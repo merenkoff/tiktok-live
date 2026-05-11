@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: tiktok_live
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    environment:
+      # TikTok
+      TIKTOK_USERNAME: ${TIKTOK_USERNAME}
+      
+      # Telegram
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHANNEL_ID: ${TELEGRAM_CHANNEL_ID}
+      
+      # Database
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: tiktok_live
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      
+      # API
+      API_PORT: 3000
+      NODE_ENV: development
+      LOG_LEVEL: debug
+      
+      # Nova Poshta
+      NOVAPOSHTA_API_KEY: ${NOVAPOSHTA_API_KEY}
+      NOVAPOSHTA_MERCHANT_NAME: ${NOVAPOSHTA_MERCHANT_NAME}
+      
+      # Business rules
+      RESERVATION_TIMEOUT_MINUTES: 5
+      PAYMENT_CONFIRMATION_TIMEOUT_MINUTES: 10
+    
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    
+    ports:
+      - '3000:3000'
+    
+    volumes:
+      - ./src:/app/src
+      - ./logs:/app/logs
+    
+    command: npm run dev
+
+volumes:
+  postgres_data:
+
+networks:
+  default:
+    name: tiktok-live-network
