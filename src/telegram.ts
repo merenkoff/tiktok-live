@@ -1,13 +1,13 @@
 import { Telegraf, Context } from 'telegraf';
 import { logger } from './logger.js';
 import {
-  createReservation,
-  getUserReservations,
+  // createReservation,
+  // getUserReservations,
   reservationToOrder,
 } from './reservations.js';
 import {
   updateOrderDetails,
-  getOrder,
+  // getOrder,
   confirmPayment,
   addTrackingNumber,
 } from './orders.js';
@@ -189,7 +189,12 @@ bot.on('callback_query', async (ctx) => {
   if (!ctx.session) ctx.session = {};
 
   try {
-    const data = ctx.callbackQuery.data;
+    const data = (ctx.callbackQuery as any)?.data;
+    
+    if (!data) {
+      await ctx.answerCbQuery('❌ Помилка');
+      return;
+    }
 
     if (data.startsWith('city_')) {
       // City selected

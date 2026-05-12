@@ -30,7 +30,7 @@ process.on('SIGINT', async () => {
   logger.info('Shutting down gracefully...');
 
   try {
-    const tiktok = getTikTokManager();
+    const tiktok = await getTikTokManager();
     await tiktok.disconnect();
     logger.info('TikTok connection closed');
   } catch (error) {
@@ -44,7 +44,7 @@ process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down...');
 
   try {
-    const tiktok = getTikTokManager();
+    const tiktok = await getTikTokManager();
     await tiktok.disconnect();
   } catch (error) {
     logger.error('Error closing TikTok connection', { error });
@@ -78,7 +78,7 @@ async function main(): Promise<void> {
 
     // Connect to TikTok LIVE
     logger.info('Connecting to TikTok LIVE...');
-    const tiktok = getTikTokManager();
+    const tiktok = await getTikTokManager();
 
     // Setup event listeners
     tiktok.on('connected', () => {

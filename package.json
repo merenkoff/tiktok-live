@@ -25,28 +25,29 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "axios": "^1.6.5",
-    "bullmq": "^5.7.0",
-    "dotenv": "^16.3.1",
-    "fastify": "^5.8.5",
-    "ioredis": "^5.3.2",
-    "node-cron": "^3.0.3",
-    "pg": "^8.11.3",
-    "telegraf": "^4.15.0",
     "tiktok-live-connector": "^2.3.0-beta1",
+    "telegraf": "^4.15.0",
+    "fastify": "^5.8.5",
+    "bullmq": "^5.7.0",
+    "ioredis": "^5.3.2",
+    "pg": "^8.11.3",
+    "axios": "^1.6.5",
+    "zod": "^3.22.4",
+    "dotenv": "^16.3.1",
     "winston": "^3.11.0",
-    "zod": "^3.22.4"
+    "node-cron": "^3.0.3"
   },
   "devDependencies": {
     "@types/node": "^20.10.6",
     "@types/pg": "^8.11.2",
+    "@types/node-cron": "^3.0.11",
     "@typescript-eslint/eslint-plugin": "^8.59.2",
     "@typescript-eslint/parser": "^8.59.2",
-    "@vitest/ui": "^4.1.6",
-    "eslint": "^8.56.0",
-    "tsx": "^4.7.0",
     "typescript": "^5.3.3",
-    "vitest": "^4.1.6"
+    "tsx": "^4.7.0",
+    "eslint": "^8.56.0",
+    "vitest": "^4.1.6",
+    "@vitest/ui": "^4.1.6"
   },
   "engines": {
     "node": ">=18.0.0"

@@ -1,5 +1,5 @@
 import { pool } from './db.js';
-import { logger } from './logger.js';
+// import { logger } from './logger.js';
 
 export interface Order {
   id: number;
@@ -109,7 +109,7 @@ export async function updateOrderDetails(
   }
 ): Promise<Order | null> {
   const updateFields = [];
-  const values = [orderId];
+  const values: any[] = [orderId];
   let paramCount = 2;
 
   if (details.customerName) {

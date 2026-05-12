@@ -5,7 +5,7 @@ import {
   getOrdersByStatus,
   getOrdersByTiktok,
   getOrdersPendingPayment,
-  updateOrderStatus,
+  // updateOrderStatus,
 } from './orders.js';
 import {
   getUserReservations,
@@ -25,8 +25,9 @@ export async function createServer(): Promise<FastifyInstance> {
   /**
    * Health check
    */
-  fastify.get('/health', async (request, reply) => {
-    const tiktok = getTikTokManager();
+  fastify.get('/health', async (_request, reply) => {
+    logger.info(`API health ${reply}`);
+    const tiktok = await getTikTokManager();
     return {
       status: 'ok',
       timestamp: new Date().toISOString(),
@@ -88,7 +89,7 @@ export async function createServer(): Promise<FastifyInstance> {
   /**
    * Get pending payment orders (admin)
    */
-  fastify.get('/api/admin/orders/pending', async (request, reply) => {
+  fastify.get('/api/admin/orders/pending', async (_request, reply) => {
     try {
       const orders = await getOrdersPendingPayment();
       return orders;
@@ -142,9 +143,9 @@ export async function createServer(): Promise<FastifyInstance> {
   /**
    * Get TikTok connection status
    */
-  fastify.get('/api/status/tiktok', async (request, reply) => {
+  fastify.get('/api/status/tiktok', async (_request, reply) => {
     try {
-      const tiktok = getTikTokManager();
+      const tiktok = await getTikTokManager();
       return tiktok.getStats();
     } catch (error) {
       logger.error('Error getting TikTok status', { error });
@@ -156,7 +157,7 @@ export async function createServer(): Promise<FastifyInstance> {
   /**
    * Cleanup expired reservations (admin)
    */
-  fastify.post('/api/admin/cleanup', async (request, reply) => {
+  fastify.post('/api/admin/cleanup', async (_request, reply) => {
     try {
       const cleaned = await cleanupExpiredReservations();
       return {
@@ -173,7 +174,7 @@ export async function createServer(): Promise<FastifyInstance> {
   /**
    * Get Nova Poshta cities
    */
-  fastify.get('/api/novaposhta/cities', async (request, reply) => {
+  fastify.get('/api/novaposhta/cities', async (_request, reply) => {
     try {
       const np = getNovaPoshtaClient();
 

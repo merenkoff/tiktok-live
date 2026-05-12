@@ -1,18 +1,12 @@
-import { WebcastPushConnection } from 'tiktok-live-connector';
 import { parseOrder, validateOrder } from './parser.js';
-import { createReservation, getUserReservations } from './reservations.js';
+import { createReservation } from './reservations.js';
 import { telegramBot } from './telegram.js';
 import { logger } from './logger.js';
 import { EventEmitter } from 'events';
-
-interface CommentEvent {
-  uniqueId: string;
-  comment: string;
-  timestamp: number;
-}
+import { TikTokLiveConnection  /*, WebcastEvent*/ } from 'tiktok-live-connector';
 
 export class TikTokLiveManager extends EventEmitter {
-  private connection: WebcastPushConnection | null = null;
+  private connection: any = null;
   private tiktokUsername: string;
   private isConnected = false;
   private reconnectAttempts = 0;
@@ -33,7 +27,10 @@ export class TikTokLiveManager extends EventEmitter {
     try {
       logger.info(`Connecting to TikTok LIVE: @${this.tiktokUsername}`);
 
-      this.connection = new WebcastPushConnection(this.tiktokUsername);
+      this.connection = new TikTokLiveConnection(this.tiktokUsername, {
+        processInitialData: false,
+        enableExtendedGiftInfo: true
+      });
 
       this.setupEventListeners();
 
@@ -106,7 +103,7 @@ export class TikTokLiveManager extends EventEmitter {
    * Handle incoming comment
    */
   private async handleComment(data: any): Promise<void> {
-    const { uniqueId, comment, createTime } = data;
+    const { uniqueId, comment } = data;
 
     logger.debug(`Comment from ${uniqueId}: ${comment}`);
 
@@ -184,13 +181,12 @@ export class TikTokLiveManager extends EventEmitter {
 👉 Перейти в Telegram для завершения заказа:
 t.me/${process.env.TELEGRAM_BOT_TOKEN?.split(':')[0]}
 
-⚠️ Если не завершить заказ в течение ${
-        process.env.RESERVATION_TIMEOUT_MINUTES || 5
-      } минут, товар будет доступен для других покупателей.
+⚠️ Если не завершить заказ в течение ${process.env.RESERVATION_TIMEOUT_MINUTES || 5
+        } минут, товар будет доступен для других покупателей.
 `;
 
       // Try to find user in Telegram
-      const telegramUsers = await telegramBot.context.session?.find(
+      const telegramUsers = await (telegramBot.context as any).session?.find(
         (u: any) => u.tiktokNickname === tiktokNickname
       );
 
@@ -198,6 +194,7 @@ t.me/${process.env.TELEGRAM_BOT_TOKEN?.split(':')[0]}
         // Send DM if we have their Telegram ID
         // This would need to be implemented based on your Telegram bot setup
         logger.info(`Would send Telegram notification to ${tiktokNickname}`);
+        logger.info(`Message: ${message}`);
       } else {
         logger.info(
           `No Telegram user found for ${tiktokNickname}, user needs to be in Telegram bot first`
@@ -272,8 +269,19 @@ t.me/${process.env.TELEGRAM_BOT_TOKEN?.split(':')[0]}
 // Singleton instance
 let tiktokManager: TikTokLiveManager | null = null;
 
-export function getTikTokManager(): TikTokLiveManager {
+export async function getTikTokManager(): Promise<TikTokLiveManager> {
   if (!tiktokManager) {
+    // Initialize WebcastPushConnection on first use
+    // if (!WebcastPushConnection) {
+    //   try {
+    //     const module = await import('tiktok-live-connector');
+    //     WebcastPushConnection = module.WebcastPushConnection;
+    //   } catch (error) {
+    //     logger.error('Failed to load tiktok-live-connector', error);
+    //     throw error;
+    //   }
+    // }
+
     const username = process.env.TIKTOK_USERNAME;
     if (!username) {
       throw new Error('TIKTOK_USERNAME not set');
