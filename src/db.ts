@@ -1,12 +1,24 @@
 import { Pool } from 'pg';
 import { logger } from './logger.js';
 
+/** Published host port from this repo's docker-compose (avoids clashing with other Postgres on 5432). */
+const defaultDbPort = '5433';
+
+function isConnectionRefused(err: unknown): boolean {
+  const e = err as NodeJS.ErrnoException & { errors?: NodeJS.ErrnoException[] };
+  if (e?.code === 'ECONNREFUSED') return true;
+  return Array.isArray(e?.errors) && e.errors.some((x) => x?.code === 'ECONNREFUSED');
+}
+
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432'),
+  port: parseInt(process.env.DB_PORT || defaultDbPort, 10),
   database: process.env.DB_NAME || 'tiktok_live',
   user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD,
+  password:
+    process.env.NODE_ENV === 'production'
+      ? process.env.DB_PASSWORD
+      : (process.env.DB_PASSWORD ?? 'postgres'),
 });
 
 pool.on('error', (err) => {
@@ -75,11 +87,31 @@ export async function initializeDatabase() {
       );
 
       CREATE INDEX IF NOT EXISTS idx_inventory_product_code ON inventory(product_code);
+
+      CREATE TABLE IF NOT EXISTS leads (
+        id SERIAL PRIMARY KEY,
+        phone VARCHAR(20) NOT NULL UNIQUE,
+        name VARCHAR(255),
+        status VARCHAR(50) DEFAULT 'new' CHECK (status IN ('new', 'contacted', 'converted', 'rejected')),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
+      CREATE INDEX IF NOT EXISTS idx_leads_created_at ON leads(created_at);
     `);
 
     logger.info('Database initialized successfully');
   } catch (error) {
     logger.error('Failed to initialize database', error);
+    if (isConnectionRefused(error)) {
+      const host = process.env.DB_HOST || 'localhost';
+      const port = process.env.DB_PORT || defaultDbPort;
+      logger.error(
+        `PostgreSQL is not reachable at ${host}:${port}. Start the DB: npm run docker:deps` +
+          ' (or docker compose up -d postgres). Align .env with .env.example (DB_PORT, DB_PASSWORD).',
+      );
+    }
     throw error;
   }
 }

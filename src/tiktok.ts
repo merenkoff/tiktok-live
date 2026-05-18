@@ -117,7 +117,9 @@ export class TikTokLiveManager extends EventEmitter {
     }
 
     this.userComments.set(uniqueId, now);
-
+    
+    logger.info(`Comment: ${comment}`);
+    
     // Parse order from comment
     const parsed = parseOrder(comment);
     if (!parsed) {

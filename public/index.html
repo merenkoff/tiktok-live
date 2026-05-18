@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Автоматизація продажів одягу в TikTok LIVE. Бронювання, Telegram-бот, Нова Пошта — без хаосу в коментарях.">
+  <title>LiveShop — Продавай в ефірі без хаосу</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="bg-glow bg-glow--1"></div>
+  <div class="bg-glow bg-glow--2"></div>
+
+  <header class="header">
+    <a href="#" class="logo">
+      <span class="logo__mark">●</span>
+      LiveShop
+    </a>
+    <a href="#callback" class="header__cta">Замовити дзвінок</a>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero__badge">Для продавців одягу в TikTok LIVE</div>
+      <h1 class="hero__title">
+        Продавай у <span class="gradient-text">ефірі</span>,<br>
+        а не в хаосі коментарів
+      </h1>
+      <p class="hero__subtitle">
+        LiveShop автоматично ловить замовлення з ефіру, бронює товар за покупцем
+        і веде його в Telegram — поки ти показуєш наступну модель.
+      </p>
+
+      <form class="lead-form hero__form" id="heroForm" novalidate>
+        <div class="lead-form__fields">
+          <input
+            type="tel"
+            name="phone"
+            class="lead-form__input"
+            placeholder="+380 XX XXX XX XX"
+            autocomplete="tel"
+            required
+          >
+          <button type="submit" class="lead-form__btn">Хочу демо</button>
+        </div>
+        <p class="lead-form__hint">Зателефонуємо протягом робочого дня. Без спаму.</p>
+        <p class="lead-form__message" hidden></p>
+      </form>
+
+      <div class="hero__stats">
+        <div class="stat">
+          <strong>5 хв</strong>
+          <span>бронювання товару</span>
+        </div>
+        <div class="stat">
+          <strong>24/7</strong>
+          <span>бот приймає замовлення</span>
+        </div>
+        <div class="stat">
+          <strong>UA · KZ · MD</strong>
+          <span>Нова Пошта та інше</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section pain">
+      <h2 class="section__title">Знайомо?</h2>
+      <div class="cards cards--3">
+        <article class="card">
+          <div class="card__icon">💬</div>
+          <h3>Коментарі летять швидше, ніж ти встигаєш</h3>
+          <p>«A12 92», «беру M», «а ця ще є?» — хтось точно залишиться без відповіді.</p>
+        </article>
+        <article class="card">
+          <div class="card__icon">😰</div>
+          <h3>Один товар — два покупці</h3>
+          <p>Хто перший? Хто оплатив? У Direct пишуть одночасно п’ять людей.</p>
+        </article>
+        <article class="card">
+          <div class="card__icon">📦</div>
+          <h3>Після ефіру — години в таблицях</h3>
+          <p>Збираєш замовлення вручну, губиш TTN і нерви замість відпочинку.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section steps">
+      <h2 class="section__title">Як це працює</h2>
+      <div class="timeline">
+        <div class="timeline__item">
+          <div class="timeline__num">1</div>
+          <div>
+            <h3>Глядач пише в ефір</h3>
+            <p>Наприклад: <code>A12 92</code> або <code>хочу K19</code> — система розуміє артикул і розмір.</p>
+          </div>
+        </div>
+        <div class="timeline__item">
+          <div class="timeline__num">2</div>
+          <div>
+            <h3>Товар бронюється автоматично</h3>
+            <p>5 хвилин на оформлення — ніхто інший не забере цю позицію.</p>
+          </div>
+        </div>
+        <div class="timeline__item">
+          <div class="timeline__num">3</div>
+          <div>
+            <h3>Покупець оформлює в Telegram</h3>
+            <p>Ім’я, телефон, місто, відділення — ти отримуєш готове замовлення в адмін-чат.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section features">
+      <h2 class="section__title">Що отримуєш</h2>
+      <div class="cards cards--2">
+        <article class="card card--feature">
+          <h3>🎯 Розумний парсер коментарів</h3>
+          <p>Українська, російська, міжнародні коди — як пишуть твої підписники.</p>
+        </article>
+        <article class="card card--feature">
+          <h3>⚡ Миттєве бронювання</h3>
+          <p>Перший написав — перший забронював. Без сварок у коментарях.</p>
+        </article>
+        <article class="card card--feature">
+          <h3>🤖 Telegram-бот для клієнта</h3>
+          <p>Покупець сам вводить дані — тобі лишається показувати товар.</p>
+        </article>
+        <article class="card card--feature">
+          <h3>📬 Нова Пошта</h3>
+          <p>TTN і відстеження — коли підключиш API, відправка стає ще швидшою.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section audience">
+      <div class="audience__inner">
+        <div>
+          <h2 class="section__title section__title--left">Для кого LiveShop</h2>
+          <ul class="audience__list">
+            <li>Дівчата та хлопці, що продають одяг у TikTok LIVE</li>
+            <li>Магазини дитячого та жіночого одягу з ефірів 3–5 разів на тиждень</li>
+            <li>Продавці в Україні, Казахстані, Молдові та інших країнах СНД</li>
+            <li>Ті, хто втомився від Excel після кожного ефіру</li>
+          </ul>
+        </div>
+        <div class="audience__quote">
+          <blockquote>
+            «Раніше після ефіру сиділа до півночі в Direct. Тепер замовлення збираються самі — я просто пакую.»
+          </blockquote>
+          <cite>— продавець дитячого одягу, Київ</cite>
+        </div>
+      </div>
+    </section>
+
+    <section class="section cta" id="callback">
+      <div class="cta__box">
+        <h2>Готові спробувати?</h2>
+        <p>Залиш номер — зателефонуємо, покажемо як це працює на твоєму ефірі.</p>
+
+        <form class="lead-form cta__form" id="ctaForm" novalidate>
+          <input
+            type="text"
+            name="name"
+            class="lead-form__input lead-form__input--full"
+            placeholder="Твоє ім’я (необов’язково)"
+            autocomplete="name"
+          >
+          <div class="lead-form__fields">
+            <input
+              type="tel"
+              name="phone"
+              class="lead-form__input"
+              placeholder="+380 XX XXX XX XX"
+              autocomplete="tel"
+              required
+            >
+            <button type="submit" class="lead-form__btn">Чекаю на дзвінок</button>
+          </div>
+          <p class="lead-form__message" hidden></p>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span class="logo logo--small"><span class="logo__mark">●</span> LiveShop</span>
+    <p>Автоматизація продажів у TikTok LIVE · 2026</p>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>

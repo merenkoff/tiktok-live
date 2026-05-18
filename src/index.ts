@@ -1,27 +1,27 @@
 import 'dotenv/config';
-import cron from 'node-cron';
+// import cron from 'node-cron';
 import { logger } from './logger.js';
 import { initializeDatabase } from './db.js';
 import { getTikTokManager } from './tiktok.js';
-import { startTelegramBot } from './telegram.js';
+// import { startTelegramBot, stopTelegramBot } from './telegram.js';
 import { startServer } from './api.js';
-import { cleanupExpiredReservations } from './reservations.js';
+// import { cleanupExpiredReservations } from './reservations.js';
 
 /**
  * Setup scheduled tasks
  */
-function setupCronJobs(): void {
-  // Clean up expired reservations every minute
-  cron.schedule('* * * * *', async () => {
-    try {
-      await cleanupExpiredReservations();
-    } catch (error) {
-      logger.error('Cron job error: cleanup expired reservations', { error });
-    }
-  });
+// function setupCronJobs(): void {
+//   // Clean up expired reservations every minute
+//   cron.schedule('* * * * *', async () => {
+//     try {
+//       await cleanupExpiredReservations();
+//     } catch (error) {
+//       logger.error('Cron job error: cleanup expired reservations', { error });
+//     }
+//   });
 
-  logger.info('Cron jobs scheduled');
-}
+//   logger.info('Cron jobs scheduled');
+// }
 
 /**
  * Graceful shutdown
@@ -69,12 +69,14 @@ async function main(): Promise<void> {
     logger.info(`Starting API server on port ${port}...`);
     await startServer(port);
 
-    // Start Telegram bot
-    logger.info('Starting Telegram bot...');
-    await startTelegramBot();
+    // // Start Telegram bot
+    // logger.info('Starting Telegram bot...');
+    // await stopTelegramBot();
+    // logger.info('Starting Telegram bot 2...');
+    // await startTelegramBot();
 
     // Setup cron jobs
-    setupCronJobs();
+    // setupCronJobs();
 
     // Connect to TikTok LIVE
     logger.info('Connecting to TikTok LIVE...');

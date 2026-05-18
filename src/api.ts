@@ -1,5 +1,9 @@
 import Fastify, { FastifyInstance } from 'fastify';
+import { readFile } from 'fs/promises';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { logger } from './logger.js';
+import { createLead, getLeads } from './leads.js';
 import {
   getOrder,
   getOrdersByStatus,
@@ -15,11 +19,72 @@ import {
 import { getTikTokManager } from './tiktok.js';
 import { getNovaPoshtaClient } from './novaposhta.js';
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const publicDir = join(__dirname, '..', 'public');
+
 export async function createServer(): Promise<FastifyInstance> {
   const fastify = Fastify({
     logger: {
       level: process.env.LOG_LEVEL || 'info',
     },
+  });
+
+  /**
+   * Landing page & static assets
+   */
+  fastify.get('/', async (_request, reply) => {
+    const html = await readFile(join(publicDir, 'index.html'), 'utf-8');
+    return reply.type('text/html; charset=utf-8').send(html);
+  });
+
+  fastify.get('/styles.css', async (_request, reply) => {
+    const css = await readFile(join(publicDir, 'styles.css'), 'utf-8');
+    return reply.type('text/css; charset=utf-8').send(css);
+  });
+
+  fastify.get('/app.js', async (_request, reply) => {
+    const js = await readFile(join(publicDir, 'app.js'), 'utf-8');
+    return reply.type('application/javascript; charset=utf-8').send(js);
+  });
+
+  /**
+   * Capture phone leads for callback
+   */
+  fastify.post('/api/leads', async (request, reply) => {
+    try {
+      const body = request.body as { phone?: string; name?: string };
+
+      if (!body?.phone?.trim()) {
+        reply.status(400);
+        return { error: 'Введіть номер телефону' };
+      }
+
+      const lead = await createLead(body.phone, body.name);
+      return { success: true, id: lead.id };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Internal server error';
+      if (message === 'Invalid phone number') {
+        reply.status(400);
+        return { error: 'Невірний формат номера' };
+      }
+      logger.error('Error saving lead', { error });
+      reply.status(500);
+      return { error: 'Не вдалося зберегти заявку' };
+    }
+  });
+
+  /**
+   * List leads (admin)
+   */
+  fastify.get('/api/admin/leads', async (_request, reply) => {
+    try {
+      const leads = await getLeads();
+      return leads;
+    } catch (error) {
+      logger.error('Error fetching leads', { error });
+      reply.status(500);
+      return { error: 'Internal server error' };
+    }
   });
 
   /**

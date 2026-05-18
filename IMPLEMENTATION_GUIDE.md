@@ -104,18 +104,28 @@ cp .env.example .env
 # - TELEGRAM_BOT_TOKEN: token from @BotFather
 # - TELEGRAM_CHANNEL_ID: admin notification channel
 # - NOVAPOSHTA_API_KEY: optional, from novaposhta
+#
+# Database: .env.example matches docker-compose.yml. If you run Node on the host,
+# keep DB_HOST=localhost, DB_PORT=5433, DB_PASSWORD=postgres (Postgres is published
+# on 5433 so it does not collide with other Docker Postgres on 5432).
 nano .env
 ```
 
 ### Step 3: Run (5 minutes)
 
 ```bash
-# Option A: Docker (easiest)
-docker-compose up -d
+# Option A: Docker (full stack: Postgres, Redis, app)
+docker compose up -d
 sleep 30
-docker-compose logs -f app
+docker compose logs -f app
 
-# Option B: Manual
+# Option B: Postgres/Redis in Docker, app on the host (good when 5432 is busy)
+npm run docker:deps   # same as: docker compose up -d postgres redis
+# wait until Postgres is ready (~10–20s), then:
+npm install
+npm run dev
+
+# Option C: Manual (you supply Postgres yourself)
 npm install
 npm run build
 npm start
@@ -125,7 +135,7 @@ npm start
 
 1. Go LIVE on TikTok
 2. Comment `A12 92` (or `хочу A12` in Russian)
-3. Check logs: `docker-compose logs -f app`
+3. Check logs: `docker compose logs -f app`
 4. Open Telegram bot link from notification
 5. Complete the order flow
 
@@ -269,16 +279,16 @@ TIKTOK_USERNAME=your_live_username
 TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
 TELEGRAM_CHANNEL_ID=-1001234567890
 
-# Database (PostgreSQL)
+# Database (PostgreSQL) — with docker compose from this repo, from host use 5433
 DB_HOST=localhost
-DB_PORT=5432
+DB_PORT=5433
 DB_NAME=tiktok_live
 DB_USER=postgres
-DB_PASSWORD=your_password
+DB_PASSWORD=postgres
 
-# Redis (ready for queue jobs)
+# Redis (ready for queue jobs) — published as 6380 on host in compose
 REDIS_HOST=localhost
-REDIS_PORT=6379
+REDIS_PORT=6380
 
 # Nova Poshta (optional)
 NOVAPOSHTA_API_KEY=your_key
@@ -397,10 +407,10 @@ Test coverage for:
 curl http://localhost:3000/health
 
 # Watch logs
-docker-compose logs -f app | grep -i "order\|reservation"
+docker compose logs -f app | grep -i "order\|reservation"
 
 # Connect to database
-docker-compose exec postgres psql -U postgres tiktok_live
+docker compose exec postgres psql -U postgres tiktok_live
 
 # Check orders
 SELECT id, tiktok_nickname, status FROM orders ORDER BY created_at DESC;
@@ -423,10 +433,10 @@ cp .env.example .env
 nano .env  # Edit with prod values
 
 # Run with Docker Compose
-docker-compose -f docker-compose.yml up -d
+docker compose -f docker-compose.yml up -d
 
 # Check logs
-docker-compose logs -f
+docker compose logs -f
 ```
 
 See `DEPLOYMENT.md` for:
@@ -492,7 +502,7 @@ Edit `.env`:
 ```bash
 RESERVATION_TIMEOUT_MINUTES=10  # Changed from 5
 ```
-Restart: `docker-compose restart app`
+Restart: `docker compose restart app`
 
 ### Add New Product Code
 No code change needed! Parser auto-supports A-Z followed by 1-2 digits.
@@ -500,20 +510,20 @@ Just use it in TikTok LIVE: "A99", "Z12", etc.
 
 ### View All Orders
 ```bash
-docker-compose exec postgres psql -U postgres tiktok_live \
+docker compose exec postgres psql -U postgres tiktok_live \
   -c "SELECT * FROM orders ORDER BY created_at DESC;"
 ```
 
 ### Backup Database
 ```bash
-docker-compose exec postgres pg_dump -U postgres tiktok_live | \
+docker compose exec postgres pg_dump -U postgres tiktok_live | \
   gzip > backup_$(date +%Y%m%d).sql.gz
 ```
 
 ### Reset Database
 ```bash
-docker-compose down -v
-docker-compose up -d
+docker compose down -v
+docker compose up -d
 # This will recreate empty database
 ```
 
@@ -522,21 +532,21 @@ docker-compose up -d
 ### "Can't connect to TikTok"
 1. Check TIKTOK_USERNAME in .env
 2. Verify account is LIVE now
-3. Check logs: `docker-compose logs app | grep -i tiktok`
+3. Check logs: `docker compose logs app | grep -i tiktok`
 
 ### "Telegram bot not responding"
 1. Test token: `curl https://api.telegram.org/bot<TOKEN>/getMe`
 2. Verify TELEGRAM_BOT_TOKEN in .env
-3. Check logs: `docker-compose logs app | grep -i telegram`
+3. Check logs: `docker compose logs app | grep -i telegram`
 
 ### "Database error"
-1. Restart: `docker-compose restart postgres`
-2. Check connection: `docker-compose exec postgres psql -U postgres`
-3. Check logs: `docker-compose logs postgres`
+1. Restart: `docker compose restart postgres`
+2. Check connection: `docker compose exec postgres psql -U postgres`
+3. Check logs: `docker compose logs postgres`
 
 ### High Memory Usage
 1. Check what's using memory: `docker stats`
-2. Restart app: `docker-compose restart app`
+2. Restart app: `docker compose restart app`
 3. Check for memory leaks in logs
 
 ## What's Not Included (Future Features)
@@ -557,7 +567,7 @@ These are intentionally left out for MVP simplicity, but ready to add:
 
 ## Support & Help
 
-1. **Check logs first**: `docker-compose logs app`
+1. **Check logs first**: `docker compose logs app`
 2. **Read docs**: README.md, DEPLOYMENT.md, ARCHITECTURE.md
 3. **Test manually**: Use curl commands above
 4. **Check database**: Query tables directly
@@ -587,7 +597,7 @@ These are intentionally left out for MVP simplicity, but ready to add:
 - Reproducible environments
 - Easy deployment to any VPS
 - Isolation of services
-- Single `docker-compose up` startup
+- Single `docker compose up` startup
 
 ## Next Steps
 

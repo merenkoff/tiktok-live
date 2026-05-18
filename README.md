@@ -2,6 +2,8 @@
 
 Automation system for TikTok LIVE sales for children's clothing store. Handles order parsing, reservation management, Telegram bot integration, and Nova Poshta shipment tracking.
 
+Non-technical setup and live operations (Russian): [ИНСТРУКЦИЯ.md](ИНСТРУКЦИЯ.md).
+
 ## Features
 
 ✅ **Real-time Order Detection** - Parse product codes from TikTok LIVE comments in multiple languages (English/Ukrainian/Russian)
