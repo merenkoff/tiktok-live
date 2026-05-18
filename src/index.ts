@@ -65,7 +65,7 @@ async function main(): Promise<void> {
     await initializeDatabase();
 
     // Start API server
-    const port = parseInt(process.env.API_PORT || '3000');
+    const port = parseInt(process.env.PORT || process.env.API_PORT || '3000', 10);
     logger.info(`Starting API server on port ${port}...`);
     await startServer(port);
 

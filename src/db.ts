@@ -10,16 +10,21 @@ function isConnectionRefused(err: unknown): boolean {
   return Array.isArray(e?.errors) && e.errors.some((x) => x?.code === 'ECONNREFUSED');
 }
 
-const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || defaultDbPort, 10),
-  database: process.env.DB_NAME || 'tiktok_live',
-  user: process.env.DB_USER || 'postgres',
-  password:
-    process.env.NODE_ENV === 'production'
-      ? process.env.DB_PASSWORD
-      : (process.env.DB_PASSWORD ?? 'postgres'),
-});
+const pool = process.env.DATABASE_URL
+  ? new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
+    })
+  : new Pool({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT || defaultDbPort, 10),
+      database: process.env.DB_NAME || 'tiktok_live',
+      user: process.env.DB_USER || 'postgres',
+      password:
+        process.env.NODE_ENV === 'production'
+          ? process.env.DB_PASSWORD
+          : (process.env.DB_PASSWORD ?? 'postgres'),
+    });
 
 pool.on('error', (err) => {
   logger.error('Unexpected error on idle client', err);
