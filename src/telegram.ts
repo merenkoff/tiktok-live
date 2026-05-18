@@ -1,13 +1,10 @@
 import { Telegraf, Context } from 'telegraf';
 import { logger } from './logger.js';
 import {
-  // createReservation,
-  // getUserReservations,
   reservationToOrder,
 } from './reservations.js';
 import {
   updateOrderDetails,
-  // getOrder,
   confirmPayment,
   addTrackingNumber,
 } from './orders.js';
