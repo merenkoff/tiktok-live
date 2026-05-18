@@ -75,3 +75,74 @@ document.querySelectorAll('.lead-form').forEach((form) => {
     submitLead(form);
   });
 });
+
+function initLiveFeedScroll() {
+  const feed = document.getElementById('liveFeed');
+  if (!feed) return;
+
+  const comments = [...feed.querySelectorAll('.live-comment')];
+  if (comments.length < 2) return;
+
+  const clone = comments.map((c) => c.cloneNode(true));
+  clone.forEach((c) => feed.appendChild(c));
+
+  let offset = 0;
+  const step = 52;
+
+  setInterval(() => {
+    offset += 1;
+    if (offset >= comments.length * step) offset = 0;
+    feed.style.transform = `translateY(-${offset}px)`;
+  }, 40);
+}
+
+function initStickyCta() {
+  const sticky = document.getElementById('stickyCta');
+  const hero = document.querySelector('.hero');
+  if (!sticky || !hero) return;
+
+  const observer = new IntersectionObserver(
+    ([entry]) => {
+      sticky.classList.toggle('is-visible', !entry.isIntersecting);
+    },
+    { threshold: 0 }
+  );
+  observer.observe(hero);
+}
+
+function initReveal() {
+  const targets = document.querySelectorAll(
+    '.proof__metric, .before-after__col, .live-demo__step, .feature-row, .faq__item, .audience__quote'
+  );
+  targets.forEach((el) => el.classList.add('reveal'));
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    },
+    { threshold: 0.12, rootMargin: '0px 0px -40px 0px' }
+  );
+
+  targets.forEach((el) => observer.observe(el));
+}
+
+function initParallax() {
+  const visual = document.querySelector('.hero__visual');
+  if (!visual || window.matchMedia('(max-width: 1024px)').matches) return;
+
+  document.addEventListener('mousemove', (e) => {
+    const x = (e.clientX / window.innerWidth - 0.5) * 12;
+    const y = (e.clientY / window.innerHeight - 0.5) * 8;
+    visual.style.transform = `translate(${x}px, ${y}px)`;
+  });
+}
+
+initLiveFeedScroll();
+initStickyCta();
+initReveal();
+initParallax();
