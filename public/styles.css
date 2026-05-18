@@ -367,6 +367,7 @@ main,
   padding: 18px;
   max-width: 340px;
   margin-left: auto;
+  overflow: hidden;
   animation: floatPanel 6s ease-in-out infinite;
 }
 
@@ -398,12 +399,29 @@ main,
 }
 
 .live-panel__feed {
+  max-height: 200px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    black 8%,
+    black 78%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    black 8%,
+    black 78%,
+    transparent 100%
+  );
+}
+
+.live-panel__feed-track {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 200px;
-  overflow: hidden;
-  mask-image: linear-gradient(to bottom, black 70%, transparent);
+  will-change: transform;
 }
 
 .live-comment {

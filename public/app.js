@@ -77,22 +77,23 @@ document.querySelectorAll('.lead-form').forEach((form) => {
 });
 
 function initLiveFeedScroll() {
-  const feed = document.getElementById('liveFeed');
-  if (!feed) return;
+  const track = document.getElementById('liveFeed');
+  if (!track) return;
 
-  const comments = [...feed.querySelectorAll('.live-comment')];
+  const comments = [...track.querySelectorAll('.live-comment')];
   if (comments.length < 2) return;
 
   const clone = comments.map((c) => c.cloneNode(true));
-  clone.forEach((c) => feed.appendChild(c));
+  clone.forEach((c) => track.appendChild(c));
 
+  const itemHeight = comments[0].offsetHeight + 8;
+  const loopHeight = itemHeight * comments.length;
   let offset = 0;
-  const step = 52;
 
   setInterval(() => {
     offset += 1;
-    if (offset >= comments.length * step) offset = 0;
-    feed.style.transform = `translateY(-${offset}px)`;
+    if (offset >= loopHeight) offset = 0;
+    track.style.transform = `translateY(-${offset}px)`;
   }, 40);
 }
 
