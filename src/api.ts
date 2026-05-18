@@ -37,6 +37,11 @@ export async function createServer(): Promise<FastifyInstance> {
     return reply.type('text/html; charset=utf-8').send(html);
   });
 
+  fastify.get('/about', async (_request, reply) => {
+    const html = await readFile(join(publicDir, 'about.html'), 'utf-8');
+    return reply.type('text/html; charset=utf-8').send(html);
+  });
+
   fastify.get('/styles.css', async (_request, reply) => {
     const css = await readFile(join(publicDir, 'styles.css'), 'utf-8');
     return reply.type('text/css; charset=utf-8').send(css);
