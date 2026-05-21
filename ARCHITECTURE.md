@@ -20,8 +20,8 @@
 │ - Rate limiting          │         │ - Validation     │
 │ - Event emission         │         └──────────────────┘
 └──────────────────────────┘                  │
-         │                                     │ Valid orders
-         │ Orders detected                     ▼
+         │                                    │ Valid orders
+         │ Orders detected                    ▼
          │                          ┌──────────────────────────┐
          │                          │ Reservation System       │
          │                          │ (reservations.ts)        │
@@ -104,9 +104,9 @@
          │ HTTP Requests
          │
 ┌──────────────────────────────────────────────────────────────────┐
-│                    External Integrations                          │
+│                    External Integrations                         │
 ├──────────────────────────────────────────────────────────────────┤
-│ - Telegram API (telegram.org)     - Message delivery              │
+│ - Telegram API (telegram.org)     - Message delivery             │
 │ - Nova Poshta API (novaposhta.ua) - Shipping & tracking          │
 │ - TikTok Live Connector (npm)     - Live comments                │
 └──────────────────────────────────────────────────────────────────┘

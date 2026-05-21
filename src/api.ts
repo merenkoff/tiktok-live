@@ -1,4 +1,4 @@
-import Fastify, { FastifyInstance } from 'fastify';
+import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 import { readFile } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -18,6 +18,11 @@ import {
 } from './reservations.js';
 import { getTikTokManager } from './tiktok.js';
 import { getNovaPoshtaClient } from './novaposhta.js';
+// Multi-user imports
+import * as usersService from './users/users.service.js';
+import * as sessionsService from './sessions/sessions.service.js';
+import { sessionManager } from './sessions/sessions.manager.js';
+import { loginUser, logoutUser, ensureAuth, verifyToken } from './core/auth.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(__dirname, '..', 'public');
@@ -30,7 +35,270 @@ export async function createServer(): Promise<FastifyInstance> {
   });
 
   /**
-   * Landing page & static assets
+   * Auth middleware for protected routes
+   */
+  fastify.register(async (fastify) => {
+    fastify.addHook('preHandler', async (request, reply) => {
+      // Skip auth для публічних маршрутів
+      const publicRoutes = ['/', '/about', '/health', '/api/leads', '/api/admin/leads', '/styles.css', '/app.js'];
+      const path = request.url.split('?')[0];
+      
+      if (publicRoutes.includes(path)) {
+        return;
+      }
+
+      // Перевірити токен
+      try {
+        ensureAuth(request);
+      } catch (error) {
+        reply.status(401).send({ error: 'Unauthorized' });
+      }
+    });
+
+    // ==================== AUTH ROUTES ====================
+
+    /**
+     * Login
+     */
+    fastify.post<{ Body: { tiktok_username: string } }>(
+      '/api/auth/login',
+      async (request, reply) => {
+        try {
+          const { tiktok_username } = request.body;
+          
+          if (!tiktok_username || tiktok_username.length < 3) {
+            reply.status(400).send({ error: 'Invalid username' });
+            return;
+          }
+
+          const { token, user } = await loginUser(tiktok_username);
+          reply.send({ token, user });
+        } catch (error) {
+          logger.error('Login error', { error });
+          reply.status(500).send({ error: 'Login failed' });
+        }
+      }
+    );
+
+    /**
+     * Logout
+     */
+    fastify.post(
+      '/api/auth/logout',
+      async (request, reply) => {
+        try {
+          const token = request.headers.authorization?.substring(7);
+          if (token) {
+            logoutUser(token);
+          }
+          reply.send({ ok: true });
+        } catch (error) {
+          logger.error('Logout error', { error });
+          reply.status(500).send({ error: 'Logout failed' });
+        }
+      }
+    );
+
+    /**
+     * Get current user
+     */
+    fastify.get(
+      '/api/auth/me',
+      async (request, reply) => {
+        try {
+          const { userId } = ensureAuth(request);
+          const user = await usersService.getUserById(userId);
+          reply.send(user);
+        } catch (error) {
+          reply.status(401).send({ error: 'Unauthorized' });
+        }
+      }
+    );
+
+    // ==================== SETTINGS ROUTES ====================
+
+    /**
+     * Get user settings
+     */
+    fastify.get(
+      '/api/settings',
+      async (request, reply) => {
+        try {
+          const { userId } = ensureAuth(request);
+          const settings = await usersService.getUserSettings(userId);
+          
+          if (!settings) {
+            reply.status(404).send({ error: 'Settings not found' });
+            return;
+          }
+
+          // Hide sensitive data
+          const safe = { ...settings };
+          if (safe.telegram_bot_token) {
+            safe.telegram_bot_token = '***' as any;
+          }
+          if (safe.novaposhta_api_key) {
+            safe.novaposhta_api_key = '***' as any;
+          }
+
+          reply.send(safe);
+        } catch (error) {
+          reply.status(401).send({ error: 'Unauthorized' });
+        }
+      }
+    );
+
+    /**
+     * Save settings
+     */
+    fastify.put<{ Body: any }>(
+      '/api/settings',
+      async (request, reply) => {
+        try {
+          const { userId } = ensureAuth(request);
+          const settings = await usersService.saveUserSettings(userId, request.body);
+          
+          // Hide sensitive data in response
+          const safe = { ...settings };
+          if (safe.telegram_bot_token) {
+            safe.telegram_bot_token = '***' as any;
+          }
+          if (safe.novaposhta_api_key) {
+            safe.novaposhta_api_key = '***' as any;
+          }
+
+          reply.send(safe);
+        } catch (error) {
+          logger.error('Settings save error', { error });
+          reply.status(500).send({ error: 'Failed to save settings' });
+        }
+      }
+    );
+
+    /**
+     * Test Telegram
+     */
+    fastify.post(
+      '/api/settings/test-telegram',
+      async (request, reply) => {
+        try {
+          const { userId } = ensureAuth(request);
+          const settings = await usersService.getUserSettings(userId);
+          
+          if (!settings?.telegram_bot_token) {
+            reply.status(400).send({ error: 'Telegram token not set' });
+            return;
+          }
+
+          const response = await fetch(
+            `https://api.telegram.org/bot${settings.telegram_bot_token}/getMe`
+          );
+
+          if (response.ok) {
+            reply.send({ ok: true, message: 'Telegram bot is working' });
+          } else {
+            reply.status(400).send({ error: 'Invalid Telegram token' });
+          }
+        } catch (error) {
+          logger.error('Telegram test error', { error });
+          reply.status(500).send({ error: 'Test failed' });
+        }
+      }
+    );
+
+    // ==================== SESSION ROUTES ====================
+
+    /**
+     * Start session
+     */
+    fastify.post(
+      '/api/sessions/start',
+      async (request, reply) => {
+        try {
+          const { userId } = ensureAuth(request);
+          const activeSession = await sessionManager.startSession(userId);
+          reply.send({
+            sessionId: activeSession.session.id,
+            status: activeSession.session.status,
+            startedAt: activeSession.session.started_at
+          });
+        } catch (error) {
+          logger.error('Start session error', { error });
+          reply.status(500).send({ error: 'Failed to start session' });
+        }
+      }
+    );
+
+    /**
+     * Stop session
+     */
+    fastify.post(
+      '/api/sessions/stop',
+      async (request, reply) => {
+        try {
+          const { userId } = ensureAuth(request);
+          await sessionManager.stopSession(userId);
+          reply.send({ ok: true });
+        } catch (error) {
+          logger.error('Stop session error', { error });
+          reply.status(500).send({ error: 'Failed to stop session' });
+        }
+      }
+    );
+
+    /**
+     * Get current session
+     */
+    fastify.get(
+      '/api/sessions/current',
+      async (request, reply) => {
+        try {
+          const { userId } = ensureAuth(request);
+          const session = sessionManager.getSession(userId);
+          reply.send(session || null);
+        } catch (error) {
+          reply.status(401).send({ error: 'Unauthorized' });
+        }
+      }
+    );
+
+    /**
+     * Get session logs
+     */
+    fastify.get<{ Querystring: { limit?: string } }>(
+      '/api/sessions/logs',
+      async (request, reply) => {
+        try {
+          const { userId } = ensureAuth(request);
+          const limit = parseInt(request.query.limit || '100');
+          const logs = sessionManager.getLogs(userId, limit);
+          reply.send(logs);
+        } catch (error) {
+          reply.status(401).send({ error: 'Unauthorized' });
+        }
+      }
+    );
+
+    /**
+     * Get session stats
+     */
+    fastify.get(
+      '/api/sessions/stats',
+      async (request, reply) => {
+        try {
+          const { userId } = ensureAuth(request);
+          const isActive = sessionManager.isSessionActive(userId);
+          reply.send({ isActive, sessionManager: sessionManager.getStats() });
+        } catch (error) {
+          logger.error('Get stats error', { error });
+          reply.status(500).send({ error: 'Failed to get stats' });
+        }
+      }
+    );
+  });
+
+  /**
+   * Public routes (без auth)
    */
   fastify.get('/', async (_request, reply) => {
     const html = await readFile(join(publicDir, 'index.html'), 'utf-8');
