@@ -1,4 +1,4 @@
-// src/telegram/telegram.instance.ts
+// src/telegram/telegram.instance.ts - FIXED
 
 import { Telegraf, Context, Markup } from 'telegraf';
 import { logger } from '../logger.js';
@@ -44,6 +44,8 @@ export class TelegramInstance {
     // Start command
     this.bot.start(async (ctx) => {
       try {
+        if (!ctx.from?.id) return;
+
         await sessionManager.addLog(
           this.userId,
           'telegram_message',
@@ -52,7 +54,7 @@ export class TelegramInstance {
         );
 
         const message = `
-👋 Welcome to ${ctx.botInfo?.first_name || 'Our Shop'}!
+👋 Welcome to our shop!
 
 🎬 **Reserve items from TikTok LIVE here**
 
@@ -94,6 +96,10 @@ Just follow the prompts to complete your order!
     // Text messages (order flow)
     this.bot.on('text', async (ctx) => {
       try {
+        if (!ctx.session) {
+          ctx.session = {};
+        }
+
         const userId = ctx.from?.id;
         const text = ctx.message.text;
 
@@ -106,7 +112,7 @@ Just follow the prompts to complete your order!
         );
 
         // Handle based on current step
-        const step = ctx.session?.step;
+        const step = ctx.session.step;
 
         if (!step) {
           // Not in order flow - show welcome
@@ -116,9 +122,7 @@ Just follow the prompts to complete your order!
           return;
         }
 
-        // Order flow steps would go here
-        // This is a simplified version - full implementation below
-
+        // Order flow steps
         switch (step) {
           case 'waiting_name':
             ctx.session.customerName = text;
@@ -154,9 +158,18 @@ Just follow the prompts to complete your order!
     // Callback queries (button clicks)
     this.bot.on('callback_query', async (ctx) => {
       try {
-        const data = ctx.callbackQuery.data;
+        const data = (ctx.callbackQuery as any)?.data as string | undefined;
 
-        if (data?.startsWith('city_')) {
+        if (!data) {
+          await ctx.answerCbQuery('❌ Error');
+          return;
+        }
+
+        if (!ctx.session) {
+          ctx.session = {};
+        }
+
+        if (data.startsWith('city_')) {
           const cityRef = data.replace('city_', '');
           ctx.session.cityRef = cityRef;
           ctx.session.step = 'waiting_branch';
@@ -173,7 +186,7 @@ Just follow the prompts to complete your order!
           }
 
           await ctx.answerCbQuery();
-        } else if (data?.startsWith('branch_')) {
+        } else if (data.startsWith('branch_')) {
           const branchRef = data.replace('branch_', '');
           ctx.session.branchRef = branchRef;
           ctx.session.step = 'confirming';
@@ -294,13 +307,10 @@ We'll contact you soon with payment details!
 `;
 
         try {
-          await this.bot.telegram.sendMessage(
-            this.settings.telegram_channel_id,
-            adminMessage,
-            {
-              parse_mode: 'HTML',
-            }
-          );
+          const channelId = String(this.settings.telegram_channel_id);
+          await this.bot.telegram.sendMessage(channelId, adminMessage, {
+            parse_mode: 'HTML',
+          });
         } catch (error) {
           logger.error('Error sending admin notification', { error });
         }
@@ -354,9 +364,9 @@ We'll contact you soon with payment details!
   /**
    * Send message to user
    */
-  async sendMessage(chatId: number, text: string): Promise<void> {
+  async sendMessage(chatId: number | string, text: string): Promise<void> {
     try {
-      await this.bot.telegram.sendMessage(chatId, text, {
+      await this.bot.telegram.sendMessage(String(chatId), text, {
         parse_mode: 'HTML',
       });
     } catch (error) {
@@ -371,7 +381,8 @@ We'll contact you soon with payment details!
     if (!this.settings.telegram_channel_id) return;
 
     try {
-      await this.bot.telegram.sendMessage(this.settings.telegram_channel_id, message, {
+      const channelId = String(this.settings.telegram_channel_id);
+      await this.bot.telegram.sendMessage(channelId, message, {
         parse_mode: 'HTML',
       });
     } catch (error) {

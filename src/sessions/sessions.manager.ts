@@ -1,8 +1,8 @@
 // src/sessions/sessions.manager.ts
 
 import { EventEmitter } from 'events';
-import { logger } from '../core/logger.js';
-import { User, UserSettings, Session, SessionLog } from '../core/types.js';
+import { logger } from '../logger.js';
+import type { User, UserSettings, Session, SessionLog } from '../core/types.js';
 import * as sessionsService from './sessions.service.js';
 import * as usersService from '../users/users.service.js';
 
@@ -213,7 +213,7 @@ export class SessionManager extends EventEmitter {
   } {
     return {
       activeSessionsCount: this.activeSessions.size,
-      userIds: Array.from(this.activeSessions.keys())
+      userIds: Array.from(this.activeSessions.keys()),
     };
   }
 }

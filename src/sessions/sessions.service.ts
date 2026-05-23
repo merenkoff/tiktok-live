@@ -1,8 +1,8 @@
 // src/sessions/sessions.service.ts
 
-import { pool } from '../core/db.js';
-import { Session, SessionLog } from '../core/types.js';
-import { logger } from '../core/logger.js';
+import { pool } from '../db.js';
+import type { Session, SessionLog } from '../core/types.js';
+import { logger } from '../logger.js';
 
 export async function createSession(user_id: number): Promise<Session> {
   try {

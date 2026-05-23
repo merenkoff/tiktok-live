@@ -21,7 +21,8 @@ const RESERVATION_TIMEOUT_MINUTES =
 export async function createReservation(
   productCode: string,
   size: string,
-  tiktokNickname: string
+  tiktokNickname: string,
+  uniqueId?: any,
 ): Promise<Reservation | null> {
   const client = await pool.connect();
   try {
@@ -64,7 +65,7 @@ export async function createReservation(
     };
   } catch (error) {
     await client.query('ROLLBACK');
-    logger.error('Failed to create reservation', { error, productCode, size });
+    logger.error('Failed to create reservation', { error, productCode, size, uniqueId });
     throw error;
   } finally {
     client.release();

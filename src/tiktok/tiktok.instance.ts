@@ -45,6 +45,8 @@ export class TikTokInstance extends EventEmitter {
         }
       });
 
+      /*
+      
       // Member join event
       this.connection.on('member', async (data: any) => {
         try {
@@ -72,6 +74,8 @@ export class TikTokInstance extends EventEmitter {
           logger.error('Error logging gift', { error });
         }
       });
+     
+      */
 
       // Disconnect event
       this.connection.on('disconnect', () => {
@@ -96,10 +100,9 @@ export class TikTokInstance extends EventEmitter {
       await sessionManager.addLog(
         this.userId,
         'info',
-        `Connected to TikTok LIVE @${this.settings.tiktok_username}`,
-        { tiktokUsername: this.settings.tiktok_username }
+        `Connected to TikTok LIVE @${this.settings.tiktok_username}`
       );
-      logger.info(`Connected to TikTok LIVE @${this.tiktokUsername}`);
+      logger.info(`Connected to TikTok LIVE @${this.settings.tiktok_username}`);
       
       this.emit('connected');
     } catch (error) {
@@ -135,15 +138,13 @@ export class TikTokInstance extends EventEmitter {
 
     logger.info(
       `📝 Order detected for user ${this.userId}: ${parsed.productCode} ${parsed.size}`,
-      {
-        tiktokUser: uniqueId,
-      }
+      { tiktokUser: uniqueId }
     );
 
     try {
       // Create reservation
       const reservation = await createReservation(
-        this.userId,
+        this.userId.toString(),
         parsed.productCode,
         parsed.size,
         uniqueId
@@ -163,7 +164,6 @@ export class TikTokInstance extends EventEmitter {
             productCode: parsed.productCode,
             size: parsed.size,
             tiktokUser: uniqueId,
-            reservationId: reservation.id,
           }
         );
 

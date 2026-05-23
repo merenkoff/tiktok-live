@@ -171,7 +171,7 @@ export async function registerSessionRoutes(fastify: FastifyInstance) {
    */
   fastify.get(
     '/api/admin/sessions',
-    async (request, reply) => {
+    async (_request, reply) => {
       try {
         // No auth check for admin endpoint - add if needed
         const allSessions = sessionManager.getAllActiveSessions();

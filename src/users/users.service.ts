@@ -1,8 +1,8 @@
 // src/users/users.service.ts
 
-import { pool } from '../core/db.js';
-import { User, UserSettings } from '../core/types.js';
-import { logger } from '../core/logger.js';
+import { pool } from '../db.js';
+import type { User, UserSettings } from '../core/types.js';
+import { logger } from '../logger.js';
 
 export async function getUserByUsername(tiktok_username: string): Promise<User | null> {
   try {
@@ -98,7 +98,7 @@ export async function saveUserSettings(
             settings.novaposhta_api_key,
             settings.novaposhta_merchant_name,
             settings.reservation_timeout_minutes || 5,
-            settings.payment_timeout_minutes || 10
+            settings.payment_timeout_minutes || 10,
           ]
         );
       } else {

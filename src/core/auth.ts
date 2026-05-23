@@ -2,7 +2,7 @@
 
 import { FastifyRequest, FastifyReply } from 'fastify';
 import * as usersService from '../users/users.service.js';
-import { logger } from './logger.js';
+import { logger } from '../logger.js';
 
 declare global {
   namespace Express {
@@ -33,7 +33,7 @@ export async function loginUser(tiktok_username: string): Promise<{
     const token = `token_${user.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     activeTokens.set(token, {
       userId: user.id,
-      username: user.tiktok_username
+      username: user.tiktok_username,
     });
 
     logger.info(`User logged in: ${tiktok_username}`);

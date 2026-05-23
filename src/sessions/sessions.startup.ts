@@ -4,7 +4,7 @@ import { logger } from '../logger.js';
 import { sessionManager } from './sessions.manager.js';
 import { TikTokInstance } from '../tiktok/tiktok.instance.js';
 import { TelegramInstance } from '../telegram/telegram.instance.js';
-import * as usersService from '../users/users.service.js';
+// import * as usersService from '../users/users.service.js';
 
 /**
  * Start a complete user session with TikTok + Telegram
@@ -34,6 +34,7 @@ export async function startUserSession(userId: number): Promise<void> {
 
       logger.info(`✅ TikTok connected for user ${userId}`);
 
+      /*
       // Listen for order events
       tiktokInstance.on('orderDetected', async (event) => {
         logger.info('Order detected from TikTok', {
@@ -52,6 +53,8 @@ export async function startUserSession(userId: number): Promise<void> {
           '🔴 TikTok max reconnection attempts reached. Please restart the session.'
         );
       });
+      */
+     
     } catch (error) {
       logger.error(`Failed to start TikTok for user ${userId}`, { error });
       await sessionManager.addLog(
@@ -82,7 +85,6 @@ export async function startUserSession(userId: number): Promise<void> {
         'error',
         `Failed to start Telegram bot: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
-      // Don't throw - session can work without Telegram
     }
 
     // 4. Log session start
