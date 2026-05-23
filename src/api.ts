@@ -1,4 +1,4 @@
-import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
+import Fastify, { FastifyInstance /*, FastifyRequest*/} from 'fastify';
 import { readFile } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -20,9 +20,9 @@ import { getTikTokManager } from './tiktok.js';
 import { getNovaPoshtaClient } from './novaposhta.js';
 // Multi-user imports
 import * as usersService from './users/users.service.js';
-import * as sessionsService from './sessions/sessions.service.js';
+// import * as sessionsService from './sessions/sessions.service.js';
 import { sessionManager } from './sessions/sessions.manager.js';
-import { loginUser, logoutUser, ensureAuth, verifyToken } from './core/auth.js';
+import { loginUser, logoutUser, ensureAuth, /* verifyToken*/} from './core/auth.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(__dirname, '..', 'public');

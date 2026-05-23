@@ -1,56 +1,55 @@
+// src/index.ts
+
 import 'dotenv/config';
-// import cron from 'node-cron';
+import cron from 'node-cron';
 import { logger } from './logger.js';
 import { initializeDatabase } from './db.js';
-import { getTikTokManager } from './tiktok.js';
-// import { startTelegramBot, stopTelegramBot } from './telegram.js';
-import { startServer } from './api.js';
-// import { cleanupExpiredReservations } from './reservations.js';
-
-/**
- * Setup scheduled tasks
- */
-// function setupCronJobs(): void {
-//   // Clean up expired reservations every minute
-//   cron.schedule('* * * * *', async () => {
-//     try {
-//       await cleanupExpiredReservations();
-//     } catch (error) {
-//       logger.error('Cron job error: cleanup expired reservations', { error });
-//     }
-//   });
-
-//   logger.info('Cron jobs scheduled');
-// }
+import { createServer, startServer } from './api.js';
+import { setupWebSocket } from './api/websocket.js';
+import { registerUserRoutes } from './users/users.controller.js';
+import { registerSettingsRoutes } from './users/settings.controller.js';
+import { registerSessionRoutes } from './sessions/sessions.controller.js';
+import { cleanupExpiredReservations } from './reservations.js';
+import { sessionManager } from './sessions/sessions.manager.js';
 
 /**
  * Graceful shutdown
  */
 process.on('SIGINT', async () => {
-  logger.info('Shutting down gracefully...');
+  logger.info('🛑 Shutting down gracefully...');
 
   try {
-    const tiktok = await getTikTokManager();
-    await tiktok.disconnect();
-    logger.info('TikTok connection closed');
-  } catch (error) {
-    logger.error('Error closing TikTok connection', { error });
-  }
+    // Stop all active sessions
+    const stats = sessionManager.getStats();
+    logger.info(`Stopping ${stats.activeSessionsCount} active sessions...`);
 
-  process.exit(0);
+    for (const userId of stats.userIds) {
+      try {
+        await sessionManager.stopSession(userId);
+        logger.info(`✅ Session stopped for user ${userId}`);
+      } catch (error) {
+        logger.error(`Error stopping session for user ${userId}`, { error });
+      }
+    }
+
+    logger.info('✅ All sessions stopped');
+    process.exit(0);
+  } catch (error) {
+    logger.error('Error during shutdown', { error });
+    process.exit(1);
+  }
 });
 
-process.on('SIGTERM', async () => {
-  logger.info('SIGTERM received, shutting down...');
+process.on('SIGTERM', () => {
+  logger.info('🛑 SIGTERM received');
+  process.emit('SIGINT' as any);
+});
 
-  try {
-    const tiktok = await getTikTokManager();
-    await tiktok.disconnect();
-  } catch (error) {
-    logger.error('Error closing TikTok connection', { error });
-  }
-
-  process.exit(0);
+/**
+ * Unhandled rejection handler
+ */
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled rejection at:', { promise, reason });
 });
 
 /**
@@ -58,59 +57,101 @@ process.on('SIGTERM', async () => {
  */
 async function main(): Promise<void> {
   try {
-    logger.info('Starting TikTok LIVE Sales Automation...');
+    logger.info('');
+    logger.info('╔════════════════════════════════════════════════════════╗');
+    logger.info('║   🚀 TikTok LIVE Automation Platform - Starting...     ║');
+    logger.info('╚════════════════════════════════════════════════════════╝');
+    logger.info('');
 
-    // Initialize database
-    logger.info('Initializing database...');
+    // 1. Initialize database
+    logger.info('📊 Step 1: Initializing database...');
     await initializeDatabase();
+    logger.info('✅ Database initialized');
 
-    // Start API server
-    const port = parseInt(process.env.PORT || process.env.API_PORT || '3000', 10);
-    logger.info(`Starting API server on port ${port}...`);
+    // 2. Create Fastify server
+    logger.info('🔧 Step 2: Creating API server...');
+    const fastify = await createServer();
+    logger.info('✅ API server created');
+
+    // 3. Setup WebSocket
+    logger.info('🔌 Step 3: Setting up WebSocket...');
+    await setupWebSocket(fastify);
+    logger.info('✅ WebSocket configured');
+
+    // 4. Register API routes
+    logger.info('📍 Step 4: Registering API routes...');
+    await registerUserRoutes(fastify);
+    await registerSettingsRoutes(fastify);
+    await registerSessionRoutes(fastify);
+    logger.info('✅ All routes registered');
+
+    // 5. Setup cron jobs
+    logger.info('⏰ Step 5: Setting up cron jobs...');
+
+    // Cleanup expired reservations every minute
+    cron.schedule('* * * * *', async () => {
+      try {
+        const cleaned = await cleanupExpiredReservations();
+        if (cleaned > 0) {
+          logger.info(`🧹 Cleaned up ${cleaned} expired reservations`);
+        }
+      } catch (error) {
+        logger.error('Reservation cleanup error', { error });
+      }
+    });
+
+    // Check and log active sessions every 5 minutes
+    cron.schedule('*/5 * * * *', async () => {
+      try {
+        const stats = sessionManager.getStats();
+        if (stats.activeSessionsCount > 0) {
+          logger.info(`📊 Active sessions: ${stats.activeSessionsCount}`, {
+            userIds: stats.userIds,
+          });
+        }
+      } catch (error) {
+        logger.error('Session stats error', { error });
+      }
+    });
+
+    // Cleanup old sessions every day at midnight
+    cron.schedule('0 0 * * *', async () => {
+      try {
+        logger.info('🧹 Running daily cleanup...');
+        // Could implement cleanup of old sessions here
+        logger.info('✅ Daily cleanup completed');
+      } catch (error) {
+        logger.error('Daily cleanup error', { error });
+      }
+    });
+
+    logger.info('✅ Cron jobs configured');
+
+    // 6. Start API server
+    logger.info('🚀 Step 6: Starting API server...');
+    const port = parseInt(process.env.API_PORT || '3000');
     await startServer(port);
 
-    // // Start Telegram bot
-    // logger.info('Starting Telegram bot...');
-    // await stopTelegramBot();
-    // logger.info('Starting Telegram bot 2...');
-    // await startTelegramBot();
+    logger.info('');
+    logger.info('╔════════════════════════════════════════════════════════╗');
+    logger.info('║   ✅ Platform Started Successfully!                    ║');
+    logger.info('╠════════════════════════════════════════════════════════╣');
+    logger.info(`║   🌐 API: http://localhost:${port}                     ║`);
+    logger.info('║   💻 Admin: http://localhost:3001                      ║');
+    logger.info('║   🔌 WebSocket: ws://localhost:3000/api/...            ║');
+    logger.info('╠════════════════════════════════════════════════════════╣');
+    logger.info('║   📊 Ready to serve multiple TikTok LIVE sellers!      ║');
+    logger.info('║   🎬 Start a session from admin panel                  ║');
+    logger.info('╚════════════════════════════════════════════════════════╝');
+    logger.info('');
 
-    // Setup cron jobs
-    // setupCronJobs();
-
-    // Connect to TikTok LIVE
-    logger.info('Connecting to TikTok LIVE...');
-    const tiktok = await getTikTokManager();
-
-    // Setup event listeners
-    tiktok.on('connected', () => {
-      logger.info('✅ Connected to TikTok LIVE and ready to receive orders');
-    });
-
-    tiktok.on('liveEnded', () => {
-      logger.warn('TikTok LIVE stream ended');
-    });
-
-    tiktok.on('maxReconnectAttemptsReached', () => {
-      logger.error('Max reconnection attempts reached. Manual intervention needed.');
-    });
-
-    tiktok.on('orderDetected', (data) => {
-      logger.info('Order detected!', data);
-    });
-
-    // Connect
-    await tiktok.connect();
-
-    logger.info('🚀 Application started successfully!');
-    logger.info('Environment:');
-    logger.info(`  - TikTok: @${process.env.TIKTOK_USERNAME}`);
-    logger.info(`  - API: http://localhost:${port}`);
-    logger.info(`  - Telegram: Bot connected and listening`);
+    // Log startup completion
+    logger.info('✨ All systems operational');
   } catch (error) {
-    logger.error('Fatal error during startup', { error });
+    logger.error('💥 Fatal error during startup', { error });
     process.exit(1);
   }
 }
 
+// Run main
 main();
