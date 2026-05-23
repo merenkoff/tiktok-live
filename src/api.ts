@@ -27,6 +27,7 @@ import { loginUser, logoutUser, ensureAuth, /* verifyToken*/} from './core/auth.
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(__dirname, '..', 'public');
 
+//Double routes check here and in files like sessions.controller atc... and controllers // seems like controllers is the better aproch but now i cant cheak all of the routes. It wiil be fixed later
 export async function createServer(): Promise<FastifyInstance> {
   const fastify = Fastify({
     logger: {
@@ -156,8 +157,9 @@ export async function createServer(): Promise<FastifyInstance> {
       async (request, reply) => {
         try {
           const { userId } = ensureAuth(request);
-          const settings = await usersService.saveUserSettings(userId, request.body);
           
+          const body = request.body as any;
+          const settings = await usersService.saveUserSettings(userId, body);
           // Hide sensitive data in response
           const safe = { ...settings };
           if (safe.telegram_bot_token) {

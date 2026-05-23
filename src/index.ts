@@ -6,9 +6,9 @@ import { logger } from './logger.js';
 import { initializeDatabase } from './db.js';
 import { createServer, startServer } from './api.js';
 import { setupWebSocket } from './api/websocket.js';
-import { registerUserRoutes } from './users/users.controller.js';
-import { registerSettingsRoutes } from './users/settings.controller.js';
-import { registerSessionRoutes } from './sessions/sessions.controller.js';
+// import { registerUserRoutes } from './users/users.controller.js';
+// import { registerSettingsRoutes } from './users/settings.controller.js';
+// import { registerSessionRoutes } from './sessions/sessions.controller.js';
 import { cleanupExpiredReservations } from './reservations.js';
 import { sessionManager } from './sessions/sessions.manager.js';
 
@@ -78,12 +78,12 @@ async function main(): Promise<void> {
     await setupWebSocket(fastify);
     logger.info('✅ WebSocket configured');
 
-    // 4. Register API routes
-    logger.info('📍 Step 4: Registering API routes...');
-    await registerUserRoutes(fastify);
-    await registerSettingsRoutes(fastify);
-    await registerSessionRoutes(fastify);
-    logger.info('✅ All routes registered');
+    // // 4. Register API routes
+    // logger.info('📍 Step 4: Registering API routes...');
+    // await registerUserRoutes(fastify);
+    // await registerSettingsRoutes(fastify);
+    // await registerSessionRoutes(fastify);
+    // logger.info('✅ All routes registered');
 
     // 5. Setup cron jobs
     logger.info('⏰ Step 5: Setting up cron jobs...');
