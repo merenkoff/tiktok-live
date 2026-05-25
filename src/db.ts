@@ -48,6 +48,7 @@ export async function initializeDatabase(): Promise<void> {
   try {
     // Test connection
     await testConnection();
+    return ;
     // Read migration file
     const migrationPath = path.join(__dirname, '..', 'migrations', '001_create_schema.sql');
     
