@@ -1,6 +1,6 @@
 // src/core/auth.ts
 
-import { FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyRequest /*, FastifyReply */ } from 'fastify';
 import * as usersService from '../users/users.service.js';
 import { logger } from '../logger.js';
 
@@ -57,13 +57,13 @@ export function verifyToken(token: string): AuthToken | null {
  * Fastify auth hook
  */
 export async function authMiddleware(
-  request: FastifyRequest,
-  reply: FastifyReply
+  request: FastifyRequest
 ): Promise<void> {
   try {
     const authHeader = request.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      reply.status(401).send({ error: 'Unauthorized' });
+      // reply.status(401).send({ error: 'Unauthorized' });
+      logger.error('Unauthorized 401');
       return;
     }
 
@@ -71,7 +71,8 @@ export async function authMiddleware(
     const auth = verifyToken(token);
 
     if (!auth) {
-      reply.status(401).send({ error: 'Invalid token' });
+      // reply.status(401).send({ error: 'Invalid token' });
+      logger.error('Invalid token 401');
       return;
     }
 
@@ -80,7 +81,8 @@ export async function authMiddleware(
     (request as any).username = auth.username;
   } catch (error) {
     logger.error('Auth middleware error', { error });
-    reply.status(500).send({ error: 'Internal error' });
+    // throw error;
+    // reply.status(500).send({ error: 'Internal error' });
   }
 }
 
@@ -90,6 +92,7 @@ export async function authMiddleware(
 export function ensureAuth(
   request: FastifyRequest
 ): { userId: number; username: string } {
+  authMiddleware(request)
   const userId = (request as any).userId;
   const username = (request as any).username;
 
