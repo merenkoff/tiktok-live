@@ -1,10 +1,10 @@
-// admin/src/services/api.ts - FIXED
+// admin/src/services/api.ts
 
 import axios from 'axios';
 import type { AxiosInstance } from 'axios';
 import type { AuthResponse, UserSettings, Session, SessionLog } from '../types';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_URL = 'https://the-live.shop'; // 'http://localhost:3000'; //import.meta.env.VITE_API_URL || '';
 
 class ApiClient {
   private client: AxiosInstance;
@@ -15,7 +15,6 @@ class ApiClient {
       timeout: 10000,
     });
 
-    // Add auth token to requests
     this.client.interceptors.request.use((config) => {
       const token = localStorage.getItem('token');
       if (token) {
@@ -24,7 +23,6 @@ class ApiClient {
       return config;
     });
 
-    // Handle errors
     this.client.interceptors.response.use(
       (response) => response,
       (error) => {
@@ -38,11 +36,8 @@ class ApiClient {
     );
   }
 
-  // Auth
   async login(tiktok_username: string): Promise<AuthResponse> {
-    const response = await this.client.post<AuthResponse>('/api/auth/login', {
-      tiktok_username,
-    });
+    const response = await this.client.post<AuthResponse>('/api/auth/login', { tiktok_username });
     return response.data;
   }
 
@@ -57,7 +52,6 @@ class ApiClient {
     return response.data;
   }
 
-  // Settings
   async getSettings(): Promise<UserSettings> {
     const response = await this.client.get<UserSettings>('/api/settings');
     return response.data;
@@ -73,7 +67,6 @@ class ApiClient {
     return response.data;
   }
 
-  // Sessions
   async startSession(): Promise<Session> {
     const response = await this.client.post<Session>('/api/sessions/start');
     return response.data;
@@ -89,7 +82,7 @@ class ApiClient {
     return response.data;
   }
 
-  async getSessionLogs(limit: number = 100): Promise<SessionLog[]> {
+  async getSessionLogs(limit = 100): Promise<SessionLog[]> {
     const response = await this.client.get<SessionLog[]>('/api/sessions/logs', {
       params: { limit },
     });
@@ -103,9 +96,9 @@ class ApiClient {
 
   getWebSocketUrl(): string {
     const token = localStorage.getItem('token');
-    const protocol = API_URL.startsWith('https') ? 'wss' : 'ws';
-    const host = API_URL.replace(/^https?:\/\//, '');
-    return `${protocol}://${host}/api/sessions/logs/stream?token=${token}`;
+    // WebSocket завжди напряму на бекенд (проксі Vite не підтримує WS за замовчуванням)
+    const base = 'ws://the-live.shop'; // import.meta.env.VITE_WS_URL || 'ws://localhost:3000';
+    return `${base}/api/sessions/logs/stream?token=${token}`;
   }
 }
 

@@ -1,4 +1,5 @@
-import Fastify, { FastifyInstance /*, FastifyRequest*/} from 'fastify';
+import Fastify, { FastifyInstance } from 'fastify';
+import cors from '@fastify/cors';
 import staticPlugin from '@fastify/static';
 import path from 'path';
 import { readFile } from 'fs/promises';
@@ -31,6 +32,26 @@ export async function createServer(): Promise<FastifyInstance> {
     logger: {
       level: process.env.LOG_LEVEL || 'info',
     },
+  });
+
+  // ── CORS ──────────────────────────────────────────────────────────────────
+  // Дозволяємо локальний фронт під час розробки + продакшн домен
+  await fastify.register(cors, {
+    origin: (origin, cb) => {
+      const allowed = [
+        'https://the-live.shop',
+        'http://localhost:3001',
+        'http://localhost:5173',
+      ];
+      // Запити без origin (curl, Postman, SSR) — пропускаємо
+      if (!origin || allowed.includes(origin)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Not allowed by CORS'), false);
+      }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 
   // ⭐ CRITICAL: Register static file serving BEFORE routes

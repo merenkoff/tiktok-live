@@ -9,115 +9,209 @@ import { LiveLogs } from '../components/LiveLogs';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 
 export function SessionPage() {
-  const { session, isLoading, isActive, start, stop, isStarting, isStopping } = useSession();
-  const { logs, isConnected } = useLogs();
-  const [duration, setDuration] = useState('00:00');
+  const { session, isLoading, isError, isActive, start, stop, isStarting, isStopping } = useSession();
+  const { logs, isConnected, reconnect } = useLogs();
+  const [duration, setDuration] = useState('00:00:00');
 
-  // Update duration timer
   useEffect(() => {
     if (!isActive || !session?.started_at) return;
-
     const interval = setInterval(() => {
-      const start = new Date(session.started_at!).getTime();
-      const now = Date.now();
-      const diff = Math.floor((now - start) / 1000);
-
-      const hours = Math.floor(diff / 3600);
-      const minutes = Math.floor((diff % 3600) / 60);
-      const seconds = diff % 60;
-
+      const startTs = new Date(session.started_at!).getTime();
+      const diff = Math.floor((Date.now() - startTs) / 1000);
+      const h = Math.floor(diff / 3600);
+      const m = Math.floor((diff % 3600) / 60);
+      const s = diff % 60;
       setDuration(
-        `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+        `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
       );
     }, 1000);
-
     return () => clearInterval(interval);
   }, [isActive, session?.started_at]);
 
-  const orderCount = logs.filter((log) => log.log_type === 'order').length;
-  const errorCount = logs.filter((log) => log.log_type === 'error').length;
-  const commentCount = logs.filter((log) => log.log_type === 'tiktok_comment').length;
+  const orderCount   = logs.filter((l) => l.log_type === 'order').length;
+  const errorCount   = logs.filter((l) => l.log_type === 'error').length;
+  const commentCount = logs.filter((l) => l.log_type === 'tiktok_comment').length;
 
   if (isLoading) return <LoadingSpinner />;
 
+  if (isError) return (
+    <div style={{ minHeight: '100vh', background: 'var(--bg-base)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="card" style={{ padding: '40px', textAlign: 'center', maxWidth: '400px' }}>
+        <div style={{ fontSize: '32px', marginBottom: '16px' }}>⚠️</div>
+        <div style={{ fontWeight: 700, marginBottom: '8px' }}>Не вдалося підключитись до сервера</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '24px' }}>
+          Перевірте що бекенд запущений на порту 3000
+        </div>
+        <button className="btn-ghost" onClick={() => window.location.reload()}>
+          ↺ Спробувати знову
+        </button>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div style={{ minHeight: '100vh', background: 'var(--bg-base)' }}>
       <Header />
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Status Header */}
-        <div className="bg-white rounded-lg shadow-lg p-8 mb-8">
-          <div className="flex items-center justify-between mb-6">
+      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '32px 24px' }}>
+
+        {/* ── Session Status Card ── */}
+        <div className="card animate-fade-up" style={{ padding: '32px', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '24px' }}>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Live Session</h1>
-              <p className="text-gray-600 mt-2">
-                Status: <span className={`font-bold ${isActive ? 'text-green-600' : 'text-gray-600'}`}>
-                  {isActive ? '● Running' : '● Stopped'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                <span
+                  className="status-dot"
+                  style={isActive ? {
+                    width: '10px', height: '10px', borderRadius: '50%',
+                    background: 'var(--accent)', boxShadow: '0 0 8px var(--accent-glow)',
+                    animation: 'pulse-dot 1.8s ease infinite', flexShrink: 0,
+                  } : {
+                    width: '10px', height: '10px', borderRadius: '50%',
+                    background: 'var(--text-muted)', flexShrink: 0,
+                  }}
+                />
+                <h1 style={{ fontSize: '22px', fontWeight: '800', letterSpacing: '-0.02em' }}>
+                  Live Session
+                </h1>
+                <span className={`badge ${isActive ? 'badge-green' : ''}`} style={
+                  !isActive ? { background: 'var(--bg-elevated)', color: 'var(--text-muted)' } : {}
+                }>
+                  {isActive ? 'Активна' : 'Зупинена'}
+                </span>
+              </div>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+                WebSocket:{' '}
+                <span style={{ color: isConnected ? 'var(--accent)' : 'var(--red)', fontWeight: 600 }}>
+                  {isConnected ? '● підключено' : '● відключено'}
                 </span>
               </p>
             </div>
-            <div className="text-right">
-              {isActive && (
-                <div className="text-4xl font-bold text-blue-600 font-mono">{duration}</div>
-              )}
-            </div>
+
+            {/* Timer */}
+            {isActive && (
+              <div style={{
+                background: 'var(--bg-elevated)',
+                border: '1px solid var(--border-default)',
+                borderRadius: 'var(--radius-md)',
+                padding: '12px 24px',
+                textAlign: 'center',
+              }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>
+                  Тривалість
+                </div>
+                <div className="font-mono" style={{ fontSize: '28px', fontWeight: 500, color: 'var(--accent)', letterSpacing: '0.04em' }}>
+                  {duration}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* WebSocket Status */}
-          <div className="mb-6 pb-6 border-b">
-            <p className="text-sm text-gray-600">
-              WebSocket: <span className={`font-bold ${isConnected ? 'text-green-600' : 'text-red-600'}`}>
-                {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
-              </span>
-            </p>
+          <div style={{ marginTop: '28px', paddingTop: '28px', borderTop: '1px solid var(--border-subtle)' }}>
+            <SessionControl
+              isActive={isActive}
+              onStart={start}
+              onStop={stop}
+              isStarting={isStarting}
+              isStopping={isStopping}
+            />
           </div>
-
-          {/* Session Control */}
-          <SessionControl
-            isActive={isActive}
-            onStart={start}
-            onStop={stop}
-            isStarting={isStarting}
-            isStopping={isStopping}
-          />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Statistics */}
-          <div className="lg:col-span-1 space-y-4">
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-gray-600 text-sm font-medium mb-2">Orders Created</h3>
-              <p className="text-4xl font-bold text-green-600">{orderCount}</p>
-            </div>
+        {/* ── Main Grid ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: '24px' }}>
 
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-gray-600 text-sm font-medium mb-2">TikTok Comments</h3>
-              <p className="text-4xl font-bold text-blue-600">{commentCount}</p>
-            </div>
+          {/* Left: Stats */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div className="section-label">Статистика ефіру</div>
 
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-gray-600 text-sm font-medium mb-2">Errors</h3>
-              <p className={`text-4xl font-bold ${errorCount > 0 ? 'text-red-600' : 'text-gray-400'}`}>
-                {errorCount}
-              </p>
-            </div>
+            <StatCard
+              label="Замовлень"
+              value={orderCount}
+              color="var(--accent)"
+              dimColor="var(--green-dim)"
+              icon="🛍"
+            />
+            <StatCard
+              label="Коментарів"
+              value={commentCount}
+              color="var(--blue)"
+              dimColor="var(--blue-dim)"
+              icon="💬"
+            />
+            <StatCard
+              label="Помилок"
+              value={errorCount}
+              color={errorCount > 0 ? 'var(--red)' : 'var(--text-muted)'}
+              dimColor={errorCount > 0 ? 'var(--red-dim)' : 'transparent'}
+              icon="⚠"
+            />
 
-            {/* Quick Links */}
-            <div className="bg-blue-50 rounded-lg p-6 border border-blue-200">
-              <h3 className="font-bold text-blue-900 mb-3">ℹ️ Quick Help</h3>
-              <ul className="text-sm text-blue-800 space-y-2">
-                <li>✓ Start session before going LIVE</li>
-                <li>✓ Watch logs for order confirmations</li>
-                <li>✓ Errors appear in red</li>
-                <li>✓ Customer messages in purple</li>
+            {/* Tips card */}
+            <div style={{
+              background: 'var(--accent-dim)',
+              border: '1px solid rgba(0,229,160,0.18)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '20px',
+              marginTop: '4px',
+            }}>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '12px' }}>
+                Підказки
+              </div>
+              <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {[
+                  'Запустіть сесію до початку ефіру',
+                  'Замовлення — зелений рядок у лозі',
+                  'Помилки виділені червоним',
+                  'Коментарі — фіолетові рядки',
+                ].map((tip, i) => (
+                  <li key={i} style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', gap: '8px' }}>
+                    <span style={{ color: 'var(--accent)', flexShrink: 0 }}>✓</span>
+                    {tip}
+                  </li>
+                ))}
               </ul>
             </div>
           </div>
 
-          {/* Live Logs */}
-          <div className="lg:col-span-2">
-            <LiveLogs logs={logs} isConnected={isConnected} />
+          {/* Right: Live Logs */}
+          <div>
+            <div className="section-label">Лайв-лог</div>
+            <LiveLogs logs={logs} isConnected={isConnected} onReconnect={reconnect} />
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Stat Card Component ── */
+function StatCard({
+  label, value, color, dimColor, icon,
+}: {
+  label: string; value: number; color: string; dimColor: string; icon: string;
+}) {
+  return (
+    <div className="stat-card" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+      <div style={{
+        width: '44px',
+        height: '44px',
+        borderRadius: 'var(--radius-md)',
+        background: dimColor,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '20px',
+        flexShrink: 0,
+      }}>
+        {icon}
+      </div>
+      <div>
+        <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '4px' }}>
+          {label}
+        </div>
+        <div className="font-mono" style={{ fontSize: '26px', fontWeight: 600, color, lineHeight: 1 }}>
+          {value}
         </div>
       </div>
     </div>

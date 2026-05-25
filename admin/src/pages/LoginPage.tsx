@@ -1,4 +1,4 @@
-// admin/src/pages/LoginPage.tsx - FIXED
+// admin/src/pages/LoginPage.tsx
 
 import { useState } from 'react';
 import { useAuthStore } from '../hooks/useAuth';
@@ -13,11 +13,9 @@ export function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError('');
-
     try {
       await login(username);
-      // Redirect by reloading
-      window.location.href = '/settings';
+      window.location.href = '/session';
     } catch (err: any) {
       setError(err.message || 'Login failed');
     } finally {
@@ -26,48 +24,177 @@ export function LoginPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-500 to-purple-600">
-      <form onSubmit={handleLogin} className="bg-white p-8 rounded-lg shadow-2xl w-96">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600">
-            TikTok LIVE
-          </h1>
-          <p className="text-gray-600 mt-2">Automation Platform</p>
-        </div>
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'var(--bg-base)',
+      padding: '24px',
+      position: 'relative',
+      overflow: 'hidden',
+    }}>
+      {/* Ambient glow behind card */}
+      <div style={{
+        position: 'absolute',
+        width: '600px',
+        height: '600px',
+        borderRadius: '50%',
+        background: 'radial-gradient(circle, rgba(0,229,160,0.06) 0%, transparent 70%)',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        pointerEvents: 'none',
+      }} />
 
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
-            {error}
+      <div style={{
+        width: '100%',
+        maxWidth: '420px',
+        position: 'relative',
+        animation: 'fadeUp 0.4s ease both',
+      }}>
+        {/* Logo */}
+        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '10px',
+            marginBottom: '12px',
+          }}>
+            <span style={{
+              width: '10px',
+              height: '10px',
+              borderRadius: '50%',
+              background: 'var(--accent)',
+              boxShadow: '0 0 10px var(--accent-glow)',
+              animation: 'pulse-dot 1.8s ease infinite',
+              display: 'inline-block',
+            }} />
+            <span style={{
+              fontSize: '22px',
+              fontWeight: '800',
+              color: 'var(--text-primary)',
+              letterSpacing: '-0.03em',
+            }}>
+              LiveShop
+            </span>
           </div>
-        )}
-
-        <div className="mb-6">
-          <label className="block text-gray-700 font-medium mb-2">
-            TikTok Username
-          </label>
-          <input
-            type="text"
-            placeholder="evelin_kids"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            required
-            disabled={loading}
-          />
+          <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
+            Панель адміністратора
+          </p>
         </div>
 
-        <button
-          type="submit"
-          disabled={loading || !username.trim()}
-          className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition"
-        >
-          {loading ? 'Logging in...' : 'Login'}
-        </button>
+        {/* Card */}
+        <div className="card" style={{ padding: '40px' }}>
+          <h1 style={{
+            fontSize: '20px',
+            fontWeight: '700',
+            marginBottom: '8px',
+            color: 'var(--text-primary)',
+          }}>
+            Вхід у систему
+          </h1>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '32px' }}>
+            Введіть ваш TikTok нікнейм, щоб увійти
+          </p>
 
-        <p className="text-center text-gray-600 text-sm mt-4">
-          No password needed - just your TikTok username!
+          {error && (
+            <div style={{
+              background: 'var(--red-dim)',
+              border: '1px solid rgba(240,77,77,0.25)',
+              color: 'var(--red)',
+              padding: '12px 16px',
+              borderRadius: 'var(--radius-md)',
+              fontSize: '14px',
+              marginBottom: '24px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+            }}>
+              <span>⚠</span>
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleLogin}>
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{
+                display: 'block',
+                fontSize: '13px',
+                fontWeight: '600',
+                color: 'var(--text-secondary)',
+                marginBottom: '8px',
+                letterSpacing: '0.02em',
+              }}>
+                TikTok username
+              </label>
+              <div style={{ position: 'relative' }}>
+                <span style={{
+                  position: 'absolute',
+                  left: '16px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'var(--text-muted)',
+                  fontSize: '15px',
+                  userSelect: 'none',
+                }}>@</span>
+                <input
+                  type="text"
+                  placeholder="evelin_kids"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  required
+                  disabled={loading}
+                  style={{ paddingLeft: '36px' }}
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading || !username.trim()}
+              className="btn-primary"
+              style={{ width: '100%', justifyContent: 'center', padding: '14px' }}
+            >
+              {loading ? (
+                <>
+                  <span style={{
+                    width: '16px',
+                    height: '16px',
+                    border: '2px solid rgba(0,0,0,0.3)',
+                    borderTopColor: '#000',
+                    borderRadius: '50%',
+                    animation: 'spin-slow 0.7s linear infinite',
+                    display: 'inline-block',
+                  }} />
+                  Входжу...
+                </>
+              ) : (
+                'Увійти →'
+              )}
+            </button>
+          </form>
+
+          <p style={{
+            textAlign: 'center',
+            color: 'var(--text-muted)',
+            fontSize: '12px',
+            marginTop: '20px',
+          }}>
+            Пароль не потрібен — лише нікнейм
+          </p>
+        </div>
+
+        {/* Footer */}
+        <p style={{
+          textAlign: 'center',
+          color: 'var(--text-muted)',
+          fontSize: '12px',
+          marginTop: '24px',
+        }}>
+          LiveShop · Автоматизація TikTok LIVE · 2026
         </p>
-      </form>
+      </div>
     </div>
   );
 }

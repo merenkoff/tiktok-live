@@ -1,7 +1,7 @@
-// admin/src/App.tsx
+// admin/src/App.tsx — unchanged logic, updated class names removed
 
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route /*, Link, Navigate, useNavigate, useLocation*/ } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { useAuthStore } from './hooks/useAuth';
 import { LoginPage } from './pages/LoginPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -15,24 +15,17 @@ export function App() {
     loadUser();
   }, [loadUser]);
 
-  // Get current page from URL
-  const path = window.location.pathname;
-
   if (!isAuthenticated) {
     return <LoginPage />;
   }
 
   return (
     <BrowserRouter>
-    <div className="app">
-      <main className="app-main">
-        <Routes>
-          <Route path="/" element={<SessionPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/session" element={<SessionPage />} />
-        </Routes>
-      </main>
-    </div>
+      <Routes>
+        <Route path="/"         element={<SessionPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/session"  element={<SessionPage />} />
+      </Routes>
     </BrowserRouter>
   );
 }
