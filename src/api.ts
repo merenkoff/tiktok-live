@@ -1,4 +1,6 @@
 import Fastify, { FastifyInstance /*, FastifyRequest*/} from 'fastify';
+import staticPlugin from '@fastify/static';
+import path from 'path';
 import { readFile } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -29,6 +31,13 @@ export async function createServer(): Promise<FastifyInstance> {
     logger: {
       level: process.env.LOG_LEVEL || 'info',
     },
+  });
+
+  // ⭐ CRITICAL: Register static file serving BEFORE routes
+  // Serve static files from public directory
+  await fastify.register(staticPlugin, {
+    root: path.join(__dirname, '..', 'public'),
+    prefix: '/',
   });
 
   /**

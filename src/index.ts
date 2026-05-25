@@ -133,16 +133,16 @@ async function main(): Promise<void> {
     await startServer(fastify, port);
 
     logger.info('');
-    logger.info('╔════════════════════════════════════════════════════════╗');
-    logger.info('║   ✅ Platform Started Successfully!                    ║');
-    logger.info('╠════════════════════════════════════════════════════════╣');
-    logger.info(`║   🌐 API: http://localhost:${port}                     ║`);
-    logger.info('║   💻 Admin: http://localhost:3001                      ║');
-    logger.info('║   🔌 WebSocket: ws://localhost:3000/api/...            ║');
-    logger.info('╠════════════════════════════════════════════════════════╣');
-    logger.info('║   📊 Ready to serve multiple TikTok LIVE sellers!      ║');
-    logger.info('║   🎬 Start a session from admin panel                  ║');
-    logger.info('╚════════════════════════════════════════════════════════╝');
+    logger.info('╔═════════════════════════════════════════════════════════════════╗');
+    logger.info('║   ✅ Platform Started Successfully!                             ║');
+    logger.info('╠═════════════════════════════════════════════════════════════════╣');
+    logger.info(`║   🌐 API: http://localhost:${port}                              ║`);
+    logger.info('║   💻 Admin: http://localhost:3001                               ║');
+    logger.info(`║   🔌 WebSocket: ws://localhost:${port}/api/sessions/logs/stream ║`);
+    logger.info('╠═════════════════════════════════════════════════════════════════╣');
+    logger.info('║   📊 Ready to serve multiple TikTok LIVE sellers!               ║');
+    logger.info('║   🎬 Start a session from admin panel                           ║');
+    logger.info('╚═════════════════════════════════════════════════════════════════╝');
     logger.info('');
 
     // Log startup completion
