@@ -1,4 +1,4 @@
-/* admin/src/index.css — LiveShop Admin Design System */
+/* admin/src/index.css — LiveShop Admin Design System (Enhanced) */
 
 @tailwind base;
 @tailwind components;
@@ -58,6 +58,7 @@ body {
   background-color: var(--bg-base);
   color: var(--text-primary);
   min-height: 100vh;
+  letter-spacing: -0.01em;
 }
 
 /* ── Scrollbar ── */
@@ -68,11 +69,20 @@ body {
 
 /* ── Typography ── */
 h1, h2, h3, h4 { font-weight: 700; letter-spacing: -0.02em; }
+p { line-height: 1.6; }
 
 /* ── Animations ── */
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideInFromLeft {
+  from { opacity: 0; transform: translateX(-16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideIn {
+  from { opacity: 0; width: 0; }
+  to   { opacity: 1; width: 20px; }
 }
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; }
@@ -81,8 +91,13 @@ h1, h2, h3, h4 { font-weight: 700; letter-spacing: -0.02em; }
 @keyframes spin-slow {
   to { transform: rotate(360deg); }
 }
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
 
 .animate-fade-up { animation: fadeUp 0.35s ease both; }
+.animate-slide-in { animation: slideInFromLeft 0.4s ease both; }
 
 /* ── Cards ── */
 .card {
@@ -90,6 +105,11 @@ h1, h2, h3, h4 { font-weight: 700; letter-spacing: -0.02em; }
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
+  transition: all 0.3s;
+}
+.card:hover {
+  border-color: var(--border-default);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5), 0 8px 24px rgba(0,0,0,0.2);
 }
 
 /* ── Buttons ── */
@@ -108,11 +128,26 @@ h1, h2, h3, h4 { font-weight: 700; letter-spacing: -0.02em; }
   cursor: pointer;
   transition: all 0.2s;
   letter-spacing: 0.01em;
+  position: relative;
+  overflow: hidden;
+}
+.btn-primary::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: rgba(255,255,255,0.1);
+  transition: left 0.3s;
 }
 .btn-primary:hover:not(:disabled) {
   background: #00ffb3;
   box-shadow: 0 0 20px rgba(0,229,160,0.35);
   transform: translateY(-1px);
+}
+.btn-primary:hover:not(:disabled)::before {
+  left: 100%;
 }
 .btn-primary:disabled {
   opacity: 0.45;
@@ -137,6 +172,7 @@ h1, h2, h3, h4 { font-weight: 700; letter-spacing: -0.02em; }
 }
 .btn-danger:hover:not(:disabled) {
   background: rgba(240,77,77,0.2);
+  border-color: rgba(240,77,77,0.4);
   box-shadow: 0 0 20px rgba(240,77,77,0.2);
   transform: translateY(-1px);
 }
@@ -187,8 +223,18 @@ textarea {
   font-family: inherit;
   font-size: 14px;
   outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
   appearance: none;
+}
+
+input[type='text']:hover,
+input[type='email']:hover,
+input[type='password']:hover,
+input[type='number']:hover,
+select:hover,
+textarea:hover {
+  border-color: var(--border-strong);
+  background: rgba(255,255,255,0.02);
 }
 
 input[type='text']:focus,
@@ -199,6 +245,7 @@ select:focus,
 textarea:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-dim);
+  background: var(--bg-elevated);
 }
 
 input:disabled,
@@ -209,7 +256,7 @@ select:disabled {
 
 input::placeholder { color: var(--text-muted); }
 
-select option { background: var(--bg-card); }
+select option { background: var(--bg-card); color: var(--text-primary); }
 
 /* ── Status dot ── */
 .status-dot {
@@ -235,10 +282,11 @@ select option { background: var(--bg-card); }
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: 24px;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 }
 .stat-card:hover {
   border-color: var(--border-default);
+  background: rgba(255,255,255,0.02);
   box-shadow: var(--shadow-card);
 }
 
@@ -249,7 +297,7 @@ select option { background: var(--bg-card); }
   border-left: 3px solid transparent;
   font-size: 13px;
   line-height: 1.6;
-  transition: background 0.15s;
+  transition: background 0.15s, border-color 0.15s;
 }
 .log-entry:hover { background: var(--bg-elevated); }
 .log-entry.order    { border-color: var(--accent); }
@@ -265,6 +313,7 @@ select option { background: var(--bg-card); }
   text-transform: uppercase;
   color: var(--text-muted);
   margin-bottom: 16px;
+  display: block;
 }
 
 /* ── Badge ── */
@@ -272,19 +321,27 @@ select option { background: var(--bg-card); }
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 10px;
+  padding: 4px 12px;
   border-radius: 100px;
   font-size: 12px;
   font-weight: 600;
+  transition: all 0.2s;
 }
 .badge-green  { background: var(--green-dim);  color: var(--green); }
 .badge-red    { background: var(--red-dim);    color: var(--red);   }
 .badge-yellow { background: var(--yellow-dim); color: var(--yellow); }
 .badge-blue   { background: var(--blue-dim);   color: var(--blue);  }
 
-/* focus ring global */
+/* ── Focus ring global ── */
 button:focus-visible, a:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 4px;
+}
+
+/* ── Smooth transitions across page ── */
+@media (prefers-reduced-motion: no-preference) {
+  * {
+    transition-property: background-color, border-color, color, fill, stroke;
+  }
 }

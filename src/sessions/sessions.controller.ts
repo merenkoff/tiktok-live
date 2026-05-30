@@ -84,10 +84,16 @@ export async function registerSessionRoutes(fastify: FastifyInstance) {
     '/api/sessions/current',
     async (request, reply) => {
       try {
+        // logger.info(`/api/sessions/current session for user ${request}`);
         const { userId } = ensureAuth(request);
+        
+        // logger.info(`getSession for user ${userId}`);
 
         const session = sessionManager.getSession(userId);
+        // logger.info(`session ${session} for user ${userId}`);
 
+        //STOPP HERE 
+        
         if (!session) {
           reply.send(null);
           return;

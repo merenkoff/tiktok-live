@@ -29,22 +29,26 @@ export class WebSocketClient {
           resolve();
         };
 
+        // ✅ СЛУХАЄМО ПОВІДОМЛЕННЯ
         this.ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
+            console.log('📨 WebSocket message:', data); // DEBUG
             this.handleMessage(data);
           } catch (error) {
-            console.error('Error parsing WebSocket message', error);
+            console.error('❌ Error parsing WebSocket message', error);
           }
         };
 
+        // ✅ СЛУХАЄМО РОЗ'ЄДНАННЯ
         this.ws.onclose = () => {
           console.warn('❌ WebSocket disconnected');
           this.handleDisconnect();
         };
 
+        // ✅ СЛУХАЄМО ПОМИЛКИ
         this.ws.onerror = (error) => {
-          console.error('WebSocket error', error);
+          console.error('❌ WebSocket error', error);
           reject(error);
         };
       } catch (error) {
@@ -54,8 +58,14 @@ export class WebSocketClient {
   }
 
   private handleMessage(data: any): void {
+    console.log('🔔 Handling message:', data); // DEBUG
+    
     if (data.type === 'log') {
-      this.logHandlers.forEach((handler) => handler(data.log));
+      console.log('📝 New log received:', data.log); // DEBUG
+      this.logHandlers.forEach((handler) => {
+        console.log('🎯 Calling log handler'); // DEBUG
+        handler(data.log);
+      });
     } else {
       const handlers = this.eventHandlers.get(data.type);
       if (handlers) {
@@ -68,12 +78,13 @@ export class WebSocketClient {
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++;
       const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-      console.log(`Reconnecting in ${Math.round(delay / 1000)}s...`);
+      console.log(`🔄 Reconnecting in ${Math.round(delay / 1000)}s...`);
       setTimeout(() => this.connect().catch(console.error), delay);
     }
   }
 
   onLog(handler: LogHandler): () => void {
+    console.log('✅ Log handler registered'); // DEBUG
     this.logHandlers.add(handler);
     return () => this.logHandlers.delete(handler);
   }

@@ -1,4 +1,4 @@
-// admin/src/pages/SessionPage.tsx
+// admin/src/pages/SessionPage.tsx (Enhanced)
 
 import { useState, useEffect } from 'react';
 import { useSession } from '../hooks/useSession';
@@ -35,14 +35,16 @@ export function SessionPage() {
   if (isLoading) return <LoadingSpinner />;
 
   if (isError) return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-base)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div className="card" style={{ padding: '40px', textAlign: 'center', maxWidth: '400px' }}>
-        <div style={{ fontSize: '32px', marginBottom: '16px' }}>⚠️</div>
-        <div style={{ fontWeight: 700, marginBottom: '8px' }}>Не вдалося підключитись до сервера</div>
-        <div style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '24px' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg-base)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+      <div className="card" style={{ padding: '48px 40px', textAlign: 'center', maxWidth: '420px', animation: 'fadeUp 0.4s ease' }}>
+        <div style={{ fontSize: '48px', marginBottom: '20px' }}>⚠️</div>
+        <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '12px', color: 'var(--text-primary)' }}>
+          Не вдалося підключитись до сервера
+        </h2>
+        <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '32px', lineHeight: 1.6 }}>
           Перевірте що бекенд запущений на порту 3000
-        </div>
-        <button className="btn-ghost" onClick={() => window.location.reload()}>
+        </p>
+        <button className="btn-primary" onClick={() => window.location.reload()}>
           ↺ Спробувати знову
         </button>
       </div>
@@ -53,39 +55,41 @@ export function SessionPage() {
     <div style={{ minHeight: '100vh', background: 'var(--bg-base)' }}>
       <Header />
 
-      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '32px 24px' }}>
+      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '36px 28px' }}>
 
         {/* ── Session Status Card ── */}
-        <div className="card animate-fade-up" style={{ padding: '32px', marginBottom: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '24px' }}>
+        <div className="card animate-fade-up" style={{ padding: '36px', marginBottom: '32px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '28px' }}>
+            {/* Title & Status */}
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '12px' }}>
                 <span
                   className="status-dot"
                   style={isActive ? {
-                    width: '10px', height: '10px', borderRadius: '50%',
+                    width: '12px', height: '12px', borderRadius: '50%',
                     background: 'var(--accent)', boxShadow: '0 0 8px var(--accent-glow)',
                     animation: 'pulse-dot 1.8s ease infinite', flexShrink: 0,
                   } : {
-                    width: '10px', height: '10px', borderRadius: '50%',
+                    width: '12px', height: '12px', borderRadius: '50%',
                     background: 'var(--text-muted)', flexShrink: 0,
                   }}
                 />
-                <h1 style={{ fontSize: '22px', fontWeight: '800', letterSpacing: '-0.02em' }}>
+                <h1 style={{ fontSize: '24px', fontWeight: '800', letterSpacing: '-0.02em', margin: 0 }}>
                   Live Session
                 </h1>
                 <span className={`badge ${isActive ? 'badge-green' : ''}`} style={
                   !isActive ? { background: 'var(--bg-elevated)', color: 'var(--text-muted)' } : {}
                 }>
-                  {isActive ? 'Активна' : 'Зупинена'}
+                  {isActive ? '● Активна' : '● Зупинена'}
                 </span>
               </div>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
-                WebSocket:{' '}
-                <span style={{ color: isConnected ? 'var(--accent)' : 'var(--red)', fontWeight: 600 }}>
-                  {isConnected ? '● підключено' : '● відключено'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 500 }}>
+                <span>WebSocket:</span>
+                <span style={{ color: isConnected ? 'var(--accent)' : 'var(--red)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', display: 'inline-block', background: isConnected ? 'var(--accent)' : 'var(--red)' }} />
+                  {isConnected ? 'підключено' : 'відключено'}
                 </span>
-              </p>
+              </div>
             </div>
 
             {/* Timer */}
@@ -94,20 +98,21 @@ export function SessionPage() {
                 background: 'var(--bg-elevated)',
                 border: '1px solid var(--border-default)',
                 borderRadius: 'var(--radius-md)',
-                padding: '12px 24px',
+                padding: '14px 28px',
                 textAlign: 'center',
+                minWidth: '180px',
               }}>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>
+                <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '6px' }}>
                   Тривалість
                 </div>
-                <div className="font-mono" style={{ fontSize: '28px', fontWeight: 500, color: 'var(--accent)', letterSpacing: '0.04em' }}>
+                <div className="font-mono" style={{ fontSize: '32px', fontWeight: 600, color: 'var(--accent)', letterSpacing: '0.06em' }}>
                   {duration}
                 </div>
               </div>
             )}
           </div>
 
-          <div style={{ marginTop: '28px', paddingTop: '28px', borderTop: '1px solid var(--border-subtle)' }}>
+          <div style={{ marginTop: '32px', paddingTop: '32px', borderTop: '1px solid var(--border-subtle)' }}>
             <SessionControl
               isActive={isActive}
               onStart={start}
@@ -119,11 +124,11 @@ export function SessionPage() {
         </div>
 
         {/* ── Main Grid ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '290px 1fr', gap: '32px' }}>
 
           {/* Left: Stats */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div className="section-label">Статистика ефіру</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            <span className="section-label">Статистика ефіру</span>
 
             <StatCard
               label="Замовлень"
@@ -149,25 +154,25 @@ export function SessionPage() {
 
             {/* Tips card */}
             <div style={{
-              background: 'var(--accent-dim)',
-              border: '1px solid rgba(0,229,160,0.18)',
+              background: 'linear-gradient(135deg, rgba(0,229,160,0.08), rgba(0,229,160,0.04))',
+              border: '1px solid rgba(0,229,160,0.2)',
               borderRadius: 'var(--radius-lg)',
-              padding: '20px',
-              marginTop: '4px',
+              padding: '22px',
+              marginTop: '8px',
             }}>
-              <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '12px' }}>
-                Підказки
+              <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '14px' }}>
+                💡 Підказки
               </div>
-              <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {[
                   'Запустіть сесію до початку ефіру',
-                  'Замовлення — зелений рядок у лозі',
+                  'Замовлення — зелений рядок',
                   'Помилки виділені червоним',
                   'Коментарі — фіолетові рядки',
                 ].map((tip, i) => (
-                  <li key={i} style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', gap: '8px' }}>
-                    <span style={{ color: 'var(--accent)', flexShrink: 0 }}>✓</span>
-                    {tip}
+                  <li key={i} style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', gap: '8px', lineHeight: 1.5 }}>
+                    <span style={{ color: 'var(--accent)', flexShrink: 0, fontWeight: 600 }}>✓</span>
+                    <span>{tip}</span>
                   </li>
                 ))}
               </ul>
@@ -176,7 +181,7 @@ export function SessionPage() {
 
           {/* Right: Live Logs */}
           <div>
-            <div className="section-label">Лайв-лог</div>
+            <span className="section-label">Лайв-лог</span>
             <LiveLogs logs={logs} isConnected={isConnected} onReconnect={reconnect} />
           </div>
         </div>
@@ -192,17 +197,18 @@ function StatCard({
   label: string; value: number; color: string; dimColor: string; icon: string;
 }) {
   return (
-    <div className="stat-card" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+    <div className="stat-card" style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
       <div style={{
-        width: '44px',
-        height: '44px',
+        width: '48px',
+        height: '48px',
         borderRadius: 'var(--radius-md)',
         background: dimColor,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontSize: '20px',
+        fontSize: '22px',
         flexShrink: 0,
+        border: `1px solid ${dimColor === 'transparent' ? 'var(--border-subtle)' : 'transparent'}`,
       }}>
         {icon}
       </div>
@@ -210,7 +216,7 @@ function StatCard({
         <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '4px' }}>
           {label}
         </div>
-        <div className="font-mono" style={{ fontSize: '26px', fontWeight: 600, color, lineHeight: 1 }}>
+        <div className="font-mono" style={{ fontSize: '28px', fontWeight: 700, color, lineHeight: 1, letterSpacing: '-0.01em' }}>
           {value}
         </div>
       </div>

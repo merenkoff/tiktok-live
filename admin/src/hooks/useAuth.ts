@@ -17,7 +17,10 @@ export const useAuthStore = create<AuthStore>((set) => ({
   isAuthenticated: false,
 
   login: async (username: string) => {
+    console.log(`Trying login ${username}`);
+    
     const response = await api.login(username);
+    console.log(`2 -- login ${response}`);
     localStorage.setItem('token', response.token);
     localStorage.setItem('user', JSON.stringify(response.user));
     set({

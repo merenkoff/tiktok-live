@@ -32,13 +32,20 @@ export class TikTokInstance extends EventEmitter {
     try {
       logger.info(`🎬 Connecting to TikTok LIVE for user ${this.userId}... ${this.settings.tiktok_username!}...`);
       this.connection = new TikTokLiveConnection(this.settings.tiktok_username!, {
+        // CRITICAL: Skip initial data to avoid 403 errors from TikTok
         processInitialData: false,
-        enableExtendedGiftInfo: true
+        enableExtendedGiftInfo: false,
+        // enableWebsocketUpgrade: false,
+        // requestHeaders: {
+        //   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        // },
       });
 
       // Chat events
       this.connection.on('chat', async (data: any) => {
         try {
+          console.log(`[CHAT] ${data.uniqueId}: ${data.comment}`);
+          
           await this.handleComment(data);
         } catch (error) {
           logger.error(`Error handling comment for user ${this.userId}`, { error });
@@ -87,7 +94,7 @@ export class TikTokInstance extends EventEmitter {
       // Error event
       this.connection.on('error', (error: any) => {
         logger.error(`TikTok error for user ${this.userId}`, { error });
-        this.handleDisconnect();
+        // Don't disconnect on error - try to continue
       });
 
       // Connect
@@ -102,16 +109,24 @@ export class TikTokInstance extends EventEmitter {
         'info',
         `Connected to TikTok LIVE @${this.settings.tiktok_username}`
       );
-      logger.info(`Connected to TikTok LIVE @${this.settings.tiktok_username}`);
-      
+
       this.emit('connected');
     } catch (error) {
       logger.error(`Failed to connect to TikTok for user ${this.userId}`, { error });
+      
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : typeof error === 'object'
+            ? JSON.stringify(error)
+            : String(error);
+
       await sessionManager.addLog(
         this.userId,
         'error',
-        `Failed to connect to TikTok LIVE: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to connect to TikTok LIVE: ${errorMessage}`
       );
+
       this.handleDisconnect();
     }
   }
@@ -120,67 +135,77 @@ export class TikTokInstance extends EventEmitter {
    * Handle incoming comment
    */
   private async handleComment(data: any): Promise<void> {
-    const { uniqueId, comment } = data;
-
-    // Parse order from comment
-    const parsed = parseOrder(comment);
-    if (!parsed || !validateOrder(parsed)) {
-      return;
-    }
-
-    // Rate limiting per user
-    const now = Date.now();
-    const lastCommentTime = this.userComments.get(uniqueId) || 0;
-    if (now - lastCommentTime < this.commentRateLimit) {
-      return;
-    }
-    this.userComments.set(uniqueId, now);
-
-    logger.info(
-      `📝 Order detected for user ${this.userId}: ${parsed.productCode} ${parsed.size}`,
-      { tiktokUser: uniqueId }
-    );
-
     try {
-      // Create reservation
-      const reservation = await createReservation(
-        this.userId.toString(),
-        parsed.productCode,
-        parsed.size,
-        uniqueId
+      const { uniqueId, comment } = data;
+
+      logger.info(`🎬 Comment ${comment}`);
+      
+      if (!uniqueId || !comment) {
+        return;
+      }
+
+      // Parse order from comment
+      const parsed = parseOrder(comment);
+      if (!parsed || !validateOrder(parsed)) {
+        return;
+      }
+
+      // Rate limiting per user
+      const now = Date.now();
+      const lastCommentTime = this.userComments.get(uniqueId) || 0;
+      if (now - lastCommentTime < this.commentRateLimit) {
+        return;
+      }
+      this.userComments.set(uniqueId, now);
+
+      logger.info(
+        `📝 Order detected for user ${this.userId}: ${parsed.productCode} ${parsed.size}`,
+        { tiktokUser: uniqueId }
       );
 
-      if (reservation) {
-        logger.info(`✅ Reservation created for user ${this.userId}`, {
-          reservationId: reservation.id,
-        });
-
-        // Log to session
-        await sessionManager.addLog(
-          this.userId,
-          'tiktok_comment',
-          `Order: ${parsed.productCode} ${parsed.size} from @${uniqueId}`,
-          {
-            productCode: parsed.productCode,
-            size: parsed.size,
-            tiktokUser: uniqueId,
-          }
+      try {
+        // Create reservation
+        const reservation = await createReservation(
+          this.userId.toString(),
+          parsed.productCode,
+          parsed.size,
+          uniqueId
         );
 
-        this.emit('orderDetected', {
-          userId: this.userId,
-          order: parsed,
-          nickname: uniqueId,
-          reservation,
-        });
+        if (reservation) {
+          logger.info(`✅ Reservation created for user ${this.userId}`, {
+            reservationId: reservation.id,
+          });
+
+          // Log to session
+          await sessionManager.addLog(
+            this.userId,
+            'tiktok_comment',
+            `Order: ${parsed.productCode} ${parsed.size} from @${uniqueId}`,
+            {
+              productCode: parsed.productCode,
+              size: parsed.size,
+              tiktokUser: uniqueId,
+            }
+          );
+
+          this.emit('orderDetected', {
+            userId: this.userId,
+            order: parsed,
+            nickname: uniqueId,
+            reservation,
+          });
+        }
+      } catch (error) {
+        logger.error('Error creating reservation', { error, userId: this.userId });
+        await sessionManager.addLog(
+          this.userId,
+          'error',
+          `Failed to create reservation: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
       }
     } catch (error) {
-      logger.error('Error creating reservation', { error, userId: this.userId });
-      await sessionManager.addLog(
-        this.userId,
-        'error',
-        `Failed to create reservation: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+      logger.error('Error in handleComment', { error, userId: this.userId });
     }
   }
 

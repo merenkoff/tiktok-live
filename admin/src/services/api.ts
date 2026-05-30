@@ -4,7 +4,7 @@ import axios from 'axios';
 import type { AxiosInstance } from 'axios';
 import type { AuthResponse, UserSettings, Session, SessionLog } from '../types';
 
-const API_URL = 'https://the-live.shop'; // 'http://localhost:3000'; //import.meta.env.VITE_API_URL || '';
+const API_URL = 'http://localhost:3000'; //'https://the-live.shop'; // 'http://localhost:3000'; //import.meta.env.VITE_API_URL || '';
 
 class ApiClient {
   private client: AxiosInstance;
@@ -23,17 +23,17 @@ class ApiClient {
       return config;
     });
 
-    this.client.interceptors.response.use(
-      (response) => response,
-      (error) => {
-        if (error.response?.status === 401) {
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          window.location.href = '/';
-        }
-        throw error;
-      }
-    );
+    // this.client.interceptors.response.use(
+    //   (response) => response,
+    //   (error) => {
+    //     if (error.response?.status === 401) {
+    //       localStorage.removeItem('token');
+    //       localStorage.removeItem('user');
+    //       window.location.href = '/';
+    //     }
+    //     throw error;
+    //   }
+    // );
   }
 
   async login(tiktok_username: string): Promise<AuthResponse> {
@@ -97,7 +97,7 @@ class ApiClient {
   getWebSocketUrl(): string {
     const token = localStorage.getItem('token');
     // WebSocket завжди напряму на бекенд (проксі Vite не підтримує WS за замовчуванням)
-    const base = 'ws://the-live.shop'; // import.meta.env.VITE_WS_URL || 'ws://localhost:3000';
+    const base = 'ws://localhost:3000'; //'ws://the-live.shop'; // import.meta.env.VITE_WS_URL || 'ws://localhost:3000';
     return `${base}/api/sessions/logs/stream?token=${token}`;
   }
 }

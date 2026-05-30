@@ -33,9 +33,14 @@ export async function getUserById(user_id: number): Promise<User | null> {
 export async function createOrGetUser(tiktok_username: string): Promise<User> {
   try {
     // Try to get existing user
+    logger.info(`TikTok getUserByUsername ${tiktok_username}`);
     let user = await getUserByUsername(tiktok_username);
-    if (user) return user;
+    if (user) {
+      logger.info(`TikTok user ${user}`);
+      return user;
+    }
 
+    logger.info(`TikTok INSERT ${tiktok_username}`);
     // Create new user
     const result = await pool.query(
       `INSERT INTO users (tiktok_username, is_active, subscription_level)

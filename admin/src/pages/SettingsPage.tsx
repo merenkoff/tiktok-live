@@ -1,4 +1,4 @@
-// admin/src/pages/SettingsPage.tsx
+// admin/src/pages/SettingsPage.tsx (Enhanced)
 
 import { useState, useEffect } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -28,7 +28,7 @@ export function SettingsPage() {
     mutationFn: (data: Partial<UserSettings>) => api.updateSettings(data),
     onSuccess: () => {
       setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000);
+      setTimeout(() => setShowSuccess(false), 3500);
     },
   });
 
@@ -36,7 +36,7 @@ export function SettingsPage() {
     mutationFn: () => api.testTelegram(),
     onSuccess: (result) => {
       setTestResult(result);
-      setTimeout(() => setTestResult(null), 5000);
+      setTimeout(() => setTestResult(null), 5500);
     },
   });
 
@@ -67,14 +67,14 @@ export function SettingsPage() {
     <div style={{ minHeight: '100vh', background: 'var(--bg-base)' }}>
       <Header />
 
-      <div style={{ maxWidth: '800px', margin: '0 auto', padding: '32px 24px' }}>
+      <div style={{ maxWidth: '840px', margin: '0 auto', padding: '36px 28px' }}>
 
         {/* Page header */}
-        <div style={{ marginBottom: '32px' }}>
-          <h1 style={{ fontSize: '26px', fontWeight: '800', letterSpacing: '-0.03em', marginBottom: '6px' }}>
+        <div style={{ marginBottom: '40px' }}>
+          <h1 style={{ fontSize: '28px', fontWeight: '800', letterSpacing: '-0.03em', marginBottom: '8px', color: 'var(--text-primary)' }}>
             Налаштування
           </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '15px', lineHeight: 1.6 }}>
             Інтеграції та параметри сесії
           </p>
         </div>
@@ -82,30 +82,31 @@ export function SettingsPage() {
         {/* Success toast */}
         {showSuccess && (
           <div style={{
-            background: 'var(--green-dim)',
-            border: '1px solid rgba(0,229,160,0.25)',
+            background: 'linear-gradient(90deg, var(--green-dim), rgba(0,229,160,0.08))',
+            border: '1px solid rgba(0,229,160,0.3)',
             color: 'var(--accent)',
             padding: '14px 20px',
             borderRadius: 'var(--radius-md)',
             fontSize: '14px',
             fontWeight: 600,
-            marginBottom: '24px',
+            marginBottom: '28px',
             display: 'flex',
             alignItems: 'center',
-            gap: '10px',
+            gap: '12px',
             animation: 'fadeUp 0.3s ease',
           }}>
-            <span>✓</span> Налаштування збережено
+            <span style={{ fontSize: '18px' }}>✓</span>
+            <span>Налаштування збережено успішно</span>
           </div>
         )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
           {/* ── Telegram Section ── */}
           <SectionCard
             icon="🤖"
             title="Telegram Bot"
-            subtitle="Підключіть бота для отримання замовлень"
+            subtitle="Підключіть бота для отримання замовлень та коментарів"
           >
             <FieldGroup label="Bot Token" hint="Отримайте у @BotFather в Telegram">
               <input
@@ -117,7 +118,7 @@ export function SettingsPage() {
               />
             </FieldGroup>
 
-            <FieldGroup label="Channel ID" hint="Використайте @userinfobot щоб отримати ID">
+            <FieldGroup label="Channel ID" hint="Використайте @userinfobot щоб отримати ID каналу">
               <input
                 type="number"
                 name="telegram_channel_id"
@@ -127,7 +128,7 @@ export function SettingsPage() {
               />
             </FieldGroup>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', paddingTop: '8px' }}>
               <button
                 className="btn-ghost"
                 onClick={() => testMutation.mutate()}
@@ -144,15 +145,20 @@ export function SettingsPage() {
 
               {testResult && (
                 <div style={{
-                  padding: '8px 16px',
+                  padding: '10px 16px',
                   borderRadius: 'var(--radius-md)',
                   fontSize: '13px',
                   fontWeight: 600,
                   background: testResult.ok ? 'var(--green-dim)' : 'var(--red-dim)',
                   color: testResult.ok ? 'var(--green)' : 'var(--red)',
-                  border: `1px solid ${testResult.ok ? 'rgba(0,229,160,0.2)' : 'rgba(240,77,77,0.2)'}`,
+                  border: `1px solid ${testResult.ok ? 'rgba(0,229,160,0.3)' : 'rgba(240,77,77,0.3)'}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  animation: 'fadeUp 0.2s ease',
                 }}>
-                  {testResult.ok ? '✓' : '✗'} {testResult.message}
+                  <span>{testResult.ok ? '✓' : '✗'}</span>
+                  {testResult.message}
                 </div>
               )}
             </div>
@@ -162,7 +168,7 @@ export function SettingsPage() {
           <SectionCard
             icon="📦"
             title="Нова Пошта"
-            subtitle="Опціонально — для генерації ТТН та відстеження"
+            subtitle="Опціонально — для генерації ТТН та відстеження посилок"
             badge="Опціонально"
           >
             <FieldGroup label="API Key" hint="developers.novaposhta.ua">
@@ -175,7 +181,7 @@ export function SettingsPage() {
               />
             </FieldGroup>
 
-            <FieldGroup label="Назва магазину" hint="Відображається у замовленнях">
+            <FieldGroup label="Назва магазину" hint="Відображається у замовленнях та ТТН">
               <input
                 type="text"
                 name="novaposhta_merchant_name"
@@ -192,10 +198,10 @@ export function SettingsPage() {
             title="Таймери бронювання"
             subtitle="Скільки часу є у покупця для кожного кроку"
           >
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
               <FieldGroup
                 label="Таймер броні"
-                hint="Скільки часу товар утримується після коментаря"
+                hint="Товар утримується після коментаря"
               >
                 <select
                   name="reservation_timeout_minutes"
@@ -210,7 +216,7 @@ export function SettingsPage() {
 
               <FieldGroup
                 label="Таймер оплати"
-                hint="Час на підтвердження після оформлення замовлення"
+                hint="Час на підтвердження оплати"
               >
                 <select
                   name="payment_timeout_minutes"
@@ -228,12 +234,12 @@ export function SettingsPage() {
         </div>
 
         {/* ── Save Button ── */}
-        <div style={{ marginTop: '32px', display: 'flex', justifyContent: 'flex-end' }}>
+        <div style={{ marginTop: '40px', display: 'flex', justifyContent: 'flex-end' }}>
           <button
             className="btn-primary"
             onClick={() => updateMutation.mutate(formData)}
             disabled={updateMutation.isPending}
-            style={{ minWidth: '180px', justifyContent: 'center' }}
+            style={{ minWidth: '200px', justifyContent: 'center', fontSize: '15px', padding: '13px 28px' }}
           >
             {updateMutation.isPending ? (
               <><Spinner dark /> Збереження...</>
@@ -254,31 +260,32 @@ function SectionCard({
   icon: string; title: string; subtitle?: string; badge?: string; children: React.ReactNode;
 }) {
   return (
-    <div className="card" style={{ padding: '28px' }}>
+    <div className="card" style={{ padding: '32px' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '28px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', flex: 1 }}>
           <div style={{
-            width: '40px', height: '40px', borderRadius: 'var(--radius-md)',
+            width: '44px', height: '44px', borderRadius: 'var(--radius-md)',
             background: 'var(--bg-elevated)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '20px', flexShrink: 0,
+            fontSize: '22px', flexShrink: 0,
+            border: '1px solid var(--border-subtle)',
           }}>
             {icon}
           </div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: '16px', marginBottom: '2px' }}>{title}</div>
-            {subtitle && <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{subtitle}</div>}
+            <h3 style={{ fontWeight: 700, fontSize: '17px', marginBottom: '4px', color: 'var(--text-primary)' }}>{title}</h3>
+            {subtitle && <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>{subtitle}</p>}
           </div>
         </div>
         {badge && (
-          <span className="badge" style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)', fontSize: '11px' }}>
+          <span className="badge" style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)', fontSize: '11px', marginLeft: '16px', flexShrink: 0 }}>
             {badge}
           </span>
         )}
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
         {children}
       </div>
     </div>
@@ -289,14 +296,15 @@ function FieldGroup({ label, hint, children }: { label: string; hint?: string; c
   return (
     <div>
       <label style={{
-        display: 'block', fontSize: '13px', fontWeight: 600,
-        color: 'var(--text-secondary)', marginBottom: '8px',
+        display: 'block', fontSize: '13px', fontWeight: 700,
+        color: 'var(--text-primary)', marginBottom: '10px',
+        letterSpacing: '-0.01em',
       }}>
         {label}
       </label>
       {children}
       {hint && (
-        <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
+        <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '7px', lineHeight: 1.4 }}>
           {hint}
         </p>
       )}
