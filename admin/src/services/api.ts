@@ -4,7 +4,7 @@ import axios from 'axios';
 import type { AxiosInstance } from 'axios';
 import type { AuthResponse, UserSettings, Session, SessionLog } from '../types';
 
-const API_URL = 'http://localhost:3000'; //'https://the-live.shop'; // 'http://localhost:3000'; //import.meta.env.VITE_API_URL || '';
+const API_URL = 'https://the-live.shop'; //process.env.VITE_API_URL ||  // 'http://localhost:3000'; //import.meta.env.VITE_API_URL || '';
 
 class ApiClient {
   private client: AxiosInstance;

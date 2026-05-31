@@ -40,6 +40,7 @@ export function useLogs() {
           }
         });
 
+        // TO AI (Claude / Cursor): Next time fix this missed method onDisconect
         // Listen for disconnect to auto-reconnect
         wsClient.onDisconnect?.(() => {
           if (!mountedRef.current) return;

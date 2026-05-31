@@ -1,0 +1,12 @@
+# admin/railway.json
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "dockerfile",
+    "dockerfile": "./Dockerfile"
+  },
+  "deploy": {
+    "numReplicas": 1,
+    "startCommand": "serve -s dist -l 3001"
+  }
+}
