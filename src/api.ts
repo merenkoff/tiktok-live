@@ -42,6 +42,8 @@ export async function createServer(): Promise<FastifyInstance> {
         'https://the-live.shop',
         'http://localhost:3001',
         'http://localhost:5173',
+        'https://creative-trust-production-95f7.up.railway.app',
+        'https://creative-trust-production-95f7.up.railway.app:3001',
       ];
       // Запити без origin (curl, Postman, SSR) — пропускаємо
       if (!origin || allowed.includes(origin)) {
