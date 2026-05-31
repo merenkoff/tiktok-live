@@ -11,6 +11,7 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:3000',
         changeOrigin: true,
+        ws: false, // ← НЕ проксируй WebSocket! Клієнт буде підключатися напрямую
       },
     },
   },

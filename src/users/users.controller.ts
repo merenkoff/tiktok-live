@@ -55,7 +55,7 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
     '/api/auth/me',
     async (request, reply) => {
       try {
-        const { userId } = ensureAuth(request);
+        const { userId } = await ensureAuth(request);
         const user = await usersService.getUserById(userId);
         reply.send(user);
       } catch (error) {

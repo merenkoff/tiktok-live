@@ -18,7 +18,7 @@ export async function registerSessionRoutes(fastify: FastifyInstance) {
     '/api/sessions/start',
     async (request, reply) => {
       try {
-        const { userId } = ensureAuth(request);
+        const { userId } = await ensureAuth(request); // ✅ AWAIT!
 
         // Check if already running
         if (sessionManager.isSessionActive(userId)) {
@@ -56,7 +56,7 @@ export async function registerSessionRoutes(fastify: FastifyInstance) {
     '/api/sessions/stop',
     async (request, reply) => {
       try {
-        const { userId } = ensureAuth(request);
+        const { userId } = await ensureAuth(request); // ✅ AWAIT!
 
         if (!sessionManager.isSessionActive(userId)) {
           reply.status(400).send({ error: 'No active session' });
@@ -84,16 +84,10 @@ export async function registerSessionRoutes(fastify: FastifyInstance) {
     '/api/sessions/current',
     async (request, reply) => {
       try {
-        // logger.info(`/api/sessions/current session for user ${request}`);
-        const { userId } = ensureAuth(request);
-        
-        // logger.info(`getSession for user ${userId}`);
+        const { userId } = await ensureAuth(request); // ✅ AWAIT!
 
         const session = sessionManager.getSession(userId);
-        // logger.info(`session ${session} for user ${userId}`);
 
-        //STOPP HERE 
-        
         if (!session) {
           reply.send(null);
           return;
@@ -121,7 +115,7 @@ export async function registerSessionRoutes(fastify: FastifyInstance) {
     '/api/sessions/logs',
     async (request, reply) => {
       try {
-        const { userId } = ensureAuth(request);
+        const { userId } = await ensureAuth(request); // ✅ AWAIT!
         const limit = parseInt(request.query.limit || '100');
         const logType = request.query.type;
 
@@ -145,7 +139,7 @@ export async function registerSessionRoutes(fastify: FastifyInstance) {
     '/api/sessions/stats',
     async (request, reply) => {
       try {
-        const { userId } = ensureAuth(request);
+        const { userId } = await ensureAuth(request); // ✅ AWAIT!
 
         const status = await getUserSessionStatus(userId);
         const logs = sessionManager.getLogs(userId, 100);

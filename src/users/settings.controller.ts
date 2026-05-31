@@ -14,7 +14,7 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
     '/api/settings',
     async (request, reply) => {
       try {
-        const { userId } = ensureAuth(request);
+        const { userId } = await ensureAuth(request);
         const settings = await usersService.getUserSettings(userId);
 
         if (!settings) {
@@ -45,7 +45,7 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
     '/api/settings',
     async (request, reply) => {
       try {
-        const { userId } = ensureAuth(request);
+        const { userId } = await ensureAuth(request);
         // Type the request body properly
         const body = request.body as Partial<UserSettings>;
         const settings = await usersService.saveUserSettings(userId, body);
@@ -74,7 +74,7 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
     '/api/settings/test-telegram',
     async (request, reply) => {
       try {
-        const { userId } = ensureAuth(request);
+        const { userId } = await ensureAuth(request);
         const settings = await usersService.getUserSettings(userId);
 
         if (!settings?.telegram_bot_token) {

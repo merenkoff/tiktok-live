@@ -134,7 +134,12 @@ export class TikTokInstance extends EventEmitter {
       const comment = data.content;
   
       logger.info(`🎬 Comment from ${uniqueId}: ${comment}`);
-      
+      await sessionManager.addLog(
+        this.userId,
+        'tiktok_comment',
+        `🎬 Comment from ${uniqueId}: ${comment}`
+      );
+
       if (!uniqueId || !comment) {
         return;
       }

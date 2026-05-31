@@ -96,9 +96,22 @@ class ApiClient {
 
   getWebSocketUrl(): string {
     const token = localStorage.getItem('token');
-    // WebSocket завжди напряму на бекенд (проксі Vite не підтримує WS за замовчуванням)
-    const base = 'ws://localhost:3000'; //'ws://the-live.shop'; // import.meta.env.VITE_WS_URL || 'ws://localhost:3000';
-    return `${base}/api/sessions/logs/stream?token=${token}`;
+    
+    // Залежно від environment, використовуєш правильний URL
+    const isProduction = window.location.hostname !== 'localhost';
+    
+    if (isProduction) {
+      // Production — напряму на сервер
+      // const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      // const host = window.location.hostname;
+      // Server_IP ????
+      return `wss://the-live.shop/api/sessions/logs/stream?token=${token}`;
+    } else {
+      // Development — Vite проксирує через /api, тому використовуй localhost:5173
+      // Вітте проксирує /api на localhost:3000, але для WebSocket потрібна пряма URL
+      // Спробуємо напряму на :3000
+      return `ws://localhost:3000/api/sessions/logs/stream?token=${token}`;
+    }
   }
 }
 

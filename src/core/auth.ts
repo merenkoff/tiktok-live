@@ -63,7 +63,7 @@ export async function authMiddleware(
     const authHeader = request.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       // reply.status(401).send({ error: 'Unauthorized' });
-      logger.error('Unauthorized 401');
+      logger.error('Unauthorized 401 - no auth header');
       return;
     }
 
@@ -89,10 +89,12 @@ export async function authMiddleware(
 /**
  * Ensure authenticated
  */
-export function ensureAuth(
+export async function ensureAuth(
   request: FastifyRequest
-): { userId: number; username: string } {
-  authMiddleware(request)
+): Promise<{ userId: number; username: string }> {
+  // ✅ WAIT for middleware to finish!
+  await authMiddleware(request);
+  
   const userId = (request as any).userId;
   const username = (request as any).username;
 
