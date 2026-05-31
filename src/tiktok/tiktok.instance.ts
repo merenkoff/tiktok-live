@@ -6,7 +6,7 @@ import { createReservation } from '../reservations.js';
 import { logger } from '../logger.js';
 import { sessionManager } from '../sessions/sessions.manager.js';
 import type { UserSettings } from '../core/types.js';
-import { TikTokLiveConnection } from 'tiktok-live-connector';
+import { TikTokLiveConnection, WebcastEvent } from 'tiktok-live-connector';
 
 export class TikTokInstance extends EventEmitter {
   private connection: any = null;
@@ -35,17 +35,11 @@ export class TikTokInstance extends EventEmitter {
         // CRITICAL: Skip initial data to avoid 403 errors from TikTok
         processInitialData: false,
         enableExtendedGiftInfo: false,
-        // enableWebsocketUpgrade: false,
-        // requestHeaders: {
-        //   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        // },
       });
 
       // Chat events
-      this.connection.on('chat', async (data: any) => {
+      this.connection.on(WebcastEvent.CHAT, async (data: any) => {
         try {
-          console.log(`[CHAT] ${data.uniqueId}: ${data.comment}`);
-          
           await this.handleComment(data);
         } catch (error) {
           logger.error(`Error handling comment for user ${this.userId}`, { error });
@@ -136,9 +130,10 @@ export class TikTokInstance extends EventEmitter {
    */
   private async handleComment(data: any): Promise<void> {
     try {
-      const { uniqueId, comment } = data;
-
-      logger.info(`🎬 Comment ${comment}`);
+      const uniqueId = data.user?.displayId || data.user?.nickname;
+      const comment = data.content;
+  
+      logger.info(`🎬 Comment from ${uniqueId}: ${comment}`);
       
       if (!uniqueId || !comment) {
         return;
