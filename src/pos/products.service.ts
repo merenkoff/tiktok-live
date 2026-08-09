@@ -1,0 +1,386 @@
+// src/pos/products.service.ts
+
+import { pool } from '../db.js';
+import type { CatalogItem } from './types.js';
+import { getProductTagIds, resolveTagFilterIds } from './tags.service.js';
+
+export interface VariantInput {
+  size?: string;
+  color?: string;
+  sku?: string | null;
+  barcode?: string | null;
+  price_cents: number;
+  cost_cents?: number;
+  quantity?: number;
+}
+
+export interface CreateProductInput {
+  name: string;
+  description?: string | null;
+  image_url?: string | null;
+  variants: VariantInput[];
+}
+
+function emptyToNull(value?: string | null): string | null {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  return trimmed === '' ? null : trimmed;
+}
+
+export async function listProducts(storeId: number) {
+  const products = await pool.query(
+    `SELECT * FROM pos_products
+     WHERE store_id = $1
+     ORDER BY name ASC`,
+    [storeId]
+  );
+
+  const variants = await pool.query(
+    `SELECT v.*, COALESCE(s.quantity, 0) AS quantity
+     FROM pos_variants v
+     LEFT JOIN pos_stock s ON s.variant_id = v.id
+     WHERE v.store_id = $1
+     ORDER BY v.product_id, v.size, v.color`,
+    [storeId]
+  );
+
+  const byProduct = new Map<number, unknown[]>();
+  for (const row of variants.rows) {
+    const productId = Number(row.product_id);
+    const list = byProduct.get(productId) ?? [];
+    list.push({
+      id: Number(row.id),
+      product_id: productId,
+      size: row.size,
+      color: row.color,
+      sku: row.sku,
+      barcode: row.barcode,
+      price_cents: Number(row.price_cents),
+      cost_cents: Number(row.cost_cents),
+      is_active: row.is_active,
+      quantity: Number(row.quantity),
+    });
+    byProduct.set(productId, list);
+  }
+
+  const productIds = products.rows.map((p) => Number(p.id));
+  const tagMap = await getProductTagIds(storeId, productIds);
+
+  return products.rows.map((p) => ({
+    id: Number(p.id),
+    name: p.name,
+    description: p.description,
+    image_url: p.image_url,
+    is_active: p.is_active,
+    created_at: p.created_at,
+    updated_at: p.updated_at,
+    tag_ids: tagMap.get(Number(p.id)) ?? [],
+    variants: byProduct.get(Number(p.id)) ?? [],
+  }));
+}
+
+export async function getProduct(storeId: number, productId: number) {
+  const products = await listProducts(storeId);
+  return products.find((p) => p.id === productId) ?? null;
+}
+
+export async function createProduct(storeId: number, input: CreateProductInput) {
+  if (!input.name?.trim()) throw new Error('Product name is required');
+  if (!input.variants?.length) throw new Error('At least one variant is required');
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const productResult = await client.query(
+      `INSERT INTO pos_products (store_id, name, description, image_url)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [
+        storeId,
+        input.name.trim(),
+        emptyToNull(input.description),
+        emptyToNull(input.image_url),
+      ]
+    );
+    const product = productResult.rows[0];
+    const productId = Number(product.id);
+
+    for (const variant of input.variants) {
+      if (variant.price_cents == null || variant.price_cents < 0) {
+        throw new Error('Variant price must be >= 0');
+      }
+      const quantity = variant.quantity ?? 0;
+      if (quantity < 0) throw new Error('Quantity must be >= 0');
+
+      const variantResult = await client.query(
+        `INSERT INTO pos_variants
+           (store_id, product_id, size, color, sku, barcode, price_cents, cost_cents)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id`,
+        [
+          storeId,
+          productId,
+          (variant.size ?? '').trim(),
+          (variant.color ?? '').trim(),
+          emptyToNull(variant.sku),
+          emptyToNull(variant.barcode),
+          variant.price_cents,
+          variant.cost_cents ?? 0,
+        ]
+      );
+      const variantId = Number(variantResult.rows[0].id);
+
+      await client.query(
+        `INSERT INTO pos_stock (variant_id, store_id, quantity)
+         VALUES ($1, $2, $3)`,
+        [variantId, storeId, quantity]
+      );
+
+      if (quantity > 0) {
+        await client.query(
+          `INSERT INTO pos_stock_movements
+             (store_id, variant_id, delta, reason, note)
+           VALUES ($1, $2, $3, 'seed', 'Initial stock')`,
+          [storeId, variantId, quantity]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    return getProduct(storeId, productId);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function updateProduct(
+  storeId: number,
+  productId: number,
+  input: Partial<Pick<CreateProductInput, 'name' | 'description' | 'image_url'>> & {
+    is_active?: boolean;
+  }
+) {
+  const sets: string[] = ['updated_at = NOW()'];
+  const values: unknown[] = [];
+  let i = 1;
+
+  if (input.name !== undefined) {
+    sets.push(`name = $${i++}`);
+    values.push(input.name.trim());
+  }
+  if (input.description !== undefined) {
+    sets.push(`description = $${i++}`);
+    values.push(emptyToNull(input.description));
+  }
+  if (input.image_url !== undefined) {
+    sets.push(`image_url = $${i++}`);
+    values.push(emptyToNull(input.image_url));
+  }
+  if (input.is_active !== undefined) {
+    sets.push(`is_active = $${i++}`);
+    values.push(input.is_active);
+  }
+
+  values.push(productId, storeId);
+  const result = await pool.query(
+    `UPDATE pos_products
+     SET ${sets.join(', ')}
+     WHERE id = $${i++} AND store_id = $${i}
+     RETURNING id`,
+    values
+  );
+  if (result.rows.length === 0) throw new Error('Product not found');
+  return getProduct(storeId, productId);
+}
+
+export async function addVariant(storeId: number, productId: number, variant: VariantInput) {
+  const product = await pool.query(
+    `SELECT id FROM pos_products WHERE id = $1 AND store_id = $2`,
+    [productId, storeId]
+  );
+  if (product.rows.length === 0) throw new Error('Product not found');
+  if (variant.price_cents == null || variant.price_cents < 0) {
+    throw new Error('Variant price must be >= 0');
+  }
+
+  const quantity = variant.quantity ?? 0;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const variantResult = await client.query(
+      `INSERT INTO pos_variants
+         (store_id, product_id, size, color, sku, barcode, price_cents, cost_cents)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id`,
+      [
+        storeId,
+        productId,
+        (variant.size ?? '').trim(),
+        (variant.color ?? '').trim(),
+        emptyToNull(variant.sku),
+        emptyToNull(variant.barcode),
+        variant.price_cents,
+        variant.cost_cents ?? 0,
+      ]
+    );
+    const variantId = Number(variantResult.rows[0].id);
+    await client.query(
+      `INSERT INTO pos_stock (variant_id, store_id, quantity) VALUES ($1, $2, $3)`,
+      [variantId, storeId, quantity]
+    );
+    if (quantity > 0) {
+      await client.query(
+        `INSERT INTO pos_stock_movements
+           (store_id, variant_id, delta, reason, note)
+         VALUES ($1, $2, $3, 'seed', 'Initial stock')`,
+        [storeId, variantId, quantity]
+      );
+    }
+    await client.query('COMMIT');
+    return getProduct(storeId, productId);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function updateVariant(
+  storeId: number,
+  variantId: number,
+  input: Partial<VariantInput> & { is_active?: boolean }
+) {
+  const result = await pool.query(
+    `UPDATE pos_variants
+     SET
+       size = COALESCE($1, size),
+       color = COALESCE($2, color),
+       sku = COALESCE($3, sku),
+       barcode = COALESCE($4, barcode),
+       price_cents = COALESCE($5, price_cents),
+       cost_cents = COALESCE($6, cost_cents),
+       is_active = COALESCE($7, is_active),
+       updated_at = NOW()
+     WHERE id = $8 AND store_id = $9
+     RETURNING product_id`,
+    [
+      input.size === undefined ? null : input.size.trim(),
+      input.color === undefined ? null : input.color.trim(),
+      input.sku === undefined ? null : emptyToNull(input.sku),
+      input.barcode === undefined ? null : emptyToNull(input.barcode),
+      input.price_cents ?? null,
+      input.cost_cents ?? null,
+      input.is_active ?? null,
+      variantId,
+      storeId,
+    ]
+  );
+  if (result.rows.length === 0) throw new Error('Variant not found');
+  return getProduct(storeId, Number(result.rows[0].product_id));
+}
+
+export async function archiveProduct(storeId: number, productId: number) {
+  const result = await pool.query(
+    `UPDATE pos_products
+     SET is_active = FALSE, updated_at = NOW()
+     WHERE id = $1 AND store_id = $2
+     RETURNING id`,
+    [productId, storeId]
+  );
+  if (result.rows.length === 0) throw new Error('Product not found');
+  await pool.query(
+    `UPDATE pos_variants SET is_active = FALSE, updated_at = NOW()
+     WHERE product_id = $1 AND store_id = $2`,
+    [productId, storeId]
+  );
+  return getProduct(storeId, productId);
+}
+
+export async function archiveVariant(storeId: number, variantId: number) {
+  const result = await pool.query(
+    `UPDATE pos_variants
+     SET is_active = FALSE, updated_at = NOW()
+     WHERE id = $1 AND store_id = $2
+     RETURNING product_id`,
+    [variantId, storeId]
+  );
+  if (result.rows.length === 0) throw new Error('Variant not found');
+  return getProduct(storeId, Number(result.rows[0].product_id));
+}
+
+export async function getCatalog(
+  storeId: number,
+  opts: { q?: string; barcode?: string; tag_id?: number } = {}
+): Promise<CatalogItem[]> {
+  const params: unknown[] = [storeId];
+  const conditions = [
+    'p.store_id = $1',
+    'p.is_active = TRUE',
+    'v.is_active = TRUE',
+  ];
+
+  if (opts.tag_id) {
+    const tagIds = await resolveTagFilterIds(storeId, opts.tag_id);
+    params.push(tagIds);
+    conditions.push(
+      `EXISTS (
+         SELECT 1 FROM pos_product_tags pt
+         WHERE pt.product_id = p.id AND pt.tag_id = ANY($${params.length}::bigint[])
+       )`
+    );
+  }
+
+  if (opts.barcode?.trim()) {
+    params.push(opts.barcode.trim());
+    conditions.push(`v.barcode = $${params.length}`);
+  } else if (opts.q?.trim()) {
+    params.push(`%${opts.q.trim().toLowerCase()}%`);
+    const idx = params.length;
+    conditions.push(
+      `(lower(p.name) LIKE $${idx}
+        OR lower(COALESCE(v.sku, '')) LIKE $${idx}
+        OR lower(COALESCE(v.barcode, '')) LIKE $${idx}
+        OR lower(v.size) LIKE $${idx}
+        OR lower(v.color) LIKE $${idx})`
+    );
+  }
+
+  const result = await pool.query(
+    `SELECT
+       v.id AS variant_id,
+       p.id AS product_id,
+       p.name AS product_name,
+       v.size,
+       v.color,
+       v.sku,
+       v.barcode,
+       v.price_cents,
+       COALESCE(s.quantity, 0) AS quantity,
+       p.image_url
+     FROM pos_variants v
+     JOIN pos_products p ON p.id = v.product_id
+     LEFT JOIN pos_stock s ON s.variant_id = v.id
+     WHERE ${conditions.join(' AND ')}
+     ORDER BY p.name ASC, v.size ASC, v.color ASC
+     LIMIT 200`,
+    params
+  );
+
+  return result.rows.map((row) => ({
+    variant_id: Number(row.variant_id),
+    product_id: Number(row.product_id),
+    product_name: row.product_name,
+    size: row.size,
+    color: row.color,
+    sku: row.sku,
+    barcode: row.barcode,
+    price_cents: Number(row.price_cents),
+    quantity: Number(row.quantity),
+    image_url: row.image_url,
+  }));
+}

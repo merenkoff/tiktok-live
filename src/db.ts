@@ -9,17 +9,27 @@ import { logger } from './logger.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Create connection pool
-export const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME || 'tiktok_live',
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'postgres',
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-});
+// Create connection pool (Railway: DATABASE_URL; local: DB_HOST/…)
+export const pool = new Pool(
+  process.env.DATABASE_URL
+    ? {
+        connectionString: process.env.DATABASE_URL,
+        ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
+        max: 20,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 2000,
+      }
+    : {
+        host: process.env.DB_HOST || 'localhost',
+        port: parseInt(process.env.DB_PORT || '5432', 10),
+        database: process.env.DB_NAME || 'tiktok_live',
+        user: process.env.DB_USER || 'postgres',
+        password: process.env.DB_PASSWORD || 'postgres',
+        max: 20,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 2000,
+      }
+);
 
 // Handle pool errors
 pool.on('error', (err) => {
@@ -48,7 +58,7 @@ export async function initializeDatabase(): Promise<void> {
   try {
     // Test connection
     await testConnection();
-    return ;
+
     // Read migration file
     const migrationPath = path.join(__dirname, '..', 'migrations', '001_create_schema.sql');
     
@@ -61,11 +71,21 @@ export async function initializeDatabase(): Promise<void> {
 
     const schema = fs.readFileSync(migrationPath, 'utf-8');
 
-    // Split into individual statements and execute
-    const statements = schema
+    // Strip full-line SQL comments, then split. Do NOT drop statements that merely
+    // start with a section comment — that previously skipped CREATE TABLE and left
+    // CREATE INDEX failing with 42P01 (relation does not exist).
+    const withoutLineComments = schema
+      .split('\n')
+      .filter((line) => {
+        const trimmed = line.trim();
+        return trimmed.length > 0 && !trimmed.startsWith('--');
+      })
+      .join('\n');
+
+    const statements = withoutLineComments
       .split(';')
       .map((s) => s.trim())
-      .filter((s) => s && !s.startsWith('--'));
+      .filter(Boolean);
 
     for (const statement of statements) {
       try {

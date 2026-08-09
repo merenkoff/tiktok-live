@@ -41,12 +41,26 @@ export async function createServer(): Promise<FastifyInstance> {
       const allowed = [
         'https://the-live.shop',
         'http://localhost:3001',
+        'http://localhost:3002',
+        'http://127.0.0.1:3001',
+        'http://127.0.0.1:3002',
         'http://localhost:5173',
+        'http://127.0.0.1:5173',
         'https://creative-trust-production-95f7.up.railway.app',
         'https://creative-trust-production-95f7.up.railway.app:3001',
       ];
+      const extra = (process.env.CORS_ORIGINS || process.env.EXTRA_CORS_ORIGINS || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      allowed.push(...extra);
+      // Dev: allow any localhost / 127.0.0.1 port
+      const isLocalDev =
+        !!origin &&
+        (/^http:\/\/localhost:\d+$/.test(origin) ||
+          /^http:\/\/127\.0\.0\.1:\d+$/.test(origin));
       // Запити без origin (curl, Postman, SSR) — пропускаємо
-      if (!origin || allowed.includes(origin)) {
+      if (!origin || allowed.includes(origin) || isLocalDev) {
         cb(null, true);
       } else {
         cb(new Error('Not allowed by CORS'), false);

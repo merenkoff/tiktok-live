@@ -47,6 +47,10 @@ tmp/
 temp/
 *.tmp
 
+# POS product photos
+data/pos-uploads/*
+!data/pos-uploads/.gitkeep
+
 # Database
 *.db
 *.sqlite

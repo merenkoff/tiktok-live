@@ -9,6 +9,7 @@ import { setupWebSocket } from './api/websocket.js';
 import { registerUserRoutes } from './users/users.controller.js';
 import { registerSettingsRoutes } from './users/settings.controller.js';
 import { registerSessionRoutes } from './sessions/sessions.controller.js';
+import { registerPosPlugin } from './pos/pos.plugin.js';
 import { cleanupExpiredReservations } from './reservations.js';
 import { sessionManager } from './sessions/sessions.manager.js';
 
@@ -83,6 +84,7 @@ async function main(): Promise<void> {
     await registerUserRoutes(fastify);
     await registerSettingsRoutes(fastify);
     await registerSessionRoutes(fastify);
+    await registerPosPlugin(fastify);
     logger.info('✅ All routes registered');
 
     // 5. Setup cron jobs
@@ -137,11 +139,12 @@ async function main(): Promise<void> {
     logger.info('║   ✅ Platform Started Successfully!                             ║');
     logger.info('╠═════════════════════════════════════════════════════════════════╣');
     logger.info(`║   🌐 API: http://localhost:${port}                              ║`);
-    logger.info('║   💻 Admin: http://localhost:3001                               ║');
+    logger.info('║   💻 LIVE Admin: http://localhost:3001                          ║');
+    logger.info('║   🛍️  POS: http://localhost:3002                               ║');
     logger.info(`║   🔌 WebSocket: ws://localhost:${port}/api/sessions/logs/stream ║`);
     logger.info('╠═════════════════════════════════════════════════════════════════╣');
-    logger.info('║   📊 Ready to serve multiple TikTok LIVE sellers!               ║');
-    logger.info('║   🎬 Start a session from admin panel                           ║');
+    logger.info('║   📊 LIVE + POS API ready                                       ║');
+    logger.info('║   🎬 LIVE sessions: admin panel | POS: /api/pos                 ║');
     logger.info('╚═════════════════════════════════════════════════════════════════╝');
     logger.info('');
 

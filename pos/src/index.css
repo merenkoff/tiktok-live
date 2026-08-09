@@ -1,0 +1,186 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --pos-primary: #006aff;
+  --pos-primary-press: #0058d6;
+  --pos-bg: #f5f5f5;
+  --pos-surface: #ffffff;
+  --pos-text: #1a1a1a;
+  --pos-secondary: #6e6e6e;
+  --pos-muted: #9a9a9a;
+  --pos-divider: #e0e0e0;
+  --pos-empty: #ebebeb;
+  --pos-folder: #e8eef4;
+  --pos-folder-ink: #3d5266;
+  --pos-radius: 4px;
+  --pos-font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* aliases for existing sq-* Tailwind usage */
+  --sq-blue: var(--pos-primary);
+  --sq-blue-press: var(--pos-primary-press);
+  --sq-bg: var(--pos-bg);
+  --sq-surface: var(--pos-surface);
+  --sq-sidebar: var(--pos-surface);
+  --sq-text: var(--pos-text);
+  --sq-text-secondary: var(--pos-secondary);
+  --sq-text-muted: var(--pos-muted);
+  --sq-divider: var(--pos-divider);
+  --sq-tile-empty: var(--pos-empty);
+  --sq-radius: var(--pos-radius);
+  --sq-font: var(--pos-font);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--pos-font);
+  background: var(--pos-bg);
+  color: var(--pos-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--pos-primary);
+  outline-offset: 2px;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--pos-muted);
+  opacity: 1;
+}
+
+.pos-field,
+.sq-field {
+  width: 100%;
+  min-height: 3rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--pos-divider);
+  border-radius: var(--pos-radius);
+  background-color: #ffffff;
+  color: var(--pos-text);
+  caret-color: var(--pos-text);
+  font: inherit;
+}
+
+.pos-field-underline,
+.sq-field-underline {
+  width: 100%;
+  padding: 0.5rem 0;
+  border: none;
+  border-bottom: 2px solid var(--pos-primary);
+  border-radius: 0;
+  background-color: transparent;
+  color: var(--pos-text);
+  caret-color: var(--pos-text);
+  font: inherit;
+  outline: none;
+}
+
+button.pos-btn-primary,
+button.sq-btn-primary,
+a.pos-btn-primary,
+a.sq-btn-primary {
+  -webkit-appearance: none;
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #006aff !important;
+  color: #ffffff !important;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--pos-radius);
+  cursor: pointer;
+}
+button.pos-btn-primary:hover:not(:disabled),
+button.sq-btn-primary:hover:not(:disabled) {
+  background-color: #0058d6 !important;
+  color: #ffffff !important;
+}
+button.pos-btn-primary:disabled,
+button.sq-btn-primary:disabled {
+  background-color: #d8d8d8 !important;
+  color: #6e6e6e !important;
+  cursor: not-allowed;
+}
+
+.pos-btn-tile,
+.sq-btn-tile {
+  -webkit-appearance: none;
+  appearance: none;
+  background-color: #006aff !important;
+  color: #ffffff !important;
+  border: none;
+  border-radius: var(--pos-radius);
+}
+
+.pos-folder-tile {
+  background-color: var(--pos-folder) !important;
+  color: var(--pos-folder-ink) !important;
+  border: 1px solid #d5dee8;
+  border-radius: var(--pos-radius);
+}
+.pos-folder-tile:hover {
+  background-color: #dce6ef !important;
+}
+
+.sq-nav-active {
+  background-color: #006aff !important;
+  color: #ffffff !important;
+}
+
+.sq-nav-idle {
+  background-color: transparent;
+  color: #1a1a1a !important;
+}
+.sq-nav-idle:hover {
+  background-color: #ffffff;
+}
+
+.sq-link {
+  color: #006aff !important;
+  font-weight: 600;
+}
+
+.sq-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6e6e6e;
+}
+
+.sq-card {
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: var(--pos-radius);
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fadeUp 0.22s ease both;
+}
