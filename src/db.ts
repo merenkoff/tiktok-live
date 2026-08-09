@@ -91,12 +91,34 @@ export async function initializeDatabase(): Promise<void> {
       try {
         await pool.query(statement);
       } catch (error: any) {
-        // Ignore "already exists" errors
-        if (error.code === '42P07' || error.code === '42701') {
-          logger.debug(`ℹ️  Skipping already existing object: ${error.message}`);
+        // Ignore "already exists" and benign index/column races on existing DBs
+        if (
+          error.code === '42P07' || // duplicate_table
+          error.code === '42701' || // duplicate_column
+          error.code === '42P16' || // invalid_table_definition (e.g. duplicate constraint)
+          error.code === '23505' // unique_violation while creating unique index on dirty data
+        ) {
+          logger.debug(`ℹ️  Skipping schema object: ${error.message}`);
+        } else if (error.code === '42703') {
+          // undefined_column — usually CREATE INDEX before column evolve; retry after ALTERs
+          logger.warn(`⚠️  Schema statement skipped (missing column): ${error.message}`);
         } else {
           throw error;
         }
+      }
+    }
+
+    // Ensure leads columns used by src/leads.ts exist on older DBs
+    await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'new'`);
+    await pool.query(
+      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`
+    );
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status)`);
+    try {
+      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS leads_phone_unique ON leads(phone)`);
+    } catch (error: any) {
+      if (error.code !== '23505' && error.code !== '42P07') {
+        logger.warn(`⚠️  Could not ensure leads_phone_unique: ${error.message}`);
       }
     }
 

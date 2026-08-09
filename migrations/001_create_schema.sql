@@ -130,19 +130,28 @@ CREATE INDEX IF NOT EXISTS idx_reservations_tiktok_nickname ON reservations(tikt
 CREATE TABLE IF NOT EXISTS leads (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
-    phone VARCHAR(20) NOT NULL,
+    phone VARCHAR(20),
     name VARCHAR(255),
     email VARCHAR(255),
-    status VARCHAR(50) NOT NULL DEFAULT 'new',
+    status VARCHAR(50) DEFAULT 'new',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT leads_phone_unique UNIQUE (phone)
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Evolve older Railway installs where leads existed without status/updated_at
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'new';
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS name VARCHAR(255);
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS phone VARCHAR(20);
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS user_id BIGINT;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
 
 CREATE INDEX IF NOT EXISTS idx_leads_user_id ON leads(user_id);
 CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(phone);
 CREATE INDEX IF NOT EXISTS idx_leads_created_at ON leads(created_at);
 CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);
+CREATE UNIQUE INDEX IF NOT EXISTS leads_phone_unique ON leads(phone);
 
 -- ============================================
 -- AUDIT LOG TABLE
