@@ -31,6 +31,15 @@ interface Props {
   type: Exclude<StockDocumentType, 'inventory'>;
 }
 
+function apiError(err: unknown): string {
+  if (err && typeof err === 'object' && 'response' in err) {
+    const msg = (err as { response?: { data?: { error?: string } } }).response?.data?.error;
+    if (msg) return msg;
+  }
+  if (err instanceof Error) return err.message;
+  return 'Помилка';
+}
+
 export function StockActionPage({ type }: Props) {
   const navigate = useNavigate();
   const [catalog, setCatalog] = useState<OnHandRow[]>([]);
@@ -43,38 +52,59 @@ export function StockActionPage({ type }: Props) {
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const title =
     type === 'receipt' ? 'Прихід товару' : type === 'writeoff' ? 'Списання' : 'Корекція залишку';
 
+  const subtitle =
+    type === 'receipt'
+      ? 'Оберіть товари з поставки, вкажіть кількість і за потреби ціну закупки.'
+      : type === 'writeoff'
+        ? 'Спишіть брак, втрату або подарунок. Кількість не може перевищувати залишок.'
+        : 'Вкажіть, скільки товару має бути на складі. Система сама порахує різницю.';
+
   useEffect(() => {
-    void Promise.all([api.stockOnHand(), type === 'receipt' ? api.listSuppliers() : Promise.resolve([])])
+    setLoading(true);
+    void Promise.all([
+      api.stockOnHand(),
+      type === 'receipt' ? api.listSuppliers() : Promise.resolve([] as Supplier[]),
+    ])
       .then(([onHand, sup]) => {
         setCatalog(onHand);
-        setSuppliers(sup as Supplier[]);
+        setSuppliers(sup);
       })
-      .catch(() => setError('Не вдалося завантажити'));
+      .catch(() => setError('Не вдалося завантажити товари'))
+      .finally(() => setLoading(false));
   }, [type]);
+
+  const selectedIds = useMemo(() => new Set(lines.map((l) => l.variant_id)), [lines]);
 
   const searchHits = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    if (!needle) return catalog.slice(0, 12);
-    return catalog
-      .filter((r) =>
-        [r.product_name, r.size, r.color, r.sku, r.barcode]
-          .filter(Boolean)
-          .some((v) => String(v).toLowerCase().includes(needle))
-      )
-      .slice(0, 20);
+    const list = !needle
+      ? catalog
+      : catalog.filter((r) =>
+          [r.product_name, r.size, r.color, r.sku, r.barcode]
+            .filter(Boolean)
+            .some((v) => String(v).toLowerCase().includes(needle))
+        );
+    return list.slice(0, needle ? 40 : 60);
   }, [catalog, q]);
 
   function addVariant(row: OnHandRow) {
-    if (lines.some((l) => l.variant_id === row.variant_id)) return;
-    const label = `${row.product_name} ${[row.size, row.color].filter(Boolean).join('/')}`;
+    if (selectedIds.has(row.variant_id)) return;
+    const label = `${row.product_name} ${[row.size, row.color].filter(Boolean).join('/')}`.trim();
     if (type === 'adjustment') {
       setLines((prev) => [
         ...prev,
-        { variant_id: row.variant_id, label, quantity: 0, target_qty: row.quantity, on_hand: row.quantity },
+        {
+          variant_id: row.variant_id,
+          label,
+          quantity: 0,
+          target_qty: row.quantity,
+          on_hand: row.quantity,
+        },
       ]);
     } else {
       setLines((prev) => [
@@ -104,9 +134,30 @@ export function StockActionPage({ type }: Props) {
   async function onSubmit(e: FormEvent, asDraft: boolean) {
     e.preventDefault();
     if (lines.length === 0) {
-      setError('Додайте хоча б один товар');
+      setError('Додайте хоча б один товар зі списку нижче');
       return;
     }
+    if (type === 'adjustment') {
+      const changed = lines.some((l) => (l.target_qty ?? l.on_hand) !== l.on_hand);
+      if (!changed) {
+        setError('Змініть «Має бути» хоча б для одного товару');
+        return;
+      }
+    }
+    if (type === 'writeoff' || type === 'adjustment') {
+      if (reason === 'other' && !note.trim()) {
+        setError('Для причини «Інше» потрібен коментар');
+        return;
+      }
+    }
+    if (type === 'writeoff') {
+      const over = lines.find((l) => l.quantity > l.on_hand);
+      if (over) {
+        setError(`На складі лише ${over.on_hand} шт: ${over.label}`);
+        return;
+      }
+    }
+
     setSaving(true);
     setError(null);
     try {
@@ -133,16 +184,12 @@ export function StockActionPage({ type }: Props) {
           });
         }
       }
-      if (type === 'adjustment') {
-        const changed = lines.some((l) => (l.target_qty ?? l.on_hand) !== l.on_hand);
-        if (!changed) throw new Error('Немає змін залишку');
-      }
       if (!asDraft) {
         await api.postStockDocument(doc.id, crypto.randomUUID());
       }
       navigate(`/admin/stock/documents/${doc.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Помилка');
+      setError(apiError(err));
     } finally {
       setSaving(false);
     }
@@ -151,12 +198,13 @@ export function StockActionPage({ type }: Props) {
   const reasons = type === 'writeoff' ? WRITEOFF_REASONS : ADJUST_REASONS;
 
   return (
-    <form className="max-w-3xl space-y-5" onSubmit={(e) => void onSubmit(e, false)}>
+    <form className="max-w-3xl space-y-5 pb-24" onSubmit={(e) => void onSubmit(e, false)}>
       <div>
         <Link to="/admin/stock" className="text-sm text-[#006AFF] hover:underline">
           ← Склад
         </Link>
         <h1 className="text-2xl font-semibold mt-2">{title}</h1>
+        <p className="text-sm text-[#6E6E6E] mt-1">{subtitle}</p>
       </div>
 
       {type === 'receipt' && (
@@ -189,21 +237,24 @@ export function StockActionPage({ type }: Props) {
       )}
 
       {type !== 'receipt' && (
-        <div className="flex flex-wrap gap-1.5">
-          {reasons.map((r) => (
-            <button
-              key={r.code}
-              type="button"
-              onClick={() => setReason(r.code)}
-              className={`px-3 py-1.5 text-sm rounded-[4px] border ${
-                reason === r.code
-                  ? 'border-[#006AFF] bg-[#E8F1FF] text-[#006AFF]'
-                  : 'border-[#E0E0E0] bg-white'
-              }`}
-            >
-              {r.label}
-            </button>
-          ))}
+        <div>
+          <p className="text-sm text-[#6E6E6E] mb-1.5">Причина</p>
+          <div className="flex flex-wrap gap-1.5">
+            {reasons.map((r) => (
+              <button
+                key={r.code}
+                type="button"
+                onClick={() => setReason(r.code)}
+                className={`px-3 py-1.5 text-sm rounded-[4px] border ${
+                  reason === r.code
+                    ? 'border-[#006AFF] bg-[#E8F1FF] text-[#006AFF]'
+                    : 'border-[#E0E0E0] bg-white'
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -213,108 +264,150 @@ export function StockActionPage({ type }: Props) {
           value={note}
           onChange={(e) => setNote(e.target.value)}
           className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2.5 text-sm"
+          placeholder={reason === 'other' ? 'обовʼязково для «Інше»' : 'необовʼязково'}
         />
       </label>
 
       <div className="space-y-2">
-        <p className="text-sm font-medium">Додати товари</p>
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="text-sm font-medium">Товари в документі</p>
+          <p className="text-xs text-[#6E6E6E]">{lines.length} поз.</p>
+        </div>
+
+        <div className="rounded-[4px] border border-[#E0E0E0] bg-white divide-y divide-[#E0E0E0]">
+          {lines.length === 0 && (
+            <p className="p-4 text-sm text-[#6E6E6E]">
+              Поки порожньо — оберіть товар зі списку каталогу нижче.
+            </p>
+          )}
+          {lines.map((line, idx) => {
+            const delta = (line.target_qty ?? line.on_hand) - line.on_hand;
+            return (
+              <div key={line.variant_id} className="p-3 flex flex-wrap gap-3 items-center">
+                <div className="flex-1 min-w-[140px]">
+                  <p className="text-sm font-medium">{line.label}</p>
+                  <p className="text-xs text-[#6E6E6E]">Зараз на складі: {line.on_hand} шт</p>
+                </div>
+                {type === 'adjustment' ? (
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm whitespace-nowrap">
+                      Має бути{' '}
+                      <input
+                        type="number"
+                        min={0}
+                        value={line.target_qty ?? 0}
+                        onChange={(e) => {
+                          const v = Number(e.target.value);
+                          setLines((prev) =>
+                            prev.map((l, i) => (i === idx ? { ...l, target_qty: v } : l))
+                          );
+                        }}
+                        className="ml-1 w-20 rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-2 py-1.5 font-semibold"
+                      />
+                    </label>
+                    <span
+                      className={`text-sm tabular-nums font-medium ${
+                        delta === 0
+                          ? 'text-[#6E6E6E]'
+                          : delta > 0
+                            ? 'text-emerald-700'
+                            : 'text-red-600'
+                      }`}
+                    >
+                      {delta === 0 ? 'без змін' : delta > 0 ? `+${delta}` : delta}
+                    </span>
+                  </div>
+                ) : (
+                  <>
+                    <label className="text-sm">
+                      К-сть{' '}
+                      <input
+                        type="number"
+                        min={1}
+                        value={line.quantity}
+                        onChange={(e) => {
+                          const v = Number(e.target.value);
+                          setLines((prev) =>
+                            prev.map((l, i) => (i === idx ? { ...l, quantity: v } : l))
+                          );
+                        }}
+                        className="ml-1 w-20 rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-2 py-1.5"
+                      />
+                    </label>
+                    {type === 'receipt' && (
+                      <label className="text-sm">
+                        Закупка ₴{' '}
+                        <input
+                          value={((line.unit_cost_cents ?? 0) / 100).toFixed(2)}
+                          onChange={(e) => {
+                            const cents = uahInputToCents(e.target.value);
+                            setLines((prev) =>
+                              prev.map((l, i) => (i === idx ? { ...l, unit_cost_cents: cents } : l))
+                            );
+                          }}
+                          className="ml-1 w-24 rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-2 py-1.5"
+                        />
+                      </label>
+                    )}
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setLines((prev) => prev.filter((_, i) => i !== idx))}
+                  className="text-sm text-red-600"
+                >
+                  Прибрати
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-sm font-medium">Каталог — натисніть, щоб додати</p>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Пошук або штрихкод…"
+          placeholder="Пошук назви, SKU або штрихкоду…"
           className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2.5 text-sm"
+          autoFocus
         />
-        {q.trim() && (
-          <div className="rounded-[4px] border border-[#E0E0E0] bg-white max-h-48 overflow-auto">
-            {searchHits.map((row) => (
+        <div className="rounded-[4px] border border-[#E0E0E0] bg-white max-h-72 overflow-auto divide-y divide-[#E0E0E0]">
+          {loading && <p className="p-4 text-sm text-[#6E6E6E]">Завантаження каталогу…</p>}
+          {!loading && searchHits.length === 0 && (
+            <p className="p-4 text-sm text-[#6E6E6E]">Нічого не знайдено</p>
+          )}
+          {searchHits.map((row) => {
+            const added = selectedIds.has(row.variant_id);
+            return (
               <button
                 key={row.variant_id}
                 type="button"
+                disabled={added}
                 onClick={() => addVariant(row)}
-                className="w-full text-left px-3 py-2 text-sm hover:bg-[#F5F5F5] border-b border-[#E0E0E0] last:border-0"
+                className={`w-full text-left px-3 py-2.5 text-sm flex justify-between gap-3 ${
+                  added ? 'bg-[#F5F5F5] text-[#6E6E6E]' : 'hover:bg-[#E8F1FF]'
+                }`}
               >
-                {row.product_name} {[row.size, row.color].filter(Boolean).join('/')} · на складі{' '}
-                {row.quantity}
+                <span>
+                  <span className="font-medium">{row.product_name}</span>{' '}
+                  <span className="text-[#6E6E6E]">
+                    {[row.size, row.color].filter(Boolean).join('/')}
+                  </span>
+                </span>
+                <span className="tabular-nums whitespace-nowrap text-[#6E6E6E]">
+                  {added ? 'додано' : `${row.quantity} шт`}
+                </span>
               </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="rounded-[4px] border border-[#E0E0E0] bg-white divide-y divide-[#E0E0E0]">
-        {lines.length === 0 && (
-          <p className="p-4 text-sm text-[#6E6E6E]">Поки немає рядків</p>
-        )}
-        {lines.map((line, idx) => (
-          <div key={line.variant_id} className="p-3 flex flex-wrap gap-3 items-center">
-            <div className="flex-1 min-w-[140px]">
-              <p className="text-sm font-medium">{line.label}</p>
-              <p className="text-xs text-[#6E6E6E]">На складі: {line.on_hand}</p>
-            </div>
-            {type === 'adjustment' ? (
-              <label className="text-sm">
-                Має бути{' '}
-                <input
-                  type="number"
-                  min={0}
-                  value={line.target_qty ?? 0}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    setLines((prev) =>
-                      prev.map((l, i) => (i === idx ? { ...l, target_qty: v } : l))
-                    );
-                  }}
-                  className="ml-1 w-20 rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-2 py-1.5"
-                />
-              </label>
-            ) : (
-              <>
-                <label className="text-sm">
-                  К-сть{' '}
-                  <input
-                    type="number"
-                    min={1}
-                    value={line.quantity}
-                    onChange={(e) => {
-                      const v = Number(e.target.value);
-                      setLines((prev) =>
-                        prev.map((l, i) => (i === idx ? { ...l, quantity: v } : l))
-                      );
-                    }}
-                    className="ml-1 w-20 rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-2 py-1.5"
-                  />
-                </label>
-                {type === 'receipt' && (
-                  <label className="text-sm">
-                    Закупка ₴{' '}
-                    <input
-                      value={((line.unit_cost_cents ?? 0) / 100).toFixed(2)}
-                      onChange={(e) => {
-                        const cents = uahInputToCents(e.target.value);
-                        setLines((prev) =>
-                          prev.map((l, i) => (i === idx ? { ...l, unit_cost_cents: cents } : l))
-                        );
-                      }}
-                      className="ml-1 w-24 rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-2 py-1.5"
-                    />
-                  </label>
-                )}
-              </>
-            )}
-            <button
-              type="button"
-              onClick={() => setLines((prev) => prev.filter((_, i) => i !== idx))}
-              className="text-sm text-red-600"
-            >
-              Прибрати
-            </button>
-          </div>
-        ))}
+            );
+          })}
+        </div>
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <div className="flex flex-wrap gap-2 sticky bottom-4">
+      <div className="flex flex-wrap gap-2 sticky bottom-0 z-10 -mx-1 px-1 py-3 bg-[#F5F5F5] border-t border-[#E0E0E0]">
         <button
           type="button"
           disabled={saving}
@@ -323,7 +416,7 @@ export function StockActionPage({ type }: Props) {
         >
           Зберегти чернетку
         </button>
-        <button type="submit" disabled={saving} className="sq-btn-primary px-6 py-2.5 text-sm">
+        <button type="submit" disabled={saving || loading} className="sq-btn-primary px-6 py-2.5 text-sm">
           {saving ? '…' : 'Провести'}
         </button>
       </div>
