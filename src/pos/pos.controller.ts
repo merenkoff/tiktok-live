@@ -250,13 +250,21 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   fastify.post('/tags', async (request, reply) => {
     const auth = await ensurePosOwner(request, reply);
     if (!auth) return;
-    const body = request.body as { name?: string; parent_id?: number | null; sort_order?: number };
+    const body = request.body as {
+      name?: string;
+      parent_id?: number | null;
+      sort_order?: number;
+      color?: string | null;
+      show_in_catalog_bar?: boolean;
+    };
     try {
       if (!body.name) return reply.code(400).send({ error: 'name required' });
       const tag = await tagsService.createTag(auth.storeId, {
         name: body.name,
         parent_id: body.parent_id,
         sort_order: body.sort_order,
+        color: body.color,
+        show_in_catalog_bar: body.show_in_catalog_bar,
       });
       return reply.code(201).send(tag);
     } catch (error) {
@@ -273,7 +281,12 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
       return await tagsService.updateTag(
         auth.storeId,
         Number(id),
-        request.body as { name?: string; sort_order?: number }
+        request.body as {
+          name?: string;
+          sort_order?: number;
+          color?: string | null;
+          show_in_catalog_bar?: boolean;
+        }
       );
     } catch (error) {
       return reply.code(400).send({ error: errorMessage(error) });

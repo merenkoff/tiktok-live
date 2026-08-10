@@ -13,7 +13,7 @@ const __dirname = path.dirname(__filename);
 async function migrate(): Promise<void> {
   await testConnection();
   const migrationsDir = path.join(__dirname, '..', '..', 'migrations');
-  const files = ['002_pos_schema.sql', '003_pos_tags.sql'];
+  const files = ['002_pos_schema.sql', '003_pos_tags.sql', '004_pos_tag_catalog_bar.sql'];
   for (const file of files) {
     const migrationPath = path.join(migrationsDir, file);
     const sql = fs.readFileSync(migrationPath, 'utf-8');

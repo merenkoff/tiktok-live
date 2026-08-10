@@ -183,12 +183,25 @@ class PosApi {
     return data;
   }
 
-  async createTag(payload: { name: string; parent_id?: number | null }): Promise<PosTag> {
+  async createTag(payload: {
+    name: string;
+    parent_id?: number | null;
+    color?: string | null;
+    show_in_catalog_bar?: boolean;
+  }): Promise<PosTag> {
     const { data } = await this.client.post<PosTag>('/tags', payload);
     return data;
   }
 
-  async updateTag(id: number, payload: { name?: string }): Promise<PosTag> {
+  async updateTag(
+    id: number,
+    payload: {
+      name?: string;
+      color?: string | null;
+      show_in_catalog_bar?: boolean;
+      sort_order?: number;
+    }
+  ): Promise<PosTag> {
     const { data } = await this.client.patch<PosTag>(`/tags/${id}`, payload);
     return data;
   }

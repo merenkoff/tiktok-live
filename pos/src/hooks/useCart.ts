@@ -8,6 +8,10 @@ export interface CartLine {
   unit_price_cents: number;
   quantity: number;
   max_quantity: number;
+  image_url?: string | null;
+  /** UI stub for future discounts */
+  discount_label?: string | null;
+  compare_at_cents?: number | null;
 }
 
 interface CartStore {
@@ -47,6 +51,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
       }
       existing.quantity = next;
       existing.max_quantity = item.quantity;
+      existing.image_url = item.image_url ?? existing.image_url;
       set({ lines, banner: null });
       return;
     }
@@ -57,6 +62,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
       unit_price_cents: item.price_cents,
       quantity: Math.min(qty, item.quantity),
       max_quantity: item.quantity,
+      image_url: item.image_url,
     });
     set({ lines, banner: null });
   },

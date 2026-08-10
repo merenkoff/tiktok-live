@@ -58,6 +58,8 @@ export interface PosTag {
   parent_id: number | null;
   name: string;
   sort_order: number;
+  color: string | null;
+  show_in_catalog_bar: boolean;
   children?: PosTag[];
 }
 

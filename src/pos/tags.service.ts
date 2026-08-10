@@ -2,13 +2,36 @@
 
 import { pool } from '../db.js';
 
+export const TAG_COLOR_KEYS = [
+  'green',
+  'rose',
+  'blue',
+  'orange',
+  'teal',
+  'purple',
+  'slate',
+  'amber',
+] as const;
+
+export type TagColorKey = (typeof TAG_COLOR_KEYS)[number];
+
 export interface PosTag {
   id: number;
   store_id: number;
   parent_id: number | null;
   name: string;
   sort_order: number;
+  color: string | null;
+  show_in_catalog_bar: boolean;
   children?: PosTag[];
+}
+
+function normalizeColor(color: string | null | undefined): string | null {
+  if (color == null || color === '') return null;
+  if (!(TAG_COLOR_KEYS as readonly string[]).includes(color)) {
+    throw new Error('Invalid tag color');
+  }
+  return color;
 }
 
 function mapTag(row: Record<string, unknown>): PosTag {
@@ -18,6 +41,8 @@ function mapTag(row: Record<string, unknown>): PosTag {
     parent_id: row.parent_id == null ? null : Number(row.parent_id),
     name: String(row.name),
     sort_order: Number(row.sort_order),
+    color: row.color == null ? null : String(row.color),
+    show_in_catalog_bar: Boolean(row.show_in_catalog_bar),
   };
 }
 
@@ -59,18 +84,32 @@ async function assertMaxDepth(
 
 export async function createTag(
   storeId: number,
-  input: { name: string; parent_id?: number | null; sort_order?: number }
+  input: {
+    name: string;
+    parent_id?: number | null;
+    sort_order?: number;
+    color?: string | null;
+    show_in_catalog_bar?: boolean;
+  }
 ): Promise<PosTag> {
   const name = input.name?.trim();
   if (!name) throw new Error('Tag name is required');
   const parentId = input.parent_id ?? null;
   await assertMaxDepth(storeId, parentId);
+  const color = normalizeColor(input.color);
 
   const result = await pool.query(
-    `INSERT INTO pos_tags (store_id, parent_id, name, sort_order)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO pos_tags (store_id, parent_id, name, sort_order, color, show_in_catalog_bar)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [storeId, parentId, name, input.sort_order ?? 0]
+    [
+      storeId,
+      parentId,
+      name,
+      input.sort_order ?? 0,
+      color,
+      input.show_in_catalog_bar ?? false,
+    ]
   );
   return mapTag(result.rows[0]);
 }
@@ -78,16 +117,45 @@ export async function createTag(
 export async function updateTag(
   storeId: number,
   tagId: number,
-  input: { name?: string; sort_order?: number }
+  input: {
+    name?: string;
+    sort_order?: number;
+    color?: string | null;
+    show_in_catalog_bar?: boolean;
+  }
 ): Promise<PosTag> {
+  const sets: string[] = [];
+  const values: unknown[] = [];
+  let i = 1;
+
+  if (input.name !== undefined) {
+    const name = input.name.trim();
+    if (!name) throw new Error('Tag name is required');
+    sets.push(`name = $${i++}`);
+    values.push(name);
+  }
+  if (input.sort_order !== undefined) {
+    sets.push(`sort_order = $${i++}`);
+    values.push(input.sort_order);
+  }
+  if (input.color !== undefined) {
+    sets.push(`color = $${i++}`);
+    values.push(normalizeColor(input.color));
+  }
+  if (input.show_in_catalog_bar !== undefined) {
+    sets.push(`show_in_catalog_bar = $${i++}`);
+    values.push(input.show_in_catalog_bar);
+  }
+
+  if (sets.length === 0) throw new Error('No fields to update');
+
+  values.push(tagId, storeId);
   const result = await pool.query(
     `UPDATE pos_tags
-     SET
-       name = COALESCE($1, name),
-       sort_order = COALESCE($2, sort_order)
-     WHERE id = $3 AND store_id = $4
+     SET ${sets.join(', ')}
+     WHERE id = $${i++} AND store_id = $${i}
      RETURNING *`,
-    [input.name?.trim() ?? null, input.sort_order ?? null, tagId, storeId]
+    values
   );
   if (result.rows.length === 0) throw new Error('Tag not found');
   return mapTag(result.rows[0]);

@@ -3,7 +3,9 @@ import { api } from '../../services/api';
 import { formatUah, uahInputToCents } from '../../lib/money';
 import type { PosTag, Product, ProductVariant } from '../../types';
 import { ProductPhotoField } from '../../components/ProductPhotoField';
+import { TagColorSwatches } from '../../components/TagColorSwatches';
 import { assetUrl } from '../../lib/urls';
+import { DEFAULT_TAG_COLOR, type TagColorKey } from '../../lib/tagColors';
 
 function flattenTags(tags: PosTag[]): PosTag[] {
   const out: PosTag[] = [];
@@ -27,7 +29,10 @@ export function ProductsPage() {
   const [editId, setEditId] = useState<number | null>(null);
   const [newTagName, setNewTagName] = useState('');
   const [newTagParent, setNewTagParent] = useState<number | ''>('');
+  const [newTagColor, setNewTagColor] = useState<TagColorKey>(DEFAULT_TAG_COLOR);
+  const [newTagCatalogBar, setNewTagCatalogBar] = useState(false);
   const [bulkTagId, setBulkTagId] = useState<number | ''>('');
+  const [savingTagId, setSavingTagId] = useState<number | null>(null);
 
   const [name, setName] = useState('');
   const [size, setSize] = useState('M');
@@ -91,12 +96,32 @@ export function ProductsPage() {
       await api.createTag({
         name: newTagName,
         parent_id: newTagParent === '' ? null : Number(newTagParent),
+        color: newTagColor,
+        show_in_catalog_bar: newTagCatalogBar,
       });
       setNewTagName('');
       setNewTagParent('');
+      setNewTagColor(DEFAULT_TAG_COLOR);
+      setNewTagCatalogBar(false);
       await reload();
     } catch {
       setError('Не вдалося створити мітку (макс. 2 рівні)');
+    }
+  }
+
+  async function patchTag(
+    tag: PosTag,
+    patch: { color?: string | null; show_in_catalog_bar?: boolean }
+  ) {
+    setSavingTagId(tag.id);
+    setError(null);
+    try {
+      await api.updateTag(tag.id, patch);
+      await reload();
+    } catch {
+      setError('Не вдалося оновити мітку');
+    } finally {
+      setSavingTagId(null);
     }
   }
 
@@ -169,28 +194,31 @@ export function ProductsPage() {
             Усі товари
           </button>
           {tags.map((root) => (
-            <div key={root.id}>
-              <button
-                type="button"
-                onClick={() => setFilterTag(root.id)}
-                className={`w-full text-left px-3 py-2 rounded-[4px] text-sm font-medium ${
-                  filterTag === root.id ? 'sq-nav-active' : 'sq-nav-idle'
-                }`}
-              >
-                {root.name}
-              </button>
-              <div className="ml-3 mt-0.5 space-y-0.5">
+            <div key={root.id} className="space-y-1">
+              <TagAdminRow
+                tag={root}
+                active={filterTag === root.id}
+                saving={savingTagId === root.id}
+                onFilter={() => setFilterTag(root.id)}
+                onColor={(color) => void patchTag(root, { color })}
+                onCatalogBar={(show_in_catalog_bar) =>
+                  void patchTag(root, { show_in_catalog_bar })
+                }
+              />
+              <div className="ml-3 space-y-1">
                 {(root.children ?? []).map((child) => (
-                  <button
+                  <TagAdminRow
                     key={child.id}
-                    type="button"
-                    onClick={() => setFilterTag(child.id)}
-                    className={`w-full text-left px-3 py-1.5 rounded-[4px] text-sm ${
-                      filterTag === child.id ? 'sq-nav-active' : 'sq-nav-idle text-[#6E6E6E]'
-                    }`}
-                  >
-                    {child.name}
-                  </button>
+                    tag={child}
+                    nested
+                    active={filterTag === child.id}
+                    saving={savingTagId === child.id}
+                    onFilter={() => setFilterTag(child.id)}
+                    onColor={(color) => void patchTag(child, { color })}
+                    onCatalogBar={(show_in_catalog_bar) =>
+                      void patchTag(child, { show_in_catalog_bar })
+                    }
+                  />
                 ))}
               </div>
             </div>
@@ -217,6 +245,22 @@ export function ProductsPage() {
                 </option>
               ))}
             </select>
+            <div className="space-y-1">
+              <p className="text-[11px] text-sq-secondary">Колір плитки</p>
+              <TagColorSwatches value={newTagColor} onChange={setNewTagColor} size="sm" />
+            </div>
+            <label className="flex items-start gap-2 text-sm text-sq-text cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={newTagCatalogBar}
+                onChange={(e) => setNewTagCatalogBar(e.target.checked)}
+              />
+              <span>
+                Показувати в рядку категорій
+                <span className="block text-[11px] text-sq-secondary">Рядок категорій на касі</span>
+              </span>
+            </label>
             <button type="submit" className="sq-btn-primary w-full py-2.5 text-sm">
               Додати мітку
             </button>
@@ -381,6 +425,59 @@ export function ProductsPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function TagAdminRow({
+  tag,
+  nested,
+  active,
+  saving,
+  onFilter,
+  onColor,
+  onCatalogBar,
+}: {
+  tag: PosTag;
+  nested?: boolean;
+  active: boolean;
+  saving: boolean;
+  onFilter: () => void;
+  onColor: (color: TagColorKey) => void;
+  onCatalogBar: (value: boolean) => void;
+}) {
+  return (
+    <div
+      className={`rounded-[4px] border border-transparent p-1.5 space-y-1.5 ${
+        active ? 'bg-sq-blue/10 border-sq-blue/30' : ''
+      } ${saving ? 'opacity-60' : ''}`}
+    >
+      <button
+        type="button"
+        onClick={onFilter}
+        className={`w-full text-left px-2 py-1 rounded-[4px] font-medium ${
+          nested ? 'text-sm text-[#6E6E6E]' : 'text-sm'
+        } ${active ? 'text-sq-blue' : 'text-sq-text'}`}
+      >
+        {tag.name}
+        {tag.show_in_catalog_bar && (
+          <span className="ml-1.5 text-[10px] font-normal text-sq-blue">рядок</span>
+        )}
+      </button>
+      <TagColorSwatches
+        value={tag.color}
+        onChange={onColor}
+        size="sm"
+      />
+      <label className="flex items-center gap-1.5 px-1 text-[11px] text-sq-secondary cursor-pointer">
+        <input
+          type="checkbox"
+          checked={tag.show_in_catalog_bar}
+          disabled={saving}
+          onChange={(e) => onCatalogBar(e.target.checked)}
+        />
+        У рядку категорій
+      </label>
     </div>
   );
 }

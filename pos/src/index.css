@@ -7,6 +7,7 @@
   --pos-primary-press: #0058d6;
   --pos-bg: #f5f5f5;
   --pos-surface: #ffffff;
+  --pos-rail: #1a1a1a;
   --pos-text: #1a1a1a;
   --pos-secondary: #6e6e6e;
   --pos-muted: #9a9a9a;
@@ -22,7 +23,7 @@
   --sq-blue-press: var(--pos-primary-press);
   --sq-bg: var(--pos-bg);
   --sq-surface: var(--pos-surface);
-  --sq-sidebar: var(--pos-surface);
+  --sq-sidebar: #f0f0f0;
   --sq-text: var(--pos-text);
   --sq-text-secondary: var(--pos-secondary);
   --sq-text-muted: var(--pos-muted);

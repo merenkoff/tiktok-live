@@ -24,7 +24,7 @@ describe.skipIf(!hasDb)('POS tags + archive', () => {
     const path = await import('path');
     const { fileURLToPath } = await import('url');
     const dir = path.dirname(fileURLToPath(import.meta.url));
-    for (const file of ['002_pos_schema.sql', '003_pos_tags.sql']) {
+    for (const file of ['002_pos_schema.sql', '003_pos_tags.sql', '004_pos_tag_catalog_bar.sql']) {
       const sql = fs.readFileSync(path.join(dir, '../../migrations', file), 'utf-8');
       await pool.query(sql);
     }
