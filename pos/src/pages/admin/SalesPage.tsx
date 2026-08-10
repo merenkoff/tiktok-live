@@ -3,6 +3,17 @@ import { api } from '../../services/api';
 import { formatUah } from '../../lib/money';
 import type { SaleDetail, SaleListItem } from '../../types';
 
+const SALE_STATUS_UK: Record<string, string> = {
+  completed: 'Завершено',
+  voided: 'Скасовано',
+  refunded: 'Повернено',
+  partially_refunded: 'Часткове повернення',
+};
+
+function saleStatusLabel(status: string): string {
+  return SALE_STATUS_UK[status] ?? status;
+}
+
 export function SalesPage() {
   const [sales, setSales] = useState<SaleListItem[]>([]);
   const [selected, setSelected] = useState<SaleDetail | null>(null);
@@ -86,7 +97,7 @@ export function SalesPage() {
               </div>
               <div className="text-right">
                 <p className="font-semibold text-sq-text">{formatUah(sale.total_cents)}</p>
-                <p className="text-xs text-sq-secondary">{sale.status}</p>
+                <p className="text-xs text-sq-secondary">{saleStatusLabel(sale.status)}</p>
               </div>
             </button>
           ))}
@@ -101,7 +112,7 @@ export function SalesPage() {
               <div>
                 <h3 className="text-xl font-bold text-sq-text">{selected.receipt_number}</h3>
                 <p className="text-sm text-sq-secondary">
-                  {selected.status} · {selected.staff_name}
+                  {saleStatusLabel(selected.status)} · {selected.staff_name}
                 </p>
               </div>
               <ul className="space-y-2 text-sm">

@@ -11,6 +11,13 @@ const TYPE_LABEL: Record<string, string> = {
   inventory: 'Інвентаризація',
 };
 
+const STATUS_LABEL: Record<string, string> = {
+  draft: 'Чернетка',
+  posted: 'Проведено',
+  voided: 'Скасовано',
+  reversed: 'Відмінено',
+};
+
 export function StockDocumentDetailPage() {
   const { id } = useParams();
   const [doc, setDoc] = useState<StockDocument | null>(null);
@@ -74,7 +81,7 @@ export function StockDocumentDetailPage() {
         <p className="sq-section-label">{TYPE_LABEL[doc.type] ?? doc.type}</p>
         <h1 className="text-2xl font-semibold">{doc.doc_number}</h1>
         <p className="text-sm text-[#6E6E6E] mt-1">
-          {doc.status} · {new Date(doc.occurred_at).toLocaleString('uk-UA')}
+          {STATUS_LABEL[doc.status] ?? doc.status} · {new Date(doc.occurred_at).toLocaleString('uk-UA')}
           {doc.reason_code ? ` · ${doc.reason_code}` : ''}
         </p>
         {doc.note && <p className="text-sm mt-2">{doc.note}</p>}

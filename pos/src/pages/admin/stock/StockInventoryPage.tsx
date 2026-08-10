@@ -122,7 +122,17 @@ export function StockInventoryPage() {
           <p className="sq-section-label">Інвентаризація</p>
           <h1 className="text-2xl font-semibold">{doc?.doc_number ?? '…'}</h1>
           <p className="text-sm text-[#6E6E6E]">
-            {doc?.status === 'draft' ? 'Чернетка — можна правити' : `Статус: ${doc?.status}`}
+            {doc?.status === 'draft'
+              ? 'Чернетка — можна правити'
+              : `Статус: ${
+                  doc?.status === 'posted'
+                    ? 'Проведено'
+                    : doc?.status === 'voided'
+                      ? 'Скасовано'
+                      : doc?.status === 'reversed'
+                        ? 'Відмінено'
+                        : doc?.status ?? '…'
+                }`}
           </p>
         </div>
         {doc?.status === 'draft' && (
