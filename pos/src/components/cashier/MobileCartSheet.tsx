@@ -82,9 +82,11 @@ export function MobileCartSheet({
                             className="w-full h-full object-cover"
                           />
                         ) : null}
-                        <span className="absolute top-0 left-0 text-[10px] font-semibold bg-black/70 text-white px-1 py-0.5 rounded-br-sq">
-                          {line.quantity}×
-                        </span>
+                        {line.quantity > 1 && (
+                          <span className="absolute top-0 left-0 text-[10px] font-semibold bg-black/70 text-white px-1 py-0.5 rounded-br-sq">
+                            {line.quantity}×
+                          </span>
+                        )}
                       </div>
                       <div className="min-w-0 flex-1 flex justify-between gap-2">
                         <div className="min-w-0">
