@@ -8,6 +8,12 @@ import { ProductsPage } from './pages/admin/ProductsPage';
 import { SalesPage } from './pages/admin/SalesPage';
 import { StaffPage } from './pages/admin/StaffPage';
 import { SettingsPage } from './pages/admin/SettingsPage';
+import { StockHubPage } from './pages/admin/stock/StockHubPage';
+import { StockActionPage } from './pages/admin/stock/StockActionPage';
+import { StockInventoryPage } from './pages/admin/stock/StockInventoryPage';
+import { StockHistoryPage } from './pages/admin/stock/StockHistoryPage';
+import { StockMovementPage } from './pages/admin/stock/StockMovementPage';
+import { StockDocumentDetailPage } from './pages/admin/stock/StockDocumentDetailPage';
 import { CustomersPage } from './pages/customers/CustomersPage';
 import { RegisterPage } from './pages/register/RegisterPage';
 
@@ -82,6 +88,15 @@ export function App() {
       >
         <Route index element={<DashboardPage />} />
         <Route path="products" element={<ProductsPage />} />
+        <Route path="stock" element={<StockHubPage />} />
+        <Route path="stock/receipt" element={<StockActionPage type="receipt" />} />
+        <Route path="stock/writeoff" element={<StockActionPage type="writeoff" />} />
+        <Route path="stock/adjust" element={<StockActionPage type="adjustment" />} />
+        <Route path="stock/inventory" element={<StockInventoryPage />} />
+        <Route path="stock/inventory/:id" element={<StockInventoryPage />} />
+        <Route path="stock/history" element={<StockHistoryPage />} />
+        <Route path="stock/movement" element={<StockMovementPage />} />
+        <Route path="stock/documents/:id" element={<StockDocumentDetailPage />} />
         <Route path="customers" element={<CustomersPage />} />
         <Route path="sales" element={<SalesPage />} />
         <Route path="staff" element={<StaffPage />} />

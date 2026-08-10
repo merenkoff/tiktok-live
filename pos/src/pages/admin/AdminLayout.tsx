@@ -4,6 +4,7 @@ import { useAuthStore } from '../../hooks/useAuth';
 const links = [
   { to: '/admin', end: true, label: 'Сьогодні' },
   { to: '/admin/products', label: 'Товари' },
+  { to: '/admin/stock', label: 'Склад' },
   { to: '/admin/customers', label: 'Клієнти' },
   { to: '/admin/sales', label: 'Продажі' },
   { to: '/admin/staff', label: 'Співробітники' },

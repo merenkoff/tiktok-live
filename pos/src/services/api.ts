@@ -10,6 +10,15 @@ import type {
   StaffMember,
   TodayAnalytics,
   CustomerChild,
+  Supplier,
+  StockDocument,
+  StockDocumentType,
+  StockDocumentStatus,
+  StockDocumentLine,
+  OnHandRow,
+  LowStockRow,
+  StockMovementRow,
+  MovementSummaryRow,
 } from '../types';
 import { posApiBase } from '../lib/urls';
 
@@ -341,6 +350,149 @@ class PosApi {
   async getStore() {
     const { data } = await this.client.get('/store');
     return data as { id: number; name: string; slug: string; currency: string; timezone: string };
+  }
+
+  async listSuppliers(): Promise<Supplier[]> {
+    const { data } = await this.client.get<Supplier[]>('/suppliers');
+    return data;
+  }
+
+  async createSupplier(payload: { name: string; phone?: string; note?: string }): Promise<Supplier> {
+    const { data } = await this.client.post<Supplier>('/suppliers', payload);
+    return data;
+  }
+
+  async listStockDocuments(params?: {
+    type?: StockDocumentType;
+    status?: StockDocumentStatus;
+    from?: string;
+    to?: string;
+  }): Promise<StockDocument[]> {
+    const { data } = await this.client.get<StockDocument[]>('/stock/documents', { params });
+    return data;
+  }
+
+  async getStockDocument(id: number): Promise<StockDocument> {
+    const { data } = await this.client.get<StockDocument>(`/stock/documents/${id}`);
+    return data;
+  }
+
+  async createStockDocument(payload: {
+    type: StockDocumentType;
+    occurred_at?: string;
+    supplier_id?: number | null;
+    reason_code?: string | null;
+    note?: string | null;
+  }): Promise<StockDocument> {
+    const { data } = await this.client.post<StockDocument>('/stock/documents', payload);
+    return data;
+  }
+
+  async addStockDocumentLine(
+    documentId: number,
+    payload: {
+      variant_id: number;
+      quantity?: number;
+      unit_cost_cents?: number | null;
+      counted_qty?: number | null;
+      target_qty?: number;
+      line_note?: string | null;
+    }
+  ): Promise<StockDocumentLine> {
+    const { data } = await this.client.post<StockDocumentLine>(
+      `/stock/documents/${documentId}/lines`,
+      payload
+    );
+    return data;
+  }
+
+  async updateStockDocumentLine(
+    documentId: number,
+    lineId: number,
+    payload: {
+      quantity?: number;
+      unit_cost_cents?: number | null;
+      counted_qty?: number | null;
+      line_note?: string | null;
+    }
+  ): Promise<StockDocumentLine> {
+    const { data } = await this.client.patch<StockDocumentLine>(
+      `/stock/documents/${documentId}/lines/${lineId}`,
+      payload
+    );
+    return data;
+  }
+
+  async removeStockDocumentLine(documentId: number, lineId: number): Promise<void> {
+    await this.client.delete(`/stock/documents/${documentId}/lines/${lineId}`);
+  }
+
+  async bulkInventoryLines(
+    documentId: number,
+    payload: { tag_ids?: number[]; product_ids?: number[]; variant_ids?: number[] }
+  ): Promise<StockDocumentLine[]> {
+    const { data } = await this.client.post<StockDocumentLine[]>(
+      `/stock/documents/${documentId}/lines/bulk`,
+      payload
+    );
+    return data;
+  }
+
+  async refreshInventorySystemQty(documentId: number): Promise<StockDocumentLine[]> {
+    const { data } = await this.client.post<StockDocumentLine[]>(
+      `/stock/documents/${documentId}/refresh-system-qty`
+    );
+    return data;
+  }
+
+  async postStockDocument(documentId: number, idempotencyKey?: string): Promise<StockDocument> {
+    const { data } = await this.client.post<StockDocument>(
+      `/stock/documents/${documentId}/post`,
+      {},
+      idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : undefined
+    );
+    return data;
+  }
+
+  async reverseStockDocument(documentId: number, note?: string): Promise<StockDocument> {
+    const { data } = await this.client.post<StockDocument>(`/stock/documents/${documentId}/reverse`, {
+      note,
+    });
+    return data;
+  }
+
+  async voidStockDocument(documentId: number): Promise<void> {
+    await this.client.delete(`/stock/documents/${documentId}`);
+  }
+
+  async stockOnHand(): Promise<OnHandRow[]> {
+    const { data } = await this.client.get<OnHandRow[]>('/stock/reports/on-hand');
+    return data;
+  }
+
+  async stockLow(): Promise<LowStockRow[]> {
+    const { data } = await this.client.get<LowStockRow[]>('/stock/low');
+    return data;
+  }
+
+  async stockMovements(params?: {
+    from?: string;
+    to?: string;
+    variant_id?: number;
+    reason?: string;
+  }): Promise<StockMovementRow[]> {
+    const { data } = await this.client.get<StockMovementRow[]>('/stock/reports/movements', {
+      params,
+    });
+    return data;
+  }
+
+  async stockMovementSummary(from: string, to: string): Promise<MovementSummaryRow[]> {
+    const { data } = await this.client.get<MovementSummaryRow[]>(
+      '/stock/reports/movement-summary',
+      { params: { from, to } }
+    );
+    return data;
   }
 }
 

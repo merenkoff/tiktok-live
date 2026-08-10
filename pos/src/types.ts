@@ -159,3 +159,103 @@ export interface StaffMember {
   is_active: boolean;
   has_pin: boolean;
 }
+
+export type StockDocumentType = 'receipt' | 'writeoff' | 'adjustment' | 'inventory';
+export type StockDocumentStatus = 'draft' | 'posted' | 'voided' | 'reversed';
+
+export interface StockDocumentLine {
+  id: number;
+  document_id: number;
+  store_id: number;
+  variant_id: number;
+  quantity: number;
+  unit_cost_cents: number | null;
+  system_qty: number | null;
+  counted_qty: number | null;
+  line_note: string | null;
+  product_name?: string;
+  size?: string;
+  color?: string;
+}
+
+export interface StockDocument {
+  id: number;
+  store_id: number;
+  type: StockDocumentType;
+  status: StockDocumentStatus;
+  doc_number: string;
+  occurred_at: string;
+  supplier_id: number | null;
+  reason_code: string | null;
+  note: string | null;
+  created_by: number;
+  posted_by: number | null;
+  posted_at: string | null;
+  reversed_at: string | null;
+  reversal_of_id: number | null;
+  created_at: string;
+  updated_at: string;
+  lines?: StockDocumentLine[];
+}
+
+export interface Supplier {
+  id: number;
+  store_id: number;
+  name: string;
+  phone: string | null;
+  note: string | null;
+  is_active: boolean;
+}
+
+export interface OnHandRow {
+  variant_id: number;
+  product_id: number;
+  product_name: string;
+  size: string;
+  color: string;
+  sku: string | null;
+  barcode: string | null;
+  quantity: number;
+  cost_cents: number;
+  price_cents: number;
+}
+
+export interface StockMovementRow {
+  id: number;
+  variant_id: number;
+  product_name: string;
+  size: string;
+  color: string;
+  delta: number;
+  reason: string;
+  reference_type: string | null;
+  reference_id: number | null;
+  note: string | null;
+  staff_name: string | null;
+  unit_cost_cents: number | null;
+  occurred_at: string;
+}
+
+export interface MovementSummaryRow {
+  variant_id: number;
+  product_name: string;
+  size: string;
+  color: string;
+  opening: number;
+  receipt: number;
+  sale: number;
+  writeoff: number;
+  adjust: number;
+  inventory: number;
+  refund: number;
+  void: number;
+  closing: number;
+}
+
+export interface LowStockRow {
+  variant_id: number;
+  product_name: string;
+  size: string;
+  color: string;
+  quantity: number;
+}
