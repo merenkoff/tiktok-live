@@ -15,38 +15,14 @@ export async function adjustStock(params: {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-
-    const stockResult = await client.query(
-      `SELECT quantity FROM pos_stock
-       WHERE variant_id = $1 AND store_id = $2
-       FOR UPDATE`,
-      [params.variantId, params.storeId]
-    );
-
-    if (stockResult.rows.length === 0) {
-      throw new Error('Stock row not found');
-    }
-
-    const current = Number(stockResult.rows[0].quantity);
-    const next = current + params.delta;
-    if (next < 0) {
-      throw new Error('Insufficient stock');
-    }
-
-    await client.query(
-      `UPDATE pos_stock
-       SET quantity = $1, updated_at = NOW()
-       WHERE variant_id = $2 AND store_id = $3`,
-      [next, params.variantId, params.storeId]
-    );
-
-    await client.query(
-      `INSERT INTO pos_stock_movements
-         (store_id, variant_id, delta, reason, note, staff_id)
-       VALUES ($1, $2, $3, 'adjust', $4, $5)`,
-      [params.storeId, params.variantId, params.delta, params.note ?? null, params.staffId]
-    );
-
+    const next = await applyStockDelta(client, {
+      storeId: params.storeId,
+      variantId: params.variantId,
+      delta: params.delta,
+      reason: 'adjust',
+      staffId: params.staffId,
+      note: params.note,
+    });
     await client.query('COMMIT');
     return { variant_id: params.variantId, quantity: next };
   } catch (error) {
@@ -68,6 +44,8 @@ export async function applyStockDelta(
     referenceType?: string;
     referenceId?: number;
     note?: string;
+    unitCostCents?: number | null;
+    occurredAt?: Date | string;
   }
 ): Promise<number> {
   const stockResult = await client.query(
@@ -96,8 +74,9 @@ export async function applyStockDelta(
 
   await client.query(
     `INSERT INTO pos_stock_movements
-       (store_id, variant_id, delta, reason, reference_type, reference_id, note, staff_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+       (store_id, variant_id, delta, reason, reference_type, reference_id, note, staff_id,
+        unit_cost_cents, occurred_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10, NOW()))`,
     [
       params.storeId,
       params.variantId,
@@ -107,6 +86,8 @@ export async function applyStockDelta(
       params.referenceId ?? null,
       params.note ?? null,
       params.staffId,
+      params.unitCostCents ?? null,
+      params.occurredAt ?? null,
     ]
   );
 
@@ -130,4 +111,13 @@ export async function listLowStock(storeId: number, threshold = 3) {
     color: row.color,
     quantity: Number(row.quantity),
   }));
+}
+
+export async function getVariantStock(storeId: number, variantId: number): Promise<number> {
+  const result = await pool.query(
+    `SELECT quantity FROM pos_stock WHERE store_id = $1 AND variant_id = $2`,
+    [storeId, variantId]
+  );
+  if (result.rows.length === 0) throw new Error('Stock row not found');
+  return Number(result.rows[0].quantity);
 }

@@ -2,7 +2,23 @@
 
 export type PosRole = 'owner' | 'seller';
 
-export type StockReason = 'sale' | 'refund' | 'adjust' | 'void' | 'seed';
+export type StockReason =
+  | 'sale'
+  | 'refund'
+  | 'adjust'
+  | 'void'
+  | 'seed'
+  | 'receipt'
+  | 'writeoff'
+  | 'inventory';
+
+export type StockDocumentType = 'receipt' | 'writeoff' | 'adjustment' | 'inventory';
+
+export type StockDocumentStatus = 'draft' | 'posted' | 'voided' | 'reversed';
+
+export type WriteoffReasonCode = 'damaged' | 'lost' | 'gift' | 'other';
+
+export type AdjustmentReasonCode = 'found' | 'loss' | 'data_fix' | 'other';
 
 export type SaleStatus = 'completed' | 'voided' | 'refunded' | 'partially_refunded';
 
