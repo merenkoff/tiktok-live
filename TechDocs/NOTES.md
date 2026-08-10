@@ -1,5 +1,7 @@
 # Локальные заметки по проекту
 
+POS post-MVP / штрихкоди: [[POS_POST_MVP]] · [[POS_GTIN_ENRICHMENT]] · [[RAILWAY_POS]]
+
 ## Inventory
 
 - Таблицы `inventory` **нет** в реальной схеме (`migrations/001_create_schema.sql`) и в коде.
