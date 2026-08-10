@@ -29,6 +29,7 @@ async function applyMigrations(): Promise<void> {
     '006_pos_stock_documents.sql',
     '007_pos_receipt_placeholders.sql',
     '008_pos_gtin_cache.sql',
+    '009_pos_gtin_learn_jobs.sql',
   ]) {
     const sql = fs.readFileSync(path.join(dir, '../../migrations', file), 'utf-8');
     await pool.query(sql);
@@ -72,7 +73,6 @@ describe.skipIf(!hasDb)('POS GTIN cache and providers', () => {
       gtinB,
       gtinC,
     ]);
-    await pool.end();
   });
 
   it('ingest merge: products_facts beats food; worse does not overwrite', async () => {

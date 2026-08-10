@@ -51,6 +51,10 @@ temp/
 data/pos-uploads/*
 !data/pos-uploads/.gitkeep
 
+# GTIN Open*Facts dump downloads (keep dir)
+data/gtin-dumps/*
+!data/gtin-dumps/.gitkeep
+
 # Database
 *.db
 *.sqlite

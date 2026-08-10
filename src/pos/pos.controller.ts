@@ -807,6 +807,97 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   // ── GTIN enrichment ───────────────────────────────────
+  fastify.post('/gtin/learn/batch', async (request, reply) => {
+    const auth = await ensurePosOwner(request, reply);
+    if (!auth) return;
+    try {
+      const { isGtinLookupEnabled } = await import('./gtin/gtin-cache.service.js');
+      if (!(await isGtinLookupEnabled(auth.storeId))) {
+        return reply.code(403).send({ error: 'gtin lookup disabled' });
+      }
+      const body = request.body as { items?: unknown };
+      const { learnBatch } = await import('./gtin/learn.service.js');
+      return await learnBatch({
+        items: (body.items ?? []) as Parameters<typeof learnBatch>[0]['items'],
+        storeId: auth.storeId,
+        staffId: auth.staffId,
+      });
+    } catch (error) {
+      const msg = errorMessage(error);
+      if (msg === 'gtin lookup disabled') return reply.code(403).send({ error: msg });
+      return reply.code(400).send({ error: msg });
+    }
+  });
+
+  fastify.get('/gtin/learn/stats', async (request, reply) => {
+    const auth = await ensurePosOwner(request, reply);
+    if (!auth) return;
+    try {
+      const { isGtinLookupEnabled } = await import('./gtin/gtin-cache.service.js');
+      if (!(await isGtinLookupEnabled(auth.storeId))) {
+        return reply.code(403).send({ error: 'gtin lookup disabled' });
+      }
+      const { learnStats } = await import('./gtin/learn.service.js');
+      return await learnStats();
+    } catch (error) {
+      return reply.code(400).send({ error: errorMessage(error) });
+    }
+  });
+
+  fastify.post('/gtin/learn/jobs', async (request, reply) => {
+    const auth = await ensurePosOwner(request, reply);
+    if (!auth) return;
+    try {
+      const { isGtinLookupEnabled } = await import('./gtin/gtin-cache.service.js');
+      if (!(await isGtinLookupEnabled(auth.storeId))) {
+        return reply.code(403).send({ error: 'gtin lookup disabled' });
+      }
+      const body = request.body as {
+        datasets?: Array<'products' | 'food' | 'beauty'>;
+        mode?: string;
+        limit?: number;
+      };
+      const { createLearnJob } = await import('./gtin/learn-jobs.service.js');
+      const job = await createLearnJob({
+        datasets: body.datasets ?? ['products'],
+        mode: body.mode ?? 'upsert',
+        limit: body.limit,
+        createdBy: auth.staffId,
+      });
+      return reply.code(201).send(job);
+    } catch (error) {
+      return reply.code(400).send({ error: errorMessage(error) });
+    }
+  });
+
+  fastify.get('/gtin/learn/jobs/:id', async (request, reply) => {
+    const auth = await ensurePosOwner(request, reply);
+    if (!auth) return;
+    try {
+      const { id } = request.params as { id: string };
+      const { getLearnJob } = await import('./gtin/learn-jobs.service.js');
+      const job = await getLearnJob(Number(id));
+      if (!job) return reply.code(404).send({ error: 'job not found' });
+      return job;
+    } catch (error) {
+      return reply.code(400).send({ error: errorMessage(error) });
+    }
+  });
+
+  fastify.post('/gtin/learn/jobs/:id/cancel', async (request, reply) => {
+    const auth = await ensurePosOwner(request, reply);
+    if (!auth) return;
+    try {
+      const { id } = request.params as { id: string };
+      const { cancelLearnJob } = await import('./gtin/learn-jobs.service.js');
+      const job = await cancelLearnJob(Number(id));
+      if (!job) return reply.code(404).send({ error: 'job not found' });
+      return job;
+    } catch (error) {
+      return reply.code(400).send({ error: errorMessage(error) });
+    }
+  });
+
   fastify.get('/gtin/:code', async (request, reply) => {
     const auth = await ensurePosOwner(request, reply);
     if (!auth) return;

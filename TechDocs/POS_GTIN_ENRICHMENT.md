@@ -2,11 +2,12 @@
 
 Дослідження + статус імплементації підказки назви за штрихкодом у приході.
 
-Пов’язано: [[POS_GTIN_SETUP]] · [[POS_POST_MVP]] · [[RAILWAY_POS]]
+Пов’язано: [[POS_GTIN_SETUP]] · [[POS_GTIN_ENRICHMENT]] · [[POS_POST_MVP]] · [[POS_GTIN_LEARNING_API]]
 
 > **Статус:** free path **реалізовано** (кеш + Open*Facts + UPCitemdb + upc.dev).  
 > GS1 enterprise — як і раніше поза scope.  
-> Налаштування ключів: [[POS_GTIN_SETUP]].
+> Налаштування ключів: [[POS_GTIN_SETUP]].  
+> Масове наповнення кешу: [[POS_GTIN_LEARNING_API]].
 
 ---
 

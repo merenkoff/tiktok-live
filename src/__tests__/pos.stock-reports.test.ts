@@ -34,6 +34,7 @@ describe.skipIf(!hasDb)('POS stock reports', () => {
       '006_pos_stock_documents.sql',
       '007_pos_receipt_placeholders.sql',
       '008_pos_gtin_cache.sql',
+      '009_pos_gtin_learn_jobs.sql',
     ]) {
       await pool.query(fs.readFileSync(path.join(dir, '../../migrations', file), 'utf-8'));
     }

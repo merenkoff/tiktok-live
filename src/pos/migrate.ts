@@ -21,6 +21,7 @@ async function migrate(): Promise<void> {
     '006_pos_stock_documents.sql',
     '007_pos_receipt_placeholders.sql',
     '008_pos_gtin_cache.sql',
+    '009_pos_gtin_learn_jobs.sql',
   ];
   for (const file of files) {
     const migrationPath = path.join(migrationsDir, file);
