@@ -489,6 +489,58 @@ class PosApi {
     await this.client.delete(`/stock/documents/${documentId}`);
   }
 
+  async getGtinCache(
+    code: string
+  ): Promise<
+    { found: true; gtin: string; name: string | null; brand: string | null; image_url: string | null; best_source: string | null } | { found: false }
+  > {
+    try {
+      const { data } = await this.client.get(`/gtin/${encodeURIComponent(code)}`);
+      return data;
+    } catch (err) {
+      if (err && typeof err === 'object' && 'response' in err) {
+        const status = (err as { response?: { status?: number } }).response?.status;
+        if (status === 404) return { found: false };
+      }
+      throw err;
+    }
+  }
+
+  async ingestGtin(
+    gtin: string,
+    results: Array<{
+      source: string;
+      found: boolean;
+      name?: string | null;
+      brand?: string | null;
+      image_url?: string | null;
+    }>
+  ): Promise<{ found: boolean; hint: {
+    gtin: string;
+    name: string | null;
+    brand: string | null;
+    image_url: string | null;
+    best_source: string | null;
+  } | null }> {
+    const { data } = await this.client.post('/gtin/ingest', { gtin, results });
+    return data;
+  }
+
+  async lookupGtinQuotaProviders(gtin: string): Promise<{
+    found: boolean;
+    hint: {
+      gtin: string;
+      name: string | null;
+      brand: string | null;
+      image_url: string | null;
+      best_source: string | null;
+    } | null;
+    skipped?: Array<{ provider: string; skipped: string }>;
+  }> {
+    const { data } = await this.client.post('/gtin/lookup/quota-providers', { gtin });
+    return data;
+  }
+
   async stockOnHand(): Promise<OnHandRow[]> {
     const { data } = await this.client.get<OnHandRow[]>('/stock/reports/on-hand');
     return data;

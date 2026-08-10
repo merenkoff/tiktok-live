@@ -1,7 +1,8 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../../../services/api';
 import { formatUah, uahInputToCents } from '../../../lib/money';
+import { enrichGtinFromSources, gtinSourceLabel, type GtinHint } from '../../../lib/gtinLookup';
 import type { OnHandRow, StockDocumentType, Supplier } from '../../../types';
 
 const WRITEOFF_REASONS = [
@@ -83,6 +84,10 @@ export function StockActionPage({ type }: Props) {
   const [stubColor, setStubColor] = useState('');
   const [stubBarcode, setStubBarcode] = useState('');
   const [similarWarn, setSimilarWarn] = useState<string[]>([]);
+  const [gtinHint, setGtinHint] = useState<GtinHint | null>(null);
+  const [gtinLooking, setGtinLooking] = useState(false);
+  const gtinDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const gtinHintClearedRef = useRef(false);
 
   const title =
     type === 'receipt' ? 'Прихід товару' : type === 'writeoff' ? 'Списання' : 'Корекція залишку';
@@ -172,6 +177,8 @@ export function StockActionPage({ type }: Props) {
     setStubCost('');
     setStubSize('');
     setStubColor('');
+    setGtinHint(null);
+    gtinHintClearedRef.current = false;
     const needle = (barcodeLike ? '' : query).toLowerCase();
     const similar = needle
       ? catalog
@@ -182,6 +189,60 @@ export function StockActionPage({ type }: Props) {
       : [];
     setSimilarWarn(similar);
     setStubOpen(true);
+    if (barcodeLike) {
+      void runGtinEnrich(query);
+    }
+  }
+
+  async function runGtinEnrich(code: string) {
+    if (type !== 'receipt' || gtinHintClearedRef.current) return;
+    if (!looksLikeBarcode(code)) return;
+    setGtinLooking(true);
+    try {
+      const { hint } = await enrichGtinFromSources(code, {
+        getGtinCache: async (c) => {
+          const r = await api.getGtinCache(c);
+          if (!r.found) return { found: false };
+          return {
+            found: true as const,
+            hint: {
+              gtin: r.gtin,
+              name: r.name,
+              brand: r.brand,
+              image_url: r.image_url,
+              best_source: r.best_source,
+            },
+          };
+        },
+        ingestGtin: (g, results) => api.ingestGtin(g, results),
+        lookupQuotaProviders: (g) => api.lookupGtinQuotaProviders(g),
+      });
+      if (hint?.name && !gtinHintClearedRef.current) {
+        setGtinHint(hint);
+        setStubName((prev) => (prev.trim() ? prev : hint.name!));
+        if (hint.brand) {
+          // brand is informational only for now
+        }
+      }
+    } catch {
+      // silent
+    } finally {
+      setGtinLooking(false);
+    }
+  }
+
+  function onStubBarcodeChange(value: string) {
+    setStubBarcode(value);
+    gtinHintClearedRef.current = false;
+    if (gtinDebounceRef.current) clearTimeout(gtinDebounceRef.current);
+    gtinDebounceRef.current = setTimeout(() => {
+      void runGtinEnrich(value.trim());
+    }, 400);
+  }
+
+  function clearGtinHint() {
+    gtinHintClearedRef.current = true;
+    setGtinHint(null);
   }
 
   function addStubToDocument() {
@@ -655,6 +716,22 @@ export function StockActionPage({ type }: Props) {
               Можливо це вже є: {similarWarn.join(', ')}?
             </p>
           )}
+          {gtinLooking && (
+            <p className="text-xs text-[#6E6E6E]">Шукаємо назву за штрихкодом…</p>
+          )}
+          {gtinHint?.name && (
+            <div className="flex flex-wrap items-center gap-2 text-sm bg-[#E8F1FF] border border-[#C5DBFF] rounded-[4px] px-3 py-2">
+              <span>
+                Знайдено: <span className="font-medium">{gtinHint.name}</span>
+                {gtinHint.best_source
+                  ? ` · ${gtinSourceLabel(gtinHint.best_source)}`
+                  : ''}
+              </span>
+              <button type="button" onClick={clearGtinHint} className="text-[#006AFF] text-xs underline">
+                Очистити підказку
+              </button>
+            </div>
+          )}
           <div className="grid sm:grid-cols-2 gap-3">
             <label className="block space-y-1 sm:col-span-2">
               <span className="text-sm text-[#6E6E6E]">Назва *</span>
@@ -717,7 +794,7 @@ export function StockActionPage({ type }: Props) {
               <span className="text-sm text-[#6E6E6E]">Штрихкод</span>
               <input
                 value={stubBarcode}
-                onChange={(e) => setStubBarcode(e.target.value)}
+                onChange={(e) => onStubBarcodeChange(e.target.value)}
                 className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2.5 text-sm"
               />
             </label>
