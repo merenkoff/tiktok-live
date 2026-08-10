@@ -20,7 +20,11 @@ export interface CreateProductInput {
   description?: string | null;
   image_url?: string | null;
   variants: VariantInput[];
+  needs_review?: boolean;
+  created_from_document_id?: number | null;
 }
+
+type DbClient = { query: typeof pool.query };
 
 function emptyToNull(value?: string | null): string | null {
   if (value == null) return null;
@@ -87,6 +91,9 @@ export async function listProducts(storeId: number) {
     description: p.description,
     image_url: p.image_url,
     is_active: p.is_active,
+    needs_review: Boolean(p.needs_review),
+    created_from_document_id:
+      p.created_from_document_id == null ? null : Number(p.created_from_document_id),
     created_at: p.created_at,
     updated_at: p.updated_at,
     tag_ids: tagMap.get(Number(p.id)) ?? [],
@@ -99,74 +106,84 @@ export async function getProduct(storeId: number, productId: number) {
   return products.find((p) => p.id === productId) ?? null;
 }
 
-export async function createProduct(storeId: number, input: CreateProductInput) {
+/** Insert product+variants+stock inside an open transaction. qty>0 writes seed movement. */
+export async function createProductInTx(
+  client: DbClient,
+  storeId: number,
+  input: CreateProductInput
+): Promise<{ productId: number; variantIds: number[] }> {
   if (!input.name?.trim()) throw new Error('Product name is required');
   if (!input.variants?.length) throw new Error('At least one variant is required');
 
+  const productResult = await client.query(
+    `INSERT INTO pos_products
+       (store_id, name, description, image_url, needs_review, created_from_document_id)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING id`,
+    [
+      storeId,
+      input.name.trim(),
+      emptyToNull(input.description),
+      emptyToNull(input.image_url),
+      input.needs_review ?? false,
+      input.created_from_document_id ?? null,
+    ]
+  );
+  const productId = Number(productResult.rows[0].id);
+  const variantIds: number[] = [];
+
+  for (const variant of input.variants) {
+    if (variant.price_cents == null || variant.price_cents < 0) {
+      throw new Error('Variant price must be >= 0');
+    }
+    const quantity = variant.quantity ?? 0;
+    if (quantity < 0) throw new Error('Quantity must be >= 0');
+
+    const compareAt = normalizeCompareAt(variant.price_cents, variant.compare_at_cents);
+    const variantResult = await client.query(
+      `INSERT INTO pos_variants
+         (store_id, product_id, size, color, sku, barcode, price_cents, cost_cents, compare_at_cents)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING id`,
+      [
+        storeId,
+        productId,
+        (variant.size ?? '').trim(),
+        (variant.color ?? '').trim(),
+        emptyToNull(variant.sku),
+        emptyToNull(variant.barcode),
+        variant.price_cents,
+        variant.cost_cents ?? 0,
+        compareAt,
+      ]
+    );
+    const variantId = Number(variantResult.rows[0].id);
+    variantIds.push(variantId);
+
+    await client.query(
+      `INSERT INTO pos_stock (variant_id, store_id, quantity)
+       VALUES ($1, $2, $3)`,
+      [variantId, storeId, quantity]
+    );
+
+    if (quantity > 0) {
+      await client.query(
+        `INSERT INTO pos_stock_movements
+           (store_id, variant_id, delta, reason, note)
+         VALUES ($1, $2, $3, 'seed', 'Initial stock')`,
+        [storeId, variantId, quantity]
+      );
+    }
+  }
+
+  return { productId, variantIds };
+}
+
+export async function createProduct(storeId: number, input: CreateProductInput) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-
-    const productResult = await client.query(
-      `INSERT INTO pos_products (store_id, name, description, image_url)
-       VALUES ($1, $2, $3, $4)
-       RETURNING *`,
-      [
-        storeId,
-        input.name.trim(),
-        emptyToNull(input.description),
-        emptyToNull(input.image_url),
-      ]
-    );
-    const product = productResult.rows[0];
-    const productId = Number(product.id);
-
-    for (const variant of input.variants) {
-      if (variant.price_cents == null || variant.price_cents < 0) {
-        throw new Error('Variant price must be >= 0');
-      }
-      const quantity = variant.quantity ?? 0;
-      if (quantity < 0) throw new Error('Quantity must be >= 0');
-
-      const compareAt = normalizeCompareAt(
-        variant.price_cents,
-        variant.compare_at_cents
-      );
-      const variantResult = await client.query(
-        `INSERT INTO pos_variants
-           (store_id, product_id, size, color, sku, barcode, price_cents, cost_cents, compare_at_cents)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-         RETURNING id`,
-        [
-          storeId,
-          productId,
-          (variant.size ?? '').trim(),
-          (variant.color ?? '').trim(),
-          emptyToNull(variant.sku),
-          emptyToNull(variant.barcode),
-          variant.price_cents,
-          variant.cost_cents ?? 0,
-          compareAt,
-        ]
-      );
-      const variantId = Number(variantResult.rows[0].id);
-
-      await client.query(
-        `INSERT INTO pos_stock (variant_id, store_id, quantity)
-         VALUES ($1, $2, $3)`,
-        [variantId, storeId, quantity]
-      );
-
-      if (quantity > 0) {
-        await client.query(
-          `INSERT INTO pos_stock_movements
-             (store_id, variant_id, delta, reason, note)
-           VALUES ($1, $2, $3, 'seed', 'Initial stock')`,
-          [storeId, variantId, quantity]
-        );
-      }
-    }
-
+    const { productId } = await createProductInTx(client, storeId, input);
     await client.query('COMMIT');
     return getProduct(storeId, productId);
   } catch (error) {
@@ -182,6 +199,7 @@ export async function updateProduct(
   productId: number,
   input: Partial<Pick<CreateProductInput, 'name' | 'description' | 'image_url'>> & {
     is_active?: boolean;
+    needs_review?: boolean;
   }
 ) {
   const sets: string[] = ['updated_at = NOW()'];
@@ -203,6 +221,17 @@ export async function updateProduct(
   if (input.is_active !== undefined) {
     sets.push(`is_active = $${i++}`);
     values.push(input.is_active);
+  }
+  if (input.needs_review !== undefined) {
+    sets.push(`needs_review = $${i++}`);
+    values.push(input.needs_review);
+  } else if (
+    input.name !== undefined ||
+    input.description !== undefined ||
+    input.image_url !== undefined
+  ) {
+    // First meaningful edit clears review flag
+    sets.push(`needs_review = FALSE`);
   }
 
   values.push(productId, storeId);

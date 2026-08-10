@@ -608,6 +608,48 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
     }
   });
 
+  fastify.post('/stock/documents/:id/lines/placeholder', async (request, reply) => {
+    const auth = await ensurePosOwner(request, reply);
+    if (!auth) return;
+    const { id } = request.params as { id: string };
+    try {
+      const body = request.body as {
+        name?: string;
+        quantity?: number;
+        unit_cost_cents?: number | null;
+        price_cents?: number;
+        size?: string;
+        color?: string;
+        barcode?: string | null;
+        line_note?: string | null;
+      };
+      if (!body.name?.trim()) return reply.code(400).send({ error: 'name required' });
+      if (body.price_cents == null) return reply.code(400).send({ error: 'price_cents required' });
+      if (!body.quantity || body.quantity <= 0) {
+        return reply.code(400).send({ error: 'quantity must be positive' });
+      }
+      const line = await stockDocumentsService.addPlaceholderLine({
+        storeId: auth.storeId,
+        documentId: Number(id),
+        name: body.name,
+        quantity: body.quantity,
+        priceCents: body.price_cents,
+        unitCostCents: body.unit_cost_cents,
+        size: body.size,
+        color: body.color,
+        barcode: body.barcode,
+        lineNote: body.line_note,
+      });
+      const suggestions = await stockDocumentsService.suggestSimilarProducts(
+        auth.storeId,
+        body.name
+      );
+      return reply.code(201).send({ ...line, similar_products: suggestions });
+    } catch (error) {
+      return reply.code(400).send({ error: errorMessage(error) });
+    }
+  });
+
   fastify.patch('/stock/documents/:id/lines/:lineId', async (request, reply) => {
     const auth = await ensurePosOwner(request, reply);
     if (!auth) return;
@@ -618,6 +660,11 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
         unit_cost_cents?: number | null;
         counted_qty?: number | null;
         line_note?: string | null;
+        placeholder_name?: string;
+        placeholder_size?: string;
+        placeholder_color?: string;
+        placeholder_barcode?: string | null;
+        placeholder_price_cents?: number;
       };
       return await stockDocumentsService.updateLine({
         storeId: auth.storeId,
@@ -627,6 +674,11 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
         unitCostCents: body.unit_cost_cents,
         countedQty: body.counted_qty,
         lineNote: body.line_note,
+        placeholderName: body.placeholder_name,
+        placeholderSize: body.placeholder_size,
+        placeholderColor: body.placeholder_color,
+        placeholderBarcode: body.placeholder_barcode,
+        placeholderPriceCents: body.placeholder_price_cents,
       });
     } catch (error) {
       return reply.code(400).send({ error: errorMessage(error) });

@@ -30,6 +30,7 @@ async function applyMigrations(): Promise<void> {
     '004_pos_tag_catalog_bar.sql',
     '005_pos_discounts_customers.sql',
     '006_pos_stock_documents.sql',
+    '007_pos_receipt_placeholders.sql',
   ]) {
     const sql = fs.readFileSync(path.join(dir, '../../migrations', file), 'utf-8');
     await pool.query(sql);

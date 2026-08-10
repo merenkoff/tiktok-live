@@ -1,6 +1,7 @@
 // src/pos/stock-documents.service.ts
 
 import { pool } from '../db.js';
+import { createProductInTx } from './products.service.js';
 import { applyStockDelta } from './stock.service.js';
 import type { StockDocumentStatus, StockDocumentType, StockReason } from './types.js';
 
@@ -8,15 +9,22 @@ export interface StockDocumentLine {
   id: number;
   document_id: number;
   store_id: number;
-  variant_id: number;
+  variant_id: number | null;
   quantity: number;
   unit_cost_cents: number | null;
   system_qty: number | null;
   counted_qty: number | null;
   line_note: string | null;
+  is_placeholder: boolean;
+  placeholder_name: string | null;
+  placeholder_size: string;
+  placeholder_color: string;
+  placeholder_barcode: string | null;
+  placeholder_price_cents: number | null;
   product_name?: string;
   size?: string;
   color?: string;
+  product_id?: number;
 }
 
 export interface StockDocument {
@@ -80,15 +88,23 @@ function mapLine(row: Record<string, unknown>): StockDocumentLine {
     id: Number(row.id),
     document_id: Number(row.document_id),
     store_id: Number(row.store_id),
-    variant_id: Number(row.variant_id),
+    variant_id: row.variant_id == null ? null : Number(row.variant_id),
     quantity: Number(row.quantity),
     unit_cost_cents: row.unit_cost_cents == null ? null : Number(row.unit_cost_cents),
     system_qty: row.system_qty == null ? null : Number(row.system_qty),
     counted_qty: row.counted_qty == null ? null : Number(row.counted_qty),
     line_note: row.line_note == null ? null : String(row.line_note),
+    is_placeholder: Boolean(row.is_placeholder),
+    placeholder_name: row.placeholder_name == null ? null : String(row.placeholder_name),
+    placeholder_size: row.placeholder_size == null ? '' : String(row.placeholder_size),
+    placeholder_color: row.placeholder_color == null ? '' : String(row.placeholder_color),
+    placeholder_barcode: row.placeholder_barcode == null ? null : String(row.placeholder_barcode),
+    placeholder_price_cents:
+      row.placeholder_price_cents == null ? null : Number(row.placeholder_price_cents),
     product_name: row.product_name == null ? undefined : String(row.product_name),
     size: row.size == null ? undefined : String(row.size),
     color: row.color == null ? undefined : String(row.color),
+    product_id: row.product_id == null ? undefined : Number(row.product_id),
   };
 }
 
@@ -130,12 +146,16 @@ async function assertVariantInStore(
 
 async function loadLines(client: DbClient, documentId: number): Promise<StockDocumentLine[]> {
   const result = await client.query(
-    `SELECT l.*, p.name AS product_name, v.size, v.color
+    `SELECT l.*,
+            COALESCE(p.name, l.placeholder_name) AS product_name,
+            COALESCE(v.size, l.placeholder_size) AS size,
+            COALESCE(v.color, l.placeholder_color) AS color,
+            p.id AS product_id
      FROM pos_stock_document_lines l
-     JOIN pos_variants v ON v.id = l.variant_id
-     JOIN pos_products p ON p.id = v.product_id
+     LEFT JOIN pos_variants v ON v.id = l.variant_id
+     LEFT JOIN pos_products p ON p.id = v.product_id
      WHERE l.document_id = $1
-     ORDER BY l.variant_id ASC`,
+     ORDER BY l.id ASC`,
     [documentId]
   );
   return result.rows.map(mapLine);
@@ -377,6 +397,110 @@ export async function addLine(params: {
   }
 }
 
+export async function addPlaceholderLine(params: {
+  storeId: number;
+  documentId: number;
+  name: string;
+  quantity: number;
+  priceCents: number;
+  unitCostCents?: number | null;
+  size?: string;
+  color?: string;
+  barcode?: string | null;
+  lineNote?: string | null;
+}): Promise<StockDocumentLine> {
+  const name = params.name.trim();
+  if (!name) throw new Error('placeholder name required');
+  if (!params.quantity || params.quantity <= 0) throw new Error('quantity must be positive');
+  if (params.priceCents == null || params.priceCents < 0) {
+    throw new Error('price_cents must be >= 0');
+  }
+
+  const size = (params.size ?? '').trim();
+  const color = (params.color ?? '').trim();
+  const barcode = params.barcode?.trim() || null;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const locked = await client.query(
+      `SELECT * FROM pos_stock_documents WHERE id = $1 AND store_id = $2 FOR UPDATE`,
+      [params.documentId, params.storeId]
+    );
+    if (locked.rows.length === 0) throw new Error('Document not found');
+    const doc = locked.rows[0];
+    if (doc.status !== 'draft') throw new Error('Only draft documents can be edited');
+    if (doc.type !== 'receipt') throw new Error('Placeholders only allowed on receipt documents');
+
+    const dup = await client.query(
+      `SELECT id FROM pos_stock_document_lines
+       WHERE document_id = $1 AND is_placeholder = TRUE
+         AND lower(placeholder_name) = lower($2)
+         AND placeholder_size = $3 AND placeholder_color = $4`,
+      [params.documentId, name, size, color]
+    );
+    if (dup.rows.length > 0) {
+      throw new Error('Duplicate placeholder in this document');
+    }
+
+    const result = await client.query(
+      `INSERT INTO pos_stock_document_lines
+         (document_id, store_id, variant_id, quantity, unit_cost_cents, line_note,
+          is_placeholder, placeholder_name, placeholder_size, placeholder_color,
+          placeholder_barcode, placeholder_price_cents)
+       VALUES ($1, $2, NULL, $3, $4, $5, TRUE, $6, $7, $8, $9, $10)
+       RETURNING *`,
+      [
+        params.documentId,
+        params.storeId,
+        params.quantity,
+        params.unitCostCents ?? null,
+        params.lineNote ?? null,
+        name,
+        size,
+        color,
+        barcode,
+        params.priceCents,
+      ]
+    );
+    await client.query(`UPDATE pos_stock_documents SET updated_at = NOW() WHERE id = $1`, [
+      params.documentId,
+    ]);
+    await client.query('COMMIT');
+    const row = result.rows[0];
+    return mapLine({
+      ...row,
+      product_name: row.placeholder_name,
+      size: row.placeholder_size,
+      color: row.placeholder_color,
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/** Soft suggestions: existing products with similar name (does not block). */
+export async function suggestSimilarProducts(
+  storeId: number,
+  name: string,
+  limit = 5
+): Promise<{ id: number; name: string }[]> {
+  const needle = name.trim();
+  if (!needle) return [];
+  const result = await pool.query(
+    `SELECT id, name FROM pos_products
+     WHERE store_id = $1 AND is_active = TRUE
+       AND lower(name) LIKE lower($2)
+     ORDER BY name ASC
+     LIMIT $3`,
+    [storeId, `%${needle}%`, limit]
+  );
+  return result.rows.map((r) => ({ id: Number(r.id), name: String(r.name) }));
+}
+
 /** Set adjustment line so resulting stock becomes targetQty */
 export async function addAdjustmentToTarget(params: {
   storeId: number;
@@ -411,6 +535,11 @@ export async function updateLine(params: {
   unitCostCents?: number | null;
   countedQty?: number | null;
   lineNote?: string | null;
+  placeholderName?: string;
+  placeholderSize?: string;
+  placeholderColor?: string;
+  placeholderBarcode?: string | null;
+  placeholderPriceCents?: number;
 }): Promise<StockDocumentLine> {
   const client = await pool.connect();
   try {
@@ -431,8 +560,35 @@ export async function updateLine(params: {
     let unitCost = row.unit_cost_cents == null ? null : Number(row.unit_cost_cents);
     let systemQty = row.system_qty == null ? null : Number(row.system_qty);
     let countedQty = row.counted_qty == null ? null : Number(row.counted_qty);
+    let placeholderName = row.placeholder_name == null ? null : String(row.placeholder_name);
+    let placeholderSize = row.placeholder_size == null ? '' : String(row.placeholder_size);
+    let placeholderColor = row.placeholder_color == null ? '' : String(row.placeholder_color);
+    let placeholderBarcode =
+      row.placeholder_barcode == null ? null : String(row.placeholder_barcode);
+    let placeholderPrice =
+      row.placeholder_price_cents == null ? null : Number(row.placeholder_price_cents);
 
-    if (row.type === 'receipt' || row.type === 'writeoff') {
+    if (row.is_placeholder) {
+      if (params.quantity !== undefined) {
+        if (params.quantity <= 0) throw new Error('quantity must be positive');
+        quantity = params.quantity;
+      }
+      if (params.unitCostCents !== undefined) unitCost = params.unitCostCents;
+      if (params.placeholderName !== undefined) {
+        const n = params.placeholderName.trim();
+        if (!n) throw new Error('placeholder name required');
+        placeholderName = n;
+      }
+      if (params.placeholderSize !== undefined) placeholderSize = params.placeholderSize.trim();
+      if (params.placeholderColor !== undefined) placeholderColor = params.placeholderColor.trim();
+      if (params.placeholderBarcode !== undefined) {
+        placeholderBarcode = params.placeholderBarcode?.trim() || null;
+      }
+      if (params.placeholderPriceCents !== undefined) {
+        if (params.placeholderPriceCents < 0) throw new Error('price_cents must be >= 0');
+        placeholderPrice = params.placeholderPriceCents;
+      }
+    } else if (row.type === 'receipt' || row.type === 'writeoff') {
       if (params.quantity !== undefined) {
         if (params.quantity <= 0) throw new Error('quantity must be positive');
         quantity = params.quantity;
@@ -457,21 +613,30 @@ export async function updateLine(params: {
       systemQty = Number(stock.rows[0].quantity);
     }
 
-    const result = await client.query(
+    await client.query(
       `UPDATE pos_stock_document_lines
        SET quantity = $1,
            unit_cost_cents = $2,
            system_qty = $3,
            counted_qty = $4,
-           line_note = COALESCE($5, line_note)
-       WHERE id = $6
-       RETURNING *`,
+           line_note = COALESCE($5, line_note),
+           placeholder_name = $6,
+           placeholder_size = $7,
+           placeholder_color = $8,
+           placeholder_barcode = $9,
+           placeholder_price_cents = $10
+       WHERE id = $11`,
       [
         quantity,
         unitCost,
         systemQty,
         countedQty,
         params.lineNote === undefined ? null : params.lineNote,
+        placeholderName,
+        placeholderSize,
+        placeholderColor,
+        placeholderBarcode,
+        placeholderPrice,
         params.lineId,
       ]
     );
@@ -482,7 +647,10 @@ export async function updateLine(params: {
       ]);
     }
     await client.query('COMMIT');
-    return mapLine({ ...result.rows[0], line_note: params.lineNote !== undefined ? params.lineNote : result.rows[0].line_note });
+    const lines = await loadLines(pool, params.documentId);
+    const updated = lines.find((l) => l.id === params.lineId);
+    if (!updated) throw new Error('Line not found');
+    return updated;
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -674,7 +842,7 @@ export async function postDocument(params: {
     const linesResult = await client.query(
       `SELECT * FROM pos_stock_document_lines
        WHERE document_id = $1
-       ORDER BY variant_id ASC
+       ORDER BY id ASC
        FOR UPDATE`,
       [params.documentId]
     );
@@ -682,15 +850,88 @@ export async function postDocument(params: {
 
     const type = docRow.type as StockDocumentType;
     const occurredAt = docRow.occurred_at as Date;
+    const docNumber = String(docRow.doc_number);
 
     for (const line of linesResult.rows) {
+      let variantId = line.variant_id == null ? null : Number(line.variant_id);
+
+      if (line.is_placeholder) {
+        if (type !== 'receipt') {
+          throw new Error('Placeholders only allowed on receipt documents');
+        }
+        const name = String(line.placeholder_name ?? '').trim();
+        const priceCents =
+          line.placeholder_price_cents == null ? null : Number(line.placeholder_price_cents);
+        if (!name) throw new Error('Placeholder line missing name');
+        if (priceCents == null || priceCents < 0) {
+          throw new Error('Placeholder line missing price_cents');
+        }
+
+        const barcode = line.placeholder_barcode
+          ? String(line.placeholder_barcode).trim()
+          : null;
+        if (barcode) {
+          const collision = await client.query(
+            `SELECT id FROM pos_variants
+             WHERE store_id = $1 AND barcode = $2
+             LIMIT 1`,
+            [params.storeId, barcode]
+          );
+          if (collision.rows.length > 0) {
+            throw new Error(`Штрихкод ${barcode} вже існує в каталозі`);
+          }
+        }
+
+        const unitCost =
+          line.unit_cost_cents == null ? 0 : Number(line.unit_cost_cents);
+        let created;
+        try {
+          created = await createProductInTx(client, params.storeId, {
+            name,
+            description: `Створено з приходу ${docNumber}`,
+            needs_review: true,
+            created_from_document_id: params.documentId,
+            variants: [
+              {
+                size: String(line.placeholder_size ?? ''),
+                color: String(line.placeholder_color ?? ''),
+                barcode,
+                price_cents: priceCents,
+                cost_cents: unitCost,
+                quantity: 0,
+              },
+            ],
+          });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (/unique|duplicate|idx_pos_variants_store_barcode/i.test(msg)) {
+            throw new Error(
+              barcode
+                ? `Штрихкод ${barcode} вже існує в каталозі`
+                : 'Не вдалося створити товар (дублікат штрихкоду/SKU)'
+            );
+          }
+          throw err;
+        }
+
+        variantId = created.variantIds[0];
+        await client.query(
+          `UPDATE pos_stock_document_lines
+           SET variant_id = $1, is_placeholder = FALSE
+           WHERE id = $2`,
+          [variantId, line.id]
+        );
+      }
+
+      if (variantId == null) throw new Error('Line missing variant_id');
+
       const stock = await client.query(
         `SELECT quantity FROM pos_stock
          WHERE variant_id = $1 AND store_id = $2
          FOR UPDATE`,
-        [line.variant_id, params.storeId]
+        [variantId, params.storeId]
       );
-      if (stock.rows.length === 0) throw new Error(`Stock not found for variant ${line.variant_id}`);
+      if (stock.rows.length === 0) throw new Error(`Stock not found for variant ${variantId}`);
       const currentQty = Number(stock.rows[0].quantity);
       const countedQty = line.counted_qty == null ? null : Number(line.counted_qty);
       const delta = computeDelta(
@@ -712,7 +953,7 @@ export async function postDocument(params: {
 
       await applyStockDelta(client, {
         storeId: params.storeId,
-        variantId: Number(line.variant_id),
+        variantId,
         delta,
         reason: reasonForType(type),
         staffId: params.staffId,
@@ -727,7 +968,7 @@ export async function postDocument(params: {
         await client.query(
           `UPDATE pos_variants SET cost_cents = $1, updated_at = NOW()
            WHERE id = $2 AND store_id = $3`,
-          [Number(line.unit_cost_cents), line.variant_id, params.storeId]
+          [Number(line.unit_cost_cents), variantId, params.storeId]
         );
       }
     }
