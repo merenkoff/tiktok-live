@@ -2,12 +2,14 @@ import axios, { type AxiosInstance } from 'axios';
 import type {
   AuthResponse,
   CatalogItem,
+  PosCustomer,
   PosTag,
   Product,
   SaleDetail,
   SaleListItem,
   StaffMember,
   TodayAnalytics,
+  CustomerChild,
 } from '../types';
 import { posApiBase } from '../lib/urls';
 
@@ -147,6 +149,7 @@ class PosApi {
       barcode?: string;
       price_cents: number;
       quantity?: number;
+      compare_at_cents?: number | null;
     }
   ): Promise<Product> {
     const { data } = await this.client.post<Product>(`/products/${productId}/variants`, payload);
@@ -161,6 +164,7 @@ class PosApi {
       sku: string;
       barcode: string;
       price_cents: number;
+      compare_at_cents: number | null;
       is_active: boolean;
     }>
   ): Promise<Product> {
@@ -233,9 +237,50 @@ class PosApi {
     items: Array<{ variant_id: number; quantity: number }>;
     payments: Array<{ method: 'cash' | 'card'; amount_cents: number }>;
     note?: string;
+    cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
+    customer_id?: number | null;
   }): Promise<SaleDetail> {
     const { data } = await this.client.post<SaleDetail>('/sales/complete', payload);
     return data;
+  }
+
+  async listCustomers(q?: string): Promise<PosCustomer[]> {
+    const { data } = await this.client.get<PosCustomer[]>('/customers', {
+      params: q ? { q } : undefined,
+    });
+    return data;
+  }
+
+  async getCustomer(id: number): Promise<PosCustomer> {
+    const { data } = await this.client.get<PosCustomer>(`/customers/${id}`);
+    return data;
+  }
+
+  async createCustomer(payload: {
+    name: string;
+    phone: string;
+    email?: string | null;
+    children_birthdays?: CustomerChild[];
+  }): Promise<PosCustomer> {
+    const { data } = await this.client.post<PosCustomer>('/customers', payload);
+    return data;
+  }
+
+  async updateCustomer(
+    id: number,
+    payload: {
+      name?: string;
+      phone?: string;
+      email?: string | null;
+      children_birthdays?: CustomerChild[];
+    }
+  ): Promise<PosCustomer> {
+    const { data } = await this.client.patch<PosCustomer>(`/customers/${id}`, payload);
+    return data;
+  }
+
+  async deleteCustomer(id: number): Promise<void> {
+    await this.client.delete(`/customers/${id}`);
   }
 
   async listSales(limit = 50): Promise<SaleListItem[]> {

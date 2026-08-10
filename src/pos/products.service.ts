@@ -12,6 +12,7 @@ export interface VariantInput {
   price_cents: number;
   cost_cents?: number;
   quantity?: number;
+  compare_at_cents?: number | null;
 }
 
 export interface CreateProductInput {
@@ -25,6 +26,18 @@ function emptyToNull(value?: string | null): string | null {
   if (value == null) return null;
   const trimmed = value.trim();
   return trimmed === '' ? null : trimmed;
+}
+
+function normalizeCompareAt(
+  priceCents: number,
+  compareAt: number | null | undefined
+): number | null {
+  if (compareAt == null) return null;
+  if (compareAt < 0) throw new Error('compare_at_cents must be >= 0');
+  if (compareAt <= priceCents) {
+    throw new Error('compare_at_cents must be greater than price_cents');
+  }
+  return compareAt;
 }
 
 export async function listProducts(storeId: number) {
@@ -57,6 +70,8 @@ export async function listProducts(storeId: number) {
       barcode: row.barcode,
       price_cents: Number(row.price_cents),
       cost_cents: Number(row.cost_cents),
+      compare_at_cents:
+        row.compare_at_cents == null ? null : Number(row.compare_at_cents),
       is_active: row.is_active,
       quantity: Number(row.quantity),
     });
@@ -113,10 +128,14 @@ export async function createProduct(storeId: number, input: CreateProductInput) 
       const quantity = variant.quantity ?? 0;
       if (quantity < 0) throw new Error('Quantity must be >= 0');
 
+      const compareAt = normalizeCompareAt(
+        variant.price_cents,
+        variant.compare_at_cents
+      );
       const variantResult = await client.query(
         `INSERT INTO pos_variants
-           (store_id, product_id, size, color, sku, barcode, price_cents, cost_cents)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           (store_id, product_id, size, color, sku, barcode, price_cents, cost_cents, compare_at_cents)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          RETURNING id`,
         [
           storeId,
@@ -127,6 +146,7 @@ export async function createProduct(storeId: number, input: CreateProductInput) 
           emptyToNull(variant.barcode),
           variant.price_cents,
           variant.cost_cents ?? 0,
+          compareAt,
         ]
       );
       const variantId = Number(variantResult.rows[0].id);
@@ -208,13 +228,14 @@ export async function addVariant(storeId: number, productId: number, variant: Va
   }
 
   const quantity = variant.quantity ?? 0;
+  const compareAt = normalizeCompareAt(variant.price_cents, variant.compare_at_cents);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const variantResult = await client.query(
       `INSERT INTO pos_variants
-         (store_id, product_id, size, color, sku, barcode, price_cents, cost_cents)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         (store_id, product_id, size, color, sku, barcode, price_cents, cost_cents, compare_at_cents)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING id`,
       [
         storeId,
@@ -225,6 +246,7 @@ export async function addVariant(storeId: number, productId: number, variant: Va
         emptyToNull(variant.barcode),
         variant.price_cents,
         variant.cost_cents ?? 0,
+        compareAt,
       ]
     );
     const variantId = Number(variantResult.rows[0].id);
@@ -255,6 +277,25 @@ export async function updateVariant(
   variantId: number,
   input: Partial<VariantInput> & { is_active?: boolean }
 ) {
+  const current = await pool.query(
+    `SELECT * FROM pos_variants WHERE id = $1 AND store_id = $2`,
+    [variantId, storeId]
+  );
+  if (current.rows.length === 0) throw new Error('Variant not found');
+  const row = current.rows[0];
+
+  const price =
+    input.price_cents !== undefined ? input.price_cents : Number(row.price_cents);
+  if (price < 0) throw new Error('Variant price must be >= 0');
+
+  let compareAt: number | null =
+    row.compare_at_cents == null ? null : Number(row.compare_at_cents);
+  if (input.compare_at_cents !== undefined) {
+    compareAt = normalizeCompareAt(price, input.compare_at_cents);
+  } else if (compareAt != null && compareAt <= price) {
+    throw new Error('compare_at_cents must be greater than price_cents');
+  }
+
   const result = await pool.query(
     `UPDATE pos_variants
      SET
@@ -262,25 +303,26 @@ export async function updateVariant(
        color = COALESCE($2, color),
        sku = COALESCE($3, sku),
        barcode = COALESCE($4, barcode),
-       price_cents = COALESCE($5, price_cents),
+       price_cents = $5,
        cost_cents = COALESCE($6, cost_cents),
        is_active = COALESCE($7, is_active),
+       compare_at_cents = $8,
        updated_at = NOW()
-     WHERE id = $8 AND store_id = $9
+     WHERE id = $9 AND store_id = $10
      RETURNING product_id`,
     [
       input.size === undefined ? null : input.size.trim(),
       input.color === undefined ? null : input.color.trim(),
       input.sku === undefined ? null : emptyToNull(input.sku),
       input.barcode === undefined ? null : emptyToNull(input.barcode),
-      input.price_cents ?? null,
+      price,
       input.cost_cents ?? null,
       input.is_active ?? null,
+      compareAt,
       variantId,
       storeId,
     ]
   );
-  if (result.rows.length === 0) throw new Error('Variant not found');
   return getProduct(storeId, Number(result.rows[0].product_id));
 }
 
@@ -360,6 +402,7 @@ export async function getCatalog(
        v.sku,
        v.barcode,
        v.price_cents,
+       v.compare_at_cents,
        COALESCE(s.quantity, 0) AS quantity,
        p.image_url
      FROM pos_variants v
@@ -380,6 +423,8 @@ export async function getCatalog(
     sku: row.sku,
     barcode: row.barcode,
     price_cents: Number(row.price_cents),
+    compare_at_cents:
+      row.compare_at_cents == null ? null : Number(row.compare_at_cents),
     quantity: Number(row.quantity),
     image_url: row.image_url,
   }));

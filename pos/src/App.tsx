@@ -8,6 +8,7 @@ import { ProductsPage } from './pages/admin/ProductsPage';
 import { SalesPage } from './pages/admin/SalesPage';
 import { StaffPage } from './pages/admin/StaffPage';
 import { SettingsPage } from './pages/admin/SettingsPage';
+import { CustomersPage } from './pages/customers/CustomersPage';
 import { RegisterPage } from './pages/register/RegisterPage';
 
 function Guard({
@@ -64,6 +65,14 @@ export function App() {
         }
       />
       <Route
+        path="/customers"
+        element={
+          <Guard>
+            <CustomersPage cashierShell />
+          </Guard>
+        }
+      />
+      <Route
         path="/admin"
         element={
           <Guard ownerOnly>
@@ -73,6 +82,7 @@ export function App() {
       >
         <Route index element={<DashboardPage />} />
         <Route path="products" element={<ProductsPage />} />
+        <Route path="customers" element={<CustomersPage />} />
         <Route path="sales" element={<SalesPage />} />
         <Route path="staff" element={<StaffPage />} />
         <Route path="settings" element={<SettingsPage />} />

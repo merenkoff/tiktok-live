@@ -3,13 +3,66 @@
 import { pool } from '../db.js';
 import { applyStockDelta } from './stock.service.js';
 import type {
+  CartDiscountInput,
   CompleteSaleItemInput,
   CompleteSalePaymentInput,
   RefundItemInput,
 } from './types.js';
+import { getCustomer } from './customers.service.js';
 
 function variantLabel(size: string, color: string): string {
   return [color, size].filter(Boolean).join(' / ');
+}
+
+/** Allocate cart discount only across lines without product discount (compare_at). */
+export function allocateCartDiscount(
+  lines: Array<{ pre_discount_total: number; has_product_discount: boolean }>,
+  cartDiscount: CartDiscountInput | null | undefined
+): { lineDiscounts: number[]; cartDiscountCents: number } {
+  const lineDiscounts = lines.map(() => 0);
+  if (!cartDiscount) return { lineDiscounts, cartDiscountCents: 0 };
+
+  const eligibleIdx: number[] = [];
+  let eligibleSum = 0;
+  lines.forEach((line, i) => {
+    if (!line.has_product_discount && line.pre_discount_total > 0) {
+      eligibleIdx.push(i);
+      eligibleSum += line.pre_discount_total;
+    }
+  });
+  if (eligibleIdx.length === 0 || eligibleSum <= 0) {
+    return { lineDiscounts, cartDiscountCents: 0 };
+  }
+
+  let cartDiscountCents = 0;
+  if (cartDiscount.type === 'percent') {
+    const pct = cartDiscount.value;
+    if (pct < 0 || pct > 100) throw new Error('Invalid percent discount');
+    cartDiscountCents = Math.round((eligibleSum * pct) / 100);
+  } else if (cartDiscount.type === 'fixed') {
+    if (cartDiscount.value < 0) throw new Error('Invalid fixed discount');
+    cartDiscountCents = Math.min(cartDiscount.value, eligibleSum);
+  } else {
+    throw new Error('Invalid cart discount type');
+  }
+
+  if (cartDiscountCents <= 0) return { lineDiscounts, cartDiscountCents: 0 };
+
+  let allocated = 0;
+  for (let k = 0; k < eligibleIdx.length; k++) {
+    const i = eligibleIdx[k];
+    if (k === eligibleIdx.length - 1) {
+      lineDiscounts[i] = cartDiscountCents - allocated;
+    } else {
+      const share = Math.floor(
+        (cartDiscountCents * lines[i].pre_discount_total) / eligibleSum
+      );
+      lineDiscounts[i] = share;
+      allocated += share;
+    }
+  }
+
+  return { lineDiscounts, cartDiscountCents };
 }
 
 async function nextReceiptNumber(
@@ -30,9 +83,16 @@ export async function completeSale(params: {
   items: CompleteSaleItemInput[];
   payments: CompleteSalePaymentInput[];
   note?: string;
+  cart_discount?: CartDiscountInput | null;
+  customer_id?: number | null;
 }) {
   if (!params.items?.length) throw new Error('Cart is empty');
   if (!params.payments?.length) throw new Error('Payment required');
+
+  if (params.customer_id) {
+    const customer = await getCustomer(params.storeId, params.customer_id);
+    if (!customer) throw new Error('Customer not found');
+  }
 
   const qtyByVariant = new Map<number, number>();
   for (const item of params.items) {
@@ -60,7 +120,7 @@ export async function completeSale(params: {
 
     const variantIds = [...qtyByVariant.keys()];
     const variantsResult = await client.query(
-      `SELECT v.id, v.price_cents, v.size, v.color, p.name AS product_name
+      `SELECT v.id, v.price_cents, v.compare_at_cents, v.size, v.color, p.name AS product_name
        FROM pos_variants v
        JOIN pos_products p ON p.id = v.product_id
        WHERE v.store_id = $1 AND v.id = ANY($2::bigint[]) AND v.is_active = TRUE`,
@@ -73,41 +133,76 @@ export async function completeSale(params: {
 
     const variantMap = new Map(variantsResult.rows.map((row) => [Number(row.id), row]));
     let subtotal = 0;
-    const lineItems: Array<{
+    const draftLines: Array<{
       variant_id: number;
       product_name: string;
       variant_label: string;
       quantity: number;
       unit_price_cents: number;
-      line_total_cents: number;
+      compare_at_unit_cents: number | null;
+      pre_discount_total: number;
+      has_product_discount: boolean;
     }> = [];
 
     for (const [variantId, quantity] of qtyByVariant) {
       const variant = variantMap.get(variantId)!;
       const unit = Number(variant.price_cents);
-      const lineTotal = unit * quantity;
-      subtotal += lineTotal;
-      lineItems.push({
+      const compareAt =
+        variant.compare_at_cents == null ? null : Number(variant.compare_at_cents);
+      const pre = unit * quantity;
+      subtotal += pre;
+      draftLines.push({
         variant_id: variantId,
         product_name: variant.product_name,
         variant_label: variantLabel(variant.size, variant.color),
         quantity,
         unit_price_cents: unit,
-        line_total_cents: lineTotal,
+        compare_at_unit_cents: compareAt,
+        pre_discount_total: pre,
+        has_product_discount: compareAt != null,
       });
     }
 
-    if (paymentsTotal < subtotal) {
+    const { lineDiscounts, cartDiscountCents } = allocateCartDiscount(
+      draftLines,
+      params.cart_discount
+    );
+
+    const lineItems = draftLines.map((line, i) => ({
+      ...line,
+      line_discount_cents: lineDiscounts[i],
+      line_total_cents: line.pre_discount_total - lineDiscounts[i],
+    }));
+
+    const total = lineItems.reduce((s, l) => s + l.line_total_cents, 0);
+
+    if (paymentsTotal < total) {
       throw new Error('Insufficient payment');
     }
+
+    const discountType = params.cart_discount?.type ?? null;
+    const discountValue =
+      params.cart_discount != null ? params.cart_discount.value : null;
 
     const receiptNumber = await nextReceiptNumber(client, params.storeId);
     const saleResult = await client.query(
       `INSERT INTO pos_sales
-         (store_id, staff_id, receipt_number, status, subtotal_cents, total_cents, note)
-       VALUES ($1, $2, $3, 'completed', $4, $4, $5)
+         (store_id, staff_id, receipt_number, status, subtotal_cents, total_cents, note,
+          customer_id, cart_discount_type, cart_discount_value, cart_discount_cents)
+       VALUES ($1, $2, $3, 'completed', $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
-      [params.storeId, params.staffId, receiptNumber, subtotal, params.note ?? null]
+      [
+        params.storeId,
+        params.staffId,
+        receiptNumber,
+        subtotal,
+        total,
+        params.note ?? null,
+        params.customer_id ?? null,
+        discountType,
+        discountValue,
+        cartDiscountCents,
+      ]
     );
     const sale = saleResult.rows[0];
     const saleId = Number(sale.id);
@@ -116,8 +211,9 @@ export async function completeSale(params: {
       await client.query(
         `INSERT INTO pos_sale_items
            (sale_id, store_id, variant_id, product_name, variant_label,
-            quantity, unit_price_cents, line_total_cents)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            quantity, unit_price_cents, line_total_cents,
+            compare_at_unit_cents, line_discount_cents)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
         [
           saleId,
           params.storeId,
@@ -127,6 +223,8 @@ export async function completeSale(params: {
           line.quantity,
           line.unit_price_cents,
           line.line_total_cents,
+          line.compare_at_unit_cents,
+          line.line_discount_cents,
         ]
       );
 
@@ -141,16 +239,13 @@ export async function completeSale(params: {
       });
     }
 
-    // Cash change is not stored as negative; only tendered amounts that cover the sale.
-    // For mixed tenders we store exact payment lines; overpay on cash is allowed (change).
-    let remaining = subtotal;
+    let remaining = total;
     for (const payment of params.payments) {
       const applied =
         payment.method === 'cash'
           ? Math.min(payment.amount_cents, Math.max(remaining, payment.amount_cents))
           : Math.min(payment.amount_cents, remaining || payment.amount_cents);
 
-      // Store the tendered amount as provided (cashier accountability)
       await client.query(
         `INSERT INTO pos_payments (sale_id, store_id, method, amount_cents)
          VALUES ($1, $2, $3, $4)`,
@@ -172,9 +267,11 @@ export async function completeSale(params: {
 
 export async function getSale(storeId: number, saleId: number) {
   const saleResult = await pool.query(
-    `SELECT s.*, st.display_name AS staff_name
+    `SELECT s.*, st.display_name AS staff_name,
+            c.name AS customer_name, c.phone AS customer_phone
      FROM pos_sales s
      JOIN pos_staff st ON st.id = s.staff_id
+     LEFT JOIN pos_customers c ON c.id = s.customer_id
      WHERE s.id = $1 AND s.store_id = $2`,
     [saleId, storeId]
   );
@@ -203,10 +300,17 @@ export async function getSale(storeId: number, saleId: number) {
     store_id: Number(sale.store_id),
     staff_id: Number(sale.staff_id),
     staff_name: sale.staff_name,
+    customer_id: sale.customer_id == null ? null : Number(sale.customer_id),
+    customer_name: sale.customer_name ?? null,
+    customer_phone: sale.customer_phone ?? null,
     receipt_number: sale.receipt_number,
     status: sale.status,
     subtotal_cents: Number(sale.subtotal_cents),
     total_cents: Number(sale.total_cents),
+    cart_discount_type: sale.cart_discount_type ?? null,
+    cart_discount_value:
+      sale.cart_discount_value == null ? null : Number(sale.cart_discount_value),
+    cart_discount_cents: Number(sale.cart_discount_cents ?? 0),
     refunded_cents: Number(sale.refunded_cents),
     note: sale.note,
     created_at: sale.created_at,
@@ -218,6 +322,9 @@ export async function getSale(storeId: number, saleId: number) {
       variant_label: row.variant_label,
       quantity: Number(row.quantity),
       unit_price_cents: Number(row.unit_price_cents),
+      compare_at_unit_cents:
+        row.compare_at_unit_cents == null ? null : Number(row.compare_at_unit_cents),
+      line_discount_cents: Number(row.line_discount_cents ?? 0),
       line_total_cents: Number(row.line_total_cents),
       refunded_quantity: Number(row.refunded_quantity),
     })),
@@ -255,9 +362,10 @@ export async function listSales(
 
   params.push(limit);
   const result = await pool.query(
-    `SELECT s.*, st.display_name AS staff_name
+    `SELECT s.*, st.display_name AS staff_name, c.name AS customer_name
      FROM pos_sales s
      JOIN pos_staff st ON st.id = s.staff_id
+     LEFT JOIN pos_customers c ON c.id = s.customer_id
      WHERE ${conditions.join(' AND ')}
      ORDER BY s.created_at DESC
      LIMIT $${params.length}`,
@@ -271,6 +379,7 @@ export async function listSales(
     total_cents: Number(sale.total_cents),
     refunded_cents: Number(sale.refunded_cents),
     staff_name: sale.staff_name,
+    customer_name: sale.customer_name ?? null,
     created_at: sale.created_at,
   }));
 }

@@ -205,21 +205,21 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_pos_customers_store_phone
 ## 5. Чеклист файлів
 
 ### Backend
-- [ ] `migrations/005_pos_discounts_customers.sql`
-- [ ] `src/pos/migrate.ts` — додати `005`
-- [ ] `src/pos/customers.service.ts` + controller routes
-- [ ] variants: `compare_at_cents` у create/update/catalog
-- [ ] `sales.service.ts` — аллокація знижки чека, snapshot compare_at, `customer_id`
-- [ ] types (`src/pos/types.ts`, FE `pos/src/types.ts`)
+- [x] `migrations/005_pos_discounts_customers.sql`
+- [x] `src/pos/migrate.ts` — додати `005`
+- [x] `src/pos/customers.service.ts` + controller routes
+- [x] variants: `compare_at_cents` у create/update/catalog
+- [x] `sales.service.ts` — аллокація знижки чека, snapshot compare_at, `customer_id`
+- [x] types (`src/pos/types.ts`, FE `pos/src/types.ts`)
 
 ### Frontend
-- [ ] `api.ts` — customers CRUD, completeSale extras, variant compare_at
-- [ ] `useCart.ts` — discount fields з каталогу, `cartDiscount`, `customerId`
-- [ ] `ProductsPage.tsx` — UI знижки варіанта
-- [ ] `SaleSidebar` / `MobileCartSheet` — реальні знижки рядка, знижка чека, клієнт у шапці
-- [ ] `CustomersPage` admin + cashier
-- [ ] `App.tsx`, `AdminLayout`, `AppRail`, `BottomNav`
-- [ ] [`pos/UI_CASHIER.md`](../pos/UI_CASHIER.md) — коротко про знижки/клієнта
+- [x] `api.ts` — customers CRUD, completeSale extras, variant compare_at
+- [x] `useCart.ts` — discount fields з каталогу, `cartDiscount`, `customerId`
+- [x] `ProductsPage.tsx` — UI знижки варіанта
+- [x] `SaleSidebar` / `MobileCartSheet` — реальні знижки рядка, знижка чека, клієнт у шапці
+- [x] `CustomersPage` admin + cashier
+- [x] `App.tsx`, `AdminLayout`, `AppRail`, `BottomNav`
+- [x] [`pos/UI_CASHIER.md`](../pos/UI_CASHIER.md) — коротко про знижки/клієнта
 
 ### Не в scope
 - Save basket

@@ -8,6 +8,7 @@ import * as stockService from './stock.service.js';
 import * as salesService from './sales.service.js';
 import * as analyticsService from './analytics.service.js';
 import * as tagsService from './tags.service.js';
+import * as customersService from './customers.service.js';
 import { saveProductImage } from './uploads.service.js';
 import { logger } from '../logger.js';
 
@@ -321,6 +322,82 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
     }
   });
 
+  // ── Customers ─────────────────────────────────────────
+  fastify.get('/customers', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const query = request.query as { q?: string };
+    return customersService.listCustomers(auth.storeId, query.q);
+  });
+
+  fastify.get('/customers/:id', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const { id } = request.params as { id: string };
+    const customer = await customersService.getCustomer(auth.storeId, Number(id));
+    if (!customer) return reply.code(404).send({ error: 'Customer not found' });
+    return customer;
+  });
+
+  fastify.post('/customers', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    try {
+      const body = request.body as {
+        name?: string;
+        phone?: string;
+        email?: string | null;
+        children_birthdays?: customersService.CustomerChild[];
+      };
+      if (!body.name || !body.phone) {
+        return reply.code(400).send({ error: 'name and phone required' });
+      }
+      const customer = await customersService.createCustomer(auth.storeId, {
+        name: body.name,
+        phone: body.phone,
+        email: body.email,
+        children_birthdays: body.children_birthdays,
+      });
+      return reply.code(201).send(customer);
+    } catch (error) {
+      const status = isUniqueViolation(error) ? 409 : 400;
+      return reply.code(status).send({ error: errorMessage(error) });
+    }
+  });
+
+  fastify.patch('/customers/:id', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const { id } = request.params as { id: string };
+    try {
+      return await customersService.updateCustomer(
+        auth.storeId,
+        Number(id),
+        request.body as {
+          name?: string;
+          phone?: string;
+          email?: string | null;
+          children_birthdays?: customersService.CustomerChild[];
+        }
+      );
+    } catch (error) {
+      const status = isUniqueViolation(error) ? 409 : 400;
+      return reply.code(status).send({ error: errorMessage(error) });
+    }
+  });
+
+  fastify.delete('/customers/:id', async (request, reply) => {
+    const auth = await ensurePosOwner(request, reply);
+    if (!auth) return;
+    const { id } = request.params as { id: string };
+    try {
+      await customersService.deleteCustomer(auth.storeId, Number(id));
+      return { ok: true };
+    } catch (error) {
+      return reply.code(400).send({ error: errorMessage(error) });
+    }
+  });
+
   // ── Catalog (cashier) ─────────────────────────────────
   fastify.get('/catalog', async (request, reply) => {
     const auth = await ensurePosAuth(request, reply);
@@ -369,6 +446,8 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
         items: { variant_id: number; quantity: number }[];
         payments: { method: 'cash' | 'card'; amount_cents: number }[];
         note?: string;
+        cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
+        customer_id?: number | null;
       };
       const sale = await salesService.completeSale({
         storeId: auth.storeId,
@@ -376,6 +455,8 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
         items: body.items,
         payments: body.payments,
         note: body.note,
+        cart_discount: body.cart_discount,
+        customer_id: body.customer_id,
       });
       return reply.code(201).send(sale);
     } catch (error) {

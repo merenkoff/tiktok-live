@@ -526,6 +526,7 @@ function EditProductInline({
           size: v.size,
           color: v.color,
           price_cents: v.price_cents,
+          compare_at_cents: v.compare_at_cents ?? null,
           sku: v.sku ?? '',
           barcode: v.barcode ?? '',
         });
@@ -617,47 +618,58 @@ function EditProductInline({
         </div>
       </div>
 
-      <div className="sm:col-span-2 space-y-2">
+      <div className="sm:col-span-2 space-y-3">
         <p className="text-xs font-semibold text-sq-secondary">Варіанти</p>
         {variants.map((v, idx) => (
-          <div key={v.id} className="grid sm:grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center">
-            <input
-              className={fieldClass}
-              value={v.color}
-              onChange={(e) => {
+          <div key={v.id} className="border border-sq-divider rounded-sq p-3 space-y-2 bg-sq-bg/40">
+            <div className="grid sm:grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center">
+              <input
+                className={fieldClass}
+                value={v.color}
+                onChange={(e) => {
+                  const next = [...variants];
+                  next[idx] = { ...v, color: e.target.value };
+                  setVariants(next);
+                }}
+                placeholder="Колір"
+              />
+              <input
+                className={fieldClass}
+                value={v.size}
+                onChange={(e) => {
+                  const next = [...variants];
+                  next[idx] = { ...v, size: e.target.value };
+                  setVariants(next);
+                }}
+                placeholder="Розмір"
+              />
+              <input
+                className={fieldClass}
+                value={(v.price_cents / 100).toFixed(2)}
+                onChange={(e) => {
+                  const next = [...variants];
+                  next[idx] = { ...v, price_cents: uahInputToCents(e.target.value) };
+                  setVariants(next);
+                }}
+                placeholder="Ціна, грн"
+              />
+              <button
+                type="button"
+                className="text-sm font-semibold text-red-600 min-h-11 px-2"
+                onClick={() => void archiveVariant(v.id)}
+              >
+                Архів
+              </button>
+            </div>
+            <VariantDiscountEditor
+              priceCents={v.price_cents}
+              compareAtCents={v.compare_at_cents ?? null}
+              onChange={(price_cents, compare_at_cents) => {
                 const next = [...variants];
-                next[idx] = { ...v, color: e.target.value };
+                next[idx] = { ...v, price_cents, compare_at_cents };
                 setVariants(next);
               }}
-              placeholder="Колір"
             />
-            <input
-              className={fieldClass}
-              value={v.size}
-              onChange={(e) => {
-                const next = [...variants];
-                next[idx] = { ...v, size: e.target.value };
-                setVariants(next);
-              }}
-              placeholder="Розмір"
-            />
-            <input
-              className={fieldClass}
-              value={(v.price_cents / 100).toFixed(2)}
-              onChange={(e) => {
-                const next = [...variants];
-                next[idx] = { ...v, price_cents: uahInputToCents(e.target.value) };
-                setVariants(next);
-              }}
-              placeholder="Ціна, грн"
-            />
-            <button
-              type="button"
-              className="text-sm font-semibold text-red-600 min-h-11 px-2"
-              onClick={() => void archiveVariant(v.id)}
-            >
-              Архів
-            </button>
           </div>
         ))}
 
@@ -694,5 +706,81 @@ function EditProductInline({
         {saving ? 'Збереження…' : 'Зберегти'}
       </button>
     </form>
+  );
+}
+
+function VariantDiscountEditor({
+  priceCents,
+  compareAtCents,
+  onChange,
+}: {
+  priceCents: number;
+  compareAtCents: number | null;
+  onChange: (priceCents: number, compareAtCents: number | null) => void;
+}) {
+  const [pct, setPct] = useState('');
+  const [newPrice, setNewPrice] = useState('');
+
+  const hasDiscount = compareAtCents != null && compareAtCents > priceCents;
+
+  return (
+    <div className="space-y-1.5 text-sm">
+      <p className="text-[11px] font-semibold text-sq-secondary">Знижка товару</p>
+      {hasDiscount ? (
+        <p className="text-xs text-sq-secondary">
+          Стара: {(compareAtCents / 100).toFixed(2)} ₴ → нова: {(priceCents / 100).toFixed(2)} ₴
+          <button
+            type="button"
+            className="ml-2 text-sq-blue font-medium"
+            onClick={() => onChange(compareAtCents, null)}
+          >
+            Скинути знижку
+          </button>
+        </p>
+      ) : (
+        <p className="text-xs text-sq-muted">Без знижки</p>
+      )}
+      <div className="flex flex-wrap gap-2 items-center">
+        <input
+          className={`${fieldClass} max-w-[100px]`}
+          placeholder="% знижки"
+          value={pct}
+          onChange={(e) => setPct(e.target.value)}
+        />
+        <button
+          type="button"
+          className="text-xs font-semibold text-sq-blue px-2 py-1"
+          onClick={() => {
+            const p = Number(pct);
+            if (!Number.isFinite(p) || p <= 0 || p >= 100) return;
+            const base = compareAtCents ?? priceCents;
+            const nextPrice = Math.round((base * (100 - p)) / 100);
+            onChange(nextPrice, base);
+            setPct('');
+          }}
+        >
+          За % 
+        </button>
+        <input
+          className={`${fieldClass} max-w-[120px]`}
+          placeholder="Нова ціна, грн"
+          value={newPrice}
+          onChange={(e) => setNewPrice(e.target.value)}
+        />
+        <button
+          type="button"
+          className="text-xs font-semibold text-sq-blue px-2 py-1"
+          onClick={() => {
+            const next = uahInputToCents(newPrice);
+            if (next <= 0 || next >= priceCents) return;
+            const base = compareAtCents ?? priceCents;
+            onChange(next, base);
+            setNewPrice('');
+          }}
+        >
+          За новою ціною
+        </button>
+      </div>
+    </div>
   );
 }

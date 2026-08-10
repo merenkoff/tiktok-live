@@ -79,6 +79,7 @@ export interface CatalogItem {
   sku: string | null;
   barcode: string | null;
   price_cents: number;
+  compare_at_cents: number | null;
   quantity: number;
   image_url: string | null;
 }
@@ -91,6 +92,11 @@ export interface CompleteSaleItemInput {
 export interface CompleteSalePaymentInput {
   method: PaymentMethod;
   amount_cents: number;
+}
+
+export interface CartDiscountInput {
+  type: 'percent' | 'fixed';
+  value: number;
 }
 
 export interface RefundItemInput {

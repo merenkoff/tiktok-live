@@ -47,6 +47,10 @@ export function RegisterPage() {
   const clear = useCartStore((s) => s.clear);
   const totalCents = useCartStore((s) => s.totalCents);
   const setBanner = useCartStore((s) => s.setBanner);
+  const cartDiscount = useCartStore((s) => s.cartDiscount);
+  const customer = useCartStore((s) => s.customer);
+  const setCartDiscount = useCartStore((s) => s.setCartDiscount);
+  const setCustomer = useCartStore((s) => s.setCustomer);
 
   const [tags, setTags] = useState<PosTag[]>([]);
   const [tagPath, setTagPath] = useState<PosTag[]>([]);
@@ -186,6 +190,8 @@ export function RegisterPage() {
           quantity: line.quantity,
         })),
         payments,
+        cart_discount: cartDiscount,
+        customer_id: customer?.id ?? null,
       });
       clear();
       setCheckoutOpen(false);
@@ -375,7 +381,10 @@ export function RegisterPage() {
             <SaleSidebar
               staffName={auth?.staff.display_name ?? ''}
               lines={lines}
-              totalCents={totalCents()}
+              customer={customer}
+              cartDiscount={cartDiscount}
+              onSetCustomer={setCustomer}
+              onSetCartDiscount={setCartDiscount}
               onSetQty={setQty}
               onRemove={remove}
               onClear={() => {
@@ -423,7 +432,10 @@ export function RegisterPage() {
       {mobileCartOpen && (
         <MobileCartSheet
           lines={lines}
-          totalCents={totalCents()}
+          customer={customer}
+          cartDiscount={cartDiscount}
+          onSetCustomer={setCustomer}
+          onSetCartDiscount={setCartDiscount}
           onSetQty={setQty}
           onRemove={remove}
           onClose={() => setMobileCartOpen(false)}

@@ -25,6 +25,7 @@ export interface CatalogItem {
   sku: string | null;
   barcode: string | null;
   price_cents: number;
+  compare_at_cents?: number | null;
   quantity: number;
   image_url: string | null;
 }
@@ -38,6 +39,7 @@ export interface ProductVariant {
   barcode: string | null;
   price_cents: number;
   cost_cents: number;
+  compare_at_cents?: number | null;
   is_active: boolean;
   quantity: number;
 }
@@ -70,6 +72,7 @@ export interface SaleListItem {
   total_cents: number;
   refunded_cents: number;
   staff_name: string;
+  customer_name?: string | null;
   created_at: string;
 }
 
@@ -79,8 +82,14 @@ export interface SaleDetail {
   status: string;
   subtotal_cents: number;
   total_cents: number;
+  cart_discount_cents?: number;
+  cart_discount_type?: string | null;
+  cart_discount_value?: number | null;
   refunded_cents: number;
   staff_name: string;
+  customer_id?: number | null;
+  customer_name?: string | null;
+  customer_phone?: string | null;
   created_at: string;
   items: Array<{
     id: number;
@@ -89,6 +98,8 @@ export interface SaleDetail {
     variant_label: string;
     quantity: number;
     unit_price_cents: number;
+    compare_at_unit_cents?: number | null;
+    line_discount_cents?: number;
     line_total_cents: number;
     refunded_quantity: number;
   }>;
@@ -104,6 +115,22 @@ export interface SaleDetail {
     staff_name: string;
     created_at: string;
   }>;
+}
+
+export interface CustomerChild {
+  name: string;
+  birthday: string;
+}
+
+export interface PosCustomer {
+  id: number;
+  store_id: number;
+  name: string;
+  phone: string;
+  email: string | null;
+  children_birthdays: CustomerChild[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface TodayAnalytics {

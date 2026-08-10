@@ -1,4 +1,4 @@
-import { Grid3X3, ListOrdered, LogOut, Package } from 'lucide-react';
+import { Grid3X3, ListOrdered, LogOut, Package, Users } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
 interface Props {
@@ -22,6 +22,13 @@ export function AppRail({ isOwner, onLogout }: Props) {
       <div className="flex flex-col items-center gap-1 flex-1">
         <Link to="/register" className={itemClass(pathname.startsWith('/register'))} title="Каса">
           <Grid3X3 size={22} strokeWidth={1.75} />
+        </Link>
+        <Link
+          to="/customers"
+          className={itemClass(pathname.startsWith('/customers'))}
+          title="Клієнти"
+        >
+          <Users size={22} strokeWidth={1.75} />
         </Link>
         {isOwner && (
           <>
