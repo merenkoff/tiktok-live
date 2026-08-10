@@ -8,8 +8,8 @@
 
 ## P1. GTIN enrichment (підказка назви)
 
-**Статус:** research готовий → [[POS_GTIN_ENRICHMENT]]  
-**Звідки:** відкладено з плану receipt placeholders — у MVP заглушка лише вручну.
+**Статус:** free path **реалізовано** → [[POS_GTIN_SETUP]] · [[POS_GTIN_ENRICHMENT]]  
+**Звідки:** відкладено з плану receipt placeholders — у MVP заглушка лише вручну; enrichment додано окремо.
 
 ### Навіщо
 
