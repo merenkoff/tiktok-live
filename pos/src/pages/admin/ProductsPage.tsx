@@ -23,7 +23,7 @@ export function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [tags, setTags] = useState<PosTag[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [filterTag, setFilterTag] = useState<number | 'all'>('all');
+  const [filterTag, setFilterTag] = useState<number | 'all' | 'needs_review'>('all');
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [showCreate, setShowCreate] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
@@ -57,9 +57,12 @@ export function ProductsPage() {
 
   const visible = products.filter((p) => {
     if (!p.is_active) return false;
+    if (filterTag === 'needs_review') return Boolean(p.needs_review);
     if (filterTag === 'all') return true;
     return p.tag_ids?.includes(filterTag);
   });
+
+  const needsReviewCount = products.filter((p) => p.is_active && p.needs_review).length;
 
   async function onCreate(e: FormEvent) {
     e.preventDefault();
@@ -192,6 +195,16 @@ export function ProductsPage() {
             }`}
           >
             Усі товари
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterTag('needs_review')}
+            className={`w-full text-left px-3 py-2 rounded-[4px] text-sm font-medium ${
+              filterTag === 'needs_review' ? 'sq-nav-active' : 'sq-nav-idle'
+            }`}
+          >
+            З приходу — перевірте
+            {needsReviewCount > 0 ? ` (${needsReviewCount})` : ''}
           </button>
           {tags.map((root) => (
             <div key={root.id} className="space-y-1">
@@ -353,7 +366,16 @@ export function ProductsPage() {
                               <span className="text-[10px] text-sq-muted">фото</span>
                             )}
                           </div>
-                          <h3 className="font-semibold text-sq-text truncate">{product.name}</h3>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="font-semibold text-sq-text truncate">{product.name}</h3>
+                              {product.needs_review && (
+                                <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-[3px] bg-[#FFF4E5] text-[#B54708]">
+                                  Потребує перевірки
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </div>
                         <div className="flex gap-3 text-sm font-semibold">
                           <button

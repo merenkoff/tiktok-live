@@ -50,6 +50,8 @@ export interface Product {
   description: string | null;
   image_url: string | null;
   is_active: boolean;
+  needs_review?: boolean;
+  created_from_document_id?: number | null;
   tag_ids: number[];
   variants: ProductVariant[];
 }
@@ -167,15 +169,22 @@ export interface StockDocumentLine {
   id: number;
   document_id: number;
   store_id: number;
-  variant_id: number;
+  variant_id: number | null;
   quantity: number;
   unit_cost_cents: number | null;
   system_qty: number | null;
   counted_qty: number | null;
   line_note: string | null;
+  is_placeholder?: boolean;
+  placeholder_name?: string | null;
+  placeholder_size?: string;
+  placeholder_color?: string;
+  placeholder_barcode?: string | null;
+  placeholder_price_cents?: number | null;
   product_name?: string;
   size?: string;
   color?: string;
+  product_id?: number;
 }
 
 export interface StockDocument {

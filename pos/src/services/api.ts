@@ -406,6 +406,25 @@ class PosApi {
     return data;
   }
 
+  async addStockDocumentPlaceholderLine(
+    documentId: number,
+    payload: {
+      name: string;
+      quantity: number;
+      price_cents: number;
+      unit_cost_cents?: number | null;
+      size?: string;
+      color?: string;
+      barcode?: string | null;
+      line_note?: string | null;
+    }
+  ): Promise<StockDocumentLine & { similar_products?: { id: number; name: string }[] }> {
+    const { data } = await this.client.post<
+      StockDocumentLine & { similar_products?: { id: number; name: string }[] }
+    >(`/stock/documents/${documentId}/lines/placeholder`, payload);
+    return data;
+  }
+
   async updateStockDocumentLine(
     documentId: number,
     lineId: number,
@@ -414,6 +433,11 @@ class PosApi {
       unit_cost_cents?: number | null;
       counted_qty?: number | null;
       line_note?: string | null;
+      placeholder_name?: string;
+      placeholder_size?: string;
+      placeholder_color?: string;
+      placeholder_barcode?: string | null;
+      placeholder_price_cents?: number;
     }
   ): Promise<StockDocumentLine> {
     const { data } = await this.client.patch<StockDocumentLine>(
