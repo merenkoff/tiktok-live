@@ -468,6 +468,18 @@ export async function addPlaceholderLine(params: {
     ]);
     await client.query('COMMIT');
     const row = result.rows[0];
+    if (barcode) {
+      try {
+        const { learnFromManual } = await import('./gtin/gtin-cache.service.js');
+        await learnFromManual({
+          code: barcode,
+          name,
+          storeId: params.storeId,
+        });
+      } catch {
+        // learning must not fail placeholder add
+      }
+    }
     return mapLine({
       ...row,
       product_name: row.placeholder_name,
