@@ -8,13 +8,13 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
+# Install dependencies (lockfile must stay in sync for npm ci)
 RUN npm ci
 
 # Copy source code
 COPY . .
 
-# Build the app
+# Build the app (exclude tests from tsc via tsconfig)
 RUN npm run build
 
 # Stage 2: Runtime (serve)
