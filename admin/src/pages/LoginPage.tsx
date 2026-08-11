@@ -120,7 +120,7 @@ export function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={handleLogin}>
+          <form onSubmit={handleLogin} data-testid="login-form">
             <div style={{ marginBottom: '24px' }}>
               <label style={{
                 display: 'block',
@@ -149,6 +149,7 @@ export function LoginPage() {
                   onChange={(e) => setUsername(e.target.value)}
                   required
                   disabled={loading}
+                  data-testid="login-username"
                   style={{ paddingLeft: '36px' }}
                 />
               </div>
@@ -158,6 +159,7 @@ export function LoginPage() {
               type="submit"
               disabled={loading || !username.trim()}
               className="btn-primary"
+              data-testid="login-submit"
               style={{ width: '100%', justifyContent: 'center', padding: '14px' }}
             >
               {loading ? (

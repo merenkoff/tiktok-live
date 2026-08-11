@@ -11,6 +11,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
     "test": "vitest",
+    "test:admin": "npm --prefix admin run test",
+    "test:admin:coverage": "npm --prefix admin run test:coverage",
     "pos:migrate": "tsx src/pos/migrate.ts",
     "pos:seed": "tsx src/pos/seed.ts",
     "docker:build": "docker build -t tiktok-live-automation .",

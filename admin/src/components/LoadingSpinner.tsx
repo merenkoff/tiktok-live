@@ -2,7 +2,9 @@
 
 export function LoadingSpinner() {
   return (
-    <div style={{
+    <div
+      data-testid="loading-spinner"
+      style={{
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
