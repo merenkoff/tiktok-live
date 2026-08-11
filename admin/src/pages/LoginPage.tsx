@@ -14,10 +14,14 @@ export function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      await login(username);
-      window.location.href = '/session';
+      await login(username.trim());
+      // Soft transition: App remounts BrowserRouter when isAuthenticated becomes true
     } catch (err: any) {
-      setError(err.message || 'Login failed');
+      const message =
+        err?.response?.data?.error ||
+        err?.message ||
+        'Login failed';
+      setError(message);
     } finally {
       setLoading(false);
     }

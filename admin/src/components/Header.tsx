@@ -10,9 +10,8 @@ export function Header() {
 
   const isActive = (path: string) => location.pathname === path;
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  const handleLogout = async () => {
+    await logout();
   };
 
   return (
@@ -121,7 +120,7 @@ export function Header() {
         >
           <NavItem
             label="🎬 Live Session"
-            isActive={isActive('/')}
+            isActive={isActive('/') || isActive('/session')}
             onClick={() => navigate('/')}
           />
           <NavItem

@@ -41,6 +41,11 @@ export class SessionManager extends EventEmitter {
         throw new Error(`Settings not configured for user ${user_id}`);
       }
 
+      // TikTok connector needs username on settings
+      if (!settings.tiktok_username) {
+        settings.tiktok_username = user.tiktok_username;
+      }
+
       // Create session in DB
       const session = await sessionsService.createSession(user_id);
 

@@ -2,9 +2,20 @@
 
 import { FastifyInstance } from 'fastify';
 import * as usersService from './users.service.js';
-import { ensureAuth } from '../core/auth.js';
+import { ensureAuth, isUnauthorizedError } from '../core/auth.js';
 import { logger } from '../logger.js';
 import type { UserSettings } from '../core/types.js';
+
+function maskSettings(settings: UserSettings): UserSettings {
+  const safe = { ...settings };
+  if (safe.telegram_bot_token) {
+    safe.telegram_bot_token = '***' as any;
+  }
+  if (safe.novaposhta_api_key) {
+    safe.novaposhta_api_key = '***' as any;
+  }
+  return safe;
+}
 
 export async function registerSettingsRoutes(fastify: FastifyInstance) {
   /**
@@ -15,25 +26,20 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       try {
         const { userId } = await ensureAuth(request);
-        const settings = await usersService.getUserSettings(userId);
+        let settings = await usersService.getUserSettings(userId);
 
         if (!settings) {
-          reply.status(404).send({ error: 'Settings not found' });
+          settings = await usersService.ensureDefaultSettings(userId);
+        }
+
+        reply.send(maskSettings(settings));
+      } catch (error) {
+        if (isUnauthorizedError(error)) {
+          reply.status(401).send({ error: 'Unauthorized' });
           return;
         }
-
-        // Hide sensitive data
-        const safe = { ...settings };
-        if (safe.telegram_bot_token) {
-          safe.telegram_bot_token = '***' as any;
-        }
-        if (safe.novaposhta_api_key) {
-          safe.novaposhta_api_key = '***' as any;
-        }
-
-        reply.send(safe);
-      } catch (error) {
-        reply.status(401).send({ error: 'Unauthorized' });
+        logger.error('Settings get error', { error });
+        reply.status(500).send({ error: 'Failed to get settings' });
       }
     }
   );
@@ -46,21 +52,14 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       try {
         const { userId } = await ensureAuth(request);
-        // Type the request body properly
         const body = request.body as Partial<UserSettings>;
         const settings = await usersService.saveUserSettings(userId, body);
-
-        // Hide sensitive data in response
-        const safe = { ...settings };
-        if (safe.telegram_bot_token) {
-          safe.telegram_bot_token = '***' as any;
-        }
-        if (safe.novaposhta_api_key) {
-          safe.novaposhta_api_key = '***' as any;
-        }
-
-        reply.send(safe);
+        reply.send(maskSettings(settings));
       } catch (error) {
+        if (isUnauthorizedError(error)) {
+          reply.status(401).send({ error: 'Unauthorized' });
+          return;
+        }
         logger.error('Settings save error', { error });
         reply.status(500).send({ error: 'Failed to save settings' });
       }
@@ -92,6 +91,10 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
           reply.status(400).send({ error: 'Invalid Telegram token' });
         }
       } catch (error) {
+        if (isUnauthorizedError(error)) {
+          reply.status(401).send({ error: 'Unauthorized' });
+          return;
+        }
         logger.error('Telegram test error', { error });
         reply.status(500).send({ error: 'Test failed' });
       }

@@ -40,9 +40,8 @@ export function useLogs() {
           }
         });
 
-        // TO AI (Claude / Cursor): Next time fix this missed method onDisconect
         // Listen for disconnect to auto-reconnect
-        wsClient.onDisconnect?.(() => {
+        wsClient.onDisconnect(() => {
           if (!mountedRef.current) return;
           setIsConnected(false);
           reconnectTimerRef.current = setTimeout(() => connect(), 5000);

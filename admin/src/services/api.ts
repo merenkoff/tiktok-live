@@ -4,7 +4,11 @@ import axios from 'axios';
 import type { AxiosInstance } from 'axios';
 import type { AuthResponse, UserSettings, Session, SessionLog } from '../types';
 
-const API_URL = 'https://the-live.shop'; //process.env.VITE_API_URL ||  // 'http://localhost:3000'; //import.meta.env.VITE_API_URL || '';
+const API_URL =
+  import.meta.env.VITE_API_URL ??
+  (typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? ''
+    : 'https://the-live.shop');
 
 class ApiClient {
   private client: AxiosInstance;
@@ -23,28 +27,36 @@ class ApiClient {
       return config;
     });
 
-    // this.client.interceptors.response.use(
-    //   (response) => response,
-    //   (error) => {
-    //     if (error.response?.status === 401) {
-    //       localStorage.removeItem('token');
-    //       localStorage.removeItem('user');
-    //       window.location.href = '/';
-    //     }
-    //     throw error;
-    //   }
-    // );
+    this.client.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response?.status === 401) {
+          const url: string = error.config?.url || '';
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+
+          // /auth/me is handled by loadUser (soft logout). Login never has a token.
+          // Other 401s → hard redirect so UI can't stay on broken session pages.
+          const isAuthProbe =
+            url.includes('/api/auth/me') || url.includes('/api/auth/login');
+          if (!isAuthProbe) {
+            window.location.replace('/');
+          }
+        }
+        return Promise.reject(error);
+      }
+    );
   }
 
   async login(tiktok_username: string): Promise<AuthResponse> {
-    const response = await this.client.post<AuthResponse>('/api/auth/login', { tiktok_username });
+    const response = await this.client.post<AuthResponse>('/api/auth/login', {
+      tiktok_username,
+    });
     return response.data;
   }
 
   async logout(): Promise<void> {
     await this.client.post('/api/auth/logout');
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
   }
 
   async getMe(): Promise<any> {
@@ -96,22 +108,23 @@ class ApiClient {
 
   getWebSocketUrl(): string {
     const token = localStorage.getItem('token');
-    
-    // Залежно від environment, використовуєш правильний URL
-    const isProduction = window.location.hostname !== 'localhost';
-    
-    if (isProduction) {
-      // Production — напряму на сервер
-      // const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      // const host = window.location.hostname;
-      // Server_IP ????
-      return `wss://the-live.shop/api/sessions/logs/stream?token=${token}`;
-    } else {
-      // Development — Vite проксирує через /api, тому використовуй localhost:5173
-      // Вітте проксирує /api на localhost:3000, але для WebSocket потрібна пряма URL
-      // Спробуємо напряму на :3000
-      return `ws://localhost:3000/api/sessions/logs/stream?token=${token}`;
+    if (!token) {
+      throw new Error('No auth token for WebSocket');
     }
+
+    const isLocal =
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1';
+
+    if (isLocal) {
+      return `ws://localhost:3000/api/sessions/logs/stream?token=${encodeURIComponent(token)}`;
+    }
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host.includes('the-live.shop')
+      ? 'the-live.shop'
+      : window.location.host;
+    return `${protocol}//${host}/api/sessions/logs/stream?token=${encodeURIComponent(token)}`;
   }
 }
 

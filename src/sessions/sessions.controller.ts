@@ -7,8 +7,19 @@ import {
   stopUserSession,
   getUserSessionStatus,
 } from './sessions.startup.js';
-import { ensureAuth } from '../core/auth.js';
+import { ensureAuth, isUnauthorizedError } from '../core/auth.js';
 import { logger } from '../logger.js';
+
+function sendAuthOrServerError(reply: any, error: unknown, fallback: string) {
+  if (isUnauthorizedError(error)) {
+    reply.status(401).send({ error: 'Unauthorized' });
+    return;
+  }
+  logger.error(fallback, { error });
+  reply.status(500).send({
+    error: error instanceof Error ? error.message : fallback,
+  });
+}
 
 export async function registerSessionRoutes(fastify: FastifyInstance) {
   /**
@@ -18,7 +29,7 @@ export async function registerSessionRoutes(fastify: FastifyInstance) {
     '/api/sessions/start',
     async (request, reply) => {
       try {
-        const { userId } = await ensureAuth(request); // ✅ AWAIT!
+        const { userId } = await ensureAuth(request);
 
         // Check if already running
         if (sessionManager.isSessionActive(userId)) {
@@ -35,16 +46,15 @@ export async function registerSessionRoutes(fastify: FastifyInstance) {
         const session = sessionManager.getSession(userId);
 
         reply.send({
-          success: true,
-          sessionId: session?.session.id,
+          id: session?.session.id,
+          user_id: userId,
           status: 'running',
-          startedAt: new Date().toISOString(),
+          started_at: session?.session.started_at ?? new Date().toISOString(),
+          stopped_at: session?.session.stopped_at,
+          created_at: session?.session.created_at,
         });
       } catch (error) {
-        logger.error('Error starting session', { error });
-        reply.status(500).send({
-          error: error instanceof Error ? error.message : 'Failed to start session',
-        });
+        sendAuthOrServerError(reply, error, 'Failed to start session');
       }
     }
   );
@@ -56,7 +66,7 @@ export async function registerSessionRoutes(fastify: FastifyInstance) {
     '/api/sessions/stop',
     async (request, reply) => {
       try {
-        const { userId } = await ensureAuth(request); // ✅ AWAIT!
+        const { userId } = await ensureAuth(request);
 
         if (!sessionManager.isSessionActive(userId)) {
           reply.status(400).send({ error: 'No active session' });
@@ -69,10 +79,7 @@ export async function registerSessionRoutes(fastify: FastifyInstance) {
 
         reply.send({ success: true, message: 'Session stopped' });
       } catch (error) {
-        logger.error('Error stopping session', { error });
-        reply.status(500).send({
-          error: error instanceof Error ? error.message : 'Failed to stop session',
-        });
+        sendAuthOrServerError(reply, error, 'Failed to stop session');
       }
     }
   );
@@ -84,7 +91,7 @@ export async function registerSessionRoutes(fastify: FastifyInstance) {
     '/api/sessions/current',
     async (request, reply) => {
       try {
-        const { userId } = await ensureAuth(request); // ✅ AWAIT!
+        const { userId } = await ensureAuth(request);
 
         const session = sessionManager.getSession(userId);
 
@@ -93,17 +100,17 @@ export async function registerSessionRoutes(fastify: FastifyInstance) {
           return;
         }
 
+        // snake_case to match admin Session type
         reply.send({
           id: session.session.id,
-          userId: session.session.user_id,
+          user_id: session.session.user_id,
           status: session.session.status,
-          startedAt: session.session.started_at,
-          stoppedAt: session.session.stopped_at,
-          createdAt: session.session.created_at,
+          started_at: session.session.started_at,
+          stopped_at: session.session.stopped_at,
+          created_at: session.session.created_at,
         });
       } catch (error) {
-        logger.error('Error getting current session', { error });
-        reply.status(500).send({ error: 'Failed to get session' });
+        sendAuthOrServerError(reply, error, 'Failed to get session');
       }
     }
   );
@@ -115,7 +122,7 @@ export async function registerSessionRoutes(fastify: FastifyInstance) {
     '/api/sessions/logs',
     async (request, reply) => {
       try {
-        const { userId } = await ensureAuth(request); // ✅ AWAIT!
+        const { userId } = await ensureAuth(request);
         const limit = parseInt(request.query.limit || '100');
         const logType = request.query.type;
 
@@ -126,8 +133,7 @@ export async function registerSessionRoutes(fastify: FastifyInstance) {
 
         reply.send(filtered);
       } catch (error) {
-        logger.error('Error getting session logs', { error });
-        reply.status(500).send({ error: 'Failed to get logs' });
+        sendAuthOrServerError(reply, error, 'Failed to get logs');
       }
     }
   );
@@ -139,7 +145,7 @@ export async function registerSessionRoutes(fastify: FastifyInstance) {
     '/api/sessions/stats',
     async (request, reply) => {
       try {
-        const { userId } = await ensureAuth(request); // ✅ AWAIT!
+        const { userId } = await ensureAuth(request);
 
         const status = await getUserSessionStatus(userId);
         const logs = sessionManager.getLogs(userId, 100);
@@ -160,8 +166,7 @@ export async function registerSessionRoutes(fastify: FastifyInstance) {
           },
         });
       } catch (error) {
-        logger.error('Error getting stats', { error });
-        reply.status(500).send({ error: 'Failed to get stats' });
+        sendAuthOrServerError(reply, error, 'Failed to get stats');
       }
     }
   );

@@ -1,19 +1,23 @@
-// admin/src/App.tsx — unchanged logic, updated class names removed
-
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './hooks/useAuth';
 import { LoginPage } from './pages/LoginPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SessionPage } from './pages/SessionPage';
+import { LoadingSpinner } from './components/LoadingSpinner';
 
 export function App() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isHydrating = useAuthStore((state) => state.isHydrating);
   const loadUser = useAuthStore((state) => state.loadUser);
 
   useEffect(() => {
     loadUser();
   }, [loadUser]);
+
+  if (isHydrating) {
+    return <LoadingSpinner />;
+  }
 
   if (!isAuthenticated) {
     return <LoginPage />;
@@ -22,9 +26,10 @@ export function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/"         element={<SessionPage />} />
+        <Route path="/" element={<SessionPage />} />
+        <Route path="/session" element={<Navigate to="/" replace />} />
         <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/session"  element={<SessionPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );

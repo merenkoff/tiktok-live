@@ -1,4 +1,4 @@
-// admin/src/services/websocket.ts - FIXED
+// admin/src/services/websocket.ts
 
 import type { SessionLog } from '../types';
 
@@ -10,9 +10,6 @@ export class WebSocketClient {
   private url: string;
   private logHandlers: Set<LogHandler> = new Set();
   private eventHandlers: Map<string, Set<EventHandler>> = new Map();
-  private reconnectAttempts = 0;
-  private maxReconnectAttempts = 10;
-  private reconnectDelay = 5000;
 
   constructor(url: string) {
     this.url = url;
@@ -24,31 +21,23 @@ export class WebSocketClient {
         this.ws = new WebSocket(this.url);
 
         this.ws.onopen = () => {
-          console.log('✅ WebSocket connected');
-          this.reconnectAttempts = 0;
           resolve();
         };
 
-        // ✅ СЛУХАЄМО ПОВІДОМЛЕННЯ
         this.ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            console.log('📨 WebSocket message:', data); // DEBUG
             this.handleMessage(data);
           } catch (error) {
-            console.error('❌ Error parsing WebSocket message', error);
+            console.error('Error parsing WebSocket message', error);
           }
         };
 
-        // ✅ СЛУХАЄМО РОЗ'ЄДНАННЯ
         this.ws.onclose = () => {
-          console.warn('❌ WebSocket disconnected');
           this.handleDisconnect();
         };
 
-        // ✅ СЛУХАЄМО ПОМИЛКИ
         this.ws.onerror = (error) => {
-          console.error('❌ WebSocket error', error);
           reject(error);
         };
       } catch (error) {
@@ -58,14 +47,8 @@ export class WebSocketClient {
   }
 
   private handleMessage(data: any): void {
-    console.log('🔔 Handling message:', data); // DEBUG
-    
     if (data.type === 'log') {
-      console.log('📝 New log received:', data.log); // DEBUG
-      this.logHandlers.forEach((handler) => {
-        console.log('🎯 Calling log handler'); // DEBUG
-        handler(data.log);
-      });
+      this.logHandlers.forEach((handler) => handler(data.log));
     } else {
       const handlers = this.eventHandlers.get(data.type);
       if (handlers) {
@@ -75,16 +58,15 @@ export class WebSocketClient {
   }
 
   private handleDisconnect(): void {
-    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-      this.reconnectAttempts++;
-      const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-      console.log(`🔄 Reconnecting in ${Math.round(delay / 1000)}s...`);
-      setTimeout(() => this.connect().catch(console.error), delay);
-    }
+    const handlers = this.eventHandlers.get('disconnect');
+    handlers?.forEach((handler) => handler({}));
+  }
+
+  onDisconnect(handler: EventHandler): () => void {
+    return this.on('disconnect', handler);
   }
 
   onLog(handler: LogHandler): () => void {
-    console.log('✅ Log handler registered'); // DEBUG
     this.logHandlers.add(handler);
     return () => this.logHandlers.delete(handler);
   }
@@ -105,6 +87,8 @@ export class WebSocketClient {
 
   disconnect(): void {
     if (this.ws) {
+      // Avoid treating intentional close as unexpected disconnect loop
+      this.ws.onclose = null;
       this.ws.close();
       this.ws = null;
     }

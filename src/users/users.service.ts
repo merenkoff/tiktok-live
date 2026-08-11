@@ -70,6 +70,32 @@ export async function getUserSettings(user_id: number): Promise<UserSettings | n
   }
 }
 
+/** Create empty settings row if missing (needed before session start). */
+export async function ensureDefaultSettings(
+  user_id: number,
+  tiktok_username?: string
+): Promise<UserSettings> {
+  const existing = await getUserSettings(user_id);
+  if (existing) return existing;
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO user_settings (
+        user_id, tiktok_username,
+        reservation_timeout_minutes, payment_timeout_minutes
+      ) VALUES ($1, $2, 5, 10)
+      ON CONFLICT (user_id) DO UPDATE SET updated_at = NOW()
+      RETURNING *`,
+      [user_id, tiktok_username || null]
+    );
+    logger.info(`Default settings created for user ${user_id}`);
+    return result.rows[0];
+  } catch (error) {
+    logger.error('Failed to ensure default settings', { error, user_id });
+    throw error;
+  }
+}
+
 export async function saveUserSettings(
   user_id: number,
   settings: Partial<UserSettings>
