@@ -31,7 +31,7 @@
 ## Layout
 
 ### Desktop / tablet (`lg+`)
-- Темний **AppRail** зліва (Каса, Клієнти, Продажі/Товари для owner, Вихід)
+- Темний **AppRail** зліва (Каса, Клієнти, Продажі/Товари для owner **лише на сайті**, Вихід). У десктоп-касі admin-посилань немає — [[POS_DESKTOP]].
 - Центр: пошук → **Рядок категорій** → сітка
 - Справа: чек (SaleSidebar)
 
@@ -63,3 +63,5 @@
 - Full-screen білий, hero-сума, методи, решта по готівці
 
 Спека знижок/клієнтів: [`TechDocs/POS_DISCOUNTS_AND_CUSTOMERS.md`](../TechDocs/POS_DISCOUNTS_AND_CUSTOMERS.md).
+
+Десктопна каса (окремий entry + Tauri 2; адмінка лишається сайтом): [`TechDocs/POS_DESKTOP.md`](../TechDocs/POS_DESKTOP.md).

@@ -2,11 +2,12 @@ import { FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuthStore } from '../hooks/useAuth';
+import { usePosShell } from '../shell';
 
 function loginErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
     if (!error.response) {
-      return 'Немає звʼязку з API. Запустіть бекенд на :3000 і фронт на :3002.';
+      return 'Немає звʼязку з API. Перевірте, що бекенд запущено.';
     }
     const apiError = error.response.data?.error;
     if (typeof apiError === 'string') return apiError;
@@ -26,6 +27,8 @@ export function LoginPage() {
   const loginOwner = useAuthStore((s) => s.loginOwner);
   const loginPin = useAuthStore((s) => s.loginPin);
   const navigate = useNavigate();
+  const shell = usePosShell();
+  const afterLogin = shell === 'cashier' ? '/register' : '/admin';
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -38,7 +41,7 @@ export function LoginPage() {
           return;
         }
         await loginOwner(login, password);
-        navigate('/admin');
+        navigate(afterLogin);
       } else {
         if (!pin.trim()) {
           setError('Введіть PIN');
@@ -60,7 +63,9 @@ export function LoginPage() {
         <div className="mb-8 text-center">
           <p className="sq-section-label">Cloth POS</p>
           <h1 className="text-3xl font-bold text-sq-text mt-2">Вхід</h1>
-          <p className="text-sq-secondary mt-2 text-sm">Каса та кабінет власника</p>
+          <p className="text-sq-secondary mt-2 text-sm">
+            {shell === 'cashier' ? 'Каса' : 'Каса та кабінет власника'}
+          </p>
         </div>
 
         <div className="flex border-b border-sq-divider mb-6">

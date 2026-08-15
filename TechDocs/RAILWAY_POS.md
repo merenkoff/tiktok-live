@@ -2,6 +2,8 @@
 
 POS ділить **той самий Postgres**, що й LIVE API. UI каси — окремий сервіс (як admin), API — існуючий backend на порті `PORT`.
 
+Сайт як і раніше: **адмінка + каса в браузері**. Десктопна каса (Tauri 2, окремий entry) — не цей деплой, див. [[POS_DESKTOP]].
+
 ## Архітектура
 
 ```
@@ -27,7 +29,7 @@ POS ділить **той самий Postgres**, що й LIVE API. UI каси �
 |----------|----------|
 | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` (якщо ще не стоїть) |
 | `DB_SSL` | `true` (зазвичай потрібно для Railway Postgres) |
-| `CORS_ORIGINS` | повний URL POS UI **без** слеша в кінці, кілька через кому. Приклад: `https://pos-xxx.up.railway.app,https://kasa.yourdomain.com` |
+| `CORS_ORIGINS` | повний URL POS UI **без** слеша в кінці, кілька через кому. Приклад: `https://pos-xxx.up.railway.app,https://kasa.yourdomain.com`. Origin десктоп-каси (`https://tauri.localhost`) уже в коді `src/api.ts`; додатково в env не обов’язково. |
 | `NODE_ENV` | `production` |
 
 Решту LIVE-змінних не чіпай.
@@ -98,7 +100,9 @@ node dist/pos/seed.js
 ```bash
 npm run pos:migrate && npm run pos:seed
 npm run dev                 # API :3000
-cd pos && npm run dev       # UI :3002
+cd pos && npm run dev       # UI :3002 (адмінка + каса)
+cd pos && npm run dev:cashier   # лише каса :3003
+cd pos && npm run tauri:dev     # вікно Tauri, див. [[POS_DESKTOP]]
 ```
 
 ## Troubleshooting
@@ -106,6 +110,7 @@ cd pos && npm run dev       # UI :3002
 | Симптом | Що перевірити |
 |---------|----------------|
 | CORS error у браузері | `CORS_ORIGINS` = точний origin каси (`https://…` без `/`) + redeploy API |
+| CORS error у Tauri | origin `https://tauri.localhost` (або `http://tauri.localhost`) має бути в allowlist `src/api.ts` — див. [[POS_DESKTOP]] |
 | API 404 на `/api/pos` | старий деплой без `src/pos`; потрібен цей коміт |
 | Фото 404 | volume + API віддає `/pos-uploads/`; `VITE_API_BASE` на UI |
 | Порожня каса / login fail | migrate + seed; ті самі Postgres credentials |

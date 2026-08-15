@@ -1,5 +1,6 @@
 import { Grid3X3, ListOrdered, LogOut, Package, Users } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
+import { usePosShell } from '../../shell';
 
 interface Props {
   isOwner: boolean;
@@ -8,6 +9,7 @@ interface Props {
 
 export function AppRail({ isOwner, onLogout }: Props) {
   const { pathname } = useLocation();
+  const showAdmin = usePosShell() === 'web' && isOwner;
 
   const itemClass = (active: boolean) =>
     `w-12 h-12 grid place-items-center rounded-sq transition-colors ${
@@ -30,7 +32,7 @@ export function AppRail({ isOwner, onLogout }: Props) {
         >
           <Users size={22} strokeWidth={1.75} />
         </Link>
-        {isOwner && (
+        {showAdmin && (
           <>
             <Link
               to="/admin/sales"

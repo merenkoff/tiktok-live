@@ -4,7 +4,7 @@ Automation system for TikTok LIVE sales for children's clothing store. Handles o
 
 Non-technical setup and live operations (Russian): [ИНСТРУКЦИЯ.md](ИНСТРУКЦИЯ.md).
 
-**POS (каса) на Railway:** [TechDocs/RAILWAY_POS.md](TechDocs/RAILWAY_POS.md).
+**POS (каса) на Railway:** [TechDocs/RAILWAY_POS.md](TechDocs/RAILWAY_POS.md). Десктопна каса (Tauri 2): [TechDocs/POS_DESKTOP.md](TechDocs/POS_DESKTOP.md).
 
 ## Features
 
