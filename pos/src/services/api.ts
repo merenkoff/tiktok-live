@@ -269,9 +269,7 @@ class PosApi {
     customer_id?: number | null;
     client_uuid?: string | null;
   }): Promise<SaleDetail> {
-    const headers: Record<string, string> = {};
-    if (payload.client_uuid) headers['Idempotency-Key'] = payload.client_uuid;
-    const { data } = await this.client.post<SaleDetail>('/sales/complete', payload, { headers });
+    const { data } = await this.client.post<SaleDetail>('/sales/complete', payload);
     return data;
   }
 

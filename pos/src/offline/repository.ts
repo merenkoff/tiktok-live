@@ -334,6 +334,11 @@ export async function completeSale(payload: {
   });
   await applyLocalStockDelta(payload.items);
   await useOfflineStatus.getState().refreshPending();
+  if (navigator.onLine) {
+    void import('./sync')
+      .then((mod) => mod.runSync())
+      .catch(() => undefined);
+  }
   const catalog = await db.catalog.toArray();
   return localSaleDetail(clientUuid, salePayload, catalog);
 }

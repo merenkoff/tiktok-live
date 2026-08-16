@@ -73,6 +73,12 @@ export async function createServer(): Promise<FastifyInstance> {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Accept',
+      'Authorization',
+      'Content-Type',
+      'Idempotency-Key',
+    ],
   });
 
   // ⭐ CRITICAL: Register static file serving BEFORE routes

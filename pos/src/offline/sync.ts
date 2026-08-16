@@ -80,8 +80,11 @@ export async function runSync(): Promise<void> {
       try {
         await syncCustomer(row);
       } catch (error) {
-        if (isNetworkError(error)) throw error;
-        const message = error instanceof Error ? error.message : 'Customer sync failed';
+        const message = isNetworkError(error)
+          ? 'Немає відповіді сервера'
+          : error instanceof Error
+            ? error.message
+            : 'Customer sync failed';
         await markError(row, message);
         useOfflineStatus.getState().setLastError(message);
       }
@@ -93,8 +96,11 @@ export async function runSync(): Promise<void> {
       try {
         await syncSale(row);
       } catch (error) {
-        if (isNetworkError(error)) throw error;
-        const message = error instanceof Error ? error.message : 'Sale sync failed';
+        const message = isNetworkError(error)
+          ? 'Немає відповіді сервера'
+          : error instanceof Error
+            ? error.message
+            : 'Sale sync failed';
         await markError(row, message);
         useOfflineStatus.getState().setLastError(message);
       }
@@ -113,6 +119,9 @@ export async function runSync(): Promise<void> {
     running = false;
     useOfflineStatus.getState().setSyncing(false);
     await useOfflineStatus.getState().refreshPending();
+    if (useOfflineStatus.getState().pending === 0) {
+      useOfflineStatus.getState().setLastError(null);
+    }
   }
 }
 
