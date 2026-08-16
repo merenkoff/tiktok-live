@@ -25,6 +25,14 @@ import { posApiBase } from '../lib/urls';
 const TOKEN_KEY = 'pos_token';
 const AUTH_KEY = 'pos_auth';
 
+export function isNetworkError(error: unknown): boolean {
+  return axios.isAxiosError(error) && !error.response;
+}
+
+export function isUnauthorized(error: unknown): boolean {
+  return axios.isAxiosError(error) && error.response?.status === 401;
+}
+
 class PosApi {
   private client: AxiosInstance;
 
@@ -36,11 +44,18 @@ class PosApi {
 
     this.client.interceptors.request.use((config) => {
       const token = localStorage.getItem(TOKEN_KEY);
-      if (token) {
+      if (token && !token.startsWith('offline:')) {
         config.headers.Authorization = `Bearer ${token}`;
       }
       return config;
     });
+  }
+
+  hasLiveJwt(): boolean {
+    const token = localStorage.getItem(TOKEN_KEY);
+    const auth = this.loadAuth();
+    if (!token || !auth || token.startsWith('offline:')) return false;
+    return new Date(auth.expires_at).getTime() > Date.now();
   }
 
   saveAuth(auth: AuthResponse) {
@@ -84,7 +99,7 @@ class PosApi {
 
   async logout(): Promise<void> {
     try {
-      await this.client.post('/auth/logout');
+      if (this.hasLiveJwt()) await this.client.post('/auth/logout');
     } finally {
       this.clearAuth();
     }
@@ -100,8 +115,12 @@ class PosApi {
     q?: string;
     barcode?: string;
     tag_id?: number;
+    snapshot?: boolean;
   }): Promise<CatalogItem[]> {
-    const { data } = await this.client.get<CatalogItem[]>('/catalog', { params });
+    const { snapshot, ...rest } = params ?? {};
+    const { data } = await this.client.get<CatalogItem[]>('/catalog', {
+      params: snapshot ? { ...rest, all: '1' } : rest,
+    });
     return data;
   }
 
@@ -248,14 +267,20 @@ class PosApi {
     note?: string;
     cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
     customer_id?: number | null;
+    client_uuid?: string | null;
   }): Promise<SaleDetail> {
-    const { data } = await this.client.post<SaleDetail>('/sales/complete', payload);
+    const headers: Record<string, string> = {};
+    if (payload.client_uuid) headers['Idempotency-Key'] = payload.client_uuid;
+    const { data } = await this.client.post<SaleDetail>('/sales/complete', payload, { headers });
     return data;
   }
 
-  async listCustomers(q?: string): Promise<PosCustomer[]> {
+  async listCustomers(q?: string, snapshot = false): Promise<PosCustomer[]> {
     const { data } = await this.client.get<PosCustomer[]>('/customers', {
-      params: q ? { q } : undefined,
+      params: {
+        ...(q ? { q } : {}),
+        ...(snapshot ? { all: '1' } : {}),
+      },
     });
     return data;
   }
@@ -270,6 +295,7 @@ class PosApi {
     phone: string;
     email?: string | null;
     children_birthdays?: CustomerChild[];
+    client_uuid?: string | null;
   }): Promise<PosCustomer> {
     const { data } = await this.client.post<PosCustomer>('/customers', payload);
     return data;
@@ -282,6 +308,7 @@ class PosApi {
       phone?: string;
       email?: string | null;
       children_birthdays?: CustomerChild[];
+      client_uuid?: string | null;
     }
   ): Promise<PosCustomer> {
     const { data } = await this.client.patch<PosCustomer>(`/customers/${id}`, payload);

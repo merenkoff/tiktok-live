@@ -98,6 +98,7 @@ export interface CatalogItem {
   compare_at_cents: number | null;
   quantity: number;
   image_url: string | null;
+  tag_ids?: number[];
 }
 
 export interface CompleteSaleItemInput {

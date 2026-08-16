@@ -1,5 +1,6 @@
 import { formatUah } from '../../lib/money';
 import { assetUrl } from '../../lib/urls';
+import { useState } from 'react';
 
 interface Props {
   name: string;
@@ -20,6 +21,9 @@ export function ProductTile({
   onClick,
   disabled,
 }: Props) {
+  const [broken, setBroken] = useState(false);
+  const src = !broken ? assetUrl(imageUrl) : null;
+
   return (
     <button
       type="button"
@@ -27,11 +31,12 @@ export function ProductTile({
       onClick={onClick}
       className="aspect-square rounded-sq overflow-hidden relative text-left bg-sq-empty hover:brightness-[0.97] transition-[filter] disabled:opacity-50 disabled:cursor-not-allowed"
     >
-      {imageUrl ? (
+      {src ? (
         <img
-          src={assetUrl(imageUrl) ?? undefined}
+          src={src}
           alt=""
           className="absolute inset-0 w-full h-full object-cover"
+          onError={() => setBroken(true)}
         />
       ) : (
         <div className="absolute inset-0 grid place-items-center text-sq-secondary text-xs px-2 font-medium">

@@ -1,6 +1,6 @@
 # POS Desktop (Tauri 2)
 
-Десктопна каса: те саме React-UI, окремий Vite entry, оболонка **Tauri 2**. Адмінка лишається сайтом. Офлайн у цій поставці **немає**.
+Десктопна каса: те саме React-UI, окремий Vite entry, оболонка **Tauri 2**. Адмінка лишається сайтом. Офлайн (каталог, PIN, продажі, клієнти) — лише в cashier-shell.
 
 Пов’язано: [[RAILWAY_POS]] · [[POS_POST_MVP]] · [`pos/UI_CASHIER.md`](../pos/UI_CASHIER.md)
 
@@ -11,11 +11,11 @@
 | Сайт (Railway `pos/`) | Vite + React SPA як раніше | Адмінка + каса в браузері; деплой не ламаємо |
 | Десктоп | Той самий React, entry каси + Tauri 2 | Вікно Win / Mac / Ubuntu 22.04 лише з касою |
 | Бізнес-логіка | TypeScript (Zustand, Axios, сторінки каси) | Rust не містить продажів, каталогу, синку |
-| Офлайн (пізніше) | IndexedDB + черга в TS | Без зміни оболонки й без Rust-SQLite на старті |
+| Офлайн каса | IndexedDB (Dexie) + черга в TS | PIN, каталог, продажі, клієнти; адмінка/склад — лише онлайн |
 
-**Чому Tauri 2, а не Electron.** Каса — кіоск на слабшому ПК, UI вже веб. Tauri дає системний webview, малий інсталятор і RAM. Slack/Electron має сенс, коли потрібен той самий Chromium скрізь; для цієї каси зайвий. Уся логіка в TS: пізніше офлайн не вимагає міграції на Electron.
+**Чому Tauri 2, а не Electron.** Каса — кіоск на слабшому ПК, UI вже веб. Tauri дає системний webview, малий інсталятор і RAM. Slack/Electron має сенс, коли потрібен той самий Chromium скрізь; для цієї каси зайвий. Уся логіка в TS: офлайн не вимагає міграції на Electron.
 
-**Що не в v1:** офлайн, ESC/POS, автооновлення, кіоск/fullscreen, підпис/нотарізація бінарів.
+**Не в скоупі:** ESC/POS, автооновлення, підпис/нотарізація бінарів, офлайн на сайті адмінки, складські документи офлайн, Rust-SQLite.
 
 ```
 [Браузер: index.html + App.tsx]
@@ -84,19 +84,84 @@ npm run tauri:build
 
 Якщо API на іншому хості — `VITE_API_BASE` = публічний URL API без слеша в кінці (як у [[RAILWAY_POS]]).
 
-## Ітерація 2: офлайн
+## Офлайн каса
 
-Не змінювати Tauri на іншу оболонку. Не класти чергу продажів у Rust.
+Працює лише в десктопному entry (`cashier-main.tsx` → `enableOfflinePos()`). Веб-адмінка як і раніше ходить в API напряму.
 
-1. Репозиторій над Axios: онлайн → `/api/pos`, офлайн → локально.
-2. Кэш каталогу + черга `completeSale` в **IndexedDB** (каталог одягу — тисячі SKU).
-3. Синк після появи мережі; конфлікти залишків — на бекенді.
-4. SQLite / Tauri SQL plugin — лише якщо IndexedDB не вистачить (чеки, жорсткі збої).
+Перший запуск на пристрої **потребує інтернету** (логін + знімок каталогу/тегів/клієнтів + PBKDF2-verifier PIN/пароля). Сирий PIN на диск не пишеться.
 
-Камера (`html5-qrcode`) залежить від webview; на Linux WebKit буває гірше, ніж Chrome. USB-сканер як клавіатура вже працює без native API.
+Далі без мережі:
+
+- PIN / пароль власника, хто вже входив на цій касі, перевіряється локально.
+- Каталог і клієнти читаються з IndexedDB; фільтр тег/пошук/штрихкод — у TS.
+- Продаж одразу закривається локально (чек `OFF-…`, мінус з кешу залишку, черга outbox).
+- Новий/змінений клієнт — локально + черга; на сервері upsert по `(store, phone)` / `client_uuid`.
+
+Синк (коли є живий JWT і мережа): **спочатку клієнти, потім продажі**. Повтор `POST /sales/complete` з тим самим `client_uuid` повертає той самий чек без другого списання.
+
+Конфлікт залишків з іншою касою: сервер **приймає** продаж, `reason = sale` може піти в мінус. Adjust / writeoff як і раніше не опускають qty нижче 0. Локально каса не дає продати більше **кешу** (`max_quantity`).
+
+JWT: last-good токен тримається до `expires_at` (14 днів). Якщо протух і мережі немає — каса працює з локальним PIN, черга копиться, синк після наступного **онлайн**-логіна. `401` з сервера скидає сесію, PIN на пристрої лишається.
+
+Фото каталогу кешуються через Cache API після знімка; якщо URL недоступний — плитка як раніше (плейсхолдер).
+
+Код: [`pos/src/offline/`](../pos/src/offline/). Баннер «Офлайн» / «Очікує синк: N» на касі та клієнтах.
+
+## Кіоск Ubuntu 22.04
+
+Fullscreen лише в **release** (`npm run tauri:build`), не в `tauri:dev`. Rust: `set_fullscreen(true)`, без рамки, не resizable, не closable. Alt+F4 на Ubuntu все одно може закрити GTK-вікно — обмеження ОС.
+
+Бінар після збірки: `pos/src-tauri/target/release/cloth-pos`. Після `.deb` зазвичай `/usr/bin/cloth-pos`.
+
+### Автологін користувача каси
+
+GNOME Settings → Users → Automatic Login, або в `/etc/gdm3/custom.conf`:
+
+```
+[daemon]
+AutomaticLoginEnable=true
+AutomaticLogin=kasyr
+```
+
+(`kasyr` — системний юзер каси, не POS PIN.)
+
+### Автостарт
+
+`~/.config/autostart/cloth-pos.desktop`:
+
+```ini
+[Desktop Entry]
+Type=Application
+Name=Cloth POS
+Exec=/usr/bin/cloth-pos
+X-GNOME-Autostart-enabled=true
+```
+
+Підставте `Exec=` на фактичний шлях (release-бінар або `/usr/bin` після deb).
+
+### Блокування екрана і сон
+
+Settings → Privacy → Screen Lock → off; Power → Blank screen → never. Або:
+
+```bash
+gsettings set org.gnome.desktop.screensaver lock-enabled false
+gsettings set org.gnome.desktop.session idle-delay 0
+gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type 'nothing'
+gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-type 'nothing'
+```
+
+### Wayland vs X11
+
+GTK fullscreen Tauri працює на обох. Огляд GNOME (Super) ОС не ховає — для «жорсткого» кіоска опційно `gnome-kiosk` / окрема сесія, не в коді v1.
+
+### Вихід з каси
+
+Не прибирати logout. Owner — кнопка «Вихід» у rail (і довгий тап на мобільній навігації). Після виходу PIN на пристрої лишається; потрібен повторний ввід.
+
+Камера (`html5-qrcode`) залежить від webview; на Linux WebKit буває гірше, ніж Chrome. USB-сканер як клавіатура працює без native API.
 
 ## Файли оболонки
 
 - [`pos/src-tauri/tauri.conf.json`](../pos/src-tauri/tauri.conf.json) — вікно «Каса» min 1024×700, CSP (`connect-src` на API, `media-src` для камери)
-- [`pos/src-tauri/src/lib.rs`](../pos/src-tauri/src/lib.rs) — порожній `Builder`, без команд
+- [`pos/src-tauri/src/lib.rs`](../pos/src-tauri/src/lib.rs) — у release: fullscreen, без рамки
 - identifier: `shop.cloth.pos`

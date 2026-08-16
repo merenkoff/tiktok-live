@@ -12,7 +12,7 @@ export function posApiBase(): string {
 /** Resolve /pos-uploads/... against API host when POS is on another domain. */
 export function assetUrl(path: string | null | undefined): string | null {
   if (!path) return null;
-  if (/^https?:\/\//i.test(path)) return path;
+  if (/^(https?:|blob:|data:)/i.test(path)) return path;
   const origin = apiOrigin();
   const normalized = path.startsWith('/') ? path : `/${path}`;
   return origin ? `${origin}${normalized}` : normalized;

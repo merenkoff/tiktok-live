@@ -1,10 +1,12 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../services/api';
+import { cashierApi } from '../../offline/cashierApi';
 import type { CustomerChild, PosCustomer } from '../../types';
 import { useAuthStore } from '../../hooks/useAuth';
 import { AppRail } from '../../components/cashier/AppRail';
 import { BottomNav } from '../../components/cashier/BottomNav';
+import { OfflineStatusBanner } from '../../components/cashier/OfflineStatusBanner';
 
 const fieldClass =
   'rounded-sq border border-sq-divider bg-sq-bg px-3 py-2.5 text-sm text-sq-text w-full';
@@ -27,7 +29,7 @@ export function CustomersPage({ cashierShell }: Props) {
   const [creating, setCreating] = useState(false);
 
   async function reload(search = q) {
-    setList(await api.listCustomers(search || undefined));
+    setList(await cashierApi.listCustomers(search || undefined));
   }
 
   useEffect(() => {
@@ -131,6 +133,7 @@ export function CustomersPage({ cashierShell }: Props) {
     <div className="h-[100dvh] flex bg-sq-bg font-sans overflow-hidden">
       <AppRail isOwner={role === 'owner'} onLogout={() => void logout()} />
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
+        <OfflineStatusBanner />
         {body}
         <div className="lg:hidden shrink-0">
           <BottomNav isOwner={role === 'owner'} onLogout={() => void logout()} />
@@ -172,8 +175,8 @@ function CustomerForm({
         email: email || null,
         children_birthdays: children.filter((c) => c.name.trim() && c.birthday),
       };
-      if (initial) await api.updateCustomer(initial.id, payload);
-      else await api.createCustomer(payload);
+      if (initial) await cashierApi.updateCustomer(initial.id, payload);
+      else await cashierApi.createCustomer(payload);
       await onSaved();
     } catch {
       onError('Не вдалося зберегти клієнта');

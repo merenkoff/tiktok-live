@@ -386,7 +386,7 @@ export async function archiveVariant(storeId: number, variantId: number) {
 
 export async function getCatalog(
   storeId: number,
-  opts: { q?: string; barcode?: string; tag_id?: number } = {}
+  opts: { q?: string; barcode?: string; tag_id?: number; snapshot?: boolean } = {}
 ): Promise<CatalogItem[]> {
   const params: unknown[] = [storeId];
   const conditions = [
@@ -395,7 +395,9 @@ export async function getCatalog(
     'v.is_active = TRUE',
   ];
 
-  if (opts.tag_id) {
+  const snapshot = Boolean(opts.snapshot);
+
+  if (!snapshot && opts.tag_id) {
     const tagIds = await resolveTagFilterIds(storeId, opts.tag_id);
     params.push(tagIds);
     conditions.push(
@@ -406,10 +408,10 @@ export async function getCatalog(
     );
   }
 
-  if (opts.barcode?.trim()) {
+  if (!snapshot && opts.barcode?.trim()) {
     params.push(opts.barcode.trim());
     conditions.push(`v.barcode = $${params.length}`);
-  } else if (opts.q?.trim()) {
+  } else if (!snapshot && opts.q?.trim()) {
     params.push(`%${opts.q.trim().toLowerCase()}%`);
     const idx = params.length;
     conditions.push(
@@ -420,6 +422,8 @@ export async function getCatalog(
         OR lower(v.color) LIKE $${idx})`
     );
   }
+
+  const limit = snapshot ? 10000 : 200;
 
   const result = await pool.query(
     `SELECT
@@ -433,13 +437,17 @@ export async function getCatalog(
        v.price_cents,
        v.compare_at_cents,
        COALESCE(s.quantity, 0) AS quantity,
-       p.image_url
+       p.image_url,
+       COALESCE(
+         (SELECT array_agg(pt.tag_id) FROM pos_product_tags pt WHERE pt.product_id = p.id),
+         '{}'::bigint[]
+       ) AS tag_ids
      FROM pos_variants v
      JOIN pos_products p ON p.id = v.product_id
      LEFT JOIN pos_stock s ON s.variant_id = v.id
      WHERE ${conditions.join(' AND ')}
      ORDER BY p.name ASC, v.size ASC, v.color ASC
-     LIMIT 200`,
+     LIMIT ${limit}`,
     params
   );
 
@@ -456,5 +464,6 @@ export async function getCatalog(
       row.compare_at_cents == null ? null : Number(row.compare_at_cents),
     quantity: Number(row.quantity),
     image_url: row.image_url,
+    tag_ids: Array.isArray(row.tag_ids) ? row.tag_ids.map((id: string | number) => Number(id)) : [],
   }));
 }

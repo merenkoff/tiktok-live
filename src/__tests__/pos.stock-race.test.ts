@@ -19,6 +19,11 @@ describe.skipIf(!hasDb)('POS stock race', () => {
     const dir = path.dirname(fileURLToPath(import.meta.url));
     const sql = fs.readFileSync(path.join(dir, '../../migrations/002_pos_schema.sql'), 'utf-8');
     await pool.query(sql);
+    const sql010 = fs.readFileSync(
+      path.join(dir, '../../migrations/010_pos_offline_sync.sql'),
+      'utf-8'
+    );
+    await pool.query(sql010);
 
     const slug = `race_${Date.now()}`;
     const store = await pool.query(
@@ -59,7 +64,7 @@ describe.skipIf(!hasDb)('POS stock race', () => {
     await pool.end();
   });
 
-  it('allows only one of two concurrent sales for last unit', async () => {
+  it('accepts concurrent sales of the last unit and allows negative stock', async () => {
     const payload = {
       storeId,
       staffId,
@@ -71,12 +76,12 @@ describe.skipIf(!hasDb)('POS stock race', () => {
     const fulfilled = results.filter((r) => r.status === 'fulfilled');
     const rejected = results.filter((r) => r.status === 'rejected');
 
-    expect(fulfilled.length).toBe(1);
-    expect(rejected.length).toBe(1);
+    expect(fulfilled.length).toBe(2);
+    expect(rejected.length).toBe(0);
 
     const stock = await pool.query(`SELECT quantity FROM pos_stock WHERE variant_id = $1`, [
       variantId,
     ]);
-    expect(Number(stock.rows[0].quantity)).toBe(0);
+    expect(Number(stock.rows[0].quantity)).toBe(-1);
   });
 });

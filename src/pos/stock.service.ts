@@ -61,7 +61,8 @@ export async function applyStockDelta(
 
   const current = Number(stockResult.rows[0].quantity);
   const next = current + params.delta;
-  if (next < 0) {
+  // Offline cashiers may race another till; sales still complete (qty can go negative).
+  if (next < 0 && params.reason !== 'sale') {
     throw new Error(`Insufficient stock for variant ${params.variantId}`);
   }
 

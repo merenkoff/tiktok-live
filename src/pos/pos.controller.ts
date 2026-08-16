@@ -329,8 +329,12 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   fastify.get('/customers', async (request, reply) => {
     const auth = await ensurePosAuth(request, reply);
     if (!auth) return;
-    const query = request.query as { q?: string };
-    return customersService.listCustomers(auth.storeId, query.q);
+    const query = request.query as { q?: string; all?: string; snapshot?: string };
+    return customersService.listCustomers(
+      auth.storeId,
+      query.q,
+      query.all === '1' || query.snapshot === '1'
+    );
   });
 
   fastify.get('/customers/:id', async (request, reply) => {
@@ -351,6 +355,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
         phone?: string;
         email?: string | null;
         children_birthdays?: customersService.CustomerChild[];
+        client_uuid?: string | null;
       };
       if (!body.name || !body.phone) {
         return reply.code(400).send({ error: 'name and phone required' });
@@ -360,6 +365,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
         phone: body.phone,
         email: body.email,
         children_birthdays: body.children_birthdays,
+        client_uuid: body.client_uuid,
       });
       return reply.code(201).send(customer);
     } catch (error) {
@@ -381,6 +387,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
           phone?: string;
           email?: string | null;
           children_birthdays?: customersService.CustomerChild[];
+          client_uuid?: string | null;
         }
       );
     } catch (error) {
@@ -405,11 +412,18 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   fastify.get('/catalog', async (request, reply) => {
     const auth = await ensurePosAuth(request, reply);
     if (!auth) return;
-    const query = request.query as { q?: string; barcode?: string; tag_id?: string };
+    const query = request.query as {
+      q?: string;
+      barcode?: string;
+      tag_id?: string;
+      all?: string;
+      snapshot?: string;
+    };
     return productsService.getCatalog(auth.storeId, {
       q: query.q,
       barcode: query.barcode,
       tag_id: query.tag_id ? Number(query.tag_id) : undefined,
+      snapshot: query.all === '1' || query.snapshot === '1',
     });
   });
 
@@ -987,7 +1001,21 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
         note?: string;
         cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
         customer_id?: number | null;
+        client_uuid?: string | null;
       };
+      const headerKey = request.headers['idempotency-key'];
+      const headerUuid =
+        typeof headerKey === 'string' &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          headerKey
+        )
+          ? headerKey
+          : null;
+      const clientUuid = body.client_uuid?.trim() || headerUuid;
+      if (clientUuid) {
+        const existing = await salesService.getSaleByClientUuid(auth.storeId, clientUuid);
+        if (existing) return reply.code(200).send(existing);
+      }
       const sale = await salesService.completeSale({
         storeId: auth.storeId,
         staffId: auth.staffId,
@@ -996,6 +1024,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
         note: body.note,
         cart_discount: body.cart_discount,
         customer_id: body.customer_id,
+        client_uuid: clientUuid,
       });
       return reply.code(201).send(sale);
     } catch (error) {

@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { X } from 'lucide-react';
-import { api } from '../../services/api';
+import { cashierApi } from '../../offline/cashierApi';
 import type { PosCustomer } from '../../types';
 
 interface Props {
@@ -18,7 +18,7 @@ export function CustomerPicker({ onClose, onSelect, currentId }: Props) {
   const [phone, setPhone] = useState('');
 
   async function search(term = q) {
-    setList(await api.listCustomers(term || undefined));
+    setList(await cashierApi.listCustomers(term || undefined));
   }
 
   useEffect(() => {
@@ -28,7 +28,7 @@ export function CustomerPicker({ onClose, onSelect, currentId }: Props) {
   async function create(e: FormEvent) {
     e.preventDefault();
     try {
-      const c = await api.createCustomer({ name, phone });
+      const c = await cashierApi.createCustomer({ name, phone });
       onSelect(c);
       onClose();
     } catch {

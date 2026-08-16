@@ -3,6 +3,8 @@ export type PosRole = 'owner' | 'seller';
 export interface AuthResponse {
   token: string;
   expires_at: string;
+  /** Local PIN/owner session without a live JWT — cashier shell only. */
+  offlineSession?: boolean;
   staff: {
     id: number;
     display_name: string;
@@ -28,6 +30,7 @@ export interface CatalogItem {
   compare_at_cents?: number | null;
   quantity: number;
   image_url: string | null;
+  tag_ids?: number[];
 }
 
 export interface ProductVariant {
@@ -133,6 +136,7 @@ export interface PosCustomer {
   children_birthdays: CustomerChild[];
   created_at: string;
   updated_at: string;
+  client_uuid?: string | null;
 }
 
 export interface TodayAnalytics {

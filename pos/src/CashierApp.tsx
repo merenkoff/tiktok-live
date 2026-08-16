@@ -4,6 +4,7 @@ import { useAuthStore } from './hooks/useAuth';
 import { LoginPage } from './pages/LoginPage';
 import { CustomersPage } from './pages/customers/CustomersPage';
 import { RegisterPage } from './pages/register/RegisterPage';
+import { startOfflineRuntime } from './offline';
 
 function Guard({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -19,6 +20,10 @@ export function CashierApp() {
   useEffect(() => {
     void bootstrap();
   }, [bootstrap]);
+
+  useEffect(() => {
+    startOfflineRuntime();
+  }, []);
 
   if (!bootstrapped) {
     return (

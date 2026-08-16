@@ -3,7 +3,10 @@ import ReactDOM from 'react-dom/client';
 import { HashRouter } from 'react-router-dom';
 import { CashierApp } from './CashierApp';
 import { PosShellContext } from './shell';
+import { enableOfflinePos } from './offline/enabled';
 import './index.css';
+
+enableOfflinePos();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

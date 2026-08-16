@@ -1,10 +1,12 @@
 import { FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { useAuthStore } from '../hooks/useAuth';
+import { useAuthStore, loadLastStoreSlug } from '../hooks/useAuth';
 import { usePosShell } from '../shell';
+import { OfflineAuthError } from '../offline/errors';
 
 function loginErrorMessage(error: unknown): string {
+  if (error instanceof OfflineAuthError) return error.message;
   if (axios.isAxiosError(error)) {
     if (!error.response) {
       return 'Немає звʼязку з API. Перевірте, що бекенд запущено.';
@@ -20,7 +22,7 @@ export function LoginPage() {
   const [mode, setMode] = useState<'owner' | 'pin'>('pin');
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
-  const [storeSlug, setStoreSlug] = useState('');
+  const [storeSlug, setStoreSlug] = useState(loadLastStoreSlug());
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);

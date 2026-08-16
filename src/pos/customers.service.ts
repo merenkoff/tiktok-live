@@ -16,6 +16,7 @@ export interface PosCustomer {
   children_birthdays: CustomerChild[];
   created_at: Date;
   updated_at: Date;
+  client_uuid?: string | null;
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -57,15 +58,18 @@ function mapCustomer(row: Record<string, unknown>): PosCustomer {
     children_birthdays: children,
     created_at: row.created_at as Date,
     updated_at: row.updated_at as Date,
+    client_uuid: row.client_uuid == null ? null : String(row.client_uuid),
   };
 }
 
 export async function listCustomers(
   storeId: number,
-  q?: string
+  q?: string,
+  snapshot = false
 ): Promise<PosCustomer[]> {
   const query = q?.trim();
-  if (query) {
+  const limit = snapshot ? 10000 : query ? 100 : 200;
+  if (query && !snapshot) {
     const digits = normalizePhone(query);
     const result = await pool.query(
       `SELECT * FROM pos_customers
@@ -76,13 +80,13 @@ export async function listCustomers(
            OR ($4 <> '' AND phone LIKE $4)
          )
        ORDER BY name ASC
-       LIMIT 100`,
+       LIMIT ${limit}`,
       [storeId, `%${query}%`, `%${query}%`, digits ? `%${digits}%` : '']
     );
     return result.rows.map(mapCustomer);
   }
   const result = await pool.query(
-    `SELECT * FROM pos_customers WHERE store_id = $1 ORDER BY name ASC LIMIT 200`,
+    `SELECT * FROM pos_customers WHERE store_id = $1 ORDER BY name ASC LIMIT ${limit}`,
     [storeId]
   );
   return result.rows.map(mapCustomer);
@@ -107,6 +111,7 @@ export async function createCustomer(
     phone: string;
     email?: string | null;
     children_birthdays?: CustomerChild[];
+    client_uuid?: string | null;
   }
 ): Promise<PosCustomer> {
   const name = input.name?.trim();
@@ -115,14 +120,67 @@ export async function createCustomer(
   if (phone.length < 8) throw new Error('Phone is required');
   const email = input.email?.trim() || null;
   const children = validateChildren(input.children_birthdays ?? []);
+  const clientUuid = input.client_uuid?.trim() || null;
 
-  const result = await pool.query(
-    `INSERT INTO pos_customers (store_id, name, phone, email, children_birthdays)
-     VALUES ($1, $2, $3, $4, $5::jsonb)
-     RETURNING *`,
-    [storeId, name, phone, email, JSON.stringify(children)]
-  );
-  return mapCustomer(result.rows[0]);
+  if (clientUuid) {
+    const byUuid = await pool.query(
+      `SELECT * FROM pos_customers WHERE store_id = $1 AND client_uuid = $2`,
+      [storeId, clientUuid]
+    );
+    if (byUuid.rows.length > 0) {
+      return updateCustomer(storeId, Number(byUuid.rows[0].id), {
+        name,
+        phone,
+        email,
+        children_birthdays: children,
+        client_uuid: clientUuid,
+      });
+    }
+  }
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO pos_customers (store_id, name, phone, email, children_birthdays, client_uuid)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6)
+       RETURNING *`,
+      [storeId, name, phone, email, JSON.stringify(children), clientUuid]
+    );
+    return mapCustomer(result.rows[0]);
+  } catch (error) {
+    const unique =
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code: string }).code === '23505';
+    if (!unique) throw error;
+    if (clientUuid) {
+      const byUuid = await pool.query(
+        `SELECT * FROM pos_customers WHERE store_id = $1 AND client_uuid = $2`,
+        [storeId, clientUuid]
+      );
+      if (byUuid.rows.length > 0) {
+        return updateCustomer(storeId, Number(byUuid.rows[0].id), {
+          name,
+          phone,
+          email,
+          children_birthdays: children,
+          client_uuid: clientUuid,
+        });
+      }
+    }
+    const existing = await pool.query(
+      `SELECT * FROM pos_customers WHERE store_id = $1 AND phone = $2`,
+      [storeId, phone]
+    );
+    if (existing.rows.length === 0) throw error;
+    return updateCustomer(storeId, Number(existing.rows[0].id), {
+      name,
+      phone,
+      email,
+      children_birthdays: children,
+      client_uuid: clientUuid,
+    });
+  }
 }
 
 export async function updateCustomer(
@@ -133,6 +191,7 @@ export async function updateCustomer(
     phone?: string;
     email?: string | null;
     children_birthdays?: CustomerChild[];
+    client_uuid?: string | null;
   }
 ): Promise<PosCustomer> {
   const existing = await getCustomer(storeId, id);
@@ -151,13 +210,18 @@ export async function updateCustomer(
     input.children_birthdays !== undefined
       ? validateChildren(input.children_birthdays)
       : existing.children_birthdays;
+  const clientUuid =
+    input.client_uuid !== undefined
+      ? input.client_uuid?.trim() || null
+      : existing.client_uuid ?? null;
 
   const result = await pool.query(
     `UPDATE pos_customers
-     SET name = $1, phone = $2, email = $3, children_birthdays = $4::jsonb, updated_at = NOW()
+     SET name = $1, phone = $2, email = $3, children_birthdays = $4::jsonb,
+         client_uuid = COALESCE($7, client_uuid), updated_at = NOW()
      WHERE id = $5 AND store_id = $6
      RETURNING *`,
-    [name, phone, email, JSON.stringify(children), id, storeId]
+    [name, phone, email, JSON.stringify(children), id, storeId, clientUuid]
   );
   return mapCustomer(result.rows[0]);
 }

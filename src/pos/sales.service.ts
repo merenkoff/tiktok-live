@@ -77,6 +77,15 @@ async function nextReceiptNumber(
   return `R-${String(n).padStart(5, '0')}`;
 }
 
+export async function getSaleByClientUuid(storeId: number, clientUuid: string) {
+  const result = await pool.query(
+    `SELECT id FROM pos_sales WHERE store_id = $1 AND client_uuid = $2`,
+    [storeId, clientUuid]
+  );
+  if (result.rows.length === 0) return null;
+  return getSale(storeId, Number(result.rows[0].id));
+}
+
 export async function completeSale(params: {
   storeId: number;
   staffId: number;
@@ -85,9 +94,16 @@ export async function completeSale(params: {
   note?: string;
   cart_discount?: CartDiscountInput | null;
   customer_id?: number | null;
+  client_uuid?: string | null;
 }) {
   if (!params.items?.length) throw new Error('Cart is empty');
   if (!params.payments?.length) throw new Error('Payment required');
+
+  const clientUuid = params.client_uuid?.trim() || null;
+  if (clientUuid) {
+    const existing = await getSaleByClientUuid(params.storeId, clientUuid);
+    if (existing) return existing;
+  }
 
   if (params.customer_id) {
     const customer = await getCustomer(params.storeId, params.customer_id);
@@ -188,8 +204,8 @@ export async function completeSale(params: {
     const saleResult = await client.query(
       `INSERT INTO pos_sales
          (store_id, staff_id, receipt_number, status, subtotal_cents, total_cents, note,
-          customer_id, cart_discount_type, cart_discount_value, cart_discount_cents)
-       VALUES ($1, $2, $3, 'completed', $4, $5, $6, $7, $8, $9, $10)
+          customer_id, cart_discount_type, cart_discount_value, cart_discount_cents, client_uuid)
+       VALUES ($1, $2, $3, 'completed', $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
       [
         params.storeId,
@@ -202,6 +218,7 @@ export async function completeSale(params: {
         discountType,
         discountValue,
         cartDiscountCents,
+        clientUuid,
       ]
     );
     const sale = saleResult.rows[0];
@@ -259,6 +276,15 @@ export async function completeSale(params: {
     return getSale(params.storeId, saleId);
   } catch (error) {
     await client.query('ROLLBACK');
+    const unique =
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code: string }).code === '23505';
+    if (unique && clientUuid) {
+      const existing = await getSaleByClientUuid(params.storeId, clientUuid);
+      if (existing) return existing;
+    }
     throw error;
   } finally {
     client.release();

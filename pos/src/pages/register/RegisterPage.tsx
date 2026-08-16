@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, Check, Search } from 'lucide-react';
-import { api } from '../../services/api';
+import { cashierApi } from '../../offline/cashierApi';
 import { useAuthStore } from '../../hooks/useAuth';
 import { useCartStore } from '../../hooks/useCart';
 import { formatUah } from '../../lib/money';
@@ -14,6 +14,7 @@ import { BottomNav } from '../../components/cashier/BottomNav';
 import { AppRail } from '../../components/cashier/AppRail';
 import { VariantPicker } from '../../components/cashier/VariantPicker';
 import { MobileCartSheet } from '../../components/cashier/MobileCartSheet';
+import { OfflineStatusBanner } from '../../components/cashier/OfflineStatusBanner';
 
 function paymentLabel(method: 'cash' | 'card'): string {
   return method === 'cash' ? 'Готівка' : 'Картка';
@@ -78,13 +79,13 @@ export function RegisterPage() {
     tagPath.length <= 1 ? 'Усі товари' : (tagPath[tagPath.length - 2]?.name ?? 'Усі товари');
 
   const loadTags = useCallback(async () => {
-    setTags(await api.getTags());
+    setTags(await cashierApi.getTags());
   }, []);
 
   const loadCatalog = useCallback(async (opts?: { q?: string; barcode?: string; tag_id?: number }) => {
     setLoading(true);
     try {
-      const items = await api.getCatalog(opts);
+      const items = await cashierApi.getCatalog(opts);
       setCatalog(items);
       return items;
     } finally {
@@ -184,7 +185,7 @@ export function RegisterPage() {
   async function pay(payments: Array<{ method: 'cash' | 'card'; amount_cents: number }>) {
     setPaying(true);
     try {
-      const sale = await api.completeSale({
+      const sale = await cashierApi.completeSale({
         items: lines.map((line) => ({
           variant_id: line.variant_id,
           quantity: line.quantity,
@@ -251,6 +252,7 @@ export function RegisterPage() {
       <AppRail isOwner={role === 'owner'} onLogout={() => void logout()} />
 
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
+        <OfflineStatusBanner />
         <input
           ref={wedgeRef}
           className="sr-only"
