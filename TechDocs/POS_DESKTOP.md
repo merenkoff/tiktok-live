@@ -42,7 +42,7 @@
 
 Контекст: [`pos/src/shell.tsx`](../pos/src/shell.tsx). Збірка каси: [`pos/vite.cashier.config.ts`](../pos/vite.cashier.config.ts) → `dist-cashier/` (порт **3003**). Сайт як і раніше: `vite.config.ts` → `dist/`, порт **3002**, Dockerfile Railway без змін.
 
-`VITE_API_BASE` той самий bake-in, що й у сайту ([`pos/src/lib/urls.ts`](../pos/src/lib/urls.ts)). Локально для десктопа: [`pos/.env`](../pos/.env) (шаблон [`pos/.env.example`](../pos/.env.example)), зараз прод API `https://the-live.shop`. Vite підхоплює файл сам для `dev:cashier` і `tauri:build`.
+`VITE_API_BASE` bake-in у [`pos/src/lib/urls.ts`](../pos/src/lib/urls.ts). **Десктоп-каса за замовчуванням** б’є в прод API `https://the-live.shop` ([`pos/vite.cashier.config.ts`](../pos/vite.cashier.config.ts)) — після clone `npm run tauri:dev` / `tauri:build` без `.env`. Перевизначити: змінна оточення або [`pos/.env`](../pos/.env) (шаблон [`pos/.env.example`](../pos/.env.example)). Сайт (`npm run dev` / Railway Docker ARG) цим дефолтом не користується.
 
 ## Запуск
 
@@ -61,7 +61,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 ### Команди (з каталогу `pos/`)
 
-Локальний тест каси проти прод API: у [`pos/.env`](../pos/.env) стоїть `VITE_API_BASE=https://the-live.shop` (файл у gitignore). Шаблон: [`pos/.env.example`](../pos/.env.example).
+Після clone каса вже ходить на `https://the-live.shop`. Локальний `.env` не обов’язковий.
 
 ```bash
 # Лише каса в браузері (той самий entry, що Tauri): :3003
@@ -74,7 +74,7 @@ npm run tauri:dev
 npm run tauri:build
 ```
 
-Сайт каса+адмінка лишається `npm run dev` на `:3002`. Локальний API на `:3000` для десктопа не потрібен, якщо `VITE_API_BASE` вказує на Railway.
+Сайт каса+адмінка лишається `npm run dev` на `:3002` (прокси на локальний API). Для десктопа локальний `:3000` не потрібен.
 
 `tauri.conf.json`: `bundle.targets = all`. Збірка `.msi` / `.dmg` — на відповідній ОС (на Ubuntu вийде AppImage/deb). Автооновлення й code signing — не в цій поставці.
 
