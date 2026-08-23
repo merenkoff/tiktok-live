@@ -139,7 +139,9 @@ export interface PosCustomer {
   client_uuid?: string | null;
 }
 
-export interface TodayAnalytics {
+export interface SalesSummary {
+  from: string;
+  to: string;
   sales_count: number;
   gross_cents: number;
   refunded_cents: number;
@@ -154,6 +156,12 @@ export interface TodayAnalytics {
   payments: Array<{
     method: 'cash' | 'card';
     amount_cents: number;
+  }>;
+  daily: Array<{
+    date: string;
+    gross_cents: number;
+    net_cents: number;
+    sales_count: number;
   }>;
 }
 

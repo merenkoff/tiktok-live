@@ -8,7 +8,7 @@ import type {
   SaleDetail,
   SaleListItem,
   StaffMember,
-  TodayAnalytics,
+  SalesSummary,
   CustomerChild,
   Supplier,
   StockDocument,
@@ -344,8 +344,8 @@ class PosApi {
     return data;
   }
 
-  async today(): Promise<TodayAnalytics> {
-    const { data } = await this.client.get<TodayAnalytics>('/analytics/today');
+  async salesSummary(params: { from?: string; to?: string } = {}): Promise<SalesSummary> {
+    const { data } = await this.client.get<SalesSummary>('/analytics/summary', { params });
     return data;
   }
 

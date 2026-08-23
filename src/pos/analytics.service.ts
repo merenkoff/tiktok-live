@@ -2,13 +2,59 @@
 
 import { pool } from '../db.js';
 
-export async function getTodayAnalytics(storeId: number, timezone = 'Europe/Kyiv') {
+export interface SalesSummary {
+  from: string;
+  to: string;
+  sales_count: number;
+  gross_cents: number;
+  refunded_cents: number;
+  net_cents: number;
+  avg_check_cents: number;
+  top_items: Array<{
+    product_name: string;
+    variant_label: string;
+    qty_sold: number;
+    revenue_cents: number;
+  }>;
+  payments: Array<{ method: 'cash' | 'card'; amount_cents: number }>;
+  daily: Array<{ date: string; gross_cents: number; net_cents: number; sales_count: number }>;
+}
+
+function todayDateString(timezone: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date());
+}
+
+function eachDate(from: string, to: string): string[] {
+  const [fy, fm, fd] = from.split('-').map(Number);
+  const [ty, tm, td] = to.split('-').map(Number);
+  let cursor = Date.UTC(fy, fm - 1, fd);
+  const end = Date.UTC(ty, tm - 1, td);
+  const out: string[] = [];
+  while (cursor <= end) {
+    out.push(new Date(cursor).toISOString().slice(0, 10));
+    cursor += 86_400_000;
+  }
+  return out;
+}
+
+export async function getSalesSummary(
+  storeId: number,
+  opts: { from?: string; to?: string; timezone?: string } = {}
+): Promise<SalesSummary> {
+  const timezone = opts.timezone ?? 'Europe/Kyiv';
+  const from = opts.from ?? todayDateString(timezone);
+  const to = opts.to ?? from;
+
+  const BOUNDS_CTE = `
+    WITH bounds AS (
+      SELECT
+        ($2::date)::timestamp AT TIME ZONE $4 AS range_start,
+        (($3::date + INTERVAL '1 day'))::timestamp AT TIME ZONE $4 AS range_end
+    )`;
+  const params = [storeId, from, to, timezone];
+
   const result = await pool.query(
-    `WITH bounds AS (
-       SELECT
-         (date_trunc('day', NOW() AT TIME ZONE $2) AT TIME ZONE $2) AS day_start,
-         ((date_trunc('day', NOW() AT TIME ZONE $2) + INTERVAL '1 day') AT TIME ZONE $2) AS day_end
-     )
+    `${BOUNDS_CTE}
      SELECT
        COUNT(*) FILTER (WHERE s.status <> 'voided')::int AS sales_count,
        COALESCE(SUM(s.total_cents) FILTER (WHERE s.status <> 'voided'), 0)::int AS gross_cents,
@@ -19,9 +65,9 @@ export async function getTodayAnalytics(storeId: number, timezone = 'Europe/Kyiv
        )::int AS net_cents
      FROM pos_sales s, bounds b
      WHERE s.store_id = $1
-       AND s.created_at >= b.day_start
-       AND s.created_at < b.day_end`,
-    [storeId, timezone]
+       AND s.created_at >= b.range_start
+       AND s.created_at < b.range_end`,
+    params
   );
 
   const row = result.rows[0];
@@ -30,11 +76,7 @@ export async function getTodayAnalytics(storeId: number, timezone = 'Europe/Kyiv
   const avgCents = salesCount > 0 ? Math.round(netCents / salesCount) : 0;
 
   const topResult = await pool.query(
-    `WITH bounds AS (
-       SELECT
-         (date_trunc('day', NOW() AT TIME ZONE $2) AT TIME ZONE $2) AS day_start,
-         ((date_trunc('day', NOW() AT TIME ZONE $2) + INTERVAL '1 day') AT TIME ZONE $2) AS day_end
-     )
+    `${BOUNDS_CTE}
      SELECT
        si.product_name,
        si.variant_label,
@@ -45,34 +87,62 @@ export async function getTodayAnalytics(storeId: number, timezone = 'Europe/Kyiv
      CROSS JOIN bounds b
      WHERE s.store_id = $1
        AND s.status <> 'voided'
-       AND s.created_at >= b.day_start
-       AND s.created_at < b.day_end
+       AND s.created_at >= b.range_start
+       AND s.created_at < b.range_end
      GROUP BY si.product_name, si.variant_label
      HAVING SUM(si.quantity - si.refunded_quantity) > 0
      ORDER BY qty_sold DESC, revenue_cents DESC
      LIMIT 5`,
-    [storeId, timezone]
+    params
   );
 
   const paymentsResult = await pool.query(
-    `WITH bounds AS (
-       SELECT
-         (date_trunc('day', NOW() AT TIME ZONE $2) AT TIME ZONE $2) AS day_start,
-         ((date_trunc('day', NOW() AT TIME ZONE $2) + INTERVAL '1 day') AT TIME ZONE $2) AS day_end
-     )
+    `${BOUNDS_CTE}
      SELECT p.method, COALESCE(SUM(p.amount_cents), 0)::int AS amount_cents
      FROM pos_payments p
      JOIN pos_sales s ON s.id = p.sale_id
      CROSS JOIN bounds b
      WHERE s.store_id = $1
        AND s.status <> 'voided'
-       AND s.created_at >= b.day_start
-       AND s.created_at < b.day_end
+       AND s.created_at >= b.range_start
+       AND s.created_at < b.range_end
      GROUP BY p.method`,
-    [storeId, timezone]
+    params
   );
 
+  const dailyResult = await pool.query(
+    `${BOUNDS_CTE}
+     SELECT
+       to_char(date_trunc('day', s.created_at AT TIME ZONE $4), 'YYYY-MM-DD') AS day,
+       COUNT(*) FILTER (WHERE s.status <> 'voided')::int AS sales_count,
+       COALESCE(SUM(s.total_cents) FILTER (WHERE s.status <> 'voided'), 0)::int AS gross_cents,
+       COALESCE(
+         SUM(s.total_cents - s.refunded_cents) FILTER (WHERE s.status <> 'voided'),
+         0
+       )::int AS net_cents
+     FROM pos_sales s, bounds b
+     WHERE s.store_id = $1
+       AND s.created_at >= b.range_start
+       AND s.created_at < b.range_end
+     GROUP BY 1
+     ORDER BY 1`,
+    params
+  );
+
+  const byDay = new Map(dailyResult.rows.map((r) => [String(r.day), r]));
+  const daily = eachDate(from, to).map((date) => {
+    const r = byDay.get(date);
+    return {
+      date,
+      sales_count: r ? Number(r.sales_count) : 0,
+      gross_cents: r ? Number(r.gross_cents) : 0,
+      net_cents: r ? Number(r.net_cents) : 0,
+    };
+  });
+
   return {
+    from,
+    to,
     sales_count: salesCount,
     gross_cents: Number(row.gross_cents),
     refunded_cents: Number(row.refunded_cents),
@@ -88,6 +158,7 @@ export async function getTodayAnalytics(storeId: number, timezone = 'Europe/Kyiv
       method: p.method as 'cash' | 'card',
       amount_cents: Number(p.amount_cents),
     })),
+    daily,
   };
 }
 
