@@ -1,10 +1,10 @@
 export function csvEscape(value: string | number): string {
   const s = String(value);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
 export function toCsv(rows: (string | number)[][]): string {
-  return rows.map((row) => row.map(csvEscape).join(',')).join('\r\n');
+  return rows.map((row) => row.map(csvEscape).join(';')).join('\r\n');
 }
 
 const UTF8_BOM = String.fromCharCode(0xfeff);
