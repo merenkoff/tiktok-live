@@ -692,6 +692,28 @@ function EditProductInline({
                 setVariants(next);
               }}
             />
+            <div className="grid sm:grid-cols-2 gap-2">
+              <input
+                className={fieldClass}
+                value={v.barcode ?? ''}
+                onChange={(e) => {
+                  const next = [...variants];
+                  next[idx] = { ...v, barcode: e.target.value };
+                  setVariants(next);
+                }}
+                placeholder="Barcode"
+              />
+              <input
+                className={fieldClass}
+                value={v.sku ?? ''}
+                onChange={(e) => {
+                  const next = [...variants];
+                  next[idx] = { ...v, sku: e.target.value };
+                  setVariants(next);
+                }}
+                placeholder="SKU"
+              />
+            </div>
           </div>
         ))}
 
