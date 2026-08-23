@@ -4,6 +4,7 @@ import { api } from '../../../services/api';
 import { formatUah } from '../../../lib/money';
 import { ManageStockModal } from '../../../components/ManageStockModal';
 import type { LowStockRow, OnHandRow, StockDocument } from '../../../types';
+import { useDragScroll } from '../../../hooks/useDragScroll';
 
 const TYPE_LABEL: Record<string, string> = {
   receipt: 'Прихід',
@@ -26,6 +27,7 @@ export function StockHubPage() {
   const [q, setQ] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [manage, setManage] = useState<OnHandRow | null>(null);
+  const tableScrollRef = useDragScroll<HTMLDivElement>();
 
   async function reload() {
     const [onHand, lowStock, recent] = await Promise.all([
@@ -113,7 +115,7 @@ export function StockHubPage() {
           />
           <span className="text-sm text-[#6E6E6E] whitespace-nowrap">{filtered.length} поз.</span>
         </div>
-        <div className="overflow-x-auto">
+        <div ref={tableScrollRef} className="overflow-x-auto select-none">
           <table className="w-full text-sm">
             <thead className="bg-[#F5F5F5] text-left text-[#6E6E6E]">
               <tr>

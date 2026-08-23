@@ -6,6 +6,7 @@ import { ProductPhotoField } from '../../components/ProductPhotoField';
 import { TagColorSwatches } from '../../components/TagColorSwatches';
 import { assetUrl } from '../../lib/urls';
 import { DEFAULT_TAG_COLOR, type TagColorKey } from '../../lib/tagColors';
+import { useDragScroll } from '../../hooks/useDragScroll';
 
 function flattenTags(tags: PosTag[]): PosTag[] {
   const out: PosTag[] = [];
@@ -410,34 +411,7 @@ export function ProductsPage() {
                           );
                         })}
                       </div>
-                      <div className="mt-3 overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="text-left text-sq-secondary">
-                              <th className="py-1 pr-2 font-medium">Варіант</th>
-                              <th className="py-1 pr-2 font-medium">Ціна</th>
-                              <th className="py-1 pr-2 font-medium">Залишок</th>
-                              <th className="py-1 pr-2 font-medium">Barcode</th>
-                              <th className="py-1 font-medium">SKU</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {product.variants
-                              .filter((v) => v.is_active)
-                              .map((v) => (
-                                <tr key={v.id} className="border-t border-sq-divider">
-                                  <td className="py-2 pr-2">
-                                    {[v.color, v.size].filter(Boolean).join(' / ') || '—'}
-                                  </td>
-                                  <td className="py-2 pr-2">{formatUah(v.price_cents)}</td>
-                                  <td className="py-2 pr-2">{v.quantity}</td>
-                                  <td className="py-2 pr-2 font-mono text-xs">{v.barcode || '—'}</td>
-                                  <td className="py-2 font-mono text-xs">{v.sku || '—'}</td>
-                                </tr>
-                              ))}
-                          </tbody>
-                        </table>
-                      </div>
+                      <VariantsTable variants={product.variants.filter((v) => v.is_active)} />
                     </div>
                   </div>
                 </section>
@@ -449,6 +423,39 @@ export function ProductsPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function VariantsTable({ variants }: { variants: ProductVariant[] }) {
+  const scrollRef = useDragScroll<HTMLDivElement>();
+
+  return (
+    <div ref={scrollRef} className="mt-3 overflow-x-auto select-none">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-sq-secondary">
+            <th className="py-1 pr-2 font-medium">Варіант</th>
+            <th className="py-1 pr-2 font-medium">Ціна</th>
+            <th className="py-1 pr-2 font-medium">Залишок</th>
+            <th className="py-1 pr-2 font-medium">Barcode</th>
+            <th className="py-1 font-medium">SKU</th>
+          </tr>
+        </thead>
+        <tbody>
+          {variants.map((v) => (
+            <tr key={v.id} className="border-t border-sq-divider">
+              <td className="py-2 pr-2">
+                {[v.color, v.size].filter(Boolean).join(' / ') || '—'}
+              </td>
+              <td className="py-2 pr-2">{formatUah(v.price_cents)}</td>
+              <td className="py-2 pr-2">{v.quantity}</td>
+              <td className="py-2 pr-2 font-mono text-xs">{v.barcode || '—'}</td>
+              <td className="py-2 font-mono text-xs">{v.sku || '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

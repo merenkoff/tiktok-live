@@ -3,6 +3,7 @@ import { Camera, Check, Search } from 'lucide-react';
 import { cashierApi } from '../../offline/cashierApi';
 import { useAuthStore } from '../../hooks/useAuth';
 import { useCartStore } from '../../hooks/useCart';
+import { useDragScroll } from '../../hooks/useDragScroll';
 import { formatUah } from '../../lib/money';
 import type { CatalogItem, PosTag, SaleDetail } from '../../types';
 import { CheckoutModal } from '../../components/CheckoutModal';
@@ -52,6 +53,9 @@ export function RegisterPage() {
   const customer = useCartStore((s) => s.customer);
   const setCartDiscount = useCartStore((s) => s.setCartDiscount);
   const setCustomer = useCartStore((s) => s.setCustomer);
+
+  const catalogBarRef = useDragScroll<HTMLDivElement>();
+  const gridRef = useDragScroll<HTMLDivElement>();
 
   const [tags, setTags] = useState<PosTag[]>([]);
   const [tagPath, setTagPath] = useState<PosTag[]>([]);
@@ -299,7 +303,10 @@ export function RegisterPage() {
               </div>
 
               {!query.trim() && (
-                <div className="flex items-stretch gap-0 overflow-x-auto -mx-1 px-1">
+                <div
+                  ref={catalogBarRef}
+                  className="flex items-stretch gap-0 overflow-x-auto -mx-1 px-1 select-none"
+                >
                   {showBack && (
                     <button
                       type="button"
@@ -341,7 +348,7 @@ export function RegisterPage() {
               )}
             </div>
 
-            <div className="flex-1 overflow-auto p-3 bg-white">
+            <div ref={gridRef} className="flex-1 overflow-auto p-3 bg-white select-none">
               {loading && <p className="text-sm text-sq-muted">Завантаження…</p>}
               <div className="grid grid-cols-3 sm:grid-cols-4 xl:grid-cols-5 gap-2">
                 {folderTiles.map((folder) => (

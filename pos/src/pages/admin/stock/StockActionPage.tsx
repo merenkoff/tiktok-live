@@ -4,6 +4,7 @@ import { api } from '../../../services/api';
 import { formatUah, uahInputToCents } from '../../../lib/money';
 import { enrichGtinFromSources, gtinSourceLabel, type GtinHint } from '../../../lib/gtinLookup';
 import type { OnHandRow, StockDocumentType, Supplier } from '../../../types';
+import { useDragScroll } from '../../../hooks/useDragScroll';
 
 const WRITEOFF_REASONS = [
   { code: 'damaged', label: 'Брак' },
@@ -74,6 +75,7 @@ export function StockActionPage({ type }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const catalogScrollRef = useDragScroll<HTMLDivElement>();
 
   const [stubOpen, setStubOpen] = useState(false);
   const [stubName, setStubName] = useState('');
@@ -658,7 +660,10 @@ export function StockActionPage({ type }: Props) {
           className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2.5 text-sm"
           autoFocus
         />
-        <div className="rounded-[4px] border border-[#E0E0E0] bg-white max-h-72 overflow-auto divide-y divide-[#E0E0E0]">
+        <div
+          ref={catalogScrollRef}
+          className="rounded-[4px] border border-[#E0E0E0] bg-white max-h-72 overflow-auto divide-y divide-[#E0E0E0] select-none"
+        >
           {loading && <p className="p-4 text-sm text-[#6E6E6E]">Завантаження каталогу…</p>}
           {!loading && searchHits.length === 0 && (
             <div className="p-4 space-y-3">

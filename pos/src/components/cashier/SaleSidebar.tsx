@@ -7,6 +7,7 @@ import { computeCartDiscountCents } from '../../hooks/useCart';
 import type { PosCustomer } from '../../types';
 import { CustomerPicker } from './CustomerPicker';
 import { uahInputToCents } from '../../lib/money';
+import { useDragScroll } from '../../hooks/useDragScroll';
 
 interface Props {
   staffName: string;
@@ -45,6 +46,7 @@ export function SaleSidebar({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [discountOpen, setDiscountOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const listRef = useDragScroll<HTMLDivElement>();
 
   useEffect(() => {
     if (!lines.some((l) => l.variant_id === selectedVariantId)) {
@@ -115,7 +117,7 @@ export function SaleSidebar({
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-3 py-2 bg-sq-sidebar">
+      <div ref={listRef} className="flex-1 overflow-auto px-3 py-2 bg-sq-sidebar select-none">
         {lines.length === 0 ? (
           <p className="text-sm text-sq-secondary py-10 text-center">Додайте товар з каталогу</p>
         ) : (

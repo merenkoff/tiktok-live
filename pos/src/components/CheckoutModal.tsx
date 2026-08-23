@@ -1,6 +1,7 @@
 import { FormEvent, useMemo, useState } from 'react';
 import { ChevronRight, X } from 'lucide-react';
 import { formatUah, uahInputToCents } from '../lib/money';
+import { useDragScroll } from '../hooks/useDragScroll';
 
 interface Props {
   totalCents: number;
@@ -15,6 +16,7 @@ export function CheckoutModal({ totalCents, loading, onClose, onConfirm }: Props
   const [step, setStep] = useState<Step>('methods');
   const [cash, setCash] = useState((totalCents / 100).toFixed(2));
   const [card, setCard] = useState('0');
+  const bodyRef = useDragScroll<HTMLDivElement>();
 
   const cashCents = uahInputToCents(cash);
   const cardCents = uahInputToCents(card);
@@ -58,7 +60,7 @@ export function CheckoutModal({ totalCents, loading, onClose, onConfirm }: Props
         <div className="min-w-11" />
       </div>
 
-      <div className="flex-1 flex flex-col items-center px-6 pt-6 overflow-auto">
+      <div ref={bodyRef} className="flex-1 flex flex-col items-center px-6 pt-6 overflow-auto select-none">
         <p className="text-5xl font-bold tracking-tight">{formatUah(totalCents)}</p>
         <p className="text-sm text-sq-muted mt-3 text-center">Оберіть спосіб оплати</p>
 

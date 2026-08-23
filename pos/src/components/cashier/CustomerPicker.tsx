@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { cashierApi } from '../../offline/cashierApi';
 import type { PosCustomer } from '../../types';
+import { useDragScroll } from '../../hooks/useDragScroll';
 
 interface Props {
   onClose: () => void;
@@ -16,6 +17,7 @@ export function CustomerPicker({ onClose, onSelect, currentId }: Props) {
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const listRef = useDragScroll<HTMLUListElement>();
 
   async function search(term = q) {
     setList(await cashierApi.listCustomers(term || undefined));
@@ -109,7 +111,7 @@ export function CustomerPicker({ onClose, onSelect, currentId }: Props) {
           </form>
         )}
 
-        <ul className="flex-1 overflow-auto">
+        <ul ref={listRef} className="flex-1 overflow-auto select-none">
           {list.map((c) => (
             <li key={c.id}>
               <button

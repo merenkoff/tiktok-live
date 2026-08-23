@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../../services/api';
 import type { MovementSummaryRow } from '../../../types';
+import { useDragScroll } from '../../../hooks/useDragScroll';
 
 function startOfDayIso(d: Date): string {
   const x = new Date(d);
@@ -24,6 +25,7 @@ export function StockMovementPage() {
   const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [rows, setRows] = useState<MovementSummaryRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const tableScrollRef = useDragScroll<HTMLDivElement>();
 
   async function load() {
     setError(null);
@@ -79,7 +81,7 @@ export function StockMovementPage() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <div className="rounded-[4px] border border-[#E0E0E0] bg-white overflow-x-auto">
+      <div ref={tableScrollRef} className="rounded-[4px] border border-[#E0E0E0] bg-white overflow-x-auto select-none">
         <table className="w-full text-sm min-w-[800px]">
           <thead className="bg-[#F5F5F5] text-left text-[#6E6E6E]">
             <tr>

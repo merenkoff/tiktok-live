@@ -1,5 +1,6 @@
 import { formatUah } from '../../lib/money';
 import type { CatalogItem } from '../../types';
+import { useDragScroll } from '../../hooks/useDragScroll';
 
 interface Props {
   productName: string;
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export function VariantPicker({ productName, variants, onPick, onClose }: Props) {
+  const listRef = useDragScroll<HTMLUListElement>();
   const sorted = [...variants].sort((a, b) => {
     if (a.quantity <= 0 && b.quantity > 0) return 1;
     if (a.quantity > 0 && b.quantity <= 0) return -1;
@@ -28,7 +30,7 @@ export function VariantPicker({ productName, variants, onPick, onClose }: Props)
             Закрити
           </button>
         </div>
-        <ul className="divide-y divide-sq-divider max-h-[60vh] overflow-auto">
+        <ul ref={listRef} className="divide-y divide-sq-divider max-h-[60vh] overflow-auto select-none">
           {sorted.map((item) => {
             const label = [item.color, item.size].filter(Boolean).join(' / ') || 'Стандарт';
             const oos = item.quantity <= 0;
