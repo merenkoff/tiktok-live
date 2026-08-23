@@ -7,6 +7,7 @@ import { useAuthStore } from '../../hooks/useAuth';
 import { AppRail } from '../../components/cashier/AppRail';
 import { BottomNav } from '../../components/cashier/BottomNav';
 import { OfflineStatusBanner } from '../../components/cashier/OfflineStatusBanner';
+import { useDragScroll } from '../../hooks/useDragScroll';
 
 const fieldClass =
   'rounded-sq border border-sq-divider bg-sq-bg px-3 py-2.5 text-sm text-sq-text w-full';
@@ -27,6 +28,7 @@ export function CustomersPage({ cashierShell }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<PosCustomer | null>(null);
   const [creating, setCreating] = useState(false);
+  const bodyRef = useDragScroll<HTMLDivElement>();
 
   async function reload(search = q) {
     setList(await cashierApi.listCustomers(search || undefined));
@@ -37,7 +39,10 @@ export function CustomersPage({ cashierShell }: Props) {
   }, []);
 
   const body = (
-    <div className={cashierShell ? 'flex-1 overflow-auto p-4 max-w-3xl mx-auto w-full' : 'space-y-4'}>
+    <div
+      ref={bodyRef}
+      className={cashierShell ? 'flex-1 overflow-auto p-4 max-w-3xl mx-auto w-full select-none' : 'space-y-4'}
+    >
       {cashierShell && (
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-lg font-semibold text-sq-text">Клієнти</h1>

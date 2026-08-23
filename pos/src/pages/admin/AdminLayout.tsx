@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../hooks/useAuth';
+import { useDragScroll } from '../../hooks/useDragScroll';
 
 const links = [
   { to: '/admin', end: true, label: 'Сьогодні' },
@@ -15,6 +16,7 @@ export function AdminLayout() {
   const auth = useAuthStore((s) => s.auth);
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
+  const navRef = useDragScroll<HTMLElement>();
 
   return (
     <div className="min-h-screen md:grid md:grid-cols-[240px_1fr] bg-[#F5F5F5] font-sans text-[#1A1A1A]">
@@ -24,7 +26,10 @@ export function AdminLayout() {
           <h1 className="text-lg font-semibold mt-1">{auth?.store.name}</h1>
           <p className="text-sm text-[#6E6E6E] mt-0.5">{auth?.staff.display_name}</p>
         </div>
-        <nav className="flex md:flex-col overflow-x-auto md:overflow-y-auto md:flex-1 p-2 gap-0.5">
+        <nav
+          ref={navRef}
+          className="flex md:flex-col overflow-x-auto md:overflow-y-auto md:flex-1 p-2 gap-0.5 select-none"
+        >
           {links.map((link) => (
             <NavLink
               key={link.to}
