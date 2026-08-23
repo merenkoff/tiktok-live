@@ -24,7 +24,7 @@ function todayDateString(timezone: string): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date());
 }
 
-function eachDate(from: string, to: string): string[] {
+export function eachDate(from: string, to: string): string[] {
   const [fy, fm, fd] = from.split('-').map(Number);
   const [ty, tm, td] = to.split('-').map(Number);
   let cursor = Date.UTC(fy, fm - 1, fd);
