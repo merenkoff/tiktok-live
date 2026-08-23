@@ -12,23 +12,32 @@
 </head>
 <body>
   <div class="bg-mesh" aria-hidden="true"></div>
-  <div class="bg-noise" aria-hidden="true"></div>
 
-  <header class="header">
-    <a href="/" class="logo">
-      <span class="logo__mark">●</span>
-      LiveShop
-    </a>
-    <a href="/#callback" class="header__cta">Замовити дзвінок</a>
-  </header>
+  <nav class="nav">
+    <div class="nav__inner">
+      <a href="/" class="logo">
+        <span class="logo__mark">●</span>
+        LiveShop
+      </a>
+      <ul class="nav__links">
+        <li><a href="/" class="nav__link">TikTok LIVE</a></li>
+        <li><a href="/pos" class="nav__link">POS каса</a></li>
+        <li><a href="/about" class="nav__link is-active">Про нас</a></li>
+      </ul>
+      <div class="nav__right">
+        <a href="/#callback" class="btn btn--primary btn--sm">Замовити дзвінок</a>
+      </div>
+    </div>
+  </nav>
 
   <main class="about">
-    <article class="about__card glass">
+    <article class="about__card card">
       <h1 class="about__title">Про сервіс</h1>
       <p class="about__lead">
         <strong>LiveShop</strong> — сервіс автоматизації продажів одягу в TikTok LIVE
-        для продавців у Україні. Система приймає замовлення з коментарів
-        ефіру, бронює товар і веде покупця в Telegram.
+        для продавців у Україні, а також POS-каса для офлайн-точок. Система приймає замовлення
+        з коментарів ефіру, бронює товар і веде покупця в Telegram — або працює як звичайна каса
+        на прилавку, онлайн і офлайн.
       </p>
 
       <section class="about__section">
@@ -46,6 +55,7 @@
           <li>Бронює товар за першим покупцем на обмежений час</li>
           <li>Допомагає оформити замовлення через Telegram-бот</li>
           <li>Надсилає сповіщення адміністраторам магазину</li>
+          <li>POS-каса зі штрихкодами, складом і офлайн-режимом для магазину</li>
         </ul>
       </section>
 
@@ -53,7 +63,8 @@
         <h2>Зв’язок</h2>
         <p>
           Щоб дізнатися більше або замовити демонстрацію сервісу,
-          залиште номер телефону на <a href="/#callback" class="about__link">головній сторінці</a>.
+          залиште номер телефону на <a href="/#callback" class="about__link">головній сторінці</a>
+          або на сторінці <a href="/pos" class="about__link">POS каси</a>.
         </p>
       </section>
 

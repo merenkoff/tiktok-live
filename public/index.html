@@ -12,15 +12,23 @@
 </head>
 <body>
   <div class="bg-mesh" aria-hidden="true"></div>
-  <div class="bg-noise" aria-hidden="true"></div>
 
-  <header class="header">
-    <a href="/" class="logo">
-      <span class="logo__mark">●</span>
-      LiveShop
-    </a>
-    <a href="#callback" class="header__cta">Замовити дзвінок</a>
-  </header>
+  <nav class="nav">
+    <div class="nav__inner">
+      <a href="/" class="logo">
+        <span class="logo__mark">●</span>
+        LiveShop
+      </a>
+      <ul class="nav__links">
+        <li><a href="/" class="nav__link is-active">TikTok LIVE</a></li>
+        <li><a href="/pos" class="nav__link">POS каса</a></li>
+        <li><a href="/about" class="nav__link">Про нас</a></li>
+      </ul>
+      <div class="nav__right">
+        <a href="#callback" class="btn btn--primary btn--sm">Замовити дзвінок</a>
+      </div>
+    </div>
+  </nav>
 
   <main>
     <section class="hero">
@@ -80,7 +88,7 @@
       </div>
 
       <div class="hero__visual">
-        <div class="live-panel glass">
+        <div class="live-panel dark-card">
           <div class="live-panel__header">
             <span class="live-badge"><span class="live-dot"></span> LIVE</span>
             <span class="live-panel__viewers">🔥 1.2k глядачів</span>
@@ -113,7 +121,7 @@
             </div>
             </div>
           </div>
-          <div class="live-panel__toast glass">
+          <div class="live-panel__toast">
             <span class="live-panel__toast-icon">📱</span>
             <div>
               <strong>Нове замовлення в Telegram</strong>
@@ -153,17 +161,17 @@
       </div>
     </section>
 
-    <section class="section proof">
+    <section class="section section--subtle proof">
       <div class="proof__grid">
-        <div class="proof__metric glass">
+        <div class="proof__metric card">
           <strong class="proof__number">1000+</strong>
           <span>замовлень оброблено</span>
         </div>
-        <div class="proof__metric glass">
+        <div class="proof__metric card">
           <strong class="proof__number">3–5</strong>
           <span>ефірів на тиждень у середнього продавця</span>
         </div>
-        <div class="proof__metric glass">
+        <div class="proof__metric card">
           <strong class="proof__number">5 хв</strong>
           <span>на оформлення після броні</span>
         </div>
@@ -173,8 +181,8 @@
 
     <section class="section before-after">
       <h2 class="section__title">До і після LiveShop</h2>
-      <div class="before-after__grid">
-        <div class="before-after__col before-after__col--before glass">
+      <div class="compare__grid">
+        <div class="compare__col compare__col--muted card">
           <h3>Без LiveShop</h3>
           <ul>
             <li><span>😵</span> 300+ коментарів — хтось точно без відповіді</li>
@@ -183,7 +191,7 @@
             <li><span>📦</span> TTN губляться в переписках</li>
           </ul>
         </div>
-        <div class="before-after__col before-after__col--after glass">
+        <div class="compare__col compare__col--accent card">
           <h3>З LiveShop</h3>
           <ul>
             <li><span>⚡</span> Бронь автоматично — перший написав, перший забронював</li>
@@ -195,20 +203,20 @@
       </div>
     </section>
 
-    <section class="section live-demo">
+    <section class="section section--subtle live-demo">
       <h2 class="section__title">Як це виглядає в ефірі</h2>
       <div class="live-demo__steps">
-        <article class="live-demo__step glass">
+        <article class="live-demo__step card">
           <div class="live-demo__num">1</div>
           <h3>Коментар у ефірі</h3>
           <p><code>A12 92</code> — система розуміє артикул і розмір</p>
         </article>
-        <article class="live-demo__step glass">
+        <article class="live-demo__step card">
           <div class="live-demo__num">2</div>
           <h3>Миттєва бронь</h3>
           <p>5 хвилин — ніхто інший не забере позицію</p>
         </article>
-        <article class="live-demo__step glass">
+        <article class="live-demo__step card">
           <div class="live-demo__num">3</div>
           <h3>Оформлення в Telegram</h3>
           <p>Покупець вводить дані — ти показуєш наступну модель</p>
@@ -219,28 +227,28 @@
     <section class="section features">
       <h2 class="section__title">Що всередині</h2>
       <div class="features__grid">
-        <article class="feature-row glass">
+        <article class="feature-row card">
           <span class="feature-row__icon">🎯</span>
           <div>
             <h3>Розумний парсер</h3>
             <p>UA · RU · міжнародні коди — як пишуть підписники</p>
           </div>
         </article>
-        <article class="feature-row glass">
+        <article class="feature-row card">
           <span class="feature-row__icon">⚡</span>
           <div>
             <h3>Миттєве бронювання</h3>
             <p>Без сварок у коментарях</p>
           </div>
         </article>
-        <article class="feature-row glass">
+        <article class="feature-row card">
           <span class="feature-row__icon">🤖</span>
           <div>
             <h3>Telegram-бот</h3>
             <p>Клієнт оформлює сам — ти ведеш ефір</p>
           </div>
         </article>
-        <article class="feature-row glass">
+        <article class="feature-row card">
           <span class="feature-row__icon">📬</span>
           <div>
             <h3>Нова Пошта</h3>
@@ -250,7 +258,7 @@
       </div>
     </section>
 
-    <section class="section audience">
+    <section class="section section--subtle audience">
       <div class="audience__inner">
         <div>
           <h2 class="section__title section__title--left">Для кого</h2>
@@ -261,7 +269,7 @@
             <li>Хто втомився від Excel після кожного ефіру</li>
           </ul>
         </div>
-        <div class="audience__quote glass">
+        <div class="audience__quote card">
           <blockquote>
             «Раніше після ефіру сиділа до півночі в Direct. Тепер замовлення збираються самі.»
           </blockquote>
@@ -273,27 +281,37 @@
     <section class="section faq">
       <h2 class="section__title">Питання</h2>
       <div class="faq__list">
-        <details class="faq__item glass">
+        <details class="faq__item card">
           <summary>Чи потрібен окремий TikTok-акаунт?</summary>
           <p>Ні. Підключаємо до вашого поточного ефіру — налаштування займає один дзвінок.</p>
         </details>
-        <details class="faq__item glass">
+        <details class="faq__item card">
           <summary>Як швидко можна почати?</summary>
           <p>Після демо — зазвичай 1–2 дні на підключення бота та тестовий ефір.</p>
         </details>
-        <details class="faq__item glass">
+        <details class="faq__item card">
           <summary>Чи працює з Нова Пошта?</summary>
           <p>Так. Збір відділень у боті; TTN — коли підключите API Нової Пошти.</p>
         </details>
-        <details class="faq__item glass">
+        <details class="faq__item card">
           <summary>Що якщо покупець не встиг оформити?</summary>
           <p>Бронь знімається через 5 хвилин — товар знову доступний в ефірі.</p>
         </details>
       </div>
     </section>
 
+    <section class="section section--subtle">
+      <div class="cross-sell card">
+        <div class="cross-sell__text">
+          <h3>Продаєш ще й офлайн?</h3>
+          <p>POS-каса для магазину одягу — штрихкоди, склад, оффлайн-режим на планшеті чи ПК.</p>
+        </div>
+        <a href="/pos" class="btn btn--outline">Дивитись POS каса →</a>
+      </div>
+    </section>
+
     <section class="section cta" id="callback">
-      <div class="cta__box glass">
+      <div class="cta__box card">
         <h2>Готові спробувати?</h2>
         <p>Залиш номер — покажемо на твоєму ефірі.</p>
 
