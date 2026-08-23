@@ -417,7 +417,8 @@ export function ProductsPage() {
                               <th className="py-1 pr-2 font-medium">Варіант</th>
                               <th className="py-1 pr-2 font-medium">Ціна</th>
                               <th className="py-1 pr-2 font-medium">Залишок</th>
-                              <th className="py-1 font-medium">Barcode</th>
+                              <th className="py-1 pr-2 font-medium">Barcode</th>
+                              <th className="py-1 font-medium">SKU</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -430,7 +431,8 @@ export function ProductsPage() {
                                   </td>
                                   <td className="py-2 pr-2">{formatUah(v.price_cents)}</td>
                                   <td className="py-2 pr-2">{v.quantity}</td>
-                                  <td className="py-2 font-mono text-xs">{v.barcode || '—'}</td>
+                                  <td className="py-2 pr-2 font-mono text-xs">{v.barcode || '—'}</td>
+                                  <td className="py-2 font-mono text-xs">{v.sku || '—'}</td>
                                 </tr>
                               ))}
                           </tbody>
