@@ -18,13 +18,13 @@ export function AdminLayout() {
 
   return (
     <div className="min-h-screen md:grid md:grid-cols-[240px_1fr] bg-[#F5F5F5] font-sans text-[#1A1A1A]">
-      <aside className="bg-[#F0F0F0] border-r border-[#E0E0E0] flex flex-col">
+      <aside className="bg-[#F0F0F0] border-r border-[#E0E0E0] flex flex-col md:sticky md:top-0 md:h-screen">
         <div className="px-4 py-5 border-b border-[#E0E0E0] bg-white">
           <p className="sq-section-label">Cloth POS</p>
           <h1 className="text-lg font-semibold mt-1">{auth?.store.name}</h1>
           <p className="text-sm text-[#6E6E6E] mt-0.5">{auth?.staff.display_name}</p>
         </div>
-        <nav className="flex md:flex-col overflow-x-auto p-2 gap-0.5">
+        <nav className="flex md:flex-col overflow-x-auto md:overflow-y-auto md:flex-1 p-2 gap-0.5">
           {links.map((link) => (
             <NavLink
               key={link.to}
