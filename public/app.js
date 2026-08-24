@@ -143,7 +143,37 @@ function initParallax() {
   });
 }
 
+function initDownloadOsDetect() {
+  const cards = document.querySelectorAll('.download-card');
+  if (!cards.length) return;
+
+  const ua = navigator.userAgent || '';
+  const platform = navigator.platform || '';
+  let os = null;
+
+  if (/Win/i.test(platform) || /Windows/i.test(ua)) {
+    os = 'windows';
+  } else if (/Mac/i.test(platform) || /Macintosh/i.test(ua)) {
+    os = 'mac';
+  } else if (/Linux/i.test(platform) && !/Android/i.test(ua)) {
+    os = 'linux';
+  }
+
+  if (!os) return;
+
+  cards.forEach((card) => {
+    if (card.dataset.os === os) {
+      card.classList.add('is-recommended');
+      const badge = document.createElement('span');
+      badge.className = 'download-card__badge';
+      badge.textContent = 'Рекомендовано для твоєї ОС';
+      card.insertBefore(badge, card.firstChild);
+    }
+  });
+}
+
 initLiveFeedScroll();
 initStickyCta();
 initReveal();
 initParallax();
+initDownloadOsDetect();

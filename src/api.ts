@@ -94,7 +94,7 @@ export async function createServer(): Promise<FastifyInstance> {
   fastify.register(async (fastify) => {
     fastify.addHook('preHandler', async (request, reply) => {
       // Skip auth для публічних маршрутів
-      const publicRoutes = ['/', '/about', '/health', '/api/leads', '/api/admin/leads', '/styles.css', '/app.js'];
+      const publicRoutes = ['/', '/about', '/pos', '/health', '/api/leads', '/api/admin/leads', '/styles.css', '/app.js'];
       const path = request.url.split('?')[0];
       
       if (publicRoutes.includes(path)) {
@@ -120,6 +120,11 @@ export async function createServer(): Promise<FastifyInstance> {
 
   fastify.get('/about', async (_request, reply) => {
     const html = await readFile(join(publicDir, 'about.html'), 'utf-8');
+    return reply.type('text/html; charset=utf-8').send(html);
+  });
+
+  fastify.get('/pos', async (_request, reply) => {
+    const html = await readFile(join(publicDir, 'pos.html'), 'utf-8');
     return reply.type('text/html; charset=utf-8').send(html);
   });
 
