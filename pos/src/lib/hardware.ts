@@ -7,6 +7,8 @@ export interface HardwareDevice {
   vendor_id: number;
   product_id: number;
   name: string | null;
+  manufacturer: string | null;
+  product: string | null;
   kind: DeviceKind;
   recognized: boolean;
   driver_status: DriverStatus;

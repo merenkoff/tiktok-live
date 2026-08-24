@@ -7,12 +7,18 @@ pub struct KnownDevice {
     pub kind: DeviceKind,
 }
 
-/// Recognized scanner/printer VID:PID pairs. Empty until real hardware is
-/// tested — do not guess IDs here, wrong names are worse than "unknown".
+/// Recognized scanner/printer VID:PID pairs. Do not guess IDs here — wrong
+/// names are worse than "unknown". Only add a pair after it's been seen on
+/// real hardware (e.g. via `system_profiler SPUSBDataType` on macOS).
 ///
 /// Add entries as:
 /// KnownDevice { vendor_id: 0x0000, product_id: 0x0000, name: "Vendor Model", kind: DeviceKind::Scanner },
-pub static KNOWN_DEVICES: &[KnownDevice] = &[];
+pub static KNOWN_DEVICES: &[KnownDevice] = &[KnownDevice {
+    vendor_id: 0x0581,
+    product_id: 0x0115,
+    name: "LWTEK USB Barcode Scanner",
+    kind: DeviceKind::Scanner,
+}];
 
 pub fn lookup(vendor_id: u16, product_id: u16) -> Option<&'static KnownDevice> {
     KNOWN_DEVICES
