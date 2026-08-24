@@ -1,12 +1,23 @@
 mod hardware;
 
+// WKWebView on macOS silently no-ops on the JS `window.print()` call (no
+// native print delegate wired up), so the PDF-fallback print path routes
+// through this command there instead — it drives the same print pipeline
+// via AppKit. Windows/Linux keep using `window.print()` directly, where it
+// works fine.
+#[tauri::command]
+fn print_webview(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.print().map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             hardware::list_hardware,
             hardware::os_printers::list_printers,
-            hardware::receipt::print_receipt
+            hardware::receipt::print_receipt,
+            print_webview
         ])
         .setup(|_app| {
             #[cfg(not(debug_assertions))]
