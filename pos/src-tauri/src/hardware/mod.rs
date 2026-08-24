@@ -1,4 +1,6 @@
 mod catalog;
+pub mod os_printers;
+pub mod receipt;
 
 use hidapi::HidApi;
 use serde::Serialize;

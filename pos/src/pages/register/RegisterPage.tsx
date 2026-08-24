@@ -5,6 +5,9 @@ import { useAuthStore } from '../../hooks/useAuth';
 import { useCartStore } from '../../hooks/useCart';
 import { useDragScroll } from '../../hooks/useDragScroll';
 import { formatUah } from '../../lib/money';
+import { printReceipt } from '../../lib/printer';
+import { buildReceiptPayload } from '../../lib/receipt';
+import { getMeta } from '../../offline/db';
 import type { CatalogItem, PosTag, SaleDetail } from '../../types';
 import { CheckoutModal } from '../../components/CheckoutModal';
 import { BarcodeScanner } from '../../components/BarcodeScanner';
@@ -66,6 +69,8 @@ export function RegisterPage() {
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [paying, setPaying] = useState(false);
   const [success, setSuccess] = useState<SaleDetail | null>(null);
+  const [printing, setPrinting] = useState(false);
+  const [printStatus, setPrintStatus] = useState<string | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [picker, setPicker] = useState<CatalogItem[] | null>(null);
   const wedgeRef = useRef<HTMLInputElement>(null);
@@ -202,6 +207,7 @@ export function RegisterPage() {
       setCheckoutOpen(false);
       setMobileCartOpen(false);
       setSuccess(sale);
+      setPrintStatus(null);
       await loadCatalog(
         currentTag && !query ? { tag_id: currentTag.id } : { q: query || undefined }
       );
@@ -216,6 +222,25 @@ export function RegisterPage() {
       setBanner(message);
     } finally {
       setPaying(false);
+    }
+  }
+
+  async function printSuccessReceipt() {
+    if (!success) return;
+    setPrinting(true);
+    setPrintStatus(null);
+    try {
+      const printerName = await getMeta<string>('receiptPrinterName');
+      if (!printerName) {
+        setPrintStatus('Принтер не обрано. Налаштуйте в "Обладнання".');
+        return;
+      }
+      await printReceipt(printerName, buildReceiptPayload(success, auth?.store.name ?? ''));
+      setPrintStatus('Чек надіслано на друк');
+    } catch {
+      setPrintStatus('Не вдалося надрукувати чек');
+    } finally {
+      setPrinting(false);
     }
   }
 
@@ -242,6 +267,15 @@ export function RegisterPage() {
           >
             Новий чек
           </button>
+          <button
+            type="button"
+            className="mt-3 w-full py-3 text-sm font-medium text-sq-blue disabled:opacity-50"
+            onClick={() => void printSuccessReceipt()}
+            disabled={printing}
+          >
+            {printing ? 'Друк…' : 'Друкувати чек'}
+          </button>
+          {printStatus && <p className="text-sq-secondary text-sm mt-1">{printStatus}</p>}
         </div>
       </div>
     );

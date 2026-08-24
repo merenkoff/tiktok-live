@@ -3,7 +3,11 @@ mod hardware;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![hardware::list_hardware])
+        .invoke_handler(tauri::generate_handler![
+            hardware::list_hardware,
+            hardware::os_printers::list_printers,
+            hardware::receipt::print_receipt
+        ])
         .setup(|_app| {
             #[cfg(not(debug_assertions))]
             {

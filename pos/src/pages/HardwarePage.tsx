@@ -1,10 +1,37 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Printer, RefreshCw, ScanLine, Usb } from 'lucide-react';
 import { HardwareDevice, listHardware } from '../lib/hardware';
+import { PrinterInfo, listPrinters, printReceipt } from '../lib/printer';
+import { getMeta, setMeta } from '../offline/db';
 import { useAuthStore } from '../hooks/useAuth';
 import { AppRail } from '../components/cashier/AppRail';
 import { BottomNav } from '../components/cashier/BottomNav';
 import { OfflineStatusBanner } from '../components/cashier/OfflineStatusBanner';
+
+const RECEIPT_PRINTER_META_KEY = 'receiptPrinterName';
+
+function testReceipt(storeName: string) {
+  return {
+    store_name: storeName,
+    receipt_number: 'ТЕСТ',
+    created_at: new Date().toLocaleString('uk-UA'),
+    staff_name: 'Тест',
+    customer_name: null,
+    items: [
+      {
+        name: 'Тестовий товар',
+        variant_label: 'M',
+        quantity: 1,
+        unit_price_cents: 10000,
+        line_total_cents: 10000,
+      },
+    ],
+    subtotal_cents: 10000,
+    discount_cents: null,
+    total_cents: 10000,
+    payments: [{ method: 'cash', amount_cents: 10000 }],
+  };
+}
 
 const kindIcon = {
   scanner: ScanLine,
@@ -25,9 +52,17 @@ function formatId(value: number) {
 export function HardwarePage() {
   const logout = useAuthStore((s) => s.logout);
   const role = useAuthStore((s) => s.role());
+  const storeName = useAuthStore((s) => s.auth?.store.name) ?? '';
   const [devices, setDevices] = useState<HardwareDevice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [printers, setPrinters] = useState<PrinterInfo[]>([]);
+  const [selectedPrinter, setSelectedPrinter] = useState<string | null>(null);
+  const [printersLoading, setPrintersLoading] = useState(true);
+  const [printersError, setPrintersError] = useState<string | null>(null);
+  const [testStatus, setTestStatus] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
 
   const refresh = useCallback(() => {
     setLoading(true);
@@ -38,9 +73,40 @@ export function HardwarePage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const refreshPrinters = useCallback(() => {
+    setPrintersLoading(true);
+    setPrintersError(null);
+    listPrinters()
+      .then(setPrinters)
+      .catch(() => setPrintersError('Не вдалося отримати список принтерів.'))
+      .finally(() => setPrintersLoading(false));
+  }, []);
+
   useEffect(() => {
     refresh();
-  }, [refresh]);
+    refreshPrinters();
+    void getMeta<string>(RECEIPT_PRINTER_META_KEY).then((name) => setSelectedPrinter(name ?? null));
+  }, [refresh, refreshPrinters]);
+
+  function selectPrinter(name: string) {
+    setSelectedPrinter(name);
+    setTestStatus(null);
+    void setMeta(RECEIPT_PRINTER_META_KEY, name);
+  }
+
+  async function testPrint() {
+    if (!selectedPrinter) return;
+    setTesting(true);
+    setTestStatus(null);
+    try {
+      await printReceipt(selectedPrinter, testReceipt(storeName));
+      setTestStatus('Надіслано на друк');
+    } catch {
+      setTestStatus('Помилка друку');
+    } finally {
+      setTesting(false);
+    }
+  }
 
   const body = (
     <div className="flex-1 overflow-auto p-4 max-w-3xl mx-auto w-full space-y-6 text-sq-text">
@@ -97,6 +163,75 @@ export function HardwarePage() {
           );
         })}
       </ul>
+
+      <div>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="sq-section-label">Принтер чеків</p>
+            <p className="text-sq-secondary text-sm">Оберіть, куди друкувати чеки продажу.</p>
+          </div>
+          <button
+            type="button"
+            onClick={refreshPrinters}
+            disabled={printersLoading}
+            className="min-h-11 px-3 flex items-center gap-2 text-sm text-sq-secondary hover:text-sq-text disabled:opacity-50"
+          >
+            <RefreshCw size={16} className={printersLoading ? 'animate-spin' : ''} />
+            Оновити
+          </button>
+        </div>
+
+        {printersError && <p className="text-sm text-red-600 mt-2">{printersError}</p>}
+
+        {!printersLoading && !printersError && printers.length === 0 && (
+          <p className="text-sm text-sq-secondary py-6 text-center bg-sq-surface border border-sq-divider rounded-sq mt-2">
+            Принтерів не знайдено. Встановіть принтер як системний і натисніть "Оновити".
+          </p>
+        )}
+
+        <ul className="space-y-2 mt-2">
+          {printers.map((printer) => (
+            <li key={printer.name}>
+              <button
+                type="button"
+                onClick={() => selectPrinter(printer.name)}
+                className={`w-full flex items-center gap-3 border rounded-sq p-4 text-left ${
+                  selectedPrinter === printer.name
+                    ? 'border-sq-blue bg-sq-surface'
+                    : 'border-sq-divider bg-sq-surface'
+                }`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full shrink-0 ${
+                    selectedPrinter === printer.name ? 'bg-sq-blue' : 'bg-sq-muted'
+                  }`}
+                  aria-hidden
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium truncate">{printer.name}</span>
+                  {printer.is_default && (
+                    <span className="block text-xs text-sq-muted">Системний за замовчуванням</span>
+                  )}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+
+        {selectedPrinter && (
+          <div className="mt-3 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => void testPrint()}
+              disabled={testing}
+              className="min-h-11 px-4 text-sm font-medium text-sq-blue disabled:opacity-50"
+            >
+              {testing ? 'Друк…' : 'Тестовий друк'}
+            </button>
+            {testStatus && <span className="text-sm text-sq-secondary">{testStatus}</span>}
+          </div>
+        )}
+      </div>
     </div>
   );
 
