@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Printer, RefreshCw, ScanLine, Usb } from 'lucide-react';
 import { HardwareDevice, listHardware } from '../lib/hardware';
 import { PrinterInfo, listPrinters, printReceipt } from '../lib/printer';
+import { usePrintableReceipt } from '../hooks/usePrintableReceipt';
 import { getMeta, setMeta } from '../offline/db';
 import { useAuthStore } from '../hooks/useAuth';
 import { AppRail } from '../components/cashier/AppRail';
@@ -63,6 +64,7 @@ export function HardwarePage() {
   const [printersError, setPrintersError] = useState<string | null>(null);
   const [testStatus, setTestStatus] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
+  const { printToPdf, printablePortal } = usePrintableReceipt();
 
   const refresh = useCallback(() => {
     setLoading(true);
@@ -184,9 +186,22 @@ export function HardwarePage() {
         {printersError && <p className="text-sm text-red-600 mt-2">{printersError}</p>}
 
         {!printersLoading && !printersError && printers.length === 0 && (
-          <p className="text-sm text-sq-secondary py-6 text-center bg-sq-surface border border-sq-divider rounded-sq mt-2">
-            Принтерів не знайдено. Встановіть принтер як системний і натисніть "Оновити".
-          </p>
+          <div className="py-6 text-center bg-sq-surface border border-sq-divider rounded-sq mt-2 px-4">
+            <p className="text-sm text-sq-secondary">
+              Принтерів не знайдено. Встановіть принтер як системний і натисніть "Оновити".
+            </p>
+            <p className="text-sm text-sq-secondary mt-2">
+              Немає чекового принтера? Друкуйте чеки через системний діалог друку — оберіть "Зберегти
+              як PDF" (на macOS і Windows цей варіант вбудований; на Linux залежить від дистрибутива).
+            </p>
+            <button
+              type="button"
+              onClick={() => printToPdf(testReceipt(storeName))}
+              className="mt-3 min-h-11 px-4 text-sm font-medium text-sq-blue"
+            >
+              Тестовий друк у PDF
+            </button>
+          </div>
         )}
 
         <ul className="space-y-2 mt-2">
@@ -245,6 +260,7 @@ export function HardwarePage() {
           <BottomNav isOwner={role === 'owner'} onLogout={() => void logout()} />
         </div>
       </div>
+      {printablePortal}
     </div>
   );
 }

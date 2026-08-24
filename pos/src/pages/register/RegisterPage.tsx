@@ -7,6 +7,7 @@ import { useDragScroll } from '../../hooks/useDragScroll';
 import { formatUah } from '../../lib/money';
 import { printReceipt } from '../../lib/printer';
 import { buildReceiptPayload } from '../../lib/receipt';
+import { usePrintableReceipt } from '../../hooks/usePrintableReceipt';
 import { getMeta } from '../../offline/db';
 import type { CatalogItem, PosTag, SaleDetail } from '../../types';
 import { CheckoutModal } from '../../components/CheckoutModal';
@@ -71,9 +72,11 @@ export function RegisterPage() {
   const [success, setSuccess] = useState<SaleDetail | null>(null);
   const [printing, setPrinting] = useState(false);
   const [printStatus, setPrintStatus] = useState<string | null>(null);
+  const [receiptPrinterName, setReceiptPrinterName] = useState<string | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [picker, setPicker] = useState<CatalogItem[] | null>(null);
   const wedgeRef = useRef<HTMLInputElement>(null);
+  const { printToPdf, printablePortal } = usePrintableReceipt();
 
   const currentTag = tagPath[tagPath.length - 1] ?? null;
   const flatTags = useMemo(() => flattenTags(tags), [tags]);
@@ -121,6 +124,11 @@ export function RegisterPage() {
   useEffect(() => {
     wedgeRef.current?.focus();
   }, [success, checkoutOpen, mobileCartOpen]);
+
+  useEffect(() => {
+    if (!success) return;
+    void getMeta<string>('receiptPrinterName').then((name) => setReceiptPrinterName(name ?? null));
+  }, [success]);
 
   const folderTiles: PosTag[] = useMemo(() => {
     if (query.trim()) return [];
@@ -226,22 +234,23 @@ export function RegisterPage() {
   }
 
   async function printSuccessReceipt() {
-    if (!success) return;
+    if (!success || !receiptPrinterName) return;
     setPrinting(true);
     setPrintStatus(null);
     try {
-      const printerName = await getMeta<string>('receiptPrinterName');
-      if (!printerName) {
-        setPrintStatus('Принтер не обрано. Налаштуйте в "Обладнання".');
-        return;
-      }
-      await printReceipt(printerName, buildReceiptPayload(success, auth?.store.name ?? ''));
+      await printReceipt(receiptPrinterName, buildReceiptPayload(success, auth?.store.name ?? ''));
       setPrintStatus('Чек надіслано на друк');
     } catch {
       setPrintStatus('Не вдалося надрукувати чек');
     } finally {
       setPrinting(false);
     }
+  }
+
+  function printSuccessReceiptAsPdf() {
+    if (!success) return;
+    setPrintStatus(null);
+    printToPdf(buildReceiptPayload(success, auth?.store.name ?? ''));
   }
 
   if (success) {
@@ -267,16 +276,26 @@ export function RegisterPage() {
           >
             Новий чек
           </button>
+          {receiptPrinterName && (
+            <button
+              type="button"
+              className="mt-3 w-full py-3 text-sm font-medium text-sq-blue disabled:opacity-50"
+              onClick={() => void printSuccessReceipt()}
+              disabled={printing}
+            >
+              {printing ? 'Друк…' : 'Друкувати чек'}
+            </button>
+          )}
           <button
             type="button"
-            className="mt-3 w-full py-3 text-sm font-medium text-sq-blue disabled:opacity-50"
-            onClick={() => void printSuccessReceipt()}
-            disabled={printing}
+            className={`w-full py-3 text-sm font-medium text-sq-blue ${receiptPrinterName ? '' : 'mt-3'}`}
+            onClick={printSuccessReceiptAsPdf}
           >
-            {printing ? 'Друк…' : 'Друкувати чек'}
+            {receiptPrinterName ? 'Зберегти чек як PDF' : 'Принтер не обрано — зберегти чек як PDF'}
           </button>
           {printStatus && <p className="text-sq-secondary text-sm mt-1">{printStatus}</p>}
         </div>
+        {printablePortal}
       </div>
     );
   }
