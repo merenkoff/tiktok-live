@@ -1,4 +1,4 @@
-import { Grid3X3, ListOrdered, LogOut, Package, Users } from 'lucide-react';
+import { Grid3X3, ListOrdered, LogOut, Package, ScanLine, Users } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { usePosShell } from '../../shell';
 
@@ -10,6 +10,7 @@ interface Props {
 export function AppRail({ isOwner, onLogout }: Props) {
   const { pathname } = useLocation();
   const showAdmin = usePosShell() === 'web' && isOwner;
+  const showHardware = usePosShell() === 'cashier';
 
   const itemClass = (active: boolean) =>
     `w-12 h-12 grid place-items-center rounded-sq transition-colors ${
@@ -49,6 +50,15 @@ export function AppRail({ isOwner, onLogout }: Props) {
               <Package size={22} strokeWidth={1.75} />
             </Link>
           </>
+        )}
+        {showHardware && (
+          <Link
+            to="/hardware"
+            className={itemClass(pathname.startsWith('/hardware'))}
+            title="Обладнання"
+          >
+            <ScanLine size={22} strokeWidth={1.75} />
+          </Link>
         )}
       </div>
       <button type="button" onClick={onLogout} className={itemClass(false)} title="Вихід">

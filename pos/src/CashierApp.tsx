@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuthStore } from './hooks/useAuth';
 import { LoginPage } from './pages/LoginPage';
 import { CustomersPage } from './pages/customers/CustomersPage';
+import { HardwarePage } from './pages/HardwarePage';
 import { RegisterPage } from './pages/register/RegisterPage';
 import { startOfflineRuntime } from './offline';
 
@@ -52,6 +53,14 @@ export function CashierApp() {
         element={
           <Guard>
             <CustomersPage cashierShell />
+          </Guard>
+        }
+      />
+      <Route
+        path="/hardware"
+        element={
+          <Guard>
+            <HardwarePage />
           </Guard>
         }
       />
