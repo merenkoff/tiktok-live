@@ -1,6 +1,6 @@
 [package]
 name = "cloth-pos"
-version = "1.0.0"
+version = "1.0.1"
 description = "Cloth POS cashier desktop shell"
 authors = ["you"]
 edition = "2021"
