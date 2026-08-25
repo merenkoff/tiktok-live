@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Printer, RefreshCw, ScanLine, Usb } from 'lucide-react';
+import { Download, Printer, RefreshCw, ScanLine, Usb } from 'lucide-react';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { HardwareDevice, listHardware } from '../lib/hardware';
 import { PrinterInfo, listPrinters, printReceipt } from '../lib/printer';
 import { usePrintableReceipt } from '../hooks/usePrintableReceipt';
+import { useUpdateStore } from '../hooks/useUpdateCheck';
 import { getMeta, setMeta } from '../offline/db';
 import { useAuthStore } from '../hooks/useAuth';
 import { AppRail } from '../components/cashier/AppRail';
@@ -65,6 +67,7 @@ export function HardwarePage() {
   const [testStatus, setTestStatus] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const { printToPdf, printablePortal } = usePrintableReceipt();
+  const updateInfo = useUpdateStore((s) => s.updateInfo);
 
   const refresh = useCallback(() => {
     setLoading(true);
@@ -128,6 +131,36 @@ export function HardwarePage() {
           <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
           Оновити
         </button>
+      </div>
+
+      <div className="bg-sq-surface border border-sq-divider rounded-sq p-4">
+        <p className="sq-section-label">Версія програми</p>
+        {updateInfo?.update_available ? (
+          <div className="mt-1 space-y-2">
+            <p className="text-sm">
+              Встановлено <span className="font-medium">{updateInfo.current_version}</span>,
+              доступна <span className="font-medium text-amber-600">{updateInfo.latest_version}</span>
+            </p>
+            {updateInfo.notes && (
+              <p className="text-xs text-sq-muted whitespace-pre-line line-clamp-3">{updateInfo.notes}</p>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                const url = updateInfo.download_url ?? updateInfo.release_url;
+                if (url) void openUrl(url);
+              }}
+              className="min-h-11 px-4 flex items-center gap-2 text-sm font-medium text-sq-blue"
+            >
+              <Download size={16} />
+              Завантажити оновлення
+            </button>
+          </div>
+        ) : (
+          <p className="text-sm text-sq-secondary mt-1">
+            {updateInfo ? `Встановлено ${updateInfo.current_version} — актуальна версія.` : 'Перевірка версії…'}
+          </p>
+        )}
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}

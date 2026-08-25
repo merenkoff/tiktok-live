@@ -1,4 +1,5 @@
 mod hardware;
+mod update;
 
 // WKWebView on macOS silently no-ops on the JS `window.print()` call (no
 // native print delegate wired up), so the PDF-fallback print path routes
@@ -13,10 +14,12 @@ fn print_webview(window: tauri::WebviewWindow) -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             hardware::list_hardware,
             hardware::os_printers::list_printers,
             hardware::receipt::print_receipt,
+            update::check_for_update,
             print_webview
         ])
         .setup(|_app| {

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuthStore } from './hooks/useAuth';
+import { useUpdateStore } from './hooks/useUpdateCheck';
 import { LoginPage } from './pages/LoginPage';
 import { CustomersPage } from './pages/customers/CustomersPage';
 import { HardwarePage } from './pages/HardwarePage';
@@ -24,6 +25,10 @@ export function CashierApp() {
 
   useEffect(() => {
     startOfflineRuntime();
+  }, []);
+
+  useEffect(() => {
+    useUpdateStore.getState().check();
   }, []);
 
   if (!bootstrapped) {

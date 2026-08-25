@@ -1,6 +1,7 @@
 import { Grid3X3, ListOrdered, LogOut, Package, ScanLine, Users } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { usePosShell } from '../../shell';
+import { useUpdateStore } from '../../hooks/useUpdateCheck';
 
 interface Props {
   isOwner: boolean;
@@ -11,6 +12,7 @@ export function AppRail({ isOwner, onLogout }: Props) {
   const { pathname } = useLocation();
   const showAdmin = usePosShell() === 'web' && isOwner;
   const showHardware = usePosShell() === 'cashier';
+  const updateAvailable = useUpdateStore((s) => s.updateInfo?.update_available ?? false);
 
   const itemClass = (active: boolean) =>
     `w-12 h-12 grid place-items-center rounded-sq transition-colors ${
@@ -54,10 +56,16 @@ export function AppRail({ isOwner, onLogout }: Props) {
         {showHardware && (
           <Link
             to="/hardware"
-            className={itemClass(pathname.startsWith('/hardware'))}
-            title="Обладнання"
+            className={`relative ${itemClass(pathname.startsWith('/hardware'))}`}
+            title={updateAvailable ? 'Обладнання · доступне оновлення' : 'Обладнання'}
           >
             <ScanLine size={22} strokeWidth={1.75} />
+            {updateAvailable && (
+              <span
+                className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500"
+                aria-hidden
+              />
+            )}
           </Link>
         )}
       </div>

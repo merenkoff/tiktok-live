@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Capability for the cashier window",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "opener:default"]
 }
