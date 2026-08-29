@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { api, isNetworkError } from '../services/api';
-import type { CatalogItem, PosCustomer, PosTag, SaleDetail } from '../types';
+import type { CatalogItem, PosCustomer, PosTag, SaleDetail, SalePaymentInput } from '../types';
 import { filterCatalog } from './catalog-filter';
 import {
   db,
@@ -13,7 +13,7 @@ import {
   type OutboxCustomerPayload,
   type OutboxSalePayload,
 } from './db';
-import { cacheCatalogImages, withCachedImages } from './photos';
+import { cacheCatalogImages, cacheQrImage, withCachedImages } from './photos';
 import { useOfflineStatus } from './status';
 
 let refreshInFlight: Promise<void> | null = null;
@@ -50,6 +50,7 @@ export async function refreshSnapshot(): Promise<void> {
       if (auth) await setMeta('storeId', auth.store.id);
     });
     void cacheCatalogImages(items);
+    void cacheQrImage(api.loadAuth()?.store.qr_payment?.static_image_url);
     await useOfflineStatus.getState().refreshPending();
   })().finally(() => {
     refreshInFlight = null;
@@ -290,7 +291,7 @@ async function applyLocalStockDelta(items: Array<{ variant_id: number; quantity:
 
 export async function completeSale(payload: {
   items: Array<{ variant_id: number; quantity: number }>;
-  payments: Array<{ method: 'cash' | 'card'; amount_cents: number }>;
+  payments: SalePaymentInput[];
   note?: string;
   cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
   customer_id?: number | null;

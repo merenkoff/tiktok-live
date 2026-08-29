@@ -5,6 +5,7 @@
 // src/pos/pos.controller.ts
 
 import type { FastifyInstance } from 'fastify';
+import type { PaymentMethod } from './types.js';
 import { ensurePosAuth, ensurePosOwner } from './core/auth.js';
 import * as authService from './auth.service.js';
 import * as productsService from './products.service.js';
@@ -1001,7 +1002,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
     try {
       const body = request.body as {
         items: { variant_id: number; quantity: number }[];
-        payments: { method: 'cash' | 'card'; amount_cents: number }[];
+        payments: { method: PaymentMethod; amount_cents: number; provider_ref?: string | null }[];
         note?: string;
         cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
         customer_id?: number | null;
@@ -1127,10 +1128,35 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   fastify.patch('/store', async (request, reply) => {
     const auth = await ensurePosOwner(request, reply);
     if (!auth) return;
-    const body = request.body as { name?: string };
+    const body = request.body as {
+      name?: string;
+      qr_payment_enabled?: boolean;
+      qr_payment_mode?: string;
+      qr_static_image_url?: string | null;
+      qr_purpose_template?: string | null;
+      qr_iban?: string | null;
+      qr_edrpou?: string | null;
+      qr_recipient?: string | null;
+    };
     try {
-      if (!body.name?.trim()) return reply.code(400).send({ error: 'name required' });
-      return await analyticsService.updateStore(auth.storeId, body.name);
+      const patch: analyticsService.StorePatch = {};
+      if (body.name !== undefined) {
+        if (!body.name.trim()) return reply.code(400).send({ error: 'name required' });
+        patch.name = body.name;
+      }
+      if (body.qr_payment_mode !== undefined) {
+        if (body.qr_payment_mode !== 'static' && body.qr_payment_mode !== 'dynamic') {
+          return reply.code(400).send({ error: 'qr_payment_mode must be static or dynamic' });
+        }
+        patch.qr_payment_mode = body.qr_payment_mode;
+      }
+      if (body.qr_payment_enabled !== undefined) patch.qr_payment_enabled = Boolean(body.qr_payment_enabled);
+      if (body.qr_static_image_url !== undefined) patch.qr_static_image_url = body.qr_static_image_url;
+      if (body.qr_purpose_template !== undefined) patch.qr_purpose_template = body.qr_purpose_template;
+      if (body.qr_iban !== undefined) patch.qr_iban = body.qr_iban;
+      if (body.qr_edrpou !== undefined) patch.qr_edrpou = body.qr_edrpou;
+      if (body.qr_recipient !== undefined) patch.qr_recipient = body.qr_recipient;
+      return await analyticsService.updateStore(auth.storeId, patch);
     } catch (error) {
       return reply.code(400).send({ error: errorMessage(error) });
     }

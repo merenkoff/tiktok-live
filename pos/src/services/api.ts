@@ -10,6 +10,9 @@ import type {
   PosTag,
   Product,
   SaleDetail,
+  SalePaymentInput,
+  StoreConfig,
+  StorePatch,
   SaleListItem,
   StaffMember,
   SalesSummary,
@@ -271,7 +274,7 @@ class PosApi {
 
   async completeSale(payload: {
     items: Array<{ variant_id: number; quantity: number }>;
-    payments: Array<{ method: 'cash' | 'card'; amount_cents: number }>;
+    payments: SalePaymentInput[];
     note?: string;
     cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
     customer_id?: number | null;
@@ -375,14 +378,14 @@ class PosApi {
     await this.client.patch(`/staff/${id}`, { is_active });
   }
 
-  async updateStore(name: string) {
-    const { data } = await this.client.patch('/store', { name });
-    return data as { id: number; name: string; slug: string; currency: string };
+  async updateStore(patch: StorePatch) {
+    const { data } = await this.client.patch('/store', patch);
+    return data as StoreConfig;
   }
 
   async getStore() {
     const { data } = await this.client.get('/store');
-    return data as { id: number; name: string; slug: string; currency: string; timezone: string };
+    return data as StoreConfig;
   }
 
   async listSuppliers(): Promise<Supplier[]> {

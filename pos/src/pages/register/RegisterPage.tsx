@@ -13,7 +13,7 @@ import { DEFAULT_RECEIPT_PAPER_WIDTH, ReceiptPaperWidth, printReceipt } from '..
 import { buildReceiptPayload } from '../../lib/receipt';
 import { usePrintableReceipt } from '../../hooks/usePrintableReceipt';
 import { getMeta } from '../../offline/db';
-import type { CatalogItem, PosTag, SaleDetail } from '../../types';
+import type { CatalogItem, PaymentMethod, PosTag, SaleDetail, SalePaymentInput } from '../../types';
 import { CheckoutModal } from '../../components/CheckoutModal';
 import { BarcodeScanner } from '../../components/BarcodeScanner';
 import { ProductTile } from '../../components/cashier/ProductTile';
@@ -25,8 +25,8 @@ import { VariantPicker } from '../../components/cashier/VariantPicker';
 import { MobileCartSheet } from '../../components/cashier/MobileCartSheet';
 import { OfflineStatusBanner } from '../../components/cashier/OfflineStatusBanner';
 
-function paymentLabel(method: 'cash' | 'card'): string {
-  return method === 'cash' ? 'Готівка' : 'Картка';
+function paymentLabel(method: PaymentMethod): string {
+  return method === 'cash' ? 'Готівка' : method === 'card' ? 'Картка' : 'QR-код';
 }
 
 function flattenTags(tags: PosTag[]): PosTag[] {
@@ -208,7 +208,7 @@ export function RegisterPage() {
     setPicker(variants);
   }
 
-  async function pay(payments: Array<{ method: 'cash' | 'card'; amount_cents: number }>) {
+  async function pay(payments: SalePaymentInput[]) {
     setPaying(true);
     try {
       const sale = await cashierApi.completeSale({

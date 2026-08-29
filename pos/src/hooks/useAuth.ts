@@ -45,6 +45,7 @@ async function afterOnlineLogin(
   persistStoreSlug(auth.store.slug);
   const offline = await import('../offline');
   await offline.saveStaffUnlock({ auth, secret, kind, loginHint });
+  void offline.cacheQrImage(auth.store.qr_payment?.static_image_url);
   void offline
     .refreshSnapshot()
     .then(() => offline.runSync())

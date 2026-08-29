@@ -9,3 +9,4 @@ export { useOfflineStatus } from './status';
 export { OfflineAuthError } from './errors';
 export { saveStaffUnlock, localPinLogin, localOwnerLogin, hasUnlockForAuth } from './auth-local';
 export { refreshSnapshot } from './repository';
+export { cacheQrImage } from './photos';

@@ -4,6 +4,53 @@
 
 export type PosRole = 'owner' | 'seller';
 
+export type PaymentMethod = 'cash' | 'card' | 'qr';
+
+export type QrPaymentMode = 'static' | 'dynamic';
+
+export interface SalePaymentInput {
+  method: PaymentMethod;
+  amount_cents: number;
+  /** Provider invoice id for a dynamic QR payment (Opendatabot). */
+  provider_ref?: string | null;
+}
+
+export interface QrPaymentConfig {
+  enabled: boolean;
+  mode: QrPaymentMode;
+  static_image_url: string | null;
+}
+
+/** Shape returned by GET /store and PATCH /store (owner settings). */
+export interface StoreConfig {
+  id: number;
+  name: string;
+  slug: string;
+  currency: string;
+  timezone: string;
+  qr_payment_enabled: boolean;
+  qr_payment_mode: QrPaymentMode;
+  qr_static_image_url: string | null;
+  qr_purpose_template: string | null;
+  qr_iban: string | null;
+  qr_edrpou: string | null;
+  qr_recipient: string | null;
+}
+
+export type StorePatch = Partial<
+  Pick<
+    StoreConfig,
+    | 'name'
+    | 'qr_payment_enabled'
+    | 'qr_payment_mode'
+    | 'qr_static_image_url'
+    | 'qr_purpose_template'
+    | 'qr_iban'
+    | 'qr_edrpou'
+    | 'qr_recipient'
+  >
+>;
+
 export interface AuthResponse {
   token: string;
   expires_at: string;
@@ -19,6 +66,8 @@ export interface AuthResponse {
     name: string;
     slug: string;
     currency: string;
+    /** Optional so a cashier build reading an older cached/offline auth still typechecks. */
+    qr_payment?: QrPaymentConfig;
   };
 }
 
@@ -114,7 +163,7 @@ export interface SaleDetail {
   }>;
   payments: Array<{
     id: number;
-    method: 'cash' | 'card';
+    method: PaymentMethod;
     amount_cents: number;
   }>;
   refunds: Array<{
@@ -158,7 +207,7 @@ export interface SalesSummary {
     revenue_cents: number;
   }>;
   payments: Array<{
-    method: 'cash' | 'card';
+    method: PaymentMethod;
     amount_cents: number;
   }>;
   daily: Array<{

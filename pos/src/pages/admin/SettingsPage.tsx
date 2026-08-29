@@ -5,25 +5,53 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { api } from '../../services/api';
 import { useAuthStore } from '../../hooks/useAuth';
+import { ProductPhotoField } from '../../components/ProductPhotoField';
+import type { QrPaymentMode, StoreConfig } from '../../types';
 
 export function SettingsPage() {
   const auth = useAuthStore((s) => s.auth);
   const [name, setName] = useState(auth?.store.name ?? '');
   const [slug, setSlug] = useState(auth?.store.slug ?? '');
+  const [qrEnabled, setQrEnabled] = useState(false);
+  const [qrMode, setQrMode] = useState<QrPaymentMode>('static');
+  const [qrImageUrl, setQrImageUrl] = useState<string | null>(null);
+  const [qrIban, setQrIban] = useState('');
+  const [qrEdrpou, setQrEdrpou] = useState('');
+  const [qrRecipient, setQrRecipient] = useState('');
+  const [qrPurposeTemplate, setQrPurposeTemplate] = useState('');
   const [message, setMessage] = useState<string | null>(null);
 
+  function hydrate(store: StoreConfig) {
+    setName(store.name);
+    setSlug(store.slug);
+    setQrEnabled(store.qr_payment_enabled);
+    setQrMode(store.qr_payment_mode);
+    setQrImageUrl(store.qr_static_image_url);
+    setQrIban(store.qr_iban ?? '');
+    setQrEdrpou(store.qr_edrpou ?? '');
+    setQrRecipient(store.qr_recipient ?? '');
+    setQrPurposeTemplate(store.qr_purpose_template ?? '');
+  }
+
   useEffect(() => {
-    void api.getStore().then((store) => {
-      setName(store.name);
-      setSlug(store.slug);
-    });
+    void api.getStore().then(hydrate);
   }, []);
 
   async function onSave(e: FormEvent) {
     e.preventDefault();
+    setMessage(null);
     try {
-      const store = await api.updateStore(name);
-      setName(store.name);
+      const store = await api.updateStore({
+        name,
+        qr_payment_enabled: qrEnabled,
+        qr_payment_mode: qrMode,
+        qr_static_image_url: qrImageUrl,
+        qr_iban: qrIban || null,
+        qr_edrpou: qrEdrpou || null,
+        qr_recipient: qrRecipient || null,
+        qr_purpose_template: qrPurposeTemplate || null,
+      });
+      hydrate(store);
       setMessage('Збережено');
     } catch {
       setMessage('Помилка збереження');
@@ -37,24 +65,107 @@ export function SettingsPage() {
         <p className="text-sq-secondary mt-1 text-sm">Базові параметри магазину.</p>
       </div>
 
-      <form onSubmit={onSave} className="bg-sq-surface border border-sq-divider rounded-sq p-5 space-y-4 shadow-sm">
-        <label className="block">
-          <span className="text-sm text-sq-secondary">Назва магазину</span>
-          <input
-            className="mt-1.5 w-full rounded-sq border border-sq-divider bg-sq-bg px-3 py-2.5 text-sq-text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+      <form onSubmit={onSave} className="space-y-6">
+        <div className="bg-sq-surface border border-sq-divider rounded-sq p-5 space-y-4 shadow-sm">
+          <label className="block">
+            <span className="text-sm text-sq-secondary">Назва магазину</span>
+            <input
+              className="mt-1.5 w-full rounded-sq border border-sq-divider bg-sq-bg px-3 py-2.5 text-sq-text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm text-sq-secondary">Код для PIN-входу</span>
+            <input
+              className="mt-1.5 w-full rounded-sq border border-sq-divider bg-sq-empty px-3 py-2.5 text-sq-secondary"
+              value={slug}
+              disabled
+            />
+          </label>
+          <p className="text-sm text-sq-secondary">Валюта: грн (UAH)</p>
+        </div>
+
+        <div className="bg-sq-surface border border-sq-divider rounded-sq p-5 space-y-4 shadow-sm">
+          <div>
+            <p className="sq-section-label">QR-код оплата</p>
+            <p className="text-sq-secondary text-sm mt-1">
+              Каса приймає оплату по QR без автоматичного підтвердження — касир перевіряє успішність
+              у застосунку покупця.
+            </p>
+          </div>
+
+          <label className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              checked={qrEnabled}
+              onChange={(e) => setQrEnabled(e.target.checked)}
+              className="h-4 w-4"
+            />
+            <span className="text-sm">Показувати «QR-код» на екрані оплати</span>
+          </label>
+
+          <label className="block">
+            <span className="text-sm text-sq-secondary">Режим</span>
+            <select
+              className="mt-1.5 w-full rounded-sq border border-sq-divider bg-sq-bg px-3 py-2.5 text-sq-text"
+              value={qrMode}
+              onChange={(e) => setQrMode(e.target.value as QrPaymentMode)}
+            >
+              <option value="static">Статичний — завантажене зображення QR</option>
+              <option value="dynamic">Динамічний — QR з точною сумою (Opendatabot)</option>
+            </select>
+          </label>
+
+          <ProductPhotoField
+            label="Зображення QR (статичний режим)"
+            value={qrImageUrl}
+            onChange={setQrImageUrl}
           />
-        </label>
-        <label className="block">
-          <span className="text-sm text-sq-secondary">Код для PIN-входу</span>
-          <input
-            className="mt-1.5 w-full rounded-sq border border-sq-divider bg-sq-empty px-3 py-2.5 text-sq-secondary"
-            value={slug}
-            disabled
-          />
-        </label>
-        <p className="text-sm text-sq-secondary">Валюта: грн (UAH)</p>
+
+          {qrMode === 'dynamic' && (
+            <div className="space-y-4 border-t border-sq-divider pt-4">
+              <label className="block">
+                <span className="text-sm text-sq-secondary">IBAN отримувача</span>
+                <input
+                  className="mt-1.5 w-full rounded-sq border border-sq-divider bg-sq-bg px-3 py-2.5 text-sq-text"
+                  value={qrIban}
+                  onChange={(e) => setQrIban(e.target.value)}
+                  placeholder="UA…"
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm text-sq-secondary">ЄДРПОУ / РНОКПП</span>
+                <input
+                  className="mt-1.5 w-full rounded-sq border border-sq-divider bg-sq-bg px-3 py-2.5 text-sq-text"
+                  value={qrEdrpou}
+                  onChange={(e) => setQrEdrpou(e.target.value)}
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm text-sq-secondary">Отримувач</span>
+                <input
+                  className="mt-1.5 w-full rounded-sq border border-sq-divider bg-sq-bg px-3 py-2.5 text-sq-text"
+                  value={qrRecipient}
+                  onChange={(e) => setQrRecipient(e.target.value)}
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm text-sq-secondary">Призначення платежу (шаблон)</span>
+                <input
+                  className="mt-1.5 w-full rounded-sq border border-sq-divider bg-sq-bg px-3 py-2.5 text-sq-text"
+                  value={qrPurposeTemplate}
+                  onChange={(e) => setQrPurposeTemplate(e.target.value)}
+                  placeholder="Оплата, чек {ref}, {store}"
+                />
+                <span className="text-xs text-sq-muted mt-1 block">
+                  Плейсхолдери: {'{ref}'} — номер чека, {'{store}'} — назва магазину.
+                </span>
+              </label>
+            </div>
+          )}
+        </div>
+
         {message && <p className="text-sm text-sq-blue font-medium">{message}</p>}
         <button type="submit" className="sq-btn-primary px-4 py-2.5">
           Зберегти

@@ -44,6 +44,20 @@ export async function cacheCatalogImages(items: CatalogItem[]): Promise<void> {
   }
 }
 
+/** Pre-cache the store's static QR image so the checkout QR step works offline. */
+export async function cacheQrImage(src: string | null | undefined): Promise<void> {
+  const cache = await openCache();
+  if (!cache) return;
+  const url = assetUrl(src);
+  if (!url || !/^https?:\/\//i.test(url)) return;
+  try {
+    if (await cache.match(url)) return;
+    await cache.add(url);
+  } catch {
+    /* falls back to the remote URL when online */
+  }
+}
+
 export async function displayImageUrl(src: string | null | undefined): Promise<string | null> {
   if (!src) return null;
   if (/^(blob:|data:)/i.test(src)) return src;

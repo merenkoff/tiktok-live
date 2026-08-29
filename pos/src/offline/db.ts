@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import Dexie, { type Table } from 'dexie';
-import type { CatalogItem, PosCustomer, PosRole } from '../types';
+import type { CatalogItem, PosCustomer, PosRole, QrPaymentMode, SalePaymentInput } from '../types';
 
 export interface MetaRow {
   key: string;
@@ -25,6 +25,10 @@ export interface StaffUnlockRow {
   hashB64: string;
   iterations: number;
   updatedAt: number;
+  /** QR payment config cached from AuthResponse for offline checkout (added later — optional on old rows). */
+  qrPaymentEnabled?: boolean;
+  qrPaymentMode?: QrPaymentMode;
+  qrStaticImageUrl?: string | null;
 }
 
 export type OutboxType = 'sale' | 'customer';
@@ -43,7 +47,7 @@ export interface OutboxCustomerPayload {
 export interface OutboxSalePayload {
   client_uuid: string;
   items: Array<{ variant_id: number; quantity: number }>;
-  payments: Array<{ method: 'cash' | 'card'; amount_cents: number }>;
+  payments: SalePaymentInput[];
   note?: string;
   cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
   customer_id: number | null;

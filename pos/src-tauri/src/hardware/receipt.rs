@@ -78,6 +78,7 @@ fn payment_label(method: &str) -> &str {
     match method {
         "cash" => "Готівка",
         "card" => "Картка",
+        "qr" => "QR-код",
         other => other,
     }
 }

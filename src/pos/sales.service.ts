@@ -128,7 +128,7 @@ export async function completeSale(params: {
   let paymentsTotal = 0;
   for (const payment of params.payments) {
     if (payment.amount_cents <= 0) throw new Error('Invalid payment amount');
-    if (payment.method !== 'cash' && payment.method !== 'card') {
+    if (payment.method !== 'cash' && payment.method !== 'card' && payment.method !== 'qr') {
       throw new Error('Invalid payment method');
     }
     paymentsTotal += payment.amount_cents;
@@ -260,20 +260,12 @@ export async function completeSale(params: {
       });
     }
 
-    let remaining = total;
     for (const payment of params.payments) {
-      const applied =
-        payment.method === 'cash'
-          ? Math.min(payment.amount_cents, Math.max(remaining, payment.amount_cents))
-          : Math.min(payment.amount_cents, remaining || payment.amount_cents);
-
       await client.query(
-        `INSERT INTO pos_payments (sale_id, store_id, method, amount_cents)
-         VALUES ($1, $2, $3, $4)`,
-        [saleId, params.storeId, payment.method, payment.amount_cents]
+        `INSERT INTO pos_payments (sale_id, store_id, method, amount_cents, provider_ref)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [saleId, params.storeId, payment.method, payment.amount_cents, payment.provider_ref ?? null]
       );
-      remaining -= Math.min(payment.amount_cents, remaining);
-      void applied;
     }
 
     await client.query('COMMIT');
