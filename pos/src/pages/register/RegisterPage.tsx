@@ -82,6 +82,8 @@ export function RegisterPage() {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [picker, setPicker] = useState<CatalogItem[] | null>(null);
   const wedgeRef = useRef<HTMLInputElement>(null);
+  // Guards auto-print against StrictMode / effect re-runs — keyed by receipt.
+  const autoPrintedRef = useRef<string | null>(null);
   const { printToPdf, printablePortal } = usePrintableReceipt();
   // Fresh draft id per checkout session — used as the QR payment reference.
   const [saleDraftId, setSaleDraftId] = useState('');
@@ -136,13 +138,47 @@ export function RegisterPage() {
     wedgeRef.current?.focus();
   }, [success, checkoutOpen, mobileCartOpen]);
 
+  // After a sale: load the station's receipt-printer config, then (if the store
+  // has auto-print on and a thermal printer is configured) silently print once.
+  // The thermal-vs-nothing decision is made from the resolved meta values here,
+  // not from the async React state, so there's no flash of the wrong path.
   useEffect(() => {
     if (!success) return;
-    void getMeta<string>('receiptPrinterName').then((name) => setReceiptPrinterName(name ?? null));
-    void getMeta<ReceiptPaperWidth>('receiptPaperWidthMm').then((mm) => {
-      if (mm === 58 || mm === 80) setReceiptPaperWidth(mm);
-    });
-  }, [success]);
+    let cancelled = false;
+    void (async () => {
+      const [name, mm] = await Promise.all([
+        getMeta<string>('receiptPrinterName'),
+        getMeta<ReceiptPaperWidth>('receiptPaperWidthMm'),
+      ]);
+      if (cancelled) return;
+      const printerName = name ?? null;
+      const paper: ReceiptPaperWidth = mm === 58 || mm === 80 ? mm : DEFAULT_RECEIPT_PAPER_WIDTH;
+      setReceiptPrinterName(printerName);
+      setReceiptPaperWidth(paper);
+
+      if (!(auth?.store.auto_print_receipt ?? false)) return;
+      if (!printerName) return; // web / desktop without a configured printer → no-op
+      const key = success.receipt_number || String(success.id);
+      if (autoPrintedRef.current === key) return;
+      autoPrintedRef.current = key;
+
+      setPrinting(true);
+      setPrintStatus(null);
+      try {
+        await printReceipt(printerName, buildReceiptPayload(success, auth?.store.name ?? ''), paper);
+        if (!cancelled) setPrintStatus('Чек надіслано на друк');
+      } catch (e) {
+        if (!cancelled) {
+          setPrintStatus(`Не вдалося надрукувати чек: ${typeof e === 'string' ? e : String(e)}`);
+        }
+      } finally {
+        if (!cancelled) setPrinting(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [success, auth?.store.auto_print_receipt, auth?.store.name]);
 
   const folderTiles: PosTag[] = useMemo(() => {
     if (query.trim()) return [];

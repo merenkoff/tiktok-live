@@ -4,7 +4,7 @@
 
 // src/pos/gtin/quota-providers.ts — parallel server-side lookups
 
-import { ingestGtinResults, getGtinCache } from './gtin-cache.service.js';
+import { ingestGtinResults, getGtinCache, getStoreGtinConfig } from './gtin-cache.service.js';
 import { normalizeGtin } from './normalize.js';
 import type { GtinHint, GtinLookupResult } from './types.js';
 import { lookupUpcDev } from './upc-dev.provider.js';
@@ -26,9 +26,10 @@ export async function lookupQuotaProviders(params: {
   const norm = normalizeGtin(params.code);
   if (!norm.ok) throw new Error(`Invalid GTIN: ${norm.reason}`);
 
+  const gtinConfig = await getStoreGtinConfig(params.storeId);
   const [upcitemdb, upcDev] = await Promise.all([
     lookupUpcitemdb(norm.gtin),
-    lookupUpcDev(norm.gtin),
+    lookupUpcDev(norm.gtin, gtinConfig),
   ]);
 
   const results: GtinLookupResult[] = [];

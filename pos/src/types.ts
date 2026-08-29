@@ -35,6 +35,11 @@ export interface StoreConfig {
   qr_iban: string | null;
   qr_edrpou: string | null;
   qr_recipient: string | null;
+  gtin_lookup_enabled: boolean;
+  /** Whether a paid-provider API key is stored — the key itself is never returned. */
+  gtin_api_key_set: boolean;
+  gtin_daily_limit: number | null;
+  auto_print_receipt: boolean;
 }
 
 export type StorePatch = Partial<
@@ -48,8 +53,14 @@ export type StorePatch = Partial<
     | 'qr_iban'
     | 'qr_edrpou'
     | 'qr_recipient'
+    | 'gtin_lookup_enabled'
+    | 'auto_print_receipt'
   >
->;
+> & {
+  /** write-only: non-empty string sets it, null/"" clears it, omitted keeps it */
+  gtin_api_key?: string | null;
+  gtin_daily_limit?: number | null;
+};
 
 export interface AuthResponse {
   token: string;
@@ -68,6 +79,7 @@ export interface AuthResponse {
     currency: string;
     /** Optional so a cashier build reading an older cached/offline auth still typechecks. */
     qr_payment?: QrPaymentConfig;
+    auto_print_receipt?: boolean;
   };
 }
 

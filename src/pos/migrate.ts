@@ -29,6 +29,7 @@ async function migrate(): Promise<void> {
     '010_pos_offline_sync.sql',
     '011_pos_qr_payment.sql',
     '012_pos_qr_confirmations.sql',
+    '013_pos_store_settings.sql',
   ];
   for (const file of files) {
     const migrationPath = path.join(migrationsDir, file);

@@ -72,6 +72,7 @@ export async function saveStaffUnlock(params: {
     qrPaymentEnabled: params.auth.store.qr_payment?.enabled ?? false,
     qrPaymentMode: params.auth.store.qr_payment?.mode ?? 'static',
     qrStaticImageUrl: params.auth.store.qr_payment?.static_image_url ?? null,
+    autoPrintReceipt: params.auth.store.auto_print_receipt ?? false,
   };
   await db.staffUnlock.put(row);
 }
@@ -115,6 +116,7 @@ function sessionFromUnlock(row: StaffUnlockRow, liveAuth: AuthResponse | null): 
         mode: row.qrPaymentMode ?? 'static',
         static_image_url: row.qrStaticImageUrl ?? null,
       },
+      auto_print_receipt: row.autoPrintReceipt ?? false,
     },
   };
 }

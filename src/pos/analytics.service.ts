@@ -186,6 +186,11 @@ function mapStore(store: Record<string, unknown>) {
     qr_iban: (store.qr_iban as string | null) ?? null,
     qr_edrpou: (store.qr_edrpou as string | null) ?? null,
     qr_recipient: (store.qr_recipient as string | null) ?? null,
+    gtin_lookup_enabled: Boolean(store.gtin_lookup_enabled),
+    // Never expose the raw key — only whether one is stored.
+    gtin_api_key_set: Boolean(store.gtin_api_key),
+    gtin_daily_limit: store.gtin_daily_limit == null ? null : Number(store.gtin_daily_limit),
+    auto_print_receipt: Boolean(store.auto_print_receipt),
   };
 }
 
@@ -198,6 +203,10 @@ export type StorePatch = {
   qr_iban?: string | null;
   qr_edrpou?: string | null;
   qr_recipient?: string | null;
+  gtin_lookup_enabled?: boolean;
+  gtin_api_key?: string | null;
+  gtin_daily_limit?: number | null;
+  auto_print_receipt?: boolean;
 };
 
 const STORE_PATCH_COLUMNS: Array<keyof StorePatch> = [
@@ -209,6 +218,10 @@ const STORE_PATCH_COLUMNS: Array<keyof StorePatch> = [
   'qr_iban',
   'qr_edrpou',
   'qr_recipient',
+  'gtin_lookup_enabled',
+  'gtin_api_key',
+  'gtin_daily_limit',
+  'auto_print_receipt',
 ];
 
 export async function getStore(storeId: number) {

@@ -1222,6 +1222,10 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
       qr_iban?: string | null;
       qr_edrpou?: string | null;
       qr_recipient?: string | null;
+      gtin_lookup_enabled?: boolean;
+      gtin_api_key?: string | null;
+      gtin_daily_limit?: number | null;
+      auto_print_receipt?: boolean;
     };
     try {
       const patch: analyticsService.StorePatch = {};
@@ -1241,6 +1245,24 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
       if (body.qr_iban !== undefined) patch.qr_iban = body.qr_iban;
       if (body.qr_edrpou !== undefined) patch.qr_edrpou = body.qr_edrpou;
       if (body.qr_recipient !== undefined) patch.qr_recipient = body.qr_recipient;
+
+      if (body.gtin_lookup_enabled !== undefined) patch.gtin_lookup_enabled = Boolean(body.gtin_lookup_enabled);
+      if (body.auto_print_receipt !== undefined) patch.auto_print_receipt = Boolean(body.auto_print_receipt);
+      // Secret: only a non-empty string sets it; explicit null / "" clears it; anything else leaves it unchanged.
+      if (typeof body.gtin_api_key === 'string' && body.gtin_api_key.trim()) {
+        patch.gtin_api_key = body.gtin_api_key.trim();
+      } else if (body.gtin_api_key === null || body.gtin_api_key === '') {
+        patch.gtin_api_key = null;
+      }
+      if (body.gtin_daily_limit === null) {
+        patch.gtin_daily_limit = null;
+      } else if (body.gtin_daily_limit !== undefined) {
+        const n = Number(body.gtin_daily_limit);
+        if (!Number.isInteger(n) || n <= 0) {
+          return reply.code(400).send({ error: 'gtin_daily_limit must be a positive integer' });
+        }
+        patch.gtin_daily_limit = n;
+      }
       return await analyticsService.updateStore(auth.storeId, patch);
     } catch (error) {
       return reply.code(400).send({ error: errorMessage(error) });
