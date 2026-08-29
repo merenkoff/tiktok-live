@@ -6,10 +6,17 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import 'dotenv/config';
 import { pool } from '../db.js';
 import { hashPassword } from '../pos/core/crypto.js';
-import { completeSale } from '../pos/sales.service.js';
+import { completeSale, getSale, listSales } from '../pos/sales.service.js';
 import { getStore, updateStore, getSalesSummary } from '../pos/analytics.service.js';
 import { getAuthByToken } from '../pos/core/auth.js';
-import { applyPurposeTemplate, createInvoice, QrProviderError } from '../pos/qr.service.js';
+import {
+  applyPurposeTemplate,
+  confirmQrPayment,
+  createInvoice,
+  QrProviderError,
+  verifyWebhookSignature,
+} from '../pos/qr.service.js';
+import crypto from 'crypto';
 
 const hasDb = Boolean(process.env.DB_HOST || process.env.DATABASE_URL);
 
@@ -30,6 +37,28 @@ describe('QR purpose template', () => {
   });
 });
 
+describe('QR webhook signature', () => {
+  const OLD = process.env.OPENDATABOT_QR_KEY;
+  afterAll(() => {
+    process.env.OPENDATABOT_QR_KEY = OLD;
+  });
+
+  it('accepts a valid HMAC-SHA256 hex signature and rejects a bad one', () => {
+    process.env.OPENDATABOT_QR_KEY = 'secret';
+    const body = Buffer.from('{"a":1}');
+    const sig = crypto.createHmac('sha256', 'secret').update(body).digest('hex');
+    expect(verifyWebhookSignature(body, sig)).toBe(true);
+    expect(verifyWebhookSignature(body, sig.replace(/.$/, '0'))).toBe(false);
+    expect(verifyWebhookSignature(body, undefined)).toBe(false);
+  });
+
+  it('rejects everything when no key is configured', () => {
+    delete process.env.OPENDATABOT_QR_KEY;
+    const body = Buffer.from('{}');
+    expect(verifyWebhookSignature(body, 'anything')).toBe(false);
+  });
+});
+
 describe.skipIf(!hasDb)('POS QR payment', () => {
   let storeId = 0;
   let staffId = 0;
@@ -46,6 +75,7 @@ describe.skipIf(!hasDb)('POS QR payment', () => {
       '005_pos_discounts_customers.sql',
       '010_pos_offline_sync.sql',
       '011_pos_qr_payment.sql',
+      '012_pos_qr_confirmations.sql',
     ]) {
       const sql = fs.readFileSync(path.join(dir, '../../migrations', file), 'utf-8');
       await pool.query(sql);
@@ -302,6 +332,70 @@ describe.skipIf(!hasDb)('POS QR payment', () => {
       await expect(createInvoice({ storeId, amountCents: 100, saleRef: '' })).rejects.toMatchObject({
         code: 'qr_not_configured',
       });
+    });
+  });
+
+  describe('confirmQrPayment', () => {
+    let saleId = 0;
+    let paymentId = 0;
+
+    beforeAll(async () => {
+      const sale = await completeSale({
+        storeId,
+        staffId,
+        items: [{ variant_id: variantId, quantity: 1 }],
+        payments: [{ method: 'qr', amount_cents: 1500, provider_ref: 'inv_confirm_1' }],
+      });
+      saleId = sale.id;
+      paymentId = sale.payments[0].id;
+    });
+
+    it('starts unconfirmed and shows on the sales list as pending', async () => {
+      const detail = await getSale(storeId, saleId);
+      expect(detail?.payments[0].confirmed_at).toBeNull();
+      const list = await listSales(storeId, { limit: 50 });
+      expect(list.find((s) => s.id === saleId)?.qr_pending).toBe(true);
+    });
+
+    it('confirms by provider_ref and is idempotent', async () => {
+      const first = await confirmQrPayment({ invoice: { id: 'inv_confirm_1' } });
+      expect(first).toMatchObject({ matched: true, by: 'provider_ref', paymentId });
+
+      const detail = await getSale(storeId, saleId);
+      expect(detail?.payments[0].confirmed_at).not.toBeNull();
+
+      const second = await confirmQrPayment({ invoice: { id: 'inv_confirm_1' } });
+      expect(second.matched).toBe(false);
+    });
+
+    it('does not touch unrelated payments on a miss', async () => {
+      const before = await pool.query(
+        `SELECT COUNT(*)::int AS n FROM pos_payments WHERE method = 'qr' AND confirmed_at IS NULL`
+      );
+      const res = await confirmQrPayment({ invoice: { id: 'inv_does_not_exist' } });
+      expect(res.matched).toBe(false);
+      const after = await pool.query(
+        `SELECT COUNT(*)::int AS n FROM pos_payments WHERE method = 'qr' AND confirmed_at IS NULL`
+      );
+      expect(after.rows[0].n).toBe(before.rows[0].n);
+    });
+
+    it('falls back to an amount match only when the provider reports matches.amount', async () => {
+      const sale = await completeSale({
+        storeId,
+        staffId,
+        items: [{ variant_id: variantId, quantity: 1 }],
+        payments: [{ method: 'qr', amount_cents: 4242 }],
+      });
+      // amount present but matches.amount not set → no confirmation
+      const skipped = await confirmQrPayment({ transaction: { amount: 42.42 } });
+      expect(skipped.matched).toBe(false);
+
+      const hit = await confirmQrPayment({
+        matches: { amount: true },
+        transaction: { amount: 42.42 },
+      });
+      expect(hit).toMatchObject({ matched: true, by: 'amount', saleId: sale.id });
     });
   });
 });

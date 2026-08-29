@@ -120,6 +120,7 @@ export function DashboardPage() {
       method: p.method,
       label: paymentLabel(p.method),
       amount_cents: p.amount_cents,
+      unconfirmed_cents: p.unconfirmed_cents ?? 0,
       pct: totalPayCents > 0 ? (p.amount_cents / totalPayCents) * 100 : 0,
       color: PAYMENT_BAR_COLORS[i % PAYMENT_BAR_COLORS.length],
     }));
@@ -245,6 +246,11 @@ export function DashboardPage() {
                   <p className="text-xs text-sq-secondary mt-1">
                     {p.label} · {p.pct.toFixed(0)}%
                   </p>
+                  {p.unconfirmed_cents > 0 && (
+                    <p className="text-xs text-amber-600 mt-0.5">
+                      не підтверджено {formatUah(p.unconfirmed_cents)}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>

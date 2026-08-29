@@ -1104,6 +1104,43 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
     }
   });
 
+  // Opendatabot payment webhook. No session auth — verified by an HMAC-SHA256
+  // `Signature` header over the raw body. Encapsulated so the buffer parser does
+  // not affect the other JSON routes. Always answers 2xx quickly (the provider
+  // retries on non-2xx).
+  await fastify.register(async (webhook) => {
+    webhook.addContentTypeParser(
+      'application/json',
+      { parseAs: 'buffer' },
+      (_req, payload, done) => {
+        try {
+          const parsed = payload.length ? JSON.parse(payload.toString('utf8')) : {};
+          done(null, { parsed, raw: payload });
+        } catch (err) {
+          done(err as Error, undefined);
+        }
+      }
+    );
+
+    webhook.post('/qr/webhook', async (request, reply) => {
+      const { parsed, raw } = (request.body ?? { parsed: {}, raw: Buffer.alloc(0) }) as {
+        parsed: unknown;
+        raw: Buffer;
+      };
+      const signature = request.headers['signature'];
+      if (!qrService.verifyWebhookSignature(raw, Array.isArray(signature) ? signature[0] : signature)) {
+        return reply.code(401).send({ error: 'bad signature' });
+      }
+      try {
+        const result = await qrService.confirmQrPayment(parsed);
+        return reply.code(200).send({ ok: true, matched: result.matched });
+      } catch (error) {
+        logger.error('QR webhook failed', { error: errorMessage(error) });
+        return reply.code(200).send({ ok: false });
+      }
+    });
+  });
+
   fastify.post('/sales/:id/void', async (request, reply) => {
     const auth = await ensurePosAuth(request, reply);
     if (!auth) return;

@@ -132,6 +132,8 @@ export interface SaleListItem {
   staff_name: string;
   customer_name?: string | null;
   created_at: string;
+  /** true when the sale has a QR payment not yet confirmed by the provider. */
+  qr_pending?: boolean;
 }
 
 export interface SaleDetail {
@@ -165,6 +167,8 @@ export interface SaleDetail {
     id: number;
     method: PaymentMethod;
     amount_cents: number;
+    /** Set once a QR payment is confirmed paid by the provider; null while pending. */
+    confirmed_at?: string | null;
   }>;
   refunds: Array<{
     id: number;
@@ -209,6 +213,7 @@ export interface SalesSummary {
   payments: Array<{
     method: PaymentMethod;
     amount_cents: number;
+    unconfirmed_cents: number;
   }>;
   daily: Array<{
     date: string;
