@@ -2,8 +2,10 @@
 name = "cloth-pos"
 version = "1.0.3"
 description = "Cloth POS cashier desktop shell"
-authors = ["you"]
+authors = ["Serhii Merenkov / Technologies LLC <mer.sergei@gmail.com>"]
 edition = "2021"
+license-file = "../../LICENSE"
+publish = false
 
 [lib]
 name = "cloth_pos_lib"

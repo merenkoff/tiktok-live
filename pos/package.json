@@ -3,6 +3,7 @@
   "private": true,
   "version": "1.0.3",
   "type": "module",
+  "license": "SEE LICENSE IN ../LICENSE",
   "scripts": {
     "dev": "vite",
     "dev:cashier": "vite --config vite.cashier.config.ts",

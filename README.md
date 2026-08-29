@@ -494,7 +494,24 @@ docker-compose restart app
 
 ## License
 
-MIT License - see LICENSE file
+**OwnNet Source License 1.1** (Source Available) — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+This is a source-available license, **not** an OSI Open Source license:
+
+- Free to use, study, modify, and share for any **non-commercial** purpose, and
+  in a business whose annual gross revenue is under **USD $100,000**.
+- **Commercial Use** — offering the software's functionality as a paid
+  hosted/SaaS service, or selling it as a product — requires a separate written
+  agreement. Contact **mer.sergei@gmail.com**.
+- **No Closed Systems**: no one may build remote kill switches, undocumented
+  data lock-in, anti-repair measures, or undisclosed user tracking on top of
+  this code.
+- Derivative works stay under this license (ShareAlike) and must credit:
+  *"Based on The Live Shop by Serhii Merenkov / Technologies LLC (own-net.com)"*.
+
+Contributions are accepted under the inbound terms in Section 6 of the LICENSE
+(you keep your copyright; the Steward gets the right to relicense, including
+commercially).
 
 ## Support
 

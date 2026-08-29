@@ -28,7 +28,8 @@ outputs/
     │   ├── QUICKSTART.md          ← 5-minute setup guide ⭐
     │   ├── DEPLOYMENT.md          ← Production setup
     │   ├── ARCHITECTURE.md        ← System design & diagrams
-    │   └── LICENSE (implicit)     ← MIT License
+    │   ├── LICENSE               ← OwnNet Source License 1.1 (source-available)
+    │   └── NOTICE                ← licensing summary & attribution line
     │
     └── 💻 Source Code (src/)
         ├── index.ts               ← Main entry point

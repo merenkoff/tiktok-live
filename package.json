@@ -27,8 +27,8 @@
     "telegram",
     "novaposhta"
   ],
-  "author": "",
-  "license": "MIT",
+  "author": "Serhii Merenkov / Technologies LLC",
+  "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
     "@fastify/cors": "^11.2.0",
     "@fastify/multipart": "^10.1.0",
