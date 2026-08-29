@@ -9,7 +9,14 @@ function loginErrorMessage(error: unknown): string {
   if (error instanceof OfflineAuthError) return error.message;
   if (axios.isAxiosError(error)) {
     if (!error.response) {
-      return 'Немає звʼязку з API. Перевірте, що бекенд запущено.';
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        return 'Сервер не відповів вчасно. Перевірте інтернет і спробуйте ще раз.';
+      }
+      const code = error.code ? ` (${error.code})` : '';
+      if (error.code && error.code.startsWith('ERR_CERT')) {
+        return `Помилка сертифіката${code}. Перевірте дату й час на компʼютері та оновлення Windows.`;
+      }
+      return `Немає звʼязку з API${code}. Перевірте інтернет, дату/час і оновлення Windows.`;
     }
     const apiError = error.response.data?.error;
     if (typeof apiError === 'string') return apiError;

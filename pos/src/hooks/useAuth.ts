@@ -2,6 +2,23 @@ import { create } from 'zustand';
 import { api, isNetworkError, isUnauthorized } from '../services/api';
 import type { AuthResponse, PosRole } from '../types';
 import { isOfflinePosEnabled } from '../offline/enabled';
+import { OfflineAuthError } from '../offline/errors';
+
+/**
+ * Мережевий вхід не вдався. Пробуємо локальний кеш; якщо його ще немає
+ * (перший запуск на цій касі) — показуємо СПРАВЖНЮ причину мережевої
+ * помилки, а не загальне "перший вхід потребує інтернету".
+ */
+async function fallbackToLocal(tryLocal: () => Promise<void>, networkError: unknown): Promise<void> {
+  try {
+    await tryLocal();
+  } catch (localError) {
+    if (localError instanceof OfflineAuthError && localError.code === 'no_cache') {
+      throw networkError;
+    }
+    throw localError;
+  }
+}
 
 const LAST_SLUG_KEY = 'pos_last_store_slug';
 
@@ -64,7 +81,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       set({ auth, isAuthenticated: true });
     } catch (error) {
       if (isOfflinePosEnabled() && isNetworkError(error)) {
-        await tryLocal();
+        await fallbackToLocal(tryLocal, error);
         return;
       }
       throw error;
@@ -87,7 +104,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       set({ auth, isAuthenticated: true });
     } catch (error) {
       if (isOfflinePosEnabled() && isNetworkError(error)) {
-        await tryLocal();
+        await fallbackToLocal(tryLocal, error);
         return;
       }
       throw error;
