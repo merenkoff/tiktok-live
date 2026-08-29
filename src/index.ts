@@ -14,6 +14,7 @@ import { registerUserRoutes } from './users/users.controller.js';
 import { registerSettingsRoutes } from './users/settings.controller.js';
 import { registerSessionRoutes } from './sessions/sessions.controller.js';
 import { registerPosPlugin } from './pos/pos.plugin.js';
+import { reconcileQrPayments } from './pos/qr.service.js';
 import { cleanupExpiredReservations } from './reservations.js';
 import { sessionManager } from './sessions/sessions.manager.js';
 
@@ -128,6 +129,15 @@ async function main(): Promise<void> {
         logger.info('✅ Daily cleanup completed');
       } catch (error) {
         logger.error('Daily cleanup error', { error });
+      }
+    });
+
+    // Reconcile QR payments against the provider's transaction feed daily
+    cron.schedule('15 3 * * *', async () => {
+      try {
+        await reconcileQrPayments();
+      } catch (error) {
+        logger.error('QR reconcile cron error', { error });
       }
     });
 

@@ -18,6 +18,12 @@ function saleStatusLabel(status: string): string {
   return SALE_STATUS_UK[status] ?? status;
 }
 
+const PAYMENT_LABEL_UK: Record<string, string> = {
+  cash: 'Готівка',
+  card: 'Картка',
+  qr: 'QR-код',
+};
+
 export function SalesPage() {
   const [sales, setSales] = useState<SaleListItem[]>([]);
   const [selected, setSelected] = useState<SaleDetail | null>(null);
@@ -101,7 +107,12 @@ export function SalesPage() {
               </div>
               <div className="text-right">
                 <p className="font-semibold text-sq-text">{formatUah(sale.total_cents)}</p>
-                <p className="text-xs text-sq-secondary">{saleStatusLabel(sale.status)}</p>
+                <p className="text-xs text-sq-secondary">
+                  {saleStatusLabel(sale.status)}
+                  {sale.qr_pending && (
+                    <span className="ml-2 text-amber-600">QR не підтверджено</span>
+                  )}
+                </p>
               </div>
             </button>
           ))}
@@ -151,6 +162,30 @@ export function SalesPage() {
                 ))}
               </ul>
               <p className="font-bold text-lg text-sq-text">Разом: {formatUah(selected.total_cents)}</p>
+
+              {selected.payments.length > 0 && (
+                <ul className="space-y-1.5 text-sm border-t border-sq-divider pt-3">
+                  {selected.payments.map((p) => (
+                    <li key={p.id} className="flex justify-between items-center gap-2">
+                      <span className="text-sq-secondary">
+                        {PAYMENT_LABEL_UK[p.method] ?? p.method}
+                        {p.method === 'qr' &&
+                          (p.confirmed_at ? (
+                            <span className="ml-2 text-xs font-semibold text-emerald-600">
+                              оплату підтверджено
+                            </span>
+                          ) : (
+                            <span className="ml-2 text-xs font-semibold text-amber-600">
+                              очікує підтвердження
+                            </span>
+                          ))}
+                      </span>
+                      <span className="font-medium text-sq-text">{formatUah(p.amount_cents)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
               <div className="flex flex-wrap gap-2">
                 {selected.status === 'completed' && (
                   <button type="button" onClick={() => void onVoid()} className="rounded-sq border border-red-300 bg-red-50 text-red-700 px-4 py-2 text-sm font-semibold">

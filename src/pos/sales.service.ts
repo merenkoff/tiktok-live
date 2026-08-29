@@ -354,6 +354,7 @@ export async function getSale(storeId: number, saleId: number) {
       id: Number(row.id),
       method: row.method,
       amount_cents: Number(row.amount_cents),
+      confirmed_at: row.confirmed_at ? new Date(row.confirmed_at).toISOString() : null,
     })),
     refunds: refunds.rows.map((row) => ({
       id: Number(row.id),
@@ -384,7 +385,11 @@ export async function listSales(
 
   params.push(limit);
   const result = await pool.query(
-    `SELECT s.*, st.display_name AS staff_name, c.name AS customer_name
+    `SELECT s.*, st.display_name AS staff_name, c.name AS customer_name,
+            EXISTS (
+              SELECT 1 FROM pos_payments p
+              WHERE p.sale_id = s.id AND p.method = 'qr' AND p.confirmed_at IS NULL
+            ) AS qr_pending
      FROM pos_sales s
      JOIN pos_staff st ON st.id = s.staff_id
      LEFT JOIN pos_customers c ON c.id = s.customer_id
@@ -403,6 +408,7 @@ export async function listSales(
     staff_name: sale.staff_name,
     customer_name: sale.customer_name ?? null,
     created_at: sale.created_at,
+    qr_pending: Boolean(sale.qr_pending),
   }));
 }
 

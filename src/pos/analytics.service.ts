@@ -21,7 +21,7 @@ export interface SalesSummary {
     qty_sold: number;
     revenue_cents: number;
   }>;
-  payments: Array<{ method: PaymentMethod; amount_cents: number }>;
+  payments: Array<{ method: PaymentMethod; amount_cents: number; unconfirmed_cents: number }>;
   daily: Array<{ date: string; gross_cents: number; net_cents: number; sales_count: number }>;
 }
 
@@ -103,7 +103,11 @@ export async function getSalesSummary(
 
   const paymentsResult = await pool.query(
     `${BOUNDS_CTE}
-     SELECT p.method, COALESCE(SUM(p.amount_cents), 0)::int AS amount_cents
+     SELECT p.method,
+            COALESCE(SUM(p.amount_cents), 0)::int AS amount_cents,
+            COALESCE(SUM(p.amount_cents) FILTER (
+              WHERE p.method = 'qr' AND p.confirmed_at IS NULL
+            ), 0)::int AS unconfirmed_cents
      FROM pos_payments p
      JOIN pos_sales s ON s.id = p.sale_id
      CROSS JOIN bounds b
@@ -162,6 +166,7 @@ export async function getSalesSummary(
     payments: paymentsResult.rows.map((p) => ({
       method: p.method as PaymentMethod,
       amount_cents: Number(p.amount_cents),
+      unconfirmed_cents: Number(p.unconfirmed_cents ?? 0),
     })),
     daily,
   };
