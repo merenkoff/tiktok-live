@@ -1,3 +1,7 @@
+// The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+// Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+// Commercial use requires a separate agreement: mer.sergei@gmail.com
+
 /** Public API origin for cross-domain POS deploy (no trailing slash). Empty = same origin. */
 export function apiOrigin(): string {
   const raw = (import.meta.env.VITE_API_BASE as string | undefined) ?? '';
