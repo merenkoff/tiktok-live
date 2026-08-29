@@ -79,20 +79,24 @@ class PosApi {
     }
   }
 
+  // Коротший таймаут: якщо каса справді офлайн, useAuth швидко впаде в
+  // локальний вхід замість очікування повних 15 с.
   async loginOwner(login: string, password: string): Promise<AuthResponse> {
-    const { data } = await this.client.post<AuthResponse>('/auth/owner/login', {
-      login,
-      password,
-    });
+    const { data } = await this.client.post<AuthResponse>(
+      '/auth/owner/login',
+      { login, password },
+      { timeout: 6000 }
+    );
     this.saveAuth(data);
     return data;
   }
 
   async loginPin(store_slug: string, pin: string): Promise<AuthResponse> {
-    const { data } = await this.client.post<AuthResponse>('/auth/staff/pin', {
-      store_slug,
-      pin,
-    });
+    const { data } = await this.client.post<AuthResponse>(
+      '/auth/staff/pin',
+      { store_slug, pin },
+      { timeout: 6000 }
+    );
     this.saveAuth(data);
     return data;
   }

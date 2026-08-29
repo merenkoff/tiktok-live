@@ -55,11 +55,9 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       set({ auth, isAuthenticated: true });
     };
 
-    if (isOfflinePosEnabled() && !navigator.onLine) {
-      await tryLocal();
-      return;
-    }
-
+    // Не довіряємо navigator.onLine (у WebView2 на Windows він відображає
+    // статус Windows NCSI, а не фактичний зв'язок). Завжди пробуємо мережу,
+    // у локальний кеш падаємо лише на реальній мережевій помилці.
     try {
       const auth = await api.loginOwner(login, password);
       await afterOnlineLogin(auth, password, 'password', login);
@@ -82,11 +80,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       set({ auth, isAuthenticated: true });
     };
 
-    if (isOfflinePosEnabled() && !navigator.onLine) {
-      await tryLocal();
-      return;
-    }
-
+    // Див. коментар у loginOwner: navigator.onLine у Tauri/WebView2 ненадійний.
     try {
       const auth = await api.loginPin(storeSlug, pin);
       await afterOnlineLogin(auth, pin, 'pin');
