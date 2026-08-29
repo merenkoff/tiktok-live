@@ -2,15 +2,33 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import 'dotenv/config';
 import { pool } from '../db.js';
 import { hashPassword } from '../pos/core/crypto.js';
 import { completeSale } from '../pos/sales.service.js';
 import { getStore, updateStore, getSalesSummary } from '../pos/analytics.service.js';
 import { getAuthByToken } from '../pos/core/auth.js';
+import { applyPurposeTemplate, createInvoice, QrProviderError } from '../pos/qr.service.js';
 
 const hasDb = Boolean(process.env.DB_HOST || process.env.DATABASE_URL);
+
+describe('QR purpose template', () => {
+  it('substitutes {ref} and {store} and collapses whitespace', () => {
+    expect(applyPurposeTemplate('Оплата, {store}, чек {ref}', { ref: 'A1', store: 'My Shop' })).toBe(
+      'Оплата, My Shop, чек A1'
+    );
+  });
+
+  it('falls back to a default template when none is set', () => {
+    expect(applyPurposeTemplate(null, { ref: 'X', store: 'S' })).toBe('Оплата, S, X');
+  });
+
+  it('truncates to 140 characters', () => {
+    const out = applyPurposeTemplate('{store}', { ref: '', store: 'x'.repeat(300) });
+    expect(out.length).toBe(140);
+  });
+});
 
 describe.skipIf(!hasDb)('POS QR payment', () => {
   let storeId = 0;
@@ -191,6 +209,99 @@ describe.skipIf(!hasDb)('POS QR payment', () => {
       enabled: true,
       mode: 'static',
       static_image_url: '/pos-uploads/qr2.png',
+    });
+  });
+
+  describe('createInvoice (Opendatabot proxy)', () => {
+    const OLD_ENV = { key: process.env.OPENDATABOT_QR_KEY, name: process.env.OPENDATABOT_QR_NAME };
+
+    beforeAll(async () => {
+      process.env.OPENDATABOT_QR_KEY = 'test-key';
+      process.env.OPENDATABOT_QR_NAME = 'test-name';
+      await updateStore(storeId, {
+        qr_iban: 'UA093052990000026007233566001',
+        qr_edrpou: '12345678',
+        qr_purpose_template: 'Оплата, {store}, {ref}',
+      });
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    afterAll(() => {
+      process.env.OPENDATABOT_QR_KEY = OLD_ENV.key;
+      process.env.OPENDATABOT_QR_NAME = OLD_ENV.name;
+    });
+
+    it('POSTs the invoice request and maps the response', async () => {
+      const fetchMock = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: 'inv_abc',
+          url: 'https://bank.gov.ua/qr/xyz',
+          qrcode: 'data:image/png;base64,AAAA',
+        }),
+      })) as unknown as typeof fetch;
+      vi.stubGlobal('fetch', fetchMock);
+
+      const inv = await createInvoice({ storeId, amountCents: 12345, saleRef: 'REF1' });
+      expect(inv).toEqual({
+        invoiceId: 'inv_abc',
+        url: 'https://bank.gov.ua/qr/xyz',
+        qrcode: 'data:image/png;base64,AAAA',
+      });
+
+      const [url, opts] = (fetchMock as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(url).toBe('https://iban.opendatabot.ua/api/invoice');
+      expect(opts.headers['x-client-key']).toBe('test-key');
+      expect(opts.headers['x-client-name']).toBe('test-name');
+      const sent = JSON.parse(opts.body);
+      expect(sent).toMatchObject({
+        code: '12345678',
+        iban: 'UA093052990000026007233566001',
+        amount: '123.45',
+        purpose: 'Оплата, QR Store, REF1',
+        responseMode: 'json',
+      });
+    });
+
+    it('throws qr_provider_unavailable on a non-2xx response', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}) })) as unknown as typeof fetch
+      );
+      await expect(createInvoice({ storeId, amountCents: 100, saleRef: '' })).rejects.toMatchObject({
+        code: 'qr_provider_unavailable',
+      });
+    });
+
+    it('throws qr_provider_unavailable when the request aborts', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => {
+          throw new DOMException('timeout', 'TimeoutError');
+        }) as unknown as typeof fetch
+      );
+      await expect(createInvoice({ storeId, amountCents: 100, saleRef: '' })).rejects.toBeInstanceOf(
+        QrProviderError
+      );
+    });
+
+    it('throws qr_no_credentials when env keys are missing', async () => {
+      delete process.env.OPENDATABOT_QR_KEY;
+      await expect(createInvoice({ storeId, amountCents: 100, saleRef: '' })).rejects.toMatchObject({
+        code: 'qr_no_credentials',
+      });
+      process.env.OPENDATABOT_QR_KEY = 'test-key';
+    });
+
+    it('throws qr_not_configured when IBAN/EDRPOU are missing', async () => {
+      await updateStore(storeId, { qr_iban: null, qr_edrpou: null });
+      await expect(createInvoice({ storeId, amountCents: 100, saleRef: '' })).rejects.toMatchObject({
+        code: 'qr_not_configured',
+      });
     });
   });
 });

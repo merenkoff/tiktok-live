@@ -388,6 +388,11 @@ class PosApi {
     return data as StoreConfig;
   }
 
+  async qrInvoice(amount_cents: number, sale_ref: string) {
+    const { data } = await this.client.post('/qr/invoice', { amount_cents, sale_ref });
+    return data as { qrcode_data_uri: string; url: string; invoice_id: string };
+  }
+
   async listSuppliers(): Promise<Supplier[]> {
     const { data } = await this.client.get<Supplier[]>('/suppliers');
     return data;

@@ -15,6 +15,7 @@ import * as stockReportsService from './stock-reports.service.js';
 import * as suppliersService from './suppliers.service.js';
 import * as salesService from './sales.service.js';
 import * as analyticsService from './analytics.service.js';
+import * as qrService from './qr.service.js';
 import * as tagsService from './tags.service.js';
 import * as customersService from './customers.service.js';
 import { saveProductImage } from './uploads.service.js';
@@ -1054,6 +1055,53 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
     const sale = await salesService.getSale(auth.storeId, Number(id));
     if (!sale) return reply.code(404).send({ error: 'Sale not found' });
     return sale;
+  });
+
+  // Generate a dynamic NBU QR (exact amount) for the current checkout via
+  // Opendatabot. Billed per call — the cashier UI only hits this on the QR step
+  // and caches the result per sale draft. A small per-store rate limit caps cost.
+  const qrInvoiceHits = new Map<number, number[]>();
+  fastify.post('/qr/invoice', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const body = request.body as { amount_cents?: number; sale_ref?: string };
+    const amountCents = Number(body.amount_cents);
+    if (!Number.isInteger(amountCents) || amountCents <= 0) {
+      return reply.code(400).send({ error: 'amount_cents must be a positive integer' });
+    }
+
+    const store = await analyticsService.getStore(auth.storeId);
+    if (!store?.qr_payment_enabled || store.qr_payment_mode !== 'dynamic') {
+      return reply.code(400).send({ error: 'dynamic QR payment is not enabled for this store' });
+    }
+
+    const now = Date.now();
+    const recent = (qrInvoiceHits.get(auth.storeId) ?? []).filter((t) => now - t < 60_000);
+    if (recent.length >= 20) {
+      return reply.code(429).send({ error: 'too many QR requests, retry shortly' });
+    }
+    recent.push(now);
+    qrInvoiceHits.set(auth.storeId, recent);
+
+    try {
+      const invoice = await qrService.createInvoice({
+        storeId: auth.storeId,
+        amountCents,
+        saleRef: typeof body.sale_ref === 'string' ? body.sale_ref : '',
+      });
+      return {
+        qrcode_data_uri: invoice.qrcode,
+        url: invoice.url,
+        invoice_id: invoice.invoiceId,
+      };
+    } catch (error) {
+      if (error instanceof qrService.QrProviderError) {
+        const status = error.code === 'qr_not_configured' ? 400 : 502;
+        return reply.code(status).send({ error: error.code });
+      }
+      logger.error('QR invoice failed', { error: errorMessage(error) });
+      return reply.code(502).send({ error: 'qr_provider_unavailable' });
+    }
   });
 
   fastify.post('/sales/:id/void', async (request, reply) => {

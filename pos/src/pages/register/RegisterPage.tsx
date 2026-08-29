@@ -83,6 +83,11 @@ export function RegisterPage() {
   const [picker, setPicker] = useState<CatalogItem[] | null>(null);
   const wedgeRef = useRef<HTMLInputElement>(null);
   const { printToPdf, printablePortal } = usePrintableReceipt();
+  // Fresh draft id per checkout session — used as the QR payment reference.
+  const [saleDraftId, setSaleDraftId] = useState('');
+  useEffect(() => {
+    if (checkoutOpen) setSaleDraftId(crypto.randomUUID());
+  }, [checkoutOpen]);
 
   const currentTag = tagPath[tagPath.length - 1] ?? null;
   const flatTags = useMemo(() => flattenTags(tags), [tags]);
@@ -499,6 +504,7 @@ export function RegisterPage() {
         <CheckoutModal
           totalCents={totalCents()}
           loading={paying}
+          saleRef={saleDraftId}
           onClose={() => setCheckoutOpen(false)}
           onConfirm={(payments) => void pay(payments)}
         />
