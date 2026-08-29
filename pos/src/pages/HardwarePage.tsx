@@ -2,7 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { Download, Printer, RefreshCw, ScanLine, Usb } from 'lucide-react';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { HardwareDevice, listHardware } from '../lib/hardware';
-import { PrinterInfo, listPrinters, printReceipt } from '../lib/printer';
+import {
+  DEFAULT_RECEIPT_PAPER_WIDTH,
+  PrinterInfo,
+  RECEIPT_PAPER_WIDTHS,
+  ReceiptPaperWidth,
+  listPrinters,
+  printReceipt,
+} from '../lib/printer';
 import { usePrintableReceipt } from '../hooks/usePrintableReceipt';
 import { useUpdateStore } from '../hooks/useUpdateCheck';
 import { getMeta, setMeta } from '../offline/db';
@@ -12,6 +19,7 @@ import { BottomNav } from '../components/cashier/BottomNav';
 import { OfflineStatusBanner } from '../components/cashier/OfflineStatusBanner';
 
 const RECEIPT_PRINTER_META_KEY = 'receiptPrinterName';
+const RECEIPT_PAPER_META_KEY = 'receiptPaperWidthMm';
 
 function testReceipt(storeName: string) {
   return {
@@ -66,6 +74,7 @@ export function HardwarePage() {
   const [printersError, setPrintersError] = useState<string | null>(null);
   const [testStatus, setTestStatus] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
+  const [paperWidth, setPaperWidth] = useState<ReceiptPaperWidth>(DEFAULT_RECEIPT_PAPER_WIDTH);
   const { printToPdf, printablePortal } = usePrintableReceipt();
   const updateInfo = useUpdateStore((s) => s.updateInfo);
 
@@ -91,6 +100,9 @@ export function HardwarePage() {
     refresh();
     refreshPrinters();
     void getMeta<string>(RECEIPT_PRINTER_META_KEY).then((name) => setSelectedPrinter(name ?? null));
+    void getMeta<ReceiptPaperWidth>(RECEIPT_PAPER_META_KEY).then((mm) => {
+      if (mm && RECEIPT_PAPER_WIDTHS.includes(mm)) setPaperWidth(mm);
+    });
   }, [refresh, refreshPrinters]);
 
   function selectPrinter(name: string) {
@@ -99,12 +111,18 @@ export function HardwarePage() {
     void setMeta(RECEIPT_PRINTER_META_KEY, name);
   }
 
+  function selectPaperWidth(mm: ReceiptPaperWidth) {
+    setPaperWidth(mm);
+    setTestStatus(null);
+    void setMeta(RECEIPT_PAPER_META_KEY, mm);
+  }
+
   async function testPrint() {
     if (!selectedPrinter) return;
     setTesting(true);
     setTestStatus(null);
     try {
-      await printReceipt(selectedPrinter, testReceipt(storeName));
+      await printReceipt(selectedPrinter, testReceipt(storeName), paperWidth);
       setTestStatus('Надіслано на друк');
     } catch (e) {
       setTestStatus(`Помилка друку: ${typeof e === 'string' ? e : String(e)}`);
@@ -267,17 +285,42 @@ export function HardwarePage() {
         </ul>
 
         {selectedPrinter && (
-          <div className="mt-3 flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => void testPrint()}
-              disabled={testing}
-              className="min-h-11 px-4 text-sm font-medium text-sq-blue disabled:opacity-50"
-            >
-              {testing ? 'Друк…' : 'Тестовий друк'}
-            </button>
-            {testStatus && <span className="text-sm text-sq-secondary">{testStatus}</span>}
-          </div>
+          <>
+            <div className="mt-4">
+              <p className="sq-section-label">Ширина стрічки</p>
+              <p className="text-sq-secondary text-sm">
+                Оберіть розмір рулону чекового принтера.
+              </p>
+              <div className="mt-2 inline-flex rounded-sq border border-sq-divider overflow-hidden">
+                {RECEIPT_PAPER_WIDTHS.map((mm) => (
+                  <button
+                    key={mm}
+                    type="button"
+                    onClick={() => selectPaperWidth(mm)}
+                    className={`min-h-11 px-4 text-sm font-medium ${
+                      paperWidth === mm
+                        ? 'bg-sq-blue text-white'
+                        : 'bg-sq-surface text-sq-text'
+                    }`}
+                  >
+                    {mm} мм
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-3 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => void testPrint()}
+                disabled={testing}
+                className="min-h-11 px-4 text-sm font-medium text-sq-blue disabled:opacity-50"
+              >
+                {testing ? 'Друк…' : 'Тестовий друк'}
+              </button>
+              {testStatus && <span className="text-sm text-sq-secondary">{testStatus}</span>}
+            </div>
+          </>
         )}
       </div>
     </div>

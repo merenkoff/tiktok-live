@@ -1,6 +1,9 @@
+use std::fs::OpenOptions;
+
 use escpos::driver::FileDriver;
 use escpos::printer::Printer;
-use escpos::utils::{JustifyMode, Protocol};
+use escpos::printer_options::PrinterOptions;
+use escpos::utils::{JustifyMode, PageCode, Protocol};
 use printers::common::base::job::PrinterJobOptions;
 use serde::Deserialize;
 
@@ -33,19 +36,37 @@ pub struct ReceiptData {
     pub payments: Vec<ReceiptPayment>,
 }
 
-// 58mm paper, the cheaper/more common Xprinter width.
-const LINE_WIDTH: usize = 32;
+// Characters per line for the two common thermal paper widths (Font A, ~12 dots
+// wide): 58mm rolls fit 32, 80mm rolls fit 48. The cashier picks the roll size
+// in Hardware settings; 58mm stays the default when nothing is stored.
+const CHARS_58MM: usize = 32;
+const CHARS_80MM: usize = 48;
+
+fn chars_per_line(paper_width_mm: Option<u16>) -> usize {
+    match paper_width_mm {
+        Some(mm) if mm >= 80 => CHARS_80MM,
+        _ => CHARS_58MM,
+    }
+}
+
+// Thermal printers don't speak UTF-8: without a code page the raw UTF-8 bytes
+// get rendered through the printer's default table (PC437) and Cyrillic comes
+// out as garbage. Windows-1251 is the one ESC/POS Cyrillic table in the escpos
+// crate that carries the full Ukrainian set (і, ї, є, ґ); PC866 there is missing
+// them. `Printer::init()` emits the matching `ESC t` select command, and every
+// `write` maps each char to its single Win-1251 byte.
+const RECEIPT_PAGE_CODE: PageCode = PageCode::WPC1251;
 
 fn money(cents: i64) -> String {
     format!("{:.2}", cents as f64 / 100.0)
 }
 
-fn divider() -> String {
-    "-".repeat(LINE_WIDTH)
+fn divider(width: usize) -> String {
+    "-".repeat(width)
 }
 
-fn two_col(left: &str, right: &str) -> String {
-    let space = LINE_WIDTH.saturating_sub(left.chars().count() + right.chars().count()).max(1);
+fn two_col(width: usize, left: &str, right: &str) -> String {
+    let space = width.saturating_sub(left.chars().count() + right.chars().count()).max(1);
     format!("{left}{}{right}", " ".repeat(space))
 }
 
@@ -57,13 +78,18 @@ fn payment_label(method: &str) -> &str {
     }
 }
 
-fn build_ticket(receipt: &ReceiptData) -> Result<Vec<u8>, String> {
+fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> {
     let dir = std::env::temp_dir();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let path = dir.join(format!("pos-receipt-{}.bin", now_nanos()));
 
-    let driver = FileDriver::open(&path).map_err(|e| e.to_string())?;
-    let mut printer = Printer::new(driver, Protocol::default(), None);
+    // `FileDriver::open` opens read+append and never creates the file, so it
+    // fails with "No such file or directory" on our fresh temp path. Create it.
+    let mut open_opts = OpenOptions::new();
+    open_opts.read(true).write(true).create(true).truncate(true);
+    let driver = FileDriver::open_with_options(&path, &open_opts).map_err(|e| e.to_string())?;
+    let options = PrinterOptions::new(Some(RECEIPT_PAGE_CODE), None, width as u8);
+    let mut printer = Printer::new(driver, Protocol::default(), Some(options));
 
     printer.init().map_err(|e| e.to_string())?;
     printer.justify(JustifyMode::CENTER).map_err(|e| e.to_string())?;
@@ -75,43 +101,44 @@ fn build_ticket(receipt: &ReceiptData) -> Result<Vec<u8>, String> {
         .map_err(|e| e.to_string())?;
     printer.writeln(&receipt.created_at).map_err(|e| e.to_string())?;
     printer.justify(JustifyMode::LEFT).map_err(|e| e.to_string())?;
-    printer.writeln(&divider()).map_err(|e| e.to_string())?;
+    printer.writeln(&divider(width)).map_err(|e| e.to_string())?;
 
     for item in &receipt.items {
         let title = format!("{} {}", item.name, item.variant_label);
         printer.writeln(&title).map_err(|e| e.to_string())?;
         let qty_line = two_col(
+            width,
             &format!("  {} x {}", item.quantity, money(item.unit_price_cents)),
             &money(item.line_total_cents),
         );
         printer.writeln(&qty_line).map_err(|e| e.to_string())?;
     }
 
-    printer.writeln(&divider()).map_err(|e| e.to_string())?;
+    printer.writeln(&divider(width)).map_err(|e| e.to_string())?;
     printer
-        .writeln(&two_col("Підсумок", &money(receipt.subtotal_cents)))
+        .writeln(&two_col(width, "Підсумок", &money(receipt.subtotal_cents)))
         .map_err(|e| e.to_string())?;
 
     if let Some(discount) = receipt.discount_cents.filter(|d| *d != 0) {
         printer
-            .writeln(&two_col("Знижка", &format!("-{}", money(discount))))
+            .writeln(&two_col(width, "Знижка", &format!("-{}", money(discount))))
             .map_err(|e| e.to_string())?;
     }
 
     printer.bold(true).map_err(|e| e.to_string())?;
     printer
-        .writeln(&two_col("РАЗОМ", &money(receipt.total_cents)))
+        .writeln(&two_col(width, "РАЗОМ", &money(receipt.total_cents)))
         .map_err(|e| e.to_string())?;
     printer.bold(false).map_err(|e| e.to_string())?;
-    printer.writeln(&divider()).map_err(|e| e.to_string())?;
+    printer.writeln(&divider(width)).map_err(|e| e.to_string())?;
 
     for payment in &receipt.payments {
         printer
-            .writeln(&two_col(payment_label(&payment.method), &money(payment.amount_cents)))
+            .writeln(&two_col(width, payment_label(&payment.method), &money(payment.amount_cents)))
             .map_err(|e| e.to_string())?;
     }
 
-    printer.writeln(&divider()).map_err(|e| e.to_string())?;
+    printer.writeln(&divider(width)).map_err(|e| e.to_string())?;
     printer
         .writeln(&format!("Касир: {}", receipt.staff_name))
         .map_err(|e| e.to_string())?;
@@ -152,8 +179,12 @@ const RAW_JOB_PROPS: &[(&str, &str)] = &[("document-format", "RAW")];
 const RAW_JOB_PROPS: &[(&str, &str)] = &[("document-format", "application/vnd.cups-raw")];
 
 #[tauri::command]
-pub fn print_receipt(printer_name: String, receipt: ReceiptData) -> Result<(), String> {
-    let bytes = build_ticket(&receipt)?;
+pub fn print_receipt(
+    printer_name: String,
+    receipt: ReceiptData,
+    paper_width_mm: Option<u16>,
+) -> Result<(), String> {
+    let bytes = build_ticket(&receipt, chars_per_line(paper_width_mm))?;
 
     let target = printers::get_printer_by_name(&printer_name)
         .ok_or_else(|| format!("Принтер \"{printer_name}\" не знайдено"))?;

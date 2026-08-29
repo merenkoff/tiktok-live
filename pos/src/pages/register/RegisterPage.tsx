@@ -5,7 +5,7 @@ import { useAuthStore } from '../../hooks/useAuth';
 import { useCartStore } from '../../hooks/useCart';
 import { useDragScroll } from '../../hooks/useDragScroll';
 import { formatUah } from '../../lib/money';
-import { printReceipt } from '../../lib/printer';
+import { DEFAULT_RECEIPT_PAPER_WIDTH, ReceiptPaperWidth, printReceipt } from '../../lib/printer';
 import { buildReceiptPayload } from '../../lib/receipt';
 import { usePrintableReceipt } from '../../hooks/usePrintableReceipt';
 import { getMeta } from '../../offline/db';
@@ -73,6 +73,8 @@ export function RegisterPage() {
   const [printing, setPrinting] = useState(false);
   const [printStatus, setPrintStatus] = useState<string | null>(null);
   const [receiptPrinterName, setReceiptPrinterName] = useState<string | null>(null);
+  const [receiptPaperWidth, setReceiptPaperWidth] =
+    useState<ReceiptPaperWidth>(DEFAULT_RECEIPT_PAPER_WIDTH);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [picker, setPicker] = useState<CatalogItem[] | null>(null);
   const wedgeRef = useRef<HTMLInputElement>(null);
@@ -128,6 +130,9 @@ export function RegisterPage() {
   useEffect(() => {
     if (!success) return;
     void getMeta<string>('receiptPrinterName').then((name) => setReceiptPrinterName(name ?? null));
+    void getMeta<ReceiptPaperWidth>('receiptPaperWidthMm').then((mm) => {
+      if (mm === 58 || mm === 80) setReceiptPaperWidth(mm);
+    });
   }, [success]);
 
   const folderTiles: PosTag[] = useMemo(() => {
@@ -238,7 +243,11 @@ export function RegisterPage() {
     setPrinting(true);
     setPrintStatus(null);
     try {
-      await printReceipt(receiptPrinterName, buildReceiptPayload(success, auth?.store.name ?? ''));
+      await printReceipt(
+        receiptPrinterName,
+        buildReceiptPayload(success, auth?.store.name ?? ''),
+        receiptPaperWidth,
+      );
       setPrintStatus('Чек надіслано на друк');
     } catch (e) {
       setPrintStatus(`Не вдалося надрукувати чек: ${typeof e === 'string' ? e : String(e)}`);

@@ -35,6 +35,16 @@ export function listPrinters(): Promise<PrinterInfo[]> {
   return invoke('list_printers');
 }
 
-export function printReceipt(printerName: string, receipt: ReceiptData): Promise<void> {
-  return invoke('print_receipt', { printerName, receipt });
+/** Thermal roll width in millimetres. 58mm ≈ 32 chars/line, 80mm ≈ 48. */
+export type ReceiptPaperWidth = 58 | 80;
+
+export const RECEIPT_PAPER_WIDTHS: ReceiptPaperWidth[] = [58, 80];
+export const DEFAULT_RECEIPT_PAPER_WIDTH: ReceiptPaperWidth = 58;
+
+export function printReceipt(
+  printerName: string,
+  receipt: ReceiptData,
+  paperWidthMm: ReceiptPaperWidth = DEFAULT_RECEIPT_PAPER_WIDTH,
+): Promise<void> {
+  return invoke('print_receipt', { printerName, receipt, paperWidthMm });
 }
