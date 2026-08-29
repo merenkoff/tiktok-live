@@ -1,3 +1,7 @@
+// The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+// Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+// Commercial use requires a separate agreement: mer.sergei@gmail.com
+
 import { create } from 'zustand';
 import { api, isNetworkError, isUnauthorized } from '../services/api';
 import type { AuthResponse, PosRole } from '../types';
@@ -41,6 +45,7 @@ async function afterOnlineLogin(
   persistStoreSlug(auth.store.slug);
   const offline = await import('../offline');
   await offline.saveStaffUnlock({ auth, secret, kind, loginHint });
+  void offline.cacheQrImage(auth.store.qr_payment?.static_image_url);
   void offline
     .refreshSnapshot()
     .then(() => offline.runSync())

@@ -1,3 +1,7 @@
+// The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+// Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+// Commercial use requires a separate agreement: mer.sergei@gmail.com
+
 import { useRef, useState } from 'react';
 import { ImagePlus, Trash2 } from 'lucide-react';
 import { api } from '../services/api';
@@ -6,9 +10,10 @@ import { assetUrl } from '../lib/urls';
 interface Props {
   value: string | null;
   onChange: (url: string | null) => void;
+  label?: string;
 }
 
-export function ProductPhotoField({ value, onChange }: Props) {
+export function ProductPhotoField({ value, onChange, label = 'Фото' }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +42,7 @@ export function ProductPhotoField({ value, onChange }: Props) {
 
   return (
     <div className="sm:col-span-2 space-y-2">
-      <p className="text-xs font-semibold text-sq-secondary">Фото</p>
+      <p className="text-xs font-semibold text-sq-secondary">{label}</p>
       <div className="flex flex-wrap items-start gap-3">
         <div className="w-28 h-28 rounded-sq border border-sq-divider bg-sq-bg overflow-hidden grid place-items-center shrink-0">
           {value ? (

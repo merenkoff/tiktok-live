@@ -1,3 +1,7 @@
+// The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+// Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+// Commercial use requires a separate agreement: mer.sergei@gmail.com
+
 // src/pos/migrate.ts — apply POS schema migration
 // Usage: npx tsx src/pos/migrate.ts
 
@@ -23,6 +27,7 @@ async function migrate(): Promise<void> {
     '008_pos_gtin_cache.sql',
     '009_pos_gtin_learn_jobs.sql',
     '010_pos_offline_sync.sql',
+    '011_pos_qr_payment.sql',
   ];
   for (const file of files) {
     const migrationPath = path.join(migrationsDir, file);

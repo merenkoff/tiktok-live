@@ -1,3 +1,7 @@
+// The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+// Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+// Commercial use requires a separate agreement: mer.sergei@gmail.com
+
 use std::fs::OpenOptions;
 
 use escpos::driver::FileDriver;
@@ -74,6 +78,7 @@ fn payment_label(method: &str) -> &str {
     match method {
         "cash" => "Готівка",
         "card" => "Картка",
+        "qr" => "QR-код",
         other => other,
     }
 }

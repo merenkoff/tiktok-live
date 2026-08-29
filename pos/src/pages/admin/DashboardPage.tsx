@@ -1,8 +1,12 @@
+// The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+// Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+// Commercial use requires a separate agreement: mer.sergei@gmail.com
+
 import { useEffect, useState } from 'react';
 import { api } from '../../services/api';
 import { formatUah } from '../../lib/money';
 import { toCsv, downloadCsv } from '../../lib/csv';
-import type { SalesSummary } from '../../types';
+import type { PaymentMethod, SalesSummary } from '../../types';
 
 function addDays(dateStr: string, delta: number): string {
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -14,10 +18,19 @@ function startOfMonth(dateStr: string): string {
   return new Date(Date.UTC(y, m - 1, 1)).toISOString().slice(0, 10);
 }
 
-const PAYMENT_LABEL_UK: Record<'cash' | 'card', string> = {
+const PAYMENT_LABEL_UK: Record<PaymentMethod, string> = {
   cash: 'Готівка',
   card: 'Картка',
+  qr: 'QR-код',
 };
+
+// Stable display order; unknown methods fall to the end.
+const PAYMENT_ORDER: PaymentMethod[] = ['card', 'cash', 'qr'];
+const PAYMENT_BAR_COLORS = ['bg-sq-blue', 'bg-sq-text/70', 'bg-emerald-500', 'bg-amber-500'];
+
+function paymentLabel(method: string): string {
+  return PAYMENT_LABEL_UK[method as PaymentMethod] ?? method;
+}
 
 function buildSummaryCsv(data: SalesSummary): string {
   const money = (c: number) => (c / 100).toFixed(2);
@@ -35,7 +48,7 @@ function buildSummaryCsv(data: SalesSummary): string {
     [],
     ['Оплата', 'Сума', '% від суми оплат'],
     ...data.payments.map((p) => [
-      PAYMENT_LABEL_UK[p.method],
+      paymentLabel(p.method),
       money(p.amount_cents),
       totalPay > 0 ? ((p.amount_cents / totalPay) * 100).toFixed(1) : '0',
     ]),
@@ -96,9 +109,20 @@ export function DashboardPage() {
     { label: 'Повернення', value: formatUah(data.refunded_cents) },
   ];
 
-  const cashCents = data.payments.find((p) => p.method === 'cash')?.amount_cents ?? 0;
-  const cardCents = data.payments.find((p) => p.method === 'card')?.amount_cents ?? 0;
-  const totalPayCents = cashCents + cardCents;
+  const totalPayCents = data.payments.reduce((s, p) => s + p.amount_cents, 0);
+  const paymentBreakdown = [...data.payments]
+    .sort((a, b) => {
+      const ai = PAYMENT_ORDER.indexOf(a.method);
+      const bi = PAYMENT_ORDER.indexOf(b.method);
+      return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi) || b.amount_cents - a.amount_cents;
+    })
+    .map((p, i) => ({
+      method: p.method,
+      label: paymentLabel(p.method),
+      amount_cents: p.amount_cents,
+      pct: totalPayCents > 0 ? (p.amount_cents / totalPayCents) * 100 : 0,
+      color: PAYMENT_BAR_COLORS[i % PAYMENT_BAR_COLORS.length],
+    }));
   const maxDaily = Math.max(...data.daily.map((d) => d.net_cents), 1);
   const invalidRange = from > to;
 
@@ -208,22 +232,21 @@ export function DashboardPage() {
         ) : (
           <div className="space-y-3">
             <div className="flex h-2 rounded-full overflow-hidden">
-              <div className="bg-sq-blue" style={{ flexBasis: `${(cardCents / totalPayCents) * 100}%` }} />
-              <div className="bg-sq-text/70" style={{ flexBasis: `${(cashCents / totalPayCents) * 100}%` }} />
+              {paymentBreakdown.map((p) => (
+                <div key={p.method} className={p.color} style={{ flexBasis: `${p.pct}%` }} />
+              ))}
             </div>
             <div className="grid grid-cols-2 gap-6">
-              <div>
-                <p className="text-2xl font-bold text-sq-text tracking-tight">{formatUah(cardCents)}</p>
-                <p className="text-xs text-sq-secondary mt-1">
-                  Картка · {((cardCents / totalPayCents) * 100).toFixed(0)}%
-                </p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-sq-text tracking-tight">{formatUah(cashCents)}</p>
-                <p className="text-xs text-sq-secondary mt-1">
-                  Готівка · {((cashCents / totalPayCents) * 100).toFixed(0)}%
-                </p>
-              </div>
+              {paymentBreakdown.map((p) => (
+                <div key={p.method}>
+                  <p className="text-2xl font-bold text-sq-text tracking-tight">
+                    {formatUah(p.amount_cents)}
+                  </p>
+                  <p className="text-xs text-sq-secondary mt-1">
+                    {p.label} · {p.pct.toFixed(0)}%
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
         )}

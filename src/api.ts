@@ -1,3 +1,7 @@
+// The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+// Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+// Commercial use requires a separate agreement: mer.sergei@gmail.com
+
 import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import staticPlugin from '@fastify/static';

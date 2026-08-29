@@ -1,22 +1,97 @@
-import { FormEvent, useMemo, useState } from 'react';
+// The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+// Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+// Commercial use requires a separate agreement: mer.sergei@gmail.com
+
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight, X } from 'lucide-react';
 import { formatUah, uahInputToCents } from '../lib/money';
 import { useDragScroll } from '../hooks/useDragScroll';
+import { useAuthStore } from '../hooks/useAuth';
+import { api } from '../services/api';
+import { displayImageUrl } from '../offline/photos';
+import type { SalePaymentInput } from '../types';
 
 interface Props {
   totalCents: number;
   loading: boolean;
+  /** Client-generated draft id for the open cart — used as the QR payment reference. */
+  saleRef?: string;
   onClose: () => void;
-  onConfirm: (payments: Array<{ method: 'cash' | 'card'; amount_cents: number }>) => void;
+  onConfirm: (payments: SalePaymentInput[]) => void;
 }
 
-type Step = 'methods' | 'cash' | 'mixed';
+type Step = 'methods' | 'cash' | 'mixed' | 'qr';
 
-export function CheckoutModal({ totalCents, loading, onClose, onConfirm }: Props) {
+type DynamicInvoice = { src: string; invoiceId: string };
+
+export function CheckoutModal({ totalCents, loading, saleRef, onClose, onConfirm }: Props) {
   const [step, setStep] = useState<Step>('methods');
   const [cash, setCash] = useState((totalCents / 100).toFixed(2));
   const [card, setCard] = useState('0');
   const bodyRef = useDragScroll<HTMLDivElement>();
+  const qrPayment = useAuthStore((s) => s.auth?.store.qr_payment);
+  const qrEnabled = Boolean(qrPayment?.enabled);
+
+  // Static QR image (uploaded in admin) — always resolved as the offline / fallback source.
+  const [qrImage, setQrImage] = useState<string | null>(null);
+  const [qrImageLoading, setQrImageLoading] = useState(false);
+  useEffect(() => {
+    if (step !== 'qr') return;
+    let cancelled = false;
+    setQrImageLoading(true);
+    void displayImageUrl(qrPayment?.static_image_url ?? null)
+      .then((url) => {
+        if (!cancelled) setQrImage(url);
+      })
+      .finally(() => {
+        if (!cancelled) setQrImageLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [step, qrPayment?.static_image_url]);
+
+  // Dynamic QR (exact amount) via Opendatabot — one invoice per sale draft, cached
+  // so re-entering the step never re-bills.
+  const invoiceCache = useRef(new Map<string, DynamicInvoice>());
+  const [dynamicInvoice, setDynamicInvoice] = useState<DynamicInvoice | null>(null);
+  const [dynamicLoading, setDynamicLoading] = useState(false);
+  const [dynamicFailed, setDynamicFailed] = useState(false);
+  useEffect(() => {
+    if (step !== 'qr') return;
+    const wantDynamic = qrPayment?.mode === 'dynamic' && navigator.onLine && Boolean(saleRef);
+    if (!wantDynamic || !saleRef) {
+      setDynamicInvoice(null);
+      setDynamicFailed(false);
+      return;
+    }
+    const cached = invoiceCache.current.get(saleRef);
+    if (cached) {
+      setDynamicInvoice(cached);
+      setDynamicFailed(false);
+      return;
+    }
+    let cancelled = false;
+    setDynamicLoading(true);
+    setDynamicFailed(false);
+    void api
+      .qrInvoice(totalCents, saleRef)
+      .then((inv) => {
+        if (cancelled) return;
+        const rec: DynamicInvoice = { src: inv.qrcode_data_uri, invoiceId: inv.invoice_id };
+        invoiceCache.current.set(saleRef, rec);
+        setDynamicInvoice(rec);
+      })
+      .catch(() => {
+        if (!cancelled) setDynamicFailed(true);
+      })
+      .finally(() => {
+        if (!cancelled) setDynamicLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [step, qrPayment?.mode, saleRef, totalCents]);
 
   const cashCents = uahInputToCents(cash);
   const cardCents = uahInputToCents(card);
@@ -30,6 +105,12 @@ export function CheckoutModal({ totalCents, loading, onClose, onConfirm }: Props
     onConfirm([{ method: 'card', amount_cents: totalCents }]);
   }
 
+  function payQr() {
+    onConfirm([
+      { method: 'qr', amount_cents: totalCents, provider_ref: dynamicInvoice?.invoiceId ?? null },
+    ]);
+  }
+
   function submitCash(e: FormEvent) {
     e.preventDefault();
     if (cashCents < totalCents) return;
@@ -39,11 +120,28 @@ export function CheckoutModal({ totalCents, loading, onClose, onConfirm }: Props
   function submitMixed(e: FormEvent) {
     e.preventDefault();
     if (cashCents + cardCents < totalCents) return;
-    const payments: Array<{ method: 'cash' | 'card'; amount_cents: number }> = [];
+    const payments: SalePaymentInput[] = [];
     if (cashCents > 0) payments.push({ method: 'cash', amount_cents: cashCents });
     if (cardCents > 0) payments.push({ method: 'card', amount_cents: cardCents });
     onConfirm(payments);
   }
+
+  const methods: Array<{ label: string; action: () => void }> = [
+    { label: 'Готівка', action: () => setStep('cash') },
+    { label: 'Картка (вручну)', action: () => payCard() },
+    { label: 'Мікс', action: () => setStep('mixed') },
+  ];
+  if (qrEnabled) methods.push({ label: 'QR-код', action: () => setStep('qr') });
+
+  const qrBusy = dynamicLoading || qrImageLoading;
+  const qrSrc = dynamicInvoice?.src ?? qrImage;
+  const qrHint = dynamicInvoice
+    ? 'Сума вже в коді'
+    : dynamicFailed
+      ? 'QR з сумою недоступний — покажіть статичний код і назвіть суму'
+      : qrPayment?.mode === 'dynamic' && !navigator.onLine
+        ? 'Немає інтернету — статичний код, назвіть суму'
+        : null;
 
   return (
     <div className="fixed inset-0 z-50 bg-white flex flex-col animate-fade-up font-sans text-sq-text">
@@ -62,15 +160,13 @@ export function CheckoutModal({ totalCents, loading, onClose, onConfirm }: Props
 
       <div ref={bodyRef} className="flex-1 flex flex-col items-center px-6 pt-6 overflow-auto select-none">
         <p className="text-5xl font-bold tracking-tight">{formatUah(totalCents)}</p>
-        <p className="text-sm text-sq-muted mt-3 text-center">Оберіть спосіб оплати</p>
+        <p className="text-sm text-sq-muted mt-3 text-center">
+          {step === 'qr' ? 'Покажіть QR-код покупцеві' : 'Оберіть спосіб оплати'}
+        </p>
 
         {step === 'methods' && (
           <ul className="w-full max-w-md mt-10 border-t border-sq-divider">
-            {[
-              { label: 'Готівка', action: () => setStep('cash') },
-              { label: 'Картка (вручну)', action: () => payCard() },
-              { label: 'Мікс', action: () => setStep('mixed') },
-            ].map((item) => (
+            {methods.map((item) => (
               <li key={item.label} className="border-b border-sq-divider">
                 <button
                   type="button"
@@ -84,6 +180,43 @@ export function CheckoutModal({ totalCents, loading, onClose, onConfirm }: Props
               </li>
             ))}
           </ul>
+        )}
+
+        {step === 'qr' && (
+          <div className="w-full max-w-md mt-8 flex flex-col items-center gap-5">
+            <div className="w-64 h-64 grid place-items-center border border-sq-divider rounded-sq bg-white">
+              {qrBusy ? (
+                <span className="text-sm text-sq-muted">
+                  {dynamicLoading ? 'Генеруємо QR…' : 'Завантаження…'}
+                </span>
+              ) : qrSrc ? (
+                <img src={qrSrc} alt="QR-код для оплати" className="w-full h-full object-contain p-2" />
+              ) : (
+                <span className="text-sm text-sq-muted text-center px-4">
+                  QR-код не налаштований. Додайте зображення в «Налаштування».
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-sq-secondary text-center">
+              Сума до сплати: <span className="font-semibold text-sq-text">{formatUah(totalCents)}</span>
+              {qrHint && <span className="block text-xs text-sq-muted mt-1">{qrHint}</span>}
+            </p>
+            <button
+              type="button"
+              disabled={loading || qrBusy || !qrSrc}
+              onClick={payQr}
+              className="pos-btn-primary w-full py-3.5"
+            >
+              {loading ? 'Обробка…' : 'Підтвердити оплату'}
+            </button>
+            <button
+              type="button"
+              className="w-full min-h-11 text-sq-secondary text-sm"
+              onClick={() => setStep('methods')}
+            >
+              Назад
+            </button>
+          </div>
         )}
 
         {step === 'cash' && (

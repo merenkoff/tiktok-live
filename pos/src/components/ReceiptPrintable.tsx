@@ -1,3 +1,7 @@
+// The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+// Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+// Commercial use requires a separate agreement: mer.sergei@gmail.com
+
 import type { ReceiptData } from '../lib/printer';
 
 function money(cents: number) {
@@ -5,7 +9,10 @@ function money(cents: number) {
 }
 
 function paymentLabel(method: string) {
-  return method === 'cash' ? 'Готівка' : method === 'card' ? 'Картка' : method;
+  if (method === 'cash') return 'Готівка';
+  if (method === 'card') return 'Картка';
+  if (method === 'qr') return 'QR-код';
+  return method;
 }
 
 // Rendered off-screen at all times; only visible to the browser's print engine

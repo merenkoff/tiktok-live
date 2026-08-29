@@ -1,3 +1,7 @@
+// The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+// Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+// Commercial use requires a separate agreement: mer.sergei@gmail.com
+
 import type { CatalogItem } from '../types';
 import { assetUrl } from '../lib/urls';
 
@@ -37,6 +41,20 @@ export async function cacheCatalogImages(items: CatalogItem[]): Promise<void> {
         }
       })
     );
+  }
+}
+
+/** Pre-cache the store's static QR image so the checkout QR step works offline. */
+export async function cacheQrImage(src: string | null | undefined): Promise<void> {
+  const cache = await openCache();
+  if (!cache) return;
+  const url = assetUrl(src);
+  if (!url || !/^https?:\/\//i.test(url)) return;
+  try {
+    if (await cache.match(url)) return;
+    await cache.add(url);
+  } catch {
+    /* falls back to the remote URL when online */
   }
 }
 

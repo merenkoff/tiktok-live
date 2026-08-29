@@ -1,3 +1,7 @@
+// The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+// Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+// Commercial use requires a separate agreement: mer.sergei@gmail.com
+
 // src/pos/auth.service.ts
 
 import { pool } from '../db.js';
@@ -11,7 +15,7 @@ import {
   verifyPin,
 } from './core/crypto.js';
 import { getAuthByToken, sessionExpiresAt } from './core/auth.js';
-import type { PosAuthContext, PosRole } from './types.js';
+import type { PosAuthContext, PosRole, QrPaymentPublicConfig } from './types.js';
 
 export interface AuthResponse {
   token: string;
@@ -26,6 +30,7 @@ export interface AuthResponse {
     name: string;
     slug: string;
     currency: string;
+    qr_payment: QrPaymentPublicConfig;
   };
 }
 
@@ -61,6 +66,7 @@ function toAuthResponse(auth: PosAuthContext, expiresAt: Date): AuthResponse {
       name: auth.storeName,
       slug: auth.storeSlug,
       currency: auth.currency,
+      qr_payment: auth.qrPayment,
     },
   };
 }

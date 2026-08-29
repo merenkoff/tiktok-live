@@ -1,6 +1,11 @@
+// The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+// Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+// Commercial use requires a separate agreement: mer.sergei@gmail.com
+
 // src/pos/pos.controller.ts
 
 import type { FastifyInstance } from 'fastify';
+import type { PaymentMethod } from './types.js';
 import { ensurePosAuth, ensurePosOwner } from './core/auth.js';
 import * as authService from './auth.service.js';
 import * as productsService from './products.service.js';
@@ -10,6 +15,7 @@ import * as stockReportsService from './stock-reports.service.js';
 import * as suppliersService from './suppliers.service.js';
 import * as salesService from './sales.service.js';
 import * as analyticsService from './analytics.service.js';
+import * as qrService from './qr.service.js';
 import * as tagsService from './tags.service.js';
 import * as customersService from './customers.service.js';
 import { saveProductImage } from './uploads.service.js';
@@ -997,7 +1003,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
     try {
       const body = request.body as {
         items: { variant_id: number; quantity: number }[];
-        payments: { method: 'cash' | 'card'; amount_cents: number }[];
+        payments: { method: PaymentMethod; amount_cents: number; provider_ref?: string | null }[];
         note?: string;
         cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
         customer_id?: number | null;
@@ -1049,6 +1055,53 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
     const sale = await salesService.getSale(auth.storeId, Number(id));
     if (!sale) return reply.code(404).send({ error: 'Sale not found' });
     return sale;
+  });
+
+  // Generate a dynamic NBU QR (exact amount) for the current checkout via
+  // Opendatabot. Billed per call — the cashier UI only hits this on the QR step
+  // and caches the result per sale draft. A small per-store rate limit caps cost.
+  const qrInvoiceHits = new Map<number, number[]>();
+  fastify.post('/qr/invoice', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const body = request.body as { amount_cents?: number; sale_ref?: string };
+    const amountCents = Number(body.amount_cents);
+    if (!Number.isInteger(amountCents) || amountCents <= 0) {
+      return reply.code(400).send({ error: 'amount_cents must be a positive integer' });
+    }
+
+    const store = await analyticsService.getStore(auth.storeId);
+    if (!store?.qr_payment_enabled || store.qr_payment_mode !== 'dynamic') {
+      return reply.code(400).send({ error: 'dynamic QR payment is not enabled for this store' });
+    }
+
+    const now = Date.now();
+    const recent = (qrInvoiceHits.get(auth.storeId) ?? []).filter((t) => now - t < 60_000);
+    if (recent.length >= 20) {
+      return reply.code(429).send({ error: 'too many QR requests, retry shortly' });
+    }
+    recent.push(now);
+    qrInvoiceHits.set(auth.storeId, recent);
+
+    try {
+      const invoice = await qrService.createInvoice({
+        storeId: auth.storeId,
+        amountCents,
+        saleRef: typeof body.sale_ref === 'string' ? body.sale_ref : '',
+      });
+      return {
+        qrcode_data_uri: invoice.qrcode,
+        url: invoice.url,
+        invoice_id: invoice.invoiceId,
+      };
+    } catch (error) {
+      if (error instanceof qrService.QrProviderError) {
+        const status = error.code === 'qr_not_configured' ? 400 : 502;
+        return reply.code(status).send({ error: error.code });
+      }
+      logger.error('QR invoice failed', { error: errorMessage(error) });
+      return reply.code(502).send({ error: 'qr_provider_unavailable' });
+    }
   });
 
   fastify.post('/sales/:id/void', async (request, reply) => {
@@ -1123,10 +1176,35 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   fastify.patch('/store', async (request, reply) => {
     const auth = await ensurePosOwner(request, reply);
     if (!auth) return;
-    const body = request.body as { name?: string };
+    const body = request.body as {
+      name?: string;
+      qr_payment_enabled?: boolean;
+      qr_payment_mode?: string;
+      qr_static_image_url?: string | null;
+      qr_purpose_template?: string | null;
+      qr_iban?: string | null;
+      qr_edrpou?: string | null;
+      qr_recipient?: string | null;
+    };
     try {
-      if (!body.name?.trim()) return reply.code(400).send({ error: 'name required' });
-      return await analyticsService.updateStore(auth.storeId, body.name);
+      const patch: analyticsService.StorePatch = {};
+      if (body.name !== undefined) {
+        if (!body.name.trim()) return reply.code(400).send({ error: 'name required' });
+        patch.name = body.name;
+      }
+      if (body.qr_payment_mode !== undefined) {
+        if (body.qr_payment_mode !== 'static' && body.qr_payment_mode !== 'dynamic') {
+          return reply.code(400).send({ error: 'qr_payment_mode must be static or dynamic' });
+        }
+        patch.qr_payment_mode = body.qr_payment_mode;
+      }
+      if (body.qr_payment_enabled !== undefined) patch.qr_payment_enabled = Boolean(body.qr_payment_enabled);
+      if (body.qr_static_image_url !== undefined) patch.qr_static_image_url = body.qr_static_image_url;
+      if (body.qr_purpose_template !== undefined) patch.qr_purpose_template = body.qr_purpose_template;
+      if (body.qr_iban !== undefined) patch.qr_iban = body.qr_iban;
+      if (body.qr_edrpou !== undefined) patch.qr_edrpou = body.qr_edrpou;
+      if (body.qr_recipient !== undefined) patch.qr_recipient = body.qr_recipient;
+      return await analyticsService.updateStore(auth.storeId, patch);
     } catch (error) {
       return reply.code(400).send({ error: errorMessage(error) });
     }

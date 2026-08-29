@@ -1,3 +1,7 @@
+// The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+// Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+// Commercial use requires a separate agreement: mer.sergei@gmail.com
+
 // src/pos/types.ts
 
 export type PosRole = 'owner' | 'seller';
@@ -22,7 +26,9 @@ export type AdjustmentReasonCode = 'found' | 'loss' | 'data_fix' | 'other';
 
 export type SaleStatus = 'completed' | 'voided' | 'refunded' | 'partially_refunded';
 
-export type PaymentMethod = 'cash' | 'card';
+export type PaymentMethod = 'cash' | 'card' | 'qr';
+
+export type QrPaymentMode = 'static' | 'dynamic';
 
 export interface PosStore {
   id: number;
@@ -30,6 +36,13 @@ export interface PosStore {
   slug: string;
   currency: string;
   timezone: string;
+  qr_payment_enabled: boolean;
+  qr_payment_mode: QrPaymentMode;
+  qr_static_image_url: string | null;
+  qr_purpose_template: string | null;
+  qr_iban: string | null;
+  qr_edrpou: string | null;
+  qr_recipient: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -47,6 +60,12 @@ export interface PosStaff {
   updated_at: Date;
 }
 
+export interface QrPaymentPublicConfig {
+  enabled: boolean;
+  mode: QrPaymentMode;
+  static_image_url: string | null;
+}
+
 export interface PosAuthContext {
   sessionId: number;
   storeId: number;
@@ -56,6 +75,7 @@ export interface PosAuthContext {
   storeName: string;
   storeSlug: string;
   currency: string;
+  qrPayment: QrPaymentPublicConfig;
   token: string;
 }
 
@@ -109,6 +129,8 @@ export interface CompleteSaleItemInput {
 export interface CompleteSalePaymentInput {
   method: PaymentMethod;
   amount_cents: number;
+  /** Provider invoice id for a dynamic QR payment (Opendatabot). */
+  provider_ref?: string | null;
 }
 
 export interface CartDiscountInput {

@@ -1,3 +1,7 @@
+// The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+// Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+// Commercial use requires a separate agreement: mer.sergei@gmail.com
+
 // src/pos/core/auth.ts
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
@@ -28,7 +32,10 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
        st.is_active AS staff_active,
        store.name AS store_name,
        store.slug AS store_slug,
-       store.currency
+       store.currency,
+       store.qr_payment_enabled,
+       store.qr_payment_mode,
+       store.qr_static_image_url
      FROM pos_sessions s
      JOIN pos_staff st ON st.id = s.staff_id
      JOIN pos_stores store ON store.id = s.store_id
@@ -49,6 +56,11 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
     storeName: row.store_name,
     storeSlug: row.store_slug,
     currency: row.currency,
+    qrPayment: {
+      enabled: row.qr_payment_enabled ?? false,
+      mode: (row.qr_payment_mode as PosAuthContext['qrPayment']['mode']) ?? 'static',
+      static_image_url: row.qr_static_image_url ?? null,
+    },
     token: row.token,
   };
 }

@@ -1,6 +1,11 @@
+// The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+// Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+// Commercial use requires a separate agreement: mer.sergei@gmail.com
+
 // src/pos/analytics.service.ts
 
 import { pool } from '../db.js';
+import type { PaymentMethod, QrPaymentMode } from './types.js';
 
 export interface SalesSummary {
   from: string;
@@ -16,7 +21,7 @@ export interface SalesSummary {
     qty_sold: number;
     revenue_cents: number;
   }>;
-  payments: Array<{ method: 'cash' | 'card'; amount_cents: number }>;
+  payments: Array<{ method: PaymentMethod; amount_cents: number }>;
   daily: Array<{ date: string; gross_cents: number; net_cents: number; sales_count: number }>;
 }
 
@@ -155,41 +160,84 @@ export async function getSalesSummary(
       revenue_cents: Number(item.revenue_cents),
     })),
     payments: paymentsResult.rows.map((p) => ({
-      method: p.method as 'cash' | 'card',
+      method: p.method as PaymentMethod,
       amount_cents: Number(p.amount_cents),
     })),
     daily,
   };
 }
 
-export async function getStore(storeId: number) {
-  const result = await pool.query(`SELECT * FROM pos_stores WHERE id = $1`, [storeId]);
-  if (result.rows.length === 0) return null;
-  const store = result.rows[0];
+function mapStore(store: Record<string, unknown>) {
   return {
     id: Number(store.id),
-    name: store.name,
-    slug: store.slug,
-    currency: store.currency,
-    timezone: store.timezone,
+    name: store.name as string,
+    slug: store.slug as string,
+    currency: store.currency as string,
+    timezone: store.timezone as string,
+    qr_payment_enabled: Boolean(store.qr_payment_enabled),
+    qr_payment_mode: (store.qr_payment_mode as QrPaymentMode) ?? 'static',
+    qr_static_image_url: (store.qr_static_image_url as string | null) ?? null,
+    qr_purpose_template: (store.qr_purpose_template as string | null) ?? null,
+    qr_iban: (store.qr_iban as string | null) ?? null,
+    qr_edrpou: (store.qr_edrpou as string | null) ?? null,
+    qr_recipient: (store.qr_recipient as string | null) ?? null,
   };
 }
 
-export async function updateStore(storeId: number, name: string) {
+export type StorePatch = {
+  name?: string;
+  qr_payment_enabled?: boolean;
+  qr_payment_mode?: QrPaymentMode;
+  qr_static_image_url?: string | null;
+  qr_purpose_template?: string | null;
+  qr_iban?: string | null;
+  qr_edrpou?: string | null;
+  qr_recipient?: string | null;
+};
+
+const STORE_PATCH_COLUMNS: Array<keyof StorePatch> = [
+  'name',
+  'qr_payment_enabled',
+  'qr_payment_mode',
+  'qr_static_image_url',
+  'qr_purpose_template',
+  'qr_iban',
+  'qr_edrpou',
+  'qr_recipient',
+];
+
+export async function getStore(storeId: number) {
+  const result = await pool.query(`SELECT * FROM pos_stores WHERE id = $1`, [storeId]);
+  if (result.rows.length === 0) return null;
+  return mapStore(result.rows[0]);
+}
+
+export async function updateStore(storeId: number, patch: StorePatch) {
+  const sets: string[] = [];
+  const values: unknown[] = [];
+  for (const col of STORE_PATCH_COLUMNS) {
+    if (patch[col] === undefined) continue;
+    let value: unknown = patch[col];
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      value = col === 'name' ? trimmed : trimmed || null;
+    }
+    values.push(value);
+    sets.push(`${col} = $${values.length}`);
+  }
+  if (sets.length === 0) {
+    const current = await getStore(storeId);
+    if (!current) throw new Error('Store not found');
+    return current;
+  }
+  values.push(storeId);
   const result = await pool.query(
     `UPDATE pos_stores
-     SET name = $1, updated_at = NOW()
-     WHERE id = $2
+     SET ${sets.join(', ')}, updated_at = NOW()
+     WHERE id = $${values.length}
      RETURNING *`,
-    [name.trim(), storeId]
+    values
   );
   if (result.rows.length === 0) throw new Error('Store not found');
-  const store = result.rows[0];
-  return {
-    id: Number(store.id),
-    name: store.name,
-    slug: store.slug,
-    currency: store.currency,
-    timezone: store.timezone,
-  };
+  return mapStore(result.rows[0]);
 }

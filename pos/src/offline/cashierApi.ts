@@ -1,7 +1,11 @@
+// The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+// Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+// Commercial use requires a separate agreement: mer.sergei@gmail.com
+
 import { api } from '../services/api';
 import { isOfflinePosEnabled } from './enabled';
 import * as repo from './repository';
-import type { CatalogItem, PosCustomer, PosTag, SaleDetail } from '../types';
+import type { CatalogItem, PosCustomer, PosTag, SaleDetail, SalePaymentInput } from '../types';
 
 export const cashierApi = {
   getCatalog(opts?: { q?: string; barcode?: string; tag_id?: number }): Promise<CatalogItem[]> {
@@ -14,7 +18,7 @@ export const cashierApi = {
 
   completeSale(payload: {
     items: Array<{ variant_id: number; quantity: number }>;
-    payments: Array<{ method: 'cash' | 'card'; amount_cents: number }>;
+    payments: SalePaymentInput[];
     note?: string;
     cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
     customer_id?: number | null;

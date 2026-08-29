@@ -1,3 +1,7 @@
+// The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+// Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+// Commercial use requires a separate agreement: mer.sergei@gmail.com
+
 import type { AuthResponse } from '../types';
 import { db, type StaffUnlockRow } from './db';
 import { OfflineAuthError } from './errors';
@@ -65,6 +69,9 @@ export async function saveStaffUnlock(params: {
     hashB64: toB64(hash),
     iterations: ITERATIONS,
     updatedAt: Date.now(),
+    qrPaymentEnabled: params.auth.store.qr_payment?.enabled ?? false,
+    qrPaymentMode: params.auth.store.qr_payment?.mode ?? 'static',
+    qrStaticImageUrl: params.auth.store.qr_payment?.static_image_url ?? null,
   };
   await db.staffUnlock.put(row);
 }
@@ -103,6 +110,11 @@ function sessionFromUnlock(row: StaffUnlockRow, liveAuth: AuthResponse | null): 
       name: row.storeName,
       slug: row.storeSlug,
       currency: row.storeCurrency,
+      qr_payment: {
+        enabled: row.qrPaymentEnabled ?? false,
+        mode: row.qrPaymentMode ?? 'static',
+        static_image_url: row.qrStaticImageUrl ?? null,
+      },
     },
   };
 }

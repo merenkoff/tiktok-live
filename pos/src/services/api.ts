@@ -1,3 +1,7 @@
+// The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+// Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+// Commercial use requires a separate agreement: mer.sergei@gmail.com
+
 import axios, { type AxiosInstance } from 'axios';
 import type {
   AuthResponse,
@@ -6,6 +10,9 @@ import type {
   PosTag,
   Product,
   SaleDetail,
+  SalePaymentInput,
+  StoreConfig,
+  StorePatch,
   SaleListItem,
   StaffMember,
   SalesSummary,
@@ -267,7 +274,7 @@ class PosApi {
 
   async completeSale(payload: {
     items: Array<{ variant_id: number; quantity: number }>;
-    payments: Array<{ method: 'cash' | 'card'; amount_cents: number }>;
+    payments: SalePaymentInput[];
     note?: string;
     cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
     customer_id?: number | null;
@@ -371,14 +378,19 @@ class PosApi {
     await this.client.patch(`/staff/${id}`, { is_active });
   }
 
-  async updateStore(name: string) {
-    const { data } = await this.client.patch('/store', { name });
-    return data as { id: number; name: string; slug: string; currency: string };
+  async updateStore(patch: StorePatch) {
+    const { data } = await this.client.patch('/store', patch);
+    return data as StoreConfig;
   }
 
   async getStore() {
     const { data } = await this.client.get('/store');
-    return data as { id: number; name: string; slug: string; currency: string; timezone: string };
+    return data as StoreConfig;
+  }
+
+  async qrInvoice(amount_cents: number, sale_ref: string) {
+    const { data } = await this.client.post('/qr/invoice', { amount_cents, sale_ref });
+    return data as { qrcode_data_uri: string; url: string; invoice_id: string };
   }
 
   async listSuppliers(): Promise<Supplier[]> {

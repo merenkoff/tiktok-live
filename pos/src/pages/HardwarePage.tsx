@@ -1,3 +1,7 @@
+// The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+// Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+// Commercial use requires a separate agreement: mer.sergei@gmail.com
+
 import { useCallback, useEffect, useState } from 'react';
 import { Download, Printer, RefreshCw, ScanLine, Usb } from 'lucide-react';
 import { openUrl } from '@tauri-apps/plugin-opener';

@@ -1,4 +1,8 @@
 #!/usr/bin/env npx tsx
+// The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+// Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+// Commercial use requires a separate agreement: mer.sergei@gmail.com
+
 // src/pos/gtin/seed-from-dump.ts — CLI seeder
 // Usage: npx tsx src/pos/gtin/seed-from-dump.ts --dataset products --limit 10000
 

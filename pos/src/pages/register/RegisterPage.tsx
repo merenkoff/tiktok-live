@@ -1,3 +1,7 @@
+// The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+// Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+// Commercial use requires a separate agreement: mer.sergei@gmail.com
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, Check, Search } from 'lucide-react';
 import { cashierApi } from '../../offline/cashierApi';
@@ -9,7 +13,7 @@ import { DEFAULT_RECEIPT_PAPER_WIDTH, ReceiptPaperWidth, printReceipt } from '..
 import { buildReceiptPayload } from '../../lib/receipt';
 import { usePrintableReceipt } from '../../hooks/usePrintableReceipt';
 import { getMeta } from '../../offline/db';
-import type { CatalogItem, PosTag, SaleDetail } from '../../types';
+import type { CatalogItem, PaymentMethod, PosTag, SaleDetail, SalePaymentInput } from '../../types';
 import { CheckoutModal } from '../../components/CheckoutModal';
 import { BarcodeScanner } from '../../components/BarcodeScanner';
 import { ProductTile } from '../../components/cashier/ProductTile';
@@ -21,8 +25,8 @@ import { VariantPicker } from '../../components/cashier/VariantPicker';
 import { MobileCartSheet } from '../../components/cashier/MobileCartSheet';
 import { OfflineStatusBanner } from '../../components/cashier/OfflineStatusBanner';
 
-function paymentLabel(method: 'cash' | 'card'): string {
-  return method === 'cash' ? 'Готівка' : 'Картка';
+function paymentLabel(method: PaymentMethod): string {
+  return method === 'cash' ? 'Готівка' : method === 'card' ? 'Картка' : 'QR-код';
 }
 
 function flattenTags(tags: PosTag[]): PosTag[] {
@@ -79,6 +83,11 @@ export function RegisterPage() {
   const [picker, setPicker] = useState<CatalogItem[] | null>(null);
   const wedgeRef = useRef<HTMLInputElement>(null);
   const { printToPdf, printablePortal } = usePrintableReceipt();
+  // Fresh draft id per checkout session — used as the QR payment reference.
+  const [saleDraftId, setSaleDraftId] = useState('');
+  useEffect(() => {
+    if (checkoutOpen) setSaleDraftId(crypto.randomUUID());
+  }, [checkoutOpen]);
 
   const currentTag = tagPath[tagPath.length - 1] ?? null;
   const flatTags = useMemo(() => flattenTags(tags), [tags]);
@@ -204,7 +213,7 @@ export function RegisterPage() {
     setPicker(variants);
   }
 
-  async function pay(payments: Array<{ method: 'cash' | 'card'; amount_cents: number }>) {
+  async function pay(payments: SalePaymentInput[]) {
     setPaying(true);
     try {
       const sale = await cashierApi.completeSale({
@@ -495,6 +504,7 @@ export function RegisterPage() {
         <CheckoutModal
           totalCents={totalCents()}
           loading={paying}
+          saleRef={saleDraftId}
           onClose={() => setCheckoutOpen(false)}
           onConfirm={(payments) => void pay(payments)}
         />
