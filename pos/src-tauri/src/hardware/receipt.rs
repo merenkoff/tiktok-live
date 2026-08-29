@@ -140,6 +140,17 @@ fn now_nanos() -> u128 {
         .unwrap_or(0)
 }
 
+// `document-format` is handled very differently per platform by the `printers`
+// crate: on Windows it is passed straight through as the Win32 print datatype
+// (StartDocPrinterW only accepts registered types like "RAW"/"TEXT", so a MIME
+// string makes the job fail outright), while on Unix it is a CUPS option and
+// "application/vnd.cups-raw" is what stops CUPS from running our ESC/POS bytes
+// through a text-to-PostScript filter. Pick the right value per OS.
+#[cfg(windows)]
+const RAW_JOB_PROPS: &[(&str, &str)] = &[("document-format", "RAW")];
+#[cfg(not(windows))]
+const RAW_JOB_PROPS: &[(&str, &str)] = &[("document-format", "application/vnd.cups-raw")];
+
 #[tauri::command]
 pub fn print_receipt(printer_name: String, receipt: ReceiptData) -> Result<(), String> {
     let bytes = build_ticket(&receipt)?;
@@ -152,7 +163,7 @@ pub fn print_receipt(printer_name: String, receipt: ReceiptData) -> Result<(), S
             &bytes,
             PrinterJobOptions {
                 name: Some("Чек"),
-                raw_properties: &[("document-format", "application/vnd.cups-raw")],
+                raw_properties: RAW_JOB_PROPS,
                 ..PrinterJobOptions::none()
             },
         )

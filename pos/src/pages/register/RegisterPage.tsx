@@ -240,8 +240,8 @@ export function RegisterPage() {
     try {
       await printReceipt(receiptPrinterName, buildReceiptPayload(success, auth?.store.name ?? ''));
       setPrintStatus('Чек надіслано на друк');
-    } catch {
-      setPrintStatus('Не вдалося надрукувати чек');
+    } catch (e) {
+      setPrintStatus(`Не вдалося надрукувати чек: ${typeof e === 'string' ? e : String(e)}`);
     } finally {
       setPrinting(false);
     }

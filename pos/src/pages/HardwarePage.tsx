@@ -106,8 +106,8 @@ export function HardwarePage() {
     try {
       await printReceipt(selectedPrinter, testReceipt(storeName));
       setTestStatus('Надіслано на друк');
-    } catch {
-      setTestStatus('Помилка друку');
+    } catch (e) {
+      setTestStatus(`Помилка друку: ${typeof e === 'string' ? e : String(e)}`);
     } finally {
       setTesting(false);
     }
