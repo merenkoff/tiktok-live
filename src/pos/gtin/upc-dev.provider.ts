@@ -6,6 +6,7 @@
 
 import type { GtinLookupResult } from './types.js';
 import { tryConsumeBudget } from './provider-budget.js';
+import type { StoreGtinConfig } from './gtin-cache.service.js';
 import type { QuotaSkip } from './upcitemdb.provider.js';
 
 export function mapUpcDevResponse(body: unknown): GtinLookupResult {
@@ -28,11 +29,14 @@ export function mapUpcDevResponse(body: unknown): GtinLookupResult {
   };
 }
 
-export async function lookupUpcDev(gtin: string): Promise<GtinLookupResult | QuotaSkip> {
-  const key = process.env.UPC_DEV_API_KEY?.trim();
+export async function lookupUpcDev(
+  gtin: string,
+  cfg?: StoreGtinConfig
+): Promise<GtinLookupResult | QuotaSkip> {
+  const key = cfg?.upcDevApiKey?.trim() || process.env.UPC_DEV_API_KEY?.trim();
   if (!key) return { skipped: 'no_key' };
 
-  const ok = await tryConsumeBudget('upc_dev');
+  const ok = await tryConsumeBudget('upc_dev', cfg?.upcDevDailyLimit ?? undefined);
   if (!ok) return { skipped: 'quota' };
 
   const contact = process.env.GTIN_CONTACT_EMAIL?.trim();

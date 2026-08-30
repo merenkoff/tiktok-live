@@ -76,6 +76,7 @@ export interface PosAuthContext {
   storeSlug: string;
   currency: string;
   qrPayment: QrPaymentPublicConfig;
+  autoPrintReceipt: boolean;
   token: string;
 }
 

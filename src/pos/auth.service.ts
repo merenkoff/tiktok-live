@@ -31,6 +31,7 @@ export interface AuthResponse {
     slug: string;
     currency: string;
     qr_payment: QrPaymentPublicConfig;
+    auto_print_receipt: boolean;
   };
 }
 
@@ -67,6 +68,7 @@ function toAuthResponse(auth: PosAuthContext, expiresAt: Date): AuthResponse {
       slug: auth.storeSlug,
       currency: auth.currency,
       qr_payment: auth.qrPayment,
+      auto_print_receipt: auth.autoPrintReceipt,
     },
   };
 }

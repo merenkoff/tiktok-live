@@ -29,9 +29,19 @@ export async function getUsedCount(provider: QuotaProvider): Promise<number> {
   return Number(r.rows[0].used_count);
 }
 
-/** Returns true if a slot was consumed; false if quota exhausted. */
-export async function tryConsumeBudget(provider: QuotaProvider): Promise<boolean> {
-  const limit = dailyLimit(provider);
+/**
+ * Returns true if a slot was consumed; false if quota exhausted.
+ * `limitOverride` (a positive integer) wins over the env/default daily limit —
+ * used to apply a per-store cap set in POS admin.
+ */
+export async function tryConsumeBudget(
+  provider: QuotaProvider,
+  limitOverride?: number
+): Promise<boolean> {
+  const limit =
+    typeof limitOverride === 'number' && Number.isFinite(limitOverride) && limitOverride > 0
+      ? Math.floor(limitOverride)
+      : dailyLimit(provider);
   const day = utcDay();
   const client = await pool.connect();
   try {

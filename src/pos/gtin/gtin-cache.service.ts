@@ -197,3 +197,23 @@ export async function isGtinLookupEnabled(storeId: number): Promise<boolean> {
   if (r.rows.length === 0) return false;
   return Boolean(r.rows[0].gtin_lookup_enabled);
 }
+
+export interface StoreGtinConfig {
+  /** upc.dev key set in POS admin; null → fall back to UPC_DEV_API_KEY env. */
+  upcDevApiKey: string | null;
+  /** upc.dev daily cap set in POS admin; null → fall back to env / default. */
+  upcDevDailyLimit: number | null;
+}
+
+export async function getStoreGtinConfig(storeId?: number): Promise<StoreGtinConfig> {
+  if (!storeId) return { upcDevApiKey: null, upcDevDailyLimit: null };
+  const r = await pool.query(
+    `SELECT gtin_api_key, gtin_daily_limit FROM pos_stores WHERE id = $1`,
+    [storeId]
+  );
+  const row = r.rows[0] ?? {};
+  return {
+    upcDevApiKey: (row.gtin_api_key as string | null) ?? null,
+    upcDevDailyLimit: row.gtin_daily_limit == null ? null : Number(row.gtin_daily_limit),
+  };
+}

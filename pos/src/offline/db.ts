@@ -29,6 +29,8 @@ export interface StaffUnlockRow {
   qrPaymentEnabled?: boolean;
   qrPaymentMode?: QrPaymentMode;
   qrStaticImageUrl?: string | null;
+  /** Auto-print receipt flag cached from AuthResponse (optional on old rows). */
+  autoPrintReceipt?: boolean;
 }
 
 export type OutboxType = 'sale' | 'customer';

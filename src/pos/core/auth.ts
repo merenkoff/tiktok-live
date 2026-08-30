@@ -35,7 +35,8 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
        store.currency,
        store.qr_payment_enabled,
        store.qr_payment_mode,
-       store.qr_static_image_url
+       store.qr_static_image_url,
+       store.auto_print_receipt
      FROM pos_sessions s
      JOIN pos_staff st ON st.id = s.staff_id
      JOIN pos_stores store ON store.id = s.store_id
@@ -61,6 +62,7 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
       mode: (row.qr_payment_mode as PosAuthContext['qrPayment']['mode']) ?? 'static',
       static_image_url: row.qr_static_image_url ?? null,
     },
+    autoPrintReceipt: row.auto_print_receipt ?? false,
     token: row.token,
   };
 }

@@ -19,6 +19,12 @@ export function SettingsPage() {
   const [qrEdrpou, setQrEdrpou] = useState('');
   const [qrRecipient, setQrRecipient] = useState('');
   const [qrPurposeTemplate, setQrPurposeTemplate] = useState('');
+  // GTIN column default is TRUE — init checked so it doesn't flash "off" before getStore().
+  const [gtinLookupEnabled, setGtinLookupEnabled] = useState(true);
+  const [gtinApiKey, setGtinApiKey] = useState('');
+  const [gtinApiKeySet, setGtinApiKeySet] = useState(false);
+  const [gtinDailyLimit, setGtinDailyLimit] = useState('');
+  const [autoPrintReceipt, setAutoPrintReceipt] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   function hydrate(store: StoreConfig) {
@@ -31,6 +37,11 @@ export function SettingsPage() {
     setQrEdrpou(store.qr_edrpou ?? '');
     setQrRecipient(store.qr_recipient ?? '');
     setQrPurposeTemplate(store.qr_purpose_template ?? '');
+    setGtinLookupEnabled(store.gtin_lookup_enabled);
+    setGtinApiKeySet(store.gtin_api_key_set);
+    setGtinApiKey('');
+    setGtinDailyLimit(store.gtin_daily_limit?.toString() ?? '');
+    setAutoPrintReceipt(store.auto_print_receipt);
   }
 
   useEffect(() => {
@@ -50,6 +61,11 @@ export function SettingsPage() {
         qr_edrpou: qrEdrpou || null,
         qr_recipient: qrRecipient || null,
         qr_purpose_template: qrPurposeTemplate || null,
+        gtin_lookup_enabled: gtinLookupEnabled,
+        gtin_daily_limit: gtinDailyLimit.trim() ? Number(gtinDailyLimit) : null,
+        auto_print_receipt: autoPrintReceipt,
+        // Only send the key when the field is non-empty (empty = keep the stored one).
+        ...(gtinApiKey.trim() ? { gtin_api_key: gtinApiKey.trim() } : {}),
       });
       hydrate(store);
       setMessage('Збережено');
@@ -164,6 +180,78 @@ export function SettingsPage() {
               </label>
             </div>
           )}
+        </div>
+
+        <div className="bg-sq-surface border border-sq-divider rounded-sq p-5 space-y-4 shadow-sm">
+          <div>
+            <p className="sq-section-label">Штрихкоди (GTIN)</p>
+            <p className="text-sq-secondary text-sm mt-1">
+              Під час приймання товару каса підтягує назву та бренд за штрихкодом із зовнішніх
+              баз. На роботу касира не впливає.
+            </p>
+          </div>
+
+          <label className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              checked={gtinLookupEnabled}
+              onChange={(e) => setGtinLookupEnabled(e.target.checked)}
+              className="h-4 w-4"
+            />
+            <span className="text-sm">Шукати товар за штрихкодом</span>
+          </label>
+
+          {gtinLookupEnabled && (
+            <div className="space-y-4 border-t border-sq-divider pt-4">
+              <label className="block">
+                <span className="text-sm text-sq-secondary">API-ключ платного сервісу (upc.dev)</span>
+                <input
+                  type="password"
+                  autoComplete="off"
+                  className="mt-1.5 w-full rounded-sq border border-sq-divider bg-sq-bg px-3 py-2.5 text-sq-text"
+                  value={gtinApiKey}
+                  onChange={(e) => setGtinApiKey(e.target.value)}
+                  placeholder={
+                    gtinApiKeySet ? '•••••••• збережено — введіть новий, щоб замінити' : 'не задано'
+                  }
+                />
+                <span className="text-xs text-sq-muted mt-1 block">
+                  Порожнє поле — ключ не змінюється. Якщо не задано, використовується серверний ключ.
+                </span>
+              </label>
+              <label className="block">
+                <span className="text-sm text-sq-secondary">Ліміт запитів на добу</span>
+                <input
+                  type="number"
+                  min={1}
+                  className="mt-1.5 w-full rounded-sq border border-sq-divider bg-sq-bg px-3 py-2.5 text-sq-text"
+                  value={gtinDailyLimit}
+                  onChange={(e) => setGtinDailyLimit(e.target.value)}
+                  placeholder="100"
+                />
+              </label>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-sq-surface border border-sq-divider rounded-sq p-5 space-y-4 shadow-sm">
+          <div>
+            <p className="sq-section-label">Друк чеків</p>
+            <p className="text-sq-secondary text-sm mt-1">
+              Працює лише на робочому місці каси з налаштованим чековим принтером
+              (десктоп-застосунок). У браузері та без принтера чек не друкується автоматично.
+            </p>
+          </div>
+
+          <label className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              checked={autoPrintReceipt}
+              onChange={(e) => setAutoPrintReceipt(e.target.checked)}
+              className="h-4 w-4"
+            />
+            <span className="text-sm">Автоматично друкувати чек після продажу</span>
+          </label>
         </div>
 
         {message && <p className="text-sm text-sq-blue font-medium">{message}</p>}
