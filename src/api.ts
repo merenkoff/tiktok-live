@@ -107,10 +107,29 @@ export async function createServer(): Promise<FastifyInstance> {
   fastify.register(async (fastify) => {
     fastify.addHook('preHandler', async (request, reply) => {
       // Skip auth для публічних маршрутів
-      const publicRoutes = ['/', '/about', '/pos', '/live', '/health', '/api/leads', '/api/admin/leads', '/styles.css', '/app.js'];
+      const publicRoutes = [
+        '/',
+        '/about',
+        '/pos',
+        '/live',
+        '/yaku-kasu-obraty',
+        '/health',
+        '/api/leads',
+        '/api/admin/leads',
+        '/styles.css',
+        '/robots.txt',
+        '/sitemap.xml',
+        '/llms.txt',
+        '/favicon.ico',
+      ];
       const path = request.url.split('?')[0];
 
-      if (publicRoutes.includes(path) || path.startsWith('/assets/')) {
+      if (
+        publicRoutes.includes(path) ||
+        path.startsWith('/assets/') ||
+        path.startsWith('/icons/') ||
+        path.startsWith('/og/')
+      ) {
         return;
       }
 
@@ -146,14 +165,14 @@ export async function createServer(): Promise<FastifyInstance> {
     return reply.type('text/html; charset=utf-8').send(html);
   });
 
+  fastify.get('/yaku-kasu-obraty', async (_request, reply) => {
+    const html = await readFile(join(siteDistDir, 'compare.html'), 'utf-8');
+    return reply.type('text/html; charset=utf-8').send(html);
+  });
+
   fastify.get('/styles.css', async (_request, reply) => {
     const css = await readFile(join(publicDir, 'styles.css'), 'utf-8');
     return reply.type('text/css; charset=utf-8').send(css);
-  });
-
-  fastify.get('/app.js', async (_request, reply) => {
-    const js = await readFile(join(publicDir, 'app.js'), 'utf-8');
-    return reply.type('application/javascript; charset=utf-8').send(js);
   });
 
   /**

@@ -1,0 +1,33 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /health
+
+# AI answer-engine crawlers — explicitly allowed for AEO.
+# Site content is public marketing copy; there is no reason to block
+# the crawlers that feed AI answer engines / chat search citations.
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+Sitemap: https://the-live.shop/sitemap.xml

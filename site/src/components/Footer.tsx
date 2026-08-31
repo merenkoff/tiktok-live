@@ -13,6 +13,9 @@ export function Footer() {
           <a href="/pos" className="hover:text-ink transition-colors">
             POS каса
           </a>
+          <a href="/yaku-kasu-obraty" className="hover:text-ink transition-colors">
+            Порівняння кас
+          </a>
           <a href="/about" className="hover:text-ink transition-colors">
             Про сервіс
           </a>

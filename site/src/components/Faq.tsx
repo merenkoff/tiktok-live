@@ -1,9 +1,6 @@
-interface Item {
-  q: string;
-  a: string;
-}
+import type { FaqItem } from '../lib/faqJsonLd';
 
-export function Faq({ items }: { items: Item[] }) {
+export function Faq({ items }: { items: FaqItem[] }) {
   return (
     <div className="divide-y divide-line border-y border-line">
       {items.map((item) => (

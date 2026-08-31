@@ -8,11 +8,26 @@ import { BrowserFrame } from '../components/BrowserFrame';
 import { Reveal } from '../components/Reveal';
 import { StickyCta } from '../components/StickyCta';
 import { useOsDetect, type DetectedOs } from '../hooks/useOsDetect';
+import { JsonLd } from '../components/JsonLd';
+import { FaqJsonLd } from '../components/FaqJsonLd';
+import { ORGANIZATION_JSON_LD } from '../lib/organizationJsonLd';
 import posRegister from '../assets/screenshots/pos-register.png';
 import posProducts from '../assets/screenshots/pos-products.png';
 import posReceipt from '../assets/screenshots/pos-receipt.png';
 
 const RELEASES_URL = 'https://github.com/merenkoff/tiktok-live/releases/latest';
+
+const POS_SOFTWARE_JSON_LD = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'The Live Shop POS',
+  applicationCategory: 'BusinessApplication',
+  operatingSystem: 'Windows, macOS, Linux',
+  url: 'https://the-live.shop/pos',
+  description:
+    'Каса для магазину одягу — товари, штрихкоди, склад, знижки, QR-оплата, десктопний термінал з офлайн-режимом.',
+  provider: { '@type': 'Organization', name: 'ТОВ «Технології»' },
+};
 
 const STATS = [
   { value: '0 мс', label: 'затримки офлайн — каса не чекає на сервер' },
@@ -77,6 +92,10 @@ const FAQ_ITEMS = [
     a: 'Вебадмінка — повний кабінет власника з будь-якого браузера, завжди онлайн. Десктопна каса — це саме той офлайн-стійкий термінал для прилавка в магазині.',
   },
   {
+    q: 'Чи є в LiveShop POS фіскалізація чеків (ПРРО)?',
+    a: 'Ні, наразі немає — інтеграція з ПРРО в розробці. Якщо фіскальний чек потрібен вам вже зараз, варто врахувати це при виборі каси.',
+  },
+  {
     q: 'Скільки коштує POS?',
     a: 'Залежить від кількості кас і магазинів — залиште номер телефону, і ми порахуємо разом.',
   },
@@ -95,6 +114,9 @@ export function PosPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <JsonLd data={ORGANIZATION_JSON_LD} />
+      <JsonLd data={POS_SOFTWARE_JSON_LD} />
+      <FaqJsonLd items={FAQ_ITEMS} />
       <Nav variant="pos" />
 
       <main className="flex-1">
@@ -270,6 +292,12 @@ export function PosPage() {
           <Reveal>
             <h2 className="text-2xl sm:text-3xl font-bold mb-8">Питання, які запитують найчастіше</h2>
             <Faq items={FAQ_ITEMS} />
+            <p className="text-sm text-muted mt-6">
+              Порівнюєте з іншими касами?{' '}
+              <a href="/yaku-kasu-obraty" className="text-pos font-semibold">
+                Дивіться чесне порівняння →
+              </a>
+            </p>
           </Reveal>
         </section>
 
