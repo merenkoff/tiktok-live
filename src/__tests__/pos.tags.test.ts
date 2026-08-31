@@ -22,6 +22,7 @@ describe.skipIf(!hasDb)('POS tags + archive', () => {
   let variantId = 0;
   let rootTagId = 0;
   let childTagId = 0;
+  let grandchildTagId = 0;
 
   beforeAll(async () => {
     const fs = await import('fs');
@@ -72,6 +73,11 @@ describe.skipIf(!hasDb)('POS tags + archive', () => {
     rootTagId = root.id;
     const child = await createTag(storeId, { name: 'Tees', parent_id: rootTagId });
     childTagId = child.id;
+    const grandchild = await createTag(storeId, {
+      name: 'Short sleeve',
+      parent_id: childTagId,
+    });
+    grandchildTagId = grandchild.id;
   }, 60000);
 
   afterAll(async () => {
@@ -79,17 +85,26 @@ describe.skipIf(!hasDb)('POS tags + archive', () => {
     await pool.end();
   });
 
-  it('assigns M2M tags and filters catalog by parent including children', async () => {
-    await setProductTags(storeId, productId, [childTagId]);
+  it('assigns M2M tags and filters catalog by parent including nested descendants', async () => {
+    await setProductTags(storeId, productId, [grandchildTagId]);
     const bulk = await assignTagToProducts(storeId, rootTagId, [productId]);
     expect(bulk.assigned).toBe(1);
 
     const ids = await resolveTagFilterIds(storeId, rootTagId);
     expect(ids).toContain(rootTagId);
     expect(ids).toContain(childTagId);
+    expect(ids).toContain(grandchildTagId);
 
+    // Browsing the root must surface a product tagged only 3 levels deep.
+    await setProductTags(storeId, productId, [grandchildTagId]);
     const catalog = await getCatalog(storeId, { tag_id: rootTagId });
     expect(catalog.some((c) => c.product_id === productId)).toBe(true);
+  });
+
+  it('allows 3 levels of nesting but rejects a 4th', async () => {
+    await expect(
+      createTag(storeId, { name: 'Too deep', parent_id: grandchildTagId })
+    ).rejects.toThrow(/3 levels/);
   });
 
   it('hides archived products from catalog', async () => {

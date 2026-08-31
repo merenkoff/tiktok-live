@@ -12,13 +12,28 @@ import { assetUrl } from '../../lib/urls';
 import { DEFAULT_TAG_COLOR, type TagColorKey } from '../../lib/tagColors';
 import { useDragScroll } from '../../hooks/useDragScroll';
 
+const MAX_TAG_DEPTH = 3;
+
 function flattenTags(tags: PosTag[]): PosTag[] {
   const out: PosTag[] = [];
   for (const t of tags) {
     out.push(t);
-    if (t.children) out.push(...t.children);
+    if (t.children?.length) out.push(...flattenTags(t.children));
   }
   return out;
+}
+
+/** "Вік / 0–1 / 3–6 міс" — full path for a nested tag. */
+function tagPathLabel(flatTags: PosTag[], tag: PosTag): string {
+  const parts = [tag.name];
+  let current = tag;
+  while (current.parent_id != null) {
+    const parent = flatTags.find((t) => t.id === current.parent_id);
+    if (!parent) break;
+    parts.unshift(parent.name);
+    current = parent;
+  }
+  return parts.join(' / ');
 }
 
 const fieldClass =
@@ -33,7 +48,6 @@ export function ProductsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [newTagName, setNewTagName] = useState('');
-  const [newTagParent, setNewTagParent] = useState<number | ''>('');
   const [newTagColor, setNewTagColor] = useState<TagColorKey>(DEFAULT_TAG_COLOR);
   const [newTagCatalogBar, setNewTagCatalogBar] = useState(false);
   const [bulkTagId, setBulkTagId] = useState<number | ''>('');
@@ -103,17 +117,26 @@ export function ProductsPage() {
     try {
       await api.createTag({
         name: newTagName,
-        parent_id: newTagParent === '' ? null : Number(newTagParent),
+        parent_id: null,
         color: newTagColor,
         show_in_catalog_bar: newTagCatalogBar,
       });
       setNewTagName('');
-      setNewTagParent('');
       setNewTagColor(DEFAULT_TAG_COLOR);
       setNewTagCatalogBar(false);
       await reload();
     } catch {
-      setError('Не вдалося створити мітку (макс. 2 рівні)');
+      setError('Не вдалося створити групу');
+    }
+  }
+
+  async function createChildTag(parentId: number, name: string) {
+    setError(null);
+    try {
+      await api.createTag({ name, parent_id: parentId, color: DEFAULT_TAG_COLOR });
+      await reload();
+    } catch {
+      setError(`Не вдалося створити підгрупу (макс. ${MAX_TAG_DEPTH} рівні)`);
     }
   }
 
@@ -212,38 +235,23 @@ export function ProductsPage() {
             {needsReviewCount > 0 ? ` (${needsReviewCount})` : ''}
           </button>
           {tags.map((root) => (
-            <div key={root.id} className="space-y-1">
-              <TagAdminRow
-                tag={root}
-                active={filterTag === root.id}
-                saving={savingTagId === root.id}
-                onFilter={() => setFilterTag(root.id)}
-                onColor={(color) => void patchTag(root, { color })}
-                onCatalogBar={(show_in_catalog_bar) =>
-                  void patchTag(root, { show_in_catalog_bar })
-                }
-              />
-              <div className="ml-3 space-y-1">
-                {(root.children ?? []).map((child) => (
-                  <TagAdminRow
-                    key={child.id}
-                    tag={child}
-                    nested
-                    active={filterTag === child.id}
-                    saving={savingTagId === child.id}
-                    onFilter={() => setFilterTag(child.id)}
-                    onColor={(color) => void patchTag(child, { color })}
-                    onCatalogBar={(show_in_catalog_bar) =>
-                      void patchTag(child, { show_in_catalog_bar })
-                    }
-                  />
-                ))}
-              </div>
-            </div>
+            <TagTreeNode
+              key={root.id}
+              tag={root}
+              depth={1}
+              filterTag={filterTag}
+              savingTagId={savingTagId}
+              onFilter={setFilterTag}
+              onColor={(tag, color) => void patchTag(tag, { color })}
+              onCatalogBar={(tag, show_in_catalog_bar) =>
+                void patchTag(tag, { show_in_catalog_bar })
+              }
+              onCreateChild={createChildTag}
+            />
           ))}
 
           <form onSubmit={onCreateTag} className="pt-3 border-t border-sq-divider space-y-2">
-            <p className="text-xs font-semibold text-sq-secondary">Нова мітка</p>
+            <p className="text-xs font-semibold text-sq-secondary">Нова коренева група</p>
             <input
               className={fieldClass}
               placeholder="Назва"
@@ -251,18 +259,6 @@ export function ProductsPage() {
               onChange={(e) => setNewTagName(e.target.value)}
               required
             />
-            <select
-              className={fieldClass}
-              value={newTagParent}
-              onChange={(e) => setNewTagParent(e.target.value === '' ? '' : Number(e.target.value))}
-            >
-              <option value="">Корінь</option>
-              {tags.map((t) => (
-                <option key={t.id} value={t.id}>
-                  під «{t.name}»
-                </option>
-              ))}
-            </select>
             <div className="space-y-1">
               <p className="text-[11px] text-sq-secondary">Колір плитки</p>
               <TagColorSwatches value={newTagColor} onChange={setNewTagColor} size="sm" />
@@ -280,7 +276,7 @@ export function ProductsPage() {
               </span>
             </label>
             <button type="submit" className="sq-btn-primary w-full py-2.5 text-sm">
-              Додати мітку
+              Додати групу
             </button>
           </form>
         </section>
@@ -297,7 +293,7 @@ export function ProductsPage() {
                 <option value="">Мітка…</option>
                 {flatTags.map((t) => (
                   <option key={t.id} value={t.id}>
-                    {t.parent_id ? `↳ ${t.name}` : t.name}
+                    {tagPathLabel(flatTags, t)}
                   </option>
                 ))}
               </select>
@@ -337,7 +333,6 @@ export function ProductsPage() {
                 <EditProductInline
                   key={product.id}
                   product={product}
-                  tags={tags}
                   flatTags={flatTags}
                   onCancel={() => setEditId(null)}
                   onSaved={async () => {
@@ -464,22 +459,110 @@ function VariantsTable({ variants }: { variants: ProductVariant[] }) {
   );
 }
 
+interface TagTreeCallbacks {
+  onFilter: (id: number) => void;
+  onColor: (tag: PosTag, color: TagColorKey) => void;
+  onCatalogBar: (tag: PosTag, value: boolean) => void;
+  onCreateChild: (parentId: number, name: string) => Promise<void>;
+}
+
+function TagTreeNode({
+  tag,
+  depth,
+  filterTag,
+  savingTagId,
+  onFilter,
+  onColor,
+  onCatalogBar,
+  onCreateChild,
+}: TagTreeCallbacks & {
+  tag: PosTag;
+  depth: number;
+  filterTag: number | 'all' | 'needs_review';
+  savingTagId: number | null;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [childName, setChildName] = useState('');
+  const children = tag.children ?? [];
+
+  async function submitChild(e: FormEvent) {
+    e.preventDefault();
+    const name = childName.trim();
+    if (!name) return;
+    await onCreateChild(tag.id, name);
+    setChildName('');
+    setAdding(false);
+  }
+
+  return (
+    <div className="space-y-1">
+      <TagAdminRow
+        tag={tag}
+        nested={depth > 1}
+        active={filterTag === tag.id}
+        saving={savingTagId === tag.id}
+        canAddChild={depth < MAX_TAG_DEPTH}
+        onFilter={() => onFilter(tag.id)}
+        onColor={(color) => onColor(tag, color)}
+        onCatalogBar={(value) => onCatalogBar(tag, value)}
+        onAddChild={() => setAdding((v) => !v)}
+      />
+      {(adding || children.length > 0) && (
+        <div className="ml-3 space-y-1 border-l border-sq-divider pl-2">
+          {children.map((child) => (
+            <TagTreeNode
+              key={child.id}
+              tag={child}
+              depth={depth + 1}
+              filterTag={filterTag}
+              savingTagId={savingTagId}
+              onFilter={onFilter}
+              onColor={onColor}
+              onCatalogBar={onCatalogBar}
+              onCreateChild={onCreateChild}
+            />
+          ))}
+          {adding && (
+            <form onSubmit={(e) => void submitChild(e)} className="flex gap-1.5 pt-1">
+              <input
+                autoFocus
+                className={fieldClass}
+                placeholder={`Підгрупа в «${tag.name}»`}
+                value={childName}
+                onChange={(e) => setChildName(e.target.value)}
+                required
+              />
+              <button type="submit" className="sq-btn-primary px-3 text-sm shrink-0">
+                OK
+              </button>
+            </form>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TagAdminRow({
   tag,
   nested,
   active,
   saving,
+  canAddChild,
   onFilter,
   onColor,
   onCatalogBar,
+  onAddChild,
 }: {
   tag: PosTag;
   nested?: boolean;
   active: boolean;
   saving: boolean;
+  canAddChild: boolean;
   onFilter: () => void;
   onColor: (color: TagColorKey) => void;
   onCatalogBar: (value: boolean) => void;
+  onAddChild: () => void;
 }) {
   return (
     <div
@@ -487,18 +570,30 @@ function TagAdminRow({
         active ? 'bg-sq-blue/10 border-sq-blue/30' : ''
       } ${saving ? 'opacity-60' : ''}`}
     >
-      <button
-        type="button"
-        onClick={onFilter}
-        className={`w-full text-left px-2 py-1 rounded-[4px] font-medium ${
-          nested ? 'text-sm text-[#6E6E6E]' : 'text-sm'
-        } ${active ? 'text-sq-blue' : 'text-sq-text'}`}
-      >
-        {tag.name}
-        {tag.show_in_catalog_bar && (
-          <span className="ml-1.5 text-[10px] font-normal text-sq-blue">рядок</span>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={onFilter}
+          className={`flex-1 text-left px-2 py-1 rounded-[4px] font-medium ${
+            nested ? 'text-sm text-[#6E6E6E]' : 'text-sm'
+          } ${active ? 'text-sq-blue' : 'text-sq-text'}`}
+        >
+          {tag.name}
+          {tag.show_in_catalog_bar && (
+            <span className="ml-1.5 text-[10px] font-normal text-sq-blue">рядок</span>
+          )}
+        </button>
+        {canAddChild && (
+          <button
+            type="button"
+            onClick={onAddChild}
+            title="Додати підгрупу"
+            className="shrink-0 text-xs font-semibold text-sq-blue px-1.5 py-1 rounded-[4px] hover:bg-sq-blue/10"
+          >
+            + підгрупа
+          </button>
         )}
-      </button>
+      </div>
       <TagColorSwatches
         value={tag.color}
         onChange={onColor}
@@ -519,14 +614,12 @@ function TagAdminRow({
 
 function EditProductInline({
   product,
-  tags,
   flatTags,
   onCancel,
   onSaved,
   onCloseAfterSave,
 }: {
   product: Product;
-  tags: PosTag[];
   flatTags: PosTag[];
   onCancel: () => void;
   onSaved: () => Promise<void>;
@@ -643,8 +736,7 @@ function EditProductInline({
                 checked={tagIds.includes(t.id)}
                 onChange={() => toggleTag(t.id)}
               />
-              {t.parent_id ? `${tags.find((r) => r.id === t.parent_id)?.name} / ` : ''}
-              {t.name}
+              {tagPathLabel(flatTags, t)}
             </label>
           ))}
           {flatTags.length === 0 && (

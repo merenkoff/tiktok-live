@@ -13,11 +13,24 @@ export function flattenTags(tags: PosTag[]): PosTag[] {
   return out;
 }
 
-/** Tag id + direct children — matches backend `resolveTagFilterIds`. */
+/** Tag id + every descendant — matches backend `resolveTagFilterIds`. */
 export function tagFilterIds(tags: PosTag[], tagId: number): number[] {
   const flat = flattenTags(tags);
-  const children = flat.filter((t) => t.parent_id === tagId).map((t) => t.id);
-  return [tagId, ...children];
+  const byParent = new Map<number, number[]>();
+  for (const t of flat) {
+    if (t.parent_id == null) continue;
+    const siblings = byParent.get(t.parent_id) ?? [];
+    siblings.push(t.id);
+    byParent.set(t.parent_id, siblings);
+  }
+  const ids: number[] = [];
+  const stack = [tagId];
+  while (stack.length) {
+    const id = stack.pop() as number;
+    ids.push(id);
+    for (const childId of byParent.get(id) ?? []) stack.push(childId);
+  }
+  return ids;
 }
 
 export function filterCatalog(

@@ -33,7 +33,7 @@ function flattenTags(tags: PosTag[]): PosTag[] {
   const out: PosTag[] = [];
   for (const t of tags) {
     out.push(t);
-    if (t.children?.length) out.push(...t.children);
+    if (t.children?.length) out.push(...flattenTags(t.children));
   }
   return out;
 }

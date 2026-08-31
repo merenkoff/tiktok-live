@@ -19,6 +19,9 @@ export const TAG_COLOR_KEYS = [
 
 export type TagColorKey = (typeof TAG_COLOR_KEYS)[number];
 
+/** Max category nesting: root → subgroup → sub-subgroup. */
+export const MAX_TAG_DEPTH = 3;
+
 export interface PosTag {
   id: number;
   store_id: number;
@@ -56,10 +59,18 @@ export async function listTags(storeId: number): Promise<PosTag[]> {
     [storeId]
   );
   const tags = result.rows.map(mapTag);
-  const roots = tags.filter((t) => t.parent_id == null);
-  for (const root of roots) {
-    root.children = tags.filter((t) => t.parent_id === root.id);
+  const byParent = new Map<number | null, PosTag[]>();
+  for (const tag of tags) {
+    const siblings = byParent.get(tag.parent_id) ?? [];
+    siblings.push(tag);
+    byParent.set(tag.parent_id, siblings);
   }
+  const attach = (node: PosTag): void => {
+    node.children = byParent.get(node.id) ?? [];
+    node.children.forEach(attach);
+  };
+  const roots = byParent.get(null) ?? [];
+  roots.forEach(attach);
   return roots;
 }
 
@@ -76,13 +87,23 @@ async function assertMaxDepth(
   parentId: number | null
 ): Promise<void> {
   if (parentId == null) return;
-  const parent = await pool.query(
-    `SELECT id, parent_id FROM pos_tags WHERE id = $1 AND store_id = $2`,
+  const res = await pool.query(
+    `WITH RECURSIVE ancestors AS (
+       SELECT id, parent_id, 1 AS depth
+       FROM pos_tags WHERE id = $1 AND store_id = $2
+       UNION ALL
+       SELECT p.id, p.parent_id, a.depth + 1
+       FROM pos_tags p
+       JOIN ancestors a ON p.id = a.parent_id
+       WHERE p.store_id = $2
+     )
+     SELECT MAX(depth) AS depth FROM ancestors`,
     [parentId, storeId]
   );
-  if (parent.rows.length === 0) throw new Error('Parent tag not found');
-  if (parent.rows[0].parent_id != null) {
-    throw new Error('Tags support only 2 levels');
+  const parentDepth = res.rows[0]?.depth == null ? null : Number(res.rows[0].depth);
+  if (parentDepth == null) throw new Error('Parent tag not found');
+  if (parentDepth + 1 > MAX_TAG_DEPTH) {
+    throw new Error(`Tags support only ${MAX_TAG_DEPTH} levels`);
   }
 }
 
@@ -280,23 +301,24 @@ export async function getProductTagIds(
   return map;
 }
 
-/** Tag id + all direct children ids (for parent folder browse). */
+/** Tag id + every descendant id (for parent folder browse, any depth). */
 export async function resolveTagFilterIds(
   storeId: number,
   tagId: number
 ): Promise<number[]> {
-  const tag = await pool.query(
-    `SELECT id, parent_id FROM pos_tags WHERE id = $1 AND store_id = $2`,
+  const result = await pool.query(
+    `WITH RECURSIVE subtree AS (
+       SELECT id FROM pos_tags WHERE id = $1 AND store_id = $2
+       UNION ALL
+       SELECT c.id FROM pos_tags c
+       JOIN subtree s ON c.parent_id = s.id
+       WHERE c.store_id = $2
+     )
+     SELECT id FROM subtree`,
     [tagId, storeId]
   );
-  if (tag.rows.length === 0) throw new Error('Tag not found');
-
-  const children = await pool.query(
-    `SELECT id FROM pos_tags WHERE parent_id = $1 AND store_id = $2`,
-    [tagId, storeId]
-  );
-  const ids = [tagId, ...children.rows.map((r) => Number(r.id))];
-  return ids;
+  if (result.rows.length === 0) throw new Error('Tag not found');
+  return result.rows.map((r) => Number(r.id));
 }
 
 export async function seedDemoTags(storeId: number): Promise<void> {
