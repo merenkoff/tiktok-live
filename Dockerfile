@@ -1,3 +1,13 @@
+# ---- Stage 1: build the marketing site (site/) ----
+FROM node:20-alpine AS site-builder
+WORKDIR /app/site
+COPY site/package*.json ./
+RUN npm ci
+COPY site/ ./
+RUN npm run build
+# -> /app/site/dist/{index.html,pos.html,live.html,assets/*}
+
+# ---- Stage 2: backend runtime ----
 FROM node:20-alpine
 
 WORKDIR /app
@@ -13,6 +23,7 @@ RUN npm ci
 COPY src/ ./src/
 COPY public/ ./public/
 COPY migrations/ ./migrations/
+COPY --from=site-builder /app/site/dist ./site/dist
 RUN mkdir -p data/pos-uploads logs
 
 # Build and drop devDependencies

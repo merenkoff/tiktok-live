@@ -29,6 +29,7 @@ import { ensureAuth } from './core/auth.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(__dirname, '..', 'public');
+const siteDistDir = join(__dirname, '..', 'site', 'dist');
 
 //Double routes check here and in files like sessions.controller atc... and controllers // seems like controllers is the better aproch but now i cant cheak all of the routes. It wiil be fixed later
 export async function createServer(): Promise<FastifyInstance> {
@@ -92,16 +93,24 @@ export async function createServer(): Promise<FastifyInstance> {
     prefix: '/',
   });
 
+  // New marketing site's hashed build assets (site/dist/assets/*) — separate
+  // prefix from the public/ mount above, so no route collision.
+  await fastify.register(staticPlugin, {
+    root: join(siteDistDir, 'assets'),
+    prefix: '/assets/',
+    decorateReply: false,
+  });
+
   /**
    * Auth middleware for protected routes
    */
   fastify.register(async (fastify) => {
     fastify.addHook('preHandler', async (request, reply) => {
       // Skip auth для публічних маршрутів
-      const publicRoutes = ['/', '/about', '/pos', '/health', '/api/leads', '/api/admin/leads', '/styles.css', '/app.js'];
+      const publicRoutes = ['/', '/about', '/pos', '/live', '/health', '/api/leads', '/api/admin/leads', '/styles.css', '/app.js'];
       const path = request.url.split('?')[0];
-      
-      if (publicRoutes.includes(path)) {
+
+      if (publicRoutes.includes(path) || path.startsWith('/assets/')) {
         return;
       }
 
@@ -118,7 +127,7 @@ export async function createServer(): Promise<FastifyInstance> {
    * Public routes (без auth)
    */
   fastify.get('/', async (_request, reply) => {
-    const html = await readFile(join(publicDir, 'index.html'), 'utf-8');
+    const html = await readFile(join(siteDistDir, 'index.html'), 'utf-8');
     return reply.type('text/html; charset=utf-8').send(html);
   });
 
@@ -128,7 +137,12 @@ export async function createServer(): Promise<FastifyInstance> {
   });
 
   fastify.get('/pos', async (_request, reply) => {
-    const html = await readFile(join(publicDir, 'pos.html'), 'utf-8');
+    const html = await readFile(join(siteDistDir, 'pos.html'), 'utf-8');
+    return reply.type('text/html; charset=utf-8').send(html);
+  });
+
+  fastify.get('/live', async (_request, reply) => {
+    const html = await readFile(join(siteDistDir, 'live.html'), 'utf-8');
     return reply.type('text/html; charset=utf-8').send(html);
   });
 
