@@ -20,6 +20,7 @@ export default defineConfig({
         main: resolve(__dirname, 'index.html'),
         live: resolve(__dirname, 'live.html'),
         pos: resolve(__dirname, 'pos.html'),
+        compare: resolve(__dirname, 'compare.html'),
       },
     },
   },

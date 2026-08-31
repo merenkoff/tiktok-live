@@ -2,12 +2,15 @@ import { Nav } from '../components/Nav';
 import { Footer } from '../components/Footer';
 import { ProductCard } from '../components/ProductCard';
 import { Reveal } from '../components/Reveal';
+import { JsonLd } from '../components/JsonLd';
+import { ORGANIZATION_JSON_LD } from '../lib/organizationJsonLd';
 import liveScreenshot from '../assets/screenshots/live-session.png';
 import posScreenshot from '../assets/screenshots/pos-register.png';
 
 export function Home() {
   return (
     <div className="min-h-screen flex flex-col">
+      <JsonLd data={ORGANIZATION_JSON_LD} />
       <Nav variant="home" />
 
       <main className="flex-1">

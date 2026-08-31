@@ -9,7 +9,22 @@ import { BrowserFrame } from '../components/BrowserFrame';
 import { TelegramChatMockup } from '../components/TelegramChatMockup';
 import { Reveal } from '../components/Reveal';
 import { StickyCta } from '../components/StickyCta';
+import { JsonLd } from '../components/JsonLd';
+import { FaqJsonLd } from '../components/FaqJsonLd';
+import { ORGANIZATION_JSON_LD } from '../lib/organizationJsonLd';
 import liveScreenshot from '../assets/screenshots/live-session.png';
+
+const LIVE_SOFTWARE_JSON_LD = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'The Live Shop — TikTok LIVE',
+  applicationCategory: 'BusinessApplication',
+  operatingSystem: 'Web',
+  url: 'https://the-live.shop/live',
+  description:
+    'Бот читає коментарі TikTok LIVE, тримає товар бронею, оформлює замовлення в Telegram і створює ТТН Нової Пошти.',
+  provider: { '@type': 'Organization', name: 'ТОВ «Технології»' },
+};
 
 const STATS = [
   { value: '3 мови', label: 'розпізнає коментарі — EN, UK, RU' },
@@ -57,6 +72,9 @@ export function LivePage() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <JsonLd data={ORGANIZATION_JSON_LD} />
+      <JsonLd data={LIVE_SOFTWARE_JSON_LD} />
+      <FaqJsonLd items={FAQ_ITEMS} />
       <Nav variant="live" />
 
       <main className="flex-1">
@@ -165,6 +183,13 @@ export function LivePage() {
         </section>
 
         {/* Feature narrative */}
+        <section className="max-w-6xl mx-auto px-6 pt-20">
+          <Reveal>
+            <h2 className="text-2xl sm:text-3xl font-bold text-center max-w-xl mx-auto">
+              Що саме автоматизує LiveShop
+            </h2>
+          </Reveal>
+        </section>
         <section className="max-w-6xl mx-auto px-6 divide-y divide-line">
           <FeatureRow
             eyebrow="Розпізнавання коментарів"
@@ -242,7 +267,7 @@ export function LivePage() {
               className="block rounded-card border border-line bg-pos/5 hover:bg-pos/10 transition-colors p-8 text-center"
             >
               <p className="text-sm font-semibold uppercase tracking-wide text-pos">А ще</p>
-              <h3 className="text-2xl font-extrabold mt-2">Продаєш ще й офлайн?</h3>
+              <h2 className="text-2xl font-extrabold mt-2">Продаєш ще й офлайн?</h2>
               <p className="text-muted mt-3 max-w-lg mx-auto">
                 POS каса від того ж LiveShop — з режимом роботи без інтернету для магазину в
                 залі.
