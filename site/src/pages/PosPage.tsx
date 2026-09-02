@@ -5,7 +5,8 @@ import { CTAForm } from '../components/CTAForm';
 import { TwoColumnCompare } from '../components/TwoColumnCompare';
 import { Faq } from '../components/Faq';
 import { BrowserFrame } from '../components/BrowserFrame';
-import { Reveal } from '../components/Reveal';
+import { Reveal, StaggerGroup, StaggerItem } from '../components/Reveal';
+import { DecorCircle } from '../components/DecorCircle';
 import { StickyCta } from '../components/StickyCta';
 import { useOsDetect, type DetectedOs } from '../hooks/useOsDetect';
 import { JsonLd } from '../components/JsonLd';
@@ -13,7 +14,7 @@ import { FaqJsonLd } from '../components/FaqJsonLd';
 import { ORGANIZATION_JSON_LD } from '../lib/organizationJsonLd';
 import { useScrollToHash } from '../hooks/useScrollToHash';
 import { ScanLine, Package, Users, Tag, Receipt, QrCode, BarChart3, Download, KeyRound, ShoppingCart } from 'lucide-react';
-import posProducts from '../assets/screenshots/pos-products.png';
+import posTerminalHero from '../assets/photo/pos-terminal-hero.jpg';
 import posReceipt from '../assets/screenshots/pos-receipt.png';
 import posRegisterMp4 from '../assets/video/pos-register-loop.mp4';
 import posRegisterWebm from '../assets/video/pos-register-loop.webm';
@@ -154,13 +155,17 @@ export function PosPage() {
 
       <main className="flex-1">
         {/* Hero */}
-        <section ref={heroRef} className="max-w-6xl mx-auto px-6 pt-16 pb-20 grid lg:grid-cols-2 gap-12 items-center">
+        <section ref={heroRef} className="relative max-w-6xl mx-auto px-6 pt-16 pb-20 grid lg:grid-cols-2 gap-12 items-center">
+          <DecorCircle
+            colorClass="bg-pos/10"
+            className="absolute -top-10 -left-16 w-72 h-72 sm:w-96 sm:h-96 -z-10"
+          />
           <Reveal>
             <p className="text-sm font-semibold uppercase tracking-wide text-pos">Каса для офлайн-точки</p>
-            <h1 className="text-5xl sm:text-6xl font-extrabold tracking-tight mt-4 leading-[1.02]">
+            <h1 className="text-6xl sm:text-7xl font-extrabold tracking-tighter mt-4 leading-[0.98]">
               Одна каса.
               <br />
-              Онлайн і офлайн продажі.
+              Онлайн і офлайн.
             </h1>
             <p className="text-muted text-lg mt-6 leading-relaxed">
               Товари, штрихкоди, склад, знижки та QR-оплата на касі — і десктопний термінал, який
@@ -176,11 +181,10 @@ export function PosPage() {
             </div>
           </Reveal>
           <Reveal>
-            <BrowserFrame
-              alt="Реальний запис роботи каси: додавання товарів, знижка, оплата"
-              accentClass="border-pos/30"
-              elevated
-              video={{ mp4: posRegisterMp4, webm: posRegisterWebm, poster: posRegisterPoster }}
+            <img
+              src={posTerminalHero}
+              alt="Каса LiveShop POS на терміналі — каталог товарів і кошик з реальним чеком"
+              className="w-full h-auto rounded-2xl shadow-ambient"
             />
           </Reveal>
         </section>
@@ -190,8 +194,8 @@ export function PosPage() {
           <div className="max-w-6xl mx-auto px-6 py-10 grid sm:grid-cols-3 gap-8 text-center">
             {STATS.map((s) => (
               <div key={s.label}>
-                <p className="text-3xl font-extrabold text-pos">{s.value}</p>
-                <p className="text-muted text-sm mt-1.5">{s.label}</p>
+                <p className="font-mono text-6xl md:text-7xl font-bold text-pos tracking-tight">{s.value}</p>
+                <p className="text-muted text-sm mt-2">{s.label}</p>
               </div>
             ))}
           </div>
@@ -202,21 +206,25 @@ export function PosPage() {
           <Reveal>
             <h2 className="text-2xl sm:text-3xl font-bold text-center max-w-xl mx-auto">Що всередині</h2>
           </Reveal>
-          <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <StaggerGroup className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {FEATURES.map((f) => (
-              <Reveal key={f.t}>
-                <div className="border border-line rounded-card p-6 h-full bg-paper transition-all duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:border-pos/30">
+              <StaggerItem key={f.t}>
+                <div className="border border-line rounded-card p-6 h-full bg-paper transition-all duration-200 ease-out hover:-translate-y-1 hover:rotate-1 hover:shadow-lg hover:border-pos/30">
                   <div className="w-10 h-10 rounded-full bg-pos/5 grid place-items-center">
                     <f.icon className="w-5 h-5 text-pos" strokeWidth={1.75} />
                   </div>
                   <h3 className="font-bold mt-4">{f.t}</h3>
                   <p className="text-muted text-sm mt-2.5 leading-relaxed">{f.d}</p>
                 </div>
-              </Reveal>
+              </StaggerItem>
             ))}
-          </div>
+          </StaggerGroup>
           <Reveal className="mt-10">
-            <BrowserFrame src={posProducts} alt="Сторінка товарів із деревом категорій" accentClass="border-pos/30" />
+            <BrowserFrame
+              alt="Реальний запис роботи каси: додавання товарів, знижка, оплата"
+              accentClass="border-pos/30"
+              video={{ mp4: posRegisterMp4, webm: posRegisterWebm, poster: posRegisterPoster }}
+            />
           </Reveal>
         </section>
 
@@ -239,8 +247,13 @@ export function PosPage() {
                   'Перевіряє PIN касира локально через PBKDF2 — без запиту на сервер',
                   'Ставить нові продажі й клієнтів у чергу, поки немає з\'єднання',
                   'Синхронізує чергу автоматично, щойно мережа з\'явиться — спершу клієнтів, потім продажі',
-                ].map((t) => (
-                  <li key={t} className="flex items-start gap-3 text-sm text-white/90 bg-white/5 border border-white/10 rounded-card p-4">
+                ].map((t, i) => (
+                  <li
+                    key={t}
+                    className={`flex items-start gap-3 text-sm text-white/90 bg-white/5 border border-white/10 rounded-card p-4 ${
+                      i % 2 === 1 ? 'sm:mt-6' : ''
+                    }`}
+                  >
                     <span className="mt-1 w-1.5 h-1.5 rounded-full bg-pos shrink-0" />
                     {t}
                   </li>
