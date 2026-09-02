@@ -12,9 +12,12 @@ import { JsonLd } from '../components/JsonLd';
 import { FaqJsonLd } from '../components/FaqJsonLd';
 import { ORGANIZATION_JSON_LD } from '../lib/organizationJsonLd';
 import { useScrollToHash } from '../hooks/useScrollToHash';
-import posRegister from '../assets/screenshots/pos-register.png';
+import { ScanLine, Package, Users, Tag, Receipt, QrCode, BarChart3, Download, KeyRound, ShoppingCart } from 'lucide-react';
 import posProducts from '../assets/screenshots/pos-products.png';
 import posReceipt from '../assets/screenshots/pos-receipt.png';
+import posRegisterMp4 from '../assets/video/pos-register-loop.mp4';
+import posRegisterWebm from '../assets/video/pos-register-loop.webm';
+import posRegisterPoster from '../assets/video/pos-register-poster.png';
 
 const RELEASES_URL = 'https://github.com/merenkoff/tiktok-live/releases/latest';
 
@@ -40,30 +43,58 @@ const FEATURES = [
   {
     t: 'Товари й штрихкоди',
     d: 'Скануєш штрихкод — система шукає товар у власній базі, а якщо його там ще немає, підвантажує назву й фото через GTIN-довідники. Пайплайн навчання запам\'ятовує підтверджені відповідності, тож наступного разу розпізнає точніше.',
+    icon: ScanLine,
   },
   {
     t: 'Склад',
     d: 'Прихід, списання і коригування залишків оформлюються документами з проведенням і сторно — завжди видно, хто і коли змінив залишок. Система сама попереджає про товари на межі закінчення та веде довідник постачальників.',
+    icon: Package,
   },
   {
     t: 'Персонал',
     d: 'Власник заходить по email і паролю в повний кабінет, продавець — за PIN-кодом одразу на касу. Ролі розділені: продавцю не потрібен доступ до налаштувань чи звітів.',
+    icon: Users,
   },
   {
     t: 'Знижки та клієнти',
     d: 'Довідник клієнтів і знижки на чек або окремий товар — без стороннього CRM.',
+    icon: Tag,
   },
   {
     t: 'Продажі',
     d: 'Завершення чека ідемпотентне: якщо касовий термінал повторить запит через збій мережі, продаж не задвоїться. Скасування і повернення — тут же, з касового екрана.',
+    icon: Receipt,
   },
   {
     t: 'QR-оплата на касі',
     d: 'Динамічний QR-код через Opendatabot, оплата підтверджується вебхуком автоматично, а щоденна звірка перевіряє, що всі платежі знайшли свій чек.',
+    icon: QrCode,
   },
   {
     t: 'Аналітика',
     d: 'Звіти з продажів по днях, середній чек і популярні товари — просто в кабінеті власника, без експорту в Excel.',
+    icon: BarChart3,
+  },
+];
+
+const GETTING_STARTED = [
+  {
+    n: '01',
+    icon: Download,
+    t: 'Завантажте й встановіть',
+    d: 'Оберіть збірку під вашу ОС вище і встановіть застосунок — інсталятор запускається як звичайна програма.',
+  },
+  {
+    n: '02',
+    icon: KeyRound,
+    t: 'Увійдіть один раз онлайн',
+    d: 'Власник — по email і паролю, продавець — за PIN. Перший вхід потребує інтернету: каса знімає локальну копію каталогу й клієнтів, а сам PIN зберігається лише як PBKDF2-хеш, не у відкритому вигляді.',
+  },
+  {
+    n: '03',
+    icon: ShoppingCart,
+    t: 'Продавайте — навіть офлайн',
+    d: 'Далі каса працює з локальної копії: PIN перевіряється на пристрої, чеки пробиваються без затримки, а нові продажі стають у чергу на синхронізацію, щойно з\'явиться мережа.',
   },
 ];
 
@@ -126,7 +157,7 @@ export function PosPage() {
         <section ref={heroRef} className="max-w-6xl mx-auto px-6 pt-16 pb-20 grid lg:grid-cols-2 gap-12 items-center">
           <Reveal>
             <p className="text-sm font-semibold uppercase tracking-wide text-pos">Каса для офлайн-точки</p>
-            <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight mt-4 leading-[1.05]">
+            <h1 className="text-5xl sm:text-6xl font-extrabold tracking-tight mt-4 leading-[1.02]">
               Одна каса.
               <br />
               Онлайн і офлайн продажі.
@@ -145,7 +176,12 @@ export function PosPage() {
             </div>
           </Reveal>
           <Reveal>
-            <BrowserFrame src={posRegister} alt="Екран каси зі списком товарів у чеку" accentClass="border-pos/30" />
+            <BrowserFrame
+              alt="Реальний запис роботи каси: додавання товарів, знижка, оплата"
+              accentClass="border-pos/30"
+              elevated
+              video={{ mp4: posRegisterMp4, webm: posRegisterWebm, poster: posRegisterPoster }}
+            />
           </Reveal>
         </section>
 
@@ -169,8 +205,11 @@ export function PosPage() {
           <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {FEATURES.map((f) => (
               <Reveal key={f.t}>
-                <div className="border border-line rounded-card p-6 h-full bg-paper">
-                  <h3 className="font-bold">{f.t}</h3>
+                <div className="border border-line rounded-card p-6 h-full bg-paper transition-all duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:border-pos/30">
+                  <div className="w-10 h-10 rounded-full bg-pos/5 grid place-items-center">
+                    <f.icon className="w-5 h-5 text-pos" strokeWidth={1.75} />
+                  </div>
+                  <h3 className="font-bold mt-4">{f.t}</h3>
                   <p className="text-muted text-sm mt-2.5 leading-relaxed">{f.d}</p>
                 </div>
               </Reveal>
@@ -257,7 +296,9 @@ export function PosPage() {
                 <Reveal key={card.key}>
                   <div
                     className={`border rounded-card p-6 text-center bg-paper h-full flex flex-col ${
-                      os === card.key ? 'border-pos shadow-lg' : 'border-line'
+                      os === card.key
+                        ? 'border-pos shadow-lg'
+                        : 'border-line transition-all duration-200 ease-out hover:-translate-y-1 hover:shadow-lg'
                     }`}
                   >
                     {os === card.key && (
@@ -283,6 +324,30 @@ export function PosPage() {
                 Визначили вашу систему як {osLabel(os)} — рекомендована збірка виділена вище.
               </p>
             )}
+          </div>
+        </section>
+
+        {/* Getting started */}
+        <section className="max-w-6xl mx-auto px-6 py-20">
+          <Reveal>
+            <h2 className="text-2xl sm:text-3xl font-bold text-center max-w-xl mx-auto">Як почати</h2>
+            <p className="text-muted text-center mt-3">Від встановлення до першого чека — три кроки.</p>
+          </Reveal>
+          <div className="mt-12 grid sm:grid-cols-3 gap-8">
+            {GETTING_STARTED.map((s) => (
+              <Reveal key={s.n}>
+                <div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-pos font-extrabold text-sm">{s.n}</span>
+                    <div className="w-9 h-9 rounded-full bg-pos/5 grid place-items-center">
+                      <s.icon className="w-4 h-4 text-pos" strokeWidth={1.75} />
+                    </div>
+                  </div>
+                  <h3 className="font-bold mt-4">{s.t}</h3>
+                  <p className="text-muted text-sm mt-2.5 leading-relaxed">{s.d}</p>
+                </div>
+              </Reveal>
+            ))}
           </div>
         </section>
 
