@@ -4,10 +4,13 @@ import { ProductCard } from '../components/ProductCard';
 import { Reveal } from '../components/Reveal';
 import { JsonLd } from '../components/JsonLd';
 import { ORGANIZATION_JSON_LD } from '../lib/organizationJsonLd';
+import { useScrollToHash } from '../hooks/useScrollToHash';
 import liveScreenshot from '../assets/screenshots/live-session.png';
 import posScreenshot from '../assets/screenshots/pos-register.png';
 
 export function Home() {
+  useScrollToHash();
+
   return (
     <div className="min-h-screen flex flex-col">
       <JsonLd data={ORGANIZATION_JSON_LD} />
@@ -29,7 +32,7 @@ export function Home() {
           </Reveal>
         </section>
 
-        <section className="max-w-6xl mx-auto px-6 pb-24">
+        <section id="products" className="max-w-6xl mx-auto px-6 pb-24">
           <div className="grid sm:grid-cols-2 gap-6">
             <Reveal>
               <ProductCard
