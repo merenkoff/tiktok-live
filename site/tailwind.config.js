@@ -24,6 +24,9 @@ export default {
       borderRadius: {
         card: '12px',
       },
+      boxShadow: {
+        ambient: '0 30px 60px -20px rgba(26,26,26,0.25), 0 10px 24px -12px rgba(26,26,26,0.15)',
+      },
     },
   },
   plugins: [],

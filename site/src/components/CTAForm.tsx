@@ -42,7 +42,7 @@ export function CTAForm({ id, accent, heading, subheading, buttonLabel, showName
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Ім'я"
-            className="flex-1 rounded-full border border-line bg-paper px-4 py-3 text-sm outline-none focus:border-ink transition-colors"
+            className="flex-1 rounded-full border border-line bg-paper px-4 py-3 text-sm outline-none focus:border-ink focus:ring-2 focus:ring-ink/10 transition-colors"
           />
         )}
         <input
@@ -55,7 +55,7 @@ export function CTAForm({ id, accent, heading, subheading, buttonLabel, showName
         <button
           type="submit"
           disabled={status === 'sending'}
-          className={`shrink-0 text-white text-sm font-semibold px-6 py-3 rounded-full transition-colors disabled:opacity-60 ${BUTTON_CLASS[accent]}`}
+          className={`shrink-0 text-white text-sm font-semibold px-6 py-3 rounded-full transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none ${BUTTON_CLASS[accent]}`}
         >
           {status === 'sending' ? 'Надсилаємо…' : buttonLabel}
         </button>
