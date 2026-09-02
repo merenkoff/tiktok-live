@@ -10,6 +10,7 @@ import { Reveal } from '../components/Reveal';
 import { StickyCta } from '../components/StickyCta';
 import { JsonLd } from '../components/JsonLd';
 import { ORGANIZATION_JSON_LD } from '../lib/organizationJsonLd';
+import { useScrollToHash } from '../hooks/useScrollToHash';
 import posProducts from '../assets/screenshots/pos-products.png';
 
 const CRITERIA = [
@@ -45,6 +46,7 @@ const FAQ_ITEMS = [
 
 export function ComparePage() {
   const heroRef = useRef<HTMLElement>(null);
+  useScrollToHash();
 
   return (
     <div className="min-h-screen flex flex-col">

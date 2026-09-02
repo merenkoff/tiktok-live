@@ -11,6 +11,7 @@ import { useOsDetect, type DetectedOs } from '../hooks/useOsDetect';
 import { JsonLd } from '../components/JsonLd';
 import { FaqJsonLd } from '../components/FaqJsonLd';
 import { ORGANIZATION_JSON_LD } from '../lib/organizationJsonLd';
+import { useScrollToHash } from '../hooks/useScrollToHash';
 import posRegister from '../assets/screenshots/pos-register.png';
 import posProducts from '../assets/screenshots/pos-products.png';
 import posReceipt from '../assets/screenshots/pos-receipt.png';
@@ -111,6 +112,7 @@ function osLabel(os: DetectedOs): string | null {
 export function PosPage() {
   const os = useOsDetect();
   const heroRef = useRef<HTMLElement>(null);
+  useScrollToHash();
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -304,6 +306,7 @@ export function PosPage() {
         {/* Closing CTA */}
         <section className="max-w-3xl mx-auto px-6 pb-24">
           <CTAForm
+            id="cta"
             accent="pos"
             heading="Готові підключити касу?"
             subheading="Залиште ім'я і телефон — допоможемо налаштувати під ваш магазин."

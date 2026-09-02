@@ -26,7 +26,7 @@ export function Nav({ variant }: { variant: Variant }) {
           </a>
         </nav>
         <a
-          href={variant === 'pos' ? '#download' : '#cta'}
+          href={variant === 'pos' ? '#download' : variant === 'live' ? '#cta' : '#products'}
           className={`text-sm font-semibold px-4 py-2 rounded-full text-white ${
             variant === 'pos' ? 'bg-pos hover:bg-pos-press' : variant === 'live' ? 'bg-live hover:bg-live-press' : 'bg-ink hover:bg-black'
           } transition-colors`}

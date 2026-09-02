@@ -12,6 +12,7 @@ import { StickyCta } from '../components/StickyCta';
 import { JsonLd } from '../components/JsonLd';
 import { FaqJsonLd } from '../components/FaqJsonLd';
 import { ORGANIZATION_JSON_LD } from '../lib/organizationJsonLd';
+import { useScrollToHash } from '../hooks/useScrollToHash';
 import liveScreenshot from '../assets/screenshots/live-session.png';
 
 const LIVE_SOFTWARE_JSON_LD = {
@@ -69,6 +70,7 @@ const FAQ_ITEMS = [
 
 export function LivePage() {
   const heroRef = useRef<HTMLElement>(null);
+  useScrollToHash();
 
   return (
     <div className="min-h-screen flex flex-col">
