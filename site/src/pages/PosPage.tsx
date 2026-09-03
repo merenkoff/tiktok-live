@@ -15,7 +15,7 @@ import { ORGANIZATION_JSON_LD } from '../lib/organizationJsonLd';
 import { useScrollToHash } from '../hooks/useScrollToHash';
 import { ScanLine, Package, Users, Tag, Receipt, QrCode, BarChart3, Download, KeyRound, ShoppingCart } from 'lucide-react';
 import posTerminalHero from '../assets/photo/pos-terminal-hero.jpg';
-import posDevicesReceipt from '../assets/photo/pos-devices-receipt.jpg';
+import posDevicesReceipt from '../assets/photo/pos-devices-receipt.png';
 import posRegisterMp4 from '../assets/video/pos-register-loop.mp4';
 import posRegisterWebm from '../assets/video/pos-register-loop.webm';
 import posRegisterPoster from '../assets/video/pos-register-poster.png';
@@ -369,7 +369,7 @@ export function PosPage() {
           <Reveal>
             <img
               src={posDevicesReceipt}
-              alt="Каса LiveShop POS на ноутбуці і чек на телефоні"
+              alt="Звіти з продажів LiveShop POS на ноутбуці і чек на телефоні"
               className="w-full h-auto rounded-2xl shadow-ambient"
             />
           </Reveal>
