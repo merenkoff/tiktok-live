@@ -1,8 +1,17 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+const rootDir = path.dirname(fileURLToPath(import.meta.url));
+
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      '@pos/platform': path.resolve(rootDir, 'src/platform/index.ts'),
+    },
+  },
   server: {
     port: 3002,
     proxy: {
@@ -21,8 +30,8 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id: string) {
-          const m = id.match(/\/src\/modules\/([^/]+)\//);
-          if (m) return `m-${m[1]}`;
+          // Keep Dexie in its own shared chunk; let Rollup split everything
+          // else per dynamic import() so lazy pages stay out of the entry.
           if (id.includes('/node_modules/dexie/')) return 'vendor-dexie';
           return undefined;
         },

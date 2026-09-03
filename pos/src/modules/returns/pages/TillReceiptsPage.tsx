@@ -4,16 +4,17 @@
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { cashierApi } from '../../offline/cashierApi';
-import { useAuthStore } from '../../hooks/useAuth';
-import { useDragScroll } from '../../hooks/useDragScroll';
-import { AppRail } from '../../components/cashier/AppRail';
-import { BottomNav } from '../../components/cashier/BottomNav';
-import { OfflineStatusBanner } from '../../components/cashier/OfflineStatusBanner';
-import { RefundSaleDialog } from '../../components/cashier/RefundSaleDialog';
-import { formatUah } from '../../lib/money';
-import type { LocalSaleRow } from '../../offline/db';
-import type { SaleDetail } from '../../types';
+import {
+  AppRail,
+  BottomNav,
+  formatUah,
+  OfflineStatusBanner,
+  useAuthStore,
+  useDragScroll,
+} from '@pos/platform';
+import type { LocalSaleRow, SaleDetail } from '@pos/platform';
+import { returnsApi } from '../data/returnsApi';
+import { RefundSaleDialog } from '../components/RefundSaleDialog';
 
 const SALE_STATUS_UK: Record<string, string> = {
   completed: 'Завершено',
@@ -48,9 +49,8 @@ function canRefund(row: LocalSaleRow): boolean {
  * admin's Продажі page, trimmed to what a till needs: find a receipt, look at
  * it, cancel it. Partial refunds stay in the admin UI.
  */
-export function CashierSalesPage() {
+export function TillReceiptsPage() {
   const logout = useAuthStore((s) => s.logout);
-  const role = useAuthStore((s) => s.role());
   const [rows, setRows] = useState<LocalSaleRow[]>([]);
   const [selected, setSelected] = useState<LocalSaleRow | null>(null);
   const [detail, setDetail] = useState<SaleDetail | null>(null);
@@ -60,7 +60,7 @@ export function CashierSalesPage() {
   const listRef = useDragScroll<HTMLDivElement>();
 
   async function reload() {
-    setRows(await cashierApi.listSales(50));
+    setRows(await returnsApi.listSales(50));
   }
 
   useEffect(() => {
@@ -73,7 +73,7 @@ export function CashierSalesPage() {
     setDetailLoading(true);
     setError(null);
     try {
-      setDetail(await cashierApi.getSale(row));
+      setDetail(await returnsApi.getSale(row));
     } catch {
       setError('Не вдалося завантажити чек');
     } finally {
@@ -140,7 +140,7 @@ export function CashierSalesPage() {
 
   return (
     <div className="h-[100dvh] flex bg-sq-bg font-sans overflow-hidden">
-      <AppRail isOwner={role === 'owner'} onLogout={() => void logout()} />
+      <AppRail onLogout={() => void logout()} />
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
         <OfflineStatusBanner />
         {error && (
@@ -150,7 +150,7 @@ export function CashierSalesPage() {
         )}
         {body}
         <div className="lg:hidden shrink-0">
-          <BottomNav isOwner={role === 'owner'} onLogout={() => void logout()} />
+          <BottomNav onLogout={() => void logout()} />
         </div>
       </div>
 
