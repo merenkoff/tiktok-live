@@ -15,7 +15,7 @@ import { ORGANIZATION_JSON_LD } from '../lib/organizationJsonLd';
 import { useScrollToHash } from '../hooks/useScrollToHash';
 import { ScanLine, Package, Users, Tag, Receipt, QrCode, BarChart3, Download, KeyRound, ShoppingCart } from 'lucide-react';
 import posTerminalHero from '../assets/photo/pos-terminal-hero.jpg';
-import posReceipt from '../assets/screenshots/pos-receipt.png';
+import posDevicesReceipt from '../assets/photo/pos-devices-receipt.jpg';
 import posRegisterMp4 from '../assets/video/pos-register-loop.mp4';
 import posRegisterWebm from '../assets/video/pos-register-loop.webm';
 import posRegisterPoster from '../assets/video/pos-register-poster.png';
@@ -367,7 +367,11 @@ export function PosPage() {
         {/* Receipt visual + FAQ */}
         <section className="max-w-6xl mx-auto px-6 py-20 grid lg:grid-cols-2 gap-16 items-start">
           <Reveal>
-            <BrowserFrame src={posReceipt} alt="Екран успішного продажу з номером чека" accentClass="border-pos/30" />
+            <img
+              src={posDevicesReceipt}
+              alt="Каса LiveShop POS на ноутбуці і чек на телефоні"
+              className="w-full h-auto rounded-2xl shadow-ambient"
+            />
           </Reveal>
           <Reveal>
             <h2 className="text-2xl sm:text-3xl font-bold mb-8">Питання, які запитують найчастіше</h2>
