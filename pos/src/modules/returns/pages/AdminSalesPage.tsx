@@ -3,9 +3,9 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { useEffect, useState } from 'react';
-import { api } from '../../services/api';
-import { formatUah } from '../../lib/money';
-import type { SaleDetail, SaleListItem } from '../../types';
+import { formatUah } from '@pos/platform';
+import type { SaleDetail, SaleListItem } from '@pos/platform';
+import { adminReturnsApi } from '../data/returnsApi';
 
 const SALE_STATUS_UK: Record<string, string> = {
   completed: 'Завершено',
@@ -24,14 +24,14 @@ const PAYMENT_LABEL_UK: Record<string, string> = {
   qr: 'QR-код',
 };
 
-export function SalesPage() {
+export function AdminSalesPage() {
   const [sales, setSales] = useState<SaleListItem[]>([]);
   const [selected, setSelected] = useState<SaleDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refundQty, setRefundQty] = useState<Record<number, number>>({});
 
   async function reload() {
-    setSales(await api.listSales(100));
+    setSales(await adminReturnsApi.listSales(100));
   }
 
   useEffect(() => {
@@ -39,7 +39,7 @@ export function SalesPage() {
   }, []);
 
   async function openSale(id: number) {
-    const sale = await api.getSale(id);
+    const sale = await adminReturnsApi.getSale(id);
     setSelected(sale);
     const initial: Record<number, number> = {};
     for (const item of sale.items) {
@@ -85,7 +85,7 @@ export function SalesPage() {
   async function submitRefund(items: Array<{ sale_item_id: number; quantity: number }>) {
     if (!selected) return;
     try {
-      const sale = await api.refundSale(selected.id, items, {
+      const sale = await adminReturnsApi.refundSale(selected.id, items, {
         client_uuid: crypto.randomUUID(),
       });
       setSelected(sale);

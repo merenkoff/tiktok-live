@@ -38,6 +38,11 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), cashierAsIndex()],
+    resolve: {
+      alias: {
+        '@pos/platform': path.resolve(__dirname, 'src/platform/index.ts'),
+      },
+    },
     clearScreen: false,
     envPrefix: ['VITE_', 'TAURI_ENV_*'],
     server: {
@@ -69,8 +74,8 @@ export default defineConfig(({ mode }) => {
         input: path.resolve(__dirname, 'cashier.html'),
         output: {
           manualChunks(id: string) {
-            const m = id.match(/\/src\/modules\/([^/]+)\//);
-            if (m) return `m-${m[1]}`;
+            // Keep Dexie in its own shared chunk; let Rollup split everything
+            // else per dynamic import() so lazy pages stay out of the entry.
             if (id.includes('/node_modules/dexie/')) return 'vendor-dexie';
             return undefined;
           },

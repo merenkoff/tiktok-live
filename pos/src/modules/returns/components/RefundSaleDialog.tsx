@@ -4,21 +4,19 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Check, Minus, Plus } from 'lucide-react';
-import { cashierApi } from '../../offline/cashierApi';
-import { OfflineRefundError } from '../../offline';
-import { getMeta } from '../../offline/db';
-import { formatUah, refundLineAmount } from '../../lib/money';
-import { buildRefundReceiptPayload } from '../../lib/receipt';
 import {
+  buildRefundReceiptPayload,
   DEFAULT_RECEIPT_PAPER_WIDTH,
+  formatUah,
+  getMeta,
+  OfflineRefundError,
   printReceipt,
-  type ReceiptData,
-  type ReceiptPaperWidth,
-} from '../../lib/printer';
-import { usePrintableReceipt } from '../../hooks/usePrintableReceipt';
-import { useAuthStore } from '../../hooks/useAuth';
-import type { LocalSaleRow } from '../../offline/db';
-import type { PaymentMethod, SaleDetail } from '../../types';
+  refundLineAmount,
+  useAuthStore,
+  usePrintableReceipt,
+} from '@pos/platform';
+import type { LocalSaleRow, PaymentMethod, ReceiptData, ReceiptPaperWidth, SaleDetail } from '@pos/platform';
+import { returnsApi } from '../data/returnsApi';
 
 interface Props {
   sale: LocalSaleRow;
@@ -85,7 +83,7 @@ export function RefundSaleDialog({ sale, detail, selectAll, onClose, onRefunded 
     setError(null);
     const lines = picked.map((i) => ({ sale_item_id: i.id, quantity: qty[i.id] }));
     try {
-      const row = await cashierApi.refundSale(sale, lines, {
+      const row = await returnsApi.refundSale(sale, lines, {
         method,
         reason: reason.trim() || undefined,
       });

@@ -6,11 +6,11 @@ import { lazy } from 'react';
 import { ListOrdered, Receipt } from 'lucide-react';
 import type { ModuleDescriptor, NavCtx } from '../types';
 
-const CashierSalesPage = lazy(() =>
-  import('../../pages/sales/CashierSalesPage').then((m) => ({ default: m.CashierSalesPage }))
+const TillReceiptsPage = lazy(() =>
+  import('./pages/TillReceiptsPage').then((m) => ({ default: m.TillReceiptsPage }))
 );
-const SalesPage = lazy(() =>
-  import('../../pages/admin/SalesPage').then((m) => ({ default: m.SalesPage }))
+const AdminSalesPage = lazy(() =>
+  import('./pages/AdminSalesPage').then((m) => ({ default: m.AdminSalesPage }))
 );
 
 /** Owner on the web build reaches receipts through the admin page; everyone else gets the till screen. */
@@ -23,8 +23,8 @@ export const returnsModule: ModuleDescriptor = {
   defaultEnabled: true,
   shells: ['web', 'cashier'],
   routes: [
-    { path: '/sales', element: CashierSalesPage },
-    { path: 'sales', mount: 'admin', element: SalesPage },
+    { path: '/sales', element: TillReceiptsPage },
+    { path: 'sales', mount: 'admin', element: AdminSalesPage },
   ],
   nav: [
     {

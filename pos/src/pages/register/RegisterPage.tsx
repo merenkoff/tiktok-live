@@ -12,8 +12,6 @@ import { formatUah } from '../../lib/money';
 import { DEFAULT_RECEIPT_PAPER_WIDTH, ReceiptPaperWidth, printReceipt } from '../../lib/printer';
 import { buildReceiptPayload } from '../../lib/receipt';
 import { usePrintableReceipt } from '../../hooks/usePrintableReceipt';
-import { RefundSaleDialog } from '../../components/cashier/RefundSaleDialog';
-import { saleRowFromDetail } from '../../offline/cashierApi';
 import { getMeta } from '../../offline/db';
 import type { CatalogItem, PaymentMethod, PosTag, SaleDetail, SalePaymentInput } from '../../types';
 import { CheckoutModal } from '../../components/CheckoutModal';
@@ -26,6 +24,7 @@ import { AppRail } from '../../components/cashier/AppRail';
 import { VariantPicker } from '../../components/cashier/VariantPicker';
 import { MobileCartSheet } from '../../components/cashier/MobileCartSheet';
 import { OfflineStatusBanner } from '../../components/cashier/OfflineStatusBanner';
+import { useCancelRungSale } from '../../modules/returns';
 
 function paymentLabel(method: PaymentMethod): string {
   return method === 'cash' ? 'Готівка' : method === 'card' ? 'Картка' : 'QR-код';
@@ -76,13 +75,10 @@ export function RegisterPage() {
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [paying, setPaying] = useState(false);
   const [success, setSuccess] = useState<SaleDetail | null>(null);
-  // Cancelling the receipt we just rang up — the common "wrong item" fix.
-  // Under ПРРО that is a full refund, so it goes through the same dialog with
-  // every line pre-selected.
-  const [cancelling, setCancelling] = useState(false);
-  // Status of the refund just taken against this receipt, if any — the cashier
-  // can deselect lines in the dialog, so this may be a partial return.
-  const [cancelled, setCancelled] = useState<string | null>(null);
+  // Cancelling the receipt we just rang up — the common "wrong item" fix. Under
+  // ПРРО that is a full refund; the `returns` module owns the dialog and lazy-
+  // loads it, so checkout stays reachable even with `returns` disabled.
+  const cancelRung = useCancelRungSale();
   const [printing, setPrinting] = useState(false);
   const [printStatus, setPrintStatus] = useState<string | null>(null);
   const [receiptPrinterName, setReceiptPrinterName] = useState<string | null>(null);
@@ -189,6 +185,15 @@ export function RegisterPage() {
     };
   }, [success, auth?.store.auto_print_receipt, auth?.store.name]);
 
+  // A cancel/partial-refund against the just-rung receipt: keep the shown
+  // receipt fresh, and pull a new catalog since stock moved.
+  useEffect(() => {
+    if (cancelRung.detail) setSuccess(cancelRung.detail);
+  }, [cancelRung.detail]);
+  useEffect(() => {
+    if (cancelRung.result) void loadCatalog();
+  }, [cancelRung.result, loadCatalog]);
+
   const folderTiles: PosTag[] = useMemo(() => {
     if (query.trim()) return [];
     const level = !currentTag ? tags : currentTag.children ?? [];
@@ -292,11 +297,11 @@ export function RegisterPage() {
     }
   }
 
-  // Keyed on the receipt, not the object: refunding refreshes `success` in
-  // place, and that must not wipe the banner it just set.
+  // Keyed on the receipt number, not the object: a partial refund refreshes
+  // `success` in place (same number) and must keep the cancellation state.
   useEffect(() => {
-    setCancelled(null);
-  }, [success?.receipt_number]);
+    cancelRung.reset();
+  }, [success?.receipt_number, cancelRung.reset]);
 
   async function printSuccessReceipt() {
     if (!success || !receiptPrinterName) return;
@@ -338,9 +343,9 @@ export function RegisterPage() {
           <p className="text-5xl font-bold mt-6 text-sq-text">{formatUah(success.total_cents)}</p>
           <p className="text-sq-secondary mt-3 text-sm">{success.staff_name}</p>
           {payText && <p className="text-sq-secondary mt-1 text-sm">{payText}</p>}
-          {cancelled && (
+          {cancelRung.result && (
             <p className="mt-6 rounded-sq bg-red-50 text-red-700 px-3 py-2 text-sm font-semibold">
-              {cancelled === 'partially_refunded'
+              {cancelRung.result === 'partially_refunded'
                 ? 'Частину чека повернуто — товар повернувся на склад.'
                 : 'Чек скасовано — кошти й товар повернуто.'}
             </p>
@@ -348,15 +353,18 @@ export function RegisterPage() {
           <button
             type="button"
             className="pos-btn-primary mt-10 w-full py-3.5"
-            onClick={() => setSuccess(null)}
+            onClick={() => {
+              setSuccess(null);
+              cancelRung.reset();
+            }}
           >
             Новий чек
           </button>
-          {cancelled !== 'refunded' && cancelled !== 'voided' && (
+          {cancelRung.result !== 'refunded' && cancelRung.result !== 'voided' && (
             <button
               type="button"
               className="mt-3 w-full min-h-12 rounded-sq border border-red-300 bg-red-50 text-red-700 text-sm font-semibold"
-              onClick={() => setCancelling(true)}
+              onClick={() => cancelRung.open(success)}
             >
               Скасувати чек
             </button>
@@ -381,23 +389,7 @@ export function RegisterPage() {
           {printStatus && <p className="text-sq-secondary text-sm mt-1">{printStatus}</p>}
         </div>
         {printablePortal}
-        {cancelling && (
-          <RefundSaleDialog
-            sale={saleRowFromDetail(success)}
-            detail={success}
-            selectAll
-            onClose={() => setCancelling(false)}
-            onRefunded={(row) => {
-              setCancelling(false);
-              setCancelled(row.status);
-              // Keep the receipt fresh so a follow-up refund sees what is still
-              // returnable rather than the quantities as first rung up.
-              if (row.detail) setSuccess(row.detail);
-              // Stock changed under us — pull a fresh catalog for the next sale.
-              void loadCatalog();
-            }}
-          />
-        )}
+        {cancelRung.node}
       </div>
     );
   }
