@@ -6,7 +6,8 @@
 
 import type { FastifyInstance } from 'fastify';
 import type { PaymentMethod } from './types.js';
-import { ensurePosAuth, ensurePosOwner } from './core/auth.js';
+import { ensureModule, ensurePosAuth, ensurePosOwner } from './core/auth.js';
+import { sanitizeEnabledModules } from './core/modules.js';
 import * as authService from './auth.service.js';
 import * as productsService from './products.service.js';
 import * as stockService from './stock.service.js';
@@ -67,13 +68,13 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
 
   // ── Staff (owner) ─────────────────────────────────────
   fastify.get('/staff', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'staff', { owner: true });
     if (!auth) return;
     return authService.listStaff(auth.storeId);
   });
 
   fastify.post('/staff', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'staff', { owner: true });
     if (!auth) return;
     const body = request.body as { display_name?: string; pin?: string };
     try {
@@ -88,7 +89,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.post('/staff/:id/pin', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'staff', { owner: true });
     if (!auth) return;
     const { id } = request.params as { id: string };
     const body = request.body as { pin?: string };
@@ -102,7 +103,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.patch('/staff/:id', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'staff', { owner: true });
     if (!auth) return;
     const { id } = request.params as { id: string };
     const body = request.body as { is_active?: boolean };
@@ -119,14 +120,13 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
 
   // ── Products ──────────────────────────────────────────
   fastify.get('/products', async (request, reply) => {
-    const auth = await ensurePosAuth(request, reply);
+    const auth = await ensureModule(request, reply, 'products', { owner: true });
     if (!auth) return;
-    if (auth.role !== 'owner') return reply.code(403).send({ error: 'Owner access required' });
     return productsService.listProducts(auth.storeId);
   });
 
   fastify.get('/products/:id', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'products', { owner: true });
     if (!auth) return;
     const { id } = request.params as { id: string };
     const product = await productsService.getProduct(auth.storeId, Number(id));
@@ -135,7 +135,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.post('/products', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'products', { owner: true });
     if (!auth) return;
     try {
       const product = await productsService.createProduct(
@@ -151,7 +151,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.patch('/products/:id', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'products', { owner: true });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
@@ -166,7 +166,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.post('/uploads', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'products', { owner: true });
     if (!auth) return;
     try {
       const file = await request.file();
@@ -179,7 +179,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.post('/products/:id/variants', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'products', { owner: true });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
@@ -196,7 +196,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.patch('/variants/:id', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'products', { owner: true });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
@@ -212,7 +212,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.post('/products/:id/archive', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'products', { owner: true });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
@@ -223,7 +223,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.post('/variants/:id/archive', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'products', { owner: true });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
@@ -234,7 +234,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.put('/products/:id/tags', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'products', { owner: true });
     if (!auth) return;
     const { id } = request.params as { id: string };
     const body = request.body as { tag_ids?: number[] };
@@ -258,7 +258,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.post('/tags', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'products', { owner: true });
     if (!auth) return;
     const body = request.body as {
       name?: string;
@@ -284,7 +284,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.patch('/tags/:id', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'products', { owner: true });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
@@ -304,7 +304,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.delete('/tags/:id', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'products', { owner: true });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
@@ -316,7 +316,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.post('/tags/:id/assign', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'products', { owner: true });
     if (!auth) return;
     const { id } = request.params as { id: string };
     const body = request.body as { product_ids?: number[] };
@@ -344,7 +344,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.get('/customers/:id', async (request, reply) => {
-    const auth = await ensurePosAuth(request, reply);
+    const auth = await ensureModule(request, reply, 'customers');
     if (!auth) return;
     const { id } = request.params as { id: string };
     const customer = await customersService.getCustomer(auth.storeId, Number(id));
@@ -353,7 +353,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.post('/customers', async (request, reply) => {
-    const auth = await ensurePosAuth(request, reply);
+    const auth = await ensureModule(request, reply, 'customers');
     if (!auth) return;
     try {
       const body = request.body as {
@@ -381,7 +381,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.patch('/customers/:id', async (request, reply) => {
-    const auth = await ensurePosAuth(request, reply);
+    const auth = await ensureModule(request, reply, 'customers');
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
@@ -403,7 +403,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.delete('/customers/:id', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'customers');
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
@@ -435,7 +435,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
 
   // ── Stock ─────────────────────────────────────────────
   fastify.post('/stock/adjust', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'stock', { owner: true });
     if (!auth) return;
     const body = request.body as { variant_id?: number; delta?: number; note?: string };
     try {
@@ -455,20 +455,20 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.get('/stock/low', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'stock', { owner: true });
     if (!auth) return;
     return stockService.listLowStock(auth.storeId);
   });
 
   // ── Suppliers ─────────────────────────────────────────
   fastify.get('/suppliers', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'stock', { owner: true });
     if (!auth) return;
     return suppliersService.listSuppliers(auth.storeId);
   });
 
   fastify.post('/suppliers', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'stock', { owner: true });
     if (!auth) return;
     try {
       const body = request.body as { name?: string; phone?: string; note?: string };
@@ -485,7 +485,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.patch('/suppliers/:id', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'stock', { owner: true });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
@@ -501,7 +501,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
 
   // ── Stock documents ───────────────────────────────────
   fastify.get('/stock/documents', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'stock', { owner: true });
     if (!auth) return;
     const q = request.query as {
       type?: string;
@@ -518,7 +518,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.post('/stock/documents', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'stock', { owner: true });
     if (!auth) return;
     try {
       const body = request.body as {
@@ -545,7 +545,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.get('/stock/documents/:id', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'stock', { owner: true });
     if (!auth) return;
     const { id } = request.params as { id: string };
     const doc = await stockDocumentsService.getDocument(auth.storeId, Number(id));
@@ -554,7 +554,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.patch('/stock/documents/:id', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'stock', { owner: true });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
@@ -576,7 +576,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.delete('/stock/documents/:id', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'stock', { owner: true });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
@@ -588,7 +588,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.post('/stock/documents/:id/lines', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'stock', { owner: true });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
@@ -629,7 +629,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.post('/stock/documents/:id/lines/placeholder', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'stock', { owner: true });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
@@ -671,7 +671,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.patch('/stock/documents/:id/lines/:lineId', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'stock', { owner: true });
     if (!auth) return;
     const { id, lineId } = request.params as { id: string; lineId: string };
     try {
@@ -706,7 +706,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.delete('/stock/documents/:id/lines/:lineId', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'stock', { owner: true });
     if (!auth) return;
     const { id, lineId } = request.params as { id: string; lineId: string };
     try {
@@ -718,7 +718,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.post('/stock/documents/:id/lines/bulk', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'stock', { owner: true });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
@@ -740,7 +740,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.post('/stock/documents/:id/refresh-system-qty', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'stock', { owner: true });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
@@ -751,7 +751,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.post('/stock/documents/:id/post', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'stock', { owner: true });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
@@ -771,7 +771,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.post('/stock/documents/:id/reverse', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'stock', { owner: true });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
@@ -789,13 +789,13 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
 
   // ── Stock reports ─────────────────────────────────────
   fastify.get('/stock/reports/on-hand', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'stock', { owner: true });
     if (!auth) return;
     return stockReportsService.listOnHand(auth.storeId);
   });
 
   fastify.get('/stock/reports/movements', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'stock', { owner: true });
     if (!auth) return;
     const q = request.query as {
       from?: string;
@@ -812,14 +812,14 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.get('/stock/reports/document-summary', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'stock', { owner: true });
     if (!auth) return;
     const q = request.query as { from?: string; to?: string };
     return stockReportsService.documentSummary(auth.storeId, { from: q.from, to: q.to });
   });
 
   fastify.get('/stock/reports/movement-summary', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'stock', { owner: true });
     if (!auth) return;
     const q = request.query as { from?: string; to?: string };
     if (!q.from || !q.to) return reply.code(400).send({ error: 'from and to required' });
@@ -828,7 +828,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
 
   // ── GTIN enrichment ───────────────────────────────────
   fastify.post('/gtin/learn/batch', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'gtin-enrichment', { owner: true });
     if (!auth) return;
     try {
       const { isGtinLookupEnabled } = await import('./gtin/gtin-cache.service.js');
@@ -850,7 +850,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.get('/gtin/learn/stats', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'gtin-enrichment', { owner: true });
     if (!auth) return;
     try {
       const { isGtinLookupEnabled } = await import('./gtin/gtin-cache.service.js');
@@ -865,7 +865,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.post('/gtin/learn/jobs', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'gtin-enrichment', { owner: true });
     if (!auth) return;
     try {
       const { isGtinLookupEnabled } = await import('./gtin/gtin-cache.service.js');
@@ -891,7 +891,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.get('/gtin/learn/jobs/:id', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'gtin-enrichment', { owner: true });
     if (!auth) return;
     try {
       const { id } = request.params as { id: string };
@@ -905,7 +905,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.post('/gtin/learn/jobs/:id/cancel', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'gtin-enrichment', { owner: true });
     if (!auth) return;
     try {
       const { id } = request.params as { id: string };
@@ -919,7 +919,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.get('/gtin/:code', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'gtin-enrichment', { owner: true });
     if (!auth) return;
     try {
       const { getGtinCache, isGtinLookupEnabled } = await import('./gtin/gtin-cache.service.js');
@@ -936,7 +936,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.post('/gtin/ingest', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'gtin-enrichment', { owner: true });
     if (!auth) return;
     try {
       const { ingestGtinResults, isGtinLookupEnabled } = await import('./gtin/gtin-cache.service.js');
@@ -970,7 +970,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.post('/gtin/lookup/quota-providers', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensureModule(request, reply, 'gtin-enrichment', { owner: true });
     if (!auth) return;
     try {
       const { isGtinLookupEnabled } = await import('./gtin/gtin-cache.service.js');
@@ -1040,7 +1040,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.get('/sales', async (request, reply) => {
-    const auth = await ensurePosAuth(request, reply);
+    const auth = await ensureModule(request, reply, 'returns');
     if (!auth) return;
     const query = request.query as { limit?: string };
     return salesService.listSales(auth.storeId, {
@@ -1049,7 +1049,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.get('/sales/:id', async (request, reply) => {
-    const auth = await ensurePosAuth(request, reply);
+    const auth = await ensureModule(request, reply, 'returns');
     if (!auth) return;
     const { id } = request.params as { id: string };
     const sale = await salesService.getSale(auth.storeId, Number(id));
@@ -1062,7 +1062,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
   // and caches the result per sale draft. A small per-store rate limit caps cost.
   const qrInvoiceHits = new Map<number, number[]>();
   fastify.post('/qr/invoice', async (request, reply) => {
-    const auth = await ensurePosAuth(request, reply);
+    const auth = await ensureModule(request, reply, 'qr-payment');
     if (!auth) return;
     const body = request.body as { amount_cents?: number; sale_ref?: string };
     const amountCents = Number(body.amount_cents);
@@ -1183,7 +1183,7 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
 
   // ── Analytics & store ─────────────────────────────────
   fastify.get('/analytics/summary', async (request, reply) => {
-    const auth = await ensurePosAuth(request, reply);
+    const auth = await ensureModule(request, reply, 'analytics');
     if (!auth) return;
 
     const q = request.query as { from?: string; to?: string };
@@ -1230,9 +1230,16 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
       gtin_api_key?: string | null;
       gtin_daily_limit?: number | null;
       auto_print_receipt?: boolean;
+      enabled_modules?: unknown;
     };
     try {
       const patch: analyticsService.StorePatch = {};
+      if (body.enabled_modules !== undefined) {
+        if (!Array.isArray(body.enabled_modules)) {
+          return reply.code(400).send({ error: 'enabled_modules must be an array' });
+        }
+        patch.enabled_modules = sanitizeEnabledModules(body.enabled_modules);
+      }
       if (body.name !== undefined) {
         if (!body.name.trim()) return reply.code(400).send({ error: 'name required' });
         patch.name = body.name;

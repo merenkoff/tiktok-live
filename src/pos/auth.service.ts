@@ -15,6 +15,7 @@ import {
   verifyPin,
 } from './core/crypto.js';
 import { getAuthByToken, sessionExpiresAt } from './core/auth.js';
+import { effectiveEnabledModules } from './core/modules.js';
 import type { PosAuthContext, PosRole, QrPaymentPublicConfig } from './types.js';
 
 export interface AuthResponse {
@@ -32,6 +33,8 @@ export interface AuthResponse {
     currency: string;
     qr_payment: QrPaymentPublicConfig;
     auto_print_receipt: boolean;
+    /** Effective toggleable module ids (empty stored set resolves to the defaults). */
+    enabled_modules: string[];
   };
 }
 
@@ -69,6 +72,7 @@ function toAuthResponse(auth: PosAuthContext, expiresAt: Date): AuthResponse {
       currency: auth.currency,
       qr_payment: auth.qrPayment,
       auto_print_receipt: auth.autoPrintReceipt,
+      enabled_modules: effectiveEnabledModules(auth.enabledModules),
     },
   };
 }

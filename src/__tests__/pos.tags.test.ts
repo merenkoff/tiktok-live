@@ -34,6 +34,7 @@ describe.skipIf(!hasDb)('POS tags + archive', () => {
       '003_pos_tags.sql',
       '004_pos_tag_catalog_bar.sql',
       '005_pos_discounts_customers.sql',
+      '015_pos_store_modules.sql',
     ]) {
       const sql = fs.readFileSync(path.join(dir, '../../migrations', file), 'utf-8');
       await pool.query(sql);

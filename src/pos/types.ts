@@ -43,6 +43,7 @@ export interface PosStore {
   qr_iban: string | null;
   qr_edrpou: string | null;
   qr_recipient: string | null;
+  enabled_modules: string[];
   created_at: Date;
   updated_at: Date;
 }
@@ -77,6 +78,8 @@ export interface PosAuthContext {
   currency: string;
   qrPayment: QrPaymentPublicConfig;
   autoPrintReceipt: boolean;
+  /** Toggleable module ids enabled for this store (core ids not included). */
+  enabledModules: string[];
   token: string;
 }
 

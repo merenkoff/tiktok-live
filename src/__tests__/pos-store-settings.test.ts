@@ -27,6 +27,7 @@ describe.skipIf(!hasDb)('POS store settings', () => {
       '008_pos_gtin_cache.sql',
       '011_pos_qr_payment.sql',
       '013_pos_store_settings.sql',
+      '015_pos_store_modules.sql',
     ]) {
       const sql = fs.readFileSync(path.join(dir, '../../migrations', file), 'utf-8');
       await pool.query(sql);

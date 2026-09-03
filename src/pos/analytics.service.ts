@@ -191,6 +191,7 @@ function mapStore(store: Record<string, unknown>) {
     gtin_api_key_set: Boolean(store.gtin_api_key),
     gtin_daily_limit: store.gtin_daily_limit == null ? null : Number(store.gtin_daily_limit),
     auto_print_receipt: Boolean(store.auto_print_receipt),
+    enabled_modules: (store.enabled_modules as string[] | null) ?? [],
   };
 }
 
@@ -207,6 +208,7 @@ export type StorePatch = {
   gtin_api_key?: string | null;
   gtin_daily_limit?: number | null;
   auto_print_receipt?: boolean;
+  enabled_modules?: string[];
 };
 
 const STORE_PATCH_COLUMNS: Array<keyof StorePatch> = [
@@ -222,6 +224,7 @@ const STORE_PATCH_COLUMNS: Array<keyof StorePatch> = [
   'gtin_api_key',
   'gtin_daily_limit',
   'auto_print_receipt',
+  'enabled_modules',
 ];
 
 export async function getStore(storeId: number) {
