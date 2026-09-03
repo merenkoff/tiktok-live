@@ -2,19 +2,10 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../hooks/useAuth';
 import { useDragScroll } from '../../hooks/useDragScroll';
-
-const links = [
-  { to: '/admin', end: true, label: 'Сьогодні' },
-  { to: '/admin/products', label: 'Товари' },
-  { to: '/admin/stock', label: 'Склад' },
-  { to: '/admin/customers', label: 'Клієнти' },
-  { to: '/admin/sales', label: 'Продажі' },
-  { to: '/admin/staff', label: 'Співробітники' },
-  { to: '/admin/settings', label: 'Налаштування' },
-];
+import { Nav } from '../../components/Nav';
 
 export function AdminLayout() {
   const auth = useAuthStore((s) => s.auth);
@@ -34,20 +25,7 @@ export function AdminLayout() {
           ref={navRef}
           className="flex md:flex-col overflow-x-auto md:overflow-y-auto md:flex-1 p-2 gap-0.5 select-none"
         >
-          {links.map((link) => (
-            <NavLink
-              key={link.to}
-              to={link.to}
-              end={link.end}
-              className={({ isActive }) =>
-                `px-3 py-2.5 rounded-[4px] text-sm font-medium whitespace-nowrap ${
-                  isActive ? 'sq-nav-active' : 'sq-nav-idle'
-                }`
-              }
-            >
-              {link.label}
-            </NavLink>
-          ))}
+          <Nav location="admin-sidebar" />
         </nav>
         <div className="mt-auto p-3 space-y-2 border-t border-[#E0E0E0] bg-white">
           <button

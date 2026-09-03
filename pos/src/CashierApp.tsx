@@ -3,26 +3,20 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { useEffect } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuthStore } from './hooks/useAuth';
 import { useUpdateStore } from './hooks/useUpdateCheck';
-import { LoginPage } from './pages/LoginPage';
-import { CustomersPage } from './pages/customers/CustomersPage';
-import { HardwarePage } from './pages/HardwarePage';
-import { RegisterPage } from './pages/register/RegisterPage';
-import { CashierSalesPage } from './pages/sales/CashierSalesPage';
+import { usePosShell } from './shell';
+import { renderModuleRoutes } from './modules/renderRoutes';
+import { useEnabledModules } from './modules/useEnabledModules';
 import { startOfflineRuntime } from './offline';
-
-function Guard({ children }: { children: React.ReactNode }) {
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
-  return <>{children}</>;
-}
 
 export function CashierApp() {
   const bootstrap = useAuthStore((s) => s.bootstrap);
   const bootstrapped = useAuthStore((s) => s.bootstrapped);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const role = useAuthStore((s) => s.role());
+  const shell = usePosShell();
+  const enabled = useEnabledModules();
 
   useEffect(() => {
     void bootstrap();
@@ -44,48 +38,5 @@ export function CashierApp() {
     );
   }
 
-  return (
-    <Routes>
-      <Route
-        path="/login"
-        element={isAuthenticated ? <Navigate to="/register" replace /> : <LoginPage />}
-      />
-      <Route
-        path="/register"
-        element={
-          <Guard>
-            <RegisterPage />
-          </Guard>
-        }
-      />
-      <Route
-        path="/sales"
-        element={
-          <Guard>
-            <CashierSalesPage />
-          </Guard>
-        }
-      />
-      <Route
-        path="/customers"
-        element={
-          <Guard>
-            <CustomersPage cashierShell />
-          </Guard>
-        }
-      />
-      <Route
-        path="/hardware"
-        element={
-          <Guard>
-            <HardwarePage />
-          </Guard>
-        }
-      />
-      <Route
-        path="*"
-        element={<Navigate to={isAuthenticated ? '/register' : '/login'} replace />}
-      />
-    </Routes>
-  );
+  return renderModuleRoutes({ shell, role, enabled, isAuthenticated });
 }

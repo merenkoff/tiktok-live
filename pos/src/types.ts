@@ -80,6 +80,8 @@ export interface AuthResponse {
     /** Optional so a cashier build reading an older cached/offline auth still typechecks. */
     qr_payment?: QrPaymentConfig;
     auto_print_receipt?: boolean;
+    /** Toggleable module ids the store has enabled. Absent on older cached auth → treat as "all defaults on". */
+    enabled_modules?: string[];
   };
 }
 
