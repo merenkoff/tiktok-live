@@ -29,7 +29,7 @@ describe.skipIf(!hasDb)('POS refunds and voids', () => {
       const path = await import('path');
       const { fileURLToPath } = await import('url');
       const dir = path.dirname(fileURLToPath(import.meta.url));
-      for (const file of ['002_pos_schema.sql', '010_pos_offline_sync.sql']) {
+      for (const file of ['002_pos_schema.sql', '010_pos_offline_sync.sql', '015_pos_store_modules.sql']) {
         await pool.query(fs.readFileSync(path.join(dir, '../../migrations', file), 'utf-8'));
       }
     }

@@ -7,6 +7,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { pool } from '../../db.js';
 import type { PosAuthContext, PosRole } from '../types.js';
+import { isModuleEnabled } from './modules.js';
 
 const SESSION_TTL_HOURS = 24 * 14;
 
@@ -36,7 +37,8 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
        store.qr_payment_enabled,
        store.qr_payment_mode,
        store.qr_static_image_url,
-       store.auto_print_receipt
+       store.auto_print_receipt,
+       store.enabled_modules
      FROM pos_sessions s
      JOIN pos_staff st ON st.id = s.staff_id
      JOIN pos_stores store ON store.id = s.store_id
@@ -63,6 +65,7 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
       static_image_url: row.qr_static_image_url ?? null,
     },
     autoPrintReceipt: row.auto_print_receipt ?? false,
+    enabledModules: (row.enabled_modules as string[] | null) ?? [],
     token: row.token,
   };
 }
@@ -101,6 +104,29 @@ export async function ensurePosOwner(
   if (!auth) return null;
   if (auth.role !== 'owner') {
     await reply.code(403).send({ error: 'Owner access required' });
+    return null;
+  }
+  return auth;
+}
+
+/**
+ * Like {@link ensurePosAuth}/{@link ensurePosOwner}, but also 404s when the
+ * store has not enabled `moduleId`. 404 (not 403) so a disabled module is
+ * indistinguishable from a route that does not exist — we don't advertise the
+ * module catalogue. Core modules always pass.
+ */
+export async function ensureModule(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  moduleId: string,
+  opts: { owner?: boolean } = {}
+): Promise<PosAuthContext | null> {
+  const auth = opts.owner
+    ? await ensurePosOwner(request, reply)
+    : await ensurePosAuth(request, reply);
+  if (!auth) return null;
+  if (!isModuleEnabled(auth.enabledModules, moduleId)) {
+    await reply.code(404).send({ error: 'Not found' });
     return null;
   }
   return auth;

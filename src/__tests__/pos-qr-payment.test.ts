@@ -76,6 +76,7 @@ describe.skipIf(!hasDb)('POS QR payment', () => {
       '010_pos_offline_sync.sql',
       '011_pos_qr_payment.sql',
       '012_pos_qr_confirmations.sql',
+      '015_pos_store_modules.sql',
     ]) {
       const sql = fs.readFileSync(path.join(dir, '../../migrations', file), 'utf-8');
       await pool.query(sql);

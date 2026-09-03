@@ -40,6 +40,8 @@ export interface StoreConfig {
   gtin_api_key_set: boolean;
   gtin_daily_limit: number | null;
   auto_print_receipt: boolean;
+  /** Toggleable module ids the store has enabled (effective set; core ids not listed). */
+  enabled_modules: string[];
 }
 
 export type StorePatch = Partial<
@@ -55,6 +57,7 @@ export type StorePatch = Partial<
     | 'qr_recipient'
     | 'gtin_lookup_enabled'
     | 'auto_print_receipt'
+    | 'enabled_modules'
   >
 > & {
   /** write-only: non-empty string sets it, null/"" clears it, omitted keeps it */
