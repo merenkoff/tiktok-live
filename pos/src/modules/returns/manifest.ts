@@ -2,10 +2,16 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
+import { lazy } from 'react';
 import { ListOrdered, Receipt } from 'lucide-react';
-import { CashierSalesPage } from '../../pages/sales/CashierSalesPage';
-import { SalesPage } from '../../pages/admin/SalesPage';
 import type { ModuleDescriptor, NavCtx } from '../types';
+
+const CashierSalesPage = lazy(() =>
+  import('../../pages/sales/CashierSalesPage').then((m) => ({ default: m.CashierSalesPage }))
+);
+const SalesPage = lazy(() =>
+  import('../../pages/admin/SalesPage').then((m) => ({ default: m.SalesPage }))
+);
 
 /** Owner on the web build reaches receipts through the admin page; everyone else gets the till screen. */
 const isOwnerWeb = (ctx: NavCtx): boolean => ctx.shell === 'web' && ctx.role === 'owner';
