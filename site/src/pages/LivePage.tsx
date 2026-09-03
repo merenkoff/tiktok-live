@@ -7,7 +7,8 @@ import { TwoColumnCompare } from '../components/TwoColumnCompare';
 import { Faq } from '../components/Faq';
 import { BrowserFrame } from '../components/BrowserFrame';
 import { TelegramChatMockup } from '../components/TelegramChatMockup';
-import { Reveal } from '../components/Reveal';
+import { Reveal, StaggerGroup, StaggerItem } from '../components/Reveal';
+import { DecorCircle } from '../components/DecorCircle';
 import { StickyCta } from '../components/StickyCta';
 import { JsonLd } from '../components/JsonLd';
 import { FaqJsonLd } from '../components/FaqJsonLd';
@@ -81,12 +82,16 @@ export function LivePage() {
 
       <main className="flex-1">
         {/* Hero */}
-        <section ref={heroRef} className="max-w-6xl mx-auto px-6 pt-16 pb-20 grid lg:grid-cols-2 gap-12 items-center">
+        <section ref={heroRef} className="relative max-w-6xl mx-auto px-6 pt-16 pb-20 grid lg:grid-cols-2 gap-12 items-center">
+          <DecorCircle
+            colorClass="bg-live/10"
+            className="absolute -top-10 -left-16 w-72 h-72 sm:w-96 sm:h-96 -z-10"
+          />
           <Reveal>
             <p className="text-sm font-semibold uppercase tracking-wide text-live">
               Операційна система для TikTok LIVE
             </p>
-            <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight mt-4 leading-[1.05]">
+            <h1 className="text-6xl sm:text-7xl font-extrabold tracking-tighter mt-4 leading-[0.98]">
               Продавай у ефірі,
               <br />
               не в хаосі
@@ -107,8 +112,14 @@ export function LivePage() {
             </div>
           </Reveal>
           <Reveal>
-            <div className="space-y-6">
-              <BrowserFrame src={liveScreenshot} alt="Панель керування LIVE-сесією зі статистикою ефіру" dark accentClass="border-live/30" />
+            <BrowserFrame
+              src={liveScreenshot}
+              alt="Панель керування LIVE-сесією зі статистикою ефіру"
+              dark
+              elevated
+              accentClass="border-live/30"
+            />
+            <div className="relative z-10 -mt-10 ml-10 mr-6 rotate-1">
               <TelegramChatMockup />
             </div>
           </Reveal>
@@ -119,8 +130,8 @@ export function LivePage() {
           <div className="max-w-6xl mx-auto px-6 py-10 grid sm:grid-cols-3 gap-8 text-center">
             {STATS.map((s) => (
               <div key={s.label}>
-                <p className="text-3xl font-extrabold text-live">{s.value}</p>
-                <p className="text-muted text-sm mt-1.5">{s.label}</p>
+                <p className="font-mono text-6xl md:text-7xl font-bold text-live tracking-tight">{s.value}</p>
+                <p className="text-muted text-sm mt-2">{s.label}</p>
               </div>
             ))}
           </div>
@@ -164,13 +175,13 @@ export function LivePage() {
             <Reveal>
               <h2 className="text-2xl sm:text-3xl font-bold text-center">Як це виглядає в ефірі</h2>
             </Reveal>
-            <div className="mt-12 grid sm:grid-cols-3 gap-8">
+            <StaggerGroup className="mt-12 grid sm:grid-cols-3 gap-8">
               {[
                 { n: '1', t: 'Коментар', d: 'Глядач пише «A12 104» або «хочу A12» у чаті ефіру.' },
                 { n: '2', t: 'Бронь', d: 'Товар резервується на ім\'я глядача на кілька хвилин.' },
                 { n: '3', t: 'Telegram', d: 'Бот у приватних повідомленнях збирає дані на доставку.' },
               ].map((s) => (
-                <Reveal key={s.n}>
+                <StaggerItem key={s.n}>
                   <div className="text-center">
                     <div className="w-10 h-10 rounded-full bg-live text-white font-bold grid place-items-center mx-auto">
                       {s.n}
@@ -178,9 +189,9 @@ export function LivePage() {
                     <h3 className="font-bold mt-4">{s.t}</h3>
                     <p className="text-muted text-sm mt-2 leading-relaxed">{s.d}</p>
                   </div>
-                </Reveal>
+                </StaggerItem>
               ))}
-            </div>
+            </StaggerGroup>
           </div>
         </section>
 
@@ -242,8 +253,13 @@ export function LivePage() {
                   'Втомились вручну гортати директ у пошуках замовлень після ефіру',
                   'Хочете, щоб бронювання й дані покупця збирались самі, поки триває ефір',
                   'Відправляєте Новою Поштою і хочете автоматичний ТТН без ручного введення',
-                ].map((t) => (
-                  <li key={t} className="flex items-start gap-3 text-sm bg-paper border border-line rounded-card p-4">
+                ].map((t, i) => (
+                  <li
+                    key={t}
+                    className={`flex items-start gap-3 text-sm bg-paper border border-line rounded-card p-4 ${
+                      i % 2 === 1 ? 'sm:mt-6' : ''
+                    }`}
+                  >
                     <span className="mt-1 w-1.5 h-1.5 rounded-full bg-live shrink-0" />
                     {t}
                   </li>

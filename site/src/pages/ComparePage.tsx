@@ -61,7 +61,7 @@ export function ComparePage() {
             <p className="text-sm font-semibold uppercase tracking-wide text-pos">
               POS каса для магазину одягу
             </p>
-            <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight mt-4 leading-[1.1]">
+            <h1 className="text-5xl sm:text-6xl font-extrabold tracking-tight mt-4 leading-[1.05]">
               Яку касу обрати для магазину одягу
             </h1>
             <p className="text-muted text-lg mt-6 leading-relaxed max-w-2xl mx-auto">
