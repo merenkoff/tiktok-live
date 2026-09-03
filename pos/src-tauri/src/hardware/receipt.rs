@@ -26,10 +26,24 @@ pub struct ReceiptPayment {
     pub amount_cents: i64,
 }
 
+/// A refund prints as its own document referencing the sale it undoes.
+/// Defaults to `Sale` so older callers that omit the field keep working.
+#[derive(Deserialize, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ReceiptKind {
+    #[default]
+    Sale,
+    Refund,
+}
+
 #[derive(Deserialize)]
 pub struct ReceiptData {
     pub store_name: String,
+    #[serde(default)]
+    pub kind: ReceiptKind,
     pub receipt_number: String,
+    #[serde(default)]
+    pub refund_of_receipt: Option<String>,
     pub created_at: String,
     pub staff_name: String,
     pub customer_name: Option<String>,
@@ -101,9 +115,20 @@ fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> 
     printer.bold(true).map_err(|e| e.to_string())?;
     printer.writeln(&receipt.store_name).map_err(|e| e.to_string())?;
     printer.bold(false).map_err(|e| e.to_string())?;
-    printer
-        .writeln(&format!("Чек {}", receipt.receipt_number))
-        .map_err(|e| e.to_string())?;
+    if receipt.kind == ReceiptKind::Refund {
+        printer
+            .writeln(&format!("ЧЕК ПОВЕРНЕННЯ {}", receipt.receipt_number))
+            .map_err(|e| e.to_string())?;
+        if let Some(origin) = &receipt.refund_of_receipt {
+            printer
+                .writeln(&format!("до чека {origin}"))
+                .map_err(|e| e.to_string())?;
+        }
+    } else {
+        printer
+            .writeln(&format!("Чек {}", receipt.receipt_number))
+            .map_err(|e| e.to_string())?;
+    }
     printer.writeln(&receipt.created_at).map_err(|e| e.to_string())?;
     printer.justify(JustifyMode::LEFT).map_err(|e| e.to_string())?;
     printer.writeln(&divider(width)).map_err(|e| e.to_string())?;
@@ -131,8 +156,13 @@ fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> 
     }
 
     printer.bold(true).map_err(|e| e.to_string())?;
+    let total_label = if receipt.kind == ReceiptKind::Refund {
+        "ДО ПОВЕРНЕННЯ"
+    } else {
+        "РАЗОМ"
+    };
     printer
-        .writeln(&two_col(width, "РАЗОМ", &money(receipt.total_cents)))
+        .writeln(&two_col(width, total_label, &money(receipt.total_cents)))
         .map_err(|e| e.to_string())?;
     printer.bold(false).map_err(|e| e.to_string())?;
     printer.writeln(&divider(width)).map_err(|e| e.to_string())?;
@@ -156,7 +186,12 @@ fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> 
 
     printer.justify(JustifyMode::CENTER).map_err(|e| e.to_string())?;
     printer.feed().map_err(|e| e.to_string())?;
-    printer.writeln("Дякуємо за покупку!").map_err(|e| e.to_string())?;
+    let footer = if receipt.kind == ReceiptKind::Refund {
+        "Кошти повернуто"
+    } else {
+        "Дякуємо за покупку!"
+    };
+    printer.writeln(footer).map_err(|e| e.to_string())?;
     printer.print_cut().map_err(|e| e.to_string())?;
 
     let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;

@@ -11,6 +11,7 @@ import type {
   CompleteSaleItemInput,
   CompleteSalePaymentInput,
   RefundItemInput,
+  RefundMethod,
 } from './types.js';
 import { getCustomer } from './customers.service.js';
 
@@ -69,6 +70,28 @@ export function allocateCartDiscount(
   return { lineDiscounts, cartDiscountCents };
 }
 
+/**
+ * Money to return for `n` more units of a sale line.
+ *
+ * Works off `line_total_cents` (post-discount), not `unit_price_cents` — the
+ * latter is the pre-discount price, so charging refunds against it hands back
+ * more than the customer actually paid on any discounted receipt.
+ *
+ * Cumulative form on purpose: taking the difference between two rounded
+ * running totals (rather than rounding each slice) means the units of a line
+ * always sum to exactly `line_total_cents`, in whatever order they come back.
+ */
+export function refundLineAmount(
+  lineTotalCents: number,
+  quantity: number,
+  alreadyRefunded: number,
+  n: number
+): number {
+  if (quantity <= 0) return 0;
+  const through = (units: number) => Math.round((lineTotalCents * units) / quantity);
+  return through(alreadyRefunded + n) - through(alreadyRefunded);
+}
+
 async function nextReceiptNumber(
   client: { query: typeof pool.query },
   storeId: number
@@ -79,6 +102,19 @@ async function nextReceiptNumber(
   );
   const n = Number(result.rows[0].cnt) + 1;
   return `R-${String(n).padStart(5, '0')}`;
+}
+
+/** Refunds are their own documents, so they carry their own numbering. */
+async function nextRefundNumber(
+  client: { query: typeof pool.query },
+  storeId: number
+): Promise<string> {
+  const result = await client.query(
+    `SELECT COUNT(*)::int AS cnt FROM pos_refunds WHERE store_id = $1`,
+    [storeId]
+  );
+  const n = Number(result.rows[0].cnt) + 1;
+  return `RF-${String(n).padStart(5, '0')}`;
 }
 
 export async function getSaleByClientUuid(storeId: number, clientUuid: string) {
@@ -326,6 +362,7 @@ export async function getSale(storeId: number, saleId: number) {
     customer_name: sale.customer_name ?? null,
     customer_phone: sale.customer_phone ?? null,
     receipt_number: sale.receipt_number,
+    client_uuid: sale.client_uuid ?? null,
     status: sale.status,
     subtotal_cents: Number(sale.subtotal_cents),
     total_cents: Number(sale.total_cents),
@@ -358,6 +395,9 @@ export async function getSale(storeId: number, saleId: number) {
     })),
     refunds: refunds.rows.map((row) => ({
       id: Number(row.id),
+      refund_number: row.refund_number ?? null,
+      client_uuid: row.client_uuid ?? null,
+      method: row.method ?? null,
       total_cents: Number(row.total_cents),
       reason: row.reason,
       staff_name: row.staff_name,
@@ -402,6 +442,7 @@ export async function listSales(
   return result.rows.map((sale) => ({
     id: Number(sale.id),
     receipt_number: sale.receipt_number,
+    client_uuid: sale.client_uuid ?? null,
     status: sale.status,
     total_cents: Number(sale.total_cents),
     refunded_cents: Number(sale.refunded_cents),
@@ -412,12 +453,21 @@ export async function listSales(
   }));
 }
 
+/**
+ * Discards a receipt outright, returning every line to stock.
+ *
+ * Reserved for the pre-fiscalisation case: once ПРРО is wired up a receipt the
+ * tax service has seen can no longer be cancelled, only refunded, so the UI
+ * goes through `refundSale` instead. Kept because that "not fiscalised yet"
+ * path is exactly what fiscalisation will need.
+ */
 export async function voidSale(params: {
   storeId: number;
   saleId: number;
   staffId: number;
 }) {
   const client = await pool.connect();
+  let alreadyVoided = false;
   try {
     await client.query('BEGIN');
 
@@ -427,6 +477,15 @@ export async function voidSale(params: {
     );
     if (saleResult.rows.length === 0) throw new Error('Sale not found');
     const sale = saleResult.rows[0];
+
+    // Idempotent by design: the offline cashier queues voids in its outbox and
+    // may replay the same request after a network blip. Re-voiding is a no-op
+    // that returns the sale, not an error — mirrors completeSale/client_uuid.
+    if (sale.status === 'voided') {
+      await client.query('ROLLBACK');
+      alreadyVoided = true;
+      return getSale(params.storeId, params.saleId);
+    }
     if (sale.status !== 'completed') {
       throw new Error('Only completed sales can be voided');
     }
@@ -461,11 +520,22 @@ export async function voidSale(params: {
     await client.query('COMMIT');
     return getSale(params.storeId, params.saleId);
   } catch (error) {
-    await client.query('ROLLBACK');
+    if (!alreadyVoided) await client.query('ROLLBACK');
     throw error;
   } finally {
     client.release();
   }
+}
+
+const REFUND_METHODS: RefundMethod[] = ['cash', 'card', 'qr'];
+
+export async function getRefundByClientUuid(storeId: number, clientUuid: string) {
+  const result = await pool.query(
+    `SELECT sale_id FROM pos_refunds WHERE store_id = $1 AND client_uuid = $2`,
+    [storeId, clientUuid]
+  );
+  if (result.rows.length === 0) return null;
+  return getSale(storeId, Number(result.rows[0].sale_id));
 }
 
 export async function refundSale(params: {
@@ -474,8 +544,21 @@ export async function refundSale(params: {
   staffId: number;
   items: RefundItemInput[];
   reason?: string;
+  method?: RefundMethod | null;
+  client_uuid?: string | null;
 }) {
   if (!params.items?.length) throw new Error('Refund items required');
+
+  const clientUuid = params.client_uuid?.trim() || null;
+  if (clientUuid) {
+    const existing = await getRefundByClientUuid(params.storeId, clientUuid);
+    if (existing) return existing;
+  }
+
+  const method = params.method ?? null;
+  if (method && !REFUND_METHODS.includes(method)) {
+    throw new Error('Invalid refund method');
+  }
 
   const client = await pool.connect();
   try {
@@ -516,23 +599,40 @@ export async function refundSale(params: {
         throw new Error(`Cannot refund more than available for item ${input.sale_item_id}`);
       }
 
-      const unit = Number(item.unit_price_cents);
-      const lineTotal = unit * input.quantity;
+      // Refund against the discounted line total, and cumulatively, so the
+      // units of a line always add back up to exactly what was charged.
+      const lineTotal = refundLineAmount(
+        Number(item.line_total_cents),
+        Number(item.quantity),
+        already,
+        input.quantity
+      );
       refundTotal += lineTotal;
       refundLines.push({
         sale_item_id: Number(item.id),
         variant_id: Number(item.variant_id),
         quantity: input.quantity,
-        unit_price_cents: unit,
+        unit_price_cents: Number(item.unit_price_cents),
         line_total_cents: lineTotal,
       });
     }
 
+    const refundNumber = await nextRefundNumber(client, params.storeId);
     const refundResult = await client.query(
-      `INSERT INTO pos_refunds (sale_id, store_id, staff_id, total_cents, reason)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO pos_refunds
+         (sale_id, store_id, staff_id, total_cents, reason, client_uuid, refund_number, method)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id`,
-      [params.saleId, params.storeId, params.staffId, refundTotal, params.reason ?? null]
+      [
+        params.saleId,
+        params.storeId,
+        params.staffId,
+        refundTotal,
+        params.reason ?? null,
+        clientUuid,
+        refundNumber,
+        method,
+      ]
     );
     const refundId = Number(refundResult.rows[0].id);
 
@@ -583,6 +683,16 @@ export async function refundSale(params: {
     return getSale(params.storeId, params.saleId);
   } catch (error) {
     await client.query('ROLLBACK');
+    // Two tills replaying the same refund can collide on the client_uuid index.
+    const unique =
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code: string }).code === '23505';
+    if (unique && clientUuid) {
+      const existing = await getRefundByClientUuid(params.storeId, clientUuid);
+      if (existing) return existing;
+    }
     throw error;
   } finally {
     client.release();

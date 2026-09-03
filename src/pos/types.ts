@@ -143,3 +143,6 @@ export interface RefundItemInput {
   sale_item_id: number;
   quantity: number;
 }
+
+/** How refunded money goes back to the customer — same set as PaymentMethod. */
+export type RefundMethod = PaymentMethod;

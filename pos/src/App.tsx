@@ -20,6 +20,7 @@ import { StockMovementPage } from './pages/admin/stock/StockMovementPage';
 import { StockDocumentDetailPage } from './pages/admin/stock/StockDocumentDetailPage';
 import { CustomersPage } from './pages/customers/CustomersPage';
 import { RegisterPage } from './pages/register/RegisterPage';
+import { CashierSalesPage } from './pages/sales/CashierSalesPage';
 
 function Guard({
   children,
@@ -71,6 +72,14 @@ export function App() {
         element={
           <Guard>
             <RegisterPage />
+          </Guard>
+        }
+      />
+      <Route
+        path="/sales"
+        element={
+          <Guard>
+            <CashierSalesPage />
           </Guard>
         }
       />

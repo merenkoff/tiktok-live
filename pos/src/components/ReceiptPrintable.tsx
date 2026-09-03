@@ -24,7 +24,14 @@ export function ReceiptPrintable({ receipt }: { receipt: ReceiptData | null }) {
   return (
     <div className="receipt-print-area">
       <p className="receipt-print-store">{receipt.store_name}</p>
-      <p>Чек {receipt.receipt_number}</p>
+      {receipt.kind === 'refund' ? (
+        <>
+          <p>ЧЕК ПОВЕРНЕННЯ {receipt.receipt_number}</p>
+          {receipt.refund_of_receipt && <p>до чека {receipt.refund_of_receipt}</p>}
+        </>
+      ) : (
+        <p>Чек {receipt.receipt_number}</p>
+      )}
       <p>{receipt.created_at}</p>
       <hr />
       {receipt.items.map((item, i) => (
@@ -52,7 +59,7 @@ export function ReceiptPrintable({ receipt }: { receipt: ReceiptData | null }) {
         </div>
       ) : null}
       <div className="receipt-print-row receipt-print-total">
-        <span>РАЗОМ</span>
+        <span>{receipt.kind === 'refund' ? 'ДО ПОВЕРНЕННЯ' : 'РАЗОМ'}</span>
         <span>{money(receipt.total_cents)}</span>
       </div>
       <hr />
@@ -65,7 +72,9 @@ export function ReceiptPrintable({ receipt }: { receipt: ReceiptData | null }) {
       <hr />
       <p>Касир: {receipt.staff_name}</p>
       {receipt.customer_name && <p>Клієнт: {receipt.customer_name}</p>}
-      <p className="receipt-print-thanks">Дякуємо за покупку!</p>
+      <p className="receipt-print-thanks">
+        {receipt.kind === 'refund' ? 'Кошти повернуто' : 'Дякуємо за покупку!'}
+      </p>
     </div>
   );
 }

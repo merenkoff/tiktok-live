@@ -48,16 +48,23 @@ export function SalesPage() {
     setRefundQty(initial);
   }
 
-  async function onVoid() {
+  // Cancelling a receipt is a refund of everything left on it. Under ПРРО a
+  // receipt the tax service has seen can only be undone that way, so the admin
+  // and the till share one model rather than two.
+  async function onRefundAll() {
     if (!selected) return;
-    if (!confirm('Скасувати цей чек і повернути товар на склад?')) return;
-    try {
-      const sale = await api.voidSale(selected.id);
-      setSelected(sale);
-      await reload();
-    } catch {
-      setError('Не вдалося скасувати чек');
+    const items = selected.items
+      .map((item) => ({
+        sale_item_id: item.id,
+        quantity: item.quantity - item.refunded_quantity,
+      }))
+      .filter((line) => line.quantity > 0);
+    if (items.length === 0) {
+      setError('За цим чеком уже все повернуто');
+      return;
     }
+    if (!confirm('Повернути весь чек і товар на склад?')) return;
+    await submitRefund(items);
   }
 
   async function onRefund() {
@@ -72,9 +79,17 @@ export function SalesPage() {
       setError('Оберіть кількість для повернення');
       return;
     }
+    await submitRefund(items);
+  }
+
+  async function submitRefund(items: Array<{ sale_item_id: number; quantity: number }>) {
+    if (!selected) return;
     try {
-      const sale = await api.refundSale(selected.id, items);
+      const sale = await api.refundSale(selected.id, items, {
+        client_uuid: crypto.randomUUID(),
+      });
       setSelected(sale);
+      setRefundQty(Object.fromEntries(sale.items.map((i) => [i.id, 0])));
       await reload();
     } catch {
       setError('Не вдалося оформити повернення');
@@ -186,18 +201,32 @@ export function SalesPage() {
                 </ul>
               )}
 
-              <div className="flex flex-wrap gap-2">
-                {selected.status === 'completed' && (
-                  <button type="button" onClick={() => void onVoid()} className="rounded-sq border border-red-300 bg-red-50 text-red-700 px-4 py-2 text-sm font-semibold">
-                    Скасувати чек
+              {selected.refunds.length > 0 && (
+                <ul className="space-y-1.5 text-sm border-t border-sq-divider pt-3">
+                  <li className="sq-section-label">Повернення</li>
+                  {selected.refunds.map((r) => (
+                    <li key={r.id} className="flex justify-between gap-2">
+                      <span className="text-sq-secondary">
+                        {r.refund_number ?? '—'}
+                        {r.method ? ` · ${PAYMENT_LABEL_UK[r.method] ?? r.method}` : ''}
+                        {r.reason ? ` · ${r.reason}` : ''}
+                      </span>
+                      <span className="font-medium text-sq-text">−{formatUah(r.total_cents)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {(selected.status === 'completed' || selected.status === 'partially_refunded') && (
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => void onRefundAll()} className="rounded-sq border border-red-300 bg-red-50 text-red-700 px-4 py-2 text-sm font-semibold">
+                    Повернути все
                   </button>
-                )}
-                {(selected.status === 'completed' || selected.status === 'partially_refunded') && (
                   <button type="button" onClick={() => void onRefund()} className="sq-btn-primary px-4 py-2 text-sm">
                     Повернення
                   </button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
         </section>

@@ -3,13 +3,24 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { api, isNetworkError } from '../services/api';
-import type { CatalogItem, PosCustomer, PosTag, SaleDetail, SalePaymentInput } from '../types';
+import type {
+  CatalogItem,
+  PaymentMethod,
+  PosCustomer,
+  PosTag,
+  RefundLineInput,
+  SaleDetail,
+  SaleListItem,
+  SalePaymentInput,
+} from '../types';
+import { OfflineRefundError } from './errors';
 import { filterCatalog } from './catalog-filter';
 import {
   db,
   getMeta,
   setMeta,
   type CachedCustomer,
+  type LocalSaleRow,
   type OutboxCustomerPayload,
   type OutboxSalePayload,
 } from './db';
@@ -262,6 +273,7 @@ function localSaleDetail(
   return {
     id: -Date.now(),
     receipt_number: `OFF-${short}`,
+    client_uuid: clientUuid,
     status: 'completed',
     subtotal_cents: subtotal,
     total_cents: payload.payments.reduce((s, p) => s + p.amount_cents, 0) || subtotal,
@@ -279,12 +291,16 @@ function localSaleDetail(
   };
 }
 
-async function applyLocalStockDelta(items: Array<{ variant_id: number; quantity: number }>): Promise<void> {
+/** `sign` is -1 when a sale consumes stock, +1 when a void hands it back. */
+async function applyLocalStockDelta(
+  items: Array<{ variant_id: number; quantity: number }>,
+  sign: -1 | 1 = -1
+): Promise<void> {
   await db.transaction('rw', db.catalog, async () => {
     for (const line of items) {
       const row = await db.catalog.get(line.variant_id);
       if (!row) continue;
-      await db.catalog.put({ ...row, quantity: row.quantity - line.quantity });
+      await db.catalog.put({ ...row, quantity: row.quantity + sign * line.quantity });
     }
   });
 }
@@ -321,8 +337,9 @@ export async function completeSale(payload: {
         client_uuid: clientUuid,
       });
       await applyLocalStockDelta(payload.items);
+      await putLocalSale(sale, clientUuid, sale.id);
       void refreshSnapshot().catch(() => undefined);
-      return sale;
+      return { ...sale, client_uuid: clientUuid };
     } catch (error) {
       if (!isNetworkError(error)) throw error;
     }
@@ -345,7 +362,9 @@ export async function completeSale(payload: {
       .catch(() => undefined);
   }
   const catalog = await db.catalog.toArray();
-  return localSaleDetail(clientUuid, salePayload, catalog);
+  const detail = localSaleDetail(clientUuid, salePayload, catalog);
+  await putLocalSale(detail, clientUuid, null);
+  return detail;
 }
 
 export async function replaceLocalCustomer(localId: number, server: PosCustomer): Promise<void> {
@@ -353,4 +372,186 @@ export async function replaceLocalCustomer(localId: number, server: PosCustomer)
     if (localId !== server.id) await db.customers.delete(localId);
     await db.customers.put(server);
   });
+}
+
+// ── Receipts: local mirror, offline list and void queue ────────────────────
+
+/**
+ * Sales rung up before offline support (or from the web admin) have no
+ * `client_uuid`, so key those rows by server id instead. Both forms stay stable
+ * for the lifetime of the receipt, which is all the void queue needs.
+ */
+function saleKey(sale: { id?: number | null; client_uuid?: string | null }): string {
+  if (sale.client_uuid) return sale.client_uuid;
+  return `srv:${sale.id ?? 0}`;
+}
+
+/** Writes/merges a receipt into the local mirror, never losing a queued void. */
+export async function putLocalSale(
+  detail: SaleDetail,
+  clientUuid: string | null,
+  serverId: number | null
+): Promise<LocalSaleRow> {
+  const key = clientUuid ?? saleKey(detail);
+  const prev = await db.sales.get(key);
+  const row: LocalSaleRow = {
+    client_uuid: key,
+    server_id: serverId ?? prev?.server_id ?? null,
+    receipt_number: detail.receipt_number,
+    status: detail.status,
+    total_cents: detail.total_cents,
+    refunded_cents: detail.refunded_cents,
+    staff_name: detail.staff_name,
+    customer_name: detail.customer_name ?? null,
+    created_at: detail.created_at,
+    detail,
+  };
+  await db.sales.put(row);
+  return row;
+}
+
+function rowFromListItem(item: SaleListItem, prev?: LocalSaleRow): LocalSaleRow {
+  return {
+    client_uuid: saleKey(item),
+    server_id: item.id,
+    receipt_number: item.receipt_number,
+    status: item.status,
+    total_cents: item.total_cents,
+    refunded_cents: item.refunded_cents,
+    staff_name: item.staff_name,
+    customer_name: item.customer_name ?? null,
+    created_at: item.created_at,
+    // Keep any detail we already hold — the list endpoint carries no line items.
+    detail: prev?.detail,
+  };
+}
+
+/**
+ * Pulls the store's recent receipts into the local mirror so the cashier's
+ * sales screen keeps working offline. Deliberately not part of
+ * `refreshSnapshot` — the register hot path does not need receipts.
+ */
+export async function refreshSalesCache(limit = 50): Promise<void> {
+  if (!navigator.onLine || !api.hasLiveJwt()) return;
+  const items = await api.listSales(limit);
+  await db.transaction('rw', db.sales, async () => {
+    for (const item of items) {
+      const prev = await db.sales.get(saleKey(item));
+      await db.sales.put(rowFromListItem(item, prev));
+    }
+  });
+}
+
+function sortByNewest(rows: LocalSaleRow[]): LocalSaleRow[] {
+  return rows.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+}
+
+export async function listSales(limit = 50): Promise<LocalSaleRow[]> {
+  if (navigator.onLine && api.hasLiveJwt()) {
+    try {
+      await refreshSalesCache(limit);
+    } catch (error) {
+      if (!isNetworkError(error)) throw error;
+    }
+  }
+  const rows = await db.sales.toArray();
+  return sortByNewest(rows).slice(0, limit);
+}
+
+/**
+ * Full receipt for a row. Offline this is whatever the device cached; a receipt
+ * merged from the server list has no line items until opened online.
+ */
+export async function getSale(row: LocalSaleRow): Promise<SaleDetail | null> {
+  if (row.server_id && navigator.onLine && api.hasLiveJwt()) {
+    try {
+      const detail = await api.getSale(row.server_id);
+      const merged = await putLocalSale(detail, row.client_uuid, row.server_id);
+      return merged.detail ?? detail;
+    } catch (error) {
+      if (!isNetworkError(error)) throw error;
+    }
+  }
+  return (await db.sales.get(row.client_uuid))?.detail ?? row.detail ?? null;
+}
+
+/**
+ * Drops a sale that has not left the device yet, atomically so nothing can ship
+ * it after we decide to cancel it. Returns false when the sale already went to
+ * the server — the caller then has to refund it properly instead.
+ */
+async function dropUnsyncedSale(clientUuid: string): Promise<boolean> {
+  return db.transaction('rw', db.outbox, async () => {
+    const pending = await db.outbox
+      .filter((r) => r.type === 'sale' && r.clientUuid === clientUuid)
+      .first();
+    if (!pending) return false;
+    await db.outbox.delete(pending.id);
+    return true;
+  });
+}
+
+/**
+ * Returns money for part (or all) of a receipt.
+ *
+ * Two paths, split by connectivity rather than by what the row knows:
+ *  - online  → always through the server, syncing the sale first if it is still
+ *    queued, because a refund is a document that must reference a real sale;
+ *  - offline → only a sale still sitting in the outbox can be cancelled, by
+ *    discarding it. That is not a refund at all — the receipt never existed
+ *    server-side. Anything already synced needs a connection.
+ *
+ * Because the local discard is offline-only and sync never runs offline, the
+ * two paths cannot overlap.
+ */
+export async function refundSale(
+  row: LocalSaleRow,
+  items: RefundLineInput[],
+  opts: { method?: PaymentMethod | null; reason?: string } = {}
+): Promise<LocalSaleRow> {
+  const online = navigator.onLine && api.hasLiveJwt();
+
+  if (!online) {
+    if (row.server_id || !(await dropUnsyncedSale(row.client_uuid))) {
+      throw new OfflineRefundError();
+    }
+    const dropped: LocalSaleRow = { ...row, status: 'voided' };
+    await db.sales.put(dropped);
+    await applyLocalStockDelta(row.detail?.items ?? [], 1);
+    await useOfflineStatus.getState().refreshPending();
+    return dropped;
+  }
+
+  // Online: the sale has to exist server-side before it can be refunded.
+  let serverId = row.server_id;
+  if (!serverId) {
+    const { runSync } = await import('./sync');
+    await runSync();
+    serverId = (await db.sales.get(row.client_uuid))?.server_id ?? null;
+    if (!serverId) throw new Error('Чек ще не синхронізовано — спробуйте ще раз');
+  }
+
+  const detail = await api.refundSale(serverId, items, {
+    reason: opts.reason,
+    method: opts.method ?? null,
+    client_uuid: crypto.randomUUID(),
+  });
+  await applyLocalStockDelta(
+    items.map((i) => ({ variant_id: refundedVariantId(row, detail, i), quantity: i.quantity })),
+    1
+  );
+  const saved = await putLocalSale(detail, row.client_uuid, serverId);
+  void refreshSnapshot().catch(() => undefined);
+  return saved;
+}
+
+/** Sale items carry the variant, refund inputs only carry the sale-item id. */
+function refundedVariantId(
+  row: LocalSaleRow,
+  detail: SaleDetail,
+  line: RefundLineInput
+): number {
+  const from = detail.items.find((i) => i.id === line.sale_item_id)
+    ?? row.detail?.items.find((i) => i.id === line.sale_item_id);
+  return from?.variant_id ?? 0;
 }

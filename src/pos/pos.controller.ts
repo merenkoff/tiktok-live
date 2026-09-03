@@ -1163,6 +1163,8 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
     const body = request.body as {
       items: { sale_item_id: number; quantity: number }[];
       reason?: string;
+      method?: 'cash' | 'card' | 'qr' | null;
+      client_uuid?: string | null;
     };
     try {
       return await salesService.refundSale({
@@ -1171,6 +1173,8 @@ export async function registerPosRoutes(fastify: FastifyInstance): Promise<void>
         staffId: auth.staffId,
         items: body.items,
         reason: body.reason,
+        method: body.method ?? null,
+        client_uuid: body.client_uuid ?? null,
       });
     } catch (error) {
       return reply.code(400).send({ error: errorMessage(error) });

@@ -11,3 +11,15 @@ export class OfflineAuthError extends Error {
     this.name = 'OfflineAuthError';
   }
 }
+
+/**
+ * A refund is a document that has to reference a real server-side sale (and,
+ * once ПРРО lands, its fiscal number), so it cannot be queued offline. Only a
+ * sale still waiting in the outbox can be cancelled without a connection.
+ */
+export class OfflineRefundError extends Error {
+  constructor() {
+    super('Повернення потребує інтернету — цей чек уже на сервері');
+    this.name = 'OfflineRefundError';
+  }
+}
