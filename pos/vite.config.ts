@@ -18,5 +18,15 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    rollupOptions: {
+      output: {
+        manualChunks(id: string) {
+          const m = id.match(/\/src\/modules\/([^/]+)\//);
+          if (m) return `m-${m[1]}`;
+          if (id.includes('/node_modules/dexie/')) return 'vendor-dexie';
+          return undefined;
+        },
+      },
+    },
   },
 });

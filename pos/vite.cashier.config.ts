@@ -67,6 +67,14 @@ export default defineConfig(({ mode }) => {
       sourcemap: !!process.env.TAURI_ENV_DEBUG,
       rollupOptions: {
         input: path.resolve(__dirname, 'cashier.html'),
+        output: {
+          manualChunks(id: string) {
+            const m = id.match(/\/src\/modules\/([^/]+)\//);
+            if (m) return `m-${m[1]}`;
+            if (id.includes('/node_modules/dexie/')) return 'vendor-dexie';
+            return undefined;
+          },
+        },
       },
     },
   };

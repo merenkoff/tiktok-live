@@ -2,9 +2,13 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
+import { lazy } from 'react';
 import { Users } from 'lucide-react';
-import { CustomersPage } from '../../pages/customers/CustomersPage';
 import type { ModuleDescriptor } from '../types';
+
+const CustomersPage = lazy(() =>
+  import('../../pages/customers/CustomersPage').then((m) => ({ default: m.CustomersPage }))
+);
 
 /** Customer directory. Same page in the cashier chrome (`cashierShell`) and embedded in admin. */
 export const customersModule: ModuleDescriptor = {

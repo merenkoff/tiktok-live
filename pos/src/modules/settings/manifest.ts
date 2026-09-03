@@ -2,8 +2,12 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { SettingsPage } from '../../pages/admin/SettingsPage';
+import { lazy } from 'react';
 import type { ModuleDescriptor } from '../types';
+
+const SettingsPage = lazy(() =>
+  import('../../pages/admin/SettingsPage').then((m) => ({ default: m.SettingsPage }))
+);
 
 /** Store settings — including the module checklist itself, so it can never be disabled. */
 export const settingsModule: ModuleDescriptor = {

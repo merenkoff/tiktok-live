@@ -2,9 +2,13 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
+import { lazy } from 'react';
 import { ScanLine } from 'lucide-react';
-import { HardwarePage } from '../../pages/HardwarePage';
 import type { ModuleDescriptor } from '../types';
+
+const HardwarePage = lazy(() =>
+  import('../../pages/HardwarePage').then((m) => ({ default: m.HardwarePage }))
+);
 
 /** Scanner / printer setup + app update. Cashier (desktop) shell only; always on there. */
 export const hardwareModule: ModuleDescriptor = {

@@ -2,13 +2,29 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { StockHubPage } from '../../pages/admin/stock/StockHubPage';
-import { StockActionPage } from '../../pages/admin/stock/StockActionPage';
-import { StockInventoryPage } from '../../pages/admin/stock/StockInventoryPage';
-import { StockHistoryPage } from '../../pages/admin/stock/StockHistoryPage';
-import { StockMovementPage } from '../../pages/admin/stock/StockMovementPage';
-import { StockDocumentDetailPage } from '../../pages/admin/stock/StockDocumentDetailPage';
+import { lazy } from 'react';
 import type { ModuleDescriptor } from '../types';
+
+const StockHubPage = lazy(() =>
+  import('../../pages/admin/stock/StockHubPage').then((m) => ({ default: m.StockHubPage }))
+);
+const StockActionPage = lazy(() =>
+  import('../../pages/admin/stock/StockActionPage').then((m) => ({ default: m.StockActionPage }))
+);
+const StockInventoryPage = lazy(() =>
+  import('../../pages/admin/stock/StockInventoryPage').then((m) => ({ default: m.StockInventoryPage }))
+);
+const StockHistoryPage = lazy(() =>
+  import('../../pages/admin/stock/StockHistoryPage').then((m) => ({ default: m.StockHistoryPage }))
+);
+const StockMovementPage = lazy(() =>
+  import('../../pages/admin/stock/StockMovementPage').then((m) => ({ default: m.StockMovementPage }))
+);
+const StockDocumentDetailPage = lazy(() =>
+  import('../../pages/admin/stock/StockDocumentDetailPage').then((m) => ({
+    default: m.StockDocumentDetailPage,
+  }))
+);
 
 /** Stock: adjustments, documents (receipt/writeoff/inventory), suppliers, reports. Owner-only, web. */
 export const stockModule: ModuleDescriptor = {
