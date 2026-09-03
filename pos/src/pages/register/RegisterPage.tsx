@@ -12,6 +12,8 @@ import { formatUah } from '../../lib/money';
 import { DEFAULT_RECEIPT_PAPER_WIDTH, ReceiptPaperWidth, printReceipt } from '../../lib/printer';
 import { buildReceiptPayload } from '../../lib/receipt';
 import { usePrintableReceipt } from '../../hooks/usePrintableReceipt';
+import { RefundSaleDialog } from '../../components/cashier/RefundSaleDialog';
+import { saleRowFromDetail } from '../../offline/cashierApi';
 import { getMeta } from '../../offline/db';
 import type { CatalogItem, PaymentMethod, PosTag, SaleDetail, SalePaymentInput } from '../../types';
 import { CheckoutModal } from '../../components/CheckoutModal';
@@ -74,6 +76,13 @@ export function RegisterPage() {
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [paying, setPaying] = useState(false);
   const [success, setSuccess] = useState<SaleDetail | null>(null);
+  // Cancelling the receipt we just rang up — the common "wrong item" fix.
+  // Under ПРРО that is a full refund, so it goes through the same dialog with
+  // every line pre-selected.
+  const [cancelling, setCancelling] = useState(false);
+  // Status of the refund just taken against this receipt, if any — the cashier
+  // can deselect lines in the dialog, so this may be a partial return.
+  const [cancelled, setCancelled] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
   const [printStatus, setPrintStatus] = useState<string | null>(null);
   const [receiptPrinterName, setReceiptPrinterName] = useState<string | null>(null);
@@ -283,6 +292,12 @@ export function RegisterPage() {
     }
   }
 
+  // Keyed on the receipt, not the object: refunding refreshes `success` in
+  // place, and that must not wipe the banner it just set.
+  useEffect(() => {
+    setCancelled(null);
+  }, [success?.receipt_number]);
+
   async function printSuccessReceipt() {
     if (!success || !receiptPrinterName) return;
     setPrinting(true);
@@ -323,6 +338,13 @@ export function RegisterPage() {
           <p className="text-5xl font-bold mt-6 text-sq-text">{formatUah(success.total_cents)}</p>
           <p className="text-sq-secondary mt-3 text-sm">{success.staff_name}</p>
           {payText && <p className="text-sq-secondary mt-1 text-sm">{payText}</p>}
+          {cancelled && (
+            <p className="mt-6 rounded-sq bg-red-50 text-red-700 px-3 py-2 text-sm font-semibold">
+              {cancelled === 'partially_refunded'
+                ? 'Частину чека повернуто — товар повернувся на склад.'
+                : 'Чек скасовано — кошти й товар повернуто.'}
+            </p>
+          )}
           <button
             type="button"
             className="pos-btn-primary mt-10 w-full py-3.5"
@@ -330,6 +352,15 @@ export function RegisterPage() {
           >
             Новий чек
           </button>
+          {cancelled !== 'refunded' && cancelled !== 'voided' && (
+            <button
+              type="button"
+              className="mt-3 w-full min-h-12 rounded-sq border border-red-300 bg-red-50 text-red-700 text-sm font-semibold"
+              onClick={() => setCancelling(true)}
+            >
+              Скасувати чек
+            </button>
+          )}
           {receiptPrinterName && (
             <button
               type="button"
@@ -350,6 +381,23 @@ export function RegisterPage() {
           {printStatus && <p className="text-sq-secondary text-sm mt-1">{printStatus}</p>}
         </div>
         {printablePortal}
+        {cancelling && (
+          <RefundSaleDialog
+            sale={saleRowFromDetail(success)}
+            detail={success}
+            selectAll
+            onClose={() => setCancelling(false)}
+            onRefunded={(row) => {
+              setCancelling(false);
+              setCancelled(row.status);
+              // Keep the receipt fresh so a follow-up refund sees what is still
+              // returnable rather than the quantities as first rung up.
+              if (row.detail) setSuccess(row.detail);
+              // Stock changed under us — pull a fresh catalog for the next sale.
+              void loadCatalog();
+            }}
+          />
+        )}
       </div>
     );
   }

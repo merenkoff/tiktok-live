@@ -10,6 +10,7 @@ import { LoginPage } from './pages/LoginPage';
 import { CustomersPage } from './pages/customers/CustomersPage';
 import { HardwarePage } from './pages/HardwarePage';
 import { RegisterPage } from './pages/register/RegisterPage';
+import { CashierSalesPage } from './pages/sales/CashierSalesPage';
 import { startOfflineRuntime } from './offline';
 
 function Guard({ children }: { children: React.ReactNode }) {
@@ -54,6 +55,14 @@ export function CashierApp() {
         element={
           <Guard>
             <RegisterPage />
+          </Guard>
+        }
+      />
+      <Route
+        path="/sales"
+        element={
+          <Guard>
+            <CashierSalesPage />
           </Guard>
         }
       />

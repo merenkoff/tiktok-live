@@ -138,6 +138,8 @@ export interface PosTag {
 export interface SaleListItem {
   id: number;
   receipt_number: string;
+  /** Client-generated UUID (offline idempotency key) — links a server sale to its local row. */
+  client_uuid?: string | null;
   status: string;
   total_cents: number;
   refunded_cents: number;
@@ -151,6 +153,8 @@ export interface SaleListItem {
 export interface SaleDetail {
   id: number;
   receipt_number: string;
+  /** Client-generated UUID (offline idempotency key) — links a server sale to its local row. */
+  client_uuid?: string | null;
   status: string;
   subtotal_cents: number;
   total_cents: number;
@@ -184,11 +188,22 @@ export interface SaleDetail {
   }>;
   refunds: Array<{
     id: number;
+    /** Document number (RF-00001); null on refunds predating the column. */
+    refund_number: string | null;
+    client_uuid: string | null;
+    /** How the money went back; null on refunds predating the column. */
+    method: PaymentMethod | null;
     total_cents: number;
     reason: string | null;
     staff_name: string;
     created_at: string;
   }>;
+}
+
+/** One line of a refund request — how many units of a sale item go back. */
+export interface RefundLineInput {
+  sale_item_id: number;
+  quantity: number;
 }
 
 export interface CustomerChild {

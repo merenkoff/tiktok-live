@@ -22,9 +22,15 @@ export interface ReceiptPayment {
   amount_cents: number;
 }
 
+/** A refund prints as its own document referencing the sale it undoes. */
+export type ReceiptKind = 'sale' | 'refund';
+
 export interface ReceiptData {
   store_name: string;
+  kind: ReceiptKind;
   receipt_number: string;
+  /** Sale this refund is against; null on a normal sale receipt. */
+  refund_of_receipt: string | null;
   created_at: string;
   staff_name: string;
   customer_name: string | null;

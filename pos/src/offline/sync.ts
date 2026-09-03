@@ -3,9 +3,20 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { api, isNetworkError } from '../services/api';
-import { db, getDeviceId, type OutboxCustomerPayload, type OutboxSalePayload, type OutboxRow } from './db';
+import {
+  db,
+  getDeviceId,
+  type OutboxCustomerPayload,
+  type OutboxSalePayload,
+  type OutboxRow,
+} from './db';
 import { isOfflinePosEnabled } from './enabled';
-import { refreshSnapshot, replaceLocalCustomer } from './repository';
+import {
+  putLocalSale,
+  refreshSalesCache,
+  refreshSnapshot,
+  replaceLocalCustomer,
+} from './repository';
 import { useOfflineStatus } from './status';
 
 const BACKOFF_MS = [2000, 5000, 15000, 30000, 60000];
@@ -60,7 +71,7 @@ async function syncSale(row: OutboxRow): Promise<void> {
     }
   }
   const customerId = await resolveSaleCustomerId(payload);
-  await api.completeSale({
+  const sale = await api.completeSale({
     items: payload.items,
     payments: payload.payments,
     note: payload.note,
@@ -68,6 +79,9 @@ async function syncSale(row: OutboxRow): Promise<void> {
     customer_id: customerId,
     client_uuid: payload.client_uuid,
   });
+  // Record client_uuid -> server id so the receipts screen can address this
+  // sale on the server once it exists there.
+  await putLocalSale(sale, payload.client_uuid, sale.id);
   await db.outbox.delete(row.id);
 }
 
@@ -75,6 +89,7 @@ export async function runSync(): Promise<void> {
   if (!isOfflinePosEnabled() || running) return;
   if (!navigator.onLine || !api.hasLiveJwt()) return;
   running = true;
+  let shipped = 0;
   useOfflineStatus.getState().setSyncing(true);
   useOfflineStatus.getState().setLastError(null);
   try {
@@ -99,6 +114,7 @@ export async function runSync(): Promise<void> {
       if (row.status === 'error' && Date.now() - row.createdAt < backoff(row.attempts)) continue;
       try {
         await syncSale(row);
+        shipped += 1;
       } catch (error) {
         const message = isNetworkError(error)
           ? 'Немає відповіді сервера'
@@ -112,6 +128,9 @@ export async function runSync(): Promise<void> {
 
     try {
       await refreshSnapshot();
+      // Only re-pull receipts when this cycle actually changed some — the sales
+      // screen refreshes its own mirror on mount, so idle tills stay quiet.
+      if (shipped > 0) await refreshSalesCache();
     } catch {
       /* keep local cache */
     }
@@ -133,6 +152,9 @@ export function startOfflineRuntime(): void {
   if (started || !isOfflinePosEnabled()) return;
   started = true;
   void getDeviceId();
+  // Interim builds queued a 'void' outbox type that no longer exists; drop any
+  // leftovers so they cannot wedge the pending counter.
+  void db.outbox.filter((r) => String(r.type) === 'void').delete();
   const status = useOfflineStatus.getState();
   status.setOnline(navigator.onLine);
   void status.refreshPending();

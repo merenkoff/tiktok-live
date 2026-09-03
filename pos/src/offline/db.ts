@@ -3,7 +3,14 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import Dexie, { type Table } from 'dexie';
-import type { CatalogItem, PosCustomer, PosRole, QrPaymentMode, SalePaymentInput } from '../types';
+import type {
+  CatalogItem,
+  PosCustomer,
+  PosRole,
+  QrPaymentMode,
+  SaleDetail,
+  SalePaymentInput,
+} from '../types';
 
 export interface MetaRow {
   key: string;
@@ -71,12 +78,32 @@ export interface CachedCustomer extends PosCustomer {
   client_uuid?: string | null;
 }
 
+/**
+ * Local mirror of a receipt, keyed by `client_uuid` so a sale keeps its identity
+ * across the offline → synced transition. `detail` is present only for receipts
+ * this device rang up or opened while online; rows merged from the server list
+ * carry summary fields only until opened.
+ */
+export interface LocalSaleRow {
+  client_uuid: string;
+  server_id: number | null;
+  receipt_number: string;
+  status: string;
+  total_cents: number;
+  refunded_cents: number;
+  staff_name: string;
+  customer_name: string | null;
+  created_at: string;
+  detail?: SaleDetail;
+}
+
 class PosOfflineDB extends Dexie {
   meta!: Table<MetaRow, string>;
   staffUnlock!: Table<StaffUnlockRow, string>;
   catalog!: Table<CatalogItem, number>;
   customers!: Table<CachedCustomer, number>;
   outbox!: Table<OutboxRow, string>;
+  sales!: Table<LocalSaleRow, string>;
 
   constructor() {
     super('cloth-pos-offline');
@@ -86,6 +113,11 @@ class PosOfflineDB extends Dexie {
       catalog: 'variant_id, product_id, barcode',
       customers: 'id, phone, client_uuid, store_id',
       outbox: 'id, type, status, createdAt',
+    });
+    // v2 adds the local receipt mirror that powers the cashier's sales screen
+    // and the offline void queue. Existing installs upgrade in place.
+    this.version(2).stores({
+      sales: 'client_uuid, server_id, created_at, status',
     });
   }
 }

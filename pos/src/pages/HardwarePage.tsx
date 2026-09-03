@@ -10,6 +10,7 @@ import {
   DEFAULT_RECEIPT_PAPER_WIDTH,
   PrinterInfo,
   RECEIPT_PAPER_WIDTHS,
+  ReceiptData,
   ReceiptPaperWidth,
   listPrinters,
   printReceipt,
@@ -25,10 +26,12 @@ import { OfflineStatusBanner } from '../components/cashier/OfflineStatusBanner';
 const RECEIPT_PRINTER_META_KEY = 'receiptPrinterName';
 const RECEIPT_PAPER_META_KEY = 'receiptPaperWidthMm';
 
-function testReceipt(storeName: string) {
+function testReceipt(storeName: string): ReceiptData {
   return {
     store_name: storeName,
+    kind: 'sale',
     receipt_number: 'ТЕСТ',
+    refund_of_receipt: null,
     created_at: new Date().toLocaleString('uk-UA'),
     staff_name: 'Тест',
     customer_name: null,

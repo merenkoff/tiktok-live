@@ -2,7 +2,7 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { Grid3X3, ListOrdered, LogOut, Package, ScanLine, Users } from 'lucide-react';
+import { Grid3X3, ListOrdered, LogOut, Package, Receipt, ScanLine, Users } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { usePosShell } from '../../shell';
 import { useUpdateStore } from '../../hooks/useUpdateCheck';
@@ -56,6 +56,13 @@ export function AppRail({ isOwner, onLogout }: Props) {
               <Package size={22} strokeWidth={1.75} />
             </Link>
           </>
+        )}
+        {/* Owners on web reach receipts through the admin page above; everyone
+            else gets the till-side screen, which also works offline. */}
+        {!showAdmin && (
+          <Link to="/sales" className={itemClass(pathname.startsWith('/sales'))} title="Чеки">
+            <Receipt size={22} strokeWidth={1.75} />
+          </Link>
         )}
         {showHardware && (
           <Link

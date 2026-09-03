@@ -6,9 +6,11 @@ import axios, { type AxiosInstance } from 'axios';
 import type {
   AuthResponse,
   CatalogItem,
+  PaymentMethod,
   PosCustomer,
   PosTag,
   Product,
+  RefundLineInput,
   SaleDetail,
   SalePaymentInput,
   StoreConfig,
@@ -345,12 +347,14 @@ class PosApi {
 
   async refundSale(
     id: number,
-    items: Array<{ sale_item_id: number; quantity: number }>,
-    reason?: string
+    items: RefundLineInput[],
+    opts: { reason?: string; method?: PaymentMethod | null; client_uuid?: string | null } = {}
   ): Promise<SaleDetail> {
     const { data } = await this.client.post<SaleDetail>(`/sales/${id}/refunds`, {
       items,
-      reason,
+      reason: opts.reason,
+      method: opts.method ?? null,
+      client_uuid: opts.client_uuid ?? null,
     });
     return data;
   }

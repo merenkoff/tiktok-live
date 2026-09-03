@@ -2,7 +2,7 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { Grid3X3, ListOrdered, LogOut, ScanLine, Users } from 'lucide-react';
+import { Grid3X3, ListOrdered, LogOut, Receipt, ScanLine, Users } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { usePosShell } from '../../shell';
 
@@ -34,6 +34,12 @@ export function BottomNav({ isOwner, onLogout }: Props) {
         <Link to="/admin/sales" className={item(pathname.startsWith('/admin/sales'))}>
           <ListOrdered size={20} strokeWidth={1.75} />
           <span className="text-[11px] mt-0.5">Продажі</span>
+        </Link>
+      )}
+      {!showAdmin && (
+        <Link to="/sales" className={item(pathname.startsWith('/sales'))}>
+          <Receipt size={20} strokeWidth={1.75} />
+          <span className="text-[11px] mt-0.5">Чеки</span>
         </Link>
       )}
       {showHardware && (
