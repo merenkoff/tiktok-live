@@ -8,6 +8,7 @@ import { useAuthStore } from '../hooks/useAuth';
 import { useUpdateStore } from '../hooks/useUpdateCheck';
 import { MODULES } from '../modules/registry';
 import { useEnabledModules } from '../modules/useEnabledModules';
+import { selectNavItems } from '../modules/selectNav';
 import type { NavCtx, NavItem, NavLocation, NavVariant } from '../modules/types';
 
 interface Props {
@@ -17,10 +18,9 @@ interface Props {
 }
 
 /**
- * Data-driven navigation: reads {@link MODULES}, keeps only entries whose module
- * is enabled for the current shell/role, then filters per-item `visible()` and
- * sorts by `order`. Replaces the hand-maintained link lists in `AdminLayout`,
- * `AppRail` and `BottomNav`.
+ * Data-driven navigation: renders whatever {@link selectNavItems} resolves for
+ * the current shell/role/variant. Replaces the hand-maintained link lists in
+ * `AdminLayout`, `AppRail` and `BottomNav`.
  */
 export function Nav({ location, variant }: Props) {
   const shell = usePosShell();
@@ -30,12 +30,7 @@ export function Nav({ location, variant }: Props) {
   const updateAvailable = useUpdateStore((s) => s.updateInfo?.update_available ?? false);
 
   const ctx: NavCtx = { shell, role, variant };
-  const items: NavItem[] = MODULES.filter(
-    (m) => enabled.has(m.id) && m.shells.includes(shell) && (!m.ownerOnly || role === 'owner')
-  )
-    .flatMap((m) => m.nav)
-    .filter((n) => n.location === location && (!n.visible || n.visible(ctx)))
-    .sort((a, b) => a.order - b.order);
+  const items: NavItem[] = selectNavItems(MODULES, enabled, ctx, location);
 
   if (location === 'admin-sidebar') {
     return (
