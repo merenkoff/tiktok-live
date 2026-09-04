@@ -38,6 +38,8 @@ export interface StaffUnlockRow {
   qrStaticImageUrl?: string | null;
   /** Auto-print receipt flag cached from AuthResponse (optional on old rows). */
   autoPrintReceipt?: boolean;
+  /** Enabled module ids cached from AuthResponse so the till honours toggles offline (optional on old rows). */
+  enabledModules?: string[];
 }
 
 export type OutboxType = 'sale' | 'customer';
