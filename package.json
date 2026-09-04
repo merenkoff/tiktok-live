@@ -13,6 +13,8 @@
     "test": "vitest",
     "test:admin": "npm --prefix admin run test",
     "test:admin:coverage": "npm --prefix admin run test:coverage",
+    "test:pos": "npm --prefix pos run test",
+    "test:pos:coverage": "npm --prefix pos run test:coverage",
     "pos:migrate": "tsx src/pos/migrate.ts",
     "pos:seed": "tsx src/pos/seed.ts",
     "docker:build": "docker build -t tiktok-live-automation .",

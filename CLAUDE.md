@@ -56,8 +56,15 @@ npm run build                 # tsc --noEmit && vite build -> dist/
 npm run build:cashier          # -> dist-cashier/
 npm run tauri:dev              # opens Tauri window (runs dev:cashier itself)
 npm run tauri:build            # native installer -> pos/src-tauri/target/release/bundle/
+npm test                       # vitest run
+npm run test:watch
+npm run test:coverage          # coverage gate: narrow include (module platform + pure helpers) ≥80% lines/fn/stmt, ≥70% branches
+npm run test:e2e:install       # once: install Playwright Chromium
+npm run test:e2e               # Playwright against `vite preview`, routes mocked
 ```
-No lint/test scripts configured in `pos/`.
+Also runnable from repo root: `npm run test:pos`, `npm run test:pos:coverage`.
+CI: `.github/workflows/pos-tests.yml` runs unit+coverage and e2e on PRs/pushes touching `pos/**`.
+No lint script configured in `pos/`. See `pos/TESTING.md` for the stack, P0 list and mocking notes.
 
 ## Architecture
 

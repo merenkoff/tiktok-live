@@ -5,3 +5,8 @@ dist-cashier/
 .env.local
 *.local
 .DS_Store
+coverage
+test-results
+playwright-report
+blob-report
+playwright/.cache
