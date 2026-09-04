@@ -9,6 +9,8 @@
     "dev:cashier": "vite --config vite.cashier.config.ts",
     "build": "tsc --noEmit && vite build",
     "build:cashier": "tsc --noEmit && vite build --config vite.cashier.config.ts",
+    "build:returns-remote": "vite build --config vite.returns-remote.config.ts",
+    "serve:returns-remote": "npx --yes serve -l 5001 --cors --no-clipboard dist-remotes/returns",
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",

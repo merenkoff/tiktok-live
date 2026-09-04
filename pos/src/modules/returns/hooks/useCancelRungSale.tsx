@@ -3,8 +3,8 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { lazy, Suspense, useCallback, useState, type ReactNode } from 'react';
+import { saleRowFromDetail } from '@pos/platform';
 import type { SaleDetail } from '@pos/platform';
-import { saleRowFromDetail } from '../data/returnsApi';
 
 const RefundSaleDialog = lazy(() =>
   import('../components/RefundSaleDialog').then((m) => ({ default: m.RefundSaleDialog }))
