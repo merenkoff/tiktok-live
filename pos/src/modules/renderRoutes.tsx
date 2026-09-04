@@ -41,11 +41,11 @@ function Guard({
 }
 
 /** Where an authenticated user lands from `/login` or an unmatched path. */
-function homePath(ctx: RouteContext): string {
+export function homePath(ctx: RouteContext): string {
   return ctx.shell === 'web' && ctx.role === 'owner' ? '/admin' : '/register';
 }
 
-function moduleVisible(m: ModuleDescriptor, ctx: RouteContext): boolean {
+export function moduleVisible(m: ModuleDescriptor, ctx: RouteContext): boolean {
   if (!m.shells.includes(ctx.shell)) return false;
   if (m.ownerOnly && ctx.role !== 'owner') return false;
   return ctx.enabled.has(m.id);
