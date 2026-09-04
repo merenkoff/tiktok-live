@@ -6,6 +6,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { api } from '../../services/api';
 import { useAuthStore } from '../../hooks/useAuth';
 import { ProductPhotoField } from '../../components/ProductPhotoField';
+import { MODULES } from '../../modules/registry';
 import type { QrPaymentMode, StoreConfig } from '../../types';
 
 export function SettingsPage() {
@@ -25,6 +26,7 @@ export function SettingsPage() {
   const [gtinApiKeySet, setGtinApiKeySet] = useState(false);
   const [gtinDailyLimit, setGtinDailyLimit] = useState('');
   const [autoPrintReceipt, setAutoPrintReceipt] = useState(false);
+  const [enabledModules, setEnabledModules] = useState<Set<string>>(new Set());
   const [message, setMessage] = useState<string | null>(null);
 
   function hydrate(store: StoreConfig) {
@@ -42,6 +44,7 @@ export function SettingsPage() {
     setGtinApiKey('');
     setGtinDailyLimit(store.gtin_daily_limit?.toString() ?? '');
     setAutoPrintReceipt(store.auto_print_receipt);
+    setEnabledModules(new Set(store.enabled_modules));
   }
 
   useEffect(() => {
@@ -64,10 +67,13 @@ export function SettingsPage() {
         gtin_lookup_enabled: gtinLookupEnabled,
         gtin_daily_limit: gtinDailyLimit.trim() ? Number(gtinDailyLimit) : null,
         auto_print_receipt: autoPrintReceipt,
+        enabled_modules: [...enabledModules],
         // Only send the key when the field is non-empty (empty = keep the stored one).
         ...(gtinApiKey.trim() ? { gtin_api_key: gtinApiKey.trim() } : {}),
       });
       hydrate(store);
+      // Refresh this tab's session so the sidebar reflects the new module set now.
+      void useAuthStore.getState().bootstrap();
       setMessage('Збережено');
     } catch {
       setMessage('Помилка збереження');
@@ -252,6 +258,44 @@ export function SettingsPage() {
             />
             <span className="text-sm">Автоматично друкувати чек після продажу</span>
           </label>
+        </div>
+
+        <div className="bg-sq-surface border border-sq-divider rounded-sq p-5 space-y-4 shadow-sm">
+          <div>
+            <p className="sq-section-label">Модулі магазину</p>
+            <p className="text-sq-secondary text-sm mt-1">
+              Вимкнений модуль зникає з меню й стає недоступним у касі та адмінці. Каси
+              підхоплять зміни після наступного входу.
+            </p>
+          </div>
+
+          {MODULES.filter((m) => m.core).map((m) => (
+            <label key={m.id} className="flex items-center gap-3 opacity-60">
+              <input type="checkbox" checked disabled className="h-4 w-4" />
+              <span className="text-sm">
+                {m.title} <span className="text-xs text-sq-muted">— завжди увімкнено</span>
+              </span>
+            </label>
+          ))}
+
+          {MODULES.filter((m) => !m.core && m.id !== 'live-selling').map((m) => (
+            <label key={m.id} className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={enabledModules.has(m.id)}
+                onChange={(e) =>
+                  setEnabledModules((prev) => {
+                    const next = new Set(prev);
+                    if (e.target.checked) next.add(m.id);
+                    else next.delete(m.id);
+                    return next;
+                  })
+                }
+                className="h-4 w-4"
+              />
+              <span className="text-sm">{m.title}</span>
+            </label>
+          ))}
         </div>
 
         {message && <p className="text-sm text-sq-blue font-medium">{message}</p>}

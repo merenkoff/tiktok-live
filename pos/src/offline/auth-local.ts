@@ -3,8 +3,11 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import type { AuthResponse } from '../types';
+import { DEFAULT_ENABLED_MODULE_IDS } from '../modules/constants';
 import { db, type StaffUnlockRow } from './db';
 import { OfflineAuthError } from './errors';
+
+const DEFAULT_MODULES: string[] = [...DEFAULT_ENABLED_MODULE_IDS];
 
 const ITERATIONS = 100_000;
 const encoder = new TextEncoder();
@@ -73,6 +76,7 @@ export async function saveStaffUnlock(params: {
     qrPaymentMode: params.auth.store.qr_payment?.mode ?? 'static',
     qrStaticImageUrl: params.auth.store.qr_payment?.static_image_url ?? null,
     autoPrintReceipt: params.auth.store.auto_print_receipt ?? false,
+    enabledModules: params.auth.store.enabled_modules ?? DEFAULT_MODULES,
   };
   await db.staffUnlock.put(row);
 }
@@ -117,6 +121,7 @@ function sessionFromUnlock(row: StaffUnlockRow, liveAuth: AuthResponse | null): 
         static_image_url: row.qrStaticImageUrl ?? null,
       },
       auto_print_receipt: row.autoPrintReceipt ?? false,
+      enabled_modules: row.enabledModules ?? DEFAULT_MODULES,
     },
   };
 }
