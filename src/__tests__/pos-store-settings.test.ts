@@ -28,6 +28,7 @@ describe.skipIf(!hasDb)('POS store settings', () => {
       '011_pos_qr_payment.sql',
       '013_pos_store_settings.sql',
       '015_pos_store_modules.sql',
+      '016_pos_store_module_remotes.sql',
     ]) {
       const sql = fs.readFileSync(path.join(dir, '../../migrations', file), 'utf-8');
       await pool.query(sql);
@@ -91,6 +92,23 @@ describe.skipIf(!hasDb)('POS store settings', () => {
     expect(back.gtin_lookup_enabled).toBe(true);
     expect(back.auto_print_receipt).toBe(false);
     expect(back.gtin_daily_limit).toBeNull();
+  });
+
+  it('round-trips the module_remotes jsonb map and leaves it on a partial patch', async () => {
+    const map = { stock: 'https://cdn.example.com/stock/remote-entry.js' };
+    const updated = await updateStore(storeId, { module_remotes: map });
+    expect(updated.module_remotes).toEqual(map);
+
+    const readBack = await getStore(storeId);
+    expect(readBack?.module_remotes).toEqual(map);
+
+    // A patch that doesn't mention module_remotes must not clear it.
+    await updateStore(storeId, { name: 'Renamed Store' });
+    expect((await getStore(storeId))?.module_remotes).toEqual(map);
+
+    // Explicit empty object clears it.
+    const cleared = await updateStore(storeId, { module_remotes: {} });
+    expect(cleared.module_remotes).toEqual({});
   });
 
   it('never returns the raw gtin_api_key, only gtin_api_key_set', async () => {

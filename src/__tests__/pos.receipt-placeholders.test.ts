@@ -34,6 +34,7 @@ async function applyMigrations(): Promise<void> {
     '008_pos_gtin_cache.sql',
     '009_pos_gtin_learn_jobs.sql',
     '015_pos_store_modules.sql',
+    '016_pos_store_module_remotes.sql',
   ]) {
     const sql = fs.readFileSync(path.join(dir, '../../migrations', file), 'utf-8');
     await pool.query(sql);

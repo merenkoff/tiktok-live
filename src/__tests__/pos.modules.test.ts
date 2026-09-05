@@ -8,10 +8,12 @@ import {
   DEFAULT_ENABLED_MODULES,
   TOGGLEABLE_MODULE_IDS,
   effectiveEnabledModules,
+  isAllowedRemoteUrl,
   isCoreModuleId,
   isKnownToggleableModuleId,
   isModuleEnabled,
   sanitizeEnabledModules,
+  sanitizeModuleRemotes,
 } from '../pos/core/modules.js';
 
 describe('POS module id sets', () => {
@@ -103,5 +105,61 @@ describe('sanitizeEnabledModules', () => {
     expect(sanitizeEnabledModules([...DEFAULT_ENABLED_MODULES])).toEqual([
       ...DEFAULT_ENABLED_MODULES,
     ]);
+  });
+});
+
+describe('isAllowedRemoteUrl', () => {
+  it('accepts https, root-relative, and localhost/127.0.0.1 http', () => {
+    expect(isAllowedRemoteUrl('https://cdn.example.com/stock/remote-entry.js')).toBe(true);
+    expect(isAllowedRemoteUrl('/remotes/stock/remote-entry.js')).toBe(true);
+    expect(isAllowedRemoteUrl('http://localhost:5002/remote-entry.js')).toBe(true);
+    expect(isAllowedRemoteUrl('http://127.0.0.1:5002/remote-entry.js')).toBe(true);
+  });
+
+  it('rejects plain http, protocol-relative, other schemes, and non-strings', () => {
+    expect(isAllowedRemoteUrl('http://evil.com/x.js')).toBe(false);
+    expect(isAllowedRemoteUrl('//evil.com/x.js')).toBe(false);
+    expect(isAllowedRemoteUrl('data:text/javascript,alert(1)')).toBe(false);
+    expect(isAllowedRemoteUrl('ftp://host/x.js')).toBe(false);
+    expect(isAllowedRemoteUrl('')).toBe(false);
+    expect(isAllowedRemoteUrl(42)).toBe(false);
+    expect(isAllowedRemoteUrl(null)).toBe(false);
+  });
+});
+
+describe('sanitizeModuleRemotes', () => {
+  it('keeps known non-core ids with allowed URLs', () => {
+    expect(
+      sanitizeModuleRemotes({
+        stock: 'https://cdn.example.com/stock.js',
+        products: 'http://localhost:5003/remote-entry.js',
+      })
+    ).toEqual({
+      stock: 'https://cdn.example.com/stock.js',
+      products: 'http://localhost:5003/remote-entry.js',
+    });
+  });
+
+  it('drops unknown ids, core ids, bad URLs, and non-string values', () => {
+    expect(
+      sanitizeModuleRemotes({
+        stock: 'http://evil.com/x.js',
+        settings: 'https://ok.example.com/x.js',
+        nope: 'https://ok.example.com/x.js',
+        products: 123,
+      })
+    ).toEqual({});
+  });
+
+  it('trims URL whitespace', () => {
+    expect(sanitizeModuleRemotes({ stock: '  https://cdn.example.com/s.js  ' })).toEqual({
+      stock: 'https://cdn.example.com/s.js',
+    });
+  });
+
+  it('returns {} for non-object input', () => {
+    expect(sanitizeModuleRemotes(null)).toEqual({});
+    expect(sanitizeModuleRemotes(['stock@https://x'])).toEqual({});
+    expect(sanitizeModuleRemotes('stock')).toEqual({});
   });
 });

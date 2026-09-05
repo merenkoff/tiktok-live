@@ -99,10 +99,23 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[-]` won
     и кладёт в `dist/assets/vendor/` + SRI в import map. `esm.sh` больше нигде
     в рантайме нет (в т.ч. e2e гоняется без сетевого доступа).
 
-- [ ] **9. Регистрация remote во `VITE_MODULE_REMOTES` из настроек стора**
-  - Сейчас список remote зашит в build-time env. Дать включать/переключать
-    per-store в рантайме (перекликается с существующими module-toggles).
-  - Зависит от: п.1, п.5. Оценка: 3–5 дней.
+- [x] **9. Регистрация remote из настроек стора** — сделано.
+  - `pos_stores.module_remotes jsonb` (`{ moduleId: url }`, миграция `016`),
+    едет в `AuthResponse.store` / `StoreConfig` рядом с `enabled_modules`.
+    Валидация на бэке (`sanitizeModuleRemotes`, `isAllowedRemoteUrl`): только
+    known non-core id и URL `https://` / `/…` / `http://localhost|127.0.0.1`.
+  - Фронт: `applyModuleRemotes()` больше не читает только env —
+    `resolveModuleRemotes()` берёт `VITE_MODULE_REMOTES` (override, выигрывает),
+    иначе `store.module_remotes` из кэшированного `pos_auth`. Применяется на
+    boot; `importWithRetry` + `RouteErrorBoundary` + `remote_load_fallback`
+    (#5) закрывают битый URL.
+  - UI: поле URL под каждым включённым toggleable-модулем в
+    Settings → «Модулі магазину». После сохранения — плашка «Перезавантажити»
+    (и app-wide баннер, если `store.module_remotes` разъехался с применённым
+    на boot — `moduleRemotesStale` в `useAuth`).
+  - **Только веб.** Tauri-касса `applyModuleRemotes` не вызывает, CSP
+    `script-src 'self'`, оффлайн — настройка хранится, но игнорируется.
+  - Зависело от: #1, #5 (+ #6 для видимости в `session_manifest`).
 
 ---
 
@@ -138,10 +151,10 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[-]` won
 
 ## Рекомендуемый порядок, если делать всерьёз
 
-~~п.1~~ (seam) → п.2, п.4 → п.3, ~~п.6~~ → ~~п.7~~, ~~п.8~~, ~~п.5~~, ~~п.10~~ → п.9 → п.11
+~~п.1~~ (seam) → п.2, п.4 → п.3, ~~п.6~~ → ~~п.7~~, ~~п.8~~, ~~п.5~~, ~~п.10~~ → ~~п.9~~ → п.11
 
-Сделано: #1 (seam, не финал), #5, #6, #7, #8, #10.
-Следующий по ценности — #9 (регистрация remote из настроек стора: теперь
-разблокирован — зависел от #1 и #5).
-До реального продакшн-раскатывания модуль-ремоутов ещё нужны: #1 (полноценный
+Сделано: #1 (seam, не финал), #5, #6, #7, #8, #9, #10.
+Механизм теперь операбельный per-store в рантайме. Осталось до реального
+продакшн-раскатывания модуль-ремоутов из отдельного репо: #1 (полноценный
 контракт версий), #4 (CSS вне `pos/src`), #2 (CI-публикация), #3 (подпись).
+#11 — исследование core/cashier-модулей — независимо.

@@ -5,6 +5,8 @@
 import type { ModuleDescriptor } from './types';
 import { importWithRetry } from './lazyWithRetry';
 import { reportModuleEvent } from './telemetry';
+import { resolveModuleRemotes } from './moduleRemotesSource';
+import { setAppliedRemotes } from './appliedRemotes';
 // Direct import, not via '@pos/platform' — the barrel re-exports the module
 // manifests, which import this file; `platform/version.ts` is a zero-import leaf.
 import { POS_APP_VERSION, POS_API_CLIENT_VERSION } from '../platform/version';
@@ -42,24 +44,22 @@ export const MODULES: ModuleDescriptor[] = [
 ];
 
 /**
- * Task B PoC — swap a bundled module descriptor for one fetched from a URL at
- * boot. `VITE_MODULE_REMOTES` is a comma-separated list of `id@url` entries
- * (e.g. `returns@http://localhost:5001/remote-entry.js`). Unset → no-op, the
- * bundled registry above is used verbatim. Evaluation only; not wired for prod.
+ * Swap a bundled module descriptor for one fetched from a URL at boot. The
+ * `{ id -> url }` list comes from `resolveModuleRemotes()` — the per-store
+ * `store.module_remotes` setting off the cached `pos_auth` (roadmap #9), or the
+ * `VITE_MODULE_REMOTES` build override when set. Empty → no-op, the bundled
+ * registry above is used verbatim.
+ *
+ * A remote that 404s / errors / exports the wrong descriptor falls back to the
+ * bundled module (telemetry: `remote_load_fallback`), never a broken registry —
+ * this runs before the first render on every boot.
  */
 export async function applyModuleRemotes(): Promise<void> {
-  const spec = import.meta.env.VITE_MODULE_REMOTES as string | undefined;
+  const knownIds = new Set(MODULES.map((m) => m.id));
+  const entries = resolveModuleRemotes(knownIds);
   const remotes = new Map<string, { url: string }>();
-  if (!spec) {
-    reportSessionManifest(remotes);
-    return;
-  }
-  for (const raw of spec.split(',').map((s) => s.trim()).filter(Boolean)) {
-    const at = raw.indexOf('@');
-    const id = at > 0 ? raw.slice(0, at) : '';
-    const url = at > 0 ? raw.slice(at + 1) : '';
-    if (!id || !url) continue;
 
+  for (const [id, { url }] of entries) {
     let attempts = 0;
     try {
       const mod = await importWithRetry<Record<string, unknown>>(() => {
@@ -92,6 +92,10 @@ export async function applyModuleRemotes(): Promise<void> {
     }
   }
 
+  // Record the resolved *intent* (not just the swaps that succeeded) so a
+  // persistently-down remote doesn't re-trigger the "reload" banner on every
+  // `me()` — the fallback is already visible via telemetry + RouteErrorBoundary.
+  setAppliedRemotes(entries);
   reportSessionManifest(remotes);
 }
 
