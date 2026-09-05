@@ -15,6 +15,7 @@ import { registerAnalyticsRoutes } from './routes/analytics.routes.js';
 import { registerStaffRoutes } from './routes/staff.routes.js';
 import { registerGtinRoutes } from './routes/gtin.routes.js';
 import { registerQrRoutes } from './routes/qr.routes.js';
+import { registerTelemetryRoutes } from './routes/telemetry.routes.js';
 
 export interface PosRouteGroup {
   /** null = core: always registered, no per-request module gate. */
@@ -32,6 +33,7 @@ export const POS_ROUTE_GROUPS: PosRouteGroup[] = [
   { moduleId: null, register: registerCatalogRoutes },
   { moduleId: null, register: registerCheckoutRoutes },
   { moduleId: null, register: registerStoreRoutes },
+  { moduleId: null, register: registerTelemetryRoutes },
   { moduleId: 'returns', register: registerReturnsRoutes },
   { moduleId: 'customers', register: registerCustomersRoutes },
   { moduleId: 'products', register: registerProductsRoutes },

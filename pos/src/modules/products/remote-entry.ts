@@ -2,4 +2,9 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-export { productsModule as manifest } from './manifest';
+// `version` stamped from THIS build's `POS_APP_VERSION` — see the note in
+// `returns/remote-entry.ts`.
+import { POS_APP_VERSION } from '../../platform/version';
+import { productsModule } from './manifest';
+
+export const manifest = { ...productsModule, version: POS_APP_VERSION };

@@ -36,7 +36,11 @@ describe('applyModuleRemotes', () => {
 
     const returnsAfter = MODULES.find((m) => m.id === 'returns');
     expect(returnsAfter).toBe(returnsBefore);
-    expect(events.map((e) => e.type)).toEqual(['remote_load_error', 'remote_load_fallback']);
+    expect(events.map((e) => e.type)).toEqual([
+      'remote_load_error',
+      'remote_load_fallback',
+      'session_manifest',
+    ]);
   });
 
   it('ignores a malformed entry (no "@")', async () => {
@@ -44,5 +48,26 @@ describe('applyModuleRemotes', () => {
     vi.stubEnv('VITE_MODULE_REMOTES', 'not-a-valid-entry');
     await applyModuleRemotes();
     expect(MODULES).toEqual(before);
+  });
+
+  it('emits a session_manifest with a version + source for every module', async () => {
+    vi.stubEnv('VITE_MODULE_REMOTES', undefined);
+    const events: ModuleEvent[] = [];
+    const off = onModuleEvent((e) => events.push(e));
+    await applyModuleRemotes();
+    off();
+
+    const manifest = events.find((e) => e.type === 'session_manifest');
+    expect(manifest).toBeDefined();
+    if (manifest?.type !== 'session_manifest') throw new Error('unreachable');
+
+    expect(manifest.modules).toHaveLength(MODULES.length);
+    for (const m of manifest.modules) {
+      expect(m.version).toBeTruthy();
+      expect(m.source).toBe('bundled');
+      expect(m.url).toBeUndefined();
+    }
+    expect(typeof manifest.appVersion).toBe('string');
+    expect(typeof manifest.apiClientVersion).toBe('number');
   });
 });

@@ -16,8 +16,9 @@ negotiation scheme yet and is expected to change.
 - Every request the POS client makes sends `X-POS-API-Version: <n>`
   (`pos/src/services/api.ts` request interceptor).
 - On a mismatch the backend logs `POS API version skew` and **still serves the
-  request**. The client logs one `[pos-api] version skew` warning to the
-  console. No user-facing behaviour.
+  request**. The client logs one `[pos-api] version skew` warning to the console
+  and emits an `api_version_skew` module-telemetry event (roadmap #6). No
+  user-facing behaviour.
 - `GET /api/pos/version` → `{ "version": 1 }`, no auth — a module-remote
   loader can preflight it before deciding whether its build is compatible.
 - CORS: `X-POS-API-Version` is in `allowedHeaders` and `exposedHeaders`
@@ -48,11 +49,22 @@ would break an older module build. At that point:
 Until that first hand-off, breaking `/api/pos` freely is fine — everything is
 built and released together.
 
+## Runtime telemetry (roadmap #6, done)
+
+The skew warning now also feeds `pos/src/modules/telemetry.ts` as an
+`api_version_skew` event, alongside a boot `session_manifest` event carrying the
+app build version and every module's resolved version + source (bundled/remote).
+An **off-by-default** beacon (`VITE_POS_TELEMETRY_BEACON=1` or
+`localStorage['pos_telemetry_beacon']='1'`) forwards those to
+`POST /api/pos/client-telemetry` (`src/pos/routes/telemetry.routes.ts` — no auth,
+no DB, `logger.info` only), symmetrical to `POS_API_STRICT_VERSION`. Without the
+flag it's `console` + `window.__POS_TELEMETRY__` only. See
+`TechDocs/POS_MODULE_REMOTE_ROADMAP.md` #6.
+
 ## Not done on purpose (future)
 
 - URL-prefixed routes (`/api/pos/v1/*`). The header scheme was chosen first
   because it needs zero route/test churn and is reversible; a prefix can be
   layered on top later without removing the header.
 - `min_supported` / deprecation window in `posApiVersionInfo()`.
-- Wiring the client-side skew warning into real telemetry (roadmap #6).
 - Rejecting by default (`POS_API_STRICT_VERSION` on).

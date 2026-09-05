@@ -59,10 +59,24 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[-]` won
   - **Прим. из п.7:** vendor- и `@pos/platform`-чанки same-origin same-deploy —
     их отказ = отказ entry-чанка (принятый риск, вне этого пункта).
 
-- [ ] **6. Телеметрия версий в рантайме**
-  - Логировать, какая версия каждого модуля реально загрузилась в сессии
-    (для отладки skew).
-  - Зависит от: п.1. Оценка: 1 день.
+- [x] **6. Телеметрия версий в рантайме** — сделано.
+  - Каждый модуль (bundled или remote) несёт `version` — build-версию из
+    `package.json`, застампленную через Vite `define` (`__POS_APP_VERSION__` →
+    `POS_APP_VERSION` в `pos/src/platform/version.ts`, `pos/scripts/pkg-version.mjs`).
+    Отдельно собранный remote (`vite.*-remote.config.ts` + `remote-entry.ts`)
+    сообщает **свою** версию сборки, а не хостовую.
+  - На boot — один событие `session_manifest` в `pos/src/modules/telemetry.ts`
+    (`{ appVersion, apiClientVersion, modules: [{ id, version, source, url }] }`),
+    из `applyModuleRemotes()` на web и `reportSessionManifest()` из
+    `cashier-main.tsx` на Tauri.
+  - Скью версии `/api/pos` больше не одинокий `console.warn`: тот же
+    `services/api.ts` шлёт `api_version_skew` в тот же seam.
+  - Сеть: `pos/src/modules/telemetryBeacon.ts` → `POST /api/pos/client-telemetry`
+    (`src/pos/routes/telemetry.routes.ts`, без auth, без БД, только `logger.info`).
+    **Выключено по умолчанию** — `VITE_POS_TELEMETRY_BEACON=1` или
+    `localStorage['pos_telemetry_beacon']='1'` (симметрия с
+    `POS_API_STRICT_VERSION`). Без флага — только `console` + debug-handle
+    `window.__POS_TELEMETRY__`.
 
 ---
 
@@ -124,8 +138,10 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[-]` won
 
 ## Рекомендуемый порядок, если делать всерьёз
 
-~~п.1~~ (seam) → п.2, п.4 → п.3, п.6 → ~~п.7~~, ~~п.8~~, ~~п.5~~, ~~п.10~~ → п.9 → п.11
+~~п.1~~ (seam) → п.2, п.4 → п.3, ~~п.6~~ → ~~п.7~~, ~~п.8~~, ~~п.5~~, ~~п.10~~ → п.9 → п.11
 
-Сделано: #1 (seam, не финал), #5, #7, #8, #10.
+Сделано: #1 (seam, не финал), #5, #6, #7, #8, #10.
+Следующий по ценности — #9 (регистрация remote из настроек стора: теперь
+разблокирован — зависел от #1 и #5).
 До реального продакшн-раскатывания модуль-ремоутов ещё нужны: #1 (полноценный
 контракт версий), #4 (CSS вне `pos/src`), #2 (CI-публикация), #3 (подпись).
