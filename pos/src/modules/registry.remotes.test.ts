@@ -4,17 +4,20 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { applyModuleRemotes, MODULES } from './registry';
+import { getAppliedRemotes } from './appliedRemotes';
 import { onModuleEvent, type ModuleEvent } from './telemetry';
 
 /**
- * `applyModuleRemotes` (Task B PoC) swaps a bundled module descriptor for one
- * fetched at boot from `VITE_MODULE_REMOTES`. It must never leave `MODULES`
- * broken — offline, a 404, or a malformed remote should fall back to the
- * bundled descriptor, since this runs before the first render on every boot.
+ * `applyModuleRemotes` swaps a bundled module descriptor for one fetched at boot
+ * from `VITE_MODULE_REMOTES` (build override) or the per-store `module_remotes`
+ * off the cached `pos_auth` (roadmap #9). It must never leave `MODULES` broken —
+ * offline, a 404, or a malformed remote should fall back to the bundled
+ * descriptor, since this runs before the first render on every boot.
  */
 describe('applyModuleRemotes', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
+    localStorage.clear();
   });
 
   it('is a no-op when VITE_MODULE_REMOTES is unset', async () => {
@@ -48,6 +51,45 @@ describe('applyModuleRemotes', () => {
     vi.stubEnv('VITE_MODULE_REMOTES', 'not-a-valid-entry');
     await applyModuleRemotes();
     expect(MODULES).toEqual(before);
+  });
+
+  it('reads the per-store module_remotes off the cached pos_auth when no env', async () => {
+    vi.stubEnv('VITE_MODULE_REMOTES', undefined);
+    localStorage.setItem(
+      'pos_auth',
+      JSON.stringify({
+        store: { module_remotes: { returns: 'http://localhost:1/does-not-exist.js' } },
+      })
+    );
+    const events: ModuleEvent[] = [];
+    const off = onModuleEvent((e) => events.push(e));
+    const returnsBefore = MODULES.find((m) => m.id === 'returns');
+
+    await applyModuleRemotes();
+    off();
+
+    // Down remote → falls back to the bundled descriptor, but the attempt is recorded.
+    expect(MODULES.find((m) => m.id === 'returns')).toBe(returnsBefore);
+    expect(getAppliedRemotes().get('returns')).toEqual({
+      url: 'http://localhost:1/does-not-exist.js',
+    });
+    expect(events.map((e) => e.type)).toEqual([
+      'remote_load_error',
+      'remote_load_fallback',
+      'session_manifest',
+    ]);
+  });
+
+  it('ignores a cached module_remotes entry with a disallowed URL', async () => {
+    vi.stubEnv('VITE_MODULE_REMOTES', undefined);
+    localStorage.setItem(
+      'pos_auth',
+      JSON.stringify({ store: { module_remotes: { returns: 'http://evil.com/x.js' } } })
+    );
+    const before = [...MODULES];
+    await applyModuleRemotes();
+    expect(MODULES).toEqual(before);
+    expect(getAppliedRemotes().size).toBe(0);
   });
 
   it('emits a session_manifest with a version + source for every module', async () => {

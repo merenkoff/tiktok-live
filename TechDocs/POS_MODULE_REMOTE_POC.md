@@ -488,3 +488,42 @@ DB-dependent failures unchanged), `npm run build` (`__POS_APP_VERSION__` folds t
 `"1.0.4"`, no dangling identifier; import-map/SRI unaffected), `npm run
 build:cashier`, `npm run build:{returns,stock,products,platform}-remote`,
 `npm run test:e2e` (8) — all green.
+
+## Update: per-store runtime remote registration (2026-09-06)
+
+Roadmap #9 — the `id@url` list moves from the build-time `VITE_MODULE_REMOTES`
+env to a **per-store setting**, editable by the owner in Settings.
+
+**Storage** — `pos_stores.module_remotes jsonb` (`{ moduleId: url }`, migration
+`016`), carried on `AuthResponse.store` / `StoreConfig` next to `enabled_modules`,
+so it's in the cached `pos_auth` for free. Backend gate
+(`src/pos/core/modules.ts`): `sanitizeModuleRemotes` keeps only known non-core
+ids with `isAllowedRemoteUrl` values — `https://`, root-relative `/…`, or
+`http://localhost|127.0.0.1[:port]/…`. `updateStore` jsonb-casts it
+(`$N::jsonb` + `JSON.stringify`, like `customers.service.ts`).
+
+**Resolution** — `pos/src/modules/moduleRemotesSource.ts` `resolveModuleRemotes(knownIds)`
+runs pre-React: `VITE_MODULE_REMOTES` if set (build/QA override, wins), else
+`JSON.parse(localStorage['pos_auth']).store.module_remotes`. Same client-side URL
+filter as the backend (defence against a mangled cache; backend is the real
+gate). `applyModuleRemotes()` iterates the resolved map instead of splitting an
+env string — everything else (`importWithRetry`, `remote_load_*` telemetry,
+`session_manifest`) unchanged.
+
+**Apply timing** — boot only. `pos/src/modules/appliedRemotes.ts` records the
+resolved intent; `useAuth.ts` compares each fresh server auth's
+`store.module_remotes` to it and flips `moduleRemotesStale`, which `App.tsx`
+surfaces as a dismissible "Перезавантажити" banner (web only). `SettingsPage`
+shows the same prompt right after a save that changed the map. No auto-reload, no
+mid-session lazy-component swap.
+
+**Web only** — `cashier-main.tsx` never calls `applyModuleRemotes`; `useAuth`'s
+staleness check early-returns when `isOfflinePosEnabled()`. Web `dist/index.html`
+has no CSP meta, so a third-party remote origin loads there; the cashier keeps
+`script-src 'self'` + offline and ignores the setting.
+
+**Verified:** `check:platform-boundary`, `tsc --noEmit` (pos + root),
+`npm test` (pos 186, +9), `npx vitest run src/__tests__/pos.modules.test.ts`
+(+`sanitizeModuleRemotes`/`isAllowedRemoteUrl`), `npm run build` +
+`build:cashier`, `npm run test:e2e` (8) — all green. `pos-store-settings.test.ts`
+gains a `module_remotes` round-trip (DB-gated).

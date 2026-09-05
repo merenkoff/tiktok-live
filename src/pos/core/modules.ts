@@ -63,3 +63,37 @@ export function sanitizeEnabledModules(input: unknown): string[] {
   }
   return [...seen];
 }
+
+/**
+ * A URL a store owner may register as a module-remote source (roadmap #9).
+ * Deliberately narrow: `https://…`, a root-relative `/…` path (served from the
+ * same origin as the web app), or `http://localhost` / `http://127.0.0.1` for
+ * local development. Everything else (plain `http://`, `data:`, protocol-relative
+ * `//host`, junk) is rejected.
+ */
+export function isAllowedRemoteUrl(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  const url = value.trim();
+  if (!url) return false;
+  if (url.startsWith('/') && !url.startsWith('//')) return true;
+  if (url.startsWith('https://')) return true;
+  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(url)) return true;
+  return false;
+}
+
+/**
+ * Keep only `{ moduleId: url }` entries with a known non-core module id and an
+ * allowed URL (see `isAllowedRemoteUrl`). Anything else is dropped silently.
+ * Non-object input → `{}`.
+ */
+export function sanitizeModuleRemotes(input: unknown): Record<string, string> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+  const out: Record<string, string> = {};
+  for (const [rawId, rawUrl] of Object.entries(input as Record<string, unknown>)) {
+    const id = rawId.trim();
+    if (!isKnownToggleableModuleId(id)) continue;
+    if (!isAllowedRemoteUrl(rawUrl)) continue;
+    out[id] = (rawUrl as string).trim();
+  }
+  return out;
+}

@@ -42,6 +42,8 @@ export interface StoreConfig {
   auto_print_receipt: boolean;
   /** Toggleable module ids the store has enabled (effective set; core ids not listed). */
   enabled_modules: string[];
+  /** `{ moduleId: remote-entry.js URL }` — web build loads these at boot instead of the bundled module (roadmap #9). */
+  module_remotes: Record<string, string>;
 }
 
 export type StorePatch = Partial<
@@ -58,6 +60,7 @@ export type StorePatch = Partial<
     | 'gtin_lookup_enabled'
     | 'auto_print_receipt'
     | 'enabled_modules'
+    | 'module_remotes'
   >
 > & {
   /** write-only: non-empty string sets it, null/"" clears it, omitted keeps it */
@@ -85,6 +88,8 @@ export interface AuthResponse {
     auto_print_receipt?: boolean;
     /** Toggleable module ids the store has enabled. Absent on older cached auth → treat as "all defaults on". */
     enabled_modules?: string[];
+    /** `{ moduleId: remote-entry.js URL }` — web build only (roadmap #9). Absent on older cached auth. */
+    module_remotes?: Record<string, string>;
   };
 }
 

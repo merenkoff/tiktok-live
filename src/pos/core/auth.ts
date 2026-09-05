@@ -38,7 +38,8 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
        store.qr_payment_mode,
        store.qr_static_image_url,
        store.auto_print_receipt,
-       store.enabled_modules
+       store.enabled_modules,
+       store.module_remotes
      FROM pos_sessions s
      JOIN pos_staff st ON st.id = s.staff_id
      JOIN pos_stores store ON store.id = s.store_id
@@ -66,6 +67,7 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
     },
     autoPrintReceipt: row.auto_print_receipt ?? false,
     enabledModules: (row.enabled_modules as string[] | null) ?? [],
+    moduleRemotes: (row.module_remotes as Record<string, string> | null) ?? {},
     token: row.token,
   };
 }

@@ -7,6 +7,7 @@ import { api } from '../../services/api';
 import { useAuthStore } from '@pos/platform';
 import { ProductPhotoField } from '../../components/ProductPhotoField';
 import { MODULES } from '../../modules/registry';
+import { sameRemoteMap } from '../../modules/appliedRemotes';
 import type { QrPaymentMode, StoreConfig } from '../../types';
 
 export function SettingsPage() {
@@ -27,6 +28,8 @@ export function SettingsPage() {
   const [gtinDailyLimit, setGtinDailyLimit] = useState('');
   const [autoPrintReceipt, setAutoPrintReceipt] = useState(false);
   const [enabledModules, setEnabledModules] = useState<Set<string>>(new Set());
+  const [moduleRemotes, setModuleRemotes] = useState<Record<string, string>>({});
+  const [remotesChanged, setRemotesChanged] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   function hydrate(store: StoreConfig) {
@@ -45,6 +48,16 @@ export function SettingsPage() {
     setGtinDailyLimit(store.gtin_daily_limit?.toString() ?? '');
     setAutoPrintReceipt(store.auto_print_receipt);
     setEnabledModules(new Set(store.enabled_modules));
+    setModuleRemotes(store.module_remotes ?? {});
+  }
+
+  function setModuleRemote(id: string, url: string) {
+    setModuleRemotes((prev) => {
+      const next = { ...prev };
+      if (url.trim()) next[id] = url.trim();
+      else delete next[id];
+      return next;
+    });
   }
 
   useEffect(() => {
@@ -68,9 +81,14 @@ export function SettingsPage() {
         gtin_daily_limit: gtinDailyLimit.trim() ? Number(gtinDailyLimit) : null,
         auto_print_receipt: autoPrintReceipt,
         enabled_modules: [...enabledModules],
+        module_remotes: moduleRemotes,
         // Only send the key when the field is non-empty (empty = keep the stored one).
         ...(gtinApiKey.trim() ? { gtin_api_key: gtinApiKey.trim() } : {}),
       });
+      // Server sanitises `module_remotes` — a rejected entry disappears in the
+      // response. Flag a reload if the effective map now differs from what this
+      // tab loaded at boot (same check as the app-wide banner).
+      setRemotesChanged(!sameRemoteMap(store.module_remotes));
       hydrate(store);
       // Refresh this tab's session so the sidebar reflects the new module set now.
       void useAuthStore.getState().bootstrap();
@@ -279,25 +297,55 @@ export function SettingsPage() {
           ))}
 
           {MODULES.filter((m) => !m.core && m.id !== 'live-selling').map((m) => (
-            <label key={m.id} className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                checked={enabledModules.has(m.id)}
-                onChange={(e) =>
-                  setEnabledModules((prev) => {
-                    const next = new Set(prev);
-                    if (e.target.checked) next.add(m.id);
-                    else next.delete(m.id);
-                    return next;
-                  })
-                }
-                className="h-4 w-4"
-              />
-              <span className="text-sm">{m.title}</span>
-            </label>
+            <div key={m.id} className="space-y-1.5">
+              <label className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={enabledModules.has(m.id)}
+                  onChange={(e) =>
+                    setEnabledModules((prev) => {
+                      const next = new Set(prev);
+                      if (e.target.checked) next.add(m.id);
+                      else next.delete(m.id);
+                      return next;
+                    })
+                  }
+                  className="h-4 w-4"
+                />
+                <span className="text-sm">{m.title}</span>
+              </label>
+              {enabledModules.has(m.id) && (
+                <input
+                  type="url"
+                  inputMode="url"
+                  placeholder="Джерело (URL) — типово вбудований"
+                  value={moduleRemotes[m.id] ?? ''}
+                  onChange={(e) => setModuleRemote(m.id, e.target.value)}
+                  className="ml-7 w-[calc(100%-1.75rem)] rounded-sq border border-sq-divider bg-sq-bg px-2.5 py-1.5 text-xs text-sq-secondary"
+                />
+              )}
+            </div>
           ))}
+
+          <p className="text-sq-muted text-xs">
+            Джерело (URL) вантажить модуль із окремої збірки під час завантаження вкладки
+            (лише веб). Дозволені <code>https://</code>, шлях від кореня <code>/…</code> або
+            <code>http://localhost</code>. Зміни потребують перезавантаження вкладки.
+          </p>
         </div>
 
+        {remotesChanged && (
+          <div className="flex items-center gap-3 text-sm">
+            <span className="text-sq-secondary">Джерело модулів змінилося.</span>
+            <button
+              type="button"
+              className="sq-btn-primary px-3 py-1.5"
+              onClick={() => window.location.reload()}
+            >
+              Перезавантажити
+            </button>
+          </div>
+        )}
         {message && <p className="text-sm text-sq-blue font-medium">{message}</p>}
         <button type="submit" className="sq-btn-primary px-4 py-2.5">
           Зберегти

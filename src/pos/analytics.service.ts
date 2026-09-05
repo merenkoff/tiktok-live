@@ -192,6 +192,7 @@ function mapStore(store: Record<string, unknown>) {
     gtin_daily_limit: store.gtin_daily_limit == null ? null : Number(store.gtin_daily_limit),
     auto_print_receipt: Boolean(store.auto_print_receipt),
     enabled_modules: (store.enabled_modules as string[] | null) ?? [],
+    module_remotes: (store.module_remotes as Record<string, string> | null) ?? {},
   };
 }
 
@@ -209,6 +210,7 @@ export type StorePatch = {
   gtin_daily_limit?: number | null;
   auto_print_receipt?: boolean;
   enabled_modules?: string[];
+  module_remotes?: Record<string, string>;
 };
 
 const STORE_PATCH_COLUMNS: Array<keyof StorePatch> = [
@@ -225,6 +227,7 @@ const STORE_PATCH_COLUMNS: Array<keyof StorePatch> = [
   'gtin_daily_limit',
   'auto_print_receipt',
   'enabled_modules',
+  'module_remotes',
 ];
 
 export async function getStore(storeId: number) {
@@ -239,6 +242,12 @@ export async function updateStore(storeId: number, patch: StorePatch) {
   for (const col of STORE_PATCH_COLUMNS) {
     if (patch[col] === undefined) continue;
     let value: unknown = patch[col];
+    if (col === 'module_remotes') {
+      // jsonb column — serialise + cast explicitly (see customers.service.ts).
+      values.push(JSON.stringify(value ?? {}));
+      sets.push(`${col} = $${values.length}::jsonb`);
+      continue;
+    }
     if (typeof value === 'string') {
       const trimmed = value.trim();
       value = col === 'name' ? trimmed : trimmed || null;

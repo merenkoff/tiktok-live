@@ -35,6 +35,8 @@ export interface AuthResponse {
     auto_print_receipt: boolean;
     /** Effective toggleable module ids (empty stored set resolves to the defaults). */
     enabled_modules: string[];
+    /** Per-store `{ moduleId: remote-entry.js URL }` map — consumed by the web build only (roadmap #9). */
+    module_remotes: Record<string, string>;
   };
 }
 
@@ -73,6 +75,7 @@ function toAuthResponse(auth: PosAuthContext, expiresAt: Date): AuthResponse {
       qr_payment: auth.qrPayment,
       auto_print_receipt: auth.autoPrintReceipt,
       enabled_modules: effectiveEnabledModules(auth.enabledModules),
+      module_remotes: auth.moduleRemotes,
     },
   };
 }

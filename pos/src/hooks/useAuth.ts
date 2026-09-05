@@ -7,6 +7,18 @@ import { api, isNetworkError, isUnauthorized } from '../services/api';
 import type { AuthResponse, PosRole } from '../types';
 import { isOfflinePosEnabled } from '../offline/enabled';
 import { OfflineAuthError } from '../offline/errors';
+import { getAppliedRemotes, sameRemoteMap } from '../modules/appliedRemotes';
+
+/**
+ * True when a fresh server auth carries a `store.module_remotes` map that differs
+ * from what `applyModuleRemotes()` applied at boot — the web app needs a reload
+ * to pick up the new module source (roadmap #9). Web only: the Tauri cashier
+ * never runs `applyModuleRemotes` and ignores the setting.
+ */
+function remotesChanged(auth: AuthResponse): boolean {
+  if (isOfflinePosEnabled()) return false;
+  return !sameRemoteMap(auth.store.module_remotes, getAppliedRemotes());
+}
 
 /**
  * Мережевий вхід не вдався. Пробуємо локальний кеш; якщо його ще немає
@@ -56,6 +68,9 @@ interface AuthStore {
   auth: AuthResponse | null;
   isAuthenticated: boolean;
   bootstrapped: boolean;
+  /** Server's `store.module_remotes` changed since boot — web app should reload (roadmap #9). */
+  moduleRemotesStale: boolean;
+  dismissModuleRemotesStale: () => void;
   loginOwner: (login: string, password: string) => Promise<void>;
   loginPin: (storeSlug: string, pin: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -67,6 +82,9 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   auth: null,
   isAuthenticated: false,
   bootstrapped: false,
+  moduleRemotesStale: false,
+
+  dismissModuleRemotesStale: () => set({ moduleRemotesStale: false }),
 
   loginOwner: async (login, password) => {
     const tryLocal = async () => {
@@ -83,7 +101,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     try {
       const auth = await api.loginOwner(login, password);
       await afterOnlineLogin(auth, password, 'password', login);
-      set({ auth, isAuthenticated: true });
+      set({ auth, isAuthenticated: true, moduleRemotesStale: remotesChanged(auth) });
     } catch (error) {
       if (isOfflinePosEnabled() && isNetworkError(error)) {
         await fallbackToLocal(tryLocal, error);
@@ -106,7 +124,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     try {
       const auth = await api.loginPin(storeSlug, pin);
       await afterOnlineLogin(auth, pin, 'pin');
-      set({ auth, isAuthenticated: true });
+      set({ auth, isAuthenticated: true, moduleRemotesStale: remotesChanged(auth) });
     } catch (error) {
       if (isOfflinePosEnabled() && isNetworkError(error)) {
         await fallbackToLocal(tryLocal, error);
@@ -143,7 +161,12 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
     try {
       const auth = await api.me();
-      set({ auth, isAuthenticated: true, bootstrapped: true });
+      set({
+        auth,
+        isAuthenticated: true,
+        bootstrapped: true,
+        moduleRemotesStale: remotesChanged(auth),
+      });
       if (isOfflinePosEnabled()) {
         const offline = await import('../offline');
         void offline

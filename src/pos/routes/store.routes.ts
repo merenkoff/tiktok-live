@@ -5,7 +5,7 @@
 import type { FastifyInstance } from 'fastify';
 import { ensurePosAuth, ensurePosOwner } from '../core/auth.js';
 import * as analyticsService from '../analytics.service.js';
-import { sanitizeEnabledModules } from '../core/modules.js';
+import { sanitizeEnabledModules, sanitizeModuleRemotes } from '../core/modules.js';
 import { errorMessage } from './_shared.js';
 
 export function registerStoreRoutes(fastify: FastifyInstance): void {
@@ -32,6 +32,7 @@ export function registerStoreRoutes(fastify: FastifyInstance): void {
       gtin_daily_limit?: number | null;
       auto_print_receipt?: boolean;
       enabled_modules?: unknown;
+      module_remotes?: unknown;
     };
     try {
       const patch: analyticsService.StorePatch = {};
@@ -40,6 +41,16 @@ export function registerStoreRoutes(fastify: FastifyInstance): void {
           return reply.code(400).send({ error: 'enabled_modules must be an array' });
         }
         patch.enabled_modules = sanitizeEnabledModules(body.enabled_modules);
+      }
+      if (body.module_remotes !== undefined) {
+        if (
+          body.module_remotes === null ||
+          typeof body.module_remotes !== 'object' ||
+          Array.isArray(body.module_remotes)
+        ) {
+          return reply.code(400).send({ error: 'module_remotes must be an object' });
+        }
+        patch.module_remotes = sanitizeModuleRemotes(body.module_remotes);
       }
       if (body.name !== undefined) {
         if (!body.name.trim()) return reply.code(400).send({ error: 'name required' });

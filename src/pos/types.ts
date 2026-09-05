@@ -44,6 +44,7 @@ export interface PosStore {
   qr_edrpou: string | null;
   qr_recipient: string | null;
   enabled_modules: string[];
+  module_remotes: Record<string, string>;
   created_at: Date;
   updated_at: Date;
 }
@@ -80,6 +81,8 @@ export interface PosAuthContext {
   autoPrintReceipt: boolean;
   /** Toggleable module ids enabled for this store (core ids not included). */
   enabledModules: string[];
+  /** Per-store `{ moduleId: remote-entry.js URL }` map — web build only (roadmap #9). */
+  moduleRemotes: Record<string, string>;
   token: string;
 }
 
