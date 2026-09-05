@@ -4,7 +4,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { api } from '../../services/api';
-import { useAuthStore } from '../../hooks/useAuth';
+import { useAuthStore } from '@pos/platform';
 import { ProductPhotoField } from '../../components/ProductPhotoField';
 import { MODULES } from '../../modules/registry';
 import type { QrPaymentMode, StoreConfig } from '../../types';

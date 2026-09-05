@@ -3,9 +3,8 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { FormEvent, useState } from 'react';
-import { api } from '../services/api';
-import { formatUah, uahInputToCents } from '../lib/money';
-import type { OnHandRow } from '../types';
+import { api, formatUah, uahInputToCents } from '@pos/platform';
+import type { OnHandRow } from '@pos/platform';
 
 const WRITEOFF_REASONS = [
   { code: 'damaged', label: 'Брак' },

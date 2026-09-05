@@ -7,10 +7,6 @@ import { Link } from 'react-router-dom';
 import { api } from '../../services/api';
 import { cashierApi } from '../../offline/cashierApi';
 import type { CustomerChild, PosCustomer } from '../../types';
-import { useAuthStore } from '../../hooks/useAuth';
-import { AppRail } from '../../components/cashier/AppRail';
-import { BottomNav } from '../../components/cashier/BottomNav';
-import { OfflineStatusBanner } from '../../components/cashier/OfflineStatusBanner';
 import { useDragScroll } from '../../hooks/useDragScroll';
 
 const fieldClass =
@@ -25,8 +21,6 @@ interface Props {
 }
 
 export function CustomersPage({ cashierShell }: Props) {
-  const logout = useAuthStore((s) => s.logout);
-  const role = useAuthStore((s) => s.role());
   const [list, setList] = useState<PosCustomer[]>([]);
   const [q, setQ] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -136,20 +130,7 @@ export function CustomersPage({ cashierShell }: Props) {
     </div>
   );
 
-  if (!cashierShell) return body;
-
-  return (
-    <div className="h-[100dvh] flex bg-sq-bg font-sans overflow-hidden">
-      <AppRail isOwner={role === 'owner'} onLogout={() => void logout()} />
-      <div className="flex-1 flex flex-col min-w-0 min-h-0">
-        <OfflineStatusBanner />
-        {body}
-        <div className="lg:hidden shrink-0">
-          <BottomNav isOwner={role === 'owner'} onLogout={() => void logout()} />
-        </div>
-      </div>
-    </div>
-  );
+  return body;
 }
 
 function CustomerForm({

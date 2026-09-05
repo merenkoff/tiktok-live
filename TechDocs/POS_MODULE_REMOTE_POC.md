@@ -95,18 +95,226 @@ Also omitted here (each is real work, not a config tweak):
 | Scope | Estimate |
 |---|---|
 | This PoC (mechanism + standalone artifact + doc) | done |
-| Web-only, actually renders (host migrated to `@pos/platform`, working import map, fallback-to-bundled) | ~1 week |
+| Web-only, actually renders (host migrated to `@pos/platform`, working import map, fallback-to-bundled) | done — see "Update: the singleton fix" below |
 | Web production rollout (versioning, CI publish, SRI, error handling, Tailwind extraction, telemetry) | ~2–4 weeks |
 | Desktop parity (signed packages to `appDataDir`, `asset:` protocol loader, CSP change, offline) | ~3–6 weeks on top — recommend **not** doing this; ship desktop module changes through the existing whole-app Tauri updater instead |
 
-Dominant risks: React / Router singleton management across the boundary;
-Tailwind class ownership; **backend API-version skew** once a module releases
-independently against one unversioned `/api/pos`.
+Dominant risks: React / Router singleton management across the boundary (now
+proven working — see below); Tailwind class ownership; **backend API-version
+skew** once a module releases independently against one unversioned `/api/pos`.
 
 ## Recommendation
 
 Keep the Steps 1–5 architecture (it is valuable on its own — per-store toggles,
 smaller surface, clean seams, lazy chunks). Treat independent *delivery* as a
 future option, not a commitment. If it becomes real: do the **web-only** import-map
-route, gate it behind `VITE_MODULE_REMOTES`, and require `/api/pos` versioning
-first. Leave the desktop cashier on the whole-app updater.
+route (done, below), gate it behind `VITE_MODULE_REMOTES`, and require `/api/pos`
+versioning first. Leave the desktop cashier on the whole-app updater.
+
+## Update: the singleton fix (2026-09-04)
+
+Closed the one item the original PoC round left unproven: that a remote
+module's pages can render *inside* the host's live React tree — same React,
+same Router, same `useAuthStore`/`useCartStore` — not two disconnected copies.
+Still evaluation only; nothing here is wired into the default `npm run build` /
+`build:cashier` (verified byte-behavior unchanged — same test suite, 159 tests
+green, before and after).
+
+**What changed:**
+
+- Host files that touched `useAuthStore`/`useCartStore` via a relative
+  `../hooks/useAuth` import now go through `@pos/platform` instead (`App.tsx`,
+  `renderRoutes.tsx`, `LoginPage.tsx`, `HardwarePage.tsx`, `CustomersPage.tsx`,
+  `RegisterPage.tsx`, `AdminLayout.tsx`, `SettingsPage.tsx`, `CheckoutModal.tsx`,
+  `SaleSidebar.tsx`, `MobileCartSheet.tsx`). This is a no-op for the default
+  build (`@pos/platform` still aliases to local source there) — it only
+  matters once `@pos/platform` is built as its own external chunk.
+- **New, load-bearing discovery**: `@pos/platform`'s `ui.ts` re-exports `Nav`,
+  and `Nav` reads the *full* module registry to render nav links — including
+  `returns`' own manifest. Building `@pos/platform` standalone therefore hit a
+  genuine circular dependency (`@pos/platform → Nav → registry → returns'
+  pages → @pos/platform`), not the Rollup config quirk the first PoC round
+  assumed. Fix: split the barrel. `@pos/platform` (`index.ts`) is now
+  state/data only (stores, api client, money/receipt/sales helpers, offline
+  errors) — the part that must be one shared instance. `@pos/platform/ui`
+  (unchanged `ui.ts`) holds the components (`Nav`, `AppRail`, `BottomNav`,
+  `BarcodeScanner`, `ProductPhotoField`, `CustomerPicker`, `OfflineStatusBanner`,
+  `useDragScroll`) — bundled locally by every consumer instead of shared,
+  which is fine, since components aren't singletons; they just read the
+  shared stores.
+- `pos/vite.platform-remote.config.ts` (new) builds `@pos/platform` as its own
+  chunk: **91 modules, ~70 kB gzip total** across `platform.js` + a couple of
+  async chunks — small, because it no longer reaches `ui.ts`.
+- `pos/vite.web-remote-demo.config.ts` (new) is a host build variant that
+  externalises `react`, `react-dom`, `react-router-dom`, `zustand`, and
+  `@pos/platform`, and injects an `importmap` (vendor libs pinned to the
+  installed versions via esm.sh, `@pos/platform` → same-origin
+  `/assets/platform.js`) into the emitted `index.html`. `@pos/platform/ui`
+  stays locally aliased here (and in `vite.returns-remote.config.ts`) — never
+  external, never shared.
+- `npm run demo:module-remote` builds all three artifacts and copies
+  `dist-remotes/platform/` into `dist-remote-demo/assets/`.
+- Added a regression test (`registry.remotes.test.ts`) asserting
+  `applyModuleRemotes()` leaves `MODULES` untouched when the remote fetch
+  fails or the entry is malformed — the fallback-to-bundled path already
+  existed structurally, it just wasn't asserted.
+
+**What the browser actually proved:** served `dist-remote-demo` (:4174) and
+`dist-remotes/returns` (:5001) together, drove it with Playwright. From the
+page's own JS context, dynamically `import('@pos/platform')` a second time
+and mutated `useAuthStore`'s state directly — the **host's already-rendered
+React UI updated live off that external mutation** (login screen → cashier
+shell), proving the browser resolved `@pos/platform` to one shared module
+instance, not two. Then navigated (client-side, no reload) to `/sales`:
+`TillReceiptsPage`, loaded entirely from the `:5001` remote, rendered inside
+the same tree with the same authenticated session — no redirect to `/login`,
+same store state. That's the mechanism *and* the singleton, both confirmed
+together.
+
+**The cost this surfaced, not previously visible:** because `returns`' pages
+render `AppRail`/`BottomNav` via `@pos/platform/ui`, and that bundles `Nav` →
+the full registry → *every* module's lazily-loaded pages locally,
+`TillReceiptsPage`'s own chunk in the remote build first measured at
+**~1 MB / 238 kB gzip** — not the ~7.6 kB the first PoC round claimed (that
+number was only true when `@pos/platform` was purely external and never
+actually built). Fixed in the next round below — see "chrome ownership."
+
+**Still open**, unchanged from the original list: SRI/signing, `/api/pos`
+versioning, CI publish of the remote artifact, Tailwind CSS extraction (the
+demo host and the remote still rely on the host's compiled stylesheet being
+present), error boundaries/retry/telemetry around the dynamic `import()`,
+and all of desktop/Tauri.
+
+## Update: chrome ownership + a Rollup barrel gotcha (2026-09-05)
+
+Closed the "~1 MB" problem from the previous round. Two separate fixes were
+needed — the first was the actual design fix, the second was an unrelated
+Rollup surprise found while measuring it.
+
+**1. Host renders nav chrome, not the module.** `AppRail`/`BottomNav` need
+the full module registry (to render links to every module) — a module
+should never need that just to show its own content. New
+`pos/src/components/cashier/CashierLayout.tsx` renders the chrome once, in
+`pos/src/modules/renderRoutes.tsx` (host-only, never part of any remote
+build) — `element={<Guard><CashierLayout>{node}</CashierLayout></Guard>}`
+for every "root"-mount route, mirroring how `AdminLayout` already wraps the
+`/admin` mount. `RegisterPage`, `HardwarePage`, `CustomersPage`, and
+`TillReceiptsPage` went back to rendering only their own content — no more
+`AppRail`/`BottomNav`/`OfflineStatusBanner`/`useAuthStore().logout` in any of
+them. `@pos/platform/ui` no longer re-exports `Nav`/`AppRail`/`BottomNav`/
+`OfflineStatusBanner` at all, specifically so a future module can't reach
+for them and reintroduce the same coupling.
+
+This is the general answer to "can a module bring its own UI, or must it use
+the host's": a module can render **whatever it wants**, custom design system
+included — nothing requires touching `@pos/platform/ui`. The only cost is
+for a module that wants to look like *part of the app* (same nav chrome) —
+that chrome has to come from the host wrapping the route, not from the
+module importing it, or independent delivery isn't actually independent.
+
+**2. The barrel didn't tree-shake — a real Rollup limitation, not a
+mechanism problem.** Even after (1), `TillReceiptsPage`'s chunk was still
+**~860 kB / 205 kB gzip** — barely smaller than before, because
+`TillReceiptsPage` still imports `useDragScroll` from `@pos/platform/ui`,
+and that barrel *also* re-exports `BarcodeScanner` (→ `html5-qrcode`,
+~200 kB) — unused, but Rollup wasn't eliminating the unused re-export when
+building a code-split library bundle. Traced with a temporary
+`moduleParsed` debug plugin to confirm `html5-qrcode` was really being
+pulled in through `ui.ts`, not through anything `returns` itself imports.
+Fix: `"sideEffects": false` in `pos/package.json` — tells Rollup none of
+this app's own source has import-time side effects, which is true (grepped
+for bare side-effect-only imports; only `.css`, which Vite's own CSS
+pipeline handles separately from JS tree-shaking either way) — and that was
+enough for Rollup to drop the unused `BarcodeScanner`/`ProductPhotoField`/
+`CustomerPicker` re-exports on its own. This is a general fix, not a
+per-file workaround: it protects every current and future module that
+imports one thing from a shared barrel.
+
+**Result:** `TillReceiptsPage-*.js` is now **21.25 kB / 5.47 kB gzip** —
+in line with the original ~7.6 kB claim. Re-ran the same Playwright check
+from the previous round (mutate `useAuthStore` via a second
+`import('@pos/platform')`, client-side nav to `/sales`) — still renders
+correctly, same shared session, chrome now supplied by the host layout
+instead of the module. Full verification: `npx tsc --noEmit`, `npm run
+build`, `npm run build:cashier`, `npm test` (159 tests) all green,
+confirming `sideEffects: false` didn't silently break anything relying on
+import-time side effects in the default app.
+
+## Update: Tailwind class coverage, verified (2026-09-05)
+
+The "CSS" line under "What the PoC does NOT solve" above says the remote
+ships no stylesheet and assumes the host's compiled Tailwind is present.
+Checked what that actually means today: `tailwind.config.js`'s `content`
+glob is `./src/**/*.{js,ts,jsx,tsx}` — since `returns`' source still lives
+inside `pos/src/modules/returns` at build time, the host's own `npm run
+build` already scans it when generating `dist/assets/*.css`, independent of
+whether any *other* page happens to use the same classes. Verified this
+empirically rather than trusting the glob on paper: extracted every
+Tailwind-like token (`bg-`, `text-`, `sq-`, `lg:`, etc.) from `returns`'
+source and confirmed all 106 of them are present in the built CSS.
+
+This only holds because the module's source is co-located with the host's.
+The day `returns` (or any future module) is built from outside `pos/src` —
+a separate package, a separate repo — this breaks silently: a class used
+only in that module and nowhere else in the host would never be generated,
+and the failure mode is a missing style in production, not a build error.
+
+Added `pos/scripts/check-module-css-coverage.mjs` to make this a checkable
+fact instead of a thing to remember: run `npm run build` then
+`npm run check:returns-css-coverage` (or point the script at any other
+module dir) — it fails with the exact missing class names if the module
+ever drifts out of coverage. Verified the failure path by temporarily
+injecting a bogus class into `TillReceiptsPage.tsx` and confirming the
+script catches it (exit 1, names the class), then reverting.
+
+## Update: `stock` as the second module-remote (2026-09-05)
+
+Applied the same pattern to a second, real module — not another PoC
+fixture — to check the convention holds beyond `returns`. Picked `stock`
+(`pos/src/modules/stock/`): web-only (no desktop/offline complication at
+all), not core, and the largest non-core module (6 pages, ~1750 lines).
+
+Two things made this cheaper than `returns`:
+- All of `stock`'s routes are `mount: 'admin'`. `AdminLayout`
+  (`pos/src/pages/admin/AdminLayout.tsx`) already renders `Nav`/sidebar
+  chrome once via React Router's `<Outlet/>` — the chrome-ownership problem
+  fixed for the cashier-root routes never existed for admin-mounted modules.
+- `api`, `formatUah`/`uahInputToCents`, and `useDragScroll` were already
+  reachable through `@pos/platform`/`@pos/platform/ui` (`stock`'s pages just
+  hadn't been switched over yet, a leftover from before the platform split).
+
+Moved `stock`'s 6 pages from `pos/src/pages/admin/stock/*` into
+`pos/src/modules/stock/pages/*`, and `pos/src/components/ManageStockModal.tsx`
+(used only by `StockHubPage`) into `modules/stock/components/` — mirroring
+how `returns` owns `RefundSaleDialog`. One dependency didn't fit that
+pattern: `pos/src/lib/gtinLookup.ts` is used by `StockActionPage` **and** by
+the host's `SettingsPage` (GTIN-enrichment settings section), so it couldn't
+move into the module. Added `pos/src/platform/gtin.ts` — same treatment as
+`platform/money.ts` — so both the module and the host reach it through
+`@pos/platform` instead of `stock` reaching past its own boundary into
+`../../../lib/gtinLookup`.
+
+New `vite.stock-remote.config.ts` mirrors `vite.returns-remote.config.ts`
+exactly (same `external` list, same local `@pos/platform/ui` alias, same
+no-`inlineDynamicImports` reasoning). `pos/src/modules/registry.ts` needed
+**zero** edits — it already imported `stockModule` from `./stock/manifest`,
+and that import path didn't change.
+
+**Result:** built clean on the first attempt — no repeat of the
+`BarcodeScanner`/barrel surprise from `returns`, because `stock` never
+touches anything in `@pos/platform/ui` beyond `useDragScroll`. Per-page
+remote chunks: `StockHubPage` 14.33 kB/4.04 kB gzip, `StockActionPage`
+28.51 kB/6.36 kB gzip (the biggest page, 857 lines), the other four pages
+between 1.5–7.4 kB/0.5–2.4 kB gzip. `npm run check:stock-css-coverage`
+passed clean (109 classes, all present in the host's built CSS). Re-ran the
+Playwright singleton check against `dist-remotes/stock` +
+`VITE_MODULE_REMOTES=stock@http://localhost:5002/remote-entry.js`: after
+mutating `useAuthStore` via a second `import('@pos/platform')` and
+client-side navigation to `/admin/stock`, the remote-loaded `StockHubPage`
+rendered inside the host's `AdminLayout`/`Outlet`/sidebar chrome, sharing
+the same store instance — confirms the singleton-sharing and
+chrome-ownership mechanisms both hold for a module that wasn't built
+hand-in-hand with the PoC. Full verification: `npx tsc --noEmit`, `npm run
+build`, `npm run build:cashier`, `npm test` (159 tests, unchanged — nothing
+under `pos/src` currently has a test referencing the stock page components)
+all green.

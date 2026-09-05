@@ -9,6 +9,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
+      '@pos/platform/ui': path.resolve(rootDir, 'src/platform/ui.ts'),
       '@pos/platform': path.resolve(rootDir, 'src/platform/index.ts'),
     },
   },

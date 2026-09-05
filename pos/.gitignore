@@ -2,6 +2,7 @@ node_modules/
 dist/
 dist-cashier/
 dist-remotes/
+dist-remote-demo/
 .env
 .env.local
 *.local

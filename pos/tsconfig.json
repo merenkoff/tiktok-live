@@ -8,7 +8,8 @@
     "moduleResolution": "bundler",
     "baseUrl": ".",
     "paths": {
-      "@pos/platform": ["src/platform/index.ts"]
+      "@pos/platform": ["src/platform/index.ts"],
+      "@pos/platform/ui": ["src/platform/ui.ts"]
     },
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,

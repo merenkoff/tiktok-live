@@ -5,8 +5,9 @@
 import type { ReactNode } from 'react';
 import { Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { useAuthStore } from '../hooks/useAuth';
+import { useAuthStore } from '@pos/platform';
 import { AdminLayout } from '../pages/admin/AdminLayout';
+import { CashierLayout } from '../components/cashier/CashierLayout';
 import { LoginPage } from '../pages/LoginPage';
 import type { PosShell } from '../shell';
 import type { PosRole } from '../types';
@@ -80,7 +81,15 @@ export function renderModuleRoutes(ctx: RouteContext) {
 
       if (!r.path) continue;
       rootRoutes.push(
-        <Route key={`root:${m.id}:${r.path}`} path={r.path} element={<Guard>{node}</Guard>} />
+        <Route
+          key={`root:${m.id}:${r.path}`}
+          path={r.path}
+          element={
+            <Guard>
+              <CashierLayout>{node}</CashierLayout>
+            </Guard>
+          }
+        />
       );
     }
   }

@@ -4,11 +4,9 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api } from '../../../services/api';
-import { formatUah, uahInputToCents } from '../../../lib/money';
-import { enrichGtinFromSources, gtinSourceLabel, type GtinHint } from '../../../lib/gtinLookup';
-import type { OnHandRow, StockDocumentType, Supplier } from '../../../types';
-import { useDragScroll } from '../../../hooks/useDragScroll';
+import { api, formatUah, uahInputToCents, enrichGtinFromSources, gtinSourceLabel } from '@pos/platform';
+import type { GtinHint, OnHandRow, StockDocumentType, Supplier } from '@pos/platform';
+import { useDragScroll } from '@pos/platform/ui';
 
 const WRITEOFF_REASONS = [
   { code: 'damaged', label: 'Брак' },

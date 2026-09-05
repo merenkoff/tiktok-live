@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { Outlet, useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../../hooks/useAuth';
+import { useAuthStore } from '@pos/platform';
 import { useDragScroll } from '../../hooks/useDragScroll';
 import { Nav } from '../../components/Nav';
 

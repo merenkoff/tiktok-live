@@ -4,8 +4,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api } from '../../../services/api';
-import type { StockDocument, StockDocumentLine } from '../../../types';
+import { api } from '@pos/platform';
+import type { StockDocument, StockDocumentLine } from '@pos/platform';
 
 export function StockInventoryPage() {
   const { id } = useParams();

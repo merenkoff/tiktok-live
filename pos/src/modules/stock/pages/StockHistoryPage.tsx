@@ -4,8 +4,8 @@
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../../../services/api';
-import type { StockMovementRow } from '../../../types';
+import { api } from '@pos/platform';
+import type { StockMovementRow } from '@pos/platform';
 
 const REASON_UK: Record<string, string> = {
   sale: 'Продаж',

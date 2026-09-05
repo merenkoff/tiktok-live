@@ -6,8 +6,6 @@ import { LogOut } from 'lucide-react';
 import { Nav } from '../Nav';
 
 interface Props {
-  /** Kept for call-site compatibility; nav visibility now comes from the module registry. */
-  isOwner?: boolean;
   onLogout: () => void;
 }
 

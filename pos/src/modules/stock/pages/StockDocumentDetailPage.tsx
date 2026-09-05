@@ -4,9 +4,8 @@
 
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api } from '../../../services/api';
-import { formatUah } from '../../../lib/money';
-import type { StockDocument } from '../../../types';
+import { api, formatUah } from '@pos/platform';
+import type { StockDocument } from '@pos/platform';
 
 const TYPE_LABEL: Record<string, string> = {
   receipt: 'Прихід',

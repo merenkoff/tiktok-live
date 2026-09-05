@@ -19,6 +19,17 @@ const dir = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   plugins: [react()],
   define: { 'process.env.NODE_ENV': '"production"' },
+  resolve: {
+    alias: {
+      // `@pos/platform/ui` re-exports `Nav`, which reads the full module
+      // registry (every manifest's lazy pages, including this module's own)
+      // — bundling it locally here avoids a circular external reference back
+      // into this same build. Not shared as a singleton, and doesn't need to
+      // be: components aren't state, they just read the (externally shared)
+      // stores from `@pos/platform` below.
+      '@pos/platform/ui': path.resolve(dir, 'src/platform/ui.ts'),
+    },
+  },
   build: {
     outDir: 'dist-remotes/returns',
     emptyOutDir: true,
@@ -38,11 +49,12 @@ export default defineConfig({
         'zustand',
         '@pos/platform',
       ],
-      output: {
-        // One self-contained file so it loads from the remote host with a
-        // single request (the module's own lazy page splits are inlined).
-        inlineDynamicImports: true,
-      },
+      // No `inlineDynamicImports`: `@pos/platform/ui`'s `Nav` pulls in every
+      // module's lazily-loaded pages via the registry, so forcing that into
+      // one file would balloon this from ~kB to the whole app. Left as
+      // normal async chunks alongside remote-entry.js (only fetched if a
+      // route actually renders one) — serve the whole `dist-remotes/returns`
+      // directory, not just the one file.
     },
   },
 });

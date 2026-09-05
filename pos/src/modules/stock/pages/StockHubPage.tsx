@@ -4,11 +4,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../../../services/api';
-import { formatUah } from '../../../lib/money';
-import { ManageStockModal } from '../../../components/ManageStockModal';
-import type { LowStockRow, OnHandRow, StockDocument } from '../../../types';
-import { useDragScroll } from '../../../hooks/useDragScroll';
+import { api, formatUah } from '@pos/platform';
+import type { LowStockRow, OnHandRow, StockDocument } from '@pos/platform';
+import { useDragScroll } from '@pos/platform/ui';
+import { ManageStockModal } from '../components/ManageStockModal';
 
 const TYPE_LABEL: Record<string, string> = {
   receipt: 'Прихід',
