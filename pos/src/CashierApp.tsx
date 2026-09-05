@@ -3,11 +3,9 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { useEffect } from 'react';
-import { useAuthStore } from './hooks/useAuth';
+import { useAuthStore, usePosShell, useEnabledModules } from '@pos/platform';
 import { useUpdateStore } from './hooks/useUpdateCheck';
-import { usePosShell } from './shell';
 import { renderModuleRoutes } from './modules/renderRoutes';
-import { useEnabledModules } from './modules/useEnabledModules';
 import { startOfflineRuntime } from './offline';
 
 export function CashierApp() {

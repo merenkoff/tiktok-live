@@ -5,10 +5,32 @@ import react from '@vitejs/plugin-react';
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
-export default defineConfig({
+/**
+ * Shared singletons the built web app resolves through the import map injected
+ * into `dist/index.html` by `scripts/assemble-web-dist.mjs` — self-hosted from
+ * `dist/assets/vendor/*` and `dist/assets/platform/*`. Externalising them here
+ * is what makes `useAuthStore` / `useCartStore` / React / the Router context
+ * ONE instance shared with a runtime-loaded module-remote (see
+ * TechDocs/POS_MODULE_REMOTE_POC.md). Build-only: `npm run dev` keeps the
+ * `resolve.alias` below and bundles everything normally.
+ */
+const SHARED_EXTERNALS = [
+  'react',
+  'react-dom',
+  'react-dom/client',
+  'react/jsx-runtime',
+  'react-router-dom',
+  'zustand',
+  '@pos/platform',
+];
+
+export default defineConfig(({ command }) => ({
   plugins: [react()],
   resolve: {
     alias: {
+      // `@pos/platform/ui` is always bundled locally (components aren't
+      // singletons). `@pos/platform` is aliased for dev; on `build` the
+      // `external` entry below wins and it resolves via the import map.
       '@pos/platform/ui': path.resolve(rootDir, 'src/platform/ui.ts'),
       '@pos/platform': path.resolve(rootDir, 'src/platform/index.ts'),
     },
@@ -29,6 +51,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     rollupOptions: {
+      external: command === 'build' ? SHARED_EXTERNALS : [],
       output: {
         manualChunks(id: string) {
           // Keep Dexie in its own shared chunk; let Rollup split everything
@@ -39,4 +62,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

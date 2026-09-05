@@ -3,11 +3,9 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { usePosShell } from '../shell';
-import { useAuthStore } from '../hooks/useAuth';
+import { usePosShell, useAuthStore, useEnabledModules } from '@pos/platform';
 import { useUpdateStore } from '../hooks/useUpdateCheck';
 import { MODULES } from '../modules/registry';
-import { useEnabledModules } from '../modules/useEnabledModules';
 import { selectNavItems } from '../modules/selectNav';
 import type { NavCtx, NavItem, NavLocation, NavVariant } from '../modules/types';
 
