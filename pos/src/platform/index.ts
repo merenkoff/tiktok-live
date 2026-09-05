@@ -29,3 +29,4 @@ export * from './receipt';
 export * from './sales';
 export * from './offline';
 export * from './types';
+export * from './version';

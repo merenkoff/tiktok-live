@@ -83,7 +83,9 @@ export async function createServer(): Promise<FastifyInstance> {
       'Authorization',
       'Content-Type',
       'Idempotency-Key',
+      'X-POS-API-Version',
     ],
+    exposedHeaders: ['X-POS-API-Version'],
   });
 
   // ⭐ CRITICAL: Register static file serving BEFORE routes
