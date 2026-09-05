@@ -33,6 +33,9 @@ import { posApiBase } from '../lib/urls';
 // Direct import (not via '@pos/platform') — that barrel re-exports this module,
 // so going through it would be a cycle. `version.ts` has no deps.
 import { POS_API_CLIENT_VERSION } from '../platform/version';
+// Deliberate reach into the modules layer for the shared telemetry seam
+// (roadmap #6). `telemetry.ts` is a dependency-free leaf, so no cycle.
+import { reportModuleEvent } from '../modules/telemetry';
 
 const TOKEN_KEY = 'pos_token';
 const AUTH_KEY = 'pos_auth';
@@ -73,6 +76,11 @@ class PosApi {
         console.warn(
           `[pos-api] version skew: this build expects v${POS_API_CLIENT_VERSION}, backend serves v${served}`
         );
+        reportModuleEvent({
+          type: 'api_version_skew',
+          clientVersion: POS_API_CLIENT_VERSION,
+          serverVersion: Number(served),
+        });
       }
       return response;
     });

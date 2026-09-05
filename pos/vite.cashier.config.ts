@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import { posAppVersion } from './scripts/pkg-version.mjs';
 
 /** Default for clone + `tauri:dev` / `tauri:build`. Override with VITE_API_BASE or pos/.env. */
 const DEFAULT_POS_API = 'https://the-live.shop';
@@ -38,6 +39,8 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), cashierAsIndex()],
+    // Build version of this bundle, read from package.json — see roadmap #6.
+    define: { __POS_APP_VERSION__: JSON.stringify(posAppVersion()) },
     resolve: {
       alias: {
         '@pos/platform/ui': path.resolve(__dirname, 'src/platform/ui.ts'),

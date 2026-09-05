@@ -5,6 +5,9 @@
 import type { ModuleDescriptor } from './types';
 import { importWithRetry } from './lazyWithRetry';
 import { reportModuleEvent } from './telemetry';
+// Direct import, not via '@pos/platform' — the barrel re-exports the module
+// manifests, which import this file; `platform/version.ts` is a zero-import leaf.
+import { POS_APP_VERSION, POS_API_CLIENT_VERSION } from '../platform/version';
 import { catalogCheckoutModule } from './catalog-checkout/manifest';
 import { returnsModule } from './returns/manifest';
 import { customersModule } from './customers/manifest';
@@ -46,7 +49,11 @@ export const MODULES: ModuleDescriptor[] = [
  */
 export async function applyModuleRemotes(): Promise<void> {
   const spec = import.meta.env.VITE_MODULE_REMOTES as string | undefined;
-  if (!spec) return;
+  const remotes = new Map<string, { url: string }>();
+  if (!spec) {
+    reportSessionManifest(remotes);
+    return;
+  }
   for (const raw of spec.split(',').map((s) => s.trim()).filter(Boolean)) {
     const at = raw.indexOf('@');
     const id = at > 0 ? raw.slice(0, at) : '';
@@ -72,6 +79,7 @@ export async function applyModuleRemotes(): Promise<void> {
       const idx = MODULES.findIndex((m) => m.id === id);
       if (idx >= 0) MODULES[idx] = descriptor;
       else MODULES.push(descriptor);
+      remotes.set(id, { url });
       reportModuleEvent({ type: 'remote_load_ok', moduleId: id, url, attempts });
     } catch (error) {
       reportModuleEvent({ type: 'remote_load_error', moduleId: id, url, attempts, error });
@@ -83,4 +91,31 @@ export async function applyModuleRemotes(): Promise<void> {
       });
     }
   }
+
+  reportSessionManifest(remotes);
+}
+
+/**
+ * Emit the boot `session_manifest` telemetry event: the app build version, the
+ * `/api/pos` version this build expects, and every module's resolved version +
+ * whether it came bundled or from a runtime remote. Fired once per shell boot —
+ * from `applyModuleRemotes()` on web, directly from `cashier-main.tsx` on the
+ * Tauri shell (which never swaps remotes). Bundled modules are stamped with
+ * `POS_APP_VERSION` here so `MODULES` carries a version everywhere it's read.
+ */
+export function reportSessionManifest(remotes: Map<string, { url: string }> = new Map()): void {
+  for (const m of MODULES) {
+    if (m.version == null && !remotes.has(m.id)) m.version = POS_APP_VERSION;
+  }
+  reportModuleEvent({
+    type: 'session_manifest',
+    appVersion: POS_APP_VERSION,
+    apiClientVersion: POS_API_CLIENT_VERSION,
+    modules: MODULES.map((m) => ({
+      id: m.id,
+      version: m.version ?? POS_APP_VERSION,
+      source: remotes.has(m.id) ? 'remote' : 'bundled',
+      url: remotes.get(m.id)?.url,
+    })),
+  });
 }

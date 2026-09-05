@@ -446,3 +446,45 @@ with the shared auth store.
 **Verified:** `check:platform-boundary`, `npx tsc --noEmit`, `npm test`
 (167, +7), `npm run build`, `npm run build:cashier`, `npm run test:e2e` (8)
 all green.
+
+## Update: runtime version telemetry (2026-09-06)
+
+Roadmap #6 — closes the loop #1 (versioning seam) and #5 (telemetry seam) left open.
+
+**Every module carries a build version.** `pos/scripts/pkg-version.mjs` reads
+`pos/package.json`; every Vite config (`vite.config.ts`, `vite.cashier.config.ts`,
+`vite.{platform,returns,stock,products}-remote.config.ts`) stamps it as
+`__POS_APP_VERSION__` → `POS_APP_VERSION` in `pos/src/platform/version.ts`
+(`0.0.0-dev` under `vite dev`). `ModuleDescriptor` gained `version?`. Bundled
+modules are stamped with `POS_APP_VERSION` at registration (`registry.ts`); a
+**separately-built** remote reports **its own** build version because
+`remote-entry.ts` now does `export const manifest = { ...<id>Module, version:
+POS_APP_VERSION }` and the deep `../../platform/version` import is bundled locally
+(only the `@pos/platform` barrel is externalised). Trade-off: `returns`/`products`
+`remote-entry.js` is now a thin re-export facade over a sibling hashed chunk —
+harmless, the whole `dist-remotes/<id>/` dir is served anyway.
+
+**One `session_manifest` telemetry event per boot** —
+`{ appVersion, apiClientVersion, modules: [{ id, version, source: 'bundled' |
+'remote', url? }] }`. Emitted from `applyModuleRemotes()` on web (always, even
+with `VITE_MODULE_REMOTES` unset) and `reportSessionManifest()` from
+`cashier-main.tsx` on Tauri. The `/api/pos` version skew (`services/api.ts`) now
+also emits `api_version_skew` into the same `reportModuleEvent` seam instead of
+just a lone `console.warn`. `window.__POS_TELEMETRY__` = `{ log, subscribe }`
+debug handle.
+
+**Dormant network sink.** `pos/src/modules/telemetryBeacon.ts` forwards a
+whitelist (`session_manifest`, `api_version_skew`, `remote_load_error` /
+`_fallback`, `route_render_error` — never `remote_load_ok`) via
+`navigator.sendBeacon` → `POST /api/pos/client-telemetry`
+(`src/pos/routes/telemetry.routes.ts`: no auth, no module gate, no DB, 16 KiB
+body cap, `logger.info` + `204`). **Off unless** `VITE_POS_TELEMETRY_BEACON=1`
+or `localStorage['pos_telemetry_beacon']='1'` — symmetrical to
+`POS_API_STRICT_VERSION`.
+
+**Verified:** `check:platform-boundary`, `npx tsc --noEmit` (pos + root),
+`npm test` (pos 177, +10; root `src/__tests__` +3 telemetry, pre-existing
+DB-dependent failures unchanged), `npm run build` (`__POS_APP_VERSION__` folds to
+`"1.0.4"`, no dangling identifier; import-map/SRI unaffected), `npm run
+build:cashier`, `npm run build:{returns,stock,products,platform}-remote`,
+`npm run test:e2e` (8) — all green.

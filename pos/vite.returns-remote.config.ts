@@ -13,12 +13,17 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { posAppVersion } from './scripts/pkg-version.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
-  define: { 'process.env.NODE_ENV': '"production"' },
+  define: {
+    'process.env.NODE_ENV': '"production"',
+    // This remote's own build version — see roadmap #6.
+    __POS_APP_VERSION__: JSON.stringify(posAppVersion()),
+  },
   resolve: {
     alias: {
       // `@pos/platform/ui` re-exports `Nav`, which reads the full module

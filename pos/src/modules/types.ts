@@ -77,6 +77,13 @@ export interface ModuleDescriptor {
   id: ModuleId;
   /** Shown in the Settings "Модулі магазину" checklist. */
   title: string;
+  /**
+   * Build version of the code behind this descriptor. Stamped at registration
+   * (`registry.ts`): bundled modules inherit `POS_APP_VERSION`; a runtime-loaded
+   * remote carries its own build's version via `remote-entry.ts`. Surfaced in
+   * the `session_manifest` telemetry event (roadmap #6).
+   */
+  version?: string;
   /** Cannot be disabled anywhere. */
   core?: boolean;
   /** Cannot be disabled when running in this shell (e.g. `hardware` on the cashier). */

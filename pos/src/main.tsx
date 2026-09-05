@@ -8,9 +8,15 @@ import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { PosShellContext } from '@pos/platform';
 import { applyModuleRemotes } from './modules/registry';
+import { maybeStartTelemetryBeacon } from './modules/telemetryBeacon';
 import './index.css';
 
-// Resolves immediately unless VITE_MODULE_REMOTES is set (Task B PoC).
+// Wire the (dormant-by-default) telemetry sink before the registry resolves so
+// it catches the boot `session_manifest` event — see roadmap #6.
+maybeStartTelemetryBeacon();
+
+// Resolves immediately unless VITE_MODULE_REMOTES is set (Task B PoC); either
+// way it emits the `session_manifest` telemetry event on completion.
 void applyModuleRemotes().finally(() => {
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>

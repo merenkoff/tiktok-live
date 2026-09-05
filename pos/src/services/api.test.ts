@@ -9,6 +9,7 @@ import { posApiBase } from '../lib/urls';
 import { server } from '../test/msw/server';
 import { makeAuthResponse } from '../test/utils';
 import { POS_API_CLIENT_VERSION } from '../platform/version';
+import { onModuleEvent, type ModuleEvent } from '../modules/telemetry';
 import { api, isNetworkError, isUnauthorized } from './api';
 
 const TOKEN_KEY = 'pos_token';
@@ -137,5 +138,28 @@ describe('API version header', () => {
     await api.me();
 
     expect(seen).toEqual([String(POS_API_CLIENT_VERSION)]);
+  });
+
+  it('reports an api_version_skew telemetry event when the backend serves a different version', async () => {
+    const events: ModuleEvent[] = [];
+    const off = onModuleEvent((e) => events.push(e));
+    server.use(
+      http.get(`${posApiBase()}/me`, () =>
+        HttpResponse.json(makeAuthResponse(), {
+          headers: { 'x-pos-api-version': String(POS_API_CLIENT_VERSION + 1) },
+        })
+      )
+    );
+
+    await api.me();
+    off();
+
+    const skew = events.filter((e) => e.type === 'api_version_skew');
+    expect(skew).toHaveLength(1);
+    expect(skew[0]).toMatchObject({
+      type: 'api_version_skew',
+      clientVersion: POS_API_CLIENT_VERSION,
+      serverVersion: POS_API_CLIENT_VERSION + 1,
+    });
   });
 });

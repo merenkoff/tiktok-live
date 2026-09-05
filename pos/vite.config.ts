@@ -2,6 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { posAppVersion } from './scripts/pkg-version.mjs';
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -26,6 +27,8 @@ const SHARED_EXTERNALS = [
 
 export default defineConfig(({ command }) => ({
   plugins: [react()],
+  // Build version of this bundle, read from package.json — see roadmap #6.
+  define: { __POS_APP_VERSION__: JSON.stringify(posAppVersion()) },
   resolve: {
     alias: {
       // `@pos/platform/ui` is always bundled locally (components aren't

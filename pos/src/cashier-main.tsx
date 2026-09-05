@@ -8,9 +8,16 @@ import { HashRouter } from 'react-router-dom';
 import { CashierApp } from './CashierApp';
 import { PosShellContext } from '@pos/platform';
 import { enableOfflinePos } from './offline/enabled';
+import { reportSessionManifest } from './modules/registry';
+import { maybeStartTelemetryBeacon } from './modules/telemetryBeacon';
 import './index.css';
 
 enableOfflinePos();
+
+// The Tauri shell never swaps module remotes, but still reports its all-bundled
+// module/version manifest for skew debugging — see roadmap #6.
+maybeStartTelemetryBeacon();
+reportSessionManifest();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
