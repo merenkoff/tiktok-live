@@ -4,8 +4,7 @@
 
 import { useRef, useState } from 'react';
 import { ImagePlus, Trash2 } from 'lucide-react';
-import { api } from '../services/api';
-import { assetUrl } from '../lib/urls';
+import { api, assetUrl } from '@pos/platform';
 
 interface Props {
   value: string | null;

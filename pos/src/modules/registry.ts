@@ -3,6 +3,8 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import type { ModuleDescriptor } from './types';
+import { importWithRetry } from './lazyWithRetry';
+import { reportModuleEvent } from './telemetry';
 import { catalogCheckoutModule } from './catalog-checkout/manifest';
 import { returnsModule } from './returns/manifest';
 import { customersModule } from './customers/manifest';
@@ -50,19 +52,35 @@ export async function applyModuleRemotes(): Promise<void> {
     const id = at > 0 ? raw.slice(0, at) : '';
     const url = at > 0 ? raw.slice(at + 1) : '';
     if (!id || !url) continue;
+
+    let attempts = 0;
     try {
-      const mod: Record<string, unknown> = await import(/* @vite-ignore */ url);
+      const mod = await importWithRetry<Record<string, unknown>>(() => {
+        attempts += 1;
+        return import(/* @vite-ignore */ url);
+      });
       const descriptor = (mod.manifest ?? mod.default) as ModuleDescriptor | undefined;
       if (!descriptor || descriptor.id !== id) {
-        console.error(`[module-remote] ${url} did not export a "${id}" descriptor`);
+        reportModuleEvent({
+          type: 'remote_load_fallback',
+          moduleId: id,
+          url,
+          reason: `remote did not export a "${id}" descriptor`,
+        });
         continue;
       }
       const idx = MODULES.findIndex((m) => m.id === id);
       if (idx >= 0) MODULES[idx] = descriptor;
       else MODULES.push(descriptor);
-      console.info(`[module-remote] loaded "${id}" from ${url}`);
-    } catch (err) {
-      console.error(`[module-remote] failed to load "${id}" from ${url}`, err);
+      reportModuleEvent({ type: 'remote_load_ok', moduleId: id, url, attempts });
+    } catch (error) {
+      reportModuleEvent({ type: 'remote_load_error', moduleId: id, url, attempts, error });
+      reportModuleEvent({
+        type: 'remote_load_fallback',
+        moduleId: id,
+        url,
+        reason: 'dynamic import failed after retries',
+      });
     }
   }
 }

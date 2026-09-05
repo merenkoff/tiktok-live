@@ -2,14 +2,14 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { lazy } from 'react';
 import { ListOrdered, Receipt } from 'lucide-react';
 import type { ModuleDescriptor, NavCtx } from '../types';
+import { lazyWithRetry } from '../lazyWithRetry';
 
-const TillReceiptsPage = lazy(() =>
+const TillReceiptsPage = lazyWithRetry(() =>
   import('./pages/TillReceiptsPage').then((m) => ({ default: m.TillReceiptsPage }))
 );
-const AdminSalesPage = lazy(() =>
+const AdminSalesPage = lazyWithRetry(() =>
   import('./pages/AdminSalesPage').then((m) => ({ default: m.AdminSalesPage }))
 );
 

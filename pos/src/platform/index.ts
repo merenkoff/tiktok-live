@@ -28,5 +28,7 @@ export * from './money';
 export * from './receipt';
 export * from './sales';
 export * from './offline';
+export * from './tag-colors';
 export * from './types';
+export * from './urls';
 export * from './version';

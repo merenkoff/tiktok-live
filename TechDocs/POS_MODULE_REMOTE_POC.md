@@ -392,3 +392,57 @@ per-module **Tailwind CSS extraction** (#4), full **error-boundary / retry /
 telemetry** around the module-remote `import()` (#5 — the vendor/platform
 chunks are same-origin same-deploy, so their failure is the entry-chunk
 failure class, accepted), and all of **desktop/Tauri**.
+
+## Update: `products` as the 3rd module-remote + `import()` resilience (2026-09-06)
+
+Roadmap #10 + #5.
+
+**`products` migrated** — `src/pages/admin/ProductsPage.tsx` (935 lines, the
+biggest single module page; uses photo upload + tag-colour UI) →
+`src/modules/products/pages/`, `TagColorSwatches` (products-only) →
+`src/modules/products/components/`. `src/modules/registry.ts` unchanged.
+`pos/vite.products-remote.config.ts` mirrors the `stock`/`returns` configs;
+`build:products-remote` / `serve:products-remote` (:5003) /
+`check:products-css-coverage` added.
+
+Two shared deps `ProductsPage` reached past the boundary for — same fix as
+`stock`'s `platform/gtin.ts`:
+- `pos/src/platform/urls.ts` re-exports `assetUrl` (`lib/urls` also holds
+  build-time API-base plumbing a module must not import).
+- `pos/src/platform/tag-colors.ts` re-exports the `lib/tagColors` tokens
+  (shared with the host's `TagFolderTile`).
+
+**The `ProductPhotoField` trap** — it's re-exported from `@pos/platform/ui`
+(bundled *into* every remote that uses it) but imported `api` from
+`../services/api` and `assetUrl` from `../lib/urls` by relative path. `stock`
+never rendered it so `sideEffects:false` dropped it; `products` uses it, which
+would have pulled a **second axios `api` instance** (own auth, own version
+header) into the `products` remote chunk. Fixed by pointing `ProductPhotoField`
+at `@pos/platform` (external in a remote build → the shared instance). No
+cycle: `@pos/platform/index.ts` does not re-export `ui.ts`.
+
+**Result** — `build:products-remote` clean on the first try. Remote chunk:
+grep-verified **no `html5-qrcode`** (unused `BarcodeScanner` re-export dropped)
+and **no second `axios`**. `check:products-css-coverage` passes. Playwright
+singleton smoke against `dist-remotes/products` + `VITE_MODULE_REMOTES=products@…`
+renders `/admin/products` from the remote inside the host `AdminLayout`/`Outlet`
+with the shared auth store.
+
+**`import()` resilience (#5)** — first `ErrorBoundary` in the app:
+- `pos/src/modules/lazyWithRetry.ts` — `import()` with exponential backoff
+  (2 retries). Used in the three module-remote manifests (`returns`, `stock`,
+  `products`) and by `applyModuleRemotes()`'s boot-time descriptor fetch.
+- `pos/src/components/RouteErrorBoundary.tsx` — wraps every lazy route in
+  `renderRoutes.tsx`. A chunk 404 / render throw now shows
+  "Не вдалося завантажити розділ «…»" with **Повторити** (soft remount), then
+  **Перезавантажити застосунок** on a second failure (`React.lazy` caches a
+  rejected import for the session), plus **На головну** — instead of a blank
+  screen.
+- `pos/src/modules/telemetry.ts` — `reportModuleEvent` (`remote_load_ok` /
+  `_error` / `_fallback`, `route_render_error`) + `onModuleEvent` /
+  `getModuleEventLog`. Replaces the raw `console.*` in `applyModuleRemotes`.
+  No network sink — that's the seam #6 attaches to.
+
+**Verified:** `check:platform-boundary`, `npx tsc --noEmit`, `npm test`
+(167, +7), `npm run build`, `npm run build:cashier`, `npm run test:e2e` (8)
+all green.
