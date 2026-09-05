@@ -8,8 +8,9 @@
   "scripts": {
     "dev": "vite",
     "dev:cashier": "vite --config vite.cashier.config.ts",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && node scripts/build-vendor.mjs && vite build --config vite.platform-remote.config.ts && vite build && node scripts/assemble-web-dist.mjs",
     "build:cashier": "tsc --noEmit && vite build --config vite.cashier.config.ts",
+    "build:vendor": "node scripts/build-vendor.mjs",
     "build:returns-remote": "vite build --config vite.returns-remote.config.ts",
     "serve:returns-remote": "npx --yes serve -l 5001 --cors --no-clipboard dist-remotes/returns",
     "build:platform-remote": "vite build --config vite.platform-remote.config.ts",
@@ -20,6 +21,7 @@
     "build:stock-remote": "vite build --config vite.stock-remote.config.ts",
     "serve:stock-remote": "npx --yes serve -l 5002 --cors --no-clipboard dist-remotes/stock",
     "check:stock-css-coverage": "node scripts/check-module-css-coverage.mjs src/modules/stock",
+    "check:platform-boundary": "node scripts/check-platform-boundary.mjs",
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",

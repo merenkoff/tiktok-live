@@ -318,3 +318,77 @@ hand-in-hand with the PoC. Full verification: `npx tsc --noEmit`, `npm run
 build`, `npm run build:cashier`, `npm test` (159 tests, unchanged — nothing
 under `pos/src` currently has a test referencing the stock page components)
 all green.
+
+## Update: `@pos/platform` externalised in the *default* web build (2026-09-05)
+
+Roadmap item #7. Everything above proved the singleton via
+`vite.web-remote-demo.config.ts` — a throwaway variant that also pulled
+vendor libs from `esm.sh` at runtime. This change makes the **default**
+`npm run build` (`vite.config.ts` → `dist/`) the one that externalises
+`react` / `react-dom` / `react-dom/client` / `react/jsx-runtime` /
+`react-router-dom` / `zustand` / `@pos/platform` and boots through an
+injected `<script type="importmap">`, with every shared chunk **self-hosted**
+from `dist/assets/` (no third-party runtime dependency — folds in item #8).
+The desktop/Tauri build (`vite.cashier.config.ts`) is untouched: it stays
+fully bundled (CSP `script-src 'self'`, offline).
+
+**Pipeline** (`npm run build`): `tsc --noEmit` → `scripts/build-vendor.mjs`
+(repackages the installed CJS/ESM `node_modules` copies to six ESM vendor
+chunks, each with the *other* vendors external — no network) → `vite build
+--config vite.platform-remote.config.ts` (the `@pos/platform` chunk, already
+existed) → `vite build` (default config; `rollupOptions.external` on
+`command === 'build'` only, so `npm run dev` still bundles normally via the
+`resolve.alias`) → `scripts/assemble-web-dist.mjs` (content-hashes the seven
+shared chunks, copies them into `dist/assets/{vendor,platform}/`, injects the
+import map into `dist/index.html` with `sha384` SRI per entry, writes
+`dist/.importmap.json`).
+
+**What building it surfaced** — `export * from '<cjs module>'` in a Rollup
+`lib` build silently emits *nothing* for `react`, `react-dom`,
+`react-dom/client`, `react/jsx-runtime` (their npm entries are
+`module.exports = require('./cjs/…')`, which the CJS lexer can't see
+through). The vendor stubs under `scripts/vendor-stubs/` therefore list the
+named exports explicitly (React 18's public API is a fixed set; this is what
+every CDN ESM build of React does). `react-router-dom` and `zustand` ship
+real ESM, so `export *` works for them. Caught by the Playwright e2e suite
+failing to render (`does not provide an export named 'createPortal'` etc.),
+not by the build.
+
+**The `useEnabledModules` trap** — `src/components/Nav.tsx` still imported
+`useAuthStore` **and** `useEnabledModules` from local relative paths. Once
+`@pos/platform` is an external chunk, the host bundle got a *second*,
+never-bootstrapped copy of the auth store, so `Nav`'s module-visibility
+filter always fell back to "show everything". Fixed by routing `Nav`
+(and `main.tsx` / `cashier-main.tsx` / `CashierApp.tsx`) through
+`@pos/platform`, and by `scripts/check-platform-boundary.mjs` +
+`npm run check:platform-boundary` (no ESLint in `pos/`), which fails if any
+file outside `src/platform/**` reaches for `useAuthStore` / `useCartStore` /
+the offline-status store / `PosShellContext` / `useEnabledModules` by a
+local path. Wired into `pos-tests.yml`.
+
+**Result:** entry chunk `dist/assets/index-*.js` **472 kB / 146 kB gzip**
+(react/router/zustand/`@pos/platform` no longer in it — verified: zero
+`scheduler.production` / `__SECRET_INTERNALS` occurrences). Self-hosted
+shared payload: vendors ~90 kB gzip (`react-dom` 49, `react-router-dom` 34,
+`react` 3.4, `zustand` 1.9, jsx-runtime 0.7, client 0.2), `@pos/platform`
+~73 kB gzip (`platform.js` + its async chunks; includes Dexie/axios/offline).
+`vendor-dexie` (~32 kB gzip) is still emitted in the host bundle too —
+`HardwarePage`/others import `../offline/db` directly rather than via
+`@pos/platform`, so Dexie is currently duplicated host-side; harmless
+(IndexedDB is the shared state, not the JS object), worth cleaning up later.
+
+**Verified:** `npm run check:platform-boundary`, `npx tsc --noEmit`,
+`npm test` (159), `npm run test:e2e` (8 Playwright specs, **no network
+egress** — proves the vendors are self-hosted, not `esm.sh`), `npm run
+build:cashier` (Tauri path unchanged) all green. Singleton smoke test from
+the previous rounds re-run against `dist/` + a served `dist-remotes/returns`:
+mutating `useAuthStore` via a second `import('@pos/platform')` updates the
+already-rendered host UI, and client-side nav to `/sales` renders the remote
+`TillReceiptsPage` with the same session.
+
+**Still open** (unchanged): full artifact **signing** (#3 — only SRI here),
+`/api/pos` **versioning** (#1), **CI publish** of remote artifacts (#2),
+per-module **Tailwind CSS extraction** (#4), full **error-boundary / retry /
+telemetry** around the module-remote `import()` (#5 — the vendor/platform
+chunks are same-origin same-deploy, so their failure is the entry-chunk
+failure class, accepted), and all of **desktop/Tauri**.

@@ -6,7 +6,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { HashRouter } from 'react-router-dom';
 import { CashierApp } from './CashierApp';
-import { PosShellContext } from './shell';
+import { PosShellContext } from '@pos/platform';
 import { enableOfflinePos } from './offline/enabled';
 import './index.css';
 
