@@ -9,6 +9,7 @@ import multipart from '@fastify/multipart';
 import staticPlugin from '@fastify/static';
 import type { FastifyInstance } from 'fastify';
 import { registerPosRoutes } from './pos.controller.js';
+import { registerPosVersioning } from './pos.versioning.js';
 import { ensureUploadsDir, POS_UPLOADS_DIR, POS_UPLOADS_PREFIX } from './uploads.service.js';
 import { logger } from '../logger.js';
 
@@ -30,6 +31,7 @@ export async function registerPosPlugin(fastify: FastifyInstance): Promise<void>
 
   await fastify.register(
     async (instance) => {
+      registerPosVersioning(instance);
       await registerPosRoutes(instance);
     },
     { prefix: '/api/pos' }

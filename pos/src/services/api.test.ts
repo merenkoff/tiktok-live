@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { posApiBase } from '../lib/urls';
 import { server } from '../test/msw/server';
 import { makeAuthResponse } from '../test/utils';
+import { POS_API_CLIENT_VERSION } from '../platform/version';
 import { api, isNetworkError, isUnauthorized } from './api';
 
 const TOKEN_KEY = 'pos_token';
@@ -120,5 +121,21 @@ describe('token interceptor', () => {
     const auth = await api.me();
 
     expect(api.loadAuth()).toEqual(auth);
+  });
+});
+
+describe('API version header', () => {
+  it('declares the build API version on every request', async () => {
+    const seen: Array<string | null> = [];
+    server.use(
+      http.get(`${posApiBase()}/me`, ({ request }) => {
+        seen.push(request.headers.get('X-POS-API-Version'));
+        return HttpResponse.json(makeAuthResponse());
+      })
+    );
+
+    await api.me();
+
+    expect(seen).toEqual([String(POS_API_CLIENT_VERSION)]);
   });
 });

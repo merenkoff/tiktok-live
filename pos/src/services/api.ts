@@ -30,6 +30,9 @@ import type {
   MovementSummaryRow,
 } from '../types';
 import { posApiBase } from '../lib/urls';
+// Direct import (not via '@pos/platform') — that barrel re-exports this module,
+// so going through it would be a cycle. `version.ts` has no deps.
+import { POS_API_CLIENT_VERSION } from '../platform/version';
 
 const TOKEN_KEY = 'pos_token';
 const AUTH_KEY = 'pos_auth';
@@ -44,6 +47,7 @@ export function isUnauthorized(error: unknown): boolean {
 
 class PosApi {
   private client: AxiosInstance;
+  private warnedApiSkew = false;
 
   constructor() {
     this.client = axios.create({
@@ -52,11 +56,25 @@ class PosApi {
     });
 
     this.client.interceptors.request.use((config) => {
+      config.headers['X-POS-API-Version'] = String(POS_API_CLIENT_VERSION);
       const token = localStorage.getItem(TOKEN_KEY);
       if (token && !token.startsWith('offline:')) {
         config.headers.Authorization = `Bearer ${token}`;
       }
       return config;
+    });
+
+    // Advisory: log a skew between what this build expects and what the
+    // backend reports. Seed for runtime version telemetry (roadmap #6); no UI.
+    this.client.interceptors.response.use((response) => {
+      const served = response.headers['x-pos-api-version'];
+      if (served != null && String(served) !== String(POS_API_CLIENT_VERSION) && !this.warnedApiSkew) {
+        this.warnedApiSkew = true;
+        console.warn(
+          `[pos-api] version skew: this build expects v${POS_API_CLIENT_VERSION}, backend serves v${served}`
+        );
+      }
+      return response;
     });
   }
 
