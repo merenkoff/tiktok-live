@@ -2,25 +2,25 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { lazy } from 'react';
 import type { ModuleDescriptor } from '../types';
+import { lazyWithRetry } from '../lazyWithRetry';
 
-const StockHubPage = lazy(() =>
+const StockHubPage = lazyWithRetry(() =>
   import('./pages/StockHubPage').then((m) => ({ default: m.StockHubPage }))
 );
-const StockActionPage = lazy(() =>
+const StockActionPage = lazyWithRetry(() =>
   import('./pages/StockActionPage').then((m) => ({ default: m.StockActionPage }))
 );
-const StockInventoryPage = lazy(() =>
+const StockInventoryPage = lazyWithRetry(() =>
   import('./pages/StockInventoryPage').then((m) => ({ default: m.StockInventoryPage }))
 );
-const StockHistoryPage = lazy(() =>
+const StockHistoryPage = lazyWithRetry(() =>
   import('./pages/StockHistoryPage').then((m) => ({ default: m.StockHistoryPage }))
 );
-const StockMovementPage = lazy(() =>
+const StockMovementPage = lazyWithRetry(() =>
   import('./pages/StockMovementPage').then((m) => ({ default: m.StockMovementPage }))
 );
-const StockDocumentDetailPage = lazy(() =>
+const StockDocumentDetailPage = lazyWithRetry(() =>
   import('./pages/StockDocumentDetailPage').then((m) => ({
     default: m.StockDocumentDetailPage,
   }))

@@ -2,12 +2,12 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { lazy } from 'react';
 import { Package } from 'lucide-react';
 import type { ModuleDescriptor } from '../types';
+import { lazyWithRetry } from '../lazyWithRetry';
 
-const ProductsPage = lazy(() =>
-  import('../../pages/admin/ProductsPage').then((m) => ({ default: m.ProductsPage }))
+const ProductsPage = lazyWithRetry(() =>
+  import('./pages/ProductsPage').then((m) => ({ default: m.ProductsPage }))
 );
 
 /** Product / variant / tag catalog management. Owner-only, web build only. */

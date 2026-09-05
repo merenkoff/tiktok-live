@@ -8,6 +8,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuthStore } from '@pos/platform';
 import { AdminLayout } from '../pages/admin/AdminLayout';
 import { CashierLayout } from '../components/cashier/CashierLayout';
+import { RouteErrorBoundary } from '../components/RouteErrorBoundary';
 import { LoginPage } from '../pages/LoginPage';
 import type { PosShell } from '../shell';
 import type { PosRole } from '../types';
@@ -64,7 +65,13 @@ export function renderModuleRoutes(ctx: RouteContext) {
     for (const r of m.routes) {
       const El = r.element;
       const raw = <El {...(r.props ?? {})} />;
-      const node = r.eager ? raw : <Suspense fallback={<RouteFallback />}>{raw}</Suspense>;
+      const node = r.eager ? (
+        raw
+      ) : (
+        <RouteErrorBoundary moduleId={m.id} title={m.title}>
+          <Suspense fallback={<RouteFallback />}>{raw}</Suspense>
+        </RouteErrorBoundary>
+      );
       const mount = r.mount ?? 'root';
 
       if (mount === 'admin') {

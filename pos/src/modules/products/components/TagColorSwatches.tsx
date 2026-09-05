@@ -8,7 +8,7 @@ import {
   TAG_COLORS,
   type TagColorKey,
   isTagColorKey,
-} from '../lib/tagColors';
+} from '@pos/platform';
 
 interface Props {
   value: string | null;

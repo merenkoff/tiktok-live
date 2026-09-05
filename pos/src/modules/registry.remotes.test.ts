@@ -4,6 +4,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { applyModuleRemotes, MODULES } from './registry';
+import { onModuleEvent, type ModuleEvent } from './telemetry';
 
 /**
  * `applyModuleRemotes` (Task B PoC) swaps a bundled module descriptor for one
@@ -27,11 +28,15 @@ describe('applyModuleRemotes', () => {
     const returnsBefore = MODULES.find((m) => m.id === 'returns');
     expect(returnsBefore).toBeDefined();
 
+    const events: ModuleEvent[] = [];
+    const off = onModuleEvent((e) => events.push(e));
     vi.stubEnv('VITE_MODULE_REMOTES', 'returns@http://localhost:1/does-not-exist.js');
     await applyModuleRemotes();
+    off();
 
     const returnsAfter = MODULES.find((m) => m.id === 'returns');
     expect(returnsAfter).toBe(returnsBefore);
+    expect(events.map((e) => e.type)).toEqual(['remote_load_error', 'remote_load_fallback']);
   });
 
   it('ignores a malformed entry (no "@")', async () => {

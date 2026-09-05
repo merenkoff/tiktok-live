@@ -45,14 +45,19 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[-]` won
   - `check:*-css-coverage` уже ловит дрейф — оставить как временную страховку.
   - Независимо. Оценка: 2–4 дня.
 
-- [ ] **5. Error boundary / retry / телеметрия вокруг динамического `import()`**
-  - Что показываем, если remote не загрузился (fallback на bundled-дескриптор
-    есть структурно, но UX нет).
-  - Retry с backoff, таймаут, метрика «remote load failed» + версия.
-  - Независимо. Оценка: 2–3 дня.
-  - **Прим. из п.7:** vendor- и `@pos/platform`-чанки теперь same-origin
-    same-deploy — их отказ = отказ entry-чанка (принятый риск, не покрывается
-    этим пунктом). Этот пункт остаётся про *модуль-ремоуты*.
+- [x] **5. Error boundary / retry / телеметрия вокруг динамического `import()`** — сделано.
+  - `pos/src/modules/lazyWithRetry.ts` — `import()` с экспоненциальным backoff
+    (2 ретрая) для боот-свопа дескриптора (`registry.ts`) и для lazy-страниц
+    (`returns`/`stock`/`products` манифесты).
+  - `pos/src/components/RouteErrorBoundary.tsx` — первый ErrorBoundary в
+    приложении; оборачивает каждый lazy-роут в `renderRoutes.tsx`. Fallback:
+    «Повторити» (мягкий remount), после 2-го провала — «Перезавантажити
+    застосунок», + «На головну». Больше нет белого экрана при 404 чанка.
+  - `pos/src/modules/telemetry.ts` — `reportModuleEvent` (структурные события
+    `remote_load_ok|error|fallback`, `route_render_error`) + `onModuleEvent` /
+    `getModuleEventLog`. Сетевого стока нет — это seam под п.6.
+  - **Прим. из п.7:** vendor- и `@pos/platform`-чанки same-origin same-deploy —
+    их отказ = отказ entry-чанка (принятый риск, вне этого пункта).
 
 - [ ] **6. Телеметрия версий в рантайме**
   - Логировать, какая версия каждого модуля реально загрузилась в сессии
@@ -89,10 +94,17 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[-]` won
 
 ## Расширение на другие модули
 
-- [ ] **10. Третий модуль через тот же паттерн**
-  - Проверить на модуле, который трогает больше shared-компонентов, чем
-    `stock` (тот использует только `useDragScroll`).
-  - Независимо. Оценка: 1–2 дня на модуль.
+- [x] **10. Третий модуль через тот же паттерн** — `products`.
+  - `src/pages/admin/ProductsPage.tsx` (935 строк) → `src/modules/products/pages/`,
+    `TagColorSwatches` → `src/modules/products/components/`.
+  - Новые shared-шимы в `@pos/platform`: `urls.ts` (`assetUrl`),
+    `tag-colors.ts` (токены). `ProductPhotoField` (в `@pos/platform/ui`)
+    переведён на `@pos/platform` для `api`/`assetUrl` — иначе тянул второй axios
+    в remote-чанк.
+  - `vite.products-remote.config.ts` + скрипты `build/serve:products-remote`
+    (порт 5003), `check:products-css-coverage`. `registry.ts` — без изменений.
+  - Проверил барел: в products-remote чанке нет `html5-qrcode`
+    (`BarcodeScanner` отсеян `sideEffects:false`) и нет второго `axios`.
 
 - [ ] **11. Разбор core-модулей (`register` / `returns`-в-регистре)**
   - Оценить, что мешает вынести cashier-root модули, завязанные на
@@ -112,7 +124,8 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[-]` won
 
 ## Рекомендуемый порядок, если делать всерьёз
 
-п.1 → (п.2, п.4, п.5 параллельно) → п.3, п.6 → ~~п.7~~ → ~~п.8~~, п.9 → п.10
+~~п.1~~ (seam) → п.2, п.4 → п.3, п.6 → ~~п.7~~, ~~п.8~~, ~~п.5~~, ~~п.10~~ → п.9 → п.11
 
-(п.7 + п.8 уже сделаны — но п.1/п.4/п.5 всё ещё нужны до реального
-продакшн-раскатывания модуль-ремоутов.)
+Сделано: #1 (seam, не финал), #5, #7, #8, #10.
+До реального продакшн-раскатывания модуль-ремоутов ещё нужны: #1 (полноценный
+контракт версий), #4 (CSS вне `pos/src`), #2 (CI-публикация), #3 (подпись).

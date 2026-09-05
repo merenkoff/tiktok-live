@@ -3,14 +3,17 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { api } from '../../services/api';
-import { formatUah, uahInputToCents } from '../../lib/money';
-import type { PosTag, Product, ProductVariant } from '../../types';
-import { ProductPhotoField } from '../../components/ProductPhotoField';
-import { TagColorSwatches } from '../../components/TagColorSwatches';
-import { assetUrl } from '../../lib/urls';
-import { DEFAULT_TAG_COLOR, type TagColorKey } from '../../lib/tagColors';
-import { useDragScroll } from '../../hooks/useDragScroll';
+import {
+  api,
+  assetUrl,
+  formatUah,
+  uahInputToCents,
+  DEFAULT_TAG_COLOR,
+  type TagColorKey,
+} from '@pos/platform';
+import type { PosTag, Product, ProductVariant } from '@pos/platform';
+import { ProductPhotoField, useDragScroll } from '@pos/platform/ui';
+import { TagColorSwatches } from '../components/TagColorSwatches';
 
 const MAX_TAG_DEPTH = 3;
 
