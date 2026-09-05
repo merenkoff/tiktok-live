@@ -3,10 +3,8 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { useEffect } from 'react';
-import { useAuthStore } from './hooks/useAuth';
-import { usePosShell } from './shell';
+import { useAuthStore, usePosShell, useEnabledModules } from '@pos/platform';
 import { renderModuleRoutes } from './modules/renderRoutes';
-import { useEnabledModules } from './modules/useEnabledModules';
 
 export function App() {
   const bootstrap = useAuthStore((s) => s.bootstrap);

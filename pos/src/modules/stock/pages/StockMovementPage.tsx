@@ -4,9 +4,9 @@
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../../../services/api';
-import type { MovementSummaryRow } from '../../../types';
-import { useDragScroll } from '../../../hooks/useDragScroll';
+import { api } from '@pos/platform';
+import type { MovementSummaryRow } from '@pos/platform';
+import { useDragScroll } from '@pos/platform/ui';
 
 function startOfDayIso(d: Date): string {
   const x = new Date(d);

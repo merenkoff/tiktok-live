@@ -40,6 +40,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), cashierAsIndex()],
     resolve: {
       alias: {
+        '@pos/platform/ui': path.resolve(__dirname, 'src/platform/ui.ts'),
         '@pos/platform': path.resolve(__dirname, 'src/platform/index.ts'),
       },
     },

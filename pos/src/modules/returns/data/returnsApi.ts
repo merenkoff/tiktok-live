@@ -2,7 +2,7 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { api, cashierApi, saleRowFromDetail } from '@pos/platform';
+import { api, cashierApi } from '@pos/platform';
 import type {
   LocalSaleRow,
   PaymentMethod,
@@ -11,7 +11,6 @@ import type {
   SaleListItem,
 } from '@pos/platform';
 
-export { saleRowFromDetail };
 export type { LocalSaleRow };
 
 /**

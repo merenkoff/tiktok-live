@@ -7,14 +7,18 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { PosShellContext } from './shell';
+import { applyModuleRemotes } from './modules/registry';
 import './index.css';
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <PosShellContext.Provider value="web">
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </PosShellContext.Provider>
-  </React.StrictMode>
-);
+// Resolves immediately unless VITE_MODULE_REMOTES is set (Task B PoC).
+void applyModuleRemotes().finally(() => {
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <PosShellContext.Provider value="web">
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </PosShellContext.Provider>
+    </React.StrictMode>
+  );
+});

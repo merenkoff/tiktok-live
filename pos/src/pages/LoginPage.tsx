@@ -5,9 +5,7 @@
 import { FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { useAuthStore, loadLastStoreSlug } from '../hooks/useAuth';
-import { usePosShell } from '../shell';
-import { OfflineAuthError } from '../offline/errors';
+import { useAuthStore, loadLastStoreSlug, usePosShell, OfflineAuthError } from '@pos/platform';
 
 function loginErrorMessage(error: unknown): string {
   if (error instanceof OfflineAuthError) return error.message;

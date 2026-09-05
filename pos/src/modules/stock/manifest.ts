@@ -6,22 +6,22 @@ import { lazy } from 'react';
 import type { ModuleDescriptor } from '../types';
 
 const StockHubPage = lazy(() =>
-  import('../../pages/admin/stock/StockHubPage').then((m) => ({ default: m.StockHubPage }))
+  import('./pages/StockHubPage').then((m) => ({ default: m.StockHubPage }))
 );
 const StockActionPage = lazy(() =>
-  import('../../pages/admin/stock/StockActionPage').then((m) => ({ default: m.StockActionPage }))
+  import('./pages/StockActionPage').then((m) => ({ default: m.StockActionPage }))
 );
 const StockInventoryPage = lazy(() =>
-  import('../../pages/admin/stock/StockInventoryPage').then((m) => ({ default: m.StockInventoryPage }))
+  import('./pages/StockInventoryPage').then((m) => ({ default: m.StockInventoryPage }))
 );
 const StockHistoryPage = lazy(() =>
-  import('../../pages/admin/stock/StockHistoryPage').then((m) => ({ default: m.StockHistoryPage }))
+  import('./pages/StockHistoryPage').then((m) => ({ default: m.StockHistoryPage }))
 );
 const StockMovementPage = lazy(() =>
-  import('../../pages/admin/stock/StockMovementPage').then((m) => ({ default: m.StockMovementPage }))
+  import('./pages/StockMovementPage').then((m) => ({ default: m.StockMovementPage }))
 );
 const StockDocumentDetailPage = lazy(() =>
-  import('../../pages/admin/stock/StockDocumentDetailPage').then((m) => ({
+  import('./pages/StockDocumentDetailPage').then((m) => ({
     default: m.StockDocumentDetailPage,
   }))
 );

@@ -18,10 +18,7 @@ import {
 import { usePrintableReceipt } from '../hooks/usePrintableReceipt';
 import { useUpdateStore } from '../hooks/useUpdateCheck';
 import { getMeta, setMeta } from '../offline/db';
-import { useAuthStore } from '../hooks/useAuth';
-import { AppRail } from '../components/cashier/AppRail';
-import { BottomNav } from '../components/cashier/BottomNav';
-import { OfflineStatusBanner } from '../components/cashier/OfflineStatusBanner';
+import { useAuthStore } from '@pos/platform';
 
 const RECEIPT_PRINTER_META_KEY = 'receiptPrinterName';
 const RECEIPT_PAPER_META_KEY = 'receiptPaperWidthMm';
@@ -68,8 +65,6 @@ function formatId(value: number) {
 }
 
 export function HardwarePage() {
-  const logout = useAuthStore((s) => s.logout);
-  const role = useAuthStore((s) => s.role());
   const storeName = useAuthStore((s) => s.auth?.store.name) ?? '';
   const [devices, setDevices] = useState<HardwareDevice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -334,16 +329,9 @@ export function HardwarePage() {
   );
 
   return (
-    <div className="h-[100dvh] flex bg-sq-bg font-sans overflow-hidden">
-      <AppRail isOwner={role === 'owner'} onLogout={() => void logout()} />
-      <div className="flex-1 flex flex-col min-w-0 min-h-0">
-        <OfflineStatusBanner />
-        {body}
-        <div className="lg:hidden shrink-0">
-          <BottomNav isOwner={role === 'owner'} onLogout={() => void logout()} />
-        </div>
-      </div>
+    <>
+      {body}
       {printablePortal}
-    </div>
+    </>
   );
 }

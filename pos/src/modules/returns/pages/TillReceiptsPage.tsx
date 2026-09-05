@@ -4,15 +4,9 @@
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import {
-  AppRail,
-  BottomNav,
-  formatUah,
-  OfflineStatusBanner,
-  useAuthStore,
-  useDragScroll,
-} from '@pos/platform';
+import { formatUah } from '@pos/platform';
 import type { LocalSaleRow, SaleDetail } from '@pos/platform';
+import { useDragScroll } from '@pos/platform/ui';
 import { returnsApi } from '../data/returnsApi';
 import { RefundSaleDialog } from '../components/RefundSaleDialog';
 
@@ -50,7 +44,6 @@ function canRefund(row: LocalSaleRow): boolean {
  * it, cancel it. Partial refunds stay in the admin UI.
  */
 export function TillReceiptsPage() {
-  const logout = useAuthStore((s) => s.logout);
   const [rows, setRows] = useState<LocalSaleRow[]>([]);
   const [selected, setSelected] = useState<LocalSaleRow | null>(null);
   const [detail, setDetail] = useState<SaleDetail | null>(null);
@@ -139,20 +132,13 @@ export function TillReceiptsPage() {
   );
 
   return (
-    <div className="h-[100dvh] flex bg-sq-bg font-sans overflow-hidden">
-      <AppRail onLogout={() => void logout()} />
-      <div className="flex-1 flex flex-col min-w-0 min-h-0">
-        <OfflineStatusBanner />
-        {error && (
-          <div className="mx-3 mt-2 rounded-sq bg-red-50 text-red-700 px-3 py-2 text-sm shrink-0">
-            {error}
-          </div>
-        )}
-        {body}
-        <div className="lg:hidden shrink-0">
-          <BottomNav onLogout={() => void logout()} />
+    <>
+      {error && (
+        <div className="mx-3 mt-2 rounded-sq bg-red-50 text-red-700 px-3 py-2 text-sm shrink-0">
+          {error}
         </div>
-      </div>
+      )}
+      {body}
 
       {/* On narrow tills the detail lives in a sheet instead of the side column. */}
       {selected && (
@@ -184,7 +170,7 @@ export function TillReceiptsPage() {
           onRefunded={onRefunded}
         />
       )}
-    </div>
+    </>
   );
 }
 

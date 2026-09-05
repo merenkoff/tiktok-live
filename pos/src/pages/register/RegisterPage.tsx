@@ -5,8 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, Check, Search } from 'lucide-react';
 import { cashierApi } from '../../offline/cashierApi';
-import { useAuthStore } from '../../hooks/useAuth';
-import { useCartStore } from '../../hooks/useCart';
+import { useAuthStore, useCartStore } from '@pos/platform';
 import { useDragScroll } from '../../hooks/useDragScroll';
 import { formatUah } from '../../lib/money';
 import { DEFAULT_RECEIPT_PAPER_WIDTH, ReceiptPaperWidth, printReceipt } from '../../lib/printer';
@@ -19,11 +18,8 @@ import { BarcodeScanner } from '../../components/BarcodeScanner';
 import { ProductTile } from '../../components/cashier/ProductTile';
 import { TagFolderTile } from '../../components/cashier/TagFolderTile';
 import { SaleSidebar } from '../../components/cashier/SaleSidebar';
-import { BottomNav } from '../../components/cashier/BottomNav';
-import { AppRail } from '../../components/cashier/AppRail';
 import { VariantPicker } from '../../components/cashier/VariantPicker';
 import { MobileCartSheet } from '../../components/cashier/MobileCartSheet';
-import { OfflineStatusBanner } from '../../components/cashier/OfflineStatusBanner';
 import { useCancelRungSale } from '../../modules/returns';
 
 function paymentLabel(method: PaymentMethod): string {
@@ -47,8 +43,6 @@ function needsBackNav(tagPath: PosTag[]): boolean {
 
 export function RegisterPage() {
   const auth = useAuthStore((s) => s.auth);
-  const logout = useAuthStore((s) => s.logout);
-  const role = useAuthStore((s) => s.role());
 
   const lines = useCartStore((s) => s.lines);
   const banner = useCartStore((s) => s.banner);
@@ -399,12 +393,8 @@ export function RegisterPage() {
     !showBack && currentTag?.show_in_catalog_bar ? currentTag.id : !currentTag ? 'all' : null;
 
   return (
-    <div className="h-[100dvh] flex bg-sq-bg font-sans overflow-hidden">
-      <AppRail isOwner={role === 'owner'} onLogout={() => void logout()} />
-
-      <div className="flex-1 flex flex-col min-w-0 min-h-0">
-        <OfflineStatusBanner />
-        <input
+    <>
+      <input
           ref={wedgeRef}
           className="sr-only"
           autoFocus
@@ -571,11 +561,6 @@ export function RegisterPage() {
           </button>
         </div>
 
-        <div className="lg:hidden shrink-0">
-          <BottomNav isOwner={role === 'owner'} onLogout={() => void logout()} />
-        </div>
-      </div>
-
       {checkoutOpen && (
         <CheckoutModal
           totalCents={totalCents()}
@@ -622,6 +607,6 @@ export function RegisterPage() {
           }}
         />
       )}
-    </div>
+    </>
   );
 }
