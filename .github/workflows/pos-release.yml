@@ -1,6 +1,21 @@
 name: POS Release
 
+# Two ways in, one behaviour:
+#   * Actions -> "POS Release" -> Run workflow, pick patch/minor/major (or type
+#     an explicit version). CI computes the number.
+#   * git push a `pos-v1.2.3` tag. CI takes the number from the tag.
+# Either way CI writes the version into pos/package.json, tauri.conf.json,
+# Cargo.toml and Cargo.lock, commits that to main, (re)points the tag at that
+# commit, then builds every platform and attaches the installers to a GitHub
+# Release for the tag. Nothing to bump or commit by hand.
+
 on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'patch | minor | major, or an explicit version like 1.2.3'
+        required: true
+        default: patch
   push:
     tags:
       - 'pos-v*'
@@ -8,8 +23,63 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: pos-release
+  cancel-in-progress: false
+
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Resolve version + write manifests
+        id: resolve
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ]; then
+            arg="${GITHUB_REF_NAME#pos-v}"
+          else
+            arg="${{ inputs.bump }}"
+          fi
+          version="$(node .github/scripts/set-pos-version.mjs "$arg")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=pos-v$version"  >> "$GITHUB_OUTPUT"
+          echo "Releasing pos-v$version" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit bump + (re)point tag
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet; then
+            git add pos/package.json pos/src-tauri/tauri.conf.json \
+                    pos/src-tauri/Cargo.toml pos/src-tauri/Cargo.lock
+            git commit -m "chore(pos): release ${TAG} [skip ci]"
+            git push origin HEAD:main
+          else
+            echo "Manifests already at this version — no bump commit."
+          fi
+          # Tag the exact commit the installers are built from. Its message
+          # carries [skip ci], so this (force-)push does not retrigger anything.
+          git tag -f "${TAG}"
+          git push -f origin "${TAG}"
+
   release:
+    needs: version
     strategy:
       fail-fast: false
       matrix:
@@ -23,6 +93,8 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
 
       - uses: actions/setup-node@v4
         with:
@@ -47,8 +119,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: pos
-          tagName: pos-v__VERSION__
-          releaseName: 'Cloth POS v__VERSION__'
+          tagName: ${{ needs.version.outputs.tag }}
+          releaseName: 'Cloth POS v${{ needs.version.outputs.version }}'
           releaseBody: |
             POS desktop cashier app. Unsigned build — macOS/Windows may warn on first launch
             (no code-signing/notarization configured yet).
