@@ -1,5 +1,9 @@
 # 📦 Complete File Manifest
 
+> ⚠️ **HISTORICAL — archived 2026-09-06.** File listing for the original
+> single-user / single-stream MVP; the repo layout and file set it describes are
+> long out of date. See `README.md` / `CLAUDE.md` at the repo root.
+
 ## Overview
 You have received a **complete, production-ready TikTok LIVE Sales Automation system**.
 

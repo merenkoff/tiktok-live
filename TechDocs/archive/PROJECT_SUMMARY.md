@@ -1,5 +1,11 @@
 # TikTok LIVE Sales Automation - Project Summary
 
+> ⚠️ **HISTORICAL — archived 2026-09-06.** Describes the original single-user /
+> single-stream MVP and references an `inventory` table that was never built.
+> Kept for design context only; **not** current truth. For the live system read
+> `src/core/types.ts` + the service files, `CLAUDE.md` (repo root), and
+> `TechDocs/NOTES.md` (tracked drift).
+
 ## 🎯 What You Have
 
 A **complete, production-ready MVP** for automating TikTok LIVE sales for children's clothing. All core features working, tested, and ready to deploy.

@@ -1,5 +1,10 @@
 # 🚀 START HERE - TikTok LIVE Sales Automation
 
+> ⚠️ **HISTORICAL — archived 2026-09-06.** Onboarding guide for the original
+> single-user / single-stream MVP (VPS + docker-compose, `tiktok-live-automation`
+> repo layout). **Not** current: the system is now multi-tenant and deployed on
+> Railway. Start from `README.md` and `CLAUDE.md` at the repo root instead.
+
 Welcome! You have a **complete, production-ready system** for automating TikTok LIVE sales.
 
 ## 📂 What's in This Folder

@@ -50,6 +50,7 @@ export function reportModuleEvent(event: ModuleEvent): void {
   ) {
     console.error(line, 'error' in event ? event.error : undefined);
   } else if (event.type === 'session_manifest') {
+    // eslint-disable-next-line no-console -- module/version-skew telemetry sink, console is the intended surface
     console.info(line, event.modules);
   } else {
     console.warn(line, event);

@@ -1,5 +1,8 @@
 # 🔧 Виправлення Помилок
 
+> ⚠️ **HISTORICAL — archived 2026-09-06.** One-off scratch note from an early
+> TypeScript build-fix pass on the MVP. No longer relevant.
+
 Я виправив всі помилки TypeScript. Зробіть це:
 
 ## 1. Встановіть типи для node-cron

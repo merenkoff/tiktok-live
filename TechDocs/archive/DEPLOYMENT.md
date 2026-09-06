@@ -1,5 +1,9 @@
 # Deployment Guide
 
+> ⚠️ **HISTORICAL — archived 2026-09-06.** VPS + docker-compose deployment for the
+> original single-user / single-stream MVP. **Not** current: the backend, `admin/`
+> and `pos/` now deploy as separate Railway services. See `TechDocs/RAILWAY_POS.md`.
+
 ## Pre-Deployment Checklist
 
 - [ ] Database backups configured
