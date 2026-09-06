@@ -11,6 +11,7 @@ import { enableOfflinePos } from './offline/enabled';
 import { reportSessionManifest } from './modules/registry';
 import { maybeStartTelemetryBeacon } from './modules/telemetryBeacon';
 import './index.css';
+import './styles/tokens.css';
 
 enableOfflinePos();
 

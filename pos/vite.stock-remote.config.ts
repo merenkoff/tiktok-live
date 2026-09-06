@@ -15,11 +15,13 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { posAppVersion } from './scripts/pkg-version.mjs';
+import { moduleCss } from './scripts/module-tailwind.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
+  css: moduleCss('stock'),
   define: {
     'process.env.NODE_ENV': '"production"',
     // This remote's own build version — see roadmap #6.
@@ -47,6 +49,9 @@ export default defineConfig({
       fileName: () => 'remote-entry.js',
     },
     rollupOptions: {
+      // CSS from remote-styles.css lands at a deterministic path the signed
+      // manifest + loader expect (roadmap #4).
+      output: { assetFileNames: 'style.css' },
       external: [
         'react',
         'react-dom',

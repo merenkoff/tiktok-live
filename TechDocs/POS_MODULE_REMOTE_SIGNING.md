@@ -12,7 +12,7 @@ next to `remote-entry.js`:
 
 | file | contents |
 |---|---|
-| `manifest.json` | `{ schema, moduleId, version, entry, keyId, builtAt, files: { "<name>": "sha384-…" } }` — every `*.js` in the output dir, name-sorted, fixed key order |
+| `manifest.json` | `{ schema, moduleId, version, entry, keyId, builtAt, files: { "<name>": "sha384-…" } }` — every `*.js` **and `*.css`** in the output dir, name-sorted, fixed key order |
 | `manifest.json.sig` | base64 Ed25519 **detached** signature over the exact bytes of `manifest.json` |
 
 `serve:<id>-remote` (and any CDN serving the directory) exposes all three.
@@ -26,7 +26,10 @@ next to `remote-entry.js`:
 2. `manifest.keyId` must be in `TRUSTED_REMOTE_KEYS` (`src/modules/remoteSigningKeys.ts`);
 3. Ed25519 `crypto.subtle.verify` of the signature over the received manifest bytes;
 4. `sha384(remote-entry.js)` must equal `manifest.files[manifest.entry]`;
-5. `manifest.moduleId` / `entry` basename must match what's being loaded.
+5. `manifest.moduleId` / `entry` basename must match what's being loaded;
+6. if `manifest.files['style.css']` exists (roadmap #4), fetch `<dir>/style.css`,
+   sha384-check it, and return its text so `registry.injectModuleStyle` can
+   append a `<style data-module-remote="<id>">` before the first render.
 
 Any failure throws `RemoteVerifyError` → `remote_verify_error` +
 `remote_load_fallback` telemetry → the bundled descriptor is kept.

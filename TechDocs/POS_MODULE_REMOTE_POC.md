@@ -556,3 +556,40 @@ scheme, key handling, and residual risks.
 `build:cashier` / `build:{returns,stock,products}-remote` (emit + sign),
 `npm run test:e2e` (8), WebCrypto sign↔verify round-trip against the built
 `dist-remotes/*` — all green.
+
+## Update: per-module CSS extraction (2026-09-06)
+
+Roadmap #4 — a remote no longer depends on the host having compiled its classes.
+
+- **Shared layer split out** — `pos/src/styles/tokens.css` (new): the
+  hand-written `.sq-*` / `.pos-*` classes, `:root` tokens, `@media print`,
+  `@keyframes`, moved verbatim out of `src/index.css` (now just the three
+  `@tailwind` directives). Framework-agnostic — imported by `main.tsx` /
+  `cashier-main.tsx` next to `index.css`, and standalone enough to vendor.
+- **Per-module utilities sheet** — `src/modules/remote-styles.css`
+  (`@tailwind utilities;`), imported only by each `remote-entry.ts`. Each
+  `vite.<id>-remote.config.ts` uses `scripts/module-tailwind.mjs` `moduleCss('<id>')`
+  → Tailwind over just `src/modules/<id>/**` with `presets:[tailwind.config.js]`
+  (theme → `sq-*` resolve) and `corePlugins.preflight = false`. Output
+  `dist-remotes/<id>/style.css` (pinned via `assetFileNames`) — only the utilities
+  that module uses, no reset, no globals.
+- **Signed + verified + injected** — `sign-remote.mjs` now hashes `.css` too, so
+  `manifest.files['style.css']` is covered by the Ed25519 signature.
+  `verifyRemoteEntry` (`Promise<void>` → `Promise<{ styleCss? }>`) fetches
+  `style.css`, sha384-checks it against the manifest, returns the text;
+  `registry.injectModuleStyle(id, css)` appends one
+  `<style data-module-remote="<id>">` before the first render (no FOUC). Bad /
+  missing `style.css` → `remote_verify_error` → bundled fallback.
+- `check:<id>-css-coverage` retargeted to `dist-remotes/<id>/style.css`
+  (folds in `src/styles/tokens.css` so host-provided `.sq-*` classes aren't
+  false positives).
+
+Bundled path unchanged — `tokens.css` merges into the one host sheet on build;
+`@tailwind utilities` over the full `content` glob still covers in-tree modules.
+
+**Verified:** `check:platform-boundary`, `tsc --noEmit`, `npm test` (pos 198,
++5), `npm run build` / `build:cashier` (tokens present in the single sheet),
+`build:{returns,stock,products}-remote` → `style.css` (utilities only, no
+preflight, `sq-*` resolve to real hex) + `check:*-css-coverage` pass,
+`npm run test:e2e` (8), live-served full verify chain incl. `style.css` hash —
+all green.

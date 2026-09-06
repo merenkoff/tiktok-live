@@ -103,7 +103,7 @@ function signModule(moduleId) {
 
   const files = {};
   for (const name of readdirSync(outDir).sort()) {
-    if (!name.endsWith('.js')) continue;
+    if (!name.endsWith('.js') && !name.endsWith('.css')) continue;
     const buf = readFileSync(path.join(outDir, name));
     files[name] = `sha384-${createHash('sha384').update(buf).digest('base64')}`;
   }

@@ -1,0 +1,10 @@
+/* The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+   Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+   Commercial use requires a separate agreement: mer.sergei@gmail.com */
+
+/* Imported only by each module's `remote-entry.ts` (never the host bundle).
+   Each `vite.<id>-remote.config.ts` runs Tailwind over just that module's
+   source with `preflight` off, so this compiles to `dist-remotes/<id>/style.css`
+   — only the utilities that module uses, no reset, no globals (the host page
+   ships `@tailwind base` + `tokens.css`). Roadmap #4. */
+@tailwind utilities;

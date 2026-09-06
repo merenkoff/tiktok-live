@@ -69,8 +69,16 @@ async function fetchOrThrow(url: string, what: string, init?: RequestInit): Prom
   return res;
 }
 
-/** Throws `RemoteVerifyError` unless the remote at `url` is validly signed. */
-export async function verifyRemoteEntry(url: string, moduleId: string): Promise<void> {
+export interface VerifiedRemote {
+  /** Verified `style.css` text (roadmap #4), if the remote ships one. */
+  styleCss?: string;
+}
+
+/**
+ * Throws `RemoteVerifyError` unless the remote at `url` is validly signed.
+ * Resolves with any verified sidecar assets (`style.css`).
+ */
+export async function verifyRemoteEntry(url: string, moduleId: string): Promise<VerifiedRemote> {
   const subtle = globalThis.crypto?.subtle;
   if (!subtle) throw new RemoteVerifyError('WebCrypto unavailable');
 
@@ -124,4 +132,14 @@ export async function verifyRemoteEntry(url: string, moduleId: string): Promise<
   if (!expected) throw new RemoteVerifyError('manifest has no entry hash');
   const actual = `sha384-${bytesToB64(await subtle.digest('SHA-384', entryBuf))}`;
   if (actual !== expected) throw new RemoteVerifyError('entry hash mismatch');
+
+  // Sidecar CSS (roadmap #4) — verify its bytes too, then hand the text to the
+  // caller to inject as a <style>. Absent → the module has no utilities sheet.
+  const styleExpected = manifest.files?.['style.css'];
+  if (!styleExpected) return {};
+  const styleUrl = url.replace(/[^/]+$/, 'style.css');
+  const styleBuf = await fetchOrThrow(styleUrl, 'style.css').then((r) => r.arrayBuffer());
+  const styleActual = `sha384-${bytesToB64(await subtle.digest('SHA-384', styleBuf))}`;
+  if (styleActual !== styleExpected) throw new RemoteVerifyError('style.css hash mismatch');
+  return { styleCss: new TextDecoder().decode(styleBuf) };
 }
