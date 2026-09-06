@@ -51,6 +51,9 @@ export default defineConfig({
         'react/jsx-runtime',
         'react-router-dom',
         'zustand',
+        // `offline/db` (reached via `platform/offline.ts`) `new Dexie()`s at
+        // load — shared so the host and this chunk stay on one DB connection.
+        'dexie',
       ],
     },
   },

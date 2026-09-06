@@ -12,6 +12,27 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const host = process.env.TAURI_DEV_HOST;
 const distCashier = path.resolve(__dirname, 'dist-cashier');
 
+/**
+ * Shared singletons the built cashier resolves through the import map injected
+ * into `dist-cashier/{index,cashier}.html` by `scripts/assemble-cashier-dist.mjs`
+ * — self-hosted INSIDE the app from `dist-cashier/assets/{vendor,platform}/`.
+ * Same idea as `vite.config.ts` for the web build (#7/#8); this is roadmap #13
+ * Part A, groundwork for online-only module remotes on the desktop. `dexie` is
+ * shared too — `@pos/platform` `new Dexie()`s on import, and two instances would
+ * mean two IndexedDB connections. Build-only: `dev:cashier` / `tauri:dev` keep
+ * the `resolve.alias` below and bundle everything.
+ */
+const SHARED_EXTERNALS = [
+  'react',
+  'react-dom',
+  'react-dom/client',
+  'react/jsx-runtime',
+  'react-router-dom',
+  'zustand',
+  'dexie',
+  '@pos/platform',
+];
+
 function cashierAsIndex() {
   return {
     name: 'cashier-as-index',
@@ -31,7 +52,7 @@ function cashierAsIndex() {
   };
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
   const fileEnv = loadEnv(mode, process.cwd(), '');
   if (!process.env.VITE_API_BASE) {
     process.env.VITE_API_BASE = fileEnv.VITE_API_BASE || DEFAULT_POS_API;
@@ -76,14 +97,11 @@ export default defineConfig(({ mode }) => {
       sourcemap: !!process.env.TAURI_ENV_DEBUG,
       rollupOptions: {
         input: path.resolve(__dirname, 'cashier.html'),
-        output: {
-          manualChunks(id: string) {
-            // Keep Dexie in its own shared chunk; let Rollup split everything
-            // else per dynamic import() so lazy pages stay out of the entry.
-            if (id.includes('/node_modules/dexie/')) return 'vendor-dexie';
-            return undefined;
-          },
-        },
+        // On `build`: react / router / zustand / dexie / @pos/platform resolve
+        // via the import map (assemble-cashier-dist.mjs). On `serve`: bundled
+        // normally via `resolve.alias`. (Dexie is external on build, so the old
+        // manualChunks split is gone.)
+        external: command === 'build' ? SHARED_EXTERNALS : [],
       },
     },
   };

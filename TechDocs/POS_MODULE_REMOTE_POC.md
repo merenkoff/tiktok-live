@@ -593,3 +593,52 @@ Bundled path unchanged — `tokens.css` merges into the one host sheet on build;
 preflight, `sq-*` resolve to real hex) + `check:*-css-coverage` pass,
 `npm run test:e2e` (8), live-served full verify chain incl. `style.css` hash —
 all green.
+
+## Update: cashier build externalises the singletons (#13 Part A) (2026-09-06)
+
+Groundwork for online-only module remotes on the **desktop** cashier: it now
+does what #7/#8 did for `dist/` — externalise the shared singletons and resolve
+them via an import map — but self-hosted *inside the app* (Tauri `script-src
+'self'`, no CDN). Nothing about module loading changes; the built cashier is
+functionally identical until Part C wires `applyModuleRemotes()` into
+`cashier-main.tsx`.
+
+- **`vite.cashier.config.ts`** — `command`-gated `SHARED_EXTERNALS`
+  (`react`, `react-dom`, `react-dom/client`, `react/jsx-runtime`,
+  `react-router-dom`, `zustand`, `dexie`, `@pos/platform`). `build` externalises;
+  `dev:cashier` / `tauri:dev` keep `resolve.alias` and bundle normally. The old
+  `manualChunks` dexie split is gone.
+- **`dexie` is now a shared vendor everywhere** — `@pos/platform` re-exports
+  `getMeta`/`setMeta` from `offline/db` which `new Dexie()`s at module load, so
+  the cashier bundle and the standalone `platform.js` must share one instance or
+  offline runs two IndexedDB connections. New `scripts/vendor-stubs/dexie.js`,
+  `build-vendor.mjs` emits `dist-remotes/vendor/dexie.js`,
+  `vite.platform-remote.config.ts` marks `dexie` external. Web build picks this
+  up too (`assemble-web-dist.mjs` maps it) — dedupes the two previously-dead
+  Dexie copies in `dist/`.
+- **`scripts/assemble-cashier-dist.mjs`** (new, standalone sibling of
+  `assemble-web-dist.mjs`) — content-hashes the 7 vendor chunks +
+  `platform.js` (+ async siblings verbatim) into `dist-cashier/assets/{vendor,
+  platform}/`, copies vendored `es-module-shims` (polyfill mode — no-op with
+  native import maps, takes over on old WebKitGTK), injects
+  `<script async src=…es-module-shims…>` + `<script type="importmap">` with
+  sha384 SRI into **both** `dist-cashier/index.html` and `cashier.html`, writes
+  `.importmap.json`.
+- **`build:cashier`** = `tsc --noEmit && build-vendor && vite build
+  --config vite.platform-remote.config.ts && vite build --config
+  vite.cashier.config.ts && assemble-cashier-dist` (mirrors `build`).
+
+**Verified:** `check:platform-boundary`, `tsc --noEmit`, `npm test` (pos 198),
+`npm run test:e2e` (8); `npm run build` (web) — import map now maps `dexie`, no
+`vendor-dexie-*` chunk, no bundled Dexie in `platform.js`; `npm run build:cashier`
+— `dist-cashier/assets/vendor/{7}`, `assets/platform/platform-*.js` + async
+chunks, `assets/es-module-shims-*.js`; import map + SRI in both HTML entries; the
+entry chunk imports bare `react` / `dexie` / `@pos/platform` (grep — no inlined
+React/Dexie).
+
+**Still to verify on a real desktop build (needs `tauri:build` + run):** the
+Tauri CSP (`script-src 'self'`, no `'unsafe-inline'`) does not block the inline
+`<script type="importmap">` — Tauri 2 should hash it into the served CSP; if not,
+fall back to an external `<script type="importmap-shim" src=…>` in es-module-shims
+`shimMode`. Plus the offline regression sweep (one Dexie / IndexedDB connection,
+one React, PIN login offline, receipt print, update check).
