@@ -527,3 +527,32 @@ has no CSP meta, so a third-party remote origin loads there; the cashier keeps
 (+`sanitizeModuleRemotes`/`isAllowedRemoteUrl`), `npm run build` +
 `build:cashier`, `npm run test:e2e` (8) — all green. `pos-store-settings.test.ts`
 gains a `module_remotes` round-trip (DB-gated).
+
+## Update: signed remote artifacts + verify before `import()` (2026-09-06)
+
+Roadmap #3 — #9 made `import(url)` from a per-store DB setting real; #3 verifies
+the artifact first. See `TechDocs/POS_MODULE_REMOTE_SIGNING.md` for the full
+scheme, key handling, and residual risks.
+
+- `scripts/sign-remote.mjs <id>` (folded into `build:<id>-remote`) → sibling
+  `manifest.json` (`sha384` of every `*.js`, name-sorted, fixed key order) +
+  `manifest.json.sig` (Ed25519 detached over the manifest bytes).
+- `src/modules/remoteVerify.ts` `verifyRemoteEntry(url, moduleId)` — called by
+  `applyModuleRemotes()` before `importWithRetry(import(url))`: fetch
+  manifest+sig+entry, check `keyId` against `remoteSigningKeys.ts`,
+  `crypto.subtle` Ed25519 verify, `sha384(remote-entry.js)` vs the signed map,
+  `moduleId`/`entry` match. Throw → `remote_verify_error` +
+  `remote_load_fallback` → bundled module kept.
+- Key: deterministic **dev** key (fixed seed in the script — nothing secret in
+  the repo, `build:*-remote` output loads out of the box); prod key from
+  `POS_REMOTE_SIGNING_KEY` (CI). `--print-dev` / `--gen-prod` helpers.
+- Escape hatch: `VITE_MODULE_REMOTES` + `VITE_MODULE_REMOTES_INSECURE=1` skips
+  verify (env override only; the per-store path is always verified).
+- Entry-only: sub-chunks trusted via content-hashed names in the signed
+  manifest, not re-hashed on load (documented residual risk).
+
+**Verified:** `check:platform-boundary`, `tsc --noEmit`, `npm test` (pos 193,
++7 — `remoteVerify.test.ts` + registry verify-path cases), `npm run build` /
+`build:cashier` / `build:{returns,stock,products}-remote` (emit + sign),
+`npm run test:e2e` (8), WebCrypto sign↔verify round-trip against the built
+`dist-remotes/*` — all green.

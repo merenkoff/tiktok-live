@@ -27,13 +27,14 @@ describe('applyModuleRemotes', () => {
     expect(MODULES).toEqual(before);
   });
 
-  it('falls back to the bundled descriptor when the remote fetch fails', async () => {
+  it('falls back to the bundled descriptor when the remote fetch fails (verify skipped)', async () => {
     const returnsBefore = MODULES.find((m) => m.id === 'returns');
     expect(returnsBefore).toBeDefined();
 
     const events: ModuleEvent[] = [];
     const off = onModuleEvent((e) => events.push(e));
     vi.stubEnv('VITE_MODULE_REMOTES', 'returns@http://localhost:1/does-not-exist.js');
+    vi.stubEnv('VITE_MODULE_REMOTES_INSECURE', '1');
     await applyModuleRemotes();
     off();
 
@@ -41,6 +42,23 @@ describe('applyModuleRemotes', () => {
     expect(returnsAfter).toBe(returnsBefore);
     expect(events.map((e) => e.type)).toEqual([
       'remote_load_error',
+      'remote_load_fallback',
+      'session_manifest',
+    ]);
+  });
+
+  it('falls back with remote_verify_error when the signed manifest is missing', async () => {
+    const returnsBefore = MODULES.find((m) => m.id === 'returns');
+    const events: ModuleEvent[] = [];
+    const off = onModuleEvent((e) => events.push(e));
+    vi.stubEnv('VITE_MODULE_REMOTES', 'returns@https://cdn.example.test/returns/remote-entry.js');
+    // No fetch stub → manifest.json fetch rejects → verify fails before import().
+    await applyModuleRemotes();
+    off();
+
+    expect(MODULES.find((m) => m.id === 'returns')).toBe(returnsBefore);
+    expect(events.map((e) => e.type)).toEqual([
+      'remote_verify_error',
       'remote_load_fallback',
       'session_manifest',
     ]);
@@ -68,13 +86,13 @@ describe('applyModuleRemotes', () => {
     await applyModuleRemotes();
     off();
 
-    // Down remote → falls back to the bundled descriptor, but the attempt is recorded.
+    // Down remote → verify fails → falls back, but the attempt is still recorded.
     expect(MODULES.find((m) => m.id === 'returns')).toBe(returnsBefore);
     expect(getAppliedRemotes().get('returns')).toEqual({
       url: 'http://localhost:1/does-not-exist.js',
     });
     expect(events.map((e) => e.type)).toEqual([
-      'remote_load_error',
+      'remote_verify_error',
       'remote_load_fallback',
       'session_manifest',
     ]);
