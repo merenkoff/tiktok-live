@@ -1,0 +1,245 @@
+/* The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+   Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+   Commercial use requires a separate agreement: mer.sergei@gmail.com */
+
+/* Shared POS design layer — framework-agnostic (no Tailwind directives), so it
+   can be vendored/`@import`ed on its own. The host entries (`main.tsx` /
+   `cashier-main.tsx`) import it next to `index.css`, so every page has it. A
+   module-remote's own `style.css` ships *only* its Tailwind utilities and relies
+   on the host for these tokens + hand-written `.sq-*` / `.pos-*` classes.
+   See TechDocs/POS_MODULE_REMOTE_POC.md (roadmap #4). */
+
+:root {
+  --pos-primary: #006aff;
+  --pos-primary-press: #0058d6;
+  --pos-bg: #f5f5f5;
+  --pos-surface: #ffffff;
+  --pos-rail: #1a1a1a;
+  --pos-text: #1a1a1a;
+  --pos-secondary: #6e6e6e;
+  --pos-muted: #9a9a9a;
+  --pos-divider: #e0e0e0;
+  --pos-empty: #ebebeb;
+  --pos-folder: #e8eef4;
+  --pos-folder-ink: #3d5266;
+  --pos-radius: 4px;
+  --pos-font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* aliases for existing sq-* Tailwind usage */
+  --sq-blue: var(--pos-primary);
+  --sq-blue-press: var(--pos-primary-press);
+  --sq-bg: var(--pos-bg);
+  --sq-surface: var(--pos-surface);
+  --sq-sidebar: #f0f0f0;
+  --sq-text: var(--pos-text);
+  --sq-text-secondary: var(--pos-secondary);
+  --sq-text-muted: var(--pos-muted);
+  --sq-divider: var(--pos-divider);
+  --sq-tile-empty: var(--pos-empty);
+  --sq-radius: var(--pos-radius);
+  --sq-font: var(--pos-font);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--pos-font);
+  background: var(--pos-bg);
+  color: var(--pos-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--pos-primary);
+  outline-offset: 2px;
+}
+
+/* Fallback "print to PDF" receipt: kept off-screen at all times, only shown
+   to the OS print dialog when usePrintableReceipt() triggers window.print(). */
+.receipt-print-area {
+  display: none;
+}
+
+@media print {
+  #root {
+    display: none;
+  }
+
+  .receipt-print-area {
+    display: block;
+    width: 72mm;
+    margin: 0 auto;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: #000;
+  }
+
+  .receipt-print-area hr {
+    border: none;
+    border-top: 1px dashed #000;
+  }
+
+  .receipt-print-store {
+    text-align: center;
+    font-weight: bold;
+    font-size: 14px;
+  }
+
+  .receipt-print-item {
+    margin-top: 4px;
+  }
+
+  .receipt-print-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .receipt-print-total {
+    font-weight: bold;
+  }
+
+  .receipt-print-thanks {
+    text-align: center;
+    margin-top: 8px;
+  }
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--pos-muted);
+  opacity: 1;
+}
+
+.pos-field,
+.sq-field {
+  width: 100%;
+  min-height: 3rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--pos-divider);
+  border-radius: var(--pos-radius);
+  background-color: #ffffff;
+  color: var(--pos-text);
+  caret-color: var(--pos-text);
+  font: inherit;
+}
+
+.pos-field-underline,
+.sq-field-underline {
+  width: 100%;
+  padding: 0.5rem 0;
+  border: none;
+  border-bottom: 2px solid var(--pos-primary);
+  border-radius: 0;
+  background-color: transparent;
+  color: var(--pos-text);
+  caret-color: var(--pos-text);
+  font: inherit;
+  outline: none;
+}
+
+button.pos-btn-primary,
+button.sq-btn-primary,
+a.pos-btn-primary,
+a.sq-btn-primary {
+  -webkit-appearance: none;
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #006aff !important;
+  color: #ffffff !important;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--pos-radius);
+  cursor: pointer;
+}
+button.pos-btn-primary:hover:not(:disabled),
+button.sq-btn-primary:hover:not(:disabled) {
+  background-color: #0058d6 !important;
+  color: #ffffff !important;
+}
+button.pos-btn-primary:disabled,
+button.sq-btn-primary:disabled {
+  background-color: #d8d8d8 !important;
+  color: #6e6e6e !important;
+  cursor: not-allowed;
+}
+
+.pos-btn-tile,
+.sq-btn-tile {
+  -webkit-appearance: none;
+  appearance: none;
+  background-color: #006aff !important;
+  color: #ffffff !important;
+  border: none;
+  border-radius: var(--pos-radius);
+}
+
+.pos-folder-tile {
+  background-color: var(--pos-folder) !important;
+  color: var(--pos-folder-ink) !important;
+  border: 1px solid #d5dee8;
+  border-radius: var(--pos-radius);
+}
+.pos-folder-tile:hover {
+  background-color: #dce6ef !important;
+}
+
+.sq-nav-active {
+  background-color: #006aff !important;
+  color: #ffffff !important;
+}
+
+.sq-nav-idle {
+  background-color: transparent;
+  color: #1a1a1a !important;
+}
+.sq-nav-idle:hover {
+  background-color: #ffffff;
+}
+
+.sq-link {
+  color: #006aff !important;
+  font-weight: 600;
+}
+
+.sq-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6e6e6e;
+}
+
+.sq-card {
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: var(--pos-radius);
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fadeUp 0.22s ease both;
+}

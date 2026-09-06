@@ -32,12 +32,19 @@ async function makeManifest(over: Partial<Record<string, unknown>> = {}): Promis
   });
 }
 
-/** fetch stub: routes by URL suffix; `manifest`/`sig` bodies come from args. */
-function stubFetch(bodies: { manifest?: string | null; sig?: string | null; entry?: string }) {
+/** fetch stub: routes by URL suffix; `manifest`/`sig`/`style` bodies come from args. */
+function stubFetch(bodies: {
+  manifest?: string | null;
+  sig?: string | null;
+  entry?: string;
+  style?: string | null;
+}) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
       const miss = () => ({ ok: false, status: 404 }) as Response;
+      const bin = (s: string) =>
+        ({ ok: true, status: 200, arrayBuffer: async () => new TextEncoder().encode(s).buffer }) as Response;
       if (url.endsWith('manifest.json')) {
         if (bodies.manifest == null) return miss();
         return { ok: true, status: 200, text: async () => bodies.manifest } as Response;
@@ -46,14 +53,16 @@ function stubFetch(bodies: { manifest?: string | null; sig?: string | null; entr
         if (bodies.sig == null) return miss();
         return { ok: true, status: 200, text: async () => bodies.sig } as Response;
       }
-      const js = bodies.entry ?? ENTRY_JS;
-      return {
-        ok: true,
-        status: 200,
-        arrayBuffer: async () => new TextEncoder().encode(js).buffer,
-      } as Response;
+      if (url.endsWith('style.css')) {
+        return bodies.style == null ? miss() : bin(bodies.style);
+      }
+      return bin(bodies.entry ?? ENTRY_JS);
     })
   );
+}
+
+async function sha384(text: string): Promise<string> {
+  return `sha384-${b64(await crypto.subtle.digest('SHA-384', new TextEncoder().encode(text).buffer))}`;
 }
 
 beforeAll(async () => {
@@ -75,10 +84,27 @@ afterEach(() => {
 });
 
 describe('verifyRemoteEntry', () => {
-  it('resolves for a validly signed manifest', async () => {
+  it('resolves for a validly signed manifest (no style.css)', async () => {
     const manifest = await makeManifest();
     stubFetch({ manifest, sig: await signManifest(manifest) });
-    await expect(verifyRemoteEntry(ENTRY_URL, 'stock')).resolves.toBeUndefined();
+    await expect(verifyRemoteEntry(ENTRY_URL, 'stock')).resolves.toEqual({});
+  });
+
+  it('returns verified style.css text when the manifest lists it', async () => {
+    const styleCss = '.text-\\[\\#006AFF\\]{color:#006aff}\n';
+    const manifest = await makeManifest({
+      files: { 'remote-entry.js': entrySha384, 'style.css': await sha384(styleCss) },
+    });
+    stubFetch({ manifest, sig: await signManifest(manifest), style: styleCss });
+    await expect(verifyRemoteEntry(ENTRY_URL, 'stock')).resolves.toEqual({ styleCss });
+  });
+
+  it('rejects when style.css hash does not match', async () => {
+    const manifest = await makeManifest({
+      files: { 'remote-entry.js': entrySha384, 'style.css': await sha384('expected') },
+    });
+    stubFetch({ manifest, sig: await signManifest(manifest), style: 'tampered' });
+    await expect(verifyRemoteEntry(ENTRY_URL, 'stock')).rejects.toThrow(/style\.css hash mismatch/);
   });
 
   it('rejects a bad signature', async () => {

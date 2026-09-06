@@ -29,6 +29,21 @@ import { liveSellingModule } from './live-selling/manifest';
  * order routes and (within a nav location, before `order` sort) nav entries are
  * considered, and it decides the `/admin` index fallback target.
  */
+/**
+ * Inject a runtime-loaded module's own utilities sheet (roadmap #4), once, as a
+ * `<style data-module-remote="<id>">`. The CSS text is already sha384-verified
+ * against the signed manifest (`verifyRemoteEntry`). Runs before the first
+ * render, so no flash of unstyled content.
+ */
+export function injectModuleStyle(moduleId: string, css: string | undefined): void {
+  if (!css || typeof document === 'undefined') return;
+  if (document.querySelector(`style[data-module-remote="${moduleId}"]`)) return;
+  const el = document.createElement('style');
+  el.dataset.moduleRemote = moduleId;
+  el.textContent = css;
+  document.head.appendChild(el);
+}
+
 export const MODULES: ModuleDescriptor[] = [
   catalogCheckoutModule,
   returnsModule,
@@ -67,9 +82,10 @@ export async function applyModuleRemotes(): Promise<void> {
     import.meta.env.VITE_MODULE_REMOTES_INSECURE === '1';
 
   for (const [id, { url }] of entries) {
+    let styleCss: string | undefined;
     if (!skipVerify) {
       try {
-        await verifyRemoteEntry(url, id);
+        ({ styleCss } = await verifyRemoteEntry(url, id));
       } catch (error) {
         reportModuleEvent({ type: 'remote_verify_error', moduleId: id, url, error });
         reportModuleEvent({
@@ -102,6 +118,7 @@ export async function applyModuleRemotes(): Promise<void> {
       if (idx >= 0) MODULES[idx] = descriptor;
       else MODULES.push(descriptor);
       remotes.set(id, { url });
+      injectModuleStyle(id, styleCss);
       reportModuleEvent({ type: 'remote_load_ok', moduleId: id, url, attempts });
     } catch (error) {
       reportModuleEvent({ type: 'remote_load_error', moduleId: id, url, attempts, error });

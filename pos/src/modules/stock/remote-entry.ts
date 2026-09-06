@@ -4,6 +4,7 @@
 
 // `version` stamped from THIS build's `POS_APP_VERSION` — see the note in
 // `returns/remote-entry.ts`.
+import '../remote-styles.css';
 import { POS_APP_VERSION } from '../../platform/version';
 import { stockModule } from './manifest';
 

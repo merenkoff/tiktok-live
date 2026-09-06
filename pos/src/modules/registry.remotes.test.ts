@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { applyModuleRemotes, MODULES } from './registry';
+import { applyModuleRemotes, injectModuleStyle, MODULES } from './registry';
 import { getAppliedRemotes } from './appliedRemotes';
 import { onModuleEvent, type ModuleEvent } from './telemetry';
 
@@ -129,5 +129,29 @@ describe('applyModuleRemotes', () => {
     }
     expect(typeof manifest.appVersion).toBe('string');
     expect(typeof manifest.apiClientVersion).toBe('number');
+  });
+});
+
+describe('injectModuleStyle', () => {
+  afterEach(() => {
+    document.head.querySelectorAll('style[data-module-remote]').forEach((el) => el.remove());
+  });
+
+  it('appends one <style data-module-remote> with the verified CSS', () => {
+    injectModuleStyle('stock', '.text-\\[\\#006AFF\\]{color:#006aff}');
+    const els = document.head.querySelectorAll('style[data-module-remote="stock"]');
+    expect(els).toHaveLength(1);
+    expect(els[0].textContent).toContain('#006aff');
+  });
+
+  it('is a no-op on a second call for the same module', () => {
+    injectModuleStyle('stock', '.a{color:red}');
+    injectModuleStyle('stock', '.a{color:blue}');
+    expect(document.head.querySelectorAll('style[data-module-remote="stock"]')).toHaveLength(1);
+  });
+
+  it('does nothing when css is undefined', () => {
+    injectModuleStyle('returns', undefined);
+    expect(document.head.querySelector('style[data-module-remote="returns"]')).toBeNull();
   });
 });

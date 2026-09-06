@@ -24,6 +24,12 @@
 
 ## Класи
 
+Токени (`:root`) і рукописні класи (`.sq-*` / `.pos-*`, `@media print`) живуть у
+`src/styles/tokens.css` — окремий framework-agnostic файл (не в `src/index.css`,
+де лишились тільки `@tailwind`-директиви). Модуль-ремоут везе лише свої
+Tailwind-утиліти (`dist-remotes/<id>/style.css`) і покладається на цей шар з боку
+хоста. Див. `TechDocs/POS_MODULE_REMOTE_POC.md` (#4).
+
 - `.pos-btn-primary` / `.sq-btn-primary` — solid CTA
 - `.pos-field` — інпут з рамкою
 - `.pos-field-underline` — поле готівки (лише нижня межа)

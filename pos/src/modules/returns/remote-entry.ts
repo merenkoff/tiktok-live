@@ -9,6 +9,7 @@
 // `version` is stamped from THIS build's `POS_APP_VERSION` (deep import, bundled
 // locally — the barrel externalization only externalizes `@pos/platform` itself)
 // so the host's `session_manifest` telemetry shows which remote build is live.
+import '../remote-styles.css';
 import { POS_APP_VERSION } from '../../platform/version';
 import { returnsModule } from './manifest';
 
