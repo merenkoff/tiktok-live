@@ -48,7 +48,6 @@ describe('gtin normalize', () => {
   });
 
   it('rejects bad check digit', () => {
-    const r = normalizeGtin('5449000000990'); // wrong check if body needs other digit
     // Force known bad: flip last digit of a valid code
     const body = '400638133393';
     const good = `${body}${computeCheckDigit(body)}`;

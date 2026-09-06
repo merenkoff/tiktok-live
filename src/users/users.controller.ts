@@ -62,7 +62,7 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
         const { userId } = await ensureAuth(request);
         const user = await usersService.getUserById(userId);
         reply.send(user);
-      } catch (error) {
+      } catch {
         reply.status(401).send({ error: 'Unauthorized' });
       }
     }

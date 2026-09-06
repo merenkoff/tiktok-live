@@ -31,6 +31,7 @@ npm run pos:seed          # tsx src/pos/seed.ts — demo store/products/staff PI
 npm run docker:deps       # docker compose up -d postgres redis (local infra only)
 ```
 Local Postgres/Redis via `docker-compose up -d` expose Postgres on `5433` and Redis on `6380` (see `.env.example`), not the default ports.
+CI: `.github/workflows/backend-tests.yml` runs `typecheck`, `lint` and `vitest run` against a `postgres:16` service on PRs/pushes touching `src/**`, `migrations/**` or the root build/test config. `vitest.global-setup.ts` applies the `pos_*` migrations to that DB; the LIVE-automation schema (`001_create_schema.sql`) is not needed because no test touches those tables.
 
 ### Admin SPA (`admin/`)
 ```bash
@@ -100,7 +101,7 @@ Design tokens/UI conventions for the POS UI are documented in `pos/UI_CASHIER.md
 ## Conventions
 
 - Root backend is strict TypeScript (`strict`, `noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns` all on) compiled with `tsc`; ESM throughout (`"type": "module"`, `.js` extensions in relative imports even though source is `.ts`).
-- ESLint: `@typescript-eslint/no-unused-vars` allows `_`-prefixed args (warn); `no-console` allows `warn`/`error` only. In the root backend use `logger` (`src/logger.ts`, Winston) for everything else. `admin/` and `pos/` add the `react-hooks` (error) / `react-refresh` (warn) plugins and turn `no-explicit-any` off; their `npm run lint` currently passes with zero warnings and is enforced in CI.
+- ESLint: all three apps share one ruleset — `@typescript-eslint/no-unused-vars` warns and allows `_`-prefixed names, `no-explicit-any` is off, `no-console` allows `warn`/`error` only (root CLI scripts `src/pos/{migrate,seed}.ts` + `gtin/seed-from-dump.ts` override it off; in the rest of the backend use `logger`, `src/logger.ts`, Winston). `admin/` and `pos/` add the `react-hooks` (error) / `react-refresh` (warn) plugins. `npm run lint` passes with zero warnings in all three and is enforced in CI.
 - Admin SPA has a real test suite (Vitest + Testing Library + MSW for HTTP mocks, class-mocked WebSocket, Playwright for e2e) — when touching `admin/src/services` or `admin/src/hooks`, keep coverage above the gate. See `admin/TESTING.md` for what's considered P0.
 - Root backend tests (`src/__tests__/`) are mostly POS-focused (crypto, money, GTIN normalization/orchestration, sales logic, stock race conditions, stock reports/documents, tags, the products/customers/suppliers/uploads/auth services, and the whole `/api/pos` route surface) plus the order parser. `vitest.config.ts` scopes the root suite to `src/__tests__` — without it vitest's default glob also picks up `admin/` and `pos/`.
 - DB-backed tests run against the database in `.env` and share `src/__tests__/helpers/pos-fixtures.ts`: `applyPosMigrations()`, per-file store isolation (`createTestStore` / `dropTestStore`), and `buildPosTestApp()` for driving the real Fastify POS plugin through `app.inject()`. Migrations are applied once per run by `vitest.global-setup.ts`; the ordered list lives in `src/pos/migrations.ts` and is shared with `npm run pos:migrate` — add new migrations there and nowhere else.

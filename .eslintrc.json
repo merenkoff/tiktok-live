@@ -1,7 +1,8 @@
 {
+  "root": true,
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
-    "ecmaVersion": 2020,
+    "ecmaVersion": 2021,
     "sourceType": "module"
   },
   "extends": [
@@ -10,22 +11,28 @@
   ],
   "env": {
     "node": true,
-    "es2020": true
+    "es2021": true
   },
+  "ignorePatterns": ["dist", "node_modules", "src/__tests__/fixtures"],
+  "overrides": [
+    {
+      "files": ["src/pos/migrate.ts", "src/pos/seed.ts", "src/pos/gtin/seed-from-dump.ts"],
+      "rules": {
+        "no-console": "off"
+      }
+    }
+  ],
   "rules": {
+    "no-undef": "off",
     "@typescript-eslint/no-unused-vars": [
       "warn",
       {
-        "argsIgnorePattern": "^_"
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_",
+        "ignoreRestSiblings": true
       }
     ],
-    "@typescript-eslint/explicit-function-return-types": [
-      "warn",
-      {
-        "allowExpressions": true,
-        "allowTypedFunctionExpressions": true
-      }
-    ],
+    "@typescript-eslint/no-explicit-any": "off",
     "no-console": [
       "warn",
       {

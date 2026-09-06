@@ -138,7 +138,7 @@ export async function createServer(): Promise<FastifyInstance> {
       // Перевірити токен
       try {
         ensureAuth(request);
-      } catch (error) {
+      } catch {
         reply.status(401).send({ error: 'Unauthorized' });
       }
     });

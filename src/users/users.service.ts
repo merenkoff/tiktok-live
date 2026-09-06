@@ -38,7 +38,7 @@ export async function createOrGetUser(tiktok_username: string): Promise<User> {
   try {
     // Try to get existing user
     logger.info(`TikTok getUserByUsername ${tiktok_username}`);
-    let user = await getUserByUsername(tiktok_username);
+    const user = await getUserByUsername(tiktok_username);
     if (user) {
       logger.info(`TikTok user ${user}`);
       return user;

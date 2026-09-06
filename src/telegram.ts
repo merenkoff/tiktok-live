@@ -132,7 +132,7 @@ bot.on('text', async (ctx) => {
         await ctx.reply('📞 Введите ваш номер телефона (например: +380671234567):');
         break;
 
-      case 'waiting_phone':
+      case 'waiting_phone': {
         // Get phone
         ctx.session.phone = ctx.message.text.trim();
         ctx.session.step = 'waiting_city';
@@ -160,6 +160,7 @@ bot.on('text', async (ctx) => {
           },
         });
         break;
+      }
 
       case 'waiting_branch':
         // If user types instead of selecting - try to find branch
