@@ -3,7 +3,6 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { lazy } from 'react';
-import { ScanLine } from 'lucide-react';
 import type { ModuleDescriptor } from '../types';
 
 const HardwarePage = lazy(() =>
@@ -22,7 +21,7 @@ export const hardwareModule: ModuleDescriptor = {
     {
       to: '/hardware',
       label: 'Обладнання',
-      icon: ScanLine,
+      icon: 'ScanLine',
       location: 'cashier-primary',
       order: 40,
       indicator: 'update',

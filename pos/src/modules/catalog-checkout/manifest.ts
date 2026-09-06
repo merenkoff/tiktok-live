@@ -2,7 +2,6 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { Grid3X3 } from 'lucide-react';
 import { RegisterPage } from '../../pages/register/RegisterPage';
 import type { ModuleDescriptor } from '../types';
 
@@ -14,6 +13,6 @@ export const catalogCheckoutModule: ModuleDescriptor = {
   shells: ['web', 'cashier'],
   routes: [{ path: '/register', element: RegisterPage, eager: true }],
   nav: [
-    { to: '/register', label: 'Каса', icon: Grid3X3, location: 'cashier-primary', order: 10 },
+    { to: '/register', label: 'Каса', icon: 'Grid3X3', location: 'cashier-primary', order: 10 },
   ],
 };

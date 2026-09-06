@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { usePosShell, useAuthStore, useEnabledModules } from '@pos/platform';
+import { usePosShell, useAuthStore, useEnabledModules, resolveNavIcon } from '@pos/platform';
 import { useUpdateStore } from '../hooks/useUpdateCheck';
 import { allModules } from '../modules/registry';
 import { selectNavItems } from '../modules/selectNav';
@@ -55,7 +55,7 @@ export function Nav({ location, variant }: Props) {
   return (
     <>
       {items.map((n) => {
-        const Icon = n.icon;
+        const Icon = resolveNavIcon(n.icon);
         const active = pathname.startsWith(n.match ?? n.to);
         const pending = n.indicator === 'pending';
 

@@ -25,7 +25,10 @@ export interface ModuleRemoteEntry {
     location: 'cashier-primary' | 'admin-sidebar';
     order: number;
     match?: string;
+    /** lucide export name, resolved host-side (roadmap #13 Part D). Falls back to `icon`. */
+    icon?: string;
   }>;
+  /** Default lucide export name for every nav entry that doesn't name its own. */
   icon?: string;
 }
 

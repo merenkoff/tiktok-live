@@ -2,7 +2,6 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { ListOrdered, Receipt } from 'lucide-react';
 import type { ModuleDescriptor, NavCtx } from '../types';
 import { lazyWithRetry } from '../lazyWithRetry';
 
@@ -30,7 +29,7 @@ export const returnsModule: ModuleDescriptor = {
     {
       to: '/admin/sales',
       label: 'Продажі',
-      icon: ListOrdered,
+      icon: 'ListOrdered',
       location: 'cashier-primary',
       order: 30,
       visible: isOwnerWeb,
@@ -38,7 +37,7 @@ export const returnsModule: ModuleDescriptor = {
     {
       to: '/sales',
       label: 'Чеки',
-      icon: Receipt,
+      icon: 'Receipt',
       location: 'cashier-primary',
       order: 30,
       visible: (ctx) => !isOwnerWeb(ctx),

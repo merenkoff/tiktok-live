@@ -221,6 +221,26 @@ describe('sanitizeModuleRemotes', () => {
     ).toEqual({});
   });
 
+  it('keeps a per-nav icon name and strips a junk one (roadmap #13 Part D)', () => {
+    const result = sanitizeModuleRemotes({
+      loyalty: {
+        url: 'https://cdn.example.com/x/remote-entry.js',
+        title: 'X',
+        routePath: '/x',
+        nav: [
+          { label: 'A', location: 'cashier-primary', order: 1, icon: 'CreditCard' },
+          { label: 'B', location: 'cashier-primary', order: 2, icon: '<img src=x>' },
+          { label: 'C', location: 'cashier-primary', order: 3, icon: 'x'.repeat(80) },
+        ],
+      },
+    });
+
+    const nav = (result.loyalty as { nav: Array<{ icon?: string }> }).nav;
+    expect(nav[0].icon).toBe('CreditCard');
+    expect(nav[1].icon).toBeUndefined();
+    expect(nav[2].icon).toBeUndefined();
+  });
+
   it('strips an unknown icon and over-long strings from an object entry', () => {
     const result = sanitizeModuleRemotes({
       loyalty: {
