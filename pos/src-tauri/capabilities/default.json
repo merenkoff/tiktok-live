@@ -1,7 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the cashier window",
+  "description": "Cashier window. Only what the frontend actually calls: one scoped opener:open-url for the release page. Deliberately no core:default — the JS never imports @tauri-apps/api/{event,window,path,app}, only invoke, and invoke of our own commands is not ACL-gated. See TechDocs/POS_MODULE_TAURI_CAPABILITIES.md before widening this; scripts/check-tauri-capabilities.mjs fails if it drifts.",
   "windows": ["main"],
-  "permissions": ["core:default", "opener:default"]
+  "permissions": [
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "https://github.com/merenkoff/tiktok-live/releases/*" }]
+    }
+  ]
 }

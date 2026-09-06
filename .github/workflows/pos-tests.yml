@@ -27,6 +27,7 @@ jobs:
           cache-dependency-path: pos/package-lock.json
       - run: npm ci
       - run: npm run check:platform-boundary
+      - run: npm run check:tauri-capabilities
       - run: npm run test:coverage
 
   e2e:

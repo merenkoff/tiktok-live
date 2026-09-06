@@ -26,6 +26,7 @@
     "serve:products-remote": "npx --yes serve -l 5003 --cors --no-clipboard dist-remotes/products",
     "check:products-css-coverage": "node scripts/check-module-css-coverage.mjs src/modules/products dist-remotes/products/style.css",
     "check:platform-boundary": "node scripts/check-platform-boundary.mjs",
+    "check:tauri-capabilities": "node scripts/check-tauri-capabilities.mjs",
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",

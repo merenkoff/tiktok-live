@@ -786,3 +786,59 @@ per-nav-icon / Nav-render cases), `npm run test:e2e` (8),
 `check:platform-boundary`, `tsc --noEmit` both sides, `npm run build` (web) +
 `build:cashier` + `build:returns-remote` + `check:returns-css-coverage` — all
 green. Not exercised on a real `tauri:dev` (same caveat as Part C).
+
+## Update: Tauri capabilities review (#13 Part E) (2026-09-06)
+
+Закрывает #13. Части A–D построили доставку модуля в десктоп-кассу, но нигде не
+было написано, **что этот модуль может внутри кассы**. Разбор — отдельный
+документ: [POS_MODULE_TAURI_CAPABILITIES.md](POS_MODULE_TAURI_CAPABILITIES.md).
+
+- **Главный вывод:** в Tauri 2 capabilities гейтят только команды **плагинов**
+  (включая `core:*`). Команды приложения из `tauri::generate_handler!` через ACL
+  **не проходят вообще** — печать, HID, `sync_module_remote` доступны любому
+  скрипту в webview независимо от `capabilities/default.json`. Плюс общий
+  origin/realm (следствие Part A) — модуль видит `pos_auth`, офлайн-очередь,
+  те же Zustand-сторы, `fetch` к API с сессионным JWT. Вывод: **модуль доверен
+  как само приложение**, единственный настоящий гейт — Ed25519-подпись (#3),
+  схема — first-party-only.
+- **Уточнение к роадмапу:** `window.__TAURI__` не существует (`withGlobalTauri`
+  не включён); IPC достаётся через `window.__TAURI_INTERNALS__.invoke`.
+- **`capabilities/default.json` сужен** с `core:default` + `opener:default` до
+  одного `opener:allow-open-url` со скоупом
+  `https://github.com/merenkoff/tiktok-live/releases/*`. Фронт из Tauri-API
+  использует ровно `invoke` (не гейтится) и один `openUrl`. Ушли из
+  досягаемости `core:image:allow-from-path`, `core:menu:*`/`core:tray:*`,
+  `webview:allow-internal-toggle-devtools` и «открыть в системе любой URL».
+  Defense-in-depth, не изоляция — честно записано в документе.
+- **`pos/scripts/check-tauri-capabilities.mjs`** (+ `npm run
+  check:tauri-capabilities`, в `pos-tests.yml` рядом с
+  `check:platform-boundary`) пиннит и набор permissions, и список команд в
+  `generate_handler!`: расширение поверхности нельзя протащить молча.
+- **Изоляция третьесторонних модулей** (отдельный webview / iframe / Worker /
+  Tauri isolation pattern) — описана с ценой каждого варианта, но не строится:
+  цена = переписать контракт «оболочка ↔ модуль» на явный брокер, а модули пока
+  свои.
+
+**Проверено на живой кассе** (macOS, Tauri 2.11.5, временный boot-пробник, в
+репозиторий не попал) — полная таблица проб в документе. Ключевое: при пустом
+`core:*` `invoke('list_printers'|'list_hardware'|'check_for_update')`
+отрабатывают, а `path.appDataDir()`/`app.getVersion()`/`event.emit()` отвечают
+`… not allowed`; `openUrl` вне скоупа отклоняется, на странице релиза —
+открывает; ноль `securitypolicyviolation`.
+
+**Заодно — первая живая проверка Part B:**
+`sync_module_remote('returns', 'http://localhost:5001/remote-entry.js')` →
+`{status:'updated', active:'1.0.6'}`, после перезапуска → `{status:'current'}`
+из кеша; `import('liveshopmodule://localhost/returns/remote-entry.js')` →
+`{ id:'returns', version:'1.0.6' }`; `style.css` отдаётся 200. Caveat «not yet
+exercised on a real tauri:dev», тянувшийся с Part B, снят.
+
+**Две ловушки, найденные прогоном** (обе в документе):
+1. В `tauri:dev` ремоут не импортируется — import map вставляется
+   `assemble-cashier-dist.mjs` на сборке, dev-сервер Vite отдаёт `cashier.html`
+   без него, и bare `react` в чанке модуля не резолвится. Проверять загрузку
+   модулей надо на собранном `dist-cashier`.
+2. `build:cashier` молча падал локально: `es-module-shims` есть в
+   `devDependencies`, но не был установлен, а `assemble-cashier-dist.mjs` на это
+   отвечает `exit 1` — `dist-cashier` оставался без import map. Лечится
+   `npm install` в `pos/`; на CI (`npm ci`) не воспроизводится.
