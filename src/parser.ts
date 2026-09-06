@@ -5,6 +5,12 @@
 import { z } from 'zod';
 import { logger } from './logger.js';
 
+/**
+ * Longest comment still scanned for a product code embedded in free text.
+ * Exact, anchored matches ("A12 92") are never subject to it.
+ */
+const MAX_LOOSE_COMMENT_LENGTH = 50;
+
 export interface ParsedOrder {
   productCode: string;
   size: string;
@@ -51,11 +57,6 @@ export function parseOrder(comment: string): ParsedOrder | null {
   const patternProductOnly = /^([a-z]\d{1,2})(?:\s+(\d{2,3}))?$/i;
   const matchProductOnly = trimmed.match(patternProductOnly);
   if (matchProductOnly) {
-    // Only match if it's a standalone message (not part of longer text)
-    // Reject if comment is very long (likely not an order)
-    if (comment.length > 50) {
-      return null;
-    }
     return {
       productCode: matchProductOnly[1].toUpperCase(),
       size: matchProductOnly[2] || '0',
@@ -63,14 +64,24 @@ export function parseOrder(comment: string): ParsedOrder | null {
     };
   }
 
-  // Pattern 4: Multiple product codes in one comment "A12 B07 K19"
-  const patternMultiple = /([a-z]\d{1,2})\s+(\d{2,3})/gi;
-  const matches = [...comment.matchAll(patternMultiple)];
-  if (matches.length === 1) {
-    const match = matches[0];
+  // Pattern 4: a code embedded in surrounding text — "👕 A12 92 👍", and
+  // several codes at once ("A12 92 B07 104"), where the first one wins: a
+  // reservation covers a single item, so the rest of the comment is ignored.
+  //
+  // Only scanned for short comments. In a long chatty message an "A12 92"-shaped
+  // fragment is far more likely to be conversation than an order, and a false
+  // positive here reserves stock against a customer who never asked for it.
+  // (The patterns above are all anchored, so the cap cannot affect them.)
+  if (comment.length > MAX_LOOSE_COMMENT_LENGTH) {
+    return null;
+  }
+  const patternEmbedded = /([a-z]\d{1,2})\s+(\d{2,3})/gi;
+  const embedded = [...comment.matchAll(patternEmbedded)];
+  if (embedded.length > 0) {
+    const [, productCode, size] = embedded[0];
     return {
-      productCode: match[1].toUpperCase(),
-      size: match[2],
+      productCode: productCode.toUpperCase(),
+      size,
       rawComment: comment,
     };
   }

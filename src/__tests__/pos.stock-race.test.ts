@@ -5,6 +5,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import 'dotenv/config';
 import { pool } from '../db.js';
+import { applyPosMigrations } from './helpers/pos-fixtures.js';
 import { completeSale } from '../pos/sales.service.js';
 import { hashPassword, hashPin } from '../pos/core/crypto.js';
 
@@ -17,17 +18,7 @@ describe.skipIf(!hasDb)('POS stock race', () => {
 
   beforeAll(async () => {
     // Ensure schema exists
-    const fs = await import('fs');
-    const path = await import('path');
-    const { fileURLToPath } = await import('url');
-    const dir = path.dirname(fileURLToPath(import.meta.url));
-    const sql = fs.readFileSync(path.join(dir, '../../migrations/002_pos_schema.sql'), 'utf-8');
-    await pool.query(sql);
-    const sql010 = fs.readFileSync(
-      path.join(dir, '../../migrations/010_pos_offline_sync.sql'),
-      'utf-8'
-    );
-    await pool.query(sql010);
+    await applyPosMigrations();
 
     const slug = `race_${Date.now()}`;
     const store = await pool.query(

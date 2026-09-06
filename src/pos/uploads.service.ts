@@ -5,7 +5,7 @@
 // src/pos/uploads.service.ts
 
 import { createWriteStream } from 'fs';
-import { mkdir } from 'fs/promises';
+import { mkdir, unlink } from 'fs/promises';
 import path from 'path';
 import { pipeline } from 'stream/promises';
 import { randomUUID } from 'crypto';
@@ -18,6 +18,7 @@ export const POS_UPLOADS_PREFIX = '/pos-uploads';
 
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const MAX_BYTES = 5 * 1024 * 1024;
+const TOO_LARGE = 'Файл більше 5 МБ';
 
 const EXT_BY_MIME: Record<string, string> = {
   'image/jpeg': '.jpg',
@@ -48,14 +49,24 @@ export async function saveProductImage(file: MultipartFile): Promise<{ url: stri
   source.on('data', (chunk: Buffer) => {
     size += chunk.length;
     if (size > MAX_BYTES) {
-      source.destroy(new Error('Файл більше 5 МБ'));
+      source.destroy(new Error(TOO_LARGE));
     }
   });
 
-  await pipeline(source, createWriteStream(dest));
+  try {
+    await pipeline(source, createWriteStream(dest));
 
-  if (file.file.truncated) {
-    throw file.file.truncated;
+    // `truncated` is set by the multipart layer when it hit its own file-size
+    // limit. It is a boolean flag, not an error — throwing it directly left the
+    // route reporting "Unknown error" (errorMessage only unwraps Error).
+    if (source.truncated) {
+      throw new Error(TOO_LARGE);
+    }
+  } catch (error) {
+    // Whatever went wrong, a partial file is already on the volume. Drop it —
+    // nothing references it and nothing would ever clean it up.
+    await unlink(dest).catch(() => undefined);
+    throw error;
   }
 
   return {

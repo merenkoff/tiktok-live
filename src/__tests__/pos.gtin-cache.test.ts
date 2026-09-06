@@ -5,6 +5,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import 'dotenv/config';
 import { pool } from '../db.js';
+import { applyPosMigrations } from './helpers/pos-fixtures.js';
 import { hashPassword, hashPin } from '../pos/core/crypto.js';
 import {
   getGtinCache,
@@ -21,25 +22,7 @@ import { addPlaceholderLine, createDocument } from '../pos/stock-documents.servi
 const hasDb = Boolean(process.env.DB_HOST || process.env.DATABASE_URL);
 
 async function applyMigrations(): Promise<void> {
-  const fs = await import('fs');
-  const path = await import('path');
-  const { fileURLToPath } = await import('url');
-  const dir = path.dirname(fileURLToPath(import.meta.url));
-  for (const file of [
-    '002_pos_schema.sql',
-    '003_pos_tags.sql',
-    '004_pos_tag_catalog_bar.sql',
-    '005_pos_discounts_customers.sql',
-    '006_pos_stock_documents.sql',
-    '007_pos_receipt_placeholders.sql',
-    '008_pos_gtin_cache.sql',
-    '009_pos_gtin_learn_jobs.sql',
-    '015_pos_store_modules.sql',
-    '016_pos_store_module_remotes.sql',
-  ]) {
-    const sql = fs.readFileSync(path.join(dir, '../../migrations', file), 'utf-8');
-    await pool.query(sql);
-  }
+  await applyPosMigrations();
 }
 
 function validEan13(body12: string): string {

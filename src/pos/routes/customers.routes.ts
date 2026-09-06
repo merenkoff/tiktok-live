@@ -7,6 +7,8 @@ import { ensureModule, ensurePosAuth } from '../core/auth.js';
 import * as customersService from '../customers.service.js';
 import { errorMessage, isUniqueViolation } from './_shared.js';
 
+const PHONE_TAKEN = 'Another customer already uses this phone';
+
 export function registerCustomersRoutes(fastify: FastifyInstance): void {
   fastify.get('/customers', async (request, reply) => {
     const auth = await ensurePosAuth(request, reply);
@@ -51,8 +53,14 @@ export function registerCustomersRoutes(fastify: FastifyInstance): void {
       });
       return reply.code(201).send(customer);
     } catch (error) {
-      const status = isUniqueViolation(error) ? 409 : 400;
-      return reply.code(status).send({ error: errorMessage(error) });
+      // A duplicate phone does not reach here: createCustomer swallows the
+      // 23505 and merges into the existing row, which is what lets the offline
+      // cashier replay a queued write. The 409 is left for the race that can
+      // still escape it — two tills inserting the same client_uuid at once.
+      if (isUniqueViolation(error)) {
+        return reply.code(409).send({ error: PHONE_TAKEN });
+      }
+      return reply.code(400).send({ error: errorMessage(error) });
     }
   });
 
@@ -73,8 +81,13 @@ export function registerCustomersRoutes(fastify: FastifyInstance): void {
         }
       );
     } catch (error) {
-      const status = isUniqueViolation(error) ? 409 : 400;
-      return reply.code(status).send({ error: errorMessage(error) });
+      // Moving a customer onto a phone another one already holds trips
+      // idx_pos_customers_store_phone. Report it as a conflict rather than
+      // forwarding the raw constraint name to the cashier's screen.
+      if (isUniqueViolation(error)) {
+        return reply.code(409).send({ error: PHONE_TAKEN });
+      }
+      return reply.code(400).send({ error: errorMessage(error) });
     }
   });
 

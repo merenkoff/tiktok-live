@@ -329,28 +329,32 @@ export async function updateVariant(
     throw new Error('compare_at_cents must be greater than price_cents');
   }
 
+  // Resolve every column against the row we already read, then write them all.
+  // The previous COALESCE form could not express "clear this field": an empty
+  // sku/barcode became NULL, which COALESCE then read as "keep the old value",
+  // so a SKU could be set but never removed.
   const result = await pool.query(
     `UPDATE pos_variants
      SET
-       size = COALESCE($1, size),
-       color = COALESCE($2, color),
-       sku = COALESCE($3, sku),
-       barcode = COALESCE($4, barcode),
+       size = $1,
+       color = $2,
+       sku = $3,
+       barcode = $4,
        price_cents = $5,
-       cost_cents = COALESCE($6, cost_cents),
-       is_active = COALESCE($7, is_active),
+       cost_cents = $6,
+       is_active = $7,
        compare_at_cents = $8,
        updated_at = NOW()
      WHERE id = $9 AND store_id = $10
      RETURNING product_id`,
     [
-      input.size === undefined ? null : input.size.trim(),
-      input.color === undefined ? null : input.color.trim(),
-      input.sku === undefined ? null : emptyToNull(input.sku),
-      input.barcode === undefined ? null : emptyToNull(input.barcode),
+      input.size === undefined ? row.size : input.size.trim(),
+      input.color === undefined ? row.color : input.color.trim(),
+      input.sku === undefined ? (row.sku ?? null) : emptyToNull(input.sku),
+      input.barcode === undefined ? (row.barcode ?? null) : emptyToNull(input.barcode),
       price,
-      input.cost_cents ?? null,
-      input.is_active ?? null,
+      input.cost_cents === undefined ? Number(row.cost_cents) : input.cost_cents,
+      input.is_active === undefined ? row.is_active : input.is_active,
       compareAt,
       variantId,
       storeId,
