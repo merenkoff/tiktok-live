@@ -59,6 +59,22 @@ export const MODULES: ModuleDescriptor[] = [
   liveSellingModule,
 ];
 
+export interface ApplyModuleRemotesOptions {
+  /**
+   * Desktop cashier only (roadmap #13 Part B). Given the store's `{ id, url }`,
+   * download+verify+cache the module in Rust and return the `liveshopmodule://`
+   * URLs to `import()` / `fetch` its style from — or `null` when it isn't cached
+   * and can't be fetched (offline first run), meaning skip it this boot. The
+   * bytes behind those URLs are already Ed25519-verified in Rust, so the web
+   * `verifyRemoteEntry` step is skipped for them. Absent on web → the CDN
+   * verify+`import()` path below runs unchanged.
+   */
+  syncRemote?: (
+    id: string,
+    url: string
+  ) => Promise<{ importUrl: string; styleUrl?: string } | null>;
+}
+
 /**
  * Swap a bundled module descriptor for one fetched from a URL at boot. The
  * `{ id -> url }` list comes from `resolveModuleRemotes()` — the per-store
@@ -70,7 +86,7 @@ export const MODULES: ModuleDescriptor[] = [
  * bundled module (telemetry: `remote_load_fallback`), never a broken registry —
  * this runs before the first render on every boot.
  */
-export async function applyModuleRemotes(): Promise<void> {
+export async function applyModuleRemotes(opts: ApplyModuleRemotesOptions = {}): Promise<void> {
   const knownIds = new Set(MODULES.map((m) => m.id));
   const entries = resolveModuleRemotes(knownIds);
   const remotes = new Map<string, { url: string }>();
@@ -82,8 +98,36 @@ export async function applyModuleRemotes(): Promise<void> {
     import.meta.env.VITE_MODULE_REMOTES_INSECURE === '1';
 
   for (const [id, { url }] of entries) {
+    let importUrl = url;
+    let styleUrl: string | undefined;
     let styleCss: string | undefined;
-    if (!skipVerify) {
+
+    if (opts.syncRemote) {
+      let resolved: { importUrl: string; styleUrl?: string } | null;
+      try {
+        resolved = await opts.syncRemote(id, url);
+      } catch (error) {
+        reportModuleEvent({ type: 'remote_verify_error', moduleId: id, url, error });
+        reportModuleEvent({
+          type: 'remote_load_fallback',
+          moduleId: id,
+          url,
+          reason: 'module sync/verify failed',
+        });
+        continue;
+      }
+      if (!resolved) {
+        reportModuleEvent({
+          type: 'remote_load_fallback',
+          moduleId: id,
+          url,
+          reason: 'not cached (offline first run)',
+        });
+        continue;
+      }
+      importUrl = resolved.importUrl;
+      styleUrl = resolved.styleUrl;
+    } else if (!skipVerify) {
       try {
         ({ styleCss } = await verifyRemoteEntry(url, id));
       } catch (error) {
@@ -102,7 +146,7 @@ export async function applyModuleRemotes(): Promise<void> {
     try {
       const mod = await importWithRetry<Record<string, unknown>>(() => {
         attempts += 1;
-        return import(/* @vite-ignore */ url);
+        return import(/* @vite-ignore */ importUrl);
       });
       const descriptor = (mod.manifest ?? mod.default) as ModuleDescriptor | undefined;
       if (!descriptor || descriptor.id !== id) {
@@ -118,7 +162,17 @@ export async function applyModuleRemotes(): Promise<void> {
       if (idx >= 0) MODULES[idx] = descriptor;
       else MODULES.push(descriptor);
       remotes.set(id, { url });
-      injectModuleStyle(id, styleCss);
+      if (styleUrl) {
+        // Served from the Rust-verified cache — fetch its text, no re-hash.
+        try {
+          const res = await fetch(styleUrl);
+          if (res.ok) injectModuleStyle(id, await res.text());
+        } catch {
+          /* style is best-effort; the module is already imported */
+        }
+      } else {
+        injectModuleStyle(id, styleCss);
+      }
       reportModuleEvent({ type: 'remote_load_ok', moduleId: id, url, attempts });
     } catch (error) {
       reportModuleEvent({ type: 'remote_load_error', moduleId: id, url, attempts, error });

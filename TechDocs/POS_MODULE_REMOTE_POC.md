@@ -642,3 +642,60 @@ Tauri CSP (`script-src 'self'`, no `'unsafe-inline'`) does not block the inline
 fall back to an external `<script type="importmap-shim" src=…>` in es-module-shims
 `shimMode`. Plus the offline regression sweep (one Dexie / IndexedDB connection,
 one React, PIN login offline, receipt print, update check).
+
+## Update: `liveshopmodule://` download / verify / cache on the desktop (#13 Part B) (2026-09-06)
+
+The delivery mechanism for online-only modules on the Tauri cashier. The web
+path (`verifyRemoteEntry` → `import(https://…)`) is a non-starter here — CSP is
+`script-src 'self'` and the till has to keep working offline — so verification
+and storage move to Rust and the webview only ever imports from our own on-disk
+cache.
+
+- **`pos/src-tauri/src/module_remotes.rs`** (new):
+  - **`sync_module_remote(id, base_url)`** command — the shell calls it per
+    `store.module_remotes` entry at boot. Fetches the signed `manifest.json` +
+    `.sig` (siblings of the entry URL, derived like `remoteVerify.ts`),
+    **Ed25519-verifies** the exact manifest bytes against an allowlisted key
+    (`TRUSTED_REMOTE_KEYS`, a hand-kept mirror of `remoteSigningKeys.ts`), and
+    if the advertised semver is newer than what's installed (or the cache is
+    damaged) downloads every `files` entry into `<version>.partial/`,
+    sha384-checks each, then atomically `rename`s it into
+    `<appDataDir>/modules/<id>/<version>/` and rewrites `installed.json`. Any
+    failure leaves the installed cache untouched (that is the rollback). No
+    network → `status: "offline"` with whatever version is cached.
+  - **`protocol`** — a `liveshopmodule://` URI-scheme handler
+    (`register_uri_scheme_protocol`). `liveshopmodule://localhost/<id>/<file>`
+    (macOS/Linux) / `http://liveshopmodule.localhost/<id>/<file>` (Windows) →
+    the bytes of that file in the active version dir. Two path segments only,
+    each `[A-Za-z0-9._-]+` and never `.`/`..` — blocks traversal. Registered
+    **only inside our WKWebView / WebView2**; it is not a system URL-scheme
+    registration (no `Info.plist` `CFBundleURLTypes`), so Safari / Chrome /
+    Finder never see it.
+  - Deps: `ed25519-dalek`, `sha2`, `base64`. Rust unit tests cover the dev-key
+    pubkey match, good/tampered signature, sha384 known-answer, the
+    traversal/separator guard, `derive_urls`, and cache-integrity detection.
+- **CSP** (`tauri.conf.json`): `script-src 'self' liveshopmodule:
+  http://liveshopmodule.localhost` (+ same in `connect-src` for the `style.css`
+  fetch). Nothing else loosened — no `https:` in `script-src`.
+- **`pos/src/lib/moduleRemotes.ts`** (new, cashier-only like `lib/updates.ts`) —
+  `syncModuleRemote()` `invoke` wrapper + `moduleRemoteUrl()` platform URL
+  builder.
+- **`applyModuleRemotes(opts?: { syncRemote })`** — new optional seam. Web
+  (no `syncRemote`, all existing tests): the CDN `verifyRemoteEntry` + `import`
+  path, byte-identical. Desktop: `syncRemote(id, url)` → `null` skips the module
+  this boot (`remote_load_fallback` "not cached"), otherwise `import()` the
+  `liveshopmodule://` URL (already verified in Rust — `verifyRemoteEntry`
+  skipped) and `fetch` its `style.css` from the same cache for
+  `injectModuleStyle`. `cashier-main.tsx` passes the desktop impl.
+
+**Verified:** `cargo test` (7) + `cargo clippy -D warnings` clean; `check:platform-boundary`,
+`tsc --noEmit`, `npm test` (pos 201, +3 seam cases), `npm run test:e2e` (8),
+`npm run build` (web, `applyModuleRemotes()` no-arg unchanged) + `npm run build:cashier`
+— all green.
+
+**Still to verify on a real desktop build (`tauri:dev` / `tauri:build`):** first
+launch online populates `appDataDir/modules/<id>/<v>/`, the module renders inside
+the host tree (one React, shared `useAuthStore`); relaunch offline still loads it
+from cache; a newer signed version swaps the dir + prunes the old; a corrupted
+cached file drops the module for the session and re-syncs clean; DevTools shows
+no CSP violation on the `liveshopmodule://` import.

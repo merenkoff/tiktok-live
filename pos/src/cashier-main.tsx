@@ -8,24 +8,34 @@ import { HashRouter } from 'react-router-dom';
 import { CashierApp } from './CashierApp';
 import { PosShellContext } from '@pos/platform';
 import { enableOfflinePos } from './offline/enabled';
-import { reportSessionManifest } from './modules/registry';
+import { applyModuleRemotes } from './modules/registry';
+import { syncModuleRemote, moduleRemoteUrl } from './lib/moduleRemotes';
 import { maybeStartTelemetryBeacon } from './modules/telemetryBeacon';
 import './index.css';
 import './styles/tokens.css';
 
 enableOfflinePos();
-
-// The Tauri shell never swaps module remotes, but still reports its all-bundled
-// module/version manifest for skew debugging — see roadmap #6.
 maybeStartTelemetryBeacon();
-reportSessionManifest();
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <PosShellContext.Provider value="cashier">
-      <HashRouter>
-        <CashierApp />
-      </HashRouter>
-    </PosShellContext.Provider>
-  </React.StrictMode>
-);
+// Desktop module remotes (roadmap #13 Part B): each `store.module_remotes` entry
+// is downloaded + Ed25519-verified + cached by Rust, then imported from the
+// `liveshopmodule://` cache. Offline with nothing cached → the module is simply
+// absent this session. No `module_remotes` configured → resolves immediately.
+// Either way `applyModuleRemotes` emits the boot `session_manifest` event.
+void applyModuleRemotes({
+  syncRemote: async (id, url) => {
+    const res = await syncModuleRemote(id, url).catch(() => null);
+    if (!res || res.active == null) return null;
+    return { importUrl: moduleRemoteUrl(id), styleUrl: moduleRemoteUrl(id, 'style.css') };
+  },
+}).finally(() => {
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <PosShellContext.Provider value="cashier">
+        <HashRouter>
+          <CashierApp />
+        </HashRouter>
+      </PosShellContext.Provider>
+    </React.StrictMode>
+  );
+});
