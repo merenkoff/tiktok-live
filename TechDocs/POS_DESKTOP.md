@@ -165,3 +165,4 @@ GTK fullscreen Tauri працює на обох. Огляд GNOME (Super) ОС �
 - [`pos/src-tauri/tauri.conf.json`](../pos/src-tauri/tauri.conf.json) — вікно «Каса» min 1024×700, CSP (`connect-src` на API, `media-src` для камери)
 - [`pos/src-tauri/src/lib.rs`](../pos/src-tauri/src/lib.rs) — у release: fullscreen, без рамки
 - identifier: `shop.cloth.pos`
+- [`pos/src-tauri/capabilities/default.json`](../pos/src-tauri/capabilities/default.json) — права вікна; що з них випливає для feature-модулів — [POS_MODULE_TAURI_CAPABILITIES.md](POS_MODULE_TAURI_CAPABILITIES.md)
