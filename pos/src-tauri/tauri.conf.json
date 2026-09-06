@@ -21,7 +21,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' ipc: http://ipc.localhost; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: http://localhost:* http://127.0.0.1:* https: asset: http://asset.localhost; connect-src ipc: http://ipc.localhost http://127.0.0.1:* http://localhost:* https://tauri.localhost http://tauri.localhost https:; media-src 'self' blob: mediastream:; frame-src 'none'"
+      "csp": "default-src 'self' ipc: http://ipc.localhost; script-src 'self' liveshopmodule: http://liveshopmodule.localhost; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: http://localhost:* http://127.0.0.1:* https: asset: http://asset.localhost; connect-src ipc: http://ipc.localhost http://127.0.0.1:* http://localhost:* https://tauri.localhost http://tauri.localhost https: liveshopmodule: http://liveshopmodule.localhost; media-src 'self' blob: mediastream:; frame-src 'none'"
     }
   },
   "bundle": {

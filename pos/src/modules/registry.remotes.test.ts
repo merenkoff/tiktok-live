@@ -132,6 +132,77 @@ describe('applyModuleRemotes', () => {
   });
 });
 
+/**
+ * Desktop cashier seam (roadmap #13 Part B): when `applyModuleRemotes` is given
+ * a `syncRemote`, each remote is resolved through the Rust download/verify/cache
+ * (`liveshopmodule://`) instead of the web CDN verify+`import()` path.
+ */
+describe('applyModuleRemotes — desktop syncRemote seam', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    localStorage.clear();
+  });
+
+  const STORE_URL = 'https://cdn.example.test/returns/remote-entry.js';
+
+  it('skips the module this boot when syncRemote returns null (offline, nothing cached)', async () => {
+    const returnsBefore = MODULES.find((m) => m.id === 'returns');
+    vi.stubEnv('VITE_MODULE_REMOTES', `returns@${STORE_URL}`);
+    const syncRemote = vi.fn().mockResolvedValue(null);
+    const events: ModuleEvent[] = [];
+    const off = onModuleEvent((e) => events.push(e));
+
+    await applyModuleRemotes({ syncRemote });
+    off();
+
+    expect(syncRemote).toHaveBeenCalledWith('returns', STORE_URL);
+    expect(MODULES.find((m) => m.id === 'returns')).toBe(returnsBefore);
+    expect(events.map((e) => e.type)).toEqual(['remote_load_fallback', 'session_manifest']);
+    // Intent is still recorded so the roadmap #9 reload-banner check stays right.
+    expect(getAppliedRemotes().get('returns')).toEqual({ url: STORE_URL });
+  });
+
+  it('imports the cache URL from syncRemote and skips the web verify path', async () => {
+    const returnsBefore = MODULES.find((m) => m.id === 'returns');
+    vi.stubEnv('VITE_MODULE_REMOTES', `returns@${STORE_URL}`);
+    const syncRemote = vi.fn().mockResolvedValue({
+      importUrl: 'liveshopmodule://localhost/returns/remote-entry.js',
+    });
+    const events: ModuleEvent[] = [];
+    const off = onModuleEvent((e) => events.push(e));
+
+    await applyModuleRemotes({ syncRemote });
+    off();
+
+    // The cache import rejects under jsdom → a load error, NOT a verify error
+    // (no `remote_verify_error` — `verifyRemoteEntry` was never called).
+    expect(MODULES.find((m) => m.id === 'returns')).toBe(returnsBefore);
+    expect(events.map((e) => e.type)).toEqual([
+      'remote_load_error',
+      'remote_load_fallback',
+      'session_manifest',
+    ]);
+  });
+
+  it('falls back with remote_verify_error when syncRemote itself throws', async () => {
+    const returnsBefore = MODULES.find((m) => m.id === 'returns');
+    vi.stubEnv('VITE_MODULE_REMOTES', `returns@${STORE_URL}`);
+    const syncRemote = vi.fn().mockRejectedValue(new Error('rust: bad signature'));
+    const events: ModuleEvent[] = [];
+    const off = onModuleEvent((e) => events.push(e));
+
+    await applyModuleRemotes({ syncRemote });
+    off();
+
+    expect(MODULES.find((m) => m.id === 'returns')).toBe(returnsBefore);
+    expect(events.map((e) => e.type)).toEqual([
+      'remote_verify_error',
+      'remote_load_fallback',
+      'session_manifest',
+    ]);
+  });
+});
+
 describe('injectModuleStyle', () => {
   afterEach(() => {
     document.head.querySelectorAll('style[data-module-remote]').forEach((el) => el.remove());

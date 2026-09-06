@@ -3,6 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 mod hardware;
+mod module_remotes;
 mod update;
 
 // WKWebView on macOS silently no-ops on the JS `window.print()` call (no
@@ -19,11 +20,16 @@ fn print_webview(window: tauri::WebviewWindow) -> Result<(), String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        // Serves the on-disk cache of an online-only feature module so
+        // `import('liveshopmodule://localhost/<id>/remote-entry.js')` resolves
+        // inside our webview only (roadmap #13 Part B) — not a system scheme.
+        .register_uri_scheme_protocol("liveshopmodule", module_remotes::protocol)
         .invoke_handler(tauri::generate_handler![
             hardware::list_hardware,
             hardware::os_printers::list_printers,
             hardware::receipt::print_receipt,
             update::check_for_update,
+            module_remotes::sync_module_remote,
             print_webview
         ])
         .setup(|_app| {
