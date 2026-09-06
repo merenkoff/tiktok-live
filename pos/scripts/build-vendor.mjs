@@ -30,6 +30,7 @@ const VENDORS = [
   { name: 'react-jsx-runtime', entry: 'react-jsx-runtime.js', external: ['react'] },
   { name: 'react-router-dom', entry: 'react-router-dom.js', external: ['react', 'react-dom'] },
   { name: 'zustand', entry: 'zustand.js', external: ['react'] },
+  { name: 'dexie', entry: 'dexie.js', external: [] },
 ];
 
 for (const [i, v] of VENDORS.entries()) {

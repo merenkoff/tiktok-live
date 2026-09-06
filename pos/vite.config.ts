@@ -22,6 +22,9 @@ const SHARED_EXTERNALS = [
   'react/jsx-runtime',
   'react-router-dom',
   'zustand',
+  // `@pos/platform` `new Dexie()`s on import (via `platform/offline.ts`), so
+  // share the one instance rather than bundling a second, dead copy.
+  'dexie',
   '@pos/platform',
 ];
 
@@ -54,15 +57,10 @@ export default defineConfig(({ command }) => ({
   build: {
     outDir: 'dist',
     rollupOptions: {
+      // On `build`: react / router / zustand / dexie / @pos/platform resolve via
+      // the import map (assemble-web-dist.mjs). On `serve`: bundled via
+      // `resolve.alias`. (Dexie is external on build — no manualChunks needed.)
       external: command === 'build' ? SHARED_EXTERNALS : [],
-      output: {
-        manualChunks(id: string) {
-          // Keep Dexie in its own shared chunk; let Rollup split everything
-          // else per dynamic import() so lazy pages stay out of the entry.
-          if (id.includes('/node_modules/dexie/')) return 'vendor-dexie';
-          return undefined;
-        },
-      },
     },
   },
 }));
