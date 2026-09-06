@@ -5,6 +5,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import 'dotenv/config';
 import { pool } from '../db.js';
+import { applyPosMigrations } from './helpers/pos-fixtures.js';
 import { completeSale, voidSale, refundSale, getSale } from '../pos/sales.service.js';
 import { hashPassword, hashPin } from '../pos/core/crypto.js';
 
@@ -21,23 +22,7 @@ describe.skipIf(!hasDb)('POS refunds and voids', () => {
   let variantId = 0;
 
   beforeAll(async () => {
-    // Schema is normally already applied by the other POS suites; only bootstrap
-    // it on a fresh database, to stay out of their migration race.
-    const exists = await pool.query(`SELECT to_regclass('public.pos_sales') AS t`);
-    if (!exists.rows[0].t) {
-      const fs = await import('fs');
-      const path = await import('path');
-      const { fileURLToPath } = await import('url');
-      const dir = path.dirname(fileURLToPath(import.meta.url));
-      for (const file of [
-        '002_pos_schema.sql',
-        '010_pos_offline_sync.sql',
-        '015_pos_store_modules.sql',
-        '016_pos_store_module_remotes.sql',
-      ]) {
-        await pool.query(fs.readFileSync(path.join(dir, '../../migrations', file), 'utf-8'));
-      }
-    }
+    await applyPosMigrations();
 
     const slug = `void_${Date.now()}`;
     const store = await pool.query(

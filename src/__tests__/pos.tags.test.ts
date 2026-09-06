@@ -5,6 +5,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import 'dotenv/config';
 import { pool } from '../db.js';
+import { applyPosMigrations } from './helpers/pos-fixtures.js';
 import { hashPassword } from '../pos/core/crypto.js';
 import {
   assignTagToProducts,
@@ -25,21 +26,7 @@ describe.skipIf(!hasDb)('POS tags + archive', () => {
   let grandchildTagId = 0;
 
   beforeAll(async () => {
-    const fs = await import('fs');
-    const path = await import('path');
-    const { fileURLToPath } = await import('url');
-    const dir = path.dirname(fileURLToPath(import.meta.url));
-    for (const file of [
-      '002_pos_schema.sql',
-      '003_pos_tags.sql',
-      '004_pos_tag_catalog_bar.sql',
-      '005_pos_discounts_customers.sql',
-      '015_pos_store_modules.sql',
-      '016_pos_store_module_remotes.sql',
-    ]) {
-      const sql = fs.readFileSync(path.join(dir, '../../migrations', file), 'utf-8');
-      await pool.query(sql);
-    }
+    await applyPosMigrations();
 
     const slug = `tags_${Date.now()}`;
     const store = await pool.query(

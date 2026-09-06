@@ -5,6 +5,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import 'dotenv/config';
 import { pool } from '../db.js';
+import { applyPosMigrations } from './helpers/pos-fixtures.js';
 import { hashPassword } from '../pos/core/crypto.js';
 import { completeSale, getSale, listSales } from '../pos/sales.service.js';
 import { getStore, updateStore, getSalesSummary } from '../pos/analytics.service.js';
@@ -66,22 +67,7 @@ describe.skipIf(!hasDb)('POS QR payment', () => {
   let token = '';
 
   beforeAll(async () => {
-    const fs = await import('fs');
-    const path = await import('path');
-    const { fileURLToPath } = await import('url');
-    const dir = path.dirname(fileURLToPath(import.meta.url));
-    for (const file of [
-      '002_pos_schema.sql',
-      '005_pos_discounts_customers.sql',
-      '010_pos_offline_sync.sql',
-      '011_pos_qr_payment.sql',
-      '012_pos_qr_confirmations.sql',
-      '015_pos_store_modules.sql',
-      '016_pos_store_module_remotes.sql',
-    ]) {
-      const sql = fs.readFileSync(path.join(dir, '../../migrations', file), 'utf-8');
-      await pool.query(sql);
-    }
+    await applyPosMigrations();
 
     const slug = `qr_${Date.now()}`;
     const store = await pool.query(

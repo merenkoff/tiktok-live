@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { describe, it, expect } from 'vitest';
-import { parseOrder, validateOrder } from '../src/parser';
+import { parseOrder, validateOrder } from '../parser.js';
 
 describe('Order Parser', () => {
   describe('parseOrder', () => {

@@ -92,16 +92,62 @@ export function refundLineAmount(
   return through(alreadyRefunded + n) - through(alreadyRefunded);
 }
 
+/**
+ * Draw the next per-store document number from `pos_store_counters`.
+ *
+ * This used to be `COUNT(*) + 1` over the document table. Two tills in one
+ * store checking out at the same moment each counted in their own snapshot,
+ * produced the same number, and the loser died on the
+ * `(store_id, receipt_number)` unique index — a completed sale lost at the
+ * till. The counter row serialises them instead: `UPDATE … RETURNING` takes a
+ * row lock, so the second transaction waits and gets the next value.
+ *
+ * The counter is seeded from the highest number already issued (not from
+ * `COUNT`), so numbering stays continuous for stores that were trading before
+ * this change and never reuses a number. Same mechanism the stock documents
+ * have always used — see `nextDocNumber` in stock-documents.service.ts.
+ */
+async function nextDocumentNumber(
+  client: { query: typeof pool.query },
+  storeId: number,
+  opts: { counterKey: string; prefix: string; table: string; column: string }
+): Promise<string> {
+  // Seed from the highest number already issued. The pattern is anchored to
+  // this document's own prefix and capped at nine digits: anything that does
+  // not look like one of our numbers is ignored rather than parsed into an
+  // out-of-range seed (`next_value` is an int4).
+  await client.query(
+    `INSERT INTO pos_store_counters (store_id, counter_key, next_value)
+     VALUES (
+       $1,
+       $2,
+       (SELECT COALESCE(MAX(substring(${opts.column} from ('^' || $3 || '-([0-9]{1,9})$'))::int), 0) + 1
+        FROM ${opts.table} WHERE store_id = $1)
+     )
+     ON CONFLICT (store_id, counter_key) DO NOTHING`,
+    [storeId, opts.counterKey, opts.prefix]
+  );
+  const result = await client.query(
+    `UPDATE pos_store_counters
+     SET next_value = next_value + 1
+     WHERE store_id = $1 AND counter_key = $2
+     RETURNING next_value - 1 AS seq`,
+    [storeId, opts.counterKey]
+  );
+  const seq = Number(result.rows[0].seq);
+  return `${opts.prefix}-${String(seq).padStart(5, '0')}`;
+}
+
 async function nextReceiptNumber(
   client: { query: typeof pool.query },
   storeId: number
 ): Promise<string> {
-  const result = await client.query(
-    `SELECT COUNT(*)::int AS cnt FROM pos_sales WHERE store_id = $1`,
-    [storeId]
-  );
-  const n = Number(result.rows[0].cnt) + 1;
-  return `R-${String(n).padStart(5, '0')}`;
+  return nextDocumentNumber(client, storeId, {
+    counterKey: 'sale',
+    prefix: 'R',
+    table: 'pos_sales',
+    column: 'receipt_number',
+  });
 }
 
 /** Refunds are their own documents, so they carry their own numbering. */
@@ -109,12 +155,12 @@ async function nextRefundNumber(
   client: { query: typeof pool.query },
   storeId: number
 ): Promise<string> {
-  const result = await client.query(
-    `SELECT COUNT(*)::int AS cnt FROM pos_refunds WHERE store_id = $1`,
-    [storeId]
-  );
-  const n = Number(result.rows[0].cnt) + 1;
-  return `RF-${String(n).padStart(5, '0')}`;
+  return nextDocumentNumber(client, storeId, {
+    counterKey: 'refund',
+    prefix: 'RF',
+    table: 'pos_refunds',
+    column: 'refund_number',
+  });
 }
 
 export async function getSaleByClientUuid(storeId: number, clientUuid: string) {
