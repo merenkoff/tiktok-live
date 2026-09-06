@@ -12,8 +12,8 @@ import { RouteErrorBoundary } from '../components/RouteErrorBoundary';
 import { LoginPage } from '../pages/LoginPage';
 import type { PosShell } from '../shell';
 import type { PosRole } from '../types';
-import { MODULES } from './registry';
-import type { ModuleDescriptor, ModuleId } from './types';
+import { allModules, type AnyModuleDescriptor } from './registry';
+import type { ModuleId } from './types';
 
 export interface RouteContext {
   shell: PosShell;
@@ -47,14 +47,17 @@ export function homePath(ctx: RouteContext): string {
   return ctx.shell === 'web' && ctx.role === 'owner' ? '/admin' : '/register';
 }
 
-export function moduleVisible(m: ModuleDescriptor, ctx: RouteContext): boolean {
+export function moduleVisible(m: AnyModuleDescriptor, ctx: RouteContext): boolean {
   if (!m.shells.includes(ctx.shell)) return false;
   if (m.ownerOnly && ctx.role !== 'owner') return false;
-  return ctx.enabled.has(m.id);
+  // Online-only remote modules (roadmap #13 Part C) opt in via `module_remotes`,
+  // not `enabled_modules`.
+  if ('alwaysEnabled' in m && m.alwaysEnabled) return true;
+  return ctx.enabled.has(m.id as ModuleId);
 }
 
 export function renderModuleRoutes(ctx: RouteContext) {
-  const visible = MODULES.filter((m) => moduleVisible(m, ctx));
+  const visible = allModules().filter((m) => moduleVisible(m, ctx));
 
   const rootRoutes: ReactNode[] = [];
   const adminRoutes: ReactNode[] = [];

@@ -68,8 +68,12 @@ export interface NavItem {
   match?: string;
   /** NavLink `end` (exact match) — used by the admin sidebar index item. */
   end?: boolean;
-  /** Extra visual state: `'update'` shows the amber "update available" dot (rail only). */
-  indicator?: 'update';
+  /**
+   * Extra visual state:
+   * - `'update'` — amber "update available" dot (rail only);
+   * - `'pending'` — greyed "module not downloaded yet" (roadmap #13 Part C).
+   */
+  indicator?: 'update' | 'pending';
   visible?: (ctx: NavCtx) => boolean;
 }
 

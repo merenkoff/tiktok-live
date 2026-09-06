@@ -5,7 +5,7 @@
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { usePosShell, useAuthStore, useEnabledModules } from '@pos/platform';
 import { useUpdateStore } from '../hooks/useUpdateCheck';
-import { MODULES } from '../modules/registry';
+import { allModules } from '../modules/registry';
 import { selectNavItems } from '../modules/selectNav';
 import type { NavCtx, NavItem, NavLocation, NavVariant } from '../modules/types';
 
@@ -28,7 +28,7 @@ export function Nav({ location, variant }: Props) {
   const updateAvailable = useUpdateStore((s) => s.updateInfo?.update_available ?? false);
 
   const ctx: NavCtx = { shell, role, variant };
-  const items: NavItem[] = selectNavItems(MODULES, enabled, ctx, location);
+  const items: NavItem[] = selectNavItems(allModules(), enabled, ctx, location);
 
   if (location === 'admin-sidebar') {
     return (
@@ -38,10 +38,11 @@ export function Nav({ location, variant }: Props) {
             key={n.to}
             to={n.to}
             end={n.end}
+            title={n.indicator === 'pending' ? `${n.label} — модуль ще не завантажено` : undefined}
             className={({ isActive }) =>
               `px-3 py-2.5 rounded-[4px] text-sm font-medium whitespace-nowrap ${
                 isActive ? 'sq-nav-active' : 'sq-nav-idle'
-              }`
+              }${n.indicator === 'pending' ? ' opacity-50' : ''}`
             }
           >
             {n.label}
@@ -56,14 +57,20 @@ export function Nav({ location, variant }: Props) {
       {items.map((n) => {
         const Icon = n.icon;
         const active = pathname.startsWith(n.match ?? n.to);
+        const pending = n.indicator === 'pending';
 
         if (variant === 'bottom') {
           return (
             <Link
               key={n.to}
               to={n.to}
+              title={pending ? `${n.label} — модуль ще не завантажено` : undefined}
               className={`flex-1 flex flex-col items-center justify-center ${
-                active ? 'text-sq-blue' : 'text-sq-secondary hover:text-sq-text'
+                pending
+                  ? 'text-sq-secondary opacity-50'
+                  : active
+                    ? 'text-sq-blue'
+                    : 'text-sq-secondary hover:text-sq-text'
               }`}
             >
               {Icon && <Icon size={20} strokeWidth={1.75} />}
@@ -77,9 +84,19 @@ export function Nav({ location, variant }: Props) {
           <Link
             key={n.to}
             to={n.to}
-            title={showDot ? `${n.label} · доступне оновлення` : n.label}
+            title={
+              pending
+                ? `${n.label} — модуль ще не завантажено`
+                : showDot
+                  ? `${n.label} · доступне оновлення`
+                  : n.label
+            }
             className={`${showDot ? 'relative ' : ''}w-12 h-12 grid place-items-center rounded-sq transition-colors ${
-              active ? 'bg-white/15 text-white' : 'text-white/70 hover:text-white hover:bg-white/10'
+              pending
+                ? 'text-white/40'
+                : active
+                  ? 'bg-white/15 text-white'
+                  : 'text-white/70 hover:text-white hover:bg-white/10'
             }`}
           >
             {Icon && <Icon size={22} strokeWidth={1.75} />}

@@ -8,6 +8,27 @@ export type PaymentMethod = 'cash' | 'card' | 'qr';
 
 export type QrPaymentMode = 'static' | 'dynamic';
 
+/**
+ * The object form of a `store.module_remotes` value (roadmap #13 Part C): a new
+ * **online-only** feature module the desktop cashier downloads and runs but
+ * ships no code for. It self-describes enough to render a nav entry + a route
+ * before its full descriptor is available (cold offline first run). Mirrors the
+ * backend `ModuleRemoteEntry` (`src/pos/core/modules.ts`). A bare string value
+ * still means "override a bundled module's code" (roadmap #9).
+ */
+export interface ModuleRemoteEntry {
+  url: string;
+  title: string;
+  routePath: string;
+  nav: Array<{
+    label: string;
+    location: 'cashier-primary' | 'admin-sidebar';
+    order: number;
+    match?: string;
+  }>;
+  icon?: string;
+}
+
 export interface SalePaymentInput {
   method: PaymentMethod;
   amount_cents: number;
@@ -42,8 +63,12 @@ export interface StoreConfig {
   auto_print_receipt: boolean;
   /** Toggleable module ids the store has enabled (effective set; core ids not listed). */
   enabled_modules: string[];
-  /** `{ moduleId: remote-entry.js URL }` — web build loads these at boot instead of the bundled module (roadmap #9). */
-  module_remotes: Record<string, string>;
+  /**
+   * Per-store module-remote map. A string value = a bundled module's code
+   * overridden at boot (web, roadmap #9); an object value = a new online-only
+   * module for the desktop cashier (roadmap #13 Part C).
+   */
+  module_remotes: Record<string, string | ModuleRemoteEntry>;
 }
 
 export type StorePatch = Partial<
@@ -88,8 +113,8 @@ export interface AuthResponse {
     auto_print_receipt?: boolean;
     /** Toggleable module ids the store has enabled. Absent on older cached auth → treat as "all defaults on". */
     enabled_modules?: string[];
-    /** `{ moduleId: remote-entry.js URL }` — web build only (roadmap #9). Absent on older cached auth. */
-    module_remotes?: Record<string, string>;
+    /** Module-remote map (roadmap #9 string form / #13 Part C object form). Absent on older cached auth. */
+    module_remotes?: Record<string, string | ModuleRemoteEntry>;
   };
 }
 

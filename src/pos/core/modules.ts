@@ -81,19 +81,104 @@ export function isAllowedRemoteUrl(value: unknown): value is string {
   return false;
 }
 
+/** Where a module's nav entry sits. Mirrors frontend `NavLocation`. */
+const NAV_LOCATIONS = ['cashier-primary', 'admin-sidebar'] as const;
+type NavLocation = (typeof NAV_LOCATIONS)[number];
+
+interface ModuleRemoteNavEntry {
+  label: string;
+  location: NavLocation;
+  order: number;
+  match?: string;
+}
+
 /**
- * Keep only `{ moduleId: url }` entries with a known non-core module id and an
- * allowed URL (see `isAllowedRemoteUrl`). Anything else is dropped silently.
+ * The object form of a `module_remotes` value (roadmap #13 Part C): a **new
+ * online-only module** the desktop cashier downloads and runs, one it doesn't
+ * ship code for. It must self-describe enough to render a nav entry + a route
+ * before its full descriptor is available (cold offline first run). The bare
+ * string form still means "override a bundled module's code" (roadmap #9).
+ */
+export interface ModuleRemoteEntry {
+  url: string;
+  title: string;
+  routePath: string;
+  nav: ModuleRemoteNavEntry[];
+  icon?: string;
+}
+
+/** New online-only module id: kebab-case, and NOT a core / known-toggleable id. */
+function isOnlineOnlyModuleId(id: string): boolean {
+  return (
+    /^[a-z][a-z0-9-]{1,40}$/.test(id) && !isCoreModuleId(id) && !isKnownToggleableModuleId(id)
+  );
+}
+
+function clampStr(value: unknown, max: number): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 && trimmed.length <= max ? trimmed : null;
+}
+
+function sanitizeRemoteNav(input: unknown): ModuleRemoteNavEntry[] | null {
+  if (!Array.isArray(input) || input.length === 0 || input.length > 8) return null;
+  const out: ModuleRemoteNavEntry[] = [];
+  for (const raw of input) {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+    const label = clampStr(r.label, 40);
+    const order = r.order;
+    if (!label) return null;
+    if (typeof order !== 'number' || !Number.isInteger(order)) return null;
+    if (!NAV_LOCATIONS.includes(r.location as NavLocation)) return null;
+    const entry: ModuleRemoteNavEntry = { label, location: r.location as NavLocation, order };
+    const match = clampStr(r.match, 200);
+    if (match) entry.match = match;
+    out.push(entry);
+  }
+  return out;
+}
+
+/** One object-form `module_remotes` value → a clean `ModuleRemoteEntry`, or null. */
+function sanitizeModuleRemoteEntry(input: unknown): ModuleRemoteEntry | null {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  const r = input as Record<string, unknown>;
+  if (!isAllowedRemoteUrl(r.url)) return null;
+  const title = clampStr(r.title, 80);
+  const routePath = clampStr(r.routePath, 120);
+  if (!title || !routePath || !/^\/[a-z0-9][a-z0-9/-]*$/.test(routePath)) return null;
+  const nav = sanitizeRemoteNav(r.nav);
+  if (!nav) return null;
+  const entry: ModuleRemoteEntry = { url: r.url.trim(), title, routePath, nav };
+  const icon = clampStr(r.icon, 40);
+  if (icon && /^[A-Za-z0-9]+$/.test(icon)) entry.icon = icon;
+  return entry;
+}
+
+/**
+ * Keep only valid `module_remotes` entries, dropping anything malformed:
+ *   - string value → override a bundled module (known non-core id + allowed URL);
+ *   - object value → a new online-only module (roadmap #13 Part C): arbitrary
+ *     kebab-case id that isn't a core / bundled-toggleable id, self-describing
+ *     via `ModuleRemoteEntry`.
  * Non-object input → `{}`.
  */
-export function sanitizeModuleRemotes(input: unknown): Record<string, string> {
+export function sanitizeModuleRemotes(
+  input: unknown
+): Record<string, string | ModuleRemoteEntry> {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
-  const out: Record<string, string> = {};
-  for (const [rawId, rawUrl] of Object.entries(input as Record<string, unknown>)) {
+  const out: Record<string, string | ModuleRemoteEntry> = {};
+  for (const [rawId, rawValue] of Object.entries(input as Record<string, unknown>)) {
     const id = rawId.trim();
-    if (!isKnownToggleableModuleId(id)) continue;
-    if (!isAllowedRemoteUrl(rawUrl)) continue;
-    out[id] = (rawUrl as string).trim();
+    if (typeof rawValue === 'string') {
+      if (isKnownToggleableModuleId(id) && isAllowedRemoteUrl(rawValue)) {
+        out[id] = rawValue.trim();
+      }
+      continue;
+    }
+    if (!isOnlineOnlyModuleId(id)) continue;
+    const entry = sanitizeModuleRemoteEntry(rawValue);
+    if (entry) out[id] = entry;
   }
   return out;
 }

@@ -51,7 +51,7 @@ vi.mock('./registry', () => {
       nav: [],
     },
   ];
-  return { MODULES: modules };
+  return { MODULES: modules, remoteModules: [], allModules: () => modules };
 });
 
 vi.mock('../pages/admin/AdminLayout', async () => {

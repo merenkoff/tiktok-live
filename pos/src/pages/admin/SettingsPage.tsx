@@ -8,7 +8,7 @@ import { useAuthStore } from '@pos/platform';
 import { ProductPhotoField } from '../../components/ProductPhotoField';
 import { MODULES } from '../../modules/registry';
 import { sameRemoteMap } from '../../modules/appliedRemotes';
-import type { QrPaymentMode, StoreConfig } from '../../types';
+import type { ModuleRemoteEntry, QrPaymentMode, StoreConfig } from '../../types';
 
 export function SettingsPage() {
   const auth = useAuthStore((s) => s.auth);
@@ -28,7 +28,11 @@ export function SettingsPage() {
   const [gtinDailyLimit, setGtinDailyLimit] = useState('');
   const [autoPrintReceipt, setAutoPrintReceipt] = useState(false);
   const [enabledModules, setEnabledModules] = useState<Set<string>>(new Set());
+  // Only the string form (a source URL per bundled module) is edited here. Any
+  // object-form entries — online-only modules (roadmap #13 Part C) — are held
+  // aside and merged back on save so this screen never clobbers them.
   const [moduleRemotes, setModuleRemotes] = useState<Record<string, string>>({});
+  const [remoteObjects, setRemoteObjects] = useState<Record<string, ModuleRemoteEntry>>({});
   const [remotesChanged, setRemotesChanged] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -48,7 +52,14 @@ export function SettingsPage() {
     setGtinDailyLimit(store.gtin_daily_limit?.toString() ?? '');
     setAutoPrintReceipt(store.auto_print_receipt);
     setEnabledModules(new Set(store.enabled_modules));
-    setModuleRemotes(store.module_remotes ?? {});
+    const strings: Record<string, string> = {};
+    const objects: Record<string, ModuleRemoteEntry> = {};
+    for (const [id, value] of Object.entries(store.module_remotes ?? {})) {
+      if (typeof value === 'string') strings[id] = value;
+      else objects[id] = value;
+    }
+    setModuleRemotes(strings);
+    setRemoteObjects(objects);
   }
 
   function setModuleRemote(id: string, url: string) {
@@ -81,7 +92,7 @@ export function SettingsPage() {
         gtin_daily_limit: gtinDailyLimit.trim() ? Number(gtinDailyLimit) : null,
         auto_print_receipt: autoPrintReceipt,
         enabled_modules: [...enabledModules],
-        module_remotes: moduleRemotes,
+        module_remotes: { ...remoteObjects, ...moduleRemotes },
         // Only send the key when the field is non-empty (empty = keep the stored one).
         ...(gtinApiKey.trim() ? { gtin_api_key: gtinApiKey.trim() } : {}),
       });

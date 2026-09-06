@@ -3,8 +3,10 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { applyModuleRemotes, injectModuleStyle, MODULES } from './registry';
-import { getAppliedRemotes } from './appliedRemotes';
+import { allModules, applyModuleRemotes, injectModuleStyle, MODULES, remoteModules } from './registry';
+import { getAppliedRemotes, sameRemoteMap } from './appliedRemotes';
+import { selectNavItems } from './selectNav';
+import { moduleVisible, type RouteContext } from './renderRoutes';
 import { onModuleEvent, type ModuleEvent } from './telemetry';
 
 /**
@@ -200,6 +202,100 @@ describe('applyModuleRemotes — desktop syncRemote seam', () => {
       'remote_load_fallback',
       'session_manifest',
     ]);
+  });
+});
+
+/**
+ * Roadmap #13 Part C: an object entry in `store.module_remotes` declares a NEW
+ * online-only module (arbitrary id, self-describing). When the desktop can't
+ * download it, `applyModuleRemotes` still puts a greyed placeholder in
+ * `remoteModules` so it shows in the nav + gets an "unavailable" screen.
+ */
+describe('applyModuleRemotes — online-only module placeholder', () => {
+  const ENTRY = {
+    url: 'https://cdn.example.test/loyalty/remote-entry.js',
+    title: 'Бонуси',
+    routePath: '/loyalty',
+    nav: [{ label: 'Бонуси', location: 'cashier-primary', order: 80 }],
+  };
+
+  function cacheAuth(entry: unknown = ENTRY) {
+    localStorage.setItem(
+      'pos_auth',
+      JSON.stringify({ store: { module_remotes: { loyalty: entry }, enabled_modules: [] } })
+    );
+  }
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    localStorage.clear();
+    remoteModules.length = 0;
+  });
+
+  it('renders a pending placeholder when syncRemote returns null', async () => {
+    vi.stubEnv('VITE_MODULE_REMOTES', undefined);
+    cacheAuth();
+    const syncRemote = vi.fn().mockResolvedValue(null);
+    const events: ModuleEvent[] = [];
+    const off = onModuleEvent((e) => events.push(e));
+
+    await applyModuleRemotes({ syncRemote });
+    off();
+
+    const placeholder = remoteModules.find((m) => m.id === 'loyalty');
+    expect(placeholder).toMatchObject({ id: 'loyalty', title: 'Бонуси', pending: true });
+    expect(allModules().some((m) => m.id === 'loyalty')).toBe(true);
+
+    const ctx = { shell: 'cashier', role: 'seller', variant: 'rail' } as const;
+    const navItems = selectNavItems(allModules(), new Set(), ctx, 'cashier-primary');
+    const loyaltyNav = navItems.find((n) => n.label === 'Бонуси');
+    expect(loyaltyNav).toMatchObject({ to: '/loyalty', indicator: 'pending' });
+
+    expect(events.some((e) => e.type === 'remote_load_fallback' && e.reason === 'not downloaded')).toBe(
+      true
+    );
+  });
+
+  it('is visible though its id is not in enabled_modules', async () => {
+    vi.stubEnv('VITE_MODULE_REMOTES', undefined);
+    cacheAuth();
+    await applyModuleRemotes({ syncRemote: vi.fn().mockResolvedValue(null) });
+
+    const routeCtx: RouteContext = {
+      shell: 'cashier',
+      role: 'seller',
+      enabled: new Set(),
+      isAuthenticated: true,
+    };
+    const placeholder = allModules().find((m) => m.id === 'loyalty')!;
+    expect(moduleVisible(placeholder, routeCtx)).toBe(true);
+  });
+
+  it('keeps the placeholder when syncRemote resolves but the import fails', async () => {
+    vi.stubEnv('VITE_MODULE_REMOTES', undefined);
+    cacheAuth();
+    const syncRemote = vi.fn().mockResolvedValue({
+      importUrl: 'liveshopmodule://localhost/loyalty/remote-entry.js',
+    });
+
+    await applyModuleRemotes({ syncRemote });
+
+    expect(remoteModules.find((m) => m.id === 'loyalty')).toMatchObject({ pending: true });
+  });
+
+  it('does NOT synthesize a placeholder on the web (no syncRemote)', async () => {
+    vi.stubEnv('VITE_MODULE_REMOTES', undefined);
+    cacheAuth();
+    await applyModuleRemotes();
+    expect(remoteModules.find((m) => m.id === 'loyalty')).toBeUndefined();
+  });
+
+  it('sameRemoteMap ignores a presentation-only change to an object entry', () => {
+    const before = new Map([['loyalty', { url: ENTRY.url }]]);
+    const serverMap = {
+      loyalty: { ...ENTRY, title: 'Бонусна програма', nav: [{ ...ENTRY.nav[0], order: 5 }] },
+    };
+    expect(sameRemoteMap(serverMap, before)).toBe(true);
   });
 });
 
