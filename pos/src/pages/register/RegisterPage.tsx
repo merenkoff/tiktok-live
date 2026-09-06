@@ -295,6 +295,7 @@ export function RegisterPage() {
   // `success` in place (same number) and must keep the cancellation state.
   useEffect(() => {
     cancelRung.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on receipt number by design (see comment above); only `cancelRung.reset` is used
   }, [success?.receipt_number, cancelRung.reset]);
 
   async function printSuccessReceipt() {

@@ -2,6 +2,10 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
+/* eslint-disable react-refresh/only-export-components --
+   route-tree builder module: it deliberately exports helpers (renderRoutes) next
+   to local layout components; it is never a Fast Refresh boundary. */
+
 import type { ReactNode } from 'react';
 import { Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';

@@ -29,6 +29,7 @@ export function CustomerPicker({ onClose, onSelect, currentId }: Props) {
 
   useEffect(() => {
     void search().catch(() => setError('Не вдалося завантажити'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initial load only; `search` reads live state via its default arg
   }, []);
 
   async function create(e: FormEvent) {

@@ -1,5 +1,11 @@
 # TikTok LIVE Sales Automation - Complete Implementation Guide
 
+> ⚠️ **HISTORICAL — archived 2026-09-06.** Describes the original single-user /
+> single-stream MVP and references an `inventory` table that was never built.
+> Kept for design context only; **not** current truth. For the live system read
+> `src/core/types.ts` + the service files, `CLAUDE.md` (repo root), and
+> `TechDocs/NOTES.md` (tracked drift).
+
 ## Overview
 
 You now have a **production-ready, MVP-focused** system for automating TikTok LIVE sales. This guide walks you through the complete solution.

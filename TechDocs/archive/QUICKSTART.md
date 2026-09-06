@@ -1,5 +1,10 @@
 # 🚀 Quick Start Guide - 5 Minutes to Running
 
+> ⚠️ **HISTORICAL — archived 2026-09-06.** Setup guide for the original
+> single-user / single-stream MVP (`git clone tiktok-live-automation`,
+> docker-compose, single `app` service). **Not** current. See `README.md` /
+> `CLAUDE.md` at the repo root and `TechDocs/RAILWAY_POS.md` for deployment.
+
 ## Step 1: Setup (2 minutes)
 
 ```bash

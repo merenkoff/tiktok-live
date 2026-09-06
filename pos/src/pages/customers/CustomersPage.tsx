@@ -34,6 +34,7 @@ export function CustomersPage({ cashierShell }: Props) {
 
   useEffect(() => {
     void reload().catch(() => setError('Не вдалося завантажити'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initial load only; `reload` reads live state via its default arg
   }, []);
 
   const body = (

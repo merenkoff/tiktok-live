@@ -37,7 +37,7 @@ Local Postgres/Redis via `docker-compose up -d` expose Postgres on `5433` and Re
 cd admin
 npm run dev                # Vite dev server
 npm run build               # tsc && vite build
-npm run lint                 # eslint . --ext ts,tsx --max-warnings 0
+npm run lint                 # eslint src --ext .ts,.tsx (legacy .eslintrc.cjs, eslint 8 + @typescript-eslint v8 — same stack as root and pos/)
 npm test                     # vitest run
 npm run test:watch
 npm run test:coverage        # coverage gate: src/services & src/hooks ≥80% lines/fn/stmt, ≥70% branches
@@ -45,7 +45,7 @@ npm run test:e2e:install     # once: install Playwright Chromium
 npm run test:e2e             # Playwright against `vite preview`, routes mocked
 ```
 Also runnable from repo root: `npm run test:admin`, `npm run test:admin:coverage`.
-CI: `.github/workflows/admin-tests.yml` runs unit+coverage and e2e on PRs/pushes touching `admin/**`.
+CI: `.github/workflows/admin-tests.yml` runs lint, unit+coverage and e2e on PRs/pushes touching `admin/**`.
 
 ### POS SPA + desktop (`pos/`)
 ```bash
@@ -54,6 +54,7 @@ npm run dev                  # web (admin+cashier), :3002, proxies local API :30
 npm run dev:cashier           # cashier-only entry, :3003 (same entry Tauri opens)
 npm run build                 # tsc --noEmit && vite build -> dist/
 npm run build:cashier          # -> dist-cashier/
+npm run lint                   # eslint src --ext .ts,.tsx (legacy .eslintrc.cjs, eslint 8 + @typescript-eslint v8)
 npm run tauri:dev              # opens Tauri window (runs dev:cashier itself)
 npm run tauri:build            # native installer -> pos/src-tauri/target/release/bundle/
 npm test                       # vitest run
@@ -63,8 +64,8 @@ npm run test:e2e:install       # once: install Playwright Chromium
 npm run test:e2e               # Playwright against `vite preview`, routes mocked
 ```
 Also runnable from repo root: `npm run test:pos`, `npm run test:pos:coverage`.
-CI: `.github/workflows/pos-tests.yml` runs unit+coverage and e2e on PRs/pushes touching `pos/**`.
-No lint script configured in `pos/`. See `pos/TESTING.md` for the stack, P0 list and mocking notes.
+CI: `.github/workflows/pos-tests.yml` runs lint, unit+coverage and e2e on PRs/pushes touching `pos/**`.
+All three apps lint with the same stack — legacy `.eslintrc.*`, eslint 8 + `@typescript-eslint` v8 (root: `.eslintrc.json`; `admin/` and `pos/`: `.eslintrc.cjs` with the React-hooks/refresh plugins). See `pos/TESTING.md` for the test stack, P0 list and mocking notes.
 
 ## Architecture
 
@@ -74,7 +75,7 @@ The system is **multi-user**, not single-stream: each `User` (a TikTok seller ac
 
 Order flow per session: TikTok comment → `parser.ts` (regex product-code/size extraction, EN/UK/RU) → `reservations.ts` (ACID reservation with 5-min auto-expiry, race-safe) → `telegram.ts` bot collects customer details → `orders.ts` → admin confirms payment → `novaposhta.ts` generates a TTN and notifies the customer. A cron job in `src/index.ts` sweeps expired reservations every minute.
 
-**Note:** `ARCHITECTURE.md`, `PROJECT_SUMMARY.md`, and `IMPLEMENTATION_GUIDE.md` at the repo root describe an earlier single-user/single-stream MVP (including an `inventory` table that does not exist). Treat them as historical design notes, not current truth — `TechDocs/NOTES.md` tracks known drift. Prefer reading `src/core/types.ts` and the service files directly over those root docs.
+**Note:** `TechDocs/archive/` holds the design + onboarding docs for the earlier single-user/single-stream MVP (`ARCHITECTURE.md`, `PROJECT_SUMMARY.md`, `IMPLEMENTATION_GUIDE.md`, `START_HERE.md`, `FILE_MANIFEST.md`, `QUICKSTART.md`, `DEPLOYMENT.md`, `fix-instructions.md` — all moved out of the repo root 2026-09-06). They include an `inventory` table that does not exist and predate multi-tenancy, the POS subsystem and the Railway deploy. Treat them as historical notes — `TechDocs/archive/README.md` explains the drift, `TechDocs/NOTES.md` tracks known drift. Prefer reading `src/core/types.ts` and the service files directly. The only current root docs are `README.md`, this file, and `ИНСТРУКЦИЯ.md` (Russian operator guide).
 
 ### POS (root `src/pos/`, `pos/`)
 
@@ -99,7 +100,7 @@ Design tokens/UI conventions for the POS UI are documented in `pos/UI_CASHIER.md
 ## Conventions
 
 - Root backend is strict TypeScript (`strict`, `noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns` all on) compiled with `tsc`; ESM throughout (`"type": "module"`, `.js` extensions in relative imports even though source is `.ts`).
-- ESLint (root): `@typescript-eslint/no-unused-vars` allows `_`-prefixed args; `no-console` allows `warn`/`error` only — use `logger` (`src/logger.ts`, Winston) for everything else.
+- ESLint: `@typescript-eslint/no-unused-vars` allows `_`-prefixed args (warn); `no-console` allows `warn`/`error` only. In the root backend use `logger` (`src/logger.ts`, Winston) for everything else. `admin/` and `pos/` add the `react-hooks` (error) / `react-refresh` (warn) plugins and turn `no-explicit-any` off; their `npm run lint` currently passes with zero warnings and is enforced in CI.
 - Admin SPA has a real test suite (Vitest + Testing Library + MSW for HTTP mocks, class-mocked WebSocket, Playwright for e2e) — when touching `admin/src/services` or `admin/src/hooks`, keep coverage above the gate. See `admin/TESTING.md` for what's considered P0.
 - Root backend tests (`src/__tests__/`) are mostly POS-focused (crypto, money, GTIN normalization/orchestration, sales logic, stock race conditions, stock reports/documents, tags, the products/customers/suppliers/uploads/auth services, and the whole `/api/pos` route surface) plus the order parser. `vitest.config.ts` scopes the root suite to `src/__tests__` — without it vitest's default glob also picks up `admin/` and `pos/`.
 - DB-backed tests run against the database in `.env` and share `src/__tests__/helpers/pos-fixtures.ts`: `applyPosMigrations()`, per-file store isolation (`createTestStore` / `dropTestStore`), and `buildPosTestApp()` for driving the real Fastify POS plugin through `app.inject()`. Migrations are applied once per run by `vitest.global-setup.ts`; the ordered list lives in `src/pos/migrations.ts` and is shared with `npm run pos:migrate` — add new migrations there and nowhere else.
