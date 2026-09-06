@@ -134,7 +134,7 @@ Just follow the prompts to complete your order!
             await ctx.reply('📞 What\'s your phone number?\n\nExample: +380671234567');
             break;
 
-          case 'waiting_phone':
+          case 'waiting_phone': {
             ctx.session.phone = text;
             ctx.session.step = 'waiting_city';
 
@@ -149,6 +149,7 @@ Just follow the prompts to complete your order!
               await ctx.reply('🏙️ Select your city:', keyboard);
             }
             break;
+          }
 
           default:
             await ctx.reply('👋 Not sure what to do. Send /start to begin!');
