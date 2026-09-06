@@ -283,6 +283,31 @@ describe('applyModuleRemotes — online-only module placeholder', () => {
     expect(remoteModules.find((m) => m.id === 'loyalty')).toMatchObject({ pending: true });
   });
 
+  it('keeps the module\u2019s own icon on the placeholder, per nav entry (roadmap #13 Part D)', async () => {
+    vi.stubEnv('VITE_MODULE_REMOTES', undefined);
+    cacheAuth({
+      ...ENTRY,
+      icon: 'Gift',
+      nav: [
+        { label: '\u0411\u043e\u043d\u0443\u0441\u0438', location: 'cashier-primary', order: 80 },
+        { label: '\u041a\u0430\u0440\u0442\u043a\u0438', location: 'cashier-primary', order: 81, icon: 'CreditCard' },
+      ],
+    });
+    await applyModuleRemotes({ syncRemote: vi.fn().mockResolvedValue(null) });
+
+    const nav = remoteModules.find((m) => m.id === 'loyalty')!.nav;
+    // No per-entry icon -> the module-level default; per-entry icon wins.
+    expect(nav.map((n) => n.icon)).toEqual(['Gift', 'CreditCard']);
+  });
+
+  it('falls back to CloudOff only when the module names no icon at all', async () => {
+    vi.stubEnv('VITE_MODULE_REMOTES', undefined);
+    cacheAuth();
+    await applyModuleRemotes({ syncRemote: vi.fn().mockResolvedValue(null) });
+
+    expect(remoteModules.find((m) => m.id === 'loyalty')!.nav[0].icon).toBe('CloudOff');
+  });
+
   it('does NOT synthesize a placeholder on the web (no syncRemote)', async () => {
     vi.stubEnv('VITE_MODULE_REMOTES', undefined);
     cacheAuth();

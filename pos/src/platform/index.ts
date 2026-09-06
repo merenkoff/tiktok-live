@@ -24,6 +24,7 @@ export * from './api';
 export * from './auth';
 export * from './cart';
 export * from './gtin';
+export * from './icons';
 export * from './money';
 export * from './receipt';
 export * from './sales';

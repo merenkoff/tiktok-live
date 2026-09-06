@@ -4,6 +4,9 @@
 
 import type { ComponentType, LazyExoticComponent } from 'react';
 import type { LucideIcon } from 'lucide-react';
+// Direct import, not via '@pos/platform' — the barrel re-exports the module
+// manifests, which import this file; `platform/icons.ts` is a leaf.
+import type { NavIconName } from '../platform/icons';
 import type { PosShell } from '../shell';
 import type { PosRole } from '../types';
 
@@ -60,7 +63,15 @@ export interface NavCtx {
 export interface NavItem {
   to: string;
   label: string;
-  icon?: LucideIcon;
+  /**
+   * Preferred form is the **name** of a lucide icon (`'PackageCheck'`) — the
+   * host resolves it via `resolveNavIcon` (roadmap #13 Part D), so a module
+   * neither bundles icon components nor has to exist as code to have an icon
+   * (an online-only module's placeholder gets one from `module_remotes`).
+   * A `LucideIcon` component is still accepted. The `(string & {})` arm keeps
+   * autocomplete on `NavIconName` while allowing a name from a newer catalogue.
+   */
+  icon?: NavIconName | (string & {}) | LucideIcon;
   location: NavLocation;
   /** Sort key within a location. */
   order: number;

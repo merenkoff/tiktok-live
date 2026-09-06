@@ -70,6 +70,27 @@ describe('resolveModuleRemotes', () => {
     });
   });
 
+  it('keeps a per-nav icon name and drops a junk one (roadmap #13 Part D)', () => {
+    vi.stubEnv('VITE_MODULE_REMOTES', undefined);
+    setCachedAuth({
+      loyalty: {
+        url: 'https://cdn/loyalty/remote-entry.js',
+        title: 'X',
+        routePath: '/x',
+        nav: [
+          { label: 'A', location: 'cashier-primary', order: 1, icon: 'CreditCard' },
+          { label: 'B', location: 'cashier-primary', order: 2, icon: '<img src=x>' },
+        ],
+        icon: 42,
+      },
+    });
+
+    const presentation = resolveModuleRemotes(KNOWN).get('loyalty')!.presentation!;
+    expect(presentation.nav[0].icon).toBe('CreditCard');
+    expect(presentation.nav[1]).not.toHaveProperty('icon');
+    expect(presentation).not.toHaveProperty('icon');
+  });
+
   it('drops a malformed object entry (bad routePath / nav / url)', () => {
     vi.stubEnv('VITE_MODULE_REMOTES', undefined);
     const ok = {

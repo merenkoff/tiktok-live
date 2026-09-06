@@ -743,3 +743,46 @@ needed to add a module** — its presentation travels as *data*.
 `npm test` (209, +8), `check:platform-boundary`, `tsc --noEmit`,
 `npm run test:e2e` (8), `npm run build` (web) + `build:cashier` — all green. Not
 yet exercised on a real `tauri:dev` with an object `module_remotes` entry.
+
+## Update: nav icons by name (#13 Part D) (2026-09-06)
+
+`NavItem.icon` now accepts the **name** of a lucide icon (`icon: 'PackageCheck'`)
+next to the component reference it always took. The host resolves it — so an icon
+is data, not code, and a module needs neither an `import` from `lucide-react` nor
+to exist as downloaded code in order to have one.
+
+- **`pos/src/platform/icons.ts`** (new, exported from `@pos/platform`) —
+  `NAV_ICONS`, a hand-picked allowlist of ~48 lucide exports; `NavIconName`
+  (autocomplete for in-tree manifests); `resolveNavIcon(icon)`: component →
+  itself, known name → its component, unknown name → `FALLBACK_NAV_ICON`
+  (`Puzzle`), nothing → `undefined` (admin-sidebar entries are label-only).
+  Deliberately **not** `import * as icons from 'lucide-react'` — this file is
+  reached eagerly from `Nav`, and the full set is thousands of components.
+  Adding a name costs ~0.3 KB and makes it available to every module, including
+  ones built outside this repo.
+- **`Nav.tsx`** resolves through `resolveNavIcon(n.icon)`; nothing else in the
+  render changed.
+- **Bundled manifests** (`catalog-checkout`, `customers`, `hardware`, `products`,
+  `returns`) now name their icons as strings — no `lucide-react` import left in
+  any manifest. Effect on a standalone remote build (`build:returns-remote`):
+  the eagerly-loaded entry goes 4.20 KB → 1.32 KB (the icon components and the
+  extra entry chunk are gone; `createLucideIcon` follows its remaining user,
+  `RefundSaleDialog`, into the lazy page chunk). Whole-artifact total −1.1 KB.
+- **`placeholderDescriptor`** (`registry.ts`) no longer hardcodes `CloudOff`: a
+  pending online-only module keeps **its own** icon — `nav[].icon`, else the
+  entry-level `icon`, else `CloudOff` — so its rail slot looks like itself while
+  `indicator: 'pending'` does the greying.
+- **Per-nav-entry `icon`** added to `ModuleRemoteEntry.nav[]` (backend
+  `sanitizeRemoteNav` + frontend `parsePresentation`, both name-shaped
+  `/^[A-Za-z0-9]+$/`, ≤40 chars). The entry-level `icon` is now the default for
+  entries that don't name their own — a two-nav-entry module can differ. The
+  backend deliberately does **not** check the name against a catalogue: which
+  icons a given client build ships is the client's business, and
+  `resolveNavIcon` has a fallback.
+
+**Verified:** root `npm test` (505 passed / 1 skipped, +1 sanitizer case); pos
+`npm test` (222, +11 — new `platform/icons.test.ts`, plus placeholder-icon /
+per-nav-icon / Nav-render cases), `npm run test:e2e` (8),
+`check:platform-boundary`, `tsc --noEmit` both sides, `npm run build` (web) +
+`build:cashier` + `build:returns-remote` + `check:returns-css-coverage` — all
+green. Not exercised on a real `tauri:dev` (same caveat as Part C).

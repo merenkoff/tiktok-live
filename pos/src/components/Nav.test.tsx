@@ -76,6 +76,19 @@ describe('Nav — cashier rail', () => {
     expect(hrefs()).not.toContain('/admin/products');
   });
 
+  it('renders the icon a manifest names as a string (roadmap #13 Part D)', () => {
+    signIn('seller');
+    const { container } = renderWithProviders(
+      <Nav location="cashier-primary" variant="rail" />,
+      { route: '/register', shell: 'cashier' }
+    );
+
+    // Every rail entry names its icon by lucide export name; the host resolves it.
+    const till = container.querySelector('a[href="/register"] svg');
+    expect(till).toBeInTheDocument();
+    expect(till).toHaveClass('lucide-grid3x3');
+  });
+
   it('marks the hardware entry when an app update is waiting', () => {
     signIn('seller');
     useUpdateStore.setState({

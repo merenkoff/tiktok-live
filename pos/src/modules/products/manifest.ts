@@ -2,7 +2,6 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { Package } from 'lucide-react';
 import type { ModuleDescriptor } from '../types';
 import { lazyWithRetry } from '../lazyWithRetry';
 
@@ -23,7 +22,7 @@ export const productsModule: ModuleDescriptor = {
     {
       to: '/admin/products',
       label: 'Товари',
-      icon: Package,
+      icon: 'Package',
       location: 'cashier-primary',
       order: 35,
       // The web cashier rail gives owners a shortcut into the catalog; the bottom bar does not.

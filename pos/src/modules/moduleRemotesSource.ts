@@ -45,6 +45,14 @@ export function isAllowedRemoteUrl(value: unknown): value is string {
 
 const NAV_LOCATIONS = ['cashier-primary', 'admin-sidebar'] as const;
 
+/**
+ * A lucide export name (roadmap #13 Part D) — shape only; whether this build
+ * actually ships the icon is `resolveNavIcon`'s problem, and it has a fallback.
+ */
+function isIconName(value: unknown): value is string {
+  return typeof value === 'string' && /^[A-Za-z0-9]+$/.test(value);
+}
+
 /** A cached object entry → validated `ModulePresentation`, or null. */
 function parsePresentation(value: Record<string, unknown>): ModulePresentation | null {
   const { title, routePath, nav, icon } = value;
@@ -64,6 +72,7 @@ function parsePresentation(value: Record<string, unknown>): ModulePresentation |
       location: n.location as ModulePresentation['nav'][number]['location'],
       order: n.order,
       ...(typeof n.match === 'string' && n.match ? { match: n.match } : {}),
+      ...(isIconName(n.icon) ? { icon: n.icon } : {}),
     });
   }
 
@@ -71,7 +80,7 @@ function parsePresentation(value: Record<string, unknown>): ModulePresentation |
     title: title.trim(),
     routePath,
     nav: cleanNav,
-    ...(typeof icon === 'string' && /^[A-Za-z0-9]+$/.test(icon) ? { icon } : {}),
+    ...(isIconName(icon) ? { icon } : {}),
   };
 }
 

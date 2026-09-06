@@ -2,7 +2,6 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { CloudOff } from 'lucide-react';
 import type { ModuleDescriptor } from './types';
 import { importWithRetry, lazyWithRetry } from './lazyWithRetry';
 import { reportModuleEvent } from './telemetry';
@@ -92,7 +91,14 @@ const RemoteModuleUnavailablePage = lazyWithRetry(() =>
   }))
 );
 
-/** Greyed placeholder for an online-only module that isn't downloaded yet. */
+/**
+ * Greyed placeholder for an online-only module that isn't downloaded yet.
+ *
+ * The nav entry keeps the module's **own** icon (`nav[].icon`, else the entry's
+ * `icon`, resolved by name in `@pos/platform` — roadmap #13 Part D) so it sits
+ * in the rail looking like itself; `indicator: 'pending'` is what greys it out.
+ * Only a module that declared no icon at all falls back to `CloudOff`.
+ */
 function placeholderDescriptor(
   id: string,
   url: string,
@@ -114,7 +120,7 @@ function placeholderDescriptor(
     nav: presentation.nav.map((n) => ({
       to: presentation.routePath,
       label: n.label,
-      icon: CloudOff,
+      icon: n.icon ?? presentation.icon ?? 'CloudOff',
       location: n.location,
       order: n.order,
       match: n.match,

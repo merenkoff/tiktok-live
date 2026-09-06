@@ -90,6 +90,18 @@ interface ModuleRemoteNavEntry {
   location: NavLocation;
   order: number;
   match?: string;
+  /** lucide export name the client resolves host-side (roadmap #13 Part D). */
+  icon?: string;
+}
+
+/**
+ * A lucide export name — shape only. Which names a given client build actually
+ * ships is the client's business (`resolveNavIcon` falls back), so this only
+ * keeps junk/markup out of the stored settings.
+ */
+function sanitizeIconName(value: unknown): string | undefined {
+  const icon = clampStr(value, 40);
+  return icon && /^[A-Za-z0-9]+$/.test(icon) ? icon : undefined;
 }
 
 /**
@@ -104,6 +116,7 @@ export interface ModuleRemoteEntry {
   title: string;
   routePath: string;
   nav: ModuleRemoteNavEntry[];
+  /** Default lucide export name for nav entries that don't name their own. */
   icon?: string;
 }
 
@@ -134,6 +147,8 @@ function sanitizeRemoteNav(input: unknown): ModuleRemoteNavEntry[] | null {
     const entry: ModuleRemoteNavEntry = { label, location: r.location as NavLocation, order };
     const match = clampStr(r.match, 200);
     if (match) entry.match = match;
+    const icon = sanitizeIconName(r.icon);
+    if (icon) entry.icon = icon;
     out.push(entry);
   }
   return out;
@@ -150,8 +165,8 @@ function sanitizeModuleRemoteEntry(input: unknown): ModuleRemoteEntry | null {
   const nav = sanitizeRemoteNav(r.nav);
   if (!nav) return null;
   const entry: ModuleRemoteEntry = { url: r.url.trim(), title, routePath, nav };
-  const icon = clampStr(r.icon, 40);
-  if (icon && /^[A-Za-z0-9]+$/.test(icon)) entry.icon = icon;
+  const icon = sanitizeIconName(r.icon);
+  if (icon) entry.icon = icon;
   return entry;
 }
 
