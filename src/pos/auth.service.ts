@@ -16,7 +16,12 @@ import {
 } from './core/crypto.js';
 import { getAuthByToken, sessionExpiresAt } from './core/auth.js';
 import { effectiveEnabledModules } from './core/modules.js';
-import type { PosAuthContext, PosRole, QrPaymentPublicConfig } from './types.js';
+import type {
+  ModuleRemoteEntry,
+  PosAuthContext,
+  PosRole,
+  QrPaymentPublicConfig,
+} from './types.js';
 
 export interface AuthResponse {
   token: string;
@@ -35,8 +40,12 @@ export interface AuthResponse {
     auto_print_receipt: boolean;
     /** Effective toggleable module ids (empty stored set resolves to the defaults). */
     enabled_modules: string[];
-    /** Per-store `{ moduleId: remote-entry.js URL }` map — consumed by the web build only (roadmap #9). */
-    module_remotes: Record<string, string>;
+    /**
+     * Per-store module-remote map. A string value overrides a bundled module's
+     * code (web, roadmap #9); an object value declares a new online-only module
+     * for the desktop cashier (roadmap #13 Part C).
+     */
+    module_remotes: Record<string, string | ModuleRemoteEntry>;
   };
 }
 

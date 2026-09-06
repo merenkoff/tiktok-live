@@ -162,4 +162,87 @@ describe('sanitizeModuleRemotes', () => {
     expect(sanitizeModuleRemotes(['stock@https://x'])).toEqual({});
     expect(sanitizeModuleRemotes('stock')).toEqual({});
   });
+
+  it('keeps a well-formed object entry for a new online-only module id', () => {
+    const entry = {
+      url: 'https://cdn.example.com/loyalty/remote-entry.js',
+      title: 'Бонуси',
+      routePath: '/loyalty',
+      nav: [{ label: 'Бонуси', location: 'cashier-primary', order: 80 }],
+      icon: 'Gift',
+    };
+    expect(sanitizeModuleRemotes({ loyalty: entry })).toEqual({ loyalty: entry });
+  });
+
+  it('mixes string (bundled override) and object (online-only) entries', () => {
+    const result = sanitizeModuleRemotes({
+      stock: 'https://cdn.example.com/stock.js',
+      loyalty: {
+        url: 'https://cdn.example.com/loyalty/remote-entry.js',
+        title: 'Бонуси',
+        routePath: '/loyalty',
+        nav: [{ label: 'Бонуси', location: 'cashier-primary', order: 80, match: '/loyalty' }],
+      },
+    });
+    expect(result.stock).toBe('https://cdn.example.com/stock.js');
+    expect(result.loyalty).toMatchObject({ title: 'Бонуси', routePath: '/loyalty' });
+  });
+
+  it('drops an object entry whose id collides with a bundled module', () => {
+    expect(
+      sanitizeModuleRemotes({
+        stock: {
+          url: 'https://cdn.example.com/x.js',
+          title: 'X',
+          routePath: '/x',
+          nav: [{ label: 'X', location: 'admin-sidebar', order: 1 }],
+        },
+      })
+    ).toEqual({});
+  });
+
+  it('drops a malformed object entry (bad url / routePath / nav / missing title)', () => {
+    const base = {
+      url: 'https://cdn.example.com/x/remote-entry.js',
+      title: 'X',
+      routePath: '/x',
+      nav: [{ label: 'X', location: 'cashier-primary', order: 1 }],
+    };
+    expect(sanitizeModuleRemotes({ loyalty: { ...base, url: 'http://evil.com/x.js' } })).toEqual({});
+    expect(sanitizeModuleRemotes({ loyalty: { ...base, routePath: 'loyalty' } })).toEqual({});
+    expect(sanitizeModuleRemotes({ loyalty: { ...base, routePath: '/../x' } })).toEqual({});
+    expect(sanitizeModuleRemotes({ loyalty: { ...base, title: '' } })).toEqual({});
+    expect(sanitizeModuleRemotes({ loyalty: { ...base, nav: [] } })).toEqual({});
+    expect(
+      sanitizeModuleRemotes({ loyalty: { ...base, nav: [{ label: 'X', location: 'nope', order: 1 }] } })
+    ).toEqual({});
+    expect(
+      sanitizeModuleRemotes({ loyalty: { ...base, nav: [{ label: 'X', location: 'cashier-primary', order: 1.5 }] } })
+    ).toEqual({});
+  });
+
+  it('strips an unknown icon and over-long strings from an object entry', () => {
+    const result = sanitizeModuleRemotes({
+      loyalty: {
+        url: 'https://cdn.example.com/x/remote-entry.js',
+        title: 'X',
+        routePath: '/x',
+        nav: [{ label: 'X', location: 'cashier-primary', order: 1 }],
+        icon: 'not a name!',
+      },
+    });
+    expect(result.loyalty).toBeDefined();
+    expect((result.loyalty as { icon?: string }).icon).toBeUndefined();
+
+    expect(
+      sanitizeModuleRemotes({
+        loyalty: {
+          url: 'https://cdn.example.com/x/remote-entry.js',
+          title: 'x'.repeat(200),
+          routePath: '/x',
+          nav: [{ label: 'X', location: 'cashier-primary', order: 1 }],
+        },
+      })
+    ).toEqual({});
+  });
 });

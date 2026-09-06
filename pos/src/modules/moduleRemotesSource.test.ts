@@ -47,6 +47,46 @@ describe('resolveModuleRemotes', () => {
     ]);
   });
 
+  it('parses an object entry (online-only module) with its presentation, id not in KNOWN', () => {
+    vi.stubEnv('VITE_MODULE_REMOTES', undefined);
+    const entry = {
+      url: 'https://cdn/loyalty/remote-entry.js',
+      title: 'Бонуси',
+      routePath: '/loyalty',
+      nav: [{ label: 'Бонуси', location: 'cashier-primary', order: 80, match: '/loyalty' }],
+      icon: 'Gift',
+    };
+    setCachedAuth({ loyalty: entry });
+
+    const out = resolveModuleRemotes(KNOWN);
+    expect(out.get('loyalty')).toEqual({
+      url: 'https://cdn/loyalty/remote-entry.js',
+      presentation: {
+        title: 'Бонуси',
+        routePath: '/loyalty',
+        nav: [{ label: 'Бонуси', location: 'cashier-primary', order: 80, match: '/loyalty' }],
+        icon: 'Gift',
+      },
+    });
+  });
+
+  it('drops a malformed object entry (bad routePath / nav / url)', () => {
+    vi.stubEnv('VITE_MODULE_REMOTES', undefined);
+    const ok = {
+      url: 'https://cdn/x/remote-entry.js',
+      title: 'X',
+      routePath: '/x',
+      nav: [{ label: 'X', location: 'cashier-primary', order: 1 }],
+    };
+    setCachedAuth({
+      a: { ...ok, routePath: 'x' },
+      b: { ...ok, nav: [] },
+      c: { ...ok, url: 'http://evil.com/x.js' },
+      d: { ...ok, nav: [{ label: 'X', location: 'nope', order: 1 }] },
+    });
+    expect(resolveModuleRemotes(KNOWN).size).toBe(0);
+  });
+
   it('returns an empty map for missing / malformed cached auth', () => {
     vi.stubEnv('VITE_MODULE_REMOTES', undefined);
     expect(resolveModuleRemotes(KNOWN).size).toBe(0);

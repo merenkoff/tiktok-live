@@ -5,7 +5,7 @@
 // src/pos/analytics.service.ts
 
 import { pool } from '../db.js';
-import type { PaymentMethod, QrPaymentMode } from './types.js';
+import type { ModuleRemoteEntry, PaymentMethod, QrPaymentMode } from './types.js';
 
 export interface SalesSummary {
   from: string;
@@ -192,7 +192,8 @@ function mapStore(store: Record<string, unknown>) {
     gtin_daily_limit: store.gtin_daily_limit == null ? null : Number(store.gtin_daily_limit),
     auto_print_receipt: Boolean(store.auto_print_receipt),
     enabled_modules: (store.enabled_modules as string[] | null) ?? [],
-    module_remotes: (store.module_remotes as Record<string, string> | null) ?? {},
+    module_remotes:
+      (store.module_remotes as Record<string, string | ModuleRemoteEntry> | null) ?? {},
   };
 }
 
@@ -210,7 +211,7 @@ export type StorePatch = {
   gtin_daily_limit?: number | null;
   auto_print_receipt?: boolean;
   enabled_modules?: string[];
-  module_remotes?: Record<string, string>;
+  module_remotes?: Record<string, string | ModuleRemoteEntry>;
 };
 
 const STORE_PATCH_COLUMNS: Array<keyof StorePatch> = [

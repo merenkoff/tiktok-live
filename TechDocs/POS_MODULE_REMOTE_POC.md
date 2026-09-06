@@ -699,3 +699,47 @@ the host tree (one React, shared `useAuthStore`); relaunch offline still loads i
 from cache; a newer signed version swaps the dir + prunes the old; a corrupted
 cached file drops the module for the session and re-syncs clean; DevTools shows
 no CSP violation on the `liveshopmodule://` import.
+
+## Update: online-only module placeholder from `store.module_remotes` (#13 Part C) (2026-09-06)
+
+Closes the last gap: a module a store enabled but the desktop hasn't downloaded
+yet (cold offline first run) was **invisible**. Now it shows a greyed nav entry →
+an "unavailable, needs internet" screen with a retry button. **No app update is
+needed to add a module** — its presentation travels as *data*.
+
+- **`store.module_remotes` value widened** to `string | ModuleRemoteEntry`:
+  - `string` — unchanged: override a **bundled** module's code (web, roadmap #9);
+    id must be a known toggleable module.
+  - `{ url, title, routePath, nav: [{ label, location, order, match? }], icon? }`
+    — a **new online-only module** (arbitrary kebab-case id, not core / not a
+    bundled id). Self-describes enough to render a nav entry + a route before its
+    full descriptor exists. `sanitizeModuleRemotes` (`src/pos/core/modules.ts`)
+    validates + clamps both forms; the type threads through `core/auth.ts`,
+    `auth.service.ts`, `types.ts`, `analytics.service.ts`. `SettingsPage` edits
+    only the string form and merges object entries back on save.
+- **`resolveModuleRemotes`** (`moduleRemotesSource.ts`) returns
+  `{ url, presentation? }`; the object form bypasses the `knownIds` filter (the
+  id is arbitrary — the backend already gated it).
+- **`registry.ts`** — new `remoteModules: RemoteModuleDescriptor[]` +
+  `allModules()` (`[...MODULES, ...remoteModules]`). `applyModuleRemotes`:
+  a bundled-id entry swaps in place as before; an online-only entry that
+  `syncRemote` (Part B) resolves → its real descriptor is pushed to
+  `remoteModules`; one that returns `null` / fails → a `pending`
+  `placeholderDescriptor` is pushed (nav from `presentation`, generic `CloudOff`
+  icon, route → lazy `RemoteModuleUnavailablePage`). Only on the desktop
+  (`opts.syncRemote` present) — web never synthesizes placeholders.
+- **`selectNav` / `renderRoutes`** iterate `allModules()`; a module with
+  `alwaysEnabled` (every online-only one) bypasses the `enabled_modules` gate —
+  being in `module_remotes` *is* the opt-in.
+- **`Nav.tsx`** renders `indicator: 'pending'` items greyed (rail + bottom +
+  admin-sidebar) with a "ще не завантажено" tooltip; still a link to the screen.
+- **`RemoteModuleUnavailablePage`** (new, cashier-only, lazy): `CloudOff` +
+  copy + "Спробувати зараз" → `syncModuleRemote(id, url)` (Part B) → reload on
+  `active != null`, else a "no connection" note.
+- **`sameRemoteMap`** compares by URL only, so a presentation-only tweak doesn't
+  trip the roadmap #9 reload banner.
+
+**Verified:** root `npm test` (505, +7 `sanitizeModuleRemotes` cases); pos
+`npm test` (209, +8), `check:platform-boundary`, `tsc --noEmit`,
+`npm run test:e2e` (8), `npm run build` (web) + `build:cashier` — all green. Not
+yet exercised on a real `tauri:dev` with an object `module_remotes` entry.

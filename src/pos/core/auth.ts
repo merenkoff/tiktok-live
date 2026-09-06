@@ -67,7 +67,8 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
     },
     autoPrintReceipt: row.auto_print_receipt ?? false,
     enabledModules: (row.enabled_modules as string[] | null) ?? [],
-    moduleRemotes: (row.module_remotes as Record<string, string> | null) ?? {},
+    moduleRemotes:
+      (row.module_remotes as PosAuthContext['moduleRemotes'] | null) ?? {},
     token: row.token,
   };
 }

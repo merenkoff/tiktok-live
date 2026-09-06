@@ -169,7 +169,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[-]` won
   - Оффлайн-снапшот произвольных remote-модулей (в т.ч. оффлайн-способных) —
     ~3–6 недель, низкая отдача. Заменено суженным #13.
 
-- [~] **13. Online-only модули в десктоп-кассе** (A, B сделаны)
+- [~] **13. Online-only модули в десктоп-кассе** (A, B, C сделаны)
   - **Цель:** десктоп-приложение (не только его веб-часть) — платформа, под
     которой крутятся полноценные **online-only** feature-модули: свой главный
     экран, свои nav/иконка, ходят в нашу БД только через `/api/pos`. Платформа
@@ -196,10 +196,17 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[-]` won
       `applyModuleRemotes({ syncRemote })` + вызов из `cashier-main.tsx`. CSP:
       `script-src 'self' liveshopmodule: http://liveshopmodule.localhost` —
       CDN не ослабляем. Это НЕ системная схема (живёт только в нашем webview).
-    - **C. Состояние «объявлен, но не скачан».** Вызов `applyModuleRemotes()`
-      из `cashier-main.tsx` уже в B. Осталось: первый запуск оффлайн сейчас
-      просто пропускает модуль на сессию (`remote_load_fallback` «not cached»)
-      — добавить плейсхолдер/disabled-пункт в nav. ~2 дня.
+    - **[x] C. Плейсхолдер «объявлен, но не скачан», из `store.module_remotes`.**
+      Значение `module_remotes[id]` теперь `string | { url, title, routePath,
+      nav[], icon? }`: строка — оверрайд bundled-модуля (#9), объект — **новый
+      online-only модуль** (произвольный id, самоописателен). `sanitizeModule­Remotes`
+      валидирует обе формы. Не скачан (холодный оффлайн) → серый пункт в nav →
+      экран `RemoteModuleUnavailablePage` c кнопкой «Спробувати зараз»
+      (`sync_module_remote`). `remoteModules` + `allModules()` в реестре;
+      `selectNav`/`renderRoutes` идут по `allModules()`, `alwaysEnabled`
+      обходит `enabled_modules`. **Апдейт приложения для нового модуля не нужен**
+      — метаданные показа приходят данными с бэкенда. `manifest`-presentation
+      отложена (почти не покрывает; вернуться при каталоге/сторонних модулях).
     - **D. `NavItem.icon` принимает строку-имя** (`'PackageCheck'`), платформа
       резолвит из `lucide-react`; модуль не бандлит иконки. ~0.5 дня.
     - **E. Обзор Tauri capabilities** (модуль в том же webview видит
@@ -218,7 +225,8 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[-]` won
 ~~п.1~~ (seam) → п.2, ~~п.4~~ → ~~п.3~~, ~~п.6~~ → ~~п.7~~, ~~п.8~~, ~~п.5~~, ~~п.10~~ → ~~п.9~~ → ~~п.11~~
 
 Сделано: #1 (seam, не финал), #3, #4, #5, #6, #7, #8, #9, #10, #11,
-#13 A+B (десктоп: externalize + `liveshopmodule://` download/verify/cache).
+#13 A+B+C (десктоп: externalize + `liveshopmodule://` download/verify/cache +
+плейсхолдер online-only модуля из `store.module_remotes`).
 Механизм для in-tree модулей закрыт: per-store, подписан, self-styled. #11
 показал: касса неотделима (оффлайн+CSP), механизм — под web/admin-фичи.
 Осталось только под раздачу из отдельного репо: **#2** (CI-публикация в
