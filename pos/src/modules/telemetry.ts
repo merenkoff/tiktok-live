@@ -16,6 +16,7 @@
 export type ModuleEvent =
   | { type: 'remote_load_ok'; moduleId: string; url: string; attempts: number }
   | { type: 'remote_load_error'; moduleId: string; url: string; attempts: number; error: unknown }
+  | { type: 'remote_verify_error'; moduleId: string; url: string; error: unknown }
   | { type: 'remote_load_fallback'; moduleId: string; url: string; reason: string }
   | { type: 'route_render_error'; moduleId: string; error: unknown }
   | {
@@ -42,7 +43,11 @@ export function reportModuleEvent(event: ModuleEvent): void {
   if (log.length > MAX_LOG) log.shift();
 
   const line = 'moduleId' in event ? `[module:${event.type}] ${event.moduleId}` : `[module:${event.type}]`;
-  if (event.type === 'remote_load_error' || event.type === 'route_render_error') {
+  if (
+    event.type === 'remote_load_error' ||
+    event.type === 'remote_verify_error' ||
+    event.type === 'route_render_error'
+  ) {
     console.error(line, 'error' in event ? event.error : undefined);
   } else if (event.type === 'session_manifest') {
     console.info(line, event.modules);

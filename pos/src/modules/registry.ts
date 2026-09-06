@@ -7,6 +7,7 @@ import { importWithRetry } from './lazyWithRetry';
 import { reportModuleEvent } from './telemetry';
 import { resolveModuleRemotes } from './moduleRemotesSource';
 import { setAppliedRemotes } from './appliedRemotes';
+import { verifyRemoteEntry } from './remoteVerify';
 // Direct import, not via '@pos/platform' — the barrel re-exports the module
 // manifests, which import this file; `platform/version.ts` is a zero-import leaf.
 import { POS_APP_VERSION, POS_API_CLIENT_VERSION } from '../platform/version';
@@ -59,7 +60,28 @@ export async function applyModuleRemotes(): Promise<void> {
   const entries = resolveModuleRemotes(knownIds);
   const remotes = new Map<string, { url: string }>();
 
+  // Build-only escape hatch: point `VITE_MODULE_REMOTES` at an unsigned URL for
+  // local dev. The per-store (cached-auth) path is always verified.
+  const skipVerify =
+    Boolean(import.meta.env.VITE_MODULE_REMOTES) &&
+    import.meta.env.VITE_MODULE_REMOTES_INSECURE === '1';
+
   for (const [id, { url }] of entries) {
+    if (!skipVerify) {
+      try {
+        await verifyRemoteEntry(url, id);
+      } catch (error) {
+        reportModuleEvent({ type: 'remote_verify_error', moduleId: id, url, error });
+        reportModuleEvent({
+          type: 'remote_load_fallback',
+          moduleId: id,
+          url,
+          reason: 'signature/integrity check failed',
+        });
+        continue;
+      }
+    }
+
     let attempts = 0;
     try {
       const mod = await importWithRetry<Record<string, unknown>>(() => {
