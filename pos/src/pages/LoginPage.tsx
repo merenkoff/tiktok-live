@@ -16,9 +16,14 @@ function loginErrorMessage(error: unknown): string {
       }
       const code = error.code ? ` (${error.code})` : '';
       if (error.code && error.code.startsWith('ERR_CERT')) {
-        return `Помилка сертифіката${code}. Перевірте дату й час на компʼютері та оновлення Windows.`;
+        // Stale root certs are the classic cause here, most often from a
+        // system that's been offline a while — true on macOS/Linux kiosks
+        // too, not just Windows, so the tip stays OS-neutral rather than
+        // naming one platform on hardware that runs all three (roadmap #13,
+        // pos-release.yml builds macOS/Windows/Linux installers alike).
+        return `Помилка сертифіката${code}. Перевірте дату й час на компʼютері та оновлення системи.`;
       }
-      return `Немає звʼязку з API${code}. Перевірте інтернет, дату/час і оновлення Windows.`;
+      return `Немає звʼязку з API${code}. Перевірте інтернет, дату/час і оновлення системи.`;
     }
     const apiError = error.response.data?.error;
     if (typeof apiError === 'string') return apiError;
