@@ -194,6 +194,7 @@ function mapStore(store: Record<string, unknown>) {
     enabled_modules: (store.enabled_modules as string[] | null) ?? [],
     module_remotes:
       (store.module_remotes as Record<string, string | ModuleRemoteEntry> | null) ?? {},
+    live_tiktok_username: (store.live_tiktok_username as string | null) ?? null,
   };
 }
 
@@ -212,6 +213,8 @@ export type StorePatch = {
   auto_print_receipt?: boolean;
   enabled_modules?: string[];
   module_remotes?: Record<string, string | ModuleRemoteEntry>;
+  /** TikTok LIVE account this store sells from — see `live.routes.ts`. */
+  live_tiktok_username?: string | null;
 };
 
 const STORE_PATCH_COLUMNS: Array<keyof StorePatch> = [
@@ -229,6 +232,7 @@ const STORE_PATCH_COLUMNS: Array<keyof StorePatch> = [
   'auto_print_receipt',
   'enabled_modules',
   'module_remotes',
+  'live_tiktok_username',
 ];
 
 export async function getStore(storeId: number) {

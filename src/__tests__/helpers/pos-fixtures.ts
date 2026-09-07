@@ -30,15 +30,29 @@ export const hasDb = Boolean(process.env.DB_HOST || process.env.DATABASE_URL);
  * vitest invocation that skipped the global setup.
  */
 export async function applyPosMigrations(): Promise<void> {
+  // Probe the column added by the LAST migration in the list, so appending a
+  // migration doesn't leave a half-applied schema looking "already done".
   const present = await pool.query(
     `SELECT 1 FROM information_schema.columns
-     WHERE table_name = 'pos_stores' AND column_name = 'module_remotes'`
+     WHERE table_name = 'pos_stores' AND column_name = 'live_tiktok_username'`
   );
   if (present.rows.length > 0) return;
 
   for (const file of POS_MIGRATIONS) {
     await pool.query(readMigration(file));
   }
+}
+
+/**
+ * Apply `001_create_schema.sql` — the LIVE-automation tables.
+ *
+ * POS tests never need this; the one exception is the POS→LIVE auth bridge
+ * (`src/pos/routes/live.routes.ts`), which mints a token against the `users` /
+ * `user_settings` tables. Idempotent (`CREATE TABLE IF NOT EXISTS` throughout),
+ * so calling it from the one suite that needs it is safe.
+ */
+export async function applyLiveMigrations(): Promise<void> {
+  await pool.query(readMigration('001_create_schema.sql'));
 }
 
 export interface TestStore {

@@ -33,6 +33,7 @@ export function registerStoreRoutes(fastify: FastifyInstance): void {
       auto_print_receipt?: boolean;
       enabled_modules?: unknown;
       module_remotes?: unknown;
+      live_tiktok_username?: string | null;
     };
     try {
       const patch: analyticsService.StorePatch = {};
@@ -68,6 +69,18 @@ export function registerStoreRoutes(fastify: FastifyInstance): void {
       if (body.qr_iban !== undefined) patch.qr_iban = body.qr_iban;
       if (body.qr_edrpou !== undefined) patch.qr_edrpou = body.qr_edrpou;
       if (body.qr_recipient !== undefined) patch.qr_recipient = body.qr_recipient;
+
+      if (body.live_tiktok_username !== undefined) {
+        // Owner-only (this whole route is): connecting the store to a TikTok
+        // account is what lets any staff member mint a LIVE token for it.
+        // `null` / '' clears the link; a leading `@` is stripped so both
+        // "@shop" and "shop" store the same nickname.
+        const raw = (body.live_tiktok_username ?? '').trim().replace(/^@/, '');
+        if (raw && !/^[A-Za-z0-9._]{2,64}$/.test(raw)) {
+          return reply.code(400).send({ error: 'live_tiktok_username is not a TikTok nickname' });
+        }
+        patch.live_tiktok_username = raw || null;
+      }
 
       if (body.gtin_lookup_enabled !== undefined) patch.gtin_lookup_enabled = Boolean(body.gtin_lookup_enabled);
       if (body.auto_print_receipt !== undefined) patch.auto_print_receipt = Boolean(body.auto_print_receipt);

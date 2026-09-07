@@ -1,0 +1,313 @@
+# `tiktok-live` — первый реальный online-only модуль POS
+
+Экран «Прямий ефір» внутри POS: лента комментариев TikTok LIVE, счётчики и
+кнопки старт/стоп трансляции. Первая настоящая фича, построенная на механизме
+module-remotes ([POS_MODULE_REMOTE_ROADMAP.md](POS_MODULE_REMOTE_ROADMAP.md) #13,
+части C и D) — POS-оболочка **не везёт под неё кода**.
+
+До этого то же самое жило в отдельной SPA `admin/`. Она никуда не делась;
+модуль — второй потребитель того же LIVE-API, живущий в кассе.
+
+---
+
+## Что где лежит
+
+| | |
+|---|---|
+| Код модуля | `pos/src/modules/tiktok-live/**` |
+| Сборка | `pos/vite.tiktok-live-remote.config.ts` → `pos/dist-remotes/tiktok-live/` |
+| Скрипты | `npm run build:tiktok-live-remote` / `serve:tiktok-live-remote` (:5004) / `check:tiktok-live-css-coverage` |
+| Мост авторизации | `src/pos/routes/live.routes.ts` → `POST /api/pos/live/session-token` |
+| Схема | `migrations/017_pos_live_link.sql` — `pos_stores.live_tiktok_username` |
+| Настройка | Адмінка → Налаштування → «TikTok LIVE» (owner-only, `PATCH /api/pos/store`) |
+| Регистрация модуля | `pos_stores.module_remotes['tiktok-live']` (объектная форма) |
+
+Внутри модуля: `lib/liveSocket.ts` (порт `admin/src/services/websocket.ts`),
+`lib/liveClient.ts` (токен + `/api/sessions/*`), `lib/wsUrl.ts`,
+`lib/hostPlatform.ts` (совместимость со старым хостом — см. ниже),
+`lib/diagnostics.ts` (код поддержки — см. ниже), `lib/errors.ts`,
+`hooks/useLiveAuth|useLiveLogs|useLiveSession.ts` (порт `admin/src/hooks/useLogs.ts`
+и react-query-шного `useSession`), `components/LiveLogs|SessionControl|SupportCode.tsx`,
+`pages/LiveDeskPage.tsx` (порт `admin/src/pages/SessionPage.tsx` без `<Header>`).
+
+---
+
+## Совместимость со старым хостом (`hostPlatform.ts`)
+
+Модуль — online-only и скачивается кассой отдельно от самого приложения
+(roadmap #13), поэтому версия модуля и версия хоста (POS-оболочки) могут
+разъехаться: касса ещё не обновилась, а модуль на сервере уже новее и ожидает
+контракт `@pos/platform`, которого в старой сборке нет (`apiOrigin`,
+`api.liveSessionToken` появились вместе с этим модулем).
+
+**Почему `import * as host from '@pos/platform'`, а не именованный импорт.**
+ES-модуль со связыванием (`import { apiOrigin } from '@pos/platform'`) не
+слинкуется, если хост не экспортирует `apiOrigin` — на этапе `import()` бросается
+`SyntaxError` ещё до исполнения кода модуля. Пользователь увидел бы рабочий пункт
+меню, который при клике падает в общий `RouteErrorBoundary` без единой зацепки,
+что случилось. `import * as host` линкуется всегда, вне зависимости от набора
+экспортов хоста — отсутствующее имя просто читается как `undefined`. Это
+превращает жёсткую ошибку связывания в значение, которое можно проверить.
+`missingHostApi()` возвращает список отсутствующих символов; `apiOrigin()` /
+`usePosShell()` в этом файле деградируют на разумные дефолты (same-origin, шелл
+`'web'`); `liveSessionToken()` при неполном контракте сразу реджектится
+`HostTooOldError` — дальше по цепочке это ловит `diagnostics.ts`.
+
+Контракт держится маленьким намеренно — три символа
+(`apiOrigin`, `api.liveSessionToken`, `usePosShell`). Каждый новый символ — это
+ещё одна версия хоста, на которой модуль перестанет работать; расширять без
+привязки к roadmap #1 (реальное версионирование поверхности `@pos/platform`) не
+стоит.
+
+---
+
+## Мост авторизации POS → LIVE
+
+Оператор логинится **один раз**, в POS. У LIVE-подсистемы своя авторизация
+(`src/core/auth.ts`, HMAC-токен на 7 дней). Мост меняет одно на другое:
+
+```
+POST /api/pos/live/session-token        (Bearer — POS-сессия любого сотрудника)
+  → ensurePosAuth
+  → SELECT live_tiktok_username FROM pos_stores WHERE id = <storeId>
+  → нет ника  → 409 { error: 'live_not_configured' }
+  → есть      → loginUser(nickname) → 200 { token, user, expiresAt }
+```
+
+Дальше модуль ходит в `/api/sessions/*` и в WebSocket `/api/sessions/logs/stream`
+уже LIVE-токеном.
+
+**Слоение.** POS-плагин в LIVE-ядро больше нигде не лезет; `live.routes.ts` —
+единственное намеренное исключение, и его вся поверхность — один именованный
+импорт `loginUser`. Оба дерева роутов регистрируются в один Fastify-инстанс
+(`src/api.ts`), делят `AUTH_SECRET` и `pool`, поэтому это внутрипроцессный
+вызов. Если POS-бэкенд когда-нибудь выделят в отдельный сервис — этот хендлер
+станет HTTP-вызовом LIVE-сервисного `POST /api/auth/login`, и больше ничего не
+поменяется.
+
+**Уровень доступа.** Мост — для **любого** авторизованного сотрудника, не
+owner-only: эфир ведёт продавец. Чувствительное действие — привязка магазина к
+TikTok-аккаунту — остаётся owner-only в `PATCH /api/pos/store`. Роут
+зарегистрирован как core-группа (`moduleId: null` в `POS_ROUTE_GROUPS`): модуль
+опт-инится через `module_remotes`, а не через `enabled_modules`, так что
+`ensureModule` тут нечего проверять; гейт — `ensurePosAuth` + 409.
+
+**Кеш токена.** `loginUser` идемпотентен (`createOrGetUser` +
+`ensureDefaultSettings`), серверного стора токенов нет (`verifyToken` —
+stateless HMAC), поэтому минт дешёвый. Клиент (`lib/liveClient.ts`) держит
+токен в памяти и в `localStorage['live_token']`, ре-минтит превентивно, когда до
+`expiresAt` меньше суток, и ровно один раз по 401 — второй 401 это ошибка, а не
+повод зациклиться.
+
+---
+
+## Когда не вышло — код для поддержки (`diagnostics.ts`)
+
+Оператор видит пустой экран одинаково в трёх совершенно разных случаях: касса
+устарела, сервер устарел, или просто нет сети. Сам он это не различит, а нам
+«у меня не работает эфир» тоже ничего не скажет. Каждая ошибка моста
+классифицируется (`diagnose()`) и показывается вместе с коротким кодом:
+
+```
+TL-HOST-1.0.8-1.0.4     модуль 1.0.8 на кассе 1.0.4      → обновить ПРИЛОЖЕНИЕ кассы
+TL-SRV404-1.0.8-1.0.8   касса ОК, роута моста нет          → обновить СЕРВЕР
+TL-SRV500-1.0.8-1.0.8   сервер ответил ошибкой              → повторить / поддержка
+TL-NET-1.0.8-1.0.8      ничего из вышеперечисленного — нет сети → проверить интернет
+TL-CFG-1.0.8-1.0.8      всё актуально, просто не привязано  → Налаштування
+```
+
+Формат: `TL-<причина>-<версия модуля>-<версия хоста>`. Обе версии — чтобы с
+одного взгляда на код было видно, какая сторона отстала, без вопросов «какая у
+вас версия приложения». `not_configured` (409, нет `live_tiktok_username`) —
+это не сбой, а обычное состояние «ещё не настроено», поэтому у него отдельный
+экран без мрачного «⚠️», но код поддержки под ним тоже есть: это самый
+вероятный повод позвонить нам, пока владелец ещё не нашёл Налаштування.
+
+**Что именно в коде.** Причина (enum), HTTP-статус моста (если был), список
+отсутствующих символов хоста (`hostPlatform.missingHostApi()`), версия модуля,
+версия хоста, адрес API. **Намеренно без ничего чувствительного** — ни токена,
+ни никнейма TikTok, ни названия магазина: строка может уйти в чат, который мы
+не контролируем. `SupportCode.tsx` показывает сам код (`select-all`,
+копирование в буфер) и разворачивающийся `<details>` с полным JSON.
+
+`reportLiveFailure()` логирует каждый уникальный код ровно один раз
+(`console.error`) — иначе 5-секундный поллер `useLiveSession` или цикл
+переподключения `useLiveLogs` заспамили бы консоль одним и тем же событием —
+и кладёт последний диагноз в `window.__POS_TIKTOK_LIVE_DIAG__`, чтобы во время
+звонка в поддержку можно было прочитать детали из консоли браузера без
+пересборки.
+
+**Дублирование версии модуля — намеренное.** `diagnostics.ts` НЕ импортирует
+общий `platform/version.ts` (как это делает `remote-entry.ts`), а читает
+`__POS_APP_VERSION__` (define-константу) отдельной строкой. Причина
+техническая: `diagnostics.ts` одновременно попадает и в синхронный граф
+`remote-entry.js`, и в ленивый чанк `LiveDeskPage` (через `SupportCode`);
+общий импорт реального модуля из обоих графов заставляет Rollup вынести его в
+отдельный общий чанк — а `remoteVerify.ts` хеширует только `remote-entry.js` и
+`style.css`, поэтому такой общий чанк грузится без проверки подписи. Именно
+так один раз и случилось при разработке этой фичи — `remote-entry.js`
+распался на тонкий реэкспорт + неподписанный `remote-entry-XXXX.js`,
+`sign-remote.mjs` тихо стал подписывать 4 файла вместо 3. Признак регрессии:
+`npm run build:tiktok-live-remote` выводит больше одного `.js`-файла в
+`dist-remotes/tiktok-live/`, кроме самого `LiveDeskPage-*.js` — и `sign-remote`
+рапортует не 3, а 4+ файлов.
+
+---
+
+## Как модуль попадает в магазин
+
+Объектная запись в `pos_stores.module_remotes` (валидируется бэкендовым
+`sanitizeModuleRemotes`, `src/pos/core/modules.ts`):
+
+```json
+{ "tiktok-live": {
+    "url": "http://localhost:5004/remote-entry.js",
+    "title": "Прямий ефір",
+    "routePath": "/live",
+    "icon": "Video",
+    "nav": [ { "label": "Ефір", "location": "cashier-primary", "order": 85,
+               "icon": "Video", "match": "/live" } ]
+} }
+```
+
+`id` обязан быть ровно `tiktok-live` — и в `manifest.ts`, и в ключе JSON: иначе
+`applyModuleRemotes` отклонит скачанный дескриптор. `icon` держать в синхроне с
+`manifest.ts`: до скачивания nav рисует плейсхолдер по этому JSON, после —
+по манифесту, и разъезд будет виден глазом.
+
+Запись `admin-sidebar` живёт только в собранном `manifest.ts` — плейсхолдеру
+до скачивания нужна лишь `cashier-primary`.
+
+Быстрый способ для демо-стора:
+
+```bash
+POS_SEED_TIKTOK_LIVE=1 npm run pos:seed
+```
+
+(по умолчанию выключено: запись, чей хост не поднят, на десктоп-кассе рисует
+серый «не скачан» пункт в рейле). Переменные `POS_SEED_TIKTOK_LIVE_URL` и
+`POS_SEED_TIKTOK_LIVE_USERNAME` переопределяют дефолты
+`http://localhost:5004/remote-entry.js` и `demo_live`.
+
+Или SQL:
+
+```sql
+UPDATE pos_stores
+SET live_tiktok_username = 'demo_live',
+    module_remotes = COALESCE(module_remotes,'{}'::jsonb) || jsonb_build_object(
+      'tiktok-live', jsonb_build_object(
+        'url','http://localhost:5004/remote-entry.js','title','Прямий ефір',
+        'routePath','/live','icon','Video',
+        'nav', jsonb_build_array(jsonb_build_object(
+          'label','Ефір','location','cashier-primary','order',85,
+          'icon','Video','match','/live'))))
+WHERE slug = 'demo';
+```
+
+---
+
+## Проверка end-to-end
+
+Предусловия: задан `AUTH_SECRET`, накатаны миграции (`npm run pos:migrate`
+— включает `017`), бэкенд на `:3000`.
+
+### Веб
+
+```bash
+cd pos && npm run build:tiktok-live-remote && npm run serve:tiktok-live-remote   # :5004
+cd pos && npm run dev                                                            # :3002
+```
+
+1. Логин владельцем в `demo` (`owner@demo.shop` / `owner123`).
+2. **Перезагрузить вкладку один раз** — `applyModuleRemotes()` бежит до маунта
+   React по уже закешированному `pos_auth`, а на самом первом логине записи там
+   ещё нет.
+3. Ожидать «Ефір» в кассовом рейле и «Прямий ефір» в сайдбаре `/admin`.
+4. Network: `POST /api/pos/live/session-token` → 200, `GET /api/sessions/current`,
+   WS `ws://localhost:3000/api/sessions/logs/stream?token=…`.
+5. «Почати ефір» → статус «Активна», тикает таймер; входящий лог → новая цветная
+   строка с автоскроллом; «Зупинити ефір» → `/api/sessions/stop`.
+6. `npm run check:tiktok-live-css-coverage`, `check:platform-boundary`,
+   `check:tauri-capabilities` — зелёные.
+
+### Десктоп
+
+`cd pos && npm run tauri:build` (или `tauri:dev`).
+
+1. Первый запуск офлайн → пункт `/live` серый (`indicator: 'pending'`), экран
+   `RemoteModuleUnavailablePage` с кнопкой «Спробувати зараз».
+2. Онлайн + retry → Rust `sync_module_remote` качает `:5004`, проверяет
+   Ed25519-подпись и отдаёт из `liveshopmodule://localhost/tiktok-live/…`.
+
+> Дев-цикл вести на web (`npm run dev`, :3002): в браузерном `dev:cashier` без
+> Tauri команда `sync_module_remote` недоступна, поэтому там всегда плейсхолдер.
+
+---
+
+## Оговорки
+
+1. **Один LIVE-пользователь на магазин ⇒ одна общая сессия.** Все сотрудники
+   минтят токен для одного `live_tiktok_username`, а `sessionManager` ключуется
+   по LIVE `user_id`. Значит два оператора делят одну трансляцию, и «Стоп»
+   любого останавливает эфир для всех. Это намеренная store-level модель, а не
+   недосмотр.
+2. **На вебе недоступный remote-хост деградирует тихо.** `applyModuleRemotes`
+   логирует `remote_load_fallback`, и nav «Ефір» с роутом `/live` просто не
+   существуют — без экрана ошибки. На десктопе в том же случае остаётся серый
+   плейсхолдер. Разница в том, что `syncRemote` есть только на кассе.
+3. **Первый вход требует одной перезагрузки** — см. шаг 2 проверки выше.
+4. **LIVE-токен уезжает в query-string WebSocket-URL** и может осесть в логах
+   прокси (валиден 7 дней). Унаследовано от `admin/`: браузерный `WebSocket` не
+   даёт заголовков. Приемлемо, но знать стоит.
+5. **CSP десктопа.** `connect-src` в `pos/src-tauri/tauri.conf.json` расширен на
+   `wss:` + `ws://localhost:*` + `ws://127.0.0.1:*` — `https:` не покрывает
+   `wss:` надёжно в WKWebView/WebKitGTK, а WebSocket управляется именно
+   `connect-src`. Права Tauri (capabilities) при этом не менялись.
+6. **CORS.** В dev `src/api.ts` пускает любой localhost-порт, так что `:3002`
+   ходит и в `/api/sessions/*`, и в WS. Для прод-деплоя POS на отдельном домене
+   этот origin нужно добавить в `CORS_ORIGINS`; при same-origin деплое делать
+   ничего не надо.
+7. **Пустая лента при остановленной сессии — норма.** `getLogs` вернёт `[]`,
+   `/api/sessions/current` — `null`; ни то, ни другое не ошибка.
+8. **Async-чанк `LiveDeskPage` не покрыт подписью.** `remoteVerify.ts` хеширует
+   только `remote-entry.js` и `style.css` — как и у `returns`/`stock`/`products`
+   (см. [POS_MODULE_REMOTE_SIGNING.md](POS_MODULE_REMOTE_SIGNING.md)). На
+   десктопе всю папку целиком качает и проверяет Rust.
+9. **`loginUser` не чистый ридер** — при первом мосте создаёт LIVE-запись
+   пользователя и `user_settings`. Идемпотентно.
+10. **`live_tiktok_username` нет в `AuthResponse.store`** и добавлять не надо:
+    мост резолвит ник сам по `posAuth.storeId`, а экран настроек читает его
+    через `GET /api/pos/store`.
+11. **Модуль может запуститься на хосте, который был собран до него.** Это
+    штатный случай для online-only модуля (roadmap #13): касса ещё не
+    обновилась, а сервер уже отдаёт `module_remotes['tiktok-live']`. Модуль
+    линкуется благодаря `import * as host` в `hostPlatform.ts` (см. раздел
+    выше) и на несовместимом хосте показывает экран «Оновіть застосунок» с
+    кодом `TL-HOST-…` вместо падения в общий `RouteErrorBoundary` без
+    объяснений. Полноценно работать он всё равно не будет, пока касса не
+    обновлена — это только про то, как аккуратно об этом сказать.
+
+---
+
+## Тесты
+
+- `src/__tests__/pos-live-session-token.test.ts` — мост: 401 без сессии, 409 без
+  привязки, минт, который принимает `verifyToken`, идемпотентность, создание
+  `user_settings`. Требует LIVE-схему поверх POS-овской (`applyLiveMigrations()`
+  в `src/__tests__/helpers/pos-fixtures.ts`).
+- `pos/src/modules/tiktok-live/**/*.test.ts(x)` — диспатч WS-фреймов, счётчик
+  минтов в `liveClient` (кеш, один ре-минт по 401, отсутствие цикла), реконнект
+  `useLiveLogs` с ре-минтом, поллинг `useLiveSession`, контракт манифеста
+  (id / `alwaysEnabled` / имена иконок / формы роутов) и рендер экрана.
+- `lib/hostPlatform.test.ts` — грузит `hostPlatform.ts` против синтетических
+  хостов разного возраста (`vi.doMock('@pos/platform', …)`): текущий хост
+  проходит без нареканий, старый — `missingHostApi()` называет ровно
+  отсутствующие символы, `apiOrigin`/`usePosShell` деградируют вместо падения,
+  `liveSessionToken()` реджектится `HostTooOldError`.
+- `lib/diagnostics.test.ts` — контракт кода поддержки: какой `LiveFailureReason`
+  из какой ошибки/HTTP-статуса, формат `TL-<причина>-<модуль>-<хост>`,
+  дедупликация `reportLiveFailure` по коду, `diagnosticText` не содержит токен/
+  никнейм/`Bearer`.
+- `pages/LiveDeskPage.test.tsx` дополнительно проверяет три «застарелых» экрана
+  (`HostTooOldError`, 404 от моста, сетевая ошибка) — каждый со своим текстом и
+  своим префиксом кода на экране.

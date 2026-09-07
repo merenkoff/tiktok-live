@@ -15,6 +15,7 @@ import type {
   SalePaymentInput,
   StoreConfig,
   StorePatch,
+  LiveBridgeToken,
   SaleListItem,
   StaffMember,
   SalesSummary,
@@ -416,6 +417,17 @@ class PosApi {
   async getStore() {
     const { data } = await this.client.get('/store');
     return data as StoreConfig;
+  }
+
+  /**
+   * Exchange this POS session for a TikTok LIVE token (see backend
+   * `src/pos/routes/live.routes.ts`). Used by the `tiktok-live` feature module,
+   * which then talks to `/api/sessions/*` directly. 409 `live_not_configured`
+   * when the store owner hasn't connected a TikTok account yet.
+   */
+  async liveSessionToken(): Promise<LiveBridgeToken> {
+    const { data } = await this.client.post<LiveBridgeToken>('/live/session-token');
+    return data;
   }
 
   async qrInvoice(amount_cents: number, sale_ref: string) {
