@@ -88,7 +88,12 @@ describe.skipIf(!hasDb)('POS → LIVE session-token bridge', () => {
       const verified = verifyToken(body.token);
       expect(verified).not.toBeNull();
       expect(verified?.username).toBe(nickname);
-      expect(verified?.userId).toBe(body.user.id);
+      // `users.id` is BIGSERIAL — node-pg returns bigint columns as a string,
+      // and the signed token embeds that raw value (AuthToken.userId is typed
+      // `number` but is actually a string at runtime; see `src/core/auth.ts`).
+      // The bridge response coerces it with `Number()` for a clean JSON
+      // contract, so the two representations only agree after normalizing.
+      expect(Number(verified?.userId)).toBe(body.user.id);
     });
 
     it('is idempotent — a second mint resolves to the same LIVE user', async () => {
