@@ -44,6 +44,14 @@ const BANNED = [
     re: /(['"])(?:\.\.?\/)+modules\/useEnabledModules\1/,
     what: 'useEnabledModules — reads the auth store, so a host-local copy sees an empty one (import from "@pos/platform")',
   },
+  {
+    // No `modules\/` prefix required, unlike the other patterns above: the
+    // real regression was `registry.ts` (itself inside `src/modules/`)
+    // importing its OWN sibling `./appliedRemotes` — a depth-anchored pattern
+    // like the others would have missed exactly that case.
+    re: /(['"])(?:\.\.?\/)*(?:modules\/)?appliedRemotes\1/,
+    what: 'getAppliedRemotes/setAppliedRemotes/sameRemoteMap — a host-local copy of `applied` never sees what useAuth.ts writes inside the platform chunk, so the "module source changed" banner never clears (import from "@pos/platform")',
+  },
 ];
 
 function walk(dir) {

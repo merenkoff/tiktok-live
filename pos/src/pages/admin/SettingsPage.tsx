@@ -4,10 +4,9 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { api } from '../../services/api';
-import { useAuthStore } from '@pos/platform';
+import { useAuthStore, sameRemoteMap } from '@pos/platform';
 import { ProductPhotoField } from '../../components/ProductPhotoField';
 import { MODULES } from '../../modules/registry';
-import { sameRemoteMap } from '../../modules/appliedRemotes';
 import type { ModuleRemoteEntry, QrPaymentMode, StoreConfig } from '../../types';
 
 export function SettingsPage() {

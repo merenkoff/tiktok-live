@@ -6,12 +6,26 @@ import type { ModuleDescriptor } from './types';
 import { importWithRetry, lazyWithRetry } from './lazyWithRetry';
 import { reportModuleEvent } from './telemetry';
 import { resolveModuleRemotes, type ModulePresentation } from './moduleRemotesSource';
-import { setAppliedRemotes } from './appliedRemotes';
 import { verifyRemoteEntry } from './remoteVerify';
 import { withTimeout, MODULE_LOAD_TIMEOUT_MS } from './withTimeout';
-// Direct import, not via '@pos/platform' — the barrel re-exports the module
-// manifests, which import this file; `platform/version.ts` is a zero-import leaf.
+// Direct import, not via '@pos/platform', for POS_APP_VERSION/POS_API_CLIENT_VERSION
+// — the barrel re-exports the module manifests, which import this file;
+// `platform/version.ts` is a zero-import leaf, so this one is safe to bypass
+// the barrel for. `setAppliedRemotes` genuinely needs the barrel, though: it
+// must land in the SAME module-level `applied` that `useAuthStore` (bundled
+// into the externalised `@pos/platform` chunk) reads via `getAppliedRemotes()`
+// — importing `../modules/appliedRemotes` directly here would bundle a second,
+// disconnected copy into this build instead, and the "module source changed"
+// banner would never clear no matter how often the page reloads. That bug
+// shipped to production once already; `check-platform-boundary.mjs` now
+// checks for it explicitly (see the comment in `platform/auth.ts`).
 import { POS_APP_VERSION, POS_API_CLIENT_VERSION } from '../platform/version';
+// `setAppliedRemotes` needs the literal '@pos/platform' specifier, not a
+// relative path — externalisation on `build` (vite.config.ts) matches the
+// bare specifier string itself, before alias resolution. A relative import
+// would resolve to the same file but get bundled locally instead of routed
+// to the shared externalised chunk, silently reintroducing the bug above.
+import { setAppliedRemotes } from '@pos/platform';
 import { catalogCheckoutModule } from './catalog-checkout/manifest';
 import { returnsModule } from './returns/manifest';
 import { customersModule } from './customers/manifest';
