@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "moduleId": "tiktok-live",
+  "version": "1.0.7",
+  "entry": "remote-entry.js",
+  "keyId": "2a73632c13044371",
+  "builtAt": "2026-09-07T13:13:05.746Z",
+  "files": {
+    "LiveDeskPage-BqpLHeb-.js": "sha384-zzgiXfhclV4KAOfRosmZe0SojCKPmD9BD6rxwG2vII305Dfbp6GKFWbQfPFhgFux",
+    "remote-entry.js": "sha384-AvaVtjO3CKdzuwxO7wn0CBXT/1Qm3BzmTlAVuYaoGBkKkaamePFRqhbhSUYwq3hP",
+    "style.css": "sha384-qPu7tx4hXJrWKqWh8SvWOIFxJyXNE7TkD7MNprmBi9sRBwyS+2eWKmd4vTWWMaYy"
+  }
+}
