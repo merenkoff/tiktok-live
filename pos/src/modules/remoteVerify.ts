@@ -58,10 +58,23 @@ function basename(url: string): string {
   return url.split(/[?#]/)[0].split('/').pop() ?? '';
 }
 
+/**
+ * A connection that a host actively refuses fails `fetch()` fast; one that
+ * accepts the TCP handshake and then never answers (a firewall black-holing
+ * packets, a container that's up but wedged) does not — `fetch()` has no
+ * default timeout, so it hangs until the platform's own multi-minute socket
+ * timeout, if that ever comes at all. `applyModuleRemotes()` runs before the
+ * app's first render (`main.tsx`), so a single store with one bad
+ * `module_remotes` URL would otherwise freeze the site for every visitor,
+ * indefinitely, with no error to look at. `AbortSignal.timeout` turns that
+ * into an ordinary, reported `remote_load_fallback` a few seconds later.
+ */
+const FETCH_TIMEOUT_MS = 10_000;
+
 async function fetchOrThrow(url: string, what: string, init?: RequestInit): Promise<Response> {
   let res: Response;
   try {
-    res = await fetch(url, init);
+    res = await fetch(url, { ...init, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
   } catch (err) {
     throw new RemoteVerifyError(`${what} fetch failed (${String(err)})`);
   }

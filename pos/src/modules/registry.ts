@@ -8,6 +8,7 @@ import { reportModuleEvent } from './telemetry';
 import { resolveModuleRemotes, type ModulePresentation } from './moduleRemotesSource';
 import { setAppliedRemotes } from './appliedRemotes';
 import { verifyRemoteEntry } from './remoteVerify';
+import { withTimeout, MODULE_LOAD_TIMEOUT_MS } from './withTimeout';
 // Direct import, not via '@pos/platform' — the barrel re-exports the module
 // manifests, which import this file; `platform/version.ts` is a zero-import leaf.
 import { POS_APP_VERSION, POS_API_CLIENT_VERSION } from '../platform/version';
@@ -183,7 +184,7 @@ export async function applyModuleRemotes(opts: ApplyModuleRemotesOptions = {}): 
       if (opts.syncRemote) {
         let resolved: { importUrl: string; styleUrl?: string } | null;
         try {
-          resolved = await opts.syncRemote(id, url);
+          resolved = await withTimeout(opts.syncRemote(id, url), MODULE_LOAD_TIMEOUT_MS, `syncRemote(${id})`);
         } catch (error) {
           reportModuleEvent({ type: 'remote_verify_error', moduleId: id, url, error });
           reportModuleEvent({
@@ -224,7 +225,11 @@ export async function applyModuleRemotes(opts: ApplyModuleRemotesOptions = {}): 
       try {
         const mod = await importWithRetry<Record<string, unknown>>(() => {
           attempts += 1;
-          return import(/* @vite-ignore */ importUrl);
+          return withTimeout(
+            import(/* @vite-ignore */ importUrl),
+            MODULE_LOAD_TIMEOUT_MS,
+            `import(${id})`
+          );
         });
         const descriptor = (mod.manifest ?? mod.default) as ModuleDescriptor | undefined;
         if (!descriptor || descriptor.id !== id) {
@@ -244,8 +249,11 @@ export async function applyModuleRemotes(opts: ApplyModuleRemotesOptions = {}): 
         remotes.set(id, { url });
         if (styleUrl) {
           // Served from the Rust-verified cache — fetch its text, no re-hash.
+          // The module is already imported at this point, so this is best-
+          // effort: bounded so a stuck fetch here can't hold up the boot
+          // either, but any failure just means unstyled content, not a fallback.
           try {
-            const res = await fetch(styleUrl);
+            const res = await withTimeout(fetch(styleUrl), MODULE_LOAD_TIMEOUT_MS, `style(${id})`);
             if (res.ok) injectModuleStyle(id, await res.text());
           } catch {
             /* style is best-effort; the module is already imported */
