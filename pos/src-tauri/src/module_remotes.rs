@@ -48,6 +48,14 @@ const B64: base64::engine::general_purpose::GeneralPurpose = base64::engine::gen
 const TRUSTED_REMOTE_KEYS: &[(&str, &str)] = &[
     // dev (deterministic — `node scripts/sign-remote.mjs --print-dev`)
     ("a5dae462a776005d", "iTxt7d1E3eJAWDaCKKiOksLNjdnPwmLgayjSJVRsIYM="),
+    // prod — generated 2026-09-07 (`node scripts/sign-remote.mjs --gen-prod`).
+    // Private half lives only in the POS_REMOTE_SIGNING_KEY GitHub Actions
+    // secret (.github/workflows/module-release.yml). Was added to the JS
+    // allowlist (remoteSigningKeys.ts) but missed here at the time — that gap
+    // is exactly why the desktop cashier's first prod-signed module
+    // ("Прямий ефір") failed to sync with a generic "no connection" error
+    // while the same URL verified and loaded fine on web.
+    ("2a73632c13044371", "L1GE875XMdo4FDMUTmYaZjpsYxzNyXnxL3G00jrsrkk="),
 ];
 
 /// The signed manifest a remote build ships next to `remote-entry.js`
