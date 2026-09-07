@@ -20,11 +20,31 @@
 // store name. Versions, a reason and an HTTP status are enough to route a
 // ticket, and this string gets pasted into chats we do not control.
 
-// Deep import, bundled into THIS build — so it reports the module's own version,
-// which is exactly what we want to compare against the host's.
-import { POS_APP_VERSION as MODULE_VERSION } from '../../../platform/version';
 import { apiOrigin, hostVersion, missingHostApi, HostTooOldError } from './hostPlatform';
 import { LiveApiError, LiveNotConfiguredError } from './errors';
+
+/**
+ * This module's own build version — deliberately NOT `import { POS_APP_VERSION }
+ * from '../../../platform/version'` even though that is exactly what
+ * `remote-entry.ts` does for the same value.
+ *
+ * `remote-entry.ts` is the only synchronous entry point, so its imports never
+ * fork the bundle. This file, by contrast, is reachable from the lazily-loaded
+ * `LiveDeskPage` chunk (`SupportCode` → here) as well. Importing the *module*
+ * `platform/version.ts` from both places would give Rollup a real shared
+ * dependency edge between the entry graph and the async-chunk graph, and it
+ * factors that into a separate hashed chunk — which `remoteVerify.ts` does NOT
+ * hash-check (by design: it verifies `remote-entry.js` and `style.css` only,
+ * treating everything else as an ordinary lazy chunk). That would turn the
+ * entry point itself into an unverified two-file load instead of one verified
+ * file, silently, the next time someone touches this constant.
+ *
+ * `__POS_APP_VERSION__` is a `define`-time string literal (`vite.tiktok-live-
+ * remote.config.ts`), not a real import — referencing it directly here costs
+ * one duplicated line instead of a shared module, so no such edge exists.
+ */
+const MODULE_VERSION: string =
+  typeof __POS_APP_VERSION__ === 'string' ? __POS_APP_VERSION__ : '0.0.0-dev';
 
 export type LiveFailureReason =
   | 'not_configured'
