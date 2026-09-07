@@ -1,0 +1,251 @@
+name: Module Release
+
+# Builds ONE module-remote (roadmap #13: pos/src/modules/<id>) and publishes it
+# where jsdelivr's GitHub-backed CDN can serve it correctly — with the right
+# JS MIME type and CORS, which plain GitHub Releases and raw.githubusercontent.com
+# do NOT provide for a browser `import()` (see TechDocs/POS_MODULE_REMOTE_ROADMAP.md
+# #2). It never touches `main`.
+#
+# Trigger: push a tag `module-<id>-v<version>`, e.g. `module-tiktok-live-v1.0.6`
+#   git tag module-tiktok-live-v1.0.6
+#   git push origin module-tiktok-live-v1.0.6
+# — or Actions → "Module Release" → Run workflow, picking the module id (the
+# tag is then computed from `pos/package.json`'s current version and pushed by
+# CI, same two-ways-in shape as `pos-release.yml`).
+#
+# `<version>` MUST equal `pos/package.json`'s `version` at the commit being
+# tagged — modules don't have an independent version number yet (roadmap #1),
+# they inherit the app's, same as `sign-remote.mjs` already stamps into every
+# manifest. A mismatch fails the job before anything is built.
+#
+# What actually happens: build + sign (with the PROD key, not the repo's dev
+# key — this job fails if it can't confirm that), then the built
+# `pos/dist-remotes/<id>/*` files are committed onto a dedicated `module-builds`
+# branch under `<id>/` at its root, and the release tag is (re)pointed at that
+# commit — exactly how `pos-release.yml` points a `pos-v*` tag at its version-
+# bump commit, just on a different branch. `main` never sees generated output.
+# Because each release is a new version number, this never rewrites a tag an
+# earlier release already published — jsdelivr keeps serving old versions from
+# their original commits untouched.
+#
+# Result — a stable, immutable URL for that exact version:
+#   https://cdn.jsdelivr.net/gh/<owner>/<repo>@module-<id>-v<version>/<id>/remote-entry.js
+#
+# That URL is NOT wired into any store automatically — registering it in a
+# store's `module_remotes` (Settings → "Онлайн-модулі", or `PATCH /api/pos/store`)
+# is a separate, deliberate step. See the job summary for the exact URLs once
+# this workflow finishes.
+
+on:
+  workflow_dispatch:
+    inputs:
+      module:
+        description: 'Module id under pos/src/modules/ (e.g. tiktok-live)'
+        required: true
+  push:
+    tags:
+      - 'module-*-v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: module-release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  # Keep in sync with the `prod` entry `pos/src/modules/remoteSigningKeys.ts` —
+  # this is the client-side allowlist a build must land in to mean anything.
+  # Not secret: a keyId is a public fingerprint, not the key itself.
+  PROD_KEY_ID: '2a73632c13044371'
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      module: ${{ steps.resolve.outputs.module }}
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Tag push: the tag's own target commit (its version is the source of
+          # truth). Manual dispatch: no tag exists yet, so `main` is what gets
+          # tagged below once the version is known.
+          ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref_name }}
+
+      - name: Resolve module id, version and tag
+        id: resolve
+        run: |
+          set -euo pipefail
+          pkg_version="$(node -p "require('./pos/package.json').version")"
+
+          if [ "${{ github.event_name }}" = "push" ]; then
+            tag="${GITHUB_REF_NAME}"
+            # module-<id>-v<version> — id itself may contain hyphens, so peel
+            # the fixed prefix/suffix off rather than splitting on '-'.
+            rest="${tag#module-}"
+            module="${rest%-v*}"
+            version="${rest##*-v}"
+          else
+            module="${{ inputs.module }}"
+            version="$pkg_version"
+            tag="module-${module}-v${version}"
+          fi
+
+          if [ -z "$module" ] || [ "$module" = "$tag" ]; then
+            echo "::error::Tag '$tag' doesn't match module-<id>-v<version>" >&2
+            exit 1
+          fi
+          if [ "$version" != "$pkg_version" ]; then
+            echo "::error::Tag version '$version' != pos/package.json version '$pkg_version'. Modules share the app's version (roadmap #1) — bump pos/package.json, or fix the tag." >&2
+            exit 1
+          fi
+          if [ ! -f "pos/src/modules/${module}/remote-entry.ts" ]; then
+            echo "::error::No pos/src/modules/${module}/remote-entry.ts — is '${module}' really a module id?" >&2
+            exit 1
+          fi
+          if ! node -e "process.exit(require('./pos/package.json').scripts['build:${module}-remote'] ? 0 : 1)"; then
+            echo "::error::pos/package.json has no \"build:${module}-remote\" script. Add one (copy an existing vite.<id>-remote.config.ts + package.json entry) before releasing this module this way." >&2
+            exit 1
+          fi
+
+          {
+            echo "module=$module"
+            echo "version=$version"
+            echo "tag=$tag"
+          } >> "$GITHUB_OUTPUT"
+          echo "Releasing **${module}** v${version} as \`${tag}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create + push the tag (manual dispatch only)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if git ls-remote --tags origin | grep -q "refs/tags/${TAG}$"; then
+            echo "::error::Tag ${TAG} already exists — bump pos/package.json's version first." >&2
+            exit 1
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "${TAG}"
+          git push origin "${TAG}"
+
+  publish:
+    needs: resolve
+    runs-on: ubuntu-latest
+    env:
+      MODULE: ${{ needs.resolve.outputs.module }}
+      TAG: ${{ needs.resolve.outputs.tag }}
+    steps:
+      - name: Checkout the released source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.tag }}
+          path: src
+          fetch-depth: 0
+
+      - name: Refuse to re-publish an already-released tag
+        # The tag itself always exists by this point (a tag push IS the tag
+        # existing; manual dispatch just created it) — that's not what this
+        # checks. This is about to FORCE-MOVE it onto module-builds, same as
+        # `pos-release.yml` force-moves `pos-v*` onto its bump commit. The one
+        # thing that must never happen is moving a tag that's already been
+        # moved there before, onto a *different* commit — that would silently
+        # change what an already-cached jsdelivr URL serves. So: does the tag,
+        # as it stands right now (still pointing at source), already resolve
+        # to something reachable from module-builds? If yes, a previous run
+        # already completed this exact release — refuse. If no (it's still
+        # sitting on `main`/wherever it was tagged), this is the first run.
+        working-directory: src
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --heads origin module-builds >/dev/null 2>&1; then
+            git fetch origin module-builds:refs/remotes/origin/module-builds
+            tag_sha="$(git rev-parse "${TAG}")"
+            if git merge-base --is-ancestor "$tag_sha" origin/module-builds; then
+              echo "::error::${TAG} was already published to module-builds — releases are immutable, bump pos/package.json's version to publish again." >&2
+              exit 1
+            fi
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: src/pos/package-lock.json
+
+      - name: Install
+        working-directory: src/pos
+        run: npm ci
+
+      - name: Build + sign
+        working-directory: src/pos
+        env:
+          POS_REMOTE_SIGNING_KEY: ${{ secrets.POS_REMOTE_SIGNING_KEY }}
+        run: npm run "build:${MODULE}-remote"
+
+      - name: Verify it was signed with the PROD key, not the repo's dev key
+        working-directory: src/pos
+        run: |
+          set -euo pipefail
+          keyId="$(node -p "require('./dist-remotes/${MODULE}/manifest.json').keyId")"
+          if [ "$keyId" != "$PROD_KEY_ID" ]; then
+            echo "::error::Signed with keyId ${keyId}, expected the prod key ${PROD_KEY_ID}. POS_REMOTE_SIGNING_KEY is missing or wrong on this repo's Actions secrets — see the setup instructions in the release PR/notes." >&2
+            exit 1
+          fi
+
+      - name: CSS coverage sanity check
+        working-directory: src/pos
+        run: npm run "check:${MODULE}-css-coverage"
+
+      - name: Publish built output to the module-builds branch
+        working-directory: src
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git ls-remote --exit-code --heads origin module-builds >/dev/null 2>&1; then
+            git fetch origin module-builds:module-builds
+            git worktree add ../builds module-builds
+          else
+            git worktree add --detach ../builds
+            (cd ../builds && git checkout --orphan module-builds && git rm -rf . >/dev/null 2>&1 || true)
+          fi
+
+          rm -rf "../builds/${MODULE}"
+          mkdir -p "../builds/${MODULE}"
+          cp -r "pos/dist-remotes/${MODULE}/." "../builds/${MODULE}/"
+
+          cd ../builds
+          git add "${MODULE}"
+          if git diff --cached --quiet; then
+            echo "No content change for ${MODULE} — publishing the tag on the current module-builds tip."
+          else
+            git commit -m "publish(${MODULE}): ${TAG}"
+            git push origin module-builds
+          fi
+
+          # Force-move: `TAG` already exists (pointing at the source commit on
+          # `main`) — this relocates it to the build-output commit, exactly
+          # how `pos-release.yml` relocates `pos-v*` onto its bump commit. The
+          # "Refuse to re-publish" step above is what keeps this from ever
+          # moving a tag that was already relocated by an earlier run.
+          git tag -f "${TAG}"
+          git push -f origin "${TAG}"
+
+      - name: Summarize
+        run: |
+          base="https://cdn.jsdelivr.net/gh/${GITHUB_REPOSITORY}@${TAG}/${MODULE}"
+          {
+            echo "### Published"
+            echo ""
+            echo "- Entry: \`${base}/remote-entry.js\`"
+            echo "- Style: \`${base}/style.css\`"
+            echo "- Manifest: \`${base}/manifest.json\`"
+            echo ""
+            echo "Not wired into any store yet — register the entry URL in"
+            echo "Settings → «Онлайн-модулі» (or \`PATCH /api/pos/store\`)."
+          } >> "$GITHUB_STEP_SUMMARY"

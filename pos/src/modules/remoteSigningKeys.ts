@@ -21,4 +21,8 @@
 export const TRUSTED_REMOTE_KEYS: Readonly<Record<string, string>> = {
   // dev (deterministic — `node scripts/sign-remote.mjs --print-dev`)
   a5dae462a776005d: 'iTxt7d1E3eJAWDaCKKiOksLNjdnPwmLgayjSJVRsIYM=',
+  // prod — generated 2026-09-07 (`node scripts/sign-remote.mjs --gen-prod`).
+  // Private half lives only as the `POS_REMOTE_SIGNING_KEY` GitHub Actions
+  // secret (`.github/workflows/module-release.yml`); nothing else holds it.
+  '2a73632c13044371': 'L1GE875XMdo4FDMUTmYaZjpsYxzNyXnxL3G00jrsrkk=',
 };
