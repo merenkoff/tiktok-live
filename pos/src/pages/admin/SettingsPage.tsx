@@ -40,6 +40,20 @@ export function SettingsPage() {
   const [remotesChanged, setRemotesChanged] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
+  // ── Add an online-only module (roadmap #13 Part C) ──────────────────────
+  // A new module id the shell ships no code for — the object form of
+  // `module_remotes`. Mirrors the backend's `sanitizeModuleRemoteEntry`
+  // (src/pos/core/modules.ts) closely enough to fail here instead of on save,
+  // but the backend is still the real gate: a rejected entry just vanishes
+  // from the response, same as an invalid bundled-module URL above.
+  const [newModuleId, setNewModuleId] = useState('');
+  const [newModuleTitle, setNewModuleTitle] = useState('');
+  const [newModuleUrl, setNewModuleUrl] = useState('');
+  const [newModuleRoutePath, setNewModuleRoutePath] = useState('');
+  const [newModuleIcon, setNewModuleIcon] = useState('');
+  const [newModuleOrder, setNewModuleOrder] = useState('90');
+  const [newModuleError, setNewModuleError] = useState<string | null>(null);
+
   function hydrate(store: StoreConfig) {
     setName(store.name);
     setSlug(store.slug);
@@ -74,6 +88,80 @@ export function SettingsPage() {
       else delete next[id];
       return next;
     });
+  }
+
+  /** Mirrors backend `isAllowedRemoteUrl` — https://, root-relative /…, or http://localhost. */
+  function isAllowedRemoteUrl(value: string): boolean {
+    if (value.startsWith('/') && !value.startsWith('//')) return true;
+    if (value.startsWith('https://')) return true;
+    return /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(value);
+  }
+
+  function removeRemoteModule(id: string) {
+    setRemoteObjects((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }
+
+  function addRemoteModule() {
+    setNewModuleError(null);
+    const id = newModuleId.trim();
+    const url = newModuleUrl.trim();
+    const title = newModuleTitle.trim();
+    const routePath = newModuleRoutePath.trim();
+    const order = Number(newModuleOrder);
+
+    if (!/^[a-z][a-z0-9-]{1,40}$/.test(id)) {
+      return setNewModuleError('Ідентифікатор: малі латинські літери, цифри, дефіс, з літери.');
+    }
+    if (
+      MODULES.some((m) => m.id === id) ||
+      id in moduleRemotes ||
+      id in remoteObjects
+    ) {
+      return setNewModuleError(`Ідентифікатор «${id}» вже зайнято.`);
+    }
+    if (!title || title.length > 80) {
+      return setNewModuleError('Назва: від 1 до 80 символів.');
+    }
+    if (!isAllowedRemoteUrl(url)) {
+      return setNewModuleError('Джерело: https://…, шлях від кореня /… або http://localhost.');
+    }
+    if (!routePath || routePath.length > 120 || !/^\/[a-z0-9][a-z0-9/-]*$/.test(routePath)) {
+      return setNewModuleError('Маршрут: з «/», малі латинські літери, цифри, «-», «/».');
+    }
+    if (!Number.isInteger(order)) {
+      return setNewModuleError('Порядок у меню: ціле число.');
+    }
+    const icon = newModuleIcon.trim();
+    if (icon && !/^[A-Za-z0-9]+$/.test(icon)) {
+      return setNewModuleError('Іконка: ім’я lucide-компонента без пробілів (напр. Video).');
+    }
+
+    const entry: ModuleRemoteEntry = {
+      url,
+      title,
+      routePath,
+      nav: [
+        {
+          label: title,
+          location: 'cashier-primary',
+          order,
+          match: routePath,
+          ...(icon ? { icon } : {}),
+        },
+      ],
+      ...(icon ? { icon } : {}),
+    };
+    setRemoteObjects((prev) => ({ ...prev, [id]: entry }));
+    setNewModuleId('');
+    setNewModuleTitle('');
+    setNewModuleUrl('');
+    setNewModuleRoutePath('');
+    setNewModuleIcon('');
+    setNewModuleOrder('90');
   }
 
   useEffect(() => {
@@ -373,6 +461,89 @@ export function SettingsPage() {
             (лише веб). Дозволені <code>https://</code>, шлях від кореня <code>/…</code> або
             <code>http://localhost</code>. Зміни потребують перезавантаження вкладки.
           </p>
+
+          <div className="border-t border-sq-divider pt-4 space-y-3">
+            <div>
+              <p className="sq-section-label">Онлайн-модулі</p>
+              <p className="text-sq-secondary text-sm mt-1">
+                Модулі, під які застосунок каси не везе код, — завантажуються з вказаного джерела
+                (напр. «Прямий ефір»). З'являться в касі після наступного входу.
+              </p>
+            </div>
+
+            {Object.entries(remoteObjects).map(([id, entry]) => (
+              <div
+                key={id}
+                className="flex items-center justify-between gap-3 rounded-sq border border-sq-divider bg-sq-bg px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <div className="text-sm font-medium">
+                    {entry.title} <span className="text-xs text-sq-muted">({id})</span>
+                  </div>
+                  <div className="truncate text-xs text-sq-muted">
+                    {entry.routePath} · {entry.url}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeRemoteModule(id)}
+                  className="shrink-0 rounded-sq border border-sq-divider px-2.5 py-1 text-xs text-sq-secondary hover:bg-sq-surface"
+                >
+                  Видалити
+                </button>
+              </div>
+            ))}
+
+            <div className="space-y-2 rounded-sq border border-dashed border-sq-divider p-3">
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  placeholder="Ідентифікатор (tiktok-live)"
+                  value={newModuleId}
+                  onChange={(e) => setNewModuleId(e.target.value)}
+                  className="rounded-sq border border-sq-divider bg-sq-surface px-2.5 py-1.5 text-xs"
+                />
+                <input
+                  placeholder="Назва (Прямий ефір)"
+                  value={newModuleTitle}
+                  onChange={(e) => setNewModuleTitle(e.target.value)}
+                  className="rounded-sq border border-sq-divider bg-sq-surface px-2.5 py-1.5 text-xs"
+                />
+                <input
+                  placeholder="Джерело (URL remote-entry.js)"
+                  value={newModuleUrl}
+                  onChange={(e) => setNewModuleUrl(e.target.value)}
+                  className="col-span-2 rounded-sq border border-sq-divider bg-sq-surface px-2.5 py-1.5 text-xs"
+                />
+                <input
+                  placeholder="Маршрут (/live)"
+                  value={newModuleRoutePath}
+                  onChange={(e) => setNewModuleRoutePath(e.target.value)}
+                  className="rounded-sq border border-sq-divider bg-sq-surface px-2.5 py-1.5 text-xs"
+                />
+                <input
+                  placeholder="Іконка lucide (Video) — необов'язково"
+                  value={newModuleIcon}
+                  onChange={(e) => setNewModuleIcon(e.target.value)}
+                  className="rounded-sq border border-sq-divider bg-sq-surface px-2.5 py-1.5 text-xs"
+                />
+                <input
+                  type="number"
+                  placeholder="Порядок у меню"
+                  value={newModuleOrder}
+                  onChange={(e) => setNewModuleOrder(e.target.value)}
+                  className="col-span-2 rounded-sq border border-sq-divider bg-sq-surface px-2.5 py-1.5 text-xs"
+                />
+              </div>
+              {newModuleError && <p className="text-xs text-rose-600">{newModuleError}</p>}
+              <button
+                type="button"
+                onClick={addRemoteModule}
+                className="rounded-sq border border-sq-divider px-3 py-1.5 text-xs font-medium text-sq-secondary hover:bg-sq-surface"
+              >
+                + Додати модуль
+              </button>
+            </div>
+          </div>
         </div>
 
         {remotesChanged && (
