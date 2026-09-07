@@ -28,6 +28,10 @@ export function SettingsPage() {
   const [gtinDailyLimit, setGtinDailyLimit] = useState('');
   const [autoPrintReceipt, setAutoPrintReceipt] = useState(false);
   const [enabledModules, setEnabledModules] = useState<Set<string>>(new Set());
+  // TikTok LIVE account this store broadcasts from. Setting it is what lets the
+  // `tiktok-live` module mint LIVE tokens for staff — see the backend
+  // `POST /api/pos/live/session-token`.
+  const [liveTiktokUsername, setLiveTiktokUsername] = useState('');
   // Only the string form (a source URL per bundled module) is edited here. Any
   // object-form entries — online-only modules (roadmap #13 Part C) — are held
   // aside and merged back on save so this screen never clobbers them.
@@ -52,6 +56,7 @@ export function SettingsPage() {
     setGtinDailyLimit(store.gtin_daily_limit?.toString() ?? '');
     setAutoPrintReceipt(store.auto_print_receipt);
     setEnabledModules(new Set(store.enabled_modules));
+    setLiveTiktokUsername(store.live_tiktok_username ?? '');
     const strings: Record<string, string> = {};
     const objects: Record<string, ModuleRemoteEntry> = {};
     for (const [id, value] of Object.entries(store.module_remotes ?? {})) {
@@ -93,6 +98,7 @@ export function SettingsPage() {
         auto_print_receipt: autoPrintReceipt,
         enabled_modules: [...enabledModules],
         module_remotes: { ...remoteObjects, ...moduleRemotes },
+        live_tiktok_username: liveTiktokUsername.trim() || null,
         // Only send the key when the field is non-empty (empty = keep the stored one).
         ...(gtinApiKey.trim() ? { gtin_api_key: gtinApiKey.trim() } : {}),
       });
@@ -286,6 +292,30 @@ export function SettingsPage() {
               className="h-4 w-4"
             />
             <span className="text-sm">Автоматично друкувати чек після продажу</span>
+          </label>
+        </div>
+
+        <div className="bg-sq-surface border border-sq-divider rounded-sq p-5 space-y-4 shadow-sm">
+          <div>
+            <p className="sq-section-label">TikTok LIVE</p>
+            <p className="text-sq-secondary text-sm mt-1">
+              Нікнейм акаунта, з якого ви ведете прямі ефіри. Після збереження екран «Прямий
+              ефір» працює і в касі, і тут — окремий вхід не потрібен.
+            </p>
+          </div>
+
+          <label className="block">
+            <span className="text-sm text-sq-secondary">Нікнейм TikTok</span>
+            <input
+              className="mt-1.5 w-full rounded-sq border border-sq-divider bg-sq-bg px-3 py-2.5 text-sq-text"
+              value={liveTiktokUsername}
+              onChange={(e) => setLiveTiktokUsername(e.target.value)}
+              placeholder="my_shop"
+              autoComplete="off"
+            />
+            <span className="text-xs text-sq-muted mt-1 block">
+              Без «@». Порожнє поле — магазин від’єднано від TikTok LIVE.
+            </span>
           </label>
         </div>
 

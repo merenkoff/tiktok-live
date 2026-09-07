@@ -18,6 +18,39 @@ import { logger } from '../logger.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SEED_ASSETS_DIR = path.join(__dirname, 'seed-assets');
 
+/**
+ * Registers the `tiktok-live` online-only module on the demo store, pointing at
+ * the local `npm run serve:tiktok-live-remote` (:5004).
+ *
+ * Opt-in via `POS_SEED_TIKTOK_LIVE=1`: an entry whose host isn't running is not
+ * harmless noise — on the desktop cashier it shows a greyed "not downloaded"
+ * placeholder in the rail — so a plain `npm run pos:seed` leaves it out.
+ *
+ * The JSON below is exactly what `sanitizeModuleRemotes` accepts and what the
+ * client reads back; `icon` / `nav[].icon` must match the module's own manifest
+ * so the placeholder and the real module look the same in the nav.
+ */
+async function seedTiktokLiveModule(storeId: number): Promise<void> {
+  const entry = {
+    url: process.env.POS_SEED_TIKTOK_LIVE_URL || 'http://localhost:5004/remote-entry.js',
+    title: 'Прямий ефір',
+    routePath: '/live',
+    icon: 'Video',
+    nav: [
+      { label: 'Ефір', location: 'cashier-primary', order: 85, icon: 'Video', match: '/live' },
+    ],
+  };
+  await pool.query(
+    `UPDATE pos_stores
+     SET live_tiktok_username = COALESCE(live_tiktok_username, $2),
+         module_remotes = COALESCE(module_remotes, '{}'::jsonb)
+                          || jsonb_build_object('tiktok-live', $3::jsonb)
+     WHERE id = $1`,
+    [storeId, process.env.POS_SEED_TIKTOK_LIVE_USERNAME || 'demo_live', JSON.stringify(entry)]
+  );
+  console.log(`   tiktok-live module registered → ${entry.url}`);
+}
+
 /** Copies the committed demo product photos into the (gitignored) uploads dir. */
 async function copySeedProductImages(): Promise<void> {
   await ensureUploadsDir();
@@ -186,6 +219,7 @@ async function seed(): Promise<void> {
   }
 
   await seedDemoTags(storeId);
+  if (process.env.POS_SEED_TIKTOK_LIVE === '1') await seedTiktokLiveModule(storeId);
   console.log('\n✅ Demo store ready (tags ensured)');
   console.log('   Store slug: demo');
   console.log('   Owner: owner@demo.shop / owner123');

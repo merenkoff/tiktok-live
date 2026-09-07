@@ -236,6 +236,21 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[-]` won
   - Оценка: **~3–4 недели** до первого модуля. Дальше новый модуль = собрать
     (`vite.<id>-remote.config.ts`), подписать, положить папку на хостинг,
     добавить `{ id: url }` в настройку стора.
+  - **[x] Первый реальный online-only модуль отгружен — `tiktok-live`**
+    («Прямий ефір»): лента комментариев TikTok LIVE и старт/стоп сессии внутри
+    POS-оболочки. Шелл не везёт под него кода: `pos/src/modules/tiktok-live/**`
+    собирается `vite.tiktok-live-remote.config.ts` в `dist-remotes/tiktok-live`,
+    подписывается и объявляется объектной записью в `pos_stores.module_remotes`
+    (`{url,title,routePath:'/live',nav,icon:'Video'}`). Проверено, что механизм
+    C+D работает на настоящей фиче, а не на PoC: `alwaysEnabled` вместо
+    `enabled_modules`, иконка именем, плейсхолдер до скачивания, свой
+    `style.css` (`check:tiktok-live-css-coverage`), только `@pos/platform` через
+    границу. Единственное, чего не хватало механизму, — авторизация к чужой
+    (LIVE) подсистеме: добавлен мост `POST /api/pos/live/session-token`
+    (`src/pos/routes/live.routes.ts`), меняющий POS-сессию на LIVE-токен по
+    `pos_stores.live_tiktok_username` (миграция `017`), — второго логина у
+    оператора нет. Архитектура и оговорки:
+    [POS_LIVE_SELLING_MODULE.md](POS_LIVE_SELLING_MODULE.md).
 
 ---
 
@@ -248,6 +263,8 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[-]` won
 download/verify/cache + плейсхолдер online-only модуля из `store.module_remotes`
 + иконки строкой + обзор Tauri capabilities). Механизм проверен на живой кассе:
 подписанный модуль скачивается, верифицируется в Rust и исполняется из кеша.
+Первый **реальный** online-only модуль на нём — `tiktok-live`
+([POS_LIVE_SELLING_MODULE.md](POS_LIVE_SELLING_MODULE.md)).
 Механизм для in-tree модулей закрыт: per-store, подписан, self-styled. #11
 показал: касса неотделима (оффлайн+CSP), механизм — под web/admin-фичи.
 Осталось только под раздачу из отдельного репо: **#2** (CI-публикация в

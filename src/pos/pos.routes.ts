@@ -16,6 +16,7 @@ import { registerStaffRoutes } from './routes/staff.routes.js';
 import { registerGtinRoutes } from './routes/gtin.routes.js';
 import { registerQrRoutes } from './routes/qr.routes.js';
 import { registerTelemetryRoutes } from './routes/telemetry.routes.js';
+import { registerLiveRoutes } from './routes/live.routes.js';
 
 export interface PosRouteGroup {
   /** null = core: always registered, no per-request module gate. */
@@ -34,6 +35,11 @@ export const POS_ROUTE_GROUPS: PosRouteGroup[] = [
   { moduleId: null, register: registerCheckoutRoutes },
   { moduleId: null, register: registerStoreRoutes },
   { moduleId: null, register: registerTelemetryRoutes },
+  // Core, not `moduleId: 'tiktok-live'`: that module opts in through
+  // `pos_stores.module_remotes`, not `enabled_modules`, so `ensureModule`
+  // has nothing to check. The per-request gate is `ensurePosAuth` plus the
+  // 409 for a store with no TikTok account connected.
+  { moduleId: null, register: registerLiveRoutes },
   { moduleId: 'returns', register: registerReturnsRoutes },
   { moduleId: 'customers', register: registerCustomersRoutes },
   { moduleId: 'products', register: registerProductsRoutes },

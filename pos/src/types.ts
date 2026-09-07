@@ -72,6 +72,11 @@ export interface StoreConfig {
    * module for the desktop cashier (roadmap #13 Part C).
    */
   module_remotes: Record<string, string | ModuleRemoteEntry>;
+  /**
+   * TikTok LIVE account this store sells from, or null when it isn't connected.
+   * Drives `POST /api/pos/live/session-token` — see the `tiktok-live` module.
+   */
+  live_tiktok_username: string | null;
 }
 
 export type StorePatch = Partial<
@@ -89,6 +94,7 @@ export type StorePatch = Partial<
     | 'auto_print_receipt'
     | 'enabled_modules'
     | 'module_remotes'
+    | 'live_tiktok_username'
   >
 > & {
   /** write-only: non-empty string sets it, null/"" clears it, omitted keeps it */
@@ -402,4 +408,16 @@ export interface LowStockRow {
   size: string;
   color: string;
   quantity: number;
+}
+
+/**
+ * Response of `POST /api/pos/live/session-token` — a TikTok LIVE token minted
+ * from the store's `live_tiktok_username`. Consumed by the `tiktok-live`
+ * feature module; the LIVE side verifies it as a stateless HMAC, so the client
+ * simply caches it and re-mints on 401 or near `expiresAt`.
+ */
+export interface LiveBridgeToken {
+  token: string;
+  user: { id: number; tiktok_username: string };
+  expiresAt: string;
 }
