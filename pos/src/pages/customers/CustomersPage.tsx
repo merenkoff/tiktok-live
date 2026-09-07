@@ -4,8 +4,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../../services/api';
-import { cashierApi } from '../../offline/cashierApi';
+import { api, cashierApi } from '@pos/platform';
 import type { CustomerChild, PosCustomer } from '../../types';
 import { useDragScroll } from '../../hooks/useDragScroll';
 

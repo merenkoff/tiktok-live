@@ -15,46 +15,70 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { posAppVersion } from './scripts/pkg-version.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 
-export default defineConfig({
-  plugins: [react()],
-  define: {
-    'process.env.NODE_ENV': '"production"',
-    // This remote's own build version — see roadmap #6.
-    __POS_APP_VERSION__: JSON.stringify(posAppVersion()),
-  },
-  build: {
-    outDir: 'dist-remotes/platform',
-    emptyOutDir: true,
-    target: 'es2020',
-    lib: {
-      entry: path.resolve(dir, 'src/platform/index.ts'),
-      formats: ['es'],
-      fileName: () => 'platform.js',
+// Same default `vite.cashier.config.ts` uses, and for the same reason:
+// `services/api.ts` — the axios client, `apiOrigin()`/`posApiBase()` included
+// — is re-exported through `@pos/platform` (`platform/api.ts`), so its
+// compiled code lives in THIS chunk, not in cashier-*.js or index-*.js. This
+// config is invoked identically by `npm run build` (web) and
+// `npm run build:cashier` (desktop) — it has no way to tell which one is
+// asking — so it can't gate the default on the target. It doesn't need to:
+// for the web deploy, pos.the-live.shop *is* the API's origin, so baking in
+// this absolute URL here produces the exact same requests same-origin
+// resolution would have. For the desktop cashier there is no same-origin
+// backend at all (the window's real origin is `tauri://localhost`), so this
+// default is the only thing that makes `apiOrigin()` correct there — leaving
+// it unset previously meant every API call resolved against `tauri://
+// localhost` instead, which the CSP (correctly) refused to let through.
+// `.env`/`VITE_API_BASE` env var still override this, same as cashier's.
+const DEFAULT_POS_API = 'https://the-live.shop';
+
+export default defineConfig(({ mode }) => {
+  const fileEnv = loadEnv(mode, process.cwd(), '');
+  if (!process.env.VITE_API_BASE) {
+    process.env.VITE_API_BASE = fileEnv.VITE_API_BASE || DEFAULT_POS_API;
+  }
+
+  return {
+    plugins: [react()],
+    define: {
+      'process.env.NODE_ENV': '"production"',
+      // This remote's own build version — see roadmap #6.
+      __POS_APP_VERSION__: JSON.stringify(posAppVersion()),
     },
-    rollupOptions: {
-      // NOT inlined: `ui.ts` re-exports `Nav`, which reads the full module
-      // registry to render nav links, so this graph reaches every module's
-      // React.lazy() page. Left as normal Rollup async chunks (loaded only
-      // on navigation) instead of forced into one file — see the PoC doc's
-      // follow-up section for why `@pos/platform` isn't a "small" artifact
-      // once `ui.ts` is included.
-      external: [
-        'react',
-        'react-dom',
-        'react-dom/client',
-        'react/jsx-runtime',
-        'react-router-dom',
-        'zustand',
-        // `offline/db` (reached via `platform/offline.ts`) `new Dexie()`s at
-        // load — shared so the host and this chunk stay on one DB connection.
-        'dexie',
-      ],
+    build: {
+      outDir: 'dist-remotes/platform',
+      emptyOutDir: true,
+      target: 'es2020',
+      lib: {
+        entry: path.resolve(dir, 'src/platform/index.ts'),
+        formats: ['es'],
+        fileName: () => 'platform.js',
+      },
+      rollupOptions: {
+        // NOT inlined: `ui.ts` re-exports `Nav`, which reads the full module
+        // registry to render nav links, so this graph reaches every module's
+        // React.lazy() page. Left as normal Rollup async chunks (loaded only
+        // on navigation) instead of forced into one file — see the PoC doc's
+        // follow-up section for why `@pos/platform` isn't a "small" artifact
+        // once `ui.ts` is included.
+        external: [
+          'react',
+          'react-dom',
+          'react-dom/client',
+          'react/jsx-runtime',
+          'react-router-dom',
+          'zustand',
+          // `offline/db` (reached via `platform/offline.ts`) `new Dexie()`s at
+          // load — shared so the host and this chunk stay on one DB connection.
+          'dexie',
+        ],
+      },
     },
-  },
+  };
 });

@@ -3,8 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { FormEvent, useEffect, useState } from 'react';
-import { api } from '../../services/api';
-import { useAuthStore, sameRemoteMap } from '@pos/platform';
+import { api, useAuthStore, sameRemoteMap } from '@pos/platform';
 import { ProductPhotoField } from '../../components/ProductPhotoField';
 import { MODULES } from '../../modules/registry';
 import type { ModuleRemoteEntry, QrPaymentMode, StoreConfig } from '../../types';

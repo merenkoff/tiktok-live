@@ -32,6 +32,15 @@ const ALLOW = [
   // Re-exported by src/platform/auth.ts, i.e. bundled INTO the platform chunk —
   // importing it back through "@pos/platform" would be a barrel cycle.
   'src/modules/useEnabledModules.ts',
+  // Re-exported by src/platform/api.ts, same reasoning.
+  'src/services/api.ts',
+  // Re-exported by src/platform/sales.ts (`cashierApi`) — repository.ts is its
+  // direct dependency and sync.ts is its dynamic import, so all three are
+  // transitively bundled INTO the platform chunk. Same "importing @pos/platform
+  // from inside what builds @pos/platform" cycle as useAuth.ts if changed.
+  'src/offline/cashierApi.ts',
+  'src/offline/repository.ts',
+  'src/offline/sync.ts',
 ];
 
 // import specifier (any relative depth) -> what it smuggles in
@@ -51,6 +60,27 @@ const BANNED = [
     // like the others would have missed exactly that case.
     re: /(['"])(?:\.\.?\/)*(?:modules\/)?appliedRemotes\1/,
     what: 'getAppliedRemotes/setAppliedRemotes/sameRemoteMap — a host-local copy of `applied` never sees what useAuth.ts writes inside the platform chunk, so the "module source changed" banner never clears (import from "@pos/platform")',
+  },
+  {
+    // The `api` singleton's axios client is constructed once, at module load,
+    // with `baseURL: posApiBase()` frozen in from THIS COPY'S build-time
+    // `import.meta.env.VITE_API_BASE` — a host-local copy doesn't just risk
+    // going stale, it can be built by an entirely different Vite config (e.g.
+    // vite.config.ts / vite.cashier.config.ts) than the one that compiles
+    // `@pos/platform` (vite.platform-remote.config.ts), each with its own
+    // VITE_API_BASE default, silently producing a client that calls a
+    // different origin than the rest of the app (import from "@pos/platform")
+    re: /(['"])(?:\.\.?\/)+services\/api\1/,
+    what: 'api/isNetworkError/isUnauthorized — a host-local axios client can bake in a different API origin than the one @pos/platform uses (import from "@pos/platform")',
+  },
+  {
+    // cashierApi wraps the SAME api singleton as the pattern above — a direct
+    // import here reintroduces the exact same bug one level removed (this is
+    // literally how it shipped: RegisterPage.tsx imported cashierApi directly,
+    // getting a copy whose axios client used vite.config.ts's/vite.cashier.
+    // config.ts's own VITE_API_BASE default instead of @pos/platform's).
+    re: /(['"])(?:\.\.?\/)+offline\/cashierApi\1/,
+    what: 'cashierApi — wraps the api singleton, same origin-mismatch risk (import from "@pos/platform")',
   },
 ];
 

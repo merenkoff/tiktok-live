@@ -4,8 +4,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, Check, Search } from 'lucide-react';
-import { cashierApi } from '../../offline/cashierApi';
-import { useAuthStore, useCartStore } from '@pos/platform';
+import { cashierApi, useAuthStore, useCartStore } from '@pos/platform';
 import { useDragScroll } from '../../hooks/useDragScroll';
 import { formatUah } from '../../lib/money';
 import { DEFAULT_RECEIPT_PAPER_WIDTH, ReceiptPaperWidth, printReceipt } from '../../lib/printer';

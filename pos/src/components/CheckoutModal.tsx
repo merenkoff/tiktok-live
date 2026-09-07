@@ -6,8 +6,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight, X } from 'lucide-react';
 import { formatUah, uahInputToCents } from '../lib/money';
 import { useDragScroll } from '../hooks/useDragScroll';
-import { useAuthStore } from '@pos/platform';
-import { api } from '../services/api';
+import { api, useAuthStore } from '@pos/platform';
 import { displayImageUrl } from '../offline/photos';
 import type { SalePaymentInput } from '../types';
 

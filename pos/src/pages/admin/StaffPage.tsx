@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { FormEvent, useEffect, useState } from 'react';
-import { api } from '../../services/api';
+import { api } from '@pos/platform';
 import type { StaffMember } from '../../types';
 
 export function StaffPage() {

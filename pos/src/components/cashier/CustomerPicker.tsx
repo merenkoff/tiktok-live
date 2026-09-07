@@ -4,7 +4,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { X } from 'lucide-react';
-import { cashierApi } from '../../offline/cashierApi';
+import { cashierApi } from '@pos/platform';
 import type { PosCustomer } from '../../types';
 import { useDragScroll } from '../../hooks/useDragScroll';
 
