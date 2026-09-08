@@ -148,9 +148,16 @@ jobs:
           projectPath: pos
           tagName: ${{ needs.version.outputs.tag }}
           releaseName: 'Cloth POS v${{ needs.version.outputs.version }}'
+          # Placeholder body until the release notes are written by hand. It is
+          # user-facing twice over: on the release page, and inside the cashier
+          # itself — HardwarePage shows the first lines of it as the update
+          # notes — so it is in the same language as the app.
           releaseBody: |
-            POS desktop cashier app. Unsigned build — macOS/Windows may warn on first launch
-            (no code-signing/notarization configured yet).
+            Оновлення десктопної каси Cloth POS.
+
+            Збірка без підпису Apple/Microsoft — на першому запуску система може показати попередження.
+            Встановлення на macOS однією командою, без попереджень:
+            curl -fsSL https://raw.githubusercontent.com/merenkoff/tiktok-live/main/pos/scripts/install-macos.sh | bash
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: ${{ steps.signing.outputs.enabled == 'true' }}
