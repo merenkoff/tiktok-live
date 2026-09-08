@@ -4,10 +4,14 @@
 
 // src/pos/gtin/provider-budget.ts
 
-import crypto from 'crypto';
 import { pool } from '../../db.js';
 
-export type QuotaProvider = 'upcitemdb' | 'upc_dev';
+/**
+ * Server-side providers with a daily allowance. One member since upc.dev was
+ * retired (see `TechDocs/POS_GTIN_ENRICHMENT.md`) — the Open*Facts fan-out runs
+ * in the browser and has no allowance of ours to spend.
+ */
+export type QuotaProvider = 'upcitemdb';
 
 /** One bucket for the whole deployment. */
 export const SHARED_SCOPE = 'shared';
@@ -16,34 +20,23 @@ function utcDay(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function dailyLimit(provider: QuotaProvider): number {
-  if (provider === 'upcitemdb') {
-    return Number(process.env.GTIN_UPCITEMDB_DAILY_LIMIT ?? 100);
-  }
-  return Number(process.env.GTIN_UPC_DEV_DAILY_LIMIT ?? 100);
+export function dailyLimit(_provider: QuotaProvider): number {
+  return Number(process.env.GTIN_UPCITEMDB_DAILY_LIMIT ?? 100);
 }
 
 /**
- * The identity the provider actually meters, which is what a daily counter has
- * to be keyed by.
+ * The identity the provider meters, which is what a daily counter has to be
+ * keyed by (migration 020).
  *
- * upc.dev counts against the **API key**, and every store can set its own
- * (`pos_stores.gtin_api_key`, migration 013). Two stores with two keys have two
- * independent allowances upstream; two stores that both fall back to
- * `UPC_DEV_API_KEY` genuinely share one, and must share one bucket here or we
- * would spend twice the allowance and start collecting 429s.
- *
- * upcitemdb's trial has no key at all — it is metered per source IP, so the
- * whole deployment is one bucket.
- *
- * The key is hashed: this table is not a place to keep a secret, and a stable
- * 16 hex chars is enough to tell two keys apart.
+ * UPCitemdb's trial has no key — it is metered per source IP, so the whole
+ * deployment is one bucket, and that is the only case today. The `scope` column
+ * stays in the primary key because the *next* keyed provider needs it: upc.dev
+ * counted against the API key, and every store can set its own, so a shared
+ * counter let one store spend another's allowance. Wiring such a provider back
+ * in means returning a per-key scope here, not another migration.
  */
-export function budgetScope(provider: QuotaProvider, apiKey?: string | null): string {
-  if (provider === 'upcitemdb') return SHARED_SCOPE;
-  const key = apiKey?.trim();
-  if (!key) return SHARED_SCOPE;
-  return `key:${crypto.createHash('sha256').update(key).digest('hex').slice(0, 16)}`;
+export function budgetScope(_provider: QuotaProvider): string {
+  return SHARED_SCOPE;
 }
 
 export interface BudgetOptions {

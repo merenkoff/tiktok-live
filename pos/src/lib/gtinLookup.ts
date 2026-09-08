@@ -86,7 +86,8 @@ const SOURCE_LABEL: Record<string, string> = {
   open_food_facts: 'Open Food Facts',
   open_beauty_facts: 'Open Beauty Facts',
   upcitemdb: 'UPCitemdb',
-  upc_dev: 'upc.dev',
+  // Retired provider; rows it wrote may still be in the cache.
+  upc_dev: 'upc.dev (застаріле)',
   manual: 'збережено вручну',
 };
 

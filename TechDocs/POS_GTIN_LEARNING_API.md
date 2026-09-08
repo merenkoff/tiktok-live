@@ -11,7 +11,7 @@
 | Live (прихід) | Learning |
 |---------------|----------|
 | 1 скан → 1–few зовнішніх запитів | Batch / dump → тисячі рядків у кеш |
-| Open*Facts з браузера + UPCitemdb/upc.dev | Офлайн дампи ODbL або ваш batch JSON |
+| Open*Facts з браузера + UPCitemdb | Офлайн дампи ODbL або ваш batch JSON |
 | Немає TTL | Той самий кеш, score-safe merge |
 
 Після навчання `GET /gtin/:code` у приході б’є лише нашу БД.
@@ -60,7 +60,7 @@ curl -s -X POST "$API/api/pos/gtin/learn/batch" \
 }
 ```
 
-`source` default: `manual`. Дозволені: `manual`, `open_products_facts`, `open_food_facts`, `open_beauty_facts`, `upcitemdb`, `upc_dev`.
+`source` default: `manual`. Дозволені: `manual`, `open_products_facts`, `open_food_facts`, `open_beauty_facts`, `upcitemdb`.
 
 Skip reasons: `bad_gtin:*`, `empty_name`, `bad_source`.
 

@@ -14,7 +14,7 @@ describe('gtin enrichment orchestration helpers', () => {
   it('sourceScore respects GTIN_SOURCE_PRIORITY override for food-first', () => {
     vi.stubEnv(
       'GTIN_SOURCE_PRIORITY',
-      'open_food_facts,open_products_facts,upc_dev,upcitemdb,open_beauty_facts,manual'
+      'open_food_facts,open_products_facts,upcitemdb,open_beauty_facts,manual'
     );
     expect(sourceScore('open_food_facts')).toBeGreaterThan(sourceScore('open_products_facts'));
   });

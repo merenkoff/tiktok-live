@@ -9,8 +9,7 @@ import { applyPosMigrations } from './helpers/pos-fixtures.js';
 import { hashPassword } from '../pos/core/crypto.js';
 import { getStore, updateStore } from '../pos/analytics.service.js';
 import { getAuthByToken } from '../pos/core/auth.js';
-import { isGtinLookupEnabled, getStoreGtinConfig } from '../pos/gtin/gtin-cache.service.js';
-import { tryConsumeBudget } from '../pos/gtin/provider-budget.js';
+import { isGtinLookupEnabled } from '../pos/gtin/gtin-cache.service.js';
 
 const hasDb = Boolean(process.env.DB_HOST || process.env.DATABASE_URL);
 
@@ -50,35 +49,29 @@ describe.skipIf(!hasDb)('POS store settings', () => {
   it('exposes sane defaults from getStore', async () => {
     const fresh = await getStore(storeId);
     expect(fresh?.gtin_lookup_enabled).toBe(true);
-    expect(fresh?.gtin_api_key_set).toBe(false);
-    expect(fresh?.gtin_daily_limit).toBeNull();
     expect(fresh?.auto_print_receipt).toBe(false);
+    // upc.dev is gone, and its per-store credentials left the wire with it.
+    expect('gtin_api_key_set' in (fresh as Record<string, unknown>)).toBe(false);
+    expect('gtin_daily_limit' in (fresh as Record<string, unknown>)).toBe(false);
   });
 
-  it('round-trips all four settings through updateStore', async () => {
+  it('round-trips the toggles through updateStore', async () => {
     const updated = await updateStore(storeId, {
       gtin_lookup_enabled: false,
-      gtin_api_key: 'k_secret_123',
-      gtin_daily_limit: 5,
       auto_print_receipt: true,
     });
     expect(updated.gtin_lookup_enabled).toBe(false);
-    expect(updated.gtin_api_key_set).toBe(true);
-    expect(updated.gtin_daily_limit).toBe(5);
     expect(updated.auto_print_receipt).toBe(true);
 
     const readBack = await getStore(storeId);
-    expect(readBack?.gtin_api_key_set).toBe(true);
-    expect(readBack?.gtin_daily_limit).toBe(5);
+    expect(readBack?.gtin_lookup_enabled).toBe(false);
 
     const back = await updateStore(storeId, {
       gtin_lookup_enabled: true,
       auto_print_receipt: false,
-      gtin_daily_limit: null,
     });
     expect(back.gtin_lookup_enabled).toBe(true);
     expect(back.auto_print_receipt).toBe(false);
-    expect(back.gtin_daily_limit).toBeNull();
   });
 
   it('round-trips the module_remotes jsonb map and leaves it on a partial patch', async () => {
@@ -98,25 +91,16 @@ describe.skipIf(!hasDb)('POS store settings', () => {
     expect(cleared.module_remotes).toEqual({});
   });
 
-  it('never returns the raw gtin_api_key, only gtin_api_key_set', async () => {
-    await updateStore(storeId, { gtin_api_key: 'top_secret' });
-    const store = (await getStore(storeId)) as Record<string, unknown>;
-    expect(store.gtin_api_key_set).toBe(true);
-    expect('gtin_api_key' in store).toBe(false);
-  });
-
   it('leaves other settings untouched on a partial patch', async () => {
     await updateStore(storeId, {
       gtin_lookup_enabled: false,
       auto_print_receipt: true,
-      gtin_daily_limit: 9,
     });
     await updateStore(storeId, { name: 'Renamed Store' });
     const after = await getStore(storeId);
     expect(after?.name).toBe('Renamed Store');
     expect(after?.gtin_lookup_enabled).toBe(false);
     expect(after?.auto_print_receipt).toBe(true);
-    expect(after?.gtin_daily_limit).toBe(9);
   });
 
   it('isGtinLookupEnabled tracks the column', async () => {
@@ -124,27 +108,6 @@ describe.skipIf(!hasDb)('POS store settings', () => {
     expect(await isGtinLookupEnabled(storeId)).toBe(false);
     await updateStore(storeId, { gtin_lookup_enabled: true });
     expect(await isGtinLookupEnabled(storeId)).toBe(true);
-  });
-
-  it('getStoreGtinConfig returns the per-store key and limit', async () => {
-    await updateStore(storeId, { gtin_api_key: 'k_9', gtin_daily_limit: 3 });
-    expect(await getStoreGtinConfig(storeId)).toEqual({ upcDevApiKey: 'k_9', upcDevDailyLimit: 3 });
-    expect(await getStoreGtinConfig(undefined)).toEqual({
-      upcDevApiKey: null,
-      upcDevDailyLimit: null,
-    });
-    expect(await getStoreGtinConfig(999_999_999)).toEqual({
-      upcDevApiKey: null,
-      upcDevDailyLimit: null,
-    });
-  });
-
-  it('tryConsumeBudget honours a positive limit over the env default', async () => {
-    const scope = `key:test_${Date.now()}`;
-    expect(await tryConsumeBudget('upc_dev', { scope, limit: 2 })).toBe(true);
-    expect(await tryConsumeBudget('upc_dev', { scope, limit: 2 })).toBe(true);
-    expect(await tryConsumeBudget('upc_dev', { scope, limit: 2 })).toBe(false);
-    await pool.query(`DELETE FROM pos_gtin_provider_budget WHERE scope = $1`, [scope]);
   });
 
   it('delivers auto_print_receipt on the auth context (not the gtin flags)', async () => {

@@ -18,20 +18,16 @@
 
 ---
 
-## Обов’язково лише для upc.dev
+## Ключів не потрібно
 
-1. Відкрий [upc.dev](https://upc.dev/) → **Get your free API key** (без кредитки, 100 lookup/день).
-2. У Railway → **API service** → Variables додай:
+Усі три живі джерела працюють без реєстрації:
 
-```
-UPC_DEV_API_KEY=your_key_here
-```
+- **Open Products / Food / Beauty Facts** — з браузера каси, CORS `*`;
+- **UPCitemdb trial** — через наш сервер, 100 запитів на добу на IP.
 
-3. Redeploy API.
-
-Без ключа upc.dev **тихо пропускається** — решта джерел працює.
-
-Локально додай той самий рядок у `.env`.
+> **upc.dev прибрано 2026-09-09** — провайдер вигадував назви (деталі в
+> [[POS_GTIN_ENRICHMENT]]). Ключ отримувати не треба; `UPC_DEV_API_KEY` більше
+> ніде не читається, а поля «API-ключ» і «Ліміт на добу» зникли з налаштувань.
 
 ---
 
@@ -40,15 +36,14 @@ UPC_DEV_API_KEY=your_key_here
 | Змінна | Навіщо | Default |
 |--------|--------|---------|
 | `GTIN_UPCITEMDB_DAILY_LIMIT` | стеля UPCitemdb на сервері | `100` |
-| `GTIN_UPC_DEV_DAILY_LIMIT` | стеля upc.dev | `100` |
-| `GTIN_SOURCE_PRIORITY` | порядок merge, через кому | kidswear: products → upc_dev → upcitemdb → beauty → food → manual |
+| `GTIN_SOURCE_PRIORITY` | порядок merge, через кому | manual → products → upcitemdb → beauty → food |
 | `GTIN_CONTACT_EMAIL` | контакт у User-Agent на server-викликах | порожньо |
 | `VITE_GTIN_OPEN_FACTS_ENABLED` | на UI: вимкнути Open*Facts (`false`) | увімкнено |
 
 Приклад food-first:
 
 ```
-GTIN_SOURCE_PRIORITY=open_food_facts,open_products_facts,upc_dev,upcitemdb,open_beauty_facts,manual
+GTIN_SOURCE_PRIORITY=manual,open_food_facts,open_products_facts,upcitemdb,open_beauty_facts
 ```
 
 ---
@@ -76,7 +71,6 @@ Batch ingest і seed з дампів Open*Facts — окремий продук�
 - [ ] Міграція `008` є в логах start
 - [ ] Прихід → «Нічого не знайдено» → створити новий → EAN → немає crash при miss
 - [ ] Повтор того ж EAN після успіху → підказка з кешу
-- [ ] (З ключем) `best_source` / підказка може бути `upc.dev`
 - [ ] Після ~100 server-викликів upcitemdb за день UI не падає
 
 ---
@@ -85,5 +79,5 @@ Batch ingest і seed з дампів Open*Facts — окремий продук�
 
 1. `GET /api/pos/gtin/:code` — кеш  
 2. Клієнт: parallel Open*Facts → `POST /gtin/ingest`  
-3. Якщо miss: `POST /gtin/lookup/quota-providers` (UPCitemdb + upc.dev з окремими бюджетами)  
+3. Якщо miss: `POST /gtin/lookup/quota-providers` (UPCitemdb, з добовим бюджетом)  
 4. Placeholder з barcode навчає кеш (`manual`)

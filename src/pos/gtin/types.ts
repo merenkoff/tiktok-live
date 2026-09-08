@@ -10,6 +10,12 @@ export type GtinSource =
   | 'open_food_facts'
   | 'open_beauty_facts'
   | 'upcitemdb'
+  /**
+   * Retired. upc.dev was dropped for fabricating answers (see
+   * `TechDocs/POS_GTIN_ENRICHMENT.md`); the value stays in the union only so
+   * rows it already wrote still map. It is absent from the priority list, so it
+   * scores 0 and loses to every live source — the next real lookup replaces it.
+   */
   | 'upc_dev';
 
 export interface GtinHint {
@@ -48,7 +54,6 @@ export interface GtinLookupResult {
 export const DEFAULT_SOURCE_PRIORITY: GtinSource[] = [
   'manual',
   'open_products_facts',
-  'upc_dev',
   'upcitemdb',
   'open_beauty_facts',
   'open_food_facts',
