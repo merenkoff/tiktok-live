@@ -10,18 +10,34 @@ export interface User {
     subscription_level: 'free' | 'pro' | 'enterprise';
   }
   
+  /**
+   * What `GET /api/settings` returns. Secrets are **omitted**, and their
+   * presence reported as `*_set` — the API used to mask them as `'***'`, which
+   * this form posted back and wrote over the real token.
+   *
+   * `payment_timeout_minutes` is gone from the contract: nothing read it.
+   */
   export interface UserSettings {
-    id: number;
     user_id: number;
-    telegram_bot_token?: string;
-    telegram_channel_id?: number;
-    novaposhta_api_key?: string;
-    novaposhta_merchant_name?: string;
-    tiktok_username?: string;
+    tiktok_username: string | null;
+    telegram_bot_token_set: boolean;
+    /** `bigint` column — a string all the way, so precision survives. */
+    telegram_channel_id: string | null;
+    novaposhta_api_key_set: boolean;
+    novaposhta_merchant_name: string | null;
     reservation_timeout_minutes: number;
-    payment_timeout_minutes: number;
-    created_at: string;
-    updated_at: string;
+  }
+
+  /**
+   * What `PUT /api/settings` accepts. Three states per field:
+   * omit to keep, `null` or `''` to clear, a value to set.
+   */
+  export interface UserSettingsPatch {
+    telegram_bot_token?: string | null;
+    telegram_channel_id?: string | null;
+    novaposhta_api_key?: string | null;
+    novaposhta_merchant_name?: string | null;
+    reservation_timeout_minutes?: number;
   }
   
   export interface Session {

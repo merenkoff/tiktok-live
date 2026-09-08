@@ -100,90 +100,126 @@ export async function ensureDefaultSettings(
   }
 }
 
+/**
+ * A settings write. Three states per field, and the distinction matters:
+ *
+ *   `undefined`      keep whatever is stored
+ *   `null` or `''`   clear the column
+ *   a non-empty value set it
+ *
+ * The old shape gated every column on truthiness, so nothing could ever be
+ * cleared, and combined with the controller masking secrets as `'***'` it let a
+ * form round-trip write the literal `'***'` over a real Telegram token. Same
+ * three-state rule the POS store patch already uses (`src/pos/routes/store.routes.ts`).
+ */
+export interface UserSettingsPatch {
+  telegram_bot_token?: string | null;
+  /** `bigint` column — carried as a string end to end so precision survives. */
+  telegram_channel_id?: string | number | null;
+  novaposhta_api_key?: string | null;
+  novaposhta_merchant_name?: string | null;
+  reservation_timeout_minutes?: number | null;
+}
+
+/**
+ * Placeholder an older client may still echo back at us.
+ *
+ * The API no longer sends it — secrets are omitted and reported through
+ * `*_set` booleans instead. But a browser holding a cached copy of the previous
+ * admin build still hydrates `'***'` into its form and posts it on save, so
+ * treating it as "unchanged" stays load-bearing until those clients are gone.
+ * A user who genuinely wants `'***'` as their token cannot have it; that is the
+ * right trade.
+ */
+const MASK_PLACEHOLDER = '***';
+
+/** `undefined` → keep, `null`/blank → clear, otherwise set. */
+function textPatch(value: string | null | undefined): { set: true; value: string | null } | null {
+  if (value === undefined) return null;
+  if (value === null) return { set: true, value: null };
+  const trimmed = value.trim();
+  if (!trimmed) return { set: true, value: null };
+  if (trimmed === MASK_PLACEHOLDER) return null;
+  return { set: true, value: trimmed };
+}
+
+/** Same three states, for the `bigint` channel id. Rejects non-numeric input. */
+function channelPatch(
+  value: string | number | null | undefined
+): { set: true; value: string | null } | null {
+  if (value === undefined) return null;
+  if (value === null) return { set: true, value: null };
+  const trimmed = String(value).trim();
+  if (!trimmed) return { set: true, value: null };
+  if (!/^-?\d{1,19}$/.test(trimmed)) {
+    throw new Error('telegram_channel_id must be an integer');
+  }
+  return { set: true, value: trimmed };
+}
+
 export async function saveUserSettings(
   user_id: number,
-  settings: Partial<UserSettings>
+  settings: UserSettingsPatch
 ): Promise<UserSettings> {
-  try {
-    const client = await pool.connect();
-    
-    try {
-      await client.query('BEGIN');
+  const updates: string[] = [];
+  const values: any[] = [user_id];
+  let paramCount = 2;
 
-      // Check if settings exist
-      const existing = await client.query(
-        'SELECT id FROM user_settings WHERE user_id = $1',
-        [user_id]
-      );
+  function add(column: string, patch: { set: true; value: unknown } | null) {
+    if (!patch) return;
+    updates.push(`${column} = $${paramCount++}`);
+    values.push(patch.value);
+  }
 
-      let result;
-      if (existing.rows.length === 0) {
-        // Insert new
-        result = await client.query(
-          `INSERT INTO user_settings (
-            user_id, telegram_bot_token, telegram_channel_id,
-            novaposhta_api_key, novaposhta_merchant_name,
-            reservation_timeout_minutes, payment_timeout_minutes
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-          RETURNING *`,
-          [
-            user_id,
-            settings.telegram_bot_token,
-            settings.telegram_channel_id,
-            settings.novaposhta_api_key,
-            settings.novaposhta_merchant_name,
-            settings.reservation_timeout_minutes || 5,
-            settings.payment_timeout_minutes || 10,
-          ]
-        );
-      } else {
-        // Update existing
-        const updates = [];
-        const values: any[] = [user_id];
-        let paramCount = 2;
+  add('telegram_bot_token', textPatch(settings.telegram_bot_token));
+  add('telegram_channel_id', channelPatch(settings.telegram_channel_id));
+  add('novaposhta_api_key', textPatch(settings.novaposhta_api_key));
+  add('novaposhta_merchant_name', textPatch(settings.novaposhta_merchant_name));
 
-        if (settings.telegram_bot_token) {
-          updates.push(`telegram_bot_token = $${paramCount++}`);
-          values.push(settings.telegram_bot_token);
-        }
-        if (settings.telegram_channel_id) {
-          updates.push(`telegram_channel_id = $${paramCount++}`);
-          values.push(settings.telegram_channel_id);
-        }
-        if (settings.novaposhta_api_key) {
-          updates.push(`novaposhta_api_key = $${paramCount++}`);
-          values.push(settings.novaposhta_api_key);
-        }
-        if (settings.novaposhta_merchant_name) {
-          updates.push(`novaposhta_merchant_name = $${paramCount++}`);
-          values.push(settings.novaposhta_merchant_name);
-        }
-        if (settings.reservation_timeout_minutes) {
-          updates.push(`reservation_timeout_minutes = $${paramCount++}`);
-          values.push(settings.reservation_timeout_minutes);
-        }
-
-        updates.push(`updated_at = NOW()`);
-
-        result = await client.query(
-          `UPDATE user_settings SET ${updates.join(', ')} WHERE user_id = $1
-           RETURNING *`,
-          values
-        );
-      }
-
-      await client.query('COMMIT');
-      logger.info(`Settings saved for user ${user_id}`);
-      return result.rows[0];
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
+  if (settings.reservation_timeout_minutes !== undefined) {
+    const minutes = Number(settings.reservation_timeout_minutes);
+    if (!Number.isInteger(minutes) || minutes <= 0 || minutes > 24 * 60) {
+      throw new Error('reservation_timeout_minutes must be 1..1440');
     }
+    add('reservation_timeout_minutes', { set: true, value: minutes });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // One statement, so a first-ever save races safely against a concurrent
+    // `ensureDefaultSettings` from `loginUser`.
+    await client.query(
+      `INSERT INTO user_settings (user_id, reservation_timeout_minutes, payment_timeout_minutes)
+       VALUES ($1, 5, 10)
+       ON CONFLICT (user_id) DO NOTHING`,
+      [user_id]
+    );
+
+    if (updates.length === 0) {
+      const current = await client.query(`SELECT * FROM user_settings WHERE user_id = $1`, [
+        user_id,
+      ]);
+      await client.query('COMMIT');
+      return current.rows[0];
+    }
+
+    updates.push('updated_at = NOW()');
+    const result = await client.query(
+      `UPDATE user_settings SET ${updates.join(', ')} WHERE user_id = $1 RETURNING *`,
+      values
+    );
+
+    await client.query('COMMIT');
+    logger.info(`Settings saved for user ${user_id}`);
+    return result.rows[0];
   } catch (error) {
+    await client.query('ROLLBACK');
     logger.error('Failed to save user settings', { error, user_id });
     throw error;
+  } finally {
+    client.release();
   }
 }
 

@@ -7,19 +7,24 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { api } from '../services/api';
-import type { UserSettings } from '../types';
+import type { UserSettingsPatch } from '../types';
 import { Header } from '../components/Header';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 
 export function SettingsPage() {
-  const [formData, setFormData] = useState<Partial<UserSettings>>({
-    telegram_bot_token: '',
-    telegram_channel_id: undefined,
-    novaposhta_api_key: '',
-    novaposhta_merchant_name: '',
-    reservation_timeout_minutes: 5,
-    payment_timeout_minutes: 10,
-  });
+  // Secrets are write-only: the API never sends them back, only whether one is
+  // stored. A blank field therefore means "keep what is saved", and clearing is
+  // an explicit act. The previous version hydrated the masked value `'***'`
+  // into these inputs and posted it on save, overwriting the real credential.
+  const [botToken, setBotToken] = useState('');
+  const [clearBotToken, setClearBotToken] = useState(false);
+  const [npKey, setNpKey] = useState('');
+  const [clearNpKey, setClearNpKey] = useState(false);
+
+  const [channelId, setChannelId] = useState('');
+  const [merchantName, setMerchantName] = useState('');
+  const [reservationMinutes, setReservationMinutes] = useState(5);
+
   const [testResult, setTestResult] = useState<{ ok?: boolean; message?: string } | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
 
@@ -29,7 +34,7 @@ export function SettingsPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (data: Partial<UserSettings>) => api.updateSettings(data),
+    mutationFn: (data: UserSettingsPatch) => api.updateSettings(data),
     onSuccess: () => {
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3500);
@@ -45,25 +50,32 @@ export function SettingsPage() {
   });
 
   useEffect(() => {
-    if (settings) {
-      setFormData({
-        telegram_bot_token: settings.telegram_bot_token || '',
-        telegram_channel_id: settings.telegram_channel_id,
-        novaposhta_api_key: settings.novaposhta_api_key || '',
-        novaposhta_merchant_name: settings.novaposhta_merchant_name || '',
-        reservation_timeout_minutes: settings.reservation_timeout_minutes || 5,
-        payment_timeout_minutes: settings.payment_timeout_minutes || 10,
-      });
-    }
+    if (!settings) return;
+    setChannelId(settings.telegram_channel_id ?? '');
+    setMerchantName(settings.novaposhta_merchant_name ?? '');
+    setReservationMinutes(settings.reservation_timeout_minutes || 5);
+    setBotToken('');
+    setNpKey('');
+    setClearBotToken(false);
+    setClearNpKey(false);
   }, [settings]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: name.includes('timeout') || name.includes('channel_id') ? parseInt(value) : value,
-    }));
-  };
+  /** Omit to keep, `null` to clear, a value to set. */
+  function buildPatch(): UserSettingsPatch {
+    const patch: UserSettingsPatch = {
+      telegram_channel_id: channelId.trim() || null,
+      novaposhta_merchant_name: merchantName.trim() || null,
+      reservation_timeout_minutes: reservationMinutes,
+    };
+    if (clearBotToken) patch.telegram_bot_token = null;
+    else if (botToken.trim()) patch.telegram_bot_token = botToken.trim();
+    if (clearNpKey) patch.novaposhta_api_key = null;
+    else if (npKey.trim()) patch.novaposhta_api_key = npKey.trim();
+    return patch;
+  }
+
+  const botTokenStored = Boolean(settings?.telegram_bot_token_set) && !clearBotToken;
+  const npKeyStored = Boolean(settings?.novaposhta_api_key_set) && !clearNpKey;
 
   if (isLoading) return <LoadingSpinner />;
 
@@ -112,22 +124,42 @@ export function SettingsPage() {
             title="Telegram Bot"
             subtitle="Підключіть бота для отримання замовлень та коментарів"
           >
-            <FieldGroup label="Bot Token" hint="Отримайте у @BotFather в Telegram">
+            <FieldGroup
+              label="Bot Token"
+              hint={
+                botTokenStored
+                  ? 'Збережено. Введіть новий, щоб замінити — порожнє поле лишає поточний.'
+                  : 'Отримайте у @BotFather в Telegram'
+              }
+            >
               <input
                 type="password"
                 name="telegram_bot_token"
-                value={formData.telegram_bot_token || ''}
-                onChange={handleChange}
-                placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+                value={botToken}
+                onChange={(e) => {
+                  setBotToken(e.target.value);
+                  setClearBotToken(false);
+                }}
+                placeholder={botTokenStored ? '•••••••• збережено' : '123456:ABC-DEF1234ghIkl'}
+              />
+              <SecretActions
+                stored={botTokenStored}
+                clearing={clearBotToken}
+                onClear={() => {
+                  setClearBotToken(true);
+                  setBotToken('');
+                }}
+                onCancelClear={() => setClearBotToken(false)}
               />
             </FieldGroup>
 
-            <FieldGroup label="Channel ID" hint="Використайте @userinfobot щоб отримати ID каналу">
+            <FieldGroup label="Channel ID" hint="Використайте @userinfobot щоб отримати ID каналу. Порожнє поле — прибрати.">
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 name="telegram_channel_id"
-                value={formData.telegram_channel_id || ''}
-                onChange={handleChange}
+                value={channelId}
+                onChange={(e) => setChannelId(e.target.value)}
                 placeholder="-1001234567890"
               />
             </FieldGroup>
@@ -136,7 +168,7 @@ export function SettingsPage() {
               <button
                 className="btn-ghost"
                 onClick={() => testMutation.mutate()}
-                disabled={testMutation.isPending || !formData.telegram_bot_token}
+                disabled={testMutation.isPending || !(botTokenStored || botToken.trim())}
               >
                 {testMutation.isPending ? (
                   <>
@@ -175,13 +207,32 @@ export function SettingsPage() {
             subtitle="Опціонально — для генерації ТТН та відстеження посилок"
             badge="Опціонально"
           >
-            <FieldGroup label="API Key" hint="developers.novaposhta.ua">
+            <FieldGroup
+              label="API Key"
+              hint={
+                npKeyStored
+                  ? 'Збережено. Введіть новий, щоб замінити — порожнє поле лишає поточний.'
+                  : 'developers.novaposhta.ua'
+              }
+            >
               <input
                 type="password"
                 name="novaposhta_api_key"
-                value={formData.novaposhta_api_key || ''}
-                onChange={handleChange}
-                placeholder="Ваш API ключ Нової Пошти"
+                value={npKey}
+                onChange={(e) => {
+                  setNpKey(e.target.value);
+                  setClearNpKey(false);
+                }}
+                placeholder={npKeyStored ? '•••••••• збережено' : 'Ваш API ключ Нової Пошти'}
+              />
+              <SecretActions
+                stored={npKeyStored}
+                clearing={clearNpKey}
+                onClear={() => {
+                  setClearNpKey(true);
+                  setNpKey('');
+                }}
+                onCancelClear={() => setClearNpKey(false)}
               />
             </FieldGroup>
 
@@ -189,51 +240,33 @@ export function SettingsPage() {
               <input
                 type="text"
                 name="novaposhta_merchant_name"
-                value={formData.novaposhta_merchant_name || ''}
-                onChange={handleChange}
+                value={merchantName}
+                onChange={(e) => setMerchantName(e.target.value)}
                 placeholder="Назва вашого магазину"
               />
             </FieldGroup>
           </SectionCard>
 
-          {/* ── Timeouts Section ── */}
+          {/* ── Timers ── */}
           <SectionCard
             icon="⏱"
-            title="Таймери бронювання"
-            subtitle="Скільки часу є у покупця для кожного кроку"
+            title="Таймер бронювання"
+            subtitle="Скільки часу товар утримується після коментаря"
           >
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-              <FieldGroup
-                label="Таймер броні"
-                hint="Товар утримується після коментаря"
+            <FieldGroup
+              label="Таймер броні"
+              hint="Застосується після наступного запуску ефіру — активна сесія працює зі знімком налаштувань, зробленим на старті."
+            >
+              <select
+                name="reservation_timeout_minutes"
+                value={reservationMinutes}
+                onChange={(e) => setReservationMinutes(parseInt(e.target.value, 10))}
               >
-                <select
-                  name="reservation_timeout_minutes"
-                  value={formData.reservation_timeout_minutes || 5}
-                  onChange={handleChange}
-                >
-                  {[3, 5, 10, 15, 30].map((v) => (
-                    <option key={v} value={v}>{v} хвилин</option>
-                  ))}
-                </select>
-              </FieldGroup>
-
-              <FieldGroup
-                label="Таймер оплати"
-                hint="Час на підтвердження оплати"
-              >
-                <select
-                  name="payment_timeout_minutes"
-                  value={formData.payment_timeout_minutes || 10}
-                  onChange={handleChange}
-                >
-                  {[5, 10, 20, 30].map((v) => (
-                    <option key={v} value={v}>{v} хвилин</option>
-                  ))}
-                  <option value={60}>1 година</option>
-                </select>
-              </FieldGroup>
-            </div>
+                {[3, 5, 10, 15, 30].map((v) => (
+                  <option key={v} value={v}>{v} хвилин</option>
+                ))}
+              </select>
+            </FieldGroup>
           </SectionCard>
         </div>
 
@@ -241,7 +274,7 @@ export function SettingsPage() {
         <div style={{ marginTop: '40px', display: 'flex', justifyContent: 'flex-end' }}>
           <button
             className="btn-primary"
-            onClick={() => updateMutation.mutate(formData)}
+            onClick={() => updateMutation.mutate(buildPatch())}
             disabled={updateMutation.isPending}
             style={{ minWidth: '200px', justifyContent: 'center', fontSize: '15px', padding: '13px 28px' }}
           >
@@ -327,5 +360,40 @@ function Spinner({ dark }: { dark?: boolean }) {
       display: 'inline-block',
       flexShrink: 0,
     }} />
+  );
+}
+
+/** Explicit clear for a write-only secret, plus a way to change your mind. */
+function SecretActions({
+  stored,
+  clearing,
+  onClear,
+  onCancelClear,
+}: {
+  stored: boolean;
+  clearing: boolean;
+  onClear: () => void;
+  onCancelClear: () => void;
+}) {
+  if (clearing) {
+    return (
+      <p style={{ fontSize: '12px', color: 'var(--red)', marginTop: '7px' }}>
+        Буде видалено при збереженні.{' '}
+        <button type="button" className="btn-ghost" style={{ padding: '2px 6px' }} onClick={onCancelClear}>
+          Скасувати
+        </button>
+      </p>
+    );
+  }
+  if (!stored) return null;
+  return (
+    <button
+      type="button"
+      className="btn-ghost"
+      style={{ padding: '4px 8px', marginTop: '7px', fontSize: '12px' }}
+      onClick={onClear}
+    >
+      Видалити збережене значення
+    </button>
   );
 }

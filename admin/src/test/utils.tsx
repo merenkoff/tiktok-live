@@ -52,17 +52,13 @@ export const mockUser = {
 };
 
 export const mockSettings = {
-  id: 1,
   user_id: 1,
-  telegram_bot_token: 'bot-token',
-  telegram_channel_id: -100123,
-  novaposhta_api_key: '',
-  novaposhta_merchant_name: 'Shop',
   tiktok_username: 'evelin_kids',
+  telegram_bot_token_set: true,
+  telegram_channel_id: '-100123',
+  novaposhta_api_key_set: false,
+  novaposhta_merchant_name: 'Shop',
   reservation_timeout_minutes: 5,
-  payment_timeout_minutes: 10,
-  created_at: '2026-01-01T00:00:00.000Z',
-  updated_at: '2026-01-01T00:00:00.000Z',
 };
 
 export const mockSession = {

@@ -6,7 +6,7 @@
 
 import axios from 'axios';
 import type { AxiosInstance } from 'axios';
-import type { AuthResponse, UserSettings, Session, SessionLog } from '../types';
+import type { AuthResponse, UserSettings, UserSettingsPatch, Session, SessionLog } from '../types';
 
 const API_URL =
   import.meta.env.VITE_API_URL ??
@@ -73,7 +73,7 @@ class ApiClient {
     return response.data;
   }
 
-  async updateSettings(settings: Partial<UserSettings>): Promise<UserSettings> {
+  async updateSettings(settings: UserSettingsPatch): Promise<UserSettings> {
     const response = await this.client.put<UserSettings>('/api/settings', settings);
     return response.data;
   }
