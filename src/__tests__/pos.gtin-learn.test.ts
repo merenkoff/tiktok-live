@@ -103,7 +103,7 @@ describe.skipIf(!hasDb)('POS GTIN learning API', () => {
     if (storeId) await pool.query(`DELETE FROM pos_stores WHERE id = $1`, [storeId]);
     // Explicit codes, not a LIKE prefix: this file shares `pos_gtin_cache`
     // with the other GTIN suites, and a prefix sweep used to delete their rows.
-    await clearGtinCache(gtin1, gtin2, ean('482000000019'), ...FIXTURE_CODES);
+    await clearGtinCache(gtin1, gtin2, ean('482000000019'), ean('482000000020'), ...FIXTURE_CODES);
   });
 
   it('learnBatch upserts and skips bad rows', async () => {
@@ -193,6 +193,22 @@ describe.skipIf(!hasDb)('POS GTIN learning API', () => {
     expect(done.processed).toBeGreaterThan(0);
     const again = await getLearnJob(job.id);
     expect(again?.status).toBe('done');
+  });
+
+  it('skips a code an owner cleared instead of refilling it', async () => {
+    const code = ean('482000000020');
+    await clearGtinCache(code);
+    const { blockGtin } = await import('../pos/gtin/gtin-cache.service.js');
+    await blockGtin({ code, storeId });
+
+    const out = await learnBatch({
+      storeId,
+      items: [{ gtin: code, name: 'Масовий імпорт', source: 'open_products_facts' }],
+    });
+    expect(out.accepted).toBe(0);
+    expect(out.skipped).toContainEqual({ gtin: code, reason: 'blocked' });
+    expect((await getGtinCache(code))?.name).toBeNull();
+    await clearGtinCache(code);
   });
 
   it('e2e: batch then getGtinCache hit', async () => {

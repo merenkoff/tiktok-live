@@ -3,11 +3,20 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import type { ModuleDescriptor } from '../types';
+import { lazyWithRetry } from '../lazyWithRetry';
+
+const GtinCachePage = lazyWithRetry(() =>
+  import('./pages/GtinCachePage').then((m) => ({ default: m.GtinCachePage }))
+);
 
 /**
- * GTIN barcode lookup / enrichment. No page of its own — it only gates the GTIN
- * subsection in Settings and the lookup call during stock receiving. Kept as a
- * module so the toggle lives in one place (backend `/gtin/*` is gated too).
+ * GTIN barcode lookup / enrichment.
+ *
+ * The toggle gates three things at once: the GTIN subsection in Settings, the
+ * lookup during stock receiving, and the backend `/gtin/*` routes. Its own page
+ * is the owner's repair surface over `pos_gtin_cache` — that table is shared by
+ * every store on the deployment, so a wrong name there is wrong for all of
+ * them and there has to be a way to correct or retract one.
  */
 export const gtinEnrichmentModule: ModuleDescriptor = {
   id: 'gtin-enrichment',
@@ -15,6 +24,8 @@ export const gtinEnrichmentModule: ModuleDescriptor = {
   defaultEnabled: true,
   shells: ['web'],
   ownerOnly: true,
-  routes: [],
-  nav: [],
+  routes: [{ path: 'gtin', mount: 'admin', element: GtinCachePage }],
+  nav: [
+    { to: '/admin/gtin', label: 'GTIN-довідник', location: 'admin-sidebar', order: 65 },
+  ],
 };

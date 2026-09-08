@@ -19,7 +19,7 @@
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { pool } from '../db.js';
-import { getGtinCache, ingestGtinResults } from '../pos/gtin/gtin-cache.service.js';
+import { blockGtin, getGtinCache, ingestGtinResults } from '../pos/gtin/gtin-cache.service.js';
 import { computeCheckDigit, normalizeGtin } from '../pos/gtin/normalize.js';
 import { applyPosMigrations, clearGtinCache, hasDb } from './helpers/pos-fixtures.js';
 
@@ -221,6 +221,25 @@ describe.skipIf(!hasDb)('GTIN cache under concurrent writers', () => {
       results: [{ source: 'manual', found: true, name: 'Молоко' }],
     });
     expect((await getGtinCache(GTIN_UPDATE))?.name).toBe('Молоко');
+  });
+
+  it('a cleared entry survives writers racing to refill it', async () => {
+    await ingestGtinResults({
+      code: GTIN_DEMOTE,
+      results: [{ source: 'open_products_facts', found: true, name: 'Wrong name' }],
+    });
+    await blockGtin({ code: GTIN_DEMOTE });
+
+    const settled = await bothReadBeforeEitherWrites(
+      GTIN_DEMOTE,
+      [{ source: 'open_products_facts', found: true, name: 'Wrong name' }],
+      [{ source: 'manual', found: true, name: 'Anything at all' }]
+    );
+    expect(rejections(settled)).toEqual([]);
+
+    const hint = await getGtinCache(GTIN_DEMOTE);
+    expect(hint?.name).toBeNull();
+    expect(hint?.blocked).toBe(true);
   });
 
   it('records lookup events for both writers even though one row results', async () => {

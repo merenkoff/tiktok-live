@@ -35,6 +35,7 @@ describe('Nav — admin sidebar', () => {
       '/admin/customers',
       '/admin/sales',
       '/admin/staff',
+      '/admin/gtin',
       '/admin/settings',
     ]);
     expect(screen.getByRole('link', { name: 'Сьогодні' })).toBeInTheDocument();
@@ -99,6 +100,7 @@ describe('Nav — cashier rail', () => {
         download_url: null,
         release_url: null,
         notes: null,
+        can_self_update: false,
       },
       checked: true,
     });

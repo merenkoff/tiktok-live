@@ -95,10 +95,26 @@ export function gtinSourceLabel(source: string | null | undefined): string {
   return SOURCE_LABEL[source] ?? source;
 }
 
+/**
+ * Render a canonical GTIN-14 storage key back as the barcode a person scanned:
+ * strip the zero padding, then pad up to the shortest standard length. Mirrors
+ * `toDisplayGtin` in the backend's `src/pos/gtin/normalize.ts`.
+ */
+export function displayGtin(gtin: string): string {
+  if (!/^\d+$/.test(gtin)) return gtin;
+  const significant = gtin.replace(/^0+/, '') || '0';
+  const width = [8, 13, 14].find((n) => n >= significant.length) ?? 14;
+  return significant.padStart(width, '0');
+}
+
 export async function enrichGtinFromSources(
   gtin: string,
   api: {
-    getGtinCache: (code: string) => Promise<{ found: boolean; hint?: GtinHint | null } & Partial<GtinHint>>;
+    getGtinCache: (
+      code: string
+    ) => Promise<
+      { found: boolean; blocked?: boolean; hint?: GtinHint | null } & Partial<GtinHint>
+    >;
     ingestGtin: (
       gtin: string,
       results: LookupResult[]
@@ -107,9 +123,13 @@ export async function enrichGtinFromSources(
       gtin: string
     ) => Promise<{ found: boolean; hint: GtinHint | null; skipped?: unknown[] }>;
   }
-): Promise<{ hint: GtinHint | null; cleared?: boolean }> {
+): Promise<{ hint: GtinHint | null; cleared?: boolean; blocked?: boolean }> {
   try {
     const cached = await api.getGtinCache(gtin);
+    // An owner cleared this entry on purpose. Stop here: fanning out would only
+    // spend provider quota to re-fetch the name they rejected, and the server
+    // would refuse to store it anyway.
+    if (cached.blocked) return { hint: null, blocked: true };
     if (cached.found && (cached.hint?.name || cached.name)) {
       const hint = cached.hint ?? {
         gtin,

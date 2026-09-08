@@ -18,6 +18,11 @@ export interface GtinHint {
   brand: string | null;
   image_url: string | null;
   best_source: GtinSource | string | null;
+  /**
+   * Tombstone: an owner cleared this entry, and no automatic source may refill
+   * it until the block is lifted. `name` is null whenever this is true.
+   */
+  blocked: boolean;
   filled_at: Date;
   updated_at: Date;
 }
