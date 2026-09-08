@@ -19,20 +19,6 @@ describe('useAuthStore', () => {
     localStorage.clear();
   });
 
-  it('login persists token/user and authenticates', async () => {
-    await useAuthStore.getState().login('evelin_kids');
-
-    expect(localStorage.getItem('token')).toBe('test-token');
-    expect(JSON.parse(localStorage.getItem('user')!).tiktok_username).toBe(
-      'evelin_kids'
-    );
-    expect(useAuthStore.getState()).toMatchObject({
-      token: 'test-token',
-      isAuthenticated: true,
-      isHydrating: false,
-    });
-  });
-
   it('logout clears storage even when API fails', async () => {
     localStorage.setItem('token', 'tok');
     localStorage.setItem('user', JSON.stringify(mockUser));

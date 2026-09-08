@@ -54,23 +54,6 @@ describe('ApiClient', () => {
     expect(window.location.replace).not.toHaveBeenCalled();
   });
 
-  it('does not hard-redirect on 401 for /api/auth/login', async () => {
-    server.use(
-      http.post('/api/auth/login', () =>
-        HttpResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      )
-    );
-
-    await expect(api.login('someone')).rejects.toBeTruthy();
-    expect(window.location.replace).not.toHaveBeenCalled();
-  });
-
-  it('login returns token and user', async () => {
-    const result = await api.login('evelin_kids');
-    expect(result.token).toBe('test-token');
-    expect(result.user.tiktok_username).toBe('evelin_kids');
-  });
-
   it('calls settings and session helper endpoints', async () => {
     await expect(api.getSettings()).resolves.toMatchObject({ user_id: 1 });
     await expect(

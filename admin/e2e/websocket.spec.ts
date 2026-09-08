@@ -1,13 +1,12 @@
 import { test, expect } from '@playwright/test';
-import { mockApi, mockWebSocket } from './helpers';
+import { mockApi, mockWebSocket, signIn } from './helpers';
 
 test.describe('websocket', () => {
   test.beforeEach(async ({ page }) => {
     await mockWebSocket(page);
     await mockApi(page);
+    await signIn(page);
     await page.goto('/');
-    await page.getByTestId('login-username').fill('evelin_kids');
-    await page.getByTestId('login-submit').click();
   });
 
   test('shows connected indicator and initial logs', async ({ page }) => {

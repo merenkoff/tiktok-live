@@ -2,75 +2,33 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+// This screen used to authenticate on a TikTok nickname alone. What is pinned
+// now is the absence of that: no form, no way in, and a pointer at the POS.
+
+import { describe, expect, it } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import { LoginPage } from './LoginPage';
-import { renderWithProviders, mockUser } from '../test/utils';
-import { useAuthStore } from '../hooks/useAuth';
 
-vi.mock('../hooks/useAuth', async () => {
-  const actual = await vi.importActual<typeof import('../hooks/useAuth')>('../hooks/useAuth');
-  return {
-    ...actual,
-    useAuthStore: actual.useAuthStore,
-  };
-});
-
-describe('LoginPage', () => {
-  beforeEach(() => {
-    useAuthStore.setState({
-      user: null,
-      token: null,
-      isAuthenticated: false,
-      isHydrating: false,
-      login: vi.fn(),
-      logout: vi.fn(),
-      loadUser: vi.fn(),
-      clearAuth: vi.fn(),
-    });
+describe('LoginPage (retired)', () => {
+  it('offers no way to sign in', () => {
+    render(<LoginPage />);
+    expect(document.querySelector('form')).toBeNull();
+    expect(document.querySelector('input')).toBeNull();
+    expect(screen.queryByTestId('login-submit')).not.toBeInTheDocument();
   });
 
-  it('disables submit when username empty', () => {
-    renderWithProviders(<LoginPage />);
-    expect(screen.getByTestId('login-submit')).toBeDisabled();
+  it('says the panel is retired and points at the POS', () => {
+    render(<LoginPage />);
+    expect(screen.getByText(/більше не використовується/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Перейти до POS/i })).toHaveAttribute(
+      'href',
+      'https://pos.the-live.shop'
+    );
   });
 
-  it('trims username and calls login', async () => {
-    const user = userEvent.setup();
-    const login = vi.fn().mockResolvedValue(undefined);
-    useAuthStore.setState({ login });
-
-    renderWithProviders(<LoginPage />);
-    await user.type(screen.getByTestId('login-username'), '  evelin_kids  ');
-    await user.click(screen.getByTestId('login-submit'));
-
-    await waitFor(() => expect(login).toHaveBeenCalledWith('evelin_kids'));
-  });
-
-  it('shows API error message', async () => {
-    const user = userEvent.setup();
-    const login = vi.fn().mockRejectedValue({
-      response: { data: { error: 'Invalid username' } },
-    });
-    useAuthStore.setState({ login });
-
-    renderWithProviders(<LoginPage />);
-    await user.type(screen.getByTestId('login-username'), 'ab');
-    await user.click(screen.getByTestId('login-submit'));
-
-    expect(await screen.findByText(/Invalid username/i)).toBeInTheDocument();
-  });
-
-  it('falls back to Login failed', async () => {
-    const user = userEvent.setup();
-    const login = vi.fn().mockRejectedValue({});
-    useAuthStore.setState({ login });
-
-    renderWithProviders(<LoginPage />);
-    await user.type(screen.getByTestId('login-username'), mockUser.tiktok_username);
-    await user.click(screen.getByTestId('login-submit'));
-
-    expect(await screen.findByText(/Login failed/i)).toBeInTheDocument();
+  it('names both surfaces the work moved to', () => {
+    render(<LoginPage />);
+    expect(screen.getByText('Ефір')).toBeInTheDocument();
+    expect(screen.getByText(/Налаштування ефіру/)).toBeInTheDocument();
   });
 });

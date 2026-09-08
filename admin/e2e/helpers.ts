@@ -135,3 +135,18 @@ export async function mockWebSocket(page: Page) {
     });
   });
 }
+
+/**
+ * Put the app in a signed-in state.
+ *
+ * The login screen is retired (`POST /api/auth/login` was removed — it
+ * authenticated on a public nickname alone), so these suites seed the token the
+ * way a returning visit would have it and let `loadUser` hydrate from storage.
+ * The screens under test are unchanged; only the way in is.
+ */
+export async function signIn(page: Page) {
+  await page.addInitScript(() => {
+    localStorage.setItem('token', 'e2e-token');
+    localStorage.setItem('user', JSON.stringify({ id: 1, tiktok_username: 'evelin_kids' }));
+  });
+}

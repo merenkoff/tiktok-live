@@ -11,7 +11,6 @@ interface AuthStore {
   token: string | null;
   isAuthenticated: boolean;
   isHydrating: boolean;
-  login: (username: string) => Promise<void>;
   logout: () => Promise<void>;
   loadUser: () => Promise<void>;
   clearAuth: () => void;
@@ -34,18 +33,6 @@ export const useAuthStore = create<AuthStore>((set) => ({
       user: null,
       token: null,
       isAuthenticated: false,
-      isHydrating: false,
-    });
-  },
-
-  login: async (username: string) => {
-    const response = await api.login(username);
-    localStorage.setItem('token', response.token);
-    localStorage.setItem('user', JSON.stringify(response.user));
-    set({
-      user: response.user,
-      token: response.token,
-      isAuthenticated: true,
       isHydrating: false,
     });
   },

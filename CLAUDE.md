@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This repo actually contains **three separately-deployed apps** that share one Postgres database:
 
 - **root (`src/`)** — Fastify + TypeScript backend. Owns the DB, serves the REST/WebSocket API for both LIVE automation and POS. Deployed as its own Railway service.
-- **`admin/`** — React + Vite SPA for the TikTok LIVE side (session control, live logs). Talks to the root API. Own `package.json`, own test suite, own CI workflow.
+- **`admin/`** — React + Vite SPA for the TikTok LIVE side (session control, live logs). **Retired 2026-09-09**: its nickname-only login endpoint was removed and the login screen is now a notice pointing at the POS, whose `tiktok-live` module owns the broadcast desk (`/live`) and its settings (`/admin/live`). The code and its CI workflow stay; nothing can sign in. Talks to the root API.
 - **`pos/`** — React + Vite SPA for the clothing-store point of sale, with a Tauri 2 desktop shell for an offline cashier kiosk. Own `package.json`, no CI workflow yet.
 
 Each of `admin/` and `pos/` has its own `node_modules`, `tsconfig.json`, and dev server — always `cd` into the subdirectory (or use `npm --prefix`) before running its scripts. Root `npm` scripts only touch `src/`.

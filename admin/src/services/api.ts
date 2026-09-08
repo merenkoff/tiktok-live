@@ -6,7 +6,7 @@
 
 import axios from 'axios';
 import type { AxiosInstance } from 'axios';
-import type { AuthResponse, UserSettings, UserSettingsPatch, Session, SessionLog } from '../types';
+import type { UserSettings, UserSettingsPatch, Session, SessionLog } from '../types';
 
 const API_URL =
   import.meta.env.VITE_API_URL ??
@@ -52,12 +52,8 @@ class ApiClient {
     );
   }
 
-  async login(tiktok_username: string): Promise<AuthResponse> {
-    const response = await this.client.post<AuthResponse>('/api/auth/login', {
-      tiktok_username,
-    });
-    return response.data;
-  }
+  // `login()` removed with `POST /api/auth/login` (2026-09-09): it authenticated
+  // on a public nickname alone. A LIVE token now comes only from the POS bridge.
 
   async logout(): Promise<void> {
     await this.client.post('/api/auth/logout');
