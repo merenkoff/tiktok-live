@@ -99,6 +99,7 @@ describe('Nav — cashier rail', () => {
         download_url: null,
         release_url: null,
         notes: null,
+        can_self_update: false,
       },
       checked: true,
     });

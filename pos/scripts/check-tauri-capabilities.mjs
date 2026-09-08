@@ -37,6 +37,7 @@ const EXPECTED_PERMISSIONS = [
 /** The commands registered in `src/lib.rs`'s `tauri::generate_handler![…]`. */
 const EXPECTED_COMMANDS = [
   'check_for_update',
+  'install_update',
   'list_hardware',
   'list_printers',
   'print_receipt',

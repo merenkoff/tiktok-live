@@ -20,6 +20,9 @@ fn print_webview(window: tauri::WebviewWindow) -> Result<(), String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        // Only the Rust side ever touches the updater (see update.rs):
+        // registering it here costs the window no `updater:*` permission.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         // Serves the on-disk cache of an online-only feature module so
         // `import('liveshopmodule://localhost/<id>/remote-entry.js')` resolves
         // inside our webview only (roadmap #13 Part B) — not a system scheme.
@@ -29,6 +32,7 @@ pub fn run() {
             hardware::os_printers::list_printers,
             hardware::receipt::print_receipt,
             update::check_for_update,
+            update::install_update,
             module_remotes::sync_module_remote,
             print_webview
         ])

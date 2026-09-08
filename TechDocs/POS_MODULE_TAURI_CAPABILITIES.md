@@ -25,7 +25,7 @@ Ed25519-верифицируется и кешируется в Rust, а пот�
 | Поверхность | Что именно |
 |---|---|
 | **IPC** | `window.__TAURI_INTERNALS__.invoke(cmd, args)` — инжектится всегда. **`window.__TAURI__` не существует**: `withGlobalTauri` в `tauri.conf.json` не включён. Роадмап раньше писал «модуль видит `window.__TAURI__`» — искать в коде надо `__TAURI_INTERNALS__`. |
-| **Наши команды** | Все 6 из `generate_handler!` ([`src-tauri/src/lib.rs`](../pos/src-tauri/src/lib.rs)): `list_hardware` (перечисление HID-устройств), `list_printers`, `print_receipt` (ESC/POS-байты в любой принтер ОС), `print_webview`, `check_for_update`, `sync_module_remote`. |
+| **Наши команды** | Все 7 из `generate_handler!` ([`src-tauri/src/lib.rs`](../pos/src-tauri/src/lib.rs)): `list_hardware` (перечисление HID-устройств), `list_printers`, `print_receipt` (ESC/POS-байты в любой принтер ОС), `print_webview`, `check_for_update`, `install_update` (скачать и поставить обновление + рестарт), `sync_module_remote`. |
 | **Данные оболочки** | Тот же origin ⇒ `localStorage['pos_auth']` (JWT сессии), IndexedDB офлайн-кассы: снапшот каталога/клиентов, очередь непроведённых продаж, PBKDF2-верификатор PIN. |
 | **Сеть** | `fetch` к `/api/pos` с сессионным JWT — то есть весь API магазина под правами текущего кассира/владельца. CSP `connect-src` разрешает `https:` целиком. |
 | **Синглтоны** | `useAuthStore` / `useCartStore` / offline-status / `PosShellContext` через `@pos/platform` — не копия, а тот самый инстанс. |
@@ -86,6 +86,15 @@ Ed25519-верифицируется и кешируется в Rust, а пот�
 Одно право, потому что фронт из всего Tauri-API использует ровно `invoke`
 (не ACL-gated) и один `openUrl` на странице «Обладнання» — открыть страницу
 релиза, которую вернул `check_for_update`.
+
+Обновление по кнопке (macOS и Linux AppImage) намеренно сделано **своей**
+командой `install_update`, а `tauri-plugin-updater` подключён только на
+Rust-стороне. Штатный путь — `@tauri-apps/plugin-updater` из JS — стоил бы
+окну `updater:default` + `process:allow-restart`, то есть дал бы модулю
+универсальные «проверь/скачай/поставь» и «перезапусти приложение». Досягаемость
+у своей команды та же (§2), но потолок у неё — запустить настоящее обновление:
+endpoint и Ed25519-ключ вшиты в бинарник, подпись манифеста проверяется до
+установки, так что подсунуть свой артефакт модуль не может.
 
 `core:default` убран целиком. Что он давал зря:
 

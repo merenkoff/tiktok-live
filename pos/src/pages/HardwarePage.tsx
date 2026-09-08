@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Download, Printer, RefreshCw, ScanLine, Usb } from 'lucide-react';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { HardwareDevice, listHardware } from '../lib/hardware';
+import { installUpdate } from '../lib/updates';
 import {
   DEFAULT_RECEIPT_PAPER_WIDTH,
   PrinterInfo,
@@ -79,6 +80,8 @@ export function HardwarePage() {
   const [paperWidth, setPaperWidth] = useState<ReceiptPaperWidth>(DEFAULT_RECEIPT_PAPER_WIDTH);
   const { printToPdf, printablePortal } = usePrintableReceipt();
   const updateInfo = useUpdateStore((s) => s.updateInfo);
+  const [installing, setInstalling] = useState(false);
+  const [installError, setInstallError] = useState<string | null>(null);
 
   const refresh = useCallback(() => {
     setLoading(true);
@@ -117,6 +120,19 @@ export function HardwarePage() {
     setPaperWidth(mm);
     setTestStatus(null);
     void setMeta(RECEIPT_PAPER_META_KEY, mm);
+  }
+
+  // Resolves only on failure: a successful install restarts the app from
+  // under us, so there is no success state to render.
+  async function runUpdate() {
+    setInstalling(true);
+    setInstallError(null);
+    try {
+      await installUpdate();
+    } catch (e) {
+      setInstallError(typeof e === 'string' ? e : 'Не вдалося встановити оновлення.');
+      setInstalling(false);
+    }
   }
 
   async function testPrint() {
@@ -164,17 +180,34 @@ export function HardwarePage() {
             {updateInfo.notes && (
               <p className="text-xs text-sq-muted whitespace-pre-line line-clamp-3">{updateInfo.notes}</p>
             )}
-            <button
-              type="button"
-              onClick={() => {
-                const url = updateInfo.download_url ?? updateInfo.release_url;
-                if (url) void openUrl(url);
-              }}
-              className="min-h-11 px-4 flex items-center gap-2 text-sm font-medium text-sq-blue"
-            >
-              <Download size={16} />
-              Завантажити оновлення
-            </button>
+            {updateInfo.can_self_update ? (
+              <button
+                type="button"
+                onClick={() => void runUpdate()}
+                disabled={installing}
+                className="min-h-11 px-4 flex items-center gap-2 text-sm font-medium text-sq-blue disabled:opacity-50"
+              >
+                {installing ? (
+                  <RefreshCw size={16} className="animate-spin" />
+                ) : (
+                  <Download size={16} />
+                )}
+                {installing ? 'Встановлення… програма перезапуститься' : 'Встановити оновлення'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  const url = updateInfo.download_url ?? updateInfo.release_url;
+                  if (url) void openUrl(url);
+                }}
+                className="min-h-11 px-4 flex items-center gap-2 text-sm font-medium text-sq-blue"
+              >
+                <Download size={16} />
+                Завантажити оновлення
+              </button>
+            )}
+            {installError && <p className="text-xs text-red-600">{installError}</p>}
           </div>
         ) : (
           <p className="text-sm text-sq-secondary mt-1">

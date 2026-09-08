@@ -30,6 +30,7 @@
     "check:tiktok-live-css-coverage": "node scripts/check-module-css-coverage.mjs src/modules/tiktok-live dist-remotes/tiktok-live/style.css",
     "check:platform-boundary": "node scripts/check-platform-boundary.mjs",
     "check:tauri-capabilities": "node scripts/check-tauri-capabilities.mjs",
+    "updater:init": "node scripts/updater-init.mjs",
     "preview": "vite preview",
     "lint": "eslint src --ext .ts,.tsx",
     "tauri": "tauri",
