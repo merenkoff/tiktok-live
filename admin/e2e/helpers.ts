@@ -8,18 +8,16 @@ const mockUser = {
   subscription_level: 'free',
 };
 
+// Mirrors `UserSettingsView` on the backend: secrets are never sent, only
+// whether one is stored, and the channel id is a string (it is a bigint column).
 const mockSettings = {
-  id: 1,
   user_id: 1,
-  telegram_bot_token: 'bot-token',
-  telegram_channel_id: -100123,
-  novaposhta_api_key: '',
-  novaposhta_merchant_name: 'Shop',
   tiktok_username: 'evelin_kids',
+  telegram_bot_token_set: true,
+  telegram_channel_id: '-100123',
+  novaposhta_api_key_set: false,
+  novaposhta_merchant_name: 'Shop',
   reservation_timeout_minutes: 5,
-  payment_timeout_minutes: 10,
-  created_at: '2026-01-01T00:00:00.000Z',
-  updated_at: '2026-01-01T00:00:00.000Z',
 };
 
 export async function mockApi(page: Page) {
@@ -53,8 +51,19 @@ export async function mockApi(page: Page) {
       await route.fulfill({ json: mockSettings });
       return;
     }
+    // The real PUT answers with the same secret-free view, not an echo of the
+    // patch — spreading the body back would reintroduce the shape this API
+    // deliberately stopped returning.
     const body = route.request().postDataJSON() as Record<string, unknown>;
-    await route.fulfill({ json: { ...mockSettings, ...body } });
+    await route.fulfill({
+      json: {
+        ...mockSettings,
+        telegram_channel_id: (body.telegram_channel_id as string | null) ?? null,
+        novaposhta_merchant_name: (body.novaposhta_merchant_name as string | null) ?? null,
+        reservation_timeout_minutes:
+          (body.reservation_timeout_minutes as number) ?? mockSettings.reservation_timeout_minutes,
+      },
+    });
   });
 
   await page.route('**/api/settings/test-telegram', async (route) => {
