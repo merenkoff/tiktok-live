@@ -40,6 +40,10 @@ export function GtinCachePage() {
   const [draftName, setDraftName] = useState('');
   const [draftBrand, setDraftBrand] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
+  // Cache images are third-party URLs and some of them 404. Hiding the <img>
+  // imperatively in onError would be undone by the next reload() re-render, so
+  // the failures live in state.
+  const [brokenImages, setBrokenImages] = useState<ReadonlySet<string>>(new Set());
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -165,7 +169,19 @@ export function GtinCachePage() {
           return (
             <div key={entry.gtin} className="px-4 py-3 space-y-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
+                {entry.image_url && !entry.blocked && !brokenImages.has(entry.image_url) && (
+                  <img
+                    src={entry.image_url}
+                    alt=""
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    onError={() =>
+                      setBrokenImages((prev) => new Set(prev).add(entry.image_url!))
+                    }
+                    className="w-12 h-12 rounded-sq object-cover bg-sq-bg border border-sq-divider shrink-0"
+                  />
+                )}
+                <div className="min-w-0 flex-1">
                   <p className="font-mono text-sm text-sq-secondary">{displayGtin(entry.gtin)}</p>
                   {entry.blocked ? (
                     <p className="font-semibold text-amber-600">Очищено власником</p>

@@ -15,6 +15,7 @@ import { registerSettingsRoutes } from './users/settings.controller.js';
 import { registerSessionRoutes } from './sessions/sessions.controller.js';
 import { registerPosPlugin } from './pos/pos.plugin.js';
 import { reconcileQrPayments } from './pos/qr.service.js';
+import { runGtinEventsRetention } from './pos/gtin/events-retention.js';
 import { cleanupExpiredReservations } from './reservations.js';
 import { sessionManager } from './sessions/sessions.manager.js';
 
@@ -138,6 +139,16 @@ async function main(): Promise<void> {
         await reconcileQrPayments();
       } catch (error) {
         logger.error('QR reconcile cron error', { error });
+      }
+    });
+
+    // Trim GTIN lookup history — a row per source per scan, read only for the
+    // last 24 hours. Owner corrections and evictions are kept.
+    cron.schedule('30 3 * * *', async () => {
+      try {
+        await runGtinEventsRetention();
+      } catch (error) {
+        logger.error('GTIN events retention cron error', { error });
       }
     });
 

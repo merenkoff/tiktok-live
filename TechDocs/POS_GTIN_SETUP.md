@@ -38,6 +38,7 @@
 | `GTIN_UPCITEMDB_DAILY_LIMIT` | стеля UPCitemdb на сервері | `100` |
 | `GTIN_SOURCE_PRIORITY` | порядок merge, через кому | manual → products → upcitemdb → beauty → food |
 | `GTIN_CONTACT_EMAIL` | контакт у User-Agent на server-викликах | порожньо |
+| `GTIN_EVENTS_RETENTION_DAYS` | скільки днів тримати історію пошуків; `0` — не чистити | `90` |
 | `VITE_GTIN_OPEN_FACTS_ENABLED` | на UI: вимкнути Open*Facts (`false`) | увімкнено |
 
 Приклад food-first:
