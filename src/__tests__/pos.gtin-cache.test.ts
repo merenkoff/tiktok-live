@@ -139,19 +139,11 @@ describe.skipIf(!hasDb)('POS GTIN cache and providers', () => {
   });
 
   it('provider budget stops at limit', async () => {
-    const provider = 'upcitemdb' as const;
     const day = new Date().toISOString().slice(0, 10);
     await pool.query(
-      `INSERT INTO pos_gtin_provider_budget (provider, day_utc, used_count)
-       VALUES ($1, $2::date, 99)
-       ON CONFLICT (provider, day_utc) DO UPDATE SET used_count = 99`,
-      [`test_${provider}_${Date.now()}`, day]
-    );
-    // use real provider with high used_count
-    await pool.query(
-      `INSERT INTO pos_gtin_provider_budget (provider, day_utc, used_count)
-       VALUES ('upcitemdb', $1::date, 100)
-       ON CONFLICT (provider, day_utc) DO UPDATE SET used_count = 100`,
+      `INSERT INTO pos_gtin_provider_budget (provider, scope, day_utc, used_count)
+       VALUES ('upcitemdb', 'shared', $1::date, 100)
+       ON CONFLICT (provider, scope, day_utc) DO UPDATE SET used_count = 100`,
       [day]
     );
     const ok = await tryConsumeBudget('upcitemdb');
@@ -160,7 +152,7 @@ describe.skipIf(!hasDb)('POS GTIN cache and providers', () => {
     // reset for other tests
     await pool.query(
       `UPDATE pos_gtin_provider_budget SET used_count = 0
-       WHERE provider = 'upcitemdb' AND day_utc = $1::date`,
+       WHERE provider = 'upcitemdb' AND scope = 'shared' AND day_utc = $1::date`,
       [day]
     );
   });
