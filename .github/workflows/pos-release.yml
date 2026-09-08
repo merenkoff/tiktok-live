@@ -119,8 +119,24 @@ jobs:
       # TAURI_SIGNING_PRIVATE_KEY exists, so a repo without the secret keeps
       # producing exactly the installers it produced before. Windows stays out:
       # its NSIS updater path wants a code-signed installer we don't have.
+      #
+      # The check runs as a step output because the `secrets` context is not
+      # available in a step's `if:` — reading it there makes the whole workflow
+      # file invalid, which GitHub reports as a startup failure with no logs.
+      - name: Is the updater signing key configured?
+        id: signing
+        shell: bash
+        env:
+          SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -n "$SIGNING_KEY" ] && [ "$RUNNER_OS" != "Windows" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Enable updater artifacts
-        if: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && runner.os != 'Windows' }}
+        if: steps.signing.outputs.enabled == 'true'
         run: node -e "const f='pos/src-tauri/tauri.conf.json',fs=require('fs'),c=JSON.parse(fs.readFileSync(f));c.bundle.createUpdaterArtifacts=true;fs.writeFileSync(f,JSON.stringify(c,null,2)+'\n')"
 
       - uses: tauri-apps/tauri-action@v0
@@ -137,5 +153,5 @@ jobs:
             (no code-signing/notarization configured yet).
           releaseDraft: true
           prerelease: false
-          includeUpdaterJson: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && runner.os != 'Windows' }}
+          includeUpdaterJson: ${{ steps.signing.outputs.enabled == 'true' }}
           args: ${{ matrix.args }}
