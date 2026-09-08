@@ -31,22 +31,34 @@ export interface GtinLookupResult {
   raw?: unknown;
 }
 
+/**
+ * Merge order, best first.
+ *
+ * `manual` leads on purpose: a name a human typed is the only source that was
+ * looked at by someone who had the physical item in hand. It used to sit last,
+ * which made the cache asymmetric — a cashier's correction was overwritten by
+ * the next automatic lookup on that barcode, so a wrong name was effectively
+ * permanent for every store sharing the cache.
+ */
 export const DEFAULT_SOURCE_PRIORITY: GtinSource[] = [
+  'manual',
   'open_products_facts',
   'upc_dev',
   'upcitemdb',
   'open_beauty_facts',
   'open_food_facts',
-  'manual',
 ];
 
 export function sourcePriorityList(): string[] {
   const env = process.env.GTIN_SOURCE_PRIORITY?.trim();
   if (!env) return [...DEFAULT_SOURCE_PRIORITY];
-  return env
+  const list = env
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
+  // An override that forgets `manual` would score it 0 and quietly bring the
+  // old asymmetry back. Stickiness is a product rule, not a tuning knob.
+  return list.includes('manual') ? list : ['manual', ...list];
 }
 
 /** Higher = better. Unknown sources get 0. */
