@@ -468,3 +468,12 @@ export interface GtinCachePage {
   limit: number;
   offset: number;
 }
+
+/** Result of `POST /api/pos/gtin/learn/batch`. */
+export interface GtinLearnResult {
+  /** Rows the server took in (a valid barcode, a name, an allowed source). */
+  accepted: number;
+  /** Of those, the ones that actually changed the cache row. */
+  upserted: number;
+  skipped: Array<{ gtin: string; reason: string }>;
+}

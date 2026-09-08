@@ -60,9 +60,26 @@ curl -s -X POST "$API/api/pos/gtin/learn/batch" \
 }
 ```
 
-`source` default: `manual`. Дозволені: `manual`, `open_products_facts`, `open_food_facts`, `open_beauty_facts`, `upcitemdb`.
+`source` default: `manual`. Дозволені: `manual`, `supplier`, `open_products_facts`,
+`open_food_facts`, `open_beauty_facts`, `upcitemdb`.
+
+`supplier` — прайс постачальника. Стоїть у пріоритеті одразу під `manual`: для одягу
+файл постачальника єдиний знає асортимент і має бити автопошук, але поступатися
+правці касира, який тримав товар у руках.
 
 Skip reasons: `bad_gtin:*`, `empty_name`, `bad_source`.
+
+### Імпорт прайсу з адмінки
+
+Те саме, але без curl: **`/admin/gtin` → «Імпорт прайсу постачальника»**. Приймає
+CSV/TSV, сам визначає роздільник (`;` `,` `tab` `|`) і кодування (UTF-8 з BOM або
+windows-1251 — Excel на українській локалі пише саме його), вгадує колонки за
+заголовками, показує попередній перегляд і що буде пропущено, і шле файл частинами
+по 500 рядків. Джерело — `supplier`.
+
+Клієнт навмисно **не** перевіряє контрольну цифру: це рішення сервера
+(`normalizeGtin`), а друга реалізація на фронті лише розходилася б із нею. Такі
+рядки повертаються в `skipped` з `bad_gtin:bad_check_digit`.
 
 ### `GET /gtin/learn/stats`
 

@@ -33,6 +33,7 @@ import type {
   MovementSummaryRow,
   GtinCacheEntry,
   GtinCachePage,
+  GtinLearnResult,
 } from '../types';
 import { posApiBase } from '../lib/urls';
 // Direct import (not via '@pos/platform') — that barrel re-exports this module,
@@ -690,6 +691,14 @@ class PosApi {
     patch: { name?: string; brand?: string | null; image_url?: string | null; blocked?: false }
   ): Promise<{ hint: GtinCacheEntry | null }> {
     const { data } = await this.client.patch(`/gtin/${encodeURIComponent(code)}`, patch);
+    return data;
+  }
+
+  /** Teach the cache a batch of barcode→name rows (max 500 per call, server-enforced). */
+  async learnGtinBatch(
+    items: Array<{ gtin: string; name: string; brand?: string | null; source?: string }>
+  ): Promise<GtinLearnResult> {
+    const { data } = await this.client.post<GtinLearnResult>('/gtin/learn/batch', { items });
     return data;
   }
 
