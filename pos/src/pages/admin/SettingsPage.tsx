@@ -23,9 +23,6 @@ export function SettingsPage() {
   const [qrPurposeTemplate, setQrPurposeTemplate] = useState('');
   // GTIN column default is TRUE — init checked so it doesn't flash "off" before getStore().
   const [gtinLookupEnabled, setGtinLookupEnabled] = useState(true);
-  const [gtinApiKey, setGtinApiKey] = useState('');
-  const [gtinApiKeySet, setGtinApiKeySet] = useState(false);
-  const [gtinDailyLimit, setGtinDailyLimit] = useState('');
   const [autoPrintReceipt, setAutoPrintReceipt] = useState(false);
   const [enabledModules, setEnabledModules] = useState<Set<string>>(new Set());
   // TikTok LIVE account this store broadcasts from. Setting it is what lets the
@@ -83,9 +80,6 @@ export function SettingsPage() {
     setQrRecipient(store.qr_recipient ?? '');
     setQrPurposeTemplate(store.qr_purpose_template ?? '');
     setGtinLookupEnabled(store.gtin_lookup_enabled);
-    setGtinApiKeySet(store.gtin_api_key_set);
-    setGtinApiKey('');
-    setGtinDailyLimit(store.gtin_daily_limit?.toString() ?? '');
     setAutoPrintReceipt(store.auto_print_receipt);
     setEnabledModules(new Set(store.enabled_modules));
     setLiveTiktokUsername(store.live_tiktok_username ?? '');
@@ -270,13 +264,11 @@ export function SettingsPage() {
         qr_recipient: qrRecipient || null,
         qr_purpose_template: qrPurposeTemplate || null,
         gtin_lookup_enabled: gtinLookupEnabled,
-        gtin_daily_limit: gtinDailyLimit.trim() ? Number(gtinDailyLimit) : null,
         auto_print_receipt: autoPrintReceipt,
         enabled_modules: [...enabledModules],
         module_remotes: { ...remoteObjects, ...moduleRemotes },
         live_tiktok_username: liveTiktokUsername.trim() || null,
         // Only send the key when the field is non-empty (empty = keep the stored one).
-        ...(gtinApiKey.trim() ? { gtin_api_key: gtinApiKey.trim() } : {}),
       });
       // Server sanitises `module_remotes` — a rejected entry disappears in the
       // response. Flag a reload if the effective map now differs from what this
@@ -403,8 +395,9 @@ export function SettingsPage() {
           <div>
             <p className="sq-section-label">Штрихкоди (GTIN)</p>
             <p className="text-sq-secondary text-sm mt-1">
-              Під час приймання товару каса підтягує назву та бренд за штрихкодом із зовнішніх
-              баз. На роботу касира не впливає.
+              Під час приймання товару каса підтягує назву та бренд за штрихкодом із відкритих
+              баз Open Food/Products/Beauty Facts і UPCitemdb. На роботу касира не впливає.
+              Виправити чи прибрати конкретний запис — на сторінці «GTIN-довідник».
             </p>
           </div>
 
@@ -417,38 +410,6 @@ export function SettingsPage() {
             />
             <span className="text-sm">Шукати товар за штрихкодом</span>
           </label>
-
-          {gtinLookupEnabled && (
-            <div className="space-y-4 border-t border-sq-divider pt-4">
-              <label className="block">
-                <span className="text-sm text-sq-secondary">API-ключ платного сервісу (upc.dev)</span>
-                <input
-                  type="password"
-                  autoComplete="off"
-                  className="mt-1.5 w-full rounded-sq border border-sq-divider bg-sq-bg px-3 py-2.5 text-sq-text"
-                  value={gtinApiKey}
-                  onChange={(e) => setGtinApiKey(e.target.value)}
-                  placeholder={
-                    gtinApiKeySet ? '•••••••• збережено — введіть новий, щоб замінити' : 'не задано'
-                  }
-                />
-                <span className="text-xs text-sq-muted mt-1 block">
-                  Порожнє поле — ключ не змінюється. Якщо не задано, використовується серверний ключ.
-                </span>
-              </label>
-              <label className="block">
-                <span className="text-sm text-sq-secondary">Ліміт запитів на добу</span>
-                <input
-                  type="number"
-                  min={1}
-                  className="mt-1.5 w-full rounded-sq border border-sq-divider bg-sq-bg px-3 py-2.5 text-sq-text"
-                  value={gtinDailyLimit}
-                  onChange={(e) => setGtinDailyLimit(e.target.value)}
-                  placeholder="100"
-                />
-              </label>
-            </div>
-          )}
         </div>
 
         <div className="bg-sq-surface border border-sq-divider rounded-sq p-5 space-y-4 shadow-sm">

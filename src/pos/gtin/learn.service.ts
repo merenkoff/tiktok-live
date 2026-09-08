@@ -11,13 +11,15 @@ import type { GtinSource } from './types.js';
 
 const BATCH_MAX = 500;
 
+// `upc_dev` is absent on purpose — the provider was retired for fabricating
+// answers, and nothing should be writing new rows under its name.
 const ALLOWED_SOURCES = new Set<string>([
   'manual',
+  'supplier',
   'open_products_facts',
   'open_food_facts',
   'open_beauty_facts',
   'upcitemdb',
-  'upc_dev',
 ]);
 
 export type LearnBatchItem = {

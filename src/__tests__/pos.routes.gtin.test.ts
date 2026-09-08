@@ -253,7 +253,7 @@ describe.skipIf(!hasDb)('POS GTIN cache admin routes', () => {
       await clearGtinCache(listCode);
       await ingestGtinResults({
         code: listCode,
-        results: [{ source: 'upc_dev', found: true, name: 'Шуканий товар', brand: 'Марка' }],
+        results: [{ source: 'upcitemdb', found: true, name: 'Шуканий товар', brand: 'Марка' }],
       });
 
       for (const query of [listCode, `0${listCode}`]) {

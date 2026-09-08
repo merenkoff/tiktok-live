@@ -61,8 +61,6 @@ export interface StoreConfig {
   qr_recipient: string | null;
   gtin_lookup_enabled: boolean;
   /** Whether a paid-provider API key is stored — the key itself is never returned. */
-  gtin_api_key_set: boolean;
-  gtin_daily_limit: number | null;
   auto_print_receipt: boolean;
   /** Toggleable module ids the store has enabled (effective set; core ids not listed). */
   enabled_modules: string[];
@@ -98,8 +96,6 @@ export type StorePatch = Partial<
   >
 > & {
   /** write-only: non-empty string sets it, null/"" clears it, omitted keeps it */
-  gtin_api_key?: string | null;
-  gtin_daily_limit?: number | null;
 };
 
 export interface AuthResponse {
@@ -471,4 +467,13 @@ export interface GtinCachePage {
   total: number;
   limit: number;
   offset: number;
+}
+
+/** Result of `POST /api/pos/gtin/learn/batch`. */
+export interface GtinLearnResult {
+  /** Rows the server took in (a valid barcode, a name, an allowed source). */
+  accepted: number;
+  /** Of those, the ones that actually changed the cache row. */
+  upserted: number;
+  skipped: Array<{ gtin: string; reason: string }>;
 }

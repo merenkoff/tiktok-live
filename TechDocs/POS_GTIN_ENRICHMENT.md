@@ -4,7 +4,7 @@
 
 Пов’язано: [[POS_GTIN_SETUP]] · [[POS_POST_MVP]] · [[POS_GTIN_LEARNING_API]] · [[POS_GTIN_TODO]] (що лишилось доробити)
 
-> **Статус:** free path **реалізовано** (кеш + Open*Facts + UPCitemdb + upc.dev).  
+> **Статус:** free path **реалізовано** (кеш + Open*Facts + UPCitemdb).  
 > GS1 enterprise — як і раніше поза scope.  
 > Налаштування ключів: [[POS_GTIN_SETUP]].  
 > Масове наповнення кешу: [[POS_GTIN_LEARNING_API]].
@@ -49,13 +49,27 @@ indicator-цифра (`14820000000014` — ящик того ж товару) л
 | Власний `pos_gtin_cache` | server | ∞ | — |
 | Open Products / Food / Beauty Facts | **клієнт** (CORS `*`) | 1 скан ≈ 1 req | — |
 | UPCitemdb trial | **server** proxy | 100/день на IP | `shared` — один на деплой |
-| [upc.dev](https://upc.dev/) Free | **server** + `UPC_DEV_API_KEY` | 100/день на ключ | `key:<sha256[..16]>` — свій у кожного ключа |
 
-Лічильник ключується тим, що тарифікує **провайдер**, а не `store_id`: два
-магазини на спільному `UPC_DEV_API_KEY` справді ділять одну квоту вгорі. Слот
-резервується до запиту (щоб конкурентні lookup-и не проскочили ліміт) і
+Слот резервується до запиту (щоб конкурентні lookup-и не проскочили ліміт) і
 повертається, якщо запит не долетів — таймаут, обрив, `5xx`. На `4xx` не
 повертається: `429` означає, що квоту витрачено, `401/403` — що ключ хибний.
+
+### upc.dev — прибрано 2026-09-09
+
+Провайдер **вигадував відповіді**, а не помилявся. Перевірено прямо: на
+`1111111111116` він видав «lana grossa double flyer… / FITLINE», на
+`9999999999994` — «Light & Free SKYR A BOIRE», а на `1504230037765` (бита
+контрольна цифра, такого GTIN не існує) — «The Original Donut Shop Coffee
+K-Cup Pods». На восьми реальних бирках дитячого одягу він дав чотири впевнено
+неправильні назви: турецький муслін став «Zelda: Tears of the Kingdom»,
+французька сукня — кремом La Roche-Posay.
+
+Кеш спільний на всі магазини, тож одна вигадана назва отруює довідник для всіх.
+Джерело прибране цілком: провайдер, його per-store ключ і добова стеля
+(`pos_stores.gtin_api_key` / `gtin_daily_limit` лишились у БД як legacy-колонки,
+але з API і з налаштувань зникли). Значення `upc_dev` лишилось у `GtinSource`
+для вже записаних рядків — воно поза списком пріоритетів, тому має скор 0 і
+програє будь-якому живому джерелу.
 
 UPCitemdb **немає** CORS для наших origin — клієнтські квоти для нього неможливі без proxy.
 
@@ -74,12 +88,12 @@ UPCitemdb **немає** CORS для наших origin — клієнтські 
 скан/EAN у stub
   → GET cache
   → parallel Open*Facts (browser) → POST ingest
-  → POST quota-providers (upcitemdb ∥ upc_dev)
+  → POST quota-providers (upcitemdb)
   → miss → ручна назва
 ```
 
 Merge priority (default):  
-`manual` > `open_products_facts` > `upc_dev` > `upcitemdb` > `open_beauty_facts` > `open_food_facts`  
+`manual` > `open_products_facts` > `upcitemdb` > `open_beauty_facts` > `open_food_facts`  
 Override: `GTIN_SOURCE_PRIORITY` (якщо в переліку немає `manual`, він додається першим).
 
 `manual` веде свідомо: назву, яку набрала людина з товаром у руках, наступний

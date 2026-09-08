@@ -61,22 +61,6 @@ describe.skipIf(!hasDb)('POS store, analytics, QR & GTIN routes', () => {
       const res = await app.inject({ method: 'GET', url: '/api/pos/store' });
       expect(res.statusCode).toBe(401);
     });
-
-    it('never exposes the raw GTIN API key', async () => {
-      await app.inject({
-        method: 'PATCH',
-        url: '/api/pos/store',
-        headers: auth(store.ownerToken),
-        payload: { gtin_api_key: 'super-secret-key' },
-      });
-      const res = await app.inject({
-        method: 'GET',
-        url: '/api/pos/store',
-        headers: auth(store.ownerToken),
-      });
-      expect(JSON.stringify(res.json())).not.toContain('super-secret-key');
-      expect(res.json().gtin_api_key_set).toBe(true);
-    });
   });
 
   describe('PATCH /store', () => {
@@ -126,33 +110,6 @@ describe.skipIf(!hasDb)('POS store, analytics, QR & GTIN routes', () => {
       });
       expect(res.statusCode).toBe(400);
       expect(res.json().error).toBe('qr_payment_mode must be static or dynamic');
-    });
-
-    it.each([0, -1, 1.5, 'ten'])('400s gtin_daily_limit %j', async (value) => {
-      const res = await app.inject({
-        method: 'PATCH',
-        url: '/api/pos/store',
-        headers: auth(store.ownerToken),
-        payload: { gtin_daily_limit: value },
-      });
-      expect(res.statusCode).toBe(400);
-      expect(res.json().error).toBe('gtin_daily_limit must be a positive integer');
-    });
-
-    it('clears the GTIN key on an explicit null', async () => {
-      await app.inject({
-        method: 'PATCH',
-        url: '/api/pos/store',
-        headers: auth(store.ownerToken),
-        payload: { gtin_api_key: 'k-to-clear' },
-      });
-      const res = await app.inject({
-        method: 'PATCH',
-        url: '/api/pos/store',
-        headers: auth(store.ownerToken),
-        payload: { gtin_api_key: null },
-      });
-      expect(res.json().gtin_api_key_set).toBe(false);
     });
 
     describe('enabled_modules', () => {

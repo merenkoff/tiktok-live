@@ -6,10 +6,22 @@
 
 export type GtinSource =
   | 'manual'
+  /**
+   * A supplier price list, imported by the owner on /admin/gtin. Ranks just
+   * under `manual` — the supplier knows the goods better than any public
+   * database, but a cashier holding the item beats a spreadsheet.
+   */
+  | 'supplier'
   | 'open_products_facts'
   | 'open_food_facts'
   | 'open_beauty_facts'
   | 'upcitemdb'
+  /**
+   * Retired. upc.dev was dropped for fabricating answers (see
+   * `TechDocs/POS_GTIN_ENRICHMENT.md`); the value stays in the union only so
+   * rows it already wrote still map. It is absent from the priority list, so it
+   * scores 0 and loses to every live source — the next real lookup replaces it.
+   */
   | 'upc_dev';
 
 export interface GtinHint {
@@ -44,11 +56,15 @@ export interface GtinLookupResult {
  * which made the cache asymmetric — a cashier's correction was overwritten by
  * the next automatic lookup on that barcode, so a wrong name was effectively
  * permanent for every store sharing the cache.
+ *
+ * `supplier` sits directly under it: for a clothing assortment the supplier's
+ * own price list is the only source that actually knows the goods, and it
+ * should beat the public databases — but not a cashier's correction.
  */
 export const DEFAULT_SOURCE_PRIORITY: GtinSource[] = [
   'manual',
+  'supplier',
   'open_products_facts',
-  'upc_dev',
   'upcitemdb',
   'open_beauty_facts',
   'open_food_facts',

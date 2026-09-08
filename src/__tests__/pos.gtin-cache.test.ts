@@ -15,7 +15,6 @@ import {
 import { mapOpenFactsResponse } from '../pos/gtin/open-facts.js';
 import { computeCheckDigit } from '../pos/gtin/normalize.js';
 import { getUsedCount, tryConsumeBudget } from '../pos/gtin/provider-budget.js';
-import { mapUpcDevResponse } from '../pos/gtin/upc-dev.provider.js';
 import { mapUpcitemdbResponse } from '../pos/gtin/upcitemdb.provider.js';
 import { addPlaceholderLine, createDocument } from '../pos/stock-documents.service.js';
 
@@ -106,19 +105,22 @@ describe.skipIf(!hasDb)('POS GTIN cache and providers', () => {
     expect(hint?.name).toBe('Kids Bodysuit');
   });
 
-  it('upc_dev ranks above upcitemdb', async () => {
-    await clearGtinCache(gtinB);
+  it('the better automatic source wins, whichever arrives first', async () => {
+    const code = gtinB;
+    await clearGtinCache(code);
     await ingestGtinResults({
-      code: gtinB,
-      results: [{ source: 'upcitemdb', found: true, name: 'From Itemdb' }],
+      code,
+      storeId,
+      results: [{ source: 'upcitemdb', found: true, name: 'From UpcItemDb' }],
     });
     await ingestGtinResults({
-      code: gtinB,
-      results: [{ source: 'upc_dev', found: true, name: 'From UpcDev' }],
+      code,
+      storeId,
+      results: [{ source: 'open_products_facts', found: true, name: 'From Products Facts' }],
     });
-    const hint = await getGtinCache(gtinB);
-    expect(hint?.best_source).toBe('upc_dev');
-    expect(hint?.name).toBe('From UpcDev');
+    const hint = await getGtinCache(code);
+    expect(hint?.best_source).toBe('open_products_facts');
+    expect(hint?.name).toBe('From Products Facts');
   });
 
   it('manual learn from placeholder barcode', async () => {
@@ -177,7 +179,7 @@ describe.skipIf(!hasDb)('POS GTIN cache and providers', () => {
     await learnFromManual({ code, name: 'Ручна назва', brand: 'Ручний бренд', storeId });
 
     // Every automatic source, best first — none of them may take the title.
-    for (const source of ['open_products_facts', 'upc_dev', 'upcitemdb', 'open_food_facts']) {
+    for (const source of ['open_products_facts', 'upcitemdb', 'open_food_facts']) {
       await ingestGtinResults({
         code,
         results: [
@@ -231,19 +233,12 @@ describe('GTIN response mappers (no network)', () => {
     expect(beauty.name).toBe('Cream');
   });
 
-  it('maps upcitemdb and upc.dev', () => {
+  it('maps upcitemdb', () => {
     expect(
       mapUpcitemdbResponse({
         items: [{ title: 'Item', brand: 'B', images: ['http://i'] }],
       }).name
     ).toBe('Item');
     expect(mapUpcitemdbResponse({ items: [] }).found).toBe(false);
-
-    expect(
-      mapUpcDevResponse({
-        ok: true,
-        data: { name: 'Coke', brand: 'Coca-Cola', image_url: 'http://c' },
-      }).name
-    ).toBe('Coke');
   });
 });
