@@ -139,11 +139,12 @@ describe.skipIf(!hasDb)('POS store settings', () => {
     });
   });
 
-  it('tryConsumeBudget honours a positive limitOverride over the env default', async () => {
-    await pool.query(`DELETE FROM pos_gtin_provider_budget WHERE provider = 'upc_dev'`);
-    expect(await tryConsumeBudget('upc_dev', 2)).toBe(true);
-    expect(await tryConsumeBudget('upc_dev', 2)).toBe(true);
-    expect(await tryConsumeBudget('upc_dev', 2)).toBe(false);
+  it('tryConsumeBudget honours a positive limit over the env default', async () => {
+    const scope = `key:test_${Date.now()}`;
+    expect(await tryConsumeBudget('upc_dev', { scope, limit: 2 })).toBe(true);
+    expect(await tryConsumeBudget('upc_dev', { scope, limit: 2 })).toBe(true);
+    expect(await tryConsumeBudget('upc_dev', { scope, limit: 2 })).toBe(false);
+    await pool.query(`DELETE FROM pos_gtin_provider_budget WHERE scope = $1`, [scope]);
   });
 
   it('delivers auto_print_receipt on the auth context (not the gtin flags)', async () => {
