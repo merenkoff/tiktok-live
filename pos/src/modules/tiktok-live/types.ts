@@ -44,3 +44,30 @@ export interface BridgeTokenResponse {
   user: { id: number; tiktok_username: string };
   expiresAt: string;
 }
+
+/**
+ * Broadcast settings, as the owner-only POS proxy reports them
+ * (`GET /api/pos/live/settings`). Declared locally for the same reason as
+ * `BridgeTokenResponse` above.
+ *
+ * Secrets are absent by design — only whether one is stored.
+ */
+export interface LiveSettings {
+  user_id: number;
+  tiktok_username: string | null;
+  telegram_bot_token_set: boolean;
+  /** `bigint` column — a string end to end so precision survives. */
+  telegram_channel_id: string | null;
+  novaposhta_api_key_set: boolean;
+  novaposhta_merchant_name: string | null;
+  reservation_timeout_minutes: number;
+}
+
+/** Omit a field to keep it, send `null` to clear it, send a value to set it. */
+export interface LiveSettingsPatch {
+  telegram_bot_token?: string | null;
+  telegram_channel_id?: string | null;
+  novaposhta_api_key?: string | null;
+  novaposhta_merchant_name?: string | null;
+  reservation_timeout_minutes?: number;
+}

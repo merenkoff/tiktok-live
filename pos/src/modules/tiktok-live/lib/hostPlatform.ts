@@ -26,7 +26,7 @@
 // it against roadmap #1 (a real platform-surface version) first.
 
 import * as host from '@pos/platform';
-import type { BridgeTokenResponse } from '../types';
+import type { BridgeTokenResponse, LiveSettings, LiveSettingsPatch } from '../types';
 
 /** Host symbols this module cannot work without, in `missingHostApi()` order. */
 export const REQUIRED_HOST_API = ['apiOrigin', 'api.liveSessionToken', 'usePosShell'] as const;
@@ -82,4 +82,69 @@ export function liveSessionToken(): Promise<BridgeTokenResponse> {
   if (missing.length > 0) return Promise.reject(new HostTooOldError(missing));
   return (host.api as unknown as { liveSessionToken: () => Promise<BridgeTokenResponse> })
     .liveSessionToken();
+}
+
+// ── Optional capability: broadcast settings ────────────────────────────────
+//
+// Deliberately NOT part of `REQUIRED_HOST_API`. These back the module's ADMIN
+// surface only; the till's broadcast screen never touches them. Requiring them
+// would cost the desk one more shell version it can no longer run on, for a
+// screen that shell's cashier cannot reach anyway (`mount: 'admin'` is web-only).
+//
+// So the settings page probes instead, and an older shell gets an explanatory
+// "update the app" card rather than a dead route.
+
+type SettingsApi = {
+  liveSettings?: () => Promise<LiveSettings>;
+  updateLiveSettings?: (patch: LiveSettingsPatch) => Promise<LiveSettings>;
+  testLiveTelegram?: () => Promise<{ ok: boolean; username: string | null }>;
+};
+
+function settingsApi(): SettingsApi {
+  return (host.api ?? {}) as SettingsApi;
+}
+
+/** Host symbols the settings screen needs, in report order. Empty = supported. */
+export function missingSettingsApi(): string[] {
+  const api = settingsApi();
+  const missing: string[] = [];
+  if (!hasFn(api.liveSettings)) missing.push('api.liveSettings');
+  if (!hasFn(api.updateLiveSettings)) missing.push('api.updateLiveSettings');
+  if (!hasFn(api.testLiveTelegram)) missing.push('api.testLiveTelegram');
+  return missing;
+}
+
+/** Does this shell expose the settings proxy at all? */
+export function hasSettingsApi(): boolean {
+  return missingSettingsApi().length === 0;
+}
+
+function requireSettingsApi(): SettingsApi {
+  const missing = missingSettingsApi();
+  if (missing.length > 0) throw new HostTooOldError(missing);
+  return settingsApi();
+}
+
+export function liveSettings(): Promise<LiveSettings> {
+  try {
+    return requireSettingsApi().liveSettings!();
+  } catch (error) {
+    return Promise.reject(error);
+  }
+}
+
+export function updateLiveSettings(patch: LiveSettingsPatch): Promise<LiveSettings> {
+  try {
+    return requireSettingsApi().updateLiveSettings!(patch);
+  } catch (error) {
+    return Promise.reject(error);
+  }
+}
+
+export function testLiveTelegram(): Promise<{ ok: boolean; username: string | null }> {
+  try {
+    return requireSettingsApi().testLiveTelegram!();
+  } catch (error) {
+    return Promise.reject(error);
+  }
 }

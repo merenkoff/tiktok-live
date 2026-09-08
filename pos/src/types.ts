@@ -423,6 +423,33 @@ export interface LiveBridgeToken {
 }
 
 /**
+ * TikTok LIVE broadcast settings, as the owner-only proxy
+ * (`GET /api/pos/live/settings`) reports them.
+ *
+ * Secrets are absent by design — only whether one is stored. Returning them
+ * masked meant a form round-trip wrote the mask over the real credential.
+ */
+export interface LiveSettings {
+  user_id: number;
+  tiktok_username: string | null;
+  telegram_bot_token_set: boolean;
+  /** `bigint` column — a string end to end so precision survives. */
+  telegram_channel_id: string | null;
+  novaposhta_api_key_set: boolean;
+  novaposhta_merchant_name: string | null;
+  reservation_timeout_minutes: number;
+}
+
+/** Omit a field to keep it, send `null`/`''` to clear it, send a value to set it. */
+export interface LiveSettingsPatch {
+  telegram_bot_token?: string | null;
+  telegram_channel_id?: string | null;
+  novaposhta_api_key?: string | null;
+  novaposhta_merchant_name?: string | null;
+  reservation_timeout_minutes?: number;
+}
+
+/**
  * One row of the shared GTIN cache (`pos_gtin_cache`), as the owner's repair
  * page sees it. `gtin` is the canonical GTIN-14 storage key — show it through
  * `displayGtin` rather than raw.

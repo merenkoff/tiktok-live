@@ -16,6 +16,8 @@ import type {
   StoreConfig,
   StorePatch,
   LiveBridgeToken,
+  LiveSettings,
+  LiveSettingsPatch,
   SaleListItem,
   StaffMember,
   SalesSummary,
@@ -430,6 +432,30 @@ class PosApi {
   async liveSessionToken(): Promise<LiveBridgeToken> {
     const { data } = await this.client.post<LiveBridgeToken>('/live/session-token');
     return data;
+  }
+
+  /**
+   * Broadcast settings, owner-only (backend `ensurePosOwner`).
+   *
+   * Unlike `liveSessionToken`, these do NOT go through the LIVE token: a bridge
+   * token is mintable by any staff member and says nothing about role, so the
+   * gate has to live on a POS route. The `tiktok-live` module reaches these
+   * through the host rather than calling LIVE itself, and probes for their
+   * presence — an older shell simply does not have them.
+   */
+  async liveSettings(): Promise<LiveSettings> {
+    const { data } = await this.client.get<LiveSettings>('/live/settings');
+    return data;
+  }
+
+  async updateLiveSettings(patch: LiveSettingsPatch): Promise<LiveSettings> {
+    const { data } = await this.client.put<LiveSettings>('/live/settings', patch);
+    return data;
+  }
+
+  async testLiveTelegram(): Promise<{ ok: boolean; username: string | null }> {
+    const { data } = await this.client.post('/live/settings/test-telegram');
+    return data as { ok: boolean; username: string | null };
   }
 
   async qrInvoice(amount_cents: number, sale_ref: string) {

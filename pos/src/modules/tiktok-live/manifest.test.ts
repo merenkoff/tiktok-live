@@ -46,6 +46,25 @@ describe('tiktok-live manifest', () => {
     expect(admin?.path).toBe('live');
   });
 
+  // This is the design decision, encoded: the two mounts are two SURFACES, not
+  // one screen shown twice. The mount carries the chrome, the audience and the
+  // shell, so the admin one is owner-only and holds the configuration while the
+  // root one stays the operational desk any staff member uses.
+  it('renders a different screen per mount', () => {
+    const root = tiktokLiveModule.routes.find((r) => (r.mount ?? 'root') === 'root');
+    const admin = tiktokLiveModule.routes.find((r) => r.mount === 'admin');
+    expect(root?.element).toBeDefined();
+    expect(admin?.element).toBeDefined();
+    expect(admin?.element).not.toBe(root?.element);
+  });
+
+  // `ownerOnly` is MODULE-scoped: setting it to gate the settings screen would
+  // also take the till's broadcast screen away from every seller. The owner gate
+  // has to come from the admin mount, which it does.
+  it('is not owner-only as a whole — sellers run the broadcast', () => {
+    expect(tiktokLiveModule.ownerOnly).toBeUndefined();
+  });
+
   it('points every nav entry at a path the routes cover', () => {
     const targets = tiktokLiveModule.nav.map((n) => n.to);
     expect(targets).toContain('/live');

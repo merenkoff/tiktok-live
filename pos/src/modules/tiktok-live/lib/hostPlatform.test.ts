@@ -98,3 +98,64 @@ describe('hostPlatform on a shell older than this module', () => {
     expect(shim.hostVersion()).toBe('unknown');
   });
 });
+
+// ── The settings capability is OPTIONAL ────────────────────────────────────
+// It backs the admin surface only. Requiring it would cost the till's broadcast
+// screen one more shell version it can no longer run on, for a screen that
+// shell's cashier cannot reach anyway.
+
+describe('optional settings capability', () => {
+  // Built per test: the global `afterEach` runs `vi.restoreAllMocks()`, which
+  // strips the implementation off a `vi.fn()` shared at describe scope.
+  const settingsHost = () => ({
+    ...MODERN_HOST,
+    api: {
+      liveSessionToken: vi.fn().mockResolvedValue({ token: 't' }),
+      liveSettings: vi.fn().mockResolvedValue({ user_id: 1 }),
+      updateLiveSettings: vi.fn().mockResolvedValue({ user_id: 1 }),
+      testLiveTelegram: vi.fn().mockResolvedValue({ ok: true, username: 'bot' }),
+    },
+  });
+
+  it('stays out of the required contract', async () => {
+    const shim = await loadShim(settingsHost());
+    // Widening this is the thing to think twice about — see the file header.
+    expect(shim.REQUIRED_HOST_API).toHaveLength(3);
+    expect(shim.REQUIRED_HOST_API).not.toContain('api.liveSettings');
+  });
+
+  it('is reported present on a host that ships it', async () => {
+    const shim = await loadShim(settingsHost());
+    expect(shim.hasSettingsApi()).toBe(true);
+    expect(shim.missingSettingsApi()).toEqual([]);
+    await expect(shim.liveSettings()).resolves.toEqual({ user_id: 1 });
+  });
+
+  it('is reported absent on a host that predates it, without breaking the desk', async () => {
+    const shim = await loadShim(MODERN_HOST);
+    expect(shim.hasSettingsApi()).toBe(false);
+    expect(shim.missingSettingsApi()).toEqual([
+      'api.liveSettings',
+      'api.updateLiveSettings',
+      'api.testLiveTelegram',
+    ]);
+    // The broadcast screen's own contract is untouched.
+    expect(shim.missingHostApi()).toEqual([]);
+  });
+
+  it('rejects rather than throwing synchronously when the host lacks it', async () => {
+    const shim = await loadShim(MODERN_HOST);
+    await expect(shim.liveSettings()).rejects.toBeInstanceOf(shim.HostTooOldError);
+    await expect(shim.updateLiveSettings({})).rejects.toBeInstanceOf(shim.HostTooOldError);
+    await expect(shim.testLiveTelegram()).rejects.toBeInstanceOf(shim.HostTooOldError);
+  });
+
+  it('treats a partially-updated host as unsupported', async () => {
+    const shim = await loadShim({
+      ...MODERN_HOST,
+      api: { liveSessionToken: vi.fn(), liveSettings: vi.fn() },
+    });
+    expect(shim.hasSettingsApi()).toBe(false);
+    expect(shim.missingSettingsApi()).toEqual(['api.updateLiveSettings', 'api.testLiveTelegram']);
+  });
+});
