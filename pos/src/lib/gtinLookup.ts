@@ -89,6 +89,7 @@ const SOURCE_LABEL: Record<string, string> = {
   // Retired provider; rows it wrote may still be in the cache.
   upc_dev: 'upc.dev (застаріле)',
   manual: 'збережено вручну',
+  supplier: 'прайс постачальника',
 };
 
 export function gtinSourceLabel(source: string | null | undefined): string {

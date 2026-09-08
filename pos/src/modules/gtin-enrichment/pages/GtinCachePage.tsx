@@ -5,6 +5,7 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { displayGtin, gtinSourceLabel } from '@pos/platform';
 import { gtinCacheApi, type GtinCacheEntry } from '../data/gtinCacheApi';
+import { SupplierImportPanel } from '../components/SupplierImportPanel';
 
 const PAGE_SIZE = 25;
 
@@ -124,10 +125,12 @@ export function GtinCachePage() {
         <h2 className="text-2xl font-semibold">GTIN-довідник</h2>
         <p className="text-sq-secondary mt-1 text-sm">
           Назви, які каса підтягує за штрихкодом під час приймання товару. Довідник спільний —
-          виправлення бачать усі магазини. Ручна правка має найвищий пріоритет: автоматичний
-          пошук її більше не перезапише.
+          виправлення бачать усі магазини. Пріоритет: ручна правка касира → прайс постачальника →
+          автоматичний пошук.
         </p>
       </div>
+
+      <SupplierImportPanel onImported={() => void reload()} />
 
       <form onSubmit={onSearch} className="flex flex-wrap items-center gap-3">
         <input
