@@ -53,7 +53,7 @@ export function parseDumpTsvLine(
   const brand = brandRaw.split(',')[0]?.trim() || null;
   const image_url = get('image_url') || get('image_front_url') || null;
   return {
-    gtin: norm.gtin,
+    gtin: norm.canonical,
     name: name.trim().slice(0, 500),
     brand,
     image_url: image_url || null,
@@ -83,7 +83,7 @@ export function parseDumpJsonlLine(
   const image_url =
     (obj.image_url as string) || (obj.image_front_url as string) || null;
   return {
-    gtin: norm.gtin,
+    gtin: norm.canonical,
     name: name.slice(0, 500),
     brand,
     image_url,

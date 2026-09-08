@@ -58,19 +58,19 @@ export async function learnBatch(params: {
     }
     const name = item.name?.trim() || null;
     if (!name) {
-      skipped.push({ gtin: norm.gtin, reason: 'empty_name' });
+      skipped.push({ gtin: norm.display, reason: 'empty_name' });
       continue;
     }
     const source = (item.source?.trim() || 'manual') as GtinSource;
     if (!ALLOWED_SOURCES.has(source)) {
-      skipped.push({ gtin: norm.gtin, reason: 'bad_source' });
+      skipped.push({ gtin: norm.display, reason: 'bad_source' });
       continue;
     }
 
     accepted += 1;
-    const before = await getGtinCache(norm.gtin);
+    const before = await getGtinCache(norm.canonical);
     const hint = await ingestGtinResults({
-      code: norm.gtin,
+      code: norm.canonical,
       storeId: params.storeId,
       staffId: params.staffId,
       results: [
