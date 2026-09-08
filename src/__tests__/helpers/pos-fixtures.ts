@@ -35,7 +35,7 @@ export async function applyPosMigrations(): Promise<void> {
   // migration doesn't leave a half-applied schema looking "already done".
   const present = await pool.query(
     `SELECT 1 FROM information_schema.columns
-     WHERE table_name = 'pos_gtin_cache' AND column_name = 'blocked_at'`
+     WHERE table_name = 'pos_gtin_provider_budget' AND column_name = 'scope'`
   );
   if (present.rows.length > 0) return;
 

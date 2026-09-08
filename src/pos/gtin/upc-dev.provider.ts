@@ -5,7 +5,12 @@
 // src/pos/gtin/upc-dev.provider.ts
 
 import type { GtinLookupResult } from './types.js';
-import { tryConsumeBudget } from './provider-budget.js';
+import {
+  budgetScope,
+  isRefundableStatus,
+  releaseBudget,
+  tryConsumeBudget,
+} from './provider-budget.js';
 import type { StoreGtinConfig } from './gtin-cache.service.js';
 import type { QuotaSkip } from './upcitemdb.provider.js';
 
@@ -36,7 +41,13 @@ export async function lookupUpcDev(
   const key = cfg?.upcDevApiKey?.trim() || process.env.UPC_DEV_API_KEY?.trim();
   if (!key) return { skipped: 'no_key' };
 
-  const ok = await tryConsumeBudget('upc_dev', cfg?.upcDevDailyLimit ?? undefined);
+  // upc.dev meters the key, so the daily counter is keyed by the key too — a
+  // store with its own key no longer spends another store's allowance.
+  const budget = {
+    scope: budgetScope('upc_dev', key),
+    limit: cfg?.upcDevDailyLimit ?? undefined,
+  };
+  const ok = await tryConsumeBudget('upc_dev', budget);
   if (!ok) return { skipped: 'quota' };
 
   const contact = process.env.GTIN_CONTACT_EMAIL?.trim();
@@ -55,11 +66,14 @@ export async function lookupUpcDev(
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) {
+      if (isRefundableStatus(res.status)) await releaseBudget('upc_dev', budget);
       return { skipped: 'error', reason: `http_${res.status}` };
     }
     const json = await res.json();
     return mapUpcDevResponse(json);
   } catch (e) {
+    // Timed out or never connected — the provider never counted this one.
+    await releaseBudget('upc_dev', budget);
     return { skipped: 'error', reason: e instanceof Error ? e.message : 'fetch_failed' };
   }
 }

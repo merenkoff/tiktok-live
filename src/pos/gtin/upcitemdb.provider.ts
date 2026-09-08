@@ -5,7 +5,12 @@
 // src/pos/gtin/upcitemdb.provider.ts
 
 import type { GtinLookupResult } from './types.js';
-import { tryConsumeBudget } from './provider-budget.js';
+import {
+  budgetScope,
+  isRefundableStatus,
+  releaseBudget,
+  tryConsumeBudget,
+} from './provider-budget.js';
 
 export type QuotaSkip = { skipped: 'quota' | 'no_key' | 'error'; reason?: string };
 
@@ -34,7 +39,10 @@ export function mapUpcitemdbResponse(body: unknown): GtinLookupResult {
 }
 
 export async function lookupUpcitemdb(gtin: string): Promise<GtinLookupResult | QuotaSkip> {
-  const ok = await tryConsumeBudget('upcitemdb');
+  // The trial has no key: upcitemdb meters our source IP, so the whole
+  // deployment shares one bucket.
+  const budget = { scope: budgetScope('upcitemdb') };
+  const ok = await tryConsumeBudget('upcitemdb', budget);
   if (!ok) return { skipped: 'quota' };
 
   const contact = process.env.GTIN_CONTACT_EMAIL?.trim();
@@ -49,11 +57,14 @@ export async function lookupUpcitemdb(gtin: string): Promise<GtinLookupResult | 
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) {
+      if (isRefundableStatus(res.status)) await releaseBudget('upcitemdb', budget);
       return { skipped: 'error', reason: `http_${res.status}` };
     }
     const json = await res.json();
     return mapUpcitemdbResponse(json);
   } catch (e) {
+    // Timed out or never connected — the provider never counted this one.
+    await releaseBudget('upcitemdb', budget);
     return { skipped: 'error', reason: e instanceof Error ? e.message : 'fetch_failed' };
   }
 }
