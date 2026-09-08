@@ -1,6 +1,6 @@
 # Локальные заметки по проекту
 
-POS post-MVP / штрихкоди: [[POS_POST_MVP]] · [[POS_GTIN_ENRICHMENT]] · [[POS_GTIN_SETUP]] · [[POS_GTIN_LEARNING_API]] · [[RAILWAY_POS]] · [[POS_DESKTOP]]
+POS post-MVP / штрихкоди: [[POS_POST_MVP]] · [[POS_GTIN_ENRICHMENT]] · [[POS_GTIN_SETUP]] · [[POS_GTIN_LEARNING_API]] · [[POS_GTIN_TODO]] · [[RAILWAY_POS]] · [[POS_DESKTOP]]
 
 ## Inventory
 
