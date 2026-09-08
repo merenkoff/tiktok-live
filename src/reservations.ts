@@ -2,157 +2,183 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
+// src/reservations.ts — reservations for the multi-tenant LIVE automation.
+//
+// Every reservation belongs to one seller (`user_id`) and one broadcast
+// (`session_id`), so two sellers can use the same product code at the same time
+// without colliding. All the "is this taken?" queries are therefore scoped by
+// user; a bare product_code+size lookup would be a cross-tenant leak.
+//
+// The hold time is NOT read from the environment. It comes from the seller's
+// own `user_settings.reservation_timeout_minutes`, which the session snapshots
+// into memory at start (`sessions.manager.ts`) and passes down here. That is
+// deliberate: one broadcast runs with one consistent set of settings, and
+// changing them mid-stream requires a stop/start.
+
 import { pool } from './db.js';
 import { logger } from './logger.js';
 
+/** Used when a seller's settings row has no explicit value. Mirrors the DB default. */
+export const DEFAULT_RESERVATION_TIMEOUT_MINUTES = 5;
+
+/** A reservation is only "live" while it is still held and not yet expired. */
+const ACTIVE = `status = 'reserved' AND expires_at > NOW()`;
+
+const COLUMNS = `id, user_id, session_id, product_code, size, tiktok_nickname,
+                 status, created_at, expires_at, converted_to_order_id`;
+
 export interface Reservation {
   id: number;
+  userId: number;
+  sessionId: number;
   productCode: string;
   size: string;
   tiktokNickname: string;
+  status: string;
   createdAt: Date;
   expiresAt: Date;
   orderId: number | null;
 }
 
-const RESERVATION_TIMEOUT_MINUTES =
-  parseInt(process.env.RESERVATION_TIMEOUT_MINUTES || '5');
+function mapRow(row: any): Reservation {
+  return {
+    id: row.id,
+    userId: Number(row.user_id),
+    sessionId: Number(row.session_id),
+    productCode: row.product_code,
+    size: row.size,
+    tiktokNickname: row.tiktok_nickname,
+    status: row.status,
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+    orderId: row.converted_to_order_id === null ? null : Number(row.converted_to_order_id),
+  };
+}
+
+/** Clamp a settings value to something sane; falls back to the default when unset. */
+export function resolveTimeoutMinutes(minutes?: number | null): number {
+  const value = Number(minutes);
+  if (!Number.isFinite(value) || value <= 0) return DEFAULT_RESERVATION_TIMEOUT_MINUTES;
+  return Math.min(Math.round(value), 24 * 60);
+}
 
 /**
- * Create a reservation for a product+size combination
- * Returns reservation if successful, null if already reserved
+ * Hold a product+size for one viewer. Returns null when this seller already has
+ * a live hold on the same product+size (race-safe: the check and the insert
+ * share one transaction).
  */
-export async function createReservation(
-  productCode: string,
-  size: string,
-  tiktokNickname: string,
-  uniqueId?: any,
-): Promise<Reservation | null> {
+export async function createReservation(params: {
+  userId: number;
+  sessionId: number;
+  productCode: string;
+  size: string;
+  tiktokNickname: string;
+  /** From `user_settings.reservation_timeout_minutes` via the active session. */
+  timeoutMinutes?: number | null;
+}): Promise<Reservation | null> {
+  const { userId, sessionId, productCode, size, tiktokNickname } = params;
+  const timeoutMinutes = resolveTimeoutMinutes(params.timeoutMinutes);
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    // Check if already reserved or sold
     const existing = await client.query(
-      `SELECT id FROM reservations 
-       WHERE product_code = $1 AND size = $2 AND expires_at > NOW()`,
-      [productCode, size]
+      `SELECT id FROM reservations
+       WHERE user_id = $1 AND product_code = $2 AND size = $3 AND ${ACTIVE}
+       FOR UPDATE`,
+      [userId, productCode, size]
     );
 
     if (existing.rows.length > 0) {
       await client.query('ROLLBACK');
-      logger.info(`Reservation exists for ${productCode} ${size}`);
+      logger.info(`Reservation exists for ${productCode} ${size}`, { userId });
       return null;
     }
 
-    // Create reservation
-    const expiresAt = new Date(Date.now() + RESERVATION_TIMEOUT_MINUTES * 60000);
+    const expiresAt = new Date(Date.now() + timeoutMinutes * 60_000);
 
     const result = await client.query(
-      `INSERT INTO reservations (product_code, size, tiktok_nickname, expires_at)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, product_code, size, tiktok_nickname, created_at, expires_at, order_id`,
-      [productCode, size, tiktokNickname, expiresAt]
+      `INSERT INTO reservations
+         (user_id, session_id, product_code, size, tiktok_nickname, status, expires_at)
+       VALUES ($1, $2, $3, $4, $5, 'reserved', $6)
+       RETURNING ${COLUMNS}`,
+      [userId, sessionId, productCode, size, tiktokNickname, expiresAt]
     );
 
     await client.query('COMMIT');
-
-    const row = result.rows[0];
-    return {
-      id: row.id,
-      productCode: row.product_code,
-      size: row.size,
-      tiktokNickname: row.tiktok_nickname,
-      createdAt: row.created_at,
-      expiresAt: row.expires_at,
-      orderId: row.order_id,
-    };
+    return mapRow(result.rows[0]);
   } catch (error) {
     await client.query('ROLLBACK');
-    logger.error('Failed to create reservation', { error, productCode, size, uniqueId });
+    logger.error('Failed to create reservation', { error, userId, productCode, size });
     throw error;
   } finally {
     client.release();
   }
 }
 
-/**
- * Check if product+size is available
- */
+/** Is this product+size free for this seller right now? */
 export async function isAvailable(
+  userId: number,
   productCode: string,
   size: string
 ): Promise<boolean> {
   const result = await pool.query(
-    `SELECT id FROM reservations 
-     WHERE product_code = $1 AND size = $2 AND expires_at > NOW()`,
-    [productCode, size]
+    `SELECT id FROM reservations
+     WHERE user_id = $1 AND product_code = $2 AND size = $3 AND ${ACTIVE}`,
+    [userId, productCode, size]
   );
-
   return result.rows.length === 0;
 }
 
-/**
- * Get active reservation for product+size
- */
+/** The live hold on this product+size, if any. */
 export async function getReservation(
+  userId: number,
   productCode: string,
   size: string
 ): Promise<Reservation | null> {
   const result = await pool.query(
-    `SELECT id, product_code, size, tiktok_nickname, created_at, expires_at, order_id
-     FROM reservations 
-     WHERE product_code = $1 AND size = $2 AND expires_at > NOW()`,
-    [productCode, size]
+    `SELECT ${COLUMNS} FROM reservations
+     WHERE user_id = $1 AND product_code = $2 AND size = $3 AND ${ACTIVE}`,
+    [userId, productCode, size]
   );
-
-  if (result.rows.length === 0) {
-    return null;
-  }
-
-  const row = result.rows[0];
-  return {
-    id: row.id,
-    productCode: row.product_code,
-    size: row.size,
-    tiktokNickname: row.tiktok_nickname,
-    createdAt: row.created_at,
-    expiresAt: row.expires_at,
-    orderId: row.order_id,
-  };
+  return result.rows.length === 0 ? null : mapRow(result.rows[0]);
 }
 
-/**
- * Get all active reservations for a user
- */
-export async function getUserReservations(
+/** Live holds one viewer has with this seller. */
+export async function getReservationsByNickname(
+  userId: number,
   tiktokNickname: string
 ): Promise<Reservation[]> {
   const result = await pool.query(
-    `SELECT id, product_code, size, tiktok_nickname, created_at, expires_at, order_id
-     FROM reservations 
-     WHERE tiktok_nickname = $1 AND expires_at > NOW()
+    `SELECT ${COLUMNS} FROM reservations
+     WHERE user_id = $1 AND tiktok_nickname = $2 AND ${ACTIVE}
      ORDER BY created_at DESC`,
-    [tiktokNickname]
+    [userId, tiktokNickname]
   );
+  return result.rows.map(mapRow);
+}
 
-  return result.rows.map((row) => ({
-    id: row.id,
-    productCode: row.product_code,
-    size: row.size,
-    tiktokNickname: row.tiktok_nickname,
-    createdAt: row.created_at,
-    expiresAt: row.expires_at,
-    orderId: row.order_id,
-  }));
+/** Every live hold for this seller (admin view). */
+export async function listActiveReservations(userId: number): Promise<Reservation[]> {
+  const result = await pool.query(
+    `SELECT ${COLUMNS} FROM reservations
+     WHERE user_id = $1 AND ${ACTIVE}
+     ORDER BY created_at DESC`,
+    [userId]
+  );
+  return result.rows.map(mapRow);
 }
 
 /**
- * Release expired reservations (move to cron job)
+ * Release holds whose time is up (cron, every minute). Marks them `expired`
+ * rather than deleting, so a hold that already became an order keeps its
+ * `converted_to_order_id` trail.
  */
 export async function cleanupExpiredReservations(): Promise<number> {
   const result = await pool.query(
-    `DELETE FROM reservations WHERE expires_at <= NOW()`
+    `UPDATE reservations SET status = 'expired', updated_at = NOW()
+     WHERE status = 'reserved' AND expires_at <= NOW()`
   );
 
   if (result.rowCount && result.rowCount > 0) {
@@ -163,19 +189,21 @@ export async function cleanupExpiredReservations(): Promise<number> {
 }
 
 /**
- * Convert reservation to order
+ * Turn a still-live hold into a pending order. Returns null when the hold
+ * expired in the meantime.
  */
 export async function reservationToOrder(
   reservationId: number,
-  telegramId: number
+  telegramUserId: number
 ): Promise<number | null> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    // Get reservation
     const res = await client.query(
-      `SELECT * FROM reservations WHERE id = $1 AND expires_at > NOW()`,
+      `SELECT ${COLUMNS} FROM reservations
+       WHERE id = $1 AND ${ACTIVE}
+       FOR UPDATE`,
       [reservationId]
     );
 
@@ -186,24 +214,28 @@ export async function reservationToOrder(
 
     const reservation = res.rows[0];
 
-    // Create order
     const orderRes = await client.query(
-      `INSERT INTO orders (tiktok_nickname, telegram_id, product_code, size, status)
-       VALUES ($1, $2, $3, $4, 'pending')
+      `INSERT INTO orders
+         (user_id, session_id, product_code, size, tiktok_nickname,
+          telegram_user_id, status, payment_status)
+       VALUES ($1, $2, $3, $4, $5, $6, 'pending', 'unpaid')
        RETURNING id`,
       [
-        reservation.tiktok_nickname,
-        telegramId,
+        reservation.user_id,
+        reservation.session_id,
         reservation.product_code,
         reservation.size,
+        reservation.tiktok_nickname,
+        telegramUserId,
       ]
     );
 
-    const orderId = orderRes.rows[0].id;
+    const orderId = Number(orderRes.rows[0].id);
 
-    // Update reservation with order_id
     await client.query(
-      `UPDATE reservations SET order_id = $1 WHERE id = $2`,
+      `UPDATE reservations
+       SET converted_to_order_id = $1, status = 'ordered', updated_at = NOW()
+       WHERE id = $2`,
       [orderId, reservationId]
     );
 
@@ -211,7 +243,7 @@ export async function reservationToOrder(
     return orderId;
   } catch (error) {
     await client.query('ROLLBACK');
-    logger.error('Failed to convert reservation to order', { error });
+    logger.error('Failed to convert reservation to order', { error, reservationId });
     throw error;
   } finally {
     client.release();

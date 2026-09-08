@@ -15,6 +15,7 @@ import { TikTokLiveConnection, WebcastEvent } from 'tiktok-live-connector';
 export class TikTokInstance extends EventEmitter {
   private connection: any = null;
   private userId: number;
+  private sessionId: number;
   private settings: UserSettings;
   private isConnected = false;
   private reconnectAttempts = 0;
@@ -23,9 +24,10 @@ export class TikTokInstance extends EventEmitter {
   private userComments: Map<string, number> = new Map();
   private commentRateLimit = 1000; // 1 second between same user
 
-  constructor(userId: number, settings: UserSettings) {
+  constructor(userId: number, sessionId: number, settings: UserSettings) {
     super();
     this.userId = userId;
+    this.sessionId = sessionId;
     this.settings = settings;
   }
 
@@ -168,13 +170,16 @@ export class TikTokInstance extends EventEmitter {
       );
 
       try {
-        // Create reservation
-        const reservation = await createReservation(
-          this.userId.toString(),
-          parsed.productCode,
-          parsed.size,
-          uniqueId
-        );
+        // Hold the item. The hold time is this seller's own setting, snapshotted
+        // with the rest of `settings` when the session started.
+        const reservation = await createReservation({
+          userId: this.userId,
+          sessionId: this.sessionId,
+          productCode: parsed.productCode,
+          size: parsed.size,
+          tiktokNickname: uniqueId,
+          timeoutMinutes: this.settings.reservation_timeout_minutes,
+        });
 
         if (reservation) {
           logger.info(`✅ Reservation created for user ${this.userId}`, {

@@ -2,10 +2,23 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
+// src/novaposhta.ts — Nova Poshta client, one per seller.
+//
+// Credentials are per-user (`user_settings.novaposhta_api_key` /
+// `novaposhta_merchant_name`), edited in the LIVE admin Settings page. There is
+// deliberately no environment fallback and no process-wide singleton: a shared
+// key would bill every seller's waybills to one account.
+
 import axios from 'axios';
 import { logger } from './logger.js';
 
 const NOVAPOSHTA_API_URL = 'https://api.novaposhta.ua/v2.0/json/';
+
+/** The slice of `UserSettings` this client needs. */
+export interface NovaPoshtaCredentials {
+  novaposhta_api_key?: string | null;
+  novaposhta_merchant_name?: string | null;
+}
 
 interface NovaPoshtaRequest {
   apiKey: string;
@@ -22,17 +35,13 @@ interface NovaPoshtaResponse {
   errors?: string[];
 }
 
-class NovaPoshtaClient {
+export class NovaPoshtaClient {
   private apiKey: string;
   private merchantName: string;
 
-  constructor() {
-    this.apiKey = process.env.NOVAPOSHTA_API_KEY || '';
-    this.merchantName = process.env.NOVAPOSHTA_MERCHANT_NAME || '';
-
-    if (!this.apiKey) {
-      logger.warn('Nova Poshta API key not configured');
-    }
+  constructor(credentials: NovaPoshtaCredentials) {
+    this.apiKey = credentials.novaposhta_api_key?.trim() || '';
+    this.merchantName = credentials.novaposhta_merchant_name?.trim() || '';
   }
 
   /**
@@ -232,14 +241,11 @@ class NovaPoshtaClient {
   }
 }
 
-// Singleton
-let novaPoshtaClient: NovaPoshtaClient | null = null;
-
-export function getNovaPoshtaClient(): NovaPoshtaClient {
-  if (!novaPoshtaClient) {
-    novaPoshtaClient = new NovaPoshtaClient();
-  }
-  return novaPoshtaClient;
+/** Build a client for one seller from their saved settings. */
+export function createNovaPoshtaClient(
+  credentials: NovaPoshtaCredentials
+): NovaPoshtaClient {
+  return new NovaPoshtaClient(credentials);
 }
 
 export type { NovaPoshtaResponse };

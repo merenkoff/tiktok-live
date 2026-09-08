@@ -10,7 +10,7 @@ import { sessionManager } from '../sessions/sessions.manager.js';
 import type { UserSettings } from '../core/types.js';
 import * as ordersService from '../orders.js';
 import * as reservationsService from '../reservations.js';
-import { getNovaPoshtaClient } from '../novaposhta.js';
+import { createNovaPoshtaClient, type NovaPoshtaClient } from '../novaposhta.js';
 
 interface BotSession {
   reservationId?: number;
@@ -32,12 +32,15 @@ export class TelegramInstance {
   private bot: Telegraf<BotContext>;
   private userId: number;
   private settings: UserSettings;
+  private novaPoshta: NovaPoshtaClient;
   private botInfo: any;
 
   constructor(userId: number, settings: UserSettings) {
     this.userId = userId;
     this.settings = settings;
     this.bot = new Telegraf<BotContext>(settings.telegram_bot_token!);
+    // This seller's own Nova Poshta account, not a process-wide key.
+    this.novaPoshta = createNovaPoshtaClient(settings);
     this.setupHandlers();
   }
 
@@ -219,8 +222,7 @@ Just follow the prompts to complete your order!
    */
   private async getNovaPoshtaCities(): Promise<any[]> {
     try {
-      const np = getNovaPoshtaClient();
-      return await np.getCities();
+      return await this.novaPoshta.getCities();
     } catch (error) {
       logger.error('Error getting cities', { error, userId: this.userId });
       return [];
@@ -232,8 +234,7 @@ Just follow the prompts to complete your order!
    */
   private async getNovaPoshtaBranches(cityRef: string): Promise<any[]> {
     try {
-      const np = getNovaPoshtaClient();
-      return await np.getBranches(cityRef);
+      return await this.novaPoshta.getBranches(cityRef);
     } catch (error) {
       logger.error('Error getting branches', { error, userId: this.userId });
       return [];
@@ -266,7 +267,7 @@ Just follow the prompts to complete your order!
         customerName: ctx.session.customerName,
         phone: ctx.session.phone,
         city: ctx.session.city,
-        novaPoshtaBranch: ctx.session.branch,
+        branch: ctx.session.branch,
       });
 
       // Confirm payment

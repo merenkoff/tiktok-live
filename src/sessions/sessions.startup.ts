@@ -28,7 +28,11 @@ export async function startUserSession(userId: number): Promise<void> {
     try {
       logger.info(`🎬 Initializing TikTok for user ${userId}...`);
 
-      const tiktokInstance = new TikTokInstance(userId, activeSession.settings);
+      const tiktokInstance = new TikTokInstance(
+        userId,
+        activeSession.session.id,
+        activeSession.settings
+      );
 
       // Set in manager
       sessionManager.setTikTokManager(userId, tiktokInstance);

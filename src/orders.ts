@@ -2,239 +2,194 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
+// src/orders.ts — orders for the multi-tenant LIVE automation.
+//
+// Column names here follow the live schema (`migrations/001_create_schema.sql`):
+// `telegram_user_id`, `phone_number`, `branch`, and a separate `payment_status`
+// alongside `status`. The MVP shape this file used to carry
+// (`telegram_id` / `phone` / `nova_poshta_branch` / `payment_confirmed_at` /
+// `shipped_at`) never existed in that table, so every query in here raised
+// 42703 (undefined_column) at runtime.
+//
+// Reads are scoped by `user_id` — one seller must never see another's orders.
+
 import { pool } from './db.js';
-// import { logger } from './logger.js';
+
+const COLUMNS = `id, user_id, session_id, created_at, updated_at, order_code,
+                 tiktok_nickname, telegram_user_id, product_code, size, quantity,
+                 status, payment_status, customer_name, phone_number, city,
+                 branch, tracking_number`;
 
 export interface Order {
   id: number;
+  userId: number;
+  sessionId: number | null;
   createdAt: Date;
   updatedAt: Date;
+  orderCode: string | null;
   tiktokNickname: string;
-  telegramId: number | null;
+  telegramUserId: number | null;
   productCode: string;
   size: string;
+  quantity: number;
   status: string;
+  paymentStatus: string;
   customerName: string | null;
   phone: string | null;
   city: string | null;
-  novaPoshtaBranch: string | null;
+  branch: string | null;
   trackingNumber: string | null;
-  paymentConfirmedAt: Date | null;
-  shippedAt: Date | null;
 }
 
-/**
- * Get order by ID
- */
-export async function getOrder(orderId: number): Promise<Order | null> {
+/** Get one order, scoped to its owner. */
+export async function getOrder(userId: number, orderId: number): Promise<Order | null> {
   const result = await pool.query(
-    `SELECT 
-      id, created_at, updated_at, tiktok_nickname, telegram_id,
-      product_code, size, status, customer_name, phone, city,
-      nova_poshta_branch, tracking_number, payment_confirmed_at, shipped_at
-     FROM orders WHERE id = $1`,
-    [orderId]
+    `SELECT ${COLUMNS} FROM orders WHERE user_id = $1 AND id = $2`,
+    [userId, orderId]
   );
-
-  if (result.rows.length === 0) {
-    return null;
-  }
-
-  return mapRowToOrder(result.rows[0]);
+  return result.rows.length === 0 ? null : mapRowToOrder(result.rows[0]);
 }
 
-/**
- * Get orders by TikTok nickname
- */
-export async function getOrdersByTiktok(tiktokNickname: string): Promise<Order[]> {
+/** Orders this seller has from one TikTok viewer. */
+export async function getOrdersByTiktok(
+  userId: number,
+  tiktokNickname: string
+): Promise<Order[]> {
   const result = await pool.query(
-    `SELECT 
-      id, created_at, updated_at, tiktok_nickname, telegram_id,
-      product_code, size, status, customer_name, phone, city,
-      nova_poshta_branch, tracking_number, payment_confirmed_at, shipped_at
-     FROM orders WHERE tiktok_nickname = $1
+    `SELECT ${COLUMNS} FROM orders
+     WHERE user_id = $1 AND tiktok_nickname = $2
      ORDER BY created_at DESC`,
-    [tiktokNickname]
+    [userId, tiktokNickname]
   );
-
   return result.rows.map(mapRowToOrder);
 }
 
-/**
- * Get orders by status
- */
-export async function getOrdersByStatus(status: string): Promise<Order[]> {
+/** Orders in a given fulfilment state. */
+export async function getOrdersByStatus(userId: number, status: string): Promise<Order[]> {
   const result = await pool.query(
-    `SELECT 
-      id, created_at, updated_at, tiktok_nickname, telegram_id,
-      product_code, size, status, customer_name, phone, city,
-      nova_poshta_branch, tracking_number, payment_confirmed_at, shipped_at
-     FROM orders WHERE status = $1
+    `SELECT ${COLUMNS} FROM orders
+     WHERE user_id = $1 AND status = $2
      ORDER BY created_at DESC`,
-    [status]
+    [userId, status]
   );
-
   return result.rows.map(mapRowToOrder);
 }
 
-/**
- * Update order status
- */
+/** Orders still waiting for the seller to confirm money arrived. */
+export async function getOrdersPendingPayment(userId: number): Promise<Order[]> {
+  const result = await pool.query(
+    `SELECT ${COLUMNS} FROM orders
+     WHERE user_id = $1 AND payment_status = 'unpaid'
+     ORDER BY created_at ASC`,
+    [userId]
+  );
+  return result.rows.map(mapRowToOrder);
+}
+
 export async function updateOrderStatus(
   orderId: number,
   status: string
 ): Promise<Order | null> {
   const result = await pool.query(
     `UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2
-     RETURNING 
-      id, created_at, updated_at, tiktok_nickname, telegram_id,
-      product_code, size, status, customer_name, phone, city,
-      nova_poshta_branch, tracking_number, payment_confirmed_at, shipped_at`,
+     RETURNING ${COLUMNS}`,
     [status, orderId]
   );
-
-  if (result.rows.length === 0) {
-    return null;
-  }
-
-  return mapRowToOrder(result.rows[0]);
+  return result.rows.length === 0 ? null : mapRowToOrder(result.rows[0]);
 }
 
-/**
- * Update order with customer details
- */
+/** Fill in the delivery details the Telegram bot collected. */
 export async function updateOrderDetails(
   orderId: number,
   details: {
     customerName?: string;
     phone?: string;
     city?: string;
-    novaPoshtaBranch?: string;
+    branch?: string;
   }
 ): Promise<Order | null> {
-  const updateFields = [];
+  const updates: string[] = [];
   const values: any[] = [orderId];
   let paramCount = 2;
 
   if (details.customerName) {
-    updateFields.push(`customer_name = $${paramCount++}`);
+    updates.push(`customer_name = $${paramCount++}`);
     values.push(details.customerName);
   }
   if (details.phone) {
-    updateFields.push(`phone = $${paramCount++}`);
+    updates.push(`phone_number = $${paramCount++}`);
     values.push(details.phone);
   }
   if (details.city) {
-    updateFields.push(`city = $${paramCount++}`);
+    updates.push(`city = $${paramCount++}`);
     values.push(details.city);
   }
-  if (details.novaPoshtaBranch) {
-    updateFields.push(`nova_poshta_branch = $${paramCount++}`);
-    values.push(details.novaPoshtaBranch);
+  if (details.branch) {
+    updates.push(`branch = $${paramCount++}`);
+    values.push(details.branch);
   }
 
-  if (updateFields.length === 0) {
-    return getOrder(orderId);
+  if (updates.length === 0) {
+    const result = await pool.query(`SELECT ${COLUMNS} FROM orders WHERE id = $1`, [orderId]);
+    return result.rows.length === 0 ? null : mapRowToOrder(result.rows[0]);
   }
 
-  updateFields.push('updated_at = NOW()');
+  updates.push('updated_at = NOW()');
 
   const result = await pool.query(
-    `UPDATE orders SET ${updateFields.join(', ')} WHERE id = $1
-     RETURNING 
-      id, created_at, updated_at, tiktok_nickname, telegram_id,
-      product_code, size, status, customer_name, phone, city,
-      nova_poshta_branch, tracking_number, payment_confirmed_at, shipped_at`,
+    `UPDATE orders SET ${updates.join(', ')} WHERE id = $1
+     RETURNING ${COLUMNS}`,
     values
   );
-
-  if (result.rows.length === 0) {
-    return null;
-  }
-
-  return mapRowToOrder(result.rows[0]);
+  return result.rows.length === 0 ? null : mapRowToOrder(result.rows[0]);
 }
 
-/**
- * Add tracking number to order
- */
+/** Attach the Nova Poshta waybill and mark the parcel as sent. */
 export async function addTrackingNumber(
   orderId: number,
   trackingNumber: string
 ): Promise<Order | null> {
   const result = await pool.query(
-    `UPDATE orders 
-     SET tracking_number = $1, shipped_at = NOW(), status = 'shipped', updated_at = NOW()
+    `UPDATE orders
+     SET tracking_number = $1, status = 'shipped', updated_at = NOW()
      WHERE id = $2
-     RETURNING 
-      id, created_at, updated_at, tiktok_nickname, telegram_id,
-      product_code, size, status, customer_name, phone, city,
-      nova_poshta_branch, tracking_number, payment_confirmed_at, shipped_at`,
+     RETURNING ${COLUMNS}`,
     [trackingNumber, orderId]
   );
-
-  if (result.rows.length === 0) {
-    return null;
-  }
-
-  return mapRowToOrder(result.rows[0]);
+  return result.rows.length === 0 ? null : mapRowToOrder(result.rows[0]);
 }
 
-/**
- * Confirm payment
- */
+/** Seller confirmed the payment landed. */
 export async function confirmPayment(orderId: number): Promise<Order | null> {
   const result = await pool.query(
-    `UPDATE orders 
-     SET status = 'paid', payment_confirmed_at = NOW(), updated_at = NOW()
+    `UPDATE orders
+     SET payment_status = 'paid', status = 'paid', updated_at = NOW()
      WHERE id = $1
-     RETURNING 
-      id, created_at, updated_at, tiktok_nickname, telegram_id,
-      product_code, size, status, customer_name, phone, city,
-      nova_poshta_branch, tracking_number, payment_confirmed_at, shipped_at`,
+     RETURNING ${COLUMNS}`,
     [orderId]
   );
-
-  if (result.rows.length === 0) {
-    return null;
-  }
-
-  return mapRowToOrder(result.rows[0]);
+  return result.rows.length === 0 ? null : mapRowToOrder(result.rows[0]);
 }
 
-/**
- * Get orders pending payment (for admin dashboard)
- */
-export async function getOrdersPendingPayment(): Promise<Order[]> {
-  const result = await pool.query(
-    `SELECT 
-      id, created_at, updated_at, tiktok_nickname, telegram_id,
-      product_code, size, status, customer_name, phone, city,
-      nova_poshta_branch, tracking_number, payment_confirmed_at, shipped_at
-     FROM orders WHERE status = 'waiting_payment'
-     ORDER BY created_at ASC`
-  );
-
-  return result.rows.map(mapRowToOrder);
-}
-
-// Helper
 function mapRowToOrder(row: any): Order {
   return {
-    id: row.id,
+    id: Number(row.id),
+    userId: Number(row.user_id),
+    sessionId: row.session_id === null ? null : Number(row.session_id),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    orderCode: row.order_code,
     tiktokNickname: row.tiktok_nickname,
-    telegramId: row.telegram_id,
+    telegramUserId: row.telegram_user_id === null ? null : Number(row.telegram_user_id),
     productCode: row.product_code,
     size: row.size,
+    quantity: Number(row.quantity),
     status: row.status,
+    paymentStatus: row.payment_status,
     customerName: row.customer_name,
-    phone: row.phone,
+    phone: row.phone_number,
     city: row.city,
-    novaPoshtaBranch: row.nova_poshta_branch,
+    branch: row.branch,
     trackingNumber: row.tracking_number,
-    paymentConfirmedAt: row.payment_confirmed_at,
-    shippedAt: row.shipped_at,
   };
 }

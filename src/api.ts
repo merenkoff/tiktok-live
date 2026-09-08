@@ -16,16 +16,15 @@ import {
   getOrdersByStatus,
   getOrdersByTiktok,
   getOrdersPendingPayment,
-  // updateOrderStatus,
 } from './orders.js';
 import {
-  getUserReservations,
+  getReservationsByNickname,
   getReservation,
   cleanupExpiredReservations,
 } from './reservations.js';
-import { getTikTokManager } from './tiktok.js';
-import { getNovaPoshtaClient } from './novaposhta.js';
-import { ensureAuth } from './core/auth.js';
+import { createNovaPoshtaClient } from './novaposhta.js';
+import { getUserSettings } from './users/users.service.js';
+import { ensureAuth, isUnauthorizedError } from './core/auth.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(__dirname, '..', 'public');
@@ -104,45 +103,29 @@ export async function createServer(): Promise<FastifyInstance> {
   });
 
   /**
-   * Auth middleware for protected routes
+   * Auth for the routes below.
+   *
+   * Each protected handler awaits this itself — same pattern as the settings /
+   * sessions / POS controllers. There used to be a `preHandler` hook here that
+   * enforced nothing: it lived inside `fastify.register(...)`, so its scope
+   * covered no routes, and it called `ensureAuth` without awaiting, so the
+   * rejection could never be caught. Every route below was reachable without a
+   * token, including the leads list.
    */
-  fastify.register(async (fastify) => {
-    fastify.addHook('preHandler', async (request, reply) => {
-      // Skip auth для публічних маршрутів
-      const publicRoutes = [
-        '/',
-        '/about',
-        '/pos',
-        '/live',
-        '/yaku-kasu-obraty',
-        '/health',
-        '/api/leads',
-        '/api/admin/leads',
-        '/styles.css',
-        '/robots.txt',
-        '/sitemap.xml',
-        '/llms.txt',
-        '/favicon.ico',
-      ];
-      const path = request.url.split('?')[0];
-
-      if (
-        publicRoutes.includes(path) ||
-        path.startsWith('/assets/') ||
-        path.startsWith('/icons/') ||
-        path.startsWith('/og/')
-      ) {
-        return;
-      }
-
-      // Перевірити токен
-      try {
-        ensureAuth(request);
-      } catch {
+  async function requireAuth(
+    request: any,
+    reply: any
+  ): Promise<{ userId: number; username: string } | null> {
+    try {
+      return await ensureAuth(request);
+    } catch (error) {
+      if (isUnauthorizedError(error)) {
         reply.status(401).send({ error: 'Unauthorized' });
+        return null;
       }
-    });
-  });
+      throw error;
+    }
+  }
 
   /**
    * Public routes (без auth)
@@ -206,8 +189,9 @@ export async function createServer(): Promise<FastifyInstance> {
   /**
    * List leads (admin)
    */
-  fastify.get('/api/admin/leads', async (_request, reply) => {
+  fastify.get('/api/admin/leads', async (request, reply) => {
     try {
+      if (!(await requireAuth(request, reply))) return;
       const leads = await getLeads();
       return leads;
     } catch (error) {
@@ -220,13 +204,12 @@ export async function createServer(): Promise<FastifyInstance> {
   /**
    * Health check
    */
-  fastify.get('/health', async (_request, reply) => {
-    logger.info(`API health ${reply}`);
-    const tiktok = await getTikTokManager();
+  fastify.get('/health', async () => {
+    // Public and deliberately cheap. Per-seller TikTok connection state lives
+    // behind auth at /api/sessions/stats.
     return {
       status: 'ok',
       timestamp: new Date().toISOString(),
-      tiktok: tiktok.getStats(),
     };
   });
 
@@ -235,8 +218,10 @@ export async function createServer(): Promise<FastifyInstance> {
    */
   fastify.get('/api/orders/:orderId', async (request, reply) => {
     try {
+      const auth = await requireAuth(request, reply);
+      if (!auth) return;
       const { orderId } = request.params as { orderId: string };
-      const order = await getOrder(parseInt(orderId));
+      const order = await getOrder(auth.userId, parseInt(orderId));
 
       if (!order) {
         reply.status(404);
@@ -256,8 +241,10 @@ export async function createServer(): Promise<FastifyInstance> {
    */
   fastify.get('/api/orders/tiktok/:nickname', async (request, reply) => {
     try {
+      const auth = await requireAuth(request, reply);
+      if (!auth) return;
       const { nickname } = request.params as { nickname: string };
-      const orders = await getOrdersByTiktok(decodeURIComponent(nickname));
+      const orders = await getOrdersByTiktok(auth.userId, decodeURIComponent(nickname));
       return orders;
     } catch (error) {
       logger.error('Error fetching orders', { error });
@@ -271,8 +258,10 @@ export async function createServer(): Promise<FastifyInstance> {
    */
   fastify.get('/api/admin/orders/status/:status', async (request, reply) => {
     try {
+      const auth = await requireAuth(request, reply);
+      if (!auth) return;
       const { status } = request.params as { status: string };
-      const orders = await getOrdersByStatus(status);
+      const orders = await getOrdersByStatus(auth.userId, status);
       return orders;
     } catch (error) {
       logger.error('Error fetching orders by status', { error });
@@ -284,9 +273,11 @@ export async function createServer(): Promise<FastifyInstance> {
   /**
    * Get pending payment orders (admin)
    */
-  fastify.get('/api/admin/orders/pending', async (_request, reply) => {
+  fastify.get('/api/admin/orders/pending', async (request, reply) => {
     try {
-      const orders = await getOrdersPendingPayment();
+      const auth = await requireAuth(request, reply);
+      if (!auth) return;
+      const orders = await getOrdersPendingPayment(auth.userId);
       return orders;
     } catch (error) {
       logger.error('Error fetching pending orders', { error });
@@ -300,8 +291,13 @@ export async function createServer(): Promise<FastifyInstance> {
    */
   fastify.get('/api/reservations/:nickname', async (request, reply) => {
     try {
+      const auth = await requireAuth(request, reply);
+      if (!auth) return;
       const { nickname } = request.params as { nickname: string };
-      const reservations = await getUserReservations(decodeURIComponent(nickname));
+      const reservations = await getReservationsByNickname(
+        auth.userId,
+        decodeURIComponent(nickname)
+      );
       return reservations;
     } catch (error) {
       logger.error('Error fetching reservations', { error });
@@ -315,12 +311,18 @@ export async function createServer(): Promise<FastifyInstance> {
    */
   fastify.get('/api/availability/:productCode/:size', async (request, reply) => {
     try {
+      const auth = await requireAuth(request, reply);
+      if (!auth) return;
       const { productCode, size } = request.params as {
         productCode: string;
         size: string;
       };
 
-      const reservation = await getReservation(productCode.toUpperCase(), size);
+      const reservation = await getReservation(
+        auth.userId,
+        productCode.toUpperCase(),
+        size
+      );
 
       return {
         available: !reservation,
@@ -336,24 +338,11 @@ export async function createServer(): Promise<FastifyInstance> {
   });
 
   /**
-   * Get TikTok connection status
-   */
-  fastify.get('/api/status/tiktok', async (_request, reply) => {
-    try {
-      const tiktok = await getTikTokManager();
-      return tiktok.getStats();
-    } catch (error) {
-      logger.error('Error getting TikTok status', { error });
-      reply.status(500);
-      return { error: 'Internal server error' };
-    }
-  });
-
-  /**
    * Cleanup expired reservations (admin)
    */
-  fastify.post('/api/admin/cleanup', async (_request, reply) => {
+  fastify.post('/api/admin/cleanup', async (request, reply) => {
     try {
+      if (!(await requireAuth(request, reply))) return;
       const cleaned = await cleanupExpiredReservations();
       return {
         cleaned,
@@ -367,19 +356,30 @@ export async function createServer(): Promise<FastifyInstance> {
   });
 
   /**
-   * Get Nova Poshta cities
+   * Nova Poshta address book, using the caller's own API key from
+   * `user_settings` (the LIVE admin Settings page). 503 when they haven't
+   * filled it in yet.
    */
-  fastify.get('/api/novaposhta/cities', async (_request, reply) => {
+  async function novaPoshtaFor(request: any, reply: any) {
+    const auth = await requireAuth(request, reply);
+    if (!auth) return null;
+
+    const settings = await getUserSettings(auth.userId);
+    const np = createNovaPoshtaClient(settings ?? {});
+
+    if (!np.isConfigured()) {
+      reply.status(503).send({ error: 'Nova Poshta not configured' });
+      return null;
+    }
+
+    return np;
+  }
+
+  fastify.get('/api/novaposhta/cities', async (request, reply) => {
     try {
-      const np = getNovaPoshtaClient();
-
-      if (!np.isConfigured()) {
-        reply.status(503);
-        return { error: 'Nova Poshta not configured' };
-      }
-
-      const cities = await np.getCities();
-      return cities;
+      const np = await novaPoshtaFor(request, reply);
+      if (!np) return;
+      return await np.getCities();
     } catch (error) {
       logger.error('Error fetching cities', { error });
       reply.status(500);
@@ -387,23 +387,14 @@ export async function createServer(): Promise<FastifyInstance> {
     }
   });
 
-  /**
-   * Get Nova Poshta branches for city
-   */
   fastify.get('/api/novaposhta/branches/:cityRef', async (request, reply) => {
+    const { cityRef } = request.params as { cityRef: string };
     try {
-      const { cityRef } = request.params as { cityRef: string };
-      const np = getNovaPoshtaClient();
-
-      if (!np.isConfigured()) {
-        reply.status(503);
-        return { error: 'Nova Poshta not configured' };
-      }
-
-      const branches = await np.getBranches(cityRef);
-      return branches;
+      const np = await novaPoshtaFor(request, reply);
+      if (!np) return;
+      return await np.getBranches(cityRef);
     } catch (error) {
-      logger.error('Error fetching branches', { error });
+      logger.error('Error fetching branches', { error, cityRef });
       reply.status(500);
       return { error: 'Internal server error' };
     }

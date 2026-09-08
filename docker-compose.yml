@@ -31,13 +31,10 @@ services:
   app:
     build: .
     environment:
-      # TikTok
-      TIKTOK_USERNAME: ${TIKTOK_USERNAME}
-      
-      # Telegram
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
-      TELEGRAM_CHANNEL_ID: ${TELEGRAM_CHANNEL_ID}
-      
+      # TikTok / Telegram / Nova Poshta credentials and the reservation timer are
+      # per-seller rows in `user_settings`, set in the LIVE admin Settings page —
+      # not process-wide environment variables.
+
       # Database
       DB_HOST: postgres
       DB_PORT: 5432
@@ -53,15 +50,7 @@ services:
       API_PORT: 3000
       NODE_ENV: development
       LOG_LEVEL: debug
-      
-      # Nova Poshta
-      NOVAPOSHTA_API_KEY: ${NOVAPOSHTA_API_KEY}
-      NOVAPOSHTA_MERCHANT_NAME: ${NOVAPOSHTA_MERCHANT_NAME}
-      
-      # Business rules
-      RESERVATION_TIMEOUT_MINUTES: 5
-      PAYMENT_CONFIRMATION_TIMEOUT_MINUTES: 10
-    
+
     depends_on:
       postgres:
         condition: service_healthy

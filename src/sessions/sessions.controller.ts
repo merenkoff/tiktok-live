@@ -180,24 +180,28 @@ export async function registerSessionRoutes(fastify: FastifyInstance) {
    */
   fastify.get(
     '/api/admin/sessions',
-    async (_request, reply) => {
+    async (request, reply) => {
       try {
-        // No auth check for admin endpoint - add if needed
+        // Was deliberately open ("add if needed") and leaked every seller's
+        // TikTok handle and live session state to anonymous callers. There is
+        // no cross-tenant admin role yet, so a caller sees only their own row.
+        const { userId } = await ensureAuth(request);
         const allSessions = sessionManager.getAllActiveSessions();
-        const sessions = Array.from(allSessions.entries()).map(([userId, session]) => ({
-          userId,
-          sessionId: session.session.id,
-          username: session.user.tiktok_username,
-          status: session.session.status,
-          startedAt: session.session.started_at,
-          tiktokConnected: session.tiktokManager?.getStats()?.connected || false,
-          logCount: session.logs.length,
-        }));
+        const sessions = Array.from(allSessions.entries())
+          .filter(([id]) => id === userId)
+          .map(([id, session]) => ({
+            userId: id,
+            sessionId: session.session.id,
+            username: session.user.tiktok_username,
+            status: session.session.status,
+            startedAt: session.session.started_at,
+            tiktokConnected: session.tiktokManager?.getStats()?.connected || false,
+            logCount: session.logs.length,
+          }));
 
         reply.send(sessions);
       } catch (error) {
-        logger.error('Error getting all sessions', { error });
-        reply.status(500).send({ error: 'Failed to get sessions' });
+        sendAuthOrServerError(reply, error, 'Failed to get sessions');
       }
     }
   );

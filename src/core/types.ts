@@ -45,34 +45,39 @@ export interface SessionLog {
   created_at: Date;
 }
 
+/** Row shape of the `orders` table (see migrations/001_create_schema.sql). */
 export interface Order {
   id: number;
   user_id: number;
   session_id?: number;
   created_at: Date;
   updated_at: Date;
+  order_code?: string;
   tiktok_nickname: string;
-  telegram_id?: bigint;
+  telegram_user_id?: bigint;
   product_code: string;
   size: string;
+  quantity: number;
   status: 'pending' | 'reserved' | 'waiting_payment' | 'paid' | 'shipped' | 'delivered' | 'cancelled';
+  payment_status: 'unpaid' | 'paid' | 'refunded';
   customer_name?: string;
-  phone?: string;
+  phone_number?: string;
   city?: string;
-  nova_poshta_branch?: string;
+  branch?: string;
   tracking_number?: string;
-  payment_confirmed_at?: Date;
-  shipped_at?: Date;
 }
 
+/** Row shape of the `reservations` table. */
 export interface Reservation {
   id: number;
   user_id: number;
-  session_id?: number;
+  session_id: number;
   created_at: Date;
+  updated_at: Date;
   expires_at: Date;
   tiktok_nickname: string;
   product_code: string;
   size: string;
-  order_id?: number;
+  status: 'reserved' | 'expired' | 'ordered' | 'cancelled';
+  converted_to_order_id?: number;
 }
