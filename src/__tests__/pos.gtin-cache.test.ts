@@ -179,6 +179,40 @@ describe.skipIf(!hasDb)('POS GTIN cache and providers', () => {
     await clearGtinCache(code);
   });
 
+  it('a manual name survives every later automatic lookup', async () => {
+    const code = validEan13('481000000010');
+    await clearGtinCache(code);
+    await learnFromManual({ code, name: 'Ручна назва', brand: 'Ручний бренд', storeId });
+
+    // Every automatic source, best first — none of them may take the title.
+    for (const source of ['open_products_facts', 'upc_dev', 'upcitemdb', 'open_food_facts']) {
+      await ingestGtinResults({
+        code,
+        results: [
+          { source, found: true, name: `Автоматична з ${source}`, image_url: 'https://img/a.jpg' },
+        ],
+      });
+      const hint = await getGtinCache(code);
+      expect(hint?.name).toBe('Ручна назва');
+      expect(hint?.best_source).toBe('manual');
+    }
+
+    // An automatic result still donates a field the manual entry never had.
+    const hint = await getGtinCache(code);
+    expect(hint?.image_url).toBe('https://img/a.jpg');
+    expect(hint?.brand).toBe('Ручний бренд');
+    await clearGtinCache(code);
+  });
+
+  it('a newer manual edit replaces an older one, even when shorter', async () => {
+    const code = validEan13('481000000011');
+    await clearGtinCache(code);
+    await learnFromManual({ code, name: 'Молоко 3.2% пастеризоване', storeId });
+    await learnFromManual({ code, name: 'Молоко', storeId });
+    const hint = await getGtinCache(code);
+    expect(hint?.name).toBe('Молоко');
+    await clearGtinCache(code);
+  });
 });
 
 describe('GTIN response mappers (no network)', () => {

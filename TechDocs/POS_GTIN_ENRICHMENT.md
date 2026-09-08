@@ -19,6 +19,7 @@
 | Не блокує | Немає в базі / офлайн / ліміт → тиха форма |
 | Не auto-create | Товар у каталог тільки після «Провести» |
 | Кеш без TTL | `filled_at` / `updated_at`; eviction — на майбутнє |
+| Ручна правка липка | `manual` — найвищий пріоритет; автоматичний пошук її не перезаписує |
 | Feature flag | `pos_stores.gtin_lookup_enabled` default **true** |
 
 ### Ключ кеша — канонічний GTIN-14
@@ -72,8 +73,16 @@ UPCitemdb **немає** CORS для наших origin — клієнтські 
 ```
 
 Merge priority (default):  
-`open_products_facts` > `upc_dev` > `upcitemdb` > `open_beauty_facts` > `open_food_facts` > `manual`  
-Override: `GTIN_SOURCE_PRIORITY`.
+`manual` > `open_products_facts` > `upc_dev` > `upcitemdb` > `open_beauty_facts` > `open_food_facts`  
+Override: `GTIN_SOURCE_PRIORITY` (якщо в переліку немає `manual`, він додається першим).
+
+`manual` веде свідомо: назву, яку набрала людина з товаром у руках, наступний
+автоматичний пошук перезаписувати не має права. Раніше `manual` стояв **останнім**,
+і виправлення касира жило рівно до наступного скану того ж штрихкоду.
+
+Ті самі правила живуть і в `INCOMING_WINS` — SQL-умові атомарного upsert-а, — тож
+JS і SQL не розходяться. Гарантія зафіксована в
+`src/__tests__/pos.gtin-concurrency.test.ts`.
 
 ---
 

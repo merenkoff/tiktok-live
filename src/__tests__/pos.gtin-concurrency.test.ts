@@ -180,14 +180,10 @@ describe.skipIf(!hasDb)('GTIN cache under concurrent writers', () => {
     expect(hint?.brand).toBe('Acme');
   });
 
-  it('a later automatic lookup overwrites a manual title (known asymmetry)', async () => {
-    // Pins CURRENT behaviour, which this change deliberately preserved rather
-    // than altered. `isBetterCandidate` lets an incoming `manual` beat anything,
-    // but `manual` sits LAST in DEFAULT_SOURCE_PRIORITY, so it scores lowest and
-    // the next automatic write wins it back — a cashier's correction is not
-    // durable, and which one survives a race depends on arrival order. Making
-    // manual sticky is a product decision, tracked as stage 2 in
-    // TechDocs/POS_GTIN_TODO.md; change this test when that lands.
+  it('a later automatic lookup cannot take back a manual title', async () => {
+    // The asymmetry this test used to pin — `manual` scoring lowest, so a
+    // cashier's correction survived only until the next scan — is gone: stage 2
+    // moved `manual` to the front of the priority list.
     await ingestGtinResults({
       code: GTIN_DEMOTE,
       results: [{ source: 'manual', found: true, name: 'Cashier title' }],
@@ -198,8 +194,33 @@ describe.skipIf(!hasDb)('GTIN cache under concurrent writers', () => {
     });
 
     const hint = await getGtinCache(GTIN_DEMOTE);
-    expect(hint?.name).toBe('Auto title');
-    expect(hint?.best_source).toBe('open_products_facts');
+    expect(hint?.name).toBe('Cashier title');
+    expect(hint?.best_source).toBe('manual');
+  });
+
+  it('keeps the manual title when a manual and an automatic write race', async () => {
+    const settled = await bothReadBeforeEitherWrites(
+      GTIN_DEMOTE,
+      [{ source: 'manual', found: true, name: 'Cashier title' }],
+      [{ source: 'open_products_facts', found: true, name: 'Auto title' }]
+    );
+    expect(rejections(settled)).toEqual([]);
+
+    const hint = await getGtinCache(GTIN_DEMOTE);
+    expect(hint?.name).toBe('Cashier title');
+    expect(hint?.best_source).toBe('manual');
+  });
+
+  it('a newer manual edit replaces an older one, even when shorter', async () => {
+    await ingestGtinResults({
+      code: GTIN_UPDATE,
+      results: [{ source: 'manual', found: true, name: 'Молоко 3.2% пастеризоване' }],
+    });
+    await ingestGtinResults({
+      code: GTIN_UPDATE,
+      results: [{ source: 'manual', found: true, name: 'Молоко' }],
+    });
+    expect((await getGtinCache(GTIN_UPDATE))?.name).toBe('Молоко');
   });
 
   it('records lookup events for both writers even though one row results', async () => {

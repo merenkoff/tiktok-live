@@ -38,13 +38,14 @@ function isBetterCandidate(
 ): boolean {
   if (!incoming.name) return false;
   if (!current.name) return true;
-  // Manual from user always wins when provided as upgrade path
-  if (incoming.source === 'manual' && current.best_source !== 'manual') return true;
   const inScore = sourceScore(incoming.source);
   const curScore = sourceScore(current.best_source ?? '');
   if (inScore > curScore) return true;
   if (inScore < curScore) return false;
-  // Same source rank: prefer longer human title
+  // Same rank. A second manual edit is someone correcting the first, so the
+  // newer text wins even when it is shorter ("Молоко" replacing "Молоко 3.2%").
+  if (incoming.source === 'manual') return true;
+  // Between automatic sources of equal rank, prefer the longer human title.
   return incoming.name.length > (current.name?.length ?? 0);
 }
 
@@ -138,9 +139,9 @@ const STORED_SCORE = `COALESCE(
 
 const INCOMING_WINS = `(
   pos_gtin_cache.name IS NULL
-  OR ($5 = 'manual' AND pos_gtin_cache.best_source IS DISTINCT FROM 'manual')
   OR $6::int > ${STORED_SCORE}
-  OR ($6::int = ${STORED_SCORE} AND length($2) > length(pos_gtin_cache.name))
+  OR ($6::int = ${STORED_SCORE}
+      AND ($5 = 'manual' OR length($2) > length(pos_gtin_cache.name)))
 )`;
 
 /**
