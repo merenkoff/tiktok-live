@@ -90,6 +90,8 @@ export function StockActionPage({ type }: Props) {
   const [similarWarn, setSimilarWarn] = useState<string[]>([]);
   const [gtinHint, setGtinHint] = useState<GtinHint | null>(null);
   const [gtinLooking, setGtinLooking] = useState(false);
+  /** The hint's picture is a third-party URL; some of them 404. */
+  const [gtinImageBroken, setGtinImageBroken] = useState(false);
   const gtinDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gtinHintClearedRef = useRef(false);
 
@@ -222,11 +224,9 @@ export function StockActionPage({ type }: Props) {
         lookupQuotaProviders: (g) => api.lookupGtinQuotaProviders(g),
       });
       if (hint?.name && !gtinHintClearedRef.current) {
+        setGtinImageBroken(false);
         setGtinHint(hint);
         setStubName((prev) => (prev.trim() ? prev : hint.name!));
-        if (hint.brand) {
-          // brand is informational only for now
-        }
       }
     } catch {
       // silent
@@ -727,14 +727,36 @@ export function StockActionPage({ type }: Props) {
             <p className="text-xs text-[#6E6E6E]">Шукаємо назву за штрихкодом…</p>
           )}
           {gtinHint?.name && (
-            <div className="flex flex-wrap items-center gap-2 text-sm bg-[#E8F1FF] border border-[#C5DBFF] rounded-[4px] px-3 py-2">
-              <span>
-                Знайдено: <span className="font-medium">{gtinHint.name}</span>
-                {gtinHint.best_source
-                  ? ` · ${gtinSourceLabel(gtinHint.best_source)}`
-                  : ''}
-              </span>
-              <button type="button" onClick={clearGtinHint} className="text-[#006AFF] text-xs underline">
+            // Brand and picture are here to answer one question the name alone
+            // cannot: is this the item in my hand? The cache stored both all
+            // along and showed neither.
+            <div className="flex items-start gap-3 text-sm bg-[#E8F1FF] border border-[#C5DBFF] rounded-[4px] px-3 py-2">
+              {gtinHint.image_url && !gtinImageBroken && (
+                <img
+                  src={gtinHint.image_url}
+                  alt=""
+                  loading="lazy"
+                  // The lookup already went to this host from this browser, so
+                  // the image leaks nothing new — but send no referrer anyway.
+                  referrerPolicy="no-referrer"
+                  onError={() => setGtinImageBroken(true)}
+                  className="w-12 h-12 rounded-[4px] object-cover bg-white shrink-0"
+                />
+              )}
+              <div className="min-w-0 flex-1">
+                <p>
+                  Знайдено: <span className="font-medium">{gtinHint.name}</span>
+                </p>
+                <p className="text-xs text-[#4A6791]">
+                  {gtinHint.brand ? `${gtinHint.brand} · ` : ''}
+                  {gtinSourceLabel(gtinHint.best_source)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={clearGtinHint}
+                className="text-[#006AFF] text-xs underline shrink-0"
+              >
                 Очистити підказку
               </button>
             </div>
