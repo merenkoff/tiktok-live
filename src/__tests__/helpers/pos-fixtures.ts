@@ -17,6 +17,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { pool } from '../../db.js';
 import { POS_MIGRATIONS, readMigration } from '../../pos/migrations.js';
 import { hashPassword, hashPin } from '../../pos/core/crypto.js';
+import { normalizeGtin } from '../../pos/gtin/normalize.js';
 
 /** DB-backed suites `describe.skipIf(!hasDb)` on this. */
 export const hasDb = Boolean(process.env.DB_HOST || process.env.DATABASE_URL);
@@ -30,11 +31,11 @@ export const hasDb = Boolean(process.env.DB_HOST || process.env.DATABASE_URL);
  * vitest invocation that skipped the global setup.
  */
 export async function applyPosMigrations(): Promise<void> {
-  // Probe the column added by the LAST migration in the list, so appending a
+  // Probe an artifact of the LAST migration in the list, so appending a
   // migration doesn't leave a half-applied schema looking "already done".
   const present = await pool.query(
     `SELECT 1 FROM information_schema.columns
-     WHERE table_name = 'pos_stores' AND column_name = 'live_tiktok_username'`
+     WHERE table_name = 'pos_gtin_cache' AND column_name = 'blocked_at'`
   );
   if (present.rows.length > 0) return;
 
@@ -53,6 +54,24 @@ export async function applyPosMigrations(): Promise<void> {
  */
 export async function applyLiveMigrations(): Promise<void> {
   await pool.query(readMigration('001_create_schema.sql'));
+}
+
+/**
+ * Drop cache + lookup-event rows for the given barcodes.
+ *
+ * The cache key is the canonical GTIN-14 (migration 018), which is not the form
+ * a test writes its fixtures in — so deleting by the raw code silently matches
+ * nothing and leaves rows behind for the next run. Everything goes through
+ * `normalizeGtin` here so tests never have to know the key's shape.
+ */
+export async function clearGtinCache(...codes: string[]): Promise<void> {
+  const keys = codes
+    .map((c) => normalizeGtin(c))
+    .filter((n): n is Extract<typeof n, { ok: true }> => n.ok)
+    .map((n) => n.canonical);
+  if (keys.length === 0) return;
+  await pool.query(`DELETE FROM pos_gtin_cache WHERE gtin = ANY($1::text[])`, [keys]);
+  await pool.query(`DELETE FROM pos_gtin_lookup_events WHERE gtin = ANY($1::text[])`, [keys]);
 }
 
 export interface TestStore {

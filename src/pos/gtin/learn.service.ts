@@ -58,19 +58,25 @@ export async function learnBatch(params: {
     }
     const name = item.name?.trim() || null;
     if (!name) {
-      skipped.push({ gtin: norm.gtin, reason: 'empty_name' });
+      skipped.push({ gtin: norm.display, reason: 'empty_name' });
       continue;
     }
     const source = (item.source?.trim() || 'manual') as GtinSource;
     if (!ALLOWED_SOURCES.has(source)) {
-      skipped.push({ gtin: norm.gtin, reason: 'bad_source' });
+      skipped.push({ gtin: norm.display, reason: 'bad_source' });
+      continue;
+    }
+
+    const before = await getGtinCache(norm.canonical);
+    if (before?.blocked) {
+      // An owner cleared this entry on purpose; a bulk import must not undo it.
+      skipped.push({ gtin: norm.display, reason: 'blocked' });
       continue;
     }
 
     accepted += 1;
-    const before = await getGtinCache(norm.gtin);
     const hint = await ingestGtinResults({
-      code: norm.gtin,
+      code: norm.canonical,
       storeId: params.storeId,
       staffId: params.staffId,
       results: [

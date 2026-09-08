@@ -8,7 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { pool } from '../db.js';
-import { applyPosMigrations } from './helpers/pos-fixtures.js';
+import { applyPosMigrations, clearGtinCache } from './helpers/pos-fixtures.js';
 import { hashPassword, hashPin } from '../pos/core/crypto.js';
 import { getGtinCache } from '../pos/gtin/gtin-cache.service.js';
 import {
@@ -30,9 +30,14 @@ import { computeCheckDigit } from '../pos/gtin/normalize.js';
 // therefore own disjoint gtin blocks, or they collide when vitest runs them in
 // parallel workers:
 //
-//   482000000xxx  pos.gtin-cache.test.ts
-//   48200000001x  this file (fixtures included; cleaned by LIKE '48200000001%')
+//   481000000xxx  pos.gtin-cache.test.ts
+//   4820000000xx  this file (dump fixtures included)
 //   482000002xxx  pos.gtin-concurrency.test.ts
+//   484000000xxx  pos.routes.gtin.test.ts
+//   485000000xxx  pos.gtin-migration.test.ts
+//
+// Cleanup goes through `clearGtinCache`, never a LIKE sweep: the stored key is
+// the canonical GTIN-14, and a prefix sweep used to delete another file's rows.
 
 const hasDb = Boolean(process.env.DB_HOST || process.env.DATABASE_URL);
 const fixturesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures/gtin');
@@ -40,6 +45,9 @@ const fixturesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fix
 function ean(body12: string): string {
   return `${body12}${computeCheckDigit(body12)}`;
 }
+
+/** Barcodes the dump fixtures under `fixtures/gtin/` seed into the cache. */
+const FIXTURE_CODES = ['4820000000017', '4820000000024'];
 
 describe('dump parser (no db)', () => {
   it('parses TSV and JSONL fixtures', () => {
@@ -93,11 +101,13 @@ describe.skipIf(!hasDb)('POS GTIN learning API', () => {
 
   afterAll(async () => {
     if (storeId) await pool.query(`DELETE FROM pos_stores WHERE id = $1`, [storeId]);
-    await pool.query(`DELETE FROM pos_gtin_cache WHERE gtin LIKE '48200000001%'`);
+    // Explicit codes, not a LIKE prefix: this file shares `pos_gtin_cache`
+    // with the other GTIN suites, and a prefix sweep used to delete their rows.
+    await clearGtinCache(gtin1, gtin2, ean('482000000019'), ean('482000000020'), ...FIXTURE_CODES);
   });
 
   it('learnBatch upserts and skips bad rows', async () => {
-    await pool.query(`DELETE FROM pos_gtin_cache WHERE gtin IN ($1, $2)`, [gtin1, gtin2]);
+    await clearGtinCache(gtin1, gtin2);
     const out = await learnBatch({
       storeId,
       staffId,
@@ -185,9 +195,25 @@ describe.skipIf(!hasDb)('POS GTIN learning API', () => {
     expect(again?.status).toBe('done');
   });
 
+  it('skips a code an owner cleared instead of refilling it', async () => {
+    const code = ean('482000000020');
+    await clearGtinCache(code);
+    const { blockGtin } = await import('../pos/gtin/gtin-cache.service.js');
+    await blockGtin({ code, storeId });
+
+    const out = await learnBatch({
+      storeId,
+      items: [{ gtin: code, name: 'Масовий імпорт', source: 'open_products_facts' }],
+    });
+    expect(out.accepted).toBe(0);
+    expect(out.skipped).toContainEqual({ gtin: code, reason: 'blocked' });
+    expect((await getGtinCache(code))?.name).toBeNull();
+    await clearGtinCache(code);
+  });
+
   it('e2e: batch then getGtinCache hit', async () => {
     const code = ean('482000000019');
-    await pool.query(`DELETE FROM pos_gtin_cache WHERE gtin = $1`, [code]);
+    await clearGtinCache(code);
     await learnBatch({
       storeId,
       items: [{ gtin: code, name: 'E2E Learned', source: 'manual' }],

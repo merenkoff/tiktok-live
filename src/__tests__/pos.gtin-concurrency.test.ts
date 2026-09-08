@@ -14,17 +14,24 @@
 // connecting, so the calls serialise and pass even against the broken code.
 // These tests take dedicated connections and force the interleaving instead.
 //
-// Uses gtins in the 482000002xxx block, disjoint from pos.gtin-cache.test.ts
-// (482000000xxx) and pos.gtin-learn.test.ts (482000001xxx).
+// Uses gtins in the 482000002xxx block — see the block table in
+// pos.gtin-learn.test.ts.
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { pool } from '../db.js';
-import { getGtinCache, ingestGtinResults } from '../pos/gtin/gtin-cache.service.js';
-import { computeCheckDigit } from '../pos/gtin/normalize.js';
-import { applyPosMigrations, hasDb } from './helpers/pos-fixtures.js';
+import { blockGtin, getGtinCache, ingestGtinResults } from '../pos/gtin/gtin-cache.service.js';
+import { computeCheckDigit, normalizeGtin } from '../pos/gtin/normalize.js';
+import { applyPosMigrations, clearGtinCache, hasDb } from './helpers/pos-fixtures.js';
 
 function ean(body12: string): string {
   return `${body12}${computeCheckDigit(body12)}`;
+}
+
+/** The stored key for a barcode: canonical GTIN-14, not the scanned form. */
+function key(gtin: string): string {
+  const norm = normalizeGtin(gtin);
+  if (!norm.ok) throw new Error(`bad fixture gtin ${gtin}`);
+  return norm.canonical;
 }
 
 const GTIN_INSERT = ean('482000002001');
@@ -71,8 +78,9 @@ describe.skipIf(!hasDb)('GTIN cache under concurrent writers', () => {
   }, 120000);
 
   afterEach(async () => {
-    await pool.query(`DELETE FROM pos_gtin_lookup_events WHERE gtin = ANY($1)`, [ALL]);
-    await pool.query(`DELETE FROM pos_gtin_cache WHERE gtin = ANY($1)`, [ALL]);
+    // Via the helper: the stored key is the canonical GTIN-14, not the form
+    // these fixtures are written in.
+    await clearGtinCache(...ALL);
   });
 
   afterAll(async () => {
@@ -102,7 +110,7 @@ describe.skipIf(!hasDb)('GTIN cache under concurrent writers', () => {
     );
 
     const rows = await pool.query(`SELECT COUNT(*)::int AS c FROM pos_gtin_cache WHERE gtin = $1`, [
-      GTIN_INSERT,
+      key(GTIN_INSERT),
     ]);
     expect(rows.rows[0].c).toBe(1);
   });
@@ -172,14 +180,10 @@ describe.skipIf(!hasDb)('GTIN cache under concurrent writers', () => {
     expect(hint?.brand).toBe('Acme');
   });
 
-  it('a later automatic lookup overwrites a manual title (known asymmetry)', async () => {
-    // Pins CURRENT behaviour, which this change deliberately preserved rather
-    // than altered. `isBetterCandidate` lets an incoming `manual` beat anything,
-    // but `manual` sits LAST in DEFAULT_SOURCE_PRIORITY, so it scores lowest and
-    // the next automatic write wins it back — a cashier's correction is not
-    // durable, and which one survives a race depends on arrival order. Making
-    // manual sticky is a product decision, tracked as stage 2 in
-    // TechDocs/POS_GTIN_TODO.md; change this test when that lands.
+  it('a later automatic lookup cannot take back a manual title', async () => {
+    // The asymmetry this test used to pin — `manual` scoring lowest, so a
+    // cashier's correction survived only until the next scan — is gone: stage 2
+    // moved `manual` to the front of the priority list.
     await ingestGtinResults({
       code: GTIN_DEMOTE,
       results: [{ source: 'manual', found: true, name: 'Cashier title' }],
@@ -190,8 +194,52 @@ describe.skipIf(!hasDb)('GTIN cache under concurrent writers', () => {
     });
 
     const hint = await getGtinCache(GTIN_DEMOTE);
-    expect(hint?.name).toBe('Auto title');
-    expect(hint?.best_source).toBe('open_products_facts');
+    expect(hint?.name).toBe('Cashier title');
+    expect(hint?.best_source).toBe('manual');
+  });
+
+  it('keeps the manual title when a manual and an automatic write race', async () => {
+    const settled = await bothReadBeforeEitherWrites(
+      GTIN_DEMOTE,
+      [{ source: 'manual', found: true, name: 'Cashier title' }],
+      [{ source: 'open_products_facts', found: true, name: 'Auto title' }]
+    );
+    expect(rejections(settled)).toEqual([]);
+
+    const hint = await getGtinCache(GTIN_DEMOTE);
+    expect(hint?.name).toBe('Cashier title');
+    expect(hint?.best_source).toBe('manual');
+  });
+
+  it('a newer manual edit replaces an older one, even when shorter', async () => {
+    await ingestGtinResults({
+      code: GTIN_UPDATE,
+      results: [{ source: 'manual', found: true, name: 'Молоко 3.2% пастеризоване' }],
+    });
+    await ingestGtinResults({
+      code: GTIN_UPDATE,
+      results: [{ source: 'manual', found: true, name: 'Молоко' }],
+    });
+    expect((await getGtinCache(GTIN_UPDATE))?.name).toBe('Молоко');
+  });
+
+  it('a cleared entry survives writers racing to refill it', async () => {
+    await ingestGtinResults({
+      code: GTIN_DEMOTE,
+      results: [{ source: 'open_products_facts', found: true, name: 'Wrong name' }],
+    });
+    await blockGtin({ code: GTIN_DEMOTE });
+
+    const settled = await bothReadBeforeEitherWrites(
+      GTIN_DEMOTE,
+      [{ source: 'open_products_facts', found: true, name: 'Wrong name' }],
+      [{ source: 'manual', found: true, name: 'Anything at all' }]
+    );
+    expect(rejections(settled)).toEqual([]);
+
+    const hint = await getGtinCache(GTIN_DEMOTE);
+    expect(hint?.name).toBeNull();
+    expect(hint?.blocked).toBe(true);
   });
 
   it('records lookup events for both writers even though one row results', async () => {
@@ -203,7 +251,7 @@ describe.skipIf(!hasDb)('GTIN cache under concurrent writers', () => {
 
     const events = await pool.query(
       `SELECT COUNT(*)::int AS c FROM pos_gtin_lookup_events WHERE gtin = $1`,
-      [GTIN_INSERT]
+      [key(GTIN_INSERT)]
     );
     expect(events.rows[0].c).toBe(2);
   });

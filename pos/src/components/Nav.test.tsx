@@ -35,6 +35,7 @@ describe('Nav — admin sidebar', () => {
       '/admin/customers',
       '/admin/sales',
       '/admin/staff',
+      '/admin/gtin',
       '/admin/settings',
     ]);
     expect(screen.getByRole('link', { name: 'Сьогодні' })).toBeInTheDocument();

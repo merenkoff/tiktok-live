@@ -28,8 +28,9 @@ export async function lookupQuotaProviders(params: {
 
   const gtinConfig = await getStoreGtinConfig(params.storeId);
   const [upcitemdb, upcDev] = await Promise.all([
-    lookupUpcitemdb(norm.gtin),
-    lookupUpcDev(norm.gtin, gtinConfig),
+    // Providers are queried with the short scanned form, never the 14-digit key.
+    lookupUpcitemdb(norm.display),
+    lookupUpcDev(norm.display, gtinConfig),
   ]);
 
   const results: GtinLookupResult[] = [];
@@ -49,14 +50,14 @@ export async function lookupQuotaProviders(params: {
   let hint: GtinHint | null = null;
   if (results.length > 0) {
     hint = await ingestGtinResults({
-      code: norm.gtin,
+      code: norm.canonical,
       results,
       storeId: params.storeId,
       staffId: params.staffId,
     });
   }
   if (!hint) {
-    hint = await getGtinCache(norm.gtin);
+    hint = await getGtinCache(norm.canonical);
   }
 
   return { hint, results, skipped };

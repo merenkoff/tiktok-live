@@ -5,7 +5,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import 'dotenv/config';
 import { pool } from '../db.js';
-import { applyPosMigrations } from './helpers/pos-fixtures.js';
+import { applyPosMigrations, clearGtinCache } from './helpers/pos-fixtures.js';
 import { hashPassword, hashPin } from '../pos/core/crypto.js';
 import {
   getGtinCache,
@@ -19,8 +19,8 @@ import { mapUpcDevResponse } from '../pos/gtin/upc-dev.provider.js';
 import { mapUpcitemdbResponse } from '../pos/gtin/upcitemdb.provider.js';
 import { addPlaceholderLine, createDocument } from '../pos/stock-documents.service.js';
 
-// This file owns the 482000000xxx gtin block. `pos_gtin_cache` is shared by
-// every store by design, so test files must not reuse each other codes —
+// This file owns the 481000000xxx gtin block. `pos_gtin_cache` is shared by
+// every store by design, so test files must not reuse each other's codes —
 // see the block table in pos.gtin-learn.test.ts.
 
 const hasDb = Boolean(process.env.DB_HOST || process.env.DATABASE_URL);
@@ -36,9 +36,9 @@ function validEan13(body12: string): string {
 describe.skipIf(!hasDb)('POS GTIN cache and providers', () => {
   let storeId = 0;
   let staffId = 0;
-  const gtinA = validEan13('482000000001');
-  const gtinB = validEan13('482000000002');
-  const gtinC = validEan13('482000000003');
+  const gtinA = validEan13('481000000001');
+  const gtinB = validEan13('481000000002');
+  const gtinC = validEan13('481000000003');
 
   beforeAll(async () => {
     await applyMigrations();
@@ -60,16 +60,11 @@ describe.skipIf(!hasDb)('POS GTIN cache and providers', () => {
 
   afterAll(async () => {
     if (storeId) await pool.query(`DELETE FROM pos_stores WHERE id = $1`, [storeId]);
-    await pool.query(`DELETE FROM pos_gtin_cache WHERE gtin IN ($1, $2, $3)`, [gtinA, gtinB, gtinC]);
-    await pool.query(`DELETE FROM pos_gtin_lookup_events WHERE gtin IN ($1, $2, $3)`, [
-      gtinA,
-      gtinB,
-      gtinC,
-    ]);
+    await clearGtinCache(gtinA, gtinB, gtinC);
   });
 
   it('ingest merge: products_facts beats food; worse does not overwrite', async () => {
-    await pool.query(`DELETE FROM pos_gtin_cache WHERE gtin = $1`, [gtinA]);
+    await clearGtinCache(gtinA);
     await ingestGtinResults({
       code: gtinA,
       storeId,
@@ -112,7 +107,7 @@ describe.skipIf(!hasDb)('POS GTIN cache and providers', () => {
   });
 
   it('upc_dev ranks above upcitemdb', async () => {
-    await pool.query(`DELETE FROM pos_gtin_cache WHERE gtin = $1`, [gtinB]);
+    await clearGtinCache(gtinB);
     await ingestGtinResults({
       code: gtinB,
       results: [{ source: 'upcitemdb', found: true, name: 'From Itemdb' }],
@@ -128,7 +123,7 @@ describe.skipIf(!hasDb)('POS GTIN cache and providers', () => {
 
   it('manual learn from placeholder barcode', async () => {
     const code = gtinC;
-    await pool.query(`DELETE FROM pos_gtin_cache WHERE gtin = $1`, [code]);
+    await clearGtinCache(code);
     const doc = await createDocument({ storeId, staffId, type: 'receipt' });
     await addPlaceholderLine({
       storeId,
@@ -171,8 +166,8 @@ describe.skipIf(!hasDb)('POS GTIN cache and providers', () => {
   });
 
   it('learnFromManual upgrades over food', async () => {
-    const code = validEan13('482000000009');
-    await pool.query(`DELETE FROM pos_gtin_cache WHERE gtin = $1`, [code]);
+    const code = validEan13('481000000009');
+    await clearGtinCache(code);
     await ingestGtinResults({
       code,
       results: [{ source: 'open_food_facts', found: true, name: 'Auto Food' }],
@@ -181,7 +176,42 @@ describe.skipIf(!hasDb)('POS GTIN cache and providers', () => {
     const hint = await getGtinCache(code);
     expect(hint?.name).toBe('Ручна назва');
     expect(hint?.best_source).toBe('manual');
-    await pool.query(`DELETE FROM pos_gtin_cache WHERE gtin = $1`, [code]);
+    await clearGtinCache(code);
+  });
+
+  it('a manual name survives every later automatic lookup', async () => {
+    const code = validEan13('481000000010');
+    await clearGtinCache(code);
+    await learnFromManual({ code, name: 'Ручна назва', brand: 'Ручний бренд', storeId });
+
+    // Every automatic source, best first — none of them may take the title.
+    for (const source of ['open_products_facts', 'upc_dev', 'upcitemdb', 'open_food_facts']) {
+      await ingestGtinResults({
+        code,
+        results: [
+          { source, found: true, name: `Автоматична з ${source}`, image_url: 'https://img/a.jpg' },
+        ],
+      });
+      const hint = await getGtinCache(code);
+      expect(hint?.name).toBe('Ручна назва');
+      expect(hint?.best_source).toBe('manual');
+    }
+
+    // An automatic result still donates a field the manual entry never had.
+    const hint = await getGtinCache(code);
+    expect(hint?.image_url).toBe('https://img/a.jpg');
+    expect(hint?.brand).toBe('Ручний бренд');
+    await clearGtinCache(code);
+  });
+
+  it('a newer manual edit replaces an older one, even when shorter', async () => {
+    const code = validEan13('481000000011');
+    await clearGtinCache(code);
+    await learnFromManual({ code, name: 'Молоко 3.2% пастеризоване', storeId });
+    await learnFromManual({ code, name: 'Молоко', storeId });
+    const hint = await getGtinCache(code);
+    expect(hint?.name).toBe('Молоко');
+    await clearGtinCache(code);
   });
 });
 

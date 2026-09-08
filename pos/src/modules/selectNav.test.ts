@@ -33,6 +33,7 @@ describe('admin sidebar', () => {
       '/admin/customers',
       '/admin/sales',
       '/admin/staff',
+      '/admin/gtin',
       '/admin/settings',
     ]);
   });

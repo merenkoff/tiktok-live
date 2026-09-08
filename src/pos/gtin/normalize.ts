@@ -4,8 +4,26 @@
 
 // src/pos/gtin/normalize.ts — GTIN/EAN/UPC normalization + check digit
 
+export type NormalizeGtinOk = {
+  ok: true;
+  /**
+   * Storage key: GTIN-14, zero-padded on the left. The canonical GS1 form —
+   * padding never changes the check digit, so `4820000000017` (EAN-13) and
+   * `04820000000017` (GTIN-14) collapse to one key, while a real indicator
+   * digit (`14820000000014` — a case of the same item) stays a separate key.
+   */
+  canonical: string;
+  /**
+   * Short human/wire form: what a scanner produced. Used for external provider
+   * URLs and for showing the code back to the user — never as a cache key.
+   */
+  display: string;
+  /** Digits as extracted from the input, before any padding. */
+  digits: string;
+};
+
 export type NormalizeGtinResult =
-  | { ok: true; gtin: string; digits: string }
+  | NormalizeGtinOk
   | { ok: false; reason: 'empty' | 'non_digits' | 'bad_length' | 'bad_check_digit' };
 
 /** Strip spaces/dashes; keep digits only. */
@@ -37,10 +55,29 @@ export function verifyCheckDigit(gtinWithCheck: string): boolean {
   return computeCheckDigit(body) === check;
 }
 
+/** Standard GTIN lengths a scanned code is shown in, shortest first. */
+const DISPLAY_LENGTHS = [8, 13, 14] as const;
+
+/** GTIN-14 storage key. Padding with leading zeros preserves the check digit. */
+export function toCanonicalGtin(digits: string): string {
+  return digits.padStart(14, '0');
+}
+
 /**
- * Normalize barcode to a canonical GTIN string used as cache key.
- * Accepts EAN-8, UPC-A (12), EAN-13, GTIN-14.
- * Pads UPC-A to 13 with leading 0 for storage consistency when length is 12.
+ * Inverse of {@link toCanonicalGtin}: strip the padding back to the shortest
+ * standard length that still holds every significant digit. Note 12 is absent
+ * from that list on purpose — a UPC-A has always been carried as an EAN-13
+ * here, and external providers are queried with that form.
+ */
+export function toDisplayGtin(canonical: string): string {
+  const significant = canonical.replace(/^0+/, '');
+  const width = DISPLAY_LENGTHS.find((n) => n >= significant.length) ?? 14;
+  return significant.padStart(width, '0');
+}
+
+/**
+ * Normalize a barcode into its storage key (`canonical`, GTIN-14) and its
+ * short form (`display`). Accepts EAN-8, UPC-A (12), EAN-13, GTIN-14.
  */
 export function normalizeGtin(raw: string | null | undefined): NormalizeGtinResult {
   if (raw == null) return { ok: false, reason: 'empty' };
@@ -69,7 +106,8 @@ export function normalizeGtin(raw: string | null | undefined): NormalizeGtinResu
     if (!verifyCheckDigit(digits)) {
       return { ok: false, reason: 'bad_check_digit' };
     }
-    return { ok: true, gtin: digits, digits };
+    const canonical = toCanonicalGtin(digits);
+    return { ok: true, canonical, display: toDisplayGtin(canonical), digits };
   }
 
   // length 9–11 after strip: invalid for retail GTIN
