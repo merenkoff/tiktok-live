@@ -1,5 +1,5 @@
 import { lazy as s } from "react";
-const c = "1.0.7";
+const c = "1.0.8";
 async function m(e, { retries: t = 2, backoffMs: r = 400 } = {}) {
   let o;
   for (let i = 0; i <= t; i += 1)
@@ -15,7 +15,7 @@ function d(e, t) {
   return s(() => m(e, t));
 }
 const a = d(
-  () => import("./LiveDeskPage-BqpLHeb-.js").then((e) => ({ default: e.LiveDeskPage }))
+  () => import("./LiveDeskPage-H5MSvk6a.js").then((e) => ({ default: e.LiveDeskPage }))
 ), h = "tiktok-live", v = {
   id: h,
   title: "Прямий ефір",

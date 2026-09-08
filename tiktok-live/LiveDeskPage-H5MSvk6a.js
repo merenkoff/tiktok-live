@@ -128,7 +128,7 @@ const C = {
   getSessionLogs: (e = 100) => A(`/api/sessions/logs?limit=${e}`),
   startSession: () => A("/api/sessions/start", { method: "POST" }),
   stopSession: () => A("/api/sessions/stop", { method: "POST" })
-}, be = "1.0.7", j = {
+}, be = "1.0.8", j = {
   not_configured: "CFG",
   host_too_old: "HOST",
   server_missing_bridge: "SRV404",
