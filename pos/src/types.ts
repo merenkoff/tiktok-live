@@ -421,3 +421,27 @@ export interface LiveBridgeToken {
   user: { id: number; tiktok_username: string };
   expiresAt: string;
 }
+
+/**
+ * One row of the shared GTIN cache (`pos_gtin_cache`), as the owner's repair
+ * page sees it. `gtin` is the canonical GTIN-14 storage key — show it through
+ * `displayGtin` rather than raw.
+ */
+export interface GtinCacheEntry {
+  gtin: string;
+  name: string | null;
+  brand: string | null;
+  image_url: string | null;
+  best_source: string | null;
+  /** An owner cleared this entry; automatic sources may not refill it. */
+  blocked: boolean;
+  filled_at: string;
+  updated_at: string;
+}
+
+export interface GtinCachePage {
+  items: GtinCacheEntry[];
+  total: number;
+  limit: number;
+  offset: number;
+}

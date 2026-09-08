@@ -34,7 +34,8 @@ export async function applyPosMigrations(): Promise<void> {
   // Probe an artifact of the LAST migration in the list, so appending a
   // migration doesn't leave a half-applied schema looking "already done".
   const present = await pool.query(
-    `SELECT 1 FROM pg_proc WHERE proname = 'pos_gtin_canonicalize'`
+    `SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'pos_gtin_cache' AND column_name = 'blocked_at'`
   );
   if (present.rows.length > 0) return;
 

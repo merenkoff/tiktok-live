@@ -29,6 +29,8 @@ import type {
   LowStockRow,
   StockMovementRow,
   MovementSummaryRow,
+  GtinCacheEntry,
+  GtinCachePage,
 } from '../types';
 import { posApiBase } from '../lib/urls';
 // Direct import (not via '@pos/platform') — that barrel re-exports this module,
@@ -575,7 +577,16 @@ class PosApi {
   async getGtinCache(
     code: string
   ): Promise<
-    { found: true; gtin: string; name: string | null; brand: string | null; image_url: string | null; best_source: string | null } | { found: false }
+    | {
+        found: true;
+        gtin: string;
+        name: string | null;
+        brand: string | null;
+        image_url: string | null;
+        best_source: string | null;
+      }
+    // `blocked` means an owner cleared this entry: no data, and none is wanted.
+    | { found: false; blocked?: boolean }
   > {
     try {
       const { data } = await this.client.get(`/gtin/${encodeURIComponent(code)}`);
@@ -621,6 +632,44 @@ class PosApi {
     skipped?: Array<{ provider: string; skipped: string }>;
   }> {
     const { data } = await this.client.post('/gtin/lookup/quota-providers', { gtin });
+    return data;
+  }
+
+  // ── GTIN cache repair (owner) ────────────────────────────────
+  //
+  // `pos_gtin_cache` is shared by every store, so a wrong name reaches all of
+  // them. These three are the only way to correct one or take it out of
+  // circulation; see TechDocs/POS_GTIN_ENRICHMENT.md.
+
+  async listGtinCache(params: {
+    q?: string;
+    limit?: number;
+    offset?: number;
+    blockedOnly?: boolean;
+  }): Promise<GtinCachePage> {
+    const { data } = await this.client.get<GtinCachePage>('/gtin/cache', {
+      params: {
+        ...(params.q ? { q: params.q } : {}),
+        ...(params.limit == null ? {} : { limit: params.limit }),
+        ...(params.offset == null ? {} : { offset: params.offset }),
+        ...(params.blockedOnly ? { blocked: 1 } : {}),
+      },
+    });
+    return data;
+  }
+
+  /** Correct an entry. Stored as `manual`, which outranks every automatic source. */
+  async updateGtinCache(
+    code: string,
+    patch: { name?: string; brand?: string | null; image_url?: string | null; blocked?: false }
+  ): Promise<{ hint: GtinCacheEntry | null }> {
+    const { data } = await this.client.patch(`/gtin/${encodeURIComponent(code)}`, patch);
+    return data;
+  }
+
+  /** Clear an entry and keep it cleared — a plain delete would be refilled on the next scan. */
+  async evictGtinCache(code: string): Promise<{ hint: GtinCacheEntry | null }> {
+    const { data } = await this.client.delete(`/gtin/${encodeURIComponent(code)}`);
     return data;
   }
 

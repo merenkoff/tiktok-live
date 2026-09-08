@@ -21,6 +21,7 @@ function mapCache(row: Record<string, unknown>): GtinHint {
     brand: row.brand == null ? null : String(row.brand),
     image_url: row.image_url == null ? null : String(row.image_url),
     best_source: row.best_source == null ? null : String(row.best_source),
+    blocked: row.blocked_at != null,
     filled_at: row.filled_at as Date,
     updated_at: row.updated_at as Date,
   };
@@ -49,6 +50,14 @@ function isBetterCandidate(
   return incoming.name.length > (current.name?.length ?? 0);
 }
 
+/**
+ * Read the cache row for a barcode.
+ *
+ * A tombstone comes back as a hint with `blocked: true` and a null `name`
+ * rather than as `null` — callers already gate on `hint?.name`, and the scan
+ * flow needs to see the block so it can skip the external fan-out entirely
+ * instead of spending provider quota on a code the owner has rejected.
+ */
 export async function getGtinCache(code: string): Promise<GtinHint | null> {
   const norm = normalizeGtin(code);
   if (!norm.ok) return null;
@@ -156,6 +165,10 @@ const INCOMING_WINS = `(
  * `learnBatch`, the dump learn jobs, `learnFromManual`), and the cache is shared
  * by every store, so concurrent writers for one barcode are ordinary. It is now
  * a single upsert that keeps the better row whichever writer lands first.
+ *
+ * TOMBSTONES. A row an owner cleared (`blocked_at`) is left alone — the `WHERE`
+ * on the upsert declines it. Every write path funnels through here, so that one
+ * clause covers scanning, `learnBatch` and dump seeding alike.
  */
 export async function ingestGtinResults(params: {
   code: string;
@@ -199,6 +212,7 @@ export async function ingestGtinResults(params: {
          THEN NOW()
          ELSE pos_gtin_cache.updated_at
        END
+     WHERE pos_gtin_cache.blocked_at IS NULL
      RETURNING *`,
     [
       norm.canonical,
@@ -211,6 +225,9 @@ export async function ingestGtinResults(params: {
     ]
   );
 
+  // No row back means the `WHERE` declined the update: an owner cleared this
+  // entry, and no automatic source may refill it. Read it back as-is.
+  if (result.rows.length === 0) return getGtinCache(norm.canonical);
   return mapCache(result.rows[0]);
 }
 
@@ -238,6 +255,159 @@ export async function learnFromManual(params: {
       },
     ],
   });
+}
+
+export async function setGtinManualEntry(params: {
+  code: string;
+  name: string;
+  brand?: string | null;
+  image_url?: string | null;
+  storeId?: number;
+  staffId?: number;
+}): Promise<GtinHint | null> {
+  const norm = normalizeGtin(params.code);
+  if (!norm.ok) throw new Error(`Invalid GTIN: ${norm.reason}`);
+  const name = trimName(params.name);
+  if (!name) throw new Error('name required');
+
+  await unblockGtin({ code: norm.canonical });
+  return ingestGtinResults({
+    code: norm.canonical,
+    storeId: params.storeId,
+    staffId: params.staffId,
+    results: [
+      {
+        source: 'manual' satisfies GtinSource,
+        found: true,
+        name,
+        brand: params.brand ?? null,
+        image_url: params.image_url ?? null,
+        raw: { action: 'manual_edit' },
+      },
+    ],
+  });
+}
+
+/**
+ * Clear a cache entry and keep it cleared.
+ *
+ * A plain DELETE would be undone by the next scan — the same external sources
+ * would hand back the same wrong name. The row survives as a tombstone that
+ * `ingestGtinResults` refuses to fill.
+ */
+export async function blockGtin(params: {
+  code: string;
+  storeId?: number;
+  staffId?: number;
+}): Promise<GtinHint | null> {
+  const norm = normalizeGtin(params.code);
+  if (!norm.ok) throw new Error(`Invalid GTIN: ${norm.reason}`);
+
+  const r = await pool.query(
+    `INSERT INTO pos_gtin_cache (gtin, blocked_at, blocked_by)
+     VALUES ($1, NOW(), $2)
+     ON CONFLICT (gtin) DO UPDATE
+       SET name = NULL, brand = NULL, image_url = NULL, best_source = NULL,
+           blocked_at = NOW(), blocked_by = $2, updated_at = NOW()
+     RETURNING *`,
+    [norm.canonical, params.staffId ?? null]
+  );
+  await recordLookupEvents(
+    norm.canonical,
+    [{ source: 'manual', found: false, raw: { action: 'evict' } }],
+    { storeId: params.storeId, staffId: params.staffId }
+  );
+  return mapCache(r.rows[0]);
+}
+
+/**
+ * Lift a tombstone so the automatic sources may fill the entry again.
+ *
+ * A tombstone that was never anything else holds no data once unblocked, so the
+ * row is dropped rather than left as a blank entry at the top of the owner's
+ * list — "not in the cache" is exactly what it now means. Returns null in that
+ * case, the same as any other miss.
+ */
+export async function unblockGtin(params: {
+  code: string;
+  storeId?: number;
+  staffId?: number;
+}): Promise<GtinHint | null> {
+  const norm = normalizeGtin(params.code);
+  if (!norm.ok) throw new Error(`Invalid GTIN: ${norm.reason}`);
+  const r = await pool.query(
+    `UPDATE pos_gtin_cache
+     SET blocked_at = NULL, blocked_by = NULL, updated_at = NOW()
+     WHERE gtin = $1 AND blocked_at IS NOT NULL
+     RETURNING *`,
+    [norm.canonical]
+  );
+  if (r.rows.length === 0) return getGtinCache(norm.canonical);
+  if (r.rows[0].name == null) {
+    await pool.query(`DELETE FROM pos_gtin_cache WHERE gtin = $1 AND name IS NULL`, [
+      norm.canonical,
+    ]);
+    return null;
+  }
+  return mapCache(r.rows[0]);
+}
+
+export interface GtinCachePage {
+  items: GtinHint[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+/**
+ * Owner browse/search over the cache. `q` is matched as a barcode when it looks
+ * like one (canonical key, exact) and as a name/brand substring otherwise.
+ */
+export async function listGtinCache(params: {
+  q?: string | null;
+  limit?: number;
+  offset?: number;
+  blockedOnly?: boolean;
+}): Promise<GtinCachePage> {
+  const limit = Math.min(Math.max(Number(params.limit) || 50, 1), 100);
+  const offset = Math.max(Number(params.offset) || 0, 0);
+  const q = params.q?.trim() || '';
+
+  const where: string[] = [];
+  const values: unknown[] = [];
+  if (q) {
+    const norm = normalizeGtin(q);
+    if (norm.ok) {
+      values.push(norm.canonical);
+      where.push(`gtin = $${values.length}`);
+    } else if (/^\d+$/.test(q)) {
+      // Partial barcode — the operator is still typing or read it off a label.
+      values.push(`%${q}%`);
+      where.push(`gtin LIKE $${values.length}`);
+    } else {
+      values.push(`%${q}%`);
+      where.push(`(name ILIKE $${values.length} OR brand ILIKE $${values.length})`);
+    }
+  }
+  if (params.blockedOnly) where.push(`blocked_at IS NOT NULL`);
+  const clause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+
+  const total = await pool.query(
+    `SELECT COUNT(*)::int AS c FROM pos_gtin_cache ${clause}`,
+    values
+  );
+  const rows = await pool.query(
+    `SELECT * FROM pos_gtin_cache ${clause}
+     ORDER BY updated_at DESC
+     LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+    [...values, limit, offset]
+  );
+  return {
+    items: rows.rows.map(mapCache),
+    total: Number(total.rows[0].c),
+    limit,
+    offset,
+  };
 }
 
 export async function isGtinLookupEnabled(storeId: number): Promise<boolean> {

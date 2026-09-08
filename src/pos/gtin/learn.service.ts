@@ -67,8 +67,14 @@ export async function learnBatch(params: {
       continue;
     }
 
-    accepted += 1;
     const before = await getGtinCache(norm.canonical);
+    if (before?.blocked) {
+      // An owner cleared this entry on purpose; a bulk import must not undo it.
+      skipped.push({ gtin: norm.display, reason: 'blocked' });
+      continue;
+    }
+
+    accepted += 1;
     const hint = await ingestGtinResults({
       code: norm.canonical,
       storeId: params.storeId,

@@ -98,6 +98,28 @@ export function registerGtinRoutes(fastify: FastifyInstance): void {
     }
   });
 
+  // Owner browse/repair of the shared cache. Registered before `/gtin/:code`
+  // for readability; Fastify's router prefers the static segment either way.
+  fastify.get('/gtin/cache', async (request, reply) => {
+    const auth = await ensureModule(request, reply, 'gtin-enrichment', { owner: true });
+    if (!auth) return;
+    try {
+      const { isGtinLookupEnabled, listGtinCache } = await import('../gtin/gtin-cache.service.js');
+      if (!(await isGtinLookupEnabled(auth.storeId))) {
+        return reply.code(403).send({ error: 'gtin lookup disabled' });
+      }
+      const query = request.query as { q?: string; limit?: string; offset?: string; blocked?: string };
+      return await listGtinCache({
+        q: query.q,
+        limit: query.limit == null ? undefined : Number(query.limit),
+        offset: query.offset == null ? undefined : Number(query.offset),
+        blockedOnly: query.blocked === '1' || query.blocked === 'true',
+      });
+    } catch (error) {
+      return reply.code(400).send({ error: errorMessage(error) });
+    }
+  });
+
   fastify.get('/gtin/:code', async (request, reply) => {
     const auth = await ensureModule(request, reply, 'gtin-enrichment', { owner: true });
     if (!auth) return;
@@ -109,7 +131,66 @@ export function registerGtinRoutes(fastify: FastifyInstance): void {
       const { code } = request.params as { code: string };
       const hint = await getGtinCache(code);
       if (!hint) return reply.code(404).send({ found: false });
+      // A tombstone answers 200, not 404: the client has to know the entry was
+      // cleared on purpose so it skips the external fan-out and the quota it costs.
+      if (hint.blocked) return { found: false, blocked: true, gtin: hint.gtin };
+      if (!hint.name) return reply.code(404).send({ found: false });
       return { found: true, ...hint };
+    } catch (error) {
+      return reply.code(400).send({ error: errorMessage(error) });
+    }
+  });
+
+  fastify.patch('/gtin/:code', async (request, reply) => {
+    const auth = await ensureModule(request, reply, 'gtin-enrichment', { owner: true });
+    if (!auth) return;
+    try {
+      const { isGtinLookupEnabled, setGtinManualEntry, unblockGtin } = await import(
+        '../gtin/gtin-cache.service.js'
+      );
+      if (!(await isGtinLookupEnabled(auth.storeId))) {
+        return reply.code(403).send({ error: 'gtin lookup disabled' });
+      }
+      const { code } = request.params as { code: string };
+      const body = (request.body ?? {}) as {
+        name?: string;
+        brand?: string | null;
+        image_url?: string | null;
+        blocked?: boolean;
+      };
+
+      if (body.name != null && body.name.trim()) {
+        const hint = await setGtinManualEntry({
+          code,
+          name: body.name,
+          brand: body.brand ?? null,
+          image_url: body.image_url ?? null,
+          storeId: auth.storeId,
+          staffId: auth.staffId,
+        });
+        return { hint };
+      }
+      if (body.blocked === false) {
+        const hint = await unblockGtin({ code, storeId: auth.storeId, staffId: auth.staffId });
+        return { hint };
+      }
+      return reply.code(400).send({ error: 'name or blocked:false required' });
+    } catch (error) {
+      return reply.code(400).send({ error: errorMessage(error) });
+    }
+  });
+
+  fastify.delete('/gtin/:code', async (request, reply) => {
+    const auth = await ensureModule(request, reply, 'gtin-enrichment', { owner: true });
+    if (!auth) return;
+    try {
+      const { blockGtin, isGtinLookupEnabled } = await import('../gtin/gtin-cache.service.js');
+      if (!(await isGtinLookupEnabled(auth.storeId))) {
+        return reply.code(403).send({ error: 'gtin lookup disabled' });
+      }
+      const { code } = request.params as { code: string };
+      const hint = await blockGtin({ code, storeId: auth.storeId, staffId: auth.staffId });
+      return { hint };
     } catch (error) {
       return reply.code(400).send({ error: errorMessage(error) });
     }
