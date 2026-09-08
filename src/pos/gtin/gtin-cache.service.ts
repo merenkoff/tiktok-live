@@ -6,7 +6,13 @@
 
 import { pool } from '../../db.js';
 import { normalizeGtin } from './normalize.js';
-import { sourceScore, type GtinHint, type GtinLookupResult, type GtinSource } from './types.js';
+import {
+  sourcePriorityList,
+  sourceScore,
+  type GtinHint,
+  type GtinLookupResult,
+  type GtinSource,
+} from './types.js';
 
 function mapCache(row: Record<string, unknown>): GtinHint {
   return {
@@ -75,7 +81,79 @@ export async function recordLookupEvents(
   }
 }
 
-/** Merge lookup results into canonical cache. Returns updated hint (or null if nothing useful). */
+/**
+ * Fold the incoming results into a single candidate, using the same ranking the
+ * cache uses. `brand`/`image_url` fall back to any other named result, so a
+ * source that knows the title but not the brand still contributes the brand.
+ */
+function foldResults(results: GtinLookupResult[]): {
+  name: string;
+  brand: string | null;
+  image_url: string | null;
+  source: string;
+} | null {
+  let best: { name: string; brand: string | null; image_url: string | null; source: string } | null =
+    null;
+  let fallbackBrand: string | null = null;
+  let fallbackImage: string | null = null;
+
+  for (const r of results) {
+    if (!r.found) continue;
+    const name = trimName(r.name);
+    if (!name) continue;
+
+    const brand = trimName(r.brand);
+    const image = r.image_url ?? null;
+    if (!fallbackBrand && brand) fallbackBrand = brand;
+    if (!fallbackImage && image) fallbackImage = image;
+
+    if (
+      !best ||
+      isBetterCandidate({ source: r.source, name }, { best_source: best.source, name: best.name })
+    ) {
+      best = { name, brand, image_url: image, source: r.source };
+    }
+  }
+
+  if (!best) return null;
+  return {
+    ...best,
+    brand: best.brand ?? fallbackBrand,
+    image_url: best.image_url ?? fallbackImage,
+  };
+}
+
+/**
+ * The `isBetterCandidate` rules, expressed against the stored row so the whole
+ * decision happens inside one statement. `$7` carries the source priority list
+ * (best first) so `GTIN_SOURCE_PRIORITY` stays the single source of truth; the
+ * arithmetic mirrors `sourceScore` — index 0 scores `length`, unknown scores 0.
+ */
+const STORED_SCORE = `COALESCE(
+  cardinality($7::text[]) + 1 - array_position($7::text[], pos_gtin_cache.best_source),
+  0
+)`;
+
+const INCOMING_WINS = `(
+  pos_gtin_cache.name IS NULL
+  OR ($5 = 'manual' AND pos_gtin_cache.best_source IS DISTINCT FROM 'manual')
+  OR $6::int > ${STORED_SCORE}
+  OR ($6::int = ${STORED_SCORE} AND length($2) > length(pos_gtin_cache.name))
+)`;
+
+/**
+ * Merge lookup results into the canonical cache. Returns the resulting hint, or
+ * null when nothing usable was learned and nothing was cached before.
+ *
+ * ATOMICITY. This used to read the row, merge in JS, then INSERT or UPDATE.
+ * Nothing guarded the gap: two callers that both saw "not cached" both inserted
+ * and the second died on `pos_gtin_cache_pkey`, and two callers that both saw
+ * the same row overwrote each other, which could demote a better source. Every
+ * cache write goes through here (`/gtin/ingest`, `/gtin/lookup/quota-providers`,
+ * `learnBatch`, the dump learn jobs, `learnFromManual`), and the cache is shared
+ * by every store, so concurrent writers for one barcode are ordinary. It is now
+ * a single upsert that keeps the better row whichever writer lands first.
+ */
 export async function ingestGtinResults(params: {
   code: string;
   results: GtinLookupResult[];
@@ -90,77 +168,47 @@ export async function ingestGtinResults(params: {
     staffId: params.staffId,
   });
 
-  const existing = await pool.query(`SELECT * FROM pos_gtin_cache WHERE gtin = $1`, [norm.gtin]);
-  let current = existing.rows[0]
-    ? {
-        name: existing.rows[0].name as string | null,
-        brand: existing.rows[0].brand as string | null,
-        image_url: existing.rows[0].image_url as string | null,
-        best_source: existing.rows[0].best_source as string | null,
-      }
-    : { name: null as string | null, brand: null, image_url: null, best_source: null };
-
-  let changed = false;
-  for (const r of params.results) {
-    if (!r.found) continue;
-    const name = trimName(r.name);
-    if (!name) continue;
-    const brand = trimName(r.brand);
-    const image = r.image_url ?? null;
-    if (
-      isBetterCandidate(
-        { source: r.source, name },
-        { best_source: current.best_source, name: current.name }
-      )
-    ) {
-      current = {
-        name,
-        brand: brand ?? current.brand,
-        image_url: image ?? current.image_url,
-        best_source: r.source,
-      };
-      changed = true;
-    } else if (current.name) {
-      // fill missing brand/image without changing best_source
-      if (!current.brand && brand) {
-        current.brand = brand;
-        changed = true;
-      }
-      if (!current.image_url && image) {
-        current.image_url = image;
-        changed = true;
-      }
-    }
+  const candidate = foldResults(params.results);
+  if (!candidate) {
+    // Nothing usable came back. Events are recorded either way; never create a
+    // nameless cache row.
+    return getGtinCache(norm.gtin);
   }
 
-  if (!current.name && existing.rows.length === 0) {
-    // Still create nothing if no name — but events already stored
-    return null;
-  }
+  const result = await pool.query(
+    `INSERT INTO pos_gtin_cache (gtin, name, brand, image_url, best_source)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (gtin) DO UPDATE SET
+       name = CASE WHEN ${INCOMING_WINS} THEN EXCLUDED.name ELSE pos_gtin_cache.name END,
+       brand = CASE WHEN ${INCOMING_WINS}
+                    THEN COALESCE(EXCLUDED.brand, pos_gtin_cache.brand)
+                    ELSE COALESCE(pos_gtin_cache.brand, EXCLUDED.brand) END,
+       image_url = CASE WHEN ${INCOMING_WINS}
+                        THEN COALESCE(EXCLUDED.image_url, pos_gtin_cache.image_url)
+                        ELSE COALESCE(pos_gtin_cache.image_url, EXCLUDED.image_url) END,
+       best_source = CASE WHEN ${INCOMING_WINS}
+                          THEN EXCLUDED.best_source
+                          ELSE pos_gtin_cache.best_source END,
+       updated_at = CASE
+         WHEN ${INCOMING_WINS}
+           OR (pos_gtin_cache.brand IS NULL AND EXCLUDED.brand IS NOT NULL)
+           OR (pos_gtin_cache.image_url IS NULL AND EXCLUDED.image_url IS NOT NULL)
+         THEN NOW()
+         ELSE pos_gtin_cache.updated_at
+       END
+     RETURNING *`,
+    [
+      norm.gtin,
+      candidate.name,
+      candidate.brand,
+      candidate.image_url,
+      candidate.source,
+      sourceScore(candidate.source),
+      sourcePriorityList(),
+    ]
+  );
 
-  if (existing.rows.length === 0 && current.name) {
-    const inserted = await pool.query(
-      `INSERT INTO pos_gtin_cache (gtin, name, brand, image_url, best_source)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING *`,
-      [norm.gtin, current.name, current.brand, current.image_url, current.best_source]
-    );
-    return mapCache(inserted.rows[0]);
-  }
-
-  if (changed && existing.rows.length > 0) {
-    const updated = await pool.query(
-      `UPDATE pos_gtin_cache
-       SET name = $2, brand = $3, image_url = $4, best_source = $5, updated_at = NOW()
-       WHERE gtin = $1
-       RETURNING *`,
-      [norm.gtin, current.name, current.brand, current.image_url, current.best_source]
-    );
-    return mapCache(updated.rows[0]);
-  }
-
-  if (existing.rows.length > 0) return mapCache(existing.rows[0]);
-  return null;
+  return mapCache(result.rows[0]);
 }
 
 export async function learnFromManual(params: {

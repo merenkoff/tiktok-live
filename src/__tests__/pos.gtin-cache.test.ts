@@ -19,6 +19,10 @@ import { mapUpcDevResponse } from '../pos/gtin/upc-dev.provider.js';
 import { mapUpcitemdbResponse } from '../pos/gtin/upcitemdb.provider.js';
 import { addPlaceholderLine, createDocument } from '../pos/stock-documents.service.js';
 
+// This file owns the 482000000xxx gtin block. `pos_gtin_cache` is shared by
+// every store by design, so test files must not reuse each other codes —
+// see the block table in pos.gtin-learn.test.ts.
+
 const hasDb = Boolean(process.env.DB_HOST || process.env.DATABASE_URL);
 
 async function applyMigrations(): Promise<void> {

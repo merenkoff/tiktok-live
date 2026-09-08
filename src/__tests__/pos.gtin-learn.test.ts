@@ -24,6 +24,16 @@ import {
 } from '../pos/gtin/learn-jobs.service.js';
 import { computeCheckDigit } from '../pos/gtin/normalize.js';
 
+// `pos_gtin_cache` is global on purpose — barcode → name/brand is universal
+// reference data and one store's lookup warms the cache for everyone — so the
+// per-store isolation in pos-fixtures.ts has nothing to scope here. Test files
+// therefore own disjoint gtin blocks, or they collide when vitest runs them in
+// parallel workers:
+//
+//   482000000xxx  pos.gtin-cache.test.ts
+//   48200000001x  this file (fixtures included; cleaned by LIKE '48200000001%')
+//   482000002xxx  pos.gtin-concurrency.test.ts
+
 const hasDb = Boolean(process.env.DB_HOST || process.env.DATABASE_URL);
 const fixturesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures/gtin');
 
@@ -35,7 +45,7 @@ describe('dump parser (no db)', () => {
   it('parses TSV and JSONL fixtures', () => {
     const header = ['code', 'product_name', 'brands', 'image_url'];
     const ok = parseDumpTsvLine(
-      '4820000000017\tKids Bodysuit Brown\tAcme Kids\thttp://example.com/body.jpg',
+      '4820000000130\tKids Bodysuit Brown\tAcme Kids\thttp://example.com/body.jpg',
       header,
       'open_products_facts'
     );
@@ -49,7 +59,7 @@ describe('dump parser (no db)', () => {
     ).toHaveProperty('skip');
 
     const j = parseDumpJsonlLine(
-      '{"code":"4820000000017","product_name":"JSONL Bodysuit","brands":"BrandJ"}',
+      '{"code":"4820000000130","product_name":"JSONL Bodysuit","brands":"BrandJ"}',
       'open_products_facts'
     );
     expect('skip' in j).toBe(false);
@@ -145,7 +155,7 @@ describe.skipIf(!hasDb)('POS GTIN learning API', () => {
     });
     expect(progress.processed).toBeGreaterThanOrEqual(2);
     expect(progress.skipped).toBeGreaterThanOrEqual(1);
-    const hint = await getGtinCache('4820000000017');
+    const hint = await getGtinCache('4820000000130');
     // products_facts may lose to manual if same gtin was trained — use unique from fixture
     expect(hint?.name).toBeTruthy();
   });
