@@ -51,7 +51,9 @@ function isBetterCandidate(
 export async function getGtinCache(code: string): Promise<GtinHint | null> {
   const norm = normalizeGtin(code);
   if (!norm.ok) return null;
-  const result = await pool.query(`SELECT * FROM pos_gtin_cache WHERE gtin = $1`, [norm.gtin]);
+  const result = await pool.query(`SELECT * FROM pos_gtin_cache WHERE gtin = $1`, [
+    norm.canonical,
+  ]);
   if (result.rows.length === 0) return null;
   return mapCache(result.rows[0]);
 }
@@ -163,7 +165,7 @@ export async function ingestGtinResults(params: {
   const norm = normalizeGtin(params.code);
   if (!norm.ok) throw new Error(`Invalid GTIN: ${norm.reason}`);
 
-  await recordLookupEvents(norm.gtin, params.results, {
+  await recordLookupEvents(norm.canonical, params.results, {
     storeId: params.storeId,
     staffId: params.staffId,
   });
@@ -172,7 +174,7 @@ export async function ingestGtinResults(params: {
   if (!candidate) {
     // Nothing usable came back. Events are recorded either way; never create a
     // nameless cache row.
-    return getGtinCache(norm.gtin);
+    return getGtinCache(norm.canonical);
   }
 
   const result = await pool.query(
@@ -198,7 +200,7 @@ export async function ingestGtinResults(params: {
        END
      RETURNING *`,
     [
-      norm.gtin,
+      norm.canonical,
       candidate.name,
       candidate.brand,
       candidate.image_url,
@@ -223,7 +225,7 @@ export async function learnFromManual(params: {
   const norm = normalizeGtin(params.code);
   if (!norm.ok) return null;
   return ingestGtinResults({
-    code: norm.gtin,
+    code: norm.canonical,
     storeId: params.storeId,
     staffId: params.staffId,
     results: [

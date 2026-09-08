@@ -14,17 +14,24 @@
 // connecting, so the calls serialise and pass even against the broken code.
 // These tests take dedicated connections and force the interleaving instead.
 //
-// Uses gtins in the 482000002xxx block, disjoint from pos.gtin-cache.test.ts
-// (482000000xxx) and pos.gtin-learn.test.ts (482000001xxx).
+// Uses gtins in the 482000002xxx block — see the block table in
+// pos.gtin-learn.test.ts.
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { pool } from '../db.js';
 import { getGtinCache, ingestGtinResults } from '../pos/gtin/gtin-cache.service.js';
-import { computeCheckDigit } from '../pos/gtin/normalize.js';
-import { applyPosMigrations, hasDb } from './helpers/pos-fixtures.js';
+import { computeCheckDigit, normalizeGtin } from '../pos/gtin/normalize.js';
+import { applyPosMigrations, clearGtinCache, hasDb } from './helpers/pos-fixtures.js';
 
 function ean(body12: string): string {
   return `${body12}${computeCheckDigit(body12)}`;
+}
+
+/** The stored key for a barcode: canonical GTIN-14, not the scanned form. */
+function key(gtin: string): string {
+  const norm = normalizeGtin(gtin);
+  if (!norm.ok) throw new Error(`bad fixture gtin ${gtin}`);
+  return norm.canonical;
 }
 
 const GTIN_INSERT = ean('482000002001');
@@ -71,8 +78,9 @@ describe.skipIf(!hasDb)('GTIN cache under concurrent writers', () => {
   }, 120000);
 
   afterEach(async () => {
-    await pool.query(`DELETE FROM pos_gtin_lookup_events WHERE gtin = ANY($1)`, [ALL]);
-    await pool.query(`DELETE FROM pos_gtin_cache WHERE gtin = ANY($1)`, [ALL]);
+    // Via the helper: the stored key is the canonical GTIN-14, not the form
+    // these fixtures are written in.
+    await clearGtinCache(...ALL);
   });
 
   afterAll(async () => {
@@ -102,7 +110,7 @@ describe.skipIf(!hasDb)('GTIN cache under concurrent writers', () => {
     );
 
     const rows = await pool.query(`SELECT COUNT(*)::int AS c FROM pos_gtin_cache WHERE gtin = $1`, [
-      GTIN_INSERT,
+      key(GTIN_INSERT),
     ]);
     expect(rows.rows[0].c).toBe(1);
   });
@@ -203,7 +211,7 @@ describe.skipIf(!hasDb)('GTIN cache under concurrent writers', () => {
 
     const events = await pool.query(
       `SELECT COUNT(*)::int AS c FROM pos_gtin_lookup_events WHERE gtin = $1`,
-      [GTIN_INSERT]
+      [key(GTIN_INSERT)]
     );
     expect(events.rows[0].c).toBe(2);
   });

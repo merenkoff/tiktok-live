@@ -40,6 +40,7 @@ export const POS_MIGRATIONS = [
   '015_pos_store_modules.sql',
   '016_pos_store_module_remotes.sql',
   '017_pos_live_link.sql',
+  '018_pos_gtin_canonical.sql',
 ] as const;
 
 export function readMigration(file: string): string {
