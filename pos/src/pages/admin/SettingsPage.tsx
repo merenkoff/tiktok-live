@@ -7,6 +7,8 @@ import { api, useAuthStore, sameRemoteMap } from '@pos/platform';
 import { ProductPhotoField } from '../../components/ProductPhotoField';
 import { MODULES } from '../../modules/registry';
 import type { ModuleRemoteEntry, QrPaymentMode, StoreConfig } from '../../types';
+// Stateless leaf — no singleton to duplicate, so a direct import is fine here.
+import { inspectRemoteManifest, type RemoteManifestInfo } from '../../modules/remoteVerify';
 
 export function SettingsPage() {
   const auth = useAuthStore((s) => s.auth);
@@ -52,6 +54,24 @@ export function SettingsPage() {
   const [newModuleOrder, setNewModuleOrder] = useState('90');
   const [newModuleError, setNewModuleError] = useState<string | null>(null);
 
+  // Reading the source's signed manifest (`inspectRemoteManifest`) tells us the
+  // id and version the build declares about itself, so the owner does not retype
+  // the id and can see which version a URL actually points at before saving.
+  // Advisory only: the manifest is not fetched on save and never gates it — a
+  // URL that is not published yet still saves.
+  const [probe, setProbe] = useState<
+    { state: 'idle' } | { state: 'busy' } | { state: 'ok'; info: RemoteManifestInfo } | { state: 'error'; message: string }
+  >({ state: 'idle' });
+
+  // Releasing a new version means repointing an existing entry at a new tag.
+  // Without this the only route was delete-then-re-add.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingUrl, setEditingUrl] = useState('');
+  const [editingError, setEditingError] = useState<string | null>(null);
+  const [editingProbe, setEditingProbe] = useState<
+    { state: 'idle' } | { state: 'busy' } | { state: 'ok'; info: RemoteManifestInfo } | { state: 'error'; message: string }
+  >({ state: 'idle' });
+
   function hydrate(store: StoreConfig) {
     setName(store.name);
     setSlug(store.slug);
@@ -93,6 +113,75 @@ export function SettingsPage() {
     if (value.startsWith('/') && !value.startsWith('//')) return true;
     if (value.startsWith('https://')) return true;
     return /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(value);
+  }
+
+  /**
+   * Verify the signature on the source's manifest and report what it declares.
+   * `expectId` is set when repointing an existing entry: the module's own id has
+   * to keep matching the `module_remotes` key, or `applyModuleRemotes` rejects
+   * the descriptor at runtime and the cashier falls back to the placeholder.
+   */
+  async function probeRemote(
+    url: string,
+    expectId: string | null
+  ): Promise<{ state: 'ok'; info: RemoteManifestInfo } | { state: 'error'; message: string }> {
+    if (!isAllowedRemoteUrl(url)) {
+      return { state: 'error', message: 'Джерело: https://…, шлях від кореня /… або http://localhost.' };
+    }
+    try {
+      const info = await inspectRemoteManifest(url);
+      if (expectId && info.moduleId !== expectId) {
+        return {
+          state: 'error',
+          message: `Джерело описує модуль «${info.moduleId}», а запис — «${expectId}».`,
+        };
+      }
+      return { state: 'ok', info };
+    } catch (err) {
+      return { state: 'error', message: err instanceof Error ? err.message : 'Не вдалося перевірити джерело.' };
+    }
+  }
+
+  async function checkNewModuleSource() {
+    setProbe({ state: 'busy' });
+    const result = await probeRemote(newModuleUrl.trim(), null);
+    setProbe(result);
+    // The manifest is authoritative about the id — fill it in rather than making
+    // the owner copy it, and keep the key matching what the module calls itself.
+    if (result.state === 'ok' && !newModuleId.trim()) setNewModuleId(result.info.moduleId);
+  }
+
+  function startEditingRemote(id: string, url: string) {
+    setEditingId(id);
+    setEditingUrl(url);
+    setEditingError(null);
+    setEditingProbe({ state: 'idle' });
+  }
+
+  function cancelEditingRemote() {
+    setEditingId(null);
+    setEditingUrl('');
+    setEditingError(null);
+    setEditingProbe({ state: 'idle' });
+  }
+
+  async function checkEditingSource() {
+    if (!editingId) return;
+    setEditingProbe({ state: 'busy' });
+    setEditingProbe(await probeRemote(editingUrl.trim(), editingId));
+  }
+
+  /** Repoint one entry at a new build; everything else about it is untouched. */
+  function applyEditingRemote() {
+    if (!editingId) return;
+    const url = editingUrl.trim();
+    if (!isAllowedRemoteUrl(url)) {
+      return setEditingError('Джерело: https://…, шлях від кореня /… або http://localhost.');
+    }
+    setRemoteObjects((prev) =>
+      prev[editingId] ? { ...prev, [editingId]: { ...prev[editingId], url } } : prev
+    );
+    cancelEditingRemote();
   }
 
   function removeRemoteModule(id: string) {
@@ -154,6 +243,7 @@ export function SettingsPage() {
       ...(icon ? { icon } : {}),
     };
     setRemoteObjects((prev) => ({ ...prev, [id]: entry }));
+    setProbe({ state: 'idle' });
     setNewModuleId('');
     setNewModuleTitle('');
     setNewModuleUrl('');
@@ -472,23 +562,71 @@ export function SettingsPage() {
             {Object.entries(remoteObjects).map(([id, entry]) => (
               <div
                 key={id}
-                className="flex items-center justify-between gap-3 rounded-sq border border-sq-divider bg-sq-bg px-3 py-2"
+                className="rounded-sq border border-sq-divider bg-sq-bg px-3 py-2 space-y-2"
               >
-                <div className="min-w-0">
-                  <div className="text-sm font-medium">
-                    {entry.title} <span className="text-xs text-sq-muted">({id})</span>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium">
+                      {entry.title} <span className="text-xs text-sq-muted">({id})</span>
+                    </div>
+                    <div className="truncate text-xs text-sq-muted">
+                      {entry.routePath} · {entry.url}
+                    </div>
                   </div>
-                  <div className="truncate text-xs text-sq-muted">
-                    {entry.routePath} · {entry.url}
+                  <div className="flex shrink-0 gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        editingId === id ? cancelEditingRemote() : startEditingRemote(id, entry.url)
+                      }
+                      className="rounded-sq border border-sq-divider px-2.5 py-1 text-xs text-sq-secondary hover:bg-sq-surface"
+                    >
+                      {editingId === id ? 'Скасувати' : 'Оновити джерело'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeRemoteModule(id)}
+                      className="rounded-sq border border-sq-divider px-2.5 py-1 text-xs text-sq-secondary hover:bg-sq-surface"
+                    >
+                      Видалити
+                    </button>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => removeRemoteModule(id)}
-                  className="shrink-0 rounded-sq border border-sq-divider px-2.5 py-1 text-xs text-sq-secondary hover:bg-sq-surface"
-                >
-                  Видалити
-                </button>
+
+                {editingId === id && (
+                  <div className="space-y-2 border-t border-sq-divider pt-2">
+                    <input
+                      aria-label={`Джерело модуля ${id}`}
+                      placeholder="Джерело (URL remote-entry.js)"
+                      value={editingUrl}
+                      onChange={(e) => {
+                        setEditingUrl(e.target.value);
+                        setEditingProbe({ state: 'idle' });
+                        setEditingError(null);
+                      }}
+                      className="w-full rounded-sq border border-sq-divider bg-sq-surface px-2.5 py-1.5 text-xs"
+                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void checkEditingSource()}
+                        disabled={editingProbe.state === 'busy'}
+                        className="rounded-sq border border-sq-divider px-2.5 py-1 text-xs text-sq-secondary hover:bg-sq-surface disabled:opacity-50"
+                      >
+                        {editingProbe.state === 'busy' ? 'Перевірка…' : 'Перевірити'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={applyEditingRemote}
+                        className="sq-btn-primary px-2.5 py-1 text-xs"
+                      >
+                        Застосувати
+                      </button>
+                      <RemoteProbeNote probe={editingProbe} />
+                    </div>
+                    {editingError && <p className="text-xs text-rose-600">{editingError}</p>}
+                  </div>
+                )}
               </div>
             ))}
 
@@ -509,9 +647,23 @@ export function SettingsPage() {
                 <input
                   placeholder="Джерело (URL remote-entry.js)"
                   value={newModuleUrl}
-                  onChange={(e) => setNewModuleUrl(e.target.value)}
+                  onChange={(e) => {
+                    setNewModuleUrl(e.target.value);
+                    setProbe({ state: 'idle' });
+                  }}
                   className="col-span-2 rounded-sq border border-sq-divider bg-sq-surface px-2.5 py-1.5 text-xs"
                 />
+                <div className="col-span-2 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void checkNewModuleSource()}
+                    disabled={probe.state === 'busy' || !newModuleUrl.trim()}
+                    className="rounded-sq border border-sq-divider px-2.5 py-1 text-xs text-sq-secondary hover:bg-sq-surface disabled:opacity-50"
+                  >
+                    {probe.state === 'busy' ? 'Перевірка…' : 'Перевірити джерело'}
+                  </button>
+                  <RemoteProbeNote probe={probe} />
+                </div>
                 <input
                   placeholder="Маршрут (/live)"
                   value={newModuleRoutePath}
@@ -563,4 +715,32 @@ export function SettingsPage() {
       </form>
     </div>
   );
+}
+
+/**
+ * Result of reading a source's signed manifest. Deliberately advisory: it says
+ * what the build declares and whether its signature checks out, but nothing
+ * here blocks saving — a URL for a version that is not published yet is a
+ * legitimate thing to store.
+ */
+function RemoteProbeNote({
+  probe,
+}: {
+  probe:
+    | { state: 'idle' }
+    | { state: 'busy' }
+    | { state: 'ok'; info: RemoteManifestInfo }
+    | { state: 'error'; message: string };
+}) {
+  if (probe.state === 'ok') {
+    return (
+      <span className="text-xs text-emerald-700">
+        Підпис дійсний · {probe.info.moduleId} {probe.info.version}
+      </span>
+    );
+  }
+  if (probe.state === 'error') {
+    return <span className="text-xs text-rose-600">{probe.message}</span>;
+  }
+  return null;
 }

@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { RemoteVerifyError, verifyRemoteEntry } from './remoteVerify';
+import { RemoteVerifyError, inspectRemoteManifest, verifyRemoteEntry } from './remoteVerify';
 import { TRUSTED_REMOTE_KEYS } from './remoteSigningKeys';
 
 const ENTRY_URL = 'https://cdn.example.test/stock/remote-entry.js';
@@ -137,5 +137,59 @@ describe('verifyRemoteEntry', () => {
   it('rejects a missing manifest', async () => {
     stubFetch({ manifest: null, sig: 'x' });
     await expect(verifyRemoteEntry(ENTRY_URL, 'stock')).rejects.toThrow(/manifest HTTP 404/);
+  });
+});
+
+describe('inspectRemoteManifest', () => {
+  it('returns what a validly signed manifest says about itself', async () => {
+    const manifest = await makeManifest({ moduleId: 'tiktok-live', version: '1.0.8' });
+    stubFetch({ manifest, sig: await signManifest(manifest) });
+    await expect(inspectRemoteManifest(ENTRY_URL)).resolves.toEqual({
+      moduleId: 'tiktok-live',
+      version: '1.0.8',
+      keyId,
+      builtAt: '2026-09-06T00:00:00.000Z',
+    });
+  });
+
+  it('never fetches the module code', async () => {
+    const manifest = await makeManifest();
+    stubFetch({ manifest, sig: await signManifest(manifest) });
+    await inspectRemoteManifest(ENTRY_URL);
+    const urls = (fetch as unknown as { mock: { calls: [string][] } }).mock.calls.map((c) => c[0]);
+    expect(urls).toHaveLength(2);
+    expect(urls.some((u) => u.endsWith('remote-entry.js'))).toBe(false);
+  });
+
+  it('does not care about the entry hash — it never reads the entry', async () => {
+    const manifest = await makeManifest();
+    stubFetch({ manifest, sig: await signManifest(manifest), entry: '/* swapped */\n' });
+    await expect(inspectRemoteManifest(ENTRY_URL)).resolves.toMatchObject({ moduleId: 'stock' });
+  });
+
+  it('rejects a bad signature', async () => {
+    const manifest = await makeManifest();
+    const sig = await signManifest(manifest);
+    const tampered = Buffer.from(sig, 'base64');
+    tampered[0] ^= 0xff;
+    stubFetch({ manifest, sig: tampered.toString('base64') });
+    await expect(inspectRemoteManifest(ENTRY_URL)).rejects.toThrow(/bad signature/);
+  });
+
+  it('rejects an unknown keyId', async () => {
+    const manifest = await makeManifest({ keyId: 'deadbeefdeadbeef' });
+    stubFetch({ manifest, sig: await signManifest(manifest) });
+    await expect(inspectRemoteManifest(ENTRY_URL)).rejects.toThrow(/untrusted keyId/);
+  });
+
+  it('rejects when the URL does not point at the manifest entry', async () => {
+    const manifest = await makeManifest({ entry: 'other-entry.js' });
+    stubFetch({ manifest, sig: await signManifest(manifest) });
+    await expect(inspectRemoteManifest(ENTRY_URL)).rejects.toThrow(/manifest entry/);
+  });
+
+  it('rejects a missing manifest', async () => {
+    stubFetch({ manifest: null, sig: 'x' });
+    await expect(inspectRemoteManifest(ENTRY_URL)).rejects.toThrow(/manifest HTTP 404/);
   });
 });

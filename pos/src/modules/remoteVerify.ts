@@ -17,6 +17,11 @@
  * are not fetched here — their filenames are content-hashed and listed in the
  * signed manifest, and the entry that imports them is verified.
  *
+ * `inspectRemoteManifest` exposes just the signed-manifest half: it verifies the
+ * signature and returns what the manifest says about itself, without fetching or
+ * running any module code. The Settings screen uses it to prefill a new
+ * `module_remotes` entry from the build the owner is pointing at.
+ *
  * Dependency-free leaf. Uses WebCrypto (`crypto.subtle`); on a browser without
  * Ed25519 support the check fails closed → the module stays bundled.
  */
@@ -82,26 +87,21 @@ async function fetchOrThrow(url: string, what: string, init?: RequestInit): Prom
   return res;
 }
 
-export interface VerifiedRemote {
-  /** Verified `style.css` text (roadmap #4), if the remote ships one. */
-  styleCss?: string;
-}
-
 /**
- * Throws `RemoteVerifyError` unless the remote at `url` is validly signed.
- * Resolves with any verified sidecar assets (`style.css`).
+ * Fetch the sibling `manifest.json` + `.sig` for an entry URL and check the
+ * signature against the allowlist. Does not touch the entry itself, so it is
+ * safe to call on a URL nobody has vetted: nothing is executed either way.
  */
-export async function verifyRemoteEntry(url: string, moduleId: string): Promise<VerifiedRemote> {
+async function fetchVerifiedManifest(url: string): Promise<RemoteManifest> {
   const subtle = globalThis.crypto?.subtle;
   if (!subtle) throw new RemoteVerifyError('WebCrypto unavailable');
 
   const manifestUrl = url.replace(/[^/]+$/, 'manifest.json');
   const sigUrl = `${manifestUrl}.sig`;
 
-  const [manifestText, sigText, entryBuf] = await Promise.all([
+  const [manifestText, sigText] = await Promise.all([
     fetchOrThrow(manifestUrl, 'manifest', { cache: 'no-store' }).then((r) => r.text()),
     fetchOrThrow(sigUrl, 'signature', { cache: 'no-store' }).then((r) => r.text()),
-    fetchOrThrow(url, 'entry').then((r) => r.arrayBuffer()),
   ]);
 
   let manifest: RemoteManifest;
@@ -134,13 +134,69 @@ export async function verifyRemoteEntry(url: string, moduleId: string): Promise<
   }
   if (!ok) throw new RemoteVerifyError('bad signature');
 
-  if (manifest.moduleId !== moduleId) {
-    throw new RemoteVerifyError(`manifest moduleId "${manifest.moduleId}" != "${moduleId}"`);
-  }
   if (basename(manifest.entry) !== basename(url)) {
     throw new RemoteVerifyError(`manifest entry "${manifest.entry}" != "${basename(url)}"`);
   }
 
+  return manifest;
+}
+
+/** What a validly signed remote says about itself. */
+export interface RemoteManifestInfo {
+  moduleId: string;
+  version: string;
+  keyId: string;
+  builtAt: string;
+}
+
+/**
+ * Read a remote's signed manifest without downloading or running its code.
+ *
+ * The point of registering an online-only module is that its id, title, route
+ * and nav have to be stored on `pos_stores.module_remotes` before the module
+ * itself is ever fetched — the desktop cashier renders the nav entry from that
+ * on a cold, offline first run. Retyping them by hand is what drifts. This
+ * gives the Settings screen the authoritative id and version straight from the
+ * build being registered, having verified the signature first.
+ *
+ * Throws `RemoteVerifyError` — the same reasons the loader reports.
+ */
+export async function inspectRemoteManifest(url: string): Promise<RemoteManifestInfo> {
+  const manifest = await fetchVerifiedManifest(url);
+  return {
+    moduleId: manifest.moduleId,
+    version: manifest.version,
+    keyId: manifest.keyId,
+    builtAt: manifest.builtAt,
+  };
+}
+
+export interface VerifiedRemote {
+  /** Verified `style.css` text (roadmap #4), if the remote ships one. */
+  styleCss?: string;
+}
+
+/**
+ * Throws `RemoteVerifyError` unless the remote at `url` is validly signed.
+ * Resolves with any verified sidecar assets (`style.css`).
+ */
+export async function verifyRemoteEntry(url: string, moduleId: string): Promise<VerifiedRemote> {
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle) throw new RemoteVerifyError('WebCrypto unavailable');
+
+  // Start the entry download alongside the manifest check — this runs before
+  // the app's first render, so the round trips are worth overlapping. The
+  // no-op catch only marks the rejection handled; `await` below still throws.
+  const entryPromise = fetchOrThrow(url, 'entry').then((r) => r.arrayBuffer());
+  void entryPromise.catch(() => undefined);
+
+  const manifest = await fetchVerifiedManifest(url);
+
+  if (manifest.moduleId !== moduleId) {
+    throw new RemoteVerifyError(`manifest moduleId "${manifest.moduleId}" != "${moduleId}"`);
+  }
+
+  const entryBuf = await entryPromise;
   const expected = manifest.files?.[manifest.entry];
   if (!expected) throw new RemoteVerifyError('manifest has no entry hash');
   const actual = `sha384-${bytesToB64(await subtle.digest('SHA-384', entryBuf))}`;
