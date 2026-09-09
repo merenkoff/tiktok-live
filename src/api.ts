@@ -83,6 +83,11 @@ export async function createServer(): Promise<FastifyInstance> {
       'Content-Type',
       'Idempotency-Key',
       'X-POS-API-Version',
+      // Super admin session (src/pos/core/superAuth.ts). A custom header
+      // triggers a preflight, and one missing from this list makes every
+      // cross-origin `/api/pos/super/*` call after login fail as a plain
+      // "network error" in the browser — exactly how it first shipped.
+      'X-POS-Super-Token',
     ],
     exposedHeaders: ['X-POS-API-Version'],
   });
