@@ -42,6 +42,7 @@ const EXPECTED_COMMANDS = [
   'list_printers',
   'print_receipt',
   'print_webview',
+  'prune_module_remotes',
   'sync_module_remote',
 ];
 

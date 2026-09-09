@@ -10,19 +10,36 @@
  * - key   = keyId (first 16 hex of `sha256(rawPubKey)`)
  * - value = raw 32-byte Ed25519 public key, base64
  *
- * The `dev` key below is **deterministic and not secret** — derived from a fixed
- * seed in `scripts/sign-remote.mjs`, it just lets locally-built `build:*-remote`
- * output load without a real signing key. Add the production keyId here when CI
- * signing (`POS_REMOTE_SIGNING_KEY`) lands; drop `dev` before shipping remotes
- * that matter.
+ * Must stay in sync with `TRUSTED_REMOTE_KEYS` / `DEV_REMOTE_KEY` in
+ * `src-tauri/src/module_remotes.rs` — the desktop verifies in Rust.
  *
  * Dependency-free leaf — imported by `registry.ts` / `remoteVerify.ts`.
  */
-export const TRUSTED_REMOTE_KEYS: Readonly<Record<string, string>> = {
-  // dev (deterministic — `node scripts/sign-remote.mjs --print-dev`)
-  a5dae462a776005d: 'iTxt7d1E3eJAWDaCKKiOksLNjdnPwmLgayjSJVRsIYM=',
+
+/** Trusted in every build. */
+const PROD_REMOTE_KEYS: Readonly<Record<string, string>> = {
   // prod — generated 2026-09-07 (`node scripts/sign-remote.mjs --gen-prod`).
   // Private half lives only as the `POS_REMOTE_SIGNING_KEY` GitHub Actions
   // secret (`.github/workflows/module-release.yml`); nothing else holds it.
   '2a73632c13044371': 'L1GE875XMdo4FDMUTmYaZjpsYxzNyXnxL3G00jrsrkk=',
+};
+
+/**
+ * The **dev** key is deterministic and not secret — derived from a fixed seed
+ * in `scripts/sign-remote.mjs`, it just lets locally-built `build:*-remote`
+ * output load without a real signing key. Anyone can sign with it, so it is
+ * trusted only under `vite dev`/vitest, or in a build made with
+ * `VITE_REMOTE_ALLOW_DEV_KEY=1` for a local end-to-end run against a
+ * dev-signed module. Production builds (Railway, CI) never set that.
+ */
+const DEV_REMOTE_KEY: Readonly<Record<string, string>> = {
+  // `node scripts/sign-remote.mjs --print-dev`
+  a5dae462a776005d: 'iTxt7d1E3eJAWDaCKKiOksLNjdnPwmLgayjSJVRsIYM=',
+};
+
+const allowDevKey = import.meta.env.DEV || import.meta.env.VITE_REMOTE_ALLOW_DEV_KEY === '1';
+
+export const TRUSTED_REMOTE_KEYS: Readonly<Record<string, string>> = {
+  ...(allowDevKey ? DEV_REMOTE_KEY : {}),
+  ...PROD_REMOTE_KEYS,
 };

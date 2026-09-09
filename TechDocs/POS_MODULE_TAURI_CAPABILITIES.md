@@ -25,7 +25,7 @@ Ed25519-верифицируется и кешируется в Rust, а пот�
 | Поверхность | Что именно |
 |---|---|
 | **IPC** | `window.__TAURI_INTERNALS__.invoke(cmd, args)` — инжектится всегда. **`window.__TAURI__` не существует**: `withGlobalTauri` в `tauri.conf.json` не включён. Роадмап раньше писал «модуль видит `window.__TAURI__`» — искать в коде надо `__TAURI_INTERNALS__`. |
-| **Наши команды** | Все 7 из `generate_handler!` ([`src-tauri/src/lib.rs`](../pos/src-tauri/src/lib.rs)): `list_hardware` (перечисление HID-устройств), `list_printers`, `print_receipt` (ESC/POS-байты в любой принтер ОС), `print_webview`, `check_for_update`, `install_update` (скачать и поставить обновление + рестарт), `sync_module_remote`. |
+| **Наши команды** | Все 8 из `generate_handler!` ([`src-tauri/src/lib.rs`](../pos/src-tauri/src/lib.rs)): `list_hardware` (перечисление HID-устройств), `list_printers`, `print_receipt` (ESC/POS-байты в любой принтер ОС), `print_webview`, `check_for_update`, `install_update` (скачать и поставить обновление + рестарт), `sync_module_remote` (с 2026-09-09 принимает `cachedOnly` — ответ из кеша без сети), `prune_module_remotes(keep)` (удалить кеш модулей не из списка — худшее, что даёт модулю: снести чужой кеш, который перекачается следующим синком). |
 | **Данные оболочки** | Тот же origin ⇒ `localStorage['pos_auth']` (JWT сессии), IndexedDB офлайн-кассы: снапшот каталога/клиентов, очередь непроведённых продаж, PBKDF2-верификатор PIN. |
 | **Сеть** | `fetch` к `/api/pos` с сессионным JWT — то есть весь API магазина под правами текущего кассира/владельца. CSP `connect-src` разрешает `https:` целиком. |
 | **Синглтоны** | `useAuthStore` / `useCartStore` / offline-status / `PosShellContext` через `@pos/platform` — не копия, а тот самый инстанс. |
@@ -52,10 +52,13 @@ Ed25519-верифицируется и кешируется в Rust, а пот�
 ## 3. Что реально держит границу
 
 - **Подпись (roadmap #3).** `sync_module_remote` принимает `base_url` от JS, но
-  ставит только манифест с Ed25519-подписью ключа из `TRUSTED_REMOTE_KEYS`
+  ставит только манифест с Ed25519-подписью ключа из `PROD_REMOTE_KEYS`
   ([`module_remotes.rs`](../pos/src-tauri/src/module_remotes.rs)), сверяет
   sha384 каждого файла и публикует директорию атомарно. Модуль **не может**
-  подсунуть себе или другому модулю неподписанный код.
+  подсунуть себе или другому модулю неподписанный код. Dev-ключ (публичный
+  сид) в release-сборке **не** доверен — только debug или
+  `POS_REMOTE_ALLOW_DEV_KEY=1` при компиляции
+  ([POS_MODULE_REMOTE_SIGNING.md](POS_MODULE_REMOTE_SIGNING.md)).
 - **`is_safe_segment`** на id и именах файлов — ни traversal, ни разделителей
   ни в путях на диске, ни в `liveshopmodule://`.
 - **CSP** (`tauri.conf.json`): `script-src 'self' liveshopmodule:

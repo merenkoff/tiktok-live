@@ -11,12 +11,13 @@ import { getAppliedRemotes, sameRemoteMap } from '../modules/appliedRemotes';
 
 /**
  * True when a fresh server auth carries a `store.module_remotes` map that differs
- * from what `applyModuleRemotes()` applied at boot — the web app needs a reload
- * to pick up the new module source (roadmap #9). Web only: the Tauri cashier
- * never runs `applyModuleRemotes` and ignores the setting.
+ * from what `applyModuleRemotes()` applied at boot — the app needs a reload to
+ * pick up the new module source (roadmap #9). Both shells: the desktop cashier
+ * runs `applyModuleRemotes` too (roadmap #13 Part B), and there this is the
+ * only way a module added while logged out, or after a cold offline boot,
+ * shows up without restarting the kiosk.
  */
 function remotesChanged(auth: AuthResponse): boolean {
-  if (isOfflinePosEnabled()) return false;
   return !sameRemoteMap(auth.store.module_remotes, getAppliedRemotes());
 }
 

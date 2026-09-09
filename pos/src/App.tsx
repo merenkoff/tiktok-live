@@ -5,26 +5,7 @@
 import { useEffect } from 'react';
 import { useAuthStore, usePosShell, useEnabledModules } from '@pos/platform';
 import { renderModuleRoutes } from './modules/renderRoutes';
-
-/**
- * Shown (web only) when the store's `module_remotes` setting changed since this
- * tab booted — `applyModuleRemotes()` only runs at boot, so a reload is needed
- * to pick up the new module source (roadmap #9).
- */
-function ModuleRemotesReloadBanner() {
-  const dismiss = useAuthStore((s) => s.dismissModuleRemotesStale);
-  return (
-    <div className="fixed inset-x-0 bottom-0 z-50 flex items-center justify-center gap-3 border-t border-sq-divider bg-sq-surface px-4 py-3 text-sm text-sq-text shadow-lg">
-      <span className="text-sq-secondary">Джерело модулів магазину змінилося.</span>
-      <button className="sq-btn-primary px-3 py-1.5" onClick={() => window.location.reload()}>
-        Перезавантажити
-      </button>
-      <button className="px-2 py-1.5 text-sq-secondary hover:text-sq-text" onClick={dismiss}>
-        Пізніше
-      </button>
-    </div>
-  );
-}
+import { ModuleRemotesReloadBanner } from './components/ModuleRemotesReloadBanner';
 
 export function App() {
   const bootstrap = useAuthStore((s) => s.bootstrap);
@@ -32,6 +13,7 @@ export function App() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const role = useAuthStore((s) => s.role());
   const moduleRemotesStale = useAuthStore((s) => s.moduleRemotesStale);
+  const dismissModuleRemotesStale = useAuthStore((s) => s.dismissModuleRemotesStale);
   const shell = usePosShell();
   const enabled = useEnabledModules();
 
@@ -50,7 +32,12 @@ export function App() {
   return (
     <>
       {renderModuleRoutes({ shell, role, enabled, isAuthenticated })}
-      {shell === 'web' && moduleRemotesStale && <ModuleRemotesReloadBanner />}
+      {moduleRemotesStale && (
+        <ModuleRemotesReloadBanner
+          message="Джерело модулів магазину змінилося."
+          onDismiss={dismissModuleRemotesStale}
+        />
+      )}
     </>
   );
 }

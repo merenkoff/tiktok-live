@@ -10,8 +10,13 @@
  * Precedence:
  *   1. `VITE_MODULE_REMOTES` (`id@url,id@url`) — build/QA override, wins outright,
  *      string form only (dev override of a bundled module);
- *   2. otherwise the per-store `store.module_remotes` map from the cached
- *      `pos_auth` (set by the last successful login/`me()`).
+ *   2. otherwise the per-store `store.module_remotes` map this device last got
+ *      from the server — `pos_module_remotes`, written by `api.saveAuth()` on
+ *      every server-issued auth and deliberately NOT cleared by logout or
+ *      overwritten by an offline session (the desktop cashier boots from it
+ *      before anyone logs in);
+ *   3. failing that, the map inside the cached `pos_auth` itself — installs
+ *      that last logged in before `pos_module_remotes` existed.
  *
  * A `module_remotes` value is either a bare URL string (override a bundled
  * module's code) or a `ModuleRemoteEntry` object (a new online-only module the
@@ -22,7 +27,10 @@
 
 import type { ModuleRemoteEntry } from '../types';
 
+// Both keys are owned by `services/api.ts`; named here by value because this
+// file runs before React mounts and must stay import-free of the API client.
 const AUTH_KEY = 'pos_auth';
+const MODULE_REMOTES_KEY = 'pos_module_remotes';
 
 /** Nav/route metadata for an online-only module, before its full descriptor loads. */
 export type ModulePresentation = Omit<ModuleRemoteEntry, 'url'>;
@@ -96,18 +104,34 @@ function fromEnv(spec: string, knownIds: ReadonlySet<string>): Map<string, Resol
   return out;
 }
 
-function fromCachedAuth(knownIds: ReadonlySet<string>): Map<string, ResolvedRemote> {
-  const out = new Map<string, ResolvedRemote>();
+function readJson(key: string): unknown {
   let raw: string | null = null;
   try {
-    raw = localStorage.getItem(AUTH_KEY);
+    raw = localStorage.getItem(key);
   } catch {
-    return out;
+    return undefined;
   }
-  if (!raw) return out;
+  if (!raw) return undefined;
   try {
-    const map = (JSON.parse(raw) as { store?: { module_remotes?: unknown } })?.store?.module_remotes;
-    if (!map || typeof map !== 'object' || Array.isArray(map)) return out;
+    return JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+}
+
+/** The last server-known `module_remotes` map on this device, or undefined. */
+function readStoredMap(): unknown {
+  const dedicated = readJson(MODULE_REMOTES_KEY) as { map?: unknown } | undefined;
+  if (dedicated && typeof dedicated === 'object' && 'map' in dedicated) return dedicated.map;
+  return (readJson(AUTH_KEY) as { store?: { module_remotes?: unknown } } | undefined)?.store
+    ?.module_remotes;
+}
+
+function fromCachedAuth(knownIds: ReadonlySet<string>): Map<string, ResolvedRemote> {
+  const out = new Map<string, ResolvedRemote>();
+  const map = readStoredMap();
+  if (!map || typeof map !== 'object' || Array.isArray(map)) return out;
+  try {
     for (const [id, value] of Object.entries(map as Record<string, unknown>)) {
       if (typeof value === 'string') {
         // String form: override a bundled module — id must be a known module.

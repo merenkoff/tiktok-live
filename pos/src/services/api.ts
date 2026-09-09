@@ -47,6 +47,8 @@ import { reportModuleEvent } from '../modules/telemetry';
 
 const TOKEN_KEY = 'pos_token';
 const AUTH_KEY = 'pos_auth';
+/** Mirrored by name in `modules/moduleRemotesSource.ts` (which must not import this file). */
+const MODULE_REMOTES_KEY = 'pos_module_remotes';
 
 export function isNetworkError(error: unknown): boolean {
   return axios.isAxiosError(error) && !error.response;
@@ -104,6 +106,22 @@ class PosApi {
   saveAuth(auth: AuthResponse) {
     localStorage.setItem(TOKEN_KEY, auth.token);
     localStorage.setItem(AUTH_KEY, JSON.stringify(auth));
+    // The store's module-remote map is kept under its own key, because
+    // `applyModuleRemotes()` reads it at boot — before any login — and the
+    // desktop cashier boots into whatever this device last knew:
+    //   - `clearAuth()` (logout) must not take the module list with it, or the
+    //     next boot renders no online-only modules until someone logs in AND
+    //     restarts the app;
+    //   - an offline session rebuilt from the local PIN cache
+    //     (`sessionFromUnlock`) must not overwrite the last server-known map.
+    // Only a server-issued auth carries the authoritative map, so only that
+    // writes here.
+    if (!auth.offlineSession && auth.store.module_remotes !== undefined) {
+      localStorage.setItem(
+        MODULE_REMOTES_KEY,
+        JSON.stringify({ storeId: auth.store.id, map: auth.store.module_remotes })
+      );
+    }
   }
 
   clearAuth() {

@@ -39,15 +39,12 @@ use tauri::{AppHandle, Manager, Runtime, UriSchemeContext};
 
 const B64: base64::engine::general_purpose::GeneralPurpose = base64::engine::general_purpose::STANDARD;
 
-/// Ed25519 public keys trusted to sign module-remote manifests (roadmap #3).
+/// Ed25519 public keys trusted to sign module-remote manifests (roadmap #3),
+/// in **every** build.
 ///
 /// **MUST stay in sync with `pos/src/modules/remoteSigningKeys.ts`.**
 /// `keyId` = first 16 hex of `sha256(rawPubKey)`; value = base64 raw 32-byte key.
-/// The `dev` entry is deterministic and not secret (see `scripts/sign-remote.mjs`
-/// `--print-dev`); drop it before shipping remotes that matter.
-const TRUSTED_REMOTE_KEYS: &[(&str, &str)] = &[
-    // dev (deterministic — `node scripts/sign-remote.mjs --print-dev`)
-    ("a5dae462a776005d", "iTxt7d1E3eJAWDaCKKiOksLNjdnPwmLgayjSJVRsIYM="),
+const PROD_REMOTE_KEYS: &[(&str, &str)] = &[
     // prod — generated 2026-09-07 (`node scripts/sign-remote.mjs --gen-prod`).
     // Private half lives only in the POS_REMOTE_SIGNING_KEY GitHub Actions
     // secret (.github/workflows/module-release.yml). Was added to the JS
@@ -57,6 +54,31 @@ const TRUSTED_REMOTE_KEYS: &[(&str, &str)] = &[
     // while the same URL verified and loaded fine on web.
     ("2a73632c13044371", "L1GE875XMdo4FDMUTmYaZjpsYxzNyXnxL3G00jrsrkk="),
 ];
+
+/// The deterministic **dev** key (`node scripts/sign-remote.mjs --print-dev`):
+/// derived from a public seed, so anyone can sign with it. It is what every
+/// local `build:<id>-remote` signs with, and nothing more — so it is trusted
+/// only in debug builds, or in a release compiled with
+/// `POS_REMOTE_ALLOW_DEV_KEY=1` for a local end-to-end run against a
+/// dev-signed module (TechDocs/POS_MODULE_REMOTE_SIGNING.md). The CI installer
+/// (`pos-release.yml`) never sets it: a shipped till trusts the prod key only.
+const DEV_REMOTE_KEY: (&str, &str) =
+    ("a5dae462a776005d", "iTxt7d1E3eJAWDaCKKiOksLNjdnPwmLgayjSJVRsIYM=");
+
+/// `option_env!` is read at compile time — set the variable for the
+/// `cargo`/`tauri build` invocation itself, not at runtime.
+fn dev_key_allowed() -> bool {
+    cfg!(debug_assertions) || matches!(option_env!("POS_REMOTE_ALLOW_DEV_KEY"), Some("1"))
+}
+
+/// Base64 public key for a manifest `keyId` this build trusts, if any.
+fn trusted_pubkey(key_id: &str) -> Option<&'static str> {
+    PROD_REMOTE_KEYS
+        .iter()
+        .find(|(k, _)| *k == key_id)
+        .map(|(_, v)| *v)
+        .or_else(|| (dev_key_allowed() && DEV_REMOTE_KEY.0 == key_id).then_some(DEV_REMOTE_KEY.1))
+}
 
 /// The signed manifest a remote build ships next to `remote-entry.js`
 /// (`scripts/sign-remote.mjs`). Field names mirror `RemoteManifest` in
@@ -201,19 +223,56 @@ async fn fetch_bytes(client: &reqwest::Client, url: &str) -> Result<Vec<u8>, Str
     Ok(resp.bytes().await.map_err(|e| e.to_string())?.to_vec())
 }
 
+/// The installed copy already satisfies the manifest the server advertises:
+/// same-or-newer semver, fetched from the **same** `base_url` (the same id and
+/// version served from a different URL is different code — a store that moved
+/// its hosting, or a second store on this device — and must be re-fetched), and
+/// every cached file still hashes right.
+fn is_current(installed: &Installed, new_ver: &semver::Version, base_url: &str, mod_dir: &Path) -> bool {
+    let Ok(cur) = semver::Version::parse(&installed.version) else {
+        return false;
+    };
+    *new_ver <= cur
+        && installed.source_url == base_url
+        && cache_intact(&mod_dir.join(&installed.version), &installed.files)
+}
+
 /// Download + verify + cache the module named `id` from `base_url` (its
 /// `module_remotes[id]`, pointing at `remote-entry.js`). See the module docs.
+///
+/// `cached_only` (roadmap #12 track 1): answer from `installed.json` without
+/// touching the network — `current` with the cached version when the cache is
+/// intact, `offline` with `active: None` otherwise. The shell boots from this
+/// so a kiosk on a half-dead link renders the till immediately; the real sync
+/// then runs in the background and only asks for a reload when something new
+/// actually landed.
 #[tauri::command]
 pub async fn sync_module_remote(
     app: AppHandle,
     id: String,
     base_url: String,
+    cached_only: Option<bool>,
 ) -> Result<ModuleSyncResult, String> {
     if !is_safe_segment(&id) {
         return Err(format!("unsafe module id {id:?}"));
     }
     let mod_dir = modules_root(&app)?.join(&id);
     let installed = read_installed(&mod_dir);
+
+    if cached_only.unwrap_or(false) {
+        let usable = installed
+            .as_ref()
+            .filter(|i| cache_intact(&mod_dir.join(&i.version), &i.files));
+        return Ok(match usable {
+            Some(i) => ModuleSyncResult {
+                status: "current".into(),
+                active: Some(i.version.clone()),
+                previous: None,
+                error: None,
+            },
+            None => ModuleSyncResult::offline(None),
+        });
+    }
 
     let (manifest_url, sig_url, dir_url) = derive_urls(&base_url)?;
     let client = reqwest::Client::builder()
@@ -240,10 +299,7 @@ pub async fn sync_module_remote(
             manifest.module_id, id
         ));
     }
-    let pubkey = TRUSTED_REMOTE_KEYS
-        .iter()
-        .find(|(k, _)| *k == manifest.key_id)
-        .map(|(_, v)| *v)
+    let pubkey = trusted_pubkey(&manifest.key_id)
         .ok_or_else(|| format!("untrusted keyId {}", manifest.key_id))?;
     if !verify_manifest_sig(pubkey, &sig_text, &manifest_bytes)? {
         return Err("bad manifest signature".into());
@@ -255,18 +311,14 @@ pub async fn sync_module_remote(
     let new_ver =
         semver::Version::parse(&manifest.version).map_err(|e| format!("bad manifest version: {e}"))?;
 
-    // Already have this (or newer) and the cache is intact → nothing to do.
-    if let Some(inst) = &installed {
-        if let Ok(cur) = semver::Version::parse(&inst.version) {
-            if new_ver <= cur && cache_intact(&mod_dir.join(&inst.version), &inst.files) {
-                return Ok(ModuleSyncResult {
-                    status: "current".into(),
-                    active: Some(inst.version.clone()),
-                    previous: None,
-                    error: None,
-                });
-            }
-        }
+    // Already have this (or newer) from this URL and the cache is intact → nothing to do.
+    if let Some(inst) = installed.as_ref().filter(|i| is_current(i, &new_ver, &base_url, &mod_dir)) {
+        return Ok(ModuleSyncResult {
+            status: "current".into(),
+            active: Some(inst.version.clone()),
+            previous: None,
+            error: None,
+        });
     }
 
     // Download into a scratch dir; only publish it once every hash checks out.
@@ -342,6 +394,37 @@ fn prune_other_versions(mod_dir: &Path, keep: &str) {
     }
 }
 
+/// Delete every `<root>/<dir>` whose name is not in `keep`. Returns what went.
+/// Only well-formed ids are considered; anything else in there was never ours.
+fn prune_dirs(root: &Path, keep: &[String]) -> Vec<String> {
+    let Ok(entries) = fs::read_dir(root) else {
+        return Vec::new();
+    };
+    let mut removed = Vec::new();
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if !entry.path().is_dir() || !is_safe_segment(&name) || keep.contains(&name) {
+            continue;
+        }
+        if fs::remove_dir_all(entry.path()).is_ok() {
+            removed.push(name);
+        }
+    }
+    removed
+}
+
+/// Drop the on-disk cache of every module **not** in `keep` — the shell calls
+/// this after boot with the ids the store's `module_remotes` still names, so a
+/// module the owner removed doesn't sit in `appDataDir/modules/` forever
+/// (roadmap #12 track 1). Reachable by module code like every app command
+/// (TechDocs/POS_MODULE_TAURI_CAPABILITIES.md §2); the worst it can do is
+/// evict another module's cache, which the next sync re-downloads.
+#[tauri::command]
+pub fn prune_module_remotes(app: AppHandle, keep: Vec<String>) -> Result<Vec<String>, String> {
+    let root = modules_root(&app)?;
+    Ok(prune_dirs(&root, &keep))
+}
+
 /// `liveshopmodule://localhost/<id>/<file>` (macOS/Linux) or
 /// `http://liveshopmodule.localhost/<id>/<file>` (Windows) → the cached bytes
 /// of the active version. Host is ignored; only the two path segments matter.
@@ -402,7 +485,71 @@ mod tests {
     #[test]
     fn dev_pubkey_matches_the_allowlist() {
         let vk = dev_signing_key().verifying_key();
-        assert_eq!(B64.encode(vk.to_bytes()), TRUSTED_REMOTE_KEYS[0].1);
+        assert_eq!(B64.encode(vk.to_bytes()), DEV_REMOTE_KEY.1);
+    }
+
+    #[test]
+    fn dev_key_is_trusted_in_test_builds_and_prod_key_always() {
+        // `cargo test` is a debug build, so the dev key is in.
+        assert!(dev_key_allowed());
+        assert_eq!(trusted_pubkey(DEV_REMOTE_KEY.0), Some(DEV_REMOTE_KEY.1));
+        assert_eq!(trusted_pubkey(PROD_REMOTE_KEYS[0].0), Some(PROD_REMOTE_KEYS[0].1));
+        assert_eq!(trusted_pubkey("0000000000000000"), None);
+    }
+
+    fn installed_fixture(dir: &Path, version: &str, url: &str) -> Installed {
+        let vdir = dir.join(version);
+        fs::create_dir_all(&vdir).unwrap();
+        fs::write(vdir.join("remote-entry.js"), b"export default 1").unwrap();
+        let mut files = BTreeMap::new();
+        files.insert("remote-entry.js".to_string(), sha384_b64(b"export default 1"));
+        Installed {
+            version: version.into(),
+            entry: "remote-entry.js".into(),
+            key_id: DEV_REMOTE_KEY.0.into(),
+            files,
+            source_url: url.into(),
+            installed_at_ms: 0,
+        }
+    }
+
+    #[test]
+    fn is_current_requires_same_url_same_or_newer_version_and_intact_cache() {
+        let dir = std::env::temp_dir().join(format!("lsm-cur-{}", now_ms()));
+        let url = "https://cdn.example.test/m/remote-entry.js";
+        let inst = installed_fixture(&dir, "1.2.0", url);
+        let v = |s: &str| semver::Version::parse(s).unwrap();
+
+        assert!(is_current(&inst, &v("1.2.0"), url, &dir));
+        assert!(is_current(&inst, &v("1.1.9"), url, &dir), "older on the server keeps the cache");
+        assert!(!is_current(&inst, &v("1.3.0"), url, &dir), "newer on the server → fetch");
+        assert!(
+            !is_current(&inst, &v("1.2.0"), "https://other.example.test/m/remote-entry.js", &dir),
+            "same id+version from another URL is different code"
+        );
+
+        fs::write(dir.join("1.2.0").join("remote-entry.js"), b"tampered").unwrap();
+        assert!(!is_current(&inst, &v("1.2.0"), url, &dir), "damaged cache → fetch");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prune_dirs_keeps_listed_ids_and_ignores_files_and_junk_names() {
+        let root = std::env::temp_dir().join(format!("lsm-prune-{}", now_ms()));
+        for id in ["tiktok-live", "fiscal-checkbox", "stale-module"] {
+            fs::create_dir_all(root.join(id)).unwrap();
+        }
+        fs::write(root.join("notes.txt"), b"x").unwrap();
+        fs::create_dir_all(root.join("weird name")).unwrap();
+
+        let removed = prune_dirs(&root, &["tiktok-live".into(), "fiscal-checkbox".into()]);
+        assert_eq!(removed, vec!["stale-module".to_string()]);
+        assert!(root.join("tiktok-live").is_dir());
+        assert!(root.join("fiscal-checkbox").is_dir());
+        assert!(!root.join("stale-module").exists());
+        assert!(root.join("notes.txt").is_file());
+        assert!(root.join("weird name").is_dir(), "not a module id — left alone");
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
