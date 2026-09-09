@@ -196,6 +196,25 @@ select:focus-visible {
     text-align: center;
     margin-top: 8px;
   }
+
+  /* The provider's pre-rendered receipt, verbatim. 48 chars at 10px Courier
+     is ≈58mm, so the widest store setting still fits the 72mm print area. */
+  .receipt-print-provider {
+    margin: 0;
+    white-space: pre;
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    line-height: 1.25;
+  }
+
+  .receipt-print-fiscal {
+    margin-top: 4px;
+  }
+
+  .receipt-print-tax-url {
+    font-size: 9px;
+    word-break: break-all;
+  }
 }
 
 input::placeholder,

@@ -168,6 +168,7 @@ export async function mockPosApi(
           auto_open_shift: true,
           fail_mode: 'block',
           receipt_source: 'local',
+          receipt_width: 32,
           updated_at: null,
           secrets_key_configured: true,
           adapter_available: false,

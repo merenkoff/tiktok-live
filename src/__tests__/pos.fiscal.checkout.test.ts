@@ -79,6 +79,10 @@ describe.skipIf(!hasDb)('POS fiscal checkout orchestration', () => {
       provider: 'checkbox',
       auto_open_shift: true,
       default_tax_code: 'A',
+      // Explicit: the row persists across tests, and the receipt-text tests
+      // flip these.
+      receipt_source: 'local',
+      receipt_width: 32,
       secrets: { licenceKey: 'fake-licence', cashierPin: '0000' },
     });
 
@@ -532,6 +536,95 @@ describe.skipIf(!hasDb)('POS fiscal checkout orchestration', () => {
     });
     // Nothing else would tell the owner why every sale 503s.
     expect(without.json().adapter_available).toBe(false);
+  });
+
+  // ── Receipt text (phase 8a) ──────────────────────────────────────────────
+
+  describe('provider receipt text', () => {
+    const renderCalls = () => fake.calls.filter((c) => c.method === 'renderReceipt');
+
+    it('fetches the provider text at the store width and stores it on the document', async () => {
+      await enableFiscal();
+      await updateFiscalSettings(store.storeId, { receipt_source: 'provider', receipt_width: 48 });
+      await warmFiscal();
+
+      const res = await sell();
+      expect(res.statusCode).toBe(201);
+      expect(res.json().fiscal.status).toBe('done');
+      const providerDocId = (await ledgerRows())[0].provider_doc_id;
+      expect(res.json().fiscal.receipt_text).toBe(`FAKE text ${providerDocId} w48`);
+      expect(renderCalls()).toHaveLength(1);
+      expect(renderCalls()[0].opts).toEqual({ width: 48 });
+
+      // Persisted, not just echoed: a reload reads it back from the ledger.
+      const reloaded = await app.inject({
+        method: 'GET',
+        url: `/api/pos/sales/${res.json().id}`,
+        headers: auth(store.sellerToken),
+      });
+      expect(reloaded.json().fiscal.receipt_text).toBe(`FAKE text ${providerDocId} w48`);
+    });
+
+    it('keeps the document done when the text fetch fails — the till prints its own layout', async () => {
+      await enableFiscal();
+      await updateFiscalSettings(store.storeId, { receipt_source: 'provider' });
+      await warmFiscal();
+      fake.renderError = 'unavailable';
+
+      const res = await sell();
+      expect(res.statusCode).toBe(201);
+      expect(res.json().fiscal.status).toBe('done');
+      expect(res.json().fiscal.fiscal_code).toBeTruthy();
+      // No render result — whatever registerSale itself returned stands (null
+      // for Checkbox; the fake volunteers a stub, which is fine either way).
+      expect(res.json().fiscal.receipt_text).not.toMatch(/^FAKE text/);
+      expect(res.json().sale_voided).toBeUndefined();
+      expect((await ledgerRows())[0].status).toBe('done');
+    });
+
+    it('never asks for text, and ships none, in local mode', async () => {
+      await enableFiscal();
+      await warmFiscal();
+
+      const res = await sell();
+      expect(res.statusCode).toBe(201);
+      // The fake volunteers text from registerSale; local mode must still
+      // send null, or the till would print provider text on a local-mode store.
+      expect(res.json().fiscal.receipt_text).toBeNull();
+      expect(renderCalls()).toHaveLength(0);
+    });
+
+    it('does not render service receipts — nobody prints those for a customer', async () => {
+      await enableFiscal();
+      await updateFiscalSettings(store.storeId, { receipt_source: 'provider' });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/pos/fiscal/service',
+        headers: auth(store.sellerToken),
+        payload: { amount_cents: 50000 },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(renderCalls()).toHaveLength(0);
+    });
+
+    it('covers the refund document too', async () => {
+      await enableFiscal();
+      await updateFiscalSettings(store.storeId, { receipt_source: 'provider', receipt_width: 32 });
+      await warmFiscal();
+      const sold = await sell();
+      const saleItemId = sold.json().items[0].id;
+
+      const refund = await app.inject({
+        method: 'POST',
+        url: `/api/pos/sales/${sold.json().id}/refunds`,
+        headers: auth(store.sellerToken),
+        payload: { items: [{ sale_item_id: saleItemId, quantity: 1 }], method: 'cash' },
+      });
+      expect(refund.statusCode).toBe(200);
+      expect(refund.json().refund_fiscal.status).toBe('done');
+      expect(refund.json().refund_fiscal.receipt_text).toMatch(/^FAKE text .* w32$/);
+      expect(renderCalls()).toHaveLength(2);
+    });
   });
 
   it('records a service receipt', async () => {

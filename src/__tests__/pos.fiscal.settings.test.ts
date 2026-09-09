@@ -88,6 +88,7 @@ describe.skipIf(!hasDb)('POS fiscal settings', () => {
       secrets_set: [],
       fail_mode: 'block',
       receipt_source: 'local',
+      receipt_width: 32,
       auto_open_shift: true,
       secrets_key_configured: true,
     });
@@ -197,6 +198,25 @@ describe.skipIf(!hasDb)('POS fiscal settings', () => {
       default_tax_code: 'B',
       secrets_set: ['licenceKey'],
     });
+  });
+
+  it('round-trips the receipt source and width', async () => {
+    const res = await patch({ receipt_source: 'provider', receipt_width: 48 });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ receipt_source: 'provider', receipt_width: 48 });
+    expect((await get()).json()).toMatchObject({ receipt_source: 'provider', receipt_width: 48 });
+
+    // And back, independently of each other.
+    expect((await patch({ receipt_source: 'local' })).json()).toMatchObject({
+      receipt_source: 'local',
+      receipt_width: 48,
+    });
+  });
+
+  it('refuses a receipt width the thermal rolls cannot print', async () => {
+    const res = await patch({ receipt_width: 40 });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/receipt_width/);
   });
 
   it('stores provider config as given', async () => {

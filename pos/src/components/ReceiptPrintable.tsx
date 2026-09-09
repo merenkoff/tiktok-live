@@ -16,10 +16,20 @@ function paymentLabel(method: string) {
 }
 
 // Rendered off-screen at all times; only visible to the browser's print engine
-// via the `@media print` rules in index.css, so window.print() reproduces the
+// via the `@media print` rules in tokens.css, so window.print() reproduces the
 // same layout the ESC/POS ticket uses (see receipt.rs) instead of the app UI.
 export function ReceiptPrintable({ receipt }: { receipt: ReceiptData | null }) {
   if (!receipt) return null;
+
+  // The provider's receipt is a finished document: print it as-is, nothing of
+  // ours around it — mirrors the `provider_text` branch in receipt.rs.
+  if (receipt.provider_text?.trim()) {
+    return (
+      <div className="receipt-print-area">
+        <pre className="receipt-print-provider">{receipt.provider_text}</pre>
+      </div>
+    );
+  }
 
   return (
     <div className="receipt-print-area">
@@ -69,6 +79,26 @@ export function ReceiptPrintable({ receipt }: { receipt: ReceiptData | null }) {
           <span>{money(p.amount_cents)}</span>
         </div>
       ))}
+      {receipt.fiscal && (
+        <>
+          <hr />
+          <div className="receipt-print-fiscal">
+            <p>Фіскальний чек</p>
+            <div className="receipt-print-row">
+              <span>ФН чека</span>
+              <span>{receipt.fiscal.fiscal_code}</span>
+            </div>
+            {receipt.fiscal.fiscal_date && <p>{receipt.fiscal.fiscal_date}</p>}
+            {receipt.fiscal.tax_url && (
+              // No QR library on the web path; the link itself is clickable in
+              // a saved PDF, which is what this renderer is for.
+              <p className="receipt-print-tax-url">
+                Перевірити: <a href={receipt.fiscal.tax_url}>{receipt.fiscal.tax_url}</a>
+              </p>
+            )}
+          </div>
+        </>
+      )}
       <hr />
       <p>Касир: {receipt.staff_name}</p>
       {receipt.customer_name && <p>Клієнт: {receipt.customer_name}</p>}

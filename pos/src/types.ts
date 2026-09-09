@@ -227,7 +227,10 @@ export interface FiscalSettingsView {
   default_tax_code: string | null;
   auto_open_shift: boolean;
   fail_mode: string;
-  receipt_source: string;
+  /** `local` = our layout + fiscal block; `provider` = the provider's text, printed verbatim. */
+  receipt_source: FiscalReceiptSource;
+  /** Characters per line the provider renders at: 32 = 58mm roll, 48 = 80mm. */
+  receipt_width: FiscalReceiptWidth;
   updated_at: string | null;
   /** False when the server has no `POS_SECRETS_KEY` — credentials cannot be saved. */
   secrets_key_configured: boolean;
@@ -235,11 +238,16 @@ export interface FiscalSettingsView {
   adapter_available?: boolean;
 }
 
+export type FiscalReceiptSource = 'local' | 'provider';
+export type FiscalReceiptWidth = 32 | 48;
+
 export interface FiscalSettingsPatch {
   enabled?: boolean;
   provider?: FiscalProviderId | null;
   default_tax_code?: string | null;
   auto_open_shift?: boolean;
+  receipt_source?: FiscalReceiptSource;
+  receipt_width?: FiscalReceiptWidth;
 }
 
 /** The result of one fiscalisation attempt, as returned by a sale or refund. */

@@ -21,6 +21,7 @@ import type {
   FiscalRefundDoc,
   FiscalRenderFormat,
   FiscalRendering,
+  FiscalRenderOptions,
   FiscalReport,
   FiscalResult,
   FiscalSaleDoc,
@@ -34,6 +35,8 @@ export interface FakeCall {
   method: string;
   requestId?: string;
   doc?: FiscalSaleDoc | FiscalRefundDoc | FiscalServiceDoc;
+  /** `renderReceipt` only — what the orchestrator asked for. */
+  opts?: FiscalRenderOptions;
 }
 
 export interface FakeProviderOptions {
@@ -66,6 +69,13 @@ export class FakeFiscalProvider implements FiscalProvider {
   signInCount = 0;
   /** Set to make `signIn` fail — e.g. to prove a recovery path gives up. */
   signInError: FiscalErrorKind | null = null;
+  /**
+   * Set to make `renderReceipt` fail on its own, without touching the shared
+   * `queueError` queue — the next queued error would hit `registerSale`
+   * first, and the point is to prove a text fetch failing AFTER a document is
+   * done leaves that document done.
+   */
+  renderError: FiscalErrorKind | null = null;
 
   private readonly errorQueue: FiscalError[] = [];
   private readonly requireOpenShift: boolean;
@@ -96,6 +106,7 @@ export class FakeFiscalProvider implements FiscalProvider {
     this.shift = null;
     this.signInCount = 0;
     this.signInError = null;
+    this.renderError = null;
     this.seq = 0;
   }
 
@@ -104,8 +115,8 @@ export class FakeFiscalProvider implements FiscalProvider {
     if (error) throw error;
   }
 
-  private record(method: string, doc?: FakeCall['doc']): void {
-    this.calls.push({ method, requestId: doc?.requestId, doc });
+  private record(method: string, doc?: FakeCall['doc'], opts?: FiscalRenderOptions): void {
+    this.calls.push({ method, requestId: doc?.requestId, doc, opts });
   }
 
   // ── Session ───────────────────────────────────────────────────────────────
@@ -241,10 +252,12 @@ export class FakeFiscalProvider implements FiscalProvider {
   async renderReceipt(
     _ctx: FiscalCallCtx,
     providerDocId: string,
-    format: FiscalRenderFormat
+    format: FiscalRenderFormat,
+    opts?: FiscalRenderOptions
   ): Promise<FiscalRendering | null> {
-    this.record('renderReceipt');
+    this.record('renderReceipt', undefined, opts);
     this.take();
+    if (this.renderError) throw new FiscalError('fake render failure', this.renderError);
     if (format === 'qrcode') {
       return {
         format,
@@ -252,7 +265,9 @@ export class FakeFiscalProvider implements FiscalProvider {
         body: Buffer.from('fake-png'),
       };
     }
-    return { format, contentType: 'text/plain', body: `FAKE ${format} ${providerDocId}` };
+    // Width in the body so a test can assert the store setting reached us.
+    const width = opts?.width ?? 0;
+    return { format, contentType: 'text/plain', body: `FAKE ${format} ${providerDocId} w${width}` };
   }
 }
 

@@ -66,6 +66,14 @@ const RETRY_BATCH = 20;
 /** How long the cron will queue behind the live path before skipping a doc. */
 const BACKGROUND_MAX_WAIT_MS = 250;
 
+/**
+ * Sub-budget for fetching the provider's receipt text after a document is
+ * already `DONE`. Carved out of the shared budget, not added to it: the text
+ * is cosmetic (the till prints its own layout without it), so an overrun here
+ * must never fail a receipt the tax service has already accepted.
+ */
+const RECEIPT_TEXT_BUDGET_MS = 2_500;
+
 export interface FiscalGate {
   /** False = this store does not fiscalise; the caller proceeds unchanged. */
   on: boolean;
@@ -250,7 +258,8 @@ async function runDocument(
       }
     }
     runtime.markProviderOk(ctx.storeId);
-    return { row: await ledger.markDone(row, result as FiscalResult), result: result as FiscalResult };
+    const final = await attachProviderReceiptText(ctx, gate, row, result as FiscalResult);
+    return { row: await ledger.markDone(row, final), result: final };
   } catch (raw) {
     const err = asFiscalError(raw, 'Помилка ПРРО');
     invalidateRuntimeFor(ctx.storeId, err.kind);
@@ -259,6 +268,51 @@ async function runDocument(
       park: isTerminal(err.kind),
     });
     throw new FiscalDocumentFailed(failed, err, mayExistAtProvider(err.kind, transmitted));
+  }
+}
+
+/**
+ * Decide what `receipt_text` the ledger row carries, per `receipt_source`.
+ *
+ * `provider`: ask the adapter for its text render at the store's
+ * `receipt_width`, best-effort — a failure logs and leaves the row without
+ * text, and the till prints its own layout (with the fiscal block) instead.
+ * `local`: no text at all, even if the adapter volunteered one from
+ * `registerSale`, so the till's "print provider text iff present" rule is
+ * exactly the owner's setting and nothing else.
+ *
+ * Runs after the document is final and before `markDone`, so it covers the
+ * live path, the retry cron and duplicate recovery alike, and never touches
+ * the rate limiter — it is a read, like `fetchDocument`.
+ */
+async function attachProviderReceiptText(
+  ctx: FiscalContext,
+  gate: FiscalGate,
+  row: ledger.FiscalReceiptRow,
+  result: FiscalResult
+): Promise<FiscalResult> {
+  if (ctx.settings.receipt_source !== 'provider') {
+    return result.receiptText === null ? result : { ...result, receiptText: null };
+  }
+  if (!ctx.provider.renderReceipt) return result;
+  // Service receipts (cash in/out) are never printed for a customer.
+  if (row.doc_type !== 'sale' && row.doc_type !== 'refund') return result;
+
+  try {
+    const signal = AbortSignal.any([gate.signal, AbortSignal.timeout(RECEIPT_TEXT_BUDGET_MS)]);
+    const callCtx = await buildCallCtx(ctx, signal);
+    const rendering = await ctx.provider.renderReceipt(callCtx, result.providerDocId, 'text', {
+      width: ctx.settings.receipt_width,
+    });
+    const text = typeof rendering?.body === 'string' ? rendering.body.trim() : '';
+    return text ? { ...result, receiptText: text } : result;
+  } catch (error) {
+    logger.warn('Provider receipt text unavailable; the till prints its own layout', {
+      storeId: ctx.storeId,
+      providerDocId: result.providerDocId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return result;
   }
 }
 

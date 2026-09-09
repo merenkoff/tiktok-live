@@ -2,9 +2,34 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import type { SaleDetail } from '../types';
-import type { ReceiptData } from './printer';
+import type { FiscalActionResult, SaleDetail, SaleFiscalDoc } from '../types';
+import type { ReceiptData, ReceiptFiscal } from './printer';
 import { refundLineAmount } from './money';
+
+/**
+ * What the paper carries from a fiscal document, if anything.
+ *
+ * The till never reads `receipt_source` — the server only ships
+ * `receipt_text` when the owner chose the provider's receipt AND it was
+ * actually fetched, so "print it iff present" is exactly that setting with
+ * the fetch-failed fallback built in.
+ */
+function fiscalParts(doc: SaleFiscalDoc | FiscalActionResult | null | undefined): {
+  provider_text: string | null;
+  fiscal: ReceiptFiscal | null;
+} {
+  if (!doc || doc.status !== 'done' || !doc.fiscal_code) {
+    return { provider_text: null, fiscal: null };
+  }
+  return {
+    provider_text: doc.receipt_text?.trim() ? doc.receipt_text : null,
+    fiscal: {
+      fiscal_code: doc.fiscal_code,
+      fiscal_date: doc.fiscal_date ? new Date(doc.fiscal_date).toLocaleString('uk-UA') : null,
+      tax_url: doc.tax_url,
+    },
+  };
+}
 
 export function buildReceiptPayload(
   sale: SaleDetail,
@@ -12,6 +37,7 @@ export function buildReceiptPayload(
   customerName?: string | null
 ): ReceiptData {
   return {
+    ...fiscalParts(sale.fiscal),
     store_name: storeName,
     kind: 'sale',
     receipt_number: sale.receipt_number,
@@ -42,7 +68,9 @@ export function buildRefundReceiptPayload(
   sale: SaleDetail,
   refund: SaleDetail['refunds'][number],
   lines: Array<{ sale_item_id: number; quantity: number }>,
-  storeName: string
+  storeName: string,
+  /** The REFUND's own fiscal document, from the refund response — never the sale's. */
+  fiscal?: FiscalActionResult | null
 ): ReceiptData {
   const byId = new Map(sale.items.map((item) => [item.id, item]));
   const items = lines.flatMap((line) => {
@@ -69,6 +97,7 @@ export function buildRefundReceiptPayload(
   });
 
   return {
+    ...fiscalParts(fiscal),
     store_name: storeName,
     kind: 'refund',
     receipt_number: refund.refund_number ?? `RF-${refund.id}`,
