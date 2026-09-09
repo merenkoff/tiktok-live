@@ -169,6 +169,10 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       });
       if (isOfflinePosEnabled()) {
         const offline = await import('../offline');
+        // The cached store flags are only written at login, so without this a
+        // till that logged in this morning keeps queuing offline sales for a
+        // store that switched ПРРО on at noon.
+        void offline.updateStaffUnlockStoreFlags(auth).catch(() => undefined);
         void offline
           .refreshSnapshot()
           .then(() => offline.runSync())

@@ -15,7 +15,14 @@ import {
   useAuthStore,
   usePrintableReceipt,
 } from '@pos/platform';
-import type { LocalSaleRow, PaymentMethod, ReceiptData, ReceiptPaperWidth, SaleDetail } from '@pos/platform';
+import type {
+  FiscalActionResult,
+  LocalSaleRow,
+  PaymentMethod,
+  ReceiptData,
+  ReceiptPaperWidth,
+  SaleDetail,
+} from '@pos/platform';
 import { returnsApi } from '../data/returnsApi';
 
 interface Props {
@@ -56,7 +63,12 @@ export function RefundSaleDialog({ sale, detail, selectAll, onClose, onRefunded 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Set once the refund lands — the dialog then becomes the print step.
-  const [done, setDone] = useState<{ row: LocalSaleRow; receipt: ReceiptData } | null>(null);
+  const [done, setDone] = useState<{
+    row: LocalSaleRow;
+    receipt: ReceiptData;
+    /** The REFUND's fiscal result — captured here because `done` is frozen once. */
+    fiscal?: FiscalActionResult | null;
+  } | null>(null);
   const [printing, setPrinting] = useState(false);
   const [printStatus, setPrintStatus] = useState<string | null>(null);
   const auth = useAuthStore((s) => s.auth);
@@ -100,6 +112,9 @@ export function RefundSaleDialog({ sale, detail, selectAll, onClose, onRefunded 
       setDone({
         row,
         receipt: buildRefundReceiptPayload(fresh, doc, lines, auth?.store.name ?? ''),
+        // `done` is set once and is all the success pane reads, so the fiscal
+        // result has to be captured now — the `sale` prop is never refreshed.
+        fiscal: row.refund_fiscal ?? null,
       });
       setBusy(false);
     } catch (e) {
@@ -156,6 +171,18 @@ export function RefundSaleDialog({ sale, detail, selectAll, onClose, onRefunded 
           <div className="mx-auto w-12 h-12 rounded-full bg-sq-blue text-white grid place-items-center">
             <Check size={24} strokeWidth={2.5} />
           </div>
+          {done.fiscal?.status === 'failed' && (
+            // Still the success pane, never an error: the money really did go
+            // back. An error screen here would make the cashier refund twice.
+            <div
+              role="alert"
+              className="mt-4 rounded-sq bg-amber-50 text-amber-900 px-3 py-2 text-sm text-left"
+            >
+              <p className="font-semibold">Чек повернення не зареєстровано в ПРРО</p>
+              {done.fiscal.message && <p className="mt-1">{done.fiscal.message}</p>}
+              <p className="mt-1">Реєстрація повториться автоматично.</p>
+            </div>
+          )}
           <p className="sq-section-label mt-5">Повернено</p>
           <p className="text-3xl font-bold mt-1 text-sq-text">
             {formatUah(done.receipt.total_cents)}
@@ -204,6 +231,17 @@ export function RefundSaleDialog({ sale, detail, selectAll, onClose, onRefunded 
         </div>
 
         <div className="flex-1 overflow-auto px-5 space-y-3 min-h-0">
+          {/* A refund references the sale's fiscal document. Without one the
+              refund goes through financially but can never be registered — and
+              nothing on the server will ever retry it, because the ledger has
+              no row for it. Say so before the money leaves the drawer. */}
+          {(auth?.store.fiscal?.enabled ?? false) &&
+            (sale.fiscal_status ?? 'none') !== 'done' && (
+              <p className="rounded-sq bg-amber-50 text-amber-900 px-3 py-2 text-sm">
+                Цей продаж не зареєстровано в ПРРО — чек повернення теж не буде
+                зареєстровано.
+              </p>
+            )}
           {items.length === 0 ? (
             <p className="text-sm text-sq-secondary">
               {detail

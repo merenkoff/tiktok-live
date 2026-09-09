@@ -120,6 +120,13 @@ export interface AuthResponse {
     enabled_modules?: string[];
     /** Module-remote map (roadmap #9 string form / #13 Part C object form). Absent on older cached auth. */
     module_remotes?: Record<string, string | ModuleRemoteEntry>;
+    /**
+     * Whether this store fiscalises, and with whom — no credentials.
+     *
+     * The desktop cashier reads this to refuse an offline sale, and cold-offline
+     * the cached `pos_auth` is the only source, so it travels with the login.
+     */
+    fiscal?: FiscalPublicConfig;
   };
 }
 
@@ -175,6 +182,78 @@ export interface PosTag {
   children?: PosTag[];
 }
 
+// ── ПРРО fiscalisation ──────────────────────────────────────────────────────
+// Everything here is optional: an older cached `pos_auth`, the synthetic
+// offline receipt, and every non-fiscalising store must all still typecheck.
+
+/** Mirrors `FISCAL_PROVIDER_IDS` in the backend. Types-only here by design. */
+export type FiscalProviderId = 'checkbox' | 'vchasno' | 'echeck';
+
+/** Projection on a sale/refund. `'none'` = this store does not fiscalise. */
+export type SaleFiscalStatus = 'none' | 'pending' | 'done' | 'failed';
+
+export type FiscalDocStatus = 'pending' | 'sent' | 'done' | 'failed' | 'abandoned';
+
+export interface FiscalPublicConfig {
+  enabled: boolean;
+  provider: FiscalProviderId | null;
+}
+
+/**
+ * The fiscal document attached to a sale by `getSale`.
+ *
+ * Deliberately NOT the same interface as {@link FiscalActionResult}: this one
+ * carries `error_message`, that one `message`. Collapsing them would make
+ * `.message` silently `undefined` on every reloaded receipt.
+ */
+export interface SaleFiscalDoc {
+  status: FiscalDocStatus | string;
+  fiscal_code: string | null;
+  fiscal_date: string | null;
+  tax_url: string | null;
+  qr_payload: string | null;
+  receipt_text: string | null;
+  error_code: string | null;
+  error_message: string | null;
+}
+
+/** Owner-facing ПРРО settings. Credentials are reported by presence only. */
+export interface FiscalSettingsView {
+  enabled: boolean;
+  provider: FiscalProviderId | null;
+  config: Record<string, unknown>;
+  /** Which credential keys hold a value. Never the values themselves. */
+  secrets_set: string[];
+  default_tax_code: string | null;
+  auto_open_shift: boolean;
+  fail_mode: string;
+  receipt_source: string;
+  updated_at: string | null;
+  /** False when the server has no `POS_SECRETS_KEY` — credentials cannot be saved. */
+  secrets_key_configured: boolean;
+  /** False when this build ships no adapter for `provider` — every sale would 503. */
+  adapter_available?: boolean;
+}
+
+export interface FiscalSettingsPatch {
+  enabled?: boolean;
+  provider?: FiscalProviderId | null;
+  default_tax_code?: string | null;
+  auto_open_shift?: boolean;
+}
+
+/** The result of one fiscalisation attempt, as returned by a sale or refund. */
+export interface FiscalActionResult {
+  status: 'done' | 'failed';
+  fiscal_code: string | null;
+  fiscal_date: string | null;
+  tax_url: string | null;
+  qr_payload: string | null;
+  receipt_text: string | null;
+  error_code: string | null;
+  message: string | null;
+}
+
 export interface SaleListItem {
   id: number;
   receipt_number: string;
@@ -188,6 +267,8 @@ export interface SaleListItem {
   created_at: string;
   /** true when the sale has a QR payment not yet confirmed by the provider. */
   qr_pending?: boolean;
+  /** ПРРО projection. Absent/`'none'` for a store that does not fiscalise. */
+  fiscal_status?: SaleFiscalStatus;
 }
 
 export interface SaleDetail {
@@ -238,6 +319,15 @@ export interface SaleDetail {
     staff_name: string;
     created_at: string;
   }>;
+  /** ПРРО projection. Absent/`'none'` for a store that does not fiscalise. */
+  fiscal_status?: SaleFiscalStatus;
+  /** The sale's own fiscal document. Null until it has one. */
+  fiscal?: SaleFiscalDoc | null;
+  /**
+   * Set only on the immediate response to a refund — it describes the REFUND's
+   * document, not the sale's, and is never persisted on the sale.
+   */
+  refund_fiscal?: FiscalActionResult | null;
 }
 
 /** One line of a refund request — how many units of a sale item go back. */

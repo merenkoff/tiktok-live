@@ -4,6 +4,8 @@
 
 import axios, { type AxiosInstance } from 'axios';
 import type {
+  FiscalSettingsPatch,
+  FiscalSettingsView,
   AuthResponse,
   CatalogItem,
   PaymentMethod,
@@ -444,6 +446,16 @@ class PosApi {
    * through the host rather than calling LIVE itself, and probes for their
    * presence — an older shell simply does not have them.
    */
+  async fiscalSettings(): Promise<FiscalSettingsView> {
+    const { data } = await this.client.get<FiscalSettingsView>('/fiscal/settings');
+    return data;
+  }
+
+  async updateFiscalSettings(patch: FiscalSettingsPatch): Promise<FiscalSettingsView> {
+    const { data } = await this.client.patch<FiscalSettingsView>('/fiscal/settings', patch);
+    return data;
+  }
+
   async liveSettings(): Promise<LiveSettings> {
     const { data } = await this.client.get<LiveSettings>('/live/settings');
     return data;

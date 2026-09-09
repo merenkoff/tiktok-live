@@ -41,6 +41,8 @@ const ALLOW = [
   'src/offline/cashierApi.ts',
   'src/offline/repository.ts',
   'src/offline/sync.ts',
+  // Imported by sync.ts, so it lands in the same chunk for the same reason.
+  'src/offline/outboxPolicy.ts',
 ];
 
 // import specifier (any relative depth) -> what it smuggles in

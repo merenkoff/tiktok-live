@@ -23,3 +23,32 @@ export class OfflineRefundError extends Error {
     this.name = 'OfflineRefundError';
   }
 }
+
+/**
+ * A ПРРО receipt is registered with the tax service at the moment of sale, so a
+ * fiscalising store cannot queue a sale offline at all. Nothing is written: no
+ * outbox row, no stock movement, no synthetic receipt.
+ */
+export class OfflineFiscalError extends Error {
+  constructor() {
+    super('Продаж із фіскалізацією потребує інтернету — чек не проведено');
+    this.name = 'OfflineFiscalError';
+  }
+}
+
+/**
+ * The request went out and no answer came back, in a fiscalising store.
+ *
+ * The sale may not exist, may exist un-fiscalised, or may exist fully
+ * fiscalised — a timeout cannot tell us. Queueing it (what a non-fiscal store
+ * does) would decrement stock, mint a synthetic `OFF-` receipt and show a
+ * success screen for a sale we cannot vouch for. So the uuid is handed back
+ * instead: re-sending it is idempotent, and the server's answer resolves every
+ * branch at once — 200 with the sale, 409 if it was voided, or a fresh sale.
+ */
+export class FiscalSaleUnknownError extends Error {
+  constructor(readonly clientUuid: string) {
+    super('Сервер не відповів — стан чека невідомий. Не пробивайте чек повторно.');
+    this.name = 'FiscalSaleUnknownError';
+  }
+}

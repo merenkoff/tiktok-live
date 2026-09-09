@@ -13,7 +13,18 @@ import type {
   SaleListItem,
   SalePaymentInput,
 } from '../types';
-import { OfflineRefundError } from './errors';
+import { FiscalSaleUnknownError, OfflineFiscalError, OfflineRefundError } from './errors';
+
+/**
+ * A refunded sale plus the REFUND's fiscal result.
+ *
+ * Carried alongside rather than inside the row: the refund's document is not
+ * the sale's, and `putLocalSale` persists `detail` wholesale, so folding it in
+ * would leave a refund's fiscal code sitting on the sale in the offline mirror.
+ */
+export type RefundedSaleRow = LocalSaleRow & {
+  refund_fiscal?: import('../types').FiscalActionResult | null;
+};
 import { filterCatalog } from './catalog-filter';
 import {
   db,
@@ -275,6 +286,10 @@ function localSaleDetail(
     receipt_number: `OFF-${short}`,
     client_uuid: clientUuid,
     status: 'completed',
+    // A queued sale has no fiscal document by construction — a fiscalising
+    // store never reaches this path (see completeSale).
+    fiscal_status: 'none',
+    fiscal: null,
     subtotal_cents: subtotal,
     total_cents: payload.payments.reduce((s, p) => s + p.amount_cents, 0) || subtotal,
     refunded_cents: 0,
@@ -311,8 +326,12 @@ export async function completeSale(payload: {
   note?: string;
   cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
   customer_id?: number | null;
-}): Promise<SaleDetail> {
-  const clientUuid = crypto.randomUUID();
+}, opts: { clientUuid?: string } = {}): Promise<SaleDetail> {
+  // Reusing a uuid is how the "server did not answer" probe stays idempotent:
+  // the server's own pre-check resolves it to the existing sale, a 409, or a
+  // fresh sale — without ever creating a second one.
+  const clientUuid = opts.clientUuid ?? crypto.randomUUID();
+  const fiscal = api.loadAuth()?.store.fiscal?.enabled === true;
   let customer = payload.customer_id ? await db.customers.get(payload.customer_id) : undefined;
   if (!customer && payload.customer_id) {
     const listed = await db.customers.toArray();
@@ -342,7 +361,15 @@ export async function completeSale(payload: {
       return { ...sale, client_uuid: clientUuid };
     } catch (error) {
       if (!isNetworkError(error)) throw error;
+      // A request that went out and timed out may have created — and even
+      // fiscalised — the sale. Queueing it would decrement stock, mint a
+      // synthetic OFF- receipt and show a success screen for a sale we cannot
+      // vouch for. Hand back the uuid so the till can probe idempotently.
+      if (fiscal) throw new FiscalSaleUnknownError(clientUuid);
     }
+  } else if (fiscal) {
+    // A ПРРО receipt is registered at the moment of sale. Nothing is written.
+    throw new OfflineFiscalError();
   }
 
   await db.outbox.add({
@@ -404,6 +431,8 @@ export async function putLocalSale(
     staff_name: detail.staff_name,
     customer_name: detail.customer_name ?? null,
     created_at: detail.created_at,
+    fiscal_status: detail.fiscal_status ?? prev?.fiscal_status,
+    sync_state: prev?.sync_state,
     detail,
   };
   await db.sales.put(row);
@@ -421,6 +450,8 @@ function rowFromListItem(item: SaleListItem, prev?: LocalSaleRow): LocalSaleRow 
     staff_name: item.staff_name,
     customer_name: item.customer_name ?? null,
     created_at: item.created_at,
+    fiscal_status: item.fiscal_status ?? prev?.fiscal_status,
+    sync_state: prev?.sync_state,
     // Keep any detail we already hold — the list endpoint carries no line items.
     detail: prev?.detail,
   };
@@ -508,7 +539,7 @@ export async function refundSale(
   row: LocalSaleRow,
   items: RefundLineInput[],
   opts: { method?: PaymentMethod | null; reason?: string } = {}
-): Promise<LocalSaleRow> {
+): Promise<RefundedSaleRow> {
   const online = navigator.onLine && api.hasLiveJwt();
 
   if (!online) {
@@ -540,9 +571,37 @@ export async function refundSale(
     items.map((i) => ({ variant_id: refundedVariantId(row, detail, i), quantity: i.quantity })),
     1
   );
-  const saved = await putLocalSale(detail, row.client_uuid, serverId);
+  // `refund_fiscal` describes the REFUND's document, not the sale's. It must not
+  // be persisted onto the sale: `putLocalSale` stores `detail` wholesale, so
+  // offline the refund's fiscal code would masquerade as the sale's forever.
+  const { refund_fiscal: refundFiscal, ...saleShape } = detail;
+  const saved = await putLocalSale(saleShape as SaleDetail, row.client_uuid, serverId);
   void refreshSnapshot().catch(() => undefined);
-  return saved;
+  return { ...saved, refund_fiscal: refundFiscal ?? null };
+}
+
+/**
+ * Drop a queued sale the server will never accept.
+ *
+ * Only for rows already marked `'dead'`, so it can never race the sync loop.
+ * Stock comes back only when the server definitely created nothing — after a
+ * 409 the server's own `voidSale` has already returned it.
+ */
+export async function discardQueuedSale(clientUuid: string): Promise<void> {
+  const row = await db.outbox
+    .filter((r) => r.type === 'sale' && r.clientUuid === clientUuid)
+    .first();
+  if (!row) throw new Error('Цей чек уже не в черзі');
+  if (row.status !== 'dead') throw new Error('Цей чек ще намагається синхронізуватись');
+
+  const payload = row.payload as OutboxSalePayload;
+  await db.outbox.delete(row.id);
+  if (row.nothingWritten) await applyLocalStockDelta(payload.items, 1);
+
+  const local = await db.sales.get(clientUuid);
+  if (local) await db.sales.put({ ...local, status: 'voided', sync_state: 'discarded' });
+  await useOfflineStatus.getState().refreshPending();
+  void refreshSnapshot().catch(() => undefined);
 }
 
 /** Sale items carry the variant, refund inputs only carry the sale-item id. */

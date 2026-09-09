@@ -23,7 +23,33 @@ function requireBearer(request: Request): boolean {
   return request.headers.get('Authorization')?.startsWith('Bearer ') ?? false;
 }
 
+/** Default ПРРО settings: off, no adapter — what every store looks like today. */
+export const fiscalSettingsFixture = {
+  enabled: false,
+  provider: null,
+  config: {},
+  secrets_set: [],
+  default_tax_code: null,
+  auto_open_shift: true,
+  fail_mode: 'block',
+  receipt_source: 'local',
+  updated_at: null,
+  secrets_key_configured: true,
+  adapter_available: false,
+};
+
 export const handlers = [
+  http.get(url('/fiscal/settings'), () => HttpResponse.json(fiscalSettingsFixture)),
+
+  http.patch(url('/fiscal/settings'), async ({ request }) => {
+    const patch = (await request.json()) as Record<string, unknown>;
+    // Mirrors the server: the PATCH response carries no `adapter_available`.
+    const { adapter_available: _omit, ...rest } = fiscalSettingsFixture;
+    return HttpResponse.json({ ...rest, ...patch });
+  }),
+
+  http.post(url('/sales/complete'), () => HttpResponse.json(makeSaleDetail(), { status: 201 })),
+
   http.post(url('/auth/owner/login'), async ({ request }) => {
     const body = (await request.json()) as { login?: string; password?: string };
     if (!body.password) {

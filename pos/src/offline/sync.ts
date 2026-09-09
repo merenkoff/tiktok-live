@@ -2,7 +2,21 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { api, isNetworkError } from '../services/api';
+import { api, isNetworkError, isUnauthorized } from '../services/api';
+import {
+  classifySyncError,
+  isDue,
+  nextRowState,
+  type SyncVerdict,
+} from './outboxPolicy';
+
+/** A sale whose customer has not reached the server yet. Not the sale's fault. */
+class CustomerNotSyncedError extends Error {
+  constructor() {
+    super('Customer not synced yet');
+    this.name = 'CustomerNotSyncedError';
+  }
+}
 import {
   db,
   getDeviceId,
@@ -19,20 +33,19 @@ import {
 } from './repository';
 import { useOfflineStatus } from './status';
 
-const BACKOFF_MS = [2000, 5000, 15000, 30000, 60000];
 let started = false;
 let running = false;
 
-function backoff(attempts: number): number {
-  return BACKOFF_MS[Math.min(attempts, BACKOFF_MS.length - 1)];
-}
-
-async function markError(row: OutboxRow, message: string): Promise<void> {
-  await db.outbox.update(row.id, {
-    status: 'error',
-    attempts: row.attempts + 1,
-    lastError: message,
-  });
+/**
+ * Record an attempt against a row.
+ *
+ * The verdict decides whether the row stays retryable or goes terminal; either
+ * way `lastAttemptAt` is stamped, which is what makes the backoff actually
+ * back off (it used to be measured from `createdAt`, so any row older than the
+ * 60s ceiling was retried on every single tick, forever).
+ */
+async function markAttempt(row: OutboxRow, verdict: SyncVerdict): Promise<void> {
+  await db.outbox.update(row.id, nextRowState(row, verdict));
 }
 
 async function syncCustomer(row: OutboxRow): Promise<void> {
@@ -67,7 +80,7 @@ async function syncSale(row: OutboxRow): Promise<void> {
       .filter((c) => c.client_uuid === payload.customer_client_uuid)
       .first();
     if (local && local.id < 0) {
-      throw new Error('Customer not synced yet');
+      throw new CustomerNotSyncedError();
     }
   }
   const customerId = await resolveSaleCustomerId(payload);
@@ -95,34 +108,42 @@ export async function runSync(): Promise<void> {
   try {
     const customers = await db.outbox.where('type').equals('customer').sortBy('createdAt');
     for (const row of customers) {
-      if (row.status === 'error' && Date.now() - row.createdAt < backoff(row.attempts)) continue;
+      if (!isDue(row)) continue;
       try {
         await syncCustomer(row);
       } catch (error) {
-        const message = isNetworkError(error)
-          ? 'Немає відповіді сервера'
-          : error instanceof Error
-            ? error.message
-            : 'Customer sync failed';
-        await markError(row, message);
-        useOfflineStatus.getState().setLastError(message);
+        // One expired session would otherwise mark every queued row, and with
+        // an attempt cap that wipes the whole queue in a handful of ticks.
+        if (isUnauthorized(error)) {
+          useOfflineStatus.getState().setLastError('Сесію завершено — увійдіть знову');
+          return;
+        }
+        const verdict = classifySyncError(error, 'customer');
+        await markAttempt(row, verdict);
+        useOfflineStatus.getState().setLastError(verdict.message);
       }
     }
 
     const sales = await db.outbox.where('type').equals('sale').sortBy('createdAt');
     for (const row of sales) {
-      if (row.status === 'error' && Date.now() - row.createdAt < backoff(row.attempts)) continue;
+      if (!isDue(row)) continue;
       try {
         await syncSale(row);
         shipped += 1;
       } catch (error) {
-        const message = isNetworkError(error)
-          ? 'Немає відповіді сервера'
-          : error instanceof Error
-            ? error.message
-            : 'Sale sync failed';
-        await markError(row, message);
-        useOfflineStatus.getState().setLastError(message);
+        if (isUnauthorized(error)) {
+          useOfflineStatus.getState().setLastError('Сесію завершено — увійдіть знову');
+          return;
+        }
+        // A sale waiting on its customer is not this row's fault — burning an
+        // attempt on it would kill a perfectly good receipt after ~8 ticks.
+        if (error instanceof CustomerNotSyncedError) {
+          useOfflineStatus.getState().setLastError('Чек: очікує на збереження клієнта');
+          continue;
+        }
+        const verdict = classifySyncError(error, 'sale');
+        await markAttempt(row, verdict);
+        useOfflineStatus.getState().setLastError(verdict.message);
       }
     }
 

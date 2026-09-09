@@ -16,6 +16,7 @@ vi.mock('./repository', () => ({
   listSales: vi.fn(),
   getSale: vi.fn(),
   refundSale: vi.fn(),
+  discardQueuedSale: vi.fn(),
 }));
 vi.mock('../services/api', () => ({
   api: {
@@ -217,5 +218,63 @@ describe('cashierApi passthrough methods', () => {
 
     expect(repo.getSale).toHaveBeenCalledWith(row);
     expect(api.getSale).not.toHaveBeenCalled();
+  });
+});
+
+describe('fiscal state passthrough', () => {
+  it('carries fiscal_status onto the local row shape', () => {
+    // Without this the receipts list shows nothing on a fiscalising store,
+    // because the till renders from `LocalSaleRow`, not `SaleDetail`.
+    const row = saleRowFromDetail(makeSaleDetail({ id: 3, fiscal_status: 'failed' }));
+    expect(row.fiscal_status).toBe('failed');
+  });
+
+  it('leaves fiscal_status absent for a store that does not fiscalise', () => {
+    expect(saleRowFromDetail(makeSaleDetail({ id: 4 })).fiscal_status).toBeUndefined();
+  });
+
+  it('keeps the refund fiscal result off the stored sale', () => {
+    // `putLocalSale` persists `detail` wholesale, so folding the refund's
+    // document into the sale would leave a refund's fiscal code masquerading
+    // as the sale's in the offline mirror.
+    const detail = makeSaleDetail({
+      id: 5,
+      fiscal_status: 'done',
+      refund_fiscal: {
+        status: 'failed',
+        fiscal_code: null,
+        fiscal_date: null,
+        tax_url: null,
+        qr_payload: null,
+        receipt_text: null,
+        error_code: 'unavailable',
+        message: 'Немає звʼязку',
+      },
+    });
+    vi.mocked(api.refundSale).mockResolvedValue(detail);
+
+    return cashierApi
+      .refundSale(saleRowFromDetail(makeSaleDetail({ id: 5 })), [
+        { sale_item_id: 1, quantity: 1 },
+      ])
+      .then((row) => {
+        expect(row.refund_fiscal).toMatchObject({ status: 'failed' });
+        expect(row.detail?.refund_fiscal).toBeUndefined();
+        expect(row.fiscal_status).toBe('done');
+      });
+  });
+});
+
+describe('discardQueuedSale', () => {
+  it('delegates to the repository on the cashier shell', async () => {
+    offline.mockReturnValue(true);
+    await cashierApi.discardQueuedSale('uuid-1');
+    expect(repo.discardQueuedSale).toHaveBeenCalledWith('uuid-1');
+  });
+
+  it('refuses on the web build, which has no outbox at all', async () => {
+    offline.mockReturnValue(false);
+    await expect(cashierApi.discardQueuedSale('uuid-1')).rejects.toThrow(/каси/);
+    expect(repo.discardQueuedSale).not.toHaveBeenCalled();
   });
 });

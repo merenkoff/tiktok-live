@@ -6,6 +6,7 @@ import { api, cashierApi } from '@pos/platform';
 import type {
   LocalSaleRow,
   PaymentMethod,
+  RefundedSaleRow,
   RefundLineInput,
   SaleDetail,
   SaleListItem,
@@ -24,7 +25,9 @@ export const returnsApi = {
     row: LocalSaleRow,
     items: RefundLineInput[],
     opts: { method?: PaymentMethod | null; reason?: string } = {}
-  ): Promise<LocalSaleRow> => cashierApi.refundSale(row, items, opts),
+  ): Promise<RefundedSaleRow> => cashierApi.refundSale(row, items, opts),
+  discardQueuedSale: (clientUuid: string): Promise<void> =>
+    cashierApi.discardQueuedSale(clientUuid),
 };
 
 /**

@@ -5,6 +5,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { api, useAuthStore, sameRemoteMap } from '@pos/platform';
 import { ProductPhotoField } from '../../components/ProductPhotoField';
+import { FiscalSettingsCard } from './FiscalSettingsCard';
 import { MODULES } from '../../modules/registry';
 import type { ModuleRemoteEntry, QrPaymentMode, StoreConfig } from '../../types';
 // Stateless leaf — no singleton to duplicate, so a direct import is fine here.
@@ -431,6 +432,12 @@ export function SettingsPage() {
             <span className="text-sm">Автоматично друкувати чек після продажу</span>
           </label>
         </div>
+
+        {/* Its own endpoint and its own save button — see the card's header for
+            why it must not join this page's single all-fields form. The guard
+            keeps an older `@pos/platform` (or a test double) from crashing the
+            whole settings screen on a method it does not have. */}
+        {typeof api.fiscalSettings === 'function' && <FiscalSettingsCard />}
 
         <div className="bg-sq-surface border border-sq-divider rounded-sq p-5 space-y-4 shadow-sm">
           <div>
