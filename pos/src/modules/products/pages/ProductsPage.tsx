@@ -110,8 +110,8 @@ export function ProductsPage() {
       setSku('');
       setImageUrl(null);
       await reload();
-    } catch {
-      setError('Не вдалося створити товар');
+    } catch (err) {
+      setError(saveErrorMessage(err, 'Не вдалося створити товар'));
     }
   }
 
@@ -328,7 +328,10 @@ export function ProductsPage() {
               </label>
               <label className="block space-y-1">
                 <span className="text-xs text-sq-secondary">Штрихкод — те, що читає сканер</span>
-                <input className={fieldClass} value={barcode} onChange={(e) => setBarcode(e.target.value)} />
+                <div className="flex gap-2">
+                  <input className={fieldClass} value={barcode} onChange={(e) => setBarcode(e.target.value)} />
+                  <GenerateBarcodeButton onGenerated={setBarcode} />
+                </div>
               </label>
               <button type="submit" className="sq-btn-primary sm:col-span-2 py-2.5 text-sm">
                 Зберегти
@@ -432,6 +435,57 @@ export function ProductsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * A 409 here means the SKU or barcode is already on another variant of this
+ * store — the one failure this design permits, and the only one the operator
+ * can act on. Folding it into "Не вдалося зберегти" left her no way to know
+ * she should simply generate another code.
+ */
+function saveErrorMessage(err: unknown, fallback: string): string {
+  const status =
+    typeof err === 'object' && err && 'response' in err
+      ? (err as { response?: { status?: number } }).response?.status
+      : undefined;
+  if (status === 409) {
+    return 'Такий артикул або штрихкод уже є в цьому магазині — змініть його або згенеруйте новий';
+  }
+  return fallback;
+}
+
+/**
+ * Mints a store-local EAN-13 for an item whose tag will not scan.
+ *
+ * Nothing is reserved: the counter behind it never repeats, so a code generated
+ * and never saved is simply a gap. Uniqueness within the store stays with the
+ * index at INSERT, which surfaces as the 409 above.
+ */
+function GenerateBarcodeButton({ onGenerated }: { onGenerated: (code: string) => void }) {
+  const [busy, setBusy] = useState(false);
+
+  async function generate() {
+    setBusy(true);
+    try {
+      onGenerated(await api.generateInternalBarcode());
+    } catch {
+      // Nothing appears in the field; pressing again is the whole recovery.
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => void generate()}
+      disabled={busy}
+      title="Внутрішній код магазину — коли бирка не сканується"
+      className="shrink-0 rounded-sq border border-sq-divider bg-sq-surface px-3 text-sm whitespace-nowrap disabled:opacity-50"
+    >
+      Згенерувати
+    </button>
   );
 }
 
@@ -670,8 +724,8 @@ function EditProductInline({
       }
       await onSaved();
       onCloseAfterSave();
-    } catch {
-      setError('Не вдалося зберегти');
+    } catch (err) {
+      setError(saveErrorMessage(err, 'Не вдалося зберегти'));
     } finally {
       setSaving(false);
     }
@@ -821,15 +875,24 @@ function EditProductInline({
               </label>
               <label className="block space-y-1">
                 <span className="text-xs text-sq-secondary">Штрихкод</span>
-                <input
-                  className={fieldClass}
-                  value={v.barcode ?? ''}
-                  onChange={(e) => {
-                    const next = [...variants];
-                    next[idx] = { ...v, barcode: e.target.value };
-                    setVariants(next);
-                  }}
-                />
+                <div className="flex gap-2">
+                  <input
+                    className={fieldClass}
+                    value={v.barcode ?? ''}
+                    onChange={(e) => {
+                      const next = [...variants];
+                      next[idx] = { ...v, barcode: e.target.value };
+                      setVariants(next);
+                    }}
+                  />
+                  <GenerateBarcodeButton
+                    onGenerated={(code) => {
+                      const next = [...variants];
+                      next[idx] = { ...v, barcode: code };
+                      setVariants(next);
+                    }}
+                  />
+                </div>
               </label>
             </div>
           </div>

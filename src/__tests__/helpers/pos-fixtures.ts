@@ -34,8 +34,7 @@ export async function applyPosMigrations(): Promise<void> {
   // Probe an artifact of the LAST migration in the list, so appending a
   // migration doesn't leave a half-applied schema looking "already done".
   const present = await pool.query(
-    `SELECT 1 FROM information_schema.tables
-     WHERE table_name = 'pos_variant_barcode_fixes'`
+    `SELECT 1 FROM pg_class WHERE relkind = 'S' AND relname = 'pos_internal_barcode_seq'`
   );
   if (present.rows.length > 0) return;
 
