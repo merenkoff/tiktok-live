@@ -1,7 +1,7 @@
 {
   "name": "clothing-pos",
   "private": true,
-  "version": "1.0.9",
+  "version": "1.1.0",
   "type": "module",
   "sideEffects": false,
   "license": "SEE LICENSE IN ../LICENSE",
@@ -28,6 +28,9 @@
     "build:tiktok-live-remote": "vite build --config vite.tiktok-live-remote.config.ts && node scripts/sign-remote.mjs tiktok-live",
     "serve:tiktok-live-remote": "npx --yes serve -l 5004 --cors --no-clipboard dist-remotes/tiktok-live",
     "check:tiktok-live-css-coverage": "node scripts/check-module-css-coverage.mjs src/modules/tiktok-live dist-remotes/tiktok-live/style.css",
+    "build:fiscal-checkbox-remote": "vite build --config vite.fiscal-checkbox-remote.config.ts && node scripts/sign-remote.mjs fiscal-checkbox",
+    "serve:fiscal-checkbox-remote": "npx --yes serve -l 5005 --cors --no-clipboard dist-remotes/fiscal-checkbox",
+    "check:fiscal-checkbox-css-coverage": "node scripts/check-module-css-coverage.mjs src/modules/fiscal-core dist-remotes/fiscal-checkbox/style.css && node scripts/check-module-css-coverage.mjs src/modules/fiscal-checkbox dist-remotes/fiscal-checkbox/style.css",
     "check:platform-boundary": "node scripts/check-platform-boundary.mjs",
     "check:tauri-capabilities": "node scripts/check-tauri-capabilities.mjs",
     "updater:init": "node scripts/updater-init.mjs",

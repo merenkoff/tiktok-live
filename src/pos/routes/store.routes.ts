@@ -5,7 +5,13 @@
 import type { FastifyInstance } from 'fastify';
 import { ensurePosAuth, ensurePosOwner } from '../core/auth.js';
 import * as analyticsService from '../analytics.service.js';
-import { sanitizeEnabledModules, sanitizeModuleRemotes } from '../core/modules.js';
+import {
+  assertSingleFiscalRemote,
+  FiscalRemoteConflictError,
+  sanitizeEnabledModules,
+  sanitizeModuleRemotes,
+} from '../core/modules.js';
+import { getFiscalSettings } from '../fiscal/settings.service.js';
 import { errorMessage } from './_shared.js';
 
 export function registerStoreRoutes(fastify: FastifyInstance): void {
@@ -49,7 +55,21 @@ export function registerStoreRoutes(fastify: FastifyInstance): void {
         ) {
           return reply.code(400).send({ error: 'module_remotes must be an object' });
         }
-        patch.module_remotes = sanitizeModuleRemotes(body.module_remotes);
+        const sanitized = sanitizeModuleRemotes(body.module_remotes);
+        // Two fiscal-* entries would otherwise sit there silently: the desktop
+        // cache only downloads strictly-newer versions of a given id, and a
+        // route collision between two bundles resolves by array order with no
+        // error anywhere. See TechDocs/POS_FISCAL_PRRO.md §11.4.
+        const fiscalSettings = await getFiscalSettings(auth.storeId);
+        try {
+          assertSingleFiscalRemote(sanitized, fiscalSettings?.provider ?? null);
+        } catch (error) {
+          if (error instanceof FiscalRemoteConflictError) {
+            return reply.code(400).send({ error: errorMessage(error) });
+          }
+          throw error;
+        }
+        patch.module_remotes = sanitized;
       }
       if (body.name !== undefined) {
         if (!body.name.trim()) return reply.code(400).send({ error: 'name required' });

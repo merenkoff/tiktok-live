@@ -19,6 +19,7 @@ import crypto from 'crypto';
 import type { FastifyInstance } from 'fastify';
 import { pool } from '../db.js';
 import { DEFAULT_ENABLED_MODULES } from '../pos/core/modules.js';
+import { updateFiscalSettings } from '../pos/fiscal/settings.service.js';
 import {
   applyPosMigrations,
   auth,
@@ -291,6 +292,116 @@ describe.skipIf(!hasDb)('POS store, analytics, QR & GTIN routes', () => {
           expect(me.json().store.module_remotes).toEqual({
             stock: 'https://cdn.example.com/stock.js',
           });
+        } finally {
+          await dropTestStore(temp.storeId);
+        }
+      });
+    });
+
+    describe('fiscal-* module remote guard', () => {
+      it('rejects a second fiscal-* remote', async () => {
+        const temp = await createTestStore('rremfiscal2');
+        try {
+          const res = await app.inject({
+            method: 'PATCH',
+            url: '/api/pos/store',
+            headers: auth(temp.ownerToken),
+            payload: {
+              module_remotes: {
+                'fiscal-checkbox': {
+                  url: 'https://cdn.example.com/a/remote-entry.js',
+                  title: 'A',
+                  routePath: '/fiscal',
+                  nav: [{ label: 'A', location: 'cashier-primary', order: 1 }],
+                },
+                'fiscal-vchasno': {
+                  url: 'https://cdn.example.com/b/remote-entry.js',
+                  title: 'B',
+                  routePath: '/fiscal',
+                  nav: [{ label: 'B', location: 'cashier-primary', order: 1 }],
+                },
+              },
+            },
+          });
+          // Without this, the desktop cache (keyed on moduleId + semver) would
+          // let a second bundle sit there doing nothing, and a route collision
+          // between the two would resolve silently by array order.
+          expect(res.statusCode).toBe(400);
+        } finally {
+          await dropTestStore(temp.storeId);
+        }
+      });
+
+      it('rejects a fiscal-* remote that disagrees with the configured ПРРО provider', async () => {
+        const temp = await createTestStore('rremfiscal3');
+        try {
+          await updateFiscalSettings(temp.storeId, { provider: 'checkbox' });
+          const res = await app.inject({
+            method: 'PATCH',
+            url: '/api/pos/store',
+            headers: auth(temp.ownerToken),
+            payload: {
+              module_remotes: {
+                'fiscal-vchasno': {
+                  url: 'https://cdn.example.com/x/remote-entry.js',
+                  title: 'X',
+                  routePath: '/fiscal',
+                  nav: [{ label: 'X', location: 'cashier-primary', order: 1 }],
+                },
+              },
+            },
+          });
+          expect(res.statusCode).toBe(400);
+        } finally {
+          await dropTestStore(temp.storeId);
+        }
+      });
+
+      it('accepts a single fiscal-* remote matching the configured provider', async () => {
+        const temp = await createTestStore('rremfiscal4');
+        try {
+          await updateFiscalSettings(temp.storeId, { provider: 'checkbox' });
+          const res = await app.inject({
+            method: 'PATCH',
+            url: '/api/pos/store',
+            headers: auth(temp.ownerToken),
+            payload: {
+              module_remotes: {
+                'fiscal-checkbox': {
+                  url: 'https://cdn.example.com/x/remote-entry.js',
+                  title: 'X',
+                  routePath: '/fiscal',
+                  nav: [{ label: 'X', location: 'cashier-primary', order: 1 }],
+                },
+              },
+            },
+          });
+          expect(res.statusCode).toBe(200);
+          expect(res.json().module_remotes).toHaveProperty('fiscal-checkbox');
+        } finally {
+          await dropTestStore(temp.storeId);
+        }
+      });
+
+      it('accepts a fiscal-* remote before any provider is configured', async () => {
+        const temp = await createTestStore('rremfiscal5');
+        try {
+          const res = await app.inject({
+            method: 'PATCH',
+            url: '/api/pos/store',
+            headers: auth(temp.ownerToken),
+            payload: {
+              module_remotes: {
+                'fiscal-checkbox': {
+                  url: 'https://cdn.example.com/x/remote-entry.js',
+                  title: 'X',
+                  routePath: '/fiscal',
+                  nav: [{ label: 'X', location: 'cashier-primary', order: 1 }],
+                },
+              },
+            },
+          });
+          expect(res.statusCode).toBe(200);
         } finally {
           await dropTestStore(temp.storeId);
         }

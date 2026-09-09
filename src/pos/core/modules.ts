@@ -197,3 +197,49 @@ export function sanitizeModuleRemotes(
   }
   return out;
 }
+
+/**
+ * A store's `module_remotes` names more than one ПРРО provider bundle, or one
+ * that disagrees with `pos_fiscal_settings.provider`.
+ *
+ * Thrown by `assertSingleFiscalRemote`, mapped to 400 by the caller.
+ */
+export class FiscalRemoteConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'FiscalRemoteConflictError';
+  }
+}
+
+/**
+ * At most one `fiscal-*` entry may exist, and it must name the provider the
+ * store is actually configured for.
+ *
+ * Without this, the desktop cache — keyed on moduleId + semver, only
+ * downloads strictly newer — would let a second `fiscal-*` entry sit there
+ * doing nothing, or two competing entries resolve their route collision
+ * silently by array order in `renderRoutes.tsx` (TechDocs/POS_FISCAL_PRRO.md
+ * §11.4). `configuredProvider` is `pos_fiscal_settings.provider` for this
+ * store, or null when fiscalisation has never been configured — a null
+ * provider does not conflict with anything, since the owner may add the
+ * module remote before saving the provider selection, or the other way round.
+ */
+export function assertSingleFiscalRemote(
+  remotes: Record<string, string | ModuleRemoteEntry>,
+  configuredProvider: string | null
+): void {
+  const fiscalIds = Object.keys(remotes).filter((id) => id.startsWith('fiscal-'));
+  if (fiscalIds.length > 1) {
+    throw new FiscalRemoteConflictError(
+      `Only one fiscal-* module remote is allowed, got: ${fiscalIds.join(', ')}`
+    );
+  }
+  if (fiscalIds.length === 1 && configuredProvider) {
+    const provider = fiscalIds[0].slice('fiscal-'.length);
+    if (provider !== configuredProvider) {
+      throw new FiscalRemoteConflictError(
+        `Module remote "${fiscalIds[0]}" does not match the configured ПРРО provider "${configuredProvider}"`
+      );
+    }
+  }
+}
