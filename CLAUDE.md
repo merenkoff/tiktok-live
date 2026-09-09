@@ -96,7 +96,7 @@ Frontend (`pos/src/`) has **two entry points sharing the same components/pages/Z
 
 `pos/src/shell.tsx` is the context that branches shell-specific behavior. The desktop cashier is the **only** offline-capable surface (`pos/src/offline/`, IndexedDB via Dexie): it snapshots catalog/tags/customers on first online login, verifies PIN/password locally via a PBKDF2 verifier (never stores the raw PIN), queues sales/customer writes while offline, and syncs (customers first, then sales) once a JWT and network are available. Web admin always talks to the API directly — no offline path there. `VITE_API_BASE` is baked in at build time (`pos/src/lib/urls.ts`); the desktop build defaults to the production API (`https://the-live.shop`) unless overridden via `pos/.env`. See `TechDocs/POS_DESKTOP.md` for the full offline/sync/CORS/kiosk story and `TechDocs/RAILWAY_POS.md` for deployment.
 
-Design tokens/UI conventions for the POS UI are documented in `pos/UI_CASHIER.md`; discount/customer rules in `TechDocs/POS_DISCOUNTS_AND_CUSTOMERS.md`; GTIN enrichment pipeline — including the canonical GTIN-14 cache key and the sticky-`manual` merge rule — in `TechDocs/POS_GTIN_ENRICHMENT.md` / `POS_GTIN_SETUP.md` / `POS_GTIN_LEARNING_API.md`.
+Design tokens/UI conventions for the POS UI — including price-tag printing to a receipt roll — are documented in `pos/UI_CASHIER.md`; discount/customer rules in `TechDocs/POS_DISCOUNTS_AND_CUSTOMERS.md`; GTIN enrichment pipeline — including the canonical GTIN-14 cache key and the sticky-`manual` merge rule — in `TechDocs/POS_GTIN_ENRICHMENT.md` / `POS_GTIN_SETUP.md` / `POS_GTIN_LEARNING_API.md`.
 
 ### CORS
 
