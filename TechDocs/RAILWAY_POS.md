@@ -31,6 +31,8 @@ POS ділить **той самий Postgres**, що й LIVE API. UI каси �
 | `DB_SSL` | `true` (зазвичай потрібно для Railway Postgres) |
 | `CORS_ORIGINS` | повний URL POS UI **без** слеша в кінці, кілька через кому. Приклад: `https://pos-xxx.up.railway.app,https://kasa.yourdomain.com`. Origin десктоп-каси (`https://tauri.localhost`) уже в коді `src/api.ts`; додатково в env не обов’язково. |
 | `NODE_ENV` | `production` |
+| `POS_SECRETS_KEY` | 32 байти base64 — шифрування ПРРО-кредів ([POS_FISCAL_CHECKBOX_SETUP.md](POS_FISCAL_CHECKBOX_SETUP.md) п. 0.1) |
+| `POS_SUPER_PASSWORD` | пароль супер-адмінки `/super` (усі магазини: модулі та їхні джерела), ≥ 12 символів — [POS_SUPER_ADMIN.md](POS_SUPER_ADMIN.md). Не задано → сторінка вимкнена |
 
 Решту LIVE-змінних не чіпай.
 

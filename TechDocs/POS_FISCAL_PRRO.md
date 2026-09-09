@@ -678,7 +678,7 @@ pos/src/modules/fiscal-checkbox/  # тонкий
 | **4** | Оркестрация чекаута + реестр + фикс 409 | ✅ |
 | **5** | Хост-фронт: фискальные поля везде + офлайн-блок | ✅ |
 | **6** | Бандлы `fiscal-core` + `fiscal-checkbox`, `posRequest`, гарды | ✅ |
-| **7** | Обкатка: список внимания, seed, CI-выпуск, ранбук | ⬜ |
+| **7** | Обкатка: список внимания, seed, CI-выпуск, ранбук | 🟡 CI-выпуск (`module-release.yml`) и ранбук ([POS_FISCAL_CHECKBOX_SETUP.md](POS_FISCAL_CHECKBOX_SETUP.md)) есть; массовое обновление URL модуля — супер-админка `/super` ([POS_SUPER_ADMIN.md](POS_SUPER_ADMIN.md)); список внимания и seed — ⬜ |
 | **8** | Отложенное: `receipt_source='provider'`, Вчасно, офлайн-режим ПРРО, Є-Чек | ⬜ |
 
 ### Что уже лежит в репозитории (фаза 1)
