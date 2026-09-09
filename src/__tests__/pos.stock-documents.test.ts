@@ -21,6 +21,7 @@ import {
   updateLine,
 } from '../pos/stock-documents.service.js';
 import { movementReport } from '../pos/stock-reports.service.js';
+import { submitCount } from '../pos/stock-documents.service.js';
 
 const hasDb = Boolean(process.env.DB_HOST || process.env.DATABASE_URL);
 
@@ -325,5 +326,54 @@ describe.skipIf(!hasDb)('POS stock documents ledger', () => {
     const row = rows.find((r) => r.variant_id === variantId);
     expect(row).toBeTruthy();
     expect(row!.closing).toBe(await stockQty(variantId));
+  });
+
+  describe('submitCount — a count sheet from the till (roadmap #12 track 3)', () => {
+    const uuid = '7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
+
+    it('creates one draft inventory document with system_qty as of now, and is idempotent on client_uuid', async () => {
+      const onHand = await pool.query(
+        `SELECT quantity FROM pos_stock WHERE store_id = $1 AND variant_id = $2`,
+        [storeId, variantId]
+      );
+      const first = await submitCount({
+        storeId,
+        staffId,
+        clientUuid: uuid,
+        note: 'полиця A',
+        lines: [{ variantId, countedQty: 3 }],
+      });
+      expect(first.created).toBe(true);
+      expect(first.document).toMatchObject({ type: 'inventory', status: 'draft', client_uuid: uuid, note: 'полиця A' });
+      expect(first.document.lines).toHaveLength(1);
+      expect(first.document.lines?.[0]).toMatchObject({
+        variant_id: variantId,
+        counted_qty: 3,
+        system_qty: Number(onHand.rows[0].quantity),
+      });
+
+      const again = await submitCount({ storeId, staffId, clientUuid: uuid.toUpperCase(), lines: [{ variantId, countedQty: 8 }] });
+      expect(again.created).toBe(false);
+      expect(again.document.id).toBe(first.document.id);
+      expect(again.document.lines?.[0].counted_qty).toBe(3);
+
+      const docs = await pool.query(`SELECT count(*)::int AS n FROM pos_stock_documents WHERE store_id = $1 AND client_uuid = $2`, [storeId, uuid]);
+      expect(docs.rows[0].n).toBe(1);
+    });
+
+    it('rejects an unknown variant, a duplicate line and a bad count without writing anything', async () => {
+      const before = await pool.query(`SELECT count(*)::int AS n FROM pos_stock_documents WHERE store_id = $1`, [storeId]);
+      await expect(
+        submitCount({ storeId, staffId, clientUuid: '7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4e', lines: [{ variantId: 999999, countedQty: 1 }] })
+      ).rejects.toThrow(/unknown variant_id: 999999/);
+      await expect(
+        submitCount({ storeId, staffId, clientUuid: '7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4f', lines: [{ variantId, countedQty: 1 }, { variantId, countedQty: 2 }] })
+      ).rejects.toThrow(/duplicate variant_id/);
+      await expect(
+        submitCount({ storeId, staffId, clientUuid: '7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c50', lines: [{ variantId, countedQty: -1 }] })
+      ).rejects.toThrow(/counted_qty/);
+      const after = await pool.query(`SELECT count(*)::int AS n FROM pos_stock_documents WHERE store_id = $1`, [storeId]);
+      expect(after.rows[0].n).toBe(before.rows[0].n);
+    });
   });
 });

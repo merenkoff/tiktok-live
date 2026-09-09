@@ -9,6 +9,9 @@ import type { LucideIcon } from 'lucide-react';
 import type { NavIconName } from '../platform/icons';
 import type { PosShell } from '../shell';
 import type { PosRole } from '../types';
+import type { ModuleOfflineHooks } from '../offline/moduleHooks';
+
+export type { ModuleOfflineHooks };
 
 /**
  * The POS UI is assembled from independently-toggleable modules. A store owner
@@ -109,6 +112,13 @@ export interface ModuleDescriptor {
   shells: PosShell[];
   /** All of this module's surface is owner-only (filters nav + route inclusion). */
   ownerOnly?: boolean;
+  /**
+   * The module keeps its own offline data (own IndexedDB, own queue) and wants
+   * the shell's offline runtime to drive it — roadmap #12 track 3,
+   * TechDocs/POS_MODULE_OFFLINE_DATA.md. The host registers these after boot;
+   * the module never touches the registry itself.
+   */
+  offline?: ModuleOfflineHooks;
   routes: RouteDef[];
   nav: NavItem[];
 }

@@ -35,7 +35,8 @@ export const POS_API_CLIENT_VERSION = 1;
  * to update it without a bump. Never bump `POS_API_CLIENT_VERSION` for this —
  * that is the `/api/pos` contract, a different thing.
  */
-export const PLATFORM_VERSION = 1;
+// 2 (2026-09-09): `useOfflineStatus`, `registerOfflineModules` — roadmap #12 track 3.
+export const PLATFORM_VERSION = 2;
 
 /**
  * Build version of this bundle — the host web/cashier build, or a module-remote

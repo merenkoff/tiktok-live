@@ -932,3 +932,40 @@ Doc: `TechDocs/POS_MODULE_PLATFORM_VERSION.md`. **Verified:** pos lint,
 +2) + clippy. Not yet run on a real desktop build — checklist in the roadmap
 #12 track-2 plan (remote `returns` on the till, `minHostPlatform: 999` →
 `incompatible` + banner, `stock` URL not downloaded, `tiktok-live` unaffected).
+
+## Update: modules with their own offline data — `stocktake` (roadmap #12 track 3) (2026-09-09)
+
+The last piece of #12. A module can now keep its own IndexedDB queue on the
+till and have the shell's offline runtime drive it, without the shell knowing
+its schema:
+
+- **Contract** — `ModuleDescriptor.offline?: { pendingCount(), sync() }`.
+  `offline/moduleHooks.ts` is a dependency-free leaf the runtime reads;
+  `sync.ts` runs module syncs after customers → sales, `status.ts` adds their
+  pending counts to the banner. The host registers hooks after
+  `applyModuleRemotes()` **through `@pos/platform`** (`registerOfflineModules`)
+  — a relative import would give the host a second registry the platform
+  chunk never reads; `check-platform-boundary.mjs` now bans that import.
+- **`PLATFORM_VERSION` → 2** (`useOfflineStatus`, `registerOfflineModules`):
+  the first real bump. `platform:snapshot` refused the changed surface until
+  the bump — track 2 working as designed.
+- **`stocktake`** (`pos/src/modules/stocktake/`): own Dexie DB
+  `cloth-pos-module-stocktake` (`dexie` external → host's copy), sheets +
+  lines, scan/search/±, `finishSheet` → queue; `syncSheets` with the shell's
+  backoff numbers copied (policy is not on the surface), `client_uuid` = sheet
+  id, 4xx → dead, network → no attempt burned. The camera scanner is a lazy
+  chunk (667 KB `html5-qrcode`) loaded only when opened; the route chunk is
+  17 KB.
+- **Backend** — `POST /api/pos/stock/counts` (`ensureModule('stock')`, any
+  staff), `submitCount` in `stock-documents.service.ts`: one transaction,
+  idempotent on `client_uuid` (migration `025`, partial unique index; a racing
+  retry gets the winner), lines carry `system_qty` as of submission +
+  `counted_qty`; the document stays a draft for the owner to post.
+- **e2e** `e2e/stocktake.spec.ts`: the real signed bundle (built by the
+  Playwright webServer command) served from a fake CDN inside the web shell —
+  scan twice, unknown barcode, finish → one `POST /stock/counts`.
+
+Docs: `TechDocs/POS_MODULE_OFFLINE_DATA.md` (contract + worked example +
+checklist for the next module). Not yet run on a real desktop build — the
+offline queue path is covered by `stocktake/data/*.test.ts` on
+`fake-indexeddb` and by the manual checklist in the track-3 plan.

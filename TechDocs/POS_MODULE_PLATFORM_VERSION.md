@@ -113,3 +113,15 @@ runtime-экспортов обоих баррелов зафиксирован 
   `minHostPlatform + 1` → bundled «Продажі». Для этого e2e-сборка идёт с
   `VITE_REMOTE_ALLOW_DEV_KEY=1` (`playwright.config.ts`).
 - Tauri-путь в браузере не воспроизводится — ручной чек-лист в roadmap #12.
+
+## Історія версій
+
+| `PLATFORM_VERSION` | Дата | Что добавилось | Кому понадобилось |
+|---|---|---|---|
+| 1 | 2026-09-09 | базовая поверхность на момент введения контракта (снапшот) | — |
+| 2 | 2026-09-09 | `useOfflineStatus`, `registerOfflineModules` (+ тип `ModuleOfflineHooks`) | `stocktake` — первый модуль со своими оффлайн-данными ([POS_MODULE_OFFLINE_DATA.md](POS_MODULE_OFFLINE_DATA.md)) |
+
+Бамп 1 → 2 — первая живая проверка механизма: `npm run platform:snapshot`
+отказался записать изменившийся набор экспортов без бампа, после бампа
+`sign-remote.mjs` стал писать `minHostPlatform: 2` в манифесты, и модули,
+собранные после этого, не загрузятся в хост с версией 1.

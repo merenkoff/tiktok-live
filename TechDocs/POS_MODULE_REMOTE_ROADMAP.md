@@ -218,12 +218,25 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[-]` won
     - e2e `pos/e2e/remotes.spec.ts` — подписанный в тесте remote с фейкового
       CDN: совместимый подменяет bundled, `minHostPlatform+1` — нет. Tauri-путь
       — юнит-тесты Rust + ручной чек-лист (в плане трека).
-  - **[ ] Трек 3 — модули с собственными оффлайн-данными.** Контракт
-    `offline?: { snapshot(), sync(), pendingCount() }`, своя Dexie-БД на модуль
-    (`cloth-pos-module-<id>`), порядок синка, агрегация `pending`. ~1.5–3 недели.
-    **Кандидата нет** (`tiktok-live` онлайн по природе, `fiscal-checkbox`
-    online-only по дизайну, склад-документы оффлайн вне скоупа) — план
-    начинается с выбора модуля. **Отдельный план перед стартом.**
+  - **[x] Трек 3 — модуль с собственными оффлайн-данными** (сделано
+    2026-09-09). Кандидат — «Інвентаризація на касі» (P4 из
+    [POS_POST_MVP.md](POS_POST_MVP.md)), модуль **`stocktake`**:
+    [POS_MODULE_OFFLINE_DATA.md](POS_MODULE_OFFLINE_DATA.md).
+    - Контракт: `ModuleDescriptor.offline?: { pendingCount(), sync() }`; хост
+      регистрирует хуки после `applyModuleRemotes` через `@pos/platform`
+      (`registerOfflineModules`), оболочка вызывает `sync()` после своих
+      клиентов/продаж и складывает `pendingCount()` в «Очікує синк: N».
+      Лист-сим `offline/moduleHooks.ts` — без цикла импортов с реестром.
+    - У модуля своя Dexie-БД (`cloth-pos-module-stocktake`), своя очередь и
+      policy; идемпотентность по `client_uuid`; `dead` для отклонённого.
+    - Бэкенд: `POST /api/pos/stock/counts` (любой сотрудник, модуль `stock`
+      включён) → черновик `inventory` с `system_qty`/`counted_qty`; миграция
+      `025` (`client_uuid` на документах). Проводит владелец на вебе.
+    - **Первый бамп `PLATFORM_VERSION` → 2** (`useOfflineStatus`,
+      `registerOfflineModules`) — механизм трека 2 отработал: снапшот
+      отказался обновляться без бампа, `minHostPlatform: 2` в манифесте.
+    - Не сделано осознанно: снапшот-хук модуля (нет потребителя), проводка с
+      кассы, слияние листов с нескольких касс.
 
 - [x] **13. Online-only модули в десктоп-кассе** (A–E сделаны)
   - **Цель:** десктоп-приложение (не только его веб-часть) — платформа, под
@@ -325,6 +338,6 @@ download/verify/cache + плейсхолдер online-only модуля из `st
 показал: касса неотделима (оффлайн+CSP), механизм — под web/admin-фичи.
 Сделано и #2 (CI-публикация в `module-builds` + jsdelivr, прод-ключ). #12
 пересмотрен 2026-09-09: трек 1 (пробелы паритета #13) и трек 2 (string-override
-на кассе + `PLATFORM_VERSION`/`minHostPlatform`) закрыты; трек 3 ждёт своего
-плана и модуля-кандидата. От #1 осталась только API-половина (strict-режим
+на кассе + `PLATFORM_VERSION`/`minHostPlatform`) и трек 3 (`stocktake` — первый
+модуль со своими оффлайн-данными) закрыты — **#12 закрыт целиком.** От #1 осталась только API-половина (strict-режим
 `/api/pos`, окно совместимости).

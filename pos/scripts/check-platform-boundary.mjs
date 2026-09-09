@@ -47,6 +47,10 @@ const ALLOW = [
 
 // import specifier (any relative depth) -> what it smuggles in
 const BANNED = [
+  {
+    re: /(['"])(?:\.\.?\/)+offline\/moduleHooks\1/,
+    what: 'the offline module-hooks registry — a host-local copy is one the platform chunk\'s sync loop never reads (import registerOfflineModules from "@pos/platform")',
+  },
   { re: /(['"])(?:\.\.?\/)+hooks\/useAuth\1/, what: 'useAuthStore (import from "@pos/platform")' },
   { re: /(['"])(?:\.\.?\/)+hooks\/useCart\1/, what: 'useCartStore (import from "@pos/platform")' },
   { re: /(['"])(?:\.\.?\/)+offline\/status\1/, what: 'the offline-status store (import from "@pos/platform")' },

@@ -7,7 +7,8 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { PosShellContext } from '@pos/platform';
-import { applyModuleRemotes } from './modules/registry';
+import { applyModuleRemotes, allModules } from './modules/registry';
+import { registerOfflineModules } from '@pos/platform';
 import { maybeStartTelemetryBeacon } from './modules/telemetryBeacon';
 import './index.css';
 import './styles/tokens.css';
@@ -19,6 +20,10 @@ maybeStartTelemetryBeacon();
 // Resolves immediately unless VITE_MODULE_REMOTES is set (Task B PoC); either
 // way it emits the `session_manifest` telemetry event on completion.
 void applyModuleRemotes().finally(() => {
+  // Hooks of modules that keep their own offline data (roadmap #12 track 3).
+  // The web shell runs no sync loop, but the registry is what `refreshPending`
+  // and any future web-side use read, so keep both entries symmetric.
+  registerOfflineModules(allModules());
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
       <PosShellContext.Provider value="web">
