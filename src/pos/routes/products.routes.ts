@@ -87,6 +87,18 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
     }
   });
 
+  // Mint a store-local barcode for a tag that will not scan. Static segment,
+  // so it never shadows `PATCH /variants/:id`.
+  fastify.post('/variants/internal-barcode', async (request, reply) => {
+    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    if (!auth) return;
+    try {
+      return { barcode: await productsService.generateInternalBarcode(auth.storeId) };
+    } catch (error) {
+      return reply.code(400).send({ error: errorMessage(error) });
+    }
+  });
+
   fastify.patch('/variants/:id', async (request, reply) => {
     const auth = await ensureModule(request, reply, 'products', { owner: true });
     if (!auth) return;
