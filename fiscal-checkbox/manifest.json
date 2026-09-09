@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "moduleId": "fiscal-checkbox",
+  "version": "1.1.0",
+  "minHostPlatform": 1,
+  "entry": "remote-entry.js",
+  "keyId": "2a73632c13044371",
+  "builtAt": "2026-09-09T16:27:51.369Z",
+  "files": {
+    "CheckboxAdminPage-DIOkYiu4.js": "sha384-FEX34oL+59ES8U5eYUyr+2/2Qx5QNTt3HGM445VQaxKZq4XeAlrDvA11GCJ2NTFm",
+    "CheckboxTillPage-Bbm_wJTD.js": "sha384-Lq5jjej74RLCr70H6uotuuHbyjfEK7OukbhnK9cBcDqYMJR67njHgOEZcWZ2sxEh",
+    "FiscalErrorCard-TfrDPJkY.js": "sha384-QP62Gd2KuwSCKzhlzsiO9RXOFO6KzZpFqrQoVYhdosi8OJ3jFx0fEl7KuBMUdTkF",
+    "remote-entry.js": "sha384-q2rhRvTovgVONPDQVs5vuMDUQ6YQE33xaVRvQxIsPWJu43LMETsapJywzRRrzy5d",
+    "style.css": "sha384-x0yTVKxVgQTkGtWjlLri7s77+JXtIqcUKvFuBaV/WxysctmsJ/kd7q9fONGuehDj"
+  }
+}
