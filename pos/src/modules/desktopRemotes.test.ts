@@ -24,7 +24,7 @@ const result = (status: ModuleSyncResult['status'], active: string | null): Modu
 afterEach(() => {
   setAppliedRemotes(new Map());
   remoteModules.length = 0;
-  useModuleRemoteUpdates.setState({ ready: [], dismissed: false });
+  useModuleRemoteUpdates.setState({ ready: [], needsAppUpdate: [], dismissed: false });
   vi.useRealTimers();
 });
 
@@ -120,6 +120,17 @@ describe('checkModuleRemoteUpdates', () => {
 
     await expect(checkModuleRemoteUpdates(sync)).resolves.toBeUndefined();
     expect(useModuleRemoteUpdates.getState().ready).toEqual([]);
+  });
+
+  it('marks a module whose published build needs a newer host platform (roadmap #12 track 2)', async () => {
+    setAppliedRemotes(new Map([['returns', { url: URL }]]));
+    await checkModuleRemoteUpdates(
+      vi.fn().mockResolvedValue({ status: 'incompatible', active: '1.0.6', error: 'needs host platform 2' })
+    );
+    expect(useModuleRemoteUpdates.getState()).toMatchObject({
+      ready: [],
+      needsAppUpdate: ['Чеки та повернення'],
+    });
   });
 
   it('does not list the same module twice and un-dismisses on a new arrival', () => {

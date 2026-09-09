@@ -89,6 +89,11 @@ struct RemoteManifest {
     schema: u32,
     module_id: String,
     version: String,
+    /// Host `PLATFORM_VERSION` (pos/src/platform/version.ts) the build needs
+    /// (roadmap #12 track 2). Missing on manifests signed before the field
+    /// existed → 0, no requirement.
+    #[serde(default)]
+    min_host_platform: u32,
     entry: String,
     key_id: String,
     files: BTreeMap<String, String>,
@@ -106,12 +111,18 @@ struct Installed {
     files: BTreeMap<String, String>,
     source_url: String,
     installed_at_ms: u64,
+    /// Copied from the manifest at install time; 0 for caches written before
+    /// the field existed. Checked again on every cached boot — an app that was
+    /// downgraded must not serve a module built for the newer platform.
+    #[serde(default)]
+    min_host_platform: u32,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModuleSyncResult {
-    /// `"updated"` | `"current"` | `"offline"` | `"error"`.
+    /// `"updated"` | `"current"` | `"offline"` | `"incompatible"` (the server's
+    /// build needs a newer host platform — nothing downloaded) | `"error"`.
     status: String,
     /// The version now live in the cache (`None` only when offline with nothing
     /// cached yet).
@@ -237,6 +248,14 @@ fn is_current(installed: &Installed, new_ver: &semver::Version, base_url: &str, 
         && cache_intact(&mod_dir.join(&installed.version), &installed.files)
 }
 
+/// The installed copy can be served to this host: intact on disk and not built
+/// for a newer platform than `host` (roadmap #12 track 2).
+fn usable_cache<'a>(installed: Option<&'a Installed>, host: u32, mod_dir: &Path) -> Option<&'a Installed> {
+    installed.filter(|i| {
+        i.min_host_platform <= host && cache_intact(&mod_dir.join(&i.version), &i.files)
+    })
+}
+
 /// Download + verify + cache the module named `id` from `base_url` (its
 /// `module_remotes[id]`, pointing at `remote-entry.js`). See the module docs.
 ///
@@ -246,23 +265,29 @@ fn is_current(installed: &Installed, new_ver: &semver::Version, base_url: &str, 
 /// so a kiosk on a half-dead link renders the till immediately; the real sync
 /// then runs in the background and only asks for a reload when something new
 /// actually landed.
+///
+/// `host_platform` (roadmap #12 track 2): this app's `PLATFORM_VERSION`, sent
+/// by the JS side (Rust cannot read `version.ts`). A manifest whose
+/// `minHostPlatform` is higher is **not downloaded** — `"incompatible"`, with
+/// `active` naming the cached version if that one is still usable. Absent
+/// (an older shell) → no gating.
 #[tauri::command]
 pub async fn sync_module_remote(
     app: AppHandle,
     id: String,
     base_url: String,
     cached_only: Option<bool>,
+    host_platform: Option<u32>,
 ) -> Result<ModuleSyncResult, String> {
     if !is_safe_segment(&id) {
         return Err(format!("unsafe module id {id:?}"));
     }
+    let host = host_platform.unwrap_or(u32::MAX);
     let mod_dir = modules_root(&app)?.join(&id);
     let installed = read_installed(&mod_dir);
 
     if cached_only.unwrap_or(false) {
-        let usable = installed
-            .as_ref()
-            .filter(|i| cache_intact(&mod_dir.join(&i.version), &i.files));
+        let usable = usable_cache(installed.as_ref(), host, &mod_dir);
         return Ok(match usable {
             Some(i) => ModuleSyncResult {
                 status: "current".into(),
@@ -310,6 +335,20 @@ pub async fn sync_module_remote(
 
     let new_ver =
         semver::Version::parse(&manifest.version).map_err(|e| format!("bad manifest version: {e}"))?;
+
+    // Built against a newer `@pos/platform` than this app exposes: it would pass
+    // every hash and then fail to link. Leave the cache exactly as it is.
+    if manifest.min_host_platform > host {
+        return Ok(ModuleSyncResult {
+            status: "incompatible".into(),
+            active: usable_cache(installed.as_ref(), host, &mod_dir).map(|i| i.version.clone()),
+            previous: None,
+            error: Some(format!(
+                "needs host platform {}, this build has {}",
+                manifest.min_host_platform, host
+            )),
+        });
+    }
 
     // Already have this (or newer) from this URL and the cache is intact → nothing to do.
     if let Some(inst) = installed.as_ref().filter(|i| is_current(i, &new_ver, &base_url, &mod_dir)) {
@@ -360,6 +399,7 @@ pub async fn sync_module_remote(
         files: manifest.files.clone(),
         source_url: base_url.clone(),
         installed_at_ms: now_ms(),
+        min_host_platform: manifest.min_host_platform,
     };
     fs::write(
         mod_dir.join("installed.json"),
@@ -510,7 +550,38 @@ mod tests {
             files,
             source_url: url.into(),
             installed_at_ms: 0,
+            min_host_platform: 0,
         }
+    }
+
+    #[test]
+    fn usable_cache_requires_intact_files_and_a_host_at_least_min_platform() {
+        let dir = std::env::temp_dir().join(format!("lsm-usable-{}", now_ms()));
+        let mut inst = installed_fixture(&dir, "1.0.0", "https://cdn.example.test/m/remote-entry.js");
+        inst.min_host_platform = 2;
+
+        assert!(usable_cache(Some(&inst), 2, &dir).is_some());
+        assert!(usable_cache(Some(&inst), 3, &dir).is_some());
+        assert!(usable_cache(Some(&inst), 1, &dir).is_none(), "cache built for a newer platform");
+        assert!(usable_cache(None, 9, &dir).is_none());
+
+        fs::write(dir.join("1.0.0").join("remote-entry.js"), b"tampered").unwrap();
+        assert!(usable_cache(Some(&inst), 2, &dir).is_none(), "damaged cache");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn manifest_min_host_platform_defaults_to_zero() {
+        let m: RemoteManifest = serde_json::from_str(
+            r#"{"schema":1,"moduleId":"x","version":"1.0.0","entry":"remote-entry.js","keyId":"k","files":{}}"#,
+        )
+        .unwrap();
+        assert_eq!(m.min_host_platform, 0);
+        let m: RemoteManifest = serde_json::from_str(
+            r#"{"schema":1,"moduleId":"x","version":"1.0.0","minHostPlatform":3,"entry":"remote-entry.js","keyId":"k","files":{}}"#,
+        )
+        .unwrap();
+        assert_eq!(m.min_host_platform, 3);
     }
 
     #[test]

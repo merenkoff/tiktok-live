@@ -13,29 +13,37 @@ interface Props {
   url: string;
 }
 
+type Outcome = 'idle' | 'offline' | 'incompatible';
+
 /**
  * Shown for an online-only feature module (roadmap #13 Part C) that a store has
  * enabled via `module_remotes` but the desktop cashier hasn't downloaded yet
  * (cold offline first run). "Спробувати зараз" re-runs the Rust
  * download/verify/cache (`sync_module_remote`, Part B) and reloads on success.
+ *
+ * A sync that comes back `incompatible` (roadmap #12 track 2 — the published
+ * build needs a newer host `PLATFORM_VERSION`) is not a connectivity problem
+ * and retrying will not fix it; say so.
  */
 export function RemoteModuleUnavailablePage({ moduleId, title, url }: Props) {
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [outcome, setOutcome] = useState<Outcome>('idle');
 
   async function retry() {
     setBusy(true);
-    setFailed(false);
+    setOutcome('idle');
+    let next: Outcome = 'offline';
     try {
       const res = await syncModuleRemote(moduleId, url);
       if (res.active != null) {
         window.location.reload();
         return;
       }
+      if (res.status === 'incompatible') next = 'incompatible';
     } catch {
       /* fall through to the failure note */
     }
-    setFailed(true);
+    setOutcome(next);
     setBusy(false);
   }
 
@@ -57,8 +65,14 @@ export function RemoteModuleUnavailablePage({ moduleId, title, url }: Props) {
         >
           {busy ? 'Завантаження…' : 'Спробувати зараз'}
         </button>
-        {failed && (
+        {outcome === 'offline' && (
           <p className="mt-3 text-sm text-red-600">Все ще немає з'єднання. Спробуйте пізніше.</p>
+        )}
+        {outcome === 'incompatible' && (
+          <p className="mt-3 text-sm text-red-600">
+            Модуль потребує новішої версії застосунку каси. Оновіть застосунок (розділ
+            «Обладнання») і спробуйте знову.
+          </p>
         )}
       </div>
     </div>

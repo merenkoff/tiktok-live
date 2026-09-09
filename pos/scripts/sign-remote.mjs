@@ -8,8 +8,17 @@
 //   node scripts/sign-remote.mjs <moduleId>
 //
 // Emits, in dist-remotes/<id>/:
-//   manifest.json      — { schema, moduleId, version, entry, keyId, builtAt, files{name: sha384} }
+//   manifest.json      — { schema, moduleId, version, minHostPlatform, entry, keyId, builtAt, files{name: sha384} }
 //   manifest.json.sig  — base64 Ed25519 detached signature over the exact manifest.json bytes
+//
+// `minHostPlatform` is this checkout's `PLATFORM_VERSION` (src/platform/
+// version.ts): the module is built against that `@pos/platform` surface, so a
+// host exposing an older one must not import it (roadmap #12 track 2,
+// TechDocs/POS_MODULE_PLATFORM_VERSION.md). Hosts that predate the field
+// ignore it — `schema` stays 1 on purpose.
+//
+// The signing helpers are exported (the CLI only runs when this file is the
+// entry point) so other tooling can sign a manifest the same way.
 //
 // The loader (`src/modules/remoteVerify.ts`) checks the signature against an
 // allowlisted public key (`src/modules/remoteSigningKeys.ts`) and the entry hash
@@ -30,6 +39,7 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { posAppVersion } from './pkg-version.mjs';
+import { platformVersion } from './platform-version.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const pos = path.resolve(dir, '..');
@@ -65,6 +75,21 @@ function keyIdOf(rawPub) {
   return createHash('sha256').update(rawPub).digest('hex').slice(0, 16);
 }
 
+/** The deterministic dev signing key (not secret — see the header). */
+export function devPrivateKey() {
+  return privateKeyFromSeed(DEV_SEED);
+}
+
+/** keyId of a private key, as the manifest records it. */
+export function keyIdOfPrivateKey(privateKey) {
+  return keyIdOf(rawPublicKey(privateKey));
+}
+
+/** Base64 detached Ed25519 signature over the exact UTF-8 bytes of `manifestJson`. */
+export function signManifestJson(manifestJson, privateKey) {
+  return edSign(null, Buffer.from(manifestJson, 'utf-8'), privateKey).toString('base64');
+}
+
 function loadPrivateKey() {
   const env = process.env.POS_REMOTE_SIGNING_KEY;
   if (env) {
@@ -73,7 +98,7 @@ function loadPrivateKey() {
       isDev: false,
     };
   }
-  return { key: privateKeyFromSeed(DEV_SEED), isDev: true };
+  return { key: devPrivateKey(), isDev: true };
 }
 
 function printKey(key, label) {
@@ -114,23 +139,28 @@ function signModule(moduleId) {
     schema: 1,
     moduleId,
     version: posAppVersion(),
+    minHostPlatform: platformVersion(),
     entry: 'remote-entry.js',
     keyId,
     builtAt: new Date().toISOString(),
     files,
   };
   const manifestJson = JSON.stringify(manifest, null, 2);
-  const signature = edSign(null, Buffer.from(manifestJson, 'utf-8'), key).toString('base64');
+  const signature = signManifestJson(manifestJson, key);
 
   writeFileSync(path.join(outDir, 'manifest.json'), manifestJson);
   writeFileSync(path.join(outDir, 'manifest.json.sig'), `${signature}\n`);
   console.log(
-    `[sign-remote] ${moduleId} v${manifest.version} — ${Object.keys(files).length} files, keyId ${keyId}`
+    `[sign-remote] ${moduleId} v${manifest.version} (host platform ≥ ${manifest.minHostPlatform}) — ${Object.keys(files).length} files, keyId ${keyId}`
   );
 }
 
-const arg = process.argv[2];
-if (!arg) die('usage: sign-remote.mjs <moduleId> | --print-dev | --gen-prod');
-if (arg === '--print-dev') printKey(privateKeyFromSeed(DEV_SEED), 'deterministic DEV key');
-else if (arg === '--gen-prod') genProd();
-else signModule(arg);
+const isCli =
+  Boolean(process.argv[1]) && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isCli) {
+  const arg = process.argv[2];
+  if (!arg) die('usage: sign-remote.mjs <moduleId> | --print-dev | --gen-prod');
+  if (arg === '--print-dev') printKey(devPrivateKey(), 'deterministic DEV key');
+  else if (arg === '--gen-prod') genProd();
+  else signModule(arg);
+}

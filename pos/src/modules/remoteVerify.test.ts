@@ -5,6 +5,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { RemoteVerifyError, inspectRemoteManifest, verifyRemoteEntry } from './remoteVerify';
 import { TRUSTED_REMOTE_KEYS } from './remoteSigningKeys';
+import { PLATFORM_VERSION } from '../platform/version';
 
 const ENTRY_URL = 'https://cdn.example.test/stock/remote-entry.js';
 const ENTRY_JS = 'export const manifest = { id: "stock" };\n';
@@ -128,6 +129,27 @@ describe('verifyRemoteEntry', () => {
     await expect(verifyRemoteEntry(ENTRY_URL, 'stock')).rejects.toThrow(/entry hash mismatch/);
   });
 
+  it('accepts a build made for this host platform, or one that predates the field', async () => {
+    const exact = await makeManifest({ minHostPlatform: PLATFORM_VERSION });
+    stubFetch({ manifest: exact, sig: await signManifest(exact) });
+    await expect(verifyRemoteEntry(ENTRY_URL, 'stock')).resolves.toEqual({});
+
+    const legacy = await makeManifest(); // no minHostPlatform at all
+    stubFetch({ manifest: legacy, sig: await signManifest(legacy) });
+    await expect(verifyRemoteEntry(ENTRY_URL, 'stock')).resolves.toEqual({});
+  });
+
+  it('rejects a build that needs a newer host platform, before touching the entry hash (roadmap #12 track 2)', async () => {
+    const manifest = await makeManifest({
+      minHostPlatform: PLATFORM_VERSION + 1,
+      files: { 'remote-entry.js': 'sha384-would-not-match-anyway' },
+    });
+    stubFetch({ manifest, sig: await signManifest(manifest) });
+    await expect(verifyRemoteEntry(ENTRY_URL, 'stock')).rejects.toThrow(
+      new RegExp(`host too old: needs platform ${PLATFORM_VERSION + 1}, this build is ${PLATFORM_VERSION}`)
+    );
+  });
+
   it('rejects a moduleId mismatch', async () => {
     const manifest = await makeManifest({ moduleId: 'products' });
     stubFetch({ manifest, sig: await signManifest(manifest) });
@@ -147,8 +169,17 @@ describe('inspectRemoteManifest', () => {
     await expect(inspectRemoteManifest(ENTRY_URL)).resolves.toEqual({
       moduleId: 'tiktok-live',
       version: '1.0.8',
+      minHostPlatform: 0,
       keyId,
       builtAt: '2026-09-06T00:00:00.000Z',
+    });
+  });
+
+  it('reports the host platform the build needs (roadmap #12 track 2)', async () => {
+    const manifest = await makeManifest({ minHostPlatform: PLATFORM_VERSION + 5 });
+    stubFetch({ manifest, sig: await signManifest(manifest) });
+    await expect(inspectRemoteManifest(ENTRY_URL)).resolves.toMatchObject({
+      minHostPlatform: PLATFORM_VERSION + 5,
     });
   });
 

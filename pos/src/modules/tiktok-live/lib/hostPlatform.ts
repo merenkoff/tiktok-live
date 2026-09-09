@@ -22,8 +22,13 @@
 // build trips over. Removing them restores the silent-dead-end behaviour above.
 //
 // The contract this module needs is small on purpose — three symbols. Adding a
-// fourth means one more version of the shell it can no longer run on, so weigh
-// it against roadmap #1 (a real platform-surface version) first.
+// fourth means one more version of the shell it can no longer run on.
+//
+// Since roadmap #12 track 2 the manifest's `minHostPlatform` keeps a host with
+// an older `PLATFORM_VERSION` from importing this module at all
+// (TechDocs/POS_MODULE_PLATFORM_VERSION.md). This file still matters for hosts
+// built BEFORE that check existed — they ignore the field — and it is what
+// turns a link failure into a support code instead of a blank screen.
 
 import * as host from '@pos/platform';
 import type { BridgeTokenResponse, LiveSettings, LiveSettingsPatch } from '../types';

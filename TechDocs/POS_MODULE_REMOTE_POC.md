@@ -890,3 +890,45 @@ warnings`. **Not yet exercised on a real desktop build** — the live checklist 
 in the roadmap #12 plan (logout → login → banner; offline PIN login from cache;
 new version → banner without restart; URL change → re-download; removed module
 → cache pruned; zero CSP violations).
+
+## Update: host↔module platform version contract (roadmap #12 track 2) (2026-09-09)
+
+The string form of `module_remotes` (a URL under a bundled module) had been
+applied by the desktop cashier since #13 B — by accident, and without any
+guard against a remote built for a newer `@pos/platform` than the till has,
+which fails to *link* at `import()`. Now official, under a contract:
+
+- **`PLATFORM_VERSION`** (`src/platform/version.ts`, exported from the barrel)
+  — the integer version of the `@pos/platform` / `@pos/platform/ui` surface.
+  `sign-remote.mjs` stamps it into the manifest as **`minHostPlatform`**
+  (`schema` stays 1; older hosts ignore the field, Rust `serde(default)`).
+- **Three checks.** Web: `verifyRemoteEntry` throws `host too old` before the
+  entry hash. Desktop: `sync_module_remote(…, hostPlatform)` returns
+  `status: 'incompatible'` and downloads nothing; `cachedOnly` refuses a cache
+  whose recorded `minHostPlatform` exceeds the host (`installed.json` gained
+  the field; `usable_cache` in Rust).
+- **Web-only modules are not synced on the cashier**: a string entry whose
+  bundled descriptor lacks `'cashier'` in `shells` (`stock`, `products`) is
+  skipped before Rust is called.
+- **UI:** the Settings probe (`inspectRemoteManifest` → `minHostPlatform`)
+  warns when the build needs a newer platform; on the cashier the background
+  check marks `needsAppUpdate` → banner "Потребує новішої версії застосунку"
+  whose action goes to `/hardware` instead of reloading;
+  `RemoteModuleUnavailablePage` tells `incompatible` apart from "no network".
+- **Bump discipline:** `src/platform/surface.test.ts` pins both barrels'
+  export names + the version in `surface.snapshot.json`; `npm run
+  platform:snapshot` refuses to record a changed surface without a bump.
+- **e2e on the web path** (`e2e/remotes.spec.ts`): the test signs a throwaway
+  `returns` remote with the dev key (helpers now exported from
+  `sign-remote.mjs`) and serves it from a fake CDN via `page.route`; a
+  compatible build replaces the bundled nav entry after the next boot, one
+  needing `PLATFORM_VERSION + 1` is refused. The e2e build runs with
+  `VITE_REMOTE_ALLOW_DEV_KEY=1` (`playwright.config.ts`).
+
+Doc: `TechDocs/POS_MODULE_PLATFORM_VERSION.md`. **Verified:** pos lint,
+`tsc --noEmit`, vitest (479, +6), `check:platform-boundary`,
+`check:tauri-capabilities`, `build:returns-remote` (manifest carries
+`minHostPlatform: 1`), `build:cashier`, `test:e2e` (11, +2); `cargo test` (12,
++2) + clippy. Not yet run on a real desktop build — checklist in the roadmap
+#12 track-2 plan (remote `returns` on the till, `minHostPlatform: 999` →
+`incompatible` + banner, `stock` URL not downloaded, `tiktok-live` unaffected).

@@ -27,6 +27,9 @@
  */
 
 import { TRUSTED_REMOTE_KEYS } from './remoteSigningKeys';
+// Leaf import (not the barrel): the barrel re-exports the module manifests,
+// which reach the registry, which imports this file.
+import { PLATFORM_VERSION } from '../platform/version';
 
 export class RemoteVerifyError extends Error {
   constructor(public reason: string) {
@@ -39,10 +42,21 @@ interface RemoteManifest {
   schema: number;
   moduleId: string;
   version: string;
+  /**
+   * `PLATFORM_VERSION` of the checkout the remote was built from (roadmap #12
+   * track 2). Absent on manifests signed before the field existed — treated
+   * as 0, i.e. no requirement.
+   */
+  minHostPlatform?: number;
   entry: string;
   keyId: string;
   builtAt: string;
   files: Record<string, string>;
+}
+
+/** This host's platform surface is older than what the remote was built against. */
+export function hostTooOld(manifest: Pick<RemoteManifest, 'minHostPlatform'>): boolean {
+  return (manifest.minHostPlatform ?? 0) > PLATFORM_VERSION;
 }
 
 function b64ToBytes(b64: string): Uint8Array {
@@ -145,6 +159,8 @@ async function fetchVerifiedManifest(url: string): Promise<RemoteManifest> {
 export interface RemoteManifestInfo {
   moduleId: string;
   version: string;
+  /** Host `PLATFORM_VERSION` the build needs; 0 for manifests that predate the field. */
+  minHostPlatform: number;
   keyId: string;
   builtAt: string;
 }
@@ -166,6 +182,7 @@ export async function inspectRemoteManifest(url: string): Promise<RemoteManifest
   return {
     moduleId: manifest.moduleId,
     version: manifest.version,
+    minHostPlatform: manifest.minHostPlatform ?? 0,
     keyId: manifest.keyId,
     builtAt: manifest.builtAt,
   };
@@ -194,6 +211,13 @@ export async function verifyRemoteEntry(url: string, moduleId: string): Promise<
 
   if (manifest.moduleId !== moduleId) {
     throw new RemoteVerifyError(`manifest moduleId "${manifest.moduleId}" != "${moduleId}"`);
+  }
+  // Before the entry hash: a remote built against a newer `@pos/platform` would
+  // pass every integrity check and then fail to *link* at `import()`.
+  if (hostTooOld(manifest)) {
+    throw new RemoteVerifyError(
+      `host too old: needs platform ${manifest.minHostPlatform}, this build is ${PLATFORM_VERSION}`
+    );
   }
 
   const entryBuf = await entryPromise;

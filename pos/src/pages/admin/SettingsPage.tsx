@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { FormEvent, useEffect, useState } from 'react';
-import { api, useAuthStore, sameRemoteMap } from '@pos/platform';
+import { api, useAuthStore, sameRemoteMap, PLATFORM_VERSION } from '@pos/platform';
 import { ProductPhotoField } from '../../components/ProductPhotoField';
 import { FiscalSettingsCard } from './FiscalSettingsCard';
 import { MODULES } from '../../modules/registry';
@@ -513,9 +513,12 @@ export function SettingsPage() {
           ))}
 
           <p className="text-sq-muted text-xs">
-            Джерело (URL) вантажить модуль із окремої збірки під час завантаження вкладки
-            (лише веб). Дозволені <code>https://</code>, шлях від кореня <code>/…</code> або
-            <code>http://localhost</code>. Зміни потребують перезавантаження вкладки.
+            Джерело (URL) вантажить модуль із окремої збірки під час завантаження — на сайті
+            та в десктоп-касі (каса тримає перевірену копію в кеші, тому працює і офлайн).
+            Дозволені <code>https://</code>, шлях від кореня <code>/…</code> або
+            <code>http://localhost</code>. Збірка, зроблена під новішу платформу, ніж у
+            застосунку, не завантажиться — лишиться вбудований модуль. Зміни потребують
+            перезавантаження.
           </p>
 
           <div className="border-t border-sq-divider pt-4 space-y-3">
@@ -701,9 +704,15 @@ function RemoteProbeNote({
     | { state: 'error'; message: string };
 }) {
   if (probe.state === 'ok') {
+    // A build that needs a newer host than this site has will be refused at
+    // load time (`verifyRemoteEntry`); the desktop cashier refuses it in Rust.
+    // Saving is still allowed — the entry starts working once the apps update.
+    const needsNewer = probe.info.minHostPlatform > PLATFORM_VERSION;
     return (
-      <span className="text-xs text-emerald-700">
+      <span className={`text-xs ${needsNewer ? 'text-amber-700' : 'text-emerald-700'}`}>
         Підпис дійсний · {probe.info.moduleId} {probe.info.version}
+        {needsNewer &&
+          ` · потребує платформу ${probe.info.minHostPlatform}, тут ${PLATFORM_VERSION} — сайт і касу треба оновити, доти лишиться вбудований модуль`}
       </span>
     );
   }

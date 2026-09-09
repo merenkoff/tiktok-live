@@ -16,6 +16,28 @@
 export const POS_API_CLIENT_VERSION = 1;
 
 /**
+ * Version of the `@pos/platform` / `@pos/platform/ui` **surface** this host
+ * build exposes to runtime-loaded modules (roadmap #12 track 2,
+ * `TechDocs/POS_MODULE_PLATFORM_VERSION.md`). A single integer.
+ *
+ * A module-remote's signed manifest carries `minHostPlatform` — the value this
+ * constant had in the build the module was made from. A host whose
+ * `PLATFORM_VERSION` is lower never imports that module: on the web
+ * `verifyRemoteEntry` rejects it, on the desktop Rust refuses to download it and
+ * the cache check refuses to serve it. That is what stops a module built against
+ * a newer platform from failing to *link* (a `SyntaxError` on a missing export)
+ * inside a till that has not updated in weeks.
+ *
+ * Bump it — by hand, +1 — whenever the surface changes in a way a module could
+ * depend on: an export added or removed from either barrel, or a signature's
+ * meaning changed. Internal refactors that keep the surface do not bump it.
+ * `src/platform/surface.test.ts` pins the export set to a snapshot and refuses
+ * to update it without a bump. Never bump `POS_API_CLIENT_VERSION` for this —
+ * that is the `/api/pos` contract, a different thing.
+ */
+export const PLATFORM_VERSION = 1;
+
+/**
  * Build version of this bundle — the host web/cashier build, or a module-remote
  * built from its own checkout. Stamped by every Vite config as
  * `__POS_APP_VERSION__` (`pos/scripts/pkg-version.mjs`, reads `package.json`);

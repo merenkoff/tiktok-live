@@ -186,6 +186,28 @@ describe('applyModuleRemotes — desktop syncRemote seam', () => {
     ]);
   });
 
+  it('does not sync a web-only bundled module on the cashier (roadmap #12 track 2)', async () => {
+    const stockBefore = MODULES.find((m) => m.id === 'stock');
+    expect(stockBefore?.shells).toEqual(['web']);
+    vi.stubEnv(
+      'VITE_MODULE_REMOTES',
+      `stock@https://cdn.example.test/stock/remote-entry.js,returns@${STORE_URL}`
+    );
+    const syncRemote = vi.fn().mockResolvedValue(null);
+    const events: ModuleEvent[] = [];
+    const off = onModuleEvent((e) => events.push(e));
+
+    await applyModuleRemotes({ syncRemote });
+    off();
+
+    // `stock` never reached Rust; `returns` (a cashier module) did.
+    expect(syncRemote).toHaveBeenCalledTimes(1);
+    expect(syncRemote).toHaveBeenCalledWith('returns', STORE_URL);
+    expect(MODULES.find((m) => m.id === 'stock')).toBe(stockBefore);
+    expect(events.filter((e) => e.type === 'remote_load_fallback').map((e) => (e as { reason: string }).reason))
+      .toEqual(['web-only module, not synced on the cashier', 'not cached (offline first run)']);
+  });
+
   it('falls back with remote_verify_error when syncRemote itself throws', async () => {
     const returnsBefore = MODULES.find((m) => m.id === 'returns');
     vi.stubEnv('VITE_MODULE_REMOTES', `returns@${STORE_URL}`);
