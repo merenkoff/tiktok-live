@@ -65,8 +65,9 @@ Full manifesto: https://own-net.com/
      PARAMETERS block, and their successors and permitted assigns.
 
 1.5  "Steward" means the Licensor, or the person or entity the Licensor
-     designates in writing to maintain the canonical Project. The Steward, and
-     only the Steward, may publish numbered revisions of this License.
+     designates in writing to maintain the canonical Project. Revisions of
+     this License are published as set out in Section 11.8, not by the
+     Steward.
 
 1.6  "You" (or "Your") means the individual or legal entity exercising rights
      under this License. For a legal entity, "You" includes all entities that
@@ -247,9 +248,10 @@ Closed System with it (Section 5.3).
 
      Any Derivative Work You distribute to a third party must be licensed, as a
      whole, under this License (OwnNet Source License 1.1) or, at Your option,
-     a later numbered version published by the Steward. You may not offer or
-     impose terms on the Derivative Work that restrict the recipient's rights
-     under this License, and You may not apply technical measures that do so.
+     a later numbered version published under Section 11.8. You may not offer
+     or impose terms on the Derivative Work that restrict the recipient's
+     rights under this License, and You may not apply technical measures that
+     do so.
 
      Each Contributor retains copyright in their own Contributions. This
      Section does not grant You the right to place a third party's
@@ -381,6 +383,17 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
 
 11.7 Controlling language. This License is written in English. If it is
      translated, the English text controls.
+
+11.8 License text and revisions. Everyone is permitted to copy and distribute
+     verbatim copies of this License document, and to apply it to their own
+     project by filling in the LICENSE PARAMETERS block as described under
+     "How to Apply This License to Your Own Project". The body of this License
+     may not be modified; a modified text may not be called the "OwnNet Source
+     License" or be presented as a version of it. Numbered revisions of this
+     License are published solely by its author, Serhii Merenkov / LIMITED
+     LIABILITY COMPANY "Technologies" (or their successors), at
+     https://own-net.com/; the Steward or Licensor of an individual project
+     may adopt a later revision but may not publish one.
 
 ═══════════════════════════════════════════════════════════════════════════
 
