@@ -181,6 +181,8 @@ export async function completeSale(params: {
   cart_discount?: CartDiscountInput | null;
   customer_id?: number | null;
   client_uuid?: string | null;
+  /** `'pending'` when the caller is about to fiscalise this sale. See the INSERT. */
+  fiscal_status?: 'none' | 'pending';
 }) {
   if (!params.items?.length) throw new Error('Cart is empty');
   if (!params.payments?.length) throw new Error('Payment required');
@@ -290,8 +292,9 @@ export async function completeSale(params: {
     const saleResult = await client.query(
       `INSERT INTO pos_sales
          (store_id, staff_id, receipt_number, status, subtotal_cents, total_cents, note,
-          customer_id, cart_discount_type, cart_discount_value, cart_discount_cents, client_uuid)
-       VALUES ($1, $2, $3, 'completed', $4, $5, $6, $7, $8, $9, $10, $11)
+          customer_id, cart_discount_type, cart_discount_value, cart_discount_cents, client_uuid,
+          fiscal_status)
+       VALUES ($1, $2, $3, 'completed', $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
       [
         params.storeId,
@@ -305,6 +308,11 @@ export async function completeSale(params: {
         discountValue,
         cartDiscountCents,
         clientUuid,
+        // Stamped INSIDE this transaction, never by a follow-up UPDATE: a crash
+        // between COMMIT and the fiscalisation call must not leave a
+        // fiscalisable sale looking like 'none', which no reconciler would ever
+        // find. Silently un-fiscalised revenue is the worst outcome available.
+        params.fiscal_status ?? 'none',
       ]
     );
     const sale = saleResult.rows[0];
@@ -399,6 +407,19 @@ export async function getSale(storeId: number, saleId: number) {
     [saleId]
   );
 
+  // The ПРРО result, when this store fiscalises. Plain fields on the sale, not
+  // a separate lookup for the client: the ESC/POS ticket is rendered in Rust
+  // and the offline receipt mirror is host-owned, so neither could ever reach a
+  // module-provided renderer. See TechDocs/POS_FISCAL_PRRO.md §1.
+  const fiscalRow = await pool.query(
+    `SELECT fiscal_code, fiscal_date, tax_url, qr_payload, receipt_text,
+            status, error_code, error_message
+     FROM pos_fiscal_receipts
+     WHERE sale_id = $1 AND doc_type = 'sale'`,
+    [saleId]
+  );
+  const fiscal = fiscalRow.rows[0] ?? null;
+
   return {
     id: Number(sale.id),
     store_id: Number(sale.store_id),
@@ -420,6 +441,21 @@ export async function getSale(storeId: number, saleId: number) {
     note: sale.note,
     created_at: sale.created_at,
     voided_at: sale.voided_at,
+    fiscal_status: sale.fiscal_status ?? 'none',
+    fiscal: fiscal
+      ? {
+          status: fiscal.status as string,
+          fiscal_code: fiscal.fiscal_code ?? null,
+          fiscal_date: fiscal.fiscal_date
+            ? new Date(fiscal.fiscal_date).toISOString()
+            : null,
+          tax_url: fiscal.tax_url ?? null,
+          qr_payload: fiscal.qr_payload ?? null,
+          receipt_text: fiscal.receipt_text ?? null,
+          error_code: fiscal.error_code ?? null,
+          error_message: fiscal.error_message ?? null,
+        }
+      : null,
     items: items.rows.map((row) => ({
       id: Number(row.id),
       variant_id: Number(row.variant_id),
@@ -496,6 +532,9 @@ export async function listSales(
     customer_name: sale.customer_name ?? null,
     created_at: sale.created_at,
     qr_pending: Boolean(sale.qr_pending),
+    // Projection, not a join: 99% of rows belong to stores that do not
+    // fiscalise, and the receipts list stays a zero-join query for them.
+    fiscal_status: sale.fiscal_status ?? 'none',
   }));
 }
 
@@ -592,6 +631,8 @@ export async function refundSale(params: {
   reason?: string;
   method?: RefundMethod | null;
   client_uuid?: string | null;
+  /** `'pending'` when the caller is about to fiscalise this refund. */
+  fiscal_status?: 'none' | 'pending';
 }) {
   if (!params.items?.length) throw new Error('Refund items required');
 
@@ -666,8 +707,9 @@ export async function refundSale(params: {
     const refundNumber = await nextRefundNumber(client, params.storeId);
     const refundResult = await client.query(
       `INSERT INTO pos_refunds
-         (sale_id, store_id, staff_id, total_cents, reason, client_uuid, refund_number, method)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         (sale_id, store_id, staff_id, total_cents, reason, client_uuid, refund_number, method,
+          fiscal_status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING id`,
       [
         params.saleId,
@@ -678,6 +720,7 @@ export async function refundSale(params: {
         clientUuid,
         refundNumber,
         method,
+        params.fiscal_status ?? 'none',
       ]
     );
     const refundId = Number(refundResult.rows[0].id);

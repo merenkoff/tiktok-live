@@ -34,7 +34,7 @@ export async function applyPosMigrations(): Promise<void> {
   // Probe an artifact of the LAST migration in the list, so appending a
   // migration doesn't leave a half-applied schema looking "already done".
   const present = await pool.query(
-    `SELECT 1 FROM pg_class WHERE relkind = 'S' AND relname = 'pos_internal_barcode_seq'`
+    `SELECT 1 FROM information_schema.tables WHERE table_name = 'pos_fiscal_settings'`
   );
   if (present.rows.length > 0) return;
 
@@ -161,6 +161,9 @@ export async function issueToken(
 export async function dropTestStore(storeId: number | undefined): Promise<void> {
   if (!storeId) return;
   const ordered = [
+    // Fiscal ledger first: it holds sales/refunds with ON DELETE RESTRICT.
+    'DELETE FROM pos_fiscal_receipts WHERE store_id = $1',
+    'DELETE FROM pos_fiscal_shifts WHERE store_id = $1',
     'DELETE FROM pos_refund_items WHERE refund_id IN (SELECT id FROM pos_refunds WHERE store_id = $1)',
     'DELETE FROM pos_refunds WHERE store_id = $1',
     'DELETE FROM pos_sale_items WHERE sale_id IN (SELECT id FROM pos_sales WHERE store_id = $1)',

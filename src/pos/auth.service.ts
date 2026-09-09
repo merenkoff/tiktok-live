@@ -17,6 +17,7 @@ import {
 import { getAuthByToken, sessionExpiresAt } from './core/auth.js';
 import { effectiveEnabledModules } from './core/modules.js';
 import type {
+  FiscalPublicConfig,
   ModuleRemoteEntry,
   PosAuthContext,
   PosRole,
@@ -37,6 +38,12 @@ export interface AuthResponse {
     slug: string;
     currency: string;
     qr_payment: QrPaymentPublicConfig;
+    /**
+     * Whether this store fiscalises (ПРРО), and with whom — no credentials.
+     * The desktop cashier reads this out of its cached `pos_auth` to refuse an
+     * offline sale for a fiscalising store, so it has to travel with the login.
+     */
+    fiscal: FiscalPublicConfig;
     auto_print_receipt: boolean;
     /** Effective toggleable module ids (empty stored set resolves to the defaults). */
     enabled_modules: string[];
@@ -82,6 +89,7 @@ function toAuthResponse(auth: PosAuthContext, expiresAt: Date): AuthResponse {
       slug: auth.storeSlug,
       currency: auth.currency,
       qr_payment: auth.qrPayment,
+      fiscal: auth.fiscal,
       auto_print_receipt: auth.autoPrintReceipt,
       enabled_modules: effectiveEnabledModules(auth.enabledModules),
       module_remotes: auth.moduleRemotes,
