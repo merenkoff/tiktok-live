@@ -34,6 +34,7 @@ pub fn run() {
             update::check_for_update,
             update::install_update,
             module_remotes::sync_module_remote,
+            module_remotes::prune_module_remotes,
             print_webview
         ])
         .setup(|_app| {

@@ -78,6 +78,7 @@ export async function saveStaffUnlock(params: {
     autoPrintReceipt: params.auth.store.auto_print_receipt ?? false,
     enabledModules: params.auth.store.enabled_modules ?? DEFAULT_MODULES,
     fiscalEnabled: params.auth.store.fiscal?.enabled ?? false,
+    moduleRemotes: params.auth.store.module_remotes ?? {},
     fiscalProvider: params.auth.store.fiscal?.provider ?? null,
   };
   await db.staffUnlock.put(row);
@@ -108,6 +109,7 @@ export async function updateStaffUnlockStoreFlags(auth: AuthResponse): Promise<v
     enabledModules: auth.store.enabled_modules ?? DEFAULT_MODULES,
     fiscalEnabled: auth.store.fiscal?.enabled ?? false,
     fiscalProvider: auth.store.fiscal?.provider ?? null,
+    moduleRemotes: auth.store.module_remotes ?? row.moduleRemotes ?? {},
   });
 }
 
@@ -152,6 +154,7 @@ function sessionFromUnlock(row: StaffUnlockRow, liveAuth: AuthResponse | null): 
       },
       auto_print_receipt: row.autoPrintReceipt ?? false,
       enabled_modules: row.enabledModules ?? DEFAULT_MODULES,
+      module_remotes: row.moduleRemotes ?? {},
       fiscal: {
         enabled: row.fiscalEnabled ?? false,
         provider: (row.fiscalProvider as FiscalProviderId | null) ?? null,

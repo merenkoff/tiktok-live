@@ -842,3 +842,51 @@ exercised on a real tauri:dev», тянувшийся с Part B, снят.
    `devDependencies`, но не был установлен, а `assemble-cashier-dist.mjs` на это
    отвечает `exit 1` — `dist-cashier` оставался без import map. Лечится
    `npm install` в `pos/`; на CI (`npm ci`) не воспроизводится.
+
+## Update: desktop parity gaps in #13 closed (roadmap #12 track 1) (2026-09-09)
+
+Re-reading roadmap #12 ("full desktop parity", won't-do) against the code showed
+its *mechanics* were already delivered by #13 — what was actually missing were
+robustness gaps in #13 itself, found while checking. All closed here; the two
+substantive leftovers of #12 are now roadmap tracks 2 and 3 with their own plans
+to come.
+
+- **`module_remotes` survives logout and offline login.** `applyModuleRemotes()`
+  used to read the map off `localStorage['pos_auth']` — which `clearAuth()`
+  deletes and an offline PIN session (rebuilt from `staffUnlock`, which never
+  cached the map) overwrote. Result: after a logout or a cold offline login the
+  cashier booted with **no** online-only modules at all (no nav, no
+  placeholder) although the code sat in the Rust cache. Now `api.saveAuth()`
+  writes `localStorage['pos_module_remotes']` for server-issued auths only,
+  `moduleRemotesSource.ts` reads it first (`pos_auth` stays as fallback for
+  older installs), and `StaffUnlockRow.moduleRemotes` keeps the offline
+  `AuthResponse` complete.
+- **Reload banner on the cashier too.** `remotesChanged()` no longer returns
+  `false` under the offline shell; `ModuleRemotesReloadBanner` is a shared
+  component rendered by both `App` and `CashierApp`.
+- **Cache-first boot, network in the background.** `sync_module_remote` takes
+  `cachedOnly`; `modules/desktopRemotes.ts` `createCacheFirstSync` imports an
+  intact cache without touching the network (before: up to
+  `MODULE_LOAD_TIMEOUT_MS` per module on a half-dead link), then
+  `startModuleRemoteUpdateChecks` runs the real sync after the first render, on
+  `online`, and hourly; `'updated'` (or a placeholder that now has a version)
+  feeds `useModuleRemoteUpdates` → the same banner. A kiosk no longer needs a
+  restart to see a new module version.
+- **`source_url` is part of "current"** (`is_current` in Rust) — same id and
+  semver from another URL re-downloads.
+- **Dev signing key gated**: Rust `DEV_REMOTE_KEY` trusted only under
+  `debug_assertions` or a build with `POS_REMOTE_ALLOW_DEV_KEY=1`; TS under
+  `import.meta.env.DEV` or `VITE_REMOTE_ALLOW_DEV_KEY=1`. Prod key lives in
+  `PROD_REMOTE_KEYS` on both sides.
+- **`prune_module_remotes(keep)`** (new command, `EXPECTED_COMMANDS` +
+  capabilities doc updated) drops caches of modules the store no longer names;
+  called from `cashier-main.tsx` after boot, skipped under `VITE_MODULE_REMOTES`.
+
+**Verified:** pos `npm run lint`, `tsc --noEmit`, `npm test` (473, +13:
+`desktopRemotes.test.ts` + 3 in `moduleRemotesSource.test.ts`),
+`check:platform-boundary`, `check:tauri-capabilities`, `npm run build`,
+`build:cashier`, `test:e2e` (9); `cargo test` (10, +3) + `cargo clippy -D
+warnings`. **Not yet exercised on a real desktop build** — the live checklist is
+in the roadmap #12 plan (logout → login → banner; offline PIN login from cache;
+new version → banner without restart; URL change → re-download; removed module
+→ cache pruned; zero CSP violations).

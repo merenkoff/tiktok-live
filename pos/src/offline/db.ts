@@ -5,6 +5,7 @@
 import Dexie, { type Table } from 'dexie';
 import type {
   CatalogItem,
+  ModuleRemoteEntry,
   PosCustomer,
   PosRole,
   QrPaymentMode,
@@ -50,6 +51,13 @@ export interface StaffUnlockRow {
    */
   fiscalEnabled?: boolean;
   fiscalProvider?: string | null;
+  /**
+   * `store.module_remotes` cached from AuthResponse (optional on old rows), so
+   * an offline session rebuilt from this row still carries the store's module
+   * list — the `pos_module_remotes` localStorage key is what boot actually
+   * reads, this keeps the offline `AuthResponse` itself complete.
+   */
+  moduleRemotes?: Record<string, string | ModuleRemoteEntry>;
 }
 
 export type OutboxType = 'sale' | 'customer';

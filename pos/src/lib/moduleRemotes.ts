@@ -25,9 +25,31 @@ export interface ModuleSyncResult {
   error?: string | null;
 }
 
+export interface SyncModuleRemoteOptions {
+  /**
+   * Answer from the on-disk cache without touching the network: `current` +
+   * the cached version when the cache is intact, `offline` + `null` otherwise.
+   * What the shell boots from (roadmap #12 track 1) — the network sync runs
+   * afterwards in the background.
+   */
+  cachedOnly?: boolean;
+}
+
 /** Download + verify + cache the module, resolve with where it now stands. */
-export function syncModuleRemote(id: string, baseUrl: string): Promise<ModuleSyncResult> {
-  return invoke('sync_module_remote', { id, baseUrl });
+export function syncModuleRemote(
+  id: string,
+  baseUrl: string,
+  opts: SyncModuleRemoteOptions = {}
+): Promise<ModuleSyncResult> {
+  return invoke('sync_module_remote', { id, baseUrl, cachedOnly: opts.cachedOnly ?? false });
+}
+
+/**
+ * Delete the cache of every module NOT in `keep`; resolves with the ids removed.
+ * Called once after boot with the ids the store still names in `module_remotes`.
+ */
+export function pruneModuleRemotes(keep: string[]): Promise<string[]> {
+  return invoke('prune_module_remotes', { keep });
 }
 
 /**

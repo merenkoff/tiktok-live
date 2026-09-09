@@ -108,6 +108,45 @@ describe('resolveModuleRemotes', () => {
     expect(resolveModuleRemotes(KNOWN).size).toBe(0);
   });
 
+  it('prefers the dedicated pos_module_remotes key over the cached auth', () => {
+    vi.stubEnv('VITE_MODULE_REMOTES', undefined);
+    setCachedAuth({ stock: 'https://cdn/old-stock.js' });
+    localStorage.setItem(
+      'pos_module_remotes',
+      JSON.stringify({ storeId: 1, map: { returns: 'https://cdn/returns.js' } })
+    );
+
+    expect([...resolveModuleRemotes(KNOWN)]).toEqual([
+      ['returns', { url: 'https://cdn/returns.js' }],
+    ]);
+  });
+
+  it('survives logout (pos_auth gone) and an offline session written over pos_auth', () => {
+    vi.stubEnv('VITE_MODULE_REMOTES', undefined);
+    localStorage.setItem(
+      'pos_module_remotes',
+      JSON.stringify({ storeId: 1, map: { returns: 'https://cdn/returns.js' } })
+    );
+
+    // Logout: `clearAuth()` removes pos_auth/pos_token, leaves this key alone.
+    localStorage.removeItem('pos_auth');
+    expect(resolveModuleRemotes(KNOWN).get('returns')).toEqual({ url: 'https://cdn/returns.js' });
+
+    // Offline PIN login rebuilt from an old staffUnlock row: no module_remotes.
+    localStorage.setItem('pos_auth', JSON.stringify({ token: 'offline:1', store: {} }));
+    expect(resolveModuleRemotes(KNOWN).get('returns')).toEqual({ url: 'https://cdn/returns.js' });
+  });
+
+  it('ignores a malformed pos_module_remotes and falls back to the cached auth', () => {
+    vi.stubEnv('VITE_MODULE_REMOTES', undefined);
+    setCachedAuth({ stock: 'https://cdn/stock.js' });
+    localStorage.setItem('pos_module_remotes', '{not json');
+    expect(resolveModuleRemotes(KNOWN).get('stock')).toEqual({ url: 'https://cdn/stock.js' });
+
+    localStorage.setItem('pos_module_remotes', JSON.stringify({ map: ['x'] }));
+    expect(resolveModuleRemotes(KNOWN).size).toBe(0);
+  });
+
   it('returns an empty map for missing / malformed cached auth', () => {
     vi.stubEnv('VITE_MODULE_REMOTES', undefined);
     expect(resolveModuleRemotes(KNOWN).size).toBe(0);
