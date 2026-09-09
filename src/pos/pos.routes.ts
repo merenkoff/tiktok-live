@@ -18,6 +18,7 @@ import { registerQrRoutes } from './routes/qr.routes.js';
 import { registerTelemetryRoutes } from './routes/telemetry.routes.js';
 import { registerLiveRoutes } from './routes/live.routes.js';
 import { registerFiscalRoutes } from './routes/fiscal.routes.js';
+import { registerSuperRoutes } from './routes/super.routes.js';
 
 export interface PosRouteGroup {
   /** null = core: always registered, no per-request module gate. */
@@ -45,6 +46,9 @@ export const POS_ROUTE_GROUPS: PosRouteGroup[] = [
   // `fiscal-<provider>` UI module opts in through `module_remotes`, not
   // `enabled_modules`. The gate is `ensurePosOwner`.
   { moduleId: null, register: registerFiscalRoutes },
+  // Core and store-less: the cross-store admin behind `POS_SUPER_PASSWORD`
+  // (TechDocs/POS_SUPER_ADMIN.md). Its gate is `ensureSuper`, not a session.
+  { moduleId: null, register: registerSuperRoutes },
   { moduleId: 'returns', register: registerReturnsRoutes },
   { moduleId: 'customers', register: registerCustomersRoutes },
   { moduleId: 'products', register: registerProductsRoutes },

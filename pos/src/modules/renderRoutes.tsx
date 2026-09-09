@@ -7,13 +7,20 @@
    to local layout components; it is never a Fast Refresh boundary. */
 
 import type { ReactNode } from 'react';
-import { Suspense } from 'react';
+import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuthStore } from '@pos/platform';
 import { AdminLayout } from '../pages/admin/AdminLayout';
 import { CashierLayout } from '../components/cashier/CashierLayout';
 import { RouteErrorBoundary } from '../components/RouteErrorBoundary';
 import { LoginPage } from '../pages/LoginPage';
+
+// The cross-store admin (TechDocs/POS_SUPER_ADMIN.md): not a module, not a
+// store session — mounted on the web shell outside every guard, gated by its
+// own password. Lazy, so the store-facing bundle does not carry it.
+const SuperAdminApp = lazy(() =>
+  import('../super/SuperAdminApp').then((m) => ({ default: m.SuperAdminApp }))
+);
 import type { PosShell } from '../shell';
 import type { PosRole } from '../types';
 import { allModules, type AnyModuleDescriptor } from './registry';
@@ -133,6 +140,16 @@ export function renderModuleRoutes(ctx: RouteContext) {
           )}
           {adminRoutes}
         </Route>
+      )}
+      {ctx.shell === 'web' && (
+        <Route
+          path="/super/*"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <SuperAdminApp />
+            </Suspense>
+          }
+        />
       )}
       <Route
         path="*"

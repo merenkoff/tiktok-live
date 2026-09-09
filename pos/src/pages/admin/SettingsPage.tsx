@@ -10,6 +10,7 @@ import { MODULES } from '../../modules/registry';
 import type { ModuleRemoteEntry, QrPaymentMode, StoreConfig } from '../../types';
 // Stateless leaf — no singleton to duplicate, so a direct import is fine here.
 import { inspectRemoteManifest, type RemoteManifestInfo } from '../../modules/remoteVerify';
+import { validateRemoteEntryInput } from '../../lib/moduleRemoteForm';
 
 export function SettingsPage() {
   const auth = useAuthStore((s) => s.auth);
@@ -195,48 +196,17 @@ export function SettingsPage() {
     const routePath = newModuleRoutePath.trim();
     const order = Number(newModuleOrder);
 
-    if (!/^[a-z][a-z0-9-]{1,40}$/.test(id)) {
-      return setNewModuleError('Ідентифікатор: малі латинські літери, цифри, дефіс, з літери.');
-    }
-    if (
-      MODULES.some((m) => m.id === id) ||
-      id in moduleRemotes ||
-      id in remoteObjects
-    ) {
-      return setNewModuleError(`Ідентифікатор «${id}» вже зайнято.`);
-    }
-    if (!title || title.length > 80) {
-      return setNewModuleError('Назва: від 1 до 80 символів.');
-    }
-    if (!isAllowedRemoteUrl(url)) {
-      return setNewModuleError('Джерело: https://…, шлях від кореня /… або http://localhost.');
-    }
-    if (!routePath || routePath.length > 120 || !/^\/[a-z0-9][a-z0-9/-]*$/.test(routePath)) {
-      return setNewModuleError('Маршрут: з «/», малі латинські літери, цифри, «-», «/».');
-    }
-    if (!Number.isInteger(order)) {
-      return setNewModuleError('Порядок у меню: ціле число.');
-    }
-    const icon = newModuleIcon.trim();
-    if (icon && !/^[A-Za-z0-9]+$/.test(icon)) {
-      return setNewModuleError('Іконка: ім’я lucide-компонента без пробілів (напр. Video).');
-    }
-
-    const entry: ModuleRemoteEntry = {
-      url,
+    const result = validateRemoteEntryInput({
+      id,
       title,
+      url,
       routePath,
-      nav: [
-        {
-          label: title,
-          location: 'cashier-primary',
-          order,
-          match: routePath,
-          ...(icon ? { icon } : {}),
-        },
-      ],
-      ...(icon ? { icon } : {}),
-    };
+      order,
+      icon: newModuleIcon,
+      takenIds: new Set([...MODULES.map((m) => m.id), ...Object.keys(moduleRemotes), ...Object.keys(remoteObjects)]),
+    });
+    if (!result.ok) return setNewModuleError(result.error);
+    const entry = result.entry;
     setRemoteObjects((prev) => ({ ...prev, [id]: entry }));
     setProbe({ state: 'idle' });
     setNewModuleId('');
