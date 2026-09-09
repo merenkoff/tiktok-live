@@ -527,6 +527,7 @@ class PosApi {
       unit_cost_cents?: number | null;
       size?: string;
       color?: string;
+      sku?: string | null;
       barcode?: string | null;
       line_note?: string | null;
     }

@@ -42,6 +42,7 @@ type PlaceholderLine = {
   unit_cost_cents?: number;
   size: string;
   color: string;
+  sku: string;
   barcode: string;
 };
 
@@ -86,6 +87,7 @@ export function StockActionPage({ type }: Props) {
   const [stubCost, setStubCost] = useState('');
   const [stubSize, setStubSize] = useState('');
   const [stubColor, setStubColor] = useState('');
+  const [stubSku, setStubSku] = useState('');
   const [stubBarcode, setStubBarcode] = useState('');
   const [similarWarn, setSimilarWarn] = useState<string[]>([]);
   const [gtinHint, setGtinHint] = useState<GtinHint | null>(null);
@@ -178,6 +180,7 @@ export function StockActionPage({ type }: Props) {
     const barcodeLike = looksLikeBarcode(query);
     setStubName(barcodeLike ? '' : query);
     setStubBarcode(barcodeLike ? query : '');
+    setStubSku('');
     setStubQty('1');
     setStubPrice('');
     setStubCost('');
@@ -291,6 +294,7 @@ export function StockActionPage({ type }: Props) {
         unit_cost_cents: unitCostCents,
         size,
         color,
+        sku: stubSku.trim(),
         barcode: stubBarcode.trim(),
       },
     ]);
@@ -367,6 +371,7 @@ export function StockActionPage({ type }: Props) {
             unit_cost_cents: line.unit_cost_cents ?? null,
             size: line.size,
             color: line.color,
+            sku: line.sku || null,
             barcode: line.barcode || null,
           });
           continue;
@@ -819,13 +824,23 @@ export function StockActionPage({ type }: Props) {
                 className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2.5 text-sm"
               />
             </label>
-            <label className="block space-y-1 sm:col-span-2">
+            <label className="block space-y-1">
+              <span className="text-sm text-[#6E6E6E]">Артикул (SKU)</span>
+              <input
+                value={stubSku}
+                onChange={(e) => setStubSku(e.target.value)}
+                className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2.5 text-sm"
+              />
+              <span className="block text-xs text-[#9A9A9A]">код з бирки постачальника</span>
+            </label>
+            <label className="block space-y-1">
               <span className="text-sm text-[#6E6E6E]">Штрихкод</span>
               <input
                 value={stubBarcode}
                 onChange={(e) => onStubBarcodeChange(e.target.value)}
                 className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2.5 text-sm"
               />
+              <span className="block text-xs text-[#9A9A9A]">те, що читає сканер</span>
             </label>
           </div>
           <div className="flex flex-wrap gap-2">

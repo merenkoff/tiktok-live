@@ -322,8 +322,14 @@ export function ProductsPage() {
               <input className={fieldClass} placeholder="Розмір" value={size} onChange={(e) => setSize(e.target.value)} />
               <input className={fieldClass} placeholder="Ціна, грн" value={price} onChange={(e) => setPrice(e.target.value)} />
               <input className={fieldClass} placeholder="Залишок" value={qty} onChange={(e) => setQty(e.target.value)} />
-              <input className={fieldClass} placeholder="Barcode" value={barcode} onChange={(e) => setBarcode(e.target.value)} />
-              <input className={`${fieldClass} sm:col-span-2`} placeholder="SKU" value={sku} onChange={(e) => setSku(e.target.value)} />
+              <label className="block space-y-1">
+                <span className="text-xs text-sq-secondary">Артикул (SKU) — ваш внутрішній код</span>
+                <input className={fieldClass} value={sku} onChange={(e) => setSku(e.target.value)} />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs text-sq-secondary">Штрихкод — те, що читає сканер</span>
+                <input className={fieldClass} value={barcode} onChange={(e) => setBarcode(e.target.value)} />
+              </label>
               <button type="submit" className="sq-btn-primary sm:col-span-2 py-2.5 text-sm">
                 Зберегти
               </button>
@@ -440,8 +446,8 @@ function VariantsTable({ variants }: { variants: ProductVariant[] }) {
             <th className="py-1 pr-2 font-medium">Варіант</th>
             <th className="py-1 pr-2 font-medium">Ціна</th>
             <th className="py-1 pr-2 font-medium">Залишок</th>
-            <th className="py-1 pr-2 font-medium">Barcode</th>
-            <th className="py-1 font-medium">SKU</th>
+            <th className="py-1 pr-2 font-medium">Артикул</th>
+            <th className="py-1 font-medium">Штрихкод</th>
           </tr>
         </thead>
         <tbody>
@@ -452,8 +458,8 @@ function VariantsTable({ variants }: { variants: ProductVariant[] }) {
               </td>
               <td className="py-2 pr-2">{formatUah(v.price_cents)}</td>
               <td className="py-2 pr-2">{v.quantity}</td>
-              <td className="py-2 pr-2 font-mono text-xs">{v.barcode || '—'}</td>
-              <td className="py-2 font-mono text-xs">{v.sku || '—'}</td>
+              <td className="py-2 pr-2 font-mono text-xs">{v.sku || '—'}</td>
+              <td className="py-2 font-mono text-xs">{v.barcode || '—'}</td>
             </tr>
           ))}
         </tbody>
@@ -801,26 +807,30 @@ function EditProductInline({
               }}
             />
             <div className="grid sm:grid-cols-2 gap-2">
-              <input
-                className={fieldClass}
-                value={v.barcode ?? ''}
-                onChange={(e) => {
-                  const next = [...variants];
-                  next[idx] = { ...v, barcode: e.target.value };
-                  setVariants(next);
-                }}
-                placeholder="Barcode"
-              />
-              <input
-                className={fieldClass}
-                value={v.sku ?? ''}
-                onChange={(e) => {
-                  const next = [...variants];
-                  next[idx] = { ...v, sku: e.target.value };
-                  setVariants(next);
-                }}
-                placeholder="SKU"
-              />
+              <label className="block space-y-1">
+                <span className="text-xs text-sq-secondary">Артикул (SKU)</span>
+                <input
+                  className={fieldClass}
+                  value={v.sku ?? ''}
+                  onChange={(e) => {
+                    const next = [...variants];
+                    next[idx] = { ...v, sku: e.target.value };
+                    setVariants(next);
+                  }}
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs text-sq-secondary">Штрихкод</span>
+                <input
+                  className={fieldClass}
+                  value={v.barcode ?? ''}
+                  onChange={(e) => {
+                    const next = [...variants];
+                    next[idx] = { ...v, barcode: e.target.value };
+                    setVariants(next);
+                  }}
+                />
+              </label>
             </div>
           </div>
         ))}
