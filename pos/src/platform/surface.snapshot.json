@@ -1,5 +1,5 @@
 {
-  "platformVersion": 1,
+  "platformVersion": 2,
   "exports": {
     "platform": [
       "DEFAULT_RECEIPT_PAPER_WIDTH",
@@ -39,6 +39,7 @@
       "loadLastStoreSlug",
       "printReceipt",
       "refundLineAmount",
+      "registerOfflineModules",
       "resolveNavIcon",
       "resolveTagColorHex",
       "saleRowFromDetail",
@@ -49,6 +50,7 @@
       "useAuthStore",
       "useCartStore",
       "useEnabledModules",
+      "useOfflineStatus",
       "usePosShell",
       "usePrintableReceipt"
     ],

@@ -656,6 +656,19 @@ class PosApi {
     await this.client.delete(`/stock/documents/${documentId}`);
   }
 
+  /**
+   * Submit a till count sheet as a draft `inventory` document (roadmap #12
+   * track 3). Idempotent on `client_uuid`: a retry returns the same document.
+   */
+  async submitStockCount(payload: {
+    client_uuid: string;
+    note?: string | null;
+    lines: Array<{ variant_id: number; counted_qty: number }>;
+  }): Promise<StockDocument> {
+    const { data } = await this.client.post<StockDocument>('/stock/counts', payload);
+    return data;
+  }
+
   async getGtinCache(
     code: string
   ): Promise<

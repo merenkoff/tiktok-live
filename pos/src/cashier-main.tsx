@@ -8,7 +8,8 @@ import { HashRouter } from 'react-router-dom';
 import { CashierApp } from './CashierApp';
 import { PosShellContext } from '@pos/platform';
 import { enableOfflinePos } from './offline/enabled';
-import { applyModuleRemotes } from './modules/registry';
+import { applyModuleRemotes, allModules } from './modules/registry';
+import { registerOfflineModules } from '@pos/platform';
 import { getAppliedRemotes } from '@pos/platform';
 import { createCacheFirstSync, startModuleRemoteUpdateChecks } from './modules/desktopRemotes';
 import { syncModuleRemote, moduleRemoteUrl, pruneModuleRemotes } from './lib/moduleRemotes';
@@ -28,6 +29,10 @@ maybeStartTelemetryBeacon();
 void applyModuleRemotes({
   syncRemote: createCacheFirstSync(syncModuleRemote, moduleRemoteUrl),
 }).finally(() => {
+  // Hooks of modules that keep their own offline data (roadmap #12 track 3):
+  // registered before the first render so the offline runtime's first tick
+  // already syncs and counts them.
+  registerOfflineModules(allModules());
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
       <PosShellContext.Provider value="cashier">

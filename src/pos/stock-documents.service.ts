@@ -47,6 +47,8 @@ export interface StockDocument {
   posted_at: Date | null;
   reversed_at: Date | null;
   reversal_of_id: number | null;
+  /** Set on documents submitted idempotently from the till (roadmap #12 track 3). */
+  client_uuid?: string | null;
   created_at: Date;
   updated_at: Date;
   lines?: StockDocumentLine[];
@@ -83,6 +85,7 @@ function mapDoc(row: Record<string, unknown>): StockDocument {
     posted_at: (row.posted_at as Date | null) ?? null,
     reversed_at: (row.reversed_at as Date | null) ?? null,
     reversal_of_id: row.reversal_of_id == null ? null : Number(row.reversal_of_id),
+    client_uuid: row.client_uuid == null ? null : String(row.client_uuid),
     created_at: row.created_at as Date,
     updated_at: row.updated_at as Date,
   };
@@ -1147,4 +1150,120 @@ export async function sumMovements(storeId: number, variantId: number): Promise<
     [storeId, variantId]
   );
   return Number(result.rows[0].total);
+}
+
+/** One counted line of a till count sheet (roadmap #12 track 3). */
+export interface CountLineInput {
+  variantId: number;
+  countedQty: number;
+}
+
+export const MAX_COUNT_LINES = 2000;
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Submit a count sheet rung up on the till as a **draft** `inventory` document
+ * (roadmap #12 track 3, TechDocs/POS_MODULE_OFFLINE_DATA.md).
+ *
+ * One request, idempotent on `clientUuid`: a retried submission (the till lost
+ * the response, or restarted before recording it) returns the document the
+ * first attempt created — `created: false` — never a second one. `system_qty`
+ * is captured at submission time, like `addBulkInventoryLines`; the owner can
+ * refresh it before posting. Nothing here touches stock: posting stays an
+ * owner action on the web (`postDocument`).
+ */
+export async function submitCount(params: {
+  storeId: number;
+  staffId: number;
+  clientUuid: string;
+  note?: string | null;
+  lines: CountLineInput[];
+}): Promise<{ document: StockDocument; created: boolean }> {
+  const clientUuid = params.clientUuid.trim().toLowerCase();
+  if (!UUID_RE.test(clientUuid)) throw new Error('client_uuid must be a UUID');
+  if (params.lines.length === 0) throw new Error('lines required');
+  if (params.lines.length > MAX_COUNT_LINES) {
+    throw new Error(`too many lines (max ${MAX_COUNT_LINES})`);
+  }
+  const byVariant = new Map<number, number>();
+  for (const line of params.lines) {
+    if (!Number.isInteger(line.variantId) || line.variantId <= 0) {
+      throw new Error('variant_id must be a positive integer');
+    }
+    if (!Number.isInteger(line.countedQty) || line.countedQty < 0) {
+      throw new Error('counted_qty must be a non-negative integer');
+    }
+    if (byVariant.has(line.variantId)) throw new Error(`duplicate variant_id ${line.variantId}`);
+    byVariant.set(line.variantId, line.countedQty);
+  }
+
+  const findExisting = async (client: DbClient): Promise<StockDocument | null> => {
+    const existing = await client.query(
+      `SELECT * FROM pos_stock_documents WHERE store_id = $1 AND client_uuid = $2`,
+      [params.storeId, clientUuid]
+    );
+    if (existing.rows.length === 0) return null;
+    const doc = mapDoc(existing.rows[0]);
+    doc.lines = await loadLines(client, doc.id);
+    return doc;
+  };
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const already = await findExisting(client);
+    if (already) {
+      await client.query('COMMIT');
+      return { document: already, created: false };
+    }
+
+    const variantIds = [...byVariant.keys()];
+    const variants = await client.query(
+      `SELECT v.id AS variant_id, s.quantity
+       FROM pos_variants v
+       JOIN pos_stock s ON s.variant_id = v.id AND s.store_id = v.store_id
+       WHERE v.store_id = $1 AND v.is_active = TRUE AND v.id = ANY($2)`,
+      [params.storeId, variantIds]
+    );
+    if (variants.rows.length !== variantIds.length) {
+      const known = new Set(variants.rows.map((r) => Number(r.variant_id)));
+      const missing = variantIds.filter((id) => !known.has(id));
+      throw new Error(`unknown variant_id: ${missing.join(', ')}`);
+    }
+
+    const docNumber = await nextDocNumber(client, params.storeId, 'inventory');
+    const inserted = await client.query(
+      `INSERT INTO pos_stock_documents
+         (store_id, type, status, doc_number, occurred_at, note, created_by, client_uuid)
+       VALUES ($1, 'inventory', 'draft', $2, NOW(), $3, $4, $5)
+       RETURNING *`,
+      [params.storeId, docNumber, params.note?.trim() || null, params.staffId, clientUuid]
+    );
+    const doc = mapDoc(inserted.rows[0]);
+
+    for (const row of variants.rows) {
+      const variantId = Number(row.variant_id);
+      await client.query(
+        `INSERT INTO pos_stock_document_lines
+           (document_id, store_id, variant_id, quantity, system_qty, counted_qty)
+         VALUES ($1, $2, $3, 0, $4, $5)`,
+        [doc.id, params.storeId, variantId, Number(row.quantity), byVariant.get(variantId)]
+      );
+    }
+    await client.query('COMMIT');
+    doc.lines = await loadLines(pool, doc.id);
+    return { document: doc, created: true };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    // Two retries of the same sheet racing each other: the loser hits the
+    // partial unique index on (store_id, client_uuid) — hand it the winner's document.
+    if (typeof error === 'object' && error !== null && (error as { code?: string }).code === '23505') {
+      const winner = await findExisting(pool);
+      if (winner) return { document: winner, created: false };
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
 }

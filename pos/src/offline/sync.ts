@@ -32,6 +32,7 @@ import {
   replaceLocalCustomer,
 } from './repository';
 import { useOfflineStatus } from './status';
+import { syncOfflineModules } from './moduleHooks';
 
 let started = false;
 let running = false;
@@ -146,6 +147,16 @@ export async function runSync(): Promise<void> {
         useOfflineStatus.getState().setLastError(verdict.message);
       }
     }
+
+    // Feature modules with their own queues (roadmap #12 track 3) go after the
+    // shell's rows — a count sheet may reference a customer or sale that had
+    // to land first. A module that throws is reported and skipped.
+    await syncOfflineModules((id, error) => {
+      if (!isNetworkError(error)) {
+        const message = error instanceof Error ? error.message : String(error);
+        useOfflineStatus.getState().setLastError(`Модуль ${id}: ${message}`);
+      }
+    });
 
     try {
       await refreshSnapshot();

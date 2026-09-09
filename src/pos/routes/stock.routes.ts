@@ -31,6 +31,38 @@ export function registerStockRoutes(fastify: FastifyInstance): void {
     }
   });
 
+  // A count sheet from the till (roadmap #12 track 3). Any staff member — the
+  // seller walking the floor — but only in a store with the `stock` module:
+  // that is where the owner reviews and posts the draft. 201 on first
+  // submission, 200 with the same document on a retry of the same client_uuid.
+  fastify.post('/stock/counts', async (request, reply) => {
+    const auth = await ensureModule(request, reply, 'stock');
+    if (!auth) return;
+    const body = request.body as {
+      client_uuid?: string;
+      note?: string | null;
+      lines?: Array<{ variant_id?: number; counted_qty?: number }>;
+    };
+    if (typeof body.client_uuid !== 'string' || !Array.isArray(body.lines)) {
+      return reply.code(400).send({ error: 'client_uuid and lines required' });
+    }
+    try {
+      const { document, created } = await stockDocumentsService.submitCount({
+        storeId: auth.storeId,
+        staffId: auth.staffId,
+        clientUuid: body.client_uuid,
+        note: body.note ?? null,
+        lines: body.lines.map((l) => ({
+          variantId: Number(l?.variant_id),
+          countedQty: Number(l?.counted_qty),
+        })),
+      });
+      return reply.code(created ? 201 : 200).send(document);
+    } catch (error) {
+      return reply.code(400).send({ error: errorMessage(error) });
+    }
+  });
+
   fastify.get('/stock/low', async (request, reply) => {
     const auth = await ensureModule(request, reply, 'stock', { owner: true });
     if (!auth) return;

@@ -430,6 +430,8 @@ export interface StockDocument {
   posted_at: string | null;
   reversed_at: string | null;
   reversal_of_id: number | null;
+  /** Set on documents submitted idempotently from the till (roadmap #12 track 3). */
+  client_uuid?: string | null;
   created_at: string;
   updated_at: string;
   lines?: StockDocumentLine[];

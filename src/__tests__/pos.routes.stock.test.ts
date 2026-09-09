@@ -517,4 +517,78 @@ describe.skipIf(!hasDb)('POS stock routes', () => {
       expect(res.statusCode).toBe(200);
     });
   });
+
+  describe('POST /stock/counts — a count sheet from the till (roadmap #12 track 3)', () => {
+    const uuid = '3f2c9b3e-9a5e-4c3b-8f1d-6f0a1b2c3d4e';
+    let counted: TestProduct;
+
+    beforeAll(async () => {
+      counted = await seedProduct(store.storeId, { name: 'Counted tee', quantity: 4 });
+    });
+
+    it('lets any staff member submit a draft inventory document, and returns the same one on a retry', async () => {
+      const payload = {
+        client_uuid: uuid,
+        note: 'зал',
+        lines: [{ variant_id: counted.variantId, counted_qty: 7 }],
+      };
+      const first = await app.inject({
+        method: 'POST',
+        url: '/api/pos/stock/counts',
+        headers: auth(store.sellerToken),
+        payload,
+      });
+      expect(first.statusCode).toBe(201);
+      const doc = first.json();
+      expect(doc).toMatchObject({
+        type: 'inventory',
+        status: 'draft',
+        client_uuid: uuid,
+        note: 'зал',
+        created_by: store.sellerId,
+      });
+      expect(doc.lines).toHaveLength(1);
+      expect(doc.lines[0]).toMatchObject({ variant_id: counted.variantId, counted_qty: 7, system_qty: 4 });
+
+      const again = await app.inject({
+        method: 'POST',
+        url: '/api/pos/stock/counts',
+        headers: auth(store.sellerToken),
+        payload: { ...payload, lines: [{ variant_id: counted.variantId, counted_qty: 99 }] },
+      });
+      expect(again.statusCode).toBe(200);
+      expect(again.json().id).toBe(doc.id);
+      expect(again.json().lines[0].counted_qty).toBe(7);
+    });
+
+    it('400s an unknown variant, a malformed uuid and an empty sheet', async () => {
+      const post = (payload: unknown) =>
+        app.inject({ method: 'POST', url: '/api/pos/stock/counts', headers: auth(store.sellerToken), payload });
+      const unknown = await post({ client_uuid: '9f2c9b3e-9a5e-4c3b-8f1d-6f0a1b2c3d4e', lines: [{ variant_id: 999999, counted_qty: 1 }] });
+      expect(unknown.statusCode).toBe(400);
+      expect(unknown.json().error).toMatch(/unknown variant_id/);
+      expect((await post({ client_uuid: 'nope', lines: [{ variant_id: counted.variantId, counted_qty: 1 }] })).statusCode).toBe(400);
+      expect((await post({ client_uuid: '9f2c9b3e-9a5e-4c3b-8f1d-6f0a1b2c3d4f', lines: [] })).statusCode).toBe(400);
+      expect((await post({ lines: [] })).statusCode).toBe(400);
+    });
+
+    it('404s in a store that has the stock module off — the owner would have nowhere to post it', async () => {
+      const saved = await pool.query<{ enabled_modules: string[] }>(
+        `SELECT enabled_modules FROM pos_stores WHERE id = $1`,
+        [store.storeId]
+      );
+      await setEnabledModules(store.storeId, ['catalog-checkout']);
+      try {
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/pos/stock/counts',
+          headers: auth(store.sellerToken),
+          payload: { client_uuid: '9f2c9b3e-9a5e-4c3b-8f1d-6f0a1b2c3d50', lines: [{ variant_id: counted.variantId, counted_qty: 1 }] },
+        });
+        expect(res.statusCode).toBe(404);
+      } finally {
+        await setEnabledModules(store.storeId, saved.rows[0].enabled_modules);
+      }
+    });
+  });
 });
