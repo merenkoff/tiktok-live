@@ -19,7 +19,7 @@ import { ensurePosAuth, ensurePosOwner } from '../core/auth.js';
 import { isSecretsKeyConfigured } from '../core/secrets.js';
 import { asFiscalError, cashierMessage, supportCode } from '../fiscal/errors.js';
 import * as fiscalService from '../fiscal/fiscal.service.js';
-import { hasProvider } from '../fiscal/providers/index.js';
+import { getProvider, hasProvider } from '../fiscal/providers/index.js';
 import * as fiscalSettings from '../fiscal/settings.service.js';
 import * as shifts from '../fiscal/shifts.service.js';
 import type { FiscalSettingsPatch } from '../fiscal/types.js';
@@ -94,6 +94,39 @@ export function registerFiscalRoutes(fastify: FastifyInstance): void {
       }
       request.log.error({ err: error }, 'Fiscal settings update failed');
       return reply.code(500).send({ error: 'fiscal_settings_failed' });
+    }
+  });
+
+  /**
+   * "Перевірити з'єднання" — deliberately does NOT require `enabled: true`.
+   *
+   * The whole point is to let an owner test credentials before flipping the
+   * switch on. It never mutates anything at the provider (`FiscalProvider.probe`
+   * is documented as safe to call from a settings screen), so testing ahead of
+   * enabling is not a safety concern — the settings screen already blocks
+   * `enabled: true` until this or a later probe succeeds anyway.
+   */
+  fastify.post('/fiscal/test-connection', async (request, reply) => {
+    const auth = await ensurePosOwner(request, reply);
+    if (!auth) return;
+
+    const creds = await fiscalSettings.getFiscalCredentials(auth.storeId, {
+      requireEnabled: false,
+    });
+    if (!creds) {
+      return reply.code(409).send({
+        error: 'not_configured',
+        message: 'Оберіть провайдера і збережіть дані доступу перед перевіркою',
+        support_code: 'FS-NOT-CONFIGURED',
+      });
+    }
+
+    try {
+      const provider = getProvider(creds.provider);
+      const probe = await provider.probe(creds, AbortSignal.timeout(SHIFT_TIMEOUT_MS));
+      return probe;
+    } catch (error) {
+      return replyFiscalError(reply, error, 'Не вдалося перевірити з\'єднання з ПРРО');
     }
   });
 

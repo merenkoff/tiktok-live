@@ -73,10 +73,12 @@ export async function getFiscalSettings(storeId: number): Promise<PosFiscalSetti
  * empty licence", which is a much harder support call.
  */
 export async function getFiscalCredentials(
-  storeId: number
+  storeId: number,
+  opts: { requireEnabled?: boolean } = {}
 ): Promise<FiscalCredentials | null> {
+  const requireEnabled = opts.requireEnabled ?? true;
   const settings = await getFiscalSettings(storeId);
-  if (!settings || !settings.enabled || !settings.provider) return null;
+  if (!settings || (requireEnabled && !settings.enabled) || !settings.provider) return null;
 
   const secrets = settings.secrets_encrypted
     ? decryptSecrets(storeId, settings.provider, settings.secrets_encrypted)

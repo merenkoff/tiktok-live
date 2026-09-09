@@ -7,7 +7,9 @@ import {
   CORE_MODULE_IDS,
   DEFAULT_ENABLED_MODULES,
   TOGGLEABLE_MODULE_IDS,
+  assertSingleFiscalRemote,
   effectiveEnabledModules,
+  FiscalRemoteConflictError,
   isAllowedRemoteUrl,
   isCoreModuleId,
   isKnownToggleableModuleId,
@@ -264,5 +266,49 @@ describe('sanitizeModuleRemotes', () => {
         },
       })
     ).toEqual({});
+  });
+});
+
+describe('assertSingleFiscalRemote', () => {
+  it('allows zero fiscal-* entries', () => {
+    expect(() => assertSingleFiscalRemote({}, null)).not.toThrow();
+    expect(() =>
+      assertSingleFiscalRemote({ returns: 'https://cdn.example.com/returns.js' }, 'checkbox')
+    ).not.toThrow();
+  });
+
+  it('allows exactly one fiscal-* entry with no provider configured yet', () => {
+    // The owner may add the module remote before saving the provider
+    // selection, or the other way round — neither order should be rejected.
+    expect(() =>
+      assertSingleFiscalRemote(
+        { 'fiscal-checkbox': { url: 'https://cdn/x.js', title: 'x', routePath: '/fiscal', nav: [] } },
+        null
+      )
+    ).not.toThrow();
+  });
+
+  it('allows one fiscal-* entry that matches the configured provider', () => {
+    expect(() =>
+      assertSingleFiscalRemote(
+        { 'fiscal-checkbox': { url: 'https://cdn/x.js', title: 'x', routePath: '/fiscal', nav: [] } },
+        'checkbox'
+      )
+    ).not.toThrow();
+  });
+
+  it('rejects two fiscal-* entries', () => {
+    const remotes = {
+      'fiscal-checkbox': { url: 'https://cdn/a.js', title: 'a', routePath: '/fiscal', nav: [] },
+      'fiscal-vchasno': { url: 'https://cdn/b.js', title: 'b', routePath: '/fiscal', nav: [] },
+    };
+    expect(() => assertSingleFiscalRemote(remotes, 'checkbox')).toThrow(FiscalRemoteConflictError);
+  });
+
+  it('rejects a fiscal-* entry that disagrees with the configured provider', () => {
+    const remotes = {
+      'fiscal-vchasno': { url: 'https://cdn/x.js', title: 'x', routePath: '/fiscal', nav: [] },
+    };
+    expect(() => assertSingleFiscalRemote(remotes, 'checkbox')).toThrow(FiscalRemoteConflictError);
   });
 });

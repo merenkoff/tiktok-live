@@ -9,13 +9,17 @@
 Каждая фаза выполняется отдельным планом; после завершения фазы **обновить
 таблицу прогресса в этом файле**.
 
-Статус: **фазы 1, 2а, 3, 4 и 5 завершены** — бэкенд фискализации и клиент
+Статус: **фазы 1, 2а, 3, 4, 5 и 6 завершены** — бэкенд фискализации и клиент
 готовы: схема (миграция 024), шифрование секретов, настройки, контракт
 `FiscalProvider`, таксономия ошибок, маппинг, лимитер, смены, реестр документов,
 оркестрация чекаута, а на клиенте — три исхода на кассе, блокировка офлайн-продажи,
-ремонт outbox, бейджи в «Чеках» и карточка настроек. **Ни один адаптер реального
-провайдера не написан**, поэтому код дормантен: `BUILT_IN` в
-`providers/index.ts` пуст.
+ремонт outbox, бейджи в «Чеках» и карточка настроек. Фаза 6 добавила
+провайдеро-специфичный UI как online-only бандл (`fiscal-checkbox`,
+по образцу `tiktok-live`) — его страницы `/admin/fiscal` и `/fiscal` уже
+работают на `FakeFiscalProvider` и проверены живьём в браузере. **Ни один
+адаптер реального провайдера не написан**, поэтому код дормантен: `BUILT_IN` в
+`providers/index.ts` пуст — бандл честно показывает 409 `not_configured` на
+«Перевірити з'єднання», пока это так.
 
 > **Перед деплоем фазы 4 обязательно проверить, что ни один магазин уже не
 > включил фискализацию.** Владелец мог сохранить `{enabled:true,
@@ -27,12 +31,11 @@
 > Должно быть пусто. Экран настроек теперь отдаёт `adapter_available`, чтобы
 > фаза 6 предупреждала об этом сама.
 
-Следующий шаг — **фаза 6** (бандл `fiscal-checkbox`) либо **фаза 2б** (сам
-адаптер Checkbox). Обе требуют песочницы. Порядок работ изменён относительно
-исходного плана: адаптер Checkbox
-(2б) уехал в конец, потому что классификация его ошибок из публичной спеки не
-выводится — см. [«Что дала спека»](#что-дала-спека-скачана-2026-09-09-21064-131-путь-249-схем).
-Фазы 5 и 6 песочницы тоже не требуют.
+Следующий шаг — **фаза 2б** (сам адаптер Checkbox), единственная оставшаяся
+фаза, которая требует песочницы. Порядок работ изменён относительно исходного
+плана: адаптер Checkbox (2б) уехал в конец, потому что классификация его
+ошибок из публичной спеки не выводится — см. [«Что дала спека»](#что-дала-спека-скачана-2026-09-09-21064-131-путь-249-схем).
+Фазы 5 и 6 песочницы не требовали.
 
 ---
 
@@ -683,7 +686,7 @@ pos/src/modules/fiscal-checkbox/  # тонкий
 | **3** | Смены, `runtime.ts`, кроны | ✅ |
 | **4** | Оркестрация чекаута + реестр + фикс 409 | ✅ |
 | **5** | Хост-фронт: фискальные поля везде + офлайн-блок | ✅ |
-| **6** | Бандлы `fiscal-core` + `fiscal-checkbox`, `posRequest`, гарды | ⬜ |
+| **6** | Бандлы `fiscal-core` + `fiscal-checkbox`, `posRequest`, гарды | ✅ |
 | **7** | Обкатка: список внимания, seed, CI-выпуск, ранбук | ⬜ |
 | **8** | Отложенное: `receipt_source='provider'`, Вчасно, офлайн-режим ПРРО, Є-Чек | ⬜ |
 
@@ -855,6 +858,67 @@ DB_HOST=localhost DB_PORT=5434 DB_NAME=tiktok_live DB_USER=postgres DB_PASSWORD=
    выдавал бы себя за код продажи в офлайн-зеркале.
 8. **`FiscalBadge` на `'none'`/`undefined` не рендерит ничего** — именно это
    оставляет экраны нефискального магазина неизменными.
+
+### Что уже лежит в репозитории (фаза 6)
+
+| Файл | Роль |
+|---|---|
+| `src/pos/routes/fiscal.routes.ts` | `POST /fiscal/test-connection` (owner) — зовёт `provider.probe` через `getFiscalCredentials(storeId, {requireEnabled:false})`, не требует включённого тумблера |
+| `src/pos/fiscal/settings.service.ts` | `getFiscalCredentials` — новый опциональный `{requireEnabled?}`, по умолчанию `true` (существующие вызовы не тронуты) |
+| `src/pos/core/modules.ts` | `assertSingleFiscalRemote` + `FiscalRemoteConflictError` — не больше одного `fiscal-*` в `module_remotes`, и его суффикс обязан совпасть с `pos_fiscal_settings.provider`, если тот уже задан |
+| `src/pos/routes/store.routes.ts` | `PATCH /store` зовёт гард перед записью `module_remotes`, 400 при конфликте |
+| `pos/src/services/api.ts` | `PosApi.posRequest<T>(method, path, body?)` — единственный новый символ в `@pos/platform`, дженерик поверх того же `this.client` (та же `baseURL`/`Authorization`/`X-POS-API-Version`), а не метод на эндпоинт — три провайдера × ~10 эндпоинтов не должны стать версией шелла на каждый |
+| `pos/src/modules/fiscal-core/` | Общий код, НЕ модуль (нет `manifest.ts`/`remote-entry.ts`): `types.ts` (зеркало wire-типов), `lib/hostPlatform.ts` (`REQUIRED_HOST_API=['api.posRequest']`, `HostTooOldError`), `lib/diagnostics.ts` (коды поддержки `FC-…`), `data/fiscalApi.ts`, `components/{SecretsForm,ShiftPanel,FiscalErrorCard}.tsx`, `hooks/useFiscalStatus.ts` |
+| `pos/src/modules/fiscal-checkbox/` | Тонкий бандл: `manifest.ts` (`id:'fiscal-checkbox'`, `alwaysEnabled:true`, роуты `/fiscal/*` и admin `fiscal`), `remote-entry.ts`, `secretSpecs.ts` (`CHECKBOX_SECRET_SPECS`: `licenceKey`, `cashierPin` — статично, контрактным тестом закреплено под будущий адаптер), `pages/{CheckboxAdminPage,CheckboxTillPage}.tsx` |
+| `pos/vite.fiscal-checkbox-remote.config.ts` | Копия `vite.tiktok-live-remote.config.ts`, `outDir: dist-remotes/fiscal-checkbox` |
+| `pos/scripts/module-tailwind.mjs` | `moduleCss(moduleId, extraContent=[])` — второй, обратно совместимый параметр, чтобы Tailwind-классы `fiscal-core` попали в `style.css` бандла, который его импортирует |
+| `pos/package.json` | `build:fiscal-checkbox-remote`, `serve:fiscal-checkbox-remote` (порт 5005), `check:fiscal-checkbox-css-coverage`; версия `1.1.0` |
+
+Решения, которые легко переизобрести неправильно:
+
+1. **`POST /fiscal/test-connection` намеренно не требует `enabled:true`.** Весь
+   смысл кнопки «Перевірити з'єднання» — дать владельцу проверить креды
+   *перед* тем, как включать тумблер; сам `probe()` документирован как
+   безопасный для вызова с экрана настроек.
+2. **Хост-владеемые настройки** (`enabled`/`provider`/`default_tax_code`/
+   `auto_open_shift`) редактируются только в хостовой `FiscalSettingsCard`
+   (фаза 5); **креды** — только в бандле провайдера, через `PATCH
+   /fiscal/settings` с телом `{secrets:{...}}`, отправленным через `posRequest`
+   в обход узкого `updateFiscalSettings` (его `FiscalSettingsPatch` намеренно
+   не включает `secrets`, чтобы хостовая карточка не могла словить 503). Если
+   бы единственный редактор «включено ли» жил внутри бандла, который не
+   загрузился, магазин не смог бы его выключить.
+3. **`assertSingleFiscalRemote` терпим к порядку бутстрапа**: `null`
+   настроенный провайдер не конфликтует ни с чем — владелец может добавить
+   `fiscal-checkbox` в `module_remotes` раньше, чем выберет провайдера в
+   настройках (и это подтверждено живым тестом через реальный UI, не мок).
+4. **`fiscal-core` — не модуль.** Не имеет `manifest.ts`/`remote-entry.ts`,
+   иначе `module-release.yml` счёл бы его отдельно выпускаемым; импортируется
+   бандлом относительно (`../fiscal-core/…`), что `check-platform-boundary.mjs`
+   уже разрешает.
+5. **Форма кредов не тянет схему с бэкенда.** Адаптера ещё нет, поэтому
+   `secretSpecs.ts` статично объявляет два поля Checkbox из спеки
+   (`CashierSignInPinCode.pin_code` + заголовок `X-License-Key`); тест на
+   `manifest.test.ts` — тревога, если реальный адаптер фазы 2б заведёт другой
+   набор `secretKeys`.
+6. **`GET /fiscal/status` никогда не бросает** — «не налаштовано» рендерится
+   в `CheckboxTillPage`/`CheckboxAdminPage` как обычное состояние, а не через
+   `FiscalErrorCard` (тот берёт `error: unknown` и предназначен для реально
+   пойманных исключений, например неудачного `POST`).
+7. **Rollup выносит общий чанк между двумя ленивыми страницами бандла**
+   (`FiscalErrorCard-*.js`) — это ожидаемо и безопасно: `sign-remote.mjs`
+   хеширует каждый `.js`/`.css` в `dist-remotes/<id>/`, а не только
+   `remote-entry.js`, так что подпись покрывает и его.
+
+Ручная проверка живьём (без реального Checkbox, на `FakeFiscalProvider`):
+собранный бандл добавлен в `module_remotes` через настоящий UI «Онлайн-модулі»
+и подтверждён прямым запросом в БД; подпись Ed25519 проверена кнопкой
+«Перевірити джерело» («Підпис дійсний · fiscal-checkbox 1.1.0»); `/admin/fiscal`
+и `/fiscal` открыты в браузере против настоящего бэкенда — обе страницы
+рендерятся корректно, «Перевірити з'єднання» честно отдаёт 409
+`FS-NOT-CONFIGURED` (адаптера нет), `/fiscal` показывает «ПРРО не
+налаштовано». Полный автопрогон: бэкенд 794 теста / 54 файла, клиент 461 тест
+/ 51 файл, покрытие 99.17%/97.56%, typecheck/lint чисты на обеих сторонах.
 
 ### Открытые вопросы
 

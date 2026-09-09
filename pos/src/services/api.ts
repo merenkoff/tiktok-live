@@ -456,6 +456,30 @@ class PosApi {
     return data;
   }
 
+  /**
+   * Generic escape hatch for `/api/pos/fiscal/*`, for a provider's own remote
+   * module (`fiscal-checkbox`, …).
+   *
+   * A typed method per endpoint (the `liveSessionToken` / `fiscalSettings`
+   * style below) does not scale here: three providers × ~10 endpoints each
+   * (shift open/close, X/Z-report, cash in/out, test-connection, diagnostics),
+   * evolving on the provider bundle's own cadence — and every named method
+   * added to this class is a platform symbol a provider module's
+   * `hostPlatform.ts` has to probe for, i.e. one more version of the shell it
+   * can no longer run on. One primitive, added once, and the module's own
+   * `fiscalApi.ts` stays typed on its side without costing the shell anything
+   * further. Reuses `this.client` directly, so baseURL / bearer token /
+   * `X-POS-API-Version` are inherited from the interceptors above for free.
+   */
+  async posRequest<T>(
+    method: 'get' | 'post' | 'patch' | 'delete',
+    path: string,
+    body?: unknown
+  ): Promise<T> {
+    const { data } = await this.client.request<T>({ method, url: path, data: body });
+    return data;
+  }
+
   async liveSettings(): Promise<LiveSettings> {
     const { data } = await this.client.get<LiveSettings>('/live/settings');
     return data;
