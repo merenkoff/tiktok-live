@@ -23,6 +23,7 @@ export interface StockDocumentLine {
   placeholder_name: string | null;
   placeholder_size: string;
   placeholder_color: string;
+  placeholder_sku: string | null;
   placeholder_barcode: string | null;
   placeholder_price_cents: number | null;
   product_name?: string;
@@ -102,6 +103,7 @@ function mapLine(row: Record<string, unknown>): StockDocumentLine {
     placeholder_name: row.placeholder_name == null ? null : String(row.placeholder_name),
     placeholder_size: row.placeholder_size == null ? '' : String(row.placeholder_size),
     placeholder_color: row.placeholder_color == null ? '' : String(row.placeholder_color),
+    placeholder_sku: row.placeholder_sku == null ? null : String(row.placeholder_sku),
     placeholder_barcode: row.placeholder_barcode == null ? null : String(row.placeholder_barcode),
     placeholder_price_cents:
       row.placeholder_price_cents == null ? null : Number(row.placeholder_price_cents),
@@ -410,6 +412,7 @@ export async function addPlaceholderLine(params: {
   unitCostCents?: number | null;
   size?: string;
   color?: string;
+  sku?: string | null;
   barcode?: string | null;
   lineNote?: string | null;
 }): Promise<StockDocumentLine> {
@@ -423,6 +426,7 @@ export async function addPlaceholderLine(params: {
   const size = (params.size ?? '').trim();
   const color = (params.color ?? '').trim();
   const barcode = params.barcode?.trim() || null;
+  const sku = params.sku?.trim() || null;
 
   const client = await pool.connect();
   try {
@@ -451,8 +455,8 @@ export async function addPlaceholderLine(params: {
       `INSERT INTO pos_stock_document_lines
          (document_id, store_id, variant_id, quantity, unit_cost_cents, line_note,
           is_placeholder, placeholder_name, placeholder_size, placeholder_color,
-          placeholder_barcode, placeholder_price_cents)
-       VALUES ($1, $2, NULL, $3, $4, $5, TRUE, $6, $7, $8, $9, $10)
+          placeholder_sku, placeholder_barcode, placeholder_price_cents)
+       VALUES ($1, $2, NULL, $3, $4, $5, TRUE, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
       [
         params.documentId,
@@ -463,6 +467,7 @@ export async function addPlaceholderLine(params: {
         name,
         size,
         color,
+        sku,
         barcode,
         params.priceCents,
       ]
@@ -554,6 +559,7 @@ export async function updateLine(params: {
   placeholderName?: string;
   placeholderSize?: string;
   placeholderColor?: string;
+  placeholderSku?: string | null;
   placeholderBarcode?: string | null;
   placeholderPriceCents?: number;
 }): Promise<StockDocumentLine> {
@@ -579,6 +585,7 @@ export async function updateLine(params: {
     let placeholderName = row.placeholder_name == null ? null : String(row.placeholder_name);
     let placeholderSize = row.placeholder_size == null ? '' : String(row.placeholder_size);
     let placeholderColor = row.placeholder_color == null ? '' : String(row.placeholder_color);
+    let placeholderSku = row.placeholder_sku == null ? null : String(row.placeholder_sku);
     let placeholderBarcode =
       row.placeholder_barcode == null ? null : String(row.placeholder_barcode);
     let placeholderPrice =
@@ -597,6 +604,9 @@ export async function updateLine(params: {
       }
       if (params.placeholderSize !== undefined) placeholderSize = params.placeholderSize.trim();
       if (params.placeholderColor !== undefined) placeholderColor = params.placeholderColor.trim();
+      if (params.placeholderSku !== undefined) {
+        placeholderSku = params.placeholderSku?.trim() || null;
+      }
       if (params.placeholderBarcode !== undefined) {
         placeholderBarcode = params.placeholderBarcode?.trim() || null;
       }
@@ -639,9 +649,10 @@ export async function updateLine(params: {
            placeholder_name = $6,
            placeholder_size = $7,
            placeholder_color = $8,
-           placeholder_barcode = $9,
-           placeholder_price_cents = $10
-       WHERE id = $11`,
+           placeholder_sku = $9,
+           placeholder_barcode = $10,
+           placeholder_price_cents = $11
+       WHERE id = $12`,
       [
         quantity,
         unitCost,
@@ -651,6 +662,7 @@ export async function updateLine(params: {
         placeholderName,
         placeholderSize,
         placeholderColor,
+        placeholderSku,
         placeholderBarcode,
         placeholderPrice,
         params.lineId,
@@ -886,6 +898,7 @@ export async function postDocument(params: {
         const barcode = line.placeholder_barcode
           ? String(line.placeholder_barcode).trim()
           : null;
+        const sku = line.placeholder_sku ? String(line.placeholder_sku).trim() : null;
         if (barcode) {
           const collision = await client.query(
             `SELECT id FROM pos_variants
@@ -911,6 +924,7 @@ export async function postDocument(params: {
               {
                 size: String(line.placeholder_size ?? ''),
                 color: String(line.placeholder_color ?? ''),
+                sku,
                 barcode,
                 price_cents: priceCents,
                 cost_cents: unitCost,

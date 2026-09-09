@@ -316,6 +316,7 @@ export interface StockDocumentLine {
   placeholder_name?: string | null;
   placeholder_size?: string;
   placeholder_color?: string;
+  placeholder_sku?: string | null;
   placeholder_barcode?: string | null;
   placeholder_price_cents?: number | null;
   product_name?: string;

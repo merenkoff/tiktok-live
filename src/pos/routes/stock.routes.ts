@@ -219,6 +219,7 @@ export function registerStockRoutes(fastify: FastifyInstance): void {
         price_cents?: number;
         size?: string;
         color?: string;
+        sku?: string | null;
         barcode?: string | null;
         line_note?: string | null;
       };
@@ -236,6 +237,7 @@ export function registerStockRoutes(fastify: FastifyInstance): void {
         unitCostCents: body.unit_cost_cents,
         size: body.size,
         color: body.color,
+        sku: body.sku,
         barcode: body.barcode,
         lineNote: body.line_note,
       });
@@ -262,6 +264,7 @@ export function registerStockRoutes(fastify: FastifyInstance): void {
         placeholder_name?: string;
         placeholder_size?: string;
         placeholder_color?: string;
+        placeholder_sku?: string | null;
         placeholder_barcode?: string | null;
         placeholder_price_cents?: number;
       };
@@ -276,6 +279,7 @@ export function registerStockRoutes(fastify: FastifyInstance): void {
         placeholderName: body.placeholder_name,
         placeholderSize: body.placeholder_size,
         placeholderColor: body.placeholder_color,
+        placeholderSku: body.placeholder_sku,
         placeholderBarcode: body.placeholder_barcode,
         placeholderPriceCents: body.placeholder_price_cents,
       });
