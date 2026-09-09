@@ -71,9 +71,91 @@ select:focus-visible {
   display: none;
 }
 
+/* Price tags: same off-screen-until-printed arrangement as the receipt. */
+.price-tag-print-area {
+  display: none;
+}
+
 @media print {
   #root {
     display: none;
+  }
+
+  /* One tag per page, so a receipt printer cuts between them exactly as it
+     does between receipts. Height stays automatic, so a long product name
+     grows the tag instead of being clipped. */
+  @page {
+    margin: 0;
+  }
+
+  .price-tag-print-area {
+    display: block;
+  }
+
+  .price-tag {
+    width: 48mm; /* printable area of 58 mm paper */
+    padding: 2mm 0 4mm;
+    margin: 0 auto;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    color: #000;
+    text-align: center;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .price-tag:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .price-tag-print-area[data-paper='80'] .price-tag {
+    width: 72mm;
+  }
+
+  .price-tag-store {
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid #000;
+    padding-bottom: 1mm;
+    margin-bottom: 1.5mm;
+  }
+
+  .price-tag-name {
+    font-size: 11pt;
+    font-weight: 700;
+    line-height: 1.15;
+  }
+
+  .price-tag-variant {
+    font-size: 9pt;
+    margin-top: 0.5mm;
+  }
+
+  /* The one thing read from across the shop. */
+  .price-tag-price {
+    font-size: 22pt;
+    font-weight: 700;
+    margin: 2mm 0;
+  }
+
+  .price-tag-barcode {
+    display: block;
+    width: 100%;
+    height: 14mm;
+  }
+
+  .price-tag-digits {
+    font-family: 'Courier New', monospace;
+    font-size: 9pt;
+    letter-spacing: 1px;
+    margin-top: 0.5mm;
+  }
+
+  .price-tag-sku {
+    font-family: 'Courier New', monospace;
+    font-size: 8pt;
+    margin-top: 1mm;
   }
 
   .receipt-print-area {
