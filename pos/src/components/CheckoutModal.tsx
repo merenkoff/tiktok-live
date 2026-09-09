@@ -2,7 +2,7 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight, X } from 'lucide-react';
 import { formatUah, uahInputToCents } from '../lib/money';
 import { useDragScroll } from '../hooks/useDragScroll';
@@ -15,6 +15,14 @@ interface Props {
   loading: boolean;
   /** Client-generated draft id for the open cart — used as the QR payment reference. */
   saleRef?: string;
+  /**
+   * A failure the cashier must read before doing anything else.
+   *
+   * This modal is an opaque full-screen overlay, so anything rendered behind it
+   * is invisible — a checkout error shown on the cart banner never reaches the
+   * person who needs it.
+   */
+  error?: { message: string; supportCode?: string | null; action?: ReactNode } | null;
   onClose: () => void;
   onConfirm: (payments: SalePaymentInput[]) => void;
 }
@@ -23,7 +31,14 @@ type Step = 'methods' | 'cash' | 'mixed' | 'qr';
 
 type DynamicInvoice = { src: string; invoiceId: string };
 
-export function CheckoutModal({ totalCents, loading, saleRef, onClose, onConfirm }: Props) {
+export function CheckoutModal({
+  totalCents,
+  loading,
+  saleRef,
+  error,
+  onClose,
+  onConfirm,
+}: Props) {
   const [step, setStep] = useState<Step>('methods');
   const [cash, setCash] = useState((totalCents / 100).toFixed(2));
   const [card, setCard] = useState('0');
@@ -143,7 +158,12 @@ export function CheckoutModal({ totalCents, loading, saleRef, onClose, onConfirm
         : null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-white flex flex-col animate-fade-up font-sans text-sq-text">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Оплата"
+      className="fixed inset-0 z-50 bg-white flex flex-col animate-fade-up font-sans text-sq-text"
+    >
       <div className="flex items-center justify-between px-4 py-2">
         <button
           type="button"
@@ -162,6 +182,19 @@ export function CheckoutModal({ totalCents, loading, saleRef, onClose, onConfirm
         <p className="text-sm text-sq-muted mt-3 text-center">
           {step === 'qr' ? 'Покажіть QR-код покупцеві' : 'Оберіть спосіб оплати'}
         </p>
+
+        {error && (
+          <div
+            role="alert"
+            className="w-full max-w-md mt-4 rounded-sq bg-red-50 text-red-700 px-3 py-2 text-sm"
+          >
+            <p className="font-semibold">{error.message}</p>
+            {error.supportCode && (
+              <p className="mt-1 text-xs text-red-600">Код: {error.supportCode}</p>
+            )}
+            {error.action}
+          </div>
+        )}
 
         {step === 'methods' && (
           <ul className="w-full max-w-md mt-10 border-t border-sq-divider">

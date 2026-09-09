@@ -45,6 +45,7 @@ export function makeAuthResponse(
       slug: 'demo',
       currency: 'UAH',
       auto_print_receipt: false,
+      fiscal: { enabled: false, provider: null },
       ...store,
     },
     ...rest,

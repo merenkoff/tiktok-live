@@ -214,23 +214,40 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
         },
         sale
       );
-      return { ...refund, fiscal };
+      // `refund_fiscal`, not `fiscal`: the body is `getSale`'s output, which
+      // already carries the SALE's fiscal document under `fiscal`. Reusing that
+      // key would overwrite it with a different document that even has
+      // different field names (`message` here vs `error_message` there) — and
+      // the client stores the whole detail in its offline mirror, so a refund's
+      // fiscal code would permanently masquerade as the sale's.
+      return { ...refund, refund_fiscal: fiscal };
     } catch (error) {
       // Deliberately 200, not an error. The refund really did happen — money
       // and stock have moved — and an error screen would make the cashier do it
       // again, refunding the customer twice. The retry cron picks it up.
-      const fiscal =
-        error instanceof fiscalService.FiscalDocumentFailed
-          ? fiscalService.failureView(error)
-          : null;
+      const failed = error instanceof fiscalService.FiscalDocumentFailed;
+      const fiscal = failed ? fiscalService.failureView(error) : null;
+
+      // A failure BEFORE the ledger row was written (the sale was never
+      // fiscalised, so there is nothing to return against) leaves the refund at
+      // `fiscal_status='pending'` with no ledger row at all — invisible to the
+      // retry cron, to `listAttentionDocs`, and to the orphan-adoption pass,
+      // which scans `pos_sales` only. Project it as failed so it is at least
+      // visible on the receipt.
+      if (!failed) {
+        await salesService.markRefundFiscalFailed(auth.storeId, lastRefund.id);
+      }
+
       logger.error('Refund fiscalisation failed', {
         storeId: auth.storeId,
         saleId,
+        refundId: lastRefund.id,
+        hadLedgerRow: failed,
         error: errorMessage(error),
       });
       return {
         ...refund,
-        fiscal: fiscal ?? {
+        refund_fiscal: fiscal ?? {
           status: 'failed' as const,
           fiscal_code: null,
           fiscal_date: null,
@@ -299,6 +316,9 @@ async function finishFailedSale(
       support_code: 'FS-INTERNAL',
       sale_id: sale.id,
       sale_voided: false,
+      // Present on every `fiscal_failed` body, so a client can read either key.
+      // It is still `sale_voided` that decides — this branch never voids.
+      sale_kept: true,
     });
   }
 

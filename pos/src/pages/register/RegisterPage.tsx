@@ -2,11 +2,16 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, Check, Search } from 'lucide-react';
-import { cashierApi, useAuthStore, useCartStore } from '@pos/platform';
+import { api, cashierApi, useAuthStore, useCartStore } from '@pos/platform';
 import { useDragScroll } from '../../hooks/useDragScroll';
 import { formatUah } from '../../lib/money';
+import {
+  classifyCheckoutError,
+  keepsModalOpen,
+  type CheckoutFailure,
+} from '../../lib/checkoutError';
 import { DEFAULT_RECEIPT_PAPER_WIDTH, ReceiptPaperWidth, printReceipt } from '../../lib/printer';
 import { buildReceiptPayload } from '../../lib/receipt';
 import { usePrintableReceipt } from '../../hooks/usePrintableReceipt';
@@ -68,6 +73,17 @@ export function RegisterPage() {
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [paying, setPaying] = useState(false);
   const [success, setSuccess] = useState<SaleDetail | null>(null);
+  /** Shown inside the payment modal, which is opaque and covers everything else. */
+  const [checkoutError, setCheckoutError] = useState<{
+    message: string;
+    supportCode?: string | null;
+    action?: ReactNode;
+  } | null>(null);
+  /** Set when the sale went through but its ПРРО receipt did not. */
+  const [fiscalNotice, setFiscalNotice] = useState<{
+    message: string;
+    supportCode: string | null;
+  } | null>(null);
   // Cancelling the receipt we just rang up — the common "wrong item" fix. Under
   // ПРРО that is a full refund; the `returns` module owns the dialog and lazy-
   // loads it, so checkout stays reachable even with `returns` disabled.
@@ -156,6 +172,15 @@ export function RegisterPage() {
 
       if (!(auth?.store.auto_print_receipt ?? false)) return;
       if (!printerName) return; // web / desktop without a configured printer → no-op
+      // Never auto-print an un-fiscalised receipt in a ПРРО store: the customer
+      // would walk out with a slip that looks like a receipt and carries no
+      // fiscal number. The manual button below stays, clearly labelled.
+      if (
+        (auth?.store.fiscal?.enabled ?? false) &&
+        (success.fiscal_status ?? 'none') !== 'done'
+      ) {
+        return;
+      }
       const key = success.receipt_number || String(success.id);
       if (autoPrintedRef.current === key) return;
       autoPrintedRef.current = key;
@@ -176,7 +201,12 @@ export function RegisterPage() {
     return () => {
       cancelled = true;
     };
-  }, [success, auth?.store.auto_print_receipt, auth?.store.name]);
+  }, [
+    success,
+    auth?.store.auto_print_receipt,
+    auth?.store.name,
+    auth?.store.fiscal?.enabled,
+  ]);
 
   // A cancel/partial-refund against the just-rung receipt: keep the shown
   // receipt fresh, and pull a new catalog since stock moved.
@@ -256,38 +286,95 @@ export function RegisterPage() {
     setPicker(variants);
   }
 
-  async function pay(payments: SalePaymentInput[]) {
+  async function pay(payments: SalePaymentInput[], opts: { clientUuid?: string } = {}) {
     setPaying(true);
+    setCheckoutError(null);
     try {
-      const sale = await cashierApi.completeSale({
-        items: lines.map((line) => ({
-          variant_id: line.variant_id,
-          quantity: line.quantity,
-        })),
-        payments,
-        cart_discount: cartDiscount,
-        customer_id: customer?.id ?? null,
-      });
+      const sale = await cashierApi.completeSale(
+        {
+          items: lines.map((line) => ({
+            variant_id: line.variant_id,
+            quantity: line.quantity,
+          })),
+          payments,
+          cart_discount: cartDiscount,
+          customer_id: customer?.id ?? null,
+        },
+        opts
+      );
       clear();
       setCheckoutOpen(false);
       setMobileCartOpen(false);
       setSuccess(sale);
+      setFiscalNotice(null);
       setPrintStatus(null);
       await loadCatalog(
         currentTag && !query ? { tag_id: currentTag.id } : { q: query || undefined }
       );
     } catch (error) {
-      const message =
-        typeof error === 'object' &&
-        error &&
-        'response' in error &&
-        (error as { response?: { data?: { error?: string } } }).response?.data?.error
-          ? String((error as { response?: { data?: { error?: string } } }).response?.data?.error)
-          : 'Не вдалося завершити продаж';
-      setBanner(message);
+      await handleCheckoutFailure(classifyCheckoutError(error), payments);
     } finally {
       setPaying(false);
     }
+  }
+
+  /**
+   * Render a checkout failure by what it means for the customer, not by status.
+   *
+   * The distinction that matters: did the customer pay and leave with the
+   * goods? If so this is a success screen with a warning, and telling the
+   * cashier to ring it again would take the money twice.
+   */
+  async function handleCheckoutFailure(
+    failure: CheckoutFailure,
+    payments: SalePaymentInput[]
+  ): Promise<void> {
+    if (failure.kind === 'fiscal_failed_kept') {
+      // The sale stands, un-fiscalised. The body carries only the id, so pull
+      // the receipt itself to show a real number and total.
+      clear();
+      setCheckoutOpen(false);
+      setMobileCartOpen(false);
+      setPrintStatus(null);
+      setFiscalNotice({ message: failure.message, supportCode: failure.supportCode });
+      try {
+        setSuccess(await api.getSale(failure.saleId));
+      } catch {
+        setSuccess(null);
+        setBanner(`${failure.message} Чек №${failure.saleId}.`);
+      }
+      await loadCatalog(
+        currentTag && !query ? { tag_id: currentTag.id } : { q: query || undefined }
+      );
+      return;
+    }
+
+    if (keepsModalOpen(failure)) {
+      setCheckoutError({
+        message: failure.message,
+        supportCode: 'supportCode' in failure ? failure.supportCode : null,
+        action:
+          failure.kind === 'unknown_state' ? (
+            <button
+              type="button"
+              onClick={() => void pay(payments, { clientUuid: failure.clientUuid })}
+              className="mt-2 min-h-11 px-3 rounded-sq bg-red-600 text-white text-sm font-semibold"
+            >
+              Перевірити ще раз
+            </button>
+          ) : undefined,
+      });
+      return;
+    }
+
+    // Cart survives, so the cashier can ring it again — and the next attempt
+    // mints a fresh client_uuid, which is what the voided receipt needs.
+    setCheckoutOpen(false);
+    setBanner(
+      failure.kind === 'fiscal_failed_voided' || failure.kind === 'sale_voided_replay'
+        ? `${failure.message} Пробийте чек ще раз.`
+        : failure.message
+    );
   }
 
   // Keyed on the receipt number, not the object: a partial refund refreshes
@@ -337,6 +424,19 @@ export function RegisterPage() {
           <p className="text-5xl font-bold mt-6 text-sq-text">{formatUah(success.total_cents)}</p>
           <p className="text-sq-secondary mt-3 text-sm">{success.staff_name}</p>
           {payText && <p className="text-sq-secondary mt-1 text-sm">{payText}</p>}
+          {fiscalNotice && (
+            <div
+              role="alert"
+              className="mt-6 rounded-sq bg-amber-50 text-amber-900 px-3 py-2 text-sm text-left"
+            >
+              <p className="font-semibold">Чек не зареєстровано в ПРРО</p>
+              <p className="mt-1">{fiscalNotice.message}</p>
+              <p className="mt-1">Реєстрація повториться автоматично.</p>
+              {fiscalNotice.supportCode && (
+                <p className="mt-1 text-xs">Код: {fiscalNotice.supportCode}</p>
+              )}
+            </div>
+          )}
           {cancelRung.result && (
             <p className="mt-6 rounded-sq bg-red-50 text-red-700 px-3 py-2 text-sm font-semibold">
               {cancelRung.result === 'partially_refunded'
@@ -349,12 +449,21 @@ export function RegisterPage() {
             className="pos-btn-primary mt-10 w-full py-3.5"
             onClick={() => {
               setSuccess(null);
+              setFiscalNotice(null);
               cancelRung.reset();
             }}
           >
             Новий чек
           </button>
-          {cancelRung.result !== 'refunded' && cancelRung.result !== 'voided' && (
+          {fiscalNotice && (
+            // Cancelling routes through a refund, and a refund against a sale
+            // with no fiscal document can never itself be fiscalised — it would
+            // leave an orphan no reconciler can see. Wait for the retry instead.
+            <p className="mt-3 rounded-sq bg-sq-surface border border-sq-divider px-3 py-2 text-xs text-sq-secondary text-left">
+              Повернення буде доступне після реєстрації чека в ПРРО.
+            </p>
+          )}
+          {!fiscalNotice && cancelRung.result !== 'refunded' && cancelRung.result !== 'voided' && (
             <button
               type="button"
               className="mt-3 w-full min-h-12 rounded-sq border border-red-300 bg-red-50 text-red-700 text-sm font-semibold"
@@ -566,7 +675,11 @@ export function RegisterPage() {
           totalCents={totalCents()}
           loading={paying}
           saleRef={saleDraftId}
-          onClose={() => setCheckoutOpen(false)}
+          error={checkoutError}
+          onClose={() => {
+            setCheckoutError(null);
+            setCheckoutOpen(false);
+          }}
           onConfirm={(payments) => void pay(payments)}
         />
       )}

@@ -377,6 +377,24 @@ export async function completeSale(params: {
   }
 }
 
+/**
+ * Project a refund as un-fiscalised.
+ *
+ * Used when fiscalisation failed before a ledger row existed — the refund is
+ * then invisible to the retry cron and to `listAttentionDocs`, both of which
+ * work off `pos_fiscal_receipts`, so the projection is the only place its state
+ * can be recorded at all.
+ */
+export async function markRefundFiscalFailed(
+  storeId: number,
+  refundId: number
+): Promise<void> {
+  await pool.query(
+    `UPDATE pos_refunds SET fiscal_status = 'failed' WHERE id = $1 AND store_id = $2`,
+    [refundId, storeId]
+  );
+}
+
 export async function getSale(storeId: number, saleId: number) {
   const saleResult = await pool.query(
     `SELECT s.*, st.display_name AS staff_name,

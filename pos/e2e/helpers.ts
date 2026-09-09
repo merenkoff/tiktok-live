@@ -77,6 +77,7 @@ export async function mockPosApi(page: Page, enabledModules: string[] = ALL_MODU
       currency: 'UAH',
       auto_print_receipt: false,
       enabled_modules: enabledModules,
+      fiscal: { enabled: false, provider: null },
     },
   };
 
@@ -141,6 +142,27 @@ export async function mockPosApi(page: Page, enabledModules: string[] = ALL_MODU
           top_items: [],
           payments: [],
           daily: [],
+        },
+      });
+      return;
+    }
+
+    // The ПРРО settings card reads object fields off this response, so the
+    // catch-all's empty array would throw before the page finished rendering.
+    if (pathname.endsWith('/fiscal/settings')) {
+      await route.fulfill({
+        json: {
+          enabled: false,
+          provider: null,
+          config: {},
+          secrets_set: [],
+          default_tax_code: null,
+          auto_open_shift: true,
+          fail_mode: 'block',
+          receipt_source: 'local',
+          updated_at: null,
+          secrets_key_configured: true,
+          adapter_available: false,
         },
       });
       return;

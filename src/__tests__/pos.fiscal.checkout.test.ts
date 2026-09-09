@@ -379,7 +379,12 @@ describe.skipIf(!hasDb)('POS fiscal checkout orchestration', () => {
     });
 
     expect(res.statusCode).toBe(200);
+    // `refund_fiscal`, not `fiscal`: the body is the SALE's detail, whose own
+    // `fiscal` key holds the sale's document. Reusing that key would overwrite
+    // it with a different document that has different field names.
+    expect(res.json().refund_fiscal).toMatchObject({ status: 'done' });
     expect(res.json().fiscal).toMatchObject({ status: 'done' });
+    expect(res.json().fiscal.fiscal_code).not.toBe(res.json().refund_fiscal.fiscal_code);
     const rows = await ledgerRows();
     expect(rows.map((r) => r.doc_type).sort()).toEqual(['refund', 'sale']);
     const refundDoc = rows.find((r) => r.doc_type === 'refund');
@@ -402,7 +407,7 @@ describe.skipIf(!hasDb)('POS fiscal checkout orchestration', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().fiscal).toMatchObject({ status: 'failed' });
+    expect(res.json().refund_fiscal).toMatchObject({ status: 'failed' });
     expect(res.json().refunds).toHaveLength(1);
 
     const refundRow = (
@@ -410,6 +415,52 @@ describe.skipIf(!hasDb)('POS fiscal checkout orchestration', () => {
     ).rows[0];
     expect(refundRow.fiscal_status).toBe('failed');
     expect(Number(refundRow.total_cents)).toBe(10000);
+  });
+
+  it('marks a refund failed when the sale was never fiscalised', async () => {
+    // `fiscalizeRefund` refuses before it writes a ledger row (there is no sale
+    // document to return against), so nothing in `pos_fiscal_receipts` would
+    // ever represent this refund — not the retry cron, not the attention list,
+    // not the orphan-adoption pass, which scans `pos_sales` only. The
+    // projection is the only place its state can be recorded.
+    await enableFiscal();
+    await warmFiscal();
+    fake.queueError('unavailable');
+    const sold = await sell();
+    const saleId = sold.json().sale_id;
+    const sale = await app.inject({
+      method: 'GET',
+      url: `/api/pos/sales/${saleId}`,
+      headers: auth(store.sellerToken),
+    });
+    const itemId = sale.json().items[0].id;
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/pos/sales/${saleId}/refunds`,
+      headers: auth(store.sellerToken),
+      payload: { items: [{ sale_item_id: itemId, quantity: 1 }], method: 'cash' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().refund_fiscal.status).toBe('failed');
+    const refundRow = (
+      await pool.query(`SELECT * FROM pos_refunds WHERE sale_id = $1`, [saleId])
+    ).rows[0];
+    expect(refundRow.fiscal_status).toBe('failed');
+  });
+
+  it('always reports sale_voided on a fiscal_failed body', async () => {
+    // Both `sale_voided` and `sale_kept` are present on every branch, so a
+    // client reading either key cannot silently miss an outcome.
+    await enableFiscal();
+    await warmFiscal();
+    fake.queueError('unavailable');
+    const res = await sell();
+    const body = res.json();
+    expect(body).toHaveProperty('sale_voided');
+    expect(body).toHaveProperty('sale_kept');
+    expect(body.sale_kept).toBe(!body.sale_voided);
   });
 
   // ── 12-13. Invariants ─────────────────────────────────────────────────────

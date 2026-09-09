@@ -9,6 +9,7 @@ import type { LocalSaleRow, SaleDetail } from '@pos/platform';
 import { useDragScroll } from '@pos/platform/ui';
 import { returnsApi } from '../data/returnsApi';
 import { RefundSaleDialog } from '../components/RefundSaleDialog';
+import { FiscalBadge, FiscalDetailCard } from '../components/FiscalBadge';
 
 const SALE_STATUS_UK: Record<string, string> = {
   completed: 'Завершено',
@@ -74,6 +75,19 @@ export function TillReceiptsPage() {
     }
   }
 
+  /** Drop a queued sale the server will never accept. */
+  async function discard(row: LocalSaleRow) {
+    setError(null);
+    try {
+      await returnsApi.discardQueuedSale(row.client_uuid);
+      setSelected(null);
+      setDetail(null);
+      await reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не вдалося видалити чек із черги');
+    }
+  }
+
   function onRefunded(updated: LocalSaleRow) {
     setRefunding(false);
     setSelected(updated);
@@ -108,7 +122,10 @@ export function TillReceiptsPage() {
               </div>
               <div className="text-right shrink-0">
                 <p className="font-semibold text-sq-text">{formatUah(row.total_cents)}</p>
-                <p className={`text-xs ${statusClass(row)}`}>{statusLabel(row)}</p>
+                <p className={`text-xs ${statusClass(row)}`}>
+                  {statusLabel(row)}
+                  <FiscalBadge status={row.fiscal_status} />
+                </p>
               </div>
             </button>
           ))}
@@ -125,6 +142,7 @@ export function TillReceiptsPage() {
             detail={detail}
             loading={detailLoading}
             onRefund={() => setRefunding(true)}
+            onDiscard={() => void discard(selected)}
           />
         )}
       </section>
@@ -158,6 +176,7 @@ export function TillReceiptsPage() {
             detail={detail}
             loading={detailLoading}
             onRefund={() => setRefunding(true)}
+            onDiscard={() => void discard(selected)}
           />
         </div>
       )}
@@ -179,11 +198,13 @@ function SaleDetailPanel({
   detail,
   loading,
   onRefund,
+  onDiscard,
 }: {
   row: LocalSaleRow;
   detail: SaleDetail | null;
   loading: boolean;
   onRefund: () => void;
+  onDiscard?: () => void;
 }) {
   const bodyRef = useDragScroll<HTMLDivElement>();
 
@@ -195,7 +216,11 @@ function SaleDetailPanel({
           <p className="text-sm text-sq-secondary">
             {new Date(row.created_at).toLocaleString('uk-UA')} · {row.staff_name}
           </p>
-          <p className={`text-sm font-semibold mt-1 ${statusClass(row)}`}>{statusLabel(row)}</p>
+          <p className={`text-sm font-semibold mt-1 ${statusClass(row)}`}>
+            {statusLabel(row)}
+            <FiscalBadge status={row.fiscal_status} />
+          </p>
+          <FiscalDetailCard doc={detail?.fiscal} />
         </div>
 
         {detail ? (
@@ -262,6 +287,21 @@ function SaleDetailPanel({
         >
           Повернення
         </button>
+        {row.sync_state === 'dead' && (
+          // A queued sale the server will never accept. Until now the only way
+          // to clear one was to take the till offline first.
+          <div className="rounded-sq bg-red-50 text-red-700 px-3 py-2 text-sm space-y-2">
+            <p className="font-semibold">Чек не потрапив на сервер</p>
+            <p>{row.detail?.fiscal?.error_message ?? 'Сервер відхилив цей чек.'}</p>
+            <button
+              type="button"
+              className="w-full min-h-11 rounded-sq border border-red-300 bg-white text-red-700 text-sm font-semibold"
+              onClick={() => void onDiscard?.()}
+            >
+              Видалити з черги
+            </button>
+          </div>
+        )}
       </div>
     </>
   );

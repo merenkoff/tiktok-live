@@ -6,7 +6,18 @@ export { enableOfflinePos, isOfflinePosEnabled } from './enabled';
 export { startOfflineRuntime, runSync } from './sync';
 export { cashierApi } from './cashierApi';
 export { useOfflineStatus } from './status';
-export { OfflineAuthError, OfflineRefundError } from './errors';
-export { saveStaffUnlock, localPinLogin, localOwnerLogin, hasUnlockForAuth } from './auth-local';
+export {
+  OfflineAuthError,
+  OfflineRefundError,
+  OfflineFiscalError,
+  FiscalSaleUnknownError,
+} from './errors';
+export {
+  saveStaffUnlock,
+  updateStaffUnlockStoreFlags,
+  localPinLogin,
+  localOwnerLogin,
+  hasUnlockForAuth,
+} from './auth-local';
 export { refreshSnapshot } from './repository';
 export { cacheQrImage } from './photos';

@@ -9,6 +9,7 @@ import type {
   PosRole,
   QrPaymentMode,
   SaleDetail,
+  SaleFiscalStatus,
   SalePaymentInput,
 } from '../types';
 
@@ -40,10 +41,27 @@ export interface StaffUnlockRow {
   autoPrintReceipt?: boolean;
   /** Enabled module ids cached from AuthResponse so the till honours toggles offline (optional on old rows). */
   enabledModules?: string[];
+  /**
+   * ПРРО state cached from AuthResponse (optional on old rows).
+   *
+   * Cold-offline PIN login rebuilds the whole `AuthResponse` from this row, so
+   * without it `store.fiscal` reads `undefined` → `false` → the offline sale
+   * block silently disappears exactly when it is needed.
+   */
+  fiscalEnabled?: boolean;
+  fiscalProvider?: string | null;
 }
 
 export type OutboxType = 'sale' | 'customer';
-export type OutboxStatus = 'pending' | 'error';
+/**
+ * `'dead'` is terminal: the server will never accept this row.
+ *
+ * It is a new *value* on the already-indexed `status` key path, not a schema
+ * change — IndexedDB indexes values, not enumerations — so it needs no Dexie
+ * version bump. `refreshPending` counts only `pending|error`, which is what
+ * stops a permanently-rejected row pinning the offline banner forever.
+ */
+export type OutboxStatus = 'pending' | 'error' | 'dead';
 
 export interface OutboxCustomerPayload {
   client_uuid: string;
@@ -74,6 +92,13 @@ export interface OutboxRow {
   attempts: number;
   lastError?: string;
   createdAt: number;
+  // The three below are non-indexed additions — no version bump. Optional
+  // because rows written by older builds must still read correctly.
+  /** End of the last attempt. The backoff is measured from here, not `createdAt`. */
+  lastAttemptAt?: number;
+  deadReason?: 'rejected' | 'sale_voided' | 'attempts_exhausted' | 'blocked_by_customer';
+  /** True only when the server definitely created nothing — governs stock on discard. */
+  nothingWritten?: boolean;
 }
 
 export interface CachedCustomer extends PosCustomer {
@@ -97,6 +122,10 @@ export interface LocalSaleRow {
   customer_name: string | null;
   created_at: string;
   detail?: SaleDetail;
+  /** ПРРО projection mirrored from the server row (optional on old rows). */
+  fiscal_status?: SaleFiscalStatus;
+  /** `'dead'` when this row's outbox entry was given up on. */
+  sync_state?: 'dead' | 'discarded';
 }
 
 class PosOfflineDB extends Dexie {

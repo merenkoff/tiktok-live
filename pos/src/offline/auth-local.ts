@@ -2,7 +2,7 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import type { AuthResponse } from '../types';
+import type { AuthResponse, FiscalProviderId } from '../types';
 import { DEFAULT_ENABLED_MODULE_IDS } from '../modules/constants';
 import { db, type StaffUnlockRow } from './db';
 import { OfflineAuthError } from './errors';
@@ -77,8 +77,38 @@ export async function saveStaffUnlock(params: {
     qrStaticImageUrl: params.auth.store.qr_payment?.static_image_url ?? null,
     autoPrintReceipt: params.auth.store.auto_print_receipt ?? false,
     enabledModules: params.auth.store.enabled_modules ?? DEFAULT_MODULES,
+    fiscalEnabled: params.auth.store.fiscal?.enabled ?? false,
+    fiscalProvider: params.auth.store.fiscal?.provider ?? null,
   };
   await db.staffUnlock.put(row);
+}
+
+/**
+ * Refresh the cached store flags without re-deriving the PIN verifier.
+ *
+ * `saveStaffUnlock` needs the raw secret, so it can only run at login — which
+ * means every cached flag (`autoPrintReceipt`, `enabledModules`, the QR config,
+ * and now `fiscal`) went stale until the next online login. A store that
+ * enabled ПРРО at noon would keep queuing offline sales on a till that logged
+ * in at nine, which is precisely the case the offline block exists to stop.
+ * Called from the online login and from every successful `/me`.
+ */
+export async function updateStaffUnlockStoreFlags(auth: AuthResponse): Promise<void> {
+  if (auth.offlineSession) return;
+  const id = unlockId(auth.store.slug, auth.staff.id);
+  const row = await db.staffUnlock.get(id);
+  if (!row) return;
+  await db.staffUnlock.update(id, {
+    storeName: auth.store.name,
+    storeCurrency: auth.store.currency,
+    qrPaymentEnabled: auth.store.qr_payment?.enabled ?? row.qrPaymentEnabled ?? false,
+    qrPaymentMode: auth.store.qr_payment?.mode ?? row.qrPaymentMode ?? 'static',
+    qrStaticImageUrl: auth.store.qr_payment?.static_image_url ?? null,
+    autoPrintReceipt: auth.store.auto_print_receipt ?? false,
+    enabledModules: auth.store.enabled_modules ?? DEFAULT_MODULES,
+    fiscalEnabled: auth.store.fiscal?.enabled ?? false,
+    fiscalProvider: auth.store.fiscal?.provider ?? null,
+  });
 }
 
 async function verifyRow(row: StaffUnlockRow, secret: string): Promise<boolean> {
@@ -122,6 +152,10 @@ function sessionFromUnlock(row: StaffUnlockRow, liveAuth: AuthResponse | null): 
       },
       auto_print_receipt: row.autoPrintReceipt ?? false,
       enabled_modules: row.enabledModules ?? DEFAULT_MODULES,
+      fiscal: {
+        enabled: row.fiscalEnabled ?? false,
+        provider: (row.fiscalProvider as FiscalProviderId | null) ?? null,
+      },
     },
   };
 }

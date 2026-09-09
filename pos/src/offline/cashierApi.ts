@@ -34,6 +34,7 @@ export function saleRowFromDetail(detail: SaleDetail): LocalSaleRow {
     staff_name: detail.staff_name,
     customer_name: detail.customer_name ?? null,
     created_at: detail.created_at,
+    fiscal_status: detail.fiscal_status,
     detail,
   };
 }
@@ -49,6 +50,7 @@ function rowFromServer(item: SaleListItem): LocalSaleRow {
     staff_name: item.staff_name,
     customer_name: item.customer_name ?? null,
     created_at: item.created_at,
+    fiscal_status: item.fiscal_status,
   };
 }
 
@@ -67,8 +69,12 @@ export const cashierApi = {
     note?: string;
     cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
     customer_id?: number | null;
-  }): Promise<SaleDetail> {
-    return isOfflinePosEnabled() ? repo.completeSale(payload) : api.completeSale(payload);
+  },
+  /** `clientUuid` reuses an existing idempotency key — see FiscalSaleUnknownError. */
+  opts: { clientUuid?: string } = {}
+  ): Promise<SaleDetail> {
+    if (isOfflinePosEnabled()) return repo.completeSale(payload, opts);
+    return api.completeSale({ ...payload, client_uuid: opts.clientUuid });
   },
 
   listCustomers(q?: string): Promise<PosCustomer[]> {
@@ -112,13 +118,28 @@ export const cashierApi = {
     row: LocalSaleRow,
     items: RefundLineInput[],
     opts: { method?: PaymentMethod | null; reason?: string } = {}
-  ): Promise<LocalSaleRow> {
+  ): Promise<repo.RefundedSaleRow> {
     if (isOfflinePosEnabled()) return repo.refundSale(row, items, opts);
     if (!row.server_id) throw new Error('Sale has no server id');
     const detail = await api.refundSale(row.server_id, items, {
       ...opts,
       client_uuid: crypto.randomUUID(),
     });
-    return { ...row, status: detail.status, refunded_cents: detail.refunded_cents, detail };
+    // Keep the refund's fiscal result off the stored sale — see RefundedSaleRow.
+    const { refund_fiscal: refundFiscal, ...saleShape } = detail;
+    return {
+      ...row,
+      status: saleShape.status,
+      refunded_cents: saleShape.refunded_cents,
+      detail: saleShape as SaleDetail,
+      fiscal_status: saleShape.fiscal_status ?? row.fiscal_status,
+      refund_fiscal: refundFiscal ?? null,
+    };
+  },
+
+  /** Drop a queued sale the server will never accept. Web build has no outbox. */
+  async discardQueuedSale(clientUuid: string): Promise<void> {
+    if (!isOfflinePosEnabled()) throw new Error('Черга доступна лише в застосунку каси');
+    return repo.discardQueuedSale(clientUuid);
   },
 };

@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { formatUah } from '@pos/platform';
 import type { SaleDetail, SaleListItem } from '@pos/platform';
 import { adminReturnsApi } from '../data/returnsApi';
+import { FiscalBadge, FiscalDetailCard } from '../components/FiscalBadge';
 
 const SALE_STATUS_UK: Record<string, string> = {
   completed: 'Завершено',
@@ -127,6 +128,7 @@ export function AdminSalesPage() {
                   {sale.qr_pending && (
                     <span className="ml-2 text-amber-600">QR не підтверджено</span>
                   )}
+                  <FiscalBadge status={sale.fiscal_status} />
                 </p>
               </div>
             </button>
@@ -143,7 +145,9 @@ export function AdminSalesPage() {
                 <h3 className="text-xl font-bold text-sq-text">{selected.receipt_number}</h3>
                 <p className="text-sm text-sq-secondary">
                   {saleStatusLabel(selected.status)} · {selected.staff_name}
+                  <FiscalBadge status={selected.fiscal_status} />
                 </p>
+                <FiscalDetailCard doc={selected.fiscal} />
               </div>
               <ul className="space-y-2 text-sm">
                 {selected.items.map((item) => (
