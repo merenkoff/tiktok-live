@@ -7,6 +7,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { pool } from '../../db.js';
 import type { PosAuthContext, PosRole } from '../types.js';
+import { isFiscalProviderId } from '../fiscal/types.js';
 import { isModuleEnabled } from './modules.js';
 
 const SESSION_TTL_HOURS = 24 * 14;
@@ -39,10 +40,13 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
        store.qr_static_image_url,
        store.auto_print_receipt,
        store.enabled_modules,
-       store.module_remotes
+       store.module_remotes,
+       fs.enabled AS fiscal_enabled,
+       fs.provider AS fiscal_provider
      FROM pos_sessions s
      JOIN pos_staff st ON st.id = s.staff_id
      JOIN pos_stores store ON store.id = s.store_id
+     LEFT JOIN pos_fiscal_settings fs ON fs.store_id = store.id
      WHERE s.token = $1 AND s.expires_at > NOW()`,
     [token]
   );
@@ -64,6 +68,11 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
       enabled: row.qr_payment_enabled ?? false,
       mode: (row.qr_payment_mode as PosAuthContext['qrPayment']['mode']) ?? 'static',
       static_image_url: row.qr_static_image_url ?? null,
+    },
+    fiscal: {
+      // A store with no `pos_fiscal_settings` row does not fiscalise.
+      enabled: row.fiscal_enabled ?? false,
+      provider: isFiscalProviderId(row.fiscal_provider) ? row.fiscal_provider : null,
     },
     autoPrintReceipt: row.auto_print_receipt ?? false,
     enabledModules: (row.enabled_modules as string[] | null) ?? [],

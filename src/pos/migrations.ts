@@ -46,6 +46,7 @@ export const POS_MIGRATIONS = [
   '021_pos_gtin_events_retention.sql',
   '022_pos_variant_barcode_to_sku.sql',
   '023_pos_internal_barcode_seq.sql',
+  '024_pos_fiscal.sql',
 ] as const;
 
 export function readMigration(file: string): string {

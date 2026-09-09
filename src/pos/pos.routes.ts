@@ -17,6 +17,7 @@ import { registerGtinRoutes } from './routes/gtin.routes.js';
 import { registerQrRoutes } from './routes/qr.routes.js';
 import { registerTelemetryRoutes } from './routes/telemetry.routes.js';
 import { registerLiveRoutes } from './routes/live.routes.js';
+import { registerFiscalRoutes } from './routes/fiscal.routes.js';
 
 export interface PosRouteGroup {
   /** null = core: always registered, no per-request module gate. */
@@ -40,6 +41,10 @@ export const POS_ROUTE_GROUPS: PosRouteGroup[] = [
   // has nothing to check. The per-request gate is `ensurePosAuth` plus the
   // 409 for a store with no TikTok account connected.
   { moduleId: null, register: registerLiveRoutes },
+  // Core for the same reason as `registerLiveRoutes` above: the
+  // `fiscal-<provider>` UI module opts in through `module_remotes`, not
+  // `enabled_modules`. The gate is `ensurePosOwner`.
+  { moduleId: null, register: registerFiscalRoutes },
   { moduleId: 'returns', register: registerReturnsRoutes },
   { moduleId: 'customers', register: registerCustomersRoutes },
   { moduleId: 'products', register: registerProductsRoutes },

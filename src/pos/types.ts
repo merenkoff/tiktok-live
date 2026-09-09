@@ -5,6 +5,7 @@
 // src/pos/types.ts
 
 import type { ModuleRemoteEntry } from './core/modules.js';
+import type { FiscalProviderId } from './fiscal/types.js';
 
 export type { ModuleRemoteEntry };
 
@@ -72,6 +73,19 @@ export interface QrPaymentPublicConfig {
   static_image_url: string | null;
 }
 
+/**
+ * The only part of the ПРРО settings a cashier's client is allowed to see —
+ * no credentials, no provider config.
+ *
+ * It rides in the auth response on purpose: the desktop cashier must refuse to
+ * queue an offline sale for a fiscalising store, and cold-offline the cached
+ * `pos_auth` blob is the only thing it can read.
+ */
+export interface FiscalPublicConfig {
+  enabled: boolean;
+  provider: FiscalProviderId | null;
+}
+
 export interface PosAuthContext {
   sessionId: number;
   storeId: number;
@@ -82,6 +96,8 @@ export interface PosAuthContext {
   storeSlug: string;
   currency: string;
   qrPayment: QrPaymentPublicConfig;
+  /** Whether this store fiscalises, and with whom. Credentials stay server-side. */
+  fiscal: FiscalPublicConfig;
   autoPrintReceipt: boolean;
   /** Toggleable module ids enabled for this store (core ids not included). */
   enabledModules: string[];

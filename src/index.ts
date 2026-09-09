@@ -16,6 +16,8 @@ import { registerSessionRoutes } from './sessions/sessions.controller.js';
 import { registerPosPlugin } from './pos/pos.plugin.js';
 import { reconcileQrPayments } from './pos/qr.service.js';
 import { runGtinEventsRetention } from './pos/gtin/events-retention.js';
+import { closeDueShifts } from './pos/fiscal/shifts.service.js';
+import { retryPendingFiscalDocs } from './pos/fiscal/fiscal.service.js';
 import { cleanupExpiredReservations } from './reservations.js';
 import { sessionManager } from './sessions/sessions.manager.js';
 
@@ -149,6 +151,37 @@ async function main(): Promise<void> {
         await runGtinEventsRetention();
       } catch (error) {
         logger.error('GTIN events retention cron error', { error });
+      }
+    });
+
+    // Close ПРРО shifts before they hit the 24h legal limit. Every 5 minutes,
+    // because the deadline is real: a shift that overruns is a compliance
+    // problem, not a cosmetic one. A no-op for stores without fiscalisation.
+    cron.schedule('*/5 * * * *', async () => {
+      try {
+        const { closed, failed } = await closeDueShifts();
+        if (closed > 0 || failed > 0) {
+          logger.info(`🧾 Fiscal shifts auto-closed: ${closed}, failed: ${failed}`);
+        }
+      } catch (error) {
+        logger.error('Fiscal shift auto-close cron error', { error });
+      }
+    });
+
+    // Retry fiscal documents that did not go through, and run the housekeeping
+    // sweeps (voided sales, orphans, stale rows). Self-guarded against
+    // overlapping ticks. A no-op for stores without fiscalisation.
+    cron.schedule('*/2 * * * *', async () => {
+      try {
+        const result = await retryPendingFiscalDocs();
+        if (result.done > 0 || result.failed > 0 || result.abandoned > 0) {
+          logger.info(
+            `🧾 Fiscal retry: ${result.done} done, ${result.failed} failed, ` +
+              `${result.abandoned} abandoned, ${result.adopted} adopted`
+          );
+        }
+      } catch (error) {
+        logger.error('Fiscal retry cron error', { error });
       }
     });
 
