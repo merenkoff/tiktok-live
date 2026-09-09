@@ -4,7 +4,14 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, formatUah, uahInputToCents, enrichGtinFromSources, gtinSourceLabel } from '@pos/platform';
+import {
+  api,
+  formatUah,
+  uahInputToCents,
+  enrichGtinFromSources,
+  gtinSourceLabel,
+  isInternalBarcode,
+} from '@pos/platform';
 import type { GtinHint, OnHandRow, StockDocumentType, Supplier } from '@pos/platform';
 import { useDragScroll } from '@pos/platform/ui';
 
@@ -88,6 +95,7 @@ export function StockActionPage({ type }: Props) {
   const [stubSize, setStubSize] = useState('');
   const [stubColor, setStubColor] = useState('');
   const [stubSku, setStubSku] = useState('');
+  const [stubBarcodeBusy, setStubBarcodeBusy] = useState(false);
   const [stubBarcode, setStubBarcode] = useState('');
   const [similarWarn, setSimilarWarn] = useState<string[]>([]);
   const [gtinHint, setGtinHint] = useState<GtinHint | null>(null);
@@ -175,6 +183,20 @@ export function StockActionPage({ type }: Props) {
     setStubOpen(false);
   }
 
+  async function generateStubBarcode() {
+    setStubBarcodeBusy(true);
+    try {
+      const code = await api.generateInternalBarcode();
+      // Straight to the field, not through onStubBarcodeChange: there is
+      // nothing to look up for a code we just invented.
+      setStubBarcode(code);
+    } catch {
+      setError('Не вдалося згенерувати штрихкод');
+    } finally {
+      setStubBarcodeBusy(false);
+    }
+  }
+
   function openStubForm() {
     const query = q.trim();
     const barcodeLike = looksLikeBarcode(query);
@@ -206,6 +228,9 @@ export function StockActionPage({ type }: Props) {
   async function runGtinEnrich(code: string) {
     if (type !== 'receipt' || gtinHintClearedRef.current) return;
     if (!looksLikeBarcode(code)) return;
+    // A code we minted is in no public database. Fanning out to three Open*Facts
+    // hosts for it spends their goodwill on a guaranteed miss.
+    if (isInternalBarcode(code)) return;
     setGtinLooking(true);
     try {
       const { hint } = await enrichGtinFromSources(code, {
@@ -835,12 +860,25 @@ export function StockActionPage({ type }: Props) {
             </label>
             <label className="block space-y-1">
               <span className="text-sm text-[#6E6E6E]">Штрихкод</span>
-              <input
-                value={stubBarcode}
-                onChange={(e) => onStubBarcodeChange(e.target.value)}
-                className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2.5 text-sm"
-              />
-              <span className="block text-xs text-[#9A9A9A]">те, що читає сканер</span>
+              <div className="flex gap-2">
+                <input
+                  value={stubBarcode}
+                  onChange={(e) => onStubBarcodeChange(e.target.value)}
+                  className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2.5 text-sm"
+                />
+                <button
+                  type="button"
+                  disabled={stubBarcodeBusy}
+                  onClick={() => void generateStubBarcode()}
+                  title="Внутрішній код магазину — коли бирка не сканується"
+                  className="shrink-0 rounded-[4px] border border-[#E0E0E0] bg-white px-3 text-sm whitespace-nowrap disabled:opacity-50"
+                >
+                  Згенерувати
+                </button>
+              </div>
+              <span className="block text-xs text-[#9A9A9A]">
+                те, що читає сканер — або згенеруйте внутрішній код
+              </span>
             </label>
           </div>
           <div className="flex flex-wrap gap-2">

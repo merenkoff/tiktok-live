@@ -5,6 +5,7 @@
 // src/pos/gtin/gtin-cache.service.ts
 
 import { pool } from '../../db.js';
+import { isInternalBarcode } from './internal-code.js';
 import { normalizeGtin } from './normalize.js';
 import {
   sourcePriorityList,
@@ -61,6 +62,9 @@ function isBetterCandidate(
 export async function getGtinCache(code: string): Promise<GtinHint | null> {
   const norm = normalizeGtin(code);
   if (!norm.ok) return null;
+  // A store-local code means nothing to anyone else: there is nothing to find
+  // here, and the caller must not go spend provider quota looking either.
+  if (isInternalBarcode(norm.display)) return null;
   const result = await pool.query(`SELECT * FROM pos_gtin_cache WHERE gtin = $1`, [
     norm.canonical,
   ]);
@@ -178,6 +182,13 @@ export async function ingestGtinResults(params: {
 }): Promise<GtinHint | null> {
   const norm = normalizeGtin(params.code);
   if (!norm.ok) throw new Error(`Invalid GTIN: ${norm.reason}`);
+
+  // NEVER cache a store-local code. `pos_gtin_cache` is keyed by GTIN alone
+  // with no store_id, so a row written here would hand store A's product name
+  // to store B, which minted the same-shaped code for something else. Every
+  // write path funnels through this function, so this one clause covers
+  // scanning, `learnBatch`, the supplier import and dump seeding alike.
+  if (isInternalBarcode(norm.display)) return null;
 
   await recordLookupEvents(norm.canonical, params.results, {
     storeId: params.storeId,

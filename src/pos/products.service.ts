@@ -5,6 +5,7 @@
 // src/pos/products.service.ts
 
 import { pool } from '../db.js';
+import { buildInternalBarcode } from './gtin/internal-code.js';
 import type { CatalogItem } from './types.js';
 import { getProductTagIds, resolveTagFilterIds } from './tags.service.js';
 
@@ -390,6 +391,33 @@ export async function archiveVariant(storeId: number, variantId: number) {
   );
   if (result.rows.length === 0) throw new Error('Variant not found');
   return getProduct(storeId, Number(result.rows[0].product_id));
+}
+
+/**
+ * Mint a store-local barcode for an item whose tag will not scan.
+ *
+ * The counter is global and non-transactional, so a code handed out and never
+ * saved is simply a gap — nothing is reserved or held. The authority for
+ * uniqueness stays where it belongs, on `idx_pos_variants_store_barcode` at
+ * INSERT time.
+ *
+ * The retry loop is not there for sequence collisions, which cannot happen. It
+ * covers the two ways a `29…` code can already exist: an operator typing one in
+ * by hand, and a database restored from a partial dump with a rewound sequence.
+ */
+export async function generateInternalBarcode(storeId: number): Promise<string> {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const seq = await pool.query<{ n: string }>(
+      `SELECT nextval('pos_internal_barcode_seq')::bigint AS n`
+    );
+    const barcode = buildInternalBarcode(Number(seq.rows[0].n));
+    const taken = await pool.query(
+      `SELECT 1 FROM pos_variants WHERE store_id = $1 AND barcode = $2 LIMIT 1`,
+      [storeId, barcode]
+    );
+    if (taken.rows.length === 0) return barcode;
+  }
+  throw new Error('Не вдалося згенерувати вільний штрихкод');
 }
 
 export async function getCatalog(

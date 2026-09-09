@@ -3,4 +3,5 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 export { displayGtin, enrichGtinFromSources, gtinSourceLabel } from '../lib/gtinLookup';
+export { INTERNAL_BARCODE_PREFIX, isInternalBarcode } from '../lib/internalBarcode';
 export type { GtinHint, LookupResult } from '../lib/gtinLookup';

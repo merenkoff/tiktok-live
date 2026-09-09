@@ -709,6 +709,12 @@ class PosApi {
     return data;
   }
 
+  /** Mint a store-local EAN-13 for an item whose tag will not scan. */
+  async generateInternalBarcode(): Promise<string> {
+    const { data } = await this.client.post<{ barcode: string }>('/variants/internal-barcode');
+    return data.barcode;
+  }
+
   async stockOnHand(): Promise<OnHandRow[]> {
     const { data } = await this.client.get<OnHandRow[]>('/stock/reports/on-hand');
     return data;
