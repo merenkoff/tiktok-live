@@ -3,14 +3,8 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import {
-  api,
-  assetUrl,
-  formatUah,
-  uahInputToCents,
-  DEFAULT_TAG_COLOR,
-  type TagColorKey,
-} from '@pos/platform';
+import { DEFAULT_TAG_COLOR, api, assetUrl, formatUah, type TagColorKey, uahInputToCents, useAuthStore } from '@pos/platform';
+import { PriceTagsDialog } from '../components/PriceTagsDialog';
 import type { PosTag, Product, ProductVariant } from '@pos/platform';
 import { ProductPhotoField, useDragScroll } from '@pos/platform/ui';
 import { TagColorSwatches } from '../components/TagColorSwatches';
@@ -48,6 +42,8 @@ export function ProductsPage() {
   const [error, setError] = useState<string | null>(null);
   const [filterTag, setFilterTag] = useState<number | 'all' | 'needs_review'>('all');
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [tagsOpen, setTagsOpen] = useState(false);
+  const storeName = useAuthStore((s) => s.auth?.store.name ?? '');
   const [showCreate, setShowCreate] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [newTagName, setNewTagName] = useState('');
@@ -307,7 +303,23 @@ export function ProductsPage() {
               >
                 Додати мітку
               </button>
+              <button
+                type="button"
+                onClick={() => setTagsOpen(true)}
+                className="rounded-sq border border-sq-divider bg-sq-surface px-3 py-2 text-sm"
+              >
+                Друк цінників
+              </button>
             </div>
+          )}
+
+          {tagsOpen && (
+            <PriceTagsDialog
+              products={products.filter((p) => selected.has(p.id))}
+              storeName={storeName}
+              onClose={() => setTagsOpen(false)}
+              onBarcodeGenerated={() => void reload()}
+            />
           )}
 
           {showCreate && (
