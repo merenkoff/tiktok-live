@@ -36,6 +36,16 @@ pub enum ReceiptKind {
     Refund,
 }
 
+/// The ПРРО result our own layout prints as a fiscal block.
+#[derive(Deserialize)]
+pub struct ReceiptFiscal {
+    pub fiscal_code: String,
+    #[serde(default)]
+    pub fiscal_date: Option<String>,
+    #[serde(default)]
+    pub tax_url: Option<String>,
+}
+
 #[derive(Deserialize)]
 pub struct ReceiptData {
     pub store_name: String,
@@ -52,6 +62,13 @@ pub struct ReceiptData {
     pub discount_cents: Option<i64>,
     pub total_cents: i64,
     pub payments: Vec<ReceiptPayment>,
+    /// The fiscal provider's own pre-rendered receipt. Printed verbatim when
+    /// present; every other field is then ignored. Both new fields default so
+    /// a host built before them keeps printing the layout.
+    #[serde(default)]
+    pub provider_text: Option<String>,
+    #[serde(default)]
+    pub fiscal: Option<ReceiptFiscal>,
 }
 
 // Characters per line for the two common thermal paper widths (Font A, ~12 dots
@@ -111,6 +128,22 @@ fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> 
     let mut printer = Printer::new(driver, Protocol::default(), Some(options));
 
     printer.init().map_err(|e| e.to_string())?;
+
+    // The provider already laid the receipt out at this roll's width (the
+    // store's `receipt_width`); lines are exactly `width` chars like our own
+    // `two_col` output, so they go through unchanged, same Win-1251 mapping.
+    if let Some(text) = receipt.provider_text.as_deref().filter(|t| !t.trim().is_empty()) {
+        printer.justify(JustifyMode::LEFT).map_err(|e| e.to_string())?;
+        for line in text.lines() {
+            printer.writeln(line.trim_end_matches('\r')).map_err(|e| e.to_string())?;
+        }
+        printer.feed().map_err(|e| e.to_string())?;
+        printer.print_cut().map_err(|e| e.to_string())?;
+        let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+        let _ = std::fs::remove_file(&path);
+        return Ok(bytes);
+    }
+
     printer.justify(JustifyMode::CENTER).map_err(|e| e.to_string())?;
     printer.bold(true).map_err(|e| e.to_string())?;
     printer.writeln(&receipt.store_name).map_err(|e| e.to_string())?;
@@ -171,6 +204,26 @@ fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> 
         printer
             .writeln(&two_col(width, payment_label(&payment.method), &money(payment.amount_cents)))
             .map_err(|e| e.to_string())?;
+    }
+
+    // Fiscal block: the number the tax office knows this receipt by, and its
+    // verification link as a QR the printer renders itself (native ESC/POS
+    // `GS ( k`, no image library) — a 200-char URL as text would just wrap.
+    if let Some(fiscal) = &receipt.fiscal {
+        printer.writeln(&divider(width)).map_err(|e| e.to_string())?;
+        printer.writeln("Фіскальний чек").map_err(|e| e.to_string())?;
+        printer
+            .writeln(&two_col(width, "ФН чека", &fiscal.fiscal_code))
+            .map_err(|e| e.to_string())?;
+        if let Some(date) = &fiscal.fiscal_date {
+            printer.writeln(date).map_err(|e| e.to_string())?;
+        }
+        if let Some(url) = fiscal.tax_url.as_deref().filter(|u| !u.is_empty()) {
+            printer.justify(JustifyMode::CENTER).map_err(|e| e.to_string())?;
+            printer.qrcode(url).map_err(|e| e.to_string())?;
+            printer.writeln("cabinet.tax.gov.ua").map_err(|e| e.to_string())?;
+            printer.justify(JustifyMode::LEFT).map_err(|e| e.to_string())?;
+        }
     }
 
     printer.writeln(&divider(width)).map_err(|e| e.to_string())?;
@@ -241,4 +294,98 @@ pub fn print_receipt(
         .map_err(|e| format!("{e:?}"))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn win1251(s: &str) -> Vec<u8> {
+        // Only what these tests need: ASCII passes through, Cyrillic maps to
+        // the Win-1251 table the printer is switched to (`RECEIPT_PAGE_CODE`).
+        s.chars()
+            .map(|c| match c {
+                'А'..='Я' => 0xC0 + (c as u32 - 'А' as u32) as u8,
+                'а'..='я' => 0xE0 + (c as u32 - 'а' as u32) as u8,
+                'і' => 0xB3,
+                'І' => 0xB2,
+                'ї' => 0xBF,
+                'є' => 0xBA,
+                'Є' => 0xAA,
+                c => c as u8,
+            })
+            .collect()
+    }
+
+    fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+        haystack.windows(needle.len()).any(|w| w == needle)
+    }
+
+    fn base() -> ReceiptData {
+        ReceiptData {
+            store_name: "Demo".into(),
+            kind: ReceiptKind::Sale,
+            receipt_number: "R-00001".into(),
+            refund_of_receipt: None,
+            created_at: "09.09.2026, 14:59:03".into(),
+            staff_name: "Олена".into(),
+            customer_name: None,
+            items: vec![ReceiptItem {
+                name: "Футболка".into(),
+                variant_label: "M".into(),
+                quantity: 1,
+                unit_price_cents: 10000,
+                line_total_cents: 10000,
+            }],
+            subtotal_cents: 10000,
+            discount_cents: None,
+            total_cents: 10000,
+            payments: vec![ReceiptPayment { method: "cash".into(), amount_cents: 10000 }],
+            provider_text: None,
+            fiscal: None,
+        }
+    }
+
+    #[test]
+    fn provider_text_prints_verbatim_and_nothing_of_ours() {
+        let mut receipt = base();
+        receipt.provider_text = Some("=== ТЕСТОВИЙ ЧЕК ===\nСУМА 100.00 ГРН\n".into());
+        let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
+        assert!(contains(&bytes, &win1251("=== ТЕСТОВИЙ ЧЕК ===")));
+        assert!(contains(&bytes, &win1251("СУМА 100.00 ГРН")));
+        assert!(!contains(&bytes, &win1251("Дякуємо за покупку!")));
+        assert!(!contains(&bytes, &win1251("Касир")));
+    }
+
+    #[test]
+    fn empty_provider_text_falls_back_to_the_layout() {
+        let mut receipt = base();
+        receipt.provider_text = Some("   \n".into());
+        let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
+        assert!(contains(&bytes, &win1251("Дякуємо за покупку!")));
+    }
+
+    #[test]
+    fn fiscal_block_carries_the_number_and_a_qr() {
+        let mut receipt = base();
+        receipt.fiscal = Some(ReceiptFiscal {
+            fiscal_code: "TEST-fKbevQ".into(),
+            fiscal_date: Some("09.09.2026, 14:59:03".into()),
+            tax_url: Some("https://cabinet.tax.gov.ua/cashregs/check?id=TEST-fKbevQ".into()),
+        });
+        let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
+        assert!(contains(&bytes, &win1251("Фіскальний чек")));
+        assert!(contains(&bytes, b"TEST-fKbevQ"));
+        // ESC/POS 2D-code function group: GS ( k
+        assert!(contains(&bytes, &[0x1D, 0x28, 0x6B]));
+        // And still our own footer — this is the local layout, not the provider's.
+        assert!(contains(&bytes, &win1251("Дякуємо за покупку!")));
+    }
+
+    #[test]
+    fn no_fiscal_block_for_a_non_fiscal_store() {
+        let bytes = build_ticket(&base(), CHARS_58MM).unwrap();
+        assert!(!contains(&bytes, &win1251("Фіскальний чек")));
+        assert!(!contains(&bytes, &[0x1D, 0x28, 0x6B]));
+    }
 }

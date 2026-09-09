@@ -18,7 +18,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '@pos/platform';
-import type { FiscalProviderId, FiscalSettingsView } from '@pos/platform';
+import type {
+  FiscalProviderId,
+  FiscalReceiptSource,
+  FiscalReceiptWidth,
+  FiscalSettingsView,
+} from '@pos/platform';
 
 // `src/types.ts` is types-only by design, so the runtime list lives here.
 // Order is the rollout order; the labels are what an owner recognises.
@@ -54,6 +59,8 @@ export function FiscalSettingsCard() {
   const [provider, setProvider] = useState<FiscalProviderId | ''>('');
   const [taxCode, setTaxCode] = useState('');
   const [autoOpenShift, setAutoOpenShift] = useState(true);
+  const [receiptSource, setReceiptSource] = useState<FiscalReceiptSource>('local');
+  const [receiptWidth, setReceiptWidth] = useState<FiscalReceiptWidth>(32);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -63,6 +70,8 @@ export function FiscalSettingsCard() {
     setProvider(view.provider ?? '');
     setTaxCode(view.default_tax_code ?? '');
     setAutoOpenShift(view.auto_open_shift);
+    setReceiptSource(view.receipt_source === 'provider' ? 'provider' : 'local');
+    setReceiptWidth(view.receipt_width === 48 ? 48 : 32);
   }
 
   const load = useCallback(async () => {
@@ -96,6 +105,8 @@ export function FiscalSettingsCard() {
         provider: provider || null,
         default_tax_code: taxCode.trim() || null,
         auto_open_shift: autoOpenShift,
+        receipt_source: receiptSource,
+        receipt_width: receiptWidth,
       });
       // Merge, never replace: the PATCH response does not carry
       // `adapter_available`, so overwriting would make the warning vanish on
@@ -187,6 +198,34 @@ export function FiscalSettingsCard() {
             />
           </label>
 
+          <label className="block text-sm">
+            <span className="text-sq-secondary">Джерело чека</span>
+            <select
+              className="pos-input mt-1 w-full"
+              value={receiptSource}
+              onChange={(e) => setReceiptSource(e.target.value as FiscalReceiptSource)}
+            >
+              <option value="local">Наш макет + фіскальний блок</option>
+              <option value="provider">Чек від провайдера, як є</option>
+            </select>
+          </label>
+
+          <label className="block text-sm">
+            <span className="text-sq-secondary">Ширина чекової стрічки</span>
+            <select
+              className="pos-input mt-1 w-full"
+              value={receiptWidth}
+              onChange={(e) => setReceiptWidth(Number(e.target.value) === 48 ? 48 : 32)}
+            >
+              <option value={32}>58 мм</option>
+              <option value={48}>80 мм</option>
+            </select>
+          </label>
+          <p className="-mt-3 text-xs text-sq-secondary">
+            Під неї провайдер верстає свій чек. Принтер кожної каси обирається окремо на екрані
+            «Обладнання».
+          </p>
+
           <div className="text-xs text-sq-secondary space-y-1">
             <p>
               Дані доступу:{' '}
@@ -195,9 +234,7 @@ export function FiscalSettingsCard() {
                 : 'не збережено'}{' '}
               — керуються на екрані ПРРО.
             </p>
-            {/* Both inert until the print-source decision lands. */}
             <p>Якщо ПРРО недоступне: продаж блокується.</p>
-            <p>Джерело чека: {settings.receipt_source === 'provider' ? 'провайдер' : 'локальне'}</p>
           </div>
 
           <div className="flex items-center gap-3">

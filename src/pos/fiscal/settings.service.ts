@@ -16,8 +16,10 @@ import {
 } from '../core/secrets.js';
 import { invalidateStore } from './runtime.js';
 import {
+  FISCAL_RECEIPT_WIDTHS,
   isFiscalProviderId,
   type FiscalCredentials,
+  type FiscalReceiptWidth,
   type FiscalSettingsPatch,
   type FiscalSettingsView,
   type PosFiscalSettings,
@@ -50,6 +52,7 @@ function mapRow(row: Record<string, unknown>): PosFiscalSettings {
     auto_open_shift: Boolean(row.auto_open_shift),
     fail_mode: 'block',
     receipt_source: row.receipt_source === 'provider' ? 'provider' : 'local',
+    receipt_width: Number(row.receipt_width) === 48 ? 48 : 32,
     created_at: row.created_at as Date,
     updated_at: row.updated_at as Date,
   };
@@ -102,6 +105,7 @@ export function toFiscalSettingsView(
       auto_open_shift: true,
       fail_mode: 'block',
       receipt_source: 'local',
+      receipt_width: 32,
       updated_at: null,
     };
   }
@@ -129,6 +133,7 @@ export function toFiscalSettingsView(
     auto_open_shift: settings.auto_open_shift,
     fail_mode: settings.fail_mode,
     receipt_source: settings.receipt_source,
+    receipt_width: settings.receipt_width,
     updated_at: settings.updated_at ? new Date(settings.updated_at).toISOString() : null,
   };
 }
@@ -244,6 +249,16 @@ export async function updateFiscalSettings(
     receiptSource = patch.receipt_source;
   }
 
+  let receiptWidth: FiscalReceiptWidth = existing?.receipt_width ?? 32;
+  if (patch.receipt_width !== undefined) {
+    if (!FISCAL_RECEIPT_WIDTHS.includes(patch.receipt_width)) {
+      throw new FiscalSettingsValidationError(
+        `receipt_width must be one of ${FISCAL_RECEIPT_WIDTHS.join(', ')}`
+      );
+    }
+    receiptWidth = patch.receipt_width;
+  }
+
   const providerChanged = Boolean(existing?.provider) && existing?.provider !== provider;
   const secretsPatch = patch.secrets === undefined ? null : validateSecretsPatch(patch.secrets);
 
@@ -275,8 +290,8 @@ export async function updateFiscalSettings(
   const result = await pool.query(
     `INSERT INTO pos_fiscal_settings
        (store_id, enabled, provider, config, secrets_encrypted, secrets_key_version,
-        default_tax_code, auto_open_shift, receipt_source)
-     VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9)
+        default_tax_code, auto_open_shift, receipt_source, receipt_width)
+     VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10)
      ON CONFLICT (store_id) DO UPDATE SET
        enabled = EXCLUDED.enabled,
        provider = EXCLUDED.provider,
@@ -286,6 +301,7 @@ export async function updateFiscalSettings(
        default_tax_code = EXCLUDED.default_tax_code,
        auto_open_shift = EXCLUDED.auto_open_shift,
        receipt_source = EXCLUDED.receipt_source,
+       receipt_width = EXCLUDED.receipt_width,
        updated_at = NOW()
      RETURNING *`,
     [
@@ -298,6 +314,7 @@ export async function updateFiscalSettings(
       defaultTaxCode,
       autoOpenShift,
       receiptSource,
+      receiptWidth,
     ]
   );
 

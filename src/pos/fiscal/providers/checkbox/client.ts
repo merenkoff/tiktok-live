@@ -266,12 +266,18 @@ export async function getReceipt(opts: AuthedOpts, receiptId: string): Promise<C
   }
 }
 
+/**
+ * `width` — characters per line for the text render (Checkbox: 10..250,
+ * default 42). Sent only when given, so non-text formats keep the plain URL.
+ */
 export async function getReceiptRendering(
   opts: AuthedOpts,
   receiptId: string,
-  format: CheckboxRenderFormat
+  format: CheckboxRenderFormat,
+  render: { width?: number } = {}
 ): Promise<{ contentType: string; body: string | Buffer } | null> {
-  const res = await fetch(`${BASE_URL}/receipts/${receiptId}/${format}`, {
+  const query = render.width ? `?width=${Math.trunc(render.width)}` : '';
+  const res = await fetch(`${BASE_URL}/receipts/${receiptId}/${format}${query}`, {
     method: 'GET',
     headers: {
       'x-license-key': opts.licenseKey,

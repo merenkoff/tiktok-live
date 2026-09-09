@@ -111,7 +111,13 @@ export function RefundSaleDialog({ sale, detail, selectAll, onClose, onRefunded 
       }
       setDone({
         row,
-        receipt: buildRefundReceiptPayload(fresh, doc, lines, auth?.store.name ?? ''),
+        receipt: buildRefundReceiptPayload(
+          fresh,
+          doc,
+          lines,
+          auth?.store.name ?? '',
+          row.refund_fiscal ?? null
+        ),
         // `done` is set once and is all the success pane reads, so the fiscal
         // result has to be captured now — the `sale` prop is never refreshed.
         fiscal: row.refund_fiscal ?? null,
@@ -150,9 +156,13 @@ export function RefundSaleDialog({ sale, detail, selectAll, onClose, onRefunded 
     }
   }
 
-  // Same store flag that governs sale receipts.
+  // Same store flag that governs sale receipts — and the same fiscal gate:
+  // never auto-print an un-fiscalised refund in a ПРРО store, the customer
+  // would keep a slip that looks like a refund receipt and carries no number.
+  // The manual button below stays.
   useEffect(() => {
     if (!done || !(auth?.store.auto_print_receipt ?? false)) return;
+    if ((auth?.store.fiscal?.enabled ?? false) && done.fiscal?.status !== 'done') return;
     void print(done.receipt);
     // Fires once per completed refund.
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -62,6 +62,68 @@ describe('buildReceiptPayload', () => {
   });
 });
 
+describe('buildReceiptPayload — fiscal', () => {
+  const doneDoc = {
+    status: 'done',
+    fiscal_code: 'TEST-fKbevQ',
+    fiscal_date: '2026-09-09T11:59:03.000Z',
+    tax_url: 'https://cabinet.tax.gov.ua/cashregs/check?id=TEST-fKbevQ',
+    qr_payload: null,
+    receipt_text: null,
+    error_code: null,
+    error_message: null,
+  };
+
+  it('carries nothing fiscal for a store that does not fiscalise', () => {
+    const payload = buildReceiptPayload(makeSaleDetail(), 'Demo');
+    expect(payload.provider_text).toBeNull();
+    expect(payload.fiscal).toBeNull();
+  });
+
+  it('adds the fiscal block from a done document', () => {
+    const payload = buildReceiptPayload(makeSaleDetail({ fiscal: doneDoc }), 'Demo');
+    expect(payload.provider_text).toBeNull();
+    expect(payload.fiscal).toMatchObject({
+      fiscal_code: 'TEST-fKbevQ',
+      tax_url: 'https://cabinet.tax.gov.ua/cashregs/check?id=TEST-fKbevQ',
+    });
+    expect(payload.fiscal?.fiscal_date).toMatch(/2026/);
+  });
+
+  it('passes the provider text through when the server shipped one', () => {
+    const payload = buildReceiptPayload(
+      makeSaleDetail({ fiscal: { ...doneDoc, receipt_text: '=== ЧЕК ===\nСУМА 450.00' } }),
+      'Demo'
+    );
+    expect(payload.provider_text).toBe('=== ЧЕК ===\nСУМА 450.00');
+    // The block is still there: the ESC/POS side ignores it when text is
+    // present, and an older Rust build that predates `provider_text` gets it.
+    expect(payload.fiscal?.fiscal_code).toBe('TEST-fKbevQ');
+  });
+
+  it('treats a failed or pending document as no fiscal data at all', () => {
+    const failed = buildReceiptPayload(
+      makeSaleDetail({ fiscal: { ...doneDoc, status: 'failed', fiscal_code: null } }),
+      'Demo'
+    );
+    expect(failed.fiscal).toBeNull();
+    expect(failed.provider_text).toBeNull();
+  });
+
+  it('attaches the refund document to a refund receipt', () => {
+    const sale = makeSaleDetail();
+    const payload = buildRefundReceiptPayload(
+      sale,
+      makeRefund(),
+      [{ sale_item_id: 100, quantity: 1 }],
+      'Demo',
+      { ...doneDoc, fiscal_code: 'TEST-gnNGVj', message: null, receipt_text: 'REFUND TEXT' }
+    );
+    expect(payload.provider_text).toBe('REFUND TEXT');
+    expect(payload.fiscal?.fiscal_code).toBe('TEST-gnNGVj');
+  });
+});
+
 describe('buildRefundReceiptPayload', () => {
   it('prices returned units exactly as they were charged', () => {
     // 3 units for 10,00 ₴; one already came back, two more are going back now.

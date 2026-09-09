@@ -18,6 +18,7 @@ import type {
   FiscalProvider,
   FiscalRefundDoc,
   FiscalRenderFormat,
+  FiscalRenderOptions,
   FiscalReport,
   FiscalResult,
   FiscalSaleDoc,
@@ -337,10 +338,13 @@ export const checkboxProvider: FiscalProvider = {
   async renderReceipt(
     ctx,
     providerDocId,
-    format: FiscalRenderFormat
+    format: FiscalRenderFormat,
+    opts?: FiscalRenderOptions
   ) {
     try {
-      const rendering = await getReceiptRendering(authedOpts(ctx), providerDocId, format);
+      const rendering = await getReceiptRendering(authedOpts(ctx), providerDocId, format, {
+        width: opts?.width,
+      });
       return rendering ? { format, contentType: rendering.contentType, body: rendering.body } : null;
     } catch (error) {
       throw classifyCheckboxError(error);

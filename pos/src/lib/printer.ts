@@ -25,6 +25,15 @@ export interface ReceiptPayment {
 /** A refund prints as its own document referencing the sale it undoes. */
 export type ReceiptKind = 'sale' | 'refund';
 
+/** The ПРРО result our own layout prints as a fiscal block. */
+export interface ReceiptFiscal {
+  fiscal_code: string;
+  /** Already formatted for the paper, like `created_at`. */
+  fiscal_date: string | null;
+  /** Tax-office verification link — printed as a QR on ESC/POS, as a link on paper-less PDF. */
+  tax_url: string | null;
+}
+
 export interface ReceiptData {
   store_name: string;
   kind: ReceiptKind;
@@ -39,6 +48,15 @@ export interface ReceiptData {
   discount_cents: number | null;
   total_cents: number;
   payments: ReceiptPayment[];
+  /**
+   * The fiscal provider's own pre-rendered receipt. When present it is
+   * printed verbatim and every other field is ignored — the store chose
+   * `receipt_source: 'provider'` and the text arrived. Optional so an older
+   * host or Rust build that predates it keeps printing the layout.
+   */
+  provider_text?: string | null;
+  /** Fiscal block for our own layout. Null/absent for a non-fiscal store. */
+  fiscal?: ReceiptFiscal | null;
 }
 
 export function listPrinters(): Promise<PrinterInfo[]> {

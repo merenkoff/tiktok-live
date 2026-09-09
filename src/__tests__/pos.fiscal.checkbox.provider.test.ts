@@ -372,6 +372,20 @@ describe('checkboxProvider.renderReceipt', () => {
     expect(rendering?.format).toBe('png');
     expect(Buffer.isBuffer(rendering?.body)).toBe(true);
   });
+
+  it('forwards the store receipt width to the text render', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => 'text/plain' },
+      text: async () => '=== ЧЕК ===',
+      arrayBuffer: async () => new ArrayBuffer(0),
+    });
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+    const rendering = await checkboxProvider.renderReceipt?.(ctx(), 'receipt-1', 'text', { width: 48 });
+    expect(rendering?.body).toBe('=== ЧЕК ===');
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/receipts\/receipt-1\/text\?width=48$/);
+  });
 });
 
 describe('checkboxProvider.signOut', () => {

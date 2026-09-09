@@ -26,8 +26,19 @@ export function isFiscalProviderId(value: unknown): value is FiscalProviderId {
  */
 export type FiscalFailMode = 'block';
 
-/** Which receipt the printer gets. Inert until the phase-8 decision. */
+/**
+ * Which receipt the printer gets.
+ *
+ * `local` — our ESC/POS layout plus a fiscal block (number, date, tax QR).
+ * `provider` — the provider's own pre-rendered text, fetched once at
+ * fiscalisation time and stored on the ledger row; the till prints it verbatim
+ * and falls back to `local` whenever the text could not be fetched.
+ */
 export type FiscalReceiptSource = 'local' | 'provider';
+
+/** Characters per line the provider renders at: 32 = 58mm roll, 48 = 80mm. */
+export type FiscalReceiptWidth = 32 | 48;
+export const FISCAL_RECEIPT_WIDTHS: readonly FiscalReceiptWidth[] = [32, 48];
 
 /** A `pos_fiscal_settings` row, secrets still encrypted. */
 export interface PosFiscalSettings {
@@ -41,6 +52,7 @@ export interface PosFiscalSettings {
   auto_open_shift: boolean;
   fail_mode: FiscalFailMode;
   receipt_source: FiscalReceiptSource;
+  receipt_width: FiscalReceiptWidth;
   created_at: Date;
   updated_at: Date;
 }
@@ -64,6 +76,7 @@ export interface FiscalSettingsView {
   auto_open_shift: boolean;
   fail_mode: FiscalFailMode;
   receipt_source: FiscalReceiptSource;
+  receipt_width: FiscalReceiptWidth;
   updated_at: string | null;
 }
 
@@ -83,6 +96,7 @@ export interface FiscalSettingsPatch {
   default_tax_code?: string | null;
   auto_open_shift?: boolean;
   receipt_source?: FiscalReceiptSource;
+  receipt_width?: FiscalReceiptWidth;
 }
 
 /** Everything an adapter needs to talk to a provider on a store's behalf. */
@@ -320,10 +334,20 @@ export interface FiscalProvider {
    */
   fetchDocument(ctx: FiscalCallCtx, providerDocId: string): Promise<FiscalResult | null>;
 
-  /** Optional: only some providers render receipts for us. */
+  /**
+   * Optional: only some providers render receipts for us.
+   *
+   * `opts.width` is the character width for text renders — the store's
+   * `receipt_width`. Adapters that cannot honour it ignore it.
+   */
   renderReceipt?(
     ctx: FiscalCallCtx,
     providerDocId: string,
-    format: FiscalRenderFormat
+    format: FiscalRenderFormat,
+    opts?: FiscalRenderOptions
   ): Promise<FiscalRendering | null>;
+}
+
+export interface FiscalRenderOptions {
+  width?: number;
 }

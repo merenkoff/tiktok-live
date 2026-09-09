@@ -40,6 +40,7 @@ function view(over: Partial<FiscalSettingsView> = {}): FiscalSettingsView {
     auto_open_shift: true,
     fail_mode: 'block',
     receipt_source: 'local',
+    receipt_width: 32,
     updated_at: null,
     secrets_key_configured: true,
     adapter_available: true,
@@ -93,6 +94,34 @@ describe('FiscalSettingsCard', () => {
       )
     );
     expect(await screen.findByText('Збережено')).toBeInTheDocument();
+  });
+
+  it('sends the receipt source and roll width the owner picked', async () => {
+    fiscalSettings.mockResolvedValue(view({ provider: 'checkbox' }));
+    updateFiscalSettings.mockResolvedValue(
+      view({ provider: 'checkbox', receipt_source: 'provider', receipt_width: 48 })
+    );
+    renderWithProviders(<FiscalSettingsCard />);
+
+    await userEvent.selectOptions(await screen.findByLabelText('Джерело чека'), 'provider');
+    await userEvent.selectOptions(screen.getByLabelText('Ширина чекової стрічки'), '48');
+    await userEvent.click(screen.getByRole('button', { name: 'Зберегти ПРРО' }));
+
+    await waitFor(() =>
+      expect(updateFiscalSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ receipt_source: 'provider', receipt_width: 48 })
+      )
+    );
+  });
+
+  it('hydrates both receipt controls from the saved settings', async () => {
+    fiscalSettings.mockResolvedValue(
+      view({ provider: 'checkbox', receipt_source: 'provider', receipt_width: 48 })
+    );
+    renderWithProviders(<FiscalSettingsCard />);
+
+    expect(await screen.findByLabelText('Джерело чека')).toHaveValue('provider');
+    expect(screen.getByLabelText('Ширина чекової стрічки')).toHaveValue('48');
   });
 
   it('keeps the no-adapter warning after a save', async () => {

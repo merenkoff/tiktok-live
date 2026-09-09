@@ -211,6 +211,32 @@ describe('getReceiptRendering', () => {
     expect(result).toEqual({ contentType: 'text/plain', body: 'ТЕСТОВИЙ ЧЕК' });
   });
 
+  it('passes the requested character width as a query parameter', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => 'text/plain' },
+      text: async () => 'x',
+      arrayBuffer: async () => new ArrayBuffer(0),
+    });
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+    await getReceiptRendering(authed, 'r1', 'text', { width: 32 });
+    expect(fetchMock.mock.calls[0][0]).toBe('https://api.checkbox.in.ua/api/v1/receipts/r1/text?width=32');
+  });
+
+  it('leaves the URL bare when no width is given', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => 'text/plain' },
+      text: async () => 'x',
+      arrayBuffer: async () => new ArrayBuffer(0),
+    });
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+    await getReceiptRendering(authed, 'r1', 'text');
+    expect(fetchMock.mock.calls[0][0]).toBe('https://api.checkbox.in.ua/api/v1/receipts/r1/text');
+  });
+
   it('returns a Buffer for binary formats (png/pdf)', async () => {
     vi.stubGlobal(
       'fetch',
