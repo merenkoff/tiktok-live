@@ -15,7 +15,7 @@ next to `remote-entry.js`:
 
 | file | contents |
 |---|---|
-| `manifest.json` | `{ schema, moduleId, version, entry, keyId, builtAt, files: { "<name>": "sha384-…" } }` — every `*.js` **and `*.css`** in the output dir, name-sorted, fixed key order |
+| `manifest.json` | `{ schema, moduleId, version, minHostPlatform, entry, keyId, builtAt, files: { "<name>": "sha384-…" } }` — every `*.js` **and `*.css`** in the output dir, name-sorted, fixed key order. `minHostPlatform` = the checkout's `PLATFORM_VERSION`; a host with a lower one refuses the remote ([POS_MODULE_PLATFORM_VERSION.md](POS_MODULE_PLATFORM_VERSION.md)). `schema` stays `1` — older hosts ignore the field. |
 | `manifest.json.sig` | base64 Ed25519 **detached** signature over the exact bytes of `manifest.json` |
 
 `serve:<id>-remote` (and any CDN serving the directory) exposes all three.

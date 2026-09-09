@@ -190,6 +190,23 @@ export async function applyModuleRemotes(opts: ApplyModuleRemotesOptions = {}): 
     const isOnlineOnly = !!presentation && !MODULES.some((m) => m.id === id);
     let landed = false;
 
+    // Desktop only (roadmap #12 track 2): a string entry overrides a bundled
+    // module, and some of those the cashier shell never mounts (`stock`,
+    // `products` — `shells: ['web']`). Downloading and caching them on every
+    // till would buy nothing, so they are not synced here at all.
+    if (opts.syncRemote && !isOnlineOnly) {
+      const bundled = MODULES.find((m) => m.id === id);
+      if (bundled && !bundled.shells.includes('cashier')) {
+        reportModuleEvent({
+          type: 'remote_load_fallback',
+          moduleId: id,
+          url,
+          reason: 'web-only module, not synced on the cashier',
+        });
+        continue;
+      }
+    }
+
     try {
       let importUrl = url;
       let styleUrl: string | undefined;

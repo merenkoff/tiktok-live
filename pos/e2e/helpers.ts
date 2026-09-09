@@ -65,7 +65,14 @@ export const catalog = [
  * to an empty list so a page never crashes on a request the spec does not care
  * about.
  */
-export async function mockPosApi(page: Page, enabledModules: string[] = ALL_MODULES) {
+export async function mockPosApi(
+  page: Page,
+  enabledModules: string[] = ALL_MODULES,
+  opts: {
+    /** `store.module_remotes` — a per-module source URL (string) or an online-only entry (object). */
+    moduleRemotes?: Record<string, unknown>;
+  } = {}
+) {
   const auth = {
     token: 'e2e-token',
     expires_at: '2099-01-01T00:00:00.000Z',
@@ -77,6 +84,7 @@ export async function mockPosApi(page: Page, enabledModules: string[] = ALL_MODU
       currency: 'UAH',
       auto_print_receipt: false,
       enabled_modules: enabledModules,
+      module_remotes: opts.moduleRemotes ?? {},
       fiscal: { enabled: false, provider: null },
     },
   };

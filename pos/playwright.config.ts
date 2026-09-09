@@ -12,7 +12,10 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   webServer: {
-    command: 'npm run build && npm run preview -- --host localhost --port 4173',
+    // `VITE_REMOTE_ALLOW_DEV_KEY=1`: e2e/remotes.spec.ts signs a throwaway
+    // module remote with the deterministic dev key, which a production build
+    // does not trust otherwise (POS_MODULE_REMOTE_SIGNING.md).
+    command: 'VITE_REMOTE_ALLOW_DEV_KEY=1 npm run build && npm run preview -- --host localhost --port 4173',
     url: 'http://localhost:4173',
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,

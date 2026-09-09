@@ -45,16 +45,30 @@ export function createCacheFirstSync(sync: SyncFn, urlFor: (id: string, file?: s
 interface ModuleRemoteUpdatesState {
   /** Module titles whose newer (or first) download landed since boot. */
   ready: string[];
+  /**
+   * Module titles whose published build needs a newer host `PLATFORM_VERSION`
+   * than this app has (roadmap #12 track 2) — a reload changes nothing; the
+   * app itself has to update.
+   */
+  needsAppUpdate: string[];
   dismissed: boolean;
   markReady: (title: string) => void;
+  markNeedsAppUpdate: (title: string) => void;
   dismiss: () => void;
 }
 
 export const useModuleRemoteUpdates = create<ModuleRemoteUpdatesState>((set) => ({
   ready: [],
+  needsAppUpdate: [],
   dismissed: false,
   markReady: (title) =>
     set((s) => (s.ready.includes(title) ? s : { ready: [...s.ready, title], dismissed: false })),
+  markNeedsAppUpdate: (title) =>
+    set((s) =>
+      s.needsAppUpdate.includes(title)
+        ? s
+        : { needsAppUpdate: [...s.needsAppUpdate, title], dismissed: false }
+    ),
   dismiss: () => set({ dismissed: true }),
 }));
 
@@ -75,7 +89,9 @@ export async function checkModuleRemoteUpdates(sync: SyncFn): Promise<void> {
   await Promise.allSettled(
     entries.map(async ([id, { url }]) => {
       const res = await sync(id, url);
-      if (res.status === 'updated' || (pending.has(id) && res.active != null)) {
+      if (res.status === 'incompatible') {
+        useModuleRemoteUpdates.getState().markNeedsAppUpdate(titleOf(id));
+      } else if (res.status === 'updated' || (pending.has(id) && res.active != null)) {
         useModuleRemoteUpdates.getState().markReady(titleOf(id));
       }
     })

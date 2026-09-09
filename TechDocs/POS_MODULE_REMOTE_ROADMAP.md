@@ -20,6 +20,10 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[-]` won
   - Осталось (до реальной отдачи модуля на независимый апгрейд): решить контракт
     breaking-изменений, `min_supported` / окно совместимости, включить strict,
     опционально URL-префикс `/api/pos/v1`.
+  - **Вторая половина #1 — версия поверхности `@pos/platform` — сделана**
+    (2026-09-09, #12 трек 2): `PLATFORM_VERSION` в хосте, `minHostPlatform` в
+    подписанном манифесте, проверка на вебе / в Rust / в кеше, снапшот-тест
+    поверхности. [POS_MODULE_PLATFORM_VERSION.md](POS_MODULE_PLATFORM_VERSION.md).
 
 - [x] **2. CI-публикация remote-артефактов** — сделано.
   - `.github/workflows/module-release.yml`: тег `module-<id>-v<version>` (или
@@ -194,12 +198,26 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[-]` won
       прод-инсталлер и Railway доверяют только прод-ключу.
     - `prune_module_remotes(keep)` после boot убирает кеш модулей, которых
       больше нет в `module_remotes`.
-  - **[ ] Трек 2 — «#12-lite»: string-override bundled-модулей на кассе.**
-    Уже работает случайно (см. #9). Сделать официально = контракт версий
-    хост↔модуль (`PLATFORM_VERSION` в `@pos/platform`, `minHostPlatform` в
-    манифесте, проверка в Rust до скачивания и в `applyModuleRemotes` до
-    `import()`, fallback на bundled) + e2e на `dist-cashier`. Закрывает
-    практическую часть #1. ~1 неделя. **Отдельный план перед стартом.**
+  - **[x] Трек 2 — «#12-lite»: string-override bundled-модулей на кассе**
+    (сделано 2026-09-09). Работало случайно (см. #9); теперь официально, под
+    контрактом версий хост↔модуль —
+    [POS_MODULE_PLATFORM_VERSION.md](POS_MODULE_PLATFORM_VERSION.md):
+    - `PLATFORM_VERSION` (целое) в `@pos/platform`; `sign-remote.mjs` пишет в
+      манифест `minHostPlatform` = версия чекаута; `schema` остаётся `1`.
+    - Проверка в трёх точках: `verifyRemoteEntry` (веб, до хэша entry),
+      `sync_module_remote` (Rust — несовместимое **не скачивается**,
+      `status: 'incompatible'`), `cachedOnly` (кеш с `minHostPlatform > host`
+      не отдаётся). `installed.json` хранит `minHostPlatform`.
+    - Касса не синкает string-override web-only модулей (`stock`, `products`).
+    - UI: проба в Settings предупреждает «потребує платформу N»; на кассе
+      баннер «Потребує новішої версії застосунку» → `/hardware`; плейсхолдер
+      online-only модуля объясняет «оновіть застосунок».
+    - Страховка от забытого бампа: `src/platform/surface.test.ts` +
+      `surface.snapshot.json`, `npm run platform:snapshot` отказывается
+      записать изменившийся набор экспортов без бампа.
+    - e2e `pos/e2e/remotes.spec.ts` — подписанный в тесте remote с фейкового
+      CDN: совместимый подменяет bundled, `minHostPlatform+1` — нет. Tauri-путь
+      — юнит-тесты Rust + ручной чек-лист (в плане трека).
   - **[ ] Трек 3 — модули с собственными оффлайн-данными.** Контракт
     `offline?: { snapshot(), sync(), pendingCount() }`, своя Dexie-БД на модуль
     (`cloth-pos-module-<id>`), порядок синка, агрегация `pending`. ~1.5–3 недели.
@@ -305,6 +323,8 @@ download/verify/cache + плейсхолдер online-only модуля из `st
 ([POS_LIVE_SELLING_MODULE.md](POS_LIVE_SELLING_MODULE.md)).
 Механизм для in-tree модулей закрыт: per-store, подписан, self-styled. #11
 показал: касса неотделима (оффлайн+CSP), механизм — под web/admin-фичи.
-Сделано и #2 (CI-публикация в `module-builds` + jsdelivr, прод-ключ). Осталось
-#1 (полноценный контракт версий) — он же трек 2 из #12. #12 пересмотрен
-2026-09-09: трек 1 (пробелы паритета #13) закрыт, треки 2–3 ждут своих планов.
+Сделано и #2 (CI-публикация в `module-builds` + jsdelivr, прод-ключ). #12
+пересмотрен 2026-09-09: трек 1 (пробелы паритета #13) и трек 2 (string-override
+на кассе + `PLATFORM_VERSION`/`minHostPlatform`) закрыты; трек 3 ждёт своего
+плана и модуля-кандидата. От #1 осталась только API-половина (strict-режим
+`/api/pos`, окно совместимости).

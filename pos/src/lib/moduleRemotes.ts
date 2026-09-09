@@ -13,13 +13,18 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+// Leaf import, like `registry.ts`: `platform/version.ts` has no dependencies.
+import { PLATFORM_VERSION } from '../platform/version';
 
 export interface ModuleSyncResult {
   /** `'updated'` fresh download · `'current'` cache already good · `'offline'`
-   *  no network (use whatever is cached) · `'error'` unreachable here (Rust
-   *  returns `Err`, surfaced as a rejected promise). */
-  status: 'updated' | 'current' | 'offline' | 'error';
-  /** Version now live in the cache; `null` only when offline with nothing cached. */
+   *  no network (use whatever is cached) · `'incompatible'` the server's build
+   *  needs a newer host `PLATFORM_VERSION` than this app has — not downloaded,
+   *  `active` is the cached version if that one is compatible (roadmap #12
+   *  track 2) · `'error'` unreachable here (Rust returns `Err`, surfaced as a
+   *  rejected promise). */
+  status: 'updated' | 'current' | 'offline' | 'incompatible' | 'error';
+  /** Version now live in the cache; `null` when nothing usable is cached. */
   active: string | null;
   previous?: string | null;
   error?: string | null;
@@ -41,7 +46,14 @@ export function syncModuleRemote(
   baseUrl: string,
   opts: SyncModuleRemoteOptions = {}
 ): Promise<ModuleSyncResult> {
-  return invoke('sync_module_remote', { id, baseUrl, cachedOnly: opts.cachedOnly ?? false });
+  // `hostPlatform` is what Rust compares the manifest's `minHostPlatform` to —
+  // the TS side owns that number; Rust cannot read `version.ts`.
+  return invoke('sync_module_remote', {
+    id,
+    baseUrl,
+    cachedOnly: opts.cachedOnly ?? false,
+    hostPlatform: PLATFORM_VERSION,
+  });
 }
 
 /**
