@@ -97,8 +97,9 @@ describe.skipIf(!hasDb)('POS fiscal shifts', () => {
   });
 
   it('throws not_configured when no adapter exists for the chosen provider', async () => {
-    // Loud, rather than falling through to an un-fiscalised sale.
-    resetProviders();
+    // Loud, rather than falling through to an un-fiscalised sale. vchasno has
+    // no adapter yet — checkbox itself is always built in now.
+    await updateFiscalSettings(store.storeId, { provider: 'vchasno' });
     await expect(shifts.resolveContext(store.storeId)).rejects.toMatchObject({
       kind: 'not_configured',
     });

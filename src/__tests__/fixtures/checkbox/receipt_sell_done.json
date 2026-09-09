@@ -1,0 +1,19 @@
+{
+  "_meta": {
+    "endpoint": "GET /api/v1/receipts/{id}",
+    "status": 200,
+    "scenario": "polled ~2s after POST /receipts/sell — status DONE, fiscal_code and tax_url now populated. Note tax_url's mac query param changes on every re-fetch of the same receipt — do not treat it as a stable comparison key."
+  },
+  "id": "9f283816-07b1-4bd7-875a-e2339c675ee8",
+  "serial": 1,
+  "status": "DONE",
+  "type": "SELL",
+  "total_sum": 15000,
+  "total_payment": 15000,
+  "fiscal_code": "TEST-kV7DlT",
+  "tax_url": "https://cabinet.tax.gov.ua/cashregs/check?id=TEST-kV7DlT&date=20260909&time=13%3A28%3A55&fn=TEST102567&sm=150.00&mac=d2888c38dc8cfdc67a6ce473039d8b6b9d2037f9438f413044d599e60545d5ca",
+  "is_sent_dps": false,
+  "shift_id": "066c8c8f-bd67-4661-8766-c7429e15ea27",
+  "transaction_id": "13562c11-818e-4428-b951-3262b7fbd5ab",
+  "related_receipt_id": null
+}

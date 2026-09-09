@@ -14,9 +14,10 @@
 
 import { FiscalError } from '../errors.js';
 import type { FiscalProvider, FiscalProviderId } from '../types.js';
+import { checkboxProvider } from './checkbox/index.js';
 
-/** Adapters compiled into the app. Checkbox lands here in phase 2b. */
-const BUILT_IN: FiscalProvider[] = [];
+/** Adapters compiled into the app. */
+const BUILT_IN: FiscalProvider[] = [checkboxProvider];
 
 const providers = new Map<FiscalProviderId, FiscalProvider>();
 

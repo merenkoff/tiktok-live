@@ -1,0 +1,9 @@
+{
+  "_meta": {
+    "endpoint": "GET /api/v1/cashier/shift (any authenticated endpoint)",
+    "status": 401,
+    "scenario": "garbage/invalid bearer token — the same code Checkbox would plausibly return for an actually-expired token, since the JWT itself carries no exp claim"
+  },
+  "code": "base.credentials",
+  "message": "Could not validate credentials"
+}

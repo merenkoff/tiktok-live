@@ -522,7 +522,9 @@ describe.skipIf(!hasDb)('POS fiscal checkout orchestration', () => {
     });
     expect(withFake.json().adapter_available).toBe(true);
 
-    resetProviders();
+    // vchasno/echeck have no adapter yet — the real scenario this field
+    // exists for, now that `checkbox` itself is always built in.
+    await updateFiscalSettings(store.storeId, { provider: 'vchasno' });
     const without = await app.inject({
       method: 'GET',
       url: '/api/pos/fiscal/settings',

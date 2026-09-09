@@ -1,0 +1,10 @@
+{
+  "_meta": {
+    "endpoint": "GET /api/v1/cashier/tax",
+    "status": 200,
+    "scenario": "the test organization has is_vat:false, so it exposes exactly one tax rate. A VAT-registered store will see more codes (20%, 7%, 0%, exempt, etc.) — the settings form must fetch this list live, never hardcode a single code."
+  },
+  "codes": [
+    { "id": "02f5ecbd-e549-456d-ab33-33167ec2c028", "code": 8, "label": "Без ПДВ", "symbol": "Є", "rate": 0, "included": true, "is_default": false, "no_vat": true }
+  ]
+}

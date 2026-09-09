@@ -1,0 +1,5 @@
+{
+  "_meta": { "endpoint": "POST /api/v1/cashier/signinPinCode", "status": 401, "scenario": "wrong X-License-Key" },
+  "code": "cash_register.invalid_license_key",
+  "message": "Невірний ключ ліцензії каси"
+}

@@ -1,0 +1,17 @@
+{
+  "_meta": {
+    "endpoint": "GET /api/v1/cashier/shift",
+    "status": 200,
+    "scenario": "polled ~2s after POST /shifts — status transitioned to OPENED"
+  },
+  "id": "066c8c8f-bd67-4661-8766-c7429e15ea27",
+  "serial": 1,
+  "status": "OPENED",
+  "opened_at": "2026-09-09T10:27:53.770403+00:00",
+  "closed_at": null,
+  "taxes": [
+    { "id": "a5f53b9f-53af-4fd4-a794-aae413070625", "code": 8, "label": "Без ПДВ", "symbol": "Є", "rate": 0, "no_vat": true }
+  ],
+  "cash_register": { "id": "92237982-b60e-42a5-87e8-6153ad6e0998", "fiscal_number": "TEST102567", "active": true, "number": "1" },
+  "cashier": { "id": "b291249c-b928-4659-93a1-4dead207b299", "full_name": "Тестовий касир", "key_id": "test_5Vwh3jzC5xShSxHk" }
+}

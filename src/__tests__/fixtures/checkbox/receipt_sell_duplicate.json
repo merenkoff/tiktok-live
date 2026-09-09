@@ -1,0 +1,9 @@
+{
+  "_meta": {
+    "endpoint": "POST /api/v1/receipts/sell",
+    "status": 400,
+    "scenario": "re-sent the exact same request body (same id) as an already-processed sell"
+  },
+  "code": "receipt.already_exists",
+  "message": "Вказаний id чеку вже існує"
+}
