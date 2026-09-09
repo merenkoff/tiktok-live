@@ -1,0 +1,6 @@
+{
+  "_meta": { "endpoint": "POST /api/v1/cashier/signinPinCode", "status": 200 },
+  "type": "bearer",
+  "token_type": "bearer",
+  "access_token": "<REDACTED — real sandbox token has no exp claim, see README>"
+}

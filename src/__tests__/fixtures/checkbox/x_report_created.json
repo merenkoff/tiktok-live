@@ -1,0 +1,16 @@
+{
+  "_meta": {
+    "endpoint": "POST /api/v1/reports",
+    "status": 201,
+    "scenario": "X-report creation — unlike shifts/receipts, fiscal_code STAYS null forever (X-reports are not transmitted to DPS, only Z-reports are). GET /reports/{id}/text is ready immediately, no polling needed."
+  },
+  "id": "2cdd8fc8-5011-47e5-aa3a-bb873386bff1",
+  "shift_id": "c1ac6fa0-6550-4406-aa68-6ecba4e34d57",
+  "last_receipt_id": null,
+  "fiscal_code": null,
+  "serial": 1,
+  "is_z_report": false,
+  "transaction_fail": false,
+  "balance": 21000,
+  "initial": 21000
+}

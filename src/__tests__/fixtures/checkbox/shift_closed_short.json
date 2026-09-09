@@ -1,0 +1,16 @@
+{
+  "_meta": {
+    "endpoint": "GET /api/v1/shifts/short/{shift_id}",
+    "status": 200,
+    "scenario": "polled after POST /shifts/close — status CLOSED, z_report.fiscal_code already populated by the time this status appears (unlike the 202 response from /shifts/close itself, where it was still null). GET /reports/{z_report.id}/text is ready right after this."
+  },
+  "id": "c1ac6fa0-6550-4406-aa68-6ecba4e34d57",
+  "serial": 3,
+  "status": "CLOSED",
+  "z_report": {
+    "id": "fe789f86-84f1-4338-a4f3-7099aca1bd5f",
+    "fiscal_code": "TEST-qrP11P",
+    "is_z_report": true
+  },
+  "closing_transaction": { "status": "DONE", "response_status": "ok" }
+}

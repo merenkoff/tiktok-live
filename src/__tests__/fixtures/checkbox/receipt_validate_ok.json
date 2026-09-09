@@ -1,0 +1,15 @@
+{
+  "_meta": {
+    "endpoint": "POST /api/v1/receipts/validate",
+    "status": 200,
+    "scenario": "dry run — same ReceiptSellPayload shape as /receipts/sell, never issues a real fiscal document",
+    "request_body": {
+      "id": "<uuid — the idempotency key>",
+      "goods": [
+        { "good": { "code": "SKU-TEST-1", "name": "Тестовий товар", "price": 15000, "tax": [8] }, "quantity": 1000 }
+      ],
+      "payments": [{ "type": "CASH", "value": 15000 }]
+    }
+  },
+  "validated": true
+}

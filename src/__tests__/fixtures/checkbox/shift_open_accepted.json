@@ -1,0 +1,14 @@
+{
+  "_meta": {
+    "endpoint": "POST /api/v1/shifts",
+    "status": 202,
+    "scenario": "immediately after opening — async, not yet OPENED"
+  },
+  "id": "066c8c8f-bd67-4661-8766-c7429e15ea27",
+  "serial": 1,
+  "status": "CREATED",
+  "z_report": null,
+  "opened_at": null,
+  "closed_at": null,
+  "cash_register": { "id": "92237982-b60e-42a5-87e8-6153ad6e0998", "fiscal_number": "TEST102567", "active": true, "number": "1" }
+}

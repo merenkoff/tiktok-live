@@ -1,0 +1,9 @@
+{
+  "_meta": {
+    "endpoint": "GET /api/v1/cashier/shift",
+    "status": 200,
+    "scenario": "no active shift — both 'never opened today' and 'closed' return this exact bare response, not an object with status CLOSED",
+    "note": "the real HTTP body is the literal JSON value null, not an object — this wrapper only exists so the fixture file itself is inspectable"
+  },
+  "raw_body": null
+}

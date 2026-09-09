@@ -105,13 +105,11 @@ describe.skipIf(!hasDb)('POS fiscal test-connection', () => {
   });
 
   it('degrades gracefully when the build ships no adapter for the provider', async () => {
-    // The state every store is in until phase 2b ships a real Checkbox
-    // adapter: `resetProviders()` empties the registry, exactly like
-    // production today.
-    resetProviders();
+    // vchasno/echeck have no adapter yet — checkbox itself is always built
+    // in now, so this is the real scenario the fallback exists for.
     await updateFiscalSettings(store.storeId, {
       enabled: false,
-      provider: 'checkbox',
+      provider: 'vchasno',
       secrets: { licenceKey: 'x', cashierPin: '0000' },
     });
     const res = await testConnection();

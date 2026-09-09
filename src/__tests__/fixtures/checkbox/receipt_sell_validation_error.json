@@ -1,0 +1,17 @@
+{
+  "_meta": {
+    "endpoint": "POST /api/v1/receipts/sell",
+    "status": 422,
+    "scenario": "empty goods array — violates ReceiptSellPayload.goods minItems:1. Same shape as the 'missing X-License-Key header' case; validation.custom is the one error family with no top-level machine code, only detail[].loc/.type."
+  },
+  "code": "validation.custom",
+  "message": "Помилка валідації",
+  "detail": [
+    {
+      "loc": ["body", "goods"],
+      "msg": "Переконайтеся, що це значення містить принаймні 1 елементів",
+      "type": "value_error.list.min_items",
+      "ctx": { "limit_value": 1 }
+    }
+  ]
+}

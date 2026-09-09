@@ -1,0 +1,8 @@
+{
+  "_meta": {
+    "endpoint": "GET /api/v1/receipts/{id}",
+    "status": 404,
+    "scenario": "nonexistent receipt id — note there is no top-level code field here, only message. client.ts's getReceipt() treats any 404 as null regardless of body shape."
+  },
+  "message": "Сталась помилка при запиті до архіву чеків: [not_found#404] Not Found"
+}

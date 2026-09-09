@@ -1,0 +1,22 @@
+{
+  "_meta": {
+    "endpoint": "POST /api/v1/shifts/close",
+    "status": 202,
+    "scenario": "immediately after closing — async, status CLOSING, z_report present but fiscal_code still null"
+  },
+  "id": "066c8c8f-bd67-4661-8766-c7429e15ea27",
+  "serial": 1,
+  "status": "CLOSING",
+  "z_report": {
+    "id": "31922e65-f694-4eec-a418-75a0ba6ac4de",
+    "shift_id": "066c8c8f-bd67-4661-8766-c7429e15ea27",
+    "last_receipt_id": "9f283816-07b1-4bd7-875a-e2339c675ee8",
+    "fiscal_code": null,
+    "serial": 1,
+    "is_z_report": true,
+    "sell_receipts_count": 1,
+    "return_receipts_count": 0,
+    "balance": 15000
+  },
+  "closed_at": "2026-09-09T13:29:47.635661+03:00"
+}

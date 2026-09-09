@@ -1,0 +1,5 @@
+{
+  "_meta": { "endpoint": "POST /api/v1/cashier/signinPinCode", "status": 403, "scenario": "wrong pin_code" },
+  "code": "cashier.invalid_credentials",
+  "message": "Невірний пінкод"
+}

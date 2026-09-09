@@ -1,0 +1,9 @@
+{
+  "_meta": {
+    "endpoint": "POST /api/v1/receipts/sell",
+    "status": 400,
+    "scenario": "sell attempted with no open shift (never opened, or already closed)"
+  },
+  "code": "shift.not_opened",
+  "message": "Зміну не відкрито"
+}

@@ -29,6 +29,7 @@ import {
   registerProvider,
   resetProviders,
 } from '../pos/fiscal/providers/index.js';
+import { checkboxProvider } from '../pos/fiscal/providers/checkbox/index.js';
 import {
   awaitSlot,
   RATE_LIMIT_DECLINED,
@@ -129,10 +130,10 @@ describe('fiscal error taxonomy', () => {
 describe('fiscal provider registry', () => {
   afterEach(() => resetProviders());
 
-  it('ships no adapters yet', () => {
-    // Checkbox lands in phase 2b, deliberately last — its error classification
-    // is not derivable from the public OpenAPI spec.
-    expect(hasProvider('checkbox')).toBe(false);
+  it('ships the checkbox adapter, and no others yet', () => {
+    expect(getProvider('checkbox')).toBe(checkboxProvider);
+    expect(hasProvider('vchasno')).toBe(false);
+    expect(hasProvider('echeck')).toBe(false);
   });
 
   it('throws not_configured rather than returning nothing', () => {
@@ -151,7 +152,8 @@ describe('fiscal provider registry', () => {
     registerProvider(fake);
     expect(getProvider('checkbox')).toBe(fake);
     resetProviders();
-    expect(hasProvider('checkbox')).toBe(false);
+    expect(getProvider('checkbox')).toBe(checkboxProvider);
+    expect(getProvider('checkbox')).not.toBe(fake);
   });
 });
 

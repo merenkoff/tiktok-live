@@ -1,0 +1,20 @@
+{
+  "_meta": {
+    "endpoint": "POST /api/v1/receipts/sell",
+    "status": 201,
+    "scenario": "immediately after selling — async, status CREATED, fiscal_code/tax_url not yet available"
+  },
+  "id": "9f283816-07b1-4bd7-875a-e2339c675ee8",
+  "serial": 1,
+  "status": "CREATED",
+  "type": "SELL",
+  "total_sum": 15000,
+  "total_payment": 15000,
+  "fiscal_code": null,
+  "fiscal_date": "2026-09-09T10:28:55.512968+00:00",
+  "tax_url": null,
+  "is_sent_dps": false,
+  "shift_id": "066c8c8f-bd67-4661-8766-c7429e15ea27",
+  "transaction_id": "13562c11-818e-4428-b951-3262b7fbd5ab",
+  "related_receipt_id": null
+}

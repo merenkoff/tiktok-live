@@ -1,0 +1,16 @@
+{
+  "_meta": { "endpoint": "GET /api/v1/cashier/me", "status": 200, "scenario": "used for probe() — confirms credentials are live and returns the cashier name to show the owner" },
+  "id": "b291249c-b928-4659-93a1-4dead207b299",
+  "full_name": "Тестовий касир",
+  "key_id": "test_5Vwh3jzC5xShSxHk",
+  "signature_type": "TEST",
+  "is_test": true,
+  "organization": {
+    "id": "088f1937-a429-4759-bfc5-2570b48a8eb5",
+    "title": "Тестова організація",
+    "is_vat": false,
+    "receipts_ratelimit_count": 3,
+    "receipts_ratelimit_interval": 1,
+    "allowed_offline_duration": 36
+  }
+}
