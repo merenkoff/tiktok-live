@@ -98,7 +98,11 @@ export interface CheckboxReceipt {
   fiscal_code: string | null;
   fiscal_date: string | null;
   tax_url: string | null;
-  transaction: { response_error_message?: string | null } | null;
+  /** Offline documents only — Checkbox computes it on `sell-offline`. */
+  control_number?: string | null;
+  is_created_offline?: boolean;
+  is_sent_dps?: boolean;
+  transaction: { id?: string; response_error_message?: string | null } | null;
 }
 
 export interface CheckboxReport {
@@ -153,6 +157,51 @@ export interface CheckboxSellPayload {
 export interface CheckboxServicePayload {
   id: string;
   payment: CheckboxCashPayment;
+}
+
+/** `POST /receipts/sell-offline` = `sell` + the two stamp fields (+ chain control). */
+export interface CheckboxSellOfflinePayload extends CheckboxSellPayload {
+  fiscal_code: string;
+  /** ISO 8601 with offset — the moment the sale actually happened. */
+  fiscal_date: string;
+  previous_receipt_id?: string;
+}
+
+// ── Offline mode (TechDocs/checkbox-api/cash-register.md) ──────────────────
+
+/** `GET /cash-registers/info` — narrowed to the offline fields. */
+export interface CheckboxCashRegisterInfo {
+  id: string;
+  fiscal_number: string;
+  offline_mode: boolean;
+  /** `true` when *we* took it offline (`go-offline`), not a tax-office timeout. */
+  stay_offline: boolean;
+  has_shift?: boolean;
+}
+
+export interface CheckboxOfflineCode {
+  fiscal_code: string;
+  serial_id: number;
+  cash_register_id?: string;
+  created_at?: string | null;
+}
+
+export interface CheckboxOfflineCodesCount {
+  available?: number;
+  minimal?: number;
+  default?: number;
+  used?: number;
+  enough_offline_codes: boolean;
+}
+
+/**
+ * `ask-offline-codes?sync=true` answers `DONE` (the tax office got the
+ * request), `TIMEOUT` (it did not answer in time), `ERROR`; `sync=false` would
+ * answer a bare `OK` that only means "sent". We always ask synchronously.
+ */
+export interface CheckboxAskOfflineCodesResponse {
+  status: 'DONE' | 'TIMEOUT' | 'ERROR' | 'OK' | string;
+  error?: string | null;
 }
 
 export type CheckboxRenderFormat = 'text' | 'html' | 'png' | 'pdf' | 'xml' | 'qrcode';
@@ -252,6 +301,90 @@ export async function serviceReceipt(
     path: '/receipts/service',
     ...opts,
     body: payload,
+  });
+  if (!result) throw new CheckboxApiError(502, null, result);
+  return result;
+}
+
+export async function sellReceiptOffline(
+  opts: AuthedOpts,
+  payload: CheckboxSellOfflinePayload
+): Promise<CheckboxReceipt> {
+  const result = await request<CheckboxReceipt>({
+    method: 'POST',
+    path: '/receipts/sell-offline',
+    ...opts,
+    body: payload,
+  });
+  if (!result) throw new CheckboxApiError(502, null, result);
+  return result;
+}
+
+export async function getCashRegisterInfo(opts: AuthedOpts): Promise<CheckboxCashRegisterInfo> {
+  const result = await request<CheckboxCashRegisterInfo>({
+    method: 'GET',
+    path: '/cash-registers/info',
+    ...opts,
+  });
+  if (!result) throw new CheckboxApiError(502, null, result);
+  return result;
+}
+
+export async function goOfflineRequest(
+  opts: AuthedOpts,
+  body: { go_offline_date: string; fiscal_code: string }
+): Promise<{ status: string; id?: string | null }> {
+  const result = await request<{ status: string; id?: string | null }>({
+    method: 'POST',
+    path: '/cash-registers/go-offline',
+    ...opts,
+    body,
+  });
+  return result ?? { status: 'ok', id: null };
+}
+
+export async function goOnlineRequest(opts: AuthedOpts): Promise<{ status: string }> {
+  const result = await request<{ status: string }>({
+    method: 'POST',
+    path: '/cash-registers/go-online',
+    ...opts,
+    body: {},
+  });
+  return result ?? { status: 'ok' };
+}
+
+export async function askOfflineCodesRequest(
+  opts: AuthedOpts,
+  count: number
+): Promise<CheckboxAskOfflineCodesResponse> {
+  const result = await request<CheckboxAskOfflineCodesResponse>({
+    method: 'GET',
+    path: `/cash-registers/ask-offline-codes?count=${count}&sync=true`,
+    ...opts,
+  });
+  if (!result) throw new CheckboxApiError(502, null, result);
+  return result;
+}
+
+export async function getOfflineCodesRequest(
+  opts: AuthedOpts,
+  count: number
+): Promise<CheckboxOfflineCode[]> {
+  const result = await request<CheckboxOfflineCode[]>({
+    method: 'GET',
+    path: `/cash-registers/get-offline-codes?count=${count}`,
+    ...opts,
+  });
+  return Array.isArray(result) ? result : [];
+}
+
+export async function getOfflineCodesCountRequest(
+  opts: AuthedOpts
+): Promise<CheckboxOfflineCodesCount> {
+  const result = await request<CheckboxOfflineCodesCount>({
+    method: 'GET',
+    path: '/cash-registers/get-offline-codes-count',
+    ...opts,
   });
   if (!result) throw new CheckboxApiError(502, null, result);
   return result;

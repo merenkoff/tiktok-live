@@ -53,9 +53,33 @@ export interface PosFiscalSettings {
   fail_mode: FiscalFailMode;
   receipt_source: FiscalReceiptSource;
   receipt_width: FiscalReceiptWidth;
+  /**
+   * Sell from a reserve of tax-office offline codes when the provider is
+   * unreachable (TechDocs/POS_FISCAL_OFFLINE.md). Only meaningful — and only
+   * accepted — for a provider whose adapter declares `offline`.
+   */
+  offline_mode: boolean;
+  /** How many free offline codes the refill cron keeps in the pool. */
+  offline_codes_target: number;
+  /**
+   * The one till that currently owns this store's register (POS_FISCAL_OFFLINE.md
+   * §3а). Null = free. Enforced only while `offline_mode` is on.
+   */
+  holder_device_id: string | null;
+  holder_name: string | null;
+  holder_since: Date | null;
+  holder_last_seen_at: Date | null;
+  /** A pending "hand the register to me" request from another till. */
+  handover_device_id: string | null;
+  handover_name: string | null;
+  handover_requested_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }
+
+export const OFFLINE_CODES_TARGET_MIN = 50;
+export const OFFLINE_CODES_TARGET_MAX = 2000;
+export const OFFLINE_CODES_TARGET_DEFAULT = 200;
 
 /**
  * The wire shape — never carries secret material.
@@ -77,6 +101,10 @@ export interface FiscalSettingsView {
   fail_mode: FiscalFailMode;
   receipt_source: FiscalReceiptSource;
   receipt_width: FiscalReceiptWidth;
+  offline_mode: boolean;
+  offline_codes_target: number;
+  /** Whether the chosen provider's adapter can work offline at all. */
+  offline_capable: boolean;
   updated_at: string | null;
 }
 
@@ -97,6 +125,8 @@ export interface FiscalSettingsPatch {
   auto_open_shift?: boolean;
   receipt_source?: FiscalReceiptSource;
   receipt_width?: FiscalReceiptWidth;
+  offline_mode?: boolean;
+  offline_codes_target?: number;
 }
 
 /** Everything an adapter needs to talk to a provider on a store's behalf. */
@@ -219,6 +249,12 @@ export interface FiscalResult {
    * that lets the print-source decision stay open until phase 8.
    */
   receiptText: string | null;
+  /**
+   * Контрольне число of an offline document — computed by the provider when
+   * it accepts a `registerSaleOffline`, null for online documents. The till
+   * cannot compute it itself (POS_FISCAL_OFFLINE.md, «Контрольне число»).
+   */
+  controlNumber: string | null;
   /** Stored verbatim in `pos_fiscal_receipts.response_payload` for support. */
   raw: unknown;
 }
@@ -346,8 +382,87 @@ export interface FiscalProvider {
     format: FiscalRenderFormat,
     opts?: FiscalRenderOptions
   ): Promise<FiscalRendering | null>;
+
+  /**
+   * Optional: the provider supports the tax office's offline mode.
+   *
+   * Absent ⇒ the store's `offline_mode` cannot be switched on and the whole
+   * offline machinery (code pool, register holder, replay) stays dormant for
+   * it. Modelled on Checkbox's API; see TechDocs/POS_FISCAL_OFFLINE.md §2.
+   */
+  readonly offline?: FiscalOfflineOps;
 }
 
 export interface FiscalRenderOptions {
   width?: number;
+}
+
+// ── Offline capability ──────────────────────────────────────────────────────
+
+/** What our side stamps on a document it registers offline. */
+export interface OfflineStamp {
+  /** An unused offline code from the pool — becomes the fiscal number. */
+  fiscalCode: string;
+  /** When the sale actually happened; must be ≥ the session's go-offline time. */
+  fiscalDate: Date;
+  /** Provider id of the previous document in the chain (sequence control). */
+  previousDocId?: string;
+}
+
+/** One offline code as the provider hands it out. */
+export interface OfflineCode {
+  fiscalCode: string;
+  serialId: number;
+  createdAt: Date | null;
+}
+
+/** The provider's own view of its reserve (Checkbox `get-offline-codes-count`). */
+export interface OfflineCodesCount {
+  available: number;
+  minimal: number;
+  used: number;
+  enough: boolean;
+}
+
+/** Whether the register is online, and whether *we* took it offline. */
+export interface RegisterState {
+  fiscalNumber: string;
+  offline: boolean;
+  /** `true` when the offline mode was entered by a `goOffline` call, not by the provider on a tax-office timeout. */
+  manualOffline: boolean;
+  raw?: unknown;
+}
+
+/**
+ * `done` — the tax office answered and the codes are on the provider's side;
+ * `timeout` — the request left, the tax office did not answer in time (codes may
+ * still land later); `error` — nothing was requested.
+ */
+export type AskOfflineCodesStatus = 'done' | 'timeout' | 'error';
+
+/**
+ * The offline operations, in the order a session uses them:
+ * `askOfflineCodes` + `getOfflineCodes` while online (refill), then
+ * `goOffline` → `registerSaleOffline`… → `goOnline` on replay.
+ */
+export interface FiscalOfflineOps {
+  registerState(ctx: FiscalCallCtx): Promise<RegisterState>;
+  /** Consumes `fiscalCode`. `at` must be ≥ the last transaction the tax office received. */
+  goOffline(ctx: FiscalCallCtx, at: Date, fiscalCode: string): Promise<{ transactionId: string | null }>;
+  /** Asynchronous at the provider: poll `registerState` until `offline` is false. */
+  goOnline(ctx: FiscalCallCtx): Promise<void>;
+  /** Only works online. */
+  askOfflineCodes(
+    ctx: FiscalCallCtx,
+    count: number
+  ): Promise<{ status: AskOfflineCodesStatus; error: string | null }>;
+  /** The provider's still-unused codes; works even while the tax office is down. */
+  getOfflineCodes(ctx: FiscalCallCtx, count: number): Promise<OfflineCode[]>;
+  offlineCodesCount(ctx: FiscalCallCtx): Promise<OfflineCodesCount>;
+  registerSaleOffline(ctx: FiscalCallCtx, doc: FiscalSaleDoc, off: OfflineStamp): Promise<FiscalResult>;
+  registerRefundOffline(
+    ctx: FiscalCallCtx,
+    doc: FiscalRefundDoc,
+    off: OfflineStamp
+  ): Promise<FiscalResult>;
 }

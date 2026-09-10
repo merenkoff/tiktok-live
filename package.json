@@ -17,6 +17,7 @@
     "test:pos:coverage": "npm --prefix pos run test:coverage",
     "pos:migrate": "tsx src/pos/migrate.ts",
     "pos:seed": "tsx src/pos/seed.ts",
+    "fiscal:sandbox:offline": "tsx src/pos/fiscal/providers/checkbox/sandbox-offline.ts",
     "docker:build": "docker build -t tiktok-live-automation .",
     "docker:run": "docker run -it --env-file .env tiktok-live-automation",
     "docker:deps": "docker compose up -d postgres redis"

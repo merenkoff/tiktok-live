@@ -40,6 +40,24 @@ interface RuntimeEntry {
 
 const runtimes = new Map<number, RuntimeEntry>();
 
+/** Last time the register holder's `last_seen_at` was written, per store. */
+const holderTouchedAt = new Map<number, number>();
+
+/** How often at most `holder_last_seen_at` is written for a busy till. */
+export const HOLDER_TOUCH_INTERVAL_MS = 60_000;
+
+/**
+ * True once per {@link HOLDER_TOUCH_INTERVAL_MS} per store — the holder's
+ * heartbeat is written by every status poll and every checkout, and a write
+ * per request would be a hot-path UPDATE for a value nobody reads that often.
+ */
+export function shouldTouchHolder(storeId: number, now = Date.now()): boolean {
+  const last = holderTouchedAt.get(storeId) ?? 0;
+  if (now - last < HOLDER_TOUCH_INTERVAL_MS) return false;
+  holderTouchedAt.set(storeId, now);
+  return true;
+}
+
 function entryFor(storeId: number): RuntimeEntry {
   let entry = runtimes.get(storeId);
   if (!entry) {
@@ -119,9 +137,11 @@ export function invalidateShift(storeId: number): void {
  */
 export function invalidateStore(storeId: number): void {
   runtimes.delete(storeId);
+  holderTouchedAt.delete(storeId);
 }
 
-/** Test seam — the map is process-global. */
+/** Test seam — the maps are process-global. */
 export function resetRuntime(): void {
   runtimes.clear();
+  holderTouchedAt.clear();
 }

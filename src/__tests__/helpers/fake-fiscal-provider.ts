@@ -29,6 +29,10 @@ import type {
   FiscalSession,
   FiscalShiftClosed,
   FiscalShiftState,
+  AskOfflineCodesStatus,
+  FiscalOfflineOps,
+  OfflineCode,
+  OfflineStamp,
 } from '../../pos/fiscal/types.js';
 
 export interface FakeCall {
@@ -45,6 +49,90 @@ export interface FakeProviderOptions {
   shiftOpen?: boolean;
   /** Reject `registerSale`/`registerRefund` unless a shift is open. */
   requireOpenShift?: boolean;
+  /** Declare the offline capability (default: not declared, like a provider without it). */
+  offline?: boolean;
+}
+
+/**
+ * An in-memory model of a provider's offline reserve: `reserve` is what
+ * `getOfflineCodes` lists (the still-unused codes, lowest serial first),
+ * `askOfflineCodes` tops it up when `askStatus` is `done`, and `spend(n)`
+ * simulates the provider consuming codes behind our back.
+ */
+export class FakeOfflineOps implements FiscalOfflineOps {
+  readonly calls: string[] = [];
+  reserve: OfflineCode[] = [];
+  askStatus: AskOfflineCodesStatus = 'done';
+  offlineMode = false;
+  manualOffline = false;
+  private nextSerial = 1;
+
+  constructor(private readonly owner: FakeFiscalProvider) {}
+
+  /** The provider used `n` of its lowest codes itself (auto-offline). */
+  spend(n: number): OfflineCode[] {
+    return this.reserve.splice(0, n);
+  }
+
+  private mint(upTo: number): void {
+    while (this.reserve.length < upTo) {
+      const serial = this.nextSerial++;
+      this.reserve.push({
+        fiscalCode: `OFF-${String(serial).padStart(4, '0')}`,
+        serialId: serial,
+        createdAt: new Date(),
+      });
+    }
+  }
+
+  async registerState() {
+    this.calls.push('registerState');
+    return {
+      fiscalNumber: 'FAKE-FN',
+      offline: this.offlineMode,
+      manualOffline: this.manualOffline,
+    };
+  }
+
+  async goOffline(_ctx: FiscalCallCtx, _at: Date, fiscalCode: string) {
+    this.calls.push('goOffline');
+    this.reserve = this.reserve.filter((c) => c.fiscalCode !== fiscalCode);
+    this.offlineMode = true;
+    this.manualOffline = true;
+    return { transactionId: `fake-tx-${fiscalCode}` };
+  }
+
+  async goOnline() {
+    this.calls.push('goOnline');
+    this.offlineMode = false;
+    this.manualOffline = false;
+  }
+
+  async askOfflineCodes(_ctx: FiscalCallCtx, count: number) {
+    this.calls.push(`askOfflineCodes:${count}`);
+    if (this.askStatus === 'done') this.mint(count);
+    return { status: this.askStatus, error: this.askStatus === 'done' ? null : 'fake' };
+  }
+
+  async getOfflineCodes(_ctx: FiscalCallCtx, count: number) {
+    this.calls.push(`getOfflineCodes:${count}`);
+    return this.reserve.slice(0, count);
+  }
+
+  async offlineCodesCount() {
+    this.calls.push('offlineCodesCount');
+    return { available: this.reserve.length, minimal: 10, used: 0, enough: this.reserve.length >= 10 };
+  }
+
+  async registerSaleOffline(_ctx: FiscalCallCtx, doc: FiscalSaleDoc, off: OfflineStamp) {
+    this.calls.push('registerSaleOffline');
+    return this.owner.registerOffline('registerSaleOffline', doc, doc.totalCents, off);
+  }
+
+  async registerRefundOffline(_ctx: FiscalCallCtx, doc: FiscalRefundDoc, off: OfflineStamp) {
+    this.calls.push('registerRefundOffline');
+    return this.owner.registerOffline('registerRefundOffline', doc, doc.totalCents, off);
+  }
 }
 
 /**
@@ -77,6 +165,9 @@ export class FakeFiscalProvider implements FiscalProvider {
    */
   renderError: FiscalErrorKind | null = null;
 
+  /** Present only when constructed with `offline: true`. */
+  readonly offline?: FakeOfflineOps;
+
   private readonly errorQueue: FiscalError[] = [];
   private readonly requireOpenShift: boolean;
   private seq = 0;
@@ -84,6 +175,7 @@ export class FakeFiscalProvider implements FiscalProvider {
   constructor(opts: FakeProviderOptions = {}) {
     this.id = opts.id ?? 'checkbox';
     this.requireOpenShift = opts.requireOpenShift ?? true;
+    if (opts.offline) this.offline = new FakeOfflineOps(this);
     if (opts.shiftOpen) {
       this.shift = {
         providerShiftId: 'fake-shift-0',
@@ -234,10 +326,29 @@ export class FakeFiscalProvider implements FiscalProvider {
       qrPayload: `fake-qr-${n}`,
       vatCents: null,
       receiptText: `FAKE RECEIPT ${doc.ourNumber}\nTOTAL ${totalCents}`,
+      controlNumber: null,
       raw: { fake: true, requestId: doc.requestId },
     };
     this.documents.set(doc.requestId, result);
     return result;
+  }
+
+  /** An offline registration: same idempotency, stamped with the given code. */
+  registerOffline(
+    method: string,
+    doc: FiscalSaleDoc | FiscalRefundDoc,
+    totalCents: number,
+    off: OfflineStamp
+  ): FiscalResult {
+    const result = this.register(method, doc, totalCents);
+    const stamped: FiscalResult = {
+      ...result,
+      fiscalCode: off.fiscalCode,
+      fiscalDate: off.fiscalDate.toISOString(),
+      controlNumber: String(1000 + (this.seq % 9000)),
+    };
+    this.documents.set(doc.requestId, stamped);
+    return stamped;
   }
 
   async fetchDocument(_ctx: FiscalCallCtx, providerDocId: string): Promise<FiscalResult | null> {

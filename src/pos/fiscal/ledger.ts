@@ -195,6 +195,7 @@ export async function markDone(
          receipt_text = $7,
          vat_cents = $8,
          response_payload = $9::jsonb,
+         control_number = COALESCE($10, control_number),
          next_attempt_at = NULL,
          error_code = NULL,
          error_message = NULL,
@@ -211,6 +212,7 @@ export async function markDone(
         result.receiptText,
         result.vatCents,
         JSON.stringify(result.raw ?? null),
+        result.controlNumber ?? null,
       ]
     );
     await setProjection(client, row, 'done');

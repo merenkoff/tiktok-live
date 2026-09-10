@@ -16,7 +16,12 @@
   "ignorePatterns": ["dist", "node_modules", "src/__tests__/fixtures"],
   "overrides": [
     {
-      "files": ["src/pos/migrate.ts", "src/pos/seed.ts", "src/pos/gtin/seed-from-dump.ts"],
+      "files": [
+        "src/pos/migrate.ts",
+        "src/pos/seed.ts",
+        "src/pos/gtin/seed-from-dump.ts",
+        "src/pos/fiscal/providers/checkbox/sandbox-offline.ts"
+      ],
       "rules": {
         "no-console": "off"
       }

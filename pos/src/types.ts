@@ -197,6 +197,11 @@ export type FiscalDocStatus = 'pending' | 'sent' | 'done' | 'failed' | 'abandone
 export interface FiscalPublicConfig {
   enabled: boolean;
   provider: FiscalProviderId | null;
+  /**
+   * The store sells from an offline-code reserve when the provider is down
+   * (TechDocs/POS_FISCAL_OFFLINE.md). Optional: older cached auth lacks it.
+   */
+  offline_mode?: boolean;
 }
 
 /**

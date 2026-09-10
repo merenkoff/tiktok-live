@@ -84,6 +84,8 @@ export interface QrPaymentPublicConfig {
 export interface FiscalPublicConfig {
   enabled: boolean;
   provider: FiscalProviderId | null;
+  /** The store sells from an offline-code reserve when the provider is down (POS_FISCAL_OFFLINE.md). */
+  offline_mode: boolean;
 }
 
 export interface PosAuthContext {

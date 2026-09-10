@@ -125,6 +125,39 @@ describe('token interceptor', () => {
   });
 });
 
+describe('device id header', () => {
+  function captureDeviceHeader() {
+    const seen: Array<string | null> = [];
+    server.use(
+      http.get(`${posApiBase()}/me`, ({ request }) => {
+        seen.push(request.headers.get('X-POS-Device-ID'));
+        return HttpResponse.json(makeAuthResponse());
+      })
+    );
+    return seen;
+  }
+
+  it('sends no device id until the cashier runtime sets one', async () => {
+    api.setDeviceId(null);
+    const seen = captureDeviceHeader();
+    localStorage.setItem(TOKEN_KEY, 'jwt-123');
+    await api.me();
+    expect(seen).toEqual([null]);
+  });
+
+  it('sends the device id on every request once set', async () => {
+    api.setDeviceId('device-abc');
+    try {
+      const seen = captureDeviceHeader();
+      localStorage.setItem(TOKEN_KEY, 'jwt-123');
+      await api.me();
+      expect(seen).toEqual(['device-abc']);
+    } finally {
+      api.setDeviceId(null);
+    }
+  });
+});
+
 describe('API version header', () => {
   it('declares the build API version on every request', async () => {
     const seen: Array<string | null> = [];
