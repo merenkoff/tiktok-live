@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "moduleId": "stocktake",
+  "version": "1.1.1",
+  "minHostPlatform": 2,
+  "entry": "remote-entry.js",
+  "keyId": "2a73632c13044371",
+  "builtAt": "2026-09-10T08:35:48.662Z",
+  "files": {
+    "StocktakeRoutes-BqVjFRY-.js": "sha384-nEof4iszvInMp8QyeqNsIdZJY3kE6spFsHhMHMMQIR+RygBB5YchngL23EDu9IKS",
+    "remote-entry-mVb3HO5B.js": "sha384-tBdRCtA2URo8hcuXPP0tEqRLeC2/zZ+k5JxfkKsfPBrQogVsvqN1UbfIhlS68hRo",
+    "remote-entry.js": "sha384-6ODRhJeppeTGsN6W5UIk+B/zQpvyhYUjuv2KIVGgzLEw+j7l1/sLRZYl6wAiuFE4",
+    "style.css": "sha384-gwLUosuBmubQ/iMAHZ+iPPSMXuwe0fkoFN2W77gj4aa7JgNI2rQSP1p9HEx95FZk",
+    "ui-Kmg-Iq7w.js": "sha384-6rBVgyP8WomUVILJtQer0RnJMOGHPyVWrMXKhFyXgwlfU3jqKLeUoC95RDBSvZv5"
+  }
+}
