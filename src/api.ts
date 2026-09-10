@@ -88,6 +88,9 @@ export async function createServer(): Promise<FastifyInstance> {
       // cross-origin `/api/pos/super/*` call after login fail as a plain
       // "network error" in the browser — exactly how it first shipped.
       'X-POS-Super-Token',
+      // Desktop cashier identity — the ПРРО register holder is keyed on it
+      // (src/pos/routes/_shared.ts readDeviceId). Same preflight trap.
+      'X-POS-Device-ID',
     ],
     exposedHeaders: ['X-POS-API-Version'],
   });

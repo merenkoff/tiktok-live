@@ -11,6 +11,7 @@ import type {
   CheckboxGoodItemPayload,
   CheckboxPayment,
   CheckboxReceipt,
+  CheckboxSellOfflinePayload,
   CheckboxSellPayload,
   CheckboxServicePayload,
 } from './client.js';
@@ -21,6 +22,7 @@ import type {
   FiscalResult,
   FiscalSaleDoc,
   FiscalServiceDoc,
+  OfflineStamp,
 } from '../../types.js';
 
 /** `pos_sale_items.quantity` is an INTEGER count of whole units — 1 pc = 1000, mapping.ts:23. */
@@ -87,6 +89,23 @@ export function mapSellPayload(doc: FiscalSaleDoc | FiscalRefundDoc): CheckboxSe
   };
 }
 
+/**
+ * The offline variant differs from `sell` only by the stamp — Checkbox's own
+ * wording ("відрізняється лише наявністю полів fiscal_code та fiscal_date"),
+ * so it is the same mapping plus two fields, not a second mapping.
+ */
+export function mapSellOfflinePayload(
+  doc: FiscalSaleDoc | FiscalRefundDoc,
+  stamp: OfflineStamp
+): CheckboxSellOfflinePayload {
+  return {
+    ...mapSellPayload(doc),
+    fiscal_code: stamp.fiscalCode,
+    fiscal_date: stamp.fiscalDate.toISOString(),
+    ...(stamp.previousDocId ? { previous_receipt_id: stamp.previousDocId } : {}),
+  };
+}
+
 export function mapServicePayload(doc: FiscalServiceDoc): CheckboxServicePayload {
   const signed = doc.kind === 'service_in' ? doc.amountCents : -doc.amountCents;
   const payment: CheckboxCashPayment = { type: 'CASH', value: signed };
@@ -114,6 +133,7 @@ export function toFiscalResult(receipt: CheckboxReceipt): FiscalResult {
     // FiscalResult already documents as an acceptable value.
     vatCents: null,
     receiptText: null,
+    controlNumber: receipt.control_number ?? null,
     raw: receipt,
   };
 }

@@ -42,7 +42,8 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
        store.enabled_modules,
        store.module_remotes,
        fs.enabled AS fiscal_enabled,
-       fs.provider AS fiscal_provider
+       fs.provider AS fiscal_provider,
+       fs.offline_mode AS fiscal_offline_mode
      FROM pos_sessions s
      JOIN pos_staff st ON st.id = s.staff_id
      JOIN pos_stores store ON store.id = s.store_id
@@ -73,6 +74,7 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
       // A store with no `pos_fiscal_settings` row does not fiscalise.
       enabled: row.fiscal_enabled ?? false,
       provider: isFiscalProviderId(row.fiscal_provider) ? row.fiscal_provider : null,
+      offline_mode: row.fiscal_offline_mode ?? false,
     },
     autoPrintReceipt: row.auto_print_receipt ?? false,
     enabledModules: (row.enabled_modules as string[] | null) ?? [],

@@ -183,7 +183,9 @@ export async function runSync(): Promise<void> {
 export function startOfflineRuntime(): void {
   if (started || !isOfflinePosEnabled()) return;
   started = true;
-  void getDeviceId();
+  // Seed the device id and hand it to the API client, which sends it as
+  // `X-POS-Device-ID` — the ПРРО register holder is keyed on it.
+  void getDeviceId().then((id) => api.setDeviceId(id));
   // Interim builds queued a 'void' outbox type that no longer exists; drop any
   // leftovers so they cannot wedge the pending counter.
   void db.outbox.filter((r) => String(r.type) === 'void').delete();

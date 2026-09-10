@@ -19,11 +19,13 @@ import { ensurePosAuth, ensurePosOwner } from '../core/auth.js';
 import { isSecretsKeyConfigured } from '../core/secrets.js';
 import { asFiscalError, cashierMessage, supportCode } from '../fiscal/errors.js';
 import * as fiscalService from '../fiscal/fiscal.service.js';
+import * as holder from '../fiscal/offline/holder.js';
+import { getOfflineStatus } from '../fiscal/offline/status.js';
 import { getProvider, hasProvider } from '../fiscal/providers/index.js';
 import * as fiscalSettings from '../fiscal/settings.service.js';
 import * as shifts from '../fiscal/shifts.service.js';
 import type { FiscalSettingsPatch } from '../fiscal/types.js';
-import { errorMessage } from './_shared.js';
+import { errorMessage, readDeviceId } from './_shared.js';
 
 /** Shift calls are interactive; keep them inside the till's own patience. */
 const SHIFT_TIMEOUT_MS = 12_000;
@@ -38,13 +40,34 @@ const SHIFT_TIMEOUT_MS = 12_000;
 function replyFiscalError(reply: FastifyReply, error: unknown, fallback: string) {
   const fiscal = asFiscalError(error, fallback);
   const status =
-    fiscal.kind === 'not_configured' || fiscal.kind === 'shift_closed' ? 409 : 502;
+    fiscal.kind === 'not_configured' ||
+    fiscal.kind === 'shift_closed' ||
+    fiscal.kind === 'register_held'
+      ? 409
+      : 502;
   return reply.code(status).send({
     error: fiscal.kind,
     message: cashierMessage(fiscal.kind),
     detail: fiscal.message,
     support_code: supportCode(fiscal),
+    ...(fiscal.kind === 'register_held' ? { holder: holder.holderFromError(fiscal) } : {}),
   });
+}
+
+/**
+ * The register-holder routes need a device id; a caller without one (web
+ * shell) cannot hold or request anything, and saying so is clearer than a
+ * 409 from a lock it can never take.
+ */
+function requireDeviceId(request: Parameters<typeof readDeviceId>[0], reply: FastifyReply) {
+  const deviceId = readDeviceId(request);
+  if (!deviceId) {
+    void reply.code(400).send({
+      error: 'device_id_required',
+      message: 'Потрібен заголовок X-POS-Device-ID (касовий застосунок)',
+    });
+  }
+  return deviceId;
 }
 
 export function registerFiscalRoutes(fastify: FastifyInstance): void {
@@ -139,8 +162,128 @@ export function registerFiscalRoutes(fastify: FastifyInstance): void {
     const auth = await ensurePosAuth(request, reply);
     if (!auth) return;
     // Never throws — an unreachable provider is a state to display, not a
-    // failed request.
-    return shifts.getStatus(auth.storeId, AbortSignal.timeout(SHIFT_TIMEOUT_MS));
+    // failed request. The offline/holder blocks are DB-only and cheap.
+    const deviceId = readDeviceId(request);
+    const [status, offline] = await Promise.all([
+      shifts.getStatus(auth.storeId, AbortSignal.timeout(SHIFT_TIMEOUT_MS)),
+      getOfflineStatus(auth.storeId, deviceId),
+    ]);
+    return { ...status, ...offline };
+  });
+
+  // ── Register holder (TechDocs/POS_FISCAL_OFFLINE.md §3а) ──────────────────
+  // Only meaningful while `offline_mode` is on; the routes still answer
+  // otherwise (the lock is simply never enforced), so a till can show the
+  // holder state before the owner flips the switch.
+
+  fastify.post('/fiscal/register/claim', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const deviceId = requireDeviceId(request, reply);
+    if (!deviceId) return;
+    const body = (request.body ?? {}) as { device_name?: unknown };
+    try {
+      const claim = await holder.claimRegister(auth.storeId, deviceId, body.device_name);
+      if (claim.ok) return { holder: claim.holder };
+      return reply.code(409).send({
+        error: 'register_taken',
+        message: cashierMessage('register_held'),
+        holder: claim.holder,
+      });
+    } catch (error) {
+      return replyFiscalError(reply, error, 'Не вдалося зайняти касу ПРРО');
+    }
+  });
+
+  fastify.post('/fiscal/register/release', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const deviceId = requireDeviceId(request, reply);
+    if (!deviceId) return;
+    const result = await holder.releaseRegister(auth.storeId, deviceId);
+    if (result === 'ok') return { holder: null };
+    return reply.code(409).send({
+      error: result,
+      message:
+        result === 'session_open'
+          ? 'Триває офлайн-сесія — звільнити касу можна після синхронізації'
+          : 'Ця каса зайнята іншим пристроєм',
+      holder: await holder.getHolder(auth.storeId),
+    });
+  });
+
+  fastify.post('/fiscal/register/handover/request', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const deviceId = requireDeviceId(request, reply);
+    if (!deviceId) return;
+    const body = (request.body ?? {}) as { device_name?: unknown };
+    try {
+      const result = await holder.requestHandover(auth.storeId, deviceId, body.device_name);
+      if (result.status === 'already_holder') {
+        return reply.code(409).send({ error: 'already_holder', holder: result.holder });
+      }
+      if (result.status === 'claimed') return { status: 'claimed', holder: result.holder };
+      return reply.code(202).send({ status: 'requested', holder: result.holder });
+    } catch (error) {
+      return replyFiscalError(reply, error, 'Не вдалося запросити передачу каси');
+    }
+  });
+
+  fastify.post('/fiscal/register/handover/confirm', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const deviceId = requireDeviceId(request, reply);
+    if (!deviceId) return;
+    const body = (request.body ?? {}) as { outbox_pending?: unknown };
+    const pending = Number(body.outbox_pending);
+    if (!Number.isInteger(pending) || pending < 0) {
+      return reply.code(400).send({ error: 'outbox_pending must be a non-negative integer' });
+    }
+    const result = await holder.confirmHandover(auth.storeId, deviceId, pending);
+    if (result.status === 'ok') return { holder: result.holder };
+    return reply.code(409).send({
+      error: result.status,
+      ...(result.status === 'handover_blocked' ? { reason: result.reason } : {}),
+      message:
+        result.status === 'handover_blocked'
+          ? result.reason === 'outbox_pending'
+            ? 'Спершу синхронізуйте чеки, що очікують відправки'
+            : 'Триває офлайн-сесія — передати касу можна після синхронізації'
+          : result.status === 'no_request'
+            ? 'Немає запиту на передачу'
+            : 'Ця каса зайнята іншим пристроєм',
+      holder: result.holder,
+    });
+  });
+
+  // Owner only: takes the register away from a holder that cannot confirm.
+  fastify.post('/fiscal/register/handover/force', async (request, reply) => {
+    const auth = await ensurePosOwner(request, reply);
+    if (!auth) return;
+    const body = (request.body ?? {}) as { device_id?: unknown; device_name?: unknown };
+    const target =
+      typeof body.device_id === 'string' && /^[A-Za-z0-9-]{1,64}$/.test(body.device_id.trim())
+        ? body.device_id.trim()
+        : null;
+    if (body.device_id !== undefined && body.device_id !== null && !target) {
+      return reply.code(400).send({ error: 'device_id must be 1-64 of [A-Za-z0-9-]' });
+    }
+    try {
+      const result = await holder.forceHandover(auth.storeId, {
+        deviceId: target,
+        name: body.device_name,
+      });
+      if (result.status === 'no_target') {
+        return reply.code(400).send({
+          error: 'no_target',
+          message: 'Вкажіть пристрій, якому передати касу, або дочекайтесь запиту на передачу',
+        });
+      }
+      return result;
+    } catch (error) {
+      return replyFiscalError(reply, error, 'Не вдалося примусово передати касу');
+    }
   });
 
   fastify.post('/fiscal/shift/open', async (request, reply) => {
@@ -189,7 +332,11 @@ export function registerFiscalRoutes(fastify: FastifyInstance): void {
     try {
       // A service receipt needs an open shift like any other document, so it
       // goes through the same gate rather than a bespoke path.
-      const gate = await fiscalService.preflight(auth.storeId, auth.staffId);
+      const gate = await fiscalService.preflight(
+        auth.storeId,
+        auth.staffId,
+        readDeviceId(request)
+      );
       if (!gate.on) return notConfigured(reply);
       return await fiscalService.fiscalizeService(gate, {
         amountCents: amount,

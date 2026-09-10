@@ -19,8 +19,9 @@ import * as salesService from '../sales.service.js';
 import * as fiscalService from '../fiscal/fiscal.service.js';
 import { getSaleDocument } from '../fiscal/ledger.js';
 import { asFiscalError, cashierMessage, supportCode } from '../fiscal/errors.js';
+import { holderFromError } from '../fiscal/offline/holder.js';
 import { logger } from '../../logger.js';
-import { errorMessage } from './_shared.js';
+import { errorMessage, readDeviceId } from './_shared.js';
 
 /** `getSale`'s row, non-null. `completeSale` / `refundSale` return the same shape. */
 type SaleDetail = NonNullable<Awaited<ReturnType<typeof salesService.getSale>>>;
@@ -73,7 +74,7 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
     // unreachable" stance.
     let gate: fiscalService.FiscalGate;
     try {
-      gate = await fiscalService.preflight(auth.storeId, auth.staffId);
+      gate = await fiscalService.preflight(auth.storeId, auth.staffId, readDeviceId(request));
     } catch (error) {
       const fiscal = asFiscalError(error, 'Немає звʼязку з ПРРО');
       logger.warn('Fiscal pre-flight refused a sale', {
@@ -81,6 +82,17 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
         kind: fiscal.kind,
         message: fiscal.message,
       });
+      // Not "the provider is down" — another till owns the register. 409 so
+      // the till shows the handover screen instead of the retry one.
+      if (fiscal.kind === 'register_held') {
+        return reply.code(409).send({
+          error: 'register_held',
+          code: fiscal.providerCode,
+          message: cashierMessage(fiscal.kind),
+          holder: holderFromError(fiscal),
+          support_code: supportCode(fiscal),
+        });
+      }
       return reply.code(503).send({
         error: 'fiscal_unavailable',
         code: fiscal.kind,
@@ -167,9 +179,18 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
     // and stock have moved.
     let gate: fiscalService.FiscalGate;
     try {
-      gate = await fiscalService.preflight(auth.storeId, auth.staffId);
+      gate = await fiscalService.preflight(auth.storeId, auth.staffId, readDeviceId(request));
     } catch (error) {
       const fiscal = asFiscalError(error, 'Немає звʼязку з ПРРО');
+      if (fiscal.kind === 'register_held') {
+        return reply.code(409).send({
+          error: 'register_held',
+          code: fiscal.providerCode,
+          message: cashierMessage(fiscal.kind),
+          holder: holderFromError(fiscal),
+          support_code: supportCode(fiscal),
+        });
+      }
       return reply.code(503).send({
         error: 'fiscal_unavailable',
         code: fiscal.kind,

@@ -540,7 +540,8 @@ COMMIT и вызовом) кроном **не** авто-отменяется �
   дальше.
 - `auto_close_due_at = opened_at + 23h30m` (ПРРО требует ≤24 ч).
 - `src/index.ts`, рядом с QR-реконсайлом: `*/5 * * * *` → `closeDueShifts`,
-  `*/2 * * * *` → `retryPendingFiscalDocs`.
+  `*/2 * * * *` → `retryPendingFiscalDocs`, `*/10 * * * *` → `refillAllStores`
+  (пул офлайн-кодов, фаза 8б).
 - `closeDueShifts` обязан использовать **`FOR UPDATE SKIP LOCKED`** — на Railway
   может быть больше одной реплики, а `closeShift`, в отличие от
   `reconcileQrPayments`, **не идемпотентен**.
@@ -682,7 +683,7 @@ pos/src/modules/fiscal-checkbox/  # тонкий
 | **6** | Бандлы `fiscal-core` + `fiscal-checkbox`, `posRequest`, гарды | ✅ |
 | **7** | Обкатка: список внимания, seed, CI-выпуск, ранбук | 🟡 CI-выпуск (`module-release.yml`) и ранбук ([POS_FISCAL_CHECKBOX_SETUP.md](POS_FISCAL_CHECKBOX_SETUP.md)) есть; массовое обновление URL модуля — супер-админка `/super` ([POS_SUPER_ADMIN.md](POS_SUPER_ADMIN.md)); список внимания и seed — ⬜ |
 | **8а** | Печать: `receipt_source='provider'` + фискальный блок в локальном макете | ✅ |
-| **8б** | Отложенное: Вчасно, офлайн-режим ПРРО, Є-Чек | 🟡 офлайн-режим — **дизайн одобрен 2026-09-10**, [POS_FISCAL_OFFLINE.md](POS_FISCAL_OFFLINE.md) (capability адаптера + параметр магазина, пул кодов и лизинг кассе, реплей go-offline → sell-offline → go-online; 6 фаз, фаза 0 — песочница и формула контрольного числа); Вчасно, Є-Чек — ⬜ |
+| **8б** | Отложенное: Вчасно, офлайн-режим ПРРО, Є-Чек | 🟡 офлайн-режим — **дизайн одобрен 2026-09-10**, [POS_FISCAL_OFFLINE.md](POS_FISCAL_OFFLINE.md); **фаза 1 сделана 2026-09-11** (capability `FiscalProvider.offline`, миграция 027, пул кодов + крон `*/10`, держатель регистратора + `register/*` роуты, `X-POS-Device-ID`) — см. таблицу ниже; фазы 2–5 ⬜; Вчасно, Є-Чек — ⬜ |
 
 ### Что уже лежит в репозитории (фаза 1)
 
@@ -984,6 +985,29 @@ status:'done'` с настоящим `fiscal_code` от `api.checkbox.in.ua` →
 именно на этом прогоне — юнит-тесты на заранее собранных фикстурах их не
 поймали, потому что обе фикстуры были собраны раньше, чем эти сценарии
 (скидка, полный чекаут с реальным открытием смены) были опробованы.
+
+### Что уже лежит в репозитории (фаза 8б, шаг 1 — фундамент офлайна)
+
+Подробности — [POS_FISCAL_OFFLINE.md](POS_FISCAL_OFFLINE.md) §2, §3, §3а. Пока
+`offline_mode` выключен (дефолт), поведение магазина не меняется вообще.
+
+| Файл | Роль |
+|---|---|
+| `migrations/027_pos_fiscal_offline.sql` | `pos_fiscal_settings.offline_mode / offline_codes_target (50..2000) / holder_* / handover_*`; `pos_fiscal_offline_codes` (`free/leased/used/burned`); `pos_fiscal_offline_sessions` (`open/replaying/closed/stuck`, одна живая на регистратор); `pos_fiscal_receipts.mode / offline_session_id / offline_seq / control_number` |
+| `src/pos/fiscal/types.ts` | `FiscalOfflineOps`, `OfflineStamp`, `OfflineCode`, `RegisterState`; `FiscalProvider.offline?`; `FiscalResult.controlNumber`; `FiscalErrorKind` + `register_held` |
+| `src/pos/fiscal/providers/checkbox/{client,payload,errors,index}.ts` | `sell-offline`, `go-offline`, `go-online`, `ask/get-offline-codes(-count)`, `cash-registers/info`; текстовые отказы → `rejected` с `providerCode` `offline_not_manual` / `offline_code_used` |
+| `src/pos/fiscal/offline/pool.ts` | `countCodes`, `refillOfflineCodes` (ask best-effort → get → upsert; недостача у провайдера → `burned` только для `free`), `takeFreeCodes` (`FOR UPDATE SKIP LOCKED`, по `serial_id`), `releaseLeasedCodes`, `refillAllStores` (крон) |
+| `src/pos/fiscal/offline/holder.ts` | `claimRegister`, `touchHolder` (троттлинг в `runtime.ts`), `releaseRegister`, `requestHandover`, `confirmHandover`, `forceHandover`, `assertHolder` (гейт `preflight`, только при `offline_mode`) |
+| `src/pos/fiscal/offline/status.ts` | блоки `offline` / `holder` для `GET /fiscal/status` |
+| `src/pos/fiscal/settings.service.ts` | `offline_mode` принимается только для провайдера с capability и при `enabled`; сброс при смене провайдера; запрет выключать при живой сессии; `offline_capable` в view |
+| `src/pos/fiscal/shifts.service.ts` | `closeDueShifts` пропускает смену с сессией `open/replaying` |
+| `src/pos/routes/{fiscal,checkout}.routes.ts`, `routes/_shared.ts` | `readDeviceId` (`X-POS-Device-ID`); `POST /fiscal/register/{claim,release,handover/request,handover/confirm,handover/force}`; 409 `register_held {holder}` на продаже/возврате/служебном чеке |
+| `src/pos/core/auth.ts`, `src/pos/types.ts`, `pos/src/types.ts` | `fiscal.offline_mode` в auth-контексте и ответе логина |
+| `src/api.ts` | `X-POS-Device-ID` в CORS `allowedHeaders` |
+| `src/index.ts` | Крон `*/10 * * * *` → `refillAllStores` |
+| `pos/src/services/api.ts`, `pos/src/offline/sync.ts` | `api.setDeviceId` — касса шлёт `X-POS-Device-ID` |
+| `src/pos/fiscal/providers/checkbox/sandbox-offline.ts` | `npm run fiscal:sandbox:offline` — прогон офлайн-цикла на тестовой кассе, пишет `fixtures/checkbox/offline_*.json` |
+| `src/__tests__/pos.fiscal.{checkbox.offline,offline.pool,holder}.test.ts` (+ settings, shifts) | адаптер на fetch-моке; пул и крон; держатель/передача/force через роуты; валидация настроек; гейт автозакрытия |
 
 ### Что уже лежит в репозитории (фаза 8а)
 

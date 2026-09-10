@@ -25,24 +25,33 @@ import type {
   FiscalServiceDoc,
   FiscalShiftClosed,
   FiscalShiftState,
+  FiscalOfflineOps,
+  OfflineStamp,
 } from '../../types.js';
 import {
+  askOfflineCodesRequest,
   closeShiftRequest,
   createXReport,
+  getCashRegisterInfo,
   getCurrentShift,
   getMe,
+  getOfflineCodesCountRequest,
+  getOfflineCodesRequest,
   getReceipt,
   getReceiptRendering,
   getReportText,
   getShiftShort,
+  goOfflineRequest,
+  goOnlineRequest,
   openShiftRequest,
   sellReceipt,
+  sellReceiptOffline,
   serviceReceipt,
   signInPinCode,
   signOutRequest,
 } from './client.js';
 import { classifyCheckboxError } from './errors.js';
-import { mapSellPayload, mapServicePayload, toFiscalResult } from './payload.js';
+import { mapSellOfflinePayload, mapSellPayload, mapServicePayload, toFiscalResult } from './payload.js';
 import { pollUntil } from './poll.js';
 
 /**
@@ -148,9 +157,105 @@ async function sendAndPoll(
   return toFiscalResult(final);
 }
 
+/**
+ * The offline capability (TechDocs/POS_FISCAL_OFFLINE.md §2, wire facts in
+ * TechDocs/checkbox-api/). Every call goes through `classifyCheckboxError` so
+ * the orchestrator sees the same kinds as for online documents; the two
+ * offline-specific refusals surface as `rejected` with a synthetic
+ * `providerCode` (`offline_not_manual`, `offline_code_used`).
+ */
+const checkboxOffline: FiscalOfflineOps = {
+  async registerState(ctx) {
+    try {
+      const info = await getCashRegisterInfo(authedOpts(ctx));
+      return {
+        fiscalNumber: info.fiscal_number,
+        offline: Boolean(info.offline_mode),
+        manualOffline: Boolean(info.stay_offline),
+        raw: info,
+      };
+    } catch (error) {
+      throw classifyCheckboxError(error);
+    }
+  },
+
+  async goOffline(ctx, at, fiscalCode) {
+    try {
+      const res = await goOfflineRequest(authedOpts(ctx), {
+        go_offline_date: at.toISOString(),
+        fiscal_code: fiscalCode,
+      });
+      return { transactionId: res.id ?? null };
+    } catch (error) {
+      throw classifyCheckboxError(error);
+    }
+  },
+
+  async goOnline(ctx) {
+    try {
+      await goOnlineRequest(authedOpts(ctx));
+    } catch (error) {
+      throw classifyCheckboxError(error);
+    }
+  },
+
+  async askOfflineCodes(ctx, count) {
+    try {
+      const res = await askOfflineCodesRequest(authedOpts(ctx), count);
+      const status =
+        res.status === 'DONE' || res.status === 'OK'
+          ? 'done'
+          : res.status === 'TIMEOUT'
+            ? 'timeout'
+            : 'error';
+      return { status, error: res.error ?? (status === 'error' ? res.status : null) };
+    } catch (error) {
+      throw classifyCheckboxError(error);
+    }
+  },
+
+  async getOfflineCodes(ctx, count) {
+    try {
+      const codes = await getOfflineCodesRequest(authedOpts(ctx), count);
+      return codes.map((c) => ({
+        fiscalCode: c.fiscal_code,
+        serialId: Number(c.serial_id),
+        createdAt: c.created_at ? new Date(c.created_at) : null,
+      }));
+    } catch (error) {
+      throw classifyCheckboxError(error);
+    }
+  },
+
+  async offlineCodesCount(ctx) {
+    try {
+      const res = await getOfflineCodesCountRequest(authedOpts(ctx));
+      return {
+        available: res.available ?? 0,
+        minimal: res.minimal ?? 0,
+        used: res.used ?? 0,
+        enough: Boolean(res.enough_offline_codes),
+      };
+    } catch (error) {
+      throw classifyCheckboxError(error);
+    }
+  },
+
+  async registerSaleOffline(ctx, doc: FiscalSaleDoc, off: OfflineStamp) {
+    const payload = mapSellOfflinePayload(doc, off);
+    return sendAndPoll(ctx, doc.requestId, (opts) => sellReceiptOffline(opts, payload));
+  },
+
+  async registerRefundOffline(ctx, doc: FiscalRefundDoc, off: OfflineStamp) {
+    const payload = mapSellOfflinePayload(doc, off);
+    return sendAndPoll(ctx, doc.requestId, (opts) => sellReceiptOffline(opts, payload));
+  },
+};
+
 export const checkboxProvider: FiscalProvider = {
   id: 'checkbox',
   title: 'Checkbox',
+  offline: checkboxOffline,
 
   secretKeys: [
     {

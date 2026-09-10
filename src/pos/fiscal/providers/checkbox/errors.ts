@@ -28,6 +28,26 @@ const AUTH_REJECTED_CODES = new Set([
   'cash_register.invalid_license_key', // wrong X-License-Key
 ]);
 
+/**
+ * Two offline refusals come back with a human message and no structured code
+ * (TechDocs/checkbox-api/{receipts-offline,cash-register}.md). Both mean the
+ * document was NOT created, so `rejected` is exact; the synthetic provider
+ * code is what the replay orchestrator branches on ("take the next code" vs
+ * "go offline first").
+ */
+const OFFLINE_MESSAGE_CODES: ReadonlyArray<[RegExp, string]> = [
+  [/manual offline mode/i, 'offline_not_manual'],
+  [/was used before/i, 'offline_code_used'],
+];
+
+function bodyMessage(body: unknown): string | null {
+  if (body && typeof body === 'object' && 'message' in body) {
+    const m = (body as { message: unknown }).message;
+    return typeof m === 'string' ? m : null;
+  }
+  return null;
+}
+
 export function classifyCheckboxError(error: unknown): FiscalError {
   if (!(error instanceof CheckboxApiError)) {
     return asFiscalError(error, 'Помилка ПРРО Checkbox');
@@ -35,6 +55,15 @@ export function classifyCheckboxError(error: unknown): FiscalError {
 
   const { status, code, body } = error;
   const opts = { providerCode: code, httpStatus: status, raw: body };
+
+  const message = bodyMessage(body);
+  if (message && status < 500) {
+    for (const [pattern, providerCode] of OFFLINE_MESSAGE_CODES) {
+      if (pattern.test(message)) {
+        return new FiscalError(message, 'rejected', { ...opts, providerCode });
+      }
+    }
+  }
 
   if (code && AUTH_REJECTED_CODES.has(code)) {
     return new FiscalError(error.message, 'auth_rejected', opts);

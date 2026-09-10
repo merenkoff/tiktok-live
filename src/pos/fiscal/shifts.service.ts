@@ -400,9 +400,18 @@ export async function closeDueShifts(
   const claimed = await pool.query(
     `UPDATE pos_fiscal_shifts SET status = 'closing', updated_at = NOW()
      WHERE id IN (
-       SELECT id FROM pos_fiscal_shifts
-       WHERE status = 'open' AND auto_close_due_at IS NOT NULL AND auto_close_due_at < NOW()
-       ORDER BY auto_close_due_at ASC
+       SELECT f.id FROM pos_fiscal_shifts f
+       WHERE f.status = 'open' AND f.auto_close_due_at IS NOT NULL AND f.auto_close_due_at < NOW()
+         -- A Z-report sent before an offline session's receipts are replayed
+         -- would make them "receipts after Z" (POS_FISCAL_OFFLINE.md §6).
+         -- Such a shift waits; if the till never comes back, the session
+         -- ends up stuck and the shift is closed by hand.
+         AND NOT EXISTS (
+           SELECT 1 FROM pos_fiscal_offline_sessions s
+           WHERE s.store_id = f.store_id AND s.cash_register_key = f.cash_register_key
+             AND s.status IN ('open', 'replaying')
+         )
+       ORDER BY f.auto_close_due_at ASC
        FOR UPDATE SKIP LOCKED
        LIMIT $1
      )

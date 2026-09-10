@@ -36,11 +36,16 @@
  *   `unavailable`    — network error or 5xx.
  *   `unknown`        — unclassified; retried, but counts toward abandonment.
  *
+ * Ours, not the provider's — raised by the register-holder gate
+ * (TechDocs/POS_FISCAL_OFFLINE.md §3а), never by an adapter:
+ *   `register_held`  — another till owns this register; routes answer 409.
+ *
  * And the one that is not a failure at all:
  *   `duplicate`      — the provider already holds this `requestId`.
  */
 export type FiscalErrorKind =
   | 'not_configured'
+  | 'register_held'
   | 'auth_rejected'
   | 'rejected'
   | 'auth_expired'
@@ -118,7 +123,12 @@ export function isRecoverable(kind: FiscalErrorKind): boolean {
 
 /** Retrying cannot help. Needs the owner, or a different document. */
 export function isTerminal(kind: FiscalErrorKind): boolean {
-  return kind === 'not_configured' || kind === 'auth_rejected' || kind === 'rejected';
+  return (
+    kind === 'not_configured' ||
+    kind === 'auth_rejected' ||
+    kind === 'rejected' ||
+    kind === 'register_held'
+  );
 }
 
 /**
@@ -129,6 +139,7 @@ export function isTerminal(kind: FiscalErrorKind): boolean {
  */
 const CASHIER_MESSAGES: Record<FiscalErrorKind, string> = {
   not_configured: 'ПРРО не налаштовано — зверніться до власника магазину',
+  register_held: 'Касу ПРРО зайнято іншим пристроєм — запросіть передачу',
   auth_rejected: 'ПРРО відхилило дані доступу — зверніться до власника магазину',
   rejected: 'ПРРО відхилило чек — перевірте товари та ціни',
   auth_expired: 'Сесія ПРРО завершилась — спробуйте ще раз',

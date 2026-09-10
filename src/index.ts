@@ -18,6 +18,7 @@ import { reconcileQrPayments } from './pos/qr.service.js';
 import { runGtinEventsRetention } from './pos/gtin/events-retention.js';
 import { closeDueShifts } from './pos/fiscal/shifts.service.js';
 import { retryPendingFiscalDocs } from './pos/fiscal/fiscal.service.js';
+import { refillAllStores } from './pos/fiscal/offline/pool.js';
 import { cleanupExpiredReservations } from './reservations.js';
 import { sessionManager } from './sessions/sessions.manager.js';
 
@@ -182,6 +183,24 @@ async function main(): Promise<void> {
         }
       } catch (error) {
         logger.error('Fiscal retry cron error', { error });
+      }
+    });
+
+    // Keep the pool of tax-office offline codes topped up for stores that run
+    // ПРРО in offline mode (TechDocs/POS_FISCAL_OFFLINE.md §3). Only works
+    // while the provider is online, which is exactly when nobody needs the
+    // codes — hence a cron, not a checkout-time call. A no-op otherwise.
+    cron.schedule('*/10 * * * *', async () => {
+      try {
+        const result = await refillAllStores();
+        if (result.fetched > 0 || result.burned > 0 || result.failed > 0) {
+          logger.info(
+            `🧾 Fiscal offline codes: ${result.fetched} fetched, ${result.burned} burned, ` +
+              `${result.failed} failed across ${result.stores} stores`
+          );
+        }
+      } catch (error) {
+        logger.error('Fiscal offline codes refill cron error', { error });
       }
     });
 

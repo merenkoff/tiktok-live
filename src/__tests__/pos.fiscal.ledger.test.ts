@@ -268,6 +268,7 @@ describe.skipIf(!hasDb)('POS fiscal ledger and reconciliation', () => {
       qrPayload: null,
       vatCents: null,
       receiptText: null,
+      controlNumber: null,
       raw: {},
     });
 

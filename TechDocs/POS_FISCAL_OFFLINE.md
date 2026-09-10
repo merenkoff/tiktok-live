@@ -146,8 +146,41 @@ Checkbox (запрет смешивать клиентов на одном ре�
 | Меняется при замене компьютера | **нет** — смена принадлежит регистратору, не устройству | да — замок переезжает |
 
 `pos_fiscal_settings` (или таблица регистраторов в v2) получает
-`holder_device_id`, `holder_since`, `holder_last_seen_at` (обновляется каждым
-`/me` и синком). Один держатель. Аренда офлайн-кодов выдаётся только держателю.
+`holder_device_id`, `holder_name`, `holder_since`, `holder_last_seen_at`
+(heartbeat — каждый `GET /fiscal/status` и каждый чекаут держателя, запись не
+чаще раза в минуту) и `handover_device_id/_name/_requested_at` — текущий запрос
+на передачу. Один держатель. Аренда офлайн-кодов выдаётся только держателю.
+
+**Как реализовано в фазе 1 (2026-09-11):**
+
+- Касса идентифицирует себя заголовком `X-POS-Device-ID` (`getDeviceId()` из
+  `pos/src/offline/db.ts`, отправляет `api.setDeviceId` из `startOfflineRuntime`;
+  веб-шелл заголовка не шлёт). Читается `readDeviceId` в `routes/_shared.ts`;
+  заголовок добавлен в CORS `allowedHeaders`.
+- **Замок действует только при `offline_mode = true`** (и у провайдера есть
+  capability). При выключенном офлайне несколько онлайн-касс и веб-шелл продают
+  как раньше — порядок транзакций держит провайдер.
+- **Свободный регистратор занимает первая касса, которая продаёт** (`assertHolder`
+  в `preflight`, до открытия смены) — одиночная касса не видит никаких экранов.
+  Чужая касса и веб-шелл получают **409** `register_held` с блоком `holder`
+  на `/sales/complete`, `/sales/:id/refunds`, `/fiscal/service`.
+- Роуты (`src/pos/routes/fiscal.routes.ts`, сервис `src/pos/fiscal/offline/holder.ts`):
+
+  | Роут | Кто | Ответ |
+  |---|---|---|
+  | `POST /fiscal/register/claim {device_name?}` | касса | 200 `{holder}`; 409 `register_taken` |
+  | `POST /fiscal/register/release` | держатель | 200; 409 `not_holder` / `session_open` |
+  | `POST /fiscal/register/handover/request {device_name?}` | вторая касса | 202 `requested`; 200 `claimed` (регистратор был свободен); 409 `already_holder` |
+  | `POST /fiscal/register/handover/confirm {outbox_pending}` | держатель | 200 `{holder}`; 409 `not_holder` / `no_request` / `handover_blocked` (`reason: outbox_pending \| session_open`) |
+  | `POST /fiscal/register/handover/force {device_id?, device_name?}` | **владелец** | 200 `{holder, stuck_sessions, burned_codes}`; 400 `no_target` |
+
+  Без заголовка устройства первые четыре отвечают 400 `device_id_required`.
+  `force` переводит открытые/реплеящиеся сессии прежнего держателя в `stuck`
+  (`error_code = register_taken`), его `leased`-коды — в `burned`.
+- `GET /fiscal/status` дополнен блоками `offline: {capable, enabled,
+  codes_target, codes: {free, leased, used} | null, session | null}` и
+  `holder: {device_id, name, since, last_seen_at, stale (> 5 мин тишины),
+  is_me, handover_request} | null`.
 
 **Передача (штатная, обе кассы онлайн):**
 1. Вторая касса при входе видит «Каса зайнята пристроєм A з 09:12» и кнопку
@@ -251,8 +284,8 @@ ended_at)`. Оркестратор в `fiscal.service.ts`:
 
 | Фаза | Что | Оценка | Статус |
 |---|---|---|---|
-| **0. Исследование на песочнице** | Документация снята (`checkbox-api/`); осталось: письмо в поддержку Checkbox по вопросам 1–2 ниже, прогон на тестовой кассе `ask/get-offline-codes` → `go-offline` → `sell-offline` (без `control_number`) → `go-online` → проверка `control_number`/`tax_url` в ответе и в кабинете; фикстуры `src/__tests__/fixtures/checkbox/offline_*.json` | 1–2 дня | 🟡 доки сняты |
-| **1. Capability, пул, держатель** | `FiscalOfflineOps`, реализация в `providers/checkbox`, миграция 027 (`offline_mode`, `offline_codes_target`, `holder_*`, таблицы кодов и сессий), крон пополнения, замок держателя + `handover/request|confirm|force` (§3а), `GET /fiscal/status` с `offline: {available, leased, session}` и `holder`; тесты | 4–5 дней | ⬜ |
+| **0. Исследование на песочнице** | Документация снята (`checkbox-api/`); письмо в поддержку Checkbox по вопросам 1–2 ниже отправлено 2026-09-11; прогон на тестовой кассе — скрипт `npm run fiscal:sandbox:offline -- --ask --go` (`CHECKBOX_SANDBOX_LICENSE_KEY/PIN` в env) делает `ask/get-offline-codes` → `go-offline` → `sell-offline` (без `control_number`) → `go-online` → опрос `info` и пишет фикстуры `src/__tests__/fixtures/checkbox/offline_*.json`; осталось запустить его и закоммитить фикстуры | 1–2 дня | 🟡 ждёт прогона и ответа поддержки |
+| **1. Capability, пул, держатель** | `FiscalOfflineOps` + `FiscalResult.controlNumber`, реализация в `providers/checkbox` (`sell-offline`, `go-offline/online`, `ask/get-offline-codes`, `info`), миграция 027 (`offline_mode`, `offline_codes_target`, `holder_*`, `handover_*`, `pos_fiscal_offline_codes`, `pos_fiscal_offline_sessions`, `pos_fiscal_receipts.mode/offline_session_id/offline_seq/control_number`), пул `offline/pool.ts` + крон `*/10` `refillAllStores`, держатель `offline/holder.ts` + роуты `register/{claim,release,handover/request|confirm|force}`, гейт в `preflight`, `X-POS-Device-ID` с кассы, `GET /fiscal/status` с `offline`/`holder`, `closeDueShifts` не трогает смену с живой сессией; песочный скрипт `npm run fiscal:sandbox:offline`; 5 новых тест-файлов | 4–5 дней | ✅ 2026-09-11 (ветка `feat/pos-fiscal-offline-phase1`) |
 | **2. Серверная сессия (случай B)** | `preflight` → офлайн-выдача штампом, реестр `mode`, реплей сессии в кроне, `goOnline`; матрица отказов §8 родителя дополнена офлайн-строками | 3 дня | ⬜ |
 | **3. Лизинг и касса (случай C)** | `/fiscal/offline/lease`, кеш аренды и смены в `cloth-pos-offline`, гейты, `completeSale` со штампом, `fiscal_offline` в outbox и в `POST /sales/complete`, печать «ОФЛАЙН» + QR, причины вместо одного `OfflineFiscalError` | 5–6 дней | ⬜ |
 | **4. UI** | `fiscal-checkbox`: на `/fiscal` блок «Офлайн: N кодів, сесія з …, лишилось …», прогресс реплея; экраны держателя — «Каса зайнята… Запросити передачу», подтверждение у держателя, «Забрати примусово» у владельца; Settings — тумблер «Офлайн-режим» (только при `offline_capable`), размер запаса; `OfflineStatusBanner` — «Офлайн, чеки ПРРО з резерву (N)»; список внимания — `stuck`-сессии, отклонённые офлайн-документы, чеки принудительно снятой кассы | 4 дня | ⬜ |

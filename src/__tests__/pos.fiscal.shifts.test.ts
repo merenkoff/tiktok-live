@@ -265,6 +265,34 @@ describe.skipIf(!hasDb)('POS fiscal shifts', () => {
     expect(fake.calls.some((x) => x.method === 'closeShift')).toBe(true);
   });
 
+  it('leaves an overdue shift alone while an offline session is live (§6 of the offline design)', async () => {
+    const c = await ctx();
+    await shifts.ensureOpenShift(c, signal());
+    await pool.query(
+      `UPDATE pos_fiscal_shifts SET auto_close_due_at = NOW() - interval '1 minute'
+       WHERE store_id = $1 AND status = 'open'`,
+      [store.storeId]
+    );
+    await pool.query(
+      `INSERT INTO pos_fiscal_offline_sessions (store_id, cash_register_key, holder, started_at, status)
+       VALUES ($1, '', 'server', NOW(), 'open')`,
+      [store.storeId]
+    );
+    try {
+      expect(await shifts.closeDueShifts()).toMatchObject({ closed: 0, failed: 0 });
+      expect(await liveRows()).toHaveLength(1);
+      expect(fake.calls.some((x) => x.method === 'closeShift')).toBe(false);
+
+      await pool.query(
+        `UPDATE pos_fiscal_offline_sessions SET status = 'closed', ended_at = NOW() WHERE store_id = $1`,
+        [store.storeId]
+      );
+      expect(await shifts.closeDueShifts()).toMatchObject({ closed: 1 });
+    } finally {
+      await pool.query(`DELETE FROM pos_fiscal_offline_sessions WHERE store_id = $1`, [store.storeId]);
+    }
+  });
+
   it('leaves a shift alone before its deadline', async () => {
     await shifts.ensureOpenShift(await ctx(), signal());
     expect(await shifts.closeDueShifts()).toMatchObject({ closed: 0, failed: 0 });

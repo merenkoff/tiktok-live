@@ -14,9 +14,13 @@ import {
   isSecretsKeyConfigured,
   SECRETS_KEY_VERSION,
 } from '../core/secrets.js';
+import { getProvider, hasProvider } from './providers/index.js';
 import { invalidateStore } from './runtime.js';
 import {
   FISCAL_RECEIPT_WIDTHS,
+  OFFLINE_CODES_TARGET_DEFAULT,
+  OFFLINE_CODES_TARGET_MAX,
+  OFFLINE_CODES_TARGET_MIN,
   isFiscalProviderId,
   type FiscalCredentials,
   type FiscalReceiptWidth,
@@ -53,6 +57,15 @@ function mapRow(row: Record<string, unknown>): PosFiscalSettings {
     fail_mode: 'block',
     receipt_source: row.receipt_source === 'provider' ? 'provider' : 'local',
     receipt_width: Number(row.receipt_width) === 48 ? 48 : 32,
+    offline_mode: Boolean(row.offline_mode),
+    offline_codes_target: Number(row.offline_codes_target) || OFFLINE_CODES_TARGET_DEFAULT,
+    holder_device_id: (row.holder_device_id as string | null) ?? null,
+    holder_name: (row.holder_name as string | null) ?? null,
+    holder_since: (row.holder_since as Date | null) ?? null,
+    holder_last_seen_at: (row.holder_last_seen_at as Date | null) ?? null,
+    handover_device_id: (row.handover_device_id as string | null) ?? null,
+    handover_name: (row.handover_name as string | null) ?? null,
+    handover_requested_at: (row.handover_requested_at as Date | null) ?? null,
     created_at: row.created_at as Date,
     updated_at: row.updated_at as Date,
   };
@@ -90,6 +103,12 @@ export async function getFiscalCredentials(
   return { provider: settings.provider, config: settings.config, secrets };
 }
 
+/** Whether the adapter compiled in for `provider` declares the offline capability. */
+export function isOfflineCapable(provider: string | null | undefined): boolean {
+  if (!provider || !isFiscalProviderId(provider) || !hasProvider(provider)) return false;
+  return Boolean(getProvider(provider).offline);
+}
+
 /** Secret-free projection for the wire. */
 export function toFiscalSettingsView(
   storeId: number,
@@ -106,6 +125,9 @@ export function toFiscalSettingsView(
       fail_mode: 'block',
       receipt_source: 'local',
       receipt_width: 32,
+      offline_mode: false,
+      offline_codes_target: OFFLINE_CODES_TARGET_DEFAULT,
+      offline_capable: false,
       updated_at: null,
     };
   }
@@ -134,6 +156,9 @@ export function toFiscalSettingsView(
     fail_mode: settings.fail_mode,
     receipt_source: settings.receipt_source,
     receipt_width: settings.receipt_width,
+    offline_mode: settings.offline_mode,
+    offline_codes_target: settings.offline_codes_target,
+    offline_capable: isOfflineCapable(settings.provider),
     updated_at: settings.updated_at ? new Date(settings.updated_at).toISOString() : null,
   };
 }
@@ -260,6 +285,55 @@ export async function updateFiscalSettings(
   }
 
   const providerChanged = Boolean(existing?.provider) && existing?.provider !== provider;
+
+  // Offline mode is a promise the adapter has to be able to keep: a provider
+  // without the capability cannot hand out offline codes, so the switch is
+  // refused rather than stored as a dormant "true". A provider switch drops it
+  // for the same reason the credentials are dropped.
+  let offlineMode = providerChanged ? false : (existing?.offline_mode ?? false);
+  if (patch.offline_mode !== undefined) {
+    if (typeof patch.offline_mode !== 'boolean') {
+      throw new FiscalSettingsValidationError('offline_mode must be a boolean');
+    }
+    offlineMode = patch.offline_mode;
+  }
+  if (offlineMode && !isOfflineCapable(provider)) {
+    if (patch.offline_mode) {
+      throw new FiscalSettingsValidationError('Провайдер не підтримує офлайн-режим');
+    }
+    offlineMode = false;
+  }
+  if (offlineMode && !enabled) {
+    throw new FiscalSettingsValidationError('Увімкніть фіскалізацію перед офлайн-режимом');
+  }
+  if (existing?.offline_mode && !offlineMode) {
+    const live = await pool.query(
+      `SELECT 1 FROM pos_fiscal_offline_sessions
+       WHERE store_id = $1 AND status IN ('open', 'replaying') LIMIT 1`,
+      [storeId]
+    );
+    if (live.rows.length > 0) {
+      throw new FiscalSettingsValidationError(
+        'Триває офлайн-сесія — дочекайтесь її завершення перед вимкненням офлайн-режиму'
+      );
+    }
+  }
+
+  let offlineCodesTarget = existing?.offline_codes_target ?? OFFLINE_CODES_TARGET_DEFAULT;
+  if (patch.offline_codes_target !== undefined) {
+    const raw = patch.offline_codes_target;
+    if (
+      !Number.isInteger(raw) ||
+      raw < OFFLINE_CODES_TARGET_MIN ||
+      raw > OFFLINE_CODES_TARGET_MAX
+    ) {
+      throw new FiscalSettingsValidationError(
+        `offline_codes_target must be an integer between ${OFFLINE_CODES_TARGET_MIN} and ${OFFLINE_CODES_TARGET_MAX}`
+      );
+    }
+    offlineCodesTarget = raw;
+  }
+
   const secretsPatch = patch.secrets === undefined ? null : validateSecretsPatch(patch.secrets);
 
   let secretsEncrypted = providerChanged ? null : (existing?.secrets_encrypted ?? null);
@@ -290,8 +364,9 @@ export async function updateFiscalSettings(
   const result = await pool.query(
     `INSERT INTO pos_fiscal_settings
        (store_id, enabled, provider, config, secrets_encrypted, secrets_key_version,
-        default_tax_code, auto_open_shift, receipt_source, receipt_width)
-     VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10)
+        default_tax_code, auto_open_shift, receipt_source, receipt_width,
+        offline_mode, offline_codes_target)
+     VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11, $12)
      ON CONFLICT (store_id) DO UPDATE SET
        enabled = EXCLUDED.enabled,
        provider = EXCLUDED.provider,
@@ -302,6 +377,8 @@ export async function updateFiscalSettings(
        auto_open_shift = EXCLUDED.auto_open_shift,
        receipt_source = EXCLUDED.receipt_source,
        receipt_width = EXCLUDED.receipt_width,
+       offline_mode = EXCLUDED.offline_mode,
+       offline_codes_target = EXCLUDED.offline_codes_target,
        updated_at = NOW()
      RETURNING *`,
     [
@@ -315,6 +392,8 @@ export async function updateFiscalSettings(
       autoOpenShift,
       receiptSource,
       receiptWidth,
+      offlineMode,
+      offlineCodesTarget,
     ]
   );
 

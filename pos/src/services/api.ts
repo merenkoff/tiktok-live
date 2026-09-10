@@ -61,6 +61,18 @@ export function isUnauthorized(error: unknown): boolean {
 class PosApi {
   private client: AxiosInstance;
   private warnedApiSkew = false;
+  /**
+   * The desktop cashier's stable device id (`offline/db.ts getDeviceId`),
+   * sent as `X-POS-Device-ID` once the offline runtime has set it. The web
+   * shell never sets one — it can never hold the ПРРО register
+   * (TechDocs/POS_FISCAL_OFFLINE.md §3а).
+   */
+  private deviceId: string | null = null;
+
+  /** Identify this install to the backend on every request (cashier shell only). */
+  setDeviceId(id: string | null): void {
+    this.deviceId = id;
+  }
 
   constructor() {
     this.client = axios.create({
@@ -70,6 +82,7 @@ class PosApi {
 
     this.client.interceptors.request.use((config) => {
       config.headers['X-POS-API-Version'] = String(POS_API_CLIENT_VERSION);
+      if (this.deviceId) config.headers['X-POS-Device-ID'] = this.deviceId;
       const token = localStorage.getItem(TOKEN_KEY);
       if (token && !token.startsWith('offline:')) {
         config.headers.Authorization = `Bearer ${token}`;

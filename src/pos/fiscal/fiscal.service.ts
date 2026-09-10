@@ -47,6 +47,7 @@ import {
   type FiscalContext,
 } from './shifts.service.js';
 import type { FiscalCallCtx, FiscalResult } from './types.js';
+import { assertHolder } from './offline/holder.js';
 
 /**
  * Budget for the entire fiscal phase of one request.
@@ -110,9 +111,17 @@ const OFF: FiscalGate = {
  * receipt number, no stock movement. This is the whole "block the sale when the
  * fiscal server is unreachable" stance.
  */
-export async function preflight(storeId: number, staffId: number): Promise<FiscalGate> {
+export async function preflight(
+  storeId: number,
+  staffId: number,
+  deviceId: string | null = null
+): Promise<FiscalGate> {
   const ctx = await resolveContext(storeId);
   if (!ctx) return OFF;
+
+  // Before the shift: a till that does not own the register must not open
+  // one either. No-op unless the store runs in offline mode.
+  await assertHolder(ctx, deviceId);
 
   const signal = AbortSignal.timeout(FISCAL_BUDGET_MS);
   await ensureOpenShift(ctx, signal, staffId);

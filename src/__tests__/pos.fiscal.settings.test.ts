@@ -244,6 +244,72 @@ describe.skipIf(!hasDb)('POS fiscal settings', () => {
     expect(await getFiscalCredentials(store.storeId)).toBeNull();
   });
 
+  // ── Offline mode (TechDocs/POS_FISCAL_OFFLINE.md §2) ──────────────────────
+
+  it('defaults offline_mode off and reports offline_capable per provider', async () => {
+    await patch({ provider: 'checkbox', enabled: false });
+    const res = await get();
+    expect(res.json()).toMatchObject({
+      offline_mode: false,
+      offline_codes_target: 200,
+      offline_capable: true, // the Checkbox adapter declares `offline`
+    });
+    await patch({ provider: 'vchasno' });
+    expect((await get()).json().offline_capable).toBe(false);
+  });
+
+  it('refuses offline_mode for a provider without the capability, and before enabling', async () => {
+    await patch({ provider: 'vchasno' });
+    const noCap = await patch({ offline_mode: true });
+    expect(noCap.statusCode).toBe(400);
+    expect(noCap.json().error).toMatch(/офлайн/i);
+
+    await patch({ provider: 'checkbox', enabled: false, secrets: { licenceKey: LICENCE } });
+    const notEnabled = await patch({ offline_mode: true });
+    expect(notEnabled.statusCode).toBe(400);
+
+    const ok = await patch({ enabled: true, offline_mode: true, offline_codes_target: 300 });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json()).toMatchObject({ offline_mode: true, offline_codes_target: 300 });
+  });
+
+  it('bounds offline_codes_target and drops offline_mode on a provider switch', async () => {
+    await patch({ provider: 'checkbox', enabled: true, secrets: { licenceKey: LICENCE }, offline_mode: true });
+    expect((await patch({ offline_codes_target: 10 })).statusCode).toBe(400);
+    expect((await patch({ offline_codes_target: 5000 })).statusCode).toBe(400);
+    expect((await patch({ offline_codes_target: 2.5 })).statusCode).toBe(400);
+    expect((await patch({ offline_mode: 'yes' })).statusCode).toBe(400);
+
+    const switched = await patch({ provider: 'vchasno' });
+    expect(switched.statusCode).toBe(200);
+    expect(switched.json()).toMatchObject({ offline_mode: false, offline_capable: false });
+  });
+
+  it('refuses to switch offline_mode off while an offline session is live', async () => {
+    await patch({ provider: 'checkbox', enabled: true, secrets: { licenceKey: LICENCE }, offline_mode: true });
+    await pool.query(
+      `INSERT INTO pos_fiscal_offline_sessions (store_id, holder, started_at, status)
+       VALUES ($1, 'server', NOW(), 'replaying')`,
+      [store.storeId]
+    );
+    try {
+      const res = await patch({ offline_mode: false });
+      expect(res.statusCode).toBe(400);
+      expect((await get()).json().offline_mode).toBe(true);
+    } finally {
+      await pool.query(`DELETE FROM pos_fiscal_offline_sessions WHERE store_id = $1`, [store.storeId]);
+    }
+    expect((await patch({ offline_mode: false })).statusCode).toBe(200);
+  });
+
+  it('carries offline_mode in the auth response next to the provider', async () => {
+    await patch({ provider: 'checkbox', enabled: true, secrets: { licenceKey: LICENCE }, offline_mode: true });
+    const me = await app.inject({ method: 'GET', url: '/api/pos/me', headers: auth(store.sellerToken) });
+    expect(me.statusCode).toBe(200);
+    expect(me.json().store.fiscal).toMatchObject({ enabled: true, provider: 'checkbox', offline_mode: true });
+    await patch({ offline_mode: false });
+  });
+
   // ── Missing encryption key ────────────────────────────────────────────────
 
   it('answers 503 rather than storing a credential in plaintext', async () => {
@@ -273,7 +339,7 @@ describe.skipIf(!hasDb)('POS fiscal settings', () => {
       headers: auth(store.sellerToken),
     });
     expect(me.statusCode).toBe(200);
-    expect(me.json().store.fiscal).toEqual({ enabled: true, provider: 'checkbox' });
+    expect(me.json().store.fiscal).toEqual({ enabled: true, provider: 'checkbox', offline_mode: false });
   });
 
   it('reports fiscal off for a store with no settings row', async () => {
@@ -284,7 +350,7 @@ describe.skipIf(!hasDb)('POS fiscal settings', () => {
         url: '/api/pos/me',
         headers: auth(other.sellerToken),
       });
-      expect(me.json().store.fiscal).toEqual({ enabled: false, provider: null });
+      expect(me.json().store.fiscal).toEqual({ enabled: false, provider: null, offline_mode: false });
     } finally {
       await dropTestStore(other.storeId);
     }
