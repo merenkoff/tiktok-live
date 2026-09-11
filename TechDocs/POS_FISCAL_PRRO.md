@@ -698,9 +698,9 @@ pos/src/modules/fiscal-checkbox/  # тонкий
 | **4** | Оркестрация чекаута + реестр + фикс 409 | ✅ |
 | **5** | Хост-фронт: фискальные поля везде + офлайн-блок | ✅ |
 | **6** | Бандлы `fiscal-core` + `fiscal-checkbox`, `posRequest`, гарды | ✅ |
-| **7** | Обкатка: список внимания, seed, CI-выпуск, ранбук | 🟡 CI-выпуск (`module-release.yml`) и ранбук ([POS_FISCAL_CHECKBOX_SETUP.md](POS_FISCAL_CHECKBOX_SETUP.md)) есть; массовое обновление URL модуля — супер-админка `/super` ([POS_SUPER_ADMIN.md](POS_SUPER_ADMIN.md)); список внимания и seed — ⬜ |
+| **7** | Обкатка: список внимания, seed, CI-выпуск, ранбук | 🟡 CI-выпуск (`module-release.yml`) и ранбук ([POS_FISCAL_CHECKBOX_SETUP.md](POS_FISCAL_CHECKBOX_SETUP.md)) есть; массовое обновление URL модуля — супер-админка `/super` ([POS_SUPER_ADMIN.md](POS_SUPER_ADMIN.md)); список внимания есть (`GET /fiscal/attention` + `CheckboxAdminPage`, в фазе 2 к нему добавились `stuck`-сессии); seed — ⬜ |
 | **8а** | Печать: `receipt_source='provider'` + фискальный блок в локальном макете | ✅ |
-| **8б** | Отложенное: Вчасно, офлайн-режим ПРРО, Є-Чек | 🟡 офлайн-режим — **дизайн одобрен 2026-09-10**, [POS_FISCAL_OFFLINE.md](POS_FISCAL_OFFLINE.md); **фаза 1 сделана 2026-09-11** (capability `FiscalProvider.offline`, миграция 027, пул кодов + крон `*/10`, держатель регистратора + `register/*` роуты, `X-POS-Device-ID`) — см. таблицу ниже; фазы 2–5 ⬜; Вчасно, Є-Чек — ⬜ |
+| **8б** | Отложенное: Вчасно, офлайн-режим ПРРО, Є-Чек | 🟡 офлайн-режим — **дизайн одобрен 2026-09-10**, [POS_FISCAL_OFFLINE.md](POS_FISCAL_OFFLINE.md); **фаза 1 сделана 2026-09-11** (capability `FiscalProvider.offline`, миграция 027, пул кодов + крон `*/10`, держатель регистратора + `register/*` роуты, `X-POS-Device-ID`) — **фаза 2 сделана 2026-09-11** (серверная офлайн-сессия, случай B: миграция 028, `offline/session.ts`, реплей в `retryPendingFiscalDocs`) — см. таблицу ниже; фазы 3–5 ⬜ (у фазы 4 есть план исполнения); Вчасно, Є-Чек — ⬜ |
 
 ### Что уже лежит в репозитории (фаза 1)
 
