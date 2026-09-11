@@ -21,6 +21,7 @@ import { logger } from '../../../logger.js';
 import { asFiscalError } from '../errors.js';
 import type { Queryable } from '../ledger.js';
 import { awaitSlot } from '../rateLimit.js';
+import { rememberRegisterFiscalNumber } from '../settings.service.js';
 import { buildCallCtx, resolveContext, type FiscalContext } from '../shifts.service.js';
 import type { AskOfflineCodesStatus } from '../types.js';
 
@@ -103,6 +104,21 @@ export async function refillOfflineCodes(
   if (!granted) return { asked: 'skipped', fetched: 0, burned: 0 };
 
   const callCtx = await buildCallCtx(ctx, signal);
+
+  // Learn the register's own fiscal number while we are online and already
+  // talking to the provider. One extra read per refill, and only until it is
+  // cached: offline it is unobtainable, and the tax-office link needs it.
+  if (!ctx.settings.register_fiscal_number) {
+    try {
+      const state = await ops.registerState(callCtx);
+      await rememberRegisterFiscalNumber(ctx.storeId, state.fiscalNumber);
+    } catch (error) {
+      logger.warn('Offline codes: could not read the register state', {
+        storeId: ctx.storeId,
+        kind: asFiscalError(error, 'registerState failed').kind,
+      });
+    }
+  }
 
   let asked: AskOfflineCodesStatus = 'error';
   try {

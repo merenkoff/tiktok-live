@@ -62,6 +62,12 @@ export interface PosFiscalSettings {
   /** How many free offline codes the refill cron keeps in the pool. */
   offline_codes_target: number;
   /**
+   * ФН ПРРО as the provider reports it (`registerState().fiscalNumber`), cached
+   * because offline there is nobody to ask — it is the `fn` of the tax-office
+   * check link we build ourselves for an offline receipt (`taxUrl.ts`).
+   */
+  register_fiscal_number: string | null;
+  /**
    * The one till that currently owns this store's register (POS_FISCAL_OFFLINE.md
    * §3а). Null = free. Enforced only while `offline_mode` is on.
    */

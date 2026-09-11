@@ -58,6 +58,7 @@ function mapRow(row: Record<string, unknown>): PosFiscalSettings {
     receipt_source: row.receipt_source === 'provider' ? 'provider' : 'local',
     receipt_width: Number(row.receipt_width) === 48 ? 48 : 32,
     offline_mode: Boolean(row.offline_mode),
+    register_fiscal_number: (row.register_fiscal_number as string | null) ?? null,
     offline_codes_target: Number(row.offline_codes_target) || OFFLINE_CODES_TARGET_DEFAULT,
     holder_device_id: (row.holder_device_id as string | null) ?? null,
     holder_name: (row.holder_name as string | null) ?? null,
@@ -69,6 +70,28 @@ function mapRow(row: Record<string, unknown>): PosFiscalSettings {
     created_at: row.created_at as Date,
     updated_at: row.updated_at as Date,
   };
+}
+
+/**
+ * Cache the register's own fiscal number (ФН ПРРО) as the provider reports it.
+ *
+ * Written from wherever we already hold a `registerState()` answer — never by
+ * asking for one on the checkout path. It only ever changes when the store is
+ * re-pointed at another register, and offline it cannot be asked for at all,
+ * which is exactly when the tax-office link needs it (`taxUrl.ts`).
+ */
+export async function rememberRegisterFiscalNumber(
+  storeId: number,
+  fiscalNumber: string | null | undefined
+): Promise<void> {
+  const value = fiscalNumber?.trim();
+  if (!value) return;
+  await pool.query(
+    `UPDATE pos_fiscal_settings
+     SET register_fiscal_number = $2, updated_at = NOW()
+     WHERE store_id = $1 AND register_fiscal_number IS DISTINCT FROM $2`,
+    [storeId, value.slice(0, 64)]
+  );
 }
 
 /** The row, or null when the store has never configured fiscalisation. */

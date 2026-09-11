@@ -90,7 +90,34 @@ describe.skipIf(!hasDb)('POS fiscal offline code pool', () => {
     const result = await refill();
     expect(result).toEqual({ asked: 'done', fetched: 60, burned: 0 });
     expect(await counts()).toEqual({ free: 60, leased: 0, used: 0, burned: 0 });
-    expect(fake.offline?.calls).toEqual(['askOfflineCodes:60', 'getOfflineCodes:60']);
+    // `registerState` comes first and only once — see the caching test below.
+    expect(fake.offline?.calls).toEqual([
+      'registerState',
+      'askOfflineCodes:60',
+      'getOfflineCodes:60',
+    ]);
+  });
+
+  it('learns the register fiscal number here, because offline nobody can be asked', async () => {
+    // It is the `fn` of the tax-office link the till prints on an offline
+    // receipt (`taxUrl.ts`). Read once, cached, never asked for again.
+    await refill();
+    const stored = async () =>
+      (
+        await pool.query(
+          `SELECT register_fiscal_number AS fn FROM pos_fiscal_settings WHERE store_id = $1`,
+          [store.storeId]
+        )
+      ).rows[0]?.fn as string | null;
+    expect(await stored()).toBe('FAKE-FN');
+
+    // Empty the pool so the next refill does its full job, and check it does
+    // not spend a call re-reading what it already knows.
+    await pool.query(`DELETE FROM pos_fiscal_offline_codes WHERE store_id = $1`, [store.storeId]);
+    fake.offline!.calls.length = 0;
+    await refill();
+    expect(fake.offline?.calls).not.toContain('registerState');
+    expect(await stored()).toBe('FAKE-FN');
   });
 
   it('does nothing while the pool is at target — no provider call at all', async () => {
@@ -122,7 +149,13 @@ describe.skipIf(!hasDb)('POS fiscal offline code pool', () => {
 
     const result = await refill();
     expect(result).toEqual({ asked: 'timeout', fetched: 20, burned: 0 });
-    expect(fake.offline?.calls).toEqual(['askOfflineCodes:60', 'getOfflineCodes:60']);
+    // `registerState` is filtered out rather than expected: whether it happens
+    // depends on the register number being cached already, which is the
+    // previous test's subject, not this one's.
+    expect(fake.offline?.calls.filter((c) => c !== 'registerState')).toEqual([
+      'askOfflineCodes:60',
+      'getOfflineCodes:60',
+    ]);
   });
 
   it('burns free codes the provider spent on its own, and only free ones', async () => {
