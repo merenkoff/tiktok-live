@@ -31,6 +31,45 @@ function httpError(status: number, data: unknown): AxiosError {
 }
 
 describe('classifyCheckoutError', () => {
+  it('reads 409 register_held as a handover, not a retry', () => {
+    // Nothing was written and nothing will change by pressing again: another
+    // till owns the register until it hands it over.
+    const failure = classifyCheckoutError(
+      httpError(409, {
+        error: 'register_held',
+        message: 'Касу ПРРО зайнято іншим пристроєм — запросіть передачу',
+        holder: { device_id: 'abcdef1234567890', name: 'Каса 1' },
+        support_code: 'FS-REGISTER-HELD',
+      })
+    );
+    expect(failure).toEqual({
+      kind: 'register_held',
+      message: 'Касу ПРРО зайнято іншим пристроєм — запросіть передачу',
+      holderName: 'Каса 1',
+    });
+    // The cart survives and the modal stays open — the cashier has to read it.
+    expect(keepsCart(failure)).toBe(true);
+    expect(keepsModalOpen(failure)).toBe(true);
+  });
+
+  it('falls back to a short device id when the other till has no name', () => {
+    const failure = classifyCheckoutError(
+      httpError(409, {
+        error: 'register_held',
+        message: 'Касу ПРРО зайнято іншим пристроєм',
+        holder: { device_id: 'abcdef1234567890', name: null },
+      })
+    );
+    expect(failure).toMatchObject({ kind: 'register_held', holderName: 'abcdef12' });
+  });
+
+  it('survives a register_held body with no holder block at all', () => {
+    const failure = classifyCheckoutError(
+      httpError(409, { error: 'register_held', message: 'Касу ПРРО зайнято' })
+    );
+    expect(failure).toMatchObject({ kind: 'register_held', holderName: null });
+  });
+
   it('reads 503 as "nothing was written"', () => {
     const failure = classifyCheckoutError(
       httpError(503, {

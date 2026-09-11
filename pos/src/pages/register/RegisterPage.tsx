@@ -351,7 +351,16 @@ export function RegisterPage() {
 
     if (keepsModalOpen(failure)) {
       setCheckoutError({
-        message: failure.message,
+        message:
+          // Which machine holds the register is the only thing the cashier
+          // needs to know to fix this; the handover itself is on «Зміна ПРРО».
+          // No link: that screen belongs to the provider's bundle and does not
+          // exist as a route until it has loaded.
+          failure.kind === 'register_held'
+            ? `${failure.message}.${
+                failure.holderName ? ` Зараз касу тримає «${failure.holderName}».` : ''
+              } Передати її можна на екрані «Зміна ПРРО».`
+            : failure.message,
         supportCode: 'supportCode' in failure ? failure.supportCode : null,
         action:
           failure.kind === 'unknown_state' ? (

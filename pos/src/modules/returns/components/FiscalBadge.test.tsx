@@ -29,6 +29,17 @@ describe('FiscalBadge', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it('separates an offline receipt from one still being registered', () => {
+    // Both are `pending`, and they mean opposite things for the cashier: the
+    // offline one already has a real tax-office number.
+    expect(
+      render(<FiscalBadge status="pending" mode="offline" />).container.textContent
+    ).toMatch(/офлайн/);
+    expect(
+      render(<FiscalBadge status="pending" mode="online" />).container.textContent
+    ).toMatch(/реєструється/);
+  });
+
   it('marks the three real states', () => {
     expect(render(<FiscalBadge status="done" />).container.textContent).toBe('ПРРО');
     expect(render(<FiscalBadge status="pending" />).container.textContent).toMatch(/реєструється/);
@@ -64,6 +75,31 @@ describe('FiscalDetailCard', () => {
       'href',
       'https://cabinet.tax.gov.ua/x'
     );
+  });
+
+  it('states an offline receipt as fiscal, not as one still being registered', () => {
+    // It already carries a real tax-office number; only the control number and
+    // the QR wait for the replay. «Реєструється» would understate a receipt the
+    // customer can be handed right now.
+    render(
+      <FiscalDetailCard
+        doc={{
+          status: 'pending',
+          mode: 'offline',
+          fiscal_code: 'AB1234567890',
+          fiscal_date: '2026-09-11T11:05:00.000Z',
+          control_number: null,
+          tax_url: null,
+          qr_payload: null,
+          receipt_text: null,
+          error_code: null,
+          error_message: null,
+        }}
+      />
+    );
+    expect(screen.getByText(/офлайн-резерву/i)).toBeInTheDocument();
+    expect(screen.getByText('AB1234567890')).toBeInTheDocument();
+    expect(screen.queryByText(/Реєструється в ПРРО/)).not.toBeInTheDocument();
   });
 
   it('promises an automatic retry while one is still coming', () => {
