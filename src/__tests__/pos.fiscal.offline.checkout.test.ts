@@ -293,6 +293,59 @@ describe.skipIf(!hasDb)('POS fiscal offline checkout (case B — server session)
     expect(res.json().code).toBe('offline_limit');
     expect(await session.getSession(s.id)).toMatchObject({ status: 'stuck', error_code: 'offline_limit' });
     expect(await live()).toBeNull();
+
+    // The owner sees the parked session, with its never-sent document.
+    const attention = await app.inject({
+      method: 'GET',
+      url: '/api/pos/fiscal/attention',
+      headers: auth(store.ownerToken),
+    });
+    expect(attention.statusCode).toBe(200);
+    expect(attention.json().sessions).toEqual([
+      expect.objectContaining({
+        id: s.id,
+        status: 'stuck',
+        error_code: 'offline_limit',
+        holder: 'server',
+        documents: { pending: 1, done: 0, abandoned: 0 },
+      }),
+    ]);
+  });
+
+  it('refuses to close the shift by hand while the session is live', async () => {
+    await warm();
+    providerDown();
+    expect((await sell()).statusCode).toBe(201);
+
+    const res = await app.inject({ method: 'POST', url: '/api/pos/fiscal/shift/close', headers: headers() });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe('offline_session_open');
+    const shift = await pool.query(`SELECT status FROM pos_fiscal_shifts WHERE store_id = $1`, [store.storeId]);
+    expect(shift.rows.map((r) => r.status)).toEqual(['open']);
+    expect(fake.calls.map((c) => c.method)).not.toContain('closeShift');
+  });
+
+  it('reports the live session and its documents on /fiscal/status', async () => {
+    await warm();
+    providerDown();
+    expect((await sell()).statusCode).toBe(201);
+    expect((await sell()).statusCode).toBe(201);
+
+    const res = await app.inject({ method: 'GET', url: '/api/pos/fiscal/status', headers: headers() });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().offline).toMatchObject({
+      enabled: true,
+      codes: { free: 57, used: 3 },
+      session: {
+        holder: 'server',
+        status: 'open',
+        go_offline_sent: false,
+        last_go_online_at: null,
+        documents: { pending: 2, done: 0, abandoned: 0 },
+        error_code: null,
+      },
+    });
+    expect(res.json().holder).toMatchObject({ device_id: DEVICE, is_me: true });
   });
 
   it('stops selling when the shift is about to hit 24h', async () => {

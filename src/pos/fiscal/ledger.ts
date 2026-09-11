@@ -243,6 +243,28 @@ export async function lastOnlineDeliveredAt(storeId: number): Promise<Date | nul
   return at ? new Date(at) : null;
 }
 
+export interface SessionDocumentCounts {
+  pending: number;
+  done: number;
+  abandoned: number;
+}
+
+/** How far a session's replay has got — for the status and attention views. */
+export async function countSessionDocuments(sessionId: number): Promise<SessionDocumentCounts> {
+  const result = await pool.query(
+    `SELECT status, COUNT(*)::int AS n FROM pos_fiscal_receipts
+     WHERE offline_session_id = $1 GROUP BY status`,
+    [sessionId]
+  );
+  const counts: SessionDocumentCounts = { pending: 0, done: 0, abandoned: 0 };
+  for (const row of result.rows as Array<{ status: FiscalLedgerStatus; n: number }>) {
+    if (row.status === 'done') counts.done += Number(row.n);
+    else if (row.status === 'abandoned') counts.abandoned += Number(row.n);
+    else counts.pending += Number(row.n);
+  }
+  return counts;
+}
+
 /** The provider's id of the last document the session got through — the next one's `previousDocId`. */
 export async function lastDoneProviderDocId(sessionId: number): Promise<string | null> {
   const result = await pool.query(

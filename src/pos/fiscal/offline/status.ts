@@ -9,9 +9,11 @@
 // service does not import the pool (which imports the shift service).
 
 import { pool } from '../../../db.js';
+import { countSessionDocuments, type SessionDocumentCounts } from '../ledger.js';
 import { getFiscalSettings, isOfflineCapable } from '../settings.service.js';
 import { getHolder, touchHolder, type HolderView } from './holder.js';
 import { countCodes } from './pool.js';
+import type { OfflineSessionRow } from './session.js';
 
 export interface OfflineSessionView {
   id: number;
@@ -19,6 +21,29 @@ export interface OfflineSessionView {
   device_id: string | null;
   status: 'open' | 'replaying' | 'closed' | 'stuck';
   started_at: string;
+  ended_at: string | null;
+  /** The replay has sent `go-offline`; documents follow. */
+  go_offline_sent: boolean;
+  last_go_online_at: string | null;
+  documents: SessionDocumentCounts;
+  error_code: string | null;
+  error_message: string | null;
+}
+
+export async function sessionView(row: OfflineSessionRow): Promise<OfflineSessionView> {
+  return {
+    id: row.id,
+    holder: row.holder,
+    device_id: row.device_id ?? null,
+    status: row.status,
+    started_at: new Date(row.started_at).toISOString(),
+    ended_at: row.ended_at ? new Date(row.ended_at).toISOString() : null,
+    go_offline_sent: row.go_offline_tx_id != null,
+    last_go_online_at: row.last_go_online_at ? new Date(row.last_go_online_at).toISOString() : null,
+    documents: await countSessionDocuments(row.id),
+    error_code: row.error_code ?? null,
+    error_message: row.error_message ?? null,
+  };
 }
 
 export interface OfflineStatusBlock {
@@ -69,22 +94,20 @@ export async function getOfflineStatus(
   block.codes = { free: counts.free, leased: counts.leased, used: counts.used };
 
   const live = await pool.query(
-    `SELECT id, holder, device_id, status, started_at
-     FROM pos_fiscal_offline_sessions
+    `SELECT * FROM pos_fiscal_offline_sessions
      WHERE store_id = $1 AND cash_register_key = $2 AND status IN ('open', 'replaying', 'stuck')
      ORDER BY CASE status WHEN 'open' THEN 0 WHEN 'replaying' THEN 1 ELSE 2 END, started_at DESC
      LIMIT 1`,
     [storeId, registerKey]
   );
-  const s = live.rows[0];
+  const s = live.rows[0] as Record<string, unknown> | undefined;
   if (s) {
-    block.session = {
+    block.session = await sessionView({
+      ...(s as unknown as OfflineSessionRow),
       id: Number(s.id),
-      holder: s.holder,
-      device_id: s.device_id ?? null,
-      status: s.status,
-      started_at: new Date(s.started_at).toISOString(),
-    };
+      store_id: Number(s.store_id),
+      shift_id: s.shift_id == null ? null : Number(s.shift_id),
+    });
   }
 
   // Heartbeat before reading, so the holder's own poll never reports itself

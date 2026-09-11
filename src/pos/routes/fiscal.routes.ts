@@ -17,7 +17,9 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { ensurePosAuth, ensurePosOwner } from '../core/auth.js';
 import { isSecretsKeyConfigured } from '../core/secrets.js';
-import { asFiscalError, cashierMessage, isOfflineGate, supportCode } from '../fiscal/errors.js';
+import { asFiscalError, cashierMessage, FiscalError, isOfflineGate, supportCode } from '../fiscal/errors.js';
+import { getLiveSession, listStuckSessions } from '../fiscal/offline/session.js';
+import { sessionView } from '../fiscal/offline/status.js';
 import * as fiscalService from '../fiscal/fiscal.service.js';
 import * as holder from '../fiscal/offline/holder.js';
 import { getOfflineStatus } from '../fiscal/offline/status.js';
@@ -312,6 +314,15 @@ export function registerFiscalRoutes(fastify: FastifyInstance): void {
     try {
       const ctx = await shifts.resolveContext(auth.storeId);
       if (!ctx) return notConfigured(reply);
+      // A Z-report sent before the session's receipts are replayed would turn
+      // them into "receipts after Z" (POS_FISCAL_OFFLINE.md §6). The auto-close
+      // cron already waits; a person must too.
+      if (await getLiveSession(ctx.storeId, ctx.registerKey)) {
+        throw new FiscalError(
+          'Офлайн-чеки ПРРО ще не надіслано — зміну можна закрити після синхронізації',
+          'offline_session_open'
+        );
+      }
       const closed = await shifts.closeShift(ctx, AbortSignal.timeout(SHIFT_TIMEOUT_MS));
       return {
         shift: closed,
@@ -355,7 +366,13 @@ export function registerFiscalRoutes(fastify: FastifyInstance): void {
   fastify.get('/fiscal/attention', async (request, reply) => {
     const auth = await ensurePosOwner(request, reply);
     if (!auth) return;
-    return { documents: await fiscalService.listAttentionDocs(auth.storeId) };
+    const [documents, stuck] = await Promise.all([
+      fiscalService.listAttentionDocs(auth.storeId),
+      listStuckSessions(auth.storeId),
+    ]);
+    // Parked offline sessions: their documents may still be `pending` (never
+    // sent) — the owner settles them with the provider by hand.
+    return { documents, sessions: await Promise.all(stuck.map(sessionView)) };
   });
 
   fastify.post('/fiscal/x-report', async (request, reply) => {

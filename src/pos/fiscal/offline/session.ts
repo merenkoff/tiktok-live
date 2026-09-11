@@ -233,6 +233,18 @@ export async function stampNext(sessionId: number, receiptId: number): Promise<O
   }
 }
 
+/** Sessions that need the owner, newest first. */
+export async function listStuckSessions(storeId: number, limit = 20): Promise<OfflineSessionRow[]> {
+  const result = await pool.query(
+    `SELECT * FROM pos_fiscal_offline_sessions
+     WHERE store_id = $1 AND status = 'stuck'
+     ORDER BY ended_at DESC NULLS LAST, id DESC
+     LIMIT $2`,
+    [storeId, limit]
+  );
+  return result.rows.map((row) => toRow(row) as OfflineSessionRow);
+}
+
 // ── Lifecycle (the replay drives these) ─────────────────────────────────────
 
 async function setStatus(
