@@ -65,6 +65,23 @@ export class FakeOfflineOps implements FiscalOfflineOps {
   askStatus: AskOfflineCodesStatus = 'done';
   offlineMode = false;
   manualOffline = false;
+  /** Make the next `goOffline` fail with this kind. */
+  goOfflineError: FiscalErrorKind | null = null;
+  /**
+   * `goOnline` is asynchronous at a real provider: the register reports
+   * `offline` for a while afterwards. This many `registerState` polls keep
+   * saying offline before it flips.
+   */
+  goOnlineLag = 0;
+  /** What `goOffline` received, for order/idempotency assertions. */
+  readonly goOfflineCalls: Array<{ at: Date; fiscalCode: string }> = [];
+  /**
+   * Errors for the next offline registrations, in order. Separate from the
+   * owner's `queueError` queue, which the sign-in of a replay probe would
+   * consume first.
+   */
+  readonly registerErrors: FiscalErrorKind[] = [];
+  private pendingOnline: number | null = null;
   private nextSerial = 1;
 
   constructor(private readonly owner: FakeFiscalProvider) {}
@@ -87,6 +104,15 @@ export class FakeOfflineOps implements FiscalOfflineOps {
 
   async registerState() {
     this.calls.push('registerState');
+    if (this.pendingOnline !== null) {
+      if (this.pendingOnline <= 0) {
+        this.offlineMode = false;
+        this.manualOffline = false;
+        this.pendingOnline = null;
+      } else {
+        this.pendingOnline -= 1;
+      }
+    }
     return {
       fiscalNumber: 'FAKE-FN',
       offline: this.offlineMode,
@@ -94,8 +120,14 @@ export class FakeOfflineOps implements FiscalOfflineOps {
     };
   }
 
-  async goOffline(_ctx: FiscalCallCtx, _at: Date, fiscalCode: string) {
+  async goOffline(_ctx: FiscalCallCtx, at: Date, fiscalCode: string) {
     this.calls.push('goOffline');
+    if (this.goOfflineError) {
+      const kind = this.goOfflineError;
+      this.goOfflineError = null;
+      throw new FiscalError(`fake go-offline ${kind}`, kind);
+    }
+    this.goOfflineCalls.push({ at, fiscalCode });
     this.reserve = this.reserve.filter((c) => c.fiscalCode !== fiscalCode);
     this.offlineMode = true;
     this.manualOffline = true;
@@ -104,8 +136,15 @@ export class FakeOfflineOps implements FiscalOfflineOps {
 
   async goOnline() {
     this.calls.push('goOnline');
-    this.offlineMode = false;
-    this.manualOffline = false;
+    if (this.goOnlineLag === 0) {
+      this.offlineMode = false;
+      this.manualOffline = false;
+      this.pendingOnline = null;
+      return;
+    }
+    // A repeated go-online while the first is still in flight does not
+    // restart the wait — the provider is already working on it.
+    if (this.pendingOnline === null) this.pendingOnline = this.goOnlineLag;
   }
 
   async askOfflineCodes(_ctx: FiscalCallCtx, count: number) {
@@ -124,13 +163,20 @@ export class FakeOfflineOps implements FiscalOfflineOps {
     return { available: this.reserve.length, minimal: 10, used: 0, enough: this.reserve.length >= 10 };
   }
 
+  private takeRegisterError(): void {
+    const kind = this.registerErrors.shift();
+    if (kind) throw new FiscalError(`fake offline registration ${kind}`, kind);
+  }
+
   async registerSaleOffline(_ctx: FiscalCallCtx, doc: FiscalSaleDoc, off: OfflineStamp) {
     this.calls.push('registerSaleOffline');
+    this.takeRegisterError();
     return this.owner.registerOffline('registerSaleOffline', doc, doc.totalCents, off);
   }
 
   async registerRefundOffline(_ctx: FiscalCallCtx, doc: FiscalRefundDoc, off: OfflineStamp) {
     this.calls.push('registerRefundOffline');
+    this.takeRegisterError();
     return this.owner.registerOffline('registerRefundOffline', doc, doc.totalCents, off);
   }
 }

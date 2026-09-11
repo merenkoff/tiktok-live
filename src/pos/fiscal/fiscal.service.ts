@@ -37,6 +37,7 @@ import {
 } from './mapping.js';
 import { awaitSlot, type FiscalCallPriority } from './rateLimit.js';
 import * as runtime from './runtime.js';
+import { getFiscalSettings } from './settings.service.js';
 import {
   buildCallCtx,
   closeShift,
@@ -50,11 +51,17 @@ import type { FiscalCallCtx, FiscalResult } from './types.js';
 import { assertHolder } from './offline/holder.js';
 import {
   getLiveSession,
+  listLiveServerSessions,
+  markClosed,
+  markGoOfflineSent,
+  markGoOnlineSent,
+  markReplaying,
   markStuck,
   openServerSession,
   stampNext,
   type OfflineSessionRow,
 } from './offline/session.js';
+import { refillOfflineCodes } from './offline/pool.js';
 
 /**
  * Budget for the entire fiscal phase of one request.
@@ -782,21 +789,34 @@ export interface RetryResult {
   failed: number;
   abandoned: number;
   adopted: number;
+  /** Offline sessions: documents sent, sessions closed, sessions parked. */
+  replayed: number;
+  closed: number;
+  stuck: number;
 }
+
+const EMPTY_RETRY: RetryResult = { done: 0, failed: 0, abandoned: 0, adopted: 0, replayed: 0, closed: 0, stuck: 0 };
 
 /**
  * Retry every due document, then run the housekeeping sweeps.
+ *
+ * Offline sessions go first: while one is live the flat claim holds the
+ * store's online documents back, so nothing is retried ahead of the replay.
  *
  * Bounded by the shift, not just by attempts: `abandonShiftDocs` fires on every
  * shift close, and the age net catches shifts that were parked in `'error'`
  * without ever being closed.
  */
-export async function retryPendingFiscalDocs(): Promise<RetryResult> {
-  if (retryRunning) return { done: 0, failed: 0, abandoned: 0, adopted: 0 };
+export async function retryPendingFiscalDocs(opts: { storeId?: number } = {}): Promise<RetryResult> {
+  if (retryRunning) return { ...EMPTY_RETRY };
   retryRunning = true;
   try {
+    const replay = await replayServerSessions(opts);
+
     const abandoned =
-      (await ledger.abandonVoidedSaleDocs()) + (await ledger.abandonStaleDocs(STALE_DOC_AGE_MS));
+      (await ledger.abandonVoidedSaleDocs()) +
+      (await ledger.abandonStaleDocs(STALE_DOC_AGE_MS)) +
+      replay.abandoned;
     const adopted = await adoptOrphanedSales();
 
     const claimed = await ledger.claimDueDocuments(RETRY_BATCH);
@@ -823,10 +843,297 @@ export async function retryPendingFiscalDocs(): Promise<RetryResult> {
       }
     }
 
-    return { done, failed, abandoned, adopted };
+    return {
+      done,
+      failed,
+      abandoned,
+      adopted,
+      replayed: replay.replayed,
+      closed: replay.closed,
+      stuck: replay.stuck,
+    };
   } finally {
     retryRunning = false;
   }
+}
+
+// ── Offline session replay (case B) ─────────────────────────────────────────
+//
+// TechDocs/POS_FISCAL_OFFLINE.md §5. One pass per live server-held session:
+//   0. is the provider back? (`registerState` — a read, no slot);
+//   1. resync the pool — the provider may have gone offline on its own and
+//      spent codes we still list as free;
+//   2. `go-offline` once, at the session's start, with its code — only if
+//      nothing online was delivered after that start (else the register would
+//      break, per the provider's own warning: park the session);
+//   3. the session's documents, in `offline_seq` order, through the same
+//      `runDocument` as everything else — `rejected` parks the document and
+//      moves on, an outage stops the pass and the next tick resumes;
+//   4. queue empty → `go-online` (≤ 1 per 2 min), then poll until the
+//      register reports online → session closed.
+
+/** How long one session may hold the cron tick. The tick is every 2 minutes. */
+const REPLAY_SESSION_BUDGET_MS = 60_000;
+/** Documents per session per tick — the rest wait for the next one. */
+const REPLAY_BATCH = 20;
+/** The provider's own limit on `go-online` calls. */
+export const GO_ONLINE_MIN_INTERVAL_MS = 2 * 60 * 1000;
+
+export interface ReplayResult {
+  sessions: number;
+  /** Provider still unreachable — left as they were. */
+  skipped: number;
+  /** Sent some or all documents; not finished this tick. */
+  replaying: number;
+  replayed: number;
+  abandoned: number;
+  closed: number;
+  stuck: number;
+}
+
+/** `storeId` narrows the pass to one store — for tests; the cron replays every store. */
+export async function replayServerSessions(opts: { storeId?: number } = {}): Promise<ReplayResult> {
+  const totals: ReplayResult = {
+    sessions: 0,
+    skipped: 0,
+    replaying: 0,
+    replayed: 0,
+    abandoned: 0,
+    closed: 0,
+    stuck: 0,
+  };
+  const sessions = await listLiveServerSessions({ storeId: opts.storeId });
+  for (const session of sessions) {
+    totals.sessions += 1;
+    try {
+      const outcome = await replayOneSession(session);
+      totals[outcome.status] += 1;
+      totals.replayed += outcome.replayed;
+      totals.abandoned += outcome.abandoned;
+    } catch (error) {
+      logger.error('Offline session replay failed outside the document path', {
+        storeId: session.store_id,
+        sessionId: session.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  return totals;
+}
+
+interface SessionOutcome {
+  status: 'skipped' | 'replaying' | 'closed' | 'stuck';
+  replayed: number;
+  abandoned: number;
+}
+
+async function replayOneSession(initial: OfflineSessionRow): Promise<SessionOutcome> {
+  const none: SessionOutcome = { status: 'skipped', replayed: 0, abandoned: 0 };
+  // Park the session only when the store really switched fiscalisation or
+  // offline mode off underneath it. Anything else that stops us resolving a
+  // context — unreadable credentials after a key rotation, a database blip —
+  // is this process's problem, not the session's: leave it for the next tick.
+  const settings = await getFiscalSettings(initial.store_id).catch(() => undefined);
+  if (settings && (!settings.enabled || !settings.offline_mode)) {
+    await markStuck(initial.id, 'not_configured', 'ПРРО або офлайн-режим вимкнено під час офлайн-сесії');
+    return { ...none, status: 'stuck' };
+  }
+  const ctx = settings ? await resolveContext(initial.store_id).catch(() => null) : null;
+  if (!ctx) {
+    logger.warn('Offline session: cannot resolve the store context, skipping', {
+      storeId: initial.store_id,
+      sessionId: initial.id,
+    });
+    return none;
+  }
+  const ops = ctx.provider.offline;
+  if (!ops) {
+    // This process has no offline-capable adapter for the store's provider —
+    // not the session's fault; leave it for a process that has.
+    logger.warn('Offline session: no offline capability in this process, skipping', {
+      storeId: ctx.storeId,
+      sessionId: initial.id,
+      provider: ctx.provider.id,
+    });
+    return none;
+  }
+
+  const signal = AbortSignal.timeout(REPLAY_SESSION_BUDGET_MS);
+  const gate: FiscalGate = {
+    on: true,
+    mode: 'offline',
+    session: initial,
+    ctx,
+    shiftRowId: initial.shift_id,
+    staffId: null,
+    signal,
+  };
+  const log = { storeId: ctx.storeId, sessionId: initial.id };
+
+  // 0. Is the provider back? A read — no rate-limit slot.
+  let state: Awaited<ReturnType<typeof ops.registerState>>;
+  try {
+    state = await ops.registerState(await buildCallCtx(ctx, signal));
+  } catch (raw) {
+    const err = asFiscalError(raw, 'ПРРО недоступне');
+    logger.info('Offline session: provider still unreachable', { ...log, kind: err.kind });
+    return none;
+  }
+
+  // 1. Resync the pool — best effort; an outage here is not a reason to stop.
+  try {
+    await refillOfflineCodes(ctx, signal);
+  } catch (raw) {
+    const err = asFiscalError(raw, 'Не вдалося оновити пул кодів');
+    logger.warn('Offline session: pool resync failed', { ...log, kind: err.kind });
+  }
+
+  // 2. go-offline, once.
+  let session = (await markReplaying(initial.id)) ?? initial;
+  if (!session.go_offline_tx_id) {
+    const floor = await ledger.lastOnlineDeliveredAt(ctx.storeId);
+    if (floor && floor.getTime() > new Date(session.started_at).getTime()) {
+      await markStuck(
+        session.id,
+        'go_offline_order',
+        'Онлайн-чек доставлено в ДПС після початку офлайн-сесії — реплей неможливий'
+      );
+      logger.error('Offline session parked: go-offline date would precede a delivered document', {
+        ...log,
+        startedAt: session.started_at,
+        lastDeliveredAt: floor,
+      });
+      return { ...none, status: 'stuck' };
+    }
+
+    if (state.offline && state.manualOffline) {
+      // Our earlier go-offline landed but the tx id was never written.
+      session = (await markGoOfflineSent(session.id, null)) ?? session;
+    } else {
+      try {
+        // `live` priority for everything the replay transmits: while the
+        // session is `replaying` the store's sales are refused, so there is
+        // no checkout to keep the reserve for — and a background slot would
+        // be declined right after the pool resync took the only spare token.
+        await awaitSlot(ctx.storeId, ctx.registerKey, 'live', signal);
+        const res = await ops.goOffline(
+          await buildCallCtx(ctx, signal),
+          new Date(session.started_at),
+          session.go_offline_code ?? ''
+        );
+        session = (await markGoOfflineSent(session.id, res.transactionId)) ?? session;
+        logger.info('Offline session: go-offline sent', { ...log, transactionId: res.transactionId });
+      } catch (raw) {
+        const err = asFiscalError(raw, 'go-offline відхилено');
+        if (isTerminal(err.kind)) {
+          await markStuck(session.id, `go_offline_${err.kind}`, err.message);
+          logger.error('Offline session parked: go-offline refused', { ...log, kind: err.kind, message: err.message });
+          return { ...none, status: 'stuck' };
+        }
+        logger.warn('Offline session: go-offline did not go through, will retry', { ...log, kind: err.kind });
+        return { ...none, status: 'replaying' };
+      }
+    }
+  }
+
+  // 3. The documents, in order.
+  let replayed = 0;
+  let abandoned = 0;
+  let previousDocId = await ledger.lastDoneProviderDocId(session.id);
+  const docs = (await ledger.listSessionDocuments(session.id)).filter(
+    (row) => row.status === 'pending' || row.status === 'failed'
+  );
+  for (const pending of docs.slice(0, REPLAY_BATCH)) {
+    const row = await ledger.claimSessionDocument(pending.id);
+    if (!row) continue;
+    if (row.doc_type !== 'sale' || !row.fiscal_code || !row.fiscal_date) {
+      await ledger.markAbandoned(row.id, 'offline_unsupported', 'Документ не можна надіслати офлайн');
+      abandoned += 1;
+      continue;
+    }
+    const payload = await pool.query(`SELECT request_payload FROM pos_fiscal_receipts WHERE id = $1`, [row.id]);
+    const doc = payload.rows[0]?.request_payload;
+    if (!doc) {
+      await ledger.markAbandoned(row.id, 'no_payload', 'Документ не містить запиту для повтору');
+      abandoned += 1;
+      continue;
+    }
+    const stamp = {
+      fiscalCode: row.fiscal_code,
+      fiscalDate: new Date(row.fiscal_date),
+      previousDocId: previousDocId ?? undefined,
+    };
+    try {
+      const { result } = await runDocument(
+        gate,
+        row,
+        (callCtx) => ops.registerSaleOffline(callCtx, doc, stamp),
+        'live'
+      );
+      previousDocId = result.providerDocId;
+      replayed += 1;
+    } catch (error) {
+      if (!(error instanceof FiscalDocumentFailed)) throw error;
+      if (isTerminal(error.cause.kind)) {
+        // The sale stands — goods left the store; the owner sorts the document out.
+        await ledger.markAbandoned(row.id, error.cause.providerCode ?? error.cause.kind, error.cause.message);
+        abandoned += 1;
+        logger.error('Offline document refused on replay; parked for the owner', {
+          ...log,
+          docId: row.id,
+          seq: row.offline_seq,
+          kind: error.cause.kind,
+        });
+        continue;
+      }
+      logger.warn('Offline session: replay interrupted, will resume', {
+        ...log,
+        docId: row.id,
+        seq: row.offline_seq,
+        kind: error.cause.kind,
+      });
+      return { status: 'replaying', replayed, abandoned };
+    }
+  }
+
+  const remaining = (await ledger.listSessionDocuments(session.id)).some(
+    (row) => row.status === 'pending' || row.status === 'failed'
+  );
+  if (remaining) return { status: 'replaying', replayed, abandoned };
+
+  // 4. Everything is at the provider — bring the register back online.
+  const lastGoOnline = session.last_go_online_at ? new Date(session.last_go_online_at).getTime() : null;
+  if (lastGoOnline === null || Date.now() - lastGoOnline >= GO_ONLINE_MIN_INTERVAL_MS) {
+    try {
+      await awaitSlot(ctx.storeId, ctx.registerKey, 'live', signal);
+      await ops.goOnline(await buildCallCtx(ctx, signal));
+      session = (await markGoOnlineSent(session.id)) ?? session;
+      logger.info('Offline session: go-online sent', log);
+    } catch (raw) {
+      const err = asFiscalError(raw, 'go-online не пройшов');
+      logger.warn('Offline session: go-online failed, will retry', { ...log, kind: err.kind });
+      return { status: 'replaying', replayed, abandoned };
+    }
+  }
+
+  try {
+    const after = await ops.registerState(await buildCallCtx(ctx, signal));
+    if (after.offline) return { status: 'replaying', replayed, abandoned };
+  } catch (raw) {
+    const err = asFiscalError(raw, 'ПРРО недоступне');
+    logger.warn('Offline session: state probe failed after go-online', { ...log, kind: err.kind });
+    return { status: 'replaying', replayed, abandoned };
+  }
+
+  await markClosed(session.id);
+  runtime.invalidateShift(ctx.storeId);
+  logger.info('Offline session closed — register online again', { ...log, replayed, abandoned });
+  try {
+    await refillOfflineCodes(ctx, signal);
+  } catch {
+    // The 10-minute cron tops it up; nothing to do now.
+  }
+  return { status: 'closed', replayed, abandoned };
 }
 
 /**

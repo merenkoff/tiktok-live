@@ -263,18 +263,21 @@ export interface RefillAllResult {
  * in `src/index.ts`; self-guarded against overlapping ticks like the retry cron.
  */
 export async function refillAllStores(
-  opts: { limit?: number; signal?: AbortSignal } = {}
+  opts: { limit?: number; signal?: AbortSignal; storeId?: number } = {}
 ): Promise<RefillAllResult> {
   const totals: RefillAllResult = { stores: 0, fetched: 0, burned: 0, failed: 0 };
   if (refillRunning) return totals;
   refillRunning = true;
   try {
+    // `storeId` narrows the sweep to one store — for tests, which share a
+    // database across workers; the cron always sweeps every store.
     const stores = await pool.query(
       `SELECT store_id FROM pos_fiscal_settings
        WHERE enabled AND offline_mode
+         AND ($2::bigint IS NULL OR store_id = $2::bigint)
        ORDER BY store_id ASC
        LIMIT $1`,
-      [opts.limit ?? 50]
+      [opts.limit ?? 50, opts.storeId ?? null]
     );
     for (const row of stores.rows as Array<{ store_id: number }>) {
       const storeId = Number(row.store_id);

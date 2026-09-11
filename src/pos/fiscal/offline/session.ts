@@ -86,14 +86,17 @@ export async function getLiveSession(
   return toRow(result.rows[0]);
 }
 
-/** Every live server-held session — the replay's worklist, oldest first. */
-export async function listLiveServerSessions(limit = 50): Promise<OfflineSessionRow[]> {
+/** Every live server-held session — the replay's worklist, oldest first. `storeId` narrows it (tests). */
+export async function listLiveServerSessions(
+  opts: { storeId?: number; limit?: number } = {}
+): Promise<OfflineSessionRow[]> {
   const result = await pool.query(
     `SELECT * FROM pos_fiscal_offline_sessions
      WHERE holder = 'server' AND status IN ('open', 'replaying')
+       AND ($2::bigint IS NULL OR store_id = $2::bigint)
      ORDER BY started_at ASC
      LIMIT $1`,
-    [limit]
+    [opts.limit ?? 50, opts.storeId ?? null]
   );
   return result.rows.map((row) => toRow(row) as OfflineSessionRow);
 }

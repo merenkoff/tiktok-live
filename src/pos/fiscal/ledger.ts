@@ -217,6 +217,32 @@ export async function listSessionDocuments(sessionId: number): Promise<FiscalRec
   return result.rows as FiscalReceiptRow[];
 }
 
+/**
+ * Take one session document for a replay attempt. Bumps `attempts` like the
+ * flat claim does, so a document the provider keeps refusing still runs out
+ * of budget and lands in the attention list instead of looping every tick.
+ */
+export async function claimSessionDocument(rowId: number): Promise<FiscalReceiptRow | null> {
+  const result = await pool.query(
+    `UPDATE pos_fiscal_receipts SET attempts = attempts + 1, updated_at = NOW()
+     WHERE id = $1 AND status IN ('pending', 'failed')
+     RETURNING *`,
+    [rowId]
+  );
+  return (result.rows[0] as FiscalReceiptRow) ?? null;
+}
+
+/** When the tax office last received an online document of this store — the floor for `go_offline_date`. */
+export async function lastOnlineDeliveredAt(storeId: number): Promise<Date | null> {
+  const result = await pool.query(
+    `SELECT MAX(fiscal_date) AS at FROM pos_fiscal_receipts
+     WHERE store_id = $1 AND mode = 'online' AND status = 'done'`,
+    [storeId]
+  );
+  const at = result.rows[0]?.at as Date | null | undefined;
+  return at ? new Date(at) : null;
+}
+
 /** The provider's id of the last document the session got through — the next one's `previousDocId`. */
 export async function lastDoneProviderDocId(sessionId: number): Promise<string | null> {
   const result = await pool.query(
