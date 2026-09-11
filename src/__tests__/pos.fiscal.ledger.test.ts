@@ -122,7 +122,7 @@ describe.skipIf(!hasDb)('POS fiscal ledger and reconciliation', () => {
     expect((await rows())[0].status).toBe('failed');
 
     await makeDue();
-    const result = await fiscalService.retryPendingFiscalDocs();
+    const result = await fiscalService.retryPendingFiscalDocs({ storeId: store.storeId });
     expect(result.done).toBe(1);
 
     const after = (await rows())[0];
@@ -144,7 +144,7 @@ describe.skipIf(!hasDb)('POS fiscal ledger and reconciliation', () => {
     );
     await makeDue();
     fake.queueError('unavailable');
-    await fiscalService.retryPendingFiscalDocs();
+    await fiscalService.retryPendingFiscalDocs({ storeId: store.storeId });
 
     const after = (await rows())[0];
     expect(after.status).toBe('abandoned');
@@ -180,7 +180,7 @@ describe.skipIf(!hasDb)('POS fiscal ledger and reconciliation', () => {
     await makeDue();
 
     const before = fake.calls.filter((c) => c.method === 'registerSale').length;
-    const result = await fiscalService.retryPendingFiscalDocs();
+    const result = await fiscalService.retryPendingFiscalDocs({ storeId: store.storeId });
 
     expect(result.abandoned).toBeGreaterThan(0);
     expect(fake.calls.filter((c) => c.method === 'registerSale').length).toBe(before);
@@ -208,7 +208,7 @@ describe.skipIf(!hasDb)('POS fiscal ledger and reconciliation', () => {
     ]);
     resetRuntime();
 
-    await fiscalService.retryPendingFiscalDocs();
+    await fiscalService.retryPendingFiscalDocs({ storeId: store.storeId });
     // Parked where the owner will see it, instead of being rescanned forever.
     expect((await saleRow(saleId)).fiscal_status).toBe('failed');
   });
@@ -220,7 +220,7 @@ describe.skipIf(!hasDb)('POS fiscal ledger and reconciliation', () => {
     await pool.query(`DELETE FROM pos_fiscal_receipts WHERE sale_id = $1`, [saleId]);
     await pool.query(`UPDATE pos_sales SET fiscal_status = 'pending' WHERE id = $1`, [saleId]);
 
-    const result = await fiscalService.retryPendingFiscalDocs();
+    const result = await fiscalService.retryPendingFiscalDocs({ storeId: store.storeId });
     expect(result.adopted).toBe(1);
     const adopted = (await rows()).find((r) => Number(r.sale_id) === saleId);
     expect(adopted).toBeTruthy();
@@ -330,7 +330,7 @@ describe.skipIf(!hasDb)('POS fiscal ledger and reconciliation', () => {
     await updateFiscalSettings(store.storeId, { enabled: false });
     await makeDue();
 
-    await fiscalService.retryPendingFiscalDocs();
+    await fiscalService.retryPendingFiscalDocs({ storeId: store.storeId });
     const after = (await rows())[0];
     expect(after.status).toBe('abandoned');
     expect(after.error_code).toBe('not_configured');

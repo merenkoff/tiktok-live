@@ -800,6 +800,10 @@ const EMPTY_RETRY: RetryResult = { done: 0, failed: 0, abandoned: 0, adopted: 0,
 /**
  * Retry every due document, then run the housekeeping sweeps.
  *
+ * `storeId` narrows the replay and the claim to one store — for tests, whose
+ * files run in parallel workers against one database and would otherwise
+ * claim each other's documents; the cron passes nothing.
+ *
  * Offline sessions go first: while one is live the flat claim holds the
  * store's online documents back, so nothing is retried ahead of the replay.
  *
@@ -819,7 +823,7 @@ export async function retryPendingFiscalDocs(opts: { storeId?: number } = {}): P
       replay.abandoned;
     const adopted = await adoptOrphanedSales();
 
-    const claimed = await ledger.claimDueDocuments(RETRY_BATCH);
+    const claimed = await ledger.claimDueDocuments(RETRY_BATCH, opts.storeId);
     let done = 0;
     let failed = 0;
 

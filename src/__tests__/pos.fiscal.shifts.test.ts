@@ -259,7 +259,7 @@ describe.skipIf(!hasDb)('POS fiscal shifts', () => {
       [store.storeId]
     );
 
-    const result = await shifts.closeDueShifts();
+    const result = await shifts.closeDueShifts({ storeId: store.storeId });
     expect(result).toMatchObject({ closed: 1, failed: 0 });
     expect(await liveRows()).toHaveLength(0);
     expect(fake.calls.some((x) => x.method === 'closeShift')).toBe(true);
@@ -279,7 +279,7 @@ describe.skipIf(!hasDb)('POS fiscal shifts', () => {
       [store.storeId]
     );
     try {
-      expect(await shifts.closeDueShifts()).toMatchObject({ closed: 0, failed: 0 });
+      expect(await shifts.closeDueShifts({ storeId: store.storeId })).toMatchObject({ closed: 0, failed: 0 });
       expect(await liveRows()).toHaveLength(1);
       expect(fake.calls.some((x) => x.method === 'closeShift')).toBe(false);
 
@@ -287,7 +287,7 @@ describe.skipIf(!hasDb)('POS fiscal shifts', () => {
         `UPDATE pos_fiscal_offline_sessions SET status = 'closed', ended_at = NOW() WHERE store_id = $1`,
         [store.storeId]
       );
-      expect(await shifts.closeDueShifts()).toMatchObject({ closed: 1 });
+      expect(await shifts.closeDueShifts({ storeId: store.storeId })).toMatchObject({ closed: 1 });
     } finally {
       await pool.query(`DELETE FROM pos_fiscal_offline_sessions WHERE store_id = $1`, [store.storeId]);
     }
@@ -295,7 +295,7 @@ describe.skipIf(!hasDb)('POS fiscal shifts', () => {
 
   it('leaves a shift alone before its deadline', async () => {
     await shifts.ensureOpenShift(await ctx(), signal());
-    expect(await shifts.closeDueShifts()).toMatchObject({ closed: 0, failed: 0 });
+    expect(await shifts.closeDueShifts({ storeId: store.storeId })).toMatchObject({ closed: 0, failed: 0 });
     expect(await liveRows()).toHaveLength(1);
   });
 
@@ -309,7 +309,7 @@ describe.skipIf(!hasDb)('POS fiscal shifts', () => {
     );
 
     fake.queueError('unavailable');
-    expect(await shifts.closeDueShifts()).toMatchObject({ closed: 0, failed: 1 });
+    expect(await shifts.closeDueShifts({ storeId: store.storeId })).toMatchObject({ closed: 0, failed: 1 });
 
     const rows = await liveRows();
     expect(rows).toHaveLength(1);
@@ -317,7 +317,7 @@ describe.skipIf(!hasDb)('POS fiscal shifts', () => {
     expect(rows[0].error_code).toBe('unavailable');
 
     // Next tick succeeds.
-    expect(await shifts.closeDueShifts()).toMatchObject({ closed: 1 });
+    expect(await shifts.closeDueShifts({ storeId: store.storeId })).toMatchObject({ closed: 1 });
   });
 
   it('parks a shift in error when the cause cannot resolve itself', async () => {
@@ -333,7 +333,7 @@ describe.skipIf(!hasDb)('POS fiscal shifts', () => {
 
     fake.signInError = 'auth_rejected';
     resetRuntime();
-    expect(await shifts.closeDueShifts()).toMatchObject({ closed: 0, failed: 1 });
+    expect(await shifts.closeDueShifts({ storeId: store.storeId })).toMatchObject({ closed: 0, failed: 1 });
 
     const row = (
       await pool.query(
@@ -355,7 +355,7 @@ describe.skipIf(!hasDb)('POS fiscal shifts', () => {
     );
     await updateFiscalSettings(store.storeId, { enabled: false });
 
-    expect(await shifts.closeDueShifts()).toMatchObject({ closed: 0, failed: 1 });
+    expect(await shifts.closeDueShifts({ storeId: store.storeId })).toMatchObject({ closed: 0, failed: 1 });
     const row = (
       await pool.query(
         `SELECT status, error_code FROM pos_fiscal_shifts WHERE store_id = $1 ORDER BY id DESC LIMIT 1`,

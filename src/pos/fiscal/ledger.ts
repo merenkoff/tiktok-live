@@ -569,7 +569,7 @@ export async function abandonVoidedSaleDocs(): Promise<number> {
  * lock the nullable side of an outer join. The claim bumps `attempts` and
  * re-leases, so an overlapping cron tick sees nothing to do.
  */
-export async function claimDueDocuments(limit: number): Promise<FiscalReceiptRow[]> {
+export async function claimDueDocuments(limit: number, storeId?: number): Promise<FiscalReceiptRow[]> {
   const result = await pool.query(
     `UPDATE pos_fiscal_receipts SET
        attempts = attempts + 1,
@@ -582,6 +582,8 @@ export async function claimDueDocuments(limit: number): Promise<FiscalReceiptRow
          AND r.next_attempt_at IS NOT NULL
          AND r.next_attempt_at < NOW()
          AND r.attempts < $3
+         -- One store only when asked (tests share a database across workers).
+         AND ($4::bigint IS NULL OR r.store_id = $4::bigint)
          -- Offline documents are sent by the session replay, in order.
          AND r.mode = 'online'
          -- And while a store has a live offline session, nothing online may
@@ -598,7 +600,7 @@ export async function claimDueDocuments(limit: number): Promise<FiscalReceiptRow
        LIMIT $1
      )
      RETURNING *`,
-    [limit, String(LEASE_MS), MAX_ATTEMPTS]
+    [limit, String(LEASE_MS), MAX_ATTEMPTS, storeId ?? null]
   );
   return result.rows as FiscalReceiptRow[];
 }
