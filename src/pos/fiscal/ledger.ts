@@ -536,6 +536,13 @@ export async function claimDueDocuments(limit: number): Promise<FiscalReceiptRow
          AND r.attempts < $3
          -- Offline documents are sent by the session replay, in order.
          AND r.mode = 'online'
+         -- And while a store has a live offline session, nothing online may
+         -- reach the provider ahead of the replay's go-offline: it would break
+         -- the date ordering. These wait, without burning attempts.
+         AND NOT EXISTS (
+           SELECT 1 FROM pos_fiscal_offline_sessions os
+           WHERE os.store_id = r.store_id AND os.status IN ('open', 'replaying')
+         )
          -- Never re-send a document whose sale has been voided.
          AND (r.sale_id IS NULL OR s.status <> 'voided')
        ORDER BY r.next_attempt_at ASC

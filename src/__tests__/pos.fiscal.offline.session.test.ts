@@ -235,6 +235,12 @@ describe.skipIf(!hasDb)('POS fiscal offline session', () => {
       `UPDATE pos_fiscal_receipts SET next_attempt_at = NOW() - interval '1 minute' WHERE id = ANY($1::bigint[])`,
       [[off.id, on.id]]
     );
+    // While the session is live, the store's online documents wait too —
+    // nothing may reach the provider ahead of the replay's go-offline.
+    expect((await ledger.claimDueDocuments(10)).map((r) => r.id)).not.toContain(on.id);
+
+    await session.markReplaying(s.id);
+    await session.markClosed(s.id);
     const claimed = await ledger.claimDueDocuments(10);
     expect(claimed.map((r) => r.id)).toContain(on.id);
     expect(claimed.map((r) => r.id)).not.toContain(off.id);

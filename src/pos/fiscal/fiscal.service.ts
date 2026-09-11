@@ -48,6 +48,13 @@ import {
 } from './shifts.service.js';
 import type { FiscalCallCtx, FiscalResult } from './types.js';
 import { assertHolder } from './offline/holder.js';
+import {
+  getLiveSession,
+  markStuck,
+  openServerSession,
+  stampNext,
+  type OfflineSessionRow,
+} from './offline/session.js';
 
 /**
  * Budget for the entire fiscal phase of one request.
@@ -75,9 +82,23 @@ const BACKGROUND_MAX_WAIT_MS = 250;
  */
 const RECEIPT_TEXT_BUDGET_MS = 2_500;
 
+/**
+ * Offline-session gates (TechDocs/POS_FISCAL_OFFLINE.md §4, план фазы 2 п. 8).
+ * The tax office allows 36h of offline selling in a row and a 24h shift; both
+ * are checked with a margin so the replay still has time to land inside them.
+ */
+export const OFFLINE_SESSION_MAX_MS = 36 * 60 * 60 * 1000 - 30 * 60 * 1000;
+export const SHIFT_DEADLINE_MS = 24 * 60 * 60 * 1000 - 15 * 60 * 1000;
+
+/** What the caller is about to register — decides what an offline session admits. */
+export type FiscalOp = 'sale' | 'refund' | 'service';
+
 export interface FiscalGate {
   /** False = this store does not fiscalise; the caller proceeds unchanged. */
   on: boolean;
+  /** `offline` = the provider is unreachable and the store sells from its code reserve. */
+  mode: 'online' | 'offline';
+  session: OfflineSessionRow | null;
   ctx: FiscalContext | null;
   shiftRowId: number | null;
   staffId: number | null;
@@ -86,9 +107,13 @@ export interface FiscalGate {
 
 /** What `fiscalize*` hands back to the route. */
 export interface FiscalView {
-  status: 'done' | 'failed';
+  /** `pending` = stamped offline; the provider confirms it on replay. */
+  status: 'done' | 'failed' | 'pending';
+  mode: 'online' | 'offline';
   fiscal_code: string | null;
   fiscal_date: string | null;
+  /** Контрольне число — offline documents get it from the provider on replay. */
+  control_number: string | null;
   tax_url: string | null;
   qr_payload: string | null;
   receipt_text: string | null;
@@ -98,6 +123,8 @@ export interface FiscalView {
 
 const OFF: FiscalGate = {
   on: false,
+  mode: 'online',
+  session: null,
   ctx: null,
   shiftRowId: null,
   staffId: null,
@@ -109,12 +136,19 @@ const OFF: FiscalGate = {
  *
  * Runs BEFORE `completeSale`, so a failure costs nothing: no row, no burned
  * receipt number, no stock movement. This is the whole "block the sale when the
- * fiscal server is unreachable" stance.
+ * fiscal server is unreachable" stance — unless the store runs in offline mode,
+ * where an unreachable provider opens a server-held offline session instead
+ * and sales are stamped from the code reserve (case B).
+ *
+ * While a session is live, every sale is stamped — even once the provider is
+ * back — because an online receipt inside the session would break the
+ * `go-offline` date ordering; only the replay ends a session.
  */
 export async function preflight(
   storeId: number,
   staffId: number,
-  deviceId: string | null = null
+  deviceId: string | null = null,
+  op: FiscalOp = 'sale'
 ): Promise<FiscalGate> {
   const ctx = await resolveContext(storeId);
   if (!ctx) return OFF;
@@ -124,10 +158,79 @@ export async function preflight(
   await assertHolder(ctx, deviceId);
 
   const signal = AbortSignal.timeout(FISCAL_BUDGET_MS);
-  await ensureOpenShift(ctx, signal, staffId);
+  const offlineCapable = Boolean(ctx.settings.offline_mode && ctx.provider.offline);
+
+  if (offlineCapable) {
+    const live = await getLiveSession(ctx.storeId, ctx.registerKey);
+    if (live) return offlineGate(ctx, live, staffId, signal, op);
+  }
+
+  try {
+    await ensureOpenShift(ctx, signal, staffId);
+  } catch (raw) {
+    const err = asFiscalError(raw, 'Немає звʼязку з ПРРО');
+    if (!offlineCapable || err.kind !== 'unavailable' || op !== 'sale') throw err;
+    // v1: an offline session lives only inside a shift that was opened
+    // online — our mirror row is the proof it was.
+    const shiftRow = await getLiveShiftRow(storeId, ctx.registerKey);
+    if (shiftRow?.status !== 'open') throw err;
+    const session = await openServerSession(ctx, Number(shiftRow.id));
+    return offlineGate(ctx, session, staffId, signal, op);
+  }
   const shiftRow = await getLiveShiftRow(storeId, ctx.registerKey);
 
-  return { on: true, ctx, shiftRowId: shiftRow ? Number(shiftRow.id) : null, staffId, signal };
+  return {
+    on: true,
+    mode: 'online',
+    session: null,
+    ctx,
+    shiftRowId: shiftRow ? Number(shiftRow.id) : null,
+    staffId,
+    signal,
+  };
+}
+
+/** The gate for a store inside a live offline session. Throws the session's refusals. */
+async function offlineGate(
+  ctx: FiscalContext,
+  session: OfflineSessionRow,
+  staffId: number | null,
+  signal: AbortSignal,
+  op: FiscalOp
+): Promise<FiscalGate> {
+  if (session.holder !== 'server') {
+    // A till-held session (case C, phase 3) is replayed by that till's sync;
+    // nothing else may register documents on the register meanwhile.
+    throw new FiscalError('Каса надсилає офлайн-чеки — зачекайте синхронізації', 'offline_session_open');
+  }
+  if (session.status === 'replaying') {
+    throw new FiscalError('ПРРО надсилає офлайн-чеки — повторіть за хвилину', 'replaying');
+  }
+  if (op !== 'sale') {
+    // Refunds and service receipts are v2 offline (§7); sending them online
+    // inside the session would break the date ordering just the same.
+    throw new FiscalError('Офлайн-чеки ПРРО ще не надіслано', 'offline_session_open');
+  }
+
+  const now = Date.now();
+  if (now - new Date(session.started_at).getTime() >= OFFLINE_SESSION_MAX_MS) {
+    await markStuck(session.id, 'offline_limit', 'Офлайн понад 36 годин — потрібен звʼязок із ПРРО');
+    throw new FiscalError('Офлайн ПРРО триває понад 36 годин', 'offline_limit');
+  }
+  const shiftRow = await getLiveShiftRow(ctx.storeId, ctx.registerKey);
+  if (shiftRow?.opened_at && now - new Date(shiftRow.opened_at).getTime() >= SHIFT_DEADLINE_MS) {
+    throw new FiscalError('Зміна ПРРО добігає доби', 'shift_deadline');
+  }
+
+  return {
+    on: true,
+    mode: 'offline',
+    session,
+    ctx,
+    shiftRowId: session.shift_id ?? (shiftRow ? Number(shiftRow.id) : null),
+    staffId,
+    signal,
+  };
 }
 
 /**
@@ -165,14 +268,20 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
 function invalidateRuntimeFor(storeId: number, kind: FiscalErrorKind): void {
   if (kind === 'auth_expired') runtime.invalidateSession(storeId);
   if (kind === 'shift_closed' || kind === 'shift_expired') runtime.invalidateShift(storeId);
+  // The cached shift is what lets pre-flight skip the provider; after an
+  // outage answered a live call, the next pre-flight must probe again —
+  // that probe is how an offline-mode store notices it has to open a session.
+  if (kind === 'unavailable') runtime.invalidateShift(storeId);
 }
 
 function toView(row: ledger.FiscalReceiptRow, result: FiscalResult | null): FiscalView {
   if (result) {
     return {
       status: 'done',
+      mode: row.mode ?? 'online',
       fiscal_code: result.fiscalCode,
       fiscal_date: result.fiscalDate,
+      control_number: result.controlNumber ?? null,
       tax_url: result.taxUrl,
       qr_payload: result.qrPayload,
       receipt_text: result.receiptText,
@@ -182,13 +291,31 @@ function toView(row: ledger.FiscalReceiptRow, result: FiscalResult | null): Fisc
   }
   return {
     status: 'failed',
+    mode: row.mode ?? 'online',
     fiscal_code: null,
     fiscal_date: null,
+    control_number: null,
     tax_url: null,
     qr_payload: null,
     receipt_text: null,
     error_code: row.error_code,
     message: row.error_message,
+  };
+}
+
+/** A document stamped offline: the fiscal number is the tax-office code; the rest arrives on replay. */
+function offlineView(row: ledger.FiscalReceiptRow): FiscalView {
+  return {
+    status: 'pending',
+    mode: 'offline',
+    fiscal_code: row.fiscal_code,
+    fiscal_date: row.fiscal_date ? new Date(row.fiscal_date).toISOString() : null,
+    control_number: null,
+    tax_url: null,
+    qr_payload: null,
+    receipt_text: null,
+    error_code: null,
+    message: null,
   };
 }
 
@@ -443,6 +570,8 @@ export async function fiscalizeSale(
   );
   const doc = buildSaleDoc({ requestId, sale, tax, codes });
 
+  if (gate.mode === 'offline') return fiscalizeSaleOffline(gate, sale, requestId, doc);
+
   const row = await ledger.openDocument({
     storeId: ctx.storeId,
     docType: 'sale',
@@ -461,6 +590,60 @@ export async function fiscalizeSale(
     'live'
   );
   return toView(done, result);
+}
+
+/**
+ * Case B: no provider call at all. The ledger row is opened as `offline`, the
+ * session hands it the next code and its position, and the request payload
+ * is kept for the replay (`offline/replay.ts`), which is the only thing that
+ * ever transmits it.
+ *
+ * A stamp failure (`replaying` raced us, the reserve ran dry) is safe to void
+ * on: nothing left the building, so `mayExist` is false.
+ */
+async function fiscalizeSaleOffline(
+  gate: FiscalGate,
+  sale: FiscalSaleSource,
+  requestId: string,
+  doc: ReturnType<typeof buildSaleDoc>
+): Promise<FiscalView> {
+  const ctx = gate.ctx as FiscalContext;
+  const session = gate.session as OfflineSessionRow;
+
+  const row = await ledger.openDocument({
+    storeId: ctx.storeId,
+    docType: 'sale',
+    saleId: sale.id,
+    shiftId: gate.shiftRowId,
+    provider: ctx.provider.id,
+    requestId,
+    totalCents: sale.total_cents,
+    requestPayload: doc,
+    mode: 'offline',
+  });
+  // The same request id again (a replayed checkout) — it is already stamped.
+  if (row.offline_seq != null) return offlineView(row);
+
+  try {
+    const stamp = await stampNext(session.id, row.id);
+    logger.info('Sale stamped offline', {
+      storeId: ctx.storeId,
+      saleId: sale.id,
+      sessionId: session.id,
+      seq: stamp.seq,
+      fiscalCode: stamp.fiscalCode,
+    });
+    return offlineView({
+      ...row,
+      mode: 'offline',
+      fiscal_code: stamp.fiscalCode,
+      fiscal_date: stamp.fiscalDate,
+    });
+  } catch (raw) {
+    const err = asFiscalError(raw, 'Не вдалося видати офлайн-чек');
+    const failed = await ledger.markFailed(row, err, { park: true });
+    throw new FiscalDocumentFailed(failed, err, false);
+  }
 }
 
 export interface FiscalRefundSource extends RefundInput {
@@ -664,6 +847,8 @@ async function backgroundGate(row: ledger.FiscalReceiptRow): Promise<FiscalGate 
 
   return {
     on: true,
+    mode: 'online',
+    session: null,
     ctx,
     shiftRowId: Number(live.id),
     staffId: null,

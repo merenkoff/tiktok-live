@@ -17,7 +17,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { ensurePosAuth, ensurePosOwner } from '../core/auth.js';
 import { isSecretsKeyConfigured } from '../core/secrets.js';
-import { asFiscalError, cashierMessage, supportCode } from '../fiscal/errors.js';
+import { asFiscalError, cashierMessage, isOfflineGate, supportCode } from '../fiscal/errors.js';
 import * as fiscalService from '../fiscal/fiscal.service.js';
 import * as holder from '../fiscal/offline/holder.js';
 import { getOfflineStatus } from '../fiscal/offline/status.js';
@@ -39,10 +39,13 @@ const SHIFT_TIMEOUT_MS = 12_000;
  */
 function replyFiscalError(reply: FastifyReply, error: unknown, fallback: string) {
   const fiscal = asFiscalError(error, fallback);
+  // The offline-session gates are "wait for the replay / fix the limit" —
+  // the caller's situation, not the provider's mood.
   const status =
     fiscal.kind === 'not_configured' ||
     fiscal.kind === 'shift_closed' ||
-    fiscal.kind === 'register_held'
+    fiscal.kind === 'register_held' ||
+    isOfflineGate(fiscal.kind)
       ? 409
       : 502;
   return reply.code(status).send({
@@ -335,7 +338,8 @@ export function registerFiscalRoutes(fastify: FastifyInstance): void {
       const gate = await fiscalService.preflight(
         auth.storeId,
         auth.staffId,
-        readDeviceId(request)
+        readDeviceId(request),
+        'service'
       );
       if (!gate.on) return notConfigured(reply);
       return await fiscalService.fiscalizeService(gate, {
