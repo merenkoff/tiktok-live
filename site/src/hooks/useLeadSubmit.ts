@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { normalizePhone } from './useNormalizedPhone';
+import { track } from '../lib/analytics';
 
 type Status = 'idle' | 'sending' | 'success' | 'error';
 
@@ -32,6 +33,7 @@ export function useLeadSubmit() {
 
       setStatus('success');
       setMessage('Дякуємо! Ми зателефонуємо найближчим часом 📞');
+      track('lead_submit', { page_path: window.location.pathname });
       return true;
     } catch (err) {
       setStatus('error');
