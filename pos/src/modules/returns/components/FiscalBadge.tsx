@@ -23,8 +23,23 @@ const FISCAL_UK: Record<string, { label: string; cls: string }> = {
  * `'none'` and `undefined` render **nothing** — that is what keeps every screen
  * in a store that does not fiscalise byte-identical to before, which is the
  * whole reason `fiscal_status` is a projection with a `'none'` member.
+ *
+ * `mode` separates the two receipts that are both `pending`: one is still being
+ * registered (something may yet go wrong), the other already carries a real
+ * tax-office number from the offline reserve and is only waiting to be sent.
+ * Reading the second as the first is what makes a cashier re-ring a receipt
+ * that is already fiscal.
  */
-export function FiscalBadge({ status }: { status?: SaleFiscalStatus | string | null }) {
+export function FiscalBadge({
+  status,
+  mode,
+}: {
+  status?: SaleFiscalStatus | string | null;
+  mode?: SaleFiscalDoc['mode'];
+}) {
+  if (status === 'pending' && mode === 'offline') {
+    return <span className="ml-2 text-xs font-semibold text-amber-600">ПРРО: офлайн</span>;
+  }
   const view = status ? FISCAL_UK[status] : undefined;
   if (!view) return null;
   return <span className={`ml-2 text-xs font-semibold ${view.cls}`}>{view.label}</span>;
@@ -51,6 +66,22 @@ export function FiscalDetailCard({ doc }: { doc?: SaleFiscalDoc | null }) {
             Перевірити в кабінеті ДПС
           </a>
         )}
+      </div>
+    );
+  }
+
+  // Stamped from the offline reserve: the fiscal number is real and final, only
+  // the control number and the tax-office QR arrive with the replay. Saying
+  // «реєструється» here would understate a receipt the customer can already be
+  // given.
+  if (doc.status === 'pending' && doc.mode === 'offline') {
+    return (
+      <div className="mt-3 rounded-sq bg-amber-50 px-3 py-2 text-sm text-amber-900">
+        <p className="font-semibold">Чек з офлайн-резерву ПРРО</p>
+        {doc.fiscal_code && <p className="mt-1 font-semibold select-all">{doc.fiscal_code}</p>}
+        <p className="mt-1">
+          Буде надіслано в ДПС автоматично, щойно відновиться звʼязок із ПРРО.
+        </p>
       </div>
     );
   }

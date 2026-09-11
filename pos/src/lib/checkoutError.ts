@@ -33,6 +33,12 @@ export type CheckoutFailure =
   | { kind: 'sale_voided_replay'; saleId: number | null; message: string }
   /** A fiscalising store with no connection: the sale was refused outright. */
   | { kind: 'offline_blocked'; message: string }
+  /**
+   * Another till owns the ПРРО register (offline mode, one register = one
+   * till). Nothing was written. Not a retry: the fix is a handover on the
+   * «Зміна ПРРО» screen, or selling from the till that holds it.
+   */
+  | { kind: 'register_held'; message: string; holderName: string | null }
   /** No response. The sale may or may not exist; probing is idempotent. */
   | { kind: 'unknown_state'; clientUuid: string; message: string }
   /** Anything else — stock, validation, a plain server error. */
@@ -46,6 +52,7 @@ interface FiscalFailBody {
   sale_id?: number;
   sale_voided?: boolean;
   sale_kept?: boolean;
+  holder?: { device_id?: string; name?: string | null } | null;
 }
 
 const GENERIC = 'Не вдалося завершити продаж';
@@ -76,6 +83,17 @@ export function classifyCheckoutError(error: unknown): CheckoutFailure {
 
   if (status === 503 && body?.error === 'fiscal_unavailable') {
     return { kind: 'fiscal_unavailable', message, supportCode };
+  }
+
+  if (status === 409 && body?.error === 'register_held') {
+    const holder = body.holder ?? null;
+    return {
+      kind: 'register_held',
+      message,
+      // The name the other till registered, or a short id — enough for a
+      // cashier to know which machine to walk to.
+      holderName: holder?.name?.trim() || holder?.device_id?.slice(0, 8) || null,
+    };
   }
 
   if (status === 409 && body?.error === 'sale_voided_not_fiscalised') {
@@ -118,6 +136,9 @@ export function keepsModalOpen(failure: CheckoutFailure): boolean {
   return (
     failure.kind === 'fiscal_unavailable' ||
     failure.kind === 'offline_blocked' ||
-    failure.kind === 'unknown_state'
+    failure.kind === 'unknown_state' ||
+    // The handover happens on another screen, but the cashier has to read this
+    // first — behind the opaque overlay it would simply vanish.
+    failure.kind === 'register_held'
   );
 }

@@ -1,8 +1,8 @@
 # ПРРО — полный офлайн-режим (фаза 8б): дизайн
 
 Статус: **дизайн одобрен 2026-09-10; фаза 1 (фундамент) — 2026-09-11, PR #71;
-фаза 2 (серверная сессия, случай B) — 2026-09-11, ветка
-`feat/pos-fiscal-offline-phase2`; фазы 3–5 — ⬜.** Родитель —
+фаза 2 (серверная сессия, случай B) — 2026-09-11, PR #73; фаза 4 (UI) —
+2026-09-11; фазы 3 и 5 — ⬜.** Родитель —
 [POS_FISCAL_PRRO.md](POS_FISCAL_PRRO.md) (§4 «Нет связи с ПРРО → продажа
 блокируется» остаётся поведением по умолчанию; этот документ описывает, что
 меняется, когда владелец включает офлайн-режим).
@@ -287,10 +287,10 @@ ended_at)`. Оркестратор в `fiscal.service.ts`:
 | Фаза | Что | Оценка | Статус |
 |---|---|---|---|
 | **0. Исследование на песочнице** | Документация снята (`checkbox-api/`); письмо в поддержку Checkbox по вопросам 1–2 ниже отправлено 2026-09-11; прогон на тестовой кассе — скрипт `npm run fiscal:sandbox:offline -- --ask --go` (`CHECKBOX_SANDBOX_LICENSE_KEY/PIN` в env) делает `ask/get-offline-codes` → `go-offline` → `sell-offline` (без `control_number`) → `go-online` → опрос `info` и пишет фикстуры `src/__tests__/fixtures/checkbox/offline_*.json`; осталось запустить его и закоммитить фикстуры | 1–2 дня | 🟡 ждёт прогона и ответа поддержки |
-| **1. Capability, пул, держатель** | `FiscalOfflineOps` + `FiscalResult.controlNumber`, реализация в `providers/checkbox` (`sell-offline`, `go-offline/online`, `ask/get-offline-codes`, `info`), миграция 027 (`offline_mode`, `offline_codes_target`, `holder_*`, `handover_*`, `pos_fiscal_offline_codes`, `pos_offline_session_opens`, `pos_fiscal_receipts.mode/offline_session_id/offline_seq/control_number`), пул `offline/pool.ts` + крон `*/10` `refillAllStores`, держатель `offline/holder.ts` + роуты `register/{claim,release,handover/request|confirm|force}`, гейт в `preflight`, `X-POS-Device-ID` с кассы, `GET /fiscal/status` с `offline`/`holder`, `closeDueShifts` не трогает смену с живой сессией; песочный скрипт `npm run fiscal:sandbox:offline`; 5 новых тест-файлов | 4–5 дней | ✅ 2026-09-11 (ветка `feat/pos-fiscal-offline-phase1`) |
-| **2. Серверная сессия (случай B)** | `offline/session.ts` (одна живая сессия на регистратор, штамп с плотным `offline_seq`, код на `go-offline` в той же транзакции), `preflight` → сессия и штамп при `unavailable` внутри смены, открытой онлайн; гейты `replaying` / `offline_limit` / `shift_deadline` / `offline_session_open` / `offline_codes_exhausted`; реплей в `retryPendingFiscalDocs` (`replayServerSessions`: проба → пересинк пула → `go-offline` один раз → документы по `seq` → `go-online` ≤ 1/2 мин → `closed`); плоский ретрай не трогает магазин с живой сессией; 409 на ручное закрытие смены; `documents`/`error_code` сессии в `/fiscal/status`, `stuck`-сессии в `/fiscal/attention`; миграция 028; матрица отказов §8 родителя; 3 новых тест-файла (`offline.session`, `offline.checkout`, `offline.replay`) | 3 дня | ✅ 2026-09-11 (ветка `feat/pos-fiscal-offline-phase2`) |
+| **1. Capability, пул, держатель** | `FiscalOfflineOps` + `FiscalResult.controlNumber`, реализация в `providers/checkbox` (`sell-offline`, `go-offline/online`, `ask/get-offline-codes`, `info`), миграция 027 (`offline_mode`, `offline_codes_target`, `holder_*`, `handover_*`, `pos_fiscal_offline_codes`, `pos_offline_session_opens`, `pos_fiscal_receipts.mode/offline_session_id/offline_seq/control_number`), пул `offline/pool.ts` + крон `*/10` `refillAllStores`, держатель `offline/holder.ts` + роуты `register/{claim,release,handover/request|confirm|force}`, гейт в `preflight`, `X-POS-Device-ID` с кассы, `GET /fiscal/status` с `offline`/`holder`, `closeDueShifts` не трогает смену с живой сессией; песочный скрипт `npm run fiscal:sandbox:offline`; 5 новых тест-файлов | 4–5 дней | ✅ 2026-09-11, PR #71 |
+| **2. Серверная сессия (случай B)** | `offline/session.ts` (одна живая сессия на регистратор, штамп с плотным `offline_seq`, код на `go-offline` в той же транзакции), `preflight` → сессия и штамп при `unavailable` внутри смены, открытой онлайн; гейты `replaying` / `offline_limit` / `shift_deadline` / `offline_session_open` / `offline_codes_exhausted`; реплей в `retryPendingFiscalDocs` (`replayServerSessions`: проба → пересинк пула → `go-offline` один раз → документы по `seq` → `go-online` ≤ 1/2 мин → `closed`); плоский ретрай не трогает магазин с живой сессией; 409 на ручное закрытие смены; `documents`/`error_code` сессии в `/fiscal/status`, `stuck`-сессии в `/fiscal/attention`; миграция 028; матрица отказов §8 родителя; 3 новых тест-файла (`offline.session`, `offline.checkout`, `offline.replay`) | 3 дня | ✅ 2026-09-11, PR #73 |
 | **3. Лизинг и касса (случай C)** | `/fiscal/offline/lease`, кеш аренды и смены в `cloth-pos-offline`, гейты, `completeSale` со штампом, `fiscal_offline` в outbox и в `POST /sales/complete`, печать «ОФЛАЙН» + QR, причины вместо одного `OfflineFiscalError` | 5–6 дней | ⬜ |
-| **4. UI** | `fiscal-checkbox`: на `/fiscal` блок «Офлайн: N кодів, сесія з …, лишилось …», прогресс реплея; экраны держателя — «Каса зайнята… Запросити передачу», подтверждение у держателя, «Забрати примусово» у владельца; Settings — тумблер «Офлайн-режим» (только при `offline_capable`), размер запаса; `OfflineStatusBanner` — «Офлайн, чеки ПРРО з резерву (N)»; список внимания — `stuck`-сессии, отклонённые офлайн-документы, чеки принудительно снятой кассы | 4 дня | ⬜ |
+| **4. UI** | `fiscal-checkbox`: на `/fiscal` блок «Офлайн: N кодів, сесія з …, лишилось …», прогресс реплея; экраны держателя — «Каса зайнята… Запросити передачу», подтверждение у держателя, «Забрати примусово» у владельца; Settings — тумблер «Офлайн-режим» (только при `offline_capable`), размер запаса; `OfflineStatusBanner` — «Офлайн, чеки ПРРО з резерву (N)»; список внимания — `stuck`-сессии, отклонённые офлайн-документы, чеки принудительно снятой кассы | 4 дня | ✅ 2026-09-11 (план исполнения ниже) |
 | **5. Закалка** | 36h/24h гейты на обеих сторонах, исчерпание кодов, `X-Device-ID`, e2e (веб-шелл с моком провайдера) + чек-лист десктопа, доки (`POS_FISCAL_PRRO.md`, `POS_DESKTOP.md`, `POS_FISCAL_CHECKBOX_SETUP.md`) | 3–4 дня | ⬜ |
 
 Итого ~4–5 недель. Фазы 1–2 не зависят от ответа Checkbox на вопрос 1 и
@@ -512,6 +512,188 @@ ended_at)`. Оркестратор в `fiscal.service.ts`:
 `mode:'offline'`, вернуть сеть → в течение 2–4 мин сессия `closed`, оба чека в
 кабинете Checkbox с теми же фискальными номерами и контрольными числами,
 `GET /fiscal/status.offline.session === null`.
+
+## План исполнения фазы 4 — UI офлайн-режима
+
+Написан 2026-09-11 по коду после фазы 2 (`main` @ 5c733af). Оценка — 4 дня.
+Ветка `claude/gallant-planck-sow9ce`.
+
+### Цель и граница
+
+Фазы 1–2 целиком серверные: включить офлайн-режим сегодня можно **только
+запросом к API**, а замок регистратора (409 `register_held`) кассир видит как
+непонятную ошибку на оплате. Фаза 4 показывает владельцу и кассиру то, что
+бэкенд уже умеет. Серверного кода фаза не трогает вовсе: все нужные поля уже
+отдают `GET /fiscal/status`, `GET /fiscal/attention` и `GET`/`PATCH
+/fiscal/settings`.
+
+В фазу 4 **не входит**: аренда кодов кассе и офлайн-продажа на самой кассе
+(фаза 3), бумажный офлайн-чек и правка политики автопечати (зависит от вопроса
+1 к поддержке Checkbox, см. «Открытые вопросы»), офлайн-открытие/закрытие
+смены и офлайн-возвраты (v2, §7), гейты 36 ч / 24 ч на клиенте (фаза 5).
+
+### Что дали фазы 1–2 и на что опираемся
+
+| Что | Где |
+|---|---|
+| `GET /fiscal/status` + блоки `offline {capable, enabled, codes_target, codes {free, leased, used} \| null, session \| null}` и `holder {device_id, name, since, last_seen_at, stale, is_me, handover_request} \| null` | `src/pos/fiscal/offline/status.ts`, роут `fiscal.routes.ts:166` |
+| `OfflineSessionView` — `status: open \| replaying \| closed \| stuck`, `started_at`, `go_offline_sent`, `last_go_online_at`, `documents` (счётчики), `error_code/message` | `offline/status.ts:18` |
+| `GET /fiscal/attention` → `{ documents, sessions }`, где `sessions` — застрявшие (`stuck`) сессии | `fiscal.routes.ts:366` |
+| `POST /fiscal/register/{claim,release,handover/request,handover/confirm,handover/force}` с кодами 200/202/400/409 из §3а | `fiscal.routes.ts:184-292` |
+| `offline_mode`, `offline_codes_target`, `offline_capable` уже **отдаются** в `FiscalSettingsView` и **принимаются** в `PATCH /fiscal/settings` | `settings.service.ts:149-161, 288-334` |
+| Правила, которые UI обязан только показать, а не повторять: провайдер без capability, `enabled: false`, живая сессия при выключении, границы запаса 50…2000 (по умолчанию 200) | `settings.service.ts:288-334`, `fiscal/types.ts:80-82` |
+| Заголовок `X-POS-Device-ID` шлёт **только десктоп-касса** (`api.setDeviceId` из офлайн-рантайма); веб-шелл не шлёт | `pos/src/offline/sync.ts:188` |
+| Число неотправленных чеков для `handover/confirm` доступно модулю: `useOfflineStatus` есть в барреле `@pos/platform` | `pos/src/platform/surface.snapshot.json` |
+
+### Решения, которых нет в §3а (фиксируем здесь)
+
+1. **Тумблер офлайна — в хосте (`FiscalSettingsCard`), не в бандле провайдера.**
+   Ровно та же причина, что у `enabled`/`provider` (§«Тумблер живёт в хосте» в
+   родителе): бандл на вебе может не загрузиться **молча**, и тогда владелец
+   магазина с включённым офлайном не сможет его выключить. Поле видно только
+   при `offline_capable` — у `vchasno`/`echeck` его нет вовсе, а не «выключено».
+2. **Экраны держателя — в бандле (`/fiscal`), кроме текста на оплате.** Замок
+   осмыслен только при включённом офлайне, то есть у capable-провайдера, у
+   которого бандл по определению есть. Исключение — 409 `register_held` на
+   чекауте: это хост (`RegisterPage` → `classifyCheckoutError`), и он даёт
+   только текст «Каса зайнята пристроєм X» + ссылку на «Зміна ПРРО»; кнопки —
+   там.
+3. **Веб-шелл — режим чтения.** Он не шлёт `X-POS-Device-ID`, поэтому
+   `holder.is_me` у него всегда `false`, а `claim`/`release`/`handover` ответят
+   400 `device_id_required`. Значит на вебе показываем строку «Каса зайнята
+   пристроєм A з 09:12» без кнопок; единственное действие веба — «Забрати
+   примусово» у владельца на `/admin/fiscal` (`handover/force` — единственный
+   роут группы, которому заголовок не нужен).
+4. **Политика автопечати не меняется.** Офлайн-чек лежит как
+   `fiscal_status='pending'`, и `RegisterPage:176-182` его не печатает
+   автоматически. Это правильное поведение **до** ответа на вопрос 1: пока не
+   известно, допустим ли бумажный чек без контрольного числа, менять печать
+   нельзя. Фаза 4 только объясняет кассиру, что произошло.
+5. **`PLATFORM_VERSION` не бампаем.** Всё новое — либо типы (стираются), либо
+   код внутри хоста и модулей; ни одного нового рантайм-экспорта из
+   `@pos/platform`. `surface.test.ts` сравнивает только имена экспортов, так
+   что он останется зелёным — и это именно тот случай, когда бамп не нужен.
+
+### Шаги (в этом порядке, каждый с тестами)
+
+**Шаг 1 — типы и обёртки API** (без UI, чтобы дальше всё было типизировано)
+- `pos/src/types.ts`: `FiscalSettingsView` += `offline_mode: boolean`,
+  `offline_codes_target: number`, `offline_capable: boolean`;
+  `FiscalSettingsPatch` += `offline_mode?`, `offline_codes_target?`.
+- `pos/src/modules/fiscal-core/types.ts`: `FiscalStatus` += `offline`/`holder`
+  (зеркало `OfflineStatusBlock` / `HolderStatusBlock` / `OfflineSessionView`
+  поле в поле, как это уже сделано для остальных ответов);
+  `listFiscalAttention` → `{ documents: AttentionDoc[]; sessions: OfflineSessionView[] }`.
+- `fiscal-core/data/fiscalApi.ts`: `claimRegister`, `releaseRegister`,
+  `requestHandover`, `confirmHandover(outboxPending)`, `forceHandover(deviceId?)`
+  через `posRequest` — как остальные роуты этого файла.
+- Тест: отдельного не нужно, проверка — `tsc` и зелёные существующие тесты.
+
+**Шаг 2 — тумблер и запас в хосте** (`pos/src/pages/admin/FiscalSettingsCard.tsx`)
+- Блок «Офлайн-режим ПРРО» после «Друк чека», рендерится только при
+  `settings.offline_capable`: чекбокс + числовое поле «Запас фіскальних кодів»
+  (50…2000, шаг 50) + пояснение «Каса продовжує продавати без зв'язку з ПРРО;
+  чеки надсилаються в ДПС після відновлення».
+- Поля уходят в тот же `api.updateFiscalSettings`. Ошибку 400 рисовать нечем
+  новым — `errorText()` уже показывает `response.data.error`, а бэкенд кладёт
+  туда готовый украинский текст («Триває офлайн-сесія — дочекайтесь…»,
+  «Увімкніть фіскалізацію перед офлайн-режимом»).
+- Тесты в существующий `FiscalSettingsCard.test.tsx`: блока нет при
+  `offline_capable: false`; включение шлёт `offline_mode: true` и
+  `offline_codes_target`; текст 400 из `data.error` виден на экране.
+
+**Шаг 3 — панель офлайна на `/fiscal`** (`fiscal-core/components/OfflinePanel.tsx`)
+- Рендерит `status.offline`: «Офлайн-резерв: N кодів» (`codes.free`, жёлтым при
+  `free < codes_target / 4`), под ним — сессия, если есть:
+  - `open` → «Працюємо офлайн з 14:02 · чеків: 7 · зв'язок відновиться
+    автоматично»;
+  - `replaying` → «Надсилаємо чеки в ДПС… 7 з 9» (`documents` + `go_offline_sent`);
+  - `stuck` → красная карточка с `error_message` и «Зверніться до власника».
+- Нет `offline.enabled` → панель не рендерится вовсе (магазин без офлайна
+  выглядит ровно как раньше — то же правило, что у `FiscalBadge` с `'none'`).
+- Тест `OfflinePanel.test.tsx`: четыре состояния + невидимость при выключенном.
+
+**Шаг 4 — экраны держателя** (`fiscal-core/components/HolderPanel.tsx`)
+- Три состояния из `status.holder`: `null` (свободна — на кассе кнопка «Зайняти
+  касу» → `claim`, на вебе ничего), `is_me` (строка «Ця каса — активна» +
+  «Звільнити», 409 `session_open` показываем текстом), чужой держатель
+  («Каса зайнята пристроєм A з 09:12», `stale` → «немає зв'язку 6 хв»; на кассе
+  кнопка «Запросити передачу» → 202 `requested`).
+- У держателя при `handover_request` — баннер «Пристрій B просить передати
+  касу» + «Передати», который шлёт `outbox_pending` из
+  `useOfflineStatus((s) => s.pending)`; 409 `handover_blocked` рисуем по
+  `reason` (`outbox_pending` → «Спершу синхронізуйте чеки», `session_open` →
+  «Дочекайтесь синхронізації ПРРО»).
+- Веб (нет `X-POS-Device-ID`) — все кнопки скрыты, а не выключены: жать их
+  бессмысленно, ответ будет 400 `device_id_required`. Признак — хост-шелл
+  (`usePosShell() === 'web'` (есть в барреле)), а не отсутствие `holder`.
+- Тест `HolderPanel.test.tsx`: три состояния × два шелла, `stale`, запрос
+  передачи, `handover_blocked` обоих видов.
+
+**Шаг 5 — владелец: принудительная передача и `stuck`-сессии**
+(`fiscal-checkbox/pages/CheckboxAdminPage.tsx`)
+- В карточку списка внимания добавить `sessions` из того же ответа: «Офлайн-сесія
+  #12 зупинена: <error_message>, чеків: N» — без кнопок (разбор у провайдера).
+- Блок «Каса ПРРО»: кто держит регистратор, и «Забрати примусово» с
+  подтверждением (`handover/force`); в ответе — `stuck_sessions`, `burned_codes`,
+  их показать как итог: «Касу звільнено. Зупинено сесій: 1, згорілих кодів: 12».
+- Тесты в существующий `CheckboxAdminPage.test.tsx`.
+
+**Шаг 6 — объяснения на чекауте и в чеках** (хост)
+- `pos/src/lib/checkoutError.ts`: новый исход `register_held` (409,
+  `body.error === 'register_held'`, плюс `holder` из тела), `keepsModalOpen` —
+  да, `keepsCart` — да. Текст: «Касу ПРРО займає пристрій A. Передайте касу на
+  екрані «Зміна ПРРО»».
+- `pos/src/modules/returns/components/FiscalBadge.tsx`: `FiscalDetailCard` при
+  `doc.mode === 'offline' && doc.status === 'pending'` вместо «Реєструється в
+  ПРРО…» рисует «Чек з офлайн-резерву · <fiscal_code> · буде надіслано в ДПС
+  після відновлення зв'язку». `FiscalBadge` для той же пары — «ПРРО: офлайн»
+  (янтарный), чтобы в списке чеков офлайн-чек не путали с зависшим.
+- `OfflineStatusBanner` — **не трогаем**: он про офлайн самой кассы (сеть до
+  нашего API), а случай B — это провайдер, касса при этом онлайн. Строка про
+  офлайн ПРРО живёт в `OfflinePanel`; смешивать два разных «офлайна» в одном
+  баннере — прямой путь к неверному решению кассира.
+- Тесты: `checkoutError.test.ts` (+1 кейс), `FiscalBadge.test.tsx`.
+
+### Файлы
+
+Новые: `pos/src/modules/fiscal-core/components/{OfflinePanel,HolderPanel}.tsx`
++ их тесты.
+Правки: `pos/src/types.ts`, `pos/src/modules/fiscal-core/{types.ts,data/fiscalApi.ts}`,
+`pos/src/modules/fiscal-checkbox/pages/{CheckboxTillPage,CheckboxAdminPage}.tsx`
+(+ тесты), `pos/src/pages/admin/FiscalSettingsCard.tsx` (+ тест),
+`pos/src/lib/checkoutError.ts` (+ тест),
+`pos/src/modules/returns/components/FiscalBadge.tsx` (+ тест), доки
+(этот файл, `POS_FISCAL_PRRO.md`, `CLAUDE.md`).
+Бэкенд — без изменений.
+
+### Что получилось (2026-09-11)
+
+Все шесть шагов сделаны, бэкенд не тронут. Два отличия от плана, оба
+осознанные:
+
+1. **В списке чеков офлайн-чек по-прежнему «ПРРО: реєструється».** `mode`
+   лежит на документе (`SaleDetail.fiscal`), а строки списка
+   (`SaleListItem`) несут только проекцию `fiscal_status` — показать «офлайн»
+   в списке значило бы добавить поле в серверную проекцию, а фаза 4 заявлена
+   как «без бэкенда». Настоящий текст — на карточке чека, в одном касании.
+2. **Из модального окна оплаты нет кнопки на «Зміна ПРРО».** Этот маршрут
+   принадлежит бандлу провайдера и не существует, пока бандл не загружен;
+   кнопка вела бы на 404. Вместо неё в тексте названо, где передать кассу, и
+   какое устройство её держит.
+
+### Проверка фазы
+
+`cd pos && npm run lint && npm test && npm run test:coverage` (гейт покрытия
+считает только платформу модулей и чистые хелперы — новые компоненты в него не
+попадают, но их тесты всё равно обязательны) и `npm run build` — чтобы
+`fiscal-checkbox` собрался как отдельный бандл. Затем вручную на вебе:
+магазину с `checkbox` включить офлайн-режим в «Налаштування» → на `/fiscal`
+появляется «Офлайн-резерв: N кодів»; оборвать сеть до провайдера с бэкенда,
+продать чек → на чеке бейдж «ПРРО: офлайн» и номер, на `/fiscal` — «Працюємо
+офлайн з …»; вернуть сеть → «Надсилаємо чеки в ДПС…» и затем пусто. На
+десктоп-кассе дополнительно: вторая касса видит «Каса зайнята», запрашивает
+передачу, первая подтверждает.
 
 ## Открытые вопросы (закрыть в фазе 0)
 

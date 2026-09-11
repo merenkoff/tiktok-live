@@ -218,7 +218,11 @@ function SaleDetailPanel({
           </p>
           <p className={`text-sm font-semibold mt-1 ${statusClass(row)}`}>
             {statusLabel(row)}
-            <FiscalBadge status={row.fiscal_status} />
+            {/* The list rows next to this one carry only `fiscal_status` — the
+                mode lives on the document, which only the detail request
+                returns. So an offline receipt reads as «реєструється» in the
+                list and gets its real wording here, one tap away. */}
+            <FiscalBadge status={row.fiscal_status} mode={detail?.fiscal?.mode} />
           </p>
           <FiscalDetailCard doc={detail?.fiscal} />
         </div>

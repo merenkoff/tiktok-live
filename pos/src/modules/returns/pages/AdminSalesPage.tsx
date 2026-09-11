@@ -145,7 +145,7 @@ export function AdminSalesPage() {
                 <h3 className="text-xl font-bold text-sq-text">{selected.receipt_number}</h3>
                 <p className="text-sm text-sq-secondary">
                   {saleStatusLabel(selected.status)} · {selected.staff_name}
-                  <FiscalBadge status={selected.fiscal_status} />
+                  <FiscalBadge status={selected.fiscal_status} mode={selected.fiscal?.mode} />
                 </p>
                 <FiscalDetailCard doc={selected.fiscal} />
               </div>

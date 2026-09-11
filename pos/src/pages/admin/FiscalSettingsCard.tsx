@@ -33,6 +33,13 @@ const PROVIDERS: ReadonlyArray<{ id: FiscalProviderId; label: string }> = [
   { id: 'echeck', label: 'Є-Чек' },
 ];
 
+// The bounds `src/pos/fiscal/types.ts` enforces. Repeated here rather than
+// exported from `types.ts`, which is types-only by design — and a runtime
+// export from it would land in the `@pos/platform` barrel and cost a
+// `PLATFORM_VERSION` bump for two numbers.
+const CODES_TARGET_MIN = 50;
+const CODES_TARGET_MAX = 2000;
+
 const PROVIDER_LABEL: Record<FiscalProviderId, string> = {
   checkbox: 'Checkbox',
   vchasno: 'Вчасно.Каса',
@@ -61,6 +68,10 @@ export function FiscalSettingsCard() {
   const [autoOpenShift, setAutoOpenShift] = useState(true);
   const [receiptSource, setReceiptSource] = useState<FiscalReceiptSource>('local');
   const [receiptWidth, setReceiptWidth] = useState<FiscalReceiptWidth>(32);
+  const [offlineMode, setOfflineMode] = useState(false);
+  // A string, not a number: a half-typed value must not snap back while the
+  // owner is still typing it.
+  const [codesTarget, setCodesTarget] = useState(String(200));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -72,6 +83,8 @@ export function FiscalSettingsCard() {
     setAutoOpenShift(view.auto_open_shift);
     setReceiptSource(view.receipt_source === 'provider' ? 'provider' : 'local');
     setReceiptWidth(view.receipt_width === 48 ? 48 : 32);
+    setOfflineMode(view.offline_mode);
+    setCodesTarget(String(view.offline_codes_target));
   }
 
   const load = useCallback(async () => {
@@ -95,8 +108,22 @@ export function FiscalSettingsCard() {
   const secretsMissing = settings ? !settings.secrets_key_configured : false;
   const adapterMissing = Boolean(settings?.provider) && settings?.adapter_available === false;
   const canEnable = Boolean(provider) && !secretsMissing && !adapterMissing;
+  // Offline mode belongs to the provider that is SAVED, not the one picked in
+  // the dropdown: switching provider drops it server-side anyway, and showing
+  // the switch for an unsaved pick would promise something the save undoes.
+  const offlineCapable = settings?.offline_capable ?? false;
+  const canGoOffline = offlineCapable && canEnable && enabled;
+  const parsedTarget = Number(codesTarget);
+  const targetValid =
+    Number.isInteger(parsedTarget) &&
+    parsedTarget >= CODES_TARGET_MIN &&
+    parsedTarget <= CODES_TARGET_MAX;
 
   async function save() {
+    if (offlineCapable && !targetValid) {
+      setMessage(`Запас кодів — ціле число від ${CODES_TARGET_MIN} до ${CODES_TARGET_MAX}.`);
+      return;
+    }
     setSaving(true);
     setMessage(null);
     try {
@@ -107,12 +134,21 @@ export function FiscalSettingsCard() {
         auto_open_shift: autoOpenShift,
         receipt_source: receiptSource,
         receipt_width: receiptWidth,
+        // Sent only for a provider that can actually go offline: for the others
+        // the backend refuses `true` and would store `false` anyway.
+        ...(offlineCapable
+          ? { offline_mode: canGoOffline ? offlineMode : false, offline_codes_target: parsedTarget }
+          : {}),
       });
       // Merge, never replace: the PATCH response does not carry
       // `adapter_available`, so overwriting would make the warning vanish on
       // save and reappear on the next reload.
       setSettings((prev) => ({ ...(prev ?? saved), ...saved }));
       setEnabled(saved.enabled);
+      // The backend silently drops offline mode when the provider changes or
+      // fiscalisation goes off; echo what it actually stored.
+      setOfflineMode(saved.offline_mode);
+      setCodesTarget(String(saved.offline_codes_target));
       setMessage('Збережено');
     } catch (error) {
       setMessage(errorText(error));
@@ -226,6 +262,44 @@ export function FiscalSettingsCard() {
             «Обладнання».
           </p>
 
+          {/* Offline mode. Rendered only for a provider whose adapter can do it —
+              for the others this is not "off", it does not exist. The switch
+              lives here rather than in the provider's own bundle for the same
+              reason `enabled` does (TechDocs/POS_FISCAL_PRRO.md §"Тумблер живёт
+              в хосте"): on the web a bundle can fail to load silently, and an
+              owner must always be able to switch offline mode back OFF. */}
+          {offlineCapable && (
+            <div className="rounded-sq border border-sq-divider p-3 space-y-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={offlineMode}
+                  disabled={!canGoOffline}
+                  onChange={(e) => setOfflineMode(e.target.checked)}
+                />
+                <span className={canGoOffline ? '' : 'text-sq-muted'}>Офлайн-режим ПРРО</span>
+              </label>
+              <p className="text-xs text-sq-secondary">
+                {canGoOffline
+                  ? 'Каса продовжує продавати без зв’язку з ПРРО: чеки отримують фіскальні номери із запасу і надсилаються в ДПС автоматично, щойно зв’язок відновиться.'
+                  : 'Спершу увімкніть реєстрацію чеків у ПРРО.'}
+              </p>
+              <label className="block text-sm">
+                <span className="text-sq-secondary">Запас фіскальних кодів</span>
+                <input
+                  className="pos-input mt-1 w-full"
+                  inputMode="numeric"
+                  value={codesTarget}
+                  onChange={(e) => setCodesTarget(e.target.value)}
+                />
+              </label>
+              <p className="text-xs text-sq-secondary">
+                Скільки кодів тримати про запас: {CODES_TARGET_MIN}–{CODES_TARGET_MAX}. Один код —
+                один офлайн-чек.
+              </p>
+            </div>
+          )}
+
           <div className="text-xs text-sq-secondary space-y-1">
             <p>
               Дані доступу:{' '}
@@ -234,7 +308,11 @@ export function FiscalSettingsCard() {
                 : 'не збережено'}{' '}
               — керуються на екрані ПРРО.
             </p>
-            <p>Якщо ПРРО недоступне: продаж блокується.</p>
+            <p>
+              {settings.offline_mode
+                ? 'Якщо ПРРО недоступне: продаж триває, чеки надсилаються пізніше.'
+                : 'Якщо ПРРО недоступне: продаж блокується.'}
+            </p>
           </div>
 
           <div className="flex items-center gap-3">

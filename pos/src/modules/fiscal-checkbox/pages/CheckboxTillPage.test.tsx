@@ -18,6 +18,7 @@ const openFiscalShift = vi.fn<[], Promise<ShiftOpenResponse>>();
 const closeFiscalShift = vi.fn<[], Promise<ShiftCloseResponse>>();
 const fiscalXReport = vi.fn();
 const fiscalServiceReceipt = vi.fn();
+const claimRegister = vi.fn();
 
 vi.mock('../../fiscal-core/data/fiscalApi', () => ({
   getFiscalStatus: () => getFiscalStatus(),
@@ -25,6 +26,11 @@ vi.mock('../../fiscal-core/data/fiscalApi', () => ({
   closeFiscalShift: () => closeFiscalShift(),
   fiscalXReport: () => fiscalXReport(),
   fiscalServiceReceipt: (cents: number) => fiscalServiceReceipt(cents),
+  // `HolderPanel` reaches for these through the same module.
+  claimRegister: () => claimRegister(),
+  releaseRegister: vi.fn(),
+  requestHandover: vi.fn(),
+  confirmHandover: vi.fn(),
 }));
 
 const { CheckboxTillPage } = await import('./CheckboxTillPage');
@@ -37,6 +43,8 @@ function status(over: Partial<FiscalStatus> = {}): FiscalStatus {
     auto_open_shift: true,
     shift: null,
     error: null,
+    holder: null,
+    offline: { capable: false, enabled: false, codes_target: 200, codes: null, session: null },
     ...over,
   };
 }
@@ -118,6 +126,35 @@ describe('CheckboxTillPage', () => {
     expect(await screen.findByText('ПРРО не налаштовано')).toBeInTheDocument();
     expect(screen.getByText('Дані доступу не збережено')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Відкрити зміну' })).not.toBeInTheDocument();
+  });
+
+  it('adds the offline reserve and the register holder once the store sells offline', async () => {
+    // Both panels are silent for a store without offline mode — this is the
+    // one case where the till screen gains anything at all.
+    getFiscalStatus.mockResolvedValue(
+      status({
+        offline: {
+          capable: true,
+          enabled: true,
+          codes_target: 200,
+          codes: { free: 180, leased: 0, used: 20 },
+          session: null,
+        },
+      })
+    );
+    renderWithProviders(<CheckboxTillPage />, { shell: 'cashier' });
+
+    expect(await screen.findByText(/Запас фіскальних кодів: 180/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Зайняти касу' })).toBeInTheDocument();
+  });
+
+  it('keeps the till screen unchanged for a store that does not sell offline', async () => {
+    getFiscalStatus.mockResolvedValue(status());
+    renderWithProviders(<CheckboxTillPage />);
+
+    await screen.findByText('Закрита');
+    expect(screen.queryByText(/Запас фіскальних кодів/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Каса ПРРО')).not.toBeInTheDocument();
   });
 
   it('submits a cash-in service receipt', async () => {

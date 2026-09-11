@@ -4,14 +4,17 @@
 
 // pos/src/modules/fiscal-checkbox/pages/CheckboxTillPage.tsx
 //
-// What `/fiscal` renders on the till: shift status/open/close/X-report, plus
-// cash in/out. All of it is provider-neutral (`ShiftPanel` lives in
-// `fiscal-core`), so this page is mostly wiring — the provider-specific part
-// of this module is the credentials screen, `CheckboxAdminPage`.
+// What `/fiscal` renders on the till: shift status/open/close/X-report, the
+// offline reserve and register-holder panels, plus cash in/out. All of it is
+// provider-neutral (the panels live in `fiscal-core`), so this page is mostly
+// wiring — the provider-specific part of this module is the credentials
+// screen, `CheckboxAdminPage`.
 
 import { useState } from 'react';
 import { ShiftPanel } from '../../fiscal-core/components/ShiftPanel';
 import { FiscalErrorCard } from '../../fiscal-core/components/FiscalErrorCard';
+import { HolderPanel } from '../../fiscal-core/components/HolderPanel';
+import { OfflinePanel } from '../../fiscal-core/components/OfflinePanel';
 import { useFiscalStatus } from '../../fiscal-core/hooks/useFiscalStatus';
 import { fiscalServiceReceipt } from '../../fiscal-core/data/fiscalApi';
 
@@ -97,6 +100,10 @@ export function CheckboxTillPage() {
       {status && (
         <>
           <ShiftPanel status={status} onChanged={() => void refresh()} />
+          {/* Both render nothing unless the store actually sells offline, so a
+              store without it sees the screen it had before. */}
+          <OfflinePanel status={status} />
+          <HolderPanel status={status} onChanged={() => void refresh()} />
           {status.shift?.status === 'open' && <ServiceReceiptForm />}
         </>
       )}
