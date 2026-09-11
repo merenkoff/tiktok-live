@@ -19,6 +19,7 @@
 import { pool } from '../../../db.js';
 import { logger } from '../../../logger.js';
 import { asFiscalError } from '../errors.js';
+import type { Queryable } from '../ledger.js';
 import { awaitSlot } from '../rateLimit.js';
 import { buildCallCtx, resolveContext, type FiscalContext } from '../shifts.service.js';
 import type { AskOfflineCodesStatus } from '../types.js';
@@ -184,15 +185,20 @@ export type CodeMark = { status: 'leased'; deviceId: string } | { status: 'used'
  * `FOR UPDATE SKIP LOCKED` so two takers never get the same code — a leased
  * code that is also stamped on a server document would be refused by the
  * tax office as used twice.
+ *
+ * `db` lets a caller take the code inside its own transaction (an offline
+ * session stamps a document and takes its code atomically), so a rollback
+ * gives the code back instead of leaving a `used` row pointing at nothing.
  */
 export async function takeFreeCodes(
   storeId: number,
   registerKey: string,
   n: number,
-  mark: CodeMark
+  mark: CodeMark,
+  db: Queryable = pool
 ): Promise<OfflineCodeRow[]> {
   if (n <= 0) return [];
-  const result = await pool.query(
+  const result = await db.query(
     `UPDATE pos_fiscal_offline_codes c SET
        status = $4::varchar,
        lease_device_id = $5::text,
@@ -257,18 +263,21 @@ export interface RefillAllResult {
  * in `src/index.ts`; self-guarded against overlapping ticks like the retry cron.
  */
 export async function refillAllStores(
-  opts: { limit?: number; signal?: AbortSignal } = {}
+  opts: { limit?: number; signal?: AbortSignal; storeId?: number } = {}
 ): Promise<RefillAllResult> {
   const totals: RefillAllResult = { stores: 0, fetched: 0, burned: 0, failed: 0 };
   if (refillRunning) return totals;
   refillRunning = true;
   try {
+    // `storeId` narrows the sweep to one store — for tests, which share a
+    // database across workers; the cron always sweeps every store.
     const stores = await pool.query(
       `SELECT store_id FROM pos_fiscal_settings
        WHERE enabled AND offline_mode
+         AND ($2::bigint IS NULL OR store_id = $2::bigint)
        ORDER BY store_id ASC
        LIMIT $1`,
-      [opts.limit ?? 50]
+      [opts.limit ?? 50, opts.storeId ?? null]
     );
     for (const row of stores.rows as Array<{ store_id: number }>) {
       const storeId = Number(row.store_id);

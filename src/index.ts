@@ -175,10 +175,18 @@ async function main(): Promise<void> {
     cron.schedule('*/2 * * * *', async () => {
       try {
         const result = await retryPendingFiscalDocs();
-        if (result.done > 0 || result.failed > 0 || result.abandoned > 0) {
+        if (
+          result.done > 0 ||
+          result.failed > 0 ||
+          result.abandoned > 0 ||
+          result.replayed > 0 ||
+          result.closed > 0 ||
+          result.stuck > 0
+        ) {
           logger.info(
             `🧾 Fiscal retry: ${result.done} done, ${result.failed} failed, ` +
-              `${result.abandoned} abandoned, ${result.adopted} adopted`
+              `${result.abandoned} abandoned, ${result.adopted} adopted; ` +
+              `offline: ${result.replayed} replayed, ${result.closed} sessions closed, ${result.stuck} stuck`
           );
         }
       } catch (error) {

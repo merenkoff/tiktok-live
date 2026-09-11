@@ -1,6 +1,8 @@
 # ПРРО — полный офлайн-режим (фаза 8б): дизайн
 
-Статус: **дизайн одобрен 2026-09-10, реализация не начата.** Родитель —
+Статус: **дизайн одобрен 2026-09-10; фаза 1 (фундамент) — 2026-09-11, PR #71;
+фаза 2 (серверная сессия, случай B) — 2026-09-11, ветка
+`feat/pos-fiscal-offline-phase2`; фазы 3–5 — ⬜.** Родитель —
 [POS_FISCAL_PRRO.md](POS_FISCAL_PRRO.md) (§4 «Нет связи с ПРРО → продажа
 блокируется» остаётся поведением по умолчанию; этот документ описывает, что
 меняется, когда владелец включает офлайн-режим).
@@ -232,7 +234,7 @@ offline_since < 36h − 30 мин`. Любой провал → `OfflineFiscalEr
 
 ### 5. Реплей (оба держателя)
 
-`pos_fiscal_offline_sessions (id, store_id, holder, device_id, lease_id,
+`pos_offline_session_opens (id, store_id, holder, device_id, lease_id,
 started_at, go_offline_code, status: 'open'|'replaying'|'closed'|'stuck',
 ended_at)`. Оркестратор в `fiscal.service.ts`:
 
@@ -251,7 +253,7 @@ ended_at)`. Оркестратор в `fiscal.service.ts`:
    раз в минуту читает `offline_mode`, при `true` повторяет `goOnline` не
    чаще 1 раза в 2 минуты; при `false` — сессия `closed`, `used`-коды
    помечены, пул пополнен. Обычные онлайн-продажи магазина на время
-   `replaying` не принимаются (503 `fiscal_replaying`, секунды-минуты).
+   `replaying` не принимаются (503 `fiscal_unavailable` / `code: 'replaying'`, секунды-минуты).
 
 Случай C: `POST /sales/complete` принимает `fiscal_offline`; бэкенд создаёт
 продажу (идемпотентно по `client_uuid`), строку реестра `mode='offline'` со
@@ -285,14 +287,231 @@ ended_at)`. Оркестратор в `fiscal.service.ts`:
 | Фаза | Что | Оценка | Статус |
 |---|---|---|---|
 | **0. Исследование на песочнице** | Документация снята (`checkbox-api/`); письмо в поддержку Checkbox по вопросам 1–2 ниже отправлено 2026-09-11; прогон на тестовой кассе — скрипт `npm run fiscal:sandbox:offline -- --ask --go` (`CHECKBOX_SANDBOX_LICENSE_KEY/PIN` в env) делает `ask/get-offline-codes` → `go-offline` → `sell-offline` (без `control_number`) → `go-online` → опрос `info` и пишет фикстуры `src/__tests__/fixtures/checkbox/offline_*.json`; осталось запустить его и закоммитить фикстуры | 1–2 дня | 🟡 ждёт прогона и ответа поддержки |
-| **1. Capability, пул, держатель** | `FiscalOfflineOps` + `FiscalResult.controlNumber`, реализация в `providers/checkbox` (`sell-offline`, `go-offline/online`, `ask/get-offline-codes`, `info`), миграция 027 (`offline_mode`, `offline_codes_target`, `holder_*`, `handover_*`, `pos_fiscal_offline_codes`, `pos_fiscal_offline_sessions`, `pos_fiscal_receipts.mode/offline_session_id/offline_seq/control_number`), пул `offline/pool.ts` + крон `*/10` `refillAllStores`, держатель `offline/holder.ts` + роуты `register/{claim,release,handover/request|confirm|force}`, гейт в `preflight`, `X-POS-Device-ID` с кассы, `GET /fiscal/status` с `offline`/`holder`, `closeDueShifts` не трогает смену с живой сессией; песочный скрипт `npm run fiscal:sandbox:offline`; 5 новых тест-файлов | 4–5 дней | ✅ 2026-09-11 (ветка `feat/pos-fiscal-offline-phase1`) |
-| **2. Серверная сессия (случай B)** | `preflight` → офлайн-выдача штампом, реестр `mode`, реплей сессии в кроне, `goOnline`; матрица отказов §8 родителя дополнена офлайн-строками | 3 дня | ⬜ |
+| **1. Capability, пул, держатель** | `FiscalOfflineOps` + `FiscalResult.controlNumber`, реализация в `providers/checkbox` (`sell-offline`, `go-offline/online`, `ask/get-offline-codes`, `info`), миграция 027 (`offline_mode`, `offline_codes_target`, `holder_*`, `handover_*`, `pos_fiscal_offline_codes`, `pos_offline_session_opens`, `pos_fiscal_receipts.mode/offline_session_id/offline_seq/control_number`), пул `offline/pool.ts` + крон `*/10` `refillAllStores`, держатель `offline/holder.ts` + роуты `register/{claim,release,handover/request|confirm|force}`, гейт в `preflight`, `X-POS-Device-ID` с кассы, `GET /fiscal/status` с `offline`/`holder`, `closeDueShifts` не трогает смену с живой сессией; песочный скрипт `npm run fiscal:sandbox:offline`; 5 новых тест-файлов | 4–5 дней | ✅ 2026-09-11 (ветка `feat/pos-fiscal-offline-phase1`) |
+| **2. Серверная сессия (случай B)** | `offline/session.ts` (одна живая сессия на регистратор, штамп с плотным `offline_seq`, код на `go-offline` в той же транзакции), `preflight` → сессия и штамп при `unavailable` внутри смены, открытой онлайн; гейты `replaying` / `offline_limit` / `shift_deadline` / `offline_session_open` / `offline_codes_exhausted`; реплей в `retryPendingFiscalDocs` (`replayServerSessions`: проба → пересинк пула → `go-offline` один раз → документы по `seq` → `go-online` ≤ 1/2 мин → `closed`); плоский ретрай не трогает магазин с живой сессией; 409 на ручное закрытие смены; `documents`/`error_code` сессии в `/fiscal/status`, `stuck`-сессии в `/fiscal/attention`; миграция 028; матрица отказов §8 родителя; 3 новых тест-файла (`offline.session`, `offline.checkout`, `offline.replay`) | 3 дня | ✅ 2026-09-11 (ветка `feat/pos-fiscal-offline-phase2`) |
 | **3. Лизинг и касса (случай C)** | `/fiscal/offline/lease`, кеш аренды и смены в `cloth-pos-offline`, гейты, `completeSale` со штампом, `fiscal_offline` в outbox и в `POST /sales/complete`, печать «ОФЛАЙН» + QR, причины вместо одного `OfflineFiscalError` | 5–6 дней | ⬜ |
 | **4. UI** | `fiscal-checkbox`: на `/fiscal` блок «Офлайн: N кодів, сесія з …, лишилось …», прогресс реплея; экраны держателя — «Каса зайнята… Запросити передачу», подтверждение у держателя, «Забрати примусово» у владельца; Settings — тумблер «Офлайн-режим» (только при `offline_capable`), размер запаса; `OfflineStatusBanner` — «Офлайн, чеки ПРРО з резерву (N)»; список внимания — `stuck`-сессии, отклонённые офлайн-документы, чеки принудительно снятой кассы | 4 дня | ⬜ |
 | **5. Закалка** | 36h/24h гейты на обеих сторонах, исчерпание кодов, `X-Device-ID`, e2e (веб-шелл с моком провайдера) + чек-лист десктопа, доки (`POS_FISCAL_PRRO.md`, `POS_DESKTOP.md`, `POS_FISCAL_CHECKBOX_SETUP.md`) | 3–4 дня | ⬜ |
 
 Итого ~4–5 недель. Фазы 1–2 не зависят от ответа Checkbox на вопрос 1 и
 могут идти параллельно с ним; фаза 3 (печать на кассе) — после ответа.
+
+## План исполнения фазы 2 — серверная сессия (случай B)
+
+Написан 2026-09-11 по коду после фазы 1 (`main` @ edfdfb5). Оценка — 3 дня.
+Ветка `feat/pos-fiscal-offline-phase2`.
+
+### Цель и граница
+
+Провайдер недоступен, касса ↔ наш API есть, `offline_mode` включён: продажа
+**не блокируется** — бэкенд ставит штамп из своего пула, документ ложится в
+реестр `mode='offline'`, ответ 201 сразу; крон реплеит сессию в порядке и
+возвращает регистратор в онлайн. В фазу 2 **не входит**: аренда кассе и всё
+на стороне кассы (фаза 3), UI (фаза 4), офлайн-открытие/закрытие смены и
+офлайн-возвраты (v2, §7).
+
+Что оставила фаза 1 и на что опираемся:
+
+- `preflight` (`fiscal.service.ts:114-130`) = `resolveContext` → `assertHolder`
+  → `ensureOpenShift` → `getLiveShiftRow`; про офлайн не знает; 503 отдаёт
+  роут (`checkout.routes.ts:75-103`, `:180-201`) по `kind`.
+- Единственный путь передачи — `runDocument(gate, row, transmit, 'live'|'background')`
+  (`:217-285`): duplicate → `resolveDuplicate`, восстановимые → `recover`,
+  `rate_limited` → пауза, итог `markDone` / `markFailed` + `mayExistAtProvider`.
+  Переиспользуем как есть, подставляя `registerSaleOffline` в `transmit`.
+- `retryPendingFiscalDocs` (`:611-654`) — sweeps → `adoptOrphanedSales` →
+  плоский `claimDueDocuments(RETRY_BATCH)` без порядка. Офлайн-документы в него
+  попадать **не должны**.
+- `ledger.openDocument` (`ledger.ts:108-156`) не пишет `mode / offline_session_id /
+  offline_seq`; `markDone` уже пишет `control_number` из `result.controlNumber`.
+- Строки `pos_offline_session_opens` никто не создаёт (только SELECT'ы и
+  `forceHandover` → `stuck`); `closeDueShifts` уже пропускает смену с живой
+  сессией; `settings` уже запрещает выключить `offline_mode` при живой сессии.
+- Пул: `takeFreeCodes(storeId, key, n, mark)` с `FOR UPDATE SKIP LOCKED`,
+  `refillOfflineCodes(ctx, signal)` (ask → get → upsert → `burned` для
+  пропавших `free`) — это и есть «пересинк» шага 0 реплея.
+- Фейковый провайдер `helpers/fake-fiscal-provider.ts` с `offline: true`
+  (`FakeOfflineOps`: `reserve/mint/spend`, `registerSaleOffline` со
+  синтетическим `controlNumber`), `queueError('unavailable')` = «провайдер
+  недоступен», чекаут через `buildPosTestApp` + `POST /api/pos/sales/complete`.
+
+### Решения, которых нет в §5 (фиксируем здесь)
+
+1. **Пока сессия `open` — все продажи магазина идут штампом**, даже если
+   провайдер уже ожил, но крон ещё не отреплеил: онлайн-чек внутри сессии
+   ломает порядок `go_offline_date`. Сессию закрывает только реплей.
+2. **Сессия `replaying` → 503 `fiscal_unavailable` / `code: 'replaying'`** на новые продажи
+   (секунды-минуты; следующий тик крона либо закроет сессию, либо, если
+   провайдер снова упал, продолжит с того же места).
+3. **Сессия открывается только при живой смене, открытой онлайн**
+   (`getLiveShiftRow` даёт строку `open`). Держатель регистратора в
+   офлайн-режиме — всегда касса (веб-шелл отсекает `assertHolder`), и в
+   случае B именно она и продаёт: серверная сессия открывается *для*
+   держателя. Живая сессия с `holder='device'` (случай C, фаза 3) для всех
+   остальных вызовов — 503 `offline_session_open`. Нет смены → 503
+   `fiscal_unavailable`, как сегодня. _(Исправлено при реализации: исходное
+   условие «только если `holder_device_id IS NULL`» было ошибкой.)_
+4. **Возвраты и служебные чеки при живой сессии → 503 `offline_session_open`**.
+   `registerRefundOffline` в контракте есть, но офлайн-возврат — v2 (§7);
+   пропускать возврат онлайн внутри сессии нельзя (п. 1).
+5. **`go-offline` тратит код из пула**: сессия при открытии берёт один код
+   `takeFreeCodes(…, 1, { status: 'used', receiptId: null })` и хранит его в
+   `go_offline_code`; `started_at = now()` (мы здесь, потому что провайдер
+   лежит сейчас, значит ≥ последней доставленной транзакции; шаг 1 реплея
+   всё равно проверяет).
+6. **Штамп документа** = следующий `free` код (`{ status: 'used', receiptId }`)
+   + `fiscal_date = now()` + `offline_seq` из счётчика сессии под `SELECT …
+   FOR UPDATE` строки сессии (сериализует параллельные чекауты одного
+   магазина). Строка реестра: `status='pending'`, `mode='offline'`,
+   `fiscal_number = fiscal_code`, `fiscal_at = fiscal_date`, `control_number
+   NULL`. Ответ кассе — `FiscalView` с `mode: 'offline'`, `status: 'pending'`,
+   `control_number: null`, `qr: null`.
+7. **`rejected` на офлайн-документе при реплее** → `markAbandoned` (список
+   внимания), продажа **не** отменяется, цепочка продолжается; `previousDocId`
+   следующего документа — последний `done` в сессии.
+8. **Гейты сессии в `preflight`**: `now − started_at ≥ 36h − 30min` → 503
+   `offline_limit`, сессия → `stuck` (`error_code='offline_limit'`);
+   `now ≥ shift.opened_at + 24h − 15min` → 503 `shift_deadline`. Ручное
+   `closeShift` при живой сессии → 409 `offline_session_open` (симметрично
+   `releaseRegister`).
+9. Кэш: `preflight` читает строку сессии одним индексированным SELECT (частичный
+   уникальный индекс по `status IN ('open','replaying')`); в `runtime.ts` не
+   кэшируем — состояние меняет крон из другого процесса.
+
+### Шаги (в этом порядке, каждый с тестами)
+
+**Шаг 1 — сессия и реестр** (`src/pos/fiscal/offline/session.ts`, `ledger.ts`)
+- `session.ts`: `getLiveSession(storeId, key)`, `openServerSession(ctx, shiftId)`
+  (INSERT `holder='server'` + `ON CONFLICT DO NOTHING` по частичному индексу →
+  перечитать; код для `go-offline`), `stampNext(session, receiptId)` →
+  `{ fiscalCode, fiscalDate, seq }`, `markReplaying / markClosed / markStuck(code, msg)`.
+- `ledger.ts`: `OpenDocumentInput` + `mode`, `offlineSessionId`, `offlineSeq`,
+  `stamp`; `claimDueDocuments` → `AND mode = 'online'`; `abandonStaleDocs` →
+  не трогать `mode='offline'` в сессии `open/replaying`;
+  `listSessionDocuments(sessionId)` по `offline_seq`; `lastDoneInSession`.
+- Тест `pos.fiscal.offline.session.test.ts`: одна живая сессия на регистратор
+  (гонка двух `openServerSession` → одна строка), `stampNext` монотонен под
+  конкуренцией, коды помечены `used` с `receiptId`, `claimDueDocuments` не
+  отдаёт офлайн-строки, `abandonStaleDocs` их не трогает.
+
+**Шаг 2 — `preflight` и чекаут** (`fiscal.service.ts`, `checkout.routes.ts`, `types.ts`, `errors.ts`)
+- `FiscalGate` + `mode: 'online' | 'offline'`, `session?`; `FiscalView` +
+  `mode`, `control_number`/`qr` nullable.
+- `preflight`: до `ensureOpenShift` — если есть живая сессия: `replaying` →
+  throw `replaying`; `open` → гейты п. 8 → `gate.mode='offline'`. Иначе как
+  сегодня; `catch` на `ensureOpenShift` с `kind==='unavailable'` +
+  `offline_mode` + `holder_device_id IS NULL` + `getLiveShiftRow` есть →
+  `openServerSession` → `gate.mode='offline'`; нет смены → пробросить.
+- `fiscalizeSaleOffline(gate, sale)`: `openDocument(mode='offline', …)` →
+  `stampNext` → UPDATE строки штампом → `FiscalView`. Провайдер **не
+  вызывается**.
+- Роут: `gate.mode==='offline'` → `fiscalizeSaleOffline`; новые `kind` →
+  503 `{ error: 'fiscal_unavailable', code: 'fiscal_replaying' | 'offline_limit' |
+  'shift_deadline' | 'offline_session_open' }` (форма ответа не меняется —
+  касса уже умеет 503 с `code`). Возврат/служебный чек при живой сессии → 503
+  `offline_session_open`.
+- `FiscalErrorKind` + `replaying`, `offline_limit`, `shift_deadline`,
+  `offline_session_open` (все терминальные, гейтовые, `mayExistAtProvider=false`).
+- Тесты в `pos.fiscal.checkout.test.ts` (или новый `…offline.checkout.test.ts`):
+  `queueError('unavailable')` + `offline_mode` + открытая смена → 201, в ответе
+  `mode:'offline'`, `fiscal_number` = код из пула, `control_number:null`;
+  сессия `open/server`; вторая продажа → `seq 2`, провайдер не дёргался
+  (счётчик вызовов фейка); без смены → 503 `fiscal_unavailable`; держатель —
+  касса → 503 как сегодня (не открываем серверную сессию); возврат при сессии →
+  503 `offline_session_open`; провайдер ожил, сессия `open` → всё ещё штамп;
+  сессия `replaying` → 503 `fiscal_unavailable` / `code: 'replaying'`; 36h/24h гейты (с подменой
+  `started_at`/`opened_at` в БД).
+
+**Шаг 3 — реплей** (`src/pos/fiscal/offline/replay.ts`, `fiscal.service.ts`, `pool.ts`)
+- `replayServerSessions({ signal }): Promise<ReplayResult>` — вызывается из
+  `retryPendingFiscalDocs` **до** плоского цикла, под тем же `retryRunning`.
+  Для каждой сессии `open/replaying` с `holder='server'`:
+  0. `backgroundGate`-подобный контекст без `ensureOpenShift`; проба
+     `provider.offline.registerState(callCtx)` — `unavailable` → пропустить
+     (провайдер всё ещё лежит), сессию не трогать;
+  1. `refillOfflineCodes(ctx, signal)` — пересинк пула (Checkbox мог сам уйти в
+     офлайн и потратить коды; `used`/`leased` не трогает);
+  2. `open` → `replaying`; если `go_offline_tx_id IS NULL`: проверить
+     `started_at ≥ max(done_at) WHERE mode='online'` (иначе `stuck`,
+     `error_code='go_offline_order'`, ничего не отправлять) → `goOffline(ctx,
+     started_at, go_offline_code)` → сохранить `go_offline_tx_id`
+     (идемпотентность при падении между вызовом и записью — `registerState`:
+     если `offlineMode` уже `true`, считаем сделанным);
+  3. `listSessionDocuments` со `status='pending'` по `offline_seq` →
+     `runDocument(gate, row, cc => provider.offline.registerSaleOffline(cc, doc,
+     { fiscalCode, fiscalDate, previousDocId }), 'background')`; `done` →
+     `markDone` пишет `control_number`/`qr`; `rejected` → `markAbandoned` +
+     продолжить; `unavailable`/таймаут → прервать проход, сессия остаётся
+     `replaying`, следующий тик продолжит с той же строки;
+  4. очередь пуста → `goOnline` (не чаще 1 раза в 2 мин: `last_go_online_at`
+     — новая колонка миграцией 028 или хранить в `error_message`? — **колонка**),
+     затем `registerState().offlineMode === false` → `closed`, `ended_at`,
+     `refillOfflineCodes`; иначе ждать следующего тика.
+- `ReplayResult { sessions, replayed, abandoned, closed, stuck }` → в лог крона.
+- Фейк: `FakeOfflineOps` + `goOffline` записывает `(at, code)`, `goOnline`
+  переводит `offlineMode=false` через N опросов (настраиваемо), `registerState`.
+- Тесты `pos.fiscal.offline.replay.test.ts`: полный цикл (2 продажи → реплей →
+  `goOffline` один раз с `started_at`/кодом → документы в порядке `seq` →
+  `goOnline` → `closed`, `control_number` записан, `retry` не трогал офлайн-
+  строки); провайдер упал на втором документе → сессия `replaying`, первый
+  `done`, повторный тик доводит без второго `goOffline`; `rejected` → второй
+  документ `abandoned`, третий `done`; `started_at` раньше последней онлайн-
+  транзакции → `stuck`; `duplicate` → `resolveDuplicate`; `goOnline` не чаще
+  1/2 мин.
+
+**Шаг 4 — смены и статус** (`shifts.service.ts`, `offline/status.ts`)
+- `closeShift` (ручное) при живой сессии → 409 `offline_session_open`
+  (`closeDueShifts` уже пропускает — тест есть).
+- `GET /fiscal/status.offline.session` уже читает сессию — добавить
+  `holder`, `seq`, `pending`, `error_code`; список внимания (`listAttentionDocs`)
+  + `stuck`-сессии.
+- Тесты: `pos.fiscal.shifts.test.ts` (409), `pos.fiscal.test-connection`/status.
+
+**Шаг 5 — клиент и доки**
+- `pos/`: `FiscalView.mode`/nullable `control_number` в типах; `CheckoutModal`
+  и `ReceiptPrintable` при `mode==='offline'` — экран успеха с пометкой
+  «офлайн: контрольне число буде після синку», чек без QR (полноценный UI —
+  фаза 4). Проверить, что `fiscal.status==='pending'` не падает в рендер как
+  ошибка.
+- `POS_FISCAL_PRRO.md` §8 «Матрица отказов» — новые строки:
+
+| Ситуация | Продажа | Ответ кассе |
+|---|---|---|
+| Провайдер недоступен, `offline_mode`, смена открыта онлайн, держатель не касса | `completed`, реестр `pending` / `mode='offline'` со штампом | 201, `fiscal.mode='offline'`, без контрольного числа и QR |
+| Провайдер недоступен, `offline_mode`, живой смены нет | **не создана** | 503 `fiscal_unavailable` (v1: смена открывается только онлайн) |
+| Сессия `open`, провайдер уже доступен | как выше — штамп до реплея | 201, `mode='offline'` |
+| Сессия `replaying` | **не создана** | 503 `fiscal_unavailable` / `code: 'replaying'` |
+| Сессия старше 36 ч − 30 мин / смена старше 24 ч − 15 мин | **не создана**, сессия `stuck` | 503 `offline_limit` / `shift_deadline` |
+| Возврат или служебный чек при живой сессии | **не создан** | 503 `offline_session_open` |
+| Реплей: `go-offline` отклонён (порядок дат) | документы остаются `pending` | сессия `stuck`, список внимания, ничего не отправлено |
+| Реплей: офлайн-документ `rejected` | `completed`, реестр `abandoned` — **не отменяется** | список внимания; цепочка продолжается |
+| Реплей: `unavailable`/таймаут посреди сессии | `done` до точки обрыва, остальное `pending` | сессия `replaying`, следующий тик продолжает |
+
+- `POS_FISCAL_PRRO.md` «Что уже лежит в репозитории (фаза 8б, шаг 2)» — таблица
+  файлов; этот док — строка фазы 2 в таблице фаз → ✅; `CLAUDE.md` — абзац про
+  офлайн («Offline selling and replay (phases 2–3) are not built yet» → фаза 2
+  есть, 3 нет).
+
+### Файлы
+
+Новые: `src/pos/fiscal/offline/{session,replay}.ts`, `migrations/028_pos_fiscal_offline_replay.sql`
+(`pos_offline_session_opens.last_go_online_at`, `go_offline_tx_id` уже есть),
+`src/__tests__/pos.fiscal.offline.{session,replay}.test.ts`.
+Правки: `fiscal.service.ts`, `ledger.ts`, `types.ts`, `errors.ts`, `offline/pool.ts`
+(`CodeMark` с `receiptId: null`), `offline/status.ts`, `shifts.service.ts`,
+`routes/checkout.routes.ts`, `routes/fiscal.routes.ts` (служебный чек),
+`src/pos/migrations.ts`, `helpers/fake-fiscal-provider.ts`, `pos/src/types.ts`,
+`pos/src/components/cashier/CheckoutModal.tsx`, доки.
+
+### Проверка фазы
+
+`npm run typecheck && npm run lint && npx vitest run src/__tests__/pos.fiscal.*.test.ts`
+на локальном Postgres; затем на песочнице Checkbox (после фазы 0): включить
+`offline_mode` тестовому магазину, оборвать сеть до `api.checkbox.in.ua` с
+бэкенда (hosts/файрвол), продать 2 чека через веб-кассу → 201 с
+`mode:'offline'`, вернуть сеть → в течение 2–4 мин сессия `closed`, оба чека в
+кабинете Checkbox с теми же фискальными номерами и контрольными числами,
+`GET /fiscal/status.offline.session === null`.
 
 ## Открытые вопросы (закрыть в фазе 0)
 

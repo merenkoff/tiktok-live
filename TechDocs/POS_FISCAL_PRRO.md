@@ -480,6 +480,23 @@ POST /sales/complete
 | Отмена (`/sales/:id/void`) фискализированного чека | остаётся `completed` | **409** `sale_fiscalised` |
 | Провал фискализации **возврата** | возврат цел, `fiscal_status='failed'` | **200** + `fiscal:{status:'failed'}` |
 
+Офлайн-режим (`offline_mode`, [POS_FISCAL_OFFLINE.md](POS_FISCAL_OFFLINE.md), фаза 2 — случай B, провайдер недоступен с бэкенда). Ответы 503 сохраняют форму `{ error: 'fiscal_unavailable', code: <kind> }`, чтобы касса не училась новой:
+
+| Ситуация | Продажа | Ответ кассе |
+|---|---|---|
+| Провайдер недоступен на префлайте, `offline_mode`, смена открыта онлайн | `completed`, реестр `pending` / `mode='offline'` со штампом (код из пула = фискальный номер, `fiscal_date`, `offline_seq`) | **201**, `fiscal: { status: 'pending', mode: 'offline', fiscal_code, control_number: null, qr_payload: null }` |
+| Провайдер недоступен, `offline_mode`, живой смены нет | **не создана** | 503 `code: 'unavailable'` (v1: смена открывается только онлайн) |
+| Сессия `open`, провайдер уже доступен | как выше — штамп до реплея (онлайн-чек внутри сессии ломает порядок `go_offline_date`) | 201, `mode: 'offline'` |
+| Сессия `replaying` | **не создана** | 503 `code: 'replaying'` — секунды-минуты |
+| Сессия старше 36 ч − 30 мин | **не создана**, сессия `stuck` (`offline_limit`) | 503 `code: 'offline_limit'` |
+| Смена старше 24 ч − 15 мин при живой сессии | **не создана** | 503 `code: 'shift_deadline'` |
+| Возврат или служебный чек при живой сессии | **не создан** | 503 `code: 'offline_session_open'` (чекаут) / 409 `error: 'offline_session_open'` (фискальные роуты, включая ручное закрытие смены) |
+| Штамп не удался (пул пуст — `offline_codes_exhausted`, реплей начался) | `voided`, реестр `abandoned` — ничего не передавалось | 502 `fiscal_failed`, `sale_voided: true` |
+| Реплей: `go-offline` отклонён или онлайн-документ доставлен позже старта сессии | документы остаются `pending` | сессия `stuck` (`go_offline_rejected` / `go_offline_order`), список внимания; ничего не отправлено |
+| Реплей: офлайн-документ `rejected` | `completed`, реестр `abandoned` — **не отменяется** | список внимания; цепочка продолжается |
+| Реплей: `unavailable`/таймаут посреди сессии | `done` до точки обрыва, остальное `pending` | сессия `replaying`, следующий тик продолжает без второго `go-offline` |
+| Онлайн-документ магазина в `failed` при живой сессии | не трогается | плоский ретрай ждёт закрытия сессии, попытки не сгорают |
+
 ### Отменять продажу можно только при доказанном отсутствии документа
 
 Исходно в этом плане было проще: «провал фискализации после коммита →
@@ -1008,6 +1025,27 @@ status:'done'` с настоящим `fiscal_code` от `api.checkbox.in.ua` →
 | `pos/src/services/api.ts`, `pos/src/offline/sync.ts` | `api.setDeviceId` — касса шлёт `X-POS-Device-ID` |
 | `src/pos/fiscal/providers/checkbox/sandbox-offline.ts` | `npm run fiscal:sandbox:offline` — прогон офлайн-цикла на тестовой кассе, пишет `fixtures/checkbox/offline_*.json` |
 | `src/__tests__/pos.fiscal.{checkbox.offline,offline.pool,holder}.test.ts` (+ settings, shifts) | адаптер на fetch-моке; пул и крон; держатель/передача/force через роуты; валидация настроек; гейт автозакрытия |
+
+### Что уже лежит в репозитории (фаза 8б, шаг 2 — серверная офлайн-сессия)
+
+План и решения — [POS_FISCAL_OFFLINE.md](POS_FISCAL_OFFLINE.md) «План
+исполнения фазы 2». Случай B: провайдер недоступен с бэкенда, касса на связи.
+
+| Файл | Роль |
+|---|---|
+| `migrations/028_pos_fiscal_offline_replay.sql` | `pos_fiscal_offline_sessions.last_go_online_at` — троттлинг `go-online` (≤ 1 раз в 2 мин) переживает рестарт |
+| `src/pos/fiscal/offline/session.ts` | `openServerSession` (INSERT под частичным уникальным индексом + код на `go-offline` в той же транзакции), `stampNext` (`FOR UPDATE` строки сессии → плотный `offline_seq`, следующий `free`-код → `used` с `receiptId`), `getLiveSession`, `listLiveServerSessions`, `listStuckSessions`, `mark{Replaying,GoOfflineSent,GoOnlineSent,Closed,Stuck}` |
+| `src/pos/fiscal/ledger.ts` | `mode` в `openDocument`, `stampOfflineDocument`, `listSessionDocuments`, `claimSessionDocument`, `lastDoneProviderDocId`, `lastOnlineDeliveredAt`, `countSessionDocuments`; `claimDueDocuments` — только `mode='online'` и не для магазина с живой сессией; `abandonStaleDocs` не трогает документы живой сессии |
+| `src/pos/fiscal/errors.ts` | гейтовые `kind`: `replaying`, `offline_limit`, `shift_deadline`, `offline_session_open`, `offline_codes_exhausted` (`isOfflineGate`, терминальные) |
+| `src/pos/fiscal/fiscal.service.ts` | `preflight(…, op)`: живая сессия → `offlineGate` (гейты 36h/24h, `replaying`, не-продажи), `unavailable` при `offline_mode` внутри смены, открытой онлайн → `openServerSession`; `fiscalizeSaleOffline` (без вызова провайдера; провал штампа → void); `unavailable` на живом вызове сбрасывает кэш смены; `replayServerSessions` / `replayOneSession` (`live`-приоритет лимитера — продажи магазина в `replaying` и так отклонены); `RetryResult` + `replayed/closed/stuck` |
+| `src/pos/fiscal/offline/pool.ts` | `takeFreeCodes(…, db)` в чужой транзакции; `refillAllStores({ storeId })` для тестов |
+| `src/pos/fiscal/offline/status.ts` | `sessionView`: `go_offline_sent`, `last_go_online_at`, `documents {pending,done,abandoned}`, `error_code` |
+| `src/pos/routes/checkout.routes.ts`, `routes/fiscal.routes.ts` | `op` в `preflight` (`refund` / `service`); `FiscalView` + `mode` / `control_number`; 409 `offline_session_open` на `POST /fiscal/shift/close`; `sessions` в `GET /fiscal/attention`; гейтовые `kind` → 409 в `replyFiscalError` |
+| `src/index.ts` | лог крона `*/2` с `replayed/closed/stuck` |
+| `src/__tests__/pos.fiscal.offline.{session,checkout,replay}.test.ts`, `helpers/fake-fiscal-provider.ts` | сессия/штамп под гонкой; случай B по HTTP и все гейты; полный реплей, обрыв посреди, `rejected`, порядок дат, троттлинг `go-online`, `duplicate`; фейк: `goOfflineError`, `goOnlineLag`, `registerErrors` |
+
+Что осталось из «Проверка (по фазам)» для фаз 1–2: прогон на песочнице
+Checkbox (фаза 0) — `npm run fiscal:sandbox:offline`.
 
 ### Что уже лежит в репозитории (фаза 8а)
 

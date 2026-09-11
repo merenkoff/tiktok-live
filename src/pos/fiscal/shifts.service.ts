@@ -394,14 +394,17 @@ export interface CloseDueShiftsResult {
  * the second one would either fail or close a shift someone just opened.
  */
 export async function closeDueShifts(
-  opts: { limit?: number; signal?: AbortSignal } = {}
+  opts: { limit?: number; signal?: AbortSignal; storeId?: number } = {}
 ): Promise<CloseDueShiftsResult> {
   const limit = opts.limit ?? 20;
+  // `storeId` narrows the sweep to one store — for tests, which share a
+  // database across workers; the cron sweeps every store.
   const claimed = await pool.query(
     `UPDATE pos_fiscal_shifts SET status = 'closing', updated_at = NOW()
      WHERE id IN (
        SELECT f.id FROM pos_fiscal_shifts f
        WHERE f.status = 'open' AND f.auto_close_due_at IS NOT NULL AND f.auto_close_due_at < NOW()
+         AND ($2::bigint IS NULL OR f.store_id = $2::bigint)
          -- A Z-report sent before an offline session's receipts are replayed
          -- would make them "receipts after Z" (POS_FISCAL_OFFLINE.md §6).
          -- Such a shift waits; if the till never comes back, the session
@@ -416,7 +419,7 @@ export async function closeDueShifts(
        LIMIT $1
      )
      RETURNING *`,
-    [limit]
+    [limit, opts.storeId ?? null]
   );
 
   let closed = 0;

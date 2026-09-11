@@ -179,7 +179,7 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
     // and stock have moved.
     let gate: fiscalService.FiscalGate;
     try {
-      gate = await fiscalService.preflight(auth.storeId, auth.staffId, readDeviceId(request));
+      gate = await fiscalService.preflight(auth.storeId, auth.staffId, readDeviceId(request), 'refund');
     } catch (error) {
       const fiscal = asFiscalError(error, 'Немає звʼязку з ПРРО');
       if (fiscal.kind === 'register_held') {
@@ -270,8 +270,10 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
         ...refund,
         refund_fiscal: fiscal ?? {
           status: 'failed' as const,
+          mode: 'online' as const,
           fiscal_code: null,
           fiscal_date: null,
+          control_number: null,
           tax_url: null,
           qr_payload: null,
           receipt_text: null,

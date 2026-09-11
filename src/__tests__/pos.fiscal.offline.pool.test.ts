@@ -211,7 +211,7 @@ describe.skipIf(!hasDb)('POS fiscal offline code pool', () => {
     // Other suites' stores may also have offline_mode on in this database, so
     // the totals are lower bounds; the store-level effect is what is pinned.
     resetRateLimiter();
-    const result = await offlinePool.refillAllStores();
+    const result = await offlinePool.refillAllStores({ storeId: store.storeId });
     expect(result.stores).toBeGreaterThanOrEqual(1);
     expect(result.fetched).toBeGreaterThanOrEqual(60);
     expect(await counts()).toMatchObject({ free: 60 });
@@ -220,7 +220,7 @@ describe.skipIf(!hasDb)('POS fiscal offline code pool', () => {
     await pool.query(`DELETE FROM pos_fiscal_offline_codes WHERE store_id = $1`, [store.storeId]);
     await updateFiscalSettings(store.storeId, { offline_mode: false });
     resetRateLimiter();
-    await offlinePool.refillAllStores();
+    await offlinePool.refillAllStores({ storeId: store.storeId });
     expect(await counts()).toMatchObject({ free: 0 });
   });
 
@@ -230,13 +230,13 @@ describe.skipIf(!hasDb)('POS fiscal offline code pool', () => {
     const plain = new FakeFiscalProvider();
     registerProvider(plain);
     resetRuntime();
-    await offlinePool.refillAllStores();
+    await offlinePool.refillAllStores({ storeId: store.storeId });
     expect(await counts()).toMatchObject({ free: 0 });
   });
 
   it('refillAllStores counts a provider failure without stopping', async () => {
     fake.signInError = 'unavailable';
-    const result = await offlinePool.refillAllStores();
+    const result = await offlinePool.refillAllStores({ storeId: store.storeId });
     expect(result.failed).toBeGreaterThanOrEqual(1);
     expect(await counts()).toMatchObject({ free: 0 });
   });

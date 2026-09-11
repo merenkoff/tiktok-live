@@ -26,6 +26,9 @@ import type { PoolClient } from 'pg';
 import type { FiscalError } from './errors.js';
 import type { FiscalResult } from './types.js';
 
+/** The pool or a checked-out client — for writes that must join a caller's transaction. */
+export type Queryable = Pick<PoolClient, 'query'>;
+
 /** Attempts before a document is given up on and handed to the owner. */
 export const MAX_ATTEMPTS = 8;
 
@@ -37,6 +40,8 @@ const MAX_BACKOFF_SEC = 900;
 
 export type FiscalDocType = 'sale' | 'refund' | 'service_in' | 'service_out';
 export type FiscalLedgerStatus = 'pending' | 'sent' | 'done' | 'failed' | 'abandoned';
+/** `online` = sent live; `offline` = stamped with a tax-office code, sent on session replay. */
+export type FiscalDocMode = 'online' | 'offline';
 
 /** The projection's vocabulary — deliberately smaller than the ledger's. */
 export type FiscalProjection = 'none' | 'pending' | 'done' | 'failed';
@@ -53,11 +58,16 @@ export interface FiscalReceiptRow {
   provider_request_id: string;
   provider_doc_id: string | null;
   fiscal_code: string | null;
+  fiscal_date: Date | null;
   attempts: number;
   next_attempt_at: Date | null;
   error_code: string | null;
   error_message: string | null;
   total_cents: number;
+  mode: FiscalDocMode;
+  offline_session_id: number | null;
+  offline_seq: number | null;
+  control_number: string | null;
   created_at: Date;
 }
 
@@ -115,6 +125,8 @@ export interface OpenDocumentInput {
   requestId: string;
   totalCents: number;
   requestPayload?: unknown;
+  /** `offline` rows get their stamp from `stampOfflineDocument` and are never claimed by the retry pass. */
+  mode?: FiscalDocMode;
 }
 
 /**
@@ -132,9 +144,9 @@ export async function openDocument(input: OpenDocumentInput): Promise<FiscalRece
   const result = await pool.query(
     `INSERT INTO pos_fiscal_receipts
        (store_id, doc_type, sale_id, refund_id, shift_id, provider, status,
-        provider_request_id, total_cents, attempts, next_attempt_at, request_payload)
+        provider_request_id, total_cents, attempts, next_attempt_at, request_payload, mode)
      VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8, 1,
-             NOW() + ($9 || ' milliseconds')::interval, $10::jsonb)
+             NOW() + ($9 || ' milliseconds')::interval, $10::jsonb, $11)
      ON CONFLICT (store_id, provider_request_id) DO UPDATE SET
        attempts = pos_fiscal_receipts.attempts + 1,
        next_attempt_at = NOW() + ($9 || ' milliseconds')::interval,
@@ -151,9 +163,118 @@ export async function openDocument(input: OpenDocumentInput): Promise<FiscalRece
       input.totalCents,
       String(LEASE_MS),
       input.requestPayload === undefined ? null : JSON.stringify(input.requestPayload),
+      input.mode ?? 'online',
     ]
   );
   return result.rows[0] as FiscalReceiptRow;
+}
+
+export interface OfflineDocumentStamp {
+  sessionId: number;
+  seq: number;
+  fiscalCode: string;
+  fiscalDate: Date;
+}
+
+/**
+ * T1b — the offline stamp: the tax-office code IS the receipt's fiscal number,
+ * the date is ours, and the position in the session fixes the replay order.
+ *
+ * Runs on the caller's client because the session takes the code in the same
+ * transaction (`offline/session.ts`). `next_attempt_at` is cleared: the flat
+ * retry pass must never pick this row up — the session replay sends it, in
+ * order, after `go-offline`.
+ */
+export async function stampOfflineDocument(
+  db: Queryable,
+  rowId: number,
+  stamp: OfflineDocumentStamp
+): Promise<FiscalReceiptRow> {
+  const result = await db.query(
+    `UPDATE pos_fiscal_receipts SET
+       mode = 'offline',
+       offline_session_id = $2,
+       offline_seq = $3,
+       fiscal_code = $4,
+       fiscal_date = $5::timestamptz,
+       next_attempt_at = NULL,
+       updated_at = NOW()
+     WHERE id = $1
+     RETURNING *`,
+    [rowId, stamp.sessionId, stamp.seq, stamp.fiscalCode, stamp.fiscalDate]
+  );
+  return result.rows[0] as FiscalReceiptRow;
+}
+
+/** Every document of an offline session, in replay order. */
+export async function listSessionDocuments(sessionId: number): Promise<FiscalReceiptRow[]> {
+  const result = await pool.query(
+    `SELECT * FROM pos_fiscal_receipts
+     WHERE offline_session_id = $1
+     ORDER BY offline_seq ASC, id ASC`,
+    [sessionId]
+  );
+  return result.rows as FiscalReceiptRow[];
+}
+
+/**
+ * Take one session document for a replay attempt. Bumps `attempts` like the
+ * flat claim does, so a document the provider keeps refusing still runs out
+ * of budget and lands in the attention list instead of looping every tick.
+ */
+export async function claimSessionDocument(rowId: number): Promise<FiscalReceiptRow | null> {
+  const result = await pool.query(
+    `UPDATE pos_fiscal_receipts SET attempts = attempts + 1, updated_at = NOW()
+     WHERE id = $1 AND status IN ('pending', 'failed')
+     RETURNING *`,
+    [rowId]
+  );
+  return (result.rows[0] as FiscalReceiptRow) ?? null;
+}
+
+/** When the tax office last received an online document of this store — the floor for `go_offline_date`. */
+export async function lastOnlineDeliveredAt(storeId: number): Promise<Date | null> {
+  const result = await pool.query(
+    `SELECT MAX(fiscal_date) AS at FROM pos_fiscal_receipts
+     WHERE store_id = $1 AND mode = 'online' AND status = 'done'`,
+    [storeId]
+  );
+  const at = result.rows[0]?.at as Date | null | undefined;
+  return at ? new Date(at) : null;
+}
+
+export interface SessionDocumentCounts {
+  pending: number;
+  done: number;
+  abandoned: number;
+}
+
+/** How far a session's replay has got — for the status and attention views. */
+export async function countSessionDocuments(sessionId: number): Promise<SessionDocumentCounts> {
+  const result = await pool.query(
+    `SELECT status, COUNT(*)::int AS n FROM pos_fiscal_receipts
+     WHERE offline_session_id = $1 GROUP BY status`,
+    [sessionId]
+  );
+  const counts: SessionDocumentCounts = { pending: 0, done: 0, abandoned: 0 };
+  for (const row of result.rows as Array<{ status: FiscalLedgerStatus; n: number }>) {
+    if (row.status === 'done') counts.done += Number(row.n);
+    else if (row.status === 'abandoned') counts.abandoned += Number(row.n);
+    else counts.pending += Number(row.n);
+  }
+  return counts;
+}
+
+/** The provider's id of the last document the session got through — the next one's `previousDocId`. */
+export async function lastDoneProviderDocId(sessionId: number): Promise<string | null> {
+  const result = await pool.query(
+    `SELECT provider_doc_id FROM pos_fiscal_receipts
+     WHERE offline_session_id = $1 AND status = 'done' AND provider_doc_id IS NOT NULL
+     ORDER BY offline_seq DESC, id DESC
+     LIMIT 1`,
+    [sessionId]
+  );
+  return (result.rows[0]?.provider_doc_id as string | undefined) ?? null;
 }
 
 async function setProjection(
@@ -363,21 +484,29 @@ export async function abandonShiftDocs(shiftId: number): Promise<number> {
  * (fiscalisation switched off, credentials rejected), and its documents are
  * then invisible to the sweep. The age net is what makes "every non-`done` row
  * has a bounded life" actually true rather than aspirational.
+ *
+ * Offline documents of a live session are exempt: they legitimately wait
+ * hours for the provider to come back, and the session (36h limit, `stuck`)
+ * bounds their life instead.
  */
 export async function abandonStaleDocs(olderThanMs: number): Promise<number> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const rows = await client.query(
-      `UPDATE pos_fiscal_receipts SET
+      `UPDATE pos_fiscal_receipts r SET
          status = 'abandoned',
          error_code = COALESCE(error_code, 'stale'),
          error_message = COALESCE(error_message, 'Документ не фіскалізовано вчасно'),
          next_attempt_at = NULL,
          updated_at = NOW()
-       WHERE status IN ('pending', 'sent', 'failed')
-         AND created_at < NOW() - ($1 || ' milliseconds')::interval
-       RETURNING doc_type, sale_id, refund_id`,
+       WHERE r.status IN ('pending', 'sent', 'failed')
+         AND r.created_at < NOW() - ($1 || ' milliseconds')::interval
+         AND NOT EXISTS (
+           SELECT 1 FROM pos_fiscal_offline_sessions os
+           WHERE os.id = r.offline_session_id AND os.status IN ('open', 'replaying')
+         )
+       RETURNING r.doc_type, r.sale_id, r.refund_id`,
       [String(olderThanMs)]
     );
     for (const row of rows.rows) {
@@ -440,7 +569,7 @@ export async function abandonVoidedSaleDocs(): Promise<number> {
  * lock the nullable side of an outer join. The claim bumps `attempts` and
  * re-leases, so an overlapping cron tick sees nothing to do.
  */
-export async function claimDueDocuments(limit: number): Promise<FiscalReceiptRow[]> {
+export async function claimDueDocuments(limit: number, storeId?: number): Promise<FiscalReceiptRow[]> {
   const result = await pool.query(
     `UPDATE pos_fiscal_receipts SET
        attempts = attempts + 1,
@@ -453,6 +582,17 @@ export async function claimDueDocuments(limit: number): Promise<FiscalReceiptRow
          AND r.next_attempt_at IS NOT NULL
          AND r.next_attempt_at < NOW()
          AND r.attempts < $3
+         -- One store only when asked (tests share a database across workers).
+         AND ($4::bigint IS NULL OR r.store_id = $4::bigint)
+         -- Offline documents are sent by the session replay, in order.
+         AND r.mode = 'online'
+         -- And while a store has a live offline session, nothing online may
+         -- reach the provider ahead of the replay's go-offline: it would break
+         -- the date ordering. These wait, without burning attempts.
+         AND NOT EXISTS (
+           SELECT 1 FROM pos_fiscal_offline_sessions os
+           WHERE os.store_id = r.store_id AND os.status IN ('open', 'replaying')
+         )
          -- Never re-send a document whose sale has been voided.
          AND (r.sale_id IS NULL OR s.status <> 'voided')
        ORDER BY r.next_attempt_at ASC
@@ -460,7 +600,7 @@ export async function claimDueDocuments(limit: number): Promise<FiscalReceiptRow
        LIMIT $1
      )
      RETURNING *`,
-    [limit, String(LEASE_MS), MAX_ATTEMPTS]
+    [limit, String(LEASE_MS), MAX_ATTEMPTS, storeId ?? null]
   );
   return result.rows as FiscalReceiptRow[];
 }

@@ -213,14 +213,20 @@ export interface FiscalPublicConfig {
  */
 export interface SaleFiscalDoc {
   status: FiscalDocStatus | string;
+  /** `offline` = stamped from the tax-office code reserve; the provider confirms it on replay. */
+  mode?: FiscalDocMode;
   fiscal_code: string | null;
   fiscal_date: string | null;
+  /** Контрольне число — an offline document gets it from the provider on replay. */
+  control_number?: string | null;
   tax_url: string | null;
   qr_payload: string | null;
   receipt_text: string | null;
   error_code: string | null;
   error_message: string | null;
 }
+
+export type FiscalDocMode = 'online' | 'offline';
 
 /** Owner-facing ПРРО settings. Credentials are reported by presence only. */
 export interface FiscalSettingsView {
@@ -255,11 +261,19 @@ export interface FiscalSettingsPatch {
   receipt_width?: FiscalReceiptWidth;
 }
 
-/** The result of one fiscalisation attempt, as returned by a sale or refund. */
+/**
+ * The result of one fiscalisation attempt, as returned by a sale or refund.
+ *
+ * `pending` + `mode: 'offline'` is a sale stamped while the provider was
+ * unreachable (server-side offline session): the fiscal number is real, the
+ * control number and QR arrive once the session is replayed.
+ */
 export interface FiscalActionResult {
-  status: 'done' | 'failed';
+  status: 'done' | 'failed' | 'pending';
+  mode?: FiscalDocMode;
   fiscal_code: string | null;
   fiscal_date: string | null;
+  control_number?: string | null;
   tax_url: string | null;
   qr_payload: string | null;
   receipt_text: string | null;
