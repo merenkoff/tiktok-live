@@ -185,6 +185,28 @@ describe.skipIf(!hasDb)('POS fiscal offline checkout (case B — server session)
     expect(await offlinePool.countCodes(store.storeId, '')).toEqual({ free: 58, leased: 0, used: 2, burned: 0 });
   });
 
+  it('reports mode and control number when the sale is read back, not only at checkout', async () => {
+    // The checkout response carries them, `GET /sales/:id` used not to — so a
+    // re-opened offline receipt looked like an ordinary pending one, and the
+    // till had nothing to print the «ОФЛАЙН» block from.
+    await warm();
+    providerDown();
+    const saleId = (await sell()).json().id;
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/pos/sales/${saleId}`,
+      headers: headers(),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().fiscal).toMatchObject({
+      status: 'pending',
+      mode: 'offline',
+      fiscal_code: 'OFF-0002',
+      control_number: null,
+    });
+  });
+
   it('keeps stamping into the same session — even once the provider is back', async () => {
     await warm();
     providerDown();

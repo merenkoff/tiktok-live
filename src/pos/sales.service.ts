@@ -431,7 +431,7 @@ export async function getSale(storeId: number, saleId: number) {
   // module-provided renderer. See TechDocs/POS_FISCAL_PRRO.md §1.
   const fiscalRow = await pool.query(
     `SELECT fiscal_code, fiscal_date, tax_url, qr_payload, receipt_text,
-            status, error_code, error_message
+            status, mode, control_number, error_code, error_message
      FROM pos_fiscal_receipts
      WHERE sale_id = $1 AND doc_type = 'sale'`,
     [saleId]
@@ -463,6 +463,13 @@ export async function getSale(storeId: number, saleId: number) {
     fiscal: fiscal
       ? {
           status: fiscal.status as string,
+          // `mode` and `control_number` matter to the till, not just to the
+          // ledger: an offline-stamped receipt already carries a real
+          // tax-office number, and the paper it prints is a different document
+          // from an online one (see TechDocs/POS_FISCAL_OFFLINE.md §4). Without
+          // them here a re-opened sale looks like an ordinary `pending` one.
+          mode: fiscal.mode === 'offline' ? ('offline' as const) : ('online' as const),
+          control_number: fiscal.control_number ?? null,
           fiscal_code: fiscal.fiscal_code ?? null,
           fiscal_date: fiscal.fiscal_date
             ? new Date(fiscal.fiscal_date).toISOString()

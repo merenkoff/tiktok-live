@@ -32,6 +32,17 @@ export interface ReceiptFiscal {
   fiscal_date: string | null;
   /** Tax-office verification link — printed as a QR on ESC/POS, as a link on paper-less PDF. */
   tax_url: string | null;
+  /**
+   * Stamped from the offline reserve: the paper must carry the «ОФЛАЙН» mark.
+   * Optional so a Rust build that predates it keeps printing the online block.
+   */
+  offline?: boolean;
+  /**
+   * Контрольне число — part of an offline receipt's required content. Null
+   * while the document has not reached the provider yet, which is exactly the
+   * case the cashier must not mistake for a complete receipt.
+   */
+  control_number?: string | null;
 }
 
 export interface ReceiptData {

@@ -84,17 +84,26 @@ export function ReceiptPrintable({ receipt }: { receipt: ReceiptData | null }) {
           <hr />
           <div className="receipt-print-fiscal">
             <p>Фіскальний чек</p>
+            {receipt.fiscal.offline && <p>ОФЛАЙН</p>}
             <div className="receipt-print-row">
               <span>ФН чека</span>
               <span>{receipt.fiscal.fiscal_code}</span>
             </div>
+            {receipt.fiscal.control_number && (
+              <div className="receipt-print-row">
+                <span>Контрольне число</span>
+                <span>{receipt.fiscal.control_number}</span>
+              </div>
+            )}
             {receipt.fiscal.fiscal_date && <p>{receipt.fiscal.fiscal_date}</p>}
-            {receipt.fiscal.tax_url && (
+            {receipt.fiscal.tax_url ? (
               // No QR library on the web path; the link itself is clickable in
               // a saved PDF, which is what this renderer is for.
               <p className="receipt-print-tax-url">
                 Перевірити: <a href={receipt.fiscal.tax_url}>{receipt.fiscal.tax_url}</a>
               </p>
+            ) : (
+              receipt.fiscal.offline && <p>QR буде після синхронізації з ПРРО</p>
             )}
           </div>
         </>

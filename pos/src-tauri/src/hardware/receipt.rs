@@ -44,6 +44,12 @@ pub struct ReceiptFiscal {
     pub fiscal_date: Option<String>,
     #[serde(default)]
     pub tax_url: Option<String>,
+    /// Stamped from the offline reserve — the paper must say so.
+    #[serde(default)]
+    pub offline: bool,
+    /// Контрольне число; absent until the document reaches the provider.
+    #[serde(default)]
+    pub control_number: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -212,9 +218,20 @@ fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> 
     if let Some(fiscal) = &receipt.fiscal {
         printer.writeln(&divider(width)).map_err(|e| e.to_string())?;
         printer.writeln("Фіскальний чек").map_err(|e| e.to_string())?;
+        // An offline receipt is a different document and has to say so on the
+        // paper, above its number — same order Checkbox's own offline receipt
+        // uses (TechDocs/checkbox-api/receipts-offline.md).
+        if fiscal.offline {
+            printer.writeln("ОФЛАЙН").map_err(|e| e.to_string())?;
+        }
         printer
             .writeln(&two_col(width, "ФН чека", &fiscal.fiscal_code))
             .map_err(|e| e.to_string())?;
+        if let Some(number) = fiscal.control_number.as_deref().filter(|n| !n.is_empty()) {
+            printer
+                .writeln(&two_col(width, "Контрольне число", number))
+                .map_err(|e| e.to_string())?;
+        }
         if let Some(date) = &fiscal.fiscal_date {
             printer.writeln(date).map_err(|e| e.to_string())?;
         }
@@ -223,6 +240,14 @@ fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> 
             printer.qrcode(url).map_err(|e| e.to_string())?;
             printer.writeln("cabinet.tax.gov.ua").map_err(|e| e.to_string())?;
             printer.justify(JustifyMode::LEFT).map_err(|e| e.to_string())?;
+        } else if fiscal.offline {
+            // No QR yet: its `mac` is the ПРРО transaction-chain hash, which
+            // only exists once the document reaches the register that keeps the
+            // chain. Say it plainly rather than print a link that would fail
+            // verification in the tax office cabinet.
+            printer
+                .writeln("QR буде після синхронізації з ПРРО")
+                .map_err(|e| e.to_string())?;
         }
     }
 

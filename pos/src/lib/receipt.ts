@@ -18,17 +18,52 @@ function fiscalParts(doc: SaleFiscalDoc | FiscalActionResult | null | undefined)
   provider_text: string | null;
   fiscal: ReceiptFiscal | null;
 } {
-  if (!doc || doc.status !== 'done' || !doc.fiscal_code) {
+  if (!doc || !doc.fiscal_code || !isPrintableFiscalDoc(doc)) {
     return { provider_text: null, fiscal: null };
   }
+  const offline = doc.mode === 'offline';
   return {
+    // An offline document never has provider text — there was no provider call
+    // to fetch it from — so this falls back to our layout by construction.
     provider_text: doc.receipt_text?.trim() ? doc.receipt_text : null,
     fiscal: {
       fiscal_code: doc.fiscal_code,
       fiscal_date: doc.fiscal_date ? new Date(doc.fiscal_date).toLocaleString('uk-UA') : null,
       tax_url: doc.tax_url,
+      offline,
+      control_number: doc.control_number ?? null,
     },
   };
+}
+
+/**
+ * Does this document put a fiscal block on paper at all?
+ *
+ * `done` — yes, the ordinary case. `pending` + `mode: 'offline'` — also yes:
+ * the fiscal number is a real tax-office code from the reserve, and the receipt
+ * the customer is handed has to carry it together with the «ОФЛАЙН» mark. Any
+ * other `pending` is a document still in flight with no number of its own, and
+ * `failed` has nothing to print.
+ */
+function isPrintableFiscalDoc(doc: SaleFiscalDoc | FiscalActionResult): boolean {
+  return doc.status === 'done' || (doc.status === 'pending' && doc.mode === 'offline');
+}
+
+/**
+ * Is the fiscal block complete enough to hand the customer without a word?
+ *
+ * The till auto-prints only these. An offline receipt whose контрольне число
+ * has not arrived yet is deliberately NOT complete: it is printable on demand
+ * (the cashier presses «Друк чека» and knows what they are giving out), but
+ * printing it automatically would quietly hand over a receipt missing a
+ * required field. See TechDocs/POS_FISCAL_OFFLINE.md.
+ */
+export function fiscalBlockComplete(
+  doc: SaleFiscalDoc | FiscalActionResult | null | undefined
+): boolean {
+  if (!doc || !doc.fiscal_code) return false;
+  if (doc.status === 'done') return true;
+  return doc.status === 'pending' && doc.mode === 'offline' && Boolean(doc.control_number);
 }
 
 export function buildReceiptPayload(

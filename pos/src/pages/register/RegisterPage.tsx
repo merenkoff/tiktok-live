@@ -13,7 +13,7 @@ import {
   type CheckoutFailure,
 } from '../../lib/checkoutError';
 import { DEFAULT_RECEIPT_PAPER_WIDTH, ReceiptPaperWidth, printReceipt } from '../../lib/printer';
-import { buildReceiptPayload } from '../../lib/receipt';
+import { buildReceiptPayload, fiscalBlockComplete } from '../../lib/receipt';
 import { usePrintableReceipt } from '../../hooks/usePrintableReceipt';
 import { getMeta } from '../../offline/db';
 import type { CatalogItem, PaymentMethod, PosTag, SaleDetail, SalePaymentInput } from '../../types';
@@ -174,11 +174,11 @@ export function RegisterPage() {
       if (!printerName) return; // web / desktop without a configured printer → no-op
       // Never auto-print an un-fiscalised receipt in a ПРРО store: the customer
       // would walk out with a slip that looks like a receipt and carries no
-      // fiscal number. The manual button below stays, clearly labelled.
-      if (
-        (auth?.store.fiscal?.enabled ?? false) &&
-        (success.fiscal_status ?? 'none') !== 'done'
-      ) {
+      // fiscal number. An offline-stamped receipt DOES carry one, so it prints
+      // automatically once its контрольне число is there too — the completeness
+      // rule lives in `fiscalBlockComplete`, next to the layout it governs. The
+      // manual button below stays for everything else, clearly labelled.
+      if ((auth?.store.fiscal?.enabled ?? false) && !fiscalBlockComplete(success.fiscal)) {
         return;
       }
       const key = success.receipt_number || String(success.id);

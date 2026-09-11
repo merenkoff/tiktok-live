@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { makeSaleDetail } from '../test/utils';
-import { buildReceiptPayload, buildRefundReceiptPayload } from './receipt';
+import { buildReceiptPayload, buildRefundReceiptPayload, fiscalBlockComplete } from './receipt';
 import type { SaleDetail } from '../types';
 
 function makeRefund(overrides: Partial<SaleDetail['refunds'][number]> = {}): SaleDetail['refunds'][number] {
@@ -101,13 +101,60 @@ describe('buildReceiptPayload — fiscal', () => {
     expect(payload.fiscal?.fiscal_code).toBe('TEST-fKbevQ');
   });
 
-  it('treats a failed or pending document as no fiscal data at all', () => {
+  it('treats a failed or still-registering document as no fiscal data at all', () => {
     const failed = buildReceiptPayload(
       makeSaleDetail({ fiscal: { ...doneDoc, status: 'failed', fiscal_code: null } }),
       'Demo'
     );
     expect(failed.fiscal).toBeNull();
     expect(failed.provider_text).toBeNull();
+
+    // An ONLINE pending document has no number of its own yet — nothing to print.
+    const pending = buildReceiptPayload(
+      makeSaleDetail({ fiscal: { ...doneDoc, status: 'pending', mode: 'online' } }),
+      'Demo'
+    );
+    expect(pending.fiscal).toBeNull();
+  });
+
+  // ── Offline receipts (TechDocs/POS_FISCAL_OFFLINE.md §4) ──────────────────
+  //
+  // An offline document is `pending` like the one above, and yet the opposite
+  // case: its fiscal number is a real tax-office code from the reserve, and the
+  // paper the customer is handed must carry it with the «ОФЛАЙН» mark.
+
+  const offlineDoc = {
+    ...doneDoc,
+    status: 'pending',
+    mode: 'offline' as const,
+    fiscal_code: 'OFF-0002',
+    control_number: null,
+    tax_url: null,
+  };
+
+  it('prints an offline-stamped receipt, marked as offline', () => {
+    const payload = buildReceiptPayload(makeSaleDetail({ fiscal: offlineDoc }), 'Demo');
+    expect(payload.fiscal).toMatchObject({
+      fiscal_code: 'OFF-0002',
+      offline: true,
+      control_number: null,
+      tax_url: null,
+    });
+  });
+
+  it('carries the control number once the replay brought it back', () => {
+    const payload = buildReceiptPayload(
+      makeSaleDetail({
+        fiscal: { ...offlineDoc, control_number: '9933', tax_url: 'https://cabinet.tax.gov.ua/x' },
+      }),
+      'Demo'
+    );
+    expect(payload.fiscal).toMatchObject({ offline: true, control_number: '9933' });
+  });
+
+  it('does not mark an ordinary online receipt as offline', () => {
+    const payload = buildReceiptPayload(makeSaleDetail({ fiscal: doneDoc }), 'Demo');
+    expect(payload.fiscal?.offline).toBe(false);
   });
 
   it('attaches the refund document to a refund receipt', () => {
@@ -122,6 +169,43 @@ describe('buildReceiptPayload — fiscal', () => {
     expect(payload.provider_text).toBe('REFUND TEXT');
     expect(payload.fiscal?.fiscal_code).toBe('TEST-gnNGVj');
   });
+});
+
+describe('fiscalBlockComplete', () => {
+  // This is what decides whether the till hands the receipt over on its own.
+  const base = {
+    fiscal_code: 'OFF-0002',
+    fiscal_date: '2026-09-11T11:05:00.000Z',
+    tax_url: null,
+    qr_payload: null,
+    receipt_text: null,
+    error_code: null,
+    error_message: null,
+  };
+
+  it('is complete for a registered receipt', () => {
+    expect(fiscalBlockComplete({ ...base, status: 'done' })).toBe(true);
+  });
+
+  it('is not complete for an offline receipt still missing its control number', () => {
+    // Printable on demand, but auto-printing it would quietly hand the customer
+    // a receipt without a required field.
+    expect(fiscalBlockComplete({ ...base, status: 'pending', mode: 'offline' })).toBe(false);
+  });
+
+  it('is complete once the offline receipt has its control number', () => {
+    expect(
+      fiscalBlockComplete({ ...base, status: 'pending', mode: 'offline', control_number: '9933' })
+    ).toBe(true);
+  });
+
+  it('is not complete for anything still in flight or failed', () => {
+    expect(fiscalBlockComplete({ ...base, status: 'pending', mode: 'online' })).toBe(false);
+    expect(fiscalBlockComplete({ ...base, status: 'failed' })).toBe(false);
+    expect(fiscalBlockComplete(null)).toBe(false);
+    expect(fiscalBlockComplete(undefined)).toBe(false);
+  });
+
 });
 
 describe('buildRefundReceiptPayload', () => {
