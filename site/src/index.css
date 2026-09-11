@@ -9,3 +9,83 @@ html {
 body {
   @apply bg-paper text-ink antialiased;
 }
+
+/* Scroll-reveal. Content is visible by default (prerendered HTML, crawlers,
+   no-JS); only `html.js` — set by an inline script before first paint — hides
+   it until IntersectionObserver adds `.reveal-in`. */
+.floating {
+  transform: rotate(var(--fc-rotate, 0deg));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html.js .reveal {
+    opacity: 0;
+    transform: translateY(24px);
+    transition:
+      opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+      transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  html.js .reveal.reveal-in,
+  html.js .reveal-in .reveal-child {
+    opacity: 1;
+    transform: none;
+  }
+
+  html.js .floating {
+    opacity: 0;
+    transform: translateY(30px) rotate(var(--fc-rotate-from, 0deg));
+    transition:
+      opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+      transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  html.js .floating.floating-in {
+    opacity: 1;
+    transform: rotate(var(--fc-rotate, 0deg));
+  }
+}
+
+/* Long-form article body (Довідка). */
+.article h2 {
+  @apply text-2xl sm:text-3xl font-bold tracking-tight mt-12 mb-4;
+}
+.article h3 {
+  @apply text-xl font-bold mt-8 mb-3;
+}
+.article p {
+  @apply text-ink/90 leading-relaxed mb-4;
+}
+.article ul,
+.article ol {
+  @apply my-4 pl-6 space-y-2 leading-relaxed;
+}
+.article ul {
+  @apply list-disc;
+}
+.article ol {
+  @apply list-decimal;
+}
+.article li::marker {
+  @apply text-muted;
+}
+.article a {
+  @apply text-pos font-semibold underline-offset-2 hover:underline;
+}
+.article strong {
+  @apply font-semibold text-ink;
+}
+.article table {
+  @apply w-full text-sm my-6 border-collapse;
+}
+.article th,
+.article td {
+  @apply border border-line px-3 py-2 text-left align-top;
+}
+.article th {
+  @apply bg-mist font-semibold;
+}
+.article .lead {
+  @apply text-lg text-ink leading-relaxed border-l-4 border-pos pl-5 my-6;
+}
+.article .callout {
+  @apply bg-mist border border-line rounded-card p-5 my-6 text-sm leading-relaxed;
+}

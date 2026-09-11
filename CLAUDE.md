@@ -9,6 +9,7 @@ This repo actually contains **three separately-deployed apps** that share one Po
 - **root (`src/`)** — Fastify + TypeScript backend. Owns the DB, serves the REST/WebSocket API for both LIVE automation and POS. Deployed as its own Railway service.
 - **`admin/`** — React + Vite SPA for the TikTok LIVE side (session control, live logs). **Retired 2026-09-09**: its nickname-only login endpoint was removed and the login screen is now a notice pointing at the POS, whose `tiktok-live` module owns the broadcast desk (`/live`) and its settings (`/admin/live`). The code and its CI workflow stay; nothing can sign in. Talks to the root API.
 - **`pos/`** — React + Vite SPA for the clothing-store point of sale, with a Tauri 2 desktop shell for an offline cashier kiosk. Own `package.json`, no CI workflow yet.
+- **`site/`** — the marketing site at `the-live.shop` (React + Vite + Tailwind, statically prerendered). Not a fourth deployment: `Dockerfile` stage 1 builds it and the root API serves `site/dist` (`src/api.ts`). See "Marketing site" below.
 
 Each of `admin/` and `pos/` has its own `node_modules`, `tsconfig.json`, and dev server — always `cd` into the subdirectory (or use `npm --prefix`) before running its scripts. Root `npm` scripts only touch `src/`.
 
@@ -66,6 +67,15 @@ npm run test:e2e               # Playwright against `vite preview`, routes mocke
 ```
 Also runnable from repo root: `npm run test:pos`, `npm run test:pos:coverage`.
 CI: `.github/workflows/pos-tests.yml` runs lint, unit+coverage and e2e on PRs/pushes touching `pos/**`.
+
+### Marketing site (`site/`)
+```bash
+cd site
+npm run dev                  # Vite dev server on :3005 (client-rendered, /pos → pos.html etc. rewritten by the pretty-urls plugin)
+npm run build                # tsc --noEmit && vite build && vite build --ssr && node scripts/prerender.mjs -> dist/
+npm run preview              # serves the prerendered dist/ on :4173 with the same pretty URLs
+```
+CI: `.github/workflows/site-build.yml` runs the build (whose prerender asserts fail on a page without `<h1>`/JSON-LD) on PRs/pushes touching `site/**`.
 All three apps lint with the same stack — legacy `.eslintrc.*`, eslint 8 + `@typescript-eslint` v8 (root: `.eslintrc.json`; `admin/` and `pos/`: `.eslintrc.cjs` with the React-hooks/refresh plugins). See `pos/TESTING.md` for the test stack, P0 list and mocking notes.
 
 ## Architecture
@@ -99,6 +109,12 @@ Frontend (`pos/src/`) has **two entry points sharing the same components/pages/Z
 `pos/src/shell.tsx` is the context that branches shell-specific behavior. The desktop cashier is the **only** offline-capable surface (`pos/src/offline/`, IndexedDB via Dexie): it snapshots catalog/tags/customers on first online login, verifies PIN/password locally via a PBKDF2 verifier (never stores the raw PIN), queues sales/customer writes while offline, and syncs (customers first, then sales) once a JWT and network are available. Web admin always talks to the API directly — no offline path there. `VITE_API_BASE` is baked in at build time (`pos/src/lib/urls.ts`); the desktop build defaults to the production API (`https://the-live.shop`) unless overridden via `pos/.env`. See `TechDocs/POS_DESKTOP.md` for the full offline/sync/CORS/kiosk story and `TechDocs/RAILWAY_POS.md` for deployment.
 
 Design tokens/UI conventions for the POS UI — including price-tag printing to a receipt roll — are documented in `pos/UI_CASHIER.md`; discount/customer rules in `TechDocs/POS_DISCOUNTS_AND_CUSTOMERS.md`; GTIN enrichment pipeline — including the canonical GTIN-14 cache key and the sticky-`manual` merge rule — in `TechDocs/POS_GTIN_ENRICHMENT.md` / `POS_GTIN_SETUP.md` / `POS_GTIN_LEARNING_API.md`.
+
+### Marketing site (`site/`)
+
+A multi-page Vite app with no router — one HTML template + one `src/*-main.tsx` entry per page (`index`/`live`/`pos`/`compare`, plus `dovidka.html` shared by `/dovidka`, every `/dovidka/<slug>` and `404.html`). It is **statically prerendered at build time, never SSR'd at runtime**: `npm run build` runs the client build, then `vite build --ssr src/entry-server.tsx`, then `scripts/prerender.mjs`, which renders every entry of the route registry `src/routes.tsx` with `renderToString`, injects the markup into the built template's `<div id="root">` and the SEO head (`src/lib/seo.ts`: title/meta/OG + JSON-LD) at the `<!--app-head-->` placeholder, and writes `dist/<out>`; the entries hydrate via `src/mount.tsx`. The reason: AI/answer-engine crawlers (GPTBot, ClaudeBot, PerplexityBot — all allowed in `public/robots.txt`) do not execute JS, so before this the pages were empty to them. The prerender also emits `dist/sitemap.xml` and `dist/llms.txt` (served by Fastify from `site/dist`, not `public/`) and fails the build if a page lacks `<h1>`/JSON-LD, carries an inline `opacity:0`, or references a missing `/assets/*` file. Fastify maps the pretty URLs to the files (`src/api.ts`: `/`, `/live`, `/pos`, `/yaku-kasu-obraty`, `/dovidka`, `/dovidka/:slug`) and its `setNotFoundHandler` returns `dist/404.html` for site paths while `/api/*` keeps the JSON 404 (`src/__tests__/site-routes.test.ts`).
+
+Rules that follow from this design: **everything the site claims about the product comes from `src/lib/productFacts.ts`** (names, prices, per-feature `'available' | 'coming'` status) — page copy, FAQ answers, `SoftwareApplication.featureList`/`offers` and `llms.txt` all read it, so a feature flips in one line; JSON-LD is built by `src/lib/jsonLd/*` and attached to routes in `routes.tsx`, never rendered from a component (it would land in the body and duplicate); `Reveal`/`FloatingCard` are CSS-only (`html.js` is set by an inline script in each template) so prerendered content is visible without JS — do not reintroduce a JS animation library that writes `opacity:0` inline; browser-only APIs stay inside `useEffect`. Knowledge-base articles («Довідка») are TSX in `src/content/dovidka/<slug>.tsx` (`meta` + `Body`, FAQ shared with the FAQPage schema), listed in `content/dovidka/index.ts` — adding one there puts it in the prerender, sitemap and llms.txt automatically. GA4 events go through `src/lib/analytics.ts` (`lead_submit`, `download_click`).
 
 ### CORS
 

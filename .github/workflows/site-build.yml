@@ -1,0 +1,41 @@
+name: Site build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/site-build.yml'
+  pull_request:
+    paths:
+      - 'site/**'
+      - '.github/workflows/site-build.yml'
+
+jobs:
+  build:
+    name: Build + prerender
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - run: npm ci
+      # tsc + client build + SSR build + scripts/prerender.mjs (its own asserts
+      # fail the build when a page ships without <h1>, JSON-LD or an asset).
+      - run: npm run build
+      - name: Prerender output sanity
+        run: |
+          test -f dist/index.html
+          test -f dist/404.html
+          test -f dist/sitemap.xml
+          test -f dist/llms.txt
+          test -f dist/dovidka/index.html
+          grep -q 'application/ld+json' dist/pos.html
+          grep -q '<h1' dist/index.html
+          ! grep -q 'в розробці' dist/pos.html

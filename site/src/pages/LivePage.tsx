@@ -10,23 +10,11 @@ import { TelegramChatMockup } from '../components/TelegramChatMockup';
 import { Reveal, StaggerGroup, StaggerItem } from '../components/Reveal';
 import { DecorCircle } from '../components/DecorCircle';
 import { StickyCta } from '../components/StickyCta';
-import { JsonLd } from '../components/JsonLd';
-import { FaqJsonLd } from '../components/FaqJsonLd';
-import { ORGANIZATION_JSON_LD } from '../lib/organizationJsonLd';
 import { useScrollToHash } from '../hooks/useScrollToHash';
+import { PRICING, FEATURES } from '../lib/productFacts';
+import type { FaqItem } from '../lib/faqJsonLd';
+import { Bot, Monitor, BarChart3, Lock, Sparkles, MessageCircle } from 'lucide-react';
 import liveScreenshot from '../assets/screenshots/live-session.png';
-
-const LIVE_SOFTWARE_JSON_LD = {
-  '@context': 'https://schema.org',
-  '@type': 'SoftwareApplication',
-  name: 'The Live Shop — TikTok LIVE',
-  applicationCategory: 'BusinessApplication',
-  operatingSystem: 'Web',
-  url: 'https://the-live.shop/live',
-  description:
-    'Бот читає коментарі TikTok LIVE, тримає товар бронею, оформлює замовлення в Telegram і створює ТТН Нової Пошти.',
-  provider: { '@type': 'Organization', name: 'ТОВ «Технології»' },
-};
 
 const STATS = [
   { value: '3 мови', label: 'розпізнає коментарі — EN, UK, RU' },
@@ -34,7 +22,43 @@ const STATS = [
   { value: '24/7', label: 'бот приймає дані покупця' },
 ];
 
-const FAQ_ITEMS = [
+const EARLY_ACCESS_PERKS = [
+  {
+    icon: Lock,
+    t: 'Ціна закріплюється',
+    d: `${PRICING.live.price} грн/міс — назавжди для тих, хто підключився зараз, скільки б не коштував тариф пізніше.`,
+  },
+  {
+    icon: Sparkles,
+    t: 'Усі нові функції — у вашому тарифі',
+    d: 'Те, що ми додамо до LIVE-модуля далі, входить у вашу ціну без доплат. Для тих, хто прийде пізніше, частина функцій буде у старших тарифах.',
+  },
+  {
+    icon: MessageCircle,
+    t: 'Прямий канал',
+    d: 'Telegram із розробником замість тікетів підтримки — і голос у тому, що робити наступним.',
+  },
+];
+
+const COMING_SOON = [
+  {
+    icon: Bot,
+    t: FEATURES.liveAiComments.label,
+    d: '«Чи є 46 розмір?» — бот відповідає в коментарях сам, із реальних залишків, поки ти показуєш наступну модель.',
+  },
+  {
+    icon: Monitor,
+    t: FEATURES.liveStockOverlay.label,
+    d: 'Віджет для OBS чи TikTok Studio: «залишилось 2 шт» просто в кадрі — глядачі бачать, що товар закінчується.',
+  },
+  {
+    icon: BarChart3,
+    t: FEATURES.liveAnalytics.label,
+    d: 'Конверсія «коментар → замовлення», топ-товари ефіру, кращий час — після кожного ефіру, без таблиць у Excel.',
+  },
+];
+
+export const FAQ_ITEMS: FaqItem[] = [
   {
     q: 'Що саме розуміє бот у коментарях?',
     a: 'Код товару і, за наявності, розмір — у форматі на кшталт «A12 92» або фрази «хочу A12», «беру K19». Парсер розпізнає це українською, російською та англійською.',
@@ -61,11 +85,11 @@ const FAQ_ITEMS = [
   },
   {
     q: 'Чи бачу я, що відбувається в ефірі, у реальному часі?',
-    a: 'Так — адмін-панель показує потік коментарів, броней і помилок наживо через WebSocket, без оновлення сторінки.',
+    a: 'Так — панель показує потік коментарів, броней і помилок наживо через WebSocket, без оновлення сторінки.',
   },
   {
     q: 'Скільки це коштує?',
-    a: 'Залежить від масштабу продажів — залиште номер телефону нижче, і ми порахуємо разом.',
+    a: PRICING.live.detail,
   },
 ];
 
@@ -75,9 +99,6 @@ export function LivePage() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <JsonLd data={ORGANIZATION_JSON_LD} />
-      <JsonLd data={LIVE_SOFTWARE_JSON_LD} />
-      <FaqJsonLd items={FAQ_ITEMS} />
       <Nav variant="live" />
 
       <main className="flex-1">
@@ -106,7 +127,7 @@ export function LivePage() {
                 id="cta"
                 accent="live"
                 heading="Спробувати на своєму ефірі"
-                subheading="Залиште номер — покажемо, як це працює на прикладі вашого магазину."
+                subheading={`${PRICING.live.label} для перших користувачів. Залиште номер — покажемо, як це працює на прикладі вашого магазину.`}
                 buttonLabel="Хочу демо"
               />
             </div>
@@ -242,6 +263,64 @@ export function LivePage() {
           />
         </section>
 
+        {/* Pricing / early access */}
+        <section id="pricing" className="bg-ink text-white mt-20">
+          <div className="max-w-5xl mx-auto px-6 py-20">
+            <Reveal>
+              <p className="text-sm font-semibold uppercase tracking-wide text-live">Ціна для перших користувачів</p>
+              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mt-3">
+                {PRICING.live.trialMonths} місяців безкоштовно, далі {PRICING.live.price} грн/міс
+              </h2>
+              <p className="text-white/70 mt-5 max-w-2xl leading-relaxed">
+                Ми запускаємось і шукаємо перших продавців, які продають одяг у TikTok LIVE
+                регулярно. Замість знижки на старті — умови, які лишаються з вами назавжди.
+              </p>
+            </Reveal>
+            <StaggerGroup className="mt-10 grid sm:grid-cols-3 gap-4">
+              {EARLY_ACCESS_PERKS.map((p) => (
+                <StaggerItem key={p.t}>
+                  <div className="bg-white/5 border border-white/10 rounded-card p-5 h-full">
+                    <p.icon className="w-5 h-5 text-live" strokeWidth={1.75} />
+                    <h3 className="font-bold mt-4">{p.t}</h3>
+                    <p className="text-white/70 text-sm mt-2 leading-relaxed">{p.d}</p>
+                  </div>
+                </StaggerItem>
+              ))}
+            </StaggerGroup>
+            <p className="text-white/50 text-xs mt-6">
+              Умови раннього доступу діють для магазинів, підключених на період запуску.
+            </p>
+          </div>
+        </section>
+
+        {/* Coming soon */}
+        <section className="max-w-6xl mx-auto px-6 py-20">
+          <Reveal>
+            <p className="text-sm font-semibold uppercase tracking-wide text-live text-center">Скоро</p>
+            <h2 className="text-2xl sm:text-3xl font-bold text-center max-w-xl mx-auto mt-3">
+              Що ми робимо далі — і що входить у ваш тариф
+            </h2>
+          </Reveal>
+          <StaggerGroup className="mt-12 grid sm:grid-cols-3 gap-6">
+            {COMING_SOON.map((f) => (
+              <StaggerItem key={f.t}>
+                <div className="border border-dashed border-line rounded-card p-6 h-full bg-paper">
+                  <div className="flex items-center justify-between">
+                    <div className="w-10 h-10 rounded-full bg-live/5 grid place-items-center">
+                      <f.icon className="w-5 h-5 text-live" strokeWidth={1.75} />
+                    </div>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-muted border border-line rounded-full px-2.5 py-1">
+                      у планах
+                    </span>
+                  </div>
+                  <h3 className="font-bold mt-4">{f.t}</h3>
+                  <p className="text-muted text-sm mt-2.5 leading-relaxed">{f.d}</p>
+                </div>
+              </StaggerItem>
+            ))}
+          </StaggerGroup>
+        </section>
+
         {/* Who it's for */}
         <section className="bg-mist border-y border-line">
           <div className="max-w-4xl mx-auto px-6 py-20">
@@ -287,8 +366,8 @@ export function LivePage() {
               <p className="text-sm font-semibold uppercase tracking-wide text-pos">А ще</p>
               <h2 className="text-2xl font-extrabold mt-2">Продаєш ще й офлайн?</h2>
               <p className="text-muted mt-3 max-w-lg mx-auto">
-                POS каса від того ж LiveShop — з режимом роботи без інтернету для магазину в
-                залі.
+                POS каса від того ж LiveShop — з фіскалізацією ПРРО і режимом роботи без
+                інтернету для магазину в залі. {PRICING.pos.label}.
               </p>
               <p className="mt-4 text-sm font-semibold text-pos">Переглянути POS →</p>
             </a>

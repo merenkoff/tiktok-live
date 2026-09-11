@@ -5,7 +5,9 @@ COPY site/package*.json ./
 RUN npm ci
 COPY site/ ./
 RUN npm run build
-# -> /app/site/dist/{index.html,pos.html,live.html,assets/*}
+# -> /app/site/dist/{index,pos,live,compare,404}.html, dovidka/**/index.html,
+#    sitemap.xml, llms.txt, assets/* — prerendered static HTML (client build +
+#    SSR build + scripts/prerender.mjs), no runtime SSR.
 
 # ---- Stage 2: backend runtime ----
 FROM node:20-alpine

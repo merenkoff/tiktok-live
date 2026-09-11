@@ -1,12 +1,27 @@
-type Variant = 'home' | 'live' | 'pos';
+type Variant = 'home' | 'live' | 'pos' | 'dovidka';
 
 const ACCENT: Record<Variant, string> = {
   home: 'text-ink',
   live: 'text-live',
   pos: 'text-pos',
+  dovidka: 'text-ink',
+};
+
+const CTA: Record<Variant, { href: string; label: string; className: string }> = {
+  home: { href: '#products', label: 'Спробувати', className: 'bg-ink hover:bg-black' },
+  live: { href: '#cta', label: 'Спробувати', className: 'bg-live hover:bg-live-press' },
+  pos: { href: '#download', label: 'Завантажити', className: 'bg-pos hover:bg-pos-press' },
+  dovidka: { href: '/pos#download', label: 'Завантажити касу', className: 'bg-pos hover:bg-pos-press' },
 };
 
 export function Nav({ variant }: { variant: Variant }) {
+  const cta = CTA[variant];
+  const link = (href: string, label: string, active: boolean) => (
+    <a href={href} className={`hover:text-ink transition-colors ${active ? 'text-ink' : ''}`}>
+      {label}
+    </a>
+  );
+
   return (
     <header className="sticky top-0 z-40 bg-paper/90 backdrop-blur border-b border-line">
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
@@ -15,23 +30,16 @@ export function Nav({ variant }: { variant: Variant }) {
           LiveShop
         </a>
         <nav className="hidden sm:flex items-center gap-8 text-sm font-medium text-muted">
-          <a href="/live" className={`hover:text-ink transition-colors ${variant === 'live' ? 'text-ink' : ''}`}>
-            TikTok LIVE
-          </a>
-          <a href="/pos" className={`hover:text-ink transition-colors ${variant === 'pos' ? 'text-ink' : ''}`}>
-            POS каса
-          </a>
-          <a href="/about" className="hover:text-ink transition-colors">
-            Про сервіс
-          </a>
+          {link('/live', 'TikTok LIVE', variant === 'live')}
+          {link('/pos', 'POS каса', variant === 'pos')}
+          {link('/dovidka', 'Довідка', variant === 'dovidka')}
+          {link('/about', 'Про сервіс', false)}
         </nav>
         <a
-          href={variant === 'pos' ? '#download' : variant === 'live' ? '#cta' : '#products'}
-          className={`text-sm font-semibold px-4 py-2 rounded-full text-white ${
-            variant === 'pos' ? 'bg-pos hover:bg-pos-press' : variant === 'live' ? 'bg-live hover:bg-live-press' : 'bg-ink hover:bg-black'
-          } transition-colors`}
+          href={cta.href}
+          className={`text-sm font-semibold px-4 py-2 rounded-full text-white ${cta.className} transition-colors`}
         >
-          {variant === 'pos' ? 'Завантажити' : 'Спробувати'}
+          {cta.label}
         </a>
       </div>
     </header>

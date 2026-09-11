@@ -25,6 +25,7 @@ import {
 import { createNovaPoshtaClient } from './novaposhta.js';
 import { getUserSettings } from './users/users.service.js';
 import { ensureAuth, isUnauthorizedError } from './core/auth.js';
+import { POS_UPLOADS_PREFIX } from './pos/uploads.service.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(__dirname, '..', 'public');
@@ -166,6 +167,60 @@ export async function createServer(): Promise<FastifyInstance> {
   fastify.get('/styles.css', async (_request, reply) => {
     const css = await readFile(join(publicDir, 'styles.css'), 'utf-8');
     return reply.type('text/css; charset=utf-8').send(css);
+  });
+
+  // Довідка — prerendered by site/scripts/prerender.mjs into dist/dovidka/<slug>/index.html.
+  fastify.get('/dovidka', async (_request, reply) => {
+    const html = await readFile(join(siteDistDir, 'dovidka', 'index.html'), 'utf-8');
+    return reply.type('text/html; charset=utf-8').send(html);
+  });
+
+  fastify.get<{ Params: { slug: string } }>('/dovidka/:slug', async (request, reply) => {
+    const { slug } = request.params;
+    if (!/^[a-z0-9-]{1,80}$/.test(slug)) return reply.callNotFound();
+    try {
+      const html = await readFile(join(siteDistDir, 'dovidka', slug, 'index.html'), 'utf-8');
+      return reply.type('text/html; charset=utf-8').send(html);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return reply.callNotFound();
+      throw error;
+    }
+  });
+
+  // Generated at site build time from the route registry, so new pages land in
+  // both without anyone editing a file by hand.
+  fastify.get('/sitemap.xml', async (_request, reply) => {
+    const xml = await readFile(join(siteDistDir, 'sitemap.xml'), 'utf-8');
+    return reply.type('application/xml; charset=utf-8').send(xml);
+  });
+
+  fastify.get('/llms.txt', async (_request, reply) => {
+    const txt = await readFile(join(siteDistDir, 'llms.txt'), 'utf-8');
+    return reply.type('text/plain; charset=utf-8').send(txt);
+  });
+
+  // Site paths get the prerendered 404 page; the API keeps Fastify's JSON
+  // shape. The `/` static mount calls callNotFound() for missing files, so a
+  // typo'd asset URL lands here as well.
+  const NOT_FOUND_FALLBACK =
+    '<!doctype html><html lang="uk"><head><meta charset="utf-8"><title>Сторінку не знайдено</title></head>' +
+    '<body><h1>Сторінку не знайдено</h1><p><a href="/">На головну</a></p></body></html>';
+  let notFoundHtml: string | null = null;
+  fastify.setNotFoundHandler(async (request, reply) => {
+    const url = request.raw.url ?? '';
+    const isSitePage =
+      (request.method === 'GET' || request.method === 'HEAD') &&
+      !url.startsWith('/api/') &&
+      !url.startsWith(`${POS_UPLOADS_PREFIX}/`);
+    if (!isSitePage) {
+      return reply
+        .status(404)
+        .send({ message: `Route ${request.method}:${url} not found`, error: 'Not Found', statusCode: 404 });
+    }
+    if (notFoundHtml === null) {
+      notFoundHtml = await readFile(join(siteDistDir, '404.html'), 'utf-8').catch(() => NOT_FOUND_FALLBACK);
+    }
+    return reply.status(404).type('text/html; charset=utf-8').send(notFoundHtml);
   });
 
   /**

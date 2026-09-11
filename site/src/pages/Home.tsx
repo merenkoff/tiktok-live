@@ -3,9 +3,8 @@ import { Footer } from '../components/Footer';
 import { Reveal } from '../components/Reveal';
 import { FloatingCard } from '../components/FloatingCard';
 import { DecorCircle } from '../components/DecorCircle';
-import { JsonLd } from '../components/JsonLd';
-import { ORGANIZATION_JSON_LD } from '../lib/organizationJsonLd';
 import { useScrollToHash } from '../hooks/useScrollToHash';
+import { PRICING } from '../lib/productFacts';
 import receiptChip from '../assets/fragments/receipt-chip.png';
 
 export function Home() {
@@ -13,7 +12,6 @@ export function Home() {
 
   return (
     <div className="min-h-screen flex flex-col overflow-x-clip">
-      <JsonLd data={ORGANIZATION_JSON_LD} />
       <Nav variant="home" />
 
       <main className="flex-1">
@@ -58,7 +56,8 @@ export function Home() {
                   Бот читає коментарі, тримає товар бронею, оформлює замовлення в Telegram і сам
                   створює ТТН Нової Пошти.
                 </p>
-                <p className="mt-6 text-sm font-semibold text-live flex items-center gap-1.5">
+                <p className="mt-4 text-xs font-semibold text-muted">{PRICING.live.label}</p>
+                <p className="mt-4 text-sm font-semibold text-live flex items-center gap-1.5">
                   Дивитись, як це працює <span>→</span>
                 </p>
               </a>
@@ -79,10 +78,11 @@ export function Home() {
                 <p className="text-sm font-semibold uppercase tracking-wide text-pos">Продаж у залі</p>
                 <h2 className="text-2xl font-extrabold tracking-tight mt-2">POS каса</h2>
                 <p className="text-muted mt-3 leading-relaxed">
-                  Штрихкоди, склад, знижки, QR-оплата — і десктопна каса, яка продовжує продавати
-                  навіть без інтернету.
+                  Штрихкоди, склад, знижки, QR-оплата, фіскальний чек ПРРО — і десктопна каса, яка
+                  продовжує продавати навіть без інтернету.
                 </p>
-                <p className="mt-6 text-sm font-semibold text-pos flex items-center gap-1.5">
+                <p className="mt-4 text-xs font-semibold text-muted">{PRICING.pos.label}</p>
+                <p className="mt-4 text-sm font-semibold text-pos flex items-center gap-1.5">
                   Переглянути можливості каси <span>→</span>
                 </p>
               </a>

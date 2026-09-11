@@ -9,38 +9,44 @@ import { Reveal, StaggerGroup, StaggerItem } from '../components/Reveal';
 import { DecorCircle } from '../components/DecorCircle';
 import { StickyCta } from '../components/StickyCta';
 import { useOsDetect, type DetectedOs } from '../hooks/useOsDetect';
-import { JsonLd } from '../components/JsonLd';
-import { FaqJsonLd } from '../components/FaqJsonLd';
-import { ORGANIZATION_JSON_LD } from '../lib/organizationJsonLd';
 import { useScrollToHash } from '../hooks/useScrollToHash';
-import { ScanLine, Package, Users, Tag, Receipt, QrCode, BarChart3, Download, KeyRound, ShoppingCart } from 'lucide-react';
+import { PRODUCT, PRICING, RELEASES_URL, FEATURES, isAvailable } from '../lib/productFacts';
+import { track } from '../lib/analytics';
+import type { FaqItem } from '../lib/faqJsonLd';
+import {
+  ScanLine,
+  Package,
+  Users,
+  Tag,
+  Receipt,
+  QrCode,
+  BarChart3,
+  Download,
+  KeyRound,
+  ShoppingCart,
+  ShieldCheck,
+  ClipboardCheck,
+} from 'lucide-react';
 import posTerminalHero from '../assets/photo/pos-terminal-hero.jpg';
 import posDevicesReceipt from '../assets/photo/pos-devices-receipt.png';
 import posRegisterMp4 from '../assets/video/pos-register-loop.mp4';
 import posRegisterWebm from '../assets/video/pos-register-loop.webm';
 import posRegisterPoster from '../assets/video/pos-register-poster.png';
 
-const RELEASES_URL = 'https://github.com/merenkoff/tiktok-live/releases/latest';
-
-const POS_SOFTWARE_JSON_LD = {
-  '@context': 'https://schema.org',
-  '@type': 'SoftwareApplication',
-  name: 'The Live Shop POS',
-  applicationCategory: 'BusinessApplication',
-  operatingSystem: 'Windows, macOS, Linux',
-  url: 'https://the-live.shop/pos',
-  description:
-    'Каса для магазину одягу — товари, штрихкоди, склад, знижки, QR-оплата, десктопний термінал з офлайн-режимом.',
-  provider: { '@type': 'Organization', name: 'ТОВ «Технології»' },
-};
+const HANDOVER_ARTICLE = '/dovidka/zmina-prro-zamina-kasy';
 
 const STATS = [
   { value: '0 мс', label: 'затримки офлайн — каса не чекає на сервер' },
-  { value: 'PIN', label: 'вхід касира без пароля щоразу' },
+  { value: 'ПРРО', label: 'фіскальний чек через Checkbox, онлайн і офлайн' },
   { value: 'GTIN', label: 'розпізнавання товару по штрихкоду' },
 ];
 
-const FEATURES = [
+const FEATURE_CARDS = [
+  {
+    t: 'Фіскалізація (ПРРО)',
+    d: 'Фіскальний чек через Checkbox — зміни, Z-звіт і QR-код для перевірки друкуються на чековому принтері. Без інтернету каса пробиває офлайн-чеки з резерву фіскальних кодів і відправляє їх у ДПС, щойно з\'явиться мережа.',
+    icon: ShieldCheck,
+  },
   {
     t: 'Товари й штрихкоди',
     d: 'Скануєш штрихкод — система шукає товар у власній базі, а якщо його там ще немає, підвантажує назву й фото через GTIN-довідники. Пайплайн навчання запам\'ятовує підтверджені відповідності, тож наступного разу розпізнає точніше.',
@@ -50,6 +56,11 @@ const FEATURES = [
     t: 'Склад',
     d: 'Прихід, списання і коригування залишків оформлюються документами з проведенням і сторно — завжди видно, хто і коли змінив залишок. Система сама попереджає про товари на межі закінчення та веде довідник постачальників.',
     icon: Package,
+  },
+  {
+    t: 'Інвентаризація на касі',
+    d: 'Продавець рахує товар сканером просто на касі — навіть без інтернету. Лист підрахунку відправляється на сервер, щойно з\'явиться мережа, і чекає на проведення власником у «Складі».',
+    icon: ClipboardCheck,
   },
   {
     t: 'Персонал',
@@ -78,6 +89,13 @@ const FEATURES = [
   },
 ];
 
+const FISCAL_POINTS = [
+  FEATURES.fiscalOnlineCheckbox.label,
+  FEATURES.fiscalReceiptPrint.label,
+  FEATURES.fiscalOffline.label,
+  FEATURES.tillHandover.label,
+];
+
 const GETTING_STARTED = [
   {
     n: '01',
@@ -99,10 +117,18 @@ const GETTING_STARTED = [
   },
 ];
 
-const FAQ_ITEMS = [
+export const FAQ_ITEMS: FaqItem[] = [
+  {
+    q: `Чи є в ${PRODUCT.pos.name} фіскалізація чеків (ПРРО)?`,
+    a: 'Так. Фіскалізація працює через Checkbox: каса відкриває і закриває зміни, формує Z-звіт, а фіскальний чек із QR-кодом для перевірки друкується на чековому принтері. Без інтернету каса пробиває офлайн-чеки з резерву фіскальних кодів і відправляє їх у ДПС, щойно мережа повернеться.',
+  },
   {
     q: 'Що станеться, якщо в магазині зникне інтернет посеред продажу?',
-    a: 'Нічого — десктопна каса продовжує пробивати чеки з локальної копії каталогу, зберігає продажі в чергу і синхронізує їх, щойно мережа з\'явиться знову.',
+    a: 'Нічого — десктопна каса продовжує пробивати чеки з локальної копії каталогу, зберігає продажі в чергу і синхронізує їх, щойно мережа з\'явиться знову. Фіскальні чеки в цей час отримують номери з резерву офлайн-кодів.',
+  },
+  {
+    q: 'Що робити, якщо комп\'ютер із касою зламався посеред зміни?',
+    a: 'Зміна ПРРО належить реєстратору, а не комп\'ютеру, тому закривати її не потрібно. На іншому комп\'ютері касир запитує передачу каси, попередній пристрій підтверджує — і зміна продовжується без другого Z-звіту. Якщо старий комп\'ютер не відповідає, власник забирає касу примусово.',
   },
   {
     q: 'Як касир заходить у касу без інтернету?',
@@ -125,12 +151,8 @@ const FAQ_ITEMS = [
     a: 'Вебадмінка — повний кабінет власника з будь-якого браузера, завжди онлайн. Десктопна каса — це саме той офлайн-стійкий термінал для прилавка в магазині.',
   },
   {
-    q: 'Чи є в LiveShop POS фіскалізація чеків (ПРРО)?',
-    a: 'Ні, наразі немає — інтеграція з ПРРО в розробці. Якщо фіскальний чек потрібен вам вже зараз, варто врахувати це при виборі каси.',
-  },
-  {
     q: 'Скільки коштує POS?',
-    a: 'Залежить від кількості кас і магазинів — залиште номер телефону, і ми порахуємо разом.',
+    a: PRICING.pos.detail,
   },
 ];
 
@@ -148,9 +170,6 @@ export function PosPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <JsonLd data={ORGANIZATION_JSON_LD} />
-      <JsonLd data={POS_SOFTWARE_JSON_LD} />
-      <FaqJsonLd items={FAQ_ITEMS} />
       <Nav variant="pos" />
 
       <main className="flex-1">
@@ -168,8 +187,8 @@ export function PosPage() {
               Онлайн і офлайн.
             </h1>
             <p className="text-muted text-lg mt-6 leading-relaxed">
-              Товари, штрихкоди, склад, знижки та QR-оплата на касі — і десктопний термінал, який
-              продовжує пробивати чеки, навіть якщо в магазині пропав інтернет.
+              Товари, штрихкоди, склад, знижки, QR-оплата і фіскальний чек ПРРО — і десктопний
+              термінал, який продовжує пробивати чеки, навіть якщо в магазині пропав інтернет.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <a href="#download" className="bg-pos hover:bg-pos-press transition-colors text-white text-sm font-semibold px-6 py-3.5 rounded-full">
@@ -179,11 +198,12 @@ export function PosPage() {
                 Замовити демо
               </a>
             </div>
+            <p className="text-sm text-muted mt-5">{PRICING.pos.label}.</p>
           </Reveal>
           <Reveal>
             <img
               src={posTerminalHero}
-              alt="Каса LiveShop POS на терміналі — каталог товарів і кошик з реальним чеком"
+              alt={`Каса ${PRODUCT.pos.name} на терміналі — каталог товарів і кошик з реальним чеком`}
               className="w-full h-auto rounded-2xl shadow-ambient"
             />
           </Reveal>
@@ -207,7 +227,7 @@ export function PosPage() {
             <h2 className="text-2xl sm:text-3xl font-bold text-center max-w-xl mx-auto">Що всередині</h2>
           </Reveal>
           <StaggerGroup className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {FEATURES.map((f) => (
+            {FEATURE_CARDS.map((f) => (
               <StaggerItem key={f.t}>
                 <div className="border border-line rounded-card p-6 h-full bg-paper transition-all duration-200 ease-out hover:-translate-y-1 hover:rotate-1 hover:shadow-lg hover:border-pos/30">
                   <div className="w-10 h-10 rounded-full bg-pos/5 grid place-items-center">
@@ -263,8 +283,42 @@ export function PosPage() {
           </div>
         </section>
 
+        {/* Fiscal */}
+        <section id="prro" className="max-w-6xl mx-auto px-6 py-20 grid lg:grid-cols-2 gap-12 items-start">
+          <Reveal>
+            <p className="text-sm font-semibold uppercase tracking-wide text-pos">Фіскалізація</p>
+            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mt-3">
+              ПРРО без окремої програми
+            </h2>
+            <p className="text-muted mt-5 leading-relaxed">
+              Фіскальний чек формується прямо з каси через Checkbox — окремий застосунок для
+              ПРРО не потрібен. Зміна належить фіскальному реєстратору, а не комп'ютеру: якщо
+              каса зламалась посеред дня, її передають на інший пристрій без другого Z-звіту.
+            </p>
+            <p className="text-sm text-muted mt-5">
+              Як саме це працює —{' '}
+              <a href={HANDOVER_ARTICLE} className="text-pos font-semibold">
+                у довідці про зміну ПРРО і заміну каси →
+              </a>
+            </p>
+          </Reveal>
+          <Reveal>
+            <ul className="grid gap-4">
+              {FISCAL_POINTS.map((t) => (
+                <li key={t} className="flex items-start gap-3 text-sm bg-mist border border-line rounded-card p-4">
+                  <ShieldCheck className="w-5 h-5 text-pos shrink-0" strokeWidth={1.75} />
+                  {t}
+                </li>
+              ))}
+            </ul>
+            {!isAvailable('fiscalOffline') && (
+              <p className="text-xs text-muted mt-3">Офлайн-режим ПРРО — у розробці.</p>
+            )}
+          </Reveal>
+        </section>
+
         {/* Web vs desktop */}
-        <section className="max-w-6xl mx-auto px-6 py-20">
+        <section className="max-w-6xl mx-auto px-6 pb-20">
           <Reveal>
             <h2 className="text-2xl sm:text-3xl font-bold text-center max-w-xl mx-auto mb-10">
               Веб-адмінка чи десктоп-каса?
@@ -297,7 +351,7 @@ export function PosPage() {
             <Reveal>
               <h2 className="text-2xl sm:text-3xl font-bold text-center">Завантажити POS</h2>
               <p className="text-muted text-center mt-3 max-w-lg mx-auto">
-                Десктопна каса для торгової точки — оберіть свою систему.
+                Десктопна каса для торгової точки — оберіть свою систему. {PRICING.pos.label}.
               </p>
             </Reveal>
             <div className="mt-10 grid sm:grid-cols-3 gap-6">
@@ -324,6 +378,7 @@ export function PosPage() {
                     <p className="text-muted text-xs mt-1">{card.meta}</p>
                     <a
                       href={RELEASES_URL}
+                      onClick={() => track('download_click', { os: card.key })}
                       className="mt-5 bg-pos hover:bg-pos-press transition-colors text-white text-sm font-semibold py-3 rounded-full"
                     >
                       Завантажити
@@ -369,7 +424,7 @@ export function PosPage() {
           <Reveal>
             <img
               src={posDevicesReceipt}
-              alt="Звіти з продажів LiveShop POS на ноутбуці і чек на телефоні"
+              alt={`Звіти з продажів ${PRODUCT.pos.name} на ноутбуці і чек на телефоні`}
               className="w-full h-auto rounded-2xl shadow-ambient"
             />
           </Reveal>
