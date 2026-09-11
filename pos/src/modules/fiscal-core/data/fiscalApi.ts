@@ -18,6 +18,10 @@ import type {
   FiscalProbe,
   FiscalReport,
   FiscalStatus,
+  ForceHandoverResponse,
+  HandoverRequestResponse,
+  HolderResponse,
+  OfflineSessionView,
   ServiceReceiptRequest,
   ShiftCloseResponse,
   ShiftOpenResponse,
@@ -82,6 +86,57 @@ export function fiscalServiceReceipt(amountCents: number): Promise<FiscalActionR
   return posRequest('post', '/fiscal/service', body);
 }
 
-export function listFiscalAttention(): Promise<{ documents: AttentionDoc[] }> {
+export function listFiscalAttention(): Promise<{
+  documents: AttentionDoc[];
+  sessions: OfflineSessionView[];
+}> {
   return posRequest('get', '/fiscal/attention');
+}
+
+// ── Register holder (TechDocs/POS_FISCAL_OFFLINE.md §3а) ─────────────────────
+//
+// All four of the till-side calls need the `X-POS-Device-ID` header, which only
+// the desktop cashier sends (`api.setDeviceId` from the offline runtime) — on
+// the web shell they answer 400 `device_id_required`, which is why the screens
+// hide their buttons there rather than let a cashier press them.
+//
+// A 409 is a state, not a crash: its body carries the same `holder` block, so
+// callers read it off the rejection and re-render.
+
+export function claimRegister(deviceName?: string): Promise<HolderResponse> {
+  return posRequest('post', '/fiscal/register/claim', deviceName ? { device_name: deviceName } : {});
+}
+
+export function releaseRegister(): Promise<HolderResponse> {
+  return posRequest('post', '/fiscal/register/release', {});
+}
+
+export function requestHandover(deviceName?: string): Promise<HandoverRequestResponse> {
+  return posRequest(
+    'post',
+    '/fiscal/register/handover/request',
+    deviceName ? { device_name: deviceName } : {}
+  );
+}
+
+/**
+ * The holder hands the register over.
+ *
+ * `outboxPending` is the till's own count of queued sales — the backend refuses
+ * the handover while it is non-zero, because those receipts would be registered
+ * by a device that no longer holds the register.
+ */
+export function confirmHandover(outboxPending: number): Promise<HolderResponse> {
+  return posRequest('post', '/fiscal/register/handover/confirm', {
+    outbox_pending: outboxPending,
+  });
+}
+
+/** Owner only, and the one register route the web shell can call. */
+export function forceHandover(deviceId?: string | null): Promise<ForceHandoverResponse> {
+  return posRequest(
+    'post',
+    '/fiscal/register/handover/force',
+    deviceId ? { device_id: deviceId } : {}
+  );
 }

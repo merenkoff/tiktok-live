@@ -242,6 +242,16 @@ export interface FiscalSettingsView {
   receipt_source: FiscalReceiptSource;
   /** Characters per line the provider renders at: 32 = 58mm roll, 48 = 80mm. */
   receipt_width: FiscalReceiptWidth;
+  /** Sell without the provider, stamping receipts from the tax-office code
+   * reserve. Only ever true for a provider that can do it — the backend
+   * refuses to store it otherwise. */
+  offline_mode: boolean;
+  /** How many offline codes the refill cron keeps in the pool. 50…2000. */
+  offline_codes_target: number;
+  /** The chosen provider's adapter implements `FiscalProvider.offline`.
+   * False ⇒ `offline_mode` cannot be switched on at all, so the owner is not
+   * shown a switch that only ever errors. */
+  offline_capable: boolean;
   updated_at: string | null;
   /** False when the server has no `POS_SECRETS_KEY` — credentials cannot be saved. */
   secrets_key_configured: boolean;
@@ -259,7 +269,10 @@ export interface FiscalSettingsPatch {
   auto_open_shift?: boolean;
   receipt_source?: FiscalReceiptSource;
   receipt_width?: FiscalReceiptWidth;
+  offline_mode?: boolean;
+  offline_codes_target?: number;
 }
+
 
 /**
  * The result of one fiscalisation attempt, as returned by a sale or refund.

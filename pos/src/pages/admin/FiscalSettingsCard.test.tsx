@@ -41,6 +41,9 @@ function view(over: Partial<FiscalSettingsView> = {}): FiscalSettingsView {
     fail_mode: 'block',
     receipt_source: 'local',
     receipt_width: 32,
+    offline_mode: false,
+    offline_codes_target: 200,
+    offline_capable: false,
     updated_at: null,
     secrets_key_configured: true,
     adapter_available: true,
@@ -49,6 +52,7 @@ function view(over: Partial<FiscalSettingsView> = {}): FiscalSettingsView {
 }
 
 const toggle = () => screen.getByLabelText('Реєструвати чеки в ПРРО');
+const offlineToggle = () => screen.getByLabelText('Офлайн-режим ПРРО');
 
 beforeEach(() => {
   fiscalSettings.mockReset();
@@ -154,6 +158,115 @@ describe('FiscalSettingsCard', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Зберегти ПРРО' }));
 
     expect(await screen.findByText(/зверніться до адміністратора/i)).toBeInTheDocument();
+  });
+
+  // ── Offline mode (TechDocs/POS_FISCAL_OFFLINE.md, phase 4) ────────────────
+  //
+  // This block is the ONLY way to switch offline mode on or off. It lives in
+  // the host, not in the provider's bundle, precisely so that a bundle that
+  // fails to load cannot strand a store in offline mode.
+
+  it('does not offer offline mode for a provider that cannot do it', async () => {
+    fiscalSettings.mockResolvedValue(view({ provider: 'vchasno', offline_capable: false }));
+    renderWithProviders(<FiscalSettingsCard />);
+
+    await waitFor(() => expect(toggle()).toBeInTheDocument());
+    expect(screen.queryByLabelText('Офлайн-режим ПРРО')).not.toBeInTheDocument();
+  });
+
+  it('keeps offline mode locked until fiscalisation itself is on', async () => {
+    // The backend refuses `offline_mode` without `enabled`; showing an enabled
+    // checkbox that always errors would be the worse half of that contract.
+    fiscalSettings.mockResolvedValue(
+      view({ provider: 'checkbox', enabled: false, offline_capable: true })
+    );
+    renderWithProviders(<FiscalSettingsCard />);
+
+    await waitFor(() => expect(offlineToggle()).toBeDisabled());
+    expect(screen.getByText(/Спершу увімкніть реєстрацію чеків/i)).toBeInTheDocument();
+
+    await userEvent.click(toggle());
+    await waitFor(() => expect(offlineToggle()).not.toBeDisabled());
+  });
+
+  it('saves the switch and the reserve size together', async () => {
+    fiscalSettings.mockResolvedValue(
+      view({ provider: 'checkbox', enabled: true, offline_capable: true })
+    );
+    updateFiscalSettings.mockResolvedValue(
+      view({
+        provider: 'checkbox',
+        enabled: true,
+        offline_capable: true,
+        offline_mode: true,
+        offline_codes_target: 500,
+      })
+    );
+    renderWithProviders(<FiscalSettingsCard />);
+
+    await waitFor(() => expect(offlineToggle()).not.toBeDisabled());
+    await userEvent.click(offlineToggle());
+    const target = screen.getByLabelText('Запас фіскальних кодів');
+    await userEvent.clear(target);
+    await userEvent.type(target, '500');
+    await userEvent.click(screen.getByRole('button', { name: 'Зберегти ПРРО' }));
+
+    await waitFor(() =>
+      expect(updateFiscalSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ offline_mode: true, offline_codes_target: 500 })
+      )
+    );
+  });
+
+  it('refuses a reserve size outside the bounds without calling the API', async () => {
+    fiscalSettings.mockResolvedValue(
+      view({ provider: 'checkbox', enabled: true, offline_capable: true })
+    );
+    renderWithProviders(<FiscalSettingsCard />);
+
+    const target = await screen.findByLabelText('Запас фіскальних кодів');
+    await userEvent.clear(target);
+    await userEvent.type(target, '9');
+    await userEvent.click(screen.getByRole('button', { name: 'Зберегти ПРРО' }));
+
+    expect(await screen.findByText(/ціле число від 50 до 2000/i)).toBeInTheDocument();
+    expect(updateFiscalSettings).not.toHaveBeenCalled();
+  });
+
+  it('shows the backend reason when offline mode cannot be switched off yet', async () => {
+    // A live offline session outlives the owner's click: the receipts it holds
+    // still have to reach the tax office.
+    fiscalSettings.mockResolvedValue(
+      view({
+        provider: 'checkbox',
+        enabled: true,
+        offline_capable: true,
+        offline_mode: true,
+      })
+    );
+    updateFiscalSettings.mockRejectedValue({
+      response: {
+        status: 400,
+        data: { error: 'Триває офлайн-сесія — дочекайтесь її завершення перед вимкненням офлайн-режиму' },
+      },
+    });
+    renderWithProviders(<FiscalSettingsCard />);
+
+    await waitFor(() => expect(offlineToggle()).toBeChecked());
+    await userEvent.click(offlineToggle());
+    await userEvent.click(screen.getByRole('button', { name: 'Зберегти ПРРО' }));
+
+    expect(await screen.findByText(/Триває офлайн-сесія/i)).toBeInTheDocument();
+  });
+
+  it('promises a different thing on a lost connection once offline mode is on', async () => {
+    fiscalSettings.mockResolvedValue(
+      view({ provider: 'checkbox', enabled: true, offline_capable: true, offline_mode: true })
+    );
+    renderWithProviders(<FiscalSettingsCard />);
+
+    expect(await screen.findByText(/продаж триває, чеки надсилаються пізніше/i)).toBeInTheDocument();
+    expect(screen.queryByText(/продаж блокується/i)).not.toBeInTheDocument();
   });
 
   it('renders nothing for a seller', async () => {
