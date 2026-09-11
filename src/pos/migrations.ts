@@ -50,6 +50,7 @@ export const POS_MIGRATIONS = [
   '025_pos_stock_document_client_uuid.sql',
   '026_pos_fiscal_receipt_width.sql',
   '027_pos_fiscal_offline.sql',
+  '028_pos_fiscal_offline_replay.sql',
 ] as const;
 
 export function readMigration(file: string): string {
