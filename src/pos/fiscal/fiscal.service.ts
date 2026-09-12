@@ -181,6 +181,16 @@ export async function preflight(
     // online — our mirror row is the proof it was.
     const shiftRow = await getLiveShiftRow(storeId, ctx.registerKey);
     if (shiftRow?.status !== 'open') throw err;
+    // An offline receipt is printed from the cached requisites (the legal
+    // header, ФН ПРРО — POS_FISCAL_OFFLINE.md «Фаза 8в»). Without them there
+    // is nothing lawful to hand the customer, so the store's first receipt
+    // has to be an online one; the shift open that precedes it caches them.
+    if (!ctx.settings.requisites) {
+      throw new FiscalError(
+        'Немає звʼязку з ПРРО, а реквізити чека ще не отримано — спершу проведіть один чек онлайн',
+        'unavailable'
+      );
+    }
     const session = await openServerSession(ctx, Number(shiftRow.id));
     return offlineGate(ctx, session, staffId, signal, op);
   }

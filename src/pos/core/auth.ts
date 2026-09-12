@@ -6,7 +6,7 @@
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { pool } from '../../db.js';
-import type { PosAuthContext, PosRole } from '../types.js';
+import type { FiscalPublicConfig, PosAuthContext, PosRole } from '../types.js';
 import { isFiscalProviderId } from '../fiscal/types.js';
 import { isModuleEnabled } from './modules.js';
 
@@ -43,7 +43,9 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
        store.module_remotes,
        fs.enabled AS fiscal_enabled,
        fs.provider AS fiscal_provider,
-       fs.offline_mode AS fiscal_offline_mode
+       fs.offline_mode AS fiscal_offline_mode,
+       fs.register_fiscal_number AS fiscal_register_number,
+       fs.requisites AS fiscal_requisites
      FROM pos_sessions s
      JOIN pos_staff st ON st.id = s.staff_id
      JOIN pos_stores store ON store.id = s.store_id
@@ -75,6 +77,8 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
       enabled: row.fiscal_enabled ?? false,
       provider: isFiscalProviderId(row.fiscal_provider) ? row.fiscal_provider : null,
       offline_mode: row.fiscal_offline_mode ?? false,
+      register_fiscal_number: (row.fiscal_register_number as string | null) ?? null,
+      requisites: (row.fiscal_requisites as FiscalPublicConfig['requisites']) ?? null,
     },
     autoPrintReceipt: row.auto_print_receipt ?? false,
     enabledModules: (row.enabled_modules as string[] | null) ?? [],

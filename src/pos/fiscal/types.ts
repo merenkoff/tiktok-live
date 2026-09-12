@@ -40,6 +40,46 @@ export type FiscalReceiptSource = 'local' | 'provider';
 export type FiscalReceiptWidth = 32 | 48;
 export const FISCAL_RECEIPT_WIDTHS: readonly FiscalReceiptWidth[] = [32, 48];
 
+/** One tax rate as the provider lists it — the letter the receipt prints next to a line. */
+export interface FiscalTaxRate {
+  /** The letter on the receipt (рядок 11): «А», «Б», … */
+  symbol: string;
+  label: string;
+  /** Percent, e.g. 20. */
+  rate: number;
+  no_vat: boolean;
+  is_default: boolean;
+}
+
+/**
+ * What the provider knows about the store that the receipt must carry
+ * (Положення № 13, розділ II п. 2). Provider-neutral; every field nullable
+ * because a provider may not expose it. Fetched online, cached in
+ * `pos_fiscal_settings.requisites`, shipped to the till in the auth blob.
+ */
+export interface FiscalRequisites {
+  /** Рядок 1 and 4/5: the legal entity. */
+  organization: {
+    name: string | null;
+    edrpou: string | null;
+    /** ІПН платника ПДВ when `is_vat`, otherwise the taxpayer number for «ІД». */
+    tax_number: string | null;
+    is_vat: boolean | null;
+  };
+  /** Рядки 2–3: the point of sale as registered (20-ОПП). */
+  point: {
+    name: string | null;
+    address: string | null;
+  };
+  /** Рядок 34 (+ the register's own name/address, when they differ from the point's). */
+  register: {
+    fiscal_number: string | null;
+    title: string | null;
+    address: string | null;
+  };
+  taxes: FiscalTaxRate[];
+}
+
 /** A `pos_fiscal_settings` row, secrets still encrypted. */
 export interface PosFiscalSettings {
   store_id: number;
@@ -67,6 +107,9 @@ export interface PosFiscalSettings {
    * check link we build ourselves for an offline receipt (`taxUrl.ts`).
    */
   register_fiscal_number: string | null;
+  /** The provider's view of the store, cached — see `FiscalRequisites`. */
+  requisites: FiscalRequisites | null;
+  requisites_fetched_at: Date | null;
   /**
    * The one till that currently owns this store's register (POS_FISCAL_OFFLINE.md
    * §3а). Null = free. Enforced only while `offline_mode` is on.
@@ -111,6 +154,9 @@ export interface FiscalSettingsView {
   offline_codes_target: number;
   /** Whether the chosen provider's adapter can work offline at all. */
   offline_capable: boolean;
+  /** The provider's view of the store, as last fetched; null until the first online contact. */
+  requisites: FiscalRequisites | null;
+  requisites_fetched_at: string | null;
   updated_at: string | null;
 }
 
@@ -348,6 +394,15 @@ export interface FiscalProvider {
 
   /** Never mutates anything; safe to call from a settings screen. */
   probe(creds: FiscalCredentials, signal: AbortSignal): Promise<FiscalProbe>;
+
+  /**
+   * What the receipt has to say about the store, as the provider knows it.
+   *
+   * A read; called while online (shift open, the pool refill, the owner's
+   * connection test) and cached — offline nobody can be asked, and that is
+   * exactly when the till prints from the cache.
+   */
+  fetchRequisites(ctx: FiscalCallCtx): Promise<FiscalRequisites>;
 
   signIn(creds: FiscalCredentials, signal: AbortSignal): Promise<FiscalSession>;
   signOut(ctx: FiscalCallCtx): Promise<void>;

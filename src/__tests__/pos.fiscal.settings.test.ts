@@ -339,7 +339,14 @@ describe.skipIf(!hasDb)('POS fiscal settings', () => {
       headers: auth(store.sellerToken),
     });
     expect(me.statusCode).toBe(200);
-    expect(me.json().store.fiscal).toEqual({ enabled: true, provider: 'checkbox', offline_mode: false });
+    expect(me.json().store.fiscal).toEqual({
+      enabled: true,
+      provider: 'checkbox',
+      offline_mode: false,
+      // Filled by the first online contact (phase 8в); null until then.
+      register_fiscal_number: null,
+      requisites: null,
+    });
   });
 
   it('reports fiscal off for a store with no settings row', async () => {
@@ -350,7 +357,13 @@ describe.skipIf(!hasDb)('POS fiscal settings', () => {
         url: '/api/pos/me',
         headers: auth(other.sellerToken),
       });
-      expect(me.json().store.fiscal).toEqual({ enabled: false, provider: null, offline_mode: false });
+      expect(me.json().store.fiscal).toEqual({
+        enabled: false,
+        provider: null,
+        offline_mode: false,
+        register_fiscal_number: null,
+        requisites: null,
+      });
     } finally {
       await dropTestStore(other.storeId);
     }

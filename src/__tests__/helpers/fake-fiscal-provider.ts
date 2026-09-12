@@ -13,6 +13,7 @@
 
 import { FiscalError, type FiscalErrorKind } from '../../pos/fiscal/errors.js';
 import type {
+  FiscalRequisites,
   FiscalCallCtx,
   FiscalCredentials,
   FiscalProbe,
@@ -35,6 +36,17 @@ import type {
   OfflineStamp,
 } from '../../pos/fiscal/types.js';
 
+/** What a demo Checkbox account looks like to the receipt header. */
+export const FAKE_REQUISITES: FiscalRequisites = {
+  organization: { name: 'ТОВ «Тестова організація»', edrpou: '44082020', tax_number: '440820207777', is_vat: true },
+  point: { name: 'Магазин «Сонечко»', address: 'м. Київ, вул. Сонячна, 27' },
+  register: { fiscal_number: 'FAKE-FN', title: 'Каса 1', address: null },
+  taxes: [
+    { symbol: 'А', label: 'ПДВ 20%', rate: 20, no_vat: false, is_default: true },
+    { symbol: 'Б', label: 'Без ПДВ', rate: 0, no_vat: true, is_default: false },
+  ],
+};
+
 export interface FakeCall {
   method: string;
   requestId?: string;
@@ -51,6 +63,8 @@ export interface FakeProviderOptions {
   requireOpenShift?: boolean;
   /** Declare the offline capability (default: not declared, like a provider without it). */
   offline?: boolean;
+  /** What `fetchRequisites` answers; defaults to `FAKE_REQUISITES`. */
+  requisites?: FiscalRequisites;
 }
 
 /**
@@ -213,6 +227,9 @@ export class FakeFiscalProvider implements FiscalProvider {
 
   /** Present only when constructed with `offline: true`. */
   readonly offline?: FakeOfflineOps;
+  requisites: FiscalRequisites;
+  /** Make `fetchRequisites` fail with this kind — separately from the shared error queue. */
+  requisitesError: FiscalErrorKind | null = null;
 
   private readonly errorQueue: FiscalError[] = [];
   private readonly requireOpenShift: boolean;
@@ -221,6 +238,7 @@ export class FakeFiscalProvider implements FiscalProvider {
   constructor(opts: FakeProviderOptions = {}) {
     this.id = opts.id ?? 'checkbox';
     this.requireOpenShift = opts.requireOpenShift ?? true;
+    this.requisites = opts.requisites ?? FAKE_REQUISITES;
     if (opts.offline) this.offline = new FakeOfflineOps(this);
     if (opts.shiftOpen) {
       this.shift = {
@@ -258,6 +276,12 @@ export class FakeFiscalProvider implements FiscalProvider {
   }
 
   // ── Session ───────────────────────────────────────────────────────────────
+
+  async fetchRequisites(): Promise<FiscalRequisites> {
+    this.record('fetchRequisites');
+    if (this.requisitesError) throw new FiscalError('fake requisites', this.requisitesError);
+    return structuredClone(this.requisites);
+  }
 
   async probe(creds: FiscalCredentials): Promise<FiscalProbe> {
     this.record('probe');

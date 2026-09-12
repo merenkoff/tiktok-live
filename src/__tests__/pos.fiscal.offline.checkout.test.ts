@@ -235,6 +235,24 @@ describe.skipIf(!hasDb)('POS fiscal offline checkout (case B — server session)
     expect(detail.json().fiscal.tax_url).toBe(body.fiscal.tax_url);
   });
 
+  it('refuses to stamp before the requisites were ever fetched — the first receipt is online', async () => {
+    // The header of an offline receipt comes from the cache; a store that
+    // never had an online moment has an empty cache and nothing to print.
+    await warm();
+    await pool.query(
+      `UPDATE pos_fiscal_settings SET requisites = NULL, requisites_fetched_at = NULL WHERE store_id = $1`,
+      [store.storeId]
+    );
+    providerDown();
+
+    const res = await sell();
+    expect(res.statusCode).toBe(503);
+    // The route answers with the cashier wording for the kind; the reason
+    // itself («спершу проведіть один чек онлайн») is in the server log.
+    expect(res.json()).toMatchObject({ error: 'fiscal_unavailable', code: 'unavailable' });
+    expect(await live()).toBeNull();
+  });
+
   it('stamps without a link when the register number was never learned', async () => {
     // A store whose refill never managed a `registerState` has no ФН — the sale
     // still goes through, the paper just says the QR is coming.

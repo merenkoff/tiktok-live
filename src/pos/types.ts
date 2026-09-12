@@ -5,7 +5,7 @@
 // src/pos/types.ts
 
 import type { ModuleRemoteEntry } from './core/modules.js';
-import type { FiscalProviderId } from './fiscal/types.js';
+import type { FiscalProviderId, FiscalRequisites } from './fiscal/types.js';
 
 export type { ModuleRemoteEntry };
 
@@ -86,6 +86,13 @@ export interface FiscalPublicConfig {
   provider: FiscalProviderId | null;
   /** The store sells from an offline-code reserve when the provider is down (POS_FISCAL_OFFLINE.md). */
   offline_mode: boolean;
+  /** ФН ПРРО (рядок 34), cached from the provider; null until the first online contact. */
+  register_fiscal_number: string | null;
+  /**
+   * Everything the receipt header needs, as the provider last reported it.
+   * Travels with the login so the desktop till prints it without a connection.
+   */
+  requisites: FiscalRequisites | null;
 }
 
 export interface PosAuthContext {
