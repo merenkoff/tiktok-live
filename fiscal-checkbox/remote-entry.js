@@ -1,5 +1,5 @@
 import { lazy as n } from "react";
-const s = "1.1.0";
+const s = "1.1.1";
 async function h(e, { retries: t = 2, backoffMs: c = 400 } = {}) {
   let o;
   for (let a = 0; a <= t; a += 1)
@@ -15,9 +15,9 @@ function i(e, t) {
   return n(() => h(e, t));
 }
 const m = i(
-  () => import("./CheckboxTillPage-Bbm_wJTD.js").then((e) => ({ default: e.CheckboxTillPage }))
+  () => import("./CheckboxTillPage-CE8BM5KH.js").then((e) => ({ default: e.CheckboxTillPage }))
 ), f = i(
-  () => import("./CheckboxAdminPage-DIOkYiu4.js").then((e) => ({ default: e.CheckboxAdminPage }))
+  () => import("./CheckboxAdminPage-CyqsSSL5.js").then((e) => ({ default: e.CheckboxAdminPage }))
 ), b = "fiscal-checkbox", d = {
   id: b,
   title: "Фіскалізація (Checkbox)",
