@@ -11,16 +11,20 @@ use escpos::utils::{JustifyMode, PageCode, Protocol};
 use printers::common::base::job::PrinterJobOptions;
 use serde::Deserialize;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 pub struct ReceiptItem {
     pub name: String,
     pub variant_label: String,
     pub quantity: i64,
     pub unit_price_cents: i64,
     pub line_total_cents: i64,
+    /// Letter of the VAT rate (Положення № 13, розділ II п. 2, рядок 11).
+    /// Absent in a store that does not fiscalise.
+    #[serde(default)]
+    pub tax_symbol: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 pub struct ReceiptPayment {
     pub method: String,
     pub amount_cents: i64,
@@ -36,8 +40,31 @@ pub enum ReceiptKind {
     Refund,
 }
 
+/// Рядки 1–5: who sold and where, as the ПРРО provider has it registered.
+/// Absent for a store that does not fiscalise — its paper stays as it was.
+#[derive(Deserialize, Default)]
+pub struct ReceiptHeader {
+    #[serde(default)]
+    pub org_name: Option<String>,
+    #[serde(default)]
+    pub point_name: Option<String>,
+    #[serde(default)]
+    pub address: Option<String>,
+    /// «ПН 1234567890» for a VAT payer, «ІД 12345678» otherwise.
+    #[serde(default)]
+    pub tax_id_line: Option<String>,
+}
+
+/// Рядок 21: one «ПДВ» line per rate letter.
+#[derive(Deserialize, Default)]
+pub struct ReceiptVatLine {
+    pub symbol: String,
+    pub rate: f64,
+    pub amount_cents: i64,
+}
+
 /// The ПРРО result our own layout prints as a fiscal block.
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 pub struct ReceiptFiscal {
     pub fiscal_code: String,
     #[serde(default)]
@@ -50,9 +77,21 @@ pub struct ReceiptFiscal {
     /// Контрольне число; absent until the document reaches the provider.
     #[serde(default)]
     pub control_number: Option<String>,
+    /// Рядок 34: «ФН ПРРО …». Cached from the provider; absent before the
+    /// first online contact.
+    #[serde(default)]
+    pub register_fiscal_number: Option<String>,
+    /// Рядок 31: `"online"` / `"offline"`. The mark is printed on every ПРРО
+    /// receipt; `offline` above is the older flag and still decides when this
+    /// is absent.
+    #[serde(default)]
+    pub mode: Option<String>,
+    /// Рядок 35: the ПРРО software's name next to «ФІСКАЛЬНИЙ ЧЕК».
+    #[serde(default)]
+    pub producer: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 pub struct ReceiptData {
     pub store_name: String,
     #[serde(default)]
@@ -69,12 +108,21 @@ pub struct ReceiptData {
     pub total_cents: i64,
     pub payments: Vec<ReceiptPayment>,
     /// The fiscal provider's own pre-rendered receipt. Printed verbatim when
-    /// present; every other field is then ignored. Both new fields default so
-    /// a host built before them keeps printing the layout.
+    /// present; every other field is then ignored. Every field below defaults
+    /// so a host built before it keeps printing the layout.
     #[serde(default)]
     pub provider_text: Option<String>,
     #[serde(default)]
     pub fiscal: Option<ReceiptFiscal>,
+    /// Рядки 1–5. Absent for a non-fiscal store.
+    #[serde(default)]
+    pub header: Option<ReceiptHeader>,
+    /// Рядок 21. Empty when the store is not a VAT payer or has no rate table.
+    #[serde(default)]
+    pub vat_lines: Vec<ReceiptVatLine>,
+    /// Рядок 25: cash handed back. Absent when nothing was.
+    #[serde(default)]
+    pub change_cents: Option<i64>,
 }
 
 // Characters per line for the two common thermal paper widths (Font A, ~12 dots
@@ -111,12 +159,23 @@ fn two_col(width: usize, left: &str, right: &str) -> String {
     format!("{left}{}{right}", " ".repeat(space))
 }
 
-fn payment_label(method: &str) -> &str {
+/// Рядок 18: the regulation knows three forms of payment — «ГОТІВКА»,
+/// «БЕЗГОТІВКОВА», «ІНШЕ»; the bracket keeps the detail the cashier had.
+fn payment_label(method: &str) -> String {
     match method {
-        "cash" => "Готівка",
-        "card" => "Картка",
-        "qr" => "QR-код",
-        other => other,
+        "cash" => "ГОТІВКА".into(),
+        "card" => "БЕЗГОТІВКОВА (картка)".into(),
+        "qr" => "БЕЗГОТІВКОВА (QR)".into(),
+        other => format!("ІНШЕ ({other})"),
+    }
+}
+
+/// Рядок 21: «ПДВ А 20%» — a whole-number rate prints without decimals.
+fn vat_label(line: &ReceiptVatLine) -> String {
+    if line.rate.fract() == 0.0 {
+        format!("ПДВ {} {}%", line.symbol, line.rate as i64)
+    } else {
+        format!("ПДВ {} {}%", line.symbol, line.rate)
     }
 }
 
@@ -154,6 +213,22 @@ fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> 
     printer.bold(true).map_err(|e| e.to_string())?;
     printer.writeln(&receipt.store_name).map_err(|e| e.to_string())?;
     printer.bold(false).map_err(|e| e.to_string())?;
+    // Рядки 1–5, in the regulation's order, straight from the provider's
+    // registration — a fiscal store prints them on every receipt.
+    if let Some(header) = &receipt.header {
+        for line in [
+            &header.org_name,
+            &header.point_name,
+            &header.address,
+            &header.tax_id_line,
+        ]
+        .into_iter()
+        .flatten()
+        .filter(|l| !l.trim().is_empty())
+        {
+            printer.writeln(line).map_err(|e| e.to_string())?;
+        }
+    }
     if receipt.kind == ReceiptKind::Refund {
         printer
             .writeln(&format!("ЧЕК ПОВЕРНЕННЯ {}", receipt.receipt_number))
@@ -175,17 +250,24 @@ fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> 
     for item in &receipt.items {
         let title = format!("{} {}", item.name, item.variant_label);
         printer.writeln(&title).map_err(|e| e.to_string())?;
+        // Рядок 11: the rate letter closes the line, «100.00 А».
+        let amount = match item.tax_symbol.as_deref().filter(|s| !s.is_empty()) {
+            Some(symbol) => format!("{} {symbol}", money(item.line_total_cents)),
+            None => money(item.line_total_cents),
+        };
         let qty_line = two_col(
             width,
             &format!("  {} x {}", item.quantity, money(item.unit_price_cents)),
-            &money(item.line_total_cents),
+            &amount,
         );
         printer.writeln(&qty_line).map_err(|e| e.to_string())?;
     }
 
     printer.writeln(&divider(width)).map_err(|e| e.to_string())?;
+    // Рядок 20 «СУМА», 21 «ПДВ», 24 «ДО СПЛАТИ» — the regulation's own words,
+    // on a non-fiscal receipt as well: one layout, one set of tests.
     printer
-        .writeln(&two_col(width, "Підсумок", &money(receipt.subtotal_cents)))
+        .writeln(&two_col(width, "СУМА", &money(receipt.subtotal_cents)))
         .map_err(|e| e.to_string())?;
 
     if let Some(discount) = receipt.discount_cents.filter(|d| *d != 0) {
@@ -194,11 +276,17 @@ fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> 
             .map_err(|e| e.to_string())?;
     }
 
+    for line in &receipt.vat_lines {
+        printer
+            .writeln(&two_col(width, &vat_label(line), &money(line.amount_cents)))
+            .map_err(|e| e.to_string())?;
+    }
+
     printer.bold(true).map_err(|e| e.to_string())?;
     let total_label = if receipt.kind == ReceiptKind::Refund {
         "ДО ПОВЕРНЕННЯ"
     } else {
-        "РАЗОМ"
+        "ДО СПЛАТИ"
     };
     printer
         .writeln(&two_col(width, total_label, &money(receipt.total_cents)))
@@ -208,43 +296,68 @@ fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> 
 
     for payment in &receipt.payments {
         printer
-            .writeln(&two_col(width, payment_label(&payment.method), &money(payment.amount_cents)))
+            .writeln(&two_col(width, &payment_label(&payment.method), &money(payment.amount_cents)))
+            .map_err(|e| e.to_string())?;
+    }
+    // Рядок 25.
+    if let Some(change) = receipt.change_cents.filter(|c| *c > 0) {
+        printer
+            .writeln(&two_col(width, "РЕШТА", &money(change)))
             .map_err(|e| e.to_string())?;
     }
 
-    // Fiscal block: the number the tax office knows this receipt by, and its
-    // verification link as a QR the printer renders itself (native ESC/POS
-    // `GS ( k`, no image library) — a 200-char URL as text would just wrap.
+    // Fiscal block, rows 26–35 of the regulation: what document this is, the
+    // number the tax office knows it by, and its verification link as a QR the
+    // printer renders itself (native ESC/POS `GS ( k`, no image library) — a
+    // 200-char URL as text would just wrap.
     if let Some(fiscal) = &receipt.fiscal {
         printer.writeln(&divider(width)).map_err(|e| e.to_string())?;
-        printer.writeln("Фіскальний чек").map_err(|e| e.to_string())?;
-        // An offline receipt is a different document and has to say so on the
-        // paper, above its number — same order Checkbox's own offline receipt
-        // uses (TechDocs/checkbox-api/receipts-offline.md).
-        if fiscal.offline {
-            printer.writeln("ОФЛАЙН").map_err(|e| e.to_string())?;
-        }
+        // Рядок 35: «ФІСКАЛЬНИЙ ЧЕК» and the ПРРО software that made it.
+        let title = match fiscal.producer.as_deref().filter(|p| !p.is_empty()) {
+            Some(producer) => two_col(width, "ФІСКАЛЬНИЙ ЧЕК", producer),
+            None => "ФІСКАЛЬНИЙ ЧЕК".to_string(),
+        };
+        printer.bold(true).map_err(|e| e.to_string())?;
+        printer.writeln(&title).map_err(|e| e.to_string())?;
+        printer.bold(false).map_err(|e| e.to_string())?;
+        // Рядок 31: the mode mark goes on every ПРРО receipt. An offline
+        // receipt is a different document and has to say so on the paper,
+        // above its number — same order Checkbox's own offline receipt uses
+        // (TechDocs/checkbox-api/receipts-offline.md).
+        let offline = fiscal.offline || fiscal.mode.as_deref() == Some("offline");
         printer
-            .writeln(&two_col(width, "ФН чека", &fiscal.fiscal_code))
+            .writeln(if offline { "ОФЛАЙН" } else { "ОНЛАЙН" })
             .map_err(|e| e.to_string())?;
+        // Рядок 26: the fiscal number of the receipt.
+        printer
+            .writeln(&two_col(width, "ЧЕК №", &fiscal.fiscal_code))
+            .map_err(|e| e.to_string())?;
+        // Рядок 32.
         if let Some(number) = fiscal.control_number.as_deref().filter(|n| !n.is_empty()) {
             printer
                 .writeln(&two_col(width, "Контрольне число", number))
                 .map_err(|e| e.to_string())?;
         }
+        // Рядок 34.
+        if let Some(fn_) = fiscal.register_fiscal_number.as_deref().filter(|n| !n.is_empty()) {
+            printer
+                .writeln(&two_col(width, "ФН ПРРО", fn_))
+                .map_err(|e| e.to_string())?;
+        }
+        // Рядок 27.
         if let Some(date) = &fiscal.fiscal_date {
             printer.writeln(date).map_err(|e| e.to_string())?;
         }
+        // Рядок 29.
         if let Some(url) = fiscal.tax_url.as_deref().filter(|u| !u.is_empty()) {
             printer.justify(JustifyMode::CENTER).map_err(|e| e.to_string())?;
             printer.qrcode(url).map_err(|e| e.to_string())?;
             printer.writeln("cabinet.tax.gov.ua").map_err(|e| e.to_string())?;
             printer.justify(JustifyMode::LEFT).map_err(|e| e.to_string())?;
-        } else if fiscal.offline {
-            // No QR yet: its `mac` is the ПРРО transaction-chain hash, which
-            // only exists once the document reaches the register that keeps the
-            // chain. Say it plainly rather than print a link that would fail
-            // verification in the tax office cabinet.
+        } else if offline {
+            // No QR yet: the link needs the register's own fiscal number, which
+            // the till only has after its first online contact. Say it plainly
+            // rather than print a link that would open an error page.
             printer
                 .writeln("QR буде після синхронізації з ПРРО")
                 .map_err(|e| e.to_string())?;
@@ -361,13 +474,22 @@ mod tests {
                 quantity: 1,
                 unit_price_cents: 10000,
                 line_total_cents: 10000,
+                tax_symbol: None,
             }],
             subtotal_cents: 10000,
             discount_cents: None,
             total_cents: 10000,
             payments: vec![ReceiptPayment { method: "cash".into(), amount_cents: 10000 }],
-            provider_text: None,
-            fiscal: None,
+            ..Default::default()
+        }
+    }
+
+    fn fiscal() -> ReceiptFiscal {
+        ReceiptFiscal {
+            fiscal_code: "TEST-fKbevQ".into(),
+            fiscal_date: Some("09.09.2026, 14:59:03".into()),
+            tax_url: Some("https://cabinet.tax.gov.ua/cashregs/check?id=TEST-fKbevQ".into()),
+            ..Default::default()
         }
     }
 
@@ -393,14 +515,12 @@ mod tests {
     #[test]
     fn fiscal_block_carries_the_number_and_a_qr() {
         let mut receipt = base();
-        receipt.fiscal = Some(ReceiptFiscal {
-            fiscal_code: "TEST-fKbevQ".into(),
-            fiscal_date: Some("09.09.2026, 14:59:03".into()),
-            tax_url: Some("https://cabinet.tax.gov.ua/cashregs/check?id=TEST-fKbevQ".into()),
-        });
+        receipt.fiscal = Some(fiscal());
         let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
-        assert!(contains(&bytes, &win1251("Фіскальний чек")));
+        assert!(contains(&bytes, &win1251("ФІСКАЛЬНИЙ ЧЕК")));
         assert!(contains(&bytes, b"TEST-fKbevQ"));
+        // Рядок 31 is printed online too.
+        assert!(contains(&bytes, &win1251("ОНЛАЙН")));
         // ESC/POS 2D-code function group: GS ( k
         assert!(contains(&bytes, &[0x1D, 0x28, 0x6B]));
         // And still our own footer — this is the local layout, not the provider's.
@@ -410,7 +530,88 @@ mod tests {
     #[test]
     fn no_fiscal_block_for_a_non_fiscal_store() {
         let bytes = build_ticket(&base(), CHARS_58MM).unwrap();
-        assert!(!contains(&bytes, &win1251("Фіскальний чек")));
+        assert!(!contains(&bytes, &win1251("ФІСКАЛЬНИЙ ЧЕК")));
+        assert!(!contains(&bytes, &win1251("ОНЛАЙН")));
         assert!(!contains(&bytes, &[0x1D, 0x28, 0x6B]));
+    }
+
+    #[test]
+    fn header_prints_the_requisites_in_the_regulation_order() {
+        let mut receipt = base();
+        receipt.header = Some(ReceiptHeader {
+            org_name: Some("ТОВ «Тест»".into()),
+            point_name: Some("Магазин №1".into()),
+            address: Some("м. Київ, вул. Хрещатик, 1".into()),
+            tax_id_line: Some("ПН 1234567890".into()),
+        });
+        let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
+        let org = bytes
+            .windows(win1251("ТОВ").len())
+            .position(|w| w == win1251("ТОВ").as_slice())
+            .unwrap();
+        let tax = bytes
+            .windows(win1251("ПН 1234567890").len())
+            .position(|w| w == win1251("ПН 1234567890").as_slice())
+            .unwrap();
+        let items = bytes
+            .windows(win1251("Футболка").len())
+            .position(|w| w == win1251("Футболка").as_slice())
+            .unwrap();
+        assert!(org < tax && tax < items);
+    }
+
+    #[test]
+    fn offline_receipt_says_so_and_carries_the_register_number() {
+        let mut receipt = base();
+        receipt.fiscal = Some(ReceiptFiscal {
+            fiscal_code: "OFF-0002".into(),
+            tax_url: None,
+            mode: Some("offline".into()),
+            control_number: Some("9933".into()),
+            register_fiscal_number: Some("4001118166".into()),
+            producer: Some("ПРРО Checkbox".into()),
+            ..Default::default()
+        });
+        let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
+        assert!(contains(&bytes, &win1251("ОФЛАЙН")));
+        assert!(!contains(&bytes, &win1251("ОНЛАЙН")));
+        assert!(contains(&bytes, b"9933"));
+        assert!(contains(&bytes, b"4001118166"));
+        assert!(contains(&bytes, &win1251("ПРРО Checkbox")));
+        assert!(contains(&bytes, &win1251("QR буде після синхронізації з ПРРО")));
+        assert!(!contains(&bytes, &[0x1D, 0x28, 0x6B]));
+    }
+
+    #[test]
+    fn older_offline_flag_still_marks_the_receipt() {
+        let mut receipt = base();
+        receipt.fiscal = Some(ReceiptFiscal { offline: true, mode: None, ..fiscal() });
+        let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
+        assert!(contains(&bytes, &win1251("ОФЛАЙН")));
+    }
+
+    #[test]
+    fn vat_letters_lines_and_change_follow_the_regulation() {
+        let mut receipt = base();
+        receipt.items[0].tax_symbol = Some("А".into());
+        receipt.vat_lines = vec![ReceiptVatLine { symbol: "А".into(), rate: 20.0, amount_cents: 1667 }];
+        receipt.payments = vec![ReceiptPayment { method: "cash".into(), amount_cents: 15000 }];
+        receipt.change_cents = Some(5000);
+        let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
+        assert!(contains(&bytes, &win1251("100.00 А")));
+        assert!(contains(&bytes, &win1251("ПДВ А 20%")));
+        assert!(contains(&bytes, b"16.67"));
+        assert!(contains(&bytes, &win1251("ГОТІВКА")));
+        assert!(contains(&bytes, &win1251("РЕШТА")));
+        assert!(contains(&bytes, b"50.00"));
+        assert!(contains(&bytes, &win1251("ДО СПЛАТИ")));
+    }
+
+    #[test]
+    fn card_and_qr_are_cashless() {
+        assert_eq!(payment_label("card"), "БЕЗГОТІВКОВА (картка)");
+        assert_eq!(payment_label("qr"), "БЕЗГОТІВКОВА (QR)");
+        assert_eq!(payment_label("cash"), "ГОТІВКА");
+        assert_eq!(payment_label("bonus"), "ІНШЕ (bonus)");
     }
 }

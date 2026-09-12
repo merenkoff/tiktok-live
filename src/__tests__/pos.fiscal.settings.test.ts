@@ -345,6 +345,8 @@ describe.skipIf(!hasDb)('POS fiscal settings', () => {
       offline_mode: false,
       // Filled by the first online contact (phase 8в); null until then.
       register_fiscal_number: null,
+      // The owner's setting, shipped so the till prints the matching letter.
+      default_tax_code: 'B',
       requisites: null,
     });
   });
@@ -362,6 +364,7 @@ describe.skipIf(!hasDb)('POS fiscal settings', () => {
         provider: null,
         offline_mode: false,
         register_fiscal_number: null,
+        default_tax_code: null,
         requisites: null,
       });
     } finally {

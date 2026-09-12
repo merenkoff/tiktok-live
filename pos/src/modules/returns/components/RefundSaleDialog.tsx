@@ -115,7 +115,7 @@ export function RefundSaleDialog({ sale, detail, selectAll, onClose, onRefunded 
           fresh,
           doc,
           lines,
-          auth?.store.name ?? '',
+          { name: auth?.store.name ?? '', fiscal: auth?.store.fiscal ?? null },
           row.refund_fiscal ?? null
         ),
         // `done` is set once and is all the success pane reads, so the fiscal

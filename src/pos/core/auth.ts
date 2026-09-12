@@ -45,6 +45,7 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
        fs.provider AS fiscal_provider,
        fs.offline_mode AS fiscal_offline_mode,
        fs.register_fiscal_number AS fiscal_register_number,
+       fs.default_tax_code AS fiscal_default_tax_code,
        fs.requisites AS fiscal_requisites
      FROM pos_sessions s
      JOIN pos_staff st ON st.id = s.staff_id
@@ -78,6 +79,7 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
       provider: isFiscalProviderId(row.fiscal_provider) ? row.fiscal_provider : null,
       offline_mode: row.fiscal_offline_mode ?? false,
       register_fiscal_number: (row.fiscal_register_number as string | null) ?? null,
+      default_tax_code: (row.fiscal_default_tax_code as string | null) ?? null,
       requisites: (row.fiscal_requisites as FiscalPublicConfig['requisites']) ?? null,
     },
     autoPrintReceipt: row.auto_print_receipt ?? false,

@@ -320,6 +320,7 @@ export const checkboxProvider: FiscalProvider = {
         taxes: taxes
           .filter((tax) => typeof tax.symbol === 'string' && tax.symbol.trim())
           .map((tax) => ({
+            code: String(tax.code),
             symbol: tax.symbol.trim(),
             label: tax.label ?? '',
             rate: Number(tax.rate) || 0,

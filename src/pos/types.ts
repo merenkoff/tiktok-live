@@ -88,6 +88,8 @@ export interface FiscalPublicConfig {
   offline_mode: boolean;
   /** ФН ПРРО (рядок 34), cached from the provider; null until the first online contact. */
   register_fiscal_number: string | null;
+  /** The rate code sales are fiscalised under — the till prints its letter (рядок 11). */
+  default_tax_code: string | null;
   /**
    * Everything the receipt header needs, as the provider last reported it.
    * Travels with the login so the desktop till prints it without a connection.

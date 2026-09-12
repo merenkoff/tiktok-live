@@ -188,7 +188,14 @@ export function RegisterPage() {
       setPrinting(true);
       setPrintStatus(null);
       try {
-        await printReceipt(printerName, buildReceiptPayload(success, auth?.store.name ?? ''), paper);
+        await printReceipt(
+          printerName,
+          buildReceiptPayload(success, {
+            name: auth?.store.name ?? '',
+            fiscal: auth?.store.fiscal ?? null,
+          }),
+          paper
+        );
         if (!cancelled) setPrintStatus('Чек надіслано на друк');
       } catch (e) {
         if (!cancelled) {
@@ -205,7 +212,7 @@ export function RegisterPage() {
     success,
     auth?.store.auto_print_receipt,
     auth?.store.name,
-    auth?.store.fiscal?.enabled,
+    auth?.store.fiscal,
   ]);
 
   // A cancel/partial-refund against the just-rung receipt: keep the shown
@@ -393,6 +400,9 @@ export function RegisterPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on receipt number by design (see comment above); only `cancelRung.reset` is used
   }, [success?.receipt_number, cancelRung.reset]);
 
+  /** The trade name plus the cached ПРРО requisites — everything the paper says about the store. */
+  const receiptStore = () => ({ name: auth?.store.name ?? '', fiscal: auth?.store.fiscal ?? null });
+
   async function printSuccessReceipt() {
     if (!success || !receiptPrinterName) return;
     setPrinting(true);
@@ -400,7 +410,7 @@ export function RegisterPage() {
     try {
       await printReceipt(
         receiptPrinterName,
-        buildReceiptPayload(success, auth?.store.name ?? ''),
+        buildReceiptPayload(success, receiptStore()),
         receiptPaperWidth,
       );
       setPrintStatus('Чек надіслано на друк');
@@ -414,7 +424,7 @@ export function RegisterPage() {
   function printSuccessReceiptAsPdf() {
     if (!success) return;
     setPrintStatus(null);
-    printToPdf(buildReceiptPayload(success, auth?.store.name ?? ''));
+    printToPdf(buildReceiptPayload(success, receiptStore()));
   }
 
   if (success) {

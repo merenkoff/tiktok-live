@@ -42,6 +42,12 @@ export const FISCAL_RECEIPT_WIDTHS: readonly FiscalReceiptWidth[] = [32, 48];
 
 /** One tax rate as the provider lists it — the letter the receipt prints next to a line. */
 export interface FiscalTaxRate {
+  /**
+   * The provider's own id of the rate, as a string — what
+   * `pos_fiscal_settings.default_tax_code` / `product.fiscal_tax_code` hold,
+   * so the till can find the letter for the code it sells under.
+   */
+  code: string;
   /** The letter on the receipt (рядок 11): «А», «Б», … */
   symbol: string;
   label: string;

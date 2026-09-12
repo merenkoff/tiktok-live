@@ -48,16 +48,96 @@ describe('ReceiptPrintable', () => {
         })}
       />
     );
-    expect(screen.getByText('Фіскальний чек')).toBeInTheDocument();
+    expect(screen.getByText('ФІСКАЛЬНИЙ ЧЕК')).toBeInTheDocument();
     expect(screen.getByText('TEST-fKbevQ')).toBeInTheDocument();
+    // Рядок 31 is printed on an online receipt too.
+    expect(screen.getByText('ОНЛАЙН')).toBeInTheDocument();
     expect(screen.getByRole('link')).toHaveAttribute('href', 'https://cabinet.tax.gov.ua/x');
     expect(screen.getByText('Дякуємо за покупку!')).toBeInTheDocument();
   });
 
   it('shows no fiscal block for a store that does not fiscalise', () => {
     render(<ReceiptPrintable receipt={receipt()} />);
-    expect(screen.queryByText('Фіскальний чек')).not.toBeInTheDocument();
+    expect(screen.queryByText('ФІСКАЛЬНИЙ ЧЕК')).not.toBeInTheDocument();
+    expect(screen.queryByText('ОНЛАЙН')).not.toBeInTheDocument();
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+
+  it('prints the requisites header, rate letters, VAT and change (Положення № 13)', () => {
+    render(
+      <ReceiptPrintable
+        receipt={receipt({
+          header: {
+            org_name: 'ТОВ «Тест»',
+            point_name: 'Магазин №1',
+            address: 'м. Київ, вул. Хрещатик, 1',
+            tax_id_line: 'ПН 123456789012',
+          },
+          items: [
+            {
+              name: 'Футболка',
+              variant_label: 'M',
+              quantity: 1,
+              unit_price_cents: 10000,
+              line_total_cents: 10000,
+              tax_symbol: 'А',
+            },
+          ],
+          vat_lines: [{ symbol: 'А', rate: 20, amount_cents: 1667 }],
+          payments: [{ method: 'cash', amount_cents: 15000 }],
+          change_cents: 5000,
+        })}
+      />
+    );
+    expect(screen.getByText('ТОВ «Тест»')).toBeInTheDocument();
+    expect(screen.getByText('ПН 123456789012')).toBeInTheDocument();
+    expect(screen.getByText('100.00 А')).toBeInTheDocument();
+    expect(screen.getByText('ПДВ А 20%')).toBeInTheDocument();
+    expect(screen.getByText('16.67')).toBeInTheDocument();
+    expect(screen.getByText('ГОТІВКА')).toBeInTheDocument();
+    expect(screen.getByText('РЕШТА')).toBeInTheDocument();
+    expect(screen.getByText('50.00')).toBeInTheDocument();
+    expect(screen.getByText('ДО СПЛАТИ')).toBeInTheDocument();
+  });
+
+  it('marks an offline receipt and prints the register number and producer', () => {
+    render(
+      <ReceiptPrintable
+        receipt={receipt({
+          fiscal: {
+            fiscal_code: 'OFF-0002',
+            fiscal_date: null,
+            tax_url: null,
+            mode: 'offline',
+            control_number: '9933',
+            register_fiscal_number: '4001118166',
+            producer: 'ПРРО Checkbox',
+          },
+        })}
+      />
+    );
+    expect(screen.getByText('ОФЛАЙН')).toBeInTheDocument();
+    expect(screen.queryByText('ОНЛАЙН')).not.toBeInTheDocument();
+    expect(screen.getByText('9933')).toBeInTheDocument();
+    expect(screen.getByText('4001118166')).toBeInTheDocument();
+    expect(screen.getByText('ПРРО Checkbox')).toBeInTheDocument();
+    expect(screen.getByText('QR буде після синхронізації з ПРРО')).toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+
+  it('labels card and QR payments as cashless', () => {
+    render(
+      <ReceiptPrintable
+        receipt={receipt({
+          payments: [
+            { method: 'card', amount_cents: 5000 },
+            { method: 'qr', amount_cents: 5000 },
+          ],
+        })}
+      />
+    );
+    expect(screen.getByText('БЕЗГОТІВКОВА (картка)')).toBeInTheDocument();
+    expect(screen.getByText('БЕЗГОТІВКОВА (QR)')).toBeInTheDocument();
   });
 
   it('ignores whitespace-only provider text', () => {

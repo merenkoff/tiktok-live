@@ -42,8 +42,8 @@ export const FAKE_REQUISITES: FiscalRequisites = {
   point: { name: 'Магазин «Сонечко»', address: 'м. Київ, вул. Сонячна, 27' },
   register: { fiscal_number: 'FAKE-FN', title: 'Каса 1', address: null },
   taxes: [
-    { symbol: 'А', label: 'ПДВ 20%', rate: 20, no_vat: false, is_default: true },
-    { symbol: 'Б', label: 'Без ПДВ', rate: 0, no_vat: true, is_default: false },
+    { code: '1', symbol: 'А', label: 'ПДВ 20%', rate: 20, no_vat: false, is_default: true },
+    { code: '2', symbol: 'Б', label: 'Без ПДВ', rate: 0, no_vat: true, is_default: false },
   ],
 };
 

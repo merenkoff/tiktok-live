@@ -15,6 +15,27 @@ export interface ReceiptItem {
   quantity: number;
   unit_price_cents: number;
   line_total_cents: number;
+  /** Letter of the VAT rate (рядок 11 of Положення № 13); absent in a non-fiscal store. */
+  tax_symbol?: string | null;
+}
+
+/**
+ * Рядки 1–5: who sold and where, as the ПРРО provider has it registered.
+ * Absent for a store that does not fiscalise — its paper stays as it was.
+ */
+export interface ReceiptHeader {
+  org_name: string | null;
+  point_name: string | null;
+  address: string | null;
+  /** «ПН 1234567890» for a VAT payer, «ІД 12345678» otherwise. */
+  tax_id_line: string | null;
+}
+
+/** Рядок 21: one «ПДВ» line per rate letter. */
+export interface ReceiptVatLine {
+  symbol: string;
+  rate: number;
+  amount_cents: number;
 }
 
 export interface ReceiptPayment {
@@ -43,6 +64,12 @@ export interface ReceiptFiscal {
    * case the cashier must not mistake for a complete receipt.
    */
   control_number?: string | null;
+  /** Рядок 34: «ФН ПРРО …». Cached from the provider; null before the first online contact. */
+  register_fiscal_number?: string | null;
+  /** Рядок 31: the mode mark is printed on every ПРРО receipt, «ОНЛАЙН» included. */
+  mode?: 'online' | 'offline';
+  /** Рядок 35: the ПРРО software's name next to «ФІСКАЛЬНИЙ ЧЕК». */
+  producer?: string | null;
 }
 
 export interface ReceiptData {
@@ -68,6 +95,12 @@ export interface ReceiptData {
   provider_text?: string | null;
   /** Fiscal block for our own layout. Null/absent for a non-fiscal store. */
   fiscal?: ReceiptFiscal | null;
+  /** Рядки 1–5. Absent for a non-fiscal store. */
+  header?: ReceiptHeader | null;
+  /** Рядок 21. Empty/absent when the store is not a VAT payer or has no rate table. */
+  vat_lines?: ReceiptVatLine[];
+  /** Рядок 25: cash handed back. Null when nothing was. */
+  change_cents?: number | null;
 }
 
 export function listPrinters(): Promise<PrinterInfo[]> {
