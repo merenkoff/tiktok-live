@@ -25,6 +25,7 @@ import { pool } from '../../../db.js';
 import { logger } from '../../../logger.js';
 import { FiscalError } from '../errors.js';
 import { stampOfflineDocument } from '../ledger.js';
+import { buildTaxUrl } from '../taxUrl.js';
 import type { FiscalContext } from '../shifts.service.js';
 import { takeFreeCodes } from './pool.js';
 
@@ -54,6 +55,8 @@ export interface OfflineDocStamp {
   fiscalCode: string;
   fiscalDate: Date;
   seq: number;
+  /** The tax-office check link we composed; null when ФН ПРРО is not cached yet. */
+  taxUrl: string | null;
 }
 
 /** pg hands BIGINT back as strings; callers compare ids, so normalise once here. */
@@ -216,15 +219,37 @@ export async function stampNext(sessionId: number, receiptId: number): Promise<O
     if (!code) throw new FiscalError('Закінчились офлайн-коди ПРРО', 'offline_codes_exhausted');
 
     const fiscalDate = new Date();
+    // The receipt gets its tax-office QR now, not after the replay: the link is
+    // the register's number plus what this very stamp decides
+    // (TechDocs/POS_FISCAL_OFFLINE.md — a real receipt verifies without `mac`).
+    // The cabinet finds the document only once it is delivered, which is what
+    // the «ОФЛАЙН» mark next to the QR is telling the customer.
+    const totals = await client.query(
+      `SELECT total_cents, (SELECT register_fiscal_number FROM pos_fiscal_settings
+                            WHERE store_id = $2) AS fn
+       FROM pos_fiscal_receipts WHERE id = $1`,
+      [receiptId, session.store_id]
+    );
+    const fn = (totals.rows[0]?.fn as string | null) ?? null;
+    const taxUrl = fn
+      ? buildTaxUrl({
+          fiscalCode: code.fiscal_code,
+          fiscalDate,
+          registerFiscalNumber: fn,
+          totalCents: Number(totals.rows[0]?.total_cents ?? 0),
+        })
+      : null;
+
     await stampOfflineDocument(client, receiptId, {
       sessionId,
       seq,
       fiscalCode: code.fiscal_code,
       fiscalDate,
+      taxUrl,
     });
     await client.query('COMMIT');
     inTx = false;
-    return { fiscalCode: code.fiscal_code, fiscalDate, seq };
+    return { fiscalCode: code.fiscal_code, fiscalDate, seq, taxUrl };
   } catch (error) {
     if (inTx) await client.query('ROLLBACK').catch(() => {});
     throw error;

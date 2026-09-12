@@ -24,6 +24,7 @@ import { asFiscalError, FiscalError } from './errors.js';
 import { abandonShiftDocs } from './ledger.js';
 import { getProvider } from './providers/index.js';
 import * as runtime from './runtime.js';
+import { refreshRequisites } from './requisites.js';
 import { getFiscalCredentials, getFiscalSettings } from './settings.service.js';
 import type {
   FiscalCallCtx,
@@ -285,6 +286,10 @@ export async function openShift(
     runtime.setCachedShift(ctx.storeId, state);
     runtime.markProviderOk(ctx.storeId);
     await mirrorOpenShift(ctx, state, staffId);
+    // The receipt header's requisites, kept fresh where we are online anyway.
+    // Awaited, not fire-and-forget: the first receipt of the day must find
+    // them cached, and this is the last online moment before it.
+    await refreshRequisites(ctx, signal);
     return state;
   } catch (error) {
     const fiscal = asFiscalError(error, 'Не вдалося відкрити зміну ПРРО');

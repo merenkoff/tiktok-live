@@ -54,6 +54,8 @@ function settingsView(over: Partial<FiscalSettingsView> = {}): FiscalSettingsVie
     offline_mode: false,
     offline_codes_target: 200,
     offline_capable: false,
+    requisites: null,
+    requisites_fetched_at: null,
     updated_at: null,
     secrets_key_configured: true,
     adapter_available: false,

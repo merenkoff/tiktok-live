@@ -13,7 +13,7 @@ import {
   type CheckoutFailure,
 } from '../../lib/checkoutError';
 import { DEFAULT_RECEIPT_PAPER_WIDTH, ReceiptPaperWidth, printReceipt } from '../../lib/printer';
-import { buildReceiptPayload } from '../../lib/receipt';
+import { buildReceiptPayload, fiscalBlockComplete } from '../../lib/receipt';
 import { usePrintableReceipt } from '../../hooks/usePrintableReceipt';
 import { getMeta } from '../../offline/db';
 import type { CatalogItem, PaymentMethod, PosTag, SaleDetail, SalePaymentInput } from '../../types';
@@ -174,11 +174,11 @@ export function RegisterPage() {
       if (!printerName) return; // web / desktop without a configured printer → no-op
       // Never auto-print an un-fiscalised receipt in a ПРРО store: the customer
       // would walk out with a slip that looks like a receipt and carries no
-      // fiscal number. The manual button below stays, clearly labelled.
-      if (
-        (auth?.store.fiscal?.enabled ?? false) &&
-        (success.fiscal_status ?? 'none') !== 'done'
-      ) {
+      // fiscal number. An offline-stamped receipt DOES carry one, so it prints
+      // automatically once its контрольне число is there too — the completeness
+      // rule lives in `fiscalBlockComplete`, next to the layout it governs. The
+      // manual button below stays for everything else, clearly labelled.
+      if ((auth?.store.fiscal?.enabled ?? false) && !fiscalBlockComplete(success.fiscal)) {
         return;
       }
       const key = success.receipt_number || String(success.id);
@@ -188,7 +188,14 @@ export function RegisterPage() {
       setPrinting(true);
       setPrintStatus(null);
       try {
-        await printReceipt(printerName, buildReceiptPayload(success, auth?.store.name ?? ''), paper);
+        await printReceipt(
+          printerName,
+          buildReceiptPayload(success, {
+            name: auth?.store.name ?? '',
+            fiscal: auth?.store.fiscal ?? null,
+          }),
+          paper
+        );
         if (!cancelled) setPrintStatus('Чек надіслано на друк');
       } catch (e) {
         if (!cancelled) {
@@ -205,7 +212,7 @@ export function RegisterPage() {
     success,
     auth?.store.auto_print_receipt,
     auth?.store.name,
-    auth?.store.fiscal?.enabled,
+    auth?.store.fiscal,
   ]);
 
   // A cancel/partial-refund against the just-rung receipt: keep the shown
@@ -393,6 +400,9 @@ export function RegisterPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on receipt number by design (see comment above); only `cancelRung.reset` is used
   }, [success?.receipt_number, cancelRung.reset]);
 
+  /** The trade name plus the cached ПРРО requisites — everything the paper says about the store. */
+  const receiptStore = () => ({ name: auth?.store.name ?? '', fiscal: auth?.store.fiscal ?? null });
+
   async function printSuccessReceipt() {
     if (!success || !receiptPrinterName) return;
     setPrinting(true);
@@ -400,7 +410,7 @@ export function RegisterPage() {
     try {
       await printReceipt(
         receiptPrinterName,
-        buildReceiptPayload(success, auth?.store.name ?? ''),
+        buildReceiptPayload(success, receiptStore()),
         receiptPaperWidth,
       );
       setPrintStatus('Чек надіслано на друк');
@@ -414,7 +424,7 @@ export function RegisterPage() {
   function printSuccessReceiptAsPdf() {
     if (!success) return;
     setPrintStatus(null);
-    printToPdf(buildReceiptPayload(success, auth?.store.name ?? ''));
+    printToPdf(buildReceiptPayload(success, receiptStore()));
   }
 
   if (success) {

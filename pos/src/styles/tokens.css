@@ -211,6 +211,12 @@ select:focus-visible {
     margin-top: 4px;
   }
 
+  /* Рядки 1–5 of Положення № 13, under the trade sign. */
+  .receipt-print-header {
+    text-align: center;
+    margin: 0;
+  }
+
   .receipt-print-tax-url {
     font-size: 9px;
     word-break: break-all;

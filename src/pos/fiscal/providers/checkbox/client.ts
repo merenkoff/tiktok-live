@@ -169,7 +169,7 @@ export interface CheckboxSellOfflinePayload extends CheckboxSellPayload {
 
 // ── Offline mode (TechDocs/checkbox-api/cash-register.md) ──────────────────
 
-/** `GET /cash-registers/info` — narrowed to the offline fields. */
+/** `GET /cash-registers/info` — the offline fields plus what the receipt header prints. */
 export interface CheckboxCashRegisterInfo {
   id: string;
   fiscal_number: string;
@@ -177,6 +177,35 @@ export interface CheckboxCashRegisterInfo {
   /** `true` when *we* took it offline (`go-offline`), not a tax-office timeout. */
   stay_offline: boolean;
   has_shift?: boolean;
+  title?: string | null;
+  address?: string | null;
+}
+
+/** `GET /cash-registers/{id}` — narrowed to the legal entity and the point of sale. */
+export interface CheckboxCashRegisterDetailed {
+  id: string;
+  fiscal_number: string;
+  address?: string | null;
+  branch?: {
+    name?: string | null;
+    address?: string | null;
+    organization?: {
+      title?: string | null;
+      edrpou?: string | null;
+      tax_number?: string | null;
+      is_vat?: boolean | null;
+    } | null;
+  } | null;
+}
+
+/** One row of `GET /tax`. */
+export interface CheckboxTax {
+  code: number;
+  label: string;
+  symbol: string;
+  rate: number;
+  no_vat?: boolean;
+  is_default?: boolean;
 }
 
 export interface CheckboxOfflineCode {
@@ -328,6 +357,24 @@ export async function getCashRegisterInfo(opts: AuthedOpts): Promise<CheckboxCas
   });
   if (!result) throw new CheckboxApiError(502, null, result);
   return result;
+}
+
+export async function getCashRegisterDetailed(
+  opts: AuthedOpts,
+  cashRegisterId: string
+): Promise<CheckboxCashRegisterDetailed> {
+  const result = await request<CheckboxCashRegisterDetailed>({
+    method: 'GET',
+    path: `/cash-registers/${encodeURIComponent(cashRegisterId)}`,
+    ...opts,
+  });
+  if (!result) throw new CheckboxApiError(502, null, result);
+  return result;
+}
+
+export async function getTaxes(opts: AuthedOpts): Promise<CheckboxTax[]> {
+  const result = await request<CheckboxTax[]>({ method: 'GET', path: '/tax', ...opts });
+  return Array.isArray(result) ? result : [];
 }
 
 export async function goOfflineRequest(

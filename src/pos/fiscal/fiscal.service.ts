@@ -37,7 +37,7 @@ import {
 } from './mapping.js';
 import { awaitSlot, type FiscalCallPriority } from './rateLimit.js';
 import * as runtime from './runtime.js';
-import { getFiscalSettings } from './settings.service.js';
+import { getFiscalSettings, rememberRegisterFiscalNumber } from './settings.service.js';
 import {
   buildCallCtx,
   closeShift,
@@ -181,6 +181,16 @@ export async function preflight(
     // online — our mirror row is the proof it was.
     const shiftRow = await getLiveShiftRow(storeId, ctx.registerKey);
     if (shiftRow?.status !== 'open') throw err;
+    // An offline receipt is printed from the cached requisites (the legal
+    // header, ФН ПРРО — POS_FISCAL_OFFLINE.md «Фаза 8в»). Without them there
+    // is nothing lawful to hand the customer, so the store's first receipt
+    // has to be an online one; the shift open that precedes it caches them.
+    if (!ctx.settings.requisites) {
+      throw new FiscalError(
+        'Немає звʼязку з ПРРО, а реквізити чека ще не отримано — спершу проведіть один чек онлайн',
+        'unavailable'
+      );
+    }
     const session = await openServerSession(ctx, Number(shiftRow.id));
     return offlineGate(ctx, session, staffId, signal, op);
   }
@@ -310,15 +320,20 @@ function toView(row: ledger.FiscalReceiptRow, result: FiscalResult | null): Fisc
   };
 }
 
-/** A document stamped offline: the fiscal number is the tax-office code; the rest arrives on replay. */
+/**
+ * A document stamped offline: the fiscal number is the tax-office code, and the
+ * check link is the one we composed at stamp time (`taxUrl.ts`) — the till
+ * prints it as the QR immediately. What still arrives on replay is the
+ * контрольне число and the provider's own link.
+ */
 function offlineView(row: ledger.FiscalReceiptRow): FiscalView {
   return {
     status: 'pending',
     mode: 'offline',
     fiscal_code: row.fiscal_code,
     fiscal_date: row.fiscal_date ? new Date(row.fiscal_date).toISOString() : null,
-    control_number: null,
-    tax_url: null,
+    control_number: row.control_number,
+    tax_url: row.tax_url ?? null,
     qr_payload: null,
     receipt_text: null,
     error_code: null,
@@ -645,6 +660,7 @@ async function fiscalizeSaleOffline(
       mode: 'offline',
       fiscal_code: stamp.fiscalCode,
       fiscal_date: stamp.fiscalDate,
+      tax_url: stamp.taxUrl,
     });
   } catch (raw) {
     const err = asFiscalError(raw, 'Не вдалося видати офлайн-чек');
@@ -983,6 +999,12 @@ async function replayOneSession(initial: OfflineSessionRow): Promise<SessionOutc
     logger.info('Offline session: provider still unreachable', { ...log, kind: err.kind });
     return none;
   }
+
+  // The probe is the cheapest place to learn the register's own number: we
+  // need it offline (for the tax-office link) and can only ask online.
+  void rememberRegisterFiscalNumber(ctx.storeId, state.fiscalNumber).catch((error) =>
+    logger.warn('Could not cache ФН ПРРО', { ...log, error: String(error) })
+  );
 
   // 1. Resync the pool — best effort; an outage here is not a reason to stop.
   try {

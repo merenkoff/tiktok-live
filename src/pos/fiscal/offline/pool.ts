@@ -21,6 +21,7 @@ import { logger } from '../../../logger.js';
 import { asFiscalError } from '../errors.js';
 import type { Queryable } from '../ledger.js';
 import { awaitSlot } from '../rateLimit.js';
+import { refreshRequisites } from '../requisites.js';
 import { buildCallCtx, resolveContext, type FiscalContext } from '../shifts.service.js';
 import type { AskOfflineCodesStatus } from '../types.js';
 
@@ -103,6 +104,11 @@ export async function refillOfflineCodes(
   if (!granted) return { asked: 'skipped', fetched: 0, burned: 0 };
 
   const callCtx = await buildCallCtx(ctx, signal);
+
+  // The receipt header's requisites (and with them ФН ПРРО, which the
+  // tax-office link needs) — refreshed here because a refill is online by
+  // definition, and offline it is exactly what the till prints from.
+  await refreshRequisites(ctx, signal);
 
   let asked: AskOfflineCodesStatus = 'error';
   try {

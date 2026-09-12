@@ -24,6 +24,7 @@ import * as fiscalService from '../fiscal/fiscal.service.js';
 import * as holder from '../fiscal/offline/holder.js';
 import { getOfflineStatus } from '../fiscal/offline/status.js';
 import { getProvider, hasProvider } from '../fiscal/providers/index.js';
+import { refreshRequisites } from '../fiscal/requisites.js';
 import * as fiscalSettings from '../fiscal/settings.service.js';
 import * as shifts from '../fiscal/shifts.service.js';
 import type { FiscalSettingsPatch } from '../fiscal/types.js';
@@ -152,6 +153,14 @@ export function registerFiscalRoutes(fastify: FastifyInstance): void {
     try {
       const provider = getProvider(creds.provider);
       const probe = await provider.probe(creds, AbortSignal.timeout(SHIFT_TIMEOUT_MS));
+      // «Оновити з ПРРО» on the settings screen is this same button: a
+      // successful probe is the cheapest online moment to refresh the
+      // requisites. Only for an enabled store — `resolveContext` is null
+      // otherwise, and a store that is not fiscalising has nothing to print.
+      if (probe.ok) {
+        const ctx = await shifts.resolveContext(auth.storeId);
+        if (ctx) await refreshRequisites(ctx, AbortSignal.timeout(SHIFT_TIMEOUT_MS), { force: true });
+      }
       return probe;
     } catch (error) {
       return replyFiscalError(reply, error, 'Не вдалося перевірити з\'єднання з ПРРО');

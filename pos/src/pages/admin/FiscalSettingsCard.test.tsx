@@ -16,6 +16,7 @@ import type { FiscalSettingsView } from '../../types';
 
 const fiscalSettings = vi.fn<[], Promise<FiscalSettingsView>>();
 const updateFiscalSettings = vi.fn<[unknown], Promise<FiscalSettingsView>>();
+const posRequest = vi.fn<[string, string], Promise<unknown>>();
 
 vi.mock('@pos/platform', async () => {
   const real = await vi.importActual<typeof import('@pos/platform')>('@pos/platform');
@@ -24,9 +25,17 @@ vi.mock('@pos/platform', async () => {
     api: {
       fiscalSettings: () => fiscalSettings(),
       updateFiscalSettings: (p: unknown) => updateFiscalSettings(p),
+      posRequest: (m: string, p: string) => posRequest(m, p),
     },
   };
 });
+
+const REQUISITES = {
+  organization: { name: 'ТОВ «Тестова організація»', edrpou: '44082020', tax_number: '440820207777', is_vat: true },
+  point: { name: 'Магазин «Сонечко»', address: 'м. Київ, вул. Сонячна, 27' },
+  register: { fiscal_number: '4000002411', title: 'Каса 1', address: null },
+  taxes: [{ code: '1', symbol: 'А', label: 'ПДВ 20%', rate: 20, no_vat: false, is_default: true }],
+};
 
 const { FiscalSettingsCard } = await import('./FiscalSettingsCard');
 
@@ -44,6 +53,8 @@ function view(over: Partial<FiscalSettingsView> = {}): FiscalSettingsView {
     offline_mode: false,
     offline_codes_target: 200,
     offline_capable: false,
+    requisites: null,
+    requisites_fetched_at: null,
     updated_at: null,
     secrets_key_configured: true,
     adapter_available: true,
@@ -57,6 +68,7 @@ const offlineToggle = () => screen.getByLabelText('Офлайн-режим ПР�
 beforeEach(() => {
   fiscalSettings.mockReset();
   updateFiscalSettings.mockReset();
+  posRequest.mockReset();
 });
 
 afterEach(() => vi.clearAllMocks());
@@ -267,6 +279,59 @@ describe('FiscalSettingsCard', () => {
 
     expect(await screen.findByText(/продаж триває, чеки надсилаються пізніше/i)).toBeInTheDocument();
     expect(screen.queryByText(/продаж блокується/i)).not.toBeInTheDocument();
+  });
+
+  // ── Requisites (phase 8в) ─────────────────────────────────────────────────
+  //
+  // The owner types nothing: the block fills itself from the provider. What
+  // this card owes is to show what came, say when nothing has yet, and give
+  // one button to fetch it now.
+
+  it('shows what the provider reported, with the tax id in receipt wording', async () => {
+    fiscalSettings.mockResolvedValue(
+      view({
+        provider: 'checkbox',
+        enabled: true,
+        requisites: REQUISITES,
+        requisites_fetched_at: '2026-09-12T08:00:00.000Z',
+      })
+    );
+    renderWithProviders(<FiscalSettingsCard />);
+
+    expect(await screen.findByText('ТОВ «Тестова організація»')).toBeInTheDocument();
+    // A VAT payer prints «ПН <ІПН>», not the ЄДРПОУ.
+    expect(screen.getByText('ПН 440820207777')).toBeInTheDocument();
+    expect(screen.getByText('м. Київ, вул. Сонячна, 27')).toBeInTheDocument();
+    expect(screen.getByText('4000002411')).toBeInTheDocument();
+    expect(screen.getByText(/А — ПДВ 20%/)).toBeInTheDocument();
+  });
+
+  it('says the requisites are still to come before the first online contact', async () => {
+    fiscalSettings.mockResolvedValue(view({ provider: 'checkbox', requisites: null }));
+    renderWithProviders(<FiscalSettingsCard />);
+    expect(await screen.findByText(/Ще не отримано/)).toBeInTheDocument();
+  });
+
+  it('«Оновити з ПРРО» runs the connection test and re-reads the card', async () => {
+    fiscalSettings
+      .mockResolvedValueOnce(view({ provider: 'checkbox', enabled: true, requisites: null }))
+      .mockResolvedValueOnce(
+        view({ provider: 'checkbox', enabled: true, requisites: REQUISITES })
+      );
+    posRequest.mockResolvedValue({ ok: true });
+    renderWithProviders(<FiscalSettingsCard />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Оновити з ПРРО' }));
+
+    await waitFor(() => expect(posRequest).toHaveBeenCalledWith('post', '/fiscal/test-connection'));
+    expect(await screen.findByText('ТОВ «Тестова організація»')).toBeInTheDocument();
+  });
+
+  it('does not offer requisites before a provider is chosen', async () => {
+    fiscalSettings.mockResolvedValue(view({ provider: null }));
+    renderWithProviders(<FiscalSettingsCard />);
+    await waitFor(() => expect(toggle()).toBeInTheDocument());
+    expect(screen.queryByText('Реквізити ПРРО')).not.toBeInTheDocument();
   });
 
   it('renders nothing for a seller', async () => {

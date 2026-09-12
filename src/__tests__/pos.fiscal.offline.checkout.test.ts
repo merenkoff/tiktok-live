@@ -166,10 +166,14 @@ describe.skipIf(!hasDb)('POS fiscal offline checkout (case B — server session)
       status: 'pending',
       mode: 'offline',
       fiscal_code: 'OFF-0002', // OFF-0001 went to go-offline
+      // Still the provider's to give: it is minted when the document is
+      // actually registered.
       control_number: null,
-      tax_url: null,
       qr_payload: null,
     });
+    // The check link, though, is ours — composed at stamp time so the customer
+    // walks out with a scannable QR. See the dedicated test below.
+    expect(body.fiscal.tax_url).toContain('/cashregs/check');
     expect(body.fiscal.fiscal_date).toBeTruthy();
     expect(providerCalls()).toHaveLength(0);
 
@@ -183,6 +187,83 @@ describe.skipIf(!hasDb)('POS fiscal offline checkout (case B — server session)
     expect(row.next_attempt_at).toBeNull();
     expect((await saleRow(body.id)).fiscal_status).toBe('pending');
     expect(await offlinePool.countCodes(store.storeId, '')).toEqual({ free: 58, leased: 0, used: 2, burned: 0 });
+  });
+
+  it('reports mode and control number when the sale is read back, not only at checkout', async () => {
+    // The checkout response carries them, `GET /sales/:id` used not to — so a
+    // re-opened offline receipt looked like an ordinary pending one, and the
+    // till had nothing to print the «ОФЛАЙН» block from.
+    await warm();
+    providerDown();
+    const saleId = (await sell()).json().id;
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/pos/sales/${saleId}`,
+      headers: headers(),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().fiscal).toMatchObject({
+      status: 'pending',
+      mode: 'offline',
+      fiscal_code: 'OFF-0002',
+      control_number: null,
+    });
+  });
+
+  it('gives the offline receipt its tax-office QR at stamp time, not after the replay', async () => {
+    // The link is ФН ПРРО + the reserve code + date/time/sum — all of it known
+    // at the till. The cabinet will not find the document until it is
+    // delivered, which is exactly what the «ОФЛАЙН» mark next to the QR says.
+    await warm();
+    providerDown();
+
+    const body = (await sell()).json();
+    const url = new URL(body.fiscal.tax_url);
+    expect(url.pathname).toBe('/cashregs/check');
+    expect(url.searchParams.get('id')).toBe('OFF-0002');
+    expect(url.searchParams.get('fn')).toBe('FAKE-FN'); // cached by the refill
+    expect(url.searchParams.get('sm')).toBe('100.00');
+    expect(url.searchParams.get('mac')).toBeNull();
+
+    // And it survives to the receipt the till re-reads for printing.
+    const detail = await app.inject({
+      method: 'GET',
+      url: `/api/pos/sales/${body.id}`,
+      headers: headers(),
+    });
+    expect(detail.json().fiscal.tax_url).toBe(body.fiscal.tax_url);
+  });
+
+  it('refuses to stamp before the requisites were ever fetched — the first receipt is online', async () => {
+    // The header of an offline receipt comes from the cache; a store that
+    // never had an online moment has an empty cache and nothing to print.
+    await warm();
+    await pool.query(
+      `UPDATE pos_fiscal_settings SET requisites = NULL, requisites_fetched_at = NULL WHERE store_id = $1`,
+      [store.storeId]
+    );
+    providerDown();
+
+    const res = await sell();
+    expect(res.statusCode).toBe(503);
+    // The route answers with the cashier wording for the kind; the reason
+    // itself («спершу проведіть один чек онлайн») is in the server log.
+    expect(res.json()).toMatchObject({ error: 'fiscal_unavailable', code: 'unavailable' });
+    expect(await live()).toBeNull();
+  });
+
+  it('stamps without a link when the register number was never learned', async () => {
+    // A store whose refill never managed a `registerState` has no ФН — the sale
+    // still goes through, the paper just says the QR is coming.
+    await warm();
+    await pool.query(`UPDATE pos_fiscal_settings SET register_fiscal_number = NULL WHERE store_id = $1`, [
+      store.storeId,
+    ]);
+    providerDown();
+
+    const body = (await sell()).json();
+    expect(body.fiscal).toMatchObject({ status: 'pending', mode: 'offline', tax_url: null });
   });
 
   it('keeps stamping into the same session — even once the provider is back', async () => {

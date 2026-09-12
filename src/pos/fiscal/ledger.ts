@@ -59,6 +59,8 @@ export interface FiscalReceiptRow {
   provider_doc_id: string | null;
   fiscal_code: string | null;
   fiscal_date: Date | null;
+  /** Tax-office check link: the provider's after a send, ours after an offline stamp. */
+  tax_url: string | null;
   attempts: number;
   next_attempt_at: Date | null;
   error_code: string | null;
@@ -170,6 +172,8 @@ export async function openDocument(input: OpenDocumentInput): Promise<FiscalRece
 }
 
 export interface OfflineDocumentStamp {
+  /** The tax-office check link we composed ourselves; null when ФН ПРРО is unknown. */
+  taxUrl?: string | null;
   sessionId: number;
   seq: number;
   fiscalCode: string;
@@ -197,11 +201,16 @@ export async function stampOfflineDocument(
        offline_seq = $3,
        fiscal_code = $4,
        fiscal_date = $5::timestamptz,
+       tax_url = $6,
        next_attempt_at = NULL,
        updated_at = NOW()
      WHERE id = $1
      RETURNING *`,
-    [rowId, stamp.sessionId, stamp.seq, stamp.fiscalCode, stamp.fiscalDate]
+    // `tax_url` is ours, built from the code and the register's number
+    // (`taxUrl.ts`) — the till prints it as the QR right away. The replay
+    // overwrites it with the provider's own link, which additionally carries
+    // `mac`; both point at the same document.
+    [rowId, stamp.sessionId, stamp.seq, stamp.fiscalCode, stamp.fiscalDate, stamp.taxUrl ?? null]
   );
   return result.rows[0] as FiscalReceiptRow;
 }

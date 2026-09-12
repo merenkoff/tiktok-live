@@ -32,7 +32,9 @@ import {
   askOfflineCodesRequest,
   closeShiftRequest,
   createXReport,
+  getCashRegisterDetailed,
   getCashRegisterInfo,
+  getTaxes,
   getCurrentShift,
   getMe,
   getOfflineCodesCountRequest,
@@ -277,6 +279,55 @@ export const checkboxProvider: FiscalProvider = {
   async probe(creds, signal) {
     try {
       return await signAndFetchProbe(creds, signal);
+    } catch (error) {
+      throw classifyCheckboxError(error);
+    }
+  },
+
+  /**
+   * Three reads, one snapshot: the register (`/cash-registers/info`), its
+   * branch and organisation (`/cash-registers/{id}`) and the tax table
+   * (`/tax`). Field names follow `openapi-2.106.4.json`; anything the account
+   * does not fill comes back null rather than as an empty string, so the
+   * receipt layout can skip the line instead of printing a blank.
+   */
+  async fetchRequisites(ctx) {
+    try {
+      const opts = authedOpts(ctx);
+      const info = await getCashRegisterInfo(opts);
+      const [detailed, taxes] = await Promise.all([
+        getCashRegisterDetailed(opts, info.id),
+        getTaxes(opts),
+      ]);
+      const org = detailed.branch?.organization ?? null;
+      const text = (v: string | null | undefined) => (v && v.trim() ? v.trim() : null);
+      return {
+        organization: {
+          name: text(org?.title),
+          edrpou: text(org?.edrpou),
+          tax_number: text(org?.tax_number),
+          is_vat: typeof org?.is_vat === 'boolean' ? org.is_vat : null,
+        },
+        point: {
+          name: text(detailed.branch?.name),
+          address: text(detailed.branch?.address) ?? text(detailed.address),
+        },
+        register: {
+          fiscal_number: text(info.fiscal_number),
+          title: text(info.title),
+          address: text(info.address),
+        },
+        taxes: taxes
+          .filter((tax) => typeof tax.symbol === 'string' && tax.symbol.trim())
+          .map((tax) => ({
+            code: String(tax.code),
+            symbol: tax.symbol.trim(),
+            label: tax.label ?? '',
+            rate: Number(tax.rate) || 0,
+            no_vat: Boolean(tax.no_vat),
+            is_default: Boolean(tax.is_default),
+          })),
+      };
     } catch (error) {
       throw classifyCheckboxError(error);
     }

@@ -17,6 +17,7 @@ import {
 import { getProvider, hasProvider } from './providers/index.js';
 import { invalidateStore } from './runtime.js';
 import {
+  type FiscalRequisites,
   FISCAL_RECEIPT_WIDTHS,
   OFFLINE_CODES_TARGET_DEFAULT,
   OFFLINE_CODES_TARGET_MAX,
@@ -58,6 +59,9 @@ function mapRow(row: Record<string, unknown>): PosFiscalSettings {
     receipt_source: row.receipt_source === 'provider' ? 'provider' : 'local',
     receipt_width: Number(row.receipt_width) === 48 ? 48 : 32,
     offline_mode: Boolean(row.offline_mode),
+    register_fiscal_number: (row.register_fiscal_number as string | null) ?? null,
+    requisites: (row.requisites as FiscalRequisites | null) ?? null,
+    requisites_fetched_at: (row.requisites_fetched_at as Date | null) ?? null,
     offline_codes_target: Number(row.offline_codes_target) || OFFLINE_CODES_TARGET_DEFAULT,
     holder_device_id: (row.holder_device_id as string | null) ?? null,
     holder_name: (row.holder_name as string | null) ?? null,
@@ -69,6 +73,49 @@ function mapRow(row: Record<string, unknown>): PosFiscalSettings {
     created_at: row.created_at as Date,
     updated_at: row.updated_at as Date,
   };
+}
+
+/**
+ * Cache the register's own fiscal number (ФН ПРРО) as the provider reports it.
+ *
+ * Written from wherever we already hold a `registerState()` answer — never by
+ * asking for one on the checkout path. It only ever changes when the store is
+ * re-pointed at another register, and offline it cannot be asked for at all,
+ * which is exactly when the tax-office link needs it (`taxUrl.ts`).
+ */
+export async function rememberRegisterFiscalNumber(
+  storeId: number,
+  fiscalNumber: string | null | undefined
+): Promise<void> {
+  const value = fiscalNumber?.trim();
+  if (!value) return;
+  await pool.query(
+    `UPDATE pos_fiscal_settings
+     SET register_fiscal_number = $2, updated_at = NOW()
+     WHERE store_id = $1 AND register_fiscal_number IS DISTINCT FROM $2`,
+    [storeId, value.slice(0, 64)]
+  );
+}
+
+/**
+ * Cache the provider's view of the store (see `FiscalRequisites`), whole.
+ *
+ * Replaced, never merged: it is one snapshot from one provider call, and a
+ * field the provider stopped reporting should disappear rather than linger.
+ * The register's own number is mirrored into its dedicated column too — the
+ * tax-office link builder reads it from there.
+ */
+export async function rememberRequisites(
+  storeId: number,
+  requisites: FiscalRequisites
+): Promise<void> {
+  await pool.query(
+    `UPDATE pos_fiscal_settings
+     SET requisites = $2::jsonb, requisites_fetched_at = NOW(), updated_at = NOW()
+     WHERE store_id = $1`,
+    [storeId, JSON.stringify(requisites)]
+  );
+  await rememberRegisterFiscalNumber(storeId, requisites.register.fiscal_number);
 }
 
 /** The row, or null when the store has never configured fiscalisation. */
@@ -128,6 +175,8 @@ export function toFiscalSettingsView(
       offline_mode: false,
       offline_codes_target: OFFLINE_CODES_TARGET_DEFAULT,
       offline_capable: false,
+      requisites: null,
+      requisites_fetched_at: null,
       updated_at: null,
     };
   }
@@ -158,6 +207,10 @@ export function toFiscalSettingsView(
     receipt_width: settings.receipt_width,
     offline_mode: settings.offline_mode,
     offline_codes_target: settings.offline_codes_target,
+    requisites: settings.requisites,
+    requisites_fetched_at: settings.requisites_fetched_at
+      ? new Date(settings.requisites_fetched_at).toISOString()
+      : null,
     offline_capable: isOfflineCapable(settings.provider),
     updated_at: settings.updated_at ? new Date(settings.updated_at).toISOString() : null,
   };
