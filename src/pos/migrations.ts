@@ -53,6 +53,7 @@ export const POS_MIGRATIONS = [
   '028_pos_fiscal_offline_replay.sql',
   '029_pos_fiscal_register_fn.sql',
   '030_pos_fiscal_requisites.sql',
+  '031_pos_fiscal_device_sessions.sql',
 ] as const;
 
 export function readMigration(file: string): string {

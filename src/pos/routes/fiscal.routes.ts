@@ -18,6 +18,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { ensurePosAuth, ensurePosOwner } from '../core/auth.js';
 import { isSecretsKeyConfigured } from '../core/secrets.js';
 import { asFiscalError, cashierMessage, FiscalError, isOfflineGate, supportCode } from '../fiscal/errors.js';
+import { leaseCodes } from '../fiscal/offline/lease.js';
 import { getLiveSession, listStuckSessions } from '../fiscal/offline/session.js';
 import { sessionView } from '../fiscal/offline/status.js';
 import * as fiscalService from '../fiscal/fiscal.service.js';
@@ -297,6 +298,45 @@ export function registerFiscalRoutes(fastify: FastifyInstance): void {
       return result;
     } catch (error) {
       return replyFiscalError(reply, error, 'Не вдалося примусово передати касу');
+    }
+  });
+
+  /**
+   * The till's reserve of offline codes (фаза 3).
+   *
+   * Called at the end of every sync, not only when something is wrong: the
+   * lease is a cache of rows we own, and `outbox_pending` is how the till
+   * tells us whether more of its offline receipts are still on their way —
+   * which is what holds the replay back. Refreshing it while online is the
+   * whole preparation for going offline.
+   */
+  fastify.post('/fiscal/offline/lease', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const deviceId = requireDeviceId(request, reply);
+    if (!deviceId) return;
+
+    const body = (request.body ?? {}) as { outbox_pending?: unknown };
+    const pending = Number(body.outbox_pending);
+    if (!Number.isInteger(pending) || pending < 0) {
+      return reply.code(400).send({ error: 'outbox_pending must be a non-negative integer' });
+    }
+
+    const ctx = await shifts.resolveContext(auth.storeId);
+    if (!ctx) return notConfigured(reply);
+    if (!ctx.settings.offline_mode || !ctx.provider.offline) {
+      // Not an error the cashier caused: the store simply does not sell
+      // offline, and the till stops asking until the owner turns it on.
+      return reply.code(409).send({
+        error: 'offline_off',
+        message: 'Офлайн-режим ПРРО вимкнено для цього магазину',
+      });
+    }
+
+    try {
+      return await leaseCodes(ctx, deviceId, { outboxPending: pending });
+    } catch (error) {
+      return replyFiscalError(reply, error, 'Не вдалося отримати офлайн-коди ПРРО');
     }
   });
 

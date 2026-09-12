@@ -215,12 +215,20 @@ export async function stampOfflineDocument(
   return result.rows[0] as FiscalReceiptRow;
 }
 
-/** Every document of an offline session, in replay order. */
+/**
+ * Every document of an offline session, in replay order — which is **date**
+ * order, not the order we learned of them.
+ *
+ * A till's receipts reach us by sync, interleaved with sales it rings online
+ * while its queue drains, so `offline_seq` records arrival and cannot be the
+ * order we transmit in: the tax office reads the chain by the dates printed on
+ * the receipts. Seq breaks ties between documents of the same second.
+ */
 export async function listSessionDocuments(sessionId: number): Promise<FiscalReceiptRow[]> {
   const result = await pool.query(
     `SELECT * FROM pos_fiscal_receipts
      WHERE offline_session_id = $1
-     ORDER BY offline_seq ASC, id ASC`,
+     ORDER BY fiscal_date ASC NULLS LAST, offline_seq ASC, id ASC`,
     [sessionId]
   );
   return result.rows as FiscalReceiptRow[];
@@ -279,7 +287,7 @@ export async function lastDoneProviderDocId(sessionId: number): Promise<string |
   const result = await pool.query(
     `SELECT provider_doc_id FROM pos_fiscal_receipts
      WHERE offline_session_id = $1 AND status = 'done' AND provider_doc_id IS NOT NULL
-     ORDER BY offline_seq DESC, id DESC
+     ORDER BY fiscal_date DESC NULLS LAST, offline_seq DESC, id DESC
      LIMIT 1`,
     [sessionId]
   );

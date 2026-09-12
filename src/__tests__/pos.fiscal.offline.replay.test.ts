@@ -4,7 +4,7 @@
 
 // src/__tests__/pos.fiscal.offline.replay.test.ts
 //
-// The replay of a server-held offline session (`replayServerSessions`, driven
+// The replay of a server-held offline session (`replayOfflineSessions`, driven
 // from `retryPendingFiscalDocs`) — phase 2, step 3. Sales are stamped over
 // HTTP with the provider down, then the cron tick is run by hand with the
 // provider back.

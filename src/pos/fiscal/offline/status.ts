@@ -12,7 +12,7 @@ import { pool } from '../../../db.js';
 import { countSessionDocuments, type SessionDocumentCounts } from '../ledger.js';
 import { getFiscalSettings, isOfflineCapable } from '../settings.service.js';
 import { getHolder, touchHolder, type HolderView } from './holder.js';
-import { countCodes } from './pool.js';
+import { countCodes, listLeasedCodes } from './pool.js';
 import type { OfflineSessionRow } from './session.js';
 
 export interface OfflineSessionView {
@@ -50,7 +50,7 @@ export interface OfflineStatusBlock {
   capable: boolean;
   enabled: boolean;
   codes_target: number;
-  codes: { free: number; leased: number; used: number } | null;
+  codes: { free: number; leased: number; used: number; leased_to_me: number } | null;
   session: OfflineSessionView | null;
 }
 
@@ -91,7 +91,15 @@ export async function getOfflineStatus(
 
   const registerKey = readRegisterKey(settings.config);
   const counts = await countCodes(storeId, registerKey);
-  block.codes = { free: counts.free, leased: counts.leased, used: counts.used };
+  // `leased_to_me` is what the till's own panel shows: the reserve it can
+  // actually spend, as opposed to the store's total lease.
+  const mine = deviceId ? await listLeasedCodes(storeId, registerKey, deviceId) : [];
+  block.codes = {
+    free: counts.free,
+    leased: counts.leased,
+    used: counts.used,
+    leased_to_me: mine.length,
+  };
 
   const live = await pool.query(
     `SELECT * FROM pos_fiscal_offline_sessions

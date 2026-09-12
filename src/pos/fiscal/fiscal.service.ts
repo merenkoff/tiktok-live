@@ -51,7 +51,10 @@ import type { FiscalCallCtx, FiscalResult } from './types.js';
 import { assertHolder } from './offline/holder.js';
 import {
   getLiveSession,
-  listLiveServerSessions,
+  listReplayableSessions,
+  offlineChainFloor,
+  sessionForDeviceDocument,
+  stampDeviceNext,
   markClosed,
   markGoOfflineSent,
   markGoOnlineSent,
@@ -61,7 +64,7 @@ import {
   stampNext,
   type OfflineSessionRow,
 } from './offline/session.js';
-import { refillOfflineCodes } from './offline/pool.js';
+import { isCodeLeasedTo, refillOfflineCodes } from './offline/pool.js';
 
 /**
  * Budget for the entire fiscal phase of one request.
@@ -207,6 +210,80 @@ export async function preflight(
   };
 }
 
+/**
+ * The gate for a sale the till already stamped itself (case C).
+ *
+ * Everything a normal pre-flight decides has already happened on the till —
+ * the receipt is printed and the customer has left. So this is not "may we
+ * sell?" but "may we file what was sold?", and the only answers are yes or a
+ * refusal the till must show its owner, never a retry that would re-ring the
+ * sale. It runs before `completeSale` all the same: a refusal must not leave a
+ * sale row, and the till's `client_uuid` pre-check has already resolved a
+ * document we took on an earlier attempt.
+ */
+export async function preflightDeviceStamp(
+  storeId: number,
+  staffId: number,
+  deviceId: string,
+  stamp: DeviceStampInput
+): Promise<FiscalGate> {
+  const ctx = await resolveContext(storeId);
+  if (!ctx) {
+    // The owner switched ПРРО off while this till was offline. The receipt in
+    // the customer's hand carries a tax-office code we can no longer file.
+    throw new FiscalError(
+      'ПРРО вимкнено — офлайн-чек цієї каси потребує ручного розбору',
+      'not_configured'
+    );
+  }
+  if (!ctx.settings.offline_mode || !ctx.provider.offline) {
+    throw new FiscalError(
+      'Офлайн-режим ПРРО вимкнено — цей чек потребує ручного розбору',
+      'not_configured'
+    );
+  }
+  // Not the holder any more (a forced handover while it was offline): its
+  // codes are burned, so the stamp cannot be honoured. Terminal, and the
+  // receipt lands in the owner's attention list.
+  await assertHolder(ctx, deviceId);
+
+  // Before anything is written: a code we cannot honour is the one refusal
+  // worth catching early, and it is the same check the stamp makes again
+  // inside its transaction.
+  if (!(await isCodeLeasedTo(ctx.storeId, ctx.registerKey, deviceId, stamp.fiscalCode))) {
+    throw new FiscalError(
+      'Код ПРРО не належить цій касі або вже використаний',
+      'offline_code_invalid',
+      { providerCode: 'offline_code_invalid' }
+    );
+  }
+
+  const shiftRow = await getLiveShiftRow(storeId, ctx.registerKey);
+  const session = await sessionForDeviceDocument(ctx, {
+    deviceId,
+    clientSessionId: stamp.clientSessionId,
+    shiftId: shiftRow ? Number(shiftRow.id) : null,
+    fiscalDate: stamp.fiscalDate,
+  });
+
+  if (Date.now() - new Date(session.started_at).getTime() >= OFFLINE_SESSION_MAX_MS) {
+    // Past the tax office's 36h. The document is still recorded — refusing it
+    // would only lose the receipt — but the session cannot be replayed as one
+    // chain any more, so it goes to the owner.
+    await markStuck(session.id, 'offline_limit', 'Офлайн понад 36 годин — потрібен звʼязок із ПРРО');
+  }
+
+  return {
+    on: true,
+    mode: 'offline',
+    session,
+    ctx,
+    shiftRowId: session.shift_id ?? (shiftRow ? Number(shiftRow.id) : null),
+    staffId,
+    signal: AbortSignal.timeout(FISCAL_BUDGET_MS),
+  };
+}
+
 /** The gate for a store inside a live offline session. Throws the session's refusals. */
 async function offlineGate(
   ctx: FiscalContext,
@@ -215,11 +292,11 @@ async function offlineGate(
   signal: AbortSignal,
   op: FiscalOp
 ): Promise<FiscalGate> {
-  if (session.holder !== 'server') {
-    // A till-held session (case C, phase 3) is replayed by that till's sync;
-    // nothing else may register documents on the register meanwhile.
-    throw new FiscalError('Каса надсилає офлайн-чеки — зачекайте синхронізації', 'offline_session_open');
-  }
+  // A till-held session is not refused here: while it is open, the till that
+  // holds the register is the only caller that reaches this (`assertHolder`),
+  // and its online sales have to join the session rather than be registered
+  // live — a delivered online receipt inside the session would break the
+  // `go-offline` ordering exactly as it would in case B.
   if (session.status === 'replaying') {
     throw new FiscalError('ПРРО надсилає офлайн-чеки — повторіть за хвилину', 'replaying');
   }
@@ -669,6 +746,87 @@ async function fiscalizeSaleOffline(
   }
 }
 
+/** What the till stamped on the receipt while it had no network. */
+export interface DeviceStampInput {
+  /** The till's own id for the offline stretch this receipt belongs to. */
+  clientSessionId: string;
+  /** The tax-office code it spent — must be one we leased to this very till. */
+  fiscalCode: string;
+  /** The receipt's printed date and time, by the till's clock. */
+  fiscalDate: Date;
+  /** Its position in the till's own stretch; kept for diagnostics, not for order. */
+  seq: number;
+}
+
+/**
+ * Case C: file a sale the till stamped itself.
+ *
+ * Same shape as {@link fiscalizeSaleOffline} and deliberately so — the ledger
+ * row, the session and the replay do not care who chose the code. The one
+ * difference that matters: a failure here cannot void the sale. The goods left
+ * the shop during the outage and the customer holds a printed fiscal receipt;
+ * the honest outcome is a refused upload the owner settles, not a cancelled
+ * sale the till would try to re-ring.
+ */
+export async function fiscalizeSaleDeviceStamp(
+  gate: FiscalGate,
+  sale: FiscalSaleSource,
+  deviceId: string,
+  stamp: DeviceStampInput
+): Promise<FiscalView> {
+  const ctx = gate.ctx as FiscalContext;
+  const session = gate.session as OfflineSessionRow;
+  const requestId = sale.client_uuid ?? randomRequestId();
+  const { tax, codes } = await loadLineCodes(ctx.storeId, sale.id, ctx.settings.default_tax_code);
+  const doc = buildSaleDoc({ requestId, sale, tax, codes });
+
+  const row = await ledger.openDocument({
+    storeId: ctx.storeId,
+    docType: 'sale',
+    saleId: sale.id,
+    shiftId: gate.shiftRowId,
+    provider: ctx.provider.id,
+    requestId,
+    totalCents: sale.total_cents,
+    requestPayload: doc,
+    mode: 'offline',
+  });
+  // Already stamped — the till re-sent a receipt whose answer it never saw.
+  if (row.offline_seq != null) return offlineView(row);
+
+  let result: Awaited<ReturnType<typeof stampDeviceNext>>;
+  try {
+    result = await stampDeviceNext(session.id, row.id, {
+      deviceId,
+      fiscalCode: stamp.fiscalCode,
+      fiscalDate: stamp.fiscalDate,
+    });
+  } catch (raw) {
+    // Park the document rather than leave it pending: the sale stays (the
+    // goods are gone), the owner gets it in the attention list, and no retry
+    // pass will try to file a stamp we just refused.
+    const err = asFiscalError(raw, 'Не вдалося прийняти офлайн-чек каси');
+    const failed = await ledger.markFailed(row, err, { park: true });
+    throw new FiscalDocumentFailed(failed, err, false);
+  }
+  logger.info('Sale accepted with the till\'s own offline stamp', {
+    storeId: ctx.storeId,
+    saleId: sale.id,
+    sessionId: session.id,
+    deviceId,
+    clientSeq: stamp.seq,
+    seq: result.seq,
+    fiscalCode: result.fiscalCode,
+  });
+  return offlineView({
+    ...row,
+    mode: 'offline',
+    fiscal_code: result.fiscalCode,
+    fiscal_date: result.fiscalDate,
+    tax_url: result.taxUrl,
+  });
+}
+
 export interface FiscalRefundSource extends RefundInput {
   id: number;
   client_uuid: string | null;
@@ -831,7 +989,7 @@ export async function retryPendingFiscalDocs(opts: { storeId?: number } = {}): P
   if (retryRunning) return { ...EMPTY_RETRY };
   retryRunning = true;
   try {
-    const replay = await replayServerSessions(opts);
+    const replay = await replayOfflineSessions(opts);
 
     const abandoned =
       (await ledger.abandonVoidedSaleDocs()) +
@@ -877,9 +1035,10 @@ export async function retryPendingFiscalDocs(opts: { storeId?: number } = {}): P
   }
 }
 
-// ── Offline session replay (case B) ─────────────────────────────────────────
+// ── Offline session replay (cases B and C) ──────────────────────────────────
 //
-// TechDocs/POS_FISCAL_OFFLINE.md §5. One pass per live server-held session:
+// TechDocs/POS_FISCAL_OFFLINE.md §5. One pass per live session — server-held
+// or carrying a till's own receipts, the chain is the same and so is this:
 //   0. is the provider back? (`registerState` — a read, no slot);
 //   1. resync the pool — the provider may have gone offline on its own and
 //      spent codes we still list as free;
@@ -912,7 +1071,7 @@ export interface ReplayResult {
 }
 
 /** `storeId` narrows the pass to one store — for tests; the cron replays every store. */
-export async function replayServerSessions(opts: { storeId?: number } = {}): Promise<ReplayResult> {
+export async function replayOfflineSessions(opts: { storeId?: number } = {}): Promise<ReplayResult> {
   const totals: ReplayResult = {
     sessions: 0,
     skipped: 0,
@@ -922,7 +1081,7 @@ export async function replayServerSessions(opts: { storeId?: number } = {}): Pro
     closed: 0,
     stuck: 0,
   };
-  const sessions = await listLiveServerSessions({ storeId: opts.storeId });
+  const sessions = await listReplayableSessions({ storeId: opts.storeId });
   for (const session of sessions) {
     totals.sessions += 1;
     try {
@@ -1017,12 +1176,12 @@ async function replayOneSession(initial: OfflineSessionRow): Promise<SessionOutc
   // 2. go-offline, once.
   let session = (await markReplaying(initial.id)) ?? initial;
   if (!session.go_offline_tx_id) {
-    const floor = await ledger.lastOnlineDeliveredAt(ctx.storeId);
+    const floor = await offlineChainFloor(ctx.storeId, ctx.registerKey);
     if (floor && floor.getTime() > new Date(session.started_at).getTime()) {
       await markStuck(
         session.id,
         'go_offline_order',
-        'Онлайн-чек доставлено в ДПС після початку офлайн-сесії — реплей неможливий'
+        'ДПС отримала документ цього реєстратора після початку офлайн-сесії — реплей неможливий'
       );
       logger.error('Offline session parked: go-offline date would precede a delivered document', {
         ...log,

@@ -49,6 +49,10 @@
  *   `offline_session_open`    — refunds/service receipts/shift close wait for the replay.
  *   `offline_codes_exhausted` — the pool has no free tax-office code left.
  *
+ * Ours too, and terminal rather than "wait" — the till stamped a sale offline
+ * with a code we cannot honour (фаза 3):
+ *   `offline_code_invalid`    — not leased to this till, already spent, or burned.
+ *
  * And the one that is not a failure at all:
  *   `duplicate`      — the provider already holds this `requestId`.
  */
@@ -60,6 +64,7 @@ export type FiscalErrorKind =
   | 'shift_deadline'
   | 'offline_session_open'
   | 'offline_codes_exhausted'
+  | 'offline_code_invalid'
   | 'auth_rejected'
   | 'rejected'
   | 'auth_expired'
@@ -142,6 +147,7 @@ export function isTerminal(kind: FiscalErrorKind): boolean {
     kind === 'auth_rejected' ||
     kind === 'rejected' ||
     kind === 'register_held' ||
+    kind === 'offline_code_invalid' ||
     isOfflineGate(kind)
   );
 }
@@ -171,6 +177,7 @@ const CASHIER_MESSAGES: Record<FiscalErrorKind, string> = {
   shift_deadline: 'Зміна ПРРО добігає доби — закрийте зміну та відкрийте нову',
   offline_session_open: 'Офлайн-чеки ПРРО ще не надіслано — повторіть після синхронізації',
   offline_codes_exhausted: 'Закінчились офлайн-коди ПРРО — потрібен звʼязок із ПРРО',
+  offline_code_invalid: 'Цей офлайн-чек не можна прийняти — код ПРРО недійсний для цієї каси',
   auth_rejected: 'ПРРО відхилило дані доступу — зверніться до власника магазину',
   rejected: 'ПРРО відхилило чек — перевірте товари та ціни',
   auth_expired: 'Сесія ПРРО завершилась — спробуйте ще раз',
