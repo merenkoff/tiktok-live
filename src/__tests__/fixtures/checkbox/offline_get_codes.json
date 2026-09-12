@@ -1,32 +1,32 @@
 [
   {
-    "fiscal_code": "TEST-F3XkZM",
+    "fiscal_code": "TEST-VWvfoM",
     "serial_id": 1,
     "cash_register_id": "0bed7770-9227-4a35-8efe-863332ac5950",
-    "created_at": "2026-09-12T04:56:20+00:00"
-  },
-  {
-    "fiscal_code": "TEST-M6Jt4h",
-    "serial_id": 2,
-    "cash_register_id": "0bed7770-9227-4a35-8efe-863332ac5950",
-    "created_at": "2026-09-12T04:56:20+00:00"
-  },
-  {
-    "fiscal_code": "TEST-MckR0h",
-    "serial_id": 3,
-    "cash_register_id": "0bed7770-9227-4a35-8efe-863332ac5950",
-    "created_at": "2026-09-12T04:56:20+00:00"
-  },
-  {
-    "fiscal_code": "TEST-VWvfoM",
-    "serial_id": 4,
-    "cash_register_id": "0bed7770-9227-4a35-8efe-863332ac5950",
-    "created_at": "2026-09-12T04:56:20+00:00"
+    "created_at": "2026-09-12T22:44:43+00:00"
   },
   {
     "fiscal_code": "TEST-Agxvef",
+    "serial_id": 2,
+    "cash_register_id": "0bed7770-9227-4a35-8efe-863332ac5950",
+    "created_at": "2026-09-12T22:44:43+00:00"
+  },
+  {
+    "fiscal_code": "TEST-EgvjR0",
+    "serial_id": 3,
+    "cash_register_id": "0bed7770-9227-4a35-8efe-863332ac5950",
+    "created_at": "2026-09-12T22:44:43+00:00"
+  },
+  {
+    "fiscal_code": "TEST-mphbSj",
+    "serial_id": 4,
+    "cash_register_id": "0bed7770-9227-4a35-8efe-863332ac5950",
+    "created_at": "2026-09-12T22:44:43+00:00"
+  },
+  {
+    "fiscal_code": "TEST-QSliK1",
     "serial_id": 5,
     "cash_register_id": "0bed7770-9227-4a35-8efe-863332ac5950",
-    "created_at": "2026-09-12T04:56:20+00:00"
+    "created_at": "2026-09-12T22:44:43+00:00"
   }
 ]

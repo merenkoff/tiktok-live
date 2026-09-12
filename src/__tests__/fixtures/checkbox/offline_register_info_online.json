@@ -3,7 +3,7 @@
   "organization_id": "c4fa5b83-ef59-4dd5-b668-7e257e9c7c8d",
   "fiscal_number": "TEST938114",
   "created_at": "2022-01-28T10:56:17.000000+00:00",
-  "updated_at": "2026-09-12T05:06:30.828180+00:00",
+  "updated_at": "2026-09-12T22:54:50.890440+00:00",
   "number": 1,
   "address": "УКРАЇНА, М.КИЇВ ГОЛОСІЇВСЬКИЙ Р-Н, Тестова, 41а",
   "title": "",
@@ -34,8 +34,8 @@
     }
   },
   "documents_state": {
-    "last_receipt_code": 16,
+    "last_receipt_code": 29,
     "last_report_code": 5,
-    "last_z_report_code": 9
+    "last_z_report_code": 11
   }
 }

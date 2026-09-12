@@ -1,7 +1,7 @@
 {
-  "available": 1998,
+  "available": 1999,
   "default": 2000,
   "minimal": 1000,
-  "used": 2,
+  "used": 1,
   "enough_offline_codes": true
 }
