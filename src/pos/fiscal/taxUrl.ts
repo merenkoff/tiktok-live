@@ -12,19 +12,23 @@
 //
 //   https://cabinet.tax.gov.ua/cashregs/check
 //     ?id=<receipt fiscal number>   the code taken from the reserve
-//     &date=YYYYMMDD                fiscal date, local
-//     &time=HH:MM:SS                fiscal time, local
+//     &date=yyyyMMdd                fiscal date, local
+//     &time=HHmm                    fiscal time, local
 //     &fn=<ФН ПРРО>                 the register's own number, cached
-//     &sm=<total>                   the receipt total
+//     &sm=<total>                   the receipt total, "." separator
 //
-// A real receipt verifies with exactly these five and no `mac`
-// (TechDocs/POS_FISCAL_OFFLINE.md). Checkbox additionally puts `mac` (the
-// transaction-chain hash) into its own link; it is an extra, not a requirement,
-// and one we cannot compute from outside their chain anyway.
+// This is the format Положення № 13 prescribes (розділ II п. 2, рядок 29 —
+// TechDocs/dps-prro-api/polozhennya-13.md), and a real receipt verifies with
+// exactly these five. The same line adds `mac=…` "лише для чеків, створених
+// ПРРО в режимі офлайн": for an OFFLINE receipt the regulation's format does
+// include the hash, and that hash is the ПРРО's transaction chain — Checkbox's
+// to compute at `sell-offline`, not ours. So the link we build for an offline
+// receipt is the regulation's format minus `mac`, and the replay replaces it
+// with the provider's complete one (see the design doc for what that means
+// for the paper).
 //
 // The cabinet will not find the receipt until it is actually delivered — the
-// link starts working after the replay. That is how every ПРРО's offline
-// receipt behaves, and it is why the paper says «ОФЛАЙН» next to it.
+// link starts working after the replay.
 
 const CHECK_URL = 'https://cabinet.tax.gov.ua/cashregs/check';
 
@@ -42,7 +46,6 @@ const PARTS = new Intl.DateTimeFormat('uk-UA', {
   day: '2-digit',
   hour: '2-digit',
   minute: '2-digit',
-  second: '2-digit',
   hour12: false,
 });
 
@@ -55,7 +58,9 @@ function localParts(at: Date): { date: string; time: string } {
   const hour = get('hour') === '24' ? '00' : get('hour');
   return {
     date: `${get('year')}${get('month')}${get('day')}`,
-    time: `${hour}:${get('minute')}:${get('second')}`,
+    // `HHmm`, as the regulation's template spells it (its prose says HHmmss
+    // once, the template and every real receipt we have seen say HHmm).
+    time: `${hour}${get('minute')}`,
   };
 }
 

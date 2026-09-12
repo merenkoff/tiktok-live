@@ -34,8 +34,9 @@ describe('buildTaxUrl', () => {
     expect(p.get('fn')).toBe('TEST551151');
     expect(p.get('sm')).toBe('563.00');
     // Local time, not UTC: the printed fiscal time and the link must agree.
+    // `HHmm` — the regulation's template (Положення № 13, розділ II п. 2).
     expect(p.get('date')).toBe('20231129');
-    expect(p.get('time')).toBe('16:07:28');
+    expect(p.get('time')).toBe('1607');
     // `mac` is the provider's chain hash — an extra we cannot compute and the
     // cabinet does not ask for.
     expect(p.get('mac')).toBeNull();
@@ -59,8 +60,8 @@ describe('buildTaxUrl', () => {
         totalCents: 100,
       }) as string
     );
-    expect(summer.get('time')).toBe('13:30:00');
-    expect(winter.get('time')).toBe('12:30:00');
+    expect(summer.get('time')).toBe('1330');
+    expect(winter.get('time')).toBe('1230');
   });
 
   it('prints midnight as 00, not 24', () => {
@@ -74,7 +75,7 @@ describe('buildTaxUrl', () => {
       }) as string
     );
     expect(p.get('date')).toBe('20260116');
-    expect(p.get('time')).toBe('00:10:05');
+    expect(p.get('time')).toBe('0010');
   });
 
   it('reports a refund by its absolute sum', () => {
