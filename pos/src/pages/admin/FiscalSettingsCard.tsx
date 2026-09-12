@@ -18,10 +18,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '@pos/platform';
+import { taxIdLine } from '../../lib/receipt';
 import type {
   FiscalProviderId,
   FiscalReceiptSource,
   FiscalReceiptWidth,
+  FiscalRequisites,
   FiscalSettingsView,
 } from '@pos/platform';
 
@@ -48,6 +50,94 @@ const PROVIDER_LABEL: Record<FiscalProviderId, string> = {
 
 type LoadState = 'loading' | 'ready' | 'forbidden' | 'error';
 
+/**
+ * What the provider knows about the store — read-only for now. Editing comes
+ * later; today the point is that the owner types nothing: the block fills
+ * itself on the first online contact (shift open, connection test).
+ */
+function RequisitesSection({
+  requisites,
+  fetchedAt,
+  refreshing,
+  onRefresh,
+}: {
+  requisites: FiscalRequisites | null;
+  fetchedAt: string | null;
+  refreshing: boolean;
+  onRefresh: () => void;
+}) {
+  return (
+    <div className="rounded-sq border border-sq-divider p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <p className="sq-section-label">Реквізити ПРРО</p>
+        <button
+          type="button"
+          className="text-xs underline text-sq-blue disabled:opacity-50"
+          disabled={refreshing}
+          onClick={onRefresh}
+        >
+          {refreshing ? 'Оновлення…' : 'Оновити з ПРРО'}
+        </button>
+      </div>
+      {!requisites ? (
+        <p className="text-xs text-sq-secondary">
+          Ще не отримано. З’являться після першого чека онлайн — або натисніть «Оновити з ПРРО».
+        </p>
+      ) : (
+        <dl className="text-sm grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+          {requisites.organization.name && (
+            <>
+              <dt className="text-sq-secondary">Організація</dt>
+              <dd>{requisites.organization.name}</dd>
+            </>
+          )}
+          {taxIdLine(requisites) && (
+            <>
+              <dt className="text-sq-secondary">Податковий №</dt>
+              <dd>{taxIdLine(requisites)}</dd>
+            </>
+          )}
+          {requisites.point.name && (
+            <>
+              <dt className="text-sq-secondary">Точка</dt>
+              <dd>{requisites.point.name}</dd>
+            </>
+          )}
+          {requisites.point.address && (
+            <>
+              <dt className="text-sq-secondary">Адреса</dt>
+              <dd>{requisites.point.address}</dd>
+            </>
+          )}
+          {requisites.register.fiscal_number && (
+            <>
+              <dt className="text-sq-secondary">ФН ПРРО</dt>
+              <dd className="font-mono">{requisites.register.fiscal_number}</dd>
+            </>
+          )}
+          {requisites.taxes.length > 0 && (
+            <>
+              <dt className="text-sq-secondary">Ставки</dt>
+              <dd>
+                {requisites.taxes
+                  .map((t) => `${t.symbol} — ${t.label || `${t.rate}%`}${t.is_default ? ' (за замовч.)' : ''}`)
+                  .join('; ')}
+              </dd>
+            </>
+          )}
+        </dl>
+      )}
+      {fetchedAt && (
+        <p className="text-xs text-sq-muted">Оновлено {new Date(fetchedAt).toLocaleString('uk-UA')}</p>
+      )}
+      <p className="text-xs text-sq-muted">
+        Друкуються в шапці кожного фіскального чека. Редагування — згодом; поки що так, як
+        зареєстровано у провайдера.
+      </p>
+    </div>
+  );
+}
+
 function errorText(error: unknown): string {
   const res = (
     error as { response?: { status?: number; data?: { error?: string; message?: string } } }
@@ -73,6 +163,7 @@ export function FiscalSettingsCard() {
   // owner is still typing it.
   const [codesTarget, setCodesTarget] = useState(String(200));
   const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   function hydrate(view: FiscalSettingsView) {
@@ -118,6 +209,21 @@ export function FiscalSettingsCard() {
     Number.isInteger(parsedTarget) &&
     parsedTarget >= CODES_TARGET_MIN &&
     parsedTarget <= CODES_TARGET_MAX;
+
+  // The connection test is the backend's "refresh the requisites" moment for
+  // an enabled store, so the button is that call plus a reload of this card.
+  async function refreshRequisites() {
+    setRefreshing(true);
+    setMessage(null);
+    try {
+      await api.posRequest('post', '/fiscal/test-connection');
+      hydrate(await api.fiscalSettings());
+    } catch (error) {
+      setMessage(errorText(error));
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   async function save() {
     if (offlineCapable && !targetValid) {
@@ -298,6 +404,15 @@ export function FiscalSettingsCard() {
                 один офлайн-чек.
               </p>
             </div>
+          )}
+
+          {settings.provider && (
+            <RequisitesSection
+              requisites={settings.requisites}
+              fetchedAt={settings.requisites_fetched_at}
+              refreshing={refreshing}
+              onRefresh={() => void refreshRequisites()}
+            />
           )}
 
           <div className="text-xs text-sq-secondary space-y-1">

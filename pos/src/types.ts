@@ -202,6 +202,43 @@ export interface FiscalPublicConfig {
    * (TechDocs/POS_FISCAL_OFFLINE.md). Optional: older cached auth lacks it.
    */
   offline_mode?: boolean;
+  /** ФН ПРРО (рядок 34 of the receipt), cached from the provider. Optional: older cached auth lacks it. */
+  register_fiscal_number?: string | null;
+  /** The rate code sales are fiscalised under; picks the letter printed next to each line. */
+  default_tax_code?: string | null;
+  /**
+   * What the receipt header says about the store, as the provider last
+   * reported it. Travels with the login so the desktop till prints it offline.
+   */
+  requisites?: FiscalRequisites | null;
+}
+
+/** One tax rate as the provider lists it — the letter printed next to a receipt line. */
+export interface FiscalTaxRate {
+  /** The provider's id of the rate, the value `default_tax_code` holds. */
+  code: string;
+  symbol: string;
+  label: string;
+  /** Percent. */
+  rate: number;
+  no_vat: boolean;
+  is_default: boolean;
+}
+
+/**
+ * The store as the provider knows it — mirrors `FiscalRequisites` on the
+ * backend field for field (Положення № 13, розділ II п. 2).
+ */
+export interface FiscalRequisites {
+  organization: {
+    name: string | null;
+    edrpou: string | null;
+    tax_number: string | null;
+    is_vat: boolean | null;
+  };
+  point: { name: string | null; address: string | null };
+  register: { fiscal_number: string | null; title: string | null; address: string | null };
+  taxes: FiscalTaxRate[];
 }
 
 /**
@@ -252,6 +289,9 @@ export interface FiscalSettingsView {
    * False ⇒ `offline_mode` cannot be switched on at all, so the owner is not
    * shown a switch that only ever errors. */
   offline_capable: boolean;
+  /** As last fetched from the provider; null until the first online contact. */
+  requisites: FiscalRequisites | null;
+  requisites_fetched_at: string | null;
   updated_at: string | null;
   /** False when the server has no `POS_SECRETS_KEY` — credentials cannot be saved. */
   secrets_key_configured: boolean;
