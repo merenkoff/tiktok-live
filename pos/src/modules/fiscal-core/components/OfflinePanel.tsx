@@ -79,6 +79,7 @@ export function OfflinePanel({ status }: { status: FiscalStatus }) {
   if (!offline?.enabled) return null;
 
   const free = offline.codes?.free ?? 0;
+  const mine = offline.codes?.leased_to_me ?? 0;
   // A quarter of the target left is the point where the owner still has time to
   // react before the reserve is gone; the refill cron runs every 10 minutes and
   // needs the provider to be reachable to top it up.
@@ -90,6 +91,11 @@ export function OfflinePanel({ status }: { status: FiscalStatus }) {
       <p className={`text-sm font-semibold ${low ? 'text-amber-600' : 'text-sq-secondary'}`}>
         Запас фіскальних кодів: {free}
       </p>
+      {mine > 0 && (
+        // The store's reserve is not what this till can spend: only the codes
+        // leased to it travel into an outage with it (фаза 3).
+        <p className="text-sm text-sq-secondary">Із них на цій касі: {mine}</p>
+      )}
       {low && (
         <p className="text-xs text-amber-700">
           Запас майже вичерпано. Поки ПРРО доступне, він поповнюється автоматично.

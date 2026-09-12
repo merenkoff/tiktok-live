@@ -43,6 +43,10 @@ const ALLOW = [
   'src/offline/sync.ts',
   // Imported by sync.ts, so it lands in the same chunk for the same reason.
   'src/offline/outboxPolicy.ts',
+  // Same again: the ПРРО offline lease is a direct dependency of repository.ts
+  // (it stamps the sale) and sync.ts (it refreshes the reserve), so it is
+  // bundled into the platform chunk with them.
+  'src/offline/lease.ts',
 ];
 
 // import specifier (any relative depth) -> what it smuggles in

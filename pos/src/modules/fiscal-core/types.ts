@@ -44,7 +44,13 @@ export interface OfflineStatusBlock {
   enabled: boolean;
   codes_target: number;
   /** Null while offline mode is off — the pool is not read at all then. */
-  codes: { free: number; leased: number; used: number } | null;
+  codes: {
+    free: number;
+    leased: number;
+    used: number;
+    /** Of the leased ones, how many this very till holds (фаза 3). */
+    leased_to_me?: number;
+  } | null;
   session: OfflineSessionView | null;
 }
 

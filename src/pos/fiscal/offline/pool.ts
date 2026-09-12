@@ -235,6 +235,77 @@ export async function takeFreeCodes(
 }
 
 /**
+ * The codes this till is currently holding, in the order it must spend them.
+ *
+ * The till keeps its own copy (it has to — offline it cannot ask), so this is
+ * the authority it re-syncs against on every lease call: a code that was
+ * burned or handed to another till disappears from the answer.
+ */
+export async function listLeasedCodes(
+  storeId: number,
+  registerKey: string,
+  deviceId: string
+): Promise<OfflineCodeRow[]> {
+  const result = await pool.query(
+    `SELECT * FROM pos_fiscal_offline_codes
+     WHERE store_id = $1 AND cash_register_key = $2 AND status = 'leased' AND lease_device_id = $3
+     ORDER BY serial_id ASC NULLS LAST, id ASC`,
+    [storeId, registerKey, deviceId]
+  );
+  return result.rows as OfflineCodeRow[];
+}
+
+/**
+ * Is this code still leased to this till?
+ *
+ * The same question `useLeasedCode` answers by updating, asked before the sale
+ * row exists: a code that was burned by a forced handover, already spent, or
+ * never this till's is refused while refusing is still free.
+ */
+export async function isCodeLeasedTo(
+  storeId: number,
+  registerKey: string,
+  deviceId: string,
+  fiscalCode: string
+): Promise<boolean> {
+  const result = await pool.query(
+    `SELECT 1 FROM pos_fiscal_offline_codes
+     WHERE store_id = $1 AND cash_register_key = $2 AND fiscal_code = $4
+       AND status = 'leased' AND lease_device_id = $3
+     LIMIT 1`,
+    [storeId, registerKey, deviceId, fiscalCode]
+  );
+  return result.rows.length > 0;
+}
+
+/**
+ * Spend one specific leased code on a document the till already stamped.
+ *
+ * The WHERE clause is the validation: only a code still `leased` to this very
+ * till can be spent, so a code from another till, one already on a receipt, or
+ * one burned by a forced handover simply matches nothing. Runs on the caller's
+ * transaction, next to the ledger stamp it belongs to.
+ */
+export async function useLeasedCode(
+  db: Queryable,
+  storeId: number,
+  registerKey: string,
+  deviceId: string,
+  fiscalCode: string,
+  receiptId: number
+): Promise<OfflineCodeRow | null> {
+  const result = await db.query(
+    `UPDATE pos_fiscal_offline_codes SET
+       status = 'used', used_by_receipt_id = $5::bigint, used_at = NOW(), updated_at = NOW()
+     WHERE store_id = $1 AND cash_register_key = $2 AND fiscal_code = $4
+       AND status = 'leased' AND lease_device_id = $3
+     RETURNING *`,
+    [storeId, registerKey, deviceId, fiscalCode, receiptId]
+  );
+  return (result.rows[0] as OfflineCodeRow) ?? null;
+}
+
+/**
  * Give a till's lease back — to the pool (`free`) on a clean handover, or
  * `burned` when the till was force-taken and may have stamped receipts on
  * some of them that will never reach us in order.

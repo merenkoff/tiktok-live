@@ -13,7 +13,9 @@ import type {
   SaleListItem,
   SalePaymentInput,
 } from '../types';
-import { FiscalSaleUnknownError, OfflineFiscalError, OfflineRefundError } from './errors';
+import { FiscalSaleUnknownError, OfflineRefundError } from './errors';
+import { takeStamp } from './lease';
+import { buildTaxUrl } from '../lib/taxUrl';
 
 /**
  * A refunded sale plus the REFUND's fiscal result.
@@ -257,7 +259,8 @@ function variantLabel(item: CatalogItem): string {
 function localSaleDetail(
   clientUuid: string,
   payload: OutboxSalePayload,
-  catalog: CatalogItem[]
+  catalog: CatalogItem[],
+  registerFiscalNumber: string | null = null
 ): SaleDetail {
   const byId = new Map(catalog.map((item) => [item.variant_id, item]));
   let subtotal = 0;
@@ -281,17 +284,40 @@ function localSaleDetail(
   });
   const auth = api.loadAuth();
   const short = clientUuid.replace(/-/g, '').slice(0, 8).toUpperCase();
+  const total = payload.payments.reduce((s, p) => s + p.amount_cents, 0) || subtotal;
   return {
     id: -Date.now(),
     receipt_number: `OFF-${short}`,
     client_uuid: clientUuid,
     status: 'completed',
-    // A queued sale has no fiscal document by construction — a fiscalising
-    // store never reaches this path (see completeSale).
-    fiscal_status: 'none',
-    fiscal: null,
+    // A queued sale in a non-fiscal store has no fiscal document at all. One
+    // this till stamped from its reserve has a real tax-office number, printed
+    // on the customer's receipt — the same shape the server returns for a
+    // receipt it stamps itself, so the receipt layout and the card need no
+    // branch of their own. What is missing until the replay is the контрольне
+    // число, which only the ПРРО can mint.
+    fiscal_status: payload.fiscal_offline ? 'pending' : 'none',
+    fiscal: payload.fiscal_offline
+      ? {
+          status: 'pending',
+          mode: 'offline',
+          fiscal_code: payload.fiscal_offline.fiscal_code,
+          fiscal_date: payload.fiscal_offline.fiscal_date,
+          control_number: null,
+          tax_url: buildTaxUrl({
+            fiscalCode: payload.fiscal_offline.fiscal_code,
+            fiscalDate: new Date(payload.fiscal_offline.fiscal_date),
+            registerFiscalNumber,
+            totalCents: total,
+          }),
+          qr_payload: null,
+          receipt_text: null,
+          error_code: null,
+          error_message: null,
+        }
+      : null,
     subtotal_cents: subtotal,
-    total_cents: payload.payments.reduce((s, p) => s + p.amount_cents, 0) || subtotal,
+    total_cents: total,
     refunded_cents: 0,
     staff_name: auth?.staff.display_name ?? '',
     customer_id: payload.customer_id && payload.customer_id > 0 ? payload.customer_id : null,
@@ -332,6 +358,8 @@ export async function completeSale(payload: {
   // fresh sale — without ever creating a second one.
   const clientUuid = opts.clientUuid ?? crypto.randomUUID();
   const fiscal = api.loadAuth()?.store.fiscal?.enabled === true;
+  /** ФН ПРРО for the offline receipt's QR; only set when this sale is stamped. */
+  let registerFiscalNumber: string | null = null;
   let customer = payload.customer_id ? await db.customers.get(payload.customer_id) : undefined;
   if (!customer && payload.customer_id) {
     const listed = await db.customers.toArray();
@@ -368,8 +396,14 @@ export async function completeSale(payload: {
       if (fiscal) throw new FiscalSaleUnknownError(clientUuid);
     }
   } else if (fiscal) {
-    // A ПРРО receipt is registered at the moment of sale. Nothing is written.
-    throw new OfflineFiscalError();
+    // A ПРРО receipt is registered at the moment of sale, so a fiscalising
+    // store can only queue one if this till is carrying a reserve of
+    // tax-office codes and every local gate passes. `takeStamp` throws
+    // `OfflineFiscalError` with the reason otherwise, before anything is
+    // written (TechDocs/POS_FISCAL_OFFLINE.md, фаза 3).
+    const taken = await takeStamp();
+    salePayload.fiscal_offline = taken.stamp;
+    registerFiscalNumber = taken.registerFiscalNumber;
   }
 
   await db.outbox.add({
@@ -389,7 +423,7 @@ export async function completeSale(payload: {
       .catch(() => undefined);
   }
   const catalog = await db.catalog.toArray();
-  const detail = localSaleDetail(clientUuid, salePayload, catalog);
+  const detail = localSaleDetail(clientUuid, salePayload, catalog, registerFiscalNumber);
   await putLocalSale(detail, clientUuid, null);
   return detail;
 }

@@ -5,6 +5,8 @@
 import Dexie, { type Table } from 'dexie';
 import type {
   CatalogItem,
+  FiscalOfflineStamp,
+  FiscalPublicConfig,
   ModuleRemoteEntry,
   PosCustomer,
   PosRole,
@@ -52,6 +54,16 @@ export interface StaffUnlockRow {
   fiscalEnabled?: boolean;
   fiscalProvider?: string | null;
   /**
+   * The whole public ПРРО block, cached from the last online `AuthResponse`.
+   *
+   * `fiscalEnabled`/`fiscalProvider` above predate it and stay for rows written
+   * by older builds. They are not enough: a receipt printed offline needs the
+   * store's requisites, ФН ПРРО and rate code to be lawful (фаза 8в), and the
+   * till has to decide whether it may stamp at all (`offline_mode`) — all of
+   * which a cold PIN login rebuilds from this row and nothing else.
+   */
+  fiscal?: FiscalPublicConfig | null;
+  /**
    * `store.module_remotes` cached from AuthResponse (optional on old rows), so
    * an offline session rebuilt from this row still carries the store's module
    * list — the `pos_module_remotes` localStorage key is what boot actually
@@ -83,6 +95,8 @@ export interface OutboxCustomerPayload {
 
 export interface OutboxSalePayload {
   client_uuid: string;
+  /** Present when this till stamped the receipt from its own reserve (фаза 3). */
+  fiscal_offline?: FiscalOfflineStamp | null;
   items: Array<{ variant_id: number; quantity: number }>;
   payments: SalePaymentInput[];
   note?: string;

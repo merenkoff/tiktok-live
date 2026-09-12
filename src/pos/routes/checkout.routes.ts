@@ -38,6 +38,8 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
       cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
       customer_id?: number | null;
       client_uuid?: string | null;
+      /** Set by the desktop till for a sale it stamped itself while offline (фаза 3). */
+      fiscal_offline?: unknown;
     };
 
     const headerKey = request.headers['idempotency-key'];
@@ -67,6 +69,15 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
         }
         return reply.code(200).send(existing);
       }
+    }
+
+    // A sale the till rang while it had no network: it carries its own
+    // tax-office stamp, so the question is not whether it may happen but
+    // whether we can file what already did. Everything after this point —
+    // pre-flight, refusal semantics, what a failure does to the sale — is
+    // different enough to live in its own path.
+    if (body.fiscal_offline !== undefined && body.fiscal_offline !== null) {
+      return completeDeviceStampedSale(request, reply, auth, body, clientUuid);
     }
 
     // Pre-flight BEFORE anything is written: no sale row, no burned receipt
@@ -319,6 +330,173 @@ function refundLinesOf(
  * fiscalised twice. Ambiguous failures stay committed and `failed`, where the
  * shift-bounded retry can resolve them with the SAME request id.
  */
+/** The body a till sends for a sale it stamped from its own lease. */
+interface DeviceStampBody {
+  client_session_id?: unknown;
+  seq?: unknown;
+  fiscal_code?: unknown;
+  fiscal_date?: unknown;
+}
+
+/**
+ * Read the till's stamp, or say what is wrong with it.
+ *
+ * The date is taken as given: it is what the customer's receipt says, printed
+ * by a clock we cannot check and must not overrule (TechDocs/POS_FISCAL_OFFLINE.md,
+ * план фазы 3, решение 7). Everything else has a shape we can insist on.
+ */
+function readDeviceStamp(raw: unknown): fiscalService.DeviceStampInput | string {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    return 'fiscal_offline must be an object';
+  }
+  const body = raw as DeviceStampBody;
+  const clientSessionId = typeof body.client_session_id === 'string' ? body.client_session_id.trim() : '';
+  if (!/^[A-Za-z0-9-]{1,64}$/.test(clientSessionId)) {
+    return 'fiscal_offline.client_session_id must be 1-64 of [A-Za-z0-9-]';
+  }
+  const fiscalCode = typeof body.fiscal_code === 'string' ? body.fiscal_code.trim() : '';
+  if (!fiscalCode || fiscalCode.length > 64) {
+    return 'fiscal_offline.fiscal_code must be 1-64 characters';
+  }
+  const seq = Number(body.seq);
+  if (!Number.isInteger(seq) || seq < 1) return 'fiscal_offline.seq must be a positive integer';
+  const fiscalDate = new Date(String(body.fiscal_date));
+  if (Number.isNaN(fiscalDate.getTime())) return 'fiscal_offline.fiscal_date must be a date';
+  return { clientSessionId, fiscalCode, fiscalDate, seq };
+}
+
+/**
+ * Kinds the till must stop retrying on.
+ *
+ * Not `isTerminal`: that counts the offline-session gates as terminal because
+ * they end the *request*, while here `replaying` means "we are sending the
+ * chain right now, come back in a minute" — the one answer that must keep the
+ * receipt in the queue.
+ */
+const STAMP_REFUSED: ReadonlySet<string> = new Set([
+  'not_configured',
+  'register_held',
+  'offline_code_invalid',
+  'rejected',
+  'auth_rejected',
+]);
+
+/**
+ * File a sale the till stamped offline.
+ *
+ * Two rules make this different from an ordinary checkout, and both come from
+ * the same fact — the receipt is printed and the customer has gone:
+ *
+ *   * a refusal never voids the sale and never hands stock back. 409 tells the
+ *     till to stop retrying and keep the receipt in its «непроведені» list;
+ *   * a 503 means "not now" and the till tries the same receipt again, which is
+ *     safe because `client_uuid` resolves a sale we already took.
+ */
+async function completeDeviceStampedSale(
+  request: Parameters<typeof readDeviceId>[0],
+  reply: FastifyReply,
+  auth: { storeId: number; staffId: number },
+  body: {
+    items: { variant_id: number; quantity: number }[];
+    payments: { method: PaymentMethod; amount_cents: number; provider_ref?: string | null }[];
+    note?: string;
+    cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
+    customer_id?: number | null;
+    fiscal_offline?: unknown;
+  },
+  clientUuid: string | null
+) {
+  const deviceId = readDeviceId(request);
+  if (!deviceId) {
+    // The web shell can never have stamped anything: it has no lease, no
+    // device id and no offline mode.
+    return reply.code(400).send({
+      error: 'device_id_required',
+      message: 'Офлайн-чек може надіслати лише касовий застосунок',
+    });
+  }
+  const stamp = readDeviceStamp(body.fiscal_offline);
+  if (typeof stamp === 'string') return reply.code(400).send({ error: stamp });
+
+  let gate: fiscalService.FiscalGate;
+  try {
+    gate = await fiscalService.preflightDeviceStamp(auth.storeId, auth.staffId, deviceId, stamp);
+  } catch (error) {
+    return replyStampRefused(reply, error, auth.storeId, null);
+  }
+
+  let sale: SaleDetail | null;
+  try {
+    sale = await salesService.completeSale({
+      storeId: auth.storeId,
+      staffId: auth.staffId,
+      items: body.items,
+      payments: body.payments,
+      note: body.note,
+      cart_discount: body.cart_discount,
+      customer_id: body.customer_id,
+      client_uuid: clientUuid,
+      fiscal_status: 'pending',
+    });
+  } catch (error) {
+    logger.error('Complete offline-stamped sale failed', { error: errorMessage(error) });
+    return reply.code(400).send({ error: errorMessage(error) });
+  }
+  if (!sale) {
+    logger.error('Complete offline-stamped sale returned no row', { storeId: auth.storeId });
+    return reply.code(500).send({ error: 'sale_not_readable' });
+  }
+
+  try {
+    const fiscal = await fiscalService.fiscalizeSaleDeviceStamp(gate, sale, deviceId, stamp);
+    return reply.code(201).send({ ...sale, fiscal });
+  } catch (error) {
+    return replyStampRefused(reply, error, auth.storeId, sale.id);
+  }
+}
+
+function replyStampRefused(
+  reply: FastifyReply,
+  error: unknown,
+  storeId: number,
+  saleId: number | null
+) {
+  const raw = error instanceof fiscalService.FiscalDocumentFailed ? error.cause : error;
+  const fiscal = asFiscalError(raw, 'Не вдалося прийняти офлайн-чек каси');
+  logger.warn('Offline-stamped sale refused', {
+    storeId,
+    saleId,
+    kind: fiscal.kind,
+    message: fiscal.message,
+  });
+
+  if (fiscal.kind === 'register_held') {
+    return reply.code(409).send({
+      error: 'register_held',
+      code: fiscal.providerCode,
+      message: cashierMessage(fiscal.kind),
+      holder: holderFromError(fiscal),
+      support_code: supportCode(fiscal),
+      sale_id: saleId,
+    });
+  }
+  if (STAMP_REFUSED.has(fiscal.kind)) {
+    return reply.code(409).send({
+      error: 'offline_stamp_rejected',
+      code: fiscal.kind,
+      message: cashierMessage(fiscal.kind),
+      support_code: supportCode(fiscal),
+      sale_id: saleId,
+    });
+  }
+  return reply.code(503).send({
+    error: 'fiscal_unavailable',
+    code: fiscal.kind,
+    message: cashierMessage(fiscal.kind),
+    support_code: supportCode(fiscal),
+  });
+}
+
 async function finishFailedSale(
   reply: FastifyReply,
   storeId: number,

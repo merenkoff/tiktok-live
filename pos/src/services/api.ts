@@ -4,6 +4,8 @@
 
 import axios, { type AxiosInstance } from 'axios';
 import type {
+  FiscalLeaseResponse,
+  FiscalOfflineStamp,
   FiscalSettingsPatch,
   FiscalSettingsView,
   AuthResponse,
@@ -346,8 +348,21 @@ class PosApi {
     cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
     customer_id?: number | null;
     client_uuid?: string | null;
+    /** Set only for a receipt this till stamped itself while offline (фаза 3). */
+    fiscal_offline?: FiscalOfflineStamp | null;
   }): Promise<SaleDetail> {
     const { data } = await this.client.post<SaleDetail>('/sales/complete', payload);
+    return data;
+  }
+
+  /**
+   * Refresh this till's reserve of tax-office codes and report how much of its
+   * outbox is still unsent — which is what lets the server replay the chain.
+   */
+  async fiscalLease(outboxPending: number): Promise<FiscalLeaseResponse> {
+    const { data } = await this.client.post<FiscalLeaseResponse>('/fiscal/offline/lease', {
+      outbox_pending: outboxPending,
+    });
     return data;
   }
 

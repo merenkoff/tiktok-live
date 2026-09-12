@@ -278,7 +278,7 @@ describe.skipIf(!hasDb)('POS fiscal offline session', () => {
     expect((await session.getSession(s.id))?.ended_at).not.toBeNull();
     expect(await session.getLiveSession(store.storeId, '')).toBeNull();
     // A closed session is out of the worklist, and a new one may open.
-    expect((await session.listLiveServerSessions()).map((x) => x.id)).not.toContain(s.id);
+    expect((await session.listReplayableSessions()).map((x) => x.id)).not.toContain(s.id);
     const next = await session.openServerSession(await ctx(), shiftId);
     expect(next.id).not.toBe(s.id);
   });

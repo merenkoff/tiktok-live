@@ -5,6 +5,8 @@
 import { create } from 'zustand';
 import { db } from './db';
 import { isOfflinePosEnabled } from './enabled';
+import { leaseSummary } from './lease';
+import type { StampRefusal } from './lease';
 import { modulePendingCounts } from './moduleHooks';
 
 interface OfflineStatus {
@@ -14,6 +16,14 @@ interface OfflineStatus {
   dead: number;
   /** Per-module share of `pending` (roadmap #12 track 3), by module id. */
   modulePending: Record<string, number>;
+  /**
+   * ПРРО receipts this till could still print with no network at all
+   * (TechDocs/POS_FISCAL_OFFLINE.md, фаза 3). Null in a store that does not
+   * fiscalise — the offline path there has no reserve and needs none.
+   */
+  fiscalReserve: number | null;
+  /** Why it could not print one, if it could not. */
+  fiscalRefusal: StampRefusal | null;
   syncing: boolean;
   lastError: string | null;
   setOnline: (online: boolean) => void;
@@ -27,6 +37,8 @@ export const useOfflineStatus = create<OfflineStatus>((set) => ({
   pending: 0,
   dead: 0,
   modulePending: {},
+  fiscalReserve: null,
+  fiscalRefusal: null,
   syncing: false,
   lastError: null,
   setOnline: (online) => set({ online }),
@@ -34,17 +46,24 @@ export const useOfflineStatus = create<OfflineStatus>((set) => ({
   setLastError: (lastError) => set({ lastError }),
   refreshPending: async () => {
     if (!isOfflinePosEnabled()) {
-      set({ pending: 0, dead: 0, modulePending: {} });
+      set({ pending: 0, dead: 0, modulePending: {}, fiscalReserve: null, fiscalRefusal: null });
       return;
     }
     // `'dead'` is deliberately outside the pending count: a permanently
     // rejected row used to sit here forever and pin the offline banner.
-    const [own, dead, modulePending] = await Promise.all([
+    const [own, dead, modulePending, lease] = await Promise.all([
       db.outbox.where('status').anyOf(['pending', 'error']).count(),
       db.outbox.where('status').equals('dead').count(),
       modulePendingCounts(),
+      leaseSummary(),
     ]);
     const modules = Object.values(modulePending).reduce((a, b) => a + b, 0);
-    set({ pending: own + modules, dead, modulePending });
+    set({
+      pending: own + modules,
+      dead,
+      modulePending,
+      fiscalReserve: lease.reserve,
+      fiscalRefusal: lease.refusal,
+    });
   },
 }));
