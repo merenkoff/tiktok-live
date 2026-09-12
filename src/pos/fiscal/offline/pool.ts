@@ -186,7 +186,15 @@ export async function refillOfflineCodes(
 export type CodeMark = { status: 'leased'; deviceId: string } | { status: 'used'; receiptId: number | null };
 
 /**
- * Take the next `n` free codes, lowest serial first, and mark them.
+ * Take the next `n` free codes, oldest first, and mark them.
+ *
+ * "Oldest" is our own `id`, i.e. the order the codes were inserted, which is
+ * the order the provider listed them in — `get-offline-codes` returns the
+ * still-unused codes oldest first. Deliberately **not** `serial_id`: that
+ * number belongs to the response, not to the code (the demo register returned
+ * the same code as serial 4 in the morning and serial 1 the same evening,
+ * fixtures `offline_get_codes.json`), so sorting by it would interleave two
+ * refills into an order that means nothing.
  *
  * `FOR UPDATE SKIP LOCKED` so two takers never get the same code — a leased
  * code that is also stamped on a server document would be refused by the
@@ -215,7 +223,7 @@ export async function takeFreeCodes(
      WHERE c.id IN (
        SELECT id FROM pos_fiscal_offline_codes
        WHERE store_id = $1 AND cash_register_key = $2 AND status = 'free'
-       ORDER BY serial_id ASC NULLS LAST, id ASC
+       ORDER BY id ASC
        FOR UPDATE SKIP LOCKED
        LIMIT $3
      )
@@ -229,8 +237,9 @@ export async function takeFreeCodes(
       mark.status === 'used' ? mark.receiptId : null,
     ]
   );
+  // `UPDATE … RETURNING` has no order of its own.
   const rows = result.rows as OfflineCodeRow[];
-  rows.sort((a, b) => (a.serial_id ?? 0) - (b.serial_id ?? 0) || a.id - b.id);
+  rows.sort((a, b) => a.id - b.id);
   return rows;
 }
 
@@ -249,7 +258,7 @@ export async function listLeasedCodes(
   const result = await pool.query(
     `SELECT * FROM pos_fiscal_offline_codes
      WHERE store_id = $1 AND cash_register_key = $2 AND status = 'leased' AND lease_device_id = $3
-     ORDER BY serial_id ASC NULLS LAST, id ASC`,
+     ORDER BY id ASC`,
     [storeId, registerKey, deviceId]
   );
   return result.rows as OfflineCodeRow[];
