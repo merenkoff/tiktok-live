@@ -17,33 +17,33 @@
 //               first five unused codes
 //   --ask       also `ask-offline-codes?count=20&sync=true` (asks the tax
 //               office; harmless — codes are only spent when used)
-//   --go        the whole cycle on the test register, shaped like a real
-//               outage: go-offline dated in the PAST → three sell-offline
-//               receipts minutes apart, also in the past, chained →
-//               go-online → poll `info` → re-read every receipt. Needs an
-//               OPEN shift; refuses a register whose licence key does not
-//               start with "test".
-//   --minutes=N how long ago the outage began (default 90). The receipts are
-//               spread across it.
+//   --go        live a real outage on the test register, in real time: take
+//               the codes, WAIT, ring a few sales while "offline" (nothing is
+//               sent), wait some more, then reconnect — go-offline dated just
+//               before the first sale, the sales with the clock times they
+//               actually happened at, chained; then go-online, poll `info`,
+//               re-read every receipt. Needs an OPEN shift; refuses a register
+//               whose licence key does not start with "test".
+//   --outage=N  how many real minutes the outage lasts (default 10)
+//   --sales=N   how many receipts to ring during it (default 3)
 //
-// --go answers the two questions the whole offline design rests on, and
-// neither can be answered from the wiki:
+// Why it waits for real instead of back-dating everything from the start:
+// each offline code carries the tax office's own `created_at`, so a run that
+// fetched codes at 04:36 and then claimed an outage beginning at 03:06 would
+// be stamping receipts with numbers that did not exist yet. Nothing in
+// production can produce that — a till leases its codes while it is still
+// online, and the outage starts afterwards — so a pass on such a run would
+// prove nothing and a failure would be our own fault. Real waiting keeps the
+// order of events honest: codes issued, then the outage, then the receipts.
 //
-//   1. Does Checkbox accept a `go_offline_date` and `fiscal_date` in the
-//      PAST? Our till only tells the server it was offline once it comes
-//      back, so the server reconstructs the session start from the first
-//      receipt it receives — hours ago, in a long outage. If the provider
-//      insists on "now", фаза 3 changes shape (TechDocs/POS_FISCAL_OFFLINE.md).
-//      When the past date is refused, the script immediately retries the same
-//      call with `now`: two results one minute apart are what tells you the
-//      date was the reason rather than the register's state.
-//   2. Does the `sell-offline` response carry `control_number` and a
-//      `tax_url` when the client sent none? The script prints both, per
-//      receipt.
-//
-// Deliberately three receipts, not one, and minutes apart rather than
-// seconds: a single receipt a second after `go-offline` exercises none of
-// the ordering a real outage produces.
+// What it does still test, because production cannot avoid it: the reconnect
+// dates `go-offline` a second before the FIRST receipt, which is minutes in
+// the past by then, and every `sell-offline` carries the time the sale really
+// happened rather than "now". If Checkbox refuses those, фаза 3 changes shape
+// (TechDocs/POS_FISCAL_OFFLINE.md). It also prints whether the codes it spent
+// were issued before the session it opened — the constraint that makes the
+// whole ordering coherent — and whether `control_number` and `tax_url` come
+// back when the client sends neither.
 
 import 'dotenv/config';
 import fs from 'node:fs';
@@ -77,12 +77,15 @@ const args = new Set(argv);
 const doAsk = args.has('--ask') || args.has('--go');
 const doGo = args.has('--go');
 
-/** How long ago the simulated outage began. */
-const OUTAGE_MINUTES = (() => {
-  const raw = argv.find((a) => a.startsWith('--minutes='))?.split('=')[1];
-  const n = Number(raw ?? 90);
-  return Number.isFinite(n) && n > 2 ? Math.floor(n) : 90;
-})();
+function intArg(name: string, fallback: number, min: number): number {
+  const raw = argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1];
+  const n = Number(raw ?? fallback);
+  return Number.isFinite(n) && n >= min ? Math.floor(n) : fallback;
+}
+
+/** Real minutes the simulated outage lasts, and how many receipts it carries. */
+const OUTAGE_MINUTES = intArg('outage', 10, 2);
+const SALES = intArg('sales', 3, 1);
 
 function save(name: string, body: unknown): void {
   const file = path.join(FIXTURES_DIR, `offline_${name}.json`);
@@ -118,7 +121,17 @@ async function trystep<T>(name: string, fn: () => Promise<T>): Promise<T | Check
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-const minutesAgo = (n: number) => new Date(Date.now() - n * 60_000);
+/** Wait out a real stretch of the outage, saying so — a silent 10-minute pause looks like a hang. */
+async function waitFor(ms: number, what: string): Promise<void> {
+  const until = Date.now() + ms;
+  console.log(`\n  … waiting ${Math.round(ms / 60_000)} min (${Math.round(ms / 1000)}s) for ${what}`);
+  while (Date.now() < until) {
+    await sleep(Math.min(30_000, until - Date.now()));
+    const left = Math.max(0, Math.round((until - Date.now()) / 1000));
+    if (left > 0) console.log(`    ${left}s left`);
+  }
+}
+
 const hhmm = (at: Date) => at.toISOString().slice(11, 16);
 
 async function main(): Promise<void> {
@@ -134,20 +147,34 @@ async function main(): Promise<void> {
   }
   fs.mkdirSync(FIXTURES_DIR, { recursive: true });
 
-  const signal = AbortSignal.timeout(60_000);
-  const { access_token } = await signInPinCode(licenseKey, pin, signal, CLIENT_NAME, CLIENT_VERSION);
-  const opts = { token: access_token, licenseKey, signal, clientName: CLIENT_NAME, clientVersion: CLIENT_VERSION };
+  const { access_token } = await signInPinCode(
+    licenseKey,
+    pin,
+    AbortSignal.timeout(60_000),
+    CLIENT_NAME,
+    CLIENT_VERSION
+  );
+  // A fresh signal per call, not one for the whole run: this script now spends
+  // minutes waiting out an outage, and a single `AbortSignal.timeout(60s)`
+  // would abort every request made after the first minute.
+  const opts = () => ({
+    token: access_token,
+    licenseKey,
+    signal: AbortSignal.timeout(60_000),
+    clientName: CLIENT_NAME,
+    clientVersion: CLIENT_VERSION,
+  });
 
-  const me = await step('cashier_me', () => getMe(opts));
+  const me = await step('cashier_me', () => getMe(opts()));
   console.log(`  cashier: ${me.full_name}`);
-  const info = await step('register_info', () => getCashRegisterInfo(opts));
+  const info = await step('register_info', () => getCashRegisterInfo(opts()));
   console.log(`  register ${info.fiscal_number}: offline_mode=${info.offline_mode} stay_offline=${info.stay_offline}`);
-  await step('codes_count', () => getOfflineCodesCountRequest(opts));
+  await step('codes_count', () => getOfflineCodesCountRequest(opts()));
 
   if (doAsk) {
-    await step('ask_codes', () => askOfflineCodesRequest(opts, 20));
+    await step('ask_codes', () => askOfflineCodesRequest(opts(), 20));
   }
-  const codes = await step('get_codes', () => getOfflineCodesRequest(opts, 5));
+  const codes = await step('get_codes', () => getOfflineCodesRequest(opts(), 5));
   console.log(`  ${codes.length} unused codes listed`);
 
   if (!doGo) {
@@ -155,7 +182,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const shift = await getCurrentShift(opts);
+  const shift = await getCurrentShift(opts());
   if (!shift || shift.status !== 'OPENED') {
     console.error('\n--go needs an OPEN shift on the test register (open one from the кабінет or POST /shifts first)');
     process.exit(3);
@@ -169,124 +196,149 @@ async function main(): Promise<void> {
     process.exit(3);
   }
 
-  // The shape of a real outage, reconstructed after the fact — which is the
-  // only shape our server can ever produce: the till was offline, so we learn
-  // of the session only when it reconnects and date it back from the first
-  // receipt it hands us.
-  const startedAt = minutesAgo(OUTAGE_MINUTES);
-  const receiptDates = [
-    minutesAgo(OUTAGE_MINUTES - 1),
-    minutesAgo(Math.round(OUTAGE_MINUTES / 2)),
-    minutesAgo(2),
-  ];
+  // ── Live the outage, in real time ────────────────────────────────────────
+  //
+  // Nothing below is sent while the outage lasts: that is the whole point. The
+  // till has no network, so it rings sales against codes it already holds and
+  // keeps them. Only the reconnect at the end talks to Checkbox.
+
+  const gapMs = Math.max(60_000, Math.floor((OUTAGE_MINUTES * 60_000) / (SALES + 1)));
   const [goCode, ...sellCodes] = codes;
+  const issuedAt = codes
+    .map((c) => (c.created_at ? new Date(c.created_at) : null))
+    .filter((d): d is Date => d !== null);
+  const newestCode = issuedAt.length
+    ? new Date(Math.max(...issuedAt.map((d) => d.getTime())))
+    : null;
 
   console.log(
-    `\n== simulating an outage that began ${OUTAGE_MINUTES} min ago\n` +
-      `   go-offline at ${hhmm(startedAt)}Z, receipts at ${receiptDates.map((d) => hhmm(d) + 'Z').join(', ')}`
+    `\n== living an outage of ${OUTAGE_MINUTES} min with ${SALES} receipt(s)\n` +
+      `   codes in hand: ${codes.map((c) => c.fiscal_code).join(', ')}\n` +
+      `   issued by the tax office at: ${newestCode ? hhmm(newestCode) + 'Z' : 'unknown'}\n` +
+      `   nothing is sent until the reconnect — the run takes about ${OUTAGE_MINUTES} min plus polling`
   );
 
-  // ── Question 1: is a past `go_offline_date` accepted at all? ──────────────
-  let sessionStart = startedAt;
-  const past = await trystep('go_offline_past', () =>
-    goOfflineRequest(opts, {
-      go_offline_date: startedAt.toISOString(),
+  const rung: Array<{ id: string; at: Date; code: string; index: number }> = [];
+  for (let i = 0; i < Math.min(SALES, sellCodes.length); i++) {
+    await waitFor(gapMs, `sale ${i + 1} of ${Math.min(SALES, sellCodes.length)}`);
+    // The timestamp is taken here, as the sale happens — not computed ahead.
+    const at = new Date();
+    rung.push({ id: crypto.randomUUID(), at, code: sellCodes[i].fiscal_code, index: i + 1 });
+    console.log(`  · sale ${i + 1} rung offline at ${hhmm(at)}Z on ${sellCodes[i].fiscal_code}`);
+  }
+  if (rung.length === 0) {
+    console.error('\nNo codes left for sales — run with --ask first');
+    process.exit(3);
+  }
+
+  // The rest of the outage: the till is still dark, and every receipt above is
+  // getting older. This is what makes the reconnect dates genuinely past.
+  const elapsed = Date.now() - rung[0].at.getTime();
+  await waitFor(Math.max(60_000, OUTAGE_MINUTES * 60_000 - elapsed - gapMs), 'the till to reconnect');
+
+  // ── Reconnect: exactly what our server does for a till-held session ───────
+  const sessionStart = new Date(rung[0].at.getTime() - 1000);
+  const behind = Math.round((Date.now() - sessionStart.getTime()) / 60_000);
+  console.log(
+    `\n== reconnecting at ${hhmm(new Date())}Z\n` +
+      `   go-offline will be dated ${hhmm(sessionStart)}Z — ${behind} min in the past`
+  );
+  if (newestCode) {
+    const coherent = newestCode.getTime() <= sessionStart.getTime();
+    console.log(
+      `   codes issued ${hhmm(newestCode)}Z ${coherent ? '≤' : '>'} session start ${hhmm(sessionStart)}Z ` +
+        `— ${coherent ? 'coherent, as production always is' : 'INCOHERENT: this run does not mirror production'}`
+    );
+  }
+
+  const goOffline = await trystep('go_offline_past', () =>
+    goOfflineRequest(opts(), {
+      go_offline_date: sessionStart.toISOString(),
       fiscal_code: goCode.fiscal_code,
     })
   );
-  if (past instanceof CheckboxApiError) {
+  if (goOffline instanceof CheckboxApiError) {
     console.error(
-      `\n  *** ANSWER 1: Checkbox REFUSED go-offline dated ${OUTAGE_MINUTES} min in the past ` +
-        `(HTTP ${past.status} ${past.code ?? ''}). Фаза 3 rests on this being accepted — ` +
-        `see TechDocs/POS_FISCAL_OFFLINE.md, and read the differential below before concluding. ***`
+      `\n  *** ANSWER 1: Checkbox REFUSED go-offline dated ${behind} min in the past ` +
+        `(HTTP ${goOffline.status} ${goOffline.code ?? ''}).\n` +
+        `      Фаза 3 rests on this being accepted — the till only reports an outage once it is over. ` +
+        `See TechDocs/POS_FISCAL_OFFLINE.md. ***`
     );
-    // The differential: the same call with `now`. If this one is refused too,
-    // the date was never the problem (wrong shift state, spent code, …) and
-    // question 1 is still open.
+    // The differential: the same call with `now`. Two answers a minute apart
+    // separate "the date was the problem" from "the register was".
     const nowProbe = await trystep('go_offline_now', () =>
-      goOfflineRequest(opts, {
+      goOfflineRequest(opts(), {
         go_offline_date: new Date().toISOString(),
-        fiscal_code: sellCodes[0].fiscal_code,
+        fiscal_code: goCode.fiscal_code,
       })
     );
     if (nowProbe instanceof CheckboxApiError) {
       console.error(
-        '\n  *** INCONCLUSIVE: `now` was refused as well — the past date was not the reason. ' +
-          'Fix the register state (open shift, unused codes, already offline) and re-run. ***'
+        '\n  *** INCONCLUSIVE: `now` was refused as well, so the past date was not the reason. ' +
+          'Check the shift, the codes and offline_mode, then re-run. ***'
       );
       process.exit(4);
     }
     console.error(
-      '\n  *** CONFIRMED: `now` was accepted where the past date was not. ' +
-        'The provider requires a current `go_offline_date`. ***'
+      '\n  *** CONFIRMED: `now` was accepted where the past date was not — ' +
+        'the provider requires a current `go_offline_date`. ***'
     );
-    sessionStart = new Date();
-    // Carry on anyway: the receipts below still answer question 2, and their
-    // own past dates tell us whether `fiscal_date` is policed as strictly.
-    sellCodes.shift();
+    process.exit(4);
   }
-  await step('register_info_offline', () => getCashRegisterInfo(opts));
+  console.log(`\n  *** ANSWER 1: a go-offline dated ${behind} min in the past was ACCEPTED. ***`);
+  await step('register_info_offline', () => getCashRegisterInfo(opts()));
 
-  // ── The receipts: minutes apart, in the past, chained ─────────────────────
+  // ── The receipts, with the times they were actually rung ──────────────────
   const sold: Array<{ id: string; at: Date; controlNumber: unknown; taxUrl: unknown }> = [];
   let previousReceiptId: string | undefined;
 
-  for (const [i, at] of receiptDates.entries()) {
-    const code = sellCodes[i];
-    if (!code) break;
-    // Never date a receipt before the session it belongs to: if the provider
-    // forced `go-offline` to `now`, the past dates below are moot.
-    const fiscalDate = at > sessionStart ? at : new Date(sessionStart.getTime() + (i + 1) * 60_000);
-    const receiptId = crypto.randomUUID();
-    const receipt = await trystep(`receipt_sell_offline_${i + 1}`, () =>
-      sellReceiptOffline(opts, {
-        id: receiptId,
+  for (const sale of rung) {
+    const receipt = await trystep(`receipt_sell_offline_${sale.index}`, () =>
+      sellReceiptOffline(opts(), {
+        id: sale.id,
         cashier_name: me.full_name,
         goods: [
           {
-            good: { code: `SANDBOX-OFF-${i + 1}`, name: `Тест офлайн ${i + 1}`, price: 100 },
+            good: { code: `SANDBOX-OFF-${sale.index}`, name: `Тест офлайн ${sale.index}`, price: 100 },
             quantity: 1000,
             is_return: false,
           },
         ],
         payments: [{ type: 'CASH', value: 100 }],
-        fiscal_code: code.fiscal_code,
-        fiscal_date: fiscalDate.toISOString(),
-        // The chain control the replay sends in production.
+        fiscal_code: sale.code,
+        fiscal_date: sale.at.toISOString(),
+        // The chain control our replay sends in production.
         ...(previousReceiptId ? { previous_receipt_id: previousReceiptId } : {}),
       })
     );
     if (receipt instanceof CheckboxApiError) {
       console.error(
-        `\n  *** Receipt ${i + 1} dated ${hhmm(fiscalDate)}Z REFUSED (HTTP ${receipt.status} ` +
-          `${receipt.code ?? ''}). A past \`fiscal_date\` is what a till always sends. ***`
+        `\n  *** Receipt ${sale.index}, rung at ${hhmm(sale.at)}Z ` +
+          `(${Math.round((Date.now() - sale.at.getTime()) / 60_000)} min ago), REFUSED: ` +
+          `HTTP ${receipt.status} ${receipt.code ?? ''}. A past \`fiscal_date\` is what every ` +
+          `offline receipt carries. ***`
       );
       break;
     }
-    previousReceiptId = receipt.id ?? receiptId;
-    sold.push({
-      id: receiptId,
-      at: fiscalDate,
-      controlNumber: receipt.control_number,
-      taxUrl: receipt.tax_url,
-    });
+    previousReceiptId = receipt.id ?? sale.id;
+    sold.push({ id: sale.id, at: sale.at, controlNumber: receipt.control_number, taxUrl: receipt.tax_url });
     console.log(
-      `  receipt ${i + 1} @ ${hhmm(fiscalDate)}Z accepted: ` +
+      `  receipt ${sale.index} @ ${hhmm(sale.at)}Z accepted: ` +
         `control_number=${JSON.stringify(receipt.control_number)} ` +
         `tax_url=${receipt.tax_url ? 'present' : 'absent'}`
     );
   }
 
   console.log(
-    `\n  *** ANSWER 2: of ${receiptDates.length} back-dated receipts, ${sold.length} were accepted; ` +
+    `\n  *** ANSWER 2: of ${rung.length} receipts rung during the outage, ${sold.length} were accepted; ` +
       `control_number came back on ${sold.filter((r) => r.controlNumber).length}, ` +
       `tax_url on ${sold.filter((r) => r.taxUrl).length}. ***`
   );
 
-  await step('go_online', () => goOnlineRequest(opts));
+  await step('go_online', () => goOnlineRequest(opts()));
   for (let i = 0; i < 6; i++) {
     await sleep(30_000);
-    const state = await getCashRegisterInfo(opts);
+    const state = await getCashRegisterInfo(opts());
     console.log(`  poll ${i + 1}: offline_mode=${state.offline_mode}`);
     if (!state.offline_mode) {
       save('register_info_online', state);
@@ -294,24 +346,26 @@ async function main(): Promise<void> {
     }
     if (i === 3) {
       console.log('  still offline after 2 min — sending go-online once more (rate limit: 1 per 2 min)');
-      await goOnlineRequest(opts);
+      await goOnlineRequest(opts());
     }
   }
 
-  // Re-read every receipt: the dates and numbers the tax office ended up with
-  // are what a customer's QR resolves to.
-  for (const [i, receipt] of sold.entries()) {
-    const back = await trystep(`receipt_sell_offline_${i + 1}_after`, () => getReceipt(opts, receipt.id));
+  // Re-read each receipt: the dates the tax office ended up with are what a
+  // customer's QR resolves to.
+  for (const receipt of sold) {
+    const back = await trystep(`receipt_sell_offline_${sold.indexOf(receipt) + 1}_after`, () =>
+      getReceipt(opts(), receipt.id)
+    );
     if (back && !(back instanceof CheckboxApiError)) {
       console.log(
-        `  receipt ${i + 1}: status=${back.status} fiscal_code=${back.fiscal_code} ` +
+        `  ${receipt.id.slice(0, 8)}: status=${back.status} fiscal_code=${back.fiscal_code} ` +
           `fiscal_date=${back.fiscal_date} control_number=${JSON.stringify(back.control_number)}`
       );
     }
   }
   console.log(
-    '\nDone. Check the receipts in the Checkbox кабінет — their dates should be the back-dated ones — ' +
-      'and commit the offline_*.json fixtures.'
+    '\nDone. In the Checkbox кабінет the receipts should carry the times they were rung, ' +
+      'not the time they were sent. Commit the offline_*.json fixtures.'
   );
 }
 
