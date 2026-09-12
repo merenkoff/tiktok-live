@@ -234,6 +234,8 @@ describe('registerSaleOffline', () => {
       fiscalDate: new Date('2026-09-11T14:07:28.000Z'),
       previousDocId: 'req-off-0',
     };
+    // The stamp carries a pointer and the payload below must still not send
+    // one — see the `previous_receipt_id` test further down.
     const result = await offline.registerSaleOffline(ctx(), saleDoc, stamp);
     expect(result).toMatchObject({
       providerDocId: 'req-off-1',
@@ -252,19 +254,33 @@ describe('registerSaleOffline', () => {
       id: 'req-off-1',
       fiscal_code: 'TEST-iA5fmb',
       fiscal_date: '2026-09-11T14:07:28.000Z',
-      previous_receipt_id: 'req-off-0',
     });
     expect(body.control_number).toBeUndefined();
     expect(body.goods).toHaveLength(1);
   });
 
-  it('omits previous_receipt_id when the stamp has none', async () => {
-    const fetchMock = stubFetch(jsonResponse(201, offlineReceipt), jsonResponse(200, offlineReceipt));
+  it('never sends previous_receipt_id, even when the caller has one', async () => {
+    // The sandbox run of 2026-09-12 replayed a real outage: receipt 1, with no
+    // pointer, was accepted; receipt 2, carrying the id Checkbox had just
+    // returned for receipt 1 — the register's latest receipt by serial — was
+    // refused with `receipt.previous_id_last_id_differs`. Whatever Checkbox
+    // means by "the last saved receipt", it is not a value we can compute, and
+    // the field is optional; sending a wrong one costs every receipt of the
+    // outage after the first. So the payload never carries it.
+    const withPointer = stubFetch(jsonResponse(201, offlineReceipt), jsonResponse(200, offlineReceipt));
+    await offline.registerSaleOffline(ctx(), saleDoc, {
+      fiscalCode: 'TEST-iA5fmb',
+      fiscalDate: new Date('2026-09-11T14:07:28.000Z'),
+      previousDocId: 'req-off-0',
+    });
+    expect('previous_receipt_id' in JSON.parse(String(lastCall(withPointer).init.body))).toBe(false);
+
+    const without = stubFetch(jsonResponse(201, offlineReceipt), jsonResponse(200, offlineReceipt));
     await offline.registerSaleOffline(ctx(), saleDoc, {
       fiscalCode: 'TEST-iA5fmb',
       fiscalDate: new Date('2026-09-11T14:07:28.000Z'),
     });
-    expect('previous_receipt_id' in JSON.parse(String(lastCall(fetchMock).init.body))).toBe(false);
+    expect('previous_receipt_id' in JSON.parse(String(lastCall(without).init.body))).toBe(false);
   });
 
   it('keeps polling when the offline receipt is still CREATED', async () => {

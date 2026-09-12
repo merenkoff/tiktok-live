@@ -93,6 +93,22 @@ export function mapSellPayload(doc: FiscalSaleDoc | FiscalRefundDoc): CheckboxSe
  * The offline variant differs from `sell` only by the stamp — Checkbox's own
  * wording ("відрізняється лише наявністю полів fiscal_code та fiscal_date"),
  * so it is the same mapping plus two fields, not a second mapping.
+ *
+ * `previous_receipt_id` is deliberately NOT sent, even when the caller has one.
+ * The sandbox run of 2026-09-12 (fixtures `offline_receipt_sell_offline_*`)
+ * replayed a real outage: the first receipt, with no pointer, was accepted;
+ * the second, carrying the id Checkbox had just returned for the first — which
+ * was also the register's latest receipt by serial — was refused with
+ * `receipt.previous_id_last_id_differs`, "id попереднього чека відрізняється
+ * від останнього збереженого чека".
+ *
+ * So Checkbox's notion of "the last saved receipt" is not the one we can
+ * compute, and an offline chain cannot be built on a value we are only
+ * guessing at: the field is optional, while getting it wrong costs every
+ * receipt of the outage after the first (a 400 no classifier treats as
+ * terminal, retried until the document runs out of attempts). Omitted, the
+ * provider orders the chain by `fiscal_date`, which is what the tax office
+ * reads anyway.
  */
 export function mapSellOfflinePayload(
   doc: FiscalSaleDoc | FiscalRefundDoc,
@@ -102,7 +118,6 @@ export function mapSellOfflinePayload(
     ...mapSellPayload(doc),
     fiscal_code: stamp.fiscalCode,
     fiscal_date: stamp.fiscalDate.toISOString(),
-    ...(stamp.previousDocId ? { previous_receipt_id: stamp.previousDocId } : {}),
   };
 }
 
