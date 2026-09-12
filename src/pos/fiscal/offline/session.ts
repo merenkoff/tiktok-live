@@ -255,10 +255,19 @@ export function openServerSession(
  * The latest moment the tax office already knows about for this register.
  *
  * `go-offline` must be dated after it, or the chain goes backwards and the
- * provider refuses — its own warning is that this breaks the register. Three
+ * provider refuses — its own warning is that this breaks the register. Four
  * things push it forward: a delivered online receipt, a previous session's
- * `go-online`, and a Z-report, which is why a shift that auto-closed while a
- * till was still offline shows up here rather than as a silent corruption.
+ * `go-online`, a Z-report (which is why a shift that auto-closed while a till
+ * was still offline shows up here rather than as a silent corruption), and the
+ * opening of the shift the documents will land in.
+ *
+ * That last one is not a precaution but an observed rule: the sandbox run of
+ * 2026-09-12 had a receipt refused with `date.fiscal_date_logic`, "Час
+ * фіскалізації чека повинен бути більше ніж час відкриття зміни". A till that
+ * stays dark across a shift boundary would otherwise hand us receipts dated
+ * before the shift that is open when it reconnects, and every one of them
+ * would be refused individually. Parking the session instead puts it in front
+ * of the owner once, with a reason.
  */
 export async function offlineChainFloor(
   storeId: number,
@@ -271,12 +280,19 @@ export async function offlineChainFloor(
          (SELECT MAX(last_go_online_at) FROM pos_fiscal_offline_sessions
           WHERE store_id = $1 AND cash_register_key = $2 AND status = 'closed') AS went_online,
          (SELECT MAX(closed_at) FROM pos_fiscal_shifts
-          WHERE store_id = $1 AND cash_register_key = $2 AND status = 'closed') AS shift_closed`,
+          WHERE store_id = $1 AND cash_register_key = $2 AND status = 'closed') AS shift_closed,
+         (SELECT MAX(opened_at) FROM pos_fiscal_shifts
+          WHERE store_id = $1 AND cash_register_key = $2
+            AND status IN ('opening', 'open', 'closing')) AS shift_opened`,
       [storeId, registerKey]
     ),
   ]);
-  const row = marks.rows[0] as { went_online: Date | null; shift_closed: Date | null };
-  const candidates = [delivered, row?.went_online ?? null, row?.shift_closed ?? null]
+  const row = marks.rows[0] as {
+    went_online: Date | null;
+    shift_closed: Date | null;
+    shift_opened: Date | null;
+  };
+  const candidates = [delivered, row?.went_online ?? null, row?.shift_closed ?? null, row?.shift_opened ?? null]
     .filter((at): at is Date => at != null)
     .map((at) => new Date(at))
     .sort((a, b) => b.getTime() - a.getTime());

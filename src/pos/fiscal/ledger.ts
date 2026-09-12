@@ -282,18 +282,6 @@ export async function countSessionDocuments(sessionId: number): Promise<SessionD
   return counts;
 }
 
-/** The provider's id of the last document the session got through — the next one's `previousDocId`. */
-export async function lastDoneProviderDocId(sessionId: number): Promise<string | null> {
-  const result = await pool.query(
-    `SELECT provider_doc_id FROM pos_fiscal_receipts
-     WHERE offline_session_id = $1 AND status = 'done' AND provider_doc_id IS NOT NULL
-     ORDER BY fiscal_date DESC NULLS LAST, offline_seq DESC, id DESC
-     LIMIT 1`,
-    [sessionId]
-  );
-  return (result.rows[0]?.provider_doc_id as string | undefined) ?? null;
-}
-
 async function setProjection(
   client: PoolClient,
   row: Pick<FiscalReceiptRow, 'doc_type' | 'sale_id' | 'refund_id'>,

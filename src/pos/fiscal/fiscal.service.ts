@@ -1222,9 +1222,14 @@ async function replayOneSession(initial: OfflineSessionRow): Promise<SessionOutc
   }
 
   // 3. The documents, in order.
+  //
+  // No chain pointer travels with them. `OfflineStamp.previousDocId` exists for
+  // a provider that needs one, but Checkbox refuses the only value we could
+  // compute — see `providers/checkbox/payload.ts` and the sandbox run of
+  // 2026-09-12. Order comes from `fiscal_date`, which is what the tax office
+  // reads.
   let replayed = 0;
   let abandoned = 0;
-  let previousDocId = await ledger.lastDoneProviderDocId(session.id);
   const docs = (await ledger.listSessionDocuments(session.id)).filter(
     (row) => row.status === 'pending' || row.status === 'failed'
   );
@@ -1246,16 +1251,9 @@ async function replayOneSession(initial: OfflineSessionRow): Promise<SessionOutc
     const stamp = {
       fiscalCode: row.fiscal_code,
       fiscalDate: new Date(row.fiscal_date),
-      previousDocId: previousDocId ?? undefined,
     };
     try {
-      const { result } = await runDocument(
-        gate,
-        row,
-        (callCtx) => ops.registerSaleOffline(callCtx, doc, stamp),
-        'live'
-      );
-      previousDocId = result.providerDocId;
+      await runDocument(gate, row, (callCtx) => ops.registerSaleOffline(callCtx, doc, stamp), 'live');
       replayed += 1;
     } catch (error) {
       if (!(error instanceof FiscalDocumentFailed)) throw error;

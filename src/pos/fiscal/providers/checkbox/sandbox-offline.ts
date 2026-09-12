@@ -290,7 +290,6 @@ async function main(): Promise<void> {
 
   // ── The receipts, with the times they were actually rung ──────────────────
   const sold: Array<{ id: string; at: Date; controlNumber: unknown; taxUrl: unknown }> = [];
-  let previousReceiptId: string | undefined;
 
   for (const sale of rung) {
     const receipt = await trystep(`receipt_sell_offline_${sale.index}`, () =>
@@ -307,8 +306,10 @@ async function main(): Promise<void> {
         payments: [{ type: 'CASH', value: 100 }],
         fiscal_code: sale.code,
         fiscal_date: sale.at.toISOString(),
-        // The chain control our replay sends in production.
-        ...(previousReceiptId ? { previous_receipt_id: previousReceiptId } : {}),
+        // No `previous_receipt_id`: the 2026-09-12 run sent the id Checkbox
+        // had just returned for the previous receipt and got 400
+        // `receipt.previous_id_last_id_differs`, which cost every receipt
+        // after the first. Production no longer sends it either.
       })
     );
     if (receipt instanceof CheckboxApiError) {
@@ -320,7 +321,6 @@ async function main(): Promise<void> {
       );
       break;
     }
-    previousReceiptId = receipt.id ?? sale.id;
     sold.push({ id: sale.id, at: sale.at, controlNumber: receipt.control_number, taxUrl: receipt.tax_url });
     console.log(
       `  receipt ${sale.index} @ ${hhmm(sale.at)}Z accepted: ` +

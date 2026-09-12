@@ -120,6 +120,15 @@ describe.skipIf(!hasDb)('POS fiscal offline device stamp (case C — the till so
   /** Open the shift online, then take a lease — what the till does before it loses the network. */
   const prepare = async () => {
     await fiscalService.preflight(store.storeId, store.sellerId, TILL);
+    // Back-date the shift: in production it is open long before the network
+    // drops, and Checkbox refuses a receipt dated before its shift opened
+    // (`date.fiscal_date_logic`, seen in the 2026-09-12 sandbox run). A shift
+    // opened "now" with receipts from twenty minutes ago is a shape no till
+    // can produce.
+    await pool.query(
+      `UPDATE pos_fiscal_shifts SET opened_at = NOW() - INTERVAL '3 hours' WHERE store_id = $1`,
+      [store.storeId]
+    );
     const res = await app.inject({
       method: 'POST',
       url: '/api/pos/fiscal/offline/lease',
@@ -435,6 +444,33 @@ describe.skipIf(!hasDb)('POS fiscal offline device stamp (case C — the till so
     expect(fake.offline!.goOfflineCalls).toHaveLength(0);
     // The sale stands: the goods left the shop and the customer holds a receipt.
     expect((await sales())[0].status).toBe('completed');
+  });
+
+  it('parks a session that starts before the shift it would land in', async () => {
+    // Checkbox: «Час фіскалізації чека повинен бути більше ніж час відкриття
+    // зміни». A till dark across a shift boundary hands us receipts older than
+    // the shift open when it reconnects; sending them would have every one
+    // refused on its own. The owner gets one parked session instead.
+    const codes = await prepare();
+    await syncStamped({ code: codes[0].fiscal_code, at: minutesAgo(20), seq: 1 });
+    await pool.query(
+      `UPDATE pos_fiscal_shifts SET opened_at = NOW() - INTERVAL '5 minutes' WHERE store_id = $1`,
+      [store.storeId]
+    );
+    await app.inject({
+      method: 'POST',
+      url: '/api/pos/fiscal/offline/lease',
+      headers: headers(),
+      payload: { outbox_pending: 0 },
+    });
+
+    await tick();
+    const parked = await pool.query(
+      `SELECT status, error_code FROM pos_fiscal_offline_sessions WHERE store_id = $1`,
+      [store.storeId]
+    );
+    expect(parked.rows[0]).toMatchObject({ status: 'stuck', error_code: 'go_offline_order' });
+    expect(fake.offline!.goOfflineCalls).toHaveLength(0);
   });
 
   it('replays a session whose till never came back, once the grace has passed', async () => {
