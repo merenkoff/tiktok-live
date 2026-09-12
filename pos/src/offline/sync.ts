@@ -31,6 +31,7 @@ import {
   refreshSnapshot,
   replaceLocalCustomer,
 } from './repository';
+import { refreshLease } from './lease';
 import { useOfflineStatus } from './status';
 import { syncOfflineModules } from './moduleHooks';
 
@@ -92,6 +93,10 @@ async function syncSale(row: OutboxRow): Promise<void> {
     cart_discount: payload.cart_discount,
     customer_id: customerId,
     client_uuid: payload.client_uuid,
+    // Present only for a receipt this till printed itself: the server files it
+    // with the code and date already on the customer's copy rather than
+    // registering a new document (TechDocs/POS_FISCAL_OFFLINE.md, фаза 3).
+    fiscal_offline: payload.fiscal_offline ?? null,
   });
   // Record client_uuid -> server id so the receipts screen can address this
   // sale on the server once it exists there.
@@ -147,6 +152,19 @@ export async function runSync(): Promise<void> {
         useOfflineStatus.getState().setLastError(verdict.message);
       }
     }
+
+    // The ПРРО reserve, last: `refreshLease` reports how much of the outbox is
+    // still unsent, and that number is what holds the server's replay back
+    // until every offline receipt of this stretch has reached it. Reading the
+    // count here — after the drain — is the whole point.
+    // `dead` rows are excluded: the server will never accept them, so counting
+    // them would hold the replay back for good.
+    const unsent = await db.outbox
+      .where('type')
+      .equals('sale')
+      .filter((row) => row.status !== 'dead')
+      .count();
+    await refreshLease(unsent);
 
     // Feature modules with their own queues (roadmap #12 track 3) go after the
     // shell's rows — a count sheet may reference a customer or sale that had

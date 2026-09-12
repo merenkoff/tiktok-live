@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom';
 // store would be a second, disconnected instance once `@pos/platform` is an
 // external chunk.
 import { useAuthStore } from '@pos/platform';
-import { isOfflinePosEnabled, useOfflineStatus } from '../../offline';
+import { isOfflinePosEnabled, refusalText, useOfflineStatus } from '../../offline';
 
 export function OfflineStatusBanner() {
   const online = useOfflineStatus((s) => s.online);
@@ -16,25 +16,28 @@ export function OfflineStatusBanner() {
   const syncing = useOfflineStatus((s) => s.syncing);
   const lastError = useOfflineStatus((s) => s.lastError);
   const fiscal = useAuthStore((s) => s.auth?.store.fiscal?.enabled ?? false);
+  const reserve = useOfflineStatus((s) => s.fiscalReserve);
+  const refusal = useOfflineStatus((s) => s.fiscalRefusal);
 
   if (!isOfflinePosEnabled()) return null;
 
-  // A fiscalising store cannot sell at all without a connection, so say it up
-  // front rather than at the payment screen with a customer waiting.
-  const blocked = !online && fiscal;
+  // A fiscalising store used to be unable to sell at all without a connection.
+  // With a reserve of tax-office codes it can (фаза 3) — so the banner says
+  // which of the two this till is in, up front rather than at the payment
+  // screen with a customer waiting.
+  const blocked = !online && fiscal && refusal !== null;
   if (online && pending === 0 && dead === 0 && !syncing && !lastError) return null;
 
   const parts: string[] = [];
-  if (blocked) parts.push('Офлайн — продаж неможливий, магазин працює з ПРРО');
+  if (blocked && refusal) parts.push(`Офлайн — продаж неможливий: ${refusalText(refusal)}`);
+  else if (!online && fiscal) parts.push(`Офлайн — чеки ПРРО з резерву (${reserve ?? 0})`);
   else if (!online) parts.push('Офлайн');
   if (pending > 0) {
     parts.push(
-      // A queued sale is registered in whatever shift is open when it finally
-      // syncs, not the one it was rung in. Say so rather than let a Z-report
-      // surprise the owner.
-      fiscal
-        ? `Очікує синк: ${pending} — буде зареєстровано поточною зміною ПРРО`
-        : `Очікує синк: ${pending}`
+      // A stamped receipt carries its own tax-office number and date, so it is
+      // filed as the document it already is — not registered anew in whatever
+      // shift happens to be open when it syncs.
+      fiscal ? `Очікує синк: ${pending} — офлайн-чеки ПРРО` : `Очікує синк: ${pending}`
     );
   }
   if (dead > 0) parts.push(`Не синхронізовано: ${dead}`);

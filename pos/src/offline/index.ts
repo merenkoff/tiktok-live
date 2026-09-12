@@ -7,6 +7,14 @@ export { startOfflineRuntime, runSync } from './sync';
 export { cashierApi } from './cashierApi';
 export { useOfflineStatus } from './status';
 export {
+  availableCodes,
+  clearLease,
+  leaseSummary,
+  refreshLease,
+  refusalText,
+  type StampRefusal,
+} from './lease';
+export {
   OfflineAuthError,
   OfflineRefundError,
   OfflineFiscalError,

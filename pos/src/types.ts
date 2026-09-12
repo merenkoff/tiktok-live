@@ -302,6 +302,47 @@ export interface FiscalSettingsView {
 export type FiscalReceiptSource = 'local' | 'provider';
 export type FiscalReceiptWidth = 32 | 48;
 
+/** What the till stamps on a receipt it prints without a connection (фаза 3). */
+export interface FiscalOfflineStamp {
+  /** The till's own id for this offline stretch; every receipt of it carries the same one. */
+  client_session_id: string;
+  /** Position inside the stretch, from 1. */
+  seq: number;
+  /** The tax-office code spent on this receipt. */
+  fiscal_code: string;
+  /** ISO date and time printed on the receipt, by the till's clock. */
+  fiscal_date: string;
+}
+
+export interface FiscalLeaseCode {
+  fiscal_code: string;
+  serial_id: number | null;
+}
+
+export interface FiscalLeaseShift {
+  id: number;
+  opened_at: string | null;
+  auto_close_due_at: string | null;
+}
+
+export interface FiscalLeaseSession {
+  id: number;
+  holder: 'server' | 'device';
+  device_id: string | null;
+  client_session_id: string | null;
+  status: 'open' | 'replaying' | 'closed' | 'stuck';
+  ready_at: string | null;
+}
+
+/** `POST /fiscal/offline/lease` — the reserve this till may sell from. */
+export interface FiscalLeaseResponse {
+  lease_size: number;
+  codes: FiscalLeaseCode[];
+  shift: FiscalLeaseShift | null;
+  register_fiscal_number: string | null;
+  session: FiscalLeaseSession | null;
+}
+
 export interface FiscalSettingsPatch {
   enabled?: boolean;
   provider?: FiscalProviderId | null;

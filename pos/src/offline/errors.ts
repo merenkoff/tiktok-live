@@ -25,13 +25,22 @@ export class OfflineRefundError extends Error {
 }
 
 /**
- * A ПРРО receipt is registered with the tax service at the moment of sale, so a
- * fiscalising store cannot queue a sale offline at all. Nothing is written: no
- * outbox row, no stock movement, no synthetic receipt.
+ * This till may not print a fiscal receipt without a connection.
+ *
+ * Before фаза 3 that was every fiscalising store, because a ПРРО receipt is
+ * registered at the moment of sale. Now a store in offline mode stamps from
+ * its own reserve instead, and this is what is left: the reasons that reserve
+ * cannot be used — no codes, no shift, past the tax office's limits, another
+ * till holds the register, or the requisites the receipt header needs have
+ * never been fetched. Nothing is written in any of them: no outbox row, no
+ * stock movement, no synthetic receipt.
  */
 export class OfflineFiscalError extends Error {
-  constructor() {
-    super('Продаж із фіскалізацією потребує інтернету — чек не проведено');
+  constructor(
+    readonly reason: string = 'offline_off',
+    message = 'Продаж із фіскалізацією потребує інтернету — чек не проведено'
+  ) {
+    super(message);
     this.name = 'OfflineFiscalError';
   }
 }

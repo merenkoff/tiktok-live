@@ -80,6 +80,7 @@ export async function saveStaffUnlock(params: {
     fiscalEnabled: params.auth.store.fiscal?.enabled ?? false,
     moduleRemotes: params.auth.store.module_remotes ?? {},
     fiscalProvider: params.auth.store.fiscal?.provider ?? null,
+    fiscal: params.auth.store.fiscal ?? null,
   };
   await db.staffUnlock.put(row);
 }
@@ -109,6 +110,10 @@ export async function updateStaffUnlockStoreFlags(auth: AuthResponse): Promise<v
     enabledModules: auth.store.enabled_modules ?? DEFAULT_MODULES,
     fiscalEnabled: auth.store.fiscal?.enabled ?? false,
     fiscalProvider: auth.store.fiscal?.provider ?? null,
+    // The requisites the receipt header is printed from, the register's own
+    // number and the rate code all live in here: a till that logs in cold
+    // tomorrow prints from this row.
+    fiscal: auth.store.fiscal ?? null,
     moduleRemotes: auth.store.module_remotes ?? row.moduleRemotes ?? {},
   });
 }
@@ -155,7 +160,10 @@ function sessionFromUnlock(row: StaffUnlockRow, liveAuth: AuthResponse | null): 
       auto_print_receipt: row.autoPrintReceipt ?? false,
       enabled_modules: row.enabledModules ?? DEFAULT_MODULES,
       module_remotes: row.moduleRemotes ?? {},
-      fiscal: {
+      // A row written before the whole block was cached still yields a
+      // correct switch; what it cannot yield is the receipt header, which is
+      // why an offline stamp refuses without requisites.
+      fiscal: row.fiscal ?? {
         enabled: row.fiscalEnabled ?? false,
         provider: (row.fiscalProvider as FiscalProviderId | null) ?? null,
       },
