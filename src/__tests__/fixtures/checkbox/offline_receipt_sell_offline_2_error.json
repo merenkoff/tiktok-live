@@ -1,0 +1,8 @@
+{
+  "status": 400,
+  "code": "receipt.previous_id_last_id_differs",
+  "body": {
+    "code": "receipt.previous_id_last_id_differs",
+    "message": "id попереднього чека відрізняється від останнього збереженого чека"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "status": 400,
+  "code": "date.fiscal_date_logic",
+  "body": {
+    "code": "date.fiscal_date_logic",
+    "message": "Час фіскалізації чека повинен бути більше ніж час відкриття зміни (2026-09-12T03:42:34.545742+00:00)"
+  }
+}

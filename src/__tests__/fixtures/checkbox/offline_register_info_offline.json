@@ -1,0 +1,41 @@
+{
+  "id": "0bed7770-9227-4a35-8efe-863332ac5950",
+  "organization_id": "c4fa5b83-ef59-4dd5-b668-7e257e9c7c8d",
+  "fiscal_number": "TEST938114",
+  "created_at": "2022-01-28T10:56:17.000000+00:00",
+  "updated_at": "2026-09-12T05:06:21.013222+00:00",
+  "number": 1,
+  "address": "УКРАЇНА, М.КИЇВ ГОЛОСІЇВСЬКИЙ Р-Н, Тестова, 41а",
+  "title": "",
+  "vehicle_license_plate": "",
+  "object_type": "",
+  "show_type_object": true,
+  "offline_mode": true,
+  "stay_offline": true,
+  "has_shift": true,
+  "emergency_date": null,
+  "emergency_details": null,
+  "is_test": true,
+  "type": 0,
+  "has_qr_acquiring": false,
+  "has_internet_acquiring": false,
+  "has_pos_acquiring": false,
+  "has_monobank_terminal": false,
+  "has_easypay_acquiring": false,
+  "has_rozetkapay_acquiring": false,
+  "ettn_acquiring_id": null,
+  "has_iban_acquiring": false,
+  "is_superkasa": false,
+  "alt_discount_calculation": false,
+  "settings": {
+    "receipt_limits": {
+      "goods_count_limit": null,
+      "total_sum_limit": null
+    }
+  },
+  "documents_state": {
+    "last_receipt_code": 15,
+    "last_report_code": 5,
+    "last_z_report_code": 9
+  }
+}
