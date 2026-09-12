@@ -10,6 +10,15 @@
 // every response into src/__tests__/fixtures/checkbox/offline_*.json so the
 // shapes the adapter assumes are pinned to what the sandbox actually said.
 //
+// Every run also keeps itself: its responses, and the whole console output,
+// land in fixtures/checkbox/runs/<timestamp>/ next to a run.json saying what
+// was asked and what came back. The canonical `offline_*.json` are still the
+// latest run — they are what the adapter's readers go to — but a run is no
+// longer erased by the next one. That is not tidiness: the run that found
+// `receipt.previous_id_last_id_differs` was overwritten by the successful
+// re-run minutes later, and only the two *_error.json files survived it,
+// because success happens to write different names than failure does.
+//
 //   CHECKBOX_SANDBOX_LICENSE_KEY=test… CHECKBOX_SANDBOX_PIN=… \
 //     npm run fiscal:sandbox:offline -- [--ask] [--go]
 //
@@ -72,6 +81,33 @@ const FIXTURES_DIR = path.join(__dirname, '..', '..', '..', '..', '__tests__', '
 const CLIENT_NAME = 'the-live-shop-pos';
 const CLIENT_VERSION = String(POS_API_VERSION);
 
+/** `20260912-2244Z` — sortable, one folder per run, no collisions within a minute that matter. */
+const RUN_ID = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z').replace('T', '-');
+const RUN_DIR = path.join(FIXTURES_DIR, 'runs', RUN_ID);
+const STARTED_AT = new Date().toISOString();
+
+/**
+ * Everything printed, kept verbatim.
+ *
+ * The interesting part of a run is usually the narration — which answer came
+ * back at which minute — and up to now it lived only in whoever's terminal
+ * ran it. Console still behaves normally; this just also remembers.
+ */
+const transcript: string[] = [];
+for (const level of ['log', 'warn', 'error'] as const) {
+  const original = console[level].bind(console);
+  console[level] = (...parts: unknown[]): void => {
+    transcript.push(parts.map((p) => (typeof p === 'string' ? p : JSON.stringify(p))).join(' '));
+    original(...parts);
+  };
+}
+
+/** Notes worth reading without scrolling the transcript: the ANSWERs and the refusals. */
+const findings: string[] = [];
+function finding(line: string): void {
+  findings.push(line);
+}
+
 const argv = process.argv.slice(2);
 const args = new Set(argv);
 const doAsk = args.has('--ask') || args.has('--go');
@@ -87,11 +123,53 @@ function intArg(name: string, fallback: number, min: number): number {
 const OUTAGE_MINUTES = intArg('outage', 10, 2);
 const SALES = intArg('sales', 3, 1);
 
+let savedAny = false;
+
 function save(name: string, body: unknown): void {
+  savedAny = true;
+  const text = JSON.stringify(body, null, 2) + '\n';
   const file = path.join(FIXTURES_DIR, `offline_${name}.json`);
-  fs.writeFileSync(file, JSON.stringify(body, null, 2) + '\n');
+  fs.writeFileSync(file, text);
+  fs.mkdirSync(RUN_DIR, { recursive: true });
+  fs.writeFileSync(path.join(RUN_DIR, `${name}.json`), text);
   console.log(`  → saved ${path.relative(process.cwd(), file)}`);
 }
+
+/**
+ * Write the run's own record — on every exit path, including `process.exit`
+ * from a failed precondition, because a run that stopped early is exactly the
+ * one worth reading later.
+ */
+let flushed = false;
+function flushRun(): void {
+  if (flushed) return;
+  flushed = true;
+  // A run that never reached the API — no credentials, wrong flags — is not
+  // history worth a folder.
+  if (!savedAny && findings.length === 0) return;
+  fs.mkdirSync(RUN_DIR, { recursive: true });
+  fs.writeFileSync(path.join(RUN_DIR, 'console.log'), transcript.join('\n') + '\n');
+  fs.writeFileSync(
+    path.join(RUN_DIR, 'run.json'),
+    JSON.stringify(
+      {
+        run_id: RUN_ID,
+        started_at: STARTED_AT,
+        finished_at: new Date().toISOString(),
+        argv,
+        outage_minutes: doGo ? OUTAGE_MINUTES : null,
+        sales: doGo ? SALES : null,
+        exit_code: process.exitCode ?? 0,
+        findings,
+      },
+      null,
+      2
+    ) + '\n'
+  );
+  // Written with the original console: this one runs inside the exit handler.
+  process.stdout.write(`\nRun kept in ${path.relative(process.cwd(), RUN_DIR)}\n`);
+}
+process.on('exit', flushRun);
 
 async function step<T>(name: string, fn: () => Promise<T>): Promise<T> {
   console.log(`\n== ${name}`);
@@ -184,14 +262,17 @@ async function main(): Promise<void> {
 
   const shift = await getCurrentShift(opts());
   if (!shift || shift.status !== 'OPENED') {
+    finding('stopped: no open shift on the test register');
     console.error('\n--go needs an OPEN shift on the test register (open one from the кабінет or POST /shifts first)');
     process.exit(3);
   }
   if (codes.length < 4) {
+    finding('stopped: fewer than four unused offline codes');
     console.error('\n--go needs at least four unused offline codes (one for go-offline, three receipts) — run with --ask first');
     process.exit(3);
   }
   if (info.offline_mode) {
+    finding('stopped: register was already offline before the run');
     console.error('\nRegister is already offline — send go-online and wait before running --go');
     process.exit(3);
   }
@@ -258,6 +339,10 @@ async function main(): Promise<void> {
     })
   );
   if (goOffline instanceof CheckboxApiError) {
+    finding(
+      `ANSWER 1: go-offline dated ${behind} min in the past REFUSED — ` +
+        `HTTP ${goOffline.status} ${goOffline.code ?? ''}`
+    );
     console.error(
       `\n  *** ANSWER 1: Checkbox REFUSED go-offline dated ${behind} min in the past ` +
         `(HTTP ${goOffline.status} ${goOffline.code ?? ''}).\n` +
@@ -285,8 +370,24 @@ async function main(): Promise<void> {
     );
     process.exit(4);
   }
-  console.log(`\n  *** ANSWER 1: a go-offline dated ${behind} min in the past was ACCEPTED. ***`);
-  await step('register_info_offline', () => getCashRegisterInfo(opts()));
+  // HTTP 200 is not the answer — `go-offline` is asynchronous, and a register
+  // that has not actually flipped will refuse every receipt that follows with
+  // something that reads like a date problem. Ask it what it thinks it is.
+  const offlineState = await step('register_info_offline', () => getCashRegisterInfo(opts()));
+  if (!offlineState.offline_mode) {
+    finding(`go-offline accepted (HTTP 200) but offline_mode is still false at ${hhmm(new Date())}Z`);
+    console.error(
+      `\n  *** ANSWER 1: Checkbox ACCEPTED the go-offline dated ${behind} min in the past, ` +
+        `but the register reports offline_mode=false. The receipts below will be refused; ` +
+        `treat this run as inconclusive about the dates. ***`
+    );
+  } else {
+    finding(`go-offline dated ${behind} min in the past accepted; register is offline`);
+    console.log(
+      `\n  *** ANSWER 1: a go-offline dated ${behind} min in the past was ACCEPTED ` +
+        `and the register is offline. ***`
+    );
+  }
 
   // ── The receipts, with the times they were actually rung ──────────────────
   const sold: Array<{ id: string; at: Date; controlNumber: unknown; taxUrl: unknown }> = [];
@@ -313,6 +414,9 @@ async function main(): Promise<void> {
       })
     );
     if (receipt instanceof CheckboxApiError) {
+      finding(
+        `receipt ${sale.index} (rung ${hhmm(sale.at)}Z) refused: HTTP ${receipt.status} ${receipt.code ?? ''}`
+      );
       console.error(
         `\n  *** Receipt ${sale.index}, rung at ${hhmm(sale.at)}Z ` +
           `(${Math.round((Date.now() - sale.at.getTime()) / 60_000)} min ago), REFUSED: ` +
@@ -329,6 +433,11 @@ async function main(): Promise<void> {
     );
   }
 
+  finding(
+    `ANSWER 2: ${sold.length}/${rung.length} offline receipts accepted, ` +
+      `control_number on ${sold.filter((r) => r.controlNumber).length}, ` +
+      `tax_url on ${sold.filter((r) => r.taxUrl).length}`
+  );
   console.log(
     `\n  *** ANSWER 2: of ${rung.length} receipts rung during the outage, ${sold.length} were accepted; ` +
       `control_number came back on ${sold.filter((r) => r.controlNumber).length}, ` +
@@ -336,12 +445,15 @@ async function main(): Promise<void> {
   );
 
   await step('go_online', () => goOnlineRequest(opts()));
+  let backOnline = false;
   for (let i = 0; i < 6; i++) {
     await sleep(30_000);
     const state = await getCashRegisterInfo(opts());
     console.log(`  poll ${i + 1}: offline_mode=${state.offline_mode}`);
     if (!state.offline_mode) {
       save('register_info_online', state);
+      backOnline = true;
+      finding(`go-online: register back online after ${i + 1} poll(s)`);
       break;
     }
     if (i === 3) {
@@ -349,6 +461,7 @@ async function main(): Promise<void> {
       await goOnlineRequest(opts());
     }
   }
+  if (!backOnline) finding('go-online: register still offline after 3 min of polling');
 
   // Re-read each receipt: the dates the tax office ended up with are what a
   // customer's QR resolves to.
@@ -365,7 +478,8 @@ async function main(): Promise<void> {
   }
   console.log(
     '\nDone. In the Checkbox кабінет the receipts should carry the times they were rung, ' +
-      'not the time they were sent. Commit the offline_*.json fixtures.'
+      'not the time they were sent. Commit the offline_*.json fixtures together with this ' +
+      "run's folder under fixtures/checkbox/runs/."
   );
 }
 
