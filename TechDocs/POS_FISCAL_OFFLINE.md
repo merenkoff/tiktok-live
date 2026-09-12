@@ -220,12 +220,12 @@ Checkbox (запрет смешивать клиентов на одном ре�
 
 ### 4. Касса без сети (случай C) — что делает `completeSale`
 
-> **Пересмотрено 2026-09-11.** Ниже — первоначальный вариант, где касса
-> печатает чек без контрольного числа и QR. Он отклонён: оба реквизита
-> формирует тот, кто ведёт цепочку ПРРО, а офлайн-чек Checkbox их несёт (см.
-> «Открытые вопросы»). Случай C делается через Checkbox Kasa — локальный ПРРО
-> на машине кассы; гейты и учёт аренды ниже остаются в силе, меняется то, кто
-> ставит штамп и что попадает на бумагу.
+> **Пересмотрено 2026-09-11, восстановлено 2026-09-12.** Вариант ниже (касса
+> печатает чек без контрольного числа, QR — свой) был отклонён в пользу
+> Checkbox Kasa, а затем **принят обратно** решением 2026-09-12 («Решение…:
+> облачный путь»). Действующий план — «План исполнения фазы 3» ниже; он
+> уточняет этот раздел (дату `go-offline` выбирает бэкенд, аренда без seed,
+> `seq` кассы авторитетен).
 
 Гейты, все локальные: `offline_mode` включён · аренда не пуста · смена **была
 открыта до потери связи** и `now < shift.deadline − 15 мин` · `now −
@@ -298,7 +298,7 @@ ended_at)`. Оркестратор в `fiscal.service.ts`:
 | **0. Исследование на песочнице** | Документация снята (`checkbox-api/`); письмо в поддержку Checkbox по вопросам 1–2 ниже отправлено 2026-09-11; прогон на тестовой кассе — скрипт `npm run fiscal:sandbox:offline -- --ask --go` (`CHECKBOX_SANDBOX_LICENSE_KEY/PIN` в env) делает `ask/get-offline-codes` → `go-offline` → `sell-offline` (без `control_number`) → `go-online` → опрос `info` и пишет фикстуры `src/__tests__/fixtures/checkbox/offline_*.json`; осталось запустить его и закоммитить фикстуры | 1–2 дня | 🟡 ждёт прогона и ответа поддержки |
 | **1. Capability, пул, держатель** | `FiscalOfflineOps` + `FiscalResult.controlNumber`, реализация в `providers/checkbox` (`sell-offline`, `go-offline/online`, `ask/get-offline-codes`, `info`), миграция 027 (`offline_mode`, `offline_codes_target`, `holder_*`, `handover_*`, `pos_fiscal_offline_codes`, `pos_offline_session_opens`, `pos_fiscal_receipts.mode/offline_session_id/offline_seq/control_number`), пул `offline/pool.ts` + крон `*/10` `refillAllStores`, держатель `offline/holder.ts` + роуты `register/{claim,release,handover/request|confirm|force}`, гейт в `preflight`, `X-POS-Device-ID` с кассы, `GET /fiscal/status` с `offline`/`holder`, `closeDueShifts` не трогает смену с живой сессией; песочный скрипт `npm run fiscal:sandbox:offline`; 5 новых тест-файлов | 4–5 дней | ✅ 2026-09-11, PR #71 |
 | **2. Серверная сессия (случай B)** | `offline/session.ts` (одна живая сессия на регистратор, штамп с плотным `offline_seq`, код на `go-offline` в той же транзакции), `preflight` → сессия и штамп при `unavailable` внутри смены, открытой онлайн; гейты `replaying` / `offline_limit` / `shift_deadline` / `offline_session_open` / `offline_codes_exhausted`; реплей в `retryPendingFiscalDocs` (`replayServerSessions`: проба → пересинк пула → `go-offline` один раз → документы по `seq` → `go-online` ≤ 1/2 мин → `closed`); плоский ретрай не трогает магазин с живой сессией; 409 на ручное закрытие смены; `documents`/`error_code` сессии в `/fiscal/status`, `stuck`-сессии в `/fiscal/attention`; миграция 028; матрица отказов §8 родителя; 3 новых тест-файла (`offline.session`, `offline.checkout`, `offline.replay`) | 3 дня | ✅ 2026-09-11, PR #73 |
-| **3. Касса без связи (случай C)** | **Облачный путь** (решение 2026-09-12, см. «Решение…» ниже): касса арендует коды, штампует чек, печатает всё, что есть, `sell-offline` при синке; контрольное число и `mac` дописываются после. Что печатать на бумаге до синка — вопрос в поддержку Checkbox. **Checkbox Kasa — отложено**, вернуться после облачного пути, если ответ Checkbox потребует. Перед фазой 3 — фаза 8в (реквизиты + полный макет) | 5–6 дней | ⬜ после 8в |
+| **3. Касса без связи (случай C)** | **Облачный путь** (решение 2026-09-12, см. «Решение…» ниже): касса арендует коды, штампует чек, печатает всё, что есть, `sell-offline` при синке; контрольное число и `mac` дописываются после. Что печатать на бумаге до синка — вопрос в поддержку Checkbox. **Checkbox Kasa — отложено**, вернуться после облачного пути, если ответ Checkbox потребует. Перед фазой 3 — фаза 8в (реквизиты + полный макет) | 5–6 дней | 🟡 план исполнения ниже («План исполнения фазы 3»), 2026-09-12; 8в сделана |
 | **4. UI** | `fiscal-checkbox`: на `/fiscal` блок «Офлайн: N кодів, сесія з …, лишилось …», прогресс реплея; экраны держателя — «Каса зайнята… Запросити передачу», подтверждение у держателя, «Забрати примусово» у владельца; Settings — тумблер «Офлайн-режим» (только при `offline_capable`), размер запаса; `OfflineStatusBanner` — «Офлайн, чеки ПРРО з резерву (N)»; список внимания — `stuck`-сессии, отклонённые офлайн-документы, чеки принудительно снятой кассы | 4 дня | ✅ 2026-09-11 (план исполнения ниже) |
 | **5. Закалка** | 36h/24h гейты на обеих сторонах, исчерпание кодов, `X-Device-ID`, e2e (веб-шелл с моком провайдера) + чек-лист десктопа, доки (`POS_FISCAL_PRRO.md`, `POS_DESKTOP.md`, `POS_FISCAL_CHECKBOX_SETUP.md`) | 3–4 дня | ⬜ |
 
@@ -905,6 +905,231 @@ ended_at)`. Оркестратор в `fiscal.service.ts`:
 - редактирование реквизитов владельцем поверх кэша;
 - «ЧЕК №» печатается фискальным номером; свой номер документа остаётся
   строкой «Чек R-…» над позициями.
+
+## План исполнения фазы 3 — касса без связи (случай C, облачный путь)
+
+Написан 2026-09-12 по коду после PR #75 (`main` @ 32ab8b1). Оценка — 5–6
+дней. Это план **до кода**: сначала согласовать, потом писать.
+
+### Цель и граница
+
+Десктоп-касса (только она: `isOfflinePosEnabled()`), у которой нет связи с
+нашим API, продолжает продавать в фискализирующем магазине: сама ставит на
+чек код из арендованного резерва и дату, печатает чек по макету 8в
+(«ОФЛАЙН», QR без `mac`, без контрольного числа), кладёт продажу в outbox, а
+при появлении связи бэкенд принимает её как офлайн-документ и реплеит в
+Checkbox тем же кроном, что и серверную сессию. Контрольное число и полная
+ссылка провайдера дописываются после реплея (решение 2026-09-12, ответственность
+владельца зафиксирована выше).
+
+Сегодня `completeSale` в `pos/src/offline/repository.ts` в этой ситуации
+бросает `OfflineFiscalError` и ничего не пишет. Фаза 3 заменяет этот `throw`
+локальным штампом, когда все гейты §4 проходят, и оставляет его с конкретной
+причиной, когда нет.
+
+**Не в этой фазе (§7):** возвраты офлайн, открытие/закрытие смены офлайн,
+веб-шелл (он не держатель и не арендует), две кассы на регистратор, закалка
+(фаза 5: e2e, чек-лист десктопа, 36ч/24ч на обеих сторонах под нагрузкой).
+
+### Что дают фазы 1–2 и 8в, на что опираемся
+
+- Держатель регистратора (`offline/holder.ts`): аренду получает только он;
+  `handover/confirm` требует `outbox_pending: 0` и возвращает `leased` → `free`,
+  `force` жжёт `leased` → `burned`. Ничего из этого не переписываем.
+- Пул (`offline/pool.ts`): `takeFreeCodes(..., { status: 'leased', deviceId })`
+  и `releaseLeasedCodes` уже есть; статус `leased` в таблице есть с миграции 027.
+- Сессия (`offline/session.ts`): таблица уже знает `holder = 'device'` и
+  `device_id`; `openServerSession` берёт код на `go-offline` из пула в одной
+  транзакции; `stampNext` — плотный `offline_seq`, `tax_url` при штампе.
+- Реплей (`replayServerSessions` в `fiscal.service.ts`): проба → пересинк пула
+  → `go-offline` c проверкой «нет доставленных онлайн-документов новее
+  `started_at`» → документы по `offline_seq` → `go-online` ≤ 1/2 мин → `closed`.
+  Ему всё равно, кто штамповал документы.
+- Касса: `X-POS-Device-ID`, outbox с терминальным `dead`, `fiscalBlockComplete`
+  (офлайн-чек без контрольного числа печатается только по кнопке),
+  `auth.store.fiscal.{register_fiscal_number, default_tax_code, requisites}`.
+
+### Решения, которых нет в §3–§5 (фиксируем здесь)
+
+1. **Дату `go-offline` и его код выбирает бэкенд при синке, а не касса.** §3
+   предполагал seed и код в аренде. Не нужно: только бэкенд знает время
+   последней доставленной в ДПС транзакции (`ledger.lastOnlineDeliveredAt`,
+   плюс `last_go_online_at` предыдущей сессии) и должен выбрать
+   `started_at = max(этот пол + 1 с, дата первого документа кассы − 1 с)`;
+   если пол новее первого документа — сессия сразу `stuck` (`go_offline_order`),
+   документы остаются в реестре, продажи стоят. Код на `go-offline` берётся из
+   **свободного** пула в той же транзакции (как в `openServerSession`), поэтому
+   касса из аренды его не тратит. Аренда = только коды документов.
+2. **Одна живая сессия на регистратор — и для случая B+C.** Если при синке
+   документов кассы у регистратора есть серверная сессия в `open` (провайдер
+   упал, пока касса ещё была онлайн, потом упала и касса), документы кассы
+   **дописываются в неё**: их даты позже серверных по построению — держатель
+   один, серверные штампы ставились только по его онлайн-чекаутам, которые
+   прекратились с потерей связи. Если живая сессия `replaying` — 409
+   `offline_session_replaying`, касса повторит через минуту (не терминально).
+   Если сессии нет — открывается сессия `holder='device'`. Новая сессия, чей
+   `started_at` раньше `go-online` предыдущей, — `stuck`, в список внимания;
+   это редкое наложение «провайдер упал, касса упала, провайдер вернулся и
+   реплей прошёл, пока касса ещё офлайн» — принимаем как v1.
+3. **`offline_seq` документа кассы = её локальный `seq`, а не MAX+1.** Тогда
+   порядок реплея не зависит от порядка прихода строк outbox (outbox шлёт
+   продажи по `createdAt`, но одна ошибка пропускает строку). Пробел в `seq`
+   реплею не мешает — ДПС видит только даты, `previous_receipt_id` строится
+   по фактически отправленным.
+4. **Реплей сессии кассы ждёт сигнала «очередь пуста».** Касса на каждом
+   тике `runSync` после отправки продаж обновляет аренду и передаёт
+   `outbox_pending` (число `pending|error` продаж); при `0` бэкенд ставит
+   `ready_at` на открытую сессию этого устройства — с этого момента она в
+   `replayServerSessions`. Страховка: сессия без `ready_at` старше 60 мин по
+   `updated_at` (касса умерла посреди синка) реплеится и так, с `warn`;
+   документ, пришедший после, получает 409 п. 2 и после закрытия сессии
+   станет новой сессией (п. 2 — вероятно `stuck`).
+5. **Аренда — правда бэкенда, касса считает доступное сама.** `POST
+   /fiscal/offline/lease` возвращает **все** коды в статусе `leased` за этим
+   `device_id` (пополнив до `OFFLINE_LEASE_SIZE = 50`, константа в v1 —
+   настройка `offline_lease_size` из §3 не заводится, пока не нужна) плюс
+   снимок смены и ФН ПРРО. Касса хранит ответ в `meta['fiscalLease']` и при
+   штампе вычитает коды, на которые уже ссылаются её outbox/локальные чеки
+   (`used` они станут только после синка). Повторный вызов идемпотентен.
+   Вызывается в конце каждого `runSync` и при онлайн-входе, только если
+   `auth.store.fiscal.offline_mode` и касса — держатель (или регистратор
+   свободен: бэкенд занимает его как `preflight`). Не держателю — 409
+   `register_held`, аренды нет, касса это запоминает и не штампует.
+6. **Смена и авто-закрытие.** `closeDueShifts` не трогает смену магазина, у
+   которого держатель **молчит** (`holder_last_seen_at` старше
+   `HOLDER_STALE_MS`) — он, возможно, продаёт офлайн; после дедлайна + 30 мин
+   при том же молчании смена помечается `stuck` в список внимания, а касса
+   свой гейт `now < auto_close_due_at − 15 мин` уже закрыла. Держатель, который
+   онлайн, синкается каждые 30 с и ничего не держит — его смену закрывать
+   безопасно. Открытая офлайн-сессия и так блокирует закрытие (фаза 2).
+7. **Что бэкенд проверяет у штампа кассы, а что нет.** Проверяет: устройство —
+   держатель, `offline_mode` включён, код — `leased` за этим устройством (или
+   уже `used` этой же продажей — идемпотентность по `client_uuid` срабатывает
+   раньше). Чужой/`burned`/неизвестный код → 409 `offline_code_invalid`,
+   **терминально** для outbox. Не проверяет дату: часы кассы — данность,
+   ДПС рассудит при реплее (`rejected` → документ в список внимания, продажа
+   стоит). Проверяет 36 ч: `fiscal_date − started_at > 36 ч` → продажа и
+   документ создаются, сессия `stuck` (`offline_limit`).
+8. **Терминальный отказ офлайн-продажи ≠ «ничего не записано».** Товар ушёл
+   и чек напечатан. Для 409 `offline_code_invalid` / `register_taken` outbox
+   помечает строку `dead` с `nothingWritten: false` (сток **не** возвращаем),
+   локальный чек остаётся с `sync_state: 'dead'` и попадает в список
+   «непроведені» на этой кассе — это и есть «чеки принудительно снятой кассы»
+   из §3а в v1 (серверного реестра сирот не заводим).
+9. **Кэш auth на кассе несёт весь публичный блок `fiscal`.** Сегодня
+   `StaffUnlockRow` хранит только `fiscalEnabled/fiscalProvider`, поэтому после
+   холодного входа по PIN у кассы нет `offline_mode`, `requisites`,
+   `register_fiscal_number`, `default_tax_code` — макет 8в печатал бы шапку
+   пустой. Это ошибка 8в, чинится здесь: `fiscal?: FiscalPublicConfig` в строке
+   целиком.
+10. **Локальные гейты и причины** (`OfflineFiscalError.reason`): `offline_off`
+    («ПРРО: офлайн-режим вимкнено»), `not_holder`, `no_lease`
+    («закінчились офлайн-коди»), `no_shift` («зміну не відкрито»),
+    `shift_deadline` («зміна спливає»), `offline_limit` («офлайн понад 36
+    год»), `no_requisites` («спершу проведіть один чек онлайн»). Отсчёт 36 ч —
+    от `offline_since` в аренде (первый локальный штамп), сбрасывается, когда
+    аренда обновилась при пустой очереди.
+11. **Локальный штамп** = следующий `leased`-код по `serial_id` + `now` +
+    `seq` + `tax_url`, собранный на кассе той же функцией, что на сервере
+    (`pos/src/lib/taxUrl.ts` — копия `src/pos/fiscal/taxUrl.ts`, Киев через
+    `Intl`; `fn` = `auth.store.fiscal.register_fiscal_number`). Локальный
+    `SaleDetail` получает `fiscal_status: 'pending'` и `fiscal: { status:
+    'pending', mode: 'offline', fiscal_code, fiscal_date, tax_url,
+    control_number: null, … }` — ровно то, что сервер отдаёт для серверного
+    штампа, так что чек, карточка и `fiscalBlockComplete` работают без правок.
+    Номер документа остаётся `OFF-…`.
+
+### Шаги (в этом порядке, каждый с тестами)
+
+**Шаг 1 — бэкенд: аренда.** Миграция 031: `pos_fiscal_offline_sessions` +=
+`client_session_id TEXT`, `ready_at TIMESTAMPTZ`, частичный уникальный индекс
+`(store_id, device_id, client_session_id)`. `offline/lease.ts`:
+`leaseCodes(ctx, deviceId, outboxPending)` — `assertHolder` (занимает свободный
+регистратор), пополнение `leased` до 50 из `free`, `ready_at` на открытой
+сессии устройства при `outboxPending === 0`, ответ `{ codes: [{fiscal_code,
+serial_id}], lease_size, shift: {id, opened_at, auto_close_due_at} | null,
+register_fiscal_number, session: {client_session_id, status} | null }`.
+Роут `POST /fiscal/offline/lease { outbox_pending }` в `fiscal.routes.ts`
+(400 без устройства, 409 `register_held`, 409 `offline_off`). В `GET
+/fiscal/status` → `offline.codes.leased_to_me`. Тесты:
+`pos.fiscal.offline.lease.test.ts` (только держатель; пополнение до 50 и
+идемпотентность; `ready_at`; `handover/confirm` возвращает коды в `free`;
+`force` жжёт).
+
+**Шаг 2 — бэкенд: документ кассы на синке.** `POST /sales/complete` принимает
+`fiscal_offline: { client_session_id, seq, fiscal_code, fiscal_date }` (только
+с `X-POS-Device-ID`; веб-шелл — 400). Ветка в `checkout.routes.ts` до
+`preflight`: `fiscalService.acceptDeviceStamp(...)` — проверки п. 7 →
+`completeSale` с `fiscal_status: 'pending'` → `offline/session.ts`
+`attachDeviceDocument`: найти живую сессию регистратора (`open` серверная →
+дописать; `replaying` → 409; нет → `openSession({holder:'device', deviceId,
+clientSessionId, startedAt})` по п. 1, обобщив `openServerSession`) →
+`openDocument` + `stampOfflineDocument` с кодом/датой кассы и `offline_seq =
+seq`, код `leased → used (receipt_id)` в той же транзакции → 201 с
+`offlineView`. `listLiveServerSessions` → `listReplayableSessions` (серверные
++ устройства с `ready_at` или старше 60 мин); в `replayOneSession` пол для
+`go-offline` учитывает `last_go_online_at` предыдущей сессии. `closeDueShifts`
+— п. 6. Тесты: `pos.fiscal.offline.device.test.ts` (сессия открывается с
+датой по п. 1; дописывание в открытую серверную; 409 на `replaying`;
+идемпотентность по `client_uuid`; `offline_code_invalid` на чужой/`burned`
+код; `offline_seq` = `seq` кассы; реплей ждёт `ready_at`, затем `closed`,
+контрольное число дописано; `stuck` при старте раньше `go-online`; 36 ч);
+правка `pos.fiscal.shifts` (стейл-держатель не закрывается).
+
+**Шаг 3 — касса: кэш, аренда, штамп, синк.** `offline/auth-local.ts` + `db.ts`
+— п. 9 (без бампа версии Dexie: новое необязательное поле строки). Новый
+`offline/lease.ts`: `refreshLease(outboxPending)` (вызов из `runSync` в конце
+и из `startOfflineRuntime` после `setDeviceId`), `takeCode()`, `availableCodes()`,
+гейты п. 10 → `OfflineFiscalError(reason)`. `lib/taxUrl.ts` + тест (копия
+серверного). `repository.completeSale`: вместо `throw new OfflineFiscalError()`
+— штамп п. 11, `fiscal_offline` в `OutboxSalePayload`, локальный `SaleDetail`
+с документом. `sync.syncSale` шлёт `fiscal_offline`; `outboxPolicy`: 409
+`offline_code_invalid` / `register_taken` → терминально, `nothingWritten:
+false`; 409 `offline_session_replaying` → обычная ошибка с backoff.
+`services/api.completeSale` принимает поле. Тесты: `offline/lease.test.ts`
+(гейты, вычитание использованных, сброс `offline_since`), `repository`
+(штамп, seq, детальный чек с документом), `sync.test`/`outboxPolicy.test`
+(поле в теле, вердикты), `auth-local.test`.
+
+**Шаг 4 — касса: что видит кассир.** `OfflineStatusBanner` при
+`fiscal.offline_mode` и аренде: «Офлайн — чеки ПРРО з резерву (N кодів)»;
+`OfflinePanel` (`fiscal-core`) — строка «Резерв на цій касі: N» из
+`leased_to_me`; экран успеха — как для серверного штампа («ПРРО: офлайн»,
+чек по кнопке, автопечать только с контрольным числом — уже так); список
+«непроведені» показывает причину `dead`-строки. `checkoutError`: сообщения
+п. 10. Без новых экранов.
+
+**Шаг 5 — доки.** Этот файл (статус, §4 заменить на ссылку сюда), таблица в
+`POS_FISCAL_PRRO.md`, `CLAUDE.md`, `POS_DESKTOP.md` (что теперь кэшируется и
+что делает касса без сети), `POS_FISCAL_CHECKBOX_SETUP.md` §6 (прогон случая C
+на тестовой кассе — чек-лист руками).
+
+### Файлы
+
+Новые: `migrations/031_pos_fiscal_device_sessions.sql`,
+`src/pos/fiscal/offline/lease.ts`, `pos/src/offline/lease.ts`,
+`pos/src/lib/taxUrl.ts`, тесты `src/__tests__/pos.fiscal.offline.{lease,device}.test.ts`,
+`pos/src/offline/lease.test.ts`, `pos/src/lib/taxUrl.test.ts`.
+Правки: `src/pos/fiscal/{fiscal.service,shifts.service}.ts`,
+`src/pos/fiscal/offline/{session,status}.ts`, `src/pos/routes/{fiscal,checkout}.routes.ts`,
+`src/pos/migrations.ts`, `pos/src/offline/{auth-local,db,repository,sync,outboxPolicy,errors}.ts`,
+`pos/src/services/api.ts`, `pos/src/lib/checkoutError.ts`,
+`pos/src/components/OfflineStatusBanner.tsx`, `pos/src/modules/fiscal-core/components/OfflinePanel.tsx`,
+доки.
+
+### Проверка фазы
+
+На тестовой кассе (демо-аккаунт Checkbox): открыть смену онлайн → продать один
+чек онлайн (реквизиты закэшированы) → выдернуть сеть → три продажи: чек
+печатается с «ОФЛАЙН», кодом из резерва и QR, карточка «ПРРО: офлайн» →
+вернуть сеть → в течение минуты outbox пуст, `GET /fiscal/status` показывает
+сессию `device`, `ready`, затем реплей: `go-offline` → три `sell-offline` →
+`go-online` → `closed`; на карточках чеков появилось контрольное число; в
+кабинете Checkbox три офлайн-чека в правильном порядке; пул пополнен.
+Отрицательные: выдернуть сеть без открытой смены → «зміну не відкрито»;
+исчерпать резерв (выставить `OFFLINE_LEASE_SIZE` = 2 в тесте) → «закінчились
+офлайн-коди»; `force` с другой кассы, пока первая офлайн → её чеки `dead` в
+списке непроведених, сток не возвращён.
 
 ## Реквизиты чека ПРРО по Положенню № 13 — сверка с нашим макетом (2026-09-12)
 
