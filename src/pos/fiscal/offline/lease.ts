@@ -27,6 +27,7 @@ import type { FiscalContext } from '../shifts.service.js';
 import { getLiveShiftRow } from '../shifts.service.js';
 import { assertHolder } from './holder.js';
 import { listLeasedCodes, takeFreeCodes } from './pool.js';
+import { offlineMonthUsage, type OfflineMonthUsage } from './limits.js';
 import { getLiveSession, markDeviceReady, type OfflineSessionStatus } from './session.js';
 
 /**
@@ -73,6 +74,13 @@ export interface LeaseView {
   register_fiscal_number: string | null;
   /** The register's live offline session, whoever holds it. */
   session: LeaseSessionView | null;
+  /**
+   * The month's offline allowance as of now (168 h per ПРРО, Положення № 13).
+   * The till cannot count this itself — an outage of another till of the same
+   * register also spends it — so it travels here and the till only adds the
+   * stretch it is living through.
+   */
+  offline_month: OfflineMonthUsage;
 }
 
 function iso(value: Date | null | undefined): string | null {
@@ -117,10 +125,11 @@ export async function leaseCodes(
     await takeFreeCodes(ctx.storeId, ctx.registerKey, missing, { status: 'leased', deviceId });
   }
 
-  const [codes, shiftRow, session] = await Promise.all([
+  const [codes, shiftRow, session, month] = await Promise.all([
     missing > 0 ? listLeasedCodes(ctx.storeId, ctx.registerKey, deviceId) : Promise.resolve(held),
     getLiveShiftRow(ctx.storeId, ctx.registerKey),
     getLiveSession(ctx.storeId, ctx.registerKey),
+    offlineMonthUsage(ctx.storeId, ctx.registerKey),
   ]);
 
   return {
@@ -137,6 +146,7 @@ export async function leaseCodes(
           }
         : null,
     register_fiscal_number: ctx.settings.register_fiscal_number ?? null,
+    offline_month: month,
     session: session
       ? {
           id: session.id,

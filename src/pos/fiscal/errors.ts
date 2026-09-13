@@ -45,6 +45,7 @@
  * document might exist at the provider:
  *   `replaying`               — the session is being sent; sell again in a minute.
  *   `offline_limit`           — the session is older than the 36h offline limit.
+ *   `offline_month_limit`     — the register has spent its 168h for this month.
  *   `shift_deadline`          — the shift is about to hit its 24h limit.
  *   `offline_session_open`    — refunds/service receipts/shift close wait for the replay.
  *   `offline_codes_exhausted` — the pool has no free tax-office code left.
@@ -61,6 +62,7 @@ export type FiscalErrorKind =
   | 'register_held'
   | 'replaying'
   | 'offline_limit'
+  | 'offline_month_limit'
   | 'shift_deadline'
   | 'offline_session_open'
   | 'offline_codes_exhausted'
@@ -157,6 +159,7 @@ export function isOfflineGate(kind: FiscalErrorKind): boolean {
   return (
     kind === 'replaying' ||
     kind === 'offline_limit' ||
+    kind === 'offline_month_limit' ||
     kind === 'shift_deadline' ||
     kind === 'offline_session_open' ||
     kind === 'offline_codes_exhausted'
@@ -174,6 +177,7 @@ const CASHIER_MESSAGES: Record<FiscalErrorKind, string> = {
   register_held: 'Касу ПРРО зайнято іншим пристроєм — запросіть передачу',
   replaying: 'ПРРО надсилає офлайн-чеки — спробуйте за хвилину',
   offline_limit: 'Офлайн ПРРО триває понад 36 годин — потрібен звʼязок із ПРРО',
+  offline_month_limit: 'Вичерпано 168 годин офлайну ПРРО цього місяця — продаж лише зі звʼязком',
   shift_deadline: 'Зміна ПРРО добігає доби — закрийте зміну та відкрийте нову',
   offline_session_open: 'Офлайн-чеки ПРРО ще не надіслано — повторіть після синхронізації',
   offline_codes_exhausted: 'Закінчились офлайн-коди ПРРО — потрібен звʼязок із ПРРО',

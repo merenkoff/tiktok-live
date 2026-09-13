@@ -19,11 +19,12 @@ import { ensurePosAuth, ensurePosOwner } from '../core/auth.js';
 import { isSecretsKeyConfigured } from '../core/secrets.js';
 import { asFiscalError, cashierMessage, FiscalError, isOfflineGate, supportCode } from '../fiscal/errors.js';
 import { leaseCodes } from '../fiscal/offline/lease.js';
+import { offlineMonthUsage } from '../fiscal/offline/limits.js';
 import { getLiveSession, listStuckSessions } from '../fiscal/offline/session.js';
 import { sessionView } from '../fiscal/offline/status.js';
 import * as fiscalService from '../fiscal/fiscal.service.js';
 import * as holder from '../fiscal/offline/holder.js';
-import { getOfflineStatus } from '../fiscal/offline/status.js';
+import { getOfflineStatus, registerKeyOf } from '../fiscal/offline/status.js';
 import { getProvider, hasProvider } from '../fiscal/providers/index.js';
 import { refreshRequisites } from '../fiscal/requisites.js';
 import * as fiscalSettings from '../fiscal/settings.service.js';
@@ -92,6 +93,13 @@ export function registerFiscalRoutes(fastify: FastifyInstance): void {
       // A store that enables a provider with no adapter gets 503 on every sale,
       // and nothing else would tell the owner why.
       adapter_available: settings?.provider ? hasProvider(settings.provider) : false,
+      // 168 годин офлайну на календарний місяць: the owner sees how much of it
+      // the register has spent, on the same screen as the switch that allows
+      // spending it. Null for a store that cannot go offline at all.
+      offline_month:
+        settings?.enabled && settings.offline_mode && fiscalSettings.isOfflineCapable(settings.provider)
+          ? await offlineMonthUsage(auth.storeId, registerKeyOf(settings.config))
+          : null,
     };
   });
 

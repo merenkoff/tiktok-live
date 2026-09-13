@@ -19,6 +19,11 @@
 
 import type { FiscalStatus, OfflineSessionView } from '../types';
 
+/** Hours, the unit the tax office's limits are written in. */
+function hours(ms: number): string {
+  return `${Math.floor(ms / 3_600_000)} год`;
+}
+
 function time(iso: string | null): string {
   if (!iso) return '';
   return new Date(iso).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
@@ -84,6 +89,10 @@ export function OfflinePanel({ status }: { status: FiscalStatus }) {
   // react before the reserve is gone; the refill cron runs every 10 minutes and
   // needs the provider to be reachable to top it up.
   const low = free < Math.max(1, Math.floor(offline.codes_target / 4));
+  const month = offline.month ?? null;
+  // Twelve hours left is a working day of outage — enough warning to do
+  // something about the connection before selling offline becomes unlawful.
+  const monthLow = month ? month.limit_ms - month.used_ms <= 12 * 3_600_000 : false;
 
   return (
     <div className="rounded-sq bg-sq-surface border border-sq-divider p-4 space-y-2">
@@ -99,6 +108,14 @@ export function OfflinePanel({ status }: { status: FiscalStatus }) {
       {low && (
         <p className="text-xs text-amber-700">
           Запас майже вичерпано. Поки ПРРО доступне, він поповнюється автоматично.
+        </p>
+      )}
+      {month && (
+        // 168 годин на календарний місяць — a limit of the register, not of
+        // this till: another till's outage spends the same hours.
+        <p className={`text-sm ${monthLow ? 'text-amber-600 font-semibold' : 'text-sq-secondary'}`}>
+          Офлайн цього місяця: {hours(month.used_ms)} із {hours(month.limit_ms)}
+          {monthLow && ' — залишок малий'}
         </p>
       )}
       {offline.session && <SessionLine session={offline.session} />}

@@ -52,6 +52,13 @@ export interface OfflineStatusBlock {
     leased_to_me?: number;
   } | null;
   session: OfflineSessionView | null;
+  /** The month's offline allowance, 168 h per register; null while offline mode is off. */
+  month?: {
+    used_ms: number;
+    limit_ms: number;
+    measured_at: string;
+    month_start: string;
+  } | null;
 }
 
 /**

@@ -203,6 +203,8 @@ export function FiscalSettingsCard() {
   // the dropdown: switching provider drops it server-side anyway, and showing
   // the switch for an unsaved pick would promise something the save undoes.
   const offlineCapable = settings?.offline_capable ?? false;
+  const month = settings?.offline_month ?? null;
+  const monthLow = month ? month.limit_ms - month.used_ms <= 12 * 3_600_000 : false;
   const canGoOffline = offlineCapable && canEnable && enabled;
   const parsedTarget = Number(codesTarget);
   const targetValid =
@@ -428,6 +430,16 @@ export function FiscalSettingsCard() {
                 ? 'Якщо ПРРО недоступне: продаж триває, чеки надсилаються пізніше.'
                 : 'Якщо ПРРО недоступне: продаж блокується.'}
             </p>
+            {settings.offline_month && (
+              // 168 годин на календарний місяць — Положення № 13. Лічильник
+              // ведеться на сервері по реєстратору: офлайн будь-якої каси
+              // витрачає ті самі години.
+              <p className={monthLow ? 'text-amber-700' : undefined}>
+                Офлайн цього місяця: {Math.floor(settings.offline_month.used_ms / 3_600_000)} год
+                із {Math.floor(settings.offline_month.limit_ms / 3_600_000)}
+                {monthLow && ' — залишок малий, продаж без звʼязку скоро стане неможливим'}
+              </p>
+            )}
           </div>
 
           <div className="flex items-center gap-3">

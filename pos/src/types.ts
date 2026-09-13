@@ -292,6 +292,8 @@ export interface FiscalSettingsView {
   /** As last fetched from the provider; null until the first online contact. */
   requisites: FiscalRequisites | null;
   requisites_fetched_at: string | null;
+  /** Offline hours spent this calendar month, of the tax office's 168. */
+  offline_month?: FiscalOfflineMonth | null;
   updated_at: string | null;
   /** False when the server has no `POS_SECRETS_KEY` — credentials cannot be saved. */
   secrets_key_configured: boolean;
@@ -334,6 +336,17 @@ export interface FiscalLeaseSession {
   ready_at: string | null;
 }
 
+/**
+ * The 168 hours a ПРРО may spend offline in a calendar month (Положення № 13),
+ * as the server counted them. The till adds the stretch it is living through.
+ */
+export interface FiscalOfflineMonth {
+  used_ms: number;
+  limit_ms: number;
+  measured_at: string;
+  month_start: string;
+}
+
 /** `POST /fiscal/offline/lease` — the reserve this till may sell from. */
 export interface FiscalLeaseResponse {
   lease_size: number;
@@ -341,6 +354,7 @@ export interface FiscalLeaseResponse {
   shift: FiscalLeaseShift | null;
   register_fiscal_number: string | null;
   session: FiscalLeaseSession | null;
+  offline_month?: FiscalOfflineMonth;
 }
 
 export interface FiscalSettingsPatch {
