@@ -56,6 +56,10 @@ export function HolderPanel({ status, onChanged }: HolderPanelProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [note, setNote] = useState<string | null>(null);
+  // Off by default: a hardware swap must not cut the day into two Z-reports.
+  // It is here for the cashier who is finishing for the day anyway.
+  const [closeShift, setCloseShift] = useState(false);
+  const [zReportText, setZReportText] = useState<string | null>(null);
 
   if (!status.offline?.enabled) return null;
 
@@ -101,8 +105,9 @@ export function HolderPanel({ status, onChanged }: HolderPanelProps) {
 
   const confirm = () =>
     run(async () => {
-      await confirmHandover(outboxPending);
-      return 'Касу передано';
+      const res = await confirmHandover(outboxPending, closeShift);
+      setZReportText(res.z_report_text ?? null);
+      return closeShift ? 'Зміну закрито, касу передано' : 'Касу передано';
     });
 
   return (
@@ -141,6 +146,15 @@ export function HolderPanel({ status, onChanged }: HolderPanelProps) {
               {outboxPending > 0 && (
                 <p className="mt-1">Спершу синхронізуйте чеки, що очікують: {outboxPending}.</p>
               )}
+              <label className="mt-2 flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={closeShift}
+                  disabled={busy}
+                  onChange={(e) => setCloseShift(e.target.checked)}
+                />
+                Закрити зміну (Z-звіт) перед передачею
+              </label>
               <button
                 type="button"
                 className="pos-btn-primary mt-2 px-4 py-2"
@@ -187,6 +201,14 @@ export function HolderPanel({ status, onChanged }: HolderPanelProps) {
       )}
 
       {note && <p className="text-sm text-sq-secondary">{note}</p>}
+      {zReportText && (
+        <div>
+          <p className="sq-section-label">Z-звіт</p>
+          <pre className="mt-1 max-h-64 overflow-auto rounded-sq bg-sq-bg p-3 font-mono text-xs whitespace-pre-wrap">
+            {zReportText}
+          </pre>
+        </div>
+      )}
       {Boolean(error) && <FiscalErrorCard error={error} />}
     </div>
   );

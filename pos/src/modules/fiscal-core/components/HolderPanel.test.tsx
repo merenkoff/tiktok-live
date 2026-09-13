@@ -25,7 +25,7 @@ vi.mock('../data/fiscalApi', () => ({
   claimRegister: () => claimRegister(),
   releaseRegister: () => releaseRegister(),
   requestHandover: () => requestHandover(),
-  confirmHandover: (n: number) => confirmHandover(n),
+  confirmHandover: (n: number, close?: boolean) => confirmHandover(n, close),
 }));
 
 const { HolderPanel } = await import('./HolderPanel');
@@ -175,7 +175,37 @@ describe('HolderPanel', () => {
     expect(screen.getByText(/«Каса 2»/)).toBeInTheDocument();
     expect(screen.getByText(/що очікують: 2/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Передати касу' }));
-    await waitFor(() => expect(confirmHandover).toHaveBeenCalledWith(2));
+    // The shift stays open unless the cashier says otherwise.
+    await waitFor(() => expect(confirmHandover).toHaveBeenCalledWith(2, false));
+  });
+
+  it('closes the shift with the handover only when asked, and shows the Z-report', async () => {
+    useOfflineStatus.setState({ pending: 0 });
+    confirmHandover.mockResolvedValue({ holder: holder(), z_report_text: 'Z-ЗВІТ' });
+    renderWithProviders(
+      <HolderPanel
+        status={status({
+          holder: holder({
+            is_me: true,
+            handover_request: {
+              device_id: 'ff00ff0011223344',
+              name: 'Каса 2',
+              requested_at: '2026-09-11T09:41:00.000Z',
+            },
+          }),
+        })}
+        onChanged={() => {}}
+      />,
+      { shell: 'cashier' }
+    );
+
+    const box = screen.getByRole('checkbox', { name: /Закрити зміну/ });
+    expect(box).not.toBeChecked();
+    await userEvent.click(box);
+    await userEvent.click(screen.getByRole('button', { name: 'Передати касу' }));
+    await waitFor(() => expect(confirmHandover).toHaveBeenCalledWith(0, true));
+    expect(await screen.findByText('Z-ЗВІТ')).toBeInTheDocument();
+    expect(screen.getByText(/Зміну закрито, касу передано/)).toBeInTheDocument();
   });
 
   it('shows the backend reason when a handover is refused', async () => {

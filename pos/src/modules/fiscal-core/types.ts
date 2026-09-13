@@ -117,6 +117,15 @@ export interface HolderResponse {
   holder: HolderView | null;
 }
 
+/**
+ * `POST /fiscal/register/handover/confirm`. The Z-report fields are filled in
+ * only when the cashier asked for the shift to be closed on the way out.
+ */
+export interface HandoverConfirmResponse extends HolderResponse {
+  z_report?: unknown;
+  z_report_text?: string | null;
+}
+
 /** `POST /fiscal/register/handover/request` — 202 `requested`, 200 `claimed`. */
 export interface HandoverRequestResponse extends HolderResponse {
   status: 'requested' | 'claimed';

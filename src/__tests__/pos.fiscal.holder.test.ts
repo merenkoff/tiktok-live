@@ -274,6 +274,59 @@ describe.skipIf(!hasDb)('POS fiscal register holder', () => {
     expect((await sell(DEVICE_A)).statusCode).toBe(409);
   });
 
+  it('closes the shift on the way out when the cashier asks, and only then', async () => {
+    // Default: the lock moves and the day stays one shift — a swapped computer
+    // must not cost two Z-reports.
+    await post('claim', DEVICE_A);
+    expect((await sell(DEVICE_A)).statusCode).toBe(201);
+    await post('handover/request', DEVICE_B, { device_name: 'B' });
+    const plain = await post('handover/confirm', DEVICE_A, { outbox_pending: 0 });
+    expect(plain.statusCode).toBe(200);
+    expect(plain.json().z_report_text).toBeNull();
+    expect(fake.calls.filter((c) => c.method === 'closeShift')).toHaveLength(0);
+
+    // Asked for: the shift is closed first, and the Z-report comes back with
+    // the handover so the cashier can print it.
+    await post('handover/request', DEVICE_A, { device_name: 'A' });
+    const closing = await post('handover/confirm', DEVICE_B, {
+      outbox_pending: 0,
+      close_shift: true,
+    });
+    expect(closing.statusCode).toBe(200);
+    expect(closing.json()).toMatchObject({
+      holder: { device_id: DEVICE_A },
+      z_report_text: 'FAKE Z-REPORT',
+    });
+    expect(fake.calls.filter((c) => c.method === 'closeShift')).toHaveLength(1);
+  });
+
+  it('keeps the register where it is when that Z-report fails', async () => {
+    await post('claim', DEVICE_A);
+    expect((await sell(DEVICE_A)).statusCode).toBe(201);
+    await post('handover/request', DEVICE_B, { device_name: 'B' });
+    fake.queueError('unavailable');
+
+    const res = await post('handover/confirm', DEVICE_A, { outbox_pending: 0, close_shift: true });
+    // The same 502 a failed `/fiscal/shift/close` answers with — this IS that
+    // call, only reached from the handover screen.
+    expect(res.statusCode).toBe(502);
+    expect(res.json().error).toBe('unavailable');
+    // A till that could not close its shift is the one that has to try again.
+    expect((await holderRow()).holder_device_id).toBe(DEVICE_A);
+    expect((await holderRow()).handover_device_id).toBe(DEVICE_B);
+  });
+
+  it('does not close the shift for a handover it would refuse anyway', async () => {
+    await post('claim', DEVICE_A);
+    expect((await sell(DEVICE_A)).statusCode).toBe(201);
+    await post('handover/request', DEVICE_B, { device_name: 'B' });
+
+    const res = await post('handover/confirm', DEVICE_A, { outbox_pending: 2, close_shift: true });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ error: 'handover_blocked', reason: 'outbox_pending' });
+    expect(fake.calls.filter((c) => c.method === 'closeShift')).toHaveLength(0);
+  });
+
   it('confirm is refused while the holder has a live offline session', async () => {
     await post('claim', DEVICE_A);
     await post('handover/request', DEVICE_B);
