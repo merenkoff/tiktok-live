@@ -108,7 +108,8 @@ describe('HolderPanel', () => {
       { shell: 'web' }
     );
 
-    expect(screen.getByText(/Каса 1/)).toBeInTheDocument();
+    // Word for word what the help article tells a cashier they will see.
+    expect(screen.getByText(/Каса зайнята пристроєм Каса 1 з/)).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
@@ -125,6 +126,7 @@ describe('HolderPanel', () => {
       <HolderPanel status={status({ holder: holder({ stale: true }) })} onChanged={() => {}} />,
       { shell: 'cashier' }
     );
+    expect(screen.getByText(/Каса не відповідає, можливо продає офлайн/)).toBeInTheDocument();
     expect(screen.getByText(/забрати касу примусово/i)).toBeInTheDocument();
   });
 
@@ -172,7 +174,7 @@ describe('HolderPanel', () => {
       { shell: 'cashier' }
     );
 
-    expect(screen.getByText(/«Каса 2»/)).toBeInTheDocument();
+    expect(screen.getByText(/Пристрій Каса 2 просить передати касу/)).toBeInTheDocument();
     expect(screen.getByText(/що очікують: 2/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Передати касу' }));
     // The shift stays open unless the cashier says otherwise.

@@ -35,9 +35,18 @@ function since(iso: string | null): string {
   return ` з ${new Date(iso).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
-/** A till a cashier can recognise: the name it registered, or a short id. */
+/**
+ * A till a cashier can recognise: the name it registered, or a short id.
+ *
+ * The sentences below are quoted verbatim in the public help article
+ * (`/dovidka/zmina-prro-zamina-kasy`) — «Каса зайнята пристроєм A з 09:12»,
+ * «Пристрій B просить передати касу», «Каса не відповідає, можливо продає
+ * офлайн». They are what a cashier finds when they search for what the screen
+ * says, so the screen has to say exactly that. Change one and change the
+ * article in the same commit.
+ */
 function deviceName(name: string | null, deviceId: string): string {
-  return name?.trim() || `пристрій ${deviceId.slice(0, 8)}`;
+  return name?.trim() || deviceId.slice(0, 8);
 }
 
 export interface HolderPanelProps {
@@ -140,7 +149,7 @@ export function HolderPanel({ status, onChanged }: HolderPanelProps) {
           {holder.handover_request && (
             <div className="rounded-sq bg-amber-50 px-3 py-2 text-sm text-amber-900">
               <p className="font-semibold">
-                «{deviceName(holder.handover_request.name, holder.handover_request.device_id)}»
+                Пристрій {deviceName(holder.handover_request.name, holder.handover_request.device_id)}{' '}
                 просить передати касу
               </p>
               {outboxPending > 0 && (
@@ -179,12 +188,13 @@ export function HolderPanel({ status, onChanged }: HolderPanelProps) {
       {holder && !holder.is_me && (
         <>
           <p className="text-sm text-sq-secondary">
-            Зайнята: «{deviceName(holder.name, holder.device_id)}»{since(holder.since)}
+            Каса зайнята пристроєм {deviceName(holder.name, holder.device_id)}
+            {since(holder.since)}
           </p>
           {holder.stale && (
             <p className="text-xs text-amber-700">
-              Немає зв’язку з тим пристроєм. Якщо він не повернеться, власник може забрати касу
-              примусово в налаштуваннях ПРРО.
+              Каса не відповідає, можливо продає офлайн. Якщо вона не повернеться, власник може
+              забрати касу примусово в налаштуваннях ПРРО.
             </p>
           )}
           {canAct && (
