@@ -28,6 +28,7 @@ import {
 } from '../../fiscal-core/data/fiscalApi';
 import { SecretsForm } from '../../fiscal-core/components/SecretsForm';
 import { FiscalErrorCard } from '../../fiscal-core/components/FiscalErrorCard';
+import { deviceLabel } from '../../fiscal-core/lib/deviceLabel';
 import { useFiscalStatus } from '../../fiscal-core/hooks/useFiscalStatus';
 import { CHECKBOX_SECRET_SPECS } from '../secretSpecs';
 import type {
@@ -150,10 +151,13 @@ function RegisterCard({ status, onChanged }: { status: FiscalStatus; onChanged: 
     <section className="space-y-2">
       <p className="sq-section-label">Каса ПРРО</p>
       {holder ? (
+        // Same sentence the cashier's own screen shows, and the one the help
+        // article quotes (/dovidka/zmina-prro-zamina-kasy) — the owner reading
+        // support chat should see the words the cashier described.
         <p className="text-sm text-sq-secondary">
-          Зайнята: «{holder.name?.trim() || `пристрій ${holder.device_id.slice(0, 8)}`}»
+          Каса зайнята пристроєм {deviceLabel(holder.name, holder.device_id)}
           {holder.since && ` з ${new Date(holder.since).toLocaleString('uk-UA')}`}
-          {holder.stale && ' · немає звʼязку'}
+          {holder.stale && ' · каса не відповідає, можливо продає офлайн'}
         </p>
       ) : (
         <p className="text-sm text-sq-secondary">Вільна</p>
@@ -162,7 +166,7 @@ function RegisterCard({ status, onChanged }: { status: FiscalStatus; onChanged: 
       {request ? (
         <>
           <p className="text-sm">
-            Запит на передачу: «{request.name?.trim() || `пристрій ${request.device_id.slice(0, 8)}`}»
+            Пристрій {deviceLabel(request.name, request.device_id)} просить передати касу
           </p>
           <button
             type="button"

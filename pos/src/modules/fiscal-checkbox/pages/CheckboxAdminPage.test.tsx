@@ -236,7 +236,8 @@ describe('CheckboxAdminPage', () => {
     getFiscalStatus.mockResolvedValue(offlineOn(heldBy()));
     renderWithProviders(<CheckboxAdminPage />);
 
-    expect(await screen.findByText(/Зайнята: «Каса 1»/)).toBeInTheDocument();
+    // The same sentence the cashier sees, and the one the help article quotes.
+    expect(await screen.findByText(/Каса зайнята пристроєм Каса 1 з/)).toBeInTheDocument();
     // With no pending request the backend has no target and would answer 400
     // `no_target`, so the owner is told what to do instead.
     expect(screen.queryByRole('button', { name: 'Забрати касу примусово' })).not.toBeInTheDocument();
@@ -265,7 +266,9 @@ describe('CheckboxAdminPage', () => {
     });
     renderWithProviders(<CheckboxAdminPage />);
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Забрати касу примусово' }));
+    expect(await screen.findByText(/Пристрій Каса 2 просить передати касу/)).toBeInTheDocument();
+    expect(screen.getByText(/каса не відповідає, можливо продає офлайн/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Забрати касу примусово' }));
 
     expect(await screen.findByText(/Зупинено сесій: 1, згорілих кодів: 12/)).toBeInTheDocument();
   });
