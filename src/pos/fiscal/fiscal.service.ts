@@ -65,6 +65,7 @@ import {
   type OfflineSessionRow,
 } from './offline/session.js';
 import { isCodeLeasedTo, refillOfflineCodes } from './offline/pool.js';
+import { offlineMonthExhausted } from './offline/limits.js';
 
 /**
  * Budget for the entire fiscal phase of one request.
@@ -194,6 +195,15 @@ export async function preflight(
         'unavailable'
       );
     }
+    // 168 годин на календарний місяць (Положення № 13): the register may not
+    // start another offline stretch once they are spent. Checked before the
+    // session exists — an opened one would have to be replayed anyway.
+    if (await offlineMonthExhausted(ctx.storeId, ctx.registerKey)) {
+      throw new FiscalError(
+        'Вичерпано 168 годин офлайну ПРРО цього місяця',
+        'offline_month_limit'
+      );
+    }
     const session = await openServerSession(ctx, Number(shiftRow.id));
     return offlineGate(ctx, session, staffId, signal, op);
   }
@@ -310,6 +320,12 @@ async function offlineGate(
   if (now - new Date(session.started_at).getTime() >= OFFLINE_SESSION_MAX_MS) {
     await markStuck(session.id, 'offline_limit', 'Офлайн понад 36 годин — потрібен звʼязок із ПРРО');
     throw new FiscalError('Офлайн ПРРО триває понад 36 годин', 'offline_limit');
+  }
+  // The monthly limit refuses the sale but — unlike the 36h one — leaves the
+  // session alone: its chain is still valid and still has to reach the tax
+  // office. What is exhausted is the right to sell offline, not this session.
+  if (await offlineMonthExhausted(ctx.storeId, ctx.registerKey, new Date(now))) {
+    throw new FiscalError('Вичерпано 168 годин офлайну ПРРО цього місяця', 'offline_month_limit');
   }
   const shiftRow = await getLiveShiftRow(ctx.storeId, ctx.registerKey);
   if (shiftRow?.opened_at && now - new Date(shiftRow.opened_at).getTime() >= SHIFT_DEADLINE_MS) {

@@ -20,6 +20,7 @@ import type {
   FiscalStatus,
   ForceHandoverResponse,
   HandoverRequestResponse,
+  HandoverConfirmResponse,
   HolderResponse,
   OfflineSessionView,
   ServiceReceiptRequest,
@@ -125,10 +126,19 @@ export function requestHandover(deviceName?: string): Promise<HandoverRequestRes
  * `outboxPending` is the till's own count of queued sales — the backend refuses
  * the handover while it is non-zero, because those receipts would be registered
  * by a device that no longer holds the register.
+ *
+ * `closeShift` is off by default and deliberately so: swapping a computer must
+ * not cut the day into two Z-reports. It is for the cashier who is finishing
+ * for the day anyway; the shift is then closed before the lock moves, and a
+ * failure to close leaves the register exactly where it was.
  */
-export function confirmHandover(outboxPending: number): Promise<HolderResponse> {
+export function confirmHandover(
+  outboxPending: number,
+  closeShift = false
+): Promise<HandoverConfirmResponse> {
   return posRequest('post', '/fiscal/register/handover/confirm', {
     outbox_pending: outboxPending,
+    ...(closeShift ? { close_shift: true } : {}),
   });
 }
 

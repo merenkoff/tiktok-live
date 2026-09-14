@@ -19,11 +19,12 @@ import { ensurePosAuth, ensurePosOwner } from '../core/auth.js';
 import { isSecretsKeyConfigured } from '../core/secrets.js';
 import { asFiscalError, cashierMessage, FiscalError, isOfflineGate, supportCode } from '../fiscal/errors.js';
 import { leaseCodes } from '../fiscal/offline/lease.js';
+import { offlineMonthUsage } from '../fiscal/offline/limits.js';
 import { getLiveSession, listStuckSessions } from '../fiscal/offline/session.js';
 import { sessionView } from '../fiscal/offline/status.js';
 import * as fiscalService from '../fiscal/fiscal.service.js';
 import * as holder from '../fiscal/offline/holder.js';
-import { getOfflineStatus } from '../fiscal/offline/status.js';
+import { getOfflineStatus, registerKeyOf } from '../fiscal/offline/status.js';
 import { getProvider, hasProvider } from '../fiscal/providers/index.js';
 import { refreshRequisites } from '../fiscal/requisites.js';
 import * as fiscalSettings from '../fiscal/settings.service.js';
@@ -92,6 +93,13 @@ export function registerFiscalRoutes(fastify: FastifyInstance): void {
       // A store that enables a provider with no adapter gets 503 on every sale,
       // and nothing else would tell the owner why.
       adapter_available: settings?.provider ? hasProvider(settings.provider) : false,
+      // 168 годин офлайну на календарний місяць: the owner sees how much of it
+      // the register has spent, on the same screen as the switch that allows
+      // spending it. Null for a store that cannot go offline at all.
+      offline_month:
+        settings?.enabled && settings.offline_mode && fiscalSettings.isOfflineCapable(settings.provider)
+          ? await offlineMonthUsage(auth.storeId, registerKeyOf(settings.config))
+          : null,
     };
   });
 
@@ -245,19 +253,12 @@ export function registerFiscalRoutes(fastify: FastifyInstance): void {
     }
   });
 
-  fastify.post('/fiscal/register/handover/confirm', async (request, reply) => {
-    const auth = await ensurePosAuth(request, reply);
-    if (!auth) return;
-    const deviceId = requireDeviceId(request, reply);
-    if (!deviceId) return;
-    const body = (request.body ?? {}) as { outbox_pending?: unknown };
-    const pending = Number(body.outbox_pending);
-    if (!Number.isInteger(pending) || pending < 0) {
-      return reply.code(400).send({ error: 'outbox_pending must be a non-negative integer' });
-    }
-    const result = await holder.confirmHandover(auth.storeId, deviceId, pending);
-    if (result.status === 'ok') return { holder: result.holder };
-    return reply.code(409).send({
+  /** The 409 a refused handover answers with, wherever it was refused. */
+  const replyHandoverRefusal = (
+    reply: FastifyReply,
+    result: holder.HandoverRefusal
+  ) =>
+    reply.code(409).send({
       error: result.status,
       ...(result.status === 'handover_blocked' ? { reason: result.reason } : {}),
       message:
@@ -270,6 +271,48 @@ export function registerFiscalRoutes(fastify: FastifyInstance): void {
             : 'Ця каса зайнята іншим пристроєм',
       holder: result.holder,
     });
+
+  fastify.post('/fiscal/register/handover/confirm', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const deviceId = requireDeviceId(request, reply);
+    if (!deviceId) return;
+    const body = (request.body ?? {}) as { outbox_pending?: unknown; close_shift?: unknown };
+    const pending = Number(body.outbox_pending);
+    if (!Number.isInteger(pending) || pending < 0) {
+      return reply.code(400).send({ error: 'outbox_pending must be a non-negative integer' });
+    }
+
+    // Handing the register over does NOT close the shift: a swapped computer
+    // must not cut the day into two Z-reports (POS_FISCAL_OFFLINE.md §3а). But
+    // a cashier who is finishing for the day anyway can ask for it here, and
+    // then the order matters — the shift is closed while this till still holds
+    // the register, and only a closed shift lets the lock move. A Z-report for
+    // a handover that is then refused would be the worst of both.
+    const closeShift = body.close_shift === true;
+    let zReport: unknown = null;
+    let zReportText: string | null = null;
+    if (closeShift) {
+      const refused = await holder.canConfirmHandover(auth.storeId, deviceId, pending);
+      if (refused) return replyHandoverRefusal(reply, refused);
+      try {
+        const ctx = await shifts.resolveContext(auth.storeId);
+        if (!ctx) return notConfigured(reply);
+        const closed = await shifts.closeShift(ctx, AbortSignal.timeout(SHIFT_TIMEOUT_MS));
+        zReport = closed.zReport;
+        zReportText = closed.zReportText;
+      } catch (error) {
+        // The register stays where it is: a till that has just failed to close
+        // its shift is the one that has to try again.
+        return replyFiscalError(reply, error, 'Не вдалося закрити зміну ПРРО перед передачею');
+      }
+    }
+
+    const result = await holder.confirmHandover(auth.storeId, deviceId, pending);
+    if (result.status === 'ok') {
+      return { holder: result.holder, z_report: zReport, z_report_text: zReportText };
+    }
+    return replyHandoverRefusal(reply, result);
   });
 
   // Owner only: takes the register away from a holder that cannot confirm.

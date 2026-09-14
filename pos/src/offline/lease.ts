@@ -36,6 +36,18 @@ const META_KEY = 'fiscalLease';
 export const OFFLINE_STRETCH_MAX_MS = 36 * 60 * 60 * 1000 - 30 * 60 * 1000;
 export const SHIFT_DEADLINE_MS = 15 * 60 * 1000;
 
+/**
+ * The second tax-office limit — 168 hours of offline per calendar month, per
+ * register — is not a constant here at all: this till cannot know it, since an
+ * outage of another till of the same register spends the same allowance. The
+ * server counts it and sends it with every lease; the till only adds the
+ * stretch it is living through (`monthUsedMs` below).
+ *
+ * A server that sends no such field (an older build) gets no count and no
+ * refusal — better than refusing every sale over an upgrade order nobody here
+ * controls.
+ */
+
 export interface StoredLease {
   /** Codes the server confirmed are ours, in spend order. */
   codes: string[];
@@ -46,6 +58,10 @@ export interface StoredLease {
   registerFiscalNumber: string | null;
   /** Set when the server refuses us a lease at all; cleared by a good answer. */
   blocked: 'not_holder' | 'offline_off' | null;
+  /** The month's allowance as the server last counted it (168 h per register). */
+  monthUsedMs: number | null;
+  monthLimitMs: number | null;
+  monthMeasuredAt: number | null;
   /** The current offline stretch: id, when it began, next position. */
   stretchId: string | null;
   stretchStartedAt: number | null;
@@ -59,6 +75,9 @@ const EMPTY: StoredLease = {
   shift: null,
   registerFiscalNumber: null,
   blocked: null,
+  monthUsedMs: null,
+  monthLimitMs: null,
+  monthMeasuredAt: null,
   stretchId: null,
   stretchStartedAt: null,
   nextSeq: 1,
@@ -89,6 +108,23 @@ export interface LeaseSummary {
   reserve: number | null;
   /** Why it could not print one, if it could not. */
   refusal: StampRefusal | null;
+  /** Offline hours left this month, or null when the server does not count them. */
+  monthLeftMs: number | null;
+}
+
+/**
+ * The month's offline time as of `now`: what the server counted, plus the
+ * stretch this till is living through since then.
+ *
+ * The two never overlap in practice — a lease is only ever taken online, so
+ * the count precedes the outage — but `max` guards the case where a stretch
+ * outlives a later successful lease.
+ */
+export function monthUsedMs(lease: StoredLease, now = Date.now()): number | null {
+  if (lease.monthUsedMs === null) return null;
+  if (lease.stretchStartedAt === null) return lease.monthUsedMs;
+  const from = Math.max(lease.stretchStartedAt, lease.monthMeasuredAt ?? lease.stretchStartedAt);
+  return lease.monthUsedMs + Math.max(0, now - from);
 }
 
 /**
@@ -97,9 +133,15 @@ export interface LeaseSummary {
  */
 export async function leaseSummary(): Promise<LeaseSummary> {
   const fiscal = api.loadAuth()?.store.fiscal ?? null;
-  if (!fiscal?.enabled) return { reserve: null, refusal: null };
+  if (!fiscal?.enabled) return { reserve: null, refusal: null, monthLeftMs: null };
   const lease = await loadLease();
-  return { reserve: unspent(lease).length, refusal: refuseStamp(fiscal, lease) };
+  const used = monthUsedMs(lease);
+  return {
+    reserve: unspent(lease).length,
+    refusal: refuseStamp(fiscal, lease),
+    monthLeftMs:
+      used === null || lease.monthLimitMs === null ? null : Math.max(0, lease.monthLimitMs - used),
+  };
 }
 
 function unspent(lease: StoredLease): string[] {
@@ -175,6 +217,9 @@ function merge(lease: StoredLease, answer: FiscalLeaseResponse, outboxPending: n
       : null,
     registerFiscalNumber: answer.register_fiscal_number,
     blocked: null,
+    monthUsedMs: answer.offline_month?.used_ms ?? null,
+    monthLimitMs: answer.offline_month?.limit_ms ?? null,
+    monthMeasuredAt: answer.offline_month ? Date.parse(answer.offline_month.measured_at) : null,
     stretchId: drained ? null : lease.stretchId,
     stretchStartedAt: drained ? null : lease.stretchStartedAt,
     nextSeq: drained ? 1 : lease.nextSeq,
@@ -190,6 +235,7 @@ export type StampRefusal =
   | 'no_shift'
   | 'shift_deadline'
   | 'offline_limit'
+  | 'offline_month_limit'
   | 'no_lease';
 
 const REFUSAL_TEXT: Record<StampRefusal, string> = {
@@ -199,6 +245,7 @@ const REFUSAL_TEXT: Record<StampRefusal, string> = {
   no_shift: 'Зміну ПРРО не відкрито — офлайн-чек неможливий',
   shift_deadline: 'Зміна ПРРО добігає доби — потрібен звʼязок, щоб закрити її',
   offline_limit: 'Офлайн триває понад 36 годин — потрібен звʼязок із ПРРО',
+  offline_month_limit: 'Вичерпано 168 годин офлайну ПРРО цього місяця — потрібен звʼязок',
   no_lease: 'Закінчились офлайн-коди ПРРО — потрібен звʼязок із ПРРО',
 };
 
@@ -256,6 +303,10 @@ export function refuseStamp(
   if (due !== null && now >= due - SHIFT_DEADLINE_MS) return 'shift_deadline';
   if (lease.stretchStartedAt !== null && now - lease.stretchStartedAt >= OFFLINE_STRETCH_MAX_MS) {
     return 'offline_limit';
+  }
+  const month = monthUsedMs(lease, now);
+  if (month !== null && lease.monthLimitMs !== null && month >= lease.monthLimitMs) {
+    return 'offline_month_limit';
   }
   if (unspent(lease).length === 0) return 'no_lease';
   return null;

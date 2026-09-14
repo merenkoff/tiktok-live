@@ -29,6 +29,8 @@ const {
   clearLease,
   loadLease,
   refreshLease,
+  leaseSummary,
+  monthUsedMs,
   refuseStamp,
   takeStamp,
   OFFLINE_STRETCH_MAX_MS,
@@ -67,6 +69,12 @@ function leaseAnswer(over: Partial<FiscalLeaseResponse> = {}): FiscalLeaseRespon
     shift: { id: 7, opened_at: new Date().toISOString(), auto_close_due_at: hoursFromNow(20) },
     register_fiscal_number: 'FN-1',
     session: null,
+    offline_month: {
+      used_ms: 4 * 3600_000,
+      limit_ms: 167 * 3600_000,
+      measured_at: new Date().toISOString(),
+      month_start: new Date(Date.now() - 20 * 24 * 3600_000).toISOString(),
+    },
     ...over,
   };
 }
@@ -244,6 +252,44 @@ describe('refuseStamp', () => {
         started + OFFLINE_STRETCH_MAX_MS + 1000
       )
     ).toBe('offline_limit');
+  });
+
+  it('refuses once the register has spent its 168 hours this month', async () => {
+    // The till cannot count this itself — another till's outage spends the
+    // same allowance — so it trusts the number the lease brought and adds only
+    // the stretch it is living through.
+    const lease = await withLease({
+      shift: { id: 7, opened_at: null, auto_close_due_at: null },
+      offline_month: {
+        used_ms: 165 * 3600_000,
+        limit_ms: 167 * 3600_000,
+        measured_at: new Date().toISOString(),
+        month_start: new Date(Date.now() - 20 * 24 * 3600_000).toISOString(),
+      },
+    });
+    const started = Date.now();
+    const running = { ...lease, stretchStartedAt: started, monthMeasuredAt: started };
+    expect(refuseStamp(fiscalConfig(), running, started + 3600_000)).toBeNull();
+    // 165 hours were already spent this month; the remaining two run out here,
+    // long before this outage reaches the 36 hours of the other limit.
+    expect(refuseStamp(fiscalConfig(), running, started + 3 * 3600_000)).toBe(
+      'offline_month_limit'
+    );
+  });
+
+  it('says nothing about the month when the server does not count it', async () => {
+    // An older backend sends no such field: no count, and no refusal invented
+    // from a number we do not have.
+    const lease = await withLease({ offline_month: undefined });
+    expect(monthUsedMs(lease)).toBeNull();
+    expect(refuseStamp(fiscalConfig(), lease)).toBeNull();
+    expect((await leaseSummary()).monthLeftMs).toBeNull();
+  });
+
+  it('reports the hours left this month for the cashier banner', async () => {
+    await withLease();
+    const summary = await leaseSummary();
+    expect(Math.round((summary.monthLeftMs ?? 0) / 3600_000)).toBe(163);
   });
 
   it('refuses when the reserve is spent', async () => {

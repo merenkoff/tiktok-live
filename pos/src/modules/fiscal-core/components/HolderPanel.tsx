@@ -28,6 +28,7 @@ import {
   requestHandover,
 } from '../data/fiscalApi';
 import { FiscalErrorCard } from './FiscalErrorCard';
+import { deviceLabel } from '../lib/deviceLabel';
 import type { FiscalStatus } from '../types';
 
 function since(iso: string | null): string {
@@ -35,10 +36,6 @@ function since(iso: string | null): string {
   return ` з ${new Date(iso).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
-/** A till a cashier can recognise: the name it registered, or a short id. */
-function deviceName(name: string | null, deviceId: string): string {
-  return name?.trim() || `пристрій ${deviceId.slice(0, 8)}`;
-}
 
 export interface HolderPanelProps {
   status: FiscalStatus;
@@ -56,6 +53,10 @@ export function HolderPanel({ status, onChanged }: HolderPanelProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [note, setNote] = useState<string | null>(null);
+  // Off by default: a hardware swap must not cut the day into two Z-reports.
+  // It is here for the cashier who is finishing for the day anyway.
+  const [closeShift, setCloseShift] = useState(false);
+  const [zReportText, setZReportText] = useState<string | null>(null);
 
   if (!status.offline?.enabled) return null;
 
@@ -101,8 +102,9 @@ export function HolderPanel({ status, onChanged }: HolderPanelProps) {
 
   const confirm = () =>
     run(async () => {
-      await confirmHandover(outboxPending);
-      return 'Касу передано';
+      const res = await confirmHandover(outboxPending, closeShift);
+      setZReportText(res.z_report_text ?? null);
+      return closeShift ? 'Зміну закрито, касу передано' : 'Касу передано';
     });
 
   return (
@@ -135,12 +137,21 @@ export function HolderPanel({ status, onChanged }: HolderPanelProps) {
           {holder.handover_request && (
             <div className="rounded-sq bg-amber-50 px-3 py-2 text-sm text-amber-900">
               <p className="font-semibold">
-                «{deviceName(holder.handover_request.name, holder.handover_request.device_id)}»
+                Пристрій {deviceLabel(holder.handover_request.name, holder.handover_request.device_id)}{' '}
                 просить передати касу
               </p>
               {outboxPending > 0 && (
                 <p className="mt-1">Спершу синхронізуйте чеки, що очікують: {outboxPending}.</p>
               )}
+              <label className="mt-2 flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={closeShift}
+                  disabled={busy}
+                  onChange={(e) => setCloseShift(e.target.checked)}
+                />
+                Закрити зміну (Z-звіт) перед передачею
+              </label>
               <button
                 type="button"
                 className="pos-btn-primary mt-2 px-4 py-2"
@@ -165,12 +176,13 @@ export function HolderPanel({ status, onChanged }: HolderPanelProps) {
       {holder && !holder.is_me && (
         <>
           <p className="text-sm text-sq-secondary">
-            Зайнята: «{deviceName(holder.name, holder.device_id)}»{since(holder.since)}
+            Каса зайнята пристроєм {deviceLabel(holder.name, holder.device_id)}
+            {since(holder.since)}
           </p>
           {holder.stale && (
             <p className="text-xs text-amber-700">
-              Немає зв’язку з тим пристроєм. Якщо він не повернеться, власник може забрати касу
-              примусово в налаштуваннях ПРРО.
+              Каса не відповідає, можливо продає офлайн. Якщо вона не повернеться, власник може
+              забрати касу примусово в налаштуваннях ПРРО.
             </p>
           )}
           {canAct && (
@@ -187,6 +199,14 @@ export function HolderPanel({ status, onChanged }: HolderPanelProps) {
       )}
 
       {note && <p className="text-sm text-sq-secondary">{note}</p>}
+      {zReportText && (
+        <div>
+          <p className="sq-section-label">Z-звіт</p>
+          <pre className="mt-1 max-h-64 overflow-auto rounded-sq bg-sq-bg p-3 font-mono text-xs whitespace-pre-wrap">
+            {zReportText}
+          </pre>
+        </div>
+      )}
       {Boolean(error) && <FiscalErrorCard error={error} />}
     </div>
   );

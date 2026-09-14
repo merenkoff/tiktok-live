@@ -220,17 +220,24 @@ export type HandoverConfirmResult =
   | { status: 'handover_blocked'; holder: HolderView; reason: 'outbox_pending' | 'session_open' };
 
 /**
- * The holder agrees. Three conditions, all checked here (§3а): the holder is
- * online (it is the one calling), its outbox is empty (`outboxPending`, as
- * the till reports it), and no offline session of its own is still open or
- * replaying. Then the lease goes back to the pool and the lock moves. The
- * shift is untouched — a hardware swap must not cut the day into two Z-reports.
+ * May this holder hand the register over right now?
+ *
+ * The three conditions of §3а, and nothing else: the holder is online (it is
+ * the one calling), its outbox is empty (`outboxPending`, as the till reports
+ * it), and no offline session of its own is still open or replaying.
+ *
+ * Separate from {@link confirmHandover} because the caller may have work to do
+ * between the check and the move — closing the shift on the way out — and a
+ * Z-report sent for a handover that then turns out to be refused would cut the
+ * day in two for nothing.
  */
-export async function confirmHandover(
+export type HandoverRefusal = Exclude<HandoverConfirmResult, { status: 'ok' }>;
+
+export async function canConfirmHandover(
   storeId: number,
   deviceId: string,
   outboxPending: number
-): Promise<HandoverConfirmResult> {
+): Promise<HandoverRefusal | null> {
   const row = await readRow(storeId);
   const holder = toView(row);
   if (!holder || holder.device_id !== deviceId) return { status: 'not_holder', holder };
@@ -239,6 +246,23 @@ export async function confirmHandover(
   if (await hasLiveSession(storeId)) {
     return { status: 'handover_blocked', holder, reason: 'session_open' };
   }
+  return null;
+}
+
+/**
+ * The holder agrees: the lease goes back to the pool and the lock moves.
+ *
+ * The shift is untouched — a hardware swap must not cut the day into two
+ * Z-reports. A cashier who does want it closed asks for that explicitly, and
+ * the route closes it before calling this.
+ */
+export async function confirmHandover(
+  storeId: number,
+  deviceId: string,
+  outboxPending: number
+): Promise<HandoverConfirmResult> {
+  const refused = await canConfirmHandover(storeId, deviceId, outboxPending);
+  if (refused) return refused;
 
   await releaseLeasedCodes(storeId, deviceId, 'free');
   const result = await pool.query(

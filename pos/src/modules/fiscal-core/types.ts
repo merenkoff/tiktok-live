@@ -52,6 +52,13 @@ export interface OfflineStatusBlock {
     leased_to_me?: number;
   } | null;
   session: OfflineSessionView | null;
+  /** The month's offline allowance, 168 h per register; null while offline mode is off. */
+  month?: {
+    used_ms: number;
+    limit_ms: number;
+    measured_at: string;
+    month_start: string;
+  } | null;
 }
 
 /**
@@ -108,6 +115,15 @@ export interface HolderStatusBlock extends HolderView {
 /** The body every `register/*` route answers with, success or 409. */
 export interface HolderResponse {
   holder: HolderView | null;
+}
+
+/**
+ * `POST /fiscal/register/handover/confirm`. The Z-report fields are filled in
+ * only when the cashier asked for the shift to be closed on the way out.
+ */
+export interface HandoverConfirmResponse extends HolderResponse {
+  z_report?: unknown;
+  z_report_text?: string | null;
 }
 
 /** `POST /fiscal/register/handover/request` — 202 `requested`, 200 `claimed`. */

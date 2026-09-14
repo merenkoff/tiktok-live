@@ -12,6 +12,7 @@ import { pool } from '../../../db.js';
 import { countSessionDocuments, type SessionDocumentCounts } from '../ledger.js';
 import { getFiscalSettings, isOfflineCapable } from '../settings.service.js';
 import { getHolder, touchHolder, type HolderView } from './holder.js';
+import { offlineMonthUsage, type OfflineMonthUsage } from './limits.js';
 import { countCodes, listLeasedCodes } from './pool.js';
 import type { OfflineSessionRow } from './session.js';
 
@@ -52,6 +53,8 @@ export interface OfflineStatusBlock {
   codes_target: number;
   codes: { free: number; leased: number; used: number; leased_to_me: number } | null;
   session: OfflineSessionView | null;
+  /** 168 h per calendar month, spent so far — null for a store that is not offline-capable. */
+  month: OfflineMonthUsage | null;
 }
 
 export interface HolderStatusBlock extends HolderView {
@@ -64,7 +67,8 @@ export interface OfflineStatus {
   holder: HolderStatusBlock | null;
 }
 
-function readRegisterKey(config: Record<string, unknown>): string {
+/** The register key inside the provider config — shared with the routes. */
+export function registerKeyOf(config: Record<string, unknown>): string {
   const value = config.cashRegisterKey;
   return typeof value === 'string' ? value.trim().slice(0, 128) : '';
 }
@@ -86,11 +90,13 @@ export async function getOfflineStatus(
     codes_target: settings?.offline_codes_target ?? 0,
     codes: null,
     session: null,
+    month: null,
   };
   if (!settings || !enabled) return { offline: block, holder: null };
 
-  const registerKey = readRegisterKey(settings.config);
+  const registerKey = registerKeyOf(settings.config);
   const counts = await countCodes(storeId, registerKey);
+  block.month = await offlineMonthUsage(storeId, registerKey);
   // `leased_to_me` is what the till's own panel shows: the reserve it can
   // actually spend, as opposed to the store's total lease.
   const mine = deviceId ? await listLeasedCodes(storeId, registerKey, deviceId) : [];
