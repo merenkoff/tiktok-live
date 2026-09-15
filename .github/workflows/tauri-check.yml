@@ -1,0 +1,59 @@
+name: Tauri shell check
+
+# Compiles the desktop cashier's Rust crate.
+#
+# Its own workflow rather than a job in pos-tests.yml, because that one
+# triggers on all of `pos/**` — every SPA change would pay for a Rust build.
+# This runs only when the crate itself moves, which in practice means a
+# Dependabot cargo PR or a change under pos/src-tauri/.
+#
+# Without it a cargo bump gets a green tick from pos-tests.yml, which never
+# invokes cargo at all.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'pos/src-tauri/**'
+      - '.github/workflows/tauri-check.yml'
+  pull_request:
+    paths:
+      - 'pos/src-tauri/**'
+      - '.github/workflows/tauri-check.yml'
+
+jobs:
+  check:
+    name: cargo check
+    # Pinned to the same image and system-dependency list as the Linux leg of
+    # pos-release.yml, so a bump that passes here is a bump that will build
+    # the installer.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libudev-dev libcups2-dev
+
+      # actions/cache rather than a third-party Rust cache action: this
+      # workflow exists to guard dependency supply chain, so it keeps its own
+      # action surface to first-party plus the toolchain installer.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            pos/src-tauri/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('pos/src-tauri/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+
+      # --locked fails if Cargo.lock disagrees with Cargo.toml, which is the
+      # thing worth catching in a dependency PR. The frontend is deliberately
+      # not built: tauri-build tolerates a missing `frontendDist` for a check
+      # build, so this stays a Rust-only, ~minutes job.
+      - name: cargo check
+        working-directory: pos/src-tauri
+        run: cargo check --locked --all-targets
