@@ -1,0 +1,96 @@
+# Dependabot version updates.
+#
+# Security updates are a separate, repo-wide switch in Settings → Code security;
+# they are not configured here and deliberately cover every manifest, including
+# the ones this file leaves on a slow schedule.
+#
+# Two decisions worth knowing before editing:
+#
+#  * Majors are ignored everywhere. The three SPAs (admin/, pos/, site/) sit on
+#    one deliberately aligned stack — React 18, Vite 5, Tailwind 3, eslint 8 with
+#    the legacy .eslintrc.* setup, @typescript-eslint 8 — so React 19, Tailwind 4
+#    or eslint 9 is a coordinated migration across three package.json files, not
+#    something to merge from a bot PR. Do those by hand, all apps at once.
+#
+#  * Nothing here auto-merges. module-release.yml signs module bundles with the
+#    production Ed25519 key, so a compromised release of any dependency that
+#    landed unattended would end up inside a signed artifact.
+#
+version: 2
+updates:
+  # ── GitHub Actions ───────────────────────────────────────────────────────
+  # Note: every workflow triggers only on its own file, so a bump here runs
+  # nothing. pos-release.yml and module-release.yml in particular only fire on
+  # a tag — a broken action in those surfaces at release time. Read these PRs.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      actions:
+        patterns: ['*']
+
+  # ── Backend (src/) ───────────────────────────────────────────────────────
+  # backend-tests.yml lists package.json/package-lock.json in its paths filter,
+  # so these PRs get typecheck + lint + the full vitest suite against Postgres.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      backend:
+        patterns: ['*']
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: '*'
+        update-types: [version-update:semver-major]
+
+  # ── Frontends: admin/, pos/, site/ ───────────────────────────────────────
+  # One PR per directory per week. Each is covered by its own workflow
+  # (admin-tests, pos-tests, site-build) via the `<dir>/**` path filter.
+  - package-ecosystem: npm
+    directories:
+      - /admin
+      - /pos
+      - /site
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      frontend:
+        patterns: ['*']
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: '*'
+        update-types: [version-update:semver-major]
+
+  # ── Tauri desktop shell (Rust) ───────────────────────────────────────────
+  # tauri-check.yml compiles the crate on any change under pos/src-tauri/, so
+  # these PRs get a real answer. Without it the green tick would come from
+  # pos-tests.yml, which matches `pos/**` but never invokes cargo.
+  - package-ecosystem: cargo
+    directory: /pos/src-tauri
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 1
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      cargo:
+        patterns: ['*']
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: '*'
+        update-types: [version-update:semver-major]
