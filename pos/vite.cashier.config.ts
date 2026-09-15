@@ -92,7 +92,7 @@ export default defineConfig(({ mode, command }) => {
     build: {
       outDir: 'dist-cashier',
       emptyOutDir: true,
-      target: process.env.TAURI_ENV_PLATFORM === 'windows' ? 'chrome105' : 'safari13',
+      target: process.env.TAURI_ENV_PLATFORM === 'windows' ? 'chrome105' : 'safari14.1',
       minify: process.env.TAURI_ENV_DEBUG ? false : 'esbuild',
       sourcemap: !!process.env.TAURI_ENV_DEBUG,
       rollupOptions: {

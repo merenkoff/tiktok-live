@@ -43,6 +43,11 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
   server.resetHandlers();
+  // clearAllMocks wipes call history on plain `vi.fn()` mocks; restoreAllMocks
+  // stopped doing that in Vitest 3 (it now only undoes `vi.spyOn` spies), which
+  // let counts leak across tests in this file's module-level mocks. Implementations
+  // are deliberately left alone — the `vi.mock` factories above define theirs once.
+  vi.clearAllMocks();
   vi.restoreAllMocks();
   vi.useRealTimers();
 });

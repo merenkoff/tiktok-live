@@ -55,13 +55,13 @@ export default defineConfig(({ isSsrBuild }) => ({
     outDir: 'dist',
     rollupOptions: {
       input: isSsrBuild
-        ? resolve(__dirname, 'src/entry-server.tsx')
+        ? resolve(import.meta.dirname, 'src/entry-server.tsx')
         : {
-            main: resolve(__dirname, 'index.html'),
-            live: resolve(__dirname, 'live.html'),
-            pos: resolve(__dirname, 'pos.html'),
-            compare: resolve(__dirname, 'compare.html'),
-            dovidka: resolve(__dirname, 'dovidka.html'),
+            main: resolve(import.meta.dirname, 'index.html'),
+            live: resolve(import.meta.dirname, 'live.html'),
+            pos: resolve(import.meta.dirname, 'pos.html'),
+            compare: resolve(import.meta.dirname, 'compare.html'),
+            dovidka: resolve(import.meta.dirname, 'dovidka.html'),
           },
     },
   },
