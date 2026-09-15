@@ -19,9 +19,17 @@
 version: 2
 updates:
   # ── GitHub Actions ───────────────────────────────────────────────────────
-  # Note: every workflow triggers only on its own file, so a bump here runs
-  # nothing. pos-release.yml and module-release.yml in particular only fire on
-  # a tag — a broken action in those surfaces at release time. Read these PRs.
+  # Majors are ignored here for a reason specific to this repo, learnt the hard
+  # way on the first run: it proposed checkout 4->7, setup-node 4->7, cache 4->6
+  # and tauri-action 0->1 in one PR, touching pos-release.yml and
+  # module-release.yml. Those two only fire on a tag, so such a PR goes green
+  # without them ever running and the breakage surfaces mid-release — with
+  # tauri-action that means the signed bundle step.
+  #
+  # So: patches and minors ride along automatically, majors are a deliberate
+  # change. Bump them by hand in the CI-covered workflows first (a PR there is
+  # genuinely tested), then the release ones, verifying with a workflow_dispatch
+  # run before tagging.
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -33,6 +41,10 @@ updates:
     groups:
       actions:
         patterns: ['*']
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: '*'
+        update-types: [version-update:semver-major]
 
   # ── Backend (src/) ───────────────────────────────────────────────────────
   # backend-tests.yml lists package.json/package-lock.json in its paths filter,

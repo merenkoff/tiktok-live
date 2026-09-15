@@ -28,7 +28,7 @@ jobs:
     # the installer.
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -40,7 +40,7 @@ jobs:
       # actions/cache rather than a third-party Rust cache action: this
       # workflow exists to guard dependency supply chain, so it keeps its own
       # action surface to first-party plus the toolchain installer.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry/index
