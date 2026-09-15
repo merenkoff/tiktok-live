@@ -32,6 +32,23 @@ export interface ModuleRemoteEntry {
   icon?: string;
 }
 
+/**
+ * One navigation entry's per-store appearance (`store.nav_overrides`). Every
+ * field is optional and absent means «keep what the module declares» — that is
+ * what lets a module rename or re-icon its own entry and still reach a store
+ * that only reordered its menu. Mirrors the backend `NavOverride`
+ * (`src/pos/core/nav.ts`). See TechDocs/POS_NAV_CUSTOMIZATION.md.
+ */
+export interface NavOverride {
+  label?: string;
+  /** lucide export name, resolved host-side by `resolveNavIcon`. */
+  icon?: string;
+  order?: number;
+}
+
+/** Sparse `{ '<moduleId>:<location>:<path>': NavOverride }` — see `navItemKey`. */
+export type NavOverrides = Record<string, NavOverride>;
+
 export interface SalePaymentInput {
   method: PaymentMethod;
   amount_cents: number;
@@ -70,6 +87,8 @@ export interface StoreConfig {
    * module for the desktop cashier (roadmap #13 Part C).
    */
   module_remotes: Record<string, string | ModuleRemoteEntry>;
+  /** Per-store menu appearance — the owner's «Вигляд меню» screen. */
+  nav_overrides: NavOverrides;
   /**
    * TikTok LIVE account this store sells from, or null when it isn't connected.
    * Drives `POST /api/pos/live/session-token` — see the `tiktok-live` module.
@@ -92,6 +111,7 @@ export type StorePatch = Partial<
     | 'auto_print_receipt'
     | 'enabled_modules'
     | 'module_remotes'
+    | 'nav_overrides'
     | 'live_tiktok_username'
   >
 > & {
@@ -120,6 +140,12 @@ export interface AuthResponse {
     enabled_modules?: string[];
     /** Module-remote map (roadmap #9 string form / #13 Part C object form). Absent on older cached auth. */
     module_remotes?: Record<string, string | ModuleRemoteEntry>;
+    /**
+     * Per-store menu appearance. Absent on older cached auth → factory menus.
+     * It ships with the login because the desktop cashier rebuilds its whole
+     * session from the cached `pos_auth` when it starts cold offline.
+     */
+    nav_overrides?: NavOverrides;
     /**
      * Whether this store fiscalises, and with whom — no credentials.
      *

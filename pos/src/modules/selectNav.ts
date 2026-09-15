@@ -4,20 +4,29 @@
 
 import type { ModuleId, NavCtx, NavItem, NavLocation } from './types';
 import type { AnyModuleDescriptor } from './registry';
+import { applyNavOverride, navItemKey, type NavOverrides } from './navOverrides';
 
 /**
  * The nav entries a given shell/role/variant should see, in display order:
  * keep enabled modules available in this shell (owner-only ones for owners;
  * online-only remote modules are `alwaysEnabled` — being in `module_remotes`
  * is the opt-in), take their entries for this location, apply per-item
- * `visible()`, sort by `order`. The single place this filtering lives —
- * {@link Nav} only renders.
+ * `visible()`, fold in the store's appearance overrides, sort by `order`.
+ * The single place this filtering lives — {@link Nav} only renders.
+ *
+ * `overrides` is the store's «Вигляд меню» setting (`store.nav_overrides`). It
+ * is applied *after* filtering and only ever changes how an entry looks and
+ * where it sits: which entries exist at all is the module set's business, so a
+ * stale or hostile override cannot add a menu item or take one away. The sort
+ * is stable, so entries the owner never reordered keep registry order among
+ * equal `order` values, exactly as before.
  */
 export function selectNavItems(
   modules: readonly AnyModuleDescriptor[],
   enabled: ReadonlySet<ModuleId>,
   ctx: NavCtx,
-  location: NavLocation
+  location: NavLocation,
+  overrides: NavOverrides = {}
 ): NavItem[] {
   return modules
     .filter(
@@ -26,7 +35,10 @@ export function selectNavItems(
         m.shells.includes(ctx.shell) &&
         (!m.ownerOnly || ctx.role === 'owner')
     )
-    .flatMap((m) => m.nav)
-    .filter((n) => n.location === location && (!n.visible || n.visible(ctx)))
+    .flatMap((m) =>
+      m.nav
+        .filter((n) => n.location === location && (!n.visible || n.visible(ctx)))
+        .map((n) => applyNavOverride(n, overrides[navItemKey(m.id, n)]))
+    )
     .sort((a, b) => a.order - b.order);
 }

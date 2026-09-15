@@ -31,6 +31,7 @@ export default defineConfig({
       include: [
         'src/modules/constants.ts',
         'src/modules/renderRoutes.tsx',
+        'src/modules/navOverrides.ts',
         'src/modules/selectNav.ts',
         'src/modules/useEnabledModules.ts',
         'src/lib/money.ts',

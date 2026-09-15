@@ -11,6 +11,7 @@ import {
   sanitizeEnabledModules,
   sanitizeModuleRemotes,
 } from '../core/modules.js';
+import { sanitizeNavOverrides } from '../core/nav.js';
 import { getFiscalSettings } from '../fiscal/settings.service.js';
 import { errorMessage } from './_shared.js';
 
@@ -37,6 +38,7 @@ export function registerStoreRoutes(fastify: FastifyInstance): void {
       auto_print_receipt?: boolean;
       enabled_modules?: unknown;
       module_remotes?: unknown;
+      nav_overrides?: unknown;
       live_tiktok_username?: string | null;
     };
     try {
@@ -70,6 +72,19 @@ export function registerStoreRoutes(fastify: FastifyInstance): void {
           throw error;
         }
         patch.module_remotes = sanitized;
+      }
+      if (body.nav_overrides !== undefined) {
+        if (
+          body.nav_overrides === null ||
+          typeof body.nav_overrides !== 'object' ||
+          Array.isArray(body.nav_overrides)
+        ) {
+          return reply.code(400).send({ error: 'nav_overrides must be an object' });
+        }
+        // Menu appearance only — labels, icon names and sort keys. It can never
+        // add or remove an entry: which modules a store has is `enabled_modules`
+        // and `module_remotes`, and both are gated above.
+        patch.nav_overrides = sanitizeNavOverrides(body.nav_overrides);
       }
       if (body.name !== undefined) {
         if (!body.name.trim()) return reply.code(400).send({ error: 'name required' });

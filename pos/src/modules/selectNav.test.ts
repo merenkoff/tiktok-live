@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { CORE_MODULE_IDS, DEFAULT_ENABLED_MODULE_IDS } from './constants';
 import { MODULES } from './registry';
 import { selectNavItems } from './selectNav';
+import type { NavOverrides } from './navOverrides';
 import type { ModuleId, NavCtx, NavLocation } from './types';
 
 const ALL: ReadonlySet<ModuleId> = new Set<ModuleId>([
@@ -35,6 +36,7 @@ describe('admin sidebar', () => {
       '/admin/staff',
       '/admin/gtin',
       '/admin/settings',
+      '/admin/appearance',
     ]);
   });
 
@@ -129,5 +131,70 @@ describe('cashier rail vs bottom bar', () => {
     expect(select({ shell: 'cashier', role: 'seller', variant: 'rail' }, 'cashier-primary', coreOnly)).toEqual(
       ['/register', '/hardware']
     );
+  });
+});
+
+describe('store menu appearance (nav_overrides)', () => {
+  const rail: NavCtx = { shell: 'cashier', role: 'seller', variant: 'rail' };
+
+  function items(overrides: NavOverrides, ctx: NavCtx = rail) {
+    return selectNavItems(MODULES, ALL, ctx, 'cashier-primary', overrides);
+  }
+
+  it('changes nothing when the store has no overrides', () => {
+    expect(items({}).map((n) => n.to)).toEqual(select(rail, 'cashier-primary'));
+  });
+
+  it('renames an entry without touching its route or its icon', () => {
+    const [first] = items({ 'catalog-checkout:cashier-primary:/register': { label: 'Продаж' } });
+    expect(first.label).toBe('Продаж');
+    expect(first.to).toBe('/register');
+    expect(first.icon).toBe('Grid3X3');
+  });
+
+  it('re-icons an entry', () => {
+    const [first] = items({ 'catalog-checkout:cashier-primary:/register': { icon: 'ShoppingCart' } });
+    expect(first.icon).toBe('ShoppingCart');
+  });
+
+  it('reorders the menu', () => {
+    expect(
+      items({
+        'catalog-checkout:cashier-primary:/register': { order: 100 },
+      }).map((n) => n.to)
+    ).toEqual(['/customers', '/sales', '/hardware', '/register']);
+  });
+
+  it('cannot add an entry or take one away', () => {
+    // The override map is appearance only: a key for an entry that does not
+    // exist here is inert, and one for a disabled module stays disabled.
+    const before = select(rail, 'cashier-primary');
+    expect(
+      items({
+        'loyalty:cashier-primary:/loyalty': { label: 'Бонуси', order: 1 },
+        'stock:cashier-primary:/admin/stock': { label: 'Склад', order: 2 },
+      }).map((n) => n.to)
+    ).toEqual(before);
+  });
+
+  it('leaves an override for another menu alone', () => {
+    const sidebar = selectNavItems(
+      MODULES,
+      ALL,
+      { shell: 'web', role: 'owner' },
+      'admin-sidebar',
+      { 'customers:cashier-primary:/customers': { label: 'Гості' } }
+    );
+    expect(sidebar.find((n) => n.to === '/admin/customers')?.label).toBe('Клієнти');
+  });
+
+  it('still hides an entry the context rules hide', () => {
+    // Giving the web owner's catalog shortcut a new name and a low order does
+    // not put it in a seller's rail — `visible()` runs first.
+    expect(
+      items({ 'products:cashier-primary:/admin/products': { label: 'Каталог', order: 1 } }).map(
+        (n) => n.to
+      )
+    ).not.toContain('/admin/products');
   });
 });

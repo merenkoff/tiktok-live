@@ -6,6 +6,7 @@
 
 import { pool } from '../db.js';
 import type { ModuleRemoteEntry, PaymentMethod, QrPaymentMode } from './types.js';
+import type { NavOverrides } from './core/nav.js';
 
 export interface SalesSummary {
   from: string;
@@ -191,6 +192,7 @@ function mapStore(store: Record<string, unknown>) {
     enabled_modules: (store.enabled_modules as string[] | null) ?? [],
     module_remotes:
       (store.module_remotes as Record<string, string | ModuleRemoteEntry> | null) ?? {},
+    nav_overrides: (store.nav_overrides as NavOverrides | null) ?? {},
     live_tiktok_username: (store.live_tiktok_username as string | null) ?? null,
   };
 }
@@ -208,6 +210,8 @@ export type StorePatch = {
   auto_print_receipt?: boolean;
   enabled_modules?: string[];
   module_remotes?: Record<string, string | ModuleRemoteEntry>;
+  /** Per-store menu appearance — see `core/nav.ts`. */
+  nav_overrides?: NavOverrides;
   /** TikTok LIVE account this store sells from — see `live.routes.ts`. */
   live_tiktok_username?: string | null;
 };
@@ -225,6 +229,7 @@ const STORE_PATCH_COLUMNS: Array<keyof StorePatch> = [
   'auto_print_receipt',
   'enabled_modules',
   'module_remotes',
+  'nav_overrides',
   'live_tiktok_username',
 ];
 
@@ -240,7 +245,7 @@ export async function updateStore(storeId: number, patch: StorePatch) {
   for (const col of STORE_PATCH_COLUMNS) {
     if (patch[col] === undefined) continue;
     let value: unknown = patch[col];
-    if (col === 'module_remotes') {
+    if (col === 'module_remotes' || col === 'nav_overrides') {
       // jsonb column — serialise + cast explicitly (see customers.service.ts).
       values.push(JSON.stringify(value ?? {}));
       sets.push(`${col} = $${values.length}::jsonb`);
