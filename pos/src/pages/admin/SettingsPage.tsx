@@ -3,6 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { FormEvent, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api, useAuthStore, sameRemoteMap, PLATFORM_VERSION } from '@pos/platform';
 import { ProductPhotoField } from '../../components/ProductPhotoField';
 import { FiscalSettingsCard } from './FiscalSettingsCard';
@@ -438,7 +439,9 @@ export function SettingsPage() {
             <p className="sq-section-label">Модулі магазину</p>
             <p className="text-sq-secondary text-sm mt-1">
               Вимкнений модуль зникає з меню й стає недоступним у касі та адмінці. Каси
-              підхоплять зміни після наступного входу.
+              підхоплять зміни після наступного входу. Назву, порядок та іконку пунктів
+              меню змінюють на сторінці <Link to="/admin/appearance" className="sq-link">
+              «Вигляд меню»</Link>.
             </p>
           </div>
 

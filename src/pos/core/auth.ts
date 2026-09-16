@@ -41,6 +41,7 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
        store.auto_print_receipt,
        store.enabled_modules,
        store.module_remotes,
+       store.nav_overrides,
        fs.enabled AS fiscal_enabled,
        fs.provider AS fiscal_provider,
        fs.offline_mode AS fiscal_offline_mode,
@@ -86,6 +87,7 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
     enabledModules: (row.enabled_modules as string[] | null) ?? [],
     moduleRemotes:
       (row.module_remotes as PosAuthContext['moduleRemotes'] | null) ?? {},
+    navOverrides: (row.nav_overrides as PosAuthContext['navOverrides'] | null) ?? {},
     token: row.token,
   };
 }

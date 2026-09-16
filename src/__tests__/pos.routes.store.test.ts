@@ -298,6 +298,124 @@ describe.skipIf(!hasDb)('POS store, analytics, QR & GTIN routes', () => {
       });
     });
 
+    describe('nav_overrides', () => {
+      const KEY = 'catalog-checkout:cashier-primary:/register';
+
+      it('400s a non-object', async () => {
+        for (const bad of [['a'], null, 'x']) {
+          const res = await app.inject({
+            method: 'PATCH',
+            url: '/api/pos/store',
+            headers: auth(store.ownerToken),
+            payload: { nav_overrides: bad },
+          });
+          expect(res.statusCode).toBe(400);
+          expect(res.json().error).toBe('nav_overrides must be an object');
+        }
+      });
+
+      it('stores a label, an icon name and an order', async () => {
+        const temp = await createTestStore('rnav');
+        try {
+          const res = await app.inject({
+            method: 'PATCH',
+            url: '/api/pos/store',
+            headers: auth(temp.ownerToken),
+            payload: {
+              nav_overrides: { [KEY]: { label: 'Продаж', icon: 'ShoppingCart', order: 20 } },
+            },
+          });
+          expect(res.statusCode).toBe(200);
+          expect(res.json().nav_overrides).toEqual({
+            [KEY]: { label: 'Продаж', icon: 'ShoppingCart', order: 20 },
+          });
+        } finally {
+          await dropTestStore(temp.storeId);
+        }
+      });
+
+      it('silently drops a malformed key or value', async () => {
+        const temp = await createTestStore('rnavdrop');
+        try {
+          const res = await app.inject({
+            method: 'PATCH',
+            url: '/api/pos/store',
+            headers: auth(temp.ownerToken),
+            payload: {
+              nav_overrides: {
+                'no-location:/register': { label: 'x' },
+                [KEY]: { icon: '<svg onload=alert(1)>' },
+              },
+            },
+          });
+          expect(res.statusCode).toBe(200);
+          expect(res.json().nav_overrides).toEqual({});
+        } finally {
+          await dropTestStore(temp.storeId);
+        }
+      });
+
+      it('defaults to an empty map and clears back to one', async () => {
+        const temp = await createTestStore('rnavclear');
+        try {
+          const before = await app.inject({
+            method: 'GET',
+            url: '/api/pos/store',
+            headers: auth(temp.ownerToken),
+          });
+          expect(before.json().nav_overrides).toEqual({});
+
+          await app.inject({
+            method: 'PATCH',
+            url: '/api/pos/store',
+            headers: auth(temp.ownerToken),
+            payload: { nav_overrides: { [KEY]: { label: 'Продаж' } } },
+          });
+          const cleared = await app.inject({
+            method: 'PATCH',
+            url: '/api/pos/store',
+            headers: auth(temp.ownerToken),
+            payload: { nav_overrides: {} },
+          });
+          expect(cleared.json().nav_overrides).toEqual({});
+        } finally {
+          await dropTestStore(temp.storeId);
+        }
+      });
+
+      it('403s a seller — menu appearance is a store setting', async () => {
+        const res = await app.inject({
+          method: 'PATCH',
+          url: '/api/pos/store',
+          headers: auth(store.sellerToken),
+          payload: { nav_overrides: { [KEY]: { label: 'Продаж' } } },
+        });
+        expect(res.statusCode).toBe(403);
+      });
+
+      it('travels to the till on the session payload', async () => {
+        // The desktop cashier rebuilds its whole session from the cached
+        // `pos_auth` when it starts cold offline, so the menu has to be in it.
+        const temp = await createTestStore('rnavme');
+        try {
+          await app.inject({
+            method: 'PATCH',
+            url: '/api/pos/store',
+            headers: auth(temp.ownerToken),
+            payload: { nav_overrides: { [KEY]: { label: 'Продаж' } } },
+          });
+          const me = await app.inject({
+            method: 'GET',
+            url: '/api/pos/me',
+            headers: auth(temp.sellerToken),
+          });
+          expect(me.json().store.nav_overrides).toEqual({ [KEY]: { label: 'Продаж' } });
+        } finally {
+          await dropTestStore(temp.storeId);
+        }
+      });
+    });
+
     describe('fiscal-* module remote guard', () => {
       it('rejects a second fiscal-* remote', async () => {
         const temp = await createTestStore('rremfiscal2');

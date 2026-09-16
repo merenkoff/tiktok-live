@@ -77,6 +77,7 @@ export async function saveStaffUnlock(params: {
     qrStaticImageUrl: params.auth.store.qr_payment?.static_image_url ?? null,
     autoPrintReceipt: params.auth.store.auto_print_receipt ?? false,
     enabledModules: params.auth.store.enabled_modules ?? DEFAULT_MODULES,
+    navOverrides: params.auth.store.nav_overrides ?? {},
     fiscalEnabled: params.auth.store.fiscal?.enabled ?? false,
     moduleRemotes: params.auth.store.module_remotes ?? {},
     fiscalProvider: params.auth.store.fiscal?.provider ?? null,
@@ -108,6 +109,7 @@ export async function updateStaffUnlockStoreFlags(auth: AuthResponse): Promise<v
     qrStaticImageUrl: auth.store.qr_payment?.static_image_url ?? null,
     autoPrintReceipt: auth.store.auto_print_receipt ?? false,
     enabledModules: auth.store.enabled_modules ?? DEFAULT_MODULES,
+    navOverrides: auth.store.nav_overrides ?? row.navOverrides ?? {},
     fiscalEnabled: auth.store.fiscal?.enabled ?? false,
     fiscalProvider: auth.store.fiscal?.provider ?? null,
     // The requisites the receipt header is printed from, the register's own
@@ -160,6 +162,7 @@ function sessionFromUnlock(row: StaffUnlockRow, liveAuth: AuthResponse | null): 
       auto_print_receipt: row.autoPrintReceipt ?? false,
       enabled_modules: row.enabledModules ?? DEFAULT_MODULES,
       module_remotes: row.moduleRemotes ?? {},
+      nav_overrides: row.navOverrides ?? {},
       // A row written before the whole block was cached still yields a
       // correct switch; what it cannot yield is the receipt header, which is
       // why an offline stamp refuses without requisites.

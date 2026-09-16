@@ -19,6 +19,7 @@ import { effectiveEnabledModules } from './core/modules.js';
 import type {
   FiscalPublicConfig,
   ModuleRemoteEntry,
+  NavOverrides,
   PosAuthContext,
   PosRole,
   QrPaymentPublicConfig,
@@ -53,6 +54,14 @@ export interface AuthResponse {
      * for the desktop cashier (roadmap #13 Part C).
      */
     module_remotes: Record<string, string | ModuleRemoteEntry>;
+    /**
+     * Per-store menu appearance (label/icon/order per nav entry). It travels
+     * with the login for the same reason the module set does: the desktop
+     * cashier rebuilds its whole session from the cached `pos_auth` when it
+     * starts cold offline, and a menu that reverts to factory labels there is
+     * exactly the moment the cashier needs it not to.
+     */
+    nav_overrides: NavOverrides;
   };
 }
 
@@ -93,6 +102,7 @@ function toAuthResponse(auth: PosAuthContext, expiresAt: Date): AuthResponse {
       auto_print_receipt: auth.autoPrintReceipt,
       enabled_modules: effectiveEnabledModules(auth.enabledModules),
       module_remotes: auth.moduleRemotes,
+      nav_overrides: auth.navOverrides,
     },
   };
 }

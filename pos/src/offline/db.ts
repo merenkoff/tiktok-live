@@ -8,6 +8,7 @@ import type {
   FiscalOfflineStamp,
   FiscalPublicConfig,
   ModuleRemoteEntry,
+  NavOverrides,
   PosCustomer,
   PosRole,
   QrPaymentMode,
@@ -44,6 +45,13 @@ export interface StaffUnlockRow {
   autoPrintReceipt?: boolean;
   /** Enabled module ids cached from AuthResponse so the till honours toggles offline (optional on old rows). */
   enabledModules?: string[];
+  /**
+   * The store's menu appearance, cached from AuthResponse (optional on old
+   * rows). A till that starts cold offline rebuilds its whole session from this
+   * row, and a menu that reverts to factory labels and factory order there is
+   * exactly the moment the cashier needs it not to.
+   */
+  navOverrides?: NavOverrides;
   /**
    * ПРРО state cached from AuthResponse (optional on old rows).
    *

@@ -5,9 +5,10 @@
 // src/pos/types.ts
 
 import type { ModuleRemoteEntry } from './core/modules.js';
+import type { NavOverrides } from './core/nav.js';
 import type { FiscalProviderId, FiscalRequisites } from './fiscal/types.js';
 
-export type { ModuleRemoteEntry };
+export type { ModuleRemoteEntry, NavOverrides };
 
 export type PosRole = 'owner' | 'seller';
 
@@ -50,6 +51,7 @@ export interface PosStore {
   qr_recipient: string | null;
   enabled_modules: string[];
   module_remotes: Record<string, string | ModuleRemoteEntry>;
+  nav_overrides: NavOverrides;
   created_at: Date;
   updated_at: Date;
 }
@@ -114,6 +116,8 @@ export interface PosAuthContext {
   enabledModules: string[];
   /** Per-store `{ moduleId: remote-entry.js URL }` map — web build only (roadmap #9). */
   moduleRemotes: Record<string, string | ModuleRemoteEntry>;
+  /** Per-store menu appearance (label/icon/order) — see `core/nav.ts`. */
+  navOverrides: NavOverrides;
   token: string;
 }
 

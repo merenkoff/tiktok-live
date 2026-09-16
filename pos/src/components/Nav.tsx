@@ -7,6 +7,7 @@ import { usePosShell, useAuthStore, useEnabledModules, resolveNavIcon } from '@p
 import { useUpdateStore } from '../hooks/useUpdateCheck';
 import { allModules } from '../modules/registry';
 import { selectNavItems } from '../modules/selectNav';
+import { useNavOverrides } from '../modules/useNavOverrides';
 import type { NavCtx, NavItem, NavLocation, NavVariant } from '../modules/types';
 
 interface Props {
@@ -24,11 +25,12 @@ export function Nav({ location, variant }: Props) {
   const shell = usePosShell();
   const role = useAuthStore((s) => s.role());
   const enabled = useEnabledModules();
+  const overrides = useNavOverrides();
   const { pathname } = useLocation();
   const updateAvailable = useUpdateStore((s) => s.updateInfo?.update_available ?? false);
 
   const ctx: NavCtx = { shell, role, variant };
-  const items: NavItem[] = selectNavItems(allModules(), enabled, ctx, location);
+  const items: NavItem[] = selectNavItems(allModules(), enabled, ctx, location, overrides);
 
   if (location === 'admin-sidebar') {
     return (

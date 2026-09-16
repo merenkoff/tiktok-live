@@ -7,14 +7,14 @@ import { describe, expect, it } from 'vitest';
 import { useAuthStore } from '../hooks/useAuth';
 import { useUpdateStore } from '../hooks/useUpdateCheck';
 import { makeAuthResponse, renderWithProviders } from '../test/utils';
-import type { PosRole } from '../types';
+import type { NavOverrides, PosRole } from '../types';
 import { Nav } from './Nav';
 
-function signIn(role: PosRole, enabled_modules?: string[]) {
+function signIn(role: PosRole, enabled_modules?: string[], nav_overrides?: NavOverrides) {
   useAuthStore.setState({
     auth: makeAuthResponse({
       staff: { id: 1, display_name: 'Тест', role },
-      store: { enabled_modules },
+      store: { enabled_modules, nav_overrides },
     }),
     isAuthenticated: true,
   });
@@ -37,6 +37,7 @@ describe('Nav — admin sidebar', () => {
       '/admin/staff',
       '/admin/gtin',
       '/admin/settings',
+      '/admin/appearance',
     ]);
     expect(screen.getByRole('link', { name: 'Сьогодні' })).toBeInTheDocument();
   });
@@ -123,5 +124,46 @@ describe('Nav — cashier rail', () => {
 
     expect(screen.getByRole('link', { name: 'Обладнання' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /оновлення/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('Nav — store menu appearance', () => {
+  it('renders the store name, icon and order the owner chose', () => {
+    signIn('seller', undefined, {
+      'catalog-checkout:cashier-primary:/register': {
+        label: 'Продаж',
+        icon: 'ShoppingCart',
+        order: 100,
+      },
+    });
+    const { container } = renderWithProviders(
+      <Nav location="cashier-primary" variant="bottom" />,
+      { route: '/register', shell: 'cashier' }
+    );
+
+    // Last in the bar now, under its new name and its new glyph.
+    expect(hrefs()).toEqual(['/customers', '/sales', '/hardware', '/register']);
+    expect(screen.getByRole('link', { name: 'Продаж' })).toBeInTheDocument();
+    expect(container.querySelector('a[href="/register"] svg')).toHaveClass('lucide-shopping-cart');
+  });
+
+  it('renames an admin section too', () => {
+    signIn('owner', undefined, {
+      'stock:admin-sidebar:/admin/stock': { label: 'Залишки' },
+    });
+    renderWithProviders(<Nav location="admin-sidebar" />, { route: '/admin' });
+
+    expect(screen.getByRole('link', { name: 'Залишки' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Склад' })).not.toBeInTheDocument();
+  });
+
+  it('ignores an override naming an entry this build does not have', () => {
+    signIn('seller', undefined, { 'loyalty:cashier-primary:/loyalty': { label: 'Бонуси' } });
+    renderWithProviders(<Nav location="cashier-primary" variant="rail" />, {
+      route: '/register',
+      shell: 'cashier',
+    });
+
+    expect(hrefs()).toEqual(['/register', '/customers', '/sales', '/hardware']);
   });
 });

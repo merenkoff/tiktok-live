@@ -6,6 +6,8 @@
 // Per-store feature-module gating. Mirrors the frontend registry
 // (pos/src/modules/constants.ts) — keep the two id lists in sync.
 
+import { NAV_LOCATIONS, type NavLocation } from './nav.js';
+
 /** Always available — never stored in `pos_stores.enabled_modules`, never toggleable. */
 export const CORE_MODULE_IDS = ['catalog-checkout', 'settings', 'hardware'] as const;
 
@@ -80,10 +82,6 @@ export function isAllowedRemoteUrl(value: unknown): value is string {
   if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(url)) return true;
   return false;
 }
-
-/** Where a module's nav entry sits. Mirrors frontend `NavLocation`. */
-const NAV_LOCATIONS = ['cashier-primary', 'admin-sidebar'] as const;
-type NavLocation = (typeof NAV_LOCATIONS)[number];
 
 interface ModuleRemoteNavEntry {
   label: string;
