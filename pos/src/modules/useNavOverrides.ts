@@ -2,7 +2,16 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { useAuthStore } from '../hooks/useAuth';
+// `@pos/platform`, not `../hooks/useAuth`: on the web build the platform is an
+// externalised chunk, and a relative import would bundle a SECOND auth store
+// into the host — one nobody ever logs into. `check-platform-boundary.mjs`
+// enforces this. Its neighbour `useEnabledModules` reaches the store relatively
+// because it is re-exported BY `platform/auth.ts`, i.e. bundled into that same
+// chunk; this hook is not — nothing in `platform/` imports it, and no remote
+// module needs it (the nav is rendered by the host alone — see `platform/ui.ts`
+// on why `Nav` is deliberately not exported). So it is ordinary host code, and
+// host code reaches a singleton through the barrel.
+import { useAuthStore } from '@pos/platform';
 import type { NavOverrides } from '../types';
 
 /** Module-level constant so an unconfigured store returns a stable reference. */
