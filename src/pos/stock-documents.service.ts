@@ -9,7 +9,7 @@ import { createProductInTx } from './products.service.js';
 import { loadStoreVertical, normalizeVariant } from './verticals/index.js';
 import type { AttributeValues } from './verticals/types.js';
 import { applyStockDelta } from './stock.service.js';
-import { assertStockable } from './composites.service.js';
+import { assertProducible, assertStockable, produceComposite } from './composites.service.js';
 import type { StockDocumentStatus, StockDocumentType, StockReason } from './types.js';
 
 export interface StockDocumentLine {
@@ -65,9 +65,16 @@ const DOC_PREFIX: Record<StockDocumentType, string> = {
   writeoff: 'СП',
   adjustment: 'КР',
   inventory: 'ІН',
+  production: 'ВР',
 };
 
-const TYPE_TO_REASON: Record<Exclude<StockDocumentType, 'adjustment'>, StockReason> = {
+// `production` is absent on purpose: it is the one type that moves two sets of
+// variants at once (components out, the assembled composite in), so it carries
+// its own reasons and never goes through `reasonForType`.
+const TYPE_TO_REASON: Record<
+  Exclude<StockDocumentType, 'adjustment' | 'production'>,
+  StockReason
+> = {
   receipt: 'receipt',
   writeoff: 'writeoff',
   inventory: 'inventory',
@@ -358,11 +365,19 @@ export async function addLine(params: {
     let countedQty: number | null = params.countedQty ?? null;
     let unitCost: number | null = params.unitCostCents ?? null;
 
-    if (doc.type === 'receipt' || doc.type === 'writeoff') {
+    if (doc.type === 'receipt' || doc.type === 'writeoff' || doc.type === 'production') {
       if (!params.quantity || params.quantity <= 0) {
         throw new Error('quantity must be positive');
       }
       quantity = params.quantity;
+      if (doc.type === 'production') {
+        // Caught here rather than at post time: the owner picking the wrong
+        // product should learn it while the draft is still on screen.
+        await assertProducible(client, params.storeId, params.variantId);
+        // The cost is summed from the components at post time; a typed-in one
+        // would only be overwritten.
+        unitCost = null;
+      }
     } else if (doc.type === 'adjustment') {
       if (typeof params.quantity !== 'number' || params.quantity === 0) {
         throw new Error('adjustment quantity (delta) cannot be zero');
@@ -855,7 +870,7 @@ function computeDelta(
   return line.counted_qty - currentQty;
 }
 
-function reasonForType(type: StockDocumentType): StockReason {
+function reasonForType(type: Exclude<StockDocumentType, 'production'>): StockReason {
   if (type === 'adjustment') return 'adjust';
   return TYPE_TO_REASON[type];
 }
@@ -983,6 +998,33 @@ export async function postDocument(params: {
 
       if (variantId == null) throw new Error('Line missing variant_id');
 
+      if (type === 'production') {
+        // The one type that moves two sets of variants: the components leave
+        // the shelf and an assembled composite lands on it. `produceComposite`
+        // owns both halves so the arithmetic stays in one place.
+        const { unitCostCents } = await produceComposite(client, {
+          storeId: params.storeId,
+          variantId,
+          quantity: Number(line.quantity),
+          staffId: params.staffId,
+          referenceType: 'stock_document',
+          referenceId: params.documentId,
+          note: docRow.note ?? line.line_note ?? `Виробництво ${docNumber}`,
+          occurredAt,
+        });
+        // Cost is the components', summed — nobody types a bouquet's cost in.
+        await client.query(
+          `UPDATE pos_stock_document_lines SET unit_cost_cents = $1 WHERE id = $2`,
+          [unitCostCents, line.id]
+        );
+        await client.query(
+          `UPDATE pos_variants SET cost_cents = $1, updated_at = NOW()
+           WHERE id = $2 AND store_id = $3`,
+          [unitCostCents, variantId, params.storeId]
+        );
+        continue;
+      }
+
       // A derived composite is not a thing you receive, write off or count —
       // its stems are. Refused here, at the one place stock actually moves.
       await assertStockable(client, params.storeId, variantId);
@@ -1108,37 +1150,83 @@ export async function reverseDocument(params: {
     );
     const reverseId = Number(reverseDoc.rows[0].id);
 
-    for (const line of lines.rows) {
-      let delta: number;
-      if (original.type === 'receipt') delta = -Number(line.quantity);
-      else if (original.type === 'writeoff') delta = Number(line.quantity);
-      else delta = -Number(line.quantity); // adjustment
+    if (reverseType === 'production') {
+      // Un-assembling is driven by the movements this document actually wrote,
+      // not by re-reading the composition: the recipe is editable, and a
+      // reversal that credited today's recipe would invent stems the bouquets
+      // never contained. The lines are copied for the human reading the doc.
+      for (const line of lines.rows) {
+        await client.query(
+          `INSERT INTO pos_stock_document_lines
+             (document_id, store_id, variant_id, quantity, unit_cost_cents, line_note)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            reverseId,
+            params.storeId,
+            line.variant_id,
+            Number(line.quantity),
+            line.unit_cost_cents,
+            line.line_note,
+          ]
+        );
+      }
 
-      await client.query(
-        `INSERT INTO pos_stock_document_lines
-           (document_id, store_id, variant_id, quantity, unit_cost_cents, line_note)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [
-          reverseId,
-          params.storeId,
-          line.variant_id,
-          original.type === 'adjustment' ? -Number(line.quantity) : Number(line.quantity),
-          line.unit_cost_cents,
-          line.line_note,
-        ]
+      const moved = await client.query(
+        `SELECT variant_id, delta, reason
+         FROM pos_stock_movements
+         WHERE store_id = $1 AND reference_type = 'stock_document' AND reference_id = $2
+         ORDER BY id ASC`,
+        [params.storeId, params.documentId]
       );
-
-      if (delta !== 0) {
+      if (moved.rows.length === 0) throw new Error('Production document moved no stock');
+      for (const move of moved.rows) {
         await applyStockDelta(client, {
           storeId: params.storeId,
-          variantId: Number(line.variant_id),
-          delta,
-          reason: reasonForType(reverseType),
+          variantId: Number(move.variant_id),
+          delta: -Number(move.delta),
+          // The stems come back as a receipt and the bouquets leave as a
+          // writeoff — the mirror image of what production recorded, so the
+          // movement report still balances per reason.
+          reason: move.reason === 'receipt' ? 'writeoff' : 'receipt',
           staffId: params.staffId,
           referenceType: 'stock_document',
           referenceId: reverseId,
           note: `Reverse of ${original.doc_number}`,
         });
+      }
+    } else {
+      for (const line of lines.rows) {
+        let delta: number;
+        if (original.type === 'receipt') delta = -Number(line.quantity);
+        else if (original.type === 'writeoff') delta = Number(line.quantity);
+        else delta = -Number(line.quantity); // adjustment
+
+        await client.query(
+          `INSERT INTO pos_stock_document_lines
+             (document_id, store_id, variant_id, quantity, unit_cost_cents, line_note)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            reverseId,
+            params.storeId,
+            line.variant_id,
+            original.type === 'adjustment' ? -Number(line.quantity) : Number(line.quantity),
+            line.unit_cost_cents,
+            line.line_note,
+          ]
+        );
+
+        if (delta !== 0) {
+          await applyStockDelta(client, {
+            storeId: params.storeId,
+            variantId: Number(line.variant_id),
+            delta,
+            reason: reasonForType(reverseType),
+            staffId: params.staffId,
+            referenceType: 'stock_document',
+            referenceId: reverseId,
+            note: `Reverse of ${original.doc_number}`,
+          });
+        }
       }
     }
 

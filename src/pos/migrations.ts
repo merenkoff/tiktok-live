@@ -63,6 +63,7 @@ export const POS_MIGRATIONS = [
   // 035, not the same one. Register it there. The runner has no tracking table
   // and re-applies every file in order, so inserting it above 037 later is safe.
   '037_pos_product_components.sql',
+  '038_pos_production_documents.sql',
 ] as const;
 
 export function readMigration(file: string): string {

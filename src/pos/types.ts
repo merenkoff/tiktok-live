@@ -23,7 +23,13 @@ export type StockReason =
   | 'writeoff'
   | 'inventory';
 
-export type StockDocumentType = 'receipt' | 'writeoff' | 'adjustment' | 'inventory';
+export type StockDocumentType =
+  | 'receipt'
+  | 'writeoff'
+  | 'adjustment'
+  | 'inventory'
+  /** Assembles a composite from its components — see composites.service.ts. */
+  | 'production';
 
 export type StockDocumentStatus = 'draft' | 'posted' | 'voided' | 'reversed';
 

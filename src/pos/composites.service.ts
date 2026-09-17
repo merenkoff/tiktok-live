@@ -110,6 +110,26 @@ export async function assertStockable(
  * Every composition in the store, keyed by the composite variant — one query
  * for the whole admin product list rather than one per bouquet.
  */
+/**
+ * Throws unless the variant is a composite assembled in advance — the only
+ * thing a production document can make.
+ */
+export async function assertProducible(
+  client: DbClient,
+  storeId: number,
+  variantId: number
+): Promise<void> {
+  const shape = await loadStockShape(client, storeId, variantId);
+  if (shape.kind !== 'composite') {
+    throw new CompositeError(`Variant ${variantId} is not a composite`);
+  }
+  if (shape.stock_mode !== 'own') {
+    throw new CompositeError(
+      `Variant ${variantId} is assembled when it sells — nothing to produce`
+    );
+  }
+}
+
 export async function listComponentsForStore(
   storeId: number,
   client: DbClient = pool
@@ -353,4 +373,77 @@ export async function returnStockForSaleItem(
       note: `Складник: варіант ${params.variantId}`,
     });
   }
+}
+
+/**
+ * Assemble `quantity` of a composite from its components.
+ *
+ * The other half of `stock_mode: 'own'`: the production document takes the
+ * stems off the shelf and puts assembled bouquets on it, so that selling one
+ * later is a plain stock move that must NOT touch the components again.
+ *
+ * Returns the assembled unit cost, summed from the components — a bouquet's
+ * cost is its stems', and nobody should have to type it in.
+ */
+export async function produceComposite(
+  client: DbClient,
+  params: {
+    storeId: number;
+    variantId: number;
+    quantity: number;
+    staffId: number;
+    referenceType: string;
+    referenceId: number;
+    note?: string | null;
+    occurredAt?: Date | string;
+  }
+): Promise<{ unitCostCents: number }> {
+  if (!Number.isInteger(params.quantity) || params.quantity <= 0) {
+    throw new CompositeError('Production quantity must be a positive integer');
+  }
+  // A derived composite is assembled by the sale itself; producing one would
+  // write off the stems into a stock row nobody ever reads.
+  await assertProducible(client, params.storeId, params.variantId);
+
+  const composition = await client.query(
+    `SELECT c.component_variant_id, c.quantity, v.cost_cents
+     FROM pos_product_components c
+     JOIN pos_variants v ON v.id = c.component_variant_id
+     WHERE c.store_id = $1 AND c.variant_id = $2
+     ORDER BY c.sort_order ASC, c.id ASC`,
+    [params.storeId, params.variantId]
+  );
+  if (composition.rows.length === 0) throw new EmptyCompositionError(params.variantId);
+
+  let unitCostCents = 0;
+  for (const row of composition.rows) {
+    const perUnit = Number(row.quantity);
+    unitCostCents += perUnit * Number(row.cost_cents);
+    await applyStockDelta(client, {
+      storeId: params.storeId,
+      variantId: Number(row.component_variant_id),
+      delta: -perUnit * params.quantity,
+      reason: 'writeoff',
+      staffId: params.staffId,
+      referenceType: params.referenceType,
+      referenceId: params.referenceId,
+      note: params.note ?? undefined,
+      occurredAt: params.occurredAt,
+    });
+  }
+
+  await applyStockDelta(client, {
+    storeId: params.storeId,
+    variantId: params.variantId,
+    delta: params.quantity,
+    reason: 'receipt',
+    staffId: params.staffId,
+    referenceType: params.referenceType,
+    referenceId: params.referenceId,
+    note: params.note ?? undefined,
+    unitCostCents,
+    occurredAt: params.occurredAt,
+  });
+
+  return { unitCostCents };
 }

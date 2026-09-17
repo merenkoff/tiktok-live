@@ -15,6 +15,12 @@ import {
 import { completeSale, refundSale, voidSale } from '../pos/sales.service.js';
 import { createProduct, getCatalog, updateProduct, updateVariant } from '../pos/products.service.js';
 import { adjustStock, listLowStock } from '../pos/stock.service.js';
+import {
+  addLine,
+  createDocument,
+  postDocument,
+  reverseDocument,
+} from '../pos/stock-documents.service.js';
 import { listOnHand } from '../pos/stock-reports.service.js';
 import { derivedAvailability } from '../pos/composites.service.js';
 
@@ -289,6 +295,141 @@ describe.skipIf(!hasDb)('POS composite products', () => {
       // 5 back, because 5 is what left the shop. Re-deriving would have
       // credited 9 and invented four roses.
       expect(await stockOf(stemId)).toBe(100);
+    });
+  });
+
+  describe('production document', () => {
+    /** A bouquet assembled in advance: 6 stems + 1 wrap, counted on its own row. */
+    async function seedOwnBouquet(name: string, quantity = 0) {
+      const product = await createProduct(storeId, {
+        name,
+        kind: 'composite',
+        stock_mode: 'own',
+        variants: [
+          {
+            attributes: {},
+            price_cents: 70000,
+            quantity,
+            components: [
+              { component_variant_id: stemId, quantity: 6 },
+              { component_variant_id: wrapId, quantity: 1 },
+            ],
+          },
+        ],
+      });
+      return (product!.variants[0] as { id: number }).id;
+    }
+
+    async function produce(variantId: number, quantity: number) {
+      const doc = await createDocument({ storeId, staffId, type: 'production' });
+      await addLine({ storeId, documentId: doc.id, variantId, quantity });
+      return postDocument({ storeId, documentId: doc.id, staffId });
+    }
+
+    it('takes the components off the shelf and puts bouquets on it', async () => {
+      const variantId = await seedOwnBouquet('Букет P');
+      await produce(variantId, 5);
+
+      expect(await stockOf(stemId)).toBe(100 - 30);
+      expect(await stockOf(wrapId)).toBe(40 - 5);
+      expect(await stockOf(variantId)).toBe(5);
+    });
+
+    it('costs the bouquet from its components, not from a typed-in number', async () => {
+      const variantId = await seedOwnBouquet('Букет Q');
+      // seedProduct leaves cost_cents at 0, so give the components a cost.
+      await pool.query(`UPDATE pos_variants SET cost_cents = 2000 WHERE id = $1`, [stemId]);
+      await pool.query(`UPDATE pos_variants SET cost_cents = 500 WHERE id = $1`, [wrapId]);
+
+      const posted = await produce(variantId, 2);
+      const expected = 6 * 2000 + 1 * 500;
+      const variant = await pool.query(`SELECT cost_cents FROM pos_variants WHERE id = $1`, [
+        variantId,
+      ]);
+      expect(Number(variant.rows[0].cost_cents)).toBe(expected);
+      const line = await pool.query(
+        `SELECT unit_cost_cents FROM pos_stock_document_lines WHERE document_id = $1`,
+        [posted.id]
+      );
+      expect(Number(line.rows[0].unit_cost_cents)).toBe(expected);
+      await pool.query(`UPDATE pos_variants SET cost_cents = 0 WHERE id IN ($1, $2)`, [
+        stemId,
+        wrapId,
+      ]);
+    });
+
+    it('sells an assembled bouquet without touching the components again', async () => {
+      const variantId = await seedOwnBouquet('Букет R');
+      await produce(variantId, 3);
+      const afterProduction = await stockOf(stemId);
+
+      await completeSale({
+        storeId,
+        staffId,
+        items: [{ variant_id: variantId, quantity: 1 }],
+        payments: [{ method: 'cash', amount_cents: 70000 }],
+      });
+
+      expect(await stockOf(stemId)).toBe(afterProduction);
+      expect(await stockOf(variantId)).toBe(2);
+    });
+
+    it('un-assembles on reversal', async () => {
+      const variantId = await seedOwnBouquet('Букет S');
+      const posted = await produce(variantId, 4);
+      await reverseDocument({ storeId, documentId: posted.id, staffId });
+
+      expect(await stockOf(stemId)).toBe(100);
+      expect(await stockOf(wrapId)).toBe(40);
+      expect(await stockOf(variantId)).toBe(0);
+    });
+
+    it('reverses what it produced, not what the recipe says today', async () => {
+      const variantId = await seedOwnBouquet('Букет T');
+      const posted = await produce(variantId, 2);
+      expect(await stockOf(stemId)).toBe(100 - 12);
+
+      await updateVariant(storeId, variantId, {
+        components: [
+          { component_variant_id: stemId, quantity: 15 },
+          { component_variant_id: wrapId, quantity: 1 },
+        ],
+      });
+      await reverseDocument({ storeId, documentId: posted.id, staffId });
+
+      expect(await stockOf(stemId)).toBe(100);
+    });
+
+    it('refuses to un-assemble bouquets that already left the shop', async () => {
+      const variantId = await seedOwnBouquet('Букет U');
+      const posted = await produce(variantId, 2);
+      await completeSale({
+        storeId,
+        staffId,
+        items: [{ variant_id: variantId, quantity: 2 }],
+        payments: [{ method: 'cash', amount_cents: 140000 }],
+      });
+
+      await expect(
+        reverseDocument({ storeId, documentId: posted.id, staffId })
+      ).rejects.toThrow(/insufficient stock/i);
+      // The failed reversal rolled back whole — the stems stayed where they were.
+      expect(await stockOf(stemId)).toBe(100 - 12);
+    });
+
+    it('refuses a line for a derived composite', async () => {
+      const { variantId } = await seedDerivedBouquet('Букет V');
+      const doc = await createDocument({ storeId, staffId, type: 'production' });
+      await expect(
+        addLine({ storeId, documentId: doc.id, variantId, quantity: 1 })
+      ).rejects.toThrow(/assembled when it sells/i);
+    });
+
+    it('refuses a line for a simple product', async () => {
+      const doc = await createDocument({ storeId, staffId, type: 'production' });
+      await expect(
+        addLine({ storeId, documentId: doc.id, variantId: stemId, quantity: 1 })
+      ).rejects.toThrow(/not a composite/i);
     });
   });
 
