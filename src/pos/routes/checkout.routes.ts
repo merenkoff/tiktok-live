@@ -13,7 +13,7 @@
 // See TechDocs/POS_FISCAL_PRRO.md §8 for the failure matrix.
 
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import type { PaymentMethod } from '../types.js';
+import type { CompleteSaleItemInput, PaymentMethod } from '../types.js';
 import { ensurePosAuth } from '../core/auth.js';
 import * as salesService from '../sales.service.js';
 import * as fiscalService from '../fiscal/fiscal.service.js';
@@ -32,7 +32,7 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
     if (!auth) return;
 
     const body = request.body as {
-      items: { variant_id: number; quantity: number }[];
+      items: CompleteSaleItemInput[];
       payments: { method: PaymentMethod; amount_cents: number; provider_ref?: string | null }[];
       note?: string;
       cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
@@ -397,7 +397,7 @@ async function completeDeviceStampedSale(
   reply: FastifyReply,
   auth: { storeId: number; staffId: number },
   body: {
-    items: { variant_id: number; quantity: number }[];
+    items: CompleteSaleItemInput[];
     payments: { method: PaymentMethod; amount_cents: number; provider_ref?: string | null }[];
     note?: string;
     cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;

@@ -186,6 +186,14 @@ export interface CatalogItem {
 export interface CompleteSaleItemInput {
   variant_id: number;
   quantity: number;
+  /**
+   * A bouquet assembled at the counter: the composition this ONE line was rung
+   * with, overriding the catalogue's. Only a derived composite accepts it.
+   * Its price is summed from the components, never sent — see
+   * `priceOfComposition`. A line carrying this is never merged with another of
+   * the same variant, because two custom bouquets are two different things.
+   */
+  components?: Array<{ component_variant_id: number; quantity: number }>;
 }
 
 export interface CompleteSalePaymentInput {

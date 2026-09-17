@@ -163,20 +163,19 @@ export async function listComponentsForStore(
 }
 
 /**
- * Replace a composite variant's composition wholesale — same "an update
- * replaces the bag" rule as variant attributes, so removing a component is
- * expressible.
+ * Check a composition and return it in canonical form.
  *
- * One level deep on purpose: a component may not itself be composite, which
- * makes cycles impossible without a recursive check. Nested semi-finished
- * products are the café phase (TechDocs/POS_VERTICALS.md §7).
+ * Shared by the catalogue editor and the till's ad-hoc assembly, so a bouquet
+ * composed at the counter obeys exactly the rules a catalogue one does. The
+ * one-level rule (a component may never itself be composite) is what makes
+ * cycles impossible without a recursive check.
  */
-export async function setComponents(
+export async function validateComponents(
   client: DbClient,
   storeId: number,
   variantId: number,
   components: ComponentInput[]
-): Promise<void> {
+): Promise<ComponentInput[]> {
   const seen = new Set<number>();
   const rows: ComponentInput[] = [];
   for (const raw of components) {
@@ -204,7 +203,7 @@ export async function setComponents(
       `SELECT v.id, p.kind
        FROM pos_variants v
        JOIN pos_products p ON p.id = v.product_id
-       WHERE v.store_id = $1 AND v.id = ANY($2::bigint[])`,
+       WHERE v.store_id = $1 AND v.id = ANY($2::bigint[]) AND v.is_active = TRUE`,
       [storeId, ids]
     );
     const found = new Map<number, string>(
@@ -218,6 +217,26 @@ export async function setComponents(
       }
     }
   }
+
+  return rows;
+}
+
+/**
+ * Replace a composite variant's composition wholesale — same "an update
+ * replaces the bag" rule as variant attributes, so removing a component is
+ * expressible.
+ *
+ * One level deep on purpose: a component may not itself be composite, which
+ * makes cycles impossible without a recursive check. Nested semi-finished
+ * products are the café phase (TechDocs/POS_VERTICALS.md §7).
+ */
+export async function setComponents(
+  client: DbClient,
+  storeId: number,
+  variantId: number,
+  components: ComponentInput[]
+): Promise<void> {
+  const rows = await validateComponents(client, storeId, variantId, components);
 
   await client.query(
     `DELETE FROM pos_product_components WHERE store_id = $1 AND variant_id = $2`,
@@ -272,6 +291,12 @@ export async function consumeStockForSaleItem(
     variantId: number;
     quantity: number;
     staffId: number;
+    /**
+     * The composition this one line was rung with, for a bouquet the cashier
+     * assembled at the counter. When absent the catalogue composition is used.
+     * Already validated by the caller.
+     */
+    components?: ComponentInput[];
   }
 ): Promise<void> {
   const shape = await loadStockShape(client, params.storeId, params.variantId);
@@ -288,16 +313,23 @@ export async function consumeStockForSaleItem(
     return;
   }
 
-  const composition = await client.query(
-    `SELECT component_variant_id, quantity, sort_order
-     FROM pos_product_components
-     WHERE store_id = $1 AND variant_id = $2
-     ORDER BY sort_order ASC, id ASC`,
-    [params.storeId, params.variantId]
-  );
-  if (composition.rows.length === 0) throw new EmptyCompositionError(params.variantId);
+  const composition = params.components
+    ? params.components.map((row) => ({
+        component_variant_id: row.component_variant_id,
+        quantity: row.quantity,
+      }))
+    : (
+        await client.query(
+          `SELECT component_variant_id, quantity
+           FROM pos_product_components
+           WHERE store_id = $1 AND variant_id = $2
+           ORDER BY sort_order ASC, id ASC`,
+          [params.storeId, params.variantId]
+        )
+      ).rows;
+  if (composition.length === 0) throw new EmptyCompositionError(params.variantId);
 
-  for (const [index, row] of composition.rows.entries()) {
+  for (const [index, row] of composition.entries()) {
     const componentVariantId = Number(row.component_variant_id);
     const perUnit = Number(row.quantity);
     await client.query(
@@ -446,4 +478,41 @@ export async function produceComposite(
   });
 
   return { unitCostCents };
+}
+
+/**
+ * What a bouquet assembled at the counter costs the customer: the sum of what
+ * its stems sell for.
+ *
+ * Deliberately computed, never typed in. A florist prices by the stem anyway,
+ * so this is the number they would have reached; and a per-line price the
+ * cashier can set freely is a hole no receipt would ever show. A genuine
+ * markdown stays expressible through the ordinary line and cart discounts.
+ */
+export async function priceOfComposition(
+  client: DbClient,
+  storeId: number,
+  components: ComponentInput[]
+): Promise<number> {
+  if (components.length === 0) throw new CompositeError('A bouquet needs at least one component');
+  const result = await client.query(
+    `SELECT id, price_cents FROM pos_variants
+     WHERE store_id = $1 AND id = ANY($2::bigint[])`,
+    [storeId, components.map((row) => row.component_variant_id)]
+  );
+  const priceOf = new Map<number, number>(
+    result.rows.map((row: { id: string | number; price_cents: string | number }) => [
+      Number(row.id),
+      Number(row.price_cents),
+    ])
+  );
+  let total = 0;
+  for (const row of components) {
+    const price = priceOf.get(row.component_variant_id);
+    if (price == null) {
+      throw new CompositeError(`Component variant ${row.component_variant_id} not found`);
+    }
+    total += price * row.quantity;
+  }
+  return total;
 }

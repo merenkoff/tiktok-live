@@ -5,7 +5,14 @@
 // src/pos/sales.service.ts
 
 import { pool } from '../db.js';
-import { consumeStockForSaleItem, returnStockForSaleItem } from './composites.service.js';
+import {
+  consumeStockForSaleItem,
+  isDerivedComposite,
+  priceOfComposition,
+  returnStockForSaleItem,
+  validateComponents,
+} from './composites.service.js';
+import type { ComponentInput } from './composites.service.js';
 import type {
   CartDiscountInput,
   CompleteSaleItemInput,
@@ -194,10 +201,25 @@ export async function completeSale(params: {
     if (!customer) throw new Error('Customer not found');
   }
 
+  // Two kinds of cart line. Ordinary ones merge by variant, as they always
+  // have. A line carrying its own composition — a bouquet the cashier put
+  // together at the counter — stays its own line: two custom bouquets off the
+  // same catalogue card are two different bouquets, and merging them would
+  // lose one of the two recipes.
   const qtyByVariant = new Map<number, number>();
+  const customItems: Array<{ variant_id: number; quantity: number; components: ComponentInput[] }> =
+    [];
   for (const item of params.items) {
     if (!item.variant_id || item.quantity <= 0) {
       throw new Error('Invalid cart item');
+    }
+    if (item.components?.length) {
+      customItems.push({
+        variant_id: item.variant_id,
+        quantity: item.quantity,
+        components: item.components,
+      });
+      continue;
     }
     qtyByVariant.set(
       item.variant_id,
@@ -218,7 +240,9 @@ export async function completeSale(params: {
   try {
     await client.query('BEGIN');
 
-    const variantIds = [...qtyByVariant.keys()];
+    const variantIds = [
+      ...new Set([...qtyByVariant.keys(), ...customItems.map((item) => item.variant_id)]),
+    ];
     const variantsResult = await client.query(
       `SELECT v.id, v.price_cents, v.compare_at_cents, v.label, v.unit, p.name AS product_name
        FROM pos_variants v
@@ -243,6 +267,8 @@ export async function completeSale(params: {
       compare_at_unit_cents: number | null;
       pre_discount_total: number;
       has_product_discount: boolean;
+      /** Present only on a bouquet assembled at the counter. */
+      components?: ComponentInput[];
     }> = [];
 
     for (const [variantId, quantity] of qtyByVariant) {
@@ -265,6 +291,38 @@ export async function completeSale(params: {
         compare_at_unit_cents: compareAt,
         pre_discount_total: pre,
         has_product_discount: compareAt != null,
+      });
+    }
+
+    for (const item of customItems) {
+      const variant = variantMap.get(item.variant_id)!;
+      const components = await validateComponents(
+        client,
+        params.storeId,
+        item.variant_id,
+        item.components
+      );
+      // Only a composite assembled at sale time can be rung with its own
+      // recipe: one with its own stock was already built, and a simple product
+      // has nothing to assemble.
+      if (!(await isDerivedComposite(client, params.storeId, item.variant_id))) {
+        throw new Error(`Variant ${item.variant_id} cannot be assembled at the till`);
+      }
+      const unit = await priceOfComposition(client, params.storeId, components);
+      const pre = unit * item.quantity;
+      subtotal += pre;
+      draftLines.push({
+        variant_id: item.variant_id,
+        product_name: variant.product_name,
+        variant_label: variant.label ?? '',
+        unit: variant.unit ?? '',
+        quantity: item.quantity,
+        unit_price_cents: unit,
+        // The catalogue card's compare-at would be about a different bouquet.
+        compare_at_unit_cents: null,
+        pre_discount_total: pre,
+        has_product_discount: false,
+        components,
       });
     }
 
@@ -352,6 +410,7 @@ export async function completeSale(params: {
         variantId: line.variant_id,
         quantity: line.quantity,
         staffId: params.staffId,
+        components: line.components,
       });
     }
 
@@ -417,6 +476,34 @@ export async function getSale(storeId: number, saleId: number) {
     `SELECT * FROM pos_sale_items WHERE sale_id = $1 ORDER BY id`,
     [saleId]
   );
+  // What each line actually took off the shelf. Present only for composites —
+  // and for a bouquet assembled at the counter this is the ONLY place its
+  // recipe exists, so the receipt and the refund screen read it from here.
+  const components = await pool.query(
+    `SELECT c.sale_item_id, c.component_variant_id, c.quantity_per_unit,
+            p.name AS product_name, v.label, v.unit
+     FROM pos_sale_item_components c
+     JOIN pos_sale_items i ON i.id = c.sale_item_id
+     JOIN pos_variants v ON v.id = c.component_variant_id
+     JOIN pos_products p ON p.id = v.product_id
+     WHERE i.sale_id = $1
+     ORDER BY c.sale_item_id, c.sort_order, c.id`,
+    [saleId]
+  );
+  const componentsByItem = new Map<number, Array<Record<string, unknown>>>();
+  for (const row of components.rows) {
+    const itemId = Number(row.sale_item_id);
+    const list = componentsByItem.get(itemId) ?? [];
+    list.push({
+      component_variant_id: Number(row.component_variant_id),
+      quantity_per_unit: Number(row.quantity_per_unit),
+      product_name: row.product_name,
+      label: row.label ?? '',
+      unit: row.unit ?? '',
+    });
+    componentsByItem.set(itemId, list);
+  }
+
   const payments = await pool.query(
     `SELECT * FROM pos_payments WHERE sale_id = $1 ORDER BY id`,
     [saleId]
@@ -499,6 +586,7 @@ export async function getSale(storeId: number, saleId: number) {
       line_discount_cents: Number(row.line_discount_cents ?? 0),
       line_total_cents: Number(row.line_total_cents),
       refunded_quantity: Number(row.refunded_quantity),
+      components: componentsByItem.get(Number(row.id)) ?? [],
     })),
     payments: payments.rows.map((row) => ({
       id: Number(row.id),

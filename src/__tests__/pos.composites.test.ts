@@ -433,6 +433,176 @@ describe.skipIf(!hasDb)('POS composite products', () => {
     });
   });
 
+  describe('a bouquet assembled at the counter', () => {
+    /**
+     * The catalogue card a florist rings custom work on: a derived composite
+     * whose stored composition is only a default. Each sale line may carry its
+     * own instead.
+     */
+    async function seedCustomCard(name: string) {
+      const product = await createProduct(storeId, {
+        name,
+        kind: 'composite',
+        stock_mode: 'derived',
+        variants: [
+          {
+            attributes: {},
+            price_cents: 1,
+            quantity: 0,
+            components: [{ component_variant_id: stemId, quantity: 1 }],
+          },
+        ],
+      });
+      return (product!.variants[0] as { id: number }).id;
+    }
+
+    it('prices itself from its stems and writes exactly them off', async () => {
+      const variantId = await seedCustomCard('Букет на замовлення A');
+      // seedProduct prices every variant at 10000 by default.
+      const sale = await completeSale({
+        storeId,
+        staffId,
+        items: [
+          {
+            variant_id: variantId,
+            quantity: 1,
+            components: [
+              { component_variant_id: stemId, quantity: 7 },
+              { component_variant_id: wrapId, quantity: 1 },
+            ],
+          },
+        ],
+        payments: [{ method: 'cash', amount_cents: 80000 }],
+      });
+
+      expect(sale!.total_cents).toBe(8 * 10000);
+      expect(await stockOf(stemId)).toBe(100 - 7);
+      expect(await stockOf(wrapId)).toBe(40 - 1);
+      // The card's own composition was a default, not what was sold.
+      expect(sale!.items[0].components).toEqual([
+        expect.objectContaining({ component_variant_id: stemId, quantity_per_unit: 7 }),
+        expect.objectContaining({ component_variant_id: wrapId, quantity_per_unit: 1 }),
+      ]);
+    });
+
+    it('keeps two custom bouquets off one card as two lines', async () => {
+      const variantId = await seedCustomCard('Букет на замовлення B');
+      const sale = await completeSale({
+        storeId,
+        staffId,
+        items: [
+          { variant_id: variantId, quantity: 1, components: [{ component_variant_id: stemId, quantity: 3 }] },
+          { variant_id: variantId, quantity: 1, components: [{ component_variant_id: wrapId, quantity: 2 }] },
+        ],
+        payments: [{ method: 'cash', amount_cents: 50000 }],
+      });
+
+      // Merging them would have thrown one of the two recipes away.
+      expect(sale!.items).toHaveLength(2);
+      expect(sale!.items[0].components).toHaveLength(1);
+      expect(sale!.items[1].components).toHaveLength(1);
+      expect(await stockOf(stemId)).toBe(100 - 3);
+      expect(await stockOf(wrapId)).toBe(40 - 2);
+    });
+
+    it('refunds what that very bouquet contained', async () => {
+      const variantId = await seedCustomCard('Букет на замовлення C');
+      const sale = await completeSale({
+        storeId,
+        staffId,
+        items: [
+          {
+            variant_id: variantId,
+            quantity: 2,
+            components: [{ component_variant_id: stemId, quantity: 4 }],
+          },
+        ],
+        payments: [{ method: 'cash', amount_cents: 80000 }],
+      });
+      expect(await stockOf(stemId)).toBe(100 - 8);
+
+      await refundSale({
+        storeId,
+        staffId,
+        saleId: sale!.id,
+        items: [{ sale_item_id: sale!.items[0].id, quantity: 1 }],
+      });
+      expect(await stockOf(stemId)).toBe(100 - 4);
+    });
+
+    it('refuses a custom composition on a product that is not assembled at sale time', async () => {
+      const product = await createProduct(storeId, {
+        name: 'Готовий букет на касі',
+        kind: 'composite',
+        stock_mode: 'own',
+        variants: [
+          {
+            attributes: {},
+            price_cents: 1000,
+            quantity: 5,
+            components: [{ component_variant_id: stemId, quantity: 2 }],
+          },
+        ],
+      });
+      const variantId = (product!.variants[0] as { id: number }).id;
+
+      await expect(
+        completeSale({
+          storeId,
+          staffId,
+          items: [
+            {
+              variant_id: variantId,
+              quantity: 1,
+              components: [{ component_variant_id: stemId, quantity: 3 }],
+            },
+          ],
+          payments: [{ method: 'cash', amount_cents: 30000 }],
+        })
+      ).rejects.toThrow(/cannot be assembled at the till/i);
+      expect(await stockOf(stemId)).toBe(100);
+    });
+
+    it('refuses a bouquet inside a bouquet, same as the catalogue does', async () => {
+      const variantId = await seedCustomCard('Букет на замовлення D');
+      const inner = await seedDerivedBouquet('Букет на замовлення E');
+      await expect(
+        completeSale({
+          storeId,
+          staffId,
+          items: [
+            {
+              variant_id: variantId,
+              quantity: 1,
+              components: [{ component_variant_id: inner.variantId, quantity: 1 }],
+            },
+          ],
+          payments: [{ method: 'cash', amount_cents: 100000 }],
+        })
+      ).rejects.toThrow(/itself composite/i);
+    });
+
+    it('does not disturb an ordinary line rung on the same receipt', async () => {
+      const variantId = await seedCustomCard('Букет на замовлення F');
+      const sale = await completeSale({
+        storeId,
+        staffId,
+        items: [
+          { variant_id: stemId, quantity: 2 },
+          {
+            variant_id: variantId,
+            quantity: 1,
+            components: [{ component_variant_id: stemId, quantity: 5 }],
+          },
+        ],
+        payments: [{ method: 'cash', amount_cents: 200000 }],
+      });
+
+      expect(sale!.total_cents).toBe(2 * 10000 + 5 * 10000);
+      expect(await stockOf(stemId)).toBe(100 - 7);
+    });
+  });
+
   describe('what a derived composite is not', () => {
     it('cannot be adjusted by hand', async () => {
       const { variantId } = await seedDerivedBouquet('Букет L');
