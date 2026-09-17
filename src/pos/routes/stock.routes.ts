@@ -9,6 +9,7 @@ import * as stockDocumentsService from '../stock-documents.service.js';
 import * as stockReportsService from '../stock-reports.service.js';
 import * as suppliersService from '../suppliers.service.js';
 import { errorMessage } from './_shared.js';
+import type { StockDocumentType } from '../types.js';
 
 export function registerStockRoutes(fastify: FastifyInstance): void {
   fastify.post('/stock/adjust', async (request, reply) => {
@@ -121,7 +122,7 @@ export function registerStockRoutes(fastify: FastifyInstance): void {
       to?: string;
     };
     return stockDocumentsService.listDocuments(auth.storeId, {
-      type: q.type as 'receipt' | 'writeoff' | 'adjustment' | 'inventory' | undefined,
+      type: q.type as StockDocumentType | undefined,
       status: q.status as 'draft' | 'posted' | 'voided' | 'reversed' | undefined,
       from: q.from,
       to: q.to,
@@ -133,7 +134,7 @@ export function registerStockRoutes(fastify: FastifyInstance): void {
     if (!auth) return;
     try {
       const body = request.body as {
-        type?: 'receipt' | 'writeoff' | 'adjustment' | 'inventory';
+        type?: StockDocumentType;
         occurred_at?: string;
         supplier_id?: number | null;
         reason_code?: string | null;

@@ -10,6 +10,8 @@ import type { CatalogItem } from './types.js';
 import { getProductTagIds, resolveTagFilterIds } from './tags.service.js';
 import { loadStoreVertical, normalizeVariant, searchableAttributeKeys } from './verticals/index.js';
 import type { VerticalDefinition } from './verticals/types.js';
+import { CompositeError, listComponentsForStore, setComponents } from './composites.service.js';
+import type { ComponentInput } from './composites.service.js';
 
 export interface VariantInput {
   /**
@@ -27,6 +29,12 @@ export interface VariantInput {
   cost_cents?: number;
   quantity?: number;
   compare_at_cents?: number | null;
+  /**
+   * Composition of a composite variant — what one of it is assembled from.
+   * Only meaningful when the product is `kind: 'composite'`; replaced wholesale
+   * on update, exactly like the attribute bag.
+   */
+  components?: ComponentInput[];
 }
 
 export interface CreateProductInput {
@@ -36,6 +44,67 @@ export interface CreateProductInput {
   variants: VariantInput[];
   needs_review?: boolean;
   created_from_document_id?: number | null;
+  /** `composite` is a bouquet or a tech card: assembled from other variants. */
+  kind?: ProductKind;
+  /** Where a composite's stock lives. See composites.service.ts. */
+  stock_mode?: ProductStockMode;
+}
+
+export type ProductKind = 'simple' | 'composite';
+export type ProductStockMode = 'own' | 'derived';
+
+/**
+ * A composite is only as good as its composition, and a derived one keeps no
+ * stock of its own — so the two ways to end up with a silently wrong catalogue
+ * (a bouquet made of nothing, a bouquet carrying stock nobody will ever see)
+ * are refused at the write, not discovered at the till.
+ */
+function resolveCompositeShape(
+  kind: ProductKind | undefined,
+  stockMode: ProductStockMode | undefined,
+  fallback: { kind: ProductKind; stock_mode: ProductStockMode } = {
+    kind: 'simple',
+    stock_mode: 'own',
+  }
+): { kind: ProductKind; stock_mode: ProductStockMode } {
+  const resolvedKind = kind ?? fallback.kind;
+  if (resolvedKind !== 'simple' && resolvedKind !== 'composite') {
+    throw new CompositeError(`Unknown product kind: ${String(kind)}`);
+  }
+  if (resolvedKind === 'simple') {
+    if (stockMode === 'derived') {
+      throw new CompositeError('Only a composite product can have derived stock');
+    }
+    return { kind: 'simple', stock_mode: 'own' };
+  }
+  const resolvedMode = stockMode ?? fallback.stock_mode;
+  if (resolvedMode !== 'own' && resolvedMode !== 'derived') {
+    throw new CompositeError(`Unknown stock_mode: ${String(stockMode)}`);
+  }
+  return { kind: 'composite', stock_mode: resolvedMode };
+}
+
+function assertVariantShape(
+  shape: { kind: ProductKind; stock_mode: ProductStockMode },
+  components: ComponentInput[] | undefined,
+  quantity: number
+): void {
+  if (shape.kind === 'simple') {
+    if (components?.length) {
+      throw new CompositeError('Only a composite product can have components');
+    }
+    return;
+  }
+  if (shape.stock_mode === 'derived') {
+    if (!components?.length) {
+      throw new CompositeError('A derived composite needs at least one component');
+    }
+    if (quantity !== 0) {
+      throw new CompositeError(
+        'A derived composite has no stock of its own — its quantity must be 0'
+      );
+    }
+  }
 }
 
 type DbClient = { query: typeof pool.query };
@@ -67,13 +136,28 @@ export async function listProducts(storeId: number) {
   );
 
   const variants = await pool.query(
-    `SELECT v.*, COALESCE(s.quantity, 0) AS quantity
+    `SELECT v.*,
+            -- Same rule as the catalog: a derived composite's quantity is what
+            -- its components allow, not the 0 sitting on its own stock row.
+            CASE
+              WHEN p.kind = 'composite' AND p.stock_mode = 'derived' THEN COALESCE((
+                SELECT MIN(FLOOR(COALESCE(cs.quantity, 0)::numeric / c.quantity))
+                FROM pos_product_components c
+                LEFT JOIN pos_stock cs
+                  ON cs.variant_id = c.component_variant_id AND cs.store_id = c.store_id
+                WHERE c.store_id = v.store_id AND c.variant_id = v.id
+              ), 0)
+              ELSE COALESCE(s.quantity, 0)
+            END::int AS quantity
      FROM pos_variants v
+     JOIN pos_products p ON p.id = v.product_id
      LEFT JOIN pos_stock s ON s.variant_id = v.id
      WHERE v.store_id = $1
      ORDER BY v.product_id, v.label, v.id`,
     [storeId]
   );
+
+  const components = await listComponentsForStore(storeId);
 
   const byProduct = new Map<number, unknown[]>();
   for (const row of variants.rows) {
@@ -93,6 +177,7 @@ export async function listProducts(storeId: number) {
         row.compare_at_cents == null ? null : Number(row.compare_at_cents),
       is_active: row.is_active,
       quantity: Number(row.quantity),
+      components: components.get(Number(row.id)) ?? [],
     });
     byProduct.set(productId, list);
   }
@@ -111,6 +196,8 @@ export async function listProducts(storeId: number) {
       p.created_from_document_id == null ? null : Number(p.created_from_document_id),
     created_at: p.created_at,
     updated_at: p.updated_at,
+    kind: (p.kind === 'composite' ? 'composite' : 'simple') as ProductKind,
+    stock_mode: (p.stock_mode === 'derived' ? 'derived' : 'own') as ProductStockMode,
     tag_ids: tagMap.get(Number(p.id)) ?? [],
     variants: byProduct.get(Number(p.id)) ?? [],
   }));
@@ -130,10 +217,13 @@ export async function createProductInTx(
   if (!input.name?.trim()) throw new Error('Product name is required');
   if (!input.variants?.length) throw new Error('At least one variant is required');
 
+  const shape = resolveCompositeShape(input.kind, input.stock_mode);
+
   const productResult = await client.query(
     `INSERT INTO pos_products
-       (store_id, name, description, image_url, needs_review, created_from_document_id)
-     VALUES ($1, $2, $3, $4, $5, $6)
+       (store_id, name, description, image_url, needs_review, created_from_document_id,
+        kind, stock_mode)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING id`,
     [
       storeId,
@@ -142,6 +232,8 @@ export async function createProductInTx(
       emptyToNull(input.image_url),
       input.needs_review ?? false,
       input.created_from_document_id ?? null,
+      shape.kind,
+      shape.stock_mode,
     ]
   );
   const productId = Number(productResult.rows[0].id);
@@ -154,6 +246,7 @@ export async function createProductInTx(
     }
     const quantity = variant.quantity ?? 0;
     if (quantity < 0) throw new Error('Quantity must be >= 0');
+    assertVariantShape(shape, variant.components, quantity);
 
     const compareAt = normalizeCompareAt(variant.price_cents, variant.compare_at_cents);
     const derived = normalizeVariant(vertical, variant);
@@ -192,6 +285,10 @@ export async function createProductInTx(
         [storeId, variantId, quantity]
       );
     }
+
+    if (shape.kind === 'composite') {
+      await setComponents(client, storeId, variantId, variant.components ?? []);
+    }
   }
 
   return { productId, variantIds };
@@ -212,10 +309,67 @@ export async function createProduct(storeId: number, input: CreateProductInput) 
   }
 }
 
+/**
+ * Reshaping an existing product is where stock can quietly vanish: switching a
+ * product to `derived` hides whatever its own `pos_stock` rows hold, and
+ * switching away from `composite` orphans the compositions. Both are refused
+ * unless the owner has already emptied the thing they would strand.
+ */
+async function resolveProductShapeChange(
+  storeId: number,
+  productId: number,
+  input: { kind?: ProductKind; stock_mode?: ProductStockMode }
+): Promise<{ kind: ProductKind; stock_mode: ProductStockMode }> {
+  // Scalar subqueries, not joins: one variant with two components would appear
+  // twice in a join, doubling `on_hand` and inflating the variant count past
+  // the composed one — so the check would fire on a product that is fine.
+  const current = await pool.query(
+    `SELECT p.kind, p.stock_mode,
+            (SELECT COALESCE(SUM(st.quantity), 0)::int
+               FROM pos_variants v
+               LEFT JOIN pos_stock st ON st.variant_id = v.id
+              WHERE v.product_id = p.id AND v.is_active = TRUE) AS on_hand,
+            (SELECT COUNT(*)::int FROM pos_variants v
+              WHERE v.product_id = p.id AND v.is_active = TRUE) AS variant_count,
+            (SELECT COUNT(DISTINCT c.variant_id)::int
+               FROM pos_product_components c
+               JOIN pos_variants v ON v.id = c.variant_id
+              WHERE v.product_id = p.id AND v.is_active = TRUE) AS composed_variants
+     FROM pos_products p
+     WHERE p.id = $1 AND p.store_id = $2`,
+    [productId, storeId]
+  );
+  if (current.rows.length === 0) throw new Error('Product not found');
+  const row = current.rows[0];
+  const shape = resolveCompositeShape(input.kind, input.stock_mode, {
+    kind: row.kind === 'composite' ? 'composite' : 'simple',
+    stock_mode: row.stock_mode === 'derived' ? 'derived' : 'own',
+  });
+
+  if (shape.stock_mode === 'derived' && Number(row.on_hand) !== 0) {
+    throw new CompositeError(
+      'Sell or write off the remaining stock before switching to derived stock'
+    );
+  }
+  if (shape.kind === 'composite' && shape.stock_mode === 'derived') {
+    if (Number(row.composed_variants) < Number(row.variant_count)) {
+      throw new CompositeError('Every variant of a derived composite needs a composition');
+    }
+  }
+  if (shape.kind === 'simple' && Number(row.composed_variants) > 0) {
+    // Deleting the compositions here would be silent data loss, and they are
+    // exactly the thing that is tedious to re-enter. Make it the owner's call.
+    throw new CompositeError('Clear the composition of every variant before making it simple');
+  }
+  return shape;
+}
+
 export async function updateProduct(
   storeId: number,
   productId: number,
-  input: Partial<Pick<CreateProductInput, 'name' | 'description' | 'image_url'>> & {
+  input: Partial<
+    Pick<CreateProductInput, 'name' | 'description' | 'image_url' | 'kind' | 'stock_mode'>
+  > & {
     is_active?: boolean;
     needs_review?: boolean;
   }
@@ -223,6 +377,14 @@ export async function updateProduct(
   const sets: string[] = ['updated_at = NOW()'];
   const values: unknown[] = [];
   let i = 1;
+
+  if (input.kind !== undefined || input.stock_mode !== undefined) {
+    const shape = await resolveProductShapeChange(storeId, productId, input);
+    sets.push(`kind = $${i++}`);
+    values.push(shape.kind);
+    sets.push(`stock_mode = $${i++}`);
+    values.push(shape.stock_mode);
+  }
 
   if (input.name !== undefined) {
     sets.push(`name = $${i++}`);
@@ -266,7 +428,7 @@ export async function updateProduct(
 
 export async function addVariant(storeId: number, productId: number, variant: VariantInput) {
   const product = await pool.query(
-    `SELECT id FROM pos_products WHERE id = $1 AND store_id = $2`,
+    `SELECT id, kind, stock_mode FROM pos_products WHERE id = $1 AND store_id = $2`,
     [productId, storeId]
   );
   if (product.rows.length === 0) throw new Error('Product not found');
@@ -274,7 +436,9 @@ export async function addVariant(storeId: number, productId: number, variant: Va
     throw new Error('Variant price must be >= 0');
   }
 
+  const shape = resolveCompositeShape(product.rows[0].kind, product.rows[0].stock_mode);
   const quantity = variant.quantity ?? 0;
+  assertVariantShape(shape, variant.components, quantity);
   const compareAt = normalizeCompareAt(variant.price_cents, variant.compare_at_cents);
   const client = await pool.connect();
   try {
@@ -311,6 +475,9 @@ export async function addVariant(storeId: number, productId: number, variant: Va
         [storeId, variantId, quantity]
       );
     }
+    if (shape.kind === 'composite') {
+      await setComponents(client, storeId, variantId, variant.components ?? []);
+    }
     await client.query('COMMIT');
     return getProduct(storeId, productId);
   } catch (error) {
@@ -327,11 +494,25 @@ export async function updateVariant(
   input: Partial<VariantInput> & { is_active?: boolean }
 ) {
   const current = await pool.query(
-    `SELECT * FROM pos_variants WHERE id = $1 AND store_id = $2`,
+    `SELECT v.*, p.kind, p.stock_mode
+     FROM pos_variants v
+     JOIN pos_products p ON p.id = v.product_id
+     WHERE v.id = $1 AND v.store_id = $2`,
     [variantId, storeId]
   );
   if (current.rows.length === 0) throw new Error('Variant not found');
   const row = current.rows[0];
+  const shape = resolveCompositeShape(row.kind, row.stock_mode);
+  if (input.components !== undefined && shape.kind === 'simple') {
+    throw new CompositeError('Only a composite product can have components');
+  }
+  if (
+    input.components !== undefined &&
+    shape.stock_mode === 'derived' &&
+    input.components.length === 0
+  ) {
+    throw new CompositeError('A derived composite needs at least one component');
+  }
 
   const price =
     input.price_cents !== undefined ? input.price_cents : Number(row.price_cents);
@@ -359,36 +540,51 @@ export async function updateVariant(
   // The previous COALESCE form could not express "clear this field": an empty
   // sku/barcode became NULL, which COALESCE then read as "keep the old value",
   // so a SKU could be set but never removed.
-  const result = await pool.query(
-    `UPDATE pos_variants
-     SET
-       attributes = $1::jsonb,
-       label = $2,
-       unit = $3,
-       sku = $4,
-       barcode = $5,
-       price_cents = $6,
-       cost_cents = $7,
-       is_active = $8,
-       compare_at_cents = $9,
-       updated_at = NOW()
-     WHERE id = $10 AND store_id = $11
-     RETURNING product_id`,
-    [
-      JSON.stringify(derived.attributes),
-      derived.label,
-      derived.unit,
-      input.sku === undefined ? (row.sku ?? null) : emptyToNull(input.sku),
-      input.barcode === undefined ? (row.barcode ?? null) : emptyToNull(input.barcode),
-      price,
-      input.cost_cents === undefined ? Number(row.cost_cents) : input.cost_cents,
-      input.is_active === undefined ? row.is_active : input.is_active,
-      compareAt,
-      variantId,
-      storeId,
-    ]
-  );
-  return getProduct(storeId, Number(result.rows[0].product_id));
+  const client = await pool.connect();
+  let productId: number;
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      `UPDATE pos_variants
+       SET
+         attributes = $1::jsonb,
+         label = $2,
+         unit = $3,
+         sku = $4,
+         barcode = $5,
+         price_cents = $6,
+         cost_cents = $7,
+         is_active = $8,
+         compare_at_cents = $9,
+         updated_at = NOW()
+       WHERE id = $10 AND store_id = $11
+       RETURNING product_id`,
+      [
+        JSON.stringify(derived.attributes),
+        derived.label,
+        derived.unit,
+        input.sku === undefined ? (row.sku ?? null) : emptyToNull(input.sku),
+        input.barcode === undefined ? (row.barcode ?? null) : emptyToNull(input.barcode),
+        price,
+        input.cost_cents === undefined ? Number(row.cost_cents) : input.cost_cents,
+        input.is_active === undefined ? row.is_active : input.is_active,
+        compareAt,
+        variantId,
+        storeId,
+      ]
+    );
+    productId = Number(result.rows[0].product_id);
+    if (input.components !== undefined) {
+      await setComponents(client, storeId, variantId, input.components);
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+  return getProduct(storeId, productId);
 }
 
 export async function archiveProduct(storeId: number, productId: number) {
@@ -517,7 +713,18 @@ export async function getCatalog(
        v.barcode,
        v.price_cents,
        v.compare_at_cents,
-       COALESCE(s.quantity, 0) AS quantity,
+       -- A derived composite has no stock of its own: what it can sell is what
+       -- its components allow. An empty composition is 0, never unlimited.
+       CASE
+         WHEN p.kind = 'composite' AND p.stock_mode = 'derived' THEN COALESCE((
+           SELECT MIN(FLOOR(COALESCE(cs.quantity, 0)::numeric / c.quantity))
+           FROM pos_product_components c
+           LEFT JOIN pos_stock cs
+             ON cs.variant_id = c.component_variant_id AND cs.store_id = c.store_id
+           WHERE c.store_id = p.store_id AND c.variant_id = v.id
+         ), 0)
+         ELSE COALESCE(s.quantity, 0)
+       END::int AS quantity,
        p.image_url,
        COALESCE(
          (SELECT array_agg(pt.tag_id) FROM pos_product_tags pt WHERE pt.product_id = p.id),

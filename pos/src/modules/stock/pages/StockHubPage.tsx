@@ -14,6 +14,7 @@ const TYPE_LABEL: Record<string, string> = {
   writeoff: 'Списання',
   adjustment: 'Корекція',
   inventory: 'Інвентаризація',
+  production: 'Виробництво',
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -64,12 +65,13 @@ export function StockHubPage() {
         <h1 className="text-2xl font-semibold mt-1">Огляд залишків</h1>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
         {[
           { to: '/admin/stock/receipt', label: 'Прихід товару', hint: 'Receive' },
           { to: '/admin/stock/writeoff', label: 'Списання', hint: 'Damage / loss' },
           { to: '/admin/stock/adjust', label: 'Корекція', hint: 'Adjust' },
           { to: '/admin/stock/inventory', label: 'Інвентаризація', hint: 'Stock count' },
+          { to: '/admin/stock/production', label: 'Виробництво', hint: 'Assemble' },
         ].map((a) => (
           <Link
             key={a.to}

@@ -227,6 +227,34 @@ export interface CatalogItem {
   tag_ids?: number[];
 }
 
+/** `composite` is a bouquet or a tech card, assembled from other variants. */
+export type ProductKind = 'simple' | 'composite';
+
+/**
+ * Where a composite's stock lives: `own` = assembled in advance and counted on
+ * its own row, `derived` = assembled when it sells, so its availability is the
+ * components'. Meaningless for a simple product, which is always `own`.
+ */
+export type ProductStockMode = 'own' | 'derived';
+
+/** One line of a composite variant's composition. */
+export interface ProductComponent {
+  id: number;
+  component_variant_id: number;
+  /** In the component's own unit. */
+  quantity: number;
+  sort_order: number;
+  product_name: string;
+  label: string;
+  unit: string;
+}
+
+/** What a composition write sends — the server resolves the rest. */
+export interface ProductComponentInput {
+  component_variant_id: number;
+  quantity: number;
+}
+
 export interface ProductVariant {
   id: number;
   product_id: number;
@@ -239,7 +267,12 @@ export interface ProductVariant {
   cost_cents: number;
   compare_at_cents?: number | null;
   is_active: boolean;
+  /**
+   * For a `derived` composite this is what the components allow, not a stored
+   * number — the server computes it. Absent on an older cached payload.
+   */
   quantity: number;
+  components?: ProductComponent[];
 }
 
 export interface Product {
@@ -250,6 +283,9 @@ export interface Product {
   is_active: boolean;
   needs_review?: boolean;
   created_from_document_id?: number | null;
+  /** Optional: an older cached payload predates composites. */
+  kind?: ProductKind;
+  stock_mode?: ProductStockMode;
   tag_ids: number[];
   variants: ProductVariant[];
 }
@@ -609,7 +645,13 @@ export interface StaffMember {
   has_pin: boolean;
 }
 
-export type StockDocumentType = 'receipt' | 'writeoff' | 'adjustment' | 'inventory';
+export type StockDocumentType =
+  | 'receipt'
+  | 'writeoff'
+  | 'adjustment'
+  | 'inventory'
+  /** Assembles a composite from its components. */
+  | 'production';
 export type StockDocumentStatus = 'draft' | 'posted' | 'voided' | 'reversed';
 
 export interface StockDocumentLine {

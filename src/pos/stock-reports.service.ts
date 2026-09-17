@@ -65,6 +65,10 @@ export async function listOnHand(storeId: number): Promise<OnHandRow[]> {
      JOIN pos_variants v ON v.id = s.variant_id
      JOIN pos_products p ON p.id = v.product_id
      WHERE s.store_id = $1 AND v.is_active = TRUE AND p.is_active = TRUE
+       -- A derived composite is not physically on a shelf; its components are.
+       -- Its own row sits at 0 forever, so listing it would only add noise to
+       -- the sheet a stocktake is counted against.
+       AND NOT (p.kind = 'composite' AND p.stock_mode = 'derived')
      ORDER BY p.name ASC, v.label ASC, v.id ASC`,
     [storeId]
   );

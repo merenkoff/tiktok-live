@@ -15,6 +15,9 @@ import type {
   PosCustomer,
   PosTag,
   Product,
+  ProductComponentInput,
+  ProductKind,
+  ProductStockMode,
   RefundLineInput,
   SaleDetail,
   SalePaymentInput,
@@ -214,6 +217,8 @@ class PosApi {
     name: string;
     description?: string;
     image_url?: string | null;
+    kind?: ProductKind;
+    stock_mode?: ProductStockMode;
     variants: Array<{
       attributes?: AttributeValues;
       unit?: string;
@@ -221,6 +226,7 @@ class PosApi {
       barcode?: string;
       price_cents: number;
       quantity?: number;
+      components?: ProductComponentInput[];
     }>;
   }): Promise<Product> {
     const { data } = await this.client.post<Product>('/products', payload);
@@ -234,6 +240,8 @@ class PosApi {
       description: string;
       image_url: string | null;
       is_active: boolean;
+      kind: ProductKind;
+      stock_mode: ProductStockMode;
     }>
   ): Promise<Product> {
     const { data } = await this.client.patch<Product>(`/products/${id}`, payload);
@@ -259,6 +267,7 @@ class PosApi {
       price_cents: number;
       quantity?: number;
       compare_at_cents?: number | null;
+      components?: ProductComponentInput[];
     }
   ): Promise<Product> {
     const { data } = await this.client.post<Product>(`/products/${productId}/variants`, payload);
@@ -276,6 +285,8 @@ class PosApi {
       price_cents: number;
       compare_at_cents: number | null;
       is_active: boolean;
+      /** Replaces the composition wholesale, like `attributes`. */
+      components: ProductComponentInput[];
     }>
   ): Promise<Product> {
     const { data } = await this.client.patch<Product>(`/variants/${id}`, payload);

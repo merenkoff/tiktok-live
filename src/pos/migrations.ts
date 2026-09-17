@@ -58,6 +58,12 @@ export const POS_MIGRATIONS = [
   '033_pos_store_nav_overrides.sql',
   '034_pos_store_vertical.sql',
   '035_pos_variant_attributes.sql',
+  // 036_pos_drop_variant_size_color.sql is deliberately absent: it drops the
+  // columns a 1.x backend still selects, so it belongs in a LATER release than
+  // 035, not the same one. Register it there. The runner has no tracking table
+  // and re-applies every file in order, so inserting it above 037 later is safe.
+  '037_pos_product_components.sql',
+  '038_pos_production_documents.sql',
 ] as const;
 
 export function readMigration(file: string): string {

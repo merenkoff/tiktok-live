@@ -5,6 +5,7 @@
 // src/pos/stock.service.ts
 
 import { pool } from '../db.js';
+import { assertStockable } from './composites.service.js';
 import type { StockReason } from './types.js';
 
 export async function adjustStock(params: {
@@ -19,6 +20,7 @@ export async function adjustStock(params: {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    await assertStockable(client, params.storeId, params.variantId);
     const next = await applyStockDelta(client, {
       storeId: params.storeId,
       variantId: params.variantId,
@@ -106,6 +108,9 @@ export async function listLowStock(storeId: number, threshold = 3) {
      JOIN pos_variants v ON v.id = s.variant_id
      JOIN pos_products p ON p.id = v.product_id
      WHERE s.store_id = $1 AND s.quantity <= $2 AND v.is_active = TRUE
+       -- Without this every derived composite would sit at 0 and permanently
+       -- top the low-stock list, drowning the components that actually ran out.
+       AND NOT (p.kind = 'composite' AND p.stock_mode = 'derived')
      ORDER BY s.quantity ASC, p.name ASC`,
     [storeId, threshold]
   );
