@@ -65,6 +65,12 @@ describe.skipIf(!hasDb)('POS fiscal ledger and reconciliation', () => {
     resetRateLimiter();
     await pool.query(`DELETE FROM pos_fiscal_receipts WHERE store_id = $1`, [store.storeId]);
     await pool.query(`DELETE FROM pos_fiscal_shifts WHERE store_id = $1`, [store.storeId]);
+    // Dropping the ledger turns every sale of the previous test into an orphan,
+    // and the orphan sweep counts them. Only the sale a test makes itself is
+    // that test's subject.
+    await pool.query(`UPDATE pos_sales SET fiscal_status = 'none' WHERE store_id = $1`, [
+      store.storeId,
+    ]);
     product = await seedProduct(store.storeId, { priceCents: 10000, quantity: 50 });
     await updateFiscalSettings(store.storeId, {
       enabled: true,
@@ -200,7 +206,13 @@ describe.skipIf(!hasDb)('POS fiscal ledger and reconciliation', () => {
     const sold = await sell();
     const saleId = sold.json().id;
     await pool.query(`DELETE FROM pos_fiscal_receipts WHERE sale_id = $1`, [saleId]);
-    await pool.query(`UPDATE pos_sales SET fiscal_status = 'pending' WHERE id = $1`, [saleId]);
+    // Past the grace the sweep gives a checkout still in flight — see the test
+    // below; the crash this simulates happened minutes ago, not this second.
+    await pool.query(
+      `UPDATE pos_sales SET fiscal_status = 'pending', created_at = NOW() - interval '5 minutes'
+       WHERE id = $1`,
+      [saleId]
+    );
 
     // No live shift the sale belongs to any more.
     await pool.query(`UPDATE pos_fiscal_shifts SET status = 'closed' WHERE store_id = $1`, [
@@ -218,12 +230,87 @@ describe.skipIf(!hasDb)('POS fiscal ledger and reconciliation', () => {
     const sold = await sell();
     const saleId = sold.json().id;
     await pool.query(`DELETE FROM pos_fiscal_receipts WHERE sale_id = $1`, [saleId]);
-    await pool.query(`UPDATE pos_sales SET fiscal_status = 'pending' WHERE id = $1`, [saleId]);
+    // The crash is minutes old — past the grace the sweep gives a checkout
+    // still in flight — and the shift it belongs to opened before it.
+    await pool.query(
+      `UPDATE pos_sales SET fiscal_status = 'pending', created_at = NOW() - interval '5 minutes'
+       WHERE id = $1`,
+      [saleId]
+    );
+    await pool.query(
+      `UPDATE pos_fiscal_shifts SET opened_at = NOW() - interval '10 minutes' WHERE store_id = $1`,
+      [store.storeId]
+    );
 
     const result = await fiscalService.retryPendingFiscalDocs({ storeId: store.storeId });
     expect(result.adopted).toBe(1);
     const adopted = (await rows()).find((r) => Number(r.sale_id) === saleId);
     expect(adopted).toBeTruthy();
+  });
+
+  it('leaves a checkout that is still in flight alone', async () => {
+    // `completeSale` commits `fiscal_status='pending'` and the ledger INSERT is
+    // a separate transaction, so for the length of one provider call a
+    // perfectly healthy sale is indistinguishable from an orphan. The cron
+    // fires every two minutes and would park a live receipt as `failed` right
+    // under the cashier's hands — with the sale already rung and the customer
+    // waiting for the printout.
+    await warm();
+    const sold = await sell();
+    const saleId = sold.json().id;
+    await pool.query(`DELETE FROM pos_fiscal_receipts WHERE sale_id = $1`, [saleId]);
+    await pool.query(`UPDATE pos_sales SET fiscal_status = 'pending' WHERE id = $1`, [saleId]);
+    await pool.query(`UPDATE pos_fiscal_shifts SET status = 'closed' WHERE store_id = $1`, [
+      store.storeId,
+    ]);
+    resetRuntime();
+
+    await fiscalService.retryPendingFiscalDocs({ storeId: store.storeId });
+    expect((await saleRow(saleId)).fiscal_status).toBe('pending');
+
+    // Age it past the grace and the very same pass parks it — the guard is a
+    // delay, not an exemption.
+    await pool.query(`UPDATE pos_sales SET created_at = NOW() - interval '5 minutes' WHERE id = $1`, [
+      saleId,
+    ]);
+    await fiscalService.retryPendingFiscalDocs({ storeId: store.storeId });
+    expect((await saleRow(saleId)).fiscal_status).toBe('failed');
+  });
+
+  it('never reaches into another store when the caller named one', async () => {
+    // This is what turned CI red: the orphan sweep ran unscoped even when
+    // `retryPendingFiscalDocs` was given a store, so one test file's retry pass
+    // marked another file's in-flight sale `failed` — the sale, its ledger row
+    // and its offline session all said `pending`, and only the denormalised
+    // column disagreed. `claimDueDocuments` has taken a store id for exactly
+    // this reason since it was written; the sweeps never got it.
+    const other = await createTestStore('rfledgx');
+    try {
+      const otherProduct = await seedProduct(other.storeId, { priceCents: 5000, quantity: 10 });
+      const sold = await app.inject({
+        method: 'POST',
+        url: '/api/pos/sales/complete',
+        headers: auth(other.sellerToken),
+        payload: {
+          items: [{ variant_id: otherProduct.variantId, quantity: 1 }],
+          payments: [{ method: 'cash', amount_cents: 5000 }],
+        },
+      });
+      const otherSaleId = sold.json().id;
+      // Old enough to be a real orphan, and with no fiscal settings of its own
+      // — so an unscoped sweep resolves no context and parks it as `failed`.
+      await pool.query(
+        `UPDATE pos_sales SET fiscal_status = 'pending', created_at = NOW() - interval '5 minutes'
+         WHERE id = $1`,
+        [otherSaleId]
+      );
+
+      await fiscalService.retryPendingFiscalDocs({ storeId: store.storeId });
+
+      expect((await saleRow(otherSaleId)).fiscal_status).toBe('pending');
+    } finally {
+      await dropTestStore(other.storeId);
+    }
   });
 
   // ── Sweeps ────────────────────────────────────────────────────────────────
@@ -241,7 +328,7 @@ describe.skipIf(!hasDb)('POS fiscal ledger and reconciliation', () => {
       [store.storeId]
     );
 
-    const swept = await ledger.abandonStaleDocs(fiscalService.STALE_DOC_AGE_MS);
+    const swept = await ledger.abandonStaleDocs(fiscalService.STALE_DOC_AGE_MS, store.storeId);
     expect(swept).toBe(1);
     const after = (await rows())[0];
     expect(after.status).toBe('abandoned');

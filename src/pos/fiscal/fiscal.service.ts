@@ -79,6 +79,21 @@ export const FISCAL_BUDGET_MS = 9_000;
 /** Documents older than this are swept up even if no shift close collected them. */
 export const STALE_DOC_AGE_MS = SHIFT_MAX_AGE_MS + 60 * 60 * 1000;
 
+/**
+ * How long a sale is left alone before it counts as orphaned.
+ *
+ * `completeSale` commits `fiscal_status='pending'` and the ledger INSERT is a
+ * separate transaction, so for the length of one checkout a perfectly healthy
+ * sale looks exactly like a sale nothing will ever fiscalise. Adopting it there
+ * parks a live receipt as `failed` or opens a second document for it — under
+ * the cashier's hands, while the provider call is still in flight.
+ *
+ * Comfortably longer than what a checkout can take (`FISCAL_BUDGET_MS` plus
+ * `RECEIPT_TEXT_BUDGET_MS`) and shorter than the cron's own two-minute tick, so
+ * a genuine orphan waits one extra pass at most.
+ */
+const ORPHAN_GRACE_MS = 60_000;
+
 /** The cron's per-tick batch. Small: it competes with live checkouts. */
 const RETRY_BATCH = 20;
 
@@ -1008,10 +1023,10 @@ export async function retryPendingFiscalDocs(opts: { storeId?: number } = {}): P
     const replay = await replayOfflineSessions(opts);
 
     const abandoned =
-      (await ledger.abandonVoidedSaleDocs()) +
-      (await ledger.abandonStaleDocs(STALE_DOC_AGE_MS)) +
+      (await ledger.abandonVoidedSaleDocs(opts.storeId)) +
+      (await ledger.abandonStaleDocs(STALE_DOC_AGE_MS, opts.storeId)) +
       replay.abandoned;
-    const adopted = await adoptOrphanedSales();
+    const adopted = await adoptOrphanedSales(opts.storeId);
 
     const claimed = await ledger.claimDueDocuments(RETRY_BATCH, opts.storeId);
     let done = 0;
@@ -1392,8 +1407,13 @@ async function retryOne(gate: FiscalGate, row: ledger.FiscalReceiptRow): Promise
  * un-fiscalised revenue" the projection exists to prevent, reintroduced one
  * layer up. Adopt only inside a live shift the sale belongs to; otherwise mark
  * it failed-and-parked so it stops being rescanned and starts being visible.
+ *
+ * Two things it must not touch: a sale still being fiscalised right now
+ * (`ORPHAN_GRACE_MS` — the two commits are not one), and another store's sales
+ * when the caller named a store. The cron names none and still sweeps
+ * everything, exactly as before.
  */
-async function adoptOrphanedSales(limit = 20): Promise<number> {
+async function adoptOrphanedSales(storeId?: number, limit = 20): Promise<number> {
   const orphans = await pool.query(
     `SELECT s.id, s.store_id, s.created_at
      FROM pos_sales s
@@ -1401,9 +1421,13 @@ async function adoptOrphanedSales(limit = 20): Promise<number> {
      WHERE s.fiscal_status IN ('pending', 'failed')
        AND s.status <> 'voided'
        AND r.id IS NULL
+       -- A checkout in flight is not an orphan.
+       AND s.created_at < NOW() - ($2 || ' milliseconds')::interval
+       -- One store only when asked (tests share a database across workers).
+       AND ($3::bigint IS NULL OR s.store_id = $3::bigint)
      ORDER BY s.created_at ASC
      LIMIT $1`,
-    [limit]
+    [limit, String(ORPHAN_GRACE_MS), storeId ?? null]
   );
 
   let adopted = 0;

@@ -494,7 +494,7 @@ export async function abandonShiftDocs(shiftId: number): Promise<number> {
  * hours for the provider to come back, and the session (36h limit, `stuck`)
  * bounds their life instead.
  */
-export async function abandonStaleDocs(olderThanMs: number): Promise<number> {
+export async function abandonStaleDocs(olderThanMs: number, storeId?: number): Promise<number> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -507,12 +507,14 @@ export async function abandonStaleDocs(olderThanMs: number): Promise<number> {
          updated_at = NOW()
        WHERE r.status IN ('pending', 'sent', 'failed')
          AND r.created_at < NOW() - ($1 || ' milliseconds')::interval
+         -- One store only when asked (tests share a database across workers).
+         AND ($2::bigint IS NULL OR r.store_id = $2::bigint)
          AND NOT EXISTS (
            SELECT 1 FROM pos_fiscal_offline_sessions os
            WHERE os.id = r.offline_session_id AND os.status IN ('open', 'replaying')
          )
        RETURNING r.doc_type, r.sale_id, r.refund_id`,
-      [String(olderThanMs)]
+      [String(olderThanMs), storeId ?? null]
     );
     for (const row of rows.rows) {
       await setProjection(client, row, 'abandoned');
@@ -535,7 +537,7 @@ export async function abandonStaleDocs(olderThanMs: number): Promise<number> {
  * perfectly claimable `failed` row — and two minutes later the cron would send
  * the tax service a receipt for a sale whose stock has already been returned.
  */
-export async function abandonVoidedSaleDocs(): Promise<number> {
+export async function abandonVoidedSaleDocs(storeId?: number): Promise<number> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -551,8 +553,10 @@ export async function abandonVoidedSaleDocs(): Promise<number> {
          AND r.doc_type = 'sale'
          AND r.status IN ('pending', 'sent', 'failed')
          AND s.status = 'voided'
+         -- One store only when asked (tests share a database across workers).
+         AND ($1::bigint IS NULL OR r.store_id = $1::bigint)
        RETURNING r.doc_type, r.sale_id, r.refund_id`,
-      []
+      [storeId ?? null]
     );
     for (const row of rows.rows) {
       await setProjection(client, row, 'abandoned');
