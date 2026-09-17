@@ -5,6 +5,7 @@
 import type { FastifyInstance } from 'fastify';
 import { ensureModule } from '../core/auth.js';
 import * as benchService from '../bench.service.js';
+import { saveProductImage } from '../uploads.service.js';
 import * as stockService from '../stock.service.js';
 import * as stockDocumentsService from '../stock-documents.service.js';
 import * as stockReportsService from '../stock-reports.service.js';
@@ -128,6 +129,7 @@ export function registerStockRoutes(fastify: FastifyInstance): void {
       client_uuid?: string;
       name?: string | null;
       price_cents?: number | null;
+      image_url?: string | null;
       note?: string | null;
       components?: Array<{ component_variant_id?: number; quantity?: number }>;
     };
@@ -138,6 +140,7 @@ export function registerStockRoutes(fastify: FastifyInstance): void {
         clientUuid: String(body.client_uuid ?? ''),
         name: body.name ?? null,
         priceCents: body.price_cents ?? null,
+        imageUrl: body.image_url ?? null,
         note: body.note ?? null,
         components: (body.components ?? []).map((c) => ({
           component_variant_id: Number(c?.component_variant_id),
@@ -173,6 +176,45 @@ export function registerStockRoutes(fastify: FastifyInstance): void {
         note: body.note ?? null,
       });
       return reply.code(result.created ? 201 : 200).send(result);
+    } catch (error) {
+      return reply.code(400).send({ error: errorMessage(error) });
+    }
+  });
+
+  // A photo of the bouquet, shot at the counter. Staff level, because the
+  // florist is the one holding it — `/uploads` is owner-only and accepts a
+  // picture for any product in the catalogue, which is not what this is.
+  //
+  // It only stores the file and hands back the path: in the main flow the card
+  // does not exist yet (the photo is taken while the bouquet is still on the
+  // bench), so there is nothing to attach it to. The same
+  // `saveProductImage` guards apply — MIME allowlist, 5 MB, partial file
+  // cleaned up on failure.
+  fastify.post('/bench/photo', async (request, reply) => {
+    const auth = await ensureModule(request, reply, 'stock');
+    if (!auth) return;
+    try {
+      const file = await request.file();
+      if (!file) return reply.code(400).send({ error: 'file required' });
+      const saved = await saveProductImage(file);
+      return reply.code(201).send(saved);
+    } catch (error) {
+      return reply.code(400).send({ error: errorMessage(error) });
+    }
+  });
+
+  // …and attaching one to a bouquet already in the window, for the florist who
+  // comes back to it. `one_off` only, like the write-off above.
+  fastify.post('/bench/showcase/photo', async (request, reply) => {
+    const auth = await ensureModule(request, reply, 'stock');
+    if (!auth) return;
+    const body = request.body as { variant_id?: number; image_url?: string };
+    try {
+      return await benchService.setShowcasePhoto({
+        storeId: auth.storeId,
+        variantId: Number(body.variant_id),
+        imageUrl: String(body.image_url ?? ''),
+      });
     } catch (error) {
       return reply.code(400).send({ error: errorMessage(error) });
     }

@@ -116,6 +116,7 @@ export function FloristBench({
   async function makeForShowcase(input: {
     name: string | null;
     priceCents: number | null;
+    imageUrl: string | null;
     print: boolean;
   }): Promise<void> {
     if (!showcase) return;
@@ -133,6 +134,7 @@ export function FloristBench({
         })),
         name: input.name,
         price_cents: input.priceCents,
+        image_url: input.imageUrl,
       });
 
       if (input.print) {

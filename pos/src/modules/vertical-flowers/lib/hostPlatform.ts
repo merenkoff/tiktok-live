@@ -42,6 +42,7 @@ export const REQUIRED_HOST_API = [
   // falling back cleanly at load time.
   'buildPriceTags',
   'triggerPrint',
+  'assetUrl',
 ] as const;
 
 /** The host shell is older than this module — it lacks part of the contract. */

@@ -19,8 +19,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Flower2, Trash2 } from 'lucide-react';
+import { Camera, Flower2, Trash2 } from 'lucide-react';
 import { api, assetUrl, cashierApi, formatUah, useVertical } from '@pos/platform';
+import { BouquetPhoto } from '../bench/BouquetPhoto';
 import type { CatalogItem } from '@pos/platform';
 
 type Reason = 'damaged' | 'gift';
@@ -35,6 +36,7 @@ export default function ShowcasePage() {
   const [rows, setRows] = useState<CatalogItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<CatalogItem | null>(null);
+  const [shooting, setShooting] = useState<CatalogItem | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -61,6 +63,20 @@ export default function ShowcasePage() {
     () => (rows ?? []).filter((item) => item.one_off && item.quantity > 0),
     [rows]
   );
+
+  async function attachPhoto(item: CatalogItem, imageUrl: string): Promise<void> {
+    setBusy(true);
+    try {
+      await api.setShowcasePhoto({ variant_id: item.variant_id, image_url: imageUrl });
+      setShooting(null);
+      await load();
+    } catch (err) {
+      const sent = (err as { response?: { data?: { error?: string } } }).response?.data?.error;
+      setError(sent || 'Не вдалося зберегти фото');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function writeOff(item: CatalogItem, reason: Reason): Promise<void> {
     setBusy(true);
@@ -126,15 +142,31 @@ export default function ShowcasePage() {
             className="rounded-sq border border-sq-divider bg-sq-surface p-3 flex items-center gap-3"
             data-testid="showcase-row"
           >
-            <div className="w-14 h-14 rounded-sq bg-sq-empty overflow-hidden shrink-0">
-              {assetUrl(item.image_url) && (
+            {/* The florist who tied one in a hurry comes back to it here — the
+                photo is what lets a cashier pick it out of a window holding
+                two similar bouquets when the tag has come unstuck. */}
+            <button
+              type="button"
+              onClick={() => {
+                setError(null);
+                setShooting(item);
+              }}
+              className="w-14 h-14 rounded-sq bg-sq-empty overflow-hidden shrink-0 grid place-items-center"
+              aria-label={
+                item.image_url ? `Змінити фото: ${item.product_name}` : `Додати фото: ${item.product_name}`
+              }
+              data-testid="showcase-photo"
+            >
+              {assetUrl(item.image_url) ? (
                 <img
                   src={assetUrl(item.image_url) ?? ''}
                   alt=""
                   className="w-full h-full object-cover"
                 />
+              ) : (
+                <Camera size={18} className="text-sq-muted" />
               )}
-            </div>
+            </button>
             <div className="min-w-0 flex-1">
               <p className="font-medium truncate">{item.product_name}</p>
               <p className="text-sm text-sq-secondary">{formatUah(item.price_cents)}</p>
@@ -161,6 +193,40 @@ export default function ShowcasePage() {
           </li>
         ))}
       </ul>
+
+      {shooting && (
+        <div className="fixed inset-0 z-50 bg-black/40 grid place-items-end md:place-items-center p-4">
+          <div
+            className="bg-white rounded-sq w-full max-w-sm overflow-hidden animate-fade-up shadow-lg"
+            data-testid="photo-dialog"
+          >
+            <div className="px-4 py-3.5 border-b border-sq-divider">
+              <h3 className="font-semibold">Фото букета</h3>
+              <p className="text-sm text-sq-secondary truncate mt-0.5">
+                {shooting.product_name}
+              </p>
+            </div>
+            <div className="p-4 space-y-3">
+              <BouquetPhoto
+                value={shooting.image_url}
+                onChange={(url) => {
+                  if (url) void attachPhoto(shooting, url);
+                  else setShooting(null);
+                }}
+                disabled={busy}
+              />
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setShooting(null)}
+                className="w-full min-h-12 rounded-sq text-sq-secondary disabled:opacity-50"
+              >
+                Закрити
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirming && (
         <div className="fixed inset-0 z-50 bg-black/40 grid place-items-end md:place-items-center p-4">

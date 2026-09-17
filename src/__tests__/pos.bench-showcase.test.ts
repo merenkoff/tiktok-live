@@ -17,7 +17,7 @@ import {
   seedProduct,
   type TestStore,
 } from './helpers/pos-fixtures.js';
-import { assembleForShowcase, writeOffShowcase } from '../pos/bench.service.js';
+import { assembleForShowcase, setShowcasePhoto, writeOffShowcase } from '../pos/bench.service.js';
 import { completeSale } from '../pos/sales.service.js';
 import { createProduct, getCatalog } from '../pos/products.service.js';
 import { reverseDocument } from '../pos/stock-documents.service.js';
@@ -619,6 +619,120 @@ describe.skipIf(!hasDb)('POS florist bench — assembling for the showcase', () 
       });
       expect(stem.statusCode).toBe(400);
       expect(stem.json().error).toMatch(/лише букет із вітрини/);
+    });
+  });
+
+  describe('the bouquet\'s photo', () => {
+    async function imageOf(productId: number): Promise<string | null> {
+      const row = await pool.query(`SELECT image_url FROM pos_products WHERE id = $1`, [productId]);
+      return row.rows[0].image_url;
+    }
+
+    it('rides along when the photo was taken on the bench', async () => {
+      const made = await assembleForShowcase({
+        storeId,
+        staffId,
+        clientUuid: randomUUID(),
+        components: bouquet(),
+        imageUrl: '/pos-uploads/abc-123.jpg',
+      });
+
+      expect(await imageOf(made.product_id)).toBe('/pos-uploads/abc-123.jpg');
+    });
+
+    it('is optional — a bouquet still has its printed tag', async () => {
+      const made = await assembleForShowcase({
+        storeId,
+        staffId,
+        clientUuid: randomUUID(),
+        components: bouquet(),
+      });
+
+      expect(await imageOf(made.product_id)).toBeNull();
+    });
+
+    it('can be added afterwards, from the window list', async () => {
+      const made = await assembleForShowcase({
+        storeId,
+        staffId,
+        clientUuid: randomUUID(),
+        components: bouquet(),
+      });
+
+      await setShowcasePhoto({
+        storeId,
+        variantId: made.variant_id,
+        imageUrl: '/pos-uploads/later.png',
+      });
+
+      expect(await imageOf(made.product_id)).toBe('/pos-uploads/later.png');
+    });
+
+    it('refuses a catalogue card — the till may not repaint the catalogue', async () => {
+      const product = await createProduct(storeId, {
+        name: 'Троянда в каталозі',
+        variants: [{ attributes: {}, price_cents: 9000, quantity: 5 }],
+      });
+      const variantId = (product!.variants[0] as { id: number }).id;
+
+      await expect(
+        setShowcasePhoto({ storeId, variantId, imageUrl: '/pos-uploads/x.jpg' })
+      ).rejects.toThrow(/лише букету з вітрини/);
+      expect(await imageOf(product!.id)).toBeNull();
+    });
+
+    it('refuses a link this backend did not issue', async () => {
+      // A till that could point a card at any URL on the internet is a
+      // stored-content hole dressed up as a convenience.
+      const made = await assembleForShowcase({
+        storeId,
+        staffId,
+        clientUuid: randomUUID(),
+        components: bouquet(),
+      });
+
+      for (const bad of [
+        'https://evil.example/x.jpg',
+        '/pos-uploads/../../etc/passwd',
+        'javascript:alert(1)',
+        '',
+      ]) {
+        await expect(
+          setShowcasePhoto({ storeId, variantId: made.variant_id, imageUrl: bad })
+        ).rejects.toThrow(/Некоректне посилання/);
+      }
+      expect(await imageOf(made.product_id)).toBeNull();
+    });
+
+    it('is staff-level over the wire, and still refuses a catalogue card', async () => {
+      const made = await assembleForShowcase({
+        storeId,
+        staffId,
+        clientUuid: randomUUID(),
+        components: bouquet(),
+      });
+
+      const ok = await app.inject({
+        method: 'POST',
+        url: '/api/pos/bench/showcase/photo',
+        headers: auth(store.sellerToken),
+        payload: { variant_id: made.variant_id, image_url: '/pos-uploads/ok.webp' },
+      });
+      expect(ok.statusCode).toBe(200);
+      expect(await imageOf(made.product_id)).toBe('/pos-uploads/ok.webp');
+
+      const stem = await app.inject({
+        method: 'POST',
+        url: '/api/pos/bench/showcase/photo',
+        headers: auth(store.sellerToken),
+        payload: { variant_id: roseId, image_url: '/pos-uploads/ok.webp' },
+      });
+      expect(stem.statusCode).toBe(400);
+    });
+
+    it('needs a session to upload one at all', async () => {
+      const res = await app.inject({ method: 'POST', url: '/api/pos/bench/photo' });
+      expect(res.statusCode).toBe(401);
     });
   });
 });
