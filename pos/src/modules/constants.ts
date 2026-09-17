@@ -5,7 +5,15 @@
 import type { ModuleId } from './types';
 
 /** Always available — never stored, never toggleable. Mirrors backend `CORE_MODULE_IDS`. */
-export const CORE_MODULE_IDS: readonly ModuleId[] = ['catalog-checkout', 'settings', 'hardware'];
+export const CORE_MODULE_IDS: readonly ModuleId[] = [
+  'catalog-checkout',
+  'settings',
+  'hardware',
+  // The bundled clothing catalog: the sell screen's fallback when a store's
+  // vertical module is missing, not downloaded yet or fails to render, so it
+  // can never be switched off. See TechDocs/POS_VERTICALS.md.
+  'vertical-clothing',
+];
 
 /**
  * The set a store gets when it has never configured `enabled_modules` (fresh

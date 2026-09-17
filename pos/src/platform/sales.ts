@@ -10,3 +10,8 @@ export type { LocalSaleRow } from '../offline/db';
 // version. Carries the REFUND's fiscal result, which must never be folded into
 // the sale row it accompanies.
 export type { RefundedSaleRow } from '../offline/repository';
+// The browsing half of the sell screen — tags, folders, search, scanning — so a
+// vertical module renders its own catalog without reimplementing navigation or
+// the offline-aware fetch.
+export { useSalesCatalog } from '../hooks/useSalesCatalog';
+export type { SalesCatalog } from '../hooks/useSalesCatalog';

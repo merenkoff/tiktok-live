@@ -13,7 +13,14 @@ import type { ModuleId } from './types';
 
 describe('module id sets', () => {
   it('pins the core set', () => {
-    expect([...CORE_MODULE_IDS]).toEqual(['catalog-checkout', 'settings', 'hardware']);
+    expect([...CORE_MODULE_IDS]).toEqual([
+      'catalog-checkout',
+      'settings',
+      'hardware',
+      // The sell screen's fallback catalog: a store must never be able to end
+      // up without one. See TechDocs/POS_VERTICALS.md.
+      'vertical-clothing',
+    ]);
   });
 
   it('pins the default-on set', () => {

@@ -23,6 +23,7 @@ export type { ModuleOfflineHooks };
  */
 export type ModuleId =
   | 'catalog-checkout'
+  | 'vertical-clothing'
   | 'returns'
   | 'customers'
   | 'products'
@@ -91,6 +92,33 @@ export interface NavItem {
   visible?: (ctx: NavCtx) => boolean;
 }
 
+export interface SalesCatalogProps {
+  /**
+   * False while the frame's payment modal, mobile cart or success screen owns
+   * the screen. The catalog releases the scanner focus and stops reacting to
+   * wedge input — a scan landing behind an opaque modal rings up an item
+   * nobody can see.
+   */
+  active: boolean;
+  /**
+   * Bumped by the frame after every completed sale, every kept-but-unfiscalised
+   * sale and every cancelled receipt. The catalog re-reads stock and keeps its
+   * own tag and search state, so the cashier stays where they were.
+   */
+  stockEpoch: number;
+}
+
+/**
+ * What a sales-vertical module contributes to the sell screen.
+ *
+ * The analogue of `offline` below: the module does not register itself, it is
+ * data the host reads. The frame (cart, payment, ПРРО, receipt) stays in the
+ * host — only the browsing half is the vertical's.
+ */
+export interface ModuleSalesSlot {
+  Catalog: ComponentType<SalesCatalogProps> | LazyExoticComponent<ComponentType<SalesCatalogProps>>;
+}
+
 export interface ModuleDescriptor {
   id: ModuleId;
   /** Shown in the Settings "Модулі магазину" checklist. */
@@ -119,6 +147,12 @@ export interface ModuleDescriptor {
    * the module never touches the registry itself.
    */
   offline?: ModuleOfflineHooks;
+  /**
+   * Set by a `vertical-*` module: the catalog half of `/register`. The host
+   * renders the one matching `store.vertical`, falling back to the bundled
+   * clothing catalog — see `modules/verticals.ts`.
+   */
+  sales?: ModuleSalesSlot;
   routes: RouteDef[];
   nav: NavItem[];
 }

@@ -5,3 +5,4 @@
 // Domain types shared across modules. `src/types.ts` is types-only, so this is
 // a pure compile-time re-export.
 export type * from '../types';
+export type { SalesCatalogProps, ModuleSalesSlot } from '../modules/types';

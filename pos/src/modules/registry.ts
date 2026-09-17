@@ -27,6 +27,7 @@ import { POS_APP_VERSION, POS_API_CLIENT_VERSION } from '../platform/version';
 // to the shared externalised chunk, silently reintroducing the bug above.
 import { setAppliedRemotes } from '@pos/platform';
 import { catalogCheckoutModule } from './catalog-checkout/manifest';
+import { verticalClothingModule } from './vertical-clothing/manifest';
 import { returnsModule } from './returns/manifest';
 import { customersModule } from './customers/manifest';
 import { productsModule } from './products/manifest';
@@ -61,6 +62,7 @@ export function injectModuleStyle(moduleId: string, css: string | undefined): vo
 
 export const MODULES: ModuleDescriptor[] = [
   catalogCheckoutModule,
+  verticalClothingModule,
   returnsModule,
   customersModule,
   productsModule,

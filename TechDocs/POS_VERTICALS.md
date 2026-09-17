@@ -126,8 +126,8 @@ VerticalDefinition {
 |---|---|---|---|
 | 1 | Ідентичність вертикалі | `034`, реєстр `src/pos/verticals`, `assertSingleVerticalRemote`, ланцюг auth → каса, super PATCH `vertical`, read-only поле власника | **зроблено** |
 | 2 | Атрибути / label / unit | `035`, наскрізна заміна `size`/`color`, `PLATFORM_VERSION` 3, API v2, `AttributeFields` | **зроблено** |
-| 3 | Слот екрана продажу | `ModuleDescriptor.sales`, вбудований `vertical-clothing`, каркас + fallback, `useSalesCatalog` у платформі (→ `PLATFORM_VERSION` 4) | у роботі |
-| 4 | Remote `vertical-flowers` | модуль, збірка, підпис, seed, e2e | заплановано |
+| 3 | Слот екрана продажу | `ModuleDescriptor.sales`, вбудований `vertical-clothing`, каркас + fallback, `useSalesCatalog` у платформі, `PLATFORM_VERSION` 4 | **зроблено** |
+| 4 | Remote `vertical-flowers` | модуль, збірка, підпис, seed, e2e | у роботі |
 | 5 | Прибирання | `036` (drop `size`/`color`), реліз 2.0.0, перепублікація remote-модулів | заплановано |
 | 6 | Повні квіти | букети: `kind='composite'`, компоненти, авто-списання | не почато |
 | 7 | Кафе | техкарти, напівфабрикати, модифікатори | не почато |
@@ -151,6 +151,28 @@ VerticalDefinition {
   тій самій транзакції (`relabelStoreVariants`), не чіпаючи атрибути — тому
   повернення назад відновлює підписи байт-у-байт.
 - Версії: `POS_API_VERSION`/`POS_API_CLIENT_VERSION` = 2, `PLATFORM_VERSION` = 3.
+
+## 7b. Що вже лежить (фаза 3)
+
+- `ModuleDescriptor.sales.Catalog` — аналог `offline`: модуль не реєструє себе,
+  це дані, які читає хост. `SalesCatalogProps = { active, stockEpoch }`.
+- `RegisterPage` тепер каркас (~500 рядків замість 744): кошик, оплата, відмови
+  ПРРО, екран успіху, друк, скасування щойно пробитого. Каталог приходить з
+  вертикалі.
+- `useSalesCatalog` (теги, папки, пошук, сканування, `refresh`) і компоненти
+  каталогу (`ProductTile`, `TagFolderTile`, `VariantPicker`, `CatalogTagBar`,
+  `ScanWedge`) — у `@pos/platform` / `@pos/platform/ui`, `PLATFORM_VERSION` 4.
+- `vertical-clothing` — вбудований core-модуль **без маршрутів і меню**
+  (`registry.test.ts` це пінить): `/register` лишається за `catalog-checkout`.
+  Статичний імпорт — lazy fallback міг би сам не доїхати.
+- `resolveSalesCatalog` (`modules/verticals.ts`) + `CatalogBoundary`: `missing` /
+  `pending` / `no_sales_slot` / `render_error` → вбудований каталог, подія
+  телеметрії `vertical_catalog_fallback` (лише коли вертикаль не clothing).
+- `active` віддає фокус сканера, коли зверху модалка оплати, мобільний кошик або
+  екран успіху; `stockEpoch` інкрементується після продажу / kept-unfiscalised /
+  скасування — каталог перечитує залишки, зберігаючи теги й пошук.
+- У «Налаштуваннях» вертикалі не показуються у списку core-модулів: тип магазину
+  обирає супер-адмін, а вимкнути fallback не можна.
 
 ## 8. Ланцюг даних (де шукати при правках)
 

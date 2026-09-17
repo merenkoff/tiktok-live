@@ -458,7 +458,13 @@ export function SettingsPage() {
             </p>
           </div>
 
-          {MODULES.filter((m) => m.core).map((m) => (
+          {/*
+            A vertical module is not something an owner chooses here — the sell
+            screen renders whichever one matches «Тип магазину» above, and the
+            bundled clothing catalog is the fallback. Listing it as "always on"
+            would invite the question of how to turn it off.
+          */}
+          {MODULES.filter((m) => m.core && !m.id.startsWith('vertical-')).map((m) => (
             <label key={m.id} className="flex items-center gap-3 opacity-60">
               <input type="checkbox" checked disabled className="h-4 w-4" />
               <span className="text-sm">

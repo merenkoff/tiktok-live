@@ -8,8 +8,28 @@
 
 import { NAV_LOCATIONS, type NavLocation } from './nav.js';
 
+/**
+ * Client module id prefix for a sales vertical: `vertical-clothing` is bundled
+ * and core, every other one arrives as an online-only `module_remotes` entry.
+ * Kept here because both the remote guard and the client registry key off it.
+ */
+export const VERTICAL_MODULE_PREFIX = 'vertical-';
+
+/**
+ * The one vertical module that ships inside the app. It is the sell screen's
+ * fallback catalog, so it is never downloaded and never overridden.
+ */
+export const BUNDLED_VERTICAL_MODULE_ID = 'vertical-clothing';
+
 /** Always available — never stored in `pos_stores.enabled_modules`, never toggleable. */
-export const CORE_MODULE_IDS = ['catalog-checkout', 'settings', 'hardware'] as const;
+export const CORE_MODULE_IDS = [
+  'catalog-checkout',
+  'settings',
+  'hardware',
+  // The bundled clothing catalog — the sell screen's fallback. Listing it here
+  // is also what stops it being stored in `module_remotes` or `enabled_modules`.
+  BUNDLED_VERTICAL_MODULE_ID,
+] as const;
 
 /**
  * The set a store gets when `enabled_modules` is empty ("never configured").
@@ -26,18 +46,6 @@ export const DEFAULT_ENABLED_MODULES = [
   'qr-payment',
 ] as const;
 
-/**
- * Client module id prefix for a sales vertical: `vertical-clothing` is bundled
- * and core, every other one arrives as an online-only `module_remotes` entry.
- * Kept here because both the remote guard and the client registry key off it.
- */
-export const VERTICAL_MODULE_PREFIX = 'vertical-';
-
-/**
- * The one vertical module that ships inside the app. It is the sell screen's
- * fallback catalog, so it is never downloaded and never overridden.
- */
-export const BUNDLED_VERTICAL_MODULE_ID = 'vertical-clothing';
 
 /** Every id that may legitimately appear in `enabled_modules` (excludes core). */
 export const TOGGLEABLE_MODULE_IDS = [...DEFAULT_ENABLED_MODULES, 'live-selling'] as const;

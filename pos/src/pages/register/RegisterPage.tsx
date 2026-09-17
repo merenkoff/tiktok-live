@@ -2,10 +2,9 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Camera, Check, Search } from 'lucide-react';
-import { api, cashierApi, useAuthStore, useCartStore, useVertical } from '@pos/platform';
-import { useDragScroll } from '../../hooks/useDragScroll';
+import { ReactNode, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Check } from 'lucide-react';
+import { api, cashierApi, useAuthStore, useCartStore } from '@pos/platform';
 import { formatUah } from '../../lib/money';
 import {
   classifyCheckoutError,
@@ -16,48 +15,54 @@ import { DEFAULT_RECEIPT_PAPER_WIDTH, ReceiptPaperWidth, printReceipt } from '..
 import { buildReceiptPayload, fiscalBlockComplete } from '../../lib/receipt';
 import { usePrintableReceipt } from '../../hooks/usePrintableReceipt';
 import { getMeta } from '../../offline/db';
-import type { CatalogItem, PaymentMethod, PosTag, SaleDetail, SalePaymentInput } from '../../types';
+import type { PaymentMethod, SaleDetail, SalePaymentInput } from '../../types';
 import { CheckoutModal } from '../../components/CheckoutModal';
-import { BarcodeScanner } from '../../components/BarcodeScanner';
-import { ProductTile } from '../../components/cashier/ProductTile';
-import { TagFolderTile } from '../../components/cashier/TagFolderTile';
 import { SaleSidebar } from '../../components/cashier/SaleSidebar';
-import { VariantPicker } from '../../components/cashier/VariantPicker';
 import { MobileCartSheet } from '../../components/cashier/MobileCartSheet';
 import { useCancelRungSale } from '../../modules/returns';
+import { resolveSalesCatalog } from '../../modules/verticals';
+import { ClothingCatalog } from '../../modules/vertical-clothing/ClothingCatalog';
+import { reportModuleEvent } from '../../modules/telemetry';
+import { CatalogBoundary } from './CatalogBoundary';
 
 function paymentLabel(method: PaymentMethod): string {
   return method === 'cash' ? 'Готівка' : method === 'card' ? 'Картка' : 'QR-код';
 }
 
-function flattenTags(tags: PosTag[]): PosTag[] {
-  const out: PosTag[] = [];
-  for (const t of tags) {
-    out.push(t);
-    if (t.children?.length) out.push(...flattenTags(t.children));
-  }
-  return out;
-}
-
-function needsBackNav(tagPath: PosTag[]): boolean {
-  if (tagPath.length === 0) return false;
-  if (tagPath.length === 1 && tagPath[0].show_in_catalog_bar) return false;
-  return true;
-}
-
+/**
+ * The sell screen's frame: the cart, payment, ПРРО outcomes, the receipt and
+ * the success screen. What is being sold — the tags, the grid, the scanner —
+ * comes from the store's sales-vertical module; see `modules/verticals.ts`.
+ *
+ * The split is where it is because everything in this file is the same for a
+ * clothes rail, a bucket of stems and a coffee machine, and everything on the
+ * other side of it is not.
+ */
 export function RegisterPage() {
   const auth = useAuthStore((s) => s.auth);
-  const vertical = useVertical();
-  // The server reads the store's vertical itself; the offline mirror has to be
-  // told, or a cashier's search finds less with the network down than with it.
-  const searchKeys = useMemo(
-    () => vertical.attributes.filter((a) => a.inSearch).map((a) => a.key),
+  const vertical = auth?.store.vertical?.id ?? 'clothing';
+  const { Catalog, moduleId, source, reason } = useMemo(
+    () => resolveSalesCatalog(vertical),
     [vertical]
   );
 
+  useEffect(() => {
+    // Worth one line: this is how anyone finds out a vertical's release never
+    // reached a shop. Clothing legitimately has no module of its own.
+    if (source === 'fallback' && vertical !== 'clothing') {
+      reportModuleEvent({ type: 'vertical_catalog_fallback', moduleId, vertical, reason: reason ?? 'missing' });
+    }
+  }, [source, reason, moduleId, vertical]);
+
+  /**
+   * Bumped whenever a sale moves stock, so the catalog re-reads it. A counter
+   * rather than a callback: the frame does not know what the catalog is
+   * showing, and the catalog keeps its own tag and search state across it.
+   */
+  const [stockEpoch, setStockEpoch] = useState(0);
+
   const lines = useCartStore((s) => s.lines);
   const banner = useCartStore((s) => s.banner);
-  const addItem = useCartStore((s) => s.addItem);
   const setQty = useCartStore((s) => s.setQty);
   const remove = useCartStore((s) => s.remove);
   const clear = useCartStore((s) => s.clear);
@@ -68,14 +73,6 @@ export function RegisterPage() {
   const setCartDiscount = useCartStore((s) => s.setCartDiscount);
   const setCustomer = useCartStore((s) => s.setCustomer);
 
-  const catalogBarRef = useDragScroll<HTMLDivElement>();
-  const gridRef = useDragScroll<HTMLDivElement>();
-
-  const [tags, setTags] = useState<PosTag[]>([]);
-  const [tagPath, setTagPath] = useState<PosTag[]>([]);
-  const [catalog, setCatalog] = useState<CatalogItem[]>([]);
-  const [query, setQuery] = useState('');
-  const [loading, setLoading] = useState(true);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [paying, setPaying] = useState(false);
@@ -100,9 +97,6 @@ export function RegisterPage() {
   const [receiptPrinterName, setReceiptPrinterName] = useState<string | null>(null);
   const [receiptPaperWidth, setReceiptPaperWidth] =
     useState<ReceiptPaperWidth>(DEFAULT_RECEIPT_PAPER_WIDTH);
-  const [cameraOpen, setCameraOpen] = useState(false);
-  const [picker, setPicker] = useState<CatalogItem[] | null>(null);
-  const wedgeRef = useRef<HTMLInputElement>(null);
   // Guards auto-print against StrictMode / effect re-runs — keyed by receipt.
   const autoPrintedRef = useRef<string | null>(null);
   const { printToPdf, printablePortal } = usePrintableReceipt();
@@ -111,56 +105,6 @@ export function RegisterPage() {
   useEffect(() => {
     if (checkoutOpen) setSaleDraftId(crypto.randomUUID());
   }, [checkoutOpen]);
-
-  const currentTag = tagPath[tagPath.length - 1] ?? null;
-  const flatTags = useMemo(() => flattenTags(tags), [tags]);
-
-  const catalogBarTags = useMemo(
-    () => flatTags.filter((t) => t.show_in_catalog_bar).sort((a, b) => a.sort_order - b.sort_order),
-    [flatTags]
-  );
-
-  const showBack = needsBackNav(tagPath);
-  const backLabel =
-    tagPath.length <= 1 ? 'Усі товари' : (tagPath[tagPath.length - 2]?.name ?? 'Усі товари');
-
-  const loadTags = useCallback(async () => {
-    setTags(await cashierApi.getTags());
-  }, []);
-
-  const loadCatalog = useCallback(
-    async (opts?: { q?: string; barcode?: string; tag_id?: number }) => {
-    setLoading(true);
-    try {
-      const items = await cashierApi.getCatalog({ ...opts, searchKeys });
-      setCatalog(items);
-      return items;
-    } finally {
-      setLoading(false);
-    }
-    },
-    [searchKeys]
-  );
-
-  useEffect(() => {
-    void loadTags();
-  }, [loadTags]);
-
-  useEffect(() => {
-    if (query.trim()) {
-      void loadCatalog({ q: query });
-      return;
-    }
-    if (currentTag) {
-      void loadCatalog({ tag_id: currentTag.id });
-      return;
-    }
-    void loadCatalog();
-  }, [currentTag, query, loadCatalog]);
-
-  useEffect(() => {
-    wedgeRef.current?.focus();
-  }, [success, checkoutOpen, mobileCartOpen]);
 
   // After a sale: load the station's receipt-printer config, then (if the store
   // has auto-print on and a thermal printer is configured) silently print once.
@@ -231,77 +175,8 @@ export function RegisterPage() {
     if (cancelRung.detail) setSuccess(cancelRung.detail);
   }, [cancelRung.detail]);
   useEffect(() => {
-    if (cancelRung.result) void loadCatalog();
-  }, [cancelRung.result, loadCatalog]);
-
-  const folderTiles: PosTag[] = useMemo(() => {
-    if (query.trim()) return [];
-    const level = !currentTag ? tags : currentTag.children ?? [];
-    return level.filter((t) => !t.show_in_catalog_bar);
-  }, [query, currentTag, tags]);
-
-  const grouped = useMemo(() => {
-    const map = new Map<number, CatalogItem[]>();
-    for (const item of catalog) {
-      const list = map.get(item.product_id) ?? [];
-      list.push(item);
-      map.set(item.product_id, list);
-    }
-    return [...map.entries()];
-  }, [catalog]);
-
-  function enterTag(tag: PosTag) {
-    setQuery('');
-    if (!currentTag) {
-      const root = tags.find((t) => t.id === tag.id) ?? tag;
-      setTagPath([root]);
-      return;
-    }
-    setTagPath([...tagPath, { ...tag, children: tag.children ?? [] }]);
-  }
-
-  function selectCatalogBarTag(tag: PosTag | null) {
-    setQuery('');
-    if (!tag) {
-      setTagPath([]);
-      return;
-    }
-    const full = flatTags.find((t) => t.id === tag.id) ?? tag;
-    // Bar selection is always a single-level path so «‹ назад» does not appear
-    if (full.parent_id == null) {
-      const root = tags.find((t) => t.id === full.id) ?? full;
-      setTagPath([root]);
-      return;
-    }
-    setTagPath([{ ...full, children: [] }]);
-  }
-
-  function goBackOne() {
-    setQuery('');
-    setTagPath((prev) => prev.slice(0, -1));
-  }
-
-  async function handleBarcode(code: string) {
-    const items = await loadCatalog({ barcode: code.trim() });
-    if (items.length === 1) {
-      addItem(items[0]);
-      setQuery('');
-      return;
-    }
-    if (items.length === 0) {
-      setBanner('Штрихкод не знайдено');
-      return;
-    }
-    setPicker(items);
-  }
-
-  function onProductTap(variants: CatalogItem[]) {
-    if (variants.length === 1) {
-      addItem(variants[0]);
-      return;
-    }
-    setPicker(variants);
-  }
+    if (cancelRung.result) setStockEpoch((n) => n + 1);
+  }, [cancelRung.result]);
 
   async function pay(payments: SalePaymentInput[], opts: { clientUuid?: string } = {}) {
     setPaying(true);
@@ -325,9 +200,7 @@ export function RegisterPage() {
       setSuccess(sale);
       setFiscalNotice(null);
       setPrintStatus(null);
-      await loadCatalog(
-        currentTag && !query ? { tag_id: currentTag.id } : { q: query || undefined }
-      );
+      setStockEpoch((n) => n + 1);
     } catch (error) {
       await handleCheckoutFailure(classifyCheckoutError(error), payments);
     } finally {
@@ -360,9 +233,7 @@ export function RegisterPage() {
         setSuccess(null);
         setBanner(`${failure.message} Чек №${failure.saleId}.`);
       }
-      await loadCatalog(
-        currentTag && !query ? { tag_id: currentTag.id } : { q: query || undefined }
-      );
+      setStockEpoch((n) => n + 1);
       return;
     }
 
@@ -527,24 +398,12 @@ export function RegisterPage() {
   }
 
   const lineCount = lines.reduce((s, l) => s + l.quantity, 0);
-  const catalogBarActiveId =
-    !showBack && currentTag?.show_in_catalog_bar ? currentTag.id : !currentTag ? 'all' : null;
+  // Anything opaque on top of the catalog takes the scanner with it: a wedge
+  // scan landing behind the payment modal would ring up an invisible item.
+  const catalogActive = !checkoutOpen && !mobileCartOpen && !success;
 
   return (
     <>
-      <input
-          ref={wedgeRef}
-          className="sr-only"
-          autoFocus
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              const value = (e.target as HTMLInputElement).value;
-              (e.target as HTMLInputElement).value = '';
-              if (value.trim()) void handleBarcode(value);
-            }
-          }}
-        />
-
         {banner && (
           <div className="mx-3 mt-2 rounded-sq bg-amber-50 text-amber-900 px-3 py-2 text-sm shrink-0">
             {banner}
@@ -552,114 +411,18 @@ export function RegisterPage() {
         )}
 
         <div className="flex-1 grid lg:grid-cols-[1fr_360px] min-h-0">
-          <section className="flex flex-col min-h-0 bg-white">
-            <div className="px-3 pt-3 pb-2 space-y-2 border-b border-sq-divider shrink-0">
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1">
-                  <Search
-                    size={18}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-sq-muted pointer-events-none"
-                  />
-                  <input
-                    className="pos-field text-sm !pl-10 !bg-sq-bg !border-sq-divider"
-                    placeholder="Пошук"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCameraOpen(true)}
-                  className="min-h-12 min-w-12 grid place-items-center rounded-sq text-sq-blue border border-sq-divider bg-white"
-                  aria-label="Камера"
-                >
-                  <Camera size={20} />
-                </button>
-              </div>
-
-              {!query.trim() && (
-                <div
-                  ref={catalogBarRef}
-                  className="flex items-stretch gap-0 overflow-x-auto -mx-1 px-1 select-none"
-                >
-                  {showBack && (
-                    <button
-                      type="button"
-                      onClick={goBackOne}
-                      className="shrink-0 px-3 py-2 text-sm font-medium text-sq-blue whitespace-nowrap"
-                    >
-                      ‹ {backLabel}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => selectCatalogBarTag(null)}
-                    className={`shrink-0 px-3 py-2 text-sm whitespace-nowrap border-b-2 ${
-                      catalogBarActiveId === 'all'
-                        ? 'font-semibold text-sq-text border-sq-text'
-                        : 'font-medium text-sq-secondary border-transparent'
-                    }`}
-                  >
-                    Усі товари
-                  </button>
-                  {catalogBarTags.map((tag) => {
-                    const active = catalogBarActiveId === tag.id;
-                    return (
-                      <button
-                        key={tag.id}
-                        type="button"
-                        onClick={() => selectCatalogBarTag(tag)}
-                        className={`shrink-0 px-3 py-2 text-sm whitespace-nowrap border-b-2 ${
-                          active
-                            ? 'font-semibold text-sq-text border-sq-text'
-                            : 'font-medium text-sq-secondary border-transparent'
-                        }`}
-                      >
-                        {tag.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            <div ref={gridRef} className="flex-1 overflow-auto p-3 bg-white select-none">
-              {loading && <p className="text-sm text-sq-muted">Завантаження…</p>}
-              <div className="grid grid-cols-3 sm:grid-cols-4 xl:grid-cols-5 gap-2">
-                {folderTiles.map((folder) => (
-                  <TagFolderTile
-                    key={folder.id}
-                    name={folder.name}
-                    color={folder.color}
-                    onClick={() => enterTag(folder)}
-                  />
-                ))}
-
-                {grouped.map(([productId, variants]) => {
-                  const first = variants[0];
-                  const minPrice = Math.min(...variants.map((v) => v.price_cents));
-                  const stock = variants.reduce((s, v) => s + v.quantity, 0);
-                  return (
-                    <ProductTile
-                      key={productId}
-                      name={first.product_name}
-                      subtitle={first.label}
-                      priceCents={minPrice}
-                      imageUrl={first.image_url}
-                      stock={stock}
-                      disabled={stock <= 0}
-                      onClick={() => onProductTap(variants)}
-                    />
-                  );
-                })}
-              </div>
-              {!loading && folderTiles.length === 0 && grouped.length === 0 && (
-                <div className="rounded-sq border border-dashed border-sq-divider p-8 text-center text-sq-muted text-sm mt-4">
-                  Порожньо
-                </div>
-              )}
-            </div>
-          </section>
+          <CatalogBoundary
+            key={moduleId}
+            moduleId={moduleId}
+            vertical={vertical}
+            fallback={<ClothingCatalog active={catalogActive} stockEpoch={stockEpoch} />}
+          >
+            <Suspense
+              fallback={<p className="p-3 text-sm text-sq-muted">Завантаження каталогу…</p>}
+            >
+              <Catalog active={catalogActive} stockEpoch={stockEpoch} />
+            </Suspense>
+          </CatalogBoundary>
 
           <div className="hidden lg:block min-h-0">
             <SaleSidebar
@@ -731,24 +494,6 @@ export function RegisterPage() {
         />
       )}
 
-      {cameraOpen && (
-        <BarcodeScanner
-          onClose={() => setCameraOpen(false)}
-          onScan={(code) => void handleBarcode(code)}
-        />
-      )}
-
-      {picker && (
-        <VariantPicker
-          productName={picker[0]?.product_name ?? 'Варіант'}
-          variants={picker}
-          onClose={() => setPicker(null)}
-          onPick={(item) => {
-            addItem(item);
-            setPicker(null);
-          }}
-        />
-      )}
     </>
   );
 }
