@@ -567,3 +567,103 @@ export async function setShowcasePhoto(params: {
   }
   return { variant_id: params.variantId, image_url: imageUrl };
 }
+
+/**
+ * The bench's third ending: keep this composition as a catalogue **recipe**.
+ *
+ * Unlike a window bouquet, nothing physical happens — no production document,
+ * no stock, no stems leave the shelf. It is a `derived` composite: a template
+ * the shop can ring again and again, whose availability is whatever its
+ * components allow at the time.
+ *
+ * Staff level, but flagged `needs_review`. The florist is the one who knows the
+ * recipe; the owner is the one who owns the catalogue, and they already have a
+ * «Потребують перевірки» filter on the products screen for exactly this — the
+ * receipt-placeholder path has used it since migration `019`. So the recipe is
+ * usable immediately and visible to its owner without a second system.
+ *
+ * `one_off` is deliberately FALSE here: this card is a product line that comes
+ * back, which is the opposite of the window's one-object card. That also keeps
+ * it out of the «Вітрина» screen and out of the till's write-off.
+ */
+export interface RecipeInput {
+  storeId: number;
+  components: ComponentInput[];
+  /** Required: a recipe nobody can name is a recipe nobody will find again. */
+  name: string;
+  priceCents?: number | null;
+  imageUrl?: string | null;
+}
+
+export interface RecipeResult {
+  product_id: number;
+  variant_id: number;
+  name: string;
+  price_cents: number;
+}
+
+export async function saveAsRecipe(input: RecipeInput): Promise<RecipeResult> {
+  const name = String(input.name ?? '').trim();
+  if (!name) throw new BenchError('Назва рецепта обовʼязкова');
+  const components = normalizeComponents(input.components);
+  if (input.priceCents != null) {
+    if (!Number.isInteger(input.priceCents) || input.priceCents < 0) {
+      throw new BenchError('Ціна має бути цілим числом копійок, не меншим за 0');
+    }
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Two «Весняний» in one catalogue is a florist hunting through duplicates
+    // at the counter. It also makes a double tap on a slow connection harmless,
+    // which is why there is no `client_uuid` here: unlike the window bouquet
+    // there is no stock document to key one on.
+    const clash = await client.query(
+      `SELECT 1 FROM pos_products
+        WHERE store_id = $1 AND is_active = TRUE AND lower(name) = lower($2)
+        LIMIT 1`,
+      [input.storeId, name]
+    );
+    if (clash.rows.length > 0) throw new BenchError(`Товар «${name}» уже є в каталозі`);
+
+    const priceCents =
+      input.priceCents ?? (await priceOfComposition(client, input.storeId, components));
+
+    const { productId, variantIds } = await createProductInTx(client, input.storeId, {
+      name,
+      description: 'Рецепт, збережений на столі флориста',
+      image_url: input.imageUrl?.trim() || null,
+      kind: 'composite',
+      stock_mode: 'derived',
+      // The owner's «Потребують перевірки» filter — price, photo and tags are
+      // theirs to finish.
+      needs_review: true,
+      variants: [
+        {
+          attributes: {},
+          price_cents: priceCents,
+          cost_cents: 0,
+          // A derived composite keeps no stock of its own; `assertVariantShape`
+          // refuses anything else.
+          quantity: 0,
+          components,
+        },
+      ],
+    });
+
+    await client.query('COMMIT');
+    logger.info('POS bench: composition saved as a recipe', {
+      storeId: input.storeId,
+      variantId: variantIds[0],
+      name,
+    });
+    return { product_id: productId, variant_id: variantIds[0], name, price_cents: priceCents };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}

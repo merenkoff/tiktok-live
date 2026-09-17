@@ -24,8 +24,8 @@
  * another till is phase B4, and the button says so rather than pretending.
  */
 
-import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, Search, Store, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { BookMarked, ChevronDown, Search, Store, X } from 'lucide-react';
 import {
   api,
   buildPriceTags,
@@ -39,6 +39,7 @@ import {
 import type { CartLineComponent, CatalogItem, PriceTag, SalesCatalog } from '@pos/platform';
 import { CatalogTagBar, PriceTagsPrintable, ScanWedge, VariantPicker } from '@pos/platform/ui';
 import type { TagPaperWidth } from '@pos/platform/ui';
+import { RecipeSheet } from './RecipeSheet';
 import { ShowcaseSheet } from './ShowcaseSheet';
 import { BudgetBar } from './BudgetBar';
 import { CompositionPanel } from './CompositionPanel';
@@ -75,6 +76,8 @@ export interface FloristBenchProps {
   onDone: (line: { unit_price_cents: number; components: CartLineComponent[] }) => void;
   /** A bouquet went to the window instead of the cart: nothing was rung. */
   onShowcased: (name: string, priceCents: number) => void;
+  /** The composition was kept as a catalogue recipe; the bench stays open. */
+  onRecipeSaved: (name: string) => void;
   onClose: () => void;
 }
 
@@ -84,6 +87,7 @@ export function FloristBench({
   catalog,
   onDone,
   onShowcased,
+  onRecipeSaved,
   onClose,
 }: FloristBenchProps) {
   const bench = useBench(labourBps);
@@ -94,6 +98,8 @@ export function FloristBench({
 
   const online = useOfflineStatus((s) => s.online);
   const storeName = useAuthStore((s) => s.auth?.store.name ?? '');
+  const [recipeOpen, setRecipeOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [showcase, setShowcase] = useState<{ uuid: string } | null>(null);
   const [showcaseBusy, setShowcaseBusy] = useState(false);
   const [showcaseError, setShowcaseError] = useState<string | null>(null);
@@ -185,6 +191,39 @@ export function FloristBench({
     [catalog.grouped]
   );
 
+  // Tapping a bouquet card means «make me one of these», so the bench opens
+  // with that card's recipe already on it — the florist adjusts rather than
+  // retypes. A card with no stored recipe (the plain «Букет на замовлення»
+  // template) simply opens empty, as before.
+  //
+  // Resolved against the loaded catalog because the recipe carries names and
+  // counts but no prices or stock, and the bench needs both. A stem the shop no
+  // longer lists is skipped rather than faked — and said out loud, because a
+  // bouquet quietly missing a flower is worse than one that explains itself.
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (seeded.current) return;
+    const recipe = card.components ?? [];
+    if (recipe.length === 0 || catalog.loading) return;
+    seeded.current = true;
+
+    const byId = new Map(
+      catalog.grouped.flatMap(([, variants]) => variants).map((v) => [v.variant_id, v])
+    );
+    const rows = recipe
+      .map((row) => {
+        const item = byId.get(row.component_variant_id);
+        return item ? { item, quantity: row.quantity } : null;
+      })
+      .filter((row): row is { item: CatalogItem; quantity: number } => row !== null);
+
+    bench.loadComposition(rows);
+    if (rows.length < recipe.length) {
+      setNotice('Деяких квітів із рецепта вже немає — перевірте склад');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [card, catalog.loading, catalog.grouped]);
+
   const reference = bench.stems.length > 0 ? bench.stems[bench.stems.length - 1].item : null;
   const read = budgetRead(
     bench.totals.totalCents,
@@ -220,8 +259,11 @@ export function FloristBench({
       <header className="px-4 py-3 border-b border-sq-divider flex items-center gap-3 shrink-0">
         <div className="min-w-0">
           <h2 className="font-semibold text-sq-text truncate">{card.product_name}</h2>
-          <p className="text-xs text-sq-secondary">
-            {bench.totals.stemCount > 0 ? `${bench.totals.stemCount} у букеті` : 'Збираємо букет'}
+          <p className={`text-xs ${notice ? 'text-amber-700' : 'text-sq-secondary'}`}>
+            {notice ??
+              (bench.totals.stemCount > 0
+                ? `${bench.totals.stemCount} у букеті`
+                : 'Збираємо букет')}
           </p>
         </div>
         <div className="hidden lg:block w-80 xl:w-96 ml-auto">
@@ -365,6 +407,17 @@ export function FloristBench({
         </button>
         <button
           type="button"
+          disabled={empty || !online}
+          title={!online ? 'Потрібна мережа' : undefined}
+          onClick={() => setRecipeOpen(true)}
+          className="min-h-12 px-4 rounded-sq border border-sq-divider text-sq-text disabled:opacity-50 flex items-center gap-2"
+          data-testid="bench-save-recipe"
+        >
+          <BookMarked size={18} />
+          <span className="hidden lg:inline">Рецепт</span>
+        </button>
+        <button
+          type="button"
           disabled={empty}
           onClick={() =>
             onDone({ unit_price_cents: bench.totals.totalCents, components: bench.components })
@@ -428,6 +481,21 @@ export function FloristBench({
             />
           </div>
         </div>
+      )}
+
+      {recipeOpen && (
+        <RecipeSheet
+          computedCents={bench.totals.totalCents}
+          onClose={() => setRecipeOpen(false)}
+          onSaved={(name) => {
+            setRecipeOpen(false);
+            onRecipeSaved(name);
+          }}
+          components={bench.components.map((c) => ({
+            component_variant_id: c.component_variant_id,
+            quantity: c.quantity,
+          }))}
+        />
       )}
 
       {showcase && (
