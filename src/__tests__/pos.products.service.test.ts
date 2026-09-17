@@ -561,7 +561,7 @@ describe.skipIf(!hasDb)('POS products service', () => {
         barcode: '4820001112223',
       });
       expect(found).toHaveLength(1);
-      expect(found[0].size).toBe('30');
+      expect(found[0].label).toBe('blue / 30');
     });
 
     it('returns nothing for an unknown barcode instead of falling back to a search', async () => {

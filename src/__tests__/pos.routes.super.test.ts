@@ -183,41 +183,56 @@ describe.skipIf(!hasDb)('POS super admin routes', () => {
   });
 
   describe('vertical', () => {
+    // Its own store, created here and dropped here. These cases move the
+    // vertical column and clear `module_remotes`, and the shared a/b/c
+    // fixtures are what the repoint cases below assert against — an earlier
+    // version of this block wiped store b's `returns` override and made that
+    // suite fail three describes later.
+    let v: TestStore;
+
+    beforeAll(async () => {
+      v = await createTestStore('rsupvert');
+    }, 60000);
+
+    afterAll(async () => {
+      await dropTestStore(v?.storeId);
+    });
+
     it('reports every store as clothing until told otherwise', async () => {
       const res = await app.inject({ method: 'GET', url: '/api/pos/super/stores', headers: superHeaders() });
       const rows = res.json() as Array<Record<string, unknown>>;
-      expect(rows.find((r) => r.id === c.storeId)!.vertical).toBe('clothing');
+      expect(rows.find((r) => r.id === v.storeId)!.vertical).toBe('clothing');
     });
 
     it('sets the store vertical and reports it back', async () => {
       const res = await app.inject({
         method: 'PATCH',
-        url: `/api/pos/super/stores/${c.storeId}`,
+        url: `/api/pos/super/stores/${v.storeId}`,
         headers: superHeaders(),
         payload: { vertical: 'flowers' },
       });
       expect(res.statusCode).toBe(200);
       expect((res.json() as { vertical: string }).vertical).toBe('flowers');
-      const db = await pool.query(`SELECT vertical FROM pos_stores WHERE id = $1`, [c.storeId]);
+      const db = await pool.query(`SELECT vertical FROM pos_stores WHERE id = $1`, [v.storeId]);
       expect(db.rows[0].vertical).toBe('flowers');
     });
 
     it('400s an unknown vertical without touching the row', async () => {
       const res = await app.inject({
         method: 'PATCH',
-        url: `/api/pos/super/stores/${c.storeId}`,
+        url: `/api/pos/super/stores/${v.storeId}`,
         headers: superHeaders(),
         payload: { vertical: 'cafe' },
       });
       expect(res.statusCode).toBe(400);
-      const db = await pool.query(`SELECT vertical FROM pos_stores WHERE id = $1`, [c.storeId]);
+      const db = await pool.query(`SELECT vertical FROM pos_stores WHERE id = $1`, [v.storeId]);
       expect(db.rows[0].vertical).toBe('flowers');
     });
 
     it('accepts the vertical and its module in one body', async () => {
       const res = await app.inject({
         method: 'PATCH',
-        url: `/api/pos/super/stores/${b.storeId}`,
+        url: `/api/pos/super/stores/${v.storeId}`,
         headers: superHeaders(),
         payload: { vertical: 'flowers', module_remotes: { 'vertical-flowers': FLOWERS_ENTRY } },
       });
@@ -228,51 +243,59 @@ describe.skipIf(!hasDb)('POS super admin routes', () => {
     });
 
     it('400s a vertical module that disagrees with the column, in either order', async () => {
-      // Registering the module on a clothing store...
-      const onClothing = await app.inject({
-        method: 'PATCH',
-        url: `/api/pos/super/stores/${a.storeId}`,
-        headers: superHeaders(),
-        payload: { module_remotes: { 'vertical-flowers': FLOWERS_ENTRY } },
-      });
-      expect(onClothing.statusCode).toBe(400);
+      // Registering the module on a clothing store — its own throwaway store,
+      // so a rejected write cannot be confused with one that damaged a fixture.
+      const clothing = await createTestStore('rsupvertc');
+      try {
+        const onClothing = await app.inject({
+          method: 'PATCH',
+          url: `/api/pos/super/stores/${clothing.storeId}`,
+          headers: superHeaders(),
+          payload: { module_remotes: { 'vertical-flowers': FLOWERS_ENTRY } },
+        });
+        expect(onClothing.statusCode).toBe(400);
+      } finally {
+        await dropTestStore(clothing.storeId);
+      }
 
-      // ...and moving the column back while the module is still registered
-      // (store b has both from the previous case). Both leave the store as it was.
+      // ...and moving the column back while the module is still registered.
+      // Both leave the store exactly as it was.
       const backToClothing = await app.inject({
         method: 'PATCH',
-        url: `/api/pos/super/stores/${b.storeId}`,
+        url: `/api/pos/super/stores/${v.storeId}`,
         headers: superHeaders(),
         payload: { vertical: 'clothing' },
       });
       expect(backToClothing.statusCode).toBe(400);
-      const db = await pool.query(`SELECT vertical FROM pos_stores WHERE id = $1`, [b.storeId]);
+      const db = await pool.query(`SELECT vertical FROM pos_stores WHERE id = $1`, [v.storeId]);
       expect(db.rows[0].vertical).toBe('flowers');
     });
 
     it('relabels every variant when the vertical changes, keeping the attributes', async () => {
       const product = await pool.query(
         `INSERT INTO pos_products (store_id, name) VALUES ($1, 'Троянда') RETURNING id`,
-        [c.storeId]
+        [v.storeId]
       );
       // A florist's stem, entered while the store was still on flowers.
       await pool.query(
         `INSERT INTO pos_variants (store_id, product_id, attributes, label, unit, price_cents)
          VALUES ($1, $2, '{"color":"Червона","length_cm":60}'::jsonb, 'Червона · 60 см', 'шт', 5000)`,
-        [c.storeId, product.rows[0].id]
+        [v.storeId, product.rows[0].id]
       );
 
+      // Dropping the module is what lets the column move.
       const toClothing = await app.inject({
         method: 'PATCH',
-        url: `/api/pos/super/stores/${c.storeId}`,
+        url: `/api/pos/super/stores/${v.storeId}`,
         headers: superHeaders(),
-        payload: { vertical: 'clothing' },
+        payload: { vertical: 'clothing', module_remotes: {} },
       });
       expect(toClothing.statusCode).toBe(200);
+      expect((toClothing.json() as { vertical: string }).vertical).toBe('clothing');
 
       const afterClothing = await pool.query(
         `SELECT attributes, label FROM pos_variants WHERE store_id = $1`,
-        [c.storeId]
+        [v.storeId]
       );
       // Clothing's rule knows `color` and not `length_cm`, so the caption
       // shrinks — but the bag is untouched, which is what lets the move back
@@ -282,27 +305,16 @@ describe.skipIf(!hasDb)('POS super admin routes', () => {
 
       const backToFlowers = await app.inject({
         method: 'PATCH',
-        url: `/api/pos/super/stores/${c.storeId}`,
+        url: `/api/pos/super/stores/${v.storeId}`,
         headers: superHeaders(),
         payload: { vertical: 'flowers' },
       });
       expect(backToFlowers.statusCode).toBe(200);
       const afterFlowers = await pool.query(
         `SELECT label FROM pos_variants WHERE store_id = $1`,
-        [c.storeId]
+        [v.storeId]
       );
       expect(afterFlowers.rows[0].label).toBe('Червона · 60 см');
-    });
-
-    it('lets the store move back once its module is gone', async () => {
-      const res = await app.inject({
-        method: 'PATCH',
-        url: `/api/pos/super/stores/${b.storeId}`,
-        headers: superHeaders(),
-        payload: { vertical: 'clothing', module_remotes: {} },
-      });
-      expect(res.statusCode).toBe(200);
-      expect((res.json() as { vertical: string }).vertical).toBe('clothing');
     });
   });
 
