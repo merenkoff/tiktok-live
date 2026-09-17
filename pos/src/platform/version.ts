@@ -50,7 +50,12 @@ export const POS_API_CLIENT_VERSION = 2;
 //     snapshot test compares export NAMES, so it cannot see that; a module
 //     built against 5 calling `setQty(123, 2)` would silently do nothing.
 //     `CatalogItem` also carries `kind`/`stock_mode`/`components` now.
-export const PLATFORM_VERSION = 6;
+// 7 (2026-09-17): the florist's bench. `withLabour`, `priceOfComponents` and
+//     `customBouquetLabel` — a vertical module prices a bouquet with the
+//     host's arithmetic instead of a third copy of it — plus the
+//     `CartLineComponent` / `AssembledLineInput` types `addAssembled` takes.
+//     `ProductTile` also gained an optional `count` badge.
+export const PLATFORM_VERSION = 7;
 
 /**
  * Build version of this bundle — the host web/cashier build, or a module-remote

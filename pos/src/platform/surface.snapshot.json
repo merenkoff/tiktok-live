@@ -1,5 +1,5 @@
 {
-  "platformVersion": 6,
+  "platformVersion": 7,
   "exports": {
     "platform": [
       "DEFAULT_RECEIPT_PAPER_WIDTH",
@@ -23,6 +23,7 @@
       "buildRefundReceiptPayload",
       "cashierApi",
       "computeCartDiscountCents",
+      "customBouquetLabel",
       "displayGtin",
       "enrichGtinFromSources",
       "formatUah",
@@ -37,6 +38,7 @@
       "isUnauthorized",
       "listPrinters",
       "loadLastStoreSlug",
+      "priceOfComponents",
       "printReceipt",
       "refundLineAmount",
       "refusalText",
@@ -56,7 +58,8 @@
       "usePosShell",
       "usePrintableReceipt",
       "useSalesCatalog",
-      "useVertical"
+      "useVertical",
+      "withLabour"
     ],
     "ui": [
       "AttributeFields",

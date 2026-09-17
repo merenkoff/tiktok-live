@@ -10,5 +10,8 @@ dist-remote-demo/
 coverage
 test-results
 playwright-report
+# Screenshots the florist-bench spec writes for a design review — regenerated
+# by every run, and a few hundred KB of PNG per run is not repo history.
+e2e/__screenshots__
 blob-report
 playwright/.cache

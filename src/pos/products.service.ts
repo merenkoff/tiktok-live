@@ -50,6 +50,12 @@ export interface CreateProductInput {
   kind?: ProductKind;
   /** Where a composite's stock lives. See composites.service.ts. */
   stock_mode?: ProductStockMode;
+  /**
+   * This card exists for ONE physical object — a bouquet made at the bench for
+   * the window, not a product line that repeats. See migration `041` and
+   * `TechDocs/POS_FLORIST_BENCH.md` §11.
+   */
+  one_off?: boolean;
 }
 
 /**
@@ -221,8 +227,8 @@ export async function createProductInTx(
   const productResult = await client.query(
     `INSERT INTO pos_products
        (store_id, name, description, image_url, needs_review, created_from_document_id,
-        kind, stock_mode)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        kind, stock_mode, one_off)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING id`,
     [
       storeId,
@@ -233,6 +239,7 @@ export async function createProductInTx(
       input.created_from_document_id ?? null,
       shape.kind,
       shape.stock_mode,
+      input.one_off ?? false,
     ]
   );
   const productId = Number(productResult.rows[0].id);

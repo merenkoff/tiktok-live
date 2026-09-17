@@ -22,8 +22,22 @@
 
 import * as host from '@pos/platform';
 
-/** Host symbols this catalog cannot render without. */
-export const REQUIRED_HOST_API = ['useSalesCatalog', 'useCartStore', 'useVertical'] as const;
+/**
+ * Host symbols this catalog cannot render without.
+ *
+ * The bouquet three are the florist's bench: it prices with the host's
+ * arithmetic rather than its own so the till, the server and an `OFF-` receipt
+ * agree to the kopeck. A host that predates them would price every bouquet at
+ * zero, which is worse than falling back to the bundled catalog.
+ */
+export const REQUIRED_HOST_API = [
+  'useSalesCatalog',
+  'useCartStore',
+  'useVertical',
+  'withLabour',
+  'priceOfComponents',
+  'customBouquetLabel',
+] as const;
 
 /** The host shell is older than this module — it lacks part of the contract. */
 export class HostTooOldError extends Error {
