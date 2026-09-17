@@ -12,7 +12,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { pool, testConnection } from '../db.js';
 import { hashPassword, hashPin } from './core/crypto.js';
-import { createProductInTx } from './products.service.js';
 import { seedDemoTags } from './tags.service.js';
 import { ensureUploadsDir, POS_UPLOADS_DIR } from './uploads.service.js';
 import { logger } from '../logger.js';
@@ -54,146 +53,51 @@ async function seedTiktokLiveModule(storeId: number): Promise<void> {
 }
 
 /**
- * A second demo store, on the flowers vertical, with its module registered.
+ * Point the demo flowers store at a locally served `vertical-flowers` bundle.
  *
- * Its own store rather than stems mixed into the clothing demo: a shop is one
- * vertical, and a demo that contradicts that teaches the wrong thing. Opt-in
- * (`POS_SEED_VERTICAL_FLOWERS=1`) for the same reason the LIVE module is — an
- * entry whose host is not running leaves a greyed "not downloaded" tile on the
- * desktop till.
+ * The store itself — staff, catalogue, bouquets, the two production documents —
+ * is migration `039`, so it arrives with a deploy rather than with whoever
+ * remembers to run this. What stays here is the one thing that is a *local dev*
+ * concern and must never ship in a migration: the module URL. Baking
+ * `localhost:5007` into every database would send production tills looking for
+ * a bundle on the cashier's own machine.
+ *
+ * Opt-in (`POS_SEED_VERTICAL_FLOWERS=1`) because an entry whose host is not
+ * running leaves a greyed "not downloaded" tile on the desktop till.
  *
  *   npm run build:vertical-flowers-remote && npm run serve:vertical-flowers-remote
  *   POS_SEED_VERTICAL_FLOWERS=1 npm run pos:seed
+ *
+ * In production the super admin sets the same entry on /super instead.
  */
-async function seedFlowersStore(): Promise<void> {
-  const existing = await pool.query(`SELECT id FROM pos_stores WHERE slug = 'demo-flowers'`);
-  if (existing.rows.length > 0) {
-    console.log('   demo-flowers store already exists — skipping');
+async function registerFlowersModule(): Promise<void> {
+  const store = await pool.query(`SELECT id FROM pos_stores WHERE slug = 'demo-flowers'`);
+  if (store.rows.length === 0) {
+    console.log('   demo-flowers store not found — run the migrations first');
     return;
   }
+  const entry = {
+    url: process.env.POS_SEED_VERTICAL_FLOWERS_URL || 'http://localhost:5007/remote-entry.js',
+    title: 'Квіти',
+    routePath: '/flowers',
+    icon: 'Flower2',
+    nav: [
+      { label: 'Квіти', location: 'cashier-primary', order: 80, icon: 'Flower2', match: '/flowers' },
+    ],
+  };
+  await pool.query(
+    `UPDATE pos_stores
+     SET module_remotes = COALESCE(module_remotes, '{}'::jsonb)
+                          || jsonb_build_object('vertical-flowers', $2::jsonb)
+     WHERE id = $1`,
+    [Number(store.rows[0].id), JSON.stringify(entry)]
+  );
 
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const store = await client.query(
-      `INSERT INTO pos_stores (name, slug, currency, timezone, vertical)
-       VALUES ('Demo Flowers', 'demo-flowers', 'UAH', 'Europe/Kyiv', 'flowers')
-       RETURNING id`
-    );
-    const storeId = Number(store.rows[0].id);
-
-    const ownerHash = await hashPassword('owner123');
-    const ownerPin = await hashPin('0000');
-    await client.query(
-      `INSERT INTO pos_staff (store_id, role, display_name, login, password_hash, pin_hash)
-       VALUES ($1, 'owner', 'Власниця', 'owner@flowers.shop', $2, $3)`,
-      [storeId, ownerHash, ownerPin]
-    );
-    const sellerPin = await hashPin('1234');
-    await client.query(
-      `INSERT INTO pos_staff (store_id, role, display_name, pin_hash)
-       VALUES ($1, 'seller', 'Флористка Ніна', $2)`,
-      [storeId, sellerPin]
-    );
-
-    // Through `createProductInTx`, so the captions come from the flowers rule
-    // rather than being typed here — the same path the admin screen takes.
-    const stems = [
-      { name: 'Троянда Freedom', color: 'Червона', length_cm: 60, country: 'Еквадор', price: 9000, qty: 120 },
-      { name: 'Троянда Avalanche', color: 'Біла', length_cm: 70, country: 'Еквадор', price: 11000, qty: 60 },
-      { name: 'Тюльпан', color: 'Рожевий', length_cm: 40, country: 'Нідерланди', price: 4500, qty: 200 },
-      { name: 'Хризантема кущова', color: 'Жовта', length_cm: 55, country: 'Україна', price: 6500, qty: 80 },
-      { name: 'Евкаліпт', color: 'Зелений', length_cm: 50, country: 'Україна', price: 3500, qty: 45 },
-    ];
-    const stemVariants = new Map<string, number>();
-    for (const stem of stems) {
-      const created = await createProductInTx(client, storeId, {
-        name: stem.name,
-        variants: [
-          {
-            attributes: { color: stem.color, length_cm: stem.length_cm, country: stem.country },
-            price_cents: stem.price,
-            cost_cents: Math.round(stem.price * 0.45),
-            quantity: stem.qty,
-          },
-        ],
-      });
-      stemVariants.set(stem.name, created.variantIds[0]);
-    }
-
-    // Consumables a bouquet eats but nobody sells on its own.
-    const wrap = await createProductInTx(client, storeId, {
-      name: 'Крафт-пакування',
-      variants: [{ attributes: {}, price_cents: 4000, cost_cents: 1500, quantity: 90 }],
-    });
-
-    // One bouquet of each stock mode, because they behave differently at the
-    // till and both need to be visible while 6b/6c are built.
-    await createProductInTx(client, storeId, {
-      name: 'Букет «Ніжність»',
-      kind: 'composite',
-      stock_mode: 'derived',
-      variants: [
-        {
-          attributes: { color: 'Червона' },
-          price_cents: 89000,
-          quantity: 0,
-          components: [
-            { component_variant_id: stemVariants.get('Троянда Freedom')!, quantity: 9 },
-            { component_variant_id: stemVariants.get('Евкаліпт')!, quantity: 3 },
-            { component_variant_id: wrap.variantIds[0], quantity: 1 },
-          ],
-        },
-      ],
-    });
-
-    await createProductInTx(client, storeId, {
-      name: 'Букет «Ранковий» (готовий)',
-      kind: 'composite',
-      stock_mode: 'own',
-      variants: [
-        {
-          attributes: { color: 'Рожевий' },
-          price_cents: 65000,
-          cost_cents: 30000,
-          quantity: 4,
-          components: [
-            { component_variant_id: stemVariants.get('Тюльпан')!, quantity: 11 },
-            { component_variant_id: wrap.variantIds[0], quantity: 1 },
-          ],
-        },
-      ],
-    });
-
-    const entry = {
-      url: process.env.POS_SEED_VERTICAL_FLOWERS_URL || 'http://localhost:5007/remote-entry.js',
-      title: 'Квіти',
-      routePath: '/flowers',
-      icon: 'Flower2',
-      nav: [
-        { label: 'Квіти', location: 'cashier-primary', order: 80, icon: 'Flower2', match: '/flowers' },
-      ],
-    };
-    await client.query(
-      `UPDATE pos_stores
-       SET module_remotes = COALESCE(module_remotes, '{}'::jsonb)
-                            || jsonb_build_object('vertical-flowers', $2::jsonb)
-       WHERE id = $1`,
-      [storeId, JSON.stringify(entry)]
-    );
-    await client.query('COMMIT');
-
-    console.log('\n✅ Demo flowers store ready');
-    console.log('   Store slug: demo-flowers');
-    console.log('   Owner: owner@flowers.shop / owner123');
-    console.log('   Seller PIN: 1234');
-    console.log(`   vertical-flowers module registered → ${entry.url}`);
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
+  console.log('\n✅ Demo flowers store ready');
+  console.log('   Store slug: demo-flowers');
+  console.log('   Owner: owner@flowers.shop / owner123');
+  console.log('   Seller PIN: 1234');
+  console.log(`   vertical-flowers module registered → ${entry.url}`);
 }
 
 /** Copies the committed demo product photos into the (gitignored) uploads dir. */
@@ -371,7 +275,7 @@ async function seed(): Promise<void> {
 
   await seedDemoTags(storeId);
   if (process.env.POS_SEED_TIKTOK_LIVE === '1') await seedTiktokLiveModule(storeId);
-  if (process.env.POS_SEED_VERTICAL_FLOWERS === '1') await seedFlowersStore();
+  if (process.env.POS_SEED_VERTICAL_FLOWERS === '1') await registerFlowersModule();
   console.log('\n✅ Demo store ready (tags ensured)');
   console.log('   Store slug: demo');
   console.log('   Owner: owner@demo.shop / owner123');

@@ -64,6 +64,7 @@ export const POS_MIGRATIONS = [
   // and re-applies every file in order, so inserting it above 037 later is safe.
   '037_pos_product_components.sql',
   '038_pos_production_documents.sql',
+  '039_pos_demo_flowers_store.sql',
 ] as const;
 
 export function readMigration(file: string): string {
