@@ -37,6 +37,11 @@ export const REQUIRED_HOST_API = [
   'withLabour',
   'priceOfComponents',
   'customBouquetLabel',
+  // The window bouquet: without these the «На вітрину» button would call
+  // undefined at the moment the florist presses it, rather than the module
+  // falling back cleanly at load time.
+  'buildPriceTags',
+  'triggerPrint',
 ] as const;
 
 /** The host shell is older than this module — it lacks part of the contract. */

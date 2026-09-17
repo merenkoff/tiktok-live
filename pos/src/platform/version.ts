@@ -55,7 +55,13 @@ export const POS_API_CLIENT_VERSION = 2;
 //     host's arithmetic instead of a third copy of it — plus the
 //     `CartLineComponent` / `AssembledLineInput` types `addAssembled` takes.
 //     `ProductTile` also gained an optional `count` badge.
-export const PLATFORM_VERSION = 7;
+// 8 (2026-09-17): the bench's second ending — a bouquet made for the window.
+//     `buildPriceTags` / `expandCopies` / `defaultCopies` / `triggerPrint` and
+//     `PriceTagsPrintable`, so a vertical module prints the tag that ties the
+//     flowers in the bucket to the card in the database. `triggerPrint`
+//     especially: `window.print()` silently no-ops in WKWebView, and a module
+//     that called it directly would work everywhere but on the shop's Mac.
+export const PLATFORM_VERSION = 8;
 
 /**
  * Build version of this bundle — the host web/cashier build, or a module-remote

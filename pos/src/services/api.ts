@@ -28,6 +28,7 @@ import type {
   LiveSettings,
   LiveSettingsPatch,
   SaleListItem,
+  ShowcaseResult,
   StaffMember,
   SalesSummary,
   CustomerChild,
@@ -708,6 +709,29 @@ class PosApi {
     lines: Array<{ variant_id: number; counted_qty: number }>;
   }): Promise<StockDocument> {
     const { data } = await this.client.post<StockDocument>('/stock/counts', payload);
+    return data;
+  }
+
+  /**
+   * A bouquet assembled at the bench for the window
+   * (`TechDocs/POS_FLORIST_BENCH.md` §11): one call makes the catalogue card,
+   * its composition and the posted production document that moves the stock.
+   *
+   * Idempotent on `client_uuid`, which the bench mints when the sheet OPENS —
+   * a double tap on a slow connection has to come back with the same bouquet,
+   * not tie a second one out of stems that are no longer there.
+   *
+   * `price_cents` is omitted unless the florist rounded the computed price;
+   * the server then prices it from the components itself.
+   */
+  async assembleShowcase(payload: {
+    client_uuid: string;
+    components: Array<{ component_variant_id: number; quantity: number }>;
+    name?: string | null;
+    price_cents?: number | null;
+    note?: string | null;
+  }): Promise<ShowcaseResult> {
+    const { data } = await this.client.post<ShowcaseResult>('/bench/showcase', payload);
     return data;
   }
 

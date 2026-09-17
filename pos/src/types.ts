@@ -270,6 +270,26 @@ export interface CatalogItem {
   tag_ids?: number[];
 }
 
+/**
+ * What `POST /bench/showcase` gives back: the catalogue card a bouquet
+ * assembled for the window became, and the production document that took its
+ * stems off the shelf. Mirrors `ShowcaseResult` in `src/pos/bench.service.ts`.
+ */
+export interface ShowcaseResult {
+  product_id: number;
+  variant_id: number;
+  name: string;
+  /** Internal EAN-13 the price tag prints — GS1 prefix 2, issued server-side. */
+  barcode: string;
+  price_cents: number;
+  cost_cents: number;
+  document_id: number;
+  /** `ВР-2026-00042`; its tail is the number the default name carries. */
+  doc_number: string;
+  /** False when this was a retry of a `client_uuid` already assembled. */
+  created: boolean;
+}
+
 /** One line of a composite's recipe, resolved for the till. Mirrors the server. */
 export interface CatalogComponent {
   component_variant_id: number;

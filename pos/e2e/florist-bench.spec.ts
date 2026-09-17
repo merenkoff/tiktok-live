@@ -330,6 +330,114 @@ test('the pad types a count into the stem last touched', async ({ page }) => {
   await expect(page.locator('[data-testid=bench-total]:visible')).toHaveText('293,75 ₴');
 });
 
+test('a bouquet can go to the window instead of the cart', async ({ page }) => {
+  await openBench(page, TILL);
+
+  const made: Array<Record<string, unknown>> = [];
+  await page.route('**/api/pos/bench/showcase', async (route) => {
+    made.push(route.request().postDataJSON() as Record<string, unknown>);
+    await route.fulfill({
+      status: 201,
+      json: {
+        product_id: 90,
+        variant_id: 900,
+        name: 'Букет №42',
+        barcode: '2000000009003',
+        price_cents: 130000,
+        cost_cents: 47000,
+        document_id: 12,
+        doc_number: 'ВР-2026-00042',
+        created: true,
+      },
+    });
+  });
+
+  await page.getByTestId('start-bouquet').click();
+  await addStems(page, 'Троянда Freedom', 1);
+  await page.locator('[data-testid=bench-pad-9]:visible').click();
+  await addStems(page, 'Евкаліпт', 1);
+  await page.locator('[data-testid=bench-pad-3]:visible').click();
+  await expect(page.locator('[data-testid=bench-total]:visible')).toHaveText('1218,75 ₴');
+
+  await page.getByTestId('bench-to-showcase').click();
+  await expect(page.getByTestId('showcase-sheet')).toBeVisible();
+  // The sheet starts on the computed price; the florist rounds it up.
+  await expect(page.getByTestId('showcase-price')).toHaveValue('1218,75');
+  await page.getByTestId('showcase-price').fill('1300');
+  await page.getByTestId('showcase-submit').click();
+
+  await expect.poll(() => made.length).toBe(1);
+  expect(made[0]).toMatchObject({
+    price_cents: 130000,
+    components: [
+      { component_variant_id: 1, quantity: 9 },
+      { component_variant_id: 13, quantity: 3 },
+    ],
+  });
+  // Blank name: only the server knows the document number it is named after.
+  expect(made[0].name).toBeNull();
+  expect(made[0].client_uuid).toMatch(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+  );
+
+  // The bench closes, nothing is rung, and the cart says where the bouquet went.
+  await expect(page.getByTestId('florist-bench')).toBeHidden();
+  await expect(page.getByText('Букет №42 — на вітрині, 1300,00 ₴')).toBeVisible();
+});
+
+test('it sends no price when the florist did not round it', async ({ page }) => {
+  await openBench(page, TILL);
+
+  const made: Array<Record<string, unknown>> = [];
+  await page.route('**/api/pos/bench/showcase', async (route) => {
+    made.push(route.request().postDataJSON() as Record<string, unknown>);
+    await route.fulfill({
+      status: 201,
+      json: {
+        product_id: 91,
+        variant_id: 901,
+        name: 'Букет №43',
+        barcode: '2000000009010',
+        price_cents: 121875,
+        cost_cents: 40000,
+        document_id: 13,
+        doc_number: 'ВР-2026-00043',
+        created: true,
+      },
+    });
+  });
+
+  await page.getByTestId('start-bouquet').click();
+  await addStems(page, 'Троянда Freedom', 1);
+  await page.locator('[data-testid=bench-pad-9]:visible').click();
+  await addStems(page, 'Евкаліпт', 1);
+  await page.locator('[data-testid=bench-pad-3]:visible').click();
+
+  await page.getByTestId('bench-to-showcase').click();
+  await page.getByTestId('showcase-submit').click();
+
+  await expect.poll(() => made.length).toBe(1);
+  // Untouched price → the server prices it from the components, so one
+  // authority owns the arithmetic instead of two that can drift.
+  expect(made[0].price_cents).toBeNull();
+});
+
+test('a refusal is shown in the server\'s own words, and nothing closes', async ({ page }) => {
+  await openBench(page, TILL);
+  await page.route('**/api/pos/bench/showcase', (route) =>
+    route.fulfill({ status: 400, json: { error: 'Недостатньо стебел на полиці' } })
+  );
+
+  await page.getByTestId('start-bouquet').click();
+  await addStems(page, 'Троянда Freedom', 3);
+  await page.getByTestId('bench-to-showcase').click();
+  await page.getByTestId('showcase-submit').click();
+
+  await expect(page.getByTestId('showcase-error')).toHaveText('Недостатньо стебел на полиці');
+  await expect(page.getByTestId('showcase-sheet')).toBeVisible();
+  await expect(page.getByTestId('florist-bench')).toBeVisible();
+});
+
 test('screenshots — till', async ({ page }) => {
   await openBench(page, TILL);
   await page.getByTestId('start-bouquet').click();
@@ -353,6 +461,14 @@ test('screenshots — till', async ({ page }) => {
   await addStems(page, 'Гортензія', 2);
   await expect(page.locator('[data-testid=bench-budget]:visible')).toContainText('Перебір на');
   await page.screenshot({ path: path.join(SHOTS, 'bench-till-over-budget.png') });
+
+  // The second ending: the bouquet goes to the window, not to the cart.
+  await page.getByTestId('bench-to-showcase').click();
+  await expect(page.getByTestId('showcase-sheet')).toBeVisible();
+  // `animate-fade-up` is still running when the element becomes "visible";
+  // shooting now catches it half transparent.
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: path.join(SHOTS, 'bench-till-showcase.png') });
 });
 
 test('screenshots — tablet', async ({ page }) => {
