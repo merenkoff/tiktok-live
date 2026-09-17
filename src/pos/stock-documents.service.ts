@@ -6,6 +6,8 @@
 
 import { pool } from '../db.js';
 import { createProductInTx } from './products.service.js';
+import { loadStoreVertical, normalizeVariant } from './verticals/index.js';
+import type { AttributeValues } from './verticals/types.js';
 import { applyStockDelta } from './stock.service.js';
 import type { StockDocumentStatus, StockDocumentType, StockReason } from './types.js';
 
@@ -21,14 +23,17 @@ export interface StockDocumentLine {
   line_note: string | null;
   is_placeholder: boolean;
   placeholder_name: string | null;
-  placeholder_size: string;
-  placeholder_color: string;
+  /** Vertical-defined attributes of a not-yet-created product. */
+  placeholder_attributes: AttributeValues;
+  placeholder_label: string;
+  placeholder_unit: string;
   placeholder_sku: string | null;
   placeholder_barcode: string | null;
   placeholder_price_cents: number | null;
   product_name?: string;
-  size?: string;
-  color?: string;
+  /** Resolved caption: the variant's when there is one, else the placeholder's. */
+  label?: string;
+  unit?: string;
   product_id?: number;
 }
 
@@ -104,15 +109,16 @@ function mapLine(row: Record<string, unknown>): StockDocumentLine {
     line_note: row.line_note == null ? null : String(row.line_note),
     is_placeholder: Boolean(row.is_placeholder),
     placeholder_name: row.placeholder_name == null ? null : String(row.placeholder_name),
-    placeholder_size: row.placeholder_size == null ? '' : String(row.placeholder_size),
-    placeholder_color: row.placeholder_color == null ? '' : String(row.placeholder_color),
+    placeholder_attributes: (row.placeholder_attributes as AttributeValues | null) ?? {},
+    placeholder_label: row.placeholder_label == null ? '' : String(row.placeholder_label),
+    placeholder_unit: row.placeholder_unit == null ? '' : String(row.placeholder_unit),
     placeholder_sku: row.placeholder_sku == null ? null : String(row.placeholder_sku),
     placeholder_barcode: row.placeholder_barcode == null ? null : String(row.placeholder_barcode),
     placeholder_price_cents:
       row.placeholder_price_cents == null ? null : Number(row.placeholder_price_cents),
     product_name: row.product_name == null ? undefined : String(row.product_name),
-    size: row.size == null ? undefined : String(row.size),
-    color: row.color == null ? undefined : String(row.color),
+    label: row.label == null ? undefined : String(row.label),
+    unit: row.unit == null ? undefined : String(row.unit),
     product_id: row.product_id == null ? undefined : Number(row.product_id),
   };
 }
@@ -157,8 +163,8 @@ async function loadLines(client: DbClient, documentId: number): Promise<StockDoc
   const result = await client.query(
     `SELECT l.*,
             COALESCE(p.name, l.placeholder_name) AS product_name,
-            COALESCE(v.size, l.placeholder_size) AS size,
-            COALESCE(v.color, l.placeholder_color) AS color,
+            COALESCE(v.label, l.placeholder_label) AS label,
+            COALESCE(v.unit, l.placeholder_unit) AS unit,
             p.id AS product_id
      FROM pos_stock_document_lines l
      LEFT JOIN pos_variants v ON v.id = l.variant_id
@@ -413,8 +419,9 @@ export async function addPlaceholderLine(params: {
   quantity: number;
   priceCents: number;
   unitCostCents?: number | null;
-  size?: string;
-  color?: string;
+  /** Vertical-defined attributes, validated against the store's schema. */
+  attributes?: unknown;
+  unit?: string;
   sku?: string | null;
   barcode?: string | null;
   lineNote?: string | null;
@@ -426,14 +433,13 @@ export async function addPlaceholderLine(params: {
     throw new Error('price_cents must be >= 0');
   }
 
-  const size = (params.size ?? '').trim();
-  const color = (params.color ?? '').trim();
   const barcode = params.barcode?.trim() || null;
   const sku = params.sku?.trim() || null;
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    const derived = normalizeVariant(await loadStoreVertical(client, params.storeId), params);
     const locked = await client.query(
       `SELECT * FROM pos_stock_documents WHERE id = $1 AND store_id = $2 FOR UPDATE`,
       [params.documentId, params.storeId]
@@ -443,12 +449,14 @@ export async function addPlaceholderLine(params: {
     if (doc.status !== 'draft') throw new Error('Only draft documents can be edited');
     if (doc.type !== 'receipt') throw new Error('Placeholders only allowed on receipt documents');
 
+    // Same key as `idx_pos_stock_doc_lines_placeholder_attr_uniq`: the
+    // normalised bag is canonical, so jsonb equality is the whole comparison.
     const dup = await client.query(
       `SELECT id FROM pos_stock_document_lines
        WHERE document_id = $1 AND is_placeholder = TRUE
          AND lower(placeholder_name) = lower($2)
-         AND placeholder_size = $3 AND placeholder_color = $4`,
-      [params.documentId, name, size, color]
+         AND placeholder_attributes = $3::jsonb`,
+      [params.documentId, name, JSON.stringify(derived.attributes)]
     );
     if (dup.rows.length > 0) {
       throw new Error('Duplicate placeholder in this document');
@@ -457,9 +465,9 @@ export async function addPlaceholderLine(params: {
     const result = await client.query(
       `INSERT INTO pos_stock_document_lines
          (document_id, store_id, variant_id, quantity, unit_cost_cents, line_note,
-          is_placeholder, placeholder_name, placeholder_size, placeholder_color,
-          placeholder_sku, placeholder_barcode, placeholder_price_cents)
-       VALUES ($1, $2, NULL, $3, $4, $5, TRUE, $6, $7, $8, $9, $10, $11)
+          is_placeholder, placeholder_name, placeholder_attributes, placeholder_label,
+          placeholder_unit, placeholder_sku, placeholder_barcode, placeholder_price_cents)
+       VALUES ($1, $2, NULL, $3, $4, $5, TRUE, $6, $7::jsonb, $8, $9, $10, $11, $12)
        RETURNING *`,
       [
         params.documentId,
@@ -468,8 +476,9 @@ export async function addPlaceholderLine(params: {
         params.unitCostCents ?? null,
         params.lineNote ?? null,
         name,
-        size,
-        color,
+        JSON.stringify(derived.attributes),
+        derived.label,
+        derived.unit,
         sku,
         barcode,
         params.priceCents,
@@ -495,8 +504,8 @@ export async function addPlaceholderLine(params: {
     return mapLine({
       ...row,
       product_name: row.placeholder_name,
-      size: row.placeholder_size,
-      color: row.placeholder_color,
+      label: row.placeholder_label,
+      unit: row.placeholder_unit,
     });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -560,8 +569,8 @@ export async function updateLine(params: {
   countedQty?: number | null;
   lineNote?: string | null;
   placeholderName?: string;
-  placeholderSize?: string;
-  placeholderColor?: string;
+  placeholderAttributes?: unknown;
+  placeholderUnit?: string;
   placeholderSku?: string | null;
   placeholderBarcode?: string | null;
   placeholderPriceCents?: number;
@@ -586,8 +595,9 @@ export async function updateLine(params: {
     let systemQty = row.system_qty == null ? null : Number(row.system_qty);
     let countedQty = row.counted_qty == null ? null : Number(row.counted_qty);
     let placeholderName = row.placeholder_name == null ? null : String(row.placeholder_name);
-    let placeholderSize = row.placeholder_size == null ? '' : String(row.placeholder_size);
-    let placeholderColor = row.placeholder_color == null ? '' : String(row.placeholder_color);
+    let placeholderAttributes = (row.placeholder_attributes as AttributeValues | null) ?? {};
+    let placeholderLabel = row.placeholder_label == null ? '' : String(row.placeholder_label);
+    let placeholderUnit = row.placeholder_unit == null ? '' : String(row.placeholder_unit);
     let placeholderSku = row.placeholder_sku == null ? null : String(row.placeholder_sku);
     let placeholderBarcode =
       row.placeholder_barcode == null ? null : String(row.placeholder_barcode);
@@ -605,8 +615,20 @@ export async function updateLine(params: {
         if (!n) throw new Error('placeholder name required');
         placeholderName = n;
       }
-      if (params.placeholderSize !== undefined) placeholderSize = params.placeholderSize.trim();
-      if (params.placeholderColor !== undefined) placeholderColor = params.placeholderColor.trim();
+      if (params.placeholderAttributes !== undefined || params.placeholderUnit !== undefined) {
+        // The bag replaces the row's, and the caption is recomputed from it —
+        // never sent by the client, same rule as a real variant.
+        const derived = normalizeVariant(await loadStoreVertical(client, params.storeId), {
+          attributes:
+            params.placeholderAttributes === undefined
+              ? placeholderAttributes
+              : params.placeholderAttributes,
+          unit: params.placeholderUnit === undefined ? placeholderUnit : params.placeholderUnit,
+        });
+        placeholderAttributes = derived.attributes;
+        placeholderLabel = derived.label;
+        placeholderUnit = derived.unit;
+      }
       if (params.placeholderSku !== undefined) {
         placeholderSku = params.placeholderSku?.trim() || null;
       }
@@ -650,8 +672,9 @@ export async function updateLine(params: {
            counted_qty = $4,
            line_note = COALESCE($5, line_note),
            placeholder_name = $6,
-           placeholder_size = $7,
-           placeholder_color = $8,
+           placeholder_attributes = $7::jsonb,
+           placeholder_label = $8,
+           placeholder_unit = $13,
            placeholder_sku = $9,
            placeholder_barcode = $10,
            placeholder_price_cents = $11
@@ -663,12 +686,13 @@ export async function updateLine(params: {
         countedQty,
         params.lineNote === undefined ? null : params.lineNote,
         placeholderName,
-        placeholderSize,
-        placeholderColor,
+        JSON.stringify(placeholderAttributes),
+        placeholderLabel,
         placeholderSku,
         placeholderBarcode,
         placeholderPrice,
         params.lineId,
+        placeholderUnit,
       ]
     );
     if (params.lineNote !== undefined) {
@@ -925,8 +949,8 @@ export async function postDocument(params: {
             created_from_document_id: params.documentId,
             variants: [
               {
-                size: String(line.placeholder_size ?? ''),
-                color: String(line.placeholder_color ?? ''),
+                attributes: line.placeholder_attributes,
+                unit: line.placeholder_unit || undefined,
                 sku,
                 barcode,
                 price_cents: priceCents,

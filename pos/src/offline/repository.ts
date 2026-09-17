@@ -116,10 +116,12 @@ export async function getCatalog(opts?: {
   q?: string;
   barcode?: string;
   tag_id?: number;
+  /** Attribute keys the store's vertical marks searchable — see `filterCatalog`. */
+  searchKeys?: readonly string[];
 }): Promise<CatalogItem[]> {
   await ensureSnapshot();
   const [items, tags] = await Promise.all([db.catalog.toArray(), getCachedTags()]);
-  return withCachedImages(filterCatalog(items, tags, opts));
+  return withCachedImages(filterCatalog(items, tags, opts, opts?.searchKeys ?? []));
 }
 
 function normalizePhone(phone: string): string {
@@ -252,10 +254,6 @@ export async function updateCustomer(
   return next;
 }
 
-function variantLabel(item: CatalogItem): string {
-  return [item.color, item.size].filter(Boolean).join(' / ');
-}
-
 function localSaleDetail(
   clientUuid: string,
   payload: OutboxSalePayload,
@@ -273,7 +271,10 @@ function localSaleDetail(
       id: -(i + 1),
       variant_id: line.variant_id,
       product_name: cat?.product_name ?? 'Товар',
-      variant_label: cat ? variantLabel(cat) : '',
+      // The snapshot carries the caption the server built, so an offline
+      // receipt reads exactly like the online one for the same variant.
+      variant_label: cat?.label ?? '',
+      unit: cat?.unit ?? '',
       quantity: line.quantity,
       unit_price_cents: unit,
       compare_at_unit_cents: cat?.compare_at_cents ?? null,

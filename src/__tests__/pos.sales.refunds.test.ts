@@ -36,8 +36,8 @@ describe.skipIf(!hasDb)('POS refunds and voids', () => {
     const product = await pool.query(
       `INSERT INTO pos_products (store_id, name) VALUES ($1, 'Void Tee') RETURNING id`, [storeId]);
     const variant = await pool.query(
-      `INSERT INTO pos_variants (store_id, product_id, size, color, sku, barcode, price_cents)
-       VALUES ($1, $2, 'M', 'Black', $3, $4, 1000) RETURNING id`,
+      `INSERT INTO pos_variants (store_id, product_id, attributes, label, sku, barcode, price_cents)
+       VALUES ($1, $2, '{"color":"Black","size":"M"}'::jsonb, 'Black / M', $3, $4, 1000) RETURNING id`,
       [storeId, product.rows[0].id, `SKU-${slug}`, `BC-${slug}`]);
     variantId = Number(variant.rows[0].id);
     await pool.query(`INSERT INTO pos_stock (variant_id, store_id, quantity) VALUES ($1, $2, 10)`,

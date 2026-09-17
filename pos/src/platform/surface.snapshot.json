@@ -1,5 +1,5 @@
 {
-  "platformVersion": 2,
+  "platformVersion": 3,
   "exports": {
     "platform": [
       "DEFAULT_RECEIPT_PAPER_WIDTH",
@@ -52,9 +52,11 @@
       "useEnabledModules",
       "useOfflineStatus",
       "usePosShell",
-      "usePrintableReceipt"
+      "usePrintableReceipt",
+      "useVertical"
     ],
     "ui": [
+      "AttributeFields",
       "BarcodeScanner",
       "CustomerPicker",
       "ProductPhotoField",

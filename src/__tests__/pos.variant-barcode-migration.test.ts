@@ -97,8 +97,9 @@ describe.skipIf(!hasDb)('pos_backfill_variant_barcodes', () => {
     active?: boolean;
   }): Promise<number> {
     const r = await pool.query(
-      `INSERT INTO pos_variants (store_id, product_id, size, color, sku, barcode, price_cents, is_active)
-       VALUES ($1, $2, $3, '', $4, $5, 1000, $6) RETURNING id`,
+      `INSERT INTO pos_variants
+         (store_id, product_id, attributes, label, sku, barcode, price_cents, is_active)
+       VALUES ($1, $2, jsonb_build_object('size', $3::text), $3, $4, $5, 1000, $6) RETURNING id`,
       [storeId, productId, v.size, v.sku, v.barcode, v.active ?? true]
     );
     return Number(r.rows[0].id);

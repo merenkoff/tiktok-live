@@ -4,6 +4,7 @@
 
 import axios, { type AxiosInstance } from 'axios';
 import type {
+  AttributeValues,
   FiscalLeaseResponse,
   FiscalOfflineStamp,
   FiscalSettingsPatch,
@@ -214,8 +215,8 @@ class PosApi {
     description?: string;
     image_url?: string | null;
     variants: Array<{
-      size?: string;
-      color?: string;
+      attributes?: AttributeValues;
+      unit?: string;
       sku?: string;
       barcode?: string;
       price_cents: number;
@@ -251,8 +252,8 @@ class PosApi {
   async addVariant(
     productId: number,
     payload: {
-      size?: string;
-      color?: string;
+      attributes?: AttributeValues;
+      unit?: string;
       sku?: string;
       barcode?: string;
       price_cents: number;
@@ -267,8 +268,9 @@ class PosApi {
   async updateVariant(
     id: number,
     payload: Partial<{
-      size: string;
-      color: string;
+      /** Replaces the variant's bag wholesale; the server rederives the label. */
+      attributes: AttributeValues;
+      unit: string;
       sku: string;
       barcode: string;
       price_cents: number;
@@ -607,8 +609,8 @@ class PosApi {
       quantity: number;
       price_cents: number;
       unit_cost_cents?: number | null;
-      size?: string;
-      color?: string;
+      attributes?: AttributeValues;
+      unit?: string;
       sku?: string | null;
       barcode?: string | null;
       line_note?: string | null;
@@ -629,8 +631,8 @@ class PosApi {
       counted_qty?: number | null;
       line_note?: string | null;
       placeholder_name?: string;
-      placeholder_size?: string;
-      placeholder_color?: string;
+      placeholder_attributes?: AttributeValues;
+      placeholder_unit?: string;
       placeholder_barcode?: string | null;
       placeholder_price_cents?: number;
     }

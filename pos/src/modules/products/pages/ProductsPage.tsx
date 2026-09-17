@@ -3,10 +3,10 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { DEFAULT_TAG_COLOR, api, assetUrl, formatUah, type TagColorKey, uahInputToCents, useAuthStore } from '@pos/platform';
+import { DEFAULT_TAG_COLOR, api, assetUrl, formatUah, type TagColorKey, uahInputToCents, useAuthStore, useVertical } from '@pos/platform';
 import { PriceTagsDialog } from '../components/PriceTagsDialog';
-import type { PosTag, Product, ProductVariant } from '@pos/platform';
-import { ProductPhotoField, useDragScroll } from '@pos/platform/ui';
+import type { AttributeValues, PosTag, Product, ProductVariant } from '@pos/platform';
+import { AttributeFields, ProductPhotoField, useDragScroll } from '@pos/platform/ui';
 import { TagColorSwatches } from '../components/TagColorSwatches';
 
 const MAX_TAG_DEPTH = 3;
@@ -52,9 +52,10 @@ export function ProductsPage() {
   const [bulkTagId, setBulkTagId] = useState<number | ''>('');
   const [savingTagId, setSavingTagId] = useState<number | null>(null);
 
+  const vertical = useVertical();
   const [name, setName] = useState('');
-  const [size, setSize] = useState('M');
-  const [color, setColor] = useState('');
+  const [attributes, setAttributes] = useState<AttributeValues>({});
+  const [unit, setUnit] = useState(vertical.defaultUnit);
   const [price, setPrice] = useState('690');
   const [qty, setQty] = useState('1');
   const [barcode, setBarcode] = useState('');
@@ -91,8 +92,8 @@ export function ProductsPage() {
         image_url: imageUrl,
         variants: [
           {
-            size,
-            color,
+            attributes,
+            unit,
             sku: sku || undefined,
             barcode: barcode || undefined,
             price_cents: uahInputToCents(price),
@@ -330,8 +331,13 @@ export function ProductsPage() {
               <p className="sm:col-span-2 text-sm font-semibold text-sq-text">Новий товар</p>
               <ProductPhotoField value={imageUrl} onChange={setImageUrl} />
               <input className={fieldClass} placeholder="Назва" value={name} onChange={(e) => setName(e.target.value)} required />
-              <input className={fieldClass} placeholder="Колір" value={color} onChange={(e) => setColor(e.target.value)} />
-              <input className={fieldClass} placeholder="Розмір" value={size} onChange={(e) => setSize(e.target.value)} />
+              <AttributeFields
+                className="sm:col-span-2 grid gap-2 sm:grid-cols-2"
+                schema={vertical.attributes}
+                value={attributes}
+                onChange={setAttributes}
+                unit={{ value: unit, options: vertical.units, onChange: setUnit }}
+              />
               <input className={fieldClass} placeholder="Ціна, грн" value={price} onChange={(e) => setPrice(e.target.value)} />
               <input className={fieldClass} placeholder="Залишок" value={qty} onChange={(e) => setQty(e.target.value)} />
               <label className="block space-y-1">
@@ -520,7 +526,7 @@ function VariantsTable({ variants }: { variants: ProductVariant[] }) {
           {variants.map((v) => (
             <tr key={v.id} className="border-t border-sq-divider">
               <td className="py-2 pr-2">
-                {[v.color, v.size].filter(Boolean).join(' / ') || '—'}
+                {v.label || '—'}
               </td>
               <td className="py-2 pr-2">{formatUah(v.price_cents)}</td>
               <td className="py-2 pr-2">{v.quantity}</td>
@@ -700,6 +706,7 @@ function EditProductInline({
   onSaved: () => Promise<void>;
   onCloseAfterSave: () => void;
 }) {
+  const vertical = useVertical();
   const [name, setName] = useState(product.name);
   const [description, setDescription] = useState(product.description ?? '');
   const [imageUrl, setImageUrl] = useState<string | null>(product.image_url);
@@ -707,8 +714,8 @@ function EditProductInline({
   const [variants, setVariants] = useState<ProductVariant[]>(
     product.variants.filter((v) => v.is_active)
   );
-  const [newSize, setNewSize] = useState('');
-  const [newColor, setNewColor] = useState('');
+  const [newAttributes, setNewAttributes] = useState<AttributeValues>({});
+  const [newUnit, setNewUnit] = useState(vertical.defaultUnit);
   const [newPrice, setNewPrice] = useState('690');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -726,8 +733,8 @@ function EditProductInline({
       await api.setProductTags(product.id, tagIds);
       for (const v of variants) {
         await api.updateVariant(v.id, {
-          size: v.size,
-          color: v.color,
+          attributes: v.attributes,
+          unit: v.unit,
           price_cents: v.price_cents,
           compare_at_cents: v.compare_at_cents ?? null,
           sku: v.sku ?? '',
@@ -746,14 +753,14 @@ function EditProductInline({
   async function addVariant() {
     try {
       const updated = await api.addVariant(product.id, {
-        size: newSize,
-        color: newColor,
+        attributes: newAttributes,
+        unit: newUnit,
         price_cents: uahInputToCents(newPrice),
         quantity: 0,
       });
       setVariants(updated.variants.filter((v) => v.is_active));
-      setNewSize('');
-      setNewColor('');
+      setNewAttributes({});
+      setNewUnit(vertical.defaultUnit);
       setNewPrice('690');
       await onSaved();
     } catch {
@@ -824,27 +831,25 @@ function EditProductInline({
         <p className="text-xs font-semibold text-sq-secondary">Варіанти</p>
         {variants.map((v, idx) => (
           <div key={v.id} className="border border-sq-divider rounded-sq p-3 space-y-2 bg-sq-bg/40">
-            <div className="grid sm:grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center">
-              <input
-                className={fieldClass}
-                value={v.color}
-                onChange={(e) => {
+            <AttributeFields
+              schema={vertical.attributes}
+              value={v.attributes}
+              onChange={(attrs) => {
+                const next = [...variants];
+                next[idx] = { ...v, attributes: attrs };
+                setVariants(next);
+              }}
+              unit={{
+                value: v.unit,
+                options: vertical.units,
+                onChange: (u) => {
                   const next = [...variants];
-                  next[idx] = { ...v, color: e.target.value };
+                  next[idx] = { ...v, unit: u };
                   setVariants(next);
-                }}
-                placeholder="Колір"
-              />
-              <input
-                className={fieldClass}
-                value={v.size}
-                onChange={(e) => {
-                  const next = [...variants];
-                  next[idx] = { ...v, size: e.target.value };
-                  setVariants(next);
-                }}
-                placeholder="Розмір"
-              />
+                },
+              }}
+            />
+            <div className="grid sm:grid-cols-[1fr_auto] gap-2 items-center">
               <input
                 className={fieldClass}
                 value={(v.price_cents / 100).toFixed(2)}
@@ -910,32 +915,28 @@ function EditProductInline({
           </div>
         ))}
 
-        <div className="grid sm:grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center pt-1">
-          <input
-            className={fieldClass}
-            placeholder="Колір"
-            value={newColor}
-            onChange={(e) => setNewColor(e.target.value)}
+        <div className="space-y-2 pt-1 border-t border-sq-divider">
+          <AttributeFields
+            schema={vertical.attributes}
+            value={newAttributes}
+            onChange={setNewAttributes}
+            unit={{ value: newUnit, options: vertical.units, onChange: setNewUnit }}
           />
-          <input
-            className={fieldClass}
-            placeholder="Розмір"
-            value={newSize}
-            onChange={(e) => setNewSize(e.target.value)}
-          />
-          <input
-            className={fieldClass}
-            placeholder="Ціна, грн"
-            value={newPrice}
-            onChange={(e) => setNewPrice(e.target.value)}
-          />
-          <button
-            type="button"
-            className="text-sm font-semibold text-sq-blue min-h-11 px-2"
-            onClick={() => void addVariant()}
-          >
-            + Варіант
-          </button>
+          <div className="grid sm:grid-cols-[1fr_auto] gap-2 items-center">
+            <input
+              className={fieldClass}
+              placeholder="Ціна, грн"
+              value={newPrice}
+              onChange={(e) => setNewPrice(e.target.value)}
+            />
+            <button
+              type="button"
+              className="text-sm font-semibold text-sq-blue min-h-11 px-2"
+              onClick={() => void addVariant()}
+            >
+              + Варіант
+            </button>
+          </div>
         </div>
       </div>
 

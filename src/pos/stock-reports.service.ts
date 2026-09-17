@@ -11,8 +11,9 @@ export interface OnHandRow {
   variant_id: number;
   product_id: number;
   product_name: string;
-  size: string;
-  color: string;
+  /** Variant caption, built by the store's vertical. */
+  label: string;
+  unit: string;
   sku: string | null;
   barcode: string | null;
   quantity: number;
@@ -24,8 +25,9 @@ export interface MovementRow {
   id: number;
   variant_id: number;
   product_name: string;
-  size: string;
-  color: string;
+  /** Variant caption, built by the store's vertical. */
+  label: string;
+  unit: string;
   delta: number;
   reason: StockReason;
   reference_type: string | null;
@@ -41,8 +43,9 @@ export interface MovementRow {
 export interface MovementSummaryRow {
   variant_id: number;
   product_name: string;
-  size: string;
-  color: string;
+  /** Variant caption, built by the store's vertical. */
+  label: string;
+  unit: string;
   opening: number;
   receipt: number;
   sale: number;
@@ -56,21 +59,21 @@ export interface MovementSummaryRow {
 
 export async function listOnHand(storeId: number): Promise<OnHandRow[]> {
   const result = await pool.query(
-    `SELECT v.id AS variant_id, v.product_id, p.name AS product_name, v.size, v.color,
+    `SELECT v.id AS variant_id, v.product_id, p.name AS product_name, v.label, v.unit,
             v.sku, v.barcode, s.quantity, v.cost_cents, v.price_cents
      FROM pos_stock s
      JOIN pos_variants v ON v.id = s.variant_id
      JOIN pos_products p ON p.id = v.product_id
      WHERE s.store_id = $1 AND v.is_active = TRUE AND p.is_active = TRUE
-     ORDER BY p.name ASC, v.size ASC, v.color ASC`,
+     ORDER BY p.name ASC, v.label ASC, v.id ASC`,
     [storeId]
   );
   return result.rows.map((row) => ({
     variant_id: Number(row.variant_id),
     product_id: Number(row.product_id),
     product_name: row.product_name,
-    size: row.size,
-    color: row.color,
+    label: row.label ?? '',
+    unit: row.unit ?? '',
     sku: row.sku,
     barcode: row.barcode,
     quantity: Number(row.quantity),
@@ -112,7 +115,7 @@ export async function listMovements(
   params.push(limit);
 
   const result = await pool.query(
-    `SELECT m.*, p.name AS product_name, v.size, v.color, st.display_name AS staff_name
+    `SELECT m.*, p.name AS product_name, v.label, v.unit, st.display_name AS staff_name
      FROM pos_stock_movements m
      JOIN pos_variants v ON v.id = m.variant_id
      JOIN pos_products p ON p.id = v.product_id
@@ -127,8 +130,8 @@ export async function listMovements(
     id: Number(row.id),
     variant_id: Number(row.variant_id),
     product_name: row.product_name,
-    size: row.size,
-    color: row.color,
+    label: row.label ?? '',
+    unit: row.unit ?? '',
     delta: Number(row.delta),
     reason: row.reason as StockReason,
     reference_type: row.reference_type,
@@ -180,7 +183,7 @@ export async function movementReport(
 ): Promise<MovementSummaryRow[]> {
   const result = await pool.query(
     `WITH variants AS (
-       SELECT v.id AS variant_id, p.name AS product_name, v.size, v.color
+       SELECT v.id AS variant_id, p.name AS product_name, v.label, v.unit
        FROM pos_variants v
        JOIN pos_products p ON p.id = v.product_id
        WHERE v.store_id = $1 AND v.is_active = TRUE
@@ -207,7 +210,7 @@ export async function movementReport(
          AND occurred_at <= $3::timestamptz
        GROUP BY variant_id
      )
-     SELECT v.variant_id, v.product_name, v.size, v.color,
+     SELECT v.variant_id, v.product_name, v.label, v.unit,
             COALESCE(o.qty, 0) AS opening,
             COALESCE(p.receipt, 0) AS receipt,
             COALESCE(p.sale, 0) AS sale,
@@ -221,15 +224,15 @@ export async function movementReport(
      LEFT JOIN opening o ON o.variant_id = v.variant_id
      LEFT JOIN period p ON p.variant_id = v.variant_id
      WHERE COALESCE(o.qty, 0) <> 0 OR COALESCE(p.total, 0) <> 0
-     ORDER BY v.product_name, v.size, v.color`,
+     ORDER BY v.product_name, v.label`,
     [storeId, from, to]
   );
 
   return result.rows.map((row) => ({
     variant_id: Number(row.variant_id),
     product_name: row.product_name,
-    size: row.size,
-    color: row.color,
+    label: row.label ?? '',
+    unit: row.unit ?? '',
     opening: Number(row.opening),
     receipt: Number(row.receipt),
     sale: Number(row.sale),

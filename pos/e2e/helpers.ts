@@ -11,12 +11,25 @@ export const ALL_MODULES = [
   'qr-payment',
 ];
 
+/** The clothing schema, as `publicConfigOf(clothingVertical)` reports it. */
+export const CLOTHING_VERTICAL = {
+  id: 'clothing',
+  title: 'Одяг',
+  attributes: [
+    { key: 'color', label: 'Колір', type: 'text', inLabel: true, inSearch: true, placeholder: 'Колір' },
+    { key: 'size', label: 'Розмір', type: 'text', inLabel: true, inSearch: true, placeholder: 'Розмір' },
+  ],
+  units: ['шт'],
+  defaultUnit: 'шт',
+};
+
 const store = {
   id: 1,
   name: 'Demo Store',
   slug: 'demo',
   currency: 'UAH',
   timezone: 'Europe/Kyiv',
+  vertical: CLOTHING_VERTICAL,
   qr_payment_enabled: false,
   qr_payment_mode: 'static',
   qr_static_image_url: null,
@@ -35,8 +48,9 @@ export const catalog = [
     variant_id: 1,
     product_id: 1,
     product_name: 'Футболка базова',
-    size: 'M',
-    color: 'Синій',
+    attributes: { color: 'Синій', size: 'M' },
+    label: 'Синій / M',
+    unit: 'шт',
     sku: 'TS-M-BL',
     barcode: '4820000000001',
     price_cents: 45000,
@@ -48,8 +62,9 @@ export const catalog = [
     variant_id: 2,
     product_id: 2,
     product_name: 'Кросівки бігові',
-    size: '42',
-    color: 'Білий',
+    attributes: { color: 'Білий', size: '42' },
+    label: 'Білий / 42',
+    unit: 'шт',
     sku: 'SN-42-WH',
     barcode: '4820000000002',
     price_cents: 189000,
@@ -71,6 +86,8 @@ export async function mockPosApi(
   opts: {
     /** `store.module_remotes` — a per-module source URL (string) or an online-only entry (object). */
     moduleRemotes?: Record<string, unknown>;
+    /** Overrides merged into `auth.store` and `GET /store` (e.g. a different vertical). */
+    store?: Record<string, unknown>;
   } = {}
 ) {
   const auth = {
@@ -83,9 +100,11 @@ export async function mockPosApi(
       slug: 'demo',
       currency: 'UAH',
       auto_print_receipt: false,
+      vertical: CLOTHING_VERTICAL,
       enabled_modules: enabledModules,
       module_remotes: opts.moduleRemotes ?? {},
       fiscal: { enabled: false, provider: null },
+      ...opts.store,
     },
   };
 
@@ -128,7 +147,9 @@ export async function mockPosApi(
     }
 
     if (path === '/store') {
-      await route.fulfill({ json: { ...store, enabled_modules: enabledModules } });
+      await route.fulfill({
+        json: { ...store, enabled_modules: enabledModules, ...opts.store },
+      });
       return;
     }
 

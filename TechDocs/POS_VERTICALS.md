@@ -125,12 +125,32 @@ VerticalDefinition {
 | # | Фаза | Що постачає | Стан |
 |---|---|---|---|
 | 1 | Ідентичність вертикалі | `034`, реєстр `src/pos/verticals`, `assertSingleVerticalRemote`, ланцюг auth → каса, super PATCH `vertical`, read-only поле власника | **зроблено** |
-| 2 | Атрибути / label / unit | `035`, наскрізна заміна `size`/`color`, `PLATFORM_VERSION` 3, API v2, `useSalesCatalog`, `AttributeFields` | у роботі |
-| 3 | Слот екрана продажу | `ModuleDescriptor.sales`, вбудований `vertical-clothing`, каркас + fallback | заплановано |
+| 2 | Атрибути / label / unit | `035`, наскрізна заміна `size`/`color`, `PLATFORM_VERSION` 3, API v2, `AttributeFields` | **зроблено** |
+| 3 | Слот екрана продажу | `ModuleDescriptor.sales`, вбудований `vertical-clothing`, каркас + fallback, `useSalesCatalog` у платформі (→ `PLATFORM_VERSION` 4) | у роботі |
 | 4 | Remote `vertical-flowers` | модуль, збірка, підпис, seed, e2e | заплановано |
 | 5 | Прибирання | `036` (drop `size`/`color`), реліз 2.0.0, перепублікація remote-модулів | заплановано |
 | 6 | Повні квіти | букети: `kind='composite'`, компоненти, авто-списання | не почато |
 | 7 | Кафе | техкарти, напівфабрикати, модифікатори | не почато |
+
+## 7a. Що вже лежить (фаза 2)
+
+- `pos_variants`: `attributes jsonb` + похідна `label` + `unit`; `pos_sale_items.unit`
+  (снапшот); `pos_stock_document_lines`: `placeholder_attributes/label/unit` і
+  новий unique-індекс по `(document_id, lower(name), placeholder_attributes)`;
+  `pos_products.kind` — резерв. Старі `size`/`color` ще на місці до `036`.
+- Кожен запис варіанта йде через `normalizeVariant` (`src/pos/verticals/attributes.ts`):
+  невідомий атрибут або чужа одиниця — 400, `label` завжди перераховується і
+  ніколи не приходить від клієнта. Оновлення замінює bag **цілком** — інакше
+  «очистити атрибут» не виражається.
+- Пошук каталогу: `label` + атрибути з `inSearch` (`jsonb_each_text`), офлайн
+  дзеркалить це через `filterCatalog(..., searchKeys)`; ключі передає екран
+  продажу з `useVertical()`.
+- Чотири клієнтські композитори підпису видалені: кошик, офлайн-чек, цінники і
+  stocktake читають `label`.
+- Зміна вертикалі супер-адміном перебудовує підписи всіх варіантів магазину в
+  тій самій транзакції (`relabelStoreVariants`), не чіпаючи атрибути — тому
+  повернення назад відновлює підписи байт-у-байт.
+- Версії: `POS_API_VERSION`/`POS_API_CLIENT_VERSION` = 2, `PLATFORM_VERSION` = 3.
 
 ## 8. Ланцюг даних (де шукати при правках)
 

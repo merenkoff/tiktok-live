@@ -47,8 +47,8 @@ describe.skipIf(!hasDb)('POS stock reports', () => {
       [storeId]
     );
     const variant = await pool.query(
-      `INSERT INTO pos_variants (store_id, product_id, size, color, price_cents, cost_cents)
-       VALUES ($1, $2, 'S', 'Blue', 5000, 2000) RETURNING id`,
+      `INSERT INTO pos_variants (store_id, product_id, attributes, label, price_cents, cost_cents)
+       VALUES ($1, $2, '{"color":"Blue","size":"S"}'::jsonb, 'Blue / S', 5000, 2000) RETURNING id`,
       [storeId, product.rows[0].id]
     );
     variantId = Number(variant.rows[0].id);

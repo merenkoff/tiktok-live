@@ -111,7 +111,7 @@ export function ManageStockModal({ row, onClose, onSaved }: Props) {
           <h2 className="text-lg font-semibold mt-1">
             {row.product_name}{' '}
             <span className="text-[#6E6E6E] font-normal">
-              {[row.size, row.color].filter(Boolean).join(' / ')}
+              {row.label}
             </span>
           </h2>
           <p className="text-sm text-[#6E6E6E] mt-1">

@@ -15,10 +15,6 @@ import type {
 } from './types.js';
 import { getCustomer } from './customers.service.js';
 
-function variantLabel(size: string, color: string): string {
-  return [color, size].filter(Boolean).join(' / ');
-}
-
 /** Allocate cart discount only across lines without product discount (compare_at). */
 export function allocateCartDiscount(
   lines: Array<{ pre_discount_total: number; has_product_discount: boolean }>,
@@ -224,7 +220,7 @@ export async function completeSale(params: {
 
     const variantIds = [...qtyByVariant.keys()];
     const variantsResult = await client.query(
-      `SELECT v.id, v.price_cents, v.compare_at_cents, v.size, v.color, p.name AS product_name
+      `SELECT v.id, v.price_cents, v.compare_at_cents, v.label, v.unit, p.name AS product_name
        FROM pos_variants v
        JOIN pos_products p ON p.id = v.product_id
        WHERE v.store_id = $1 AND v.id = ANY($2::bigint[]) AND v.is_active = TRUE`,
@@ -241,6 +237,7 @@ export async function completeSale(params: {
       variant_id: number;
       product_name: string;
       variant_label: string;
+      unit: string;
       quantity: number;
       unit_price_cents: number;
       compare_at_unit_cents: number | null;
@@ -258,7 +255,11 @@ export async function completeSale(params: {
       draftLines.push({
         variant_id: variantId,
         product_name: variant.product_name,
-        variant_label: variantLabel(variant.size, variant.color),
+        // The caption is whatever the store's vertical already derived onto the
+        // row; the sale snapshots it, so a later variant edit cannot rewrite
+        // history on a printed receipt.
+        variant_label: variant.label ?? '',
+        unit: variant.unit ?? '',
         quantity,
         unit_price_cents: unit,
         compare_at_unit_cents: compareAt,
@@ -321,10 +322,10 @@ export async function completeSale(params: {
     for (const line of lineItems) {
       await client.query(
         `INSERT INTO pos_sale_items
-           (sale_id, store_id, variant_id, product_name, variant_label,
+           (sale_id, store_id, variant_id, product_name, variant_label, unit,
             quantity, unit_price_cents, line_total_cents,
             compare_at_unit_cents, line_discount_cents)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+         VALUES ($1, $2, $3, $4, $5, $11, $6, $7, $8, $9, $10)`,
         [
           saleId,
           params.storeId,
@@ -336,6 +337,7 @@ export async function completeSale(params: {
           line.line_total_cents,
           line.compare_at_unit_cents,
           line.line_discount_cents,
+          line.unit,
         ]
       );
 
@@ -486,6 +488,7 @@ export async function getSale(storeId: number, saleId: number) {
       variant_id: Number(row.variant_id),
       product_name: row.product_name,
       variant_label: row.variant_label,
+      unit: row.unit ?? '',
       quantity: Number(row.quantity),
       unit_price_cents: Number(row.unit_price_cents),
       compare_at_unit_cents:

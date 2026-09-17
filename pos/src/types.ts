@@ -70,6 +70,9 @@ export interface QrPaymentConfig {
  */
 export type VerticalId = 'clothing' | 'flowers';
 
+/** Normalised attribute values of one variant: only keys the schema declares. */
+export type AttributeValues = Record<string, string | number>;
+
 /** One product-variant attribute, as the store's vertical declares it. */
 export interface AttributeSpec {
   key: string;
@@ -205,8 +208,16 @@ export interface CatalogItem {
   variant_id: number;
   product_id: number;
   product_name: string;
-  size: string;
-  color: string;
+  /** Vertical-defined attributes — the schema is `store.vertical.attributes`. */
+  attributes: AttributeValues;
+  /**
+   * The variant's caption, built by the server from `attributes`. The client
+   * never composes one: the rule belongs to the store's vertical, and four
+   * hand-rolled composers on this side had already drifted apart.
+   */
+  label: string;
+  /** Base unit of `quantity` ('шт', 'г'…). */
+  unit: string;
   sku: string | null;
   barcode: string | null;
   price_cents: number;
@@ -219,8 +230,9 @@ export interface CatalogItem {
 export interface ProductVariant {
   id: number;
   product_id: number;
-  size: string;
-  color: string;
+  attributes: AttributeValues;
+  label: string;
+  unit: string;
   sku: string | null;
   barcode: string | null;
   price_cents: number;
@@ -499,6 +511,8 @@ export interface SaleDetail {
     variant_id: number;
     product_name: string;
     variant_label: string;
+    /** Unit the quantity is counted in, snapshotted at sale time. */
+    unit?: string;
     quantity: number;
     unit_price_cents: number;
     compare_at_unit_cents?: number | null;
@@ -610,14 +624,16 @@ export interface StockDocumentLine {
   line_note: string | null;
   is_placeholder?: boolean;
   placeholder_name?: string | null;
-  placeholder_size?: string;
-  placeholder_color?: string;
+  placeholder_attributes?: AttributeValues;
+  placeholder_label?: string;
+  placeholder_unit?: string;
   placeholder_sku?: string | null;
   placeholder_barcode?: string | null;
   placeholder_price_cents?: number | null;
   product_name?: string;
-  size?: string;
-  color?: string;
+  /** Resolved caption: the variant's, or the placeholder's for a stub line. */
+  label?: string;
+  unit?: string;
   product_id?: number;
 }
 
@@ -656,8 +672,8 @@ export interface OnHandRow {
   variant_id: number;
   product_id: number;
   product_name: string;
-  size: string;
-  color: string;
+  label: string;
+  unit: string;
   sku: string | null;
   barcode: string | null;
   quantity: number;
@@ -669,8 +685,8 @@ export interface StockMovementRow {
   id: number;
   variant_id: number;
   product_name: string;
-  size: string;
-  color: string;
+  label: string;
+  unit: string;
   delta: number;
   reason: string;
   reference_type: string | null;
@@ -684,8 +700,8 @@ export interface StockMovementRow {
 export interface MovementSummaryRow {
   variant_id: number;
   product_name: string;
-  size: string;
-  color: string;
+  label: string;
+  unit: string;
   opening: number;
   receipt: number;
   sale: number;
@@ -700,8 +716,8 @@ export interface MovementSummaryRow {
 export interface LowStockRow {
   variant_id: number;
   product_name: string;
-  size: string;
-  color: string;
+  label: string;
+  unit: string;
   quantity: number;
 }
 

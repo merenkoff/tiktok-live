@@ -101,7 +101,7 @@ export async function applyStockDelta(
 
 export async function listLowStock(storeId: number, threshold = 3) {
   const result = await pool.query(
-    `SELECT v.id AS variant_id, p.name AS product_name, v.size, v.color, s.quantity
+    `SELECT v.id AS variant_id, p.name AS product_name, v.label, v.unit, s.quantity
      FROM pos_stock s
      JOIN pos_variants v ON v.id = s.variant_id
      JOIN pos_products p ON p.id = v.product_id
@@ -112,8 +112,8 @@ export async function listLowStock(storeId: number, threshold = 3) {
   return result.rows.map((row) => ({
     variant_id: Number(row.variant_id),
     product_name: row.product_name,
-    size: row.size,
-    color: row.color,
+    label: row.label ?? '',
+    unit: row.unit ?? '',
     quantity: Number(row.quantity),
   }));
 }

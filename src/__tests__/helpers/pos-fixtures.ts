@@ -13,6 +13,7 @@
 // other's rows, and re-running against a dirty database is safe.
 
 import 'dotenv/config';
+import { clothingVertical, normalizeVariant } from '../../pos/verticals/index.js';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { pool } from '../../db.js';
 import { POS_MIGRATIONS, readMigration } from '../../pos/migrations.js';
@@ -204,8 +205,9 @@ export async function seedProduct(
     quantity?: number;
     barcode?: string | null;
     sku?: string | null;
-    size?: string;
-    color?: string;
+    /** Vertical attributes; defaults to the clothing pair most suites assume. */
+    attributes?: Record<string, string | number>;
+    unit?: string;
   } = {}
 ): Promise<TestProduct> {
   const product = await pool.query(
@@ -214,15 +216,22 @@ export async function seedProduct(
   );
   const productId = Number(product.rows[0].id);
 
+  // Through the real vertical, so the stored caption is whatever production
+  // would have derived — tests never hand-write a label.
+  const derived = normalizeVariant(clothingVertical, {
+    attributes: opts.attributes ?? { size: 'M', color: 'black' },
+    unit: opts.unit,
+  });
   const variant = await pool.query(
     `INSERT INTO pos_variants
-       (store_id, product_id, size, color, sku, barcode, price_cents, cost_cents)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 0) RETURNING id`,
+       (store_id, product_id, attributes, label, unit, sku, barcode, price_cents, cost_cents)
+     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, 0) RETURNING id`,
     [
       storeId,
       productId,
-      opts.size ?? 'M',
-      opts.color ?? 'black',
+      JSON.stringify(derived.attributes),
+      derived.label,
+      derived.unit,
       opts.sku ?? null,
       opts.barcode ?? null,
       opts.priceCents ?? 10000,

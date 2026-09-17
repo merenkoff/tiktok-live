@@ -15,8 +15,13 @@
  * Bump this (and `pos/src/platform/version.ts` on the client) the first time a
  * feature module is handed off for independent upgrades and a `/api/pos`
  * change would break an older module build. See `TechDocs/POS_API_VERSIONING.md`.
+ *
+ * 2 (verticals): `/catalog` and `/products` no longer carry `size`/`color`;
+ * a variant has `attributes`, a derived `label` and a `unit`. A 1.x module
+ * build (the shipped `stocktake`, for one) reads `item.size` and would show
+ * bare product names, so this is exactly the break the version exists for.
  */
-export const POS_API_VERSION = 1;
+export const POS_API_VERSION = 2;
 
 export interface PosApiVersionInfo {
   version: number;

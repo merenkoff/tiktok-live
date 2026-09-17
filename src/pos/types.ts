@@ -7,7 +7,7 @@
 import type { ModuleRemoteEntry } from './core/modules.js';
 import type { NavOverrides } from './core/nav.js';
 import type { FiscalProviderId, FiscalRequisites } from './fiscal/types.js';
-import type { VerticalId } from './verticals/types.js';
+import type { AttributeValues, VerticalId } from './verticals/types.js';
 
 export type { ModuleRemoteEntry, NavOverrides };
 
@@ -145,8 +145,12 @@ export interface PosVariant {
   id: number;
   store_id: number;
   product_id: number;
-  size: string;
-  color: string;
+  /** Vertical-defined attributes — see `src/pos/verticals`. */
+  attributes: AttributeValues;
+  /** Derived from `attributes` on every write by the store's `labelOf`. */
+  label: string;
+  /** Base unit of quantity (`quantity` counts whole units of it). */
+  unit: string;
   sku: string | null;
   barcode: string | null;
   price_cents: number;
@@ -160,8 +164,10 @@ export interface CatalogItem {
   variant_id: number;
   product_id: number;
   product_name: string;
-  size: string;
-  color: string;
+  attributes: AttributeValues;
+  /** The one caption the till, receipts and reports show for this variant. */
+  label: string;
+  unit: string;
   sku: string | null;
   barcode: string | null;
   price_cents: number;

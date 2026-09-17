@@ -57,6 +57,7 @@ export const POS_MIGRATIONS = [
   '032_pos_fiscal_offline_code_order.sql',
   '033_pos_store_nav_overrides.sql',
   '034_pos_store_vertical.sql',
+  '035_pos_variant_attributes.sql',
 ] as const;
 
 export function readMigration(file: string): string {

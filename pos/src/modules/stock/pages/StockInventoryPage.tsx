@@ -89,7 +89,7 @@ export function StockInventoryPage() {
     const needle = q.trim().toLowerCase();
     if (!needle) return lines;
     return lines.filter((l) =>
-      [l.product_name, l.size, l.color].filter(Boolean).some((v) => String(v).toLowerCase().includes(needle))
+      [l.product_name, l.label].filter(Boolean).some((v) => String(v).toLowerCase().includes(needle))
     );
   }, [lines, q]);
 
@@ -180,7 +180,7 @@ export function StockInventoryPage() {
                   <td className="px-3 py-2">
                     {line.product_name}{' '}
                     <span className="text-[#6E6E6E]">
-                      {[line.size, line.color].filter(Boolean).join('/')}
+                      {line.label}
                     </span>
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">{system}</td>

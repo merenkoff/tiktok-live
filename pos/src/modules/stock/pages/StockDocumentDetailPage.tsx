@@ -118,7 +118,7 @@ export function StockDocumentDetailPage() {
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="font-medium">
-                    {line.product_name} {[line.size, line.color].filter(Boolean).join('/')}
+                    {line.product_name} {line.label}
                   </p>
                   {isStub && (
                     <span className="text-[11px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-[3px] bg-[#FFF4E5] text-[#B54708]">

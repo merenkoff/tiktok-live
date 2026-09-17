@@ -105,7 +105,7 @@ export function StockMovementPage() {
                 <td className="px-3 py-2">
                   {row.product_name}{' '}
                   <span className="text-[#6E6E6E]">
-                    {[row.size, row.color].filter(Boolean).join('/')}
+                    {row.label}
                   </span>
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums">{row.opening}</td>

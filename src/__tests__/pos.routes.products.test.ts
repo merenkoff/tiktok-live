@@ -138,7 +138,7 @@ describe.skipIf(!hasDb)('POS products & catalog routes', () => {
         headers: auth(store.ownerToken),
         payload: {
           name: 'Route Jacket',
-          variants: [{ size: 'L', color: 'green', price_cents: 30000, quantity: 2 }],
+          variants: [{ attributes: { size: 'L', color: 'green' }, price_cents: 30000, quantity: 2 }],
         },
       });
       expect(res.statusCode).toBe(201);
@@ -211,7 +211,7 @@ describe.skipIf(!hasDb)('POS products & catalog routes', () => {
         method: 'POST',
         url: `/api/pos/products/${seeded.productId}/variants`,
         headers: auth(store.ownerToken),
-        payload: { size: 'XL', price_cents: 15000, quantity: 1 },
+        payload: { attributes: { size: 'XL' }, price_cents: 15000, quantity: 1 },
       });
       expect(res.statusCode).toBe(201);
       expect(res.json().variants).toHaveLength(2);

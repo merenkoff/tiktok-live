@@ -194,3 +194,21 @@ describe('searchableAttributeKeys', () => {
     expect(searchableAttributeKeys(flowersVertical)).toEqual(['color', 'country']);
   });
 });
+
+describe('label rules the database depends on', () => {
+  it('matches migration 035\'s clothing backfill exactly', () => {
+    // 035 writes `concat_ws(' / ', NULLIF(color,''), NULLIF(size,''))` into
+    // `pos_variants.label` for every existing row. If `labelOf` ever stops
+    // agreeing with that SQL, the first edit of an untouched variant silently
+    // rewrites its caption — this test is the tripwire.
+    const cases: Array<[Record<string, string>, string]> = [
+      [{ color: 'Синій', size: 'M' }, 'Синій / M'],
+      [{ color: 'Синій' }, 'Синій'],
+      [{ size: 'M' }, 'M'],
+      [{}, ''],
+    ];
+    for (const [attrs, expected] of cases) {
+      expect(clothingVertical.labelOf(attrs)).toBe(expected);
+    }
+  });
+});

@@ -55,7 +55,17 @@ function rowFromServer(item: SaleListItem): LocalSaleRow {
 }
 
 export const cashierApi = {
-  getCatalog(opts?: { q?: string; barcode?: string; tag_id?: number }): Promise<CatalogItem[]> {
+  /**
+   * `searchKeys` only matters offline: the server reads the store's vertical
+   * itself, while the local mirror has to be told which attributes are
+   * searchable so it finds exactly what the online query would.
+   */
+  getCatalog(opts?: {
+    q?: string;
+    barcode?: string;
+    tag_id?: number;
+    searchKeys?: readonly string[];
+  }): Promise<CatalogItem[]> {
     return isOfflinePosEnabled() ? repo.getCatalog(opts) : api.getCatalog(opts);
   },
 

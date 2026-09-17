@@ -11,9 +11,36 @@ import {
   enrichGtinFromSources,
   gtinSourceLabel,
   isInternalBarcode,
+  useVertical,
 } from '@pos/platform';
-import type { GtinHint, OnHandRow, StockDocumentType, Supplier } from '@pos/platform';
-import { useDragScroll } from '@pos/platform/ui';
+import type {
+  AttributeValues,
+  GtinHint,
+  OnHandRow,
+  StockDocumentType,
+  Supplier,
+  VerticalPublicConfig,
+} from '@pos/platform';
+import { AttributeFields, useDragScroll } from '@pos/platform/ui';
+
+/**
+ * A short read-out of what the operator typed, for the draft row on screen.
+ *
+ * Deliberately not called a label: the real caption is derived server-side by
+ * the store's vertical when the line is saved, and only that one is stored,
+ * printed and shown everywhere else.
+ */
+function attributeSummary(vertical: VerticalPublicConfig, attributes: AttributeValues): string {
+  return vertical.attributes
+    .filter((spec) => spec.inLabel)
+    .map((spec) => {
+      const value = attributes[spec.key];
+      if (value == null || value === '') return '';
+      return spec.unitSuffix ? `${value} ${spec.unitSuffix}` : String(value);
+    })
+    .filter(Boolean)
+    .join(' · ');
+}
 
 const WRITEOFF_REASONS = [
   { code: 'damaged', label: 'Брак' },
@@ -47,8 +74,11 @@ type PlaceholderLine = {
   quantity: number;
   price_cents: number;
   unit_cost_cents?: number;
-  size: string;
-  color: string;
+  /** Vertical-defined attributes of the product this line will create. */
+  attributes: AttributeValues;
+  unit: string;
+  /** What the operator typed, shown on the draft row until the server saves it. */
+  summary: string;
   sku: string;
   barcode: string;
 };
@@ -73,6 +103,7 @@ function looksLikeBarcode(value: string): boolean {
 }
 
 export function StockActionPage({ type }: Props) {
+  const vertical = useVertical();
   const navigate = useNavigate();
   const [catalog, setCatalog] = useState<OnHandRow[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -92,8 +123,8 @@ export function StockActionPage({ type }: Props) {
   const [stubQty, setStubQty] = useState('1');
   const [stubPrice, setStubPrice] = useState('');
   const [stubCost, setStubCost] = useState('');
-  const [stubSize, setStubSize] = useState('');
-  const [stubColor, setStubColor] = useState('');
+  const [stubAttributes, setStubAttributes] = useState<AttributeValues>({});
+  const [stubUnit, setStubUnit] = useState(vertical.defaultUnit);
   const [stubSku, setStubSku] = useState('');
   const [stubBarcodeBusy, setStubBarcodeBusy] = useState(false);
   const [stubBarcode, setStubBarcode] = useState('');
@@ -144,7 +175,7 @@ export function StockActionPage({ type }: Props) {
     const list = !needle
       ? catalog
       : catalog.filter((r) =>
-          [r.product_name, r.size, r.color, r.sku, r.barcode]
+          [r.product_name, r.label, r.sku, r.barcode]
             .filter(Boolean)
             .some((v) => String(v).toLowerCase().includes(needle))
         );
@@ -153,7 +184,7 @@ export function StockActionPage({ type }: Props) {
 
   function addVariant(row: OnHandRow) {
     if (selectedIds.has(row.variant_id)) return;
-    const label = `${row.product_name} ${[row.size, row.color].filter(Boolean).join('/')}`.trim();
+    const label = `${row.product_name} ${row.label}`.trim();
     if (type === 'adjustment') {
       setLines((prev) => [
         ...prev,
@@ -206,8 +237,8 @@ export function StockActionPage({ type }: Props) {
     setStubQty('1');
     setStubPrice('');
     setStubCost('');
-    setStubSize('');
-    setStubColor('');
+    setStubAttributes({});
+    setStubUnit(vertical.defaultUnit);
     setGtinHint(null);
     gtinHintClearedRef.current = false;
     const needle = (barcodeLike ? '' : query).toLowerCase();
@@ -295,14 +326,18 @@ export function StockActionPage({ type }: Props) {
     }
     const costRaw = stubCost.trim();
     const unitCostCents = costRaw === '' ? undefined : uahInputToCents(costRaw);
-    const size = stubSize.trim();
-    const color = stubColor.trim();
+    // Same key the server de-duplicates on (`placeholder_attributes` jsonb
+    // equality) — catching it here just saves a round trip.
+    const attributes = stubAttributes;
+    const attrKey = JSON.stringify(
+      vertical.attributes.map((spec) => attributes[spec.key] ?? null)
+    );
     const dup = lines.some(
       (l) =>
         l.kind === 'placeholder' &&
         l.name.toLowerCase() === name.toLowerCase() &&
-        l.size === size &&
-        l.color === color
+        JSON.stringify(vertical.attributes.map((spec) => l.attributes[spec.key] ?? null)) ===
+          attrKey
     );
     if (dup) {
       setError('Такий новий товар уже є в документі');
@@ -317,8 +352,9 @@ export function StockActionPage({ type }: Props) {
         quantity,
         price_cents: priceCents,
         unit_cost_cents: unitCostCents,
-        size,
-        color,
+        attributes,
+        unit: stubUnit,
+        summary: attributeSummary(vertical, attributes),
         sku: stubSku.trim(),
         barcode: stubBarcode.trim(),
       },
@@ -394,8 +430,8 @@ export function StockActionPage({ type }: Props) {
             quantity: line.quantity,
             price_cents: line.price_cents,
             unit_cost_cents: line.unit_cost_cents ?? null,
-            size: line.size,
-            color: line.color,
+            attributes: line.attributes,
+            unit: line.unit,
             sku: line.sku || null,
             barcode: line.barcode || null,
           });
@@ -525,9 +561,9 @@ export function StockActionPage({ type }: Props) {
                       </span>
                     </div>
                     <p className="text-xs text-[#6E6E6E]">Створиться при проведенні</p>
-                    {(line.size || line.color || line.barcode) && (
+                    {(line.summary || line.barcode) && (
                       <p className="text-xs text-[#6E6E6E]">
-                        {[line.size, line.color].filter(Boolean).join(' / ')}
+                        {line.summary}
                         {line.barcode ? ` · ${line.barcode}` : ''}
                       </p>
                     )}
@@ -728,7 +764,7 @@ export function StockActionPage({ type }: Props) {
                 <span>
                   <span className="font-medium">{row.product_name}</span>{' '}
                   <span className="text-[#6E6E6E]">
-                    {[row.size, row.color].filter(Boolean).join('/')}
+                    {row.label}
                   </span>
                 </span>
                 <span className="tabular-nums whitespace-nowrap text-[#6E6E6E]">
@@ -833,22 +869,13 @@ export function StockActionPage({ type }: Props) {
                 className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2.5 text-sm"
               />
             </label>
-            <label className="block space-y-1">
-              <span className="text-sm text-[#6E6E6E]">Розмір</span>
-              <input
-                value={stubSize}
-                onChange={(e) => setStubSize(e.target.value)}
-                className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2.5 text-sm"
-              />
-            </label>
-            <label className="block space-y-1">
-              <span className="text-sm text-[#6E6E6E]">Колір</span>
-              <input
-                value={stubColor}
-                onChange={(e) => setStubColor(e.target.value)}
-                className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2.5 text-sm"
-              />
-            </label>
+            <AttributeFields
+              className="grid gap-2"
+              schema={vertical.attributes}
+              value={stubAttributes}
+              onChange={setStubAttributes}
+              unit={{ value: stubUnit, options: vertical.units, onChange: setStubUnit }}
+            />
             <label className="block space-y-1">
               <span className="text-sm text-[#6E6E6E]">Артикул (SKU)</span>
               <input

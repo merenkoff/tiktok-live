@@ -56,8 +56,8 @@ describe.skipIf(!hasDb)('POS receipt placeholder products', () => {
     );
     const productId = Number(product.rows[0].id);
     const v1 = await pool.query(
-      `INSERT INTO pos_variants (store_id, product_id, size, color, sku, barcode, price_cents, cost_cents)
-       VALUES ($1, $2, 'M', 'Black', $3, $4, 10000, 4000) RETURNING id`,
+      `INSERT INTO pos_variants (store_id, product_id, attributes, label, sku, barcode, price_cents, cost_cents)
+       VALUES ($1, $2, '{"color":"Black","size":"M"}'::jsonb, 'Black / M', $3, $4, 10000, 4000) RETURNING id`,
       [storeId, productId, `SKU-${slug}`, existingBarcode]
     );
     variantId = Number(v1.rows[0].id);
@@ -101,8 +101,7 @@ describe.skipIf(!hasDb)('POS receipt placeholder products', () => {
       quantity: 3,
       priceCents: 45000,
       unitCostCents: 20000,
-      size: '86',
-      color: 'brown',
+      attributes: { size: '86', color: 'brown' },
     });
     expect(line.variant_id).toBeNull();
     expect(line.is_placeholder).toBe(true);
@@ -160,8 +159,7 @@ describe.skipIf(!hasDb)('POS receipt placeholder products', () => {
       quantity: 4,
       priceCents: 12000,
       unitCostCents: 5000,
-      size: 'S',
-      color: 'red',
+      attributes: { size: 'S', color: 'red' },
     });
 
     const posted = await postDocument({ storeId, documentId: doc.id, staffId });
@@ -309,8 +307,7 @@ describe.skipIf(!hasDb)('POS receipt placeholder products', () => {
       name: 'Dup Name',
       quantity: 1,
       priceCents: 100,
-      size: 'M',
-      color: 'blue',
+      attributes: { size: 'M', color: 'blue' },
     });
     await expect(
       addPlaceholderLine({
@@ -319,8 +316,7 @@ describe.skipIf(!hasDb)('POS receipt placeholder products', () => {
         name: 'Dup Name',
         quantity: 2,
         priceCents: 200,
-        size: 'M',
-        color: 'blue',
+        attributes: { size: 'M', color: 'blue' },
       })
     ).rejects.toThrow(/duplicate/i);
   });

@@ -6,6 +6,7 @@
 // Usage: npx tsx src/pos/seed.ts
 
 import 'dotenv/config';
+import { clothingVertical, normalizeVariant } from './verticals/index.js';
 import { copyFile } from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -172,16 +173,22 @@ async function seed(): Promise<void> {
         const productId = Number(productResult.rows[0].id);
 
         for (const variant of product.variants) {
+          // The demo store is a clothing store, so size/colour go in as that
+          // vertical's attributes and the caption is derived, never typed.
+          const derived = normalizeVariant(clothingVertical, {
+            attributes: { size: variant.size, color: variant.color },
+          });
           const variantResult = await client.query(
             `INSERT INTO pos_variants
-               (store_id, product_id, size, color, sku, barcode, price_cents, cost_cents)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+               (store_id, product_id, attributes, label, unit, sku, barcode, price_cents, cost_cents)
+             VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9)
              RETURNING id`,
             [
               storeId,
               productId,
-              variant.size,
-              variant.color,
+              JSON.stringify(derived.attributes),
+              derived.label,
+              derived.unit,
               variant.sku,
               variant.barcode,
               variant.price,

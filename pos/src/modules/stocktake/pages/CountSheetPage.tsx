@@ -18,6 +18,7 @@ import {
   addCount,
   finishSheet,
   getSheet,
+  lineLabel,
   listLines,
   lookupByBarcode,
   removeLine,
@@ -246,7 +247,7 @@ export function CountSheetPage() {
                     }}
                   >
                     <span className="text-sq-text">
-                      {item.product_name} · {item.size} · {item.color}
+                      {lineLabel(item)}
                     </span>
                     <span className="text-sq-secondary">+1</span>
                   </button>

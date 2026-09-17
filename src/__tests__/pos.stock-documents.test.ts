@@ -60,8 +60,8 @@ describe.skipIf(!hasDb)('POS stock documents ledger', () => {
     );
     const productId = Number(product.rows[0].id);
     const v1 = await pool.query(
-      `INSERT INTO pos_variants (store_id, product_id, size, color, sku, barcode, price_cents, cost_cents)
-       VALUES ($1, $2, 'M', 'Black', $3, $4, 10000, 4000) RETURNING id`,
+      `INSERT INTO pos_variants (store_id, product_id, attributes, label, sku, barcode, price_cents, cost_cents)
+       VALUES ($1, $2, '{"color":"Black","size":"M"}'::jsonb, 'Black / M', $3, $4, 10000, 4000) RETURNING id`,
       [storeId, productId, `SKU-${slug}-1`, `BC-${slug}-1`]
     );
     variantId = Number(v1.rows[0].id);
@@ -76,8 +76,8 @@ describe.skipIf(!hasDb)('POS stock documents ledger', () => {
     );
 
     const v2 = await pool.query(
-      `INSERT INTO pos_variants (store_id, product_id, size, color, sku, barcode, price_cents, cost_cents)
-       VALUES ($1, $2, 'L', 'Black', $3, $4, 10000, 4000) RETURNING id`,
+      `INSERT INTO pos_variants (store_id, product_id, attributes, label, sku, barcode, price_cents, cost_cents)
+       VALUES ($1, $2, '{"color":"Black","size":"L"}'::jsonb, 'Black / L', $3, $4, 10000, 4000) RETURNING id`,
       [storeId, productId, `SKU-${slug}-2`, `BC-${slug}-2`]
     );
     variantId2 = Number(v2.rows[0].id);

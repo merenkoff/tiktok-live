@@ -250,6 +250,50 @@ describe.skipIf(!hasDb)('POS super admin routes', () => {
       expect(db.rows[0].vertical).toBe('flowers');
     });
 
+    it('relabels every variant when the vertical changes, keeping the attributes', async () => {
+      const product = await pool.query(
+        `INSERT INTO pos_products (store_id, name) VALUES ($1, 'Троянда') RETURNING id`,
+        [c.storeId]
+      );
+      // A florist's stem, entered while the store was still on flowers.
+      await pool.query(
+        `INSERT INTO pos_variants (store_id, product_id, attributes, label, unit, price_cents)
+         VALUES ($1, $2, '{"color":"Червона","length_cm":60}'::jsonb, 'Червона · 60 см', 'шт', 5000)`,
+        [c.storeId, product.rows[0].id]
+      );
+
+      const toClothing = await app.inject({
+        method: 'PATCH',
+        url: `/api/pos/super/stores/${c.storeId}`,
+        headers: superHeaders(),
+        payload: { vertical: 'clothing' },
+      });
+      expect(toClothing.statusCode).toBe(200);
+
+      const afterClothing = await pool.query(
+        `SELECT attributes, label FROM pos_variants WHERE store_id = $1`,
+        [c.storeId]
+      );
+      // Clothing's rule knows `color` and not `length_cm`, so the caption
+      // shrinks — but the bag is untouched, which is what lets the move back
+      // restore the original caption verbatim.
+      expect(afterClothing.rows[0].attributes).toEqual({ color: 'Червона', length_cm: 60 });
+      expect(afterClothing.rows[0].label).toBe('Червона');
+
+      const backToFlowers = await app.inject({
+        method: 'PATCH',
+        url: `/api/pos/super/stores/${c.storeId}`,
+        headers: superHeaders(),
+        payload: { vertical: 'flowers' },
+      });
+      expect(backToFlowers.statusCode).toBe(200);
+      const afterFlowers = await pool.query(
+        `SELECT label FROM pos_variants WHERE store_id = $1`,
+        [c.storeId]
+      );
+      expect(afterFlowers.rows[0].label).toBe('Червона · 60 см');
+    });
+
     it('lets the store move back once its module is gone', async () => {
       const res = await app.inject({
         method: 'PATCH',

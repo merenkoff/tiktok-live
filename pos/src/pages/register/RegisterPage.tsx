@@ -4,7 +4,7 @@
 
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, Check, Search } from 'lucide-react';
-import { api, cashierApi, useAuthStore, useCartStore } from '@pos/platform';
+import { api, cashierApi, useAuthStore, useCartStore, useVertical } from '@pos/platform';
 import { useDragScroll } from '../../hooks/useDragScroll';
 import { formatUah } from '../../lib/money';
 import {
@@ -47,6 +47,13 @@ function needsBackNav(tagPath: PosTag[]): boolean {
 
 export function RegisterPage() {
   const auth = useAuthStore((s) => s.auth);
+  const vertical = useVertical();
+  // The server reads the store's vertical itself; the offline mirror has to be
+  // told, or a cashier's search finds less with the network down than with it.
+  const searchKeys = useMemo(
+    () => vertical.attributes.filter((a) => a.inSearch).map((a) => a.key),
+    [vertical]
+  );
 
   const lines = useCartStore((s) => s.lines);
   const banner = useCartStore((s) => s.banner);
@@ -121,16 +128,19 @@ export function RegisterPage() {
     setTags(await cashierApi.getTags());
   }, []);
 
-  const loadCatalog = useCallback(async (opts?: { q?: string; barcode?: string; tag_id?: number }) => {
+  const loadCatalog = useCallback(
+    async (opts?: { q?: string; barcode?: string; tag_id?: number }) => {
     setLoading(true);
     try {
-      const items = await cashierApi.getCatalog(opts);
+      const items = await cashierApi.getCatalog({ ...opts, searchKeys });
       setCatalog(items);
       return items;
     } finally {
       setLoading(false);
     }
-  }, []);
+    },
+    [searchKeys]
+  );
 
   useEffect(() => {
     void loadTags();
@@ -633,7 +643,7 @@ export function RegisterPage() {
                     <ProductTile
                       key={productId}
                       name={first.product_name}
-                      subtitle={[first.color, first.size].filter(Boolean).join(' / ')}
+                      subtitle={first.label}
                       priceCents={minPrice}
                       imageUrl={first.image_url}
                       stock={stock}

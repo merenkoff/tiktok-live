@@ -51,7 +51,7 @@ export function StockHubPage() {
     const needle = q.trim().toLowerCase();
     if (!needle) return rows;
     return rows.filter((r) =>
-      [r.product_name, r.size, r.color, r.sku, r.barcode]
+      [r.product_name, r.label, r.sku, r.barcode]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(needle))
     );
@@ -100,7 +100,7 @@ export function StockHubPage() {
           <ul className="mt-2 space-y-1 text-sm">
             {low.map((item) => (
               <li key={item.variant_id}>
-                {item.product_name} {[item.size, item.color].filter(Boolean).join('/')} —{' '}
+                {item.product_name} {item.label} —{' '}
                 <strong>{item.quantity}</strong> шт
               </li>
             ))}
@@ -133,7 +133,7 @@ export function StockHubPage() {
                 <tr key={row.variant_id} className="border-t border-[#E0E0E0]">
                   <td className="px-3 py-2.5">{row.product_name}</td>
                   <td className="px-3 py-2.5 text-[#6E6E6E]">
-                    {[row.size, row.color].filter(Boolean).join(' / ') || '—'}
+                    {row.label || '—'}
                   </td>
                   <td className="px-3 py-2.5 text-right">
                     <button

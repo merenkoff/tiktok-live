@@ -11,6 +11,7 @@ function makeLine(overrides: Partial<CartLine> = {}): CartLine {
     variant_id: 1,
     product_name: 'Футболка',
     variant_label: 'Синій / M',
+    unit: 'шт',
     unit_price_cents: 10000,
     quantity: 2,
     max_quantity: 5,
@@ -110,9 +111,11 @@ describe('useCartStore', () => {
     expect(cart().lines[0]).toMatchObject({ compare_at_cents: null, discount_label: null });
   });
 
-  it('builds the variant label from colour and size', () => {
-    cart().addItem(makeCatalogItem({ color: 'Синій', size: 'M' }));
-    expect(cart().lines[0].variant_label).toBe('Синій / M');
+  it('takes the caption and unit the server derived, never composing one', () => {
+    // The rule belongs to the store's vertical; four client-side composers
+    // had already drifted to three different separators before this.
+    cart().addItem(makeCatalogItem({ label: 'Червона · 60 см', unit: 'шт' }));
+    expect(cart().lines[0]).toMatchObject({ variant_label: 'Червона · 60 см', unit: 'шт' });
   });
 
   it('clamps setQty to the stock ceiling and warns', () => {

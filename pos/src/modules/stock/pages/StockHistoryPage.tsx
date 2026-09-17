@@ -86,7 +86,7 @@ export function StockHistoryPage() {
               <p className="font-medium">
                 {row.product_name}{' '}
                 <span className="text-[#6E6E6E] font-normal">
-                  {[row.size, row.color].filter(Boolean).join('/')}
+                  {row.label}
                 </span>
               </p>
               <p className="text-xs text-[#6E6E6E] mt-0.5">

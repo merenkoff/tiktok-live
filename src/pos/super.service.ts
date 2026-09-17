@@ -9,6 +9,7 @@
 // owner could not.
 
 import { pool } from '../db.js';
+import { logger } from '../logger.js';
 import { updateStore, type StorePatch } from './analytics.service.js';
 import {
   assertSingleFiscalRemote,
@@ -22,8 +23,8 @@ import {
 } from './core/modules.js';
 import { getFiscalSettings } from './fiscal/settings.service.js';
 import { isFiscalProviderId } from './fiscal/types.js';
-import { hasVertical, verticalOrDefault } from './verticals/index.js';
-import type { VerticalId } from './verticals/types.js';
+import { getVertical, hasVertical, verticalOrDefault } from './verticals/index.js';
+import type { AttributeValues, VerticalDefinition, VerticalId } from './verticals/types.js';
 
 export interface SuperStoreRow {
   id: number;
@@ -129,6 +130,7 @@ async function validatedRemotes(
  * recompute here, next to the write it belongs to.
  */
 async function setStoreVertical(storeId: number, vertical: VerticalId): Promise<void> {
+  const def = getVertical(vertical);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -136,13 +138,79 @@ async function setStoreVertical(storeId: number, vertical: VerticalId): Promise<
       vertical,
       storeId,
     ]);
+    const relabelled = await relabelStoreVariants(client, storeId, def);
     await client.query('COMMIT');
+    logger.info('pos super: store vertical changed', { storeId, vertical, relabelled });
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
   } finally {
     client.release();
   }
+}
+
+interface Queryable {
+  query(text: string, values?: unknown[]): Promise<{ rows: Array<Record<string, unknown>> }>;
+}
+
+/**
+ * Recompute every stored caption of a store under a new vertical.
+ *
+ * The attribute bags are left exactly as they are — a florist's `length_cm`
+ * stays on the row even while the store is set to clothing, so moving back
+ * restores the old captions verbatim. Keys the new vertical does not declare
+ * simply do not appear in its label, which is why this reads `labelOf`
+ * directly rather than going through `normalizeAttributes` (that one rejects
+ * unknown keys, which is right on a write and wrong here).
+ *
+ * Returns how many rows it touched, for the log.
+ */
+async function relabelStoreVariants(
+  client: Queryable,
+  storeId: number,
+  def: VerticalDefinition
+): Promise<number> {
+  const variants = await client.query(
+    `SELECT id, attributes FROM pos_variants WHERE store_id = $1`,
+    [storeId]
+  );
+  if (variants.rows.length > 0) {
+    const ids = variants.rows.map((row) => Number(row.id));
+    const labels = variants.rows.map((row) =>
+      def.labelOf((row.attributes as AttributeValues | null) ?? {})
+    );
+    await client.query(
+      `UPDATE pos_variants v
+          SET label = x.label, updated_at = NOW()
+         FROM unnest($1::bigint[], $2::text[]) AS x(id, label)
+        WHERE v.id = x.id AND v.label IS DISTINCT FROM x.label`,
+      [ids, labels]
+    );
+  }
+
+  // Draft receipts carry captions of products that do not exist yet.
+  const placeholders = await client.query(
+    `SELECT l.id, l.placeholder_attributes
+       FROM pos_stock_document_lines l
+       JOIN pos_stock_documents d ON d.id = l.document_id
+      WHERE l.store_id = $1 AND l.is_placeholder = TRUE AND d.status = 'draft'`,
+    [storeId]
+  );
+  if (placeholders.rows.length > 0) {
+    const ids = placeholders.rows.map((row) => Number(row.id));
+    const labels = placeholders.rows.map((row) =>
+      def.labelOf((row.placeholder_attributes as AttributeValues | null) ?? {})
+    );
+    await client.query(
+      `UPDATE pos_stock_document_lines l
+          SET placeholder_label = x.label
+         FROM unnest($1::bigint[], $2::text[]) AS x(id, label)
+        WHERE l.id = x.id AND l.placeholder_label IS DISTINCT FROM x.label`,
+      [ids, labels]
+    );
+  }
+
+  return variants.rows.length;
 }
 
 export async function patchStoreModules(

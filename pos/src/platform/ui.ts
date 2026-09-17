@@ -12,3 +12,4 @@ export { BarcodeScanner } from '../components/BarcodeScanner';
 export { ProductPhotoField } from '../components/ProductPhotoField';
 export { CustomerPicker } from '../components/cashier/CustomerPicker';
 export { useDragScroll } from '../hooks/useDragScroll';
+export { AttributeFields } from '../components/AttributeFields';

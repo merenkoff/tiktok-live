@@ -6,6 +6,10 @@ export { useAuthStore, loadLastStoreSlug } from '../hooks/useAuth';
 export { PosShellContext, usePosShell } from '../shell';
 export type { PosShell } from '../shell';
 export { useEnabledModules } from '../modules/useEnabledModules';
+// The store's sales vertical: the attribute schema its product forms render
+// and the units it sells in. A vertical module reads it to know what it is
+// looking at; the host's product/stock screens render their fields from it.
+export { useVertical } from '../hooks/useVertical';
 export type { ModuleId } from '../modules/types';
 // `getAppliedRemotes`/`setAppliedRemotes` hold module-level state
 // (`applied`, in `modules/appliedRemotes.ts`) that must be ONE instance
