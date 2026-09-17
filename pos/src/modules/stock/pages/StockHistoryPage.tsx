@@ -16,6 +16,7 @@ const REASON_UK: Record<string, string> = {
   receipt: 'Прихід',
   writeoff: 'Списання',
   inventory: 'Інвентаризація',
+  production: 'Виробництво',
 };
 
 export function StockHistoryPage() {

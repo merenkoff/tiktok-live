@@ -12,6 +12,7 @@ const TYPE_LABEL: Record<string, string> = {
   writeoff: 'Списання',
   adjustment: 'Корекція',
   inventory: 'Інвентаризація',
+  production: 'Виробництво',
 };
 
 const STATUS_LABEL: Record<string, string> = {

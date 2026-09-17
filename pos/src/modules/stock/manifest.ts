@@ -11,6 +11,9 @@ const StockHubPage = lazyWithRetry(() =>
 const StockActionPage = lazyWithRetry(() =>
   import('./pages/StockActionPage').then((m) => ({ default: m.StockActionPage }))
 );
+const StockProductionPage = lazyWithRetry(() =>
+  import('./pages/StockProductionPage').then((m) => ({ default: m.StockProductionPage }))
+);
 const StockInventoryPage = lazyWithRetry(() =>
   import('./pages/StockInventoryPage').then((m) => ({ default: m.StockInventoryPage }))
 );
@@ -26,7 +29,7 @@ const StockDocumentDetailPage = lazyWithRetry(() =>
   }))
 );
 
-/** Stock: adjustments, documents (receipt/writeoff/inventory), suppliers, reports. Owner-only, web. */
+/** Stock: adjustments, documents (receipt/writeoff/inventory/production), suppliers, reports. Owner-only, web. */
 export const stockModule: ModuleDescriptor = {
   id: 'stock',
   title: 'Склад',
@@ -38,6 +41,7 @@ export const stockModule: ModuleDescriptor = {
     { path: 'stock/receipt', mount: 'admin', element: StockActionPage, props: { type: 'receipt' } },
     { path: 'stock/writeoff', mount: 'admin', element: StockActionPage, props: { type: 'writeoff' } },
     { path: 'stock/adjust', mount: 'admin', element: StockActionPage, props: { type: 'adjustment' } },
+    { path: 'stock/production', mount: 'admin', element: StockProductionPage },
     { path: 'stock/inventory', mount: 'admin', element: StockInventoryPage },
     { path: 'stock/inventory/:id', mount: 'admin', element: StockInventoryPage },
     { path: 'stock/history', mount: 'admin', element: StockHistoryPage },

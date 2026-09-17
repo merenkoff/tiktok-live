@@ -5,7 +5,17 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { DEFAULT_TAG_COLOR, api, assetUrl, formatUah, type TagColorKey, uahInputToCents, useAuthStore, useVertical } from '@pos/platform';
 import { PriceTagsDialog } from '../components/PriceTagsDialog';
-import type { AttributeValues, PosTag, Product, ProductVariant } from '@pos/platform';
+import type {
+  AttributeValues,
+  PosTag,
+  Product,
+  ProductComponentInput,
+  ProductStockMode,
+  ProductVariant,
+} from '@pos/platform';
+import { CompositionEditor } from '../components/CompositionEditor';
+import { componentOptions } from '../components/componentOptions';
+import type { ComponentOption } from '../components/componentOptions';
 import { AttributeFields, ProductPhotoField, useDragScroll } from '@pos/platform/ui';
 import { TagColorSwatches } from '../components/TagColorSwatches';
 
@@ -61,8 +71,14 @@ export function ProductsPage() {
   const [barcode, setBarcode] = useState('');
   const [sku, setSku] = useState('');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  // '' = simple. The two composite modes are separate options rather than a
+  // checkbox plus a switch, because they behave differently enough at the till
+  // that the owner should pick one deliberately.
+  const [composite, setComposite] = useState<'' | ProductStockMode>('');
+  const [components, setComponents] = useState<ProductComponentInput[]>([]);
 
   const flatTags = useMemo(() => flattenTags(tags), [tags]);
+  const partOptions = useMemo(() => componentOptions(products), [products]);
 
   async function reload() {
     const [plist, tlist] = await Promise.all([api.getProducts(), api.getTags()]);
@@ -90,6 +106,7 @@ export function ProductsPage() {
       await api.createProduct({
         name,
         image_url: imageUrl,
+        ...(composite ? { kind: 'composite' as const, stock_mode: composite } : {}),
         variants: [
           {
             attributes,
@@ -97,7 +114,10 @@ export function ProductsPage() {
             sku: sku || undefined,
             barcode: barcode || undefined,
             price_cents: uahInputToCents(price),
-            quantity: Number(qty) || 0,
+            // A derived composite keeps no stock of its own; the server refuses
+            // an opening quantity on one rather than silently dropping it.
+            quantity: composite === 'derived' ? 0 : Number(qty) || 0,
+            ...(composite ? { components } : {}),
           },
         ],
       });
@@ -106,6 +126,8 @@ export function ProductsPage() {
       setBarcode('');
       setSku('');
       setImageUrl(null);
+      setComposite('');
+      setComponents([]);
       await reload();
     } catch (err) {
       setError(saveErrorMessage(err, 'Не вдалося створити товар'));
@@ -339,7 +361,39 @@ export function ProductsPage() {
                 unit={{ value: unit, options: vertical.units, onChange: setUnit }}
               />
               <input className={fieldClass} placeholder="Ціна, грн" value={price} onChange={(e) => setPrice(e.target.value)} />
-              <input className={fieldClass} placeholder="Залишок" value={qty} onChange={(e) => setQty(e.target.value)} />
+              {composite === 'derived' ? (
+                <p className="text-xs text-sq-secondary self-center">
+                  Залишок рахується зі складників.
+                </p>
+              ) : (
+                <input className={fieldClass} placeholder="Залишок" value={qty} onChange={(e) => setQty(e.target.value)} />
+              )}
+              <label className="block space-y-1 sm:col-span-2">
+                <span className="text-xs text-sq-secondary">Що це за товар</span>
+                <select
+                  className={fieldClass}
+                  value={composite}
+                  onChange={(e) => setComposite(e.target.value as '' | ProductStockMode)}
+                >
+                  <option value="">Звичайний товар</option>
+                  <option value="derived">Складений — збирається при продажу</option>
+                  <option value="own">Складений — збираємо заздалегідь</option>
+                </select>
+              </label>
+              {composite && (
+                <div className="sm:col-span-2">
+                  <CompositionEditor
+                    value={components}
+                    options={partOptions}
+                    onChange={setComponents}
+                  />
+                  <p className="text-xs text-sq-secondary mt-1">
+                    {composite === 'derived'
+                      ? 'Продаж спише складники зі складу.'
+                      : 'Складники спише документ виробництва — «Склад → Виробництво».'}
+                  </p>
+                </div>
+              )}
               <label className="block space-y-1">
                 <span className="text-xs text-sq-secondary">Артикул (SKU) — ваш внутрішній код</span>
                 <input className={fieldClass} value={sku} onChange={(e) => setSku(e.target.value)} />
@@ -364,6 +418,7 @@ export function ProductsPage() {
                   key={product.id}
                   product={product}
                   flatTags={flatTags}
+                  partOptions={componentOptions(products, product.id)}
                   onCancel={() => setEditId(null)}
                   onSaved={async () => {
                     await reload();
@@ -404,6 +459,13 @@ export function ProductsPage() {
                                   Потребує перевірки
                                 </span>
                               )}
+                              {product.kind === 'composite' && (
+                                <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-[3px] bg-[#EEF4FF] text-[#2B4ACB]">
+                                  {product.stock_mode === 'derived'
+                                    ? 'Складений · при продажу'
+                                    : 'Складений · збираємо'}
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -440,7 +502,10 @@ export function ProductsPage() {
                           );
                         })}
                       </div>
-                      <VariantsTable variants={product.variants.filter((v) => v.is_active)} />
+                      <VariantsTable
+                        variants={product.variants.filter((v) => v.is_active)}
+                        derived={product.kind === 'composite' && product.stock_mode === 'derived'}
+                      />
                     </div>
                   </div>
                 </section>
@@ -507,7 +572,14 @@ function GenerateBarcodeButton({ onGenerated }: { onGenerated: (code: string) =>
   );
 }
 
-function VariantsTable({ variants }: { variants: ProductVariant[] }) {
+function VariantsTable({
+  variants,
+  derived,
+}: {
+  variants: ProductVariant[];
+  /** Whether the quantity column is computed from components rather than stored. */
+  derived?: boolean;
+}) {
   const scrollRef = useDragScroll<HTMLDivElement>();
 
   return (
@@ -517,7 +589,7 @@ function VariantsTable({ variants }: { variants: ProductVariant[] }) {
           <tr className="text-left text-sq-secondary">
             <th className="py-1 pr-2 font-medium">Варіант</th>
             <th className="py-1 pr-2 font-medium">Ціна</th>
-            <th className="py-1 pr-2 font-medium">Залишок</th>
+            <th className="py-1 pr-2 font-medium">{derived ? 'Можна зібрати' : 'Залишок'}</th>
             <th className="py-1 pr-2 font-medium">Артикул</th>
             <th className="py-1 font-medium">Штрихкод</th>
           </tr>
@@ -529,7 +601,10 @@ function VariantsTable({ variants }: { variants: ProductVariant[] }) {
                 {v.label || '—'}
               </td>
               <td className="py-2 pr-2">{formatUah(v.price_cents)}</td>
-              <td className="py-2 pr-2">{v.quantity}</td>
+              <td className="py-2 pr-2">
+                {v.quantity}
+                {v.unit ? <span className="text-xs text-sq-muted"> {v.unit}</span> : null}
+              </td>
               <td className="py-2 pr-2 font-mono text-xs">{v.sku || '—'}</td>
               <td className="py-2 font-mono text-xs">{v.barcode || '—'}</td>
             </tr>
@@ -696,17 +771,20 @@ function TagAdminRow({
 function EditProductInline({
   product,
   flatTags,
+  partOptions,
   onCancel,
   onSaved,
   onCloseAfterSave,
 }: {
   product: Product;
   flatTags: PosTag[];
+  partOptions: ComponentOption[];
   onCancel: () => void;
   onSaved: () => Promise<void>;
   onCloseAfterSave: () => void;
 }) {
   const vertical = useVertical();
+  const composite = product.kind === 'composite';
   const [name, setName] = useState(product.name);
   const [description, setDescription] = useState(product.description ?? '');
   const [imageUrl, setImageUrl] = useState<string | null>(product.image_url);
@@ -714,9 +792,26 @@ function EditProductInline({
   const [variants, setVariants] = useState<ProductVariant[]>(
     product.variants.filter((v) => v.is_active)
   );
+  // Kept next to `variants` rather than inside them: the composition is a
+  // separate write, and mixing it into the variant row would make it too easy
+  // to send a half-edited one.
+  const [compositions, setCompositions] = useState<Record<number, ProductComponentInput[]>>(() =>
+    Object.fromEntries(
+      product.variants
+        .filter((v) => v.is_active)
+        .map((v) => [
+          v.id,
+          (v.components ?? []).map((c) => ({
+            component_variant_id: c.component_variant_id,
+            quantity: c.quantity,
+          })),
+        ])
+    )
+  );
   const [newAttributes, setNewAttributes] = useState<AttributeValues>({});
   const [newUnit, setNewUnit] = useState(vertical.defaultUnit);
   const [newPrice, setNewPrice] = useState('690');
+  const [newComponents, setNewComponents] = useState<ProductComponentInput[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -739,6 +834,7 @@ function EditProductInline({
           compare_at_cents: v.compare_at_cents ?? null,
           sku: v.sku ?? '',
           barcode: v.barcode ?? '',
+          ...(composite ? { components: compositions[v.id] ?? [] } : {}),
         });
       }
       await onSaved();
@@ -757,11 +853,25 @@ function EditProductInline({
         unit: newUnit,
         price_cents: uahInputToCents(newPrice),
         quantity: 0,
+        ...(composite ? { components: newComponents } : {}),
       });
-      setVariants(updated.variants.filter((v) => v.is_active));
+      const active = updated.variants.filter((v) => v.is_active);
+      setVariants(active);
+      setCompositions(
+        Object.fromEntries(
+          active.map((v) => [
+            v.id,
+            (v.components ?? []).map((c) => ({
+              component_variant_id: c.component_variant_id,
+              quantity: c.quantity,
+            })),
+          ])
+        )
+      );
       setNewAttributes({});
       setNewUnit(vertical.defaultUnit);
       setNewPrice('690');
+      setNewComponents([]);
       await onSaved();
     } catch {
       setError('Не вдалося додати варіант');
@@ -877,6 +987,13 @@ function EditProductInline({
                 setVariants(next);
               }}
             />
+            {composite && (
+              <CompositionEditor
+                value={compositions[v.id] ?? []}
+                options={partOptions}
+                onChange={(next) => setCompositions((prev) => ({ ...prev, [v.id]: next }))}
+              />
+            )}
             <div className="grid sm:grid-cols-2 gap-2">
               <label className="block space-y-1">
                 <span className="text-xs text-sq-secondary">Артикул (SKU)</span>
@@ -922,6 +1039,13 @@ function EditProductInline({
             onChange={setNewAttributes}
             unit={{ value: newUnit, options: vertical.units, onChange: setNewUnit }}
           />
+          {composite && (
+            <CompositionEditor
+              value={newComponents}
+              options={partOptions}
+              onChange={setNewComponents}
+            />
+          )}
           <div className="grid sm:grid-cols-[1fr_auto] gap-2 items-center">
             <input
               className={fieldClass}
