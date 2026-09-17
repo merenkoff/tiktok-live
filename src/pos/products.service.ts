@@ -6,7 +6,9 @@
 
 import { pool } from '../db.js';
 import { buildInternalBarcode } from './gtin/internal-code.js';
-import type { CatalogItem } from './types.js';
+import type { CatalogItem, ProductKind, ProductStockMode } from './types.js';
+
+export type { ProductKind, ProductStockMode };
 import { getProductTagIds, resolveTagFilterIds } from './tags.service.js';
 import { loadStoreVertical, normalizeVariant, searchableAttributeKeys } from './verticals/index.js';
 import type { VerticalDefinition } from './verticals/types.js';
@@ -49,9 +51,6 @@ export interface CreateProductInput {
   /** Where a composite's stock lives. See composites.service.ts. */
   stock_mode?: ProductStockMode;
 }
-
-export type ProductKind = 'simple' | 'composite';
-export type ProductStockMode = 'own' | 'derived';
 
 /**
  * A composite is only as good as its composition, and a derived one keeps no
@@ -726,6 +725,27 @@ export async function getCatalog(
          ELSE COALESCE(s.quantity, 0)
        END::int AS quantity,
        p.image_url,
+       p.kind,
+       p.stock_mode,
+       -- The till needs the recipe, not just the fact of one: the florist's
+       -- bench starts a custom bouquet from the catalogue card's composition,
+       -- and a composite it cannot read is a card it cannot sell from. Only
+       -- composites carry it, so this is a handful of rows.
+       CASE WHEN p.kind = 'composite' THEN COALESCE((
+         SELECT jsonb_agg(
+                  jsonb_build_object(
+                    'component_variant_id', c.component_variant_id,
+                    'quantity', c.quantity,
+                    'product_name', cp.name,
+                    'label', cv.label,
+                    'unit', cv.unit
+                  ) ORDER BY c.sort_order, c.id
+                )
+         FROM pos_product_components c
+         JOIN pos_variants cv ON cv.id = c.component_variant_id
+         JOIN pos_products cp ON cp.id = cv.product_id
+         WHERE c.store_id = p.store_id AND c.variant_id = v.id
+       ), '[]'::jsonb) END AS components,
        COALESCE(
          (SELECT array_agg(pt.tag_id) FROM pos_product_tags pt WHERE pt.product_id = p.id),
          '{}'::bigint[]
@@ -753,6 +773,22 @@ export async function getCatalog(
       row.compare_at_cents == null ? null : Number(row.compare_at_cents),
     quantity: Number(row.quantity),
     image_url: row.image_url,
+    kind: (row.kind === 'composite' ? 'composite' : 'simple') as ProductKind,
+    stock_mode: (row.stock_mode === 'derived' ? 'derived' : 'own') as ProductStockMode,
+    // Absent for a simple product rather than an empty array: "this card has
+    // no recipe" and "this bouquet's recipe is empty" are different facts, and
+    // only the second one is a problem.
+    ...(row.kind === 'composite'
+      ? {
+          components: (row.components ?? []).map((c: Record<string, unknown>) => ({
+            component_variant_id: Number(c.component_variant_id),
+            quantity: Number(c.quantity),
+            product_name: String(c.product_name ?? ''),
+            label: String(c.label ?? ''),
+            unit: String(c.unit ?? ''),
+          })),
+        }
+      : {}),
     tag_ids: Array.isArray(row.tag_ids) ? row.tag_ids.map((id: string | number) => Number(id)) : [],
   }));
 }

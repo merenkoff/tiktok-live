@@ -41,6 +41,7 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
        store.qr_payment_mode,
        store.qr_static_image_url,
        store.auto_print_receipt,
+       store.florist_labour_bps,
        store.enabled_modules,
        store.module_remotes,
        store.nav_overrides,
@@ -87,6 +88,10 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
       requisites: (row.fiscal_requisites as FiscalPublicConfig['requisites']) ?? null,
     },
     autoPrintReceipt: row.auto_print_receipt ?? false,
+    // Rides with the login so the offline till prices a bouquet by the same
+    // rule the server would have — cold-offline, the cached `pos_auth` blob
+    // is the only place it could read this from.
+    floristLabourBps: Number(row.florist_labour_bps ?? 0),
     enabledModules: (row.enabled_modules as string[] | null) ?? [],
     moduleRemotes:
       (row.module_remotes as PosAuthContext['moduleRemotes'] | null) ?? {},

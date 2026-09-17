@@ -22,6 +22,35 @@ import type {
 } from './types.js';
 import { getCustomer } from './customers.service.js';
 
+/**
+ * The caption for a bouquet assembled at the counter: how many stems went in.
+ *
+ * Kept deliberately short — it is snapshotted into `pos_sale_items.
+ * variant_label`, which a 32-character ПРРО receipt prints next to the product
+ * name. The recipe itself lives in `pos_sale_item_components`, and the till and
+ * the refund screen read it from there; this is only what a printed line can
+ * afford to say.
+ */
+export function customBouquetLabel(components: ComponentInput[]): string {
+  const stems = components.reduce((sum, row) => sum + row.quantity, 0);
+  return `${stems} ${pluralStems(stems)}`;
+}
+
+function pluralStems(n: number): string {
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 14) return 'стебел';
+  switch (n % 10) {
+    case 1:
+      return 'стебло';
+    case 2:
+    case 3:
+    case 4:
+      return 'стебла';
+    default:
+      return 'стебел';
+  }
+}
+
 /** Allocate cart discount only across lines without product discount (compare_at). */
 export function allocateCartDiscount(
   lines: Array<{ pre_discount_total: number; has_product_discount: boolean }>,
@@ -314,7 +343,12 @@ export async function completeSale(params: {
       draftLines.push({
         variant_id: item.variant_id,
         product_name: variant.product_name,
-        variant_label: variant.label ?? '',
+        // NOT the catalogue card's caption. That card is «Букет на замовлення ·
+        // Червоний» for every custom bouquet ever rung on it, and the ПРРО
+        // receipt, the sales list and the refund screen would all show the same
+        // meaningless line. What actually distinguishes this one is what went
+        // into it, so the caption counts that.
+        variant_label: customBouquetLabel(components),
         unit: variant.unit ?? '',
         quantity: item.quantity,
         unit_price_cents: unit,
