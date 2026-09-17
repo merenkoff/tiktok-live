@@ -19,6 +19,7 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, Flower2, Search } from 'lucide-react';
 import {
   customBouquetLabel,
+  formatUah,
   useAuthStore,
   useCartStore,
   useSalesCatalog,
@@ -229,6 +230,13 @@ function FlowersCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
           labourBps={labourBps}
           catalog={catalog}
           onClose={() => setBench(null)}
+          onShowcased={(name, priceCents) => {
+            // Nothing was rung: the bouquet went to the window. Say so in the
+            // cart's own banner, which is where the cashier already looks for
+            // "what just happened".
+            setBanner(`${name} — на вітрині, ${formatUah(priceCents)}`);
+            setBench(null);
+          }}
           onDone={({ unit_price_cents, components }) => {
             addAssembled({
               variant_id: bench.variant_id,

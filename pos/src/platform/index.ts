@@ -30,6 +30,7 @@ export * from './money';
 export * from './receipt';
 export * from './sales';
 export * from './offline';
+export * from './priceTag';
 export * from './tag-colors';
 export * from './types';
 export * from './urls';

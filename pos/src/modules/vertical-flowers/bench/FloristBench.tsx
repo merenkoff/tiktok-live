@@ -24,17 +24,47 @@
  * another till is phase B4, and the button says so rather than pretending.
  */
 
-import { useMemo, useState } from 'react';
-import { ChevronDown, Search, X } from 'lucide-react';
-import { formatUah, uahInputToCents, useVertical } from '@pos/platform';
-import type { CartLineComponent, CatalogItem, SalesCatalog } from '@pos/platform';
-import { CatalogTagBar, ScanWedge, VariantPicker } from '@pos/platform/ui';
+import { useEffect, useMemo, useState } from 'react';
+import { ChevronDown, Search, Store, X } from 'lucide-react';
+import {
+  api,
+  buildPriceTags,
+  formatUah,
+  triggerPrint,
+  uahInputToCents,
+  useAuthStore,
+  useOfflineStatus,
+  useVertical,
+} from '@pos/platform';
+import type { CartLineComponent, CatalogItem, PriceTag, SalesCatalog } from '@pos/platform';
+import { CatalogTagBar, PriceTagsPrintable, ScanWedge, VariantPicker } from '@pos/platform/ui';
+import type { TagPaperWidth } from '@pos/platform/ui';
+import { ShowcaseSheet } from './ShowcaseSheet';
 import { BudgetBar } from './BudgetBar';
 import { CompositionPanel } from './CompositionPanel';
 import { QuantityPad } from './QuantityPad';
 import { StemGrid } from './StemGrid';
 import { isAssemblable } from './stems';
 import { budgetRead, useBench } from './useBench';
+
+/**
+ * Station-local, exactly as `PriceTagsDialog` treats it: the roll is a property
+ * of the printer attached to THIS till, not of the store. Same key, so a shop
+ * that set 80 mm on the admin screen does not have to set it again here.
+ */
+/** The server's own words when it refuses — they are Ukrainian and actionable. */
+function errorText(error: unknown): string {
+  const sent = (error as { response?: { data?: { error?: string } } }).response?.data?.error;
+  return sent || 'Не вдалося зробити букет. Спробуйте ще раз.';
+}
+
+function loadPaper(): TagPaperWidth {
+  try {
+    return localStorage.getItem('pos.priceTagPaperWidth') === '80' ? 80 : 58;
+  } catch {
+    return 58;
+  }
+}
 
 export interface FloristBenchProps {
   /** The catalogue card this is rung on — a `derived` composite. */
@@ -43,15 +73,102 @@ export interface FloristBenchProps {
   /** Shared with the sell screen so the bench browses the same rows. */
   catalog: SalesCatalog;
   onDone: (line: { unit_price_cents: number; components: CartLineComponent[] }) => void;
+  /** A bouquet went to the window instead of the cart: nothing was rung. */
+  onShowcased: (name: string, priceCents: number) => void;
   onClose: () => void;
 }
 
-export function FloristBench({ card, labourBps, catalog, onDone, onClose }: FloristBenchProps) {
+export function FloristBench({
+  card,
+  labourBps,
+  catalog,
+  onDone,
+  onShowcased,
+  onClose,
+}: FloristBenchProps) {
   const bench = useBench(labourBps);
   const vertical = useVertical();
   const [picker, setPicker] = useState<CatalogItem[] | null>(null);
   const [budgetOpen, setBudgetOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+
+  const online = useOfflineStatus((s) => s.online);
+  const storeName = useAuthStore((s) => s.auth?.store.name ?? '');
+  const [showcase, setShowcase] = useState<{ uuid: string } | null>(null);
+  const [showcaseBusy, setShowcaseBusy] = useState(false);
+  const [showcaseError, setShowcaseError] = useState<string | null>(null);
+  const [printing, setPrinting] = useState<PriceTag[] | null>(null);
+
+  // The same handshake `PriceTagsDialog` uses: the printable is mounted, the OS
+  // dialog is opened on the next frame, and the markup is torn down on
+  // `afterprint`. Printing before the frame lands gives an empty sheet.
+  useEffect(() => {
+    if (!printing) return;
+    const clear = () => setPrinting(null);
+    window.addEventListener('afterprint', clear);
+    const raf = requestAnimationFrame(triggerPrint);
+    return () => {
+      window.removeEventListener('afterprint', clear);
+      cancelAnimationFrame(raf);
+    };
+  }, [printing]);
+
+  async function makeForShowcase(input: {
+    name: string | null;
+    priceCents: number | null;
+    print: boolean;
+  }): Promise<void> {
+    if (!showcase) return;
+    setShowcaseBusy(true);
+    setShowcaseError(null);
+    try {
+      const made = await api.assembleShowcase({
+        // Minted when the sheet opened, not now: a double tap on a slow
+        // connection has to come back with the same bouquet rather than tie a
+        // second one out of stems that are no longer on the shelf.
+        client_uuid: showcase.uuid,
+        components: bench.components.map((c) => ({
+          component_variant_id: c.component_variant_id,
+          quantity: c.quantity,
+        })),
+        name: input.name,
+        price_cents: input.priceCents,
+      });
+
+      if (input.print) {
+        setPrinting(
+          buildPriceTags(storeName, [
+            {
+              product: { name: made.name },
+              variant: {
+                id: made.variant_id,
+                // The card carries no attributes, so it has no caption — the
+                // name is «Букет №42» and that is the whole identity.
+                label: '',
+                unit: 'шт',
+                price_cents: made.price_cents,
+                sku: null,
+                barcode: made.barcode,
+                quantity: 1,
+              },
+              // One bouquet, one tag — not `defaultCopies`, which would print
+              // one per unit on hand and is right only for a product line.
+              copies: 1,
+            },
+          ])
+        );
+      }
+
+      // The fridge changed and a new card exists, so the sell screen behind us
+      // is now stale in two ways.
+      void catalog.refresh();
+      onShowcased(made.name, made.price_cents);
+    } catch (error) {
+      setShowcaseError(errorText(error));
+    } finally {
+      setShowcaseBusy(false);
+    }
+  }
 
   // Bouquet cards are not components (see `isAssemblable`), so they never reach
   // the grid. Filtering here rather than in `useSalesCatalog` keeps the sell
@@ -229,11 +346,20 @@ export function FloristBench({ card, labourBps, catalog, onDone, onClose }: Flor
         </button>
         <button
           type="button"
-          disabled
-          title="Буде у фазі B4 — відкладені кошики"
-          className="min-h-12 px-4 rounded-sq border border-sq-divider text-sq-muted disabled:opacity-50 hidden sm:block"
+          disabled={empty || !online}
+          // Online only, and it says so rather than timing out: making the card
+          // means the server issuing ids, which an offline till cannot do
+          // (POS_FLORIST_BENCH.md §11.6). Selling still works without network.
+          title={!online ? 'Потрібна мережа' : undefined}
+          onClick={() => {
+            setShowcaseError(null);
+            setShowcase({ uuid: crypto.randomUUID() });
+          }}
+          className="min-h-12 px-4 rounded-sq border border-sq-divider text-sq-text disabled:opacity-50 flex items-center gap-2"
+          data-testid="bench-to-showcase"
         >
-          Відкласти
+          <Store size={18} />
+          <span className="hidden sm:inline">{online ? 'На вітрину' : 'Потрібна мережа'}</span>
         </button>
         <button
           type="button"
@@ -301,6 +427,18 @@ export function FloristBench({ card, labourBps, catalog, onDone, onClose }: Flor
           </div>
         </div>
       )}
+
+      {showcase && (
+        <ShowcaseSheet
+          computedCents={bench.totals.totalCents}
+          busy={showcaseBusy}
+          error={showcaseError}
+          onSubmit={(input) => void makeForShowcase(input)}
+          onClose={() => setShowcase(null)}
+        />
+      )}
+
+      <PriceTagsPrintable tags={printing} paperWidth={loadPaper()} />
 
       {budgetOpen && (
         <BudgetDialog

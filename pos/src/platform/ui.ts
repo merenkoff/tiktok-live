@@ -20,3 +20,10 @@ export { TagFolderTile } from '../components/cashier/TagFolderTile';
 export { VariantPicker } from '../components/cashier/VariantPicker';
 export { CatalogTagBar } from '../components/cashier/CatalogTagBar';
 export { ScanWedge } from '../components/cashier/ScanWedge';
+// The price tag, rendered off-screen and made visible only to the print engine
+// by the `@media print` rules in `styles/tokens.css`. Those rules ship with the
+// HOST page, not with a module's `style.css` (which is Tailwind utilities
+// only), so a runtime-loaded module gets them for free and needs no CSS of its
+// own for this — see `scripts/module-tailwind.mjs`.
+export { PriceTagsPrintable } from '../components/PriceTagsPrintable';
+export type { TagPaperWidth } from '../components/PriceTagsPrintable';
