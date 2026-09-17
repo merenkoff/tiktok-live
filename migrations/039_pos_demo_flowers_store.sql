@@ -12,15 +12,47 @@
 -- runner touches — production included. It creates a real store with
 -- PUBLICLY KNOWN credentials (owner@flowers.shop / owner123, owner PIN 0000,
 -- seller PIN 1234). Those accounts see only their own store (every POS query is
--- scoped by `store_id`), but they are real logins. To drop it afterwards:
+-- scoped by `store_id`), but they are real logins. To drop it afterwards, delete
+-- the transactional tables first and let the cascade take the rest:
 --
+--   BEGIN;
+--   WITH s AS (SELECT id FROM pos_stores WHERE slug = 'demo-flowers')
+--   DELETE FROM pos_fiscal_receipts      WHERE store_id IN (SELECT id FROM s);
+--   -- …then refunds, sales, stock documents, as `dropTestStore` does…
 --   DELETE FROM pos_stores WHERE slug = 'demo-flowers';
+--   COMMIT;
 --
--- Everything below cascades from that row, so one statement removes it all.
+-- A bare `DELETE FROM pos_stores` looks like it works — it does on a demo
+-- nobody has sold from — but `pos_sale_items`, `pos_refund_items` and
+-- `pos_stock_document_lines` hold their variant with ON DELETE RESTRICT, and
+-- PostgreSQL checks that while the cascade is still running. The ordered
+-- version lives twice in this repo already: the rebuild block below, and
+-- `dropTestStore` in `src/__tests__/helpers/pos-fixtures.ts`.
 --
--- It is idempotent: the whole block exits if `demo-flowers` already exists, so
--- re-running the migration — which the runner does on every boot, it keeps no
--- tracking table — never duplicates or overwrites an edited demo.
+-- Idempotency works off a stamp, not off "does the store exist". The runner
+-- keeps no tracking table and re-applies every file on every boot
+-- (`src/pos/migrate.ts`), so this file records which build of the demo a
+-- database already has in `pos_demo_seed` and compares it with `v_version`:
+--
+--   * no store           -> build it, stamp it;
+--   * stamp = v_version  -> return immediately (the no-op on every boot);
+--   * stamp older/absent -> rebuild the catalogue, stamp it.
+--
+-- So editing the VALUES lists below means bumping `v_version`, and nothing else
+-- reaches a database that already has the demo. The third case is also how a
+-- store that predates this migration — created by `pos:seed`, which used to own
+-- the demo — gets the full catalogue.
+--
+-- ⚠ A rebuild REPLACES this store's catalogue and DELETES the demo's own sales,
+-- refunds and stock documents. A demo's history is not worth keeping, and the
+-- alternative (skip when sales exist) means the update never reaches a demo
+-- anyone actually used. Nothing outside `store_id` is touched. What survives:
+-- the store row with all its configuration (`vertical`, `enabled_modules`,
+-- `module_remotes`, `nav_overrides`, QR and fiscal settings), its staff, its
+-- customers and its receipt counters. `module_remotes` is the concrete reason —
+-- it points at a real `vertical-flowers` release that the super admin set, a
+-- migration must never write a module URL, and a demo that lost it would fall
+-- back to the bundled clothing catalogue.
 --
 -- Pictures are flat SVGs under `public/demo-flowers/` (regenerate with
 -- `node scripts/gen-demo-flowers.mjs public/demo-flowers`). `public/` is
@@ -32,8 +64,20 @@
 -- every one of them through the real flowers rule and fails if this file and
 -- `src/pos/verticals/flowers.ts` ever disagree.
 
+-- Which build of a demo dataset a database carries. Its own table rather than a
+-- column on `pos_stores`: that row is the owner's to edit, this is the
+-- migration's bookkeeping, and the next demo store can stamp itself here too.
+CREATE TABLE IF NOT EXISTS pos_demo_seed (
+  slug       TEXT PRIMARY KEY,
+  version    INT NOT NULL,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 DO $$
 DECLARE
+  -- Bump when the catalogue below changes. The header says what that does.
+  v_version CONSTANT int := 1;
+  v_stamped    int;
   v_store      bigint;
   v_owner      bigint;
   v_year       int := EXTRACT(YEAR FROM NOW())::int;
@@ -46,31 +90,87 @@ DECLARE
   v_unit_cost  int;
   v_seq        int := 0;
 BEGIN
-  IF EXISTS (SELECT 1 FROM pos_stores WHERE slug = 'demo-flowers') THEN
-    RAISE NOTICE 'demo-flowers already exists — skipping';
+  SELECT id INTO v_store FROM pos_stores WHERE slug = 'demo-flowers';
+  SELECT version INTO v_stamped FROM pos_demo_seed WHERE slug = 'demo-flowers';
+
+  IF v_store IS NOT NULL AND v_stamped = v_version THEN
+    RAISE NOTICE 'demo-flowers already at version % — skipping', v_version;
     RETURN;
   END IF;
 
-  INSERT INTO pos_stores (name, slug, currency, timezone, vertical)
-  VALUES ('Demo Flowers', 'demo-flowers', 'UAH', 'Europe/Kyiv', 'flowers')
-  RETURNING id INTO v_store;
+  IF v_store IS NOT NULL THEN
+    RAISE NOTICE 'demo-flowers at version % — rebuilding its catalogue at %',
+      COALESCE(v_stamped::text, 'none'), v_version;
+
+    -- Content only; the store row and its configuration stay (see the header).
+    -- The order follows the foreign keys: `pos_variants` is RESTRICTed by
+    -- `pos_sale_items`, `pos_refund_items` and `pos_stock_document_lines`, and
+    -- `pos_sales` / `pos_refunds` by `pos_fiscal_receipts`, so those go first.
+    -- The rest would cascade, but deleting explicitly is what makes the order
+    -- provable instead of dependent on the order PostgreSQL happens to walk a
+    -- cascade in.
+    DELETE FROM pos_fiscal_receipts WHERE store_id = v_store;
+    DELETE FROM pos_refund_items
+     WHERE refund_id IN (SELECT id FROM pos_refunds WHERE store_id = v_store);
+    DELETE FROM pos_refunds WHERE store_id = v_store;
+    DELETE FROM pos_payments WHERE store_id = v_store;
+    DELETE FROM pos_sale_item_components WHERE store_id = v_store;
+    DELETE FROM pos_sale_items WHERE store_id = v_store;
+    DELETE FROM pos_sales WHERE store_id = v_store;
+    -- Otherwise a replayed `client_uuid` answers with a sale that is gone.
+    DELETE FROM pos_idempotency_keys WHERE store_id = v_store;
+    DELETE FROM pos_stock_document_lines WHERE store_id = v_store;
+    DELETE FROM pos_stock_documents WHERE store_id = v_store;
+    DELETE FROM pos_product_components WHERE store_id = v_store;
+    DELETE FROM pos_variant_barcode_fixes WHERE store_id = v_store;
+    DELETE FROM pos_stock_movements WHERE store_id = v_store;
+    DELETE FROM pos_stock WHERE store_id = v_store;
+    DELETE FROM pos_product_tags
+     WHERE product_id IN (SELECT id FROM pos_products WHERE store_id = v_store);
+    DELETE FROM pos_variants WHERE store_id = v_store;
+    DELETE FROM pos_products WHERE store_id = v_store;
+    DELETE FROM pos_tags WHERE store_id = v_store;
+
+    -- The documents below are signed by the owner this store already has: a
+    -- rebuild never rewrites anyone's credentials. A store somehow left without
+    -- an active owner falls through to the insert below and gets the documented
+    -- one.
+    SELECT id INTO v_owner
+      FROM pos_staff
+     WHERE store_id = v_store AND role = 'owner' AND is_active
+     ORDER BY id LIMIT 1;
+  ELSE
+    INSERT INTO pos_stores (name, slug, currency, timezone, vertical)
+    VALUES ('Demo Flowers', 'demo-flowers', 'UAH', 'Europe/Kyiv', 'flowers')
+    RETURNING id INTO v_store;
+  END IF;
 
   -- bcrypt(10) digests of owner123 / 0000 / 1234, precomputed because SQL has
   -- no bcrypt. `pos.demo-flowers.test.ts` verifies them against the real
   -- `verifyPassword`/`verifyPin`, so a rotten paste cannot go unnoticed.
-  INSERT INTO pos_staff (store_id, role, display_name, login, password_hash, pin_hash)
-  VALUES (
-    v_store, 'owner', 'Власниця', 'owner@flowers.shop',
-    '$2b$10$SAR9nrA9Y5gEsMs0MJuRbOwC7CySrhVz7uBQzLwgUulAkMLLfzNmG',
-    '$2b$10$z0Fo3/EBQ0JxfO9NCJG65uT6kLeMT2gceRpiSlAokkSv0Bru9R5Bq'
-  )
-  RETURNING id INTO v_owner;
+  --
+  -- Only when the store has nobody: a rebuild leaves the staff it finds alone,
+  -- credentials included. Whoever manages the demo may have rotated the PIN,
+  -- and a catalogue update is no reason to hand it back to the internet.
+  IF v_owner IS NULL THEN
+    INSERT INTO pos_staff (store_id, role, display_name, login, password_hash, pin_hash)
+    VALUES (
+      v_store, 'owner', 'Власниця', 'owner@flowers.shop',
+      '$2b$10$SAR9nrA9Y5gEsMs0MJuRbOwC7CySrhVz7uBQzLwgUulAkMLLfzNmG',
+      '$2b$10$z0Fo3/EBQ0JxfO9NCJG65uT6kLeMT2gceRpiSlAokkSv0Bru9R5Bq'
+    )
+    RETURNING id INTO v_owner;
+  END IF;
 
-  INSERT INTO pos_staff (store_id, role, display_name, pin_hash)
-  VALUES (
-    v_store, 'seller', 'Флористка Ніна',
-    '$2b$10$4vDSYZFiSOgarz.z0sihVeqbYlAtUG0ZfI1uNFbWDGhzi4jKVaG1q'
-  );
+  IF NOT EXISTS (
+    SELECT 1 FROM pos_staff WHERE store_id = v_store AND role = 'seller' AND is_active
+  ) THEN
+    INSERT INTO pos_staff (store_id, role, display_name, pin_hash)
+    VALUES (
+      v_store, 'seller', 'Флористка Ніна',
+      '$2b$10$4vDSYZFiSOgarz.z0sihVeqbYlAtUG0ZfI1uNFbWDGhzi4jKVaG1q'
+    );
+  END IF;
 
   -- ── Tags ────────────────────────────────────────────────────────────────
   INSERT INTO pos_tags (store_id, name, sort_order, color, show_in_catalog_bar)
@@ -291,9 +391,15 @@ BEGIN
   END LOOP;
 
   -- The next production document the app numbers must not collide with ours.
+  -- Overwritten rather than kept on a rebuild: the documents it counted are
+  -- gone with the catalogue, so the numbers are free again. The receipt
+  -- counters are left alone — numbering never walks backwards.
   INSERT INTO pos_store_counters (store_id, counter_key, next_value)
   VALUES (v_store, 'production_' || v_year, v_seq + 1)
   ON CONFLICT (store_id, counter_key) DO UPDATE SET next_value = EXCLUDED.next_value;
 
-  RAISE NOTICE 'demo-flowers store created (id %)', v_store;
+  INSERT INTO pos_demo_seed (slug, version) VALUES ('demo-flowers', v_version)
+  ON CONFLICT (slug) DO UPDATE SET version = EXCLUDED.version, applied_at = NOW();
+
+  RAISE NOTICE 'demo-flowers store ready at version % (id %)', v_version, v_store;
 END $$;

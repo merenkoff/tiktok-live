@@ -195,26 +195,136 @@ describe.skipIf(!hasDb)('demo flowers store (migration 039)', () => {
     // The store is data and belongs in a migration; the bundle URL is a
     // deployment choice and does not. `npm run pos:seed` writes the localhost
     // entry for local work, and the super admin sets the real one in prod.
-    const sql = readMigration('039_pos_demo_flowers_store.sql');
+    //
+    // Comments are stripped first: the header has to name `module_remotes` to
+    // explain why a rebuild keeps it. The ban is on writing one.
+    const sql = readMigration('039_pos_demo_flowers_store.sql')
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('--'))
+      .join('\n');
     expect(sql).not.toContain('module_remotes');
     expect(sql).not.toContain('localhost');
   });
 
   it('is idempotent — re-running the migration changes nothing', async () => {
-    const before = await pool.query(
-      `SELECT (SELECT COUNT(*) FROM pos_stores WHERE slug = 'demo-flowers') AS stores,
-              (SELECT COUNT(*) FROM pos_variants WHERE store_id = $1) AS variants,
-              (SELECT COUNT(*) FROM pos_stock_movements WHERE store_id = $1) AS moves`,
+    // Not just the counts: the row ids too. A rebuild that happened to insert
+    // the same number of rows would pass a count check and still have thrown
+    // the catalogue away.
+    const shape = async () =>
+      (
+        await pool.query(
+          `SELECT (SELECT COUNT(*) FROM pos_stores WHERE slug = 'demo-flowers') AS stores,
+                  (SELECT COUNT(*) FROM pos_variants WHERE store_id = $1) AS variants,
+                  (SELECT COUNT(*) FROM pos_stock_movements WHERE store_id = $1) AS moves,
+                  (SELECT md5(string_agg(id::text, ',' ORDER BY id))
+                     FROM pos_products WHERE store_id = $1) AS product_ids,
+                  (SELECT version FROM pos_demo_seed WHERE slug = 'demo-flowers') AS stamp`,
+          [storeId]
+        )
+      ).rows[0];
+
+    const before = await shape();
+    await pool.query(readMigration('039_pos_demo_flowers_store.sql'));
+    expect(await shape()).toEqual(before);
+    expect(Number(before.stores)).toBe(1);
+    expect(Number(before.stamp)).toBeGreaterThan(0);
+  });
+
+  it('rebuilds a store that predates the stamp, keeping what its owner set', async () => {
+    // The production case this exists for: `demo-flowers` was created by
+    // `pos:seed` before the migration owned it, so it carries a catalogue from
+    // back then and no stamp at all. The rebuild has to reach it — and must not
+    // take the store's configuration with it. `module_remotes` is the one that
+    // would hurt: it points at a real `vertical-flowers` release the super
+    // admin set, and without it the demo till falls back to the bundled
+    // clothing catalogue.
+    const url = 'https://cdn.example/test@v9/vertical-flowers/remote-entry.js';
+    await pool.query(
+      `UPDATE pos_stores
+          SET module_remotes = jsonb_build_object(
+                'vertical-flowers',
+                jsonb_build_object('url', $2::text, 'title', 'Квіти', 'routePath', '/flowers'))
+        WHERE id = $1`,
+      [storeId, url]
+    );
+    const staffBefore = await pool.query(
+      `SELECT id FROM pos_staff WHERE store_id = $1 ORDER BY id`,
+      [storeId]
+    );
+    // A demo someone actually sold from: the rebuild deletes this, on purpose.
+    const sale = await pool.query(
+      `INSERT INTO pos_sales (store_id, staff_id, receipt_number)
+       VALUES ($1, $2, 'DEMO-REBUILD-1') RETURNING id`,
+      [storeId, staffBefore.rows[0].id]
+    );
+    await pool.query(
+      `INSERT INTO pos_sale_items
+         (sale_id, store_id, variant_id, product_name, quantity, unit_price_cents, line_total_cents)
+       SELECT $2, $1, id, 'before the rebuild', 1, 100, 100
+         FROM pos_variants WHERE store_id = $1 ORDER BY id LIMIT 1`,
+      [storeId, sale.rows[0].id]
+    );
+    // An extra product from the old shape, to prove the catalogue is replaced
+    // rather than added to.
+    await pool.query(
+      `INSERT INTO pos_products (store_id, name, kind, stock_mode)
+       VALUES ($1, 'Тюльпан (старий сид)', 'simple', 'own')`,
+      [storeId]
+    );
+    await pool.query(`DELETE FROM pos_demo_seed WHERE slug = 'demo-flowers'`);
+
+    await pool.query(readMigration('039_pos_demo_flowers_store.sql'));
+
+    const after = await pool.query(
+      `SELECT (SELECT id FROM pos_stores WHERE slug = 'demo-flowers') AS store_id,
+              (SELECT module_remotes -> 'vertical-flowers' ->> 'url'
+                 FROM pos_stores WHERE id = $1) AS module_url,
+              (SELECT COUNT(*) FROM pos_sales WHERE store_id = $1) AS sales,
+              (SELECT COUNT(*) FROM pos_products
+                WHERE store_id = $1 AND name = 'Тюльпан (старий сид)') AS leftovers,
+              (SELECT COUNT(*) FROM pos_stock_documents WHERE store_id = $1) AS docs,
+              (SELECT version FROM pos_demo_seed WHERE slug = 'demo-flowers') AS stamp`,
+      [storeId]
+    );
+    expect(Number(after.rows[0].store_id)).toBe(storeId);
+    expect(after.rows[0].module_url).toBe(url);
+    expect(Number(after.rows[0].sales)).toBe(0);
+    expect(Number(after.rows[0].leftovers)).toBe(0);
+    expect(Number(after.rows[0].docs)).toBe(2);
+    expect(Number(after.rows[0].stamp)).toBeGreaterThan(0);
+
+    // Staff are found, not re-created: nobody's credentials get rotated back.
+    const staffAfter = await pool.query(
+      `SELECT id FROM pos_staff WHERE store_id = $1 ORDER BY id`,
+      [storeId]
+    );
+    expect(staffAfter.rows).toEqual(staffBefore.rows);
+
+    await pool.query(`UPDATE pos_stores SET module_remotes = '{}'::jsonb WHERE id = $1`, [
+      storeId,
+    ]);
+  });
+
+  it('leaves an edited demo alone while the stamp matches', async () => {
+    // The flip side of the rebuild: once a database is at the current version,
+    // every boot must keep its hands off. Otherwise whoever is demoing loses
+    // their price edit to the next restart.
+    await pool.query(
+      `UPDATE pos_variants SET price_cents = 99999
+        WHERE store_id = $1 AND label = 'Червона · 60 см'`,
       [storeId]
     );
     await pool.query(readMigration('039_pos_demo_flowers_store.sql'));
-    const after = await pool.query(
-      `SELECT (SELECT COUNT(*) FROM pos_stores WHERE slug = 'demo-flowers') AS stores,
-              (SELECT COUNT(*) FROM pos_variants WHERE store_id = $1) AS variants,
-              (SELECT COUNT(*) FROM pos_stock_movements WHERE store_id = $1) AS moves`,
+    const edited = await pool.query(
+      `SELECT COUNT(*) AS n FROM pos_variants WHERE store_id = $1 AND price_cents = 99999`,
       [storeId]
     );
-    expect(after.rows[0]).toEqual(before.rows[0]);
-    expect(Number(after.rows[0].stores)).toBe(1);
+    expect(Number(edited.rows[0].n)).toBe(1);
+
+    await pool.query(
+      `UPDATE pos_variants SET price_cents = 9000
+        WHERE store_id = $1 AND label = 'Червона · 60 см'`,
+      [storeId]
+    );
   });
 });
