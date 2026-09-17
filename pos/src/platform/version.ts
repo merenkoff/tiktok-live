@@ -67,7 +67,11 @@ export const POS_API_CLIENT_VERSION = 2;
 //     otherwise both composite+own. A module built against 9 calling
 //     `writeOffShowcase` on an older host would hit undefined, which is the
 //     case this guard exists for.
-export const PLATFORM_VERSION = 9;
+// 10 (2026-09-17): the bouquet's photo. `api.uploadBouquetPhoto` and
+//     `api.setShowcasePhoto` — staff-level, because `/uploads` is owner-only
+//     and takes a picture for any product in the catalogue, which is a
+//     different thing.
+export const PLATFORM_VERSION = 10;
 
 /**
  * Build version of this bundle — the host web/cashier build, or a module-remote

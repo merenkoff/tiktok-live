@@ -21,13 +21,19 @@
 import { useState } from 'react';
 import { Printer, X } from 'lucide-react';
 import { formatUah, uahInputToCents } from '@pos/platform';
+import { BouquetPhoto } from './BouquetPhoto';
 
 interface Props {
   /** What the bench computed: stems at catalogue price plus the labour charge. */
   computedCents: number;
   busy: boolean;
   error: string | null;
-  onSubmit: (input: { name: string | null; priceCents: number | null; print: boolean }) => void;
+  onSubmit: (input: {
+    name: string | null;
+    priceCents: number | null;
+    imageUrl: string | null;
+    print: boolean;
+  }) => void;
   onClose: () => void;
 }
 
@@ -40,6 +46,11 @@ export function ShowcaseSheet({ computedCents, busy, error, onSubmit, onClose }:
     (computedCents / 100).toFixed(2).replace('.', ',')
   );
 
+  // Uploaded as soon as it is shot, so the card carries it from birth rather
+  // than needing a second write. Optional: a bouquet without a photo still has
+  // its printed tag, and making the camera mandatory would stop a sale.
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+
   const priceCents = uahInputToCents(priceText);
   const rounded = priceCents !== computedCents;
 
@@ -50,6 +61,7 @@ export function ShowcaseSheet({ computedCents, busy, error, onSubmit, onClose }:
       // bouquet from its components itself, which keeps one authority for the
       // arithmetic instead of two that can drift.
       priceCents: rounded ? priceCents : null,
+      imageUrl,
       print,
     });
   }
@@ -74,6 +86,8 @@ export function ShowcaseSheet({ computedCents, busy, error, onSubmit, onClose }:
         </div>
 
         <div className="p-4 space-y-4">
+          <BouquetPhoto value={imageUrl} onChange={setImageUrl} disabled={busy} />
+
           <label className="block">
             <span className="text-sm text-sq-secondary">Назва</span>
             <input

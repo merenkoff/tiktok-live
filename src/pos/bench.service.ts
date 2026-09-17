@@ -64,6 +64,12 @@ export interface ShowcaseInput {
    * refuses, because no receipt would ever show it.
    */
   priceCents?: number | null;
+  /**
+   * A photo of the finished bouquet, already uploaded through `/bench/photo`.
+   * Optional: a bouquet without one still has its printed tag, and making the
+   * camera mandatory would stop a sale over a picture.
+   */
+  imageUrl?: string | null;
   note?: string | null;
 }
 
@@ -220,6 +226,7 @@ export async function assembleForShowcase(input: ShowcaseInput): Promise<Showcas
     const { productId, variantIds } = await createProductInTx(client, input.storeId, {
       name,
       description: `Зібрано на столі флориста, ${docNumber}`,
+      image_url: input.imageUrl?.trim() || null,
       kind: 'composite',
       stock_mode: 'own',
       one_off: true,
@@ -523,4 +530,40 @@ async function nextWriteoffNumber(client: DbClient, storeId: number): Promise<st
     [storeId, counterKey]
   );
   return `СП-${year}-${String(Number(result.rows[0].seq)).padStart(5, '0')}`;
+}
+
+/**
+ * Attach a photo to a bouquet already standing in the window.
+ *
+ * The main path puts the picture on at assembly time, while the bouquet is
+ * still on the bench — but a florist who tied one in a hurry, or whose hands
+ * were wet, comes back to it from the window list. Same narrowness as the
+ * write-off: only a `one_off` card, so the till cannot repaint the catalogue.
+ */
+export async function setShowcasePhoto(params: {
+  storeId: number;
+  variantId: number;
+  imageUrl: string;
+}): Promise<{ variant_id: number; image_url: string }> {
+  const imageUrl = String(params.imageUrl ?? '').trim();
+  // Only a path this backend itself issued. Accepting an arbitrary string would
+  // let a till point a catalogue card at any URL on the internet, which is a
+  // stored-content hole dressed up as a convenience.
+  if (!/^\/pos-uploads\/[A-Za-z0-9._-]+$/.test(imageUrl)) {
+    throw new BenchError('Некоректне посилання на фото');
+  }
+
+  const updated = await pool.query(
+    `UPDATE pos_products p
+        SET image_url = $3, updated_at = NOW()
+       FROM pos_variants v
+      WHERE v.id = $2 AND v.product_id = p.id
+        AND p.store_id = $1 AND p.one_off = TRUE
+      RETURNING p.id`,
+    [params.storeId, params.variantId, imageUrl]
+  );
+  if (updated.rows.length === 0) {
+    throw new BenchError('Фото можна додати лише букету з вітрини');
+  }
+  return { variant_id: params.variantId, image_url: imageUrl };
 }

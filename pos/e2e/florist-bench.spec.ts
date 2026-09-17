@@ -585,3 +585,121 @@ test('screenshots — showcase', async ({ page }) => {
   await page.waitForTimeout(400);
   await page.screenshot({ path: path.join(SHOTS, 'showcase-writeoff.png') });
 });
+
+/** A 1×1 PNG — enough for `createImageBitmap`, small enough to inline. */
+const TINY_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64'
+);
+
+test('a photo shot on the bench rides onto the card', async ({ page }) => {
+  await openBench(page, TILL);
+
+  await page.route('**/api/pos/bench/photo', (route) =>
+    route.fulfill({ status: 201, json: { url: '/pos-uploads/shot.jpg', filename: 'shot.jpg' } })
+  );
+  await page.route('**/demo-flowers/shot.jpg', (route) =>
+    route.fulfill({ body: TINY_PNG, contentType: 'image/png' })
+  );
+  const made: Array<Record<string, unknown>> = [];
+  await page.route('**/api/pos/bench/showcase', async (route) => {
+    made.push(route.request().postDataJSON() as Record<string, unknown>);
+    await route.fulfill({
+      status: 201,
+      json: {
+        product_id: 92,
+        variant_id: 902,
+        name: 'Букет №44',
+        barcode: '2000000009027',
+        price_cents: 121875,
+        cost_cents: 40000,
+        document_id: 14,
+        doc_number: 'ВР-2026-00044',
+        created: true,
+      },
+    });
+  });
+
+  await page.getByTestId('start-bouquet').click();
+  await addStems(page, 'Троянда Freedom', 3);
+  await page.getByTestId('bench-to-showcase').click();
+
+  // The tablet path: the input carries `capture`, so one tap is the camera.
+  await expect(page.getByTestId('bouquet-photo-input')).toHaveAttribute('capture', 'environment');
+  await page.getByTestId('bouquet-photo-input').setInputFiles({
+    name: 'bouquet.png',
+    mimeType: 'image/png',
+    buffer: TINY_PNG,
+  });
+  await expect(page.getByTestId('bouquet-photo-shoot')).toHaveText('Зняти ще раз');
+
+  await page.getByTestId('showcase-submit').click();
+  await expect.poll(() => made.length).toBe(1);
+  expect(made[0].image_url).toBe('/pos-uploads/shot.jpg');
+});
+
+test('a photo can be added to a bouquet already in the window', async ({ page }) => {
+  await openBench(page, TILL);
+
+  await page.route('**/api/pos/bench/photo', (route) =>
+    route.fulfill({ status: 201, json: { url: '/pos-uploads/late.jpg', filename: 'late.jpg' } })
+  );
+  const attached: Array<Record<string, unknown>> = [];
+  await page.route('**/api/pos/bench/showcase/photo', async (route) => {
+    attached.push(route.request().postDataJSON() as Record<string, unknown>);
+    await route.fulfill({ status: 200, json: { variant_id: 60, image_url: '/pos-uploads/late.jpg' } });
+  });
+
+  await page.goto('/flowers');
+  await page.getByTestId('showcase-photo').click();
+  await expect(page.getByTestId('photo-dialog')).toBeVisible();
+  await page.getByTestId('bouquet-photo-input').setInputFiles({
+    name: 'bouquet.png',
+    mimeType: 'image/png',
+    buffer: TINY_PNG,
+  });
+
+  await expect.poll(() => attached.length).toBe(1);
+  expect(attached[0]).toMatchObject({ variant_id: 60, image_url: '/pos-uploads/late.jpg' });
+});
+
+test('an upload refusal is shown and the bouquet is not lost', async ({ page }) => {
+  await openBench(page, TILL);
+  await page.route('**/api/pos/bench/photo', (route) =>
+    route.fulfill({ status: 400, json: { error: 'Файл більше 5 МБ' } })
+  );
+
+  await page.getByTestId('start-bouquet').click();
+  await addStems(page, 'Троянда Freedom', 3);
+  await page.getByTestId('bench-to-showcase').click();
+  await page.getByTestId('bouquet-photo-input').setInputFiles({
+    name: 'bouquet.png',
+    mimeType: 'image/png',
+    buffer: TINY_PNG,
+  });
+
+  await expect(page.getByTestId('bouquet-photo-error')).toHaveText('Файл більше 5 МБ');
+  // The sheet stays open and the bouquet is still ringable without a photo.
+  await expect(page.getByTestId('showcase-sheet')).toBeVisible();
+  await expect(page.getByTestId('showcase-submit')).toBeEnabled();
+});
+
+test('screenshots — photo', async ({ page }) => {
+  await openBench(page, TILL);
+  await page.route('**/api/pos/bench/photo', (route) =>
+    route.fulfill({ status: 201, json: { url: '/demo-flowers/bouquet-summer.svg', filename: 's.svg' } })
+  );
+
+  await page.getByTestId('start-bouquet').click();
+  await addStems(page, 'Троянда Freedom', 1);
+  await page.locator('[data-testid=bench-pad-9]:visible').click();
+  await page.getByTestId('bench-to-showcase').click();
+  await page.getByTestId('bouquet-photo-input').setInputFiles({
+    name: 'bouquet.png',
+    mimeType: 'image/png',
+    buffer: TINY_PNG,
+  });
+  await expect(page.getByTestId('bouquet-photo-shoot')).toHaveText('Зняти ще раз');
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: path.join(SHOTS, 'showcase-sheet-photo.png') });
+});

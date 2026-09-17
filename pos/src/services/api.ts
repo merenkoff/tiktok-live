@@ -729,6 +729,7 @@ class PosApi {
     components: Array<{ component_variant_id: number; quantity: number }>;
     name?: string | null;
     price_cents?: number | null;
+    image_url?: string | null;
     note?: string | null;
   }): Promise<ShowcaseResult> {
     const { data } = await this.client.post<ShowcaseResult>('/bench/showcase', payload);
@@ -755,6 +756,38 @@ class PosApi {
       doc_number: string;
       created: boolean;
     }>('/bench/writeoff', payload);
+    return data;
+  }
+
+  /**
+   * A photo of a bouquet, shot at the counter. Staff level — `/uploads` is
+   * owner-only and takes a picture for any product in the catalogue, which is
+   * a different thing (`POS_FLORIST_BENCH.md` §11.3).
+   *
+   * Stores the file and returns its path only: in the main flow the card does
+   * not exist yet, because the photo is taken while the bouquet is still on
+   * the bench.
+   */
+  async uploadBouquetPhoto(file: File): Promise<{ url: string; filename: string }> {
+    const body = new FormData();
+    body.append('file', file);
+    const { data } = await this.client.post<{ url: string; filename: string }>(
+      '/bench/photo',
+      body,
+      { timeout: 60000 }
+    );
+    return data;
+  }
+
+  /** Attach one to a bouquet already standing in the window. `one_off` only. */
+  async setShowcasePhoto(payload: {
+    variant_id: number;
+    image_url: string;
+  }): Promise<{ variant_id: number; image_url: string }> {
+    const { data } = await this.client.post<{ variant_id: number; image_url: string }>(
+      '/bench/showcase/photo',
+      payload
+    );
     return data;
   }
 
