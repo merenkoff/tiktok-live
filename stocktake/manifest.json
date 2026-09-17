@@ -1,16 +1,16 @@
 {
   "schema": 1,
   "moduleId": "stocktake",
-  "version": "1.1.1",
-  "minHostPlatform": 2,
+  "version": "2.0.0",
+  "minHostPlatform": 4,
   "entry": "remote-entry.js",
   "keyId": "2a73632c13044371",
-  "builtAt": "2026-09-10T08:35:48.662Z",
+  "builtAt": "2026-09-17T08:07:25.404Z",
   "files": {
-    "StocktakeRoutes-BqVjFRY-.js": "sha384-nEof4iszvInMp8QyeqNsIdZJY3kE6spFsHhMHMMQIR+RygBB5YchngL23EDu9IKS",
-    "remote-entry-mVb3HO5B.js": "sha384-tBdRCtA2URo8hcuXPP0tEqRLeC2/zZ+k5JxfkKsfPBrQogVsvqN1UbfIhlS68hRo",
-    "remote-entry.js": "sha384-6ODRhJeppeTGsN6W5UIk+B/zQpvyhYUjuv2KIVGgzLEw+j7l1/sLRZYl6wAiuFE4",
-    "style.css": "sha384-gwLUosuBmubQ/iMAHZ+iPPSMXuwe0fkoFN2W77gj4aa7JgNI2rQSP1p9HEx95FZk",
-    "ui-Kmg-Iq7w.js": "sha384-6rBVgyP8WomUVILJtQer0RnJMOGHPyVWrMXKhFyXgwlfU3jqKLeUoC95RDBSvZv5"
+    "StocktakeRoutes-ClfiRiKu.js": "sha384-J1KG6Bj1v62xAXz7sdB7rPJwS8o6LGSiRJv8+JGYYsAKrAt45BfQzQoMEaVFBZbq",
+    "remote-entry.js": "sha384-KBQCJD8vTr+aROTc4GxgAuE8Rp+roaP0SqPZYRAQg1a/5dXiH9anFj+vch/IlfXH",
+    "style.css": "sha384-7kQetKzBwRkSs+W8ezWSRgV55HiK3g5sz4AVnx7s/S1G34ygJAii4SvpfVFa/SUD",
+    "sync-CyxwpwU0.js": "sha384-d2uNFJkSD3Lym8rsRs03ZlvvrEcEfLnNmGajG3a+EaQoddNBl+RP5Q+P5YnHzv2o",
+    "ui-DDyd6b-m.js": "sha384-h7k7FozxihdT2cYBXZsLuvH2nmezpFoHZ17TVH+R34lHtTcbvHJBkmWVo9KVWFbs"
   }
 }
