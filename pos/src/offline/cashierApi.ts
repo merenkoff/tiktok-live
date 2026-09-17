@@ -14,6 +14,7 @@ import type {
   RefundLineInput,
   SaleDetail,
   SaleListItem,
+  SaleItemInput,
   SalePaymentInput,
 } from '../types';
 
@@ -74,7 +75,7 @@ export const cashierApi = {
   },
 
   completeSale(payload: {
-    items: Array<{ variant_id: number; quantity: number }>;
+    items: SaleItemInput[];
     payments: SalePaymentInput[];
     note?: string;
     cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;

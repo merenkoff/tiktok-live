@@ -126,6 +126,8 @@ export interface PosAuthContext {
   /** Whether this store fiscalises, and with whom. Credentials stay server-side. */
   fiscal: FiscalPublicConfig;
   autoPrintReceipt: boolean;
+  /** Assembly charge on a composite, in basis points. See migration 040. */
+  floristLabourBps: number;
   /** Toggleable module ids enabled for this store (core ids not included). */
   enabledModules: string[];
   /** Per-store `{ moduleId: remote-entry.js URL }` map — web build only (roadmap #9). */
@@ -166,6 +168,26 @@ export interface PosVariant {
   updated_at: Date;
 }
 
+/** `composite` is a bouquet or a tech card, assembled from other variants. */
+export type ProductKind = 'simple' | 'composite';
+
+/**
+ * Where a composite's stock lives: `own` = assembled in advance and counted on
+ * its own row, `derived` = assembled when it sells. Always `own` for a simple
+ * product. See `composites.service.ts`.
+ */
+export type ProductStockMode = 'own' | 'derived';
+
+/** One line of a composite's recipe, resolved for the till. */
+export interface CatalogComponent {
+  component_variant_id: number;
+  /** Per one unit of the composite, in the component's own unit. */
+  quantity: number;
+  product_name: string;
+  label: string;
+  unit: string;
+}
+
 export interface CatalogItem {
   variant_id: number;
   product_id: number;
@@ -180,6 +202,16 @@ export interface CatalogItem {
   compare_at_cents: number | null;
   quantity: number;
   image_url: string | null;
+  kind: ProductKind;
+  stock_mode: ProductStockMode;
+  /**
+   * The catalogue recipe, for a composite only. Present so the till can tell a
+   * bouquet card from a rose and start a custom bouquet from it — the only
+   * endpoint that carried this before is owner-only, so a cashier could not.
+   * It rides into the offline snapshot for free, since the snapshot is this
+   * same endpoint.
+   */
+  components?: CatalogComponent[];
   tag_ids?: number[];
 }
 

@@ -120,7 +120,7 @@ describe('useCartStore', () => {
 
   it('clamps setQty to the stock ceiling and warns', () => {
     cart().addItem(makeCatalogItem({ quantity: 3 }), 1);
-    cart().setQty(1, 9);
+    cart().setQty('1', 9);
 
     expect(cart().lines[0].quantity).toBe(3);
     expect(cart().banner).toBe('Недостатньо залишку');
@@ -128,7 +128,7 @@ describe('useCartStore', () => {
 
   it('drops a line set to zero', () => {
     cart().addItem(makeCatalogItem());
-    cart().setQty(1, 0);
+    cart().setQty('1', 0);
 
     expect(cart().lines).toEqual([]);
   });
@@ -136,7 +136,7 @@ describe('useCartStore', () => {
   it('leaves other lines alone when changing one', () => {
     cart().addItem(makeCatalogItem({ variant_id: 1 }));
     cart().addItem(makeCatalogItem({ variant_id: 2 }));
-    cart().setQty(2, 3);
+    cart().setQty('2', 3);
 
     expect(cart().lines.map((l) => [l.variant_id, l.quantity])).toEqual([
       [1, 1],
@@ -144,12 +144,76 @@ describe('useCartStore', () => {
     ]);
   });
 
-  it('removes a line by variant', () => {
+  it('removes a line by its uid', () => {
     cart().addItem(makeCatalogItem({ variant_id: 1 }));
     cart().addItem(makeCatalogItem({ variant_id: 2 }));
-    cart().remove(1);
+    cart().remove('1');
 
     expect(cart().lines.map((l) => l.variant_id)).toEqual([2]);
+  });
+
+  describe('a bouquet assembled at the counter', () => {
+    const bouquet = (stems: number) => ({
+      variant_id: 7,
+      product_name: 'Букет на замовлення',
+      variant_label: `${stems} стебел`,
+      unit: 'шт',
+      unit_price_cents: stems * 10000,
+      quantity: 1,
+      components: [
+        {
+          component_variant_id: 1,
+          quantity: stems,
+          product_name: 'Троянда',
+          label: 'Червона · 60 см',
+          unit: 'шт',
+          unit_price_cents: 10000,
+        },
+      ],
+    });
+
+    it('never merges with another bouquet off the same card', () => {
+      // Two custom bouquets are two different bouquets. Merging them would
+      // throw one of the two recipes away — the server refuses to, and the
+      // cart must not do it either.
+      cart().addAssembled(bouquet(9));
+      cart().addAssembled(bouquet(5));
+
+      expect(cart().lines).toHaveLength(2);
+      expect(cart().lines.map((l) => l.variant_label)).toEqual(['9 стебел', '5 стебел']);
+      expect(new Set(cart().lines.map((l) => l.uid)).size).toBe(2);
+    });
+
+    it('never merges with an ordinary line of the same variant either', () => {
+      cart().addItem(makeCatalogItem({ variant_id: 7 }));
+      cart().addAssembled(bouquet(9));
+
+      expect(cart().lines).toHaveLength(2);
+    });
+
+    it('is edited and removed by its own uid', () => {
+      cart().addAssembled(bouquet(9));
+      cart().addAssembled(bouquet(5));
+      const [first, second] = cart().lines;
+
+      cart().remove(first.uid);
+
+      expect(cart().lines.map((l) => l.uid)).toEqual([second.uid]);
+      expect(cart().lines[0].components).toHaveLength(1);
+    });
+
+    it('refuses an empty bouquet rather than ringing nothing', () => {
+      cart().addAssembled({ ...bouquet(0), components: [] });
+
+      expect(cart().lines).toEqual([]);
+      expect(cart().banner).toBe('Букет порожній');
+    });
+
+    it('counts toward the subtotal at the price it was assembled for', () => {
+      cart().addAssembled(bouquet(9));
+
+      expect(cart().subtotalCents()).toBe(90000);
+    });
   });
 
   it('subtracts the cart discount from the total but never below zero', () => {

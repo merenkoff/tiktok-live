@@ -20,6 +20,7 @@ import type {
   ProductStockMode,
   RefundLineInput,
   SaleDetail,
+  SaleItemInput,
   SalePaymentInput,
   StoreConfig,
   StorePatch,
@@ -355,7 +356,7 @@ class PosApi {
   }
 
   async completeSale(payload: {
-    items: Array<{ variant_id: number; quantity: number }>;
+    items: SaleItemInput[];
     payments: SalePaymentInput[];
     note?: string;
     cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;

@@ -481,8 +481,21 @@ export async function produceComposite(
 }
 
 /**
- * What a bouquet assembled at the counter costs the customer: the sum of what
- * its stems sell for.
+ * Add the store's assembly charge to a parts sum.
+ *
+ * Exported and free of the database on purpose: the offline till mirrors this
+ * exact arithmetic on the cached `florist_labour_bps` to price a bouquet it
+ * rings with no network, and the two answers have to agree to the kopeck.
+ * `Math.round` is the tie-breaker both sides use.
+ */
+export function withLabour(partsCents: number, labourBps: number): number {
+  if (!Number.isFinite(labourBps) || labourBps <= 0) return partsCents;
+  return partsCents + Math.round((partsCents * labourBps) / 10000);
+}
+
+/**
+ * What a bouquet assembled at the counter costs the customer: what its stems
+ * sell for, plus the shop's charge for assembling them.
  *
  * Deliberately computed, never typed in. A florist prices by the stem anyway,
  * so this is the number they would have reached; and a per-line price the
@@ -514,5 +527,10 @@ export async function priceOfComposition(
     }
     total += price * row.quantity;
   }
-  return total;
+
+  const store = await client.query(
+    `SELECT florist_labour_bps FROM pos_stores WHERE id = $1`,
+    [storeId]
+  );
+  return withLabour(total, Number(store.rows[0]?.florist_labour_bps ?? 0));
 }

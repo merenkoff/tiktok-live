@@ -58,6 +58,13 @@ export interface AuthResponse {
      */
     fiscal: FiscalPublicConfig;
     auto_print_receipt: boolean;
+    /**
+     * Assembly charge on a composite, in basis points. Travels with the login
+     * for the same reason as `fiscal`: cold-offline, the cached `pos_auth` is
+     * the only place the till can read it, and a bouquet it prices without it
+     * would disagree with the server once the sale syncs.
+     */
+    florist_labour_bps: number;
     /** Effective toggleable module ids (empty stored set resolves to the defaults). */
     enabled_modules: string[];
     /**
@@ -113,6 +120,7 @@ function toAuthResponse(auth: PosAuthContext, expiresAt: Date): AuthResponse {
       qr_payment: auth.qrPayment,
       fiscal: auth.fiscal,
       auto_print_receipt: auth.autoPrintReceipt,
+      florist_labour_bps: auth.floristLabourBps,
       enabled_modules: effectiveEnabledModules(auth.enabledModules),
       module_remotes: auth.moduleRemotes,
       nav_overrides: auth.navOverrides,

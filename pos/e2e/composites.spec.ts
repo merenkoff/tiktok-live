@@ -146,6 +146,64 @@ test('the owner gives a bouquet its composition', async ({ page }) => {
   expect(variantPatches[0].components).toEqual([{ component_variant_id: 10, quantity: 9 }]);
 });
 
+test('an existing plain product can be turned into a bouquet', async ({ page }) => {
+  // The gap this covers: the composition editor used to appear only for a
+  // product that was *already* composite, and nothing in the UI ever sent
+  // `kind`/`stock_mode`. A shop with a catalogue of stems could not make a
+  // bouquet out of any of them.
+  await mockPosApi(page, ALL_MODULES);
+  await mockProducts(page, [STEM, WRAP]);
+
+  const productPatches: Array<Record<string, unknown>> = [];
+  const variantPatches: Array<Record<string, unknown>> = [];
+  await page.route('**/api/pos/products/2', async (route) => {
+    productPatches.push(route.request().postDataJSON() as Record<string, unknown>);
+    await route.fulfill({ json: WRAP });
+  });
+  await page.route('**/api/pos/variants/20', async (route) => {
+    variantPatches.push(route.request().postDataJSON() as Record<string, unknown>);
+    await route.fulfill({ json: WRAP });
+  });
+  await page.route('**/api/pos/products/2/tags', async (route) =>
+    route.fulfill({ json: { tag_ids: [] } })
+  );
+
+  await loginAsOwner(page);
+  await page.goto('/admin/products');
+
+  await page
+    .locator('section', { hasText: 'Крафт-пакування' })
+    .getByRole('button', { name: 'Редагувати' })
+    .click();
+
+  // Nothing composite on screen until it is chosen.
+  await expect(page.getByTestId('composition-row')).toHaveCount(0);
+
+  await page
+    .getByLabel('Що це за товар')
+    .selectOption({ label: 'Складений — збирається при продажу' });
+
+  // The editor appears immediately, before saving. `.first()` because the edit
+  // form carries one editor per variant plus one on the "+ Варіант" row.
+  await page
+    .getByLabel('Складник', { exact: true })
+    .first()
+    .selectOption({ label: 'Троянда Freedom · Червона' });
+  await page.getByLabel('Кількість складника').first().fill('5');
+  await page.getByRole('button', { name: '+ Додати' }).first().click();
+  await expect(page.getByTestId('composition-row')).toHaveCount(1);
+
+  await page.getByRole('button', { name: 'Зберегти' }).click();
+
+  await expect.poll(() => productPatches.length).toBeGreaterThan(1);
+  // Simple → derived cannot be one write: the server refuses a composition on
+  // a simple product, and refuses `derived` until every variant is composed.
+  // So it goes through `own`, the composition lands, then the mode flips.
+  expect(productPatches[0]).toMatchObject({ kind: 'composite', stock_mode: 'own' });
+  expect(variantPatches[0].components).toEqual([{ component_variant_id: 10, quantity: 5 }]);
+  expect(productPatches[productPatches.length - 1]).toMatchObject({ stock_mode: 'derived' });
+});
+
 test('a production run posts as one document and never offers a derived bouquet', async ({
   page,
 }) => {

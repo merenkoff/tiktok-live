@@ -14,6 +14,7 @@ import type {
   QrPaymentMode,
   SaleDetail,
   SaleFiscalStatus,
+  SaleItemInput,
   SalePaymentInput,
   VerticalPublicConfig,
 } from '../types';
@@ -116,7 +117,7 @@ export interface OutboxSalePayload {
   client_uuid: string;
   /** Present when this till stamped the receipt from its own reserve (фаза 3). */
   fiscal_offline?: FiscalOfflineStamp | null;
-  items: Array<{ variant_id: number; quantity: number }>;
+  items: SaleItemInput[];
   payments: SalePaymentInput[];
   note?: string;
   cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;

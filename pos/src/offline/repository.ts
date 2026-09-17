@@ -10,6 +10,7 @@ import type {
   PosTag,
   RefundLineInput,
   SaleDetail,
+  SaleItemInput,
   SaleListItem,
   SalePaymentInput,
 } from '../types';
@@ -28,6 +29,7 @@ export type RefundedSaleRow = LocalSaleRow & {
   refund_fiscal?: import('../types').FiscalActionResult | null;
 };
 import { filterCatalog } from './catalog-filter';
+import { customBouquetLabel, priceOfComponents } from '../lib/bouquet';
 import {
   db,
   getMeta,
@@ -261,10 +263,17 @@ function localSaleDetail(
   registerFiscalNumber: string | null = null
 ): SaleDetail {
   const byId = new Map(catalog.map((item) => [item.variant_id, item]));
+  const labourBps = api.loadAuth()?.store.florist_labour_bps ?? 0;
   let subtotal = 0;
   const items = payload.items.map((line, i) => {
     const cat = byId.get(line.variant_id);
-    const unit = cat?.price_cents ?? 0;
+    // A bouquet assembled at the counter is not priced by its catalogue card —
+    // that card is a template, and its price means nothing for this bouquet.
+    // Same arithmetic the server runs, on the same numbers, so the `OFF-`
+    // receipt the customer walks out with matches what lands at sync.
+    const unit = line.components
+      ? priceOfComponents(line.components, byId, labourBps)
+      : (cat?.price_cents ?? 0);
     const total = unit * line.quantity;
     subtotal += total;
     return {
@@ -272,12 +281,16 @@ function localSaleDetail(
       variant_id: line.variant_id,
       product_name: cat?.product_name ?? 'Товар',
       // The snapshot carries the caption the server built, so an offline
-      // receipt reads exactly like the online one for the same variant.
-      variant_label: cat?.label ?? '',
+      // receipt reads exactly like the online one for the same variant. For a
+      // custom bouquet the server names the line by what went in, so mirror
+      // that too rather than printing the template's caption.
+      variant_label: line.components
+        ? customBouquetLabel(line.components)
+        : (cat?.label ?? ''),
       unit: cat?.unit ?? '',
       quantity: line.quantity,
       unit_price_cents: unit,
-      compare_at_unit_cents: cat?.compare_at_cents ?? null,
+      compare_at_unit_cents: line.components ? null : (cat?.compare_at_cents ?? null),
       line_discount_cents: 0,
       line_total_cents: total,
       refunded_quantity: 0,
@@ -334,21 +347,42 @@ function localSaleDetail(
 }
 
 /** `sign` is -1 when a sale consumes stock, +1 when a void hands it back. */
+/**
+ * Move the mirror's stock so the grid stops offering what the till just sold.
+ *
+ * A bouquet assembled at the counter moves its **stems**, not itself: it has no
+ * stock of its own, and what the next customer can still be sold is whatever is
+ * left in the buckets. This is the same split the server makes in
+ * `consumeStockForSaleItem`; getting it wrong here means the florist is offered
+ * a bouquet the fridge can no longer make.
+ */
 async function applyLocalStockDelta(
-  items: Array<{ variant_id: number; quantity: number }>,
+  items: SaleItemInput[],
   sign: -1 | 1 = -1
 ): Promise<void> {
+  const deltas = new Map<number, number>();
+  for (const line of items) {
+    if (line.components) {
+      for (const part of line.components) {
+        const previous = deltas.get(part.component_variant_id) ?? 0;
+        deltas.set(part.component_variant_id, previous + part.quantity * line.quantity);
+      }
+      continue;
+    }
+    deltas.set(line.variant_id, (deltas.get(line.variant_id) ?? 0) + line.quantity);
+  }
+
   await db.transaction('rw', db.catalog, async () => {
-    for (const line of items) {
-      const row = await db.catalog.get(line.variant_id);
+    for (const [variantId, quantity] of deltas) {
+      const row = await db.catalog.get(variantId);
       if (!row) continue;
-      await db.catalog.put({ ...row, quantity: row.quantity + sign * line.quantity });
+      await db.catalog.put({ ...row, quantity: row.quantity + sign * quantity });
     }
   });
 }
 
 export async function completeSale(payload: {
-  items: Array<{ variant_id: number; quantity: number }>;
+  items: SaleItemInput[];
   payments: SalePaymentInput[];
   note?: string;
   cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
@@ -583,7 +617,24 @@ export async function refundSale(
     }
     const dropped: LocalSaleRow = { ...row, status: 'voided' };
     await db.sales.put(dropped);
-    await applyLocalStockDelta(row.detail?.items ?? [], 1);
+    // A bouquet gives back its stems, not itself — its own row is the 0 nobody
+    // reads. The sale's snapshot says what it took, in the same per-unit shape
+    // the payload uses, so it maps straight across.
+    await applyLocalStockDelta(
+      (row.detail?.items ?? []).map((item) => ({
+        variant_id: item.variant_id,
+        quantity: item.quantity,
+        ...(item.components
+          ? {
+              components: item.components.map((c) => ({
+                component_variant_id: c.component_variant_id,
+                quantity: c.quantity_per_unit,
+              })),
+            }
+          : {}),
+      })),
+      1
+    );
     await useOfflineStatus.getState().refreshPending();
     return dropped;
   }

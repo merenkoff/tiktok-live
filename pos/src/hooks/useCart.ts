@@ -11,6 +11,16 @@ export interface CartDiscount {
 }
 
 export interface CartLine {
+  /**
+   * This line's identity, not the variant's.
+   *
+   * An ordinary line's uid is its `variant_id` as a string, so scanning the
+   * same rose twice still merges into one line. A bouquet assembled at the
+   * counter gets a fresh uid, because two custom bouquets rung on one
+   * catalogue card are two different bouquets and merging them would throw one
+   * of the two recipes away — which is exactly how the server behaves.
+   */
+  uid: string;
   variant_id: number;
   product_name: string;
   /** Built by the store's vertical, server-side — never composed here. */
@@ -23,6 +33,22 @@ export interface CartLine {
   image_url?: string | null;
   compare_at_cents?: number | null;
   discount_label?: string | null;
+  /**
+   * What this one line was assembled from, for a bouquet built at the counter.
+   * The server re-prices from it and snapshots it; the client never sends a
+   * price. Absent on every ordinary line.
+   */
+  components?: CartLineComponent[];
+}
+
+/** One stem in a bouquet being rung, per one unit of it. */
+export interface CartLineComponent {
+  component_variant_id: number;
+  quantity: number;
+  product_name: string;
+  label: string;
+  unit: string;
+  unit_price_cents: number;
 }
 
 interface CartStore {
@@ -34,8 +60,10 @@ interface CartStore {
   setCartDiscount: (discount: CartDiscount | null) => void;
   setCustomer: (customer: PosCustomer | null) => void;
   addItem: (item: CatalogItem, qty?: number) => void;
-  setQty: (variantId: number, quantity: number) => void;
-  remove: (variantId: number) => void;
+  /** A bouquet assembled at the counter — always its own line. */
+  addAssembled: (input: AssembledLineInput) => void;
+  setQty: (uid: string, quantity: number) => void;
+  remove: (uid: string) => void;
   clear: () => void;
   subtotalCents: () => number;
   cartDiscountCents: () => number;
@@ -56,6 +84,20 @@ function discountMeta(item: CatalogItem): {
     compare_at_cents: compare,
     discount_label: `Знижка (${pct}%)`,
   };
+}
+
+/** What the bench hands the cart when the florist is done. */
+export interface AssembledLineInput {
+  /** The catalogue card it was rung on — a derived composite. */
+  variant_id: number;
+  product_name: string;
+  variant_label: string;
+  unit: string;
+  /** Mirrors `priceOfComposition`; the server recomputes and wins. */
+  unit_price_cents: number;
+  quantity: number;
+  image_url?: string | null;
+  components: CartLineComponent[];
 }
 
 /** Mirror backend: cart discount only on lines without product discount. */
@@ -94,7 +136,9 @@ export const useCartStore = create<CartStore>((set, get) => ({
     }
     const meta = discountMeta(item);
     const lines = [...get().lines];
-    const existing = lines.find((l) => l.variant_id === item.variant_id);
+    // Only an ordinary line merges. A line carrying its own composition keeps
+    // its own uid, so it is never a candidate here.
+    const existing = lines.find((l) => l.uid === String(item.variant_id));
     if (existing) {
       const next = Math.min(existing.quantity + qty, item.quantity);
       if (next === existing.quantity) {
@@ -111,6 +155,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
       return;
     }
     lines.push({
+      uid: String(item.variant_id),
       variant_id: item.variant_id,
       product_name: item.product_name,
       variant_label: item.label,
@@ -125,10 +170,39 @@ export const useCartStore = create<CartStore>((set, get) => ({
     set({ lines, banner: null });
   },
 
-  setQty: (variantId, quantity) => {
+  addAssembled: (input) => {
+    const stems = input.components.reduce((sum, c) => sum + c.quantity, 0);
+    if (stems <= 0) {
+      set({ banner: 'Букет порожній' });
+      return;
+    }
+    set({
+      lines: [
+        ...get().lines,
+        {
+          // A fresh uid every time: this bouquet is not the last one.
+          uid: `bouquet:${crypto.randomUUID()}`,
+          variant_id: input.variant_id,
+          product_name: input.product_name,
+          variant_label: input.variant_label,
+          unit: input.unit,
+          unit_price_cents: input.unit_price_cents,
+          quantity: input.quantity,
+          // Stock is the components', and the server checks it. Nothing here
+          // can be clamped against a single variant's quantity.
+          max_quantity: input.quantity,
+          image_url: input.image_url ?? null,
+          components: input.components,
+        },
+      ],
+      banner: null,
+    });
+  },
+
+  setQty: (uid, quantity) => {
     const lines = get()
       .lines.map((line) => {
-        if (line.variant_id !== variantId) return line;
+        if (line.uid !== uid) return line;
         if (quantity > line.max_quantity) {
           set({ banner: 'Недостатньо залишку' });
           return { ...line, quantity: line.max_quantity };
@@ -139,8 +213,8 @@ export const useCartStore = create<CartStore>((set, get) => ({
     set({ lines });
   },
 
-  remove: (variantId) => {
-    set({ lines: get().lines.filter((l) => l.variant_id !== variantId) });
+  remove: (uid) => {
+    set({ lines: get().lines.filter((l) => l.uid !== uid) });
   },
 
   clear: () => set({ lines: [], banner: null, cartDiscount: null, customer: null }),

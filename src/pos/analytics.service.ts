@@ -193,6 +193,7 @@ function mapStore(store: Record<string, unknown>) {
     qr_recipient: (store.qr_recipient as string | null) ?? null,
     gtin_lookup_enabled: Boolean(store.gtin_lookup_enabled),
     auto_print_receipt: Boolean(store.auto_print_receipt),
+    florist_labour_bps: Number(store.florist_labour_bps ?? 0),
     enabled_modules: (store.enabled_modules as string[] | null) ?? [],
     module_remotes:
       (store.module_remotes as Record<string, string | ModuleRemoteEntry> | null) ?? {},
@@ -212,6 +213,8 @@ export type StorePatch = {
   qr_recipient?: string | null;
   gtin_lookup_enabled?: boolean;
   auto_print_receipt?: boolean;
+  /** Assembly charge on a composite, in basis points. See migration 040. */
+  florist_labour_bps?: number;
   enabled_modules?: string[];
   module_remotes?: Record<string, string | ModuleRemoteEntry>;
   /** Per-store menu appearance — see `core/nav.ts`. */
@@ -231,6 +234,7 @@ const STORE_PATCH_COLUMNS: Array<keyof StorePatch> = [
   'qr_recipient',
   'gtin_lookup_enabled',
   'auto_print_receipt',
+  'florist_labour_bps',
   'enabled_modules',
   'module_remotes',
   'nav_overrides',
@@ -254,6 +258,15 @@ export async function updateStore(storeId: number, patch: StorePatch) {
       values.push(JSON.stringify(value ?? {}));
       sets.push(`${col} = $${values.length}::jsonb`);
       continue;
+    }
+    if (col === 'florist_labour_bps') {
+      // The CHECK would reject a bad value anyway, but as a 500 the owner
+      // cannot act on. Refuse it here with something readable.
+      const bps = Number(value);
+      if (!Number.isInteger(bps) || bps < 0 || bps > 100000) {
+        throw new Error('Націнка за роботу має бути від 0 до 1000%');
+      }
+      value = bps;
     }
     if (typeof value === 'string') {
       const trimmed = value.trim();

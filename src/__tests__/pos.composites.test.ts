@@ -601,6 +601,79 @@ describe.skipIf(!hasDb)('POS composite products', () => {
       expect(sale!.total_cents).toBe(2 * 10000 + 5 * 10000);
       expect(await stockOf(stemId)).toBe(100 - 7);
     });
+
+    it('names the line by what went in, not by the catalogue card', async () => {
+      // The card is «Букет на замовлення» for every custom bouquet ever rung
+      // on it; the ПРРО receipt would otherwise show the same line every time.
+      const variantId = await seedCustomCard('Букет на замовлення G');
+      const sale = await completeSale({
+        storeId,
+        staffId,
+        items: [
+          {
+            variant_id: variantId,
+            quantity: 1,
+            components: [
+              { component_variant_id: stemId, quantity: 9 },
+              { component_variant_id: wrapId, quantity: 1 },
+            ],
+          },
+        ],
+        payments: [{ method: 'cash', amount_cents: 100000 }],
+      });
+      expect(sale!.items[0].variant_label).toBe('10 стебел');
+    });
+
+    it('adds the store assembly charge on top of the stems', async () => {
+      const variantId = await seedCustomCard('Букет на замовлення H');
+      await pool.query(`UPDATE pos_stores SET florist_labour_bps = 2500 WHERE id = $1`, [storeId]);
+      try {
+        const sale = await completeSale({
+          storeId,
+          staffId,
+          items: [
+            {
+              variant_id: variantId,
+              quantity: 1,
+              components: [{ component_variant_id: stemId, quantity: 4 }],
+            },
+          ],
+          payments: [{ method: 'cash', amount_cents: 100000 }],
+        });
+        // 4 × 100 ₴ = 400 ₴ of stems, +25% for the work.
+        expect(sale!.total_cents).toBe(50000);
+      } finally {
+        await pool.query(`UPDATE pos_stores SET florist_labour_bps = 0 WHERE id = $1`, [storeId]);
+      }
+    });
+  });
+
+  describe('the catalog tells the till what a card is', () => {
+    it('carries kind, stock mode and the recipe for a composite', async () => {
+      // Without this the till cannot distinguish a bouquet card from a rose —
+      // the only endpoint that used to carry it is owner-only.
+      const { variantId } = await seedDerivedBouquet('Букет P');
+      const catalog = await getCatalog(storeId, { snapshot: true });
+      const bouquet = catalog.find((item) => item.variant_id === variantId);
+      expect(bouquet?.kind).toBe('composite');
+      expect(bouquet?.stock_mode).toBe('derived');
+      expect(bouquet?.components).toEqual([
+        expect.objectContaining({ component_variant_id: stemId, quantity: 5, unit: 'шт' }),
+        expect.objectContaining({ component_variant_id: wrapId, quantity: 1 }),
+      ]);
+      // Resolved, not just ids: the bench shows names without a second call.
+      expect(bouquet?.components?.[0].product_name).toBe('Троянда');
+    });
+
+    it('leaves a simple product without a recipe at all', async () => {
+      const catalog = await getCatalog(storeId, { snapshot: true });
+      const stem = catalog.find((item) => item.variant_id === stemId);
+      expect(stem?.kind).toBe('simple');
+      expect(stem?.stock_mode).toBe('own');
+      // Absent, not empty: "no recipe" and "an empty recipe" are different
+      // facts, and only the second one is a problem.
+      expect(stem?.components).toBeUndefined();
+    });
   });
 
   describe('what a derived composite is not', () => {

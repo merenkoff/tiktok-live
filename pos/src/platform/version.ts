@@ -44,7 +44,13 @@ export const POS_API_CLIENT_VERSION = 2;
 // 5 (2026-09-17): `startOfflineRuntime` and `refusalText` — the two names the
 //     cashier shell was still reaching relatively, i.e. through a second copy
 //     of the offline runtime and its module-hooks registry.
-export const PLATFORM_VERSION = 5;
+// 6 (2026-09-17): the florist's bench groundwork. `useCartStore` gained
+//     `addAssembled`, and — the reason this is a bump and not a no-op —
+//     `setQty` and `remove` now take a line's `uid`, not a `variant_id`. The
+//     snapshot test compares export NAMES, so it cannot see that; a module
+//     built against 5 calling `setQty(123, 2)` would silently do nothing.
+//     `CatalogItem` also carries `kind`/`stock_mode`/`components` now.
+export const PLATFORM_VERSION = 6;
 
 /**
  * Build version of this bundle — the host web/cashier build, or a module-remote
