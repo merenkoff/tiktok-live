@@ -21,6 +21,31 @@ import { TagColorSwatches } from '../components/TagColorSwatches';
 
 const MAX_TAG_DEPTH = 3;
 
+/**
+ * `'' | ProductStockMode` rather than a separate kind + mode pair: the two
+ * composite modes behave differently enough at the till that the owner should
+ * pick one deliberately, and a checkbox plus a switch invites picking neither.
+ */
+type ProductShape = '' | ProductStockMode;
+
+function shapeOf(product: Pick<Product, 'kind' | 'stock_mode'>): ProductShape {
+  if (product.kind !== 'composite') return '';
+  return product.stock_mode === 'derived' ? 'derived' : 'own';
+}
+
+/** Says where the components go, which is the whole difference between the modes. */
+function compositionHint(shape: Exclude<ProductShape, ''>): string {
+  return shape === 'derived'
+    ? 'Продаж спише складники зі складу.'
+    : 'Складники спише документ виробництва — «Склад → Виробництво».';
+}
+
+const SHAPE_OPTIONS: Array<{ value: ProductShape; label: string }> = [
+  { value: '', label: 'Звичайний товар' },
+  { value: 'derived', label: 'Складений — збирається при продажу' },
+  { value: 'own', label: 'Складений — збираємо заздалегідь' },
+];
+
 function flattenTags(tags: PosTag[]): PosTag[] {
   const out: PosTag[] = [];
   for (const t of tags) {
@@ -71,10 +96,7 @@ export function ProductsPage() {
   const [barcode, setBarcode] = useState('');
   const [sku, setSku] = useState('');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  // '' = simple. The two composite modes are separate options rather than a
-  // checkbox plus a switch, because they behave differently enough at the till
-  // that the owner should pick one deliberately.
-  const [composite, setComposite] = useState<'' | ProductStockMode>('');
+  const [composite, setComposite] = useState<ProductShape>('');
   const [components, setComponents] = useState<ProductComponentInput[]>([]);
 
   const flatTags = useMemo(() => flattenTags(tags), [tags]);
@@ -353,6 +375,24 @@ export function ProductsPage() {
               <p className="sm:col-span-2 text-sm font-semibold text-sq-text">Новий товар</p>
               <ProductPhotoField value={imageUrl} onChange={setImageUrl} />
               <input className={fieldClass} placeholder="Назва" value={name} onChange={(e) => setName(e.target.value)} required />
+              {/* Directly under the name on purpose: this choice decides what the
+                  rest of the form means (a derived composite has no opening
+                  stock, a composite needs a composition). Below the fold it was
+                  simply never found. */}
+              <label className="block space-y-1">
+                <span className="text-xs text-sq-secondary">Що це за товар</span>
+                <select
+                  className={fieldClass}
+                  value={composite}
+                  onChange={(e) => setComposite(e.target.value as ProductShape)}
+                >
+                  {SHAPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <AttributeFields
                 className="sm:col-span-2 grid gap-2 sm:grid-cols-2"
                 schema={vertical.attributes}
@@ -368,18 +408,6 @@ export function ProductsPage() {
               ) : (
                 <input className={fieldClass} placeholder="Залишок" value={qty} onChange={(e) => setQty(e.target.value)} />
               )}
-              <label className="block space-y-1 sm:col-span-2">
-                <span className="text-xs text-sq-secondary">Що це за товар</span>
-                <select
-                  className={fieldClass}
-                  value={composite}
-                  onChange={(e) => setComposite(e.target.value as '' | ProductStockMode)}
-                >
-                  <option value="">Звичайний товар</option>
-                  <option value="derived">Складений — збирається при продажу</option>
-                  <option value="own">Складений — збираємо заздалегідь</option>
-                </select>
-              </label>
               {composite && (
                 <div className="sm:col-span-2">
                   <CompositionEditor
@@ -388,9 +416,7 @@ export function ProductsPage() {
                     onChange={setComponents}
                   />
                   <p className="text-xs text-sq-secondary mt-1">
-                    {composite === 'derived'
-                      ? 'Продаж спише складники зі складу.'
-                      : 'Складники спише документ виробництва — «Склад → Виробництво».'}
+                    {compositionHint(composite)}
                   </p>
                 </div>
               )}
@@ -784,7 +810,13 @@ function EditProductInline({
   onCloseAfterSave: () => void;
 }) {
   const vertical = useVertical();
-  const composite = product.kind === 'composite';
+  const savedShape = shapeOf(product);
+  // Editable, not derived from the product: without this there was no way at
+  // all to turn an existing product into a composite — the editor only ever
+  // appeared for one that was already composite, and the whole feature was
+  // reachable only from the create form.
+  const [shape, setShape] = useState<ProductShape>(savedShape);
+  const composite = shape !== '';
   const [name, setName] = useState(product.name);
   const [description, setDescription] = useState(product.description ?? '');
   const [imageUrl, setImageUrl] = useState<string | null>(product.image_url);
@@ -819,24 +851,66 @@ function EditProductInline({
     setTagIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
+  async function writeVariants(components: 'clear' | 'keep'): Promise<void> {
+    for (const v of variants) {
+      await api.updateVariant(v.id, {
+        attributes: v.attributes,
+        unit: v.unit,
+        price_cents: v.price_cents,
+        compare_at_cents: v.compare_at_cents ?? null,
+        sku: v.sku ?? '',
+        barcode: v.barcode ?? '',
+        ...(components === 'clear'
+          ? { components: [] }
+          : composite
+            ? { components: compositions[v.id] ?? [] }
+            : {}),
+      });
+    }
+  }
+
+  /**
+   * The product's shape and its variants, in whichever order the server will
+   * accept — it enforces four rules and two of them are ordering rules:
+   *
+   * - a simple product may not carry a composition, so becoming composite has
+   *   to happen **before** the compositions are written;
+   * - a composite may not become simple while a composition still exists, so
+   *   those have to be cleared **first**;
+   * - a derived composite needs every variant composed, so simple → derived
+   *   cannot be one write. It goes through `own` (which has no such rule),
+   *   the compositions land, and only then the mode flips. If that last step
+   *   is refused — a derived composite may not hold stock — the product stays
+   *   a perfectly valid `own` composite and the message says what to do.
+   */
+  async function saveShapeAndVariants(): Promise<void> {
+    const details = { name, description, image_url: imageUrl };
+    if (shape === savedShape) {
+      await api.updateProduct(product.id, details);
+      await writeVariants('keep');
+      return;
+    }
+
+    if (shape === '') {
+      await writeVariants('clear');
+      await api.updateProduct(product.id, { ...details, kind: 'simple' });
+      return;
+    }
+
+    await api.updateProduct(product.id, { ...details, kind: 'composite', stock_mode: 'own' });
+    await writeVariants('keep');
+    if (shape === 'derived') {
+      await api.updateProduct(product.id, { stock_mode: 'derived' });
+    }
+  }
+
   async function save(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setSaving(true);
     try {
-      await api.updateProduct(product.id, { name, description, image_url: imageUrl });
+      await saveShapeAndVariants();
       await api.setProductTags(product.id, tagIds);
-      for (const v of variants) {
-        await api.updateVariant(v.id, {
-          attributes: v.attributes,
-          unit: v.unit,
-          price_cents: v.price_cents,
-          compare_at_cents: v.compare_at_cents ?? null,
-          sku: v.sku ?? '',
-          barcode: v.barcode ?? '',
-          ...(composite ? { components: compositions[v.id] ?? [] } : {}),
-        });
-      }
       await onSaved();
       onCloseAfterSave();
     } catch (err) {
@@ -914,6 +988,24 @@ function EditProductInline({
         value={description}
         onChange={(e) => setDescription(e.target.value)}
       />
+
+      <label className="block space-y-1 sm:col-span-2">
+        <span className="text-xs text-sq-secondary">Що це за товар</span>
+        <select
+          className={fieldClass}
+          value={shape}
+          onChange={(e) => setShape(e.target.value as ProductShape)}
+        >
+          {SHAPE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        {shape !== '' && (
+          <span className="text-xs text-sq-secondary">{compositionHint(shape)}</span>
+        )}
+      </label>
 
       <div className="sm:col-span-2">
         <p className="text-xs font-semibold text-sq-secondary mb-2">Мітки</p>
