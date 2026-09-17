@@ -4,6 +4,7 @@
 
 import type { AuthResponse, FiscalProviderId } from '../types';
 import { DEFAULT_ENABLED_MODULE_IDS } from '../modules/constants';
+import { DEFAULT_VERTICAL } from '../lib/vertical';
 import { db, type StaffUnlockRow } from './db';
 import { OfflineAuthError } from './errors';
 
@@ -76,6 +77,7 @@ export async function saveStaffUnlock(params: {
     qrPaymentMode: params.auth.store.qr_payment?.mode ?? 'static',
     qrStaticImageUrl: params.auth.store.qr_payment?.static_image_url ?? null,
     autoPrintReceipt: params.auth.store.auto_print_receipt ?? false,
+    vertical: params.auth.store.vertical ?? null,
     enabledModules: params.auth.store.enabled_modules ?? DEFAULT_MODULES,
     navOverrides: params.auth.store.nav_overrides ?? {},
     fiscalEnabled: params.auth.store.fiscal?.enabled ?? false,
@@ -108,6 +110,9 @@ export async function updateStaffUnlockStoreFlags(auth: AuthResponse): Promise<v
     qrPaymentMode: auth.store.qr_payment?.mode ?? row.qrPaymentMode ?? 'static',
     qrStaticImageUrl: auth.store.qr_payment?.static_image_url ?? null,
     autoPrintReceipt: auth.store.auto_print_receipt ?? false,
+    // A store whose vertical changed at noon must not keep selling from the
+    // wrong catalog on a till that logged in at nine.
+    vertical: auth.store.vertical ?? row.vertical ?? null,
     enabledModules: auth.store.enabled_modules ?? DEFAULT_MODULES,
     navOverrides: auth.store.nav_overrides ?? row.navOverrides ?? {},
     fiscalEnabled: auth.store.fiscal?.enabled ?? false,
@@ -160,6 +165,9 @@ function sessionFromUnlock(row: StaffUnlockRow, liveAuth: AuthResponse | null): 
         static_image_url: row.qrStaticImageUrl ?? null,
       },
       auto_print_receipt: row.autoPrintReceipt ?? false,
+      // A row written before verticals existed yields clothing, which is what
+      // that store was.
+      vertical: row.vertical ?? DEFAULT_VERTICAL,
       enabled_modules: row.enabledModules ?? DEFAULT_MODULES,
       module_remotes: row.moduleRemotes ?? {},
       nav_overrides: row.navOverrides ?? {},

@@ -4,6 +4,7 @@
 
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { remoteSummary, remoteUrlOf } from '../lib/moduleRemoteForm';
+import { verticalTitle } from '../lib/vertical';
 import { superApi, superErrorText, type SuperStoreRow } from './superApi';
 import { StoreEditor } from './StoreEditor';
 import { RepointPanel } from './RepointPanel';
@@ -60,10 +61,11 @@ export function StoresPage({ onLogout }: { onLogout: () => void }) {
       {stores && stores.length > 0 && <RepointPanel stores={stores} onDone={reload} />}
 
       <div className="overflow-x-auto rounded-sq border border-sq-divider bg-sq-surface">
-        <table className="w-full min-w-[900px] text-sm">
+        <table className="w-full min-w-[1000px] text-sm">
           <thead className="text-left text-xs uppercase text-sq-secondary">
             <tr>
               <th className="px-3 py-2">Магазин</th>
+              <th className="px-3 py-2">Тип</th>
               <th className="px-3 py-2">Модулі</th>
               <th className="px-3 py-2">Remote-модулі</th>
               <th className="px-3 py-2">ПРРО</th>
@@ -83,6 +85,7 @@ export function StoresPage({ onLogout }: { onLogout: () => void }) {
                       {s.slug} · #{s.id}
                     </div>
                   </td>
+                  <td className="px-3 py-2 text-xs text-sq-text">{verticalTitle(s.vertical)}</td>
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap gap-1">
                       {s.enabled_modules.map((m) => (
@@ -124,7 +127,7 @@ export function StoresPage({ onLogout }: { onLogout: () => void }) {
                 </tr>
                 {open === s.id && (
                   <tr>
-                    <td colSpan={8} className="bg-sq-bg px-3 py-3">
+                    <td colSpan={9} className="bg-sq-bg px-3 py-3">
                       <StoreEditor store={s} onSaved={replaceRow} onClose={() => setOpen(null)} />
                     </td>
                   </tr>

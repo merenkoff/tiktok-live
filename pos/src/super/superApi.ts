@@ -12,7 +12,7 @@
 
 import axios, { type AxiosAdapter, type AxiosInstance } from 'axios';
 import { posApiBase } from '../lib/urls';
-import type { ModuleRemoteEntry } from '../types';
+import type { ModuleRemoteEntry, VerticalId } from '../types';
 
 export const SUPER_TOKEN_KEY = 'pos_super_token';
 const SUPER_TOKEN_HEADER = 'X-POS-Super-Token';
@@ -23,6 +23,8 @@ export interface SuperStoreRow {
   slug: string;
   currency: string;
   created_at: string;
+  /** What the store sells — writable here and nowhere else. */
+  vertical: VerticalId;
   enabled_modules: string[];
   module_remotes: Record<string, string | ModuleRemoteEntry>;
   live_tiktok_username: string | null;
@@ -101,7 +103,11 @@ export class SuperApi {
 
   async patchStore(
     id: number,
-    body: { enabled_modules?: string[]; module_remotes?: Record<string, string | ModuleRemoteEntry> }
+    body: {
+      enabled_modules?: string[];
+      module_remotes?: Record<string, string | ModuleRemoteEntry>;
+      vertical?: VerticalId;
+    }
   ): Promise<SuperStoreRow> {
     const { data } = await this.client.patch<SuperStoreRow>(`/stores/${id}`, body);
     return data;

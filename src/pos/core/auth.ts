@@ -9,6 +9,7 @@ import { pool } from '../../db.js';
 import type { FiscalPublicConfig, PosAuthContext, PosRole } from '../types.js';
 import { isFiscalProviderId } from '../fiscal/types.js';
 import { isModuleEnabled } from './modules.js';
+import { verticalOrDefault } from '../verticals/index.js';
 
 const SESSION_TTL_HOURS = 24 * 14;
 
@@ -35,6 +36,7 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
        store.name AS store_name,
        store.slug AS store_slug,
        store.currency,
+       store.vertical,
        store.qr_payment_enabled,
        store.qr_payment_mode,
        store.qr_static_image_url,
@@ -69,6 +71,7 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
     storeName: row.store_name,
     storeSlug: row.store_slug,
     currency: row.currency,
+    vertical: verticalOrDefault(row.vertical as string | null).id,
     qrPayment: {
       enabled: row.qr_payment_enabled ?? false,
       mode: (row.qr_payment_mode as PosAuthContext['qrPayment']['mode']) ?? 'static',

@@ -7,6 +7,7 @@
 import type { ModuleRemoteEntry } from './core/modules.js';
 import type { NavOverrides } from './core/nav.js';
 import type { FiscalProviderId, FiscalRequisites } from './fiscal/types.js';
+import type { VerticalId } from './verticals/types.js';
 
 export type { ModuleRemoteEntry, NavOverrides };
 
@@ -108,6 +109,13 @@ export interface PosAuthContext {
   storeName: string;
   storeSlug: string;
   currency: string;
+  /**
+   * What kind of shop this is — the product attribute schema, the units it may
+   * sell in and which module supplies the sell screen's catalog
+   * (`vertical-<id>`). Always a vertical this build knows: an unrecognised
+   * column value degrades to clothing at read time (`verticalOrDefault`).
+   */
+  vertical: VerticalId;
   qrPayment: QrPaymentPublicConfig;
   /** Whether this store fiscalises, and with whom. Credentials stay server-side. */
   fiscal: FiscalPublicConfig;

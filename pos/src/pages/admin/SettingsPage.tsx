@@ -12,11 +12,13 @@ import type { ModuleRemoteEntry, QrPaymentMode, StoreConfig } from '../../types'
 // Stateless leaf — no singleton to duplicate, so a direct import is fine here.
 import { inspectRemoteManifest, type RemoteManifestInfo } from '../../modules/remoteVerify';
 import { validateRemoteEntryInput } from '../../lib/moduleRemoteForm';
+import { useVertical } from '../../hooks/useVertical';
 
 export function SettingsPage() {
   const auth = useAuthStore((s) => s.auth);
   const [name, setName] = useState(auth?.store.name ?? '');
   const [slug, setSlug] = useState(auth?.store.slug ?? '');
+  const vertical = useVertical();
   const [qrEnabled, setQrEnabled] = useState(false);
   const [qrMode, setQrMode] = useState<QrPaymentMode>('static');
   const [qrImageUrl, setQrImageUrl] = useState<string | null>(null);
@@ -279,6 +281,17 @@ export function SettingsPage() {
               value={slug}
               disabled
             />
+          </label>
+          <label className="block">
+            <span className="text-sm text-sq-secondary">Тип магазину</span>
+            <input
+              className="mt-1.5 w-full rounded-sq border border-sq-divider bg-sq-empty px-3 py-2.5 text-sq-secondary"
+              value={vertical.title}
+              disabled
+            />
+            <span className="mt-1 block text-xs text-sq-muted">
+              Визначає поля товару та екран продажу. Змінює адміністратор платформи.
+            </span>
           </label>
           <p className="text-sm text-sq-secondary">Валюта: грн (UAH)</p>
         </div>

@@ -15,6 +15,7 @@ import type {
   SaleDetail,
   SaleFiscalStatus,
   SalePaymentInput,
+  VerticalPublicConfig,
 } from '../types';
 
 export interface MetaRow {
@@ -43,6 +44,16 @@ export interface StaffUnlockRow {
   qrStaticImageUrl?: string | null;
   /** Auto-print receipt flag cached from AuthResponse (optional on old rows). */
   autoPrintReceipt?: boolean;
+  /**
+   * The store's sales vertical, cached from AuthResponse (optional on old rows).
+   *
+   * A till that starts cold offline rebuilds its whole session from this row,
+   * and the vertical is what decides which catalog the sell screen renders and
+   * which attribute fields its forms show. Without it a florist's till would
+   * come up as a clothes shop. Not indexed, so adding it needs no Dexie
+   * version bump.
+   */
+  vertical?: VerticalPublicConfig | null;
   /** Enabled module ids cached from AuthResponse so the till honours toggles offline (optional on old rows). */
   enabledModules?: string[];
   /**

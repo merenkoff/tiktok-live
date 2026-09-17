@@ -8,11 +8,14 @@ import {
   DEFAULT_ENABLED_MODULES,
   TOGGLEABLE_MODULE_IDS,
   assertSingleFiscalRemote,
+  assertSingleVerticalRemote,
   effectiveEnabledModules,
   FiscalRemoteConflictError,
+  VerticalRemoteConflictError,
   isAllowedRemoteUrl,
   isCoreModuleId,
   isKnownToggleableModuleId,
+  ModuleRemoteConflictError,
   isModuleEnabled,
   sanitizeEnabledModules,
   sanitizeModuleRemotes,
@@ -310,5 +313,64 @@ describe('assertSingleFiscalRemote', () => {
       'fiscal-vchasno': { url: 'https://cdn/x.js', title: 'x', routePath: '/fiscal', nav: [] },
     };
     expect(() => assertSingleFiscalRemote(remotes, 'checkbox')).toThrow(FiscalRemoteConflictError);
+  });
+});
+
+describe('assertSingleVerticalRemote', () => {
+  const NAV = { label: 'Квіти', location: 'cashier-primary' as const, order: 80 };
+  const flowers = {
+    url: 'https://cdn/x.js',
+    title: 'Квіти',
+    routePath: '/flowers',
+    nav: [NAV],
+  };
+
+  it('allows a store with no vertical-* entry at all', () => {
+    // Clothing ships bundled, so most stores never register one.
+    expect(() => assertSingleVerticalRemote({}, 'clothing')).not.toThrow();
+    expect(() =>
+      assertSingleVerticalRemote({ returns: 'https://cdn.example.com/returns.js' }, 'flowers')
+    ).not.toThrow();
+  });
+
+  it('allows the entry that matches the store column', () => {
+    expect(() => assertSingleVerticalRemote({ 'vertical-flowers': flowers }, 'flowers')).not.toThrow();
+  });
+
+  it('rejects an entry for a vertical the store is not set to', () => {
+    // Otherwise the till downloads a module the sell screen never asks for.
+    expect(() => assertSingleVerticalRemote({ 'vertical-flowers': flowers }, 'clothing')).toThrow(
+      VerticalRemoteConflictError
+    );
+    expect(() => assertSingleVerticalRemote({ 'vertical-flowers': flowers }, null)).toThrow(
+      VerticalRemoteConflictError
+    );
+  });
+
+  it('rejects two vertical-* entries', () => {
+    const remotes = {
+      'vertical-flowers': flowers,
+      'vertical-cafe': { ...flowers, routePath: '/cafe' },
+    };
+    expect(() => assertSingleVerticalRemote(remotes, 'flowers')).toThrow(VerticalRemoteConflictError);
+  });
+
+  it('is a ModuleRemoteConflictError, so the routes' + "'" + ' single catch answers 400', () => {
+    try {
+      assertSingleVerticalRemote({ 'vertical-flowers': flowers }, 'clothing');
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(ModuleRemoteConflictError);
+    }
+  });
+
+  it('refuses to let the bundled clothing catalog be loaded from a URL', () => {
+    // It is the fallback the sell screen falls back to when a remote vertical
+    // is missing, pending or throws — a store that could point it at a CDN
+    // could lose the ability to sell offline.
+    const entry = { ...flowers, title: 'Одяг', routePath: '/clothing', nav: [NAV] };
+    expect(() => assertSingleVerticalRemote({ 'vertical-clothing': entry }, 'clothing')).toThrow(
+      VerticalRemoteConflictError
+    );
   });
 });

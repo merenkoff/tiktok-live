@@ -28,6 +28,14 @@ const TIKTOK_ENTRY = {
   icon: 'Video',
 };
 
+const FLOWERS_ENTRY = {
+  url: 'https://cdn.jsdelivr.net/gh/o/r@module-vertical-flowers-v2.0.0/vertical-flowers/remote-entry.js',
+  title: 'Квіти',
+  routePath: '/flowers',
+  nav: [{ label: 'Квіти', location: 'cashier-primary', order: 80 }],
+  icon: 'Flower2',
+};
+
 describe.skipIf(!hasDb)('POS super admin routes', () => {
   let app: FastifyInstance;
   let a: TestStore;
@@ -171,6 +179,86 @@ describe.skipIf(!hasDb)('POS super admin routes', () => {
       expect(conflict.json().error).toMatch(/fiscal/);
       const missing = await app.inject({ method: 'PATCH', url: '/api/pos/super/stores/999999999', headers: superHeaders(), payload: { enabled_modules: [] } });
       expect(missing.statusCode).toBe(404);
+    });
+  });
+
+  describe('vertical', () => {
+    it('reports every store as clothing until told otherwise', async () => {
+      const res = await app.inject({ method: 'GET', url: '/api/pos/super/stores', headers: superHeaders() });
+      const rows = res.json() as Array<Record<string, unknown>>;
+      expect(rows.find((r) => r.id === c.storeId)!.vertical).toBe('clothing');
+    });
+
+    it('sets the store vertical and reports it back', async () => {
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/pos/super/stores/${c.storeId}`,
+        headers: superHeaders(),
+        payload: { vertical: 'flowers' },
+      });
+      expect(res.statusCode).toBe(200);
+      expect((res.json() as { vertical: string }).vertical).toBe('flowers');
+      const db = await pool.query(`SELECT vertical FROM pos_stores WHERE id = $1`, [c.storeId]);
+      expect(db.rows[0].vertical).toBe('flowers');
+    });
+
+    it('400s an unknown vertical without touching the row', async () => {
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/pos/super/stores/${c.storeId}`,
+        headers: superHeaders(),
+        payload: { vertical: 'cafe' },
+      });
+      expect(res.statusCode).toBe(400);
+      const db = await pool.query(`SELECT vertical FROM pos_stores WHERE id = $1`, [c.storeId]);
+      expect(db.rows[0].vertical).toBe('flowers');
+    });
+
+    it('accepts the vertical and its module in one body', async () => {
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/pos/super/stores/${b.storeId}`,
+        headers: superHeaders(),
+        payload: { vertical: 'flowers', module_remotes: { 'vertical-flowers': FLOWERS_ENTRY } },
+      });
+      expect(res.statusCode).toBe(200);
+      const row = res.json() as { vertical: string; module_remotes: Record<string, unknown> };
+      expect(row.vertical).toBe('flowers');
+      expect(row.module_remotes['vertical-flowers']).toMatchObject({ routePath: '/flowers' });
+    });
+
+    it('400s a vertical module that disagrees with the column, in either order', async () => {
+      // Registering the module on a clothing store...
+      const onClothing = await app.inject({
+        method: 'PATCH',
+        url: `/api/pos/super/stores/${a.storeId}`,
+        headers: superHeaders(),
+        payload: { module_remotes: { 'vertical-flowers': FLOWERS_ENTRY } },
+      });
+      expect(onClothing.statusCode).toBe(400);
+
+      // ...and moving the column back while the module is still registered
+      // (store b has both from the previous case). Both leave the store as it was.
+      const backToClothing = await app.inject({
+        method: 'PATCH',
+        url: `/api/pos/super/stores/${b.storeId}`,
+        headers: superHeaders(),
+        payload: { vertical: 'clothing' },
+      });
+      expect(backToClothing.statusCode).toBe(400);
+      const db = await pool.query(`SELECT vertical FROM pos_stores WHERE id = $1`, [b.storeId]);
+      expect(db.rows[0].vertical).toBe('flowers');
+    });
+
+    it('lets the store move back once its module is gone', async () => {
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/pos/super/stores/${b.storeId}`,
+        headers: superHeaders(),
+        payload: { vertical: 'clothing', module_remotes: {} },
+      });
+      expect(res.statusCode).toBe(200);
+      expect((res.json() as { vertical: string }).vertical).toBe('clothing');
     });
   });
 

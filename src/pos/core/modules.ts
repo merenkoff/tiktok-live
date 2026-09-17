@@ -26,6 +26,19 @@ export const DEFAULT_ENABLED_MODULES = [
   'qr-payment',
 ] as const;
 
+/**
+ * Client module id prefix for a sales vertical: `vertical-clothing` is bundled
+ * and core, every other one arrives as an online-only `module_remotes` entry.
+ * Kept here because both the remote guard and the client registry key off it.
+ */
+export const VERTICAL_MODULE_PREFIX = 'vertical-';
+
+/**
+ * The one vertical module that ships inside the app. It is the sell screen's
+ * fallback catalog, so it is never downloaded and never overridden.
+ */
+export const BUNDLED_VERTICAL_MODULE_ID = 'vertical-clothing';
+
 /** Every id that may legitimately appear in `enabled_modules` (excludes core). */
 export const TOGGLEABLE_MODULE_IDS = [...DEFAULT_ENABLED_MODULES, 'live-selling'] as const;
 
@@ -197,15 +210,42 @@ export function sanitizeModuleRemotes(
 }
 
 /**
+ * A `module_remotes` map that cannot be coherent: two bundles claiming the same
+ * role, or one that disagrees with the store column it must follow.
+ *
+ * Both callers (`PATCH /store`, `PATCH /super/stores/:id`) catch this base class
+ * and answer 400, so a new single-slot guard needs no new catch site.
+ */
+export class ModuleRemoteConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ModuleRemoteConflictError';
+  }
+}
+
+/**
  * A store's `module_remotes` names more than one ПРРО provider bundle, or one
  * that disagrees with `pos_fiscal_settings.provider`.
  *
  * Thrown by `assertSingleFiscalRemote`, mapped to 400 by the caller.
  */
-export class FiscalRemoteConflictError extends Error {
+export class FiscalRemoteConflictError extends ModuleRemoteConflictError {
   constructor(message: string) {
     super(message);
     this.name = 'FiscalRemoteConflictError';
+  }
+}
+
+/**
+ * A store's `module_remotes` names more than one sales-vertical bundle, or one
+ * that disagrees with `pos_stores.vertical`.
+ *
+ * Thrown by `assertSingleVerticalRemote`, mapped to 400 by the caller.
+ */
+export class VerticalRemoteConflictError extends ModuleRemoteConflictError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'VerticalRemoteConflictError';
   }
 }
 
@@ -237,6 +277,47 @@ export function assertSingleFiscalRemote(
     if (provider !== configuredProvider) {
       throw new FiscalRemoteConflictError(
         `Module remote "${fiscalIds[0]}" does not match the configured ПРРО provider "${configuredProvider}"`
+      );
+    }
+  }
+}
+
+/**
+ * At most one `vertical-*` entry may exist, and it must be the vertical the
+ * store is actually set to (`pos_stores.vertical`).
+ *
+ * Two of them would collide the same way two `fiscal-*` bundles do — the
+ * desktop cache is keyed on moduleId + semver, and nothing warns when two
+ * modules both claim the sell screen. Pointing at a vertical the store is not
+ * set to is worse than useless: the sell screen resolves `vertical-<column>`
+ * and would silently ignore the downloaded module, so the owner would see a
+ * module that does nothing.
+ *
+ * The bundled clothing catalog is rejected outright: it is the cold-start
+ * fallback the sell screen falls back to when a remote vertical is missing,
+ * pending or broken, so replacing it over the wire would remove the very thing
+ * that guarantees a till can always sell.
+ */
+export function assertSingleVerticalRemote(
+  remotes: Record<string, string | ModuleRemoteEntry>,
+  vertical: string | null | undefined
+): void {
+  const verticalIds = Object.keys(remotes).filter((id) => id.startsWith(VERTICAL_MODULE_PREFIX));
+  if (verticalIds.includes(BUNDLED_VERTICAL_MODULE_ID)) {
+    throw new VerticalRemoteConflictError(
+      `"${BUNDLED_VERTICAL_MODULE_ID}" ships with the app and cannot be loaded from a URL`
+    );
+  }
+  if (verticalIds.length > 1) {
+    throw new VerticalRemoteConflictError(
+      `Only one vertical-* module remote is allowed, got: ${verticalIds.join(', ')}`
+    );
+  }
+  if (verticalIds.length === 1) {
+    const wanted = `${VERTICAL_MODULE_PREFIX}${vertical ?? ''}`;
+    if (verticalIds[0] !== wanted) {
+      throw new VerticalRemoteConflictError(
+        `Module remote "${verticalIds[0]}" does not match the store's sales vertical "${vertical ?? ''}"`
       );
     }
   }

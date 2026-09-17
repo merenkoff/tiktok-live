@@ -62,6 +62,43 @@ export interface QrPaymentConfig {
   static_image_url: string | null;
 }
 
+/**
+ * Sales verticals this build knows — mirrors `VerticalId` in
+ * `src/pos/verticals/types.ts`. What a store sells decides its product
+ * attribute schema, its units and which module renders the sell screen's
+ * catalog (`vertical-<id>`).
+ */
+export type VerticalId = 'clothing' | 'flowers';
+
+/** One product-variant attribute, as the store's vertical declares it. */
+export interface AttributeSpec {
+  key: string;
+  label: string;
+  type: 'text' | 'number' | 'select';
+  options?: string[];
+  /** `number` only — rendered after the value ('см'), never stored. */
+  unitSuffix?: string;
+  required?: boolean;
+  /** Feeds the server-built variant label and earns a column in the variants table. */
+  inLabel?: boolean;
+  /** Searchable on the till. */
+  inSearch?: boolean;
+  placeholder?: string;
+}
+
+/**
+ * The store's vertical as the server reports it: schema and units, no rules.
+ * The client renders attribute inputs from this and reads the server-built
+ * `label` — it never composes a label itself.
+ */
+export interface VerticalPublicConfig {
+  id: VerticalId;
+  title: string;
+  attributes: AttributeSpec[];
+  units: string[];
+  defaultUnit: string;
+}
+
 /** Shape returned by GET /store and PATCH /store (owner settings). */
 export interface StoreConfig {
   id: number;
@@ -69,6 +106,8 @@ export interface StoreConfig {
   slug: string;
   currency: string;
   timezone: string;
+  /** What this store sells. Read-only here — only the super admin writes it. */
+  vertical: VerticalPublicConfig;
   qr_payment_enabled: boolean;
   qr_payment_mode: QrPaymentMode;
   qr_static_image_url: string | null;
@@ -133,6 +172,12 @@ export interface AuthResponse {
     name: string;
     slug: string;
     currency: string;
+    /**
+     * The store's sales vertical. Absent on older cached auth → the till treats
+     * it as clothing (`DEFAULT_VERTICAL`), which is what every store was before
+     * verticals existed.
+     */
+    vertical?: VerticalPublicConfig;
     /** Optional so a cashier build reading an older cached/offline auth still typechecks. */
     qr_payment?: QrPaymentConfig;
     auto_print_receipt?: boolean;

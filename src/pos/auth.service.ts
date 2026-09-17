@@ -16,6 +16,8 @@ import {
 } from './core/crypto.js';
 import { getAuthByToken, sessionExpiresAt } from './core/auth.js';
 import { effectiveEnabledModules } from './core/modules.js';
+import { getVertical, publicConfigOf } from './verticals/index.js';
+import type { VerticalPublicConfig } from './verticals/types.js';
 import type {
   FiscalPublicConfig,
   ModuleRemoteEntry,
@@ -38,6 +40,16 @@ export interface AuthResponse {
     name: string;
     slug: string;
     currency: string;
+    /**
+     * The store's sales vertical: its product attribute schema, its units and
+     * the id of the module that supplies the sell screen's catalog.
+     *
+     * It travels with the login for the same reason the module set does — the
+     * desktop cashier rebuilds its whole session from the cached `pos_auth`
+     * when it starts cold offline, and a till that forgets what it sells shows
+     * the wrong catalog and the wrong product fields.
+     */
+    vertical: VerticalPublicConfig;
     qr_payment: QrPaymentPublicConfig;
     /**
      * Whether this store fiscalises (ПРРО), and with whom — no credentials.
@@ -97,6 +109,7 @@ function toAuthResponse(auth: PosAuthContext, expiresAt: Date): AuthResponse {
       name: auth.storeName,
       slug: auth.storeSlug,
       currency: auth.currency,
+      vertical: publicConfigOf(getVertical(auth.vertical)),
       qr_payment: auth.qrPayment,
       fiscal: auth.fiscal,
       auto_print_receipt: auth.autoPrintReceipt,
