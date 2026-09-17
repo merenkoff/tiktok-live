@@ -9,9 +9,9 @@ import type { VerticalDefinition } from './types.js';
 
 /**
  * Flowers: a stem has a colour, a length and an origin, and is sold by the
- * piece. Bouquets — a product assembled from stems and consumables whose
- * components are written off when it sells — are a later phase and need
- * `pos_products.kind = 'composite'`, not a change here.
+ * piece. A bouquet is the same shop's `kind = 'composite'` product — assembled
+ * from stems and consumables, either in advance or when it sells — which is
+ * why this vertical allows both kinds.
  */
 export const flowersVertical: VerticalDefinition = {
   id: 'flowers',
@@ -49,5 +49,5 @@ export const flowersVertical: VerticalDefinition = {
     ]
       .filter(Boolean)
       .join(' · '),
-  productKinds: ['simple'],
+  productKinds: ['simple', 'composite'],
 };
