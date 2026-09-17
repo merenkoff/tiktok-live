@@ -127,8 +127,8 @@ VerticalDefinition {
 | 1 | Ідентичність вертикалі | `034`, реєстр `src/pos/verticals`, `assertSingleVerticalRemote`, ланцюг auth → каса, super PATCH `vertical`, read-only поле власника | **зроблено** |
 | 2 | Атрибути / label / unit | `035`, наскрізна заміна `size`/`color`, `PLATFORM_VERSION` 3, API v2, `AttributeFields` | **зроблено** |
 | 3 | Слот екрана продажу | `ModuleDescriptor.sales`, вбудований `vertical-clothing`, каркас + fallback, `useSalesCatalog` у платформі, `PLATFORM_VERSION` 4 | **зроблено** |
-| 4 | Remote `vertical-flowers` | модуль, збірка, підпис, seed, e2e | у роботі |
-| 5 | Прибирання | `036` (drop `size`/`color`), реліз 2.0.0, перепублікація remote-модулів | заплановано |
+| 4 | Remote `vertical-flowers` | модуль, збірка, підпис, seed, e2e | **зроблено** (тонкий) |
+| 5 | Прибирання | `036` (drop `size`/`color`), реліз 2.0.0, перепублікація remote-модулів | наступне |
 | 6 | Повні квіти | букети: `kind='composite'`, компоненти, авто-списання | не почато |
 | 7 | Кафе | техкарти, напівфабрикати, модифікатори | не почато |
 
@@ -173,6 +173,31 @@ VerticalDefinition {
   скасування — каталог перечитує залишки, зберігаючи теги й пошук.
 - У «Налаштуваннях» вертикалі не показуються у списку core-модулів: тип магазину
   обирає супер-адмін, а вимкнути fallback не можна.
+
+## 7c. Що вже лежить (фаза 4)
+
+`pos/src/modules/vertical-flowers/` — перша вертикаль, що приїжджає в магазин
+модулем: `manifest.ts` (`alwaysEnabled`, `sales.Catalog`, маршрут `/flowers/*` +
+пункт меню), `FlowersCatalog.tsx` (та сама сітка, але бейдж «N шт» стебел і
+підпис `Червона · 60 см`), `pages/FlowersHomePage.tsx`, `lib/hostPlatform.ts`
+(namespace-import + `REQUIRED_HOST_API`; несумісний хост кидає в
+`CatalogBoundary`, і каса продає на вбудованому каталозі).
+
+Збірка: `pos/vite.vertical-flowers-remote.config.ts` + `npm run
+build:vertical-flowers-remote` (підпис) + `check:vertical-flowers-css-coverage`.
+Камера (`html5-qrcode`, ~500 кБ) винесена в окремий чанк дин-імпортом **по
+шляху файлу**, а не через barrel — barrel уже в статичному графі, і динамічний
+імпорт його не ділить. Каталог: 15 кБ замість 524 кБ.
+
+Seed: `POS_SEED_VERTICAL_FLOWERS=1 npm run pos:seed` створює **окремий** магазин
+`demo-flowers` (owner `owner@flowers.shop`/`owner123`, PIN `1234`), 5 позицій
+стебел через `createProductInTx` і запис `module_remotes['vertical-flowers']`
+(URL з `POS_SEED_VERTICAL_FLOWERS_URL`, типово `http://localhost:5007`).
+
+E2E `pos/e2e/vertical-flowers.spec.ts`: реально зібраний підписаний бандл із
+фейкового CDN → `/register` малює каталог модуля → продаж проходить каркасом
+хоста; і другий тест — CDN лежить, каса **все одно продає** на вбудованому
+каталозі.
 
 ## 8. Ланцюг даних (де шукати при правках)
 

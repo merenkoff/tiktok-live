@@ -12,6 +12,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { pool, testConnection } from '../db.js';
 import { hashPassword, hashPin } from './core/crypto.js';
+import { createProductInTx } from './products.service.js';
 import { seedDemoTags } from './tags.service.js';
 import { ensureUploadsDir, POS_UPLOADS_DIR } from './uploads.service.js';
 import { logger } from '../logger.js';
@@ -50,6 +51,103 @@ async function seedTiktokLiveModule(storeId: number): Promise<void> {
     [storeId, process.env.POS_SEED_TIKTOK_LIVE_USERNAME || 'demo_live', JSON.stringify(entry)]
   );
   console.log(`   tiktok-live module registered → ${entry.url}`);
+}
+
+/**
+ * A second demo store, on the flowers vertical, with its module registered.
+ *
+ * Its own store rather than stems mixed into the clothing demo: a shop is one
+ * vertical, and a demo that contradicts that teaches the wrong thing. Opt-in
+ * (`POS_SEED_VERTICAL_FLOWERS=1`) for the same reason the LIVE module is — an
+ * entry whose host is not running leaves a greyed "not downloaded" tile on the
+ * desktop till.
+ *
+ *   npm run build:vertical-flowers-remote && npm run serve:vertical-flowers-remote
+ *   POS_SEED_VERTICAL_FLOWERS=1 npm run pos:seed
+ */
+async function seedFlowersStore(): Promise<void> {
+  const existing = await pool.query(`SELECT id FROM pos_stores WHERE slug = 'demo-flowers'`);
+  if (existing.rows.length > 0) {
+    console.log('   demo-flowers store already exists — skipping');
+    return;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const store = await client.query(
+      `INSERT INTO pos_stores (name, slug, currency, timezone, vertical)
+       VALUES ('Demo Flowers', 'demo-flowers', 'UAH', 'Europe/Kyiv', 'flowers')
+       RETURNING id`
+    );
+    const storeId = Number(store.rows[0].id);
+
+    const ownerHash = await hashPassword('owner123');
+    const ownerPin = await hashPin('0000');
+    await client.query(
+      `INSERT INTO pos_staff (store_id, role, display_name, login, password_hash, pin_hash)
+       VALUES ($1, 'owner', 'Власниця', 'owner@flowers.shop', $2, $3)`,
+      [storeId, ownerHash, ownerPin]
+    );
+    const sellerPin = await hashPin('1234');
+    await client.query(
+      `INSERT INTO pos_staff (store_id, role, display_name, pin_hash)
+       VALUES ($1, 'seller', 'Флористка Ніна', $2)`,
+      [storeId, sellerPin]
+    );
+
+    // Through `createProductInTx`, so the captions come from the flowers rule
+    // rather than being typed here — the same path the admin screen takes.
+    const stems = [
+      { name: 'Троянда Freedom', color: 'Червона', length_cm: 60, country: 'Еквадор', price: 9000, qty: 120 },
+      { name: 'Троянда Avalanche', color: 'Біла', length_cm: 70, country: 'Еквадор', price: 11000, qty: 60 },
+      { name: 'Тюльпан', color: 'Рожевий', length_cm: 40, country: 'Нідерланди', price: 4500, qty: 200 },
+      { name: 'Хризантема кущова', color: 'Жовта', length_cm: 55, country: 'Україна', price: 6500, qty: 80 },
+      { name: 'Евкаліпт', color: 'Зелений', length_cm: 50, country: 'Україна', price: 3500, qty: 45 },
+    ];
+    for (const stem of stems) {
+      await createProductInTx(client, storeId, {
+        name: stem.name,
+        variants: [
+          {
+            attributes: { color: stem.color, length_cm: stem.length_cm, country: stem.country },
+            price_cents: stem.price,
+            cost_cents: Math.round(stem.price * 0.45),
+            quantity: stem.qty,
+          },
+        ],
+      });
+    }
+
+    const entry = {
+      url: process.env.POS_SEED_VERTICAL_FLOWERS_URL || 'http://localhost:5007/remote-entry.js',
+      title: 'Квіти',
+      routePath: '/flowers',
+      icon: 'Flower2',
+      nav: [
+        { label: 'Квіти', location: 'cashier-primary', order: 80, icon: 'Flower2', match: '/flowers' },
+      ],
+    };
+    await client.query(
+      `UPDATE pos_stores
+       SET module_remotes = COALESCE(module_remotes, '{}'::jsonb)
+                            || jsonb_build_object('vertical-flowers', $2::jsonb)
+       WHERE id = $1`,
+      [storeId, JSON.stringify(entry)]
+    );
+    await client.query('COMMIT');
+
+    console.log('\n✅ Demo flowers store ready');
+    console.log('   Store slug: demo-flowers');
+    console.log('   Owner: owner@flowers.shop / owner123');
+    console.log('   Seller PIN: 1234');
+    console.log(`   vertical-flowers module registered → ${entry.url}`);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 /** Copies the committed demo product photos into the (gitignored) uploads dir. */
@@ -227,6 +325,7 @@ async function seed(): Promise<void> {
 
   await seedDemoTags(storeId);
   if (process.env.POS_SEED_TIKTOK_LIVE === '1') await seedTiktokLiveModule(storeId);
+  if (process.env.POS_SEED_VERTICAL_FLOWERS === '1') await seedFlowersStore();
   console.log('\n✅ Demo store ready (tags ensured)');
   console.log('   Store slug: demo');
   console.log('   Owner: owner@demo.shop / owner123');
