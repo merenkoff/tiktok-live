@@ -41,7 +41,10 @@ export const POS_API_CLIENT_VERSION = 2;
 // 4 (2026-09-17): the sell-screen slot — `useSalesCatalog` plus the catalog
 //     components a vertical module renders with (`ProductTile`,
 //     `TagFolderTile`, `VariantPicker`, `CatalogTagBar`, `ScanWedge`).
-export const PLATFORM_VERSION = 4;
+// 5 (2026-09-17): `startOfflineRuntime` and `refusalText` — the two names the
+//     cashier shell was still reaching relatively, i.e. through a second copy
+//     of the offline runtime and its module-hooks registry.
+export const PLATFORM_VERSION = 5;
 
 /**
  * Build version of this bundle — the host web/cashier build, or a module-remote

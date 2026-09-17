@@ -3,96 +3,80 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 // Guards the invariant the externalised-`@pos/platform` web build depends on:
-// the shared singletons (auth/cart Zustand stores, the offline-status store,
-// the shell React context) must be reached ONLY through `@pos/platform`. A
-// file that imports them from a local relative path instead gets a second,
-// disconnected copy once `@pos/platform` is an external chunk — the exact bug
-// this build layout exists to prevent (see TechDocs/POS_MODULE_REMOTE_POC.md).
+// the shared singletons (auth/cart Zustand stores, the api singleton's axios
+// client, the offline-status store, the offline module-hooks registry, the
+// applied module-remote map, the shell React context) must be reached ONLY
+// through `@pos/platform`. A file outside the platform chunk that imports them
+// from a local relative path instead gets a second, disconnected copy once
+// `@pos/platform` is an external chunk — the exact bug this build layout
+// exists to prevent (see TechDocs/POS_MODULE_REMOTE_POC.md).
 //
-// No ESLint in pos/ — same lightweight style as check-module-css-coverage.mjs.
+// This used to be a hand-written list of banned import specifiers, and it let
+// the real thing through: `hooks/useVertical.ts` reaches `hooks/useAuth.ts`
+// transitively, nobody added it to the list, and SettingsPage shipped a second
+// auth store — an empty one — so a flower shop read as «Одяг» in the admin.
+// So the two sets are COMPUTED now, and only the state owners are named:
+//
+//   PLATFORM  — the transitive closure of relative imports from
+//               `src/platform/index.ts`: what is compiled INTO the external
+//               chunk (vite.platform-remote.config.ts).
+//   STATEFUL  — the state owners below plus everything that reaches one of
+//               them through relative imports.
+//
+// A violation is an edge from OUTSIDE `PLATFORM` into a file that is in
+// `PLATFORM` *and* `STATEFUL`. Everything else is fine: host code importing
+// host code duplicates nothing (one Rollup run, one copy), and a stateless
+// leaf inside the platform chunk (`lib/money.ts`, `lib/vertical.ts`, every
+// `@pos/platform/ui` component) is deliberately bundled by each consumer.
+//
+// Import edges come from the TypeScript parser rather than a regex per line:
+// the old line-based matcher could not see a multi-line
+// `import {\n  useAuthStore,\n} from '../hooks/useAuth'` at all, and could not
+// tell a type-only import (erased, harmless) from a value one.
 //
 //   node scripts/check-platform-boundary.mjs
 
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 
 const pos = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const srcRoot = path.join(pos, 'src');
 
-// Files/dirs that legitimately own or re-export these singletons.
-const ALLOW = [
-  'src/platform/',
-  'src/shell.tsx',
-  'src/hooks/useAuth.ts',
-  'src/hooks/useCart.ts',
-  'src/offline/status.ts',
-  'src/offline/enabled.ts',
-  'src/test/',
-  // Re-exported by src/platform/auth.ts, i.e. bundled INTO the platform chunk —
-  // importing it back through "@pos/platform" would be a barrel cycle.
-  'src/modules/useEnabledModules.ts',
-  // Re-exported by src/platform/api.ts, same reasoning.
-  'src/services/api.ts',
-  // Re-exported by src/platform/sales.ts (`cashierApi`) — repository.ts is its
-  // direct dependency and sync.ts is its dynamic import, so all three are
-  // transitively bundled INTO the platform chunk. Same "importing @pos/platform
-  // from inside what builds @pos/platform" cycle as useAuth.ts if changed.
-  'src/offline/cashierApi.ts',
-  'src/offline/repository.ts',
-  'src/offline/sync.ts',
-  // Imported by sync.ts, so it lands in the same chunk for the same reason.
-  'src/offline/outboxPolicy.ts',
-  // Same again: the ПРРО offline lease is a direct dependency of repository.ts
-  // (it stamps the sale) and sync.ts (it refreshes the reserve), so it is
-  // bundled into the platform chunk with them.
-  'src/offline/lease.ts',
+/** What `@pos/platform` is built from — the root of the PLATFORM closure. */
+const PLATFORM_ENTRY = 'src/platform/index.ts';
+
+/**
+ * The files that OWN shared mutable state: a Zustand store, a module-level
+ * registry or client, a React context. A second copy of one of these is a
+ * second source of truth, which is the bug.
+ */
+const STATE_OWNERS = [
+  ['src/hooks/useAuth.ts', 'useAuthStore — the session every screen reads'],
+  ['src/hooks/useCart.ts', 'useCartStore — the cart the sell screen rings up'],
+  ['src/offline/status.ts', 'the offline-status store'],
+  ['src/shell.tsx', 'PosShellContext / usePosShell'],
+  [
+    'src/services/api.ts',
+    "the api singleton's axios client (a second one can even bake in a different VITE_API_BASE)",
+  ],
+  [
+    'src/modules/appliedRemotes.ts',
+    'the applied module-remote map — a second copy never sees what useAuth.ts writes, so the "module source changed" banner never clears',
+  ],
+  [
+    'src/offline/moduleHooks.ts',
+    'the offline module-hooks registry — a second copy is one the sync loop never reads',
+  ],
 ];
 
-// import specifier (any relative depth) -> what it smuggles in
-const BANNED = [
-  {
-    re: /(['"])(?:\.\.?\/)+offline\/moduleHooks\1/,
-    what: 'the offline module-hooks registry — a host-local copy is one the platform chunk\'s sync loop never reads (import registerOfflineModules from "@pos/platform")',
-  },
-  { re: /(['"])(?:\.\.?\/)+hooks\/useAuth\1/, what: 'useAuthStore (import from "@pos/platform")' },
-  { re: /(['"])(?:\.\.?\/)+hooks\/useCart\1/, what: 'useCartStore (import from "@pos/platform")' },
-  { re: /(['"])(?:\.\.?\/)+offline\/status\1/, what: 'the offline-status store (import from "@pos/platform")' },
-  { re: /(['"])(?:\.\.?\/)+shell\1/, what: 'PosShellContext / usePosShell (import from "@pos/platform")' },
-  {
-    re: /(['"])(?:\.\.?\/)+modules\/useEnabledModules\1/,
-    what: 'useEnabledModules — reads the auth store, so a host-local copy sees an empty one (import from "@pos/platform")',
-  },
-  {
-    // No `modules\/` prefix required, unlike the other patterns above: the
-    // real regression was `registry.ts` (itself inside `src/modules/`)
-    // importing its OWN sibling `./appliedRemotes` — a depth-anchored pattern
-    // like the others would have missed exactly that case.
-    re: /(['"])(?:\.\.?\/)*(?:modules\/)?appliedRemotes\1/,
-    what: 'getAppliedRemotes/setAppliedRemotes/sameRemoteMap — a host-local copy of `applied` never sees what useAuth.ts writes inside the platform chunk, so the "module source changed" banner never clears (import from "@pos/platform")',
-  },
-  {
-    // The `api` singleton's axios client is constructed once, at module load,
-    // with `baseURL: posApiBase()` frozen in from THIS COPY'S build-time
-    // `import.meta.env.VITE_API_BASE` — a host-local copy doesn't just risk
-    // going stale, it can be built by an entirely different Vite config (e.g.
-    // vite.config.ts / vite.cashier.config.ts) than the one that compiles
-    // `@pos/platform` (vite.platform-remote.config.ts), each with its own
-    // VITE_API_BASE default, silently producing a client that calls a
-    // different origin than the rest of the app (import from "@pos/platform")
-    re: /(['"])(?:\.\.?\/)+services\/api\1/,
-    what: 'api/isNetworkError/isUnauthorized — a host-local axios client can bake in a different API origin than the one @pos/platform uses (import from "@pos/platform")',
-  },
-  {
-    // cashierApi wraps the SAME api singleton as the pattern above — a direct
-    // import here reintroduces the exact same bug one level removed (this is
-    // literally how it shipped: RegisterPage.tsx imported cashierApi directly,
-    // getting a copy whose axios client used vite.config.ts's/vite.cashier.
-    // config.ts's own VITE_API_BASE default instead of @pos/platform's).
-    re: /(['"])(?:\.\.?\/)+offline\/cashierApi\1/,
-    what: 'cashierApi — wraps the api singleton, same origin-mismatch risk (import from "@pos/platform")',
-  },
-];
+/**
+ * Files that may reach a singleton relatively although they are not part of the
+ * platform chunk. Only the test harness qualifies: it drives the stores
+ * directly under Vitest, where nothing is externalised.
+ */
+const ALLOW = ['src/test/'];
 
 function walk(dir) {
   const out = [];
@@ -104,23 +88,155 @@ function walk(dir) {
   return out;
 }
 
-const violations = [];
-for (const file of walk(srcRoot)) {
-  const rel = path.relative(pos, file).replaceAll(path.sep, '/');
-  if (ALLOW.some((a) => rel.startsWith(a) || rel === a)) continue;
-  const src = readFileSync(file, 'utf-8');
-  for (const line of src.split('\n')) {
-    if (!/^\s*import\b/.test(line) && !/\brequire\(/.test(line)) continue;
-    if (/^\s*import\s+type\b/.test(line)) continue; // types are erased — harmless
-    for (const { re, what } of BANNED) {
-      if (re.test(line)) violations.push({ rel, line: line.trim(), what });
+const rel = (file) => path.relative(pos, file).replaceAll(path.sep, '/');
+
+/** `./x` -> the file it actually is. Bare specifiers are someone else's problem. */
+function resolveRelative(from, spec) {
+  if (!spec.startsWith('.')) return null;
+  const base = path.resolve(path.dirname(from), spec);
+  for (const candidate of [
+    base + '.ts',
+    base + '.tsx',
+    path.join(base, 'index.ts'),
+    path.join(base, 'index.tsx'),
+  ]) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+/** True when the whole import/export is types — erased, so it duplicates nothing. */
+function isTypeOnly(node) {
+  // `import type { X } from` carries the flag on the CLAUSE, `export type { X }
+  // from` on the declaration itself. Reading only the latter is why the first
+  // draft of this rewrite reported every `import type { PosShell }`.
+  if (ts.isImportDeclaration(node) ? node.importClause?.isTypeOnly : node.isTypeOnly) return true;
+  const bindings = ts.isImportDeclaration(node)
+    ? node.importClause?.namedBindings
+    : node.exportClause;
+  if (bindings && ts.isNamedImports(bindings) && bindings.elements.length > 0) {
+    return bindings.elements.every((el) => el.isTypeOnly);
+  }
+  if (bindings && ts.isNamedExports(bindings) && bindings.elements.length > 0) {
+    return bindings.elements.every((el) => el.isTypeOnly);
+  }
+  return false;
+}
+
+/** Every relative import edge of one file, as { target, statement }. */
+function edgesOf(file) {
+  const text = readFileSync(file, 'utf-8');
+  const source = ts.createSourceFile(
+    file,
+    text,
+    ts.ScriptTarget.Latest,
+    false,
+    file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
+  );
+  const out = [];
+  const add = (node, spec) => {
+    const target = resolveRelative(file, spec);
+    if (!target) return;
+    const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));
+    out.push({ target, spec, line: line + 1 });
+  };
+
+  const visit = (node) => {
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier &&
+      ts.isStringLiteral(node.moduleSpecifier)
+    ) {
+      if (!isTypeOnly(node)) add(node, node.moduleSpecifier.text);
+    } else if (ts.isCallExpression(node)) {
+      const isDynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword;
+      const isRequire = ts.isIdentifier(node.expression) && node.expression.text === 'require';
+      const [arg] = node.arguments;
+      if ((isDynamicImport || isRequire) && arg && ts.isStringLiteral(arg)) add(node, arg.text);
     }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(source, visit);
+  return out;
+}
+
+const files = walk(srcRoot);
+const edges = new Map(files.map((f) => [f, edgesOf(f)]));
+
+/** Everything reachable from `start` through relative imports. */
+function closure(start) {
+  const seen = new Set();
+  const queue = [start];
+  while (queue.length > 0) {
+    const file = queue.pop();
+    if (!file || seen.has(file)) continue;
+    seen.add(file);
+    for (const edge of edges.get(file) ?? []) queue.push(edge.target);
+  }
+  return seen;
+}
+
+const platformEntry = path.join(pos, PLATFORM_ENTRY);
+if (!existsSync(platformEntry)) {
+  console.error(`check-platform-boundary: ${PLATFORM_ENTRY} is gone — update this script.`);
+  process.exit(1);
+}
+const PLATFORM = closure(platformEntry);
+
+const owners = new Map(STATE_OWNERS.map(([file, what]) => [path.join(pos, file), what]));
+for (const owner of owners.keys()) {
+  if (!existsSync(owner)) {
+    console.error(`check-platform-boundary: state owner ${rel(owner)} is gone — update this script.`);
+    process.exit(1);
+  }
+}
+
+/** The path from `file` to the state owner it reaches, or null. */
+const reachMemo = new Map();
+function reachesOwner(file, stack = new Set()) {
+  if (owners.has(file)) return [file];
+  if (reachMemo.has(file)) return reachMemo.get(file);
+  if (stack.has(file)) return null; // cycle — this branch answers nothing
+  stack.add(file);
+  let found = null;
+  for (const edge of edges.get(file) ?? []) {
+    const rest = reachesOwner(edge.target, stack);
+    if (rest) {
+      found = [file, ...rest];
+      break;
+    }
+  }
+  stack.delete(file);
+  reachMemo.set(file, found);
+  return found;
+}
+
+const violations = [];
+for (const file of files) {
+  const relPath = rel(file);
+  if (PLATFORM.has(file)) continue; // inside the chunk: relative is how it is built
+  if (ALLOW.some((a) => relPath.startsWith(a) || relPath === a)) continue;
+  for (const edge of edges.get(file) ?? []) {
+    if (!PLATFORM.has(edge.target)) continue;
+    const chain = reachesOwner(edge.target);
+    if (!chain) continue; // stateless leaf of the platform chunk — a copy is harmless
+    violations.push({
+      relPath,
+      line: edge.line,
+      spec: edge.spec,
+      chain: chain.map(rel).join(' -> '),
+      what: owners.get(chain[chain.length - 1]),
+    });
   }
 }
 
 if (violations.length > 0) {
   console.error('Cross-boundary singleton imports found — route these through "@pos/platform":\n');
-  for (const v of violations) console.error(`  ${v.rel}\n    ${v.line}\n    -> ${v.what}\n`);
+  for (const v of violations) {
+    console.error(`  ${v.relPath}:${v.line}  imports "${v.spec}"`);
+    console.error(`    ${v.chain}`);
+    console.error(`    -> a second copy of ${v.what}\n`);
+  }
   process.exit(1);
 }
 

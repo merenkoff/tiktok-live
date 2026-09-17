@@ -4,12 +4,11 @@
 
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuthStore, usePosShell, useEnabledModules } from '@pos/platform';
+import { useAuthStore, usePosShell, useEnabledModules, startOfflineRuntime } from '@pos/platform';
 import { useUpdateStore } from './hooks/useUpdateCheck';
 import { renderModuleRoutes } from './modules/renderRoutes';
 import { useModuleRemoteUpdates } from './modules/desktopRemotes';
 import { ModuleRemotesReloadBanner } from './components/ModuleRemotesReloadBanner';
-import { startOfflineRuntime } from './offline';
 
 export function CashierApp() {
   const bootstrap = useAuthStore((s) => s.bootstrap);
@@ -31,7 +30,9 @@ export function CashierApp() {
   }, [bootstrap]);
 
   useEffect(() => {
-    startOfflineRuntime();
+    // Through the barrel: the runtime must be the one `cashier-main.tsx`
+    // registered the module offline hooks into.
+    void startOfflineRuntime();
   }, []);
 
   useEffect(() => {

@@ -4,10 +4,14 @@
 
 import { Link } from 'react-router-dom';
 // Via the platform barrel, not a relative path: a host-local copy of the auth
-// store would be a second, disconnected instance once `@pos/platform` is an
-// external chunk.
-import { useAuthStore } from '@pos/platform';
-import { isOfflinePosEnabled, refusalText, useOfflineStatus } from '../../offline';
+// store or the offline-status store would be a second, disconnected instance
+// once `@pos/platform` is an external chunk.
+import {
+  isOfflinePosEnabled,
+  refusalText,
+  useAuthStore,
+  useOfflineStatus,
+} from '@pos/platform';
 
 export function OfflineStatusBanner() {
   const online = useOfflineStatus((s) => s.online);
