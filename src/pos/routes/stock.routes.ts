@@ -4,6 +4,7 @@
 
 import type { FastifyInstance } from 'fastify';
 import { ensureModule } from '../core/auth.js';
+import * as benchService from '../bench.service.js';
 import * as stockService from '../stock.service.js';
 import * as stockDocumentsService from '../stock-documents.service.js';
 import * as stockReportsService from '../stock-reports.service.js';
@@ -111,6 +112,43 @@ export function registerStockRoutes(fastify: FastifyInstance): void {
   });
 
   // ── Stock documents ───────────────────────────────────
+
+  // A bouquet assembled at the bench for the window, not for a customer
+  // standing there (TechDocs/POS_FLORIST_BENCH.md §11).
+  //
+  // Staff level, like `/stock/counts` above and for the same reason: this is
+  // the florist's own work, and a window bouquet has to be sellable the moment
+  // it is tied — a draft the owner posts later would leave it unsellable in the
+  // bucket. Unlike a count sheet it therefore posts immediately, which is why
+  // it is one atomic service call and not create → add line → post.
+  fastify.post('/bench/showcase', async (request, reply) => {
+    const auth = await ensureModule(request, reply, 'stock');
+    if (!auth) return;
+    const body = request.body as {
+      client_uuid?: string;
+      name?: string | null;
+      price_cents?: number | null;
+      note?: string | null;
+      components?: Array<{ component_variant_id?: number; quantity?: number }>;
+    };
+    try {
+      const result = await benchService.assembleForShowcase({
+        storeId: auth.storeId,
+        staffId: auth.staffId,
+        clientUuid: String(body.client_uuid ?? ''),
+        name: body.name ?? null,
+        priceCents: body.price_cents ?? null,
+        note: body.note ?? null,
+        components: (body.components ?? []).map((c) => ({
+          component_variant_id: Number(c?.component_variant_id),
+          quantity: Number(c?.quantity),
+        })),
+      });
+      return reply.code(result.created ? 201 : 200).send(result);
+    } catch (error) {
+      return reply.code(400).send({ error: errorMessage(error) });
+    }
+  });
 
   fastify.get('/stock/documents', async (request, reply) => {
     const auth = await ensureModule(request, reply, 'stock', { owner: true });
