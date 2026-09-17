@@ -205,6 +205,12 @@ export interface CatalogItem {
   kind: ProductKind;
   stock_mode: ProductStockMode;
   /**
+   * True for a card made at the bench for one physical bouquet. The window and
+   * a catalogue bouquet are both `composite` + `own`, so nothing else tells
+   * them apart — and only this one may be written off from the till.
+   */
+  one_off: boolean;
+  /**
    * The catalogue recipe, for a composite only. Present so the till can tell a
    * bouquet card from a rose and start a custom bouquet from it — the only
    * endpoint that carried this before is owner-only, so a cashier could not.

@@ -734,6 +734,10 @@ export async function getCatalog(
        p.image_url,
        p.kind,
        p.stock_mode,
+       -- A card that exists for ONE physical bouquet, not for a product line.
+       -- The till needs it to tell the window apart from the catalogue: both
+       -- are composite+own, and only the one-off may be written off from here.
+       p.one_off,
        -- The till needs the recipe, not just the fact of one: the florist's
        -- bench starts a custom bouquet from the catalogue card's composition,
        -- and a composite it cannot read is a card it cannot sell from. Only
@@ -782,6 +786,7 @@ export async function getCatalog(
     image_url: row.image_url,
     kind: (row.kind === 'composite' ? 'composite' : 'simple') as ProductKind,
     stock_mode: (row.stock_mode === 'derived' ? 'derived' : 'own') as ProductStockMode,
+    one_off: Boolean(row.one_off),
     // Absent for a simple product rather than an empty array: "this card has
     // no recipe" and "this bouquet's recipe is empty" are different facts, and
     // only the second one is a problem.

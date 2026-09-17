@@ -7,7 +7,7 @@
 import type { RemoteModuleDescriptor } from '../registry';
 import { lazyWithRetry } from '../lazyWithRetry';
 
-const FlowersHomePage = lazyWithRetry(() => import('./pages/FlowersHomePage'));
+const ShowcasePage = lazyWithRetry(() => import('./pages/ShowcasePage'));
 const FlowersCatalog = lazyWithRetry(() => import('./FlowersCatalog'));
 
 /**
@@ -28,11 +28,14 @@ export const verticalFlowersModule: RemoteModuleDescriptor = {
   shells: ['web', 'cashier'],
   alwaysEnabled: true,
   sales: { Catalog: FlowersCatalog },
-  routes: [{ path: '/flowers/*', element: FlowersHomePage }],
+  // «Вітрина» is what the route actually shows now: the bouquets standing in
+  // the window and the write-off for one that did not sell. The old page only
+  // reported that the module was live, which the nav entry already does.
+  routes: [{ path: '/flowers/*', element: ShowcasePage }],
   nav: [
     {
       to: '/flowers',
-      label: 'Квіти',
+      label: 'Вітрина',
       icon: 'Flower2',
       location: 'cashier-primary',
       order: 80,

@@ -10,7 +10,7 @@ import * as stockDocumentsService from '../stock-documents.service.js';
 import * as stockReportsService from '../stock-reports.service.js';
 import * as suppliersService from '../suppliers.service.js';
 import { errorMessage } from './_shared.js';
-import type { StockDocumentType } from '../types.js';
+import type { StockDocumentType, WriteoffReasonCode } from '../types.js';
 
 export function registerStockRoutes(fastify: FastifyInstance): void {
   fastify.post('/stock/adjust', async (request, reply) => {
@@ -143,6 +143,34 @@ export function registerStockRoutes(fastify: FastifyInstance): void {
           component_variant_id: Number(c?.component_variant_id),
           quantity: Number(c?.quantity),
         })),
+      });
+      return reply.code(result.created ? 201 : 200).send(result);
+    } catch (error) {
+      return reply.code(400).send({ error: errorMessage(error) });
+    }
+  });
+
+  // A window bouquet that did not sell. Staff level like the one above, and
+  // narrower than the owner's write-off screen: only a `one_off` card, so a
+  // mis-tap at the till cannot empty a stem line. The loss is the bouquet
+  // itself — production took its stems days ago.
+  fastify.post('/bench/writeoff', async (request, reply) => {
+    const auth = await ensureModule(request, reply, 'stock');
+    if (!auth) return;
+    const body = request.body as {
+      client_uuid?: string;
+      variant_id?: number;
+      reason_code?: string;
+      note?: string | null;
+    };
+    try {
+      const result = await benchService.writeOffShowcase({
+        storeId: auth.storeId,
+        staffId: auth.staffId,
+        clientUuid: String(body.client_uuid ?? ''),
+        variantId: Number(body.variant_id),
+        reasonCode: body.reason_code as WriteoffReasonCode,
+        note: body.note ?? null,
       });
       return reply.code(result.created ? 201 : 200).send(result);
     } catch (error) {

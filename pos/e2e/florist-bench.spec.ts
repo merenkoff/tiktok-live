@@ -109,6 +109,31 @@ const FLOWERS_CATALOG = [
   stem(17, 17, 'Крафт-папір', 'kraft', 'Натуральний', 0, 4000, 300),
   stem(18, 18, 'Стрічка атласна', 'ribbon', 'Пудрова', 0, 2500, 200),
   {
+    // A bouquet already standing in the window: one_off, one on the shelf.
+    variant_id: 60,
+    product_id: 60,
+    product_name: 'Букет №41',
+    attributes: {},
+    label: '',
+    unit: 'шт',
+    sku: null,
+    barcode: '2000000000604',
+    price_cents: 130000,
+    quantity: 1,
+    image_url: '/demo-flowers/bouquet-tenderness.svg',
+    kind: 'composite',
+    // `own`: it is already tied and standing in a bucket. Marking it `derived`
+    // would make it a second card the «Зібрати букет» button offers to assemble
+    // ON, which is not what a finished bouquet is.
+    stock_mode: 'own',
+    one_off: true,
+    components: [
+      { component_variant_id: 1, quantity: 9, product_name: 'Троянда Freedom', label: 'Червона · 60 см', unit: 'шт' },
+      { component_variant_id: 13, quantity: 3, product_name: 'Евкаліпт', label: 'Зелений · 50 см', unit: 'шт' },
+    ],
+    tag_ids: [],
+  },
+  {
     // The card the bench opens on: a composite the shop ties when it sells, so
     // its own stock is 0 forever and tapping it must mean "make me one".
     variant_id: 50,
@@ -492,4 +517,71 @@ test('screenshots — tablet', async ({ page }) => {
   await page.locator('[data-testid=bench-pad-1]:visible').click();
   await page.waitForTimeout(150);
   await page.screenshot({ path: path.join(SHOTS, 'bench-tablet-sheet.png') });
+});
+
+test('the window lists what is made up, and writes off what did not sell', async ({ page }) => {
+  await openBench(page, TILL);
+
+  const written: Array<Record<string, unknown>> = [];
+  await page.route('**/api/pos/bench/writeoff', async (route) => {
+    written.push(route.request().postDataJSON() as Record<string, unknown>);
+    await route.fulfill({
+      status: 201,
+      json: { variant_id: 60, quantity: 1, doc_number: 'СП-2026-00007', created: true },
+    });
+  });
+
+  await page.goto('/flowers');
+  await expect(page.getByRole('heading', { name: 'Вітрина' })).toBeVisible();
+
+  // Only the one-off card. «Букет на замовлення» is the bench's template and
+  // has no stock; the stems are not bouquets.
+  const rows = page.getByTestId('showcase-row');
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText('Букет №41');
+  await expect(rows.first()).toContainText('1300,00 ₴');
+  // Its recipe is on the row — the only place a one-off bouquet's is.
+  await expect(rows.first()).toContainText('Троянда Freedom × 9');
+
+  await page.getByTestId('showcase-writeoff').click();
+  await expect(page.getByTestId('writeoff-dialog')).toBeVisible();
+  // The one thing a florist might reasonably expect to work the other way.
+  await expect(page.getByTestId('writeoff-dialog')).toContainText('Стебла не повернуться');
+  await page.getByTestId('writeoff-damaged').click();
+
+  await expect.poll(() => written.length).toBe(1);
+  expect(written[0]).toMatchObject({ variant_id: 60, reason_code: 'damaged' });
+  expect(written[0].client_uuid).toMatch(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+  );
+});
+
+test('a refused write-off says why, in the server\'s words', async ({ page }) => {
+  await openBench(page, TILL);
+  await page.route('**/api/pos/bench/writeoff', (route) =>
+    route.fulfill({ status: 400, json: { error: 'Цього букета вже немає на вітрині' } })
+  );
+
+  await page.goto('/flowers');
+  await page.getByTestId('showcase-writeoff').click();
+  await page.getByTestId('writeoff-damaged').click();
+
+  await expect(page.getByTestId('showcase-page-error')).toHaveText(
+    'Цього букета вже немає на вітрині'
+  );
+  // Still listed: nothing was written off, so nothing may disappear.
+  await expect(page.getByTestId('showcase-row')).toHaveCount(1);
+});
+
+test('screenshots — showcase', async ({ page }) => {
+  await openBench(page, TILL);
+  await page.goto('/flowers');
+  await expect(page.getByTestId('showcase-row')).toHaveCount(1);
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: path.join(SHOTS, 'showcase-list.png') });
+
+  await page.getByTestId('showcase-writeoff').click();
+  await expect(page.getByTestId('writeoff-dialog')).toBeVisible();
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: path.join(SHOTS, 'showcase-writeoff.png') });
 });

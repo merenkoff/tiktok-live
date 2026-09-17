@@ -1,5 +1,5 @@
 {
-  "platformVersion": 8,
+  "platformVersion": 9,
   "exports": {
     "platform": [
       "DEFAULT_RECEIPT_PAPER_WIDTH",

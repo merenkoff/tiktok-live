@@ -263,6 +263,12 @@ export interface CatalogItem {
   kind?: ProductKind;
   stock_mode?: ProductStockMode;
   /**
+   * A card made at the bench for one physical bouquet. The window and a
+   * catalogue bouquet are both `composite` + `own`; only this one may be
+   * written off from the till. Absent on an older cached snapshot → false.
+   */
+  one_off?: boolean;
+  /**
    * The catalogue recipe, for a composite only. Rides into the offline
    * snapshot for free, because the snapshot is this same endpoint.
    */
@@ -359,6 +365,12 @@ export interface Product {
   /** Optional: an older cached payload predates composites. */
   kind?: ProductKind;
   stock_mode?: ProductStockMode;
+  /**
+   * A card made at the bench for one physical bouquet. The window and a
+   * catalogue bouquet are both `composite` + `own`; only this one may be
+   * written off from the till. Absent on an older cached snapshot → false.
+   */
+  one_off?: boolean;
   tag_ids: number[];
   variants: ProductVariant[];
 }

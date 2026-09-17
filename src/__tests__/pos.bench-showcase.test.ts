@@ -17,9 +17,9 @@ import {
   seedProduct,
   type TestStore,
 } from './helpers/pos-fixtures.js';
-import { assembleForShowcase } from '../pos/bench.service.js';
+import { assembleForShowcase, writeOffShowcase } from '../pos/bench.service.js';
 import { completeSale } from '../pos/sales.service.js';
-import { getCatalog } from '../pos/products.service.js';
+import { createProduct, getCatalog } from '../pos/products.service.js';
 import { reverseDocument } from '../pos/stock-documents.service.js';
 import { listOnHand } from '../pos/stock-reports.service.js';
 import { internalBarcodeFor, isInternalBarcode } from '../pos/core/internalBarcode.js';
@@ -421,6 +421,204 @@ describe.skipIf(!hasDb)('POS florist bench — assembling for the showcase', () 
 
       expect(res.statusCode).toBe(400);
       expect(res.json().error).toBe('Букет порожній');
+    });
+  });
+
+  describe('writing off a bouquet that did not sell', () => {
+    it('takes the bouquet, and never gives the stems back', async () => {
+      // The whole point. Production took the stems days ago; crediting them
+      // here would invent flowers that are in the bin.
+      const made = await assembleForShowcase({
+        storeId,
+        staffId,
+        clientUuid: randomUUID(),
+        components: bouquet(),
+      });
+      const roses = await stockOf(roseId);
+      const greens = await stockOf(eucalyptusId);
+
+      const off = await writeOffShowcase({
+        storeId,
+        staffId,
+        clientUuid: randomUUID(),
+        variantId: made.variant_id,
+        reasonCode: 'damaged',
+      });
+
+      expect(off.created).toBe(true);
+      expect(off.quantity).toBe(1);
+      expect(off.doc_number).toMatch(/^СП-\d{4}-\d{5}$/);
+      expect(await stockOf(made.variant_id)).toBe(0);
+      expect(await stockOf(roseId)).toBe(roses);
+      expect(await stockOf(eucalyptusId)).toBe(greens);
+    });
+
+    it('records the reason, so a gift and a loss are not the same number', async () => {
+      const made = await assembleForShowcase({
+        storeId,
+        staffId,
+        clientUuid: randomUUID(),
+        components: bouquet(),
+      });
+      const off = await writeOffShowcase({
+        storeId,
+        staffId,
+        clientUuid: randomUUID(),
+        variantId: made.variant_id,
+        reasonCode: 'gift',
+        note: 'Віддали сусідці',
+      });
+
+      const doc = await pool.query(
+        `SELECT type, status, reason_code, note FROM pos_stock_documents WHERE id = $1`,
+        [off.document_id]
+      );
+      expect(doc.rows[0]).toMatchObject({
+        type: 'writeoff',
+        status: 'posted',
+        reason_code: 'gift',
+        note: 'Віддали сусідці',
+      });
+    });
+
+    it('refuses a catalogue bouquet — the till may only write off the window', async () => {
+      // «Ніжність» is also composite+own, but it is a product line assembled in
+      // batches. Letting a mis-tap at the till write one off would be the same
+      // button emptying a stem line.
+      const product = await createProduct(storeId, {
+        name: 'Букет «Ніжність»',
+        kind: 'composite',
+        stock_mode: 'own',
+        variants: [
+          {
+            attributes: {},
+            price_cents: 90000,
+            quantity: 0,
+            components: [{ component_variant_id: roseId, quantity: 9 }],
+          },
+        ],
+      });
+      const variantId = (product!.variants[0] as { id: number }).id;
+      await pool.query(
+        `UPDATE pos_stock SET quantity = 3 WHERE variant_id = $1 AND store_id = $2`,
+        [variantId, storeId]
+      );
+
+      await expect(
+        writeOffShowcase({
+          storeId,
+          staffId,
+          clientUuid: randomUUID(),
+          variantId,
+          reasonCode: 'damaged',
+        })
+      ).rejects.toThrow(/лише букет із вітрини/);
+      expect(await stockOf(variantId)).toBe(3);
+    });
+
+    it('refuses a bouquet that already left', async () => {
+      const made = await assembleForShowcase({
+        storeId,
+        staffId,
+        clientUuid: randomUUID(),
+        components: bouquet(),
+      });
+      await completeSale({
+        storeId,
+        staffId,
+        clientUuid: randomUUID(),
+        items: [{ variant_id: made.variant_id, quantity: 1 }],
+        payments: [{ method: 'cash', amount_cents: made.price_cents }],
+      });
+
+      await expect(
+        writeOffShowcase({
+          storeId,
+          staffId,
+          clientUuid: randomUUID(),
+          variantId: made.variant_id,
+          reasonCode: 'damaged',
+        })
+      ).rejects.toThrow(/вже немає на вітрині/);
+    });
+
+    it('refuses a reason the till has no business sending', async () => {
+      const made = await assembleForShowcase({
+        storeId,
+        staffId,
+        clientUuid: randomUUID(),
+        components: bouquet(),
+      });
+      await expect(
+        writeOffShowcase({
+          storeId,
+          staffId,
+          clientUuid: randomUUID(),
+          variantId: made.variant_id,
+          // `lost` is a stock-taking word; a florist at the counter is saying
+          // either "it wilted" or "we gave it away".
+          reasonCode: 'lost',
+          })
+      ).rejects.toThrow(/Причина списання/);
+      expect(await stockOf(made.variant_id)).toBe(1);
+    });
+
+    it('a retry writes it off once', async () => {
+      const made = await assembleForShowcase({
+        storeId,
+        staffId,
+        clientUuid: randomUUID(),
+        components: bouquet(),
+      });
+      const clientUuid = randomUUID();
+      const first = await writeOffShowcase({
+        storeId,
+        staffId,
+        clientUuid,
+        variantId: made.variant_id,
+        reasonCode: 'damaged',
+      });
+      const retry = await writeOffShowcase({
+        storeId,
+        staffId,
+        clientUuid,
+        variantId: made.variant_id,
+        reasonCode: 'damaged',
+      });
+
+      expect(retry.created).toBe(false);
+      expect(retry.document_id).toBe(first.document_id);
+      expect(await stockOf(made.variant_id)).toBe(0);
+    });
+
+    it('is staff-level over the wire, and refuses a catalogue card there too', async () => {
+      const made = await assembleForShowcase({
+        storeId,
+        staffId,
+        clientUuid: randomUUID(),
+        components: bouquet(),
+      });
+
+      const ok = await app.inject({
+        method: 'POST',
+        url: '/api/pos/bench/writeoff',
+        headers: auth(store.sellerToken),
+        payload: {
+          client_uuid: randomUUID(),
+          variant_id: made.variant_id,
+          reason_code: 'damaged',
+        },
+      });
+      expect(ok.statusCode).toBe(201);
+
+      const stem = await app.inject({
+        method: 'POST',
+        url: '/api/pos/bench/writeoff',
+        headers: auth(store.sellerToken),
+        payload: { client_uuid: randomUUID(), variant_id: roseId, reason_code: 'damaged' },
+      });
+      expect(stem.statusCode).toBe(400);
+      expect(stem.json().error).toMatch(/лише букет із вітрини/);
     });
   });
 });
