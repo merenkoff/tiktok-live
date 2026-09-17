@@ -20,16 +20,26 @@ import {
   saveUserSettings,
   ensureDefaultSettings,
 } from '../users/users.service.js';
-import { applyLiveMigrations, applyPosMigrations, hasDb } from './helpers/pos-fixtures.js';
+import {
+  applyLiveMigrations,
+  applyPosMigrations,
+  hasDb,
+  readLiveSchema,
+  type LiveSchemaLease,
+} from './helpers/pos-fixtures.js';
 
 const REAL_TOKEN = '123456:AAH-real-bot-token';
 
 describe.skipIf(!hasDb)('saveUserSettings', () => {
   const nickname = `set_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
   let userId: number;
+  let lease: LiveSchemaLease;
 
   beforeAll(async () => {
     await applyPosMigrations();
+    // Shared lease: `live-schema-repair.test.ts` drops these very tables to
+    // rebuild them, and it runs in another worker against the same database.
+    lease = await readLiveSchema();
     await applyLiveMigrations();
     const user = await pool.query(
       `INSERT INTO users (tiktok_username) VALUES ($1) RETURNING id`,
@@ -52,6 +62,7 @@ describe.skipIf(!hasDb)('saveUserSettings', () => {
 
   afterAll(async () => {
     await pool.query(`DELETE FROM users WHERE tiktok_username = $1`, [nickname]);
+    await lease?.release();
     await pool.end();
   });
 
