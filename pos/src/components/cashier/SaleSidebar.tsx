@@ -20,8 +20,8 @@ interface Props {
   cartDiscount: CartDiscount | null;
   onSetCustomer: (c: PosCustomer | null) => void;
   onSetCartDiscount: (d: CartDiscount | null) => void;
-  onSetQty: (variantId: number, qty: number) => void;
-  onRemove: (variantId: number) => void;
+  onSetQty: (uid: string, qty: number) => void;
+  onRemove: (uid: string) => void;
   onClear: () => void;
   onCharge: () => void;
   onSaveBasket?: () => void;
@@ -45,7 +45,7 @@ export function SaleSidebar({
   const discountCents = computeCartDiscountCents(lines, cartDiscount);
   const total = Math.max(0, subtotal - discountCents);
 
-  const [selectedVariantId, setSelectedVariantId] = useState<number | null>(null);
+  const [selectedUid, setSelectedUid] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [discountOpen, setDiscountOpen] = useState(false);
@@ -53,10 +53,10 @@ export function SaleSidebar({
   const listRef = useDragScroll<HTMLDivElement>();
 
   useEffect(() => {
-    if (!lines.some((l) => l.variant_id === selectedVariantId)) {
-      setSelectedVariantId(null);
+    if (!lines.some((l) => l.uid === selectedUid)) {
+      setSelectedUid(null);
     }
-  }, [lines, selectedVariantId]);
+  }, [lines, selectedUid]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -67,8 +67,8 @@ export function SaleSidebar({
     return () => document.removeEventListener('mousedown', onDoc);
   }, [menuOpen]);
 
-  function toggleSelect(variantId: number) {
-    setSelectedVariantId((prev) => (prev === variantId ? null : variantId));
+  function toggleSelect(uid: string) {
+    setSelectedUid((prev) => (prev === uid ? null : uid));
   }
 
   return (
@@ -127,15 +127,15 @@ export function SaleSidebar({
         ) : (
           <ul className="space-y-1">
             {lines.map((line) => {
-              const selected = selectedVariantId === line.variant_id;
+              const selected = selectedUid === line.uid;
               const lineTotal = line.unit_price_cents * line.quantity;
               const compareTotal =
                 line.compare_at_cents != null ? line.compare_at_cents * line.quantity : null;
               return (
-                <li key={line.variant_id}>
+                <li key={line.uid}>
                   <button
                     type="button"
-                    onClick={() => toggleSelect(line.variant_id)}
+                    onClick={() => toggleSelect(line.uid)}
                     className={`w-full text-left rounded-sq px-2 py-2.5 flex gap-3 transition-colors ${
                       selected ? 'bg-white ring-1 ring-sq-blue/40' : 'hover:bg-white/70'
                     }`}
@@ -188,7 +188,7 @@ export function SaleSidebar({
                       <button
                         type="button"
                         className="h-10 w-10 rounded-sq border border-sq-divider text-base bg-white"
-                        onClick={() => onSetQty(line.variant_id, line.quantity - 1)}
+                        onClick={() => onSetQty(line.uid, line.quantity - 1)}
                       >
                         −
                       </button>
@@ -196,14 +196,14 @@ export function SaleSidebar({
                       <button
                         type="button"
                         className="h-10 w-10 rounded-sq border border-sq-divider text-base bg-white"
-                        onClick={() => onSetQty(line.variant_id, line.quantity + 1)}
+                        onClick={() => onSetQty(line.uid, line.quantity + 1)}
                       >
                         +
                       </button>
                       <button
                         type="button"
                         className="ml-auto text-sm text-red-600 font-medium min-h-10 px-2"
-                        onClick={() => onRemove(line.variant_id)}
+                        onClick={() => onRemove(line.uid)}
                       >
                         Видалити
                       </button>

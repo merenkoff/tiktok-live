@@ -187,6 +187,17 @@ export function RegisterPage() {
           items: lines.map((line) => ({
             variant_id: line.variant_id,
             quantity: line.quantity,
+            // A bouquet assembled at the counter carries its own recipe. Only
+            // the ids and counts go: the server re-prices from them, because a
+            // line price the till can set freely is a hole no receipt shows.
+            ...(line.components
+              ? {
+                  components: line.components.map((c) => ({
+                    component_variant_id: c.component_variant_id,
+                    quantity: c.quantity,
+                  })),
+                }
+              : {}),
           })),
           payments,
           cart_discount: cartDiscount,

@@ -121,6 +121,11 @@ export interface StoreConfig {
   gtin_lookup_enabled: boolean;
   /** Whether a paid-provider API key is stored — the key itself is never returned. */
   auto_print_receipt: boolean;
+  /**
+   * What the shop charges for assembling a composite, in basis points of its
+   * components' retail sum (2500 = 25%). 0 = parts only.
+   */
+  florist_labour_bps: number;
   /** Toggleable module ids the store has enabled (effective set; core ids not listed). */
   enabled_modules: string[];
   /**
@@ -151,6 +156,7 @@ export type StorePatch = Partial<
     | 'qr_recipient'
     | 'gtin_lookup_enabled'
     | 'auto_print_receipt'
+    | 'florist_labour_bps'
     | 'enabled_modules'
     | 'module_remotes'
     | 'nav_overrides'
@@ -184,6 +190,12 @@ export interface AuthResponse {
     /** Optional so a cashier build reading an older cached/offline auth still typechecks. */
     qr_payment?: QrPaymentConfig;
     auto_print_receipt?: boolean;
+    /**
+     * Assembly charge on a composite, in basis points. Optional for the same
+     * reason as the rest: a cached auth from before this existed reads as 0,
+     * which is exactly the old behaviour (parts only).
+     */
+    florist_labour_bps?: number;
     /** Toggleable module ids the store has enabled. Absent on older cached auth → treat as "all defaults on". */
     enabled_modules?: string[];
     /** Module-remote map (roadmap #9 string form / #13 Part C object form). Absent on older cached auth. */
@@ -202,6 +214,21 @@ export interface AuthResponse {
      */
     fiscal?: FiscalPublicConfig;
   };
+}
+
+/**
+ * One line of a `POST /sales/complete` payload.
+ *
+ * `components` is what a bouquet assembled at the counter took. Ids and counts
+ * only: the server re-prices from them (`priceOfComposition` plus the store's
+ * assembly charge), because a line price the till can set freely is a hole no
+ * receipt would show. A line carrying it is never merged with another of the
+ * same variant.
+ */
+export interface SaleItemInput {
+  variant_id: number;
+  quantity: number;
+  components?: Array<{ component_variant_id: number; quantity: number }>;
 }
 
 export interface CatalogItem {
@@ -555,6 +582,20 @@ export interface SaleDetail {
     line_discount_cents?: number;
     line_total_cents: number;
     refunded_quantity: number;
+    /**
+     * What this line actually consumed, for a composite. For a bouquet
+     * assembled at the counter this is the only place its recipe exists —
+     * there is no catalogue card to look it up on. Absent on an ordinary line
+     * and on an older cached sale.
+     */
+    components?: Array<{
+      component_variant_id: number;
+      /** Per one unit of the composite. */
+      quantity_per_unit: number;
+      product_name: string;
+      label: string;
+      unit: string;
+    }>;
   }>;
   payments: Array<{
     id: number;

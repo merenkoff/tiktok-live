@@ -38,6 +38,7 @@ export default defineConfig({
         'src/modules/navOverrides.ts',
         'src/modules/selectNav.ts',
         'src/modules/useEnabledModules.ts',
+        'src/lib/bouquet.ts',
         'src/lib/money.ts',
         'src/lib/receipt.ts',
         'src/lib/taxUrl.ts',
