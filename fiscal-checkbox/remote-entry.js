@@ -1,44 +1,50 @@
-import { lazy as n } from "react";
-const s = "1.1.1";
-async function h(e, { retries: t = 2, backoffMs: c = 400 } = {}) {
-  let o;
-  for (let a = 0; a <= t; a += 1)
-    try {
-      return await e();
-    } catch (r) {
-      if (o = r, a === t) break;
-      await new Promise((l) => setTimeout(l, c * 2 ** a));
-    }
-  throw o;
+import { lazy as e } from "react";
+//#region src/platform/version.ts
+var t = "2.0.0";
+//#endregion
+//#region src/modules/lazyWithRetry.ts
+async function n(e, { retries: t = 2, backoffMs: n = 400 } = {}) {
+	let r;
+	for (let i = 0; i <= t; i += 1) try {
+		return await e();
+	} catch (e) {
+		if (r = e, i === t) break;
+		await new Promise((e) => setTimeout(e, n * 2 ** i));
+	}
+	throw r;
 }
-function i(e, t) {
-  return n(() => h(e, t));
+function r(t, r) {
+	return e(() => n(t, r));
 }
-const m = i(
-  () => import("./CheckboxTillPage-CE8BM5KH.js").then((e) => ({ default: e.CheckboxTillPage }))
-), f = i(
-  () => import("./CheckboxAdminPage-CyqsSSL5.js").then((e) => ({ default: e.CheckboxAdminPage }))
-), b = "fiscal-checkbox", d = {
-  id: b,
-  title: "Фіскалізація (Checkbox)",
-  shells: ["web", "cashier"],
-  alwaysEnabled: !0,
-  routes: [
-    { path: "/fiscal/*", element: m },
-    { path: "fiscal", mount: "admin", element: f }
-  ],
-  nav: [
-    {
-      to: "/fiscal",
-      label: "Зміна",
-      icon: "Receipt",
-      location: "cashier-primary",
-      order: 90,
-      match: "/fiscal"
-    },
-    { to: "/admin/fiscal", label: "Фіскалізація", location: "admin-sidebar", order: 65 }
-  ]
-}, p = { ...d, version: s };
-export {
-  p as manifest
+//#endregion
+//#region src/modules/fiscal-checkbox/manifest.ts
+var i = r(() => import("./CheckboxTillPage-DN8Mho8z.js").then((e) => ({ default: e.CheckboxTillPage }))), a = r(() => import("./CheckboxAdminPage-DnF1YfIf.js").then((e) => ({ default: e.CheckboxAdminPage }))), o = {
+	id: "fiscal-checkbox",
+	title: "Фіскалізація (Checkbox)",
+	shells: ["web", "cashier"],
+	alwaysEnabled: !0,
+	routes: [{
+		path: "/fiscal/*",
+		element: i
+	}, {
+		path: "fiscal",
+		mount: "admin",
+		element: a
+	}],
+	nav: [{
+		to: "/fiscal",
+		label: "Зміна",
+		icon: "Receipt",
+		location: "cashier-primary",
+		order: 90,
+		match: "/fiscal"
+	}, {
+		to: "/admin/fiscal",
+		label: "Фіскалізація",
+		location: "admin-sidebar",
+		order: 65
+	}],
+	version: t
 };
+//#endregion
+export { o as manifest };
