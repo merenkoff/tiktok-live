@@ -28,6 +28,9 @@ export function SettingsPage() {
   // GTIN column default is TRUE — init checked so it doesn't flash "off" before getStore().
   const [gtinLookupEnabled, setGtinLookupEnabled] = useState(true);
   const [autoPrintReceipt, setAutoPrintReceipt] = useState(false);
+  // Percent in the field, basis points on the wire — the owner thinks in
+  // percent and the column is exact.
+  const [labourPercent, setLabourPercent] = useState('0');
   const [enabledModules, setEnabledModules] = useState<Set<string>>(new Set());
   // TikTok LIVE account this store broadcasts from. Setting it is what lets the
   // `tiktok-live` module mint LIVE tokens for staff — see the backend
@@ -85,6 +88,7 @@ export function SettingsPage() {
     setQrPurposeTemplate(store.qr_purpose_template ?? '');
     setGtinLookupEnabled(store.gtin_lookup_enabled);
     setAutoPrintReceipt(store.auto_print_receipt);
+    setLabourPercent(String((store.florist_labour_bps ?? 0) / 100));
     setEnabledModules(new Set(store.enabled_modules));
     setLiveTiktokUsername(store.live_tiktok_username ?? '');
     const strings: Record<string, string> = {};
@@ -238,6 +242,7 @@ export function SettingsPage() {
         qr_purpose_template: qrPurposeTemplate || null,
         gtin_lookup_enabled: gtinLookupEnabled,
         auto_print_receipt: autoPrintReceipt,
+        florist_labour_bps: Math.round(Number(labourPercent.replace(',', '.')) * 100) || 0,
         enabled_modules: [...enabledModules],
         module_remotes: { ...remoteObjects, ...moduleRemotes },
         live_tiktok_username: liveTiktokUsername.trim() || null,
@@ -290,6 +295,20 @@ export function SettingsPage() {
             />
             <span className="mt-1 block text-xs text-sq-muted">
               Визначає поля товару та екран продажу. Змінює адміністратор платформи.
+            </span>
+          </label>
+          <label className="block">
+            <span className="text-sm text-sq-secondary">Робота флориста, %</span>
+            <input
+              className="mt-1.5 w-full rounded-sq border border-sq-divider px-3 py-2.5"
+              inputMode="decimal"
+              value={labourPercent}
+              onChange={(e) => setLabourPercent(e.target.value.replace(/[^\d.,]/g, ''))}
+            />
+            <span className="mt-1 block text-xs text-sq-muted">
+              Скільки додається до вартості складників, коли касир збирає букет. Ціни
+              стебел уже містять вашу націнку, тож тут — плата за саму роботу; у
+              галузі це зазвичай близько 25%. 0 — рахувати тільки складники.
             </span>
           </label>
           <p className="text-sm text-sq-secondary">Валюта: грн (UAH)</p>

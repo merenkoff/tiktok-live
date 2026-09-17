@@ -29,3 +29,13 @@ ALTER TABLE pos_stores
 
 COMMENT ON COLUMN pos_stores.florist_labour_bps IS
   'Assembly charge on a composite, in basis points of its components'' retail sum (2500 = 25%). 0 = parts only.';
+
+-- Give the demo shop the trade's usual figure, so the bench demonstrates the
+-- feature instead of pricing a bouquet at cost. Guarded on 0, which every store
+-- is on the deploy that adds the column — afterwards an owner's edit sticks.
+-- (Setting the demo's charge back to exactly 0 would be re-seeded on the next
+-- boot. It is a demo store; that is a cheap wart for a migration that has no
+-- other way to know whether it has run.)
+UPDATE pos_stores
+   SET florist_labour_bps = 2500
+ WHERE slug = 'demo-flowers' AND florist_labour_bps = 0;
