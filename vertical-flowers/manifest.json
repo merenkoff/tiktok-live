@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "moduleId": "vertical-flowers",
+  "version": "2.0.0",
+  "minHostPlatform": 4,
+  "entry": "remote-entry.js",
+  "keyId": "2a73632c13044371",
+  "builtAt": "2026-09-17T08:02:25.728Z",
+  "files": {
+    "BarcodeScanner-DDyd6b-m.js": "sha384-h7k7FozxihdT2cYBXZsLuvH2nmezpFoHZ17TVH+R34lHtTcbvHJBkmWVo9KVWFbs",
+    "FlowersCatalog-3PK-qplx.js": "sha384-yXAQPG+iKyDyUJGnK5KvXBq0XlVAZXFNkMJmwyu3DyK2gai6TYHecZQ8Nrz/smvT",
+    "FlowersHomePage-DffhguV3.js": "sha384-AIqybV8vlzk3wbMY2xwdD+zbb4egk/BrXiwf7WrC+7y+jFuSjPVhIIlbNOeaPM2C",
+    "remote-entry.js": "sha384-MPHOZoK0LF1d/iH1Dv8lXkIL0KOIJKVqFtPyTQvnERk9VXRtIi6cJjSegXEYiUM2",
+    "style.css": "sha384-7iIIh/VyAwe9f2nFH9UEF0w9InsT/UtxDHtPzfTaicxPFxP99RvtIcK+kcNAke2K"
+  }
+}
