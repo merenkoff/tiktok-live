@@ -55,6 +55,86 @@ export async function testConnection(): Promise<void> {
   }
 }
 
+/** A statement's first line — enough to recognise it in a log, short enough to read. */
+function firstLine(statement: string): string {
+  const line = statement.split('\n')[0].trim();
+  return line.length > 120 ? `${line.slice(0, 117)}…` : line;
+}
+
+/**
+ * Columns the LIVE code writes that a database created before multi-tenancy can
+ * be missing.
+ *
+ * `001_create_schema.sql` declares its tables with `CREATE TABLE IF NOT EXISTS`,
+ * which is silent about an existing table whose shape has since moved on — so a
+ * database that first ran the single-user MVP keeps `orders` and `reservations`
+ * without `user_id`, `session_id`, `status` or `payment_status` forever. What
+ * showed on production was the *symptom*: the six `CREATE INDEX` statements over
+ * those columns failed with 42703, and the every-minute reservation-cleanup cron
+ * failed with it too, because `cleanupExpiredReservations` updates `status`.
+ * Nothing could have created a reservation there either.
+ *
+ * Added nullable and without foreign keys on purpose: `NOT NULL` cannot be added
+ * to a table that already has rows, and a fresh database gets the real
+ * constraints from the `CREATE TABLE` above anyway. This list is a repair path
+ * for old databases, not a second declaration of the schema.
+ */
+const LEGACY_COLUMNS: ReadonlyArray<{ table: string; column: string; type: string }> = [
+  // The two tables production was still carrying in their pre-multi-tenancy shape.
+  { table: 'reservations', column: 'user_id', type: 'BIGINT' },
+  { table: 'reservations', column: 'session_id', type: 'BIGINT' },
+  { table: 'reservations', column: 'status', type: "VARCHAR(50) DEFAULT 'reserved'" },
+  { table: 'reservations', column: 'expires_at', type: 'TIMESTAMP' },
+  { table: 'reservations', column: 'converted_to_order_id', type: 'BIGINT' },
+  { table: 'reservations', column: 'updated_at', type: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP' },
+  { table: 'orders', column: 'user_id', type: 'BIGINT' },
+  { table: 'orders', column: 'session_id', type: 'BIGINT' },
+  { table: 'orders', column: 'order_code', type: 'VARCHAR(50)' },
+  { table: 'orders', column: 'quantity', type: 'INTEGER DEFAULT 1' },
+  { table: 'orders', column: 'status', type: "VARCHAR(50) DEFAULT 'pending'" },
+  { table: 'orders', column: 'payment_status', type: "VARCHAR(50) DEFAULT 'unpaid'" },
+  { table: 'orders', column: 'tracking_number', type: 'VARCHAR(255)' },
+  { table: 'orders', column: 'updated_at', type: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP' },
+  // Was two loose ALTERs below this loop; same problem, same place to fix it.
+  { table: 'leads', column: 'status', type: "VARCHAR(50) DEFAULT 'new'" },
+  { table: 'leads', column: 'updated_at', type: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP' },
+];
+
+/**
+ * Bring an older database's LIVE tables up to the columns the code writes.
+ *
+ * Idempotent (`ADD COLUMN IF NOT EXISTS`) and quiet on a table this build does
+ * not have: a database can legitimately be missing one (the POS-only test
+ * databases never create the LIVE schema at all).
+ *
+ * Exported for `src/__tests__/live-schema-repair.test.ts` — the whole point of
+ * this function is that it is provable somewhere other than production.
+ */
+export async function repairLegacyLiveColumns(): Promise<string[]> {
+  const repaired: string[] = [];
+  for (const { table, column, type } of LEGACY_COLUMNS) {
+    try {
+      const before = await pool.query(
+        `SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2`,
+        [table, column]
+      );
+      if (before.rows.length > 0) continue;
+      await pool.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${column} ${type}`);
+      repaired.push(`${table}.${column}`);
+    } catch (error: any) {
+      // 42P01: this build has no such table here. Anything else is worth seeing.
+      if (error.code !== '42P01') {
+        logger.warn(`⚠️  Could not add ${table}.${column}: ${error.message}`);
+      }
+    }
+  }
+  if (repaired.length > 0) {
+    logger.warn(`⚠️  Added missing LIVE columns: ${repaired.join(', ')}`);
+  }
+  return repaired;
+}
+
 /**
  * Initialize database schema
  */
@@ -91,6 +171,12 @@ export async function initializeDatabase(): Promise<void> {
       .map((s) => s.trim())
       .filter(Boolean);
 
+    // Statements that hit a column an older database does not have yet. They are
+    // retried after `repairLegacyLiveColumns()` below rather than dropped — the
+    // previous version of this comment promised the retry and there wasn't one,
+    // which is how production ended up without six indexes it was told to have.
+    const deferred: string[] = [];
+
     for (const statement of statements) {
       try {
         await pool.query(statement);
@@ -104,19 +190,32 @@ export async function initializeDatabase(): Promise<void> {
         ) {
           logger.debug(`ℹ️  Skipping schema object: ${error.message}`);
         } else if (error.code === '42703') {
-          // undefined_column — usually CREATE INDEX before column evolve; retry after ALTERs
-          logger.warn(`⚠️  Schema statement skipped (missing column): ${error.message}`);
+          // undefined_column — a CREATE INDEX over a column the ALTERs add below.
+          deferred.push(statement);
         } else {
           throw error;
         }
       }
     }
 
-    // Ensure leads columns used by src/leads.ts exist on older DBs
-    await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'new'`);
-    await pool.query(
-      `ALTER TABLE leads ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`
-    );
+    await repairLegacyLiveColumns();
+
+    for (const statement of deferred) {
+      try {
+        await pool.query(statement);
+        logger.info(`✅ Recovered schema statement after repair: ${firstLine(statement)}`);
+      } catch (error: any) {
+        if (error.code === '42P07' || error.code === '23505') {
+          logger.debug(`ℹ️  Skipping schema object: ${error.message}`);
+        } else {
+          // Now it is a real problem: the column was supposed to exist by here.
+          logger.warn(
+            `⚠️  Schema statement still failing after repair: ${firstLine(statement)} — ${error.message}`
+          );
+        }
+      }
+    }
+
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status)`);
     try {
       await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS leads_phone_unique ON leads(phone)`);
