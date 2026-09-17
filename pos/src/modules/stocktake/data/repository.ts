@@ -13,8 +13,8 @@ import { cashierApi } from '@pos/platform';
 import type { CatalogItem } from '@pos/platform';
 import { db, type LineRow, type SheetRow } from './db';
 
-export function lineLabel(item: Pick<CatalogItem, 'product_name' | 'size' | 'color'>): string {
-  return [item.product_name, item.size, item.color].filter((s) => s && s.trim()).join(' · ');
+export function lineLabel(item: Pick<CatalogItem, 'product_name' | 'label'>): string {
+  return [item.product_name, item.label].filter((s) => s && s.trim()).join(' · ');
 }
 
 export async function listSheets(storeId: number): Promise<SheetRow[]> {

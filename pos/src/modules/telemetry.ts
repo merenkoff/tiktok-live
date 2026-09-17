@@ -19,6 +19,19 @@ export type ModuleEvent =
   | { type: 'remote_verify_error'; moduleId: string; url: string; error: unknown }
   | { type: 'remote_load_fallback'; moduleId: string; url: string; reason: string }
   | { type: 'route_render_error'; moduleId: string; error: unknown }
+  /**
+   * The sell screen rendered the bundled catalog because the store's own
+   * vertical module was not usable. Not an error for the cashier — the till
+   * keeps selling — but it is how anyone finds out a release never reached a
+   * shop, so it is worth a line.
+   */
+  | {
+      type: 'vertical_catalog_fallback';
+      moduleId: string;
+      vertical: string;
+      reason: string;
+      error?: unknown;
+    }
   | {
       type: 'session_manifest';
       appVersion: string;

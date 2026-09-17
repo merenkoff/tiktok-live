@@ -123,7 +123,7 @@ describe.skipIf(!hasDb)('POST /variants/internal-barcode', () => {
       method: 'POST',
       url: `/api/pos/products/${productId}/variants`,
       headers: auth(store.ownerToken),
-      payload: { size: 'M', color: 'Синій', price_cents: 1000, barcode },
+      payload: { attributes: { size: 'M', color: 'Синій' }, price_cents: 1000, barcode },
     });
     expect(first.statusCode).toBe(201);
 
@@ -132,7 +132,7 @@ describe.skipIf(!hasDb)('POST /variants/internal-barcode', () => {
       method: 'POST',
       url: `/api/pos/products/${productId}/variants`,
       headers: auth(store.ownerToken),
-      payload: { size: 'L', color: 'Синій', price_cents: 1000, barcode },
+      payload: { attributes: { size: 'L', color: 'Синій' }, price_cents: 1000, barcode },
     });
     expect(second.statusCode).toBe(409);
   });

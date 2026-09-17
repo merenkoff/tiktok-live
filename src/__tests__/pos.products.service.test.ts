@@ -43,8 +43,8 @@ describe.skipIf(!hasDb)('POS products service', () => {
         name: 'Hoodie',
         description: 'Warm',
         variants: [
-          { size: 'S', color: 'black', price_cents: 45000, quantity: 3 },
-          { size: 'M', color: 'black', price_cents: 45000, quantity: 0 },
+          { attributes: { size: 'S', color: 'black' }, price_cents: 45000, quantity: 3 },
+          { attributes: { size: 'M', color: 'black' }, price_cents: 45000, quantity: 0 },
         ],
       });
 
@@ -122,8 +122,8 @@ describe.skipIf(!hasDb)('POS products service', () => {
         products.createProduct(store.storeId, {
           name: 'Half-valid',
           variants: [
-            { size: 'S', price_cents: 1000, quantity: 1 },
-            { size: 'M', price_cents: -1 },
+            { attributes: { size: 'S' }, price_cents: 1000, quantity: 1 },
+            { attributes: { size: 'M' }, price_cents: -1 },
           ],
         })
       ).rejects.toThrow('Variant price must be >= 0');
@@ -227,17 +227,17 @@ describe.skipIf(!hasDb)('POS products service', () => {
     it('adds a variant with its stock row and seed movement', async () => {
       const created = await products.createProduct(store.storeId, {
         name: 'Growing',
-        variants: [{ size: 'S', price_cents: 100 }],
+        variants: [{ attributes: { size: 'S' }, price_cents: 100 }],
       });
       const withVariant = await products.addVariant(store.storeId, created!.id, {
-        size: 'L',
+        attributes: { size: 'L' },
         price_cents: 12000,
         quantity: 7,
       });
 
       expect(withVariant?.variants).toHaveLength(2);
       const added = withVariant!.variants.find(
-        (v) => (v as { size: string }).size === 'L'
+        (v) => (v as { label: string }).label === 'L'
       ) as { id: number; quantity: number };
       expect(added.quantity).toBe(7);
 
@@ -348,7 +348,12 @@ describe.skipIf(!hasDb)('POS products service', () => {
       const created = await products.createProduct(store.storeId, {
         name: 'Partial variant edit',
         variants: [
-          { size: 'S', color: 'red', price_cents: 100, cost_cents: 40, sku: 'KEEP-1' },
+          {
+            attributes: { size: 'S', color: 'red' },
+            price_cents: 100,
+            cost_cents: 40,
+            sku: 'KEEP-1',
+          },
         ],
       });
       const variantId = (created!.variants[0] as { id: number }).id;
@@ -357,16 +362,19 @@ describe.skipIf(!hasDb)('POS products service', () => {
         price_cents: 200,
       });
       const variant = updated!.variants[0] as {
-        size: string;
-        color: string;
+        attributes: Record<string, string>;
+        label: string;
+        unit: string;
         sku: string | null;
         cost_cents: number;
         price_cents: number;
         is_active: boolean;
       };
       expect(variant.price_cents).toBe(200);
-      expect(variant.size).toBe('S');
-      expect(variant.color).toBe('red');
+      // An update that names neither keeps the bag and its derived caption.
+      expect(variant.attributes).toEqual({ color: 'red', size: 'S' });
+      expect(variant.label).toBe('red / S');
+      expect(variant.unit).toBe('шт');
       expect(variant.sku).toBe('KEEP-1');
       expect(variant.cost_cents).toBe(40);
       expect(variant.is_active).toBe(true);
@@ -378,8 +386,8 @@ describe.skipIf(!hasDb)('POS products service', () => {
       const created = await products.createProduct(store.storeId, {
         name: 'To archive',
         variants: [
-          { size: 'S', price_cents: 100 },
-          { size: 'M', price_cents: 100 },
+          { attributes: { size: 'S' }, price_cents: 100 },
+          { attributes: { size: 'M' }, price_cents: 100 },
         ],
       });
       const archived = await products.archiveProduct(store.storeId, created!.id);
@@ -393,8 +401,8 @@ describe.skipIf(!hasDb)('POS products service', () => {
       const created = await products.createProduct(store.storeId, {
         name: 'Partial archive',
         variants: [
-          { size: 'S', price_cents: 100 },
-          { size: 'M', price_cents: 100 },
+          { attributes: { size: 'S' }, price_cents: 100 },
+          { attributes: { size: 'M' }, price_cents: 100 },
         ],
       });
       const variantId = (created!.variants[0] as { id: number }).id;
@@ -417,6 +425,55 @@ describe.skipIf(!hasDb)('POS products service', () => {
     });
   });
 
+  describe('vertical attributes', () => {
+    it('derives the label and unit, and refuses an attribute the vertical has no field for', async () => {
+      const created = await products.createProduct(store.storeId, {
+        name: 'Derived caption',
+        variants: [{ attributes: { color: 'Синій', size: 'M' }, price_cents: 1000 }],
+      });
+      const variant = created!.variants[0] as {
+        attributes: Record<string, string>;
+        label: string;
+        unit: string;
+      };
+      expect(variant.attributes).toEqual({ color: 'Синій', size: 'M' });
+      expect(variant.label).toBe('Синій / M');
+      expect(variant.unit).toBe('шт');
+
+      await expect(
+        products.createProduct(store.storeId, {
+          name: 'Bad attribute',
+          variants: [{ attributes: { length_cm: 60 }, price_cents: 1000 }],
+        })
+      ).rejects.toThrow(/Невідомий атрибут/);
+
+      await expect(
+        products.createProduct(store.storeId, {
+          name: 'Bad unit',
+          variants: [{ attributes: { size: 'M' }, unit: 'г', price_cents: 1000 }],
+        })
+      ).rejects.toThrow(/Одиниця/);
+    });
+
+    it('replaces the bag wholesale on update, so an attribute can be cleared', async () => {
+      const created = await products.createProduct(store.storeId, {
+        name: 'Clearable',
+        variants: [{ attributes: { color: 'Синій', size: 'M' }, price_cents: 1000 }],
+      });
+      const variantId = (created!.variants[0] as { id: number }).id;
+
+      const updated = await products.updateVariant(store.storeId, variantId, {
+        attributes: { size: 'M' },
+      });
+      const variant = updated!.variants[0] as {
+        attributes: Record<string, string>;
+        label: string;
+      };
+      expect(variant.attributes).toEqual({ size: 'M' });
+      expect(variant.label).toBe('M');
+    });
+  });
+
   describe('getCatalog', () => {
     let catalogStore: TestStore;
 
@@ -425,18 +482,41 @@ describe.skipIf(!hasDb)('POS products service', () => {
       await products.createProduct(catalogStore.storeId, {
         name: 'Blue Jeans',
         variants: [
-          { size: '30', color: 'blue', price_cents: 90000, barcode: '4820001112223', sku: 'BJ-30' },
-          { size: '32', color: 'blue', price_cents: 90000 },
+          {
+            attributes: { size: '30', color: 'blue' },
+            price_cents: 90000,
+            barcode: '4820001112223',
+            sku: 'BJ-30',
+          },
+          { attributes: { size: '32', color: 'blue' }, price_cents: 90000 },
         ],
       });
       await products.createProduct(catalogStore.storeId, {
         name: 'Red Scarf',
-        variants: [{ color: 'red', price_cents: 25000, sku: 'RS-1' }],
+        variants: [{ attributes: { color: 'red' }, price_cents: 25000, sku: 'RS-1' }],
       });
     }, 60000);
 
     afterAll(async () => {
       await dropTestStore(catalogStore?.storeId);
+    });
+
+    it('searches the variant caption and the searchable attributes', async () => {
+      const byColour = await products.getCatalog(catalogStore.storeId, { q: 'blue' });
+      expect(byColour.length).toBeGreaterThan(0);
+      expect(byColour.every((c) => c.label.includes('blue'))).toBe(true);
+      // The caption itself, not just the attributes behind it.
+      const byLabel = await products.getCatalog(catalogStore.storeId, { q: 'blue / 30' });
+      expect(byLabel.map((c) => c.product_name)).toContain('Blue Jeans');
+    });
+
+    it('carries attributes, the derived caption and the unit', async () => {
+      const [item] = await products.getCatalog(catalogStore.storeId, { q: 'BJ-30' });
+      expect(item).toMatchObject({
+        attributes: { color: 'blue', size: '30' },
+        label: 'blue / 30',
+        unit: 'шт',
+      });
     });
 
     it('returns one row per active variant', async () => {
@@ -463,11 +543,10 @@ describe.skipIf(!hasDb)('POS products service', () => {
         (p) => p.name === 'Blue Jeans'
       )!;
       const extra = await products.addVariant(catalogStore.storeId, jeans.id, {
-        size: '34',
-        color: 'blue',
+        attributes: { size: '34', color: 'blue' },
         price_cents: 90000,
       });
-      const extraId = (extra!.variants.find((v) => (v as { size: string }).size === '34') as {
+      const extraId = (extra!.variants.find((v) => (v as { label: string }).label === 'blue / 34') as {
         id: number;
       }).id;
 
@@ -482,7 +561,7 @@ describe.skipIf(!hasDb)('POS products service', () => {
         barcode: '4820001112223',
       });
       expect(found).toHaveLength(1);
-      expect(found[0].size).toBe('30');
+      expect(found[0].label).toBe('blue / 30');
     });
 
     it('returns nothing for an unknown barcode instead of falling back to a search', async () => {

@@ -11,8 +11,8 @@ function source(over: Partial<PriceTagSource['variant']> = {}, name = 'Піжа�
     product: { name },
     variant: {
       id: 1,
-      size: '98/104',
-      color: 'Рожевий',
+      label: 'Рожевий · 98/104',
+      unit: 'шт',
       price_cents: 45000,
       sku: '068-130',
       barcode: '2900000000018',
@@ -23,10 +23,10 @@ function source(over: Partial<PriceTagSource['variant']> = {}, name = 'Піжа�
 }
 
 describe('variantLabel', () => {
-  it('joins colour and size, and survives either being blank', () => {
-    expect(variantLabel({ size: 'M', color: 'Синій' })).toBe('Синій · M');
-    expect(variantLabel({ size: 'M', color: '' })).toBe('M');
-    expect(variantLabel({ size: '', color: '' })).toBe('');
+  it('is the caption the server derived, so the tag agrees with the till', () => {
+    expect(variantLabel({ label: 'Синій · M' })).toBe('Синій · M');
+    expect(variantLabel({ label: '  Червона · 60 см ' })).toBe('Червона · 60 см');
+    expect(variantLabel({ label: '' })).toBe('');
   });
 });
 
@@ -38,6 +38,12 @@ describe('defaultCopies', () => {
   it('still prints one at zero stock — tagging usually happens before receiving', () => {
     expect(defaultCopies(0)).toBe(1);
     expect(defaultCopies(-2)).toBe(1);
+  });
+
+  it('starts at one for anything not counted in pieces', () => {
+    // "600 tags for 600 grams of coffee" is not a default anyone wants.
+    expect(defaultCopies(600, 'г')).toBe(1);
+    expect(defaultCopies(5, 'шт')).toBe(5);
   });
 });
 

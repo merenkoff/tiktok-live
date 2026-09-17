@@ -149,6 +149,7 @@ describe('MODULES nav', () => {
   it('covers every module id declared in the union', () => {
     const union: ModuleId[] = [
       'catalog-checkout',
+      'vertical-clothing',
       'returns',
       'customers',
       'products',
@@ -162,5 +163,17 @@ describe('MODULES nav', () => {
       'live-selling',
     ];
     expect([...ids].sort()).toEqual([...union].sort());
+  });
+
+  it('gives every bundled vertical a catalog and no screen of its own', () => {
+    // `catalog-checkout` owns /register and renders the store's vertical into
+    // it; a vertical that also claimed a route would collide with something.
+    const verticals = MODULES.filter((m) => m.id.startsWith('vertical-'));
+    expect(verticals.length).toBeGreaterThan(0);
+    for (const m of verticals) {
+      expect(m.sales?.Catalog, `${m.id} must declare sales.Catalog`).toBeTruthy();
+      expect(m.routes, `${m.id} must not own routes`).toEqual([]);
+      expect(m.nav, `${m.id} must not own nav entries`).toEqual([]);
+    }
   });
 });

@@ -7,7 +7,8 @@ import { ensurePosAuth, ensurePosOwner } from '../core/auth.js';
 import * as analyticsService from '../analytics.service.js';
 import {
   assertSingleFiscalRemote,
-  FiscalRemoteConflictError,
+  assertSingleVerticalRemote,
+  ModuleRemoteConflictError,
   sanitizeEnabledModules,
   sanitizeModuleRemotes,
 } from '../core/modules.js';
@@ -40,8 +41,16 @@ export function registerStoreRoutes(fastify: FastifyInstance): void {
       module_remotes?: unknown;
       nav_overrides?: unknown;
       live_tiktok_username?: string | null;
+      vertical?: unknown;
     };
     try {
+      // What a store sells is not the owner's to change: it decides the product
+      // attribute schema of a catalogue they have already filled in. Only the
+      // super admin writes it (`PATCH /super/stores/:id`), which also relabels
+      // every variant in the same transaction.
+      if (body.vertical !== undefined) {
+        return reply.code(400).send({ error: 'vertical is set by the super admin' });
+      }
       const patch: analyticsService.StorePatch = {};
       if (body.enabled_modules !== undefined) {
         if (!Array.isArray(body.enabled_modules)) {
@@ -65,8 +74,12 @@ export function registerStoreRoutes(fastify: FastifyInstance): void {
         const fiscalSettings = await getFiscalSettings(auth.storeId);
         try {
           assertSingleFiscalRemote(sanitized, fiscalSettings?.provider ?? null);
+          // Same rule for the sell screen: one `vertical-*` bundle, and it has
+          // to be the vertical the store is actually set to, or the module
+          // downloads and is then never asked to render.
+          assertSingleVerticalRemote(sanitized, auth.vertical);
         } catch (error) {
-          if (error instanceof FiscalRemoteConflictError) {
+          if (error instanceof ModuleRemoteConflictError) {
             return reply.code(400).send({ error: errorMessage(error) });
           }
           throw error;

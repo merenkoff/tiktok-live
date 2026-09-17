@@ -48,8 +48,8 @@ describe.skipIf(!hasDb)('POS tags + archive', () => {
     );
     productId = Number(product.rows[0].id);
     const variant = await pool.query(
-      `INSERT INTO pos_variants (store_id, product_id, size, color, price_cents)
-       VALUES ($1, $2, 'M', 'Red', 1000) RETURNING id`,
+      `INSERT INTO pos_variants (store_id, product_id, attributes, label, price_cents)
+       VALUES ($1, $2, '{"color":"Red","size":"M"}'::jsonb, 'Red / M', 1000) RETURNING id`,
       [storeId, productId]
     );
     variantId = Number(variant.rows[0].id);

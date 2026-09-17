@@ -68,3 +68,23 @@ flag it's `console` + `window.__POS_TELEMETRY__` only. See
   layered on top later without removing the header.
 - `min_supported` / deprecation window in `posApiVersionInfo()`.
 - Rejecting by default (`POS_API_STRICT_VERSION` on).
+
+## v2 (2026-09-17) — вертикалі продажів
+
+Перший реальний бамп. Змінилася форма товару у відповідях `/catalog`,
+`/products`, `/stock/*` і в тілах їх записів:
+
+| Було | Стало |
+|---|---|
+| `size`, `color` на варіанті | `attributes` (jsonb за схемою вертикалі) |
+| підпис збирав клієнт | `label` — будує сервер правилом вертикалі |
+| одиниця малася на увазі («шт») | `unit` на варіанті й у позиції продажу |
+| `placeholder_size`/`placeholder_color` | `placeholder_attributes`/`placeholder_label`/`placeholder_unit` |
+
+Чому це саме той випадок, заради якого існує версія: збірка `stocktake` 1.x
+читає `item.size`/`item.color` і після деплою показуватиме самі назви товарів —
+деградація без жодної помилки. Скос версій пишеться в лог (`pos.versioning.ts`);
+строгий режим (`POS_API_STRICT_VERSION=1`) лишається вимкненим.
+
+Після релізу 2.0.0 усі remote-модулі треба перезібрати й перепублікувати, а
+`module_remotes` магазинів — перенаправити (`POST /super/module-remotes/repoint`).

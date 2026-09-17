@@ -71,6 +71,19 @@ describe.skipIf(!hasDb)('POS checkout & returns routes', () => {
       expect(res.json().receipt_number).toEqual(expect.any(String));
     });
 
+    it('snapshots the caption and the unit onto the sale line', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/pos/sales/complete',
+        headers: auth(store.sellerToken),
+        payload: cart(),
+      });
+      expect(res.statusCode).toBe(201);
+      // Both are snapshots: a receipt reprinted next year must read the way it
+      // did at the till, whatever the variant looks like by then.
+      expect(res.json().items[0]).toMatchObject({ variant_label: 'black / M', unit: 'шт' });
+    });
+
     it('401s without a token', async () => {
       const res = await app.inject({
         method: 'POST',

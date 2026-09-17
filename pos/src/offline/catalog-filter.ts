@@ -36,7 +36,13 @@ export function tagFilterIds(tags: PosTag[], tagId: number): number[] {
 export function filterCatalog(
   items: CatalogItem[],
   tags: PosTag[],
-  opts?: { q?: string; barcode?: string; tag_id?: number }
+  opts?: { q?: string; barcode?: string; tag_id?: number },
+  /**
+   * Attribute keys the store's vertical marks searchable. Mirrors the server's
+   * `searchableAttributeKeys` — the offline till must find what the online one
+   * finds, or a cashier learns not to trust the search box.
+   */
+  searchKeys: readonly string[] = []
 ): CatalogItem[] {
   const barcode = opts?.barcode?.trim();
   if (barcode) {
@@ -51,8 +57,8 @@ export function filterCatalog(
         item.product_name,
         item.sku ?? '',
         item.barcode ?? '',
-        item.size,
-        item.color,
+        item.label,
+        ...searchKeys.map((key) => String(item.attributes?.[key] ?? '')),
       ]
         .join(' ')
         .toLowerCase();

@@ -88,10 +88,10 @@ test('a seller counts on the till and the sheet is submitted as one idempotent r
   const scan = page.getByLabel('Штрихкод');
   await scan.fill('4820000000001');
   await scan.press('Enter');
-  await expect(page.getByText('Футболка базова · M · Синій')).toBeVisible();
+  await expect(page.getByText('Футболка базова · Синій / M')).toBeVisible();
   await scan.fill('4820000000001');
   await scan.press('Enter');
-  await expect(page.getByLabel('Кількість: Футболка базова · M · Синій')).toHaveValue('2');
+  await expect(page.getByLabel('Кількість: Футболка базова · Синій / M')).toHaveValue('2');
 
   await scan.fill('0000000000000');
   await scan.press('Enter');

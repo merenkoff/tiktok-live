@@ -109,3 +109,23 @@ offline ↔ cart ↔ returns** knot that isn't a "module" boundary, it's the cor
 - `TechDocs/POS_MODULE_REMOTE_POC.md` — the extracted-module pattern
 - `pos/src/platform/offline.ts` — current offline re-export surface
 - `pos/src/offline/cashierApi.ts` — the online/offline facade
+
+---
+
+## Update 2026-09-17 — вердикт по `catalog-checkout` переглянуто
+
+Цей документ рекомендував «заморозити `catalog-checkout` як platform-core: це і
+є cashier-платформа, а не модуль». Половина цього лишилася правдою, половина —
+ні, і межа проходить не там, де здавалося.
+
+Правда: **каркас** каси — кошик, оплата, відмови ПРРО, чек, екран успіху — це
+платформа. Його не можна віддавати в remote-модуль: він offline-first, а на
+вебі невдалий remote не лишає навіть заглушки.
+
+Не правда: що каса — **одне** неподільне ціле. Половина екрана (теги, сітка
+товарів, вибір варіанта, сканер) залежить від того, чим магазин торгує, і
+саме вона тепер приходить з модуля вертикалі через `ModuleDescriptor.sales`
+(TechDocs/POS_VERTICALS.md, фаза 3). Вбудований `vertical-clothing` лишається
+fallback-ом, тож жоден зі сценаріїв «модуля немає» не позбавляє касу здатності
+продавати — те саме обмеження, яке цей аналіз і зафіксував, тільки враховане в
+дизайні замість того, щоб закрити напрямок.

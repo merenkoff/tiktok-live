@@ -8,10 +8,19 @@ import { pool } from '../db.js';
 import { buildInternalBarcode } from './gtin/internal-code.js';
 import type { CatalogItem } from './types.js';
 import { getProductTagIds, resolveTagFilterIds } from './tags.service.js';
+import { loadStoreVertical, normalizeVariant, searchableAttributeKeys } from './verticals/index.js';
+import type { VerticalDefinition } from './verticals/types.js';
 
 export interface VariantInput {
-  size?: string;
-  color?: string;
+  /**
+   * Vertical-defined attribute bag (clothing: `{ color, size }`; flowers:
+   * `{ color, length_cm, country }`). Validated against the store's schema and
+   * turned into the stored `label` by `normalizeVariant` — a client never sends
+   * a label. On update the bag replaces the row's wholesale.
+   */
+  attributes?: unknown;
+  /** Base unit of quantity; must be one the store's vertical sells in. */
+  unit?: string;
   sku?: string | null;
   barcode?: string | null;
   price_cents: number;
@@ -62,7 +71,7 @@ export async function listProducts(storeId: number) {
      FROM pos_variants v
      LEFT JOIN pos_stock s ON s.variant_id = v.id
      WHERE v.store_id = $1
-     ORDER BY v.product_id, v.size, v.color`,
+     ORDER BY v.product_id, v.label, v.id`,
     [storeId]
   );
 
@@ -73,8 +82,9 @@ export async function listProducts(storeId: number) {
     list.push({
       id: Number(row.id),
       product_id: productId,
-      size: row.size,
-      color: row.color,
+      attributes: row.attributes ?? {},
+      label: row.label ?? '',
+      unit: row.unit ?? '',
       sku: row.sku,
       barcode: row.barcode,
       price_cents: Number(row.price_cents),
@@ -136,6 +146,7 @@ export async function createProductInTx(
   );
   const productId = Number(productResult.rows[0].id);
   const variantIds: number[] = [];
+  const vertical = await loadStoreVertical(client, storeId);
 
   for (const variant of input.variants) {
     if (variant.price_cents == null || variant.price_cents < 0) {
@@ -145,16 +156,18 @@ export async function createProductInTx(
     if (quantity < 0) throw new Error('Quantity must be >= 0');
 
     const compareAt = normalizeCompareAt(variant.price_cents, variant.compare_at_cents);
+    const derived = normalizeVariant(vertical, variant);
     const variantResult = await client.query(
       `INSERT INTO pos_variants
-         (store_id, product_id, size, color, sku, barcode, price_cents, cost_cents, compare_at_cents)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         (store_id, product_id, attributes, label, unit, sku, barcode, price_cents, cost_cents, compare_at_cents)
+       VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10)
        RETURNING id`,
       [
         storeId,
         productId,
-        (variant.size ?? '').trim(),
-        (variant.color ?? '').trim(),
+        JSON.stringify(derived.attributes),
+        derived.label,
+        derived.unit,
         emptyToNull(variant.sku),
         emptyToNull(variant.barcode),
         variant.price_cents,
@@ -266,16 +279,18 @@ export async function addVariant(storeId: number, productId: number, variant: Va
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    const derived = normalizeVariant(await loadStoreVertical(client, storeId), variant);
     const variantResult = await client.query(
       `INSERT INTO pos_variants
-         (store_id, product_id, size, color, sku, barcode, price_cents, cost_cents, compare_at_cents)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         (store_id, product_id, attributes, label, unit, sku, barcode, price_cents, cost_cents, compare_at_cents)
+       VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10)
        RETURNING id`,
       [
         storeId,
         productId,
-        (variant.size ?? '').trim(),
-        (variant.color ?? '').trim(),
+        JSON.stringify(derived.attributes),
+        derived.label,
+        derived.unit,
         emptyToNull(variant.sku),
         emptyToNull(variant.barcode),
         variant.price_cents,
@@ -330,6 +345,16 @@ export async function updateVariant(
     throw new Error('compare_at_cents must be greater than price_cents');
   }
 
+  // The attribute bag is replaced wholesale, never merged key by key: the admin
+  // form sends the whole set, and merging would make "clear this attribute"
+  // unexpressible — the same trap the COALESCE form below fell into for `sku`.
+  // `label` is always recomputed; it is a projection of the bag, not an input.
+  const vertical = await loadStoreVertical(pool, storeId);
+  const derived = normalizeVariant(vertical, {
+    attributes: input.attributes === undefined ? (row.attributes ?? {}) : input.attributes,
+    unit: input.unit === undefined ? row.unit : input.unit,
+  });
+
   // Resolve every column against the row we already read, then write them all.
   // The previous COALESCE form could not express "clear this field": an empty
   // sku/barcode became NULL, which COALESCE then read as "keep the old value",
@@ -337,20 +362,22 @@ export async function updateVariant(
   const result = await pool.query(
     `UPDATE pos_variants
      SET
-       size = $1,
-       color = $2,
-       sku = $3,
-       barcode = $4,
-       price_cents = $5,
-       cost_cents = $6,
-       is_active = $7,
-       compare_at_cents = $8,
+       attributes = $1::jsonb,
+       label = $2,
+       unit = $3,
+       sku = $4,
+       barcode = $5,
+       price_cents = $6,
+       cost_cents = $7,
+       is_active = $8,
+       compare_at_cents = $9,
        updated_at = NOW()
-     WHERE id = $9 AND store_id = $10
+     WHERE id = $10 AND store_id = $11
      RETURNING product_id`,
     [
-      input.size === undefined ? row.size : input.size.trim(),
-      input.color === undefined ? row.color : input.color.trim(),
+      JSON.stringify(derived.attributes),
+      derived.label,
+      derived.unit,
       input.sku === undefined ? (row.sku ?? null) : emptyToNull(input.sku),
       input.barcode === undefined ? (row.barcode ?? null) : emptyToNull(input.barcode),
       price,
@@ -422,8 +449,16 @@ export async function generateInternalBarcode(storeId: number): Promise<string> 
 
 export async function getCatalog(
   storeId: number,
-  opts: { q?: string; barcode?: string; tag_id?: number; snapshot?: boolean } = {}
+  opts: {
+    q?: string;
+    barcode?: string;
+    tag_id?: number;
+    snapshot?: boolean;
+    /** The store's vertical, when the caller already has it. Read otherwise. */
+    vertical?: VerticalDefinition;
+  } = {}
 ): Promise<CatalogItem[]> {
+  const vertical = opts.vertical ?? (await loadStoreVertical(pool, storeId));
   const params: unknown[] = [storeId];
   const conditions = [
     'p.store_id = $1',
@@ -450,12 +485,21 @@ export async function getCatalog(
   } else if (!snapshot && opts.q?.trim()) {
     params.push(`%${opts.q.trim().toLowerCase()}%`);
     const idx = params.length;
+    // The label covers whatever the vertical puts in it; the `inSearch`
+    // attributes cover what it does not (a florist searching by country).
+    // `pos/src/offline/catalog-filter.ts` mirrors this for the offline till.
+    const searchKeys = searchableAttributeKeys(vertical);
+    params.push(searchKeys);
+    const keysIdx = params.length;
     conditions.push(
       `(lower(p.name) LIKE $${idx}
         OR lower(COALESCE(v.sku, '')) LIKE $${idx}
         OR lower(COALESCE(v.barcode, '')) LIKE $${idx}
-        OR lower(v.size) LIKE $${idx}
-        OR lower(v.color) LIKE $${idx})`
+        OR lower(v.label) LIKE $${idx}
+        OR EXISTS (
+             SELECT 1 FROM jsonb_each_text(v.attributes) attr
+             WHERE attr.key = ANY($${keysIdx}::text[]) AND lower(attr.value) LIKE $${idx}
+           ))`
     );
   }
 
@@ -466,8 +510,9 @@ export async function getCatalog(
        v.id AS variant_id,
        p.id AS product_id,
        p.name AS product_name,
-       v.size,
-       v.color,
+       v.attributes,
+       v.label,
+       v.unit,
        v.sku,
        v.barcode,
        v.price_cents,
@@ -482,7 +527,7 @@ export async function getCatalog(
      JOIN pos_products p ON p.id = v.product_id
      LEFT JOIN pos_stock s ON s.variant_id = v.id
      WHERE ${conditions.join(' AND ')}
-     ORDER BY p.name ASC, v.size ASC, v.color ASC
+     ORDER BY p.name ASC, v.label ASC, v.id ASC
      LIMIT ${limit}`,
     params
   );
@@ -491,8 +536,9 @@ export async function getCatalog(
     variant_id: Number(row.variant_id),
     product_id: Number(row.product_id),
     product_name: row.product_name,
-    size: row.size,
-    color: row.color,
+    attributes: row.attributes ?? {},
+    label: row.label ?? '',
+    unit: row.unit ?? '',
     sku: row.sku,
     barcode: row.barcode,
     price_cents: Number(row.price_cents),

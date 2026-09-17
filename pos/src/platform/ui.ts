@@ -12,3 +12,11 @@ export { BarcodeScanner } from '../components/BarcodeScanner';
 export { ProductPhotoField } from '../components/ProductPhotoField';
 export { CustomerPicker } from '../components/cashier/CustomerPicker';
 export { useDragScroll } from '../hooks/useDragScroll';
+export { AttributeFields } from '../components/AttributeFields';
+// The catalog surface a sales-vertical module builds its screen from. `Nav` and
+// the shell chrome stay out (see above); these render only their own content.
+export { ProductTile } from '../components/cashier/ProductTile';
+export { TagFolderTile } from '../components/cashier/TagFolderTile';
+export { VariantPicker } from '../components/cashier/VariantPicker';
+export { CatalogTagBar } from '../components/cashier/CatalogTagBar';
+export { ScanWedge } from '../components/cashier/ScanWedge';

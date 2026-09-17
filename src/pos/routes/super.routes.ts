@@ -56,7 +56,11 @@ export function registerSuperRoutes(fastify: FastifyInstance): void {
     if (!Number.isInteger(storeId) || storeId <= 0) {
       return reply.code(400).send({ error: 'bad store id' });
     }
-    const body = (request.body ?? {}) as { enabled_modules?: unknown; module_remotes?: unknown };
+    const body = (request.body ?? {}) as {
+      enabled_modules?: unknown;
+      module_remotes?: unknown;
+      vertical?: unknown;
+    };
     try {
       const updated = await superService.patchStoreModules(storeId, body);
       if (!updated) return reply.code(404).send({ error: 'Store not found' });

@@ -4,7 +4,8 @@
 
 import { useState } from 'react';
 import { MODULES } from '../modules/registry';
-import type { ModuleRemoteEntry } from '../types';
+import { VERTICAL_OPTIONS } from '../lib/vertical';
+import type { ModuleRemoteEntry, VerticalId } from '../types';
 import { validateRemoteEntryInput } from '../lib/moduleRemoteForm';
 import { superApi, superErrorText, type SuperStoreRow } from './superApi';
 import { ProbeNote } from './ProbeNote';
@@ -14,10 +15,14 @@ type Remotes = Record<string, string | ModuleRemoteEntry>;
 
 const toggleable = MODULES.filter((m) => !m.core);
 
+const VERTICAL_PREFIX = 'vertical-';
+
 /**
- * One store's `enabled_modules` + `module_remotes`, the same two fields the
- * owner edits in Settings — saved through `PATCH /super/stores/:id`, which
- * validates exactly like the owner's route.
+ * One store's sales vertical plus its `enabled_modules` / `module_remotes` —
+ * saved through `PATCH /super/stores/:id`, which validates exactly like the
+ * owner's route. The vertical is the one field that exists only here: it
+ * decides the product attribute schema of a catalogue the owner has already
+ * filled in, so it is not theirs to flip.
  */
 export function StoreEditor({
   store,
@@ -28,6 +33,7 @@ export function StoreEditor({
   onSaved: (row: SuperStoreRow) => void;
   onClose: () => void;
 }) {
+  const [vertical, setVertical] = useState<VerticalId>(store.vertical);
   const [enabled, setEnabled] = useState<Set<string>>(() => new Set(store.enabled_modules));
   const [remotes, setRemotes] = useState<Remotes>(() => ({ ...store.module_remotes }));
   const [busy, setBusy] = useState(false);
@@ -98,12 +104,14 @@ export function StoreEditor({
     setMessage(null);
     try {
       const row = await superApi.patchStore(store.id, {
+        vertical,
         enabled_modules: [...enabled],
         module_remotes: remotes,
       });
       onSaved(row);
       setRemotes({ ...row.module_remotes });
       setEnabled(new Set(row.enabled_modules));
+      setVertical(row.vertical);
       const dropped = Object.keys(remotes).filter((id) => !(id in row.module_remotes));
       setMessage(
         dropped.length
@@ -120,8 +128,39 @@ export function StoreEditor({
   const stringEntries = Object.entries(remotes).filter(([, v]) => typeof v === 'string') as Array<[string, string]>;
   const objectEntries = Object.entries(remotes).filter(([, v]) => typeof v !== 'string') as Array<[string, ModuleRemoteEntry]>;
 
+  const verticalRemoteId = Object.keys(remotes).find((id) => id.startsWith(VERTICAL_PREFIX));
+  // `vertical-clothing` ships with the app; every other vertical needs its
+  // module registered below, or the till falls back to the generic catalog.
+  const verticalNeedsRemote = vertical !== 'clothing' && verticalRemoteId === undefined;
+
   return (
     <div className="space-y-4 text-sm">
+      <section>
+        <p className="sq-section-label">Тип магазину</p>
+        <label className="mt-2 flex flex-wrap items-center gap-2">
+          <select
+            className="rounded-sq border border-sq-divider bg-sq-bg px-2 py-1.5 text-sq-text"
+            value={vertical}
+            onChange={(e) => setVertical(e.target.value as VerticalId)}
+          >
+            {VERTICAL_OPTIONS.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.title} ({v.id})
+              </option>
+            ))}
+          </select>
+          <span className="text-xs text-sq-secondary">
+            Схема атрибутів товару та екран продажу. Зміна перебудовує підписи варіантів.
+          </span>
+        </label>
+        {verticalNeedsRemote && (
+          <p className="mt-1.5 text-xs text-amber-700">
+            Модуль {VERTICAL_PREFIX}
+            {vertical} не підключено — каса продаватиме на загальному екрані.
+          </p>
+        )}
+      </section>
+
       <section>
         <p className="sq-section-label">Модулі магазину</p>
         <div className="mt-2 grid gap-1 sm:grid-cols-3">

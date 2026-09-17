@@ -13,7 +13,10 @@ export interface CartDiscount {
 export interface CartLine {
   variant_id: number;
   product_name: string;
+  /** Built by the store's vertical, server-side — never composed here. */
   variant_label: string;
+  /** Unit the quantity counts ('шт', 'г'…), for the cart and the receipt. */
+  unit: string;
   unit_price_cents: number;
   quantity: number;
   max_quantity: number;
@@ -38,10 +41,6 @@ interface CartStore {
   cartDiscountCents: () => number;
   totalCents: () => number;
   itemCount: () => number;
-}
-
-function label(item: CatalogItem): string {
-  return [item.color, item.size].filter(Boolean).join(' / ');
 }
 
 function discountMeta(item: CatalogItem): {
@@ -114,7 +113,8 @@ export const useCartStore = create<CartStore>((set, get) => ({
     lines.push({
       variant_id: item.variant_id,
       product_name: item.product_name,
-      variant_label: label(item),
+      variant_label: item.label,
+      unit: item.unit,
       unit_price_cents: item.price_cents,
       quantity: Math.min(qty, item.quantity),
       max_quantity: item.quantity,

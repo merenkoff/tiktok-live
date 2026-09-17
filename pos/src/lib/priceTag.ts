@@ -20,7 +20,7 @@ import type { Product, ProductVariant } from '../types';
 export type PriceTag = {
   storeName: string;
   productName: string;
-  /** "98/104 · Рожевий", or empty when the variant has neither. */
+  /** The variant's caption ("Рожевий · 98/104"), or empty when it has none. */
   variantLabel: string;
   priceCents: number;
   sku: string | null;
@@ -32,13 +32,21 @@ export type PriceTag = {
 
 export type PriceTagSource = {
   product: Pick<Product, 'name'>;
-  variant: Pick<ProductVariant, 'id' | 'size' | 'color' | 'price_cents' | 'sku' | 'barcode' | 'quantity'>;
+  variant: Pick<
+    ProductVariant,
+    'id' | 'label' | 'unit' | 'price_cents' | 'sku' | 'barcode' | 'quantity'
+  >;
   /** Overrides the stock-derived default. */
   copies?: number;
 };
 
-export function variantLabel(variant: Pick<ProductVariant, 'size' | 'color'>): string {
-  return [variant.color, variant.size].map((s) => s.trim()).filter(Boolean).join(' · ');
+/**
+ * The caption printed under the product name. It is the variant's stored
+ * `label` — the store's vertical built it, and a tag that disagreed with the
+ * till and the receipt would be its own kind of bug.
+ */
+export function variantLabel(variant: Pick<ProductVariant, 'label'>): string {
+  return variant.label.trim();
 }
 
 /**
@@ -47,8 +55,13 @@ export function variantLabel(variant: Pick<ProductVariant, 'size' | 'color'>): s
  * One per unit on hand: a rail of five pyjamas needs five tags. Zero stock
  * still gets one — the operator is often tagging something before receiving it,
  * and printing nothing would look like a bug.
+ *
+ * Only for goods counted in pieces. "600 tags for 600 grams of coffee" is not a
+ * default anyone wants, so anything else starts at one and the operator says
+ * how many they need.
  */
-export function defaultCopies(quantity: number): number {
+export function defaultCopies(quantity: number, unit = 'шт'): number {
+  if (unit !== 'шт') return 1;
   return Math.max(1, Math.floor(quantity) || 0);
 }
 
@@ -62,7 +75,10 @@ export function buildPriceTags(storeName: string, items: PriceTagSource[]): Pric
     // A tag whose barcode cannot be drawn is still a useful tag — it just has
     // no bars. Silently printing a mangled one would be worse.
     barcode: variant.barcode && isEan13(variant.barcode.trim()) ? variant.barcode.trim() : null,
-    copies: copies == null ? defaultCopies(variant.quantity) : Math.max(0, Math.floor(copies)),
+    copies:
+      copies == null
+        ? defaultCopies(variant.quantity, variant.unit)
+        : Math.max(0, Math.floor(copies)),
   }));
 }
 

@@ -53,8 +53,8 @@ describe('filterCatalog', () => {
       product_name: 'Футболка',
       sku: 'TS-M',
       barcode: '111',
-      size: 'M',
-      color: 'Синій',
+      attributes: { color: 'Синій', size: 'M' },
+      label: 'Синій / M',
       tag_ids: [3],
     }),
     makeCatalogItem({
@@ -62,8 +62,8 @@ describe('filterCatalog', () => {
       product_name: 'Кросівки',
       sku: 'SN-42',
       barcode: '222',
-      size: '42',
-      color: 'Білий',
+      attributes: { color: 'Білий', size: '42' },
+      label: 'Білий / 42',
       tag_ids: [4],
     }),
     makeCatalogItem({
@@ -71,8 +71,8 @@ describe('filterCatalog', () => {
       product_name: 'Шапка',
       sku: null,
       barcode: null,
-      size: 'OS',
-      color: 'Чорний',
+      attributes: { color: 'Чорний', size: 'OS', country: 'Туреччина' },
+      label: 'Чорний / OS',
     }),
   ];
 
@@ -90,7 +90,7 @@ describe('filterCatalog', () => {
     expect(filterCatalog(items, tags, { barcode: '22' })).toEqual([]);
   });
 
-  it('searches name, sku, barcode, size and colour case-insensitively', () => {
+  it('searches name, sku, barcode and the variant caption case-insensitively', () => {
     const ids = (q: string) => filterCatalog(items, tags, { q }).map((i) => i.variant_id);
     expect(ids('футбол')).toEqual([1]);
     expect(ids('SN-4')).toEqual([2]);
@@ -98,6 +98,17 @@ describe('filterCatalog', () => {
     expect(ids('чорний')).toEqual([3]);
     expect(ids('42')).toEqual([2]);
     expect(ids('нічого')).toEqual([]);
+  });
+
+  it('searches the attributes the vertical marks searchable, and only those', () => {
+    // Mirrors the server: `searchableAttributeKeys` decides, so the offline
+    // till finds exactly what the online one finds.
+    const ids = (q: string, keys: string[]) =>
+      filterCatalog(items, tags, { q }, keys).map((i) => i.variant_id);
+    expect(ids('туреч', ['country'])).toEqual([3]);
+    // Not searchable → not found, even though the value is on the row.
+    expect(ids('туреч', [])).toEqual([]);
+    expect(ids('туреч', ['color'])).toEqual([]);
   });
 
   it('filters by tag including descendants', () => {

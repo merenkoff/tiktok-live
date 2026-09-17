@@ -32,6 +32,7 @@ type Row = {
   productName: string;
   variantId: number;
   label: string;
+  unit: string;
   priceCents: number;
   sku: string | null;
   barcode: string | null;
@@ -59,10 +60,11 @@ export function PriceTagsDialog({
           productName: p.name,
           variantId: v.id,
           label: variantLabel(v),
+          unit: v.unit,
           priceCents: v.price_cents,
           sku: v.sku,
           barcode: v.barcode,
-          copies: defaultCopies(v.quantity),
+          copies: defaultCopies(v.quantity, v.unit),
         }))
     )
   );
@@ -124,8 +126,8 @@ export function PriceTagsDialog({
           product: { name: r.productName },
           variant: {
             id: r.variantId,
-            size: '',
-            color: '',
+            label: r.label,
+            unit: r.unit,
             price_cents: r.priceCents,
             sku: r.sku,
             barcode: r.barcode,
@@ -133,7 +135,7 @@ export function PriceTagsDialog({
           },
           copies: r.copies,
         }))
-      ).map((tag, i) => ({ ...tag, variantLabel: rows[i]!.label }))
+      )
     );
   }
 

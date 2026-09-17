@@ -7,6 +7,7 @@
 import { pool } from '../db.js';
 import type { ModuleRemoteEntry, PaymentMethod, QrPaymentMode } from './types.js';
 import type { NavOverrides } from './core/nav.js';
+import { publicConfigOf, verticalOrDefault } from './verticals/index.js';
 
 export interface SalesSummary {
   from: string;
@@ -180,6 +181,9 @@ function mapStore(store: Record<string, unknown>) {
     slug: store.slug as string,
     currency: store.currency as string,
     timezone: store.timezone as string,
+    // Read-only for the owner: only the super admin writes the column, so it is
+    // deliberately absent from `STORE_PATCH_COLUMNS` below.
+    vertical: publicConfigOf(verticalOrDefault(store.vertical as string | null)),
     qr_payment_enabled: Boolean(store.qr_payment_enabled),
     qr_payment_mode: (store.qr_payment_mode as QrPaymentMode) ?? 'static',
     qr_static_image_url: (store.qr_static_image_url as string | null) ?? null,

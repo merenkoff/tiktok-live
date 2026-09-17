@@ -9,18 +9,22 @@
 // owner could not.
 
 import { pool } from '../db.js';
+import { logger } from '../logger.js';
 import { updateStore, type StorePatch } from './analytics.service.js';
 import {
   assertSingleFiscalRemote,
+  assertSingleVerticalRemote,
   effectiveEnabledModules,
-  FiscalRemoteConflictError,
   isAllowedRemoteUrl,
+  ModuleRemoteConflictError,
   sanitizeEnabledModules,
   sanitizeModuleRemotes,
   type ModuleRemoteEntry,
 } from './core/modules.js';
 import { getFiscalSettings } from './fiscal/settings.service.js';
 import { isFiscalProviderId } from './fiscal/types.js';
+import { getVertical, hasVertical, verticalOrDefault } from './verticals/index.js';
+import type { AttributeValues, VerticalDefinition, VerticalId } from './verticals/types.js';
 
 export interface SuperStoreRow {
   id: number;
@@ -28,6 +32,8 @@ export interface SuperStoreRow {
   slug: string;
   currency: string;
   created_at: string;
+  /** What the store sells — the one column only the super admin may write. */
+  vertical: VerticalId;
   /** Effective set (defaults applied), not the raw column. */
   enabled_modules: string[];
   module_remotes: Record<string, string | ModuleRemoteEntry>;
@@ -46,7 +52,7 @@ export class SuperValidationError extends Error {
 }
 
 const STORE_SELECT = `
-  SELECT s.id, s.name, s.slug, s.currency, s.created_at,
+  SELECT s.id, s.name, s.slug, s.currency, s.created_at, s.vertical,
          s.enabled_modules, s.module_remotes, s.live_tiktok_username,
          fs.enabled AS fiscal_enabled, fs.provider AS fiscal_provider,
          (SELECT count(*)::int FROM pos_staff st WHERE st.store_id = s.id AND st.is_active) AS staff_count,
@@ -63,6 +69,7 @@ function mapRow(row: Record<string, unknown>): SuperStoreRow {
     slug: String(row.slug),
     currency: String(row.currency),
     created_at: created instanceof Date ? created.toISOString() : String(created),
+    vertical: verticalOrDefault(row.vertical as string | null).id,
     enabled_modules: effectiveEnabledModules(row.enabled_modules as string[] | null),
     module_remotes: (row.module_remotes as SuperStoreRow['module_remotes'] | null) ?? {},
     live_tiktok_username: (row.live_tiktok_username as string | null) ?? null,
@@ -87,13 +94,16 @@ export async function getStore(storeId: number): Promise<SuperStoreRow | null> {
 
 /**
  * Same checks as the owner's `PATCH /store`: the fiscal-* guard needs the
- * store's configured provider. Throws `SuperValidationError` for a
- * fiscal conflict; `sanitizeModuleRemotes` silently drops malformed entries,
- * exactly as it does for the owner.
+ * store's configured provider, the vertical-* guard the vertical it will have
+ * once this request lands — which is why `vertical` is a parameter rather than
+ * another read. Throws `SuperValidationError` for either conflict;
+ * `sanitizeModuleRemotes` silently drops malformed entries, exactly as it does
+ * for the owner.
  */
 async function validatedRemotes(
   storeId: number,
-  input: unknown
+  input: unknown,
+  vertical: VerticalId
 ): Promise<Record<string, string | ModuleRemoteEntry>> {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     throw new SuperValidationError('module_remotes must be an object');
@@ -102,19 +112,128 @@ async function validatedRemotes(
   const fiscal = await getFiscalSettings(storeId);
   try {
     assertSingleFiscalRemote(sanitized, fiscal?.provider ?? null);
+    assertSingleVerticalRemote(sanitized, vertical);
   } catch (error) {
-    if (error instanceof FiscalRemoteConflictError) throw new SuperValidationError(error.message);
+    if (error instanceof ModuleRemoteConflictError) throw new SuperValidationError(error.message);
     throw error;
   }
   return sanitized;
 }
 
+/**
+ * Write `pos_stores.vertical`.
+ *
+ * Its own statement rather than a `StorePatch` field: the column is not in
+ * `STORE_PATCH_COLUMNS`, which is exactly what makes it unwritable through the
+ * owner's `PATCH /store`. In a transaction because changing what a shop sells
+ * also changes how every variant label reads — migration 035 adds that
+ * recompute here, next to the write it belongs to.
+ */
+async function setStoreVertical(storeId: number, vertical: VerticalId): Promise<void> {
+  const def = getVertical(vertical);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(`UPDATE pos_stores SET vertical = $1, updated_at = NOW() WHERE id = $2`, [
+      vertical,
+      storeId,
+    ]);
+    const relabelled = await relabelStoreVariants(client, storeId, def);
+    await client.query('COMMIT');
+    logger.info('pos super: store vertical changed', { storeId, vertical, relabelled });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+interface Queryable {
+  query(text: string, values?: unknown[]): Promise<{ rows: Array<Record<string, unknown>> }>;
+}
+
+/**
+ * Recompute every stored caption of a store under a new vertical.
+ *
+ * The attribute bags are left exactly as they are — a florist's `length_cm`
+ * stays on the row even while the store is set to clothing, so moving back
+ * restores the old captions verbatim. Keys the new vertical does not declare
+ * simply do not appear in its label, which is why this reads `labelOf`
+ * directly rather than going through `normalizeAttributes` (that one rejects
+ * unknown keys, which is right on a write and wrong here).
+ *
+ * Returns how many rows it touched, for the log.
+ */
+async function relabelStoreVariants(
+  client: Queryable,
+  storeId: number,
+  def: VerticalDefinition
+): Promise<number> {
+  const variants = await client.query(
+    `SELECT id, attributes FROM pos_variants WHERE store_id = $1`,
+    [storeId]
+  );
+  if (variants.rows.length > 0) {
+    const ids = variants.rows.map((row) => Number(row.id));
+    const labels = variants.rows.map((row) =>
+      def.labelOf((row.attributes as AttributeValues | null) ?? {})
+    );
+    await client.query(
+      `UPDATE pos_variants v
+          SET label = x.label, updated_at = NOW()
+         FROM unnest($1::bigint[], $2::text[]) AS x(id, label)
+        WHERE v.id = x.id AND v.label IS DISTINCT FROM x.label`,
+      [ids, labels]
+    );
+  }
+
+  // Draft receipts carry captions of products that do not exist yet.
+  const placeholders = await client.query(
+    `SELECT l.id, l.placeholder_attributes
+       FROM pos_stock_document_lines l
+       JOIN pos_stock_documents d ON d.id = l.document_id
+      WHERE l.store_id = $1 AND l.is_placeholder = TRUE AND d.status = 'draft'`,
+    [storeId]
+  );
+  if (placeholders.rows.length > 0) {
+    const ids = placeholders.rows.map((row) => Number(row.id));
+    const labels = placeholders.rows.map((row) =>
+      def.labelOf((row.placeholder_attributes as AttributeValues | null) ?? {})
+    );
+    await client.query(
+      `UPDATE pos_stock_document_lines l
+          SET placeholder_label = x.label
+         FROM unnest($1::bigint[], $2::text[]) AS x(id, label)
+        WHERE l.id = x.id AND l.placeholder_label IS DISTINCT FROM x.label`,
+      [ids, labels]
+    );
+  }
+
+  return variants.rows.length;
+}
+
 export async function patchStoreModules(
   storeId: number,
-  body: { enabled_modules?: unknown; module_remotes?: unknown }
+  body: { enabled_modules?: unknown; module_remotes?: unknown; vertical?: unknown }
 ): Promise<SuperStoreRow | null> {
   const current = await getStore(storeId);
   if (!current) return null;
+
+  // Validate everything against the state this request would produce, before
+  // writing anything: setting `vertical: clothing` while `vertical-flowers` is
+  // registered and registering `vertical-flowers` on a clothing store are the
+  // same mistake, and both have to fail whichever order they arrive in — or
+  // together in one body.
+  let vertical: VerticalId | undefined;
+  if (body.vertical !== undefined) {
+    if (!hasVertical(body.vertical)) {
+      throw new SuperValidationError(`unknown vertical "${String(body.vertical)}"`);
+    }
+    vertical = body.vertical;
+  }
+  const effectiveVertical = vertical ?? current.vertical;
+
   const patch: StorePatch = {};
   if (body.enabled_modules !== undefined) {
     if (!Array.isArray(body.enabled_modules)) {
@@ -123,7 +242,16 @@ export async function patchStoreModules(
     patch.enabled_modules = sanitizeEnabledModules(body.enabled_modules);
   }
   if (body.module_remotes !== undefined) {
-    patch.module_remotes = await validatedRemotes(storeId, body.module_remotes);
+    patch.module_remotes = await validatedRemotes(storeId, body.module_remotes, effectiveVertical);
+  } else if (vertical !== undefined) {
+    // The vertical moved but the remotes did not: the entry already stored has
+    // to still be legal against the new column, or the till would download a
+    // module the sell screen never asks for.
+    await validatedRemotes(storeId, current.module_remotes, effectiveVertical);
+  }
+
+  if (vertical !== undefined && vertical !== current.vertical) {
+    await setStoreVertical(storeId, vertical);
   }
   await updateStore(storeId, patch);
   return getStore(storeId);
@@ -179,7 +307,7 @@ export async function repointModuleRemote(params: {
       [moduleId]: typeof entry === 'string' ? url : { ...entry, url },
     };
     try {
-      const sanitized = await validatedRemotes(store.id, next);
+      const sanitized = await validatedRemotes(store.id, next, store.vertical);
       if (!(moduleId in sanitized)) {
         throw new SuperValidationError('entry rejected by validation');
       }

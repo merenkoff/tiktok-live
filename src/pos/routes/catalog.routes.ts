@@ -5,6 +5,7 @@
 import type { FastifyInstance } from 'fastify';
 import { ensurePosAuth } from '../core/auth.js';
 import * as productsService from '../products.service.js';
+import { getVertical } from '../verticals/index.js';
 
 export function registerCatalogRoutes(fastify: FastifyInstance): void {
   fastify.get('/catalog', async (request, reply) => {
@@ -22,6 +23,9 @@ export function registerCatalogRoutes(fastify: FastifyInstance): void {
       barcode: query.barcode,
       tag_id: query.tag_id ? Number(query.tag_id) : undefined,
       snapshot: query.all === '1' || query.snapshot === '1',
+      // Already on the session — saves the service a round trip, and the
+      // search needs it to know which attributes are searchable.
+      vertical: getVertical(auth.vertical),
     });
   });
 

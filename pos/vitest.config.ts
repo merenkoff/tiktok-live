@@ -9,6 +9,10 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
+      // Longest specifier first: '@pos/platform' would otherwise swallow
+      // '@pos/platform/ui'. The bundled clothing catalog imports it, and the
+      // registry imports that, so every module test now resolves it.
+      '@pos/platform/ui': path.resolve(rootDir, 'src/platform/ui.ts'),
       '@pos/platform': path.resolve(rootDir, 'src/platform/index.ts'),
     },
   },

@@ -27,15 +27,23 @@ const tee: CatalogItem = {
   variant_id: 1,
   product_id: 1,
   product_name: 'Футболка базова',
-  size: 'M',
-  color: 'Синій',
+  attributes: { color: 'Синій', size: 'M' },
+  label: 'Синій / M',
+  unit: 'шт',
   sku: 'TS-M-BL',
   barcode: '4820000000001',
   price_cents: 45000,
   quantity: 5,
   image_url: null,
 };
-const shoe: CatalogItem = { ...tee, variant_id: 2, product_name: 'Кросівки', size: '42', color: '', barcode: '4820000000002' };
+const shoe: CatalogItem = {
+  ...tee,
+  variant_id: 2,
+  product_name: 'Кросівки',
+  attributes: { size: '42' },
+  label: '42',
+  barcode: '4820000000002',
+};
 
 beforeEach(async () => {
   await db.sheets.clear();
@@ -53,7 +61,7 @@ describe('count sheet repository', () => {
     expect(a).toMatchObject({ status: 'counting', attempts: 0, note: null });
   });
 
-  it('scanning the same variant twice bumps the count; labels drop an empty color', async () => {
+  it('scanning the same variant twice bumps the count; the line keeps the server caption', async () => {
     const s = await startSheet({ storeId: 1, staffId: 7 });
     await addCount(s.id, tee);
     await addCount(s.id, tee);
@@ -61,7 +69,7 @@ describe('count sheet repository', () => {
     const lines = await listLines(s.id);
     expect(lines.map((l) => [l.variantId, l.countedQty, l.label])).toEqual(
       expect.arrayContaining([
-        [1, 2, 'Футболка базова · M · Синій'],
+        [1, 2, 'Футболка базова · Синій / M'],
         [2, 1, 'Кросівки · 42'],
       ])
     );

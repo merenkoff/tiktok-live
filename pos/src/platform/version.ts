@@ -13,7 +13,7 @@
  * then every build is "v1" and the header is advisory. See
  * `TechDocs/POS_API_VERSIONING.md`.
  */
-export const POS_API_CLIENT_VERSION = 1;
+export const POS_API_CLIENT_VERSION = 2;
 
 /**
  * Version of the `@pos/platform` / `@pos/platform/ui` **surface** this host
@@ -36,7 +36,12 @@ export const POS_API_CLIENT_VERSION = 1;
  * that is the `/api/pos` contract, a different thing.
  */
 // 2 (2026-09-09): `useOfflineStatus`, `registerOfflineModules` — roadmap #12 track 3.
-export const PLATFORM_VERSION = 2;
+// 3 (2026-09-17): sales verticals — `useVertical` (the store's attribute
+//     schema and units) and `AttributeFields` (the inputs built from it).
+// 4 (2026-09-17): the sell-screen slot — `useSalesCatalog` plus the catalog
+//     components a vertical module renders with (`ProductTile`,
+//     `TagFolderTile`, `VariantPicker`, `CatalogTagBar`, `ScanWedge`).
+export const PLATFORM_VERSION = 4;
 
 /**
  * Build version of this bundle — the host web/cashier build, or a module-remote

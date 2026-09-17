@@ -96,8 +96,8 @@ describe.skipIf(!hasDb)('POS QR payment', () => {
       [storeId]
     );
     const variant = await pool.query(
-      `INSERT INTO pos_variants (store_id, product_id, size, color, price_cents)
-       VALUES ($1, $2, 'M', 'Blue', 1500) RETURNING id`,
+      `INSERT INTO pos_variants (store_id, product_id, attributes, label, price_cents)
+       VALUES ($1, $2, '{"color":"Blue","size":"M"}'::jsonb, 'Blue / M', 1500) RETURNING id`,
       [storeId, product.rows[0].id]
     );
     variantId = Number(variant.rows[0].id);

@@ -117,6 +117,16 @@ describe.skipIf(!hasDb)('POS auth & staff routes', () => {
   });
 
   describe('GET /me', () => {
+    it('carries the store vertical, so a cold-offline till knows what it sells', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/pos/me',
+        headers: auth(store.ownerToken),
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().store.vertical).toMatchObject({ id: 'clothing', title: 'Одяг' });
+    });
+
     it('401s with no Authorization header', async () => {
       const res = await app.inject({ method: 'GET', url: '/api/pos/me' });
       expect(res.statusCode).toBe(401);

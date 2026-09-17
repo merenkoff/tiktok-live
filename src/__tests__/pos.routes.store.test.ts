@@ -58,6 +58,24 @@ describe.skipIf(!hasDb)('POS store, analytics, QR & GTIN routes', () => {
       expect(res.json().id).toBe(store.storeId);
     });
 
+    it('reports the store vertical, schema and all', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/pos/store',
+        headers: auth(store.ownerToken),
+      });
+      expect(res.json().vertical).toMatchObject({
+        id: 'clothing',
+        title: 'Одяг',
+        units: ['шт'],
+        defaultUnit: 'шт',
+      });
+      expect(res.json().vertical.attributes.map((a: { key: string }) => a.key)).toEqual([
+        'color',
+        'size',
+      ]);
+    });
+
     it('401s without a token', async () => {
       const res = await app.inject({ method: 'GET', url: '/api/pos/store' });
       expect(res.statusCode).toBe(401);
@@ -520,6 +538,50 @@ describe.skipIf(!hasDb)('POS store, analytics, QR & GTIN routes', () => {
             },
           });
           expect(res.statusCode).toBe(200);
+        } finally {
+          await dropTestStore(temp.storeId);
+        }
+      });
+    });
+
+    describe('vertical', () => {
+      it('refuses to let the owner change what the store sells', async () => {
+        // It decides the attribute schema of a catalogue they have already
+        // filled in; only the super admin moves it, and that relabels
+        // every variant in the same transaction.
+        const res = await app.inject({
+          method: 'PATCH',
+          url: '/api/pos/store',
+          headers: auth(store.ownerToken),
+          payload: { vertical: 'flowers' },
+        });
+        expect(res.statusCode).toBe(400);
+        expect(res.json().error).toContain('super admin');
+        const after = await pool.query(`SELECT vertical FROM pos_stores WHERE id = $1`, [
+          store.storeId,
+        ]);
+        expect(after.rows[0].vertical).toBe('clothing');
+      });
+
+      it('rejects a vertical-* remote for a vertical this store is not on', async () => {
+        const temp = await createTestStore('rremvert');
+        try {
+          const res = await app.inject({
+            method: 'PATCH',
+            url: '/api/pos/store',
+            headers: auth(temp.ownerToken),
+            payload: {
+              module_remotes: {
+                'vertical-flowers': {
+                  url: 'https://cdn.example.com/f/remote-entry.js',
+                  title: 'Квіти',
+                  routePath: '/flowers',
+                  nav: [{ label: 'Квіти', location: 'cashier-primary', order: 80 }],
+                },
+              },
+            },
+          });
+          expect(res.statusCode).toBe(400);
         } finally {
           await dropTestStore(temp.storeId);
         }

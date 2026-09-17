@@ -36,7 +36,7 @@ export function VariantPicker({ productName, variants, onPick, onClose }: Props)
         </div>
         <ul ref={listRef} className="divide-y divide-sq-divider max-h-[60vh] overflow-auto select-none">
           {sorted.map((item) => {
-            const label = [item.color, item.size].filter(Boolean).join(' / ') || 'Стандарт';
+            const label = item.label || 'Стандарт';
             const oos = item.quantity <= 0;
             return (
               <li key={item.variant_id}>
