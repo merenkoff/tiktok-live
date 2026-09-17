@@ -105,8 +105,9 @@ async function seedFlowersStore(): Promise<void> {
       { name: 'Хризантема кущова', color: 'Жовта', length_cm: 55, country: 'Україна', price: 6500, qty: 80 },
       { name: 'Евкаліпт', color: 'Зелений', length_cm: 50, country: 'Україна', price: 3500, qty: 45 },
     ];
+    const stemVariants = new Map<string, number>();
     for (const stem of stems) {
-      await createProductInTx(client, storeId, {
+      const created = await createProductInTx(client, storeId, {
         name: stem.name,
         variants: [
           {
@@ -117,7 +118,52 @@ async function seedFlowersStore(): Promise<void> {
           },
         ],
       });
+      stemVariants.set(stem.name, created.variantIds[0]);
     }
+
+    // Consumables a bouquet eats but nobody sells on its own.
+    const wrap = await createProductInTx(client, storeId, {
+      name: 'Крафт-пакування',
+      variants: [{ attributes: {}, price_cents: 4000, cost_cents: 1500, quantity: 90 }],
+    });
+
+    // One bouquet of each stock mode, because they behave differently at the
+    // till and both need to be visible while 6b/6c are built.
+    await createProductInTx(client, storeId, {
+      name: 'Букет «Ніжність»',
+      kind: 'composite',
+      stock_mode: 'derived',
+      variants: [
+        {
+          attributes: { color: 'Червона' },
+          price_cents: 89000,
+          quantity: 0,
+          components: [
+            { component_variant_id: stemVariants.get('Троянда Freedom')!, quantity: 9 },
+            { component_variant_id: stemVariants.get('Евкаліпт')!, quantity: 3 },
+            { component_variant_id: wrap.variantIds[0], quantity: 1 },
+          ],
+        },
+      ],
+    });
+
+    await createProductInTx(client, storeId, {
+      name: 'Букет «Ранковий» (готовий)',
+      kind: 'composite',
+      stock_mode: 'own',
+      variants: [
+        {
+          attributes: { color: 'Рожевий' },
+          price_cents: 65000,
+          cost_cents: 30000,
+          quantity: 4,
+          components: [
+            { component_variant_id: stemVariants.get('Тюльпан')!, quantity: 11 },
+            { component_variant_id: wrap.variantIds[0], quantity: 1 },
+          ],
+        },
+      ],
+    });
 
     const entry = {
       url: process.env.POS_SEED_VERTICAL_FLOWERS_URL || 'http://localhost:5007/remote-entry.js',

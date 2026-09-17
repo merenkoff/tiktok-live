@@ -5,7 +5,7 @@
 // src/pos/sales.service.ts
 
 import { pool } from '../db.js';
-import { applyStockDelta } from './stock.service.js';
+import { consumeStockForSaleItem, returnStockForSaleItem } from './composites.service.js';
 import type {
   CartDiscountInput,
   CompleteSaleItemInput,
@@ -320,12 +320,13 @@ export async function completeSale(params: {
     const saleId = Number(sale.id);
 
     for (const line of lineItems) {
-      await client.query(
+      const itemResult = await client.query(
         `INSERT INTO pos_sale_items
            (sale_id, store_id, variant_id, product_name, variant_label, unit,
             quantity, unit_price_cents, line_total_cents,
             compare_at_unit_cents, line_discount_cents)
-         VALUES ($1, $2, $3, $4, $5, $11, $6, $7, $8, $9, $10)`,
+         VALUES ($1, $2, $3, $4, $5, $11, $6, $7, $8, $9, $10)
+         RETURNING id`,
         [
           saleId,
           params.storeId,
@@ -341,14 +342,16 @@ export async function completeSale(params: {
         ]
       );
 
-      await applyStockDelta(client, {
+      // Composite-aware: a derived composite (a bouquet assembled when it
+      // sells) writes off its components and records what it took on this line,
+      // so the refund below can give back exactly that.
+      await consumeStockForSaleItem(client, {
         storeId: params.storeId,
+        saleId,
+        saleItemId: Number(itemResult.rows[0].id),
         variantId: line.variant_id,
-        delta: -line.quantity,
-        reason: 'sale',
+        quantity: line.quantity,
         staffId: params.staffId,
-        referenceType: 'sale',
-        referenceId: saleId,
       });
     }
 
@@ -612,10 +615,11 @@ export async function voidSale(params: {
     );
 
     for (const item of items.rows) {
-      await applyStockDelta(client, {
+      await returnStockForSaleItem(client, {
         storeId: params.storeId,
+        saleItemId: Number(item.id),
         variantId: Number(item.variant_id),
-        delta: Number(item.quantity),
+        quantity: Number(item.quantity),
         reason: 'void',
         staffId: params.staffId,
         referenceType: 'sale',
@@ -775,10 +779,11 @@ export async function refundSale(params: {
         [line.quantity, line.sale_item_id]
       );
 
-      await applyStockDelta(client, {
+      await returnStockForSaleItem(client, {
         storeId: params.storeId,
+        saleItemId: line.sale_item_id,
         variantId: line.variant_id,
-        delta: line.quantity,
+        quantity: line.quantity,
         reason: 'refund',
         staffId: params.staffId,
         referenceType: 'refund',

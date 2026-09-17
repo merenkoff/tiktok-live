@@ -9,6 +9,7 @@ import { createProductInTx } from './products.service.js';
 import { loadStoreVertical, normalizeVariant } from './verticals/index.js';
 import type { AttributeValues } from './verticals/types.js';
 import { applyStockDelta } from './stock.service.js';
+import { assertStockable } from './composites.service.js';
 import type { StockDocumentStatus, StockDocumentType, StockReason } from './types.js';
 
 export interface StockDocumentLine {
@@ -981,6 +982,10 @@ export async function postDocument(params: {
       }
 
       if (variantId == null) throw new Error('Line missing variant_id');
+
+      // A derived composite is not a thing you receive, write off or count —
+      // its stems are. Refused here, at the one place stock actually moves.
+      await assertStockable(client, params.storeId, variantId);
 
       const stock = await client.query(
         `SELECT quantity FROM pos_stock
