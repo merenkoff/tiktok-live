@@ -6,6 +6,7 @@ import type { FastifyInstance } from 'fastify';
 import { registerAuthRoutes } from './routes/auth.routes.js';
 import { registerCatalogRoutes } from './routes/catalog.routes.js';
 import { registerCheckoutRoutes } from './routes/checkout.routes.js';
+import { registerParkedCartRoutes } from './routes/parked-carts.routes.js';
 import { registerStoreRoutes } from './routes/store.routes.js';
 import { registerReturnsRoutes } from './routes/returns.routes.js';
 import { registerCustomersRoutes } from './routes/customers.routes.js';
@@ -35,6 +36,9 @@ export const POS_ROUTE_GROUPS: PosRouteGroup[] = [
   { moduleId: null, register: registerAuthRoutes },
   { moduleId: null, register: registerCatalogRoutes },
   { moduleId: null, register: registerCheckoutRoutes },
+  // Core, not a module: parking a cart is part of selling, and a store that
+  // can ring one can put one down (TechDocs/POS_FLORIST_BENCH.md §9).
+  { moduleId: null, register: registerParkedCartRoutes },
   { moduleId: null, register: registerStoreRoutes },
   { moduleId: null, register: registerTelemetryRoutes },
   // Core, not `moduleId: 'tiktok-live'`: that module opts in through

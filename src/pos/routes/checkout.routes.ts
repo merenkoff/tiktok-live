@@ -16,6 +16,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { CompleteSaleItemInput, PaymentMethod } from '../types.js';
 import { ensurePosAuth } from '../core/auth.js';
 import * as salesService from '../sales.service.js';
+import * as parkedCarts from '../parked-carts.service.js';
 import * as fiscalService from '../fiscal/fiscal.service.js';
 import { getSaleDocument } from '../fiscal/ledger.js';
 import { asFiscalError, cashierMessage, supportCode } from '../fiscal/errors.js';
@@ -25,6 +26,31 @@ import { errorMessage, readDeviceId } from './_shared.js';
 
 /** `getSale`'s row, non-null. `completeSale` / `refundSale` return the same shape. */
 type SaleDetail = NonNullable<Awaited<ReturnType<typeof salesService.getSale>>>;
+
+/**
+ * Record which sale a parked cart became.
+ *
+ * Deliberately swallows its own failure: the sale exists and is about to be
+ * fiscalised, and losing a receipt because a bookkeeping UPDATE did not land
+ * would be a far worse trade than an unannotated parked cart.
+ */
+async function noteParkedCart(
+  storeId: number,
+  cartId: number | null | undefined,
+  saleId: number
+): Promise<void> {
+  if (!cartId) return;
+  try {
+    await parkedCarts.markSold({ storeId, cartId: Number(cartId), saleId });
+  } catch (error) {
+    logger.warn('Could not link sale to its parked cart', {
+      storeId,
+      cartId,
+      saleId,
+      error: errorMessage(error),
+    });
+  }
+}
 
 export function registerCheckoutRoutes(fastify: FastifyInstance): void {
   fastify.post('/sales/complete', async (request, reply) => {
@@ -40,6 +66,12 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
       client_uuid?: string | null;
       /** Set by the desktop till for a sale it stamped itself while offline (фаза 3). */
       fiscal_offline?: unknown;
+      /**
+       * The parked cart this sale came out of, if any. Bookkeeping only — the
+       * cart stopped holding its stems when it was picked up, so nothing here
+       * depends on it arriving (TechDocs/POS_FLORIST_BENCH.md §9).
+       */
+      parked_cart_id?: number | null;
     };
 
     const headerKey = request.headers['idempotency-key'];
@@ -136,7 +168,12 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
       return reply.code(500).send({ error: 'sale_not_readable' });
     }
 
-    if (!gate.on) return reply.code(201).send(sale);
+    if (!gate.on) {
+      await noteParkedCart(auth.storeId, body.parked_cart_id, sale.id);
+      return reply.code(201).send(sale);
+    }
+
+    await noteParkedCart(auth.storeId, body.parked_cart_id, sale.id);
 
     try {
       const fiscal = await fiscalService.fiscalizeSale(gate, {

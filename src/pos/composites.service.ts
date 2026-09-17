@@ -274,6 +274,59 @@ export async function derivedAvailability(
 }
 
 /**
+ * Which shelves one cart line actually takes from.
+ *
+ * `own` means the variant's own stock row: every simple product, and a
+ * composite assembled in advance — selling one of those must not touch the
+ * components, because the production document already took them. `derived`
+ * means the composition instead, per one unit of the composite.
+ *
+ * Extracted so that **holding** stock and **consuming** it cannot disagree.
+ * A parked cart reserves what ringing it will consume, and if the two resolved
+ * the shape separately, a bouquet could hold stems it would not take, or —
+ * worse — hold nothing and take nine roses.
+ */
+export type StockDemand =
+  | { kind: 'own' }
+  | { kind: 'derived'; composition: ComponentInput[] };
+
+export async function resolveStockDemand(
+  client: DbClient,
+  params: {
+    storeId: number;
+    variantId: number;
+    /** The line's own composition, when it carries one. Already validated. */
+    components?: ComponentInput[];
+  }
+): Promise<StockDemand> {
+  const shape = await loadStockShape(client, params.storeId, params.variantId);
+  if (!(shape.kind === 'composite' && shape.stock_mode === 'derived')) return { kind: 'own' };
+
+  const composition: ComponentInput[] = params.components
+    ? params.components.map((row) => ({
+        component_variant_id: row.component_variant_id,
+        quantity: row.quantity,
+      }))
+    : (
+        await client.query(
+          `SELECT component_variant_id, quantity
+           FROM pos_product_components
+           WHERE store_id = $1 AND variant_id = $2
+           ORDER BY sort_order ASC, id ASC`,
+          [params.storeId, params.variantId]
+        )
+      ).rows.map((row) => ({
+        component_variant_id: Number(row.component_variant_id),
+        quantity: Number(row.quantity),
+      }));
+
+  // A derived composite with nothing in it is 0 available, never unlimited —
+  // the same rule the catalog's availability sum follows.
+  if (composition.length === 0) throw new EmptyCompositionError(params.variantId);
+  return { kind: 'derived', composition };
+}
+
+/**
  * Write off stock for one completed sale line.
  *
  * `own` (and every simple product) moves its own stock row exactly as before.
@@ -299,8 +352,13 @@ export async function consumeStockForSaleItem(
     components?: ComponentInput[];
   }
 ): Promise<void> {
-  const shape = await loadStockShape(client, params.storeId, params.variantId);
-  if (!(shape.kind === 'composite' && shape.stock_mode === 'derived')) {
+  const demand = await resolveStockDemand(client, {
+    storeId: params.storeId,
+    variantId: params.variantId,
+    components: params.components,
+  });
+
+  if (demand.kind === 'own') {
     await applyStockDelta(client, {
       storeId: params.storeId,
       variantId: params.variantId,
@@ -313,23 +371,7 @@ export async function consumeStockForSaleItem(
     return;
   }
 
-  const composition = params.components
-    ? params.components.map((row) => ({
-        component_variant_id: row.component_variant_id,
-        quantity: row.quantity,
-      }))
-    : (
-        await client.query(
-          `SELECT component_variant_id, quantity
-           FROM pos_product_components
-           WHERE store_id = $1 AND variant_id = $2
-           ORDER BY sort_order ASC, id ASC`,
-          [params.storeId, params.variantId]
-        )
-      ).rows;
-  if (composition.length === 0) throw new EmptyCompositionError(params.variantId);
-
-  for (const [index, row] of composition.entries()) {
+  for (const [index, row] of demand.composition.entries()) {
     const componentVariantId = Number(row.component_variant_id);
     const perUnit = Number(row.quantity);
     await client.query(

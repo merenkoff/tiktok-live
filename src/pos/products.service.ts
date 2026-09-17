@@ -719,17 +719,30 @@ export async function getCatalog(
        v.barcode,
        v.price_cents,
        v.compare_at_cents,
+       -- What the till may offer, which is not the same as what is on the
+       -- shelf: a parked cart holds its stems (migration 042), and a bouquet
+       -- waiting on the counter has already taken its roses out of the fridge
+       -- as far as the next customer is concerned. GREATEST(…, 0) because a
+       -- sale is allowed to drive stock negative and a negative offer is not
+       -- a fact about anything.
+       --
        -- A derived composite has no stock of its own: what it can sell is what
-       -- its components allow. An empty composition is 0, never unlimited.
+       -- its components allow, each of them net of what they are holding. An
+       -- empty composition is 0, never unlimited.
        CASE
          WHEN p.kind = 'composite' AND p.stock_mode = 'derived' THEN COALESCE((
-           SELECT MIN(FLOOR(COALESCE(cs.quantity, 0)::numeric / c.quantity))
+           SELECT MIN(FLOOR(
+                    GREATEST(COALESCE(cs.quantity, 0) - COALESCE(cres.reserved, 0), 0)::numeric
+                    / c.quantity
+                  ))
            FROM pos_product_components c
            LEFT JOIN pos_stock cs
              ON cs.variant_id = c.component_variant_id AND cs.store_id = c.store_id
+           LEFT JOIN pos_stock_reserved cres
+             ON cres.variant_id = c.component_variant_id AND cres.store_id = c.store_id
            WHERE c.store_id = p.store_id AND c.variant_id = v.id
          ), 0)
-         ELSE COALESCE(s.quantity, 0)
+         ELSE GREATEST(COALESCE(s.quantity, 0) - COALESCE(res.reserved, 0), 0)
        END::int AS quantity,
        p.image_url,
        p.kind,
@@ -764,6 +777,8 @@ export async function getCatalog(
      FROM pos_variants v
      JOIN pos_products p ON p.id = v.product_id
      LEFT JOIN pos_stock s ON s.variant_id = v.id
+     LEFT JOIN pos_stock_reserved res
+       ON res.variant_id = v.id AND res.store_id = p.store_id
      WHERE ${conditions.join(' AND ')}
      ORDER BY p.name ASC, v.label ASC, v.id ASC
      LIMIT ${limit}`,
