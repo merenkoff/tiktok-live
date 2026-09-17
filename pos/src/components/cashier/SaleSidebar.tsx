@@ -25,6 +25,10 @@ interface Props {
   onClear: () => void;
   onCharge: () => void;
   onSaveBasket?: () => void;
+  /** The shelf of carts any till can take back (POS_FLORIST_BENCH.md §9). */
+  onOpenParked?: () => void;
+  /** How many are waiting, for the badge. */
+  parkedCount?: number;
 }
 
 export function SaleSidebar({
@@ -39,6 +43,8 @@ export function SaleSidebar({
   onClear,
   onCharge,
   onSaveBasket,
+  onOpenParked,
+  parkedCount = 0,
 }: Props) {
   const count = lines.reduce((s, l) => s + l.quantity, 0);
   const subtotal = lines.reduce((s, l) => s + l.unit_price_cents * l.quantity, 0);
@@ -105,6 +111,18 @@ export function SaleSidebar({
               >
                 Знижка на чек
               </button>
+              {onOpenParked && (
+                <button
+                  type="button"
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-sq-bg"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onOpenParked();
+                  }}
+                >
+                  Відкладені кошики{parkedCount > 0 ? ` (${parkedCount})` : ''}
+                </button>
+              )}
               <button
                 type="button"
                 disabled={lines.length === 0}
@@ -233,14 +251,31 @@ export function SaleSidebar({
       </div>
 
       <div className="p-3 border-t border-sq-divider bg-white flex gap-2">
-        <button
-          type="button"
-          disabled={lines.length === 0}
-          onClick={onSaveBasket}
-          className="flex-1 min-h-[48px] rounded-sq bg-sq-bg text-sq-blue font-semibold text-sm disabled:opacity-40"
-        >
-          Зберегти кошик
-        </button>
+        {/*
+          One button, two jobs, because an empty cart cannot be parked and an
+          empty cart is exactly when a cashier reaches for one that was. Before
+          this it sat disabled and useless on the state where it was needed most.
+        */}
+        {lines.length === 0 ? (
+          <button
+            type="button"
+            disabled={!onOpenParked}
+            onClick={onOpenParked}
+            className="flex-1 min-h-[48px] rounded-sq bg-sq-bg text-sq-blue font-semibold text-sm disabled:opacity-40"
+            data-testid="open-parked"
+          >
+            Відкладені{parkedCount > 0 ? ` (${parkedCount})` : ''}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onSaveBasket}
+            className="flex-1 min-h-[48px] rounded-sq bg-sq-bg text-sq-blue font-semibold text-sm disabled:opacity-40"
+            data-testid="park-cart"
+          >
+            Відкласти
+          </button>
+        )}
         <button
           type="button"
           disabled={lines.length === 0}

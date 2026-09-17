@@ -4,6 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { makeCatalogItem } from '../test/utils';
+import { cartLinesFromParked } from '../lib/parkedCart';
 import { computeCartDiscountCents, useCartStore, type CartLine } from './useCart';
 
 function makeLine(overrides: Partial<CartLine> = {}): CartLine {
@@ -225,6 +226,79 @@ describe('useCartStore', () => {
 
     cart().setCartDiscount({ type: 'percent', value: 100 });
     expect(cart().totalCents()).toBe(0);
+  });
+
+  describe('restoring a parked cart', () => {
+    const parkedItem = (over: Record<string, unknown> = {}) => ({
+      id: 7,
+      variant_id: 42,
+      quantity: 3,
+      product_name: 'Троянда',
+      label: 'Червона',
+      unit: 'шт',
+      line_price_cents: 9000,
+      image_url: null,
+      components: null,
+      ...over,
+    });
+
+    it('prices a line at what the server says it costs', () => {
+      const [line] = cartLinesFromParked({ items: [parkedItem()] });
+
+      expect(line).toMatchObject({
+        variant_id: 42,
+        quantity: 3,
+        unit_price_cents: 9000,
+        variant_label: 'Червона',
+      });
+    });
+
+    it('caps a restored line at what was parked', () => {
+      // The reserve behind this cart covers exactly these flowers. Letting the
+      // cashier raise the line would spend stock nobody checked — adding more
+      // is what the catalog is for, and `addItem` does check.
+      const [line] = cartLinesFromParked({ items: [parkedItem({ quantity: 3 })] });
+
+      expect(line.max_quantity).toBe(3);
+    });
+
+    it('keeps a parked bouquet in a line of its own', () => {
+      // Same rule as at the counter: two custom bouquets are two bouquets, and
+      // an ordinary rose must never merge into one of them.
+      const lines = cartLinesFromParked({
+        items: [
+          parkedItem({ id: 1, components: [{ component_variant_id: 42, quantity: 9 }] }),
+          parkedItem({ id: 2, components: [{ component_variant_id: 42, quantity: 5 }] }),
+          parkedItem({ id: 3, components: null }),
+        ],
+      });
+
+      expect(new Set(lines.map((l) => l.uid)).size).toBe(3);
+      expect(lines[2].uid).toBe('42');
+      expect(lines[0].components).toHaveLength(1);
+    });
+
+    it('replaces the screen rather than merging into what is on it', () => {
+      // Folding someone else's cart into a half-rung one would put two
+      // people's flowers on one receipt.
+      cart().addItem(makeCatalogItem({ variant_id: 99, quantity: 5 }), 2);
+      cart().restore({
+        lines: cartLinesFromParked({ items: [parkedItem()] }),
+        cartDiscount: { type: 'percent', value: 10 },
+        customer: null,
+      });
+
+      expect(cart().lines.map((l) => l.variant_id)).toEqual([42]);
+      expect(cart().cartDiscount).toEqual({ type: 'percent', value: 10 });
+    });
+
+    it('a cart parked without a discount clears the one on screen', () => {
+      cart().setCartDiscount({ type: 'fixed', value: 5000 });
+      cart().restore({ lines: cartLinesFromParked({ items: [parkedItem()] }) });
+
+      expect(cart().cartDiscount).toBeNull();
+      expect(cart().customer).toBeNull();
+    });
   });
 
   it('clear() wipes lines, banner, discount and customer', () => {

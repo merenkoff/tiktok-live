@@ -296,6 +296,61 @@ export interface ShowcaseResult {
   created: boolean;
 }
 
+/**
+ * A cart put aside at one till, waiting to be rung up at another
+ * (`TechDocs/POS_FLORIST_BENCH.md` §9). Mirrors `ParkedCart` in
+ * `src/pos/parked-carts.service.ts`.
+ *
+ * The server holds the stock behind it, so nothing on the till reserves
+ * anything: `quantity` here is what was parked, and the hold ends when the
+ * cart is picked up, put back or lapses at `expires_at`.
+ */
+export interface ParkedCartComponent {
+  component_variant_id: number;
+  quantity: number;
+  product_name: string;
+  label: string;
+  unit: string;
+  unit_price_cents: number;
+}
+
+export interface ParkedCartItem {
+  id: number;
+  variant_id: number;
+  quantity: number;
+  /** Absent on an ordinary line; the stems for a bouquet built at the bench. */
+  components: ParkedCartComponent[] | null;
+  product_name: string;
+  label: string;
+  unit: string;
+  /** The catalogue card's price. For a bouquet, only a starting point. */
+  price_cents: number;
+  /**
+   * What the line actually costs: the assembled price for a bouquet built at
+   * the bench (stems plus the shop's assembly charge), the card's price
+   * otherwise. Computed server-side by the same function checkout prices with.
+   */
+  line_price_cents: number;
+  image_url: string | null;
+}
+
+export interface ParkedCart {
+  id: number;
+  label: string;
+  note: string | null;
+  status: 'open' | 'picked' | 'released' | 'expired';
+  staff_id: number;
+  staff_name: string | null;
+  customer_id: number | null;
+  customer_name: string | null;
+  cart_discount: { type: 'percent' | 'fixed'; value: number } | null;
+  expires_at: string;
+  created_at: string;
+  items: ParkedCartItem[];
+  /** At today's prices — a line under a name in a list, not a promise. */
+  total_cents: number;
+}
+
 /** One line of a composite's recipe, resolved for the till. Mirrors the server. */
 export interface CatalogComponent {
   component_variant_id: number;

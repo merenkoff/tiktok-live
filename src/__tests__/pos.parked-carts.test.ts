@@ -280,8 +280,13 @@ describe.skipIf(!hasDb)('POS parked carts', () => {
     const taken = await pickUp({ storeId, staffId, cartId: cart.id });
 
     expect(taken.items[0].components).toEqual([
-      { component_variant_id: roseId, quantity: 15 },
-      { component_variant_id: eucalyptusId, quantity: 2 },
+      expect.objectContaining({
+        component_variant_id: roseId,
+        quantity: 15,
+        product_name: 'Троянда',
+        unit_price_cents: 9000,
+      }),
+      expect.objectContaining({ component_variant_id: eucalyptusId, quantity: 2 }),
     ]);
   });
 

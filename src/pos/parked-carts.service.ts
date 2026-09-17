@@ -31,7 +31,11 @@
 
 import { pool } from '../db.js';
 import { logger } from '../logger.js';
-import { resolveStockDemand, type ComponentInput } from './composites.service.js';
+import {
+  priceOfComposition,
+  resolveStockDemand,
+  type ComponentInput,
+} from './composites.service.js';
 import type { CartDiscountInput } from './types.js';
 
 type DbClient = { query: typeof pool.query };
@@ -73,15 +77,42 @@ export interface ParkCartInput {
   items: ParkCartItemInput[];
 }
 
+/**
+ * One stem of a parked bouquet, named.
+ *
+ * The stored composition is ids and counts; this is what the till needs to
+ * draw the line it restores. Resolved here rather than on the client because
+ * the join is already open — and because a stem the shop has since delisted
+ * still has to show its name on a bouquet that was assembled while it did.
+ */
+export interface ParkedCartComponent extends ComponentInput {
+  product_name: string;
+  label: string;
+  unit: string;
+  unit_price_cents: number;
+}
+
 export interface ParkedCartItem {
   id: number;
   variant_id: number;
   quantity: number;
-  components: ComponentInput[] | null;
+  components: ParkedCartComponent[] | null;
   product_name: string;
   label: string;
   unit: string;
+  /** The catalogue card's price. For a bouquet, only a starting point. */
   price_cents: number;
+  /**
+   * What this line actually costs — the assembled price for a bouquet built at
+   * the bench, the card's price for everything else.
+   *
+   * Computed here through `priceOfComposition`, the same function checkout
+   * prices it with (stems plus the shop's assembly charge), because the card's
+   * own price says nothing about a bouquet somebody put together by hand. A
+   * restored cart that showed the card's number would break the one rule the
+   * bench rests on: the price never lies and never hides.
+   */
+  line_price_cents: number;
   image_url: string | null;
 }
 
@@ -249,7 +280,24 @@ export async function getCart(storeId: number, cartId: number): Promise<ParkedCa
   const items = await pool.query(
     `SELECT i.id, i.variant_id, i.quantity, i.components,
             p.name AS product_name, p.image_url,
-            v.label, v.unit, v.price_cents
+            v.label, v.unit, v.price_cents,
+            -- The stems, named. Keyed off the stored composition rather than
+            -- the card's, because a bouquet assembled at the bench is not its
+            -- catalogue card's recipe.
+            (SELECT jsonb_agg(
+                      jsonb_build_object(
+                        'component_variant_id', (c->>'component_variant_id')::bigint,
+                        'quantity', (c->>'quantity')::int,
+                        'product_name', cp.name,
+                        'label', cv.label,
+                        'unit', cv.unit,
+                        'unit_price_cents', cv.price_cents
+                      ) ORDER BY ord
+                    )
+             FROM jsonb_array_elements(i.components) WITH ORDINALITY AS t(c, ord)
+             JOIN pos_variants cv ON cv.id = (c->>'component_variant_id')::bigint
+             JOIN pos_products cp ON cp.id = cv.product_id
+            ) AS component_rows
      FROM pos_parked_cart_items i
      JOIN pos_variants v ON v.id = i.variant_id
      JOIN pos_products p ON p.id = v.product_id
@@ -258,22 +306,36 @@ export async function getCart(storeId: number, cartId: number): Promise<ParkedCa
     [cartId, storeId]
   );
 
-  const mapped: ParkedCartItem[] = items.rows.map((item) => ({
+  const mapped: ParkedCartItem[] = await Promise.all(items.rows.map(async (item) => ({
     id: Number(item.id),
     variant_id: Number(item.variant_id),
     quantity: Number(item.quantity),
     components: item.components
-      ? (item.components as Array<Record<string, unknown>>).map((c) => ({
+      ? ((item.component_rows ?? []) as Array<Record<string, unknown>>).map((c) => ({
           component_variant_id: Number(c.component_variant_id),
           quantity: Number(c.quantity),
+          product_name: String(c.product_name ?? ''),
+          label: String(c.label ?? ''),
+          unit: String(c.unit ?? ''),
+          unit_price_cents: Number(c.unit_price_cents ?? 0),
         }))
       : null,
     product_name: item.product_name ?? '',
     label: item.label ?? '',
     unit: item.unit ?? '',
     price_cents: Number(item.price_cents ?? 0),
+    line_price_cents: item.components
+      ? await priceOfComposition(
+          pool,
+          storeId,
+          (item.components as Array<Record<string, unknown>>).map((c) => ({
+            component_variant_id: Number(c.component_variant_id),
+            quantity: Number(c.quantity),
+          }))
+        )
+      : Number(item.price_cents ?? 0),
     image_url: item.image_url ?? null,
-  }));
+  })));
 
   return {
     id: Number(row.id),
@@ -288,10 +350,11 @@ export async function getCart(storeId: number, cartId: number): Promise<ParkedCa
     expires_at: new Date(row.expires_at).toISOString(),
     created_at: new Date(row.created_at).toISOString(),
     items: mapped,
-    // At today's prices, and deliberately without the bouquet arithmetic: this
-    // is the line under a name in a list, so the cashier can tell two waiting
-    // carts apart. The cart is priced for real when it is rung.
-    total_cents: mapped.reduce((sum, item) => sum + item.price_cents * item.quantity, 0),
+    // At today's prices: the line under a name in a list, so the cashier can
+    // tell two waiting carts apart. Still not a promise — the sale re-prices
+    // from the components when it is rung, and a stem that changed price in
+    // between changes this too.
+    total_cents: mapped.reduce((sum, item) => sum + item.line_price_cents * item.quantity, 0),
   };
 }
 

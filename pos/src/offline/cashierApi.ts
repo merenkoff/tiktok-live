@@ -80,6 +80,12 @@ export const cashierApi = {
     note?: string;
     cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
     customer_id?: number | null;
+    /**
+     * The parked cart this sale came out of. Bookkeeping only, and dropped on
+     * the offline path: the cart was already picked up (which is what released
+     * its hold), and a queued sale has no server to tell.
+     */
+    parked_cart_id?: number | null;
   },
   /** `clientUuid` reuses an existing idempotency key — see FiscalSaleUnknownError. */
   opts: { clientUuid?: string } = {}
