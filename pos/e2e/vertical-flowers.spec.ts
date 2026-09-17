@@ -112,7 +112,9 @@ test('a flower shop sells through its own catalog module', async ({ page }) => {
   // Its screen is reachable too — that route is what the `module_remotes`
   // entry declares, and on the desktop it is what the pending tile points at.
   await page.goto('/flowers');
-  await expect(page.getByRole('heading', { name: 'Квіти' })).toBeVisible();
+  // The module's own screen is «Вітрина» now — the bouquets standing in the
+  // window, and the write-off for one that did not sell.
+  await expect(page.getByRole('heading', { name: 'Вітрина' })).toBeVisible();
 
   // …and the host frame still takes the money.
   await page.goto('/register');

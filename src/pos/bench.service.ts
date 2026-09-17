@@ -31,7 +31,9 @@ import {
   produceComposite,
   type ComponentInput,
 } from './composites.service.js';
+import { applyStockDelta } from './stock.service.js';
 import { internalBarcodeFor } from './core/internalBarcode.js';
+import type { WriteoffReasonCode } from './types.js';
 
 type DbClient = { query: typeof pool.query };
 
@@ -345,4 +347,180 @@ async function nextProductionNumber(client: DbClient, storeId: number): Promise<
     [storeId, counterKey]
   );
   return `ВР-${year}-${String(Number(result.rows[0].seq)).padStart(5, '0')}`;
+}
+
+/**
+ * A window bouquet that did not sell.
+ *
+ * The loss is the **bouquet**, not its stems: production took those off the
+ * shelf days ago, and crediting them back would invent flowers that are in the
+ * bin. So this is an ordinary `writeoff` document naming the card itself —
+ * which is also what finally makes the window's shrinkage visible in a report
+ * instead of a card sitting at quantity 1 forever.
+ *
+ * Staff level on purpose, and narrower than the owner's write-off screen: only
+ * a `one_off` card. The florist made this bouquet and watched it die; the rest
+ * of the fridge stays the owner's to write off, so a mis-tap at the till cannot
+ * empty a stem line.
+ */
+export interface ShowcaseWriteoffInput {
+  storeId: number;
+  staffId: number;
+  clientUuid: string;
+  variantId: number;
+  /** `damaged` = wilted, `gift` = given away. Both happen, and differently. */
+  reasonCode: WriteoffReasonCode;
+  note?: string | null;
+}
+
+export interface ShowcaseWriteoffResult {
+  variant_id: number;
+  quantity: number;
+  document_id: number;
+  doc_number: string;
+  created: boolean;
+}
+
+const TILL_WRITEOFF_REASONS: readonly WriteoffReasonCode[] = ['damaged', 'gift'];
+
+export async function writeOffShowcase(
+  input: ShowcaseWriteoffInput
+): Promise<ShowcaseWriteoffResult> {
+  const clientUuid = String(input.clientUuid ?? '').trim().toLowerCase();
+  if (!UUID_RE.test(clientUuid)) throw new BenchError('client_uuid must be a UUID');
+  if (!TILL_WRITEOFF_REASONS.includes(input.reasonCode)) {
+    throw new BenchError('Причина списання має бути «завʼяв» або «віддали»');
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const already = await findExistingWriteoff(client, input.storeId, clientUuid);
+    if (already) {
+      await client.query('COMMIT');
+      return already;
+    }
+
+    // Locked before anything is decided: the same bouquet can be sold on
+    // another till while this one is deciding it is dead, and the loser must
+    // find no stock rather than write off a bouquet that left in a bag.
+    const card = await client.query(
+      `SELECT p.one_off, COALESCE(s.quantity, 0)::int AS quantity, p.name
+       FROM pos_variants v
+       JOIN pos_products p ON p.id = v.product_id
+       LEFT JOIN pos_stock s ON s.variant_id = v.id AND s.store_id = v.store_id
+       WHERE v.id = $1 AND v.store_id = $2
+       FOR UPDATE OF v`,
+      [input.variantId, input.storeId]
+    );
+    if (card.rows.length === 0) throw new BenchError('Букет не знайдено');
+    if (!card.rows[0].one_off) {
+      throw new BenchError('З каси можна списати лише букет із вітрини');
+    }
+    const quantity = Number(card.rows[0].quantity);
+    if (quantity <= 0) throw new BenchError('Цього букета вже немає на вітрині');
+
+    const docNumber = await nextWriteoffNumber(client, input.storeId);
+    const doc = await client.query(
+      `INSERT INTO pos_stock_documents
+         (store_id, type, status, doc_number, occurred_at, reason_code, note, created_by,
+          posted_by, posted_at, client_uuid)
+       VALUES ($1, 'writeoff', 'posted', $2, NOW(), $3, $4, $5, $5, NOW(), $6)
+       RETURNING id`,
+      [
+        input.storeId,
+        docNumber,
+        input.reasonCode,
+        input.note?.trim() || `Вітрина: ${card.rows[0].name}`,
+        input.staffId,
+        clientUuid,
+      ]
+    );
+    const documentId = Number(doc.rows[0].id);
+
+    await client.query(
+      `INSERT INTO pos_stock_document_lines (document_id, store_id, variant_id, quantity)
+       VALUES ($1, $2, $3, $4)`,
+      [documentId, input.storeId, input.variantId, quantity]
+    );
+    await applyStockDelta(client, {
+      storeId: input.storeId,
+      variantId: input.variantId,
+      delta: -quantity,
+      reason: 'writeoff',
+      staffId: input.staffId,
+      referenceType: 'stock_document',
+      referenceId: documentId,
+      note: input.note?.trim() ?? undefined,
+    });
+
+    await client.query('COMMIT');
+    logger.info('POS bench: showcase bouquet written off', {
+      storeId: input.storeId,
+      variantId: input.variantId,
+      reasonCode: input.reasonCode,
+      docNumber,
+    });
+    return {
+      variant_id: input.variantId,
+      quantity,
+      document_id: documentId,
+      doc_number: docNumber,
+      created: true,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    if (typeof error === 'object' && error !== null && (error as { code?: string }).code === '23505') {
+      const winner = await findExistingWriteoff(pool, input.storeId, clientUuid);
+      if (winner) return winner;
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function findExistingWriteoff(
+  client: DbClient,
+  storeId: number,
+  clientUuid: string
+): Promise<ShowcaseWriteoffResult | null> {
+  const doc = await client.query(
+    `SELECT d.id, d.doc_number, l.variant_id, l.quantity
+     FROM pos_stock_documents d
+     JOIN pos_stock_document_lines l ON l.document_id = d.id
+     WHERE d.store_id = $1 AND d.client_uuid = $2
+     ORDER BY l.id ASC
+     LIMIT 1`,
+    [storeId, clientUuid]
+  );
+  if (doc.rows.length === 0) return null;
+  return {
+    variant_id: Number(doc.rows[0].variant_id),
+    quantity: Number(doc.rows[0].quantity),
+    document_id: Number(doc.rows[0].id),
+    doc_number: String(doc.rows[0].doc_number),
+    created: false,
+  };
+}
+
+/** The write-off counter — same shape as `nextProductionNumber` above. */
+async function nextWriteoffNumber(client: DbClient, storeId: number): Promise<string> {
+  const year = new Date().getFullYear();
+  const counterKey = `writeoff_${year}`;
+  await client.query(
+    `INSERT INTO pos_store_counters (store_id, counter_key, next_value)
+     VALUES ($1, $2, 1)
+     ON CONFLICT (store_id, counter_key) DO NOTHING`,
+    [storeId, counterKey]
+  );
+  const result = await client.query(
+    `UPDATE pos_store_counters
+     SET next_value = next_value + 1
+     WHERE store_id = $1 AND counter_key = $2
+     RETURNING next_value - 1 AS seq`,
+    [storeId, counterKey]
+  );
+  return `СП-${year}-${String(Number(result.rows[0].seq)).padStart(5, '0')}`;
 }

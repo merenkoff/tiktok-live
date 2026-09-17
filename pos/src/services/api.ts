@@ -735,6 +735,29 @@ class PosApi {
     return data;
   }
 
+  /**
+   * A window bouquet that did not sell (`POS_FLORIST_BENCH.md` §11).
+   *
+   * The loss is the bouquet, not its stems — production took those days ago.
+   * Narrower than the owner's write-off screen by design: the server refuses
+   * anything that is not a one-off card, so a mis-tap here cannot empty a stem
+   * line.
+   */
+  async writeOffShowcase(payload: {
+    client_uuid: string;
+    variant_id: number;
+    reason_code: 'damaged' | 'gift';
+    note?: string | null;
+  }): Promise<{ variant_id: number; quantity: number; doc_number: string; created: boolean }> {
+    const { data } = await this.client.post<{
+      variant_id: number;
+      quantity: number;
+      doc_number: string;
+      created: boolean;
+    }>('/bench/writeoff', payload);
+    return data;
+  }
+
   async getGtinCache(
     code: string
   ): Promise<

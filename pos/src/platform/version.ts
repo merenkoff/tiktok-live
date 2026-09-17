@@ -61,7 +61,13 @@ export const POS_API_CLIENT_VERSION = 2;
 //     flowers in the bucket to the card in the database. `triggerPrint`
 //     especially: `window.print()` silently no-ops in WKWebView, and a module
 //     that called it directly would work everywhere but on the shop's Mac.
-export const PLATFORM_VERSION = 8;
+// 9 (2026-09-17): the window's write-off. `api.writeOffShowcase` and
+//     `CatalogItem.one_off` — the flag that tells a bouquet made at the bench
+//     for one object from a catalogue bouquet assembled in batches, which are
+//     otherwise both composite+own. A module built against 9 calling
+//     `writeOffShowcase` on an older host would hit undefined, which is the
+//     case this guard exists for.
+export const PLATFORM_VERSION = 9;
 
 /**
  * Build version of this bundle — the host web/cashier build, or a module-remote
