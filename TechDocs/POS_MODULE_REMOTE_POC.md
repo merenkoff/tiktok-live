@@ -361,10 +361,9 @@ never-bootstrapped copy of the auth store, so `Nav`'s module-visibility
 filter always fell back to "show everything". Fixed by routing `Nav`
 (and `main.tsx` / `cashier-main.tsx` / `CashierApp.tsx`) through
 `@pos/platform`, and by `scripts/check-platform-boundary.mjs` +
-`npm run check:platform-boundary` (no ESLint in `pos/`), which fails if any
-file outside `src/platform/**` reaches for `useAuthStore` / `useCartStore` /
-the offline-status store / `PosShellContext` / `useEnabledModules` by a
-local path. Wired into `pos-tests.yml`.
+`npm run check:platform-boundary` (no ESLint in `pos/`), wired into
+`pos-tests.yml`. That guard started as a hand-written list of banned import
+specifiers and is now computed — see "the guard that enumerated" below for why.
 
 **Result:** entry chunk `dist/assets/index-*.js` **472 kB / 146 kB gzip**
 (react/router/zustand/`@pos/platform` no longer in it — verified: zero
@@ -969,3 +968,85 @@ Docs: `TechDocs/POS_MODULE_OFFLINE_DATA.md` (contract + worked example +
 checklist for the next module). Not yet run on a real desktop build — the
 offline queue path is covered by `stocktake/data/*.test.ts` on
 `fake-indexeddb` and by the manual checklist in the track-3 plan.
+
+## Update: the guard that enumerated (2026-09-17)
+
+The `useEnabledModules` trap came back, in the shape the guard could not see.
+`SettingsPage.tsx` imported `useVertical` — a hook added by sales verticals
+(2.0.0) — from `../../hooks/useVertical` instead of the barrel. That hook
+imports `hooks/useAuth.ts`, so the host bundle got a second, never-logged-in
+auth store again, and `useVertical`'s `?? DEFAULT_VERTICAL` turned it into a
+plausible answer: the admin of a flower shop read «Тип магазину: Одяг» while
+the API, the DB and the super admin all said `flowers`. Found by reading the
+shipped chunk: `assets/SettingsPage-*.js` carried its own
+`create({auth:null,isAuthenticated:!1,…})` next to an `useAuthStore` imported
+from `"@pos/platform"`.
+
+The guard passed the whole time, for two reasons worth remembering:
+
+- it banned **named specifiers** (`hooks/useAuth`, `services/api`, …), so any
+  new module that reaches a singleton *transitively* is invisible to it — and
+  a hook is exactly that;
+- it matched **one line at a time**, so a multi-line
+  `import {\n  useAuthStore,\n} from '../hooks/useAuth'` never matched at all.
+
+It now computes both sets instead, from the TypeScript parser rather than
+regexes per line (which also tells an erased `import type` from a value
+import):
+
+- `PLATFORM` — the transitive closure of relative imports (static,
+  `export … from`, dynamic) out of `src/platform/index.ts`: what is compiled
+  *into* the external chunk;
+- `STATEFUL` — the seven files that own shared mutable state (`hooks/useAuth`,
+  `hooks/useCart`, `offline/status`, `shell`, `services/api`,
+  `modules/appliedRemotes`, `offline/moduleHooks`) plus everything that
+  reaches one of them.
+
+A violation is an edge from outside `PLATFORM` into a file in both sets, and
+the error prints the chain (`SettingsPage.tsx → hooks/useVertical.ts →
+hooks/useAuth.ts`), because the offending import rarely looks stateful. Host
+code importing host code is not a violation — one Rollup run, one copy — and
+neither is a stateless leaf of the platform chunk (`lib/money.ts`,
+`lib/vertical.ts`, every `@pos/platform/ui` component), which each consumer
+bundles on purpose. Only `src/test/` is allowed through: Vitest externalises
+nothing. The hand-maintained `ALLOW` list of files that are *inside* the chunk
+(`offline/repository.ts`, `sync.ts`, `lease.ts`, `outboxPolicy.ts`,
+`services/api.ts`, `useEnabledModules.ts`) is gone — the closure derives it.
+
+The computed rule immediately found two more live copies of the same class,
+both fixed here:
+
+- `CashierApp.tsx` started the offline runtime via `./offline`, while
+  `cashier-main.tsx` registers the module offline hooks through
+  `@pos/platform`. Two copies of `offline/moduleHooks.ts` — so on the desktop
+  till the runtime's loop drove an **empty** registry, and a module's own
+  offline data (track 3, `stocktake`) only ever synced on the login path that
+  runs inside the platform chunk.
+- `OfflineStatusBanner.tsx` pulled `refusalText` from `../../offline`, which
+  dragged a second `services/api.ts` — a second axios client — and a second
+  offline-status store into the host bundle, so host components and platform
+  components were reading different connectivity state.
+
+Both now go through the barrel: `platform/offline.ts` gained `refusalText`
+(from `offline/lease.ts`, already static in the chunk) and
+`startOfflineRuntime` as a thin `await import('../offline/sync')` wrapper — a
+plain re-export would have pulled the whole runtime into the eager graph the
+web shell downloads and never uses. `PLATFORM_VERSION` 4 → 5.
+
+`useVertical` also warns once now when a signed-in session carries no
+vertical, so the next wiring bug of this shape cannot pass for a legitimate
+clothing store.
+
+**Verified:** `check:platform-boundary` (fails on a probe file with the
+multi-line form of the original import, naming the chain; passes on the tree),
+`npm run lint`, `npm test` (72 files / 678 tests, vitest 4.1.11),
+`check:tauri-capabilities`, `npm run build` + `npm run build:cashier` with
+`tsc --noEmit`. In both `dist/` and `dist-cashier/` the POS api client
+(`X-POS-API-Version`, `baseURL: posApiBase()`), the auth store literal, the
+module-hooks registry and `offline/sync.ts` each exist exactly **once**, all
+of them under `assets/platform/*`; before the fix the api client, the auth
+store, `sync.ts` and the registry each had a host-side twin. The axios
+*library* is still duplicated host-side (`axios` is not in
+`SHARED_EXTERNALS`; `LoginPage.tsx`, `lib/checkoutError.ts`,
+`super/superApi.ts` import it directly) — stateless, same category as the
+Dexie note above, worth cleaning up later.

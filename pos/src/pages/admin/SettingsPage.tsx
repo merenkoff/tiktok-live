@@ -4,7 +4,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, useAuthStore, sameRemoteMap, PLATFORM_VERSION } from '@pos/platform';
+import { api, useAuthStore, sameRemoteMap, useVertical, PLATFORM_VERSION } from '@pos/platform';
 import { ProductPhotoField } from '../../components/ProductPhotoField';
 import { FiscalSettingsCard } from './FiscalSettingsCard';
 import { MODULES } from '../../modules/registry';
@@ -12,7 +12,6 @@ import type { ModuleRemoteEntry, QrPaymentMode, StoreConfig } from '../../types'
 // Stateless leaf — no singleton to duplicate, so a direct import is fine here.
 import { inspectRemoteManifest, type RemoteManifestInfo } from '../../modules/remoteVerify';
 import { validateRemoteEntryInput } from '../../lib/moduleRemoteForm';
-import { useVertical } from '../../hooks/useVertical';
 
 export function SettingsPage() {
   const auth = useAuthStore((s) => s.auth);

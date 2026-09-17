@@ -1,5 +1,5 @@
 {
-  "platformVersion": 4,
+  "platformVersion": 5,
   "exports": {
     "platform": [
       "DEFAULT_RECEIPT_PAPER_WIDTH",
@@ -39,6 +39,7 @@
       "loadLastStoreSlug",
       "printReceipt",
       "refundLineAmount",
+      "refusalText",
       "registerOfflineModules",
       "resolveNavIcon",
       "resolveTagColorHex",
@@ -46,6 +47,7 @@
       "sameRemoteMap",
       "setAppliedRemotes",
       "setMeta",
+      "startOfflineRuntime",
       "uahInputToCents",
       "useAuthStore",
       "useCartStore",

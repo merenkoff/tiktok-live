@@ -12,3 +12,26 @@ export { getMeta, setMeta } from '../offline/db';
 export { useOfflineStatus } from '../offline/status';
 export { registerOfflineModules } from '../offline/moduleHooks';
 export type { ModuleOfflineHooks } from '../offline/moduleHooks';
+// The ПРРО offline reserve's refusal text. `offline/lease.ts` is already a
+// static member of this chunk (`platform/sales.ts` -> `offline/cashierApi.ts`
+// -> it), so exporting the helper costs nothing and keeps the shell's banner
+// off a relative path into the chunk.
+export { refusalText } from '../offline/lease';
+
+/**
+ * Starts the till's offline runtime: the outbox loop, the connectivity
+ * listeners and the per-module sync hooks the shell entry registered.
+ *
+ * A thin async wrapper rather than a re-export, for two reasons. `offline/sync`
+ * is reached lazily everywhere else inside this chunk (`useAuth.ts` does
+ * `await import('../offline')`), and re-exporting it here would drag the whole
+ * runtime into the eager graph the web shell downloads and never uses. And the
+ * shell cannot reach it relatively instead: that copy's module-hooks registry
+ * is not the one `registerOfflineModules` above writes to, so every module's
+ * offline sync would be driven against an empty registry
+ * (`scripts/check-platform-boundary.mjs` now refuses that import).
+ */
+export async function startOfflineRuntime(): Promise<void> {
+  const runtime = await import('../offline/sync');
+  runtime.startOfflineRuntime();
+}
