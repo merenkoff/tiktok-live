@@ -15,9 +15,15 @@
  * the flowers vertical derives («Червона · 60 см»).
  */
 
-import { Suspense, lazy, useEffect, useState } from 'react';
-import { Camera, Search } from 'lucide-react';
-import { useCartStore, useSalesCatalog, useVertical } from '@pos/platform';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
+import { Camera, Flower2, Search } from 'lucide-react';
+import {
+  customBouquetLabel,
+  useAuthStore,
+  useCartStore,
+  useSalesCatalog,
+  useVertical,
+} from '@pos/platform';
 import type { CatalogItem, SalesCatalogProps } from '@pos/platform';
 import {
   CatalogTagBar,
@@ -40,6 +46,8 @@ const BarcodeScanner = lazy(() =>
   import('../../components/BarcodeScanner').then((m) => ({ default: m.BarcodeScanner }))
 );
 import { HostTooOldError, missingHostApi } from './lib/hostPlatform';
+import { FloristBench } from './bench/FloristBench';
+import { isAssembledOnSale } from './bench/stems';
 
 export default function FlowersCatalog({ active, stockEpoch }: SalesCatalogProps) {
   // Throws into the host's `CatalogBoundary`, which falls back to the bundled
@@ -54,11 +62,27 @@ function FlowersCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
   const catalog = useSalesCatalog();
   const vertical = useVertical();
   const addItem = useCartStore((s) => s.addItem);
+  const addAssembled = useCartStore((s) => s.addAssembled);
   const setBanner = useCartStore((s) => s.setBanner);
   const gridRef = useDragScroll<HTMLDivElement>();
+  // Travels with the login, so the till prices a bouquet the same with the
+  // network down — see `auth.store.florist_labour_bps`.
+  const labourBps = useAuthStore((s) => s.auth?.store.florist_labour_bps ?? 0);
 
   const [cameraOpen, setCameraOpen] = useState(false);
   const [picker, setPicker] = useState<CatalogItem[] | null>(null);
+  const [bench, setBench] = useState<CatalogItem | null>(null);
+
+  // The «Зібрати букет» shortcut needs a card to ring on. Held in a ref that
+  // only ever fills — the first load has no tag and so carries the whole
+  // catalog, and after that walking into «Троянди» must not make the button
+  // blink out just because no bouquet card is in the current view.
+  const bouquetCards = useRef<CatalogItem[]>([]);
+  const inView = useMemo(
+    () => catalog.grouped.flatMap(([, variants]) => variants).filter(isAssembledOnSale),
+    [catalog.grouped]
+  );
+  if (inView.length > bouquetCards.current.length) bouquetCards.current = inView;
 
   useEffect(() => {
     if (stockEpoch > 0) void catalog.refresh();
@@ -82,7 +106,7 @@ function FlowersCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
   return (
     <section className="flex flex-col min-h-0 bg-white" data-testid="flowers-catalog">
       <ScanWedge
-        active={active && !picker && !cameraOpen}
+        active={active && !picker && !cameraOpen && !bench}
         onScan={(code) => void handleBarcode(code)}
       />
 
@@ -108,6 +132,21 @@ function FlowersCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
           >
             <Camera size={20} />
           </button>
+          {bouquetCards.current.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                const cards = bouquetCards.current;
+                if (cards.length === 1) setBench(cards[0]);
+                else setPicker(cards);
+              }}
+              className="min-h-12 px-3 flex items-center gap-2 rounded-sq text-white bg-sq-blue font-medium shrink-0"
+              data-testid="start-bouquet"
+            >
+              <Flower2 size={18} />
+              <span className="hidden sm:inline">Зібрати букет</span>
+            </button>
+          )}
         </div>
 
         {!catalog.query.trim() && (
@@ -150,9 +189,17 @@ function FlowersCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
                 imageUrl={first.image_url}
                 stock={stock}
                 disabled={stock <= 0}
-                onClick={() =>
-                  variants.length === 1 ? addItem(variants[0]) : setPicker(variants)
-                }
+                onClick={() => {
+                  if (variants.length > 1) {
+                    setPicker(variants);
+                    return;
+                  }
+                  // Tapping a bouquet card is "make me one of these", not "ring
+                  // the template" — the card's own stock is 0 forever, so the
+                  // old path could only ever refuse.
+                  if (isAssembledOnSale(variants[0])) setBench(variants[0]);
+                  else addItem(variants[0]);
+                }}
               />
             );
           })}
@@ -176,13 +223,39 @@ function FlowersCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
         </Suspense>
       )}
 
+      {bench && (
+        <FloristBench
+          card={bench}
+          labourBps={labourBps}
+          catalog={catalog}
+          onClose={() => setBench(null)}
+          onDone={({ unit_price_cents, components }) => {
+            addAssembled({
+              variant_id: bench.variant_id,
+              product_name: bench.product_name,
+              // Not the card's own caption («Червоний»): the receipt has to say
+              // what was actually tied, and the server derives the same string
+              // from the same components when it files the sale.
+              variant_label: customBouquetLabel(components),
+              unit: bench.unit,
+              unit_price_cents,
+              quantity: 1,
+              image_url: bench.image_url,
+              components,
+            });
+            setBench(null);
+          }}
+        />
+      )}
+
       {picker && (
         <VariantPicker
           productName={picker[0]?.product_name ?? ''}
           variants={picker}
           onPick={(item) => {
-            addItem(item);
             setPicker(null);
+            if (isAssembledOnSale(item)) setBench(item);
+            else addItem(item);
           }}
           onClose={() => setPicker(null)}
         />

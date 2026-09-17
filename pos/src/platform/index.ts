@@ -22,6 +22,7 @@
 
 export * from './api';
 export * from './auth';
+export * from './bouquet';
 export * from './cart';
 export * from './gtin';
 export * from './icons';

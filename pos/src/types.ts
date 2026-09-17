@@ -251,7 +251,33 @@ export interface CatalogItem {
   compare_at_cents?: number | null;
   quantity: number;
   image_url: string | null;
+  /**
+   * What shape of product this variant belongs to. The till needs it to tell a
+   * bouquet card from a rose — before this the only endpoint carrying it was
+   * owner-only, so a cashier could not.
+   *
+   * Optional because the offline mirror can still hold rows snapshotted by an
+   * older build: absent reads as `'simple'` / `'own'`, which is what every
+   * product was before composites existed.
+   */
+  kind?: ProductKind;
+  stock_mode?: ProductStockMode;
+  /**
+   * The catalogue recipe, for a composite only. Rides into the offline
+   * snapshot for free, because the snapshot is this same endpoint.
+   */
+  components?: CatalogComponent[];
   tag_ids?: number[];
+}
+
+/** One line of a composite's recipe, resolved for the till. Mirrors the server. */
+export interface CatalogComponent {
+  component_variant_id: number;
+  /** Per one unit of the composite, in the component's own unit. */
+  quantity: number;
+  product_name: string;
+  label: string;
+  unit: string;
 }
 
 /** `composite` is a bouquet or a tech card, assembled from other variants. */

@@ -3,4 +3,12 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 export { useCartStore, computeCartDiscountCents } from '../hooks/useCart';
-export type { CartLine, CartDiscount } from '../hooks/useCart';
+// `CartLineComponent` and `AssembledLineInput` are what the florist's bench
+// hands back: one custom bouquet, its stems, and the price it was assembled
+// for. The server re-prices from the stems and wins — see `addAssembled`.
+export type {
+  CartLine,
+  CartDiscount,
+  CartLineComponent,
+  AssembledLineInput,
+} from '../hooks/useCart';
