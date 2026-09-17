@@ -53,6 +53,12 @@ export interface Bench {
   select: (variantId: number) => void;
   /** A digit from the pad. Builds the number, so 1 then 2 is twelve. */
   typeDigit: (digit: number) => void;
+  /**
+   * Put a whole composition on the bench at once — assembling BY a recipe.
+   * Replaces whatever is there, because it is the start of a bouquet, not an
+   * addition to one.
+   */
+  loadComposition: (rows: Array<{ item: CatalogItem; quantity: number }>) => void;
   /** Rubs out the last digit; rubbing out the only one takes the stem out. */
   backspace: () => void;
   totals: BenchTotals;
@@ -121,6 +127,23 @@ export function useBench(labourBps: number): Bench {
     setSelectedId(null);
     setTyping(false);
   }, []);
+
+  const loadComposition = useCallback(
+    (rows: Array<{ item: CatalogItem; quantity: number }>) => {
+      // Capped at the shelf like every other way in: a recipe written when the
+      // fridge was full must not promise nine roses out of four.
+      const seeded = rows
+        .map(({ item, quantity }) => ({
+          item,
+          quantity: Math.min(quantity, Math.max(0, item.quantity)),
+        }))
+        .filter((row) => row.quantity > 0);
+      setStems(seeded);
+      setSelectedId(seeded.length > 0 ? seeded[seeded.length - 1].item.variant_id : null);
+      setTyping(false);
+    },
+    []
+  );
 
   const select = useCallback((variantId: number) => {
     setSelectedId(variantId);
@@ -205,6 +228,7 @@ export function useBench(labourBps: number): Bench {
     select,
     typeDigit,
     backspace,
+    loadComposition,
   };
 }
 

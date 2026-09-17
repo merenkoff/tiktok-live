@@ -17,7 +17,12 @@ import {
   seedProduct,
   type TestStore,
 } from './helpers/pos-fixtures.js';
-import { assembleForShowcase, setShowcasePhoto, writeOffShowcase } from '../pos/bench.service.js';
+import {
+  assembleForShowcase,
+  saveAsRecipe,
+  setShowcasePhoto,
+  writeOffShowcase,
+} from '../pos/bench.service.js';
 import { completeSale } from '../pos/sales.service.js';
 import { createProduct, getCatalog } from '../pos/products.service.js';
 import { reverseDocument } from '../pos/stock-documents.service.js';
@@ -733,6 +738,126 @@ describe.skipIf(!hasDb)('POS florist bench — assembling for the showcase', () 
     it('needs a session to upload one at all', async () => {
       const res = await app.inject({ method: 'POST', url: '/api/pos/bench/photo' });
       expect(res.statusCode).toBe(401);
+    });
+  });
+
+  describe('saving the composition as a recipe', () => {
+    it('makes a derived template — nothing physical happens', async () => {
+      const roses = await stockOf(roseId);
+      const greens = await stockOf(eucalyptusId);
+
+      const recipe = await saveAsRecipe({
+        storeId,
+        name: `Весняний ${Date.now()}`,
+        components: bouquet(),
+      });
+
+      // No production document, no stems off the shelf: a recipe is a template
+      // for a bouquet nobody has tied yet.
+      expect(await stockOf(roseId)).toBe(roses);
+      expect(await stockOf(eucalyptusId)).toBe(greens);
+
+      const product = await pool.query(
+        `SELECT kind, stock_mode, one_off, needs_review FROM pos_products WHERE id = $1`,
+        [recipe.product_id]
+      );
+      expect(product.rows[0]).toMatchObject({
+        kind: 'composite',
+        stock_mode: 'derived',
+        // NOT one_off: this card is a product line that comes back, which keeps
+        // it out of «Вітрина» and out of the till's write-off.
+        one_off: false,
+        // The owner's «Потребують перевірки» filter — price, photo and tags are
+        // theirs to finish.
+        needs_review: true,
+      });
+      expect(await stockOf(recipe.variant_id)).toBe(0);
+    });
+
+    it('carries the composition, so the till can assemble by it', async () => {
+      const recipe = await saveAsRecipe({
+        storeId,
+        name: `Рецепт ${Date.now()}`,
+        components: bouquet(),
+      });
+
+      const catalog = await getCatalog(storeId, {});
+      const row = catalog.find((item) => item.variant_id === recipe.variant_id);
+      expect(row?.components).toEqual([
+        expect.objectContaining({ component_variant_id: roseId, quantity: 9 }),
+        expect.objectContaining({ component_variant_id: eucalyptusId, quantity: 3 }),
+      ]);
+      // A derived composite shows what its components allow, not a stored count.
+      expect(row?.quantity).toBeGreaterThan(0);
+    });
+
+    it('prices it from the components unless the florist said otherwise', async () => {
+      const auto = await saveAsRecipe({
+        storeId,
+        name: `Авто ${Date.now()}`,
+        components: bouquet(),
+      });
+      expect(auto.price_cents).toBe(121875);
+
+      const rounded = await saveAsRecipe({
+        storeId,
+        name: `Округлений ${Date.now()}`,
+        components: bouquet(),
+        priceCents: 130000,
+      });
+      expect(rounded.price_cents).toBe(130000);
+    });
+
+    it('needs a name — a recipe nobody can name is one nobody finds again', async () => {
+      await expect(
+        saveAsRecipe({ storeId, name: '   ', components: bouquet() })
+      ).rejects.toThrow('Назва рецепта обовʼязкова');
+    });
+
+    it('refuses a name the catalogue already uses', async () => {
+      // Which also makes a double tap on a slow connection harmless: there is
+      // no stock document here to key a client_uuid on.
+      const name = `Ніжність ${Date.now()}`;
+      await saveAsRecipe({ storeId, name, components: bouquet() });
+
+      await expect(saveAsRecipe({ storeId, name, components: bouquet() })).rejects.toThrow(
+        /уже є в каталозі/
+      );
+      await expect(
+        saveAsRecipe({ storeId, name: name.toUpperCase(), components: bouquet() })
+      ).rejects.toThrow(/уже є в каталозі/);
+    });
+
+    it('refuses an empty composition', async () => {
+      await expect(
+        saveAsRecipe({ storeId, name: `Порожній ${Date.now()}`, components: [] })
+      ).rejects.toThrow('Букет порожній');
+    });
+
+    it('is staff-level over the wire', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/pos/bench/recipe',
+        headers: auth(store.sellerToken),
+        payload: { name: `З каси ${Date.now()}`, components: bouquet() },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ price_cents: 121875 });
+    });
+
+    it('reports a clash as text the florist can act on', async () => {
+      const name = `Дубль ${Date.now()}`;
+      await saveAsRecipe({ storeId, name, components: bouquet() });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/pos/bench/recipe',
+        headers: auth(store.sellerToken),
+        payload: { name, components: bouquet() },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toContain('уже є в каталозі');
     });
   });
 });

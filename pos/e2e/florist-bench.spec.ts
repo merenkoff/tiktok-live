@@ -134,6 +134,29 @@ const FLOWERS_CATALOG = [
     tag_ids: [],
   },
   {
+    // A catalogue recipe: a `derived` template the shop rings again and again.
+    // Tapping it opens the bench ALREADY LOADED with these stems.
+    variant_id: 70,
+    product_id: 70,
+    product_name: 'Букет «Весняний»',
+    attributes: {},
+    label: '',
+    unit: 'шт',
+    sku: null,
+    barcode: null,
+    price_cents: 95000,
+    quantity: 8,
+    image_url: '/demo-flowers/bouquet-morning.svg',
+    kind: 'composite',
+    stock_mode: 'derived',
+    one_off: false,
+    components: [
+      { component_variant_id: 5, quantity: 11, product_name: 'Тюльпан Dynasty', label: 'Рожевий · 40 см', unit: 'шт' },
+      { component_variant_id: 13, quantity: 3, product_name: 'Евкаліпт', label: 'Зелений · 50 см', unit: 'шт' },
+    ],
+    tag_ids: [],
+  },
+  {
     // The card the bench opens on: a composite the shop ties when it sells, so
     // its own stock is 0 forever and tapping it must mean "make me one".
     variant_id: 50,
@@ -702,4 +725,117 @@ test('screenshots — photo', async ({ page }) => {
   await expect(page.getByTestId('bouquet-photo-shoot')).toHaveText('Зняти ще раз');
   await page.waitForTimeout(400);
   await page.screenshot({ path: path.join(SHOTS, 'showcase-sheet-photo.png') });
+});
+
+test('tapping a recipe card opens the bench already loaded with it', async ({ page }) => {
+  await openBench(page, TILL);
+
+  // Assembling BY a recipe is tapping that recipe's own card — the «Зібрати
+  // букет» shortcut is the blank start.
+  await page.getByRole('button', { name: /Весняний/ }).first().click();
+
+  await expect(page.getByTestId('florist-bench')).toBeVisible();
+  // 11 tulips at 45 + 3 eucalyptus at 55 = 660; +25% = 825.
+  await expect(page.locator('[data-testid=bench-total]:visible')).toHaveText('825,00 ₴');
+  await expect(page.locator('[data-testid=bench-stem]:visible')).toHaveCount(2);
+  // …and it is a starting point, not a fixed order: the florist adjusts.
+  await addStems(page, 'Троянда Freedom', 1);
+  await expect(page.locator('[data-testid=bench-stem]:visible')).toHaveCount(3);
+});
+
+test('a recipe caps at the shelf rather than promising flowers that are gone', async ({ page }) => {
+  await page.setViewportSize(TILL);
+  await serveArtwork(page);
+  await serveBuiltRemote(page);
+  await mockPosApi(page, ALL_MODULES, {
+    moduleRemotes: { 'vertical-flowers': FLOWERS_REMOTE },
+    store: { vertical: FLOWERS_VERTICAL, florist_labour_bps: 2500 },
+  });
+  // The fridge holds four tulips; the recipe asks for eleven.
+  await page.route('**/api/pos/catalog**', (route) =>
+    route.fulfill({
+      json: FLOWERS_CATALOG.map((row) =>
+        row.variant_id === 5 ? { ...row, quantity: 4 } : row
+      ),
+    })
+  );
+  await loginAsOwner(page);
+  await page.reload();
+  await page.waitForURL(/\/admin$/);
+  await page.goto('/register');
+
+  await page.getByRole('button', { name: /Весняний/ }).first().click();
+
+  // 4 tulips (180) + 3 eucalyptus (165) = 345; +25% = 431.25.
+  await expect(page.locator('[data-testid=bench-total]:visible')).toHaveText('431,25 ₴');
+});
+
+test('the composition can be kept as a catalogue recipe', async ({ page }) => {
+  await openBench(page, TILL);
+
+  const saved: Array<Record<string, unknown>> = [];
+  await page.route('**/api/pos/bench/recipe', async (route) => {
+    saved.push(route.request().postDataJSON() as Record<string, unknown>);
+    await route.fulfill({
+      status: 200,
+      json: { product_id: 80, variant_id: 800, name: 'Ніжність', price_cents: 121875 },
+    });
+  });
+
+  await page.getByTestId('start-bouquet').click();
+  await addStems(page, 'Троянда Freedom', 1);
+  await page.locator('[data-testid=bench-pad-9]:visible').click();
+  await addStems(page, 'Евкаліпт', 1);
+  await page.locator('[data-testid=bench-pad-3]:visible').click();
+
+  await page.getByTestId('bench-save-recipe').click();
+  await expect(page.getByTestId('recipe-sheet')).toBeVisible();
+  // A recipe nobody can name is one nobody finds again.
+  await expect(page.getByTestId('recipe-submit')).toBeDisabled();
+  await page.getByTestId('recipe-name').fill('Ніжність');
+  await page.getByTestId('recipe-submit').click();
+
+  await expect.poll(() => saved.length).toBe(1);
+  expect(saved[0]).toMatchObject({
+    name: 'Ніжність',
+    components: [
+      { component_variant_id: 1, quantity: 9 },
+      { component_variant_id: 13, quantity: 3 },
+    ],
+  });
+  // Untouched price → the server prices it, same rule as the window.
+  expect(saved[0].price_cents).toBeNull();
+
+  // The bench stays open: saving a recipe is not finishing with the bouquet.
+  await expect(page.getByTestId('florist-bench')).toBeVisible();
+  await expect(page.locator('[data-testid=bench-total]:visible')).toHaveText('1218,75 ₴');
+});
+
+test('a name the catalogue already uses is refused in the server\'s words', async ({ page }) => {
+  await openBench(page, TILL);
+  await page.route('**/api/pos/bench/recipe', (route) =>
+    route.fulfill({ status: 400, json: { error: 'Товар «Ніжність» уже є в каталозі' } })
+  );
+
+  await page.getByTestId('start-bouquet').click();
+  await addStems(page, 'Троянда Freedom', 3);
+  await page.getByTestId('bench-save-recipe').click();
+  await page.getByTestId('recipe-name').fill('Ніжність');
+  await page.getByTestId('recipe-submit').click();
+
+  await expect(page.getByTestId('recipe-error')).toHaveText('Товар «Ніжність» уже є в каталозі');
+  await expect(page.getByTestId('recipe-sheet')).toBeVisible();
+});
+
+test('screenshots — recipe', async ({ page }) => {
+  await openBench(page, TILL);
+  await page.getByRole('button', { name: /Весняний/ }).first().click();
+  await expect(page.locator('[data-testid=bench-stem]:visible')).toHaveCount(2);
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: path.join(SHOTS, 'bench-from-recipe.png') });
+
+  await page.getByTestId('bench-save-recipe').click();
+  await page.getByTestId('recipe-name').fill('Весняний великий');
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: path.join(SHOTS, 'bench-recipe-sheet.png') });
 });

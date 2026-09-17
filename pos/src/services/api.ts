@@ -791,6 +791,29 @@ class PosApi {
     return data;
   }
 
+  /**
+   * Keep the bench's composition as a catalogue recipe — the third ending
+   * (`POS_FLORIST_BENCH.md` §11.1). Nothing physical happens: no production
+   * document, no stock, no stems off the shelf.
+   *
+   * Staff level but flagged `needs_review`, so the owner finds it under
+   * «Потребують перевірки» and finishes the price, photo and tags.
+   */
+  async saveBouquetRecipe(payload: {
+    name: string;
+    components: Array<{ component_variant_id: number; quantity: number }>;
+    price_cents?: number | null;
+    image_url?: string | null;
+  }): Promise<{ product_id: number; variant_id: number; name: string; price_cents: number }> {
+    const { data } = await this.client.post<{
+      product_id: number;
+      variant_id: number;
+      name: string;
+      price_cents: number;
+    }>('/bench/recipe', payload);
+    return data;
+  }
+
   async getGtinCache(
     code: string
   ): Promise<

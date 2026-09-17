@@ -186,6 +186,76 @@ describe('useBench', () => {
     });
   });
 
+  describe('loading a recipe', () => {
+    it('puts the whole composition on the bench at once', () => {
+      const { result } = renderHook(() => useBench(2500));
+      act(() =>
+        result.current.loadComposition([
+          { item: rose(), quantity: 9 },
+          { item: eucalyptus(), quantity: 3 },
+        ])
+      );
+
+      expect(result.current.countOf(1)).toBe(9);
+      expect(result.current.countOf(2)).toBe(3);
+      expect(result.current.totals.totalCents).toBe(121875);
+    });
+
+    it('caps at the shelf — a recipe must not promise flowers that are gone', () => {
+      // Written when the fridge was full, loaded when it is not. Nine roses out
+      // of four is a bouquet the customer never gets.
+      const { result } = renderHook(() => useBench(0));
+      act(() =>
+        result.current.loadComposition([{ item: rose({ quantity: 4 }), quantity: 9 }])
+      );
+
+      expect(result.current.countOf(1)).toBe(4);
+    });
+
+    it('drops a stem the shop has none of rather than showing a zero row', () => {
+      const { result } = renderHook(() => useBench(0));
+      act(() =>
+        result.current.loadComposition([
+          { item: rose({ quantity: 0 }), quantity: 9 },
+          { item: eucalyptus(), quantity: 3 },
+        ])
+      );
+
+      expect(result.current.stems.map((s) => s.item.variant_id)).toEqual([2]);
+    });
+
+    it('replaces what was there — it is a start, not an addition', () => {
+      const { result } = renderHook(() => useBench(0));
+      act(() => result.current.add(rose(), 5));
+      act(() => result.current.loadComposition([{ item: eucalyptus(), quantity: 2 }]));
+
+      expect(result.current.stems.map((s) => s.item.variant_id)).toEqual([2]);
+      expect(result.current.countOf(1)).toBe(0);
+    });
+
+    it('aims the pad at the last stem loaded, so a count can be typed straight away', () => {
+      const { result } = renderHook(() => useBench(0));
+      act(() =>
+        result.current.loadComposition([
+          { item: rose(), quantity: 9 },
+          { item: eucalyptus(), quantity: 3 },
+        ])
+      );
+      act(() => result.current.typeDigit(5));
+
+      expect(result.current.countOf(2)).toBe(5);
+      expect(result.current.countOf(1)).toBe(9);
+    });
+
+    it('an empty recipe leaves an empty bench with nothing selected', () => {
+      const { result } = renderHook(() => useBench(0));
+      act(() => result.current.loadComposition([]));
+
+      expect(result.current.stems).toEqual([]);
+      expect(result.current.selectedId).toBeNull();
+    });
+  });
+
   it('clear() empties the bouquet and forgets the budget', () => {
     const { result } = renderHook(() => useBench(2500));
     act(() => {

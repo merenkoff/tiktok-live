@@ -138,8 +138,15 @@ function FlowersCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
               type="button"
               onClick={() => {
                 const cards = bouquetCards.current;
-                if (cards.length === 1) setBench(cards[0]);
-                else setPicker(cards);
+                // «Зібрати букет» means "from scratch", so it prefers a card
+                // with no stored recipe — the plain «Букет на замовлення».
+                // Assembling BY a recipe is what tapping that recipe's own card
+                // does; offering a list of recipes here would make the blank
+                // start, which is the common one, cost an extra tap.
+                const blank = cards.filter((card) => (card.components ?? []).length === 0);
+                const choices = blank.length > 0 ? blank : cards;
+                if (choices.length === 1) setBench(choices[0]);
+                else setPicker(choices);
               }}
               className="min-h-12 px-3 flex items-center gap-2 rounded-sq text-white bg-sq-blue font-medium shrink-0"
               data-testid="start-bouquet"
@@ -230,6 +237,12 @@ function FlowersCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
           labourBps={labourBps}
           catalog={catalog}
           onClose={() => setBench(null)}
+          onRecipeSaved={(name) => {
+            // The bench stays open: saving a recipe is not finishing with the
+            // bouquet — the florist usually rings or displays the very one they
+            // just described.
+            setBanner(`Рецепт «${name}» збережено`);
+          }}
           onShowcased={(name, priceCents) => {
             // Nothing was rung: the bouquet went to the window. Say so in the
             // cart's own banner, which is where the cashier already looks for

@@ -220,6 +220,36 @@ export function registerStockRoutes(fastify: FastifyInstance): void {
     }
   });
 
+  // The bench's third ending: keep the composition as a catalogue recipe.
+  // Nothing physical happens — no production document, no stock — so this is
+  // not the window. Staff level but `needs_review`: the florist knows the
+  // recipe, the owner owns the catalogue and already has a filter for exactly
+  // this on the products screen.
+  fastify.post('/bench/recipe', async (request, reply) => {
+    const auth = await ensureModule(request, reply, 'stock');
+    if (!auth) return;
+    const body = request.body as {
+      name?: string;
+      price_cents?: number | null;
+      image_url?: string | null;
+      components?: Array<{ component_variant_id?: number; quantity?: number }>;
+    };
+    try {
+      return await benchService.saveAsRecipe({
+        storeId: auth.storeId,
+        name: String(body.name ?? ''),
+        priceCents: body.price_cents ?? null,
+        imageUrl: body.image_url ?? null,
+        components: (body.components ?? []).map((c) => ({
+          component_variant_id: Number(c?.component_variant_id),
+          quantity: Number(c?.quantity),
+        })),
+      });
+    } catch (error) {
+      return reply.code(400).send({ error: errorMessage(error) });
+    }
+  });
+
   fastify.get('/stock/documents', async (request, reply) => {
     const auth = await ensureModule(request, reply, 'stock', { owner: true });
     if (!auth) return;

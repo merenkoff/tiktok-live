@@ -253,12 +253,12 @@ describe.skipIf(!hasDb)('POS fiscal offline session', () => {
     await session.stampNext(s.id, doc.id);
     await pool.query(`UPDATE pos_fiscal_receipts SET created_at = NOW() - interval '2 days' WHERE id = $1`, [doc.id]);
 
-    expect(await ledger.abandonStaleDocs(60 * 60 * 1000)).toBe(0);
+    expect(await ledger.abandonStaleDocs(60 * 60 * 1000, store.storeId)).toBe(0);
     expect((await receipt(doc.id)).status).toBe('pending');
 
     await session.markReplaying(s.id);
     await session.markStuck(s.id, 'go_offline_order', 'test');
-    expect(await ledger.abandonStaleDocs(60 * 60 * 1000)).toBe(1);
+    expect(await ledger.abandonStaleDocs(60 * 60 * 1000, store.storeId)).toBe(1);
     expect((await receipt(doc.id)).status).toBe('abandoned');
   });
 
