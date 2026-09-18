@@ -62,6 +62,15 @@ interface CartStore {
   addItem: (item: CatalogItem, qty?: number) => void;
   /** A bouquet assembled at the counter — always its own line. */
   addAssembled: (input: AssembledLineInput) => void;
+  /**
+   * Put a parked cart back on the screen, replacing whatever is there.
+   *
+   * Replaces rather than merges on purpose: the cashier asked for *that*
+   * customer's cart, and quietly folding it into a half-rung one would make
+   * two people's flowers into one receipt. The frame refuses to restore over a
+   * non-empty cart; this is what happens once it has been cleared.
+   */
+  restore: (cart: RestoredCart) => void;
   setQty: (uid: string, quantity: number) => void;
   remove: (uid: string) => void;
   clear: () => void;
@@ -98,6 +107,13 @@ export interface AssembledLineInput {
   quantity: number;
   image_url?: string | null;
   components: CartLineComponent[];
+}
+
+/** A parked cart, turned back into what the sell screen draws. */
+export interface RestoredCart {
+  lines: CartLine[];
+  cartDiscount?: CartDiscount | null;
+  customer?: PosCustomer | null;
 }
 
 /** Mirror backend: cart discount only on lines without product discount. */
@@ -168,6 +184,10 @@ export const useCartStore = create<CartStore>((set, get) => ({
       discount_label: meta.discount_label,
     });
     set({ lines, banner: null });
+  },
+
+  restore: ({ lines, cartDiscount, customer }) => {
+    set({ lines, cartDiscount: cartDiscount ?? null, customer: customer ?? null, banner: null });
   },
 
   addAssembled: (input) => {

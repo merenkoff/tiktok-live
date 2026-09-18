@@ -20,8 +20,11 @@
  * - **Tablet is one column** (§2): grid on top, composition as a sheet from the
  *   bottom, following `MobileCartSheet`.
  *
- * v1 keeps the composition in memory only. Parking a half-built bouquet for
- * another till is phase B4, and the button says so rather than pretending.
+ * The composition lives in memory only, and deliberately still does. Handing a
+ * bouquet to another till is «Відкласти» on the cart (phase B4), reached by
+ * finishing here first: the bench assembles, the cart is what can be put down
+ * and picked up. A fifth button here would be a second way to do the same
+ * thing, on the one screen in the app with no room for one.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';

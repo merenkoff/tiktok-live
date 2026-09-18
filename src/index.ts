@@ -19,6 +19,7 @@ import { runGtinEventsRetention } from './pos/gtin/events-retention.js';
 import { closeDueShifts } from './pos/fiscal/shifts.service.js';
 import { retryPendingFiscalDocs } from './pos/fiscal/fiscal.service.js';
 import { refillAllStores } from './pos/fiscal/offline/pool.js';
+import { expireParkedCarts } from './pos/parked-carts.service.js';
 import { cleanupExpiredReservations } from './reservations.js';
 import { sessionManager } from './sessions/sessions.manager.js';
 
@@ -108,6 +109,20 @@ async function main(): Promise<void> {
         }
       } catch (error) {
         logger.error('Reservation cleanup error', { error });
+      }
+    });
+
+    // Move lapsed parked carts out of `open` every five minutes.
+    //
+    // Housekeeping, not correctness: the till's list and the reserve view both
+    // read `expires_at > NOW()`, so a lapsed cart has already stopped holding
+    // its stems whether or not this has run (TechDocs/POS_FLORIST_BENCH.md §9).
+    cron.schedule('*/5 * * * *', async () => {
+      try {
+        const expired = await expireParkedCarts();
+        if (expired > 0) logger.info(`🧹 Expired ${expired} parked carts`);
+      } catch (error) {
+        logger.error('Parked cart expiry cron error', { error });
       }
     });
 

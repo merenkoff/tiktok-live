@@ -20,6 +20,8 @@ import { pool } from '../db.js';
 import { verifyToken } from '../core/auth.js';
 import {
   applyLiveMigrations,
+  readLiveSchema,
+  type LiveSchemaLease,
   applyPosMigrations,
   auth,
   buildPosTestApp,
@@ -35,9 +37,13 @@ describe.skipIf(!hasDb)('POS → LIVE session-token bridge', () => {
   let app: FastifyInstance;
   let store: TestStore;
   let nickname: string;
+  let lease: LiveSchemaLease;
 
   beforeAll(async () => {
     await applyPosMigrations();
+    // Shared lease: `live-schema-repair.test.ts` drops these very tables to
+    // rebuild them, and it runs in another worker against the same database.
+    lease = await readLiveSchema();
     await applyLiveMigrations();
     store = await createTestStore('rlive');
     // `users.tiktok_username` is globally unique and outside the store's
@@ -50,6 +56,7 @@ describe.skipIf(!hasDb)('POS → LIVE session-token bridge', () => {
     await app?.close();
     await dropTestStore(store?.storeId);
     if (nickname) await pool.query(`DELETE FROM users WHERE tiktok_username = $1`, [nickname]);
+    await lease?.release();
     await pool.end();
   });
 

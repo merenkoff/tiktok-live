@@ -53,7 +53,71 @@ export async function applyPosMigrations(): Promise<void> {
  * so calling it from the one suite that needs it is safe.
  */
 export async function applyLiveMigrations(): Promise<void> {
-  await pool.query(readMigration('001_create_schema.sql'));
+  // `CREATE TABLE IF NOT EXISTS` is not concurrency-safe against an identical
+  // CREATE in another session: both see the table missing, both create it, and
+  // the loser gets `duplicate key value violates unique constraint
+  // "pg_type_typname_nsp_index"`. Two suites in two workers call this, so they
+  // have to take turns. Short and always exclusive — a different lock from the
+  // one guarding the drop, because a reader holds that one for its whole run.
+  const client = await pool.connect();
+  try {
+    await client.query(`SELECT pg_advisory_lock($1)`, [LIVE_MIGRATE_LOCK]);
+    await client.query(readMigration('001_create_schema.sql'));
+  } finally {
+    await client.query(`SELECT pg_advisory_unlock($1)`, [LIVE_MIGRATE_LOCK]).catch(() => undefined);
+    client.release();
+  }
+}
+
+/**
+ * The LIVE schema is shared, unlike the `pos_*` tables.
+ *
+ * Every POS suite gets its own store and stays out of everyone's way, but
+ * `users` / `user_settings` / `sessions` are one set of tables for the whole
+ * database — and `live-schema-repair.test.ts` legitimately DROPs and rebuilds
+ * them, because what it tests is the repair of a legacy production schema.
+ * With vitest running files in parallel workers, that drop lands in the middle
+ * of another file's query and the failure reads `relation "users" does not
+ * exist` somewhere that never touched the schema.
+ *
+ * A Postgres advisory lock says exactly what is true: one writer, many
+ * readers. The lock lives on a dedicated connection because advisory locks are
+ * per-session, and `pool.query` picks a connection per call.
+ */
+const LIVE_SCHEMA_LOCK = 8_140_271;
+/** Serialises the schema CREATE itself — see `applyLiveMigrations`. */
+const LIVE_MIGRATE_LOCK = 8_140_272;
+
+export interface LiveSchemaLease {
+  release: () => Promise<void>;
+}
+
+async function takeLiveSchemaLock(exclusive: boolean): Promise<LiveSchemaLease> {
+  const client = await pool.connect();
+  const fn = exclusive ? 'pg_advisory_lock' : 'pg_advisory_lock_shared';
+  await client.query(`SELECT ${fn}($1)`, [LIVE_SCHEMA_LOCK]);
+  let released = false;
+  return {
+    release: async () => {
+      if (released) return;
+      released = true;
+      const un = exclusive ? 'pg_advisory_unlock' : 'pg_advisory_unlock_shared';
+      // Best effort: the pool may already be closing, and failing a teardown
+      // over an unlock would turn a clean run red for no reason.
+      await client.query(`SELECT ${un}($1)`, [LIVE_SCHEMA_LOCK]).catch(() => undefined);
+      client.release();
+    },
+  };
+}
+
+/** For a suite that READS the LIVE tables. Shared — readers do not block each other. */
+export function readLiveSchema(): Promise<LiveSchemaLease> {
+  return takeLiveSchemaLock(false);
+}
+
+/** For the one suite that DROPS and rebuilds them. Exclusive. */
+export function ownLiveSchema(): Promise<LiveSchemaLease> {
+  return takeLiveSchemaLock(true);
 }
 
 /**

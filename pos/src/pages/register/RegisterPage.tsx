@@ -4,7 +4,7 @@
 
 import { ReactNode, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Check } from 'lucide-react';
-import { api, cashierApi, useAuthStore, useCartStore } from '@pos/platform';
+import { api, cashierApi, useAuthStore, useCartStore, useOfflineStatus } from '@pos/platform';
 import { formatUah } from '../../lib/money';
 import {
   classifyCheckoutError,
@@ -19,6 +19,10 @@ import type { PaymentMethod, SaleDetail, SalePaymentInput } from '../../types';
 import { CheckoutModal } from '../../components/CheckoutModal';
 import { SaleSidebar } from '../../components/cashier/SaleSidebar';
 import { MobileCartSheet } from '../../components/cashier/MobileCartSheet';
+import { ParkCartSheet } from '../../components/cashier/ParkCartSheet';
+import { ParkedCartsSheet } from '../../components/cashier/ParkedCartsSheet';
+import { cartLinesFromParked } from '../../lib/parkedCart';
+import type { ParkedCart } from '../../types';
 import { useCancelRungSale } from '../../modules/returns';
 import { resolveSalesCatalog } from '../../modules/verticals';
 import { ClothingCatalog } from '../../modules/vertical-clothing/ClothingCatalog';
@@ -73,8 +77,23 @@ export function RegisterPage() {
   const setCartDiscount = useCartStore((s) => s.setCartDiscount);
   const setCustomer = useCartStore((s) => s.setCustomer);
 
+  const restore = useCartStore((s) => s.restore);
+  const online = useOfflineStatus((s) => s.online);
+
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
+  // Putting this cart aside, and the shelf of carts any till can take back.
+  // See TechDocs/POS_FLORIST_BENCH.md §9.
+  const [parkOpen, setParkOpen] = useState(false);
+  const [parking, setParking] = useState(false);
+  const [parkError, setParkError] = useState<string | null>(null);
+  const [parkedOpen, setParkedOpen] = useState(false);
+  const [parkedCarts, setParkedCarts] = useState<ParkedCart[]>([]);
+  const [parkedLoading, setParkedLoading] = useState(false);
+  const [parkedError, setParkedError] = useState<string | null>(null);
+  const [parkedBusyId, setParkedBusyId] = useState<number | null>(null);
+  /** The cart this sale came out of, so the server can note what it became. */
+  const [fromParkedId, setFromParkedId] = useState<number | null>(null);
   const [paying, setPaying] = useState(false);
   const [success, setSuccess] = useState<SaleDetail | null>(null);
   /** Shown inside the payment modal, which is opaque and covers everything else. */
@@ -92,6 +111,24 @@ export function RegisterPage() {
   // ПРРО that is a full refund; the `returns` module owns the dialog and lazy-
   // loads it, so checkout stays reachable even with `returns` disabled.
   const cancelRung = useCancelRungSale();
+
+  // What this shop is already holding, for the badge on the button. Read once
+  // per till session and after anything that changes it: the point is that a
+  // cashier walking up to an empty till can SEE there is a bouquet waiting,
+  // rather than having to know to look. A poll would cost more than it is
+  // worth — a cart parked at the other till is announced out loud anyway.
+  useEffect(() => {
+    let alive = true;
+    void api
+      .listParkedCarts()
+      .then((carts) => {
+        if (alive) setParkedCarts(carts);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [printing, setPrinting] = useState(false);
   const [printStatus, setPrintStatus] = useState<string | null>(null);
   const [receiptPrinterName, setReceiptPrinterName] = useState<string | null>(null);
@@ -178,6 +215,120 @@ export function RegisterPage() {
     if (cancelRung.result) setStockEpoch((n) => n + 1);
   }, [cancelRung.result]);
 
+  // ── Parked carts (TechDocs/POS_FLORIST_BENCH.md §9) ──────────────────────
+
+  /**
+   * What the server said, not what axios says about it.
+   *
+   * Every refusal on this path is something a cashier has to act on at the
+   * counter — «Кошик уже забрали», «Термін минув» — and «Request failed with
+   * status code 409» tells them none of it.
+   */
+  function sentMessage(error: unknown, fallback: string): string {
+    return (
+      (error as { response?: { data?: { error?: string } } }).response?.data?.error || fallback
+    );
+  }
+
+  async function park(label: string, note: string | null) {
+    setParking(true);
+    setParkError(null);
+    try {
+      await api.parkCart({
+        client_uuid: crypto.randomUUID(),
+        label,
+        note,
+        customer_id: customer?.id ?? null,
+        cart_discount: cartDiscount,
+        items: lines.map((line) => ({
+          variant_id: line.variant_id,
+          quantity: line.quantity,
+          ...(line.components
+            ? {
+                components: line.components.map((c) => ({
+                  component_variant_id: c.component_variant_id,
+                  quantity: c.quantity,
+                })),
+              }
+            : {}),
+        })),
+      });
+      clear();
+      setParkOpen(false);
+      setMobileCartOpen(false);
+      // The stems this cart now holds are off the catalog, so the tiles behind
+      // have to re-read — the same reason a sale bumps it.
+      setStockEpoch((n) => n + 1);
+      setBanner(`Відкладено: ${label}`);
+      await refreshParked().catch(() => undefined);
+    } catch (error) {
+      setParkError(sentMessage(error, 'Не вдалося відкласти кошик'));
+    } finally {
+      setParking(false);
+    }
+  }
+
+  async function refreshParked(): Promise<void> {
+    setParkedCarts(await api.listParkedCarts());
+  }
+
+  async function openParked() {
+    setParkedOpen(true);
+    setParkedLoading(true);
+    setParkedError(null);
+    try {
+      await refreshParked();
+    } catch {
+      setParkedError('Не вдалося завантажити відкладені кошики');
+    } finally {
+      setParkedLoading(false);
+    }
+  }
+
+  async function pickUpParked(cart: ParkedCart) {
+    setParkedBusyId(cart.id);
+    setParkedError(null);
+    try {
+      const taken = await api.pickUpParkedCart(cart.id);
+      // The real customer row, not a stub built from the two fields the list
+      // carries: the cart sidebar shows the phone and the discount rules read
+      // the birthdays. A failure here is not worth losing the cart over — the
+      // cashier can pick the customer again.
+      const restoredCustomer = taken.customer_id
+        ? await api.getCustomer(taken.customer_id).catch(() => null)
+        : null;
+      restore({
+        lines: cartLinesFromParked(taken),
+        cartDiscount: taken.cart_discount,
+        customer: restoredCustomer,
+      });
+      setFromParkedId(taken.id);
+      setParkedOpen(false);
+      setStockEpoch((n) => n + 1);
+      setBanner(`Кошик «${taken.label}» на касі`);
+    } catch (error) {
+      // A 409: the other till got there first, or it lapsed while this one was
+      // reading the list. Refresh rather than leave a row that is not there.
+      setParkedError(sentMessage(error, 'Не вдалося забрати кошик'));
+      setParkedCarts(await api.listParkedCarts().catch(() => []));
+    } finally {
+      setParkedBusyId(null);
+    }
+  }
+
+  async function releaseParked(cart: ParkedCart) {
+    setParkedBusyId(cart.id);
+    try {
+      await api.releaseParkedCart(cart.id);
+      setParkedCarts((carts) => carts.filter((c) => c.id !== cart.id));
+      setStockEpoch((n) => n + 1);
+    } catch {
+      setParkedError('Не вдалося повернути товар');
+    } finally {
+      setParkedBusyId(null);
+    }
+  }
+
   async function pay(payments: SalePaymentInput[], opts: { clientUuid?: string } = {}) {
     setPaying(true);
     setCheckoutError(null);
@@ -202,10 +353,12 @@ export function RegisterPage() {
           payments,
           cart_discount: cartDiscount,
           customer_id: customer?.id ?? null,
+          parked_cart_id: fromParkedId,
         },
         opts
       );
       clear();
+      setFromParkedId(null);
       setCheckoutOpen(false);
       setMobileCartOpen(false);
       setSuccess(sale);
@@ -449,7 +602,12 @@ export function RegisterPage() {
                 if (lines.length && confirm('Очистити кошик?')) clear();
               }}
               onCharge={() => setCheckoutOpen(true)}
-              onSaveBasket={() => setBanner('Збереження кошика — скоро')}
+              onSaveBasket={() => {
+                setParkError(null);
+                setParkOpen(true);
+              }}
+              onOpenParked={() => void openParked()}
+              parkedCount={parkedCarts.length}
             />
           </div>
         </div>
@@ -487,6 +645,31 @@ export function RegisterPage() {
         />
       )}
 
+      {parkOpen && (
+        <ParkCartSheet
+          totalCents={totalCents()}
+          lineCount={lines.length}
+          defaultLabel={customer?.name}
+          online={online}
+          busy={parking}
+          error={parkError}
+          onSubmit={(label, note) => void park(label, note)}
+          onClose={() => setParkOpen(false)}
+        />
+      )}
+
+      {parkedOpen && (
+        <ParkedCartsSheet
+          carts={parkedCarts}
+          loading={parkedLoading}
+          error={parkedError}
+          busyId={parkedBusyId}
+          onPickUp={(cart) => void pickUpParked(cart)}
+          onRelease={(cart) => void releaseParked(cart)}
+          onClose={() => setParkedOpen(false)}
+        />
+      )}
+
       {mobileCartOpen && (
         <MobileCartSheet
           lines={lines}
@@ -501,7 +684,12 @@ export function RegisterPage() {
             setMobileCartOpen(false);
             setCheckoutOpen(true);
           }}
-          onSaveBasket={() => setBanner('Збереження кошика — скоро')}
+          onSaveBasket={() => {
+            setParkError(null);
+            setParkOpen(true);
+          }}
+          onOpenParked={() => void openParked()}
+          parkedCount={parkedCarts.length}
         />
       )}
 

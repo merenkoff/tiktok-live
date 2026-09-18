@@ -44,6 +44,7 @@ import type {
   GtinCacheEntry,
   GtinCachePage,
   GtinLearnResult,
+  ParkedCart,
 } from '../types';
 import { posApiBase } from '../lib/urls';
 // Direct import (not via '@pos/platform') — that barrel re-exports this module,
@@ -365,6 +366,8 @@ class PosApi {
     client_uuid?: string | null;
     /** Set only for a receipt this till stamped itself while offline (фаза 3). */
     fiscal_offline?: FiscalOfflineStamp | null;
+    /** The parked cart this sale came out of, if any — bookkeeping only. */
+    parked_cart_id?: number | null;
   }): Promise<SaleDetail> {
     const { data } = await this.client.post<SaleDetail>('/sales/complete', payload);
     return data;
@@ -811,6 +814,44 @@ class PosApi {
       name: string;
       price_cents: number;
     }>('/bench/recipe', payload);
+    return data;
+  }
+
+  // ── Parked carts (TechDocs/POS_FLORIST_BENCH.md §9) ─────────────────────
+  //
+  // A cart put aside at one till and rung up at another. The server holds the
+  // stock behind it, so nothing here needs to reserve anything client-side —
+  // and picking one up is what releases the hold, not ringing it.
+
+  async listParkedCarts(): Promise<ParkedCart[]> {
+    const { data } = await this.client.get<{ carts: ParkedCart[] }>('/parked-carts');
+    return data.carts ?? [];
+  }
+
+  async parkCart(payload: {
+    client_uuid: string;
+    label: string;
+    note?: string | null;
+    customer_id?: number | null;
+    cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
+    items: Array<{
+      variant_id: number;
+      quantity: number;
+      components?: Array<{ component_variant_id: number; quantity: number }>;
+    }>;
+  }): Promise<ParkedCart> {
+    const { data } = await this.client.post<ParkedCart>('/parked-carts', payload);
+    return data;
+  }
+
+  /** Take a cart back to this till. The hold ends here, not at the payment. */
+  async pickUpParkedCart(id: number): Promise<ParkedCart> {
+    const { data } = await this.client.post<ParkedCart>(`/parked-carts/${id}/pick-up`);
+    return data;
+  }
+
+  async releaseParkedCart(id: number): Promise<{ released: boolean }> {
+    const { data } = await this.client.post<{ released: boolean }>(`/parked-carts/${id}/release`);
     return data;
   }
 

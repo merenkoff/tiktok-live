@@ -158,6 +158,13 @@ export async function mockPosApi(
       return;
     }
 
+    // The sell screen reads this on mount for the «Відкладені» badge; the
+    // catch-all's bare array would not carry a `carts` key.
+    if (path === '/parked-carts') {
+      await route.fulfill({ json: { carts: [] } });
+      return;
+    }
+
     if (path === '/analytics/summary') {
       await route.fulfill({
         json: {

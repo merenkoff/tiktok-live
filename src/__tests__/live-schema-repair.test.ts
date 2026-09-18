@@ -5,7 +5,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import 'dotenv/config';
 import { initializeDatabase, pool, repairLegacyLiveColumns } from '../db.js';
-import { hasDb } from './helpers/pos-fixtures.js';
+import { hasDb, ownLiveSchema, type LiveSchemaLease } from './helpers/pos-fixtures.js';
 
 /**
  * What production actually looked like on 2026-09-17: a database that first ran
@@ -77,9 +77,17 @@ async function indexExists(name: string): Promise<boolean> {
 }
 
 describe.skipIf(!hasDb)('LIVE schema repair (initializeDatabase)', () => {
+  let lease: LiveSchemaLease;
+
   beforeAll(async () => {
     // The POS suites never create the LIVE schema, so this file owns it end to
     // end: it builds the legacy shape, runs the real init, and clears up after.
+    //
+    // «Owns» is literal, and it has to be: the two suites that read `users` /
+    // `user_settings` run in other workers against the same database, and the
+    // drop below would land in the middle of one of their queries. The
+    // exclusive lease makes them wait.
+    lease = await ownLiveSchema();
     await dropLiveTables();
     await pool.query(LEGACY_ORDERS);
     await pool.query(LEGACY_RESERVATIONS);
@@ -88,6 +96,7 @@ describe.skipIf(!hasDb)('LIVE schema repair (initializeDatabase)', () => {
 
   afterAll(async () => {
     await dropLiveTables();
+    await lease?.release();
     await pool.end();
   });
 

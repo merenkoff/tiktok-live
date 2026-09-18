@@ -23,6 +23,9 @@ interface Props {
   onCharge: () => void;
   onClose: () => void;
   onSaveBasket?: () => void;
+  /** The shelf of carts any till can take back (POS_FLORIST_BENCH.md §9). */
+  onOpenParked?: () => void;
+  parkedCount?: number;
 }
 
 export function MobileCartSheet({
@@ -36,6 +39,8 @@ export function MobileCartSheet({
   onCharge,
   onClose,
   onSaveBasket,
+  onOpenParked,
+  parkedCount = 0,
 }: Props) {
   const count = lines.reduce((s, l) => s + l.quantity, 0);
   const subtotal = lines.reduce((s, l) => s + l.unit_price_cents * l.quantity, 0);
@@ -179,14 +184,27 @@ export function MobileCartSheet({
         </div>
 
         <div className="p-3 border-t border-sq-divider bg-white flex gap-2 safe-pb">
-          <button
-            type="button"
-            disabled={lines.length === 0}
-            onClick={onSaveBasket}
-            className="flex-1 min-h-[48px] rounded-sq bg-sq-bg text-sq-blue font-semibold text-sm disabled:opacity-40"
-          >
-            Зберегти кошик
-          </button>
+          {/* Same two-jobs rule as the sidebar — see the comment there. */}
+          {lines.length === 0 ? (
+            <button
+              type="button"
+              disabled={!onOpenParked}
+              onClick={onOpenParked}
+              className="flex-1 min-h-[48px] rounded-sq bg-sq-bg text-sq-blue font-semibold text-sm disabled:opacity-40"
+              data-testid="open-parked-mobile"
+            >
+              Відкладені{parkedCount > 0 ? ` (${parkedCount})` : ''}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onSaveBasket}
+              className="flex-1 min-h-[48px] rounded-sq bg-sq-bg text-sq-blue font-semibold text-sm disabled:opacity-40"
+              data-testid="park-cart-mobile"
+            >
+              Відкласти
+            </button>
+          )}
           <button
             type="button"
             disabled={lines.length === 0}
