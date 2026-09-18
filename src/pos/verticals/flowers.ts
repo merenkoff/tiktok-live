@@ -50,4 +50,8 @@ export const flowersVertical: VerticalDefinition = {
       .filter(Boolean)
       .join(' · '),
   productKinds: ['simple', 'composite'],
+  // A bouquet holds stems and consumables, never another bouquet: a bouquet
+  // inside a bouquet would be priced at its card price plus labour on top of
+  // labour (`priceOfComposition`), and no florist asked for it.
+  maxCompositionDepth: 1,
 };

@@ -109,8 +109,10 @@ VerticalDefinition {
 
 ## 6. Як додати вертикаль
 
-1. `src/pos/verticals/<id>.ts` — визначення; додати в `BUILT_IN`
-   (`src/pos/verticals/index.ts`).
+1. `src/pos/verticals/<id>.ts` — визначення (атрибути, одиниці, `labelOf`,
+   `productKinds`, `maxCompositionDepth` — скільки рівнів рецепту дозволено:
+   1 у одягу й квітів, 3 у кафе); додати в `BUILT_IN`
+   (`src/pos/verticals/index.ts`). `VerticalId` у `types.ts`.
 2. `pos/src/types.ts` `VerticalId` + `pos/src/lib/vertical.ts` `VERTICAL_OPTIONS`
    (паритет пінить `pos/src/lib/vertical.test.ts`).
 3. Модуль `pos/src/modules/vertical-<id>/` з `sales.Catalog`, `remote-entry.ts`,
@@ -132,7 +134,7 @@ VerticalDefinition {
 | 6a | Складені товари (бекенд) | `037`, `pos_product_components`, `stock_mode`, знімок складу на чек, похідна доступність | **зроблено** |
 | 6b | Складені товари (UI + збірка) | документ виробництва (`038`), редактор складу в картці товару, екран «Виробництво» | **зроблено** |
 | 6c | Букет «на льоту» | бекенд (склад на рядку чека) і екран збирання на касі — [POS_FLORIST_BENCH.md](POS_FLORIST_BENCH.md), фази B2–B3 | **зроблено** |
-| 7 | Кафе | техкарти, напівфабрикати, модифікатори — [POS_CAFE.md](POS_CAFE.md), фази К0–К6 | **К0 зроблено** (дизайн), К1 не почато |
+| 7 | Кафе | техкарти, напівфабрикати, модифікатори — [POS_CAFE.md](POS_CAFE.md), фази К0–К6 | **К0 зроблено** (дизайн), К1a (вертикаль `cafe`) зроблено |
 
 ## 7a. Що вже лежить (фаза 2)
 
