@@ -23,6 +23,7 @@ import type {
 import { getCustomer } from './customers.service.js';
 import * as preorders from './preorders.service.js';
 import * as modifiers from './modifiers.service.js';
+import { localDateString } from './core/localDate.js';
 import type { LineModifierSnapshot } from './modifiers.service.js';
 
 /**
@@ -183,6 +184,36 @@ async function nextReceiptNumber(
     table: 'pos_sales',
     column: 'receipt_number',
   });
+}
+
+/**
+ * The order number the barista calls out: 1, 2, 3… restarting every day the
+ * store's own clock says has begun (migration 047). Seeded at 1 with the
+ * day-keyed form `nextDocNumber` uses for stock documents — not the
+ * MAX-seeded receipt form, whose key never changes. Inside the sale's
+ * transaction, so a rolled-back sale gives its number back.
+ */
+async function nextOrderNo(
+  client: { query: typeof pool.query },
+  storeId: number
+): Promise<number> {
+  const store = await client.query(`SELECT timezone FROM pos_stores WHERE id = $1`, [storeId]);
+  const timezone = String(store.rows[0]?.timezone || 'Europe/Kyiv');
+  const counterKey = `order_${localDateString(timezone)}`;
+  await client.query(
+    `INSERT INTO pos_store_counters (store_id, counter_key, next_value)
+     VALUES ($1, $2, 1)
+     ON CONFLICT (store_id, counter_key) DO NOTHING`,
+    [storeId, counterKey]
+  );
+  const result = await client.query(
+    `UPDATE pos_store_counters
+     SET next_value = next_value + 1
+     WHERE store_id = $1 AND counter_key = $2
+     RETURNING next_value - 1 AS seq`,
+    [storeId, counterKey]
+  );
+  return Number(result.rows[0].seq);
 }
 
 /** Refunds are their own documents, so they carry their own numbering. */
@@ -492,12 +523,13 @@ export async function completeSale(params: {
       params.cart_discount != null ? params.cart_discount.value : null;
 
     const receiptNumber = await nextReceiptNumber(client, params.storeId);
+    const orderNo = await nextOrderNo(client, params.storeId);
     const saleResult = await client.query(
       `INSERT INTO pos_sales
          (store_id, staff_id, receipt_number, status, subtotal_cents, total_cents, note,
           customer_id, cart_discount_type, cart_discount_value, cart_discount_cents, client_uuid,
-          fiscal_status)
-       VALUES ($1, $2, $3, 'completed', $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          fiscal_status, order_no)
+       VALUES ($1, $2, $3, 'completed', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING *`,
       [
         params.storeId,
@@ -516,6 +548,7 @@ export async function completeSale(params: {
         // fiscalisable sale looking like 'none', which no reconciler would ever
         // find. Silently un-fiscalised revenue is the worst outcome available.
         params.fiscal_status ?? 'none',
+        orderNo,
       ]
     );
     const sale = saleResult.rows[0];
@@ -726,6 +759,7 @@ export async function getSale(storeId: number, saleId: number) {
     customer_name: sale.customer_name ?? null,
     customer_phone: sale.customer_phone ?? null,
     receipt_number: sale.receipt_number,
+    order_no: sale.order_no == null ? null : Number(sale.order_no),
     client_uuid: sale.client_uuid ?? null,
     status: sale.status,
     subtotal_cents: Number(sale.subtotal_cents),
@@ -832,6 +866,7 @@ export async function listSales(
   return result.rows.map((sale) => ({
     id: Number(sale.id),
     receipt_number: sale.receipt_number,
+    order_no: sale.order_no == null ? null : Number(sale.order_no),
     client_uuid: sale.client_uuid ?? null,
     status: sale.status,
     total_cents: Number(sale.total_cents),

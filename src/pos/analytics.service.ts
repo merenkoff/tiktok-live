@@ -5,6 +5,7 @@
 // src/pos/analytics.service.ts
 
 import { pool } from '../db.js';
+import { localDateString } from './core/localDate.js';
 import type { ModuleRemoteEntry, PaymentMethod, QrPaymentMode } from './types.js';
 import type { NavOverrides } from './core/nav.js';
 import { publicConfigOf, verticalOrDefault } from './verticals/index.js';
@@ -28,7 +29,7 @@ export interface SalesSummary {
 }
 
 function todayDateString(timezone: string): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date());
+  return localDateString(timezone);
 }
 
 export function eachDate(from: string, to: string): string[] {
