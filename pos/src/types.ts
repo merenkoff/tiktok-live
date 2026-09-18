@@ -297,6 +297,70 @@ export interface ShowcaseResult {
 }
 
 /**
+ * The florist's own numbers (`TechDocs/POS_FLORIST_BENCH.md` §13). Mirrors
+ * `FlowerAnalytics` in `src/pos/flowers-analytics.service.ts`.
+ *
+ * Basis points throughout for the same reason the store's assembly charge is:
+ * a percentage with one decimal is a rounding argument waiting to happen.
+ */
+export interface FlowerLossRow {
+  reason: 'damaged' | 'gift' | 'lost' | 'other';
+  quantity: number;
+  cost_cents: number;
+}
+
+export interface FlowerLossVariant {
+  variant_id: number;
+  product_name: string;
+  label: string;
+  unit: string;
+  written_off: number;
+  cost_cents: number;
+  received: number;
+  /** Written off as a share of what came in. Null when nothing came in. */
+  waste_bps: number | null;
+}
+
+export interface FlowerStemRow {
+  variant_id: number;
+  product_name: string;
+  label: string;
+  unit: string;
+  loose: number;
+  in_bouquets: number;
+  total: number;
+}
+
+export interface FlowerMarginRow {
+  kind: 'bouquet' | 'other';
+  lines: number;
+  revenue_cents: number;
+  cost_cents: number;
+  margin_cents: number;
+  markup_bps: number | null;
+}
+
+export interface FlowerAnalytics {
+  from: string;
+  to: string;
+  loss: {
+    total_cost_cents: number;
+    by_reason: FlowerLossRow[];
+    top_variants: FlowerLossVariant[];
+  };
+  stems: FlowerStemRow[];
+  margin: {
+    rows: FlowerMarginRow[];
+    total_revenue_cents: number;
+    total_cost_cents: number;
+    total_margin_cents: number;
+    /** What the shop charges for assembly — the number the margin is read against. */
+    labour_bps: number;
+  };
+  daily_loss: Array<{ date: string; cost_cents: number }>;
+}
+
+/**
  * A cart put aside at one till, waiting to be rung up at another
  * (`TechDocs/POS_FLORIST_BENCH.md` §9). Mirrors `ParkedCart` in
  * `src/pos/parked-carts.service.ts`.
