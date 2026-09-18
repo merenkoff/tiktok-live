@@ -12,7 +12,13 @@ export type { ProductKind, ProductStockMode };
 import { getProductTagIds, resolveTagFilterIds } from './tags.service.js';
 import { loadStoreVertical, normalizeVariant, searchableAttributeKeys } from './verticals/index.js';
 import type { VerticalDefinition } from './verticals/types.js';
-import { CompositeError, listComponentsForStore, setComponents } from './composites.service.js';
+import {
+  CompositeError,
+  listComponentsForStore,
+  lockRecipes,
+  recomputeFlat,
+  setComponents,
+} from './composites.service.js';
 import type { ComponentInput } from './composites.service.js';
 
 export interface VariantInput {
@@ -150,14 +156,15 @@ export async function listProducts(storeId: number) {
   const variants = await pool.query(
     `SELECT v.*,
             -- Same rule as the catalog: a derived composite's quantity is what
-            -- its components allow, not the 0 sitting on its own stock row.
+            -- its leaves allow (the recipe expanded, migration 045), not the 0
+            -- sitting on its own stock row.
             CASE
               WHEN p.kind = 'composite' AND p.stock_mode = 'derived' THEN COALESCE((
-                SELECT MIN(FLOOR(COALESCE(cs.quantity, 0)::numeric / c.quantity))
-                FROM pos_product_components c
+                SELECT MIN(FLOOR(COALESCE(cs.quantity, 0)::numeric / f.quantity_per_unit))
+                FROM pos_product_components_flat f
                 LEFT JOIN pos_stock cs
-                  ON cs.variant_id = c.component_variant_id AND cs.store_id = c.store_id
-                WHERE c.store_id = v.store_id AND c.variant_id = v.id
+                  ON cs.variant_id = f.leaf_variant_id AND cs.store_id = f.store_id
+                WHERE f.store_id = v.store_id AND f.variant_id = v.id
               ), 0)
               ELSE COALESCE(s.quantity, 0)
             END::int AS quantity
@@ -331,6 +338,7 @@ export async function createProduct(storeId: number, input: CreateProductInput) 
  * unless the owner has already emptied the thing they would strand.
  */
 async function resolveProductShapeChange(
+  client: DbClient,
   storeId: number,
   productId: number,
   input: { kind?: ProductKind; stock_mode?: ProductStockMode }
@@ -338,7 +346,7 @@ async function resolveProductShapeChange(
   // Scalar subqueries, not joins: one variant with two components would appear
   // twice in a join, doubling `on_hand` and inflating the variant count past
   // the composed one — so the check would fire on a product that is fine.
-  const current = await pool.query(
+  const current = await client.query(
     `SELECT p.kind, p.stock_mode,
             (SELECT COALESCE(SUM(st.quantity), 0)::int
                FROM pos_variants v
@@ -395,56 +403,73 @@ export async function updateProduct(
   const sets: string[] = ['updated_at = NOW()'];
   const values: unknown[] = [];
   let i = 1;
+  const reshaping = input.kind !== undefined || input.stock_mode !== undefined;
 
-  if (input.kind !== undefined || input.stock_mode !== undefined) {
-    const shape = await resolveProductShapeChange(storeId, productId, input);
-    sets.push(`kind = $${i++}`);
-    values.push(shape.kind);
-    sets.push(`stock_mode = $${i++}`);
-    values.push(shape.stock_mode);
-  }
+  // A reshape is a recipe write in disguise: flipping a semi-finished product
+  // between made-in-advance and made-when-sold changes whether every dish
+  // above it sees a leaf or an expansion. So it runs in a transaction, under
+  // the store's recipe lock, and rebuilds the expanded recipes before commit.
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    if (reshaping) {
+      await lockRecipes(client, storeId);
+      const shape = await resolveProductShapeChange(client, storeId, productId, input);
+      sets.push(`kind = $${i++}`);
+      values.push(shape.kind);
+      sets.push(`stock_mode = $${i++}`);
+      values.push(shape.stock_mode);
+    }
 
-  if (input.name !== undefined) {
-    sets.push(`name = $${i++}`);
-    values.push(input.name.trim());
-  }
-  if (input.description !== undefined) {
-    sets.push(`description = $${i++}`);
-    values.push(emptyToNull(input.description));
-  }
-  if (input.image_url !== undefined) {
-    sets.push(`image_url = $${i++}`);
-    values.push(emptyToNull(input.image_url));
-  }
-  if (input.is_active !== undefined) {
-    sets.push(`is_active = $${i++}`);
-    values.push(input.is_active);
-  }
-  if (input.sellable !== undefined) {
-    sets.push(`sellable = $${i++}`);
-    values.push(Boolean(input.sellable));
-  }
-  if (input.needs_review !== undefined) {
-    sets.push(`needs_review = $${i++}`);
-    values.push(input.needs_review);
-  } else if (
-    input.name !== undefined ||
-    input.description !== undefined ||
-    input.image_url !== undefined
-  ) {
-    // First meaningful edit clears review flag
-    sets.push(`needs_review = FALSE`);
-  }
+    if (input.name !== undefined) {
+      sets.push(`name = $${i++}`);
+      values.push(input.name.trim());
+    }
+    if (input.description !== undefined) {
+      sets.push(`description = $${i++}`);
+      values.push(emptyToNull(input.description));
+    }
+    if (input.image_url !== undefined) {
+      sets.push(`image_url = $${i++}`);
+      values.push(emptyToNull(input.image_url));
+    }
+    if (input.is_active !== undefined) {
+      sets.push(`is_active = $${i++}`);
+      values.push(input.is_active);
+    }
+    if (input.sellable !== undefined) {
+      sets.push(`sellable = $${i++}`);
+      values.push(Boolean(input.sellable));
+    }
+    if (input.needs_review !== undefined) {
+      sets.push(`needs_review = $${i++}`);
+      values.push(input.needs_review);
+    } else if (
+      input.name !== undefined ||
+      input.description !== undefined ||
+      input.image_url !== undefined
+    ) {
+      // First meaningful edit clears review flag
+      sets.push(`needs_review = FALSE`);
+    }
 
-  values.push(productId, storeId);
-  const result = await pool.query(
-    `UPDATE pos_products
-     SET ${sets.join(', ')}
-     WHERE id = $${i++} AND store_id = $${i}
-     RETURNING id`,
-    values
-  );
-  if (result.rows.length === 0) throw new Error('Product not found');
+    values.push(productId, storeId);
+    const result = await client.query(
+      `UPDATE pos_products
+       SET ${sets.join(', ')}
+       WHERE id = $${i++} AND store_id = $${i}
+       RETURNING id`,
+      values
+    );
+    if (result.rows.length === 0) throw new Error('Product not found');
+    if (reshaping) await recomputeFlat(client, storeId);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
   return getProduct(storeId, productId);
 }
 
@@ -753,20 +778,21 @@ export async function getCatalog(
        -- a fact about anything.
        --
        -- A derived composite has no stock of its own: what it can sell is what
-       -- its components allow, each of them net of what they are holding. An
-       -- empty composition is 0, never unlimited.
+       -- its leaves allow (the recipe expanded to shelves, migration 045),
+       -- each of them net of what they are holding. An empty composition is
+       -- 0, never unlimited.
        CASE
          WHEN p.kind = 'composite' AND p.stock_mode = 'derived' THEN COALESCE((
            SELECT MIN(FLOOR(
                     GREATEST(COALESCE(cs.quantity, 0) - COALESCE(cres.reserved, 0), 0)::numeric
-                    / c.quantity
+                    / f.quantity_per_unit
                   ))
-           FROM pos_product_components c
+           FROM pos_product_components_flat f
            LEFT JOIN pos_stock cs
-             ON cs.variant_id = c.component_variant_id AND cs.store_id = c.store_id
+             ON cs.variant_id = f.leaf_variant_id AND cs.store_id = f.store_id
            LEFT JOIN pos_stock_reserved cres
-             ON cres.variant_id = c.component_variant_id AND cres.store_id = c.store_id
-           WHERE c.store_id = p.store_id AND c.variant_id = v.id
+             ON cres.variant_id = f.leaf_variant_id AND cres.store_id = f.store_id
+           WHERE f.store_id = p.store_id AND f.variant_id = v.id
          ), 0)
          ELSE GREATEST(COALESCE(s.quantity, 0) - COALESCE(res.reserved, 0), 0)
        END::int AS quantity,
