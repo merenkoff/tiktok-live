@@ -45,6 +45,7 @@ import type {
   GtinCachePage,
   GtinLearnResult,
   ParkedCart,
+  FlowerAnalytics,
 } from '../types';
 import { posApiBase } from '../lib/urls';
 // Direct import (not via '@pos/platform') — that barrel re-exports this module,
@@ -814,6 +815,19 @@ class PosApi {
       name: string;
       price_cents: number;
     }>('/bench/recipe', payload);
+    return data;
+  }
+
+  /**
+   * The florist's own numbers (`TechDocs/POS_FLORIST_BENCH.md` §13).
+   *
+   * Owner-only, and 409 for a store that does not sell flowers — the module
+   * that calls this only exists in one, but the check is the server's.
+   */
+  async getFlowerAnalytics(range: { from?: string; to?: string } = {}): Promise<FlowerAnalytics> {
+    const { data } = await this.client.get<FlowerAnalytics>('/analytics/flowers', {
+      params: range,
+    });
     return data;
   }
 

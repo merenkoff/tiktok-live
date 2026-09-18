@@ -136,3 +136,87 @@ test('with the module CDN down the till still sells, on the bundled catalog', as
   await expect(page.getByPlaceholder('Пошук')).toBeVisible();
   await expect(page.getByText('Футболка базова')).toBeVisible();
 });
+
+test('the owner gets the florist’s numbers on the module’s own admin page', async ({ page }) => {
+  // The B7 decision: a page the flowers module owns, not panels on «Сьогодні».
+  // What this guards is that a remote module can put a route AND a sidebar
+  // entry in the admin at all — the same shape `tiktok-live` uses for
+  // `/admin/live` — and that the numbers the server sends survive the trip.
+  await signInAsFlorist(page);
+
+  await page.route('**/api/pos/analytics/flowers**', async (route) => {
+    await route.fulfill({
+      json: {
+        from: '2026-08-20',
+        to: '2026-09-18',
+        loss: {
+          total_cost_cents: 50000,
+          by_reason: [{ reason: 'damaged', quantity: 10, cost_cents: 40000 }],
+          top_variants: [
+            {
+              variant_id: 1,
+              product_name: 'Троянда',
+              label: 'Червона',
+              unit: 'шт',
+              written_off: 20,
+              cost_cents: 40000,
+              received: 100,
+              waste_bps: 2000,
+            },
+          ],
+        },
+        stems: [
+          {
+            variant_id: 1,
+            product_name: 'Троянда',
+            label: 'Червона',
+            unit: 'шт',
+            loose: 4,
+            in_bouquets: 18,
+            total: 22,
+          },
+        ],
+        margin: {
+          rows: [
+            {
+              kind: 'bouquet',
+              lines: 3,
+              revenue_cents: 101250,
+              cost_cents: 36000,
+              margin_cents: 65250,
+              markup_bps: 18125,
+            },
+          ],
+          total_revenue_cents: 101250,
+          total_cost_cents: 36000,
+          total_margin_cents: 65250,
+          labour_bps: 2500,
+        },
+        daily_loss: [{ date: '2026-09-18', cost_cents: 40000 }],
+      },
+    });
+  });
+
+  await page.getByRole('link', { name: 'Квіти' }).click();
+  await page.waitForURL(/\/admin\/flowers$/);
+
+  const panel = page.getByTestId('flower-analytics');
+  await expect(panel.getByTestId('loss-total')).toContainText('500');
+  // The number the core dashboard cannot show: stems that left inside bouquets.
+  await expect(panel.getByTestId('stem-table')).toContainText('18');
+  await expect(panel.getByTestId('stem-table')).toContainText('22');
+  // Markup is read against cost, so it is far above the 25% assembly charge —
+  // the page says both, because confusing them is the easy mistake here.
+  await expect(panel.getByTestId('bouquet-markup')).toContainText('181.3%');
+  await expect(panel).toContainText('25%');
+});
+
+test('a clothes shop has no flowers page at all', async ({ page }) => {
+  // Not an empty screen and not a 409 the owner has to read: the module is not
+  // there, so neither is its nav entry. That is the whole argument for a page
+  // over panels on the shared dashboard.
+  await mockPosApi(page);
+  await loginAsOwner(page);
+
+  await expect(page.getByRole('link', { name: 'Квіти' })).toHaveCount(0);
+});

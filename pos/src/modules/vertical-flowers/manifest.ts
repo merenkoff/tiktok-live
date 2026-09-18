@@ -8,6 +8,7 @@ import type { RemoteModuleDescriptor } from '../registry';
 import { lazyWithRetry } from '../lazyWithRetry';
 
 const ShowcasePage = lazyWithRetry(() => import('./pages/ShowcasePage'));
+const FlowerAnalyticsPage = lazyWithRetry(() => import('./pages/FlowerAnalyticsPage'));
 const FlowersCatalog = lazyWithRetry(() => import('./FlowersCatalog'));
 
 /**
@@ -31,7 +32,13 @@ export const verticalFlowersModule: RemoteModuleDescriptor = {
   // «Вітрина» is what the route actually shows now: the bouquets standing in
   // the window and the write-off for one that did not sell. The old page only
   // reported that the module was live, which the nav entry already does.
-  routes: [{ path: '/flowers/*', element: ShowcasePage }],
+  // Two surfaces, like `tiktok-live`: the root mount is the till's window, the
+  // admin mount is the owner's numbers. Owner-only by construction —
+  // `renderRoutes` wraps every `/admin` route in `<Guard ownerOnly>`.
+  routes: [
+    { path: '/flowers/*', element: ShowcasePage },
+    { path: 'flowers', mount: 'admin', element: FlowerAnalyticsPage },
+  ],
   nav: [
     {
       to: '/flowers',
@@ -41,5 +48,9 @@ export const verticalFlowersModule: RemoteModuleDescriptor = {
       order: 80,
       match: '/flowers',
     },
+    // The florist's analytics live here rather than as panels on «Сьогодні»:
+    // this is the module's own surface, so it appears only in a shop that has
+    // the module, and a CDN outage cannot take the core dashboard with it.
+    { to: '/admin/flowers', label: 'Квіти', location: 'admin-sidebar', order: 55 },
   ],
 };
