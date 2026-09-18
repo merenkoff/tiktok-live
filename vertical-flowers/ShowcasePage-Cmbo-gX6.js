@@ -1,5 +1,6 @@
-import { n as e, t } from "./trash-2-J8IpCBHX.js";
-import { n, t as r } from "./BouquetPhoto-DgI0gXjX.js";
+import { t as e } from "./flower-2-DQVy9i5h.js";
+import { n as t, t as n } from "./BouquetPhoto-C0wJlYvp.js";
+import { t as r } from "./trash-2-CBFgWIf2.js";
 import { useCallback as i, useEffect as a, useMemo as o, useState as s } from "react";
 import { jsx as c, jsxs as l } from "react/jsx-runtime";
 import { api as u, assetUrl as d, cashierApi as f, formatUah as p, useVertical as m } from "@pos/platform";
@@ -113,7 +114,7 @@ function g() {
 								src: d(e.image_url) ?? "",
 								alt: "",
 								className: "w-full h-full object-cover"
-							}) : /* @__PURE__ */ c(n, {
+							}) : /* @__PURE__ */ c(t, {
 								size: 18,
 								className: "text-sq-muted"
 							})
@@ -143,7 +144,7 @@ function g() {
 							className: "min-h-11 min-w-11 grid place-items-center rounded-sq text-sq-muted hover:text-red-600 shrink-0",
 							"aria-label": `Списати: ${e.product_name}`,
 							"data-testid": "showcase-writeoff",
-							children: /* @__PURE__ */ c(t, { size: 18 })
+							children: /* @__PURE__ */ c(r, { size: 18 })
 						})
 					]
 				}, e.variant_id))
@@ -164,7 +165,7 @@ function g() {
 						})]
 					}), /* @__PURE__ */ l("div", {
 						className: "p-4 space-y-3",
-						children: [/* @__PURE__ */ c(r, {
+						children: [/* @__PURE__ */ c(n, {
 							value: C.image_url,
 							onChange: (e) => {
 								e ? k(C, e) : w(null);

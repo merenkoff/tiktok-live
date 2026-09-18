@@ -1,20 +1,21 @@
-import { n as e, r as t, t as n } from "./trash-2-J8IpCBHX.js";
-import { n as r, t as i } from "./BouquetPhoto-DgI0gXjX.js";
+import { n as e, t } from "./flower-2-DQVy9i5h.js";
+import { n, t as r } from "./BouquetPhoto-C0wJlYvp.js";
+import { t as i } from "./trash-2-CBFgWIf2.js";
 import { Suspense as a, lazy as o, useCallback as s, useEffect as c, useMemo as l, useRef as u, useState as d } from "react";
 import { Fragment as f, jsx as p, jsxs as m } from "react/jsx-runtime";
 import * as h from "@pos/platform";
 import { api as g, assetUrl as _, buildPriceTags as v, customBouquetLabel as y, formatUah as b, priceOfComponents as x, triggerPrint as S, uahInputToCents as C, useAuthStore as ee, useCartStore as w, useOfflineStatus as T, useSalesCatalog as E, useVertical as D, withLabour as O } from "@pos/platform";
 //#region node_modules/lucide-react/dist/esm/icons/book-marked.js
-var k = t("BookMarked", [["path", {
+var k = e("BookMarked", [["path", {
 	d: "M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20",
 	key: "t4utmx"
 }], ["polyline", {
 	points: "10 2 10 10 13 7 16 10 16 2",
 	key: "13o6vz"
-}]]), A = t("ChevronDown", [["path", {
+}]]), A = e("ChevronDown", [["path", {
 	d: "m6 9 6 6 6-6",
 	key: "qrunsl"
-}]]), j = t("Delete", [
+}]]), j = e("Delete", [
 	["path", {
 		d: "M20 5H9l-7 7 7 7h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z",
 		key: "1oy587"
@@ -33,19 +34,19 @@ var k = t("BookMarked", [["path", {
 		y2: "15",
 		key: "1n50pc"
 	}]
-]), M = t("Folder", [["path", {
+]), M = e("Folder", [["path", {
 	d: "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z",
 	key: "1kt360"
-}]]), N = t("Minus", [["path", {
+}]]), N = e("Minus", [["path", {
 	d: "M5 12h14",
 	key: "1ays0h"
-}]]), P = t("Plus", [["path", {
+}]]), P = e("Plus", [["path", {
 	d: "M5 12h14",
 	key: "1ays0h"
 }], ["path", {
 	d: "M12 5v14",
 	key: "s699le"
-}]]), F = t("Printer", [
+}]]), F = e("Printer", [
 	["path", {
 		d: "M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2",
 		key: "143wyd"
@@ -62,7 +63,7 @@ var k = t("BookMarked", [["path", {
 		rx: "1",
 		key: "1ue0tg"
 	}]
-]), te = t("Search", [["circle", {
+]), te = e("Search", [["circle", {
 	cx: "11",
 	cy: "11",
 	r: "8",
@@ -70,7 +71,7 @@ var k = t("BookMarked", [["path", {
 }], ["path", {
 	d: "m21 21-4.3-4.3",
 	key: "1qie3q"
-}]]), ne = t("Store", [
+}]]), ne = e("Store", [
 	["path", {
 		d: "m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7",
 		key: "ztvudi"
@@ -91,7 +92,7 @@ var k = t("BookMarked", [["path", {
 		d: "M22 7v3a2 2 0 0 1-2 2v0a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12v0a2 2 0 0 1-2-2V7",
 		key: "jon5kx"
 	}]
-]), I = t("X", [["path", {
+]), I = e("X", [["path", {
 	d: "M18 6 6 18",
 	key: "1bl5f8"
 }], ["path", {
@@ -498,7 +499,7 @@ function Se() {
 }
 //#endregion
 //#region src/modules/vertical-flowers/bench/RecipeSheet.tsx
-function Ce({ computedCents: e, components: t, onSaved: n, onClose: r }) {
+function Ce({ computedCents: e, components: t, onSaved: n, onClose: i }) {
 	let [a, o] = d(""), [s, c] = d((e / 100).toFixed(2).replace(".", ",")), [l, u] = d(null), [f, h] = d(!1), [_, v] = d(null), y = C(s), x = y !== e;
 	async function S() {
 		h(!0), v(null);
@@ -528,7 +529,7 @@ function Ce({ computedCents: e, components: t, onSaved: n, onClose: r }) {
 					children: "Зберегти як рецепт"
 				}), /* @__PURE__ */ p("button", {
 					type: "button",
-					onClick: r,
+					onClick: i,
 					disabled: f,
 					className: "min-h-11 min-w-11 grid place-items-center text-sq-secondary disabled:opacity-40",
 					"aria-label": "Закрити",
@@ -541,7 +542,7 @@ function Ce({ computedCents: e, components: t, onSaved: n, onClose: r }) {
 						className: "text-xs text-sq-muted",
 						children: "Букет лишиться на столі — рецепт це шаблон, який можна збирати знову. Стебла зараз не списуються."
 					}),
-					/* @__PURE__ */ p(i, {
+					/* @__PURE__ */ p(r, {
 						value: l,
 						onChange: u,
 						disabled: f
@@ -600,10 +601,10 @@ function Ce({ computedCents: e, components: t, onSaved: n, onClose: r }) {
 }
 //#endregion
 //#region src/modules/vertical-flowers/bench/ShowcaseSheet.tsx
-function we({ computedCents: e, busy: t, error: n, onSubmit: r, onClose: a }) {
+function we({ computedCents: e, busy: t, error: n, onSubmit: i, onClose: a }) {
 	let [o, s] = d(""), [c, l] = d((e / 100).toFixed(2).replace(".", ",")), [u, f] = d(null), h = C(c), g = h !== e;
 	function _(e) {
-		r({
+		i({
 			name: o.trim() || null,
 			priceCents: g ? h : null,
 			imageUrl: u,
@@ -631,7 +632,7 @@ function we({ computedCents: e, busy: t, error: n, onSubmit: r, onClose: a }) {
 			}), /* @__PURE__ */ m("div", {
 				className: "p-4 space-y-4",
 				children: [
-					/* @__PURE__ */ p(i, {
+					/* @__PURE__ */ p(r, {
 						value: u,
 						onChange: f,
 						disabled: t
@@ -745,11 +746,11 @@ function Te(e) {
 }
 //#endregion
 //#region src/modules/vertical-flowers/bench/CompositionPanel.tsx
-function Ee({ stems: e, totals: t, labourBps: r, selectedId: i, onSelect: a, onStep: o, onRemove: s }) {
+function Ee({ stems: e, totals: t, labourBps: n, selectedId: r, onSelect: a, onStep: o, onRemove: s }) {
 	let l = R(), d = u(null);
 	return c(() => {
 		d.current?.scrollIntoView({ block: "nearest" });
-	}, [i, e.length]), /* @__PURE__ */ m("div", {
+	}, [r, e.length]), /* @__PURE__ */ m("div", {
 		className: "flex flex-col min-h-0 flex-1",
 		"data-testid": "bench-composition",
 		children: [e.length === 0 ? /* @__PURE__ */ p("div", {
@@ -762,10 +763,10 @@ function Ee({ stems: e, totals: t, labourBps: r, selectedId: i, onSelect: a, onS
 			ref: l,
 			className: "flex-1 overflow-auto divide-y divide-sq-divider select-none",
 			children: e.map((e) => /* @__PURE__ */ m("li", {
-				ref: e.item.variant_id === i ? d : void 0,
-				className: `px-4 py-3 border-l-4 ${e.item.variant_id === i ? "border-sq-blue" : "border-transparent"}`,
+				ref: e.item.variant_id === r ? d : void 0,
+				className: `px-4 py-3 border-l-4 ${e.item.variant_id === r ? "border-sq-blue" : "border-transparent"}`,
 				"data-testid": "bench-stem",
-				"data-selected": e.item.variant_id === i ? "true" : void 0,
+				"data-selected": e.item.variant_id === r ? "true" : void 0,
 				children: [
 					/* @__PURE__ */ m("div", {
 						className: "flex items-baseline justify-between gap-3",
@@ -794,7 +795,7 @@ function Ee({ stems: e, totals: t, labourBps: r, selectedId: i, onSelect: a, onS
 							/* @__PURE__ */ p("button", {
 								type: "button",
 								onClick: () => a(e.item.variant_id),
-								className: `min-h-11 min-w-12 rounded-sq text-center text-base font-semibold tabular-nums ${e.item.variant_id === i ? "text-sq-blue ring-2 ring-sq-blue" : "text-sq-text"}`,
+								className: `min-h-11 min-w-12 rounded-sq text-center text-base font-semibold tabular-nums ${e.item.variant_id === r ? "text-sq-blue ring-2 ring-sq-blue" : "text-sq-text"}`,
 								"aria-label": `Набрати кількість: ${e.item.product_name}`,
 								"data-testid": "bench-stem-qty",
 								children: e.quantity
@@ -821,7 +822,7 @@ function Ee({ stems: e, totals: t, labourBps: r, selectedId: i, onSelect: a, onS
 								onClick: () => s(e.item.variant_id),
 								className: "min-h-11 min-w-11 grid place-items-center rounded-sq text-sq-muted hover:text-red-600 ml-auto shrink-0",
 								"aria-label": `Прибрати: ${e.item.product_name}`,
-								children: /* @__PURE__ */ p(n, { size: 18 })
+								children: /* @__PURE__ */ p(i, { size: 18 })
 							})
 						]
 					})
@@ -834,8 +835,8 @@ function Ee({ stems: e, totals: t, labourBps: r, selectedId: i, onSelect: a, onS
 					label: "Квіти",
 					valueCents: t.partsCents
 				}),
-				r > 0 && /* @__PURE__ */ p(De, {
-					label: `Робота (${Oe(r)})`,
+				n > 0 && /* @__PURE__ */ p(De, {
+					label: `Робота (${Oe(n)})`,
 					valueCents: t.labourCents
 				}),
 				/* @__PURE__ */ m("div", {
@@ -1510,11 +1511,11 @@ function Be({ active: e, stockEpoch: t }) {
 		stockEpoch: t
 	});
 }
-function Ve({ active: t, stockEpoch: n }) {
+function Ve({ active: e, stockEpoch: r }) {
 	let i = E(), o = D(), s = w((e) => e.addItem), f = w((e) => e.addAssembled), h = w((e) => e.setBanner), g = R(), _ = ee((e) => e.auth?.store.florist_labour_bps ?? 0), [v, x] = d(!1), [S, C] = d(null), [T, O] = d(null), k = u([]), A = l(() => i.grouped.flatMap(([, e]) => e).filter($), [i.grouped]);
 	A.length > k.current.length && (k.current = A), c(() => {
-		n > 0 && i.refresh();
-	}, [n]);
+		r > 0 && i.refresh();
+	}, [r]);
 	async function j(e) {
 		let t = await i.lookupBarcode(e);
 		if (t.length === 1) {
@@ -1532,7 +1533,7 @@ function Ve({ active: t, stockEpoch: n }) {
 		"data-testid": "flowers-catalog",
 		children: [
 			/* @__PURE__ */ p(K, {
-				active: t && !S && !v && !T,
+				active: e && !S && !v && !T,
 				onScan: (e) => void j(e)
 			}),
 			/* @__PURE__ */ m("div", {
@@ -1557,7 +1558,7 @@ function Ve({ active: t, stockEpoch: n }) {
 							onClick: () => x(!0),
 							className: "min-h-12 min-w-12 grid place-items-center rounded-sq text-sq-blue border border-sq-divider bg-white",
 							"aria-label": "Камера",
-							children: /* @__PURE__ */ p(r, { size: 20 })
+							children: /* @__PURE__ */ p(n, { size: 20 })
 						}),
 						k.current.length > 0 && /* @__PURE__ */ m("button", {
 							type: "button",
@@ -1567,7 +1568,7 @@ function Ve({ active: t, stockEpoch: n }) {
 							},
 							className: "min-h-12 px-3 flex items-center gap-2 rounded-sq text-white bg-sq-blue font-medium shrink-0",
 							"data-testid": "start-bouquet",
-							children: [/* @__PURE__ */ p(e, { size: 18 }), /* @__PURE__ */ p("span", {
+							children: [/* @__PURE__ */ p(t, { size: 18 }), /* @__PURE__ */ p("span", {
 								className: "hidden sm:inline",
 								children: "Зібрати букет"
 							})]

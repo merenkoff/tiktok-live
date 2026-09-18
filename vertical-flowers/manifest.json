@@ -1,19 +1,23 @@
 {
   "schema": 1,
   "moduleId": "vertical-flowers",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "minHostPlatform": 12,
   "entry": "remote-entry.js",
   "keyId": "2a73632c13044371",
-  "builtAt": "2026-09-18T01:46:48.082Z",
+  "builtAt": "2026-09-18T11:19:59.122Z",
   "files": {
     "BarcodeScanner-DDyd6b-m.js": "sha384-h7k7FozxihdT2cYBXZsLuvH2nmezpFoHZ17TVH+R34lHtTcbvHJBkmWVo9KVWFbs",
-    "BouquetPhoto-DgI0gXjX.js": "sha384-ME3jIFfIVfUQ30/LMpb5+SOtq6lV+sp4+gUoEmkt6uy9+8lpL+b1vaIrFYij7hNZ",
-    "FlowerAnalyticsPage-BAvRLhmJ.js": "sha384-nZrVmHZ7D9a1Yr26k1Gl0ttI8P4XQEuibxj56cjKQozbjjLAXT/PZLa5nsc8a6jk",
-    "FlowersCatalog-BMKE2PZK.js": "sha384-c2ZodgpaYZLabi1B5DXmqaC+Uy/4oo0eXpWeD9nQUcxqk4GD3qXKeI77k3OVoOsu",
-    "ShowcasePage-Bagdd8Tm.js": "sha384-GaIIRKQxWd5VUEbMKWcvAoD4WEysmBZ99gw8Bjq1wwACyC0wUzDq0PY4Xvt/Bvgo",
-    "remote-entry.js": "sha384-+abTkuTVCwhEaK5yV+bCgzjqZRgUb4L8pC17Aph/IRnxpUv+S2mtHj0i/a5ev7jl",
-    "style.css": "sha384-CzM4o6Uuex2uTE6u9VhA7weh/QDq2+9eiMP6fmvvAWNV4Dh5EL7QunMzdaEtlCt3",
-    "trash-2-J8IpCBHX.js": "sha384-m6j3gxv2wIhEPTFjzMgO4gxkeoYhAAIMcjMjVnoRitBmJufT2d6kqjRAU7dATyis"
+    "BouquetPhoto-C0wJlYvp.js": "sha384-Vb6P64JPLkDpF4QXgJBFb+I0iP43ysC81EqWHAf0Q+WXAX3vOZ4a8CafjsXv1rjC",
+    "FloristLabourCard-Jd-khfoM.js": "sha384-gN6vCE3pc8rrgj8fXaRRehe/+0pd4vqsapKsAOVXdHitLycm5/VC5N3FIP/7Hh0x",
+    "FlowerAnalyticsPage-CRKXg11e.js": "sha384-hPSuuZ7YyUiAFx3uEf67CO0UzegxC69nXDICVrIGTmy5PBbWTdgLXNXGbhNmvLlS",
+    "FlowerPanels-BSJnNihV.js": "sha384-taz0CIKL+CS5DWYkPdPcorvHQ/D6gkmh5ugBmu5GlPBn4up1myQ2aGY+PkVx0rpT",
+    "FlowersCatalog--O62oK-x.js": "sha384-Jmm6EY03NR6p8euJqWetY0xScpoVHWmdL71BasNxZ3Rxzmm6Q+xrP1MSECSgczW8",
+    "ShowcasePage-Cmbo-gX6.js": "sha384-RMHI3xs8aUqZY+fAgHEEVKT6joiabO0NKvz25lmk432TwpkLvDzRDLVSxXFR46vx",
+    "Stat-DRWd55Hz.js": "sha384-yNV1ukhrVP+GcnYaVNCGrzeDvYieA4onvTtvTg0jxLMHlQ9CCRei7JeNRSOEs5Hu",
+    "flower-2-DQVy9i5h.js": "sha384-BT7P8TqCm7WGGXgl51SnHwjzc+Xuupj3XXqqO06g5Y/rqu3G18iGBelNxwA0x5PD",
+    "remote-entry.js": "sha384-2UesVAQ1iyI6gamzeKy+DZP/yLy9OgJgiQgiwU5Kxx4HB8FDoz1MnR8RDjDAqUP0",
+    "style.css": "sha384-9uN0sFMXOHdelZP6wNgJlNFdWRuwj366ZPU7JuEPa95BBNvJEV5AOPQ7XZHq5Kox",
+    "trash-2-CBFgWIf2.js": "sha384-FRABpqvBlRWeKhNQs4bFoknG2TlGh2Keah2yccktVg3uyc9ETPdbTENTDLDWU0dh"
   }
 }
