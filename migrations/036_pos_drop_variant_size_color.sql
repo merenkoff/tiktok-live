@@ -15,30 +15,63 @@
 -- The backfill below is 035's, repeated: it catches rows a 1.x backend wrote
 -- after 035 ran. `WHERE attributes = '{}'` keeps it from touching anything the
 -- new backend has since written.
+--
+-- Both halves are guarded on the column still existing, because the runner
+-- keeps no tracking table and re-applies every migration on every container
+-- start (Dockerfile CMD): the run after this one finds the columns already
+-- gone. `DROP COLUMN IF EXISTS` handles itself; a bare UPDATE would not, and
+-- a failed `migrate` means the API never starts. 007 stops re-adding the
+-- placeholder pair once 035 has run, for the same reason.
 
-UPDATE pos_variants
-   SET attributes = jsonb_strip_nulls(
-         jsonb_build_object('size', NULLIF(size, ''), 'color', NULLIF(color, ''))
-       ),
-       label = concat_ws(' / ', NULLIF(color, ''), NULLIF(size, ''))
- WHERE attributes = '{}'::jsonb
-   AND label = ''
-   AND (size <> '' OR color <> '');
+DO $guard$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_attribute
+     WHERE attrelid = 'pos_variants'::regclass
+       AND attname = 'size'
+       AND NOT attisdropped
+  ) THEN
+    EXECUTE $sql$
+      UPDATE pos_variants
+         SET attributes = jsonb_strip_nulls(
+               jsonb_build_object('size', NULLIF(size, ''), 'color', NULLIF(color, ''))
+             ),
+             label = concat_ws(' / ', NULLIF(color, ''), NULLIF(size, ''))
+       WHERE attributes = '{}'::jsonb
+         AND label = ''
+         AND (size <> '' OR color <> '')
+    $sql$;
+  END IF;
+END
+$guard$;
 
-UPDATE pos_stock_document_lines
-   SET placeholder_attributes = jsonb_strip_nulls(
-         jsonb_build_object(
-           'size', NULLIF(placeholder_size, ''),
-           'color', NULLIF(placeholder_color, '')
-         )
-       ),
-       placeholder_label = concat_ws(
-         ' / ', NULLIF(placeholder_color, ''), NULLIF(placeholder_size, '')
-       )
- WHERE is_placeholder = TRUE
-   AND placeholder_attributes = '{}'::jsonb
-   AND placeholder_label = ''
-   AND (placeholder_size <> '' OR placeholder_color <> '');
+DO $guard$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_attribute
+     WHERE attrelid = 'pos_stock_document_lines'::regclass
+       AND attname = 'placeholder_size'
+       AND NOT attisdropped
+  ) THEN
+    EXECUTE $sql$
+      UPDATE pos_stock_document_lines
+         SET placeholder_attributes = jsonb_strip_nulls(
+               jsonb_build_object(
+                 'size', NULLIF(placeholder_size, ''),
+                 'color', NULLIF(placeholder_color, '')
+               )
+             ),
+             placeholder_label = concat_ws(
+               ' / ', NULLIF(placeholder_color, ''), NULLIF(placeholder_size, '')
+             )
+       WHERE is_placeholder = TRUE
+         AND placeholder_attributes = '{}'::jsonb
+         AND placeholder_label = ''
+         AND (placeholder_size <> '' OR placeholder_color <> '')
+    $sql$;
+  END IF;
+END
+$guard$;
 
 ALTER TABLE pos_variants
   DROP COLUMN IF EXISTS size,

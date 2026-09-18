@@ -20,7 +20,7 @@
 
 import type { AnyModuleDescriptor } from './registry';
 import { allModules } from './registry';
-import type { ModuleSalesSlot } from './types';
+import type { ModuleAnalyticsSlot, ModuleSalesSlot, ModuleSettingsSlot } from './types';
 
 export const VERTICAL_MODULE_PREFIX = 'vertical-';
 export const FALLBACK_VERTICAL_MODULE_ID = 'vertical-clothing';
@@ -61,4 +61,63 @@ export function resolveSalesCatalog(
     source: 'fallback',
     reason: !own ? 'missing' : 'pending' in own && own.pending ? 'pending' : 'no_sales_slot',
   };
+}
+
+/**
+ * What a vertical module adds to a screen the **host** owns.
+ *
+ * Deliberately not `resolveSalesCatalog`'s shape: there is no fallback and no
+ * telemetry here. The three ways a vertical module goes missing are the same,
+ * but the consequence has to be different — the sell screen must always end up
+ * with a catalog, while a host screen must be able to end up with nothing
+ * added to it. `null` means "draw nothing", which is exactly what a clothing
+ * store (no vertical module at all) and a shop whose CDN is down should both
+ * see. A vertical whose remote never arrived already reports
+ * `vertical_catalog_fallback` from `/register`; saying it twice is noise.
+ */
+function verticalSlot<T>(
+  vertical: string | undefined,
+  pick: (m: AnyModuleDescriptor) => T | undefined,
+  modules: AnyModuleDescriptor[]
+): { value: T; moduleId: string } | null {
+  const wanted = verticalModuleId(vertical);
+  const own = modules.find((m) => m.id === wanted);
+  if (!own || ('pending' in own && own.pending)) return null;
+  const value = pick(own);
+  return value ? { value, moduleId: wanted } : null;
+}
+
+export interface ResolvedAnalyticsPanels {
+  Panels: ModuleAnalyticsSlot['Panels'];
+  moduleId: string;
+}
+
+/** The store's own figures on the owner's «Сьогодні», if it has any. */
+export function resolveAnalyticsPanels(
+  vertical: string | undefined,
+  modules: AnyModuleDescriptor[] = allModules()
+): ResolvedAnalyticsPanels | null {
+  const found = verticalSlot(vertical, (m) => m.analytics?.Panels, modules);
+  return found && { Panels: found.value, moduleId: found.moduleId };
+}
+
+export interface ResolvedSettingsCard {
+  Card: ModuleSettingsSlot['Card'];
+  moduleId: string;
+}
+
+/**
+ * The store's own card on `/admin/settings`, if its vertical has one.
+ *
+ * First use: what a flower shop charges for assembling a bouquet
+ * (`pos_stores.florist_labour_bps`). It lived on the host's page and was shown
+ * to every shop, clothing included — which is exactly the kind of thing a
+ * vertical is supposed to own.
+ */
+export function resolveSettingsCard(
+  vertical: string | undefined,
+  modules: AnyModuleDescriptor[] = allModules()
+): ResolvedSettingsCard | null {
+  const found = verticalSlot(vertical, (m) => m.settings?.Card, modules);
+  return found && { Card: found.value, moduleId: found.moduleId };
 }

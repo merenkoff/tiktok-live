@@ -2,10 +2,13 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { useEffect, useState } from 'react';
-import { api } from '@pos/platform';
+import { Suspense, useEffect, useMemo, useState } from 'react';
+import { api, useAuthStore } from '@pos/platform';
 import { formatUah } from '../../lib/money';
 import { toCsv, downloadCsv } from '../../lib/csv';
+import { SlotBoundary } from '../../modules/SlotBoundary';
+import { reportModuleEvent } from '../../modules/telemetry';
+import { resolveAnalyticsPanels } from '../../modules/verticals';
 import type { PaymentMethod, SalesSummary } from '../../types';
 
 function addDays(dateStr: string, delta: number): string {
@@ -67,6 +70,9 @@ export function DashboardPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [error, setError] = useState<string | null>(null);
+
+  const vertical = useAuthStore((s) => s.auth)?.store.vertical?.id ?? 'clothing';
+  const panels = useMemo(() => resolveAnalyticsPanels(vertical), [vertical]);
 
   async function load(nextFrom?: string, nextTo?: string) {
     setError(null);
@@ -200,6 +206,27 @@ export function DashboardPage() {
           ))}
         </div>
       </section>
+
+      {/* What the store's vertical adds to the owner's morning. Nothing at all
+          for a clothing shop, and nothing when the module's CDN is down — the
+          dashboard is the host's screen (TechDocs/POS_FLORIST_BENCH.md §15). */}
+      {panels && (
+        <SlotBoundary
+          fallback={null}
+          onError={(err) =>
+            reportModuleEvent({
+              type: 'analytics_panels_error',
+              moduleId: panels.moduleId,
+              vertical,
+              error: err,
+            })
+          }
+        >
+          <Suspense fallback={<div className="h-28" />}>
+            <panels.Panels from={data.from} to={data.to} />
+          </Suspense>
+        </SlotBoundary>
+      )}
 
       <section className="bg-sq-surface border border-sq-divider rounded-sq p-5 shadow-sm">
         <p className="sq-section-label mb-4">Дохід за днями</p>

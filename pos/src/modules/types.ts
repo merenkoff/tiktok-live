@@ -119,6 +119,43 @@ export interface ModuleSalesSlot {
   Catalog: ComponentType<SalesCatalogProps> | LazyExoticComponent<ComponentType<SalesCatalogProps>>;
 }
 
+export interface AnalyticsPanelProps {
+  /**
+   * The window «Сьогодні» is showing right now — the `from`/`to` the server
+   * resolved for the summary above, not the date inputs' local state. A panel
+   * answering about a different period than the figures it sits under is worse
+   * than no panel.
+   */
+  from: string;
+  to: string;
+}
+
+/**
+ * What a sales-vertical module adds to the owner's «Сьогодні» dashboard.
+ *
+ * Same shape as `sales` above — data the host reads, not self-registration —
+ * with one deliberate difference: there is no fallback. A store whose module
+ * is missing, `pending` or broken gets no panels at all, because the dashboard
+ * is host surface and a failing CDN must not be able to take it down with it
+ * (TechDocs/POS_FLORIST_BENCH.md §15).
+ */
+export interface ModuleAnalyticsSlot {
+  Panels: ComponentType<AnalyticsPanelProps> | LazyExoticComponent<ComponentType<AnalyticsPanelProps>>;
+}
+
+/**
+ * What a sales-vertical module adds to the owner's Settings page.
+ *
+ * Props-less on purpose: the card owns its fetch, its save button and its own
+ * error line, exactly as the host's `FiscalSettingsCard` does. Settings is one
+ * big form over `PATCH /store`, and threading a module's field through it would
+ * mean the host knowing what that field is — which is the thing verticals exist
+ * to avoid. No fallback either, for the same reason as `analytics` above.
+ */
+export interface ModuleSettingsSlot {
+  Card: ComponentType | LazyExoticComponent<ComponentType>;
+}
+
 export interface ModuleDescriptor {
   id: ModuleId;
   /** Shown in the Settings "Модулі магазину" checklist. */
@@ -153,6 +190,17 @@ export interface ModuleDescriptor {
    * clothing catalog — see `modules/verticals.ts`.
    */
   sales?: ModuleSalesSlot;
+  /**
+   * Set by a `vertical-*` module: extra figures on the owner's «Сьогодні».
+   * Unlike `sales`, an absent or broken module simply contributes nothing —
+   * see `modules/verticals.ts`.
+   */
+  analytics?: ModuleAnalyticsSlot;
+  /**
+   * Set by a `vertical-*` module: its own card on `/admin/settings`. Absent or
+   * broken module → the page is simply the one it always was.
+   */
+  settings?: ModuleSettingsSlot;
   routes: RouteDef[];
   nav: NavItem[];
 }

@@ -37,6 +37,7 @@ export function registerStoreRoutes(fastify: FastifyInstance): void {
       qr_recipient?: string | null;
       gtin_lookup_enabled?: boolean;
       auto_print_receipt?: boolean;
+      florist_labour_bps?: unknown;
       enabled_modules?: unknown;
       module_remotes?: unknown;
       nav_overrides?: unknown;
@@ -130,6 +131,13 @@ export function registerStoreRoutes(fastify: FastifyInstance): void {
 
       if (body.gtin_lookup_enabled !== undefined) patch.gtin_lookup_enabled = Boolean(body.gtin_lookup_enabled);
       if (body.auto_print_receipt !== undefined) patch.auto_print_receipt = Boolean(body.auto_print_receipt);
+      // Handed over raw: `updateStore` coerces it and refuses anything outside
+      // 0–1000% with a message the owner can act on, where the column's CHECK
+      // would only manage a 500. Coercing here as well would turn 'багато' into
+      // NaN twice and say nothing more.
+      if (body.florist_labour_bps !== undefined) {
+        patch.florist_labour_bps = body.florist_labour_bps as number;
+      }
       return await analyticsService.updateStore(auth.storeId, patch);
     } catch (error) {
       return reply.code(400).send({ error: errorMessage(error) });

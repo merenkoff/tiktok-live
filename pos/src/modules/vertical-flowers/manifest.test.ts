@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { verticalFlowersModule } from './manifest';
 import { NAV_ICONS } from '../../platform/icons';
 import { CORE_MODULE_IDS, DEFAULT_ENABLED_MODULE_IDS } from '../constants';
-import { resolveSalesCatalog } from '../verticals';
+import { resolveAnalyticsPanels, resolveSalesCatalog, resolveSettingsCard } from '../verticals';
 import { MODULES } from '../registry';
 
 describe('vertical-flowers manifest', () => {
@@ -34,6 +34,27 @@ describe('vertical-flowers manifest', () => {
     expect(verticalFlowersModule.sales?.Catalog).toBeTruthy();
     const resolved = resolveSalesCatalog('flowers', [...MODULES, verticalFlowersModule]);
     expect(resolved).toMatchObject({ moduleId: 'vertical-flowers', source: 'vertical' });
+  });
+
+  it('contributes figures to «Сьогодні» without owning a second admin page', () => {
+    // The panels are a slot the host reads, so they exist only for a store
+    // that actually loaded this module — and the module's own numbers page
+    // stays where it is, at /admin/flowers.
+    expect(verticalFlowersModule.analytics?.Panels).toBeTruthy();
+    expect(resolveAnalyticsPanels('flowers', [...MODULES, verticalFlowersModule])).toMatchObject({
+      moduleId: 'vertical-flowers',
+    });
+    expect(verticalFlowersModule.routes.filter((r) => r.mount === 'admin')).toHaveLength(1);
+  });
+
+  it('brings its own settings card rather than a field on the host page', () => {
+    // `florist_labour_bps` lived on the host's Settings page, where a clothing
+    // shop saw it too. The slot is what makes it exist only where it means
+    // something.
+    expect(verticalFlowersModule.settings?.Card).toBeTruthy();
+    expect(resolveSettingsCard('flowers', [...MODULES, verticalFlowersModule])).toMatchObject({
+      moduleId: 'vertical-flowers',
+    });
   });
 
   it('runs in both shells and is not owner-only', () => {

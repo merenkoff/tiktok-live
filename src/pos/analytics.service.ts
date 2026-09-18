@@ -223,7 +223,14 @@ export type StorePatch = {
   live_tiktok_username?: string | null;
 };
 
-const STORE_PATCH_COLUMNS: Array<keyof StorePatch> = [
+/**
+ * Exported for `pos.routes.store.test.ts`: the route copies each field out of
+ * the body by hand, and `florist_labour_bps` was once simply missed — the PATCH
+ * answered 200 and changed nothing for months. The test walks this list, so a
+ * column added here without a line in the route fails in CI instead of in a
+ * shop.
+ */
+export const STORE_PATCH_COLUMNS: Array<keyof StorePatch> = [
   'name',
   'qr_payment_enabled',
   'qr_payment_mode',

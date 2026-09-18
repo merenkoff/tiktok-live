@@ -20,22 +20,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Flower2, Scissors, TrendingUp, Trash2 } from 'lucide-react';
 import { api, formatUah } from '@pos/platform';
-import type { FlowerAnalytics, FlowerLossRow } from '@pos/platform';
-
-const REASON_LABEL: Record<FlowerLossRow['reason'], string> = {
-  damaged: 'Завʼяло',
-  gift: 'Подаровано',
-  lost: 'Недостача',
-  other: 'Інше',
-};
-
-/** Basis points as the percentage a person reads. 2000 → «20%». */
-function pct(bps: number | null): string {
-  if (bps == null) return '—';
-  const value = bps / 100;
-  // A whole number unless the fraction actually says something.
-  return `${Number.isInteger(value) ? value : value.toFixed(1)}%`;
-}
+import type { FlowerAnalytics } from '@pos/platform';
+// Shared with the «Сьогодні» panels, so a reason or a percentage cannot be
+// worded one way on one screen and another way on the other.
+import { REASON_LABEL, pct } from '../lib/figures';
+import { Stat } from '../ui/Stat';
 
 function isoDaysAgo(days: number): string {
   return new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
@@ -278,17 +267,6 @@ export default function FlowerAnalyticsPage() {
           </section>
         </>
       )}
-    </div>
-  );
-}
-
-function Stat({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
-  return (
-    <div className="rounded-sq bg-sq-bg p-3">
-      <p className="text-xs text-sq-muted">{label}</p>
-      <p className={`mt-0.5 ${strong ? 'text-lg font-semibold text-sq-text' : 'text-sq-text'}`}>
-        {value}
-      </p>
     </div>
   );
 }

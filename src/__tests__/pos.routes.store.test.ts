@@ -19,6 +19,7 @@ import crypto from 'crypto';
 import type { FastifyInstance } from 'fastify';
 import { pool } from '../db.js';
 import { DEFAULT_ENABLED_MODULES } from '../pos/core/modules.js';
+import { STORE_PATCH_COLUMNS } from '../pos/analytics.service.js';
 import { updateFiscalSettings } from '../pos/fiscal/settings.service.js';
 import {
   applyPosMigrations,
@@ -541,6 +542,146 @@ describe.skipIf(!hasDb)('POS store, analytics, QR & GTIN routes', () => {
         } finally {
           await dropTestStore(temp.storeId);
         }
+      });
+    });
+
+    describe('every patchable column actually reaches the column', () => {
+      // The fence around the bug below. `PATCH /store` copies each field out of
+      // the body by hand — there is no loop — so a column can sit in
+      // `STORE_PATCH_COLUMNS`, be validated, be typed into `StorePatch`, be sent
+      // by the admin UI, and still go nowhere. That is exactly what
+      // `florist_labour_bps` did: 200, and nothing written.
+      //
+      // Two values per column on purpose. Asserting one would pass for a
+      // dropped field whenever the value happens to match the store's default;
+      // writing A then B cannot.
+
+      const NAV_KEY = 'catalog-checkout:cashier-primary:/register';
+
+      const CASES: Record<string, [unknown, unknown]> = {
+        name: ['Крамниця на розі', 'Крамниця на площі'],
+        qr_payment_enabled: [true, false],
+        qr_payment_mode: ['dynamic', 'static'],
+        qr_static_image_url: ['/pos-uploads/qr-demo.png', null],
+        qr_purpose_template: ['Оплата чека {receipt}', null],
+        qr_iban: ['UA903052992990004149123456789', null],
+        qr_edrpou: ['12345678', null],
+        qr_recipient: ['ФОП Тестовий', null],
+        gtin_lookup_enabled: [false, true],
+        auto_print_receipt: [true, false],
+        florist_labour_bps: [2500, 0],
+        enabled_modules: [['products', 'stock'], ['customers']],
+        module_remotes: [{ stock: 'https://cdn.example.com/stock/remote-entry.js' }, {}],
+        nav_overrides: [{ [NAV_KEY]: { label: 'Продаж' } }, {}],
+        live_tiktok_username: ['shopdemo', null],
+      };
+
+      it('covers every column the service is willing to write', () => {
+        // Adding a column to `STORE_PATCH_COLUMNS` without a case here fails
+        // right away; the case then fails until the route carries it.
+        expect(Object.keys(CASES).sort()).toEqual([...STORE_PATCH_COLUMNS].sort());
+      });
+
+      it.each(Object.keys(CASES))('writes %s', async (column) => {
+        const temp = await createTestStore(`rcol${column.replace(/_/g, '').slice(0, 10)}`);
+        try {
+          for (const value of CASES[column]) {
+            const res = await app.inject({
+              method: 'PATCH',
+              url: '/api/pos/store',
+              headers: auth(temp.ownerToken),
+              payload: { [column]: value },
+            });
+            expect(res.statusCode, `PATCH ${column}=${JSON.stringify(value)}`).toBe(200);
+
+            // Read back through a second request, not the PATCH's own echo: a
+            // route that dropped the field would still echo the row it read.
+            const after = await app.inject({
+              method: 'GET',
+              url: '/api/pos/store',
+              headers: auth(temp.ownerToken),
+            });
+            expect(after.json()[column], `GET after ${column}=${JSON.stringify(value)}`).toEqual(
+              value
+            );
+          }
+        } finally {
+          await dropTestStore(temp.storeId);
+        }
+      });
+    });
+
+    describe('florist_labour_bps', () => {
+      // The whole `describe` exists because nothing did: every other test sets
+      // this column with raw SQL, so nobody noticed that the route never copied
+      // it out of the body. `PATCH` answered 200 with the value unchanged, and
+      // the owner's Settings page had an input that quietly did nothing.
+
+      it('persists what the owner typed', async () => {
+        const res = await app.inject({
+          method: 'PATCH',
+          url: '/api/pos/store',
+          headers: auth(store.ownerToken),
+          payload: { florist_labour_bps: 2500 },
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.json().florist_labour_bps).toBe(2500);
+
+        // Through the column, not just the echo — a route that dropped the
+        // field would still return the row it read back.
+        const after = await pool.query(
+          `SELECT florist_labour_bps FROM pos_stores WHERE id = $1`,
+          [store.storeId]
+        );
+        expect(after.rows[0].florist_labour_bps).toBe(2500);
+      });
+
+      it('takes 0, which means «parts only» and not «leave it alone»', async () => {
+        const res = await app.inject({
+          method: 'PATCH',
+          url: '/api/pos/store',
+          headers: auth(store.ownerToken),
+          payload: { florist_labour_bps: 0 },
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.json().florist_labour_bps).toBe(0);
+      });
+
+      it('leaves it alone when the patch does not mention it', async () => {
+        await app.inject({
+          method: 'PATCH',
+          url: '/api/pos/store',
+          headers: auth(store.ownerToken),
+          payload: { florist_labour_bps: 1500 },
+        });
+        const res = await app.inject({
+          method: 'PATCH',
+          url: '/api/pos/store',
+          headers: auth(store.ownerToken),
+          payload: { name: store.slug },
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.json().florist_labour_bps).toBe(1500);
+      });
+
+      it('refuses a value outside the range, in words the owner can act on', async () => {
+        // The CHECK would refuse it too, but as a 500 nobody can do anything
+        // with — `updateStore` turns it into a 400 that names the limit.
+        for (const bad of [100001, -1, 12.5, 'багато']) {
+          const res = await app.inject({
+            method: 'PATCH',
+            url: '/api/pos/store',
+            headers: auth(store.ownerToken),
+            payload: { florist_labour_bps: bad },
+          });
+          expect(res.statusCode, `${bad} should be refused`).toBe(400);
+          expect(res.json().error).toContain('Націнка за роботу');
+        }
+        const after = await pool.query(
+          `SELECT florist_labour_bps FROM pos_stores WHERE id = $1`,
+          [store.storeId]
+        );
+        expect(after.rows[0].florist_labour_bps).toBe(1500);
       });
     });
 
