@@ -1,6 +1,6 @@
 import { lazy as e } from "react";
 //#region src/platform/version.ts
-var t = "2.0.1";
+var t = "2.0.2";
 //#endregion
 //#region src/modules/lazyWithRetry.ts
 async function n(e, { retries: t = 2, backoffMs: n = 400 } = {}) {
@@ -23,7 +23,7 @@ var i = r(() => import("./ShowcasePage-Bagdd8Tm.js")), a = r(() => import("./Flo
 	title: "Квіти",
 	shells: ["web", "cashier"],
 	alwaysEnabled: !0,
-	sales: { Catalog: r(() => import("./FlowersCatalog-BYVuffwt.js")) },
+	sales: { Catalog: r(() => import("./FlowersCatalog-BMKE2PZK.js")) },
 	routes: [{
 		path: "/flowers/*",
 		element: i

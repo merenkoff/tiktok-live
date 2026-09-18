@@ -1,18 +1,18 @@
 {
   "schema": 1,
   "moduleId": "vertical-flowers",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "minHostPlatform": 12,
   "entry": "remote-entry.js",
   "keyId": "2a73632c13044371",
-  "builtAt": "2026-09-18T00:48:58.191Z",
+  "builtAt": "2026-09-18T01:46:48.082Z",
   "files": {
     "BarcodeScanner-DDyd6b-m.js": "sha384-h7k7FozxihdT2cYBXZsLuvH2nmezpFoHZ17TVH+R34lHtTcbvHJBkmWVo9KVWFbs",
     "BouquetPhoto-DgI0gXjX.js": "sha384-ME3jIFfIVfUQ30/LMpb5+SOtq6lV+sp4+gUoEmkt6uy9+8lpL+b1vaIrFYij7hNZ",
     "FlowerAnalyticsPage-BAvRLhmJ.js": "sha384-nZrVmHZ7D9a1Yr26k1Gl0ttI8P4XQEuibxj56cjKQozbjjLAXT/PZLa5nsc8a6jk",
-    "FlowersCatalog-BYVuffwt.js": "sha384-qwybosXU7Zft/eITQG1VXVxUyfDkx0QGdZvB0fvZVHCppQDEJtwFNHiClgBENnxE",
+    "FlowersCatalog-BMKE2PZK.js": "sha384-c2ZodgpaYZLabi1B5DXmqaC+Uy/4oo0eXpWeD9nQUcxqk4GD3qXKeI77k3OVoOsu",
     "ShowcasePage-Bagdd8Tm.js": "sha384-GaIIRKQxWd5VUEbMKWcvAoD4WEysmBZ99gw8Bjq1wwACyC0wUzDq0PY4Xvt/Bvgo",
-    "remote-entry.js": "sha384-oxXwTCDOSv/ZX6TUYNt5TI/a9+i49Xrrm2Kd6poLXERUjJhwxGpE7VlAm9lncbHT",
+    "remote-entry.js": "sha384-+abTkuTVCwhEaK5yV+bCgzjqZRgUb4L8pC17Aph/IRnxpUv+S2mtHj0i/a5ev7jl",
     "style.css": "sha384-CzM4o6Uuex2uTE6u9VhA7weh/QDq2+9eiMP6fmvvAWNV4Dh5EL7QunMzdaEtlCt3",
     "trash-2-J8IpCBHX.js": "sha384-m6j3gxv2wIhEPTFjzMgO4gxkeoYhAAIMcjMjVnoRitBmJufT2d6kqjRAU7dATyis"
   }
