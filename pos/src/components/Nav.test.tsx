@@ -59,7 +59,7 @@ describe('Nav — cashier rail', () => {
       shell: 'cashier',
     });
 
-    expect(hrefs()).toEqual(['/register', '/customers', '/sales', '/hardware']);
+    expect(hrefs()).toEqual(['/register', '/orders', '/customers', '/sales', '/hardware']);
   });
 
   it('gives a web owner the catalog shortcut and the admin sales page', () => {
@@ -142,7 +142,7 @@ describe('Nav — store menu appearance', () => {
     );
 
     // Last in the bar now, under its new name and its new glyph.
-    expect(hrefs()).toEqual(['/customers', '/sales', '/hardware', '/register']);
+    expect(hrefs()).toEqual(['/orders', '/customers', '/sales', '/hardware', '/register']);
     expect(screen.getByRole('link', { name: 'Продаж' })).toBeInTheDocument();
     expect(container.querySelector('a[href="/register"] svg')).toHaveClass('lucide-shopping-cart');
   });
@@ -164,6 +164,6 @@ describe('Nav — store menu appearance', () => {
       shell: 'cashier',
     });
 
-    expect(hrefs()).toEqual(['/register', '/customers', '/sales', '/hardware']);
+    expect(hrefs()).toEqual(['/register', '/orders', '/customers', '/sales', '/hardware']);
   });
 });

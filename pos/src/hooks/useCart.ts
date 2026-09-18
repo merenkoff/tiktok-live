@@ -54,6 +54,17 @@ export interface CartLineComponent {
 interface CartStore {
   lines: CartLine[];
   banner: string | null;
+  /**
+   * The pre-order this cart IS, when one is being handed over
+   * (`TechDocs/POS_FLORIST_BENCH.md` §14).
+   *
+   * Set, the cart is not a cart: it is a promise the shop already made, at a
+   * price it already named. The sell screen hides every edit control while it
+   * is set, because the server rings the order's own lines from its own table
+   * and an edited screen would show one thing while the receipt says another.
+   * Adding something at the counter is a second sale.
+   */
+  preorderId: number | null;
   cartDiscount: CartDiscount | null;
   customer: PosCustomer | null;
   setBanner: (msg: string | null) => void;
@@ -114,6 +125,8 @@ export interface RestoredCart {
   lines: CartLine[];
   cartDiscount?: CartDiscount | null;
   customer?: PosCustomer | null;
+  /** Set when what is being restored is a pre-order being handed over. */
+  preorderId?: number | null;
 }
 
 /** Mirror backend: cart discount only on lines without product discount. */
@@ -138,6 +151,7 @@ export function computeCartDiscountCents(
 export const useCartStore = create<CartStore>((set, get) => ({
   lines: [],
   banner: null,
+  preorderId: null,
   cartDiscount: null,
   customer: null,
 
@@ -186,8 +200,14 @@ export const useCartStore = create<CartStore>((set, get) => ({
     set({ lines, banner: null });
   },
 
-  restore: ({ lines, cartDiscount, customer }) => {
-    set({ lines, cartDiscount: cartDiscount ?? null, customer: customer ?? null, banner: null });
+  restore: ({ lines, cartDiscount, customer, preorderId }) => {
+    set({
+      lines,
+      cartDiscount: cartDiscount ?? null,
+      customer: customer ?? null,
+      preorderId: preorderId ?? null,
+      banner: null,
+    });
   },
 
   addAssembled: (input) => {
@@ -237,7 +257,8 @@ export const useCartStore = create<CartStore>((set, get) => ({
     set({ lines: get().lines.filter((l) => l.uid !== uid) });
   },
 
-  clear: () => set({ lines: [], banner: null, cartDiscount: null, customer: null }),
+  clear: () =>
+    set({ lines: [], banner: null, cartDiscount: null, customer: null, preorderId: null }),
 
   subtotalCents: () =>
     get().lines.reduce((sum, line) => sum + line.unit_price_cents * line.quantity, 0),

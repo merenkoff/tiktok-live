@@ -78,7 +78,7 @@ describe('AppearancePage', () => {
     const labels = (await screen.findAllByLabelText(/^Назва пункту/)).map((el) =>
       el.getAttribute('placeholder')
     );
-    expect(labels.slice(0, 3)).toEqual(['Каса', 'Клієнти', 'Продажі']);
+    expect(labels.slice(0, 3)).toEqual(['Каса', 'Замовлення', 'Клієнти']);
   });
 
   it('saves a rename as a sparse override, not a copy of the menu', async () => {
@@ -104,7 +104,8 @@ describe('AppearancePage', () => {
     await waitFor(() => expect(updateStore).toHaveBeenCalled());
     const sent = (updateStore.mock.calls[0][0] as { nav_overrides: Record<string, unknown> })
       .nav_overrides;
-    expect(sent['customers:cashier-primary:/customers']).toEqual({ order: 0 });
+    // «Каса» swaps with whatever sits under it, which is «Замовлення» now.
+    expect(sent['catalog-checkout:cashier-primary:/orders']).toEqual({ order: 0 });
     expect(sent['catalog-checkout:cashier-primary:/register']).toEqual({ order: 10 });
   });
 
