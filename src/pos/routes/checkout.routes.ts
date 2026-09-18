@@ -17,6 +17,8 @@ import type { CompleteSaleItemInput, PaymentMethod } from '../types.js';
 import { ensurePosAuth } from '../core/auth.js';
 import * as salesService from '../sales.service.js';
 import * as parkedCarts from '../parked-carts.service.js';
+import * as preorders from '../preorders.service.js';
+import { PreorderClosedError } from '../preorders.service.js';
 import * as fiscalService from '../fiscal/fiscal.service.js';
 import { getSaleDocument } from '../fiscal/ledger.js';
 import { asFiscalError, cashierMessage, supportCode } from '../fiscal/errors.js';
@@ -34,6 +36,25 @@ type SaleDetail = NonNullable<Awaited<ReturnType<typeof salesService.getSale>>>;
  * fiscalised, and losing a receipt because a bookkeeping UPDATE did not land
  * would be a far worse trade than an unannotated parked cart.
  */
+/** Record which sale a pre-order became. Same trade as `noteParkedCart`. */
+async function notePreorder(
+  storeId: number,
+  preorderId: number | null | undefined,
+  saleId: number
+): Promise<void> {
+  if (!preorderId) return;
+  try {
+    await preorders.markSold({ storeId, preorderId: Number(preorderId), saleId });
+  } catch (error) {
+    logger.warn('Could not link sale to its pre-order', {
+      storeId,
+      preorderId,
+      saleId,
+      error: errorMessage(error),
+    });
+  }
+}
+
 async function noteParkedCart(
   storeId: number,
   cartId: number | null | undefined,
@@ -72,6 +93,11 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
        * depends on it arriving (TechDocs/POS_FLORIST_BENCH.md §9).
        */
       parked_cart_id?: number | null;
+      /**
+       * A pre-order being handed over (фаза B6). Its lines and their promised
+       * prices come from the server's own table; the till names the id.
+       */
+      preorder_id?: number | null;
     };
 
     const headerKey = request.headers['idempotency-key'];
@@ -156,9 +182,15 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
         customer_id: body.customer_id,
         client_uuid: clientUuid,
         fiscal_status: gate.on ? 'pending' : 'none',
+        preorder_id: body.preorder_id,
       });
     } catch (error) {
       logger.error('Complete sale failed', { error: errorMessage(error) });
+      // Another till handed this order over first. A conflict, not a bad ask —
+      // and the sale rolled back with the claim, so nothing needs undoing.
+      if (error instanceof PreorderClosedError) {
+        return reply.code(409).send({ error: errorMessage(error) });
+      }
       return reply.code(400).send({ error: errorMessage(error) });
     }
     if (!sale) {
@@ -170,10 +202,12 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
 
     if (!gate.on) {
       await noteParkedCart(auth.storeId, body.parked_cart_id, sale.id);
+      await notePreorder(auth.storeId, body.preorder_id, sale.id);
       return reply.code(201).send(sale);
     }
 
     await noteParkedCart(auth.storeId, body.parked_cart_id, sale.id);
+    await notePreorder(auth.storeId, body.preorder_id, sale.id);
 
     try {
       const fiscal = await fiscalService.fiscalizeSale(gate, {

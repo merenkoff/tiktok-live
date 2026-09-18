@@ -21,6 +21,7 @@ import type {
   RefundMethod,
 } from './types.js';
 import { getCustomer } from './customers.service.js';
+import * as preorders from './preorders.service.js';
 
 /**
  * The caption for a bouquet assembled at the counter: how many stems went in.
@@ -215,8 +216,18 @@ export async function completeSale(params: {
   client_uuid?: string | null;
   /** `'pending'` when the caller is about to fiscalise this sale. See the INSERT. */
   fiscal_status?: 'none' | 'pending';
+  /**
+   * A pre-order being handed over (`preorders.service.ts`, фаза B6).
+   *
+   * Its lines are read from the order at the price the shop promised, and are
+   * added to whatever else the customer picked up at the counter. The caller
+   * names an id and nothing else: the numbers come out of a table this server
+   * wrote when the order was taken, which is what keeps the price lock from
+   * being the freely settable line price §3.5 refuses.
+   */
+  preorder_id?: number | null;
 }) {
-  if (!params.items?.length) throw new Error('Cart is empty');
+  if (!params.items?.length && !params.preorder_id) throw new Error('Cart is empty');
   if (!params.payments?.length) throw new Error('Payment required');
 
   const clientUuid = params.client_uuid?.trim() || null;
@@ -238,7 +249,7 @@ export async function completeSale(params: {
   const qtyByVariant = new Map<number, number>();
   const customItems: Array<{ variant_id: number; quantity: number; components: ComponentInput[] }> =
     [];
-  for (const item of params.items) {
+  for (const item of params.items ?? []) {
     if (!item.variant_id || item.quantity <= 0) {
       throw new Error('Invalid cart item');
     }
@@ -269,8 +280,32 @@ export async function completeSale(params: {
   try {
     await client.query('BEGIN');
 
+    // A pre-order's lines, at the price the shop promised. Read here rather
+    // than taken from the request: the caller named an id, and these numbers
+    // are ones this server wrote when the order was taken.
+    //
+    // Closed in the same transaction, so the hand-over and the receipt commit
+    // together. Two tills reaching for the same bouquet is then a row-level
+    // race one of them loses, and a checkout that fails afterwards needs no
+    // compensating «put it back».
+    const locked = params.preorder_id
+      ? await preorders.lockedLines(client, params.storeId, params.preorder_id)
+      : [];
+    if (params.preorder_id) {
+      if (locked.length === 0) throw new Error('Preorder has no lines');
+      await preorders.claimForSale(client, {
+        storeId: params.storeId,
+        preorderId: params.preorder_id,
+        staffId: params.staffId,
+      });
+    }
+
     const variantIds = [
-      ...new Set([...qtyByVariant.keys(), ...customItems.map((item) => item.variant_id)]),
+      ...new Set([
+        ...qtyByVariant.keys(),
+        ...customItems.map((item) => item.variant_id),
+        ...locked.map((line) => line.variant_id),
+      ]),
     ];
     const variantsResult = await client.query(
       `SELECT v.id, v.price_cents, v.compare_at_cents, v.label, v.unit, p.name AS product_name
@@ -320,6 +355,32 @@ export async function completeSale(params: {
         compare_at_unit_cents: compareAt,
         pre_discount_total: pre,
         has_product_discount: compareAt != null,
+      });
+    }
+
+    for (const line of locked) {
+      const variant = variantMap.get(line.variant_id)!;
+      // Never merged with a walk-in line of the same variant: the promised
+      // price applies to the order's roses and today's to the ones the
+      // customer picked up at the counter, and merging would silently pick one.
+      const pre = line.unit_price_cents * line.quantity;
+      subtotal += pre;
+      const components = line.components?.length
+        ? await validateComponents(client, params.storeId, line.variant_id, line.components)
+        : undefined;
+      draftLines.push({
+        variant_id: line.variant_id,
+        product_name: variant.product_name,
+        variant_label: components ? customBouquetLabel(components) : (variant.label ?? ''),
+        unit: variant.unit ?? '',
+        quantity: line.quantity,
+        unit_price_cents: line.unit_price_cents,
+        // A promised price is not a markdown off today's card, and showing one
+        // would put a discount on the receipt that nobody gave.
+        compare_at_unit_cents: null,
+        pre_discount_total: pre,
+        has_product_discount: false,
+        ...(components ? { components } : {}),
       });
     }
 
