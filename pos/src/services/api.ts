@@ -46,6 +46,8 @@ import type {
   GtinLearnResult,
   ParkedCart,
   FlowerAnalytics,
+  Preorder,
+  PreorderStatus,
 } from '../types';
 import { posApiBase } from '../lib/urls';
 // Direct import (not via '@pos/platform') — that barrel re-exports this module,
@@ -369,6 +371,8 @@ class PosApi {
     fiscal_offline?: FiscalOfflineStamp | null;
     /** The parked cart this sale came out of, if any — bookkeeping only. */
     parked_cart_id?: number | null;
+    /** The pre-order being handed over. Its lines and prices come from the server. */
+    preorder_id?: number | null;
   }): Promise<SaleDetail> {
     const { data } = await this.client.post<SaleDetail>('/sales/complete', payload);
     return data;
@@ -815,6 +819,51 @@ class PosApi {
       name: string;
       price_cents: number;
     }>('/bench/recipe', payload);
+    return data;
+  }
+
+  // ── Pre-orders (TechDocs/POS_FLORIST_BENCH.md §14) ──────────────────────
+  //
+  // An order holds no stock and is not paid until it is handed over, which is
+  // the opposite of a parked cart on both counts. Its price is locked server
+  // side; nothing here ever sends one.
+
+  async listPreorders(opts: { status?: PreorderStatus | 'open' } = {}): Promise<Preorder[]> {
+    const { data } = await this.client.get<{ preorders: Preorder[] }>('/preorders', {
+      params: opts,
+    });
+    return data.preorders ?? [];
+  }
+
+  async createPreorder(payload: {
+    client_uuid: string;
+    due_at: string;
+    due_window_minutes?: number | null;
+    fulfilment: 'pickup' | 'delivery';
+    address?: string | null;
+    customer_id?: number | null;
+    recipient_name?: string | null;
+    recipient_phone?: string | null;
+    card_message?: string | null;
+    note?: string | null;
+    items: Array<{
+      variant_id: number;
+      quantity: number;
+      components?: Array<{ component_variant_id: number; quantity: number }>;
+    }>;
+  }): Promise<Preorder> {
+    const { data } = await this.client.post<Preorder>('/preorders', payload);
+    return data;
+  }
+
+  /** Built ahead of the due time. A state change only — no stock, no money. */
+  async markPreorderAssembled(id: number): Promise<Preorder> {
+    const { data } = await this.client.post<Preorder>(`/preorders/${id}/assembled`);
+    return data;
+  }
+
+  async cancelPreorder(id: number): Promise<{ cancelled: boolean }> {
+    const { data } = await this.client.post<{ cancelled: boolean }>(`/preorders/${id}/cancel`);
     return data;
   }
 

@@ -86,6 +86,12 @@ export const cashierApi = {
      * its hold), and a queued sale has no server to tell.
      */
     parked_cart_id?: number | null;
+    /**
+     * The pre-order being handed over. Online only by nature: its lines and
+     * their locked prices live on the server, so a queued offline sale has
+     * nothing to ring — the offline path drops it, as it does `parked_cart_id`.
+     */
+    preorder_id?: number | null;
   },
   /** `clientUuid` reuses an existing idempotency key — see FiscalSaleUnknownError. */
   opts: { clientUuid?: string } = {}

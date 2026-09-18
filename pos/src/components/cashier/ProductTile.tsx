@@ -2,9 +2,16 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { formatUah } from '../../lib/money';
-import { assetUrl } from '../../lib/urls';
 import { useState } from 'react';
+import { formatUah } from '../../lib/money';
+// Through the barrel, NOT `../../lib/urls`: this component is re-exported by
+// `@pos/platform/ui`, which every remote bundles locally — and a bundled copy
+// of `lib/urls` compiles with that build's `VITE_API_BASE`, which in CI is
+// empty. That shipped: the flowers module asked the POS host for
+// `/demo-flowers/*.svg`, got a 404, and every tile fell back to its caption
+// while the cart — host code, host copy — showed the same photos fine.
+// `@pos/platform` is external in a remote, so this is always the host's.
+import { assetUrl } from '@pos/platform';
 
 interface Props {
   name: string;

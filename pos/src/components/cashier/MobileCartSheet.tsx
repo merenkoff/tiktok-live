@@ -26,6 +26,8 @@ interface Props {
   /** The shelf of carts any till can take back (POS_FLORIST_BENCH.md §9). */
   onOpenParked?: () => void;
   parkedCount?: number;
+  /** A pre-order is on the till — see the note on `SaleSidebar` (§14). */
+  locked?: boolean;
 }
 
 export function MobileCartSheet({
@@ -41,6 +43,7 @@ export function MobileCartSheet({
   onSaveBasket,
   onOpenParked,
   parkedCount = 0,
+  locked,
 }: Props) {
   const count = lines.reduce((s, l) => s + l.quantity, 0);
   const subtotal = lines.reduce((s, l) => s + l.unit_price_cents * l.quantity, 0);
@@ -184,8 +187,9 @@ export function MobileCartSheet({
         </div>
 
         <div className="p-3 border-t border-sq-divider bg-white flex gap-2 safe-pb">
-          {/* Same two-jobs rule as the sidebar — see the comment there. */}
-          {lines.length === 0 ? (
+          {/* Same two-jobs rule as the sidebar — see the comment there. A
+              promise is paid or put back from the sidebar, never parked. */}
+          {locked ? null : lines.length === 0 ? (
             <button
               type="button"
               disabled={!onOpenParked}

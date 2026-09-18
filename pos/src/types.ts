@@ -297,6 +297,53 @@ export interface ShowcaseResult {
 }
 
 /**
+ * A bouquet ordered now for a day that has not happened yet
+ * (`TechDocs/POS_FLORIST_BENCH.md` §14). Mirrors `Preorder` in
+ * `src/pos/preorders.service.ts`.
+ *
+ * `unit_price_cents` is the LOCKED price — what the shop promised. The till
+ * never sends it back; handing the order over names its id and the server reads
+ * the number out of its own table.
+ */
+export type PreorderStatus = 'new' | 'assembled' | 'handed_over' | 'cancelled';
+
+export interface PreorderItem {
+  id: number;
+  variant_id: number;
+  quantity: number;
+  unit_price_cents: number;
+  components: Array<{ component_variant_id: number; quantity: number }> | null;
+  product_name: string;
+  label: string;
+  unit: string;
+  image_url: string | null;
+  /** What it would cost if quoted today. Null when a stem was delisted. */
+  current_unit_price_cents: number | null;
+}
+
+export interface Preorder {
+  id: number;
+  status: PreorderStatus;
+  staff_id: number;
+  staff_name: string | null;
+  customer_id: number | null;
+  customer_name: string | null;
+  recipient_name: string | null;
+  recipient_phone: string | null;
+  fulfilment: 'pickup' | 'delivery';
+  address: string | null;
+  due_at: string;
+  due_window_minutes: number | null;
+  card_message: string | null;
+  note: string | null;
+  quoted_total_cents: number;
+  sale_id: number | null;
+  created_at: string;
+  items: PreorderItem[];
+  current_total_cents: number | null;
+}
+
+/**
  * The florist's own numbers (`TechDocs/POS_FLORIST_BENCH.md` §13). Mirrors
  * `FlowerAnalytics` in `src/pos/flowers-analytics.service.ts`.
  *

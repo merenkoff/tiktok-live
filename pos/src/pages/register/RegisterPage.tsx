@@ -21,6 +21,7 @@ import { SaleSidebar } from '../../components/cashier/SaleSidebar';
 import { MobileCartSheet } from '../../components/cashier/MobileCartSheet';
 import { ParkCartSheet } from '../../components/cashier/ParkCartSheet';
 import { ParkedCartsSheet } from '../../components/cashier/ParkedCartsSheet';
+import { PreorderSheet } from '../../components/cashier/PreorderSheet';
 import { cartLinesFromParked } from '../../lib/parkedCart';
 import type { ParkedCart } from '../../types';
 import { useCancelRungSale } from '../../modules/returns';
@@ -78,6 +79,7 @@ export function RegisterPage() {
   const setCustomer = useCartStore((s) => s.setCustomer);
 
   const restore = useCartStore((s) => s.restore);
+  const preorderId = useCartStore((s) => s.preorderId);
   const online = useOfflineStatus((s) => s.online);
 
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -94,6 +96,10 @@ export function RegisterPage() {
   const [parkedBusyId, setParkedBusyId] = useState<number | null>(null);
   /** The cart this sale came out of, so the server can note what it became. */
   const [fromParkedId, setFromParkedId] = useState<number | null>(null);
+  // Taking an order for a day that has not happened yet (§14).
+  const [preorderOpen, setPreorderOpen] = useState(false);
+  const [preordering, setPreordering] = useState(false);
+  const [preorderError, setPreorderError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
   const [success, setSuccess] = useState<SaleDetail | null>(null);
   /** Shown inside the payment modal, which is opaque and covers everything else. */
@@ -329,6 +335,48 @@ export function RegisterPage() {
     }
   }
 
+  async function takePreorder(input: {
+    due_at: string;
+    fulfilment: 'pickup' | 'delivery';
+    address: string | null;
+    recipient_name: string | null;
+    recipient_phone: string | null;
+    card_message: string | null;
+    note: string | null;
+  }) {
+    setPreordering(true);
+    setPreorderError(null);
+    try {
+      await api.createPreorder({
+        client_uuid: crypto.randomUUID(),
+        customer_id: customer?.id ?? null,
+        ...input,
+        items: lines.map((line) => ({
+          variant_id: line.variant_id,
+          quantity: line.quantity,
+          ...(line.components
+            ? {
+                components: line.components.map((c) => ({
+                  component_variant_id: c.component_variant_id,
+                  quantity: c.quantity,
+                })),
+              }
+            : {}),
+        })),
+      });
+      clear();
+      setPreorderOpen(false);
+      setMobileCartOpen(false);
+      // Deliberately NOT bumping `stockEpoch`: an order holds no stock, so the
+      // tiles behind have nothing new to read.
+      setBanner('Замовлення записано');
+    } catch (error) {
+      setPreorderError(sentMessage(error, 'Не вдалося записати замовлення'));
+    } finally {
+      setPreordering(false);
+    }
+  }
+
   async function pay(payments: SalePaymentInput[], opts: { clientUuid?: string } = {}) {
     setPaying(true);
     setCheckoutError(null);
@@ -354,6 +402,7 @@ export function RegisterPage() {
           cart_discount: cartDiscount,
           customer_id: customer?.id ?? null,
           parked_cart_id: fromParkedId,
+          preorder_id: preorderId,
         },
         opts
       );
@@ -608,6 +657,12 @@ export function RegisterPage() {
               }}
               onOpenParked={() => void openParked()}
               parkedCount={parkedCarts.length}
+              locked={preorderId != null}
+              onCancelPreorder={clear}
+              onTakePreorder={() => {
+                setPreorderError(null);
+                setPreorderOpen(true);
+              }}
             />
           </div>
         </div>
@@ -642,6 +697,19 @@ export function RegisterPage() {
             setCheckoutOpen(false);
           }}
           onConfirm={(payments) => void pay(payments)}
+        />
+      )}
+
+      {preorderOpen && (
+        <PreorderSheet
+          totalCents={totalCents()}
+          lineCount={lines.length}
+          defaultRecipient={customer?.name}
+          online={online}
+          busy={preordering}
+          error={preorderError}
+          onSubmit={(input) => void takePreorder(input)}
+          onClose={() => setPreorderOpen(false)}
         />
       )}
 
@@ -690,6 +758,7 @@ export function RegisterPage() {
           }}
           onOpenParked={() => void openParked()}
           parkedCount={parkedCarts.length}
+          locked={preorderId != null}
         />
       )}
 

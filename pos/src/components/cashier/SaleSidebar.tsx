@@ -29,6 +29,18 @@ interface Props {
   onOpenParked?: () => void;
   /** How many are waiting, for the badge. */
   parkedCount?: number;
+  /**
+   * A pre-order is on the till (`TechDocs/POS_FLORIST_BENCH.md` §14).
+   *
+   * Then this is not a cart but a promise the shop already made, at a price it
+   * already named — so every edit control goes away. The server rings the
+   * order's own lines from its own table, and an editable screen would show one
+   * thing while the receipt said another. Anything extra is a second sale.
+   */
+  locked?: boolean;
+  onCancelPreorder?: () => void;
+  /** Take this cart as an order for a future day (§14). */
+  onTakePreorder?: () => void;
 }
 
 export function SaleSidebar({
@@ -45,6 +57,9 @@ export function SaleSidebar({
   onSaveBasket,
   onOpenParked,
   parkedCount = 0,
+  locked,
+  onCancelPreorder,
+  onTakePreorder,
 }: Props) {
   const count = lines.reduce((s, l) => s + l.quantity, 0);
   const subtotal = lines.reduce((s, l) => s + l.unit_price_cents * l.quantity, 0);
@@ -90,7 +105,7 @@ export function SaleSidebar({
           </p>
           <p className="text-[11px] text-sq-muted mt-0.5">Касир: {staffName || '—'}</p>
         </button>
-        <div className="relative" ref={menuRef}>
+        {!locked && <div className="relative" ref={menuRef}>
           <button
             type="button"
             onClick={() => setMenuOpen((v) => !v)}
@@ -111,6 +126,20 @@ export function SaleSidebar({
               >
                 Знижка на чек
               </button>
+              {onTakePreorder && (
+                <button
+                  type="button"
+                  disabled={lines.length === 0}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-sq-bg disabled:opacity-40"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onTakePreorder();
+                  }}
+                  data-testid="take-preorder"
+                >
+                  Замовлення наперед
+                </button>
+              )}
               {onOpenParked && (
                 <button
                   type="button"
@@ -136,7 +165,7 @@ export function SaleSidebar({
               </button>
             </div>
           )}
-        </div>
+        </div>}
       </div>
 
       <div ref={listRef} className="flex-1 overflow-auto px-3 py-2 bg-sq-sidebar select-none">
@@ -201,7 +230,7 @@ export function SaleSidebar({
                       </div>
                     </div>
                   </button>
-                  {selected && (
+                  {selected && !locked && (
                     <div className="flex items-center gap-2 px-2 pb-2 pt-1">
                       <button
                         type="button"
@@ -252,11 +281,20 @@ export function SaleSidebar({
 
       <div className="p-3 border-t border-sq-divider bg-white flex gap-2">
         {/*
-          One button, two jobs, because an empty cart cannot be parked and an
-          empty cart is exactly when a cashier reaches for one that was. Before
-          this it sat disabled and useless on the state where it was needed most.
+          A promise is paid or put back — never parked, never discounted. The
+          shop already named this number; the only questions left are «платимо»
+          and «повертаємо на потім».
         */}
-        {lines.length === 0 ? (
+        {locked ? (
+          <button
+            type="button"
+            onClick={onCancelPreorder}
+            className="flex-1 min-h-[48px] rounded-sq bg-sq-bg text-sq-secondary font-semibold text-sm"
+            data-testid="preorder-put-back"
+          >
+            Повернути
+          </button>
+        ) : lines.length === 0 ? (
           <button
             type="button"
             disabled={!onOpenParked}

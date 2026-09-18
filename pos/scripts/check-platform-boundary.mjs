@@ -48,9 +48,26 @@ const srcRoot = path.join(pos, 'src');
 const PLATFORM_ENTRY = 'src/platform/index.ts';
 
 /**
- * The files that OWN shared mutable state: a Zustand store, a module-level
- * registry or client, a React context. A second copy of one of these is a
- * second source of truth, which is the bug.
+ * The files that OWN something a page may have only one of.
+ *
+ * Mostly shared mutable state — a Zustand store, a module-level registry or
+ * client, a React context — where a second copy is a second source of truth.
+ *
+ * But not only. `lib/urls.ts` owns no state at all: it is pure functions, and
+ * by the rule above it reads as one of the stateless leaves a remote is
+ * *supposed* to bundle. What it actually owns is the **identity of the API
+ * origin**, baked in at build time from `VITE_API_BASE` — and a remote is built
+ * once, in CI, and served to many stores on many domains. Its copy therefore
+ * compiles with an empty origin and can only ever produce root-relative URLs,
+ * against the POS's own host rather than the API's.
+ *
+ * That shipped: `ProductTile` reached it relatively, so every catalog tile in
+ * the flowers module asked `pos.<shop>` for `/demo-flowers/*.svg`, got a 404 and
+ * fell back to its grey caption — while the cart, host code with the host's
+ * copy, showed the same photos correctly.
+ *
+ * So the test is not «does it hold state» but «would a second copy disagree
+ * with the host's». A pure leaf that bakes in build configuration does.
  */
 const STATE_OWNERS = [
   ['src/hooks/useAuth.ts', 'useAuthStore — the session every screen reads'],
@@ -69,7 +86,20 @@ const STATE_OWNERS = [
     'src/offline/moduleHooks.ts',
     'the offline module-hooks registry — a second copy is one the sync loop never reads',
   ],
+  [
+    'src/lib/urls.ts',
+    'the API origin, baked in from VITE_API_BASE — a remote is built in CI without it, so its copy resolves every /pos-uploads and /demo-flowers path against the POS host instead of the API',
+    // Scoped, unlike the stores above, and the difference is real: a second
+    // copy of a store is wrong anywhere, while a second copy of this one is
+    // wrong only where it is compiled SEPARATELY from the host. Host code
+    // duplicates nothing — one Rollup run, one module. So the danger zone is
+    // exactly what a remote bundle can pull in.
+    'remote-bundled',
+  ],
 ];
+
+/** The entry whose closure a remote compiles into its own bundle. */
+const UI_ENTRY = 'src/platform/ui.ts';
 
 /**
  * Files that may reach a singleton relatively although they are not part of the
@@ -183,7 +213,34 @@ if (!existsSync(platformEntry)) {
 }
 const PLATFORM = closure(platformEntry);
 
-const owners = new Map(STATE_OWNERS.map(([file, what]) => [path.join(pos, file), what]));
+/**
+ * What can end up inside a remote's own bundle, computed rather than guessed:
+ * the closure of `@pos/platform/ui` (which every remote bundles by alias) plus
+ * the closure of each module's `remote-entry.ts`.
+ *
+ * Deliberately not «everything under src/modules/» — `registry.ts`,
+ * `selectNav.ts` and their neighbours are host files that happen to live there.
+ * And deliberately not «only a module's own folder» either: a module reaches
+ * shared helpers like `modules/telemetry.ts`, and those travel with it.
+ *
+ * Anything outside this set is host-only, compiled once, and cannot hold a
+ * second copy of anything.
+ */
+const uiEntry = path.join(pos, UI_ENTRY);
+if (!existsSync(uiEntry)) {
+  console.error(`check-platform-boundary: ${UI_ENTRY} is gone — update this script.`);
+  process.exit(1);
+}
+const REMOTE_BUNDLED = closure(uiEntry);
+for (const file of files) {
+  if (/^src\/modules\/[^/]+\/remote-entry\.ts$/.test(rel(file))) {
+    for (const reached of closure(file)) REMOTE_BUNDLED.add(reached);
+  }
+}
+
+const owners = new Map(
+  STATE_OWNERS.map(([file, what, scope]) => [path.join(pos, file), { what, scope }])
+);
 for (const owner of owners.keys()) {
   if (!existsSync(owner)) {
     console.error(`check-platform-boundary: state owner ${rel(owner)} is gone — update this script.`);
@@ -220,12 +277,15 @@ for (const file of files) {
     if (!PLATFORM.has(edge.target)) continue;
     const chain = reachesOwner(edge.target);
     if (!chain) continue; // stateless leaf of the platform chunk — a copy is harmless
+    const owner = owners.get(chain[chain.length - 1]);
+    // An owner that only matters inside a remote lets host-only importers past.
+    if (owner.scope === 'remote-bundled' && !REMOTE_BUNDLED.has(file)) continue;
     violations.push({
       relPath,
       line: edge.line,
       spec: edge.spec,
       chain: chain.map(rel).join(' -> '),
-      what: owners.get(chain[chain.length - 1]),
+      what: owner.what,
     });
   }
 }

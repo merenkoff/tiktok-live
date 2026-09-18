@@ -114,22 +114,26 @@ describe('cashier rail vs bottom bar', () => {
     ).not.toContain('/hardware');
   });
 
-  it('orders the till rail: register, customers, receipts, hardware', () => {
+  it('orders the till rail: register, orders, customers, receipts, hardware', () => {
+    // `/orders` sits straight after the till: what the shop promised is the
+    // second thing a cashier reaches for, and both come from `catalog-checkout`.
     expect(select({ shell: 'cashier', role: 'seller', variant: 'rail' }, 'cashier-primary')).toEqual(
-      ['/register', '/customers', '/sales', '/hardware']
+      ['/register', '/orders', '/customers', '/sales', '/hardware']
     );
   });
 
   it('drops the receipts entry when returns are turned off', () => {
     expect(
       select({ shell: 'cashier', role: 'seller', variant: 'rail' }, 'cashier-primary', without('returns'))
-    ).toEqual(['/register', '/customers', '/hardware']);
+    ).toEqual(['/register', '/orders', '/customers', '/hardware']);
   });
 
   it('keeps the till itself when every toggleable module is off', () => {
     const coreOnly = new Set<ModuleId>(CORE_MODULE_IDS);
+    // `/orders` survives: `catalog-checkout` is core, and so is the promise
+    // list that ships with it.
     expect(select({ shell: 'cashier', role: 'seller', variant: 'rail' }, 'cashier-primary', coreOnly)).toEqual(
-      ['/register', '/hardware']
+      ['/register', '/orders', '/hardware']
     );
   });
 });
@@ -162,7 +166,7 @@ describe('store menu appearance (nav_overrides)', () => {
       items({
         'catalog-checkout:cashier-primary:/register': { order: 100 },
       }).map((n) => n.to)
-    ).toEqual(['/customers', '/sales', '/hardware', '/register']);
+    ).toEqual(['/orders', '/customers', '/sales', '/hardware', '/register']);
   });
 
   it('cannot add an entry or take one away', () => {
