@@ -26,34 +26,68 @@ ALTER TABLE pos_variants
 
 -- Exactly the pre-verticals clothing rule (`[color, size].filter(Boolean)
 -- .join(' / ')`, sales.service.ts), so no existing shop sees a caption change.
-UPDATE pos_variants
-   SET attributes = jsonb_strip_nulls(
-         jsonb_build_object('size', NULLIF(size, ''), 'color', NULLIF(color, ''))
-       ),
-       label = concat_ws(' / ', NULLIF(color, ''), NULLIF(size, ''))
- WHERE attributes = '{}'::jsonb
-   AND label = ''
-   AND (size <> '' OR color <> '');
+--
+-- Guarded, because the runner keeps no tracking table and re-applies every
+-- migration on every container start: once 036 has dropped `size`/`color`
+-- this file runs again against a table that no longer has them, and a bare
+-- UPDATE would fail — taking the whole boot with it, since the API starts
+-- only if `migrate` exits 0. `EXECUTE` keeps the statement from being planned
+-- in the branch that is not taken.
+DO $guard$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_attribute
+     WHERE attrelid = 'pos_variants'::regclass
+       AND attname = 'size'
+       AND NOT attisdropped
+  ) THEN
+    EXECUTE $sql$
+      UPDATE pos_variants
+         SET attributes = jsonb_strip_nulls(
+               jsonb_build_object('size', NULLIF(size, ''), 'color', NULLIF(color, ''))
+             ),
+             label = concat_ws(' / ', NULLIF(color, ''), NULLIF(size, ''))
+       WHERE attributes = '{}'::jsonb
+         AND label = ''
+         AND (size <> '' OR color <> '')
+    $sql$;
+  END IF;
+END
+$guard$;
 
 ALTER TABLE pos_stock_document_lines
   ADD COLUMN IF NOT EXISTS placeholder_attributes jsonb NOT NULL DEFAULT '{}'::jsonb,
   ADD COLUMN IF NOT EXISTS placeholder_label      text  NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS placeholder_unit       text  NOT NULL DEFAULT 'шт';
 
-UPDATE pos_stock_document_lines
-   SET placeholder_attributes = jsonb_strip_nulls(
-         jsonb_build_object(
-           'size', NULLIF(placeholder_size, ''),
-           'color', NULLIF(placeholder_color, '')
-         )
-       ),
-       placeholder_label = concat_ws(
-         ' / ', NULLIF(placeholder_color, ''), NULLIF(placeholder_size, '')
-       )
- WHERE is_placeholder = TRUE
-   AND placeholder_attributes = '{}'::jsonb
-   AND placeholder_label = ''
-   AND (placeholder_size <> '' OR placeholder_color <> '');
+-- Same guard, same reason (007 no longer re-adds these once 035 has run).
+DO $guard$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_attribute
+     WHERE attrelid = 'pos_stock_document_lines'::regclass
+       AND attname = 'placeholder_size'
+       AND NOT attisdropped
+  ) THEN
+    EXECUTE $sql$
+      UPDATE pos_stock_document_lines
+         SET placeholder_attributes = jsonb_strip_nulls(
+               jsonb_build_object(
+                 'size', NULLIF(placeholder_size, ''),
+                 'color', NULLIF(placeholder_color, '')
+               )
+             ),
+             placeholder_label = concat_ws(
+               ' / ', NULLIF(placeholder_color, ''), NULLIF(placeholder_size, '')
+             )
+       WHERE is_placeholder = TRUE
+         AND placeholder_attributes = '{}'::jsonb
+         AND placeholder_label = ''
+         AND (placeholder_size <> '' OR placeholder_color <> '')
+    $sql$;
+  END IF;
+END
+$guard$;
 
 -- The 007 index keyed on the (name, size, color) tuple. New code writes '' into
 -- both old columns, so two genuinely different placeholders would collide on
