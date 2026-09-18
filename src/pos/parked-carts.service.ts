@@ -152,6 +152,13 @@ export async function parkCart(input: ParkCartInput): Promise<{ cart: ParkedCart
     if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
       throw new ParkedCartError('Некоректна кількість');
     }
+    // A parked line has nowhere yet to keep a modifier or a kitchen note
+    // (café phase К3). Refused out loud: dropping them would hand a latte on
+    // oat milk back as a plain latte.
+    const extra = item as { modifiers?: unknown; note?: unknown };
+    if ((Array.isArray(extra.modifiers) && extra.modifiers.length > 0) || extra.note) {
+      throw new ParkedCartError('Позицію з модифікаторами поки не можна відкласти');
+    }
   }
 
   // Idempotent on `client_uuid` like every other till write: a double tap on a

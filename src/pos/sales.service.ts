@@ -22,6 +22,8 @@ import type {
 } from './types.js';
 import { getCustomer } from './customers.service.js';
 import * as preorders from './preorders.service.js';
+import * as modifiers from './modifiers.service.js';
+import type { LineModifierSnapshot } from './modifiers.service.js';
 
 /**
  * The caption for a bouquet assembled at the counter: how many stems went in.
@@ -241,19 +243,31 @@ export async function completeSale(params: {
     if (!customer) throw new Error('Customer not found');
   }
 
-  // Two kinds of cart line. Ordinary ones merge by variant, as they always
-  // have. A line carrying its own composition — a bouquet the cashier put
-  // together at the counter — stays its own line: two custom bouquets off the
-  // same catalogue card are two different bouquets, and merging them would
-  // lose one of the two recipes.
-  const qtyByVariant = new Map<number, number>();
+  // Two kinds of cart line. Ordinary ones merge by variant — and by the
+  // modifiers and the kitchen note they carry: a latte on oat milk and a latte
+  // on ordinary milk are two lines, two identical ones are one line of two,
+  // and the same set named in a different order is the same set. A line
+  // carrying its own composition — a bouquet the cashier put together at the
+  // counter — stays its own line: two custom bouquets off the same catalogue
+  // card are two different bouquets, and merging them would lose one of the
+  // two recipes.
+  const plainLines = new Map<
+    string,
+    { variant_id: number; quantity: number; modifiers: number[]; note: string }
+  >();
   const customItems: Array<{ variant_id: number; quantity: number; components: ComponentInput[] }> =
     [];
   for (const item of params.items ?? []) {
     if (!item.variant_id || item.quantity <= 0) {
       throw new Error('Invalid cart item');
     }
+    const modifierIds = modifiers.normalizeModifierIds(item.modifiers);
+    const note = modifiers.cleanLineNote(item.note);
     if (item.components?.length) {
+      // A bouquet's price is its stems'; a delta on top of that has no meaning.
+      if (modifierIds.length > 0) {
+        throw new Error('A line assembled at the counter cannot carry modifiers');
+      }
       customItems.push({
         variant_id: item.variant_id,
         quantity: item.quantity,
@@ -261,10 +275,10 @@ export async function completeSale(params: {
       });
       continue;
     }
-    qtyByVariant.set(
-      item.variant_id,
-      (qtyByVariant.get(item.variant_id) ?? 0) + item.quantity
-    );
+    const key = `${item.variant_id}|${modifierIds.join(',')}|${note}`;
+    const existing = plainLines.get(key);
+    if (existing) existing.quantity += item.quantity;
+    else plainLines.set(key, { variant_id: item.variant_id, quantity: item.quantity, modifiers: modifierIds, note });
   }
 
   let paymentsTotal = 0;
@@ -302,13 +316,14 @@ export async function completeSale(params: {
 
     const variantIds = [
       ...new Set([
-        ...qtyByVariant.keys(),
+        ...[...plainLines.values()].map((line) => line.variant_id),
         ...customItems.map((item) => item.variant_id),
         ...locked.map((line) => line.variant_id),
       ]),
     ];
     const variantsResult = await client.query(
-      `SELECT v.id, v.price_cents, v.compare_at_cents, v.label, v.unit, p.name AS product_name
+      `SELECT v.id, v.price_cents, v.compare_at_cents, v.label, v.unit,
+              p.id AS product_id, p.name AS product_name
        FROM pos_variants v
        JOIN pos_products p ON p.id = v.product_id
        WHERE v.store_id = $1 AND v.id = ANY($2::bigint[]) AND v.is_active = TRUE`,
@@ -333,27 +348,61 @@ export async function completeSale(params: {
       has_product_discount: boolean;
       /** Present only on a bouquet assembled at the counter. */
       components?: ComponentInput[];
+      /** Kitchen note; '' when none. */
+      note?: string;
+      /** What the line chose, when it chose anything (migration 046). */
+      modifiers?: LineModifierSnapshot[];
+      /** What those choices write off, per one unit, authored. */
+      modifier_components?: ComponentInput[];
     }> = [];
 
-    for (const [variantId, quantity] of qtyByVariant) {
-      const variant = variantMap.get(variantId)!;
-      const unit = Number(variant.price_cents);
+    // Every product's questions, once. A line naming no modifiers is checked
+    // too: a required group is required whichever client is asking, and an
+    // older till that has never heard of modifiers must not sell a latte with
+    // no milk in it.
+    const groupsByProduct = await modifiers.loadGroupsForProducts(
+      client,
+      params.storeId,
+      [...new Set([...plainLines.values()].map((line) => Number(variantMap.get(line.variant_id)!.product_id)))],
+      { activeOnly: true }
+    );
+
+    for (const line of plainLines.values()) {
+      const variant = variantMap.get(line.variant_id)!;
+      const chosen = modifiers.resolveLineModifiers(
+        groupsByProduct.get(Number(variant.product_id)) ?? [],
+        line.modifiers
+      );
+      // The card price plus the deltas — never a sum of ingredients, which is
+      // the opposite of a bouquet and deliberately so (POS_CAFE.md §4.1). A
+      // delta may be negative; the result may not.
+      const unit = Number(variant.price_cents) + chosen.deltaCents;
+      if (unit < 0) throw new Error('Modifiers cannot take the line price below zero');
+      // Shifted by the same sum, so the receipt's markdown stays what the card
+      // says; a delta that only moved the price would print a bigger or a
+      // negative discount.
       const compareAt =
-        variant.compare_at_cents == null ? null : Number(variant.compare_at_cents);
-      const pre = unit * quantity;
+        variant.compare_at_cents == null
+          ? null
+          : Number(variant.compare_at_cents) + chosen.deltaCents;
+      const pre = unit * line.quantity;
       subtotal += pre;
       draftLines.push({
-        variant_id: variantId,
+        variant_id: line.variant_id,
         product_name: variant.product_name,
         // The caption is whatever the store's vertical already derived onto the
-        // row; the sale snapshots it, so a later variant edit cannot rewrite
-        // history on a printed receipt.
-        variant_label: variant.label ?? '',
+        // row, plus the modifiers chosen; the sale snapshots it, so a later
+        // variant edit cannot rewrite history on a printed receipt.
+        variant_label: modifiers.lineCaption(variant.label ?? '', chosen.names),
         unit: variant.unit ?? '',
-        quantity,
+        quantity: line.quantity,
         unit_price_cents: unit,
         compare_at_unit_cents: compareAt,
         pre_discount_total: pre,
+        note: line.note,
+        ...(chosen.snapshot.length > 0
+          ? { modifiers: chosen.snapshot, modifier_components: chosen.components }
+          : {}),
         has_product_discount: compareAt != null,
       });
     }
@@ -477,8 +526,8 @@ export async function completeSale(params: {
         `INSERT INTO pos_sale_items
            (sale_id, store_id, variant_id, product_name, variant_label, unit,
             quantity, unit_price_cents, line_total_cents,
-            compare_at_unit_cents, line_discount_cents)
-         VALUES ($1, $2, $3, $4, $5, $11, $6, $7, $8, $9, $10)
+            compare_at_unit_cents, line_discount_cents, note)
+         VALUES ($1, $2, $3, $4, $5, $11, $6, $7, $8, $9, $10, $12)
          RETURNING id`,
         [
           saleId,
@@ -492,8 +541,29 @@ export async function completeSale(params: {
           line.compare_at_unit_cents,
           line.line_discount_cents,
           line.unit,
+          line.note ?? '',
         ]
       );
+      const saleItemId = Number(itemResult.rows[0].id);
+
+      // What the line chose, by name and delta: a group renamed next week
+      // must not rewrite a printed receipt.
+      for (const chosen of line.modifiers ?? []) {
+        await client.query(
+          `INSERT INTO pos_sale_item_modifiers
+             (store_id, sale_item_id, modifier_id, group_name, name, price_delta_cents, sort_order)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            params.storeId,
+            saleItemId,
+            chosen.modifier_id,
+            chosen.group_name,
+            chosen.name,
+            chosen.price_delta_cents,
+            chosen.sort_order,
+          ]
+        );
+      }
 
       // Composite-aware: a derived composite (a bouquet assembled when it
       // sells) writes off its components and records what it took on this line,
@@ -501,11 +571,12 @@ export async function completeSale(params: {
       await consumeStockForSaleItem(client, {
         storeId: params.storeId,
         saleId,
-        saleItemId: Number(itemResult.rows[0].id),
+        saleItemId,
         variantId: line.variant_id,
         quantity: line.quantity,
         staffId: params.staffId,
         components: line.components,
+        extra: line.modifier_components,
       });
     }
 
@@ -598,6 +669,27 @@ export async function getSale(storeId: number, saleId: number) {
     });
     componentsByItem.set(itemId, list);
   }
+  // What each line chose, as it was named at the time (migration 046).
+  const chosen = await pool.query(
+    `SELECT m.sale_item_id, m.modifier_id, m.group_name, m.name, m.price_delta_cents
+     FROM pos_sale_item_modifiers m
+     JOIN pos_sale_items i ON i.id = m.sale_item_id
+     WHERE i.sale_id = $1
+     ORDER BY m.sale_item_id, m.sort_order, m.id`,
+    [saleId]
+  );
+  const modifiersByItem = new Map<number, Array<Record<string, unknown>>>();
+  for (const row of chosen.rows) {
+    const itemId = Number(row.sale_item_id);
+    const list = modifiersByItem.get(itemId) ?? [];
+    list.push({
+      modifier_id: row.modifier_id == null ? null : Number(row.modifier_id),
+      group_name: row.group_name,
+      name: row.name,
+      price_delta_cents: Number(row.price_delta_cents),
+    });
+    modifiersByItem.set(itemId, list);
+  }
 
   const payments = await pool.query(
     `SELECT * FROM pos_payments WHERE sale_id = $1 ORDER BY id`,
@@ -682,6 +774,8 @@ export async function getSale(storeId: number, saleId: number) {
       line_total_cents: Number(row.line_total_cents),
       refunded_quantity: Number(row.refunded_quantity),
       components: componentsByItem.get(Number(row.id)) ?? [],
+      modifiers: modifiersByItem.get(Number(row.id)) ?? [],
+      note: typeof row.note === 'string' ? row.note : '',
     })),
     payments: payments.rows.map((row) => ({
       id: Number(row.id),

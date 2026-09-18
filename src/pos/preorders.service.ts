@@ -147,6 +147,12 @@ export async function createPreorder(
     if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
       throw new PreorderError('Некоректна кількість');
     }
+    // Same as a parked cart: no column for it yet (café phase К3), and a
+    // silently dropped modifier is a wrong order on the pickup shelf.
+    const extra = item as { modifiers?: unknown; note?: unknown };
+    if ((Array.isArray(extra.modifiers) && extra.modifiers.length > 0) || extra.note) {
+      throw new PreorderError('Позицію з модифікаторами поки не можна замовити наперед');
+    }
   }
 
   const existing = await findByClientUuid(input.storeId, clientUuid);

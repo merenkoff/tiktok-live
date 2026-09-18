@@ -12,6 +12,7 @@ import { registerStoreRoutes } from './routes/store.routes.js';
 import { registerReturnsRoutes } from './routes/returns.routes.js';
 import { registerCustomersRoutes } from './routes/customers.routes.js';
 import { registerProductsRoutes } from './routes/products.routes.js';
+import { registerModifierRoutes } from './routes/modifiers.routes.js';
 import { registerStockRoutes } from './routes/stock.routes.js';
 import { registerAnalyticsRoutes } from './routes/analytics.routes.js';
 import { registerStaffRoutes } from './routes/staff.routes.js';
@@ -60,6 +61,7 @@ export const POS_ROUTE_GROUPS: PosRouteGroup[] = [
   { moduleId: 'returns', register: registerReturnsRoutes },
   { moduleId: 'customers', register: registerCustomersRoutes },
   { moduleId: 'products', register: registerProductsRoutes },
+  { moduleId: 'products', register: registerModifierRoutes },
   { moduleId: 'stock', register: registerStockRoutes },
   { moduleId: 'analytics', register: registerAnalyticsRoutes },
   { moduleId: 'staff', register: registerStaffRoutes },
