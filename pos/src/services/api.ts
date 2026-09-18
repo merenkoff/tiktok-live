@@ -206,10 +206,16 @@ class PosApi {
     barcode?: string;
     tag_id?: number;
     snapshot?: boolean;
+    /** Also products that are not on the menu — the stock count counts milk. */
+    include_unsellable?: boolean;
   }): Promise<CatalogItem[]> {
-    const { snapshot, ...rest } = params ?? {};
+    const { snapshot, include_unsellable, ...rest } = params ?? {};
     const { data } = await this.client.get<CatalogItem[]>('/catalog', {
-      params: snapshot ? { ...rest, all: '1' } : rest,
+      params: {
+        ...rest,
+        ...(snapshot ? { all: '1' } : {}),
+        ...(include_unsellable ? { include_unsellable: '1' } : {}),
+      },
     });
     return data;
   }
@@ -225,6 +231,7 @@ class PosApi {
     image_url?: string | null;
     kind?: ProductKind;
     stock_mode?: ProductStockMode;
+    sellable?: boolean;
     variants: Array<{
       attributes?: AttributeValues;
       unit?: string;
@@ -248,6 +255,7 @@ class PosApi {
       is_active: boolean;
       kind: ProductKind;
       stock_mode: ProductStockMode;
+      sellable: boolean;
     }>
   ): Promise<Product> {
     const { data } = await this.client.patch<Product>(`/products/${id}`, payload);

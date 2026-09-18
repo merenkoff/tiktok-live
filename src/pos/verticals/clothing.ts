@@ -42,4 +42,5 @@ export const clothingVertical: VerticalDefinition = {
       .filter(Boolean)
       .join(' / '),
   productKinds: ['simple'],
+  maxCompositionDepth: 1,
 };

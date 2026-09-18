@@ -9,6 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { clothingVertical } from '../../../src/pos/verticals/clothing';
+import { cafeVertical } from '../../../src/pos/verticals/cafe';
 import { flowersVertical } from '../../../src/pos/verticals/flowers';
 import { DEFAULT_VERTICAL, VERTICAL_OPTIONS, verticalTitle } from './vertical';
 
@@ -30,12 +31,13 @@ describe('VERTICAL_OPTIONS', () => {
     expect(VERTICAL_OPTIONS).toEqual([
       { id: clothingVertical.id, title: clothingVertical.title },
       { id: flowersVertical.id, title: flowersVertical.title },
+      { id: cafeVertical.id, title: cafeVertical.title },
     ]);
   });
 
   it('names a vertical, falling back to the raw id', () => {
     expect(verticalTitle('flowers')).toBe('Квіти');
     // A store on a vertical this build has not shipped yet still renders.
-    expect(verticalTitle('cafe')).toBe('cafe');
+    expect(verticalTitle('bakery')).toBe('bakery');
   });
 });

@@ -300,6 +300,47 @@ describe.skipIf(!hasDb)('POS products & catalog routes', () => {
       expect(res.json()[0].product_name).toBe('Tagged for catalog');
     });
 
+    it('hides an ingredient from the till unless the stock count asks for everything', async () => {
+      const created = await app.inject({
+        method: 'POST',
+        url: '/api/pos/products',
+        headers: auth(store.ownerToken),
+        payload: {
+          name: 'Milk (ingredient)',
+          sellable: false,
+          variants: [{ price_cents: 0, quantity: 5000 }],
+        },
+      });
+      expect(created.statusCode).toBe(201);
+      expect(created.json().sellable).toBe(false);
+
+      const till = await app.inject({
+        method: 'GET',
+        url: '/api/pos/catalog?q=Milk',
+        headers: auth(store.sellerToken),
+      });
+      expect(till.statusCode).toBe(200);
+      expect(till.json()).toEqual([]);
+
+      // The stock count runs at seller level and counts milk.
+      const count = await app.inject({
+        method: 'GET',
+        url: '/api/pos/catalog?q=Milk&include_unsellable=1',
+        headers: auth(store.sellerToken),
+      });
+      expect(count.statusCode).toBe(200);
+      expect(count.json()).toHaveLength(1);
+      expect(count.json()[0].sellable).toBe(false);
+
+      const list = await app.inject({
+        method: 'GET',
+        url: '/api/pos/products',
+        headers: auth(store.ownerToken),
+      });
+      const row = list.json().find((p: { id: number }) => p.id === created.json().id);
+      expect(row?.sellable).toBe(false);
+    });
+
     it('treats all=1 and snapshot=1 as the same snapshot switch', async () => {
       const withAll = await app.inject({
         method: 'GET',

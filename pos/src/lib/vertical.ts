@@ -35,6 +35,7 @@ export const DEFAULT_VERTICAL: VerticalPublicConfig = {
 export const VERTICAL_OPTIONS: ReadonlyArray<{ id: VerticalId; title: string }> = [
   { id: 'clothing', title: 'Одяг' },
   { id: 'flowers', title: 'Квіти' },
+  { id: 'cafe', title: 'Кафе' },
 ];
 
 /** Title for a vertical id, falling back to the raw id for an unknown one. */

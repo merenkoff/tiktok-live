@@ -19,6 +19,7 @@ import {
   listSheets,
   lookupByBarcode,
   removeLine,
+  searchCatalog,
   setCount,
   startSheet,
 } from './repository';
@@ -115,6 +116,17 @@ describe('count sheet repository', () => {
     await expect(lookupByBarcode('0000')).resolves.toBeNull();
     getCatalog.mockResolvedValue([shoe]);
     await expect(lookupByBarcode(' 4820000000002 ')).resolves.toMatchObject({ variant_id: 2 });
-    expect(getCatalog).toHaveBeenLastCalledWith({ barcode: '4820000000002' });
+    // A count counts the shelf, not the menu: a café's milk is not sellable
+    // and this is the one screen that has to find it.
+    expect(getCatalog).toHaveBeenLastCalledWith({
+      barcode: '4820000000002',
+      include_unsellable: true,
+    });
+  });
+
+  it('searchCatalog asks for the whole shelf too', async () => {
+    getCatalog.mockResolvedValue([tee]);
+    await expect(searchCatalog('mi')).resolves.toHaveLength(1);
+    expect(getCatalog).toHaveBeenLastCalledWith({ q: 'mi', include_unsellable: true });
   });
 });

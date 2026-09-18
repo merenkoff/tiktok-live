@@ -17,7 +17,7 @@
 // into four different separators. See TechDocs/POS_VERTICALS.md.
 
 /** Verticals this build knows. Adding one is a code change, never a migration. */
-export type VerticalId = 'clothing' | 'flowers';
+export type VerticalId = 'clothing' | 'flowers' | 'cafe';
 
 export type AttributeType = 'text' | 'number' | 'select';
 
@@ -61,11 +61,23 @@ export interface VerticalDefinition {
    */
   labelOf(attrs: AttributeValues): string;
   /**
-   * Which `pos_products.kind` values this vertical may create. Every vertical
-   * is `['simple']` today; `'composite'` is reserved for bouquets and tech
-   * cards (TechDocs/POS_VERTICALS.md §future).
+   * Which `pos_products.kind` values this vertical may create: `'composite'`
+   * is a bouquet (flowers) or a tech card (café), see
+   * TechDocs/POS_VERTICALS.md §7e.
    */
   productKinds: readonly ('simple' | 'composite')[];
+  /**
+   * How many recipe levels a composite may have under it. The depth of a
+   * composite is 1 + the deepest composite among its components (a simple
+   * component adds nothing), so `1` means "components are stock leaves only"
+   * — a bouquet of stems — and `3` allows dish → semi-finished →
+   * semi-finished → ingredients. Enforced on every recipe write and re-checked
+   * for every ancestor when an inner recipe or a product's `stock_mode`
+   * changes (TechDocs/POS_CAFE.md §9.2). Server-side only: it is a validation
+   * rule, not something the client renders, so it stays out of
+   * `VerticalPublicConfig`.
+   */
+  maxCompositionDepth: number;
 }
 
 /**

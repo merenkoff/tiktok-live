@@ -222,7 +222,7 @@ describe.skipIf(!hasDb)('POS super admin routes', () => {
         method: 'PATCH',
         url: `/api/pos/super/stores/${v.storeId}`,
         headers: superHeaders(),
-        payload: { vertical: 'cafe' },
+        payload: { vertical: 'bakery' },
       });
       expect(res.statusCode).toBe(400);
       const db = await pool.query(`SELECT vertical FROM pos_stores WHERE id = $1`, [v.storeId]);

@@ -8,6 +8,7 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  cafeVertical,
   clothingVertical,
   DEFAULT_VERTICAL_ID,
   flowersVertical,
@@ -31,25 +32,26 @@ afterEach(() => {
 });
 
 describe('vertical registry', () => {
-  it('ships clothing and flowers, with clothing as the default', () => {
+  it('ships clothing, flowers and café, with clothing as the default', () => {
     expect(hasVertical('clothing')).toBe(true);
     expect(hasVertical('flowers')).toBe(true);
-    expect(hasVertical('cafe')).toBe(false);
+    expect(hasVertical('cafe')).toBe(true);
+    expect(hasVertical('bakery')).toBe(false);
     expect(DEFAULT_VERTICAL_ID).toBe('clothing');
-    expect(listVerticals().map((v) => v.id)).toEqual(['clothing', 'flowers']);
+    expect(listVerticals().map((v) => v.id)).toEqual(['clothing', 'flowers', 'cafe']);
   });
 
   it('falls back to clothing for a column this build does not know', () => {
-    // A newer build wrote 'cafe', or somebody typed into psql: every login of
-    // that store must still work, on the generic catalog.
-    expect(verticalOrDefault('cafe').id).toBe('clothing');
+    // A newer build wrote 'bakery', or somebody typed into psql: every login
+    // of that store must still work, on the generic catalog.
+    expect(verticalOrDefault('bakery').id).toBe('clothing');
     expect(verticalOrDefault(null).id).toBe('clothing');
     expect(verticalOrDefault('').id).toBe('clothing');
     expect(verticalOrDefault('flowers').id).toBe('flowers');
   });
 
   it('throws for an unknown id on the strict lookup', () => {
-    expect(() => getVertical('cafe' as never)).toThrow();
+    expect(() => getVertical('bakery' as never)).toThrow();
   });
 
   it('strips the rules from the client config', () => {
@@ -72,6 +74,7 @@ describe('vertical registry', () => {
       units: ['шт'],
       labelOf: () => 'x',
       productKinds: ['simple'],
+      maxCompositionDepth: 1,
     };
     registerVertical(fake);
     expect(getVertical('flowers').title).toBe('Тест');
@@ -95,6 +98,38 @@ describe('labelOf', () => {
     expect(flowersVertical.labelOf({ color: 'Червона', length_cm: 60 })).toBe('Червона · 60 см');
     expect(flowersVertical.labelOf({ length_cm: 60 })).toBe('60 см');
     expect(flowersVertical.labelOf({})).toBe('');
+  });
+
+  it('labels a café variant by its size alone, and a dish by nothing', () => {
+    expect(cafeVertical.labelOf({ size: 'M · 350 мл' })).toBe('M · 350 мл');
+    expect(cafeVertical.labelOf({})).toBe('');
+  });
+});
+
+describe('café vertical', () => {
+  it('counts ingredients in grams and millilitres, pieces by default', () => {
+    // 200 ml of milk is quantity 200 in unit 'мл' — quantities stay whole
+    // (TechDocs/POS_CAFE.md §9.3), so the small unit is the base unit.
+    expect([...cafeVertical.units]).toEqual(['шт', 'г', 'мл']);
+    expect(normalizeUnit(cafeVertical, undefined)).toBe('шт');
+    expect(normalizeUnit(cafeVertical, 'мл')).toBe('мл');
+    expect(() => normalizeUnit(cafeVertical, 'л')).toThrow(VerticalValidationError);
+    // A florist still cannot sell by the gram.
+    expect(() => normalizeUnit(flowersVertical, 'г')).toThrow(VerticalValidationError);
+  });
+
+  it('is the only vertical that allows a recipe inside a recipe', () => {
+    // A bouquet holds stems, never another bouquet; a dish holds a sauce that
+    // is itself a recipe. The depth is a property of the vertical, not of the
+    // composites service, because `validateComponents` is shared.
+    expect(clothingVertical.maxCompositionDepth).toBe(1);
+    expect(flowersVertical.maxCompositionDepth).toBe(1);
+    expect(cafeVertical.maxCompositionDepth).toBe(3);
+    expect(cafeVertical.productKinds).toEqual(['simple', 'composite']);
+  });
+
+  it('keeps the depth rule off the wire', () => {
+    expect('maxCompositionDepth' in publicConfigOf(cafeVertical)).toBe(false);
   });
 });
 
