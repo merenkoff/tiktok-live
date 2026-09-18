@@ -19,6 +19,7 @@ import crypto from 'crypto';
 import type { FastifyInstance } from 'fastify';
 import { pool } from '../db.js';
 import { DEFAULT_ENABLED_MODULES } from '../pos/core/modules.js';
+import { STORE_PATCH_COLUMNS } from '../pos/analytics.service.js';
 import { updateFiscalSettings } from '../pos/fiscal/settings.service.js';
 import {
   applyPosMigrations,
@@ -538,6 +539,72 @@ describe.skipIf(!hasDb)('POS store, analytics, QR & GTIN routes', () => {
             },
           });
           expect(res.statusCode).toBe(200);
+        } finally {
+          await dropTestStore(temp.storeId);
+        }
+      });
+    });
+
+    describe('every patchable column actually reaches the column', () => {
+      // The fence around the bug below. `PATCH /store` copies each field out of
+      // the body by hand — there is no loop — so a column can sit in
+      // `STORE_PATCH_COLUMNS`, be validated, be typed into `StorePatch`, be sent
+      // by the admin UI, and still go nowhere. That is exactly what
+      // `florist_labour_bps` did: 200, and nothing written.
+      //
+      // Two values per column on purpose. Asserting one would pass for a
+      // dropped field whenever the value happens to match the store's default;
+      // writing A then B cannot.
+
+      const NAV_KEY = 'catalog-checkout:cashier-primary:/register';
+
+      const CASES: Record<string, [unknown, unknown]> = {
+        name: ['Крамниця на розі', 'Крамниця на площі'],
+        qr_payment_enabled: [true, false],
+        qr_payment_mode: ['dynamic', 'static'],
+        qr_static_image_url: ['/pos-uploads/qr-demo.png', null],
+        qr_purpose_template: ['Оплата чека {receipt}', null],
+        qr_iban: ['UA903052992990004149123456789', null],
+        qr_edrpou: ['12345678', null],
+        qr_recipient: ['ФОП Тестовий', null],
+        gtin_lookup_enabled: [false, true],
+        auto_print_receipt: [true, false],
+        florist_labour_bps: [2500, 0],
+        enabled_modules: [['products', 'stock'], ['customers']],
+        module_remotes: [{ stock: 'https://cdn.example.com/stock/remote-entry.js' }, {}],
+        nav_overrides: [{ [NAV_KEY]: { label: 'Продаж' } }, {}],
+        live_tiktok_username: ['shopdemo', null],
+      };
+
+      it('covers every column the service is willing to write', () => {
+        // Adding a column to `STORE_PATCH_COLUMNS` without a case here fails
+        // right away; the case then fails until the route carries it.
+        expect(Object.keys(CASES).sort()).toEqual([...STORE_PATCH_COLUMNS].sort());
+      });
+
+      it.each(Object.keys(CASES))('writes %s', async (column) => {
+        const temp = await createTestStore(`rcol${column.replace(/_/g, '').slice(0, 10)}`);
+        try {
+          for (const value of CASES[column]) {
+            const res = await app.inject({
+              method: 'PATCH',
+              url: '/api/pos/store',
+              headers: auth(temp.ownerToken),
+              payload: { [column]: value },
+            });
+            expect(res.statusCode, `PATCH ${column}=${JSON.stringify(value)}`).toBe(200);
+
+            // Read back through a second request, not the PATCH's own echo: a
+            // route that dropped the field would still echo the row it read.
+            const after = await app.inject({
+              method: 'GET',
+              url: '/api/pos/store',
+              headers: auth(temp.ownerToken),
+            });
+            expect(after.json()[column], `GET after ${column}=${JSON.stringify(value)}`).toEqual(
+              value
+            );
+          }
         } finally {
           await dropTestStore(temp.storeId);
         }
