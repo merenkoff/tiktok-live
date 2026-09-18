@@ -16,6 +16,7 @@
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { stripComments } from './strip-comments.mjs';
 
 function walk(dir, matchExt) {
   const out = [];
@@ -60,7 +61,7 @@ const css = [
 ].join('\n');
 
 const sourceFiles = walk(moduleDir, ['.ts', '.tsx']);
-const text = sourceFiles.map((f) => readFileSync(f, 'utf-8')).join('\n');
+const text = sourceFiles.map((f) => stripComments(readFileSync(f, 'utf-8'))).join('\n');
 
 const PREFIXES = [
   'bg-', 'text-', 'border-', 'px-', 'py-', 'pt-', 'pb-', 'pl-', 'pr-', 'p-',
