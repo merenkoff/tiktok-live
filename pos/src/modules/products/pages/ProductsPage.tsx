@@ -97,6 +97,8 @@ export function ProductsPage() {
   const [sku, setSku] = useState('');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [composite, setComposite] = useState<ProductShape>('');
+  // An ingredient or a semi-finished product: on the shelf, off the menu.
+  const [sellable, setSellable] = useState(true);
   const [components, setComponents] = useState<ProductComponentInput[]>([]);
 
   const flatTags = useMemo(() => flattenTags(tags), [tags]);
@@ -129,6 +131,7 @@ export function ProductsPage() {
         name,
         image_url: imageUrl,
         ...(composite ? { kind: 'composite' as const, stock_mode: composite } : {}),
+        sellable,
         variants: [
           {
             attributes,
@@ -149,6 +152,7 @@ export function ProductsPage() {
       setSku('');
       setImageUrl(null);
       setComposite('');
+      setSellable(true);
       setComponents([]);
       await reload();
     } catch (err) {
@@ -393,6 +397,21 @@ export function ProductsPage() {
                   ))}
                 </select>
               </label>
+              <label className="flex items-start gap-2 text-sm text-sq-text cursor-pointer sm:col-span-2">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={sellable}
+                  onChange={(e) => setSellable(e.target.checked)}
+                />
+                <span>
+                  Продається на касі
+                  <span className="block text-[11px] text-sq-secondary">
+                    Вимкніть для інгредієнта чи заготовки: склад і рецепти його бачать, екран
+                    продажу — ні
+                  </span>
+                </span>
+              </label>
               <AttributeFields
                 className="sm:col-span-2 grid gap-2 sm:grid-cols-2"
                 schema={vertical.attributes}
@@ -490,6 +509,11 @@ export function ProductsPage() {
                                   {product.stock_mode === 'derived'
                                     ? 'Складений · при продажу'
                                     : 'Складений · збираємо'}
+                                </span>
+                              )}
+                              {product.sellable === false && (
+                                <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-[3px] bg-sq-bg text-sq-secondary">
+                                  Не на касі
                                 </span>
                               )}
                             </div>
@@ -820,6 +844,7 @@ function EditProductInline({
   const [name, setName] = useState(product.name);
   const [description, setDescription] = useState(product.description ?? '');
   const [imageUrl, setImageUrl] = useState<string | null>(product.image_url);
+  const [sellable, setSellable] = useState(product.sellable !== false);
   const [tagIds, setTagIds] = useState<number[]>(product.tag_ids ?? []);
   const [variants, setVariants] = useState<ProductVariant[]>(
     product.variants.filter((v) => v.is_active)
@@ -884,7 +909,7 @@ function EditProductInline({
    *   a perfectly valid `own` composite and the message says what to do.
    */
   async function saveShapeAndVariants(): Promise<void> {
-    const details = { name, description, image_url: imageUrl };
+    const details = { name, description, image_url: imageUrl, sellable };
     if (shape === savedShape) {
       await api.updateProduct(product.id, details);
       await writeVariants('keep');
@@ -1005,6 +1030,21 @@ function EditProductInline({
         {shape !== '' && (
           <span className="text-xs text-sq-secondary">{compositionHint(shape)}</span>
         )}
+      </label>
+
+      <label className="flex items-start gap-2 text-sm text-sq-text cursor-pointer sm:col-span-2">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={sellable}
+          onChange={(e) => setSellable(e.target.checked)}
+        />
+        <span>
+          Продається на касі
+          <span className="block text-[11px] text-sq-secondary">
+            Вимкніть для інгредієнта чи заготовки: склад і рецепти його бачать, екран продажу — ні
+          </span>
+        </span>
       </label>
 
       <div className="sm:col-span-2">

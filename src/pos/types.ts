@@ -211,6 +211,12 @@ export interface CatalogItem {
    */
   one_off: boolean;
   /**
+   * On the menu. Always `true` in a plain `GET /catalog` answer — the query
+   * filters on it — and `false` only for rows a stock count asked for with
+   * `include_unsellable=1` (an ingredient, a semi-finished product).
+   */
+  sellable: boolean;
+  /**
    * The catalogue recipe, for a composite only. Present so the till can tell a
    * bouquet card from a rose and start a custom bouquet from it — the only
    * endpoint that carried this before is owner-only, so a cashier could not.

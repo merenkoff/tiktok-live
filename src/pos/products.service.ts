@@ -56,6 +56,13 @@ export interface CreateProductInput {
    * `TechDocs/POS_FLORIST_BENCH.md` §11.
    */
   one_off?: boolean;
+  /**
+   * On the sell screen. `false` for an ingredient or a semi-finished product:
+   * the shelf, the documents, the stock count and every recipe still see it,
+   * only the till does not (migration `044`, `TechDocs/POS_CAFE.md` §4.8).
+   * Defaults to `true` — every product a clothing or flower shop has is sold.
+   */
+  sellable?: boolean;
 }
 
 /**
@@ -203,6 +210,7 @@ export async function listProducts(storeId: number) {
     updated_at: p.updated_at,
     kind: (p.kind === 'composite' ? 'composite' : 'simple') as ProductKind,
     stock_mode: (p.stock_mode === 'derived' ? 'derived' : 'own') as ProductStockMode,
+    sellable: p.sellable !== false,
     tag_ids: tagMap.get(Number(p.id)) ?? [],
     variants: byProduct.get(Number(p.id)) ?? [],
   }));
@@ -227,8 +235,8 @@ export async function createProductInTx(
   const productResult = await client.query(
     `INSERT INTO pos_products
        (store_id, name, description, image_url, needs_review, created_from_document_id,
-        kind, stock_mode, one_off)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        kind, stock_mode, one_off, sellable)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING id`,
     [
       storeId,
@@ -240,6 +248,7 @@ export async function createProductInTx(
       shape.kind,
       shape.stock_mode,
       input.one_off ?? false,
+      input.sellable ?? true,
     ]
   );
   const productId = Number(productResult.rows[0].id);
@@ -374,7 +383,10 @@ export async function updateProduct(
   storeId: number,
   productId: number,
   input: Partial<
-    Pick<CreateProductInput, 'name' | 'description' | 'image_url' | 'kind' | 'stock_mode'>
+    Pick<
+      CreateProductInput,
+      'name' | 'description' | 'image_url' | 'kind' | 'stock_mode' | 'sellable'
+    >
   > & {
     is_active?: boolean;
     needs_review?: boolean;
@@ -407,6 +419,10 @@ export async function updateProduct(
   if (input.is_active !== undefined) {
     sets.push(`is_active = $${i++}`);
     values.push(input.is_active);
+  }
+  if (input.sellable !== undefined) {
+    sets.push(`sellable = $${i++}`);
+    values.push(Boolean(input.sellable));
   }
   if (input.needs_review !== undefined) {
     sets.push(`needs_review = $${i++}`);
@@ -656,6 +672,13 @@ export async function getCatalog(
     barcode?: string;
     tag_id?: number;
     snapshot?: boolean;
+    /**
+     * Also return products that are not on the menu (`sellable = FALSE`).
+     * The stock count on the till finds what it counts through this same
+     * endpoint, and a café counts its milk — without this the one screen
+     * that must see an ingredient would be the one that cannot.
+     */
+    includeUnsellable?: boolean;
     /** The store's vertical, when the caller already has it. Read otherwise. */
     vertical?: VerticalDefinition;
   } = {}
@@ -667,6 +690,9 @@ export async function getCatalog(
     'p.is_active = TRUE',
     'v.is_active = TRUE',
   ];
+  // The one place `sellable` is read (migration 044): an ingredient exists for
+  // the shelf, the documents and the recipes, and this query is the till.
+  if (!opts.includeUnsellable) conditions.push('p.sellable = TRUE');
 
   const snapshot = Boolean(opts.snapshot);
 
@@ -751,6 +777,7 @@ export async function getCatalog(
        -- The till needs it to tell the window apart from the catalogue: both
        -- are composite+own, and only the one-off may be written off from here.
        p.one_off,
+       p.sellable,
        -- The till needs the recipe, not just the fact of one: the florist's
        -- bench starts a custom bouquet from the catalogue card's composition,
        -- and a composite it cannot read is a card it cannot sell from. Only
@@ -802,6 +829,7 @@ export async function getCatalog(
     kind: (row.kind === 'composite' ? 'composite' : 'simple') as ProductKind,
     stock_mode: (row.stock_mode === 'derived' ? 'derived' : 'own') as ProductStockMode,
     one_off: Boolean(row.one_off),
+    sellable: row.sellable !== false,
     // Absent for a simple product rather than an empty array: "this card has
     // no recipe" and "this bouquet's recipe is empty" are different facts, and
     // only the second one is a problem.

@@ -66,6 +66,12 @@ export const cashierApi = {
     barcode?: string;
     tag_id?: number;
     searchKeys?: readonly string[];
+    /**
+     * Also products that are not on the menu. Online it is a query flag; the
+     * offline mirror snapshots the till's view only, so an ingredient is not
+     * there to be found — the desktop stock count of a café is К2.
+     */
+    include_unsellable?: boolean;
   }): Promise<CatalogItem[]> {
     return isOfflinePosEnabled() ? repo.getCatalog(opts) : api.getCatalog(opts);
   },

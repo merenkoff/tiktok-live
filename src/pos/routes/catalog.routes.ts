@@ -17,12 +17,15 @@ export function registerCatalogRoutes(fastify: FastifyInstance): void {
       tag_id?: string;
       all?: string;
       snapshot?: string;
+      include_unsellable?: string;
     };
     return productsService.getCatalog(auth.storeId, {
       q: query.q,
       barcode: query.barcode,
       tag_id: query.tag_id ? Number(query.tag_id) : undefined,
       snapshot: query.all === '1' || query.snapshot === '1',
+      // The stock count counts ingredients; the sell screen never sees them.
+      includeUnsellable: query.include_unsellable === '1',
       // Already on the session — saves the service a round trip, and the
       // search needs it to know which attributes are searchable.
       vertical: getVertical(auth.vertical),

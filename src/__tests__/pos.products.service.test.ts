@@ -584,6 +584,51 @@ describe.skipIf(!hasDb)('POS products service', () => {
       expect(await products.getCatalog(catalogStore.storeId, { q: 'red' })).toHaveLength(1);
     });
 
+    it('keeps an ingredient off the till but on the shelf', async () => {
+      // Migration 044: `sellable = FALSE` is read by the catalog query and by
+      // nothing else. The product list, and so the recipe editor and every
+      // stock screen, still see the flour; the till does not — unless it is
+      // the stock count asking, which counts flour and finds it through this
+      // same endpoint.
+      const flour = (await products.createProduct(catalogStore.storeId, {
+        name: 'Flour (ingredient)',
+        sellable: false,
+        variants: [{ price_cents: 0, quantity: 5000 }],
+      }))!;
+      const names = (items: Array<{ product_name: string }>) => items.map((c) => c.product_name);
+
+      expect(names(await products.getCatalog(catalogStore.storeId))).not.toContain(
+        'Flour (ingredient)'
+      );
+      expect(
+        names(await products.getCatalog(catalogStore.storeId, { snapshot: true }))
+      ).not.toContain('Flour (ingredient)');
+      expect((await products.getCatalog(catalogStore.storeId)).every((c) => c.sellable)).toBe(
+        true
+      );
+
+      const forTheCount = await products.getCatalog(catalogStore.storeId, {
+        includeUnsellable: true,
+      });
+      expect(forTheCount.find((c) => c.product_id === flour.id)?.sellable).toBe(false);
+
+      const listed = (await products.listProducts(catalogStore.storeId)).find(
+        (p) => p.id === flour.id
+      );
+      expect(listed?.sellable).toBe(false);
+
+      // Back on the menu with one PATCH, and off again — the flag is not a
+      // one-way door like archiving.
+      await products.updateProduct(catalogStore.storeId, flour.id, { sellable: true });
+      expect(names(await products.getCatalog(catalogStore.storeId))).toContain(
+        'Flour (ingredient)'
+      );
+      await products.updateProduct(catalogStore.storeId, flour.id, { sellable: false });
+      expect(names(await products.getCatalog(catalogStore.storeId))).not.toContain(
+        'Flour (ingredient)'
+      );
+    });
+
     it('ignores q and barcode in snapshot mode — the cashier caches everything', async () => {
       const snapshot = await products.getCatalog(catalogStore.storeId, {
         q: 'nothing-matches-this',

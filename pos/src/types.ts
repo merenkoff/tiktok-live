@@ -269,6 +269,13 @@ export interface CatalogItem {
    */
   one_off?: boolean;
   /**
+   * On the menu. A plain catalog answer only ever carries `true`; `false`
+   * appears on rows the stock count asked for with `include_unsellable`
+   * (an ingredient, a semi-finished product). Absent on an older snapshot →
+   * true, which is what every product was before the column existed.
+   */
+  sellable?: boolean;
+  /**
    * The catalogue recipe, for a composite only. Rides into the offline
    * snapshot for free, because the snapshot is this same endpoint.
    */
@@ -537,6 +544,12 @@ export interface Product {
    * written off from the till. Absent on an older cached snapshot → false.
    */
   one_off?: boolean;
+  /**
+   * On the sell screen. `false` for an ingredient or a semi-finished product
+   * — still on the shelf, in the documents and in recipes. Absent on an older
+   * cached payload → true.
+   */
+  sellable?: boolean;
   tag_ids: number[];
   variants: ProductVariant[];
 }

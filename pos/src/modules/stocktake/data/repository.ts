@@ -116,13 +116,16 @@ export async function discardSheet(sheetId: string): Promise<void> {
 export async function lookupByBarcode(code: string): Promise<CatalogItem | null> {
   const trimmed = code.trim();
   if (!trimmed) return null;
-  const items = await cashierApi.getCatalog({ barcode: trimmed });
+  // A count counts what is on the shelf, which includes what the till never
+  // sells — a café's milk is `sellable = false` and this is the one screen
+  // that has to find it.
+  const items = await cashierApi.getCatalog({ barcode: trimmed, include_unsellable: true });
   return items.find((i) => i.barcode === trimmed) ?? (items.length === 1 ? items[0] : null);
 }
 
 export async function searchCatalog(q: string): Promise<CatalogItem[]> {
   const trimmed = q.trim();
   if (trimmed.length < 2) return [];
-  const items = await cashierApi.getCatalog({ q: trimmed });
+  const items = await cashierApi.getCatalog({ q: trimmed, include_unsellable: true });
   return items.slice(0, 20);
 }
