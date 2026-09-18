@@ -220,3 +220,100 @@ test('a clothes shop has no flowers page at all', async ({ page }) => {
 
   await expect(page.getByRole('link', { name: 'Квіти' })).toHaveCount(0);
 });
+
+/**
+ * B8 — the same module contributing to a screen it does not own
+ * (`TechDocs/POS_FLORIST_BENCH.md` §15).
+ *
+ * The pair mirrors the two `/register` tests above, because the slot has the
+ * same three failure modes and one deliberately different answer: the sell
+ * screen must always end up with a catalog, while «Сьогодні» must be willing
+ * to end up with nothing.
+ */
+
+const DASHBOARD_ANALYTICS = {
+  from: '2026-09-18',
+  to: '2026-09-18',
+  loss: {
+    total_cost_cents: 50000,
+    by_reason: [
+      { reason: 'damaged', quantity: 10, cost_cents: 40000 },
+      { reason: 'gift', quantity: 2, cost_cents: 10000 },
+    ],
+    top_variants: [],
+  },
+  stems: [],
+  margin: {
+    rows: [
+      {
+        kind: 'bouquet',
+        lines: 6,
+        revenue_cents: 180000,
+        cost_cents: 90000,
+        margin_cents: 90000,
+        markup_bps: 10000,
+      },
+      {
+        kind: 'other',
+        lines: 9,
+        revenue_cents: 60000,
+        cost_cents: 40000,
+        margin_cents: 20000,
+        markup_bps: 5000,
+      },
+    ],
+    total_revenue_cents: 240000,
+    total_cost_cents: 130000,
+    total_margin_cents: 110000,
+    labour_bps: 3000,
+  },
+  daily_loss: [],
+};
+
+test('the florist’s three figures land on the owner’s «Сьогодні»', async ({ page }) => {
+  await signInAsFlorist(page);
+  // Registered after `mockPosApi`, so it beats its catch-all.
+  const ranges: string[] = [];
+  await page.route('**/api/pos/analytics/flowers**', async (route) => {
+    const url = new URL(route.request().url());
+    ranges.push(`${url.searchParams.get('from')}..${url.searchParams.get('to')}`);
+    await route.fulfill({ json: DASHBOARD_ANALYTICS });
+  });
+
+  await page.goto('/admin');
+
+  const panels = page.getByTestId('flower-panels');
+  await expect(panels).toBeVisible();
+  // Money that the sales figures above physically cannot show.
+  await expect(panels.getByTestId('panel-loss')).toContainText('500');
+  await expect(panels.getByTestId('panel-loss')).toContainText('здебільшого: завʼяло');
+  // Whether the florist's work is where the takings are: 1800 of 2400.
+  await expect(panels.getByTestId('panel-bouquet-revenue')).toContainText('1800');
+  await expect(panels.getByTestId('panel-bouquet-revenue')).toContainText('75%');
+  // Realised markup next to the rate the shop asks — never one without the other.
+  await expect(panels.getByTestId('panel-bouquet-markup')).toContainText('100%');
+  await expect(panels.getByTestId('panel-bouquet-markup')).toContainText('магазин просить 30%');
+
+  // The window is the host's. The dashboard opens on today, so the panel asks
+  // for today — not for a month of its own choosing.
+  expect(ranges.length).toBeGreaterThan(0);
+  expect(ranges[ranges.length - 1]).toBe('2026-01-01..2026-01-01');
+});
+
+test('with the module CDN down «Сьогодні» is simply the dashboard it always was', async ({ page }) => {
+  // The reason the slot has no fallback. A failed remote must cost the owner
+  // three figures and nothing else — no empty frame, no error, no blank page.
+  await signInAsFlorist(page, { down: true });
+
+  await page.goto('/admin');
+  await expect(page.getByText('Загальний огляд продажів')).toBeVisible();
+  await expect(page.getByTestId('flower-panels')).toHaveCount(0);
+});
+
+test('a clothes shop’s «Сьогодні» never borrows another vertical’s figures', async ({ page }) => {
+  await mockPosApi(page);
+  await loginAsOwner(page);
+
+  await expect(page.getByText('Загальний огляд продажів')).toBeVisible();
+  await expect(page.getByTestId('flower-panels')).toHaveCount(0);
+});

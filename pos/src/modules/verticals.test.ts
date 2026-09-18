@@ -7,12 +7,13 @@
 // with a catalog, because the alternative is a till that cannot sell.
 
 import { describe, expect, it } from 'vitest';
-import { resolveSalesCatalog, verticalModuleId } from './verticals';
+import { resolveAnalyticsPanels, resolveSalesCatalog, verticalModuleId } from './verticals';
 import { MODULES } from './registry';
 import type { AnyModuleDescriptor } from './registry';
 import type { ModuleDescriptor } from './types';
 
 const FlowersCatalog = () => null;
+const FlowerPanels = () => null;
 const clothing = MODULES.find((m) => m.id === 'vertical-clothing')!;
 
 function flowers(over: Partial<ModuleDescriptor> = {}): AnyModuleDescriptor {
@@ -80,5 +81,40 @@ describe('resolveSalesCatalog', () => {
     expect(() => resolveSalesCatalog('flowers', [flowers({ sales: undefined })])).toThrow(
       /vertical-clothing/
     );
+  });
+});
+
+// The other half of the same mechanism, with the opposite consequence. The sell
+// screen must always end up with a catalog; the owner's dashboard must be able
+// to end up with nothing, because it is the host's screen and the panels are
+// only an addition to it.
+describe('resolveAnalyticsPanels', () => {
+  it('uses the module named by the store vertical', () => {
+    expect(resolveAnalyticsPanels('flowers', [clothing, flowers({ analytics: { Panels: FlowerPanels } })])).toEqual({
+      Panels: FlowerPanels,
+      moduleId: 'vertical-flowers',
+    });
+  });
+
+  it('draws nothing when the store vertical has no module at all', () => {
+    // A failed remote on the web. The dashboard must look exactly as it did
+    // before the module existed — no empty frame, no placeholder, no error.
+    expect(resolveAnalyticsPanels('flowers', [clothing])).toBeNull();
+  });
+
+  it('draws nothing for a placeholder that has not been downloaded yet', () => {
+    const pending = { ...flowers({ analytics: { Panels: FlowerPanels } }), pending: true as const };
+    expect(resolveAnalyticsPanels('flowers', [clothing, pending])).toBeNull();
+  });
+
+  it('draws nothing for a module that declares no panels', () => {
+    expect(resolveAnalyticsPanels('flowers', [clothing, flowers()])).toBeNull();
+  });
+
+  it('never falls back to clothing, which has no figures of its own', () => {
+    // The difference from `resolveSalesCatalog` above, stated as a test: a
+    // clothing shop's dashboard is the plain one, not one borrowing a vertical.
+    expect(resolveAnalyticsPanels('clothing', [clothing])).toBeNull();
+    expect(resolveAnalyticsPanels(undefined)).toBeNull();
   });
 });

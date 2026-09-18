@@ -2,10 +2,6 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { Component, type ReactNode } from 'react';
-import { reportModuleEvent } from '../../modules/telemetry';
-import type { SalesCatalogProps } from '../../modules/types';
-
 /**
  * Renders the store's own catalog and, if it throws, the bundled one instead.
  *
@@ -13,35 +9,41 @@ import type { SalesCatalogProps } from '../../modules/types';
  * `RouteErrorBoundary` on purpose, so the sell screen never flashes a loading
  * state — which means the frame has to own this itself. A vertical module that
  * throws must cost the shop a plainer catalog, not the ability to sell.
+ *
+ * The mechanism is `SlotBoundary`; what is this file's own is the name of the
+ * event, which is the same one `resolveSalesCatalog` reports when the module
+ * never loaded at all.
  */
-export class CatalogBoundary extends Component<
-  {
-    moduleId: string;
-    vertical: string;
-    fallback: ReactNode;
-    children: ReactNode;
-  },
-  { failed: boolean }
-> {
-  state = { failed: false };
 
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
+import type { ReactNode } from 'react';
+import { SlotBoundary } from '../../modules/SlotBoundary';
+import { reportModuleEvent } from '../../modules/telemetry';
 
-  componentDidCatch(error: unknown) {
-    reportModuleEvent({
-      type: 'vertical_catalog_fallback',
-      moduleId: this.props.moduleId,
-      vertical: this.props.vertical,
-      reason: 'render_error',
-      error,
-    });
-  }
-
-  render() {
-    return this.state.failed ? this.props.fallback : this.props.children;
-  }
+export function CatalogBoundary({
+  moduleId,
+  vertical,
+  fallback,
+  children,
+}: {
+  moduleId: string;
+  vertical: string;
+  fallback: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <SlotBoundary
+      fallback={fallback}
+      onError={(error) =>
+        reportModuleEvent({
+          type: 'vertical_catalog_fallback',
+          moduleId,
+          vertical,
+          reason: 'render_error',
+          error,
+        })
+      }
+    >
+      {children}
+    </SlotBoundary>
+  );
 }
-
-export type { SalesCatalogProps };

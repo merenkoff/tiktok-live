@@ -32,6 +32,12 @@ export type ModuleEvent =
       reason: string;
       error?: unknown;
     }
+  /**
+   * A vertical module's figures threw on the owner's «Сьогодні». Unlike the
+   * catalog above there is nothing to fall back to and nothing is drawn, so
+   * this line is the only trace the panels were ever meant to be there.
+   */
+  | { type: 'analytics_panels_error'; moduleId: string; vertical: string; error: unknown }
   | {
       type: 'session_manifest';
       appVersion: string;
@@ -59,7 +65,8 @@ export function reportModuleEvent(event: ModuleEvent): void {
   if (
     event.type === 'remote_load_error' ||
     event.type === 'remote_verify_error' ||
-    event.type === 'route_render_error'
+    event.type === 'route_render_error' ||
+    event.type === 'analytics_panels_error'
   ) {
     console.error(line, 'error' in event ? event.error : undefined);
   } else if (event.type === 'session_manifest') {

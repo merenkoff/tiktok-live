@@ -20,7 +20,7 @@
 
 import type { AnyModuleDescriptor } from './registry';
 import { allModules } from './registry';
-import type { ModuleSalesSlot } from './types';
+import type { ModuleAnalyticsSlot, ModuleSalesSlot } from './types';
 
 export const VERTICAL_MODULE_PREFIX = 'vertical-';
 export const FALLBACK_VERTICAL_MODULE_ID = 'vertical-clothing';
@@ -61,4 +61,31 @@ export function resolveSalesCatalog(
     source: 'fallback',
     reason: !own ? 'missing' : 'pending' in own && own.pending ? 'pending' : 'no_sales_slot',
   };
+}
+
+export interface ResolvedAnalyticsPanels {
+  Panels: ModuleAnalyticsSlot['Panels'];
+  moduleId: string;
+}
+
+/**
+ * The store's own figures on the owner's «Сьогодні», if it has any.
+ *
+ * Deliberately not `resolveSalesCatalog`'s shape: there is no fallback and no
+ * telemetry. The three ways a vertical module goes missing are the same, but
+ * the consequence has to be different — the sell screen must always have a
+ * catalog, while the dashboard is the host's own screen and the panels are an
+ * addition to it. `null` means "draw nothing", which is exactly what the
+ * clothing store (no vertical module at all) and a shop whose CDN is down
+ * should both see. A vertical whose remote never arrived already reports
+ * `vertical_catalog_fallback` from `/register`; saying it twice is noise.
+ */
+export function resolveAnalyticsPanels(
+  vertical: string | undefined,
+  modules: AnyModuleDescriptor[] = allModules()
+): ResolvedAnalyticsPanels | null {
+  const wanted = verticalModuleId(vertical);
+  const own = modules.find((m) => m.id === wanted);
+  if (!own || ('pending' in own && own.pending) || !own.analytics?.Panels) return null;
+  return { Panels: own.analytics.Panels, moduleId: wanted };
 }

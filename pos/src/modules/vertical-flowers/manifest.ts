@@ -10,6 +10,7 @@ import { lazyWithRetry } from '../lazyWithRetry';
 const ShowcasePage = lazyWithRetry(() => import('./pages/ShowcasePage'));
 const FlowerAnalyticsPage = lazyWithRetry(() => import('./pages/FlowerAnalyticsPage'));
 const FlowersCatalog = lazyWithRetry(() => import('./FlowersCatalog'));
+const FlowerPanels = lazyWithRetry(() => import('./panels/FlowerPanels'));
 
 /**
  * The flower-shop sales vertical — the first one that reaches a store as an
@@ -29,6 +30,10 @@ export const verticalFlowersModule: RemoteModuleDescriptor = {
   shells: ['web', 'cashier'],
   alwaysEnabled: true,
   sales: { Catalog: FlowersCatalog },
+  // Three of §13's figures on the owner's «Сьогодні». A slot rather than a
+  // second page, and without a fallback: a store that never loaded this module
+  // sees its dashboard exactly as before (TechDocs/POS_FLORIST_BENCH.md §15).
+  analytics: { Panels: FlowerPanels },
   // «Вітрина» is what the route actually shows now: the bouquets standing in
   // the window and the write-off for one that did not sell. The old page only
   // reported that the module was live, which the nav entry already does.
