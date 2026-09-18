@@ -7,13 +7,19 @@
 // with a catalog, because the alternative is a till that cannot sell.
 
 import { describe, expect, it } from 'vitest';
-import { resolveAnalyticsPanels, resolveSalesCatalog, verticalModuleId } from './verticals';
+import {
+  resolveAnalyticsPanels,
+  resolveSalesCatalog,
+  resolveSettingsCard,
+  verticalModuleId,
+} from './verticals';
 import { MODULES } from './registry';
 import type { AnyModuleDescriptor } from './registry';
 import type { ModuleDescriptor } from './types';
 
 const FlowersCatalog = () => null;
 const FlowerPanels = () => null;
+const FlowerSettings = () => null;
 const clothing = MODULES.find((m) => m.id === 'vertical-clothing')!;
 
 function flowers(over: Partial<ModuleDescriptor> = {}): AnyModuleDescriptor {
@@ -116,5 +122,29 @@ describe('resolveAnalyticsPanels', () => {
     // clothing shop's dashboard is the plain one, not one borrowing a vertical.
     expect(resolveAnalyticsPanels('clothing', [clothing])).toBeNull();
     expect(resolveAnalyticsPanels(undefined)).toBeNull();
+  });
+});
+
+// Third slot, same rule. The one it exists for is the florist's assembly
+// charge, which used to be a field on the host's Settings page — shown to a
+// clothing shop too, where it meant nothing.
+describe('resolveSettingsCard', () => {
+  it('uses the module named by the store vertical', () => {
+    expect(resolveSettingsCard('flowers', [clothing, flowers({ settings: { Card: FlowerSettings } })])).toEqual({
+      Card: FlowerSettings,
+      moduleId: 'vertical-flowers',
+    });
+  });
+
+  it('draws nothing when the module is missing, pending or declares no card', () => {
+    expect(resolveSettingsCard('flowers', [clothing])).toBeNull();
+    const pending = { ...flowers({ settings: { Card: FlowerSettings } }), pending: true as const };
+    expect(resolveSettingsCard('flowers', [clothing, pending])).toBeNull();
+    expect(resolveSettingsCard('flowers', [clothing, flowers()])).toBeNull();
+  });
+
+  it('never falls back, so a clothes shop sees the settings page it always had', () => {
+    expect(resolveSettingsCard('clothing', [clothing])).toBeNull();
+    expect(resolveSettingsCard(undefined)).toBeNull();
   });
 });

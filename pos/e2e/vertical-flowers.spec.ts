@@ -317,3 +317,57 @@ test('a clothes shop’s «Сьогодні» never borrows another vertical’s
   await expect(page.getByText('Загальний огляд продажів')).toBeVisible();
   await expect(page.getByTestId('flower-panels')).toHaveCount(0);
 });
+
+/**
+ * The third slot: what this kind of shop configures and the others do not
+ * (`TechDocs/POS_FLORIST_BENCH.md` §16).
+ */
+
+test('the assembly charge is the flower shop’s to set, and saves in basis points', async ({ page }) => {
+  await signInAsFlorist(page);
+
+  const patches: Array<Record<string, unknown>> = [];
+  await page.route('**/api/pos/store', async (route) => {
+    if (route.request().method() === 'PATCH') {
+      const body = route.request().postDataJSON() as Record<string, unknown>;
+      patches.push(body);
+      await route.fulfill({ json: { id: 1, name: 'Demo', florist_labour_bps: body.florist_labour_bps } });
+      return;
+    }
+    await route.fulfill({ json: { id: 1, name: 'Demo', slug: 'demo', currency: 'UAH', florist_labour_bps: 2500, enabled_modules: [], module_remotes: {} } });
+  });
+
+  await page.goto('/admin/settings');
+
+  const card = page.getByTestId('florist-labour-card');
+  await expect(card).toBeVisible();
+  await expect(card.getByTestId('florist-labour-input')).toHaveValue('25');
+
+  await card.getByTestId('florist-labour-input').fill('30');
+  await card.getByTestId('florist-labour-save').click();
+
+  await expect.poll(() => patches.length).toBeGreaterThan(0);
+  // Percent on screen, basis points on the wire — and nothing else in the patch,
+  // because this card saves itself rather than riding the host's form.
+  expect(patches.at(-1)).toEqual({ florist_labour_bps: 3000 });
+});
+
+test('with the module CDN down the settings page is the one it always was', async ({ page }) => {
+  await signInAsFlorist(page, { down: true });
+
+  await page.goto('/admin/settings');
+  await expect(page.getByText('Тип магазину')).toBeVisible();
+  await expect(page.getByTestId('florist-labour-card')).toHaveCount(0);
+});
+
+test('a clothes shop is never shown a florist’s assembly charge', async ({ page }) => {
+  // The complaint this whole change answers: the field used to be on every
+  // store's settings page, and it did nothing there.
+  await mockPosApi(page);
+  await loginAsOwner(page);
+
+  await page.goto('/admin/settings');
+  await expect(page.getByText('Тип магазину')).toBeVisible();
+  await expect(page.getByTestId('florist-labour-card')).toHaveCount(0);
+  await expect(page.getByText(/Робота флориста/)).toHaveCount(0);
+});

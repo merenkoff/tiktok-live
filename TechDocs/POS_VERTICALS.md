@@ -181,6 +181,12 @@ VerticalDefinition {
   `resolveAnalyticsPanels` повертає `null` для `missing`/`pending`/без слота, і
   дашборд лишається тим, чим був. Каса зобовʼязана мати каталог; «Сьогодні»
   зобовʼязане вміти не мати нічого.
+- `ModuleDescriptor.settings.Card` — третій слот, те саме правило
+  (`POS_FLORIST_BENCH.md` §16): картка вертикалі на `/admin/settings`, без
+  пропсів і з власним «Зберегти». Перша — націнка флориста за збирання, яка
+  доти лежала на хостовій сторінці й показувалася навіть магазину одягу.
+  `resolveAnalyticsPanels` і `resolveSettingsCard` — обгортки над одним
+  `verticalSlot`; `resolveSalesCatalog` окремо, бо фолбек саме його й вирізняє.
 
 ## 7c. Що вже лежить (фаза 4)
 

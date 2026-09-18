@@ -10,4 +10,5 @@ export type {
   ModuleSalesSlot,
   AnalyticsPanelProps,
   ModuleAnalyticsSlot,
+  ModuleSettingsSlot,
 } from '../modules/types';

@@ -209,3 +209,20 @@ describe('Settings — adding an online-only module', () => {
     expect(screen.getByRole('button', { name: '+ Додати модуль' })).toBeEnabled();
   });
 });
+
+describe('Settings — what belongs to a vertical is not the host’s to save', () => {
+  it('no longer sends florist_labour_bps', async () => {
+    // It used to be a field on this page, shown to every store including a
+    // clothing one, and it is now the flowers module's own card with its own
+    // save. If this form kept sending its (now nonexistent) copy, the host's
+    // «Зберегти» would quietly overwrite whatever that card had just saved.
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await user.click(await screen.findByRole('button', { name: /Зберегти/ }));
+
+    await waitFor(() => expect(updateStore).toHaveBeenCalled());
+    expect(Object.keys(updateStore.mock.calls.at(-1)![0])).not.toContain('florist_labour_bps');
+    expect(screen.queryByText(/Робота флориста/)).toBeNull();
+  });
+});

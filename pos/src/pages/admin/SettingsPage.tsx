@@ -2,12 +2,15 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, Suspense, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, useAuthStore, sameRemoteMap, useVertical, PLATFORM_VERSION } from '@pos/platform';
 import { ProductPhotoField } from '../../components/ProductPhotoField';
 import { FiscalSettingsCard } from './FiscalSettingsCard';
 import { MODULES } from '../../modules/registry';
+import { SlotBoundary } from '../../modules/SlotBoundary';
+import { reportModuleEvent } from '../../modules/telemetry';
+import { resolveSettingsCard } from '../../modules/verticals';
 import type { ModuleRemoteEntry, QrPaymentMode, StoreConfig } from '../../types';
 // Stateless leaf — no singleton to duplicate, so a direct import is fine here.
 import { inspectRemoteManifest, type RemoteManifestInfo } from '../../modules/remoteVerify';
@@ -18,6 +21,10 @@ export function SettingsPage() {
   const [name, setName] = useState(auth?.store.name ?? '');
   const [slug, setSlug] = useState(auth?.store.slug ?? '');
   const vertical = useVertical();
+  // Whatever this kind of shop has to configure and the others do not — first
+  // of them is the florist's assembly charge, which used to be on this page
+  // for every store (see `modules/verticals.ts`).
+  const settingsCard = useMemo(() => resolveSettingsCard(vertical.id), [vertical.id]);
   const [qrEnabled, setQrEnabled] = useState(false);
   const [qrMode, setQrMode] = useState<QrPaymentMode>('static');
   const [qrImageUrl, setQrImageUrl] = useState<string | null>(null);
@@ -30,7 +37,6 @@ export function SettingsPage() {
   const [autoPrintReceipt, setAutoPrintReceipt] = useState(false);
   // Percent in the field, basis points on the wire — the owner thinks in
   // percent and the column is exact.
-  const [labourPercent, setLabourPercent] = useState('0');
   const [enabledModules, setEnabledModules] = useState<Set<string>>(new Set());
   // TikTok LIVE account this store broadcasts from. Setting it is what lets the
   // `tiktok-live` module mint LIVE tokens for staff — see the backend
@@ -88,7 +94,6 @@ export function SettingsPage() {
     setQrPurposeTemplate(store.qr_purpose_template ?? '');
     setGtinLookupEnabled(store.gtin_lookup_enabled);
     setAutoPrintReceipt(store.auto_print_receipt);
-    setLabourPercent(String((store.florist_labour_bps ?? 0) / 100));
     setEnabledModules(new Set(store.enabled_modules));
     setLiveTiktokUsername(store.live_tiktok_username ?? '');
     const strings: Record<string, string> = {};
@@ -242,7 +247,6 @@ export function SettingsPage() {
         qr_purpose_template: qrPurposeTemplate || null,
         gtin_lookup_enabled: gtinLookupEnabled,
         auto_print_receipt: autoPrintReceipt,
-        florist_labour_bps: Math.round(Number(labourPercent.replace(',', '.')) * 100) || 0,
         enabled_modules: [...enabledModules],
         module_remotes: { ...remoteObjects, ...moduleRemotes },
         live_tiktok_username: liveTiktokUsername.trim() || null,
@@ -297,22 +301,31 @@ export function SettingsPage() {
               Визначає поля товару та екран продажу. Змінює адміністратор платформи.
             </span>
           </label>
-          <label className="block">
-            <span className="text-sm text-sq-secondary">Робота флориста, %</span>
-            <input
-              className="mt-1.5 w-full rounded-sq border border-sq-divider px-3 py-2.5"
-              inputMode="decimal"
-              value={labourPercent}
-              onChange={(e) => setLabourPercent(e.target.value.replace(/[^\d.,]/g, ''))}
-            />
-            <span className="mt-1 block text-xs text-sq-muted">
-              Скільки додається до вартості складників, коли касир збирає букет. Ціни
-              стебел уже містять вашу націнку, тож тут — плата за саму роботу; у
-              галузі це зазвичай близько 25%. 0 — рахувати тільки складники.
-            </span>
-          </label>
           <p className="text-sm text-sq-secondary">Валюта: грн (UAH)</p>
         </div>
+
+        {/* Whatever this kind of shop configures and the others do not. It sits
+            here because «Тип магазину» is directly above it, and it carries its
+            own «Зберегти»: the card is the module's, the form is the host's.
+            A module that never loaded adds nothing — this page is the host's
+            and a failing CDN must not be able to take it down. */}
+        {settingsCard && (
+          <SlotBoundary
+            fallback={null}
+            onError={(err) =>
+              reportModuleEvent({
+                type: 'settings_card_error',
+                moduleId: settingsCard.moduleId,
+                vertical: vertical.id,
+                error: err,
+              })
+            }
+          >
+            <Suspense fallback={<div className="h-28" />}>
+              <settingsCard.Card />
+            </Suspense>
+          </SlotBoundary>
+        )}
 
         <div className="bg-sq-surface border border-sq-divider rounded-sq p-5 space-y-4 shadow-sm">
           <div>

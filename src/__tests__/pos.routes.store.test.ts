@@ -544,6 +544,80 @@ describe.skipIf(!hasDb)('POS store, analytics, QR & GTIN routes', () => {
       });
     });
 
+    describe('florist_labour_bps', () => {
+      // The whole `describe` exists because nothing did: every other test sets
+      // this column with raw SQL, so nobody noticed that the route never copied
+      // it out of the body. `PATCH` answered 200 with the value unchanged, and
+      // the owner's Settings page had an input that quietly did nothing.
+
+      it('persists what the owner typed', async () => {
+        const res = await app.inject({
+          method: 'PATCH',
+          url: '/api/pos/store',
+          headers: auth(store.ownerToken),
+          payload: { florist_labour_bps: 2500 },
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.json().florist_labour_bps).toBe(2500);
+
+        // Through the column, not just the echo — a route that dropped the
+        // field would still return the row it read back.
+        const after = await pool.query(
+          `SELECT florist_labour_bps FROM pos_stores WHERE id = $1`,
+          [store.storeId]
+        );
+        expect(after.rows[0].florist_labour_bps).toBe(2500);
+      });
+
+      it('takes 0, which means «parts only» and not «leave it alone»', async () => {
+        const res = await app.inject({
+          method: 'PATCH',
+          url: '/api/pos/store',
+          headers: auth(store.ownerToken),
+          payload: { florist_labour_bps: 0 },
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.json().florist_labour_bps).toBe(0);
+      });
+
+      it('leaves it alone when the patch does not mention it', async () => {
+        await app.inject({
+          method: 'PATCH',
+          url: '/api/pos/store',
+          headers: auth(store.ownerToken),
+          payload: { florist_labour_bps: 1500 },
+        });
+        const res = await app.inject({
+          method: 'PATCH',
+          url: '/api/pos/store',
+          headers: auth(store.ownerToken),
+          payload: { name: store.slug },
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.json().florist_labour_bps).toBe(1500);
+      });
+
+      it('refuses a value outside the range, in words the owner can act on', async () => {
+        // The CHECK would refuse it too, but as a 500 nobody can do anything
+        // with — `updateStore` turns it into a 400 that names the limit.
+        for (const bad of [100001, -1, 12.5, 'багато']) {
+          const res = await app.inject({
+            method: 'PATCH',
+            url: '/api/pos/store',
+            headers: auth(store.ownerToken),
+            payload: { florist_labour_bps: bad },
+          });
+          expect(res.statusCode, `${bad} should be refused`).toBe(400);
+          expect(res.json().error).toContain('Націнка за роботу');
+        }
+        const after = await pool.query(
+          `SELECT florist_labour_bps FROM pos_stores WHERE id = $1`,
+          [store.storeId]
+        );
+        expect(after.rows[0].florist_labour_bps).toBe(1500);
+      });
+    });
+
     describe('vertical', () => {
       it('refuses to let the owner change what the store sells', async () => {
         // It decides the attribute schema of a catalogue they have already

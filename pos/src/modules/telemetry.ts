@@ -38,6 +38,8 @@ export type ModuleEvent =
    * this line is the only trace the panels were ever meant to be there.
    */
   | { type: 'analytics_panels_error'; moduleId: string; vertical: string; error: unknown }
+  /** Same, for the card a vertical adds to the owner's Settings page. */
+  | { type: 'settings_card_error'; moduleId: string; vertical: string; error: unknown }
   | {
       type: 'session_manifest';
       appVersion: string;
@@ -66,7 +68,8 @@ export function reportModuleEvent(event: ModuleEvent): void {
     event.type === 'remote_load_error' ||
     event.type === 'remote_verify_error' ||
     event.type === 'route_render_error' ||
-    event.type === 'analytics_panels_error'
+    event.type === 'analytics_panels_error' ||
+    event.type === 'settings_card_error'
   ) {
     console.error(line, 'error' in event ? event.error : undefined);
   } else if (event.type === 'session_manifest') {
