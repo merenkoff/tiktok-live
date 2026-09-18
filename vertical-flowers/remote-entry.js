@@ -1,6 +1,6 @@
 import { lazy as e } from "react";
 //#region src/platform/version.ts
-var t = "2.0.0";
+var t = "2.0.1";
 //#endregion
 //#region src/modules/lazyWithRetry.ts
 async function n(e, { retries: t = 2, backoffMs: n = 400 } = {}) {
@@ -18,25 +18,34 @@ function r(t, r) {
 }
 //#endregion
 //#region src/modules/vertical-flowers/manifest.ts
-var i = r(() => import("./FlowersHomePage-DffhguV3.js")), a = {
+var i = r(() => import("./ShowcasePage-Bagdd8Tm.js")), a = r(() => import("./FlowerAnalyticsPage-BAvRLhmJ.js")), o = {
 	id: "vertical-flowers",
 	title: "Квіти",
 	shells: ["web", "cashier"],
 	alwaysEnabled: !0,
-	sales: { Catalog: r(() => import("./FlowersCatalog-3PK-qplx.js")) },
+	sales: { Catalog: r(() => import("./FlowersCatalog-BYVuffwt.js")) },
 	routes: [{
 		path: "/flowers/*",
 		element: i
+	}, {
+		path: "flowers",
+		mount: "admin",
+		element: a
 	}],
 	nav: [{
 		to: "/flowers",
-		label: "Квіти",
+		label: "Вітрина",
 		icon: "Flower2",
 		location: "cashier-primary",
 		order: 80,
 		match: "/flowers"
+	}, {
+		to: "/admin/flowers",
+		label: "Квіти",
+		location: "admin-sidebar",
+		order: 55
 	}],
 	version: t
 };
 //#endregion
-export { a as manifest };
+export { o as manifest };
