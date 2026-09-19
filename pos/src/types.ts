@@ -808,6 +808,8 @@ export interface FiscalActionResult {
 export interface SaleListItem {
   id: number;
   receipt_number: string;
+  /** Short daily order number (migration 047); null on older sales. */
+  order_no?: number | null;
   /** Client-generated UUID (offline idempotency key) — links a server sale to its local row. */
   client_uuid?: string | null;
   status: string;
@@ -825,6 +827,12 @@ export interface SaleListItem {
 export interface SaleDetail {
   id: number;
   receipt_number: string;
+  /**
+   * The short daily number the counter calls out (migration 047). Null on a
+   * sale made before it existed, and on a sale the desktop till stamped
+   * offline until it syncs. Shown where the vertical wants it.
+   */
+  order_no?: number | null;
   /** Client-generated UUID (offline idempotency key) — links a server sale to its local row. */
   client_uuid?: string | null;
   status: string;
