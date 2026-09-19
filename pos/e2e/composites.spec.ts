@@ -116,6 +116,9 @@ test('the owner gives a bouquet its composition', async ({ page }) => {
   await page.route('**/api/pos/products/3/tags', async (route) =>
     route.fulfill({ json: { tag_ids: [] } })
   );
+  await page.route('**/api/pos/products/3/modifier-groups', async (route) =>
+    route.fulfill({ json: [] })
+  );
 
   await loginAsOwner(page);
   await page.goto('/admin/products');
@@ -166,6 +169,9 @@ test('an existing plain product can be turned into a bouquet', async ({ page }) 
   });
   await page.route('**/api/pos/products/2/tags', async (route) =>
     route.fulfill({ json: { tag_ids: [] } })
+  );
+  await page.route('**/api/pos/products/2/modifier-groups', async (route) =>
+    route.fulfill({ json: [] })
   );
 
   await loginAsOwner(page);

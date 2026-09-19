@@ -6,6 +6,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { DEFAULT_TAG_COLOR, api, assetUrl, formatUah, type TagColorKey, uahInputToCents, useAuthStore, useVertical } from '@pos/platform';
 import { PriceTagsDialog } from '../components/PriceTagsDialog';
 import type {
+  ModifierGroup,
   AttributeValues,
   PosTag,
   Product,
@@ -14,6 +15,7 @@ import type {
   ProductVariant,
 } from '@pos/platform';
 import { CompositionEditor } from '../components/CompositionEditor';
+import { ModifierGroupChips } from '../components/ModifierGroupChips';
 import { componentOptions } from '../components/componentOptions';
 import type { ComponentOption } from '../components/componentOptions';
 import { AttributeFields, ProductPhotoField, useDragScroll } from '@pos/platform/ui';
@@ -100,14 +102,28 @@ export function ProductsPage() {
   // An ingredient or a semi-finished product: on the shelf, off the menu.
   const [sellable, setSellable] = useState(true);
   const [components, setComponents] = useState<ProductComponentInput[]>([]);
+  // The questions the new product asks, in order (`/admin/modifiers` owns the questions).
+  const [groupIds, setGroupIds] = useState<number[]>([]);
+  const [groups, setGroups] = useState<ModifierGroup[]>([]);
 
   const flatTags = useMemo(() => flattenTags(tags), [tags]);
-  const partOptions = useMemo(() => componentOptions(products), [products]);
+  // A recipe may go into a recipe only where the vertical says so (a café's
+  // sauce inside a sandwich, never a bouquet inside a bouquet).
+  const maxDepth = vertical.maxCompositionDepth ?? 1;
+  const partOptions = useMemo(
+    () => componentOptions(products, { maxDepth }),
+    [products, maxDepth]
+  );
 
   async function reload() {
-    const [plist, tlist] = await Promise.all([api.getProducts(), api.getTags()]);
+    const [plist, tlist, glist] = await Promise.all([
+      api.getProducts(),
+      api.getTags(),
+      api.listModifierGroups(),
+    ]);
     setProducts(plist);
     setTags(tlist);
+    setGroups(glist);
   }
 
   useEffect(() => {
@@ -127,7 +143,7 @@ export function ProductsPage() {
     e.preventDefault();
     setError(null);
     try {
-      await api.createProduct({
+      const created = await api.createProduct({
         name,
         image_url: imageUrl,
         ...(composite ? { kind: 'composite' as const, stock_mode: composite } : {}),
@@ -146,6 +162,8 @@ export function ProductsPage() {
           },
         ],
       });
+      // The questions travel separately, like tags — and only when there are any.
+      if (groupIds.length) await api.setProductModifierGroups(created.id, groupIds);
       setShowCreate(false);
       setName('');
       setBarcode('');
@@ -154,6 +172,7 @@ export function ProductsPage() {
       setComposite('');
       setSellable(true);
       setComponents([]);
+      setGroupIds([]);
       await reload();
     } catch (err) {
       setError(saveErrorMessage(err, 'Не вдалося створити товар'));
@@ -412,6 +431,7 @@ export function ProductsPage() {
                   </span>
                 </span>
               </label>
+              <ModifierGroupChips groups={groups} value={groupIds} onChange={setGroupIds} />
               <AttributeFields
                 className="sm:col-span-2 grid gap-2 sm:grid-cols-2"
                 schema={vertical.attributes}
@@ -463,7 +483,11 @@ export function ProductsPage() {
                   key={product.id}
                   product={product}
                   flatTags={flatTags}
-                  partOptions={componentOptions(products, product.id)}
+                  groups={groups}
+                  partOptions={componentOptions(products, {
+                    excludeProductId: product.id,
+                    maxDepth,
+                  })}
                   onCancel={() => setEditId(null)}
                   onSaved={async () => {
                     await reload();
@@ -514,6 +538,11 @@ export function ProductsPage() {
                               {product.sellable === false && (
                                 <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-[3px] bg-sq-bg text-sq-secondary">
                                   Не на касі
+                                </span>
+                              )}
+                              {(product.modifier_group_ids?.length ?? 0) > 0 && (
+                                <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-[3px] bg-[#EEF4FF] text-[#2B4ACB]">
+                                  Модифікатори · {product.modifier_group_ids?.length}
                                 </span>
                               )}
                             </div>
@@ -821,6 +850,7 @@ function TagAdminRow({
 function EditProductInline({
   product,
   flatTags,
+  groups,
   partOptions,
   onCancel,
   onSaved,
@@ -828,6 +858,7 @@ function EditProductInline({
 }: {
   product: Product;
   flatTags: PosTag[];
+  groups: ModifierGroup[];
   partOptions: ComponentOption[];
   onCancel: () => void;
   onSaved: () => Promise<void>;
@@ -846,6 +877,7 @@ function EditProductInline({
   const [imageUrl, setImageUrl] = useState<string | null>(product.image_url);
   const [sellable, setSellable] = useState(product.sellable !== false);
   const [tagIds, setTagIds] = useState<number[]>(product.tag_ids ?? []);
+  const [groupIds, setGroupIds] = useState<number[]>(product.modifier_group_ids ?? []);
   const [variants, setVariants] = useState<ProductVariant[]>(
     product.variants.filter((v) => v.is_active)
   );
@@ -936,6 +968,8 @@ function EditProductInline({
     try {
       await saveShapeAndVariants();
       await api.setProductTags(product.id, tagIds);
+      // Always, like tags: sending the empty list is how a question is taken away.
+      await api.setProductModifierGroups(product.id, groupIds);
       await onSaved();
       onCloseAfterSave();
     } catch (err) {
@@ -1068,6 +1102,8 @@ function EditProductInline({
           )}
         </div>
       </div>
+
+      <ModifierGroupChips groups={groups} value={groupIds} onChange={setGroupIds} />
 
       <div className="sm:col-span-2 space-y-3">
         <p className="text-xs font-semibold text-sq-secondary">Варіанти</p>

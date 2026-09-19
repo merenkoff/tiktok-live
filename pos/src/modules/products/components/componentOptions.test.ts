@@ -45,12 +45,29 @@ describe('componentOptions', () => {
     expect(options[1].caption).toBe('Троянда · Червона');
   });
 
-  it('never offers a composite — that is what makes cycles impossible', () => {
+  it('never offers a composite when the vertical allows one level — a bouquet holds stems, not bouquets', () => {
     const options = componentOptions([
       product(1, 'Троянда'),
       product(2, 'Букет', { kind: 'composite', stock_mode: 'derived' }),
     ]);
     expect(options.map((o) => o.caption)).toEqual(['Троянда · Червона']);
+    expect(componentOptions([product(2, 'Букет', { kind: 'composite' })], { maxDepth: 1 })).toEqual([]);
+  });
+
+  it('offers a recipe as a component where the vertical nests — a café’s sauce inside a sandwich', () => {
+    const options = componentOptions(
+      [product(1, 'Сир'), product(2, 'Соус', { kind: 'composite', stock_mode: 'derived' })],
+      { maxDepth: 3 }
+    );
+    expect(options.map((o) => o.caption)).toEqual(['Сир · Червона', 'Соус · Червона']);
+  });
+
+  it('never offers the product itself, whatever the depth', () => {
+    const options = componentOptions(
+      [product(1, 'Сир'), product(2, 'Соус', { kind: 'composite', stock_mode: 'derived' })],
+      { maxDepth: 3, excludeProductId: 2 }
+    );
+    expect(options.map((o) => o.caption)).toEqual(['Сир · Червона']);
   });
 
   it('skips archived products and archived variants', () => {
@@ -64,7 +81,7 @@ describe('componentOptions', () => {
   });
 
   it('excludes the product being edited, so it cannot contain itself', () => {
-    const options = componentOptions([product(1, 'Троянда'), product(2, 'Евкаліпт')], 1);
+    const options = componentOptions([product(1, 'Троянда'), product(2, 'Евкаліпт')], { excludeProductId: 1 });
     expect(options.map((o) => o.caption)).toEqual(['Евкаліпт · Червона']);
   });
 

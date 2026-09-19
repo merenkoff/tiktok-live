@@ -14,14 +14,22 @@ export interface ComponentOption {
 
 /**
  * Everything a composite may be assembled from: every active variant of a
- * product that is not itself composite. One level deep is the server's rule
- * too — it makes cycles impossible without a recursive check.
+ * product — and, only where the vertical lets a recipe hold a recipe
+ * (`maxCompositionDepth > 1`: a café's sauce inside a sandwich), a composite
+ * too. A bouquet holds stems and never another bouquet, so a florist's
+ * editor keeps offering leaves only; the server checks the depth and the
+ * cycle either way, this just spares the owner a 400.
  */
-export function componentOptions(products: Product[], excludeProductId?: number): ComponentOption[] {
+export function componentOptions(
+  products: Product[],
+  opts: { excludeProductId?: number; maxDepth?: number } = {}
+): ComponentOption[] {
+  const { excludeProductId, maxDepth = 1 } = opts;
   const options: ComponentOption[] = [];
   for (const product of products) {
     if (!product.is_active) continue;
-    if (product.kind === 'composite') continue;
+    if (product.kind === 'composite' && maxDepth <= 1) continue;
+    // A product may never contain itself, whatever the depth.
     if (excludeProductId != null && product.id === excludeProductId) continue;
     for (const variant of product.variants) {
       if (!variant.is_active) continue;

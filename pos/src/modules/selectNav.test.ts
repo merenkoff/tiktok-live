@@ -30,6 +30,7 @@ describe('admin sidebar', () => {
     expect(select({ shell: 'web', role: 'owner' }, 'admin-sidebar')).toEqual([
       '/admin',
       '/admin/products',
+      '/admin/modifiers',
       '/admin/stock',
       '/admin/customers',
       '/admin/sales',
