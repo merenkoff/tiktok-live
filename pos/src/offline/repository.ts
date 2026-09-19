@@ -30,6 +30,7 @@ export type RefundedSaleRow = LocalSaleRow & {
 };
 import { filterCatalog } from './catalog-filter';
 import { customBouquetLabel, priceOfComponents } from '../lib/bouquet';
+import { lineCaption, resolveLineModifiers, shiftCompareAt } from '../lib/modifiers';
 import {
   db,
   getMeta,
@@ -59,7 +60,9 @@ export async function refreshSnapshot(): Promise<void> {
   if (refreshInFlight) return refreshInFlight;
   refreshInFlight = (async () => {
     const [items, tags, customers] = await Promise.all([
-      api.getCatalog({ snapshot: true }),
+      // Everything, the ingredients included: the till's stock count has to
+      // find the milk, and `filterCatalog` is what keeps it off the sell screen.
+      api.getCatalog({ snapshot: true, include_unsellable: true }),
       api.getTags(),
       api.listCustomers(undefined, true),
     ]);
@@ -120,6 +123,8 @@ export async function getCatalog(opts?: {
   tag_id?: number;
   /** Attribute keys the store's vertical marks searchable — see `filterCatalog`. */
   searchKeys?: readonly string[];
+  /** Also the rows that are not on the menu — the stock count asks for them. */
+  include_unsellable?: boolean;
 }): Promise<CatalogItem[]> {
   await ensureSnapshot();
   const [items, tags] = await Promise.all([db.catalog.toArray(), getCachedTags()]);
@@ -271,9 +276,15 @@ function localSaleDetail(
     // that card is a template, and its price means nothing for this bouquet.
     // Same arithmetic the server runs, on the same numbers, so the `OFF-`
     // receipt the customer walks out with matches what lands at sync.
+    // A café line's answers, priced from the ids in the payload against the
+    // snapshot's groups — never from `is_default`, which the server ignores.
+    const chosen = line.modifiers?.length
+      ? resolveLineModifiers(cat?.modifier_groups ?? [], line.modifiers)
+      : null;
+    const deltaCents = chosen?.deltaCents ?? 0;
     const unit = line.components
       ? priceOfComponents(line.components, byId, labourBps)
-      : (cat?.price_cents ?? 0);
+      : (cat?.price_cents ?? 0) + deltaCents;
     const total = unit * line.quantity;
     subtotal += total;
     return {
@@ -282,18 +293,34 @@ function localSaleDetail(
       product_name: cat?.product_name ?? 'Товар',
       // The snapshot carries the caption the server built, so an offline
       // receipt reads exactly like the online one for the same variant. For a
-      // custom bouquet the server names the line by what went in, so mirror
-      // that too rather than printing the template's caption.
+      // custom bouquet the server names the line by what went in, and for a
+      // line with modifiers by what was answered, so mirror both rather than
+      // printing the template's caption.
       variant_label: line.components
         ? customBouquetLabel(line.components)
-        : (cat?.label ?? ''),
+        : chosen
+          ? lineCaption(cat?.label ?? '', chosen.names)
+          : (cat?.label ?? ''),
       unit: cat?.unit ?? '',
       quantity: line.quantity,
       unit_price_cents: unit,
-      compare_at_unit_cents: line.components ? null : (cat?.compare_at_cents ?? null),
+      compare_at_unit_cents: line.components
+        ? null
+        : shiftCompareAt(cat?.compare_at_cents, deltaCents),
       line_discount_cents: 0,
       line_total_cents: total,
       refunded_quantity: 0,
+      ...(chosen
+        ? {
+            modifiers: chosen.snapshot.map((m) => ({
+              modifier_id: m.id,
+              group_name: m.group_name,
+              name: m.name,
+              price_delta_cents: m.price_delta_cents,
+            })),
+          }
+        : {}),
+      ...(line.note ? { note: line.note } : {}),
     };
   });
   const auth = api.loadAuth();
@@ -361,15 +388,23 @@ async function applyLocalStockDelta(
   sign: -1 | 1 = -1
 ): Promise<void> {
   const deltas = new Map<number, number>();
+  const add = (variantId: number, quantity: number) =>
+    deltas.set(variantId, (deltas.get(variantId) ?? 0) + quantity);
   for (const line of items) {
     if (line.components) {
-      for (const part of line.components) {
-        const previous = deltas.get(part.component_variant_id) ?? 0;
-        deltas.set(part.component_variant_id, previous + part.quantity * line.quantity);
-      }
+      for (const part of line.components) add(part.component_variant_id, part.quantity * line.quantity);
       continue;
     }
-    deltas.set(line.variant_id, (deltas.get(line.variant_id) ?? 0) + line.quantity);
+    add(line.variant_id, line.quantity);
+    // What the line's answers take — the oat milk behind «вівсяне». Only a
+    // simple leaf moves here: a component that is itself a recipe (a syrup
+    // portion) is not expanded offline, and the server's flat table corrects
+    // the mirror on sync. Accepted drift: one portion of syrup, not a latte.
+    if (line.modifiers?.length) {
+      const row = await db.catalog.get(line.variant_id);
+      const chosen = resolveLineModifiers(row?.modifier_groups ?? [], line.modifiers);
+      for (const part of chosen.components) add(part.component_variant_id, part.quantity * line.quantity);
+    }
   }
 
   await db.transaction('rw', db.catalog, async () => {
@@ -630,6 +665,14 @@ export async function refundSale(
                 component_variant_id: c.component_variant_id,
                 quantity: c.quantity_per_unit,
               })),
+            }
+          : {}),
+        // The milk the answers took comes back with the latte.
+        ...(item.modifiers?.length
+          ? {
+              modifiers: item.modifiers.flatMap((m) =>
+                m.modifier_id == null ? [] : [m.modifier_id]
+              ),
             }
           : {}),
       })),

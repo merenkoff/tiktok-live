@@ -34,9 +34,9 @@ export function tagFilterIds(tags: PosTag[], tagId: number): number[] {
 }
 
 export function filterCatalog(
-  items: CatalogItem[],
+  all: CatalogItem[],
   tags: PosTag[],
-  opts?: { q?: string; barcode?: string; tag_id?: number },
+  opts?: { q?: string; barcode?: string; tag_id?: number; include_unsellable?: boolean },
   /**
    * Attribute keys the store's vertical marks searchable. Mirrors the server's
    * `searchableAttributeKeys` — the offline till must find what the online one
@@ -44,6 +44,10 @@ export function filterCatalog(
    */
   searchKeys: readonly string[] = []
 ): CatalogItem[] {
+  // The menu, unless asked for everything: an ingredient is in the snapshot so
+  // the stock count can find it, and this is the one place it is kept off the
+  // sell screen — before the barcode branch, or a wedge scan rings up milk.
+  const items = opts?.include_unsellable ? all : all.filter((item) => item.sellable !== false);
   const barcode = opts?.barcode?.trim();
   if (barcode) {
     return items.filter((item) => (item.barcode ?? '') === barcode);

@@ -78,6 +78,12 @@ export interface ReceiptData {
   receipt_number: string;
   /** Sale this refund is against; null on a normal sale receipt. */
   refund_of_receipt: string | null;
+  /**
+   * The short daily number the counter calls out, printed large above the
+   * receipt number. Only a café sets it; absent on an older host, and a Rust
+   * build that predates it ignores it.
+   */
+  order_no?: number | null;
   created_at: string;
   staff_name: string;
   customer_name: string | null;

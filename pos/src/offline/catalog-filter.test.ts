@@ -121,3 +121,30 @@ describe('filterCatalog', () => {
     expect(filterCatalog(items, tags, { q: 'кросівки', tag_id: 4 }).map((i) => i.variant_id)).toEqual([2]);
   });
 });
+
+describe('filterCatalog — what is not on the menu', () => {
+  // The snapshot holds the ingredients too, so the stock count can find the
+  // milk; the sell screen must never offer it, not even to a wedge scan.
+  const items = [
+    makeCatalogItem({ variant_id: 1, product_name: 'Латте', barcode: '111' }),
+    makeCatalogItem({ variant_id: 2, product_name: 'Молоко вівсяне', barcode: '222', sellable: false }),
+    makeCatalogItem({ variant_id: 3, product_name: 'Круасан', barcode: '333', sellable: true }),
+  ];
+
+  it('hides an unsellable row by default, whatever the query', () => {
+    expect(filterCatalog(items, tags).map((i) => i.variant_id)).toEqual([1, 3]);
+    expect(filterCatalog(items, tags, { q: 'молоко' })).toEqual([]);
+    expect(filterCatalog(items, tags, { barcode: '222' })).toEqual([]);
+  });
+
+  it('shows everything when the stock count asks', () => {
+    expect(filterCatalog(items, tags, { include_unsellable: true }).map((i) => i.variant_id)).toEqual([1, 2, 3]);
+    expect(filterCatalog(items, tags, { barcode: '222', include_unsellable: true }).map((i) => i.variant_id)).toEqual([2]);
+  });
+
+  it('treats a row snapshotted before the flag existed as on the menu', () => {
+    const old = { ...makeCatalogItem({ variant_id: 9 }) } as Record<string, unknown>;
+    delete old.sellable;
+    expect(filterCatalog([old as never], tags).map((i) => i.variant_id)).toEqual([9]);
+  });
+});

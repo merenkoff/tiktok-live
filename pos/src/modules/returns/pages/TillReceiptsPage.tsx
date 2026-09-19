@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { formatUah } from '@pos/platform';
+import { formatUah, useVertical } from '@pos/platform';
 import type { LocalSaleRow, SaleDetail } from '@pos/platform';
 import { useDragScroll } from '@pos/platform/ui';
 import { returnsApi } from '../data/returnsApi';
@@ -207,12 +207,22 @@ function SaleDetailPanel({
   onDiscard?: () => void;
 }) {
   const bodyRef = useDragScroll<HTMLDivElement>();
+  // A café's daily number sits on the detail, which is the only request that
+  // carries it; the list rows are keyed by receipt number as everywhere else.
+  const cafe = useVertical().id === 'cafe';
 
   return (
     <>
       <div ref={bodyRef} className="flex-1 overflow-auto p-5 space-y-4 select-none">
         <div>
-          <h2 className="text-xl font-bold text-sq-text">{row.receipt_number}</h2>
+          <h2 className="text-xl font-bold text-sq-text">
+            {cafe && detail?.order_no != null && (
+              <span className="mr-2 rounded-sq bg-sq-bg px-1.5 py-0.5 text-sm tabular-nums">
+                № {detail.order_no}
+              </span>
+            )}
+            {row.receipt_number}
+          </h2>
           <p className="text-sm text-sq-secondary">
             {new Date(row.created_at).toLocaleString('uk-UA')} · {row.staff_name}
           </p>
@@ -237,6 +247,7 @@ function SaleDetailPanel({
                     {item.variant_label} · {item.quantity} шт
                     {item.refunded_quantity > 0 ? ` (повернено ${item.refunded_quantity})` : ''}
                   </p>
+                  {item.note && <p className="text-xs text-sq-muted italic">✎ {item.note}</p>}
                 </div>
                 <span className="font-semibold text-sq-text shrink-0">
                   {formatUah(item.line_total_cents)}

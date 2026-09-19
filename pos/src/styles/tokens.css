@@ -178,6 +178,15 @@ select:focus-visible {
     font-size: 14px;
   }
 
+  /* The café's daily order number — read from the pickup counter, so bigger
+     than anything else on the roll. */
+  .receipt-print-order {
+    text-align: center;
+    font-weight: bold;
+    font-size: 22px;
+    margin: 4px 0;
+  }
+
   .receipt-print-item {
     margin-top: 4px;
   }

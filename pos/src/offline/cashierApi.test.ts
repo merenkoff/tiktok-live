@@ -89,6 +89,14 @@ describe('cashierApi delegation', () => {
     expect(api.getCatalog).not.toHaveBeenCalled();
   });
 
+  it("passes the stock count's include_unsellable flag through to the mirror", async () => {
+    offline.mockReturnValue(true);
+    vi.mocked(repo.getCatalog).mockResolvedValue([]);
+    await cashierApi.getCatalog({ barcode: '4820', include_unsellable: true });
+
+    expect(repo.getCatalog).toHaveBeenCalledWith({ barcode: '4820', include_unsellable: true });
+  });
+
   it('maps the server sales list onto local rows', async () => {
     vi.mocked(api.listSales).mockResolvedValue([
       makeSaleListItem({ id: 5, client_uuid: null, receipt_number: 'RC-00005' }),
