@@ -31,6 +31,7 @@ describe('Nav — admin sidebar', () => {
     expect(hrefs()).toEqual([
       '/admin',
       '/admin/products',
+      '/admin/modifiers',
       '/admin/stock',
       '/admin/customers',
       '/admin/sales',

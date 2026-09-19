@@ -8,6 +8,9 @@ import { lazyWithRetry } from '../lazyWithRetry';
 const ProductsPage = lazyWithRetry(() =>
   import('./pages/ProductsPage').then((m) => ({ default: m.ProductsPage }))
 );
+const ModifiersPage = lazyWithRetry(() =>
+  import('./pages/ModifiersPage').then((m) => ({ default: m.ModifiersPage }))
+);
 
 /** Product / variant / tag catalog management. Owner-only, web build only. */
 export const productsModule: ModuleDescriptor = {
@@ -16,9 +19,15 @@ export const productsModule: ModuleDescriptor = {
   defaultEnabled: true,
   shells: ['web'],
   ownerOnly: true,
-  routes: [{ path: 'products', mount: 'admin', element: ProductsPage }],
+  routes: [
+    { path: 'products', mount: 'admin', element: ProductsPage },
+    // The questions a product may ask («Молоко?») and their answers. Host code,
+    // not café code: the next vertical that asks a question reuses it.
+    { path: 'modifiers', mount: 'admin', element: ModifiersPage },
+  ],
   nav: [
     { to: '/admin/products', label: 'Товари', location: 'admin-sidebar', order: 20 },
+    { to: '/admin/modifiers', label: 'Модифікатори', location: 'admin-sidebar', order: 22 },
     {
       to: '/admin/products',
       label: 'Товари',

@@ -82,6 +82,10 @@ export const handlers = [
 
   http.get(url('/tags'), () => HttpResponse.json([makeTag()])),
 
+  http.get(url('/modifier-groups'), () => HttpResponse.json([])),
+
+  http.put(url('/products/:id/modifier-groups'), () => HttpResponse.json([])),
+
   http.get(url('/customers'), () => HttpResponse.json([])),
 
   http.get(url('/store'), () => HttpResponse.json({ enabled_modules: [] })),

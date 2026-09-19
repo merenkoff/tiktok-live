@@ -48,6 +48,9 @@ import type {
   FlowerAnalytics,
   Preorder,
   PreorderStatus,
+  ModifierGroup,
+  ModifierGroupInput,
+  ModifierInput,
 } from '../types';
 import { posApiBase } from '../lib/urls';
 // Direct import (not via '@pos/platform') — that barrel re-exports this module,
@@ -354,6 +357,56 @@ class PosApi {
       tag_ids,
     });
     return data.tag_ids;
+  }
+
+  // ── modifiers (owner, `products` module) ──────────────────────────
+
+  async listModifierGroups(): Promise<ModifierGroup[]> {
+    const { data } = await this.client.get<ModifierGroup[]>('/modifier-groups');
+    return data;
+  }
+
+  async createModifierGroup(input: ModifierGroupInput): Promise<ModifierGroup> {
+    const { data } = await this.client.post<ModifierGroup>('/modifier-groups', input);
+    return data;
+  }
+
+  async updateModifierGroup(id: number, input: ModifierGroupInput): Promise<ModifierGroup> {
+    const { data } = await this.client.patch<ModifierGroup>(`/modifier-groups/${id}`, input);
+    return data;
+  }
+
+  async deleteModifierGroup(id: number): Promise<void> {
+    await this.client.delete(`/modifier-groups/${id}`);
+  }
+
+  async createModifier(groupId: number, input: ModifierInput): Promise<ModifierGroup> {
+    const { data } = await this.client.post<ModifierGroup>(
+      `/modifier-groups/${groupId}/modifiers`,
+      input
+    );
+    return data;
+  }
+
+  async updateModifier(id: number, input: ModifierInput): Promise<ModifierGroup> {
+    const { data } = await this.client.patch<ModifierGroup>(`/modifiers/${id}`, input);
+    return data;
+  }
+
+  async deleteModifier(id: number): Promise<void> {
+    await this.client.delete(`/modifiers/${id}`);
+  }
+
+  /**
+   * The groups a product asks, replaced wholesale and in this order — like
+   * tags, so taking a question away is expressible.
+   */
+  async setProductModifierGroups(productId: number, group_ids: number[]): Promise<ModifierGroup[]> {
+    const { data } = await this.client.put<ModifierGroup[]>(
+      `/products/${productId}/modifier-groups`,
+      { group_ids }
+    );
+    return data;
   }
 
   async assignTag(tagId: number, product_ids: number[]) {

@@ -258,6 +258,51 @@ export interface CatalogModifier {
   component_quantity: number | null;
 }
 
+/** One answer as the owner edits it — mirrors `Modifier` in `src/pos/modifiers.service.ts`. */
+export interface Modifier {
+  id: number;
+  group_id: number;
+  name: string;
+  /** Signed: «половина −20 ₴» is a delta too. */
+  price_delta_cents: number;
+  component_variant_id: number | null;
+  component_quantity: number | null;
+  /** The component named, for the list. */
+  component: { product_name: string; label: string; unit: string } | null;
+  is_default: boolean;
+  sort_order: number;
+  is_active: boolean;
+}
+
+/** A question as the owner edits it, with its answers in order. */
+export interface ModifierGroup {
+  id: number;
+  name: string;
+  min_select: number;
+  max_select: number;
+  sort_order: number;
+  is_active: boolean;
+  modifiers: Modifier[];
+}
+
+export interface ModifierGroupInput {
+  name?: string;
+  min_select?: number;
+  max_select?: number;
+  sort_order?: number;
+  is_active?: boolean;
+}
+
+export interface ModifierInput {
+  name?: string;
+  price_delta_cents?: number;
+  component_variant_id?: number | null;
+  component_quantity?: number | null;
+  is_default?: boolean;
+  sort_order?: number;
+  is_active?: boolean;
+}
+
 /** A question the till asks about a product and how many answers it takes. */
 export interface CatalogModifierGroup {
   id: number;
