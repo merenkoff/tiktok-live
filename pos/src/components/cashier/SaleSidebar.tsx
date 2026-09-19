@@ -93,7 +93,10 @@ export function SaleSidebar({
   }
 
   return (
-    <aside className="bg-sq-sidebar border-l border-sq-divider flex flex-col min-h-0 h-full text-sq-text w-full max-w-[360px] ml-auto">
+    <aside
+      className="bg-sq-sidebar border-l border-sq-divider flex flex-col min-h-0 h-full text-sq-text w-full max-w-[360px] ml-auto"
+      data-testid="sale-sidebar"
+    >
       <div className="px-4 py-3 border-b border-sq-divider bg-white flex items-start justify-between gap-2">
         <button type="button" className="min-w-0 text-left flex-1" onClick={() => setPickerOpen(true)}>
           <p className="text-[15px] font-semibold truncate">
