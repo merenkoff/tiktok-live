@@ -531,21 +531,43 @@ export async function resolveStockDemand(
     variantId: number;
     /** The line's own composition, when it carries one. Already validated. */
     components?: ComponentInput[];
+    /**
+     * What the line's modifiers write off, on top of the variant's own demand
+     * — «вівсяне молоко» on a latte, «ще сир» on a sandwich that has its own
+     * shelf. Authored, per one unit; expanded here like everything else.
+     */
+    extra?: ComponentInput[];
   }
 ): Promise<StockDemand> {
   const shape = await loadStockShape(client, params.storeId, params.variantId);
+  const extra = params.extra?.length
+    ? await flattenComponents(client, params.storeId, params.extra)
+    : [];
   if (!(shape.kind === 'composite' && shape.stock_mode === 'derived')) {
-    return { self: true, leaves: [] };
+    return { self: true, leaves: extra };
   }
 
-  const leaves = params.components
+  const own = params.components
     ? await flattenComponents(client, params.storeId, params.components)
     : await flatOf(client, params.storeId, params.variantId);
 
   // A derived composite with nothing in it is 0 available, never unlimited —
   // the same rule the catalog's availability sum follows.
-  if (leaves.length === 0) throw new EmptyCompositionError(params.variantId);
-  return { self: false, leaves };
+  if (own.length === 0) throw new EmptyCompositionError(params.variantId);
+  return { self: false, leaves: mergeLeaves(own, extra) };
+}
+
+/** Two expanded lists into one, the same leaf summed. */
+function mergeLeaves(a: ComponentInput[], b: ComponentInput[]): ComponentInput[] {
+  if (b.length === 0) return a;
+  const totals = new Map<number, number>();
+  for (const row of [...a, ...b]) {
+    totals.set(row.component_variant_id, (totals.get(row.component_variant_id) ?? 0) + row.quantity);
+  }
+  return [...totals.entries()].map(([component_variant_id, quantity]) => ({
+    component_variant_id,
+    quantity,
+  }));
 }
 
 /**
@@ -572,12 +594,15 @@ export async function consumeStockForSaleItem(
      * Already validated by the caller.
      */
     components?: ComponentInput[];
+    /** What the line's modifiers write off, per one unit (see `resolveStockDemand`). */
+    extra?: ComponentInput[];
   }
 ): Promise<void> {
   const demand = await resolveStockDemand(client, {
     storeId: params.storeId,
     variantId: params.variantId,
     components: params.components,
+    extra: params.extra,
   });
 
   if (demand.self) {

@@ -19,6 +19,7 @@ import {
   recomputeFlat,
   setComponents,
 } from './composites.service.js';
+import { listProductGroupIds, loadGroupsForProducts, toCatalogGroup } from './modifiers.service.js';
 import type { ComponentInput } from './composites.service.js';
 
 export interface VariantInput {
@@ -203,6 +204,7 @@ export async function listProducts(storeId: number) {
 
   const productIds = products.rows.map((p) => Number(p.id));
   const tagMap = await getProductTagIds(storeId, productIds);
+  const groupMap = await listProductGroupIds(storeId, productIds);
 
   return products.rows.map((p) => ({
     id: Number(p.id),
@@ -219,6 +221,7 @@ export async function listProducts(storeId: number) {
     stock_mode: (p.stock_mode === 'derived' ? 'derived' : 'own') as ProductStockMode,
     sellable: p.sellable !== false,
     tag_ids: tagMap.get(Number(p.id)) ?? [],
+    modifier_group_ids: groupMap.get(Number(p.id)) ?? [],
     variants: byProduct.get(Number(p.id)) ?? [],
   }));
 }
@@ -838,6 +841,16 @@ export async function getCatalog(
     params
   );
 
+  // The questions the till asks about each product. One query for the whole
+  // answer, and absent (not empty) on a product that asks none — the till
+  // opens the modifier sheet only when there is something to choose.
+  const groupsByProduct = await loadGroupsForProducts(
+    pool,
+    storeId,
+    [...new Set(result.rows.map((row) => Number(row.product_id)))],
+    { activeOnly: true }
+  );
+
   return result.rows.map((row) => ({
     variant_id: Number(row.variant_id),
     product_id: Number(row.product_id),
@@ -869,6 +882,9 @@ export async function getCatalog(
             unit: String(c.unit ?? ''),
           })),
         }
+      : {}),
+    ...(groupsByProduct.has(Number(row.product_id))
+      ? { modifier_groups: groupsByProduct.get(Number(row.product_id))!.map(toCatalogGroup) }
       : {}),
     tag_ids: Array.isArray(row.tag_ids) ? row.tag_ids.map((id: string | number) => Number(id)) : [],
   }));

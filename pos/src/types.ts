@@ -229,6 +229,35 @@ export interface SaleItemInput {
   variant_id: number;
   quantity: number;
   components?: Array<{ component_variant_id: number; quantity: number }>;
+  /**
+   * Modifier ids this line chose («вівсяне молоко», «без цукру»). Ids only —
+   * the server prices the line as the card price plus the deltas and writes
+   * off what the modifiers take. Never together with `components`.
+   */
+  modifiers?: number[];
+  /** Kitchen note, ≤ 120 characters. Never on the fiscal receipt. */
+  note?: string;
+}
+
+/** One answer the till may pick for a product. */
+export interface CatalogModifier {
+  id: number;
+  name: string;
+  /** Signed. */
+  price_delta_cents: number;
+  /** Pre-selected on the till; the server never applies it on its own. */
+  is_default: boolean;
+  component_variant_id: number | null;
+  component_quantity: number | null;
+}
+
+/** A question the till asks about a product and how many answers it takes. */
+export interface CatalogModifierGroup {
+  id: number;
+  name: string;
+  min_select: number;
+  max_select: number;
+  modifiers: CatalogModifier[];
 }
 
 export interface CatalogItem {
@@ -280,6 +309,8 @@ export interface CatalogItem {
    * snapshot for free, because the snapshot is this same endpoint.
    */
   components?: CatalogComponent[];
+  /** The product's modifier groups, in order — only when it has any. */
+  modifier_groups?: CatalogModifierGroup[];
   tag_ids?: number[];
 }
 
@@ -551,6 +582,8 @@ export interface Product {
    */
   sellable?: boolean;
   tag_ids: number[];
+  /** Modifier groups this product asks, in order. Absent on an older payload. */
+  modifier_group_ids?: number[];
   variants: ProductVariant[];
 }
 
@@ -833,6 +866,15 @@ export interface SaleDetail {
       label: string;
       unit: string;
     }>;
+    /** What the line chose, by name and delta, as it was at the time. */
+    modifiers?: Array<{
+      modifier_id: number | null;
+      group_name: string;
+      name: string;
+      price_delta_cents: number;
+    }>;
+    /** Kitchen note. */
+    note?: string;
   }>;
   payments: Array<{
     id: number;

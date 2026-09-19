@@ -188,6 +188,30 @@ export interface CatalogComponent {
   unit: string;
 }
 
+/** One answer the till may pick, as the catalog carries it. */
+export interface CatalogModifier {
+  id: number;
+  name: string;
+  /** Signed: «пів порції −15» is a real modifier. */
+  price_delta_cents: number;
+  /** Pre-selected on the till; never applied by the server on its own. */
+  is_default: boolean;
+  component_variant_id: number | null;
+  component_quantity: number | null;
+}
+
+/**
+ * A question the till asks about a product («Молоко?») and how many answers
+ * it takes. Migration 046, TechDocs/POS_CAFE.md §3.
+ */
+export interface CatalogModifierGroup {
+  id: number;
+  name: string;
+  min_select: number;
+  max_select: number;
+  modifiers: CatalogModifier[];
+}
+
 export interface CatalogItem {
   variant_id: number;
   product_id: number;
@@ -224,12 +248,28 @@ export interface CatalogItem {
    * same endpoint.
    */
   components?: CatalogComponent[];
+  /**
+   * The product's active modifier groups, in order — present only when it
+   * has any. Rides into the offline snapshot, so the desktop till can price
+   * a modified line without the network.
+   */
+  modifier_groups?: CatalogModifierGroup[];
   tag_ids?: number[];
 }
 
 export interface CompleteSaleItemInput {
   variant_id: number;
   quantity: number;
+  /**
+   * Modifier ids this line chose (migration 046). Ids only: the server prices
+   * the line as the card price plus the deltas, snapshots names and deltas
+   * onto the line and writes off what the modifiers take. A line naming none
+   * still has to satisfy every required group of its product. Never together
+   * with `components`.
+   */
+  modifiers?: number[];
+  /** Kitchen note for this line, ≤ 120 characters. Never on the fiscal receipt. */
+  note?: string;
   /**
    * A bouquet assembled at the counter: the composition this ONE line was rung
    * with, overriding the catalogue's. Only a derived composite accepts it.
