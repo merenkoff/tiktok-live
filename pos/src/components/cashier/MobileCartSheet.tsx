@@ -124,6 +124,14 @@ export function MobileCartSheet({
                           {line.variant_label && (
                             <p className="text-xs text-sq-secondary mt-0.5">{line.variant_label}</p>
                           )}
+                          {line.note && (
+                            <p
+                              className="text-xs text-sq-muted italic mt-0.5 truncate"
+                              data-testid="cart-line-note"
+                            >
+                              ✎ {line.note}
+                            </p>
+                          )}
                           {line.discount_label && (
                             <p className="text-xs text-sq-secondary mt-1 flex items-center gap-1">
                               <Tag size={12} />

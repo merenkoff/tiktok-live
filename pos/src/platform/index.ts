@@ -26,6 +26,7 @@ export * from './bouquet';
 export * from './cart';
 export * from './gtin';
 export * from './icons';
+export * from './modifiers';
 export * from './money';
 export * from './receipt';
 export * from './sales';

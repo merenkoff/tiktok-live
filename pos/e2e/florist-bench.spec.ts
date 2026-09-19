@@ -50,6 +50,7 @@ const FLOWERS_VERTICAL = {
   ],
   units: ['шт'],
   defaultUnit: 'шт',
+  maxCompositionDepth: 1,
 };
 
 const FLOWERS_REMOTE = {

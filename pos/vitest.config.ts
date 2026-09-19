@@ -40,6 +40,7 @@ export default defineConfig({
         'src/modules/useEnabledModules.ts',
         'src/modules/vertical-flowers/bench/useBench.ts',
         'src/lib/bouquet.ts',
+        'src/lib/modifiers.ts',
         'src/lib/money.ts',
         'src/lib/receipt.ts',
         'src/lib/taxUrl.ts',

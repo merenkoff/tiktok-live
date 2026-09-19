@@ -20,6 +20,11 @@ export { TagFolderTile } from '../components/cashier/TagFolderTile';
 export { VariantPicker } from '../components/cashier/VariantPicker';
 export { CatalogTagBar } from '../components/cashier/CatalogTagBar';
 export { ScanWedge } from '../components/cashier/ScanWedge';
+// Every question about a product on one sheet, with the price of the answer
+// on the button (TechDocs/POS_CAFE.md §3). Host UI rather than café code, so
+// the next vertical that asks a question does not write a second one.
+export { ModifierSheet } from '../components/cashier/ModifierSheet';
+export type { ModifierSheetChoice } from '../components/cashier/ModifierSheet';
 // The price tag, rendered off-screen and made visible only to the print engine
 // by the `@media print` rules in `styles/tokens.css`. Those rules ship with the
 // HOST page, not with a module's `style.css` (which is Tailwind utilities

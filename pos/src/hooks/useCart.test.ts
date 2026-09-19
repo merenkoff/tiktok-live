@@ -2,7 +2,7 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { makeCatalogItem } from '../test/utils';
 import { cartLinesFromParked } from '../lib/parkedCart';
 import { computeCartDiscountCents, useCartStore, type CartLine } from './useCart';
@@ -318,5 +318,133 @@ describe('useCartStore', () => {
     cart().clear();
 
     expect(cart()).toMatchObject({ lines: [], banner: null, cartDiscount: null, customer: null });
+  });
+});
+
+describe('useCartStore with modifiers', () => {
+  // The café's answers, as the catalog carries them. The numbers are the ones
+  // `src/__tests__/pos.modifiers.test.ts` pins on the server.
+  const milk = {
+    id: 1,
+    name: 'Молоко',
+    min_select: 1,
+    max_select: 1,
+    modifiers: [
+      { id: 11, name: 'звичайне', price_delta_cents: 0, is_default: true, component_variant_id: 501, component_quantity: 200 },
+      { id: 12, name: 'вівсяне', price_delta_cents: 1500, is_default: false, component_variant_id: 502, component_quantity: 200 },
+    ],
+  };
+  const syrup = {
+    id: 2,
+    name: 'Сироп',
+    min_select: 0,
+    max_select: 3,
+    modifiers: [
+      { id: 21, name: 'карамель', price_delta_cents: 1000, is_default: false, component_variant_id: 601, component_quantity: 1 },
+      { id: 22, name: 'половина', price_delta_cents: -2000, is_default: false, component_variant_id: null, component_quantity: null },
+    ],
+  };
+  const latte = (overrides = {}) =>
+    makeCatalogItem({
+      variant_id: 7,
+      product_name: 'Латте',
+      label: 'M',
+      price_cents: 6500,
+      quantity: 20,
+      modifier_groups: [milk, syrup],
+      ...overrides,
+    });
+
+  beforeEach(() => cart().clear());
+
+  it('prices the line as the card plus the deltas and composes the caption the server will', () => {
+    cart().addItem(latte(), 1, { modifiers: [21, 12] });
+
+    expect(cart().lines[0]).toMatchObject({
+      uid: '7|12,21|',
+      unit_price_cents: 9000,
+      variant_label: 'M · вівсяне · карамель',
+      modifiers: [
+        { id: 12, group_name: 'Молоко', name: 'вівсяне', price_delta_cents: 1500 },
+        { id: 21, group_name: 'Сироп', name: 'карамель', price_delta_cents: 1000 },
+      ],
+    });
+    expect(cart().lines[0].note).toBeUndefined();
+    expect(cart().subtotalCents()).toBe(9000);
+  });
+
+  it('keeps an oat latte and a plain latte apart, and merges the same choice in any order', () => {
+    cart().addItem(latte(), 1, { modifiers: [11] });
+    cart().addItem(latte(), 1, { modifiers: [12] });
+    expect(cart().lines).toHaveLength(2);
+
+    cart().addItem(latte(), 1, { modifiers: [12] });
+    expect(cart().lines[1].quantity).toBe(2);
+
+    cart().addItem(latte(), 1, { modifiers: [21, 12] });
+    cart().addItem(latte(), 1, { modifiers: [12, 21] });
+    expect(cart().lines).toHaveLength(3);
+    expect(cart().lines[2].quantity).toBe(2);
+  });
+
+  it('splits the line on the kitchen note and carries it, trimmed', () => {
+    cart().addItem(latte(), 1, { modifiers: [11], note: ' гарячіше ' });
+    cart().addItem(latte(), 1, { modifiers: [11] });
+
+    expect(cart().lines).toHaveLength(2);
+    expect(cart().lines[0]).toMatchObject({ uid: '7|11|гарячіше', note: 'гарячіше' });
+    expect(cart().lines[0].variant_label).toBe('M · звичайне');
+    expect(cart().lines[1].note).toBeUndefined();
+  });
+
+  it('refuses a choice the server would refuse, in the server’s words', () => {
+    cart().addItem(latte(), 1, { modifiers: [] });
+    expect(cart().lines).toEqual([]);
+    expect(cart().banner).toBe('Оберіть «Молоко»');
+
+    cart().addItem(latte(), 1, { modifiers: [11, 999] });
+    expect(cart().lines).toEqual([]);
+    expect(cart().banner).toBe('Модифікатор 999 недоступний для цього товару');
+  });
+
+  it('refuses a price below zero', () => {
+    cart().addItem(latte({ price_cents: 1000 }), 1, { modifiers: [11, 22] });
+    expect(cart().lines).toEqual([]);
+    expect(cart().banner).toBe('Ціна не може бути відʼємною');
+  });
+
+  it('moves the old price by the delta and keeps the discount label from the card', () => {
+    cart().addItem(latte({ compare_at_cents: 8000 }), 1, { modifiers: [12] });
+
+    expect(cart().lines[0]).toMatchObject({
+      unit_price_cents: 8000,
+      compare_at_cents: 9500,
+      discount_label: 'Знижка (19%)',
+    });
+    // Still a discounted line, so the cart discount skips it — as on the server.
+    cart().setCartDiscount({ type: 'percent', value: 10 });
+    expect(cart().cartDiscountCents()).toBe(0);
+  });
+
+  it('without a choice the call is what it always was — no default applied, the bare uid', () => {
+    cart().addItem(latte());
+    expect(cart().lines[0]).toMatchObject({ uid: '7', unit_price_cents: 6500, variant_label: 'M' });
+    expect(cart().lines[0].modifiers).toBeUndefined();
+  });
+
+  it('never merges a modified line into a bouquet rung on the same card', () => {
+    cart().addAssembled({
+      variant_id: 7,
+      product_name: 'Латте',
+      variant_label: 'x',
+      unit: 'шт',
+      unit_price_cents: 100,
+      quantity: 1,
+      components: [
+        { component_variant_id: 1, quantity: 1, product_name: 'a', label: '', unit: 'шт', unit_price_cents: 100 },
+      ],
+    });
+    cart().addItem(latte(), 1, { modifiers: [11] });
+    expect(cart().lines).toHaveLength(2);
   });
 });

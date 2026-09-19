@@ -88,4 +88,24 @@ describe('ProductTile', () => {
     expect(screen.getByTestId('tile-count')).toHaveTextContent('9');
     expect(screen.queryByText('немає')).toBeNull();
   });
+
+  it('offers a second way in when asked — a sibling of the tile, so a tap on it does not add the line too', () => {
+    const onClick = vi.fn();
+    const onMore = vi.fn();
+    render(<ProductTile name="Латте" priceCents={6500} onClick={onClick} onMore={onMore} />);
+
+    fireEvent.click(screen.getByTestId('tile-more'));
+    expect(onMore).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByText('Латте').closest('button')!);
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onMore).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the corner action on a tile that cannot be tapped', () => {
+    render(<ProductTile name="Сирник" stock={0} disabled onClick={() => {}} onMore={() => {}} />);
+    expect(screen.queryByTestId('tile-more')).toBeNull();
+    expect(screen.getByText('немає')).toBeInTheDocument();
+  });
 });

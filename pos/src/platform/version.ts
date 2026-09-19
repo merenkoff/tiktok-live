@@ -75,7 +75,15 @@ export const POS_API_CLIENT_VERSION = 2;
 //     a composition as a catalogue template instead of selling or displaying it.
 // 12 (2026-09-18): `api.getFlowerAnalytics` — the florist's own numbers, read
 // by the flowers module's admin page (фаза B7).
-export const PLATFORM_VERSION = 12;
+// 13 (2026-09-19): modifiers at the till (café, К2a). `useCartStore.addItem`
+//     takes a third argument — the line's modifier ids and kitchen note — and
+//     `CartLine` carries `modifiers` / `note`; the pure mirrors of the server's
+//     arithmetic (`resolveLineModifiers`, `lineCaption`, `cartLineUid`,
+//     `defaultModifierIds`, `needsModifierSheet`…) are exported so a module
+//     never copies them; `@pos/platform/ui` gains `ModifierSheet`, `ProductTile`
+//     an `onMore` corner action; `Coffee` joins the nav icons;
+//     `VerticalPublicConfig.maxCompositionDepth` is on the wire.
+export const PLATFORM_VERSION = 13;
 
 /**
  * Build version of this bundle — the host web/cashier build, or a module-remote

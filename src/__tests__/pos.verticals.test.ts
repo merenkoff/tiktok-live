@@ -62,6 +62,7 @@ describe('vertical registry', () => {
       attributes: flowersVertical.attributes,
       units: ['шт'],
       defaultUnit: 'шт',
+      maxCompositionDepth: 1,
     });
     expect('labelOf' in config).toBe(false);
   });
@@ -128,8 +129,9 @@ describe('café vertical', () => {
     expect(cafeVertical.productKinds).toEqual(['simple', 'composite']);
   });
 
-  it('keeps the depth rule off the wire', () => {
-    expect('maxCompositionDepth' in publicConfigOf(cafeVertical)).toBe(false);
+  it('puts the depth on the wire, so the composition editor can offer a recipe as a component', () => {
+    expect(publicConfigOf(cafeVertical).maxCompositionDepth).toBe(3);
+    expect(publicConfigOf(clothingVertical).maxCompositionDepth).toBe(1);
   });
 });
 

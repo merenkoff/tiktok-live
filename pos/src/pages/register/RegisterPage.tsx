@@ -397,6 +397,12 @@ export function RegisterPage() {
                   })),
                 }
               : {}),
+            // The answers a café line chose and its kitchen note. Ids only,
+            // sorted: the server prices from them and keys its merge on them.
+            ...(line.modifiers?.length
+              ? { modifiers: line.modifiers.map((m) => m.id).sort((a, b) => a - b) }
+              : {}),
+            ...(line.note ? { note: line.note } : {}),
           })),
           payments,
           cart_discount: cartDiscount,
@@ -494,6 +500,32 @@ export function RegisterPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on receipt number by design (see comment above); only `cancelRung.reset` is used
   }, [success?.receipt_number, cancelRung.reset]);
 
+  /**
+   * A line with modifiers or a kitchen note can be sold, but not parked or
+   * ordered ahead until К3: the server refuses it (`parked-carts.service.ts`,
+   * `preorders.service.ts`), and dropping the fields on the way would lose
+   * what the customer asked for. Said here, before a sheet opens for nothing.
+   */
+  const hasModifiedLine = lines.some((l) => l.modifiers?.length || l.note);
+
+  function openPark() {
+    if (hasModifiedLine) {
+      setBanner('Позицію з модифікаторами поки не можна відкласти');
+      return;
+    }
+    setParkError(null);
+    setParkOpen(true);
+  }
+
+  function openPreorder() {
+    if (hasModifiedLine) {
+      setBanner('Позицію з модифікаторами поки не можна замовити наперед');
+      return;
+    }
+    setPreorderError(null);
+    setPreorderOpen(true);
+  }
+
   /** The trade name plus the cached ПРРО requisites — everything the paper says about the store. */
   const receiptStore = () => ({ name: auth?.store.name ?? '', fiscal: auth?.store.fiscal ?? null });
 
@@ -525,6 +557,10 @@ export function RegisterPage() {
     const payText = success.payments
       .map((p) => `${paymentLabel(p.method)} ${formatUah(p.amount_cents)}`)
       .join(' · ');
+    // The number the counter calls out — «сорок два», not «R-2026-000317».
+    // Shown per vertical: a clothing store has no counter to call it at, and an
+    // `OFF-` sale queued offline has no number until it syncs.
+    const showOrderNo = vertical === 'cafe' && success.order_no != null;
 
     return (
       <div className="min-h-screen bg-white grid place-items-center p-6 font-sans">
@@ -532,8 +568,23 @@ export function RegisterPage() {
           <div className="mx-auto w-14 h-14 rounded-full bg-sq-blue text-white grid place-items-center">
             <Check size={28} strokeWidth={2.5} />
           </div>
-          <p className="sq-section-label mt-6">Чек</p>
-          <h2 className="text-2xl font-bold mt-2 text-sq-text">{success.receipt_number}</h2>
+          {showOrderNo ? (
+            <>
+              <p className="sq-section-label mt-6">Замовлення</p>
+              <p
+                className="text-7xl font-bold mt-2 text-sq-text tabular-nums leading-none"
+                data-testid="order-no"
+              >
+                {success.order_no}
+              </p>
+              <p className="text-sm text-sq-secondary mt-3">Чек {success.receipt_number}</p>
+            </>
+          ) : (
+            <>
+              <p className="sq-section-label mt-6">Чек</p>
+              <h2 className="text-2xl font-bold mt-2 text-sq-text">{success.receipt_number}</h2>
+            </>
+          )}
           <p className="text-5xl font-bold mt-6 text-sq-text">{formatUah(success.total_cents)}</p>
           <p className="text-sq-secondary mt-3 text-sm">{success.staff_name}</p>
           {payText && <p className="text-sq-secondary mt-1 text-sm">{payText}</p>}
@@ -651,18 +702,12 @@ export function RegisterPage() {
                 if (lines.length && confirm('Очистити кошик?')) clear();
               }}
               onCharge={() => setCheckoutOpen(true)}
-              onSaveBasket={() => {
-                setParkError(null);
-                setParkOpen(true);
-              }}
+              onSaveBasket={openPark}
               onOpenParked={() => void openParked()}
               parkedCount={parkedCarts.length}
               locked={preorderId != null}
               onCancelPreorder={clear}
-              onTakePreorder={() => {
-                setPreorderError(null);
-                setPreorderOpen(true);
-              }}
+              onTakePreorder={openPreorder}
             />
           </div>
         </div>
@@ -752,10 +797,7 @@ export function RegisterPage() {
             setMobileCartOpen(false);
             setCheckoutOpen(true);
           }}
-          onSaveBasket={() => {
-            setParkError(null);
-            setParkOpen(true);
-          }}
+          onSaveBasket={openPark}
           onOpenParked={() => void openParked()}
           parkedCount={parkedCarts.length}
           locked={preorderId != null}
