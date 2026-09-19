@@ -29,6 +29,46 @@ const catalog = [
     photo_url: null,
     tag_ids: [],
   },
+  // A café card with its answers, and the milk one of them takes.
+  {
+    variant_id: 12,
+    product_id: 2,
+    product_name: 'Латте',
+    label: 'M',
+    unit: 'шт',
+    price_cents: 6500,
+    compare_at_cents: null,
+    quantity: 50,
+    barcode: null,
+    photo_url: null,
+    tag_ids: [],
+    modifier_groups: [
+      {
+        id: 1,
+        name: 'Молоко',
+        min_select: 1,
+        max_select: 1,
+        modifiers: [
+          { id: 101, name: 'звичайне', price_delta_cents: 0, is_default: true, component_variant_id: 13, component_quantity: 200 },
+          { id: 102, name: 'вівсяне', price_delta_cents: 1500, is_default: false, component_variant_id: 14, component_quantity: 200 },
+        ],
+      },
+    ],
+  },
+  {
+    variant_id: 14,
+    product_id: 3,
+    product_name: 'Молоко вівсяне',
+    label: '',
+    unit: 'мл',
+    price_cents: 0,
+    compare_at_cents: null,
+    quantity: 5000,
+    barcode: null,
+    photo_url: null,
+    tag_ids: [],
+    sellable: false,
+  },
 ];
 
 vi.mock('./db', () => ({
@@ -64,6 +104,7 @@ vi.mock('../services/api', () => ({
 }));
 
 const { api } = await import('../services/api');
+const { db } = await import('./db');
 const { takeStamp } = await import('./lease');
 const { completeSale } = await import('./repository');
 const { OfflineFiscalError } = await import('./errors');
@@ -141,5 +182,61 @@ describe('completeSale — offline in a fiscalising store', () => {
     expect(sale.fiscal).toBeNull();
     expect(sale.fiscal_status).toBe('none');
     expect((outbox[0].payload as OutboxSalePayload).fiscal_offline).toBeUndefined();
+  });
+});
+
+describe('completeSale — a line with modifiers, offline', () => {
+  beforeEach(() => {
+    vi.mocked(api.loadAuth).mockReturnValue({
+      staff: { display_name: 'Марта' },
+      store: { fiscal: { enabled: false } },
+    } as never);
+  });
+
+  it('prices, captions and snapshots the answers the way the server will', async () => {
+    const sale = await completeSale({
+      items: [{ variant_id: 12, quantity: 2, modifiers: [102], note: 'гарячіше' }],
+      payments: [{ method: 'cash', amount_cents: 16000 }],
+    });
+
+    expect(sale.items[0]).toMatchObject({
+      unit_price_cents: 8000,
+      line_total_cents: 16000,
+      variant_label: 'M · вівсяне',
+      note: 'гарячіше',
+      modifiers: [{ modifier_id: 102, group_name: 'Молоко', name: 'вівсяне', price_delta_cents: 1500 }],
+    });
+    expect(sale.subtotal_cents).toBe(16000);
+    // The queue carries the ids and the note as sent, for the server to price.
+    expect((outbox[0].payload as OutboxSalePayload).items[0]).toEqual({
+      variant_id: 12,
+      quantity: 2,
+      modifiers: [102],
+      note: 'гарячіше',
+    });
+  });
+
+  it("takes the oat milk off the mirror's shelf along with the latte", async () => {
+    await completeSale({
+      items: [{ variant_id: 12, quantity: 2, modifiers: [102] }],
+      payments: [{ method: 'cash', amount_cents: 16000 }],
+    });
+
+    const puts = vi.mocked(db.catalog.put).mock.calls.map(([row]) => row as { variant_id: number; quantity: number });
+    expect(puts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ variant_id: 12, quantity: 48 }),
+        expect.objectContaining({ variant_id: 14, quantity: 4600 }),
+      ])
+    );
+  });
+
+  it('prices a plain line exactly as before when no answers are named', async () => {
+    const sale = await completeSale({
+      items: [{ variant_id: 12, quantity: 1 }],
+      payments: [{ method: 'cash', amount_cents: 6500 }],
+    });
+    expect(sale.items[0]).toMatchObject({ unit_price_cents: 6500, variant_label: 'M' });
+    expect(sale.items[0].modifiers).toBeUndefined();
   });
 });

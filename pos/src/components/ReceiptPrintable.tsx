@@ -61,7 +61,12 @@ export function ReceiptPrintable({ receipt }: { receipt: ReceiptData | null }) {
           {receipt.refund_of_receipt && <p>до чека {receipt.refund_of_receipt}</p>}
         </>
       ) : (
-        <p>Чек {receipt.receipt_number}</p>
+        <>
+          {receipt.order_no != null && (
+            <p className="receipt-print-order">Замовлення № {receipt.order_no}</p>
+          )}
+          <p>Чек {receipt.receipt_number}</p>
+        </>
       )}
       <p>{receipt.created_at}</p>
       <hr />

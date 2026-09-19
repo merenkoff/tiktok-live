@@ -99,6 +99,10 @@ pub struct ReceiptData {
     pub receipt_number: String,
     #[serde(default)]
     pub refund_of_receipt: Option<String>,
+    /// The short daily number the counter calls out, printed large above the
+    /// receipt number. Only a café sends it; absent from an older host.
+    #[serde(default)]
+    pub order_no: Option<i64>,
     pub created_at: String,
     pub staff_name: String,
     pub customer_name: Option<String>,
@@ -239,6 +243,17 @@ fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> 
                 .map_err(|e| e.to_string())?;
         }
     } else {
+        if let Some(order_no) = receipt.order_no {
+            // The number the barista calls out — big enough to read from the
+            // pickup counter, above the receipt number nobody reads aloud.
+            printer.bold(true).map_err(|e| e.to_string())?;
+            printer.size(2, 2).map_err(|e| e.to_string())?;
+            printer
+                .writeln(&format!("ЗАМОВЛЕННЯ {order_no}"))
+                .map_err(|e| e.to_string())?;
+            printer.reset_size().map_err(|e| e.to_string())?;
+            printer.bold(false).map_err(|e| e.to_string())?;
+        }
         printer
             .writeln(&format!("Чек {}", receipt.receipt_number))
             .map_err(|e| e.to_string())?;
@@ -465,6 +480,7 @@ mod tests {
             kind: ReceiptKind::Sale,
             receipt_number: "R-00001".into(),
             refund_of_receipt: None,
+            order_no: None,
             created_at: "09.09.2026, 14:59:03".into(),
             staff_name: "Олена".into(),
             customer_name: None,
@@ -533,6 +549,46 @@ mod tests {
         assert!(!contains(&bytes, &win1251("ФІСКАЛЬНИЙ ЧЕК")));
         assert!(!contains(&bytes, &win1251("ОНЛАЙН")));
         assert!(!contains(&bytes, &[0x1D, 0x28, 0x6B]));
+    }
+
+    #[test]
+    fn order_number_prints_large_above_the_receipt_number() {
+        let mut receipt = base();
+        receipt.order_no = Some(42);
+        let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
+        let order = bytes
+            .windows(win1251("ЗАМОВЛЕННЯ 42").len())
+            .position(|w| w == win1251("ЗАМОВЛЕННЯ 42").as_slice())
+            .unwrap();
+        let number = bytes
+            .windows(win1251("Чек ").len())
+            .position(|w| w == win1251("Чек ").as_slice())
+            .unwrap();
+        assert!(order < number);
+        // Double size on, then back to normal before the receipt number.
+        assert!(contains(&bytes[..number], &[0x1D, 0x21, 0x11]));
+        assert!(contains(&bytes[order..number], &[0x1D, 0x21, 0x00]));
+    }
+
+    #[test]
+    fn a_payload_without_an_order_number_still_parses_and_prints_none() {
+        // A host built before the field, or any sale outside a café.
+        let json = serde_json::json!({
+            "store_name": "Demo",
+            "receipt_number": "R-1",
+            "created_at": "x",
+            "staff_name": "y",
+            "customer_name": null,
+            "items": [],
+            "subtotal_cents": 0,
+            "discount_cents": null,
+            "total_cents": 0,
+            "payments": []
+        });
+        let receipt: ReceiptData = serde_json::from_value(json).unwrap();
+        assert_eq!(receipt.order_no, None);
+        let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
+        assert!(!contains(&bytes, &win1251("ЗАМОВЛЕННЯ")));
     }
 
     #[test]

@@ -67,9 +67,10 @@ export const cashierApi = {
     tag_id?: number;
     searchKeys?: readonly string[];
     /**
-     * Also products that are not on the menu. Online it is a query flag; the
-     * offline mirror snapshots the till's view only, so an ingredient is not
-     * there to be found — the desktop stock count of a café is К2.
+     * Also products that are not on the menu — an ingredient, a semi-finished
+     * product. Online it is a query flag; offline the snapshot holds everything
+     * and `filterCatalog` hides the unsellable rows unless asked, so the
+     * desktop stock count of a café finds its milk too.
      */
     include_unsellable?: boolean;
   }): Promise<CatalogItem[]> {

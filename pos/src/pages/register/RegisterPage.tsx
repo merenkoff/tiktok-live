@@ -190,6 +190,7 @@ export function RegisterPage() {
           buildReceiptPayload(success, {
             name: auth?.store.name ?? '',
             fiscal: auth?.store.fiscal ?? null,
+            vertical: auth?.store.vertical?.id ?? null,
           }),
           paper
         );
@@ -209,6 +210,7 @@ export function RegisterPage() {
     success,
     auth?.store.auto_print_receipt,
     auth?.store.name,
+    auth?.store.vertical?.id,
     auth?.store.fiscal,
   ]);
 
@@ -527,7 +529,11 @@ export function RegisterPage() {
   }
 
   /** The trade name plus the cached ПРРО requisites — everything the paper says about the store. */
-  const receiptStore = () => ({ name: auth?.store.name ?? '', fiscal: auth?.store.fiscal ?? null });
+  const receiptStore = () => ({
+    name: auth?.store.name ?? '',
+    fiscal: auth?.store.fiscal ?? null,
+    vertical: auth?.store.vertical?.id ?? null,
+  });
 
   async function printSuccessReceipt() {
     if (!success || !receiptPrinterName) return;

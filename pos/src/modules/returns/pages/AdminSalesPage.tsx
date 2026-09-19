@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { useEffect, useState } from 'react';
-import { formatUah } from '@pos/platform';
+import { formatUah, useVertical } from '@pos/platform';
 import type { SaleDetail, SaleListItem } from '@pos/platform';
 import { adminReturnsApi } from '../data/returnsApi';
 import { FiscalBadge, FiscalDetailCard } from '../components/FiscalBadge';
@@ -97,6 +97,10 @@ export function AdminSalesPage() {
     }
   }
 
+  // The daily order number is a café's — the counter calls it out. Anywhere
+  // else the receipt number is the only name a sale has.
+  const cafe = useVertical().id === 'cafe';
+
   return (
     <div className="space-y-6 animate-fade-up text-sq-text">
       <div>
@@ -116,7 +120,17 @@ export function AdminSalesPage() {
               className="w-full text-left px-4 py-3 hover:bg-sq-bg flex justify-between gap-3"
             >
               <div>
-                <p className="font-semibold text-sq-text">{sale.receipt_number}</p>
+                <p className="font-semibold text-sq-text">
+                  {cafe && sale.order_no != null && (
+                    <span
+                      className="mr-2 rounded-sq bg-sq-bg px-1.5 py-0.5 text-xs tabular-nums"
+                      data-testid="sale-order-no"
+                    >
+                      № {sale.order_no}
+                    </span>
+                  )}
+                  {sale.receipt_number}
+                </p>
                 <p className="text-xs text-sq-secondary">
                   {new Date(sale.created_at).toLocaleString('uk-UA')} · {sale.staff_name}
                 </p>
@@ -142,7 +156,14 @@ export function AdminSalesPage() {
           ) : (
             <div className="space-y-4">
               <div>
-                <h3 className="text-xl font-bold text-sq-text">{selected.receipt_number}</h3>
+                <h3 className="text-xl font-bold text-sq-text">
+                  {cafe && selected.order_no != null && (
+                    <span className="mr-2 rounded-sq bg-sq-bg px-1.5 py-0.5 text-sm tabular-nums">
+                      № {selected.order_no}
+                    </span>
+                  )}
+                  {selected.receipt_number}
+                </h3>
                 <p className="text-sm text-sq-secondary">
                   {saleStatusLabel(selected.status)} · {selected.staff_name}
                   <FiscalBadge status={selected.fiscal_status} mode={selected.fiscal?.mode} />
@@ -158,6 +179,7 @@ export function AdminSalesPage() {
                         {item.variant_label} · {item.quantity} шт
                         {item.refunded_quantity > 0 ? ` (повернено ${item.refunded_quantity})` : ''}
                       </p>
+                      {item.note && <p className="text-xs text-sq-muted italic">✎ {item.note}</p>}
                     </div>
                     <div className="flex items-center gap-2">
                       {selected.status !== 'voided' && selected.status !== 'refunded' && (

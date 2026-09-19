@@ -471,3 +471,17 @@ describe('buildRefundReceiptPayload', () => {
     expect(payload.receipt_number).toBe('RF-42');
   });
 });
+
+describe('buildReceiptPayload — order number', () => {
+  it('prints the daily order number for a café, and for nobody else', () => {
+    const sale = makeSaleDetail({ order_no: 42 });
+    expect(buildReceiptPayload(sale, { name: 'Demo', vertical: 'cafe' }).order_no).toBe(42);
+    expect(buildReceiptPayload(sale, { name: 'Demo', vertical: 'clothing' }).order_no).toBeNull();
+    expect(buildReceiptPayload(sale, DEMO).order_no).toBeNull();
+  });
+
+  it('is null when the sale has none — an OFF- receipt queued offline gets its number at sync', () => {
+    expect(buildReceiptPayload(makeSaleDetail({ order_no: null }), { name: 'Demo', vertical: 'cafe' }).order_no).toBeNull();
+    expect(buildReceiptPayload(makeSaleDetail(), { name: 'Demo', vertical: 'cafe' }).order_no).toBeNull();
+  });
+});

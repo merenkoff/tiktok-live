@@ -8,6 +8,7 @@ import type {
   FiscalRequisites,
   SaleDetail,
   SaleFiscalDoc,
+  VerticalId,
 } from '../types';
 import type { ReceiptData, ReceiptFiscal, ReceiptHeader, ReceiptVatLine } from './printer';
 import { refundLineAmount } from './money';
@@ -21,6 +22,11 @@ import { refundLineAmount } from './money';
 export interface ReceiptStoreInfo {
   name: string;
   fiscal?: FiscalPublicConfig | null;
+  /**
+   * What the store sells. Decides whether the daily order number goes on the
+   * paper: a café's counter calls it out, a clothing store has no counter.
+   */
+  vertical?: VerticalId | null;
 }
 
 /** Рядок 4/5: «ПН <ІПН>» for a VAT payer, «ІД <податковий номер>» otherwise. */
@@ -173,6 +179,7 @@ export function buildReceiptPayload(
     kind: 'sale',
     receipt_number: sale.receipt_number,
     refund_of_receipt: null,
+    order_no: store.vertical === 'cafe' ? (sale.order_no ?? null) : null,
     created_at: new Date(sale.created_at).toLocaleString('uk-UA'),
     staff_name: sale.staff_name,
     customer_name: customerName ?? sale.customer_name ?? null,
