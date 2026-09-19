@@ -23,6 +23,9 @@ import {
 } from '../pos/stock-documents.service.js';
 import { listOnHand } from '../pos/stock-reports.service.js';
 import { derivedAvailability } from '../pos/composites.service.js';
+import { parkCart, reservedFor } from '../pos/parked-carts.service.js';
+import { readMigration } from '../pos/migrations.js';
+import { randomUUID } from 'node:crypto';
 
 /**
  * A bouquet is the first product whose stock is not its own. These run against
@@ -113,7 +116,13 @@ describe.skipIf(!hasDb)('POS composite products', () => {
       // The catalogue route refuses this, so build it the only way it could
       // ever exist: a composition emptied behind the service's back.
       const { variantId } = await seedDerivedBouquet('Букет C');
+      // A state the service refuses to write; reached here by raw SQL, so the
+      // expanded copy (which only `setComponents` and the boot rebuild keep in
+      // step) has to be emptied by hand as well.
       await pool.query(`DELETE FROM pos_product_components WHERE variant_id = $1`, [variantId]);
+      await pool.query(`DELETE FROM pos_product_components_flat WHERE variant_id = $1`, [
+        variantId,
+      ]);
       expect(await derivedAvailability(pool, storeId, variantId)).toBe(0);
     });
 
@@ -194,7 +203,11 @@ describe.skipIf(!hasDb)('POS composite products', () => {
 
     it('refuses a derived composite with nothing in it', async () => {
       const { variantId } = await seedDerivedBouquet('Букет G');
+      // Raw SQL, as above: the expanded copy goes with the authored rows.
       await pool.query(`DELETE FROM pos_product_components WHERE variant_id = $1`, [variantId]);
+      await pool.query(`DELETE FROM pos_product_components_flat WHERE variant_id = $1`, [
+        variantId,
+      ]);
       await expect(
         completeSale({
           storeId,
@@ -834,6 +847,385 @@ describe.skipIf(!hasDb)('POS composite products', () => {
       await expect(
         updateProduct(storeId, productId, { kind: 'simple' })
       ).rejects.toThrow(/clear the composition/i);
+    });
+  });
+  describe('a recipe inside a recipe (café)', () => {
+    // Everything here runs on a café store. Flowers and clothing keep the
+    // one-level rule (`maxCompositionDepth: 1`) — the "itself composite"
+    // cases above are what pin that — while a café allows dish →
+    // semi-finished → semi-finished → ingredients, expanded into
+    // `pos_product_components_flat` (migration 045) so that availability,
+    // write-off and production never recurse.
+    let cafeId = 0;
+    let cafeStaff = 0;
+    let beans = 0;
+    let sugar = 0;
+    let water = 0;
+    let milk = 0;
+    let cup = 0;
+    /** Derived semi-finished: 5 г sugar + 5 мл water per portion. */
+    let syrup = 0;
+    /** Own semi-finished: 10 г sugar + 10 мл milk per portion, made in advance. */
+    let sauce = 0;
+    /** The dish: 18 г beans, 1 syrup portion, 1 sauce portion, 1 cup. */
+    let latte = 0;
+
+    async function ingredient(name: string, unit: string, quantity: number, cost = 0) {
+      const product = await createProduct(cafeId, {
+        name,
+        sellable: false,
+        variants: [{ attributes: {}, unit, price_cents: 100, cost_cents: cost, quantity }],
+      });
+      return (product!.variants[0] as { id: number }).id;
+    }
+
+    async function recipe(
+      name: string,
+      stockMode: 'own' | 'derived',
+      components: Array<{ component_variant_id: number; quantity: number }>,
+      price = 6500
+    ) {
+      const product = await createProduct(cafeId, {
+        name,
+        kind: 'composite',
+        stock_mode: stockMode,
+        variants: [{ attributes: {}, price_cents: price, quantity: 0, components }],
+      });
+      return {
+        productId: product!.id,
+        variantId: (product!.variants[0] as { id: number }).id,
+      };
+    }
+
+    async function flatOf(variantId: number): Promise<Record<number, number>> {
+      const rows = await pool.query(
+        `SELECT leaf_variant_id, quantity_per_unit
+         FROM pos_product_components_flat
+         WHERE store_id = $1 AND variant_id = $2
+         ORDER BY leaf_variant_id`,
+        [cafeId, variantId]
+      );
+      return Object.fromEntries(
+        rows.rows.map((r) => [Number(r.leaf_variant_id), Number(r.quantity_per_unit)])
+      );
+    }
+
+    async function cafeStockOf(variantId: number): Promise<number> {
+      const result = await pool.query(
+        `SELECT quantity FROM pos_stock WHERE variant_id = $1 AND store_id = $2`,
+        [variantId, cafeId]
+      );
+      return Number(result.rows[0].quantity);
+    }
+
+    async function produce(variantId: number, quantity: number) {
+      const doc = await createDocument({ storeId: cafeId, staffId: cafeStaff, type: 'production' });
+      await addLine({ storeId: cafeId, documentId: doc.id, variantId, quantity });
+      return postDocument({ storeId: cafeId, documentId: doc.id, staffId: cafeStaff });
+    }
+
+    async function snapshotOf(saleId: number): Promise<Record<number, number>> {
+      const rows = await pool.query(
+        `SELECT c.component_variant_id, c.quantity_per_unit
+         FROM pos_sale_item_components c
+         JOIN pos_sale_items i ON i.id = c.sale_item_id
+         WHERE i.sale_id = $1`,
+        [saleId]
+      );
+      return Object.fromEntries(
+        rows.rows.map((r) => [Number(r.component_variant_id), Number(r.quantity_per_unit)])
+      );
+    }
+
+    beforeAll(async () => {
+      const store = await createTestStore('cafe');
+      cafeId = store.storeId;
+      cafeStaff = store.ownerId;
+      await pool.query(`UPDATE pos_stores SET vertical = 'cafe' WHERE id = $1`, [cafeId]);
+      beans = await ingredient('Зерно', 'г', 1000, 100);
+      sugar = await ingredient('Цукор', 'г', 1000, 5);
+      water = await ingredient('Вода', 'мл', 10000, 1);
+      milk = await ingredient('Молоко', 'мл', 5000, 4);
+      cup = await ingredient('Стакан', 'шт', 100, 300);
+      syrup = (
+        await recipe('Сироп (порція)', 'derived', [
+          { component_variant_id: sugar, quantity: 5 },
+          { component_variant_id: water, quantity: 5 },
+        ], 1000)
+      ).variantId;
+      sauce = (
+        await recipe('Карамельний соус (порція)', 'own', [
+          { component_variant_id: sugar, quantity: 10 },
+          { component_variant_id: milk, quantity: 10 },
+        ])
+      ).variantId;
+      latte = (
+        await recipe('Латте карамель', 'derived', [
+          { component_variant_id: beans, quantity: 18 },
+          { component_variant_id: syrup, quantity: 1 },
+          { component_variant_id: sauce, quantity: 1 },
+          { component_variant_id: cup, quantity: 1 },
+        ])
+      ).variantId;
+    });
+
+    afterAll(async () => {
+      if (cafeId) await dropTestStore(cafeId);
+    });
+
+    it('expands a derived semi-finished into its ingredients and keeps a made-in-advance one whole', async () => {
+      expect(await flatOf(syrup)).toEqual({ [sugar]: 5, [water]: 5 });
+      // An own composite has its own expansion (production reads it)…
+      expect(await flatOf(sauce)).toEqual({ [sugar]: 10, [milk]: 10 });
+      // …but inside the latte it is a leaf: its ingredients left with the
+      // production document, and taking them again would count them twice.
+      expect(await flatOf(latte)).toEqual({
+        [beans]: 18,
+        [sugar]: 5,
+        [water]: 5,
+        [sauce]: 1,
+        [cup]: 1,
+      });
+    });
+
+    it('counts availability over the leaves, including the sauce on its own shelf', async () => {
+      // No sauce made yet → no latte, however much sugar there is.
+      expect(await derivedAvailability(pool, cafeId, latte)).toBe(0);
+      const before = await getCatalog(cafeId);
+      expect(before.find((c) => c.variant_id === latte)?.quantity).toBe(0);
+      // Ingredients are off the menu, the dish is on it.
+      expect(before.some((c) => c.variant_id === sugar)).toBe(false);
+
+      await produce(sauce, 10);
+      expect(await cafeStockOf(sauce)).toBe(10);
+      expect(await cafeStockOf(sugar)).toBe(1000 - 100);
+      expect(await cafeStockOf(milk)).toBe(5000 - 100);
+      // min(1000/18, 900/5, 10000/5, 10/1, 100/1) = 10
+      expect(await derivedAvailability(pool, cafeId, latte)).toBe(10);
+      const after = await getCatalog(cafeId);
+      expect(after.find((c) => c.variant_id === latte)?.quantity).toBe(10);
+    });
+
+    it('writes off the leaves on a sale, snapshots exactly them, and gives them back on a refund', async () => {
+      const sale = await completeSale({
+        storeId: cafeId,
+        staffId: cafeStaff,
+        items: [{ variant_id: latte, quantity: 2 }],
+        payments: [{ method: 'cash', amount_cents: 13000 }],
+      });
+      expect(await cafeStockOf(beans)).toBe(1000 - 36);
+      expect(await cafeStockOf(sugar)).toBe(900 - 10);
+      expect(await cafeStockOf(water)).toBe(10000 - 10);
+      expect(await cafeStockOf(sauce)).toBe(10 - 2);
+      expect(await cafeStockOf(cup)).toBe(100 - 2);
+      // The syrup itself is not a shelf: nothing moved on its row, and it is
+      // not in the snapshot — the snapshot is shelves only.
+      expect(await cafeStockOf(syrup)).toBe(0);
+      expect(await snapshotOf(sale!.id)).toEqual({
+        [beans]: 18,
+        [sugar]: 5,
+        [water]: 5,
+        [sauce]: 1,
+        [cup]: 1,
+      });
+
+      await refundSale({
+        storeId: cafeId,
+        staffId: cafeStaff,
+        saleId: sale!.id,
+        items: [{ sale_item_id: sale!.items[0].id, quantity: 1 }],
+      });
+      expect(await cafeStockOf(beans)).toBe(1000 - 18);
+      expect(await cafeStockOf(sugar)).toBe(900 - 5);
+      expect(await cafeStockOf(sauce)).toBe(10 - 1);
+      expect(await cafeStockOf(cup)).toBe(100 - 1);
+    });
+
+    it('cascades an inner recipe edit into every dish above it, but not into what was already sold', async () => {
+      const sale = await completeSale({
+        storeId: cafeId,
+        staffId: cafeStaff,
+        items: [{ variant_id: latte, quantity: 1 }],
+        payments: [{ method: 'cash', amount_cents: 6500 }],
+      });
+      const sugarBefore = await cafeStockOf(sugar);
+
+      // The syrup gets sweeter: 8 г of sugar per portion instead of 5.
+      await updateVariant(cafeId, syrup, {
+        components: [
+          { component_variant_id: sugar, quantity: 8 },
+          { component_variant_id: water, quantity: 5 },
+        ],
+      });
+      expect((await flatOf(latte))[sugar]).toBe(8);
+      // The sale made with the old syrup still says 5 — and returns 5.
+      expect((await snapshotOf(sale!.id))[sugar]).toBe(5);
+      await refundSale({
+        storeId: cafeId,
+        staffId: cafeStaff,
+        saleId: sale!.id,
+        items: [{ sale_item_id: sale!.items[0].id, quantity: 1 }],
+      });
+      expect(await cafeStockOf(sugar)).toBe(sugarBefore + 5);
+    });
+
+    it('turns a made-in-advance semi-finished into an expansion when it becomes made-to-order', async () => {
+      const paste = await recipe('Паста (порція)', 'own', [
+        { component_variant_id: sugar, quantity: 3 },
+        { component_variant_id: milk, quantity: 3 },
+      ]);
+      const dish = await recipe('Десерт', 'derived', [
+        { component_variant_id: paste.variantId, quantity: 2 },
+        { component_variant_id: cup, quantity: 1 },
+      ]);
+      expect(await flatOf(dish.variantId)).toEqual({ [paste.variantId]: 2, [cup]: 1 });
+
+      // Nothing on its shelf, so the flip is allowed — and every dish above
+      // it now takes the paste's ingredients instead of the paste.
+      await updateProduct(cafeId, paste.productId, { stock_mode: 'derived' });
+      expect(await flatOf(dish.variantId)).toEqual({ [sugar]: 6, [milk]: 6, [cup]: 1 });
+    });
+
+    it('refuses a cycle, even one that runs through a made-in-advance product', async () => {
+      await expect(
+        updateVariant(cafeId, syrup, {
+          components: [
+            { component_variant_id: sugar, quantity: 5 },
+            { component_variant_id: latte, quantity: 1 },
+          ],
+        })
+      ).rejects.toThrow(/contain itself/i);
+      // Own↔own would not loop at sale time, but would the moment one side is
+      // flipped to derived — so the authored graph is acyclic, full stop.
+      await expect(
+        updateVariant(cafeId, sauce, {
+          components: [{ component_variant_id: latte, quantity: 1 }],
+        })
+      ).rejects.toThrow(/contain itself/i);
+      // Nothing changed.
+      expect(await flatOf(latte)).toMatchObject({ [sauce]: 1, [sugar]: 8 });
+    });
+
+    it('refuses a fourth level, whichever end of the chain is being edited', async () => {
+      const d = await recipe('D', 'derived', [{ component_variant_id: sugar, quantity: 1 }]);
+      const c = await recipe('C', 'derived', [{ component_variant_id: d.variantId, quantity: 1 }]);
+      const b = await recipe('B', 'derived', [{ component_variant_id: c.variantId, quantity: 1 }]);
+      expect(await flatOf(b.variantId)).toEqual({ [sugar]: 1 });
+
+      // From the top: a fourth recipe over three.
+      await expect(
+        recipe('A', 'derived', [{ component_variant_id: b.variantId, quantity: 1 }])
+      ).rejects.toThrow(/too deep/i);
+
+      // From the bottom: putting a recipe under D makes B four deep. D itself
+      // would be fine, so the message names B.
+      const e = await recipe('E', 'derived', [{ component_variant_id: water, quantity: 1 }]);
+      await expect(
+        updateVariant(cafeId, d.variantId, {
+          components: [{ component_variant_id: e.variantId, quantity: 1 }],
+        })
+      ).rejects.toThrow(new RegExp(`variant ${b.variantId} would be 4 levels deep`));
+    });
+
+    it('produces a semi-finished through its own inner recipe, costed from the leaves', async () => {
+      // Sugar 5, water 1, milk 4 per unit (cents).
+      const glaze = await recipe('Глазур (порція)', 'own', [
+        { component_variant_id: syrup, quantity: 2 }, // 16 г sugar + 10 мл water
+        { component_variant_id: milk, quantity: 10 },
+      ]);
+      const sugarBefore = await cafeStockOf(sugar);
+      const waterBefore = await cafeStockOf(water);
+      const milkBefore = await cafeStockOf(milk);
+
+      await produce(glaze.variantId, 3);
+
+      expect(await cafeStockOf(glaze.variantId)).toBe(3);
+      expect(await cafeStockOf(sugar)).toBe(sugarBefore - 16 * 3);
+      expect(await cafeStockOf(water)).toBe(waterBefore - 10 * 3);
+      expect(await cafeStockOf(milk)).toBe(milkBefore - 10 * 3);
+      const variant = await pool.query(`SELECT cost_cents FROM pos_variants WHERE id = $1`, [
+        glaze.variantId,
+      ]);
+      expect(Number(variant.rows[0].cost_cents)).toBe(16 * 5 + 10 * 1 + 10 * 4);
+    });
+
+    it('expands a semi-finished carried on a till line the same way', async () => {
+      const card = (
+        await recipe('Напій на замовлення', 'derived', [
+          { component_variant_id: beans, quantity: 18 },
+        ], 1)
+      ).variantId;
+      const sugarBefore = await cafeStockOf(sugar);
+      const beansBefore = await cafeStockOf(beans);
+
+      const sale = await completeSale({
+        storeId: cafeId,
+        staffId: cafeStaff,
+        items: [
+          {
+            variant_id: card,
+            quantity: 1,
+            components: [
+              { component_variant_id: syrup, quantity: 2 },
+              { component_variant_id: beans, quantity: 10 },
+            ],
+          },
+        ],
+        // Priced from the components: 2 × 1000 (syrup card) + 10 × 100 (beans).
+        payments: [{ method: 'cash', amount_cents: 3000 }],
+      });
+      expect(sale!.items[0].unit_price_cents).toBe(3000);
+      expect(await cafeStockOf(sugar)).toBe(sugarBefore - 16);
+      expect(await cafeStockOf(beans)).toBe(beansBefore - 10);
+      expect(await snapshotOf(sale!.id)).toEqual({ [sugar]: 16, [water]: 10, [beans]: 10 });
+    });
+
+    it('holds the leaves while the dish waits in a parked cart', async () => {
+      const flat = await flatOf(latte);
+      const { cart } = await parkCart({
+        storeId: cafeId,
+        staffId: cafeStaff,
+        clientUuid: randomUUID(),
+        label: 'Столик біля вікна',
+        items: [{ variant_id: latte, quantity: 2 }],
+      });
+      expect(cart.status).toBe('open');
+      expect(await reservedFor(pool, cafeId, sugar)).toBe(flat[sugar] * 2);
+      expect(await reservedFor(pool, cafeId, sauce)).toBe(2);
+      expect(await reservedFor(pool, cafeId, cup)).toBe(2);
+      // The syrup is not a shelf, so nothing is held on it.
+      expect(await reservedFor(pool, cafeId, syrup)).toBe(0);
+    });
+
+    it('matches the boot-time rebuild in migration 045, row for row', async () => {
+      // The migration is what runs on every container start; the service's
+      // per-store rebuild must leave exactly what it would. Run inside a
+      // transaction that is rolled back: the migration rebuilds EVERY store's
+      // rows, and other test files are writing recipes of their own right now.
+      const client = await pool.connect();
+      try {
+        const read = async () =>
+          (
+            await client.query(
+              `SELECT variant_id, leaf_variant_id, quantity_per_unit
+               FROM pos_product_components_flat WHERE store_id = $1
+               ORDER BY variant_id, leaf_variant_id`,
+              [cafeId]
+            )
+          ).rows.map((r) => [
+            Number(r.variant_id),
+            Number(r.leaf_variant_id),
+            Number(r.quantity_per_unit),
+          ]);
+        await client.query('BEGIN');
+        const incremental = await read();
+        expect(incremental.length).toBeGreaterThan(10);
+        await client.query(readMigration('045_pos_product_components_flat.sql'));
+        expect(await read()).toEqual(incremental);
+      } finally {
+        await client.query('ROLLBACK');
+        client.release();
+      }
     });
   });
 });

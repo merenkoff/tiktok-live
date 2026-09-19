@@ -205,13 +205,12 @@ export async function parkCart(input: ParkCartInput): Promise<{ cart: ParkedCart
         variantId: item.variant_id,
         components: item.components,
       });
-      if (demand.kind === 'own') {
+      if (demand.self) {
         held.set(item.variant_id, (held.get(item.variant_id) ?? 0) + item.quantity);
-      } else {
-        for (const row of demand.composition) {
-          const total = row.quantity * item.quantity;
-          held.set(row.component_variant_id, (held.get(row.component_variant_id) ?? 0) + total);
-        }
+      }
+      for (const row of demand.leaves) {
+        const total = row.quantity * item.quantity;
+        held.set(row.component_variant_id, (held.get(row.component_variant_id) ?? 0) + total);
       }
     }
 

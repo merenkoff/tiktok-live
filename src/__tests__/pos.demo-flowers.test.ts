@@ -165,6 +165,26 @@ describe.skipIf(!hasDb)('demo flowers store (migration 039)', () => {
     expect(qty('Букет «Комплімент»')).toBe(6);
   });
 
+  it('keeps the expanded recipes equal to the authored ones — flowers are one level deep', async () => {
+    // Migration 045 rebuilds `pos_product_components_flat` on every boot, and
+    // 039 rebuilds this catalogue on a version bump — the two must agree, or
+    // a demo bouquet would sell from a recipe the flowers rule never allowed.
+    const authored = await pool.query(
+      `SELECT variant_id, component_variant_id AS leaf, quantity
+       FROM pos_product_components WHERE store_id = $1
+       ORDER BY variant_id, component_variant_id`,
+      [storeId]
+    );
+    const flat = await pool.query(
+      `SELECT variant_id, leaf_variant_id AS leaf, quantity_per_unit AS quantity
+       FROM pos_product_components_flat WHERE store_id = $1
+       ORDER BY variant_id, leaf_variant_id`,
+      [storeId]
+    );
+    expect(flat.rows.length).toBeGreaterThan(0);
+    expect(flat.rows).toEqual(authored.rows);
+  });
+
   it('never puts a composite inside a composite', async () => {
     const nested = await pool.query(
       `SELECT c.id FROM pos_product_components c
