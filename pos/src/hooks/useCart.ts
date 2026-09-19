@@ -4,6 +4,16 @@
 
 import { create } from 'zustand';
 import type { CatalogItem, PosCustomer } from '../types';
+import {
+  cartLineUid,
+  cleanLineNote,
+  lineCaption,
+  normalizeModifierIds,
+  resolveLineModifiers,
+  shiftCompareAt,
+  type CartLineChoice,
+  type CartLineModifier,
+} from '../lib/modifiers';
 
 export interface CartDiscount {
   type: 'percent' | 'fixed';
@@ -39,6 +49,16 @@ export interface CartLine {
    * price. Absent on every ordinary line.
    */
   components?: CartLineComponent[];
+  /**
+   * The answers this line chose («вівсяне», «без цукру»), in group order.
+   * `variant_label` already carries their names — the server composes the
+   * caption the same way — so the cart draws the label, not this list; this
+   * is what goes on the wire (ids) and what the offline receipt is priced
+   * from. Absent on every line without modifiers.
+   */
+  modifiers?: CartLineModifier[];
+  /** Kitchen note. Never part of any label, and never on the fiscal line. */
+  note?: string;
 }
 
 /** One stem in a bouquet being rung, per one unit of it. */
@@ -70,7 +90,13 @@ interface CartStore {
   setBanner: (msg: string | null) => void;
   setCartDiscount: (discount: CartDiscount | null) => void;
   setCustomer: (customer: PosCustomer | null) => void;
-  addItem: (item: CatalogItem, qty?: number) => void;
+  /**
+   * Add a catalog item, merging into the line with the same identity. The
+   * optional `choice` is what the modifier sheet hands back; without it the
+   * call is exactly what it was before modifiers existed, which is what the
+   * clothing and flowers catalogs still make.
+   */
+  addItem: (item: CatalogItem, qty?: number, choice?: CartLineChoice) => void;
   /** A bouquet assembled at the counter — always its own line. */
   addAssembled: (input: AssembledLineInput) => void;
   /**
@@ -159,16 +185,40 @@ export const useCartStore = create<CartStore>((set, get) => ({
   setCartDiscount: (discount) => set({ cartDiscount: discount }),
   setCustomer: (customer) => set({ customer }),
 
-  addItem: (item, qty = 1) => {
+  addItem: (item, qty = 1, choice) => {
     if (item.quantity <= 0) {
       set({ banner: 'Немає в наявності' });
       return;
     }
+    // A choice is resolved the way the server will resolve it at checkout:
+    // the same refusals, the same delta, the same caption. No choice means no
+    // modifiers at all — the server never applies a default on its own, so
+    // neither does this.
+    const ids = normalizeModifierIds(choice?.modifiers);
+    const note = cleanLineNote(choice?.note);
+    const resolved = choice ? resolveLineModifiers(item.modifier_groups ?? [], ids) : null;
+    if (resolved?.error) {
+      set({ banner: resolved.error });
+      return;
+    }
+    const deltaCents = resolved?.deltaCents ?? 0;
+    const unitPrice = item.price_cents + deltaCents;
+    if (unitPrice < 0) {
+      set({ banner: 'Ціна не може бути відʼємною' });
+      return;
+    }
+    // The discount is read off the card; the old price then moves by the same
+    // delta as the new one, or a +20 ₴ double shot would shrink the discount.
     const meta = discountMeta(item);
+    const compareAt = shiftCompareAt(meta.compare_at_cents, deltaCents);
+    const uid = cartLineUid(item.variant_id, ids, note);
+    const label = resolved ? lineCaption(item.label, resolved.names) : item.label;
+
     const lines = [...get().lines];
-    // Only an ordinary line merges. A line carrying its own composition keeps
-    // its own uid, so it is never a candidate here.
-    const existing = lines.find((l) => l.uid === String(item.variant_id));
+    // Only a line with the same identity merges — same variant, same answers,
+    // same note, which is the server's own merge key. A line carrying its own
+    // composition keeps a uid of its own, so it is never a candidate here.
+    const existing = lines.find((l) => l.uid === uid);
     if (existing) {
       const next = Math.min(existing.quantity + qty, item.quantity);
       if (next === existing.quantity) {
@@ -178,24 +228,26 @@ export const useCartStore = create<CartStore>((set, get) => ({
       existing.quantity = next;
       existing.max_quantity = item.quantity;
       existing.image_url = item.image_url ?? existing.image_url;
-      existing.compare_at_cents = meta.compare_at_cents;
+      existing.compare_at_cents = compareAt;
       existing.discount_label = meta.discount_label;
-      existing.unit_price_cents = item.price_cents;
+      existing.unit_price_cents = unitPrice;
       set({ lines, banner: null });
       return;
     }
     lines.push({
-      uid: String(item.variant_id),
+      uid,
       variant_id: item.variant_id,
       product_name: item.product_name,
-      variant_label: item.label,
+      variant_label: label,
       unit: item.unit,
-      unit_price_cents: item.price_cents,
+      unit_price_cents: unitPrice,
       quantity: Math.min(qty, item.quantity),
       max_quantity: item.quantity,
       image_url: item.image_url,
-      compare_at_cents: meta.compare_at_cents,
+      compare_at_cents: compareAt,
       discount_label: meta.discount_label,
+      ...(resolved && resolved.snapshot.length ? { modifiers: resolved.snapshot } : {}),
+      ...(note ? { note } : {}),
     });
     set({ lines, banner: null });
   },

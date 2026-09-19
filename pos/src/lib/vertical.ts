@@ -22,6 +22,7 @@ export const DEFAULT_VERTICAL: VerticalPublicConfig = {
   ],
   units: ['шт'],
   defaultUnit: 'шт',
+  maxCompositionDepth: 1,
 };
 
 /**

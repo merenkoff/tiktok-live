@@ -73,9 +73,9 @@ export interface VerticalDefinition {
    * — a bouquet of stems — and `3` allows dish → semi-finished →
    * semi-finished → ingredients. Enforced on every recipe write and re-checked
    * for every ancestor when an inner recipe or a product's `stock_mode`
-   * changes (TechDocs/POS_CAFE.md §9.2). Server-side only: it is a validation
-   * rule, not something the client renders, so it stays out of
-   * `VerticalPublicConfig`.
+   * changes (TechDocs/POS_CAFE.md §9.2). Enforced here only, but reported in
+   * `VerticalPublicConfig` too, so the composition editor knows whether to
+   * offer a recipe as a component at all rather than learning it from a 400.
    */
   maxCompositionDepth: number;
 }
@@ -91,4 +91,6 @@ export interface VerticalPublicConfig {
   attributes: AttributeSpec[];
   units: string[];
   defaultUnit: string;
+  /** How deep a recipe may nest — see `VerticalDefinition.maxCompositionDepth`. */
+  maxCompositionDepth: number;
 }

@@ -23,6 +23,7 @@ describe('DEFAULT_VERTICAL', () => {
     expect(DEFAULT_VERTICAL.attributes).toEqual(clothingVertical.attributes);
     expect(DEFAULT_VERTICAL.units).toEqual([...clothingVertical.units]);
     expect(DEFAULT_VERTICAL.defaultUnit).toBe(clothingVertical.units[0]);
+    expect(DEFAULT_VERTICAL.maxCompositionDepth).toBe(clothingVertical.maxCompositionDepth);
   });
 });
 

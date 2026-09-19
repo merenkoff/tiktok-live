@@ -63,6 +63,7 @@ export function publicConfigOf(def: VerticalDefinition): VerticalPublicConfig {
     attributes: def.attributes,
     units: [...def.units],
     defaultUnit: def.units[0],
+    maxCompositionDepth: def.maxCompositionDepth,
   };
 }
 

@@ -100,6 +100,13 @@ export interface VerticalPublicConfig {
   attributes: AttributeSpec[];
   units: string[];
   defaultUnit: string;
+  /**
+   * How deep a recipe may nest: 1 when a composite holds only simple products
+   * (clothing, flowers), 3 in a café where a dish holds a sauce that is itself
+   * a recipe. Optional because an auth cached before the field was on the
+   * wire has none — read it as 1.
+   */
+  maxCompositionDepth?: number;
 }
 
 /** Shape returned by GET /store and PATCH /store (owner settings). */

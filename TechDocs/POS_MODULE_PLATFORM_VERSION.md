@@ -139,3 +139,27 @@ runtime-экспортов обоих баррелов зафиксирован 
 компоненти, з яких вертикаль будує свій екран: `ProductTile`, `TagFolderTile`,
 `VariantPicker`, `CatalogTagBar`, `ScanWedge`. Каркас каси (кошик, оплата,
 ПРРО, чек) у платформу **не** виноситься — він лишається в хості.
+
+### 5–12 (2026-09-17 … 2026-09-18) — стіл флориста
+
+`startOfflineRuntime`/`refusalText` (5), `addAssembled` + `setQty`/`remove` за
+`uid` (6), `withLabour`/`priceOfComponents`/`customBouquetLabel` (7),
+`buildPriceTags`/`PriceTagsPrintable`/`triggerPrint` (8), `api.writeOffShowcase`
+(9), `api.uploadBouquetPhoto`/`setShowcasePhoto` (10), `api.saveBouquetRecipe`
+(11), `api.getFlowerAnalytics` (12) — усе для `vertical-flowers`, див.
+TechDocs/POS_FLORIST_BENCH.md і коментар до `PLATFORM_VERSION` у `version.ts`.
+
+### 13 (2026-09-19) — модифікатори на касі
+
+Для кафе (TechDocs/POS_CAFE.md §3, фаза К2). `useCartStore.addItem` отримав
+третій аргумент — `{ modifiers, note }`, відповіді й кухонний коментар рядка,
+а `CartLine` — поля `modifiers`/`note`. Це зміна **сенсу** сигнатури, яку
+снапшот імен не бачить: модуль, зібраний проти 13, на хості 12 злінкується, а
+третій аргумент буде мовчки проігноровано і кожен латте піде за ціною картки —
+тому бамп. `@pos/platform` експортує дзеркала серверної арифметики
+(`resolveLineModifiers`, `lineCaption`, `cartLineUid`, `defaultModifierIds`,
+`needsModifierSheet`, `shiftCompareAt`, `groupsOf`…) з `lib/modifiers.ts`, щоб
+модуль їх не копіював; `@pos/platform/ui` — `ModifierSheet` (усі питання про
+товар на одному листі, ціна відповіді на кнопці); `ProductTile` — `onMore`,
+кутова кнопка «⋯». `Coffee` — у `NAV_ICONS`. `VerticalPublicConfig` несе
+`maxCompositionDepth`.

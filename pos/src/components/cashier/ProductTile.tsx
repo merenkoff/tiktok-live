@@ -28,6 +28,14 @@ interface Props {
    * constantly while their hands are full. 0 or absent draws nothing.
    */
   count?: number;
+  /**
+   * A second, visible way in: the «⋯» in the tile's corner. The café uses it
+   * to open the modifier sheet for a product whose tap already adds it «як
+   * завжди» — the tap stays one tap, and the way to change the answer is on
+   * the tile rather than behind a long-press nobody finds. Absent, the tile
+   * is exactly what it was.
+   */
+  onMore?: () => void;
 }
 
 export function ProductTile({
@@ -39,16 +47,17 @@ export function ProductTile({
   onClick,
   disabled,
   count,
+  onMore,
 }: Props) {
   const [broken, setBroken] = useState(false);
   const src = !broken ? assetUrl(imageUrl) : null;
 
-  return (
+  const tile = (
     <button
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`aspect-square rounded-sq overflow-hidden relative text-left bg-sq-empty hover:brightness-[0.97] transition-[filter] disabled:opacity-50 disabled:cursor-not-allowed ${
+      className={`${onMore ? 'w-full h-full' : 'aspect-square'} rounded-sq overflow-hidden relative text-left bg-sq-empty hover:brightness-[0.97] transition-[filter] disabled:opacity-50 disabled:cursor-not-allowed ${
         count ? 'ring-2 ring-sq-blue' : ''
       }`}
     >
@@ -89,5 +98,26 @@ export function ProductTile({
         </span>
       )}
     </button>
+  );
+
+  if (!onMore) return tile;
+
+  // A sibling of the tile, not a child: a button inside a button is invalid
+  // HTML, and its click would bubble into the tile and add the line as well.
+  return (
+    <div className="relative aspect-square">
+      {tile}
+      {!disabled && (
+        <button
+          type="button"
+          onClick={onMore}
+          aria-label={`Змінити: ${name}`}
+          className="absolute top-1 right-1 w-11 h-11 grid place-items-center rounded-full bg-black/45 text-white text-xl leading-none shadow-sm hover:bg-black/60"
+          data-testid="tile-more"
+        >
+          ⋯
+        </button>
+      )}
+    </div>
   );
 }

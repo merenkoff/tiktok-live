@@ -6,9 +6,10 @@
 // and keeps selling when that module is missing or broken.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithProviders, makeAuthResponse } from '../../test/utils';
 import { useAuthStore } from '../../hooks/useAuth';
+import { useCartStore } from '../../hooks/useCart';
 import { RegisterPage } from './RegisterPage';
 import { remoteModules } from '../../modules/registry';
 import type { SalesCatalogProps } from '../../modules/types';
@@ -25,7 +26,7 @@ function installVertical(Catalog: (props: SalesCatalogProps) => JSX.Element): vo
   });
 }
 
-function signIn(vertical: 'clothing' | 'flowers'): void {
+function signIn(vertical: 'clothing' | 'flowers' | 'cafe'): void {
   const auth = makeAuthResponse();
   useAuthStore.setState({
     auth: {
@@ -34,7 +35,7 @@ function signIn(vertical: 'clothing' | 'flowers'): void {
         ...auth.store,
         vertical: {
           id: vertical,
-          title: vertical === 'flowers' ? 'Квіти' : 'Одяг',
+          title: vertical === 'flowers' ? 'Квіти' : vertical === 'cafe' ? 'Кафе' : 'Одяг',
           attributes: [],
           units: ['шт'],
           defaultUnit: 'шт',
@@ -53,6 +54,7 @@ beforeEach(() => {
 
 afterEach(() => {
   remoteModules.length = 0;
+  useCartStore.getState().clear();
   vi.restoreAllMocks();
 });
 
@@ -85,5 +87,52 @@ describe('RegisterPage as the sell-screen frame', () => {
     });
     renderWithProviders(<RegisterPage />, { shell: 'cashier' });
     await waitFor(() => expect(screen.getByPlaceholderText('Пошук')).toBeInTheDocument());
+  });
+});
+
+describe('RegisterPage with a café line', () => {
+  function ringOatLatte(): void {
+    useCartStore.getState().restore({
+      lines: [
+        {
+          uid: '7|12|гарячіше',
+          variant_id: 7,
+          product_name: 'Латте',
+          variant_label: 'M · вівсяне',
+          unit: 'шт',
+          unit_price_cents: 8000,
+          quantity: 1,
+          max_quantity: 9,
+          modifiers: [{ id: 12, group_name: 'Молоко', name: 'вівсяне', price_delta_cents: 1500 }],
+          note: 'гарячіше',
+        },
+      ],
+    });
+  }
+
+  it('shows the kitchen note under the caption, and the caption already names the answers', async () => {
+    signIn('cafe');
+    ringOatLatte();
+    renderWithProviders(<RegisterPage />, { shell: 'cashier' });
+    expect(await screen.findByPlaceholderText('Пошук')).toBeInTheDocument();
+
+    expect(screen.getAllByText('M · вівсяне').length).toBeGreaterThan(0);
+    expect(screen.getAllByTestId('cart-line-note')[0]).toHaveTextContent('гарячіше');
+  });
+
+  it('refuses to park a line with modifiers in the server’s words, without opening the sheet', async () => {
+    // Parked carts have no column for them until К3; the server refuses such
+    // a line, and dropping the answers on the way would be worse than refusing.
+    signIn('cafe');
+    ringOatLatte();
+    renderWithProviders(<RegisterPage />, { shell: 'cashier' });
+    expect(await screen.findByPlaceholderText('Пошук')).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByTestId('park-cart')[0]);
+
+    expect(screen.queryByTestId('park-cart-sheet')).toBeNull();
+    expect(
+      await screen.findByText('Позицію з модифікаторами поки не можна відкласти')
+    ).toBeInTheDocument();
   });
 });
