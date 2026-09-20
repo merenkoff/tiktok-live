@@ -37,6 +37,8 @@ export function registerParkedCartRoutes(fastify: FastifyInstance): void {
         variant_id?: number;
         quantity?: number;
         components?: Array<{ component_variant_id?: number; quantity?: number }>;
+        modifiers?: number[];
+        note?: string;
       }>;
     };
     try {
@@ -57,6 +59,10 @@ export function registerParkedCartRoutes(fastify: FastifyInstance): void {
                 quantity: Number(c?.quantity),
               }))
             : undefined,
+          // Used to be dropped here — the service's refusal never saw them
+          // and a modified line went quiet (К3f, migration 051).
+          modifiers: Array.isArray(item?.modifiers) ? item.modifiers.map(Number) : undefined,
+          note: typeof item?.note === 'string' ? item.note : undefined,
         })),
       });
       return reply.code(result.created ? 201 : 200).send(result.cart);

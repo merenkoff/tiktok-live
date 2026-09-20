@@ -37,6 +37,8 @@ import {
   type ComponentInput,
 } from './composites.service.js';
 import type { CartDiscountInput } from './types.js';
+import * as modifiers from './modifiers.service.js';
+import type { LineModifierSnapshot } from './modifiers.service.js';
 
 type DbClient = { query: typeof pool.query };
 
@@ -64,6 +66,10 @@ export interface ParkCartItemInput {
   quantity: number;
   /** The bouquet this line was assembled as, when it carries its own recipe. */
   components?: ComponentInput[];
+  /** The answers chosen (ids), as checkout takes them — К3f. */
+  modifiers?: number[];
+  /** The kitchen note, bounded like the sale line's. */
+  note?: string;
 }
 
 export interface ParkCartInput {
@@ -97,6 +103,14 @@ export interface ParkedCartItem {
   variant_id: number;
   quantity: number;
   components: ParkedCartComponent[] | null;
+  /**
+   * The answers this line chose, as a snapshot (migration 051): names and
+   * deltas draw the restored line, ids replay at checkout. Empty for a plain
+   * line.
+   */
+  modifiers: LineModifierSnapshot[];
+  /** The kitchen note. Never on the fiscal receipt. */
+  note: string;
   product_name: string;
   label: string;
   unit: string;
@@ -110,7 +124,8 @@ export interface ParkedCartItem {
    * prices it with (stems plus the shop's assembly charge), because the card's
    * own price says nothing about a bouquet somebody put together by hand. A
    * restored cart that showed the card's number would break the one rule the
-   * bench rests on: the price never lies and never hides.
+   * bench rests on: the price never lies and never hides. For a modified line
+   * it is the card's price plus the answers' deltas, as checkout prices it.
    */
   line_price_cents: number;
   image_url: string | null;
@@ -152,12 +167,10 @@ export async function parkCart(input: ParkCartInput): Promise<{ cart: ParkedCart
     if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
       throw new ParkedCartError('Некоректна кількість');
     }
-    // A parked line has nowhere yet to keep a modifier or a kitchen note
-    // (café phase К3). Refused out loud: dropping them would hand a latte on
-    // oat milk back as a plain latte.
-    const extra = item as { modifiers?: unknown; note?: unknown };
-    if ((Array.isArray(extra.modifiers) && extra.modifiers.length > 0) || extra.note) {
-      throw new ParkedCartError('Позицію з модифікаторами поки не можна відкласти');
+    // A bouquet's price is its stems'; a delta on top of that has no meaning
+    // — the same rule checkout applies.
+    if (item.components?.length && modifiers.normalizeModifierIds(item.modifiers).length > 0) {
+      throw new ParkedCartError('Позиція з власним складом не приймає модифікаторів');
     }
   }
 
@@ -193,10 +206,22 @@ export async function parkCart(input: ParkCartInput): Promise<{ cart: ParkedCart
     const held = new Map<number, number>();
 
     for (const [index, item] of input.items.entries()) {
+      // The answers this line chose (К3f), resolved against the product's
+      // groups exactly as checkout will — a required question left unanswered
+      // is refused here, in the server's words, not when the cart comes back
+      // to a till. Stored as a snapshot so the restored line reads the same
+      // after an answer is renamed; the ids replay at checkout.
+      const chosen = await modifiers.resolveForVariant(
+        client,
+        input.storeId,
+        item.variant_id,
+        modifiers.normalizeModifierIds(item.modifiers)
+      );
+      const note = modifiers.cleanLineNote(item.note);
       await client.query(
         `INSERT INTO pos_parked_cart_items
-           (store_id, cart_id, variant_id, quantity, components, sort_order)
-         VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
+           (store_id, cart_id, variant_id, quantity, components, sort_order, modifiers, note)
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7::jsonb, $8)`,
         [
           input.storeId,
           cartId,
@@ -204,13 +229,18 @@ export async function parkCart(input: ParkCartInput): Promise<{ cart: ParkedCart
           item.quantity,
           item.components?.length ? JSON.stringify(item.components) : null,
           index,
+          chosen.snapshot.length ? JSON.stringify(chosen.snapshot) : null,
+          note,
         ]
       );
 
+      // What the answers take off the shelf («вівсяне молоко» 200 мл) is
+      // held with the rest, through the same function the sale resolves it by.
       const demand = await resolveStockDemand(client, {
         storeId: input.storeId,
         variantId: item.variant_id,
         components: item.components,
+        extra: chosen.components,
       });
       if (demand.self) {
         held.set(item.variant_id, (held.get(item.variant_id) ?? 0) + item.quantity);
@@ -284,7 +314,7 @@ export async function getCart(storeId: number, cartId: number): Promise<ParkedCa
   const row = head.rows[0];
 
   const items = await pool.query(
-    `SELECT i.id, i.variant_id, i.quantity, i.components,
+    `SELECT i.id, i.variant_id, i.quantity, i.components, i.modifiers, i.note,
             p.name AS product_name, p.image_url,
             v.label, v.unit, v.price_cents,
             -- The stems, named. Keyed off the stored composition rather than
@@ -316,6 +346,8 @@ export async function getCart(storeId: number, cartId: number): Promise<ParkedCa
     id: Number(item.id),
     variant_id: Number(item.variant_id),
     quantity: Number(item.quantity),
+    modifiers: modifiers.parseLineModifierSnapshot(item.modifiers),
+    note: typeof item.note === 'string' ? item.note : '',
     components: item.components
       ? ((item.component_rows ?? []) as Array<Record<string, unknown>>).map((c) => ({
           component_variant_id: Number(c.component_variant_id),
@@ -330,16 +362,20 @@ export async function getCart(storeId: number, cartId: number): Promise<ParkedCa
     label: item.label ?? '',
     unit: item.unit ?? '',
     price_cents: Number(item.price_cents ?? 0),
-    line_price_cents: item.components
-      ? await priceOfComposition(
-          pool,
-          storeId,
-          (item.components as Array<Record<string, unknown>>).map((c) => ({
-            component_variant_id: Number(c.component_variant_id),
-            quantity: Number(c.quantity),
-          }))
-        )
-      : Number(item.price_cents ?? 0),
+    line_price_cents:
+      (item.components
+        ? await priceOfComposition(
+            pool,
+            storeId,
+            (item.components as Array<Record<string, unknown>>).map((c) => ({
+              component_variant_id: Number(c.component_variant_id),
+              quantity: Number(c.quantity),
+            }))
+          )
+        : Number(item.price_cents ?? 0)) +
+      modifiers
+        .parseLineModifierSnapshot(item.modifiers)
+        .reduce((sum, m) => sum + m.price_delta_cents, 0),
     image_url: item.image_url ?? null,
   })));
 

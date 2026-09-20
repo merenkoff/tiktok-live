@@ -22,9 +22,10 @@ import {
   type TestStore,
 } from './helpers/pos-fixtures.js';
 import { completeSale, getSale, listSales, voidSale } from '../pos/sales.service.js';
-import { getCatalog } from '../pos/products.service.js';
+import { createProduct, getCatalog } from '../pos/products.service.js';
 import * as modifiers from '../pos/modifiers.service.js';
 import { KitchenError, listOpenOrders, setPrepStatus } from '../pos/kitchen.service.js';
+import { getPreorder } from '../pos/preorders.service.js';
 import { localDateString } from '../pos/core/localDate.js';
 import type { CompleteSaleItemInput } from '../pos/types.js';
 
@@ -37,6 +38,9 @@ describe.skipIf(!hasDb)('POS kitchen board', () => {
   let croissant = 0;
   let croissantProduct = 0;
   let oat = 0;
+  let oatMilk = 0;
+  let tea = 0;
+  let sugarGroupId = 0;
   let shirt = 0;
 
   async function sell(
@@ -93,12 +97,36 @@ describe.skipIf(!hasDb)('POS kitchen board', () => {
       min_select: 0,
       max_select: 1,
     });
+    // The answer carries its own milk (§4.3): 200 мл off the shelf per latte.
+    // Through the real service (the fixture seeds through the clothing
+    // vertical, which knows no millilitres).
+    const oatCard = await createProduct(cafe.storeId, {
+      name: 'Молоко вівсяне',
+      sellable: false,
+      variants: [{ attributes: {}, unit: 'мл', price_cents: 100, cost_cents: 4, quantity: 5000 }],
+    });
+    oatMilk = (oatCard!.variants[0] as { id: number }).id;
     const withOat = await modifiers.createModifier(cafe.storeId, milk.id, {
       name: 'вівсяне',
       price_delta_cents: 1500,
+      component_variant_id: oatMilk,
+      component_quantity: 200,
     });
     oat = withOat.modifiers.find((m) => m.name === 'вівсяне')!.id;
     await modifiers.setProductGroups(cafe.storeId, latteCard.productId, [milk.id]);
+
+    // Tea asks a required question, so a line that skips it is refused.
+    const teaCard = await seedProduct(cafe.storeId, { name: 'Чай', priceCents: 4000, quantity: 100 });
+    tea = teaCard.variantId;
+    let sugar = await modifiers.createGroup(cafe.storeId, {
+      name: 'Цукор',
+      min_select: 1,
+      max_select: 1,
+    });
+    sugar = await modifiers.createModifier(cafe.storeId, sugar.id, { name: 'з цукром', is_default: true });
+    sugar = await modifiers.createModifier(cafe.storeId, sugar.id, { name: 'без цукру' });
+    sugarGroupId = sugar.id;
+    await modifiers.setProductGroups(cafe.storeId, teaCard.productId, [sugar.id]);
   }, 60000);
 
   afterAll(async () => {
@@ -396,6 +424,152 @@ describe.skipIf(!hasDb)('POS kitchen board', () => {
       (tags.json() as Array<{ name: string; station: string | null }>).map((t) => [t.name, t.station])
     );
     expect(byName).toMatchObject({ 'Кава': 'bar', 'Сніданки': 'kitchen', 'Новинки': null });
+  });
+
+  const stockOf = async (variantId: number) =>
+    Number(
+      (await pool.query(`SELECT quantity FROM pos_stock WHERE variant_id = $1`, [variantId])).rows[0]
+        .quantity
+    );
+  const reservedOf = async (variantId: number) =>
+    Number(
+      (
+        await pool.query(
+          `SELECT reserved FROM pos_stock_reserved WHERE store_id = $1 AND variant_id = $2`,
+          [cafe.storeId, variantId]
+        )
+      ).rows[0]?.reserved ?? 0
+    );
+
+  it('parks a latte on oat milk with its note, holds the milk, and hands it back to ring as one line', async () => {
+    // Over the API on purpose: the route used to rebuild the line without
+    // its answers, so the service never saw them (К3f, migration 051).
+    const parked = await app.inject({
+      method: 'POST',
+      url: '/api/pos/parked-carts',
+      headers: auth(cafe.sellerToken),
+      payload: {
+        client_uuid: crypto.randomUUID(),
+        label: 'Марта, вікно',
+        items: [{ variant_id: latte, quantity: 2, modifiers: [oat], note: 'гарячіше' }],
+      },
+    });
+    expect(parked.statusCode).toBe(201);
+    const cart = parked.json();
+    expect(cart.items[0]).toMatchObject({
+      price_cents: 6500,
+      line_price_cents: 8000,
+      note: 'гарячіше',
+      modifiers: [expect.objectContaining({ modifier_id: oat, group_name: 'Молоко', name: 'вівсяне', price_delta_cents: 1500 })],
+    });
+    expect(cart.total_cents).toBe(16000);
+    expect(await reservedOf(oatMilk)).toBe(400);
+
+    const picked = await app.inject({
+      method: 'POST',
+      url: `/api/pos/parked-carts/${cart.id}/pick-up`,
+      headers: auth(cafe.sellerToken),
+    });
+    expect(picked.statusCode).toBe(200);
+    const restored = picked.json().items[0] as {
+      variant_id: number;
+      quantity: number;
+      modifiers: Array<{ modifier_id: number }>;
+      note: string;
+    };
+    expect(await reservedOf(oatMilk)).toBe(0);
+
+    // Rung with a walk-in latte on the same answers: one line of three.
+    const sale = await sell(cafe, [
+      {
+        variant_id: restored.variant_id,
+        quantity: restored.quantity,
+        modifiers: restored.modifiers.map((m) => m.modifier_id),
+        note: restored.note,
+      },
+      { variant_id: latte, quantity: 1, modifiers: [oat], note: 'гарячіше' },
+    ]);
+    expect(sale.items).toHaveLength(1);
+    expect(sale.items[0]).toMatchObject({
+      quantity: 3,
+      unit_price_cents: 8000,
+      variant_label: 'M · вівсяне',
+      note: 'гарячіше',
+    });
+  });
+
+  it("refuses a parked line that skips a required question, in the server's words", async () => {
+    const park = (items: unknown[]) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/pos/parked-carts',
+        headers: auth(cafe.sellerToken),
+        payload: { client_uuid: crypto.randomUUID(), label: 'Чай', items },
+      });
+    const skipped = await park([{ variant_id: tea, quantity: 1 }]);
+    expect(skipped.statusCode).toBe(400);
+    expect(skipped.json().error).toBe('Оберіть «Цукор»');
+    const sugarFree = (await modifiers.getGroup(cafe.storeId, sugarGroupId)).modifiers.find(
+      (m) => m.name === 'без цукру'
+    )!.id;
+    const answered = await park([{ variant_id: tea, quantity: 1, modifiers: [sugarFree] }]);
+    expect(answered.statusCode).toBe(201);
+    expect(answered.json().items[0].modifiers.map((m: { name: string }) => m.name)).toEqual([
+      'без цукру',
+    ]);
+  });
+
+  it('takes a pre-order at the card price plus the delta, and honours it after the answer changes or disappears', async () => {
+    const taken = await app.inject({
+      method: 'POST',
+      url: '/api/pos/preorders',
+      headers: auth(cafe.sellerToken),
+      payload: {
+        client_uuid: crypto.randomUUID(),
+        due_at: new Date(Date.now() + 3_600_000).toISOString(),
+        items: [{ variant_id: latte, quantity: 1, modifiers: [oat], note: 'без цукру' }],
+      },
+    });
+    expect(taken.statusCode).toBe(201);
+    const preorderId = taken.json().id as number;
+    expect(taken.json().quoted_total_cents).toBe(8000);
+    expect(taken.json().items[0]).toMatchObject({
+      unit_price_cents: 8000,
+      current_unit_price_cents: 8000,
+      note: 'без цукру',
+      modifiers: [expect.objectContaining({ modifier_id: oat, name: 'вівсяне', price_delta_cents: 1500 })],
+    });
+
+    // The answer gets dearer: today's figure moves, the promise does not.
+    await modifiers.updateModifier(cafe.storeId, oat, { price_delta_cents: 2000 });
+    const dearer = (await getPreorder(cafe.storeId, preorderId))!;
+    expect(dearer.items[0]).toMatchObject({ unit_price_cents: 8000, current_unit_price_cents: 8500 });
+    expect(dearer.current_total_cents).toBe(8500);
+
+    // The answer is deleted: nothing to price today, and the hand-over keeps
+    // the name, the price and the note, writes off nothing for it, and nulls
+    // the id the FK no longer has.
+    await modifiers.deleteModifier(cafe.storeId, oat);
+    const orphaned = (await getPreorder(cafe.storeId, preorderId))!;
+    expect(orphaned.items[0].current_unit_price_cents).toBeNull();
+    expect(orphaned.current_total_cents).toBeNull();
+
+    const milkBefore = await stockOf(oatMilk);
+    const sale = await completeSale({
+      storeId: cafe.storeId,
+      staffId: cafe.sellerId,
+      items: [],
+      payments: [{ method: 'cash', amount_cents: 8000 }],
+      preorder_id: preorderId,
+    });
+    expect(sale!.items[0]).toMatchObject({
+      variant_label: 'M · вівсяне',
+      unit_price_cents: 8000,
+      note: 'без цукру',
+      modifiers: [{ modifier_id: null, group_name: 'Молоко', name: 'вівсяне', price_delta_cents: 1500 }],
+    });
+    expect(await stockOf(oatMilk)).toBe(milkBefore);
+    expect(sale!.prep_status).toBe('new');
   });
 
   it('needs a session', async () => {
