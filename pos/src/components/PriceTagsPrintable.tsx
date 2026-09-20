@@ -3,6 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import type { CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import {
   EAN13_GUARD_BARS,
   EAN13_QUIET_LEFT,
@@ -118,6 +119,15 @@ function Ean13({ code }: { code: string }) {
  * `styles/tokens.css` make it visible, to the print engine alone — the same
  * arrangement `ReceiptPrintable` uses.
  *
+ * It puts itself at the end of `document.body`, rather than leaving that to
+ * whoever renders it. Printing hides every other child of the body, so where
+ * this lands in the tree decides whether anything comes out at all, and both
+ * ways of getting it wrong had shipped: a caller that left it inside the app
+ * printed a blank page, and a dialog that portalled itself out to escape a
+ * stale transform printed the dialog. Neither is a decision a caller should be
+ * making — the whole job of this component is to be visible to the print
+ * engine and to nothing else.
+ *
  * Everything here is solid black on white. A thermal head has no greys, and a
  * hairline thinner than one dot at 203 dpi disappears entirely.
  *
@@ -135,9 +145,9 @@ export function PriceTagsPrintable({
   tags: PriceTag[] | null;
   paperWidth: TagPaperWidth;
 }) {
-  if (!tags) return null;
+  if (!tags || typeof document === 'undefined') return null;
 
-  return (
+  return createPortal(
     <div
       className="price-tag-print-area"
       data-paper={paperWidth}
@@ -157,6 +167,7 @@ export function PriceTagsPrintable({
           {tag.sku && <p className="price-tag-sku">{tag.sku}</p>}
         </div>
       ))}
-    </div>
+    </div>,
+    document.body
   );
 }
