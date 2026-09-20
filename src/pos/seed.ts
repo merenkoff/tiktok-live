@@ -100,6 +100,47 @@ async function registerFlowersModule(): Promise<void> {
   console.log(`   vertical-flowers module registered → ${entry.url}`);
 }
 
+/**
+ * Point `demo-cafe` (migration 048) at a `vertical-cafe` bundle. Same shape
+ * and the same reasons as the flowers entry above: opt-in, dev URL by
+ * default, never written by the migration.
+ *
+ * The module owns no route of its own in К2 — the sell screen is a slot, not
+ * a page — but an object entry must name `routePath` and one nav item (both
+ * sanitisers refuse an empty `nav`). They only shape the desktop's `pending`
+ * placeholder while the bundle downloads; once it loads, the descriptor's own
+ * empty nav wins and the tile goes away.
+ *
+ *   POS_SEED_VERTICAL_CAFE=1 npm run pos:seed
+ */
+async function registerCafeModule(): Promise<void> {
+  const store = await pool.query(`SELECT id FROM pos_stores WHERE slug = 'demo-cafe'`);
+  if (store.rows.length === 0) {
+    console.log('   demo-cafe store not found — run the migrations first');
+    return;
+  }
+  const entry = {
+    url: process.env.POS_SEED_VERTICAL_CAFE_URL || 'http://localhost:5008/remote-entry.js',
+    title: 'Кафе',
+    routePath: '/cafe',
+    icon: 'Coffee',
+    nav: [{ label: 'Кафе', location: 'cashier-primary', order: 80, icon: 'Coffee', match: '/cafe' }],
+  };
+  await pool.query(
+    `UPDATE pos_stores
+     SET module_remotes = COALESCE(module_remotes, '{}'::jsonb)
+                          || jsonb_build_object('vertical-cafe', $2::jsonb)
+     WHERE id = $1`,
+    [Number(store.rows[0].id), JSON.stringify(entry)]
+  );
+
+  console.log('\n✅ Demo café store ready');
+  console.log('   Store slug: demo-cafe');
+  console.log('   Owner: owner@cafe.shop / owner123');
+  console.log('   Seller PIN: 1234');
+  console.log(`   vertical-cafe module registered → ${entry.url}`);
+}
+
 /** Copies the committed demo product photos into the (gitignored) uploads dir. */
 async function copySeedProductImages(): Promise<void> {
   await ensureUploadsDir();
@@ -276,6 +317,7 @@ async function seed(): Promise<void> {
   await seedDemoTags(storeId);
   if (process.env.POS_SEED_TIKTOK_LIVE === '1') await seedTiktokLiveModule(storeId);
   if (process.env.POS_SEED_VERTICAL_FLOWERS === '1') await registerFlowersModule();
+  if (process.env.POS_SEED_VERTICAL_CAFE === '1') await registerCafeModule();
   console.log('\n✅ Demo store ready (tags ensured)');
   console.log('   Store slug: demo');
   console.log('   Owner: owner@demo.shop / owner123');
