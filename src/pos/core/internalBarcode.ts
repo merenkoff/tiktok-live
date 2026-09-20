@@ -42,11 +42,12 @@ export class BarcodeRangeError extends Error {
  * The thirteenth digit: weight 1 on the odd positions from the left, 3 on the
  * even ones, then round the sum up to the next ten.
  *
- * It has to be right here, because nothing downstream will catch it: the
- * client's `isEan13` only asserts thirteen digits, and `encodeEan13` will
- * happily draw bars for a code whose check digit is wrong — a tag that looks
- * perfect and that no scanner will accept. The scanner is the first and only
- * validator, standing at the counter with a customer waiting.
+ * It has to be right here, because this is where the code is made. The client
+ * now checks it too (`pos/src/lib/ean13.ts`, same arithmetic) and a price tag
+ * refuses to draw bars for a code that fails — but that check exists for codes
+ * typed in or imported, and it can only report a bad one. It cannot repair a
+ * code this function got wrong, and until it was added the scanner at the
+ * counter was the first validator, with a customer waiting.
  */
 export function ean13CheckDigit(twelve: string): number {
   let sum = 0;

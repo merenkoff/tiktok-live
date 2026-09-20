@@ -6,8 +6,9 @@
  * Recognising a store-local barcode on the client.
  *
  * Mirrors `isInternalBarcode` in `src/pos/gtin/internal-code.ts`, but only the
- * predicate — the check-digit arithmetic stays on the server, because the codes
- * are minted there. There is nothing here to drift.
+ * predicate: whether a code is *ours*. Whether it is a valid EAN-13 at all is
+ * `isEan13` in `ean13.ts` — a separate question, asked on a different path
+ * (anything printed on a tag, whoever issued it).
  *
  * Used to suppress the external lookup: a code we invented is in no public
  * database, so fanning out to Open*Facts for it would spend a provider's

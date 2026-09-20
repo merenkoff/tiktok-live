@@ -11,10 +11,11 @@ import {
 } from '../pos/core/internalBarcode.js';
 
 /**
- * Nothing downstream validates a check digit: the client's `isEan13` only
- * counts to thirteen, and `encodeEan13` will draw bars for a wrong one. The
- * first validator is the scanner at the counter with a customer waiting, so
- * the maths is pinned here against codes whose check digit is publicly known.
+ * A wrong check digit cannot be caught downstream, only reported: the client's
+ * `isEan13` verifies it and a price tag then prints no bars at all, which is
+ * the right answer for a code someone typed in and no answer at all for one
+ * this module minted. So the maths is pinned here against codes whose check
+ * digit is publicly known — the same arithmetic the client runs.
  */
 describe('internal EAN-13', () => {
   it('computes the check digit real barcodes agree on', () => {

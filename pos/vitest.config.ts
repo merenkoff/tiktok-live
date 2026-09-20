@@ -42,6 +42,7 @@ export default defineConfig({
         'src/lib/bouquet.ts',
         'src/lib/modifiers.ts',
         'src/lib/money.ts',
+        'src/lib/priceTagLayout.ts',
         'src/lib/receipt.ts',
         'src/lib/taxUrl.ts',
         'src/lib/urls.ts',

@@ -3,7 +3,17 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { describe, expect, it } from 'vitest';
-import { EAN13_MODULES, ean13Bars, encodeEan13, isEan13 } from './ean13';
+import {
+  EAN13_MODULES,
+  EAN13_QUIET_LEFT,
+  EAN13_QUIET_RIGHT,
+  EAN13_TOTAL_MODULES,
+  ean13Bars,
+  ean13CheckDigit,
+  encodeEan13,
+  hasEan13Shape,
+  isEan13,
+} from './ean13';
 
 // The tables are only trustworthy if something reads them back. This decoder
 // exists solely for the tests: it inverts the encoder, so a typo in any of the
@@ -124,5 +134,34 @@ describe('isEan13', () => {
     expect(isEan13('4820270362877')).toBe(true);
     expect(isEan13('482027036287')).toBe(false);
     expect(isEan13(' 4820270362877')).toBe(false);
+  });
+
+  it('rejects a code whose check digit does not add up', () => {
+    // The failure the shop actually hits: an article number that spent months
+    // in the barcode column, or a hand-typed code with one digit out. It is
+    // thirteen digits, it used to draw a symbol that looks perfect, and no
+    // reader on earth accepts it — so the counter was the first validator.
+    expect(isEan13('4820270362870')).toBe(false);
+    expect(isEan13('2900000000010')).toBe(false);
+    expect(hasEan13Shape('4820270362870')).toBe(true);
+  });
+
+  it('agrees with the server that mints the store\'s own codes', () => {
+    // Same arithmetic as `ean13CheckDigit` in `src/pos/core/internalBarcode.ts`.
+    expect(ean13CheckDigit('482027036287')).toBe(7);
+    expect(ean13CheckDigit('290000000001')).toBe(8);
+    expect(ean13CheckDigit('590123412345')).toBe(7);
+    expect(ean13CheckDigit('000000000000')).toBe(0);
+    expect(ean13CheckDigit('999999999999')).toBe(4);
+  });
+});
+
+describe('quiet zones', () => {
+  it('reserves the light margins a reader needs on either side', () => {
+    // A symbol is 95 modules; what has to fit on the paper is wider than that,
+    // and forgetting the difference is exactly how a tag stops scanning.
+    expect(EAN13_TOTAL_MODULES).toBe(EAN13_QUIET_LEFT + EAN13_MODULES + EAN13_QUIET_RIGHT);
+    expect(EAN13_QUIET_LEFT).toBeGreaterThanOrEqual(11);
+    expect(EAN13_QUIET_RIGHT).toBeGreaterThanOrEqual(7);
   });
 });

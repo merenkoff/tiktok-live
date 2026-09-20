@@ -41,8 +41,79 @@ const END_GUARD = '101';
 /** Total modules in an EAN-13: 3 + 6×7 + 5 + 6×7 + 3. */
 export const EAN13_MODULES = 95;
 
-export function isEan13(code: string): boolean {
+/**
+ * GS1's floor for the light margins of an EAN-13, in modules.
+ *
+ * Not decoration: a reader uses the quiet zone to find where the symbol starts
+ * and to calibrate what "white" looks like, so a symbol printed edge to edge
+ * is simply not found — which at the counter is indistinguishable from a
+ * broken scanner.
+ */
+export const EAN13_MIN_QUIET_LEFT = 11;
+export const EAN13_MIN_QUIET_RIGHT = 7;
+
+/**
+ * What we actually draw: eleven modules on both sides.
+ *
+ * The right margin is deliberately four modules past the floor. Seven is a
+ * minimum measured on a perfect print, and on a receipt printer it is not one:
+ * a module is under three dots, every edge snaps to a whole one, and a head
+ * run hot spreads each bar into the white beside it. At exactly seven the
+ * simulated reader in `test/scannerSim.ts` loses the symbol as soon as the
+ * bars grow a third of a module — which is an ordinary thermal print, not an
+ * unlucky one. Extra light margin costs paper and nothing else.
+ *
+ * The left margin is also why the first digit is printed out beside the
+ * symbol: it reserves that space visually, so the next person tidying the
+ * layout can see the margin is meant to be there.
+ */
+export const EAN13_QUIET_LEFT = EAN13_MIN_QUIET_LEFT;
+export const EAN13_QUIET_RIGHT = 11;
+
+/** What actually has to fit on the paper: the symbol plus both light margins. */
+export const EAN13_TOTAL_MODULES = EAN13_QUIET_LEFT + EAN13_MODULES + EAN13_QUIET_RIGHT;
+
+/**
+ * Where the six guard bars start, in symbol coordinates (no quiet zone).
+ * They are drawn longer than the data bars — the conventional look, and it
+ * gives the human-readable digits a frame to sit in.
+ */
+export const EAN13_GUARD_BARS: readonly number[] = [0, 2, 46, 48, 92, 94];
+
+/** Thirteen digits — the shape, saying nothing about whether they check out. */
+export function hasEan13Shape(code: string): boolean {
   return /^\d{13}$/.test(code);
+}
+
+/**
+ * The thirteenth digit: weight 1 on the odd positions from the left, 3 on the
+ * even ones, then round the sum up to the next ten. Mirrors
+ * `ean13CheckDigit` in `src/pos/core/internalBarcode.ts`, which mints the
+ * store's own codes; this copy exists because the check has to happen *before*
+ * anything is drawn, on the client.
+ */
+export function ean13CheckDigit(twelve: string): number {
+  let sum = 0;
+  for (let i = 0; i < twelve.length; i += 1) {
+    const digit = twelve.charCodeAt(i) - 48;
+    sum += i % 2 === 0 ? digit : digit * 3;
+  }
+  return (10 - (sum % 10)) % 10;
+}
+
+/**
+ * A code that will actually scan: thirteen digits **and** a check digit that
+ * adds up.
+ *
+ * The check digit is not cosmetic — every reader verifies it and stays silent
+ * when it fails, so a code with a wrong thirteenth digit prints a symbol that
+ * looks perfect and that no scanner will ever accept. The counter is the first
+ * validator otherwise, with a customer standing at it. Article numbers typed
+ * into the barcode column are exactly how such codes get in.
+ */
+export function isEan13(code: string): boolean {
+  if (!hasEan13Shape(code)) return false;
+  return ean13CheckDigit(code.slice(0, 12)) === code.charCodeAt(12) - 48;
 }
 
 /**
@@ -52,7 +123,7 @@ export function isEan13(code: string): boolean {
  * is worse than no barcode, because it looks fine on the label.
  */
 export function encodeEan13(code: string): string {
-  if (!isEan13(code)) throw new Error(`not an EAN-13: ${code}`);
+  if (!hasEan13Shape(code)) throw new Error(`not an EAN-13: ${code}`);
   const digits = [...code].map(Number);
   const parity = PARITY[digits[0]!]!;
 
