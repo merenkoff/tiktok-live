@@ -367,7 +367,8 @@ export async function completeSale(params: {
     ];
     const variantsResult = await client.query(
       `SELECT v.id, v.price_cents, v.compare_at_cents, v.label, v.unit,
-              p.id AS product_id, p.name AS product_name
+              p.id AS product_id, p.name AS product_name,
+              p.stop_listed_on::text AS stop_listed_on
        FROM pos_variants v
        JOIN pos_products p ON p.id = v.product_id
        WHERE v.store_id = $1 AND v.id = ANY($2::bigint[]) AND v.is_active = TRUE`,
@@ -379,6 +380,23 @@ export async function completeSale(params: {
     }
 
     const variantMap = new Map(variantsResult.rows.map((row) => [Number(row.id), row]));
+
+    // The day's stop-list (migration 050, К3b): a stale second till that still
+    // shows the tile is told in so many words. Never a replay — the goods left
+    // while the till was offline — and never a pre-order's locked line, which
+    // was promised before the dish was pulled.
+    if (!params.offline_replay) {
+      const rung = [
+        ...[...plainLines.values()].map((line) => line.variant_id),
+        ...customItems.map((item) => item.variant_id),
+      ];
+      for (const variantId of rung) {
+        const row = variantMap.get(variantId)!;
+        if (row.stop_listed_on != null && row.stop_listed_on === clock.today) {
+          throw new Error(`«${row.product_name}» сьогодні в стоп-листі`);
+        }
+      }
+    }
     let subtotal = 0;
     const draftLines: Array<{
       variant_id: number;

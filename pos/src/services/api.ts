@@ -14,6 +14,7 @@ import type {
   PaymentMethod,
   PosCustomer,
   PosTag,
+  TagStation,
   Product,
   ProductComponentInput,
   ProductKind,
@@ -330,6 +331,7 @@ class PosApi {
     parent_id?: number | null;
     color?: string | null;
     show_in_catalog_bar?: boolean;
+    station?: TagStation | null;
   }): Promise<PosTag> {
     const { data } = await this.client.post<PosTag>('/tags', payload);
     return data;
@@ -342,6 +344,7 @@ class PosApi {
       color?: string | null;
       show_in_catalog_bar?: boolean;
       sort_order?: number;
+      station?: TagStation | null;
     }
   ): Promise<PosTag> {
     const { data } = await this.client.patch<PosTag>(`/tags/${id}`, payload);

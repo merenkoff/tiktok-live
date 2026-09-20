@@ -241,6 +241,14 @@ export interface CatalogItem {
    */
   sellable: boolean;
   /**
+   * On the day's manual stop-list («сьогодні не робимо», migration 050). The
+   * row stays in the answer so the tile greys with a caption instead of
+   * vanishing; `stop_listed_on` is the raw store-local day, so an offline
+   * till can un-grey it at midnight without asking.
+   */
+  stop_listed: boolean;
+  stop_listed_on: string | null;
+  /**
    * The catalogue recipe, for a composite only. Present so the till can tell a
    * bouquet card from a rose and start a custom bouquet from it — the only
    * endpoint that carried this before is owner-only, so a cashier could not.

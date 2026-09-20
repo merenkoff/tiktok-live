@@ -357,6 +357,15 @@ export interface CatalogItem {
    */
   sellable?: boolean;
   /**
+   * On the day's manual stop-list («сьогодні не робимо», migration 050). The
+   * row stays in the answer so the tile greys with a caption instead of
+   * vanishing; `stop_listed_on` is the raw store-local day, so a snapshot
+   * taken yesterday un-greys at midnight on the till's own clock. Absent on
+   * an older snapshot → on the menu.
+   */
+  stop_listed?: boolean;
+  stop_listed_on?: string | null;
+  /**
    * The catalogue recipe, for a composite only. Rides into the offline
    * snapshot for free, because the snapshot is this same endpoint.
    */
@@ -633,6 +642,8 @@ export interface Product {
    * cached payload → true.
    */
   sellable?: boolean;
+  /** The store-local day the barista pulled it, or null (migration 050). */
+  stop_listed_on?: string | null;
   tag_ids: number[];
   /** Modifier groups this product asks, in order. Absent on an older payload. */
   modifier_group_ids?: number[];
@@ -647,8 +658,17 @@ export interface PosTag {
   sort_order: number;
   color: string | null;
   show_in_catalog_bar: boolean;
+  /**
+   * Where a product wearing this tag is made (migration 050, café phase К3):
+   * the kitchen ticket prints per station. Optional because an older cached
+   * `tagsTree` predates the column; absent reads as «no station».
+   */
+  station?: TagStation | null;
   children?: PosTag[];
 }
+
+/** `pos_tags.station`: where the kitchen ticket for a tagged product goes. */
+export type TagStation = 'kitchen' | 'bar';
 
 // ── ПРРО fiscalisation ──────────────────────────────────────────────────────
 // Everything here is optional: an older cached `pos_auth`, the synthetic

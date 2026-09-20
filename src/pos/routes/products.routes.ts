@@ -171,6 +171,7 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
       sort_order?: number;
       color?: string | null;
       show_in_catalog_bar?: boolean;
+      station?: string | null;
     };
     try {
       if (!body.name) return reply.code(400).send({ error: 'name required' });
@@ -180,6 +181,7 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
         sort_order: body.sort_order,
         color: body.color,
         show_in_catalog_bar: body.show_in_catalog_bar,
+        station: body.station,
       });
       return reply.code(201).send(tag);
     } catch (error) {
@@ -201,6 +203,7 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
           sort_order?: number;
           color?: string | null;
           show_in_catalog_bar?: boolean;
+          station?: string | null;
         }
       );
     } catch (error) {
