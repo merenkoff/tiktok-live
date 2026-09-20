@@ -98,6 +98,13 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
        * prices come from the server's own table; the till names the id.
        */
       preorder_id?: number | null;
+      /**
+       * The desktop till replaying a sale it rang while offline (`sync.ts`,
+       * café phase К3). The sale is stamped `served` instead of landing on the
+       * kitchen board, and the day's stop-list does not refuse it. Only ever
+       * `true` from the outbox; the web shell never sends it.
+       */
+      offline_replay?: unknown;
     };
 
     const headerKey = request.headers['idempotency-key'];
@@ -183,6 +190,7 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
         client_uuid: clientUuid,
         fiscal_status: gate.on ? 'pending' : 'none',
         preorder_id: body.preorder_id,
+        offline_replay: body.offline_replay === true,
       });
     } catch (error) {
       logger.error('Complete sale failed', { error: errorMessage(error) });
@@ -474,6 +482,7 @@ async function completeDeviceStampedSale(
     cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
     customer_id?: number | null;
     fiscal_offline?: unknown;
+    offline_replay?: unknown;
   },
   clientUuid: string | null
 ) {
@@ -508,6 +517,10 @@ async function completeDeviceStampedSale(
       customer_id: body.customer_id,
       client_uuid: clientUuid,
       fiscal_status: 'pending',
+      // A till-stamped receipt was by construction rung with no network: the
+      // customer left with it long before this request, whatever the outbox
+      // says.
+      offline_replay: true,
     });
   } catch (error) {
     logger.error('Complete offline-stamped sale failed', { error: errorMessage(error) });

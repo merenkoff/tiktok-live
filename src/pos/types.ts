@@ -257,6 +257,14 @@ export interface CatalogItem {
   tag_ids?: number[];
 }
 
+/**
+ * Where a paid order is between «paid» and «handed over» (migration 049,
+ * café phase К3): `new` on the kitchen board, `ready` on the pickup shelf
+ * («Готово»), `served` taken by the customer («Видано»). Every sale of a
+ * store without a kitchen is `served` from the moment it is rung.
+ */
+export type PrepStatus = 'new' | 'ready' | 'served';
+
 export interface CompleteSaleItemInput {
   variant_id: number;
   quantity: number;

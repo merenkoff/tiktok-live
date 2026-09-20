@@ -78,6 +78,14 @@ export interface VerticalDefinition {
    * offer a recipe as a component at all rather than learning it from a 400.
    */
   maxCompositionDepth: number;
+  /**
+   * Whether a paid sale goes to a kitchen before it is handed over — i.e.
+   * whether `completeSale` puts it on the kitchen board as `new`
+   * (migration 049, TechDocs/POS_CAFE.md §10 К3). A boutique's sale is
+   * `served` the moment it is rung. Server-only: the till learns about the
+   * board from the module that draws it, not from the vertical config.
+   */
+  kitchen: boolean;
 }
 
 /**

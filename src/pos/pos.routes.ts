@@ -20,6 +20,7 @@ import { registerGtinRoutes } from './routes/gtin.routes.js';
 import { registerQrRoutes } from './routes/qr.routes.js';
 import { registerTelemetryRoutes } from './routes/telemetry.routes.js';
 import { registerLiveRoutes } from './routes/live.routes.js';
+import { registerKitchenRoutes } from './routes/kitchen.routes.js';
 import { registerFiscalRoutes } from './routes/fiscal.routes.js';
 import { registerSuperRoutes } from './routes/super.routes.js';
 
@@ -51,6 +52,10 @@ export const POS_ROUTE_GROUPS: PosRouteGroup[] = [
   // has nothing to check. The per-request gate is `ensurePosAuth` plus the
   // 409 for a store with no TikTok account connected.
   { moduleId: null, register: registerLiveRoutes },
+  // Core for the same reason as `registerLiveRoutes`: the `vertical-cafe`
+  // module that draws the kitchen board opts in through `module_remotes`.
+  // The gate is `ensurePosAuth` plus a 409 for a store with no kitchen.
+  { moduleId: null, register: registerKitchenRoutes },
   // Core for the same reason as `registerLiveRoutes` above: the
   // `fiscal-<provider>` UI module opts in through `module_remotes`, not
   // `enabled_modules`. The gate is `ensurePosOwner`.

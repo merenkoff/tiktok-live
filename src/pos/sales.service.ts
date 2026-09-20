@@ -19,11 +19,12 @@ import type {
   CompleteSalePaymentInput,
   RefundItemInput,
   RefundMethod,
+  PrepStatus,
 } from './types.js';
 import { getCustomer } from './customers.service.js';
+import { storeClock } from './core/storeClock.js';
 import * as preorders from './preorders.service.js';
 import * as modifiers from './modifiers.service.js';
-import { localDateString } from './core/localDate.js';
 import type { LineModifierSnapshot } from './modifiers.service.js';
 
 /**
@@ -195,11 +196,10 @@ async function nextReceiptNumber(
  */
 async function nextOrderNo(
   client: { query: typeof pool.query },
-  storeId: number
+  storeId: number,
+  today: string
 ): Promise<number> {
-  const store = await client.query(`SELECT timezone FROM pos_stores WHERE id = $1`, [storeId]);
-  const timezone = String(store.rows[0]?.timezone || 'Europe/Kyiv');
-  const counterKey = `order_${localDateString(timezone)}`;
+  const counterKey = `order_${today}`;
   await client.query(
     `INSERT INTO pos_store_counters (store_id, counter_key, next_value)
      VALUES ($1, $2, 1)
@@ -259,6 +259,14 @@ export async function completeSale(params: {
    * being the freely settable line price §3.5 refuses.
    */
   preorder_id?: number | null;
+  /**
+   * The desktop till replaying a sale it rang while offline (`sync.ts`,
+   * café phase К3). The customer left hours ago with a paper ticket, so the
+   * sale is stamped `served` instead of landing on the kitchen board as a
+   * fresh order (migration 049), and the day's stop-list does not refuse
+   * it (К3b). It relaxes a menu rule and marks kitchen state — never money.
+   */
+  offline_replay?: boolean;
 }) {
   if (!params.items?.length && !params.preorder_id) throw new Error('Cart is empty');
   if (!params.payments?.length) throw new Error('Payment required');
@@ -324,6 +332,11 @@ export async function completeSale(params: {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    // The store's day and vertical, read once inside the transaction: the
+    // order counter's day and the kitchen stamp below must agree with each
+    // other and with the row the INSERT is about to join.
+    const clock = await storeClock(client, params.storeId);
 
     // A pre-order's lines, at the price the shop promised. Read here rather
     // than taken from the request: the caller named an id, and these numbers
@@ -523,13 +536,20 @@ export async function completeSale(params: {
       params.cart_discount != null ? params.cart_discount.value : null;
 
     const receiptNumber = await nextReceiptNumber(client, params.storeId);
-    const orderNo = await nextOrderNo(client, params.storeId);
+    const orderNo = await nextOrderNo(client, params.storeId, clock.today);
+    // Kitchen state (migration 049). Only a kitchen vertical puts a sale on
+    // the board, and a sale the desktop till replays after selling offline
+    // was handed over on a paper ticket hours ago — `new` again would ask
+    // the barista to make it twice. Stamped inside the transaction, like
+    // `fiscal_status`, so no follow-up UPDATE can be lost.
+    const toBoard = clock.vertical.kitchen && !params.offline_replay;
     const saleResult = await client.query(
       `INSERT INTO pos_sales
          (store_id, staff_id, receipt_number, status, subtotal_cents, total_cents, note,
           customer_id, cart_discount_type, cart_discount_value, cart_discount_cents, client_uuid,
-          fiscal_status, order_no)
-       VALUES ($1, $2, $3, 'completed', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          fiscal_status, order_no, prep_status, served_at)
+       VALUES ($1, $2, $3, 'completed', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+               $14::text, CASE WHEN $14::text = 'new' THEN NULL ELSE NOW() END)
        RETURNING *`,
       [
         params.storeId,
@@ -549,6 +569,7 @@ export async function completeSale(params: {
         // find. Silently un-fiscalised revenue is the worst outcome available.
         params.fiscal_status ?? 'none',
         orderNo,
+        toBoard ? 'new' : 'served',
       ]
     );
     const sale = saleResult.rows[0];
@@ -658,6 +679,20 @@ export async function markRefundFiscalFailed(
   );
 }
 
+/** The kitchen columns of a `pos_sales` row (migration 049), as the wire reports them. */
+function kitchenFields(sale: Record<string, unknown>): {
+  prep_status: PrepStatus;
+  ready_at: string | null;
+  served_at: string | null;
+} {
+  const raw = sale.prep_status;
+  return {
+    prep_status: raw === 'new' || raw === 'ready' ? raw : 'served',
+    ready_at: sale.ready_at ? new Date(sale.ready_at as string).toISOString() : null,
+    served_at: sale.served_at ? new Date(sale.served_at as string).toISOString() : null,
+  };
+}
+
 export async function getSale(storeId: number, saleId: number) {
   const saleResult = await pool.query(
     `SELECT s.*, st.display_name AS staff_name,
@@ -762,6 +797,7 @@ export async function getSale(storeId: number, saleId: number) {
     order_no: sale.order_no == null ? null : Number(sale.order_no),
     client_uuid: sale.client_uuid ?? null,
     status: sale.status,
+    ...kitchenFields(sale),
     subtotal_cents: Number(sale.subtotal_cents),
     total_cents: Number(sale.total_cents),
     cart_discount_type: sale.cart_discount_type ?? null,
@@ -869,6 +905,7 @@ export async function listSales(
     order_no: sale.order_no == null ? null : Number(sale.order_no),
     client_uuid: sale.client_uuid ?? null,
     status: sale.status,
+    ...kitchenFields(sale),
     total_cents: Number(sale.total_cents),
     refunded_cents: Number(sale.refunded_cents),
     staff_name: sale.staff_name,

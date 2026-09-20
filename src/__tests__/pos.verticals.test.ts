@@ -54,6 +54,14 @@ describe('vertical registry', () => {
     expect(() => getVertical('bakery' as never)).toThrow();
   });
 
+  it('knows which verticals cook after the sale, and keeps that off the wire', () => {
+    // Migration 049: only a kitchen vertical puts a sale on the board.
+    expect(cafeVertical.kitchen).toBe(true);
+    expect(clothingVertical.kitchen).toBe(false);
+    expect(flowersVertical.kitchen).toBe(false);
+    expect('kitchen' in publicConfigOf(cafeVertical)).toBe(false);
+  });
+
   it('strips the rules from the client config', () => {
     const config = publicConfigOf(flowersVertical);
     expect(config).toEqual({
@@ -76,6 +84,7 @@ describe('vertical registry', () => {
       labelOf: () => 'x',
       productKinds: ['simple'],
       maxCompositionDepth: 1,
+      kitchen: false,
     };
     registerVertical(fake);
     expect(getVertical('flowers').title).toBe('Тест');
