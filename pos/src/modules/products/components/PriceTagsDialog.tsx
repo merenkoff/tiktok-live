@@ -157,7 +157,10 @@ export function PriceTagsDialog({
     <>
       <PriceTagsPrintable tags={printing} paperWidth={paper} />
       {createPortal(
-        <div className="fixed inset-0 z-50 bg-black/40 grid place-items-center p-4">
+        <div
+          data-testid="price-tags-overlay"
+          className="fixed inset-0 z-50 bg-black/40 grid place-items-center p-4"
+        >
           <div className="bg-sq-surface rounded-sq w-full max-w-3xl max-h-[85vh] flex flex-col shadow-lg">
             <div className="p-5 border-b border-sq-divider">
               <p className="sq-section-label">Друк цінників</p>
