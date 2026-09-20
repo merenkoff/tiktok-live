@@ -39,6 +39,8 @@ export default defineConfig({
         'src/modules/selectNav.ts',
         'src/modules/useEnabledModules.ts',
         'src/modules/vertical-flowers/bench/useBench.ts',
+        'src/modules/vertical-cafe/kitchen/lib/kitchen.ts',
+        'src/modules/vertical-cafe/lib/stopList.ts',
         'src/lib/bouquet.ts',
         'src/lib/modifiers.ts',
         'src/lib/money.ts',

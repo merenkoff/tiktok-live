@@ -42,12 +42,12 @@ const CAFE_VERTICAL = {
   maxCompositionDepth: 3,
 };
 
-/** The module owns no route; these only shape the desktop's pending tile. */
+/** Names the module's own route (К3c) — the desktop's pending tile stands in for it. */
 const CAFE_REMOTE = {
   url: `${CDN}/remote-entry.js`,
   title: 'Кафе',
-  routePath: '/cafe',
-  nav: [{ label: 'Кафе', location: 'cashier-primary', order: 80 }],
+  routePath: '/kitchen',
+  nav: [{ label: 'Кухня', location: 'cashier-primary', order: 80, icon: 'ClipboardList' }],
   icon: 'Coffee',
 };
 
@@ -104,6 +104,8 @@ function drink(over: Record<string, unknown>) {
     kind: 'composite',
     stock_mode: 'derived',
     sellable: true,
+    stop_listed: false,
+    stop_listed_on: null,
     components: [],
     tag_ids: [],
     ...over,
@@ -121,7 +123,45 @@ const MENU = [
   drink({ variant_id: 5, product_id: 3, product_name: 'Флет вайт', price_cents: 7000, quantity: 200, modifier_groups: [MILK, SUGAR] }),
   drink({ variant_id: 6, product_id: 4, product_name: 'Круасан', kind: 'simple', stock_mode: 'own', price_cents: 5500, quantity: 24 }),
   drink({ variant_id: 7, product_id: 5, product_name: 'Сирник', kind: 'simple', stock_mode: 'own', price_cents: 6500, quantity: 0 }),
+  // In the case, but pulled for the day on the kitchen board (К3). No day
+  // on purpose: the till then trusts the verdict, whatever the browser's date.
+  drink({ variant_id: 8, product_id: 6, product_name: 'Чізкейк', kind: 'simple', stock_mode: 'own', price_cents: 7500, quantity: 10, stop_listed: true }),
 ];
+
+function kitchenOrder(prep_status: 'new' | 'ready') {
+  return {
+    id: 7,
+    order_no: 7,
+    receipt_number: 'ЧК-000007',
+    prep_status,
+    created_at: new Date(Date.now() - 120_000).toISOString(),
+    ready_at: prep_status === 'ready' ? new Date().toISOString() : null,
+    staff_name: 'Олена',
+    note: null,
+    items: [
+      { id: 70, product_name: 'Латте', variant_label: 'M · вівсяне', quantity: 1, modifiers: [{ group_name: 'Молоко', name: 'вівсяне' }], note: 'гарячіше', stations: ['bar'] },
+      { id: 71, product_name: 'Круасан', variant_label: '', quantity: 2, modifiers: [], note: '', stations: ['kitchen'] },
+    ],
+  };
+}
+
+/** A board with one order whose state follows the taps it receives. */
+async function mockKitchen(page: Page) {
+  let status: 'new' | 'ready' | 'served' = 'new';
+  const taps: Array<Record<string, unknown>> = [];
+  await page.route('**/api/pos/kitchen/orders', async (route) =>
+    route.fulfill({
+      json: { orders: status === 'served' ? [] : [kitchenOrder(status)], now: new Date().toISOString() },
+    })
+  );
+  await page.route('**/api/pos/sales/7/prep', async (route) => {
+    const body = route.request().postDataJSON() as { prep_status: 'ready' | 'served' };
+    taps.push(body);
+    status = body.prep_status;
+    await route.fulfill({ json: { id: 7, prep_status: status, ready_at: new Date().toISOString(), served_at: null } });
+  });
+  return taps;
+}
 
 async function serveBuiltRemote(page: Page, { down = false } = {}) {
   await page.route(`${CDN}/**`, async (route) => {
@@ -271,6 +311,42 @@ test('a drink with sizes asks for the size first, with the answers pre-selected'
   await sheet.getByTestId('modifier-add').click();
 
   await expect(page.getByTestId('sale-sidebar').getByText('M · звичайне · з цукром')).toBeVisible();
+});
+
+test('a dish on the day’s stop-list is greyed with «стоп», not gone, and cannot be tapped', async ({ page }) => {
+  await signInAsBarista(page);
+
+  await page.goto('/register');
+  await expect(page.getByTestId('cafe-catalog')).toBeVisible();
+  const tile = page.getByRole('button', { name: /Чізкейк/ });
+  await expect(tile).toBeVisible();
+  await expect(tile).toBeDisabled();
+  await expect(page.getByTestId('tile-badge').filter({ hasText: 'стоп' })).toBeVisible();
+});
+
+test('the kitchen board takes two taps: «Готово» moves the order to «Видача», «Видано» takes it off', async ({ page }) => {
+  await signInAsBarista(page);
+  const taps = await mockKitchen(page);
+
+  await page.goto('/kitchen');
+  await expect(page.getByTestId('kitchen-board')).toBeVisible();
+  const inWork = page.getByTestId('kitchen-in-work');
+  const pickup = page.getByTestId('kitchen-pickup');
+  await expect(inWork.getByTestId('kitchen-order-7')).toBeVisible();
+  await expect(inWork.getByTestId('kitchen-order-no')).toHaveText('7');
+  await expect(inWork.getByText('вівсяне', { exact: true })).toBeVisible();
+  await expect(inWork.getByText('✎ гарячіше')).toBeVisible();
+  await expect(pickup.getByText('Нічого не чекає видачі')).toBeVisible();
+
+  // Tap 1.
+  await page.getByTestId('kitchen-ready-7').click();
+  await expect(pickup.getByTestId('kitchen-order-7')).toBeVisible();
+  await expect(inWork.getByText('Замовлень немає')).toBeVisible();
+
+  // Tap 2 — and nothing else ever takes it off.
+  await page.getByTestId('kitchen-served-7').click();
+  await expect(page.getByTestId('kitchen-order-7')).toHaveCount(0);
+  expect(taps).toEqual([{ prep_status: 'ready' }, { prep_status: 'served' }]);
 });
 
 test('with the module CDN down the till still sells, on the bundled catalog', async ({ page }) => {

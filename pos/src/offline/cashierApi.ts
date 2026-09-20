@@ -81,6 +81,17 @@ export const cashierApi = {
     return isOfflinePosEnabled() ? repo.getTags() : api.getTags();
   },
 
+  /**
+   * Re-read the catalog now. On the desktop that is the offline mirror, which
+   * is what the sell screen draws from — so a stop-list toggle on the kitchen
+   * board (К3) greys the tile at once rather than at the next scheduled
+   * refresh. The web shell reads the server on every catalog call and has
+   * nothing to refresh.
+   */
+  refreshCatalog(): Promise<void> {
+    return isOfflinePosEnabled() ? repo.refreshSnapshot() : Promise.resolve();
+  },
+
   completeSale(payload: {
     items: SaleItemInput[];
     payments: SalePaymentInput[];

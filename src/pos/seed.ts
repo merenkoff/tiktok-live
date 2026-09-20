@@ -122,9 +122,12 @@ async function registerCafeModule(): Promise<void> {
   const entry = {
     url: process.env.POS_SEED_VERTICAL_CAFE_URL || 'http://localhost:5008/remote-entry.js',
     title: 'Кафе',
-    routePath: '/cafe',
+    // The kitchen board (К3c): the desktop's placeholder tile stands in for
+    // it until the bundle downloads, so the entry names the module's own
+    // route and label.
+    routePath: '/kitchen',
     icon: 'Coffee',
-    nav: [{ label: 'Кафе', location: 'cashier-primary', order: 80, icon: 'Coffee', match: '/cafe' }],
+    nav: [{ label: 'Кухня', location: 'cashier-primary', order: 80, icon: 'ClipboardList', match: '/kitchen' }],
   };
   await pool.query(
     `UPDATE pos_stores

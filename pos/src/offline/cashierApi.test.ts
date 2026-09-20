@@ -9,6 +9,7 @@ vi.mock('./enabled', () => ({ isOfflinePosEnabled: vi.fn(() => false) }));
 vi.mock('./repository', () => ({
   getCatalog: vi.fn(),
   getTags: vi.fn(),
+  refreshSnapshot: vi.fn(),
   completeSale: vi.fn(),
   listCustomers: vi.fn(),
   createCustomer: vi.fn(),
@@ -87,6 +88,16 @@ describe('cashierApi delegation', () => {
 
     expect(repo.getCatalog).toHaveBeenCalledWith({ q: 'x' });
     expect(api.getCatalog).not.toHaveBeenCalled();
+  });
+
+  it('re-reads the mirror on the desktop, and has nothing to re-read on the web', async () => {
+    vi.mocked(repo.refreshSnapshot).mockResolvedValue(undefined);
+    await cashierApi.refreshCatalog();
+    expect(repo.refreshSnapshot).not.toHaveBeenCalled();
+
+    offline.mockReturnValue(true);
+    await cashierApi.refreshCatalog();
+    expect(repo.refreshSnapshot).toHaveBeenCalledTimes(1);
   });
 
   it("passes the stock count's include_unsellable flag through to the mirror", async () => {

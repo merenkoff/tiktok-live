@@ -66,7 +66,12 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[-]` won
     утилиты, без reset/globals.
   - `sign-remote.mjs` хэширует `.css` тоже; `remoteVerify.ts` сверяет `sha384`
     `style.css` с подписанным манифестом и возвращает текст; `registry.ts`
-    `injectModuleStyle()` вставляет `<style data-module-remote=id>` до рендера.
+    `injectModuleStyle()` вставляет `<style data-module-remote=id>` до рендера —
+    **перед** таблицей стилей хоста, а не в конец `<head>`: утилиты одной
+    специфичности, и голый `.hidden`/`.flex` модуля, добавленный последним,
+    перебивал `lg:block`/`lg:hidden` хоста на его же элементах (одна строка
+    `'hidden'` в исходнике модуля кафе складывала `/register` в телефонную
+    раскладку).
   - `check:<id>-css-coverage` перенацелен на `dist-remotes/<id>/style.css`
     (+ folds in `tokens.css`) — теперь это реальный контракт, не растяжка.
 
