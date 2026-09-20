@@ -69,10 +69,24 @@ const PREFIXES = [
   'min-h', 'max-w', 'max-h', 'rounded', 'shadow', 'space-', 'divide-',
   'overflow-', 'justify-', 'items-', 'shrink', 'grow', 'sq-', 'lg:', 'z-',
   'font-', 'select-', 'disabled:', 'hover:', 'focus:', 'opacity-', 'cursor-',
-  'inset-', 'top-', 'bottom-', 'left-', 'right-',
+  'inset-', 'top-', 'bottom-', 'left-', 'right-', 'print:',
 ];
 
-const tokens = new Set(text.match(/[a-zA-Z][a-zA-Z0-9]*(?:-[a-zA-Z0-9[\].\/#%]+)+/g) ?? []);
+// Two shapes, and the variant one has to come first so the engine takes
+// `hover:bg-sq-hover` whole instead of starting at `bg-` past the colon:
+//
+// 1. `variant:utility` — the only shape with no hyphen of its own is exactly
+//    the interesting one (`print:hidden`), and the hyphenated pattern below
+//    never matched it. That left every `print:` class in every module outside
+//    the gate, including the one that keeps the price-tag dialog off the roll.
+// 2. `utility-with-hyphens`, optionally with an arbitrary value in brackets.
+//
+// Both over-match on purpose — `node:path`, `data:image`, file names — and the
+// PREFIXES filter above is what narrows them to plausible classes.
+const TOKEN_RE =
+  /[a-zA-Z][a-zA-Z0-9]*:[a-zA-Z0-9][a-zA-Z0-9[\].\/#%-]*|[a-zA-Z][a-zA-Z0-9]*(?:-[a-zA-Z0-9[\].\/#%]+)+/g;
+
+const tokens = new Set(text.match(TOKEN_RE) ?? []);
 const candidates = [...tokens].filter((t) => PREFIXES.some((p) => t.startsWith(p)));
 
 const missing = candidates.filter((cls) => {

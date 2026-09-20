@@ -62,8 +62,11 @@ describe('where the dialog opens', () => {
     // into `document.body` puts it back on the window whatever a page above it
     // is doing.
     const { getByTestId } = open();
-    const overlay = document.querySelector('.fixed.inset-0.z-50')!;
-    expect(overlay).toBeTruthy();
+    // By test id, not by the utility classes the overlay happens to wear:
+    // `check-module-css-coverage.mjs` reads the module's source as text, and
+    // `.fixed.inset-0.z-50` reads to it as a class `inset-0.z-50` that no CSS
+    // can contain — it turned the release gate for `products` red.
+    const overlay = getByTestId('price-tags-overlay');
     expect(getByTestId('page').contains(overlay)).toBe(false);
     expect(overlay.parentElement).toBe(document.body);
   });
