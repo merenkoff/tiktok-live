@@ -7,9 +7,10 @@ import { createPortal } from 'react-dom';
 import { api, formatUah } from '@pos/platform';
 import type { Product } from '@pos/platform';
 import { buildPriceTags, defaultCopies, variantLabel, type PriceTag } from '../../../lib/priceTag';
-import { isEan13 } from '../../../lib/ean13';
+import { hasEan13Shape, isEan13 } from '../../../lib/ean13';
+import { tagWidthMm, type TagPaperWidth } from '../../../lib/priceTagLayout';
 import { triggerPrint } from '../../../lib/triggerPrint';
-import { PriceTagsPrintable, type TagPaperWidth } from '../../../components/PriceTagsPrintable';
+import { PriceTagsPrintable } from '../../../components/PriceTagsPrintable';
 
 const PAPER_KEY = 'pos.priceTagPaperWidth';
 const BTN = 'rounded-sq border border-sq-divider bg-sq-surface px-3 py-2 text-sm disabled:opacity-50';
@@ -86,6 +87,13 @@ export function PriceTagsDialog({
 
   const total = useMemo(() => rows.reduce((n, r) => n + r.copies, 0), [rows]);
   const missing = useMemo(() => rows.filter((r) => !isEan13(r.barcode ?? '')).length, [rows]);
+  // Thirteen digits that do not add up. Worth calling out on its own: such a
+  // tag used to print a symbol that looks perfect and that no scanner accepts,
+  // so the shop's conclusion was "the printer is bad", not "this code is".
+  const bad = useMemo(
+    () => rows.filter((r) => hasEan13Shape(r.barcode ?? '') && !isEan13(r.barcode!)).length,
+    [rows]
+  );
 
   function setCopies(key: string, value: number) {
     setRows((prev) =>
@@ -139,9 +147,16 @@ export function PriceTagsDialog({
     );
   }
 
-  return (
+  // Both halves go to `document.body`. The printable has to, to escape the
+  // `#root { display: none }` print rule; the dialog has to for a different
+  // reason — a page wrapper with a finished `animate-fade-up` on it used to
+  // leave a transform behind, which made *it* the containing block for
+  // `position: fixed`, so this centred itself on the product list instead of
+  // on the window. The stylesheet no longer leaves that transform, and
+  // portalling means no future one can put the dialog off-screen either.
+  return createPortal(
     <>
-      {createPortal(<PriceTagsPrintable tags={printing} paperWidth={paper} />, document.body)}
+      <PriceTagsPrintable tags={printing} paperWidth={paper} />
       <div className="fixed inset-0 z-50 bg-black/40 grid place-items-center p-4">
         <div className="bg-sq-surface rounded-sq w-full max-w-3xl max-h-[85vh] flex flex-col shadow-lg">
           <div className="p-5 border-b border-sq-divider">
@@ -164,13 +179,17 @@ export function PriceTagsDialog({
                 {w} мм
               </button>
             ))}
+            <span className="text-sm text-sq-secondary">
+              Ширина цінника: {tagWidthMm(paper)} мм
+            </span>
             <span className="text-sm text-sq-secondary ml-auto">Усього цінників: {total}</span>
           </div>
 
           {missing > 0 && (
             <p className="mx-5 mt-3 rounded-sq bg-amber-50 text-amber-800 px-3 py-2 text-sm">
-              Без штрихкоду: {missing}. Такі цінники надрукуються без коду — згенеруйте
-              внутрішній, щоб касир міг сканувати.
+              Без придатного штрихкоду: {missing}
+              {bad > 0 && ` (з них ${bad} — з хибною контрольною цифрою)`}. Такі цінники
+              надрукуються без коду — згенеруйте внутрішній, щоб касир міг сканувати.
             </p>
           )}
 
@@ -196,14 +215,21 @@ export function PriceTagsDialog({
                       {isEan13(r.barcode ?? '') ? (
                         <span className="font-mono text-xs">{r.barcode}</span>
                       ) : (
-                        <button
-                          type="button"
-                          disabled={busyKey === r.key}
-                          onClick={() => void generateFor(r)}
-                          className={`${BTN} text-xs`}
-                        >
-                          Згенерувати
-                        </button>
+                        <div className="flex flex-col items-start gap-1">
+                          {hasEan13Shape(r.barcode ?? '') && (
+                            <span className="font-mono text-xs text-amber-700 line-through">
+                              {r.barcode}
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            disabled={busyKey === r.key}
+                            onClick={() => void generateFor(r)}
+                            className={`${BTN} text-xs`}
+                          >
+                            Згенерувати
+                          </button>
+                        </div>
                       )}
                     </td>
                     <td className="py-2 text-right">
@@ -236,6 +262,7 @@ export function PriceTagsDialog({
           </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }

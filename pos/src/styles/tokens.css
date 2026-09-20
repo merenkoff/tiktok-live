@@ -92,8 +92,20 @@ select:focus-visible {
     display: block;
   }
 
+  /* A tag is not a receipt: nobody reads it across a counter, so it takes a
+     share of the roll rather than all of it (`lib/priceTagLayout.ts` — half of
+     80 mm paper, three quarters of anything narrower) and sits centred, which
+     also buys the barcode extra white on both sides.
+
+     `--tag-w` / `--tag-barcode-h` come from `PriceTagsPrintable`, not from
+     here, because these rules ship with the host page while that component is
+     bundled into every module that prints a tag. The fallbacks are the layout
+     as it was: a module built before this change sets no properties and keeps
+     printing full width instead of inheriting half a layout. Every size below
+     is a share of `--tag-w` for the same reason — change the share and the
+     whole tag rescales, instead of a 22pt price running off a narrower one. */
   .price-tag {
-    width: 48mm; /* printable area of 58 mm paper */
+    width: var(--tag-w, 48mm);
     padding: 2mm 0 4mm;
     margin: 0 auto;
     font-family: 'Helvetica Neue', Arial, sans-serif;
@@ -109,11 +121,11 @@ select:focus-visible {
   }
 
   .price-tag-print-area[data-paper='80'] .price-tag {
-    width: 72mm;
+    width: var(--tag-w, 72mm);
   }
 
   .price-tag-store {
-    font-size: 8pt;
+    font-size: max(6pt, calc(var(--tag-w, 48mm) * 0.0588));
     text-transform: uppercase;
     letter-spacing: 0.5px;
     border-bottom: 1px solid #000;
@@ -122,39 +134,42 @@ select:focus-visible {
   }
 
   .price-tag-name {
-    font-size: 11pt;
+    font-size: max(8pt, calc(var(--tag-w, 48mm) * 0.0808));
     font-weight: 700;
     line-height: 1.15;
   }
 
   .price-tag-variant {
-    font-size: 9pt;
+    font-size: max(7pt, calc(var(--tag-w, 48mm) * 0.0661));
     margin-top: 0.5mm;
   }
 
   /* The one thing read from across the shop. */
   .price-tag-price {
-    font-size: 22pt;
+    font-size: calc(var(--tag-w, 48mm) * 0.1617);
     font-weight: 700;
+    line-height: 1.1;
     margin: 2mm 0;
   }
 
+  /* Height follows the SVG's own aspect ratio, so the modules stay the width
+     `moduleWidthMm` computed; see `priceTagLayout.ts`. */
   .price-tag-barcode {
     display: block;
     width: 100%;
-    height: 14mm;
+    height: var(--tag-barcode-h, 14mm);
   }
 
   .price-tag-digits {
     font-family: 'Courier New', monospace;
-    font-size: 9pt;
+    font-size: max(7pt, calc(var(--tag-w, 48mm) * 0.0661));
     letter-spacing: 1px;
     margin-top: 0.5mm;
   }
 
   .price-tag-sku {
     font-family: 'Courier New', monospace;
-    font-size: 8pt;
+    font-size: max(6pt, calc(var(--tag-w, 48mm) * 0.0588));
     margin-top: 1mm;
   }
 
@@ -356,6 +371,14 @@ button.sq-btn-primary:disabled {
   }
 }
 
+/* `backwards`, never `forwards`/`both`: a filled-forwards animation leaves
+   `transform: translateY(0)` on the element for good, and any non-`none`
+   transform makes that element the containing block for every `position:
+   fixed` descendant. Page wrappers carry this class, so a modal inside one
+   centred itself on the page instead of on the window — on a long product list
+   that put the price-tag dialog somewhere far below the fold. `backwards`
+   applies the opening keyframe before the run and nothing after it, which
+   looks identical and leaves no transform behind. */
 .animate-fade-up {
-  animation: fadeUp 0.22s ease both;
+  animation: fadeUp 0.22s ease backwards;
 }
