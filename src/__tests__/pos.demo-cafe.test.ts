@@ -329,6 +329,26 @@ describe.skipIf(!hasDb)('demo café store (migration 048)', () => {
     expect(catalog.find((item) => item.product_name === 'Круасан')?.modifier_groups).toBeUndefined();
   });
 
+  it('routes coffee, tea and water to the bar and pastry and breakfasts to the kitchen (050)', async () => {
+    // Set by 050, not by 048: on a fresh database 048 runs before the column
+    // exists, and 050's idempotent UPDATE also heals a later 048 rebuild —
+    // which an earlier case in this file just performed, recreating the tags
+    // without a station. Re-applying 050 is what the next boot would do.
+    await pool.query(readMigration('050_pos_stop_list_station.sql'));
+    const tags = await pool.query(
+      `SELECT name, station FROM pos_tags WHERE store_id = $1 ORDER BY sort_order`,
+      [storeId]
+    );
+    expect(Object.fromEntries(tags.rows.map((r) => [r.name, r.station]))).toEqual({
+      Кава: 'bar',
+      Чай: 'bar',
+      Випічка: 'kitchen',
+      Сніданки: 'kitchen',
+      Вода: 'bar',
+      Інгредієнти: null,
+    });
+  });
+
   it('carries the credentials the migration header advertises', async () => {
     const staff = await pool.query(
       `SELECT role, login, password_hash, pin_hash FROM pos_staff

@@ -18,6 +18,7 @@
 
 import { pool } from '../db.js';
 import { readStoreClock } from './core/storeClock.js';
+import type { TagStation } from './tags.service.js';
 import type { PrepStatus } from './types.js';
 
 export class KitchenError extends Error {
@@ -45,6 +46,12 @@ export interface KitchenOrderItem {
   modifiers: Array<{ group_name: string; name: string }>;
   /** The kitchen note. Never on the fiscal receipt; always here. */
   note: string;
+  /**
+   * Where the line is made, from its product's tags (`pos_tags.station`,
+   * migration 050): `['bar']`, `['kitchen']`, both, or none — the ticket
+   * printer sends a line with none to the kitchen.
+   */
+  stations: TagStation[];
 }
 
 export interface KitchenOrder {
@@ -135,10 +142,15 @@ export async function listOpenOrders(
     }
 
     const itemRows = await pool.query(
-      `SELECT id, sale_id, product_name, variant_label, quantity, note
-       FROM pos_sale_items
-       WHERE sale_id = ANY($1::bigint[])
-       ORDER BY sale_id, id`,
+      `SELECT i.id, i.sale_id, i.product_name, i.variant_label, i.quantity, i.note,
+              (SELECT array_agg(DISTINCT t.station ORDER BY t.station)
+               FROM pos_variants v
+               JOIN pos_product_tags pt ON pt.product_id = v.product_id
+               JOIN pos_tags t ON t.id = pt.tag_id
+               WHERE v.id = i.variant_id AND t.station IS NOT NULL) AS stations
+       FROM pos_sale_items i
+       WHERE i.sale_id = ANY($1::bigint[])
+       ORDER BY i.sale_id, i.id`,
       [saleIds]
     );
     for (const row of itemRows.rows) {
@@ -151,6 +163,11 @@ export async function listOpenOrders(
         quantity: Number(row.quantity),
         modifiers: modifiersByItem.get(Number(row.id)) ?? [],
         note: typeof row.note === 'string' ? row.note : '',
+        stations: Array.isArray(row.stations)
+          ? (row.stations as unknown[]).filter(
+              (s): s is TagStation => s === 'kitchen' || s === 'bar'
+            )
+          : [],
       });
       itemsBySale.set(saleId, list);
     }
@@ -212,4 +229,33 @@ export async function setPrepStatus(params: {
     throw new KitchenError('Спершу натисніть „Готово“');
   }
   throw new KitchenError('Замовлення вже видано');
+}
+
+/**
+ * «Сьогодні не робимо»: put a dish on the day's stop-list, or take it off.
+ *
+ * Staff level on purpose — the person who knows the cheesecake is gone is
+ * the barista, and the owner is not behind the counter at seven in the
+ * morning. Keyed on the store's day (migration 050), so it forgets itself
+ * at the store's midnight; the catalog greys the tile and the checkout
+ * refuses the dish while the day lasts.
+ */
+export async function setStopListed(params: {
+  storeId: number;
+  productId: number;
+  stopListed: boolean;
+}): Promise<{ product_id: number; stop_listed: boolean; stop_listed_on: string | null }> {
+  const clock = await readStoreClock(params.storeId);
+  if (!clock.vertical.kitchen) throw new KitchenError(NO_KITCHEN);
+  const result = await pool.query(
+    `UPDATE pos_products
+     SET stop_listed_on = CASE WHEN $3::boolean THEN $4::date ELSE NULL END,
+         updated_at = NOW()
+     WHERE id = $1 AND store_id = $2 AND is_active = TRUE
+     RETURNING stop_listed_on::text AS stop_listed_on`,
+    [params.productId, params.storeId, params.stopListed, clock.today]
+  );
+  if (result.rows.length === 0) throw new KitchenNotFound('Товар не знайдено');
+  const on = (result.rows[0].stop_listed_on as string | null) ?? null;
+  return { product_id: params.productId, stop_listed: on === clock.today, stop_listed_on: on };
 }

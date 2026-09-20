@@ -19,6 +19,15 @@ export const TAG_COLOR_KEYS = [
 
 export type TagColorKey = (typeof TAG_COLOR_KEYS)[number];
 
+/**
+ * Where a product wearing the tag is made (migration 050, café phase К3b).
+ * The kitchen ticket prints per station; a product wearing tags of two
+ * stations prints on both, one wearing none goes to the kitchen. A column,
+ * never a magic tag name — the tag is navigation the owner may rename.
+ */
+export const TAG_STATIONS = ['kitchen', 'bar'] as const;
+export type TagStation = (typeof TAG_STATIONS)[number];
+
 /** Max category nesting: root → subgroup → sub-subgroup. */
 export const MAX_TAG_DEPTH = 3;
 
@@ -30,6 +39,7 @@ export interface PosTag {
   sort_order: number;
   color: string | null;
   show_in_catalog_bar: boolean;
+  station: TagStation | null;
   children?: PosTag[];
 }
 
@@ -41,6 +51,14 @@ function normalizeColor(color: string | null | undefined): string | null {
   return color;
 }
 
+function normalizeStation(station: string | null | undefined): TagStation | null {
+  if (station == null || station === '') return null;
+  if (!(TAG_STATIONS as readonly string[]).includes(station)) {
+    throw new Error('Invalid station');
+  }
+  return station as TagStation;
+}
+
 function mapTag(row: Record<string, unknown>): PosTag {
   return {
     id: Number(row.id),
@@ -50,6 +68,7 @@ function mapTag(row: Record<string, unknown>): PosTag {
     sort_order: Number(row.sort_order),
     color: row.color == null ? null : String(row.color),
     show_in_catalog_bar: Boolean(row.show_in_catalog_bar),
+    station: row.station === 'kitchen' || row.station === 'bar' ? row.station : null,
   };
 }
 
@@ -115,6 +134,7 @@ export async function createTag(
     sort_order?: number;
     color?: string | null;
     show_in_catalog_bar?: boolean;
+    station?: string | null;
   }
 ): Promise<PosTag> {
   const name = input.name?.trim();
@@ -122,10 +142,11 @@ export async function createTag(
   const parentId = input.parent_id ?? null;
   await assertMaxDepth(storeId, parentId);
   const color = normalizeColor(input.color);
+  const station = normalizeStation(input.station);
 
   const result = await pool.query(
-    `INSERT INTO pos_tags (store_id, parent_id, name, sort_order, color, show_in_catalog_bar)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO pos_tags (store_id, parent_id, name, sort_order, color, show_in_catalog_bar, station)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
     [
       storeId,
@@ -134,6 +155,7 @@ export async function createTag(
       input.sort_order ?? 0,
       color,
       input.show_in_catalog_bar ?? false,
+      station,
     ]
   );
   return mapTag(result.rows[0]);
@@ -147,6 +169,7 @@ export async function updateTag(
     sort_order?: number;
     color?: string | null;
     show_in_catalog_bar?: boolean;
+    station?: string | null;
   }
 ): Promise<PosTag> {
   const sets: string[] = [];
@@ -170,6 +193,10 @@ export async function updateTag(
   if (input.show_in_catalog_bar !== undefined) {
     sets.push(`show_in_catalog_bar = $${i++}`);
     values.push(input.show_in_catalog_bar);
+  }
+  if (input.station !== undefined) {
+    sets.push(`station = $${i++}`);
+    values.push(normalizeStation(input.station));
   }
 
   if (sets.length === 0) throw new Error('No fields to update');

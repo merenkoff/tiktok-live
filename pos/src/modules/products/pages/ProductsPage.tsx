@@ -9,6 +9,7 @@ import type {
   ModifierGroup,
   AttributeValues,
   PosTag,
+  TagStation,
   Product,
   ProductComponentInput,
   ProductStockMode,
@@ -209,7 +210,7 @@ export function ProductsPage() {
 
   async function patchTag(
     tag: PosTag,
-    patch: { color?: string | null; show_in_catalog_bar?: boolean }
+    patch: { color?: string | null; show_in_catalog_bar?: boolean; station?: TagStation | null }
   ) {
     setSavingTagId(tag.id);
     setError(null);
@@ -313,6 +314,10 @@ export function ProductsPage() {
               onCatalogBar={(tag, show_in_catalog_bar) =>
                 void patchTag(tag, { show_in_catalog_bar })
               }
+              onStation={(tag, station) => void patchTag(tag, { station })}
+              // Only a café prints a kitchen ticket; a boutique's tags have no
+              // station to pick and no reason to see the control.
+              showStation={vertical.id === 'cafe'}
               onCreateChild={createChildTag}
             />
           ))}
@@ -698,6 +703,9 @@ interface TagTreeCallbacks {
   onFilter: (id: number) => void;
   onColor: (tag: PosTag, color: TagColorKey) => void;
   onCatalogBar: (tag: PosTag, value: boolean) => void;
+  onStation: (tag: PosTag, station: TagStation | null) => void;
+  /** Show the «Станція» control — a café, where the kitchen ticket routes by it. */
+  showStation: boolean;
   onCreateChild: (parentId: number, name: string) => Promise<void>;
 }
 
@@ -709,6 +717,8 @@ function TagTreeNode({
   onFilter,
   onColor,
   onCatalogBar,
+  onStation,
+  showStation,
   onCreateChild,
 }: TagTreeCallbacks & {
   tag: PosTag;
@@ -740,6 +750,7 @@ function TagTreeNode({
         onFilter={() => onFilter(tag.id)}
         onColor={(color) => onColor(tag, color)}
         onCatalogBar={(value) => onCatalogBar(tag, value)}
+        onStation={showStation ? (station) => onStation(tag, station) : undefined}
         onAddChild={() => setAdding((v) => !v)}
       />
       {(adding || children.length > 0) && (
@@ -754,6 +765,8 @@ function TagTreeNode({
               onFilter={onFilter}
               onColor={onColor}
               onCatalogBar={onCatalogBar}
+              onStation={onStation}
+              showStation={showStation}
               onCreateChild={onCreateChild}
             />
           ))}
@@ -787,6 +800,7 @@ function TagAdminRow({
   onFilter,
   onColor,
   onCatalogBar,
+  onStation,
   onAddChild,
 }: {
   tag: PosTag;
@@ -797,6 +811,8 @@ function TagAdminRow({
   onFilter: () => void;
   onColor: (color: TagColorKey) => void;
   onCatalogBar: (value: boolean) => void;
+  /** Present only where a station means something (a café). */
+  onStation?: (station: TagStation | null) => void;
   onAddChild: () => void;
 }) {
   return (
@@ -843,9 +859,44 @@ function TagAdminRow({
         />
         У рядку категорій
       </label>
+      {onStation && (
+        <div
+          className="flex items-center gap-1 px-1 text-[11px] text-sq-secondary"
+          data-testid={`tag-station-${tag.id}`}
+        >
+          <span className="mr-0.5">Станція:</span>
+          {STATION_CHOICES.map(([value, label]) => {
+            const current = tag.station ?? null;
+            const on = current === value;
+            return (
+              <button
+                key={label}
+                type="button"
+                disabled={saving}
+                aria-pressed={on}
+                onClick={() => {
+                  if (!on) onStation(value);
+                }}
+                className={`rounded-full border px-2 py-0.5 ${
+                  on ? 'border-sq-blue bg-sq-blue text-white' : 'border-sq-divider text-sq-text'
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
+
+/** «—» clears the station; the ticket then goes to the kitchen by default. */
+const STATION_CHOICES: ReadonlyArray<[TagStation | null, string]> = [
+  [null, '—'],
+  ['kitchen', 'Кухня'],
+  ['bar', 'Бар'],
+];
 
 function EditProductInline({
   product,

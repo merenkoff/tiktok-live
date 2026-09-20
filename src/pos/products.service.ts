@@ -12,6 +12,7 @@ export type { ProductKind, ProductStockMode };
 import { getProductTagIds, resolveTagFilterIds } from './tags.service.js';
 import { loadStoreVertical, normalizeVariant, searchableAttributeKeys } from './verticals/index.js';
 import type { VerticalDefinition } from './verticals/types.js';
+import { storeClock } from './core/storeClock.js';
 import {
   CompositeError,
   listComponentsForStore,
@@ -220,6 +221,7 @@ export async function listProducts(storeId: number) {
     kind: (p.kind === 'composite' ? 'composite' : 'simple') as ProductKind,
     stock_mode: (p.stock_mode === 'derived' ? 'derived' : 'own') as ProductStockMode,
     sellable: p.sellable !== false,
+    stop_listed_on: dateOnly(p.stop_listed_on),
     tag_ids: tagMap.get(Number(p.id)) ?? [],
     modifier_group_ids: groupMap.get(Number(p.id)) ?? [],
     variants: byProduct.get(Number(p.id)) ?? [],
@@ -693,6 +695,20 @@ export async function generateInternalBarcode(storeId: number): Promise<string> 
   throw new Error('Не вдалося згенерувати вільний штрихкод');
 }
 
+/**
+ * A DATE column as `YYYY-MM-DD`, whether pg handed it over as text (a `::text`
+ * cast) or as the local-midnight Date its default parser makes of a DATE.
+ */
+function dateOnly(value: unknown): string | null {
+  if (value == null) return null;
+  if (value instanceof Date) {
+    const m = String(value.getMonth() + 1).padStart(2, '0');
+    const d = String(value.getDate()).padStart(2, '0');
+    return `${value.getFullYear()}-${m}-${d}`;
+  }
+  return String(value).slice(0, 10);
+}
+
 export async function getCatalog(
   storeId: number,
   opts: {
@@ -711,7 +727,9 @@ export async function getCatalog(
     vertical?: VerticalDefinition;
   } = {}
 ): Promise<CatalogItem[]> {
-  const vertical = opts.vertical ?? (await loadStoreVertical(pool, storeId));
+  // One read for the vertical and «today»: the stop-list below is a day.
+  const clock = await storeClock(pool, storeId);
+  const vertical = opts.vertical ?? clock.vertical;
   const params: unknown[] = [storeId];
   const conditions = [
     'p.store_id = $1',
@@ -807,6 +825,9 @@ export async function getCatalog(
        -- are composite+own, and only the one-off may be written off from here.
        p.one_off,
        p.sellable,
+       -- As text: node-postgres would parse a DATE into a local-midnight
+       -- Date, and the store's day is a string everywhere else.
+       p.stop_listed_on::text AS stop_listed_on,
        -- The till needs the recipe, not just the fact of one: the florist's
        -- bench starts a custom bouquet from the catalogue card's composition,
        -- and a composite it cannot read is a card it cannot sell from. Only
@@ -869,6 +890,12 @@ export async function getCatalog(
     stock_mode: (row.stock_mode === 'derived' ? 'derived' : 'own') as ProductStockMode,
     one_off: Boolean(row.one_off),
     sellable: row.sellable !== false,
+    // The day's stop-list (migration 050): the row stays in the answer so the
+    // tile greys with a caption instead of vanishing (§3 «видно, а не
+    // зникло»); the raw day travels too, so an offline till can un-grey it at
+    // midnight on its own.
+    stop_listed: row.stop_listed_on === clock.today,
+    stop_listed_on: row.stop_listed_on ?? null,
     // Absent for a simple product rather than an empty array: "this card has
     // no recipe" and "this bouquet's recipe is empty" are different facts, and
     // only the second one is a problem.

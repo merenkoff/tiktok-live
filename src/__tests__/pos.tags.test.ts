@@ -12,6 +12,7 @@ import {
   createTag,
   resolveTagFilterIds,
   setProductTags,
+  updateTag,
 } from '../pos/tags.service.js';
 import { archiveProduct, getCatalog } from '../pos/products.service.js';
 
@@ -88,6 +89,20 @@ describe.skipIf(!hasDb)('POS tags + archive', () => {
     await setProductTags(storeId, productId, [grandchildTagId]);
     const catalog = await getCatalog(storeId, { tag_id: rootTagId });
     expect(catalog.some((c) => c.product_id === productId)).toBe(true);
+  });
+
+  it('carries a station for the kitchen ticket, and refuses one it does not know (050)', async () => {
+    const bar = await createTag(storeId, { name: `Бар ${Date.now()}`, station: 'bar' });
+    expect(bar.station).toBe('bar');
+    expect((await updateTag(storeId, bar.id, { station: null })).station).toBeNull();
+    expect((await updateTag(storeId, bar.id, { station: 'kitchen' })).station).toBe('kitchen');
+    // Untouched by an update that says nothing about it.
+    expect((await updateTag(storeId, bar.id, { sort_order: 7 })).station).toBe('kitchen');
+    const plain = await createTag(storeId, { name: `Без станції ${Date.now()}` });
+    expect(plain.station).toBeNull();
+    await expect(createTag(storeId, { name: 'Гараж', station: 'garage' })).rejects.toThrow(
+      'Invalid station'
+    );
   });
 
   it('allows 3 levels of nesting but rejects a 4th', async () => {

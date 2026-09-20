@@ -22,8 +22,10 @@ import {
   type TestStore,
 } from './helpers/pos-fixtures.js';
 import { completeSale, getSale, listSales, voidSale } from '../pos/sales.service.js';
+import { getCatalog } from '../pos/products.service.js';
 import * as modifiers from '../pos/modifiers.service.js';
 import { KitchenError, listOpenOrders, setPrepStatus } from '../pos/kitchen.service.js';
+import { localDateString } from '../pos/core/localDate.js';
 import type { CompleteSaleItemInput } from '../pos/types.js';
 
 describe.skipIf(!hasDb)('POS kitchen board', () => {
@@ -31,7 +33,9 @@ describe.skipIf(!hasDb)('POS kitchen board', () => {
   let cafe: TestStore;
   let boutique: TestStore;
   let latte = 0;
+  let latteProduct = 0;
   let croissant = 0;
+  let croissantProduct = 0;
   let oat = 0;
   let shirt = 0;
 
@@ -74,9 +78,14 @@ describe.skipIf(!hasDb)('POS kitchen board', () => {
       attributes: { size: 'M' },
     });
     latte = latteCard.variantId;
-    croissant = (
-      await seedProduct(cafe.storeId, { name: 'Круасан', priceCents: 5500, quantity: 500 })
-    ).variantId;
+    latteProduct = latteCard.productId;
+    const croissantCard = await seedProduct(cafe.storeId, {
+      name: 'Круасан',
+      priceCents: 5500,
+      quantity: 500,
+    });
+    croissant = croissantCard.variantId;
+    croissantProduct = croissantCard.productId;
     shirt = (await seedProduct(boutique.storeId, { name: 'Сорочка', quantity: 50 })).variantId;
 
     const milk = await modifiers.createGroup(cafe.storeId, {
@@ -248,6 +257,145 @@ describe.skipIf(!hasDb)('POS kitchen board', () => {
     await expect(setPrepStatus({ storeId: cafe.storeId, saleId: 0, status: 'ready' })).rejects.toThrow(
       'Замовлення не знайдено'
     );
+  });
+
+  const stopList = (productId: number, stop_listed: unknown, token = cafe.sellerToken) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/pos/kitchen/stop-list/${productId}`,
+      headers: auth(token),
+      payload: { stop_listed },
+    });
+
+  it("lets staff pull a dish for the day: the tile greys, the till is refused, a replay is not", async () => {
+    const on = await stopList(croissantProduct, true);
+    expect(on.statusCode).toBe(200);
+    const timezone = (
+      await pool.query(`SELECT timezone FROM pos_stores WHERE id = $1`, [cafe.storeId])
+    ).rows[0].timezone as string;
+    expect(on.json()).toEqual({
+      product_id: croissantProduct,
+      stop_listed: true,
+      stop_listed_on: localDateString(timezone),
+    });
+
+    // Still in the catalog — greyed, not gone — with the raw day beside the flag.
+    const catalog = await getCatalog(cafe.storeId, {});
+    expect(catalog.find((i) => i.variant_id === croissant)).toMatchObject({
+      stop_listed: true,
+      stop_listed_on: localDateString(timezone),
+    });
+    expect(catalog.find((i) => i.variant_id === latte)).toMatchObject({
+      stop_listed: false,
+      stop_listed_on: null,
+    });
+
+    await expect(sell(cafe, [{ variant_id: croissant, quantity: 1 }])).rejects.toThrow(
+      '«Круасан» сьогодні в стоп-листі'
+    );
+    const refused = await app.inject({
+      method: 'POST',
+      url: '/api/pos/sales/complete',
+      headers: auth(cafe.sellerToken),
+      payload: {
+        items: [{ variant_id: croissant, quantity: 1 }],
+        payments: [{ method: 'cash', amount_cents: 10000 }],
+      },
+    });
+    expect(refused.statusCode).toBe(400);
+    expect(refused.json().error).toBe('«Круасан» сьогодні в стоп-листі');
+
+    // The goods left while the till was offline: a replay is filed, and as served.
+    const replayed = await sell(cafe, [{ variant_id: croissant, quantity: 1 }], {
+      offline_replay: true,
+    });
+    expect(replayed.prep_status).toBe('served');
+
+    const off = await stopList(croissantProduct, false);
+    expect(off.json()).toEqual({ product_id: croissantProduct, stop_listed: false, stop_listed_on: null });
+    expect((await sell(cafe, [{ variant_id: croissant, quantity: 1 }])).prep_status).toBe('new');
+  });
+
+  it("forgets yesterday's stop-list by itself, and refuses the toggle where it makes no sense", async () => {
+    await pool.query(`UPDATE pos_products SET stop_listed_on = CURRENT_DATE - 1 WHERE id = $1`, [
+      croissantProduct,
+    ]);
+    const stale = (await getCatalog(cafe.storeId, {})).find((i) => i.variant_id === croissant)!;
+    expect(stale.stop_listed).toBe(false);
+    expect(stale.stop_listed_on).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect((await sell(cafe, [{ variant_id: croissant, quantity: 1 }])).prep_status).toBe('new');
+    await pool.query(`UPDATE pos_products SET stop_listed_on = NULL WHERE id = $1`, [croissantProduct]);
+
+    const missing = await stopList(999999999, true);
+    expect(missing.statusCode).toBe(404);
+    expect(missing.json().error).toBe('Товар не знайдено');
+
+    const notBoolean = await stopList(croissantProduct, 'yes');
+    expect(notBoolean.statusCode).toBe(400);
+    expect(notBoolean.json().error).toBe('stop_listed має бути true або false');
+
+    const shirtProduct = (
+      await pool.query(`SELECT product_id FROM pos_variants WHERE id = $1`, [shirt])
+    ).rows[0].product_id as number;
+    const noKitchen = await stopList(Number(shirtProduct), true, boutique.sellerToken);
+    expect(noKitchen.statusCode).toBe(409);
+    expect(noKitchen.json().error).toBe('Цей магазин не має кухні');
+  });
+
+  it("reports each line's station from its tags, so a ticket knows where to go", async () => {
+    const createTag = (payload: Record<string, unknown>) =>
+      app.inject({ method: 'POST', url: '/api/pos/tags', headers: auth(cafe.ownerToken), payload });
+    const bar = await createTag({ name: 'Кава', station: 'bar' });
+    expect(bar.statusCode).toBe(201);
+    expect(bar.json().station).toBe('bar');
+    const kitchenTag = await createTag({ name: 'Сніданки', station: 'kitchen' });
+    const plain = await createTag({ name: 'Новинки' });
+    expect(plain.json().station).toBeNull();
+
+    const invalid = await createTag({ name: 'Гараж', station: 'garage' });
+    expect(invalid.statusCode).toBe(400);
+
+    const cleared = await app.inject({
+      method: 'PATCH',
+      url: `/api/pos/tags/${bar.json().id}`,
+      headers: auth(cafe.ownerToken),
+      payload: { station: null },
+    });
+    expect(cleared.json().station).toBeNull();
+    const restored = await app.inject({
+      method: 'PATCH',
+      url: `/api/pos/tags/${bar.json().id}`,
+      headers: auth(cafe.ownerToken),
+      payload: { station: 'bar' },
+    });
+    expect(restored.json().station).toBe('bar');
+
+    const wear = (productId: number, tag_ids: number[]) =>
+      app.inject({
+        method: 'PUT',
+        url: `/api/pos/products/${productId}/tags`,
+        headers: auth(cafe.ownerToken),
+        payload: { tag_ids },
+      });
+    await wear(latteProduct, [bar.json().id, plain.json().id]);
+    await wear(croissantProduct, [kitchenTag.json().id]);
+
+    const order = await sell(cafe, [
+      { variant_id: latte, quantity: 1 },
+      { variant_id: croissant, quantity: 1 },
+    ]);
+    const card = (await listOpenOrders(cafe.storeId)).orders.find((o) => o.id === order.id)!;
+    expect(card.items.map((i) => [i.product_name, i.stations])).toEqual([
+      ['Латте', ['bar']],
+      ['Круасан', ['kitchen']],
+    ]);
+
+    // The till reads the same fact from the tag tree it already caches.
+    const tags = await app.inject({ method: 'GET', url: '/api/pos/tags', headers: auth(cafe.sellerToken) });
+    const byName = Object.fromEntries(
+      (tags.json() as Array<{ name: string; station: string | null }>).map((t) => [t.name, t.station])
+    );
+    expect(byName).toMatchObject({ 'Кава': 'bar', 'Сніданки': 'kitchen', 'Новинки': null });
   });
 
   it('needs a session', async () => {

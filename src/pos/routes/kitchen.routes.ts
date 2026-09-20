@@ -36,6 +36,38 @@ export function registerKitchenRoutes(fastify: FastifyInstance): void {
     }
   });
 
+  // Staff level, like `/stock/counts` and the florist's bench, and for the
+  // same reason: this is the barista's own call to make, at 07:00, with no
+  // owner in sight. The day's stop-list is a menu fact, not money.
+  fastify.post('/kitchen/stop-list/:productId', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const { productId } = request.params as { productId: string };
+    const body = (request.body ?? {}) as { stop_listed?: unknown };
+    if (typeof body.stop_listed !== 'boolean') {
+      return reply.code(400).send({ error: 'stop_listed має бути true або false' });
+    }
+    const id = Number(productId);
+    if (!Number.isInteger(id) || id <= 0) {
+      return reply.code(404).send({ error: 'Товар не знайдено' });
+    }
+    try {
+      return await kitchen.setStopListed({
+        storeId: auth.storeId,
+        productId: id,
+        stopListed: body.stop_listed,
+      });
+    } catch (error) {
+      if (error instanceof kitchen.KitchenNotFound) {
+        return reply.code(404).send({ error: errorMessage(error) });
+      }
+      if (error instanceof kitchen.KitchenError) {
+        return reply.code(409).send({ error: errorMessage(error) });
+      }
+      throw error;
+    }
+  });
+
   fastify.patch('/sales/:id/prep', async (request, reply) => {
     const auth = await ensurePosAuth(request, reply);
     if (!auth) return;
