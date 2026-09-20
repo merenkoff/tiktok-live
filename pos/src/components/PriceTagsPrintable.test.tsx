@@ -14,7 +14,7 @@
  * is visible here and nowhere else.
  */
 
-import { render } from '@testing-library/react';
+import { cleanup, render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { PriceTagsPrintable } from './PriceTagsPrintable';
 import { buildPriceTags } from '../lib/priceTag';
@@ -61,8 +61,8 @@ function tags(barcode: string | null = CODE) {
  * Reading the DOM rather than calling `ean13Bars` is the point: what is
  * asserted is the thing the print engine is handed.
  */
-function printedBars(container: HTMLElement): { bars: PrintedBar[]; viewWidth: number } {
-  const svg = container.querySelector('svg.price-tag-barcode');
+function printedBars(): { bars: PrintedBar[]; viewWidth: number } {
+  const svg = document.querySelector('svg.price-tag-barcode');
   if (!svg) throw new Error('no barcode was drawn');
   const [, , viewWidth] = svg.getAttribute('viewBox')!.split(/\s+/).map(Number) as number[];
   const bars = [...svg.querySelectorAll('rect')]
@@ -77,10 +77,11 @@ function scanTag(
   paper: (typeof TAG_PAPER_WIDTHS)[number],
   opts: { dpi?: number; barGrowth?: number; code?: string } = {}
 ): string {
-  const { container } = render(
-    <PriceTagsPrintable tags={tags(opts.code ?? CODE)} paperWidth={paper} />
-  );
-  const { bars, viewWidth } = printedBars(container);
+  // The printable mounts on the body, so a second render inside one test would
+  // otherwise sit next to the first and be read instead of it.
+  cleanup();
+  render(<PriceTagsPrintable tags={tags(opts.code ?? CODE)} paperWidth={paper} />);
+  const { bars, viewWidth } = printedBars();
   return scanEan13(
     rasterize(bars, {
       totalModules: viewWidth,
@@ -141,8 +142,8 @@ describe('the light margins', () => {
   // calibrate against then and simply stays silent — which at the counter
   // looks exactly like a broken scanner.
   it.each(TAG_PAPER_WIDTHS)('clears the GS1 minimum on both sides of %i mm paper', (paper) => {
-    const { container } = render(<PriceTagsPrintable tags={tags()} paperWidth={paper} />);
-    const { bars, viewWidth } = printedBars(container);
+    render(<PriceTagsPrintable tags={tags()} paperWidth={paper} />);
+    const { bars, viewWidth } = printedBars();
     const first = bars[0]!;
     const last = bars[bars.length - 1]!;
 
@@ -154,8 +155,8 @@ describe('the light margins', () => {
   it('refuses to decode a symbol printed hard against the paper edge', () => {
     // Proof the reader above is not simply generous: strip the margins and it
     // stops reading, exactly as the shop's scanner did.
-    const { container } = render(<PriceTagsPrintable tags={tags()} paperWidth={58} />);
-    const { bars } = printedBars(container);
+    render(<PriceTagsPrintable tags={tags()} paperWidth={58} />);
+    const { bars } = printedBars();
     const trimmed = bars.map((b) => ({ ...b, start: b.start - EAN13_QUIET_LEFT }));
     expect(() =>
       scanEan13(
@@ -174,16 +175,16 @@ describe('what the tag refuses to draw', () => {
     // '4820270362870' is the shop's code with the last digit mistyped. It is
     // thirteen digits, it used to print a symbol that looks perfect, and no
     // reader on earth accepts it.
-    const { container } = render(
-      <PriceTagsPrintable tags={tags('4820270362870')} paperWidth={58} />
+    render(<PriceTagsPrintable tags={tags('4820270362870')} paperWidth={58} />);
+    expect(document.querySelector('svg.price-tag-barcode')).toBeNull();
+    expect(document.querySelector('.price-tag-print-area')!.textContent).toContain(
+      'без штрихкоду'
     );
-    expect(container.querySelector('svg.price-tag-barcode')).toBeNull();
-    expect(container.textContent).toContain('без штрихкоду');
   });
 
   it('prints the digits where the standard puts them, out of the scan band', () => {
-    const { container } = render(<PriceTagsPrintable tags={tags()} paperWidth={58} />);
-    const svg = container.querySelector('svg.price-tag-barcode')!;
+    render(<PriceTagsPrintable tags={tags()} paperWidth={58} />);
+    const svg = document.querySelector('svg.price-tag-barcode')!;
     const texts = [...svg.querySelectorAll('text')];
     expect(texts.map((t) => t.textContent).join('')).toBe(CODE);
     // The first digit sits out in the left light margin — which is what keeps
@@ -199,6 +200,37 @@ describe('what the tag refuses to draw', () => {
   });
 });
 
+describe('where the printable mounts', () => {
+  // Printing hides every child of the body but the print areas, so where this
+  // lands in the tree decides whether anything comes out — and both ways of
+  // getting it wrong had shipped. The florist's bench rendered it inside the
+  // app, where `display: none` took it down with everything else and the tag
+  // came out blank; the products dialog then portalled *itself* out to escape
+  // a stale transform, which left the dialog visible and printed that instead
+  // of the tags. The component decides now, so no caller can get it wrong.
+  it('goes straight to the body, however deeply it is rendered', () => {
+    const { container } = render(
+      <div className="page">
+        <div className="panel">
+          <PriceTagsPrintable tags={tags()} paperWidth={58} />
+        </div>
+      </div>
+    );
+    const area = document.querySelector('.price-tag-print-area')!;
+    expect(area.parentElement).toBe(document.body);
+    expect(container.querySelector('.price-tag-print-area')).toBeNull();
+  });
+
+  it('leaves nothing behind on the body once printing is over', () => {
+    const { rerender } = render(<PriceTagsPrintable tags={tags()} paperWidth={58} />);
+    expect(document.querySelectorAll('.price-tag-print-area')).toHaveLength(1);
+    // `afterprint` clears the payload; a print area left on the body would
+    // print on top of the next thing anyone prints.
+    rerender(<PriceTagsPrintable tags={null} paperWidth={58} />);
+    expect(document.querySelectorAll('.price-tag-print-area')).toHaveLength(0);
+  });
+});
+
 describe('the tag on the roll', () => {
   it('takes half of 80 mm paper and three quarters of 58 mm', () => {
     expect(tagWidthMm(80)).toBe(40);
@@ -206,8 +238,8 @@ describe('the tag on the roll', () => {
   });
 
   it('carries the width to the stylesheet as a custom property', () => {
-    const { container } = render(<PriceTagsPrintable tags={tags()} paperWidth={80} />);
-    const area = container.querySelector<HTMLElement>('.price-tag-print-area')!;
+    render(<PriceTagsPrintable tags={tags()} paperWidth={80} />);
+    const area = document.querySelector<HTMLElement>('.price-tag-print-area')!;
     expect(area.style.getPropertyValue('--tag-w')).toBe('40mm');
     expect(area.style.getPropertyValue('--tag-barcode-h')).toBe('19.145mm');
   });

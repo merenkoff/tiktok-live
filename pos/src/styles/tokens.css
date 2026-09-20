@@ -77,8 +77,17 @@ select:focus-visible {
 }
 
 @media print {
-  #root {
-    display: none;
+  /* Hide the app, show only what is being printed.
+     Hiding `#root` was not that: anything React portals to `document.body` —
+     a modal, a toast — is a *sibling* of `#root`, so it stayed on the page and
+     came out of the printer. The other half of the same mistake is a printable
+     left *inside* `#root`, which `display: none` removes subtree and all, so
+     the page comes out blank. Saying it this way makes both impossible, and
+     `PriceTagsPrintable` puts itself here so no caller has to know.
+     `display` rather than `visibility`, because hidden-but-laid-out content
+     would follow the tags out of the printer as blank pages. */
+  body > *:not(.price-tag-print-area):not(.receipt-print-area) {
+    display: none !important;
   }
 
   /* One tag per page, so a receipt printer cuts between them exactly as it

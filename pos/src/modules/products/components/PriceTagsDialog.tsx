@@ -147,122 +147,124 @@ export function PriceTagsDialog({
     );
   }
 
-  // Both halves go to `document.body`. The printable has to, to escape the
-  // `#root { display: none }` print rule; the dialog has to for a different
-  // reason — a page wrapper with a finished `animate-fade-up` on it used to
-  // leave a transform behind, which made *it* the containing block for
-  // `position: fixed`, so this centred itself on the product list instead of
-  // on the window. The stylesheet no longer leaves that transform, and
-  // portalling means no future one can put the dialog off-screen either.
-  return createPortal(
+  // The printable sends itself to `document.body`; the dialog is portalled for
+  // a different reason — a page wrapper with a finished `animate-fade-up` on it
+  // used to leave a transform behind, which made *it* the containing block for
+  // `position: fixed`, so this centred itself on the product list instead of on
+  // the window. The stylesheet no longer leaves that transform, and portalling
+  // means no future one can put the dialog off-screen either.
+  return (
     <>
       <PriceTagsPrintable tags={printing} paperWidth={paper} />
-      <div className="fixed inset-0 z-50 bg-black/40 grid place-items-center p-4">
-        <div className="bg-sq-surface rounded-sq w-full max-w-3xl max-h-[85vh] flex flex-col shadow-lg">
-          <div className="p-5 border-b border-sq-divider">
-            <p className="sq-section-label">Друк цінників</p>
-            <p className="text-sm text-sq-secondary mt-1">
-              Кількість — за залишком на складі; змініть, якщо треба інакше. Кожен цінник
-              друкується окремою сторінкою, тож принтер ріже їх так само, як чеки.
-            </p>
-          </div>
+      {createPortal(
+        <div className="fixed inset-0 z-50 bg-black/40 grid place-items-center p-4">
+          <div className="bg-sq-surface rounded-sq w-full max-w-3xl max-h-[85vh] flex flex-col shadow-lg">
+            <div className="p-5 border-b border-sq-divider">
+              <p className="sq-section-label">Друк цінників</p>
+              <p className="text-sm text-sq-secondary mt-1">
+                Кількість — за залишком на складі; змініть, якщо треба інакше. Кожен цінник
+                друкується окремою сторінкою, тож принтер ріже їх так само, як чеки.
+              </p>
+            </div>
 
-          <div className="flex flex-wrap items-center gap-3 px-5 py-3 border-b border-sq-divider">
-            <span className="text-sm text-sq-secondary">Стрічка</span>
-            {([58, 80] as const).map((w) => (
-              <button
-                key={w}
-                type="button"
-                onClick={() => choosePaper(w)}
-                className={`${BTN} ${paper === w ? 'border-[#006AFF] text-[#006AFF]' : ''}`}
-              >
-                {w} мм
-              </button>
-            ))}
-            <span className="text-sm text-sq-secondary">
-              Ширина цінника: {tagWidthMm(paper)} мм
-            </span>
-            <span className="text-sm text-sq-secondary ml-auto">Усього цінників: {total}</span>
-          </div>
+            <div className="flex flex-wrap items-center gap-3 px-5 py-3 border-b border-sq-divider">
+              <span className="text-sm text-sq-secondary">Стрічка</span>
+              {([58, 80] as const).map((w) => (
+                <button
+                  key={w}
+                  type="button"
+                  onClick={() => choosePaper(w)}
+                  className={`${BTN} ${paper === w ? 'border-[#006AFF] text-[#006AFF]' : ''}`}
+                >
+                  {w} мм
+                </button>
+              ))}
+              <span className="text-sm text-sq-secondary">
+                Ширина цінника: {tagWidthMm(paper)} мм
+              </span>
+              <span className="text-sm text-sq-secondary ml-auto">Усього цінників: {total}</span>
+            </div>
 
-          {missing > 0 && (
-            <p className="mx-5 mt-3 rounded-sq bg-amber-50 text-amber-800 px-3 py-2 text-sm">
-              Без придатного штрихкоду: {missing}
-              {bad > 0 && ` (з них ${bad} — з хибною контрольною цифрою)`}. Такі цінники
-              надрукуються без коду — згенеруйте внутрішній, щоб касир міг сканувати.
-            </p>
-          )}
+            {missing > 0 && (
+              <p className="mx-5 mt-3 rounded-sq bg-amber-50 text-amber-800 px-3 py-2 text-sm">
+                Без придатного штрихкоду: {missing}
+                {bad > 0 && ` (з них ${bad} — з хибною контрольною цифрою)`}. Такі цінники
+                надрукуються без коду — згенеруйте внутрішній, щоб касир міг сканувати.
+              </p>
+            )}
 
-          <div className="flex-1 overflow-y-auto px-5 py-3">
-            <table className="w-full text-sm">
-              <thead className="text-sq-secondary">
-                <tr>
-                  <th className="text-left font-medium py-1">Товар</th>
-                  <th className="text-left font-medium py-1">Ціна</th>
-                  <th className="text-left font-medium py-1">Штрихкод</th>
-                  <th className="text-right font-medium py-1">Цінників</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-sq-divider">
-                {rows.map((r) => (
-                  <tr key={r.key}>
-                    <td className="py-2 pr-2">
-                      <p className="text-sq-text">{r.productName}</p>
-                      {r.label && <p className="text-xs text-sq-secondary">{r.label}</p>}
-                    </td>
-                    <td className="py-2 pr-2 whitespace-nowrap">{formatUah(r.priceCents)}</td>
-                    <td className="py-2 pr-2">
-                      {isEan13(r.barcode ?? '') ? (
-                        <span className="font-mono text-xs">{r.barcode}</span>
-                      ) : (
-                        <div className="flex flex-col items-start gap-1">
-                          {hasEan13Shape(r.barcode ?? '') && (
-                            <span className="font-mono text-xs text-amber-700 line-through">
-                              {r.barcode}
-                            </span>
-                          )}
-                          <button
-                            type="button"
-                            disabled={busyKey === r.key}
-                            onClick={() => void generateFor(r)}
-                            className={`${BTN} text-xs`}
-                          >
-                            Згенерувати
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                    <td className="py-2 text-right">
-                      <input
-                        type="number"
-                        min={0}
-                        value={r.copies}
-                        onChange={(e) => setCopies(r.key, Number(e.target.value))}
-                        className="w-16 rounded-sq border border-sq-divider bg-sq-bg px-2 py-1 text-right"
-                      />
-                    </td>
+            <div className="flex-1 overflow-y-auto px-5 py-3">
+              <table className="w-full text-sm">
+                <thead className="text-sq-secondary">
+                  <tr>
+                    <th className="text-left font-medium py-1">Товар</th>
+                    <th className="text-left font-medium py-1">Ціна</th>
+                    <th className="text-left font-medium py-1">Штрихкод</th>
+                    <th className="text-right font-medium py-1">Цінників</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-sq-divider">
+                  {rows.map((r) => (
+                    <tr key={r.key}>
+                      <td className="py-2 pr-2">
+                        <p className="text-sq-text">{r.productName}</p>
+                        {r.label && <p className="text-xs text-sq-secondary">{r.label}</p>}
+                      </td>
+                      <td className="py-2 pr-2 whitespace-nowrap">{formatUah(r.priceCents)}</td>
+                      <td className="py-2 pr-2">
+                        {isEan13(r.barcode ?? '') ? (
+                          <span className="font-mono text-xs">{r.barcode}</span>
+                        ) : (
+                          <div className="flex flex-col items-start gap-1">
+                            {hasEan13Shape(r.barcode ?? '') && (
+                              <span className="font-mono text-xs text-amber-700 line-through">
+                                {r.barcode}
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              disabled={busyKey === r.key}
+                              onClick={() => void generateFor(r)}
+                              className={`${BTN} text-xs`}
+                            >
+                              Згенерувати
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-2 text-right">
+                        <input
+                          type="number"
+                          min={0}
+                          value={r.copies}
+                          onChange={(e) => setCopies(r.key, Number(e.target.value))}
+                          className="w-16 rounded-sq border border-sq-divider bg-sq-bg px-2 py-1 text-right"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex justify-end gap-2 p-5 border-t border-sq-divider">
+              <button type="button" className={BTN} onClick={onClose}>
+                Закрити
+              </button>
+              <button
+                type="button"
+                className="sq-btn-primary px-4 py-2 text-sm disabled:opacity-50"
+                disabled={total === 0}
+                onClick={print}
+              >
+                Друкувати {total}
+              </button>
+            </div>
           </div>
 
-          <div className="flex justify-end gap-2 p-5 border-t border-sq-divider">
-            <button type="button" className={BTN} onClick={onClose}>
-              Закрити
-            </button>
-            <button
-              type="button"
-              className="sq-btn-primary px-4 py-2 text-sm disabled:opacity-50"
-              disabled={total === 0}
-              onClick={print}
-            >
-              Друкувати {total}
-            </button>
-          </div>
-        </div>
-      </div>
-    </>,
-    document.body
+        </div>,
+        document.body
+      )}
+    </>
   );
 }
