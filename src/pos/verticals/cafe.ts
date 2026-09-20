@@ -37,4 +37,7 @@ export const cafeVertical: VerticalDefinition = {
   // modelling smell, and the cycle/depth walk on every recipe write has to
   // stop somewhere.
   maxCompositionDepth: 3,
+  // A latte is made after it is paid for; the board and the ticket exist for
+  // exactly that gap.
+  kitchen: true,
 };

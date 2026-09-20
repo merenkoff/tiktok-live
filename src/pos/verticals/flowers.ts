@@ -54,4 +54,5 @@ export const flowersVertical: VerticalDefinition = {
   // inside a bouquet would be priced at its card price plus labour on top of
   // labour (`priceOfComposition`), and no florist asked for it.
   maxCompositionDepth: 1,
+  kitchen: false,
 };

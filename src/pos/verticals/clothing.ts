@@ -43,4 +43,5 @@ export const clothingVertical: VerticalDefinition = {
       .join(' / '),
   productKinds: ['simple'],
   maxCompositionDepth: 1,
+  kitchen: false,
 };
