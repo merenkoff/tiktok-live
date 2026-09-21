@@ -25,6 +25,7 @@ import { getCustomer } from './customers.service.js';
 import { storeClock } from './core/storeClock.js';
 import { dailyCounterKey, nextCounterValue } from './core/counters.js';
 import * as preorders from './preorders.service.js';
+import * as bills from './bills.service.js';
 import * as modifiers from './modifiers.service.js';
 import type { LineModifierSnapshot } from './modifiers.service.js';
 
@@ -254,8 +255,24 @@ export async function completeSale(params: {
    * it (К3b). It relaxes a menu rule and marks kitchen state — never money.
    */
   offline_replay?: boolean;
+  /**
+   * A table bill being paid (К4d, migration 052).
+   *
+   * Its lines go through the very same locked branch a pre-order does — the
+   * price was fixed when the round was fired and must not be re-derived — and
+   * the caller names ids, never numbers, for the same reason: what is owed
+   * comes out of a table this server wrote.
+   *
+   * One difference, and it is the whole of К4d: the stock ALREADY MOVED when
+   * the round was fired, so these lines copy their snapshot across instead of
+   * writing off a second time. `line_ids` absent means every fired line of the
+   * bill that nobody has paid for yet; naming a subset is a split.
+   */
+  bill_part?: { bill_id: number; line_ids?: number[] } | null;
 }) {
-  if (!params.items?.length && !params.preorder_id) throw new Error('Cart is empty');
+  if (!params.items?.length && !params.preorder_id && !params.bill_part) {
+    throw new Error('Cart is empty');
+  }
   if (!params.payments?.length) throw new Error('Payment required');
 
   const clientUuid = params.client_uuid?.trim() || null;
@@ -333,7 +350,7 @@ export async function completeSale(params: {
     // together. Two tills reaching for the same bouquet is then a row-level
     // race one of them loses, and a checkout that fails afterwards needs no
     // compensating «put it back».
-    const locked = params.preorder_id
+    const locked: Array<preorders.LockedLine & { bill_item_id?: number }> = params.preorder_id
       ? await preorders.lockedLines(client, params.storeId, params.preorder_id)
       : [];
     if (params.preorder_id) {
@@ -343,6 +360,19 @@ export async function completeSale(params: {
         preorderId: params.preorder_id,
         staffId: params.staffId,
       });
+    }
+
+    // The bill's share of this receipt, read the same way and for the same
+    // reason. `lockedBillLines` also takes the lines for this sale, so two
+    // tills splitting the same bill cannot both claim the same plate.
+    if (params.bill_part) {
+      const billLines = await bills.lockedBillLines(client, {
+        storeId: params.storeId,
+        billId: params.bill_part.bill_id,
+        lineIds: params.bill_part.line_ids,
+      });
+      if (billLines.length === 0) throw new Error('Bill has nothing left to pay');
+      locked.push(...billLines);
     }
 
     const variantIds = [
@@ -403,6 +433,12 @@ export async function completeSale(params: {
       modifiers?: LineModifierSnapshot[];
       /** What those choices write off, per one unit, authored. */
       modifier_components?: ComponentInput[];
+      /**
+       * The bill line behind this one (К4d). Its presence is the signal that
+       * the stock already moved when the round was fired, so this line copies
+       * the snapshot instead of writing off again.
+       */
+      bill_item_id?: number;
     }> = [];
 
     // Every product's questions, once. A line naming no modifiers is checked
@@ -495,6 +531,7 @@ export async function completeSale(params: {
         ...(promised.snapshot.length > 0
           ? { modifiers: promised.snapshot, modifier_components: promised.components }
           : {}),
+        ...(line.bill_item_id ? { bill_item_id: line.bill_item_id } : {}),
       });
     }
 
@@ -601,8 +638,8 @@ export async function completeSale(params: {
         `INSERT INTO pos_sale_items
            (sale_id, store_id, variant_id, product_name, variant_label, unit,
             quantity, unit_price_cents, line_total_cents,
-            compare_at_unit_cents, line_discount_cents, note)
-         VALUES ($1, $2, $3, $4, $5, $11, $6, $7, $8, $9, $10, $12)
+            compare_at_unit_cents, line_discount_cents, note, bill_item_id)
+         VALUES ($1, $2, $3, $4, $5, $11, $6, $7, $8, $9, $10, $12, $13)
          RETURNING id`,
         [
           saleId,
@@ -617,6 +654,7 @@ export async function completeSale(params: {
           line.line_discount_cents,
           line.unit,
           line.note ?? '',
+          line.bill_item_id ?? null,
         ]
       );
       const saleItemId = Number(itemResult.rows[0].id);
@@ -638,6 +676,19 @@ export async function completeSale(params: {
             chosen.sort_order,
           ]
         );
+      }
+
+      // A line of a table bill: its round already took the stock, so moving it
+      // again would write dinner off twice. What it took is copied across
+      // verbatim, and the refund reverses the copy — never the recipe.
+      if (line.bill_item_id) {
+        await bills.attachPaidLine(client, {
+          storeId: params.storeId,
+          billItemId: line.bill_item_id,
+          saleId,
+          saleItemId,
+        });
+        continue;
       }
 
       // Composite-aware: a derived composite (a bouquet assembled when it

@@ -30,6 +30,7 @@
 import type { FastifyInstance } from 'fastify';
 import { ensurePosAuth, ensurePosOwner } from '../core/auth.js';
 import * as bills from '../bills.service.js';
+import * as billPayment from '../bill-payment.service.js';
 import * as rounds from '../rounds.service.js';
 import { CompositeError } from '../composites.service.js';
 import { ModifierError } from '../modifiers.service.js';
@@ -359,6 +360,32 @@ export function registerTablesRoutes(fastify: FastifyInstance): void {
         staffId: auth.staffId,
         billId: id,
         roundId,
+      });
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  // Pay the bill — as one receipt, or as several. A part with its own
+  // `line_ids` is a split by dishes (its own sale, its own fiscal receipt);
+  // one part with several payments is a split by sum (§4.4).
+  fastify.post('/bills/:id/pay', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const id = idOf((request.params as { id: string }).id);
+    if (id == null) return reply.code(404).send({ error: 'Рахунок не знайдено' });
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const parts = Array.isArray(body.parts)
+      ? (body.parts as billPayment.BillPaymentPart[])
+      : [{ payments: (body.payments ?? []) as never[] }];
+    try {
+      return await billPayment.payBill({
+        storeId: auth.storeId,
+        staffId: auth.staffId,
+        billId: id,
+        parts,
+        cart_discount: (body.cart_discount ?? null) as never,
+        customer_id: body.customer_id == null ? null : Number(body.customer_id),
       });
     } catch (error) {
       return sendError(reply, error);
