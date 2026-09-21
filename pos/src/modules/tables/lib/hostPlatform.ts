@@ -9,6 +9,7 @@
 // value we can inspect instead of a link-time `SyntaxError`.
 
 import * as host from '@pos/platform';
+import type { CatalogItem } from '@pos/platform';
 
 /**
  * Host symbols this module cannot work without.
@@ -19,7 +20,21 @@ import * as host from '@pos/platform';
  * (`api.posRequest`) is resolved key by key, which is why adding one costs no
  * export name at all.
  */
-export const REQUIRED_HOST_API = ['api.posRequest', 'useOfflineStatus', 'formatUah'] as const;
+export const REQUIRED_HOST_API = [
+  'api.posRequest',
+  'useOfflineStatus',
+  'formatUah',
+  // The dish picker (К4f) reads the menu through the host's shell-aware
+  // surface rather than the raw API, so the desktop till reads its mirror and
+  // the web reads the server, without this module knowing which it is on.
+  'cashierApi.getCatalog',
+  // The tap rule of the picker, borrowed whole from the café till: the
+  // arithmetic and the wording of a question belong to the host, and a second
+  // copy here would drift from the server's the first time either changed.
+  'groupsOf',
+  'defaultModifierIds',
+  'needsModifierSheet',
+] as const;
 
 /** The host shell is older than this module — it lacks part of the contract. */
 export class HostTooOldError extends Error {
@@ -68,4 +83,16 @@ export function posRequest<T>(
       posRequest: (m: string, p: string, b?: unknown) => Promise<T>;
     }
   ).posRequest(method, path, body);
+}
+
+/**
+ * The menu, through the host's shell-aware reader.
+ *
+ * `include_unsellable` is deliberately not passed: an ingredient is not a
+ * dish, and a waiter who can type flour onto a bill will eventually do it.
+ */
+export async function searchMenu(q: string): Promise<CatalogItem[]> {
+  const fn = member('cashierApi.getCatalog');
+  if (!hasFn(fn)) throw new HostTooOldError(['cashierApi.getCatalog']);
+  return (await (fn as (o: { q?: string }) => Promise<CatalogItem[]>)({ q })) ?? [];
 }
