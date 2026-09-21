@@ -843,3 +843,148 @@ async function refuseClosedBill(storeId: number, billId: number): Promise<never>
   const status = String(row.rows[0].status);
   throw new BillConflict(status === 'paid' ? 'Рахунок уже оплачено' : 'Рахунок скасовано');
 }
+
+// ── paying (К4d) ───────────────────────────────────────────────────────────
+
+/**
+ * The lines of a bill that this receipt is about to pay for.
+ *
+ * Shaped exactly like a pre-order's locked line, because `completeSale` puts
+ * both through the same branch: the price is the one the round fixed, the
+ * answers are the promise as made, and nothing is re-derived from today's
+ * menu. `FOR UPDATE` on the rows is what stops two tills splitting one bill
+ * from both claiming the same plate.
+ *
+ * A line already paid for is skipped rather than refused: the second part of
+ * a split legitimately asks for «everything still open», and a `line_ids`
+ * naming a paid line is a stale screen, not a bug worth failing the receipt.
+ * A line still in the draft is refused, though — nobody owes for a plate the
+ * kitchen has not been told about.
+ */
+export async function lockedBillLines(
+  client: DbClient,
+  params: { storeId: number; billId: number; lineIds?: number[] }
+): Promise<
+  Array<{
+    variant_id: number;
+    quantity: number;
+    unit_price_cents: number;
+    components?: ComponentInput[];
+    modifiers: LineModifierSnapshot[];
+    note: string;
+    bill_item_id: number;
+  }>
+> {
+  const bill = await client.query(
+    `SELECT status FROM pos_bills WHERE store_id = $1 AND id = $2 FOR UPDATE`,
+    [params.storeId, params.billId]
+  );
+  if (bill.rows.length === 0) throw new BillNotFound('Рахунок не знайдено');
+  if (String(bill.rows[0].status) === 'cancelled') throw new BillConflict('Рахунок скасовано');
+
+  if (params.lineIds?.length) {
+    const draft = await client.query(
+      `SELECT 1 FROM pos_bill_items
+        WHERE bill_id = $1 AND id = ANY($2::bigint[]) AND round_id IS NULL LIMIT 1`,
+      [params.billId, params.lineIds]
+    );
+    if (draft.rows.length > 0) {
+      throw new BillConflict('Позиція ще не відправлена на кухню — оплатити її не можна');
+    }
+  }
+
+  const rows = await client.query(
+    `SELECT i.id, i.variant_id, i.quantity, i.unit_price_cents, i.components,
+            i.modifiers, i.note
+       FROM pos_bill_items i
+       JOIN pos_bill_rounds r ON r.id = i.round_id
+      WHERE i.bill_id = $1
+        AND i.sale_id IS NULL
+        AND r.cancelled_at IS NULL
+        ${params.lineIds?.length ? 'AND i.id = ANY($2::bigint[])' : ''}
+      ORDER BY i.sort_order ASC, i.id ASC
+      FOR UPDATE OF i`,
+    params.lineIds?.length ? [params.billId, params.lineIds] : [params.billId]
+  );
+  return rows.rows.map((row) => ({
+    variant_id: Number(row.variant_id),
+    quantity: Number(row.quantity),
+    unit_price_cents: Number(row.unit_price_cents ?? 0),
+    ...(row.components ? { components: row.components as ComponentInput[] } : {}),
+    modifiers: modifiers.parseLineModifierSnapshot(row.modifiers),
+    note: String(row.note ?? ''),
+    bill_item_id: Number(row.id),
+  }));
+}
+
+/**
+ * Tie a paid sale line back to the bill line behind it, and copy what that
+ * line took off the shelf — **without moving stock**, because the round did
+ * that when it fired.
+ *
+ * Both directions are written: `pos_sale_items.bill_item_id` so a refund can
+ * find the bill line, and `pos_bill_items.sale_id` so the bill knows which
+ * part of a split paid for this plate — and so «what is still open» is just
+ * `sale_id IS NULL`.
+ */
+export async function attachPaidLine(
+  client: DbClient,
+  params: { storeId: number; billItemId: number; saleId: number; saleItemId: number }
+): Promise<void> {
+  await client.query(
+    `INSERT INTO pos_sale_item_components
+       (store_id, sale_item_id, component_variant_id, quantity_per_unit, sort_order)
+     SELECT store_id, $3, component_variant_id, quantity_per_unit, sort_order
+       FROM pos_bill_item_components
+      WHERE store_id = $1 AND bill_item_id = $2
+      ORDER BY sort_order ASC, id ASC`,
+    [params.storeId, params.billItemId, params.saleItemId]
+  );
+  await client.query(
+    `UPDATE pos_bill_items SET sale_id = $3 WHERE store_id = $1 AND id = $2`,
+    [params.storeId, params.billItemId, params.saleId]
+  );
+}
+
+/** What a bill still owes, and whether anything is left unfired. */
+export async function billBalance(
+  client: DbClient,
+  storeId: number,
+  billId: number
+): Promise<{ openCents: number; openLines: number; draftLines: number }> {
+  const row = await client.query(
+    `SELECT
+       COALESCE(SUM(i.unit_price_cents * i.quantity)
+                FILTER (WHERE i.sale_id IS NULL AND i.round_id IS NOT NULL), 0) AS open_cents,
+       COUNT(*) FILTER (WHERE i.sale_id IS NULL AND i.round_id IS NOT NULL) AS open_lines,
+       COUNT(*) FILTER (WHERE i.round_id IS NULL) AS draft_lines
+     FROM pos_bill_items i
+     LEFT JOIN pos_bill_rounds r ON r.id = i.round_id
+     WHERE i.bill_id = $2 AND i.store_id = $1
+       AND (i.round_id IS NULL OR r.cancelled_at IS NULL)`,
+    [storeId, billId]
+  );
+  return {
+    openCents: Number(row.rows[0]?.open_cents ?? 0),
+    openLines: Number(row.rows[0]?.open_lines ?? 0),
+    draftLines: Number(row.rows[0]?.draft_lines ?? 0),
+  };
+}
+
+/** Close a bill whose lines are all paid for. Idempotent by the status check. */
+export async function closeIfSettled(
+  storeId: number,
+  staffId: number,
+  billId: number
+): Promise<boolean> {
+  const balance = await billBalance(pool, storeId, billId);
+  if (balance.openLines > 0 || balance.draftLines > 0) return false;
+  const closed = await pool.query(
+    `UPDATE pos_bills
+        SET status = 'paid', closed_by = $3, closed_at = NOW(), updated_at = NOW()
+      WHERE store_id = $1 AND id = $2 AND status = 'open'
+    RETURNING id`,
+    [storeId, billId, staffId]
+  );
+  return (closed.rowCount ?? 0) > 0;
+}
