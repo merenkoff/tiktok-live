@@ -24,9 +24,12 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { formatUah, useOfflineStatus } from '@pos/platform';
 import { DishPicker } from '../components/DishPicker';
+import { PaySheet } from '../components/PaySheet';
 import { billTotals, canCancelRound, firedLineCents, lineTitle, ROUND_STATUS } from '../lib/bill';
+import { isSettled, payableLines } from '../lib/pay';
 import { useBill } from '../lib/useBill';
 import * as tablesApi from '../lib/tablesApi';
+import type { PayPart } from '../lib/tablesApi';
 import type { BillLine } from '../lib/types';
 
 function newUuid(): string {
@@ -43,9 +46,11 @@ export function BillPage(): JSX.Element {
   const online = useOfflineStatus((s) => s.online);
   const { bill, loading, error, banner, busy, clearBanner, reload, run } = useBill(id, online);
   const [picking, setPicking] = useState(false);
+  const [paying, setPaying] = useState(false);
   const navigate = useNavigate();
 
   const totals = useMemo(() => (bill ? billTotals(bill) : null), [bill]);
+  const owedLines = useMemo(() => (bill ? payableLines(bill) : []), [bill]);
 
   if (!online) {
     return (
@@ -74,6 +79,26 @@ export function BillPage(): JSX.Element {
       </div>
     );
   }
+
+  /**
+   * Pay, then leave if the table is settled.
+   *
+   * Whether it IS settled is read off the bill the server answered with, not
+   * guessed from what was sent: a part may fail after an earlier one was
+   * rung, and the lines still without a `sale_id` are the only honest answer
+   * to «що лишилось».
+   */
+  const pay = async (parts: PayPart[]): Promise<void> => {
+    let settled = false;
+    const ok = await run(async () => {
+      const paid = await tablesApi.payBill(bill.id, parts);
+      settled = isSettled(paid.bill);
+      return paid.bill;
+    });
+    if (!ok) return;
+    setPaying(false);
+    if (settled) navigate('/tables');
+  };
 
   const line = (l: BillLine, fired: boolean): JSX.Element => (
     <div
@@ -228,8 +253,32 @@ export function BillPage(): JSX.Element {
           >
             На кухню
           </button>
+          <button
+            type="button"
+            className="sq-btn-primary flex-1"
+            data-testid="bill-pay"
+            // The draft is the server's own rule, said here before it has to
+            // refuse: a plate the kitchen does not know about is not owed for.
+            disabled={busy || owedLines.length === 0 || bill.draft.length > 0}
+            onClick={() => setPaying(true)}
+          >
+            Оплатити
+          </button>
         </div>
+        <button
+          type="button"
+          className="sq-link mt-2"
+          data-testid="bill-precheck"
+          disabled={busy || owedLines.length === 0}
+          onClick={() => void run(() => tablesApi.markPrecheck(bill.id))}
+        >
+          {bill.precheck_printed_at ? 'Передчек надруковано · ще раз' : 'Передчек'}
+        </button>
       </footer>
+
+      {paying && (
+        <PaySheet bill={bill} busy={busy} onClose={() => setPaying(false)} onPay={(p) => void pay(p)} />
+      )}
 
       {picking && (
         <DishPicker

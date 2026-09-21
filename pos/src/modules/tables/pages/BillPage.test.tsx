@@ -14,6 +14,7 @@ import type { Bill, BillLine, BillRound } from '../lib/types';
 
 const posRequest = vi.fn();
 const getCatalog = vi.fn();
+const navigate = vi.fn();
 
 vi.mock('@pos/platform', async () => {
   const real = await vi.importActual<typeof import('@pos/platform')>('@pos/platform');
@@ -26,7 +27,7 @@ vi.mock('@pos/platform', async () => {
 
 vi.mock('react-router-dom', async () => {
   const real = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
-  return { ...real, useParams: () => ({ billId: '90' }), useNavigate: () => vi.fn() };
+  return { ...real, useParams: () => ({ billId: '90' }), useNavigate: () => navigate };
 });
 
 const { BillPage } = await import('./BillPage');
@@ -45,6 +46,7 @@ const line = (over: Partial<BillLine> = {}): BillLine => ({
   components: null,
   modifiers: [],
   note: '',
+  sale_id: null,
   added_by: 1,
   added_by_name: 'Марта',
   sort_order: 0,
@@ -142,6 +144,7 @@ const MENU = [
 
 beforeEach(() => {
   vi.useRealTimers();
+  navigate.mockReset();
   useOfflineStatus.setState({ online: true });
   bill = {
     id: 90,
@@ -306,5 +309,108 @@ describe('BillPage', () => {
     renderWithProviders(<BillPage />, { route: '/tables/90' });
     expect(await screen.findByTestId('bill-offline')).toHaveTextContent('Потрібна мережа');
     expect(posRequest).not.toHaveBeenCalled();
+  });
+
+  // ── К4g: розділення й передчек ───────────────────────────────────────────
+
+  it('pays the whole bill in one receipt and leaves the table', async () => {
+    bill.draft = [];
+    const posted: unknown[] = [];
+    posRequest.mockImplementation(async (method: string, path: string, body?: unknown) => {
+      if (method === 'post' && path === '/bills/90/pay') {
+        posted.push(body);
+        return { bill: { ...bill, status: 'paid' }, sale_ids: [7] };
+      }
+      return bill;
+    });
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    await userEvent.click(await screen.findByTestId('bill-pay'));
+    await userEvent.click(await screen.findByTestId('pay-submit'));
+    // No `line_ids` when everything is ticked: «усе, що винні» survives
+    // another waiter firing one more round between render and request.
+    await waitFor(() =>
+      expect(posted).toEqual([{ parts: [{ payments: [{ method: 'card', amount_cents: 8000 }] }] }])
+    );
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/tables'));
+  });
+
+  it('splits by dishes: only the ticked lines, and the table stays open', async () => {
+    bill.rounds = [
+      round({
+        items: [
+          line({ id: 2, quantity: 1, unit_price_cents: 8000 }),
+          line({ id: 5, quantity: 1, unit_price_cents: 5500, product_name: 'Круасан' }),
+        ],
+      }),
+    ];
+    bill.fired_total_cents = 13500;
+    bill.draft = [];
+    const posted: unknown[] = [];
+    posRequest.mockImplementation(async (method: string, path: string, body?: unknown) => {
+      if (method === 'post' && path === '/bills/90/pay') {
+        posted.push(body);
+        // The other plate is still owed, so the bill stays open.
+        return { bill, sale_ids: [8] };
+      }
+      return bill;
+    });
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    await userEvent.click(await screen.findByTestId('bill-pay'));
+    await userEvent.click(await screen.findByTestId('pay-line-5'));
+    expect(screen.getByTestId('pay-submit')).toHaveTextContent('частина');
+    await userEvent.click(screen.getByTestId('pay-submit'));
+    await waitFor(() =>
+      expect(posted).toEqual([
+        { parts: [{ line_ids: [2], payments: [{ method: 'card', amount_cents: 8000 }] }] },
+      ])
+    );
+    // Dividing the dishes is N receipts, so the waiter comes back for the rest.
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('splits evenly: one receipt, several payment rows that add up', async () => {
+    bill.draft = [];
+    const posted: Array<{ parts: Array<{ payments: Array<{ amount_cents: number }> }> }> = [];
+    posRequest.mockImplementation(async (method: string, path: string, body?: unknown) => {
+      if (method === 'post' && path === '/bills/90/pay') {
+        posted.push(body as (typeof posted)[number]);
+        return { bill: { ...bill, status: 'paid' }, sale_ids: [9] };
+      }
+      return bill;
+    });
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    await userEvent.click(await screen.findByTestId('bill-pay'));
+    await userEvent.click(await screen.findByTestId('pay-ways-more'));
+    await userEvent.click(screen.getByTestId('pay-ways-more'));
+    expect(screen.getByTestId('pay-ways')).toHaveTextContent('3');
+    await userEvent.click(screen.getByTestId('pay-method-cash'));
+    await userEvent.click(screen.getByTestId('pay-submit'));
+    await waitFor(() => expect(posted).toHaveLength(1));
+    const part = posted[0].parts[0];
+    expect(part).not.toHaveProperty('line_ids');
+    expect(part.payments).toHaveLength(3);
+    expect(part.payments.reduce((a, p) => a + p.amount_cents, 0)).toBe(8000);
+    expect(part.payments.every((p) => (p as { method: string }).method === 'cash')).toBe(true);
+  });
+
+  it('will not offer payment while the kitchen has not been told', async () => {
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    // The draft from the fixture is still untyped-but-unsent.
+    expect(await screen.findByTestId('bill-pay')).toBeDisabled();
+  });
+
+  it('records the pre-bill without freezing anything', async () => {
+    const seen: string[] = [];
+    posRequest.mockImplementation(async (method: string, path: string) => {
+      seen.push(`${method} ${path}`);
+      return path === '/bills/90/precheck' ? { ...bill, precheck_printed_at: 'x' } : bill;
+    });
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    await userEvent.click(await screen.findByTestId('bill-precheck'));
+    await waitFor(() => expect(seen).toContain('post /bills/90/precheck'));
+    // The bill stays open and editable — the mark is only so the tile can
+    // show it and the next waiter does not print a second one.
+    expect(await screen.findByTestId('bill-precheck')).toHaveTextContent('Передчек надруковано');
+    expect(screen.getByTestId('bill-fire')).toBeEnabled();
   });
 });

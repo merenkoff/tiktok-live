@@ -44,6 +44,7 @@ export default defineConfig({
         'src/modules/tables/lib/hallMap.ts',
         'src/modules/tables/lib/bill.ts',
         'src/modules/tables/lib/menu.ts',
+        'src/modules/tables/lib/pay.ts',
         'src/lib/bouquet.ts',
         'src/lib/kitchenPrinters.ts',
         'src/lib/kitchenTicket.ts',

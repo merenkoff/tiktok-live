@@ -85,3 +85,40 @@ export function moveBill(billId: number, tableId: number): Promise<Bill> {
 export function cancelBill(billId: number): Promise<Bill> {
   return posRequest<Bill>('post', `/bills/${billId}/cancel`);
 }
+
+// ── paying, and the pre-bill (К4g) ─────────────────────────────────────────
+
+/** How one receipt of a split is paid. */
+export interface PayPart {
+  /** The lines this receipt covers. Absent = everything still owed. */
+  line_ids?: number[];
+  payments: Array<{ method: 'cash' | 'card' | 'qr'; amount_cents: number }>;
+}
+
+/**
+ * Pay the bill, whole or in parts.
+ *
+ * One call carries both ways of dividing it, and the difference is the
+ * server's to honour: a part with its own `line_ids` becomes its own sale
+ * with its own fiscal receipt (dividing the dishes), while one part paid in
+ * several rows stays one sale (dividing the sum). See §4.4 — a sale carries
+ * at most one fiscal receipt, which is what makes these two different things
+ * rather than one option.
+ *
+ * The answer is the bill as it stands afterwards; a part that fails leaves
+ * the parts before it paid, so the screen re-reads rather than assumes.
+ */
+export function payBill(billId: number, parts: PayPart[]): Promise<{ bill: Bill; sale_ids: number[] }> {
+  return posRequest<{ bill: Bill; sale_ids: number[] }>('post', `/bills/${billId}/pay`, { parts });
+}
+
+/**
+ * Record that the pre-bill was printed.
+ *
+ * It binds nothing — the bill stays open and editable (§4.6); this only marks
+ * that the sum was read out loud, so the table's tile can show it and the
+ * next waiter does not print a second one. The printing itself is К4h.
+ */
+export function markPrecheck(billId: number): Promise<Bill> {
+  return posRequest<Bill>('post', `/bills/${billId}/precheck`);
+}
