@@ -62,9 +62,11 @@ export function ReceiptPrintable({ receipt }: { receipt: ReceiptData | null }) {
         </>
       ) : (
         <>
-          {receipt.order_no != null && (
+          {receipt.order_no != null ? (
             <p className="receipt-print-order">Замовлення № {receipt.order_no}</p>
-          )}
+          ) : receipt.order_label ? (
+            <p className="receipt-print-order">Замовлення {receipt.order_label}</p>
+          ) : null}
           <p>Чек {receipt.receipt_number}</p>
         </>
       )}

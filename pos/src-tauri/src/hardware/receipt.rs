@@ -103,6 +103,11 @@ pub struct ReceiptData {
     /// receipt number. Only a café sends it; absent from an older host.
     #[serde(default)]
     pub order_no: Option<i64>,
+    /// The till's own number for a receipt it printed before the sale reached
+    /// the server — «К17», a string because of the letter. `order_no` wins
+    /// when both are set; a host built before this field never sends it.
+    #[serde(default)]
+    pub order_label: Option<String>,
     pub created_at: String,
     pub staff_name: String,
     pub customer_name: Option<String>,
@@ -243,13 +248,18 @@ fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> 
                 .map_err(|e| e.to_string())?;
         }
     } else {
-        if let Some(order_no) = receipt.order_no {
+        let order = receipt
+            .order_no
+            .map(|n| n.to_string())
+            .or_else(|| receipt.order_label.clone());
+        if let Some(order) = order {
             // The number the barista calls out — big enough to read from the
             // pickup counter, above the receipt number nobody reads aloud.
+            // The server's number, or the till's own «К17» while offline.
             printer.bold(true).map_err(|e| e.to_string())?;
             printer.size(2, 2).map_err(|e| e.to_string())?;
             printer
-                .writeln(&format!("ЗАМОВЛЕННЯ {order_no}"))
+                .writeln(&format!("ЗАМОВЛЕННЯ {order}"))
                 .map_err(|e| e.to_string())?;
             printer.reset_size().map_err(|e| e.to_string())?;
             printer.bold(false).map_err(|e| e.to_string())?;
@@ -587,8 +597,38 @@ mod tests {
         });
         let receipt: ReceiptData = serde_json::from_value(json).unwrap();
         assert_eq!(receipt.order_no, None);
+        assert_eq!(receipt.order_label, None);
         let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
         assert!(!contains(&bytes, &win1251("ЗАМОВЛЕННЯ")));
+    }
+
+    #[test]
+    fn the_tills_own_label_prints_large_when_there_is_no_server_number() {
+        // A receipt printed while the sale is still in the outbox: «К1», in
+        // the same place and size the server's number would take.
+        let mut receipt = base();
+        receipt.order_label = Some("К1".into());
+        let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
+        let order = bytes
+            .windows(win1251("ЗАМОВЛЕННЯ К1").len())
+            .position(|w| w == win1251("ЗАМОВЛЕННЯ К1").as_slice())
+            .unwrap();
+        let number = bytes
+            .windows(win1251("Чек ").len())
+            .position(|w| w == win1251("Чек ").as_slice())
+            .unwrap();
+        assert!(order < number);
+        assert!(contains(&bytes[..number], &[0x1D, 0x21, 0x11]));
+    }
+
+    #[test]
+    fn the_server_number_wins_over_the_tills_label() {
+        let mut receipt = base();
+        receipt.order_no = Some(42);
+        receipt.order_label = Some("К1".into());
+        let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
+        assert!(contains(&bytes, &win1251("ЗАМОВЛЕННЯ 42")));
+        assert!(!contains(&bytes, &win1251("К1")));
     }
 
     #[test]

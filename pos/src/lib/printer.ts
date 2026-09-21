@@ -84,6 +84,12 @@ export interface ReceiptData {
    * build that predates it ignores it.
    */
   order_no?: number | null;
+  /**
+   * The till's own «К17» for a receipt printed before the sale reached the
+   * server (К3d). Printed in the same place and size as `order_no`, which wins
+   * when both are present. Absent on an older host; ignored by an older Rust.
+   */
+  order_label?: string | null;
   created_at: string;
   staff_name: string;
   customer_name: string | null;

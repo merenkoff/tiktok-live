@@ -104,7 +104,8 @@ vi.mock('../services/api', () => ({
 }));
 
 const { api } = await import('../services/api');
-const { db } = await import('./db');
+const { db, getMeta, setMeta } = await import('./db');
+const { deviceLocalDay } = await import('../lib/localOrderNo');
 const { takeStamp } = await import('./lease');
 const { completeSale } = await import('./repository');
 const { OfflineFiscalError } = await import('./errors');
@@ -238,5 +239,82 @@ describe('completeSale — a line with modifiers, offline', () => {
     });
     expect(sale.items[0]).toMatchObject({ unit_price_cents: 6500, variant_label: 'M' });
     expect(sale.items[0].modifiers).toBeUndefined();
+  });
+});
+
+describe("completeSale — the till's own order number, offline (К3d)", () => {
+  let counter: unknown;
+
+  beforeEach(() => {
+    counter = undefined;
+    vi.mocked(api.loadAuth).mockReturnValue({
+      staff: { display_name: 'Марта' },
+      store: { fiscal: { enabled: false } },
+    } as never);
+    vi.mocked(getMeta).mockImplementation(async (key: string) =>
+      key === 'localOrderCounter' ? counter : undefined
+    );
+    vi.mocked(setMeta).mockImplementation(async (key: string, value: unknown) => {
+      if (key === 'localOrderCounter') counter = value;
+    });
+  });
+
+  it('numbers the day’s first queued sale «1» and the next «2», and never touches order_no', async () => {
+    const first = await completeSale(payload);
+    expect(first.local_order_no).toBe(1);
+    expect(first.order_no).toBeUndefined();
+    expect(first.receipt_number).toMatch(/^OFF-/);
+    expect(counter).toEqual({ day: deviceLocalDay(), next: 2 });
+
+    const second = await completeSale(payload);
+    expect(second.local_order_no).toBe(2);
+    // The queue carries no number at all — the server hands out its own.
+    for (const row of outbox) {
+      expect(row.payload).not.toHaveProperty('local_order_no');
+      expect(row.payload).not.toHaveProperty('order_no');
+    }
+  });
+
+  it('starts over on a new device day', async () => {
+    counter = { day: '2000-01-01', next: 9 };
+    const sale = await completeSale(payload);
+    expect(sale.local_order_no).toBe(1);
+    expect(counter).toEqual({ day: deviceLocalDay(), next: 2 });
+  });
+
+  it('spends no number on a sale the till may not queue', async () => {
+    vi.mocked(api.loadAuth).mockReturnValue({
+      staff: { display_name: 'Марта' },
+      store: { fiscal: { enabled: true, offline_mode: true } },
+    } as never);
+    vi.mocked(takeStamp).mockRejectedValue(new OfflineFiscalError('no_reserve', 'x'));
+    await expect(completeSale(payload)).rejects.toBeInstanceOf(OfflineFiscalError);
+    expect(counter).toBeUndefined();
+  });
+
+  it('gives an online sale the server’s number and no local one', async () => {
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+    vi.mocked(api.hasLiveJwt).mockReturnValue(true);
+    vi.mocked(api.completeSale).mockResolvedValue({
+      id: 5,
+      receipt_number: 'ЧК-000005',
+      order_no: 7,
+      status: 'completed',
+      subtotal_cents: 45000,
+      total_cents: 45000,
+      refunded_cents: 0,
+      staff_name: 'Марта',
+      customer_id: null,
+      created_at: '2026-09-21T08:00:00.000Z',
+      items: [],
+      payments: [],
+      refunds: [],
+    } as never);
+
+    const sale = await completeSale(payload);
+    expect(sale.order_no).toBe(7);
+    expect(sale.local_order_no).toBeUndefined();
+    expect(counter).toBeUndefined();
+    expect(outbox).toHaveLength(0);
   });
 });

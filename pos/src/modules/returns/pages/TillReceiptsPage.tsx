@@ -221,6 +221,19 @@ function SaleDetailPanel({
                 № {detail.order_no}
               </span>
             )}
+            {/* The till's own number on a receipt still in the outbox (К3d).
+                Spelled here rather than through `localOrderLabel`: this page
+                ships in the `returns` remote and reaches the host only through
+                `@pos/platform`, and «К» + n is not worth a platform export. */}
+            {cafe && detail?.order_no == null && detail?.local_order_no != null && (
+              <span
+                className="mr-2 rounded-sq bg-sq-bg px-1.5 py-0.5 text-sm tabular-nums"
+                title="Номер каси — сервер призначить свій після синхронізації"
+                data-testid="local-order-no"
+              >
+                К{detail.local_order_no}
+              </span>
+            )}
             {row.receipt_number}
           </h2>
           <p className="text-sm text-sq-secondary">

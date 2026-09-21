@@ -6,6 +6,7 @@ import { ReactNode, Suspense, useEffect, useMemo, useRef, useState } from 'react
 import { Check } from 'lucide-react';
 import { api, cashierApi, useAuthStore, useCartStore, useOfflineStatus } from '@pos/platform';
 import { formatUah } from '../../lib/money';
+import { localOrderLabel } from '../../lib/localOrderNo';
 import {
   classifyCheckoutError,
   keepsModalOpen,
@@ -564,9 +565,17 @@ export function RegisterPage() {
       .map((p) => `${paymentLabel(p.method)} ${formatUah(p.amount_cents)}`)
       .join(' · ');
     // The number the counter calls out — «сорок два», not «R-2026-000317».
-    // Shown per vertical: a clothing store has no counter to call it at, and an
-    // `OFF-` sale queued offline has no number until it syncs.
-    const showOrderNo = vertical === 'cafe' && success.order_no != null;
+    // Shown per vertical: a clothing store has no counter to call it at. An
+    // `OFF-` sale the desktop queued offline has no server number until it
+    // syncs, so it shows the till's own — «К1» — and says whose it is (К3d).
+    const localNo = success.order_no == null ? (success.local_order_no ?? null) : null;
+    const orderCaption =
+      success.order_no != null
+        ? String(success.order_no)
+        : localNo != null
+          ? localOrderLabel(localNo)
+          : null;
+    const showOrderNo = vertical === 'cafe' && orderCaption != null;
 
     return (
       <div className="min-h-screen bg-white grid place-items-center p-6 font-sans">
@@ -581,8 +590,13 @@ export function RegisterPage() {
                 className="text-7xl font-bold mt-2 text-sq-text tabular-nums leading-none"
                 data-testid="order-no"
               >
-                {success.order_no}
+                {orderCaption}
               </p>
+              {localNo != null && (
+                <p className="text-xs text-sq-secondary mt-2" data-testid="order-no-local">
+                  Номер каси — сервер призначить свій після синхронізації
+                </p>
+              )}
               <p className="text-sm text-sq-secondary mt-3">Чек {success.receipt_number}</p>
             </>
           ) : (
