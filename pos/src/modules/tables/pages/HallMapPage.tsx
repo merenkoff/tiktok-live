@@ -15,22 +15,39 @@
 // same on a laptop and on a tablet. Tables may overlap — a sofa stands
 // against a wall — and nothing here tries to prevent it.
 //
-// Online only, and it says so rather than pretending: the bill lives on the
-// server, and К4j adds a read-only mirror so the map at least still draws
-// when the Wi-Fi blinks.
+// Writes are online only, and the screen says so rather than pretending: the
+// bill lives on the server (§4.10). Reads are not: К4j gives the till a
+// read-only mirror, so when the Wi-Fi blinks the waiter still sees which
+// tables are taken, for how long and for how much — with «станом на» over it,
+// because a map that might be minutes old must never pass for a live one.
 
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useOfflineStatus } from '@pos/platform';
+import { useAuthStore, useOfflineStatus, usePosShell } from '@pos/platform';
 import { TableTile } from '../components/TableTile';
 import { hallExtent, seatsOfHall, visibleHalls } from '../lib/hallMap';
 import type { TableSeat } from '../lib/hallMap';
 import { serverMessage, useHallMap } from '../lib/useHallMap';
 import * as tablesApi from '../lib/tablesApi';
 
+/** `20:41` on the device clock — what «станом на» reads. */
+function savedAtLabel(at: number): string {
+  const d = new Date(at);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 export function HallMapPage(): JSX.Element {
   const online = useOfflineStatus((s) => s.online);
-  const { halls, bills, now, loading, error, refresh } = useHallMap(online);
+  const shell = usePosShell();
+  const storeId = useAuthStore((s) => s.auth?.store.id ?? null);
+  const { halls, bills, now, loading, error, stale, savedAt, refresh } = useHallMap({
+    online,
+    // Only the till keeps a copy: the waiter's tablet is the web shell and has
+    // no offline runtime at all (§4.12), so a mirror written there could never
+    // be read back.
+    mirrored: shell === 'cashier',
+    storeId,
+  });
   const [hallId, setHallId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
@@ -46,6 +63,13 @@ export function HallMapPage(): JSX.Element {
 
   async function open(seat: TableSeat): Promise<void> {
     if (busy) return;
+    // Seating a table is a write, and a write needs the server — the mirror
+    // is a cache, not a queue (§4.10). Said here, before the request times
+    // out somewhere the waiter cannot see.
+    if (!online) {
+      setBanner('Потрібна мережа, щоб відкрити стіл');
+      return;
+    }
     setBusy(true);
     setBanner(null);
     try {
@@ -59,7 +83,9 @@ export function HallMapPage(): JSX.Element {
     }
   }
 
-  if (!online) {
+  // Offline with nothing remembered — the honest empty state. With a mirror
+  // the map draws below instead, marked as a memory.
+  if (!online && !stale && !loading) {
     return (
       <div className="p-4" data-testid="tables-offline">
         <div className="sq-card p-6 text-center">
@@ -92,6 +118,16 @@ export function HallMapPage(): JSX.Element {
             </button>
           ))}
         </div>
+      )}
+
+      {stale && (
+        <p
+          className="mx-3 mb-2 rounded-lg bg-amber-500/15 p-2 text-sm"
+          data-testid="tables-stale"
+        >
+          Немає звʼязку — зала з памʼяті каси
+          {savedAt == null ? '' : `, станом на ${savedAtLabel(savedAt)}`}
+        </p>
       )}
 
       {banner && (

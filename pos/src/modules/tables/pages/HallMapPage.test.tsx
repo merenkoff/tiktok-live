@@ -6,6 +6,7 @@
 // the table is doing, one tap seats it, and «Потрібна мережа» when there is
 // none.
 
+import 'fake-indexeddb/auto';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -82,11 +83,19 @@ vi.mock('react-router-dom', async () => {
 });
 
 const { HallMapPage } = await import('./HallMapPage');
-const { useOfflineStatus } = await import('@pos/platform');
+const { useOfflineStatus, useAuthStore } = await import('@pos/platform');
+const mirror = await import('../data/mirror');
+const { makeAuthResponse } = await import('../../../test/utils');
 
-beforeEach(() => {
+beforeEach(async () => {
   navigate.mockReset();
   useOfflineStatus.setState({ online: true });
+  useAuthStore.setState({
+    auth: makeAuthResponse({ store: { id: 7 } }),
+    isAuthenticated: true,
+    bootstrapped: true,
+  });
+  await mirror.clearMirror();
   bills = [
     {
       id: 90,
@@ -168,5 +177,50 @@ describe('HallMapPage', () => {
     });
     renderWithProviders(<HallMapPage />);
     expect(await screen.findByTestId('tables-empty')).toHaveTextContent('Зали ще не створені');
+  });
+
+  // ── К4j: дзеркало для читання ────────────────────────────────────────────
+
+  it('draws the room from the till’s memory when the Wi-Fi blinks', async () => {
+    // Online once, on the till, so the mirror has something in it…
+    const { unmount } = renderWithProviders(<HallMapPage />, { shell: 'cashier' });
+    await screen.findByTestId('table-tile-11');
+    await waitFor(async () => expect(await mirror.loadRoom(7)).not.toBeNull());
+    unmount();
+
+    // …then the network goes and the waiter still sees who is sitting where.
+    useOfflineStatus.setState({ online: false });
+    posRequest.mockRejectedValue(new Error('offline'));
+    renderWithProviders(<HallMapPage />, { shell: 'cashier' });
+    expect(await screen.findByTestId('tables-stale')).toHaveTextContent('з памʼяті каси');
+    const seated = await screen.findByTestId('table-tile-11');
+    expect(seated).toHaveTextContent('240');
+    expect(screen.queryByTestId('tables-offline')).toBeNull();
+  });
+
+  it('still refuses to seat a table without the network', async () => {
+    const { unmount } = renderWithProviders(<HallMapPage />, { shell: 'cashier' });
+    await screen.findByTestId('table-tile-12');
+    await waitFor(async () => expect(await mirror.loadRoom(7)).not.toBeNull());
+    unmount();
+
+    useOfflineStatus.setState({ online: false });
+    posRequest.mockClear();
+    renderWithProviders(<HallMapPage />, { shell: 'cashier' });
+    await userEvent.click(await screen.findByTestId('table-tile-12'));
+    // The mirror is a cache, not a queue: a seated table is a write.
+    expect(await screen.findByTestId('tables-banner')).toHaveTextContent('Потрібна мережа');
+    expect(posRequest).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('keeps no mirror on the waiter’s web tablet', async () => {
+    // The web shell has no offline runtime at all (§4.12), so a mirror written
+    // there could never be read back — and writing one would only mean a
+    // second, staler copy of the room on a device that cannot use it.
+    renderWithProviders(<HallMapPage />);
+    await screen.findByTestId('table-tile-11');
+    await waitFor(() => expect(posRequest).toHaveBeenCalledWith('get', '/halls', undefined));
+    expect(await mirror.loadRoom(7)).toBeNull();
   });
 });

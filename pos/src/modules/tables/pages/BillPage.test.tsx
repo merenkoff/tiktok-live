@@ -6,6 +6,7 @@
 // what is only typed, a dish that asks a question asks it, «На кухню» locks
 // the round, and a refusal arrives in the server's own words.
 
+import 'fake-indexeddb/auto';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -35,7 +36,9 @@ vi.mock('react-router-dom', async () => {
 });
 
 const { BillPage } = await import('./BillPage');
-const { useOfflineStatus } = await import('@pos/platform');
+const { useOfflineStatus, useAuthStore } = await import('@pos/platform');
+const mirror = await import('../data/mirror');
+const { makeAuthResponse } = await import('../../../test/utils');
 
 const line = (over: Partial<BillLine> = {}): BillLine => ({
   id: 1,
@@ -146,10 +149,16 @@ const MENU = [
   },
 ];
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.useRealTimers();
   navigate.mockReset();
   useOfflineStatus.setState({ online: true });
+  useAuthStore.setState({
+    auth: makeAuthResponse({ store: { id: 7 } }),
+    isAuthenticated: true,
+    bootstrapped: true,
+  });
+  await mirror.clearMirror();
   bill = {
     id: 90,
     bill_no: 12,
@@ -469,5 +478,44 @@ describe('BillPage', () => {
     // never held up by paper.
     await waitFor(() => expect(seen).toContain('post /bills/90/precheck'));
     expect(await screen.findByTestId('bill-print-status')).toHaveTextContent('не знайдено');
+  });
+
+  // ── К4j: дзеркало для читання ────────────────────────────────────────────
+
+  it('reads the bill out of the till’s memory when the network goes', async () => {
+    const { unmount } = renderWithProviders(<BillPage />, { route: '/tables/90', shell: 'cashier' });
+    await screen.findByTestId('bill-owed');
+    await waitFor(async () => expect(await mirror.loadBill(7, 90)).not.toBeNull());
+    unmount();
+
+    useOfflineStatus.setState({ online: false });
+    posRequest.mockRejectedValue(new Error('offline'));
+    renderWithProviders(<BillPage />, { route: '/tables/90', shell: 'cashier' });
+    // A guest asking «скільки з нас?» gets an answer even mid-blink.
+    expect(await screen.findByTestId('bill-stale')).toHaveTextContent('з памʼяті каси');
+    expect(screen.getByTestId('bill-owed')).toHaveTextContent('80');
+    expect(screen.queryByTestId('bill-offline')).toBeNull();
+    // And nothing on it can be changed: the mirror is a cache, not a queue.
+    expect(screen.getByTestId('bill-fire')).toBeDisabled();
+    expect(screen.getByTestId('bill-pay')).toBeDisabled();
+    expect(screen.getByTestId('bill-precheck')).toBeDisabled();
+    expect(screen.getByTestId('bill-add')).toBeDisabled();
+  });
+
+  it('says «Потрібна мережа» rather than queueing a write', async () => {
+    const { unmount } = renderWithProviders(<BillPage />, { route: '/tables/90', shell: 'cashier' });
+    await screen.findByTestId('bill-owed');
+    await waitFor(async () => expect(await mirror.loadBill(7, 90)).not.toBeNull());
+    unmount();
+
+    useOfflineStatus.setState({ online: false });
+    const { useBill } = await import('../lib/useBill');
+    expect(typeof useBill).toBe('function');
+    posRequest.mockClear();
+    renderWithProviders(<BillPage />, { route: '/tables/90', shell: 'cashier' });
+    await screen.findByTestId('bill-stale');
+    // Every write goes through `run`, and `run` refuses offline before the
+    // request is even built — a round fired into a mirror wakes no kitchen.
+    expect(posRequest).not.toHaveBeenCalled();
   });
 });

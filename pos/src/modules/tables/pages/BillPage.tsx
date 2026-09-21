@@ -27,6 +27,7 @@ import {
   formatUah,
   getMeta,
   printPrecheck,
+  useAuthStore,
   useOfflineStatus,
   usePosShell,
 } from '@pos/platform';
@@ -54,7 +55,14 @@ export function BillPage(): JSX.Element {
   const id = Number(billId);
   const online = useOfflineStatus((s) => s.online);
   const shell = usePosShell();
-  const { bill, loading, error, banner, busy, clearBanner, reload, run } = useBill(id, online);
+  const storeId = useAuthStore((s) => s.auth?.store.id ?? null);
+  const { bill, loading, error, banner, busy, stale, savedAt, clearBanner, reload, run } = useBill(
+    id,
+    // The till keeps a copy so a blink of the Wi-Fi does not take the bill off
+    // the screen mid-dinner; the waiter's web tablet has no offline runtime to
+    // read one back (§4.12).
+    { online, mirrored: shell === 'cashier', storeId }
+  );
   const [picking, setPicking] = useState(false);
   const [paying, setPaying] = useState(false);
   const [printStatus, setPrintStatus] = useState<string | null>(null);
@@ -63,7 +71,9 @@ export function BillPage(): JSX.Element {
   const totals = useMemo(() => (bill ? billTotals(bill) : null), [bill]);
   const owedLines = useMemo(() => (bill ? payableLines(bill) : []), [bill]);
 
-  if (!online) {
+  // Offline with nothing remembered. With a mirror the bill is drawn below
+  // instead — readable, marked as a memory, and with every write refused.
+  if (!online && !stale && !loading) {
     return (
       <div className="p-4" data-testid="bill-offline">
         <div className="sq-card p-6 text-center">
@@ -158,7 +168,7 @@ export function BillPage(): JSX.Element {
               type="button"
               className="sq-btn-tile"
               data-testid={`bill-less-${l.id}`}
-              disabled={busy}
+              disabled={busy || !online}
               onClick={() =>
                 void run(() =>
                   l.quantity > 1
@@ -173,7 +183,7 @@ export function BillPage(): JSX.Element {
               type="button"
               className="sq-btn-tile"
               data-testid={`bill-more-${l.id}`}
-              disabled={busy}
+              disabled={busy || !online}
               onClick={() => void run(() => tablesApi.setQuantity(bill.id, l.id, l.quantity + 1))}
             >
               +
@@ -205,6 +215,18 @@ export function BillPage(): JSX.Element {
           До зали
         </button>
       </header>
+
+      {stale && (
+        <p className="m-3 rounded-lg bg-amber-500/15 p-2 text-sm" data-testid="bill-stale">
+          Немає звʼязку — рахунок з памʼяті каси
+          {savedAt == null
+            ? ''
+            : `, станом на ${String(new Date(savedAt).getHours()).padStart(2, '0')}:${String(
+                new Date(savedAt).getMinutes()
+              ).padStart(2, '0')}`}
+          . Змінити його можна лише онлайн.
+        </p>
+      )}
 
       {banner && (
         <p className="m-3 rounded-lg bg-rose-500/15 p-2 text-sm" data-testid="bill-banner">
@@ -254,7 +276,7 @@ export function BillPage(): JSX.Element {
               type="button"
               className="sq-link"
               data-testid="bill-add"
-              disabled={busy}
+              disabled={busy || !online}
               onClick={() => setPicking(true)}
             >
               + Додати
@@ -289,7 +311,7 @@ export function BillPage(): JSX.Element {
             type="button"
             className="sq-btn-primary flex-1"
             data-testid="bill-fire"
-            disabled={busy || bill.draft.length === 0}
+            disabled={busy || !online || bill.draft.length === 0}
             onClick={() => void run(() => tablesApi.fireRound(bill.id, newUuid()))}
           >
             На кухню
@@ -300,7 +322,7 @@ export function BillPage(): JSX.Element {
             data-testid="bill-pay"
             // The draft is the server's own rule, said here before it has to
             // refuse: a plate the kitchen does not know about is not owed for.
-            disabled={busy || owedLines.length === 0 || bill.draft.length > 0}
+            disabled={busy || !online || owedLines.length === 0 || bill.draft.length > 0}
             onClick={() => setPaying(true)}
           >
             Оплатити
@@ -310,7 +332,7 @@ export function BillPage(): JSX.Element {
           type="button"
           className="sq-link mt-2"
           data-testid="bill-precheck"
-          disabled={busy || owedLines.length === 0}
+          disabled={busy || !online || owedLines.length === 0}
           onClick={() => void precheck()}
         >
           {bill.precheck_printed_at ? 'Передчек надруковано · ще раз' : 'Передчек'}

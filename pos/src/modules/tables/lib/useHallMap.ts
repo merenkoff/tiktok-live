@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as tablesApi from './tablesApi';
+import * as mirror from '../data/mirror';
 import type { OpenBillSummary, PosHall } from './types';
 
 export const POLL_MS = 10000;
@@ -26,7 +27,24 @@ export interface HallMapData {
   loading: boolean;
   /** The room could not be read at all (network, host too old, no room yet). */
   error: string | null;
+  /** This room came out of the till's mirror, not off the server (К4j). */
+  stale: boolean;
+  /** When the mirror was written, for the «станом на» line. */
+  savedAt: number | null;
   refresh: () => Promise<void>;
+}
+
+export interface HallMapOptions {
+  /** Read the server. False while the till is out of range. */
+  online: boolean;
+  /**
+   * Keep a copy on this device. Only the desktop till: the waiter's tablet is
+   * the web shell, which has no offline runtime at all (§4.12), and writing a
+   * mirror there would be a cache nothing could ever read.
+   */
+  mirrored?: boolean;
+  /** Whose room this is — a till that changed store must not show the old one. */
+  storeId?: number | null;
 }
 
 export function serverMessage(error: unknown, fallback: string): string {
@@ -35,12 +53,14 @@ export function serverMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
-export function useHallMap(enabled: boolean): HallMapData {
+export function useHallMap({ online, mirrored = false, storeId = null }: HallMapOptions): HallMapData {
   const [halls, setHalls] = useState<PosHall[]>([]);
   const [bills, setBills] = useState<OpenBillSummary[]>([]);
   const [now, setNow] = useState(() => new Date().toISOString());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -50,6 +70,20 @@ export function useHallMap(enabled: boolean): HallMapData {
     };
   }, []);
 
+  /** Draw whatever the till remembers, and say that it is a memory. */
+  const fromMirror = useCallback(async () => {
+    if (!mirrored || storeId == null) return false;
+    const row = await mirror.loadRoom(storeId);
+    if (!row || !mountedRef.current) return false;
+    setHalls(row.halls);
+    setBills(row.bills);
+    setNow(row.now);
+    setStale(true);
+    setSavedAt(row.savedAt);
+    setLoading(false);
+    return true;
+  }, [mirrored, storeId]);
+
   const refresh = useCallback(async () => {
     try {
       const [room, open] = await Promise.all([tablesApi.listHalls(), tablesApi.listOpenBills()]);
@@ -58,15 +92,41 @@ export function useHallMap(enabled: boolean): HallMapData {
       setBills(open.bills);
       setNow(new Date().toISOString());
       setError(null);
+      setStale(false);
+      setSavedAt(null);
+      if (mirrored && storeId != null) {
+        // Written after the screen has the answer, never before: the mirror is
+        // a convenience and must not sit between the waiter and the server.
+        void mirror.saveRoom(storeId, {
+          halls: room.halls,
+          bills: open.bills,
+          now: new Date().toISOString(),
+        });
+        void mirror.pruneBills(storeId, open.bills.map((b) => b.id));
+      }
     } catch (err) {
-      if (mountedRef.current) setError(serverMessage(err, 'Не вдалося прочитати зал'));
+      if (!mountedRef.current) return;
+      // A read that failed falls back to the mirror rather than to an empty
+      // room: «Wi-Fi моргнув» must not look like «столів немає».
+      const drawn = await fromMirror();
+      if (mountedRef.current && !drawn) setError(serverMessage(err, 'Не вдалося прочитати зал'));
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, []);
+  }, [fromMirror, mirrored, storeId]);
+
+  // Offline: the mirror is all there is, and it is read once rather than
+  // polled — nothing on this device is going to change it.
+  useEffect(() => {
+    if (online) return;
+    void (async () => {
+      const drawn = await fromMirror();
+      if (mountedRef.current && !drawn) setLoading(false);
+    })();
+  }, [online, fromMirror]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!online) return;
     void refresh();
     const id = setInterval(() => {
       // A tab nobody is looking at polls nothing: the waiter's tablet sleeps
@@ -80,7 +140,7 @@ export function useHallMap(enabled: boolean): HallMapData {
       void refresh();
     }, POLL_MS);
     return () => clearInterval(id);
-  }, [enabled, refresh]);
+  }, [online, refresh]);
 
-  return { halls, bills, now, loading, error, refresh };
+  return { halls, bills, now, loading, error, stale, savedAt, refresh };
 }
