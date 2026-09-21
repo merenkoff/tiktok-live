@@ -42,6 +42,8 @@ export default defineConfig({
         'src/modules/vertical-cafe/kitchen/lib/kitchen.ts',
         'src/modules/vertical-cafe/lib/stopList.ts',
         'src/modules/tables/lib/hallMap.ts',
+        'src/modules/tables/lib/bill.ts',
+        'src/modules/tables/lib/menu.ts',
         'src/lib/bouquet.ts',
         'src/lib/kitchenPrinters.ts',
         'src/lib/kitchenTicket.ts',

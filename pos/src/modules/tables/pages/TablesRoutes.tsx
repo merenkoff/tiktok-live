@@ -2,17 +2,18 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-// The module's routes under the `/tables/*` splat the manifest claims.
-// К4e ships the map; the bill screen (`/tables/:billId`) is К4f and lands
-// here as a second `<Route>`.
+// The module's routes under the `/tables/*` splat the manifest claims: the
+// hall map, and one bill (К4f).
 
 import { Route, Routes } from 'react-router-dom';
+import { BillPage } from './BillPage';
 import { HallMapPage } from './HallMapPage';
 
 export function TablesRoutes(): JSX.Element {
   return (
     <Routes>
       <Route index element={<HallMapPage />} />
+      <Route path=":billId" element={<BillPage />} />
     </Routes>
   );
 }

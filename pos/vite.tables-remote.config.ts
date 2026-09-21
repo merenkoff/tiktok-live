@@ -21,11 +21,23 @@ const dir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
-  css: moduleCss('tables'),
+  // The host cashier component this bundle renders inline — without its
+  // classes in the glob too, `style.css` would build fine (signed, present,
+  // deterministic path) and every chip of the modifier sheet would come out
+  // unstyled at runtime. See scripts/module-tailwind.mjs for the lesson.
+  css: moduleCss('tables', ['./src/components/cashier/ModifierSheet.tsx']),
   define: {
     'process.env.NODE_ENV': '"production"',
     // This remote's own build version — see roadmap #6.
     __POS_APP_VERSION__: JSON.stringify(posAppVersion()),
+  },
+  resolve: {
+    alias: {
+      // Bundled locally, like every other remote: `@pos/platform/ui` re-exports
+      // components, not singletons. The stores they read come from the shared,
+      // externalised `@pos/platform` below.
+      '@pos/platform/ui': path.resolve(dir, 'src/platform/ui.ts'),
+    },
   },
   build: {
     outDir: 'dist-remotes/tables',

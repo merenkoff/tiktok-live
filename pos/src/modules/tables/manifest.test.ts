@@ -58,5 +58,11 @@ describe('tables manifest', () => {
     expect(REQUIRED_HOST_API).toContain('api.posRequest');
     expect(REQUIRED_HOST_API).toContain('useOfflineStatus');
     expect(REQUIRED_HOST_API).toContain('formatUah');
+    // К4f: the menu through the shell-aware reader, and the café's tap rule
+    // borrowed whole. Every one of them shipped with platform 13.
+    expect(REQUIRED_HOST_API).toContain('cashierApi.getCatalog');
+    expect(REQUIRED_HOST_API).toContain('needsModifierSheet');
+    expect(REQUIRED_HOST_API).toContain('defaultModifierIds');
+    expect(REQUIRED_HOST_API).toContain('groupsOf');
   });
 });
