@@ -21,6 +21,7 @@ import { registerQrRoutes } from './routes/qr.routes.js';
 import { registerTelemetryRoutes } from './routes/telemetry.routes.js';
 import { registerLiveRoutes } from './routes/live.routes.js';
 import { registerKitchenRoutes } from './routes/kitchen.routes.js';
+import { registerTablesRoutes } from './routes/tables.routes.js';
 import { registerFiscalRoutes } from './routes/fiscal.routes.js';
 import { registerSuperRoutes } from './routes/super.routes.js';
 
@@ -56,6 +57,12 @@ export const POS_ROUTE_GROUPS: PosRouteGroup[] = [
   // module that draws the kitchen board opts in through `module_remotes`.
   // The gate is `ensurePosAuth` plus a 409 for a store with no kitchen.
   { moduleId: null, register: registerKitchenRoutes },
+  // Core for the same reason again: the `tables` module that draws the hall
+  // map opts in through `module_remotes` — its presence IS the «restaurant»
+  // switch, which is why there is no `pos_stores.service_mode` column
+  // (TechDocs/POS_TABLES.md §4.11). Reading the map is `ensurePosAuth`,
+  // changing the furniture is `ensurePosOwner`.
+  { moduleId: null, register: registerTablesRoutes },
   // Core for the same reason as `registerLiveRoutes` above: the
   // `fiscal-<provider>` UI module opts in through `module_remotes`, not
   // `enabled_modules`. The gate is `ensurePosOwner`.

@@ -236,6 +236,16 @@ export async function dropTestStore(storeId: number | undefined): Promise<void> 
     'DELETE FROM pos_sale_item_components WHERE store_id = $1',
     'DELETE FROM pos_sale_items WHERE sale_id IN (SELECT id FROM pos_sales WHERE store_id = $1)',
     'DELETE FROM pos_sales WHERE store_id = $1',
+    // Bills before variants and tables (migration 052): a bill line points at
+    // a variant with NO ACTION and a bill points at its table with RESTRICT,
+    // and Postgres checks both mid-cascade — a bare DELETE FROM pos_stores
+    // fails on a store that ever seated anyone.
+    'DELETE FROM pos_bill_item_components WHERE store_id = $1',
+    'DELETE FROM pos_bill_items WHERE store_id = $1',
+    'DELETE FROM pos_bill_rounds WHERE store_id = $1',
+    'DELETE FROM pos_bills WHERE store_id = $1',
+    'DELETE FROM pos_tables WHERE store_id = $1',
+    'DELETE FROM pos_halls WHERE store_id = $1',
     'DELETE FROM pos_product_components WHERE store_id = $1',
     'DELETE FROM pos_stock_document_lines WHERE store_id = $1',
     'DELETE FROM pos_stock_documents WHERE store_id = $1',

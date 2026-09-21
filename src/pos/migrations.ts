@@ -85,6 +85,7 @@ export const POS_MIGRATIONS = [
   '049_pos_kitchen_prep.sql',
   '050_pos_stop_list_station.sql',
   '051_pos_parked_preorder_modifiers.sql',
+  '052_pos_tables_bills.sql',
 ] as const;
 
 export function readMigration(file: string): string {
