@@ -571,20 +571,44 @@ function mergeLeaves(a: ComponentInput[], b: ComponentInput[]): ComponentInput[]
 }
 
 /**
- * Write off stock for one completed sale line.
+ * Where a line's stock snapshot lives.
+ *
+ * A sale line writes it to `pos_sale_item_components`; a bill line fired to
+ * the kitchen (К4c) writes the very same rows to `pos_bill_item_components`,
+ * because a round moves stock at fire time and payment then copies the
+ * snapshot across without moving anything again. Two tables, one arithmetic —
+ * and a second 60-line copy of it would have drifted at the first edit.
+ *
+ * The table and column below are interpolated into SQL. They come from this
+ * closed record keyed by a union type and never from a caller's string, so
+ * there is nothing here for a value to escape into.
+ */
+export type LineStockTarget = 'sale' | 'bill';
+
+const LINE_SNAPSHOT: Record<LineStockTarget, { table: string; fk: string }> = {
+  sale: { table: 'pos_sale_item_components', fk: 'sale_item_id' },
+  bill: { table: 'pos_bill_item_components', fk: 'bill_item_id' },
+};
+
+/**
+ * Write off stock for one line and snapshot what it actually took.
  *
  * An own row (every simple product, a composite made in advance) moves
- * exactly as before. Leaves are snapshotted onto the sale line and moved
- * instead — same reason and reference as a plain sale, so the movement report
- * still totals stems sold whether they left loose or in a bouquet. A line that
+ * exactly as before. Leaves are snapshotted onto the line and moved instead —
+ * same reason and reference as a plain sale, so the movement report still
+ * totals stems sold whether they left loose or in a bouquet. A line that
  * moves both gets a snapshot row for itself too (see `StockDemand`).
  */
-export async function consumeStockForSaleItem(
+export async function consumeStockForLine(
   client: DbClient,
   params: {
     storeId: number;
-    saleId: number;
-    saleItemId: number;
+    target: LineStockTarget;
+    /** `pos_sale_items.id` or `pos_bill_items.id`, per `target`. */
+    lineId: number;
+    /** What the movement points at: a sale, or the round that fired the line. */
+    referenceType: string;
+    referenceId: number;
     variantId: number;
     quantity: number;
     staffId: number;
@@ -598,6 +622,7 @@ export async function consumeStockForSaleItem(
     extra?: ComponentInput[];
   }
 ): Promise<void> {
+  const snapshotTarget = LINE_SNAPSHOT[params.target];
   const demand = await resolveStockDemand(client, {
     storeId: params.storeId,
     variantId: params.variantId,
@@ -612,8 +637,8 @@ export async function consumeStockForSaleItem(
       delta: -params.quantity,
       reason: 'sale',
       staffId: params.staffId,
-      referenceType: 'sale',
-      referenceId: params.saleId,
+      referenceType: params.referenceType,
+      referenceId: params.referenceId,
     });
   }
   if (demand.leaves.length === 0) return;
@@ -627,10 +652,10 @@ export async function consumeStockForSaleItem(
     : demand.leaves;
   for (const [index, row] of snapshot.entries()) {
     await client.query(
-      `INSERT INTO pos_sale_item_components
-         (store_id, sale_item_id, component_variant_id, quantity_per_unit, sort_order)
+      `INSERT INTO ${snapshotTarget.table}
+         (store_id, ${snapshotTarget.fk}, component_variant_id, quantity_per_unit, sort_order)
        VALUES ($1, $2, $3, $4, $5)`,
-      [params.storeId, params.saleItemId, row.component_variant_id, row.quantity, index]
+      [params.storeId, params.lineId, row.component_variant_id, row.quantity, index]
     );
   }
   for (const row of demand.leaves) {
@@ -640,11 +665,34 @@ export async function consumeStockForSaleItem(
       delta: -row.quantity * params.quantity,
       reason: 'sale',
       staffId: params.staffId,
-      referenceType: 'sale',
-      referenceId: params.saleId,
+      referenceType: params.referenceType,
+      referenceId: params.referenceId,
       note: `Складник: варіант ${params.variantId}`,
     });
   }
+}
+
+/** `consumeStockForLine` for a sale line — the shape checkout has always called. */
+export function consumeStockForSaleItem(
+  client: DbClient,
+  params: {
+    storeId: number;
+    saleId: number;
+    saleItemId: number;
+    variantId: number;
+    quantity: number;
+    staffId: number;
+    components?: ComponentInput[];
+    extra?: ComponentInput[];
+  }
+): Promise<void> {
+  return consumeStockForLine(client, {
+    ...params,
+    target: 'sale',
+    lineId: params.saleItemId,
+    referenceType: 'sale',
+    referenceId: params.saleId,
+  });
 }
 
 /**
@@ -656,11 +704,12 @@ export async function consumeStockForSaleItem(
  * the sale and the refund therefore cannot return stems the customer never
  * got.
  */
-export async function returnStockForSaleItem(
+export async function returnStockForLine(
   client: DbClient,
   params: {
     storeId: number;
-    saleItemId: number;
+    target: LineStockTarget;
+    lineId: number;
     variantId: number;
     quantity: number;
     reason: Extract<StockReason, 'void' | 'refund'>;
@@ -669,12 +718,13 @@ export async function returnStockForSaleItem(
     referenceId: number;
   }
 ): Promise<void> {
+  const snapshotTarget = LINE_SNAPSHOT[params.target];
   const snapshot = await client.query(
     `SELECT component_variant_id, quantity_per_unit
-     FROM pos_sale_item_components
-     WHERE store_id = $1 AND sale_item_id = $2
+     FROM ${snapshotTarget.table}
+     WHERE store_id = $1 AND ${snapshotTarget.fk} = $2
      ORDER BY sort_order ASC, id ASC`,
-    [params.storeId, params.saleItemId]
+    [params.storeId, params.lineId]
   );
 
   if (snapshot.rows.length === 0) {
@@ -702,6 +752,23 @@ export async function returnStockForSaleItem(
       note: `Складник: варіант ${params.variantId}`,
     });
   }
+}
+
+/** `returnStockForLine` for a sale line — the shape void and refund call. */
+export function returnStockForSaleItem(
+  client: DbClient,
+  params: {
+    storeId: number;
+    saleItemId: number;
+    variantId: number;
+    quantity: number;
+    reason: Extract<StockReason, 'void' | 'refund'>;
+    staffId: number;
+    referenceType: string;
+    referenceId: number;
+  }
+): Promise<void> {
+  return returnStockForLine(client, { ...params, target: 'sale', lineId: params.saleItemId });
 }
 
 /**

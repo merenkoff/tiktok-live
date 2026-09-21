@@ -30,6 +30,7 @@
 import type { FastifyInstance } from 'fastify';
 import { ensurePosAuth, ensurePosOwner } from '../core/auth.js';
 import * as bills from '../bills.service.js';
+import * as rounds from '../rounds.service.js';
 import { CompositeError } from '../composites.service.js';
 import { ModifierError } from '../modifiers.service.js';
 import * as tables from '../tables.service.js';
@@ -318,6 +319,47 @@ export function registerTablesRoutes(fastify: FastifyInstance): void {
     if (id == null) return reply.code(404).send({ error: 'Рахунок не знайдено' });
     try {
       return await bills.cancelBill(auth.storeId, auth.staffId, id);
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  // «На кухню»: everything in the draft becomes one round — price locked,
+  // stock moved, ticket on the pass (К4c). Idempotent on `client_uuid`,
+  // because a second tap on a bad connection must not cook dinner twice.
+  fastify.post('/bills/:id/fire', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const id = idOf((request.params as { id: string }).id);
+    if (id == null) return reply.code(404).send({ error: 'Рахунок не знайдено' });
+    try {
+      return await rounds.fireRound({
+        storeId: auth.storeId,
+        staffId: auth.staffId,
+        billId: id,
+        clientUuid: (request.body as { client_uuid?: unknown })?.client_uuid,
+      });
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  fastify.post('/bills/:id/rounds/:roundId/cancel', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const params = request.params as { id: string; roundId: string };
+    const id = idOf(params.id);
+    const roundId = idOf(params.roundId);
+    if (id == null || roundId == null) {
+      return reply.code(404).send({ error: 'Раунд не знайдено' });
+    }
+    try {
+      return await rounds.cancelRound({
+        storeId: auth.storeId,
+        staffId: auth.staffId,
+        billId: id,
+        roundId,
+      });
     } catch (error) {
       return sendError(reply, error);
     }
