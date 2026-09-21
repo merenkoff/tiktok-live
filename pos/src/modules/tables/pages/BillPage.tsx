@@ -351,6 +351,7 @@ export function BillPage(): JSX.Element {
       {picking && (
         <DishPicker
           busy={busy}
+          draftCount={bill.draft.length}
           onClose={() => setPicking(false)}
           onPick={({ item, modifiers, note }) => {
             void run(() =>
