@@ -20,6 +20,7 @@ import { pool } from '../db.js';
 import { readStoreClock } from './core/storeClock.js';
 import type { TagStation } from './tags.service.js';
 import type { PrepStatus } from './types.js';
+import { parseLineModifierSnapshot } from './modifiers.service.js';
 
 export class KitchenError extends Error {
   constructor(message: string) {
@@ -56,7 +57,21 @@ export interface KitchenOrderItem {
 
 export interface KitchenOrder {
   id: number;
+  /**
+   * Which of the two things on this board it is (К4c). A counter sale is
+   * `'sale'` and carries a daily number; a round of an open bill is
+   * `'round'` and carries a table and a sequence instead. Additive — a host
+   * that predates tables reads the same fields it always did, so
+   * `POS_API_VERSION` stays at 2.
+   */
+  kind: 'sale' | 'round';
+  /** What the card says at the top: «№ 7», or «Стіл 5 · раунд 2». */
+  title: string;
+  /** Round only; null for a counter sale. */
+  table_name: string | null;
+  round_seq: number | null;
   order_no: number | null;
+  /** A round has no receipt yet — empty string there, never a made-up number. */
   receipt_number: string;
   prep_status: 'new' | 'ready';
   created_at: string;
@@ -76,17 +91,40 @@ export interface PrepStatusRow {
 
 const NO_KITCHEN = 'Цей магазин не має кухні';
 
-/** The one step each tap is allowed to take. Anything else is a disagreement. */
-const ALLOWED_FROM: Record<'ready' | 'served', PrepStatus[]> = {
+/**
+ * The one step each tap is allowed to take. Anything else is a disagreement.
+ *
+ * Exported because a round of an open bill (К4c) takes exactly the same two
+ * taps as a counter sale. The guarded UPDATE differs — another table, and
+ * `cancelled_at IS NULL` where a sale says `status <> 'voided'` — but the
+ * steps and the words must not.
+ */
+export const ALLOWED_FROM: Record<'ready' | 'served', PrepStatus[]> = {
   ready: ['new'],
   served: ['ready'],
 };
+
+/**
+ * Where a line is made, from its product's tags — the same subquery for a
+ * sale line and a bill line, both of which name their variant as `i.variant_id`.
+ */
+const STATIONS_SQL = `(SELECT array_agg(DISTINCT t.station ORDER BY t.station)
+                         FROM pos_variants v
+                         JOIN pos_product_tags pt ON pt.product_id = v.product_id
+                         JOIN pos_tags t ON t.id = pt.tag_id
+                        WHERE v.id = i.variant_id AND t.station IS NOT NULL)`;
+
+function stationsOf(value: unknown): TagStation[] {
+  return Array.isArray(value)
+    ? (value as unknown[]).filter((x): x is TagStation => x === 'kitchen' || x === 'bar')
+    : [];
+}
 
 function isoOrNull(value: unknown): string | null {
   return value ? new Date(value as string).toISOString() : null;
 }
 
-function rowOf(row: Record<string, unknown>): PrepStatusRow {
+export function prepRowOf(row: Record<string, unknown>): PrepStatusRow {
   const raw = row.prep_status;
   return {
     id: Number(row.id),
@@ -143,11 +181,7 @@ export async function listOpenOrders(
 
     const itemRows = await pool.query(
       `SELECT i.id, i.sale_id, i.product_name, i.variant_label, i.quantity, i.note,
-              (SELECT array_agg(DISTINCT t.station ORDER BY t.station)
-               FROM pos_variants v
-               JOIN pos_product_tags pt ON pt.product_id = v.product_id
-               JOIN pos_tags t ON t.id = pt.tag_id
-               WHERE v.id = i.variant_id AND t.station IS NOT NULL) AS stations
+              ${STATIONS_SQL} AS stations
        FROM pos_sale_items i
        WHERE i.sale_id = ANY($1::bigint[])
        ORDER BY i.sale_id, i.id`,
@@ -163,29 +197,108 @@ export async function listOpenOrders(
         quantity: Number(row.quantity),
         modifiers: modifiersByItem.get(Number(row.id)) ?? [],
         note: typeof row.note === 'string' ? row.note : '',
-        stations: Array.isArray(row.stations)
-          ? (row.stations as unknown[]).filter(
-              (s): s is TagStation => s === 'kitchen' || s === 'bar'
-            )
-          : [],
+        stations: stationsOf(row.stations),
       });
       itemsBySale.set(saleId, list);
     }
   }
 
-  const orders: KitchenOrder[] = heads.rows.map((row) => ({
+  const orders: KitchenOrder[] = heads.rows.map((row) => {
+    const orderNo = row.order_no == null ? null : Number(row.order_no);
+    return {
+      id: Number(row.id),
+      kind: 'sale' as const,
+      title: orderNo == null ? `Чек ${String(row.receipt_number)}` : `№ ${orderNo}`,
+      table_name: null,
+      round_seq: null,
+      order_no: orderNo,
+      receipt_number: String(row.receipt_number),
+      prep_status: row.prep_status === 'ready' ? ('ready' as const) : ('new' as const),
+      created_at: new Date(row.created_at as string).toISOString(),
+      ready_at: isoOrNull(row.ready_at),
+      staff_name: String(row.staff_name ?? ''),
+      note: typeof row.note === 'string' && row.note ? row.note : null,
+      items: itemsBySale.get(Number(row.id)) ?? [],
+    };
+  });
+
+  orders.push(...(await openRounds(storeId)));
+  // One board, two sources, one order: oldest first, as the kitchen works.
+  orders.sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id);
+
+  return { orders, now: new Date().toISOString() };
+}
+
+/**
+ * Rounds of open bills, for the same board (К4c, TechDocs/POS_TABLES.md §11).
+ *
+ * Deliberately WITHOUT the day window the sales query uses: a bill opened
+ * before midnight is still being eaten after it, and dropping its round off
+ * the board at 00:00 would hide food that is on the pass. A cancelled round
+ * is out — that is the kitchen's «скасувати», exactly as a voided sale is.
+ */
+async function openRounds(storeId: number): Promise<KitchenOrder[]> {
+  const heads = await pool.query(
+    `SELECT r.id, r.seq, r.prep_status, r.fired_at, r.ready_at,
+            b.note, t.name AS table_name, st.display_name AS staff_name
+     FROM pos_bill_rounds r
+     JOIN pos_bills b ON b.id = r.bill_id
+     JOIN pos_tables t ON t.id = b.table_id
+     JOIN pos_staff st ON st.id = r.fired_by
+     WHERE r.store_id = $1
+       AND r.prep_status IN ('new', 'ready')
+       AND r.cancelled_at IS NULL
+       AND b.status = 'open'
+     ORDER BY r.fired_at ASC, r.id ASC`,
+    [storeId]
+  );
+  if (heads.rows.length === 0) return [];
+
+  const roundIds = heads.rows.map((row) => Number(row.id));
+  const itemRows = await pool.query(
+    `SELECT i.id, i.round_id, i.product_name, i.variant_label, i.quantity, i.note,
+            i.modifiers, ${STATIONS_SQL} AS stations
+     FROM pos_bill_items i
+     WHERE i.round_id = ANY($1::bigint[])
+     ORDER BY i.round_id, i.sort_order, i.id`,
+    [roundIds]
+  );
+  const itemsByRound = new Map<number, KitchenOrderItem[]>();
+  for (const row of itemRows.rows) {
+    const roundId = Number(row.round_id);
+    const list = itemsByRound.get(roundId) ?? [];
+    list.push({
+      id: Number(row.id),
+      product_name: String(row.product_name ?? ''),
+      variant_label: String(row.variant_label ?? ''),
+      quantity: Number(row.quantity),
+      // The answers live on the line as a snapshot, not in a join table: a
+      // bill line is written once and read back exactly as it was fired.
+      modifiers: parseLineModifierSnapshot(row.modifiers).map((m) => ({
+        group_name: m.group_name,
+        name: m.name,
+      })),
+      note: typeof row.note === 'string' ? row.note : '',
+      stations: stationsOf(row.stations),
+    });
+    itemsByRound.set(roundId, list);
+  }
+
+  return heads.rows.map((row) => ({
     id: Number(row.id),
-    order_no: row.order_no == null ? null : Number(row.order_no),
-    receipt_number: String(row.receipt_number),
-    prep_status: row.prep_status === 'ready' ? 'ready' : 'new',
-    created_at: new Date(row.created_at as string).toISOString(),
+    kind: 'round' as const,
+    title: `Стіл ${String(row.table_name)} · раунд ${Number(row.seq)}`,
+    table_name: String(row.table_name),
+    round_seq: Number(row.seq),
+    order_no: null,
+    receipt_number: '',
+    prep_status: row.prep_status === 'ready' ? ('ready' as const) : ('new' as const),
+    created_at: new Date(row.fired_at as string).toISOString(),
     ready_at: isoOrNull(row.ready_at),
     staff_name: String(row.staff_name ?? ''),
     note: typeof row.note === 'string' && row.note ? row.note : null,
-    items: itemsBySale.get(Number(row.id)) ?? [],
+    items: itemsByRound.get(Number(row.id)) ?? [],
   }));
-
-  return { orders, now: new Date().toISOString() };
 }
 
 /**
@@ -214,7 +327,7 @@ export async function setPrepStatus(params: {
      RETURNING id, prep_status, ready_at, served_at`,
     [params.saleId, params.storeId, params.status, ALLOWED_FROM[params.status]]
   );
-  if (updated.rows.length > 0) return rowOf(updated.rows[0]);
+  if (updated.rows.length > 0) return prepRowOf(updated.rows[0]);
 
   const current = await pool.query(
     `SELECT id, status, prep_status, ready_at, served_at
@@ -222,10 +335,35 @@ export async function setPrepStatus(params: {
     [params.saleId, params.storeId]
   );
   const row = current.rows[0];
-  if (!row) throw new KitchenNotFound('Замовлення не знайдено');
-  if (row.status === 'voided') throw new KitchenError('Чек скасовано');
-  if (row.prep_status === params.status) return rowOf(row);
-  if (params.status === 'served' && row.prep_status === 'new') {
+  return explainPrepRefusal({
+    row,
+    wanted: params.status,
+    gone: row?.status === 'voided',
+    notFoundMessage: 'Замовлення не знайдено',
+    goneMessage: 'Чек скасовано',
+  });
+}
+
+/**
+ * Why a guarded prep UPDATE matched nothing — shared by a sale and a round.
+ *
+ * Returns the row for a re-tap of the state it is already in (200: the state
+ * the caller wanted is the state there is), and throws for everything else.
+ * Only the two nouns differ between the callers — «Чек скасовано» against
+ * «Раунд скасовано» — because everything else the kitchen reads must be word
+ * for word the same whatever it is looking at.
+ */
+export function explainPrepRefusal(params: {
+  row: Record<string, unknown> | undefined;
+  wanted: 'ready' | 'served';
+  gone: boolean;
+  notFoundMessage: string;
+  goneMessage: string;
+}): PrepStatusRow {
+  if (!params.row) throw new KitchenNotFound(params.notFoundMessage);
+  if (params.gone) throw new KitchenError(params.goneMessage);
+  if (params.row.prep_status === params.wanted) return prepRowOf(params.row);
+  if (params.wanted === 'served' && params.row.prep_status === 'new') {
     throw new KitchenError('Спершу натисніть „Готово“');
   }
   throw new KitchenError('Замовлення вже видано');

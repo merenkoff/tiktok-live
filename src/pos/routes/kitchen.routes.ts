@@ -20,6 +20,7 @@
 import type { FastifyInstance } from 'fastify';
 import { ensurePosAuth } from '../core/auth.js';
 import * as kitchen from '../kitchen.service.js';
+import * as rounds from '../rounds.service.js';
 import { errorMessage } from './_shared.js';
 
 export function registerKitchenRoutes(fastify: FastifyInstance): void {
@@ -56,6 +57,38 @@ export function registerKitchenRoutes(fastify: FastifyInstance): void {
         storeId: auth.storeId,
         productId: id,
         stopListed: body.stop_listed,
+      });
+    } catch (error) {
+      if (error instanceof kitchen.KitchenNotFound) {
+        return reply.code(404).send({ error: errorMessage(error) });
+      }
+      if (error instanceof kitchen.KitchenError) {
+        return reply.code(409).send({ error: errorMessage(error) });
+      }
+      throw error;
+    }
+  });
+
+  // The same tap, for a round of an open bill (К4c). A separate path rather
+  // than a `kind` on the sale one: two different rows, two different guarded
+  // UPDATEs, and a board that mixes them up would mark the wrong table served.
+  fastify.patch('/kitchen/rounds/:id/prep', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { prep_status?: unknown };
+    if (body.prep_status !== 'ready' && body.prep_status !== 'served') {
+      return reply.code(400).send({ error: 'prep_status має бути ready або served' });
+    }
+    const roundId = Number(id);
+    if (!Number.isInteger(roundId) || roundId <= 0) {
+      return reply.code(404).send({ error: 'Раунд не знайдено' });
+    }
+    try {
+      return await rounds.setRoundPrep({
+        storeId: auth.storeId,
+        roundId,
+        status: body.prep_status,
       });
     } catch (error) {
       if (error instanceof kitchen.KitchenNotFound) {
