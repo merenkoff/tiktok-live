@@ -348,14 +348,41 @@ describe('applyModuleRemotes — online-only module placeholder', () => {
 
 describe('injectModuleStyle', () => {
   afterEach(() => {
-    document.head.querySelectorAll('style[data-module-remote]').forEach((el) => el.remove());
+    document.head
+      .querySelectorAll('style[data-module-remote], link[rel="stylesheet"], style[data-host]')
+      .forEach((el) => el.remove());
   });
 
-  it('appends one <style data-module-remote> with the verified CSS', () => {
+  it('adds one <style data-module-remote> with the verified CSS', () => {
     injectModuleStyle('stock', '.text-\\[\\#006AFF\\]{color:#006aff}');
     const els = document.head.querySelectorAll('style[data-module-remote="stock"]');
     expect(els).toHaveLength(1);
     expect(els[0].textContent).toContain('#006aff');
+  });
+
+  it("puts the module's sheet before the host's, so the host keeps the last word on its own elements", () => {
+    const host = document.createElement('link');
+    host.rel = 'stylesheet';
+    host.href = '/assets/index.css';
+    document.head.appendChild(host);
+
+    injectModuleStyle('stock', '.hidden{display:none}');
+    injectModuleStyle('returns', '.flex{display:flex}');
+
+    const order = Array.from(document.head.children)
+      .filter((el) => el === host || (el as HTMLElement).dataset.moduleRemote)
+      .map((el) => (el as HTMLElement).dataset.moduleRemote ?? 'host');
+    expect(order).toEqual(['stock', 'returns', 'host']);
+  });
+
+  it("goes before a dev-server <style> as well, never before another module's sheet", () => {
+    const dev = document.createElement('style');
+    dev.dataset.host = '1';
+    dev.textContent = '.lg\\:block{display:block}';
+    document.head.appendChild(dev);
+
+    injectModuleStyle('stock', '.hidden{display:none}');
+    expect(dev.previousElementSibling).toBe(document.head.querySelector('style[data-module-remote="stock"]'));
   });
 
   it('is a no-op on a second call for the same module', () => {

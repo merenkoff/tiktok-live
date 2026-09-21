@@ -576,8 +576,15 @@ Roadmap #4 — a remote no longer depends on the host having compiled its classe
   `manifest.files['style.css']` is covered by the Ed25519 signature.
   `verifyRemoteEntry` (`Promise<void>` → `Promise<{ styleCss? }>`) fetches
   `style.css`, sha384-checks it against the manifest, returns the text;
-  `registry.injectModuleStyle(id, css)` appends one
-  `<style data-module-remote="<id>">` before the first render (no FOUC). Bad /
+  `registry.injectModuleStyle(id, css)` adds one
+  `<style data-module-remote="<id>">` before the first render (no FOUC) —
+  inserted **before the host's stylesheet**, not appended to `<head>`: the two
+  sheets are utilities of equal specificity, and a module's bare `.hidden` /
+  `.flex` appended last used to outrank the host's `lg:block` / `lg:hidden`
+  on the shell's own elements whenever the module did not itself use those
+  responsive variants (one `'hidden'` string in the café module's source
+  collapsed `/register` to the phone layout). First, the host — built from
+  `src/**`, modules included — keeps its canonical order. Bad /
   missing `style.css` → `remote_verify_error` → bundled fallback.
 - `check:<id>-css-coverage` retargeted to `dist-remotes/<id>/style.css`
   (folds in `src/styles/tokens.css` so host-provided `.sq-*` classes aren't

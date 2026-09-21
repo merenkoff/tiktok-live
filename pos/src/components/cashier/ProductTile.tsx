@@ -36,6 +36,12 @@ interface Props {
    * is exactly what it was.
    */
   onMore?: () => void;
+  /**
+   * A word in the tile's corner that says why it is greyed when stock is not
+   * the reason — «стоп» for a dish the barista pulled for the day (К3). Wins
+   * over the stock-driven «немає»: the dish may well be in the case.
+   */
+  badge?: string;
 }
 
 export function ProductTile({
@@ -48,6 +54,7 @@ export function ProductTile({
   disabled,
   count,
   onMore,
+  badge,
 }: Props) {
   const [broken, setBroken] = useState(false);
   const src = !broken ? assetUrl(imageUrl) : null;
@@ -92,10 +99,20 @@ export function ProductTile({
         </span>
       )}
 
-      {stock != null && stock <= 0 && (
-        <span className="absolute top-2 right-2 text-[10px] font-semibold bg-black/55 text-white px-1.5 py-0.5 rounded-sq pointer-events-none">
-          немає
+      {badge ? (
+        <span
+          className="absolute top-2 right-2 text-[10px] font-semibold bg-black/55 text-white px-1.5 py-0.5 rounded-sq pointer-events-none"
+          data-testid="tile-badge"
+        >
+          {badge}
         </span>
+      ) : (
+        stock != null &&
+        stock <= 0 && (
+          <span className="absolute top-2 right-2 text-[10px] font-semibold bg-black/55 text-white px-1.5 py-0.5 rounded-sq pointer-events-none">
+            немає
+          </span>
+        )
       )}
     </button>
   );

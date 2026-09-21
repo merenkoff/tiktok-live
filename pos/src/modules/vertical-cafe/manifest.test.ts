@@ -12,6 +12,7 @@ import { resolveSalesCatalog } from '../verticals';
 import { MODULES } from '../registry';
 import { REQUIRED_HOST_API } from './lib/hostPlatform';
 import { PLATFORM_VERSION } from '../../platform/version';
+import { NAV_ICONS } from '../../platform/icons';
 
 describe('vertical-cafe manifest', () => {
   it('is keyed exactly as the store setting names it', () => {
@@ -36,12 +37,26 @@ describe('vertical-cafe manifest', () => {
     expect(verticalCafeModule.ownerOnly).toBeUndefined();
   });
 
-  it('owns no route or nav yet — the sell screen is a slot, not a page', () => {
-    // The kitchen board (К3) will be the first. Until then the object entry in
-    // `module_remotes` still names a `routePath` and a nav item, because both
-    // sanitisers require them; they shape the desktop's pending tile only.
-    expect(verticalCafeModule.routes).toEqual([]);
-    expect(verticalCafeModule.nav).toEqual([]);
+  it('owns the kitchen board in both shells, with a nav entry the icon set knows', () => {
+    // К3c: the first route this module owns. A root mount (no `mount:
+    // 'admin'`), so the desktop cashier renders it too; the splat matches the
+    // shape the desktop's pending placeholder builds from `routePath`.
+    expect(verticalCafeModule.routes).toEqual([
+      expect.objectContaining({ path: '/kitchen/*' }),
+    ]);
+    expect(verticalCafeModule.routes[0].mount).toBeUndefined();
+    expect(verticalCafeModule.nav).toEqual([
+      expect.objectContaining({ to: '/kitchen', label: 'Кухня', location: 'cashier-primary' }),
+    ]);
+    expect(Object.keys(NAV_ICONS)).toContain(verticalCafeModule.nav[0].icon);
+  });
+
+  it('probes the two host members the board needs without a new export name', () => {
+    // `api.posRequest` and `useOfflineStatus` were on the host long before
+    // platform 13, so PLATFORM_VERSION stays put — but a host missing either
+    // must be told, not guessed at.
+    expect(REQUIRED_HOST_API).toContain('api.posRequest');
+    expect(REQUIRED_HOST_API).toContain('useOfflineStatus');
   });
 
   it('refuses to link into a host older than platform 13', () => {

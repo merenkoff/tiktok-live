@@ -50,6 +50,21 @@ import { liveSellingModule } from './live-selling/manifest';
  * `<style data-module-remote="<id>">`. The CSS text is already sha384-verified
  * against the signed manifest (`verifyRemoteEntry`). Runs before the first
  * render, so no flash of unstyled content.
+ *
+ * The sheet goes **before** the host's own stylesheet, not at the end of
+ * `<head>`. Both sheets are Tailwind utilities of equal specificity, so on a
+ * host element the later declaration wins — and a module's sheet is only the
+ * utilities *that module* uses. Appended last, its bare `.hidden` or `.flex`
+ * outranked the host's `lg:block` / `lg:hidden` on every element of the shell
+ * that pairs them (the cart column and the mobile «Чек» bar of `/register`),
+ * because the module never used those responsive variants and so never
+ * re-emitted them after its base rule: one string `'hidden'` in a comment of
+ * the café module collapsed the whole till to the phone layout. Inserted
+ * first, the host's sheet — generated from `src/**`, the modules included —
+ * keeps its canonical order and has the last word on its own elements; a
+ * module element loses only under version skew, when it pairs a base utility
+ * the host has with a responsive variant the host does not, and then only
+ * that tweak, never the shell.
  */
 export function injectModuleStyle(moduleId: string, css: string | undefined): void {
   if (!css || typeof document === 'undefined') return;
@@ -57,7 +72,11 @@ export function injectModuleStyle(moduleId: string, css: string | undefined): vo
   const el = document.createElement('style');
   el.dataset.moduleRemote = moduleId;
   el.textContent = css;
-  document.head.appendChild(el);
+  const hostSheet = document.head.querySelector(
+    'link[rel="stylesheet"], style:not([data-module-remote])'
+  );
+  if (hostSheet) document.head.insertBefore(el, hostSheet);
+  else document.head.appendChild(el);
 }
 
 export const MODULES: ModuleDescriptor[] = [

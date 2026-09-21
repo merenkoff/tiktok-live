@@ -48,6 +48,7 @@ const BarcodeScanner = lazy(() =>
   import('../../components/BarcodeScanner').then((m) => ({ default: m.BarcodeScanner }))
 );
 import { HostTooOldError, missingHostApi } from './lib/hostPlatform';
+import { isStopListed } from './lib/stopList';
 
 export default function CafeCatalog({ active, stockEpoch }: SalesCatalogProps) {
   // Throws into the host's `CatalogBoundary`, which falls back to the bundled
@@ -172,6 +173,10 @@ function CafeCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
             // немає» is an answer to the guest, an empty cell is a question to
             // the barista (§3).
             const stock = variants.reduce((s, v) => s + v.quantity, 0);
+            // «Сьогодні не робимо» (К3): the barista pulled it for the day on
+            // the kitchen board. Greyed with its own word, because the dish
+            // may well be in the case — «немає» would be a lie.
+            const stopped = isStopListed(first);
             const subtitle =
               variants.length > 1
                 ? variants.map((v) => v.label).filter(Boolean).join(' / ')
@@ -184,7 +189,8 @@ function CafeCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
                 priceCents={minPrice}
                 imageUrl={first.image_url}
                 stock={stock}
-                disabled={stock <= 0}
+                disabled={stock <= 0 || stopped}
+                badge={stopped ? 'стоп' : undefined}
                 onClick={() => ring(variants)}
                 onMore={groups.length > 0 ? () => ring(variants, { ask: true }) : undefined}
               />

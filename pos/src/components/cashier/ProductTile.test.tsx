@@ -103,6 +103,14 @@ describe('ProductTile', () => {
     expect(onMore).toHaveBeenCalledTimes(1);
   });
 
+  it('says why a tile is greyed when stock is not the reason', () => {
+    // A dish the barista pulled for the day (К3): it may well be in the case,
+    // so «немає» would be a lie — the badge wins.
+    render(<ProductTile name="Сирник" stock={0} disabled badge="стоп" onClick={() => {}} />);
+    expect(screen.getByTestId('tile-badge')).toHaveTextContent('стоп');
+    expect(screen.queryByText('немає')).toBeNull();
+  });
+
   it('hides the corner action on a tile that cannot be tapped', () => {
     render(<ProductTile name="Сирник" stock={0} disabled onClick={() => {}} onMore={() => {}} />);
     expect(screen.queryByTestId('tile-more')).toBeNull();
