@@ -15,6 +15,8 @@ import type { Bill, BillLine, BillRound } from '../lib/types';
 const posRequest = vi.fn();
 const getCatalog = vi.fn();
 const navigate = vi.fn();
+const getMeta = vi.fn();
+const printPrecheck = vi.fn();
 
 vi.mock('@pos/platform', async () => {
   const real = await vi.importActual<typeof import('@pos/platform')>('@pos/platform');
@@ -22,6 +24,8 @@ vi.mock('@pos/platform', async () => {
     ...real,
     api: { posRequest: (...a: unknown[]) => posRequest(...a) },
     cashierApi: { getCatalog: (...a: unknown[]) => getCatalog(...a) },
+    getMeta: (...a: unknown[]) => getMeta(...a),
+    printPrecheck: (...a: unknown[]) => printPrecheck(...a),
   };
 });
 
@@ -174,6 +178,12 @@ beforeEach(() => {
   });
   getCatalog.mockReset();
   getCatalog.mockResolvedValue(MENU);
+  getMeta.mockReset();
+  getMeta.mockImplementation(async (key: string) =>
+    key === 'receiptPrinterName' ? 'XP-58' : 58
+  );
+  printPrecheck.mockReset();
+  printPrecheck.mockResolvedValue(undefined);
 });
 
 describe('BillPage', () => {
@@ -412,5 +422,52 @@ describe('BillPage', () => {
     // show it and the next waiter does not print a second one.
     expect(await screen.findByTestId('bill-precheck')).toHaveTextContent('Передчек надруковано');
     expect(screen.getByTestId('bill-fire')).toBeEnabled();
+  });
+
+  // ── К4h: друк передчека ──────────────────────────────────────────────────
+
+  it('prints the pre-bill on a till, listing only what the rounds locked', async () => {
+    posRequest.mockImplementation(async (method: string, path: string) =>
+      path === '/bills/90/precheck' ? { ...bill, precheck_printed_at: 'x' } : bill
+    );
+    renderWithProviders(<BillPage />, { route: '/tables/90', shell: 'cashier' });
+    await userEvent.click(await screen.findByTestId('bill-precheck'));
+    await waitFor(() => expect(printPrecheck).toHaveBeenCalledTimes(1));
+    const [printerName, doc, width] = printPrecheck.mock.calls[0];
+    expect(printerName).toBe('XP-58');
+    expect(width).toBe(58);
+    expect(doc).toMatchObject({ table_name: '5', bill_no: 12, guests: 4, total_cents: 8000 });
+    // The draft is on the screen but never on the paper.
+    expect(doc.items).toHaveLength(1);
+    expect(await screen.findByTestId('bill-print-status')).toHaveTextContent('на друк');
+  });
+
+  it('on the waiter’s tablet the mark IS the whole action', async () => {
+    const seen: string[] = [];
+    posRequest.mockImplementation(async (method: string, path: string) => {
+      seen.push(`${method} ${path}`);
+      return bill;
+    });
+    // The web shell has no printer at all, so К4h's command never runs and
+    // nothing about the bill waits on paper.
+    renderWithProviders(<BillPage />, { route: '/tables/90', shell: 'web' });
+    await userEvent.click(await screen.findByTestId('bill-precheck'));
+    await waitFor(() => expect(seen).toContain('post /bills/90/precheck'));
+    expect(printPrecheck).not.toHaveBeenCalled();
+  });
+
+  it('says what went wrong at the printer without losing the mark', async () => {
+    printPrecheck.mockRejectedValue(new Error('Принтер "XP-58" не знайдено'));
+    const seen: string[] = [];
+    posRequest.mockImplementation(async (method: string, path: string) => {
+      seen.push(`${method} ${path}`);
+      return { ...bill, precheck_printed_at: 'x' };
+    });
+    renderWithProviders(<BillPage />, { route: '/tables/90', shell: 'cashier' });
+    await userEvent.click(await screen.findByTestId('bill-precheck'));
+    // The mark is what the other waiters see, so it is recorded first and
+    // never held up by paper.
+    await waitFor(() => expect(seen).toContain('post /bills/90/precheck'));
+    expect(await screen.findByTestId('bill-print-status')).toHaveTextContent('не знайдено');
   });
 });

@@ -4,6 +4,7 @@
 
 mod catalog;
 pub mod kitchen_ticket;
+pub mod precheck;
 pub mod os_printers;
 pub mod receipt;
 

@@ -83,7 +83,11 @@ export const POS_API_CLIENT_VERSION = 2;
 //     never copies them; `@pos/platform/ui` gains `ModifierSheet`, `ProductTile`
 //     an `onMore` corner action; `Coffee` joins the nav icons;
 //     `VerticalPublicConfig.maxCompositionDepth` is on the wire.
-export const PLATFORM_VERSION = 13;
+// 14 (2026-09-21): `printPrecheck` — the pre-bill the `tables` module hands the
+//     guests (К4h). The Tauri command stays the host's: a module that reached
+//     `invoke` itself would bundle a second copy of the Tauri API and step
+//     outside this contract entirely.
+export const PLATFORM_VERSION = 14;
 
 /**
  * Build version of this bundle — the host web/cashier build, or a module-remote
