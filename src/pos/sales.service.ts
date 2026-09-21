@@ -479,10 +479,22 @@ export async function completeSale(params: {
       const components = line.components?.length
         ? await validateComponents(client, params.storeId, line.variant_id, line.components)
         : undefined;
+      // The answers as promised (К3f): names and deltas from the order,
+      // never re-resolved — a renamed answer must not rewrite a promise, and
+      // the lock already carries the deltas. What they write off comes from
+      // the live rows by id; a deleted answer writes off nothing.
+      const promised = await modifiers.promisedLineModifiers(
+        client,
+        params.storeId,
+        line.modifiers
+      );
       draftLines.push({
         variant_id: line.variant_id,
         product_name: variant.product_name,
-        variant_label: components ? customBouquetLabel(components) : (variant.label ?? ''),
+        variant_label: modifiers.lineCaption(
+          components ? customBouquetLabel(components) : (variant.label ?? ''),
+          promised.names
+        ),
         unit: variant.unit ?? '',
         quantity: line.quantity,
         unit_price_cents: line.unit_price_cents,
@@ -490,8 +502,12 @@ export async function completeSale(params: {
         // would put a discount on the receipt that nobody gave.
         compare_at_unit_cents: null,
         pre_discount_total: pre,
+        note: line.note,
         has_product_discount: false,
         ...(components ? { components } : {}),
+        ...(promised.snapshot.length > 0
+          ? { modifiers: promised.snapshot, modifier_components: promised.components }
+          : {}),
       });
     }
 

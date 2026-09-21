@@ -30,6 +30,8 @@
 import { pool } from '../db.js';
 import { logger } from '../logger.js';
 import { priceOfComposition, type ComponentInput } from './composites.service.js';
+import * as modifiers from './modifiers.service.js';
+import type { LineModifierSnapshot } from './modifiers.service.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -45,6 +47,10 @@ export interface PreorderItemInput {
   variant_id: number;
   quantity: number;
   components?: ComponentInput[];
+  /** The answers chosen (ids), as checkout takes them — К3f. */
+  modifiers?: number[];
+  /** The kitchen note, bounded like the sale line's. */
+  note?: string;
 }
 
 export interface CreatePreorderInput {
@@ -67,9 +73,17 @@ export interface PreorderItem {
   id: number;
   variant_id: number;
   quantity: number;
-  /** The locked per-unit price — what the shop promised, not today's. */
+  /** The locked per-unit price — what the shop promised, not today's. Includes the answers' deltas. */
   unit_price_cents: number;
   components: ComponentInput[] | null;
+  /**
+   * The answers the order was taken with, as a snapshot (migration 051):
+   * part of the promise — the hand-over uses these names, never a
+   * re-resolved answer. Empty for a plain line.
+   */
+  modifiers: LineModifierSnapshot[];
+  /** The kitchen note, carried into the sale at hand-over. */
+  note: string;
   product_name: string;
   label: string;
   unit: string;
@@ -147,11 +161,10 @@ export async function createPreorder(
     if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
       throw new PreorderError('Некоректна кількість');
     }
-    // Same as a parked cart: no column for it yet (café phase К3), and a
-    // silently dropped modifier is a wrong order on the pickup shelf.
-    const extra = item as { modifiers?: unknown; note?: unknown };
-    if ((Array.isArray(extra.modifiers) && extra.modifiers.length > 0) || extra.note) {
-      throw new PreorderError('Позицію з модифікаторами поки не можна замовити наперед');
+    // A bouquet's price is its stems'; a delta on top of that has no meaning
+    // — the same rule checkout applies.
+    if (item.components?.length && modifiers.normalizeModifierIds(item.modifiers).length > 0) {
+      throw new PreorderError('Позиція з власним складом не приймає модифікаторів');
     }
   }
 
@@ -163,10 +176,28 @@ export async function createPreorder(
     await client.query('BEGIN');
 
     // Price every line first: the total is the sum, and a line that cannot be
-    // priced must fail the whole order rather than quietly cost nothing.
-    const priced: Array<{ item: PreorderItemInput; unitPriceCents: number }> = [];
+    // priced must fail the whole order rather than quietly cost nothing. The
+    // answers are resolved here, as checkout would (a required question left
+    // unanswered is refused now), and their deltas go INTO the lock: what was
+    // promised is «латте на вівсяному за 80», not «латте за 65 плюс щось».
+    const priced: Array<{
+      item: PreorderItemInput;
+      unitPriceCents: number;
+      chosen: modifiers.ResolvedLineModifiers;
+      note: string;
+    }> = [];
     for (const item of input.items) {
-      priced.push({ item, unitPriceCents: await quoteUnit(client, input.storeId, item) });
+      const chosen = await modifiers.resolveForVariant(
+        client,
+        input.storeId,
+        item.variant_id,
+        modifiers.normalizeModifierIds(item.modifiers)
+      );
+      const unitPriceCents = (await quoteUnit(client, input.storeId, item)) + chosen.deltaCents;
+      if (unitPriceCents < 0) {
+        throw new PreorderError('Ціна позиції з модифікаторами не може бути відʼємною');
+      }
+      priced.push({ item, unitPriceCents, chosen, note: modifiers.cleanLineNote(item.note) });
     }
     const total = priced.reduce((sum, row) => sum + row.unitPriceCents * row.item.quantity, 0);
 
@@ -198,8 +229,9 @@ export async function createPreorder(
     for (const [index, row] of priced.entries()) {
       await client.query(
         `INSERT INTO pos_preorder_items
-           (store_id, preorder_id, variant_id, quantity, unit_price_cents, components, sort_order)
-         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)`,
+           (store_id, preorder_id, variant_id, quantity, unit_price_cents, components, sort_order,
+            modifiers, note)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8::jsonb, $9)`,
         [
           input.storeId,
           preorderId,
@@ -208,6 +240,8 @@ export async function createPreorder(
           row.unitPriceCents,
           row.item.components?.length ? JSON.stringify(row.item.components) : null,
           index,
+          row.chosen.snapshot.length ? JSON.stringify(row.chosen.snapshot) : null,
+          row.note,
         ]
       );
     }
@@ -293,6 +327,7 @@ export async function getPreorder(storeId: number, preorderId: number): Promise<
 
   const rows = await pool.query(
     `SELECT i.id, i.variant_id, i.quantity, i.unit_price_cents, i.components,
+            i.modifiers, i.note,
             pr.name AS product_name, pr.image_url, v.label, v.unit
      FROM pos_preorder_items i
      JOIN pos_variants v ON v.id = i.variant_id
@@ -313,12 +348,16 @@ export async function getPreorder(storeId: number, preorderId: number): Promise<
       : null;
     // A stem the shop delisted cannot be re-priced. That is worth saying out
     // loud rather than silently costing zero, so the whole current total goes
-    // null and the screen shows the quote alone.
-    const current = await quoteUnitIfStillStocked(pool, storeId, {
+    // null and the screen shows the quote alone. An answer that was deleted
+    // since is the same kind of fact (`liveDeltaCents` → null).
+    const snapshot = modifiers.parseLineModifierSnapshot(item.modifiers);
+    const base = await quoteUnitIfStillStocked(pool, storeId, {
       variant_id: Number(item.variant_id),
       quantity: Number(item.quantity),
       components: components ?? undefined,
     }).catch(() => null);
+    const liveDelta = await modifiers.liveDeltaCents(pool, storeId, snapshot);
+    const current = base == null || liveDelta == null ? null : base + liveDelta;
     if (current == null) currentTotal = null;
     else if (currentTotal != null) currentTotal += current * Number(item.quantity);
 
@@ -328,6 +367,8 @@ export async function getPreorder(storeId: number, preorderId: number): Promise<
       quantity: Number(item.quantity),
       unit_price_cents: Number(item.unit_price_cents),
       components,
+      modifiers: snapshot,
+      note: typeof item.note === 'string' ? item.note : '',
       product_name: item.product_name ?? '',
       label: item.label ?? '',
       unit: item.unit ?? '',
@@ -454,8 +495,12 @@ export async function cancelPreorder(params: {
 export interface LockedLine {
   variant_id: number;
   quantity: number;
+  /** Includes the answers' deltas — the lock was minted with them. */
   unit_price_cents: number;
   components?: ComponentInput[];
+  /** The promised answers; checkout keeps these names and never re-resolves. */
+  modifiers: LineModifierSnapshot[];
+  note: string;
 }
 
 export async function lockedLines(
@@ -464,7 +509,7 @@ export async function lockedLines(
   preorderId: number
 ): Promise<LockedLine[]> {
   const rows = await client.query(
-    `SELECT variant_id, quantity, unit_price_cents, components
+    `SELECT variant_id, quantity, unit_price_cents, components, modifiers, note
      FROM pos_preorder_items
      WHERE preorder_id = $1 AND store_id = $2
      ORDER BY sort_order, id`,
@@ -474,6 +519,8 @@ export async function lockedLines(
     variant_id: Number(row.variant_id),
     quantity: Number(row.quantity),
     unit_price_cents: Number(row.unit_price_cents),
+    modifiers: modifiers.parseLineModifierSnapshot(row.modifiers),
+    note: typeof row.note === 'string' ? row.note : '',
     ...(row.components
       ? {
           components: (row.components as Array<Record<string, unknown>>).map((c) => ({

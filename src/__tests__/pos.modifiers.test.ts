@@ -21,7 +21,7 @@ import {
 import { completeSale, refundSale } from '../pos/sales.service.js';
 import * as modifiers from '../pos/modifiers.service.js';
 import { fiscalLineName } from '../pos/fiscal/mapping.js';
-import { parkCart } from '../pos/parked-carts.service.js';
+import { parkCart, releaseCart } from '../pos/parked-carts.service.js';
 import { createPreorder } from '../pos/preorders.service.js';
 
 describe.skipIf(!hasDb)('POS modifiers', () => {
@@ -526,25 +526,53 @@ describe.skipIf(!hasDb)('POS modifiers', () => {
       expect(kept.rows).toEqual([{ modifier_id: null, name: 'ваніль' }]);
     });
 
-    it('is refused, out loud, by a parked cart and a pre-order for now', async () => {
-      await expect(
-        parkCart({
-          storeId,
-          staffId,
-          clientUuid: randomUUID(),
-          label: 'Столик',
-          items: [{ variant_id: sandwich, quantity: 1, modifiers: [id(extrasGroup, 'ще сир')] } as never],
-        })
-      ).rejects.toThrow(/поки не можна відкласти/);
-      await expect(
-        createPreorder({
-          storeId,
-          staffId,
-          clientUuid: randomUUID(),
-          dueAt: new Date(Date.now() + 3_600_000).toISOString(),
-          items: [{ variant_id: sandwich, quantity: 1, note: 'без цибулі' } as never],
-        })
-      ).rejects.toThrow(/поки не можна замовити наперед/);
+    it('is parked with its answers and holds the extra cheese; ordered ahead at the card price plus the delta', async () => {
+      // К3f (migration 051): the same resolution checkout makes, run where
+      // the line is written down; the reserve holds what the answer takes.
+      const extra = id(extrasGroup, 'ще сир');
+      const { cart } = await parkCart({
+        storeId,
+        staffId,
+        clientUuid: randomUUID(),
+        label: 'Столик',
+        items: [{ variant_id: sandwich, quantity: 1, modifiers: [extra], note: 'без цибулі' }],
+      });
+      expect(cart.items[0]).toMatchObject({
+        price_cents: 9000,
+        line_price_cents: 11000,
+        note: 'без цибулі',
+        modifiers: [
+          expect.objectContaining({
+            modifier_id: extra,
+            group_name: 'Додатки',
+            name: 'ще сир',
+            price_delta_cents: 2000,
+          }),
+        ],
+      });
+      expect(cart.total_cents).toBe(11000);
+      const held = await pool.query(
+        `SELECT reserved FROM pos_stock_reserved WHERE store_id = $1 AND variant_id = $2`,
+        [storeId, cheese]
+      );
+      expect(Number(held.rows[0]?.reserved ?? 0)).toBe(20);
+      await releaseCart({ storeId, staffId, cartId: cart.id });
+
+      const { preorder } = await createPreorder({
+        storeId,
+        staffId,
+        clientUuid: randomUUID(),
+        dueAt: new Date(Date.now() + 3_600_000).toISOString(),
+        items: [{ variant_id: sandwich, quantity: 2, modifiers: [extra], note: 'без цибулі' }],
+      });
+      // The lock includes the delta: what was promised is «сендвіч з сиром за 110».
+      expect(preorder.quoted_total_cents).toBe(22000);
+      expect(preorder.items[0]).toMatchObject({
+        unit_price_cents: 11000,
+        current_unit_price_cents: 11000,
+        note: 'без цибулі',
+      });
+      expect(preorder.items[0].modifiers.map((m) => m.name)).toEqual(['ще сир']);
     });
   });
 });

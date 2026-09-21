@@ -76,7 +76,8 @@ export interface ModifierInput {
 
 /** One chosen modifier as the sale line records it. */
 export interface LineModifierSnapshot {
-  modifier_id: number;
+  /** Null once the answer was deleted: the name below is then the whole record. */
+  modifier_id: number | null;
   group_name: string;
   name: string;
   price_delta_cents: number;
@@ -638,4 +639,116 @@ export function resolveLineModifiers(groups: ModifierGroup[], ids: number[]): Re
  */
 export function lineCaption(variantLabel: string, modifierNames: string[]): string {
   return [variantLabel.trim(), ...modifierNames].filter(Boolean).join(' · ').slice(0, 255);
+}
+
+// ── snapshots that live outside a sale (parked carts, pre-orders — К3f) ──
+
+/**
+ * A stored line-modifier snapshot (JSONB on `pos_parked_cart_items` /
+ * `pos_preorder_items`, migration 051) back into its typed shape. Anything
+ * that is not a list of named answers reads as «none».
+ */
+export function parseLineModifierSnapshot(raw: unknown): LineModifierSnapshot[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((m, i) => {
+      const row = (m ?? {}) as Record<string, unknown>;
+      return {
+        modifier_id: row.modifier_id == null ? null : Number(row.modifier_id),
+        group_name: String(row.group_name ?? ''),
+        name: String(row.name ?? ''),
+        price_delta_cents: Number(row.price_delta_cents ?? 0),
+        sort_order: Number(row.sort_order ?? i),
+      };
+    })
+    .filter((m) => m.name !== '');
+}
+
+/**
+ * Resolve a line's answers against its product's groups — the same check
+ * checkout makes, run where the line is written down (a parked cart, a
+ * pre-order) so that a required question left unanswered is refused there
+ * and not when the cart comes back to a till.
+ */
+export async function resolveForVariant(
+  client: DbClient,
+  storeId: number,
+  variantId: number,
+  ids: number[]
+): Promise<ResolvedLineModifiers> {
+  const product = await client.query(
+    `SELECT product_id FROM pos_variants WHERE id = $1 AND store_id = $2`,
+    [variantId, storeId]
+  );
+  if (product.rows.length === 0) throw new ModifierError('Позиція не знайдена');
+  const productId = Number(product.rows[0].product_id);
+  const groups = await loadGroupsForProducts(client, storeId, [productId], { activeOnly: true });
+  return resolveLineModifiers(groups.get(productId) ?? [], ids);
+}
+
+/**
+ * Σ of what a snapshot's answers cost TODAY, or null when one of them no
+ * longer exists (deleted or switched off) — the «what would this cost now»
+ * read next to a pre-order's quote, which must say nothing rather than a
+ * wrong number.
+ */
+export async function liveDeltaCents(
+  client: DbClient,
+  storeId: number,
+  snapshot: LineModifierSnapshot[]
+): Promise<number | null> {
+  if (snapshot.length === 0) return 0;
+  const ids = snapshot.map((m) => m.modifier_id).filter((id): id is number => id != null);
+  if (ids.length !== snapshot.length) return null;
+  const rows = await client.query(
+    `SELECT id, price_delta_cents FROM pos_modifiers
+     WHERE store_id = $1 AND id = ANY($2::bigint[]) AND is_active = TRUE`,
+    [storeId, ids]
+  );
+  if (rows.rows.length !== new Set(ids).size) return null;
+  const delta = new Map(rows.rows.map((r) => [Number(r.id), Number(r.price_delta_cents)]));
+  return ids.reduce((sum, id) => sum + (delta.get(id) ?? 0), 0);
+}
+
+/**
+ * A pre-order's answers at hand-over: the snapshot as promised — names and
+ * deltas from the order, never re-resolved, because a renamed answer must
+ * not rewrite a promise and the price lock already includes the deltas —
+ * plus what they write off, from the LIVE rows by id. A deleted answer
+ * writes off nothing and lands on the sale line with `modifier_id` null,
+ * which is what the `pos_sale_item_modifiers` FK demands.
+ */
+export async function promisedLineModifiers(
+  client: DbClient,
+  storeId: number,
+  snapshot: LineModifierSnapshot[]
+): Promise<{ snapshot: LineModifierSnapshot[]; names: string[]; components: ComponentInput[] }> {
+  if (snapshot.length === 0) return { snapshot: [], names: [], components: [] };
+  const ids = snapshot.map((m) => m.modifier_id).filter((id): id is number => id != null);
+  const live = ids.length
+    ? await client.query(
+        `SELECT id, component_variant_id, component_quantity FROM pos_modifiers
+         WHERE store_id = $1 AND id = ANY($2::bigint[])`,
+        [storeId, ids]
+      )
+    : { rows: [] as Array<Record<string, unknown>> };
+  const liveById = new Map(live.rows.map((r) => [Number(r.id), r]));
+  const components: ComponentInput[] = [];
+  const out = snapshot.map((m, i) => {
+    const row = m.modifier_id == null ? undefined : liveById.get(m.modifier_id);
+    if (row && row.component_variant_id != null) {
+      components.push({
+        component_variant_id: Number(row.component_variant_id),
+        quantity: Number(row.component_quantity),
+      });
+    }
+    return {
+      modifier_id: row ? m.modifier_id : null,
+      group_name: m.group_name,
+      name: m.name,
+      price_delta_cents: m.price_delta_cents,
+      sort_order: i,
+    };
+  });
+  return { snapshot: out, names: out.map((m) => m.name), components };
 }
