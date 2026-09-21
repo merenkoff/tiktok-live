@@ -433,6 +433,12 @@ class PosApi {
     client_uuid?: string | null;
     /** Set only for a receipt this till stamped itself while offline (фаза 3). */
     fiscal_offline?: FiscalOfflineStamp | null;
+    /**
+     * Set only by the desktop's outbox replay (`offline/sync.ts`): the sale
+     * was made and handed over while the till was offline, so the kitchen
+     * state is `served` and the day's stop-list does not apply (К3).
+     */
+    offline_replay?: boolean;
     /** The parked cart this sale came out of, if any — bookkeeping only. */
     parked_cart_id?: number | null;
     /** The pre-order being handed over. Its lines and prices come from the server. */

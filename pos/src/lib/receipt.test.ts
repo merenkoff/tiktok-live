@@ -485,3 +485,27 @@ describe('buildReceiptPayload — order number', () => {
     expect(buildReceiptPayload(makeSaleDetail(), { name: 'Demo', vertical: 'cafe' }).order_no).toBeNull();
   });
 });
+
+describe("buildReceiptPayload — the till's own order number (К3d)", () => {
+  it('prints «К1» for a café receipt the desktop queued offline, and nothing for anyone else', () => {
+    const queued = makeSaleDetail({ order_no: null, local_order_no: 1, receipt_number: 'OFF-ABCD1234' });
+    const cafe = buildReceiptPayload(queued, { name: 'Demo', vertical: 'cafe' });
+    expect(cafe.order_label).toBe('К1');
+    expect(cafe.order_no).toBeNull();
+    expect(buildReceiptPayload(queued, { name: 'Demo', vertical: 'clothing' }).order_label).toBeNull();
+    expect(buildReceiptPayload(queued, DEMO).order_label).toBeNull();
+  });
+
+  it('lets the server’s number win the moment there is one', () => {
+    const synced = makeSaleDetail({ order_no: 42, local_order_no: 1 });
+    const payload = buildReceiptPayload(synced, { name: 'Demo', vertical: 'cafe' });
+    expect(payload.order_no).toBe(42);
+    expect(payload.order_label).toBeNull();
+  });
+
+  it('prints neither on a café sale that has no number of either kind', () => {
+    const payload = buildReceiptPayload(makeSaleDetail({ order_no: null }), { name: 'Demo', vertical: 'cafe' });
+    expect(payload.order_no).toBeNull();
+    expect(payload.order_label).toBeNull();
+  });
+});

@@ -42,6 +42,7 @@ export default defineConfig({
         'src/modules/vertical-cafe/kitchen/lib/kitchen.ts',
         'src/modules/vertical-cafe/lib/stopList.ts',
         'src/lib/bouquet.ts',
+        'src/lib/localOrderNo.ts',
         'src/lib/modifiers.ts',
         'src/lib/money.ts',
         'src/lib/priceTagLayout.ts',

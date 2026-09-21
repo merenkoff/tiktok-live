@@ -30,6 +30,7 @@ export type RefundedSaleRow = LocalSaleRow & {
 };
 import { filterCatalog } from './catalog-filter';
 import { customBouquetLabel, priceOfComponents } from '../lib/bouquet';
+import { advanceLocalOrderNo, deviceLocalDay, type LocalOrderCounter } from '../lib/localOrderNo';
 import { lineCaption, resolveLineModifiers, shiftCompareAt } from '../lib/modifiers';
 import {
   db,
@@ -50,6 +51,22 @@ async function nextLocalCustomerId(): Promise<number> {
   const next = current - 1;
   await setMeta('localCustomerSeq', next);
   return next;
+}
+
+/**
+ * The till's own daily order number for a sale queued offline (К3d): what the
+ * success screen, the receipt and the kitchen ticket show as «К17» while the
+ * server cannot yet hand out «17». Counted per device-local day in `meta` —
+ * the till stands in the shop, so its clock is the shop's. Issued on the
+ * queue path only: an online sale already carries the server's number, and
+ * this one is never written to `order_no` — sync replaces the mirror row with
+ * the server's sale, number included.
+ */
+async function nextLocalOrderNo(): Promise<number> {
+  const prev = await getMeta<LocalOrderCounter>('localOrderCounter');
+  const { counter, issued } = advanceLocalOrderNo(prev, deviceLocalDay());
+  await setMeta('localOrderCounter', counter);
+  return issued;
 }
 
 export async function getCachedTags(): Promise<PosTag[]> {
@@ -265,7 +282,8 @@ function localSaleDetail(
   clientUuid: string,
   payload: OutboxSalePayload,
   catalog: CatalogItem[],
-  registerFiscalNumber: string | null = null
+  registerFiscalNumber: string | null = null,
+  localOrderNo: number | null = null
 ): SaleDetail {
   const byId = new Map(catalog.map((item) => [item.variant_id, item]));
   const labourBps = api.loadAuth()?.store.florist_labour_bps ?? 0;
@@ -330,6 +348,7 @@ function localSaleDetail(
     id: -Date.now(),
     receipt_number: `OFF-${short}`,
     client_uuid: clientUuid,
+    ...(localOrderNo != null ? { local_order_no: localOrderNo } : {}),
     status: 'completed',
     // A queued sale in a non-fiscal store has no fiscal document at all. One
     // this till stamped from its reserve has a real tax-office number, printed
@@ -493,7 +512,10 @@ export async function completeSale(payload: {
       .catch(() => undefined);
   }
   const catalog = await db.catalog.toArray();
-  const detail = localSaleDetail(clientUuid, salePayload, catalog, registerFiscalNumber);
+  // After the outbox row exists, so a sale that could not be queued never
+  // spends a number; before the mirror row, which is what shows it.
+  const localOrderNo = await nextLocalOrderNo();
+  const detail = localSaleDetail(clientUuid, salePayload, catalog, registerFiscalNumber, localOrderNo);
   await putLocalSale(detail, clientUuid, null);
   return detail;
 }

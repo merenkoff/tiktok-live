@@ -11,6 +11,7 @@ import type {
   VerticalId,
 } from '../types';
 import type { ReceiptData, ReceiptFiscal, ReceiptHeader, ReceiptVatLine } from './printer';
+import { localOrderLabel } from './localOrderNo';
 import { refundLineAmount } from './money';
 
 /**
@@ -180,6 +181,12 @@ export function buildReceiptPayload(
     receipt_number: sale.receipt_number,
     refund_of_receipt: null,
     order_no: store.vertical === 'cafe' ? (sale.order_no ?? null) : null,
+    // The till's own «К17» on a receipt printed while the sale is still in
+    // the outbox — the server's number wins the moment there is one.
+    order_label:
+      store.vertical === 'cafe' && sale.order_no == null && sale.local_order_no != null
+        ? localOrderLabel(sale.local_order_no)
+        : null,
     created_at: new Date(sale.created_at).toLocaleString('uk-UA'),
     staff_name: sale.staff_name,
     customer_name: customerName ?? sale.customer_name ?? null,

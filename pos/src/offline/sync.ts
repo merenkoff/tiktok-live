@@ -97,6 +97,12 @@ async function syncSale(row: OutboxRow): Promise<void> {
     // with the code and date already on the customer's copy rather than
     // registering a new document (TechDocs/POS_FISCAL_OFFLINE.md, фаза 3).
     fiscal_offline: payload.fiscal_offline ?? null,
+    // A sale replayed from the outbox is already made and handed over: the
+    // kitchen worked from the till's own «К17», so the server files it as
+    // served rather than putting it on the board as new, and does not refuse
+    // it for a stop-list it could not have known about (К3a/К3b). Only this
+    // path may say so — the flag relaxes the menu rule, never the money.
+    offline_replay: true,
   });
   // Record client_uuid -> server id so the receipts screen can address this
   // sale on the server once it exists there.

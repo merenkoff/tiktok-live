@@ -6,13 +6,21 @@
 // and keeps selling when that module is missing or broken.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
-import { renderWithProviders, makeAuthResponse } from '../../test/utils';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { renderWithProviders, makeAuthResponse, makeSaleDetail } from '../../test/utils';
+import { cashierApi } from '../../offline/cashierApi';
 import { useAuthStore } from '../../hooks/useAuth';
 import { useCartStore } from '../../hooks/useCart';
 import { RegisterPage } from './RegisterPage';
 import { remoteModules } from '../../modules/registry';
 import type { SalesCatalogProps } from '../../modules/types';
+
+// The success screen reads the station's printer from Dexie; jsdom has no
+// IndexedDB, and an unconfigured printer is exactly the no-print path.
+vi.mock('../../offline/db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../offline/db')>()),
+  getMeta: vi.fn(async () => undefined),
+}));
 
 function installVertical(Catalog: (props: SalesCatalogProps) => JSX.Element): void {
   remoteModules.push({
@@ -134,5 +142,75 @@ describe('RegisterPage with a café line', () => {
     expect(
       await screen.findByText('Позицію з модифікаторами поки не можна відкласти')
     ).toBeInTheDocument();
+  });
+});
+
+describe('RegisterPage success screen — the order number (К3d)', () => {
+  function ringEspresso(): void {
+    useCartStore.getState().restore({
+      lines: [
+        {
+          uid: '3',
+          variant_id: 3,
+          product_name: 'Еспресо',
+          variant_label: '',
+          unit: 'шт',
+          unit_price_cents: 4500,
+          quantity: 1,
+          max_quantity: 9,
+        },
+      ],
+    });
+  }
+
+  async function payCash(): Promise<void> {
+    fireEvent.click(screen.getAllByRole('button', { name: /^Сплатити/ })[0]);
+    const dialog = await screen.findByRole('dialog', { name: 'Оплата' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Готівка' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Готово' }));
+  }
+
+  it('shows the till’s own «К1» with its caption on a sale queued offline', async () => {
+    signIn('cafe');
+    ringEspresso();
+    vi.spyOn(cashierApi, 'completeSale').mockResolvedValue(
+      makeSaleDetail({ order_no: null, local_order_no: 1, receipt_number: 'OFF-ABCD1234' })
+    );
+    renderWithProviders(<RegisterPage />, { shell: 'cashier' });
+    expect(await screen.findByPlaceholderText('Пошук')).toBeInTheDocument();
+
+    await payCash();
+    expect(await screen.findByTestId('order-no')).toHaveTextContent('К1');
+    expect(screen.getByTestId('order-no-local')).toHaveTextContent('сервер призначить свій');
+    expect(screen.getByText('Чек OFF-ABCD1234')).toBeInTheDocument();
+  });
+
+  it('shows the server’s number bare, with no caption, once there is one', async () => {
+    signIn('cafe');
+    ringEspresso();
+    vi.spyOn(cashierApi, 'completeSale').mockResolvedValue(
+      makeSaleDetail({ order_no: 42, receipt_number: 'ЧК-000042' })
+    );
+    renderWithProviders(<RegisterPage />, { shell: 'cashier' });
+    expect(await screen.findByPlaceholderText('Пошук')).toBeInTheDocument();
+
+    await payCash();
+    expect(await screen.findByTestId('order-no')).toHaveTextContent('42');
+    expect(screen.queryByTestId('order-no-local')).toBeNull();
+  });
+
+  it('shows no number of either kind outside a café', async () => {
+    signIn('clothing');
+    ringEspresso();
+    vi.spyOn(cashierApi, 'completeSale').mockResolvedValue(
+      makeSaleDetail({ order_no: null, local_order_no: 1, receipt_number: 'OFF-ABCD1234' })
+    );
+    renderWithProviders(<RegisterPage />, { shell: 'cashier' });
+    expect(await screen.findByPlaceholderText('Пошук')).toBeInTheDocument();
+
+    await payCash();
+    expect(await screen.findByText('Чек')).toBeInTheDocument();
+    expect(screen.queryByTestId('order-no')).toBeNull();
+    expect(screen.getByText('OFF-ABCD1234')).toBeInTheDocument();
   });
 });

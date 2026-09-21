@@ -905,6 +905,12 @@ export interface SaleDetail {
    * offline until it syncs. Shown where the vertical wants it.
    */
   order_no?: number | null;
+  /**
+   * The desktop till's own daily number for a sale it queued offline — shown
+   * as «К17» while `order_no` is null, and gone once sync replaces this row
+   * with the server's sale. Never sent to the server; never on a web sale.
+   */
+  local_order_no?: number | null;
   /** Client-generated UUID (offline idempotency key) — links a server sale to its local row. */
   client_uuid?: string | null;
   status: string;
