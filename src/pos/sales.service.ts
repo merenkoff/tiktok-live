@@ -23,6 +23,7 @@ import type {
 } from './types.js';
 import { getCustomer } from './customers.service.js';
 import { storeClock } from './core/storeClock.js';
+import { dailyCounterKey, nextCounterValue } from './core/counters.js';
 import * as preorders from './preorders.service.js';
 import * as modifiers from './modifiers.service.js';
 import type { LineModifierSnapshot } from './modifiers.service.js';
@@ -189,31 +190,17 @@ async function nextReceiptNumber(
 
 /**
  * The order number the barista calls out: 1, 2, 3… restarting every day the
- * store's own clock says has begun (migration 047). Seeded at 1 with the
- * day-keyed form `nextDocNumber` uses for stock documents — not the
- * MAX-seeded receipt form, whose key never changes. Inside the sale's
- * transaction, so a rolled-back sale gives its number back.
+ * store's own clock says has begun (migration 047). The counter itself lives
+ * in `core/counters.ts`, shared with the bill number a waiter reads off a
+ * table tile (052) — same day-keyed shape, so the two cannot drift. Inside
+ * the sale's transaction, so a rolled-back sale gives its number back.
  */
-async function nextOrderNo(
+function nextOrderNo(
   client: { query: typeof pool.query },
   storeId: number,
   today: string
 ): Promise<number> {
-  const counterKey = `order_${today}`;
-  await client.query(
-    `INSERT INTO pos_store_counters (store_id, counter_key, next_value)
-     VALUES ($1, $2, 1)
-     ON CONFLICT (store_id, counter_key) DO NOTHING`,
-    [storeId, counterKey]
-  );
-  const result = await client.query(
-    `UPDATE pos_store_counters
-     SET next_value = next_value + 1
-     WHERE store_id = $1 AND counter_key = $2
-     RETURNING next_value - 1 AS seq`,
-    [storeId, counterKey]
-  );
-  return Number(result.rows[0].seq);
+  return nextCounterValue(client, storeId, dailyCounterKey('order', today));
 }
 
 /** Refunds are their own documents, so they carry their own numbering. */
