@@ -155,7 +155,7 @@ pub(crate) fn chars_per_line(paper_width_mm: Option<u16>) -> usize {
 // `write` maps each char to its single Win-1251 byte.
 pub(crate) const RECEIPT_PAGE_CODE: PageCode = PageCode::WPC1251;
 
-fn money(cents: i64) -> String {
+pub(crate) fn money(cents: i64) -> String {
     format!("{:.2}", cents as f64 / 100.0)
 }
 
@@ -163,7 +163,7 @@ pub(crate) fn divider(width: usize) -> String {
     "-".repeat(width)
 }
 
-fn two_col(width: usize, left: &str, right: &str) -> String {
+pub(crate) fn two_col(width: usize, left: &str, right: &str) -> String {
     let space = width.saturating_sub(left.chars().count() + right.chars().count()).max(1);
     format!("{left}{}{right}", " ".repeat(space))
 }

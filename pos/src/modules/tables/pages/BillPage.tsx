@@ -22,11 +22,20 @@
 
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { formatUah, useOfflineStatus } from '@pos/platform';
+import {
+  DEFAULT_RECEIPT_PAPER_WIDTH,
+  formatUah,
+  getMeta,
+  printPrecheck,
+  useOfflineStatus,
+  usePosShell,
+} from '@pos/platform';
+import type { ReceiptPaperWidth } from '@pos/platform';
 import { DishPicker } from '../components/DishPicker';
 import { PaySheet } from '../components/PaySheet';
 import { billTotals, canCancelRound, firedLineCents, lineTitle, ROUND_STATUS } from '../lib/bill';
 import { isSettled, payableLines } from '../lib/pay';
+import { buildPrecheck } from '../lib/precheck';
 import { useBill } from '../lib/useBill';
 import * as tablesApi from '../lib/tablesApi';
 import type { PayPart } from '../lib/tablesApi';
@@ -44,9 +53,11 @@ export function BillPage(): JSX.Element {
   const { billId } = useParams<{ billId: string }>();
   const id = Number(billId);
   const online = useOfflineStatus((s) => s.online);
+  const shell = usePosShell();
   const { bill, loading, error, banner, busy, clearBanner, reload, run } = useBill(id, online);
   const [picking, setPicking] = useState(false);
   const [paying, setPaying] = useState(false);
+  const [printStatus, setPrintStatus] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const totals = useMemo(() => (bill ? billTotals(bill) : null), [bill]);
@@ -98,6 +109,36 @@ export function BillPage(): JSX.Element {
     if (!ok) return;
     setPaying(false);
     if (settled) navigate('/tables');
+  };
+
+  /**
+   * The pre-bill: mark it on the server, and on a till also print it.
+   *
+   * The mark is the part that matters to everyone else — it is what the
+   * table's tile shows, so the next waiter does not read the sum out twice —
+   * so it is recorded first and never held up by paper. The waiter's tablet
+   * is the web shell and has no printer at all; there the mark IS the whole
+   * action, and К4h's Rust command simply never runs.
+   */
+  const precheck = async (): Promise<void> => {
+    setPrintStatus(null);
+    const ok = await run(() => tablesApi.markPrecheck(bill.id));
+    if (!ok || shell !== 'cashier') return;
+    try {
+      const [name, mm] = await Promise.all([
+        getMeta<string>('receiptPrinterName'),
+        getMeta<ReceiptPaperWidth>('receiptPaperWidthMm'),
+      ]);
+      if (!name) return; // a till with no thermal printer configured
+      await printPrecheck(
+        name,
+        buildPrecheck(bill),
+        mm === 58 || mm === 80 ? mm : DEFAULT_RECEIPT_PAPER_WIDTH
+      );
+      setPrintStatus('Передчек надіслано на друк');
+    } catch (err) {
+      setPrintStatus(err instanceof Error ? err.message : 'Не вдалося надрукувати');
+    }
   };
 
   const line = (l: BillLine, fired: boolean): JSX.Element => (
@@ -270,10 +311,15 @@ export function BillPage(): JSX.Element {
           className="sq-link mt-2"
           data-testid="bill-precheck"
           disabled={busy || owedLines.length === 0}
-          onClick={() => void run(() => tablesApi.markPrecheck(bill.id))}
+          onClick={() => void precheck()}
         >
           {bill.precheck_printed_at ? 'Передчек надруковано · ще раз' : 'Передчек'}
         </button>
+        {printStatus && (
+          <p className="mt-1 text-xs text-sq-muted" data-testid="bill-print-status">
+            {printStatus}
+          </p>
+        )}
       </footer>
 
       {paying && (

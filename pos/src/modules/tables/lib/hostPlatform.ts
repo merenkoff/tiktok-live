@@ -34,6 +34,14 @@ export const REQUIRED_HOST_API = [
   'groupsOf',
   'defaultModifierIds',
   'needsModifierSheet',
+  // К4h: the pre-bill. Platform 14 — the Tauri command behind it is the
+  // host's, and a module reaching `invoke` itself would bundle a second copy
+  // of the Tauri API. `getMeta` is how the till's configured receipt printer
+  // is found; on the web both are present and simply never used, because the
+  // shell there is not a till.
+  'printPrecheck',
+  'getMeta',
+  'usePosShell',
 ] as const;
 
 /** The host shell is older than this module — it lacks part of the contract. */

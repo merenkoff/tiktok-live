@@ -41,6 +41,7 @@ const EXPECTED_COMMANDS = [
   'list_hardware',
   'list_printers',
   'print_kitchen_ticket',
+  'print_precheck',
   'print_receipt',
   'print_webview',
   'prune_module_remotes',

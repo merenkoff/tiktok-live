@@ -173,3 +173,44 @@ export function printKitchenTicket(
 ): Promise<void> {
   return invoke('print_kitchen_ticket', { printerName, ticket, paperWidthMm });
 }
+
+/** One line of a pre-bill: what was served, how many, at what the round locked. */
+export interface PrecheckItem {
+  name: string;
+  /** Composed by the round when it fired — modifiers included. */
+  variant_label: string;
+  quantity: number;
+  unit_price_cents: number;
+  line_total_cents: number;
+}
+
+/**
+ * A pre-bill (tables phase К4h): what the guests are handed when they ask for
+ * the bill. Deliberately not a receipt — no «ЧЕК №», no fiscal block, no
+ * tax-office QR — and it says so on the paper twice, because under Закон
+ * 265/95-ВР the settlement document is the fiscal receipt and this is not it.
+ * Built by `modules/tables/lib/precheck.ts`, drawn by Rust
+ * `hardware/precheck.rs`.
+ */
+export interface PrecheckData {
+  table_name: string;
+  hall_name: string;
+  bill_no: number | null;
+  guests: number | null;
+  /** Already formatted — when the table was seated. */
+  opened_at: string;
+  /** Already formatted — now. */
+  printed_at: string;
+  waiter_name: string;
+  items: PrecheckItem[];
+  total_cents: number;
+}
+
+/** Print one pre-bill to a named OS printer — the Rust `print_precheck` command. */
+export function printPrecheck(
+  printerName: string,
+  bill: PrecheckData,
+  paperWidthMm: ReceiptPaperWidth = DEFAULT_RECEIPT_PAPER_WIDTH
+): Promise<void> {
+  return invoke('print_precheck', { printerName, bill, paperWidthMm });
+}

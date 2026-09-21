@@ -1,5 +1,5 @@
 {
-  "platformVersion": 13,
+  "platformVersion": 14,
   "exports": {
     "platform": [
       "DEFAULT_RECEIPT_PAPER_WIDTH",
@@ -50,6 +50,7 @@
       "needsModifierSheet",
       "normalizeModifierIds",
       "priceOfComponents",
+      "printPrecheck",
       "printReceipt",
       "refundLineAmount",
       "refusalText",
