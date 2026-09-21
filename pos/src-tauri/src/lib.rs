@@ -31,6 +31,7 @@ pub fn run() {
             hardware::list_hardware,
             hardware::os_printers::list_printers,
             hardware::receipt::print_receipt,
+            hardware::kitchen_ticket::print_kitchen_ticket,
             update::check_for_update,
             update::install_update,
             module_remotes::sync_module_remote,

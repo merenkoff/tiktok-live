@@ -9,20 +9,152 @@ import { HardwareDevice, listHardware } from '../lib/hardware';
 import { installUpdate } from '../lib/updates';
 import {
   DEFAULT_RECEIPT_PAPER_WIDTH,
+  KitchenTicketData,
   PrinterInfo,
   RECEIPT_PAPER_WIDTHS,
   ReceiptData,
   ReceiptPaperWidth,
   listPrinters,
+  printKitchenTicket,
   printReceipt,
 } from '../lib/printer';
+import {
+  BAR_PAPER_META_KEY,
+  BAR_PRINTER_META_KEY,
+  KITCHEN_PAPER_META_KEY,
+  KITCHEN_PRINTER_META_KEY,
+} from '../lib/kitchenPrinters';
+import { STATION_TITLES, type Station } from '../lib/kitchenTicket';
 import { usePrintableReceipt } from '../hooks/usePrintableReceipt';
 import { useUpdateStore } from '../hooks/useUpdateCheck';
 import { getMeta, setMeta } from '../offline/db';
-import { useAuthStore } from '@pos/platform';
+import { useAuthStore, useVertical } from '@pos/platform';
 
 const RECEIPT_PRINTER_META_KEY = 'receiptPrinterName';
 const RECEIPT_PAPER_META_KEY = 'receiptPaperWidthMm';
+
+const STATION_META: Record<Station, { printer: string; paper: string }> = {
+  kitchen: { printer: KITCHEN_PRINTER_META_KEY, paper: KITCHEN_PAPER_META_KEY },
+  bar: { printer: BAR_PRINTER_META_KEY, paper: BAR_PAPER_META_KEY },
+};
+
+/** What a station's «Тестовий тікет» prints — every element a real one can carry. */
+function testKitchenTicket(station: Station): KitchenTicketData {
+  return {
+    order_label: '17',
+    station: STATION_TITLES[station],
+    created_at: new Date().toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }),
+    staff_name: 'Тест',
+    note: 'тестовий друк',
+    receipt_number: null,
+    items: [
+      { name: 'Латте', variant_label: 'M', quantity: 1, modifiers: ['вівсяне', 'без цукру'], note: 'гарячіше' },
+      { name: 'Круасан', variant_label: '', quantity: 2, modifiers: [], note: null },
+    ],
+  };
+}
+
+interface StationPrinterSectionProps {
+  station: Station;
+  title: string;
+  hint: string;
+  printers: PrinterInfo[];
+  selected: string | null;
+  paperWidth: ReceiptPaperWidth;
+  onSelect: (name: string) => void;
+  onPaperWidth: (mm: ReceiptPaperWidth) => void;
+  /** The bar only: forget its own printer and follow the kitchen's. */
+  onFollowKitchen?: () => void;
+  onTest: () => void;
+  testing: boolean;
+  testStatus: string | null;
+}
+
+/**
+ * A station's printer (К3e): the same picker as the receipt printer's, minus
+ * the PDF fallback — a kitchen ticket that is not printed is not a ticket.
+ */
+function StationPrinterSection({
+  station,
+  title,
+  hint,
+  printers,
+  selected,
+  paperWidth,
+  onSelect,
+  onPaperWidth,
+  onFollowKitchen,
+  onTest,
+  testing,
+  testStatus,
+}: StationPrinterSectionProps) {
+  return (
+    <div data-testid={`station-printer-${station}`}>
+      <p className="sq-section-label">{title}</p>
+      <p className="text-sq-secondary text-sm">{hint}</p>
+      {printers.length === 0 && (
+        <p className="text-sm text-sq-secondary mt-2">Принтерів не знайдено — див. «Принтер чеків».</p>
+      )}
+      <ul className="space-y-2 mt-2">
+        {printers.map((printer) => (
+          <li key={printer.name}>
+            <button
+              type="button"
+              onClick={() => onSelect(printer.name)}
+              className={`w-full flex items-center gap-3 border rounded-sq p-4 text-left ${
+                selected === printer.name ? 'border-sq-blue bg-sq-surface' : 'border-sq-divider bg-sq-surface'
+              }`}
+            >
+              <span
+                className={`w-2 h-2 rounded-full shrink-0 ${selected === printer.name ? 'bg-sq-blue' : 'bg-sq-muted'}`}
+                aria-hidden
+              />
+              <span className="block text-sm font-medium truncate min-w-0 flex-1">{printer.name}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {selected && (
+        <>
+          <div className="mt-2 inline-flex rounded-sq border border-sq-divider overflow-hidden">
+            {RECEIPT_PAPER_WIDTHS.map((mm) => (
+              <button
+                key={mm}
+                type="button"
+                onClick={() => onPaperWidth(mm)}
+                className={`min-h-11 px-4 text-sm font-medium ${
+                  paperWidth === mm ? 'bg-sq-blue text-white' : 'bg-sq-surface text-sq-text'
+                }`}
+              >
+                {mm} мм
+              </button>
+            ))}
+          </div>
+          <div className="mt-3 flex items-center gap-3 flex-wrap">
+            <button
+              type="button"
+              onClick={onTest}
+              disabled={testing}
+              className="min-h-11 px-4 text-sm font-medium text-sq-blue disabled:opacity-50"
+            >
+              {testing ? 'Друк…' : 'Тестовий тікет'}
+            </button>
+            {onFollowKitchen && (
+              <button
+                type="button"
+                onClick={onFollowKitchen}
+                className="min-h-11 px-4 text-sm font-medium text-sq-secondary"
+              >
+                Той самий, що кухня
+              </button>
+            )}
+            {testStatus && <span className="text-sm text-sq-secondary">{testStatus}</span>}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 function testReceipt(storeName: string): ReceiptData {
   return {
@@ -67,6 +199,8 @@ function formatId(value: number) {
 
 export function HardwarePage() {
   const storeName = useAuthStore((s) => s.auth?.store.name) ?? '';
+  // A café has a kitchen and a bar to send tickets to; nobody else does.
+  const cafe = useVertical().id === 'cafe';
   const [devices, setDevices] = useState<HardwareDevice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -78,6 +212,16 @@ export function HardwarePage() {
   const [testStatus, setTestStatus] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const [paperWidth, setPaperWidth] = useState<ReceiptPaperWidth>(DEFAULT_RECEIPT_PAPER_WIDTH);
+  const [stationPrinters, setStationPrinters] = useState<Record<Station, string | null>>({
+    kitchen: null,
+    bar: null,
+  });
+  const [stationPaper, setStationPaper] = useState<Record<Station, ReceiptPaperWidth>>({
+    kitchen: DEFAULT_RECEIPT_PAPER_WIDTH,
+    bar: DEFAULT_RECEIPT_PAPER_WIDTH,
+  });
+  const [ticketTesting, setTicketTesting] = useState<Station | null>(null);
+  const [ticketStatus, setTicketStatus] = useState<{ station: Station; text: string } | null>(null);
   const { printToPdf, printablePortal } = usePrintableReceipt();
   const updateInfo = useUpdateStore((s) => s.updateInfo);
   const [installing, setInstalling] = useState(false);
@@ -108,7 +252,42 @@ export function HardwarePage() {
     void getMeta<ReceiptPaperWidth>(RECEIPT_PAPER_META_KEY).then((mm) => {
       if (mm && RECEIPT_PAPER_WIDTHS.includes(mm)) setPaperWidth(mm);
     });
+    for (const station of ['kitchen', 'bar'] as const) {
+      void getMeta<string>(STATION_META[station].printer).then((name) =>
+        setStationPrinters((prev) => ({ ...prev, [station]: typeof name === 'string' ? name : null }))
+      );
+      void getMeta<ReceiptPaperWidth>(STATION_META[station].paper).then((mm) => {
+        if (mm && RECEIPT_PAPER_WIDTHS.includes(mm)) setStationPaper((prev) => ({ ...prev, [station]: mm }));
+      });
+    }
   }, [refresh, refreshPrinters]);
+
+  function selectStationPrinter(station: Station, name: string | null) {
+    setStationPrinters((prev) => ({ ...prev, [station]: name }));
+    setTicketStatus(null);
+    void setMeta(STATION_META[station].printer, name);
+  }
+
+  function selectStationPaper(station: Station, mm: ReceiptPaperWidth) {
+    setStationPaper((prev) => ({ ...prev, [station]: mm }));
+    setTicketStatus(null);
+    void setMeta(STATION_META[station].paper, mm);
+  }
+
+  async function testTicket(station: Station) {
+    const name = stationPrinters[station];
+    if (!name) return;
+    setTicketTesting(station);
+    setTicketStatus(null);
+    try {
+      await printKitchenTicket(name, testKitchenTicket(station), stationPaper[station]);
+      setTicketStatus({ station, text: 'Надіслано на друк' });
+    } catch (e) {
+      setTicketStatus({ station, text: `Помилка друку: ${typeof e === 'string' ? e : String(e)}` });
+    } finally {
+      setTicketTesting(null);
+    }
+  }
 
   function selectPrinter(name: string) {
     setSelectedPrinter(name);
@@ -358,6 +537,38 @@ export function HardwarePage() {
           </>
         )}
       </div>
+
+      {cafe && (
+        <>
+          <StationPrinterSection
+            station="kitchen"
+            title="Принтер кухні"
+            hint="Тікет кожного замовлення: без цін, з номером на весь рулон. Без нього тікети не друкуються."
+            printers={printers}
+            selected={stationPrinters.kitchen}
+            paperWidth={stationPaper.kitchen}
+            onSelect={(name) => selectStationPrinter('kitchen', name)}
+            onPaperWidth={(mm) => selectStationPaper('kitchen', mm)}
+            onTest={() => void testTicket('kitchen')}
+            testing={ticketTesting === 'kitchen'}
+            testStatus={ticketStatus?.station === 'kitchen' ? ticketStatus.text : null}
+          />
+          <StationPrinterSection
+            station="bar"
+            title="Принтер бару"
+            hint="Напої з теґів зі станцією «Бар». Не обрано — друкуються на принтері кухні."
+            printers={printers}
+            selected={stationPrinters.bar}
+            paperWidth={stationPaper.bar}
+            onSelect={(name) => selectStationPrinter('bar', name)}
+            onPaperWidth={(mm) => selectStationPaper('bar', mm)}
+            onFollowKitchen={() => selectStationPrinter('bar', null)}
+            onTest={() => void testTicket('bar')}
+            testing={ticketTesting === 'bar'}
+            testStatus={ticketStatus?.station === 'bar' ? ticketStatus.text : null}
+          />
+        </>
+      )}
     </div>
   );
 

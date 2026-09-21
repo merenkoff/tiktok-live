@@ -16,6 +16,7 @@ import { DEFAULT_RECEIPT_PAPER_WIDTH, ReceiptPaperWidth, printReceipt } from '..
 import { buildReceiptPayload, fiscalBlockComplete } from '../../lib/receipt';
 import { usePrintableReceipt } from '../../hooks/usePrintableReceipt';
 import { getMeta } from '../../offline/db';
+import { printKitchenTickets } from '../../offline/kitchenTickets';
 import type { PaymentMethod, SaleDetail, SalePaymentInput } from '../../types';
 import { CheckoutModal } from '../../components/CheckoutModal';
 import { SaleSidebar } from '../../components/cashier/SaleSidebar';
@@ -103,6 +104,11 @@ export function RegisterPage() {
   const [preorderError, setPreorderError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
   const [success, setSuccess] = useState<SaleDetail | null>(null);
+  /** The kitchen ticket's fate for this sale (К3e): status text, and whether a station printer exists. */
+  const [kitchenStatus, setKitchenStatus] = useState<string | null>(null);
+  const [kitchenPrinter, setKitchenPrinter] = useState(false);
+  const [kitchenPrinting, setKitchenPrinting] = useState(false);
+  const kitchenPrintedRef = useRef<string | null>(null);
   /** Shown inside the payment modal, which is opaque and covers everything else. */
   const [checkoutError, setCheckoutError] = useState<{
     message: string;
@@ -529,6 +535,42 @@ export function RegisterPage() {
     setPreorderOpen(true);
   }
 
+  // The kitchen ticket (К3e): every café sale, the moment it is rung, to the
+  // station printers. No `auto_print_receipt` gate and no ПРРО gate on
+  // purpose — a paid order is made while the fiscal retry is still running,
+  // and the ticket is not a receipt. Keyed on the sale, so a re-render or
+  // StrictMode's second pass never sends the kitchen the same order twice.
+  useEffect(() => {
+    if (!success || vertical !== 'cafe') return;
+    const key = success.client_uuid ?? success.receipt_number ?? String(success.id);
+    if (kitchenPrintedRef.current === key) return;
+    kitchenPrintedRef.current = key;
+    setKitchenStatus(null);
+    void printKitchenTickets(success)
+      .then((outcome) => {
+        setKitchenPrinter(outcome !== 'no-printer');
+        if (outcome === 'printed') setKitchenStatus('Тікет надіслано на кухню');
+      })
+      .catch((e) => {
+        setKitchenPrinter(true);
+        setKitchenStatus(`Не вдалося надрукувати тікет: ${typeof e === 'string' ? e : String(e)}`);
+      });
+  }, [success, vertical]);
+
+  async function printKitchenTicketAgain() {
+    if (!success) return;
+    setKitchenPrinting(true);
+    setKitchenStatus(null);
+    try {
+      const outcome = await printKitchenTickets(success);
+      setKitchenStatus(outcome === 'printed' ? 'Тікет надіслано на кухню' : 'Принтер кухні не обрано');
+    } catch (e) {
+      setKitchenStatus(`Не вдалося надрукувати тікет: ${typeof e === 'string' ? e : String(e)}`);
+    } finally {
+      setKitchenPrinting(false);
+    }
+  }
+
   /** The trade name plus the cached ПРРО requisites — everything the paper says about the store. */
   const receiptStore = () => ({
     name: auth?.store.name ?? '',
@@ -634,6 +676,7 @@ export function RegisterPage() {
             onClick={() => {
               setSuccess(null);
               setFiscalNotice(null);
+              setKitchenStatus(null);
               cancelRung.reset();
             }}
           >
@@ -666,6 +709,17 @@ export function RegisterPage() {
               {printing ? 'Друк…' : 'Друкувати чек'}
             </button>
           )}
+          {vertical === 'cafe' && kitchenPrinter && (
+            <button
+              type="button"
+              className="mt-3 w-full py-3 text-sm font-medium text-sq-blue disabled:opacity-50"
+              onClick={() => void printKitchenTicketAgain()}
+              disabled={kitchenPrinting}
+              data-testid="print-kitchen-ticket"
+            >
+              {kitchenPrinting ? 'Друк…' : 'Друкувати тікет'}
+            </button>
+          )}
           <button
             type="button"
             className={`w-full py-3 text-sm font-medium text-sq-blue ${receiptPrinterName ? '' : 'mt-3'}`}
@@ -674,6 +728,11 @@ export function RegisterPage() {
             {receiptPrinterName ? 'Зберегти чек як PDF' : 'Принтер не обрано — зберегти чек як PDF'}
           </button>
           {printStatus && <p className="text-sq-secondary text-sm mt-1">{printStatus}</p>}
+          {kitchenStatus && (
+            <p className="text-sq-secondary text-sm mt-1" data-testid="kitchen-status">
+              {kitchenStatus}
+            </p>
+          )}
         </div>
         {printablePortal}
         {cancelRung.node}

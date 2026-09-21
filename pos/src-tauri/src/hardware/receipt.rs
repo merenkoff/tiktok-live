@@ -140,7 +140,7 @@ pub struct ReceiptData {
 const CHARS_58MM: usize = 32;
 const CHARS_80MM: usize = 48;
 
-fn chars_per_line(paper_width_mm: Option<u16>) -> usize {
+pub(crate) fn chars_per_line(paper_width_mm: Option<u16>) -> usize {
     match paper_width_mm {
         Some(mm) if mm >= 80 => CHARS_80MM,
         _ => CHARS_58MM,
@@ -153,13 +153,13 @@ fn chars_per_line(paper_width_mm: Option<u16>) -> usize {
 // crate that carries the full Ukrainian set (і, ї, є, ґ); PC866 there is missing
 // them. `Printer::init()` emits the matching `ESC t` select command, and every
 // `write` maps each char to its single Win-1251 byte.
-const RECEIPT_PAGE_CODE: PageCode = PageCode::WPC1251;
+pub(crate) const RECEIPT_PAGE_CODE: PageCode = PageCode::WPC1251;
 
 fn money(cents: i64) -> String {
     format!("{:.2}", cents as f64 / 100.0)
 }
 
-fn divider(width: usize) -> String {
+pub(crate) fn divider(width: usize) -> String {
     "-".repeat(width)
 }
 
@@ -415,7 +415,7 @@ fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> 
     Ok(bytes)
 }
 
-fn now_nanos() -> u128 {
+pub(crate) fn now_nanos() -> u128 {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -430,26 +430,22 @@ fn now_nanos() -> u128 {
 // "application/vnd.cups-raw" is what stops CUPS from running our ESC/POS bytes
 // through a text-to-PostScript filter. Pick the right value per OS.
 #[cfg(windows)]
-const RAW_JOB_PROPS: &[(&str, &str)] = &[("document-format", "RAW")];
+pub(crate) const RAW_JOB_PROPS: &[(&str, &str)] = &[("document-format", "RAW")];
 #[cfg(not(windows))]
-const RAW_JOB_PROPS: &[(&str, &str)] = &[("document-format", "application/vnd.cups-raw")];
+pub(crate) const RAW_JOB_PROPS: &[(&str, &str)] = &[("document-format", "application/vnd.cups-raw")];
 
-#[tauri::command]
-pub fn print_receipt(
-    printer_name: String,
-    receipt: ReceiptData,
-    paper_width_mm: Option<u16>,
-) -> Result<(), String> {
-    let bytes = build_ticket(&receipt, chars_per_line(paper_width_mm))?;
-
-    let target = printers::get_printer_by_name(&printer_name)
+/// Hand raw ESC/POS bytes to a named OS printer as one job. Shared by the
+/// receipt and the kitchen ticket (`kitchen_ticket.rs`): the printer lookup,
+/// the raw-format option and the error wording are the same for both.
+pub(crate) fn send_raw(printer_name: &str, bytes: &[u8], job_name: &str) -> Result<(), String> {
+    let target = printers::get_printer_by_name(printer_name)
         .ok_or_else(|| format!("Принтер \"{printer_name}\" не знайдено"))?;
 
     target
         .print(
-            &bytes,
+            bytes,
             PrinterJobOptions {
-                name: Some("Чек"),
+                name: Some(job_name),
                 raw_properties: RAW_JOB_PROPS,
                 ..PrinterJobOptions::none()
             },
@@ -459,11 +455,19 @@ pub fn print_receipt(
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+#[tauri::command]
+pub fn print_receipt(
+    printer_name: String,
+    receipt: ReceiptData,
+    paper_width_mm: Option<u16>,
+) -> Result<(), String> {
+    let bytes = build_ticket(&receipt, chars_per_line(paper_width_mm))?;
+    send_raw(&printer_name, &bytes, "Чек")
+}
 
-    fn win1251(s: &str) -> Vec<u8> {
+#[cfg(test)]
+pub(crate) mod test_util {
+    pub(crate) fn win1251(s: &str) -> Vec<u8> {
         // Only what these tests need: ASCII passes through, Cyrillic maps to
         // the Win-1251 table the printer is switched to (`RECEIPT_PAGE_CODE`).
         s.chars()
@@ -480,9 +484,15 @@ mod tests {
             .collect()
     }
 
-    fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+    pub(crate) fn contains(haystack: &[u8], needle: &[u8]) -> bool {
         haystack.windows(needle.len()).any(|w| w == needle)
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::test_util::{contains, win1251};
+    use super::*;
 
     fn base() -> ReceiptData {
         ReceiptData {
