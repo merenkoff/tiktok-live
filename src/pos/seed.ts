@@ -144,6 +144,42 @@ async function registerCafeModule(): Promise<void> {
   console.log(`   vertical-cafe module registered → ${entry.url}`);
 }
 
+/**
+ * Point the demo café at a locally served `tables` bundle (café phase К4e).
+ *
+ * Its OWN entry beside `vertical-cafe`, not inside it: a `module_remotes`
+ * value carries exactly one `routePath`, the café spent its on `/kitchen`,
+ * and tables are not a vertical anyway (TechDocs/POS_TABLES.md §4.11). The
+ * presence of this entry is what turns the store into a restaurant — there is
+ * no `service_mode` column.
+ *
+ * Dev only, like the two above: a real store gets its URL from the super
+ * admin, and baking `localhost:5009` into a database would send production
+ * tills looking for a module on the waiter's laptop.
+ */
+async function registerTablesModule(): Promise<void> {
+  const store = await pool.query(`SELECT id FROM pos_stores WHERE slug = 'demo-cafe'`);
+  if (store.rows.length === 0) {
+    console.log('   demo-cafe store not found — run the migrations first');
+    return;
+  }
+  const entry = {
+    url: process.env.POS_SEED_TABLES_URL || 'http://localhost:5009/remote-entry.js',
+    title: 'Столи',
+    routePath: '/tables',
+    icon: 'Grid3X3',
+    nav: [{ label: 'Столи', location: 'cashier-primary', order: 60, icon: 'Grid3X3', match: '/tables' }],
+  };
+  await pool.query(
+    `UPDATE pos_stores
+     SET module_remotes = COALESCE(module_remotes, '{}'::jsonb)
+                          || jsonb_build_object('tables', $2::jsonb)
+     WHERE id = $1`,
+    [Number(store.rows[0].id), JSON.stringify(entry)]
+  );
+  console.log(`   tables module registered → ${entry.url}`);
+}
+
 /** Copies the committed demo product photos into the (gitignored) uploads dir. */
 async function copySeedProductImages(): Promise<void> {
   await ensureUploadsDir();
@@ -321,6 +357,7 @@ async function seed(): Promise<void> {
   if (process.env.POS_SEED_TIKTOK_LIVE === '1') await seedTiktokLiveModule(storeId);
   if (process.env.POS_SEED_VERTICAL_FLOWERS === '1') await registerFlowersModule();
   if (process.env.POS_SEED_VERTICAL_CAFE === '1') await registerCafeModule();
+  if (process.env.POS_SEED_TABLES === '1') await registerTablesModule();
   console.log('\n✅ Demo store ready (tags ensured)');
   console.log('   Store slug: demo');
   console.log('   Owner: owner@demo.shop / owner123');

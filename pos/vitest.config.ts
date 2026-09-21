@@ -41,6 +41,7 @@ export default defineConfig({
         'src/modules/vertical-flowers/bench/useBench.ts',
         'src/modules/vertical-cafe/kitchen/lib/kitchen.ts',
         'src/modules/vertical-cafe/lib/stopList.ts',
+        'src/modules/tables/lib/hallMap.ts',
         'src/lib/bouquet.ts',
         'src/lib/kitchenPrinters.ts',
         'src/lib/kitchenTicket.ts',
