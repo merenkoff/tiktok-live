@@ -68,6 +68,22 @@ npm run test:e2e               # Playwright against `vite preview`, routes mocke
 Also runnable from repo root: `npm run test:pos`, `npm run test:pos:coverage`.
 CI: `.github/workflows/pos-tests.yml` runs lint, unit+coverage and e2e on PRs/pushes touching `pos/**`.
 
+#### Running the POS locally against a demo store
+```bash
+cp .env.example .env                          # DB on localhost:5433 (edit DB_PORT if that port is taken)
+npm run docker:deps                           # Postgres :5433 (nothing in src/ uses Redis)
+npm run pos:migrate
+POS_SEED_VERTICAL_CAFE=1 npm run pos:seed     # demo-cafe + registers vertical-cafe → localhost:5008 (POS_SEED_VERTICAL_FLOWERS=1 → flowers, :5007)
+npm run dev                                   # API :3000
+cd pos
+npm run build:local                           # web build that talks to the local API
+npm run build:vertical-cafe-remote && npm run serve:vertical-cafe-remote   # module bundle, :5008
+npm run preview:local                         # http://localhost:3002
+```
+Logins (`pos:seed` prints them): store `demo-cafe` + seller PIN `1234`, owner `owner@cafe.shop` / `owner123`.
+
+Why a production build and not `npm run dev`: a runtime-loaded module (`vertical-*`, `tiktok-live`, …) resolves `@pos/platform` through the import map that only `dist/` has — under `vite dev` it is bundled through the alias. And why `build:local` and not `build`: `vite.platform-remote.config.ts` bakes `https://the-live.shop` into the shared `@pos/platform` chunk (where the axios client lives) unless `VITE_API_BASE` is set — right for the desktop cashier, wrong here: a plain `npm run build` produces a "local" POS that talks to **production**. `build:local` points it at `http://localhost:3002`, the origin `preview:local` serves, whose proxy forwards `/api` and `/pos-uploads` to :3000, so no CORS. Check what a build will call with `(await import('@pos/platform')).apiOrigin()` in the browser console. `VITE_REMOTE_ALLOW_DEV_KEY=1` makes the host trust the dev signing key the `build:*-remote` scripts sign with. The migrations are re-applied on every start and `036` drops columns older branches still read, so don't aim a checkout at a Postgres that another worktree on an older branch uses. `.claude/launch.json` starts the same three servers (`api`, `cafe-remote`, `pos-web`) from the desktop app.
+
 ### Marketing site (`site/`)
 ```bash
 cd site
