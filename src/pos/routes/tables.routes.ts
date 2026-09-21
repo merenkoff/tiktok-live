@@ -15,6 +15,13 @@
 // and §4.7 says everyone sees every table. Changing the furniture is
 // `ensurePosOwner` — a floor plan is not a shift-time decision.
 //
+// The bill endpoints (К4b) live here too, under the same core group: they
+// are the same module's server surface, and one registration is easier to
+// reason about than two. They are all `ensurePosAuth` — seating a table,
+// adding to the draft and moving a bill are the waiter's job, not the
+// owner's — and they refuse with 409 «Столи не налаштовано» while the store
+// has no hall, which `GET /halls` deliberately does not (§8.4).
+//
 // Answers are the shapes the rest of this backend uses: 400 in the service's
 // own words for input that cannot be right, 404 (never 403) for a hall or
 // table belonging to another store, 409 for a delete that would take a
@@ -22,6 +29,9 @@
 
 import type { FastifyInstance } from 'fastify';
 import { ensurePosAuth, ensurePosOwner } from '../core/auth.js';
+import * as bills from '../bills.service.js';
+import { CompositeError } from '../composites.service.js';
+import { ModifierError } from '../modifiers.service.js';
 import * as tables from '../tables.service.js';
 import { errorMessage } from './_shared.js';
 
@@ -32,6 +42,15 @@ function idOf(value: string): number | null {
 
 /** Map a service error onto its status. Anything else is a real 500. */
 function sendError(reply: { code: (n: number) => { send: (b: unknown) => unknown } }, error: unknown): unknown {
+  if (error instanceof bills.BillNotFound) {
+    return reply.code(404).send({ error: errorMessage(error) });
+  }
+  if (error instanceof bills.BillConflict) {
+    return reply.code(409).send({ error: errorMessage(error) });
+  }
+  if (error instanceof bills.BillError) {
+    return reply.code(400).send({ error: errorMessage(error) });
+  }
   if (error instanceof tables.TablesNotFound) {
     return reply.code(404).send({ error: errorMessage(error) });
   }
@@ -39,6 +58,14 @@ function sendError(reply: { code: (n: number) => { send: (b: unknown) => unknown
     return reply.code(409).send({ error: errorMessage(error) });
   }
   if (error instanceof tables.TablesError) {
+    return reply.code(400).send({ error: errorMessage(error) });
+  }
+  // A draft line carries the same answers and the same composition a sale
+  // does, and validates them through the same two services — whose refusals
+  // are the client's fault, not ours. Without this they escaped as 500s and
+  // the waiter saw «Internal Server Error» for a modifier that simply is not
+  // on that dish.
+  if (error instanceof ModifierError || error instanceof CompositeError) {
     return reply.code(400).send({ error: errorMessage(error) });
   }
   throw error;
@@ -153,6 +180,158 @@ export function registerTablesRoutes(fastify: FastifyInstance): void {
     try {
       await tables.deleteTable(auth.storeId, id);
       return { ok: true };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  // ── Bills (К4b) ──────────────────────────────────────────────────────────
+
+  // The hall map's overlay: which tables are seated, for how much, and what
+  // they are waiting for. One query behind it, no N+1 over the room.
+  fastify.get('/bills', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    return { bills: await bills.listOpenBills(auth.storeId) };
+  });
+
+  // Seat a table. Tapping an occupied one opens the bill already there —
+  // «show me it», never «start a second one» (bills.service.ts rule 1).
+  fastify.post('/bills', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const tableId = Number(body.table_id);
+    if (!Number.isInteger(tableId) || tableId <= 0) {
+      return reply.code(404).send({ error: 'Стіл не знайдено' });
+    }
+    try {
+      const opened = await bills.openBill({
+        storeId: auth.storeId,
+        staffId: auth.staffId,
+        tableId,
+        guests: body.guests,
+        note: body.note,
+        customerId: body.customer_id == null ? null : Number(body.customer_id),
+        clientUuid: body.client_uuid,
+      });
+      return opened;
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  fastify.get('/bills/:id', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const id = idOf((request.params as { id: string }).id);
+    if (id == null) return reply.code(404).send({ error: 'Рахунок не знайдено' });
+    try {
+      return await bills.getBill(auth.storeId, id);
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  fastify.patch('/bills/:id', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const id = idOf((request.params as { id: string }).id);
+    if (id == null) return reply.code(404).send({ error: 'Рахунок не знайдено' });
+    try {
+      return await bills.updateBill(auth.storeId, id, (request.body ?? {}) as Record<string, unknown>);
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  fastify.post('/bills/:id/items', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const id = idOf((request.params as { id: string }).id);
+    if (id == null) return reply.code(404).send({ error: 'Рахунок не знайдено' });
+    try {
+      return await bills.addDraftItem(
+        auth.storeId,
+        auth.staffId,
+        id,
+        (request.body ?? {}) as bills.DraftItemInput
+      );
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  fastify.patch('/bills/:id/items/:itemId', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const params = request.params as { id: string; itemId: string };
+    const id = idOf(params.id);
+    const itemId = idOf(params.itemId);
+    if (id == null || itemId == null) {
+      return reply.code(404).send({ error: 'Позицію не знайдено' });
+    }
+    const quantity = Number((request.body as { quantity?: unknown })?.quantity);
+    try {
+      return await bills.setDraftQuantity(auth.storeId, id, itemId, quantity);
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  fastify.delete('/bills/:id/items/:itemId', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const params = request.params as { id: string; itemId: string };
+    const id = idOf(params.id);
+    const itemId = idOf(params.itemId);
+    if (id == null || itemId == null) {
+      return reply.code(404).send({ error: 'Позицію не знайдено' });
+    }
+    try {
+      return await bills.removeDraftItem(auth.storeId, id, itemId);
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  fastify.post('/bills/:id/move', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const id = idOf((request.params as { id: string }).id);
+    const tableId = Number((request.body as { table_id?: unknown })?.table_id);
+    if (id == null) return reply.code(404).send({ error: 'Рахунок не знайдено' });
+    if (!Number.isInteger(tableId) || tableId <= 0) {
+      return reply.code(404).send({ error: 'Стіл не знайдено' });
+    }
+    try {
+      return await bills.moveBill(auth.storeId, id, tableId);
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  fastify.post('/bills/:id/cancel', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const id = idOf((request.params as { id: string }).id);
+    if (id == null) return reply.code(404).send({ error: 'Рахунок не знайдено' });
+    try {
+      return await bills.cancelBill(auth.storeId, auth.staffId, id);
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  // A pre-bill is printed, not binding: this only records that the sum was
+  // read out loud, so the table tile can show it (§4.6).
+  fastify.post('/bills/:id/precheck', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const id = idOf((request.params as { id: string }).id);
+    if (id == null) return reply.code(404).send({ error: 'Рахунок не знайдено' });
+    try {
+      return await bills.markPrecheckPrinted(auth.storeId, id);
     } catch (error) {
       return sendError(reply, error);
     }
