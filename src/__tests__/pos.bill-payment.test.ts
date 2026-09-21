@@ -185,6 +185,30 @@ describe.skipIf(!hasDb)('POS bill payment', () => {
     // Each part is its own receipt, which is the whole reason it is its own
     // sale: one sale may carry only one fiscal document.
     expect(first!.receipt_number).not.toBe(second!.receipt_number);
+    // And each line says which part paid for it. The till works a split off
+    // exactly this: after the first guest pays, «що лишилось» is the lines
+    // still carrying null.
+    const paidLines = paid.rounds[0].items;
+    expect(paidLines.find((l: { id: number }) => l.id === teaLine.id).sale_id).toBe(sale_ids[0]);
+    expect(paidLines.find((l: { id: number }) => l.id === cakeLine.id).sale_id).toBe(sale_ids[1]);
+  });
+
+  it('leaves the lines nobody paid for open, and says so on the line', async () => {
+    const bill = await firedBill([
+      { variant_id: tea, quantity: 1 },
+      { variant_id: cake, quantity: 1 },
+    ]);
+    const teaLine = bill.rounds[0].items.find((l) => l.variant_id === tea)!;
+    const res = await pay(bill.id, {
+      parts: [{ line_ids: [teaLine.id], payments: cash(4000) }],
+    });
+    expect(res.statusCode).toBe(200);
+    const { bill: after } = res.json();
+    // One guest paid and left; the table is still occupied by the cake.
+    expect(after.status).toBe('open');
+    const lines = after.rounds[0].items;
+    expect(lines.find((l: { variant_id: number }) => l.variant_id === tea).sale_id).not.toBeNull();
+    expect(lines.find((l: { variant_id: number }) => l.variant_id === cake).sale_id).toBeNull();
   });
 
   it('splits by sum as several payments on one receipt', async () => {

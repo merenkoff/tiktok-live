@@ -89,6 +89,14 @@ export interface BillLine {
   components: ComponentInput[] | null;
   modifiers: LineModifierSnapshot[];
   note: string;
+  /**
+   * The sale that paid for this plate, or null while it is still owed.
+   *
+   * This is the whole of «що лишилось оплатити» (К4d writes both directions
+   * of the link), and the till cannot work a split without it: after the
+   * first guest pays, the screen has to offer the OTHER lines and no others.
+   */
+  sale_id: number | null;
   added_by: number;
   added_by_name: string;
   sort_order: number;
@@ -223,6 +231,7 @@ function mapLine(row: Record<string, unknown>, preview: number | null): BillLine
     components: (row.components as ComponentInput[] | null) ?? null,
     modifiers: modifiers.parseLineModifierSnapshot(row.modifiers),
     note: String(row.note ?? ''),
+    sale_id: row.sale_id == null ? null : Number(row.sale_id),
     added_by: Number(row.added_by),
     added_by_name: String(row.added_by_name ?? ''),
     sort_order: Number(row.sort_order),

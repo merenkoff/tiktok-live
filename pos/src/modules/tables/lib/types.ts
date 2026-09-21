@@ -73,6 +73,12 @@ export interface BillLine {
   components: Array<{ component_variant_id: number; quantity: number }> | null;
   modifiers: LineModifier[];
   note: string;
+  /**
+   * The sale that paid for this plate, or null while it is still owed. After
+   * the first guest of a split pays, this is what tells the screen which
+   * lines are still on the table.
+   */
+  sale_id: number | null;
   added_by: number;
   added_by_name: string;
   sort_order: number;
