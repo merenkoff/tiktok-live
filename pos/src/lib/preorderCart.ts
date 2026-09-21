@@ -18,6 +18,8 @@
 
 import type { CartLine } from '../hooks/useCart';
 import type { Preorder } from '../types';
+import { lineCaption } from './modifiers';
+import { liveModifiers } from './parkedCart';
 
 export function cartLinesFromPreorder(order: Preorder): CartLine[] {
   return order.items.map((item) => ({
@@ -26,7 +28,9 @@ export function cartLinesFromPreorder(order: Preorder): CartLine[] {
     uid: `preorder:${order.id}:${item.id}`,
     variant_id: item.variant_id,
     product_name: item.product_name,
-    variant_label: item.label,
+    // Names every answer as promised — the server hands the order over from
+    // its own snapshot, so a deleted answer still reaches the receipt.
+    variant_label: lineCaption(item.label, (item.modifiers ?? []).map((m) => m.name)),
     unit: item.unit,
     unit_price_cents: item.unit_price_cents,
     quantity: item.quantity,
@@ -34,6 +38,8 @@ export function cartLinesFromPreorder(order: Preorder): CartLine[] {
     // every edit control while one is on the till anyway.
     max_quantity: item.quantity,
     image_url: item.image_url,
+    ...(liveModifiers(item.modifiers) ? { modifiers: liveModifiers(item.modifiers) } : {}),
+    ...(item.note?.trim() ? { note: item.note.trim() } : {}),
     ...(item.components?.length
       ? {
           components: item.components.map((c) => ({

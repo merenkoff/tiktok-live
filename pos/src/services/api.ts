@@ -920,6 +920,9 @@ class PosApi {
       variant_id: number;
       quantity: number;
       components?: Array<{ component_variant_id: number; quantity: number }>;
+      /** The café line's answers, ids only, sorted — the checkout shape (К3). */
+      modifiers?: number[];
+      note?: string;
     }>;
   }): Promise<Preorder> {
     const { data } = await this.client.post<Preorder>('/preorders', payload);
@@ -971,6 +974,9 @@ class PosApi {
       variant_id: number;
       quantity: number;
       components?: Array<{ component_variant_id: number; quantity: number }>;
+      /** The café line's answers, ids only, sorted — the checkout shape (К3). */
+      modifiers?: number[];
+      note?: string;
     }>;
   }): Promise<ParkedCart> {
     const { data } = await this.client.post<ParkedCart>('/parked-carts', payload);

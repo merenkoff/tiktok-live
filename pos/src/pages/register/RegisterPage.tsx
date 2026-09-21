@@ -245,6 +245,33 @@ export function RegisterPage() {
     );
   }
 
+  /**
+   * A cart line as the server takes it back — for a parked cart and a
+   * pre-order alike, in the same shape checkout sends (`pay` below): the
+   * recipe of a counter-built bouquet, and a café line's answers as sorted
+   * ids with its kitchen note. Since К3 the server keeps both on the parked
+   * and the pre-ordered line, so nothing the customer asked for is dropped
+   * on the way to the shelf.
+   */
+  function wireLine(line: (typeof lines)[number]) {
+    return {
+      variant_id: line.variant_id,
+      quantity: line.quantity,
+      ...(line.components
+        ? {
+            components: line.components.map((c) => ({
+              component_variant_id: c.component_variant_id,
+              quantity: c.quantity,
+            })),
+          }
+        : {}),
+      ...(line.modifiers?.length
+        ? { modifiers: line.modifiers.map((m) => m.id).sort((a, b) => a - b) }
+        : {}),
+      ...(line.note ? { note: line.note } : {}),
+    };
+  }
+
   async function park(label: string, note: string | null) {
     setParking(true);
     setParkError(null);
@@ -255,18 +282,7 @@ export function RegisterPage() {
         note,
         customer_id: customer?.id ?? null,
         cart_discount: cartDiscount,
-        items: lines.map((line) => ({
-          variant_id: line.variant_id,
-          quantity: line.quantity,
-          ...(line.components
-            ? {
-                components: line.components.map((c) => ({
-                  component_variant_id: c.component_variant_id,
-                  quantity: c.quantity,
-                })),
-              }
-            : {}),
-        })),
+        items: lines.map(wireLine),
       });
       clear();
       setParkOpen(false);
@@ -360,18 +376,7 @@ export function RegisterPage() {
         client_uuid: crypto.randomUUID(),
         customer_id: customer?.id ?? null,
         ...input,
-        items: lines.map((line) => ({
-          variant_id: line.variant_id,
-          quantity: line.quantity,
-          ...(line.components
-            ? {
-                components: line.components.map((c) => ({
-                  component_variant_id: c.component_variant_id,
-                  quantity: c.quantity,
-                })),
-              }
-            : {}),
-        })),
+        items: lines.map(wireLine),
       });
       clear();
       setPreorderOpen(false);
@@ -509,28 +514,12 @@ export function RegisterPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on receipt number by design (see comment above); only `cancelRung.reset` is used
   }, [success?.receipt_number, cancelRung.reset]);
 
-  /**
-   * A line with modifiers or a kitchen note can be sold, but not parked or
-   * ordered ahead until К3: the server refuses it (`parked-carts.service.ts`,
-   * `preorders.service.ts`), and dropping the fields on the way would lose
-   * what the customer asked for. Said here, before a sheet opens for nothing.
-   */
-  const hasModifiedLine = lines.some((l) => l.modifiers?.length || l.note);
-
   function openPark() {
-    if (hasModifiedLine) {
-      setBanner('Позицію з модифікаторами поки не можна відкласти');
-      return;
-    }
     setParkError(null);
     setParkOpen(true);
   }
 
   function openPreorder() {
-    if (hasModifiedLine) {
-      setBanner('Позицію з модифікаторами поки не можна замовити наперед');
-      return;
-    }
     setPreorderError(null);
     setPreorderOpen(true);
   }

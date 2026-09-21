@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithProviders, makeAuthResponse, makeSaleDetail } from '../../test/utils';
 import { cashierApi } from '../../offline/cashierApi';
+import { api } from '../../services/api';
 import { printKitchenTickets } from '../../offline/kitchenTickets';
 import { useAuthStore } from '../../hooks/useAuth';
 import { useCartStore } from '../../hooks/useCart';
@@ -134,20 +135,26 @@ describe('RegisterPage with a café line', () => {
     expect(screen.getAllByTestId('cart-line-note')[0]).toHaveTextContent('гарячіше');
   });
 
-  it('refuses to park a line with modifiers in the server’s words, without opening the sheet', async () => {
-    // Parked carts have no column for them until К3; the server refuses such
-    // a line, and dropping the answers on the way would be worse than refusing.
+  it('parks a line with its answers and note in the shape checkout sends (К3)', async () => {
+    // Since К3 the server keeps the answers on the parked line, so the till
+    // sends them exactly as checkout does — ids sorted, note as typed.
     signIn('cafe');
     ringOatLatte();
+    const parkCart = vi.spyOn(api, 'parkCart').mockResolvedValue({ id: 1, label: 'Оксана', items: [] } as never);
+    vi.spyOn(api, 'listParkedCarts').mockResolvedValue([]);
     renderWithProviders(<RegisterPage />, { shell: 'cashier' });
     expect(await screen.findByPlaceholderText('Пошук')).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByTestId('park-cart')[0]);
+    const sheet = await screen.findByTestId('park-cart-sheet');
+    fireEvent.change(within(sheet).getByTestId('park-label'), { target: { value: 'Оксана' } });
+    fireEvent.click(within(sheet).getByTestId('park-submit'));
 
-    expect(screen.queryByTestId('park-cart-sheet')).toBeNull();
-    expect(
-      await screen.findByText('Позицію з модифікаторами поки не можна відкласти')
-    ).toBeInTheDocument();
+    await waitFor(() => expect(parkCart).toHaveBeenCalledTimes(1));
+    expect(parkCart.mock.calls[0][0].items).toEqual([
+      { variant_id: 7, quantity: 1, modifiers: [12], note: 'гарячіше' },
+    ]);
+    expect(screen.queryByText(/поки не можна відкласти/)).toBeNull();
   });
 });
 

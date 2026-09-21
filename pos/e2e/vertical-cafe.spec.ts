@@ -280,10 +280,14 @@ test('two answers changed is four taps, priced before the line exists', async ({
   const sidebar = page.getByTestId('sale-sidebar');
   await expect(sidebar.getByText('вівсяне · без цукру')).toBeVisible();
 
-  // Parking a line with answers is refused in the server's words, not lost.
+  // A line with answers can be parked since К3 — the sheet opens, nothing is
+  // refused and nothing is dropped; the shape it sends is pinned by the unit
+  // test of `RegisterPage`.
   await sidebar.getByTestId('park-cart').click();
-  await expect(page.getByTestId('park-cart-sheet')).toHaveCount(0);
-  await expect(page.getByText('Позицію з модифікаторами поки не можна відкласти')).toBeVisible();
+  const parkSheet = page.getByTestId('park-cart-sheet');
+  await expect(parkSheet).toBeVisible();
+  await parkSheet.getByRole('button', { name: 'Закрити' }).click();
+  await expect(parkSheet).toHaveCount(0);
 
   await payCash(page);
   await expect(page.getByTestId('order-no')).toHaveText('42');
@@ -338,15 +342,17 @@ test('the kitchen board takes two taps: «Готово» moves the order to «В
   await expect(inWork.getByText('✎ гарячіше')).toBeVisible();
   await expect(pickup.getByText('Нічого не чекає видачі')).toBeVisible();
 
-  // Tap 1.
+  // Tap 1. The card moves before the server answers (optimistically), so
+  // the request is awaited on its own — it is what the test is about.
   await page.getByTestId('kitchen-ready-7').click();
   await expect(pickup.getByTestId('kitchen-order-7')).toBeVisible();
   await expect(inWork.getByText('Замовлень немає')).toBeVisible();
+  await expect.poll(() => taps).toEqual([{ prep_status: 'ready' }]);
 
   // Tap 2 — and nothing else ever takes it off.
   await page.getByTestId('kitchen-served-7').click();
   await expect(page.getByTestId('kitchen-order-7')).toHaveCount(0);
-  expect(taps).toEqual([{ prep_status: 'ready' }, { prep_status: 'served' }]);
+  await expect.poll(() => taps).toEqual([{ prep_status: 'ready' }, { prep_status: 'served' }]);
 });
 
 test('with the module CDN down the till still sells, on the bundled catalog', async ({ page }) => {

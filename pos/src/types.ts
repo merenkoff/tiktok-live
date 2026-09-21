@@ -410,7 +410,12 @@ export interface PreorderItem {
   id: number;
   variant_id: number;
   quantity: number;
+  /** Locked at order time — the card's price plus the answers' deltas (К3). */
   unit_price_cents: number;
+  /** The café answers promised with the line; absent on an older cached order. */
+  modifiers?: LineModifierSnapshot[] | null;
+  /** The kitchen note promised with it. */
+  note?: string | null;
   components: Array<{ component_variant_id: number; quantity: number }> | null;
   product_name: string;
   label: string;
@@ -524,10 +529,27 @@ export interface ParkedCartComponent {
   unit_price_cents: number;
 }
 
+/**
+ * A parked or pre-ordered line's answers as the server snapshotted them
+ * (migration 051): ids to ring the line again, names and deltas to show it.
+ */
+export interface LineModifierSnapshot {
+  /** Null once the answer was deleted in `/admin/modifiers`; the name and delta stay. */
+  modifier_id: number | null;
+  group_name: string;
+  name: string;
+  price_delta_cents: number;
+  sort_order?: number;
+}
+
 export interface ParkedCartItem {
   id: number;
   variant_id: number;
   quantity: number;
+  /** The café answers this line was parked with (К3); absent on an older cached cart. */
+  modifiers?: LineModifierSnapshot[] | null;
+  /** The kitchen note it was parked with. */
+  note?: string | null;
   /** Absent on an ordinary line; the stems for a bouquet built at the bench. */
   components: ParkedCartComponent[] | null;
   product_name: string;
