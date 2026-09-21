@@ -132,3 +132,44 @@ export function printReceipt(
 ): Promise<void> {
   return invoke('print_receipt', { printerName, receipt, paperWidthMm });
 }
+
+/** One line of a kitchen ticket — what to make, how many, and how. */
+export interface KitchenTicketItem {
+  name: string;
+  variant_label: string;
+  quantity: number;
+  /** The answers the line chose, by name — «вівсяне», «без цукру». */
+  modifiers: string[];
+  /** The kitchen note for this line. */
+  note: string | null;
+}
+
+/**
+ * A kitchen ticket (café phase К3e): not a receipt — no prices, no fiscal
+ * block — but the order number at triple size, the station it is for and one
+ * loud line per item. Built by `lib/kitchenTicket.ts`, drawn by Rust
+ * `hardware/kitchen_ticket.rs`.
+ */
+export interface KitchenTicketData {
+  /** What the counter calls out: the server's «17», or the till's own «К17». */
+  order_label: string;
+  /** «КУХНЯ» / «БАР»; null when the store routes nothing by station. */
+  station: string | null;
+  /** Already formatted — the time the sale was rung. */
+  created_at: string;
+  staff_name: string;
+  /** The order-level note, if any. */
+  note: string | null;
+  /** Small, at the bottom: what to look for on the till if something is off. */
+  receipt_number: string | null;
+  items: KitchenTicketItem[];
+}
+
+/** Print one kitchen ticket to a named OS printer — the Rust `print_kitchen_ticket` command. */
+export function printKitchenTicket(
+  printerName: string,
+  ticket: KitchenTicketData,
+  paperWidthMm: ReceiptPaperWidth
+): Promise<void> {
+  return invoke('print_kitchen_ticket', { printerName, ticket, paperWidthMm });
+}

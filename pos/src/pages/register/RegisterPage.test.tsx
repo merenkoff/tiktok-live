@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithProviders, makeAuthResponse, makeSaleDetail } from '../../test/utils';
 import { cashierApi } from '../../offline/cashierApi';
+import { printKitchenTickets } from '../../offline/kitchenTickets';
 import { useAuthStore } from '../../hooks/useAuth';
 import { useCartStore } from '../../hooks/useCart';
 import { RegisterPage } from './RegisterPage';
@@ -20,6 +21,11 @@ import type { SalesCatalogProps } from '../../modules/types';
 vi.mock('../../offline/db', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../offline/db')>()),
   getMeta: vi.fn(async () => undefined),
+}));
+// The kitchen ticket goes through the offline mirror and a Tauri command;
+// here only the decision to print — once per sale, café only — is under test.
+vi.mock('../../offline/kitchenTickets', () => ({
+  printKitchenTickets: vi.fn(async () => 'printed'),
 }));
 
 function installVertical(Catalog: (props: SalesCatalogProps) => JSX.Element): void {
@@ -212,5 +218,65 @@ describe('RegisterPage success screen — the order number (К3d)', () => {
     expect(await screen.findByText('Чек')).toBeInTheDocument();
     expect(screen.queryByTestId('order-no')).toBeNull();
     expect(screen.getByText('OFF-ABCD1234')).toBeInTheDocument();
+  });
+});
+
+describe('RegisterPage success screen — the kitchen ticket (К3e)', () => {
+  function ringEspresso(): void {
+    useCartStore.getState().restore({
+      lines: [
+        { uid: '3', variant_id: 3, product_name: 'Еспресо', variant_label: '', unit: 'шт', unit_price_cents: 4500, quantity: 1, max_quantity: 9 },
+      ],
+    });
+  }
+
+  async function payCash(): Promise<void> {
+    fireEvent.click(screen.getAllByRole('button', { name: /^Сплатити/ })[0]);
+    const dialog = await screen.findByRole('dialog', { name: 'Оплата' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Готівка' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Готово' }));
+  }
+
+  it('sends a café sale to the kitchen once, the moment it is rung, and offers to print again', async () => {
+    signIn('cafe');
+    ringEspresso();
+    const sold = makeSaleDetail({ order_no: 42, receipt_number: 'ЧК-000042', client_uuid: 'u-42' });
+    vi.spyOn(cashierApi, 'completeSale').mockResolvedValue(sold);
+    renderWithProviders(<RegisterPage />, { shell: 'cashier' });
+    expect(await screen.findByPlaceholderText('Пошук')).toBeInTheDocument();
+
+    await payCash();
+    expect(await screen.findByTestId('kitchen-status')).toHaveTextContent('Тікет надіслано на кухню');
+    expect(printKitchenTickets).toHaveBeenCalledTimes(1);
+    expect(printKitchenTickets).toHaveBeenCalledWith(expect.objectContaining({ receipt_number: 'ЧК-000042' }));
+
+    fireEvent.click(screen.getByTestId('print-kitchen-ticket'));
+    await waitFor(() => expect(printKitchenTickets).toHaveBeenCalledTimes(2));
+  });
+
+  it('says nothing and offers nothing on a device with no kitchen printer', async () => {
+    signIn('cafe');
+    ringEspresso();
+    vi.mocked(printKitchenTickets).mockResolvedValueOnce('no-printer');
+    vi.spyOn(cashierApi, 'completeSale').mockResolvedValue(makeSaleDetail({ order_no: 42 }));
+    renderWithProviders(<RegisterPage />, { shell: 'cashier' });
+    expect(await screen.findByPlaceholderText('Пошук')).toBeInTheDocument();
+
+    await payCash();
+    expect(await screen.findByTestId('order-no')).toHaveTextContent('42');
+    expect(screen.queryByTestId('kitchen-status')).toBeNull();
+    expect(screen.queryByTestId('print-kitchen-ticket')).toBeNull();
+  });
+
+  it('never sends a boutique’s sale to a kitchen', async () => {
+    signIn('clothing');
+    ringEspresso();
+    vi.spyOn(cashierApi, 'completeSale').mockResolvedValue(makeSaleDetail({ receipt_number: 'ЧК-000001' }));
+    renderWithProviders(<RegisterPage />, { shell: 'cashier' });
+    expect(await screen.findByPlaceholderText('Пошук')).toBeInTheDocument();
+
+    await payCash();
+    expect(await screen.findByText('ЧК-000001')).toBeInTheDocument();
+    expect(printKitchenTickets).not.toHaveBeenCalled();
   });
 });
