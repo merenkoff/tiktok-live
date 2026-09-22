@@ -443,3 +443,89 @@ test('with the module CDN down the till still sells, on the bundled catalog', as
   await expect(page.getByTestId('cafe-catalog')).toHaveCount(0);
   await expect(page.getByPlaceholder('Пошук')).toBeVisible();
 });
+
+/** What `GET /analytics/cafe` answers, with the sample knob the matrix turns on. */
+function cafeAnalytics({ enoughData = true } = {}) {
+  const dish = (id: number, name: string, quadrant: string, sold: number) => ({
+    variant_id: id,
+    product_name: name,
+    label: '',
+    sold,
+    share_bps: 2500,
+    revenue_cents: sold * 5_000,
+    cost_cents: sold * 1_500,
+    margin_cents: sold * 3_500,
+    unit_margin_cents: 3_500,
+    quadrant,
+  });
+  return {
+    from: '2026-08-24',
+    to: '2026-09-22',
+    food_cost: { revenue_cents: 400_000, cost_cents: 130_000, bps: 3_250, unpriced_lines: 0 },
+    sales_count: 96,
+    average_check_cents: 12_500,
+    peak_hours: Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      orders: hour === 13 ? 19 : 0,
+      revenue_cents: 0,
+    })),
+    top_modifiers: [{ group_name: 'Молоко', name: 'вівсяне', times: 42 }],
+    menu: {
+      rows: [
+        dish(1, 'Капучино', 'star', 40),
+        dish(2, 'Сирник', 'dog', 4),
+        dish(3, 'Лате', 'plowhorse', 30),
+      ],
+      excluded: [
+        { variant_id: 9, product_name: 'Борщ', label: '', sold: 12, reason: 'no_cost' },
+      ],
+      thresholds: { popularity_share_bps: 2_333, unit_margin_cents: 3_000 },
+      enough_data: enoughData,
+    },
+    writeoffs: {
+      rows: [{ reason: 'spoiled', quantity: 4, cost_cents: 12_000 }],
+      total_cost_cents: 12_000,
+    },
+    tables: null,
+  };
+}
+
+test('the owner gets a «Кафе» entry the module owns, and the matrix tells them what to do', async ({
+  page,
+}) => {
+  // What the unit tests cannot see: that a `mount: 'admin'` route of a REMOTE
+  // module really registers in the host and really appears in the sidebar —
+  // `module_remotes` names only the kitchen's `routePath`, and this second
+  // mount has to arrive with the bundle or not at all.
+  await signInAsBarista(page);
+  await page.route('**/api/pos/analytics/cafe**', async (route) =>
+    route.fulfill({ json: cafeAnalytics() })
+  );
+
+  await page.getByRole('link', { name: 'Кафе', exact: true }).click();
+  await page.waitForURL(/\/admin\/cafe$/);
+  await expect(page.getByTestId('cafe-analytics')).toBeVisible();
+
+  // The point of the screen is the sentence, not the colour.
+  await expect(page.getByTestId('quadrant-star')).toContainText('тримати як є');
+  await expect(page.getByTestId('quadrant-dog')).toContainText('прибрати з меню');
+  await expect(page.getByTestId('quadrant-star')).toContainText('Капучино');
+  await expect(page.getByTestId('cafe-food-cost')).toContainText('32,5 %');
+
+  // A dish we could not cost is NAMED, never quietly filed among the dogs.
+  await expect(page.getByTestId('cafe-excluded')).toContainText('Борщ');
+  await expect(page.getByTestId('quadrant-dog')).not.toContainText('Борщ');
+});
+
+test('too small a sample withholds the quadrants and keeps the figures', async ({ page }) => {
+  await signInAsBarista(page);
+  await page.route('**/api/pos/analytics/cafe**', async (route) =>
+    route.fulfill({ json: cafeAnalytics({ enoughData: false }) })
+  );
+
+  await page.goto('/admin/cafe');
+  await expect(page.getByTestId('cafe-not-enough')).toBeVisible();
+  await expect(page.getByTestId('cafe-matrix')).toHaveCount(0);
+  // The arithmetic is still arithmetic — only the recommendation is withheld.
+  await expect(page.getByTestId('cafe-menu-table')).toContainText('Капучино');
+});

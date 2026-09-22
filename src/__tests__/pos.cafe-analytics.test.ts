@@ -160,12 +160,19 @@ describe.skipIf(!hasDb)('POS café analytics', () => {
         payments: [{ method: 'cash', amount_cents: 10_000 }],
       });
 
-      const { menu } = await getCafeAnalytics(tiny.storeId);
-      // One dish and two units: the quadrants would be noise with a straight
-      // face, so the screen is told to say so instead.
-      expect(menu.enough_data).toBe(false);
-      expect(menu.rows).toHaveLength(1);
-      await dropTestStore(tiny.storeId);
+      try {
+        const { menu } = await getCafeAnalytics(tiny.storeId);
+        // One dish and two units: the quadrants would be noise with a straight
+        // face, so the screen is told to say so instead.
+        expect(menu.enough_data).toBe(false);
+        expect(menu.rows).toHaveLength(1);
+      } finally {
+        // `finally`, not a trailing line: a failed expectation used to skip
+        // the drop and leave a `cafeanalytics_tiny_*` store behind in whatever
+        // database the suite ran against — two of them were still sitting in
+        // the dev database when К6d checked the demo stores.
+        await dropTestStore(tiny.storeId);
+      }
     });
   });
 
