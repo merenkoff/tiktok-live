@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "moduleId": "products",
+  "version": "2.2.0",
+  "minHostPlatform": 14,
+  "entry": "remote-entry.js",
+  "keyId": "2a73632c13044371",
+  "builtAt": "2026-09-22T08:56:06.229Z",
+  "files": {
+    "ModifiersPage-CkBHO3ui.js": "sha384-JUFGEonLagKJkUZ4fi+aDIgHeSbsddgYHXTjzAeOhj67vQ7maAJt7jOTvN0bWKHZ",
+    "ProductsPage-UwdjOM2Y.js": "sha384-0KX0T0NbS4khWmm0OiJmclZaQDVm74nzmD0Ojdr/pPUzh5GfCUdS5HXlcqdUNQf3",
+    "componentOptions-CV1UZTqA.js": "sha384-zRlanSfeu/A5vo6btrTKHBsKFH4TAikNUcDWuQwetteOjagS7KyrZH46wIhNx5y3",
+    "remote-entry.js": "sha384-S1yEbOiB3ifujACB2SHvmlwi4ele1l+xAAR2l9eH0SUpsagAYLEdSte2dD4O/nb1",
+    "style.css": "sha384-1jrR0FkGni8HjpNLXDA3m1uL+wX7O5a3PNtHWG8y6yjn5zIyv4ZM1l+SrdXkvOMJ"
+  }
+}
