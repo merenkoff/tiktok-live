@@ -13,22 +13,10 @@ import {
   QuantityUnitToggle,
   quantityToBase,
   uahInputToCents,
+  useVertical,
 } from '@pos/platform';
 import type { OnHandRow, PackMode } from '@pos/platform';
-
-const WRITEOFF_REASONS = [
-  { code: 'damaged', label: 'Брак' },
-  { code: 'lost', label: 'Втрата' },
-  { code: 'gift', label: 'Подарунок' },
-  { code: 'other', label: 'Інше' },
-] as const;
-
-const ADJUST_REASONS = [
-  { code: 'found', label: 'Знайшли' },
-  { code: 'loss', label: 'Не вистачає' },
-  { code: 'data_fix', label: 'Помилка введення' },
-  { code: 'other', label: 'Інше' },
-] as const;
+import { ADJUST_REASONS, defaultReason, writeoffReasonsOf } from '../lib/reasons';
 
 type Mode = 'receive' | 'writeoff' | 'set';
 
@@ -42,6 +30,11 @@ export function ManageStockModal({ row, onClose, onSaved }: Props) {
   // How this variant arrives, if it does (migration 054). Null for a shop that
   // does not buy in packs — and then nothing below draws anything extra.
   const pack = packOf(row);
+  // К5e: the write-off vocabulary is the store's vertical's — a kitchen says
+  // «Зіпсувалося», a boutique «Брак» — while a correction is about counting
+  // and reads the same everywhere.
+  const vertical = useVertical();
+  const writeoffReasons = writeoffReasonsOf(vertical);
   const [mode, setMode] = useState<Mode>('set');
   // What the box is counting in. Receiving opens in packs (oil arrives in
   // bottles); «має бути» and a write-off open in base units, because what is
@@ -136,7 +129,7 @@ export function ManageStockModal({ row, onClose, onSaved }: Props) {
     }
   }
 
-  const reasons = mode === 'writeoff' ? WRITEOFF_REASONS : ADJUST_REASONS;
+  const reasons = mode === 'writeoff' ? writeoffReasons : ADJUST_REASONS;
   const label =
     mode === 'receive' ? 'Скільки надійшло' : mode === 'writeoff' ? 'Скільки списати' : 'Має бути';
 
@@ -178,7 +171,7 @@ export function ManageStockModal({ row, onClose, onSaved }: Props) {
                 // «1» means one pack when the box opens in packs — the number
                 // and the caption above it always agree.
                 setQty(m === 'set' ? String(row.quantity) : '1');
-                setReason(m === 'writeoff' ? 'damaged' : 'data_fix');
+                setReason(m === 'writeoff' ? defaultReason(writeoffReasons) : 'data_fix');
               }}
               className={`flex-1 py-2 text-sm rounded-[4px] ${
                 mode === m ? 'bg-white font-medium shadow-sm' : 'text-[#6E6E6E]'

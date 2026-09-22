@@ -12,8 +12,9 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderWithProviders } from '../../../test/utils';
-import type { OnHandRow } from '../../../types';
+import { makeAuthResponse, renderWithProviders } from '../../../test/utils';
+import { useAuthStore } from '../../../hooks/useAuth';
+import type { OnHandRow, VerticalPublicConfig } from '../../../types';
 
 const createStockDocument = vi.fn();
 const addStockDocumentLine = vi.fn();
@@ -59,10 +60,32 @@ function open(r: OnHandRow) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useAuthStore.setState({ auth: null, isAuthenticated: false, bootstrapped: true });
   createStockDocument.mockResolvedValue({ id: 99 });
   addStockDocumentLine.mockResolvedValue({});
   postStockDocument.mockResolvedValue({});
 });
+
+/** A store whose vertical says what it may write stock off for (К5e). */
+function signInWithReasons(writeoffReasons: VerticalPublicConfig['writeoffReasons']): void {
+  useAuthStore.setState({
+    auth: makeAuthResponse({
+      store: {
+        vertical: {
+          id: 'cafe',
+          title: 'Кафе',
+          attributes: [],
+          units: ['шт', 'г', 'мл'],
+          defaultUnit: 'шт',
+          maxCompositionDepth: 3,
+          writeoffReasons,
+        },
+      },
+    }),
+    isAuthenticated: true,
+    bootstrapped: true,
+  });
+}
 
 describe('a variant with no pack', () => {
   it('looks exactly as it did — no toggle at all', async () => {
@@ -155,5 +178,61 @@ describe('a variant that arrives in bottles', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Провести' }));
     expect(await screen.findByText(/склад рахується цілими/)).toBeInTheDocument();
     expect(addStockDocumentLine).not.toHaveBeenCalled();
+  });
+});
+
+// К5e. The write-off vocabulary belongs to the store's VERTICAL: a kitchen
+// throws food away for reasons a boutique has no word for, and each is its own
+// line in the expense report — which is exactly why they are not «Інше» with a
+// comment. The correction list is untouched: it is about counting.
+describe('why stock is written off', () => {
+  async function openWriteoff() {
+    open(row());
+    await userEvent.click(screen.getByRole('button', { name: 'Списання' }));
+  }
+
+  it('offers the generic four when the session carries no list', async () => {
+    // A session cached by a build older than К5e, or a cold-offline one
+    // rebuilt from such a row. Drawing no buttons would leave the screen
+    // unable to write anything off at all.
+    await openWriteoff();
+    for (const label of ['Брак', 'Втрата', 'Подарунок', 'Інше']) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+    }
+    expect(screen.queryByRole('button', { name: 'Зіпсувалося' })).not.toBeInTheDocument();
+  });
+
+  it('offers exactly what the vertical sent, and opens on its first', async () => {
+    signInWithReasons([
+      { code: 'spoiled', label: 'Зіпсувалося' },
+      { code: 'tasting', label: 'Проба' },
+      { code: 'other', label: 'Інше' },
+    ]);
+    await openWriteoff();
+
+    expect(screen.getByRole('button', { name: 'Зіпсувалося' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Проба' })).toBeInTheDocument();
+    // Not on this shop's list any more — the server would refuse it.
+    expect(screen.queryByRole('button', { name: 'Подарунок' })).not.toBeInTheDocument();
+
+    const qty = screen.getByRole('spinbutton', { name: 'Скільки списати' });
+    fireEvent.change(qty, { target: { value: '200' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Провести' }));
+    await waitFor(() => expect(createStockDocument).toHaveBeenCalled());
+    // The first reason is what the screen opened on — a kitchen's commonest.
+    expect(createStockDocument.mock.calls[0][0]).toMatchObject({
+      type: 'writeoff',
+      reason_code: 'spoiled',
+    });
+  });
+
+  it('leaves the CORRECTION reasons alone — they are about counting', async () => {
+    signInWithReasons([{ code: 'spoiled', label: 'Зіпсувалося' }]);
+    open(row());
+    // «Має бути» is where the modal starts.
+    for (const label of ['Знайшли', 'Не вистачає', 'Помилка введення', 'Інше']) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+    }
+    expect(screen.queryByRole('button', { name: 'Зіпсувалося' })).not.toBeInTheDocument();
   });
 });

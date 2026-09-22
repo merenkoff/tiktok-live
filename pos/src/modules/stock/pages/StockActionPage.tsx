@@ -28,6 +28,7 @@ import type {
   VerticalPublicConfig,
 } from '@pos/platform';
 import { AttributeFields, useDragScroll } from '@pos/platform/ui';
+import { ADJUST_REASONS, defaultReason, writeoffReasonsOf } from '../lib/reasons';
 
 /**
  * A short read-out of what the operator typed, for the draft row on screen.
@@ -47,20 +48,6 @@ function attributeSummary(vertical: VerticalPublicConfig, attributes: AttributeV
     .filter(Boolean)
     .join(' · ');
 }
-
-const WRITEOFF_REASONS = [
-  { code: 'damaged', label: 'Брак' },
-  { code: 'lost', label: 'Втрата' },
-  { code: 'gift', label: 'Подарунок' },
-  { code: 'other', label: 'Інше' },
-];
-
-const ADJUST_REASONS = [
-  { code: 'found', label: 'Знайшли' },
-  { code: 'loss', label: 'Не вистачає' },
-  { code: 'data_fix', label: 'Помилка введення' },
-  { code: 'other', label: 'Інше' },
-];
 
 type ExistingLine = {
   kind: 'existing';
@@ -159,6 +146,10 @@ function looksLikeBarcode(value: string): boolean {
 
 export function StockActionPage({ type }: Props) {
   const vertical = useVertical();
+  // К5e: what this shop may say. A kitchen writes food off as «Зіпсувалося»
+  // or «Проба»; a boutique has no such word, and the server refuses one that
+  // is not on its vertical's list.
+  const reasons = type === 'writeoff' ? writeoffReasonsOf(vertical) : ADJUST_REASONS;
   const navigate = useNavigate();
   const [catalog, setCatalog] = useState<OnHandRow[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -166,7 +157,7 @@ export function StockActionPage({ type }: Props) {
   const [lines, setLines] = useState<LineDraft[]>([]);
   const [supplierId, setSupplierId] = useState<number | ''>('');
   const [newSupplier, setNewSupplier] = useState('');
-  const [reason, setReason] = useState(type === 'writeoff' ? 'damaged' : 'data_fix');
+  const [reason, setReason] = useState(type === 'writeoff' ? defaultReason(reasons) : 'data_fix');
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -548,7 +539,6 @@ export function StockActionPage({ type }: Props) {
     }
   }
 
-  const reasons = type === 'writeoff' ? WRITEOFF_REASONS : ADJUST_REASONS;
   const showCreateCta = type === 'receipt' && !loading && searchHits.length === 0 && q.trim().length > 0;
 
   return (

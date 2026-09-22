@@ -5,6 +5,7 @@
 // src/pos/verticals/clothing.ts — the vertical every store had before verticals
 // existed, and the one the bundled sell screen falls back to.
 
+import { GENERIC_WRITEOFF_REASONS } from './types.js';
 import type { VerticalDefinition } from './types.js';
 
 /**
@@ -36,6 +37,7 @@ export const clothingVertical: VerticalDefinition = {
     },
   ],
   units: ['шт'],
+  writeoffReasons: GENERIC_WRITEOFF_REASONS,
   labelOf: (attrs) =>
     [attrs.color, attrs.size]
       .map((v) => (v == null ? '' : String(v)))
