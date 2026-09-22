@@ -7,7 +7,8 @@
 // (`lib/hostPlatform.ts`).
 
 import { posRequest } from './hostPlatform';
-import type { Bill, OpenBillSummary, PosHall } from './types';
+import type { TablePosition } from './layout';
+import type { Bill, OpenBillSummary, PosHall, PosTable, TableShape } from './types';
 
 /** The room, as the owner laid it out. */
 export function listHalls(): Promise<{ halls: PosHall[] }> {
@@ -121,4 +122,60 @@ export function payBill(billId: number, parts: PayPart[]): Promise<{ bill: Bill;
  */
 export function markPrecheck(billId: number): Promise<Bill> {
   return posRequest<Bill>('post', `/bills/${billId}/precheck`);
+}
+
+// ── the owner's hall editor (К4i) ──────────────────────────────────────────
+
+export function createHall(name: string): Promise<PosHall> {
+  return posRequest<PosHall>('post', '/halls', { name });
+}
+
+export function updateHall(
+  hallId: number,
+  patch: { name?: string; sort_order?: number; is_active?: boolean }
+): Promise<PosHall> {
+  return posRequest<PosHall>('patch', `/halls/${hallId}`, patch);
+}
+
+/** Only a hall nothing points at; the server says so in words when it is not. */
+export function deleteHall(hallId: number): Promise<{ ok: boolean }> {
+  return posRequest<{ ok: boolean }>('delete', `/halls/${hallId}`);
+}
+
+export interface TableDraft {
+  hall_id?: number;
+  name?: string;
+  seats?: number;
+  pos_x?: number;
+  pos_y?: number;
+  width?: number;
+  height?: number;
+  shape?: TableShape;
+  is_active?: boolean;
+}
+
+export function createTable(table: TableDraft): Promise<PosTable> {
+  return posRequest<PosTable>('post', '/tables', table);
+}
+
+export function updateTable(tableId: number, patch: TableDraft): Promise<PosTable> {
+  return posRequest<PosTable>('patch', `/tables/${tableId}`, patch);
+}
+
+/**
+ * Retire a table rather than delete it, wherever a bill ever sat at it — the
+ * server refuses the delete in those words, because a deleted table would
+ * take the history of what was sold at it with it.
+ */
+export function deleteTable(tableId: number): Promise<{ ok: boolean }> {
+  return posRequest<{ ok: boolean }>('delete', `/tables/${tableId}`);
+}
+
+/**
+ * Write the layout — the whole batch, in one transaction, after the owner
+ * lets go (§6). N requests mid-drag would be both slower and, on a floor with
+ * bad Wi-Fi, a half-saved room.
+ */
+export function moveTables(positions: TablePosition[]): Promise<{ tables: PosTable[] }> {
+  return posRequest<{ tables: PosTable[] }>('patch', '/tables/positions', { positions });
 }

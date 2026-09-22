@@ -24,6 +24,36 @@ vi.mock('html5-qrcode', () => ({
   Html5QrcodeSupportedFormats: {},
 }));
 
+// jsdom ships no `PointerEvent` (jsdom#2527). Testing Library then builds a
+// bare `Event` for `fireEvent.pointerDown(...)` and every init field it was
+// given — `clientX`, `button`, `pointerId` — is silently dropped, so a drag
+// test sees a press with no coordinates and nothing moves. A MouseEvent
+// subclass carries all three and is everything our pointer code reads (the
+// hall editor's `useTableDrag`, К4i).
+if (!('PointerEvent' in globalThis)) {
+  class JsdomPointerEvent extends MouseEvent {
+    readonly pointerId: number;
+    readonly pointerType: string;
+    constructor(type: string, init: PointerEventInit = {}) {
+      super(type, init);
+      this.pointerId = init.pointerId ?? 0;
+      this.pointerType = init.pointerType ?? 'mouse';
+    }
+  }
+  (globalThis as { PointerEvent?: unknown }).PointerEvent = JsdomPointerEvent;
+}
+
+// The same gap, one level down: jsdom elements have no pointer capture at all.
+// Our code guards the call, but a test that never exercises the guard is a
+// test that would not notice it disappearing.
+if (typeof Element !== 'undefined' && !Element.prototype.setPointerCapture) {
+  Element.prototype.setPointerCapture = function setPointerCapture() {};
+  Element.prototype.releasePointerCapture = function releasePointerCapture() {};
+  Element.prototype.hasPointerCapture = function hasPointerCapture() {
+    return false;
+  };
+}
+
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'error' });
 });

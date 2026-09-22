@@ -37,12 +37,27 @@ describe('tables manifest', () => {
   });
 
   it('owns /tables at the root, with an icon the host knows', () => {
-    expect(tablesModule.routes).toEqual([expect.objectContaining({ path: '/tables/*' })]);
+    expect(tablesModule.routes[0]).toEqual(expect.objectContaining({ path: '/tables/*' }));
     expect(tablesModule.routes[0].mount).toBeUndefined();
-    expect(tablesModule.nav).toEqual([
-      expect.objectContaining({ to: '/tables', label: 'Столи', location: 'cashier-primary' }),
-    ]);
+    expect(tablesModule.nav[0]).toEqual(
+      expect.objectContaining({ to: '/tables', label: 'Столи', location: 'cashier-primary' })
+    );
     expect(Object.keys(NAV_ICONS)).toContain(tablesModule.nav[0].icon);
+  });
+
+  it('puts the floor plan in the admin, where the owner draws it', () => {
+    // The module itself is not `ownerOnly` — waiters need `/tables` — and it
+    // does not have to be: the `/admin` area is gated by the shell's own
+    // `Guard ownerOnly`, and it is web-only, so the till never mounts this.
+    expect(tablesModule.routes).toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: 'tables', mount: 'admin' })])
+    );
+    expect(tablesModule.ownerOnly).toBeUndefined();
+    expect(tablesModule.nav).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ to: '/admin/tables', location: 'admin-sidebar' }),
+      ])
+    );
   });
 
   it('declares no offline hooks: a read mirror is not a queue', () => {
