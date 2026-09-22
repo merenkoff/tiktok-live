@@ -130,6 +130,26 @@ describe.skipIf(!hasDb)('POS café analytics', () => {
       expect(menu.rows[0].variant_id).toBe(star);
     });
 
+    it('captions a row with the CATALOGUE name, not one sale\'s modifier answers', async () => {
+      // Since К2 a modifier composes its answer into `pos_sale_items.variant_label`
+      // («M · вівсяне»). A row here aggregates every sale of the variant, so
+      // labelling it from one snapshot would caption a row about all L
+      // americanos as if it were only about the sugared ones — and the owner
+      // re-prices menu items, not answers. The answers are reported apart, in
+      // `top_modifiers`.
+      const labelled = await dish('З відповідями', 10_000, 2_000);
+      await pool.query(`UPDATE pos_variants SET label = 'L' WHERE id = $1`, [labelled]);
+      await sell(labelled, 4);
+      // What the till writes on the line once an answer is chosen.
+      await pool.query(
+        `UPDATE pos_sale_items SET variant_label = 'L · з цукром' WHERE variant_id = $1`,
+        [labelled],
+      );
+
+      const { menu } = await read();
+      expect(menu.rows.find((r) => r.variant_id === labelled)?.label).toBe('L');
+    });
+
     it('leaves a dish we cannot cost OUT of the matrix, and names why', async () => {
       // The rule the whole screen rests on. Zero cost would make this the most
       // profitable thing on the menu and land it in «stars»; zero margin would
