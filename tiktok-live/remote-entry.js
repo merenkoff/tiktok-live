@@ -1,6 +1,6 @@
 import { lazy as e } from "react";
 //#region src/platform/version.ts
-var t = "2.0.0";
+var t = "2.2.0";
 //#endregion
 //#region src/modules/lazyWithRetry.ts
 async function n(e, { retries: t = 2, backoffMs: n = 400 } = {}) {
@@ -18,7 +18,7 @@ function r(t, r) {
 }
 //#endregion
 //#region src/modules/tiktok-live/manifest.ts
-var i = r(() => import("./LiveDeskPage-CNx4krBY.js").then((e) => ({ default: e.LiveDeskPage }))), a = r(() => import("./LiveSettingsPage-BnkFfBND.js").then((e) => ({ default: e.LiveSettingsPage }))), o = {
+var i = r(() => import("./LiveDeskPage-DjCLjDjw.js").then((e) => ({ default: e.LiveDeskPage }))), a = r(() => import("./LiveSettingsPage-8iLllLuF.js").then((e) => ({ default: e.LiveSettingsPage }))), o = {
 	id: "tiktok-live",
 	title: "Прямий ефір",
 	shells: ["web", "cashier"],

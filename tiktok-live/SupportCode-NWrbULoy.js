@@ -197,7 +197,7 @@ var W = {
 	getSessionLogs: (e = 100) => U(`/api/sessions/logs?limit=${e}`),
 	startSession: () => U("/api/sessions/start", { method: "POST" }),
 	stopSession: () => U("/api/sessions/stop", { method: "POST" })
-}, G = "2.0.0", K = {
+}, G = "2.2.0", K = {
 	not_configured: "CFG",
 	host_too_old: "HOST",
 	server_missing_bridge: "SRV404",

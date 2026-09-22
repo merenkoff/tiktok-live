@@ -1,16 +1,16 @@
 {
   "schema": 1,
   "moduleId": "tiktok-live",
-  "version": "2.0.0",
-  "minHostPlatform": 4,
+  "version": "2.2.0",
+  "minHostPlatform": 14,
   "entry": "remote-entry.js",
   "keyId": "2a73632c13044371",
-  "builtAt": "2026-09-17T08:04:26.643Z",
+  "builtAt": "2026-09-22T10:49:25.997Z",
   "files": {
-    "LiveDeskPage-CNx4krBY.js": "sha384-b0WgVW3ruaqg865FGshHT+OYf/rsFDk89SXXHOH1BvRYEdeWKuVVT7gcGrvjk1KN",
-    "LiveSettingsPage-BnkFfBND.js": "sha384-R8gfwV/q+KocTm57lbkbjvIZCw4dUwyZNeFCFjafDVUWiLd6bxLOQins9QA3msZ1",
-    "SupportCode-DM4FbOTP.js": "sha384-EgcLS2kbPjf5aG9oJNFAgOPqGXfuz2XsX/aXYHWnuWdDgziUvPX1sgOa6AbsWlQb",
-    "remote-entry.js": "sha384-gCEmaNj1k5uOAUqaEkyxMVPw5CoZ1mR9zy3Hnc/Qq+P4kG6QXTftHHmp71C0FC9B",
+    "LiveDeskPage-DjCLjDjw.js": "sha384-P6YehOvkvx9TeQeDEKRe3chelCgKpSNxoCL492fvLDP9fdGQjC2xYjqOeuRJ3ko0",
+    "LiveSettingsPage-8iLllLuF.js": "sha384-o5JcBJKy9kIQiSEGGm4ns4FLA4icRcvAguXvPJqsTXT3czdeBRpgAxsv0hpj1FrP",
+    "SupportCode-NWrbULoy.js": "sha384-BaO1h/uuvjXf6vBrDSvQxMe2UBqhW0KxZcdvbvsaTsdQmRxvwjSuqhCAWhCBcwDL",
+    "remote-entry.js": "sha384-He85aXYV4ApI4noTjy+bpTFRSkJ9h129Zl97IsPhiz4lWYENXKgC2WqNibcev2Cp",
     "style.css": "sha384-NC9/BoMCmug2kDwtgY7e83sbq1d3sGzsT30hBNIINgfMCp5pWrf9gPwZhRTLsVTP"
   }
 }
