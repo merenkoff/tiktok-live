@@ -1,7 +1,7 @@
 import { n as e, t } from "./sync-CyxwpwU0.js";
 import { lazy as n } from "react";
 //#region src/platform/version.ts
-var r = "2.2.0";
+var r = "2.2.3";
 //#endregion
 //#region src/modules/lazyWithRetry.ts
 async function i(e, { retries: t = 2, backoffMs: n = 400 } = {}) {
@@ -26,7 +26,7 @@ var o = {
 	alwaysEnabled: !0,
 	routes: [{
 		path: "/stocktake/*",
-		element: a(() => import("./StocktakeRoutes-BE12Dvks.js").then((e) => ({ default: e.StocktakeRoutes })))
+		element: a(() => import("./StocktakeRoutes-Barg4T6u.js").then((e) => ({ default: e.StocktakeRoutes })))
 	}],
 	nav: [{
 		to: "/stocktake",
