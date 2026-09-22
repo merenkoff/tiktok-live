@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "moduleId": "tables",
+  "version": "2.2.0",
+  "minHostPlatform": 14,
+  "entry": "remote-entry.js",
+  "keyId": "2a73632c13044371",
+  "builtAt": "2026-09-22T08:56:40.670Z",
+  "files": {
+    "HallEditorPage-CpxP69Y6.js": "sha384-2bWIKOfXmUEE0AeXhfWnHmi1nb0xVhW/FF6kxck+g1yctpO5pTmRXZKKmrKBX5td",
+    "TablesRoutes--Z3Nb_hL.js": "sha384-8AWPhdrYbZwNuZD0IYJBWPj3pcMWE95W/eXTBQF5BXV+wXHKxwoDiH1vU1IzJ+ZE",
+    "remote-entry.js": "sha384-FCeLt0sCMNqgpFZ4feztVRHLOG0De+8gM/mk1AahmqHvOsQD3FTTOcYF9sK1wtLa",
+    "style.css": "sha384-1/GsWOOXjOvYymWUOIqxYxpFPZGHX940BOZVEVi0Mtg8BqqFtl3cU/hn5HjdG+Ga",
+    "useHallMap-fXqupFz3.js": "sha384-WSfmFUb5TZOmu8Uytw0tw3Zf2uD4dc79hIOlsI5eQI8NIbBX5WpVVIGXDvVFBhR1"
+  }
+}
