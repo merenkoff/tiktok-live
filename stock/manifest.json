@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "moduleId": "stock",
+  "version": "2.2.0",
+  "minHostPlatform": 14,
+  "entry": "remote-entry.js",
+  "keyId": "2a73632c13044371",
+  "builtAt": "2026-09-22T09:39:48.645Z",
+  "files": {
+    "StockActionPage-BM9z0x7M.js": "sha384-4rBL2wo4exuxaEk65r26cBZNj7yt5SZa+WiPvYGXqc16c69vSOo/RWqoa+SQqUM1",
+    "StockDocumentDetailPage-D00YSBsX.js": "sha384-3/1baPTZcjFlVNwyzpSlDShkTlThYBjGdyjwORfwnS3fmVuzT1QLMV1uuPyBEeOK",
+    "StockHistoryPage-DlyJ35Mc.js": "sha384-1Nrnx1+gPfNc0fDqPIGcQdigv/kd/Q8MhzNRAUsm1vQ0AzEVazAOyJvSsAYhrwLk",
+    "StockHubPage-BEQh-pee.js": "sha384-zNOxlvOTPkJU/Ka7XONa/Na9aYnQLdvMuexfZhj6RNM8GJ0oivsjTNl91hEemjlE",
+    "StockInventoryPage-BS2ignMb.js": "sha384-YDcJzM7+tZy94M+TGB4N5pziRLYqGLgAVDodX/M1eV5/8TkG7awCPugp5PKpvdEX",
+    "StockMovementPage-P1RzhZS6.js": "sha384-6xY72/1UAHd1cxivjCZSY9a3f6IrDUmipO/ZjRnibAht0ooHd0/SxeFIR4PbTVuL",
+    "StockProductionPage-BuUTTrTD.js": "sha384-v72luuKvnhCvxakM9/uE/L0+K7QNb5jx7+M0vUv7UMYUmOiu66xmCCsKonoq+7HC",
+    "remote-entry.js": "sha384-6U/WYUPtt2G2b9vMY6QHG6ZJTCTjtfoyM7wNG35Mu6kRXc5S21uvgt1EdaDbRQOd",
+    "style.css": "sha384-9GIyS928rwWCr7crHSHTk/IPVFCjTZOV5WGodUXKa9pz3Wqa9w7dtKHnzvj2wf8O",
+    "useDragScroll-Hmq7ij8E.js": "sha384-FgLBQANTIP+BGWQ1SgEkhiTPWVS2DsAaRuBxSNpMULHZvRvEtvuxugJW6F4RAc4c"
+  }
+}
