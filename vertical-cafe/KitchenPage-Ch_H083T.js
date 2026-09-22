@@ -55,16 +55,26 @@ function b(e) {
 	};
 }
 function x(e) {
-	return e.order_no == null ? e.receipt_number : String(e.order_no);
+	return e.kind === "round";
 }
-function S(e, t, n, r) {
-	return n === "served" ? e.filter((e) => e.id !== t) : e.map((e) => e.id === t ? {
+function S(e) {
+	return x(e) ? e.table_name || e.title || "" : e.order_no == null ? e.receipt_number : String(e.order_no);
+}
+function C(e) {
+	return !x(e) || e.round_seq == null ? null : `раунд ${e.round_seq}`;
+}
+function w(e) {
+	return `${e.kind ?? "sale"}-${e.id}`;
+}
+function T(e, t, n, r) {
+	let i = w(t);
+	return n === "served" ? e.filter((e) => w(e) !== i) : e.map((e) => w(e) === i ? {
 		...e,
 		prep_status: "ready",
 		ready_at: e.ready_at ?? r
 	} : e);
 }
-function C(e) {
+function E(e) {
 	let t = /* @__PURE__ */ new Map();
 	for (let n of e) {
 		if (n.sellable === !1) continue;
@@ -79,39 +89,40 @@ function C(e) {
 	}
 	return [...t.values()].sort((e, t) => e.name.localeCompare(t.name, "uk"));
 }
-function w(e, t) {
+function D(e, t) {
 	let n = e?.response?.data?.error;
 	return typeof n == "string" && n.trim() ? n : t;
 }
 //#endregion
 //#region src/modules/vertical-cafe/kitchen/kitchenApi.ts
-function T() {
+function O() {
 	return r("get", "/kitchen/orders");
 }
-function E(e, t) {
-	return r("patch", `/sales/${e}/prep`, { prep_status: t });
+function k(e, t) {
+	let n = e.kind === "round" ? `/kitchen/rounds/${e.id}/prep` : `/sales/${e.id}/prep`;
+	return r("patch", n, { prep_status: t });
 }
-function D(e, t) {
+function A(e, t) {
 	return r("post", `/kitchen/stop-list/${e}`, { stop_listed: t });
 }
-function O() {
+function j() {
 	return r("get", "/catalog");
 }
 //#endregion
 //#region src/modules/vertical-cafe/kitchen/useKitchenOrders.ts
-var k = 5e3;
-function A(e) {
+var M = 5e3;
+function N(e) {
 	let [t, n] = l([]), [r, i] = l(0), [s, u] = l(!0), [d, f] = l(null), [p, m] = l(null), h = c(!0);
 	o(() => (h.current = !0, () => {
 		h.current = !1;
 	}), []);
 	let _ = a(async () => {
 		try {
-			let e = await T();
+			let e = await O();
 			if (!h.current) return;
 			n(e.orders), i(g(e.now)), f(null);
 		} catch (e) {
-			h.current && f(w(e, "Не вдалося прочитати замовлення"));
+			h.current && f(D(e, "Не вдалося прочитати замовлення"));
 		} finally {
 			h.current && u(!1);
 		}
@@ -121,15 +132,15 @@ function A(e) {
 		_();
 		let t = setInterval(() => {
 			typeof document < "u" && document.visibilityState !== "visible" || _();
-		}, k);
+		}, M);
 		return () => clearInterval(t);
 	}, [e, _]);
 	let v = a(async (e, t) => {
-		n((n) => S(n, e, t, (/* @__PURE__ */ new Date()).toISOString()));
+		n((n) => T(n, e, t, (/* @__PURE__ */ new Date()).toISOString()));
 		try {
-			await E(e, t), h.current && m(null);
+			await k(e, t), h.current && m(null);
 		} catch (e) {
-			h.current && m(w(e, "Не вдалося оновити замовлення"));
+			h.current && m(D(e, "Не вдалося оновити замовлення"));
 		} finally {
 			await _();
 		}
@@ -148,16 +159,16 @@ function A(e) {
 }
 //#endregion
 //#region src/modules/vertical-cafe/kitchen/OrdersTab.tsx
-var j = {
+var P = {
 	kitchen: "кухня",
 	bar: "бар"
-}, M = {
+}, F = {
 	ok: "text-sq-secondary",
 	warn: "text-amber-600",
 	late: "text-red-600"
 };
-function N() {
-	let { orders: e, offset: t, loading: n, error: r, banner: i, markReady: a, markServed: c, clearBanner: l } = A(!0), [, f] = s((e) => e + 1, 0);
+function I() {
+	let { orders: e, offset: t, loading: n, error: r, banner: i, markReady: a, markServed: c, clearBanner: l } = N(!0), [, f] = s((e) => e + 1, 0);
 	o(() => {
 		let e = setInterval(f, 1e3);
 		return () => clearInterval(e);
@@ -188,36 +199,36 @@ function N() {
 			}),
 			/* @__PURE__ */ d("div", {
 				className: "grid gap-3 md:grid-cols-2",
-				children: [/* @__PURE__ */ u(P, {
+				children: [/* @__PURE__ */ u(L, {
 					title: "В роботі",
 					testId: "kitchen-in-work",
 					empty: "Замовлень немає",
-					children: p.map((e) => /* @__PURE__ */ u(F, {
+					children: p.map((e) => /* @__PURE__ */ u(R, {
 						order: e,
 						since: e.created_at,
 						offset: t,
 						action: "Готово",
-						actionTestId: `kitchen-ready-${e.id}`,
-						onAction: () => void a(e.id)
-					}, e.id))
-				}), /* @__PURE__ */ u(P, {
+						actionTestId: `kitchen-ready-${w(e)}`,
+						onAction: () => void a(e)
+					}, w(e)))
+				}), /* @__PURE__ */ u(L, {
 					title: "Видача",
 					testId: "kitchen-pickup",
 					empty: "Нічого не чекає видачі",
-					children: m.map((e) => /* @__PURE__ */ u(F, {
+					children: m.map((e) => /* @__PURE__ */ u(R, {
 						order: e,
 						since: e.ready_at ?? e.created_at,
 						offset: t,
 						action: "Видано",
-						actionTestId: `kitchen-served-${e.id}`,
-						onAction: () => void c(e.id)
-					}, e.id))
+						actionTestId: `kitchen-served-${w(e)}`,
+						onAction: () => void c(e)
+					}, w(e)))
 				})]
 			})
 		]
 	});
 }
-function P({ title: e, testId: t, empty: n, children: r }) {
+function L({ title: e, testId: t, empty: n, children: r }) {
 	return /* @__PURE__ */ d("section", {
 		className: "space-y-2",
 		"data-testid": t,
@@ -230,23 +241,30 @@ function P({ title: e, testId: t, empty: n, children: r }) {
 		}) : r]
 	});
 }
-function F({ order: e, since: t, offset: n, action: r, actionTestId: i, onAction: a }) {
+function R({ order: e, since: t, offset: n, action: r, actionTestId: i, onAction: a }) {
 	let o = _(t, n), s = /* @__PURE__ */ new Set();
 	for (let t of e.items) for (let e of t.stations) s.add(e);
 	return /* @__PURE__ */ d("article", {
 		className: "rounded-sq border border-sq-divider bg-white p-3 space-y-2 shadow-sm",
-		"data-testid": `kitchen-order-${e.id}`,
+		"data-testid": `kitchen-order-${w(e)}`,
 		children: [
 			/* @__PURE__ */ d("div", {
 				className: "flex items-baseline justify-between gap-3",
-				children: [/* @__PURE__ */ u("p", {
-					className: "text-6xl font-bold tabular-nums leading-none",
-					"data-testid": "kitchen-order-no",
-					children: x(e)
+				children: [/* @__PURE__ */ d("div", {
+					className: "min-w-0",
+					children: [/* @__PURE__ */ u("p", {
+						className: `font-bold leading-none ${x(e) ? "text-4xl break-words" : "text-6xl tabular-nums"}`,
+						"data-testid": "kitchen-order-no",
+						children: S(e)
+					}), C(e) && /* @__PURE__ */ u("p", {
+						className: "text-sm text-sq-secondary mt-1",
+						"data-testid": "kitchen-order-round",
+						children: C(e)
+					})]
 				}), /* @__PURE__ */ d("div", {
 					className: "text-right",
 					children: [/* @__PURE__ */ u("p", {
-						className: `text-xl font-semibold tabular-nums ${M[v(o)]}`,
+						className: `text-xl font-semibold tabular-nums ${F[v(o)]}`,
 						"data-testid": "kitchen-wait",
 						children: y(o)
 					}), /* @__PURE__ */ u("p", {
@@ -259,7 +277,7 @@ function F({ order: e, since: t, offset: n, action: r, actionTestId: i, onAction
 				className: "flex gap-1.5",
 				children: [...s].map((e) => /* @__PURE__ */ u("span", {
 					className: "text-[11px] font-semibold px-1.5 py-0.5 rounded-[3px] bg-sq-bg text-sq-secondary",
-					children: j[e]
+					children: P[e]
 				}, e))
 			}),
 			/* @__PURE__ */ u("ul", {
@@ -307,12 +325,12 @@ function F({ order: e, since: t, offset: n, action: r, actionTestId: i, onAction
 }
 //#endregion
 //#region src/modules/vertical-cafe/kitchen/StopListTab.tsx
-function I() {
+function z() {
 	let [e, n] = l(null), [r, i] = l(null), [s, c] = l(null), p = a(async () => {
 		try {
-			n(C(await O())), i(null);
+			n(E(await j())), i(null);
 		} catch (e) {
-			i(w(e, "Не вдалося прочитати меню")), n([]);
+			i(D(e, "Не вдалося прочитати меню")), n([]);
 		}
 	}, []);
 	o(() => {
@@ -321,13 +339,13 @@ function I() {
 	async function m(e) {
 		c(e.product_id);
 		try {
-			let r = await D(e.product_id, !e.stop_listed);
+			let r = await A(e.product_id, !e.stop_listed);
 			n((t) => (t ?? []).map((t) => t.product_id === e.product_id ? {
 				...t,
 				stop_listed: r.stop_listed
 			} : t)), i(null), await t();
 		} catch (e) {
-			i(w(e, "Не вдалося змінити стоп-лист"));
+			i(D(e, "Не вдалося змінити стоп-лист"));
 		} finally {
 			c(null);
 		}
@@ -399,12 +417,12 @@ function I() {
 }
 //#endregion
 //#region src/modules/vertical-cafe/kitchen/KitchenPage.tsx
-function L() {
+function B() {
 	let e = n();
 	if (e.length > 0) throw new i(e);
-	return /* @__PURE__ */ u(R, {});
+	return /* @__PURE__ */ u(V, {});
 }
-function R() {
+function V() {
 	let e = m(), t = p((e) => e.online), [n, r] = l("orders");
 	return e.id === "cafe" ? /* @__PURE__ */ d("div", {
 		className: "flex flex-col h-full min-h-0 text-sq-text",
@@ -416,20 +434,20 @@ function R() {
 					className: "text-lg font-semibold mr-2",
 					children: "Кухня"
 				}),
-				/* @__PURE__ */ u(z, {
+				/* @__PURE__ */ u(H, {
 					active: n === "orders",
 					onClick: () => r("orders"),
 					testId: "kitchen-tab-orders",
 					children: "Замовлення"
 				}),
-				/* @__PURE__ */ u(z, {
+				/* @__PURE__ */ u(H, {
 					active: n === "stop",
 					onClick: () => r("stop"),
 					testId: "kitchen-tab-stop",
 					children: "Стоп-лист"
 				})
 			]
-		}), t ? u(n === "orders" ? N : I, {}) : /* @__PURE__ */ d("div", {
+		}), t ? u(n === "orders" ? I : z, {}) : /* @__PURE__ */ d("div", {
 			className: "m-4 rounded-sq border border-dashed border-sq-divider p-8 text-center",
 			"data-testid": "kitchen-offline",
 			children: [
@@ -458,7 +476,7 @@ function R() {
 		})]
 	});
 }
-function z({ active: e, onClick: t, testId: n, children: r }) {
+function H({ active: e, onClick: t, testId: n, children: r }) {
 	return /* @__PURE__ */ u("button", {
 		type: "button",
 		onClick: t,
@@ -469,4 +487,4 @@ function z({ active: e, onClick: t, testId: n, children: r }) {
 	});
 }
 //#endregion
-export { L as default };
+export { B as default };

@@ -1,17 +1,17 @@
 {
   "schema": 1,
   "moduleId": "vertical-cafe",
-  "version": "2.2.0",
-  "minHostPlatform": 14,
+  "version": "2.2.3",
+  "minHostPlatform": 15,
   "entry": "remote-entry.js",
   "keyId": "2a73632c13044371",
-  "builtAt": "2026-09-22T10:43:00.273Z",
+  "builtAt": "2026-09-22T19:21:45.820Z",
   "files": {
     "BarcodeScanner-DDyd6b-m.js": "sha384-h7k7FozxihdT2cYBXZsLuvH2nmezpFoHZ17TVH+R34lHtTcbvHJBkmWVo9KVWFbs",
     "CafeCatalog-DEL2FDPJ.js": "sha384-Ezj9EHlaOE0fMxugYaA+cQ2Clg0FJm8EM5tQ+YN078dIU7pz9BFOA2gHuSO4LrXK",
-    "KitchenPage-BAaRbRj9.js": "sha384-TOoCkNHMNeX3bs7tLnXj4EOgM032LWfWo4u1S+LeEYcqM6nqWdeoMrS/DtnhCA1M",
+    "KitchenPage-Ch_H083T.js": "sha384-AUhrYmE3mpRPEr+GTuMONjNsb7olIP0xbn+PsbvZypZsFaMn/i+n2Zqu0JRdnTnD",
     "hostPlatform-BSaDrC_D.js": "sha384-mHi12dO61e0ciSwpBKqJ35lUv7QCug6gsqavqHaS4MW904OM3M+pTAkDPvDz/seD",
-    "remote-entry.js": "sha384-0DewCGOmLpw3Y4sf6iNHGCDAl+Wx85jUY6nhuGOaFpwHE6N0QnI8V2NaVF8SI+0h",
-    "style.css": "sha384-O6MEvAmH20CXtQlbWMXnTnJig87Adi5zWUwcbGsQmfaFCkkZiOpcdCQWuMc8li20"
+    "remote-entry.js": "sha384-CbWQat5qP8cq7lL3ORlNLpSZ/0pR0oeP/m/jrb39s6FOxYiS+3t4OSFTGwusJYGt",
+    "style.css": "sha384-NuGsCRq+zY3Pk22/izLVqjRA3yGGaSV6s1GqEANQxJF7IJ8/+C4HSEkW8wTSovGz"
   }
 }

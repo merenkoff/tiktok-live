@@ -1,6 +1,6 @@
 import { lazy as e } from "react";
 //#region src/platform/version.ts
-var t = "2.2.0";
+var t = "2.2.3";
 //#endregion
 //#region src/modules/lazyWithRetry.ts
 async function n(e, { retries: t = 2, backoffMs: n = 400 } = {}) {
@@ -18,7 +18,7 @@ function r(t, r) {
 }
 //#endregion
 //#region src/modules/vertical-cafe/manifest.ts
-var i = r(() => import("./CafeCatalog-DEL2FDPJ.js")), a = r(() => import("./KitchenPage-BAaRbRj9.js")), o = {
+var i = r(() => import("./CafeCatalog-DEL2FDPJ.js")), a = r(() => import("./KitchenPage-Ch_H083T.js")), o = {
 	id: "vertical-cafe",
 	title: "Кафе",
 	shells: ["web", "cashier"],
