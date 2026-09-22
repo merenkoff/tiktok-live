@@ -655,4 +655,83 @@ describe.skipIf(!hasDb)('POS products service', () => {
       expect(foreign.map((c) => c.product_name)).not.toContain('Blue Jeans');
     });
   });
+
+  // ── The purchase pack (migration 054, café phase К5a) ─────────────────────
+  // How a variant ARRIVES, as opposed to how it is counted. The pair is the
+  // whole rule: half of it cannot be converted or read, so it is refused at
+  // the write rather than discovered on the receiving screen.
+  describe('purchase pack', () => {
+    it('accepts the pair and hands it back on the variant and the catalog', async () => {
+      const created = await products.createProduct(store.storeId, {
+        name: `Oil ${Date.now()}`,
+        variants: [
+          { attributes: { size: 'S' }, price_cents: 0, quantity: 5000, pack_qty: 1000, pack_label: 'пляшка' },
+        ],
+      });
+      const variant = created!.variants[0] as { id: number; pack_qty: number | null; pack_label: string };
+      expect(variant.pack_qty).toBe(1000);
+      expect(variant.pack_label).toBe('пляшка');
+
+      const catalog = await products.getCatalog(store.storeId);
+      const row = catalog.find((c) => c.variant_id === variant.id)!;
+      expect(row.pack_qty).toBe(1000);
+      expect(row.pack_label).toBe('пляшка');
+    });
+
+    it('refuses half a pair, in the words the owner sees', async () => {
+      await expect(
+        products.createProduct(store.storeId, {
+          name: `HalfA ${Date.now()}`,
+          variants: [{ price_cents: 100, pack_qty: 1000 }],
+        })
+      ).rejects.toThrow(/назву упаковки/);
+
+      await expect(
+        products.createProduct(store.storeId, {
+          name: `HalfB ${Date.now()}`,
+          variants: [{ price_cents: 100, pack_label: 'пляшка' }],
+        })
+      ).rejects.toThrow(/скільки одиниць/);
+    });
+
+    it('refuses a pack of zero, a fraction and a negative', async () => {
+      for (const bad of [0, 2.5, -1]) {
+        await expect(
+          products.createProduct(store.storeId, {
+            name: `Bad${bad} ${Date.now()}`,
+            variants: [{ price_cents: 100, pack_qty: bad, pack_label: 'ящик' }],
+          })
+        ).rejects.toThrow(/цілим числом більше нуля/);
+      }
+    });
+
+    it('keeps the pack when an update does not mention it, and clears it on an explicit null', async () => {
+      const created = await products.createProduct(store.storeId, {
+        name: `Keep ${Date.now()}`,
+        variants: [{ price_cents: 100, quantity: 0, pack_qty: 12, pack_label: 'ящик' }],
+      });
+      const id = (created!.variants[0] as { id: number }).id;
+
+      // An unrelated edit must not silently drop it — the owner did not say to.
+      const afterPrice = await products.updateVariant(store.storeId, id, { price_cents: 150 });
+      const kept = afterPrice!.variants.find((v) => (v as { id: number }).id === id) as {
+        pack_qty: number | null;
+        pack_label: string;
+      };
+      expect(kept.pack_qty).toBe(12);
+      expect(kept.pack_label).toBe('ящик');
+
+      // Clearing is expressible: the pair goes together, both ways.
+      const afterClear = await products.updateVariant(store.storeId, id, {
+        pack_qty: null,
+        pack_label: '',
+      });
+      const cleared = afterClear!.variants.find((v) => (v as { id: number }).id === id) as {
+        pack_qty: number | null;
+        pack_label: string;
+      };
+      expect(cleared.pack_qty).toBeNull();
+      expect(cleared.pack_label).toBe('');
+    });
+  });
 });
