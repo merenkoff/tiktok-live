@@ -49,8 +49,16 @@ on:
 permissions:
   contents: write
 
+# One module at a time, but only THAT module. The group has to name the module
+# because `github.ref_name` does not: on a tag push it is `module-<id>-v<ver>`
+# and so already unique, but on a manual dispatch it is the branch — `main` for
+# every module. Nine dispatches then shared one group, and since a concurrency
+# group holds at most one PENDING run, each new one cancelled the previous
+# pending one: releasing nine modules produced seven cancellations, the first
+# and the last surviving. `cancel-in-progress: false` does not help with that —
+# it protects the RUNNING job, not the queue.
 concurrency:
-  group: module-release-${{ github.ref_name }}
+  group: module-release-${{ github.event.inputs.module || github.ref_name }}
   cancel-in-progress: false
 
 env:
