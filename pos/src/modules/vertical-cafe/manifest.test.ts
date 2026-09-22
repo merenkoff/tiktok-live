@@ -41,14 +41,32 @@ describe('vertical-cafe manifest', () => {
     // К3c: the first route this module owns. A root mount (no `mount:
     // 'admin'`), so the desktop cashier renders it too; the splat matches the
     // shape the desktop's pending placeholder builds from `routePath`.
-    expect(verticalCafeModule.routes).toEqual([
-      expect.objectContaining({ path: '/kitchen/*' }),
-    ]);
-    expect(verticalCafeModule.routes[0].mount).toBeUndefined();
-    expect(verticalCafeModule.nav).toEqual([
-      expect.objectContaining({ to: '/kitchen', label: 'Кухня', location: 'cashier-primary' }),
-    ]);
+    const board = verticalCafeModule.routes.find((r) => r.path === '/kitchen/*');
+    expect(board).toBeTruthy();
+    expect(board?.mount).toBeUndefined();
+    expect(verticalCafeModule.nav).toContainEqual(
+      expect.objectContaining({ to: '/kitchen', label: 'Кухня', location: 'cashier-primary' })
+    );
     expect(Object.keys(NAV_ICONS)).toContain(verticalCafeModule.nav[0].icon);
+  });
+
+  it('owns the owner\'s menu screen too, and only in the admin', () => {
+    // К6c. The desktop cashier has no admin at all, so this route reaches only
+    // the web shell — which is why `module_remotes` still carries exactly one
+    // `routePath` (the board's) and needs no second one.
+    const menu = verticalCafeModule.routes.find((r) => r.path === 'cafe');
+    expect(menu?.mount).toBe('admin');
+    expect(verticalCafeModule.nav).toContainEqual(
+      expect.objectContaining({ to: '/admin/cafe', location: 'admin-sidebar' })
+    );
+    // Not «Кухня»: the till's primary nav already has that word, and two
+    // entries reading the same would send an owner to the board for a menu
+    // question. Not «Меню» either — the host sidebar already carries «Товари»
+    // (the owner's guide calls it the menu) and «Вигляд меню» (the nav's own
+    // appearance), so the module's name is the one label free of collisions.
+    expect(verticalCafeModule.nav.find((n) => n.to === '/admin/cafe')?.label).toBe('Кафе');
+    const labels = verticalCafeModule.nav.map((n) => n.label);
+    expect(new Set(labels).size).toBe(labels.length);
   });
 
   it('probes the two host members the board needs without a new export name', () => {

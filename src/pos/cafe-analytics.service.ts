@@ -155,9 +155,12 @@ function resolveRange(opts: { from?: string; to?: string; timezone?: string }): 
 const SALE_SCOPE = `
   FROM pos_sale_items si
   JOIN pos_sales s ON s.id = si.sale_id
-  -- LEFT, because a receipt placeholder line (migration 019) names no variant.
-  -- It then has no cost card, so \`COST_IS_KNOWN\` is false and it leaves the
-  -- matrix by the front door rather than being silently dropped from the join.
+  -- LEFT is defensive, not load-bearing: si.variant_id is NOT NULL and its FK
+  -- is ON DELETE RESTRICT, so today the row is always there. It is written
+  -- this way so that if a line ever stops naming a catalogue variant, it
+  -- leaves the matrix through COST_IS_KNOWN — named, with a reason — instead
+  -- of being silently dropped from the join, which is the one failure mode
+  -- this screen must not have.
   LEFT JOIN pos_variants v ON v.id = si.variant_id
   WHERE s.store_id = $1
     AND s.status <> 'voided'
@@ -333,7 +336,16 @@ async function menu(params: unknown[]): Promise<CafeAnalytics['menu']> {
   const result = await pool.query(
     `SELECT si.variant_id,
             MIN(si.product_name) AS product_name,
-            MIN(si.variant_label) AS label,
+            -- The CATALOGUE caption, not the sold line's. Since К2 a modifier
+            -- composes its answer into si.variant_label («M · вівсяне»), so
+            -- MIN(si.variant_label) would label a row that aggregates every L
+            -- americano with whichever answer happened to sort first, and the
+            -- owner would read a row about all of them as a row about the
+            -- sugared ones. A row here is a MENU ITEM; the answers are
+            -- reported apart, in top_modifiers. The snapshot stays as the
+            -- fallback for the same defensive reason the join is LEFT: today
+            -- RESTRICT means the variant is always there, so it never fires.
+            MIN(COALESCE(v.label, si.variant_label)) AS label,
             SUM(${NET_QTY})::int AS sold,
             SUM(CASE WHEN si.quantity > 0
                      THEN si.line_total_cents::numeric / si.quantity * ${NET_QTY}
