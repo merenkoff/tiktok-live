@@ -8,16 +8,29 @@
 
 import type { CatalogItem } from '@pos/platform';
 import { posRequest } from '../lib/hostPlatform';
-import type { KitchenBoard, PrepStatusRow, StopListRow } from './types';
+import type { KitchenBoard, KitchenOrder, PrepStatusRow, StopListRow } from './types';
 
 /** Today's open orders, oldest first, with the server's clock. */
 export function listOrders(): Promise<KitchenBoard> {
   return posRequest<KitchenBoard>('get', '/kitchen/orders');
 }
 
-/** One tap: «Готово» (`ready`) or «Видано» (`served`). 409 in the kitchen's words. */
-export function setPrep(saleId: number, status: 'ready' | 'served'): Promise<PrepStatusRow> {
-  return posRequest<PrepStatusRow>('patch', `/sales/${saleId}/prep`, { prep_status: status });
+/**
+ * One tap: «Готово» (`ready`) or «Видано» (`served`). 409 in the kitchen's words.
+ *
+ * Takes the ORDER, not an id, because the board has two kinds on it and they
+ * are stamped in different tables: a counter sale through `/sales/:id/prep`,
+ * a table's round through `/kitchen/rounds/:id/prep`. Sending a round's id to
+ * the sales route is what answered «Замовлення не знайдено» to a cook who was
+ * looking straight at the ticket.
+ */
+export function setPrep(
+  order: Pick<KitchenOrder, 'id' | 'kind'>,
+  status: 'ready' | 'served'
+): Promise<PrepStatusRow> {
+  const path =
+    order.kind === 'round' ? `/kitchen/rounds/${order.id}/prep` : `/sales/${order.id}/prep`;
+  return posRequest<PrepStatusRow>('patch', path, { prep_status: status });
 }
 
 /** «Сьогодні не робимо» — on or off for the store's day. */

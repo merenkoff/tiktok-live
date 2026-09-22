@@ -7,7 +7,16 @@
 // metre away.
 
 import { useEffect, useReducer } from 'react';
-import { formatWait, orderLabel, splitColumns, waitSeconds, waitTone } from './lib/kitchen';
+import {
+  formatWait,
+  isRound,
+  orderKey,
+  orderLabel,
+  orderSubLabel,
+  splitColumns,
+  waitSeconds,
+  waitTone,
+} from './lib/kitchen';
 import type { KitchenOrder, Station } from './types';
 import { useKitchenOrders } from './useKitchenOrders';
 
@@ -55,26 +64,26 @@ export function OrdersTab() {
         <Column title="В роботі" testId="kitchen-in-work" empty="Замовлень немає">
           {inWork.map((order) => (
             <OrderCard
-              key={order.id}
+              key={orderKey(order)}
               order={order}
               since={order.created_at}
               offset={offset}
               action="Готово"
-              actionTestId={`kitchen-ready-${order.id}`}
-              onAction={() => void markReady(order.id)}
+              actionTestId={`kitchen-ready-${orderKey(order)}`}
+              onAction={() => void markReady(order)}
             />
           ))}
         </Column>
         <Column title="Видача" testId="kitchen-pickup" empty="Нічого не чекає видачі">
           {pickup.map((order) => (
             <OrderCard
-              key={order.id}
+              key={orderKey(order)}
               order={order}
               since={order.ready_at ?? order.created_at}
               offset={offset}
               action="Видано"
-              actionTestId={`kitchen-served-${order.id}`}
-              onAction={() => void markServed(order.id)}
+              actionTestId={`kitchen-served-${orderKey(order)}`}
+              onAction={() => void markServed(order)}
             />
           ))}
         </Column>
@@ -132,12 +141,24 @@ function OrderCard({
   return (
     <article
       className="rounded-sq border border-sq-divider bg-white p-3 space-y-2 shadow-sm"
-      data-testid={`kitchen-order-${order.id}`}
+      data-testid={`kitchen-order-${orderKey(order)}`}
     >
       <div className="flex items-baseline justify-between gap-3">
-        <p className="text-6xl font-bold tabular-nums leading-none" data-testid="kitchen-order-no">
-          {orderLabel(order)}
-        </p>
+        <div className="min-w-0">
+          <p
+            className={`font-bold leading-none ${
+              isRound(order) ? 'text-4xl break-words' : 'text-6xl tabular-nums'
+            }`}
+            data-testid="kitchen-order-no"
+          >
+            {orderLabel(order)}
+          </p>
+          {orderSubLabel(order) && (
+            <p className="text-sm text-sq-secondary mt-1" data-testid="kitchen-order-round">
+              {orderSubLabel(order)}
+            </p>
+          )}
+        </div>
         <div className="text-right">
           <p
             className={`text-xl font-semibold tabular-nums ${TONE_CLASS[waitTone(seconds)]}`}

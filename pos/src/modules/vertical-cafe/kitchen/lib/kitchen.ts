@@ -60,9 +60,45 @@ export function splitColumns(orders: KitchenOrder[]): {
   };
 }
 
-/** What the barista calls out: the daily number, or the receipt when there is none. */
-export function orderLabel(order: Pick<KitchenOrder, 'order_no' | 'receipt_number'>): string {
+/** A round fired from a table, as opposed to a sale rung at the counter. */
+export function isRound(order: Pick<KitchenOrder, 'kind'>): boolean {
+  return order.kind === 'round';
+}
+
+/**
+ * What is called out across the kitchen: the daily number at the counter, the
+ * TABLE for a round.
+ *
+ * A round carries neither `order_no` nor `receipt_number` — nothing is paid
+ * yet — so the old rule returned an empty string and the ticket arrived with
+ * a blank where its identity should be. The table is the thing a cook needs;
+ * which round of it goes underneath, in `orderSubLabel`.
+ */
+export function orderLabel(
+  order: Pick<KitchenOrder, 'order_no' | 'receipt_number' | 'kind' | 'table_name' | 'title'>
+): string {
+  if (isRound(order)) return order.table_name || order.title || '';
   return order.order_no != null ? String(order.order_no) : order.receipt_number;
+}
+
+/** "раунд 2" under a table's name; nothing for a counter sale. */
+export function orderSubLabel(
+  order: Pick<KitchenOrder, 'kind' | 'round_seq'>
+): string | null {
+  if (!isRound(order) || order.round_seq == null) return null;
+  return `раунд ${order.round_seq}`;
+}
+
+/**
+ * What identifies a card on the board.
+ *
+ * NOT the id: sales and rounds are separate tables with separate sequences,
+ * so sale 7 and round 7 sit on the same board at the same time. Everything
+ * that singles a card out — the optimistic move, the React key, the test id —
+ * goes through this.
+ */
+export function orderKey(order: Pick<KitchenOrder, 'id' | 'kind'>): string {
+  return `${order.kind ?? 'sale'}-${order.id}`;
 }
 
 /**
@@ -72,13 +108,14 @@ export function orderLabel(order: Pick<KitchenOrder, 'order_no' | 'receipt_numbe
  */
 export function applyPrep(
   orders: KitchenOrder[],
-  saleId: number,
+  target: Pick<KitchenOrder, 'id' | 'kind'>,
   status: 'ready' | 'served',
   readyAt: string
 ): KitchenOrder[] {
-  if (status === 'served') return orders.filter((o) => o.id !== saleId);
+  const key = orderKey(target);
+  if (status === 'served') return orders.filter((o) => orderKey(o) !== key);
   return orders.map((o) =>
-    o.id === saleId ? { ...o, prep_status: 'ready', ready_at: o.ready_at ?? readyAt } : o
+    orderKey(o) === key ? { ...o, prep_status: 'ready', ready_at: o.ready_at ?? readyAt } : o
   );
 }
 
