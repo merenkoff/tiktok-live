@@ -4,6 +4,8 @@
 
 import type { FastifyInstance } from 'fastify';
 import { ensureModule, ensurePosAuth } from '../core/auth.js';
+import { pool } from '../../db.js';
+import { listTechCards } from '../composites.service.js';
 import * as productsService from '../products.service.js';
 import * as tagsService from '../tags.service.js';
 import { saveProductImage } from '../uploads.service.js';
@@ -15,6 +17,17 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
     const auth = await ensureModule(request, reply, 'products', { owner: true });
     if (!auth) return;
     return productsService.listProducts(auth.storeId);
+  });
+
+  /**
+   * «Техкарти» — every composite with what it costs to assemble and what share
+   * of its price that is. Static segment, declared BEFORE `/products/:id` so
+   * it is never read as a product id.
+   */
+  fastify.get('/products/tech-cards', async (request, reply) => {
+    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    if (!auth) return;
+    return listTechCards(pool, auth.storeId);
   });
 
   fastify.get('/products/:id', async (request, reply) => {

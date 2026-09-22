@@ -109,13 +109,33 @@ describe.skipIf(!hasDb)('POS fiscal ledger and reconciliation', () => {
   const saleRow = async (id: number) =>
     (await pool.query(`SELECT * FROM pos_sales WHERE id = $1`, [id])).rows[0];
 
-  /** Make the single ledger row due for a retry right now. */
+  /**
+   * Make the single ledger row due for a retry right now — clock and all.
+   *
+   * The `next_attempt_at` rewind is the obvious half. The rate limiter is the
+   * other one, and leaving it out is what made this file flaky on CI: the live
+   * transmission these tests make FIRST (the sale that fails) empties the
+   * register's token bucket, and a `background` caller may take a token only
+   * while more than `LIVE_RESERVE` remain — so the retry needs about a second
+   * of wall clock to refill, and declines with `rate_limited` if it does not
+   * get one (`BACKGROUND_MAX_WAIT_MS` is 250 ms). Whether that second had
+   * passed depended on how fast the machine ran the few queries in between:
+   * green here, red on CI, with `{ done: 0, failed: 1 }`.
+   *
+   * That decline is correct behaviour — the cron comes back in two minutes and
+   * the till must never queue behind a backlog drain — so the product is not
+   * what changes. What the reserve does is pinned with an injected clock in
+   * `pos.fiscal.core.test.ts` («never lets a background drain starve a live
+   * checkout»); here it is only in the way. The two offline suites already
+   * reset it on the same line as their retry call.
+   */
   const makeDue = async () => {
     await pool.query(
       `UPDATE pos_fiscal_receipts SET next_attempt_at = NOW() - interval '1 minute'
        WHERE store_id = $1 AND status IN ('pending','failed')`,
       [store.storeId]
     );
+    resetRateLimiter();
   };
 
   // ── Retry ─────────────────────────────────────────────────────────────────
