@@ -1,4 +1,4 @@
-import { a as e, c as t, f as n, i as r, m as i, n as a, o, p as s, r as c, s as l, t as u } from "./useFiscalStatus-DMmCsnes.js";
+import { a as e, c as t, f as n, i as r, m as i, n as a, o, p as s, r as c, s as l, t as u } from "./useFiscalStatus-ByHRzVE7.js";
 import { useState as d } from "react";
 import { useOfflineStatus as f, usePosShell as p } from "@pos/platform";
 import { Fragment as m, jsx as h, jsxs as g } from "react/jsx-runtime";

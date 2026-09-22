@@ -1,16 +1,16 @@
 {
   "schema": 1,
   "moduleId": "fiscal-checkbox",
-  "version": "2.0.0",
-  "minHostPlatform": 4,
+  "version": "2.2.0",
+  "minHostPlatform": 14,
   "entry": "remote-entry.js",
   "keyId": "2a73632c13044371",
-  "builtAt": "2026-09-17T08:17:41.942Z",
+  "builtAt": "2026-09-22T11:24:13.546Z",
   "files": {
-    "CheckboxAdminPage-DnF1YfIf.js": "sha384-OgvpXsyJIwYgyWwgyBYha+tWzqFRYSMlLNo5HvBmf0xs9ESVj8ifSku5lcuFObnf",
-    "CheckboxTillPage-DN8Mho8z.js": "sha384-erB8K4/Ji6KeeSsg2VwkYMFYWsXxQU4Ixf5LceHN1XGm7J+sGjoGEtL1V0U9EiWx",
-    "remote-entry.js": "sha384-+B6HEcDEgU70Gy0k8w3GB0UGBCPUhUdKlrtwsydX+QZj2vd4B6iONuy0Re3JgJNl",
+    "CheckboxAdminPage-Bg-ffP4j.js": "sha384-YA5cDr5F9A1ng2ULewOImVmMg5krXFROaXg7RtDUw5OP/pyx2Go56toVm795dFfj",
+    "CheckboxTillPage-ar3dxCz2.js": "sha384-99JTxPLAw2Grwa1e5mKSFKYwcmbxENg5zB8iDnaWEpjbJqkBLRjEZzZlOgchqU+i",
+    "remote-entry.js": "sha384-VcK4uKHepJPAPoKKH2BKI+W30dz4nVbLTbPJL6O6a++BXbHIAgGw/DZ3PrnNEjbn",
     "style.css": "sha384-WTXYH/A6aX9TLb17DCN62NaSk/t3pybM+LJuWE1X3IGF1aQS4I7ULkQjZR0rXJtI",
-    "useFiscalStatus-DMmCsnes.js": "sha384-O7ab/BRiOoYlCjovzAPitkzDmjt0l2geFGX+zYPq8swjpFPWb661ABQ/qY7Hpgap"
+    "useFiscalStatus-ByHRzVE7.js": "sha384-t3g67TLr1rJD81tXf3ICWmJ5IygngmvAS1jCxlmvD9EAbPKMu/B7y/MpDNVo6Upu"
   }
 }

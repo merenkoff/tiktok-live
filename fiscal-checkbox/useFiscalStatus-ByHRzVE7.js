@@ -118,7 +118,7 @@ function M(e) {
 }
 //#endregion
 //#region src/modules/fiscal-core/lib/diagnostics.ts
-var N = "2.0.0", P = {
+var N = "2.2.0", P = {
 	host_too_old: "HOST",
 	server: "SRV",
 	network: "NET",
