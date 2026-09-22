@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "moduleId": "returns",
+  "version": "2.2.0",
+  "minHostPlatform": 14,
+  "entry": "remote-entry.js",
+  "keyId": "2a73632c13044371",
+  "builtAt": "2026-09-22T09:17:55.696Z",
+  "files": {
+    "AdminSalesPage-DjcDHEtO.js": "sha384-I7e0k2/wx7Ol8R1jQ3LrhYR4tZXePyyu0+lrUM70+x5/uGOkrCJZ1hFFQKLUpdvB",
+    "FiscalBadge-RJoaOqdy.js": "sha384-I5Mz7jpRcTiQel1XJxGSAxEAqbmWrzZw/huzJQ5WK0IQDOD6d8JhOKrNmYoeJbjU",
+    "TillReceiptsPage-ByFN7uJ0.js": "sha384-TCBNOY9CU2kk+Kr9WfUse+y1b7rFCtTNVamdpOQn3Jx5N8YM/42QP9DWk3MAG4SO",
+    "remote-entry.js": "sha384-W0x9w0iRNr6g9e4wW3YJtyKZCdG6cugcqJ8dMqGVRqoQWPT+RSkYjA90zIg5BCW8",
+    "style.css": "sha384-NU+hzVZ2oL7/kUUGk8qovighHfJzvsYocmcKH+3jrHaTsjbyIj5/o/N+aX0Hot02"
+  }
+}
