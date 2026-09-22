@@ -68,6 +68,11 @@ export async function addCount(sheetId: string, item: CatalogItem, delta = 1): P
     label: prev?.label ?? lineLabel(item),
     barcode: item.barcode ?? prev?.barcode ?? null,
     updatedAt: Date.now(),
+    // Captured with the label, and for the same reason: the sheet is counted
+    // offline, and «5 пляшок» has to stay readable without the catalog.
+    unit: item.unit ?? prev?.unit,
+    packQty: item.pack_qty ?? prev?.packQty ?? null,
+    packLabel: item.pack_label ?? prev?.packLabel ?? '',
   };
   await db.lines.put(row);
   return row;

@@ -243,6 +243,9 @@ class PosApi {
       barcode?: string;
       price_cents: number;
       quantity?: number;
+      /** The purchase pack — both halves or neither (migration 054). */
+      pack_qty?: number | null;
+      pack_label?: string | null;
       components?: ProductComponentInput[];
     }>;
   }): Promise<Product> {
@@ -285,6 +288,9 @@ class PosApi {
       price_cents: number;
       quantity?: number;
       compare_at_cents?: number | null;
+      /** The purchase pack — both halves or neither (migration 054). */
+      pack_qty?: number | null;
+      pack_label?: string | null;
       components?: ProductComponentInput[];
     }
   ): Promise<Product> {
@@ -303,6 +309,12 @@ class PosApi {
       price_cents: number;
       compare_at_cents: number | null;
       is_active: boolean;
+      /**
+       * The purchase pack. Leaving both out keeps whatever the row has; an
+       * explicit `null` + `''` pair is how it is cleared (migration 054).
+       */
+      pack_qty: number | null;
+      pack_label: string;
       /** Replaces the composition wholesale, like `attributes`. */
       components: ProductComponentInput[];
     }>

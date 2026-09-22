@@ -6,7 +6,12 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   api,
+  baseToPack,
+  defaultPackMode,
   formatUah,
+  packOf,
+  QuantityUnitToggle,
+  quantityToBase,
   uahInputToCents,
   enrichGtinFromSources,
   gtinSourceLabel,
@@ -17,6 +22,7 @@ import type {
   AttributeValues,
   GtinHint,
   OnHandRow,
+  PackMode,
   StockDocumentType,
   Supplier,
   VerticalPublicConfig,
@@ -60,12 +66,61 @@ type ExistingLine = {
   kind: 'existing';
   variant_id: number;
   label: string;
+  /**
+   * ALWAYS base units, whatever the box on screen is counting in — the pack is
+   * a typing aid and this is the number the document is made of.
+   */
   quantity: number;
+  /** Per BASE unit, same rule as the quantity. */
   unit_cost_cents?: number;
   price_cents?: number;
   target_qty?: number;
   on_hand: number;
+  /** The variant's own unit, so the row stops saying «шт» about millilitres. */
+  unit: string;
+  /** The purchase pack, if this variant has one (migration 054). */
+  pack_qty: number | null;
+  pack_label: string;
+  /** Which side of the toggle this row is on. */
+  packMode: PackMode;
 };
+
+/**
+ * The four conversions the rows on this screen need. `quantity`,
+ * `target_qty` and `unit_cost_cents` are ALWAYS base units in state — what a
+ * pack changes is only what the box shows and what a keystroke means.
+ */
+function shownQty(line: ExistingLine, base: number): number {
+  const pack = packOf(line);
+  if (line.packMode !== 'pack' || !pack) return base;
+  // Four decimals so a round-trip through the box is lossless for anything a
+  // person would actually type.
+  return Math.round(baseToPack(base, pack.qty) * 10000) / 10000;
+}
+
+function typedToBase(line: ExistingLine, raw: string): number {
+  return quantityToBase(Number(raw), line.packMode, packOf(line));
+}
+
+function shownCost(line: ExistingLine, centsPerBase: number): number {
+  const pack = packOf(line);
+  if (line.packMode !== 'pack' || !pack) return centsPerBase;
+  return centsPerBase * pack.qty;
+}
+
+/**
+ * Kept UNROUNDED in state on purpose. 15 ₴ for a 1000 ml bottle is 1.5 cents
+ * per millilitre; rounding that to 2 on every keystroke would redraw the box
+ * as «20,00 ₴» while the person is still typing «15». The single rounding
+ * happens once, on the way out — the integer `unit_cost_cents` column is what
+ * loses the half-kopiyka, and it lost it before packs existed too.
+ */
+function typedCostToBase(line: ExistingLine, raw: string): number {
+  const cents = uahInputToCents(raw);
+  const pack = packOf(line);
+  if (line.packMode !== 'pack' || !pack) return cents;
+  return cents / pack.qty;
+}
 
 type PlaceholderLine = {
   kind: 'placeholder';
@@ -185,6 +240,16 @@ export function StockActionPage({ type }: Props) {
   function addVariant(row: OnHandRow) {
     if (selectedIds.has(row.variant_id)) return;
     const label = `${row.product_name} ${row.label}`.trim();
+    const pack = packOf(row);
+    // Receiving opens in packs — oil arrives in bottles. A write-off and a
+    // correction open in base units, because what is written off is 200 ml.
+    const packMode = defaultPackMode(type === 'receipt' ? 'receive' : 'count', pack);
+    const packFields = {
+      unit: row.unit,
+      pack_qty: pack?.qty ?? null,
+      pack_label: pack?.label ?? '',
+      packMode,
+    };
     if (type === 'adjustment') {
       setLines((prev) => [
         ...prev,
@@ -195,6 +260,7 @@ export function StockActionPage({ type }: Props) {
           quantity: 0,
           target_qty: row.quantity,
           on_hand: row.quantity,
+          ...packFields,
         },
       ]);
     } else {
@@ -204,9 +270,12 @@ export function StockActionPage({ type }: Props) {
           kind: 'existing',
           variant_id: row.variant_id,
           label,
-          quantity: 1,
+          // One pack when the box counts packs: the number and the caption
+          // above it always agree.
+          quantity: packMode === 'pack' && pack ? pack.qty : 1,
           unit_cost_cents: row.cost_cents,
           on_hand: row.quantity,
+          ...packFields,
         },
       ]);
     }
@@ -400,9 +469,22 @@ export function StockActionPage({ type }: Props) {
         (l): l is ExistingLine => l.kind === 'existing' && l.quantity > l.on_hand
       );
       if (over) {
-        setError(`На складі лише ${over.on_hand} шт: ${over.label}`);
+        setError(`На складі лише ${over.on_hand} ${over.unit}: ${over.label}`);
         return;
       }
+    }
+    const fractional = lines.find(
+      (l): l is ExistingLine =>
+        l.kind === 'existing' &&
+        !Number.isInteger(type === 'adjustment' ? (l.target_qty ?? l.on_hand) : l.quantity)
+    );
+    if (fractional) {
+      const value =
+        type === 'adjustment' ? fractional.target_qty ?? fractional.on_hand : fractional.quantity;
+      setError(
+        `Вийде ${value} ${fractional.unit} — склад рахується цілими: ${fractional.label}`
+      );
+      return;
     }
     if (type === 'receipt' && !asDraft && placeholderCount > 0) {
       const ok = window.confirm(
@@ -448,7 +530,10 @@ export function StockActionPage({ type }: Props) {
           await api.addStockDocumentLine(doc.id, {
             variant_id: line.variant_id,
             quantity: line.quantity,
-            unit_cost_cents: type === 'receipt' ? line.unit_cost_cents ?? null : null,
+            unit_cost_cents:
+              type === 'receipt' && line.unit_cost_cents != null
+                ? Math.round(line.unit_cost_cents)
+                : null,
           });
         }
       }
@@ -633,7 +718,9 @@ export function StockActionPage({ type }: Props) {
               <div key={line.variant_id} className="p-3 flex flex-wrap gap-3 items-center">
                 <div className="flex-1 min-w-[140px]">
                   <p className="text-sm font-medium">{line.label}</p>
-                  <p className="text-xs text-[#6E6E6E]">Зараз на складі: {line.on_hand} шт</p>
+                  <p className="text-xs text-[#6E6E6E]">
+                    Зараз на складі: {line.on_hand} {line.unit}
+                  </p>
                 </div>
                 {type === 'adjustment' ? (
                   <div className="flex items-center gap-2">
@@ -642,9 +729,12 @@ export function StockActionPage({ type }: Props) {
                       <input
                         type="number"
                         min={0}
-                        value={line.target_qty ?? 0}
+                        // See ManageStockModal: a default step=1 would let the
+                        // browser block half a pack before our own message.
+                        step="any"
+                        value={shownQty(line, line.target_qty ?? 0)}
                         onChange={(e) => {
-                          const v = Number(e.target.value);
+                          const v = typedToBase(line, e.target.value);
                           setLines((prev) =>
                             prev.map((l, i) =>
                               i === idx && l.kind === 'existing' ? { ...l, target_qty: v } : l
@@ -672,10 +762,11 @@ export function StockActionPage({ type }: Props) {
                       К-сть{' '}
                       <input
                         type="number"
-                        min={1}
-                        value={line.quantity}
+                        min={0}
+                        step="any"
+                        value={shownQty(line, line.quantity)}
                         onChange={(e) => {
-                          const v = Number(e.target.value);
+                          const v = typedToBase(line, e.target.value);
                           setLines((prev) =>
                             prev.map((l, i) =>
                               i === idx && l.kind === 'existing' ? { ...l, quantity: v } : l
@@ -687,11 +778,11 @@ export function StockActionPage({ type }: Props) {
                     </label>
                     {type === 'receipt' && (
                       <label className="text-sm">
-                        Закупка ₴{' '}
+                        Закупка за {line.packMode === 'pack' ? line.pack_label : line.unit} ₴{' '}
                         <input
-                          value={((line.unit_cost_cents ?? 0) / 100).toFixed(2)}
+                          value={(shownCost(line, line.unit_cost_cents ?? 0) / 100).toFixed(2)}
                           onChange={(e) => {
-                            const cents = uahInputToCents(e.target.value);
+                            const cents = typedCostToBase(line, e.target.value);
                             setLines((prev) =>
                               prev.map((l, i) =>
                                 i === idx && l.kind === 'existing'
@@ -706,6 +797,23 @@ export function StockActionPage({ type }: Props) {
                     )}
                   </>
                 )}
+                <QuantityUnitToggle
+                  className="w-32"
+                  pack={packOf(line)}
+                  unit={line.unit}
+                  mode={line.packMode}
+                  value={shownQty(
+                    line,
+                    type === 'adjustment' ? line.target_qty ?? line.on_hand : line.quantity
+                  )}
+                  onModeChange={(next) =>
+                    setLines((prev) =>
+                      prev.map((l, i) =>
+                        i === idx && l.kind === 'existing' ? { ...l, packMode: next } : l
+                      )
+                    )
+                  }
+                />
                 <button
                   type="button"
                   onClick={() => setLines((prev) => prev.filter((_, i) => i !== idx))}

@@ -48,6 +48,7 @@ export default defineConfig({
         'src/modules/tables/lib/precheck.ts',
         'src/modules/tables/lib/layout.ts',
         'src/lib/bouquet.ts',
+        'src/lib/pack.ts',
         'src/lib/kitchenPrinters.ts',
         'src/lib/kitchenTicket.ts',
         'src/lib/localOrderNo.ts',

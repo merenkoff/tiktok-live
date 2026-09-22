@@ -87,7 +87,13 @@ export const POS_API_CLIENT_VERSION = 2;
 //     guests (К4h). The Tauri command stays the host's: a module that reached
 //     `invoke` itself would bundle a second copy of the Tauri API and step
 //     outside this contract entirely.
-export const PLATFORM_VERSION = 14;
+// 15 (2026-09-22): the purchase pack (К5b). `packOf` / `packToBase` /
+//     `baseToPack` / `toBase` / `packHint` / `defaultPackMode` — how many base
+//     units are in one bottle, and how a screen that types a quantity in
+//     converts what the person typed BEFORE it leaves. Three modules need the
+//     same arithmetic (`products`, `stock`, `stocktake`), so it is handed out
+//     rather than compiled into each of them.
+export const PLATFORM_VERSION = 15;
 
 /**
  * Build version of this bundle — the host web/cashier build, or a module-remote

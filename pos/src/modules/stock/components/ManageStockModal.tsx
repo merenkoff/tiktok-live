@@ -3,8 +3,18 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { FormEvent, useState } from 'react';
-import { api, formatUah, uahInputToCents } from '@pos/platform';
-import type { OnHandRow } from '@pos/platform';
+import {
+  api,
+  baseCostToPack,
+  defaultPackMode,
+  formatUah,
+  packCostToBase,
+  packOf,
+  QuantityUnitToggle,
+  quantityToBase,
+  uahInputToCents,
+} from '@pos/platform';
+import type { OnHandRow, PackMode } from '@pos/platform';
 
 const WRITEOFF_REASONS = [
   { code: 'damaged', label: 'Брак' },
@@ -29,7 +39,14 @@ interface Props {
 }
 
 export function ManageStockModal({ row, onClose, onSaved }: Props) {
+  // How this variant arrives, if it does (migration 054). Null for a shop that
+  // does not buy in packs — and then nothing below draws anything extra.
+  const pack = packOf(row);
   const [mode, setMode] = useState<Mode>('set');
+  // What the box is counting in. Receiving opens in packs (oil arrives in
+  // bottles); «має бути» and a write-off open in base units, because what is
+  // written off is 200 ml, not 0.2 of a bottle.
+  const [packMode, setPackMode] = useState<PackMode>(defaultPackMode('count', pack));
   const [qty, setQty] = useState(String(row.quantity));
   const [cost, setCost] = useState(String((row.cost_cents / 100).toFixed(2)));
   const [reason, setReason] = useState('data_fix');
@@ -37,13 +54,32 @@ export function ManageStockModal({ row, onClose, onSaved }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * Switching sides rescales what is already on screen — both the quantity's
+   * caption and the purchase price. Showing a per-millilitre price under a
+   * label that says «за пляшку» would be the one lie this feature could tell.
+   */
+  function switchPackMode(next: PackMode): void {
+    if (!pack || next === packMode) return;
+    const cents = uahInputToCents(cost);
+    const rescaled =
+      next === 'pack' ? baseCostToPack(cents, pack.qty) : packCostToBase(cents, pack.qty);
+    setCost((rescaled / 100).toFixed(2));
+    setPackMode(next);
+  }
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
     setError(null);
     try {
-      const n = Number(qty);
-      if (!Number.isFinite(n) || n < 0) throw new Error('Некоректна кількість');
+      const typed = Number(qty);
+      if (!Number.isFinite(typed) || typed < 0) throw new Error('Некоректна кількість');
+      // Whatever the box counted in, base units are what leaves the screen.
+      const n = quantityToBase(typed, packMode, pack);
+      if (!Number.isInteger(n)) {
+        throw new Error(`Вийде ${n} ${row.unit} — склад рахується цілими`);
+      }
 
       if (mode === 'receive') {
         if (n <= 0) throw new Error('Кількість має бути більше 0');
@@ -51,7 +87,12 @@ export function ManageStockModal({ row, onClose, onSaved }: Props) {
         await api.addStockDocumentLine(doc.id, {
           variant_id: row.variant_id,
           quantity: n,
-          unit_cost_cents: uahInputToCents(cost),
+          // Typed per pack when the box counts packs — `unit_cost_cents` has
+          // only ever meant cents per BASE unit.
+          unit_cost_cents:
+            packMode === 'pack' && pack
+              ? packCostToBase(uahInputToCents(cost), pack.qty)
+              : uahInputToCents(cost),
         });
         await api.postStockDocument(doc.id, crypto.randomUUID());
       } else if (mode === 'writeoff') {
@@ -115,7 +156,7 @@ export function ManageStockModal({ row, onClose, onSaved }: Props) {
             </span>
           </h2>
           <p className="text-sm text-[#6E6E6E] mt-1">
-            Зараз: <strong className="text-[#1A1A1A]">{row.quantity}</strong> шт ·{' '}
+            Зараз: <strong className="text-[#1A1A1A]">{row.quantity}</strong> {row.unit} ·{' '}
             {formatUah(row.price_cents)}
           </p>
         </div>
@@ -133,6 +174,9 @@ export function ManageStockModal({ row, onClose, onSaved }: Props) {
               type="button"
               onClick={() => {
                 setMode(m);
+                switchPackMode(defaultPackMode(m === 'receive' ? 'receive' : 'count', pack));
+                // «1» means one pack when the box opens in packs — the number
+                // and the caption above it always agree.
                 setQty(m === 'set' ? String(row.quantity) : '1');
                 setReason(m === 'writeoff' ? 'damaged' : 'data_fix');
               }}
@@ -145,22 +189,39 @@ export function ManageStockModal({ row, onClose, onSaved }: Props) {
           ))}
         </div>
 
-        <label className="block space-y-1">
-          <span className="text-sm text-[#6E6E6E]">{label}</span>
-          <input
-            type="number"
-            min={0}
-            step={1}
-            value={qty}
-            onChange={(e) => setQty(e.target.value)}
-            className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-3 text-lg font-semibold"
-            autoFocus
+        <div className="space-y-1">
+          <label className="block space-y-1">
+            <span className="text-sm text-[#6E6E6E]">{label}</span>
+            <input
+              type="number"
+              min={0}
+              // A number box defaults to step=1, and native validation would
+              // then block «1,5 ящика» with a browser tooltip instead of the
+              // named message below. Half a pack is a legitimate thing to
+              // type; what is refused is the base units it comes out to.
+              step="any"
+              value={qty}
+              onChange={(e) => setQty(e.target.value)}
+              className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-3 text-lg font-semibold"
+              autoFocus
+            />
+          </label>
+          <QuantityUnitToggle
+            pack={pack}
+            unit={row.unit}
+            mode={packMode}
+            value={Number(qty)}
+            onModeChange={switchPackMode}
           />
-        </label>
+        </div>
 
         {mode === 'receive' && (
           <label className="block space-y-1">
-            <span className="text-sm text-[#6E6E6E]">Ціна закупки (₴)</span>
+            <span className="text-sm text-[#6E6E6E]">
+              {packMode === 'pack' && pack
+                ? `Ціна закупки за ${pack.label} (₴)`
+                : `Ціна закупки за ${row.unit} (₴)`}
+            </span>
             <input
               value={cost}
               onChange={(e) => setCost(e.target.value)}

@@ -4,8 +4,14 @@
 
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { isOfflinePosEnabled, useOfflineStatus } from '@pos/platform';
-import type { CatalogItem } from '@pos/platform';
+import {
+  isOfflinePosEnabled,
+  packOf,
+  QuantityUnitToggle,
+  quantityToBase,
+  useOfflineStatus,
+} from '@pos/platform';
+import type { CatalogItem, PackMode } from '@pos/platform';
 
 // Loaded only when the camera is opened: `html5-qrcode` behind `BarcodeScanner`
 // is ~650 KB, and a USB scanner (a keyboard, as far as the page knows) is the
@@ -41,6 +47,10 @@ export function CountSheetPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Which rows are being counted in packs. Base units is the start here —
+  // what is counted on a shelf is 200 ml, not 0.2 of a bottle — and the row
+  // only offers the switch when the variant has a pack at all.
+  const [packModes, setPackModes] = useState<Record<number, PackMode>>({});
   const scanRef = useRef<HTMLInputElement>(null);
 
   const reload = useCallback(async () => {
@@ -73,6 +83,9 @@ export function CountSheetPage() {
   }, [query]);
 
   const counting = sheet?.status === 'counting';
+  const packModeOf = (variantId: number): PackMode => packModes[variantId] ?? 'base';
+  const linePack = (line: LineRow) =>
+    packOf({ pack_qty: line.packQty, pack_label: line.packLabel });
 
   async function add(item: CatalogItem, delta = 1) {
     setError(null);
@@ -107,7 +120,11 @@ export function CountSheetPage() {
   async function adjust(line: LineRow, delta: number) {
     setError(null);
     try {
-      await setCount(id, line.variantId, line.countedQty + delta);
+      // One tap is one PACK when the row counts packs — «+1» next to a bottle
+      // that meant one millilitre would be useless.
+      const pack = linePack(line);
+      const step = packModeOf(line.variantId) === 'pack' && pack ? delta * pack.qty : delta;
+      await setCount(id, line.variantId, line.countedQty + step);
       await reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Помилка');
@@ -115,8 +132,11 @@ export function CountSheetPage() {
   }
 
   async function typed(line: LineRow, value: string) {
-    const qty = Number(value);
-    if (!Number.isFinite(qty)) return;
+    const typedQty = Number(value);
+    if (!Number.isFinite(typedQty)) return;
+    // Base units are what is stored and what is sent; the box is only how it
+    // was typed.
+    const qty = quantityToBase(typedQty, packModeOf(line.variantId), linePack(line));
     await setCount(id, line.variantId, qty).catch(() => undefined);
     await reload();
   }
@@ -264,52 +284,81 @@ export function CountSheetPage() {
             {counting ? 'Відскануйте перший товар.' : 'Порожній лист.'}
           </li>
         )}
-        {lines.map((line) => (
-          <li key={line.variantId} className="flex items-center gap-2 px-3 py-2">
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm text-sq-text">{line.label}</div>
-              {line.barcode && <div className="text-xs text-sq-secondary">{line.barcode}</div>}
-            </div>
-            {counting ? (
-              <>
-                <button
-                  type="button"
-                  aria-label="Менше"
-                  className="h-9 w-9 rounded-sq border border-sq-divider text-sq-text"
-                  onClick={() => adjust(line, -1)}
-                >
-                  −
-                </button>
-                <input
-                  type="number"
-                  min={0}
-                  value={line.countedQty}
-                  aria-label={`Кількість: ${line.label}`}
-                  onChange={(e) => void typed(line, e.target.value)}
-                  className="h-9 w-16 rounded-sq border border-sq-divider bg-sq-bg text-center text-sm text-sq-text"
+        {lines.map((line) => {
+          const pack = linePack(line);
+          const mode = packModeOf(line.variantId);
+          const shown =
+            mode === 'pack' && pack
+              ? Math.round((line.countedQty / pack.qty) * 10000) / 10000
+              : line.countedQty;
+          return (
+            <li key={line.variantId} className="px-3 py-2">
+              <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm text-sq-text">{line.label}</div>
+                  {line.barcode && (
+                    <div className="text-xs text-sq-secondary">{line.barcode}</div>
+                  )}
+                </div>
+                {counting ? (
+                  <>
+                    <button
+                      type="button"
+                      aria-label="Менше"
+                      className="h-9 w-9 rounded-sq border border-sq-divider text-sq-text"
+                      onClick={() => adjust(line, -1)}
+                    >
+                      −
+                    </button>
+                    <input
+                      type="number"
+                      min={0}
+                      // Packs may be fractional on screen; `setCount` is what
+                      // floors the base units that come out.
+                      step="any"
+                      value={shown}
+                      aria-label={`Кількість: ${line.label}`}
+                      onChange={(e) => void typed(line, e.target.value)}
+                      className="h-9 w-16 rounded-sq border border-sq-divider bg-sq-bg text-center text-sm text-sq-text"
+                    />
+                    <button
+                      type="button"
+                      aria-label="Більше"
+                      className="h-9 w-9 rounded-sq border border-sq-divider text-sq-text"
+                      onClick={() => adjust(line, 1)}
+                    >
+                      +
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Прибрати"
+                      className="px-2 text-xs text-sq-secondary hover:text-red-600"
+                      onClick={() => void removeLine(id, line.variantId).then(reload)}
+                    >
+                      ✕
+                    </button>
+                  </>
+                ) : (
+                  <span className="w-16 text-right text-sm font-medium text-sq-text">
+                    {line.countedQty}
+                  </span>
+                )}
+              </div>
+              {counting && (
+                <QuantityUnitToggle
+                  className="mt-1 w-40 ml-auto"
+                  pack={pack}
+                  unit={line.unit ?? ''}
+                  mode={mode}
+                  value={shown}
+                  onModeChange={(next) =>
+                    setPackModes((prev) => ({ ...prev, [line.variantId]: next }))
+                  }
                 />
-                <button
-                  type="button"
-                  aria-label="Більше"
-                  className="h-9 w-9 rounded-sq border border-sq-divider text-sq-text"
-                  onClick={() => adjust(line, 1)}
-                >
-                  +
-                </button>
-                <button
-                  type="button"
-                  aria-label="Прибрати"
-                  className="px-2 text-xs text-sq-secondary hover:text-red-600"
-                  onClick={() => void removeLine(id, line.variantId).then(reload)}
-                >
-                  ✕
-                </button>
-              </>
-            ) : (
-              <span className="w-16 text-right text-sm font-medium text-sq-text">{line.countedQty}</span>
-            )}
-          </li>
-        ))}
+              )}
+            </li>
+          );
+        })}
       </ul>
 
       {counting && (

@@ -31,6 +31,7 @@ export * from './money';
 export * from './receipt';
 export * from './sales';
 export * from './offline';
+export * from './pack';
 export * from './priceTag';
 export * from './tag-colors';
 export * from './types';
