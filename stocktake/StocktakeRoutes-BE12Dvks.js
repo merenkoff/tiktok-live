@@ -81,12 +81,18 @@ async function A(e) {
 async function j(e) {
 	let t = e.trim();
 	if (!t) return null;
-	let n = await c.getCatalog({ barcode: t });
+	let n = await c.getCatalog({
+		barcode: t,
+		include_unsellable: !0
+	});
 	return n.find((e) => e.barcode === t) ?? (n.length === 1 ? n[0] : null);
 }
 async function M(e) {
 	let t = e.trim();
-	return t.length < 2 ? [] : (await c.getCatalog({ q: t })).slice(0, 20);
+	return t.length < 2 ? [] : (await c.getCatalog({
+		q: t,
+		include_unsellable: !0
+	})).slice(0, 20);
 }
 //#endregion
 //#region src/modules/stocktake/components/SheetStatusBadge.tsx
