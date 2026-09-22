@@ -7,8 +7,16 @@
 // «пік о 00:00» from an empty day.
 
 import { describe, expect, it } from 'vitest';
-import { formatHour, pct, peakHour, topModifier } from './figures';
-import type { CafeAnalytics } from '../analytics/types';
+import {
+  formatHour,
+  formatMinutes,
+  groupByQuadrant,
+  pct,
+  peakHour,
+  reasonLabeller,
+  topModifier,
+} from './figures';
+import type { CafeAnalytics, MenuMatrixRow, MenuQuadrant } from '../analytics/types';
 
 const hours = (spec: Record<number, number>): CafeAnalytics['peak_hours'] =>
   Array.from({ length: 24 }, (_, hour) => ({
@@ -62,5 +70,58 @@ describe('topModifier', () => {
     ];
     expect(topModifier(list)?.name).toBe('вівсяне');
     expect(topModifier([])).toBeNull();
+  });
+});
+
+describe('groupByQuadrant', () => {
+  const row = (variant_id: number, quadrant: MenuQuadrant): MenuMatrixRow => ({
+    variant_id,
+    product_name: `Страва ${variant_id}`,
+    label: '',
+    sold: 10,
+    share_bps: 2500,
+    revenue_cents: 10_000,
+    cost_cents: 3_000,
+    margin_cents: 7_000,
+    unit_margin_cents: 700,
+    quadrant,
+  });
+
+  it('keeps the four groups in the order an owner reads them, empty ones included', () => {
+    // An empty quadrant is an answer — «собак немає» is worth seeing — so the
+    // groups are fixed rather than derived from what happens to be there.
+    const groups = groupByQuadrant([row(1, 'dog'), row(2, 'star'), row(3, 'dog')]);
+    expect(groups.map((g) => g.quadrant)).toEqual(['star', 'plowhorse', 'puzzle', 'dog']);
+    expect(groups.map((g) => g.rows.length)).toEqual([1, 0, 0, 2]);
+  });
+});
+
+describe('reasonLabeller', () => {
+  const reasons = [
+    { code: 'spoiled', label: 'Зіпсувалося' },
+    { code: 'tasting', label: 'Проба' },
+  ];
+
+  it('names a reason the way the write-off screen did', () => {
+    expect(reasonLabeller(reasons)('spoiled')).toBe('Зіпсувалося');
+  });
+
+  it('shows an unknown code as it is instead of folding it into «Інше»', () => {
+    // A session cached before a vertical learned a new word. An unnamed line
+    // is a question the owner can ask; a mislabelled one is not.
+    expect(reasonLabeller(reasons)('staff')).toBe('staff');
+    expect(reasonLabeller(undefined)('spoiled')).toBe('spoiled');
+  });
+});
+
+describe('formatMinutes', () => {
+  it('writes a visit the way a host would say it', () => {
+    expect(formatMinutes(42)).toBe('42 хв');
+    expect(formatMinutes(95)).toBe('1 год 35 хв');
+    expect(formatMinutes(120)).toBe('2 год');
+  });
+
+  it('says «—» when there is nothing to average', () => {
+    expect(formatMinutes(null)).toBe('—');
   });
 });

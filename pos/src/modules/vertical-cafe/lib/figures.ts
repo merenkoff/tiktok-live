@@ -60,3 +60,37 @@ export const EXCLUSION_LABEL: Record<CafeAnalytics['menu']['excluded'][number]['
     no_cost: 'не вистачає собівартості складника',
     no_price: 'продано без ціни',
   };
+
+/** The matrix, read as four groups rather than one sorted list. */
+export function groupByQuadrant(
+  rows: CafeAnalytics['menu']['rows']
+): Array<{ quadrant: MenuQuadrant; rows: CafeAnalytics['menu']['rows'] }> {
+  return QUADRANT_ORDER.map((quadrant) => ({
+    quadrant,
+    rows: rows.filter((row) => row.quadrant === quadrant),
+  }));
+}
+
+/**
+ * What a write-off reason is called in this store.
+ *
+ * The vocabulary belongs to the vertical and rides with the login (К5e), so
+ * the labels here are the very ones the write-off screen offered. A code the
+ * session does not know is shown **as it is** rather than folded into «Інше»:
+ * an unnamed line is a question the owner can ask, a mislabelled one is not.
+ */
+export function reasonLabeller(
+  reasons: readonly { code: string; label: string }[] | undefined
+): (code: string) => string {
+  const known = new Map((reasons ?? []).map((r) => [r.code, r.label]));
+  return (code) => known.get(code) ?? code;
+}
+
+/** «12 хв» / «1 год 35 хв» — a visit written the way a host would say it. */
+export function formatMinutes(minutes: number | null): string {
+  if (minutes == null) return '—';
+  const whole = Math.round(minutes);
+  if (whole < 60) return `${whole} хв`;
+  const rest = whole % 60;
+  return rest === 0 ? `${whole / 60} год` : `${Math.floor(whole / 60)} год ${rest} хв`;
+}

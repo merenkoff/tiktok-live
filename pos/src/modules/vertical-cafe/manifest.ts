@@ -10,6 +10,7 @@ import { lazyWithRetry } from '../lazyWithRetry';
 const CafeCatalog = lazyWithRetry(() => import('./CafeCatalog'));
 const KitchenPage = lazyWithRetry(() => import('./kitchen/KitchenPage'));
 const CafePanels = lazyWithRetry(() => import('./panels/CafePanels'));
+const CafeAnalyticsPage = lazyWithRetry(() => import('./pages/CafeAnalyticsPage'));
 
 /**
  * The café sales vertical — the counter's sell screen and the kitchen's board
@@ -36,7 +37,14 @@ export const verticalCafeModule: RemoteModuleDescriptor = {
   // and one that deliberately has NO fallback: a panel that fails contributes
   // nothing and the dashboard stays exactly what it was.
   analytics: { Panels: CafePanels },
-  routes: [{ path: '/kitchen/*', element: KitchenPage }],
+  // Two mounts, as the florist has: the root one is the kitchen's board, the
+  // admin one is the owner's menu matrix (К6c). Only the root route needs a
+  // `routePath` in `module_remotes` — that entry stands in for the desktop
+  // placeholder tile, and the desktop cashier has no admin at all.
+  routes: [
+    { path: '/kitchen/*', element: KitchenPage },
+    { path: 'cafe', mount: 'admin', element: CafeAnalyticsPage },
+  ],
   nav: [
     {
       to: '/kitchen',
@@ -46,5 +54,9 @@ export const verticalCafeModule: RemoteModuleDescriptor = {
       order: 80,
       match: '/kitchen',
     },
+    // «Меню», not «Кухня»: the till already has a «Кухня» and the two would
+    // read as the same screen. This one is menu engineering — what to keep,
+    // what to re-price and what to drop.
+    { to: '/admin/cafe', label: 'Меню', location: 'admin-sidebar', order: 55 },
   ],
 };
