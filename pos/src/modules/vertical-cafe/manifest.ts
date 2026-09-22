@@ -9,6 +9,7 @@ import { lazyWithRetry } from '../lazyWithRetry';
 
 const CafeCatalog = lazyWithRetry(() => import('./CafeCatalog'));
 const KitchenPage = lazyWithRetry(() => import('./kitchen/KitchenPage'));
+const CafePanels = lazyWithRetry(() => import('./panels/CafePanels'));
 
 /**
  * The café sales vertical — the counter's sell screen and the kitchen's board
@@ -31,6 +32,10 @@ export const verticalCafeModule: RemoteModuleDescriptor = {
   shells: ['web', 'cashier'],
   alwaysEnabled: true,
   sales: { Catalog: CafeCatalog },
+  // The owner's «Сьогодні» tiles (К6). A slot the host reads, like `sales`,
+  // and one that deliberately has NO fallback: a panel that fails contributes
+  // nothing and the dashboard stays exactly what it was.
+  analytics: { Panels: CafePanels },
   routes: [{ path: '/kitchen/*', element: KitchenPage }],
   nav: [
     {
