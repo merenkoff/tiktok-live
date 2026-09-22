@@ -387,16 +387,23 @@ describe.skipIf(!hasDb)('POS fiscal ledger and reconciliation', () => {
 
   // ── Claim mechanics ───────────────────────────────────────────────────────
 
+  // Every `claimDueDocuments` below names the store, and that argument is not
+  // decoration: without it the claim is what the cron really is — a sweep over
+  // EVERY store in the database. Vitest runs files in parallel against one
+  // database, so a neighbour's due document either takes the row (`FOR UPDATE
+  // SKIP LOCKED`) or crowds this one out of the `LIMIT`, and the assertion
+  // below sees nothing. Clearing this store's receipts in `beforeEach` guards
+  // against our own leftovers, never against anybody else's.
   it('does not hand the same document to two overlapping ticks', async () => {
     await warm();
     fake.queueError('unavailable');
     await sell();
     await makeDue();
 
-    const first = await ledger.claimDueDocuments(10);
+    const first = await ledger.claimDueDocuments(10, store.storeId);
     expect(first).toHaveLength(1);
     // The claim re-leases via `next_attempt_at`, so a second tick sees nothing.
-    const second = await ledger.claimDueDocuments(10);
+    const second = await ledger.claimDueDocuments(10, store.storeId);
     expect(second).toHaveLength(0);
   });
 
@@ -407,7 +414,7 @@ describe.skipIf(!hasDb)('POS fiscal ledger and reconciliation', () => {
     const before = Number((await rows())[0].attempts);
 
     await makeDue();
-    await ledger.claimDueDocuments(10);
+    await ledger.claimDueDocuments(10, store.storeId);
     expect(Number((await rows())[0].attempts)).toBe(before + 1);
   });
 
