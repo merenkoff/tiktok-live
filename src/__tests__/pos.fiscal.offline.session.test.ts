@@ -237,11 +237,11 @@ describe.skipIf(!hasDb)('POS fiscal offline session', () => {
     );
     // While the session is live, the store's online documents wait too —
     // nothing may reach the provider ahead of the replay's go-offline.
-    expect((await ledger.claimDueDocuments(10)).map((r) => r.id)).not.toContain(on.id);
+    expect((await ledger.claimDueDocuments(10, store.storeId)).map((r) => r.id)).not.toContain(on.id);
 
     await session.markReplaying(s.id);
     await session.markClosed(s.id);
-    const claimed = await ledger.claimDueDocuments(10);
+    const claimed = await ledger.claimDueDocuments(10, store.storeId);
     expect(claimed.map((r) => r.id)).toContain(on.id);
     expect(claimed.map((r) => r.id)).not.toContain(off.id);
   });
