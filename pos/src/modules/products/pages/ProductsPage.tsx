@@ -2,7 +2,8 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { DEFAULT_TAG_COLOR, api, assetUrl, formatUah, type TagColorKey, uahInputToCents, useAuthStore, useVertical } from '@pos/platform';
 import { PriceTagsDialog } from '../components/PriceTagsDialog';
 import type {
@@ -19,6 +20,8 @@ import { CompositionEditor } from '../components/CompositionEditor';
 import { ModifierGroupChips } from '../components/ModifierGroupChips';
 import { PackFields } from '../components/PackFields';
 import { componentOptions } from '../components/componentOptions';
+import { listTechCards, type TechCardRow } from '../data/techCardsApi';
+import { foodCostPercent, missingReason } from '../data/techCards';
 import type { ComponentOption } from '../components/componentOptions';
 import { AttributeFields, ProductPhotoField, useDragScroll } from '@pos/platform/ui';
 import { TagColorSwatches } from '../components/TagColorSwatches';
@@ -84,7 +87,28 @@ export function ProductsPage() {
   const [tagsOpen, setTagsOpen] = useState(false);
   const storeName = useAuthStore((s) => s.auth?.store.name ?? '');
   const [showCreate, setShowCreate] = useState(false);
-  const [editId, setEditId] = useState<number | null>(null);
+  const [editId, setEditIdState] = useState<number | null>(null);
+  // «Техкарти» links here with `?edit=<id>` — a screen that says which dish
+  // eats the profit has to be able to take the owner to it. The param and the
+  // local state are kept in step, so closing the card also clears the URL.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const setEditId = useCallback(
+    (id: number | null) => {
+      setEditIdState(id);
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (id == null) next.delete('edit');
+          else next.set('edit', String(id));
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
+  /** What each composite variant costs to assemble — shown beside its recipe. */
+  const [techCards, setTechCards] = useState<Map<number, TechCardRow>>(new Map());
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState<TagColorKey>(DEFAULT_TAG_COLOR);
   const [newTagCatalogBar, setNewTagCatalogBar] = useState(false);
@@ -121,19 +145,35 @@ export function ProductsPage() {
   );
 
   async function reload() {
-    const [plist, tlist, glist] = await Promise.all([
+    const [plist, tlist, glist, cards] = await Promise.all([
       api.getProducts(),
       api.getTags(),
       api.listModifierGroups(),
+      // Empty for a shop with no composites, so this costs a clothing store
+      // one round trip that answers `[]` — and never fails the page: the
+      // catalog is the point here, the cost figure is a bonus beside it.
+      listTechCards().catch(() => [] as TechCardRow[]),
     ]);
     setProducts(plist);
     setTags(tlist);
     setGroups(glist);
+    setTechCards(new Map(cards.map((c) => [c.variant_id, c])));
   }
 
   useEffect(() => {
     void reload().catch(() => setError('Не вдалося завантажити'));
   }, []);
+
+  // `?edit=<id>` from «Техкарти». Applied once the catalog is in: opening a
+  // card for a product this owner cannot see would leave the page blank with
+  // the param still on it.
+  useEffect(() => {
+    const raw = searchParams.get('edit');
+    if (!raw) return;
+    const id = Number(raw);
+    if (!Number.isInteger(id) || !products.some((p) => p.id === id)) return;
+    setEditIdState(id);
+  }, [searchParams, products]);
 
   const visible = products.filter((p) => {
     if (!p.is_active) return false;
@@ -507,6 +547,7 @@ export function ProductsPage() {
                     excludeProductId: product.id,
                     maxDepth,
                   })}
+                  techCards={techCards}
                   onCancel={() => setEditId(null)}
                   onSaved={async () => {
                     await reload();
@@ -912,11 +953,37 @@ const STATION_CHOICES: ReadonlyArray<[TagStation | null, string]> = [
   ['bar', 'Бар'],
 ];
 
+/**
+ * What this variant costs to assemble, beside the recipe it is summed from.
+ *
+ * The same rule as «Техкарти» and for the same reason: a recipe with one
+ * unpriced ingredient has no honest food cost, so it says «—» and why. It is
+ * the SAVED recipe's figure — edit the composition and it refreshes after the
+ * save, which is when the server recomputes it.
+ */
+function TechCardLine({ card }: { card?: TechCardRow }) {
+  if (!card) return null;
+  const reason = missingReason(card);
+  return (
+    <p className="text-xs text-sq-secondary">
+      Собівартість: <strong className="text-sq-text">{formatUah(card.cost_cents)}</strong>
+      {' · food cost: '}
+      {reason ? (
+        <span>— ({reason})</span>
+      ) : (
+        <strong className="text-sq-text">{foodCostPercent(card.food_cost_bps!)}</strong>
+      )}
+      {' · за останніми цінами закупівлі'}
+    </p>
+  );
+}
+
 function EditProductInline({
   product,
   flatTags,
   groups,
   partOptions,
+  techCards,
   onCancel,
   onSaved,
   onCloseAfterSave,
@@ -925,6 +992,8 @@ function EditProductInline({
   flatTags: PosTag[];
   groups: ModifierGroup[];
   partOptions: ComponentOption[];
+  /** What each composite variant costs to assemble, by variant id. */
+  techCards: Map<number, TechCardRow>;
   onCancel: () => void;
   onSaved: () => Promise<void>;
   onCloseAfterSave: () => void;
@@ -1229,11 +1298,14 @@ function EditProductInline({
               }}
             />
             {composite && (
-              <CompositionEditor
-                value={compositions[v.id] ?? []}
-                options={partOptions}
-                onChange={(next) => setCompositions((prev) => ({ ...prev, [v.id]: next }))}
-              />
+              <>
+                <CompositionEditor
+                  value={compositions[v.id] ?? []}
+                  options={partOptions}
+                  onChange={(next) => setCompositions((prev) => ({ ...prev, [v.id]: next }))}
+                />
+                <TechCardLine card={techCards.get(v.id)} />
+              </>
             )}
             <div className="grid sm:grid-cols-2 gap-2">
               <label className="block space-y-1">

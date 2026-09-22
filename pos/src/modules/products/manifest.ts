@@ -11,6 +11,9 @@ const ProductsPage = lazyWithRetry(() =>
 const ModifiersPage = lazyWithRetry(() =>
   import('./pages/ModifiersPage').then((m) => ({ default: m.ModifiersPage }))
 );
+const TechCardsPage = lazyWithRetry(() =>
+  import('./pages/TechCardsPage').then((m) => ({ default: m.TechCardsPage }))
+);
 
 /** Product / variant / tag catalog management. Owner-only, web build only. */
 export const productsModule: ModuleDescriptor = {
@@ -24,9 +27,15 @@ export const productsModule: ModuleDescriptor = {
     // The questions a product may ask («Молоко?») and their answers. Host code,
     // not café code: the next vertical that asks a question reuses it.
     { path: 'modifiers', mount: 'admin', element: ModifiersPage },
+    // What a composite costs to assemble, and what share of its price that is.
+    { path: 'tech-cards', mount: 'admin', element: TechCardsPage },
   ],
   nav: [
     { to: '/admin/products', label: 'Товари', location: 'admin-sidebar', order: 20 },
+    // Shown to every owner, not only a café: a clothing shop CAN make a product
+    // composite (phase A), so hiding the screen from it would be a lie. Where
+    // there is nothing to show, the page says so and points at the product card.
+    { to: '/admin/tech-cards', label: 'Техкарти', location: 'admin-sidebar', order: 21 },
     { to: '/admin/modifiers', label: 'Модифікатори', location: 'admin-sidebar', order: 22 },
     {
       to: '/admin/products',
