@@ -61,7 +61,10 @@ describe('vertical-cafe manifest', () => {
     );
     // Not «Кухня»: the till's primary nav already has that word, and two
     // entries reading the same would send an owner to the board for a menu
-    // question.
+    // question. Not «Меню» either — the host sidebar already carries «Товари»
+    // (the owner's guide calls it the menu) and «Вигляд меню» (the nav's own
+    // appearance), so the module's name is the one label free of collisions.
+    expect(verticalCafeModule.nav.find((n) => n.to === '/admin/cafe')?.label).toBe('Кафе');
     const labels = verticalCafeModule.nav.map((n) => n.label);
     expect(new Set(labels).size).toBe(labels.length);
   });

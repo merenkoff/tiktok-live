@@ -54,9 +54,11 @@ export const verticalCafeModule: RemoteModuleDescriptor = {
       order: 80,
       match: '/kitchen',
     },
-    // «Меню», not «Кухня»: the till already has a «Кухня» and the two would
-    // read as the same screen. This one is menu engineering — what to keep,
-    // what to re-price and what to drop.
-    { to: '/admin/cafe', label: 'Меню', location: 'admin-sidebar', order: 55 },
+    // «Кафе», exactly as the florist's own page is «Квіти»: the module's name
+    // is the one label that collides with nothing. «Кухня» is the till's
+    // board, and «Меню» would sit beside «Товари» (which the owner's guide
+    // calls the menu) and «Вигляд меню» (which is about the nav) — three
+    // entries for three different things, all reading «menu».
+    { to: '/admin/cafe', label: 'Кафе', location: 'admin-sidebar', order: 55 },
   ],
 };
