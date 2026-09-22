@@ -44,6 +44,8 @@ export interface DishPickerProps {
   busy?: boolean;
   /** «Розмір» in a café — what the sheet calls its variant row. */
   variantLabel?: string;
+  /** How many lines the draft holds, shown on the way out. */
+  draftCount?: number;
 }
 
 export function DishPicker({
@@ -51,6 +53,7 @@ export function DishPicker({
   onClose,
   busy,
   variantLabel = 'Розмір',
+  draftCount = 0,
 }: DishPickerProps): JSX.Element {
   const [q, setQ] = useState('');
   const [items, setItems] = useState<CatalogItem[]>([]);
@@ -109,8 +112,14 @@ export function DishPicker({
           autoFocus
           onChange={(e) => setQ(e.target.value)}
         />
+        {/*
+          The picker stays open after a dish is chosen: a table orders «два
+          лате і чізкейк», and closing after each one would cost a tap per
+          dish. What it must not do is hide what has been taken, so the way
+          out carries the count — «Готово · 3».
+        */}
         <button type="button" className="sq-btn-primary" onClick={onClose} data-testid="dish-close">
-          Закрити
+          Готово{draftCount > 0 ? ` · ${draftCount}` : ''}
         </button>
       </div>
 
