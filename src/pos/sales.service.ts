@@ -596,11 +596,24 @@ export async function completeSale(params: {
     const receiptNumber = await nextReceiptNumber(client, params.storeId);
     const orderNo = await nextOrderNo(client, params.storeId, clock.today);
     // Kitchen state (migration 049). Only a kitchen vertical puts a sale on
-    // the board, and a sale the desktop till replays after selling offline
-    // was handed over on a paper ticket hours ago — `new` again would ask
-    // the barista to make it twice. Stamped inside the transaction, like
-    // `fiscal_status`, so no follow-up UPDATE can be lost.
-    const toBoard = clock.vertical.kitchen && !params.offline_replay;
+    // the board, and two kinds of sale are already made by the time they are
+    // rung — `new` again would ask the kitchen to cook them twice:
+    //
+    //   * one the desktop till replays after selling offline, handed over on
+    //     a paper ticket hours ago;
+    //   * **a table bill's receipt**. For a table the kitchen's unit of work
+    //     is the ROUND, fired from `rounds.service.ts` and shown on the board
+    //     by `openRounds` — paying is only the receipt for food that was
+    //     eaten. Without this the dinner reappeared in «В роботі» the moment
+    //     it was paid for, and a split by dishes put it there once PER
+    //     RECEIPT. A bill payment never carries fresh items either
+    //     (`bill-payment.ts` always sends `items: []`), so there is nothing
+    //     here for a cook to make.
+    //
+    // Stamped inside the transaction, like `fiscal_status`, so no follow-up
+    // UPDATE can be lost.
+    const toBoard =
+      clock.vertical.kitchen && !params.offline_replay && !params.bill_part;
     const saleResult = await client.query(
       `INSERT INTO pos_sales
          (store_id, staff_id, receipt_number, status, subtotal_cents, total_cents, note,
