@@ -38,6 +38,7 @@ export default defineConfig({
         'src/modules/navOverrides.ts',
         'src/modules/selectNav.ts',
         'src/modules/useEnabledModules.ts',
+        'src/modules/products/data/techCards.ts',
         'src/modules/vertical-flowers/bench/useBench.ts',
         'src/modules/vertical-cafe/kitchen/lib/kitchen.ts',
         'src/modules/vertical-cafe/lib/stopList.ts',

@@ -145,8 +145,8 @@ describe('KitchenPage', () => {
 
   it('draws the order under «В роботі» with its number, lines, answers, note and station', async () => {
     renderWithProviders(<KitchenPage />);
-    const card = await screen.findByTestId('kitchen-order-7');
-    expect(within(screen.getByTestId('kitchen-in-work')).getByTestId('kitchen-order-7')).toBe(card);
+    const card = await screen.findByTestId('kitchen-order-sale-7');
+    expect(within(screen.getByTestId('kitchen-in-work')).getByTestId('kitchen-order-sale-7')).toBe(card);
     expect(within(card).getByTestId('kitchen-order-no')).toHaveTextContent('42');
     expect(card).toHaveTextContent('2 × Латте');
     expect(card).toHaveTextContent('вівсяне');
@@ -161,30 +161,30 @@ describe('KitchenPage', () => {
   it('takes two taps: «Готово» moves the card to «Видача», «Видано» takes it off', async () => {
     const user = userEvent.setup();
     renderWithProviders(<KitchenPage />);
-    await screen.findByTestId('kitchen-order-7');
+    await screen.findByTestId('kitchen-order-sale-7');
 
-    await user.click(screen.getByTestId('kitchen-ready-7'));
+    await user.click(screen.getByTestId('kitchen-ready-sale-7'));
     expect(posRequest).toHaveBeenCalledWith('patch', '/sales/7/prep', { prep_status: 'ready' });
     await waitFor(() =>
-      expect(within(screen.getByTestId('kitchen-pickup')).getByTestId('kitchen-order-7')).toBeInTheDocument()
+      expect(within(screen.getByTestId('kitchen-pickup')).getByTestId('kitchen-order-sale-7')).toBeInTheDocument()
     );
     expect(within(screen.getByTestId('kitchen-in-work')).getByText('Замовлень немає')).toBeInTheDocument();
 
-    await user.click(screen.getByTestId('kitchen-served-7'));
+    await user.click(screen.getByTestId('kitchen-served-sale-7'));
     expect(posRequest).toHaveBeenCalledWith('patch', '/sales/7/prep', { prep_status: 'served' });
-    await waitFor(() => expect(screen.queryByTestId('kitchen-order-7')).toBeNull());
+    await waitFor(() => expect(screen.queryByTestId('kitchen-order-sale-7')).toBeNull());
   });
 
   it("shows the server's words when a tap is refused", async () => {
     const user = userEvent.setup();
     renderWithProviders(<KitchenPage />);
-    await screen.findByTestId('kitchen-order-7');
+    await screen.findByTestId('kitchen-order-sale-7');
     // The other screen's card is stale: the board thinks it is ready, the server does not.
     status = 'new';
     posRequest.mockImplementationOnce(async () => {
       throw { response: { data: { error: 'Спершу натисніть „Готово“' } } };
     });
-    await user.click(screen.getByTestId('kitchen-ready-7'));
+    await user.click(screen.getByTestId('kitchen-ready-sale-7'));
     expect(await screen.findByTestId('kitchen-banner')).toHaveTextContent('Спершу натисніть „Готово“');
   });
 

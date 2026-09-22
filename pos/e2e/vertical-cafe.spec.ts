@@ -145,21 +145,69 @@ function kitchenOrder(prep_status: 'new' | 'ready') {
   };
 }
 
-/** A board with one order whose state follows the taps it receives. */
-async function mockKitchen(page: Page) {
-  let status: 'new' | 'ready' | 'served' = 'new';
-  const taps: Array<Record<string, unknown>> = [];
+/**
+ * A round fired from a table (К4c), with **the same id 7** as the sale above.
+ *
+ * That collision is deliberate: sales and rounds are separate tables with
+ * their own sequences, so both numbers land on the board at once. A round is
+ * not paid for yet, which is why it carries neither `order_no` nor
+ * `receipt_number` — and why the card's big line used to come out blank.
+ */
+function kitchenRound(prep_status: 'new' | 'ready') {
+  return {
+    id: 7,
+    kind: 'round' as const,
+    title: 'Стіл 5 · раунд 2',
+    table_name: 'Стіл 5',
+    round_seq: 2,
+    order_no: null,
+    receipt_number: '',
+    prep_status,
+    created_at: new Date(Date.now() - 180_000).toISOString(),
+    ready_at: prep_status === 'ready' ? new Date().toISOString() : null,
+    staff_name: 'Власник',
+    note: null,
+    items: [
+      { id: 80, product_name: 'Стейк Рібай', variant_label: 'з кровʼю', quantity: 1, modifiers: [{ group_name: 'Просмаження', name: 'з кровʼю' }], note: '', stations: ['kitchen'] },
+    ],
+  };
+}
+
+type Kind = 'sale' | 'round';
+
+/**
+ * A board whose cards follow the taps they receive, with the counter sale
+ * always on it and the table's round only when asked for.
+ *
+ * The two taps are routed and collected **separately**: a tap that goes to
+ * the wrong endpoint lands in the wrong array, so the test fails by name
+ * rather than by timeout — which is exactly the bug this guards.
+ */
+async function mockKitchen(page: Page, { withRound = false } = {}) {
+  const status: Record<Kind, 'new' | 'ready' | 'served'> = { sale: 'new', round: 'new' };
+  const taps: Record<Kind, Array<Record<string, unknown>>> = { sale: [], round: [] };
   await page.route('**/api/pos/kitchen/orders', async (route) =>
     route.fulfill({
-      json: { orders: status === 'served' ? [] : [kitchenOrder(status)], now: new Date().toISOString() },
+      json: {
+        orders: [
+          ...(status.sale === 'served' ? [] : [kitchenOrder(status.sale)]),
+          ...(withRound && status.round !== 'served' ? [kitchenRound(status.round)] : []),
+        ],
+        now: new Date().toISOString(),
+      },
     })
   );
-  await page.route('**/api/pos/sales/7/prep', async (route) => {
-    const body = route.request().postDataJSON() as { prep_status: 'ready' | 'served' };
-    taps.push(body);
-    status = body.prep_status;
-    await route.fulfill({ json: { id: 7, prep_status: status, ready_at: new Date().toISOString(), served_at: null } });
-  });
+  const tapRoute = (kind: Kind, url: string) =>
+    page.route(url, async (route) => {
+      const body = route.request().postDataJSON() as { prep_status: 'ready' | 'served' };
+      taps[kind].push(body);
+      status[kind] = body.prep_status;
+      await route.fulfill({
+        json: { id: 7, prep_status: body.prep_status, ready_at: new Date().toISOString(), served_at: null },
+      });
+    });
+  await tapRoute('round', '**/api/pos/kitchen/rounds/7/prep');
+  await tapRoute('sale', '**/api/pos/sales/7/prep');
   return taps;
 }
 
@@ -336,7 +384,7 @@ test('the kitchen board takes two taps: «Готово» moves the order to «В
   await expect(page.getByTestId('kitchen-board')).toBeVisible();
   const inWork = page.getByTestId('kitchen-in-work');
   const pickup = page.getByTestId('kitchen-pickup');
-  await expect(inWork.getByTestId('kitchen-order-7')).toBeVisible();
+  await expect(inWork.getByTestId('kitchen-order-sale-7')).toBeVisible();
   await expect(inWork.getByTestId('kitchen-order-no')).toHaveText('7');
   await expect(inWork.getByText('вівсяне', { exact: true })).toBeVisible();
   await expect(inWork.getByText('✎ гарячіше')).toBeVisible();
@@ -344,15 +392,48 @@ test('the kitchen board takes two taps: «Готово» moves the order to «В
 
   // Tap 1. The card moves before the server answers (optimistically), so
   // the request is awaited on its own — it is what the test is about.
-  await page.getByTestId('kitchen-ready-7').click();
-  await expect(pickup.getByTestId('kitchen-order-7')).toBeVisible();
+  await page.getByTestId('kitchen-ready-sale-7').click();
+  await expect(pickup.getByTestId('kitchen-order-sale-7')).toBeVisible();
   await expect(inWork.getByText('Замовлень немає')).toBeVisible();
-  await expect.poll(() => taps).toEqual([{ prep_status: 'ready' }]);
+  await expect.poll(() => taps.sale).toEqual([{ prep_status: 'ready' }]);
 
   // Tap 2 — and nothing else ever takes it off.
-  await page.getByTestId('kitchen-served-7').click();
-  await expect(page.getByTestId('kitchen-order-7')).toHaveCount(0);
-  await expect.poll(() => taps).toEqual([{ prep_status: 'ready' }, { prep_status: 'served' }]);
+  await page.getByTestId('kitchen-served-sale-7').click();
+  await expect(page.getByTestId('kitchen-order-sale-7')).toHaveCount(0);
+  await expect.poll(() => taps.sale).toEqual([{ prep_status: 'ready' }, { prep_status: 'served' }]);
+});
+
+test('a round fired from a table is called out by its TABLE and stamped through the rounds route', async ({ page }) => {
+  await signInAsBarista(page);
+  const taps = await mockKitchen(page, { withRound: true });
+
+  await page.goto('/kitchen');
+  await expect(page.getByTestId('kitchen-board')).toBeVisible();
+  const inWork = page.getByTestId('kitchen-in-work');
+  const pickup = page.getByTestId('kitchen-pickup');
+
+  // Both kinds share id 7 and sit side by side — the card is told apart by
+  // its kind, never by the bare number.
+  const sale = inWork.getByTestId('kitchen-order-sale-7');
+  const round = inWork.getByTestId('kitchen-order-round-7');
+  await expect(sale).toBeVisible();
+  await expect(round).toBeVisible();
+
+  // The table, not a blank: a round carries no daily number and no receipt.
+  await expect(round.getByTestId('kitchen-order-no')).toHaveText('Стіл 5');
+  await expect(round.getByTestId('kitchen-order-round')).toHaveText('раунд 2');
+  await expect(sale.getByTestId('kitchen-order-no')).toHaveText('7');
+
+  // The tap the cook makes while looking at the ticket. It must reach the
+  // ROUNDS route — sending it to the sales one is what answered
+  // «Замовлення не знайдено».
+  await page.getByTestId('kitchen-ready-round-7').click();
+  await expect(pickup.getByTestId('kitchen-order-round-7')).toBeVisible();
+  await expect.poll(() => taps.round).toEqual([{ prep_status: 'ready' }]);
+  expect(taps.sale).toEqual([]);
+
+  // And the sale of the same number never moved.
+  await expect(inWork.getByTestId('kitchen-order-sale-7')).toBeVisible();
 });
 
 test('with the module CDN down the till still sells, on the bundled catalog', async ({ page }) => {
