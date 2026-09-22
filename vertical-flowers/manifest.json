@@ -1,23 +1,23 @@
 {
   "schema": 1,
   "moduleId": "vertical-flowers",
-  "version": "2.0.3",
-  "minHostPlatform": 12,
+  "version": "2.2.0",
+  "minHostPlatform": 14,
   "entry": "remote-entry.js",
   "keyId": "2a73632c13044371",
-  "builtAt": "2026-09-18T11:19:59.122Z",
+  "builtAt": "2026-09-22T10:48:40.653Z",
   "files": {
     "BarcodeScanner-DDyd6b-m.js": "sha384-h7k7FozxihdT2cYBXZsLuvH2nmezpFoHZ17TVH+R34lHtTcbvHJBkmWVo9KVWFbs",
     "BouquetPhoto-C0wJlYvp.js": "sha384-Vb6P64JPLkDpF4QXgJBFb+I0iP43ysC81EqWHAf0Q+WXAX3vOZ4a8CafjsXv1rjC",
     "FloristLabourCard-Jd-khfoM.js": "sha384-gN6vCE3pc8rrgj8fXaRRehe/+0pd4vqsapKsAOVXdHitLycm5/VC5N3FIP/7Hh0x",
     "FlowerAnalyticsPage-CRKXg11e.js": "sha384-hPSuuZ7YyUiAFx3uEf67CO0UzegxC69nXDICVrIGTmy5PBbWTdgLXNXGbhNmvLlS",
     "FlowerPanels-BSJnNihV.js": "sha384-taz0CIKL+CS5DWYkPdPcorvHQ/D6gkmh5ugBmu5GlPBn4up1myQ2aGY+PkVx0rpT",
-    "FlowersCatalog--O62oK-x.js": "sha384-Jmm6EY03NR6p8euJqWetY0xScpoVHWmdL71BasNxZ3Rxzmm6Q+xrP1MSECSgczW8",
+    "FlowersCatalog-L1c5I-If.js": "sha384-xSdYQtwADvKsdmXTNQzOLPKYJg4fjW3Ysxlf+C9qJkwz97cc/KNU+LIlTe2fRYct",
     "ShowcasePage-Cmbo-gX6.js": "sha384-RMHI3xs8aUqZY+fAgHEEVKT6joiabO0NKvz25lmk432TwpkLvDzRDLVSxXFR46vx",
     "Stat-DRWd55Hz.js": "sha384-yNV1ukhrVP+GcnYaVNCGrzeDvYieA4onvTtvTg0jxLMHlQ9CCRei7JeNRSOEs5Hu",
     "flower-2-DQVy9i5h.js": "sha384-BT7P8TqCm7WGGXgl51SnHwjzc+Xuupj3XXqqO06g5Y/rqu3G18iGBelNxwA0x5PD",
-    "remote-entry.js": "sha384-2UesVAQ1iyI6gamzeKy+DZP/yLy9OgJgiQgiwU5Kxx4HB8FDoz1MnR8RDjDAqUP0",
-    "style.css": "sha384-9uN0sFMXOHdelZP6wNgJlNFdWRuwj366ZPU7JuEPa95BBNvJEV5AOPQ7XZHq5Kox",
+    "remote-entry.js": "sha384-xeRlWELOfbl/v6GQy2HQob9kfaa5cLTGzZdvcPmCJMopilNm3CV6CjMpPdTSeOia",
+    "style.css": "sha384-DwWeKz8TrFXyrKs9QnbdWLdLwddrL9n1vVmxcaDrhIXM5zh0Ym/q7QbC04hviFpd",
     "trash-2-CBFgWIf2.js": "sha384-FRABpqvBlRWeKhNQs4bFoknG2TlGh2Keah2yccktVg3uyc9ETPdbTENTDLDWU0dh"
   }
 }

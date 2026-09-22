@@ -1,6 +1,6 @@
 import { lazy as e } from "react";
 //#region src/platform/version.ts
-var t = "2.0.3";
+var t = "2.2.0";
 //#endregion
 //#region src/modules/lazyWithRetry.ts
 async function n(e, { retries: t = 2, backoffMs: n = 400 } = {}) {
@@ -18,7 +18,7 @@ function r(t, r) {
 }
 //#endregion
 //#region src/modules/vertical-flowers/manifest.ts
-var i = r(() => import("./ShowcasePage-Cmbo-gX6.js")), a = r(() => import("./FlowerAnalyticsPage-CRKXg11e.js")), o = r(() => import("./FlowersCatalog--O62oK-x.js")), s = r(() => import("./FlowerPanels-BSJnNihV.js")), c = r(() => import("./FloristLabourCard-Jd-khfoM.js")), l = {
+var i = r(() => import("./ShowcasePage-Cmbo-gX6.js")), a = r(() => import("./FlowerAnalyticsPage-CRKXg11e.js")), o = r(() => import("./FlowersCatalog-L1c5I-If.js")), s = r(() => import("./FlowerPanels-BSJnNihV.js")), c = r(() => import("./FloristLabourCard-Jd-khfoM.js")), l = {
 	id: "vertical-flowers",
 	title: "Квіти",
 	shells: ["web", "cashier"],
