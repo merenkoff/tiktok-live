@@ -129,4 +129,32 @@ describe('count sheet repository', () => {
     await expect(searchCatalog('mi')).resolves.toHaveLength(1);
     expect(getCatalog).toHaveBeenLastCalledWith({ q: 'mi', include_unsellable: true });
   });
+
+  // Captured with the label, and for the same reason: the sheet is counted
+  // with no network, and «5 пляшок» has to stay readable without the catalog
+  // (migration 054).
+  it('captures the unit and the purchase pack on the line', async () => {
+    const sheet = await startSheet({ storeId: 1, staffId: 1 });
+    const oil: CatalogItem = {
+      ...tee,
+      variant_id: 9,
+      product_name: 'Олія',
+      unit: 'мл',
+      pack_qty: 1000,
+      pack_label: 'пляшка',
+    };
+    await addCount(sheet.id, oil, 1000);
+    const [line] = await listLines(sheet.id);
+    expect(line).toMatchObject({ unit: 'мл', packQty: 1000, packLabel: 'пляшка' });
+    // Base units, always: the pack is a typing aid, not a second unit.
+    expect(line.countedQty).toBe(1000);
+  });
+
+  it('leaves a variant with no pack exactly as it was', async () => {
+    const sheet = await startSheet({ storeId: 1, staffId: 1 });
+    await addCount(sheet.id, tee, 2);
+    const [line] = await listLines(sheet.id);
+    expect(line.packQty).toBeNull();
+    expect(line.packLabel).toBe('');
+  });
 });

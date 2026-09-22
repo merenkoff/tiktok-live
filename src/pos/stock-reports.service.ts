@@ -19,6 +19,12 @@ export interface OnHandRow {
   quantity: number;
   cost_cents: number;
   price_cents: number;
+  /**
+   * The purchase pack (migration 054), so «Керувати залишком» can offer the
+   * same «5 пляшок» the receiving screen does. Stock itself is base units.
+   */
+  pack_qty: number | null;
+  pack_label: string;
 }
 
 export interface MovementRow {
@@ -60,7 +66,8 @@ export interface MovementSummaryRow {
 export async function listOnHand(storeId: number): Promise<OnHandRow[]> {
   const result = await pool.query(
     `SELECT v.id AS variant_id, v.product_id, p.name AS product_name, v.label, v.unit,
-            v.sku, v.barcode, s.quantity, v.cost_cents, v.price_cents
+            v.sku, v.barcode, s.quantity, v.cost_cents, v.price_cents,
+            v.pack_qty, v.pack_label
      FROM pos_stock s
      JOIN pos_variants v ON v.id = s.variant_id
      JOIN pos_products p ON p.id = v.product_id
@@ -83,6 +90,8 @@ export async function listOnHand(storeId: number): Promise<OnHandRow[]> {
     quantity: Number(row.quantity),
     cost_cents: Number(row.cost_cents),
     price_cents: Number(row.price_cents),
+    pack_qty: row.pack_qty == null ? null : Number(row.pack_qty),
+    pack_label: String(row.pack_label ?? ''),
   }));
 }
 

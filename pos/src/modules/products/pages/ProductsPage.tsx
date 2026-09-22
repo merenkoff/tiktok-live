@@ -17,6 +17,7 @@ import type {
 } from '@pos/platform';
 import { CompositionEditor } from '../components/CompositionEditor';
 import { ModifierGroupChips } from '../components/ModifierGroupChips';
+import { PackFields } from '../components/PackFields';
 import { componentOptions } from '../components/componentOptions';
 import type { ComponentOption } from '../components/componentOptions';
 import { AttributeFields, ProductPhotoField, useDragScroll } from '@pos/platform/ui';
@@ -98,6 +99,9 @@ export function ProductsPage() {
   const [qty, setQty] = useState('1');
   const [barcode, setBarcode] = useState('');
   const [sku, setSku] = useState('');
+  // How it arrives, not how it is counted (migration 054). Raw text: the pair
+  // is validated by the server, and half of it is refused there by name.
+  const [pack, setPack] = useState({ qty: '', label: '' });
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [composite, setComposite] = useState<ProductShape>('');
   // An ingredient or a semi-finished product: on the shelf, off the menu.
@@ -159,6 +163,8 @@ export function ProductsPage() {
             // A derived composite keeps no stock of its own; the server refuses
             // an opening quantity on one rather than silently dropping it.
             quantity: composite === 'derived' ? 0 : Number(qty) || 0,
+            pack_qty: pack.qty.trim() === '' ? null : Number(pack.qty),
+            pack_label: pack.label.trim() === '' ? null : pack.label,
             ...(composite ? { components } : {}),
           },
         ],
@@ -169,6 +175,7 @@ export function ProductsPage() {
       setName('');
       setBarcode('');
       setSku('');
+      setPack({ qty: '', label: '' });
       setImageUrl(null);
       setComposite('');
       setSellable(true);
@@ -475,6 +482,13 @@ export function ProductsPage() {
                   <GenerateBarcodeButton onGenerated={setBarcode} />
                 </div>
               </label>
+              <PackFields
+                className="sm:col-span-2"
+                qty={pack.qty}
+                label={pack.label}
+                unit={unit}
+                onChange={setPack}
+              />
               <button type="submit" className="sq-btn-primary sm:col-span-2 py-2.5 text-sm">
                 Зберегти
               </button>
@@ -951,6 +965,7 @@ function EditProductInline({
   const [newAttributes, setNewAttributes] = useState<AttributeValues>({});
   const [newUnit, setNewUnit] = useState(vertical.defaultUnit);
   const [newPrice, setNewPrice] = useState('690');
+  const [newPack, setNewPack] = useState({ qty: '', label: '' });
   const [newComponents, setNewComponents] = useState<ProductComponentInput[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -968,6 +983,10 @@ function EditProductInline({
         compare_at_cents: v.compare_at_cents ?? null,
         sku: v.sku ?? '',
         barcode: v.barcode ?? '',
+        // Sent as a pair every time: the form owns both halves, and sending
+        // one alone is what the server refuses by name.
+        pack_qty: v.pack_qty ?? null,
+        pack_label: v.pack_label ?? '',
         ...(components === 'clear'
           ? { components: [] }
           : composite
@@ -1037,6 +1056,8 @@ function EditProductInline({
         unit: newUnit,
         price_cents: uahInputToCents(newPrice),
         quantity: 0,
+        pack_qty: newPack.qty.trim() === '' ? null : Number(newPack.qty),
+        pack_label: newPack.label.trim() === '' ? null : newPack.label,
         ...(composite ? { components: newComponents } : {}),
       });
       const active = updated.variants.filter((v) => v.is_active);
@@ -1055,6 +1076,7 @@ function EditProductInline({
       setNewAttributes({});
       setNewUnit(vertical.defaultUnit);
       setNewPrice('690');
+      setNewPack({ qty: '', label: '' });
       setNewComponents([]);
       await onSaved();
     } catch {
@@ -1248,6 +1270,20 @@ function EditProductInline({
                 </div>
               </label>
             </div>
+            <PackFields
+              qty={v.pack_qty == null ? '' : String(v.pack_qty)}
+              label={v.pack_label ?? ''}
+              unit={v.unit}
+              onChange={({ qty, label }) => {
+                const next = [...variants];
+                next[idx] = {
+                  ...v,
+                  pack_qty: qty.trim() === '' ? null : Number(qty),
+                  pack_label: label,
+                };
+                setVariants(next);
+              }}
+            />
           </div>
         ))}
 
@@ -1265,6 +1301,12 @@ function EditProductInline({
               onChange={setNewComponents}
             />
           )}
+          <PackFields
+            qty={newPack.qty}
+            label={newPack.label}
+            unit={newUnit}
+            onChange={setNewPack}
+          />
           <div className="grid sm:grid-cols-[1fr_auto] gap-2 items-center">
             <input
               className={fieldClass}

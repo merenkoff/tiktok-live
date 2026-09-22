@@ -47,11 +47,22 @@ export interface SheetRow {
 export interface LineRow {
   sheetId: string;
   variantId: number;
+  /** Always base units — the pack is a typing aid, not a second unit. */
   countedQty: number;
   /** "Product · size · color" captured at scan time — the list renders without the catalog. */
   label: string;
   barcode: string | null;
   updatedAt: number;
+  /**
+   * The variant's base unit and purchase pack, captured at scan time for the
+   * same reason the label is: the sheet is counted with no network and the
+   * catalog snapshot may be a screen away. Absent on a row written by an
+   * older build — `packOf` reads that as «no pack» and the row draws exactly
+   * what it drew before. No Dexie version bump: neither is an index.
+   */
+  unit?: string;
+  packQty?: number | null;
+  packLabel?: string;
 }
 
 class StocktakeDB extends Dexie {

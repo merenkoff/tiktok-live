@@ -326,6 +326,15 @@ export interface CatalogItem {
   label: string;
   /** Base unit of `quantity` ('шт', 'г'…). */
   unit: string;
+  /**
+   * The purchase pack (migration 054): `pack_qty` base units in one pack,
+   * `pack_label` what it is called. A typing aid for the screens where a
+   * person enters a quantity — stock, recipes and documents stay in base
+   * units. Absent on an older cached payload, which `packOf` reads as «no
+   * pack» and so draws nothing.
+   */
+  pack_qty?: number | null;
+  pack_label?: string;
   sku: string | null;
   barcode: string | null;
   price_cents: number;
@@ -639,6 +648,15 @@ export interface ProductVariant {
    */
   quantity: number;
   components?: ProductComponent[];
+  /**
+   * The purchase pack (migration 054): `pack_qty` base units in one pack,
+   * `pack_label` what it is called. A typing aid for the screens where a
+   * person enters a quantity — stock, recipes and documents stay in base
+   * units. Absent on an older cached payload, which `packOf` reads as «no
+   * pack» and so draws nothing.
+   */
+  pack_qty?: number | null;
+  pack_label?: string;
 }
 
 export interface Product {
@@ -1149,6 +1167,15 @@ export interface OnHandRow {
   quantity: number;
   cost_cents: number;
   price_cents: number;
+  /**
+   * The purchase pack (migration 054): `pack_qty` base units in one pack,
+   * `pack_label` what it is called. A typing aid for the screens where a
+   * person enters a quantity — stock, recipes and documents stay in base
+   * units. Absent on an older cached payload, which `packOf` reads as «no
+   * pack» and so draws nothing.
+   */
+  pack_qty?: number | null;
+  pack_label?: string;
 }
 
 export interface StockMovementRow {
