@@ -10,8 +10,9 @@ import { DecorCircle } from '../components/DecorCircle';
 import { StickyCta } from '../components/StickyCta';
 import { VerticalCards } from '../components/VerticalCards';
 import { PricingCard } from '../components/PricingSection';
+import { Roadmap } from '../components/Roadmap';
 import { useScrollToHash } from '../hooks/useScrollToHash';
-import { PRICING } from '../lib/productFacts';
+import { PRICING, roadmapFor } from '../lib/productFacts';
 import type { VerticalPageData } from '../content/verticals';
 import { ShieldCheck, WifiOff, Package, QrCode, Users, BarChart3 } from 'lucide-react';
 
@@ -106,23 +107,8 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
           <PricingCard addon={fact.id === 'restaurant'} />
         </section>
 
-        {/* Honest gaps */}
-        <section className="max-w-4xl mx-auto px-6 pb-16">
-          <Reveal>
-            <h2 className="text-2xl font-bold">Чого поки немає</h2>
-            <p className="text-muted mt-2 text-sm">
-              Щоб ви не дізнались про це після підключення.
-            </p>
-            <ul className="mt-6 grid sm:grid-cols-2 gap-3">
-              {content.missing.map((m) => (
-                <li key={m} className="flex items-start gap-3 text-sm bg-paper border border-line rounded-card p-4">
-                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-muted shrink-0" />
-                  {m}
-                </li>
-              ))}
-            </ul>
-          </Reveal>
-        </section>
+        {/* Coming soon */}
+        <Roadmap items={roadmapFor(fact.id)} lede="Усе це входить у тариф тих, хто підключився на період запуску." />
 
         {/* FAQ */}
         <section className="max-w-3xl mx-auto px-6 pb-16">
