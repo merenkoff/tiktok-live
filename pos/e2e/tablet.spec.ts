@@ -59,22 +59,24 @@ const HALLS = [
 ];
 
 /**
- * A first launch, as a real one goes: open, let the worker install and claim
- * the page, open again. The second load is controlled from the start, which
- * is the state every later launch is in — and the only one in which
- * Playwright's context routes see the requests the worker relays (a page the
- * worker claimed mid-life keeps issuing them from its own network stack).
+ * A first launch, as a real one goes: open, sign in, let the worker (which
+ * registers once there is a session) install and claim the page, open again.
+ * The second load is controlled from the start, which is the state every
+ * later launch is in. The login itself happens BEFORE the worker exists: a
+ * POST from a page the worker controls is one Playwright's routes cannot
+ * answer, GETs are fine — which is also why the app registers it after the
+ * session and not at boot.
  */
 async function loginWithPin(page: Page) {
   await page.goto('/tablet/');
-  await expect(page).toHaveURL(/\/tablet\/login$/);
-  await serviceWorkerControls(page);
-  await page.reload();
   await expect(page).toHaveURL(/\/tablet\/login$/);
   await expect(page.getByText('Планшет офіціанта')).toBeVisible();
   await page.getByLabel('Код магазину').fill('demo');
   await page.getByLabel('PIN').fill('1234');
   await page.getByRole('button', { name: 'Увійти' }).click();
+  await page.waitForURL(/\/tablet\/register$/);
+  await serviceWorkerControls(page);
+  await page.reload();
   await page.waitForURL(/\/tablet\/register$/);
 }
 

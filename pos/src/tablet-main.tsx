@@ -17,7 +17,6 @@ import { PosShellContext, enableOfflineReads, registerOfflineModules } from '@po
 import { applyModuleRemotes, allModules } from './modules/registry';
 import { maybeStartTelemetryBeacon } from './modules/telemetryBeacon';
 import { captureInstallPrompt } from './lib/installPrompt';
-import { registerTabletServiceWorker } from './hooks/useAppUpdate';
 import './index.css';
 import './styles/tokens.css';
 
@@ -40,7 +39,6 @@ void applyModuleRemotes().finally(() => {
       </PosShellContext.Provider>
     </React.StrictMode>
   );
-  // After the first render: the shell is up, and a new host build found now
-  // is offered on a banner rather than applied under the waiter's hands.
-  registerTabletServiceWorker();
+  // The service worker registers from `TabletApp` once a session exists —
+  // see `hooks/useAppUpdate.ts` for why not here.
 });

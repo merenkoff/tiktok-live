@@ -6,7 +6,7 @@ import { useEffect } from 'react';
 import { useAuthStore, usePosShell, useEnabledModules, startOfflineRuntime } from '@pos/platform';
 import { renderModuleRoutes } from './modules/renderRoutes';
 import { ModuleRemotesReloadBanner } from './components/ModuleRemotesReloadBanner';
-import { useAppUpdate } from './hooks/useAppUpdate';
+import { registerTabletServiceWorker, useAppUpdate } from './hooks/useAppUpdate';
 
 export function TabletApp() {
   const bootstrap = useAuthStore((s) => s.bootstrap);
@@ -32,6 +32,14 @@ export function TabletApp() {
     // is the runtime `tablet-main.tsx` registered the module hooks into.
     void startOfflineRuntime();
   }, []);
+
+  useEffect(() => {
+    // Once there is a session, not at boot: the first launch needs the network
+    // for the login and the snapshot anyway, so nothing is lost by installing
+    // the shell cache after it — and a login that races the worker's claim is
+    // a request Playwright cannot route (`hooks/useAppUpdate.ts`).
+    if (isAuthenticated) registerTabletServiceWorker();
+  }, [isAuthenticated]);
 
   if (!bootstrapped) {
     return (

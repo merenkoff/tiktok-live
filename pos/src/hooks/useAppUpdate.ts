@@ -56,12 +56,24 @@ function offerWaiting(reg: ServiceWorkerRegistration): void {
   }
 }
 
+let registered = false;
+
 /**
  * Register the tablet's service worker and watch it for a newer build.
  * Production builds only: `vite dev` serves no `tablet-sw.js`, and a worker
  * registered against a 404 would be a stale one from a previous build.
+ *
+ * Called by `TabletApp` once a session exists, not from the entry at boot.
+ * The product reason: a first launch needs the network for the login and the
+ * catalog snapshot regardless, so caching the shell after them loses nothing,
+ * and a visitor who never signs in never downloads it. The test reason, which
+ * is what fixed the order: a POST issued while the freshly installed worker
+ * claims the page — or from any page it controls — is one Playwright's routes
+ * cannot answer, and the e2e mock API would miss the login itself.
  */
 export function registerTabletServiceWorker(): void {
+  if (registered) return;
+  registered = true;
   if (!import.meta.env.PROD) return;
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
 
