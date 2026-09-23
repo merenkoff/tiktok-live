@@ -96,7 +96,11 @@ mkdirSync(platformDest, { recursive: true });
 // back into it (`offline-*.js`, behind `useAuth`'s lazy `import('../offline')`)
 // names it `./platform.js`, and copied verbatim that import is a 404 — every
 // offline login on the till failed on it. See assemble-web-dist.mjs.
-const platformName = placeHashed(path.join(platformSrc, 'platform.js'), platformDest, 'platform', '@pos/platform');
+// `placeHashed` here returns the URL (the cashier's import map needs it);
+// the sibling's import is relative, so only the file name goes in.
+const platformName = path.basename(
+  placeHashed(path.join(platformSrc, 'platform.js'), platformDest, 'platform', '@pos/platform')
+);
 for (const entry of readdirSync(platformSrc)) {
   if (entry === 'platform.js') continue;
   const src = path.join(platformSrc, entry);
