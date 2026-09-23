@@ -7,12 +7,13 @@ import { PosPage, FAQ_ITEMS as POS_FAQ } from './pages/PosPage';
 import { ComparePage, FAQ_ITEMS as COMPARE_FAQ } from './pages/ComparePage';
 import { ArticlePage } from './pages/ArticlePage';
 import { DovidkaIndexPage } from './pages/DovidkaIndexPage';
+import { AboutPage } from './pages/AboutPage';
 import { VerticalPage } from './pages/VerticalPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ARTICLES } from './content/dovidka';
 import { VERTICAL_PAGES } from './content/verticals';
 import type { PageHead } from './lib/seo';
-import { organizationJsonLd } from './lib/jsonLd/organization';
+import { organizationJsonLd, aboutPageJsonLd } from './lib/jsonLd/organization';
 import { posSoftwareJsonLd, liveSoftwareJsonLd } from './lib/jsonLd/softwareApplication';
 import { buildFaqJsonLd } from './lib/faqJsonLd';
 import { breadcrumbJsonLd } from './lib/jsonLd/breadcrumb';
@@ -31,16 +32,6 @@ export interface SiteRoute {
   updatedAt: string;
   sitemap: boolean;
 }
-
-/** Pages that are not prerendered here but belong in sitemap.xml / llms.txt. */
-export const STATIC_PAGES = [
-  {
-    path: '/about',
-    title: 'Про сервіс — LiveShop',
-    description: 'Юридична інформація про власника сервісу — ТОВ «Технології».',
-    updatedAt: '2026-09-03',
-  },
-];
 
 const org = organizationJsonLd();
 const DOVIDKA_CRUMB = { name: 'Довідка', path: '/dovidka' };
@@ -62,7 +53,7 @@ export const ROUTES: SiteRoute[] = [
     out: 'live.html',
     Component: LivePage,
     jsonLd: [org, liveSoftwareJsonLd(), buildFaqJsonLd(LIVE_FAQ)],
-    updatedAt: '2026-09-11',
+    updatedAt: '2026-09-23',
     sitemap: true,
   },
   {
@@ -121,7 +112,23 @@ export const ROUTES: SiteRoute[] = [
       ogImage: '/og/pos.png',
     },
     jsonLd: [org, breadcrumbJsonLd([DOVIDKA_CRUMB])],
-    updatedAt: ARTICLES[0]?.meta.updatedAt ?? '2026-09-11',
+    updatedAt: '2026-09-23',
+    sitemap: true,
+  },
+  {
+    path: '/about',
+    template: 'dovidka.html',
+    out: 'about/index.html',
+    Component: AboutPage,
+    head: {
+      title: 'Про сервіс — LiveShop: каса для магазину, квітів, кафе і ресторану',
+      description:
+        'Хто робить LiveShop: ТОВ «Технології», код ЄДРПОУ 46288273. Каса з ПРРО для чотирьох бізнесів і бот для продажу в TikTok LIVE — реквізити, умови, зв\'язок.',
+      path: '/about',
+      ogImage: '/og/home.png',
+    },
+    jsonLd: [org, aboutPageJsonLd(), breadcrumbJsonLd([{ name: 'Про сервіс', path: '/about' }])],
+    updatedAt: '2026-09-23',
     sitemap: true,
   },
   ...ARTICLES.map((article): SiteRoute => {

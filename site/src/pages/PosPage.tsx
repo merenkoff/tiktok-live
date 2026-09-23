@@ -10,9 +10,10 @@ import { DecorCircle } from '../components/DecorCircle';
 import { StickyCta } from '../components/StickyCta';
 import { VerticalCards } from '../components/VerticalCards';
 import { PricingSection, checkboxComparison } from '../components/PricingSection';
+import { Roadmap } from '../components/Roadmap';
 import { useOsDetect, type DetectedOs } from '../hooks/useOsDetect';
 import { useScrollToHash } from '../hooks/useScrollToHash';
-import { PRODUCT, PRICING, RELEASES_URL, FEATURES, VERTICALS, isAvailable } from '../lib/productFacts';
+import { PRODUCT, PRICING, RELEASES_URL, FEATURES, VERTICALS, isAvailable, ROADMAP } from '../lib/productFacts';
 import { track } from '../lib/analytics';
 import type { FaqItem } from '../lib/faqJsonLd';
 import {
@@ -36,6 +37,7 @@ import posRegisterWebm from '../assets/video/pos-register-loop.webm';
 import posRegisterPoster from '../assets/video/pos-register-poster.png';
 
 const HANDOVER_ARTICLE = '/dovidka/zmina-prro-zamina-kasy';
+const ROADMAP_POS = ROADMAP.filter((item) => item.vertical === 'pos');
 
 const STATS = [
   { value: '0 мс', label: 'затримки офлайн — каса не чекає на сервер' },
@@ -376,6 +378,12 @@ export function PosPage() {
         </section>
 
         <PricingSection />
+
+        <Roadmap
+          items={ROADMAP_POS}
+          title="Що ми робимо далі — і що входить у ваш тариф"
+          lede="Спільне для всіх вертикалей. Те, що стосується лише квітів, кафе чи столів, — на їхніх сторінках."
+        />
 
         {/* Downloads */}
         <section id="download" className="bg-mist border-y border-line">

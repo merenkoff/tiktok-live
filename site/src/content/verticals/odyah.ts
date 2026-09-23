@@ -1,7 +1,7 @@
 import type { VerticalContent } from './types';
 import { PRODUCT, PRICING } from '../../lib/productFacts';
-import posRegister from '../../assets/screenshots/pos-register.png';
-import posProducts from '../../assets/screenshots/pos-products.png';
+import clothingRegister from '../../assets/screenshots/clothing-register.png';
+import clothingProducts from '../../assets/screenshots/clothing-products.png';
 
 export const odyah: VerticalContent = {
   id: 'clothing',
@@ -13,7 +13,7 @@ export const odyah: VerticalContent = {
   h1: 'Каса для магазину одягу',
   lede:
     'Футболка чорна M і футболка чорна L — різні залишки, один товар. Каса веде облік на рівні варіантів, сканує штрихкоди, тримає склад документами і пробиває фіскальний чек, навіть коли в залі пропав інтернет.',
-  hero: { src: posRegister, alt: 'Екран продажу для магазину одягу: плитки товарів і кошик' },
+  hero: { src: clothingRegister, alt: 'Екран продажу магазину одягу: плитки товарів за категоріями і кошик' },
   rows: [
     {
       eyebrow: 'Варіанти',
@@ -25,7 +25,7 @@ export const odyah: VerticalContent = {
         'Пошук по назві, кольору й розміру з одного поля',
         'Цінники друкуються на чековому принтері',
       ],
-      shot: { src: posProducts, alt: 'Картка товару з варіантами за розміром і кольором' },
+      shot: { src: clothingProducts, alt: 'Товари в кабінеті власника: варіанти за кольором і розміром, залишки, артикули й штрихкоди' },
     },
     {
       eyebrow: 'Штрихкоди',
@@ -45,11 +45,6 @@ export const odyah: VerticalContent = {
         'Той самий LiveShop веде продаж в ефірі: бот читає коментарі, тримає товар бронею, збирає дані покупця в Telegram і створює ТТН Нової Пошти. Два продукти, кожен зі своєю базою — підключаються окремо.',
       bullets: ['Коментар → бронь → Telegram → ТТН', 'Розпізнає код і розмір трьома мовами', 'Дивіться /live'],
     },
-  ],
-  missing: [
-    'Інтеграцій із маркетплейсами (Prom, Rozetka) поки немає',
-    'Програми лояльності з балами немає — є довідник клієнтів і знижки на чек чи товар',
-    'Каталог одягу й каталог TikTok LIVE — окремі бази, спільного каталогу поки немає',
   ],
   faq: [
     {

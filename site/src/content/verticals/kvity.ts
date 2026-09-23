@@ -3,6 +3,7 @@ import { PRODUCT, PRICING } from '../../lib/productFacts';
 import flowersRegister from '../../assets/screenshots/flowers-register.png';
 import flowersBench from '../../assets/screenshots/flowers-bench.png';
 import flowersOrders from '../../assets/screenshots/flowers-orders.png';
+import flowersAnalytics from '../../assets/screenshots/flowers-analytics.png';
 
 export const kvity: VerticalContent = {
   id: 'flowers',
@@ -52,12 +53,8 @@ export const kvity: VerticalContent = {
       title: 'Скільки пішло в смітник і що заробили букети',
       body:
         'На «Сьогодні» власника — три цифри флориста: що коштували списання, яку частку виручки дали букети і яка націнка вийшла насправді проти тієї, що просить крамниця. Окрема сторінка розкриває топ стебел і причини списань.',
+      shot: { src: flowersAnalytics, alt: 'Аналітика флориста: що зів\'яло за місяць і які стебла справді йдуть у букетах' },
     },
-  ],
-  missing: [
-    'Кур\'єрського циклу немає: замовлення знає адресу, але не призначає кур\'єра',
-    'Авансу за передзамовлення немає — оплата при видачі',
-    'Стіл флориста, вітрина і передзамовлення потребують мережі; офлайн каса продає тільки готовий каталог',
   ],
   faq: [
     {

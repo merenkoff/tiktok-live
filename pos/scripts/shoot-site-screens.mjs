@@ -91,13 +91,19 @@ const STORES = {
         await page.getByTestId('showcase-list').waitFor(WAIT);
         await page.waitForTimeout(600);
         await shoot('flowers-showcase');
-      });
+      }, page);
       await optional('flowers-dashboard', async () => {
         await page.goto('/admin');
         await page.getByTestId('flower-panels').waitFor(WAIT);
-        await page.waitForTimeout(800);
+        await pickRange(page);
         await shoot('flowers-dashboard');
-      });
+      }, page);
+      await optional('flowers-analytics', async () => {
+        await page.goto('/admin/flowers');
+        await page.getByTestId('flower-analytics').waitFor(WAIT);
+        await pickRange(page);
+        await shoot('flowers-analytics');
+      }, page);
     },
   },
   cafe: {
@@ -119,15 +125,21 @@ const STORES = {
       await optional('cafe-analytics', async () => {
         await page.goto('/admin/cafe');
         await page.getByTestId('cafe-analytics').waitFor(WAIT);
-        await page.waitForTimeout(800);
+        await pickRange(page);
         await shoot('cafe-analytics');
-      });
+      }, page);
+      await optional('cafe-dashboard', async () => {
+        await page.goto('/admin');
+        await page.getByTestId('cafe-panels').waitFor(WAIT);
+        await pickRange(page);
+        await shoot('cafe-dashboard');
+      }, page);
       await optional('cafe-tech-cards', async () => {
         await page.goto('/admin/tech-cards');
         await page.getByRole('heading', { name: /Техкарти/ }).waitFor(WAIT);
         await page.waitForTimeout(800);
         await shoot('cafe-tech-cards');
-      });
+      }, page);
     },
   },
   restaurant: {
@@ -151,16 +163,34 @@ const STORES = {
       await page.getByTestId('hall-editor').waitFor(WAIT);
       await page.waitForTimeout(600);
       await shoot('restaurant-hall-editor');
+      // The restaurant shares the café vertical, so its module release may
+      // carry the café analytics before the café demo's does.
+      await optional('restaurant-analytics', async () => {
+        await page.goto('/admin/cafe');
+        await page.getByTestId('cafe-analytics').waitFor(WAIT);
+        await pickRange(page);
+        await shoot('restaurant-analytics');
+      }, page);
     },
   },
 };
 
 /** A screen the store's pinned module release may not have yet: warn, don't fail. */
-async function optional(name, fn) {
+async function optional(name, fn, page) {
   try {
     await fn();
   } catch (error) {
     console.warn(`${name}: skipped — ${error instanceof Error ? error.message.split('\n')[0] : String(error)}`);
+    if (page) await page.screenshot({ path: path.join(OUT, `_skipped-${name}.png`) }).catch(() => {});
+  }
+}
+
+/** The owner's date presets: the demo's sales are spread over weeks, so «Сьогодні» reads empty. */
+async function pickRange(page, label = '30 днів') {
+  const btn = page.getByRole('button', { name: label });
+  if (await btn.count()) {
+    await btn.first().click();
+    await page.waitForTimeout(1200);
   }
 }
 
