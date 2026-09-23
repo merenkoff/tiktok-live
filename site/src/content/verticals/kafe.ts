@@ -76,5 +76,6 @@ export const kafe: VerticalContent = {
       a: PRICING.pos.detail,
     },
   ],
+  guide: { slug: 'restoran-ta-kafe', label: 'посібник ресторану й кав\'ярні' },
   updatedAt: '2026-09-23',
 };

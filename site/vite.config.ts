@@ -1,5 +1,6 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import { guidesPlugin } from './scripts/guides-plugin.mjs';
 import { resolve } from 'path';
 
 // Production URLs are extensionless (Fastify maps /pos → dist/pos.html); make
@@ -46,7 +47,7 @@ function prettyUrls(): Plugin {
 }
 
 export default defineConfig(({ isSsrBuild }) => ({
-  plugins: [react(), prettyUrls()],
+  plugins: [react(), prettyUrls(), guidesPlugin()],
   server: {
     port: 3005,
     proxy: {

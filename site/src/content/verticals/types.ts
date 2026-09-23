@@ -23,5 +23,7 @@ export interface VerticalContent {
   hero: Shot;
   rows: VerticalRow[];
   faq: FaqItem[];
+  /** The Довідка guide for this business, linked under the FAQ; routes.tsx checks the slug exists. */
+  guide?: { slug: string; label: string };
   updatedAt: string;
 }

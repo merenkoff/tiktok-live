@@ -115,6 +115,15 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
           <Reveal>
             <h2 className="text-2xl sm:text-3xl font-bold mb-8">Питання, які запитують найчастіше</h2>
             <Faq items={content.faq} />
+            {content.guide && (
+              <p className="text-muted mt-8 leading-relaxed">
+                Як це виглядає в роботі щодня, крок за кроком, —{' '}
+                <a href={`/dovidka/${content.guide.slug}`} className="text-pos font-semibold hover:underline underline-offset-2">
+                  {content.guide.label}
+                </a>
+                .
+              </p>
+            )}
           </Reveal>
         </section>
 

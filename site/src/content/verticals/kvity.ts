@@ -78,5 +78,6 @@ export const kvity: VerticalContent = {
       a: PRICING.pos.detail,
     },
   ],
+  guide: { slug: 'kvitkovyi-magazyn', label: 'посібник квіткового магазину' },
   updatedAt: '2026-09-23',
 };

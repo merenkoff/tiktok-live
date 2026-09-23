@@ -6,6 +6,8 @@ const POS = PRODUCT.pos.name;
 export const zminaPrroZaminaKasy: Article = {
   meta: {
     slug: 'zmina-prro-zamina-kasy',
+    kind: 'article',
+    eyebrow: 'ПРРО і фіскалізація',
     title: 'Зміна ПРРО і заміна каси посеред дня: що робити, якщо комп\'ютер із касою зламався',
     description:
       'Зміна належить фіскальному реєстратору, а не комп\'ютеру. Коли можна замінити пристрій без Z-звіту, що робити з офлайн-чеками і як The Live Shop POS передає касу між пристроями.',
