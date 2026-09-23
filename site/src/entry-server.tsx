@@ -13,6 +13,7 @@ import {
   LIVE_FEATURE_IDS,
   VERTICALS,
   COMPETITOR_FACTS,
+  ROADMAP,
 } from './lib/productFacts';
 
 export { ROUTES };
@@ -72,6 +73,13 @@ export function buildLlmsTxt(pages: LlmsPage[]): string {
     ),
     ...PRICING.pos.addons.map((addon) => `- ${addon.name}: +${addon.price} ${PRICING.pos.currency}/міс.`),
     `- ${PRICING.pos.billing} Для порівняння: ${COMPETITOR_FACTS.checkbox.name} з ${COMPETITOR_FACTS.checkbox.priceFromDate} піднімає ціну з ${COMPETITOR_FACTS.checkbox.priceNow} до ${COMPETITOR_FACTS.checkbox.priceFrom} грн/міс за касу і фіксує стару лише передплатою до ${COMPETITOR_FACTS.checkbox.lockBy} (максимум ${COMPETITOR_FACTS.checkbox.lockMaxMonths} місяців, не далі ${COMPETITOR_FACTS.checkbox.lockUntil}); джерело: ${COMPETITOR_FACTS.checkbox.source}, станом на ${COMPETITOR_FACTS.checkbox.checkedAt}.`,
+    '',
+    '## У планах (входить у тариф перших користувачів)',
+    '',
+    ...ROADMAP.map((item) => {
+      const scope = item.vertical === 'pos' ? 'усі' : VERTICALS.find((v) => v.id === item.vertical)?.title ?? item.vertical;
+      return `- ${item.title} (${scope}, готовність ${item.progress} %): ${item.body}`;
+    }),
     '',
     '## Основні сторінки',
     '',

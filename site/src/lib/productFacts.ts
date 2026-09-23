@@ -269,6 +269,161 @@ export const VERTICALS: readonly VerticalFact[] = [
   },
 ];
 
+/**
+ * What the site promises next, with a readiness figure. These are commitments
+ * to build, not descriptions of code that exists — `TechDocs/SITE_PROMISES.md`
+ * is the list to work from, and a figure moves here when the work moves.
+ * `vertical: 'pos'` is shared by every store.
+ */
+export interface RoadmapItem {
+  id: string;
+  vertical: VerticalId | 'pos';
+  title: string;
+  body: string;
+  /** Readiness in percent, 0–100. */
+  progress: number;
+}
+
+export const ROADMAP: readonly RoadmapItem[] = [
+  {
+    id: 'own-prro',
+    vertical: 'pos',
+    title: 'Власний ПРРО без стороннього провайдера',
+    body: 'Фіскальний реєстратор усередині каси: чек іде в ДПС напряму, без окремої підписки й без окремої програми. 200 грн/міс за магазин — і жодних доплат за касу.',
+    progress: 35,
+  },
+  {
+    id: 'loyalty',
+    vertical: 'pos',
+    title: 'Програма лояльності з балами',
+    body: 'Бали за покупку і знижка за бали просто на касі — без стороннього CRM. Клієнта впізнає номер телефону, як зараз для знижок.',
+    progress: 20,
+  },
+  {
+    id: 'fiscal-providers',
+    vertical: 'pos',
+    title: 'Вчасно.Каса та Є-Чек як провайдери',
+    body: 'Якщо у вас уже є ключ іншого ПРРО — каса підключиться до нього так само, як зараз до Checkbox.',
+    progress: 15,
+  },
+  {
+    id: 'shared-catalog',
+    vertical: 'clothing',
+    title: 'Спільний каталог з TikTok LIVE',
+    body: 'Один товар, один залишок — на касі й в ефірі. Продали в залі — бот у коментарях уже знає, що 46-го немає.',
+    progress: 40,
+  },
+  {
+    id: 'marketplaces',
+    vertical: 'clothing',
+    title: 'Маркетплейси: Prom і Rozetka',
+    body: 'Залишки й ціни з каси — на маркетплейс, замовлення звідти — у продажі, без ручного перенесення.',
+    progress: 15,
+  },
+  {
+    id: 'price-tags',
+    vertical: 'clothing',
+    title: 'Цінники з QR і власним дизайном',
+    body: 'Свій шаблон цінника, QR на сторінку товару чи на оплату — друк тим самим чековим принтером.',
+    progress: 10,
+  },
+  {
+    id: 'couriers',
+    vertical: 'flowers',
+    title: 'Кур\'єрська доставка',
+    body: 'Призначити кур\'єра прямо із замовлення, статус «в дорозі» і фото букета при врученні — одержувачу в SMS.',
+    progress: 25,
+  },
+  {
+    id: 'deposit',
+    vertical: 'flowers',
+    title: 'Аванс за передзамовлення',
+    body: 'Частина оплати при прийомі — з фіскальним чеком на аванс — і решта при видачі. Букет на 8 березня більше не відміняють у переддень.',
+    progress: 30,
+  },
+  {
+    id: 'bench-offline',
+    vertical: 'flowers',
+    title: 'Стіл флориста без інтернету',
+    body: 'Зібрати букет і пробити чек, коли мережа впала, а черга стоїть — картка й документ виробництва доїдуть на сервер потім.',
+    progress: 10,
+  },
+  {
+    id: 'holiday-forecast',
+    vertical: 'flowers',
+    title: 'Календар свят і прогноз закупівлі',
+    body: '14 лютого і 8 березня — каса підкаже, скільки троянд купити, за минулорічними продажами й списаннями.',
+    progress: 5,
+  },
+  {
+    id: 'aggregators',
+    vertical: 'cafe',
+    title: 'Доставка через Glovo і Bolt Food',
+    body: 'Замовлення з агрегаторів падають на ту саму дошку кухні, зі своїм номером і своїм списанням складу.',
+    progress: 15,
+  },
+  {
+    id: 'kds-timers',
+    vertical: 'cafe',
+    title: 'KDS із таймерами по станціях',
+    body: 'Кухонний екран з нормативом на страву: кава — 2 хв, сендвіч — 6, і червоне, коли бар відстає від кухні.',
+    progress: 40,
+  },
+  {
+    id: 'tips',
+    vertical: 'cafe',
+    title: 'Чайові на касі',
+    body: 'Кнопка чайових на екрані оплати й QR на чеку — окремо від виручки, з розподілом між зміною.',
+    progress: 20,
+  },
+  {
+    id: 'scales',
+    vertical: 'cafe',
+    title: 'Вагові товари з ваг',
+    body: 'Салат-бар і випічка на вагу: підключені ваги, дробова кількість, ціна за 100 г.',
+    progress: 10,
+  },
+  {
+    id: 'reservations',
+    vertical: 'restaurant',
+    title: 'Бронювання столів',
+    body: 'Бронь на час із телефону гостя, стіл підсвічується на плані залу за годину до приходу.',
+    progress: 15,
+  },
+  {
+    id: 'courses',
+    vertical: 'restaurant',
+    title: 'Курси подачі',
+    body: '«Гарячі після салатів»: офіціант відправляє рахунок цілком, а кухня отримує другий курс по команді «пробити далі».',
+    progress: 30,
+  },
+  {
+    id: 'merge-bills',
+    vertical: 'restaurant',
+    title: 'Об\'єднання рахунків',
+    body: 'Дві компанії зсунули столи — два рахунки стають одним без скасування раундів.',
+    progress: 35,
+  },
+  {
+    id: 'restaurant-tips',
+    vertical: 'restaurant',
+    title: 'Чайові з розподілом між офіціантами',
+    body: 'Чайові з картки й QR на передчеку, звіт по кожному офіціанту за зміну.',
+    progress: 20,
+  },
+  {
+    id: 'waiter-pwa',
+    vertical: 'restaurant',
+    title: 'Планшет офіціанта без мережі',
+    body: 'Прийняти замовлення на терасі, де не ловить Wi-Fi, і відправити на кухню, щойно зв\'язок повернеться.',
+    progress: 10,
+  },
+];
+
+export function roadmapFor(vertical: VerticalId): RoadmapItem[] {
+  return ROADMAP.filter((item) => item.vertical === vertical);
+}
+
 export function findVertical(slug: string): VerticalFact | undefined {
   return VERTICALS.find((v) => v.slug === slug);
 }

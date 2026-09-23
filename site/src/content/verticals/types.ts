@@ -22,8 +22,6 @@ export interface VerticalContent {
   lede: string;
   hero: Shot;
   rows: VerticalRow[];
-  /** What the product honestly does not do yet — same tone as the rest of the site. */
-  missing: string[];
   faq: FaqItem[];
   updatedAt: string;
 }
