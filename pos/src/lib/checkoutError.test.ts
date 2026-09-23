@@ -16,7 +16,7 @@ import {
   keepsCart,
   keepsModalOpen,
 } from './checkoutError';
-import { FiscalSaleUnknownError, OfflineFiscalError } from '../offline/errors';
+import { FiscalSaleUnknownError, OfflineFiscalError, OfflineWriteError } from '../offline/errors';
 
 function httpError(status: number, data: unknown): AxiosError {
   const error = new AxiosError('Request failed', 'ERR_BAD_RESPONSE');
@@ -180,5 +180,26 @@ describe('classifyCheckoutError', () => {
     expect(failure).toMatchObject({ kind: 'unknown_state', clientUuid: 'uuid-1' });
     // Re-probing with that uuid is idempotent, which is why the modal waits.
     expect(keepsModalOpen(failure)).toBe(true);
+  });
+
+  it("recognises the tablet's refusal to write without a network", () => {
+    const failure = classifyCheckoutError(new OfflineWriteError());
+    expect(failure).toMatchObject({ kind: 'offline_blocked', message: /Потрібна мережа/ });
+    expect(keepsCart(failure)).toBe(true);
+    expect(keepsModalOpen(failure)).toBe(true);
+  });
+
+  it('matches the offline errors by name, across the platform chunk boundary', () => {
+    // On a built shell `offline/errors.ts` is inside the external `@pos/platform`
+    // chunk while this file is host code: same class, two objects, `instanceof`
+    // false. What arrives is an Error carrying the name.
+    const foreign = (name: string, extra: Record<string, unknown> = {}) =>
+      Object.assign(new Error('from the chunk'), { name }, extra);
+    expect(classifyCheckoutError(foreign('OfflineFiscalError')).kind).toBe('offline_blocked');
+    expect(classifyCheckoutError(foreign('OfflineWriteError')).kind).toBe('offline_blocked');
+    expect(classifyCheckoutError(foreign('FiscalSaleUnknownError', { clientUuid: 'u-9' }))).toMatchObject({
+      kind: 'unknown_state',
+      clientUuid: 'u-9',
+    });
   });
 });

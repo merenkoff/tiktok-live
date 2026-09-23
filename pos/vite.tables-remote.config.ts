@@ -21,6 +21,8 @@ const dir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
+  // `public/` is the tablet PWA's manifest and icons — the web host's, never a remote's.
+  publicDir: false,
   // The host cashier component this bundle renders inline — without its
   // classes in the glob too, `style.css` would build fine (signed, present,
   // deterministic path) and every chip of the modifier sheet would come out

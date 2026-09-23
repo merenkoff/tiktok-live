@@ -57,7 +57,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test",
+    "test:e2e": "PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS=1 playwright test",
+    "pwa:icons": "node scripts/gen-pwa-icons.mjs",
     "test:e2e:install": "playwright install --with-deps chromium"
   },
   "dependencies": {

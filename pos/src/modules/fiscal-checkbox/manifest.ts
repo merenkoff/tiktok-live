@@ -34,7 +34,7 @@ export const FISCAL_CHECKBOX_MODULE_ID = 'fiscal-checkbox';
 export const fiscalCheckboxModule: RemoteModuleDescriptor = {
   id: FISCAL_CHECKBOX_MODULE_ID,
   title: 'Фіскалізація (Checkbox)',
-  shells: ['web', 'cashier'],
+  shells: ['web', 'cashier', 'tablet'],
   alwaysEnabled: true,
   routes: [
     { path: '/fiscal/*', element: CheckboxTillPage },

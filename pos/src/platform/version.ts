@@ -93,7 +93,14 @@ export const POS_API_CLIENT_VERSION = 2;
 //     converts what the person typed BEFORE it leaves. Three modules need the
 //     same arithmetic (`products`, `stock`, `stocktake`), so it is handed out
 //     rather than compiled into each of them.
-export const PLATFORM_VERSION = 15;
+// 16 (2026-09-23): the tablet PWA (TechDocs/POS_PWA.md). `PosShell` gains a
+//     third value, `'tablet'` — a module that tests `shell === 'cashier'` to
+//     mean "the desktop till" is still right, one that tests `=== 'web'` to
+//     mean "not the till" is not. `enableOfflineReads` / `isOfflineReadsEnabled`
+//     / `offlineMode` join `isOfflinePosEnabled`: the tablet reads its mirror
+//     but never queues a write, and `OfflineWriteError` is what a write with no
+//     network throws there.
+export const PLATFORM_VERSION = 16;
 
 /**
  * Build version of this bundle — the host web/cashier build, or a module-remote

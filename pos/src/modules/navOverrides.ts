@@ -23,7 +23,9 @@
  */
 
 import type { NavOverride, NavOverrides } from '../types';
+import type { PosShell } from '../shell';
 import type { AnyModuleDescriptor } from './registry';
+import { runsInShell } from './shells';
 import type { ModuleId, NavCtx, NavItem, NavLocation, NavVariant } from './types';
 
 export type { NavOverride, NavOverrides };
@@ -82,7 +84,7 @@ export function pruneNavOverrides(
 }
 
 /** Every shell/role/variant combination an entry's `visible()` is asked about. */
-const NAV_CONTEXTS: NavCtx[] = (['web', 'cashier'] as const).flatMap((shell) =>
+const NAV_CONTEXTS: NavCtx[] = (['web', 'cashier', 'tablet'] as const).flatMap((shell) =>
   (['owner', 'seller'] as const).flatMap((role) =>
     (['rail', 'bottom'] as const).map<NavCtx>((variant) => ({ shell, role, variant }))
   )
@@ -95,8 +97,8 @@ const NAV_CONTEXTS: NavCtx[] = (['web', 'cashier'] as const).flatMap((shell) =>
  */
 export interface NavEntryScope {
   ownerOnly: boolean;
-  /** Shows in exactly one shell — the web app or the desktop till. */
-  shellOnly: 'web' | 'cashier' | null;
+  /** Shows in exactly one shell — the web app, the desktop till or the tablet. */
+  shellOnly: PosShell | null;
   /** Shows in exactly one cashier variant — the side rail or the phone bottom bar. */
   variantOnly: NavVariant | null;
 }
@@ -112,9 +114,8 @@ export interface NavCatalogEntry {
 }
 
 function describeScope(module: AnyModuleDescriptor, item: NavItem): NavEntryScope {
-  const shells = new Set(module.shells);
   const visible = NAV_CONTEXTS.filter(
-    (ctx) => shells.has(ctx.shell) && (!item.visible || item.visible(ctx))
+    (ctx) => runsInShell(module, ctx.shell) && (!item.visible || item.visible(ctx))
   );
   const seen = <K extends keyof NavCtx>(field: K): Set<NavCtx[K]> =>
     new Set(visible.map((ctx) => ctx[field]));

@@ -20,7 +20,7 @@ export const verticalClothingModule: ModuleDescriptor = {
   id: 'vertical-clothing',
   title: 'Продаж одягу',
   core: true,
-  shells: ['web', 'cashier'],
+  shells: ['web', 'cashier', 'tablet'],
   routes: [],
   nav: [],
   sales: { Catalog: ClothingCatalog },

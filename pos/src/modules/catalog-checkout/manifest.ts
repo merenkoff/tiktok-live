@@ -17,7 +17,7 @@ export const catalogCheckoutModule: ModuleDescriptor = {
   id: 'catalog-checkout',
   title: 'Продажі (каса)',
   core: true,
-  shells: ['web', 'cashier'],
+  shells: ['web', 'cashier', 'tablet'],
   routes: [
     { path: '/register', element: RegisterPage, eager: true },
     // Pre-orders live here rather than in a vertical module: the backend is

@@ -41,7 +41,7 @@ export const TABLES_MODULE_ID = 'tables';
 export const tablesModule: RemoteModuleDescriptor = {
   id: TABLES_MODULE_ID,
   title: 'Столи',
-  shells: ['web', 'cashier'],
+  shells: ['web', 'cashier', 'tablet'],
   alwaysEnabled: true,
   // Splat, matching the shape `placeholderDescriptor` uses for the
   // not-yet-downloaded state; `TablesRoutes` nests the map and (К4f) the bill.

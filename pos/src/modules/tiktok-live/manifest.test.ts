@@ -28,8 +28,8 @@ describe('tiktok-live manifest', () => {
     expect(tiktokLiveModule.pending).toBeUndefined();
   });
 
-  it('runs in both shells', () => {
-    expect(tiktokLiveModule.shells).toEqual(['web', 'cashier']);
+  it('runs in every shell', () => {
+    expect(tiktokLiveModule.shells).toEqual(['web', 'cashier', 'tablet']);
   });
 
   it('names icons the host actually ships', () => {

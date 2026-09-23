@@ -29,7 +29,7 @@ vi.mock('./db', () => ({
   },
   getDeviceId: vi.fn(async () => 'dev-1'),
 }));
-vi.mock('./enabled', () => ({ isOfflinePosEnabled: () => true }));
+vi.mock('./enabled', () => ({ isOfflinePosEnabled: () => true, isOfflineReadsEnabled: () => true }));
 vi.mock('../services/api', () => ({
   api: { completeSale: vi.fn(), hasLiveJwt: () => true },
   isNetworkError: () => false,

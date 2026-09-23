@@ -4,8 +4,13 @@
 
 import { createContext, useContext } from 'react';
 
-/** `web` = Railway SPA (адмінка + каса). `cashier` = десктоп / cashier entry (лише каса). */
-export type PosShell = 'web' | 'cashier';
+/**
+ * `web` = Railway SPA (адмінка + каса в браузері). `cashier` = десктоп / cashier
+ * entry (лише каса). `tablet` = планшет офіціанта, PWA з того ж деплою, що й
+ * `web`, під `/tablet/`: екрани каси без `/admin`, читає офлайн, пише онлайн
+ * (TechDocs/POS_PWA.md).
+ */
+export type PosShell = 'web' | 'cashier' | 'tablet';
 
 export const PosShellContext = createContext<PosShell>('web');
 

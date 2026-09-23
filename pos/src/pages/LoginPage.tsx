@@ -6,6 +6,7 @@ import { FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuthStore, loadLastStoreSlug, usePosShell, OfflineAuthError } from '@pos/platform';
+import { isIos, isStandalone, useInstallPrompt } from '../lib/installPrompt';
 
 function loginErrorMessage(error: unknown): string {
   if (error instanceof OfflineAuthError) return error.message;
@@ -44,7 +45,11 @@ export function LoginPage() {
   const loginPin = useAuthStore((s) => s.loginPin);
   const navigate = useNavigate();
   const shell = usePosShell();
-  const afterLogin = shell === 'cashier' ? '/register' : '/admin';
+  const afterLogin = shell === 'web' ? '/admin' : '/register';
+  const { canInstall, install } = useInstallPrompt();
+  // The install nudge belongs to the tablet entry only, and only in a browser
+  // tab: an installed app asking to be installed is noise.
+  const installHint = shell === 'tablet' && !isStandalone();
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -80,7 +85,11 @@ export function LoginPage() {
           <p className="sq-section-label">Cloth POS</p>
           <h1 className="text-3xl font-bold text-sq-text mt-2">Вхід</h1>
           <p className="text-sq-secondary mt-2 text-sm">
-            {shell === 'cashier' ? 'Каса' : 'Каса та кабінет власника'}
+            {shell === 'cashier'
+              ? 'Каса'
+              : shell === 'tablet'
+                ? 'Планшет офіціанта'
+                : 'Каса та кабінет власника'}
           </p>
         </div>
 
@@ -158,6 +167,22 @@ export function LoginPage() {
             {loading ? 'Вхід…' : 'Увійти'}
           </button>
         </form>
+
+        {installHint && canInstall && (
+          <button
+            type="button"
+            onClick={() => void install()}
+            className="mt-4 w-full min-h-11 py-3 rounded-sq border border-sq-divider bg-white text-sm font-medium text-sq-text"
+            data-testid="install-app"
+          >
+            Встановити на планшет
+          </button>
+        )}
+        {installHint && !canInstall && isIos() && (
+          <p className="mt-4 text-center text-xs text-sq-muted" data-testid="install-hint-ios">
+            Щоб відкривати як застосунок: «Поділитися» → «На Початковий екран».
+          </p>
+        )}
 
         <p className="mt-4 text-center text-xs text-sq-muted">
           Демо: магазин <span className="font-medium">demo</span>, PIN{' '}

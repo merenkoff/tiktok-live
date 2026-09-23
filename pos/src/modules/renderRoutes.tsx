@@ -24,6 +24,7 @@ const SuperAdminApp = lazy(() =>
 import type { PosShell } from '../shell';
 import type { PosRole } from '../types';
 import { allModules, type AnyModuleDescriptor } from './registry';
+import { runsInShell } from './shells';
 import type { ModuleId } from './types';
 
 export interface RouteContext {
@@ -59,7 +60,7 @@ export function homePath(ctx: RouteContext): string {
 }
 
 export function moduleVisible(m: AnyModuleDescriptor, ctx: RouteContext): boolean {
-  if (!m.shells.includes(ctx.shell)) return false;
+  if (!runsInShell(m, ctx.shell)) return false;
   if (m.ownerOnly && ctx.role !== 'owner') return false;
   // Online-only remote modules (roadmap #13 Part C) opt in via `module_remotes`,
   // not `enabled_modules`.

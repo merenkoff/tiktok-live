@@ -58,10 +58,10 @@ export function BillPage(): JSX.Element {
   const storeId = useAuthStore((s) => s.auth?.store.id ?? null);
   const { bill, loading, error, banner, busy, stale, savedAt, clearBanner, reload, run } = useBill(
     id,
-    // The till keeps a copy so a blink of the Wi-Fi does not take the bill off
-    // the screen mid-dinner; the waiter's web tablet has no offline runtime to
-    // read one back (§4.12).
-    { online, mirrored: shell === 'cashier', storeId }
+    // The till and the tablet PWA keep a copy so a blink of the Wi-Fi does not
+    // take the bill off the screen mid-dinner; the web shell has no offline
+    // runtime to read one back (§4.12).
+    { online, mirrored: shell !== 'web', storeId }
   );
   const [picking, setPicking] = useState(false);
   const [paying, setPaying] = useState(false);

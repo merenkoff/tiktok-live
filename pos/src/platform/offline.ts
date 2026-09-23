@@ -2,8 +2,20 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-export { isOfflinePosEnabled } from '../offline/enabled';
-export { OfflineAuthError, OfflineRefundError } from '../offline/errors';
+// The mode setters travel through the barrel too, and the shell entries MUST
+// call them from here: `offline/enabled.ts` is compiled into this chunk, and a
+// relative import from an entry sets a second copy of the flag that nothing in
+// the chunk reads — which is how the release desktop till shipped with its
+// offline runtime never starting (TechDocs/POS_PWA.md).
+export {
+  enableOfflinePos,
+  enableOfflineReads,
+  isOfflinePosEnabled,
+  isOfflineReadsEnabled,
+  offlineMode,
+} from '../offline/enabled';
+export type { OfflineMode } from '../offline/enabled';
+export { OfflineAuthError, OfflineRefundError, OfflineWriteError } from '../offline/errors';
 export { getMeta, setMeta } from '../offline/db';
 // Roadmap #12 track 3 — a module with its own offline data reads the till's
 // connectivity from the same store the shell's banner uses, and the shell entry

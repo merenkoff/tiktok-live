@@ -30,7 +30,7 @@ const CafeAnalyticsPage = lazyWithRetry(() => import('./pages/CafeAnalyticsPage'
 export const verticalCafeModule: RemoteModuleDescriptor = {
   id: 'vertical-cafe',
   title: 'Кафе',
-  shells: ['web', 'cashier'],
+  shells: ['web', 'cashier', 'tablet'],
   alwaysEnabled: true,
   sales: { Catalog: CafeCatalog },
   // The owner's «Сьогодні» tiles (К6). A slot the host reads, like `sales`,

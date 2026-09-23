@@ -57,10 +57,10 @@ describe('vertical-flowers manifest', () => {
     });
   });
 
-  it('runs in both shells and is not owner-only', () => {
+  it('runs in every shell and is not owner-only', () => {
     // `ownerOnly` is module-scoped: it would take the sell screen away from
     // the sellers who spend all day on it.
-    expect(verticalFlowersModule.shells).toEqual(['web', 'cashier']);
+    expect(verticalFlowersModule.shells).toEqual(['web', 'cashier', 'tablet']);
     expect(verticalFlowersModule.ownerOnly).toBeUndefined();
   });
 

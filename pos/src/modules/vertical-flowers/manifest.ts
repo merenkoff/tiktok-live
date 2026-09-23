@@ -28,7 +28,7 @@ const FloristLabourCard = lazyWithRetry(() => import('./settings/FloristLabourCa
 export const verticalFlowersModule: RemoteModuleDescriptor = {
   id: 'vertical-flowers',
   title: 'Квіти',
-  shells: ['web', 'cashier'],
+  shells: ['web', 'cashier', 'tablet'],
   alwaysEnabled: true,
   sales: { Catalog: FlowersCatalog },
   // Three of §13's figures on the owner's «Сьогодні». A slot rather than a

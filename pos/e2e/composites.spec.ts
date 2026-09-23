@@ -245,9 +245,11 @@ test('a production run posts as one document and never offers a derived bouquet'
   const picker = page.getByLabel('Що збираємо');
   // The list is populated by the products fetch; reading it before that lands
   // would pass for the wrong reason (an empty select offers nothing either).
-  await expect(picker.locator('option')).not.toHaveCount(1);
+  // Wait for the bouquet itself, not for «more than the placeholder»: while
+  // the page is still loading there is no select at all, so a count of 0 used
+  // to satisfy `not.toHaveCount(1)` and the read below saw an empty list.
+  await expect(picker.locator('option', { hasText: 'Ранковий' })).toHaveCount(1);
   const offered = await picker.locator('option').allTextContents();
-  expect(offered.some((o) => o.includes('Ранковий'))).toBe(true);
   // Assembled by the sale itself — producing it would write off the stems into
   // a stock row nobody ever reads.
   expect(offered.some((o) => o.includes('Ніжність'))).toBe(false);

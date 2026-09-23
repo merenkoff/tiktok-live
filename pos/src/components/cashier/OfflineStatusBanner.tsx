@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom';
 // once `@pos/platform` is an external chunk.
 import {
   isOfflinePosEnabled,
+  isOfflineReadsEnabled,
   refusalText,
   useAuthStore,
   useOfflineStatus,
@@ -23,7 +24,19 @@ export function OfflineStatusBanner() {
   const reserve = useOfflineStatus((s) => s.fiscalReserve);
   const refusal = useOfflineStatus((s) => s.fiscalRefusal);
 
-  if (!isOfflinePosEnabled()) return null;
+  if (!isOfflineReadsEnabled()) return null;
+
+  // The tablet reads its mirror and queues nothing, so there is no count to
+  // show and no sync to report — only the one fact the waiter needs before
+  // tapping «На кухню».
+  if (!isOfflinePosEnabled()) {
+    if (online) return null;
+    return (
+      <div className="mx-3 mt-2 rounded-sq bg-slate-800 text-white px-3 py-2 text-sm shrink-0">
+        Без мережі — лише перегляд
+      </div>
+    );
+  }
 
   // A fiscalising store used to be unable to sell at all without a connection.
   // With a reserve of tax-office codes it can (фаза 3) — so the banner says

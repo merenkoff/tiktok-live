@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { posAppVersion } from './scripts/pkg-version.mjs';
 
@@ -28,8 +28,37 @@ const SHARED_EXTERNALS = [
   '@pos/platform',
 ];
 
+/**
+ * The tablet PWA lives under `/tablet/` (TechDocs/POS_PWA.md §3): in production
+ * `serve.json` rewrites that prefix to `tablet.html`, and this does the same
+ * for `vite dev` and `vite preview`, whose SPA fallbacks would both answer
+ * `index.html`. `/tablet` itself is sent to `/tablet/`, as production does —
+ * the service worker's scope does not cover the slash-less form.
+ */
+function tabletUnderPrefix(): Plugin {
+  const rewrite = (req: { url?: string }, res: { writeHead: (s: number, h: Record<string, string>) => void; end: () => void }, next: () => void) => {
+    const url = req.url ?? '';
+    if (url === '/tablet' || url.startsWith('/tablet?')) {
+      res.writeHead(301, { Location: `/tablet/${url.slice('/tablet'.length)}` });
+      res.end();
+      return;
+    }
+    if (url.startsWith('/tablet/')) req.url = '/tablet.html';
+    next();
+  };
+  return {
+    name: 'tablet-under-prefix',
+    configureServer(server) {
+      server.middlewares.use(rewrite);
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(rewrite);
+    },
+  };
+}
+
 export default defineConfig(({ command }) => ({
-  plugins: [react()],
+  plugins: [react(), tabletUnderPrefix()],
   // Build version of this bundle, read from package.json — see roadmap #6.
   define: { __POS_APP_VERSION__: JSON.stringify(posAppVersion()) },
   resolve: {
@@ -56,7 +85,14 @@ export default defineConfig(({ command }) => ({
   },
   build: {
     outDir: 'dist',
+    // `.vite/manifest.json` is what `assemble-web-dist.mjs` walks to list the
+    // tablet entry's chunks for the service worker's precache.
+    manifest: true,
     rollupOptions: {
+      input: {
+        index: path.resolve(rootDir, 'index.html'),
+        tablet: path.resolve(rootDir, 'tablet.html'),
+      },
       // On `build`: react / router / zustand / dexie / @pos/platform resolve via
       // the import map (assemble-web-dist.mjs). On `serve`: bundled via
       // `resolve.alias`. (Dexie is external on build — no manualChunks needed.)

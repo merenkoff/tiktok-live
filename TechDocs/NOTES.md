@@ -1,6 +1,14 @@
 # Локальные заметки по проекту
 
-POS post-MVP / штрихкоди: [[POS_POST_MVP]] · [[POS_GTIN_ENRICHMENT]] · [[POS_GTIN_SETUP]] · [[POS_GTIN_LEARNING_API]] · [[POS_GTIN_TODO]] · [[RAILWAY_POS]] · [[POS_DESKTOP]]
+POS post-MVP / штрихкоди: [[POS_POST_MVP]] · [[POS_GTIN_ENRICHMENT]] · [[POS_GTIN_SETUP]] · [[POS_GTIN_LEARNING_API]] · [[POS_GTIN_TODO]] · [[RAILWAY_POS]] · [[POS_DESKTOP]] · [[POS_PWA]]
+
+## Две копии через границу чанка `@pos/platform` (2026-09-23)
+
+Найдено при PWA-треке ([[POS_PWA]] §2), оба в проде до него:
+
+- `cashier-main.tsx` включал офлайн через относительный импорт `./offline/enabled` — вторая копия флага, которую чанк платформы не читал: релизная десктопная касса офлайн-рантайм не запускала (в `tauri:dev` всё в одном бандле, не видно). Теперь через барел, `enabled.ts` в `STATE_OWNERS` проверки границы.
+- `lib/checkoutError.ts` сравнивал ошибки офлайна через `instanceof` с классами из чанка — на собранной оболочке всегда `false`, `FiscalSaleUnknownError` читалась как `rejected` без «Перевірити ще раз». Теперь по `.name`.
+- `assemble-{web,cashier}-dist.mjs` переименовывали entry платформы в `platform-<hash>.js`, но ленивый чанк `offline-*.js` (за `import('../offline')` в `useAuth`, т.е. каждый офлайн-вход) импортирует его как `./platform.js` → 404. На релизной кассе путь был мёртв из-за первого пункта; фикс флага вывел бы его на этот 404. Теперь ссылка переписывается при копировании соседних чанков.
 
 ## Inventory
 

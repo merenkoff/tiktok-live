@@ -13,7 +13,7 @@ export const liveSellingModule: ModuleDescriptor = {
   id: 'live-selling',
   title: 'LIVE-продажі',
   defaultEnabled: false,
-  shells: ['web', 'cashier'],
+  shells: ['web', 'cashier', 'tablet'],
   routes: [],
   nav: [],
 };

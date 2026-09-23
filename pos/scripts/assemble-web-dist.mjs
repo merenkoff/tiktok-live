@@ -28,6 +28,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildPrecache } from './precache.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const pos = path.resolve(dir, '..');
@@ -87,32 +88,85 @@ for (const [file, specifier] of Object.entries(VENDOR_SPECIFIER)) {
   placeHashed(src, vendorDest, 'vendor', specifier);
 }
 
-// --- @pos/platform: hash the entry, copy its sibling async chunks verbatim ---
+// --- @pos/platform: hash the entry, copy its sibling async chunks ---
+// A sibling that reaches back into the entry (`offline-*.js` does, for the
+// stores `useAuth`'s lazy `import('../offline')` shares with it) names it as
+// Rollup emitted it, `./platform.js`. Once the entry is renamed that import is
+// a 404 — which is what every login on the tablet, and every offline login on
+// the desktop, ran into. So the siblings are copied with the reference
+// rewritten to the hashed name.
 const platformDest = path.join(dist, 'assets/platform');
 rmSync(platformDest, { recursive: true, force: true });
 mkdirSync(platformDest, { recursive: true });
+const platformName = placeHashed(path.join(platformSrc, 'platform.js'), platformDest, 'platform', '@pos/platform');
 for (const entry of readdirSync(platformSrc)) {
   if (entry === 'platform.js') continue;
-  cpSync(path.join(platformSrc, entry), path.join(platformDest, entry));
+  const src = path.join(platformSrc, entry);
+  if (entry.endsWith('.js')) {
+    const text = readFileSync(src, 'utf-8').replaceAll('./platform.js', `./${platformName}`);
+    writeFileSync(path.join(platformDest, entry), text);
+  } else {
+    cpSync(src, path.join(platformDest, entry));
+  }
 }
-placeHashed(path.join(platformSrc, 'platform.js'), platformDest, 'platform', '@pos/platform');
 
-// --- inject the import map into dist/index.html ---
-const htmlPath = path.join(dist, 'index.html');
-let html = readFileSync(htmlPath, 'utf-8');
-if (html.includes('type="importmap"')) die('dist/index.html already has an import map');
-
+// --- inject the import map into dist/index.html AND dist/tablet.html ---
 const mapTag =
   `    <script type="importmap">\n` +
   `${JSON.stringify({ imports, integrity }, null, 2)}\n` +
   `    </script>\n`;
 
-const anchor = html.indexOf('<script type="module"');
-if (anchor === -1) die('no <script type="module"> entry found in dist/index.html');
-html = html.slice(0, anchor) + mapTag + '  ' + html.slice(anchor);
-writeFileSync(htmlPath, html);
+for (const file of ['index.html', 'tablet.html']) {
+  const htmlPath = path.join(dist, file);
+  if (!existsSync(htmlPath)) die(`dist/${file} missing — run \`vite build\` first.`);
+  let html = readFileSync(htmlPath, 'utf-8');
+  if (html.includes('type="importmap"')) die(`dist/${file} already has an import map`);
+  const anchor = html.indexOf('<script type="module"');
+  if (anchor === -1) die(`no <script type="module"> entry found in dist/${file}`);
+  html = html.slice(0, anchor) + mapTag + '  ' + html.slice(anchor);
+  writeFileSync(htmlPath, html);
+}
 
 writeFileSync(path.join(dist, '.importmap.json'), JSON.stringify({ imports, integrity }, null, 2));
 
 console.log('[assemble-web-dist] import map injected:');
 for (const [k, v] of Object.entries(imports)) console.log(`  ${k.padEnd(20)} -> ${v}`);
+
+// --- the tablet PWA: service worker with the precache list, and serve.json ---
+// (TechDocs/POS_PWA.md §3–4). The worker is a template under `sw/`; the list
+// is computed from what this script just laid out plus Vite's manifest.
+const viteManifestPath = path.join(dist, '.vite/manifest.json');
+if (!existsSync(viteManifestPath)) die('dist/.vite/manifest.json missing — vite.config.ts must set build.manifest.');
+const viteManifest = JSON.parse(readFileSync(viteManifestPath, 'utf-8'));
+
+function filesUnder(dir, prefix) {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? filesUnder(path.join(dir, e.name), `${prefix}${e.name}/`) : [`${prefix}${e.name}`]
+  );
+}
+
+const { urls: precache, buildId } = buildPrecache({
+  manifest: viteManifest,
+  sharedFiles: [
+    ...filesUnder(vendorDest, 'assets/vendor/'),
+    ...filesUnder(platformDest, 'assets/platform/'),
+  ],
+  extra: ['tablet.webmanifest', ...filesUnder(path.join(dist, 'icons'), 'icons/')],
+  base: BASE,
+});
+for (const url of precache) {
+  if (url === `${BASE}tablet/`) continue;
+  if (!existsSync(path.join(dist, url.slice(BASE.length)))) die(`precache names a file that is not in dist: ${url}`);
+}
+
+const swTemplate = readFileSync(path.join(pos, 'sw/tablet-sw.js'), 'utf-8');
+const sw = swTemplate
+  .replace("'__BUILD_ID__'", JSON.stringify(buildId))
+  .replace('__PRECACHE__', JSON.stringify(precache, null, 2));
+if (sw.includes('__BUILD_ID__') || sw.includes('__PRECACHE__')) die('sw/tablet-sw.js placeholders not replaced');
+writeFileSync(path.join(dist, 'tablet-sw.js'), sw);
+
+cpSync(path.join(pos, 'serve.json'), path.join(dist, 'serve.json'));
+
+console.log(`[assemble-web-dist] tablet-sw.js: build ${buildId}, ${precache.length} precached URLs`);

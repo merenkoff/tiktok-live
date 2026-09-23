@@ -41,6 +41,10 @@ describe('homePath', () => {
       ['cashier', 'owner'],
       ['cashier', 'seller'],
       ['cashier', null],
+      // The tablet has no /admin: an owner holding one is at the till.
+      ['tablet', 'owner'],
+      ['tablet', 'seller'],
+      ['tablet', null],
     ];
     for (const [shell, role] of elsewhere) {
       expect(homePath(ctx({ shell, role })), `${shell}/${role}`).toBe('/register');
@@ -56,6 +60,13 @@ describe('moduleVisible', () => {
   it('hides a module that does not run in this shell', () => {
     expect(moduleVisible(mod({ shells: ['web'] }), ctx({ shell: 'cashier' }))).toBe(false);
     expect(moduleVisible(mod({ shells: ['cashier'] }), ctx({ shell: 'web' }))).toBe(false);
+    expect(moduleVisible(mod({ shells: ['web'] }), ctx({ shell: 'tablet' }))).toBe(false);
+    expect(moduleVisible(mod({ shells: ['cashier'] }), ctx({ shell: 'tablet' }))).toBe(false);
+  });
+
+  it('shows a module published for both older shells on the tablet', () => {
+    // What a remote bundle built before the tablet carries — see modules/shells.ts.
+    expect(moduleVisible(mod({ shells: ['web', 'cashier'] }), ctx({ shell: 'tablet' }))).toBe(true);
   });
 
   it('hides an owner-only module from sellers and from a signed-out shell', () => {

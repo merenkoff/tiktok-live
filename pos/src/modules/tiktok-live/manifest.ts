@@ -32,7 +32,7 @@ export const TIKTOK_LIVE_MODULE_ID = 'tiktok-live';
 export const tiktokLiveModule: RemoteModuleDescriptor = {
   id: TIKTOK_LIVE_MODULE_ID,
   title: 'Прямий ефір',
-  shells: ['web', 'cashier'],
+  shells: ['web', 'cashier', 'tablet'],
   alwaysEnabled: true,
   // Two surfaces, not one screen shown twice. `mount` already carries the
   // chrome, the audience and the shell: the root mount is the operational desk

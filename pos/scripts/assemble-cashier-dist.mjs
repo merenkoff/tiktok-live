@@ -92,11 +92,25 @@ for (const [file, specifier] of Object.entries(VENDOR_SPECIFIER)) {
 const platformDest = path.join(dist, 'assets/platform');
 rmSync(platformDest, { recursive: true, force: true });
 mkdirSync(platformDest, { recursive: true });
+// The entry first, so its hashed name is known: a sibling chunk that imports
+// back into it (`offline-*.js`, behind `useAuth`'s lazy `import('../offline')`)
+// names it `./platform.js`, and copied verbatim that import is a 404 — every
+// offline login on the till failed on it. See assemble-web-dist.mjs.
+// `placeHashed` here returns the URL (the cashier's import map needs it);
+// the sibling's import is relative, so only the file name goes in.
+const platformName = path.basename(
+  placeHashed(path.join(platformSrc, 'platform.js'), platformDest, 'platform', '@pos/platform')
+);
 for (const entry of readdirSync(platformSrc)) {
   if (entry === 'platform.js') continue;
-  cpSync(path.join(platformSrc, entry), path.join(platformDest, entry));
+  const src = path.join(platformSrc, entry);
+  if (entry.endsWith('.js')) {
+    const text = readFileSync(src, 'utf-8').replaceAll('./platform.js', `./${platformName}`);
+    writeFileSync(path.join(platformDest, entry), text);
+  } else {
+    cpSync(src, path.join(platformDest, entry));
+  }
 }
-placeHashed(path.join(platformSrc, 'platform.js'), platformDest, 'platform', '@pos/platform');
 
 // --- es-module-shims: polyfill for a webview without native import maps ---
 const shimsBuf = readFileSync(shimsSrc);

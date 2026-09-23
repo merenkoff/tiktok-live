@@ -27,7 +27,7 @@ export const STOCKTAKE_MODULE_ID = 'stocktake';
 export const stocktakeModule: RemoteModuleDescriptor = {
   id: STOCKTAKE_MODULE_ID,
   title: 'Інвентаризація',
-  shells: ['web', 'cashier'],
+  shells: ['web', 'cashier', 'tablet'],
   alwaysEnabled: true,
   // Splat, matching the shape `placeholderDescriptor` uses for the
   // not-yet-downloaded state; `StocktakeRoutes` nests the list and the sheet.

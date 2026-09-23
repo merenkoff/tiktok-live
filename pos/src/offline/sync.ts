@@ -24,7 +24,7 @@ import {
   type OutboxSalePayload,
   type OutboxRow,
 } from './db';
-import { isOfflinePosEnabled } from './enabled';
+import { isOfflinePosEnabled, isOfflineReadsEnabled } from './enabled';
 import {
   putLocalSale,
   refreshSalesCache,
@@ -204,26 +204,65 @@ export async function runSync(): Promise<void> {
   }
 }
 
+/**
+ * The connectivity the whole page reads. Without this `useOfflineStatus.online`
+ * is seeded once from `navigator.onLine` and never moves — which is exactly
+ * what the web shell had, and why a tablet's hall map could not tell a lost
+ * Wi-Fi from a slow one.
+ */
+function installConnectivity(onOnline: () => void): void {
+  const status = useOfflineStatus.getState();
+  status.setOnline(navigator.onLine);
+  window.addEventListener('online', () => {
+    useOfflineStatus.getState().setOnline(true);
+    onOnline();
+  });
+  window.addEventListener('offline', () => {
+    useOfflineStatus.getState().setOnline(false);
+  });
+}
+
+/**
+ * The tablet's runtime: read the mirror, never queue. No device id — the
+ * server treats any `X-POS-Device-ID` as a till that can hold the ПРРО
+ * register — no outbox, no code reserve, and no 30-second loop: `runSync` pulls
+ * the whole catalog and every customer each tick, which a till on a wire
+ * affords and a tablet on the shop's Wi-Fi does not. `ensureSnapshot` already
+ * re-pulls a snapshot older than two minutes on every catalog read; this only
+ * adds the moments the shop's state is most likely to have moved — the network
+ * coming back, and the tablet being picked up again.
+ */
+function startReadsRuntime(): void {
+  const refresh = () => {
+    if (!navigator.onLine || !api.hasLiveJwt()) return;
+    void refreshSnapshot().catch(() => undefined);
+  };
+  installConnectivity(refresh);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refresh();
+  });
+  void useOfflineStatus.getState().refreshPending();
+  refresh();
+}
+
 export function startOfflineRuntime(): void {
-  if (started || !isOfflinePosEnabled()) return;
+  if (started || !isOfflineReadsEnabled()) return;
   started = true;
+  if (!isOfflinePosEnabled()) {
+    startReadsRuntime();
+    return;
+  }
   // Seed the device id and hand it to the API client, which sends it as
   // `X-POS-Device-ID` — the ПРРО register holder is keyed on it.
   void getDeviceId().then((id) => api.setDeviceId(id));
   // Interim builds queued a 'void' outbox type that no longer exists; drop any
   // leftovers so they cannot wedge the pending counter.
   void db.outbox.filter((r) => String(r.type) === 'void').delete();
-  const status = useOfflineStatus.getState();
-  status.setOnline(navigator.onLine);
-  void status.refreshPending();
-
-  window.addEventListener('online', () => {
-    useOfflineStatus.getState().setOnline(true);
+  installConnectivity(() => {
     void runSync();
   });
-  window.addEventListener('offline', () => {
-    useOfflineStatus.getState().setOnline(false);
-  });
+  void useOfflineStatus.getState().refreshPending();
+
   window.setInterval(() => {
     void runSync();
   }, 30_000);

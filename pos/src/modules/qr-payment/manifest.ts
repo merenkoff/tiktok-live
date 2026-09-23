@@ -13,7 +13,7 @@ export const qrPaymentModule: ModuleDescriptor = {
   id: 'qr-payment',
   title: 'QR-оплата',
   defaultEnabled: true,
-  shells: ['web', 'cashier'],
+  shells: ['web', 'cashier', 'tablet'],
   routes: [],
   nav: [],
 };

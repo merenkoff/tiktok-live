@@ -1,4 +1,4 @@
-import type { Page, Route } from '@playwright/test';
+import type { BrowserContext, Page, Route } from '@playwright/test';
 
 export const ALL_MODULES = [
   'returns',
@@ -82,7 +82,10 @@ export const catalog = [
  * about.
  */
 export async function mockPosApi(
-  page: Page,
+  // A page, or its context: the tablet PWA's requests pass through a service
+  // worker, and only a CONTEXT route sees those (with
+  // `PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS=1`, set by `test:e2e`).
+  page: Pick<Page | BrowserContext, 'route'>,
   enabledModules: string[] = ALL_MODULES,
   opts: {
     /** `store.module_remotes` — a per-module source URL (string) or an online-only entry (object). */

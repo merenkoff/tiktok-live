@@ -96,6 +96,7 @@ function scopeHints(entry: NavCatalogEntry, location: NavLocation): string[] {
   if (entry.scope.ownerOnly && location === 'cashier-primary') hints.push('лише власник');
   if (entry.scope.shellOnly === 'cashier') hints.push('лише десктоп-каса');
   if (entry.scope.shellOnly === 'web') hints.push('лише у браузері');
+  if (entry.scope.shellOnly === 'tablet') hints.push('лише планшет');
   if (entry.scope.variantOnly === 'rail') hints.push('лише бічна панель');
   if (entry.scope.variantOnly === 'bottom') hints.push('лише нижня панель');
   return hints;

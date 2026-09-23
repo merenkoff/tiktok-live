@@ -20,7 +20,6 @@
 // The Ukrainian text is in `.message`.
 
 import axios from 'axios';
-import { OfflineFiscalError, FiscalSaleUnknownError } from '../offline/errors';
 
 export type CheckoutFailure =
   /** Pre-flight refused: no sale row, no receipt number burned, no stock moved. */
@@ -64,12 +63,28 @@ function bodyOf(error: unknown): FiscalFailBody | undefined {
   return data && typeof data === 'object' ? (data as FiscalFailBody) : undefined;
 }
 
+/**
+ * The offline runtime's own errors, matched by NAME rather than `instanceof`.
+ *
+ * `offline/errors.ts` is compiled into the external `@pos/platform` chunk, and
+ * this file is host code: on a built shell the two see different class objects
+ * for the same error, so `instanceof` was false for every one of them — a
+ * timed-out ПРРО sale on the desktop read as a plain `rejected` and lost its
+ * «Перевірити ще раз», and the tablet's refusal to sell offline read the same
+ * way. The name is set in each constructor and survives the chunk boundary.
+ */
+function errorName(error: unknown): string | null {
+  return error instanceof Error ? error.name : null;
+}
+
 export function classifyCheckoutError(error: unknown): CheckoutFailure {
-  if (error instanceof OfflineFiscalError) {
-    return { kind: 'offline_blocked', message: error.message };
+  const name = errorName(error);
+  if (name === 'OfflineFiscalError' || name === 'OfflineWriteError') {
+    return { kind: 'offline_blocked', message: (error as Error).message };
   }
-  if (error instanceof FiscalSaleUnknownError) {
-    return { kind: 'unknown_state', clientUuid: error.clientUuid, message: error.message };
+  if (name === 'FiscalSaleUnknownError') {
+    const { clientUuid, message } = error as Error & { clientUuid: string };
+    return { kind: 'unknown_state', clientUuid, message };
   }
 
   if (!axios.isAxiosError(error) || !error.response) {

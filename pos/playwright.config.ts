@@ -10,6 +10,9 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:4173',
     trace: 'on-first-retry',
+    // A machine whose Playwright is newer than its browsers can point at the
+    // Chromium it has (`PW_CHROMIUM=/path/to/chrome`); CI installs the matching one.
+    launchOptions: process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {},
   },
   webServer: {
     // `VITE_REMOTE_ALLOW_DEV_KEY=1`: e2e/remotes.spec.ts signs a throwaway

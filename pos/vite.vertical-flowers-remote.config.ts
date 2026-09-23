@@ -22,6 +22,8 @@ const dir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
+  // `public/` is the tablet PWA's manifest and icons — the web host's, never a remote's.
+  publicDir: false,
   // The catalog is built from the host's cashier components, which this bundle
   // renders inline — without their classes in the glob, `style.css` would build
   // fine and every tile would come out unstyled at runtime (the `fiscal-core`
