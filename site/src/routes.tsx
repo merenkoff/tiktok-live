@@ -10,7 +10,7 @@ import { DovidkaIndexPage } from './pages/DovidkaIndexPage';
 import { AboutPage } from './pages/AboutPage';
 import { VerticalPage } from './pages/VerticalPage';
 import { NotFoundPage } from './pages/NotFoundPage';
-import { ARTICLES } from './content/dovidka';
+import { ARTICLES, findArticle } from './content/dovidka';
 import { VERTICAL_PAGES } from './content/verticals';
 import type { PageHead } from './lib/seo';
 import { organizationJsonLd, aboutPageJsonLd } from './lib/jsonLd/organization';
@@ -36,6 +36,14 @@ export interface SiteRoute {
 const org = organizationJsonLd();
 const DOVIDKA_CRUMB = { name: 'Довідка', path: '/dovidka' };
 const POS_CRUMB = { name: 'POS каса', path: '/pos' };
+
+// A landing links its guide by slug (importing the guide there would ship its
+// HTML in the landing's bundle), so a renamed guide must fail the prerender.
+for (const { content } of VERTICAL_PAGES) {
+  if (content.guide && !findArticle(content.guide.slug)) {
+    throw new Error(`routes: ${content.id} links the unknown guide /dovidka/${content.guide.slug}`);
+  }
+}
 
 export const ROUTES: SiteRoute[] = [
   {
@@ -107,12 +115,12 @@ export const ROUTES: SiteRoute[] = [
     head: {
       title: 'Довідка — каса, ПРРО і TikTok LIVE | The Live Shop',
       description:
-        'Короткі відповіді для власників магазинів, кав\'ярень і квіткових: фіскалізація ПРРО, офлайн-режим каси, зміни і Z-звіт, продажі в TikTok LIVE.',
+        'Посібники для власника, касира, ресторану й квіткового магазину та короткі відповіді: фіскалізація ПРРО, офлайн-режим каси, зміни і Z-звіт, продажі в TikTok LIVE.',
       path: '/dovidka',
       ogImage: '/og/pos.png',
     },
     jsonLd: [org, breadcrumbJsonLd([DOVIDKA_CRUMB])],
-    updatedAt: '2026-09-23',
+    updatedAt: '2026-09-24',
     sitemap: true,
   },
   {

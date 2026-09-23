@@ -64,5 +64,6 @@ export const odyah: VerticalContent = {
       a: PRICING.pos.detail,
     },
   ],
+  guide: { slug: 'vlasnyk-pochatok', label: 'посібник власника' },
   updatedAt: '2026-09-23',
 };

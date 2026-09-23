@@ -4,6 +4,8 @@ WORKDIR /app/site
 COPY site/package*.json ./
 RUN npm ci
 COPY site/ ./
+# The Довідка guides are rendered from TechDocs/guides/*.md (site/scripts/guides-plugin.mjs).
+COPY TechDocs/guides/ ../TechDocs/guides/
 RUN npm run build
 # -> /app/site/dist/{index,pos,live,compare,404}.html, dovidka/**/index.html,
 #    sitemap.xml, llms.txt, assets/* — prerendered static HTML (client build +

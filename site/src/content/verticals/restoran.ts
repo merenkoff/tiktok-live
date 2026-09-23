@@ -64,5 +64,6 @@ export const restoran: VerticalContent = {
       a: `${PRICING.pos.detail} Модуль «${tables.name}» — ще ${tables.price} грн/міс.`,
     },
   ],
+  guide: { slug: 'restoran-ta-kafe', label: 'посібник ресторану й кав\'ярні' },
   updatedAt: '2026-09-23',
 };
