@@ -483,12 +483,12 @@ describe.skipIf(!hasDb)('POS fiscal offline checkout (case B — server session)
 
     providerDown();
     expect((await sell()).statusCode).toBe(201);
-    expect((await ledger.claimDueDocuments(10)).map((r) => r.id)).not.toContain(online.id);
+    expect((await ledger.claimDueDocuments(10, store.storeId)).map((r) => r.id)).not.toContain(online.id);
 
     const s = (await live()) as session.OfflineSessionRow;
     await session.markReplaying(s.id);
     await session.markClosed(s.id);
-    expect((await ledger.claimDueDocuments(10)).map((r) => r.id)).toContain(online.id);
+    expect((await ledger.claimDueDocuments(10, store.storeId)).map((r) => r.id)).toContain(online.id);
   });
 
   it('a web caller without a device id is still refused in offline mode', async () => {

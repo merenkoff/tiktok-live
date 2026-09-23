@@ -241,6 +241,15 @@ export interface CatalogItem {
    */
   sellable: boolean;
   /**
+   * The purchase pack (migration 054): `pack_qty` base units per pack,
+   * `pack_label` what it is called. Here because the till's stock count is the
+   * one screen there that types a quantity in, and «5 пляшок» is what the
+   * person holding the clipboard is actually counting. Never used to price or
+   * to sell — stock stays in base units.
+   */
+  pack_qty: number | null;
+  pack_label: string;
+  /**
    * On the day's manual stop-list («сьогодні не робимо», migration 050). The
    * row stays in the answer so the tile greys with a caption instead of
    * vanishing; `stop_listed_on` is the raw store-local day, so an offline

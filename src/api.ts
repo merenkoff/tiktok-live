@@ -28,7 +28,6 @@ import { ensureAuth, isUnauthorizedError } from './core/auth.js';
 import { POS_UPLOADS_PREFIX } from './pos/uploads.service.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const publicDir = join(__dirname, '..', 'public');
 const siteDistDir = join(__dirname, '..', 'site', 'dist');
 
 //Double routes check here and in files like sessions.controller atc... and controllers // seems like controllers is the better aproch but now i cant cheak all of the routes. It wiil be fixed later
@@ -144,8 +143,10 @@ export async function createServer(): Promise<FastifyInstance> {
     return reply.type('text/html; charset=utf-8').send(html);
   });
 
+  // Prerendered with the rest of the site (dist/about/index.html) since
+  // 2026-09-23; the hand-written public/about.html and its styles.css are gone.
   fastify.get('/about', async (_request, reply) => {
-    const html = await readFile(join(publicDir, 'about.html'), 'utf-8');
+    const html = await readFile(join(siteDistDir, 'about', 'index.html'), 'utf-8');
     return reply.type('text/html; charset=utf-8').send(html);
   });
 
@@ -164,9 +165,19 @@ export async function createServer(): Promise<FastifyInstance> {
     return reply.type('text/html; charset=utf-8').send(html);
   });
 
-  fastify.get('/styles.css', async (_request, reply) => {
-    const css = await readFile(join(publicDir, 'styles.css'), 'utf-8');
-    return reply.type('text/css; charset=utf-8').send(css);
+  // Vertical landings (/pos/odyah, /pos/kvity, …) — prerendered into
+  // dist/pos/<slug>/index.html the same way Довідка is. `/pos` itself stays the
+  // exact route above.
+  fastify.get<{ Params: { slug: string } }>('/pos/:slug', async (request, reply) => {
+    const { slug } = request.params;
+    if (!/^[a-z0-9-]{1,80}$/.test(slug)) return reply.callNotFound();
+    try {
+      const html = await readFile(join(siteDistDir, 'pos', slug, 'index.html'), 'utf-8');
+      return reply.type('text/html; charset=utf-8').send(html);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return reply.callNotFound();
+      throw error;
+    }
   });
 
   // Довідка — prerendered by site/scripts/prerender.mjs into dist/dovidka/<slug>/index.html.

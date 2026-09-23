@@ -71,6 +71,12 @@ describe('vertical registry', () => {
       units: ['шт'],
       defaultUnit: 'шт',
       maxCompositionDepth: 1,
+      writeoffReasons: [
+        { code: 'damaged', label: 'Брак' },
+        { code: 'lost', label: 'Втрата' },
+        { code: 'gift', label: 'Подарунок' },
+        { code: 'other', label: 'Інше' },
+      ],
     });
     expect('labelOf' in config).toBe(false);
   });
@@ -81,6 +87,7 @@ describe('vertical registry', () => {
       title: 'Тест',
       attributes: [],
       units: ['шт'],
+      writeoffReasons: [{ code: 'other', label: 'Інше' }],
       labelOf: () => 'x',
       productKinds: ['simple'],
       maxCompositionDepth: 1,

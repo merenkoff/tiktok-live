@@ -93,17 +93,17 @@ describe('useKitchenOrders', () => {
     listOrders.mockResolvedValue(board([order({ id: 1, prep_status: 'ready', ready_at: 'srv' })]));
 
     await act(async () => {
-      await result.current.markReady(1);
+      await result.current.markReady({ id: 1, kind: 'sale' });
     });
-    expect(setPrep).toHaveBeenCalledWith(1, 'ready');
+    expect(setPrep).toHaveBeenCalledWith({ id: 1, kind: 'sale' }, 'ready');
     expect(result.current.orders[0]).toMatchObject({ prep_status: 'ready', ready_at: 'srv' });
     expect(result.current.banner).toBeNull();
 
     listOrders.mockResolvedValue(board([]));
     await act(async () => {
-      await result.current.markServed(1);
+      await result.current.markServed({ id: 1, kind: 'sale' });
     });
-    expect(setPrep).toHaveBeenLastCalledWith(1, 'served');
+    expect(setPrep).toHaveBeenLastCalledWith({ id: 1, kind: 'sale' }, 'served');
     expect(result.current.orders).toEqual([]);
   });
 
@@ -116,7 +116,7 @@ describe('useKitchenOrders', () => {
     listOrders.mockResolvedValue(board([]));
 
     await act(async () => {
-      await result.current.markReady(1);
+      await result.current.markReady({ id: 1, kind: 'sale' });
     });
     expect(result.current.banner).toBe('Замовлення вже видано');
     expect(result.current.orders).toEqual([]);

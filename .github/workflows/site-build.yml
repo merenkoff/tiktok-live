@@ -5,10 +5,12 @@ on:
     branches: [main]
     paths:
       - 'site/**'
+      - 'TechDocs/guides/**'
       - '.github/workflows/site-build.yml'
   pull_request:
     paths:
       - 'site/**'
+      - 'TechDocs/guides/**'
       - '.github/workflows/site-build.yml'
 
 jobs:

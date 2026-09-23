@@ -112,7 +112,7 @@ describe.skipIf(!hasDb)('POS receipt placeholder products', () => {
   });
 
   it('rejects placeholder on writeoff', async () => {
-    const doc = await createDocument({ storeId, staffId, type: 'writeoff', reasonCode: 'damage' });
+    const doc = await createDocument({ storeId, staffId, type: 'writeoff', reasonCode: 'damaged' });
     await expect(
       addPlaceholderLine({
         storeId,

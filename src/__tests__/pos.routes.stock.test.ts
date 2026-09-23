@@ -251,7 +251,7 @@ describe.skipIf(!hasDb)('POS stock routes', () => {
         headers: auth(store.ownerToken),
         payload: {
           type: 'writeoff',
-          reason_code: 'damage',
+          reason_code: 'damaged',
           supplier_id: supplier.json().id,
         },
       });

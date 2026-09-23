@@ -253,13 +253,13 @@ web-only (адмінка) і cashier-only (hardware) — ні. У bundled-ман
 
 | фаза | що | стан |
 |---|---|---|
-| P0 | shell `'tablet'`, `runsInShell`, режим `reads`, платформа 15, фікс другої копії `enabled.ts` | зроблено 2026-09-23 |
+| P0 | shell `'tablet'`, `runsInShell`, режим `reads`, платформа 16, фікс другої копії `enabled.ts` | зроблено 2026-09-23 |
 | P1 | `tablet.html`/`tablet-main.tsx`/`TabletApp`, multi-page Vite, `assemble-web-dist`, `serve.json`, Dockerfile без `-s` | зроблено 2026-09-23 |
 | P2 | webmanifest, іконки, `sw/tablet-sw.js`, `useAppUpdate` + банер, «Встановити на планшет» | зроблено 2026-09-23 |
 | P3 | unit + e2e, документація, посібники | зроблено 2026-09-23 |
 
 Залежність деплою: бандл `tables` (і решту remote-модулів) треба перезібрати
-й опублікувати проти платформи 15, щоб `mirrored: shell !== 'web'` дійшов до
+й опублікувати проти платформи 16, щоб `mirrored: shell !== 'web'` дійшов до
 планшета; до того `runsInShell` тримає модуль видимим, але дзеркало пише лише
 новий бандл.
 

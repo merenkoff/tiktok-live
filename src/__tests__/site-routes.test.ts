@@ -45,6 +45,18 @@ describe('site routes', () => {
     expect(res.json()).toMatchObject({ error: 'Not Found', statusCode: 404 });
   });
 
+  it('rejects vertical landing slugs that are not plain kebab-case', async () => {
+    const res = await app.inject({ method: 'GET', url: '/pos/..%2Fsecret' });
+    expect(res.statusCode).toBe(404);
+    expect(res.headers['content-type']).toMatch(/text\/html/);
+  });
+
+  it('answers an unknown vertical landing with the HTML 404', async () => {
+    const res = await app.inject({ method: 'GET', url: '/pos/no-such-vertical' });
+    expect(res.statusCode).toBe(404);
+    expect(res.headers['content-type']).toMatch(/text\/html/);
+  });
+
   it('rejects dovidka slugs that are not plain kebab-case', async () => {
     const res = await app.inject({ method: 'GET', url: '/dovidka/..%2Fsecret' });
     expect(res.statusCode).toBe(404);

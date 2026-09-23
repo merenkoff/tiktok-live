@@ -107,6 +107,23 @@ export interface VerticalPublicConfig {
    * wire has none — read it as 1.
    */
   maxCompositionDepth?: number;
+  /**
+   * Why stock may be written off here, in the order the owner should see
+   * them — a kitchen has words a boutique does not («Зіпсувалося», «Проба»,
+   * «Харчування персоналу»), and each is its own line in the expense report.
+   *
+   * Optional for the same reason as `maxCompositionDepth`: an auth cached
+   * before the field was on the wire carries none, and the screen falls back
+   * to the generic four rather than drawing no buttons at all. The server is
+   * the authority either way — it refuses a code outside its own list.
+   */
+  writeoffReasons?: WriteoffReason[];
+}
+
+/** One answer to «чому списуємо»: the stored code and what the owner reads. */
+export interface WriteoffReason {
+  code: string;
+  label: string;
 }
 
 /** Shape returned by GET /store and PATCH /store (owner settings). */
@@ -326,6 +343,15 @@ export interface CatalogItem {
   label: string;
   /** Base unit of `quantity` ('шт', 'г'…). */
   unit: string;
+  /**
+   * The purchase pack (migration 054): `pack_qty` base units in one pack,
+   * `pack_label` what it is called. A typing aid for the screens where a
+   * person enters a quantity — stock, recipes and documents stay in base
+   * units. Absent on an older cached payload, which `packOf` reads as «no
+   * pack» and so draws nothing.
+   */
+  pack_qty?: number | null;
+  pack_label?: string;
   sku: string | null;
   barcode: string | null;
   price_cents: number;
@@ -639,6 +665,15 @@ export interface ProductVariant {
    */
   quantity: number;
   components?: ProductComponent[];
+  /**
+   * The purchase pack (migration 054): `pack_qty` base units in one pack,
+   * `pack_label` what it is called. A typing aid for the screens where a
+   * person enters a quantity — stock, recipes and documents stay in base
+   * units. Absent on an older cached payload, which `packOf` reads as «no
+   * pack» and so draws nothing.
+   */
+  pack_qty?: number | null;
+  pack_label?: string;
 }
 
 export interface Product {
@@ -1149,6 +1184,15 @@ export interface OnHandRow {
   quantity: number;
   cost_cents: number;
   price_cents: number;
+  /**
+   * The purchase pack (migration 054): `pack_qty` base units in one pack,
+   * `pack_label` what it is called. A typing aid for the screens where a
+   * person enters a quantity — stock, recipes and documents stay in base
+   * units. Absent on an older cached payload, which `packOf` reads as «no
+   * pack» and so draws nothing.
+   */
+  pack_qty?: number | null;
+  pack_label?: string;
 }
 
 export interface StockMovementRow {

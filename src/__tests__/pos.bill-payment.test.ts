@@ -28,7 +28,8 @@ import {
 import * as bills from '../pos/bills.service.js';
 import { shareDiscount } from '../pos/bill-payment.service.js';
 import { fireRound } from '../pos/rounds.service.js';
-import { getSale, refundSale } from '../pos/sales.service.js';
+import { completeSale, getSale, refundSale } from '../pos/sales.service.js';
+import { listOpenOrders } from '../pos/kitchen.service.js';
 
 describe.skipIf(!hasDb)('POS bill payment', () => {
   let app: FastifyInstance;
@@ -298,5 +299,73 @@ describe.skipIf(!hasDb)('POS bill payment', () => {
     expect(sale!.total_cents).toBe(6000);
     expect(sale!.items).toHaveLength(1);
     expect(paid.status).toBe('paid');
+  });
+
+  // For a table the kitchen's unit of work is the ROUND: it is what was fired,
+  // what moved the stock and what the board showed. Paying is only the receipt
+  // for food that has been eaten, so it must not put the dinner back on the
+  // board — which is exactly what it did, once per receipt.
+  describe('a paid bill does not go back to the kitchen', () => {
+    /** Ids of the board's cards, both kinds, keyed as the till keys them. */
+    async function boardKeys(): Promise<string[]> {
+      const { orders } = await listOpenOrders(store.storeId);
+      return orders.map((o) => `${o.kind}-${o.id}`);
+    }
+
+    it('stamps the receipt as already served and keeps it off the board', async () => {
+      const bill = await firedBill([{ variant_id: tea, quantity: 1 }]);
+      // Fired: the round IS on the board, which is the whole point of a round.
+      expect(await boardKeys()).toContain(`round-${bill.rounds[0].id}`);
+
+      const { sale_ids } = (await pay(bill.id, { payments: cash(4000) })).json();
+      const sale = await getSale(store.storeId, sale_ids[0]);
+      expect(sale!.prep_status).toBe('served');
+      expect(sale!.served_at).not.toBeNull();
+
+      const after = await boardKeys();
+      expect(after).not.toContain(`sale-${sale_ids[0]}`);
+      // And the round left with the bill, because `openRounds` only lists
+      // rounds of an OPEN bill.
+      expect(after).not.toContain(`round-${bill.rounds[0].id}`);
+    });
+
+    it('puts nothing on the board when the guests split by dishes', async () => {
+      const bill = await firedBill([
+        { variant_id: tea, quantity: 1 },
+        { variant_id: cake, quantity: 1 },
+      ]);
+      const lines = bill.rounds[0].items;
+      const teaLine = lines.find((l) => l.variant_id === tea)!;
+      const cakeLine = lines.find((l) => l.variant_id === cake)!;
+
+      const { sale_ids } = (
+        await pay(bill.id, {
+          parts: [
+            { line_ids: [teaLine.id], payments: cash(4000) },
+            { line_ids: [cakeLine.id], payments: cash(6000) },
+          ],
+        })
+      ).json();
+      expect(sale_ids).toHaveLength(2);
+
+      const board = await boardKeys();
+      for (const id of sale_ids) {
+        expect((await getSale(store.storeId, id))!.prep_status).toBe('served');
+        expect(board).not.toContain(`sale-${id}`);
+      }
+    });
+
+    it('still puts an ordinary counter sale of the same store on the board', async () => {
+      // The guard must not switch the café till off: someone buying a cake at
+      // the counter has not been to any table, and the kitchen has to make it.
+      const walkIn = await completeSale({
+        storeId: store.storeId,
+        staffId: store.sellerId,
+        items: [{ variant_id: cake, quantity: 1 }],
+        payments: [{ method: 'cash', amount_cents: 6000 }],
+      });
+      expect(walkIn!.prep_status).toBe('new');
+      expect(await boardKeys()).toContain(`sale-${walkIn!.id}`);
+    });
   });
 });

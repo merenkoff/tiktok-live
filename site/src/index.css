@@ -51,6 +51,17 @@ body {
 .article h3 {
   @apply text-xl font-bold mt-8 mb-3;
 }
+.article h4 {
+  @apply text-lg font-semibold mt-6 mb-2;
+}
+.article h2,
+.article h3,
+.article h4 {
+  scroll-margin-top: 5rem;
+}
+.article hr {
+  @apply my-10 border-line;
+}
 .article p {
   @apply text-ink/90 leading-relaxed mb-4;
 }

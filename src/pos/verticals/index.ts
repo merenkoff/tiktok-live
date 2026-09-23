@@ -64,6 +64,7 @@ export function publicConfigOf(def: VerticalDefinition): VerticalPublicConfig {
     units: [...def.units],
     defaultUnit: def.units[0],
     maxCompositionDepth: def.maxCompositionDepth,
+    writeoffReasons: [...def.writeoffReasons],
   };
 }
 
@@ -113,6 +114,7 @@ export {
   searchableAttributeKeys,
   VerticalValidationError,
 } from './attributes.js';
+export { GENERIC_WRITEOFF_REASONS } from './types.js';
 export type {
   AttributeSpec,
   AttributeType,
@@ -120,4 +122,5 @@ export type {
   VerticalDefinition,
   VerticalId,
   VerticalPublicConfig,
+  WriteoffReason,
 } from './types.js';

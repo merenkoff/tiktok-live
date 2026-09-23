@@ -107,7 +107,7 @@ END $$;
 DO $$
 DECLARE
   -- Bump when the catalogue below changes. The header says what that does.
-  v_version CONSTANT int := 1;
+  v_version CONSTANT int := 2;
   v_stamped    int;
   v_store      bigint;
   v_owner      bigint;
@@ -267,7 +267,13 @@ BEGIN
       ('Цукор',               'sugar',      'г',       4,  10000),
       ('Лимон',               'lemon',      'г',      12,   5000),
       ('Мʼята',               'mint',       'г',      80,    500),
-      ('Вода',                'water',      'мл',      0, 200000),
+      -- Filtered water is not free, and 0 does not mean «free» anywhere in
+      -- this system — it means «we do not know», which is what keeps a dish
+      -- with an unpriced ingredient out of the menu matrix (POS_VERTICALS.md
+      -- §7q). At 0 this one row took every coffee and every soup out of it.
+      -- A 19 l bottle at ~110 ₴ is 0.58 kopiyky per ml, so 1 is the honest
+      -- rounding on an integer-kopiyka scale, not a placeholder.
+      ('Вода',                'water',      'мл',      1, 200000),
       ('Содова',              'soda',       'мл',      2,  30000),
       ('Зерно арабіка',       'beans',      'г',      60,   5000),
       ('Молоко',              'milk',       'мл',      4,  20000),

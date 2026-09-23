@@ -89,6 +89,28 @@ describe.skipIf(!hasDb)('POS stock reports', () => {
     expect(row?.cost_cents).toBe(2100);
   });
 
+  // The on-hand sheet is what «Керувати залишком» and the stock count read, and
+  // those are the two screens where a person types a quantity in. Without the
+  // pack they can only be typed in base units (migration 054).
+  it('carries the purchase pack onto the on-hand sheet', async () => {
+    const before = (await listOnHand(storeId)).find((r) => r.variant_id === variantId);
+    expect(before?.pack_qty).toBeNull();
+    expect(before?.pack_label).toBe('');
+
+    await pool.query(
+      `UPDATE pos_variants SET pack_qty = 1000, pack_label = 'пляшка' WHERE id = $1`,
+      [variantId]
+    );
+    const after = (await listOnHand(storeId)).find((r) => r.variant_id === variantId);
+    expect(after?.pack_qty).toBe(1000);
+    expect(after?.pack_label).toBe('пляшка');
+
+    await pool.query(
+      `UPDATE pos_variants SET pack_qty = NULL, pack_label = '' WHERE id = $1`,
+      [variantId]
+    );
+  });
+
   it('lists movements filtered by reason', async () => {
     const receipts = await listMovements(storeId, { reason: 'receipt' });
     expect(receipts.some((m) => m.variant_id === variantId && m.delta === 20)).toBe(true);

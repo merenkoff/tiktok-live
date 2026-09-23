@@ -7,10 +7,13 @@ import { PosPage, FAQ_ITEMS as POS_FAQ } from './pages/PosPage';
 import { ComparePage, FAQ_ITEMS as COMPARE_FAQ } from './pages/ComparePage';
 import { ArticlePage } from './pages/ArticlePage';
 import { DovidkaIndexPage } from './pages/DovidkaIndexPage';
+import { AboutPage } from './pages/AboutPage';
+import { VerticalPage } from './pages/VerticalPage';
 import { NotFoundPage } from './pages/NotFoundPage';
-import { ARTICLES } from './content/dovidka';
+import { ARTICLES, findArticle } from './content/dovidka';
+import { VERTICAL_PAGES } from './content/verticals';
 import type { PageHead } from './lib/seo';
-import { organizationJsonLd } from './lib/jsonLd/organization';
+import { organizationJsonLd, aboutPageJsonLd } from './lib/jsonLd/organization';
 import { posSoftwareJsonLd, liveSoftwareJsonLd } from './lib/jsonLd/softwareApplication';
 import { buildFaqJsonLd } from './lib/faqJsonLd';
 import { breadcrumbJsonLd } from './lib/jsonLd/breadcrumb';
@@ -30,18 +33,17 @@ export interface SiteRoute {
   sitemap: boolean;
 }
 
-/** Pages that are not prerendered here but belong in sitemap.xml / llms.txt. */
-export const STATIC_PAGES = [
-  {
-    path: '/about',
-    title: 'Про сервіс — LiveShop',
-    description: 'Юридична інформація про власника сервісу — ТОВ «Технології».',
-    updatedAt: '2026-09-03',
-  },
-];
-
 const org = organizationJsonLd();
 const DOVIDKA_CRUMB = { name: 'Довідка', path: '/dovidka' };
+const POS_CRUMB = { name: 'POS каса', path: '/pos' };
+
+// A landing links its guide by slug (importing the guide there would ship its
+// HTML in the landing's bundle), so a renamed guide must fail the prerender.
+for (const { content } of VERTICAL_PAGES) {
+  if (content.guide && !findArticle(content.guide.slug)) {
+    throw new Error(`routes: ${content.id} links the unknown guide /dovidka/${content.guide.slug}`);
+  }
+}
 
 export const ROUTES: SiteRoute[] = [
   {
@@ -50,7 +52,7 @@ export const ROUTES: SiteRoute[] = [
     out: 'index.html',
     Component: Home,
     jsonLd: [org],
-    updatedAt: '2026-09-11',
+    updatedAt: '2026-09-23',
     sitemap: true,
   },
   {
@@ -59,7 +61,7 @@ export const ROUTES: SiteRoute[] = [
     out: 'live.html',
     Component: LivePage,
     jsonLd: [org, liveSoftwareJsonLd(), buildFaqJsonLd(LIVE_FAQ)],
-    updatedAt: '2026-09-11',
+    updatedAt: '2026-09-23',
     sitemap: true,
   },
   {
@@ -68,9 +70,30 @@ export const ROUTES: SiteRoute[] = [
     out: 'pos.html',
     Component: PosPage,
     jsonLd: [org, posSoftwareJsonLd(), buildFaqJsonLd(POS_FAQ)],
-    updatedAt: '2026-09-11',
+    updatedAt: '2026-09-23',
     sitemap: true,
   },
+  // One landing per vertical, prerendered from the shared template the way
+  // Довідка is. The SoftwareApplication schema stays on /pos — one product.
+  ...VERTICAL_PAGES.map(({ fact, content }): SiteRoute => ({
+    path: fact.path,
+    template: 'vertical.html',
+    out: `pos/${fact.slug}/index.html`,
+    Component: () => <VerticalPage page={{ fact, content }} />,
+    head: {
+      title: content.head.title,
+      description: content.head.description,
+      path: fact.path,
+      ogImage: '/og/pos.png',
+    },
+    jsonLd: [
+      org,
+      buildFaqJsonLd(content.faq),
+      breadcrumbJsonLd([POS_CRUMB, { name: fact.eyebrow, path: fact.path }]),
+    ],
+    updatedAt: content.updatedAt,
+    sitemap: true,
+  })),
   {
     path: '/yaku-kasu-obraty',
     template: 'compare.html',
@@ -79,9 +102,9 @@ export const ROUTES: SiteRoute[] = [
     jsonLd: [
       org,
       buildFaqJsonLd(COMPARE_FAQ),
-      breadcrumbJsonLd([{ name: 'POS каса', path: '/pos' }, { name: 'Яку касу обрати', path: '/yaku-kasu-obraty' }]),
+      breadcrumbJsonLd([POS_CRUMB, { name: 'Яку касу обрати', path: '/yaku-kasu-obraty' }]),
     ],
-    updatedAt: '2026-09-11',
+    updatedAt: '2026-09-23',
     sitemap: true,
   },
   {
@@ -90,14 +113,30 @@ export const ROUTES: SiteRoute[] = [
     out: 'dovidka/index.html',
     Component: DovidkaIndexPage,
     head: {
-      title: 'Довідка — каса, ПРРО і TikTok LIVE для магазину одягу | The Live Shop',
+      title: 'Довідка — каса, ПРРО і TikTok LIVE | The Live Shop',
       description:
-        'Короткі відповіді для власників магазинів одягу: фіскалізація ПРРО, офлайн-режим каси, зміни і Z-звіт, продажі в TikTok LIVE.',
+        'Посібники для власника, касира, ресторану й квіткового магазину та короткі відповіді: фіскалізація ПРРО, офлайн-режим каси, зміни і Z-звіт, продажі в TikTok LIVE.',
       path: '/dovidka',
       ogImage: '/og/pos.png',
     },
     jsonLd: [org, breadcrumbJsonLd([DOVIDKA_CRUMB])],
-    updatedAt: ARTICLES[0]?.meta.updatedAt ?? '2026-09-11',
+    updatedAt: '2026-09-24',
+    sitemap: true,
+  },
+  {
+    path: '/about',
+    template: 'dovidka.html',
+    out: 'about/index.html',
+    Component: AboutPage,
+    head: {
+      title: 'Про сервіс — LiveShop: каса для магазину, квітів, кафе і ресторану',
+      description:
+        'Хто робить LiveShop: ТОВ «Технології», код ЄДРПОУ 46288273. Каса з ПРРО для чотирьох бізнесів і бот для продажу в TikTok LIVE — реквізити, умови, зв\'язок.',
+      path: '/about',
+      ogImage: '/og/home.png',
+    },
+    jsonLd: [org, aboutPageJsonLd(), breadcrumbJsonLd([{ name: 'Про сервіс', path: '/about' }])],
+    updatedAt: '2026-09-23',
     sitemap: true,
   },
   ...ARTICLES.map((article): SiteRoute => {

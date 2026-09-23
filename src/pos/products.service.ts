@@ -45,6 +45,14 @@ export interface VariantInput {
    * on update, exactly like the attribute bag.
    */
   components?: ComponentInput[];
+  /**
+   * How the variant ARRIVES, as opposed to how it is counted (migration 054):
+   * `pack_qty` base units per purchase pack, `pack_label` what it is called.
+   * Both or neither — see `normalizePack`. A typing aid for the receiving
+   * screens; stock, recipes and documents stay in base units.
+   */
+  pack_qty?: number | null;
+  pack_label?: string | null;
 }
 
 export interface CreateProductInput {
@@ -135,6 +143,37 @@ function emptyToNull(value?: string | null): string | null {
   return trimmed === '' ? null : trimmed;
 }
 
+/**
+ * The purchase pack: both halves or neither (migration 054). A pack with no
+ * name cannot be read off a screen and a name with no number cannot be
+ * converted, so half a pair is refused rather than quietly dropped — the
+ * receiving clerk would otherwise see a toggle that multiplies by nothing.
+ *
+ * Takes what the row has today so an update that mentions neither field keeps
+ * it, and one that mentions either resolves against the other.
+ */
+function normalizePack(
+  input: { pack_qty?: number | null; pack_label?: string | null },
+  current: { pack_qty: number | null; pack_label: string } = { pack_qty: null, pack_label: '' }
+): { pack_qty: number | null; pack_label: string } {
+  const qty = input.pack_qty === undefined ? current.pack_qty : input.pack_qty;
+  const rawLabel = input.pack_label === undefined ? current.pack_label : input.pack_label;
+  const label = (rawLabel ?? '').trim();
+
+  if (qty == null && label === '') return { pack_qty: null, pack_label: '' };
+  if (qty == null) {
+    throw new Error('Вкажіть, скільки одиниць в упаковці, або приберіть її назву');
+  }
+  if (!Number.isInteger(qty) || qty <= 0) {
+    throw new Error('Кількість в упаковці має бути цілим числом більше нуля');
+  }
+  if (label === '') {
+    throw new Error('Вкажіть назву упаковки — наприклад «пляшка»');
+  }
+  if (label.length > 32) throw new Error('Назва упаковки задовга');
+  return { pack_qty: qty, pack_label: label };
+}
+
 function normalizeCompareAt(
   priceCents: number,
   compareAt: number | null | undefined
@@ -199,6 +238,9 @@ export async function listProducts(storeId: number) {
       is_active: row.is_active,
       quantity: Number(row.quantity),
       components: components.get(Number(row.id)) ?? [],
+      // How it arrives, not how it is counted (migration 054).
+      pack_qty: row.pack_qty == null ? null : Number(row.pack_qty),
+      pack_label: String(row.pack_label ?? ''),
     });
     byProduct.set(productId, list);
   }
@@ -277,10 +319,12 @@ export async function createProductInTx(
 
     const compareAt = normalizeCompareAt(variant.price_cents, variant.compare_at_cents);
     const derived = normalizeVariant(vertical, variant);
+    const pack = normalizePack(variant);
     const variantResult = await client.query(
       `INSERT INTO pos_variants
-         (store_id, product_id, attributes, label, unit, sku, barcode, price_cents, cost_cents, compare_at_cents)
-       VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10)
+         (store_id, product_id, attributes, label, unit, sku, barcode, price_cents, cost_cents, compare_at_cents,
+          pack_qty, pack_label)
+       VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING id`,
       [
         storeId,
@@ -293,6 +337,8 @@ export async function createProductInTx(
         variant.price_cents,
         variant.cost_cents ?? 0,
         compareAt,
+        pack.pack_qty,
+        pack.pack_label,
       ]
     );
     const variantId = Number(variantResult.rows[0].id);
@@ -496,10 +542,12 @@ export async function addVariant(storeId: number, productId: number, variant: Va
   try {
     await client.query('BEGIN');
     const derived = normalizeVariant(await loadStoreVertical(client, storeId), variant);
+    const pack = normalizePack(variant);
     const variantResult = await client.query(
       `INSERT INTO pos_variants
-         (store_id, product_id, attributes, label, unit, sku, barcode, price_cents, cost_cents, compare_at_cents)
-       VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10)
+         (store_id, product_id, attributes, label, unit, sku, barcode, price_cents, cost_cents, compare_at_cents,
+          pack_qty, pack_label)
+       VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING id`,
       [
         storeId,
@@ -512,6 +560,8 @@ export async function addVariant(storeId: number, productId: number, variant: Va
         variant.price_cents,
         variant.cost_cents ?? 0,
         compareAt,
+        pack.pack_qty,
+        pack.pack_label,
       ]
     );
     const variantId = Number(variantResult.rows[0].id);
@@ -582,6 +632,11 @@ export async function updateVariant(
   // form sends the whole set, and merging would make "clear this attribute"
   // unexpressible — the same trap the COALESCE form below fell into for `sku`.
   // `label` is always recomputed; it is a projection of the bag, not an input.
+  const pack = normalizePack(input, {
+    pack_qty: row.pack_qty == null ? null : Number(row.pack_qty),
+    pack_label: String(row.pack_label ?? ''),
+  });
+
   const vertical = await loadStoreVertical(pool, storeId);
   const derived = normalizeVariant(vertical, {
     attributes: input.attributes === undefined ? (row.attributes ?? {}) : input.attributes,
@@ -608,8 +663,10 @@ export async function updateVariant(
          cost_cents = $7,
          is_active = $8,
          compare_at_cents = $9,
+         pack_qty = $10,
+         pack_label = $11,
          updated_at = NOW()
-       WHERE id = $10 AND store_id = $11
+       WHERE id = $12 AND store_id = $13
        RETURNING product_id`,
       [
         JSON.stringify(derived.attributes),
@@ -621,6 +678,8 @@ export async function updateVariant(
         input.cost_cents === undefined ? Number(row.cost_cents) : input.cost_cents,
         input.is_active === undefined ? row.is_active : input.is_active,
         compareAt,
+        pack.pack_qty,
+        pack.pack_label,
         variantId,
         storeId,
       ]
@@ -787,6 +846,11 @@ export async function getCatalog(
        v.attributes,
        v.label,
        v.unit,
+       -- How it arrives, beside how it is counted (migration 054). The till
+       -- needs it because the stock count is the one screen there that types a
+       -- quantity in, and it rides into the offline snapshot for free.
+       v.pack_qty,
+       v.pack_label,
        v.sku,
        v.barcode,
        v.price_cents,
@@ -890,6 +954,8 @@ export async function getCatalog(
     stock_mode: (row.stock_mode === 'derived' ? 'derived' : 'own') as ProductStockMode,
     one_off: Boolean(row.one_off),
     sellable: row.sellable !== false,
+    pack_qty: row.pack_qty == null ? null : Number(row.pack_qty),
+    pack_label: String(row.pack_label ?? ''),
     // The day's stop-list (migration 050): the row stays in the answer so the
     // tile greys with a caption instead of vanishing (§3 «видно, а не
     // зникло»); the raw day travels too, so an offline till can un-grey it at

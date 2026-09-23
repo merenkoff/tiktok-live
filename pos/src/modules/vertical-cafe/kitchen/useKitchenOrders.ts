@@ -30,8 +30,9 @@ export interface KitchenOrders {
   /** A tap the server refused, in its words. */
   banner: string | null;
   refresh: () => Promise<void>;
-  markReady: (saleId: number) => Promise<void>;
-  markServed: (saleId: number) => Promise<void>;
+  /** Take the ORDER, not an id: the board has sales and rounds on it. */
+  markReady: (order: Pick<KitchenOrder, 'id' | 'kind'>) => Promise<void>;
+  markServed: (order: Pick<KitchenOrder, 'id' | 'kind'>) => Promise<void>;
   clearBanner: () => void;
 }
 
@@ -80,10 +81,10 @@ export function useKitchenOrders(enabled: boolean): KitchenOrders {
   }, [enabled, refresh]);
 
   const tap = useCallback(
-    async (saleId: number, status: 'ready' | 'served') => {
-      setOrders((prev) => applyPrep(prev, saleId, status, new Date().toISOString()));
+    async (order: Pick<KitchenOrder, 'id' | 'kind'>, status: 'ready' | 'served') => {
+      setOrders((prev) => applyPrep(prev, order, status, new Date().toISOString()));
       try {
-        await kitchenApi.setPrep(saleId, status);
+        await kitchenApi.setPrep(order, status);
         if (mountedRef.current) setBanner(null);
       } catch (err) {
         if (mountedRef.current) setBanner(serverMessage(err, 'Не вдалося оновити замовлення'));
@@ -94,8 +95,14 @@ export function useKitchenOrders(enabled: boolean): KitchenOrders {
     [refresh]
   );
 
-  const markReady = useCallback((saleId: number) => tap(saleId, 'ready'), [tap]);
-  const markServed = useCallback((saleId: number) => tap(saleId, 'served'), [tap]);
+  const markReady = useCallback(
+    (order: Pick<KitchenOrder, 'id' | 'kind'>) => tap(order, 'ready'),
+    [tap]
+  );
+  const markServed = useCallback(
+    (order: Pick<KitchenOrder, 'id' | 'kind'>) => tap(order, 'served'),
+    [tap]
+  );
   const clearBanner = useCallback(() => setBanner(null), []);
 
   return { orders, offset, loading, error, banner, refresh, markReady, markServed, clearBanner };

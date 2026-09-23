@@ -8,9 +8,12 @@ import { BrowserFrame } from '../components/BrowserFrame';
 import { Reveal, StaggerGroup, StaggerItem } from '../components/Reveal';
 import { DecorCircle } from '../components/DecorCircle';
 import { StickyCta } from '../components/StickyCta';
+import { VerticalCards } from '../components/VerticalCards';
+import { PricingSection, checkboxComparison } from '../components/PricingSection';
+import { Roadmap } from '../components/Roadmap';
 import { useOsDetect, type DetectedOs } from '../hooks/useOsDetect';
 import { useScrollToHash } from '../hooks/useScrollToHash';
-import { PRODUCT, PRICING, RELEASES_URL, FEATURES, isAvailable } from '../lib/productFacts';
+import { PRODUCT, PRICING, RELEASES_URL, FEATURES, VERTICALS, isAvailable, ROADMAP } from '../lib/productFacts';
 import { track } from '../lib/analytics';
 import type { FaqItem } from '../lib/faqJsonLd';
 import {
@@ -34,6 +37,7 @@ import posRegisterWebm from '../assets/video/pos-register-loop.webm';
 import posRegisterPoster from '../assets/video/pos-register-poster.png';
 
 const HANDOVER_ARTICLE = '/dovidka/zmina-prro-zamina-kasy';
+const ROADMAP_POS = ROADMAP.filter((item) => item.vertical === 'pos');
 
 const STATS = [
   { value: '0 мс', label: 'затримки офлайн — каса не чекає на сервер' },
@@ -151,8 +155,20 @@ export const FAQ_ITEMS: FaqItem[] = [
     a: 'Вебадмінка — повний кабінет власника з будь-якого браузера, завжди онлайн. Десктопна каса — це саме той офлайн-стійкий термінал для прилавка в магазині.',
   },
   {
+    q: 'Чи підходить каса для кафе чи ресторану?',
+    a: 'Так. Вертикаль «кафе» дає модифікатори, номер замовлення на чеку, дошку кухні й бару зі стоп-листом, техкарти з фудкостом і матрицю меню; модуль столів додає план залу, рахунки столів, раунди на кухню, передчек і розділення рахунку. Докладно — на сторінках /pos/kafe і /pos/restoran.',
+  },
+  {
+    q: 'Чи можна вести квіткову крамницю?',
+    a: 'Так. Вертикаль «квіти» має стіл флориста, який рахує букет по стеблах з роботою флориста, вітрину з власними цінниками, передзамовлення на дату й аналітику списань. Докладно — на /pos/kvity.',
+  },
+  {
     q: 'Скільки коштує POS?',
     a: PRICING.pos.detail,
+  },
+  {
+    q: 'Чи треба платити наперед, щоб зафіксувати ціну?',
+    a: `Ні. ${checkboxComparison()}`,
   },
 ];
 
@@ -180,15 +196,16 @@ export function PosPage() {
             className="absolute -top-10 -left-16 w-72 h-72 sm:w-96 sm:h-96 -z-10"
           />
           <Reveal>
-            <p className="text-sm font-semibold uppercase tracking-wide text-pos">Каса для офлайн-точки</p>
+            <p className="text-sm font-semibold uppercase tracking-wide text-pos">Одна каса для чотирьох бізнесів</p>
             <h1 className="text-6xl sm:text-7xl font-extrabold tracking-tighter mt-4 leading-[0.98]">
               Одна каса.
               <br />
               Онлайн і офлайн.
             </h1>
             <p className="text-muted text-lg mt-6 leading-relaxed">
-              Товари, штрихкоди, склад, знижки, QR-оплата і фіскальний чек ПРРО — і десктопний
-              термінал, який продовжує пробивати чеки, навіть якщо в магазині пропав інтернет.
+              Для магазину одягу, квіткової крамниці, кав'ярні й ресторану. Товари, штрихкоди,
+              склад, знижки, QR-оплата і фіскальний чек ПРРО — і десктопний термінал, який
+              продовжує пробивати чеки, навіть якщо в залі пропав інтернет.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <a href="#download" className="bg-pos hover:bg-pos-press transition-colors text-white text-sm font-semibold px-6 py-3.5 rounded-full">
@@ -221,10 +238,25 @@ export function PosPage() {
           </div>
         </section>
 
+        {/* Verticals */}
+        <section id="verticals" className="max-w-6xl mx-auto px-6 py-20">
+          <Reveal>
+            <h2 className="text-2xl sm:text-3xl font-bold text-center max-w-xl mx-auto">Для якого бізнесу</h2>
+            <p className="text-muted text-center mt-3 max-w-xl mx-auto">
+              Що продає магазин, вирішує, як виглядає екран продажу: {VERTICALS.map((v) => v.title.toLowerCase()).join(', ')}.
+              Решта каси — спільна.
+            </p>
+          </Reveal>
+          <div className="mt-12">
+            <VerticalCards />
+          </div>
+        </section>
+
         {/* Feature grid */}
-        <section className="max-w-6xl mx-auto px-6 py-20">
+        <section className="max-w-6xl mx-auto px-6 pb-20">
           <Reveal>
             <h2 className="text-2xl sm:text-3xl font-bold text-center max-w-xl mx-auto">Що всередині</h2>
+            <p className="text-muted text-center mt-3 max-w-xl mx-auto">Спільне ядро для всіх вертикалей.</p>
           </Reveal>
           <StaggerGroup className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {FEATURE_CARDS.map((f) => (
@@ -345,13 +377,21 @@ export function PosPage() {
           />
         </section>
 
+        <PricingSection />
+
+        <Roadmap
+          items={ROADMAP_POS}
+          title="Що ми робимо далі — і що входить у ваш тариф"
+          lede="Спільне для всіх вертикалей. Те, що стосується лише квітів, кафе чи столів, — на їхніх сторінках."
+        />
+
         {/* Downloads */}
         <section id="download" className="bg-mist border-y border-line">
           <div className="max-w-5xl mx-auto px-6 py-20">
             <Reveal>
               <h2 className="text-2xl sm:text-3xl font-bold text-center">Завантажити POS</h2>
               <p className="text-muted text-center mt-3 max-w-lg mx-auto">
-                Десктопна каса для торгової точки — оберіть свою систему. {PRICING.pos.label}.
+                Десктопна каса для торгової точки — оберіть свою систему. {PRICING.pos.launch.label}.
               </p>
             </Reveal>
             <div className="mt-10 grid sm:grid-cols-3 gap-6">

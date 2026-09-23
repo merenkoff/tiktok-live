@@ -376,4 +376,84 @@ describe.skipIf(!hasDb)('POS stock documents ledger', () => {
       expect(after.rows[0].n).toBe(before.rows[0].n);
     });
   });
+
+  // К5e. The reason a shop gives for stock leaving without being sold belongs
+  // to the VERTICAL, like units and attributes — a kitchen throws food away
+  // for reasons a boutique has no word for, and each is its own line in the
+  // expense report. Checked here, not merely offered: a list nothing enforces
+  // is not a list.
+  describe('write-off reasons come from the store’s vertical', () => {
+    let cafeStoreId = 0;
+    let cafeStaffId = 0;
+
+    beforeAll(async () => {
+      const slug = `stockdoc_cafe_${Date.now()}`;
+      const store = await pool.query(
+        `INSERT INTO pos_stores (name, slug, vertical) VALUES ('Stock Doc Cafe', $1, 'cafe') RETURNING id`,
+        [slug]
+      );
+      cafeStoreId = Number(store.rows[0].id);
+      const staff = await pool.query(
+        `INSERT INTO pos_staff (store_id, role, display_name, login, password_hash)
+         VALUES ($1, 'owner', 'Owner', $2, $3) RETURNING id`,
+        [cafeStoreId, `${slug}@test.local`, await hashPassword('x')]
+      );
+      cafeStaffId = Number(staff.rows[0].id);
+    }, 30000);
+
+    afterAll(async () => {
+      if (cafeStoreId) {
+        await pool.query(`DELETE FROM pos_stock_documents WHERE store_id = $1`, [cafeStoreId]);
+        await pool.query(`DELETE FROM pos_stores WHERE id = $1`, [cafeStoreId]);
+      }
+    });
+
+    it('a café may write food off as «Зіпсувалося», and a boutique may not', async () => {
+      const doc = await createDocument({
+        storeId: cafeStoreId,
+        staffId: cafeStaffId,
+        type: 'writeoff',
+        reasonCode: 'spoiled',
+      });
+      expect(doc).toMatchObject({ type: 'writeoff', reason_code: 'spoiled', status: 'draft' });
+
+      // The same code on the clothing store — it is not a café word there, and
+      // the refusal says so in the owner's own vocabulary rather than echoing
+      // a code back at them.
+      await expect(
+        createDocument({ storeId, staffId, type: 'writeoff', reasonCode: 'spoiled' })
+      ).rejects.toThrow(/«spoiled».*«Одяг».*Брак, Втрата, Подарунок, Інше/s);
+    });
+
+    it('keeps the four generic reasons working, and still demands a comment for «Інше»', async () => {
+      for (const reasonCode of ['damaged', 'lost', 'gift']) {
+        const doc = await createDocument({ storeId, staffId, type: 'writeoff', reasonCode });
+        expect(doc.reason_code).toBe(reasonCode);
+      }
+      await expect(
+        createDocument({ storeId, staffId, type: 'writeoff', reasonCode: 'other' })
+      ).rejects.toThrow(/note required/);
+      const withNote = await createDocument({
+        storeId,
+        staffId,
+        type: 'writeoff',
+        reasonCode: 'other',
+        note: 'розбилась вітрина',
+      });
+      expect(withNote.reason_code).toBe('other');
+    });
+
+    it('leaves CORRECTION reasons alone — they are about counting, not about the goods', async () => {
+      // `found` is in no vertical's write-off list, and an adjustment takes it
+      // in every shop: what a correction says is «ми порахували», which is the
+      // same everywhere.
+      const doc = await createDocument({
+        storeId: cafeStoreId,
+        staffId: cafeStaffId,
+        type: 'adjustment',
+        reasonCode: 'found',
+      });
+      expect(doc.reason_code).toBe('found');
+    });
+  });
 });

@@ -12,7 +12,9 @@ import {
   clockOffset,
   formatWait,
   groupStopList,
+  orderKey,
   orderLabel,
+  orderSubLabel,
   serverMessage,
   splitColumns,
   waitSeconds,
@@ -77,17 +79,53 @@ describe('kitchen columns', () => {
     expect(orderLabel({ order_no: null, receipt_number: 'R-00042' })).toBe('R-00042');
   });
 
+  // A round is not paid yet, so it has neither number nor receipt. Before К4
+  // reached this file that meant an empty label — a ticket on the pass with a
+  // blank where the cook looks for the table.
+  it('calls out the TABLE for a round fired from a bill', () => {
+    const round = {
+      kind: 'round' as const,
+      order_no: null,
+      receipt_number: '',
+      table_name: '5',
+      title: 'Стіл 5 · раунд 2',
+      round_seq: 2,
+    };
+    expect(orderLabel(round)).toBe('5');
+    expect(orderSubLabel(round)).toBe('раунд 2');
+    // A counter sale says nothing underneath.
+    expect(orderSubLabel({ kind: 'sale', round_seq: null })).toBeNull();
+  });
+
+  // Sales and rounds are separate tables with separate sequences, so sale 7
+  // and round 7 sit on the board together. Anything keyed on the bare id
+  // would move, hide or re-render the wrong card.
+  it('tells a sale from a round with the same id', () => {
+    expect(orderKey({ id: 7, kind: 'sale' })).not.toBe(orderKey({ id: 7, kind: 'round' }));
+    // A server older than К4 sends no kind at all; that is a sale.
+    expect(orderKey({ id: 7 })).toBe(orderKey({ id: 7, kind: 'sale' }));
+  });
+
   it('moves an order the moment it is tapped: «Готово» to the shelf, «Видано» off the board', () => {
     const list = [order({ id: 1 }), order({ id: 2 })];
-    const ready = applyPrep(list, 1, 'ready', '2026-09-20T10:02:00.000Z');
+    const ready = applyPrep(list, { id: 1 }, 'ready', '2026-09-20T10:02:00.000Z');
     expect(ready[0]).toMatchObject({ id: 1, prep_status: 'ready', ready_at: '2026-09-20T10:02:00.000Z' });
     expect(ready[1]).toBe(list[1]);
     // A second «Готово» keeps the first stamp.
-    expect(applyPrep(ready, 1, 'ready', '2026-09-20T10:03:00.000Z')[0].ready_at).toBe(
+    expect(applyPrep(ready, { id: 1 }, 'ready', '2026-09-20T10:03:00.000Z')[0].ready_at).toBe(
       '2026-09-20T10:02:00.000Z'
     );
-    expect(applyPrep(ready, 1, 'served', '2026-09-20T10:04:00.000Z').map((o) => o.id)).toEqual([2]);
-    expect(applyPrep(list, 99, 'served', '')).toEqual(list);
+    expect(
+      applyPrep(ready, { id: 1 }, 'served', '2026-09-20T10:04:00.000Z').map((o) => o.id)
+    ).toEqual([2]);
+    expect(applyPrep(list, { id: 99 }, 'served', '')).toEqual(list);
+  });
+
+  it('never moves the sale when the round with that id was tapped', () => {
+    const list = [order({ id: 7 }), order({ id: 7, kind: 'round' })];
+    const after = applyPrep(list, { id: 7, kind: 'round' }, 'served', '');
+    expect(after).toHaveLength(1);
+    expect(after[0].kind).toBeUndefined();
   });
 });
 

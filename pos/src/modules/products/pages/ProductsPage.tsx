@@ -2,7 +2,8 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { DEFAULT_TAG_COLOR, api, assetUrl, formatUah, type TagColorKey, uahInputToCents, useAuthStore, useVertical } from '@pos/platform';
 import { PriceTagsDialog } from '../components/PriceTagsDialog';
 import type {
@@ -17,7 +18,10 @@ import type {
 } from '@pos/platform';
 import { CompositionEditor } from '../components/CompositionEditor';
 import { ModifierGroupChips } from '../components/ModifierGroupChips';
+import { PackFields } from '../components/PackFields';
 import { componentOptions } from '../components/componentOptions';
+import { listTechCards, type TechCardRow } from '../data/techCardsApi';
+import { foodCostPercent, missingReason } from '../data/techCards';
 import type { ComponentOption } from '../components/componentOptions';
 import { AttributeFields, ProductPhotoField, useDragScroll } from '@pos/platform/ui';
 import { TagColorSwatches } from '../components/TagColorSwatches';
@@ -83,7 +87,28 @@ export function ProductsPage() {
   const [tagsOpen, setTagsOpen] = useState(false);
   const storeName = useAuthStore((s) => s.auth?.store.name ?? '');
   const [showCreate, setShowCreate] = useState(false);
-  const [editId, setEditId] = useState<number | null>(null);
+  const [editId, setEditIdState] = useState<number | null>(null);
+  // «Техкарти» links here with `?edit=<id>` — a screen that says which dish
+  // eats the profit has to be able to take the owner to it. The param and the
+  // local state are kept in step, so closing the card also clears the URL.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const setEditId = useCallback(
+    (id: number | null) => {
+      setEditIdState(id);
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (id == null) next.delete('edit');
+          else next.set('edit', String(id));
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
+  /** What each composite variant costs to assemble — shown beside its recipe. */
+  const [techCards, setTechCards] = useState<Map<number, TechCardRow>>(new Map());
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState<TagColorKey>(DEFAULT_TAG_COLOR);
   const [newTagCatalogBar, setNewTagCatalogBar] = useState(false);
@@ -98,6 +123,9 @@ export function ProductsPage() {
   const [qty, setQty] = useState('1');
   const [barcode, setBarcode] = useState('');
   const [sku, setSku] = useState('');
+  // How it arrives, not how it is counted (migration 054). Raw text: the pair
+  // is validated by the server, and half of it is refused there by name.
+  const [pack, setPack] = useState({ qty: '', label: '' });
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [composite, setComposite] = useState<ProductShape>('');
   // An ingredient or a semi-finished product: on the shelf, off the menu.
@@ -117,19 +145,35 @@ export function ProductsPage() {
   );
 
   async function reload() {
-    const [plist, tlist, glist] = await Promise.all([
+    const [plist, tlist, glist, cards] = await Promise.all([
       api.getProducts(),
       api.getTags(),
       api.listModifierGroups(),
+      // Empty for a shop with no composites, so this costs a clothing store
+      // one round trip that answers `[]` — and never fails the page: the
+      // catalog is the point here, the cost figure is a bonus beside it.
+      listTechCards().catch(() => [] as TechCardRow[]),
     ]);
     setProducts(plist);
     setTags(tlist);
     setGroups(glist);
+    setTechCards(new Map(cards.map((c) => [c.variant_id, c])));
   }
 
   useEffect(() => {
     void reload().catch(() => setError('Не вдалося завантажити'));
   }, []);
+
+  // `?edit=<id>` from «Техкарти». Applied once the catalog is in: opening a
+  // card for a product this owner cannot see would leave the page blank with
+  // the param still on it.
+  useEffect(() => {
+    const raw = searchParams.get('edit');
+    if (!raw) return;
+    const id = Number(raw);
+    if (!Number.isInteger(id) || !products.some((p) => p.id === id)) return;
+    setEditIdState(id);
+  }, [searchParams, products]);
 
   const visible = products.filter((p) => {
     if (!p.is_active) return false;
@@ -159,6 +203,8 @@ export function ProductsPage() {
             // A derived composite keeps no stock of its own; the server refuses
             // an opening quantity on one rather than silently dropping it.
             quantity: composite === 'derived' ? 0 : Number(qty) || 0,
+            pack_qty: pack.qty.trim() === '' ? null : Number(pack.qty),
+            pack_label: pack.label.trim() === '' ? null : pack.label,
             ...(composite ? { components } : {}),
           },
         ],
@@ -169,6 +215,7 @@ export function ProductsPage() {
       setName('');
       setBarcode('');
       setSku('');
+      setPack({ qty: '', label: '' });
       setImageUrl(null);
       setComposite('');
       setSellable(true);
@@ -475,6 +522,13 @@ export function ProductsPage() {
                   <GenerateBarcodeButton onGenerated={setBarcode} />
                 </div>
               </label>
+              <PackFields
+                className="sm:col-span-2"
+                qty={pack.qty}
+                label={pack.label}
+                unit={unit}
+                onChange={setPack}
+              />
               <button type="submit" className="sq-btn-primary sm:col-span-2 py-2.5 text-sm">
                 Зберегти
               </button>
@@ -493,6 +547,7 @@ export function ProductsPage() {
                     excludeProductId: product.id,
                     maxDepth,
                   })}
+                  techCards={techCards}
                   onCancel={() => setEditId(null)}
                   onSaved={async () => {
                     await reload();
@@ -898,11 +953,37 @@ const STATION_CHOICES: ReadonlyArray<[TagStation | null, string]> = [
   ['bar', 'Бар'],
 ];
 
+/**
+ * What this variant costs to assemble, beside the recipe it is summed from.
+ *
+ * The same rule as «Техкарти» and for the same reason: a recipe with one
+ * unpriced ingredient has no honest food cost, so it says «—» and why. It is
+ * the SAVED recipe's figure — edit the composition and it refreshes after the
+ * save, which is when the server recomputes it.
+ */
+function TechCardLine({ card }: { card?: TechCardRow }) {
+  if (!card) return null;
+  const reason = missingReason(card);
+  return (
+    <p className="text-xs text-sq-secondary">
+      Собівартість: <strong className="text-sq-text">{formatUah(card.cost_cents)}</strong>
+      {' · food cost: '}
+      {reason ? (
+        <span>— ({reason})</span>
+      ) : (
+        <strong className="text-sq-text">{foodCostPercent(card.food_cost_bps!)}</strong>
+      )}
+      {' · за останніми цінами закупівлі'}
+    </p>
+  );
+}
+
 function EditProductInline({
   product,
   flatTags,
   groups,
   partOptions,
+  techCards,
   onCancel,
   onSaved,
   onCloseAfterSave,
@@ -911,6 +992,8 @@ function EditProductInline({
   flatTags: PosTag[];
   groups: ModifierGroup[];
   partOptions: ComponentOption[];
+  /** What each composite variant costs to assemble, by variant id. */
+  techCards: Map<number, TechCardRow>;
   onCancel: () => void;
   onSaved: () => Promise<void>;
   onCloseAfterSave: () => void;
@@ -951,6 +1034,7 @@ function EditProductInline({
   const [newAttributes, setNewAttributes] = useState<AttributeValues>({});
   const [newUnit, setNewUnit] = useState(vertical.defaultUnit);
   const [newPrice, setNewPrice] = useState('690');
+  const [newPack, setNewPack] = useState({ qty: '', label: '' });
   const [newComponents, setNewComponents] = useState<ProductComponentInput[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -968,6 +1052,10 @@ function EditProductInline({
         compare_at_cents: v.compare_at_cents ?? null,
         sku: v.sku ?? '',
         barcode: v.barcode ?? '',
+        // Sent as a pair every time: the form owns both halves, and sending
+        // one alone is what the server refuses by name.
+        pack_qty: v.pack_qty ?? null,
+        pack_label: v.pack_label ?? '',
         ...(components === 'clear'
           ? { components: [] }
           : composite
@@ -1037,6 +1125,8 @@ function EditProductInline({
         unit: newUnit,
         price_cents: uahInputToCents(newPrice),
         quantity: 0,
+        pack_qty: newPack.qty.trim() === '' ? null : Number(newPack.qty),
+        pack_label: newPack.label.trim() === '' ? null : newPack.label,
         ...(composite ? { components: newComponents } : {}),
       });
       const active = updated.variants.filter((v) => v.is_active);
@@ -1055,6 +1145,7 @@ function EditProductInline({
       setNewAttributes({});
       setNewUnit(vertical.defaultUnit);
       setNewPrice('690');
+      setNewPack({ qty: '', label: '' });
       setNewComponents([]);
       await onSaved();
     } catch {
@@ -1207,11 +1298,14 @@ function EditProductInline({
               }}
             />
             {composite && (
-              <CompositionEditor
-                value={compositions[v.id] ?? []}
-                options={partOptions}
-                onChange={(next) => setCompositions((prev) => ({ ...prev, [v.id]: next }))}
-              />
+              <>
+                <CompositionEditor
+                  value={compositions[v.id] ?? []}
+                  options={partOptions}
+                  onChange={(next) => setCompositions((prev) => ({ ...prev, [v.id]: next }))}
+                />
+                <TechCardLine card={techCards.get(v.id)} />
+              </>
             )}
             <div className="grid sm:grid-cols-2 gap-2">
               <label className="block space-y-1">
@@ -1248,6 +1342,20 @@ function EditProductInline({
                 </div>
               </label>
             </div>
+            <PackFields
+              qty={v.pack_qty == null ? '' : String(v.pack_qty)}
+              label={v.pack_label ?? ''}
+              unit={v.unit}
+              onChange={({ qty, label }) => {
+                const next = [...variants];
+                next[idx] = {
+                  ...v,
+                  pack_qty: qty.trim() === '' ? null : Number(qty),
+                  pack_label: label,
+                };
+                setVariants(next);
+              }}
+            />
           </div>
         ))}
 
@@ -1265,6 +1373,12 @@ function EditProductInline({
               onChange={setNewComponents}
             />
           )}
+          <PackFields
+            qty={newPack.qty}
+            label={newPack.label}
+            unit={newUnit}
+            onChange={setNewPack}
+          />
           <div className="grid sm:grid-cols-[1fr_auto] gap-2 items-center">
             <input
               className={fieldClass}

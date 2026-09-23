@@ -5,6 +5,7 @@
 // src/pos/verticals/flowers.ts — the first vertical whose sell screen ships as
 // an online-only module (`vertical-flowers`).
 
+import { GENERIC_WRITEOFF_REASONS } from './types.js';
 import type { VerticalDefinition } from './types.js';
 
 /**
@@ -42,6 +43,11 @@ export const flowersVertical: VerticalDefinition = {
     },
   ],
   units: ['шт'],
+  // A wilted rose is «Брак» here: the shop throws away the thing it bought,
+  // not an ingredient it prepared. The café's three extra codes would be
+  // noise on a florist's screen — and the bench's own «Вітрина» write-off is
+  // narrower still (`damaged` / `gift` only), by its own list.
+  writeoffReasons: GENERIC_WRITEOFF_REASONS,
   labelOf: (attrs) =>
     [
       attrs.color == null ? '' : String(attrs.color),

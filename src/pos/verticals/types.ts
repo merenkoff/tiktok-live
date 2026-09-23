@@ -47,6 +47,30 @@ export interface AttributeSpec {
 /** Normalised attribute values of one variant: schema keys only. */
 export type AttributeValues = Record<string, string | number>;
 
+/** One answer to «чому списуємо»: the stored code and what the owner reads. */
+export interface WriteoffReason {
+  /** Goes into `pos_stock_documents.reason_code`; VARCHAR(32), no CHECK. */
+  code: string;
+  /** UI label, Ukrainian. */
+  label: string;
+}
+
+/**
+ * What a shop that sells things says when stock leaves without being sold.
+ *
+ * `other` is last and is the only one that demands a comment — the rule
+ * `createDocument` has enforced since migration 006. A vertical that needs
+ * its own words does **not** drop these; it says more precisely what
+ * happened, because each code is a separate line in the expense report and
+ * «Інше з коментарем» is exactly what that report cannot add up.
+ */
+export const GENERIC_WRITEOFF_REASONS: readonly WriteoffReason[] = [
+  { code: 'damaged', label: 'Брак' },
+  { code: 'lost', label: 'Втрата' },
+  { code: 'gift', label: 'Подарунок' },
+  { code: 'other', label: 'Інше' },
+];
+
 export interface VerticalDefinition {
   id: VerticalId;
   /** Shown to the owner and the super admin («Одяг», «Квіти»). */
@@ -54,6 +78,21 @@ export interface VerticalDefinition {
   attributes: AttributeSpec[];
   /** Allowed `pos_variants.unit` values; `units[0]` is the default. */
   units: readonly string[];
+  /**
+   * Why stock may be written off or corrected here, in the order the owner
+   * sees them. The same mechanism as `units` and `attributes`: the vertical
+   * owns the vocabulary, the screen only renders it.
+   *
+   * Checked by `createDocument`, not merely offered — a list that nothing
+   * enforces is not a list. It travels to the client in
+   * `VerticalPublicConfig`, so a till learns a new reason from the backend
+   * rather than from a module release.
+   *
+   * It does **not** govern the florist's showcase write-off: `writeOffShowcase`
+   * builds its document with its own INSERT and its own two-code list, a
+   * deliberate narrowing at the till (TechDocs/POS_FLORIST_BENCH.md).
+   */
+  writeoffReasons: readonly WriteoffReason[];
   /**
    * The variant label, from already-normalised attributes. Pure — it is called
    * on every variant write and by `relabelStoreVariants` when a store's
@@ -101,4 +140,10 @@ export interface VerticalPublicConfig {
   defaultUnit: string;
   /** How deep a recipe may nest — see `VerticalDefinition.maxCompositionDepth`. */
   maxCompositionDepth: number;
+  /**
+   * The write-off reasons this store may use. Optional on the client side
+   * (see `pos/src/modules/stock/...`), because a module can meet a backend
+   * older than this field and must fall back rather than draw no buttons.
+   */
+  writeoffReasons: WriteoffReason[];
 }

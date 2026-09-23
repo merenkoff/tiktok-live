@@ -31,6 +31,22 @@ export const cafeVertical: VerticalDefinition = {
     },
   ],
   units: ['шт', 'г', 'мл'],
+  // A kitchen throws food away for reasons a boutique has no word for, and
+  // each one is its own line in the expense report — which is precisely why
+  // they are not «Інше» with a comment. `spoiled` is what the shop bought and
+  // failed to sell in time (milk past its date); `damaged` stays for the
+  // bottle that was dropped. `tasting` is what the barista poured to calibrate
+  // the grinder, `staff` what the team ate — both are costs the owner wants to
+  // see apart from waste, because one is training and the other is a benefit.
+  writeoffReasons: [
+    { code: 'spoiled', label: 'Зіпсувалося' },
+    { code: 'damaged', label: 'Брак' },
+    { code: 'tasting', label: 'Проба' },
+    { code: 'staff', label: 'Харчування персоналу' },
+    { code: 'gift', label: 'Подарунок' },
+    { code: 'lost', label: 'Втрата' },
+    { code: 'other', label: 'Інше' },
+  ],
   labelOf: (attrs) => (attrs.size == null ? '' : String(attrs.size)),
   productKinds: ['simple', 'composite'],
   // dish → semi-finished → semi-finished → ingredients. Deeper than that is a

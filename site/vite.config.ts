@@ -1,5 +1,6 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import { guidesPlugin } from './scripts/guides-plugin.mjs';
 import { resolve } from 'path';
 
 // Production URLs are extensionless (Fastify maps /pos → dist/pos.html); make
@@ -11,14 +12,19 @@ const PAGE_TEMPLATES: Record<string, string> = {
   '/pos': '/pos.html',
   '/yaku-kasu-obraty': '/compare.html',
 };
+// /pos/<slug> pages share one template the same way Довідка does.
+const VERTICAL_PATH = /^\/pos\/[a-z0-9-]+$/;
 
 function prettyUrls(): Plugin {
   const rewrite = (url: string | undefined, prerendered: boolean): string | undefined => {
     if (!url) return undefined;
     const path = url.split('?')[0].replace(/\/+$/, '') || '/';
     if (PAGE_TEMPLATES[path]) return PAGE_TEMPLATES[path];
-    if (path === '/dovidka' || path.startsWith('/dovidka/')) {
+    if (path === '/dovidka' || path.startsWith('/dovidka/') || path === '/about') {
       return prerendered ? `${path}/index.html` : '/dovidka.html';
+    }
+    if (VERTICAL_PATH.test(path)) {
+      return prerendered ? `${path}/index.html` : '/vertical.html';
     }
     return undefined;
   };
@@ -41,7 +47,7 @@ function prettyUrls(): Plugin {
 }
 
 export default defineConfig(({ isSsrBuild }) => ({
-  plugins: [react(), prettyUrls()],
+  plugins: [react(), prettyUrls(), guidesPlugin()],
   server: {
     port: 3005,
     proxy: {
@@ -62,6 +68,7 @@ export default defineConfig(({ isSsrBuild }) => ({
             pos: resolve(import.meta.dirname, 'pos.html'),
             compare: resolve(import.meta.dirname, 'compare.html'),
             dovidka: resolve(import.meta.dirname, 'dovidka.html'),
+            vertical: resolve(import.meta.dirname, 'vertical.html'),
           },
     },
   },

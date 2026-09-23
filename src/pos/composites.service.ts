@@ -771,6 +771,81 @@ export function returnStockForSaleItem(
   return returnStockForLine(client, { ...params, target: 'sale', lineId: params.saleItemId });
 }
 
+/** One shelf a composite takes from, with what that shelf last cost. */
+export interface FlatLeaf {
+  leafVariantId: number;
+  /** Per ONE unit of the composite, in the leaf's own unit. */
+  quantityPerUnit: number;
+  /** Last purchase price of the leaf, per its own unit. */
+  costCents: number;
+}
+
+/**
+ * The composite's recipe as the shelves it actually takes from (migration
+ * 045): a derived composite inside it is folded in, one made in advance stays
+ * a leaf because its ingredients left with its production document.
+ */
+async function loadFlatComposition(
+  client: DbClient,
+  storeId: number,
+  variantId: number
+): Promise<FlatLeaf[]> {
+  const result = await client.query(
+    `SELECT f.leaf_variant_id, f.quantity_per_unit, v.cost_cents
+     FROM pos_product_components_flat f
+     JOIN pos_variants v ON v.id = f.leaf_variant_id
+     WHERE f.store_id = $1 AND f.variant_id = $2
+     ORDER BY f.leaf_variant_id ASC`,
+    [storeId, variantId]
+  );
+  return result.rows.map((row: Record<string, unknown>) => ({
+    leafVariantId: Number(row.leaf_variant_id),
+    quantityPerUnit: Number(row.quantity_per_unit),
+    costCents: Number(row.cost_cents),
+  }));
+}
+
+/**
+ * What one unit of a composite costs to assemble, and whether that number can
+ * be trusted.
+ *
+ * `hasUnpricedLeaf` is the whole point of returning a pair. A leaf whose
+ * `cost_cents` is 0 has never been received with a price, and zero there means
+ * «we do not know», not «free» — a dish whose sum quietly omits its meat is a
+ * food-cost figure the owner would make decisions on. The reader is expected
+ * to show «—» rather than a percentage in that case.
+ *
+ * `cost_cents` itself is the LAST purchase price, not a weighted average: it
+ * is written by posting a receipt and by production, and nothing here changes
+ * that.
+ */
+export function sumUnitCost(leaves: FlatLeaf[]): {
+  unitCostCents: number;
+  hasUnpricedLeaf: boolean;
+} {
+  let unitCostCents = 0;
+  let hasUnpricedLeaf = false;
+  for (const leaf of leaves) {
+    unitCostCents += leaf.quantityPerUnit * leaf.costCents;
+    if (leaf.costCents <= 0) hasUnpricedLeaf = true;
+  }
+  return { unitCostCents, hasUnpricedLeaf };
+}
+
+/**
+ * Read-only: what one unit of this composite costs today. The same sum
+ * `produceComposite` writes onto a production document — the production
+ * document stays the only WRITER of `cost_cents`, this only reads.
+ */
+export async function unitCostOf(
+  client: DbClient,
+  storeId: number,
+  variantId: number
+): Promise<{ unitCostCents: number; hasUnpricedLeaf: boolean; leafCount: number }> {
+  const leaves = await loadFlatComposition(client, storeId, variantId);
+  return { ...sumUnitCost(leaves), leafCount: leaves.length };
+}
+
 /**
  * Assemble `quantity` of a composite from its components.
  *
@@ -803,24 +878,17 @@ export async function produceComposite(
 
   // The expanded recipe: a derived semi-finished inside this one is taken
   // from its ingredients, one made in advance from its own shelf.
-  const composition = await client.query(
-    `SELECT f.leaf_variant_id, f.quantity_per_unit, v.cost_cents
-     FROM pos_product_components_flat f
-     JOIN pos_variants v ON v.id = f.leaf_variant_id
-     WHERE f.store_id = $1 AND f.variant_id = $2
-     ORDER BY f.leaf_variant_id ASC`,
-    [params.storeId, params.variantId]
-  );
-  if (composition.rows.length === 0) throw new EmptyCompositionError(params.variantId);
+  const leaves = await loadFlatComposition(client, params.storeId, params.variantId);
+  if (leaves.length === 0) throw new EmptyCompositionError(params.variantId);
 
-  let unitCostCents = 0;
-  for (const row of composition.rows) {
-    const perUnit = Number(row.quantity_per_unit);
-    unitCostCents += perUnit * Number(row.cost_cents);
+  // The same sum the owner reads on «Техкарти» — one definition, so a tech
+  // card and the document that assembles it can never disagree.
+  const { unitCostCents } = sumUnitCost(leaves);
+  for (const leaf of leaves) {
     await applyStockDelta(client, {
       storeId: params.storeId,
-      variantId: Number(row.leaf_variant_id),
-      delta: -perUnit * params.quantity,
+      variantId: leaf.leafVariantId,
+      delta: -leaf.quantityPerUnit * params.quantity,
       reason: 'writeoff',
       staffId: params.staffId,
       referenceType: params.referenceType,
@@ -844,6 +912,99 @@ export async function produceComposite(
   });
 
   return { unitCostCents };
+}
+
+/** One row of the owner's «Техкарти» list. */
+export interface TechCardRow {
+  variant_id: number;
+  product_id: number;
+  product_name: string;
+  label: string;
+  unit: string;
+  kind: 'composite';
+  stock_mode: 'own' | 'derived';
+  /** What it sells for. */
+  price_cents: number;
+  /** What it costs to assemble, at the last purchase prices of its leaves. */
+  cost_cents: number;
+  /** How many shelves it takes from, expanded. Zero = a recipe that is empty. */
+  leaf_count: number;
+  /** At least one leaf has never been received with a price — see below. */
+  has_unpriced_leaf: boolean;
+  /**
+   * Cost as a share of price, in basis points (2500 = 25 %). **Null** when it
+   * cannot be told honestly: no price, no recipe, or a leaf with no cost. Zero
+   * per cent on this screen would be a lie the owner would act on.
+   */
+  food_cost_bps: number | null;
+}
+
+/**
+ * Every composite the store sells, with what it costs to assemble.
+ *
+ * One query for the whole store rather than `unitCostOf` per variant: a café
+ * menu is a hundred cards, and a hundred round trips to draw one screen is a
+ * screen nobody opens twice. The arithmetic is the same — a LEFT JOIN so a
+ * composite with an EMPTY recipe still appears, because an empty recipe is
+ * exactly the kind of thing this screen exists to surface.
+ *
+ * Costs are the LAST purchase prices of the leaves, not a weighted average, so
+ * the screen has to say so out loud.
+ */
+export async function listTechCards(
+  client: DbClient,
+  storeId: number
+): Promise<TechCardRow[]> {
+  const result = await client.query(
+    `SELECT v.id            AS variant_id,
+            p.id            AS product_id,
+            p.name          AS product_name,
+            v.label,
+            v.unit,
+            p.stock_mode,
+            v.price_cents,
+            COALESCE(SUM(f.quantity_per_unit * lv.cost_cents), 0)::bigint AS cost_cents,
+            COUNT(f.leaf_variant_id)::int                                 AS leaf_count,
+            COALESCE(BOOL_OR(lv.cost_cents <= 0), FALSE)                  AS has_unpriced_leaf
+     FROM pos_variants v
+     JOIN pos_products p ON p.id = v.product_id
+     LEFT JOIN pos_product_components_flat f
+       ON f.store_id = v.store_id AND f.variant_id = v.id
+     LEFT JOIN pos_variants lv ON lv.id = f.leaf_variant_id
+     WHERE v.store_id = $1
+       AND v.is_active = TRUE
+       AND p.is_active = TRUE
+       AND p.kind = 'composite'
+     GROUP BY v.id, p.id, p.name, v.label, v.unit, p.stock_mode, v.price_cents
+     ORDER BY p.name ASC, v.label ASC, v.id ASC`,
+    [storeId]
+  );
+
+  return result.rows.map((row: Record<string, unknown>) => {
+    const price = Number(row.price_cents);
+    const cost = Number(row.cost_cents);
+    const leafCount = Number(row.leaf_count);
+    const hasUnpricedLeaf = Boolean(row.has_unpriced_leaf);
+    return {
+      variant_id: Number(row.variant_id),
+      product_id: Number(row.product_id),
+      product_name: String(row.product_name ?? ''),
+      label: String(row.label ?? ''),
+      unit: String(row.unit ?? ''),
+      kind: 'composite' as const,
+      stock_mode: row.stock_mode === 'derived' ? ('derived' as const) : ('own' as const),
+      price_cents: price,
+      cost_cents: cost,
+      leaf_count: leafCount,
+      has_unpriced_leaf: hasUnpricedLeaf,
+      // Null, never 0: «we cannot tell» and «this dish costs nothing» are
+      // different facts, and only one of them is ever true.
+      food_cost_bps:
+        price > 0 && leafCount > 0 && !hasUnpricedLeaf
+          ? Math.round((cost * 10000) / price)
+          : null,
+    };
+  });
 }
 
 /**

@@ -254,6 +254,25 @@ export async function createDocument(params: {
       throw new Error('note required when reason_code is other');
     }
   }
+  if (params.type === 'writeoff') {
+    // WHY the vertical and not a constant: a kitchen throws food away for
+    // reasons a boutique has no word for, and each is a separate line in the
+    // expense report. Checked rather than merely offered — a list nothing
+    // enforces is not a list, and a code typed by a client this backend does
+    // not know would sit in the report as a category of one.
+    //
+    // A correction (`adjustment`) is deliberately NOT checked here: its
+    // reasons are about COUNTING — found / short / typo — which is the same
+    // everywhere and says nothing about what happened to the goods.
+    const vertical = await loadStoreVertical(pool, params.storeId);
+    const allowed = vertical.writeoffReasons.map((r) => r.code);
+    if (!allowed.includes(params.reasonCode as string)) {
+      throw new Error(
+        `Причина списання «${params.reasonCode}» не підходить для «${vertical.title}». ` +
+          `Доступні: ${vertical.writeoffReasons.map((r) => r.label).join(', ')}`
+      );
+    }
+  }
   if (params.type !== 'receipt' && params.supplierId) {
     throw new Error('supplier_id only allowed on receipt');
   }

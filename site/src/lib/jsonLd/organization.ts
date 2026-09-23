@@ -14,3 +14,17 @@ export function organizationJsonLd() {
     sameAs: [...ORG.sameAs],
   };
 }
+
+/** /about — the page whose subject is the organisation itself. */
+export function aboutPageJsonLd() {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'AboutPage',
+    '@id': `${ORG.url}/about#page`,
+    url: `${ORG.url}/about`,
+    name: 'Про сервіс — LiveShop',
+    inLanguage: 'uk',
+    about: { '@id': `${ORG.url}/#organization` },
+    mainEntity: { '@id': `${ORG.url}/#organization` },
+  };
+}
