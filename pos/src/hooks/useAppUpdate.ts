@@ -22,6 +22,13 @@ interface AppUpdateState {
 }
 
 let registration: ServiceWorkerRegistration | null = null;
+/**
+ * Set by «Оновити» and read by the `controllerchange` listener: that event
+ * also fires on the FIRST install, when the fresh worker `clients.claim()`s
+ * the page — and a reload there wiped a PIN the waiter was halfway through
+ * typing. Only a reload the waiter asked for is a reload.
+ */
+let applying = false;
 
 export const useAppUpdate = create<AppUpdateState>((set) => ({
   ready: false,
@@ -29,6 +36,7 @@ export const useAppUpdate = create<AppUpdateState>((set) => ({
   apply: () => {
     const waiting = registration?.waiting;
     if (!waiting) return;
+    applying = true;
     // `controllerchange` below does the reload once the new worker has taken
     // the page over — never before, or the page would reload into the old one.
     waiting.postMessage('SKIP_WAITING');
@@ -59,7 +67,7 @@ export function registerTabletServiceWorker(): void {
 
   let refreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (refreshing) return;
+    if (!applying || refreshing) return;
     refreshing = true;
     window.location.reload();
   });
