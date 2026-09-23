@@ -77,10 +77,10 @@ export function ComparePage() {
                 Порівняти можливості
               </a>
               <a
-                href="/pos"
+                href="/pos/odyah"
                 className="border border-line hover:border-ink transition-colors text-sm font-semibold px-6 py-3.5 rounded-full"
               >
-                Спробувати {PRODUCT.pos.name}
+                Детальніше про касу для одягу
               </a>
             </div>
           </Reveal>

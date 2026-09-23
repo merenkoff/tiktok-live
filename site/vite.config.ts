@@ -11,6 +11,8 @@ const PAGE_TEMPLATES: Record<string, string> = {
   '/pos': '/pos.html',
   '/yaku-kasu-obraty': '/compare.html',
 };
+// /pos/<slug> pages share one template the same way Довідка does.
+const VERTICAL_PATH = /^\/pos\/[a-z0-9-]+$/;
 
 function prettyUrls(): Plugin {
   const rewrite = (url: string | undefined, prerendered: boolean): string | undefined => {
@@ -19,6 +21,9 @@ function prettyUrls(): Plugin {
     if (PAGE_TEMPLATES[path]) return PAGE_TEMPLATES[path];
     if (path === '/dovidka' || path.startsWith('/dovidka/')) {
       return prerendered ? `${path}/index.html` : '/dovidka.html';
+    }
+    if (VERTICAL_PATH.test(path)) {
+      return prerendered ? `${path}/index.html` : '/vertical.html';
     }
     return undefined;
   };
@@ -62,6 +67,7 @@ export default defineConfig(({ isSsrBuild }) => ({
             pos: resolve(import.meta.dirname, 'pos.html'),
             compare: resolve(import.meta.dirname, 'compare.html'),
             dovidka: resolve(import.meta.dirname, 'dovidka.html'),
+            vertical: resolve(import.meta.dirname, 'vertical.html'),
           },
     },
   },

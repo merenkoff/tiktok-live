@@ -65,5 +65,6 @@ for (const route of ROUTES) {
 await writeFile(join(dist, 'sitemap.xml'), buildSitemap());
 await writeFile(join(dist, 'llms.txt'), buildLlmsTxt(pages));
 await rm(join(dist, 'dovidka.html'), { force: true });
+await rm(join(dist, 'vertical.html'), { force: true });
 await rm(distSsr, { recursive: true, force: true });
 console.log(`[prerender] ${ROUTES.length} pages, sitemap.xml, llms.txt`);

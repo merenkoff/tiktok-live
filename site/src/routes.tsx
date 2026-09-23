@@ -7,8 +7,10 @@ import { PosPage, FAQ_ITEMS as POS_FAQ } from './pages/PosPage';
 import { ComparePage, FAQ_ITEMS as COMPARE_FAQ } from './pages/ComparePage';
 import { ArticlePage } from './pages/ArticlePage';
 import { DovidkaIndexPage } from './pages/DovidkaIndexPage';
+import { VerticalPage } from './pages/VerticalPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ARTICLES } from './content/dovidka';
+import { VERTICAL_PAGES } from './content/verticals';
 import type { PageHead } from './lib/seo';
 import { organizationJsonLd } from './lib/jsonLd/organization';
 import { posSoftwareJsonLd, liveSoftwareJsonLd } from './lib/jsonLd/softwareApplication';
@@ -42,6 +44,7 @@ export const STATIC_PAGES = [
 
 const org = organizationJsonLd();
 const DOVIDKA_CRUMB = { name: 'Довідка', path: '/dovidka' };
+const POS_CRUMB = { name: 'POS каса', path: '/pos' };
 
 export const ROUTES: SiteRoute[] = [
   {
@@ -50,7 +53,7 @@ export const ROUTES: SiteRoute[] = [
     out: 'index.html',
     Component: Home,
     jsonLd: [org],
-    updatedAt: '2026-09-11',
+    updatedAt: '2026-09-23',
     sitemap: true,
   },
   {
@@ -68,9 +71,30 @@ export const ROUTES: SiteRoute[] = [
     out: 'pos.html',
     Component: PosPage,
     jsonLd: [org, posSoftwareJsonLd(), buildFaqJsonLd(POS_FAQ)],
-    updatedAt: '2026-09-11',
+    updatedAt: '2026-09-23',
     sitemap: true,
   },
+  // One landing per vertical, prerendered from the shared template the way
+  // Довідка is. The SoftwareApplication schema stays on /pos — one product.
+  ...VERTICAL_PAGES.map(({ fact, content }): SiteRoute => ({
+    path: fact.path,
+    template: 'vertical.html',
+    out: `pos/${fact.slug}/index.html`,
+    Component: () => <VerticalPage page={{ fact, content }} />,
+    head: {
+      title: content.head.title,
+      description: content.head.description,
+      path: fact.path,
+      ogImage: '/og/pos.png',
+    },
+    jsonLd: [
+      org,
+      buildFaqJsonLd(content.faq),
+      breadcrumbJsonLd([POS_CRUMB, { name: fact.eyebrow, path: fact.path }]),
+    ],
+    updatedAt: content.updatedAt,
+    sitemap: true,
+  })),
   {
     path: '/yaku-kasu-obraty',
     template: 'compare.html',
@@ -79,9 +103,9 @@ export const ROUTES: SiteRoute[] = [
     jsonLd: [
       org,
       buildFaqJsonLd(COMPARE_FAQ),
-      breadcrumbJsonLd([{ name: 'POS каса', path: '/pos' }, { name: 'Яку касу обрати', path: '/yaku-kasu-obraty' }]),
+      breadcrumbJsonLd([POS_CRUMB, { name: 'Яку касу обрати', path: '/yaku-kasu-obraty' }]),
     ],
-    updatedAt: '2026-09-11',
+    updatedAt: '2026-09-23',
     sitemap: true,
   },
   {
@@ -90,9 +114,9 @@ export const ROUTES: SiteRoute[] = [
     out: 'dovidka/index.html',
     Component: DovidkaIndexPage,
     head: {
-      title: 'Довідка — каса, ПРРО і TikTok LIVE для магазину одягу | The Live Shop',
+      title: 'Довідка — каса, ПРРО і TikTok LIVE | The Live Shop',
       description:
-        'Короткі відповіді для власників магазинів одягу: фіскалізація ПРРО, офлайн-режим каси, зміни і Z-звіт, продажі в TikTok LIVE.',
+        'Короткі відповіді для власників магазинів, кав\'ярень і квіткових: фіскалізація ПРРО, офлайн-режим каси, зміни і Z-звіт, продажі в TikTok LIVE.',
       path: '/dovidka',
       ogImage: '/og/pos.png',
     },

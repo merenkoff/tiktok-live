@@ -6,6 +6,7 @@ export default {
     './pos.html',
     './compare.html',
     './dovidka.html',
+    './vertical.html',
     './src/**/*.{js,ts,jsx,tsx}',
   ],
   theme: {
@@ -23,6 +24,13 @@ export default {
         pos: {
           DEFAULT: '#006AFF',
           press: '#0058D6',
+        },
+        // Soft card backgrounds per vertical; buttons and links stay `pos`.
+        tint: {
+          clothing: '#EAF1FF',
+          flowers: '#FBE7EF',
+          cafe: '#F3E9DC',
+          restaurant: '#E6EEF5',
         },
       },
       fontFamily: {
