@@ -19,7 +19,7 @@ function prettyUrls(): Plugin {
     if (!url) return undefined;
     const path = url.split('?')[0].replace(/\/+$/, '') || '/';
     if (PAGE_TEMPLATES[path]) return PAGE_TEMPLATES[path];
-    if (path === '/dovidka' || path.startsWith('/dovidka/')) {
+    if (path === '/dovidka' || path.startsWith('/dovidka/') || path === '/about') {
       return prerendered ? `${path}/index.html` : '/dovidka.html';
     }
     if (VERTICAL_PATH.test(path)) {

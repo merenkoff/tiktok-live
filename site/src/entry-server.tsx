@@ -1,7 +1,7 @@
 // Built by `vite build --ssr` into dist-ssr/ and driven by scripts/prerender.mjs.
 import { StrictMode, createElement } from 'react';
 import { renderToString } from 'react-dom/server';
-import { ROUTES, STATIC_PAGES, type SiteRoute } from './routes';
+import { ROUTES, type SiteRoute } from './routes';
 import { renderHeadHtml } from './lib/seo';
 import {
   SITE_URL,
@@ -25,10 +25,7 @@ export function render(route: SiteRoute): { html: string; head: string } {
 }
 
 export function buildSitemap(): string {
-  const entries = [
-    ...ROUTES.filter((r) => r.sitemap).map((r) => ({ path: r.path, lastmod: r.updatedAt })),
-    ...STATIC_PAGES.map((p) => ({ path: p.path, lastmod: p.updatedAt })),
-  ];
+  const entries = ROUTES.filter((r) => r.sitemap).map((r) => ({ path: r.path, lastmod: r.updatedAt }));
   const urls = entries
     .map((e) => `  <url>\n    <loc>${SITE_URL}${e.path}</loc>\n    <lastmod>${e.lastmod}</lastmod>\n  </url>`)
     .join('\n');
@@ -89,7 +86,7 @@ export function buildLlmsTxt(pages: LlmsPage[]): string {
     line('/live', 'TikTok LIVE', PRODUCT.live.description),
     line('/yaku-kasu-obraty', 'Яку касу обрати для магазину одягу', 'чесне порівняння підходів до вибору POS-системи.'),
     line('/dovidka', 'Довідка', 'короткі відповіді про касу, ПРРО і TikTok LIVE.'),
-    ...STATIC_PAGES.map((p) => `- [${p.title}](${SITE_URL}${p.path}): ${p.description}`),
+    line('/about', 'Про сервіс', 'хто робить LiveShop, реквізити й умови.'),
     '',
     '## Довідка',
     '',
