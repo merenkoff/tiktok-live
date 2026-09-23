@@ -24,6 +24,8 @@ const dir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
+  // `public/` is the tablet PWA's manifest and icons — the web host's, never a remote's.
+  publicDir: false,
   css: moduleCss('tiktok-live'),
   define: {
     'process.env.NODE_ENV': '"production"',

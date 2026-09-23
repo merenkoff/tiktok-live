@@ -67,6 +67,8 @@ function importMapPlugin(): Plugin {
 
 export default defineConfig({
   plugins: [react(), importMapPlugin()],
+  // `public/` is the tablet PWA's manifest and icons — the web host's, never a remote's.
+  publicDir: false,
   resolve: {
     alias: {
       // Bundled locally, same as the default host config — only the state

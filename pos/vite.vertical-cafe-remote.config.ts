@@ -22,6 +22,8 @@ const dir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
+  // `public/` is the tablet PWA's manifest and icons — the web host's, never a remote's.
+  publicDir: false,
   // The host's cashier components this bundle renders inline — the modifier
   // sheet included, or its chips would come out unstyled at runtime (see
   // scripts/module-tailwind.mjs for the lesson).

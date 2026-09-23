@@ -69,6 +69,9 @@ export default defineConfig(({ mode, command }) => {
       },
     },
     clearScreen: false,
+    // `public/` holds the tablet PWA's manifest and icons — nothing the
+    // desktop shell serves, so keep them out of `dist-cashier`.
+    publicDir: false,
     envPrefix: ['VITE_', 'TAURI_ENV_*'],
     server: {
       port: 3003,

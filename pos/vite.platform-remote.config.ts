@@ -46,6 +46,8 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    // `public/` is the tablet PWA's manifest and icons — the web host's, never a remote's.
+    publicDir: false,
     define: {
       'process.env.NODE_ENV': '"production"',
       // This remote's own build version — see roadmap #6.

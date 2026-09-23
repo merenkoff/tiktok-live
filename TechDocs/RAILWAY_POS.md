@@ -87,6 +87,13 @@ node dist/pos/seed.js
 
 5. Generate domain або свій домен (каса).
 6. Додай цей HTTPS origin у `CORS_ORIGINS` на API → Redeploy API.
+7. Start command — `serve dist -l 3002` **без `-s`** (так у `pos/Dockerfile` і
+   `pos/railway.json`): `-s` ставить `** → /index.html` попереду правил
+   `dist/serve.json`, і `/tablet/*` планшета офіціанта ніколи не дійшов би
+   до `tablet.html`. SPA-fallback, редірект `/tablet → /tablet/` і кеш-заголовки
+   (`immutable` на `/assets/**`, `no-cache` на `tablet-sw.js` і html) — у
+   `pos/serve.json`, який `assemble-web-dist.mjs` копіює в `dist/`
+   ([POS_PWA.md](POS_PWA.md) §3). Планшет — той самий сервіс, `/tablet/`.
 
 ## 3. Чеклист
 

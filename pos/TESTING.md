@@ -51,7 +51,14 @@ backend helpers themselves are covered by the root suite in `src/__tests__/pos.m
 ## Mocking notes
 
 - **HTTP:** MSW handlers in `src/test/msw/handlers.ts` (unit) and `e2e/helpers.ts`
-  (Playwright `page.route('**/api/pos/**')`).
+  (Playwright `page.route('**/api/pos/**')`). The tablet PWA specs
+  (`e2e/tablet.spec.ts`) route on the **context** instead: once its service worker
+  controls the page, the page's fetches surface as worker requests, which only
+  `context.route` sees — and only with `PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS=1`,
+  which `npm run test:e2e` sets. `mockPosApi` takes a `Page` or a `BrowserContext`.
+- **Browsers:** a checkout whose Playwright is newer than the browsers on the machine
+  can run against any Chromium with `PW_CHROMIUM=/path/to/chrome` (also for
+  `npm run pwa:icons`); CI installs the matching one.
 - **API base:** `vitest.config.ts` forces `VITE_API_BASE=''` so `posApiBase()` returns the
   relative `/api/pos` that msw/node can intercept — `pos/.env` points at a local API and
   would otherwise leak into tests.

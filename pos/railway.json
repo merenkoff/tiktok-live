@@ -6,6 +6,6 @@
   },
   "deploy": {
     "numReplicas": 1,
-    "startCommand": "serve -s dist -l 3002"
+    "startCommand": "serve dist -l 3002"
   }
 }
