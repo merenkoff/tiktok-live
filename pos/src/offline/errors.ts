@@ -13,6 +13,19 @@ export class OfflineAuthError extends Error {
 }
 
 /**
+ * A write on a shell that reads offline but never queues (the tablet PWA,
+ * `enableOfflineReads`) while there is no connection. Nothing was written:
+ * no outbox row, no stock movement, no local receipt — the tablet is not a
+ * till, and a queued round would wake no kitchen (TechDocs/POS_PWA.md).
+ */
+export class OfflineWriteError extends Error {
+  constructor(message = 'Потрібна мережа — без звʼязку це не зберегти') {
+    super(message);
+    this.name = 'OfflineWriteError';
+  }
+}
+
+/**
  * A refund is a document that has to reference a real server-side sale (and,
  * once ПРРО lands, its fiscal number), so it cannot be queued offline. Only a
  * sale still waiting in the outbox can be cancelled without a connection.

@@ -87,7 +87,14 @@ export const POS_API_CLIENT_VERSION = 2;
 //     guests (К4h). The Tauri command stays the host's: a module that reached
 //     `invoke` itself would bundle a second copy of the Tauri API and step
 //     outside this contract entirely.
-export const PLATFORM_VERSION = 14;
+// 15 (2026-09-23): the tablet PWA (TechDocs/POS_PWA.md). `PosShell` gains a
+//     third value, `'tablet'` — a module that tests `shell === 'cashier'` to
+//     mean "the desktop till" is still right, one that tests `=== 'web'` to
+//     mean "not the till" is not. `enableOfflineReads` / `isOfflineReadsEnabled`
+//     / `offlineMode` join `isOfflinePosEnabled`: the tablet reads its mirror
+//     but never queues a write, and `OfflineWriteError` is what a write with no
+//     network throws there.
+export const PLATFORM_VERSION = 15;
 
 /**
  * Build version of this bundle — the host web/cashier build, or a module-remote

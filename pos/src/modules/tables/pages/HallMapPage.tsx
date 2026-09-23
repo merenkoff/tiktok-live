@@ -42,10 +42,10 @@ export function HallMapPage(): JSX.Element {
   const storeId = useAuthStore((s) => s.auth?.store.id ?? null);
   const { halls, bills, now, loading, error, stale, savedAt, refresh } = useHallMap({
     online,
-    // Only the till keeps a copy: the waiter's tablet is the web shell and has
-    // no offline runtime at all (§4.12), so a mirror written there could never
-    // be read back.
-    mirrored: shell === 'cashier',
+    // The till and the tablet PWA keep a copy; the web shell has no offline
+    // runtime at all (§4.12), so a mirror written there could never be read
+    // back.
+    mirrored: shell !== 'web',
     storeId,
   });
   const [hallId, setHallId] = useState<number | null>(null);

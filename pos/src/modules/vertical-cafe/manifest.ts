@@ -28,7 +28,7 @@ const KitchenPage = lazyWithRetry(() => import('./kitchen/KitchenPage'));
 export const verticalCafeModule: RemoteModuleDescriptor = {
   id: 'vertical-cafe',
   title: 'Кафе',
-  shells: ['web', 'cashier'],
+  shells: ['web', 'cashier', 'tablet'],
   alwaysEnabled: true,
   sales: { Catalog: CafeCatalog },
   routes: [{ path: '/kitchen/*', element: KitchenPage }],

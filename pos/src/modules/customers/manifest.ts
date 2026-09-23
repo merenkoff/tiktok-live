@@ -14,7 +14,7 @@ export const customersModule: ModuleDescriptor = {
   id: 'customers',
   title: 'Клієнти',
   defaultEnabled: true,
-  shells: ['web', 'cashier'],
+  shells: ['web', 'cashier', 'tablet'],
   routes: [
     { path: '/customers', element: CustomersPage, props: { cashierShell: true } },
     { path: 'customers', mount: 'admin', element: CustomersPage },

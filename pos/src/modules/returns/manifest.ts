@@ -20,7 +20,7 @@ export const returnsModule: ModuleDescriptor = {
   id: 'returns',
   title: 'Чеки та повернення',
   defaultEnabled: true,
-  shells: ['web', 'cashier'],
+  shells: ['web', 'cashier', 'tablet'],
   routes: [
     { path: '/sales', element: TillReceiptsPage },
     { path: 'sales', mount: 'admin', element: AdminSalesPage },

@@ -30,8 +30,8 @@ describe('fiscal-checkbox manifest', () => {
     expect(fiscalCheckboxModule.pending).toBeUndefined();
   });
 
-  it('runs in both shells', () => {
-    expect(fiscalCheckboxModule.shells).toEqual(['web', 'cashier']);
+  it('runs in every shell', () => {
+    expect(fiscalCheckboxModule.shells).toEqual(['web', 'cashier', 'tablet']);
   });
 
   it('names icons the host actually ships', () => {

@@ -44,7 +44,7 @@ export function LoginPage() {
   const loginPin = useAuthStore((s) => s.loginPin);
   const navigate = useNavigate();
   const shell = usePosShell();
-  const afterLogin = shell === 'cashier' ? '/register' : '/admin';
+  const afterLogin = shell === 'web' ? '/admin' : '/register';
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -80,7 +80,11 @@ export function LoginPage() {
           <p className="sq-section-label">Cloth POS</p>
           <h1 className="text-3xl font-bold text-sq-text mt-2">Вхід</h1>
           <p className="text-sq-secondary mt-2 text-sm">
-            {shell === 'cashier' ? 'Каса' : 'Каса та кабінет власника'}
+            {shell === 'cashier'
+              ? 'Каса'
+              : shell === 'tablet'
+                ? 'Планшет офіціанта'
+                : 'Каса та кабінет власника'}
           </p>
         </div>
 

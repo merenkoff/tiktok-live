@@ -5,6 +5,7 @@
 import type { ModuleId, NavCtx, NavItem, NavLocation } from './types';
 import type { AnyModuleDescriptor } from './registry';
 import { applyNavOverride, navItemKey, type NavOverrides } from './navOverrides';
+import { runsInShell } from './shells';
 
 /**
  * The nav entries a given shell/role/variant should see, in display order:
@@ -32,7 +33,7 @@ export function selectNavItems(
     .filter(
       (m) =>
         (('alwaysEnabled' in m && m.alwaysEnabled) || enabled.has(m.id as ModuleId)) &&
-        m.shells.includes(ctx.shell) &&
+        runsInShell(m, ctx.shell) &&
         (!m.ownerOnly || ctx.role === 'owner')
     )
     .flatMap((m) =>

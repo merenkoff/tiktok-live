@@ -5,7 +5,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeSaleDetail, makeSaleListItem } from '../test/utils';
 
-vi.mock('./enabled', () => ({ isOfflinePosEnabled: vi.fn(() => false) }));
+vi.mock('./enabled', () => ({
+  isOfflinePosEnabled: vi.fn(() => false),
+  isOfflineReadsEnabled: vi.fn(() => false),
+}));
+const statusState = { online: true };
+vi.mock('./status', () => ({ useOfflineStatus: { getState: () => statusState } }));
 vi.mock('./repository', () => ({
   getCatalog: vi.fn(),
   getTags: vi.fn(),
@@ -35,14 +40,29 @@ vi.mock('../services/api', () => ({
 
 const { api } = await import('../services/api');
 const repo = await import('./repository');
-const { isOfflinePosEnabled } = await import('./enabled');
+const { isOfflinePosEnabled, isOfflineReadsEnabled } = await import('./enabled');
 const { cashierApi, saleRowFromDetail } = await import('./cashierApi');
 
 const offline = vi.mocked(isOfflinePosEnabled);
+const reads = vi.mocked(isOfflineReadsEnabled);
+
+/** The desktop till: reads AND writes go to the local mirror. */
+function tillMode() {
+  offline.mockReturnValue(true);
+  reads.mockReturnValue(true);
+}
+
+/** The tablet PWA: reads go to the mirror, writes to the server or nowhere. */
+function tabletMode() {
+  offline.mockReturnValue(false);
+  reads.mockReturnValue(true);
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
   offline.mockReturnValue(false);
+  reads.mockReturnValue(false);
+  statusState.online = true;
 });
 
 describe('saleRowFromDetail', () => {
@@ -82,7 +102,7 @@ describe('cashierApi delegation', () => {
   });
 
   it('reads the catalog from the local mirror on the offline cashier', async () => {
-    offline.mockReturnValue(true);
+    tillMode();
     vi.mocked(repo.getCatalog).mockResolvedValue([]);
     await cashierApi.getCatalog({ q: 'x' });
 
@@ -95,13 +115,13 @@ describe('cashierApi delegation', () => {
     await cashierApi.refreshCatalog();
     expect(repo.refreshSnapshot).not.toHaveBeenCalled();
 
-    offline.mockReturnValue(true);
+    tillMode();
     await cashierApi.refreshCatalog();
     expect(repo.refreshSnapshot).toHaveBeenCalledTimes(1);
   });
 
   it("passes the stock count's include_unsellable flag through to the mirror", async () => {
-    offline.mockReturnValue(true);
+    tillMode();
     vi.mocked(repo.getCatalog).mockResolvedValue([]);
     await cashierApi.getCatalog({ barcode: '4820', include_unsellable: true });
 
@@ -164,7 +184,7 @@ describe('cashierApi delegation', () => {
   });
 
   it('routes refunds through the local queue on the offline cashier', async () => {
-    offline.mockReturnValue(true);
+    tillMode();
     const row = saleRowFromDetail(makeSaleDetail({ id: -1 }));
     vi.mocked(repo.refundSale).mockResolvedValue(row);
 
@@ -201,7 +221,7 @@ describe('cashierApi passthrough methods', () => {
   });
 
   it.each(cases)('%s goes to the local mirror on the offline cashier', async (name, call) => {
-    offline.mockReturnValue(true);
+    tillMode();
     vi.mocked(repo[name]).mockResolvedValue([] as never);
     await call();
 
@@ -214,14 +234,14 @@ describe('cashierApi passthrough methods', () => {
     await cashierApi.updateCustomer(7, { name: 'Аня' });
     expect(api.updateCustomer).toHaveBeenCalledWith(7, { name: 'Аня' });
 
-    offline.mockReturnValue(true);
+    tillMode();
     vi.mocked(repo.updateCustomer).mockResolvedValue({} as never);
     await cashierApi.updateCustomer(7, { name: 'Аня' });
     expect(repo.updateCustomer).toHaveBeenCalledWith(7, { name: 'Аня' });
   });
 
   it('lists sales from the local mirror on the offline cashier', async () => {
-    offline.mockReturnValue(true);
+    tillMode();
     vi.mocked(repo.listSales).mockResolvedValue([]);
     await cashierApi.listSales();
 
@@ -230,7 +250,7 @@ describe('cashierApi passthrough methods', () => {
   });
 
   it('reads a sale detail from the local mirror on the offline cashier', async () => {
-    offline.mockReturnValue(true);
+    tillMode();
     const row = saleRowFromDetail(makeSaleDetail());
     vi.mocked(repo.getSale).mockResolvedValue(null);
     await cashierApi.getSale(row);
@@ -286,7 +306,7 @@ describe('fiscal state passthrough', () => {
 
 describe('discardQueuedSale', () => {
   it('delegates to the repository on the cashier shell', async () => {
-    offline.mockReturnValue(true);
+    tillMode();
     await cashierApi.discardQueuedSale('uuid-1');
     expect(repo.discardQueuedSale).toHaveBeenCalledWith('uuid-1');
   });
@@ -295,5 +315,86 @@ describe('discardQueuedSale', () => {
     offline.mockReturnValue(false);
     await expect(cashierApi.discardQueuedSale('uuid-1')).rejects.toThrow(/каси/);
     expect(repo.discardQueuedSale).not.toHaveBeenCalled();
+  });
+
+  it('refuses on the tablet too — reads have a mirror, writes have no queue', async () => {
+    tabletMode();
+    await expect(cashierApi.discardQueuedSale('uuid-1')).rejects.toThrow(/каси/);
+    expect(repo.discardQueuedSale).not.toHaveBeenCalled();
+  });
+});
+
+describe('the tablet: reads from the mirror, writes to the server or nowhere', () => {
+  beforeEach(() => tabletMode());
+
+  it('reads the catalog, tags, customers and sales from the mirror', async () => {
+    vi.mocked(repo.getCatalog).mockResolvedValue([]);
+    vi.mocked(repo.getTags).mockResolvedValue([]);
+    vi.mocked(repo.listCustomers).mockResolvedValue([]);
+    vi.mocked(repo.listSales).mockResolvedValue([]);
+    await cashierApi.getCatalog({ q: 'x' });
+    await cashierApi.getTags();
+    await cashierApi.listCustomers('ан');
+    await cashierApi.listSales(5);
+    await cashierApi.refreshCatalog();
+
+    expect(repo.getCatalog).toHaveBeenCalledWith({ q: 'x' });
+    expect(repo.getTags).toHaveBeenCalled();
+    expect(repo.listCustomers).toHaveBeenCalledWith('ан');
+    expect(repo.listSales).toHaveBeenCalledWith(5);
+    expect(repo.refreshSnapshot).toHaveBeenCalled();
+    expect(api.getCatalog).not.toHaveBeenCalled();
+    expect(api.listSales).not.toHaveBeenCalled();
+  });
+
+  it('sends every write straight to the server while online', async () => {
+    vi.mocked(api.completeSale).mockResolvedValue(makeSaleDetail());
+    vi.mocked(api.createCustomer).mockResolvedValue({} as never);
+    vi.mocked(api.updateCustomer).mockResolvedValue({} as never);
+
+    await cashierApi.completeSale({ items: [], payments: [] }, { clientUuid: 'u-1' });
+    await cashierApi.createCustomer({ name: 'Аня', phone: '+380' });
+    await cashierApi.updateCustomer(7, { name: 'Аня' });
+
+    expect(api.completeSale).toHaveBeenCalledWith({ items: [], payments: [], client_uuid: 'u-1' });
+    expect(api.createCustomer).toHaveBeenCalledWith({ name: 'Аня', phone: '+380' });
+    expect(api.updateCustomer).toHaveBeenCalledWith(7, { name: 'Аня' });
+    expect(repo.completeSale).not.toHaveBeenCalled();
+    expect(repo.createCustomer).not.toHaveBeenCalled();
+    expect(repo.updateCustomer).not.toHaveBeenCalled();
+  });
+
+  it('refuses every write on the spot without a network — nothing is queued', async () => {
+    statusState.online = false;
+    const row = saleRowFromDetail(makeSaleDetail());
+
+    await expect(cashierApi.completeSale({ items: [], payments: [] })).rejects.toMatchObject({
+      name: 'OfflineWriteError',
+    });
+    await expect(cashierApi.createCustomer({ name: 'Аня', phone: '+380' })).rejects.toMatchObject({
+      name: 'OfflineWriteError',
+    });
+    await expect(cashierApi.updateCustomer(7, { name: 'Аня' })).rejects.toMatchObject({
+      name: 'OfflineWriteError',
+    });
+    await expect(cashierApi.refundSale(row, [])).rejects.toMatchObject({ name: 'OfflineWriteError' });
+
+    expect(api.completeSale).not.toHaveBeenCalled();
+    expect(api.createCustomer).not.toHaveBeenCalled();
+    expect(api.updateCustomer).not.toHaveBeenCalled();
+    expect(api.refundSale).not.toHaveBeenCalled();
+    expect(repo.completeSale).not.toHaveBeenCalled();
+    expect(repo.createCustomer).not.toHaveBeenCalled();
+    expect(repo.refundSale).not.toHaveBeenCalled();
+  });
+
+  it('never refuses a write on the web shell for a stale online flag', async () => {
+    // The web shell installs no connectivity listeners, so `online` there is
+    // whatever `navigator.onLine` said at load — not something to refuse on.
+    reads.mockReturnValue(false);
+    statusState.online = false;
+    vi.mocked(api.createCustomer).mockResolvedValue({} as never);
+    await cashierApi.createCustomer({ name: 'Аня', phone: '+380' });
+    expect(api.createCustomer).toHaveBeenCalled();
   });
 });

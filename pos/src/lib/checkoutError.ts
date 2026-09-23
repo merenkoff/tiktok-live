@@ -20,7 +20,7 @@
 // The Ukrainian text is in `.message`.
 
 import axios from 'axios';
-import { OfflineFiscalError, FiscalSaleUnknownError } from '../offline/errors';
+import { OfflineFiscalError, OfflineWriteError, FiscalSaleUnknownError } from '../offline/errors';
 
 export type CheckoutFailure =
   /** Pre-flight refused: no sale row, no receipt number burned, no stock moved. */
@@ -65,7 +65,7 @@ function bodyOf(error: unknown): FiscalFailBody | undefined {
 }
 
 export function classifyCheckoutError(error: unknown): CheckoutFailure {
-  if (error instanceof OfflineFiscalError) {
+  if (error instanceof OfflineFiscalError || error instanceof OfflineWriteError) {
     return { kind: 'offline_blocked', message: error.message };
   }
   if (error instanceof FiscalSaleUnknownError) {

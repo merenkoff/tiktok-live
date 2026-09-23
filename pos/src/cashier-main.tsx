@@ -6,11 +6,17 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { HashRouter } from 'react-router-dom';
 import { CashierApp } from './CashierApp';
-import { PosShellContext } from '@pos/platform';
-import { enableOfflinePos } from './offline/enabled';
+// The offline switch through the barrel, never `./offline/enabled`: that file
+// is compiled into the platform chunk, and a relative import from this entry
+// bundled a second copy whose flag nothing in the chunk read — the release
+// till's offline runtime never started (TechDocs/POS_PWA.md).
+import {
+  PosShellContext,
+  enableOfflinePos,
+  getAppliedRemotes,
+  registerOfflineModules,
+} from '@pos/platform';
 import { applyModuleRemotes, allModules } from './modules/registry';
-import { registerOfflineModules } from '@pos/platform';
-import { getAppliedRemotes } from '@pos/platform';
 import { createCacheFirstSync, startModuleRemoteUpdateChecks } from './modules/desktopRemotes';
 import { syncModuleRemote, moduleRemoteUrl, pruneModuleRemotes } from './lib/moduleRemotes';
 import { maybeStartTelemetryBeacon } from './modules/telemetryBeacon';

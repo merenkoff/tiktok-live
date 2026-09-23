@@ -2,7 +2,13 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-export { enableOfflinePos, isOfflinePosEnabled } from './enabled';
+export {
+  enableOfflinePos,
+  enableOfflineReads,
+  isOfflinePosEnabled,
+  isOfflineReadsEnabled,
+  offlineMode,
+} from './enabled';
 export { startOfflineRuntime, runSync } from './sync';
 export { cashierApi } from './cashierApi';
 export { useOfflineStatus } from './status';
@@ -17,6 +23,7 @@ export {
 export {
   OfflineAuthError,
   OfflineRefundError,
+  OfflineWriteError,
   OfflineFiscalError,
   FiscalSaleUnknownError,
 } from './errors';

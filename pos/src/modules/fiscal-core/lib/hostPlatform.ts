@@ -60,7 +60,7 @@ export function apiOrigin(): string {
 const hostShellHook = hasFn(host.usePosShell) ? host.usePosShell : null;
 
 /** `usePosShell`, degrading to the web shell on a host that has no such hook. */
-export function usePosShell(): 'web' | 'cashier' {
+export function usePosShell(): 'web' | 'cashier' | 'tablet' {
   return hostShellHook ? hostShellHook() : 'web';
 }
 

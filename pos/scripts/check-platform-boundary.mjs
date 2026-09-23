@@ -73,6 +73,10 @@ const STATE_OWNERS = [
   ['src/hooks/useAuth.ts', 'useAuthStore — the session every screen reads'],
   ['src/hooks/useCart.ts', 'useCartStore — the cart the sell screen rings up'],
   ['src/offline/status.ts', 'the offline-status store'],
+  [
+    'src/offline/enabled.ts',
+    'the offline-mode flag — the entry that set a second copy left the chunk reading `off`, so the release till never started its offline runtime',
+  ],
   ['src/shell.tsx', 'PosShellContext / usePosShell'],
   [
     'src/services/api.ts',

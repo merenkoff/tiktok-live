@@ -1,5 +1,5 @@
 {
-  "platformVersion": 14,
+  "platformVersion": 15,
   "exports": {
     "platform": [
       "DEFAULT_RECEIPT_PAPER_WIDTH",
@@ -10,6 +10,7 @@
       "NAV_ICONS",
       "OfflineAuthError",
       "OfflineRefundError",
+      "OfflineWriteError",
       "PLATFORM_VERSION",
       "POS_API_CLIENT_VERSION",
       "POS_APP_VERSION",
@@ -31,6 +32,8 @@
       "defaultCopies",
       "defaultModifierIds",
       "displayGtin",
+      "enableOfflinePos",
+      "enableOfflineReads",
       "enrichGtinFromSources",
       "expandCopies",
       "formatUah",
@@ -42,6 +45,7 @@
       "isNavIconName",
       "isNetworkError",
       "isOfflinePosEnabled",
+      "isOfflineReadsEnabled",
       "isTagColorKey",
       "isUnauthorized",
       "lineCaption",
@@ -49,6 +53,7 @@
       "loadLastStoreSlug",
       "needsModifierSheet",
       "normalizeModifierIds",
+      "offlineMode",
       "priceOfComponents",
       "printPrecheck",
       "printReceipt",

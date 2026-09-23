@@ -29,10 +29,10 @@ describe('tables manifest', () => {
     expect(tablesModule.alwaysEnabled).toBe(true);
   });
 
-  it('runs in both shells and is not owner-only', () => {
+  it('runs in every shell and is not owner-only', () => {
     // The waiter's tablet is the web shell, the counter is the cashier one,
     // and §4.7 says everyone sees every table.
-    expect(tablesModule.shells).toEqual(['web', 'cashier']);
+    expect(tablesModule.shells).toEqual(['web', 'cashier', 'tablet']);
     expect(tablesModule.ownerOnly).toBeUndefined();
   });
 

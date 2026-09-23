@@ -32,8 +32,8 @@ describe('vertical-cafe manifest', () => {
     expect(resolved).toMatchObject({ moduleId: 'vertical-cafe', source: 'vertical' });
   });
 
-  it('runs in both shells and is not owner-only', () => {
-    expect(verticalCafeModule.shells).toEqual(['web', 'cashier']);
+  it('runs in every shell and is not owner-only', () => {
+    expect(verticalCafeModule.shells).toEqual(['web', 'cashier', 'tablet']);
     expect(verticalCafeModule.ownerOnly).toBeUndefined();
   });
 

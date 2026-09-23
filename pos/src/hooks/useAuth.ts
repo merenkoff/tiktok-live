@@ -5,7 +5,7 @@
 import { create } from 'zustand';
 import { api, isNetworkError, isUnauthorized } from '../services/api';
 import type { AuthResponse, PosRole } from '../types';
-import { isOfflinePosEnabled } from '../offline/enabled';
+import { isOfflineReadsEnabled } from '../offline/enabled';
 import { OfflineAuthError } from '../offline/errors';
 import { getAppliedRemotes, sameRemoteMap } from '../modules/appliedRemotes';
 
@@ -54,7 +54,7 @@ async function afterOnlineLogin(
   kind: 'pin' | 'password',
   loginHint?: string | null
 ): Promise<void> {
-  if (!isOfflinePosEnabled()) return;
+  if (!isOfflineReadsEnabled()) return;
   persistStoreSlug(auth.store.slug);
   const offline = await import('../offline');
   await offline.saveStaffUnlock({ auth, secret, kind, loginHint });
@@ -104,7 +104,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       await afterOnlineLogin(auth, password, 'password', login);
       set({ auth, isAuthenticated: true, moduleRemotesStale: remotesChanged(auth) });
     } catch (error) {
-      if (isOfflinePosEnabled() && isNetworkError(error)) {
+      if (isOfflineReadsEnabled() && isNetworkError(error)) {
         await fallbackToLocal(tryLocal, error);
         return;
       }
@@ -127,7 +127,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       await afterOnlineLogin(auth, pin, 'pin');
       set({ auth, isAuthenticated: true, moduleRemotesStale: remotesChanged(auth) });
     } catch (error) {
-      if (isOfflinePosEnabled() && isNetworkError(error)) {
+      if (isOfflineReadsEnabled() && isNetworkError(error)) {
         await fallbackToLocal(tryLocal, error);
         return;
       }
@@ -148,7 +148,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     }
 
     const offlineToken = cached.offlineSession || cached.token.startsWith('offline:');
-    if (isOfflinePosEnabled() && offlineToken) {
+    if (isOfflineReadsEnabled() && offlineToken) {
       const { hasUnlockForAuth } = await import('../offline');
       const ok = await hasUnlockForAuth(cached);
       set({
@@ -168,7 +168,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         bootstrapped: true,
         moduleRemotesStale: remotesChanged(auth),
       });
-      if (isOfflinePosEnabled()) {
+      if (isOfflineReadsEnabled()) {
         const offline = await import('../offline');
         // The cached store flags are only written at login, so without this a
         // till that logged in this morning keeps queuing offline sales for a
