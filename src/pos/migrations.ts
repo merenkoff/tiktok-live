@@ -88,6 +88,8 @@ export const POS_MIGRATIONS = [
   '052_pos_tables_bills.sql',
   '053_pos_demo_restaurant.sql',
   '054_pos_variant_pack.sql',
+  // The fourth demo store (clothing), same stamp pattern as 039/048/053.
+  '055_pos_demo_clothing_store.sql',
 ] as const;
 
 export function readMigration(file: string): string {
