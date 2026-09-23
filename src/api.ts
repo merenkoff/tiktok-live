@@ -169,6 +169,21 @@ export async function createServer(): Promise<FastifyInstance> {
     return reply.type('text/css; charset=utf-8').send(css);
   });
 
+  // Vertical landings (/pos/odyah, /pos/kvity, …) — prerendered into
+  // dist/pos/<slug>/index.html the same way Довідка is. `/pos` itself stays the
+  // exact route above.
+  fastify.get<{ Params: { slug: string } }>('/pos/:slug', async (request, reply) => {
+    const { slug } = request.params;
+    if (!/^[a-z0-9-]{1,80}$/.test(slug)) return reply.callNotFound();
+    try {
+      const html = await readFile(join(siteDistDir, 'pos', slug, 'index.html'), 'utf-8');
+      return reply.type('text/html; charset=utf-8').send(html);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return reply.callNotFound();
+      throw error;
+    }
+  });
+
   // Довідка — prerendered by site/scripts/prerender.mjs into dist/dovidka/<slug>/index.html.
   fastify.get('/dovidka', async (_request, reply) => {
     const html = await readFile(join(siteDistDir, 'dovidka', 'index.html'), 'utf-8');

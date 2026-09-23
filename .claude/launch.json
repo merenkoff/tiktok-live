@@ -4,20 +4,44 @@
     {
       "name": "api",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 3000
     },
     {
       "name": "cafe-remote",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "pos", "run", "serve:vertical-cafe-remote"],
+      "runtimeArgs": [
+        "--prefix",
+        "pos",
+        "run",
+        "serve:vertical-cafe-remote"
+      ],
       "port": 5008
     },
     {
       "name": "pos-web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "pos", "run", "preview:local"],
+      "runtimeArgs": [
+        "--prefix",
+        "pos",
+        "run",
+        "preview:local"
+      ],
       "port": 3002
+    },
+    {
+      "name": "site-preview",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "site",
+        "run",
+        "preview"
+      ],
+      "port": 4173
     }
   ]
 }
