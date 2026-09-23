@@ -139,17 +139,11 @@ function prewarmRemote(manifestUrl, response) {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
-  // Network-only, but through the worker rather than by falling through: a
-  // request the handler ignores is issued by the page's own network stack,
-  // while one it answers with `fetch()` is issued by the worker. The bytes
-  // and the caching are the same either way; what differs is who can see the
-  // request — Playwright's context routes (the e2e suite's mock API) observe
-  // worker-issued fetches and miss the fall-through ones once the worker has
-  // claimed the page.
-  if (request.method !== 'GET' || isApiPath(url.pathname)) {
-    event.respondWith(fetch(request));
-    return;
-  }
+  // Not answered at all — the page's own network stack issues these. Not
+  // `respondWith(fetch(request))` either: a worker-issued POST with a body is
+  // one Playwright's context routes cannot answer, so the e2e mock API would
+  // never see a login (the CDN's GETs it relays are fine).
+  if (request.method !== 'GET' || isApiPath(url.pathname)) return;
 
   if (request.mode === 'navigate') {
     if (!url.pathname.startsWith(SCOPE_PATH)) return;
