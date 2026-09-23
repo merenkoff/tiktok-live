@@ -88,15 +88,27 @@ for (const [file, specifier] of Object.entries(VENDOR_SPECIFIER)) {
   placeHashed(src, vendorDest, 'vendor', specifier);
 }
 
-// --- @pos/platform: hash the entry, copy its sibling async chunks verbatim ---
+// --- @pos/platform: hash the entry, copy its sibling async chunks ---
+// A sibling that reaches back into the entry (`offline-*.js` does, for the
+// stores `useAuth`'s lazy `import('../offline')` shares with it) names it as
+// Rollup emitted it, `./platform.js`. Once the entry is renamed that import is
+// a 404 — which is what every login on the tablet, and every offline login on
+// the desktop, ran into. So the siblings are copied with the reference
+// rewritten to the hashed name.
 const platformDest = path.join(dist, 'assets/platform');
 rmSync(platformDest, { recursive: true, force: true });
 mkdirSync(platformDest, { recursive: true });
+const platformName = placeHashed(path.join(platformSrc, 'platform.js'), platformDest, 'platform', '@pos/platform');
 for (const entry of readdirSync(platformSrc)) {
   if (entry === 'platform.js') continue;
-  cpSync(path.join(platformSrc, entry), path.join(platformDest, entry));
+  const src = path.join(platformSrc, entry);
+  if (entry.endsWith('.js')) {
+    const text = readFileSync(src, 'utf-8').replaceAll('./platform.js', `./${platformName}`);
+    writeFileSync(path.join(platformDest, entry), text);
+  } else {
+    cpSync(src, path.join(platformDest, entry));
+  }
 }
-placeHashed(path.join(platformSrc, 'platform.js'), platformDest, 'platform', '@pos/platform');
 
 // --- inject the import map into dist/index.html AND dist/tablet.html ---
 const mapTag =
