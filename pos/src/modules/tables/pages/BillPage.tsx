@@ -2,12 +2,16 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-// The bill of one table (phase К4f, TechDocs/POS_TABLES.md §3.2).
+// The bill of one table (phases К4f, К4l — TechDocs/POS_TABLES.md §3.2).
 //
-// Read top to bottom the way the evening happened: the rounds already in the
-// kitchen's hands, oldest first, and under them the draft — what the waiter
-// has typed but not sent. The one thing this screen must never blur is which
-// of the two is money:
+// The table's workstation: the menu on one side, the bill on the other. A
+// tap on a tile puts the dish on the draft at once (§4.13), a tap on «На
+// кухню» sends it. On a wide screen the two sit side by side; on a narrow
+// one the menu takes the screen and the bill lives on a bar beneath it,
+// opening as a sheet — the till's own phone layout.
+//
+// The one thing this screen must never blur is which of its two sums is
+// money:
 //
 //   «До сплати» is what the rounds LOCKED when they fired. Real.
 //   «Чернетка»  is what the untyped half would come to TODAY. Not owed.
@@ -24,23 +28,26 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   DEFAULT_RECEIPT_PAPER_WIDTH,
-  formatUah,
   getMeta,
   printPrecheck,
   useAuthStore,
   useOfflineStatus,
   usePosShell,
 } from '@pos/platform';
-import type { ReceiptPaperWidth } from '@pos/platform';
-import { DishPicker } from '../components/DishPicker';
+import type { CatalogItem, ReceiptPaperWidth } from '@pos/platform';
+import { BillBar } from '../components/BillBar';
+import { BillPane } from '../components/BillPane';
+import { BillSheet } from '../components/BillSheet';
+import { MenuCatalog } from '../components/MenuCatalog';
 import { PaySheet } from '../components/PaySheet';
-import { billTotals, canCancelRound, firedLineCents, lineTitle, ROUND_STATUS } from '../lib/bill';
+import { countsByProduct, draftSummary, draftView } from '../lib/draft';
+import type { DraftLineView } from '../lib/draft';
 import { isSettled, payableLines } from '../lib/pay';
 import { buildPrecheck } from '../lib/precheck';
 import { useBill } from '../lib/useBill';
+import { useIsWide } from '../lib/useIsWide';
 import * as tablesApi from '../lib/tablesApi';
 import type { PayPart } from '../lib/tablesApi';
-import type { BillLine } from '../lib/types';
 
 function newUuid(): string {
   const c = globalThis.crypto as { randomUUID?: () => string } | undefined;
@@ -56,20 +63,40 @@ export function BillPage(): JSX.Element {
   const online = useOfflineStatus((s) => s.online);
   const shell = usePosShell();
   const storeId = useAuthStore((s) => s.auth?.store.id ?? null);
-  const { bill, loading, error, banner, busy, stale, savedAt, clearBanner, reload, run } = useBill(
+  const {
+    bill,
+    loading,
+    error,
+    banner,
+    busy,
+    pending,
+    epoch,
+    stale,
+    savedAt,
+    clearBanner,
+    reload,
+    addLine,
+    run,
+  } = useBill(
     id,
     // The till and the tablet PWA keep a copy so a blink of the Wi-Fi does not
     // take the bill off the screen mid-dinner; the web shell has no offline
     // runtime to read one back (§4.12).
     { online, mirrored: shell !== 'web', storeId }
   );
-  const [picking, setPicking] = useState(false);
+  const wide = useIsWide();
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [paying, setPaying] = useState(false);
   const [printStatus, setPrintStatus] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  const totals = useMemo(() => (bill ? billTotals(bill) : null), [bill]);
+  const draft = useMemo(() => (bill ? draftView(bill.draft, pending) : []), [bill, pending]);
+  const summary = useMemo(() => draftSummary(draft), [draft]);
   const owedLines = useMemo(() => (bill ? payableLines(bill) : []), [bill]);
+  // The count on each tile needs the catalog's own grouping, which lives in
+  // the menu; the menu hands its rows up through this and reads the counts back.
+  const [grouped, setGrouped] = useState<ReadonlyArray<readonly [number, readonly CatalogItem[]]>>([]);
+  const counts = useMemo(() => countsByProduct(draft, grouped), [draft, grouped]);
 
   // Offline with nothing remembered. With a mirror the bill is drawn below
   // instead — readable, marked as a memory, and with every write refused.
@@ -115,7 +142,7 @@ export function BillPage(): JSX.Element {
       const paid = await tablesApi.payBill(bill.id, parts);
       settled = isSettled(paid.bill);
       return paid.bill;
-    });
+    }, { stock: true });
     if (!ok) return;
     setPaying(false);
     if (settled) navigate('/tables');
@@ -127,8 +154,8 @@ export function BillPage(): JSX.Element {
    * The mark is the part that matters to everyone else — it is what the
    * table's tile shows, so the next waiter does not read the sum out twice —
    * so it is recorded first and never held up by paper. The waiter's tablet
-   * is the web shell and has no printer at all; there the mark IS the whole
-   * action, and К4h's Rust command simply never runs.
+   * has no printer at all; there the mark IS the whole action, and К4h's
+   * Rust command simply never runs.
    */
   const precheck = async (): Promise<void> => {
     setPrintStatus(null);
@@ -151,73 +178,65 @@ export function BillPage(): JSX.Element {
     }
   };
 
-  const line = (l: BillLine, fired: boolean): JSX.Element => (
-    <div
-      key={l.id}
-      className="flex items-start justify-between gap-3 py-2"
-      data-testid={`bill-line-${l.id}`}
-    >
-      <div className="min-w-0">
-        <p className="truncate">
-          <span className="tabular-nums">{l.quantity}×</span> {lineTitle(l, fired)}
-        </p>
-        {l.note && <p className="text-xs italic text-sq-muted">✎ {l.note}</p>}
-        {!fired && (
-          <div className="mt-1 flex items-center gap-2">
-            <button
-              type="button"
-              className="sq-btn-tile"
-              data-testid={`bill-less-${l.id}`}
-              disabled={busy || !online}
-              onClick={() =>
-                void run(() =>
-                  l.quantity > 1
-                    ? tablesApi.setQuantity(bill.id, l.id, l.quantity - 1)
-                    : tablesApi.removeLine(bill.id, l.id)
-                )
-              }
-            >
-              −
-            </button>
-            <button
-              type="button"
-              className="sq-btn-tile"
-              data-testid={`bill-more-${l.id}`}
-              disabled={busy || !online}
-              onClick={() => void run(() => tablesApi.setQuantity(bill.id, l.id, l.quantity + 1))}
-            >
-              +
-            </button>
-          </div>
-        )}
-      </div>
-      <span className="shrink-0 tabular-nums">
-        {fired
-          ? formatUah(firedLineCents(l))
-          : l.preview_unit_price_cents == null
-            ? '—'
-            : `≈ ${formatUah(l.preview_unit_price_cents * l.quantity)}`}
-      </span>
-    </div>
+  const fire = (): void => {
+    setSheetOpen(false);
+    void run(() => tablesApi.fireRound(bill.id, newUuid()), { stock: true });
+  };
+
+  const less = (row: DraftLineView): void => {
+    if (row.id == null) return;
+    const lineId = row.id;
+    void run(() =>
+      row.quantity > 1 ? tablesApi.setQuantity(bill.id, lineId, row.quantity - 1) : tablesApi.removeLine(bill.id, lineId)
+    );
+  };
+
+  const more = (row: DraftLineView): void => {
+    if (row.id == null) return;
+    const lineId = row.id;
+    void run(() => tablesApi.setQuantity(bill.id, lineId, row.quantity + 1));
+  };
+
+  const pane = (
+    <BillPane
+      bill={bill}
+      draft={draft}
+      summary={summary}
+      owedCents={bill.fired_total_cents}
+      busy={busy}
+      online={online}
+      hasPending={pending.length > 0}
+      canPay={owedLines.length > 0}
+      canPrecheck={owedLines.length > 0}
+      printStatus={printStatus}
+      onLess={less}
+      onMore={more}
+      onCancelRound={(roundId) => void run(() => tablesApi.cancelRound(bill.id, roundId), { stock: true })}
+      onFire={fire}
+      onPay={() => {
+        setSheetOpen(false);
+        setPaying(true);
+      }}
+      onPrecheck={() => void precheck()}
+    />
   );
 
   return (
     <div className="relative flex h-full flex-col" data-testid="bill-page">
-      <header className="flex items-baseline justify-between gap-2 border-b border-sq-divider p-3">
-        <div>
-          <p className="text-xl font-bold">Стіл {bill.table_name}</p>
-          <p className="text-xs text-sq-muted">
-            {bill.hall_name} · рахунок {bill.bill_no} · {bill.guests} гост. ·{' '}
-            {bill.opened_by_name}
+      <header className="flex shrink-0 items-baseline justify-between gap-2 border-b border-sq-divider px-3 py-2">
+        <div className="min-w-0">
+          <p className="truncate text-lg font-bold">Стіл {bill.table_name}</p>
+          <p className="truncate text-xs text-sq-muted">
+            {bill.hall_name} · рахунок {bill.bill_no} · {bill.guests} гост. · {bill.opened_by_name}
           </p>
         </div>
-        <button type="button" className="sq-link" onClick={() => navigate('/tables')}>
+        <button type="button" className="sq-link shrink-0" onClick={() => navigate('/tables')}>
           До зали
         </button>
       </header>
 
       {stale && (
-        <p className="m-3 rounded-lg bg-amber-500/15 p-2 text-sm" data-testid="bill-stale">
+        <p className="mx-3 mt-2 rounded-lg bg-amber-500/15 p-2 text-sm" data-testid="bill-stale">
           Немає звʼязку — рахунок з памʼяті каси
           {savedAt == null
             ? ''
@@ -229,7 +248,7 @@ export function BillPage(): JSX.Element {
       )}
 
       {banner && (
-        <p className="m-3 rounded-lg bg-rose-500/15 p-2 text-sm" data-testid="bill-banner">
+        <p className="mx-3 mt-2 rounded-lg bg-rose-500/15 p-2 text-sm" data-testid="bill-banner">
           {banner}{' '}
           <button type="button" className="sq-link" onClick={clearBanner}>
             Зрозуміло
@@ -237,133 +256,41 @@ export function BillPage(): JSX.Element {
         </p>
       )}
 
-      <div className="flex-1 overflow-auto p-3">
-        {bill.rounds.map((round) => (
-          <section
-            key={round.id}
-            className="sq-card mb-3 p-3"
-            data-testid={`bill-round-${round.id}`}
-            data-cancelled={round.cancelled_at ? 'yes' : 'no'}
-          >
-            <div className="flex items-baseline justify-between gap-2">
-              <p className="sq-section-label">
-                Раунд {round.seq} ·{' '}
-                {round.cancelled_at ? 'скасовано' : ROUND_STATUS[round.prep_status]}
-              </p>
-              <span className="tabular-nums">
-                {round.cancelled_at ? '—' : formatUah(round.total_cents)}
-              </span>
-            </div>
-            {round.items.map((l) => line(l, true))}
-            {canCancelRound(round) && (
-              <button
-                type="button"
-                className="sq-link mt-1"
-                data-testid={`bill-cancel-round-${round.id}`}
-                disabled={busy}
-                onClick={() => void run(() => tablesApi.cancelRound(bill.id, round.id))}
-              >
-                Скасувати раунд
-              </button>
-            )}
-          </section>
-        ))}
-
-        <section className="sq-card p-3" data-testid="bill-draft">
-          <div className="flex items-baseline justify-between gap-2">
-            <p className="sq-section-label">Чернетка</p>
-            <button
-              type="button"
-              className="sq-link"
-              data-testid="bill-add"
-              disabled={busy || !online}
-              onClick={() => setPicking(true)}
-            >
-              + Додати
-            </button>
-          </div>
-          {bill.draft.length === 0 ? (
-            <p className="py-2 text-sm text-sq-muted">Нічого не набрано</p>
-          ) : (
-            bill.draft.map((l) => line(l, false))
-          )}
-        </section>
+      <div className={`min-h-0 flex-1 ${wide ? 'grid grid-cols-[1fr_360px]' : 'flex flex-col'}`}>
+        <MenuCatalog
+          counts={counts}
+          online={online}
+          active={online && !paying && !sheetOpen}
+          canScan={shell === 'cashier'}
+          epoch={epoch}
+          onAdd={addLine}
+          onRows={setGrouped}
+        />
+        {wide && (
+          <aside className="flex min-h-0 flex-col border-l border-sq-divider bg-sq-bg">{pane}</aside>
+        )}
       </div>
 
-      <footer className="border-t border-sq-divider p-3">
-        <div className="flex items-baseline justify-between">
-          <span className="text-sm text-sq-muted">До сплати</span>
-          <span className="text-2xl font-bold tabular-nums" data-testid="bill-owed">
-            {formatUah(totals!.owed)}
-          </span>
-        </div>
-        {bill.draft.length > 0 && (
-          <div className="flex items-baseline justify-between text-sm text-sq-muted">
-            <span>Чернетка (ще не відправлено)</span>
-            <span className="tabular-nums" data-testid="bill-draft-total">
-              {totals!.draftExact ? '' : '≈ '}
-              {formatUah(totals!.draft)}
-            </span>
-          </div>
-        )}
-        <div className="mt-2 flex gap-2">
-          <button
-            type="button"
-            className="sq-btn-primary flex-1"
-            data-testid="bill-fire"
-            disabled={busy || !online || bill.draft.length === 0}
-            onClick={() => void run(() => tablesApi.fireRound(bill.id, newUuid()))}
-          >
-            На кухню
-          </button>
-          <button
-            type="button"
-            className="sq-btn-primary flex-1"
-            data-testid="bill-pay"
-            // The draft is the server's own rule, said here before it has to
-            // refuse: a plate the kitchen does not know about is not owed for.
-            disabled={busy || !online || owedLines.length === 0 || bill.draft.length > 0}
-            onClick={() => setPaying(true)}
-          >
-            Оплатити
-          </button>
-        </div>
-        <button
-          type="button"
-          className="sq-link mt-2"
-          data-testid="bill-precheck"
-          disabled={busy || !online || owedLines.length === 0}
-          onClick={() => void precheck()}
-        >
-          {bill.precheck_printed_at ? 'Передчек надруковано · ще раз' : 'Передчек'}
-        </button>
-        {printStatus && (
-          <p className="mt-1 text-xs text-sq-muted" data-testid="bill-print-status">
-            {printStatus}
-          </p>
-        )}
-      </footer>
+      {!wide && (
+        <BillBar
+          summary={summary}
+          owedCents={bill.fired_total_cents}
+          hasPending={pending.length > 0}
+          busy={busy}
+          online={online}
+          onOpen={() => setSheetOpen(true)}
+          onFire={fire}
+        />
+      )}
+
+      {!wide && sheetOpen && (
+        <BillSheet title={`Стіл ${bill.table_name} · рахунок ${bill.bill_no}`} onClose={() => setSheetOpen(false)}>
+          {pane}
+        </BillSheet>
+      )}
 
       {paying && (
         <PaySheet bill={bill} busy={busy} onClose={() => setPaying(false)} onPay={(p) => void pay(p)} />
-      )}
-
-      {picking && (
-        <DishPicker
-          busy={busy}
-          draftCount={bill.draft.length}
-          onClose={() => setPicking(false)}
-          onPick={({ item, modifiers, note }) => {
-            void run(() =>
-              tablesApi.addLine(bill.id, {
-                variant_id: item.variant_id,
-                quantity: 1,
-                modifiers,
-                note,
-              })
-            );
-          }}
-        />
       )}
     </div>
   );

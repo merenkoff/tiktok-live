@@ -35,7 +35,7 @@
     "build:vertical-cafe-remote": "vite build --config vite.vertical-cafe-remote.config.ts && node scripts/sign-remote.mjs vertical-cafe",
     "build:tables-remote": "vite build --config vite.tables-remote.config.ts && node scripts/sign-remote.mjs tables",
     "serve:tables-remote": "npx --yes serve -l 5009 --cors --no-clipboard dist-remotes/tables",
-    "check:tables-css-coverage": "node scripts/check-module-css-coverage.mjs src/modules/tables dist-remotes/tables/style.css",
+    "check:tables-css-coverage": "node scripts/check-module-css-coverage.mjs src/modules/tables dist-remotes/tables/style.css src/components/cashier/ModifierSheet.tsx src/components/cashier/ProductTile.tsx src/components/cashier/TagFolderTile.tsx src/components/cashier/CatalogTagBar.tsx src/components/cashier/ScanWedge.tsx",
     "serve:vertical-cafe-remote": "npx --yes serve -l 5008 --cors --no-clipboard dist-remotes/vertical-cafe",
     "check:vertical-cafe-css-coverage": "node scripts/check-module-css-coverage.mjs src/modules/vertical-cafe dist-remotes/vertical-cafe/style.css",
     "build:fiscal-checkbox-remote": "vite build --config vite.fiscal-checkbox-remote.config.ts && node scripts/sign-remote.mjs fiscal-checkbox",

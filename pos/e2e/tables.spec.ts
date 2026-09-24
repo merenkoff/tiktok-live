@@ -59,7 +59,44 @@ const HALLS = [
   },
 ];
 
+// A latte in two sizes with a required «Молоко»: the dish that cannot be one
+// tap, so the sheet's own tap budget (§6) is measurable too.
+const MILK = {
+  id: 3,
+  name: 'Молоко',
+  min_select: 1,
+  max_select: 1,
+  modifiers: [
+    { id: 31, name: 'звичайне', price_delta_cents: 0, is_default: true, component_variant_id: null, component_quantity: null },
+    { id: 32, name: 'вівсяне', price_delta_cents: 1500, is_default: false, component_variant_id: null, component_quantity: null },
+  ],
+};
+
+const LATTE = [5, 7].map((variantId, i) => ({
+  variant_id: variantId,
+  product_id: 1,
+  product_name: 'Латте',
+  attributes: { size: i === 0 ? 'M' : 'L' },
+  label: i === 0 ? 'M' : 'L',
+  unit: 'шт',
+  sku: null,
+  barcode: null,
+  price_cents: i === 0 ? 6500 : 8500,
+  compare_at_cents: null,
+  quantity: 20,
+  image_url: null,
+  kind: 'simple',
+  stock_mode: 'own',
+  sellable: true,
+  stop_listed: false,
+  stop_listed_on: null,
+  components: [],
+  tag_ids: [],
+  modifier_groups: [MILK],
+}));
+
 const MENU = [
+  ...LATTE,
   {
     variant_id: 6,
     product_id: 4,
@@ -250,12 +287,11 @@ test('one evening at table 5: seat, ring, fire, pay', async ({ page }) => {
   await page.getByTestId('table-tile-11').click();
   await expect(page.getByTestId('bill-page')).toContainText('Стіл 5');
 
-  await page.getByTestId('bill-add').click();
-  await page.getByTestId('dish-4').click();
-  // The picker stays open for the next dish and says what has been taken.
-  await expect(page.getByTestId('dish-close')).toContainText('Готово · 1');
-  await page.getByTestId('dish-close').click();
+  // The menu is on the screen beside the bill: a tap on the tile is the whole
+  // order, and the line is on the draft before the server has answered.
+  await page.getByTestId('menu-tile-4').click();
   await expect(page.getByTestId('bill-draft')).toContainText('Круасан');
+  await expect(page.getByTestId('bill-line-21')).toHaveAttribute('data-pending', 'no');
 
   // The two sums are named apart: nothing is owed until the round fires.
   await expect(page.getByTestId('bill-owed')).toContainText('0');
@@ -291,4 +327,61 @@ test('with the module CDN down there are no tables, and the till still sells', a
   // And the till sells exactly as it did before the restaurant existed.
   await page.goto('/register');
   await expect(page.getByPlaceholder('Пошук')).toBeVisible();
+});
+
+/**
+ * The speed budget of §6, counted rather than promised: every tap the waiter
+ * makes goes through `tap`, and the number at the end is the number in the
+ * table. «Стіл + три плитки + На кухню» is five; a latte with two changed
+ * answers is «⋯» + two chips + «Додати», four.
+ */
+function counter(page: Page) {
+  let taps = 0;
+  return {
+    tap: async (testId: string) => {
+      taps += 1;
+      await page.getByTestId(testId).click();
+    },
+    count: () => taps,
+  };
+}
+
+test('five taps: open the table and ring three simple dishes', async ({ page }) => {
+  await signInAsWaiter(page);
+  const sent = await mockTables(page);
+  await page.goto('/tables');
+  const { tap, count } = counter(page);
+
+  await tap('table-tile-11');
+  await expect(page.getByTestId('bill-page')).toContainText('Стіл 5');
+  await tap('menu-tile-4');
+  await tap('menu-tile-4');
+  await tap('menu-tile-4');
+  // Three taps, one line: the draft merges the way the server does.
+  await expect(page.getByTestId('bill-draft')).toContainText('Круасан');
+  await expect(page.getByTestId('bill-line-21')).toHaveAttribute('data-pending', 'no');
+  await tap('bill-fire');
+  await expect(page.getByTestId('bill-owed')).toContainText('55');
+
+  expect(count()).toBe(5);
+  expect(sent.filter((s) => s.path === '/items')).toHaveLength(3);
+  expect(sent.filter((s) => s.path === '/fire')).toHaveLength(1);
+});
+
+test('four taps: a latte with two changed answers', async ({ page }) => {
+  await signInAsWaiter(page);
+  const sent = await mockTables(page);
+  await page.goto('/tables');
+  await page.getByTestId('table-tile-11').click();
+  await expect(page.getByTestId('bill-page')).toContainText('Стіл 5');
+  const { tap, count } = counter(page);
+
+  await tap('menu-tile-1-more');
+  await tap('modifier-variant-7');
+  await tap('modifier-chip-32');
+  await tap('modifier-add');
+
+  expect(count()).toBe(4);
+  const added = sent.find((s) => s.path === '/items')?.body;
+  expect(added).toMatchObject({ variant_id: 7, quantity: 1, modifiers: [32] });
 });

@@ -42,6 +42,8 @@ interface Props {
    * over the stock-driven «немає»: the dish may well be in the case.
    */
   badge?: string;
+  /** Test id of the tile button; its «⋯» gets `<testId>-more`. */
+  testId?: string;
 }
 
 export function ProductTile({
@@ -55,6 +57,7 @@ export function ProductTile({
   count,
   onMore,
   badge,
+  testId,
 }: Props) {
   const [broken, setBroken] = useState(false);
   const src = !broken ? assetUrl(imageUrl) : null;
@@ -64,6 +67,7 @@ export function ProductTile({
       type="button"
       disabled={disabled}
       onClick={onClick}
+      data-testid={testId}
       className={`${onMore ? 'w-full h-full' : 'aspect-square'} rounded-sq overflow-hidden relative text-left bg-sq-empty hover:brightness-[0.97] transition-[filter] disabled:opacity-50 disabled:cursor-not-allowed ${
         count ? 'ring-2 ring-sq-blue' : ''
       }`}
@@ -130,7 +134,7 @@ export function ProductTile({
           onClick={onMore}
           aria-label={`Змінити: ${name}`}
           className="absolute top-1 right-1 w-11 h-11 grid place-items-center rounded-full bg-black/45 text-white text-xl leading-none shadow-sm hover:bg-black/60"
-          data-testid="tile-more"
+          data-testid={testId ? `${testId}-more` : 'tile-more'}
         >
           ⋯
         </button>

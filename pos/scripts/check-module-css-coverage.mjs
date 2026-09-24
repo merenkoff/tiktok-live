@@ -13,6 +13,11 @@
 //
 // Second arg may be a file or a directory (all *.css under it are concatenated).
 // Omitted → defaults to `dist/assets` (the host bundle, for the bundled path).
+// Any further args are extra source files the module renders inline — the host
+// UI components its vite config lists in `moduleCss(id, [...])`. Without them
+// here a component missing from that list would pass this gate and ship
+// unstyled: the script scans only the module's own directory otherwise.
+//   node scripts/check-module-css-coverage.mjs src/modules/tables dist-remotes/tables/style.css src/components/cashier/ProductTile.tsx
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
@@ -60,7 +65,7 @@ const css = [
   })()),
 ].join('\n');
 
-const sourceFiles = walk(moduleDir, ['.ts', '.tsx']);
+const sourceFiles = [...walk(moduleDir, ['.ts', '.tsx']), ...process.argv.slice(4)];
 const text = sourceFiles.map((f) => stripComments(readFileSync(f, 'utf-8'))).join('\n');
 
 const PREFIXES = [
