@@ -112,23 +112,30 @@ export function Nav({ location, variant, tillLink, counts }: Props) {
         const pending = n.indicator === 'pending';
 
         if (variant === 'bottom') {
-          // A Things tab bar: the glyph in a soft pill when selected, a label under it.
+          // The tab bar speaks the rail's language: glyph and label on one
+          // grey plate with the rail's 12 px corners, not a pill round the
+          // glyph alone — the whole entry reads as selected.
           return (
             <Link
               key={n.to}
               to={n.to}
               title={pending ? `${n.label} — модуль ще не завантажено` : undefined}
-              className={`flex-1 flex flex-col items-center justify-center gap-1 ${pending ? 'opacity-50' : ''}`}
+              aria-current={active ? 'page' : undefined}
+              className={`flex-1 min-w-0 flex items-stretch justify-center px-0.5 py-1.5 ${pending ? 'opacity-50' : ''}`}
             >
               <span
-                className={`w-14 h-8 rounded-full grid place-items-center transition-colors ${
-                  active ? 'bg-sq-selected' : ''
+                className={`w-full max-w-[88px] rounded-xl flex flex-col items-center justify-center gap-1 px-1 py-1 transition-colors ${
+                  active ? 'bg-sq-selected' : 'active:bg-sq-selected/50'
                 }`}
               >
                 {Icon && <Icon size={24} />}
-              </span>
-              <span className={`text-[11px] font-semibold leading-none ${active ? 'text-sq-text' : 'text-sq-secondary'}`}>
-                {n.label}
+                <span
+                  className={`max-w-full text-center text-[11px] font-semibold leading-[1.15] hyphens-auto break-words ${
+                    active ? 'text-sq-text' : 'text-sq-secondary'
+                  }`}
+                >
+                  {n.label}
+                </span>
               </span>
             </Link>
           );

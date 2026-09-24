@@ -32,6 +32,10 @@ export type { ModifierSheetChoice } from '../components/cashier/ModifierSheet';
 // own for this — see `scripts/module-tailwind.mjs`.
 export { PriceTagsPrintable } from '../components/PriceTagsPrintable';
 export type { TagPaperWidth } from '../components/PriceTagsPrintable';
+// The owner screen's frame in Things' voice — title with its colour glyph, blue
+// section heads, the segmented control — so a module's page reads like the host's.
+export { PageHeader, SectionHead, Segmented } from '../components/ui/Page';
+export type { PageHeaderProps, SectionHeadProps, SegmentedProps } from '../components/ui/Page';
 // The glyph set (design/icons, drawn in the style of Things): colour glyphs on a
 // 24 px grid with their own hue, UI glyphs on a 20 px grid (plus 16 px drawings
 // for the small ones) in currentColor. Here rather than in `@pos/platform`
