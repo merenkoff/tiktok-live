@@ -1,6 +1,6 @@
 import { lazy as e } from "react";
 //#region src/platform/version.ts
-var t = "2.2.0";
+var t = "2.4.0";
 //#endregion
 //#region src/modules/lazyWithRetry.ts
 async function n(e, { retries: t = 2, backoffMs: n = 400 } = {}) {
@@ -18,10 +18,14 @@ function r(t, r) {
 }
 //#endregion
 //#region src/modules/fiscal-checkbox/manifest.ts
-var i = r(() => import("./CheckboxTillPage-ar3dxCz2.js").then((e) => ({ default: e.CheckboxTillPage }))), a = r(() => import("./CheckboxAdminPage-Bg-ffP4j.js").then((e) => ({ default: e.CheckboxAdminPage }))), o = {
+var i = r(() => import("./CheckboxTillPage-D4ljLpwn.js").then((e) => ({ default: e.CheckboxTillPage }))), a = r(() => import("./CheckboxAdminPage-CqEAUo6I.js").then((e) => ({ default: e.CheckboxAdminPage }))), o = {
 	id: "fiscal-checkbox",
 	title: "Фіскалізація (Checkbox)",
-	shells: ["web", "cashier"],
+	shells: [
+		"web",
+		"cashier",
+		"tablet"
+	],
 	alwaysEnabled: !0,
 	routes: [{
 		path: "/fiscal/*",
@@ -34,7 +38,7 @@ var i = r(() => import("./CheckboxTillPage-ar3dxCz2.js").then((e) => ({ default:
 	nav: [{
 		to: "/fiscal",
 		label: "Зміна",
-		icon: "Receipt",
+		icon: "ShieldCheck",
 		location: "cashier-primary",
 		order: 90,
 		match: "/fiscal"
