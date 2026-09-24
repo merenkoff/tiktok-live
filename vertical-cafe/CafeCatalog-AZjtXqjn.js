@@ -59,18 +59,19 @@ function C(e) {
 }
 //#endregion
 //#region src/components/cashier/ProductTile.tsx
-function w({ name: e, subtitle: t, priceCents: n, imageUrl: r, stock: i, onClick: a, disabled: o, count: c, onMore: f, badge: p }) {
-	let [m, h] = s(!1), g = m ? null : d(r), _ = /* @__PURE__ */ u("button", {
+function w({ name: e, subtitle: t, priceCents: n, imageUrl: r, stock: i, onClick: a, disabled: o, count: c, onMore: f, badge: p, testId: m }) {
+	let [h, g] = s(!1), _ = h ? null : d(r), v = /* @__PURE__ */ u("button", {
 		type: "button",
 		disabled: o,
 		onClick: a,
+		"data-testid": m,
 		className: `${f ? "w-full h-full" : "aspect-square"} rounded-sq overflow-hidden relative text-left bg-sq-empty hover:brightness-[0.97] transition-[filter] disabled:opacity-50 disabled:cursor-not-allowed ${c ? "ring-2 ring-sq-blue" : ""}`,
 		children: [
-			g ? /* @__PURE__ */ l("img", {
-				src: g,
+			_ ? /* @__PURE__ */ l("img", {
+				src: _,
 				alt: "",
 				className: "absolute inset-0 w-full h-full object-cover pointer-events-none",
-				onError: () => h(!0)
+				onError: () => g(!0)
 			}) : /* @__PURE__ */ l("div", {
 				className: "absolute inset-0 grid place-items-center text-sq-secondary text-xs px-2 font-medium pointer-events-none",
 				children: t || " "
@@ -103,15 +104,15 @@ function w({ name: e, subtitle: t, priceCents: n, imageUrl: r, stock: i, onClick
 	});
 	return f ? /* @__PURE__ */ u("div", {
 		className: "relative aspect-square",
-		children: [_, !o && /* @__PURE__ */ l("button", {
+		children: [v, !o && /* @__PURE__ */ l("button", {
 			type: "button",
 			onClick: f,
 			"aria-label": `Змінити: ${e}`,
 			className: "absolute top-1 right-1 w-11 h-11 grid place-items-center rounded-full bg-black/45 text-white text-xl leading-none shadow-sm hover:bg-black/60",
-			"data-testid": "tile-more",
+			"data-testid": m ? `${m}-more` : "tile-more",
 			children: "⋯"
 		})]
-	}) : _;
+	}) : v;
 }
 //#endregion
 //#region src/lib/tagColors.ts
@@ -264,25 +265,25 @@ function I(e) {
 }
 //#endregion
 //#region src/components/cashier/ModifierSheet.tsx
-function L({ productName: e, variants: t, variantLabel: n = "Варіант", initialVariantId: r, initialModifierIds: i, initialNote: o, onAdd: d, onClose: f }) {
-	let [p, m] = s(() => r ?? (t.length === 1 ? t[0].variant_id : null)), [h, g] = s(() => i ?? []), [_, v] = s(o ?? ""), y = S(), b = t.find((e) => e.variant_id === p) ?? null, x = I(t), w = F(x, h), T = b ? b.price_cents + w.deltaCents : null, E = b == null ? `Оберіть «${n}»` : w.error ?? (T != null && T < 0 ? "Ціна не може бути відʼємною" : null), D = E == null && b != null;
+function L({ productName: e, variants: t, variantLabel: n = "Варіант", initialVariantId: r, initialModifierIds: i, initialNote: o, submitLabel: d = "Додати в чек", onAdd: f, onClose: p }) {
+	let [m, h] = s(() => r ?? (t.length === 1 ? t[0].variant_id : null)), [g, _] = s(() => i ?? []), [v, y] = s(o ?? ""), b = S(), x = t.find((e) => e.variant_id === m) ?? null, w = I(t), T = F(w, g), E = x ? x.price_cents + T.deltaCents : null, D = x == null ? `Оберіть «${n}»` : T.error ?? (E != null && E < 0 ? "Ціна не може бути відʼємною" : null), O = D == null && x != null;
 	a(() => {
 		let e = (e) => {
-			e.key === "Escape" && f();
+			e.key === "Escape" && p();
 		};
 		return window.addEventListener("keydown", e), () => window.removeEventListener("keydown", e);
-	}, [f]);
-	function O(e, t) {
+	}, [p]);
+	function k(e, t) {
 		return t.filter((t) => e.modifiers.some((e) => e.id === t)).length;
 	}
-	function k(e, t) {
-		g((n) => n.includes(t.id) ? n.filter((e) => e !== t.id) : e.max_select === 1 ? [...n.filter((t) => !e.modifiers.some((e) => e.id === t)), t.id] : O(e, n) >= e.max_select ? n : [...n, t.id]);
+	function A(e, t) {
+		_((n) => n.includes(t.id) ? n.filter((e) => e !== t.id) : e.max_select === 1 ? [...n.filter((t) => !e.modifiers.some((e) => e.id === t)), t.id] : k(e, n) >= e.max_select ? n : [...n, t.id]);
 	}
-	function A() {
-		D && b && d({
-			item: b,
-			modifiers: w.snapshot.map((e) => e.id),
-			note: N(_)
+	function j() {
+		O && x && f({
+			item: x,
+			modifiers: T.snapshot.map((e) => e.id),
+			note: N(v)
 		});
 	}
 	return /* @__PURE__ */ u("div", {
@@ -292,7 +293,7 @@ function L({ productName: e, variants: t, variantLabel: n = "Варіант", in
 			type: "button",
 			"aria-label": "Закрити",
 			className: "absolute inset-0 bg-black/30",
-			onClick: f
+			onClick: p
 		}), /* @__PURE__ */ u("div", {
 			role: "dialog",
 			"aria-label": e,
@@ -305,20 +306,20 @@ function L({ productName: e, variants: t, variantLabel: n = "Варіант", in
 						children: [/* @__PURE__ */ l("h3", {
 							className: "font-semibold text-sq-text truncate",
 							children: e
-						}), b && /* @__PURE__ */ l("p", {
+						}), x && /* @__PURE__ */ l("p", {
 							className: "text-xs text-sq-secondary truncate",
-							children: [b.label, C(b.price_cents)].filter(Boolean).join(" · ")
+							children: [x.label, C(x.price_cents)].filter(Boolean).join(" · ")
 						})]
 					}), /* @__PURE__ */ l("button", {
 						type: "button",
-						onClick: f,
+						onClick: p,
 						className: "min-h-11 min-w-11 text-sm text-sq-secondary hover:text-sq-text shrink-0",
 						"data-testid": "modifier-close",
 						children: "Закрити"
 					})]
 				}),
 				/* @__PURE__ */ u("div", {
-					ref: y,
+					ref: b,
 					className: "flex-1 overflow-auto select-none px-4 py-3 space-y-4",
 					children: [t.length > 1 && /* @__PURE__ */ u("div", {
 						"data-testid": "modifier-variants",
@@ -328,20 +329,20 @@ function L({ productName: e, variants: t, variantLabel: n = "Варіант", in
 						}), /* @__PURE__ */ l("div", {
 							className: "flex flex-wrap gap-2",
 							children: t.map((e) => {
-								let t = e.variant_id === p, n = e.quantity <= 0;
+								let t = e.variant_id === m, n = e.quantity <= 0;
 								return /* @__PURE__ */ u("button", {
 									type: "button",
 									disabled: n,
 									"aria-pressed": t,
-									onClick: () => m(e.variant_id),
+									onClick: () => h(e.variant_id),
 									className: z(t, n),
 									"data-testid": `modifier-variant-${e.variant_id}`,
 									children: [e.label || "Стандарт", n ? " · немає" : ""]
 								}, e.variant_id);
 							})
 						})]
-					}), x.map((e) => {
-						let t = O(e, h), n = e.max_select > 1 && t >= e.max_select, r = e.min_select >= 1 ? e.max_select > 1 ? `обовʼязково · до ${e.max_select}` : "обовʼязково" : e.max_select > 1 ? n ? `не більше ${e.max_select}` : `до ${e.max_select}` : null;
+					}), w.map((e) => {
+						let t = k(e, g), n = e.max_select > 1 && t >= e.max_select, r = e.min_select >= 1 ? e.max_select > 1 ? `обовʼязково · до ${e.max_select}` : "обовʼязково" : e.max_select > 1 ? n ? `не більше ${e.max_select}` : `до ${e.max_select}` : null;
 						return /* @__PURE__ */ u("div", {
 							"data-testid": `modifier-group-${e.id}`,
 							children: [/* @__PURE__ */ l(R, {
@@ -350,12 +351,12 @@ function L({ productName: e, variants: t, variantLabel: n = "Варіант", in
 							}), /* @__PURE__ */ l("div", {
 								className: "flex flex-wrap gap-2",
 								children: e.modifiers.map((t) => {
-									let r = h.includes(t.id), i = !r && n;
+									let r = g.includes(t.id), i = !r && n;
 									return /* @__PURE__ */ u("button", {
 										type: "button",
 										"aria-pressed": r,
 										"aria-disabled": i || void 0,
-										onClick: () => k(e, t),
+										onClick: () => A(e, t),
 										className: z(r, i),
 										"data-testid": `modifier-chip-${t.id}`,
 										children: [t.name, B(t.price_delta_cents)]
@@ -370,30 +371,30 @@ function L({ productName: e, variants: t, variantLabel: n = "Варіант", in
 					children: [
 						/* @__PURE__ */ l("input", {
 							className: "pos-field w-full",
-							value: _,
+							value: v,
 							maxLength: 120,
 							placeholder: "Коментар для кухні",
 							enterKeyHint: "done",
-							onChange: (e) => v(e.target.value),
+							onChange: (e) => y(e.target.value),
 							onKeyDown: (e) => {
-								e.key === "Enter" && (e.preventDefault(), A());
+								e.key === "Enter" && (e.preventDefault(), j());
 							},
 							"data-testid": "modifier-note"
 						}),
-						E && /* @__PURE__ */ l("p", {
+						D && /* @__PURE__ */ l("p", {
 							className: "text-xs text-red-600",
 							"data-testid": "modifier-error",
-							children: E
+							children: D
 						}),
 						/* @__PURE__ */ u("button", {
 							type: "button",
 							className: "pos-btn-primary w-full min-h-12",
-							disabled: !D,
-							onClick: A,
+							disabled: !O,
+							onClick: j,
 							"data-testid": "modifier-add",
-							children: ["Додати в чек", T != null && /* @__PURE__ */ u(c, { children: [" · ", /* @__PURE__ */ l("span", {
+							children: [d, E != null && /* @__PURE__ */ u(c, { children: [" · ", /* @__PURE__ */ l("span", {
 								"data-testid": "modifier-price",
-								children: C(T)
+								children: C(E)
 							})] })]
 						})
 					]

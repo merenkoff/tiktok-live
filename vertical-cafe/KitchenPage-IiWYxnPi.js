@@ -298,10 +298,6 @@ function R({ order: e, since: t, offset: n, action: r, actionTestId: i, onAction
 							className: "text-sq-secondary",
 							children: [" ", e.variant_label]
 						}),
-						e.modifiers.length > 0 && /* @__PURE__ */ u("ul", {
-							className: "ml-6 text-sm text-sq-secondary",
-							children: e.modifiers.map((e, t) => /* @__PURE__ */ u("li", { children: e.name }, `${e.group_name}-${t}`))
-						}),
 						e.note && /* @__PURE__ */ d("p", {
 							className: "ml-6 text-sm italic text-sq-text",
 							children: ["✎ ", e.note]

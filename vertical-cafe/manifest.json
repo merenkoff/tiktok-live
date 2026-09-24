@@ -1,17 +1,20 @@
 {
   "schema": 1,
   "moduleId": "vertical-cafe",
-  "version": "2.2.3",
-  "minHostPlatform": 15,
+  "version": "2.3.0",
+  "minHostPlatform": 16,
   "entry": "remote-entry.js",
   "keyId": "2a73632c13044371",
-  "builtAt": "2026-09-22T19:21:45.820Z",
+  "builtAt": "2026-09-24T13:38:56.990Z",
   "files": {
     "BarcodeScanner-DDyd6b-m.js": "sha384-h7k7FozxihdT2cYBXZsLuvH2nmezpFoHZ17TVH+R34lHtTcbvHJBkmWVo9KVWFbs",
-    "CafeCatalog-DEL2FDPJ.js": "sha384-Ezj9EHlaOE0fMxugYaA+cQ2Clg0FJm8EM5tQ+YN078dIU7pz9BFOA2gHuSO4LrXK",
-    "KitchenPage-Ch_H083T.js": "sha384-AUhrYmE3mpRPEr+GTuMONjNsb7olIP0xbn+PsbvZypZsFaMn/i+n2Zqu0JRdnTnD",
+    "CafeAnalyticsPage-kqfP7qYj.js": "sha384-aHGtQZjbMd208FzQtruujq7WHt8/sXZVDj7Rp5cgh3wmJLlZ01dK3U9io5CpjP2l",
+    "CafeCatalog-AZjtXqjn.js": "sha384-CwoAN9o1NpCuNrtfryb330dcZK6uSUJsqEXuKAno0J+6xZoxiNLHJmZozUV7Rwq+",
+    "CafePanels-99GsWr7h.js": "sha384-S+NGHwFcdzWCoFv6LfiauleIpKmu4Bs0754f5TrVhWvtkHA7m9bP0LyO55JNUXPg",
+    "KitchenPage-IiWYxnPi.js": "sha384-pWLtfBse8Ru78nx/kc5AZqWvRdG0E24IU/33qSPo/IU4DV+QHQqp8YEOnbDBpZ02",
+    "figures-CvCQJyZx.js": "sha384-jr1EcQ8aiQn9j4HD2Nzt0ayJoJJPhjoBFoMQpnDqy3h0OduNz5l1rzw7XYxDCVS1",
     "hostPlatform-BSaDrC_D.js": "sha384-mHi12dO61e0ciSwpBKqJ35lUv7QCug6gsqavqHaS4MW904OM3M+pTAkDPvDz/seD",
-    "remote-entry.js": "sha384-CbWQat5qP8cq7lL3ORlNLpSZ/0pR0oeP/m/jrb39s6FOxYiS+3t4OSFTGwusJYGt",
-    "style.css": "sha384-NuGsCRq+zY3Pk22/izLVqjRA3yGGaSV6s1GqEANQxJF7IJ8/+C4HSEkW8wTSovGz"
+    "remote-entry.js": "sha384-FSmO+cj9FdK1CbfcIySgoRRUIO7YRqD1SGCGeG0dBYFWRBc9hNZxn/KvM+Ghaiz/",
+    "style.css": "sha384-8NJM39bif1B+kIKt/aayiE7RZTvLAMf1/Krb8/onEKSZkGgzTUzdYeWCoALi4ZMM"
   }
 }

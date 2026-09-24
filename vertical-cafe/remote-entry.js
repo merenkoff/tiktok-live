@@ -1,6 +1,6 @@
 import { lazy as e } from "react";
 //#region src/platform/version.ts
-var t = "2.2.3";
+var t = "2.3.0";
 //#endregion
 //#region src/modules/lazyWithRetry.ts
 async function n(e, { retries: t = 2, backoffMs: n = 400 } = {}) {
@@ -18,15 +18,24 @@ function r(t, r) {
 }
 //#endregion
 //#region src/modules/vertical-cafe/manifest.ts
-var i = r(() => import("./CafeCatalog-DEL2FDPJ.js")), a = r(() => import("./KitchenPage-Ch_H083T.js")), o = {
+var i = r(() => import("./CafeCatalog-AZjtXqjn.js")), a = r(() => import("./KitchenPage-IiWYxnPi.js")), o = r(() => import("./CafePanels-99GsWr7h.js")), s = r(() => import("./CafeAnalyticsPage-kqfP7qYj.js")), c = {
 	id: "vertical-cafe",
 	title: "Кафе",
-	shells: ["web", "cashier"],
+	shells: [
+		"web",
+		"cashier",
+		"tablet"
+	],
 	alwaysEnabled: !0,
 	sales: { Catalog: i },
+	analytics: { Panels: o },
 	routes: [{
 		path: "/kitchen/*",
 		element: a
+	}, {
+		path: "cafe",
+		mount: "admin",
+		element: s
 	}],
 	nav: [{
 		to: "/kitchen",
@@ -35,8 +44,13 @@ var i = r(() => import("./CafeCatalog-DEL2FDPJ.js")), a = r(() => import("./Kitc
 		location: "cashier-primary",
 		order: 80,
 		match: "/kitchen"
+	}, {
+		to: "/admin/cafe",
+		label: "Кафе",
+		location: "admin-sidebar",
+		order: 55
 	}],
 	version: t
 };
 //#endregion
-export { o as manifest };
+export { c as manifest };
