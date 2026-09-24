@@ -33,8 +33,10 @@ import {
   useAuthStore,
   useOfflineStatus,
   usePosShell,
+  useVertical,
 } from '@pos/platform';
 import type { CatalogItem, ReceiptPaperWidth } from '@pos/platform';
+import { ModifierSheet } from '@pos/platform/ui';
 import { BillBar } from '../components/BillBar';
 import { BillPane } from '../components/BillPane';
 import { BillSheet } from '../components/BillSheet';
@@ -74,6 +76,7 @@ export function BillPage(): JSX.Element {
     stale,
     savedAt,
     clearBanner,
+    notice,
     reload,
     addLine,
     run,
@@ -85,8 +88,13 @@ export function BillPage(): JSX.Element {
     { online, mirrored: shell !== 'web', storeId }
   );
   const wide = useIsWide();
+  const vertical = useVertical();
+  const sizeLabel = vertical.attributes.find((a) => a.key === 'size')?.label ?? 'Розмір';
   const [sheetOpen, setSheetOpen] = useState(false);
   const [paying, setPaying] = useState(false);
+  // The draft row being retyped on the sheet, with the product's variants
+  // looked up in the menu's own rows (К4m).
+  const [editing, setEditing] = useState<{ row: DraftLineView; variants: CatalogItem[] } | null>(null);
   const [printStatus, setPrintStatus] = useState<string | null>(null);
   const navigate = useNavigate();
 
@@ -197,6 +205,29 @@ export function BillPage(): JSX.Element {
     void run(() => tablesApi.setQuantity(bill.id, lineId, row.quantity + 1));
   };
 
+  /**
+   * Open the sheet on a draft row — its answers, its note, its size — and
+   * send the result as one PATCH. The product's variants come from the menu
+   * the page already has; a dish the menu no longer lists cannot be retyped,
+   * only taken off, and the bill says so instead of opening an empty sheet.
+   */
+  const edit = (row: DraftLineView): void => {
+    if (row.id == null) return;
+    const group = grouped.find(([, items]) => items.some((i) => i.variant_id === row.variant_id));
+    if (!group) {
+      notice('Страви вже немає в меню — зніміть рядок і додайте іншу');
+      return;
+    }
+    setEditing({ row, variants: [...group[1]] });
+  };
+
+  const saveEdit = (item: CatalogItem, modifiers: number[], note: string): void => {
+    const lineId = editing?.row.id;
+    setEditing(null);
+    if (lineId == null) return;
+    void run(() => tablesApi.updateLine(bill.id, lineId, { variant_id: item.variant_id, modifiers, note }));
+  };
+
   const pane = (
     <BillPane
       bill={bill}
@@ -211,6 +242,7 @@ export function BillPage(): JSX.Element {
       printStatus={printStatus}
       onLess={less}
       onMore={more}
+      onEdit={edit}
       onCancelRound={(roundId) => void run(() => tablesApi.cancelRound(bill.id, roundId), { stock: true })}
       onFire={fire}
       onPay={() => {
@@ -260,7 +292,7 @@ export function BillPage(): JSX.Element {
         <MenuCatalog
           counts={counts}
           online={online}
-          active={online && !paying && !sheetOpen}
+          active={online && !paying && !sheetOpen && !editing}
           canScan={shell === 'cashier'}
           epoch={epoch}
           onAdd={addLine}
@@ -291,6 +323,24 @@ export function BillPage(): JSX.Element {
 
       {paying && (
         <PaySheet bill={bill} busy={busy} onClose={() => setPaying(false)} onPay={(p) => void pay(p)} />
+      )}
+
+      {editing && (
+        // Over everything, the bill sheet included: the modifier sheet
+        // positions itself `absolute` inside whatever it is given.
+        <div className="fixed inset-0 z-50">
+          <ModifierSheet
+            productName={editing.row.product_name}
+            variants={editing.variants}
+            variantLabel={sizeLabel}
+            initialVariantId={editing.row.variant_id}
+            initialModifierIds={editing.row.modifierIds}
+            initialNote={editing.row.note}
+            submitLabel="Зберегти"
+            onAdd={({ item, modifiers, note }) => saveEdit(item, modifiers, note)}
+            onClose={() => setEditing(null)}
+          />
+        </div>
       )}
     </div>
   );

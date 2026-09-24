@@ -386,7 +386,9 @@ test('the kitchen board takes two taps: «Готово» moves the order to «В
   const pickup = page.getByTestId('kitchen-pickup');
   await expect(inWork.getByTestId('kitchen-order-sale-7')).toBeVisible();
   await expect(inWork.getByTestId('kitchen-order-no')).toHaveText('7');
-  await expect(inWork.getByText('вівсяне', { exact: true })).toBeVisible();
+  // The answer is in the fired caption, and only there — not listed a second time.
+  await expect(inWork.getByText('M · вівсяне')).toBeVisible();
+  await expect(inWork.getByText('вівсяне', { exact: true })).toHaveCount(0);
   await expect(inWork.getByText('✎ гарячіше')).toBeVisible();
   await expect(pickup.getByText('Нічого не чекає видачі')).toBeVisible();
 

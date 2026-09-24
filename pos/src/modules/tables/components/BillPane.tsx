@@ -28,6 +28,8 @@ export interface BillPaneProps {
   printStatus: string | null;
   onLess: (line: DraftLineView) => void;
   onMore: (line: DraftLineView) => void;
+  /** The row itself is the way into the sheet — answers, note, size (К4m). */
+  onEdit: (line: DraftLineView) => void;
   onCancelRound: (roundId: number) => void;
   onFire: () => void;
   onPay: () => void;
@@ -47,6 +49,7 @@ export function BillPane({
   printStatus,
   onLess,
   onMore,
+  onEdit,
   onCancelRound,
   onFire,
   onPay,
@@ -79,9 +82,15 @@ export function BillPane({
         data-pending={row.pending ? 'yes' : 'no'}
       >
         <div className="min-w-0">
-          <p className="truncate">
+          <button
+            type="button"
+            className="block w-full truncate text-left"
+            data-testid={row.id != null ? `bill-line-edit-${row.id}` : undefined}
+            disabled={busy || !online || !editable}
+            onClick={() => onEdit(row)}
+          >
             <span className="tabular-nums">{row.quantity}×</span> {title}
-          </p>
+          </button>
           {row.note && <p className="text-xs italic text-sq-muted">✎ {row.note}</p>}
           {row.id != null && (
             <div className="mt-1 flex items-center gap-2">

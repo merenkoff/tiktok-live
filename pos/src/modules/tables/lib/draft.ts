@@ -55,8 +55,11 @@ export interface DraftLineView {
   uid: string;
   /** Known for a pending row; a server row learns it from the catalog. */
   product_id: number | null;
+  variant_id: number;
   product_name: string;
   variant_label: string;
+  /** The answers as ids — what the sheet is opened with when the row is tapped. */
+  modifierIds: number[];
   modifierNames: string[];
   note: string;
   quantity: number;
@@ -120,8 +123,10 @@ export function draftView(serverDraft: readonly BillLine[], pending: readonly Pe
     id: line.id,
     uid: serverUid(line),
     product_id: null,
+    variant_id: line.variant_id,
     product_name: line.product_name,
     variant_label: line.variant_label,
+    modifierIds: line.modifiers.map((m) => m.modifier_id).filter((id): id is number => id != null),
     modifierNames: line.modifiers.map((m) => m.name),
     note: line.note,
     quantity: line.quantity,
@@ -142,8 +147,10 @@ export function draftView(serverDraft: readonly BillLine[], pending: readonly Pe
       id: null,
       uid: tap.uid,
       product_id: tap.product_id,
+      variant_id: tap.variant_id,
       product_name: tap.product_name,
       variant_label: tap.variant_label,
+      modifierIds: tap.modifiers,
       modifierNames: tap.modifierNames,
       note: tap.note,
       quantity: tap.quantity,

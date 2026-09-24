@@ -46,6 +46,8 @@ export interface BillState {
   stale: boolean;
   savedAt: number | null;
   clearBanner: () => void;
+  /** Put a refusal the screen found itself on the banner, in the same voice. */
+  notice: (text: string) => void;
   reload: () => Promise<void>;
   /** Put a dish on the draft: on the screen now, on the server next. */
   addLine: (choice: DishChoice) => void;
@@ -250,6 +252,8 @@ export function useBill(
     stale,
     savedAt,
     clearBanner: () => setBanner(null),
+    /** Say something in the bill's own voice — a refusal the screen found before the server could. */
+    notice: (text: string) => setBanner(text),
     reload,
     addLine,
     run,

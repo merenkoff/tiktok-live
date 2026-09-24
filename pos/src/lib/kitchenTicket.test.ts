@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { makeSaleDetail } from '../test/utils';
 import type { PosTag, SaleDetail } from '../types';
-import { buildKitchenTickets, formatTicketTime, orderLabelOf, stationByTag, stationsOf } from './kitchenTicket';
+import { bareVariantLabel, buildKitchenTickets, formatTicketTime, orderLabelOf, stationByTag, stationsOf } from './kitchenTicket';
 
 function tag(over: Partial<PosTag> & Pick<PosTag, 'id' | 'name'>): PosTag {
   return { store_id: 1, parent_id: null, sort_order: 0, color: null, show_in_catalog_bar: true, ...over };
@@ -109,7 +109,7 @@ describe('buildKitchenTickets', () => {
     const [, bar] = buildKitchenTickets(sale, { catalog: CATALOG, tags: TAGS, formatTime: fixed });
     expect(bar.ticket.items[0]).toEqual({
       name: 'Латте',
-      variant_label: 'M · вівсяне',
+      variant_label: 'M',
       quantity: 2,
       modifiers: ['вівсяне'],
       note: 'гарячіше',
@@ -142,5 +142,15 @@ describe('formatTicketTime', () => {
   it('is hours and minutes, and blank for a date it cannot read', () => {
     expect(formatTicketTime('2026-09-21T11:59:00.000Z')).toMatch(/^\d{2}:\d{2}$/);
     expect(formatTicketTime('not a date')).toBe('');
+  });
+});
+
+describe('bareVariantLabel', () => {
+  it('takes the appended answers off the caption and leaves the size', () => {
+    expect(bareVariantLabel('M · вівсяне · без цукру', ['вівсяне', 'без цукру'])).toBe('M');
+    expect(bareVariantLabel('вівсяне', ['вівсяне'])).toBe('');
+    expect(bareVariantLabel('M', [])).toBe('M');
+    // A caption that was not composed this way is left alone.
+    expect(bareVariantLabel('M · щось інше', ['вівсяне'])).toBe('M · щось інше');
   });
 });

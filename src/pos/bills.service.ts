@@ -636,25 +636,122 @@ export async function addDraftItem(
   return getBill(storeId, billId);
 }
 
-/** Retype the count on a draft line. Zero is `removeDraftItem`, not this. */
-export async function setDraftQuantity(
+/** What `PATCH /bills/:id/items/:itemId` may carry. Every field optional; absent = unchanged. */
+export interface DraftItemPatch {
+  quantity?: unknown;
+  variant_id?: unknown;
+  modifiers?: unknown;
+  note?: unknown;
+}
+
+/**
+ * Change a draft line: its count, its answers, its note, or its size.
+ *
+ * The count alone is the «−/+» on the bill; the rest is the sheet the waiter
+ * opens by tapping the row (К4m). Two rules are the same as at `addDraftItem`
+ * so the draft can never hold what a tap could not have produced: the answers
+ * are resolved against the product's groups (a required question without an
+ * answer is refused by name), and a line that after the change carries the
+ * same `variant|answers|note` key as another draft line FOLDS INTO it — the
+ * waiter who turns the second latte's milk back to what the first has should
+ * see «2×», not two identical rows. The size may change only to another
+ * variant of the same product; a different dish is remove + add, and saying
+ * so beats silently relabelling a plate.
+ *
+ * Zero is `removeDraftItem`, not this.
+ */
+export async function updateDraftItem(
   storeId: number,
   billId: number,
   itemId: number,
-  quantity: number
+  input: DraftItemPatch
 ): Promise<Bill> {
-  const wanted = intField(quantity, 'Кількість', 1, 9999);
+  const quantity = input.quantity === undefined ? null : intField(input.quantity, 'Кількість', 1, 9999);
+  const wantedVariant =
+    input.variant_id === undefined
+      ? null
+      : intField(input.variant_id, 'Позиція', 1, Number.MAX_SAFE_INTEGER);
+  const retyped = wantedVariant != null || input.modifiers !== undefined || input.note !== undefined;
+  if (quantity == null && !retyped) throw new BillError('Нічого змінювати');
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     await loadOpenBill(client, storeId, billId);
-    const result = await client.query(
-      `UPDATE pos_bill_items SET quantity = $4
-        WHERE store_id = $1 AND bill_id = $2 AND id = $3 AND round_id IS NULL
-      RETURNING id`,
-      [storeId, billId, itemId, wanted]
+    const current = await client.query(
+      `SELECT i.id, i.variant_id, i.quantity, i.components, i.modifiers, i.note, v.product_id
+         FROM pos_bill_items i
+         JOIN pos_variants v ON v.id = i.variant_id
+        WHERE i.store_id = $1 AND i.bill_id = $2 AND i.id = $3 AND i.round_id IS NULL`,
+      [storeId, billId, itemId]
     );
-    if (result.rowCount === 0) await refuseFiredLine(client, storeId, billId, itemId);
+    if (current.rows.length === 0) await refuseFiredLine(client, storeId, billId, itemId);
+    const line = current.rows[0];
+
+    if (!retyped) {
+      await client.query(`UPDATE pos_bill_items SET quantity = $2 WHERE id = $1`, [itemId, quantity]);
+      await client.query('COMMIT');
+      return await getBill(storeId, billId);
+    }
+
+    const variantId = wantedVariant ?? Number(line.variant_id);
+    if (variantId !== Number(line.variant_id)) {
+      const sibling = await client.query(
+        `SELECT v.id FROM pos_variants v
+          WHERE v.id = $1 AND v.store_id = $2 AND v.product_id = $3 AND v.is_active`,
+        [variantId, storeId, Number(line.product_id)]
+      );
+      if (sibling.rows.length === 0) {
+        throw new BillError('Змінити можна лише варіант тієї ж страви — іншу страву додайте окремо');
+      }
+    }
+    const modifierIds =
+      input.modifiers === undefined
+        ? modifiers
+            .parseLineModifierSnapshot(line.modifiers)
+            .map((m) => m.modifier_id)
+            .filter((id): id is number => id != null)
+            .sort((a, b) => a - b)
+        : modifiers.normalizeModifierIds(input.modifiers);
+    const note = input.note === undefined ? String(line.note ?? '') : modifiers.cleanLineNote(input.note);
+    const components = (line.components as ComponentInput[] | null) ?? null;
+    if (components?.length && modifierIds.length > 0) {
+      throw new BillError('Позиція з власним складом не приймає модифікаторів');
+    }
+    const chosen = await modifiers.resolveForVariant(client, storeId, variantId, modifierIds);
+    const count = quantity ?? Number(line.quantity);
+
+    if (!components?.length) {
+      const twins = await client.query(
+        `SELECT id, modifiers, note FROM pos_bill_items
+          WHERE bill_id = $1 AND round_id IS NULL AND variant_id = $2 AND components IS NULL AND id <> $3`,
+        [billId, variantId, itemId]
+      );
+      const wanted = lineKey(variantId, modifierIds, note);
+      for (const row of twins.rows) {
+        const rowIds = modifiers
+          .parseLineModifierSnapshot(row.modifiers)
+          .map((m) => m.modifier_id)
+          .filter((id): id is number => id != null)
+          .sort((a, b) => a - b);
+        if (lineKey(variantId, rowIds, String(row.note ?? '')) === wanted) {
+          await client.query(`UPDATE pos_bill_items SET quantity = quantity + $2 WHERE id = $1`, [
+            row.id,
+            count,
+          ]);
+          await client.query(`DELETE FROM pos_bill_items WHERE id = $1`, [itemId]);
+          await client.query('COMMIT');
+          return await getBill(storeId, billId);
+        }
+      }
+    }
+
+    await client.query(
+      `UPDATE pos_bill_items
+          SET variant_id = $2, quantity = $3, modifiers = $4::jsonb, note = $5
+        WHERE id = $1`,
+      [itemId, variantId, count, chosen.snapshot.length ? JSON.stringify(chosen.snapshot) : null, note]
+    );
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');

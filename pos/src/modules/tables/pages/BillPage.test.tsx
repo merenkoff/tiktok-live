@@ -396,6 +396,52 @@ describe('BillPage', () => {
     await waitFor(() => expect(screen.queryByTestId('bill-line-pending')).toBeNull());
   });
 
+  it('retypes a draft line from its row: the sheet opens on what it has and saves one PATCH (К4m)', async () => {
+    bill.draft = [
+      line({
+        id: 3,
+        variant_id: 5,
+        quantity: 2,
+        product_name: 'Латте',
+        variant_label: 'M',
+        modifiers: [{ modifier_id: 31, group_name: 'Молоко', name: 'звичайне', price_delta_cents: 0, sort_order: 0 }],
+        preview_unit_price_cents: 6500,
+      }),
+    ];
+    const seen: Array<[string, string, unknown]> = [];
+    posRequest.mockImplementation(async (method: string, path: string, body?: unknown) => {
+      seen.push([method, path, body]);
+      return bill;
+    });
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    await userEvent.click(await screen.findByTestId('bill-line-edit-3'));
+    const sheet = await screen.findByTestId('modifier-sheet');
+    // What the line already has is what the sheet opens on.
+    expect(within(sheet).getByTestId('modifier-variant-5')).toHaveAttribute('aria-pressed', 'true');
+    expect(within(sheet).getByTestId('modifier-chip-31')).toHaveAttribute('aria-pressed', 'true');
+    expect(within(sheet).getByTestId('modifier-add')).toHaveTextContent('Зберегти');
+    await userEvent.click(within(sheet).getByTestId('modifier-variant-6'));
+    await userEvent.click(within(sheet).getByTestId('modifier-chip-32'));
+    await userEvent.type(within(sheet).getByTestId('modifier-note'), 'гарячіше');
+    await userEvent.click(within(sheet).getByTestId('modifier-add'));
+    await waitFor(() =>
+      expect(seen).toContainEqual([
+        'patch',
+        '/bills/90/items/3',
+        { variant_id: 6, modifiers: [32], note: 'гарячіше' },
+      ])
+    );
+    expect(screen.queryByTestId('modifier-sheet')).toBeNull();
+  });
+
+  it('cannot retype a dish the menu no longer lists, and says so', async () => {
+    bill.draft = [line({ id: 3, variant_id: 77, quantity: 1, product_name: 'Сирник', variant_label: '' })];
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    await userEvent.click(await screen.findByTestId('bill-line-edit-3'));
+    expect(await screen.findByTestId('bill-banner')).toHaveTextContent('немає в меню');
+    expect(screen.queryByTestId('modifier-sheet')).toBeNull();
+  });
+
   it('asks the question the dish has, and sends the answer the waiter picked', async () => {
     const posted: unknown[] = [];
     posRequest.mockImplementation(async (method: string, path: string, body?: unknown) => {
