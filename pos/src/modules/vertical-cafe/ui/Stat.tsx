@@ -28,13 +28,13 @@ export function Stat({
   testId?: string;
 }) {
   return (
-    <div className="rounded-sq bg-sq-bg p-3" data-testid={testId}>
-      <p className="text-xs text-sq-muted">{label}</p>
-      <p className={`mt-0.5 ${strong ? 'text-lg font-semibold text-sq-text' : 'text-sq-text'}`}>
+    <div className="rounded-xl bg-sq-sidebar px-4 py-3.5" data-testid={testId}>
+      <p className="text-[13px] font-medium text-sq-secondary">{label}</p>
+      <p className={`mt-1 tabular-nums ${strong ? 'text-[22px] leading-tight font-bold text-sq-heading' : 'text-sq-text'}`}>
         {value}
       </p>
       {hint && (
-        <p className={`mt-0.5 text-[11px] ${tone === 'warn' ? 'text-amber-600' : 'text-sq-muted'}`}>
+        <p className={`mt-1 text-xs ${tone === 'warn' ? 'text-amber-600' : 'text-sq-muted'}`}>
           {hint}
         </p>
       )}

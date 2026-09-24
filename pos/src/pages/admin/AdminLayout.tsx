@@ -2,18 +2,32 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { Outlet, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo } from 'react';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@pos/platform';
 import { useDragScroll } from '../../hooks/useDragScroll';
 import { Nav } from '../../components/Nav';
 import { AppIcon } from '../../components/AppIcon';
 import { LogOut } from '../../platform/glyphs';
+import { navCounts, useAttention } from './attention';
 
 export function AdminLayout() {
   const auth = useAuthStore((s) => s.auth);
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
   const navRef = useDragScroll<HTMLElement>();
+  const { pathname } = useLocation();
+  const vertical = auth?.store.vertical?.id ?? 'clothing';
+  const fiscalEnabled = Boolean(auth?.store.fiscal?.enabled);
+  const attention = useAttention((s) => s.items);
+  const counts = useMemo(() => navCounts(attention ?? []), [attention]);
+
+  // The sidebar's numbers follow the owner around the cabinet: re-read on a
+  // page change once the last read is a minute old, never on every render.
+  useEffect(() => {
+    if (!auth) return;
+    void useAttention.getState().load({ vertical, fiscalEnabled });
+  }, [auth, pathname, vertical, fiscalEnabled]);
 
   return (
     <div className="min-h-screen md:grid md:grid-cols-[256px_1fr] bg-sq-surface font-sans text-sq-text">
@@ -32,7 +46,7 @@ export function AdminLayout() {
           aria-label="Кабінет"
           className="flex md:flex-col overflow-x-auto md:overflow-y-auto md:flex-1 px-2 pb-2 gap-0.5 select-none"
         >
-          <Nav location="admin-sidebar" tillLink />
+          <Nav location="admin-sidebar" tillLink counts={counts} />
         </nav>
         <div className="p-2 border-t border-sq-divider/70">
           <button

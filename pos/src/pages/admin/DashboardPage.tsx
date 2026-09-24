@@ -3,13 +3,16 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
-import { api, useAuthStore } from '@pos/platform';
+import { Link } from 'react-router-dom';
+import { api, assetUrl, useAuthStore } from '@pos/platform';
 import { formatUah } from '../../lib/money';
 import { toCsv, downloadCsv } from '../../lib/csv';
 import { SlotBoundary } from '../../modules/SlotBoundary';
 import { reportModuleEvent } from '../../modules/telemetry';
 import { resolveAnalyticsPanels } from '../../modules/verticals';
 import type { PaymentMethod, SalesSummary } from '../../types';
+import { Check, DownloadLine, Star } from '../../platform/glyphs';
+import { deviceDay, useAttention } from './attention';
 
 function addDays(dateStr: string, delta: number): string {
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -29,7 +32,7 @@ const PAYMENT_LABEL_UK: Record<PaymentMethod, string> = {
 
 // Stable display order; unknown methods fall to the end.
 const PAYMENT_ORDER: PaymentMethod[] = ['card', 'cash', 'qr'];
-const PAYMENT_BAR_COLORS = ['bg-sq-blue', 'bg-sq-text/70', 'bg-emerald-500', 'bg-amber-500'];
+const PAYMENT_BAR_COLORS = ['bg-sq-blue', 'bg-sq-success', 'bg-[#8A6CEF]', 'bg-sq-warning'];
 
 function paymentLabel(method: string): string {
   return PAYMENT_LABEL_UK[method as PaymentMethod] ?? method;
@@ -65,14 +68,38 @@ function buildSummaryCsv(data: SalesSummary): string {
   return toCsv(rows);
 }
 
+type Preset = 'today' | '7d' | '30d' | 'month' | 'custom';
+
+const PRESETS: Array<{ id: Preset; label: string; title: string }> = [
+  { id: 'today', label: 'Сьогодні', title: 'Сьогодні' },
+  { id: '7d', label: '7 днів', title: 'Останні 7 днів' },
+  { id: '30d', label: '30 днів', title: 'Останні 30 днів' },
+  { id: 'month', label: 'Місяць', title: 'Цей місяць' },
+  { id: 'custom', label: 'Період', title: 'Період' },
+];
+
+/** «четвер, 24 вересня» for one day, «1 — 24 вересня» for a window. */
+function periodLabel(from: string, to: string): string {
+  const at = (d: string) => new Date(`${d}T12:00:00`);
+  if (from === to) {
+    return new Intl.DateTimeFormat('uk-UA', { weekday: 'long', day: 'numeric', month: 'long' }).format(at(from));
+  }
+  const day = new Intl.DateTimeFormat('uk-UA', { day: 'numeric', month: 'long' });
+  return `${day.format(at(from))} — ${day.format(at(to))}`;
+}
+
 export function DashboardPage() {
   const [data, setData] = useState<SalesSummary | null>(null);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [preset, setPreset] = useState<Preset>('today');
   const [error, setError] = useState<string | null>(null);
 
-  const vertical = useAuthStore((s) => s.auth)?.store.vertical?.id ?? 'clothing';
+  const auth = useAuthStore((s) => s.auth);
+  const vertical = auth?.store.vertical?.id ?? 'clothing';
+  const fiscalEnabled = Boolean(auth?.store.fiscal?.enabled);
   const panels = useMemo(() => resolveAnalyticsPanels(vertical), [vertical]);
+  const attention = useAttention((s) => s.items);
 
   async function load(nextFrom?: string, nextTo?: string) {
     setError(null);
@@ -88,14 +115,18 @@ export function DashboardPage() {
 
   useEffect(() => {
     void load();
+    // The owner opened «Сьогодні» to see what needs doing: always a fresh read.
+    void useAttention.getState().load({ vertical, fiscalEnabled }, { force: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function applyPreset(preset: 'today' | '7d' | '30d' | 'month') {
-    const today = new Date().toISOString().slice(0, 10);
-    if (preset === 'today') void load(today, today);
-    else if (preset === '7d') void load(addDays(today, -6), today);
-    else if (preset === '30d') void load(addDays(today, -29), today);
+  function applyPreset(next: Preset) {
+    setPreset(next);
+    if (next === 'custom') return;
+    const today = deviceDay();
+    if (next === 'today') void load(today, today);
+    else if (next === '7d') void load(addDays(today, -6), today);
+    else if (next === '30d') void load(addDays(today, -29), today);
     else void load(startOfMonth(today), today);
   }
 
@@ -109,8 +140,8 @@ export function DashboardPage() {
   if (!data) return <p className="text-sq-secondary text-sm">Завантаження…</p>;
 
   const metrics = [
-    { label: 'Загальний продаж', value: formatUah(data.gross_cents) },
-    { label: 'Продажі', value: String(data.sales_count) },
+    { label: 'Виторг', value: formatUah(data.gross_cents) },
+    { label: 'Чеків', value: String(data.sales_count) },
     { label: 'Середній чек', value: formatUah(data.avg_check_cents) },
     { label: 'Повернення', value: formatUah(data.refunded_cents) },
   ];
@@ -132,79 +163,129 @@ export function DashboardPage() {
     }));
   const maxDaily = Math.max(...data.daily.map((d) => d.net_cents), 1);
   const invalidRange = from > to;
+  const title = PRESETS.find((p) => p.id === preset)?.title ?? 'Сьогодні';
 
   return (
-    <div className="space-y-6 animate-fade-up max-w-4xl text-sq-text">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold">Звіти з продажів</h2>
-          <p className="text-sq-secondary text-sm mt-1">
-            {data.from === data.to ? data.from : `${data.from} — ${data.to}`}
-          </p>
-        </div>
-        <button type="button" onClick={exportCsv} className="sq-btn-primary px-4 py-2 text-sm">
-          Експортувати CSV
-        </button>
-      </div>
-
-      <div className="flex flex-wrap gap-2 items-end">
-        <button type="button" onClick={() => applyPreset('today')} className="text-sm border border-sq-divider rounded-sq px-3 py-2 hover:bg-sq-bg">
-          Сьогодні
-        </button>
-        <button type="button" onClick={() => applyPreset('7d')} className="text-sm border border-sq-divider rounded-sq px-3 py-2 hover:bg-sq-bg">
-          7 днів
-        </button>
-        <button type="button" onClick={() => applyPreset('30d')} className="text-sm border border-sq-divider rounded-sq px-3 py-2 hover:bg-sq-bg">
-          30 днів
-        </button>
-        <button type="button" onClick={() => applyPreset('month')} className="text-sm border border-sq-divider rounded-sq px-3 py-2 hover:bg-sq-bg">
-          Цей місяць
-        </button>
-
-        <label className="text-sm space-y-1 ml-2">
-          <span className="text-sq-secondary block">Від</span>
-          <input
-            type="date"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-            className="rounded-sq border border-sq-divider bg-sq-bg px-3 py-2"
-          />
-        </label>
-        <label className="text-sm space-y-1">
-          <span className="text-sq-secondary block">До</span>
-          <input
-            type="date"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-            className="rounded-sq border border-sq-divider bg-sq-bg px-3 py-2"
-          />
-        </label>
-        <button
-          type="button"
-          disabled={invalidRange}
-          onClick={() => void load(from, to)}
-          className="sq-btn-primary px-4 py-2.5 text-sm disabled:opacity-50"
-        >
-          Показати
-        </button>
-      </div>
-      {invalidRange && <p className="text-sm text-red-600">«Від» не може бути пізніше «До»</p>}
-
-      <section className="bg-sq-surface border border-sq-divider rounded-sq p-5 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <p className="sq-section-label">Загальний огляд продажів</p>
-          <span className="text-xs font-semibold text-sq-blue uppercase tracking-wide">
-            Чистий дохід {formatUah(data.net_cents)}
+    <div className="space-y-7 animate-fade-up max-w-4xl text-sq-text">
+      <header className="space-y-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <Star size={32} />
+          <h2 className="text-[30px] font-bold text-sq-heading leading-tight">{title}</h2>
+          <span className="ml-auto text-[15px] text-sq-muted" data-testid="dashboard-period">
+            {periodLabel(data.from, data.to)}
           </span>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-          {metrics.map((m) => (
-            <div key={m.label}>
-              <p className="text-3xl font-bold text-sq-text tracking-tight">{m.value}</p>
-              <p className="text-xs text-sq-secondary mt-1">{m.label}</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex gap-1 p-[3px] rounded-xl bg-sq-empty" role="group" aria-label="Період">
+            {PRESETS.map((p) => {
+              const on = preset === p.id;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => applyPreset(p.id)}
+                  className={`min-h-[34px] px-3.5 rounded-[9px] text-[15px] transition-colors ${
+                    on
+                      ? 'bg-white shadow-[0_1px_3px_rgba(0,0,0,.12)] font-semibold text-sq-text'
+                      : 'font-medium text-sq-secondary hover:text-sq-text'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+          {preset === 'custom' && (
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="date"
+                aria-label="Від"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+                className="h-9 rounded-[10px] bg-sq-empty px-3 text-[15px] border-0"
+              />
+              <span className="text-sq-muted">—</span>
+              <input
+                type="date"
+                aria-label="До"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+                className="h-9 rounded-[10px] bg-sq-empty px-3 text-[15px] border-0"
+              />
+              <button
+                type="button"
+                disabled={invalidRange}
+                onClick={() => void load(from, to)}
+                className="pos-btn-primary h-9 px-4 rounded-[10px] text-[15px] disabled:opacity-50"
+              >
+                Показати
+              </button>
             </div>
-          ))}
+          )}
+          <button
+            type="button"
+            onClick={exportCsv}
+            className="ml-auto h-9 px-3.5 rounded-[10px] bg-white ring-1 ring-sq-divider text-[15px] font-semibold text-sq-text inline-flex items-center gap-2 hover:bg-sq-sidebar"
+          >
+            <DownloadLine size={20} />
+            CSV
+          </button>
         </div>
+        {invalidRange && <p className="text-sm text-red-600">«Від» не може бути пізніше «До»</p>}
+      </header>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5" data-testid="dashboard-stats">
+        {metrics.map((m) => (
+          <div key={m.label} className="rounded-xl bg-sq-sidebar px-[18px] py-4 flex flex-col gap-1.5">
+            <span className="text-[13px] font-medium text-sq-secondary">{m.label}</span>
+            <span className="text-[26px] font-bold text-sq-heading tabular-nums leading-tight">{m.value}</span>
+          </div>
+        ))}
+      </div>
+      {data.net_cents !== data.gross_cents && (
+        <p className="-mt-4 text-[13px] text-sq-muted tabular-nums">Чистий дохід {formatUah(data.net_cents)}</p>
+      )}
+
+      <section data-testid="dashboard-attention">
+        <SectionHead title="Потребують уваги" />
+        {attention == null ? (
+          <p className="py-3 text-sm text-sq-muted">Перевіряємо…</p>
+        ) : attention.length === 0 ? (
+          <p className="py-3 flex items-center gap-2 text-[15px] text-sq-secondary">
+            <Check size={20} className="text-sq-success" />
+            Усе гаразд — нічого не чекає
+          </p>
+        ) : (
+          <ul>
+            {attention.map((item) => {
+              const Icon = item.glyph;
+              const body = (
+                <>
+                  <Icon size={24} className="shrink-0" />
+                  <span className={`flex-1 min-w-0 text-base ${item.alert ? 'text-sq-danger font-semibold' : 'text-sq-text'}`}>
+                    {item.text}
+                  </span>
+                  {item.meta && <span className="text-sm text-sq-muted tabular-nums">{item.meta}</span>}
+                  <span className="h-[22px] px-2 rounded-md ring-1 ring-inset ring-sq-divider text-xs font-medium text-sq-secondary inline-flex items-center shrink-0">
+                    {item.tag}
+                  </span>
+                </>
+              );
+              return (
+                <li key={item.key} className="shadow-[0_1px_0_#E6E8EC]">
+                  {item.to ? (
+                    <Link to={item.to} className="min-h-11 py-1.5 flex items-center gap-3 hover:bg-sq-sidebar/60 -mx-2 px-2 rounded-lg">
+                      {body}
+                    </Link>
+                  ) : (
+                    <div className="min-h-11 py-1.5 flex items-center gap-3">{body}</div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </section>
 
       {/* What the store's vertical adds to the owner's morning. Nothing at all
@@ -228,49 +309,46 @@ export function DashboardPage() {
         </SlotBoundary>
       )}
 
-      <section className="bg-sq-surface border border-sq-divider rounded-sq p-5 shadow-sm">
-        <p className="sq-section-label mb-4">Дохід за днями</p>
-        {data.daily.length === 0 ? (
-          <p className="text-sm text-sq-secondary">Немає даних за період.</p>
-        ) : (
-          <div className="flex items-end gap-1 h-40">
+      {data.daily.length > 1 && (
+        <section>
+          <SectionHead title="Дохід за днями" />
+          <div className="flex items-end gap-1 h-40 pt-3">
             {data.daily.map((d) => {
               const pct = Math.max((d.net_cents / maxDaily) * 100, d.net_cents > 0 ? 2 : 0);
               return (
                 <div key={d.date} className="flex-1 flex flex-col items-center gap-1 min-w-0">
                   <div className="w-full flex items-end h-32">
                     <div
-                      className="w-full bg-sq-blue rounded-t-sm"
+                      className="w-full bg-sq-blue rounded-t-[4px]"
                       style={{ height: `${pct}%` }}
                       title={`${d.date}: чистий ${formatUah(d.net_cents)}, продажів ${d.sales_count}`}
                     />
                   </div>
-                  <p className="text-[10px] text-sq-secondary truncate w-full text-center">{d.date.slice(5)}</p>
+                  <p className="text-[10px] text-sq-muted truncate w-full text-center tabular-nums">{d.date.slice(5)}</p>
                 </div>
               );
             })}
           </div>
-        )}
-      </section>
+        </section>
+      )}
 
-      <section className="bg-sq-surface border border-sq-divider rounded-sq p-5 shadow-sm">
-        <p className="sq-section-label mb-4">Оплата</p>
+      <section>
+        <SectionHead title="Оплата" />
         {totalPayCents === 0 ? (
-          <p className="text-sm text-sq-secondary">Немає оплат за період.</p>
+          <p className="py-3 text-sm text-sq-muted">Немає оплат за період.</p>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-3 pt-3">
             <div className="flex h-2 rounded-full overflow-hidden">
               {paymentBreakdown.map((p) => (
                 <div key={p.method} className={p.color} style={{ flexBasis: `${p.pct}%` }} />
               ))}
             </div>
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
               {paymentBreakdown.map((p) => (
                 <div key={p.method}>
-                  <p className="text-2xl font-bold text-sq-text tracking-tight">
-                    {formatUah(p.amount_cents)}
-                  </p>
-                  <p className="text-xs text-sq-secondary mt-1">
+                  <p className="text-[22px] font-bold text-sq-heading tabular-nums">{formatUah(p.amount_cents)}</p>
+                  <p className="text-[13px] text-sq-secondary mt-0.5 flex items-center gap-1.5">
+                    <span aria-hidden className={`w-2 h-2 rounded-full ${p.color}`} />
                     {p.label} · {p.pct.toFixed(0)}%
                   </p>
                   {p.unconfirmed_cents > 0 && (
@@ -285,27 +363,51 @@ export function DashboardPage() {
         )}
       </section>
 
-      <section className="bg-sq-surface border border-sq-divider rounded-sq p-5 shadow-sm">
-        <p className="sq-section-label mb-4">Популярні товари</p>
+      <section>
+        <SectionHead title="Популярні товари" />
         {data.top_items.length === 0 ? (
-          <p className="text-sm text-sq-secondary">Поки немає продажів.</p>
+          <p className="py-3 text-sm text-sq-muted">Поки немає продажів.</p>
         ) : (
-          <ul className="divide-y divide-sq-divider">
+          <ul>
             {data.top_items.map((item, idx) => (
-              <li key={`${item.product_name}-${idx}`} className="py-3 flex justify-between gap-3 text-sm">
-                <div>
-                  <p className="font-medium text-sq-text">{item.product_name}</p>
-                  <p className="text-sq-secondary">{item.variant_label || '—'}</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-semibold">{item.qty_sold} шт</p>
-                  <p className="text-sq-secondary">{formatUah(item.revenue_cents)}</p>
-                </div>
+              <li
+                key={`${item.product_name}-${idx}`}
+                className="min-h-12 py-1.5 flex items-center gap-3 shadow-[0_1px_0_#E6E8EC]"
+              >
+                <Thumb url={item.image_url ?? null} />
+                <span className="flex-1 min-w-0">
+                  <span className="block text-base text-sq-text truncate">{item.product_name}</span>
+                  {item.variant_label && (
+                    <span className="block text-[13px] text-sq-muted truncate">{item.variant_label}</span>
+                  )}
+                </span>
+                <span className="text-sm text-sq-muted tabular-nums shrink-0">{formatUah(item.revenue_cents)}</span>
+                <span className="w-16 text-right text-sm font-semibold text-sq-text tabular-nums shrink-0">
+                  {item.qty_sold} шт.
+                </span>
               </li>
             ))}
           </ul>
         )}
       </section>
     </div>
+  );
+}
+
+/** Things' section title: blue, bold, a hairline under it. */
+function SectionHead({ title }: { title: string }) {
+  return (
+    <div className="flex items-center justify-between pb-1.5 shadow-[0_1px_0_rgb(var(--sq-divider-rgb))]">
+      <h3 className="text-[15px] font-bold text-sq-blue">{title}</h3>
+    </div>
+  );
+}
+
+function Thumb({ url }: { url: string | null }) {
+  const src = url ? assetUrl(url) : null;
+  return (
+    <span className="w-8 h-8 rounded-lg bg-sq-empty overflow-hidden shrink-0">
+      {src && <img src={src} alt="" className="w-full h-full object-cover" />}
+    </span>
   );
 }

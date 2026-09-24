@@ -60,6 +60,22 @@ describe('Nav — admin sidebar', () => {
     expect(hrefs().slice(0, 2)).toEqual(['/admin', '/register']);
   });
 
+  it('shows a count beside a row, and a red pill for trouble', () => {
+    signIn('owner');
+    const { container } = renderWithProviders(
+      <Nav
+        location="admin-sidebar"
+        counts={{ '/admin': { count: 3 }, '/admin/stock': { count: 120, alert: true } }}
+      />,
+      { route: '/admin' }
+    );
+    expect(container.querySelector('a[href="/admin"] [data-testid=nav-count]')).toHaveTextContent('3');
+    const stock = container.querySelector('a[href="/admin/stock"] [data-testid=nav-count]');
+    expect(stock).toHaveTextContent('99+');
+    expect(stock).toHaveAttribute('data-alert', 'true');
+    expect(container.querySelector('a[href="/admin/customers"] [data-testid=nav-count]')).toBeNull();
+  });
+
   it('drops the sections of a disabled module', () => {
     signIn('owner', ['returns', 'customers', 'products', 'analytics', 'staff']);
     renderWithProviders(<Nav location="admin-sidebar" />, { route: '/admin' });

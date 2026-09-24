@@ -1085,6 +1085,8 @@ export interface SalesSummary {
     variant_label: string;
     qty_sold: number;
     revenue_cents: number;
+    /** Absent from an older server. */
+    image_url?: string | null;
   }>;
   payments: Array<{
     method: PaymentMethod;

@@ -18,6 +18,11 @@ interface Props {
   variant?: NavVariant;
   /** Admin sidebar: add «Каса» (the till) under «Сьогодні». */
   tillLink?: boolean;
+  /**
+   * Admin sidebar: a number beside a row, by route — Things' counts. `alert`
+   * draws it as a red pill: something is wrong, not merely waiting.
+   */
+  counts?: Readonly<Record<string, { count: number; alert?: boolean }>>;
 }
 
 /**
@@ -25,7 +30,7 @@ interface Props {
  * the current shell/role/variant. Replaces the hand-maintained link lists in
  * `AdminLayout`, `AppRail` and `BottomNav`.
  */
-export function Nav({ location, variant, tillLink }: Props) {
+export function Nav({ location, variant, tillLink, counts }: Props) {
   const shell = usePosShell();
   const role = useAuthStore((s) => s.role());
   const enabled = useEnabledModules();
@@ -56,7 +61,8 @@ export function Nav({ location, variant, tillLink }: Props) {
           }
         >
           {Icon && <Icon size={24} className="shrink-0" />}
-          {n.label}
+          <span className="md:flex-1">{n.label}</span>
+          <NavCount value={counts?.[n.to]} />
         </NavLink>
       );
     };
@@ -164,5 +170,23 @@ export function Nav({ location, variant, tillLink }: Props) {
         );
       })}
     </>
+  );
+}
+
+function NavCount({ value }: { value?: { count: number; alert?: boolean } }) {
+  if (!value || value.count <= 0) return null;
+  const text = value.count > 99 ? '99+' : String(value.count);
+  return value.alert ? (
+    <span
+      className="min-w-[22px] h-5 px-1.5 rounded-full bg-sq-danger text-white text-xs font-bold tabular-nums grid place-items-center"
+      data-testid="nav-count"
+      data-alert="true"
+    >
+      {text}
+    </span>
+  ) : (
+    <span className="text-[13px] text-sq-muted tabular-nums" data-testid="nav-count">
+      {text}
+    </span>
   );
 }

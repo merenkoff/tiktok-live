@@ -307,7 +307,7 @@ test('with the module CDN down «Сьогодні» is simply the dashboard it a
   await signInAsFlorist(page, { down: true });
 
   await page.goto('/admin');
-  await expect(page.getByText('Загальний огляд продажів')).toBeVisible();
+  await expect(page.getByTestId('dashboard-stats')).toBeVisible();
   await expect(page.getByTestId('flower-panels')).toHaveCount(0);
 });
 
@@ -315,7 +315,7 @@ test('a clothes shop’s «Сьогодні» never borrows another vertical’s
   await mockPosApi(page);
   await loginAsOwner(page);
 
-  await expect(page.getByText('Загальний огляд продажів')).toBeVisible();
+  await expect(page.getByTestId('dashboard-stats')).toBeVisible();
   await expect(page.getByTestId('flower-panels')).toHaveCount(0);
 });
 

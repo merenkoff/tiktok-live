@@ -23,6 +23,8 @@ export interface SalesSummary {
     variant_label: string;
     qty_sold: number;
     revenue_cents: number;
+    /** The product's picture, for the owner's «Популярні товари» row; null for a placeholder line. */
+    image_url: string | null;
   }>;
   payments: Array<{ method: PaymentMethod; amount_cents: number; unconfirmed_cents: number }>;
   daily: Array<{ date: string; gross_cents: number; net_cents: number; sales_count: number }>;
@@ -89,9 +91,13 @@ export async function getSalesSummary(
        si.product_name,
        si.variant_label,
        SUM(si.quantity - si.refunded_quantity)::int AS qty_sold,
-       SUM((si.quantity - si.refunded_quantity) * si.unit_price_cents)::int AS revenue_cents
+       SUM((si.quantity - si.refunded_quantity) * si.unit_price_cents)::int AS revenue_cents,
+       MAX(p.image_url) AS image_url
      FROM pos_sale_items si
      JOIN pos_sales s ON s.id = si.sale_id
+     -- LEFT: a receipt's placeholder line names no variant, and it still sold.
+     LEFT JOIN pos_variants v ON v.id = si.variant_id
+     LEFT JOIN pos_products p ON p.id = v.product_id
      CROSS JOIN bounds b
      WHERE s.store_id = $1
        AND s.status <> 'voided'
@@ -165,6 +171,7 @@ export async function getSalesSummary(
       variant_label: item.variant_label,
       qty_sold: Number(item.qty_sold),
       revenue_cents: Number(item.revenue_cents),
+      image_url: (item.image_url as string | null) ?? null,
     })),
     payments: paymentsResult.rows.map((p) => ({
       method: p.method as PaymentMethod,
