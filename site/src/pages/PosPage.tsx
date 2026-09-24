@@ -6,7 +6,9 @@ import { TwoColumnCompare } from '../components/TwoColumnCompare';
 import { Faq } from '../components/Faq';
 import { BrowserFrame } from '../components/BrowserFrame';
 import { Reveal, StaggerGroup, StaggerItem } from '../components/Reveal';
-import { DecorCircle } from '../components/DecorCircle';
+import { AppIcon } from '../components/AppIcon';
+import { SectionHeading } from '../components/SectionHeading';
+import { VerticalsMark } from '../components/VerticalsMark';
 import { StickyCta } from '../components/StickyCta';
 import { VerticalCards } from '../components/VerticalCards';
 import { PricingSection, checkboxComparison } from '../components/PricingSection';
@@ -17,19 +19,26 @@ import { PRODUCT, PRICING, RELEASES_URL, FEATURES, VERTICALS, isAvailable, ROADM
 import { track } from '../lib/analytics';
 import type { FaqItem } from '../lib/faqJsonLd';
 import {
-  ScanLine,
-  Package,
-  Users,
-  Tag,
-  Receipt,
-  QrCode,
   BarChart3,
+  ChevronRight,
+  ClipboardCheck,
   Download,
   KeyRound,
-  ShoppingCart,
+  Laptop,
+  MessageCircle,
+  Monitor,
+  Package,
+  QrCode,
+  Receipt,
+  ScanLine,
   ShieldCheck,
-  ClipboardCheck,
-} from 'lucide-react';
+  ShoppingCart,
+  Star,
+  Tag,
+  Terminal,
+  Users,
+  WifiOff,
+} from '../components/glyphs';
 import posTerminalHero from '../assets/photo/pos-terminal-hero.jpg';
 import posDevicesReceipt from '../assets/photo/pos-devices-receipt.png';
 import posRegisterMp4 from '../assets/video/pos-register-loop.mp4';
@@ -189,63 +198,65 @@ export function PosPage() {
       <Nav variant="pos" />
 
       <main className="flex-1">
-        {/* Hero */}
-        <section ref={heroRef} className="relative max-w-6xl mx-auto px-6 pt-16 pb-20 grid lg:grid-cols-2 gap-12 items-center">
-          <DecorCircle
-            colorClass="bg-pos/10"
-            className="absolute -top-10 -left-16 w-72 h-72 sm:w-96 sm:h-96 -z-10"
-          />
-          <Reveal>
-            <p className="text-sm font-semibold uppercase tracking-wide text-pos">Одна каса для чотирьох бізнесів</p>
-            <h1 className="text-6xl sm:text-7xl font-extrabold tracking-tighter mt-4 leading-[0.98]">
+        {/* Hero — the Things layout: the app icon, the name, one paragraph, one button. */}
+        <section ref={heroRef} className="max-w-6xl mx-auto px-6 pt-16 sm:pt-20 text-center">
+          <Reveal className="flex flex-col items-center">
+            <AppIcon size={144} className="drop-shadow-[0_14px_24px_rgba(0,30,80,0.22)]" />
+            <p className="eyebrow text-pos mt-8">Одна каса для чотирьох бізнесів</p>
+            <h1 className="h-display mt-3">
               Одна каса.
               <br />
               Онлайн і офлайн.
             </h1>
-            <p className="text-muted text-lg mt-6 leading-relaxed">
+            <p className="lede mt-6 max-w-2xl">
               Для магазину одягу, квіткової крамниці, кав'ярні й ресторану. Товари, штрихкоди,
               склад, знижки, QR-оплата і фіскальний чек ПРРО — і десктопний термінал, який
               продовжує пробивати чеки, навіть якщо в залі пропав інтернет.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <a href="#download" className="bg-pos hover:bg-pos-press transition-colors text-white text-sm font-semibold px-6 py-3.5 rounded-full">
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
+              <a href="#download" className="btn-pos">
                 Завантажити POS
               </a>
-              <a href="#cta" className="border border-line hover:border-ink transition-colors text-sm font-semibold px-6 py-3.5 rounded-full">
-                Замовити демо
+              <a href="#cta" className="link-more text-[17px]">
+                Замовити демо <ChevronRight size={20} />
               </a>
             </div>
             <p className="text-sm text-muted mt-5">{PRICING.pos.label}.</p>
           </Reveal>
-          <Reveal>
+          <Reveal className="mt-14">
             <img
               src={posTerminalHero}
               alt={`Каса ${PRODUCT.pos.name} на терміналі — каталог товарів і кошик з реальним чеком`}
-              className="w-full h-auto rounded-2xl shadow-ambient"
+              className="w-full max-w-5xl mx-auto h-auto rounded-card shadow-ambient"
             />
           </Reveal>
         </section>
 
         {/* Stat strip */}
-        <section className="border-y border-line bg-mist">
-          <div className="max-w-6xl mx-auto px-6 py-10 grid sm:grid-cols-3 gap-8 text-center">
+        <section className="max-w-6xl mx-auto px-6 pt-16">
+          <div className="grid sm:grid-cols-3 gap-6 text-center">
             {STATS.map((s) => (
-              <div key={s.label}>
-                <p className="font-mono text-6xl md:text-7xl font-bold text-pos tracking-tight">{s.value}</p>
-                <p className="text-muted text-sm mt-2">{s.label}</p>
+              <div key={s.label} className="card px-6 py-8">
+                <p className="text-5xl md:text-6xl font-bold text-pos tracking-tight tabular-nums">{s.value}</p>
+                <p className="text-muted text-[15px] mt-2">{s.label}</p>
               </div>
             ))}
           </div>
         </section>
 
         {/* Verticals */}
-        <section id="verticals" className="max-w-6xl mx-auto px-6 py-20">
+        <section id="verticals" className="max-w-6xl mx-auto px-6 py-24 scroll-mt-16">
           <Reveal>
-            <h2 className="text-2xl sm:text-3xl font-bold text-center max-w-xl mx-auto">Для якого бізнесу</h2>
-            <p className="text-muted text-center mt-3 max-w-xl mx-auto">
-              Що продає магазин, вирішує, як виглядає екран продажу: {VERTICALS.map((v) => v.title.toLowerCase()).join(', ')}.
-              Решта каси — спільна.
-            </p>
+            <SectionHeading
+              icon={<VerticalsMark size={64} />}
+              title="Для якого бізнесу"
+              lede={
+                <>
+                  Що продає магазин, вирішує, як виглядає екран продажу:{' '}
+                  {VERTICALS.map((v) => v.title.toLowerCase()).join(', ')}. Решта каси — спільна.
+                </>
+              }
+            />
           </Reveal>
           <div className="mt-12">
             <VerticalCards />
@@ -253,60 +264,49 @@ export function PosPage() {
         </section>
 
         {/* Feature grid */}
-        <section className="max-w-6xl mx-auto px-6 pb-20">
+        <section className="max-w-6xl mx-auto px-6 pb-24">
           <Reveal>
-            <h2 className="text-2xl sm:text-3xl font-bold text-center max-w-xl mx-auto">Що всередині</h2>
-            <p className="text-muted text-center mt-3 max-w-xl mx-auto">Спільне ядро для всіх вертикалей.</p>
+            <SectionHeading icon={<Package size={48} />} title="Що всередині" lede="Спільне ядро для всіх вертикалей." />
           </Reveal>
           <StaggerGroup className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {FEATURE_CARDS.map((f) => (
-              <StaggerItem key={f.t}>
-                <div className="border border-line rounded-card p-6 h-full bg-paper transition-all duration-200 ease-out hover:-translate-y-1 hover:rotate-1 hover:shadow-lg hover:border-pos/30">
-                  <div className="w-10 h-10 rounded-full bg-pos/5 grid place-items-center">
-                    <f.icon className="w-5 h-5 text-pos" strokeWidth={1.75} />
-                  </div>
-                  <h3 className="font-bold mt-4">{f.t}</h3>
-                  <p className="text-muted text-sm mt-2.5 leading-relaxed">{f.d}</p>
+              <StaggerItem key={f.t} className="h-full">
+                <div className="card p-7 h-full">
+                  <f.icon size={24} />
+                  <h3 className="text-lg font-bold text-ink-strong mt-3">{f.t}</h3>
+                  <p className="text-muted text-[15px] mt-2 leading-relaxed">{f.d}</p>
                 </div>
               </StaggerItem>
             ))}
           </StaggerGroup>
-          <Reveal className="mt-10">
+          <Reveal className="mt-12">
             <BrowserFrame
               alt="Реальний запис роботи каси: додавання товарів, знижка, оплата"
-              accentClass="border-pos/30"
               video={{ mp4: posRegisterMp4, webm: posRegisterWebm, poster: posRegisterPoster }}
+              elevated
             />
           </Reveal>
         </section>
 
         {/* Offline differentiator */}
-        <section className="bg-ink text-white">
-          <div className="max-w-5xl mx-auto px-6 py-20">
+        <section className="band">
+          <div className="max-w-5xl mx-auto px-6 py-24">
             <Reveal>
-              <p className="text-sm font-semibold uppercase tracking-wide text-pos">Головна відмінність</p>
-              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mt-3">
-                Каса, яка не залежить від інтернету
-              </h2>
-              <p className="text-white/70 mt-5 max-w-2xl leading-relaxed">
-                Десктопна каса на Tauri — єдина частина системи, розрахована на роботу офлайн. Це
-                не «резервний режим на випадок збою», а те, як касир працює щодня в магазині зі
-                слабким чи нестабільним інтернетом.
-              </p>
-              <ul className="mt-8 grid sm:grid-cols-2 gap-4 max-w-3xl">
+              <SectionHeading
+                icon={<WifiOff size={48} />}
+                eyebrow="Головна відмінність"
+                title="Каса, яка не залежить від інтернету"
+                lede="Десктопна каса на Tauri — єдина частина системи, розрахована на роботу офлайн. Це не «резервний режим на випадок збою», а те, як касир працює щодня в магазині зі слабким чи нестабільним інтернетом."
+              />
+              <ul className="mt-12 grid sm:grid-cols-2 gap-4 max-w-3xl mx-auto">
                 {[
                   'Знімає локальну копію каталогу товарів і клієнтів при першому вході в мережі',
                   'Перевіряє PIN касира локально через PBKDF2 — без запиту на сервер',
                   'Ставить нові продажі й клієнтів у чергу, поки немає з\'єднання',
                   'Синхронізує чергу автоматично, щойно мережа з\'явиться — спершу клієнтів, потім продажі',
-                ].map((t, i) => (
-                  <li
-                    key={t}
-                    className={`flex items-start gap-3 text-sm text-white/90 bg-white/5 border border-white/10 rounded-card p-4 ${
-                      i % 2 === 1 ? 'sm:mt-6' : ''
-                    }`}
-                  >
-                    <span className="mt-1 w-1.5 h-1.5 rounded-full bg-pos shrink-0" />
+                ].map((t) => (
+                  <li key={t} className="card-flat flex items-start gap-3 text-[15px] text-body p-5">
+                    <ChevronRight size={20} className="text-pos shrink-0" />
                     {t}
                   </li>
                 ))}
@@ -316,29 +316,24 @@ export function PosPage() {
         </section>
 
         {/* Fiscal */}
-        <section id="prro" className="max-w-6xl mx-auto px-6 py-20 grid lg:grid-cols-2 gap-12 items-start">
+        <section id="prro" className="max-w-6xl mx-auto px-6 py-24 grid lg:grid-cols-2 gap-12 items-start scroll-mt-16">
           <Reveal>
-            <p className="text-sm font-semibold uppercase tracking-wide text-pos">Фіскалізація</p>
-            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mt-3">
-              ПРРО без окремої програми
-            </h2>
-            <p className="text-muted mt-5 leading-relaxed">
-              Фіскальний чек формується прямо з каси через Checkbox — окремий застосунок для
-              ПРРО не потрібен. Зміна належить фіскальному реєстратору, а не комп'ютеру: якщо
-              каса зламалась посеред дня, її передають на інший пристрій без другого Z-звіту.
-            </p>
-            <p className="text-sm text-muted mt-5">
-              Як саме це працює —{' '}
-              <a href={HANDOVER_ARTICLE} className="text-pos font-semibold">
-                у довідці про зміну ПРРО і заміну каси →
-              </a>
-            </p>
+            <SectionHeading
+              align="left"
+              icon={<ShieldCheck size={48} />}
+              eyebrow="Фіскалізація"
+              title="ПРРО без окремої програми"
+              lede="Фіскальний чек формується прямо з каси через Checkbox — окремий застосунок для ПРРО не потрібен. Зміна належить фіскальному реєстратору, а не комп'ютеру: якщо каса зламалась посеред дня, її передають на інший пристрій без другого Z-звіту."
+            />
+            <a href={HANDOVER_ARTICLE} className="link-more text-[15px] mt-6">
+              Як саме це працює — у довідці про зміну ПРРО і заміну каси <ChevronRight size={20} />
+            </a>
           </Reveal>
           <Reveal>
-            <ul className="grid gap-4">
+            <ul className="card divide-y divide-line">
               {FISCAL_POINTS.map((t) => (
-                <li key={t} className="flex items-start gap-3 text-sm bg-mist border border-line rounded-card p-4">
-                  <ShieldCheck className="w-5 h-5 text-pos shrink-0" strokeWidth={1.75} />
+                <li key={t} className="flex items-start gap-3 text-[15px] text-body px-6 py-4">
+                  <ShieldCheck size={24} className="shrink-0" />
                   {t}
                 </li>
               ))}
@@ -350,11 +345,9 @@ export function PosPage() {
         </section>
 
         {/* Web vs desktop */}
-        <section className="max-w-6xl mx-auto px-6 pb-20">
+        <section className="max-w-6xl mx-auto px-6 pb-24">
           <Reveal>
-            <h2 className="text-2xl sm:text-3xl font-bold text-center max-w-xl mx-auto mb-10">
-              Веб-адмінка чи десктоп-каса?
-            </h2>
+            <SectionHeading icon={<Monitor size={48} />} title="Веб-адмінка чи десктоп-каса?" className="mb-12" />
           </Reveal>
           <TwoColumnCompare
             accentClass="text-pos"
@@ -386,40 +379,37 @@ export function PosPage() {
         />
 
         {/* Downloads */}
-        <section id="download" className="bg-mist border-y border-line">
-          <div className="max-w-5xl mx-auto px-6 py-20">
+        <section id="download" className="band scroll-mt-16">
+          <div className="max-w-5xl mx-auto px-6 py-24">
             <Reveal>
-              <h2 className="text-2xl sm:text-3xl font-bold text-center">Завантажити POS</h2>
-              <p className="text-muted text-center mt-3 max-w-lg mx-auto">
-                Десктопна каса для торгової точки — оберіть свою систему. {PRICING.pos.launch.label}.
-              </p>
+              <SectionHeading
+                icon={<Download size={48} />}
+                title="Завантажити POS"
+                lede={<>Десктопна каса для торгової точки — оберіть свою систему. {PRICING.pos.launch.label}.</>}
+              />
             </Reveal>
-            <div className="mt-10 grid sm:grid-cols-3 gap-6">
+            <div className="mt-12 grid sm:grid-cols-3 gap-6">
               {[
-                { key: 'windows', icon: '🪟', name: 'Windows', meta: 'Windows 10/11, 64-біт' },
-                { key: 'mac', icon: '🍎', name: 'macOS', meta: 'macOS 11+, Intel і Apple Silicon' },
-                { key: 'linux', icon: '🐧', name: 'Linux', meta: 'AppImage / .deb' },
+                { key: 'windows', icon: Monitor, name: 'Windows', meta: 'Windows 10/11, 64-біт' },
+                { key: 'mac', icon: Laptop, name: 'macOS', meta: 'macOS 11+, Intel і Apple Silicon' },
+                { key: 'linux', icon: Terminal, name: 'Linux', meta: 'AppImage / .deb' },
               ].map((card) => (
-                <Reveal key={card.key}>
+                <Reveal key={card.key} className="h-full">
                   <div
-                    className={`border rounded-card p-6 text-center bg-paper h-full flex flex-col ${
-                      os === card.key
-                        ? 'border-pos shadow-lg'
-                        : 'border-line transition-all duration-200 ease-out hover:-translate-y-1 hover:shadow-lg'
+                    className={`card-flat p-6 text-center h-full flex flex-col items-center ${
+                      os === card.key ? 'ring-2 ring-pos' : ''
                     }`}
                   >
-                    {os === card.key && (
-                      <span className="text-[11px] font-semibold text-pos mb-2">
-                        Рекомендовано для твоєї ОС
-                      </span>
-                    )}
-                    <div className="text-4xl">{card.icon}</div>
-                    <p className="font-bold mt-2">{card.name}</p>
-                    <p className="text-muted text-xs mt-1">{card.meta}</p>
+                    <span className={`text-xs font-semibold mb-3 ${os === card.key ? 'text-pos' : 'invisible'}`}>
+                      Рекомендовано для твоєї ОС
+                    </span>
+                    <card.icon size={48} />
+                    <p className="text-lg font-bold text-ink-strong mt-3">{card.name}</p>
+                    <p className="text-muted text-sm mt-1">{card.meta}</p>
                     <a
                       href={RELEASES_URL}
                       onClick={() => track('download_click', { os: card.key })}
-                      className="mt-5 bg-pos hover:bg-pos-press transition-colors text-white text-sm font-semibold py-3 rounded-full"
+                      className="btn-pos mt-6 self-stretch"
                     >
                       Завантажити
                     </a>
@@ -436,23 +426,20 @@ export function PosPage() {
         </section>
 
         {/* Getting started */}
-        <section className="max-w-6xl mx-auto px-6 py-20">
+        <section className="max-w-6xl mx-auto px-6 py-24">
           <Reveal>
-            <h2 className="text-2xl sm:text-3xl font-bold text-center max-w-xl mx-auto">Як почати</h2>
-            <p className="text-muted text-center mt-3">Від встановлення до першого чека — три кроки.</p>
+            <SectionHeading icon={<Star size={48} />} title="Як почати" lede="Від встановлення до першого чека — три кроки." />
           </Reveal>
-          <div className="mt-12 grid sm:grid-cols-3 gap-8">
+          <div className="mt-12 grid sm:grid-cols-3 gap-6">
             {GETTING_STARTED.map((s) => (
-              <Reveal key={s.n}>
-                <div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-pos font-extrabold text-sm">{s.n}</span>
-                    <div className="w-9 h-9 rounded-full bg-pos/5 grid place-items-center">
-                      <s.icon className="w-4 h-4 text-pos" strokeWidth={1.75} />
-                    </div>
+              <Reveal key={s.n} className="h-full">
+                <div className="card p-7 h-full">
+                  <div className="flex items-center justify-between">
+                    <s.icon size={24} />
+                    <span className="text-[13px] font-semibold text-faint tabular-nums">{s.n}</span>
                   </div>
-                  <h3 className="font-bold mt-4">{s.t}</h3>
-                  <p className="text-muted text-sm mt-2.5 leading-relaxed">{s.d}</p>
+                  <h3 className="text-lg font-bold text-ink-strong mt-3">{s.t}</h3>
+                  <p className="text-muted text-[15px] mt-2 leading-relaxed">{s.d}</p>
                 </div>
               </Reveal>
             ))}
@@ -460,23 +447,20 @@ export function PosPage() {
         </section>
 
         {/* Receipt visual + FAQ */}
-        <section className="max-w-6xl mx-auto px-6 py-20 grid lg:grid-cols-2 gap-16 items-start">
+        <section className="max-w-6xl mx-auto px-6 pb-24 grid lg:grid-cols-2 gap-16 items-start">
           <Reveal>
             <img
               src={posDevicesReceipt}
               alt={`Звіти з продажів ${PRODUCT.pos.name} на ноутбуці і чек на телефоні`}
-              className="w-full h-auto rounded-2xl shadow-ambient"
+              className="w-full h-auto rounded-card shadow-ambient"
             />
           </Reveal>
           <Reveal>
-            <h2 className="text-2xl sm:text-3xl font-bold mb-8">Питання, які запитують найчастіше</h2>
+            <SectionHeading align="left" icon={<MessageCircle size={48} />} title="Питання, які запитують найчастіше" className="mb-8" />
             <Faq items={FAQ_ITEMS} />
-            <p className="text-sm text-muted mt-6">
-              Порівнюєте з іншими касами?{' '}
-              <a href="/yaku-kasu-obraty" className="text-pos font-semibold">
-                Дивіться чесне порівняння →
-              </a>
-            </p>
+            <a href="/yaku-kasu-obraty" className="link-more text-[15px] mt-6">
+              Порівнюєте з іншими касами? Дивіться чесне порівняння <ChevronRight size={20} />
+            </a>
           </Reveal>
         </section>
 

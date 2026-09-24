@@ -15,7 +15,7 @@ interface Props {
   video?: VideoSources; // when set, renders a looping muted video instead of the static <img>
 }
 
-/** Wraps a real product screenshot (or a real screen-recording) in a plain browser-window chrome. */
+/** Wraps a real product screenshot (or a real screen-recording) in a quiet window chrome, the way Things frames its app. */
 export function BrowserFrame({ src, alt, dark, accentClass = 'border-line', elevated, video }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -30,12 +30,12 @@ export function BrowserFrame({ src, alt, dark, accentClass = 'border-line', elev
 
   return (
     <div
-      className={`rounded-card overflow-hidden border ${elevated ? 'shadow-ambient' : 'shadow-xl'} ${accentClass} ${dark ? 'bg-[#0B0B0F]' : 'bg-paper'}`}
+      className={`rounded-[14px] overflow-hidden ${elevated ? 'shadow-ambient' : 'shadow-card'} ${accentClass} ${dark ? 'bg-[#1F2226]' : 'bg-paper'}`}
     >
-      <div className={`flex items-center gap-1.5 px-4 py-3 ${dark ? 'bg-[#151519]' : 'bg-mist'}`}>
-        <span className="w-2.5 h-2.5 rounded-full bg-[#FF5F57]" />
-        <span className="w-2.5 h-2.5 rounded-full bg-[#FEBC2E]" />
-        <span className="w-2.5 h-2.5 rounded-full bg-[#28C840]" />
+      <div className={`flex items-center gap-2 px-3.5 h-9 ${dark ? 'bg-[#2A2E33]' : 'bg-side border-b border-line'}`}>
+        {[0, 1, 2].map((i) => (
+          <span key={i} className={`w-3 h-3 rounded-full ring-1 ring-inset ${dark ? 'ring-white/25' : 'ring-[#C6CBD2]'}`} />
+        ))}
       </div>
       {video ? (
         <video ref={videoRef} className="w-full h-auto block" autoPlay muted loop playsInline poster={video.poster}>

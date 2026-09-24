@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" data-hue="slate">
+  <mask id="cut" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24"><rect x="0" y="0" width="24" height="24" fill="#FFFFFF"/><path d="M4 4 20 20" stroke="#000000" stroke-width="5" stroke-linecap="round"/></mask>
+  <g mask="url(#cut)"><path d="M5.25 11.25a9.5 9.5 0 0 1 13.5 0M8.5 14.5a5 5 0 0 1 7 0" fill="none" stroke="#6C7D93" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="18.5" r="1.75" fill="#6C7D93"/></g>
+  <path d="M4 4 20 20" fill="none" stroke="#6C7D93" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

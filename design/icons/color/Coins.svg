@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" data-hue="yellow">
+  <mask id="cut" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24"><rect x="0" y="0" width="24" height="24" fill="#FFFFFF"/><circle cx="9" cy="15" r="7.5" fill="#000000"/></mask>
+  <circle cx="15" cy="9" r="6" fill="#F8C00F" fill-opacity=".55" mask="url(#cut)"/>
+  <circle cx="9" cy="15" r="6" fill="#F8C00F"/>
+  <circle cx="9" cy="15" r="3.5" fill="none" stroke="#FFFFFF" stroke-opacity=".6" stroke-width="2"/>
+</svg>

@@ -11,12 +11,21 @@ export default {
   ],
   theme: {
     extend: {
+      // Neutrals are Things' (culturedcode.com, measured 2026-09-24); the
+      // accents — pos, live and the vertical tints — stay ours.
       colors: {
         paper: '#FFFFFF',
-        mist: '#F5F5F5',
-        ink: '#1A1A1A',
-        muted: '#6E6E6E',
-        line: '#E5E5E5',
+        mist: '#F2F5F7', // page background
+        side: '#F4F5F7', // a sidebar, a quiet panel
+        selected: '#DFE2E7',
+        ink: {
+          DEFAULT: '#303336',
+          strong: '#2C3138', // headings
+        },
+        body: '#44474B', // lead paragraphs
+        muted: '#55606E',
+        faint: '#8E9196',
+        line: '#DFE3E8',
         live: {
           DEFAULT: '#FF3D7A',
           press: '#D8215F',
@@ -33,15 +42,21 @@ export default {
           restaurant: '#E6EEF5',
         },
       },
+      // Inter (self-hosted, @fontsource-variable/inter) by default; Apple
+      // devices switch to SF through `html.apple` in index.css. The system
+      // font cannot simply lead this stack: Chrome resolves BlinkMacSystemFont
+      // as system-ui, which on Windows is Segoe UI.
       fontFamily: {
-        sans: ['Manrope', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
-        mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        sans: ['"Inter Variable"', '"Inter"', 'sans-serif'],
+        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
       },
       borderRadius: {
-        card: '12px',
+        card: '18px',
       },
       boxShadow: {
-        ambient: '0 30px 60px -20px rgba(26,26,26,0.25), 0 10px 24px -12px rgba(26,26,26,0.15)',
+        card: '0 2px 8px rgba(0,0,0,.1), 0 0 2px rgba(0,0,0,.1)',
+        'card-hover': '0 6px 20px rgba(0,20,60,.12), 0 0 2px rgba(0,0,0,.12)',
+        ambient: '0 30px 60px -12px rgba(0,20,60,.22), 0 0 0 1px rgba(0,28,70,.08)',
       },
     },
   },

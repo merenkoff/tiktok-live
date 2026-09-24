@@ -1,3 +1,8 @@
+/* Inter for everything that is not an Apple device (see fontFamily.sans).
+   The opsz build carries the optical-size axis, so big headings get Inter's
+   display cut the way SF switches to SF Display. */
+@import '@fontsource-variable/inter/opsz.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -7,7 +12,60 @@ html {
 }
 
 body {
-  @apply bg-paper text-ink antialiased;
+  @apply bg-mist text-ink antialiased;
+}
+
+/* SF on Mac, iPhone and iPad — the font Things is set in. The class is added
+   before first paint by an inline script in each template; without it (every
+   other platform, or no JS) the page stays in Inter, and on Apple devices
+   Inter is then never downloaded. */
+html.apple {
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
+
+/* The Things look, in one place: white cards with a soft shadow on the grey
+   page, centred section heads, one pill button and a chevron text link. */
+@layer components {
+  .card {
+    @apply bg-paper rounded-card shadow-card;
+  }
+  .card-link {
+    @apply card transition-shadow duration-200 ease-out hover:shadow-card-hover;
+  }
+  /* A card on a white band: grey instead of lifted. */
+  .card-flat {
+    @apply bg-mist rounded-card;
+  }
+  .band {
+    @apply bg-paper;
+  }
+  .eyebrow {
+    @apply text-[15px] font-semibold;
+  }
+  .h-display {
+    @apply text-[2.5rem] sm:text-5xl lg:text-[3.5rem] font-bold tracking-[-0.025em] leading-[1.05] text-ink-strong;
+  }
+  .h-section {
+    @apply text-3xl sm:text-4xl font-bold tracking-[-0.015em] leading-tight text-ink-strong;
+  }
+  .lede {
+    @apply text-lg sm:text-xl leading-[1.45] text-body;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-full px-6 h-12 text-[15px] font-semibold text-white transition-colors whitespace-nowrap;
+  }
+  .btn-pos {
+    @apply btn bg-pos hover:bg-pos-press;
+  }
+  .btn-live {
+    @apply btn bg-live hover:bg-live-press;
+  }
+  .btn-quiet {
+    @apply btn bg-paper text-ink shadow-card hover:shadow-card-hover;
+  }
+  .link-more {
+    @apply inline-flex items-center gap-0.5 font-semibold text-pos hover:text-pos-press;
+  }
 }
 
 /* Scroll-reveal. Content is visible by default (prerendered HTML, crawlers,
@@ -46,7 +104,7 @@ body {
 
 /* Long-form article body (Довідка). */
 .article h2 {
-  @apply text-2xl sm:text-3xl font-bold tracking-tight mt-12 mb-4;
+  @apply text-2xl sm:text-3xl font-bold tracking-tight text-ink-strong mt-12 mb-4;
 }
 .article h3 {
   @apply text-xl font-bold mt-8 mb-3;
@@ -63,7 +121,7 @@ body {
   @apply my-10 border-line;
 }
 .article p {
-  @apply text-ink/90 leading-relaxed mb-4;
+  @apply text-body leading-relaxed mb-4;
 }
 .article ul,
 .article ol {
@@ -92,11 +150,11 @@ body {
   @apply border border-line px-3 py-2 text-left align-top;
 }
 .article th {
-  @apply bg-mist font-semibold;
+  @apply bg-side font-semibold;
 }
 .article .lead {
   @apply text-lg text-ink leading-relaxed border-l-4 border-pos pl-5 my-6;
 }
 .article .callout {
-  @apply bg-mist border border-line rounded-card p-5 my-6 text-sm leading-relaxed;
+  @apply bg-side rounded-card p-5 my-6 text-sm leading-relaxed;
 }

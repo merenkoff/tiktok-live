@@ -8,12 +8,13 @@ import { Faq } from '../components/Faq';
 import { BrowserFrame } from '../components/BrowserFrame';
 import { TelegramChatMockup } from '../components/TelegramChatMockup';
 import { Reveal, StaggerGroup, StaggerItem } from '../components/Reveal';
-import { DecorCircle } from '../components/DecorCircle';
+import { AppIcon } from '../components/AppIcon';
+import { SectionHeading } from '../components/SectionHeading';
 import { StickyCta } from '../components/StickyCta';
 import { useScrollToHash } from '../hooks/useScrollToHash';
 import { PRICING, FEATURES } from '../lib/productFacts';
 import type { FaqItem } from '../lib/faqJsonLd';
-import { Bot, Monitor, BarChart3, Lock, Sparkles, MessageCircle } from 'lucide-react';
+import { BarChart3, Bot, Check, ChevronRight, Coins, Lock, MessageCircle, Monitor, Sparkles, Users, Video } from '../components/glyphs';
 import liveScreenshot from '../assets/screenshots/live-session.png';
 
 const STATS = [
@@ -103,21 +104,20 @@ export function LivePage() {
 
       <main className="flex-1">
         {/* Hero */}
-        <section ref={heroRef} className="relative max-w-6xl mx-auto px-6 pt-16 pb-20 grid lg:grid-cols-2 gap-12 items-center">
-          <DecorCircle
-            colorClass="bg-live/10"
-            className="absolute -top-10 -left-16 w-72 h-72 sm:w-96 sm:h-96 -z-10"
-          />
+        <section ref={heroRef} className="max-w-6xl mx-auto px-6 pt-16 sm:pt-20 pb-20 grid lg:grid-cols-2 gap-12 items-center">
           <Reveal>
-            <p className="text-sm font-semibold uppercase tracking-wide text-live">
+            <div className="w-20 h-20 rounded-[20px] bg-paper shadow-card grid place-items-center">
+              <Video size={48} />
+            </div>
+            <p className="eyebrow text-live mt-8">
               Операційна система для TikTok LIVE
             </p>
-            <h1 className="text-6xl sm:text-7xl font-extrabold tracking-tighter mt-4 leading-[0.98]">
+            <h1 className="h-display mt-3">
               Продавай у ефірі,
               <br />
               не в хаосі
             </h1>
-            <p className="text-muted text-lg mt-6 leading-relaxed">
+            <p className="lede mt-6">
               Коментар → бронь → Telegram. Поки ти показуєш наступну модель одягу, попередні
               замовлення вже зібрані, а бот питає в покупця ім'я, телефон і відділення Нової
               Пошти — без твоєї участі.
@@ -138,7 +138,6 @@ export function LivePage() {
               alt="Панель керування LIVE-сесією зі статистикою ефіру"
               dark
               elevated
-              accentClass="border-live/30"
             />
             <div className="relative z-10 -mt-10 ml-10 mr-6 rotate-1">
               <TelegramChatMockup />
@@ -147,25 +146,23 @@ export function LivePage() {
         </section>
 
         {/* Stat strip */}
-        <section className="border-y border-line bg-mist">
-          <div className="max-w-6xl mx-auto px-6 py-10 grid sm:grid-cols-3 gap-8 text-center">
+        <section className="max-w-6xl mx-auto px-6">
+          <div className="grid sm:grid-cols-3 gap-6 text-center">
             {STATS.map((s) => (
-              <div key={s.label}>
-                <p className="font-mono text-6xl md:text-7xl font-bold text-live tracking-tight">{s.value}</p>
-                <p className="text-muted text-sm mt-2">{s.label}</p>
+              <div key={s.label} className="card px-6 py-8">
+                <p className="tabular-nums text-5xl md:text-6xl font-bold text-live tracking-tight">{s.value}</p>
+                <p className="text-muted text-[15px] mt-2">{s.label}</p>
               </div>
             ))}
           </div>
         </section>
 
         {/* Before/after */}
-        <section className="max-w-6xl mx-auto px-6 py-20">
+        <section className="max-w-6xl mx-auto px-6 py-24">
           <Reveal>
-            <h2 className="text-2xl sm:text-3xl font-bold text-center max-w-xl mx-auto">
-              До і після LiveShop
-            </h2>
+            <SectionHeading icon={<Sparkles size={48} />} title="До і після LiveShop" />
           </Reveal>
-          <div className="mt-10">
+          <div className="mt-12">
             <TwoColumnCompare
               accentClass="text-live"
               left={{
@@ -191,10 +188,10 @@ export function LivePage() {
         </section>
 
         {/* How it looks */}
-        <section className="bg-mist border-y border-line">
-          <div className="max-w-4xl mx-auto px-6 py-20">
+        <section className="band">
+          <div className="max-w-4xl mx-auto px-6 py-24">
             <Reveal>
-              <h2 className="text-2xl sm:text-3xl font-bold text-center">Як це виглядає в ефірі</h2>
+              <SectionHeading icon={<Video size={48} />} title="Як це виглядає в ефірі" />
             </Reveal>
             <StaggerGroup className="mt-12 grid sm:grid-cols-3 gap-8">
               {[
@@ -204,7 +201,7 @@ export function LivePage() {
               ].map((s) => (
                 <StaggerItem key={s.n}>
                   <div className="text-center">
-                    <div className="w-10 h-10 rounded-full bg-live text-white font-bold grid place-items-center mx-auto">
+                    <div className="w-11 h-11 rounded-full bg-live text-white text-lg font-bold grid place-items-center mx-auto shadow-card">
                       {s.n}
                     </div>
                     <h3 className="font-bold mt-4">{s.t}</h3>
@@ -217,11 +214,9 @@ export function LivePage() {
         </section>
 
         {/* Feature narrative */}
-        <section className="max-w-6xl mx-auto px-6 pt-20">
+        <section className="max-w-6xl mx-auto px-6 pt-24">
           <Reveal>
-            <h2 className="text-2xl sm:text-3xl font-bold text-center max-w-xl mx-auto">
-              Що саме автоматизує LiveShop
-            </h2>
+            <SectionHeading icon={<Bot size={48} />} title="Що саме автоматизує LiveShop" />
           </Reveal>
         </section>
         <section className="max-w-6xl mx-auto px-6 divide-y divide-line">
@@ -264,57 +259,54 @@ export function LivePage() {
         </section>
 
         {/* Pricing / early access */}
-        <section id="pricing" className="bg-ink text-white mt-20">
-          <div className="max-w-5xl mx-auto px-6 py-20">
+        <section id="pricing" className="band mt-24 scroll-mt-16">
+          <div className="max-w-5xl mx-auto px-6 py-24">
             <Reveal>
-              <p className="text-sm font-semibold uppercase tracking-wide text-live">Ціна для перших користувачів</p>
-              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mt-3">
-                {PRICING.live.trialMonths} місяців безкоштовно, далі {PRICING.live.price} грн/міс
-              </h2>
-              <p className="text-white/70 mt-5 max-w-2xl leading-relaxed">
-                Ми запускаємось і шукаємо перших продавців, які продають одяг у TikTok LIVE
-                регулярно. Замість знижки на старті — умови, які лишаються з вами назавжди.
-              </p>
+              <SectionHeading
+                icon={<Coins size={48} />}
+                eyebrow="Ціна для перших користувачів"
+                eyebrowClass="text-live"
+                title={<>{PRICING.live.trialMonths} місяців безкоштовно, далі {PRICING.live.price} грн/міс</>}
+                lede="Ми запускаємось і шукаємо перших продавців, які продають одяг у TikTok LIVE регулярно. Замість знижки на старті — умови, які лишаються з вами назавжди."
+              />
             </Reveal>
-            <StaggerGroup className="mt-10 grid sm:grid-cols-3 gap-4">
+            <StaggerGroup className="mt-12 grid sm:grid-cols-3 gap-6">
               {EARLY_ACCESS_PERKS.map((p) => (
-                <StaggerItem key={p.t}>
-                  <div className="bg-white/5 border border-white/10 rounded-card p-5 h-full">
-                    <p.icon className="w-5 h-5 text-live" strokeWidth={1.75} />
-                    <h3 className="font-bold mt-4">{p.t}</h3>
-                    <p className="text-white/70 text-sm mt-2 leading-relaxed">{p.d}</p>
+                <StaggerItem key={p.t} className="h-full">
+                  <div className="card-flat p-6 h-full">
+                    <p.icon size={24} />
+                    <h3 className="font-bold text-ink-strong mt-3">{p.t}</h3>
+                    <p className="text-muted text-[15px] mt-2 leading-relaxed">{p.d}</p>
                   </div>
                 </StaggerItem>
               ))}
             </StaggerGroup>
-            <p className="text-white/50 text-xs mt-6">
+            <p className="text-muted text-xs mt-6 text-center">
               Умови раннього доступу діють для магазинів, підключених на період запуску.
             </p>
           </div>
         </section>
 
         {/* Coming soon */}
-        <section className="max-w-6xl mx-auto px-6 py-20">
+        <section className="max-w-6xl mx-auto px-6 py-24">
           <Reveal>
-            <p className="text-sm font-semibold uppercase tracking-wide text-live text-center">Скоро</p>
-            <h2 className="text-2xl sm:text-3xl font-bold text-center max-w-xl mx-auto mt-3">
-              Що ми робимо далі — і що входить у ваш тариф
-            </h2>
+            <SectionHeading
+              icon={<Sparkles size={48} />}
+              eyebrow="Скоро"
+              eyebrowClass="text-live"
+              title="Що ми робимо далі — і що входить у ваш тариф"
+            />
           </Reveal>
           <StaggerGroup className="mt-12 grid sm:grid-cols-3 gap-6">
             {COMING_SOON.map((f) => (
-              <StaggerItem key={f.t}>
-                <div className="border border-dashed border-line rounded-card p-6 h-full bg-paper">
+              <StaggerItem key={f.t} className="h-full">
+                <div className="card p-6 h-full">
                   <div className="flex items-center justify-between">
-                    <div className="w-10 h-10 rounded-full bg-live/5 grid place-items-center">
-                      <f.icon className="w-5 h-5 text-live" strokeWidth={1.75} />
-                    </div>
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-muted border border-line rounded-full px-2.5 py-1">
-                      у планах
-                    </span>
+                    <f.icon size={24} />
+                    <span className="text-xs font-semibold text-muted bg-side rounded-full px-2.5 py-1">у планах</span>
                   </div>
-                  <h3 className="font-bold mt-4">{f.t}</h3>
-                  <p className="text-muted text-sm mt-2.5 leading-relaxed">{f.d}</p>
+                  <h3 className="font-bold text-ink-strong mt-4">{f.t}</h3>
+                  <p className="text-muted text-[15px] mt-2 leading-relaxed">{f.d}</p>
                 </div>
               </StaggerItem>
             ))}
@@ -322,11 +314,11 @@ export function LivePage() {
         </section>
 
         {/* Who it's for */}
-        <section className="bg-mist border-y border-line">
-          <div className="max-w-4xl mx-auto px-6 py-20">
+        <section className="band">
+          <div className="max-w-4xl mx-auto px-6 py-24">
             <Reveal>
-              <h2 className="text-2xl sm:text-3xl font-bold text-center">Для кого це</h2>
-              <ul className="mt-8 grid sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
+              <SectionHeading icon={<Users size={48} />} title="Для кого це" />
+              <ul className="mt-12 grid sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
                 {[
                   'Продаєте одяг у TikTok LIVE і ведете ефіри кілька разів на тиждень',
                   'Втомились вручну гортати директ у пошуках замовлень після ефіру',
@@ -335,11 +327,9 @@ export function LivePage() {
                 ].map((t, i) => (
                   <li
                     key={t}
-                    className={`flex items-start gap-3 text-sm bg-paper border border-line rounded-card p-4 ${
-                      i % 2 === 1 ? 'sm:mt-6' : ''
-                    }`}
+                    className={`card-flat flex items-start gap-3 text-[15px] text-body p-5 ${i % 2 === 1 ? 'sm:mt-6' : ''}`}
                   >
-                    <span className="mt-1 w-1.5 h-1.5 rounded-full bg-live shrink-0" />
+                    <Check size={20} className="text-live shrink-0" />
                     {t}
                   </li>
                 ))}
@@ -349,9 +339,9 @@ export function LivePage() {
         </section>
 
         {/* FAQ */}
-        <section className="max-w-3xl mx-auto px-6 py-20">
+        <section className="max-w-3xl mx-auto px-6 py-24">
           <Reveal>
-            <h2 className="text-2xl sm:text-3xl font-bold text-center mb-10">Питання, які запитують найчастіше</h2>
+            <SectionHeading icon={<MessageCircle size={48} />} title="Питання, які запитують найчастіше" className="mb-10" />
           </Reveal>
           <Faq items={FAQ_ITEMS} />
         </section>
@@ -359,17 +349,17 @@ export function LivePage() {
         {/* Cross-sell */}
         <section className="max-w-4xl mx-auto px-6 pb-20">
           <Reveal>
-            <a
-              href="/pos"
-              className="block rounded-card border border-line bg-pos/5 hover:bg-pos/10 transition-colors p-8 text-center"
-            >
-              <p className="text-sm font-semibold uppercase tracking-wide text-pos">А ще</p>
-              <h2 className="text-2xl font-extrabold mt-2">Продаєш ще й офлайн?</h2>
+            <a href="/pos" className="card-link block p-8 text-center">
+              <AppIcon size={64} className="mx-auto" />
+              <p className="eyebrow text-pos mt-5">А ще</p>
+              <h2 className="text-2xl font-bold text-ink-strong mt-1">Продаєш ще й офлайн?</h2>
               <p className="text-muted mt-3 max-w-lg mx-auto">
                 POS каса від того ж LiveShop — з фіскалізацією ПРРО і режимом роботи без
                 інтернету для магазину в залі. {PRICING.pos.label}.
               </p>
-              <p className="mt-4 text-sm font-semibold text-pos">Переглянути POS →</p>
+              <p className="link-more mt-4 text-[15px]">
+                Переглянути POS <ChevronRight size={20} />
+              </p>
             </a>
           </Reveal>
         </section>

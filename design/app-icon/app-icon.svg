@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 100 100">
+  <!-- LiveShop app icon, concept A «Чек» (approved 2026-09-24): a white receipt on the POS-blue squircle,
+       lit the way Things' icon is — soft top-down gradient, a highlight on the upper half, a drop shadow
+       under the paper. Rendered by site/scripts/gen-app-icon.mjs; site/src/components/AppIcon.tsx draws the same shapes. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3D8EFF"/><stop offset="1" stop-color="#0052D1"/></linearGradient>
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#E8ECF2"/></linearGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".28"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
+  </defs>
+  <rect width="100" height="100" rx="22.5" fill="url(#bg)"/>
+  <rect x="1" y="1" width="98" height="50" rx="21.5" fill="url(#gloss)"/>
+  <path d="M29 83V22q0-6 6-6h30q6 0 6 6v61l-5.25-4-5.25 4-5.25-4L50 83l-5.25-4-5.25 4-5.25-4Z" fill="#00307A" fill-opacity=".28" transform="translate(0 3)"/>
+  <path d="M29 83V22q0-6 6-6h30q6 0 6 6v61l-5.25-4-5.25 4-5.25-4L50 83l-5.25-4-5.25 4-5.25-4Z" fill="url(#paper)"/>
+  <rect x="37" y="28" width="20" height="5" rx="2.5" fill="#C3CAD5"/>
+  <rect x="37" y="39" width="26" height="5" rx="2.5" fill="#D7DCE3"/>
+  <rect x="37" y="50" width="16" height="5" rx="2.5" fill="#D7DCE3"/>
+  <rect x="37" y="62" width="26" height="7" rx="3.5" fill="#303336"/>
+</svg>

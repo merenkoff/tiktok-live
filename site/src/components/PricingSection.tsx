@@ -1,5 +1,6 @@
 import { Reveal, StaggerGroup, StaggerItem } from './Reveal';
-import { Lock, Sparkles, MessageCircle, ArrowRight } from 'lucide-react';
+import { SectionHeading } from './SectionHeading';
+import { ArrowRight, ChevronRight, Coins, Lock, MessageCircle, Sparkles } from './glyphs';
 import { PRICING, COMPETITOR_FACTS } from '../lib/productFacts';
 
 const { pos } = PRICING;
@@ -44,115 +45,101 @@ const PERKS = [
 /** The pricing block for /pos: the early-access offer the way /live states its own. */
 export function PricingSection() {
   return (
-    <section id="pricing" className="bg-ink text-white">
-      <div className="max-w-6xl mx-auto px-6 py-20">
+    <section id="pricing" className="band scroll-mt-16">
+      <div className="max-w-6xl mx-auto px-6 py-24">
         <Reveal>
-          <p className="text-sm font-semibold uppercase tracking-wide text-pos">Ціна для перших користувачів</p>
-          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mt-3">
-            Безкоштовно на період запуску, далі від {BASE.price} грн/міс
-          </h2>
-          <p className="text-white/70 mt-5 max-w-2xl leading-relaxed">
-            Ми запускаємось і шукаємо перші магазини, квіткові, кав'ярні й ресторани, які працюватимуть
-            на касі щодня. Замість знижки на старті — умови, які лишаються з вами назавжди.
-          </p>
+          <SectionHeading
+            icon={<Coins size={48} />}
+            eyebrow="Ціна для перших користувачів"
+            title={<>Безкоштовно на період запуску, далі від {BASE.price} грн/міс</>}
+            lede="Ми запускаємось і шукаємо перші магазини, квіткові, кав'ярні й ресторани, які працюватимуть на касі щодня. Замість знижки на старті — умови, які лишаються з вами назавжди."
+          />
         </Reveal>
 
         {/* The offer in one line: what you pay now, what you pay later, and that it never moves. */}
-        <Reveal className="mt-10">
-          <div className="rounded-2xl bg-white/5 border border-white/10 p-6 sm:p-8 grid md:grid-cols-[auto_auto_1fr] gap-6 md:gap-10 items-center">
+        <Reveal className="mt-12">
+          <div className="card-flat p-6 sm:p-8 grid md:grid-cols-[auto_auto_1fr] gap-6 md:gap-10 items-center">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-white/50">Зараз</p>
+              <p className="text-[13px] font-semibold text-muted">Зараз</p>
               <p className="mt-1">
-                <span className="font-mono text-6xl font-bold tracking-tight text-white">0</span>
-                <span className="text-white/60 text-sm ml-2">грн/міс</span>
+                <span className="text-6xl font-bold tracking-tight tabular-nums text-ink-strong">0</span>
+                <span className="text-muted text-sm ml-2">грн/міс</span>
               </p>
-              <p className="text-white/60 text-sm mt-1">на період запуску</p>
+              <p className="text-muted text-sm mt-1">на період запуску</p>
             </div>
-            <ArrowRight className="w-7 h-7 text-white/30 hidden md:block" strokeWidth={1.5} />
+            <ArrowRight size={40} className="text-faint hidden md:block" />
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-white/50">Потім</p>
+              <p className="text-[13px] font-semibold text-muted">Потім</p>
               <p className="mt-1">
-                <span className="font-mono text-6xl font-bold tracking-tight text-pos">{BASE.price}</span>
-                <span className="text-white/60 text-sm ml-2">грн/міс за магазин</span>
+                <span className="text-6xl font-bold tracking-tight tabular-nums text-pos">{BASE.price}</span>
+                <span className="text-muted text-sm ml-2">грн/міс за магазин</span>
               </p>
-              <p className="text-white/80 text-sm mt-1 flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-pos" strokeWidth={2} />
+              <p className="text-body text-sm mt-1 flex items-center gap-1.5">
+                <Lock size={24} className="shrink-0" />
                 і ця ціна ваша назавжди — до {pos.perStoreRegisters} кас, помісячно, без передплати
               </p>
             </div>
           </div>
         </Reveal>
 
-        <StaggerGroup className="mt-6 grid sm:grid-cols-3 gap-4">
+        <StaggerGroup className="mt-6 grid sm:grid-cols-3 gap-6">
           {PERKS.map((p) => (
             <StaggerItem key={p.t}>
-              <div className="bg-white/5 border border-white/10 rounded-card p-5 h-full">
-                <p.icon className="w-5 h-5 text-pos" strokeWidth={1.75} />
-                <h3 className="font-bold mt-4">{p.t}</h3>
-                <p className="text-white/70 text-sm mt-2 leading-relaxed">{p.d}</p>
+              <div className="card-flat p-6 h-full">
+                <p.icon size={24} />
+                <h3 className="font-bold text-ink-strong mt-3">{p.t}</h3>
+                <p className="text-muted text-[15px] mt-2 leading-relaxed">{p.d}</p>
               </div>
             </StaggerItem>
           ))}
         </StaggerGroup>
 
         {/* Plans */}
-        <Reveal className="mt-14">
-          <p className="text-sm font-semibold uppercase tracking-wide text-white/50">Тарифи після запуску</p>
+        <Reveal className="mt-16">
+          <h3 className="text-2xl font-bold text-ink-strong text-center">Тарифи після запуску</h3>
         </Reveal>
-        <div className="mt-5 grid md:grid-cols-3 gap-4">
+        <div className="mt-8 grid md:grid-cols-3 gap-6">
           {pos.plans.map((plan) => (
             <Reveal key={plan.id}>
-              <div
-                className={`h-full rounded-2xl p-6 flex flex-col border ${
-                  plan.status === 'available' ? 'bg-paper text-ink border-transparent' : 'bg-white/5 border-white/10'
-                }`}
-              >
+              <div className={`h-full p-6 flex flex-col ${plan.status === 'available' ? 'card ring-2 ring-pos' : 'card-flat'}`}>
                 <div className="flex items-center justify-between gap-3">
-                  <p className="font-bold">{plan.name}</p>
+                  <p className="font-bold text-ink-strong">{plan.name}</p>
                   {plan.status === 'coming' && (
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-white/60 border border-white/20 rounded-full px-2 py-0.5">
-                      у розробці
-                    </span>
+                    <span className="text-xs font-semibold text-muted bg-paper rounded-full px-2.5 py-1">у розробці</span>
                   )}
                 </div>
                 <p className="mt-3">
-                  <span className="font-mono text-4xl font-bold tracking-tight text-pos">{plan.price}</span>
-                  <span className={`text-sm ml-1.5 ${plan.status === 'available' ? 'text-muted' : 'text-white/60'}`}>
-                    грн/міс за магазин
-                  </span>
+                  <span className="text-4xl font-bold tracking-tight tabular-nums text-pos">{plan.price}</span>
+                  <span className="text-sm ml-1.5 text-muted">грн/міс за магазин</span>
                 </p>
-                <p className={`text-sm mt-3 leading-relaxed flex-1 ${plan.status === 'available' ? 'text-muted' : 'text-white/70'}`}>
-                  {plan.note}
-                </p>
-                <p className={`text-xs mt-4 pt-3 border-t ${plan.status === 'available' ? 'text-muted border-line' : 'text-white/50 border-white/10'}`}>
-                  Ціна закріплюється {plan.lock}.
-                </p>
+                <p className="text-[15px] mt-3 leading-relaxed flex-1 text-muted">{plan.note}</p>
+                <p className="text-xs mt-4 pt-3 border-t border-line text-muted">Ціна закріплюється {plan.lock}.</p>
               </div>
             </Reveal>
           ))}
           <Reveal>
-            <div className="h-full rounded-2xl p-6 flex flex-col bg-white/5 border border-white/10">
-              <p className="font-bold">{TABLES.name}</p>
+            <div className="h-full card-flat p-6 flex flex-col">
+              <p className="font-bold text-ink-strong">{TABLES.name}</p>
               <p className="mt-3">
-                <span className="font-mono text-4xl font-bold tracking-tight text-white">+{TABLES.price}</span>
-                <span className="text-white/60 text-sm ml-1.5">грн/міс</span>
+                <span className="text-4xl font-bold tracking-tight tabular-nums text-ink-strong">+{TABLES.price}</span>
+                <span className="text-muted text-sm ml-1.5">грн/міс</span>
               </p>
-              <p className="text-white/70 text-sm mt-3 leading-relaxed flex-1">
+              <p className="text-muted text-[15px] mt-3 leading-relaxed flex-1">
                 План залу, рахунки столів, раунди на кухню, передчек і розділення рахунку. Доповнення до
                 будь-якого тарифу.
               </p>
-              <p className="text-white/50 text-xs mt-4 pt-3 border-t border-white/10">Для ресторану з офіціантами.</p>
+              <p className="text-muted text-xs mt-4 pt-3 border-t border-line">Для ресторану з офіціантами.</p>
             </div>
           </Reveal>
         </div>
 
         {/* Why monthly */}
         <Reveal className="mt-10">
-          <div className="rounded-2xl border border-white/10 p-6 sm:p-8 grid md:grid-cols-[1fr_auto] gap-6 items-center">
+          <div className="card-flat p-6 sm:p-8 grid md:grid-cols-[1fr_auto] gap-6 items-center">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-wide text-white/50">Чому без передплати</p>
-              <p className="mt-2 leading-relaxed text-white/85">{checkboxComparison()}</p>
-              <p className="text-xs text-white/50 mt-3">
+              <p className="font-bold text-ink-strong">Чому без передплати</p>
+              <p className="mt-2 leading-relaxed text-body">{checkboxComparison()}</p>
+              <p className="text-xs text-muted mt-3">
                 Станом на {uaDate(cb.checkedAt)}, за{' '}
                 <a href={cb.source} rel="nofollow noopener" target="_blank" className="text-pos font-semibold">
                   публікацією {cb.name}
@@ -160,15 +147,12 @@ export function PricingSection() {
                 . Підписку {cb.name} магазин оплачує окремо від нашої каси.
               </p>
             </div>
-            <a
-              href="#cta"
-              className="bg-pos hover:bg-pos-press transition-colors text-white text-sm font-semibold px-6 py-3.5 rounded-full text-center"
-            >
+            <a href="#cta" className="btn-pos">
               Зафіксувати ціну
             </a>
           </div>
         </Reveal>
-        <p className="text-white/50 text-xs mt-6">
+        <p className="text-muted text-xs mt-6 text-center">
           Умови раннього доступу діють для магазинів, підключених на період запуску.
         </p>
       </div>
@@ -180,23 +164,23 @@ export function PricingSection() {
 export function PricingCard({ addon }: { addon?: boolean }) {
   return (
     <Reveal>
-      <div className="rounded-2xl bg-ink text-white p-6 sm:p-8 grid sm:grid-cols-[auto_1fr_auto] gap-6 items-center">
+      <div className="card p-6 sm:p-8 grid sm:grid-cols-[auto_1fr_auto] gap-6 items-center">
         <p className="whitespace-nowrap">
-          <span className="font-mono text-5xl font-bold tracking-tight">0</span>
-          <span className="text-white/60 text-sm ml-1.5">грн зараз</span>
+          <span className="text-5xl font-bold tracking-tight tabular-nums text-ink-strong">0</span>
+          <span className="text-muted text-sm ml-1.5">грн зараз</span>
         </p>
         <div>
-          <p className="font-bold flex items-center gap-2">
-            <Lock className="w-4 h-4 text-pos" strokeWidth={2} />
+          <p className="font-bold text-ink-strong flex items-center gap-2">
+            <Lock size={24} className="shrink-0" />
             Потім {BASE.price} грн/міс за магазин — і ця ціна ваша назавжди
           </p>
-          <p className="text-white/70 text-sm mt-1 leading-relaxed">
+          <p className="text-muted text-[15px] mt-1 leading-relaxed">
             До {pos.perStoreRegisters} кас{addon ? `, столи — ще ${TABLES.price} грн/міс` : ''}. Помісячно, без
             передплати. Усе, що ми додамо далі, входить у вашу ціну.
           </p>
         </div>
-        <a href="/pos#pricing" className="text-sm font-semibold text-pos whitespace-nowrap">
-          Умови для перших →
+        <a href="/pos#pricing" className="link-more text-[15px] whitespace-nowrap">
+          Умови для перших <ChevronRight size={20} />
         </a>
       </div>
     </Reveal>

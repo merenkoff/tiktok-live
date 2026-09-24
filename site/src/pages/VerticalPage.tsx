@@ -6,15 +6,15 @@ import { Faq } from '../components/Faq';
 import { BrowserFrame } from '../components/BrowserFrame';
 import { FeatureRow } from '../components/FeatureRow';
 import { Reveal, StaggerGroup, StaggerItem } from '../components/Reveal';
-import { DecorCircle } from '../components/DecorCircle';
+import { SectionHeading } from '../components/SectionHeading';
 import { StickyCta } from '../components/StickyCta';
-import { VerticalCards } from '../components/VerticalCards';
+import { VerticalCards, VERTICAL_GLYPH } from '../components/VerticalCards';
 import { PricingCard } from '../components/PricingSection';
 import { Roadmap } from '../components/Roadmap';
 import { useScrollToHash } from '../hooks/useScrollToHash';
 import { PRICING, roadmapFor } from '../lib/productFacts';
 import type { VerticalPageData } from '../content/verticals';
-import { ShieldCheck, WifiOff, Package, QrCode, Users, BarChart3 } from 'lucide-react';
+import { BarChart3, ChevronRight, MessageCircle, Package, QrCode, ShieldCheck, Users, WifiOff } from '../components/glyphs';
 
 /** The core every vertical shares; short on purpose — /pos tells the long version. */
 const CORE = [
@@ -28,6 +28,7 @@ const CORE = [
 
 export function VerticalPage({ page }: { page: VerticalPageData }) {
   const { fact, content } = page;
+  const Mark = VERTICAL_GLYPH[fact.id];
   const heroRef = useRef<HTMLElement>(null);
   useScrollToHash();
 
@@ -37,31 +38,33 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
 
       <main className="flex-1">
         {/* Hero */}
-        <section ref={heroRef} className="relative max-w-6xl mx-auto px-6 pt-16 pb-20 grid lg:grid-cols-2 gap-12 items-center">
-          <DecorCircle colorClass="bg-pos/10" className="absolute -top-10 -left-16 w-72 h-72 sm:w-96 sm:h-96 -z-10" />
-          <Reveal>
-            <p className="text-sm font-semibold uppercase tracking-wide text-pos">{fact.eyebrow}</p>
-            <h1 className="text-5xl sm:text-6xl font-extrabold tracking-tighter mt-4 leading-[0.98]">{content.h1}</h1>
-            <p className="text-muted text-lg mt-6 leading-relaxed">{content.lede}</p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <a href="/pos#download" className="bg-pos hover:bg-pos-press transition-colors text-white text-sm font-semibold px-6 py-3.5 rounded-full">
+        <section ref={heroRef} className="max-w-6xl mx-auto px-6 pt-16 sm:pt-20 pb-24 text-center">
+          <Reveal className="flex flex-col items-center">
+            <div className={`w-24 h-24 rounded-[22px] grid place-items-center shadow-card ${fact.tint}`}>
+              <Mark size={48} />
+            </div>
+            <p className="eyebrow text-pos mt-8">{fact.eyebrow}</p>
+            <h1 className="h-display mt-3 max-w-4xl">{content.h1}</h1>
+            <p className="lede mt-6 max-w-2xl">{content.lede}</p>
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
+              <a href="/pos#download" className="btn-pos">
                 Завантажити POS
               </a>
-              <a href="#cta" className="border border-line hover:border-ink transition-colors text-sm font-semibold px-6 py-3.5 rounded-full">
-                Замовити демо
+              <a href="#cta" className="link-more text-[17px]">
+                Замовити демо <ChevronRight size={20} />
               </a>
             </div>
             <p className="text-sm text-muted mt-5">{PRICING.pos.label}.</p>
           </Reveal>
-          <Reveal>
-            <BrowserFrame src={content.hero.src} alt={content.hero.alt} accentClass="border-pos/30" elevated />
+          <Reveal className="mt-14 max-w-5xl mx-auto">
+            <BrowserFrame src={content.hero.src} alt={content.hero.alt} elevated />
           </Reveal>
         </section>
 
         {/* Rows */}
-        <section className="max-w-6xl mx-auto px-6 pb-8">
+        <section className="max-w-6xl mx-auto px-6 pb-12">
           <Reveal>
-            <h2 className="text-2xl sm:text-3xl font-bold text-center max-w-xl mx-auto">Як це виглядає на касі</h2>
+            <SectionHeading icon={<Mark size={48} />} title="Як це виглядає на касі" />
           </Reveal>
           {content.rows.map((row, i) => (
             <FeatureRow
@@ -72,29 +75,28 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
               bullets={row.bullets}
               accentClass="text-pos"
               reverse={i % 2 === 1}
-              visual={row.shot ? <BrowserFrame src={row.shot.src} alt={row.shot.alt} accentClass="border-pos/20" /> : undefined}
+              visual={row.shot ? <BrowserFrame src={row.shot.src} alt={row.shot.alt} /> : undefined}
             />
           ))}
         </section>
 
         {/* Shared core */}
-        <section className="bg-mist border-y border-line">
-          <div className="max-w-6xl mx-auto px-6 py-20">
+        <section className="band">
+          <div className="max-w-6xl mx-auto px-6 py-24">
             <Reveal>
-              <h2 className="text-2xl sm:text-3xl font-bold text-center max-w-xl mx-auto">Спільне ядро для всіх</h2>
-              <p className="text-muted text-center mt-3 max-w-xl mx-auto">
-                Те, що є в касі незалежно від того, що ви продаєте. Докладно — на сторінці каси.
-              </p>
+              <SectionHeading
+                icon={<Package size={48} />}
+                title="Спільне ядро для всіх"
+                lede="Те, що є в касі незалежно від того, що ви продаєте. Докладно — на сторінці каси."
+              />
             </Reveal>
-            <StaggerGroup className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            <StaggerGroup className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {CORE.map((c) => (
-                <StaggerItem key={c.t}>
-                  <a href={c.href} className="block h-full border border-line rounded-card p-5 bg-paper transition-all duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:border-pos/30">
-                    <div className="w-9 h-9 rounded-full bg-pos/5 grid place-items-center">
-                      <c.icon className="w-4 h-4 text-pos" strokeWidth={1.75} />
-                    </div>
-                    <h3 className="font-bold mt-3">{c.t}</h3>
-                    <p className="text-muted text-sm mt-1.5 leading-relaxed">{c.d}</p>
+                <StaggerItem key={c.t} className="h-full">
+                  <a href={c.href} className="block h-full card-flat p-6 transition-colors hover:bg-selected">
+                    <c.icon size={24} />
+                    <h3 className="font-bold text-ink-strong mt-3">{c.t}</h3>
+                    <p className="text-muted text-[15px] mt-1.5 leading-relaxed">{c.d}</p>
                   </a>
                 </StaggerItem>
               ))}
@@ -103,7 +105,7 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
         </section>
 
         {/* Pricing */}
-        <section className="max-w-4xl mx-auto px-6 py-16">
+        <section className="max-w-4xl mx-auto px-6 py-20">
           <PricingCard addon={fact.id === 'restaurant'} />
         </section>
 
@@ -111,12 +113,12 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
         <Roadmap items={roadmapFor(fact.id)} lede="Усе це входить у тариф тих, хто підключився на період запуску." />
 
         {/* FAQ */}
-        <section className="max-w-3xl mx-auto px-6 pb-16">
+        <section className="max-w-3xl mx-auto px-6 pb-24">
           <Reveal>
-            <h2 className="text-2xl sm:text-3xl font-bold mb-8">Питання, які запитують найчастіше</h2>
+            <SectionHeading icon={<MessageCircle size={48} />} title="Питання, які запитують найчастіше" className="mb-10" />
             <Faq items={content.faq} />
             {content.guide && (
-              <p className="text-muted mt-8 leading-relaxed">
+              <p className="text-muted mt-8 leading-relaxed text-center">
                 Як це виглядає в роботі щодня, крок за кроком, —{' '}
                 <a href={`/dovidka/${content.guide.slug}`} className="text-pos font-semibold hover:underline underline-offset-2">
                   {content.guide.label}
@@ -128,9 +130,9 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
         </section>
 
         {/* Other verticals */}
-        <section className="max-w-6xl mx-auto px-6 pb-16">
+        <section className="max-w-6xl mx-auto px-6 pb-24">
           <Reveal>
-            <h2 className="text-2xl font-bold mb-8">Інший бізнес?</h2>
+            <SectionHeading title="Інший бізнес?" className="mb-10" />
           </Reveal>
           <VerticalCards current={fact.id} />
         </section>

@@ -17,7 +17,7 @@ const BUBBLES: Bubble[] = [
 
 export function TelegramChatMockup() {
   return (
-    <div className="rounded-card border border-line bg-paper shadow-xl overflow-hidden">
+    <div className="card overflow-hidden shadow-card-hover">
       <div className="flex items-center gap-3 px-4 py-3 bg-[#229ED9] text-white">
         <div className="w-8 h-8 rounded-full bg-white/20 grid place-items-center text-sm font-bold">L</div>
         <div>

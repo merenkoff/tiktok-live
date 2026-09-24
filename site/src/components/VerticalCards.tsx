@@ -1,5 +1,16 @@
 import { StaggerGroup, StaggerItem } from './Reveal';
 import { VERTICALS, type VerticalFact } from '../lib/productFacts';
+import { Check, ChevronRight, Coffee, Flower2, Shirt, UtensilsCrossed, type Glyph } from './glyphs';
+
+/** Each vertical's glyph — the mark on its landing's hero and section heads. */
+export const VERTICAL_GLYPH: Record<VerticalFact['id'], Glyph> = {
+  clothing: Shirt,
+  flowers: Flower2,
+  cafe: Coffee,
+  restaurant: UtensilsCrossed,
+};
+
+const TILT = ['-rotate-6', '', 'rotate-6'];
 
 /**
  * The four businesses the POS is sold to, as cards linking to their landings.
@@ -8,19 +19,17 @@ import { VERTICALS, type VerticalFact } from '../lib/productFacts';
  */
 export function VerticalCards({ current }: { current?: VerticalFact['id'] }) {
   return (
-    <StaggerGroup className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+    <StaggerGroup className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
       {VERTICALS.map((v) => {
         const active = v.id === current;
         return (
-          <StaggerItem key={v.id}>
+          <StaggerItem key={v.id} className="h-full">
             <a
               href={v.path}
               aria-current={active ? 'page' : undefined}
-              className={`group block h-full rounded-2xl border p-6 transition-all duration-200 ease-out hover:-translate-y-1 hover:shadow-lg ${v.tint} ${
-                active ? 'border-pos' : 'border-transparent hover:border-pos/30'
-              }`}
+              className={`group card-link h-full overflow-hidden flex flex-col ${active ? 'ring-2 ring-pos' : ''}`}
             >
-              <div className="flex items-end gap-1 h-16">
+              <div className={`h-36 flex items-center justify-center ${v.tint}`}>
                 {v.illustrations.map((src, i) => (
                   <img
                     key={src}
@@ -28,25 +37,27 @@ export function VerticalCards({ current }: { current?: VerticalFact['id'] }) {
                     alt=""
                     aria-hidden
                     loading="lazy"
-                    width={64}
-                    height={64}
-                    className={`rounded-xl shadow-sm ${i === 1 ? 'w-16 h-16 -mx-1 z-10' : 'w-12 h-12 opacity-90'}`}
+                    width={80}
+                    height={80}
+                    className={`w-20 h-20 rounded-2xl shadow-card ${i ? '-ml-3' : ''} ${TILT[i]} ${i === 1 ? 'z-10' : ''}`}
                   />
                 ))}
               </div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted mt-5">{v.eyebrow}</p>
-              <h3 className="text-xl font-extrabold tracking-tight mt-1">{v.title}</h3>
-              <ul className="mt-3 space-y-1.5">
-                {v.bullets.map((b) => (
-                  <li key={b} className="flex items-start gap-2 text-sm text-ink/85">
-                    <span className="mt-2 w-1.5 h-1.5 rounded-full bg-pos shrink-0" />
-                    {b}
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-4 text-sm font-semibold text-pos flex items-center gap-1.5">
-                Детальніше <span className="transition-transform group-hover:translate-x-0.5">→</span>
-              </p>
+              <div className="p-6 flex flex-col flex-1">
+                <h3 className="text-[22px] font-bold text-ink-strong">{v.title}</h3>
+                <p className="text-sm text-muted mt-0.5">{v.eyebrow}</p>
+                <ul className="mt-4 space-y-2 flex-1">
+                  {v.bullets.map((b) => (
+                    <li key={b} className="flex items-start gap-2 text-[15px] leading-snug text-body">
+                      <Check size={20} className="text-pos shrink-0" />
+                      {b}
+                    </li>
+                  ))}
+                </ul>
+                <p className="link-more mt-5 text-[15px]">
+                  Детальніше <ChevronRight size={20} className="transition-transform group-hover:translate-x-0.5" />
+                </p>
+              </div>
             </a>
           </StaggerItem>
         );
