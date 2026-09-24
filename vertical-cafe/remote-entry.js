@@ -1,6 +1,6 @@
 import { lazy as e } from "react";
 //#region src/platform/version.ts
-var t = "2.3.0";
+var t = "2.4.0";
 //#endregion
 //#region src/modules/lazyWithRetry.ts
 async function n(e, { retries: t = 2, backoffMs: n = 400 } = {}) {
@@ -18,7 +18,7 @@ function r(t, r) {
 }
 //#endregion
 //#region src/modules/vertical-cafe/manifest.ts
-var i = r(() => import("./CafeCatalog-AZjtXqjn.js")), a = r(() => import("./KitchenPage-IiWYxnPi.js")), o = r(() => import("./CafePanels-99GsWr7h.js")), s = r(() => import("./CafeAnalyticsPage-kqfP7qYj.js")), c = {
+var i = r(() => import("./CafeCatalog-D6PVClQz.js")), a = r(() => import("./KitchenPage-DvbFsKAG.js")), o = r(() => import("./CafePanels-C89hoqrE.js")), s = r(() => import("./CafeAnalyticsPage-ClNCdj_Z.js")), c = {
 	id: "vertical-cafe",
 	title: "Кафе",
 	shells: [
@@ -40,7 +40,7 @@ var i = r(() => import("./CafeCatalog-AZjtXqjn.js")), a = r(() => import("./Kitc
 	nav: [{
 		to: "/kitchen",
 		label: "Кухня",
-		icon: "ClipboardList",
+		icon: "ChefHat",
 		location: "cashier-primary",
 		order: 80,
 		match: "/kitchen"

@@ -1,21 +1,21 @@
-import { r as e } from "./hostPlatform-BSaDrC_D.js";
+import { r as e } from "./hostPlatform-D3rxsd42.js";
 import { jsx as t, jsxs as n } from "react/jsx-runtime";
 //#region src/modules/vertical-cafe/ui/Stat.tsx
 function r({ label: e, value: r, strong: i, hint: a, tone: o, testId: s }) {
 	return /* @__PURE__ */ n("div", {
-		className: "rounded-sq bg-sq-bg p-3",
+		className: "rounded-xl bg-sq-sidebar px-4 py-3.5",
 		"data-testid": s,
 		children: [
 			/* @__PURE__ */ t("p", {
-				className: "text-xs text-sq-muted",
+				className: "text-[13px] font-medium text-sq-secondary",
 				children: e
 			}),
 			/* @__PURE__ */ t("p", {
-				className: `mt-0.5 ${i ? "text-lg font-semibold text-sq-text" : "text-sq-text"}`,
+				className: `mt-1 tabular-nums ${i ? "text-[22px] leading-tight font-bold text-sq-heading" : "text-sq-text"}`,
 				children: r
 			}),
 			a && /* @__PURE__ */ t("p", {
-				className: `mt-0.5 text-[11px] ${o === "warn" ? "text-amber-600" : "text-sq-muted"}`,
+				className: `mt-1 text-xs ${o === "warn" ? "text-amber-600" : "text-sq-muted"}`,
 				children: a
 			})
 		]

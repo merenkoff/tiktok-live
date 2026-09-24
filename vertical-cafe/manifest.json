@@ -1,20 +1,20 @@
 {
   "schema": 1,
   "moduleId": "vertical-cafe",
-  "version": "2.3.0",
-  "minHostPlatform": 16,
+  "version": "2.4.0",
+  "minHostPlatform": 17,
   "entry": "remote-entry.js",
   "keyId": "2a73632c13044371",
-  "builtAt": "2026-09-24T13:38:56.990Z",
+  "builtAt": "2026-09-24T22:57:51.798Z",
   "files": {
     "BarcodeScanner-DDyd6b-m.js": "sha384-h7k7FozxihdT2cYBXZsLuvH2nmezpFoHZ17TVH+R34lHtTcbvHJBkmWVo9KVWFbs",
-    "CafeAnalyticsPage-kqfP7qYj.js": "sha384-aHGtQZjbMd208FzQtruujq7WHt8/sXZVDj7Rp5cgh3wmJLlZ01dK3U9io5CpjP2l",
-    "CafeCatalog-AZjtXqjn.js": "sha384-CwoAN9o1NpCuNrtfryb330dcZK6uSUJsqEXuKAno0J+6xZoxiNLHJmZozUV7Rwq+",
-    "CafePanels-99GsWr7h.js": "sha384-S+NGHwFcdzWCoFv6LfiauleIpKmu4Bs0754f5TrVhWvtkHA7m9bP0LyO55JNUXPg",
-    "KitchenPage-IiWYxnPi.js": "sha384-pWLtfBse8Ru78nx/kc5AZqWvRdG0E24IU/33qSPo/IU4DV+QHQqp8YEOnbDBpZ02",
-    "figures-CvCQJyZx.js": "sha384-jr1EcQ8aiQn9j4HD2Nzt0ayJoJJPhjoBFoMQpnDqy3h0OduNz5l1rzw7XYxDCVS1",
-    "hostPlatform-BSaDrC_D.js": "sha384-mHi12dO61e0ciSwpBKqJ35lUv7QCug6gsqavqHaS4MW904OM3M+pTAkDPvDz/seD",
-    "remote-entry.js": "sha384-FSmO+cj9FdK1CbfcIySgoRRUIO7YRqD1SGCGeG0dBYFWRBc9hNZxn/KvM+Ghaiz/",
-    "style.css": "sha384-8NJM39bif1B+kIKt/aayiE7RZTvLAMf1/Krb8/onEKSZkGgzTUzdYeWCoALi4ZMM"
+    "CafeAnalyticsPage-ClNCdj_Z.js": "sha384-jE4AcHVcO8rbpuGT4SNIikzPE4YcLLmvgSjA1qOrj2puIfELkPVz3o6SPF3RMErK",
+    "CafeCatalog-D6PVClQz.js": "sha384-p5sFC16+R5f6X5Zg8ha6FxQHnvwgOpB9lSK+E8sysVzmdMBVPuYeKloFu9a+emq3",
+    "CafePanels-C89hoqrE.js": "sha384-uQQaDdR6SkIDTG+xuv/SANUIfJypwglyHQHnzigHom6VJHjo93o/dvhr8XGtFFP3",
+    "KitchenPage-DvbFsKAG.js": "sha384-CVrQkodVx3Ns63rCEPDlbKzKi9sR+SxVx5mOHKas2+Ql0ULs0J89x2TOAE9mmdXv",
+    "figures-BHrhvwo4.js": "sha384-j3zfSEKn5FvIS9mwJ2acy09JT+nAafwwpfY4LfxUmW++K7MV7CTURuQAG6uZeqN9",
+    "hostPlatform-D3rxsd42.js": "sha384-YAl54PALCgC9BGrE2a/PZRG8mEPPqXAiPeizTD8ORpk8pxY0KsFc2GLs5LYMHJaH",
+    "remote-entry.js": "sha384-saUGeBn4qo7W0QcJ35pd7Ox9gc8cvMDSZ/we99C0ZLb0Dt67bBhEHTeyLJzktSHd",
+    "style.css": "sha384-LASJVDRGtbrVMcvqIlXSV0UXhKLhOsc44zXh845nA7kU83fE41ShFN94sTIwA/bw"
   }
 }
