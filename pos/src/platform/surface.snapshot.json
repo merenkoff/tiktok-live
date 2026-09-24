@@ -41,6 +41,7 @@
       "enrichGtinFromSources",
       "expandCopies",
       "formatUah",
+      "formatUahCompact",
       "getAppliedRemotes",
       "getMeta",
       "groupsOf",

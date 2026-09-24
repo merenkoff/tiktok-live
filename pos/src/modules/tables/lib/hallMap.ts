@@ -10,6 +10,7 @@
 // tablet's own clock is nobody's to set, and a table that reads «−3 хв»
 // because a device drifted is worse than no number at all.
 
+import { formatUahCompact } from '@pos/platform';
 import type { OpenBillSummary, PosHall, PosTable } from './types';
 
 /** A table, plus the bill on it when somebody is sitting there. */
@@ -105,7 +106,7 @@ export function positionsLabel(n: number): string {
 
 /** «1 240 ₴» — whole hryvnias on a tile read from three metres away. */
 export function tileSum(cents: number): string {
-  return `${Math.round(cents / 100).toLocaleString('uk-UA')} ₴`;
+  return formatUahCompact(Math.round(cents / 100) * 100);
 }
 
 /**

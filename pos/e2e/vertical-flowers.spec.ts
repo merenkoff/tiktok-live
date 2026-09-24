@@ -289,7 +289,7 @@ test('the florist’s three figures land on the owner’s «Сьогодні»',
   await expect(panels.getByTestId('panel-loss')).toContainText('500');
   await expect(panels.getByTestId('panel-loss')).toContainText('здебільшого: завʼяло');
   // Whether the florist's work is where the takings are: 1800 of 2400.
-  await expect(panels.getByTestId('panel-bouquet-revenue')).toContainText('1800');
+  await expect(panels.getByTestId('panel-bouquet-revenue')).toContainText('1 800,00 ₴');
   await expect(panels.getByTestId('panel-bouquet-revenue')).toContainText('75%');
   // Realised markup next to the rate the shop asks — never one without the other.
   await expect(panels.getByTestId('panel-bouquet-markup')).toContainText('100%');

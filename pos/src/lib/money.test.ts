@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { describe, expect, it } from 'vitest';
-import { formatUah, refundLineAmount, uahInputToCents } from './money';
+import { formatUah, formatUahCompact, refundLineAmount, uahInputToCents } from './money';
 
 describe('formatUah', () => {
   it('renders kopiykas with a comma and the currency sign', () => {
@@ -15,6 +15,22 @@ describe('formatUah', () => {
   it('keeps the sign for negative amounts (refund previews)', () => {
     expect(formatUah(-1250)).toBe('-12,50 ₴');
   });
+
+  it('splits thousands with a no-break space', () => {
+    expect(formatUah(126875)).toBe('1\u00a0268,75 ₴');
+    expect(formatUah(123456789)).toBe('1\u00a0234\u00a0567,89 ₴');
+    expect(formatUah(-250000)).toBe('-2\u00a0500,00 ₴');
+    expect(formatUah(99999)).toBe('999,99 ₴');
+  });
+});
+
+describe('formatUahCompact', () => {
+  it('drops the kopiykas of a whole sum and keeps them otherwise', () => {
+    expect(formatUahCompact(6000)).toBe('60 ₴');
+    expect(formatUahCompact(124000)).toBe('1\u00a0240 ₴');
+    expect(formatUahCompact(-2000)).toBe('-20 ₴');
+    expect(formatUahCompact(1250)).toBe('12,50 ₴');
+  });
 });
 
 describe('uahInputToCents', () => {
@@ -22,6 +38,12 @@ describe('uahInputToCents', () => {
     expect(uahInputToCents('12,50')).toBe(1250);
     expect(uahInputToCents('12.50')).toBe(1250);
     expect(uahInputToCents('  7 ')).toBe(700);
+  });
+
+  it('reads a sum with its thousands grouping back', () => {
+    expect(uahInputToCents('1\u202f268,75')).toBe(126875);
+    expect(uahInputToCents('1 268,75')).toBe(126875);
+    expect(uahInputToCents('2\u00a0500')).toBe(250000);
   });
 
   it('rounds to the nearest kopiyka', () => {

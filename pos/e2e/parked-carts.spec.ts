@@ -195,5 +195,5 @@ test('a parked bouquet comes back at its assembled price', async ({ page }) => {
   await page.getByTestId('open-parked').first().click();
   await page.getByTestId('parked-pick-up').first().click();
 
-  await expect(page.getByRole('button', { name: /^Оплатити/ }).first()).toHaveAccessibleName(/1818,75/);
+  await expect(page.getByRole('button', { name: /^Оплатити/ }).first()).toHaveAccessibleName(/1\s818,75/);
 });

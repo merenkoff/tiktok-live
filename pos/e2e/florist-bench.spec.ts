@@ -268,12 +268,12 @@ test('the bench prices a bouquet as it is assembled, and rings it as one line', 
   // Nine roses at 90 = 810; plus 25% labour = 1012.50. The price is on screen
   // the whole time, which is the one thing §2 says may never be broken.
   await addStems(page, 'Троянда Freedom', 9);
-  await expect(page.locator('[data-testid=bench-total]:visible')).toHaveText('1012,50 ₴');
+  await expect(page.locator('[data-testid=bench-total]:visible')).toHaveText('1 012,50 ₴');
   await expect(page.getByTestId('bench-grid').getByTestId('tile-count').first()).toHaveText('9');
 
   // Three eucalyptus at 55 = 165 → parts 975, labour 243.75, total 1218.75.
   await addStems(page, 'Евкаліпт', 3);
-  await expect(page.locator('[data-testid=bench-total]:visible')).toHaveText('1218,75 ₴');
+  await expect(page.locator('[data-testid=bench-total]:visible')).toHaveText('1 218,75 ₴');
 
   await page.locator('[data-testid=bench-add-to-cart]:visible').click();
   await expect(page.getByTestId('florist-bench')).toBeHidden();
@@ -314,11 +314,11 @@ test('a stem comes back out with one tap, and the budget warns without re-pricin
   await addStems(page, 'Гортензія', 5); // 220 each → 1100 + 25% = 1375
   await expect(page.locator('[data-testid=bench-budget]:visible')).toContainText('Перебір на');
   // §3.5: the bar is a hint. The price stays what the composition says.
-  await expect(page.locator('[data-testid=bench-total]:visible')).toHaveText('1375,00 ₴');
+  await expect(page.locator('[data-testid=bench-total]:visible')).toHaveText('1 375,00 ₴');
 
   // §3.7: taking one back is free and instant — no manager code, no confirm.
   await page.getByRole('button', { name: 'Менше: Гортензія' }).click();
-  await expect(page.locator('[data-testid=bench-total]:visible')).toHaveText('1100,00 ₴');
+  await expect(page.locator('[data-testid=bench-total]:visible')).toHaveText('1 100,00 ₴');
   await expect(page.locator('[data-testid=bench-budget]:visible')).not.toContainText('Перебір');
 });
 
@@ -360,16 +360,16 @@ test('the pad types a count into the stem last touched', async ({ page }) => {
   await addStems(page, 'Троянда Freedom', 1);
   // The first digit replaces the count, so «9» means nine roses, not ninety…
   await page.locator('[data-testid=bench-pad-9]:visible').click();
-  await expect(page.locator('[data-testid=bench-total]:visible')).toHaveText('1012,50 ₴');
+  await expect(page.locator('[data-testid=bench-total]:visible')).toHaveText('1 012,50 ₴');
 
   // …and a second digit builds on it: 9 then 1 is ninety-one, capped at the 90
   // the shelf holds.
   await page.locator('[data-testid=bench-pad-1]:visible').click();
-  await expect(page.locator('[data-testid=bench-total]:visible')).toHaveText('10125,00 ₴');
+  await expect(page.locator('[data-testid=bench-total]:visible')).toHaveText('10 125,00 ₴');
 
   // ⌫ rubs out the last digit rather than clearing the row.
   await page.locator('[data-testid=bench-pad-backspace]:visible').click();
-  await expect(page.locator('[data-testid=bench-total]:visible')).toHaveText('1012,50 ₴');
+  await expect(page.locator('[data-testid=bench-total]:visible')).toHaveText('1 012,50 ₴');
 
   // A stem added earlier is aimed at by tapping its count.
   await addStems(page, 'Евкаліпт', 1);
@@ -406,7 +406,7 @@ test('a bouquet can go to the window instead of the cart', async ({ page }) => {
   await page.locator('[data-testid=bench-pad-9]:visible').click();
   await addStems(page, 'Евкаліпт', 1);
   await page.locator('[data-testid=bench-pad-3]:visible').click();
-  await expect(page.locator('[data-testid=bench-total]:visible')).toHaveText('1218,75 ₴');
+  await expect(page.locator('[data-testid=bench-total]:visible')).toHaveText('1 218,75 ₴');
 
   await page.getByTestId('bench-to-showcase').click();
   await expect(page.getByTestId('showcase-sheet')).toBeVisible();
@@ -431,7 +431,7 @@ test('a bouquet can go to the window instead of the cart', async ({ page }) => {
 
   // The bench closes, nothing is rung, and the cart says where the bouquet went.
   await expect(page.getByTestId('florist-bench')).toBeHidden();
-  await expect(page.getByText('Букет №42 — на вітрині, 1300,00 ₴')).toBeVisible();
+  await expect(page.getByText('Букет №42 — на вітрині, 1 300,00 ₴')).toBeVisible();
 });
 
 test('it sends no price when the florist did not round it', async ({ page }) => {
@@ -563,7 +563,7 @@ test('the window lists what is made up, and writes off what did not sell', async
   const rows = page.getByTestId('showcase-row');
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText('Букет №41');
-  await expect(rows.first()).toContainText('1300,00 ₴');
+  await expect(rows.first()).toContainText('1 300,00 ₴');
   // Its recipe is on the row — the only place a one-off bouquet's is.
   await expect(rows.first()).toContainText('Троянда Freedom × 9');
 
@@ -809,7 +809,7 @@ test('the composition can be kept as a catalogue recipe', async ({ page }) => {
 
   // The bench stays open: saving a recipe is not finishing with the bouquet.
   await expect(page.getByTestId('florist-bench')).toBeVisible();
-  await expect(page.locator('[data-testid=bench-total]:visible')).toHaveText('1218,75 ₴');
+  await expect(page.locator('[data-testid=bench-total]:visible')).toHaveText('1 218,75 ₴');
 });
 
 test('a name the catalogue already uses is refused in the server\'s words', async ({ page }) => {

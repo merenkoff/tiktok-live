@@ -14,7 +14,7 @@ import {
   X,
   type Glyph,
 } from '../platform/glyphs';
-import { formatUah, uahInputToCents } from '../lib/money';
+import { formatUah, formatUahCompact, uahInputToCents } from '../lib/money';
 import { centsToPadText, padInput, quickCashAmounts, type PadKey } from '../lib/cash';
 import { positionsText } from '../lib/plural';
 import { useDragScroll } from '../hooks/useDragScroll';
@@ -343,7 +343,7 @@ export function CheckoutModal({
                       }`}
                       data-testid={`checkout-quick-${cents}`}
                     >
-                      {centsToPadText(cents)} ₴
+                      {formatUahCompact(cents)}
                     </button>
                   ))}
                 </div>

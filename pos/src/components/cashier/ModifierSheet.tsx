@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from 'react';
 import { assetUrl } from '@pos/platform';
-import { formatUah } from '../../lib/money';
+import { formatUah, formatUahCompact } from '../../lib/money';
 import { useDragScroll } from '../../hooks/useDragScroll';
 import {
   MAX_LINE_NOTE,
@@ -195,7 +195,7 @@ export function ModifierSheet({
                       {on && <Check size={20} aria-hidden />}
                       {v.label || 'Стандарт'}
                       <span className={on ? 'font-medium' : 'font-medium text-sq-secondary'}>
-                        {oos ? 'немає' : shortUah(v.price_cents)}
+                        {oos ? 'немає' : formatUahCompact(v.price_cents)}
                       </span>
                     </button>
                   );
@@ -362,15 +362,9 @@ function chipClass(on: boolean, blocked: boolean): string {
   ].join(' ');
 }
 
-/** «60 ₴» for a whole-hryvnia price, the full form otherwise. */
-function shortUah(cents: number): string {
-  if (cents % 100 !== 0) return formatUah(cents);
-  return `${(cents / 100).toLocaleString('uk-UA')} ₴`;
-}
-
 /** «+15 ₴» / «−20 ₴»; nothing for a free answer. */
 function deltaText(deltaCents: number): string {
-  if (deltaCents > 0) return `+${shortUah(deltaCents)}`;
-  if (deltaCents < 0) return `−${shortUah(-deltaCents)}`;
+  if (deltaCents > 0) return `+${formatUahCompact(deltaCents)}`;
+  if (deltaCents < 0) return `−${formatUahCompact(-deltaCents)}`;
   return '';
 }
