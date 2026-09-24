@@ -1,9 +1,11 @@
 {
   "cleanUrls": false,
-  "redirects": [{ "source": "/tablet", "destination": "/tablet/", "type": 301 }],
+  "directoryListing": false,
   "rewrites": [
+    { "source": "/", "destination": "/index.html" },
+    { "source": "/tablet", "destination": "/tablet.html" },
     { "source": "/tablet/**", "destination": "/tablet.html" },
-    { "source": "**", "destination": "/index.html" }
+    { "source": "/:path([^.]+)", "destination": "/index.html" }
   ],
   "headers": [
     {

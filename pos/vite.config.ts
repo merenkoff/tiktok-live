@@ -36,14 +36,13 @@ const SHARED_EXTERNALS = [
  * the service worker's scope does not cover the slash-less form.
  */
 function tabletUnderPrefix(): Plugin {
-  const rewrite = (req: { url?: string }, res: { writeHead: (s: number, h: Record<string, string>) => void; end: () => void }, next: () => void) => {
+  const rewrite = (req: { url?: string }, _res: unknown, next: () => void) => {
     const url = req.url ?? '';
-    if (url === '/tablet' || url.startsWith('/tablet?')) {
-      res.writeHead(301, { Location: `/tablet/${url.slice('/tablet'.length)}` });
-      res.end();
-      return;
-    }
-    if (url.startsWith('/tablet/')) req.url = '/tablet.html';
+    // Same as production's `serve.json`: `/tablet`, `/tablet/` and everything
+    // under it are `tablet.html`, with no redirect — serve-handler strips the
+    // trailing slash before matching, so a `/tablet → /tablet/` redirect there
+    // matched `/tablet/` too and looped (2.3.0; `scripts/check-serve-json.mjs`).
+    if (url === '/tablet' || url.startsWith('/tablet?') || url.startsWith('/tablet/')) req.url = '/tablet.html';
     next();
   };
   return {

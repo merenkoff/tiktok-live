@@ -59,7 +59,8 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS=1 playwright test",
     "pwa:icons": "node scripts/gen-pwa-icons.mjs",
-    "test:e2e:install": "playwright install --with-deps chromium"
+    "test:e2e:install": "playwright install --with-deps chromium",
+    "check:serve-json": "node scripts/check-serve-json.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",
@@ -99,6 +100,7 @@
     "msw": "^2.15.0",
     "postcss": "^8.4.32",
     "rollup": "^4.63.3",
+    "serve": "^14.2.6",
     "tailwindcss": "^3.3.6",
     "typescript": "^5.9.3",
     "vite": "^8.3.0",
