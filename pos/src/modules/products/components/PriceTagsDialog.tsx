@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api, formatUah } from '@pos/platform';
 import type { Product } from '@pos/platform';
+import { Printer, PrinterColor, Segmented, X } from '@pos/platform/ui';
 import { buildPriceTags, defaultCopies, variantLabel, type PriceTag } from '../../../lib/priceTag';
 import { hasEan13Shape, isEan13 } from '../../../lib/ean13';
 import { tagWidthMm, type TagPaperWidth } from '../../../lib/priceTagLayout';
@@ -13,7 +14,10 @@ import { triggerPrint } from '../../../lib/triggerPrint';
 import { PriceTagsPrintable } from '../../../components/PriceTagsPrintable';
 
 const PAPER_KEY = 'pos.priceTagPaperWidth';
-const BTN = 'rounded-sq border border-sq-divider bg-sq-surface px-3 py-2 text-sm disabled:opacity-50';
+const PAPER_OPTIONS = [
+  { value: '58', label: '58 мм' },
+  { value: '80', label: '80 мм' },
+] as const;
 
 /**
  * Station-local, so it lives in `localStorage` rather than on the store: the
@@ -159,68 +163,81 @@ export function PriceTagsDialog({
       {createPortal(
         <div
           data-testid="price-tags-overlay"
-          className="fixed inset-0 z-50 bg-black/40 grid place-items-center p-4"
+          className="fixed inset-0 z-50 bg-[rgba(28,32,38,.32)] grid place-items-center p-4"
         >
-          <div className="bg-sq-surface rounded-sq w-full max-w-3xl max-h-[85vh] flex flex-col shadow-lg">
-            <div className="p-5 border-b border-sq-divider">
-              <p className="sq-section-label">Друк цінників</p>
-              <p className="text-sm text-sq-secondary mt-1">
-                Кількість — за залишком на складі; змініть, якщо треба інакше. Кожен цінник
-                друкується окремою сторінкою, тож принтер ріже їх так само, як чеки.
-              </p>
+          <div
+            role="dialog"
+            aria-label="Друк цінників"
+            className="bg-white rounded-card w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden animate-fade-up shadow-[0_24px_60px_rgba(0,20,60,.28)]"
+          >
+            <div className="px-5 pt-[18px] pb-3.5 flex items-start gap-2.5">
+              <PrinterColor size={24} className="shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <h3 className="text-[19px] font-bold text-sq-heading">Друк цінників</h3>
+                <p className="text-[15px] text-sq-secondary mt-1 leading-relaxed">
+                  Кількість — за залишком на складі; змініть, якщо треба інакше. Кожен цінник
+                  друкується окремою сторінкою, тож принтер ріже їх так само, як чеки.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-9 h-9 grid place-items-center rounded-full text-sq-secondary hover:bg-sq-empty shrink-0"
+                aria-label="Закрити"
+              >
+                <X size={20} />
+              </button>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 px-5 py-3 border-b border-sq-divider">
-              <span className="text-sm text-sq-secondary">Стрічка</span>
-              {([58, 80] as const).map((w) => (
-                <button
-                  key={w}
-                  type="button"
-                  onClick={() => choosePaper(w)}
-                  className={`${BTN} ${paper === w ? 'border-[#006AFF] text-[#006AFF]' : ''}`}
-                >
-                  {w} мм
-                </button>
-              ))}
-              <span className="text-sm text-sq-secondary">
+            <div className="flex flex-wrap items-center gap-3 px-5 pb-3.5 shadow-[0_1px_0_rgb(var(--sq-divider-rgb))]">
+              <span className="text-[15px] text-sq-secondary">Стрічка</span>
+              <Segmented
+                ariaLabel="Стрічка"
+                value={String(paper) as '58' | '80'}
+                options={PAPER_OPTIONS}
+                onChange={(next) => choosePaper(next === '80' ? 80 : 58)}
+              />
+              <span className="text-[15px] text-sq-secondary tabular-nums">
                 Ширина цінника: {tagWidthMm(paper)} мм
               </span>
-              <span className="text-sm text-sq-secondary ml-auto">Усього цінників: {total}</span>
+              <span className="text-[15px] text-sq-secondary tabular-nums ml-auto">
+                Усього цінників: {total}
+              </span>
             </div>
 
             {missing > 0 && (
-              <p className="mx-5 mt-3 rounded-sq bg-amber-50 text-amber-800 px-3 py-2 text-sm">
+              <p className="mx-5 mt-3.5 rounded-xl bg-amber-50 text-amber-800 px-4 py-3 text-sm">
                 Без придатного штрихкоду: {missing}
                 {bad > 0 && ` (з них ${bad} — з хибною контрольною цифрою)`}. Такі цінники
                 надрукуються без коду — згенеруйте внутрішній, щоб касир міг сканувати.
               </p>
             )}
 
-            <div className="flex-1 overflow-y-auto px-5 py-3">
-              <table className="w-full text-sm">
-                <thead className="text-sq-secondary">
+            <div className="flex-1 overflow-y-auto px-5 py-2">
+              <table className="sq-table">
+                <thead>
                   <tr>
-                    <th className="text-left font-medium py-1">Товар</th>
-                    <th className="text-left font-medium py-1">Ціна</th>
-                    <th className="text-left font-medium py-1">Штрихкод</th>
-                    <th className="text-right font-medium py-1">Цінників</th>
+                    <th>Товар</th>
+                    <th className="!text-right">Ціна</th>
+                    <th>Штрихкод</th>
+                    <th className="!text-right !pr-0">Цінників</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-sq-divider">
+                <tbody>
                   {rows.map((r) => (
                     <tr key={r.key}>
-                      <td className="py-2 pr-2">
+                      <td>
                         <p className="text-sq-text">{r.productName}</p>
-                        {r.label && <p className="text-xs text-sq-secondary">{r.label}</p>}
+                        {r.label && <p className="text-[13px] text-sq-muted">{r.label}</p>}
                       </td>
-                      <td className="py-2 pr-2 whitespace-nowrap">{formatUah(r.priceCents)}</td>
-                      <td className="py-2 pr-2">
+                      <td className="text-right tabular-nums whitespace-nowrap">{formatUah(r.priceCents)}</td>
+                      <td>
                         {isEan13(r.barcode ?? '') ? (
-                          <span className="font-mono text-xs">{r.barcode}</span>
+                          <span className="text-[13px] text-sq-secondary tabular-nums">{r.barcode}</span>
                         ) : (
                           <div className="flex flex-col items-start gap-1">
                             {hasEan13Shape(r.barcode ?? '') && (
-                              <span className="font-mono text-xs text-amber-700 line-through">
+                              <span className="text-[13px] text-amber-700 tabular-nums line-through">
                                 {r.barcode}
                               </span>
                             )}
@@ -228,21 +245,24 @@ export function PriceTagsDialog({
                               type="button"
                               disabled={busyKey === r.key}
                               onClick={() => void generateFor(r)}
-                              className={`${BTN} text-xs`}
+                              className="sq-btn-quiet !min-h-9 !px-3 !text-[13px]"
                             >
                               Згенерувати
                             </button>
                           </div>
                         )}
                       </td>
-                      <td className="py-2 text-right">
-                        <input
-                          type="number"
-                          min={0}
-                          value={r.copies}
-                          onChange={(e) => setCopies(r.key, Number(e.target.value))}
-                          className="w-16 rounded-sq border border-sq-divider bg-sq-bg px-2 py-1 text-right"
-                        />
+                      <td className="!pr-0">
+                        <div className="w-20 ml-auto">
+                          <input
+                            type="number"
+                            min={0}
+                            value={r.copies}
+                            onChange={(e) => setCopies(r.key, Number(e.target.value))}
+                            aria-label={`Цінників: ${r.productName}${r.label ? ` · ${r.label}` : ''}`}
+                            className="sq-input text-right tabular-nums"
+                          />
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -250,21 +270,21 @@ export function PriceTagsDialog({
               </table>
             </div>
 
-            <div className="flex justify-end gap-2 p-5 border-t border-sq-divider">
-              <button type="button" className={BTN} onClick={onClose}>
+            <div className="flex justify-end gap-2 px-5 py-4 shadow-[0_-1px_0_rgb(var(--sq-divider-rgb))]">
+              <button type="button" className="sq-btn-quiet" onClick={onClose}>
                 Закрити
               </button>
               <button
                 type="button"
-                className="sq-btn-primary px-4 py-2 text-sm disabled:opacity-50"
+                className="pos-btn-primary min-h-11 px-5 rounded-sq text-[15px] gap-2"
                 disabled={total === 0}
                 onClick={print}
               >
+                <Printer size={20} />
                 Друкувати {total}
               </button>
             </div>
           </div>
-
         </div>,
         document.body
       )}

@@ -190,13 +190,13 @@ test('an existing plain product can be turned into a bouquet', async ({ page }) 
     .selectOption({ label: 'Складений — збирається при продажу' });
 
   // The editor appears immediately, before saving. `.first()` because the edit
-  // form carries one editor per variant plus one on the "+ Варіант" row.
+  // form carries one editor per variant plus one on the new-variant row.
   await page
     .getByLabel('Складник', { exact: true })
     .first()
     .selectOption({ label: 'Троянда Freedom · Червона' });
   await page.getByLabel('Кількість складника').first().fill('5');
-  await page.getByRole('button', { name: '+ Додати' }).first().click();
+  await page.getByRole('button', { name: 'Додати', exact: true }).first().click();
   await expect(page.getByTestId('composition-row')).toHaveCount(1);
 
   await page.getByRole('button', { name: 'Зберегти' }).click();

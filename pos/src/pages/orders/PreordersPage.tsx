@@ -96,156 +96,167 @@ export function PreordersPage() {
   }
 
   return (
-    <div className="p-3 md:p-4 space-y-3" data-testid="preorders-page">
-      <header className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold text-sq-text flex items-center gap-2">
-            <CalendarClock size={24} className="text-sq-blue" />
-            Замовлення
-          </h1>
-          <p className="text-xs text-sq-muted mt-0.5">Що обіцяли, найближче спершу</p>
+    // Its own scroller: the till's frame is a fixed-height column, so a morning
+    // with a dozen orders must scroll here rather than run off the screen.
+    <div className="flex-1 min-h-0 overflow-auto" data-testid="preorders-page">
+      <header className="px-4 md:px-7 py-4 md:min-h-[72px]">
+        <div className="flex items-center gap-3">
+          <CalendarClock size={24} className="shrink-0" />
+          <h1 className="text-2xl font-bold text-sq-heading">Замовлення</h1>
         </div>
+        <p className="mt-0.5 text-[15px] text-sq-secondary">Що обіцяли, найближче спершу</p>
       </header>
 
-      {loading && <p className="text-sm text-sq-muted">Завантаження…</p>}
-      {error && (
-        <p className="text-sm text-red-600" data-testid="preorders-error">
-          {error}
-        </p>
-      )}
+      <div className="px-4 md:px-7 pb-6 space-y-3 max-w-3xl">
+        {loading && <p className="text-sm text-sq-muted">Завантаження…</p>}
+        {error && (
+          <p className="rounded-sq bg-red-50 text-red-700 px-4 py-3 text-sm" data-testid="preorders-error">
+            {error}
+          </p>
+        )}
 
-      {!loading && !error && orders.length === 0 && (
-        <p className="p-6 text-center text-sm text-sq-muted">
-          Замовлень немає. Наберіть кошик на касі й оформіть його як замовлення.
-        </p>
-      )}
-
-      {orders.map((order) => {
-        const overdue = new Date(order.due_at).getTime() < Date.now();
-        return (
-          <article
-            key={order.id}
-            className="bg-white rounded-sq border border-sq-divider p-3"
-            data-testid="preorder-row"
-          >
-            <div className="flex items-baseline justify-between gap-3">
-              <span
-                className={`font-semibold ${overdue ? 'text-red-600' : 'text-sq-text'}`}
-                data-testid="preorder-due-label"
-              >
-                {dueLabel(order.due_at)}
-                {overdue && ' · прострочено'}
-              </span>
-              <span className="font-semibold text-sq-text shrink-0">
-                {formatUah(order.quoted_total_cents)}
-              </span>
-            </div>
-
-            <p className="mt-1 text-sm text-sq-text flex items-center gap-1.5">
-              {order.fulfilment === 'delivery' ? <MapPin size={16} /> : <PackageLine size={16} />}
-              {order.recipient_name || order.customer_name || 'Без імені'}
-              {order.recipient_phone && (
-                <span className="text-sq-muted flex items-center gap-1">
-                  <Phone size={16} />
-                  {order.recipient_phone}
-                </span>
-              )}
+        {!loading && !error && orders.length === 0 && (
+          <div className="py-12 flex flex-col items-center gap-3 text-center">
+            <CalendarClock size={48} />
+            <p className="text-[15px] text-sq-secondary max-w-sm">
+              Замовлень немає. Наберіть кошик на касі й оформіть його як замовлення.
             </p>
-            {order.address && <p className="text-xs text-sq-muted">{order.address}</p>}
+          </div>
+        )}
 
-            <ul className="mt-2 text-xs text-sq-secondary">
-              {order.items.map((item) => (
-                <li key={item.id}>
-                  {item.quantity} × {item.product_name}
-                  {item.label && ` · ${item.label}`}
-                </li>
-              ))}
-            </ul>
+        {orders.map((order) => {
+          const overdue = new Date(order.due_at).getTime() < Date.now();
+          return (
+            <article
+              key={order.id}
+              className="rounded-card bg-white shadow-card px-5 py-4"
+              data-testid="preorder-row"
+            >
+              <div className="flex items-baseline justify-between gap-3">
+                <span
+                  className={`text-[17px] font-semibold ${overdue ? 'text-red-600' : 'text-sq-heading'}`}
+                  data-testid="preorder-due-label"
+                >
+                  {dueLabel(order.due_at)}
+                  {overdue && ' · прострочено'}
+                </span>
+                <span className="text-[17px] font-semibold text-sq-heading tabular-nums shrink-0">
+                  {formatUah(order.quoted_total_cents)}
+                </span>
+              </div>
 
-            {order.card_message && (
-              // Set apart because it is the customer's words, not the shop's —
-              // the florist copies it onto a card by hand.
-              <p
-                className="mt-2 text-sm italic text-sq-text bg-sq-bg rounded-sq px-3 py-2"
-                data-testid="preorder-card-message"
-              >
-                «{order.card_message}»
+              <p className="mt-1.5 text-[15px] text-sq-text flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                <span className="text-sq-muted inline-flex">
+                  {order.fulfilment === 'delivery' ? <MapPin size={16} /> : <PackageLine size={16} />}
+                </span>
+                {order.recipient_name || order.customer_name || 'Без імені'}
+                {order.recipient_phone && (
+                  <span className="text-sq-muted flex items-center gap-1 tabular-nums">
+                    <Phone size={16} />
+                    {order.recipient_phone}
+                  </span>
+                )}
               </p>
-            )}
-            {order.note && <p className="mt-1 text-xs text-sq-muted">{order.note}</p>}
+              {order.address && <p className="mt-0.5 text-[13px] text-sq-muted">{order.address}</p>}
 
-            {/* What honouring the promise costs now, only when it differs. */}
-            {order.current_total_cents != null &&
-              order.current_total_cents !== order.quoted_total_cents && (
-                <p className="mt-1.5 text-xs text-sq-muted" data-testid="preorder-drift">
-                  Сьогодні це коштувало б {formatUah(order.current_total_cents)} — ціну зафіксовано
-                  при замовленні.
+              <ul className="mt-2.5 space-y-0.5 text-sm text-sq-secondary">
+                {order.items.map((item) => (
+                  <li key={item.id}>
+                    <span className="tabular-nums">{item.quantity} ×</span> {item.product_name}
+                    {item.label && ` · ${item.label}`}
+                  </li>
+                ))}
+              </ul>
+
+              {order.card_message && (
+                // Set apart because it is the customer's words, not the shop's —
+                // the florist copies it onto a card by hand.
+                <p
+                  className="mt-3 text-[15px] italic text-sq-text bg-sq-sidebar rounded-xl px-3.5 py-2.5"
+                  data-testid="preorder-card-message"
+                >
+                  «{order.card_message}»
                 </p>
               )}
+              {order.note && <p className="mt-1.5 text-[13px] text-sq-muted">{order.note}</p>}
 
-            {confirming === order.id ? (
-              <div className="mt-2.5 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setConfirming(null)}
-                  className="flex-1 min-h-11 rounded-sq bg-sq-bg text-sq-secondary text-sm font-semibold"
-                >
-                  Ні
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setConfirming(null);
-                    void cancel(order);
-                  }}
-                  className="flex-1 min-h-11 rounded-sq bg-red-50 text-red-600 text-sm font-semibold"
-                  data-testid="preorder-cancel-confirm"
-                >
-                  Скасувати замовлення
-                </button>
-              </div>
-            ) : (
-              <div className="mt-2.5 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setConfirming(order.id)}
-                  disabled={busyId != null}
-                  className="min-h-11 px-3 rounded-sq bg-sq-bg text-sq-secondary text-sm font-semibold disabled:opacity-40"
-                  data-testid="preorder-cancel"
-                >
-                  Скасувати
-                </button>
-                {order.status === 'new' && (
+              {/* What honouring the promise costs now, only when it differs. */}
+              {order.current_total_cents != null &&
+                order.current_total_cents !== order.quoted_total_cents && (
+                  <p className="mt-1.5 text-[13px] text-sq-muted tabular-nums" data-testid="preorder-drift">
+                    Сьогодні це коштувало б {formatUah(order.current_total_cents)} — ціну зафіксовано
+                    при замовленні.
+                  </p>
+                )}
+
+              {confirming === order.id ? (
+                <div className="mt-4 flex gap-2">
                   <button
                     type="button"
-                    onClick={() => void assemble(order)}
-                    disabled={busyId != null}
-                    className="min-h-11 px-3 rounded-sq bg-sq-bg text-sq-blue text-sm font-semibold disabled:opacity-40 flex items-center gap-1.5"
-                    data-testid="preorder-assembled"
+                    onClick={() => setConfirming(null)}
+                    className={quietClass + ' flex-1'}
                   >
-                    <Flower2 size={24} />
-                    Зібрано
+                    Ні
                   </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => handOver(order)}
-                  // A cart with something already in it would be merged with a
-                  // promise, and two people's flowers would land on one receipt.
-                  disabled={busyId != null || lines.length > 0}
-                  title={lines.length > 0 ? 'Спершу завершіть поточний чек' : undefined}
-                  className="pos-btn-primary flex-1 min-h-11 text-sm disabled:opacity-40"
-                  data-testid="preorder-hand-over"
-                >
-                  Видати
-                </button>
-              </div>
-            )}
-          </article>
-        );
-      })}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConfirming(null);
+                      void cancel(order);
+                    }}
+                    className="flex-1 min-h-12 rounded-xl bg-red-50 text-red-600 text-[15px] font-semibold"
+                    data-testid="preorder-cancel-confirm"
+                  >
+                    Скасувати замовлення
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-4 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirming(order.id)}
+                    disabled={busyId != null}
+                    className={quietClass + ' px-4'}
+                    data-testid="preorder-cancel"
+                  >
+                    Скасувати
+                  </button>
+                  {order.status === 'new' && (
+                    <button
+                      type="button"
+                      onClick={() => void assemble(order)}
+                      disabled={busyId != null}
+                      className={quietClass + ' px-4 inline-flex items-center gap-2'}
+                      data-testid="preorder-assembled"
+                    >
+                      <Flower2 size={24} />
+                      Зібрано
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handOver(order)}
+                    // A cart with something already in it would be merged with a
+                    // promise, and two people's flowers would land on one receipt.
+                    disabled={busyId != null || lines.length > 0}
+                    title={lines.length > 0 ? 'Спершу завершіть поточний чек' : undefined}
+                    className="pos-btn-primary flex-1 min-h-12 rounded-xl text-[17px]"
+                    data-testid="preorder-hand-over"
+                  >
+                    Видати
+                  </button>
+                </div>
+              )}
+            </article>
+          );
+        })}
+      </div>
     </div>
   );
 }
+
+/** The white button beside the primary one: a hairline ring, never a fill. */
+const quietClass =
+  'min-h-12 rounded-xl bg-white ring-1 ring-sq-divider text-[15px] font-semibold text-sq-text hover:bg-sq-sidebar disabled:opacity-40';
 
 export default PreordersPage;

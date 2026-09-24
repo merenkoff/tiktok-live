@@ -7,18 +7,8 @@ import { formatUah, useVertical } from '@pos/platform';
 import type { SaleDetail, SaleListItem } from '@pos/platform';
 import { adminReturnsApi } from '../data/returnsApi';
 import { FiscalBadge, FiscalDetailCard } from '../components/FiscalBadge';
-import { Pencil } from '@pos/platform/ui';
-
-const SALE_STATUS_UK: Record<string, string> = {
-  completed: 'Завершено',
-  voided: 'Скасовано',
-  refunded: 'Повернено',
-  partially_refunded: 'Часткове повернення',
-};
-
-function saleStatusLabel(status: string): string {
-  return SALE_STATUS_UK[status] ?? status;
-}
+import { Chip, SaleStatusChip } from '../components/SaleChips';
+import { PageHeader, Pencil, Receipt, SectionHead } from '@pos/platform/ui';
 
 const PAYMENT_LABEL_UK: Record<string, string> = {
   cash: 'Готівка',
@@ -103,92 +93,103 @@ export function AdminSalesPage() {
   const cafe = useVertical().id === 'cafe';
 
   return (
-    <div className="space-y-6 animate-fade-up text-sq-text">
-      <div>
-        <h2 className="text-2xl font-semibold">Продажі</h2>
-        <p className="text-sq-secondary mt-1 text-sm">Історія чеків, скасування та повернення.</p>
-      </div>
+    <div className="animate-fade-up text-sq-text">
+      <PageHeader glyph={Receipt} title="Продажі" subtitle="Історія чеків, скасування та повернення." />
 
-      {error && <div className="rounded-sq bg-red-50 text-red-700 px-3 py-2 text-sm">{error}</div>}
+      {error && <div className="mb-5 rounded-sq bg-red-50 text-red-700 px-4 py-3 text-sm">{error}</div>}
 
-      <div className="grid lg:grid-cols-2 gap-4">
-        <section className="bg-sq-surface border border-sq-divider rounded-sq divide-y divide-sq-divider overflow-hidden shadow-sm">
-          {sales.map((sale) => (
-            <button
-              key={sale.id}
-              type="button"
-              onClick={() => void openSale(sale.id)}
-              className="w-full text-left px-4 py-3 hover:bg-sq-bg flex justify-between gap-3"
-            >
-              <div>
-                <p className="font-semibold text-sq-text">
-                  {cafe && sale.order_no != null && (
-                    <span
-                      className="mr-2 rounded-sq bg-sq-bg px-1.5 py-0.5 text-xs tabular-nums"
-                      data-testid="sale-order-no"
+      <div className="grid lg:grid-cols-2 gap-x-8 gap-y-6 items-start">
+        <section>
+          {sales.length === 0 ? (
+            <Empty text="Поки немає продажів." />
+          ) : (
+            <ul>
+              {sales.map((sale) => {
+                const on = selected?.id === sale.id;
+                return (
+                  <li key={sale.id} className="sq-row">
+                    <button
+                      type="button"
+                      onClick={() => void openSale(sale.id)}
+                      aria-current={on || undefined}
+                      className={`w-[calc(100%+1rem)] text-left -mx-2 px-2 min-h-[60px] py-2 rounded-lg flex items-center gap-3 transition-colors ${
+                        on ? 'bg-sq-selected' : 'hover:bg-sq-sidebar/60'
+                      }`}
                     >
-                      № {sale.order_no}
-                    </span>
-                  )}
-                  {sale.receipt_number}
-                </p>
-                <p className="text-xs text-sq-secondary">
-                  {new Date(sale.created_at).toLocaleString('uk-UA')} · {sale.staff_name}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="font-semibold text-sq-text">{formatUah(sale.total_cents)}</p>
-                <p className="text-xs text-sq-secondary">
-                  {saleStatusLabel(sale.status)}
-                  {sale.qr_pending && (
-                    <span className="ml-2 text-amber-600">QR не підтверджено</span>
-                  )}
-                  <FiscalBadge status={sale.fiscal_status} />
-                </p>
-              </div>
-            </button>
-          ))}
-          {sales.length === 0 && <p className="p-4 text-sq-secondary text-sm">Поки немає продажів.</p>}
+                      <span className="flex-1 min-w-0">
+                        <span className="flex items-center gap-2 text-base font-medium text-sq-text tabular-nums">
+                          {cafe && sale.order_no != null && (
+                            <span
+                              className="inline-flex items-center h-[22px] px-2 rounded-md bg-sq-empty text-xs font-semibold tabular-nums"
+                              data-testid="sale-order-no"
+                            >
+                              № {sale.order_no}
+                            </span>
+                          )}
+                          <span className="truncate">{sale.receipt_number}</span>
+                        </span>
+                        <span className="block text-[13px] text-sq-muted tabular-nums truncate">
+                          {new Date(sale.created_at).toLocaleString('uk-UA')} · {sale.staff_name}
+                        </span>
+                      </span>
+                      <span className="shrink-0 flex flex-col items-end gap-1">
+                        <span className="text-base font-semibold text-sq-text tabular-nums">
+                          {formatUah(sale.total_cents)}
+                        </span>
+                        <span className="flex flex-wrap justify-end gap-1">
+                          <SaleStatusChip status={sale.status} />
+                          {sale.qr_pending && <Chip tone="warning">QR не підтверджено</Chip>}
+                          <FiscalBadge status={sale.fiscal_status} />
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </section>
 
-        <section className="bg-sq-surface border border-sq-divider rounded-sq p-5 min-h-[240px] shadow-sm">
+        <section className="sq-card p-5 md:p-6 min-h-[240px]">
           {!selected ? (
-            <p className="text-sq-secondary text-sm">Оберіть чек зліва.</p>
+            <Empty text="Оберіть чек зліва." />
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
-                <h3 className="text-xl font-bold text-sq-text">
+                <h3 className="flex flex-wrap items-center gap-2 text-[22px] font-bold text-sq-heading tabular-nums">
                   {cafe && selected.order_no != null && (
-                    <span className="mr-2 rounded-sq bg-sq-bg px-1.5 py-0.5 text-sm tabular-nums">
+                    <span className="inline-flex items-center h-7 px-2 rounded-md bg-sq-empty text-sm font-semibold tabular-nums">
                       № {selected.order_no}
                     </span>
                   )}
                   {selected.receipt_number}
                 </h3>
-                <p className="text-sm text-sq-secondary">
-                  {saleStatusLabel(selected.status)} · {selected.staff_name}
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  <SaleStatusChip status={selected.status} />
                   <FiscalBadge status={selected.fiscal_status} mode={selected.fiscal?.mode} />
-                </p>
+                  <span className="text-[15px] text-sq-secondary">{selected.staff_name}</span>
+                </div>
                 <FiscalDetailCard doc={selected.fiscal} />
               </div>
-              <ul className="space-y-2 text-sm">
+              <ul>
                 {selected.items.map((item) => (
-                  <li key={item.id} className="flex justify-between gap-2 items-center">
-                    <div>
-                      <p className="font-medium text-sq-text">{item.product_name}</p>
-                      <p className="text-sq-secondary">
+                  <li key={item.id} className="sq-row min-h-12 py-2 flex justify-between gap-3 items-center">
+                    <div className="min-w-0">
+                      <p className="text-base text-sq-text">{item.product_name}</p>
+                      <p className="text-[13px] text-sq-muted tabular-nums">
                         {item.variant_label} · {item.quantity} шт
                         {item.refunded_quantity > 0 ? ` (повернено ${item.refunded_quantity})` : ''}
                       </p>
-                      {item.note && <p className="text-xs text-sq-muted italic"><Pencil size={16} aria-hidden className="inline-block align-[-3px] mr-1" />{item.note}</p>}
+                      {item.note && <p className="text-[13px] text-sq-muted italic"><Pencil size={16} aria-hidden className="inline-block align-[-3px] mr-1" />{item.note}</p>}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3 shrink-0">
                       {selected.status !== 'voided' && selected.status !== 'refunded' && (
                         <input
                           type="number"
                           min={0}
                           max={item.quantity - item.refunded_quantity}
-                          className="w-16 rounded-sq border border-sq-divider bg-sq-bg px-2 py-1 text-sq-text"
+                          aria-label={`Повернути: ${item.product_name}`}
+                          className="sq-input !w-20 text-center tabular-nums"
                           value={refundQty[item.id] ?? 0}
                           onChange={(e) =>
                             setRefundQty((prev) => ({
@@ -198,58 +199,69 @@ export function AdminSalesPage() {
                           }
                         />
                       )}
-                      <span className="font-semibold text-sq-text">{formatUah(item.line_total_cents)}</span>
+                      <span className="w-24 text-right text-base font-medium text-sq-text tabular-nums">
+                        {formatUah(item.line_total_cents)}
+                      </span>
                     </div>
                   </li>
                 ))}
               </ul>
-              <p className="font-bold text-lg text-sq-text">Разом: {formatUah(selected.total_cents)}</p>
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-lg font-bold text-sq-heading">Разом</span>
+                <span className="text-[26px] font-bold text-sq-heading tabular-nums">{formatUah(selected.total_cents)}</span>
+              </div>
 
               {selected.payments.length > 0 && (
-                <ul className="space-y-1.5 text-sm border-t border-sq-divider pt-3">
+                <ul className="space-y-1.5 text-[15px]">
                   {selected.payments.map((p) => (
                     <li key={p.id} className="flex justify-between items-center gap-2">
-                      <span className="text-sq-secondary">
+                      <span className="flex flex-wrap items-center gap-2 text-sq-secondary">
                         {PAYMENT_LABEL_UK[p.method] ?? p.method}
                         {p.method === 'qr' &&
                           (p.confirmed_at ? (
-                            <span className="ml-2 text-xs font-semibold text-emerald-600">
-                              оплату підтверджено
-                            </span>
+                            <Chip tone="success">оплату підтверджено</Chip>
                           ) : (
-                            <span className="ml-2 text-xs font-semibold text-amber-600">
-                              очікує підтвердження
-                            </span>
+                            <Chip tone="warning">очікує підтвердження</Chip>
                           ))}
                       </span>
-                      <span className="font-medium text-sq-text">{formatUah(p.amount_cents)}</span>
+                      <span className="text-sq-text tabular-nums">{formatUah(p.amount_cents)}</span>
                     </li>
                   ))}
                 </ul>
               )}
 
               {selected.refunds.length > 0 && (
-                <ul className="space-y-1.5 text-sm border-t border-sq-divider pt-3">
-                  <li className="sq-section-label">Повернення</li>
-                  {selected.refunds.map((r) => (
-                    <li key={r.id} className="flex justify-between gap-2">
-                      <span className="text-sq-secondary">
-                        {r.refund_number ?? '—'}
-                        {r.method ? ` · ${PAYMENT_LABEL_UK[r.method] ?? r.method}` : ''}
-                        {r.reason ? ` · ${r.reason}` : ''}
-                      </span>
-                      <span className="font-medium text-sq-text">−{formatUah(r.total_cents)}</span>
-                    </li>
-                  ))}
-                </ul>
+                <div>
+                  <SectionHead title="Повернення" />
+                  <ul>
+                    {selected.refunds.map((r) => (
+                      <li key={r.id} className="sq-row min-h-11 py-2 flex justify-between items-center gap-2 text-[15px]">
+                        <span className="text-sq-secondary">
+                          {r.refund_number ?? '—'}
+                          {r.method ? ` · ${PAYMENT_LABEL_UK[r.method] ?? r.method}` : ''}
+                          {r.reason ? ` · ${r.reason}` : ''}
+                        </span>
+                        <span className="text-sq-text tabular-nums shrink-0">−{formatUah(r.total_cents)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
 
               {(selected.status === 'completed' || selected.status === 'partially_refunded') && (
-                <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => void onRefundAll()} className="rounded-sq border border-red-300 bg-red-50 text-red-700 px-4 py-2 text-sm font-semibold">
+                <div className="flex flex-wrap justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => void onRefundAll()}
+                    className="sq-btn-quiet !text-red-600"
+                  >
                     Повернути все
                   </button>
-                  <button type="button" onClick={() => void onRefund()} className="sq-btn-primary px-4 py-2 text-sm">
+                  <button
+                    type="button"
+                    onClick={() => void onRefund()}
+                    className="pos-btn-primary min-h-11 px-4 rounded-sq text-[15px]"
+                  >
                     Повернення
                   </button>
                 </div>
@@ -258,6 +270,16 @@ export function AdminSalesPage() {
           )}
         </section>
       </div>
+    </div>
+  );
+}
+
+/** A colour glyph and one quiet line, centred — Things' empty list. */
+function Empty({ text }: { text: string }) {
+  return (
+    <div className="py-12 flex flex-col items-center gap-3 text-center">
+      <Receipt size={48} />
+      <p className="text-[15px] text-sq-secondary">{text}</p>
     </div>
   );
 }

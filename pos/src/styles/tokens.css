@@ -309,10 +309,15 @@ textarea::placeholder {
 /* Things' field: a grey well without a border; focus lifts it to white with
    the accent ring. `.sq-input` is the compact (44 px) one for admin forms,
    `.pos-field` the touch-sized one (48 px) for the till. */
+/* Width sits at zero specificity, so a `w-24` / `max-w-*` utility on the
+   field wins wherever the sheets land: this file loads after the host's
+   utilities, and a module's own sheet is inserted before both. */
+:where(.pos-field, .sq-field, .sq-input) {
+  width: 100%;
+}
 .pos-field,
 .sq-field,
 .sq-input {
-  width: 100%;
   min-height: 3rem;
   padding: 0.75rem 1rem;
   border: 1px solid transparent;

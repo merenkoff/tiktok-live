@@ -28,19 +28,19 @@ export function FiscalErrorCard({ error }: { error: unknown }) {
   }
 
   return (
-    <div role="alert" className="rounded-sq bg-red-50 px-3 py-2.5 text-sm text-red-700">
+    <div role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-[15px] text-red-700">
       <p className="font-semibold">{message}</p>
-      <div className="mt-2 flex items-center gap-2">
+      <div className="mt-2 flex flex-wrap items-center gap-2">
         <code
           data-testid="fiscal-support-code"
-          className="select-all rounded-sq bg-white/60 px-2 py-1 font-mono text-xs text-red-800"
+          className="select-all rounded-md bg-white/70 px-2 py-1 font-mono text-[13px] text-red-800"
         >
           {diagnostic.code}
         </code>
         <button
           type="button"
           onClick={() => void copy()}
-          className="rounded-sq border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-white/50"
+          className="min-h-9 rounded-sq px-3 text-[13px] font-semibold text-red-700 ring-1 ring-inset ring-red-200 hover:bg-white/60"
         >
           {copied ? 'Скопійовано' : 'Копіювати деталі'}
         </button>

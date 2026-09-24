@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatUah } from '@pos/platform';
+import { FileText, PageHeader } from '@pos/platform/ui';
 import { listTechCards, type TechCardRow } from '../data/techCardsApi';
 import { foodCostPercent, missingReason, sortTechCards } from '../data/techCards';
 
@@ -41,87 +42,92 @@ export function TechCardsPage() {
   }, []);
 
   return (
-    <div className="space-y-6 animate-fade-up text-sq-text">
-      <div>
-        <h2 className="text-2xl font-semibold">Техкарти</h2>
-        <p className="text-sq-secondary mt-1 text-sm">
-          Скільки коштує зібрати страву і яку частку її ціни це з’їдає.
-          Собівартість рахується <strong>за останніми цінами закупівлі</strong> складників,
-          а не за середньою по партіях. Зверху — ті, що лишають найменше.
-        </p>
-      </div>
+    <div className="animate-fade-up text-sq-text max-w-5xl">
+      <PageHeader
+        glyph={FileText}
+        title="Техкарти"
+        subtitle={
+          <>
+            Скільки коштує зібрати страву і яку частку її ціни це з’їдає.
+            Собівартість рахується{' '}
+            <strong className="font-semibold text-sq-text">за останніми цінами закупівлі</strong>{' '}
+            складників, а не за середньою по партіях. Зверху — ті, що лишають найменше.
+          </>
+        }
+      />
 
       {error && (
-        <div className="rounded-sq bg-red-50 text-red-700 px-3 py-2 text-sm" data-testid="tech-cards-error">
+        <div className="rounded-sq bg-red-50 text-red-700 px-4 py-3 text-sm" data-testid="tech-cards-error">
           {error}
         </div>
       )}
 
       {rows && rows.length === 0 && (
-        <div className="bg-sq-surface border border-sq-divider rounded-sq p-6 text-sm text-sq-secondary">
-          У цьому магазині ще немає складених товарів — страв, букетів чи наборів,
-          які збирають зі складників. Зробіть товар складеним у{' '}
-          <Link to="/admin/products" className="text-sq-blue">
-            картці товару
-          </Link>
-          , і його техкартка зʼявиться тут.
+        <div className="py-12 flex flex-col items-center gap-3 text-center">
+          <FileText size={48} />
+          <p className="text-[15px] text-sq-secondary max-w-md leading-relaxed">
+            У цьому магазині ще немає складених товарів — страв, букетів чи наборів,
+            які збирають зі складників. Зробіть товар складеним у{' '}
+            <Link to="/admin/products" className="text-sq-blue font-semibold">
+              картці товару
+            </Link>
+            , і його техкартка зʼявиться тут.
+          </p>
         </div>
       )}
 
       {rows && rows.length > 0 && (
-        <div className="bg-sq-surface border border-sq-divider rounded-sq overflow-hidden shadow-sm">
-          <table className="w-full text-sm">
-            <thead className="bg-sq-bg/60 text-xs text-sq-secondary">
-              <tr>
-                <th className="text-left font-medium px-4 py-2.5">Страва</th>
-                <th className="text-right font-medium px-4 py-2.5">Ціна</th>
-                <th className="text-right font-medium px-4 py-2.5">Собівартість</th>
-                <th className="text-right font-medium px-4 py-2.5">Food cost</th>
-                <th className="text-right font-medium px-4 py-2.5">Складників</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-sq-divider">
-              {rows.map((row) => {
-                const reason = missingReason(row);
-                return (
-                  <tr key={row.variant_id} className="hover:bg-sq-bg/40">
-                    <td className="px-4 py-2.5">
-                      <Link
-                        to={`/admin/products?edit=${row.product_id}`}
-                        className="text-sq-blue"
-                      >
-                        {row.product_name}
-                      </Link>
-                      {row.label && (
-                        <span className="text-sq-secondary"> · {row.label}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums">
-                      {row.price_cents > 0 ? formatUah(row.price_cents) : '—'}
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums">
-                      {formatUah(row.cost_cents)}
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums">
-                      {reason ? (
-                        <span className="text-sq-secondary">
-                          — <span className="text-xs">({reason})</span>
-                        </span>
-                      ) : (
-                        <span className={toneOf(row.food_cost_bps!)}>
-                          {foodCostPercent(row.food_cost_bps!)}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-sq-secondary">
-                      {row.leaf_count}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <table className="sq-table">
+          <thead>
+            <tr>
+              <th>Страва</th>
+              <th className="!text-right">Ціна</th>
+              <th className="!text-right">Собівартість</th>
+              <th className="!text-right">Food cost</th>
+              <th className="!text-right !pr-0">Складників</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const reason = missingReason(row);
+              return (
+                <tr key={row.variant_id}>
+                  <td>
+                    <Link
+                      to={`/admin/products?edit=${row.product_id}`}
+                      className="text-sq-blue font-medium"
+                    >
+                      {row.product_name}
+                    </Link>
+                    {row.label && (
+                      <span className="text-sq-muted"> · {row.label}</span>
+                    )}
+                  </td>
+                  <td className="text-right tabular-nums">
+                    {row.price_cents > 0 ? formatUah(row.price_cents) : '—'}
+                  </td>
+                  <td className="text-right tabular-nums">
+                    {formatUah(row.cost_cents)}
+                  </td>
+                  <td className="text-right tabular-nums">
+                    {reason ? (
+                      <span className="text-sq-muted">
+                        — <span className="text-[13px]">({reason})</span>
+                      </span>
+                    ) : (
+                      <span className={toneOf(row.food_cost_bps!)}>
+                        {foodCostPercent(row.food_cost_bps!)}
+                      </span>
+                    )}
+                  </td>
+                  <td className="!pr-0 text-right tabular-nums text-sq-muted">
+                    {row.leaf_count}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       )}
     </div>
   );

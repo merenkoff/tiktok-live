@@ -49,20 +49,20 @@ export function SecretsForm({ specs, secretsSet, saving, onSave }: SecretsFormPr
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {specs.map((spec) => {
         const isSet = secretsSet.includes(spec.key);
         return (
-          <div key={spec.key} className="space-y-1">
-            <label className="block text-sm">
-              <span className="text-sq-secondary">
+          <div key={spec.key} className="space-y-1.5">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-semibold text-sq-secondary">
                 {spec.label}
                 {spec.required && <span className="text-red-600"> *</span>}
               </span>
-              <div className="mt-1 flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <input
                   type={spec.kind === 'password' ? 'password' : 'text'}
-                  className="pos-input flex-1"
+                  className="sq-input flex-1"
                   value={values[spec.key] ?? ''}
                   onChange={(e) => setField(spec.key, e.target.value)}
                   placeholder={isSet ? '••••••••' : spec.hint}
@@ -71,7 +71,7 @@ export function SecretsForm({ specs, secretsSet, saving, onSave }: SecretsFormPr
                 {isSet && (
                   <button
                     type="button"
-                    className="shrink-0 rounded-sq border border-sq-divider px-2 py-1.5 text-xs text-sq-secondary hover:bg-sq-bg"
+                    className="shrink-0 min-h-9 text-[15px] font-semibold text-red-600"
                     onClick={() => clearField(spec.key)}
                   >
                     Очистити
@@ -80,15 +80,15 @@ export function SecretsForm({ specs, secretsSet, saving, onSave }: SecretsFormPr
               </div>
             </label>
             {isSet && !values[spec.key] && (
-              <p className="text-xs text-sq-muted">Значення збережено — залиште порожнім, щоб не змінювати.</p>
+              <p className="text-[13px] text-sq-muted">Значення збережено — залиште порожнім, щоб не змінювати.</p>
             )}
-            {spec.hint && <p className="text-xs text-sq-muted">{spec.hint}</p>}
+            {spec.hint && <p className="text-[13px] text-sq-muted">{spec.hint}</p>}
           </div>
         );
       })}
       <button
         type="button"
-        className="pos-btn-primary px-4 py-2"
+        className="pos-btn-primary min-h-11 px-4 rounded-sq text-[15px]"
         disabled={saving}
         onClick={submit}
       >

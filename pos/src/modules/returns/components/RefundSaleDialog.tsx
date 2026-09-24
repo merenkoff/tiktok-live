@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Minus, Plus } from '@pos/platform/ui';
+import { Check, Minus, Plus, Printer, X } from '@pos/platform/ui';
 import {
   buildRefundReceiptPayload,
   DEFAULT_RECEIPT_PAPER_WIDTH,
@@ -170,15 +170,15 @@ export function RefundSaleDialog({ sale, detail, selectAll, onClose, onRefunded 
 
   if (done) {
     return (
-      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-        <button type="button" className="absolute inset-0 bg-black/40" onClick={onClose} aria-label="Закрити" />
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
+        <button type="button" className="absolute inset-0 bg-[rgba(28,32,38,.32)]" onClick={onClose} aria-label="Закрити" />
         <div
           role="dialog"
           aria-modal="true"
           aria-label="Повернення оформлено"
-          className="relative w-full max-w-sm bg-white rounded-t-sq sm:rounded-sq p-6 text-center shadow-lg"
+          className="relative w-full max-w-sm bg-white rounded-t-card sm:rounded-card px-6 pt-8 pb-6 text-center shadow-[0_24px_60px_rgba(0,20,60,.28)] animate-fade-up"
         >
-          <div className="mx-auto w-12 h-12 rounded-full bg-sq-blue text-white grid place-items-center">
+          <div className="mx-auto w-16 h-16 rounded-full bg-sq-blue text-white grid place-items-center">
             <Check size={40} />
           </div>
           {done.fiscal?.status === 'failed' && (
@@ -186,33 +186,34 @@ export function RefundSaleDialog({ sale, detail, selectAll, onClose, onRefunded 
             // back. An error screen here would make the cashier refund twice.
             <div
               role="alert"
-              className="mt-4 rounded-sq bg-amber-50 text-amber-900 px-3 py-2 text-sm text-left"
+              className="mt-4 rounded-xl bg-amber-50 text-amber-900 px-4 py-3 text-sm text-left"
             >
               <p className="font-semibold">Чек повернення не зареєстровано в ПРРО</p>
               {done.fiscal.message && <p className="mt-1">{done.fiscal.message}</p>}
               <p className="mt-1">Реєстрація повториться автоматично.</p>
             </div>
           )}
-          <p className="sq-section-label mt-5">Повернено</p>
-          <p className="text-3xl font-bold mt-1 text-sq-text">
+          <p className="mt-[18px] text-sm font-semibold text-sq-secondary">Повернено</p>
+          <p className="text-[34px] leading-tight font-bold mt-1 text-sq-heading tabular-nums">
             {formatUah(done.receipt.total_cents)}
           </p>
-          <p className="text-sm text-sq-secondary mt-1">
+          <p className="text-sm text-sq-muted mt-1 tabular-nums">
             {done.receipt.receipt_number} · до чека {sale.receipt_number}
           </p>
           <button
             type="button"
-            className="pos-btn-primary mt-6 w-full py-3.5"
+            className="pos-btn-primary mt-6 w-full min-h-[52px] rounded-xl text-[17px]"
             onClick={onClose}
           >
             Готово
           </button>
           <button
             type="button"
-            className="mt-3 w-full min-h-12 text-sm font-medium text-sq-blue disabled:opacity-50"
+            className="mt-2 w-full min-h-12 inline-flex items-center justify-center gap-2 text-[15px] font-semibold text-sq-blue disabled:opacity-50"
             onClick={() => void print(done.receipt)}
             disabled={printing}
           >
+            <Printer size={20} />
             {printing ? 'Друк…' : 'Друкувати чек повернення'}
           </button>
           {printStatus && <p className="text-sq-secondary text-sm mt-1">{printStatus}</p>}
@@ -223,84 +224,98 @@ export function RefundSaleDialog({ sale, detail, selectAll, onClose, onRefunded 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      <button type="button" className="absolute inset-0 bg-black/40" onClick={onClose} aria-label="Закрити" />
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
+      <button type="button" className="absolute inset-0 bg-[rgba(28,32,38,.32)]" onClick={onClose} aria-label="Закрити" />
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Повернення"
-        className="relative w-full max-w-md max-h-[92dvh] bg-white rounded-t-sq sm:rounded-sq flex flex-col shadow-lg"
+        className="relative w-full max-w-md max-h-[92dvh] bg-white rounded-t-card sm:rounded-card flex flex-col shadow-[0_24px_60px_rgba(0,20,60,.28)] animate-fade-up"
       >
-        <div className="px-5 pt-5 pb-3 shrink-0">
-          <p className="font-semibold text-sq-text">
-            {everything ? 'Скасувати чек?' : 'Повернення'}
-          </p>
-          <p className="text-sm text-sq-secondary mt-0.5">
-            {sale.receipt_number} · {formatUah(sale.total_cents)}
-          </p>
+        <div aria-hidden className="sm:hidden w-10 h-[5px] rounded-full bg-sq-divider self-center mt-2 shrink-0" />
+        <div className="pl-5 pr-3 pt-3 sm:pt-4 pb-3 flex items-start justify-between gap-3 shrink-0">
+          <div className="min-w-0">
+            <p className="text-[19px] font-bold text-sq-heading">
+              {everything ? 'Скасувати чек?' : 'Повернення'}
+            </p>
+            <p className="text-sm text-sq-secondary mt-0.5 tabular-nums">
+              {sale.receipt_number} · {formatUah(sale.total_cents)}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            aria-label="Закрити"
+            className="w-10 h-10 grid place-items-center rounded-full text-sq-secondary hover:bg-sq-empty disabled:opacity-40 shrink-0"
+          >
+            <X size={20} />
+          </button>
         </div>
 
-        <div className="flex-1 overflow-auto px-5 space-y-3 min-h-0">
+        <div className="flex-1 overflow-auto px-5 space-y-4 min-h-0">
           {/* A refund references the sale's fiscal document. Without one the
               refund goes through financially but can never be registered — and
               nothing on the server will ever retry it, because the ledger has
               no row for it. Say so before the money leaves the drawer. */}
           {(auth?.store.fiscal?.enabled ?? false) &&
             (sale.fiscal_status ?? 'none') !== 'done' && (
-              <p className="rounded-sq bg-amber-50 text-amber-900 px-3 py-2 text-sm">
+              <p className="rounded-xl bg-amber-50 text-amber-900 px-4 py-3 text-sm">
                 Цей продаж не зареєстровано в ПРРО — чек повернення теж не буде
                 зареєстровано.
               </p>
             )}
           {items.length === 0 ? (
-            <p className="text-sm text-sq-secondary">
+            <p className="text-[15px] text-sq-secondary">
               {detail
                 ? 'За цим чеком уже все повернуто.'
                 : 'Позиції чека недоступні — відкрийте чек онлайн.'}
             </p>
           ) : (
-            items.map((item) => {
-              const max = available(item);
-              const n = qty[item.id] ?? 0;
-              return (
-                <div key={item.id} className="flex items-center gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-sq-text truncate">{item.product_name}</p>
-                    <p className="text-xs text-sq-secondary truncate">
-                      {item.variant_label} · доступно {max} шт
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      type="button"
-                      className="w-11 h-11 grid place-items-center rounded-sq border border-sq-divider text-sq-text disabled:opacity-30"
-                      onClick={() => setLine(item.id, n - 1, max)}
-                      disabled={n === 0}
-                      aria-label={`Менше ${item.product_name}`}
-                    >
-                      <Minus size={20} />
-                    </button>
-                    <span className="w-8 text-center font-semibold tabular-nums">{n}</span>
-                    <button
-                      type="button"
-                      className="w-11 h-11 grid place-items-center rounded-sq border border-sq-divider text-sq-text disabled:opacity-30"
-                      onClick={() => setLine(item.id, n + 1, max)}
-                      disabled={n === max}
-                      aria-label={`Більше ${item.product_name}`}
-                    >
-                      <Plus size={20} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })
+            <ul>
+              {items.map((item) => {
+                const max = available(item);
+                const n = qty[item.id] ?? 0;
+                return (
+                  <li key={item.id} className="sq-row min-h-[60px] py-2 flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-base text-sq-text truncate">{item.product_name}</p>
+                      <p className="text-[13px] text-sq-muted truncate">
+                        {item.variant_label} · доступно {max} шт
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        className={stepClass}
+                        onClick={() => setLine(item.id, n - 1, max)}
+                        disabled={n === 0}
+                        aria-label={`Менше ${item.product_name}`}
+                      >
+                        <Minus size={20} />
+                      </button>
+                      <span className="w-8 text-center text-[17px] font-semibold text-sq-text tabular-nums">{n}</span>
+                      <button
+                        type="button"
+                        className={stepClass}
+                        onClick={() => setLine(item.id, n + 1, max)}
+                        disabled={n === max}
+                        aria-label={`Більше ${item.product_name}`}
+                      >
+                        <Plus size={20} />
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           )}
 
           {items.length > 0 && (
             <>
               <button
                 type="button"
-                className="text-sm font-semibold text-sq-blue min-h-12"
+                className="text-[15px] font-semibold text-sq-blue min-h-11 -mt-2"
                 onClick={() =>
                   setQty(Object.fromEntries(items.map((i) => [i.id, everything ? 0 : available(i)])))
                 }
@@ -309,27 +324,31 @@ export function RefundSaleDialog({ sale, detail, selectAll, onClose, onRefunded 
               </button>
 
               <div>
-                <p className="sq-section-label mb-1.5">Спосіб повернення</p>
+                <p className="sq-section-label mb-2">Спосіб повернення</p>
                 <div className="flex gap-2">
-                  {METHODS.map((m) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      className={`flex-1 min-h-12 rounded-sq text-sm font-medium border ${
-                        method === m.id
-                          ? 'border-sq-blue text-sq-blue bg-sq-blue/5'
-                          : 'border-sq-divider text-sq-text'
-                      }`}
-                      onClick={() => setMethod(m.id)}
-                    >
-                      {m.label}
-                    </button>
-                  ))}
+                  {METHODS.map((m) => {
+                    const on = method === m.id;
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        aria-pressed={on}
+                        className={`flex-1 min-h-12 rounded-xl text-base transition-colors ${
+                          on
+                            ? 'bg-sq-blue/[0.08] ring-2 ring-sq-blue text-sq-blue font-semibold'
+                            : 'bg-white ring-1 ring-sq-divider text-sq-text font-medium'
+                        }`}
+                        onClick={() => setMethod(m.id)}
+                      >
+                        {m.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
               <input
-                className="pos-field text-sm"
+                className="pos-field"
                 placeholder="Причина (необов'язково)"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
@@ -337,18 +356,18 @@ export function RefundSaleDialog({ sale, detail, selectAll, onClose, onRefunded 
             </>
           )}
 
-          {error && <p className="rounded-sq bg-red-50 text-red-700 px-3 py-2 text-sm">{error}</p>}
+          {error && <p className="rounded-xl bg-red-50 text-red-700 px-4 py-3 text-sm">{error}</p>}
         </div>
 
-        <div className="p-5 pt-3 shrink-0 space-y-2">
+        <div className="px-5 pt-3 pb-5 shrink-0 space-y-3 shadow-[0_-1px_0_rgb(var(--sq-divider-rgb))] mt-3">
           <div className="flex justify-between items-baseline">
-            <span className="text-sm text-sq-secondary">До повернення</span>
-            <span className="text-2xl font-bold text-sq-text">{formatUah(total)}</span>
+            <span className="text-[15px] text-sq-secondary">До повернення</span>
+            <span className="text-[26px] font-bold text-sq-heading tabular-nums">{formatUah(total)}</span>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2.5">
             <button
               type="button"
-              className="flex-1 min-h-12 rounded-sq border border-sq-divider text-sm font-semibold text-sq-text disabled:opacity-50"
+              className="flex-1 min-h-[52px] rounded-xl bg-white ring-1 ring-sq-divider text-[17px] font-semibold text-sq-text hover:bg-sq-sidebar disabled:opacity-50"
               onClick={onClose}
               disabled={busy}
             >
@@ -356,7 +375,7 @@ export function RefundSaleDialog({ sale, detail, selectAll, onClose, onRefunded 
             </button>
             <button
               type="button"
-              className="flex-1 min-h-12 rounded-sq bg-red-600 text-white text-sm font-semibold disabled:opacity-50"
+              className="flex-1 min-h-[52px] rounded-xl bg-red-600 hover:bg-red-700 text-white text-[17px] font-semibold disabled:opacity-50"
               onClick={() => void confirm()}
               disabled={busy || picked.length === 0}
             >
@@ -368,3 +387,6 @@ export function RefundSaleDialog({ sale, detail, selectAll, onClose, onRefunded 
     </div>
   );
 }
+
+const stepClass =
+  'w-11 h-11 rounded-sq bg-white ring-1 ring-sq-divider grid place-items-center text-sq-text disabled:opacity-30';

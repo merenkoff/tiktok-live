@@ -23,13 +23,22 @@ import baseTw from '../tailwind.config.js';
  * widget would render unstyled at runtime. Optional and defaulted to `[]`, so
  * every existing single-module call site is unaffected.
  */
+/**
+ * The owner screen's frame (`PageHeader`, `SectionHead`, `Segmented` in
+ * `src/components/ui/`) reaches every module through `@pos/platform/ui`, which
+ * each consumer bundles — so its classes must be in every module's own sheet,
+ * not only in the host's, or a module built against a newer frame than the
+ * host it lands on draws it half-styled.
+ */
+const SHARED_UI = ['./src/components/ui/**/*.{ts,tsx}'];
+
 export function moduleCss(moduleId, extraContent = []) {
   return {
     postcss: {
       plugins: [
         tailwindcss({
           presets: [baseTw],
-          content: [`./src/modules/${moduleId}/**/*.{ts,tsx}`, ...extraContent],
+          content: [`./src/modules/${moduleId}/**/*.{ts,tsx}`, ...SHARED_UI, ...extraContent],
           corePlugins: { preflight: false },
         }),
         autoprefixer(),

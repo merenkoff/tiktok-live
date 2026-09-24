@@ -8,9 +8,9 @@ import type { Modifier, ModifierGroup, ModifierInput } from '@pos/platform';
 import type { ComponentOption } from './componentOptions';
 import { errorText, signedUahInputToCents } from './modifierInput';
 
-const fieldClass =
-  'w-full rounded-sq border border-sq-divider bg-sq-surface px-3 py-2.5 text-sm ' +
-  'text-sq-text placeholder:text-sq-muted focus:outline-none focus:border-sq-blue';
+// White wells on the grey add-answer panel: the grey one would vanish into it.
+const fieldClass = 'sq-input !bg-sq-surface';
+const captionClass = 'text-[13px] font-semibold text-sq-secondary';
 
 function deltaText(cents: number): string {
   if (cents > 0) return `+${formatUah(cents)}`;
@@ -123,12 +123,12 @@ export function ModifierEditor({
   return (
     <div className="space-y-3">
       {group.modifiers.length === 0 && (
-        <p className="text-sm text-sq-muted">
+        <p className="py-1 text-[15px] text-sq-muted">
           Ще жодної відповіді. Без відповідей питання на касі не зʼявиться.
         </p>
       )}
 
-      <ul className="divide-y divide-sq-divider">
+      <ul>
         {group.modifiers.map((m) => {
           const part = m.component_variant_id == null ? null : byVariant.get(m.component_variant_id);
           const partCaption = part
@@ -139,29 +139,37 @@ export function ModifierEditor({
           return (
             <li
               key={m.id}
-              className="py-2 flex flex-wrap items-center gap-x-3 gap-y-1"
+              className="sq-row min-h-12 py-1.5 flex flex-wrap items-center gap-x-3 gap-y-1"
               data-testid="modifier-row"
             >
-              <span className="font-medium text-sq-text">{m.name}</span>
+              <span className="text-base font-medium text-sq-text">{m.name}</span>
               <span className="text-sm text-sq-secondary tabular-nums">{deltaText(m.price_delta_cents)}</span>
               {m.is_default && (
-                <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-[3px] bg-[#EEF4FF] text-[#2B4ACB]">
+                <span className="h-[22px] px-2 rounded-md bg-sq-blue/10 text-sq-blue-press text-xs font-medium inline-flex items-center">
                   за умовчанням
                 </span>
               )}
-              <span className="text-xs text-sq-secondary">
+              <span className="text-[13px] text-sq-muted">
                 {partCaption
                   ? `списує ${partCaption} × ${m.component_quantity} ${part?.unit ?? m.component?.unit ?? ''}`.trim()
                   : 'без списання'}
               </span>
-              {!m.is_active && <span className="text-xs text-sq-muted">вимкнено</span>}
-              <span className="ml-auto flex gap-2 text-sm">
-                <button type="button" className="text-sq-blue" onClick={() => void toggleDefault(m)}>
+              {!m.is_active && (
+                <span className="h-[22px] px-2 rounded-md ring-1 ring-inset ring-sq-divider text-xs font-medium text-sq-secondary inline-flex items-center">
+                  вимкнено
+                </span>
+              )}
+              <span className="ml-auto flex items-center gap-1 text-[15px] font-semibold">
+                <button
+                  type="button"
+                  className="min-h-9 px-2 rounded-lg text-sq-blue hover:bg-sq-sidebar"
+                  onClick={() => void toggleDefault(m)}
+                >
                   {m.is_default ? 'Не за умовчанням' : 'За умовчанням'}
                 </button>
                 <button
                   type="button"
-                  className="text-sq-blue"
+                  className="min-h-9 px-2 rounded-lg text-sq-blue hover:bg-sq-sidebar"
                   onClick={() => {
                     setEditingId(m.id);
                     setDraft(draftOf(m));
@@ -169,7 +177,11 @@ export function ModifierEditor({
                 >
                   Змінити
                 </button>
-                <button type="button" className="text-red-600" onClick={() => void remove(m)}>
+                <button
+                  type="button"
+                  className="min-h-9 px-2 rounded-lg text-red-600 hover:bg-red-50"
+                  onClick={() => void remove(m)}
+                >
                   Прибрати
                 </button>
               </span>
@@ -180,10 +192,10 @@ export function ModifierEditor({
 
       <form
         onSubmit={submit}
-        className="grid gap-2 sm:grid-cols-[1fr_120px_1fr_90px_auto] items-end rounded-sq border border-sq-divider bg-sq-bg/40 p-3"
+        className="grid gap-3 sm:grid-cols-[1fr_120px_1fr_100px_auto] items-end rounded-xl bg-sq-sidebar p-3.5"
       >
-        <label className="text-xs text-sq-secondary">
-          Відповідь
+        <label className="flex flex-col gap-1.5">
+          <span className={captionClass}>Відповідь</span>
           <input
             className={fieldClass}
             placeholder="вівсяне"
@@ -193,10 +205,10 @@ export function ModifierEditor({
             data-testid="modifier-form-name"
           />
         </label>
-        <label className="text-xs text-sq-secondary">
-          До ціни, ₴
+        <label className="flex flex-col gap-1.5">
+          <span className={captionClass}>До ціни, ₴</span>
           <input
-            className={fieldClass}
+            className={`${fieldClass} tabular-nums`}
             inputMode="decimal"
             placeholder="15 або -20"
             value={draft.delta}
@@ -204,8 +216,8 @@ export function ModifierEditor({
             data-testid="modifier-form-delta"
           />
         </label>
-        <label className="text-xs text-sq-secondary">
-          Списує
+        <label className="flex flex-col gap-1.5">
+          <span className={captionClass}>Списує</span>
           <select
             className={fieldClass}
             value={draft.componentId}
@@ -222,10 +234,10 @@ export function ModifierEditor({
             ))}
           </select>
         </label>
-        <label className="text-xs text-sq-secondary">
-          Кількість{component ? `, ${component.unit}` : ''}
+        <label className="flex flex-col gap-1.5">
+          <span className={captionClass}>Кількість{component ? `, ${component.unit}` : ''}</span>
           <input
-            className={fieldClass}
+            className={`${fieldClass} tabular-nums`}
             type="number"
             min={1}
             step={1}
@@ -236,9 +248,10 @@ export function ModifierEditor({
           />
         </label>
         <div className="flex items-center gap-3">
-          <label className="inline-flex items-center gap-1.5 text-sm text-sq-text whitespace-nowrap">
+          <label className="inline-flex items-center gap-2 min-h-11 text-[15px] text-sq-text whitespace-nowrap cursor-pointer">
             <input
               type="checkbox"
+              className="w-4 h-4 accent-[rgb(var(--sq-blue-rgb))]"
               checked={draft.isDefault}
               onChange={(e) => setDraft({ ...draft, isDefault: e.target.checked })}
               data-testid="modifier-form-default"
@@ -247,7 +260,7 @@ export function ModifierEditor({
           </label>
           <button
             type="submit"
-            className="sq-btn-primary px-3 py-2 whitespace-nowrap"
+            className="pos-btn-primary min-h-11 px-4 rounded-sq text-[15px] whitespace-nowrap"
             disabled={busy}
             data-testid="modifier-form-submit"
           >
@@ -256,7 +269,7 @@ export function ModifierEditor({
           {editingId != null && (
             <button
               type="button"
-              className="text-sm text-sq-secondary"
+              className="min-h-11 px-1 text-[15px] font-semibold text-sq-secondary"
               onClick={() => {
                 setEditingId(null);
                 setDraft(EMPTY);

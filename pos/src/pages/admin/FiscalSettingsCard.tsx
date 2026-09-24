@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '@pos/platform';
 import { taxIdLine } from '../../lib/receipt';
+import { SectionHead } from '../../components/ui/Page';
 import type {
   FiscalProviderId,
   FiscalReceiptSource,
@@ -50,6 +51,11 @@ const PROVIDER_LABEL: Record<FiscalProviderId, string> = {
 
 type LoadState = 'loading' | 'ready' | 'forbidden' | 'error';
 
+// The same field voice as the rest of «Налаштування»: a 13/600 label over the
+// control, native checkboxes in the accent colour.
+const LABEL = 'text-[13px] font-semibold text-sq-secondary';
+const CHECKBOX = 'w-5 h-5 shrink-0 accent-[rgb(var(--sq-blue-rgb))]';
+
 /**
  * What the provider knows about the store — read-only for now. Editing comes
  * later; today the point is that the owner types nothing: the block fills
@@ -67,12 +73,12 @@ function RequisitesSection({
   onRefresh: () => void;
 }) {
   return (
-    <div className="rounded-sq border border-sq-divider p-3 space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <p className="sq-section-label">Реквізити ПРРО</p>
+    <div className="rounded-xl bg-sq-sidebar px-[18px] py-4 space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[15px] font-semibold text-sq-heading">Реквізити ПРРО</p>
         <button
           type="button"
-          className="text-xs underline text-sq-blue disabled:opacity-50"
+          className="min-h-9 text-[15px] font-semibold text-sq-blue disabled:opacity-50"
           disabled={refreshing}
           onClick={onRefresh}
         >
@@ -80,45 +86,45 @@ function RequisitesSection({
         </button>
       </div>
       {!requisites ? (
-        <p className="text-xs text-sq-secondary">
+        <p className="text-[15px] text-sq-secondary">
           Ще не отримано. З’являться після першого чека онлайн — або натисніть «Оновити з ПРРО».
         </p>
       ) : (
-        <dl className="text-sm grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+        <dl className="text-[15px] grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
           {requisites.organization.name && (
             <>
               <dt className="text-sq-secondary">Організація</dt>
-              <dd>{requisites.organization.name}</dd>
+              <dd className="text-sq-text">{requisites.organization.name}</dd>
             </>
           )}
           {taxIdLine(requisites) && (
             <>
               <dt className="text-sq-secondary">Податковий №</dt>
-              <dd>{taxIdLine(requisites)}</dd>
+              <dd className="text-sq-text tabular-nums">{taxIdLine(requisites)}</dd>
             </>
           )}
           {requisites.point.name && (
             <>
               <dt className="text-sq-secondary">Точка</dt>
-              <dd>{requisites.point.name}</dd>
+              <dd className="text-sq-text">{requisites.point.name}</dd>
             </>
           )}
           {requisites.point.address && (
             <>
               <dt className="text-sq-secondary">Адреса</dt>
-              <dd>{requisites.point.address}</dd>
+              <dd className="text-sq-text">{requisites.point.address}</dd>
             </>
           )}
           {requisites.register.fiscal_number && (
             <>
               <dt className="text-sq-secondary">ФН ПРРО</dt>
-              <dd className="font-mono">{requisites.register.fiscal_number}</dd>
+              <dd className="text-sq-text tabular-nums">{requisites.register.fiscal_number}</dd>
             </>
           )}
           {requisites.taxes.length > 0 && (
             <>
               <dt className="text-sq-secondary">Ставки</dt>
-              <dd>
+              <dd className="text-sq-text">
                 {requisites.taxes
                   .map((t) => `${t.symbol} — ${t.label || `${t.rate}%`}${t.is_default ? ' (за замовч.)' : ''}`)
                   .join('; ')}
@@ -128,9 +134,9 @@ function RequisitesSection({
         </dl>
       )}
       {fetchedAt && (
-        <p className="text-xs text-sq-muted">Оновлено {new Date(fetchedAt).toLocaleString('uk-UA')}</p>
+        <p className="text-[13px] text-sq-muted">Оновлено {new Date(fetchedAt).toLocaleString('uk-UA')}</p>
       )}
-      <p className="text-xs text-sq-muted">
+      <p className="text-[13px] text-sq-muted">
         Друкуються в шапці кожного фіскального чека. Редагування — згодом; поки що так, як
         зареєстровано у провайдера.
       </p>
@@ -266,195 +272,216 @@ export function FiscalSettingsCard() {
   }
 
   return (
-    <div className="bg-sq-surface border border-sq-divider rounded-sq p-5 space-y-4 shadow-sm">
-      <p className="sq-section-label">Фіскалізація (ПРРО)</p>
+    <section>
+      <SectionHead title="Фіскалізація (ПРРО)" />
 
-      {state === 'loading' && <p className="text-sm text-sq-secondary">Завантаження…</p>}
+      <div className="pt-4 space-y-4">
+        {state === 'loading' && <p className="text-[15px] text-sq-secondary">Завантаження…</p>}
 
-      {state === 'error' && (
-        <div className="text-sm">
-          <p className="text-sq-secondary">Не вдалося завантажити налаштування ПРРО.</p>
-          <button type="button" className="mt-2 underline text-sq-blue" onClick={() => void load()}>
-            Спробувати ще раз
-          </button>
-        </div>
-      )}
-
-      {state === 'ready' && settings && (
-        <>
-          {secretsMissing && (
-            <p role="alert" className="rounded-sq bg-red-50 text-red-700 px-3 py-2 text-sm">
-              Сервер не налаштовано для зберігання ключів ПРРО (<code>POS_SECRETS_KEY</code>).
-              Увімкнути фіскалізацію не можна.
-            </p>
-          )}
-          {adapterMissing && (
-            <p role="alert" className="rounded-sq bg-red-50 text-red-700 px-3 py-2 text-sm">
-              Для провайдера «{PROVIDER_LABEL[settings.provider as FiscalProviderId]}» у цій версії
-              застосунку немає модуля. Кожен продаж отримає помилку.
-            </p>
-          )}
-
-          <label className="block text-sm">
-            <span className="text-sq-secondary">Провайдер</span>
-            <select
-              className="pos-input mt-1 w-full"
-              value={provider}
-              onChange={(e) => setProvider(e.target.value as FiscalProviderId | '')}
-            >
-              <option value="">Не обрано</option>
-              {PROVIDERS.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={enabled}
-              disabled={!canEnable}
-              onChange={(e) => setEnabled(e.target.checked)}
-            />
-            <span className={canEnable ? '' : 'text-sq-muted'}>
-              Реєструвати чеки в ПРРО
-            </span>
-          </label>
-
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={autoOpenShift}
-              onChange={(e) => setAutoOpenShift(e.target.checked)}
-            />
-            <span>Відкривати зміну автоматично</span>
-          </label>
-
-          <label className="block text-sm">
-            <span className="text-sq-secondary">Код ставки за замовчуванням</span>
-            <input
-              className="pos-input mt-1 w-full"
-              value={taxCode}
-              onChange={(e) => setTaxCode(e.target.value)}
-              placeholder="напр. A"
-            />
-          </label>
-
-          <label className="block text-sm">
-            <span className="text-sq-secondary">Джерело чека</span>
-            <select
-              className="pos-input mt-1 w-full"
-              value={receiptSource}
-              onChange={(e) => setReceiptSource(e.target.value as FiscalReceiptSource)}
-            >
-              <option value="local">Наш макет + фіскальний блок</option>
-              <option value="provider">Чек від провайдера, як є</option>
-            </select>
-          </label>
-
-          <label className="block text-sm">
-            <span className="text-sq-secondary">Ширина чекової стрічки</span>
-            <select
-              className="pos-input mt-1 w-full"
-              value={receiptWidth}
-              onChange={(e) => setReceiptWidth(Number(e.target.value) === 48 ? 48 : 32)}
-            >
-              <option value={32}>58 мм</option>
-              <option value={48}>80 мм</option>
-            </select>
-          </label>
-          <p className="-mt-3 text-xs text-sq-secondary">
-            Під неї провайдер верстає свій чек. Принтер кожної каси обирається окремо на екрані
-            «Обладнання».
-          </p>
-
-          {/* Offline mode. Rendered only for a provider whose adapter can do it —
-              for the others this is not "off", it does not exist. The switch
-              lives here rather than in the provider's own bundle for the same
-              reason `enabled` does (TechDocs/POS_FISCAL_PRRO.md §"Тумблер живёт
-              в хосте"): on the web a bundle can fail to load silently, and an
-              owner must always be able to switch offline mode back OFF. */}
-          {offlineCapable && (
-            <div className="rounded-sq border border-sq-divider p-3 space-y-2">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={offlineMode}
-                  disabled={!canGoOffline}
-                  onChange={(e) => setOfflineMode(e.target.checked)}
-                />
-                <span className={canGoOffline ? '' : 'text-sq-muted'}>Офлайн-режим ПРРО</span>
-              </label>
-              <p className="text-xs text-sq-secondary">
-                {canGoOffline
-                  ? 'Каса продовжує продавати без зв’язку з ПРРО: чеки отримують фіскальні номери із запасу і надсилаються в ДПС автоматично, щойно зв’язок відновиться.'
-                  : 'Спершу увімкніть реєстрацію чеків у ПРРО.'}
-              </p>
-              <label className="block text-sm">
-                <span className="text-sq-secondary">Запас фіскальних кодів</span>
-                <input
-                  className="pos-input mt-1 w-full"
-                  inputMode="numeric"
-                  value={codesTarget}
-                  onChange={(e) => setCodesTarget(e.target.value)}
-                />
-              </label>
-              <p className="text-xs text-sq-secondary">
-                Скільки кодів тримати про запас: {CODES_TARGET_MIN}–{CODES_TARGET_MAX}. Один код —
-                один офлайн-чек.
-              </p>
-            </div>
-          )}
-
-          {settings.provider && (
-            <RequisitesSection
-              requisites={settings.requisites}
-              fetchedAt={settings.requisites_fetched_at}
-              refreshing={refreshing}
-              onRefresh={() => void refreshRequisites()}
-            />
-          )}
-
-          <div className="text-xs text-sq-secondary space-y-1">
-            <p>
-              Дані доступу:{' '}
-              {settings.secrets_set.length
-                ? settings.secrets_set.join(', ')
-                : 'не збережено'}{' '}
-              — керуються на екрані ПРРО.
-            </p>
-            <p>
-              {settings.offline_mode
-                ? 'Якщо ПРРО недоступне: продаж триває, чеки надсилаються пізніше.'
-                : 'Якщо ПРРО недоступне: продаж блокується.'}
-            </p>
-            {settings.offline_month && (
-              // 168 годин на календарний місяць — Положення № 13. Лічильник
-              // ведеться на сервері по реєстратору: офлайн будь-якої каси
-              // витрачає ті самі години.
-              <p className={monthLow ? 'text-amber-700' : undefined}>
-                Офлайн цього місяця: {Math.floor(settings.offline_month.used_ms / 3_600_000)} год
-                із {Math.floor(settings.offline_month.limit_ms / 3_600_000)}
-                {monthLow && ' — залишок малий, продаж без звʼязку скоро стане неможливим'}
-              </p>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3">
+        {state === 'error' && (
+          <div className="text-[15px]">
+            <p className="text-sq-secondary">Не вдалося завантажити налаштування ПРРО.</p>
             <button
               type="button"
-              className="pos-btn-primary px-4 py-2"
-              disabled={saving}
-              onClick={() => void save()}
+              className="mt-1 min-h-9 font-semibold text-sq-blue"
+              onClick={() => void load()}
             >
-              {saving ? 'Збереження…' : 'Зберегти ПРРО'}
+              Спробувати ще раз
             </button>
-            {message && <span className="text-sm text-sq-secondary">{message}</span>}
           </div>
-        </>
-      )}
-    </div>
+        )}
+
+        {state === 'ready' && settings && (
+          <>
+            {secretsMissing && (
+              <p role="alert" className="rounded-xl bg-red-50 text-red-700 px-4 py-3 text-[15px]">
+                Сервер не налаштовано для зберігання ключів ПРРО (<code>POS_SECRETS_KEY</code>).
+                Увімкнути фіскалізацію не можна.
+              </p>
+            )}
+            {adapterMissing && (
+              <p role="alert" className="rounded-xl bg-red-50 text-red-700 px-4 py-3 text-[15px]">
+                Для провайдера «{PROVIDER_LABEL[settings.provider as FiscalProviderId]}» у цій версії
+                застосунку немає модуля. Кожен продаж отримає помилку.
+              </p>
+            )}
+
+            <label className="flex flex-col gap-1.5">
+              <span className={LABEL}>Провайдер</span>
+              <select
+                className="sq-input"
+                value={provider}
+                onChange={(e) => setProvider(e.target.value as FiscalProviderId | '')}
+              >
+                <option value="">Не обрано</option>
+                {PROVIDERS.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div>
+              <label className="min-h-11 flex items-center gap-3 text-[15px]">
+                <input
+                  type="checkbox"
+                  className={CHECKBOX}
+                  checked={enabled}
+                  disabled={!canEnable}
+                  onChange={(e) => setEnabled(e.target.checked)}
+                />
+                <span className={canEnable ? 'text-sq-text' : 'text-sq-muted'}>
+                  Реєструвати чеки в ПРРО
+                </span>
+              </label>
+
+              <label className="min-h-11 flex items-center gap-3 text-[15px] text-sq-text">
+                <input
+                  type="checkbox"
+                  className={CHECKBOX}
+                  checked={autoOpenShift}
+                  onChange={(e) => setAutoOpenShift(e.target.checked)}
+                />
+                <span>Відкривати зміну автоматично</span>
+              </label>
+            </div>
+
+            <label className="flex flex-col gap-1.5">
+              <span className={LABEL}>Код ставки за замовчуванням</span>
+              <input
+                className="sq-input"
+                value={taxCode}
+                onChange={(e) => setTaxCode(e.target.value)}
+                placeholder="напр. A"
+              />
+            </label>
+
+            <div className="grid gap-4 sm:grid-cols-2 items-start">
+              <label className="flex flex-col gap-1.5">
+                <span className={LABEL}>Джерело чека</span>
+                <select
+                  className="sq-input"
+                  value={receiptSource}
+                  onChange={(e) => setReceiptSource(e.target.value as FiscalReceiptSource)}
+                >
+                  <option value="local">Наш макет + фіскальний блок</option>
+                  <option value="provider">Чек від провайдера, як є</option>
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1.5">
+                <span className={LABEL}>Ширина чекової стрічки</span>
+                <select
+                  className="sq-input"
+                  value={receiptWidth}
+                  onChange={(e) => setReceiptWidth(Number(e.target.value) === 48 ? 48 : 32)}
+                >
+                  <option value={32}>58 мм</option>
+                  <option value={48}>80 мм</option>
+                </select>
+              </label>
+            </div>
+            <p className="-mt-2 text-[13px] text-sq-muted">
+              Під неї провайдер верстає свій чек. Принтер кожної каси обирається окремо на екрані
+              «Обладнання».
+            </p>
+
+            {/* Offline mode. Rendered only for a provider whose adapter can do it —
+                for the others this is not "off", it does not exist. The switch
+                lives here rather than in the provider's own bundle for the same
+                reason `enabled` does (TechDocs/POS_FISCAL_PRRO.md §"Тумблер живёт
+                в хосте"): on the web a bundle can fail to load silently, and an
+                owner must always be able to switch offline mode back OFF. */}
+            {offlineCapable && (
+              <div className="space-y-2">
+                <label className="min-h-11 flex items-center gap-3 text-[15px]">
+                  <input
+                    type="checkbox"
+                    className={CHECKBOX}
+                    checked={offlineMode}
+                    disabled={!canGoOffline}
+                    onChange={(e) => setOfflineMode(e.target.checked)}
+                  />
+                  <span className={canGoOffline ? 'text-sq-text' : 'text-sq-muted'}>Офлайн-режим ПРРО</span>
+                </label>
+                <div className="pl-8 space-y-3">
+                  <p className="text-[13px] leading-relaxed text-sq-secondary">
+                    {canGoOffline
+                      ? 'Каса продовжує продавати без зв’язку з ПРРО: чеки отримують фіскальні номери із запасу і надсилаються в ДПС автоматично, щойно зв’язок відновиться.'
+                      : 'Спершу увімкніть реєстрацію чеків у ПРРО.'}
+                  </p>
+                  <label className="flex flex-col gap-1.5 max-w-xs">
+                    <span className={LABEL}>Запас фіскальних кодів</span>
+                    <input
+                      className="sq-input tabular-nums"
+                      inputMode="numeric"
+                      value={codesTarget}
+                      onChange={(e) => setCodesTarget(e.target.value)}
+                    />
+                  </label>
+                  <p className="text-[13px] text-sq-muted">
+                    Скільки кодів тримати про запас: {CODES_TARGET_MIN}–{CODES_TARGET_MAX}. Один код —
+                    один офлайн-чек.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {settings.provider && (
+              <RequisitesSection
+                requisites={settings.requisites}
+                fetchedAt={settings.requisites_fetched_at}
+                refreshing={refreshing}
+                onRefresh={() => void refreshRequisites()}
+              />
+            )}
+
+            <div className="text-[13px] text-sq-secondary space-y-1">
+              <p>
+                Дані доступу:{' '}
+                {settings.secrets_set.length
+                  ? settings.secrets_set.join(', ')
+                  : 'не збережено'}{' '}
+                — керуються на екрані ПРРО.
+              </p>
+              <p>
+                {settings.offline_mode
+                  ? 'Якщо ПРРО недоступне: продаж триває, чеки надсилаються пізніше.'
+                  : 'Якщо ПРРО недоступне: продаж блокується.'}
+              </p>
+              {settings.offline_month && (
+                // 168 годин на календарний місяць — Положення № 13. Лічильник
+                // ведеться на сервері по реєстратору: офлайн будь-якої каси
+                // витрачає ті самі години.
+                <p className={monthLow ? 'text-amber-700 font-medium' : undefined}>
+                  Офлайн цього місяця: {Math.floor(settings.offline_month.used_ms / 3_600_000)} год
+                  із {Math.floor(settings.offline_month.limit_ms / 3_600_000)}
+                  {monthLow && ' — залишок малий, продаж без звʼязку скоро стане неможливим'}
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                className="pos-btn-primary min-h-11 px-4 rounded-sq text-[15px]"
+                disabled={saving}
+                onClick={() => void save()}
+              >
+                {saving ? 'Збереження…' : 'Зберегти ПРРО'}
+              </button>
+              {message && (
+                <span
+                  className={`text-[15px] ${message === 'Збережено' ? 'text-sq-success-ink font-medium' : 'text-red-600'}`}
+                >
+                  {message}
+                </span>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </section>
   );
 }

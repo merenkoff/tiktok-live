@@ -22,7 +22,7 @@
  */
 
 import { useState } from 'react';
-import { CalendarClock, X } from '../../platform/glyphs';
+import { Clock, X } from '../../platform/glyphs';
 import { formatUah } from '../../lib/money';
 
 interface Props {
@@ -74,65 +74,71 @@ export function PreorderSheet({
   const needsAddress = fulfilment === 'delivery' && !address.trim();
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 grid place-items-end md:place-items-center p-4">
+    <div className="fixed inset-0 z-50 bg-[rgba(28,32,38,.32)] grid place-items-end md:place-items-center p-4">
       <div
-        className="bg-white rounded-sq w-full max-w-md overflow-hidden animate-fade-up shadow-lg flex flex-col max-h-[90vh]"
+        role="dialog"
+        aria-label="Замовлення наперед"
+        className="bg-white rounded-card w-full max-w-md overflow-hidden animate-fade-up shadow-[0_24px_60px_rgba(0,20,60,.28)] flex flex-col max-h-[90vh]"
         data-testid="preorder-sheet"
       >
-        <div className="px-4 py-3.5 border-b border-sq-divider flex items-center justify-between gap-3">
-          <h3 className="font-semibold text-sq-text">Замовлення наперед</h3>
+        <div className="pl-5 pr-3 pt-4 pb-2 flex items-center justify-between gap-3 shrink-0">
+          <h3 className="text-[19px] font-bold text-sq-heading">Замовлення наперед</h3>
           <button
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="min-h-11 min-w-11 grid place-items-center text-sq-secondary disabled:opacity-40"
+            className="w-10 h-10 grid place-items-center rounded-full text-sq-secondary hover:bg-sq-empty disabled:opacity-40 shrink-0"
             aria-label="Закрити"
           >
             <X size={20} />
           </button>
         </div>
 
-        <div className="overflow-y-auto p-4 space-y-4">
-          <p className="text-xs text-sq-muted">
-            {lineCount} поз. на {formatUah(totalCents)}. Ціну зафіксовано на сьогодні — навіть
+        <div className="overflow-y-auto px-5 pt-1 pb-5 space-y-4">
+          <p className="text-sm text-sq-secondary">
+            {lineCount} поз. на <span className="tabular-nums">{formatUah(totalCents)}</span>. Ціну зафіксовано на сьогодні — навіть
             якщо квіти подорожчають, клієнт заплатить стільки. Залишок не резервується: стебла
             купуються ближче до дати.
           </p>
 
-          <label className="block">
-            <span className="text-sm text-sq-secondary">Коли</span>
+          <label className={labelClass}>
+            <span className={captionClass}>Коли</span>
             <input
               type="datetime-local"
-              className="pos-field mt-1.5"
+              className="pos-field"
               value={dueAt}
               onChange={(e) => setDueAt(e.target.value)}
               data-testid="preorder-due"
             />
           </label>
 
-          <div className="flex gap-1.5" role="group" aria-label="Спосіб видачі">
-            {(['pickup', 'delivery'] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setFulfilment(mode)}
-                className={`flex-1 min-h-11 rounded-sq text-sm font-semibold ${
-                  fulfilment === mode
-                    ? 'bg-sq-blue text-white'
-                    : 'bg-sq-bg text-sq-secondary'
-                }`}
-                data-testid={`preorder-${mode}`}
-              >
-                {mode === 'pickup' ? 'Самовивіз' : 'Доставка'}
-              </button>
-            ))}
+          <div className="flex gap-1 p-[3px] rounded-xl bg-sq-empty" role="group" aria-label="Спосіб видачі">
+            {(['pickup', 'delivery'] as const).map((mode) => {
+              const on = fulfilment === mode;
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => setFulfilment(mode)}
+                  className={`flex-1 min-h-11 rounded-[9px] text-[15px] transition-colors ${
+                    on
+                      ? 'bg-white shadow-[0_1px_3px_rgba(0,0,0,.12)] font-semibold text-sq-text'
+                      : 'font-medium text-sq-secondary hover:text-sq-text'
+                  }`}
+                  data-testid={`preorder-${mode}`}
+                >
+                  {mode === 'pickup' ? 'Самовивіз' : 'Доставка'}
+                </button>
+              );
+            })}
           </div>
 
           {fulfilment === 'delivery' && (
-            <label className="block">
-              <span className="text-sm text-sq-secondary">Адреса</span>
+            <label className={labelClass}>
+              <span className={captionClass}>Адреса</span>
               <input
-                className="pos-field mt-1.5"
+                className="pos-field"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 placeholder="вул. Хрещатик, 1, кв. 5"
@@ -142,20 +148,20 @@ export function PreorderSheet({
           )}
 
           <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className="text-sm text-sq-secondary">Отримувач</span>
+            <label className={labelClass}>
+              <span className={captionClass}>Отримувач</span>
               <input
-                className="pos-field mt-1.5"
+                className="pos-field"
                 value={recipientName}
                 onChange={(e) => setRecipientName(e.target.value)}
                 placeholder="Оксана"
                 data-testid="preorder-recipient"
               />
             </label>
-            <label className="block">
-              <span className="text-sm text-sq-secondary">Телефон</span>
+            <label className={labelClass}>
+              <span className={captionClass}>Телефон</span>
               <input
-                className="pos-field mt-1.5"
+                className="pos-field tabular-nums"
                 inputMode="tel"
                 value={recipientPhone}
                 onChange={(e) => setRecipientPhone(e.target.value)}
@@ -165,24 +171,24 @@ export function PreorderSheet({
             </label>
           </div>
 
-          <label className="block">
-            <span className="text-sm text-sq-secondary">Текст листівки</span>
+          <label className={labelClass}>
+            <span className={captionClass}>Текст листівки</span>
             <textarea
-              className="pos-field mt-1.5 min-h-[72px]"
+              className="pos-field min-h-[72px]"
               value={cardMessage}
               onChange={(e) => setCardMessage(e.target.value)}
               placeholder="З днем народження!"
               data-testid="preorder-card"
             />
-            <span className="mt-1 block text-xs text-sq-muted">
+            <span className="text-[13px] text-sq-muted">
               Слова клієнта — їх перепишуть на листівку від руки.
             </span>
           </label>
 
-          <label className="block">
-            <span className="text-sm text-sq-secondary">Примітка для себе</span>
+          <label className={labelClass}>
+            <span className={captionClass}>Примітка для себе</span>
             <input
-              className="pos-field mt-1.5"
+              className="pos-field"
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Без лілій — алергія"
@@ -196,7 +202,7 @@ export function PreorderSheet({
           )}
         </div>
 
-        <div className="p-4 border-t border-sq-divider">
+        <div className="px-5 pt-3 pb-5 shrink-0 shadow-[0_-1px_0_rgb(var(--sq-divider-rgb))]">
           <button
             type="button"
             disabled={busy || !online || !dueAt || needsAddress}
@@ -211,10 +217,10 @@ export function PreorderSheet({
                 note: note.trim() || null,
               })
             }
-            className="sq-btn-primary min-h-12 w-full flex items-center justify-center gap-2"
+            className="pos-btn-primary min-h-[52px] w-full rounded-xl text-[17px] gap-2"
             data-testid="preorder-submit"
           >
-            <CalendarClock size={24} />
+            <Clock size={20} />
             {!online
               ? 'Потрібна мережа'
               : needsAddress
@@ -228,3 +234,6 @@ export function PreorderSheet({
     </div>
   );
 }
+
+const labelClass = 'flex flex-col gap-1.5';
+const captionClass = 'text-[13px] font-semibold text-sq-secondary';

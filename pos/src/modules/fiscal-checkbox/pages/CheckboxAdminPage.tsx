@@ -19,6 +19,7 @@
 // to load would have no way to turn it off.
 
 import { useCallback, useEffect, useState } from 'react';
+import { Check, PageHeader, SectionHead, ShieldCheck } from '@pos/platform/ui';
 import {
   forceHandover,
   getFiscalSettingsView,
@@ -62,44 +63,51 @@ function AttentionList() {
   }, []);
 
   if (error) return <FiscalErrorCard error={error} />;
-  if (!docs) return <p className="text-sm text-sq-secondary">Завантаження…</p>;
+  if (!docs) return <p className="py-3 text-[15px] text-sq-muted">Завантаження…</p>;
   if (docs.length === 0 && sessions.length === 0) {
-    return <p className="text-sm text-sq-secondary">Немає документів, що потребують уваги.</p>;
+    return (
+      <p className="py-3 flex items-center gap-2 text-[15px] text-sq-secondary">
+        <Check size={20} className="shrink-0 text-sq-success" />
+        Немає документів, що потребують уваги.
+      </p>
+    );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 pt-2">
       {sessions.map((session) => (
         <div
           key={`session-${session.id}`}
           role="alert"
-          className="rounded-sq bg-red-50 px-3 py-2 text-sm text-red-700"
+          className="rounded-xl bg-red-50 px-4 py-3 text-[15px] text-red-700"
         >
           <p className="font-semibold">Офлайн-сесія #{session.id} зупинена</p>
           <p className="mt-1">{session.error_message ?? session.error_code ?? 'Причина невідома'}</p>
-          <p className="mt-0.5 text-xs">
+          <p className="mt-1 text-[13px] tabular-nums">
             Чеків: {session.documents.pending + session.documents.done + session.documents.abandoned}
             {' · не надіслано: '}
             {session.documents.pending} · з {new Date(session.started_at).toLocaleString('uk-UA')}
           </p>
-          <p className="mt-1 text-xs">
+          <p className="mt-1 text-[13px]">
             Ці чеки треба звірити в кабінеті провайдера — автоматично вони вже не підуть.
           </p>
         </div>
       ))}
 
       {docs.length > 0 && (
-        <ul className="divide-y divide-sq-divider rounded-sq border border-sq-divider">
+        <ul>
           {docs.map((doc) => (
-            <li key={doc.id} className="p-3 text-sm">
-              <div className="flex justify-between">
-                <span className="font-medium">{doc.receipt_number ?? `#${doc.id}`}</span>
-                <span>{formatCents(doc.total_cents)}</span>
+            <li key={doc.id} className="sq-row py-2.5">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-base font-medium text-sq-text tabular-nums">
+                  {doc.receipt_number ?? `#${doc.id}`}
+                </span>
+                <span className="text-[15px] text-sq-text tabular-nums">{formatCents(doc.total_cents)}</span>
               </div>
-              <p className="mt-1 text-xs text-red-600">
+              <p className="mt-0.5 text-[13px] text-red-600">
                 {doc.error_message ?? doc.error_code ?? 'Помилка ПРРО'}
               </p>
-              <p className="mt-0.5 text-xs text-sq-muted">
+              <p className="mt-0.5 text-[13px] text-sq-muted tabular-nums">
                 Спроб: {doc.attempts} · {new Date(doc.created_at).toLocaleString('uk-UA')}
               </p>
             </li>
@@ -148,49 +156,51 @@ function RegisterCard({ status, onChanged }: { status: FiscalStatus; onChanged: 
   }
 
   return (
-    <section className="space-y-2">
-      <p className="sq-section-label">Каса ПРРО</p>
-      {holder ? (
-        // Same sentence the cashier's own screen shows, and the one the help
-        // article quotes (/dovidka/zmina-prro-zamina-kasy) — the owner reading
-        // support chat should see the words the cashier described.
-        <p className="text-sm text-sq-secondary">
-          Каса зайнята пристроєм {deviceLabel(holder.name, holder.device_id)}
-          {holder.since && ` з ${new Date(holder.since).toLocaleString('uk-UA')}`}
-          {holder.stale && ' · каса не відповідає, можливо продає офлайн'}
-        </p>
-      ) : (
-        <p className="text-sm text-sq-secondary">Вільна</p>
-      )}
+    <section>
+      <SectionHead title="Каса ПРРО" />
+      <div className="pt-3 space-y-3">
+        {holder ? (
+          // Same sentence the cashier's own screen shows, and the one the help
+          // article quotes (/dovidka/zmina-prro-zamina-kasy) — the owner reading
+          // support chat should see the words the cashier described.
+          <p className="text-[15px] text-sq-text">
+            Каса зайнята пристроєм {deviceLabel(holder.name, holder.device_id)}
+            {holder.since && ` з ${new Date(holder.since).toLocaleString('uk-UA')}`}
+            {holder.stale && ' · каса не відповідає, можливо продає офлайн'}
+          </p>
+        ) : (
+          <p className="text-[15px] text-sq-secondary">Вільна</p>
+        )}
 
-      {request ? (
-        <>
-          <p className="text-sm">
-            Пристрій {deviceLabel(request.name, request.device_id)} просить передати касу
-          </p>
-          <button
-            type="button"
-            className="rounded-sq border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700"
-            disabled={busy}
-            onClick={() => void force()}
-          >
-            Забрати касу примусово
-          </button>
-          <p className="text-xs text-sq-muted">
-            Тільки якщо попередня каса не може підтвердити передачу сама: її незавершена
-            офлайн-сесія зупиниться, а видані їй коди згорять.
-          </p>
-        </>
-      ) : (
-        holder && (
-          <p className="text-xs text-sq-muted">
-            Щоб передати касу, надішліть запит із тієї каси, якій вона потрібна.
-          </p>
-        )
-      )}
+        {request ? (
+          <>
+            <p className="text-[15px] font-semibold text-sq-text">
+              Пристрій {deviceLabel(request.name, request.device_id)} просить передати касу
+            </p>
+            <button
+              type="button"
+              className="min-h-11 px-4 rounded-sq bg-red-50 text-[15px] font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
+              disabled={busy}
+              onClick={() => void force()}
+            >
+              Забрати касу примусово
+            </button>
+            <p className="text-[13px] text-sq-muted">
+              Тільки якщо попередня каса не може підтвердити передачу сама: її незавершена
+              офлайн-сесія зупиниться, а видані їй коди згорять.
+            </p>
+          </>
+        ) : (
+          holder && (
+            <p className="text-[13px] text-sq-muted">
+              Щоб передати касу, надішліть запит із тієї каси, якій вона потрібна.
+            </p>
+          )
+        )}
 
-      {note && <p className="text-sm text-sq-secondary">{note}</p>}
-      {Boolean(error) && <FiscalErrorCard error={error} />}
+        {note && <p className="text-[15px] text-sq-secondary">{note}</p>}
+        {Boolean(error) && <FiscalErrorCard error={error} />}
+      </div>
     </section>
   );
 }
@@ -241,60 +251,64 @@ export function CheckboxAdminPage() {
   }
 
   return (
-    <div className="p-5 space-y-6 max-w-lg">
-      <h1 className="text-lg font-semibold">Фіскалізація — Checkbox</h1>
+    <div className="space-y-8 animate-fade-up max-w-2xl text-sq-text">
+      <PageHeader glyph={ShieldCheck} title="Фіскалізація — Checkbox" />
 
       {Boolean(loadError) && <FiscalErrorCard error={loadError} />}
 
       {settings && (
         <>
-          <section className="space-y-2">
-            <p className="sq-section-label">Дані доступу</p>
-            <SecretsForm
-              specs={CHECKBOX_SECRET_SPECS}
-              secretsSet={settings.secrets_set}
-              saving={saving}
-              onSave={(values) => void saveSecrets(values)}
-            />
-            {Boolean(saveError) && <FiscalErrorCard error={saveError} />}
+          <section>
+            <SectionHead title="Дані доступу" />
+            <div className="pt-4 space-y-3">
+              <SecretsForm
+                specs={CHECKBOX_SECRET_SPECS}
+                secretsSet={settings.secrets_set}
+                saving={saving}
+                onSave={(values) => void saveSecrets(values)}
+              />
+              {Boolean(saveError) && <FiscalErrorCard error={saveError} />}
+            </div>
           </section>
 
-          <section className="space-y-2">
-            <p className="sq-section-label">Зʼєднання</p>
-            <button
-              type="button"
-              className="rounded-sq border border-sq-divider px-4 py-2 text-sm font-medium"
-              disabled={probing}
-              onClick={() => void runProbe()}
-            >
-              {probing ? 'Перевірка…' : "Перевірити з'єднання"}
-            </button>
-            {Boolean(probeError) && <FiscalErrorCard error={probeError} />}
-            {probe && (
-              <div
-                className={`rounded-sq px-3 py-2 text-sm ${
-                  probe.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-900'
-                }`}
+          <section>
+            <SectionHead title="Зʼєднання" />
+            <div className="pt-4 space-y-3">
+              <button
+                type="button"
+                className="sq-btn-quiet"
+                disabled={probing}
+                onClick={() => void runProbe()}
               >
-                {probe.ok ? (
-                  <>
-                    <p className="font-semibold">З'єднання успішне</p>
-                    {probe.cashierName && <p>Касир: {probe.cashierName}</p>}
-                    {probe.cashRegister && <p>Каса: {probe.cashRegister}</p>}
-                  </>
-                ) : (
-                  <p>{probe.message ?? 'Перевірка не пройдена'}</p>
-                )}
-              </div>
-            )}
+                {probing ? 'Перевірка…' : "Перевірити з'єднання"}
+              </button>
+              {Boolean(probeError) && <FiscalErrorCard error={probeError} />}
+              {probe && (
+                <div
+                  className={`rounded-xl px-4 py-3 text-[15px] ${
+                    probe.ok ? 'bg-sq-success/10 text-sq-success-ink' : 'bg-amber-50 text-amber-800'
+                  }`}
+                >
+                  {probe.ok ? (
+                    <>
+                      <p className="font-semibold">З'єднання успішне</p>
+                      {probe.cashierName && <p>Касир: {probe.cashierName}</p>}
+                      {probe.cashRegister && <p>Каса: {probe.cashRegister}</p>}
+                    </>
+                  ) : (
+                    <p>{probe.message ?? 'Перевірка не пройдена'}</p>
+                  )}
+                </div>
+              )}
+            </div>
           </section>
 
           {fiscalStatus && (
             <RegisterCard status={fiscalStatus} onChanged={() => void refreshStatus()} />
           )}
 
-          <section className="space-y-2">
-            <p className="sq-section-label">Потребують уваги</p>
+          <section>
+            <SectionHead title="Потребують уваги" />
             <AttentionList />
           </section>
         </>

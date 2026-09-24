@@ -21,7 +21,7 @@ export function TagColorSwatches({ value, onChange, size = 'md' }: Props) {
   const dim = size === 'sm' ? 'w-5 h-5' : 'w-7 h-7';
 
   return (
-    <div className="flex flex-wrap gap-1.5" role="listbox" aria-label="Колір мітки">
+    <div className="flex flex-wrap gap-2" role="listbox" aria-label="Колір мітки">
       {TAG_COLOR_KEYS.map((key) => {
         const active = selected === key;
         return (
@@ -32,8 +32,8 @@ export function TagColorSwatches({ value, onChange, size = 'md' }: Props) {
             aria-selected={active}
             title={key}
             onClick={() => onChange(key)}
-            className={`${dim} rounded-sq shrink-0 ${
-              active ? 'ring-2 ring-sq-blue ring-offset-1' : 'ring-1 ring-black/10'
+            className={`${dim} rounded-full shrink-0 transition-shadow ${
+              active ? 'ring-2 ring-sq-blue ring-offset-2' : 'ring-1 ring-inset ring-black/10'
             }`}
             style={{ backgroundColor: TAG_COLORS[key] }}
           />

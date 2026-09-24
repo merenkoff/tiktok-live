@@ -41,7 +41,7 @@ describe('CompositionEditor', () => {
     const qty = screen.getByLabelText('Кількість складника');
     await user.clear(qty);
     await user.type(qty, '9');
-    await user.click(screen.getByRole('button', { name: '+ Додати' }));
+    await user.click(screen.getByRole('button', { name: 'Додати' }));
 
     expect(onChange).toHaveBeenCalledWith([{ component_variant_id: 10, quantity: 9 }]);
   });
@@ -74,12 +74,12 @@ describe('CompositionEditor', () => {
   it('refuses to add nothing', async () => {
     const user = userEvent.setup();
     const { onChange } = setup();
-    expect(screen.getByRole('button', { name: '+ Додати' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Додати' })).toBeDisabled();
 
     await user.selectOptions(screen.getByLabelText('Складник'), '10');
     const qty = screen.getByLabelText('Кількість складника');
     await user.clear(qty);
-    await user.click(screen.getByRole('button', { name: '+ Додати' }));
+    await user.click(screen.getByRole('button', { name: 'Додати' }));
     expect(onChange).not.toHaveBeenCalled();
   });
 });

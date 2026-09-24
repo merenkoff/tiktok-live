@@ -4,11 +4,8 @@
 
 import { useMemo, useState } from 'react';
 import type { ProductComponentInput } from '@pos/platform';
+import { Plus } from '@pos/platform/ui';
 import type { ComponentOption } from './componentOptions';
-
-const fieldClass =
-  'w-full rounded-sq border border-sq-divider bg-sq-surface px-3 py-2.5 text-sm ' +
-  'text-sq-text placeholder:text-sq-muted focus:outline-none focus:border-sq-blue';
 
 /**
  * The composition of one composite variant — what one bouquet is made of.
@@ -45,11 +42,11 @@ export function CompositionEditor({
   }
 
   return (
-    <div className="space-y-2 rounded-sq border border-sq-divider bg-sq-bg/40 p-3">
-      <p className="text-xs font-semibold text-sq-secondary">Склад</p>
+    <div className="space-y-1">
+      <p className="text-[13px] font-semibold text-sq-secondary">Склад</p>
 
       {value.length === 0 && (
-        <p className="text-sm text-sq-muted">
+        <p className="py-2 text-[15px] text-sq-muted">
           Порожньо. Складений товар без складу продати не можна.
         </p>
       )}
@@ -60,14 +57,14 @@ export function CompositionEditor({
           <div
             key={row.component_variant_id}
             data-testid="composition-row"
-            className="grid grid-cols-[1fr_5rem_auto] gap-2 items-center"
+            className="sq-row grid grid-cols-[1fr_8rem_auto] gap-2 items-center min-h-12 py-1"
           >
-            <span className="text-sm text-sq-text truncate">
+            <span className="text-[15px] text-sq-text truncate">
               {option?.caption ?? `Варіант ${row.component_variant_id}`}
             </span>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
               <input
-                className={fieldClass}
+                className="sq-input text-right tabular-nums"
                 inputMode="numeric"
                 aria-label="Кількість"
                 value={String(row.quantity)}
@@ -77,11 +74,11 @@ export function CompositionEditor({
                   onChange(next);
                 }}
               />
-              <span className="text-xs text-sq-muted shrink-0">{option?.unit ?? ''}</span>
+              <span className="w-6 text-[13px] text-sq-muted shrink-0">{option?.unit ?? ''}</span>
             </div>
             <button
               type="button"
-              className="text-sm font-semibold text-red-600 min-h-11 px-2"
+              className="text-[15px] font-semibold text-red-600 min-h-11 px-2"
               onClick={() => onChange(value.filter((_, i) => i !== idx))}
             >
               Прибрати
@@ -90,9 +87,9 @@ export function CompositionEditor({
         );
       })}
 
-      <div className="grid grid-cols-[1fr_5rem_auto] gap-2 items-center pt-1 border-t border-sq-divider">
+      <div className="grid grid-cols-[1fr_8rem_auto] gap-2 items-center pt-2">
         <select
-          className={fieldClass}
+          className="sq-input"
           aria-label="Складник"
           value={addId}
           onChange={(e) => setAddId(e.target.value === '' ? '' : Number(e.target.value))}
@@ -104,20 +101,23 @@ export function CompositionEditor({
             </option>
           ))}
         </select>
-        <input
-          className={fieldClass}
-          inputMode="numeric"
-          aria-label="Кількість складника"
-          value={addQty}
-          onChange={(e) => setAddQty(e.target.value.replace(/\D/g, ''))}
-        />
+        <div className="pr-[30px]">
+          <input
+            className="sq-input text-right tabular-nums"
+            inputMode="numeric"
+            aria-label="Кількість складника"
+            value={addQty}
+            onChange={(e) => setAddQty(e.target.value.replace(/\D/g, ''))}
+          />
+        </div>
         <button
           type="button"
-          className="text-sm font-semibold text-sq-blue min-h-11 px-2"
+          className="inline-flex items-center gap-1 text-[15px] font-semibold text-sq-blue min-h-11 px-2 disabled:opacity-40"
           onClick={add}
           disabled={addId === ''}
         >
-          + Додати
+          <Plus size={20} />
+          Додати
         </button>
       </div>
     </div>

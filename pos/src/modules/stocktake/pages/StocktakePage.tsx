@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore, useOfflineStatus, isOfflinePosEnabled } from '@pos/platform';
+import { ClipboardCheck, Plus } from '@pos/platform/ui';
 import type { SheetRow } from '../data/db';
 import { discardSheet, listSheets, startSheet } from '../data/repository';
 import { db } from '../data/db';
@@ -67,54 +68,68 @@ export function StocktakePage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-4">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-lg font-semibold text-sq-text">Інвентаризація</h1>
-        <button type="button" className="sq-btn-primary px-4 py-2" onClick={create}>
-          Новий підрахунок
-        </button>
-      </div>
-      <p className="mt-1 text-sm text-sq-secondary">
-        Порахуйте товар сканером; завершений лист стане чернеткою інвентаризації, яку проведе
-        власник.
-        {isOfflinePosEnabled() && !online && ' Зараз офлайн — листи відправляться, щойно з’явиться мережа.'}
-      </p>
-      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+    <div className="flex-1 min-h-0 overflow-auto bg-sq-bg text-sq-text">
+      <div className="mx-auto max-w-2xl px-4 md:px-7 pb-6">
+        <div className="flex flex-wrap items-center gap-3 py-4 md:min-h-[72px]">
+          <ClipboardCheck size={24} className="shrink-0" />
+          <h1 className="text-2xl font-bold text-sq-heading">Інвентаризація</h1>
+          <button
+            type="button"
+            className="pos-btn-primary ml-auto min-h-11 px-4 rounded-xl text-[15px] gap-1.5"
+            onClick={create}
+          >
+            <Plus size={20} />
+            Новий підрахунок
+          </button>
+        </div>
+        <p className="text-[15px] text-sq-secondary leading-relaxed">
+          Порахуйте товар сканером; завершений лист стане чернеткою інвентаризації, яку проведе
+          власник.
+          {isOfflinePosEnabled() && !online && ' Зараз офлайн — листи відправляться, щойно з’явиться мережа.'}
+        </p>
+        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
 
-      <ul className="mt-4 divide-y divide-sq-divider rounded-sq border border-sq-divider bg-sq-surface">
-        {sheets.length === 0 && (
-          <li className="px-4 py-6 text-center text-sm text-sq-secondary">Ще немає жодного листа.</li>
-        )}
-        {sheets.map((sheet) => (
-          <li key={sheet.id} className="flex items-center gap-3 px-4 py-3">
-            <button
-              type="button"
-              className="min-w-0 flex-1 text-left"
-              onClick={() => navigate(`/stocktake/${sheet.id}`)}
-            >
-              <div className="flex items-center gap-2">
-                <SheetStatusBadge sheet={sheet} />
-                <span className="text-sm text-sq-secondary">{formatDate(sheet.createdAt)}</span>
-              </div>
-              <div className="mt-1 text-sm text-sq-text">
-                Рядків: {lineCounts[sheet.id] ?? 0}
-                {sheet.lastError && sheet.status !== 'synced' && (
-                  <span className="ml-2 text-xs text-red-600">{sheet.lastError}</span>
+        {sheets.length === 0 ? (
+          <div className="py-14 text-center">
+            <ClipboardCheck size={48} className="mx-auto" />
+            <p className="mt-3 text-[15px] text-sq-secondary">Ще немає жодного листа.</p>
+          </div>
+        ) : (
+          <ul className="mt-4 divide-y divide-sq-divider rounded-card bg-white shadow-card overflow-hidden">
+            {sheets.map((sheet) => (
+              <li key={sheet.id} className="flex items-center gap-3 pl-4 pr-2">
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 min-h-[60px] py-2.5 text-left flex items-center gap-3"
+                  onClick={() => navigate(`/stocktake/${sheet.id}`)}
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-base text-sq-text tabular-nums">
+                      {formatDate(sheet.createdAt)}
+                    </span>
+                    <span className="block text-[13px] text-sq-muted tabular-nums">
+                      Рядків: {lineCounts[sheet.id] ?? 0}
+                      {sheet.lastError && sheet.status !== 'synced' && (
+                        <span className="ml-2 text-red-600">{sheet.lastError}</span>
+                      )}
+                    </span>
+                  </span>
+                  <SheetStatusBadge sheet={sheet} />
+                </button>
+                {sheet.status !== 'synced' && (
+                  <button
+                    type="button"
+                    className="min-h-11 px-2.5 rounded-sq text-[15px] font-semibold text-red-600 hover:bg-sq-empty"
+                    onClick={() => remove(sheet)}
+                  >
+                    Видалити
+                  </button>
                 )}
-              </div>
-            </button>
-            {sheet.status !== 'synced' && (
-              <button
-                type="button"
-                className="px-2 py-1 text-xs text-sq-secondary hover:text-red-600"
-                onClick={() => remove(sheet)}
-              >
-                Видалити
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

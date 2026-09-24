@@ -21,8 +21,10 @@
 // readable.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { PageHeader, Plus, Segmented, Table } from '@pos/platform/ui';
 import { CELL_PX, changedPositions, droppedAt, editorExtent, cellsMoved, withDroppedTable } from '../lib/layout';
 import { useTableDrag } from '../lib/useTableDrag';
+import { seatsLabel } from '../lib/hallMap';
 import { serverMessage } from '../lib/useHallMap';
 import * as tablesApi from '../lib/tablesApi';
 import type { PosHall, PosTable, TableShape } from '../lib/types';
@@ -133,67 +135,16 @@ export function HallEditorPage(): JSX.Element {
   if (loading) return <p className="p-6 text-center text-sm text-sq-muted">Завантаження…</p>;
 
   return (
-    <div className="p-4" data-testid="hall-editor">
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        {halls.map((h) => (
-          <button
-            key={h.id}
-            type="button"
-            data-testid={`editor-hall-${h.id}`}
-            onClick={() => setHallId(h.id)}
-            className={`rounded-full border px-3 py-1.5 text-sm ${
-              hall?.id === h.id
-                ? 'border-sq-blue bg-sq-blue text-white'
-                : 'border-sq-divider bg-sq-surface text-sq-text'
-            }`}
-          >
-            {h.name}
-            {h.is_active ? '' : ' · прибрано'}
-          </button>
-        ))}
-        <input
-          className="sq-field w-40"
-          data-testid="editor-hall-name"
-          placeholder="Нова зала"
-          value={hallName}
-          onChange={(e) => setHallName(e.target.value)}
-        />
-        <button
-          type="button"
-          className="sq-btn-primary"
-          data-testid="editor-hall-add"
-          disabled={busy || hallName.trim().length === 0}
-          onClick={() => {
-            const name = hallName.trim();
-            setHallName('');
-            void run(() => tablesApi.createHall(name));
-          }}
-        >
-          Додати залу
-        </button>
-      </div>
-
-      {banner && (
-        <p className="mb-3 rounded-lg bg-rose-500/15 p-2 text-sm" data-testid="editor-banner">
-          {banner}
-        </p>
-      )}
-
-      {!hall && (
-        <div className="sq-card p-6 text-center" data-testid="editor-empty">
-          <p className="text-lg font-semibold">Залів ще немає</p>
-          <p className="mt-1 text-sm text-sq-muted">
-            Додайте залу — і перетягніть у неї столи так, як вони стоять насправді.
-          </p>
-        </div>
-      )}
-
-      {hall && (
-        <>
-          <div className="mb-2 flex flex-wrap items-center gap-2">
+    <div className="animate-fade-up text-sq-text" data-testid="hall-editor">
+      <PageHeader
+        glyph={Table}
+        title="Зали і столи"
+        subtitle={hall ? 'Перетягніть стіл, щоб поставити його на місце. Тап — щоб змінити.' : undefined}
+        actions={
+          hall && (
             <button
               type="button"
-              className="sq-btn-primary"
+              className="pos-btn-primary min-h-11 px-4 rounded-sq text-[15px] gap-1.5"
               data-testid="editor-table-add"
               disabled={busy}
               onClick={() => {
@@ -201,89 +152,151 @@ export function HallEditorPage(): JSX.Element {
                 setDraft(NEW_TABLE);
               }}
             >
-              + Стіл
+              <Plus size={20} />
+              Стіл
             </button>
-            <button
-              type="button"
-              className="sq-link"
-              data-testid="editor-hall-retire"
-              disabled={busy}
-              onClick={() => void run(() => tablesApi.updateHall(hall.id, { is_active: !hall.is_active }))}
-            >
-              {hall.is_active ? 'Прибрати залу' : 'Повернути залу'}
-            </button>
-            <span className="text-xs text-sq-muted">
-              Перетягніть стіл, щоб поставити його на місце. Тап — щоб змінити.
-            </span>
-          </div>
+          )
+        }
+      />
 
-          <div
-            className="relative overflow-auto rounded-sq border border-sq-divider bg-sq-surface p-2"
-            data-testid="editor-grid"
-            style={{
-              // The plan itself is a grid of cells; the tiles sit on it by
-              // `gridColumn`/`gridRow`, which is how the stored numbers and
-              // the picture stay the same thing.
-              display: 'grid',
-              gridTemplateColumns: `repeat(${extent.cols}, ${CELL_PX}px)`,
-              gridAutoRows: `${CELL_PX}px`,
-              gap: '4px',
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        {halls.length > 0 && (
+          <Segmented
+            value={String(hall?.id ?? '')}
+            options={halls.map((h) => ({
+              value: String(h.id),
+              label: `${h.name}${h.is_active ? '' : ' · прибрано'}`,
+              testId: `editor-hall-${h.id}`,
+            }))}
+            onChange={(id) => setHallId(Number(id))}
+          />
+        )}
+        {hall && (
+          <button
+            type="button"
+            className="min-h-11 text-[15px] font-semibold text-sq-blue disabled:opacity-50"
+            data-testid="editor-hall-retire"
+            disabled={busy}
+            onClick={() => void run(() => tablesApi.updateHall(hall.id, { is_active: !hall.is_active }))}
+          >
+            {hall.is_active ? 'Прибрати залу' : 'Повернути залу'}
+          </button>
+        )}
+        <div className="ml-auto flex items-center gap-2">
+          <input
+            className="sq-input w-44"
+            data-testid="editor-hall-name"
+            placeholder="Нова зала"
+            value={hallName}
+            onChange={(e) => setHallName(e.target.value)}
+          />
+          <button
+            type="button"
+            className="sq-btn-quiet whitespace-nowrap"
+            data-testid="editor-hall-add"
+            disabled={busy || hallName.trim().length === 0}
+            onClick={() => {
+              const name = hallName.trim();
+              setHallName('');
+              void run(() => tablesApi.createHall(name));
             }}
           >
-            {tables.map((table) => {
-              const dragging = drag.id === table.id;
-              return (
-                <button
-                  key={table.id}
-                  type="button"
-                  data-testid={`editor-table-${table.id}`}
-                  data-dragging={dragging ? 'yes' : 'no'}
-                  onPointerDown={(e) => start(e, table.id)}
-                  onClick={(e) => {
-                    // A drag ends with a click the browser sends anyway; the
-                    // form must not open on top of the table just dropped.
-                    if (suppressClick()) {
-                      e.preventDefault();
-                      return;
-                    }
-                    openTable(table);
-                  }}
-                  className={`flex flex-col items-center justify-center border-2 text-center ${
-                    table.shape === 'round' ? 'rounded-full' : 'rounded-sq'
-                  } ${table.is_active ? 'border-sq-blue bg-sq-blue/10' : 'border-sq-divider opacity-60'}`}
-                  style={{
-                    gridColumn: `${table.pos_x + 1} / span ${table.width}`,
-                    gridRow: `${table.pos_y + 1} / span ${table.height}`,
-                    touchAction: 'none',
-                    transform: dragging ? `translate(${drag.dx}px, ${drag.dy}px)` : undefined,
-                    zIndex: dragging ? 10 : undefined,
-                  }}
-                >
-                  <span className="text-lg font-bold">{table.name}</span>
-                  <span className="text-xs text-sq-muted">{table.seats} місць</span>
-                </button>
-              );
-            })}
-          </div>
-        </>
+            Додати залу
+          </button>
+        </div>
+      </div>
+
+      {banner && (
+        <p className="mb-4 rounded-sq bg-red-50 text-red-700 px-3.5 py-2.5 text-sm" data-testid="editor-banner">
+          {banner}
+        </p>
+      )}
+
+      {!hall && (
+        <div className="py-14 text-center" data-testid="editor-empty">
+          <Table size={48} className="mx-auto" />
+          <p className="mt-3 text-[17px] font-semibold text-sq-heading">Залів ще немає</p>
+          <p className="mt-1 text-[15px] text-sq-secondary">
+            Додайте залу — і перетягніть у неї столи так, як вони стоять насправді.
+          </p>
+        </div>
+      )}
+
+      {hall && (
+        <div
+          className="relative overflow-auto rounded-card bg-sq-sidebar p-3"
+          data-testid="editor-grid"
+          style={{
+            // The plan itself is a grid of cells; the tiles sit on it by
+            // `gridColumn`/`gridRow`, which is how the stored numbers and
+            // the picture stay the same thing.
+            display: 'grid',
+            gridTemplateColumns: `repeat(${extent.cols}, ${CELL_PX}px)`,
+            gridAutoRows: `${CELL_PX}px`,
+            gap: '4px',
+          }}
+        >
+          {tables.map((table) => {
+            const dragging = drag.id === table.id;
+            return (
+              <button
+                key={table.id}
+                type="button"
+                data-testid={`editor-table-${table.id}`}
+                data-dragging={dragging ? 'yes' : 'no'}
+                onPointerDown={(e) => start(e, table.id)}
+                onClick={(e) => {
+                  // A drag ends with a click the browser sends anyway; the
+                  // form must not open on top of the table just dropped.
+                  if (suppressClick()) {
+                    e.preventDefault();
+                    return;
+                  }
+                  openTable(table);
+                }}
+                className={`flex flex-col items-center justify-center gap-0.5 p-2 text-center transition-shadow ${
+                  table.shape === 'round' ? 'rounded-full' : 'rounded-card'
+                } ${
+                  !table.is_active
+                    ? 'bg-sq-empty opacity-60'
+                    : dragging || (editing === table.id)
+                      ? 'bg-white ring-2 ring-sq-blue shadow-card-hover'
+                      : 'bg-white ring-1 ring-sq-divider shadow-card'
+                }`}
+                style={{
+                  gridColumn: `${table.pos_x + 1} / span ${table.width}`,
+                  gridRow: `${table.pos_y + 1} / span ${table.height}`,
+                  touchAction: 'none',
+                  transform: dragging ? `translate(${drag.dx}px, ${drag.dy}px)` : undefined,
+                  zIndex: dragging ? 10 : undefined,
+                }}
+              >
+                <span className="text-[26px] font-bold leading-none text-sq-heading tabular-nums">
+                  {table.name}
+                </span>
+                <span className="text-[13px] text-sq-muted">{seatsLabel(table.seats)}</span>
+              </button>
+            );
+          })}
+        </div>
       )}
 
       {editing != null && (
-        <div className="sq-card mt-3 p-3" data-testid="editor-form">
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="text-xs text-sq-muted">
-              Назва
+        <div className="sq-card mt-5 p-5" data-testid="editor-form">
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-semibold text-sq-secondary">Назва</span>
               <input
-                className="sq-field mt-1 block w-24"
+                className="sq-input w-28"
                 data-testid="editor-form-name"
                 value={draft.name}
                 onChange={(e) => setDraft({ ...draft, name: e.target.value })}
               />
             </label>
-            <label className="text-xs text-sq-muted">
-              Місць
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-semibold text-sq-secondary">Місць</span>
               <input
-                className="sq-field mt-1 block w-20"
+                className="sq-input w-24 tabular-nums"
                 type="number"
                 min={1}
                 data-testid="editor-form-seats"
@@ -291,10 +304,10 @@ export function HallEditorPage(): JSX.Element {
                 onChange={(e) => setDraft({ ...draft, seats: Number(e.target.value) })}
               />
             </label>
-            <label className="text-xs text-sq-muted">
-              Ширина
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-semibold text-sq-secondary">Ширина</span>
               <input
-                className="sq-field mt-1 block w-20"
+                className="sq-input w-24 tabular-nums"
                 type="number"
                 min={1}
                 data-testid="editor-form-width"
@@ -302,10 +315,10 @@ export function HallEditorPage(): JSX.Element {
                 onChange={(e) => setDraft({ ...draft, width: Number(e.target.value) })}
               />
             </label>
-            <label className="text-xs text-sq-muted">
-              Висота
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-semibold text-sq-secondary">Висота</span>
               <input
-                className="sq-field mt-1 block w-20"
+                className="sq-input w-24 tabular-nums"
                 type="number"
                 min={1}
                 data-testid="editor-form-height"
@@ -316,26 +329,31 @@ export function HallEditorPage(): JSX.Element {
             <button
               type="button"
               data-testid="editor-form-shape"
-              className="rounded-lg border border-sq-divider px-3 py-2 text-sm"
+              className="sq-btn-quiet"
               onClick={() =>
                 setDraft({ ...draft, shape: draft.shape === 'rect' ? 'round' : 'rect' })
               }
             >
               {draft.shape === 'rect' ? 'Прямокутний' : 'Круглий'}
             </button>
+          </div>
+          <div className="mt-5 flex flex-wrap items-center gap-3">
             <button
               type="button"
-              className="sq-btn-primary"
+              className="pos-btn-primary min-h-11 px-4 rounded-sq text-[15px]"
               data-testid="editor-form-save"
               disabled={busy || draft.name.trim().length === 0}
               onClick={() => void saveTable()}
             >
               Зберегти
             </button>
+            <button type="button" className="sq-btn-quiet" onClick={() => setEditing(null)}>
+              Скасувати
+            </button>
             {editing !== 'new' && (
               <button
                 type="button"
-                className="sq-link"
+                className="ml-auto min-h-11 text-[15px] text-red-600 font-semibold disabled:opacity-50"
                 data-testid="editor-form-retire"
                 disabled={busy}
                 onClick={async () => {
@@ -351,9 +369,6 @@ export function HallEditorPage(): JSX.Element {
                 Прибрати із зали
               </button>
             )}
-            <button type="button" className="sq-link" onClick={() => setEditing(null)}>
-              Скасувати
-            </button>
           </div>
         </div>
       )}

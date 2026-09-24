@@ -31,7 +31,17 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChefHat, LayoutGrid, Trash2, UtensilsCrossed } from '@pos/platform/ui';
+import {
+  AlertTriangle,
+  Coffee,
+  PageHeader,
+  Puzzle,
+  Repeat,
+  SectionHead,
+  Segmented,
+  Star,
+  type Glyph,
+} from '@pos/platform/ui';
 import { formatUah, useVertical } from '@pos/platform';
 import { Stat } from '../ui/Stat';
 import { getCafeAnalytics } from '../analytics/cafeAnalyticsApi';
@@ -56,13 +66,23 @@ const RANGES = [
   { days: 90, label: 'Квартал' },
 ];
 
-/** The quadrant's colour — a badge, and the card's left edge. */
-const TONE: Record<keyof typeof QUADRANT, string> = {
-  star: 'text-emerald-700 bg-emerald-50 border-emerald-200',
-  plowhorse: 'text-sky-700 bg-sky-50 border-sky-200',
-  puzzle: 'text-amber-700 bg-amber-50 border-amber-200',
-  dog: 'text-red-700 bg-red-50 border-red-200',
+const RANGE_OPTIONS = RANGES.map((range) => ({
+  value: String(range.days),
+  label: range.label,
+  testId: `range-${range.days}`,
+}));
+
+/** The quadrant's mark on its card — a colour glyph, the way every Things list has one. */
+const QUADRANT_GLYPH: Record<keyof typeof QUADRANT, Glyph> = {
+  star: Star,
+  plowhorse: Repeat,
+  puzzle: Puzzle,
+  dog: AlertTriangle,
 };
+
+/** The quiet chip a tag or a status is drawn as. */
+const CHIP =
+  'inline-flex items-center h-[22px] px-2 rounded-md ring-1 ring-inset ring-sq-divider text-xs font-medium text-sq-secondary';
 
 export default function CafeAnalyticsPage() {
   const [days, setDays] = useState(30);
@@ -102,35 +122,20 @@ export default function CafeAnalyticsPage() {
   const blind = data?.food_cost.unpriced_lines ?? 0;
 
   return (
-    <div className="p-4 md:p-6 space-y-6" data-testid="cafe-analytics">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-sq-text flex items-center gap-2">
-            <ChefHat size={24} className="text-sq-blue" />
-            Меню й кухня
-          </h1>
-          <p className="text-sm text-sq-muted mt-0.5">
-            Що тримати в меню, що переписати цінником і що прибрати.
-          </p>
-        </div>
-        <div className="flex gap-1.5" role="group" aria-label="Період">
-          {RANGES.map((range) => (
-            <button
-              key={range.days}
-              type="button"
-              onClick={() => setDays(range.days)}
-              className={`min-h-10 px-3 rounded-sq text-sm font-semibold ${
-                days === range.days
-                  ? 'bg-sq-blue text-white'
-                  : 'bg-sq-bg text-sq-secondary hover:text-sq-text'
-              }`}
-              data-testid={`range-${range.days}`}
-            >
-              {range.label}
-            </button>
-          ))}
-        </div>
-      </header>
+    <div className="space-y-7 animate-fade-up max-w-4xl text-sq-text" data-testid="cafe-analytics">
+      <PageHeader
+        glyph={Coffee}
+        title="Меню й кухня"
+        subtitle="Що тримати в меню, що переписати цінником і що прибрати."
+        actions={
+          <Segmented
+            value={String(days)}
+            options={RANGE_OPTIONS}
+            onChange={(next) => setDays(Number(next))}
+            ariaLabel="Період"
+          />
+        }
+      />
 
       {loading && <p className="text-sm text-sq-muted">Рахуємо…</p>}
       {error && (
@@ -142,13 +147,10 @@ export default function CafeAnalyticsPage() {
       {data && !loading && !error && (
         <>
           {/* ── Скільки коштує кухня ──────────────────────────────────── */}
-          <section className="bg-white rounded-sq border border-sq-divider p-4">
-            <h2 className="font-semibold text-sq-text flex items-center gap-2">
-              <UtensilsCrossed size={24} className="text-sq-secondary" />
-              Скільки коштує те, що продали
-            </h2>
+          <section>
+            <SectionHead title="Скільки коштує те, що продали" />
 
-            <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-3.5">
               <Stat
                 label="Food cost"
                 value={pct(data.food_cost.bps)}
@@ -172,13 +174,13 @@ export default function CafeAnalyticsPage() {
 
             {/* Rule 1, said out loud — the same sentence `/admin/tech-cards`
                 uses, because it is the same arithmetic. */}
-            <p className="mt-3 text-xs text-sq-muted">
+            <p className="mt-3 text-[13px] text-sq-muted leading-relaxed">
               Собівартість — за останніми цінами закупівлі, а не за тими, що були в день продажу.
               Магазин не веде партій, тож це орієнтир для меню, а не історичний факт.
               {blind > 0 && (
                 <>
                   {' '}
-                  <span className="text-amber-600" data-testid="cafe-blind-lines">
+                  <span className="text-amber-700" data-testid="cafe-blind-lines">
                     {blind} проданих позицій у цей відсоток не входять — у їхньому рецепті є
                     складник без собівартості.
                   </span>
@@ -188,26 +190,35 @@ export default function CafeAnalyticsPage() {
 
             {/* The hour to staff for. One row of bars, the way the florist's
                 page draws a spike of write-offs. */}
-            <div className="mt-4 flex items-end gap-[2px] h-16" aria-hidden="true">
-              {data.peak_hours.map((hour) => (
-                <div
-                  key={hour.hour}
-                  title={`${formatHour(hour.hour)}: ${hour.orders}`}
-                  className="flex-1 bg-sq-blue/20 rounded-t-[2px] min-h-[2px]"
-                  style={{ height: `${Math.round((hour.orders / peak) * 100)}%` }}
-                />
-              ))}
+            <div className="mt-5" aria-hidden="true">
+              <div className="flex items-end gap-1 h-24">
+                {data.peak_hours.map((hour) => (
+                  <div
+                    key={hour.hour}
+                    title={`${formatHour(hour.hour)}: ${hour.orders}`}
+                    className="flex-1 bg-sq-blue rounded-t-[4px] min-h-[2px]"
+                    style={{ height: `${Math.round((hour.orders / peak) * 100)}%` }}
+                  />
+                ))}
+              </div>
+              <div className="mt-1 flex gap-1">
+                {data.peak_hours.map((hour) => (
+                  <span
+                    key={hour.hour}
+                    className="flex-1 min-w-0 text-center text-[10px] text-sq-muted tabular-nums"
+                  >
+                    {hour.hour % 3 === 0 ? String(hour.hour).padStart(2, '0') : ''}
+                  </span>
+                ))}
+              </div>
             </div>
-            <p className="text-xs text-sq-muted">Замовлення за годинами доби.</p>
+            <p className="mt-1 text-[13px] text-sq-muted">Замовлення за годинами доби.</p>
           </section>
 
           {/* ── Матриця меню ─────────────────────────────────────────── */}
-          <section className="bg-white rounded-sq border border-sq-divider p-4">
-            <h2 className="font-semibold text-sq-text flex items-center gap-2">
-              <LayoutGrid size={20} className="text-sq-secondary" />
-              Матриця меню
-            </h2>
-            <p className="mt-1 text-xs text-sq-muted">
+          <section>
+            <SectionHead title="Матриця меню" />
+            <p className="mt-2 text-[13px] text-sq-muted leading-relaxed">
               Популярність проти маржі. Страва «популярна», якщо її частка продажів не менша за{' '}
               {pct(data.menu.thresholds.popularity_share_bps)}, і «маржинальна», якщо з одиниці
               лишається не менше за {formatUah(data.menu.thresholds.unit_margin_cents)} — середнє
@@ -218,102 +229,120 @@ export default function CafeAnalyticsPage() {
               // Rule 3: the numbers below are still true, only the verdict is
               // withheld. Four quadrants drawn from three sales would be a
               // recommendation made up out of nothing.
-              <p className="mt-4 text-sm text-sq-muted" data-testid="cafe-not-enough">
+              <p
+                className="mt-4 rounded-xl bg-sq-sidebar px-[18px] py-4 text-[15px] text-sq-secondary leading-relaxed"
+                data-testid="cafe-not-enough"
+              >
                 Замало продажів, щоб ділити меню на квадранти. Візьміть довший період — цифри
                 нижче правильні й зараз, але порада з них ще не виходить.
               </p>
             ) : (
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="cafe-matrix">
-                {groups.map(({ quadrant, rows }) => (
-                  <div
-                    key={quadrant}
-                    className={`rounded-sq border p-3 ${TONE[quadrant]}`}
-                    data-testid={`quadrant-${quadrant}`}
-                  >
-                    <p className="font-semibold text-sm">
-                      {QUADRANT[quadrant].title}
-                      <span className="font-normal opacity-70"> · {rows.length}</span>
-                    </p>
-                    <p className="text-xs opacity-80">{QUADRANT[quadrant].advice}</p>
-                    {rows.length === 0 ? (
-                      <p className="mt-2 text-xs opacity-60">Порожньо.</p>
-                    ) : (
-                      <ul className="mt-2 space-y-0.5 text-xs">
-                        {rows.map((row) => (
-                          <li key={row.variant_id} className="flex justify-between gap-2">
-                            <span className="truncate">
-                              {row.product_name}
-                              {row.label && <span className="opacity-60"> · {row.label}</span>}
-                            </span>
-                            <span className="tabular-nums shrink-0 opacity-80">{row.sold}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                ))}
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3.5" data-testid="cafe-matrix">
+                {groups.map(({ quadrant, rows }) => {
+                  const Icon = QUADRANT_GLYPH[quadrant];
+                  return (
+                    <div key={quadrant} className="sq-card p-5" data-testid={`quadrant-${quadrant}`}>
+                      <div className="flex items-center gap-2.5">
+                        <Icon size={24} className="shrink-0" />
+                        <p className="text-[17px] font-bold text-sq-heading">
+                          {QUADRANT[quadrant].title}
+                          <span className="ml-1.5 text-[13px] font-normal text-sq-muted tabular-nums">
+                            {rows.length}
+                          </span>
+                        </p>
+                      </div>
+                      <p className="mt-1 text-[13px] text-sq-secondary">{QUADRANT[quadrant].advice}</p>
+                      {rows.length === 0 ? (
+                        <p className="mt-3 text-[13px] text-sq-muted">Порожньо.</p>
+                      ) : (
+                        <ul className="mt-2">
+                          {rows.map((row) => (
+                            <li
+                              key={row.variant_id}
+                              className="sq-row min-h-10 py-1.5 flex items-center justify-between gap-3"
+                            >
+                              <span className="truncate text-[15px] text-sq-text">
+                                {row.product_name}
+                                {row.label && <span className="text-sq-muted"> · {row.label}</span>}
+                              </span>
+                              <span className="text-sm text-sq-muted tabular-nums shrink-0">{row.sold}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
 
             {data.menu.rows.length === 0 ? (
-              <p className="mt-4 text-sm text-sq-muted">За цей період нічого не продали.</p>
+              <p className="mt-4 text-[15px] text-sq-secondary">За цей період нічого не продали.</p>
             ) : (
-              <table className="mt-4 w-full text-sm" data-testid="cafe-menu-table">
-                <thead className="text-xs text-sq-muted">
-                  <tr className="text-left">
-                    <th className="font-normal pb-1">Страва</th>
-                    <th className="font-normal pb-1 text-right">Продано</th>
-                    <th className="font-normal pb-1 text-right">Частка</th>
-                    <th className="font-normal pb-1 text-right">Виторг</th>
-                    <th className="font-normal pb-1 text-right">Маржа</th>
-                    <th className="font-normal pb-1 text-right">З одиниці</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.menu.rows.map((row) => (
-                    <tr key={row.variant_id} className="border-t border-sq-divider">
-                      <td className="py-1.5">
-                        {row.product_name}
-                        {row.label && <span className="text-sq-muted"> · {row.label}</span>}
-                        {data.menu.enough_data && (
-                          <span className="ml-1.5 text-[11px] text-sq-muted">
-                            {QUADRANT[row.quadrant].title.toLowerCase()}
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-1.5 text-right tabular-nums">{row.sold}</td>
-                      <td className="py-1.5 text-right tabular-nums text-sq-muted">
-                        {pct(row.share_bps)}
-                      </td>
-                      <td className="py-1.5 text-right tabular-nums text-sq-muted">
-                        {formatUah(row.revenue_cents)}
-                      </td>
-                      <td className="py-1.5 text-right tabular-nums font-semibold">
-                        {formatUah(row.margin_cents)}
-                      </td>
-                      <td className="py-1.5 text-right tabular-nums text-sq-muted">
-                        {formatUah(row.unit_margin_cents)}
-                      </td>
+              <div className="mt-5 overflow-x-auto">
+                <table className="sq-table" data-testid="cafe-menu-table">
+                  <thead>
+                    <tr>
+                      <th>Страва</th>
+                      <th className="text-right">Продано</th>
+                      <th className="text-right">Частка</th>
+                      <th className="text-right">Виторг</th>
+                      <th className="text-right">Маржа</th>
+                      <th className="text-right">З одиниці</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {data.menu.rows.map((row) => (
+                      <tr key={row.variant_id}>
+                        <td>
+                          {row.product_name}
+                          {row.label && <span className="text-sq-muted"> · {row.label}</span>}
+                          {data.menu.enough_data && (
+                            <span className={`ml-2 align-middle ${CHIP}`}>
+                              {QUADRANT[row.quadrant].title.toLowerCase()}
+                            </span>
+                          )}
+                        </td>
+                        <td className="text-right tabular-nums">{row.sold}</td>
+                        <td className="text-right tabular-nums text-sq-muted">
+                          {pct(row.share_bps)}
+                        </td>
+                        <td className="text-right tabular-nums text-sq-muted">
+                          {formatUah(row.revenue_cents)}
+                        </td>
+                        <td className="text-right tabular-nums font-semibold text-sq-heading">
+                          {formatUah(row.margin_cents)}
+                        </td>
+                        <td className="text-right tabular-nums text-sq-muted">
+                          {formatUah(row.unit_margin_cents)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
 
             {/* Rule 2. Named, with the reason — never silently a «dog». */}
             {data.menu.excluded.length > 0 && (
-              <div className="mt-4" data-testid="cafe-excluded">
-                <p className="text-xs font-semibold text-sq-text">Поза матрицею</p>
-                <ul className="mt-1 space-y-0.5 text-xs text-sq-muted">
+              <div className="mt-5" data-testid="cafe-excluded">
+                <p className="sq-section-label">Поза матрицею</p>
+                <ul className="mt-1">
                   {data.menu.excluded.map((row) => (
-                    <li key={row.variant_id}>
-                      {row.product_name}
-                      {row.label && <span> · {row.label}</span>} — {EXCLUSION_LABEL[row.reason]} (
-                      {row.sold})
+                    <li
+                      key={row.variant_id}
+                      className="sq-row min-h-11 py-1.5 flex items-center gap-3"
+                    >
+                      <span className="flex-1 min-w-0 text-[15px] text-sq-text">
+                        {row.product_name}
+                        {row.label && <span className="text-sq-muted"> · {row.label}</span>}
+                        <span className="text-sq-secondary"> — {EXCLUSION_LABEL[row.reason]}</span>
+                      </span>
+                      <span className="text-sm text-sq-muted tabular-nums shrink-0">({row.sold})</span>
                     </li>
                   ))}
                 </ul>
-                <p className="mt-1 text-xs text-sq-muted">
+                <p className="mt-2 text-[13px] text-sq-muted leading-relaxed">
                   Ці страви не класифіковані навмисно: без собівартості їхня маржа була б нулем, а
                   нуль тут означає «не знаємо», а не «безкоштовно».
                 </p>
@@ -322,34 +351,40 @@ export default function CafeAnalyticsPage() {
           </section>
 
           {/* ── Що пішло не в чек ────────────────────────────────────── */}
-          <section className="bg-white rounded-sq border border-sq-divider p-4">
-            <h2 className="font-semibold text-sq-text flex items-center gap-2">
-              <Trash2 size={20} className="text-sq-secondary" />
-              Списання кухні
-            </h2>
-            <p className="mt-2 text-2xl font-semibold text-sq-text" data-testid="cafe-writeoff-total">
+          <section>
+            <SectionHead title="Списання кухні" />
+            <p
+              className="mt-3 text-[26px] font-bold text-sq-heading tabular-nums leading-tight"
+              data-testid="cafe-writeoff-total"
+            >
               {formatUah(data.writeoffs.total_cost_cents)}
             </p>
-            <p className="text-xs text-sq-muted">
+            <p className="mt-0.5 text-[13px] text-sq-muted tabular-nums">
               за собівартістю, {data.from} — {data.to}
             </p>
 
             {data.writeoffs.rows.length === 0 ? (
-              <p className="mt-3 text-sm text-sq-muted">За цей період нічого не списували.</p>
+              <p className="mt-3 text-[15px] text-sq-secondary">За цей період нічого не списували.</p>
             ) : (
-              <div className="mt-3 flex flex-wrap gap-2">
+              <ul className="mt-2">
                 {data.writeoffs.rows.map((row) => (
-                  <span
+                  <li
                     key={row.reason}
-                    className="text-xs px-2 py-1 rounded-[3px] bg-sq-bg text-sq-secondary"
+                    className="sq-row min-h-11 py-1.5 flex items-center gap-3"
                     data-testid={`cafe-writeoff-${row.reason}`}
                   >
-                    {labelOfReason(row.reason)}: {formatUah(row.cost_cents)} ({row.quantity})
-                  </span>
+                    <span className="flex-1 min-w-0 text-[15px] text-sq-text">
+                      {labelOfReason(row.reason)}
+                    </span>
+                    <span className="text-sm text-sq-muted tabular-nums">({row.quantity})</span>
+                    <span className="w-28 text-right text-[15px] font-semibold text-sq-text tabular-nums">
+                      {formatUah(row.cost_cents)}
+                    </span>
+                  </li>
                 ))}
-              </div>
+              </ul>
             )}
-            <p className="mt-2 text-xs text-sq-muted">
+            <p className="mt-2 text-[13px] text-sq-muted">
               «Проба» і «Харчування персоналу» — це не втрати, а витрати, які варто бачити окремо
               від зіпсованого.
             </p>
@@ -360,12 +395,9 @@ export default function CafeAnalyticsPage() {
               «оборотність столу: 0» reads as a bad month rather than as a
               question that is not about this shop. */}
           {data.tables && (
-            <section
-              className="bg-white rounded-sq border border-sq-divider p-4"
-              data-testid="cafe-tables"
-            >
-              <h2 className="font-semibold text-sq-text">Зала</h2>
-              <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <section data-testid="cafe-tables">
+              <SectionHead title="Зала" />
+              <div className="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-3.5">
                 <Stat
                   label="Чек на стіл"
                   value={formatUah(data.tables.avg_bill_cents)}

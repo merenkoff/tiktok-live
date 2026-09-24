@@ -206,7 +206,7 @@ describe('Settings — adding an online-only module', () => {
     expect(await screen.findByText(/bad signature/)).toBeInTheDocument();
     // The id was NOT guessed, and the form is still usable.
     expect(screen.getByPlaceholderText('Ідентифікатор (tiktok-live)')).toHaveValue('');
-    expect(screen.getByRole('button', { name: '+ Додати модуль' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Додати модуль' })).toBeEnabled();
   });
 });
 

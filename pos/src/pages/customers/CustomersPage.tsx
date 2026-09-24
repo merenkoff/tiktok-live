@@ -7,10 +7,14 @@ import { Link } from 'react-router-dom';
 import { api, cashierApi } from '@pos/platform';
 import type { CustomerChild, PosCustomer } from '../../types';
 import { useDragScroll } from '../../hooks/useDragScroll';
-import { ArrowLeft, X } from '../../platform/glyphs';
+import { PageHeader } from '../../components/ui/Page';
+import { ArrowLeft, Plus, Search, Users, X } from '../../platform/glyphs';
 
-const fieldClass =
-  'rounded-sq border border-sq-divider bg-sq-bg px-3 py-2.5 text-sm text-sq-text w-full';
+// One page, two shells: the till's `pos-field` is touch-sized (48 px), the
+// owner's `sq-input` the compact admin well (44 px).
+function fieldClassFor(cashierShell?: boolean): string {
+  return cashierShell ? 'pos-field' : 'sq-input';
+}
 
 function emptyChild(): CustomerChild {
   return { name: '', birthday: '' };
@@ -37,97 +41,142 @@ export function CustomersPage({ cashierShell }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- initial load only; `reload` reads live state via its default arg
   }, []);
 
+  const fieldClass = fieldClassFor(cashierShell);
+  const runSearch = () => void reload(q).catch(() => setError('Помилка пошуку'));
+
+  const newButton = (
+    <button
+      type="button"
+      className={`sq-btn-quiet ${cashierShell ? '!min-h-12' : ''}`}
+      onClick={() => {
+        setCreating(true);
+        setEditing(null);
+      }}
+    >
+      <Plus size={20} />
+      Новий клієнт
+    </button>
+  );
+
   const body = (
     <div
       ref={bodyRef}
-      className={cashierShell ? 'flex-1 overflow-auto p-4 max-w-3xl mx-auto w-full select-none' : 'space-y-4'}
+      className={
+        cashierShell
+          ? 'flex-1 overflow-auto select-none'
+          : 'animate-fade-up text-sq-text max-w-4xl'
+      }
     >
-      {cashierShell && (
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-lg font-semibold text-sq-text">Клієнти</h1>
-          <Link to="/register" className="text-sm font-semibold text-sq-blue">
-            <ArrowLeft size={20} aria-hidden className="inline-block align-[-5px] mr-0.5" />Каса
-          </Link>
-        </div>
-      )}
-
-      {!cashierShell && <p className="sq-section-label">Клієнти</p>}
-
-      {error && <p className="text-sm text-red-600">{error}</p>}
-
-      <div className="flex flex-wrap gap-2 items-center mb-3">
-        <input
-          className={`${fieldClass} max-w-xs`}
-          placeholder="Пошук імені / телефону"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') void reload(q).catch(() => setError('Помилка пошуку'));
-          }}
-        />
-        <button
-          type="button"
-          className="sq-btn-primary px-3 py-2 text-sm"
-          onClick={() => void reload(q).catch(() => setError('Помилка пошуку'))}
-        >
-          Шукати
-        </button>
-        <button
-          type="button"
-          className="rounded-sq border border-sq-divider px-3 py-2 text-sm font-medium bg-white"
-          onClick={() => {
-            setCreating(true);
-            setEditing(null);
-          }}
-        >
-          + Новий клієнт
-        </button>
-      </div>
-
-      {(creating || editing) && (
-        <div className="mb-3">
-          <CustomerForm
-            initial={editing}
-            onCancel={() => {
-              setCreating(false);
-              setEditing(null);
-            }}
-            onSaved={async () => {
-              setCreating(false);
-              setEditing(null);
-              await reload();
-            }}
-            onError={setError}
-            allowDelete={!cashierShell && !!editing}
-          />
-        </div>
-      )}
-
-      <ul className="divide-y divide-sq-divider border border-sq-divider rounded-sq bg-white">
-        {list.map((c) => (
-          <li key={c.id}>
-            <button
-              type="button"
-              className="w-full text-left px-4 py-3 hover:bg-sq-bg"
-              onClick={() => {
-                setEditing(c);
-                setCreating(false);
-              }}
-            >
-              <p className="font-medium text-sq-text">{c.name}</p>
-              <p className="text-sm text-sq-secondary">{c.phone}</p>
-              {c.children_birthdays?.length > 0 && (
-                <p className="text-xs text-sq-muted mt-0.5">
-                  Діти: {c.children_birthdays.map((ch) => ch.name).join(', ')}
-                </p>
-              )}
-            </button>
-          </li>
-        ))}
-        {list.length === 0 && (
-          <li className="px-4 py-8 text-center text-sm text-sq-muted">Немає клієнтів</li>
+      <div className={cashierShell ? 'max-w-3xl mx-auto w-full px-4 md:px-7 pb-6' : ''}>
+        {cashierShell ? (
+          <header className="flex flex-wrap items-center gap-3 py-4 md:min-h-[72px]">
+            <Users size={24} className="shrink-0" />
+            <h1 className="text-2xl font-bold text-sq-heading">Клієнти</h1>
+            <div className="ml-auto flex items-center gap-3">
+              {newButton}
+              <Link
+                to="/register"
+                className="min-h-12 inline-flex items-center gap-1 text-[15px] font-semibold text-sq-blue"
+              >
+                <ArrowLeft size={20} aria-hidden />
+                Каса
+              </Link>
+            </div>
+          </header>
+        ) : (
+          <PageHeader glyph={Users} title="Клієнти" actions={newButton} />
         )}
-      </ul>
+
+        {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+
+        <div className="flex flex-wrap gap-2 items-center mb-4">
+          <div className="relative flex-1 min-w-[14rem] max-w-md">
+            <Search
+              size={20}
+              aria-hidden
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sq-muted pointer-events-none"
+            />
+            <input
+              className={`${fieldClass} !pl-11`}
+              placeholder="Пошук імені / телефону"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') runSearch();
+              }}
+            />
+          </div>
+          <button type="button" className={`sq-btn-quiet ${cashierShell ? '!min-h-12' : ''}`} onClick={runSearch}>
+            Шукати
+          </button>
+        </div>
+
+        {(creating || editing) && (
+          <div className="mb-5">
+            <CustomerForm
+              initial={editing}
+              cashierShell={cashierShell}
+              onCancel={() => {
+                setCreating(false);
+                setEditing(null);
+              }}
+              onSaved={async () => {
+                setCreating(false);
+                setEditing(null);
+                await reload();
+              }}
+              onError={setError}
+              allowDelete={!cashierShell && !!editing}
+            />
+          </div>
+        )}
+
+        {list.length === 0 ? (
+          <div className="py-12 flex flex-col items-center gap-3 text-center">
+            <Users size={48} />
+            <p className="text-[15px] text-sq-secondary">Немає клієнтів</p>
+          </div>
+        ) : (
+          <ul className={cashierShell ? 'rounded-card bg-white shadow-card overflow-hidden' : ''}>
+            {list.map((c) => {
+              const on = editing?.id === c.id;
+              return (
+                <li key={c.id} className={cashierShell ? 'sq-row last:shadow-none' : 'sq-row'}>
+                  <button
+                    type="button"
+                    aria-current={on || undefined}
+                    className={`text-left py-2 flex items-center gap-3 transition-colors ${
+                      cashierShell ? 'w-full min-h-[60px] px-4 md:px-5' : 'w-[calc(100%+1rem)] min-h-12 -mx-2 px-2 rounded-lg'
+                    } ${on ? 'bg-sq-selected' : 'hover:bg-sq-sidebar/60'}`}
+                    onClick={() => {
+                      setEditing(c);
+                      setCreating(false);
+                    }}
+                  >
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-base text-sq-text truncate">{c.name}</span>
+                      {c.children_birthdays?.length > 0 && (
+                        <span className="mt-1 flex flex-wrap items-center gap-1">
+                          <span className="text-[13px] text-sq-muted mr-0.5">Діти</span>
+                          {c.children_birthdays.map((ch, i) => (
+                            <span
+                              key={`${ch.name}-${i}`}
+                              className="inline-flex items-center h-[22px] px-2 rounded-md ring-1 ring-inset ring-sq-divider text-xs font-medium text-sq-secondary"
+                            >
+                              {ch.name}
+                            </span>
+                          ))}
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-sm text-sq-muted tabular-nums shrink-0">{c.phone}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
     </div>
   );
 
@@ -136,12 +185,14 @@ export function CustomersPage({ cashierShell }: Props) {
 
 function CustomerForm({
   initial,
+  cashierShell,
   onCancel,
   onSaved,
   onError,
   allowDelete,
 }: {
   initial: PosCustomer | null;
+  cashierShell?: boolean;
   onCancel: () => void;
   onSaved: () => Promise<void>;
   onError: (msg: string) => void;
@@ -186,51 +237,53 @@ function CustomerForm({
     }
   }
 
+  const fieldClass = fieldClassFor(cashierShell);
+  const labelClass = 'flex flex-col gap-1.5';
+  const captionClass = 'text-[13px] font-semibold text-sq-secondary';
+
   return (
-    <form
-      onSubmit={(e) => void save(e)}
-      className="border border-sq-divider rounded-sq p-4 space-y-3 bg-white shadow-sm"
-    >
-      <p className="text-sm font-semibold">{initial ? 'Редагування' : 'Новий клієнт'}</p>
-      <input
-        className={fieldClass}
-        placeholder="Ім’я *"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        required
-      />
-      <input
-        className={fieldClass}
-        placeholder="Телефон *"
-        value={phone}
-        onChange={(e) => setPhone(e.target.value)}
-        required
-      />
-      <input
-        className={fieldClass}
-        placeholder="Email"
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
+    <form onSubmit={(e) => void save(e)} className="sq-card p-5 md:p-6 space-y-4">
+      <p className="text-[19px] font-bold text-sq-heading">{initial ? 'Редагування' : 'Новий клієнт'}</p>
+      <div className="grid sm:grid-cols-2 gap-4">
+        <label className={labelClass}>
+          <span className={captionClass}>Ім’я *</span>
+          <input className={fieldClass} value={name} onChange={(e) => setName(e.target.value)} required />
+        </label>
+        <label className={labelClass}>
+          <span className={captionClass}>Телефон *</span>
+          <input
+            className={`${fieldClass} tabular-nums`}
+            inputMode="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            required
+          />
+        </label>
+        <label className={`${labelClass} sm:col-span-2`}>
+          <span className={captionClass}>Email</span>
+          <input className={fieldClass} type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        </label>
+      </div>
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold text-sq-secondary">Діти (макс. 5)</p>
+          <p className={captionClass}>Діти (макс. 5)</p>
           <button
             type="button"
             disabled={children.length >= 5}
-            className="text-sm text-sq-blue font-medium disabled:opacity-40"
+            className="min-h-9 inline-flex items-center gap-1 text-[15px] text-sq-blue font-semibold disabled:opacity-40"
             onClick={() => setChildren([...children, emptyChild()])}
           >
-            + Дитина
+            <Plus size={20} />
+            Дитина
           </button>
         </div>
         {children.map((ch, idx) => (
-          <div key={idx} className="grid grid-cols-[1fr_1fr_auto] gap-2">
+          <div key={idx} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
             <input
               className={fieldClass}
               placeholder="Ім’я"
+              aria-label="Ім’я дитини"
               value={ch.name}
               onChange={(e) => {
                 const next = [...children];
@@ -241,6 +294,7 @@ function CustomerForm({
             <input
               className={fieldClass}
               type="date"
+              aria-label="День народження"
               value={ch.birthday}
               onChange={(e) => {
                 const next = [...children];
@@ -250,25 +304,37 @@ function CustomerForm({
             />
             <button
               type="button"
-              className="text-sm text-red-600 px-2"
+              className="w-11 h-11 grid place-items-center rounded-full text-sq-secondary hover:bg-sq-empty hover:text-red-600"
               aria-label="Прибрати"
               onClick={() => setChildren(children.filter((_, i) => i !== idx))}
             >
-              <X size={16} />
+              <X size={20} />
             </button>
           </div>
         ))}
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <button type="submit" disabled={saving} className="sq-btn-primary px-4 py-2.5 text-sm">
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        <button
+          type="submit"
+          disabled={saving}
+          className={
+            cashierShell
+              ? 'pos-btn-primary min-h-12 px-6 rounded-xl text-[17px]'
+              : 'pos-btn-primary min-h-11 px-5 rounded-sq text-[15px]'
+          }
+        >
           {saving ? '…' : 'Зберегти'}
         </button>
-        <button type="button" className="px-4 py-2.5 text-sm text-sq-secondary" onClick={onCancel}>
+        <button type="button" className={`sq-btn-quiet ${cashierShell ? '!min-h-12' : ''}`} onClick={onCancel}>
           Скасувати
         </button>
         {allowDelete && (
-          <button type="button" className="ml-auto px-4 py-2.5 text-sm text-red-600" onClick={() => void remove()}>
+          <button
+            type="button"
+            className="ml-auto min-h-11 px-3 text-[15px] font-semibold text-red-600"
+            onClick={() => void remove()}
+          >
             Видалити
           </button>
         )}

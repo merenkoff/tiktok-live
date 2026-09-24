@@ -15,8 +15,7 @@
 
 import type { AttributeSpec, AttributeValues } from '../types';
 
-const FIELD =
-  'w-full rounded-sq border border-sq-divider bg-sq-bg px-3 py-2 text-sm text-sq-text';
+const FIELD = 'sq-input';
 
 export function AttributeFields({
   schema,
@@ -24,7 +23,7 @@ export function AttributeFields({
   onChange,
   unit,
   disabled,
-  className = 'grid gap-2 sm:grid-cols-2',
+  className = 'grid gap-3 sm:grid-cols-2',
 }: {
   schema: AttributeSpec[];
   value: AttributeValues;
@@ -53,14 +52,14 @@ export function AttributeFields({
         const shown = current == null ? '' : String(current);
         const label = spec.unitSuffix ? `${spec.label}, ${spec.unitSuffix}` : spec.label;
         return (
-          <label key={spec.key} className="block">
-            <span className="text-xs text-sq-secondary">
+          <label key={spec.key} className="flex flex-col gap-1.5">
+            <span className="text-[13px] font-semibold text-sq-secondary">
               {label}
-              {spec.required && <span className="text-rose-600"> *</span>}
+              {spec.required && <span className="text-sq-danger"> *</span>}
             </span>
             {spec.type === 'select' ? (
               <select
-                className={`${FIELD} mt-1`}
+                className={FIELD}
                 value={shown}
                 disabled={disabled}
                 onChange={(e) => set(spec.key, e.target.value)}
@@ -74,7 +73,7 @@ export function AttributeFields({
               </select>
             ) : (
               <input
-                className={`${FIELD} mt-1`}
+                className={FIELD}
                 type={spec.type === 'number' ? 'number' : 'text'}
                 inputMode={spec.type === 'number' ? 'decimal' : undefined}
                 value={shown}
@@ -88,10 +87,10 @@ export function AttributeFields({
       })}
 
       {showUnit && (
-        <label className="block">
-          <span className="text-xs text-sq-secondary">Одиниця</span>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-[13px] font-semibold text-sq-secondary">Одиниця</span>
           <select
-            className={`${FIELD} mt-1`}
+            className={FIELD}
             value={unit.value}
             disabled={disabled}
             onChange={(e) => unit.onChange(e.target.value)}

@@ -70,12 +70,19 @@ export interface SegmentedProps<T extends string> {
   options: ReadonlyArray<{ value: T; label: ReactNode; testId?: string }>;
   onChange: (value: T) => void;
   ariaLabel?: string;
+  /** `w-full` in a dialog, where the track spans the panel and the choices share it. */
+  className?: string;
 }
 
 /** A row of choices on a grey track; the chosen one is a white chip. */
-export function Segmented<T extends string>({ value, options, onChange, ariaLabel }: SegmentedProps<T>) {
+export function Segmented<T extends string>({ value, options, onChange, ariaLabel, className = '' }: SegmentedProps<T>) {
+  const fill = className.includes('w-full');
   return (
-    <div className="inline-flex max-w-full overflow-x-auto gap-1 p-[3px] rounded-xl bg-sq-empty" role="group" aria-label={ariaLabel}>
+    <div
+      className={`inline-flex max-w-full overflow-x-auto gap-1 p-[3px] rounded-xl bg-sq-empty ${className}`}
+      role="group"
+      aria-label={ariaLabel}
+    >
       {options.map((o) => {
         const on = o.value === value;
         return (
@@ -85,7 +92,7 @@ export function Segmented<T extends string>({ value, options, onChange, ariaLabe
             aria-pressed={on}
             onClick={() => onChange(o.value)}
             data-testid={o.testId}
-            className={`min-h-[34px] px-3.5 rounded-[9px] text-[15px] whitespace-nowrap transition-colors ${
+            className={`min-h-[34px] px-3.5 rounded-[9px] text-[15px] whitespace-nowrap transition-colors ${fill ? 'flex-1' : ''} ${
               on
                 ? 'bg-white shadow-[0_1px_3px_rgba(0,0,0,.12)] font-semibold text-sq-text'
                 : 'font-medium text-sq-secondary hover:text-sq-text'
