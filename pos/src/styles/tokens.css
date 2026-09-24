@@ -10,27 +10,53 @@
    See TechDocs/POS_MODULE_REMOTE_POC.md (roadmap #4). */
 
 :root {
-  --pos-primary: #006aff;
-  --pos-primary-press: #0058d6;
-  --pos-bg: #f5f5f5;
-  --pos-surface: #ffffff;
-  --pos-rail: #1a1a1a;
-  --pos-text: #1a1a1a;
-  --pos-secondary: #6e6e6e;
-  --pos-muted: #9a9a9a;
-  --pos-divider: #e0e0e0;
-  --pos-empty: #ebebeb;
+  /* Neutrals are Things' (Cultured Code), measured 2026-09-24 — see
+     design/README.md at the repo root; the accent, the tag colours and the
+     black-only print stay ours. Each colour is kept as RGB channels so
+     Tailwind's `sq-*` utilities (tailwind.config.js) can take an opacity
+     modifier (`bg-sq-blue/10`); the named colours below are read from them. */
+  --sq-blue-rgb: 0 106 255;
+  --sq-blue-press-rgb: 0 88 214;
+  --sq-bg-rgb: 242 245 247;
+  --sq-surface-rgb: 255 255 255;
+  --sq-sidebar-rgb: 244 245 247;
+  --sq-selected-rgb: 223 226 231;
+  --sq-text-rgb: 48 51 54;
+  --sq-heading-rgb: 44 49 56;
+  --sq-secondary-rgb: 85 96 110;
+  --sq-muted-rgb: 142 145 150;
+  --sq-divider-rgb: 223 227 232;
+  --sq-empty-rgb: 236 238 240;
+
+  --pos-primary: rgb(var(--sq-blue-rgb));
+  --pos-primary-press: rgb(var(--sq-blue-press-rgb));
+  --pos-bg: rgb(var(--sq-bg-rgb));
+  --pos-surface: rgb(var(--sq-surface-rgb));
+  --pos-sidebar: rgb(var(--sq-sidebar-rgb));
+  --pos-selected: rgb(var(--sq-selected-rgb));
+  --pos-text: rgb(var(--sq-text-rgb));
+  --pos-heading: rgb(var(--sq-heading-rgb));
+  --pos-secondary: rgb(var(--sq-secondary-rgb));
+  --pos-muted: rgb(var(--sq-muted-rgb));
+  --pos-divider: rgb(var(--sq-divider-rgb));
+  --pos-empty: rgb(var(--sq-empty-rgb));
   --pos-folder: #e8eef4;
   --pos-folder-ink: #3d5266;
-  --pos-radius: 4px;
-  --pos-font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  /* Two radii: controls (buttons, fields, tiles) and cards/sheets. */
+  --pos-radius: 10px;
+  --pos-radius-card: 18px;
+  --pos-shadow-card: 0 2px 8px rgba(0, 0, 0, 0.1), 0 0 2px rgba(0, 0, 0, 0.1);
+  /* Inter everywhere by default (self-hosted, styles/fonts.css); SF on Apple
+     devices through `html.apple` below. Not one stack: Chrome and WebView2
+     read BlinkMacSystemFont as system-ui, which on Windows is Segoe UI. */
+  --pos-font: 'Inter Variable', 'Inter', sans-serif;
 
-  /* aliases for existing sq-* Tailwind usage */
+  /* aliases for existing sq-* usage */
   --sq-blue: var(--pos-primary);
   --sq-blue-press: var(--pos-primary-press);
   --sq-bg: var(--pos-bg);
   --sq-surface: var(--pos-surface);
-  --sq-sidebar: #f0f0f0;
+  --sq-sidebar: var(--pos-sidebar);
   --sq-text: var(--pos-text);
   --sq-text-secondary: var(--pos-secondary);
   --sq-text-muted: var(--pos-muted);
@@ -38,6 +64,14 @@
   --sq-tile-empty: var(--pos-empty);
   --sq-radius: var(--pos-radius);
   --sq-font: var(--pos-font);
+}
+
+/* SF on Mac, iPhone and iPad — the font Things is set in. The class is set by
+   `markApplePlatform()` (lib/applePlatform.ts) before the first render; every
+   element reads the font through --pos-font (Tailwind's `font-sans` too), so
+   this one override is all it takes, and Inter is then never downloaded. */
+html.apple {
+  --pos-font: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
 
 * {
@@ -77,6 +111,11 @@ select:focus-visible {
 }
 
 @media print {
+  body {
+    background: #fff;
+    color: #000;
+  }
+
   /* Hide the app, show only what is being printed.
      Hiding `#root` was not that: anything React portals to `document.body` —
      a modal, a toast — is a *sibling* of `#root`, so it stayed on the page and
@@ -269,7 +308,7 @@ textarea::placeholder {
   padding: 0.75rem 1rem;
   border: 1px solid var(--pos-divider);
   border-radius: var(--pos-radius);
-  background-color: #ffffff;
+  background-color: var(--pos-surface);
   color: var(--pos-text);
   caret-color: var(--pos-text);
   font: inherit;
@@ -298,7 +337,7 @@ a.sq-btn-primary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background-color: #006aff !important;
+  background-color: var(--pos-primary) !important;
   color: #ffffff !important;
   font-weight: 600;
   border: none;
@@ -307,13 +346,13 @@ a.sq-btn-primary {
 }
 button.pos-btn-primary:hover:not(:disabled),
 button.sq-btn-primary:hover:not(:disabled) {
-  background-color: #0058d6 !important;
+  background-color: var(--pos-primary-press) !important;
   color: #ffffff !important;
 }
 button.pos-btn-primary:disabled,
 button.sq-btn-primary:disabled {
-  background-color: #d8d8d8 !important;
-  color: #6e6e6e !important;
+  background-color: var(--pos-selected) !important;
+  color: var(--pos-muted) !important;
   cursor: not-allowed;
 }
 
@@ -321,7 +360,7 @@ button.sq-btn-primary:disabled {
 .sq-btn-tile {
   -webkit-appearance: none;
   appearance: none;
-  background-color: #006aff !important;
+  background-color: var(--pos-primary) !important;
   color: #ffffff !important;
   border: none;
   border-radius: var(--pos-radius);
@@ -337,36 +376,37 @@ button.sq-btn-primary:disabled {
   background-color: #dce6ef !important;
 }
 
+/* The selected row the way Things draws it: grey, not blue. */
 .sq-nav-active {
-  background-color: #006aff !important;
-  color: #ffffff !important;
+  background-color: var(--pos-selected) !important;
+  color: var(--pos-text) !important;
+  font-weight: 600;
 }
 
 .sq-nav-idle {
   background-color: transparent;
-  color: #1a1a1a !important;
+  color: var(--pos-text) !important;
 }
 .sq-nav-idle:hover {
-  background-color: #ffffff;
+  background-color: rgb(var(--sq-selected-rgb) / 0.55);
 }
 
 .sq-link {
-  color: #006aff !important;
+  color: var(--pos-primary) !important;
   font-weight: 600;
 }
 
+/* A quiet section caption — sentence case, like Things, not tracked capitals. */
 .sq-section-label {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #6e6e6e;
+  color: var(--pos-secondary);
 }
 
 .sq-card {
-  background: #ffffff;
-  border: 1px solid #e0e0e0;
-  border-radius: var(--pos-radius);
+  background: var(--pos-surface);
+  border-radius: var(--pos-radius-card);
+  box-shadow: var(--pos-shadow-card);
 }
 
 @keyframes fadeUp {

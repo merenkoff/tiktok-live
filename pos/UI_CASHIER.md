@@ -1,24 +1,28 @@
 # UI каси (Cloth POS)
 
 Каса для невеликого магазину одягу: каталог з мітками, варіанти (колір/розмір), залишки, штрихкод, чек, оплата.
-Візуал орієнтований на Square Register.
+Візуал — мова Things (Cultured Code): їхні білі й сірі, SF на Apple / Inter деінде, м'які картки; наш синій,
+кольори міток і чорно-білий друк лишаються нашими. Джерело токенів і правил — `design/README.md` у корені репо.
 
 ## Tokens
 
-| Token | Hex |
-|-------|-----|
-| `--pos-primary` | `#006AFF` |
-| `--pos-primary-press` | `#0058D6` |
-| `--pos-bg` | `#F5F5F5` |
-| `--pos-surface` | `#FFFFFF` |
-| `--pos-rail` | `#1A1A1A` |
-| `--pos-text` | `#1A1A1A` |
-| `--pos-secondary` | `#6E6E6E` |
-| `--pos-muted` | `#9A9A9A` |
-| `--pos-divider` | `#E0E0E0` |
-| `--pos-empty` | `#EBEBEB` |
-| Font | Inter |
-| Radius | 4px |
+Кольори живуть у `src/styles/tokens.css` як RGB-канали (`--sq-*-rgb`), з яких читаються і `--pos-*`, і
+Tailwind-утиліти `sq-*` (`tailwind.config.js`, з fallback-каналами для ремоута на старішому хості) — тому
+працює `bg-sq-blue/10`, а ремоут іде за палітрою хоста.
+
+| Token | Значення | Tailwind |
+|-------|-----|-----|
+| `--pos-primary` / `-press` | `#006AFF` / `#0058D6` | `sq-blue` / `sq-blue-press` |
+| `--pos-bg` | `#F2F5F7` — фон сторінки | `sq-bg` |
+| `--pos-sidebar` | `#F4F5F7` — сайдбар, тиха панель | `sq-sidebar` |
+| `--pos-surface` | `#FFFFFF` | `sq-surface` |
+| `--pos-selected` | `#DFE2E7` — вибраний рядок | `sq-selected` |
+| `--pos-text` / `--pos-heading` | `#303336` / `#2C3138` | `sq-text` / `sq-heading` |
+| `--pos-secondary` / `--pos-muted` | `#55606E` / `#8E9196` | `sq-secondary` / `sq-muted` |
+| `--pos-divider` / `--pos-empty` | `#DFE3E8` / `#ECEEF0` | `sq-divider` / `sq-empty` |
+| Радіуси | `--pos-radius` 10px (кнопки, поля, плитки) · `--pos-radius-card` 18px (картки, шторки) | `rounded-sq` / `rounded-card` |
+| Тінь картки | `--pos-shadow-card` | `shadow-card` |
+| Font | `--pos-font`: Inter (`styles/fonts.css`, self-hosted, 4 підмножини) за замовчуванням; SF під `html.apple` (`lib/applePlatform.ts`, викликається першим рядком кожного entry). Не одним стеком: Chrome/WebView2 читає `BlinkMacSystemFont` як `system-ui` = Segoe UI на Windows. | `font-sans` |
 
 Кольори плиток міток (ключ у `pos_tags.color`): `green`, `rose`, `blue`, `orange`, `teal`, `purple`, `slate`, `amber` — див. `pos/src/lib/tagColors.ts`.
 
@@ -31,6 +35,8 @@ Tailwind-утиліти (`dist-remotes/<id>/style.css`) і покладаєть�
 хоста. Див. `TechDocs/POS_MODULE_REMOTE_POC.md` (#4).
 
 - `.pos-btn-primary` / `.sq-btn-primary` — solid CTA
+- `.sq-card` — біла картка з радіусом 18 і тінню Things; `.sq-section-label` — тихий підпис розділу, звичайним регістром
+- `.sq-nav-active` — вибраний пункт меню: сірий `--pos-selected`, не синій
 - `.pos-field` — інпут з рамкою
 - `.pos-field-underline` — поле готівки (лише нижня межа)
 - `.animate-fade-up` — поява сторінки/шторки. `animation-fill-mode` тут

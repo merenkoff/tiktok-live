@@ -22,6 +22,10 @@ import { syncModuleRemote, moduleRemoteUrl, pruneModuleRemotes } from './lib/mod
 import { maybeStartTelemetryBeacon } from './modules/telemetryBeacon';
 import './index.css';
 import './styles/tokens.css';
+import './styles/fonts.css';
+import { markApplePlatform } from './lib/applePlatform';
+
+markApplePlatform();
 
 enableOfflinePos();
 maybeStartTelemetryBeacon();

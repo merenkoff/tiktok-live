@@ -12,6 +12,10 @@ import { registerOfflineModules } from '@pos/platform';
 import { maybeStartTelemetryBeacon } from './modules/telemetryBeacon';
 import './index.css';
 import './styles/tokens.css';
+import './styles/fonts.css';
+import { markApplePlatform } from './lib/applePlatform';
+
+markApplePlatform();
 
 // Wire the (dormant-by-default) telemetry sink before the registry resolves so
 // it catches the boot `session_manifest` event — see roadmap #6.
