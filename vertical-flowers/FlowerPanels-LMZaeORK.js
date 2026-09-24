@@ -1,5 +1,5 @@
-import { t as e } from "./flower-2-DQVy9i5h.js";
-import { a as t, i as n, n as r, o as i, r as a, t as o } from "./Stat-DRWd55Hz.js";
+import { c as e } from "./glyphs-yCl9Zx5o.js";
+import { a as t, i as n, n as r, o as i, r as a, t as o } from "./Stat-BU_EepWd.js";
 import { useEffect as s, useState as c } from "react";
 import { jsx as l, jsxs as u } from "react/jsx-runtime";
 import { api as d, formatUah as f } from "@pos/platform";
@@ -22,19 +22,15 @@ function m({ from: m, to: h }) {
 	}, [m, h]), v) return null;
 	let b = g ? a(g.margin) : null, x = g ? n(g.margin) : null, S = g ? t(g.loss) : null;
 	return /* @__PURE__ */ u("section", {
-		className: "bg-sq-surface border border-sq-divider rounded-sq p-5 shadow-sm",
 		"data-testid": "flower-panels",
 		children: [/* @__PURE__ */ u("div", {
-			className: "flex items-center justify-between mb-4",
-			children: [/* @__PURE__ */ u("p", {
-				className: "sq-section-label flex items-center gap-2",
-				children: [/* @__PURE__ */ l(e, {
-					size: 14,
-					className: "text-sq-blue"
-				}), "Квіти"]
+			className: "flex items-center justify-between gap-3 pb-1.5 mb-3 shadow-[0_1px_0_rgb(var(--sq-divider-rgb))]",
+			children: [/* @__PURE__ */ u("h3", {
+				className: "flex items-center gap-2 text-[15px] font-bold text-sq-blue",
+				children: [/* @__PURE__ */ l(e, { size: 24 }), "Квіти"]
 			}), /* @__PURE__ */ l(p, {
 				to: "/admin/flowers",
-				className: "text-xs font-semibold text-sq-blue uppercase tracking-wide",
+				className: "text-[15px] font-semibold text-sq-blue hover:underline",
 				children: "Докладніше"
 			})]
 		}), /* @__PURE__ */ u("div", {

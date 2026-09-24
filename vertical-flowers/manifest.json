@@ -1,23 +1,22 @@
 {
   "schema": 1,
   "moduleId": "vertical-flowers",
-  "version": "2.2.0",
-  "minHostPlatform": 14,
+  "version": "2.4.0",
+  "minHostPlatform": 17,
   "entry": "remote-entry.js",
   "keyId": "2a73632c13044371",
-  "builtAt": "2026-09-22T10:48:40.653Z",
+  "builtAt": "2026-09-24T23:00:52.178Z",
   "files": {
     "BarcodeScanner-DDyd6b-m.js": "sha384-h7k7FozxihdT2cYBXZsLuvH2nmezpFoHZ17TVH+R34lHtTcbvHJBkmWVo9KVWFbs",
-    "BouquetPhoto-C0wJlYvp.js": "sha384-Vb6P64JPLkDpF4QXgJBFb+I0iP43ysC81EqWHAf0Q+WXAX3vOZ4a8CafjsXv1rjC",
-    "FloristLabourCard-Jd-khfoM.js": "sha384-gN6vCE3pc8rrgj8fXaRRehe/+0pd4vqsapKsAOVXdHitLycm5/VC5N3FIP/7Hh0x",
-    "FlowerAnalyticsPage-CRKXg11e.js": "sha384-hPSuuZ7YyUiAFx3uEf67CO0UzegxC69nXDICVrIGTmy5PBbWTdgLXNXGbhNmvLlS",
-    "FlowerPanels-BSJnNihV.js": "sha384-taz0CIKL+CS5DWYkPdPcorvHQ/D6gkmh5ugBmu5GlPBn4up1myQ2aGY+PkVx0rpT",
-    "FlowersCatalog-L1c5I-If.js": "sha384-xSdYQtwADvKsdmXTNQzOLPKYJg4fjW3Ysxlf+C9qJkwz97cc/KNU+LIlTe2fRYct",
-    "ShowcasePage-Cmbo-gX6.js": "sha384-RMHI3xs8aUqZY+fAgHEEVKT6joiabO0NKvz25lmk432TwpkLvDzRDLVSxXFR46vx",
-    "Stat-DRWd55Hz.js": "sha384-yNV1ukhrVP+GcnYaVNCGrzeDvYieA4onvTtvTg0jxLMHlQ9CCRei7JeNRSOEs5Hu",
-    "flower-2-DQVy9i5h.js": "sha384-BT7P8TqCm7WGGXgl51SnHwjzc+Xuupj3XXqqO06g5Y/rqu3G18iGBelNxwA0x5PD",
-    "remote-entry.js": "sha384-xeRlWELOfbl/v6GQy2HQob9kfaa5cLTGzZdvcPmCJMopilNm3CV6CjMpPdTSeOia",
-    "style.css": "sha384-DwWeKz8TrFXyrKs9QnbdWLdLwddrL9n1vVmxcaDrhIXM5zh0Ym/q7QbC04hviFpd",
-    "trash-2-CBFgWIf2.js": "sha384-FRABpqvBlRWeKhNQs4bFoknG2TlGh2Keah2yccktVg3uyc9ETPdbTENTDLDWU0dh"
+    "BouquetPhoto-CymTfdUQ.js": "sha384-EdAMos8uJvKPMh+pUKtQxPoK+o3AsCz4IPxtXQ6P1y8NLp/O/qFZe9eV/MPF008G",
+    "FloristLabourCard-CRgQjaJS.js": "sha384-G7SfV3TYNorMqJmLzxxcJ9sypN2iChDV54t0NvkN2NEg0n/Hwg7zInEMN3cFFC5z",
+    "FlowerAnalyticsPage-hEUku0zk.js": "sha384-6DBoa07hcV4yld4BQoJz9QkdiGraoYi/1F8e/8jswdZV6DsP4XfZK4i0d+rBnLdp",
+    "FlowerPanels-LMZaeORK.js": "sha384-5SHQ9+kqP5g11G4NijixUWBA3FbQRobTO5x6Or/UPcBkQ8etyVYbC/rU1NMGv2zU",
+    "FlowersCatalog-BptsWNcH.js": "sha384-k2dq/R/j2Oft7Rhzh91jVFTfKYZ8+snh4QyJS+gvcZeGrWMA0GwsGdICCttANSn+",
+    "ShowcasePage-BD9Btw85.js": "sha384-+3LEMO11wLN8NeGxfC0JKV9sTb4vJRNlfUYs6C5HwyDVE45wm32FbvJTQgucfELl",
+    "Stat-BU_EepWd.js": "sha384-74CnGhGKs1WybITPTnQL6YcKxDii9zPOlgsCUCA4b4edzsujESsZK+C0u/bldki1",
+    "glyphs-yCl9Zx5o.js": "sha384-PjoFNCfJ1+oKOvV6TjHmkRdFDo30Lj4O/ImF4TpnGJorpthI8Ens4DhKf+YJFx0X",
+    "remote-entry.js": "sha384-h9/p0B8gX14GUM6/Tjvcsrd2Toer1eukxRyj7a3XhqNzHktEh6CaUPYM28kSEJQu",
+    "style.css": "sha384-mDqj3MxC5/C0/2d6snLCAPpdUPv6oWnh/TpYOL8/npcBO5xvwiTQ//xtB5/4uixG"
   }
 }

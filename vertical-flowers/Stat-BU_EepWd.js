@@ -27,19 +27,19 @@ function o(e) {
 //#region src/modules/vertical-flowers/ui/Stat.tsx
 function s({ label: n, value: r, strong: i, hint: a, testId: o }) {
 	return /* @__PURE__ */ t("div", {
-		className: "rounded-sq bg-sq-bg p-3",
+		className: "rounded-xl bg-sq-sidebar px-4 py-3.5",
 		"data-testid": o,
 		children: [
 			/* @__PURE__ */ e("p", {
-				className: "text-xs text-sq-muted",
+				className: "text-[13px] font-medium text-sq-secondary",
 				children: n
 			}),
 			/* @__PURE__ */ e("p", {
-				className: `mt-0.5 ${i ? "text-lg font-semibold text-sq-text" : "text-sq-text"}`,
+				className: `mt-1 tabular-nums ${i ? "text-[22px] leading-tight font-bold text-sq-heading" : "text-sq-text"}`,
 				children: r
 			}),
 			a && /* @__PURE__ */ e("p", {
-				className: "mt-0.5 text-[11px] text-sq-muted",
+				className: "mt-1 text-xs text-sq-muted",
 				children: a
 			})
 		]

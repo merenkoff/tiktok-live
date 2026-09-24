@@ -1,4 +1,4 @@
-import { t as e } from "./flower-2-DQVy9i5h.js";
+import { c as e } from "./glyphs-yCl9Zx5o.js";
 import { useEffect as t, useState as n } from "react";
 import { jsx as r, jsxs as i } from "react/jsx-runtime";
 import { api as a, useAuthStore as o } from "@pos/platform";
@@ -37,7 +37,7 @@ function c() {
 			/* @__PURE__ */ i("p", {
 				className: "sq-section-label flex items-center gap-2",
 				children: [/* @__PURE__ */ r(e, {
-					size: 14,
+					size: 24,
 					className: "text-sq-blue"
 				}), "Робота флориста"]
 			}),
