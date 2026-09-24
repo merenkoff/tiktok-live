@@ -107,6 +107,9 @@ export const POS_API_CLIENT_VERSION = 2;
 //     (stored in `nav_overrides` / `module_remotes`) but resolves to glyphs and
 //     gains `ChefHat`, `Table`, `ShieldCheck`, `UtensilsCrossed`. A module that
 //     drew lucide keeps working on this host — nothing it imported went away.
+//     Before 17 shipped it also took `PageHeader` / `SectionHead` / `Segmented`
+//     (the owner screen's frame) and the `Banknote` / `Split` / `ChevronLeft`
+//     glyphs; the modifier sheet hands back a `quantity`.
 export const PLATFORM_VERSION = 17;
 
 /**
