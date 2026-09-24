@@ -25,8 +25,14 @@ interface Props {
   /** The shelf of carts any till can take back (POS_FLORIST_BENCH.md §9). */
   onOpenParked?: () => void;
   parkedCount?: number;
-  /** A pre-order is on the till — see the note on `SaleSidebar` (§14). */
+  /**
+   * A pre-order is on the till — see the note on `SaleSidebar` (§14). Its lines
+   * are the shop's promise: no quantity, no delete, no cart discount; the only
+   * questions left are «платимо» and «повертаємо на потім».
+   */
   locked?: boolean;
+  /** «Повернути» — the pre-order goes back to waiting; on a phone this sheet is the only cart. */
+  onCancelPreorder?: () => void;
 }
 
 export function MobileCartSheet({
@@ -43,6 +49,7 @@ export function MobileCartSheet({
   onOpenParked,
   parkedCount = 0,
   locked,
+  onCancelPreorder,
 }: Props) {
   const count = lines.reduce((s, l) => s + l.quantity, 0);
   const subtotal = lines.reduce((s, l) => s + l.unit_price_cents * l.quantity, 0);
@@ -146,7 +153,7 @@ export function MobileCartSheet({
                         )}
                       </div>
                     </button>
-                    {selected && (
+                    {selected && !locked && (
                       <div className="flex items-center gap-2 px-2 pb-2.5">
                         <button
                           type="button"
@@ -189,13 +196,24 @@ export function MobileCartSheet({
               <span className="tabular-nums">−{formatUah(discountCents)}</span>
             </div>
           )}
-          <button type="button" className="text-sq-blue text-[13px] font-semibold" onClick={() => setDiscountOpen(true)}>
-            {cartDiscount ? 'Змінити знижку на чек' : 'Знижка на чек'}
-          </button>
+          {!locked && (
+            <button type="button" className="text-sq-blue text-[13px] font-semibold" onClick={() => setDiscountOpen(true)}>
+              {cartDiscount ? 'Змінити знижку на чек' : 'Знижка на чек'}
+            </button>
+          )}
           <div className="flex gap-2.5">
             {/* Same two-jobs rule as the sidebar — see the comment there. A
-                promise is paid or put back from the sidebar, never parked. */}
-            {locked ? null : lines.length === 0 ? (
+                promise is paid or put back, never parked. */}
+            {locked ? (
+              <button
+                type="button"
+                onClick={onCancelPreorder}
+                className="flex-1 min-h-[52px] px-4 rounded-xl bg-white ring-1 ring-sq-divider text-sq-text font-semibold text-[16px]"
+                data-testid="preorder-put-back-mobile"
+              >
+                Повернути
+              </button>
+            ) : lines.length === 0 ? (
               <button
                 type="button"
                 disabled={!onOpenParked}

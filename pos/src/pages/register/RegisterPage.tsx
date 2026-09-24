@@ -913,6 +913,10 @@ export function RegisterPage() {
           onOpenParked={() => void openParked()}
           parkedCount={parkedCarts.length}
           locked={preorderId != null}
+          onCancelPreorder={() => {
+            clear();
+            setMobileCartOpen(false);
+          }}
         />
       )}
 
