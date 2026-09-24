@@ -20,7 +20,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CalendarClock, Flower2, MapPin, Package, Phone } from 'lucide-react';
+import { CalendarClock, Flower2, MapPin, PackageLine, Phone } from '../../platform/glyphs';
 import { api, useCartStore } from '@pos/platform';
 import { formatUah } from '../../lib/money';
 import { cartLinesFromPreorder } from '../../lib/preorderCart';
@@ -100,7 +100,7 @@ export function PreordersPage() {
       <header className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold text-sq-text flex items-center gap-2">
-            <CalendarClock size={20} className="text-sq-blue" />
+            <CalendarClock size={24} className="text-sq-blue" />
             Замовлення
           </h1>
           <p className="text-xs text-sq-muted mt-0.5">Що обіцяли, найближче спершу</p>
@@ -142,11 +142,11 @@ export function PreordersPage() {
             </div>
 
             <p className="mt-1 text-sm text-sq-text flex items-center gap-1.5">
-              {order.fulfilment === 'delivery' ? <MapPin size={14} /> : <Package size={14} />}
+              {order.fulfilment === 'delivery' ? <MapPin size={16} /> : <PackageLine size={16} />}
               {order.recipient_name || order.customer_name || 'Без імені'}
               {order.recipient_phone && (
                 <span className="text-sq-muted flex items-center gap-1">
-                  <Phone size={12} />
+                  <Phone size={16} />
                   {order.recipient_phone}
                 </span>
               )}
@@ -223,7 +223,7 @@ export function PreordersPage() {
                     className="min-h-11 px-3 rounded-sq bg-sq-bg text-sq-blue text-sm font-semibold disabled:opacity-40 flex items-center gap-1.5"
                     data-testid="preorder-assembled"
                   >
-                    <Flower2 size={16} />
+                    <Flower2 size={24} />
                     Зібрано
                   </button>
                 )}

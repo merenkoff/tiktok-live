@@ -152,7 +152,7 @@ describe('KitchenPage', () => {
     // The caption already carries the answer («M · вівсяне»): once, not twice.
     expect(card).toHaveTextContent('Латте M · вівсяне');
     expect((card.textContent ?? '').match(/вівсяне/g)).toHaveLength(1);
-    expect(card).toHaveTextContent('✎ гарячіше');
+    expect(card).toHaveTextContent('гарячіше');
     expect(card).toHaveTextContent('Замовлення: з собою');
     expect(card).toHaveTextContent('бар');
     expect(card).toHaveTextContent('кухня');

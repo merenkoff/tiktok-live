@@ -2,7 +2,7 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { LogOut } from 'lucide-react';
+import { LogOut } from '../../platform/glyphs';
 import { Nav } from '../Nav';
 
 interface Props {
@@ -24,7 +24,7 @@ export function AppRail({ onLogout }: Props) {
         className="w-12 h-12 grid place-items-center rounded-sq transition-colors text-white/70 hover:text-white hover:bg-white/10"
         title="Вихід"
       >
-        <LogOut size={22} strokeWidth={1.75} />
+        <LogOut size={20} />
       </button>
     </nav>
   );

@@ -31,7 +31,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChefHat, LayoutGrid, Trash2, UtensilsCrossed } from 'lucide-react';
+import { ChefHat, LayoutGrid, Trash2, UtensilsCrossed } from '@pos/platform/ui';
 import { formatUah, useVertical } from '@pos/platform';
 import { Stat } from '../ui/Stat';
 import { getCafeAnalytics } from '../analytics/cafeAnalyticsApi';
@@ -106,7 +106,7 @@ export default function CafeAnalyticsPage() {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-sq-text flex items-center gap-2">
-            <ChefHat size={22} className="text-sq-blue" />
+            <ChefHat size={24} className="text-sq-blue" />
             Меню й кухня
           </h1>
           <p className="text-sm text-sq-muted mt-0.5">
@@ -144,7 +144,7 @@ export default function CafeAnalyticsPage() {
           {/* ── Скільки коштує кухня ──────────────────────────────────── */}
           <section className="bg-white rounded-sq border border-sq-divider p-4">
             <h2 className="font-semibold text-sq-text flex items-center gap-2">
-              <UtensilsCrossed size={18} className="text-sq-secondary" />
+              <UtensilsCrossed size={24} className="text-sq-secondary" />
               Скільки коштує те, що продали
             </h2>
 
@@ -204,7 +204,7 @@ export default function CafeAnalyticsPage() {
           {/* ── Матриця меню ─────────────────────────────────────────── */}
           <section className="bg-white rounded-sq border border-sq-divider p-4">
             <h2 className="font-semibold text-sq-text flex items-center gap-2">
-              <LayoutGrid size={18} className="text-sq-secondary" />
+              <LayoutGrid size={20} className="text-sq-secondary" />
               Матриця меню
             </h2>
             <p className="mt-1 text-xs text-sq-muted">
@@ -324,7 +324,7 @@ export default function CafeAnalyticsPage() {
           {/* ── Що пішло не в чек ────────────────────────────────────── */}
           <section className="bg-white rounded-sq border border-sq-divider p-4">
             <h2 className="font-semibold text-sq-text flex items-center gap-2">
-              <Trash2 size={18} className="text-sq-secondary" />
+              <Trash2 size={20} className="text-sq-secondary" />
               Списання кухні
             </h2>
             <p className="mt-2 text-2xl font-semibold text-sq-text" data-testid="cafe-writeoff-total">

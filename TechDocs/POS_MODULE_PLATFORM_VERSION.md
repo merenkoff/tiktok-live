@@ -198,3 +198,19 @@ TechDocs/POS_FLORIST_BENCH.md і коментар до `PLATFORM_VERSION` у `ve
 правильно: на ньому `runsInShell` ще нема, а бандл із `shells: ['web',
 'cashier', 'tablet']` він і так читає як «обидві старі» — просто планшета там
 не існує.
+
+### 17 (2026-09-24) — гліфи замість lucide
+
+Каса переходить на власний набір іконок у стилі Things (`design/README.md`):
+`scripts/gen-icons.mjs` генерує `src/platform/glyphs.tsx` з `design/icons/`,
+а `@pos/platform/ui` реекспортує всі гліфи — кольорові на сітці 24 px зі своїм
+відтінком, службові на 20 px (для дрібних — окремий малюнок на 16 px) у
+`currentColor` — плюс `Glyph` / `GlyphProps` / `COLOR_GLYPHS` / `UI_GLYPHS`.
+Імена нових експортів — отже бамп. `NAV_ICONS` лишив **ті самі ключі** (їх
+зберігають `nav_overrides` і `module_remotes`), але тепер веде на гліфи і
+отримав `ChefHat`, `Table`, `ShieldCheck`, `UtensilsCrossed`; де ім'я належить
+службовому гліфу (`Search`, `Camera`, `Printer`, `RefreshCw`, `MapPin`), ключ
+веде на кольоровий із суфіксом (`SearchColor`…). Старий модуль, що малював
+lucide, на цьому хості працює як і був — жоден його імпорт не зник; новий,
+зібраний проти 17, на хості 16 не завантажиться, і це правильно: там нема
+`@pos/platform/ui` з гліфами.

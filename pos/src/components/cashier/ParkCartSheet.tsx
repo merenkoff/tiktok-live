@@ -20,7 +20,7 @@
  */
 
 import { useState } from 'react';
-import { Inbox, X } from 'lucide-react';
+import { Inbox, X } from '../../platform/glyphs';
 import { formatUah } from '../../lib/money';
 
 interface Props {
@@ -108,7 +108,7 @@ export function ParkCartSheet({
             className="sq-btn-primary min-h-12 w-full flex items-center justify-center gap-2"
             data-testid="park-submit"
           >
-            <Inbox size={18} />
+            <Inbox size={20} />
             {!online ? 'Потрібна мережа' : busy ? 'Відкладаємо…' : 'Відкласти'}
           </button>
         </div>

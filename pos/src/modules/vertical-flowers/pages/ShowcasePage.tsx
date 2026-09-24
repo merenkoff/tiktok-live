@@ -19,7 +19,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Camera, Flower2, Trash2 } from 'lucide-react';
+import { Camera, Flower2, Trash2 } from '@pos/platform/ui';
 import { api, assetUrl, cashierApi, formatUah, useVertical } from '@pos/platform';
 import { BouquetPhoto } from '../bench/BouquetPhoto';
 import type { CatalogItem } from '@pos/platform';
@@ -127,7 +127,7 @@ export default function ShowcasePage() {
 
       {rows !== null && showcase.length === 0 && (
         <div className="rounded-sq border border-dashed border-sq-divider p-8 text-center">
-          <Flower2 size={28} className="mx-auto text-sq-muted" />
+          <Flower2 size={48} className="mx-auto text-sq-muted" />
           <p className="mt-2 text-sm text-sq-secondary">На вітрині зараз порожньо</p>
           <p className="mt-1 text-xs text-sq-muted max-w-[34ch] mx-auto">
             Зберіть букет на екрані продажу й натисніть «На вітрину» — він зʼявиться тут.
@@ -164,7 +164,7 @@ export default function ShowcasePage() {
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <Camera size={18} className="text-sq-muted" />
+                <Camera size={20} className="text-sq-muted" />
               )}
             </button>
             <div className="min-w-0 flex-1">
@@ -188,7 +188,7 @@ export default function ShowcasePage() {
               aria-label={`Списати: ${item.product_name}`}
               data-testid="showcase-writeoff"
             >
-              <Trash2 size={18} />
+              <Trash2 size={20} />
             </button>
           </li>
         ))}

@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatUah, useVertical } from '@pos/platform';
 import type { LocalSaleRow, SaleDetail } from '@pos/platform';
-import { useDragScroll } from '@pos/platform/ui';
+import { ArrowLeft, Pencil, useDragScroll } from '@pos/platform/ui';
 import { returnsApi } from '../data/returnsApi';
 import { RefundSaleDialog } from '../components/RefundSaleDialog';
 import { FiscalBadge, FiscalDetailCard } from '../components/FiscalBadge';
@@ -101,7 +101,7 @@ export function TillReceiptsPage() {
         <div className="px-4 py-3 border-b border-sq-divider flex items-center justify-between shrink-0">
           <h1 className="text-lg font-semibold text-sq-text">Чеки</h1>
           <Link to="/register" className="text-sm font-semibold text-sq-blue min-h-12 flex items-center">
-            ← Каса
+            <ArrowLeft size={20} aria-hidden className="inline-block align-[-5px] mr-0.5" />Каса
           </Link>
         </div>
         <div ref={listRef} className="flex-1 overflow-auto divide-y divide-sq-divider select-none">
@@ -260,7 +260,7 @@ function SaleDetailPanel({
                     {item.variant_label} · {item.quantity} шт
                     {item.refunded_quantity > 0 ? ` (повернено ${item.refunded_quantity})` : ''}
                   </p>
-                  {item.note && <p className="text-xs text-sq-muted italic">✎ {item.note}</p>}
+                  {item.note && <p className="text-xs text-sq-muted italic"><Pencil size={16} aria-hidden className="inline-block align-[-3px] mr-1" />{item.note}</p>}
                 </div>
                 <span className="font-semibold text-sq-text shrink-0">
                   {formatUah(item.line_total_cents)}

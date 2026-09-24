@@ -27,6 +27,7 @@ import { useLiveSettings } from '../hooks/useLiveSettings';
 import { useLiveSession } from '../hooks/useLiveSession';
 import { SupportCode } from '../components/SupportCode';
 import type { LiveSettingsPatch } from '../types';
+import { AlertTriangle, Download, Video, type Glyph } from '@pos/platform/ui';
 
 const RESERVATION_CHOICES = [3, 5, 10, 15, 30];
 
@@ -80,7 +81,7 @@ export function LiveSettingsPage() {
   if (status === 'host-too-old') {
     return (
       <CenteredCard
-        icon="⬆️"
+        icon={Download}
         title="Застосунок каси застарів для цього екрана"
         body="Екран ефіру працює, а його налаштування зʼявляться після оновлення застосунку. Поки що змінюйте їх у старій адмінці."
         diagnostic={diagnostic}
@@ -91,7 +92,7 @@ export function LiveSettingsPage() {
   if (status === 'not-configured') {
     return (
       <CenteredCard
-        icon="🔌"
+        icon={Video}
         title="Магазин не підʼєднано до TikTok LIVE"
         body="Вкажіть нікнейм TikTok-акаунта в Налаштуваннях магазину — після цього тут зʼявляться налаштування ефіру."
         link={{ to: '/admin/settings', label: 'Перейти до Налаштувань' }}
@@ -102,7 +103,7 @@ export function LiveSettingsPage() {
   if (status === 'error' || !settings) {
     return (
       <CenteredCard
-        icon="⚠️"
+        icon={AlertTriangle}
         title="Не вдалося завантажити налаштування"
         body="Спробуйте ще раз. Якщо помилка повторюється — передайте код нижче в підтримку."
         action={{ label: 'Спробувати ще раз', onClick: reload }}
@@ -420,17 +421,22 @@ function CenteredCard({
   link,
   diagnostic,
 }: {
-  icon?: string;
+  icon?: Glyph;
   title: string;
   body?: string;
   action?: { label: string; onClick: () => void };
   link?: { to: string; label: string };
   diagnostic?: import('../lib/diagnostics').LiveDiagnostic | null;
 }) {
+  const Icon = icon;
   return (
     <div className="grid min-h-[60vh] place-items-center px-6">
       <div className="sq-card animate-fade-up max-w-md p-8 text-center">
-        {icon && <div className="mb-4 text-4xl">{icon}</div>}
+        {Icon && (
+          <div className="mb-4 flex justify-center">
+            <Icon size={48} />
+          </div>
+        )}
         <h2 className="text-lg font-semibold text-sq-text">{title}</h2>
         {body && <p className="mt-3 text-sm leading-relaxed text-sq-secondary">{body}</p>}
         {action && (

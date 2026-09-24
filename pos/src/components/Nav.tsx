@@ -75,7 +75,7 @@ export function Nav({ location, variant }: Props) {
                     : 'text-sq-secondary hover:text-sq-text'
               }`}
             >
-              {Icon && <Icon size={20} strokeWidth={1.75} />}
+              {Icon && <Icon size={24} />}
               <span className="text-[11px] mt-0.5 font-medium">{n.label}</span>
             </Link>
           );
@@ -101,7 +101,7 @@ export function Nav({ location, variant }: Props) {
                   : 'text-white/70 hover:text-white hover:bg-white/10'
             }`}
           >
-            {Icon && <Icon size={22} strokeWidth={1.75} />}
+            {Icon && <Icon size={24} />}
             {showDot && (
               <span
                 className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500"

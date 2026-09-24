@@ -155,7 +155,7 @@ describe('store menu appearance (nav_overrides)', () => {
     const [first] = items({ 'catalog-checkout:cashier-primary:/register': { label: 'Продаж' } });
     expect(first.label).toBe('Продаж');
     expect(first.to).toBe('/register');
-    expect(first.icon).toBe('Grid3X3');
+    expect(first.icon).toBe('ShoppingCart');
   });
 
   it('re-icons an entry', () => {

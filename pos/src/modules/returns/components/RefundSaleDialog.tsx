@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Minus, Plus } from 'lucide-react';
+import { Check, Minus, Plus } from '@pos/platform/ui';
 import {
   buildRefundReceiptPayload,
   DEFAULT_RECEIPT_PAPER_WIDTH,
@@ -179,7 +179,7 @@ export function RefundSaleDialog({ sale, detail, selectAll, onClose, onRefunded 
           className="relative w-full max-w-sm bg-white rounded-t-sq sm:rounded-sq p-6 text-center shadow-lg"
         >
           <div className="mx-auto w-12 h-12 rounded-full bg-sq-blue text-white grid place-items-center">
-            <Check size={24} strokeWidth={2.5} />
+            <Check size={40} />
           </div>
           {done.fiscal?.status === 'failed' && (
             // Still the success pane, never an error: the money really did go
@@ -278,7 +278,7 @@ export function RefundSaleDialog({ sale, detail, selectAll, onClose, onRefunded 
                       disabled={n === 0}
                       aria-label={`Менше ${item.product_name}`}
                     >
-                      <Minus size={18} />
+                      <Minus size={20} />
                     </button>
                     <span className="w-8 text-center font-semibold tabular-nums">{n}</span>
                     <button
@@ -288,7 +288,7 @@ export function RefundSaleDialog({ sale, detail, selectAll, onClose, onRefunded 
                       disabled={n === max}
                       aria-label={`Більше ${item.product_name}`}
                     >
-                      <Plus size={18} />
+                      <Plus size={20} />
                     </button>
                   </div>
                 </div>

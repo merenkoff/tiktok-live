@@ -18,7 +18,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Flower2, Scissors, TrendingUp, Trash2 } from 'lucide-react';
+import { Flower2, Scissors, Trash2, TrendingUp } from '@pos/platform/ui';
 import { api, formatUah } from '@pos/platform';
 import type { FlowerAnalytics } from '@pos/platform';
 // Shared with the «Сьогодні» panels, so a reason or a percentage cannot be
@@ -77,7 +77,7 @@ export default function FlowerAnalyticsPage() {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-sq-text flex items-center gap-2">
-            <Flower2 size={22} className="text-sq-blue" />
+            <Flower2 size={24} className="text-sq-blue" />
             Квіти
           </h1>
           <p className="text-sm text-sq-muted mt-0.5">
@@ -115,7 +115,7 @@ export default function FlowerAnalyticsPage() {
           {/* ── Що в смітнику ─────────────────────────────────────────── */}
           <section className="bg-white rounded-sq border border-sq-divider p-4">
             <h2 className="font-semibold text-sq-text flex items-center gap-2">
-              <Trash2 size={18} className="text-sq-secondary" />У смітнику
+              <Trash2 size={20} className="text-sq-secondary" />У смітнику
             </h2>
 
             <p className="mt-2 text-2xl font-semibold text-sq-text" data-testid="loss-total">
@@ -198,7 +198,7 @@ export default function FlowerAnalyticsPage() {
           {/* ── Топ стебел ────────────────────────────────────────────── */}
           <section className="bg-white rounded-sq border border-sq-divider p-4">
             <h2 className="font-semibold text-sq-text flex items-center gap-2">
-              <Scissors size={18} className="text-sq-secondary" />
+              <Scissors size={20} className="text-sq-secondary" />
               Що справді йде
             </h2>
             <p className="mt-1 text-xs text-sq-muted">
@@ -242,7 +242,7 @@ export default function FlowerAnalyticsPage() {
           {/* ── Реалізована націнка ───────────────────────────────────── */}
           <section className="bg-white rounded-sq border border-sq-divider p-4">
             <h2 className="font-semibold text-sq-text flex items-center gap-2">
-              <TrendingUp size={18} className="text-sq-secondary" />
+              <TrendingUp size={24} className="text-sq-secondary" />
               Реалізована націнка
             </h2>
 

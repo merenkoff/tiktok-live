@@ -17,7 +17,7 @@
  */
 
 import { useState } from 'react';
-import { Inbox, RotateCcw, X } from 'lucide-react';
+import { Inbox, RotateCcw, X } from '../../platform/glyphs';
 import { formatUah } from '../../lib/money';
 import type { ParkedCart } from '../../types';
 

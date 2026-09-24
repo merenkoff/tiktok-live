@@ -27,7 +27,7 @@
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Coffee } from 'lucide-react';
+import { Coffee } from '@pos/platform/ui';
 import { formatUah } from '@pos/platform';
 import type { AnalyticsPanelProps } from '@pos/platform';
 import { Stat } from '../ui/Stat';
@@ -68,7 +68,7 @@ export default function CafePanels({ from, to }: AnalyticsPanelProps) {
     >
       <div className="flex items-center justify-between mb-4">
         <p className="sq-section-label flex items-center gap-2">
-          <Coffee size={14} className="text-sq-blue" />
+          <Coffee size={24} className="text-sq-blue" />
           Кухня
         </p>
         <Link

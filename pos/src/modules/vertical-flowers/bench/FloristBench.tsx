@@ -28,7 +28,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BookMarked, ChevronDown, Search, Store, X } from 'lucide-react';
+import { BookMarked, ChevronDown, Search, Store, X } from '@pos/platform/ui';
 import {
   api,
   buildPriceTags,
@@ -295,7 +295,7 @@ export function FloristBench({
           <div className="px-3 pt-3 pb-2 space-y-2 border-b border-sq-divider shrink-0">
             <div className="relative">
               <Search
-                size={18}
+                size={20}
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-sq-muted pointer-events-none"
               />
               <input
@@ -378,7 +378,7 @@ export function FloristBench({
             <span className="text-lg font-semibold tabular-nums" data-testid="bench-total-mobile">
               {formatUah(bench.totals.totalCents)}
             </span>
-            <ChevronDown size={18} className="text-sq-muted rotate-180" />
+            <ChevronDown size={20} className="text-sq-muted rotate-180" />
           </span>
         </button>
       </div>
@@ -405,7 +405,7 @@ export function FloristBench({
           className="min-h-12 px-4 rounded-sq border border-sq-divider text-sq-text disabled:opacity-50 flex items-center gap-2"
           data-testid="bench-to-showcase"
         >
-          <Store size={18} />
+          <Store size={24} />
           <span className="hidden sm:inline">{online ? 'На вітрину' : 'Потрібна мережа'}</span>
         </button>
         <button
@@ -416,7 +416,7 @@ export function FloristBench({
           className="min-h-12 px-4 rounded-sq border border-sq-divider text-sq-text disabled:opacity-50 flex items-center gap-2"
           data-testid="bench-save-recipe"
         >
-          <BookMarked size={18} />
+          <BookMarked size={20} />
           <span className="hidden lg:inline">Рецепт</span>
         </button>
         <button

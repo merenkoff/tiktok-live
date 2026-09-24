@@ -53,7 +53,7 @@ export function validateRemoteEntryInput(input: RemoteEntryInput): RemoteEntryRe
   }
   if (!Number.isInteger(order)) return { ok: false, error: 'Порядок у меню: ціле число.' };
   if (icon && !/^[A-Za-z0-9]+$/.test(icon)) {
-    return { ok: false, error: 'Іконка: ім’я lucide-компонента без пробілів (напр. Video).' };
+    return { ok: false, error: 'Іконка: назва без пробілів (напр. Video).' };
   }
 
   const entry: ModuleRemoteEntry = {

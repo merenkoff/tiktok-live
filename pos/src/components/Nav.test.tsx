@@ -87,10 +87,10 @@ describe('Nav — cashier rail', () => {
       { route: '/register', shell: 'cashier' }
     );
 
-    // Every rail entry names its icon by lucide export name; the host resolves it.
+    // Every rail entry names its icon as a string; the host resolves it to a glyph.
     const till = container.querySelector('a[href="/register"] svg');
     expect(till).toBeInTheDocument();
-    expect(till).toHaveClass('lucide-grid3x3');
+    expect(till).toHaveAttribute('data-glyph', 'ShoppingCart');
   });
 
   it('marks the hardware entry when an app update is waiting', () => {
@@ -134,7 +134,7 @@ describe('Nav — store menu appearance', () => {
     signIn('seller', undefined, {
       'catalog-checkout:cashier-primary:/register': {
         label: 'Продаж',
-        icon: 'ShoppingCart',
+        icon: 'Store',
         order: 100,
       },
     });
@@ -146,7 +146,7 @@ describe('Nav — store menu appearance', () => {
     // Last in the bar now, under its new name and its new glyph.
     expect(hrefs()).toEqual(['/orders', '/customers', '/sales', '/hardware', '/register']);
     expect(screen.getByRole('link', { name: 'Продаж' })).toBeInTheDocument();
-    expect(container.querySelector('a[href="/register"] svg')).toHaveClass('lucide-shopping-cart');
+    expect(container.querySelector('a[href="/register"] svg')).toHaveAttribute('data-glyph', 'Store');
   });
 
   it('renames an admin section too', () => {

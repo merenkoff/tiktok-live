@@ -7,6 +7,7 @@ import { formatUah, useVertical } from '@pos/platform';
 import type { SaleDetail, SaleListItem } from '@pos/platform';
 import { adminReturnsApi } from '../data/returnsApi';
 import { FiscalBadge, FiscalDetailCard } from '../components/FiscalBadge';
+import { Pencil } from '@pos/platform/ui';
 
 const SALE_STATUS_UK: Record<string, string> = {
   completed: 'Завершено',
@@ -179,7 +180,7 @@ export function AdminSalesPage() {
                         {item.variant_label} · {item.quantity} шт
                         {item.refunded_quantity > 0 ? ` (повернено ${item.refunded_quantity})` : ''}
                       </p>
-                      {item.note && <p className="text-xs text-sq-muted italic">✎ {item.note}</p>}
+                      {item.note && <p className="text-xs text-sq-muted italic"><Pencil size={16} aria-hidden className="inline-block align-[-3px] mr-1" />{item.note}</p>}
                     </div>
                     <div className="flex items-center gap-2">
                       {selected.status !== 'voided' && selected.status !== 'refunded' && (

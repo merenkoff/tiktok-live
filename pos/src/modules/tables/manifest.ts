@@ -53,12 +53,12 @@ export const tablesModule: RemoteModuleDescriptor = {
     { path: 'tables', mount: 'admin', element: HallEditorPage },
   ],
   nav: [
-    // `Grid3X3` is in the host's `NAV_ICONS` allowlist. Keep in sync with the
+    // `Table` is in the host's `NAV_ICONS` allowlist. Keep in sync with the
     // `icon` in the store's `module_remotes` entry (the placeholder).
     {
       to: '/tables',
       label: 'Столи',
-      icon: 'Grid3X3',
+      icon: 'Table',
       location: 'cashier-primary',
       order: 60,
       match: '/tables',

@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import type { ComponentType, LazyExoticComponent } from 'react';
-import type { LucideIcon } from 'lucide-react';
+import type { Glyph } from '../platform/glyphs';
 // Direct import, not via '@pos/platform' — the barrel re-exports the module
 // manifests, which import this file; `platform/icons.ts` is a leaf.
 import type { NavIconName } from '../platform/icons';
@@ -68,14 +68,16 @@ export interface NavItem {
   to: string;
   label: string;
   /**
-   * Preferred form is the **name** of a lucide icon (`'PackageCheck'`) — the
-   * host resolves it via `resolveNavIcon` (roadmap #13 Part D), so a module
-   * neither bundles icon components nor has to exist as code to have an icon
-   * (an online-only module's placeholder gets one from `module_remotes`).
-   * A `LucideIcon` component is still accepted. The `(string & {})` arm keeps
-   * autocomplete on `NavIconName` while allowing a name from a newer catalogue.
+   * Preferred form is the **name** of a nav icon (`'PackageCheck'` — the keys
+   * of `NAV_ICONS`, lucide's export names kept for stored settings); the host
+   * resolves it to a colour glyph via `resolveNavIcon` (roadmap #13 Part D), so
+   * a module neither bundles icon components nor has to exist as code to have
+   * an icon (an online-only module's placeholder gets one from
+   * `module_remotes`). A `Glyph` component is still accepted. The
+   * `(string & {})` arm keeps autocomplete on `NavIconName` while allowing a
+   * name from a newer catalogue.
    */
-  icon?: NavIconName | (string & {}) | LucideIcon;
+  icon?: NavIconName | (string & {}) | Glyph;
   location: NavLocation;
   /** Sort key within a location. */
   order: number;

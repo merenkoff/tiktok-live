@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import { api, cashierApi } from '@pos/platform';
 import type { CustomerChild, PosCustomer } from '../../types';
 import { useDragScroll } from '../../hooks/useDragScroll';
+import { ArrowLeft, X } from '../../platform/glyphs';
 
 const fieldClass =
   'rounded-sq border border-sq-divider bg-sq-bg px-3 py-2.5 text-sm text-sq-text w-full';
@@ -45,7 +46,7 @@ export function CustomersPage({ cashierShell }: Props) {
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-lg font-semibold text-sq-text">Клієнти</h1>
           <Link to="/register" className="text-sm font-semibold text-sq-blue">
-            ← Каса
+            <ArrowLeft size={20} aria-hidden className="inline-block align-[-5px] mr-0.5" />Каса
           </Link>
         </div>
       )}
@@ -250,9 +251,10 @@ function CustomerForm({
             <button
               type="button"
               className="text-sm text-red-600 px-2"
+              aria-label="Прибрати"
               onClick={() => setChildren(children.filter((_, i) => i !== idx))}
             >
-              ×
+              <X size={16} />
             </button>
           </div>
         ))}

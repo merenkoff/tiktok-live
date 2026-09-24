@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { FormEvent, useEffect, useState } from 'react';
-import { X } from 'lucide-react';
+import { X } from '../../platform/glyphs';
 import { cashierApi } from '@pos/platform';
 import type { PosCustomer } from '../../types';
 import { useDragScroll } from '../../hooks/useDragScroll';

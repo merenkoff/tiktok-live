@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { useState } from 'react';
-import { CloudOff } from 'lucide-react';
+import { CloudOff } from '../platform/glyphs';
 import { syncModuleRemote } from '../lib/moduleRemotes';
 
 interface Props {
@@ -50,7 +50,7 @@ export function RemoteModuleUnavailablePage({ moduleId, title, url }: Props) {
   return (
     <div className="min-h-screen grid place-items-center px-6 text-center">
       <div className="max-w-sm">
-        <CloudOff size={44} strokeWidth={1.5} className="mx-auto text-sq-secondary" />
+        <CloudOff size={48} className="mx-auto text-sq-secondary" />
         <h1 className="mt-4 text-lg font-semibold text-sq-text">
           Модуль «{title}» ще не завантажено
         </h1>

@@ -665,7 +665,7 @@ export function SettingsPage() {
                   className="rounded-sq border border-sq-divider bg-sq-surface px-2.5 py-1.5 text-xs"
                 />
                 <input
-                  placeholder="Іконка lucide (Video) — необов'язково"
+                  placeholder="Іконка, назвою (Video) — необов'язково"
                   value={newModuleIcon}
                   onChange={(e) => setNewModuleIcon(e.target.value)}
                   className="rounded-sq border border-sq-divider bg-sq-surface px-2.5 py-1.5 text-xs"

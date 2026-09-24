@@ -22,7 +22,7 @@
  * section demands (WCAG 2.5.5 Enhanced), even in the 22 rem till panel.
  */
 
-import { Delete } from 'lucide-react';
+import { Delete } from '@pos/platform/ui';
 
 interface Props {
   /** What the digits will land on — shown so the florist can see the target. */
@@ -62,7 +62,7 @@ export function QuantityPad({ targetName, onDigit, onBackspace }: Props) {
           aria-label="Стерти цифру"
           data-testid="bench-pad-backspace"
         >
-          <Delete size={18} />
+          <Delete size={20} />
         </button>
       </div>
     </div>

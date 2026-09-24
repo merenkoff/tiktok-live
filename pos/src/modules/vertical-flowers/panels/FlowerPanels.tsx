@@ -32,7 +32,7 @@
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Flower2 } from 'lucide-react';
+import { Flower2 } from '@pos/platform/ui';
 import { api, formatUah } from '@pos/platform';
 import type { AnalyticsPanelProps, FlowerAnalytics } from '@pos/platform';
 import { Stat } from '../ui/Stat';
@@ -73,7 +73,7 @@ export default function FlowerPanels({ from, to }: AnalyticsPanelProps) {
     >
       <div className="flex items-center justify-between mb-4">
         <p className="sq-section-label flex items-center gap-2">
-          <Flower2 size={14} className="text-sq-blue" />
+          <Flower2 size={24} className="text-sq-blue" />
           Квіти
         </p>
         <Link

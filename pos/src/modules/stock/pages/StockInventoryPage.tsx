@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '@pos/platform';
 import type { StockDocument, StockDocumentLine } from '@pos/platform';
+import { ArrowLeft } from '@pos/platform/ui';
 
 export function StockInventoryPage() {
   const { id } = useParams();
@@ -97,7 +98,7 @@ export function StockInventoryPage() {
     return (
       <div className="max-w-xl space-y-4">
         <Link to="/admin/stock" className="text-sm text-[#006AFF] hover:underline">
-          ← Склад
+          <ArrowLeft size={20} aria-hidden className="inline-block align-[-5px] mr-0.5" />Склад
         </Link>
         <h1 className="text-2xl font-semibold">Інвентаризація</h1>
         <p className="text-sm text-[#6E6E6E]">
@@ -119,7 +120,7 @@ export function StockInventoryPage() {
   return (
     <div className="max-w-4xl space-y-4 pb-24">
       <Link to="/admin/stock" className="text-sm text-[#006AFF] hover:underline">
-        ← Склад
+        <ArrowLeft size={20} aria-hidden className="inline-block align-[-5px] mr-0.5" />Склад
       </Link>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>

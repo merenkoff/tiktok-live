@@ -2,7 +2,7 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { LogOut } from 'lucide-react';
+import { LogOut } from '../../platform/glyphs';
 import { Nav } from '../Nav';
 
 interface Props {
@@ -18,7 +18,7 @@ export function BottomNav({ onLogout }: Props) {
         onClick={onLogout}
         className="flex-1 flex flex-col items-center justify-center text-sq-secondary hover:text-sq-text"
       >
-        <LogOut size={20} strokeWidth={1.75} />
+        <LogOut size={20} />
         <span className="text-[11px] mt-0.5 font-medium">Вихід</span>
       </button>
     </nav>

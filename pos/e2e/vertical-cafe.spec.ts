@@ -389,7 +389,7 @@ test('the kitchen board takes two taps: «Готово» moves the order to «В
   // The answer is in the fired caption, and only there — not listed a second time.
   await expect(inWork.getByText('M · вівсяне')).toBeVisible();
   await expect(inWork.getByText('вівсяне', { exact: true })).toHaveCount(0);
-  await expect(inWork.getByText('✎ гарячіше')).toBeVisible();
+  await expect(inWork.getByText('гарячіше')).toBeVisible();
   await expect(pickup.getByText('Нічого не чекає видачі')).toBeVisible();
 
   // Tap 1. The card moves before the server answers (optimistically), so

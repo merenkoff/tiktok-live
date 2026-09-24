@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronRight, X } from 'lucide-react';
+import { ChevronRight, X } from '../platform/glyphs';
 import { formatUah, uahInputToCents } from '../lib/money';
 import { useDragScroll } from '../hooks/useDragScroll';
 import { api, useAuthStore } from '@pos/platform';
@@ -171,7 +171,7 @@ export function CheckoutModal({
           className="min-h-11 min-w-11 grid place-items-center rounded-sq text-sq-text"
           aria-label="Закрити"
         >
-          <X size={22} />
+          <X size={20} />
         </button>
         <span className="text-sm font-medium text-sq-blue">Оплата</span>
         <div className="min-w-11" />
@@ -207,7 +207,7 @@ export function CheckoutModal({
                   className="w-full min-h-14 flex items-center justify-between gap-3 text-left text-[17px] font-medium disabled:text-sq-muted"
                 >
                   <span>{item.label}</span>
-                  <ChevronRight size={18} className="text-sq-muted shrink-0" />
+                  <ChevronRight size={20} className="text-sq-muted shrink-0" />
                 </button>
               </li>
             ))}

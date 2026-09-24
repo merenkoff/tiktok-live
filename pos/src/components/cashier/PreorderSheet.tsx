@@ -22,7 +22,7 @@
  */
 
 import { useState } from 'react';
-import { CalendarClock, X } from 'lucide-react';
+import { CalendarClock, X } from '../../platform/glyphs';
 import { formatUah } from '../../lib/money';
 
 interface Props {
@@ -214,7 +214,7 @@ export function PreorderSheet({
             className="sq-btn-primary min-h-12 w-full flex items-center justify-center gap-2"
             data-testid="preorder-submit"
           >
-            <CalendarClock size={18} />
+            <CalendarClock size={24} />
             {!online
               ? 'Потрібна мережа'
               : needsAddress

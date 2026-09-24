@@ -23,7 +23,7 @@
  */
 
 import { Suspense, lazy, useEffect, useState } from 'react';
-import { Camera, Search } from 'lucide-react';
+import { Camera, Search } from '@pos/platform/ui';
 import {
   defaultModifierIds,
   groupsOf,
@@ -120,7 +120,7 @@ function CafeCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <Search
-              size={18}
+              size={20}
               className="absolute left-3 top-1/2 -translate-y-1/2 text-sq-muted pointer-events-none"
             />
             <input

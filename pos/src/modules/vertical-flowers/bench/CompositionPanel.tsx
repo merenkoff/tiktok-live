@@ -17,7 +17,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { Minus, Plus, Trash2 } from 'lucide-react';
+import { Minus, Plus, Trash2 } from '@pos/platform/ui';
 import { formatUah } from '@pos/platform';
 import { useDragScroll } from '@pos/platform/ui';
 import type { BenchStem, BenchTotals } from './useBench';
@@ -93,7 +93,7 @@ export function CompositionPanel({
                   className="min-h-11 min-w-11 grid place-items-center rounded-sq border border-sq-divider text-sq-text bg-white"
                   aria-label={`Менше: ${stem.item.product_name}`}
                 >
-                  <Minus size={18} />
+                  <Minus size={20} />
                 </button>
                 <button
                   type="button"
@@ -115,7 +115,7 @@ export function CompositionPanel({
                   className="min-h-11 min-w-11 grid place-items-center rounded-sq border border-sq-divider text-sq-text bg-white disabled:opacity-40"
                   aria-label={`Більше: ${stem.item.product_name}`}
                 >
-                  <Plus size={18} />
+                  <Plus size={20} />
                 </button>
                 <span className="text-xs text-sq-muted ml-1 truncate">
                   {stem.item.quantity} {stem.item.unit} на полиці
@@ -126,7 +126,7 @@ export function CompositionPanel({
                   className="min-h-11 min-w-11 grid place-items-center rounded-sq text-sq-muted hover:text-red-600 ml-auto shrink-0"
                   aria-label={`Прибрати: ${stem.item.product_name}`}
                 >
-                  <Trash2 size={18} />
+                  <Trash2 size={20} />
                 </button>
               </div>
             </li>

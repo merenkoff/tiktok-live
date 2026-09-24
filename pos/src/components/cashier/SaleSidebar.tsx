@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { useEffect, useRef, useState } from 'react';
-import { MoreHorizontal, Tag } from 'lucide-react';
+import { MoreHorizontal, Pencil, TagLine } from '../../platform/glyphs';
 import { formatUah } from '../../lib/money';
 import { assetUrl } from '../../lib/urls';
 import type { CartDiscount, CartLine } from '@pos/platform';
@@ -220,12 +220,12 @@ export function SaleSidebar({
                               className="text-xs text-sq-muted italic mt-0.5 truncate"
                               data-testid="cart-line-note"
                             >
-                              ✎ {line.note}
+                              <Pencil size={16} aria-hidden className="inline-block align-[-3px] mr-1" />{line.note}
                             </p>
                           )}
                           {line.discount_label && (
                             <p className="text-xs text-sq-secondary mt-1 flex items-center gap-1">
-                              <Tag size={12} className="shrink-0" />
+                              <TagLine size={16} className="shrink-0" />
                               {line.discount_label}
                             </p>
                           )}

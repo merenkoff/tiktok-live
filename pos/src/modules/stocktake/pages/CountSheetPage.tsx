@@ -33,6 +33,7 @@ import {
 } from '../data/repository';
 import { syncSheets } from '../data/sync';
 import { SheetStatusBadge } from '../components/SheetStatusBadge';
+import { ArrowLeft, X } from '@pos/platform/ui';
 
 /** One count sheet: scan, search, adjust, finish. Read-only once it left the till. */
 export function CountSheetPage() {
@@ -176,7 +177,7 @@ export function CountSheetPage() {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Link to="/stocktake" className="text-sm text-sq-secondary hover:text-sq-text">
-            ← Листи
+            <ArrowLeft size={20} aria-hidden className="inline-block align-[-5px] mr-0.5" />Листи
           </Link>
           <SheetStatusBadge sheet={sheet} />
         </div>
@@ -335,7 +336,7 @@ export function CountSheetPage() {
                       className="px-2 text-xs text-sq-secondary hover:text-red-600"
                       onClick={() => void removeLine(id, line.variantId).then(reload)}
                     >
-                      ✕
+                      <X size={16} />
                     </button>
                   </>
                 ) : (

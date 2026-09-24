@@ -12,6 +12,7 @@ import { formatUah } from '@pos/platform';
 import { canCancelRound, firedLineCents, lineTitle, ROUND_STATUS } from '../lib/bill';
 import type { DraftLineView, DraftSummary } from '../lib/draft';
 import type { Bill, BillLine } from '../lib/types';
+import { Pencil } from '@pos/platform/ui';
 
 export interface BillPaneProps {
   bill: Bill;
@@ -61,7 +62,7 @@ export function BillPane({
         <p className="truncate">
           <span className="tabular-nums">{l.quantity}×</span> {lineTitle(l, true)}
         </p>
-        {l.note && <p className="text-xs italic text-sq-muted">✎ {l.note}</p>}
+        {l.note && <p className="text-xs italic text-sq-muted"><Pencil size={16} aria-hidden className="inline-block align-[-3px] mr-1" />{l.note}</p>}
       </div>
       <span className="shrink-0 tabular-nums">{formatUah(firedLineCents(l))}</span>
     </div>
@@ -91,7 +92,7 @@ export function BillPane({
           >
             <span className="tabular-nums">{row.quantity}×</span> {title}
           </button>
-          {row.note && <p className="text-xs italic text-sq-muted">✎ {row.note}</p>}
+          {row.note && <p className="text-xs italic text-sq-muted"><Pencil size={16} aria-hidden className="inline-block align-[-3px] mr-1" />{row.note}</p>}
           {row.id != null && (
             <div className="mt-1 flex items-center gap-2">
               <button

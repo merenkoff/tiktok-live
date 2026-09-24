@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { useRef, useState } from 'react';
-import { ImagePlus, Trash2 } from 'lucide-react';
+import { ImagePlus, Trash2 } from '../platform/glyphs';
 import { api, assetUrl } from '@pos/platform';
 
 interface Props {
@@ -47,7 +47,7 @@ export function ProductPhotoField({ value, onChange, label = 'Фото' }: Props
           {value ? (
             <img src={assetUrl(value) ?? undefined} alt="" className="w-full h-full object-cover" />
           ) : (
-            <ImagePlus size={28} className="text-sq-muted" strokeWidth={1.5} />
+            <ImagePlus size={40} className="text-sq-muted" />
           )}
         </div>
         <div className="flex flex-col gap-2 min-w-0">
@@ -73,7 +73,7 @@ export function ProductPhotoField({ value, onChange, label = 'Фото' }: Props
               onClick={() => onChange(null)}
               className="inline-flex items-center gap-1.5 text-sm font-semibold text-red-600 w-fit"
             >
-              <Trash2 size={14} />
+              <Trash2 size={16} />
               Прибрати
             </button>
           )}

@@ -7,6 +7,7 @@
 // knows where the bill is.
 
 import type { ReactNode } from 'react';
+import { X } from '@pos/platform/ui';
 
 interface Props {
   title: string;
@@ -28,7 +29,7 @@ export function BillSheet({ title, onClose, children }: Props): JSX.Element {
             aria-label="Закрити"
             data-testid="bill-sheet-close"
           >
-            ✕
+            <X size={20} />
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-hidden">{children}</div>

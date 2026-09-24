@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, formatUah } from '@pos/platform';
 import type { StockDocument } from '@pos/platform';
+import { ArrowLeft } from '@pos/platform/ui';
 
 const TYPE_LABEL: Record<string, string> = {
   receipt: 'Прихід',
@@ -84,7 +85,7 @@ export function StockDocumentDetailPage() {
     return (
       <div>
         <Link to="/admin/stock" className="text-sm text-[#006AFF]">
-          ← Склад
+          <ArrowLeft size={20} aria-hidden className="inline-block align-[-5px] mr-0.5" />Склад
         </Link>
         <p className="mt-4 text-red-600">{error}</p>
       </div>
@@ -96,7 +97,7 @@ export function StockDocumentDetailPage() {
   return (
     <div className="max-w-3xl space-y-4">
       <Link to="/admin/stock" className="text-sm text-[#006AFF] hover:underline">
-        ← Склад
+        <ArrowLeft size={20} aria-hidden className="inline-block align-[-5px] mr-0.5" />Склад
       </Link>
       <div>
         <p className="sq-section-label">{TYPE_LABEL[doc.type] ?? doc.type}</p>

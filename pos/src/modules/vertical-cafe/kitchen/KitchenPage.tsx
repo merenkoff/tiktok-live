@@ -18,7 +18,7 @@
  */
 
 import { useState } from 'react';
-import { WifiOff } from 'lucide-react';
+import { WifiOff } from '@pos/platform/ui';
 import { useOfflineStatus, useVertical } from '@pos/platform';
 import { HostTooOldError, missingHostApi } from '../lib/hostPlatform';
 import { OrdersTab } from './OrdersTab';
@@ -67,7 +67,7 @@ function KitchenBody() {
           className="m-4 rounded-sq border border-dashed border-sq-divider p-8 text-center"
           data-testid="kitchen-offline"
         >
-          <WifiOff size={28} className="mx-auto text-sq-muted" />
+          <WifiOff size={48} className="mx-auto text-sq-muted" />
           <p className="mt-3 text-sm font-medium">Потрібна мережа</p>
           <p className="mt-1 text-xs text-sq-secondary">
             Замовлення живуть на сервері. Дошка оновиться, щойно звʼязок повернеться.

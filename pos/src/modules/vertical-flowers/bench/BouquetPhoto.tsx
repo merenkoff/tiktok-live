@@ -23,7 +23,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Camera, ImagePlus, Trash2 } from 'lucide-react';
+import { Camera, ImagePlus, Trash2 } from '@pos/platform/ui';
 import { api, assetUrl } from '@pos/platform';
 
 /**
@@ -144,7 +144,7 @@ export function BouquetPhoto({ value, onChange, disabled }: Props) {
           {value ? (
             <img src={assetUrl(value) ?? undefined} alt="" className="w-full h-full object-cover" />
           ) : (
-            <ImagePlus size={24} className="text-sq-muted" strokeWidth={1.5} />
+            <ImagePlus size={40} className="text-sq-muted" />
           )}
         </div>
         <div className="flex flex-col gap-1.5 min-w-0">
@@ -179,7 +179,7 @@ export function BouquetPhoto({ value, onChange, disabled }: Props) {
               onClick={() => onChange(null)}
               className="inline-flex items-center gap-1.5 text-sm text-red-600 disabled:opacity-50"
             >
-              <Trash2 size={14} />
+              <Trash2 size={16} />
               Прибрати
             </button>
           )}

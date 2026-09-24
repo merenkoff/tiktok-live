@@ -24,7 +24,7 @@
 // ever printed: the guest is looking at this screen (§5).
 
 import { useEffect, useState } from 'react';
-import { Search } from 'lucide-react';
+import { Search } from '@pos/platform/ui';
 import { defaultModifierIds, groupsOf, needsModifierSheet, useSalesCatalog, useVertical } from '@pos/platform';
 import type { CatalogItem } from '@pos/platform';
 import { CatalogTagBar, ModifierSheet, ProductTile, ScanWedge, TagFolderTile, useDragScroll } from '@pos/platform/ui';
@@ -114,7 +114,7 @@ export function MenuCatalog({
       <div className="shrink-0 space-y-2 border-b border-sq-divider px-3 pb-2 pt-3">
         <div className="relative">
           <Search
-            size={18}
+            size={20}
             className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sq-muted"
           />
           <input

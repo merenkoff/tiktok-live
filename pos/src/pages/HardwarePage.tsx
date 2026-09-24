@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { useCallback, useEffect, useState } from 'react';
-import { Download, Printer, RefreshCw, ScanLine, Usb } from 'lucide-react';
+import { DownloadLine, PrinterColor, RefreshCw, ScanLine, Usb } from '../platform/glyphs';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { HardwareDevice, listHardware } from '../lib/hardware';
 import { installUpdate } from '../lib/updates';
@@ -181,9 +181,10 @@ function testReceipt(storeName: string): ReceiptData {
   };
 }
 
+// Colour glyphs: a device list row is a Things list row, glyph first.
 const kindIcon = {
   scanner: ScanLine,
-  printer: Printer,
+  printer: PrinterColor,
   unknown: Usb,
 };
 
@@ -369,7 +370,7 @@ export function HardwarePage() {
                 {installing ? (
                   <RefreshCw size={16} className="animate-spin" />
                 ) : (
-                  <Download size={16} />
+                  <DownloadLine size={16} />
                 )}
                 {installing ? 'Встановлення… програма перезапуститься' : 'Встановити оновлення'}
               </button>
@@ -382,7 +383,7 @@ export function HardwarePage() {
                 }}
                 className="min-h-11 px-4 flex items-center gap-2 text-sm font-medium text-sq-blue"
               >
-                <Download size={16} />
+                <DownloadLine size={16} />
                 Завантажити оновлення
               </button>
             )}
@@ -417,7 +418,7 @@ export function HardwarePage() {
                 }`}
                 aria-hidden
               />
-              <Icon size={20} className="text-sq-secondary shrink-0" strokeWidth={1.75} />
+              <Icon size={24} className="shrink-0" />
               <div className="min-w-0">
                 <p className="text-sm font-medium truncate">
                   {device.name ?? kindLabel[device.kind]}

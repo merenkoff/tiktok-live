@@ -19,6 +19,7 @@ import {
 } from './lib/kitchen';
 import type { KitchenOrder, Station } from './types';
 import { useKitchenOrders } from './useKitchenOrders';
+import { Pencil, X } from '@pos/platform/ui';
 
 const STATION_LABEL: Record<Station, string> = { kitchen: 'кухня', bar: 'бар' };
 
@@ -54,7 +55,7 @@ export function OrdersTab() {
         >
           <span>{banner}</span>
           <button type="button" className="min-h-11 px-2 font-semibold" onClick={clearBanner} aria-label="Закрити">
-            ×
+            <X size={20} />
           </button>
         </div>
       )}
@@ -191,7 +192,7 @@ function OrderCard({
             {/* `variant_label` is the fired caption, «M · вівсяне» — the answers
                 are already in it (`lineCaption`), so they are not listed again. */}
             {item.variant_label && <span className="text-sq-secondary"> {item.variant_label}</span>}
-            {item.note && <p className="ml-6 text-sm italic text-sq-text">✎ {item.note}</p>}
+            {item.note && <p className="ml-6 text-sm italic text-sq-text"><Pencil size={16} aria-hidden className="inline-block align-[-3px] mr-1" />{item.note}</p>}
           </li>
         ))}
       </ul>

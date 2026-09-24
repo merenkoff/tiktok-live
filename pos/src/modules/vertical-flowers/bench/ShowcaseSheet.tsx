@@ -19,7 +19,7 @@
  */
 
 import { useState } from 'react';
-import { Printer, X } from 'lucide-react';
+import { Printer, X } from '@pos/platform/ui';
 import { formatUah, uahInputToCents } from '@pos/platform';
 import { BouquetPhoto } from './BouquetPhoto';
 
@@ -132,7 +132,7 @@ export function ShowcaseSheet({ computedCents, busy, error, onSubmit, onClose }:
               className="sq-btn-primary min-h-12 w-full flex items-center justify-center gap-2"
               data-testid="showcase-submit-print"
             >
-              <Printer size={18} />
+              <Printer size={20} />
               {busy ? 'Робимо…' : 'Зробити і надрукувати цінник'}
             </button>
             <button

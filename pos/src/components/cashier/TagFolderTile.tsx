@@ -2,7 +2,7 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { Folder } from 'lucide-react';
+import { Folder } from '../../platform/glyphs';
 import { resolveTagColorHex } from '../../lib/tagColors';
 
 interface Props {
@@ -22,7 +22,7 @@ export function TagFolderTile({ name, color, onClick }: Props) {
       className="aspect-square rounded-sq overflow-hidden relative text-left p-2.5 hover:brightness-110 transition-[filter]"
       style={{ backgroundColor: bg }}
     >
-      <Folder size={22} strokeWidth={1.75} className="text-white/95 absolute top-2.5 left-2.5" />
+      <Folder size={20} className="text-white/95 absolute top-2.5 left-2.5" />
       <span className="absolute bottom-2.5 left-2.5 right-2 text-[13px] font-medium leading-tight line-clamp-2 text-white">
         {name}
       </span>

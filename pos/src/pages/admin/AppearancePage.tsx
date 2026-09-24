@@ -16,7 +16,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, GripVertical, RotateCcw, Search } from 'lucide-react';
+import { ArrowDown, ArrowUp, GripVertical, RotateCcw, Search } from '../../platform/glyphs';
 import { api, useAuthStore, useEnabledModules, resolveNavIcon, NAV_ICONS } from '@pos/platform';
 import { allModules } from '../../modules/registry';
 import {
@@ -229,7 +229,7 @@ export function AppearancePage() {
               disabled={!customisedHere}
               className="inline-flex items-center gap-1.5 rounded-sq border border-sq-divider px-2.5 py-1 text-xs text-sq-secondary hover:bg-sq-empty disabled:opacity-40 disabled:hover:bg-transparent"
             >
-              <RotateCcw size={13} strokeWidth={1.75} />
+              <RotateCcw size={16} />
               Відновити типове
             </button>
           </div>
@@ -355,7 +355,7 @@ function NavEntryRow({
         title="Перетягніть, щоб змінити порядок"
         className="shrink-0 text-sq-muted cursor-grab active:cursor-grabbing"
       >
-        <GripVertical size={16} strokeWidth={1.75} aria-hidden />
+        <GripVertical size={16} aria-hidden />
       </span>
 
       {showIcon && (
@@ -389,7 +389,7 @@ function NavEntryRow({
           onClick={() => onMove(-1)}
           className="w-8 h-8 grid place-items-center rounded-sq text-sq-secondary hover:bg-sq-empty disabled:opacity-30 disabled:hover:bg-transparent"
         >
-          <ArrowUp size={15} strokeWidth={1.75} />
+          <ArrowUp size={16} />
         </button>
         <button
           type="button"
@@ -398,7 +398,7 @@ function NavEntryRow({
           onClick={() => onMove(1)}
           className="w-8 h-8 grid place-items-center rounded-sq text-sq-secondary hover:bg-sq-empty disabled:opacity-30 disabled:hover:bg-transparent"
         >
-          <ArrowDown size={15} strokeWidth={1.75} />
+          <ArrowDown size={16} />
         </button>
         <button
           type="button"
@@ -408,7 +408,7 @@ function NavEntryRow({
           onClick={onReset}
           className="w-8 h-8 grid place-items-center rounded-sq text-sq-secondary hover:bg-sq-empty disabled:opacity-30 disabled:hover:bg-transparent"
         >
-          <RotateCcw size={15} strokeWidth={1.75} />
+          <RotateCcw size={16} />
         </button>
       </div>
     </li>
@@ -419,7 +419,7 @@ const ICON_NAMES = Object.keys(NAV_ICONS).sort();
 
 /**
  * The icon the host can actually draw — the hand-picked `NAV_ICONS` allowlist,
- * not all of lucide. Picking from what the app ships is the point: a name it
+ * not every icon there is. Picking from what the app ships is the point: a name it
  * does not have would silently fall back to a placeholder glyph on the till.
  */
 function IconPicker({
@@ -469,13 +469,13 @@ function IconPicker({
         onClick={() => setOpen((v) => !v)}
         className="w-9 h-9 grid place-items-center rounded-sq border border-sq-divider bg-sq-bg text-sq-text hover:bg-sq-empty"
       >
-        {Icon ? <Icon size={18} strokeWidth={1.75} /> : <span className="text-xs text-sq-muted">—</span>}
+        {Icon ? <Icon size={24} /> : <span className="text-xs text-sq-muted">—</span>}
       </button>
 
       {open && (
         <div className="absolute z-20 mt-1 w-64 rounded-sq border border-sq-divider bg-sq-surface p-2 shadow-lg">
           <div className="flex items-center gap-1.5 rounded-sq border border-sq-divider bg-sq-bg px-2">
-            <Search size={13} strokeWidth={1.75} className="text-sq-muted" aria-hidden />
+            <Search size={16} className="text-sq-muted" aria-hidden />
             <input
               autoFocus
               aria-label="Пошук іконки"
@@ -503,7 +503,7 @@ function IconPicker({
                     selected === name ? 'bg-sq-empty ring-1 ring-sq-blue' : ''
                   }`}
                 >
-                  <Candidate size={17} strokeWidth={1.75} />
+                  <Candidate size={24} />
                 </button>
               );
             })}
@@ -562,7 +562,7 @@ function NavPreview({
                     i === 0 ? 'bg-white/15 text-white' : 'text-white/70'
                   }`}
                 >
-                  {Icon && <Icon size={22} strokeWidth={1.75} />}
+                  {Icon && <Icon size={24} />}
                 </div>
               );
             })}
@@ -576,7 +576,7 @@ function NavPreview({
                   key={`${n.to}#${i}`}
                   className="flex items-center gap-2 text-sm text-sq-secondary truncate"
                 >
-                  {Icon && <Icon size={15} strokeWidth={1.75} className="shrink-0" />}
+                  {Icon && <Icon size={24} className="shrink-0" />}
                   <span className="truncate">{n.label}</span>
                 </li>
               );

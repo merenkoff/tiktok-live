@@ -12,6 +12,7 @@ import { formatUah } from '../../lib/money';
 // while the cart — host code, host copy — showed the same photos fine.
 // `@pos/platform` is external in a remote, so this is always the host's.
 import { assetUrl } from '@pos/platform';
+import { MoreHorizontal } from '../../platform/glyphs';
 
 interface Props {
   name: string;
@@ -136,7 +137,7 @@ export function ProductTile({
           className="absolute top-1 right-1 w-11 h-11 grid place-items-center rounded-full bg-black/45 text-white text-xl leading-none shadow-sm hover:bg-black/60"
           data-testid={testId ? `${testId}-more` : 'tile-more'}
         >
-          ⋯
+          <MoreHorizontal size={20} />
         </button>
       )}
     </div>

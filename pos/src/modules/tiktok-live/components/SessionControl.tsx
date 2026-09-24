@@ -1,4 +1,5 @@
 // The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+import { Video } from '@pos/platform/ui';
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
@@ -30,7 +31,14 @@ export function SessionControl({
         data-testid="session-start"
         className="sq-btn-primary px-6 py-3 text-base disabled:cursor-not-allowed"
       >
-        {isStarting ? 'Запускаємо…' : '▶ Почати ефір'}
+        {isStarting ? (
+          'Запускаємо…'
+        ) : (
+          <>
+            <Video size={24} className="inline-block align-[-6px] mr-2" />
+            Почати ефір
+          </>
+        )}
       </button>
     );
   }

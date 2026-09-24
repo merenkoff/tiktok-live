@@ -32,3 +32,10 @@ export type { ModifierSheetChoice } from '../components/cashier/ModifierSheet';
 // own for this — see `scripts/module-tailwind.mjs`.
 export { PriceTagsPrintable } from '../components/PriceTagsPrintable';
 export type { TagPaperWidth } from '../components/PriceTagsPrintable';
+// The glyph set (design/icons, drawn in the style of Things): colour glyphs on a
+// 24 px grid with their own hue, UI glyphs on a 20 px grid (plus 16 px drawings
+// for the small ones) in currentColor. Here rather than in `@pos/platform`
+// because each consumer bundles only the few it draws; the nav set the host
+// resolves by name stays `NAV_ICONS`. Generated — edit the SVGs, run
+// `node scripts/gen-icons.mjs` at the repo root.
+export * from './glyphs';

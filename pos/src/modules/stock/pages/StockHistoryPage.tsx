@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '@pos/platform';
 import type { StockMovementRow } from '@pos/platform';
+import { ArrowLeft } from '@pos/platform/ui';
 
 const REASON_UK: Record<string, string> = {
   sale: 'Продаж',
@@ -39,7 +40,7 @@ export function StockHistoryPage() {
   return (
     <div className="max-w-5xl space-y-4">
       <Link to="/admin/stock" className="text-sm text-[#006AFF] hover:underline">
-        ← Склад
+        <ArrowLeft size={20} aria-hidden className="inline-block align-[-5px] mr-0.5" />Склад
       </Link>
       <div>
         <p className="sq-section-label">Inventory history</p>

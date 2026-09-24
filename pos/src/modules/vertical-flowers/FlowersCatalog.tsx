@@ -16,7 +16,7 @@
  */
 
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
-import { Camera, Flower2, Search } from 'lucide-react';
+import { Camera, Flower2, Search } from '@pos/platform/ui';
 import {
   customBouquetLabel,
   formatUah,
@@ -115,7 +115,7 @@ function FlowersCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <Search
-              size={18}
+              size={20}
               className="absolute left-3 top-1/2 -translate-y-1/2 text-sq-muted pointer-events-none"
             />
             <input
@@ -151,7 +151,7 @@ function FlowersCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
               className="min-h-12 px-3 flex items-center gap-2 rounded-sq text-white bg-sq-blue font-medium shrink-0"
               data-testid="start-bouquet"
             >
-              <Flower2 size={18} />
+              <Flower2 size={24} />
               <span className="hidden sm:inline">Зібрати букет</span>
             </button>
           )}

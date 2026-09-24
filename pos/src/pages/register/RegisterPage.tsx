@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { ReactNode, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { Check } from 'lucide-react';
+import { Check } from '../../platform/glyphs';
 import { api, cashierApi, useAuthStore, useCartStore, useOfflineStatus } from '@pos/platform';
 import { formatUah } from '../../lib/money';
 import { localOrderLabel } from '../../lib/localOrderNo';
@@ -612,7 +612,7 @@ export function RegisterPage() {
       <div className="min-h-screen bg-white grid place-items-center p-6 font-sans">
         <div className="text-center max-w-sm w-full animate-fade-up">
           <div className="mx-auto w-14 h-14 rounded-full bg-sq-blue text-white grid place-items-center">
-            <Check size={28} strokeWidth={2.5} />
+            <Check size={40} />
           </div>
           {showOrderNo ? (
             <>

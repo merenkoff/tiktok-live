@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '@pos/platform';
 import type { MovementSummaryRow } from '@pos/platform';
-import { useDragScroll } from '@pos/platform/ui';
+import { ArrowLeft, useDragScroll } from '@pos/platform/ui';
 
 function startOfDayIso(d: Date): string {
   const x = new Date(d);
@@ -52,7 +52,7 @@ export function StockMovementPage() {
   return (
     <div className="max-w-6xl space-y-4">
       <Link to="/admin/stock" className="text-sm text-[#006AFF] hover:underline">
-        ← Склад
+        <ArrowLeft size={20} aria-hidden className="inline-block align-[-5px] mr-0.5" />Склад
       </Link>
       <div>
         <p className="sq-section-label">Movement report</p>

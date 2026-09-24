@@ -17,6 +17,7 @@ import { LiveLogs } from '../components/LiveLogs';
 import { SessionControl } from '../components/SessionControl';
 import { SupportCode } from '../components/SupportCode';
 import type { LiveDiagnostic, LiveFailureReason } from '../lib/diagnostics';
+import { AlertTriangle, Download, MessageCircle, ShoppingBag, Video, WifiOff, Wrench, type Glyph } from '@pos/platform/ui';
 
 /**
  * What to tell the operator per failure, keyed by reason so the copy and the
@@ -28,32 +29,32 @@ import type { LiveDiagnostic, LiveFailureReason } from '../lib/diagnostics';
  * it is an errand for the store owner rather than a fault.
  */
 const FAILURE_COPY: Record<Exclude<LiveFailureReason, 'not_configured'>, {
-  icon: string;
+  icon: Glyph;
   title: string;
   body: string;
 }> = {
   host_too_old: {
-    icon: '⬆️',
+    icon: Download,
     title: 'Застосунок каси застарів для модуля ефіру',
     body: 'Оновіть застосунок до останньої версії. Якщо після оновлення нічого не змінилось — передайте код нижче в підтримку.',
   },
   server_missing_bridge: {
-    icon: '🛠',
+    icon: Wrench,
     title: 'Сервер не підтримує модуль ефіру',
     body: 'Схоже, сервер магазину ще не оновлено. Передайте код нижче в підтримку — оновлення на нашому боці.',
   },
   server_error: {
-    icon: '⚠️',
+    icon: AlertTriangle,
     title: 'Сервер відповів помилкою',
     body: 'Спробуйте ще раз. Якщо помилка повторюється — передайте код нижче в підтримку.',
   },
   network: {
-    icon: '📡',
+    icon: WifiOff,
     title: 'Немає зʼєднання з сервером',
     body: 'Модуль ефіру працює лише онлайн. Перевірте інтернет і спробуйте ще раз.',
   },
   unknown: {
-    icon: '⚠️',
+    icon: AlertTriangle,
     title: 'Не вдалося підключитися до TikTok LIVE',
     body: 'Спробуйте ще раз. Якщо помилка повторюється — передайте код нижче в підтримку.',
   },
@@ -103,7 +104,7 @@ export function LiveDeskPage() {
   if (status === 'not-configured') {
     return (
       <CenteredCard
-        icon="🔌"
+        icon={Video}
         title="Магазин не під’єднано до TikTok LIVE"
         body={
           shell === 'web'
@@ -206,12 +207,12 @@ export function LiveDeskPage() {
       <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
         <div className="flex flex-col gap-4">
           <span className="sq-section-label">Статистика ефіру</span>
-          <StatCard label="Замовлень" value={orderCount} icon="🛍" tone="text-emerald-700" />
-          <StatCard label="Коментарів" value={commentCount} icon="💬" tone="text-blue-700" />
+          <StatCard label="Замовлень" value={orderCount} icon={ShoppingBag} tone="text-emerald-700" />
+          <StatCard label="Коментарів" value={commentCount} icon={MessageCircle} tone="text-blue-700" />
           <StatCard
             label="Помилок"
             value={errorCount}
-            icon="⚠"
+            icon={AlertTriangle}
             tone={errorCount > 0 ? 'text-rose-700' : 'text-sq-muted'}
           />
         </div>
@@ -233,13 +234,14 @@ function StatCard({
 }: {
   label: string;
   value: number;
-  icon: string;
+  icon: Glyph;
   tone: string;
 }) {
+  const Icon = icon;
   return (
     <div className="sq-card flex items-center gap-4 p-4">
-      <div className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-sq bg-sq-bg text-xl">
-        {icon}
+      <div className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-sq bg-sq-bg">
+        <Icon size={24} />
       </div>
       <div>
         <div className="sq-section-label">{label}</div>
@@ -256,16 +258,21 @@ function CenteredCard({
   action,
   diagnostic,
 }: {
-  icon?: string;
+  icon?: Glyph;
   title: string;
   body?: string;
   action?: { label: string; onClick: () => void };
   diagnostic?: LiveDiagnostic | null;
 }) {
+  const Icon = icon;
   return (
     <div className="grid min-h-[60vh] place-items-center px-6">
       <div className="sq-card animate-fade-up max-w-md p-8 text-center">
-        {icon && <div className="mb-4 text-4xl">{icon}</div>}
+        {Icon && (
+          <div className="mb-4 flex justify-center">
+            <Icon size={48} />
+          </div>
+        )}
         <h2 className="text-lg font-semibold text-sq-text">{title}</h2>
         {body && <p className="mt-3 text-sm leading-relaxed text-sq-secondary">{body}</p>}
         {action && (

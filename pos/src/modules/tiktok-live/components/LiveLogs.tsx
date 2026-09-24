@@ -14,6 +14,7 @@
 
 import { useEffect, useRef } from 'react';
 import type { SessionLog, SessionLogType } from '../types';
+import { AlertTriangle, FileText, Inbox, Info, MessageCircle, PackageCheck, Video, type Glyph } from '@pos/platform/ui';
 
 interface LiveLogsProps {
   logs: SessionLog[];
@@ -37,12 +38,12 @@ const LABEL_CLASS: Record<SessionLogType, string> = {
   info: 'text-amber-700',
 };
 
-const ICON: Record<SessionLogType, string> = {
-  tiktok_comment: '🎬',
-  telegram_message: '💬',
-  order: '✅',
-  error: '❌',
-  info: 'ℹ️',
+const ICON: Record<SessionLogType, Glyph> = {
+  tiktok_comment: Video,
+  telegram_message: MessageCircle,
+  order: PackageCheck,
+  error: AlertTriangle,
+  info: Info,
 };
 
 const LABEL: Record<SessionLogType, string> = {
@@ -108,7 +109,7 @@ export function LiveLogs({ logs, isConnected, onReconnect }: LiveLogsProps) {
       <div ref={scrollRef} className="flex flex-1 flex-col gap-2 overflow-y-auto p-4">
         {logs.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center text-sq-muted">
-            <span className="text-3xl opacity-40">📭</span>
+            <Inbox size={40} className="text-sq-muted" />
             <div className="text-sm font-semibold text-sq-secondary">Повідомлень поки немає</div>
             <div className="text-sm">
               Почніть ефір — коментарі та замовлення з TikTok LIVE з’являться тут
@@ -124,7 +125,7 @@ export function LiveLogs({ logs, isConnected, onReconnect }: LiveLogsProps) {
               }`}
             >
               <div className="mb-1.5 flex items-center gap-1.5">
-                <span className="text-sm leading-none">{ICON[log.log_type] ?? '📝'}</span>
+                <LogIcon type={log.log_type} />
                 <span
                   className={`text-[11px] font-bold uppercase tracking-wider ${
                     LABEL_CLASS[log.log_type] ?? 'text-sq-secondary'
@@ -154,4 +155,9 @@ export function LiveLogs({ logs, isConnected, onReconnect }: LiveLogsProps) {
       </div>
     </div>
   );
+}
+
+function LogIcon({ type }: { type: SessionLogType }) {
+  const Icon = ICON[type] ?? FileText;
+  return <Icon size={24} className="shrink-0" />;
 }
