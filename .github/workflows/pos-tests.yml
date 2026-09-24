@@ -47,3 +47,6 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      # The rewrites production's `serve@14` applies to dist/ — Playwright runs
+      # against `vite preview`, which only imitates them (POS_PWA.md §3).
+      - run: npm run check:serve-json

@@ -126,16 +126,21 @@ zf(){Hf=!0}`, а `isOfflinePosEnabled` чанка відповідав `false`. 
   без мережі зависає, тримає перший рендер, а `--pos-font` падає на
   `system-ui`.
 - `vite.config.ts`: multi-page (`index` + `tablet`), `build.manifest: true`
-  (для precache-списку), плагін `tabletUnderPrefix` — `/tablet/*` →
-  `tablet.html` і `/tablet` → `/tablet/` у `vite dev` **і** `vite preview`.
+  (для precache-списку), плагін `tabletUnderPrefix` — `/tablet`, `/tablet/`
+  і все під ним → `tablet.html` у `vite dev` **і** `vite preview` (без
+  редиректу — як у проді, див. пастку 4 нижче).
   У всіх `vite.*-remote.config.ts` і `vite.cashier.config.ts` —
   `publicDir: false`: `public/` тепер існує (маніфест, іконки) і Vite копіював
   би його в кожен remote-бандл і в `dist-cashier`.
 - `scripts/assemble-web-dist.mjs`: import map тепер і в `tablet.html`;
   потім `dist/tablet-sw.js` із шаблону `sw/tablet-sw.js` (§4) і копія
   `serve.json` у `dist/`.
-- Роздача (`pos/serve.json`, serve-handler) — три пастки, кожна перевірена в
-  джерелах `serve@14`:
+- Роздача (`pos/serve.json`, serve-handler) — пʼять пасток, кожна перевірена
+  в джерелах `serve@14` (`serve-handler` 6.1.7); дві останні знайшлися вже на
+  проді після 2.3.0, бо Playwright ходить через `vite preview`, який правила
+  лише імітує, — тепер `npm run check:serve-json`
+  (`scripts/check-serve-json.mjs`) підіймає **справжній** `serve` над `dist/`
+  і звіряє таблицю адрес; він у CI після e2e:
   1. `serve -s` **додає** `** → /index.html` *попереду* правил із
      `serve.json`, а `applyRewrites` бере перше, що збіглося, — `/tablet/*`
      ніколи не дійшло б до `tablet.html`. Тому в `Dockerfile` і `railway.json`
@@ -144,8 +149,26 @@ zf(){Hf=!0}`, а `isOfflinePosEnabled` чанка відповідав `false`. 
      `/tablet`, а Chromium відмовляється віддавати з precache redirected-
      відповідь на навігацію. `cleanUrls: false`, і precache тримає `/tablet/`
      (ціль rewrite, 200), а не `/tablet.html`.
-  3. Scope `/tablet/` не контролює `/tablet` без слеша — `redirects`
-     `/tablet → /tablet/`, а `start_url`/`scope`/`id` маніфесту — `/tablet/`.
+  3. Scope `/tablet/` не контролює `/tablet` без слеша — `start_url`/`scope`/
+     `id` маніфесту `/tablet/`, а `/tablet` без слеша віддається тим самим
+     `tablet.html` (rewrite, не redirect — пастка 4); застосунок сам іде на
+     `/tablet/login`, і далі все вже в scope.
+  4. `sourceMatches` порівнює правило з `path.posix.resolve(шлях)`, який
+     **зрізає кінцевий слеш**: `/tablet/` → `/tablet`. Redirect
+     `/tablet → /tablet/` збігався і з `/tablet/` — нескінченні 301, «too many
+     redirects» на кожному планшеті. Тому `redirects` у `serve.json` немає
+     взагалі, а `/tablet` — rewrite на `tablet.html`, який покриває обидва
+     написання.
+  5. `applyRewrites` після першого збігу **знову проганяє решту правил по
+     результату**: `/tablet/login` → `/tablet.html` → catch-all `**` →
+     `/index.html`, і планшет отримував веб-касу. Тому SPA-fallback — не `**`,
+     а `/:path([^.]+)` (path-to-regexp-параметр без крапки): результат
+     планшетного rewrite має розширення і повторно не переписується. Ціна:
+     маршрут веб-каси з крапкою в шляху fallback не отримає (у POS таких
+     немає — id числові). Корінь `/` цей шаблон не ловить (потрібен хоча б
+     один символ), а без rewrite serve віддавав би **лістинг `dist/`** —
+     тому окреме правило `/ → /index.html` і `directoryListing: false`. У шаблонах `serve.json` не можна вживати `*` для
+     цього — `sourceMatches` підміняє першу зірочку на `(.*)`.
   Заголовки: `immutable` на `/assets/**`, `no-cache` на `/tablet-sw.js`,
   обидва html і `/tablet/`.
   Rewrite застосовується лише коли файлу нема (шлях із розширенням спершу
