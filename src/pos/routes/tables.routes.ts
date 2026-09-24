@@ -273,9 +273,13 @@ export function registerTablesRoutes(fastify: FastifyInstance): void {
     if (id == null || itemId == null) {
       return reply.code(404).send({ error: 'Позицію не знайдено' });
     }
-    const quantity = Number((request.body as { quantity?: unknown })?.quantity);
     try {
-      return await bills.setDraftQuantity(auth.storeId, id, itemId, quantity);
+      return await bills.updateDraftItem(
+        auth.storeId,
+        id,
+        itemId,
+        (request.body ?? {}) as bills.DraftItemPatch
+      );
     } catch (error) {
       return sendError(reply, error);
     }

@@ -246,6 +246,47 @@ describe.skipIf(!hasDb)('POS bills', () => {
     expect(bill.draft).toHaveLength(0);
   });
 
+  it('retypes a draft line’s answers and note, and folds it into its twin (К4m)', async () => {
+    const billId = (await seat(five)).json().bill.id;
+    await add(billId, { variant_id: latte, quantity: 1, modifiers: [oatId] });
+    const plain = (await add(billId, { variant_id: latte, quantity: 2 })).json();
+    expect(plain.draft).toHaveLength(2);
+    const oat = plain.draft.find((l: { modifiers: unknown[] }) => l.modifiers.length === 1);
+    const bare = plain.draft.find((l: { modifiers: unknown[] }) => l.modifiers.length === 0);
+    const patch = (lineId: number, payload: Record<string, unknown>) =>
+      app.inject({
+        method: 'PATCH',
+        url: `/api/pos/bills/${billId}/items/${lineId}`,
+        headers: auth(store.sellerToken),
+        payload,
+      });
+
+    // A note alone: the line keeps its answers and its count.
+    const noted = await patch(oat.id, { note: 'гарячіше' });
+    expect(noted.statusCode).toBe(200);
+    const notedLine = noted.json().draft.find((l: { id: number }) => l.id === oat.id);
+    expect(notedLine).toMatchObject({ quantity: 1, note: 'гарячіше' });
+    expect(notedLine.modifiers.map((m: { name: string }) => m.name)).toEqual(['вівсяне']);
+    expect(notedLine.preview_unit_price_cents).toBe(8000);
+
+    // Turning the oat milk back and dropping the note makes it the plain
+    // line's twin — one row of three, not two rows the kitchen reads twice.
+    const folded = await patch(oat.id, { modifiers: [], note: '' });
+    expect(folded.statusCode).toBe(200);
+    expect(folded.json().draft).toHaveLength(1);
+    expect(folded.json().draft[0]).toMatchObject({ id: bare.id, quantity: 3 });
+
+    // Only a variant of the same product; a different dish is remove + add.
+    const other = await patch(bare.id, { variant_id: croissant });
+    expect(other.statusCode).toBe(400);
+    expect(other.json().error).toMatch(/тієї ж страви/);
+    // And an answer the product does not have is refused by the same rule
+    // that refuses it at add time.
+    expect((await patch(bare.id, { modifiers: [999999] })).statusCode).toBe(400);
+    // An empty patch is a mistake, not a no-op that costs a round-trip.
+    expect((await patch(bare.id, {})).statusCode).toBe(400);
+  });
+
   it('refuses a dish that left the menu or is on the stop-list today', async () => {
     const billId = (await seat(six)).json().bill.id;
     const tz = await pool.query(`SELECT timezone FROM pos_stores WHERE id = $1`, [store.storeId]);

@@ -31,6 +31,8 @@ interface Props {
   /** Pre-selected answers — the caller passes `defaultModifierIds(groups)`. UI state only. */
   initialModifierIds?: number[];
   initialNote?: string;
+  /** What the button says — «Додати в чек» by default; «Зберегти» when the sheet edits a line. */
+  submitLabel?: string;
   onAdd: (choice: ModifierSheetChoice) => void;
   onClose: () => void;
 }
@@ -56,6 +58,7 @@ export function ModifierSheet({
   initialVariantId,
   initialModifierIds,
   initialNote,
+  submitLabel = 'Додати в чек',
   onAdd,
   onClose,
 }: Props) {
@@ -238,7 +241,7 @@ export function ModifierSheet({
             onClick={submit}
             data-testid="modifier-add"
           >
-            Додати в чек
+            {submitLabel}
             {priceCents != null && (
               <>
                 {' · '}

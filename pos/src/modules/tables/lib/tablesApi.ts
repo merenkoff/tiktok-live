@@ -60,6 +60,19 @@ export function setQuantity(billId: number, itemId: number, quantity: number): P
   return posRequest<Bill>('patch', `/bills/${billId}/items/${itemId}`, { quantity });
 }
 
+/**
+ * Retype a draft line from the sheet: another size of the same dish, other
+ * answers, another note. Ids only, as at `addLine`; the server re-keys the
+ * line and folds it into a twin when the change makes it one (К4m).
+ */
+export function updateLine(
+  billId: number,
+  itemId: number,
+  patch: { variant_id?: number; modifiers?: number[]; note?: string }
+): Promise<Bill> {
+  return posRequest<Bill>('patch', `/bills/${billId}/items/${itemId}`, patch);
+}
+
 export function removeLine(billId: number, itemId: number): Promise<Bill> {
   return posRequest<Bill>('delete', `/bills/${billId}/items/${itemId}`);
 }

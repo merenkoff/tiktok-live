@@ -198,3 +198,109 @@ test('the hall map is read back from the mirror without a network', async ({ pag
   await expect(page.getByTestId('table-tile-11')).toContainText('5');
   await expect(page.getByTestId('tables-stale')).toBeVisible();
 });
+
+/**
+ * Portrait: the menu takes the screen and the bill lives on a bar beneath it
+ * (POS_TABLES.md §3.2) — the same taps as on a wide screen, in a layout a
+ * thumb reaches.
+ */
+test.describe('portrait tablet', () => {
+  test.use({ viewport: { width: 768, height: 1024 } });
+
+  const BILL = {
+    id: 90,
+    bill_no: 12,
+    status: 'open',
+    table_id: 11,
+    table_name: '5',
+    hall_id: 1,
+    hall_name: 'Зала',
+    guests: 2,
+    note: null,
+    customer_id: null,
+    precheck_printed_at: null,
+    opened_by: 1,
+    opened_by_name: 'Олена',
+    opened_at: new Date().toISOString(),
+    closed_at: null,
+    rounds: [],
+    draft: [],
+    fired_total_cents: 0,
+    draft_preview_cents: 0,
+  };
+  const MENU = [
+    {
+      variant_id: 6,
+      product_id: 4,
+      product_name: 'Круасан',
+      attributes: {},
+      label: '',
+      unit: 'шт',
+      sku: null,
+      barcode: null,
+      price_cents: 5500,
+      compare_at_cents: null,
+      quantity: 24,
+      image_url: null,
+      kind: 'simple',
+      stock_mode: 'own',
+      sellable: true,
+      stop_listed: false,
+      stop_listed_on: null,
+      components: [],
+      tag_ids: [],
+      modifier_groups: [],
+    },
+  ];
+
+  test('the bill is a bar under the menu, and opens as a sheet', async ({ page, context }) => {
+    await serveBuiltRemote(context);
+    await mockPosApi(context, ALL_MODULES, {
+      moduleRemotes: { tables: TABLES_REMOTE },
+      store: { vertical: CAFE_VERTICAL },
+    });
+    await context.route('**/api/pos/catalog**', async (route) => route.fulfill({ json: MENU }));
+    await context.route('**/api/pos/halls', async (route) => route.fulfill({ json: { halls: HALLS } }));
+    let bill = BILL;
+    await context.route('**/api/pos/bills', async (route) =>
+      route.request().method() === 'POST'
+        ? route.fulfill({ json: { bill: { id: 90 }, created: true } })
+        : route.fulfill({ json: { bills: [] } })
+    );
+    await context.route('**/api/pos/bills/90', async (route) => route.fulfill({ json: bill }));
+    await context.route('**/api/pos/bills/90/items', async (route) => {
+      bill = {
+        ...BILL,
+        draft: [
+          {
+            id: 21, variant_id: 6, quantity: 1, product_name: 'Круасан', variant_label: '', unit: 'шт',
+            unit_price_cents: null, compare_at_unit_cents: null, preview_unit_price_cents: 5500,
+            components: null, modifiers: [], note: '', sale_id: null, added_by: 1, added_by_name: 'Олена', sort_order: 0,
+          },
+        ],
+        draft_preview_cents: 5500,
+      } as typeof BILL;
+      await route.fulfill({ json: bill });
+    });
+
+    await loginWithPin(page);
+    await page.reload();
+    await page.waitForURL(/\/tablet\/register$/);
+    await page.goto('/tablet/tables');
+    await page.getByTestId('table-tile-11').click();
+    await expect(page.getByTestId('bill-page')).toContainText('Стіл 5');
+
+    // No column for the bill at this width: the bar carries the figures.
+    await expect(page.getByTestId('bill-bar')).toBeVisible();
+    await expect(page.getByTestId('bill-owed')).toHaveCount(0);
+    await page.getByTestId('menu-tile-4').click();
+    await expect(page.getByTestId('bill-bar')).toContainText('Чернетка · 1 поз.');
+    await expect(page.getByTestId('bill-bar-fire')).toContainText('На кухню · 1');
+
+    await page.getByTestId('bill-bar-open').click();
+    await expect(page.getByTestId('bill-sheet')).toBeVisible();
+    await expect(page.getByTestId('bill-draft')).toContainText('Круасан');
+    await page.getByTestId('bill-sheet-close').click();
+    await expect(page.getByTestId('bill-sheet')).toHaveCount(0);
+  });
+});

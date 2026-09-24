@@ -21,10 +21,41 @@ const printPrecheck = vi.fn();
 
 vi.mock('@pos/platform', async () => {
   const real = await vi.importActual<typeof import('@pos/platform')>('@pos/platform');
+  const { useEffect, useState } = await import('react');
+  // The menu's hook, on the fixture below rather than on the real fetch: the
+  // real one reads the host's own `cashierApi`, which no mock here reaches.
+  function useSalesCatalog() {
+    const [rows, setRows] = useState<Array<[number, unknown[]]>>([]);
+    const [query, setQuery] = useState('');
+    useEffect(() => {
+      void Promise.resolve(getCatalog()).then((items: Array<{ product_id: number }>) => {
+        const map = new Map<number, unknown[]>();
+        for (const it of items) map.set(it.product_id, [...(map.get(it.product_id) ?? []), it]);
+        setRows([...map.entries()]);
+      });
+    }, []);
+    return {
+      grouped: rows,
+      folderTiles: [],
+      catalogBarTags: [],
+      catalogBarActiveId: 'all' as const,
+      loading: false,
+      query,
+      setQuery,
+      showBack: false,
+      backLabel: 'Усі товари',
+      enterTag: () => undefined,
+      selectCatalogBarTag: () => undefined,
+      goBackOne: () => undefined,
+      lookupBarcode: async () => [],
+      refresh: async () => undefined,
+    };
+  }
   return {
     ...real,
     api: { posRequest: (...a: unknown[]) => posRequest(...a) },
     cashierApi: { getCatalog: (...a: unknown[]) => getCatalog(...a) },
+    useSalesCatalog,
     getMeta: (...a: unknown[]) => getMeta(...a),
     printPrecheck: (...a: unknown[]) => printPrecheck(...a),
   };
@@ -176,7 +207,9 @@ beforeEach(async () => {
     opened_at: '2026-09-21T18:00:00.000Z',
     closed_at: null,
     rounds: [round()],
-    draft: [line({ id: 3, quantity: 2, product_name: 'Круасан', variant_label: '', preview_unit_price_cents: 5500 })],
+    draft: [
+      line({ id: 3, variant_id: 9, quantity: 2, product_name: 'Круасан', variant_label: '', preview_unit_price_cents: 5500 }),
+    ],
     fired_total_cents: 8000,
     draft_preview_cents: 11000,
   };
@@ -290,18 +323,123 @@ describe('BillPage', () => {
     await waitFor(() => expect(seen).toContainEqual(['delete', '/bills/90/items/3', undefined]));
   });
 
-  it('adds a dish that asks nothing in one tap', async () => {
+  // ── К4l: меню плитками, чернетка одразу ──────────────────────────────────
+
+  /** A POST that answers only when the test says so. */
+  function deferredPost() {
     const posted: unknown[] = [];
+    const answers: Array<(b: Bill) => void> = [];
+    const rejects: Array<(e: unknown) => void> = [];
+    posRequest.mockImplementation((method: string, path: string, body?: unknown) => {
+      if (method === 'post' && path === '/bills/90/items') {
+        posted.push(body);
+        return new Promise<Bill>((resolve, reject) => {
+          answers.push(resolve);
+          rejects.push(reject);
+        });
+      }
+      return Promise.resolve(bill);
+    });
+    return { posted, answers, rejects };
+  }
+
+  it('adds a dish that asks nothing in one tap, on the screen before the server answers', async () => {
+    const { posted, answers } = deferredPost();
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    await userEvent.click(await screen.findByTestId('menu-tile-2'));
+    expect(posted).toEqual([{ variant_id: 9, quantity: 1, modifiers: [], note: '' }]);
+    // The fixture's draft already holds two croissants: the tap folds into
+    // that line — «3×», greyed — and the tile says 3 as well.
+    const row = await screen.findByTestId('bill-line-3');
+    expect(row).toHaveAttribute('data-pending', 'yes');
+    expect(row).toHaveTextContent('3×');
+    expect(within(screen.getByTestId('menu-tile-2')).getByTestId('tile-count')).toHaveTextContent('3');
+    // Nothing that fires may run on a draft the server has not confirmed.
+    expect(screen.getByTestId('bill-fire')).toBeDisabled();
+
+    answers[0]({ ...bill, draft: [{ ...bill.draft[0], quantity: 3 }] });
+    await waitFor(() => expect(screen.getByTestId('bill-line-3')).toHaveAttribute('data-pending', 'no'));
+    expect(screen.getByTestId('bill-fire')).toBeEnabled();
+  });
+
+  it('counts a second tap on the same dish up locally, and sends it twice', async () => {
+    bill.draft = [];
+    bill.draft_preview_cents = 0;
+    const { posted, answers } = deferredPost();
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    const tile = await screen.findByTestId('menu-tile-2');
+    await userEvent.click(tile);
+    await userEvent.click(tile);
+    // Both taps are on the screen at once; only one of them is on the wire —
+    // the writes go out in turn, so the answers apply in the order the waiter
+    // tapped (§4.13).
+    expect(screen.getByTestId('bill-line-pending')).toHaveTextContent('2×');
+    expect(screen.getByTestId('bill-draft-total')).toHaveTextContent('110');
+    expect(posted).toHaveLength(1);
+    answers[0]({ ...bill, draft: [line({ id: 4, variant_id: 9, product_name: 'Круасан', variant_label: '', preview_unit_price_cents: 5500 })], draft_preview_cents: 5500 });
+    await waitFor(() => expect(posted).toHaveLength(2));
+    // The first answer landed, the second tap is still folded into that row.
+    const row = screen.getByTestId('bill-line-4');
+    expect(row).toHaveAttribute('data-pending', 'yes');
+    expect(row).toHaveTextContent('2×');
+  });
+
+  it('takes a refused tap off the screen and says why, in the server’s words', async () => {
+    bill.draft = [];
+    bill.draft_preview_cents = 0;
+    const { rejects } = deferredPost();
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    await userEvent.click(await screen.findByTestId('menu-tile-2'));
+    expect(screen.getByTestId('bill-line-pending')).toBeInTheDocument();
+    rejects[0]({ response: { data: { error: 'Страва сьогодні в стоп-листі' } } });
+    expect(await screen.findByTestId('bill-banner')).toHaveTextContent('в стоп-листі');
+    await waitFor(() => expect(screen.queryByTestId('bill-line-pending')).toBeNull());
+  });
+
+  it('retypes a draft line from its row: the sheet opens on what it has and saves one PATCH (К4m)', async () => {
+    bill.draft = [
+      line({
+        id: 3,
+        variant_id: 5,
+        quantity: 2,
+        product_name: 'Латте',
+        variant_label: 'M',
+        modifiers: [{ modifier_id: 31, group_name: 'Молоко', name: 'звичайне', price_delta_cents: 0, sort_order: 0 }],
+        preview_unit_price_cents: 6500,
+      }),
+    ];
+    const seen: Array<[string, string, unknown]> = [];
     posRequest.mockImplementation(async (method: string, path: string, body?: unknown) => {
-      if (method === 'post' && path === '/bills/90/items') posted.push(body);
+      seen.push([method, path, body]);
       return bill;
     });
     renderWithProviders(<BillPage />, { route: '/tables/90' });
-    await userEvent.click(await screen.findByTestId('bill-add'));
-    await userEvent.click(await screen.findByTestId('dish-2'));
+    await userEvent.click(await screen.findByTestId('bill-line-edit-3'));
+    const sheet = await screen.findByTestId('modifier-sheet');
+    // What the line already has is what the sheet opens on.
+    expect(within(sheet).getByTestId('modifier-variant-5')).toHaveAttribute('aria-pressed', 'true');
+    expect(within(sheet).getByTestId('modifier-chip-31')).toHaveAttribute('aria-pressed', 'true');
+    expect(within(sheet).getByTestId('modifier-add')).toHaveTextContent('Зберегти');
+    await userEvent.click(within(sheet).getByTestId('modifier-variant-6'));
+    await userEvent.click(within(sheet).getByTestId('modifier-chip-32'));
+    await userEvent.type(within(sheet).getByTestId('modifier-note'), 'гарячіше');
+    await userEvent.click(within(sheet).getByTestId('modifier-add'));
     await waitFor(() =>
-      expect(posted).toEqual([{ variant_id: 9, quantity: 1, modifiers: [], note: '' }])
+      expect(seen).toContainEqual([
+        'patch',
+        '/bills/90/items/3',
+        { variant_id: 6, modifiers: [32], note: 'гарячіше' },
+      ])
     );
+    expect(screen.queryByTestId('modifier-sheet')).toBeNull();
+  });
+
+  it('cannot retype a dish the menu no longer lists, and says so', async () => {
+    bill.draft = [line({ id: 3, variant_id: 77, quantity: 1, product_name: 'Сирник', variant_label: '' })];
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    await userEvent.click(await screen.findByTestId('bill-line-edit-3'));
+    expect(await screen.findByTestId('bill-banner')).toHaveTextContent('немає в меню');
+    expect(screen.queryByTestId('modifier-sheet')).toBeNull();
   });
 
   it('asks the question the dish has, and sends the answer the waiter picked', async () => {
@@ -311,9 +449,8 @@ describe('BillPage', () => {
       return bill;
     });
     renderWithProviders(<BillPage />, { route: '/tables/90' });
-    await userEvent.click(await screen.findByTestId('bill-add'));
     // Two sizes and a required group: the tap cannot be the whole order.
-    await userEvent.click(await screen.findByTestId('dish-1'));
+    await userEvent.click(await screen.findByTestId('menu-tile-1'));
     const sheet = await screen.findByTestId('modifier-sheet');
     await userEvent.click(within(sheet).getByTestId('modifier-variant-6'));
     await userEvent.click(within(sheet).getByTestId('modifier-chip-32'));
@@ -321,6 +458,38 @@ describe('BillPage', () => {
     await waitFor(() =>
       expect(posted).toEqual([{ variant_id: 6, quantity: 1, modifiers: [32], note: '' }])
     );
+  });
+
+  it('greys a dish the kitchen stopped for the day, with its own word', async () => {
+    getCatalog.mockResolvedValue([
+      ...MENU.slice(0, 2),
+      { ...MENU[2], stop_listed: true, stop_listed_on: new Intl.DateTimeFormat('en-CA').format(new Date()) },
+    ]);
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    const tile = await screen.findByTestId('menu-tile-2');
+    expect(tile).toBeDisabled();
+    expect(within(tile).getByTestId('tile-badge')).toHaveTextContent('стоп');
+  });
+
+  it('on a narrow screen the bill lives on a bar and opens as a sheet', async () => {
+    const matchMedia = vi.fn().mockImplementation(() => ({
+      matches: false,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+    vi.stubGlobal('matchMedia', matchMedia);
+    try {
+      renderWithProviders(<BillPage />, { route: '/tables/90' });
+      const bar = await screen.findByTestId('bill-bar');
+      expect(bar).toHaveTextContent('Чернетка · 1 поз.');
+      expect(screen.getByTestId('bill-bar-fire')).toHaveTextContent('На кухню · 1');
+      expect(screen.queryByTestId('bill-owed')).toBeNull();
+      await userEvent.click(screen.getByTestId('bill-bar-open'));
+      expect(await screen.findByTestId('bill-sheet')).toBeInTheDocument();
+      expect(screen.getByTestId('bill-owed')).toHaveTextContent('80');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('says so plainly when there is no network', async () => {
@@ -499,7 +668,7 @@ describe('BillPage', () => {
     expect(screen.getByTestId('bill-fire')).toBeDisabled();
     expect(screen.getByTestId('bill-pay')).toBeDisabled();
     expect(screen.getByTestId('bill-precheck')).toBeDisabled();
-    expect(screen.getByTestId('bill-add')).toBeDisabled();
+    expect(await screen.findByTestId('menu-tile-2')).toBeDisabled();
   });
 
   it('says «Потрібна мережа» rather than queueing a write', async () => {

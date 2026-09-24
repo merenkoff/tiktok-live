@@ -19,15 +19,25 @@ import { moduleCss } from './scripts/module-tailwind.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 
+/** Host UI the `tables` bundle renders (`@pos/platform/ui`, bundled locally). */
+export const TABLES_HOST_UI = [
+  'ModifierSheet',
+  'ProductTile',
+  'TagFolderTile',
+  'CatalogTagBar',
+  'ScanWedge',
+].map((name) => `./src/components/cashier/${name}.tsx`);
+
 export default defineConfig({
   plugins: [react()],
   // `public/` is the tablet PWA's manifest and icons — the web host's, never a remote's.
   publicDir: false,
-  // The host cashier component this bundle renders inline — without its
+  // The host cashier components this bundle renders inline — without their
   // classes in the glob too, `style.css` would build fine (signed, present,
-  // deterministic path) and every chip of the modifier sheet would come out
-  // unstyled at runtime. See scripts/module-tailwind.mjs for the lesson.
-  css: moduleCss('tables', ['./src/components/cashier/ModifierSheet.tsx']),
+  // deterministic path) and every chip of the modifier sheet, every tile of
+  // the menu would come out unstyled at runtime. See scripts/module-tailwind.mjs
+  // for the lesson; `check:tables-css-coverage` names the same files.
+  css: moduleCss('tables', TABLES_HOST_UI),
   define: {
     'process.env.NODE_ENV': '"production"',
     // This remote's own build version — see roadmap #6.

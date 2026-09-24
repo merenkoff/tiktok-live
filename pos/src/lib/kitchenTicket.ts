@@ -78,12 +78,28 @@ export function stationsOf(
   return ordered.length > 0 ? ordered : ['kitchen'];
 }
 
+/**
+ * The caption without the answers the server appended to it: a sale line's
+ * `variant_label` is «M · вівсяне» (`lineCaption`), and the ticket prints
+ * each answer on its own line under the dish — printing the caption whole
+ * would name the milk twice on the cook's paper.
+ */
+export function bareVariantLabel(caption: string, modifierNames: readonly string[]): string {
+  let label = caption;
+  for (const name of [...modifierNames].reverse()) {
+    if (label.endsWith(` · ${name}`)) label = label.slice(0, -(name.length + 3));
+    else if (label === name) label = '';
+  }
+  return label;
+}
+
 function ticketItem(item: SaleDetail['items'][number]): KitchenTicketItem {
+  const names = (item.modifiers ?? []).map((m) => m.name);
   return {
     name: item.product_name,
-    variant_label: item.variant_label,
+    variant_label: bareVariantLabel(item.variant_label, names),
     quantity: item.quantity,
-    modifiers: (item.modifiers ?? []).map((m) => m.name),
+    modifiers: names,
     note: item.note?.trim() ? item.note.trim() : null,
   };
 }

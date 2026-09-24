@@ -45,6 +45,7 @@ export default defineConfig({
         'src/modules/vertical-cafe/lib/stopList.ts',
         'src/modules/tables/lib/hallMap.ts',
         'src/modules/tables/lib/bill.ts',
+        'src/modules/tables/lib/draft.ts',
         'src/modules/tables/lib/menu.ts',
         'src/modules/tables/lib/pay.ts',
         'src/modules/tables/lib/precheck.ts',

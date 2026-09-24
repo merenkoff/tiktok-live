@@ -188,14 +188,9 @@ function OrderCard({
           <li key={item.id} className="text-base leading-snug">
             <span className="font-semibold tabular-nums">{item.quantity} ×</span>{' '}
             <span className="font-medium">{item.product_name}</span>
+            {/* `variant_label` is the fired caption, «M · вівсяне» — the answers
+                are already in it (`lineCaption`), so they are not listed again. */}
             {item.variant_label && <span className="text-sq-secondary"> {item.variant_label}</span>}
-            {item.modifiers.length > 0 && (
-              <ul className="ml-6 text-sm text-sq-secondary">
-                {item.modifiers.map((m, i) => (
-                  <li key={`${m.group_name}-${i}`}>{m.name}</li>
-                ))}
-              </ul>
-            )}
             {item.note && <p className="ml-6 text-sm italic text-sq-text">✎ {item.note}</p>}
           </li>
         ))}
