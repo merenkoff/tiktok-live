@@ -1665,7 +1665,7 @@ function St() {
 				]
 			}),
 			/* @__PURE__ */ W("div", {
-				className: `min-h-0 flex-1 ${x ? "grid grid-cols-[1fr_372px]" : "flex flex-col"}`,
+				className: `min-h-0 flex-1 ${x ? "grid grid-cols-[minmax(0,1fr)_372px]" : "flex flex-col"}`,
 				children: [/* @__PURE__ */ U(tt, {
 					counts: K,
 					online: n,
