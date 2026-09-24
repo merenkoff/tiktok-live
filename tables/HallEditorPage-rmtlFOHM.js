@@ -1,4 +1,4 @@
-import { c as e, d as t, p as n, s as r, t as i, v as a, y as o } from "./useHallMap-fXqupFz3.js";
+import { b as e, c as t, d as n, p as r, s as i, t as a, v as o } from "./useHallMap-DwoGctYl.js";
 import { useCallback as s, useEffect as c, useMemo as l, useRef as u, useState as d } from "react";
 import { Fragment as f, jsx as p, jsxs as m } from "react/jsx-runtime";
 function h(e, t, n = 72) {
@@ -101,10 +101,10 @@ var S = {
 function C() {
 	let [u, b] = d([]), [C, w] = d(null), [T, E] = d(!0), [D, O] = d(null), [k, A] = d(!1), [j, M] = d(null), [N, P] = d(S), [F, I] = d(""), L = s(async () => {
 		try {
-			let { halls: e } = await t();
+			let { halls: e } = await n();
 			b(e);
 		} catch (e) {
-			O(i(e, "Не вдалося прочитати зали"));
+			O(a(e, "Не вдалося прочитати зали"));
 		} finally {
 			E(!1);
 		}
@@ -119,20 +119,20 @@ function C() {
 		try {
 			return await e(), await L(), !0;
 		} catch (e) {
-			return await L(), O(i(e, "Не вдалося зберегти")), !1;
+			return await L(), O(a(e, "Не вдалося зберегти")), !1;
 		} finally {
 			A(!1);
 		}
 	}
-	let { drag: H, start: U, suppressClick: W } = x(s((e, t, r) => {
+	let { drag: H, start: U, suppressClick: W } = x(s((e, t, n) => {
 		if (!R) return;
 		let i = R.tables.find((t) => t.id === e);
 		if (!i) return;
-		let a = g(i, h(t, r)), o = y(R.tables, e, a), s = v(R.tables, o);
+		let a = g(i, h(t, n)), o = y(R.tables, e, a), s = v(R.tables, o);
 		s.length !== 0 && (b((e) => e.map((e) => e.id === R.id ? {
 			...e,
 			tables: o
-		} : e)), V(() => n(s)));
+		} : e)), V(() => r(s)));
 	}, [R, k]));
 	function G(e) {
 		M(e.id), P({
@@ -144,12 +144,12 @@ function C() {
 		});
 	}
 	async function K() {
-		R && await V(() => j === "new" ? e({
+		R && await V(() => j === "new" ? t({
 			...N,
 			hall_id: R.id,
 			pos_x: 0,
 			pos_y: 0
-		}) : o(j, N)) && M(null);
+		}) : e(j, N)) && M(null);
 	}
 	return T ? /* @__PURE__ */ p("p", {
 		className: "p-6 text-center text-sm text-sq-muted",
@@ -182,7 +182,7 @@ function C() {
 						disabled: k || F.trim().length === 0,
 						onClick: () => {
 							let e = F.trim();
-							I(""), V(() => r(e));
+							I(""), V(() => i(e));
 						},
 						children: "Додати залу"
 					})
@@ -222,7 +222,7 @@ function C() {
 						className: "sq-link",
 						"data-testid": "editor-hall-retire",
 						disabled: k,
-						onClick: () => void V(() => a(R.id, { is_active: !R.is_active })),
+						onClick: () => void V(() => o(R.id, { is_active: !R.is_active })),
 						children: R.is_active ? "Прибрати залу" : "Повернути залу"
 					}),
 					/* @__PURE__ */ p("span", {
@@ -355,7 +355,7 @@ function C() {
 							"data-testid": "editor-form-retire",
 							disabled: k,
 							onClick: async () => {
-								await V(() => o(j, { is_active: !1 })) && M(null);
+								await V(() => e(j, { is_active: !1 })) && M(null);
 							},
 							children: "Прибрати із зали"
 						}),

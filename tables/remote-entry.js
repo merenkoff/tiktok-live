@@ -1,6 +1,6 @@
 import { lazy as e } from "react";
 //#region src/platform/version.ts
-var t = "2.2.0";
+var t = "2.3.0";
 //#endregion
 //#region src/modules/lazyWithRetry.ts
 async function n(e, { retries: t = 2, backoffMs: n = 400 } = {}) {
@@ -18,10 +18,14 @@ function r(t, r) {
 }
 //#endregion
 //#region src/modules/tables/manifest.ts
-var i = r(() => import("./TablesRoutes--Z3Nb_hL.js").then((e) => ({ default: e.TablesRoutes }))), a = r(() => import("./HallEditorPage-CpxP69Y6.js").then((e) => ({ default: e.HallEditorPage }))), o = {
+var i = r(() => import("./TablesRoutes-DmU2X2F_.js").then((e) => ({ default: e.TablesRoutes }))), a = r(() => import("./HallEditorPage-rmtlFOHM.js").then((e) => ({ default: e.HallEditorPage }))), o = {
 	id: "tables",
 	title: "Столи",
-	shells: ["web", "cashier"],
+	shells: [
+		"web",
+		"cashier",
+		"tablet"
+	],
 	alwaysEnabled: !0,
 	routes: [{
 		path: "/tables/*",

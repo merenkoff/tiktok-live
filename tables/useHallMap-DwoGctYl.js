@@ -44,7 +44,8 @@ var u = [
 	"api.posRequest",
 	"useOfflineStatus",
 	"formatUah",
-	"cashierApi.getCatalog",
+	"useSalesCatalog",
+	"useVertical",
 	"groupsOf",
 	"defaultModifierIds",
 	"needsModifierSheet",
@@ -69,33 +70,31 @@ function h(e, t, n) {
 	let r = m();
 	return r.length > 0 ? Promise.reject(new d(r)) : i.api.posRequest(e, t, n);
 }
-async function g(e) {
-	let t = p("cashierApi.getCatalog");
-	if (!f(t)) throw new d(["cashierApi.getCatalog"]);
-	return await t({ q: e }) ?? [];
-}
 //#endregion
 //#region src/modules/tables/lib/tablesApi.ts
-function _() {
+function g() {
 	return h("get", "/halls");
 }
-function v() {
+function _() {
 	return h("get", "/bills");
 }
-function y(e, t) {
+function v(e, t) {
 	return h("post", "/bills", {
 		table_id: e,
 		...t ? { guests: t } : {}
 	});
 }
-function b(e) {
+function y(e) {
 	return h("get", `/bills/${e}`);
 }
-function x(e, t) {
+function b(e, t) {
 	return h("post", `/bills/${e}/items`, t);
 }
-function S(e, t, n) {
+function x(e, t, n) {
 	return h("patch", `/bills/${e}/items/${t}`, { quantity: n });
+}
+function S(e, t, n) {
+	return h("patch", `/bills/${e}/items/${t}`, n);
 }
 function C(e, t) {
 	return h("delete", `/bills/${e}/items/${t}`);
@@ -184,7 +183,7 @@ function V(e, t) {
 	return n && typeof n.error == "string" ? n.error : t;
 }
 function H({ online: i, mirrored: a = !1, storeId: o = null }) {
-	let [s, c] = r([]), [l, u] = r([]), [d, f] = r(() => (/* @__PURE__ */ new Date()).toISOString()), [p, m] = r(!0), [h, g] = r(null), [y, b] = r(!1), [x, S] = r(null), C = n(!0);
+	let [s, c] = r([]), [l, u] = r([]), [d, f] = r(() => (/* @__PURE__ */ new Date()).toISOString()), [p, m] = r(!0), [h, v] = r(null), [y, b] = r(!1), [x, S] = r(null), C = n(!0);
 	t(() => (C.current = !0, () => {
 		C.current = !1;
 	}), []);
@@ -194,9 +193,9 @@ function H({ online: i, mirrored: a = !1, storeId: o = null }) {
 		return !e || !C.current ? !1 : (c(e.halls), u(e.bills), f(e.now), b(!0), S(e.savedAt), m(!1), !0);
 	}, [a, o]), T = e(async () => {
 		try {
-			let [e, t] = await Promise.all([_(), v()]);
+			let [e, t] = await Promise.all([g(), _()]);
 			if (!C.current) return;
-			c(e.halls), u(t.bills), f((/* @__PURE__ */ new Date()).toISOString()), g(null), b(!1), S(null), a && o != null && (F(o, {
+			c(e.halls), u(t.bills), f((/* @__PURE__ */ new Date()).toISOString()), v(null), b(!1), S(null), a && o != null && (F(o, {
 				halls: e.halls,
 				bills: t.bills,
 				now: (/* @__PURE__ */ new Date()).toISOString()
@@ -204,7 +203,7 @@ function H({ online: i, mirrored: a = !1, storeId: o = null }) {
 		} catch (e) {
 			if (!C.current) return;
 			let t = await w();
-			C.current && !t && g(V(e, "Не вдалося прочитати зал"));
+			C.current && !t && v(V(e, "Не вдалося прочитати зал"));
 		} finally {
 			C.current && m(!1);
 		}
@@ -237,4 +236,4 @@ function H({ online: i, mirrored: a = !1, storeId: o = null }) {
 	};
 }
 //#endregion
-export { S as _, x as a, g as b, A as c, _ as d, D as f, y as g, C as h, L as i, w as l, E as m, H as n, T as o, M as p, R as r, O as s, V as t, b as u, k as v, j as y };
+export { x as _, b as a, j as b, A as c, g as d, D as f, v as g, C as h, L as i, w as l, E as m, H as n, T as o, M as p, R as r, O as s, V as t, y as u, k as v, S as y };
