@@ -295,7 +295,7 @@ export function BillPage(): JSX.Element {
         </p>
       )}
 
-      <div className={`min-h-0 flex-1 ${wide ? 'grid grid-cols-[1fr_372px]' : 'flex flex-col'}`}>
+      <div className={`min-h-0 flex-1 ${wide ? 'grid grid-cols-[minmax(0,1fr)_372px]' : 'flex flex-col'}`}>
         <MenuCatalog
           counts={counts}
           online={online}
