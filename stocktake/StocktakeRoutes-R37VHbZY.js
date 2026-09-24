@@ -1,62 +1,65 @@
-import { useEffect as e, useRef as t, useState as n } from "react";
-import { jsx as r, jsxs as i } from "react/jsx-runtime";
+import { n as e, r as t } from "./sync-CyxwpwU0.js";
+import { Suspense as n, lazy as r, useCallback as i, useEffect as a, useRef as o, useState as s } from "react";
+import { QuantityUnitToggle as c, cashierApi as l, isOfflinePosEnabled as u, packOf as d, quantityToBase as f, useAuthStore as p, useOfflineStatus as m } from "@pos/platform";
+import { Link as h, Route as g, Routes as _, useNavigate as v, useParams as y } from "react-router-dom";
+import { Fragment as b, jsx as x, jsxs as S } from "react/jsx-runtime";
 //#region \0rolldown/runtime.js
-var a = Object.create, o = Object.defineProperty, s = Object.getOwnPropertyDescriptor, c = Object.getOwnPropertyNames, l = Object.getPrototypeOf, u = Object.prototype.hasOwnProperty, d = (e, t) => () => (t || (e((t = { exports: {} }).exports, t), e = null), t.exports), f = (e, t, n, r) => {
-	if (t && typeof t == "object" || typeof t == "function") for (var i = c(t), a = 0, l = i.length, d; a < l; a++) d = i[a], !u.call(e, d) && d !== n && o(e, d, {
-		get: ((e) => t[e]).bind(null, d),
-		enumerable: !(r = s(t, d)) || r.enumerable
+var C = Object.create, ee = Object.defineProperty, te = Object.getOwnPropertyDescriptor, w = Object.getOwnPropertyNames, T = Object.getPrototypeOf, ne = Object.prototype.hasOwnProperty, E = (e, t) => () => (t || (e((t = { exports: {} }).exports, t), e = null), t.exports), re = (e, t, n, r) => {
+	if (t && typeof t == "object" || typeof t == "function") for (var i = w(t), a = 0, o = i.length, s; a < o; a++) s = i[a], !ne.call(e, s) && s !== n && ee(e, s, {
+		get: ((e) => t[e]).bind(null, s),
+		enumerable: !(r = te(t, s)) || r.enumerable
 	});
 	return e;
-}, p = (e, t, n) => (n = e == null ? {} : a(l(e)), f(t || !e || !e.__esModule || !u.call(e, "default") ? o(n, "default", {
+}, D = (e, t, n) => (n = e == null ? {} : C(T(e)), re(t || !e || !e.__esModule || !ne.call(e, "default") ? ee(n, "default", {
 	value: e,
 	enumerable: !0
-}) : n, e)), m;
+}) : n, e)), O;
 (function(e) {
 	e[e.QR_CODE = 0] = "QR_CODE", e[e.AZTEC = 1] = "AZTEC", e[e.CODABAR = 2] = "CODABAR", e[e.CODE_39 = 3] = "CODE_39", e[e.CODE_93 = 4] = "CODE_93", e[e.CODE_128 = 5] = "CODE_128", e[e.DATA_MATRIX = 6] = "DATA_MATRIX", e[e.MAXICODE = 7] = "MAXICODE", e[e.ITF = 8] = "ITF", e[e.EAN_13 = 9] = "EAN_13", e[e.EAN_8 = 10] = "EAN_8", e[e.PDF_417 = 11] = "PDF_417", e[e.RSS_14 = 12] = "RSS_14", e[e.RSS_EXPANDED = 13] = "RSS_EXPANDED", e[e.UPC_A = 14] = "UPC_A", e[e.UPC_E = 15] = "UPC_E", e[e.UPC_EAN_EXTENSION = 16] = "UPC_EAN_EXTENSION";
-})(m || (m = {}));
-var h = /* @__PURE__ */ new Map([
-	[m.QR_CODE, "QR_CODE"],
-	[m.AZTEC, "AZTEC"],
-	[m.CODABAR, "CODABAR"],
-	[m.CODE_39, "CODE_39"],
-	[m.CODE_93, "CODE_93"],
-	[m.CODE_128, "CODE_128"],
-	[m.DATA_MATRIX, "DATA_MATRIX"],
-	[m.MAXICODE, "MAXICODE"],
-	[m.ITF, "ITF"],
-	[m.EAN_13, "EAN_13"],
-	[m.EAN_8, "EAN_8"],
-	[m.PDF_417, "PDF_417"],
-	[m.RSS_14, "RSS_14"],
-	[m.RSS_EXPANDED, "RSS_EXPANDED"],
-	[m.UPC_A, "UPC_A"],
-	[m.UPC_E, "UPC_E"],
-	[m.UPC_EAN_EXTENSION, "UPC_EAN_EXTENSION"]
-]), g;
+})(O || (O = {}));
+var ie = /* @__PURE__ */ new Map([
+	[O.QR_CODE, "QR_CODE"],
+	[O.AZTEC, "AZTEC"],
+	[O.CODABAR, "CODABAR"],
+	[O.CODE_39, "CODE_39"],
+	[O.CODE_93, "CODE_93"],
+	[O.CODE_128, "CODE_128"],
+	[O.DATA_MATRIX, "DATA_MATRIX"],
+	[O.MAXICODE, "MAXICODE"],
+	[O.ITF, "ITF"],
+	[O.EAN_13, "EAN_13"],
+	[O.EAN_8, "EAN_8"],
+	[O.PDF_417, "PDF_417"],
+	[O.RSS_14, "RSS_14"],
+	[O.RSS_EXPANDED, "RSS_EXPANDED"],
+	[O.UPC_A, "UPC_A"],
+	[O.UPC_E, "UPC_E"],
+	[O.UPC_EAN_EXTENSION, "UPC_EAN_EXTENSION"]
+]), ae;
 (function(e) {
 	e[e.UNKNOWN = 0] = "UNKNOWN", e[e.URL = 1] = "URL";
-})(g || (g = {}));
-function _(e) {
-	return Object.values(m).includes(e);
+})(ae || (ae = {}));
+function oe(e) {
+	return Object.values(O).includes(e);
 }
-var v;
+var se;
 (function(e) {
 	e[e.SCAN_TYPE_CAMERA = 0] = "SCAN_TYPE_CAMERA", e[e.SCAN_TYPE_FILE = 1] = "SCAN_TYPE_FILE";
-})(v || (v = {}));
-var y = function() {
+})(se || (se = {}));
+var ce = function() {
 	function e() {}
-	return e.GITHUB_PROJECT_URL = "https://github.com/mebjas/html5-qrcode", e.SCAN_DEFAULT_FPS = 2, e.DEFAULT_DISABLE_FLIP = !1, e.DEFAULT_REMEMBER_LAST_CAMERA_USED = !0, e.DEFAULT_SUPPORTED_SCAN_TYPE = [v.SCAN_TYPE_CAMERA, v.SCAN_TYPE_FILE], e;
-}(), b = function() {
+	return e.GITHUB_PROJECT_URL = "https://github.com/mebjas/html5-qrcode", e.SCAN_DEFAULT_FPS = 2, e.DEFAULT_DISABLE_FLIP = !1, e.DEFAULT_REMEMBER_LAST_CAMERA_USED = !0, e.DEFAULT_SUPPORTED_SCAN_TYPE = [se.SCAN_TYPE_CAMERA, se.SCAN_TYPE_FILE], e;
+}(), le = function() {
 	function e(e, t) {
 		this.format = e, this.formatName = t;
 	}
 	return e.prototype.toString = function() {
 		return this.formatName;
 	}, e.create = function(t) {
-		if (!h.has(t)) throw `${t} not in html5QrcodeSupportedFormatsTextMap`;
-		return new e(t, h.get(t));
+		if (!ie.has(t)) throw `${t} not in html5QrcodeSupportedFormatsTextMap`;
+		return new e(t, ie.get(t));
 	}, e;
-}(), x = function() {
+}(), ue = function() {
 	function e() {}
 	return e.createFromText = function(e) {
 		return {
@@ -69,19 +72,19 @@ var y = function() {
 			result: e
 		};
 	}, e;
-}(), S;
+}(), k;
 (function(e) {
 	e[e.UNKWOWN_ERROR = 0] = "UNKWOWN_ERROR", e[e.IMPLEMENTATION_ERROR = 1] = "IMPLEMENTATION_ERROR", e[e.NO_CODE_FOUND_ERROR = 2] = "NO_CODE_FOUND_ERROR";
-})(S || (S = {}));
-var C = function() {
+})(k || (k = {}));
+var de = function() {
 	function e() {}
 	return e.createFrom = function(e) {
 		return {
 			errorMessage: e,
-			type: S.UNKWOWN_ERROR
+			type: k.UNKWOWN_ERROR
 		};
 	}, e;
-}(), ee = function() {
+}(), fe = function() {
 	function e(e) {
 		this.verbose = e;
 	}
@@ -96,15 +99,15 @@ var C = function() {
 		this.verbose && console.error(e);
 	}, e;
 }();
-function te(e) {
+function pe(e) {
 	return e == null;
 }
-function w(e, t, n) {
+function me(e, t, n) {
 	return e > n ? n : e < t ? t : e;
 }
 //#endregion
 //#region node_modules/html5-qrcode/esm/strings.js
-var T = function() {
+var he = function() {
 	function e() {}
 	return e.codeParseError = function(e) {
 		return `QR code parse error, error = ${e}`;
@@ -121,7 +124,7 @@ var T = function() {
 	}, e.scannerPaused = function() {
 		return "Scanner paused";
 	}, e;
-}(), E = function() {
+}(), A = function() {
 	function e() {}
 	return e.scanningStatus = function() {
 		return "Scanning";
@@ -184,14 +187,14 @@ var T = function() {
 	}, e.fileScanAltText = function() {
 		return "Fule based scan";
 	}, e;
-}(), D = function() {
+}(), j = function() {
 	function e() {}
 	return e.poweredBy = function() {
 		return "Powered by ";
 	}, e.reportIssues = function() {
 		return "Report issues";
 	}, e;
-}(), ne = function() {
+}(), ge = function() {
 	function e() {}
 	return e.isMediaStreamConstraintsValid = function(e, t) {
 		if (typeof e != "object") {
@@ -213,7 +216,7 @@ var T = function() {
 		}
 		return !0;
 	}, e;
-}(), O = /* @__PURE__ */ p((/* @__PURE__ */ d(((e, t) => {
+}(), M = /* @__PURE__ */ D((/* @__PURE__ */ E(((e, t) => {
 	(function(n, r) {
 		typeof e == "object" && t !== void 0 ? r(e) : typeof define == "function" && define.amd ? define(["exports"], r) : (n = typeof globalThis < "u" ? globalThis : n || self, r(n.ZXing = {}));
 	})(e, (function(e) {
@@ -776,13 +779,13 @@ var T = function() {
 				this.value = this.value.substr(0, e) + t + this.value.substr(e + t.length);
 			}
 		}
-		class E {
+		class ne {
 			constructor(e, t, n, r) {
 				if (this.width = e, this.height = t, this.rowSize = n, this.bits = r, t ?? (t = e), this.height = t, e < 1 || t < 1) throw new l("Both dimensions must be greater than 0");
 				n ?? (n = Math.floor((e + 31) / 32)), this.rowSize = n, r ?? (this.bits = new Int32Array(this.rowSize * this.height));
 			}
 			static parseFromBooleanArray(e) {
-				let t = e.length, n = e[0].length, r = new E(n, t);
+				let t = e.length, n = e[0].length, r = new ne(n, t);
 				for (let i = 0; i < t; i++) {
 					let t = e[i];
 					for (let e = 0; e < n; e++) t[e] && r.set(e, i);
@@ -807,7 +810,7 @@ var T = function() {
 					else if (i - a !== o) throw new l("row lengths do not match");
 					s++;
 				}
-				let u = new E(o, s);
+				let u = new ne(o, s);
 				for (let e = 0; e < i; e++) r[e] && u.set(Math.floor(e % o), Math.floor(e / o));
 				return u;
 			}
@@ -913,7 +916,7 @@ var T = function() {
 				return this.rowSize;
 			}
 			equals(e) {
-				if (!(e instanceof E)) return !1;
+				if (!(e instanceof ne)) return !1;
 				let t = e;
 				return this.width === t.width && this.height === t.height && this.rowSize === t.rowSize && g.equals(this.bits, t.bits);
 			}
@@ -933,25 +936,25 @@ var T = function() {
 				return r.toString();
 			}
 			clone() {
-				return new E(this.width, this.height, this.rowSize, this.bits.slice());
+				return new ne(this.width, this.height, this.rowSize, this.bits.slice());
 			}
 		}
-		class D extends s {
+		class E extends s {
 			static getNotFoundInstance() {
-				return new D();
+				return new E();
 			}
 		}
-		D.kind = "NotFoundException";
-		class ne extends f {
+		E.kind = "NotFoundException";
+		class re extends f {
 			constructor(e) {
-				super(e), this.luminances = ne.EMPTY, this.buckets = new Int32Array(ne.LUMINANCE_BUCKETS);
+				super(e), this.luminances = re.EMPTY, this.buckets = new Int32Array(re.LUMINANCE_BUCKETS);
 			}
 			getBlackRow(e, t) {
 				let n = this.getLuminanceSource(), r = n.getWidth();
 				t == null || t.getSize() < r ? t = new v(r) : t.clear(), this.initArrays(r);
 				let i = n.getRow(e, this.luminances), a = this.buckets;
-				for (let e = 0; e < r; e++) a[(i[e] & 255) >> ne.LUMINANCE_SHIFT]++;
-				let o = ne.estimateBlackPoint(a);
+				for (let e = 0; e < r; e++) a[(i[e] & 255) >> re.LUMINANCE_SHIFT]++;
+				let o = re.estimateBlackPoint(a);
 				if (r < 3) for (let e = 0; e < r; e++) (i[e] & 255) < o && t.set(e);
 				else {
 					let e = i[0] & 255, n = i[1] & 255;
@@ -963,17 +966,17 @@ var T = function() {
 				return t;
 			}
 			getBlackMatrix() {
-				let e = this.getLuminanceSource(), t = e.getWidth(), n = e.getHeight(), r = new E(t, n);
+				let e = this.getLuminanceSource(), t = e.getWidth(), n = e.getHeight(), r = new ne(t, n);
 				this.initArrays(t);
 				let i = this.buckets;
 				for (let r = 1; r < 5; r++) {
 					let a = Math.floor(n * r / 5), o = e.getRow(a, this.luminances), s = Math.floor(t * 4 / 5);
 					for (let e = Math.floor(t / 5); e < s; e++) {
 						let t = o[e] & 255;
-						i[t >> ne.LUMINANCE_SHIFT]++;
+						i[t >> re.LUMINANCE_SHIFT]++;
 					}
 				}
-				let a = ne.estimateBlackPoint(i), o = e.getMatrix();
+				let a = re.estimateBlackPoint(i), o = e.getMatrix();
 				for (let e = 0; e < n; e++) {
 					let n = e * t;
 					for (let i = 0; i < t; i++) (o[n + i] & 255) < a && r.set(i, e);
@@ -981,12 +984,12 @@ var T = function() {
 				return r;
 			}
 			createBinarizer(e) {
-				return new ne(e);
+				return new re(e);
 			}
 			initArrays(e) {
 				this.luminances.length < e && (this.luminances = new Uint8ClampedArray(e));
 				let t = this.buckets;
-				for (let e = 0; e < ne.LUMINANCE_BUCKETS; e++) t[e] = 0;
+				for (let e = 0; e < re.LUMINANCE_BUCKETS; e++) t[e] = 0;
 			}
 			static estimateBlackPoint(e) {
 				let t = e.length, n = 0, r = 0, i = 0;
@@ -1000,52 +1003,52 @@ var T = function() {
 					let e = r;
 					r = a, a = e;
 				}
-				if (a - r <= t / 16) throw new D();
+				if (a - r <= t / 16) throw new E();
 				let s = a - 1, c = -1;
 				for (let t = a - 1; t > r; t--) {
 					let i = t - r, o = i * i * (a - t) * (n - e[t]);
 					o > c && (s = t, c = o);
 				}
-				return s << ne.LUMINANCE_SHIFT;
+				return s << re.LUMINANCE_SHIFT;
 			}
 		}
-		ne.LUMINANCE_BITS = 5, ne.LUMINANCE_SHIFT = 8 - ne.LUMINANCE_BITS, ne.LUMINANCE_BUCKETS = 1 << ne.LUMINANCE_BITS, ne.EMPTY = Uint8ClampedArray.from([0]);
-		class O extends ne {
+		re.LUMINANCE_BITS = 5, re.LUMINANCE_SHIFT = 8 - re.LUMINANCE_BITS, re.LUMINANCE_BUCKETS = 1 << re.LUMINANCE_BITS, re.EMPTY = Uint8ClampedArray.from([0]);
+		class D extends re {
 			constructor(e) {
 				super(e), this.matrix = null;
 			}
 			getBlackMatrix() {
 				if (this.matrix !== null) return this.matrix;
 				let e = this.getLuminanceSource(), t = e.getWidth(), n = e.getHeight();
-				if (t >= O.MINIMUM_DIMENSION && n >= O.MINIMUM_DIMENSION) {
-					let r = e.getMatrix(), i = t >> O.BLOCK_SIZE_POWER;
-					(t & O.BLOCK_SIZE_MASK) !== 0 && i++;
-					let a = n >> O.BLOCK_SIZE_POWER;
-					(n & O.BLOCK_SIZE_MASK) !== 0 && a++;
-					let o = O.calculateBlackPoints(r, i, a, t, n), s = new E(t, n);
-					O.calculateThresholdForBlock(r, i, a, t, n, o, s), this.matrix = s;
+				if (t >= D.MINIMUM_DIMENSION && n >= D.MINIMUM_DIMENSION) {
+					let r = e.getMatrix(), i = t >> D.BLOCK_SIZE_POWER;
+					(t & D.BLOCK_SIZE_MASK) !== 0 && i++;
+					let a = n >> D.BLOCK_SIZE_POWER;
+					(n & D.BLOCK_SIZE_MASK) !== 0 && a++;
+					let o = D.calculateBlackPoints(r, i, a, t, n), s = new ne(t, n);
+					D.calculateThresholdForBlock(r, i, a, t, n, o, s), this.matrix = s;
 				} else this.matrix = super.getBlackMatrix();
 				return this.matrix;
 			}
 			createBinarizer(e) {
-				return new O(e);
+				return new D(e);
 			}
 			static calculateThresholdForBlock(e, t, n, r, i, a, o) {
-				let s = i - O.BLOCK_SIZE, c = r - O.BLOCK_SIZE;
+				let s = i - D.BLOCK_SIZE, c = r - D.BLOCK_SIZE;
 				for (let i = 0; i < n; i++) {
-					let l = i << O.BLOCK_SIZE_POWER;
+					let l = i << D.BLOCK_SIZE_POWER;
 					l > s && (l = s);
-					let u = O.cap(i, 2, n - 3);
+					let u = D.cap(i, 2, n - 3);
 					for (let n = 0; n < t; n++) {
-						let i = n << O.BLOCK_SIZE_POWER;
+						let i = n << D.BLOCK_SIZE_POWER;
 						i > c && (i = c);
-						let s = O.cap(n, 2, t - 3), d = 0;
+						let s = D.cap(n, 2, t - 3), d = 0;
 						for (let e = -2; e <= 2; e++) {
 							let t = a[u + e];
 							d += t[s - 2] + t[s - 1] + t[s] + t[s + 1] + t[s + 2];
 						}
 						let f = d / 25;
-						O.thresholdBlock(e, i, l, f, r, o);
+						D.thresholdBlock(e, i, l, f, r, o);
 					}
 				}
 			}
@@ -1053,27 +1056,27 @@ var T = function() {
 				return e < t ? t : e > n ? n : e;
 			}
 			static thresholdBlock(e, t, n, r, i, a) {
-				for (let o = 0, s = n * i + t; o < O.BLOCK_SIZE; o++, s += i) for (let i = 0; i < O.BLOCK_SIZE; i++) (e[s + i] & 255) <= r && a.set(t + i, n + o);
+				for (let o = 0, s = n * i + t; o < D.BLOCK_SIZE; o++, s += i) for (let i = 0; i < D.BLOCK_SIZE; i++) (e[s + i] & 255) <= r && a.set(t + i, n + o);
 			}
 			static calculateBlackPoints(e, t, n, r, i) {
-				let a = i - O.BLOCK_SIZE, o = r - O.BLOCK_SIZE, s = Array(n);
+				let a = i - D.BLOCK_SIZE, o = r - D.BLOCK_SIZE, s = Array(n);
 				for (let i = 0; i < n; i++) {
 					s[i] = new Int32Array(t);
-					let n = i << O.BLOCK_SIZE_POWER;
+					let n = i << D.BLOCK_SIZE_POWER;
 					n > a && (n = a);
 					for (let a = 0; a < t; a++) {
-						let t = a << O.BLOCK_SIZE_POWER;
+						let t = a << D.BLOCK_SIZE_POWER;
 						t > o && (t = o);
 						let c = 0, l = 255, u = 0;
-						for (let i = 0, a = n * r + t; i < O.BLOCK_SIZE; i++, a += r) {
-							for (let t = 0; t < O.BLOCK_SIZE; t++) {
+						for (let i = 0, a = n * r + t; i < D.BLOCK_SIZE; i++, a += r) {
+							for (let t = 0; t < D.BLOCK_SIZE; t++) {
 								let n = e[a + t] & 255;
 								c += n, n < l && (l = n), n > u && (u = n);
 							}
-							if (u - l > O.MIN_DYNAMIC_RANGE) for (i++, a += r; i < O.BLOCK_SIZE; i++, a += r) for (let t = 0; t < O.BLOCK_SIZE; t++) c += e[a + t] & 255;
+							if (u - l > D.MIN_DYNAMIC_RANGE) for (i++, a += r; i < D.BLOCK_SIZE; i++, a += r) for (let t = 0; t < D.BLOCK_SIZE; t++) c += e[a + t] & 255;
 						}
-						let d = c >> O.BLOCK_SIZE_POWER * 2;
-						if (u - l <= O.MIN_DYNAMIC_RANGE && (d = l / 2, i > 0 && a > 0)) {
+						let d = c >> D.BLOCK_SIZE_POWER * 2;
+						if (u - l <= D.MIN_DYNAMIC_RANGE && (d = l / 2, i > 0 && a > 0)) {
 							let e = (s[i - 1][a] + 2 * s[i][a - 1] + s[i - 1][a - 1]) / 4;
 							l < e && (d = e);
 						}
@@ -1083,8 +1086,8 @@ var T = function() {
 				return s;
 			}
 		}
-		O.BLOCK_SIZE_POWER = 3, O.BLOCK_SIZE = 1 << O.BLOCK_SIZE_POWER, O.BLOCK_SIZE_MASK = O.BLOCK_SIZE - 1, O.MINIMUM_DIMENSION = O.BLOCK_SIZE * 5, O.MIN_DYNAMIC_RANGE = 24;
-		class re {
+		D.BLOCK_SIZE_POWER = 3, D.BLOCK_SIZE = 1 << D.BLOCK_SIZE_POWER, D.BLOCK_SIZE_MASK = D.BLOCK_SIZE - 1, D.MINIMUM_DIMENSION = D.BLOCK_SIZE * 5, D.MIN_DYNAMIC_RANGE = 24;
+		class O {
 			constructor(e, t) {
 				this.width = e, this.height = t;
 			}
@@ -1122,7 +1125,7 @@ var T = function() {
 				return t.toString();
 			}
 		}
-		class ie extends re {
+		class ie extends O {
 			constructor(e) {
 				super(e.getWidth(), e.getHeight()), this.delegate = e;
 			}
@@ -1155,7 +1158,7 @@ var T = function() {
 				return new ie(this.delegate.rotateCounterClockwise45());
 			}
 		}
-		class ae extends re {
+		class ae extends O {
 			constructor(e) {
 				super(e.width, e.height), this.canvas = e, this.tempCanvasElement = null, this.buffer = ae.makeBufferFromCanvasImageData(e);
 			}
@@ -1487,13 +1490,13 @@ var T = function() {
 				this._stopAsyncDecode = !1;
 				let r = (i, a) => {
 					if (this._stopAsyncDecode) {
-						a(new D("Video stream has ended before any code could be detected.")), this._stopAsyncDecode = void 0;
+						a(new E("Video stream has ended before any code could be detected.")), this._stopAsyncDecode = void 0;
 						return;
 					}
 					try {
 						i(this.decode(e));
 					} catch (e) {
-						let o = t && e instanceof D, s = (e instanceof d || e instanceof x) && n;
+						let o = t && e instanceof E, s = (e instanceof d || e instanceof x) && n;
 						if (o || s) return setTimeout(r, this._timeBetweenDecodingAttempts, i, a);
 						a(e);
 					}
@@ -1511,7 +1514,7 @@ var T = function() {
 						t(this.decode(e), null), setTimeout(n, this.timeBetweenScansMillis);
 					} catch (e) {
 						t(null, e);
-						let r = e instanceof d || e instanceof x, i = e instanceof D;
+						let r = e instanceof d || e instanceof x, i = e instanceof E;
 						(r || i) && setTimeout(n, this._timeBetweenDecodingAttempts);
 					}
 				};
@@ -1550,7 +1553,7 @@ var T = function() {
 			}
 			createBinaryBitmap(e) {
 				this.getCaptureCanvasContext(e), this._isHTMLVideoElement(e) ? this.drawFrameOnCanvas(e) : this.drawImageOnCanvas(e);
-				let t = this.getCaptureCanvas(e), n = new ae(t), r = new O(n);
+				let t = this.getCaptureCanvas(e), n = new ae(t), r = new D(n);
 				return new u(r);
 			}
 			getCaptureCanvasContext(e) {
@@ -1822,9 +1825,9 @@ var T = function() {
 				return e;
 			}
 		}
-		class ge extends s {}
-		ge.kind = "ArithmeticException";
-		class A extends me {
+		class A extends s {}
+		A.kind = "ArithmeticException";
+		class j extends me {
 			constructor(e, t, n) {
 				super(), this.primitive = e, this.size = t, this.generatorBase = n;
 				let r = new Int32Array(t), i = 1;
@@ -1847,7 +1850,7 @@ var T = function() {
 				return n[0] = t, new he(this, n);
 			}
 			inverse(e) {
-				if (e === 0) throw new ge();
+				if (e === 0) throw new A();
 				return this.expTable[this.size - this.logTable[e] - 1];
 			}
 			multiply(e, t) {
@@ -1866,12 +1869,12 @@ var T = function() {
 				return e === this;
 			}
 		}
-		A.AZTEC_DATA_12 = new A(4201, 4096, 1), A.AZTEC_DATA_10 = new A(1033, 1024, 1), A.AZTEC_DATA_6 = new A(67, 64, 1), A.AZTEC_PARAM = new A(19, 16, 1), A.QR_CODE_FIELD_256 = new A(285, 256, 0), A.DATA_MATRIX_FIELD_256 = new A(301, 256, 1), A.AZTEC_DATA_8 = A.DATA_MATRIX_FIELD_256, A.MAXICODE_FIELD_64 = A.AZTEC_DATA_6;
-		class _e extends s {}
-		_e.kind = "ReedSolomonException";
-		class ve extends s {}
-		ve.kind = "IllegalStateException";
-		class ye {
+		j.AZTEC_DATA_12 = new j(4201, 4096, 1), j.AZTEC_DATA_10 = new j(1033, 1024, 1), j.AZTEC_DATA_6 = new j(67, 64, 1), j.AZTEC_PARAM = new j(19, 16, 1), j.QR_CODE_FIELD_256 = new j(285, 256, 0), j.DATA_MATRIX_FIELD_256 = new j(301, 256, 1), j.AZTEC_DATA_8 = j.DATA_MATRIX_FIELD_256, j.MAXICODE_FIELD_64 = j.AZTEC_DATA_6;
+		class ge extends s {}
+		ge.kind = "ReedSolomonException";
+		class M extends s {}
+		M.kind = "IllegalStateException";
+		class _e {
 			constructor(e) {
 				this.field = e;
 			}
@@ -1885,8 +1888,8 @@ var T = function() {
 				let o = new he(n, i), s = this.runEuclideanAlgorithm(n.buildMonomial(t, 1), o, t), c = s[0], l = s[1], u = this.findErrorLocations(c), d = this.findErrorMagnitudes(l, u);
 				for (let t = 0; t < u.length; t++) {
 					let r = e.length - 1 - n.log(u[t]);
-					if (r < 0) throw new _e("Bad error location");
-					e[r] = A.addOrSubtract(e[r], d[t]);
+					if (r < 0) throw new ge("Bad error location");
+					e[r] = j.addOrSubtract(e[r], d[t]);
 				}
 			}
 			runEuclideanAlgorithm(e, t, n) {
@@ -1897,17 +1900,17 @@ var T = function() {
 				let r = this.field, i = e, a = t, o = r.getZero(), s = r.getOne();
 				for (; a.getDegree() >= (n / 2 | 0);) {
 					let e = i, t = o;
-					if (i = a, o = s, i.isZero()) throw new _e("r_{i-1} was zero");
+					if (i = a, o = s, i.isZero()) throw new ge("r_{i-1} was zero");
 					a = e;
 					let n = r.getZero(), c = i.getCoefficient(i.getDegree()), l = r.inverse(c);
 					for (; a.getDegree() >= i.getDegree() && !a.isZero();) {
 						let e = a.getDegree() - i.getDegree(), t = r.multiply(a.getCoefficient(a.getDegree()), l);
 						n = n.addOrSubtract(r.buildMonomial(e, t)), a = a.addOrSubtract(i.multiplyByMonomial(e, t));
 					}
-					if (s = n.multiply(o).addOrSubtract(t), a.getDegree() >= i.getDegree()) throw new ve("Division algorithm failed to reduce polynomial?");
+					if (s = n.multiply(o).addOrSubtract(t), a.getDegree() >= i.getDegree()) throw new M("Division algorithm failed to reduce polynomial?");
 				}
 				let c = s.getCoefficient(0);
-				if (c === 0) throw new _e("sigmaTilde(0) was zero");
+				if (c === 0) throw new ge("sigmaTilde(0) was zero");
 				let l = r.inverse(c);
 				return [s.multiplyScalar(l), a.multiplyScalar(l)];
 			}
@@ -1916,7 +1919,7 @@ var T = function() {
 				if (t === 1) return Int32Array.from([e.getCoefficient(1)]);
 				let n = new Int32Array(t), r = 0, i = this.field;
 				for (let a = 1; a < i.getSize() && r < t; a++) e.evaluateAt(a) === 0 && (n[r] = i.inverse(a), r++);
-				if (r !== t) throw new _e("Error locator degree does not match number of roots");
+				if (r !== t) throw new ge("Error locator degree does not match number of roots");
 				return n;
 			}
 			findErrorMagnitudes(e, t) {
@@ -1932,76 +1935,76 @@ var T = function() {
 				return r;
 			}
 		}
-		var be;
+		var ve;
 		(function(e) {
 			e[e.UPPER = 0] = "UPPER", e[e.LOWER = 1] = "LOWER", e[e.MIXED = 2] = "MIXED", e[e.DIGIT = 3] = "DIGIT", e[e.PUNCT = 4] = "PUNCT", e[e.BINARY = 5] = "BINARY";
-		})(be || (be = {}));
-		class j {
+		})(ve || (ve = {}));
+		class ye {
 			decode(e) {
 				this.ddata = e;
-				let t = e.getBits(), n = this.extractBits(t), r = this.correctBits(n), i = j.convertBoolArrayToByteArray(r), a = j.getEncodedData(r), o = new pe(i, a, null, null);
+				let t = e.getBits(), n = this.extractBits(t), r = this.correctBits(n), i = ye.convertBoolArrayToByteArray(r), a = ye.getEncodedData(r), o = new pe(i, a, null, null);
 				return o.setNumBits(r.length), o;
 			}
 			static highLevelDecode(e) {
 				return this.getEncodedData(e);
 			}
 			static getEncodedData(e) {
-				let t = e.length, n = be.UPPER, r = be.UPPER, i = "", a = 0;
-				for (; a < t;) if (r === be.BINARY) {
+				let t = e.length, n = ve.UPPER, r = ve.UPPER, i = "", a = 0;
+				for (; a < t;) if (r === ve.BINARY) {
 					if (t - a < 5) break;
-					let o = j.readCode(e, a, 5);
+					let o = ye.readCode(e, a, 5);
 					if (a += 5, o === 0) {
 						if (t - a < 11) break;
-						o = j.readCode(e, a, 11) + 31, a += 11;
+						o = ye.readCode(e, a, 11) + 31, a += 11;
 					}
 					for (let n = 0; n < o; n++) {
 						if (t - a < 8) {
 							a = t;
 							break;
 						}
-						let n = j.readCode(e, a, 8);
+						let n = ye.readCode(e, a, 8);
 						i += w.castAsNonUtf8Char(n), a += 8;
 					}
 					r = n;
 				} else {
-					let o = r === be.DIGIT ? 4 : 5;
+					let o = r === ve.DIGIT ? 4 : 5;
 					if (t - a < o) break;
-					let s = j.readCode(e, a, o);
+					let s = ye.readCode(e, a, o);
 					a += o;
-					let c = j.getCharacter(r, s);
-					c.startsWith("CTRL_") ? (n = r, r = j.getTable(c.charAt(5)), c.charAt(6) === "L" && (n = r)) : (i += c, r = n);
+					let c = ye.getCharacter(r, s);
+					c.startsWith("CTRL_") ? (n = r, r = ye.getTable(c.charAt(5)), c.charAt(6) === "L" && (n = r)) : (i += c, r = n);
 				}
 				return i;
 			}
 			static getTable(e) {
 				switch (e) {
-					case "L": return be.LOWER;
-					case "P": return be.PUNCT;
-					case "M": return be.MIXED;
-					case "D": return be.DIGIT;
-					case "B": return be.BINARY;
-					default: return be.UPPER;
+					case "L": return ve.LOWER;
+					case "P": return ve.PUNCT;
+					case "M": return ve.MIXED;
+					case "D": return ve.DIGIT;
+					case "B": return ve.BINARY;
+					default: return ve.UPPER;
 				}
 			}
 			static getCharacter(e, t) {
 				switch (e) {
-					case be.UPPER: return j.UPPER_TABLE[t];
-					case be.LOWER: return j.LOWER_TABLE[t];
-					case be.MIXED: return j.MIXED_TABLE[t];
-					case be.PUNCT: return j.PUNCT_TABLE[t];
-					case be.DIGIT: return j.DIGIT_TABLE[t];
-					default: throw new ve("Bad table");
+					case ve.UPPER: return ye.UPPER_TABLE[t];
+					case ve.LOWER: return ye.LOWER_TABLE[t];
+					case ve.MIXED: return ye.MIXED_TABLE[t];
+					case ve.PUNCT: return ye.PUNCT_TABLE[t];
+					case ve.DIGIT: return ye.DIGIT_TABLE[t];
+					default: throw new M("Bad table");
 				}
 			}
 			correctBits(e) {
 				let t, n;
-				this.ddata.getNbLayers() <= 2 ? (n = 6, t = A.AZTEC_DATA_6) : this.ddata.getNbLayers() <= 8 ? (n = 8, t = A.AZTEC_DATA_8) : this.ddata.getNbLayers() <= 22 ? (n = 10, t = A.AZTEC_DATA_10) : (n = 12, t = A.AZTEC_DATA_12);
+				this.ddata.getNbLayers() <= 2 ? (n = 6, t = j.AZTEC_DATA_6) : this.ddata.getNbLayers() <= 8 ? (n = 8, t = j.AZTEC_DATA_8) : this.ddata.getNbLayers() <= 22 ? (n = 10, t = j.AZTEC_DATA_10) : (n = 12, t = j.AZTEC_DATA_12);
 				let r = this.ddata.getNbDatablocks(), i = e.length / n;
 				if (i < r) throw new x();
 				let a = e.length % n, o = new Int32Array(i);
-				for (let t = 0; t < i; t++, a += n) o[t] = j.readCode(e, a, n);
+				for (let t = 0; t < i; t++, a += n) o[t] = ye.readCode(e, a, n);
 				try {
-					new ye(t).decode(o, i - r);
+					new _e(t).decode(o, i - r);
 				} catch (e) {
 					throw new x(e);
 				}
@@ -2046,18 +2049,18 @@ var T = function() {
 			}
 			static readByte(e, t) {
 				let n = e.length - t;
-				return n >= 8 ? j.readCode(e, t, 8) : j.readCode(e, t, n) << 8 - n;
+				return n >= 8 ? ye.readCode(e, t, 8) : ye.readCode(e, t, n) << 8 - n;
 			}
 			static convertBoolArrayToByteArray(e) {
 				let t = new Uint8Array((e.length + 7) / 8);
-				for (let n = 0; n < t.length; n++) t[n] = j.readByte(e, 8 * n);
+				for (let n = 0; n < t.length; n++) t[n] = ye.readByte(e, 8 * n);
 				return t;
 			}
 			totalBitsInLayer(e, t) {
 				return ((t ? 88 : 112) + 16 * e) * e;
 			}
 		}
-		j.UPPER_TABLE = /* @__PURE__ */ "CTRL_PS. .A.B.C.D.E.F.G.H.I.J.K.L.M.N.O.P.Q.R.S.T.U.V.W.X.Y.Z.CTRL_LL.CTRL_ML.CTRL_DL.CTRL_BS".split("."), j.LOWER_TABLE = /* @__PURE__ */ "CTRL_PS. .a.b.c.d.e.f.g.h.i.j.k.l.m.n.o.p.q.r.s.t.u.v.w.x.y.z.CTRL_US.CTRL_ML.CTRL_DL.CTRL_BS".split("."), j.MIXED_TABLE = /* @__PURE__ */ "CTRL_PS. .\\1.\\2.\\3.\\4.\\5.\\6.\\7.\b.	.\n.\\13.\f.\r.\\33.\\34.\\35.\\36.\\37.@.\\.^._.`.|.~.\\177.CTRL_LL.CTRL_UL.CTRL_PL.CTRL_BS".split("."), j.PUNCT_TABLE = [
+		ye.UPPER_TABLE = /* @__PURE__ */ "CTRL_PS. .A.B.C.D.E.F.G.H.I.J.K.L.M.N.O.P.Q.R.S.T.U.V.W.X.Y.Z.CTRL_LL.CTRL_ML.CTRL_DL.CTRL_BS".split("."), ye.LOWER_TABLE = /* @__PURE__ */ "CTRL_PS. .a.b.c.d.e.f.g.h.i.j.k.l.m.n.o.p.q.r.s.t.u.v.w.x.y.z.CTRL_US.CTRL_ML.CTRL_DL.CTRL_BS".split("."), ye.MIXED_TABLE = /* @__PURE__ */ "CTRL_PS. .\\1.\\2.\\3.\\4.\\5.\\6.\\7.\b.	.\n.\\13.\f.\r.\\33.\\34.\\35.\\36.\\37.@.\\.^._.`.|.~.\\177.CTRL_LL.CTRL_UL.CTRL_PL.CTRL_BS".split("."), ye.PUNCT_TABLE = [
 			"",
 			"\r",
 			"\r\n",
@@ -2090,7 +2093,7 @@ var T = function() {
 			"{",
 			"}",
 			"CTRL_UL"
-		], j.DIGIT_TABLE = [
+		], ye.DIGIT_TABLE = [
 			"CTRL_PS",
 			" ",
 			"0",
@@ -2108,7 +2111,7 @@ var T = function() {
 			"CTRL_UL",
 			"CTRL_US"
 		];
-		class M {
+		class N {
 			constructor() {}
 			static round(e) {
 				return e === NaN ? 0 : e <= -(2 ** 53 - 1) ? -(2 ** 53 - 1) : e >= 2 ** 53 - 1 ? 2 ** 53 - 1 : e + (e < 0 ? -.5 : .5) | 0;
@@ -2126,13 +2129,13 @@ var T = function() {
 				return t;
 			}
 		}
-		class xe {
+		class be {
 			static floatToIntBits(e) {
 				return e;
 			}
 		}
-		xe.MAX_VALUE = 2 ** 53 - 1;
-		class N {
+		be.MAX_VALUE = 2 ** 53 - 1;
+		class P {
 			constructor(e, t) {
 				this.x = e, this.y = t;
 			}
@@ -2143,14 +2146,14 @@ var T = function() {
 				return this.y;
 			}
 			equals(e) {
-				if (e instanceof N) {
+				if (e instanceof P) {
 					let t = e;
 					return this.x === t.x && this.y === t.y;
 				}
 				return !1;
 			}
 			hashCode() {
-				return 31 * xe.floatToIntBits(this.x) + xe.floatToIntBits(this.y);
+				return 31 * be.floatToIntBits(this.x) + be.floatToIntBits(this.y);
 			}
 			toString() {
 				return "(" + this.x + "," + this.y + ")";
@@ -2164,14 +2167,14 @@ var T = function() {
 				e[0] = i, e[1] = a, e[2] = o;
 			}
 			static distance(e, t) {
-				return M.distance(e.x, e.y, t.x, t.y);
+				return N.distance(e.x, e.y, t.x, t.y);
 			}
 			static crossProductZ(e, t, n) {
 				let r = t.x, i = t.y;
 				return (n.x - r) * (e.y - i) - (n.y - i) * (e.x - r);
 			}
 		}
-		class Se {
+		class xe {
 			constructor(e, t) {
 				this.bits = e, this.points = t;
 			}
@@ -2182,7 +2185,7 @@ var T = function() {
 				return this.points;
 			}
 		}
-		class Ce extends Se {
+		class Se extends xe {
 			constructor(e, t, n, r, i) {
 				super(e, t), this.compact = n, this.nbDatablocks = r, this.nbLayers = i;
 			}
@@ -2196,11 +2199,11 @@ var T = function() {
 				return this.compact;
 			}
 		}
-		class we {
+		class Ce {
 			constructor(e, t, n, r) {
-				this.image = e, this.height = e.getHeight(), this.width = e.getWidth(), t ?? (t = we.INIT_SIZE), n ?? (n = e.getWidth() / 2 | 0), r ?? (r = e.getHeight() / 2 | 0);
+				this.image = e, this.height = e.getHeight(), this.width = e.getWidth(), t ?? (t = Ce.INIT_SIZE), n ?? (n = e.getWidth() / 2 | 0), r ?? (r = e.getHeight() / 2 | 0);
 				let i = t / 2 | 0;
-				if (this.leftInit = n - i, this.rightInit = n + i, this.upInit = r - i, this.downInit = r + i, this.upInit < 0 || this.leftInit < 0 || this.downInit >= this.height || this.rightInit >= this.width) throw new D();
+				if (this.leftInit = n - i, this.rightInit = n + i, this.upInit = r - i, this.downInit = r + i, this.upInit < 0 || this.leftInit < 0 || this.downInit >= this.height || this.rightInit >= this.width) throw new E();
 			}
 			detect() {
 				let e = this.leftInit, t = this.rightInit, n = this.upInit, r = this.downInit, i = !1, a = !0, o = !1, s = !1, c = !1, l = !1, u = !1, d = this.width, f = this.height;
@@ -2235,40 +2238,40 @@ var T = function() {
 				if (!i && o) {
 					let i = t - e, a = null;
 					for (let t = 1; a === null && t < i; t++) a = this.getBlackPointOnSegment(e, r - t, e + t, r);
-					if (a == null) throw new D();
+					if (a == null) throw new E();
 					let o = null;
 					for (let t = 1; o === null && t < i; t++) o = this.getBlackPointOnSegment(e, n + t, e + t, n);
-					if (o == null) throw new D();
+					if (o == null) throw new E();
 					let s = null;
 					for (let e = 1; s === null && e < i; e++) s = this.getBlackPointOnSegment(t, n + e, t - e, n);
-					if (s == null) throw new D();
+					if (s == null) throw new E();
 					let c = null;
 					for (let e = 1; c === null && e < i; e++) c = this.getBlackPointOnSegment(t, r - e, t - e, r);
-					if (c == null) throw new D();
+					if (c == null) throw new E();
 					return this.centerEdges(c, a, s, o);
 				}
-				throw new D();
+				throw new E();
 			}
 			getBlackPointOnSegment(e, t, n, r) {
-				let i = M.round(M.distance(e, t, n, r)), a = (n - e) / i, o = (r - t) / i, s = this.image;
+				let i = N.round(N.distance(e, t, n, r)), a = (n - e) / i, o = (r - t) / i, s = this.image;
 				for (let n = 0; n < i; n++) {
-					let r = M.round(e + n * a), i = M.round(t + n * o);
-					if (s.get(r, i)) return new N(r, i);
+					let r = N.round(e + n * a), i = N.round(t + n * o);
+					if (s.get(r, i)) return new P(r, i);
 				}
 				return null;
 			}
 			centerEdges(e, t, n, r) {
-				let i = e.getX(), a = e.getY(), o = t.getX(), s = t.getY(), c = n.getX(), l = n.getY(), u = r.getX(), d = r.getY(), f = we.CORR;
+				let i = e.getX(), a = e.getY(), o = t.getX(), s = t.getY(), c = n.getX(), l = n.getY(), u = r.getX(), d = r.getY(), f = Ce.CORR;
 				return i < this.width / 2 ? [
-					new N(u - f, d + f),
-					new N(o + f, s + f),
-					new N(c - f, l - f),
-					new N(i + f, a - f)
+					new P(u - f, d + f),
+					new P(o + f, s + f),
+					new P(c - f, l - f),
+					new P(i + f, a - f)
 				] : [
-					new N(u + f, d + f),
-					new N(o + f, s - f),
-					new N(c - f, l + f),
-					new N(i - f, a - f)
+					new P(u + f, d + f),
+					new P(o + f, s - f),
+					new P(c - f, l + f),
+					new P(i - f, a - f)
 				];
 			}
 			containsBlackPoint(e, t, n, r) {
@@ -2279,30 +2282,30 @@ var T = function() {
 				return !1;
 			}
 		}
-		we.INIT_SIZE = 10, we.CORR = 1;
-		class Te {
+		Ce.INIT_SIZE = 10, Ce.CORR = 1;
+		class we {
 			static checkAndNudgePoints(e, t) {
 				let n = e.getWidth(), r = e.getHeight(), i = !0;
 				for (let e = 0; e < t.length && i; e += 2) {
 					let a = Math.floor(t[e]), o = Math.floor(t[e + 1]);
-					if (a < -1 || a > n || o < -1 || o > r) throw new D();
+					if (a < -1 || a > n || o < -1 || o > r) throw new E();
 					i = !1, a === -1 ? (t[e] = 0, i = !0) : a === n && (t[e] = n - 1, i = !0), o === -1 ? (t[e + 1] = 0, i = !0) : o === r && (t[e + 1] = r - 1, i = !0);
 				}
 				i = !0;
 				for (let e = t.length - 2; e >= 0 && i; e -= 2) {
 					let a = Math.floor(t[e]), o = Math.floor(t[e + 1]);
-					if (a < -1 || a > n || o < -1 || o > r) throw new D();
+					if (a < -1 || a > n || o < -1 || o > r) throw new E();
 					i = !1, a === -1 ? (t[e] = 0, i = !0) : a === n && (t[e] = n - 1, i = !0), o === -1 ? (t[e + 1] = 0, i = !0) : o === r && (t[e + 1] = r - 1, i = !0);
 				}
 			}
 		}
-		class Ee {
+		class Te {
 			constructor(e, t, n, r, i, a, o, s, c) {
 				this.a11 = e, this.a21 = t, this.a31 = n, this.a12 = r, this.a22 = i, this.a32 = a, this.a13 = o, this.a23 = s, this.a33 = c;
 			}
 			static quadrilateralToQuadrilateral(e, t, n, r, i, a, o, s, c, l, u, d, f, p, m, h) {
-				let g = Ee.quadrilateralToSquare(e, t, n, r, i, a, o, s);
-				return Ee.squareToQuadrilateral(c, l, u, d, f, p, m, h).times(g);
+				let g = Te.quadrilateralToSquare(e, t, n, r, i, a, o, s);
+				return Te.squareToQuadrilateral(c, l, u, d, f, p, m, h).times(g);
 			}
 			transformPoints(e) {
 				let t = e.length, n = this.a11, r = this.a12, i = this.a13, a = this.a21, o = this.a22, s = this.a23, c = this.a31, l = this.a32, u = this.a33;
@@ -2320,58 +2323,58 @@ var T = function() {
 			}
 			static squareToQuadrilateral(e, t, n, r, i, a, o, s) {
 				let c = e - n + i - o, l = t - r + a - s;
-				if (c === 0 && l === 0) return new Ee(n - e, i - n, e, r - t, a - r, t, 0, 0, 1);
+				if (c === 0 && l === 0) return new Te(n - e, i - n, e, r - t, a - r, t, 0, 0, 1);
 				{
 					let u = n - i, d = o - i, f = r - a, p = s - a, m = u * p - d * f, h = (c * p - d * l) / m, g = (u * l - c * f) / m;
-					return new Ee(n - e + h * n, o - e + g * o, e, r - t + h * r, s - t + g * s, t, h, g, 1);
+					return new Te(n - e + h * n, o - e + g * o, e, r - t + h * r, s - t + g * s, t, h, g, 1);
 				}
 			}
 			static quadrilateralToSquare(e, t, n, r, i, a, o, s) {
-				return Ee.squareToQuadrilateral(e, t, n, r, i, a, o, s).buildAdjoint();
+				return Te.squareToQuadrilateral(e, t, n, r, i, a, o, s).buildAdjoint();
 			}
 			buildAdjoint() {
-				return new Ee(this.a22 * this.a33 - this.a23 * this.a32, this.a23 * this.a31 - this.a21 * this.a33, this.a21 * this.a32 - this.a22 * this.a31, this.a13 * this.a32 - this.a12 * this.a33, this.a11 * this.a33 - this.a13 * this.a31, this.a12 * this.a31 - this.a11 * this.a32, this.a12 * this.a23 - this.a13 * this.a22, this.a13 * this.a21 - this.a11 * this.a23, this.a11 * this.a22 - this.a12 * this.a21);
+				return new Te(this.a22 * this.a33 - this.a23 * this.a32, this.a23 * this.a31 - this.a21 * this.a33, this.a21 * this.a32 - this.a22 * this.a31, this.a13 * this.a32 - this.a12 * this.a33, this.a11 * this.a33 - this.a13 * this.a31, this.a12 * this.a31 - this.a11 * this.a32, this.a12 * this.a23 - this.a13 * this.a22, this.a13 * this.a21 - this.a11 * this.a23, this.a11 * this.a22 - this.a12 * this.a21);
 			}
 			times(e) {
-				return new Ee(this.a11 * e.a11 + this.a21 * e.a12 + this.a31 * e.a13, this.a11 * e.a21 + this.a21 * e.a22 + this.a31 * e.a23, this.a11 * e.a31 + this.a21 * e.a32 + this.a31 * e.a33, this.a12 * e.a11 + this.a22 * e.a12 + this.a32 * e.a13, this.a12 * e.a21 + this.a22 * e.a22 + this.a32 * e.a23, this.a12 * e.a31 + this.a22 * e.a32 + this.a32 * e.a33, this.a13 * e.a11 + this.a23 * e.a12 + this.a33 * e.a13, this.a13 * e.a21 + this.a23 * e.a22 + this.a33 * e.a23, this.a13 * e.a31 + this.a23 * e.a32 + this.a33 * e.a33);
+				return new Te(this.a11 * e.a11 + this.a21 * e.a12 + this.a31 * e.a13, this.a11 * e.a21 + this.a21 * e.a22 + this.a31 * e.a23, this.a11 * e.a31 + this.a21 * e.a32 + this.a31 * e.a33, this.a12 * e.a11 + this.a22 * e.a12 + this.a32 * e.a13, this.a12 * e.a21 + this.a22 * e.a22 + this.a32 * e.a23, this.a12 * e.a31 + this.a22 * e.a32 + this.a32 * e.a33, this.a13 * e.a11 + this.a23 * e.a12 + this.a33 * e.a13, this.a13 * e.a21 + this.a23 * e.a22 + this.a33 * e.a23, this.a13 * e.a31 + this.a23 * e.a32 + this.a33 * e.a33);
 			}
 		}
-		class De extends Te {
+		class Ee extends we {
 			sampleGrid(e, t, n, r, i, a, o, s, c, l, u, d, f, p, m, h, g, _, v) {
-				let y = Ee.quadrilateralToQuadrilateral(r, i, a, o, s, c, l, u, d, f, p, m, h, g, _, v);
+				let y = Te.quadrilateralToQuadrilateral(r, i, a, o, s, c, l, u, d, f, p, m, h, g, _, v);
 				return this.sampleGridWithTransform(e, t, n, y);
 			}
 			sampleGridWithTransform(e, t, n, r) {
-				if (t <= 0 || n <= 0) throw new D();
-				let i = new E(t, n), a = new Float32Array(2 * t);
+				if (t <= 0 || n <= 0) throw new E();
+				let i = new ne(t, n), a = new Float32Array(2 * t);
 				for (let t = 0; t < n; t++) {
 					let n = a.length, o = t + .5;
 					for (let e = 0; e < n; e += 2) a[e] = e / 2 + .5, a[e + 1] = o;
-					r.transformPoints(a), Te.checkAndNudgePoints(e, a);
+					r.transformPoints(a), we.checkAndNudgePoints(e, a);
 					try {
 						for (let r = 0; r < n; r += 2) e.get(Math.floor(a[r]), Math.floor(a[r + 1])) && i.set(r / 2, t);
 					} catch {
-						throw new D();
+						throw new E();
 					}
 				}
 				return i;
 			}
 		}
-		class Oe {
+		class De {
 			static setGridSampler(e) {
-				Oe.gridSampler = e;
+				De.gridSampler = e;
 			}
 			static getInstance() {
-				return Oe.gridSampler;
+				return De.gridSampler;
 			}
 		}
-		Oe.gridSampler = new De();
-		class ke {
+		De.gridSampler = new Ee();
+		class Oe {
 			constructor(e, t) {
 				this.x = e, this.y = t;
 			}
 			toResultPoint() {
-				return new N(this.getX(), this.getY());
+				return new P(this.getX(), this.getY());
 			}
 			getX() {
 				return this.x;
@@ -2380,7 +2383,7 @@ var T = function() {
 				return this.y;
 			}
 		}
-		class Ae {
+		class ke {
 			constructor(e) {
 				this.EXPECTED_CORNER_BITS = new Int32Array([
 					3808,
@@ -2400,10 +2403,10 @@ var T = function() {
 				}
 				this.extractParameters(n);
 				let r = this.sampleGrid(this.image, n[this.shift % 4], n[(this.shift + 1) % 4], n[(this.shift + 2) % 4], n[(this.shift + 3) % 4]), i = this.getMatrixCornerPoints(n);
-				return new Ce(r, i, this.compact, this.nbDataBlocks, this.nbLayers);
+				return new Se(r, i, this.compact, this.nbDataBlocks, this.nbLayers);
 			}
 			extractParameters(e) {
-				if (!this.isValidPoint(e[0]) || !this.isValidPoint(e[1]) || !this.isValidPoint(e[2]) || !this.isValidPoint(e[3])) throw new D();
+				if (!this.isValidPoint(e[0]) || !this.isValidPoint(e[1]) || !this.isValidPoint(e[2]) || !this.isValidPoint(e[3])) throw new E();
 				let t = 2 * this.nbCenterLayers, n = new Int32Array([
 					this.sampleLine(e[0], e[1], t),
 					this.sampleLine(e[1], e[2], t),
@@ -2426,7 +2429,7 @@ var T = function() {
 					n = (n << 3) + a;
 				}), n = ((n & 1) << 11) + (n >> 1);
 				for (let e = 0; e < 4; e++) if (_.bitCount(n ^ this.EXPECTED_CORNER_BITS[e]) <= 2) return e;
-				throw new D();
+				throw new E();
 			}
 			getCorrectedParameterData(e, t) {
 				let n, r;
@@ -2434,9 +2437,9 @@ var T = function() {
 				let i = n - r, a = new Int32Array(n);
 				for (let t = n - 1; t >= 0; --t) a[t] = e & 15, e >>= 4;
 				try {
-					new ye(A.AZTEC_PARAM).decode(a, i);
+					new _e(j.AZTEC_PARAM).decode(a, i);
 				} catch {
-					throw new D();
+					throw new E();
 				}
 				let o = 0;
 				for (let e = 0; e < r; e++) o = (o << 4) + a[e];
@@ -2452,9 +2455,9 @@ var T = function() {
 					}
 					t = e, n = o, r = s, i = c, a = !a;
 				}
-				if (this.nbCenterLayers !== 5 && this.nbCenterLayers !== 7) throw new D();
+				if (this.nbCenterLayers !== 5 && this.nbCenterLayers !== 7) throw new E();
 				this.compact = this.nbCenterLayers === 5;
-				let o = new N(t.getX() + .5, t.getY() - .5), s = new N(n.getX() + .5, n.getY() + .5), c = new N(r.getX() - .5, r.getY() + .5), l = new N(i.getX() - .5, i.getY() - .5);
+				let o = new P(t.getX() + .5, t.getY() - .5), s = new P(n.getX() + .5, n.getY() + .5), c = new P(r.getX() - .5, r.getY() + .5), l = new P(i.getX() - .5, i.getY() - .5);
 				return this.expandSquare([
 					o,
 					s,
@@ -2465,35 +2468,35 @@ var T = function() {
 			getMatrixCenter() {
 				let e, t, n, r;
 				try {
-					let i = new we(this.image).detect();
+					let i = new Ce(this.image).detect();
 					e = i[0], t = i[1], n = i[2], r = i[3];
 				} catch {
 					let i = this.image.getWidth() / 2, a = this.image.getHeight() / 2;
-					e = this.getFirstDifferent(new ke(i + 7, a - 7), !1, 1, -1).toResultPoint(), t = this.getFirstDifferent(new ke(i + 7, a + 7), !1, 1, 1).toResultPoint(), n = this.getFirstDifferent(new ke(i - 7, a + 7), !1, -1, 1).toResultPoint(), r = this.getFirstDifferent(new ke(i - 7, a - 7), !1, -1, -1).toResultPoint();
+					e = this.getFirstDifferent(new Oe(i + 7, a - 7), !1, 1, -1).toResultPoint(), t = this.getFirstDifferent(new Oe(i + 7, a + 7), !1, 1, 1).toResultPoint(), n = this.getFirstDifferent(new Oe(i - 7, a + 7), !1, -1, 1).toResultPoint(), r = this.getFirstDifferent(new Oe(i - 7, a - 7), !1, -1, -1).toResultPoint();
 				}
-				let i = M.round((e.getX() + r.getX() + t.getX() + n.getX()) / 4), a = M.round((e.getY() + r.getY() + t.getY() + n.getY()) / 4);
+				let i = N.round((e.getX() + r.getX() + t.getX() + n.getX()) / 4), a = N.round((e.getY() + r.getY() + t.getY() + n.getY()) / 4);
 				try {
-					let o = new we(this.image, 15, i, a).detect();
+					let o = new Ce(this.image, 15, i, a).detect();
 					e = o[0], t = o[1], n = o[2], r = o[3];
 				} catch {
-					e = this.getFirstDifferent(new ke(i + 7, a - 7), !1, 1, -1).toResultPoint(), t = this.getFirstDifferent(new ke(i + 7, a + 7), !1, 1, 1).toResultPoint(), n = this.getFirstDifferent(new ke(i - 7, a + 7), !1, -1, 1).toResultPoint(), r = this.getFirstDifferent(new ke(i - 7, a - 7), !1, -1, -1).toResultPoint();
+					e = this.getFirstDifferent(new Oe(i + 7, a - 7), !1, 1, -1).toResultPoint(), t = this.getFirstDifferent(new Oe(i + 7, a + 7), !1, 1, 1).toResultPoint(), n = this.getFirstDifferent(new Oe(i - 7, a + 7), !1, -1, 1).toResultPoint(), r = this.getFirstDifferent(new Oe(i - 7, a - 7), !1, -1, -1).toResultPoint();
 				}
-				return i = M.round((e.getX() + r.getX() + t.getX() + n.getX()) / 4), a = M.round((e.getY() + r.getY() + t.getY() + n.getY()) / 4), new ke(i, a);
+				return i = N.round((e.getX() + r.getX() + t.getX() + n.getX()) / 4), a = N.round((e.getY() + r.getY() + t.getY() + n.getY()) / 4), new Oe(i, a);
 			}
 			getMatrixCornerPoints(e) {
 				return this.expandSquare(e, 2 * this.nbCenterLayers, this.getDimension());
 			}
 			sampleGrid(e, t, n, r, i) {
-				let a = Oe.getInstance(), o = this.getDimension(), s = o / 2 - this.nbCenterLayers, c = o / 2 + this.nbCenterLayers;
+				let a = De.getInstance(), o = this.getDimension(), s = o / 2 - this.nbCenterLayers, c = o / 2 + this.nbCenterLayers;
 				return a.sampleGrid(e, o, o, s, s, c, s, c, c, s, c, t.getX(), t.getY(), n.getX(), n.getY(), r.getX(), r.getY(), i.getX(), i.getY());
 			}
 			sampleLine(e, t, n) {
 				let r = 0, i = this.distanceResultPoint(e, t), a = i / n, o = e.getX(), s = e.getY(), c = a * (t.getX() - e.getX()) / i, l = a * (t.getY() - e.getY()) / i;
-				for (let e = 0; e < n; e++) this.image.get(M.round(o + e * c), M.round(s + e * l)) && (r |= 1 << n - e - 1);
+				for (let e = 0; e < n; e++) this.image.get(N.round(o + e * c), N.round(s + e * l)) && (r |= 1 << n - e - 1);
 				return r;
 			}
 			isWhiteOrBlackRectangle(e, t, n, r) {
-				e = new ke(e.getX() - 3, e.getY() + 3), t = new ke(t.getX() - 3, t.getY() - 3), n = new ke(n.getX() + 3, n.getY() - 3), r = new ke(r.getX() + 3, r.getY() + 3);
+				e = new Oe(e.getX() - 3, e.getY() + 3), t = new Oe(t.getX() - 3, t.getY() - 3), n = new Oe(n.getX() + 3, n.getY() - 3), r = new Oe(r.getX() + 3, r.getY() + 3);
 				let i = this.getColor(r, e);
 				if (i === 0) return !1;
 				let a = this.getColor(e, t);
@@ -2501,7 +2504,7 @@ var T = function() {
 			}
 			getColor(e, t) {
 				let n = this.distancePoint(e, t), r = (t.getX() - e.getX()) / n, i = (t.getY() - e.getY()) / n, a = 0, o = e.getX(), s = e.getY(), c = this.image.get(e.getX(), e.getY()), l = Math.ceil(n);
-				for (let e = 0; e < l; e++) o += r, s += i, this.image.get(M.round(o), M.round(s)) !== c && a++;
+				for (let e = 0; e < l; e++) o += r, s += i, this.image.get(N.round(o), N.round(s)) !== c && a++;
 				let u = a / n;
 				return u > .1 && u < .9 ? 0 : u <= .1 === c ? 1 : -1;
 			}
@@ -2510,46 +2513,46 @@ var T = function() {
 				for (; this.isValid(i, a) && this.image.get(i, a) === t;) i += n, a += r;
 				for (i -= n, a -= r; this.isValid(i, a) && this.image.get(i, a) === t;) i += n;
 				for (i -= n; this.isValid(i, a) && this.image.get(i, a) === t;) a += r;
-				return a -= r, new ke(i, a);
+				return a -= r, new Oe(i, a);
 			}
 			expandSquare(e, t, n) {
-				let r = n / (2 * t), i = e[0].getX() - e[2].getX(), a = e[0].getY() - e[2].getY(), o = (e[0].getX() + e[2].getX()) / 2, s = (e[0].getY() + e[2].getY()) / 2, c = new N(o + r * i, s + r * a), l = new N(o - r * i, s - r * a);
+				let r = n / (2 * t), i = e[0].getX() - e[2].getX(), a = e[0].getY() - e[2].getY(), o = (e[0].getX() + e[2].getX()) / 2, s = (e[0].getY() + e[2].getY()) / 2, c = new P(o + r * i, s + r * a), l = new P(o - r * i, s - r * a);
 				return i = e[1].getX() - e[3].getX(), a = e[1].getY() - e[3].getY(), o = (e[1].getX() + e[3].getX()) / 2, s = (e[1].getY() + e[3].getY()) / 2, [
 					c,
-					new N(o + r * i, s + r * a),
+					new P(o + r * i, s + r * a),
 					l,
-					new N(o - r * i, s - r * a)
+					new P(o - r * i, s - r * a)
 				];
 			}
 			isValid(e, t) {
 				return e >= 0 && e < this.image.getWidth() && t > 0 && t < this.image.getHeight();
 			}
 			isValidPoint(e) {
-				let t = M.round(e.getX()), n = M.round(e.getY());
+				let t = N.round(e.getX()), n = N.round(e.getY());
 				return this.isValid(t, n);
 			}
 			distancePoint(e, t) {
-				return M.distance(e.getX(), e.getY(), t.getX(), t.getY());
+				return N.distance(e.getX(), e.getY(), t.getX(), t.getY());
 			}
 			distanceResultPoint(e, t) {
-				return M.distance(e.getX(), e.getY(), t.getX(), t.getY());
+				return N.distance(e.getX(), e.getY(), t.getX(), t.getY());
 			}
 			getDimension() {
 				return this.compact ? 4 * this.nbLayers + 11 : this.nbLayers <= 4 ? 4 * this.nbLayers + 15 : 4 * this.nbLayers + 2 * (_.truncDivision(this.nbLayers - 4, 8) + 1) + 15;
 			}
 		}
-		class je {
+		class Ae {
 			decode(e, t = null) {
-				let n = null, r = new Ae(e.getBlackMatrix()), i = null, a = null;
+				let n = null, r = new ke(e.getBlackMatrix()), i = null, a = null;
 				try {
 					let e = r.detectMirror(!1);
-					i = e.getPoints(), this.reportFoundResultPoints(t, i), a = new j().decode(e);
+					i = e.getPoints(), this.reportFoundResultPoints(t, i), a = new ye().decode(e);
 				} catch (e) {
 					n = e;
 				}
 				if (a == null) try {
 					let e = r.detectMirror(!0);
-					i = e.getPoints(), this.reportFoundResultPoints(t, i), a = new j().decode(e);
+					i = e.getPoints(), this.reportFoundResultPoints(t, i), a = new ye().decode(e);
 				} catch (e) {
 					throw n ?? e;
 				}
@@ -2568,12 +2571,12 @@ var T = function() {
 			}
 			reset() {}
 		}
-		class Me extends ce {
+		class je extends ce {
 			constructor(e = 500) {
-				super(new je(), e);
+				super(new Ae(), e);
 			}
 		}
-		class Ne {
+		class Me {
 			decode(e, t) {
 				try {
 					return this.doDecode(e, t);
@@ -2584,11 +2587,11 @@ var T = function() {
 						let o = r.getResultPoints();
 						if (o !== null) {
 							let e = n.getHeight();
-							for (let t = 0; t < o.length; t++) o[t] = new N(e - o[t].getY() - 1, o[t].getX());
+							for (let t = 0; t < o.length; t++) o[t] = new P(e - o[t].getY() - 1, o[t].getX());
 						}
 						return r;
 					}
-					throw new D();
+					throw new E();
 				}
 			}
 			reset() {}
@@ -2614,19 +2617,19 @@ var T = function() {
 							if (e === 1) {
 								r.putMetadata(fe.ORIENTATION, 180);
 								let e = r.getResultPoints();
-								e !== null && (e[0] = new N(n - e[0].getX() - 1, e[0].getY()), e[1] = new N(n - e[1].getX() - 1, e[1].getY()));
+								e !== null && (e[0] = new P(n - e[0].getX() - 1, e[0].getY()), e[1] = new P(n - e[1].getX() - 1, e[1].getY()));
 							}
 							return r;
 						} catch {}
 					}
 				}
-				throw new D();
+				throw new E();
 			}
 			static recordPattern(e, t, n) {
 				let r = n.length;
 				for (let e = 0; e < r; e++) n[e] = 0;
 				let i = e.getSize();
-				if (t >= i) throw new D();
+				if (t >= i) throw new E();
 				let a = !e.get(t), o = 0, s = t;
 				for (; s < i;) {
 					if (e.get(s) !== a) n[o]++;
@@ -2634,13 +2637,13 @@ var T = function() {
 					else n[o] = 1, a = !a;
 					s++;
 				}
-				if (!(o === r || o === r - 1 && s === i)) throw new D();
+				if (!(o === r || o === r - 1 && s === i)) throw new E();
 			}
 			static recordPatternInReverse(e, t, n) {
 				let r = n.length, i = e.get(t);
 				for (; t > 0 && r >= 0;) e.get(--t) !== i && (r--, i = !i);
-				if (r >= 0) throw new D();
-				Ne.recordPattern(e, t + 1, n);
+				if (r >= 0) throw new E();
+				Me.recordPattern(e, t + 1, n);
 			}
 			static patternMatchVariance(e, t, n) {
 				let r = e.length, i = 0, a = 0;
@@ -2657,7 +2660,7 @@ var T = function() {
 				return s / i;
 			}
 		}
-		class P extends Ne {
+		class F extends Me {
 			static findStartPattern(e) {
 				let t = e.getSize(), n = e.getNextSet(0), r = 0, i = Int32Array.from([
 					0,
@@ -2670,9 +2673,9 @@ var T = function() {
 				for (let s = n; s < t; s++) if (e.get(s) !== o) i[r]++;
 				else {
 					if (r === 5) {
-						let t = P.MAX_AVG_VARIANCE, n = -1;
-						for (let e = P.CODE_START_A; e <= P.CODE_START_C; e++) {
-							let r = Ne.patternMatchVariance(i, P.CODE_PATTERNS[e], P.MAX_INDIVIDUAL_VARIANCE);
+						let t = F.MAX_AVG_VARIANCE, n = -1;
+						for (let e = F.CODE_START_A; e <= F.CODE_START_C; e++) {
+							let r = Me.patternMatchVariance(i, F.CODE_PATTERNS[e], F.MAX_INDIVIDUAL_VARIANCE);
 							r < t && (t = r, n = e);
 						}
 						if (n >= 0 && e.isRange(Math.max(0, a - (s - a) / 2), a, !1)) return Int32Array.from([
@@ -2684,31 +2687,31 @@ var T = function() {
 					} else r++;
 					i[r] = 1, o = !o;
 				}
-				throw new D();
+				throw new E();
 			}
 			static decodeCode(e, t, n) {
-				Ne.recordPattern(e, n, t);
-				let r = P.MAX_AVG_VARIANCE, i = -1;
-				for (let e = 0; e < P.CODE_PATTERNS.length; e++) {
-					let n = P.CODE_PATTERNS[e], a = this.patternMatchVariance(t, n, P.MAX_INDIVIDUAL_VARIANCE);
+				Me.recordPattern(e, n, t);
+				let r = F.MAX_AVG_VARIANCE, i = -1;
+				for (let e = 0; e < F.CODE_PATTERNS.length; e++) {
+					let n = F.CODE_PATTERNS[e], a = this.patternMatchVariance(t, n, F.MAX_INDIVIDUAL_VARIANCE);
 					a < r && (r = a, i = e);
 				}
 				if (i >= 0) return i;
-				throw new D();
+				throw new E();
 			}
 			decodeRow(e, t, n) {
-				let r = n && n.get(b.ASSUME_GS1) === !0, i = P.findStartPattern(t), a = i[2], o = 0, s = /* @__PURE__ */ new Uint8Array(20);
+				let r = n && n.get(b.ASSUME_GS1) === !0, i = F.findStartPattern(t), a = i[2], o = 0, s = /* @__PURE__ */ new Uint8Array(20);
 				s[o++] = a;
 				let c;
 				switch (a) {
-					case P.CODE_START_A:
-						c = P.CODE_CODE_A;
+					case F.CODE_START_A:
+						c = F.CODE_CODE_A;
 						break;
-					case P.CODE_START_B:
-						c = P.CODE_CODE_B;
+					case F.CODE_START_B:
+						c = F.CODE_CODE_B;
 						break;
-					case P.CODE_START_C:
-						c = P.CODE_CODE_C;
+					case F.CODE_START_C:
+						c = F.CODE_CODE_C;
 						break;
 					default: throw new x();
 				}
@@ -2722,88 +2725,88 @@ var T = function() {
 				]), g = 0, _ = 0, v = a, y = 0, S = !0, C = !1, ee = !1;
 				for (; !l;) {
 					let e = u;
-					switch (u = !1, g = _, _ = P.decodeCode(t, h, m), s[o++] = _, _ !== P.CODE_STOP && (S = !0), _ !== P.CODE_STOP && (y++, v += y * _), p = m, m += h.reduce((e, t) => e + t, 0), _) {
-						case P.CODE_START_A:
-						case P.CODE_START_B:
-						case P.CODE_START_C: throw new x();
+					switch (u = !1, g = _, _ = F.decodeCode(t, h, m), s[o++] = _, _ !== F.CODE_STOP && (S = !0), _ !== F.CODE_STOP && (y++, v += y * _), p = m, m += h.reduce((e, t) => e + t, 0), _) {
+						case F.CODE_START_A:
+						case F.CODE_START_B:
+						case F.CODE_START_C: throw new x();
 					}
 					switch (c) {
-						case P.CODE_CODE_A:
+						case F.CODE_CODE_A:
 							if (_ < 64) f += ee === C ? String.fromCharCode(32 + _) : String.fromCharCode(32 + _ + 128), ee = !1;
 							else if (_ < 96) f += ee === C ? String.fromCharCode(_ - 64) : String.fromCharCode(_ + 64), ee = !1;
-							else switch (_ !== P.CODE_STOP && (S = !1), _) {
-								case P.CODE_FNC_1:
+							else switch (_ !== F.CODE_STOP && (S = !1), _) {
+								case F.CODE_FNC_1:
 									r && (f.length === 0 ? f += "]C1" : f += "");
 									break;
-								case P.CODE_FNC_2:
-								case P.CODE_FNC_3: break;
-								case P.CODE_FNC_4_A:
+								case F.CODE_FNC_2:
+								case F.CODE_FNC_3: break;
+								case F.CODE_FNC_4_A:
 									!C && ee ? (C = !0, ee = !1) : C && ee ? (C = !1, ee = !1) : ee = !0;
 									break;
-								case P.CODE_SHIFT:
-									u = !0, c = P.CODE_CODE_B;
+								case F.CODE_SHIFT:
+									u = !0, c = F.CODE_CODE_B;
 									break;
-								case P.CODE_CODE_B:
-									c = P.CODE_CODE_B;
+								case F.CODE_CODE_B:
+									c = F.CODE_CODE_B;
 									break;
-								case P.CODE_CODE_C:
-									c = P.CODE_CODE_C;
+								case F.CODE_CODE_C:
+									c = F.CODE_CODE_C;
 									break;
-								case P.CODE_STOP: l = !0;
+								case F.CODE_STOP: l = !0;
 							}
 							break;
-						case P.CODE_CODE_B:
+						case F.CODE_CODE_B:
 							if (_ < 96) f += ee === C ? String.fromCharCode(32 + _) : String.fromCharCode(32 + _ + 128), ee = !1;
-							else switch (_ !== P.CODE_STOP && (S = !1), _) {
-								case P.CODE_FNC_1:
+							else switch (_ !== F.CODE_STOP && (S = !1), _) {
+								case F.CODE_FNC_1:
 									r && (f.length === 0 ? f += "]C1" : f += "");
 									break;
-								case P.CODE_FNC_2:
-								case P.CODE_FNC_3: break;
-								case P.CODE_FNC_4_B:
+								case F.CODE_FNC_2:
+								case F.CODE_FNC_3: break;
+								case F.CODE_FNC_4_B:
 									!C && ee ? (C = !0, ee = !1) : C && ee ? (C = !1, ee = !1) : ee = !0;
 									break;
-								case P.CODE_SHIFT:
-									u = !0, c = P.CODE_CODE_A;
+								case F.CODE_SHIFT:
+									u = !0, c = F.CODE_CODE_A;
 									break;
-								case P.CODE_CODE_A:
-									c = P.CODE_CODE_A;
+								case F.CODE_CODE_A:
+									c = F.CODE_CODE_A;
 									break;
-								case P.CODE_CODE_C:
-									c = P.CODE_CODE_C;
+								case F.CODE_CODE_C:
+									c = F.CODE_CODE_C;
 									break;
-								case P.CODE_STOP: l = !0;
+								case F.CODE_STOP: l = !0;
 							}
 							break;
-						case P.CODE_CODE_C: if (_ < 100) _ < 10 && (f += "0"), f += _;
-						else switch (_ !== P.CODE_STOP && (S = !1), _) {
-							case P.CODE_FNC_1:
+						case F.CODE_CODE_C: if (_ < 100) _ < 10 && (f += "0"), f += _;
+						else switch (_ !== F.CODE_STOP && (S = !1), _) {
+							case F.CODE_FNC_1:
 								r && (f.length === 0 ? f += "]C1" : f += "");
 								break;
-							case P.CODE_CODE_A:
-								c = P.CODE_CODE_A;
+							case F.CODE_CODE_A:
+								c = F.CODE_CODE_A;
 								break;
-							case P.CODE_CODE_B:
-								c = P.CODE_CODE_B;
+							case F.CODE_CODE_B:
+								c = F.CODE_CODE_B;
 								break;
-							case P.CODE_STOP: l = !0;
+							case F.CODE_STOP: l = !0;
 						}
 					}
-					e && (c = c === P.CODE_CODE_A ? P.CODE_CODE_B : P.CODE_CODE_A);
+					e && (c = c === F.CODE_CODE_A ? F.CODE_CODE_B : F.CODE_CODE_A);
 				}
 				let te = m - p;
-				if (m = t.getNextUnset(m), !t.isRange(m, Math.min(t.getSize(), m + (m - p) / 2), !1)) throw new D();
+				if (m = t.getNextUnset(m), !t.isRange(m, Math.min(t.getSize(), m + (m - p) / 2), !1)) throw new E();
 				if (v -= y * g, v % 103 !== g) throw new d();
 				let w = f.length;
-				if (w === 0) throw new D();
-				w > 0 && S && (f = c === P.CODE_CODE_C ? f.substring(0, w - 2) : f.substring(0, w - 1));
-				let T = (i[1] + i[0]) / 2, E = p + te / 2, ne = s.length, O = new Uint8Array(ne);
-				for (let e = 0; e < ne; e++) O[e] = s[e];
-				let re = [new N(T, e), new N(E, e)];
-				return new le(f, O, 0, re, k.CODE_128, (/* @__PURE__ */ new Date()).getTime());
+				if (w === 0) throw new E();
+				w > 0 && S && (f = c === F.CODE_CODE_C ? f.substring(0, w - 2) : f.substring(0, w - 1));
+				let T = (i[1] + i[0]) / 2, ne = p + te / 2, re = s.length, D = new Uint8Array(re);
+				for (let e = 0; e < re; e++) D[e] = s[e];
+				let O = [new P(T, e), new P(ne, e)];
+				return new le(f, D, 0, O, k.CODE_128, (/* @__PURE__ */ new Date()).getTime());
 			}
 		}
-		P.CODE_PATTERNS = [
+		F.CODE_PATTERNS = [
 			Int32Array.from([
 				2,
 				1,
@@ -3661,20 +3664,20 @@ var T = function() {
 				1,
 				2
 			])
-		], P.MAX_AVG_VARIANCE = .25, P.MAX_INDIVIDUAL_VARIANCE = .7, P.CODE_SHIFT = 98, P.CODE_CODE_C = 99, P.CODE_CODE_B = 100, P.CODE_CODE_A = 101, P.CODE_FNC_1 = 102, P.CODE_FNC_2 = 97, P.CODE_FNC_3 = 96, P.CODE_FNC_4_A = 101, P.CODE_FNC_4_B = 100, P.CODE_START_A = 103, P.CODE_START_B = 104, P.CODE_START_C = 105, P.CODE_STOP = 106;
-		class Pe extends Ne {
+		], F.MAX_AVG_VARIANCE = .25, F.MAX_INDIVIDUAL_VARIANCE = .7, F.CODE_SHIFT = 98, F.CODE_CODE_C = 99, F.CODE_CODE_B = 100, F.CODE_CODE_A = 101, F.CODE_FNC_1 = 102, F.CODE_FNC_2 = 97, F.CODE_FNC_3 = 96, F.CODE_FNC_4_A = 101, F.CODE_FNC_4_B = 100, F.CODE_START_A = 103, F.CODE_START_B = 104, F.CODE_START_C = 105, F.CODE_STOP = 106;
+		class Ne extends Me {
 			constructor(e = !1, t = !1) {
 				super(), this.usingCheckDigit = e, this.extendedMode = t, this.decodeRowResult = "", this.counters = /* @__PURE__ */ new Int32Array(9);
 			}
 			decodeRow(e, t, n) {
 				let r = this.counters;
 				r.fill(0), this.decodeRowResult = "";
-				let i = Pe.findAsteriskPattern(t, r), a = t.getNextSet(i[1]), o = t.getSize(), s, c;
+				let i = Ne.findAsteriskPattern(t, r), a = t.getNextSet(i[1]), o = t.getSize(), s, c;
 				do {
-					Pe.recordPattern(t, a, r);
-					let e = Pe.toNarrowWidePattern(r);
-					if (e < 0) throw new D();
-					s = Pe.patternToChar(e), this.decodeRowResult += s, c = a;
+					Ne.recordPattern(t, a, r);
+					let e = Ne.toNarrowWidePattern(r);
+					if (e < 0) throw new E();
+					s = Ne.patternToChar(e), this.decodeRowResult += s, c = a;
 					for (let e of r) a += e;
 					a = t.getNextSet(a);
 				} while (s !== "*");
@@ -3682,30 +3685,30 @@ var T = function() {
 				let l = 0;
 				for (let e of r) l += e;
 				let u = a - c - l;
-				if (a !== o && u * 2 < l) throw new D();
+				if (a !== o && u * 2 < l) throw new E();
 				if (this.usingCheckDigit) {
 					let e = this.decodeRowResult.length - 1, t = 0;
-					for (let n = 0; n < e; n++) t += Pe.ALPHABET_STRING.indexOf(this.decodeRowResult.charAt(n));
-					if (this.decodeRowResult.charAt(e) !== Pe.ALPHABET_STRING.charAt(t % 43)) throw new d();
+					for (let n = 0; n < e; n++) t += Ne.ALPHABET_STRING.indexOf(this.decodeRowResult.charAt(n));
+					if (this.decodeRowResult.charAt(e) !== Ne.ALPHABET_STRING.charAt(t % 43)) throw new d();
 					this.decodeRowResult = this.decodeRowResult.substring(0, e);
 				}
-				if (this.decodeRowResult.length === 0) throw new D();
+				if (this.decodeRowResult.length === 0) throw new E();
 				let f;
-				f = this.extendedMode ? Pe.decodeExtended(this.decodeRowResult) : this.decodeRowResult;
+				f = this.extendedMode ? Ne.decodeExtended(this.decodeRowResult) : this.decodeRowResult;
 				let p = (i[1] + i[0]) / 2, m = c + l / 2;
-				return new le(f, null, 0, [new N(p, e), new N(m, e)], k.CODE_39, (/* @__PURE__ */ new Date()).getTime());
+				return new le(f, null, 0, [new P(p, e), new P(m, e)], k.CODE_39, (/* @__PURE__ */ new Date()).getTime());
 			}
 			static findAsteriskPattern(e, t) {
 				let n = e.getSize(), r = e.getNextSet(0), i = 0, a = r, o = !1, s = t.length;
 				for (let c = r; c < n; c++) if (e.get(c) !== o) t[i]++;
 				else {
 					if (i === s - 1) {
-						if (this.toNarrowWidePattern(t) === Pe.ASTERISK_ENCODING && e.isRange(Math.max(0, a - Math.floor((c - a) / 2)), a, !1)) return [a, c];
+						if (this.toNarrowWidePattern(t) === Ne.ASTERISK_ENCODING && e.isRange(Math.max(0, a - Math.floor((c - a) / 2)), a, !1)) return [a, c];
 						a += t[0] + t[1], t.copyWithin(0, 2, 2 + i - 1), t[i - 1] = 0, t[i] = 0, i--;
 					} else i++;
 					t[i] = 1, o = !o;
 				}
-				throw new D();
+				throw new E();
 			}
 			static toNarrowWidePattern(e) {
 				let t = e.length, n = 0, r;
@@ -3729,9 +3732,9 @@ var T = function() {
 				return -1;
 			}
 			static patternToChar(e) {
-				for (let t = 0; t < Pe.CHARACTER_ENCODINGS.length; t++) if (Pe.CHARACTER_ENCODINGS[t] === e) return Pe.ALPHABET_STRING.charAt(t);
-				if (e === Pe.ASTERISK_ENCODING) return "*";
-				throw new D();
+				for (let t = 0; t < Ne.CHARACTER_ENCODINGS.length; t++) if (Ne.CHARACTER_ENCODINGS[t] === e) return Ne.ALPHABET_STRING.charAt(t);
+				if (e === Ne.ASTERISK_ENCODING) return "*";
+				throw new E();
 			}
 			static decodeExtended(e) {
 				let t = e.length, n = "";
@@ -3769,7 +3772,7 @@ var T = function() {
 				return n;
 			}
 		}
-		Pe.ALPHABET_STRING = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%", Pe.CHARACTER_ENCODINGS = [
+		Ne.ALPHABET_STRING = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%", Ne.CHARACTER_ENCODINGS = [
 			52,
 			289,
 			97,
@@ -3813,16 +3816,16 @@ var T = function() {
 			162,
 			138,
 			42
-		], Pe.ASTERISK_ENCODING = 148;
-		class F extends Ne {
+		], Ne.ASTERISK_ENCODING = 148;
+		class Pe extends Me {
 			constructor() {
 				super(...arguments), this.narrowLineWidth = -1;
 			}
 			decodeRow(e, t, n) {
 				let r = this.decodeStart(t), i = this.decodeEnd(t), a = new T();
-				F.decodeMiddle(t, r[1], i[0], a);
+				Pe.decodeMiddle(t, r[1], i[0], a);
 				let o = a.toString(), s = null;
-				n != null && (s = n.get(b.ALLOWED_LENGTHS)), s ?? (s = F.DEFAULT_ALLOWED_LENGTHS);
+				n != null && (s = n.get(b.ALLOWED_LENGTHS)), s ?? (s = Pe.DEFAULT_ALLOWED_LENGTHS);
 				let c = o.length, l = !1, u = 0;
 				for (let e of s) {
 					if (c === e) {
@@ -3832,46 +3835,46 @@ var T = function() {
 					e > u && (u = e);
 				}
 				if (!l && c > u && (l = !0), !l) throw new x();
-				let d = [new N(r[1], e), new N(i[0], e)];
+				let d = [new P(r[1], e), new P(i[0], e)];
 				return new le(o, null, 0, d, k.ITF, (/* @__PURE__ */ new Date()).getTime());
 			}
 			static decodeMiddle(e, t, n, r) {
 				let i = /* @__PURE__ */ new Int32Array(10), a = /* @__PURE__ */ new Int32Array(5), o = /* @__PURE__ */ new Int32Array(5);
 				for (i.fill(0), a.fill(0), o.fill(0); t < n;) {
-					Ne.recordPattern(e, t, i);
+					Me.recordPattern(e, t, i);
 					for (let e = 0; e < 5; e++) {
 						let t = 2 * e;
 						a[e] = i[t], o[e] = i[t + 1];
 					}
-					let n = F.decodeDigit(a);
+					let n = Pe.decodeDigit(a);
 					r.append(n.toString()), n = this.decodeDigit(o), r.append(n.toString()), i.forEach(function(e) {
 						t += e;
 					});
 				}
 			}
 			decodeStart(e) {
-				let t = F.skipWhiteSpace(e), n = F.findGuardPattern(e, t, F.START_PATTERN);
+				let t = Pe.skipWhiteSpace(e), n = Pe.findGuardPattern(e, t, Pe.START_PATTERN);
 				return this.narrowLineWidth = (n[1] - n[0]) / 4, this.validateQuietZone(e, n[0]), n;
 			}
 			validateQuietZone(e, t) {
 				let n = this.narrowLineWidth * 10;
 				n = n < t ? n : t;
 				for (let r = t - 1; n > 0 && r >= 0 && !e.get(r); r--) n--;
-				if (n !== 0) throw new D();
+				if (n !== 0) throw new E();
 			}
 			static skipWhiteSpace(e) {
 				let t = e.getSize(), n = e.getNextSet(0);
-				if (n === t) throw new D();
+				if (n === t) throw new E();
 				return n;
 			}
 			decodeEnd(e) {
 				e.reverse();
 				try {
-					let t = F.skipWhiteSpace(e), n;
+					let t = Pe.skipWhiteSpace(e), n;
 					try {
-						n = F.findGuardPattern(e, t, F.END_PATTERN_REVERSED[0]);
+						n = Pe.findGuardPattern(e, t, Pe.END_PATTERN_REVERSED[0]);
 					} catch (r) {
-						r instanceof D && (n = F.findGuardPattern(e, t, F.END_PATTERN_REVERSED[1]));
+						r instanceof E && (n = Pe.findGuardPattern(e, t, Pe.END_PATTERN_REVERSED[1]));
 					}
 					this.validateQuietZone(e, n[0]);
 					let r = n[0];
@@ -3886,24 +3889,24 @@ var T = function() {
 				for (let l = t; l < a; l++) if (e.get(l) !== o) i[s]++;
 				else {
 					if (s === r - 1) {
-						if (Ne.patternMatchVariance(i, n, F.MAX_INDIVIDUAL_VARIANCE) < F.MAX_AVG_VARIANCE) return [c, l];
+						if (Me.patternMatchVariance(i, n, Pe.MAX_INDIVIDUAL_VARIANCE) < Pe.MAX_AVG_VARIANCE) return [c, l];
 						c += i[0] + i[1], p.arraycopy(i, 2, i, 0, s - 1), i[s - 1] = 0, i[s] = 0, s--;
 					} else s++;
 					i[s] = 1, o = !o;
 				}
-				throw new D();
+				throw new E();
 			}
 			static decodeDigit(e) {
-				let t = F.MAX_AVG_VARIANCE, n = -1, r = F.PATTERNS.length;
+				let t = Pe.MAX_AVG_VARIANCE, n = -1, r = Pe.PATTERNS.length;
 				for (let i = 0; i < r; i++) {
-					let r = F.PATTERNS[i], a = Ne.patternMatchVariance(e, r, F.MAX_INDIVIDUAL_VARIANCE);
+					let r = Pe.PATTERNS[i], a = Me.patternMatchVariance(e, r, Pe.MAX_INDIVIDUAL_VARIANCE);
 					a < t ? (t = a, n = i) : a === t && (n = -1);
 				}
 				if (n >= 0) return n % 10;
-				throw new D();
+				throw new E();
 			}
 		}
-		F.PATTERNS = [
+		Pe.PATTERNS = [
 			Int32Array.from([
 				1,
 				1,
@@ -4044,18 +4047,18 @@ var T = function() {
 				3,
 				1
 			])
-		], F.MAX_AVG_VARIANCE = .38, F.MAX_INDIVIDUAL_VARIANCE = .5, F.DEFAULT_ALLOWED_LENGTHS = [
+		], Pe.MAX_AVG_VARIANCE = .38, Pe.MAX_INDIVIDUAL_VARIANCE = .5, Pe.DEFAULT_ALLOWED_LENGTHS = [
 			6,
 			8,
 			10,
 			12,
 			14
-		], F.START_PATTERN = Int32Array.from([
+		], Pe.START_PATTERN = Int32Array.from([
 			1,
 			1,
 			1,
 			1
-		]), F.END_PATTERN_REVERSED = [Int32Array.from([
+		]), Pe.END_PATTERN_REVERSED = [Int32Array.from([
 			1,
 			1,
 			2
@@ -4064,7 +4067,7 @@ var T = function() {
 			1,
 			3
 		])];
-		class Fe extends Ne {
+		class Fe extends Me {
 			constructor() {
 				super(...arguments), this.decodeRowStringBuffer = "";
 			}
@@ -4124,7 +4127,7 @@ var T = function() {
 				for (let n = t; n < a; n++) if (e.get(n) !== l) i[o]++;
 				else {
 					if (o === c - 1) {
-						if (Ne.patternMatchVariance(i, r, Fe.MAX_INDIVIDUAL_VARIANCE) < Fe.MAX_AVG_VARIANCE) return Int32Array.from([s, n]);
+						if (Me.patternMatchVariance(i, r, Fe.MAX_INDIVIDUAL_VARIANCE) < Fe.MAX_AVG_VARIANCE) return Int32Array.from([s, n]);
 						s += i[0] + i[1];
 						let e = i.slice(2, i.length - 1);
 						for (let t = 0; t < o - 1; t++) i[t] = e[t];
@@ -4132,17 +4135,17 @@ var T = function() {
 					} else o++;
 					i[o] = 1, l = !l;
 				}
-				throw new D();
+				throw new E();
 			}
 			static decodeDigit(e, t, n, r) {
 				this.recordPattern(e, n, t);
 				let i = this.MAX_AVG_VARIANCE, a = -1, o = r.length;
 				for (let e = 0; e < o; e++) {
-					let n = r[e], o = Ne.patternMatchVariance(t, n, Fe.MAX_INDIVIDUAL_VARIANCE);
+					let n = r[e], o = Me.patternMatchVariance(t, n, Fe.MAX_INDIVIDUAL_VARIANCE);
 					o < i && (i = o, a = e);
 				}
 				if (a >= 0) return a;
-				throw new D();
+				throw new E();
 			}
 		}
 		Fe.MAX_AVG_VARIANCE = .48, Fe.MAX_INDIVIDUAL_VARIANCE = .7, Fe.START_END_PATTERN = Int32Array.from([
@@ -4245,7 +4248,7 @@ var T = function() {
 				]), this.decodeRowStringBuffer = "";
 			}
 			decodeRow(e, t, n) {
-				let r = this.decodeRowStringBuffer, i = this.decodeMiddle(t, n, r), a = r.toString(), o = Ie.parseExtensionString(a), s = [new N((n[0] + n[1]) / 2, e), new N(i, e)], c = new le(a, null, 0, s, k.UPC_EAN_EXTENSION, (/* @__PURE__ */ new Date()).getTime());
+				let r = this.decodeRowStringBuffer, i = this.decodeMiddle(t, n, r), a = r.toString(), o = Ie.parseExtensionString(a), s = [new P((n[0] + n[1]) / 2, e), new P(i, e)], c = new le(a, null, 0, s, k.UPC_EAN_EXTENSION, (/* @__PURE__ */ new Date()).getTime());
 				return o != null && c.putAllMetadata(o), c;
 			}
 			decodeMiddle(e, t, n) {
@@ -4258,9 +4261,9 @@ var T = function() {
 					for (let e of r) a += e;
 					i >= 10 && (o |= 1 << 4 - t), t !== 4 && (a = e.getNextSet(a), a = e.getNextUnset(a));
 				}
-				if (n.length !== 5) throw new D();
+				if (n.length !== 5) throw new E();
 				let s = this.determineCheckDigit(o);
-				if (Ie.extensionChecksum(n.toString()) !== s) throw new D();
+				if (Ie.extensionChecksum(n.toString()) !== s) throw new E();
 				return a;
 			}
 			static extensionChecksum(e) {
@@ -4272,7 +4275,7 @@ var T = function() {
 			}
 			determineCheckDigit(e) {
 				for (let t = 0; t < 10; t++) if (e === this.CHECK_DIGIT_ENCODINGS[t]) return t;
-				throw new D();
+				throw new E();
 			}
 			static parseExtensionString(e) {
 				if (e.length !== 5) return null;
@@ -4312,7 +4315,7 @@ var T = function() {
 				]), this.decodeRowStringBuffer = "";
 			}
 			decodeRow(e, t, n) {
-				let r = this.decodeRowStringBuffer, i = this.decodeMiddle(t, n, r), a = r.toString(), o = Le.parseExtensionString(a), s = [new N((n[0] + n[1]) / 2, e), new N(i, e)], c = new le(a, null, 0, s, k.UPC_EAN_EXTENSION, (/* @__PURE__ */ new Date()).getTime());
+				let r = this.decodeRowStringBuffer, i = this.decodeMiddle(t, n, r), a = r.toString(), o = Le.parseExtensionString(a), s = [new P((n[0] + n[1]) / 2, e), new P(i, e)], c = new le(a, null, 0, s, k.UPC_EAN_EXTENSION, (/* @__PURE__ */ new Date()).getTime());
 				return o != null && c.putAllMetadata(o), c;
 			}
 			decodeMiddle(e, t, n) {
@@ -4325,7 +4328,7 @@ var T = function() {
 					for (let e of r) a += e;
 					i >= 10 && (o |= 1 << 1 - t), t !== 1 && (a = e.getNextSet(a), a = e.getNextUnset(a));
 				}
-				if (n.length !== 2 || parseInt(n.toString()) % 4 !== o) throw new D();
+				if (n.length !== 2 || parseInt(n.toString()) % 4 !== o) throw new E();
 				return a;
 			}
 			static parseExtensionString(e) {
@@ -4359,25 +4362,25 @@ var T = function() {
 			decodeRow(e, t, n) {
 				let r = I.findStartGuardPattern(t), i = n == null ? null : n.get(b.NEED_RESULT_POINT_CALLBACK);
 				if (i != null) {
-					let t = new N((r[0] + r[1]) / 2, e);
+					let t = new P((r[0] + r[1]) / 2, e);
 					i.foundPossibleResultPoint(t);
 				}
 				let a = this.decodeMiddle(t, r, this.decodeRowStringBuffer), o = a.rowOffset, s = a.resultString;
 				if (i != null) {
-					let t = new N(o, e);
+					let t = new P(o, e);
 					i.foundPossibleResultPoint(t);
 				}
 				let c = this.decodeEnd(t, o);
 				if (i != null) {
-					let t = new N((c[0] + c[1]) / 2, e);
+					let t = new P((c[0] + c[1]) / 2, e);
 					i.foundPossibleResultPoint(t);
 				}
 				let l = c[1], u = l + (l - c[0]);
-				if (u >= t.getSize() || !t.isRange(l, u, !1)) throw new D();
+				if (u >= t.getSize() || !t.isRange(l, u, !1)) throw new E();
 				let f = s.toString();
 				if (f.length < 8) throw new x();
 				if (!I.checkChecksum(f)) throw new d();
-				let p = (r[1] + r[0]) / 2, m = (c[1] + c[0]) / 2, h = this.getBarcodeFormat(), g = [new N(p, e), new N(m, e)], _ = new le(f, null, 0, g, h, (/* @__PURE__ */ new Date()).getTime()), v = 0;
+				let p = (r[1] + r[0]) / 2, m = (c[1] + c[0]) / 2, h = this.getBarcodeFormat(), g = [new P(p, e), new P(m, e)], _ = new le(f, null, 0, g, h, (/* @__PURE__ */ new Date()).getTime()), v = 0;
 				try {
 					let n = Re.decodeRow(e, t, c[1]);
 					_.putMetadata(fe.UPC_EAN_EXTENSION, n.getText()), _.putAllMetadata(n.getResultMetadata()), _.addResultPoints(n.getResultPoints()), v = n.getText().length;
@@ -4389,7 +4392,7 @@ var T = function() {
 						e = !0;
 						break;
 					}
-					if (!e) throw new D();
+					if (!e) throw new E();
 				}
 				return _;
 			}
@@ -4456,7 +4459,7 @@ var T = function() {
 			}
 			static determineFirstDigit(e, t) {
 				for (let n = 0; n < 10; n++) if (t === this.FIRST_DIGIT_ENCODINGS[n]) return e = String.fromCharCode(48 + n) + e, e;
-				throw new D();
+				throw new E();
 			}
 		}
 		ze.FIRST_DIGIT_ENCODINGS = [
@@ -4526,7 +4529,7 @@ var T = function() {
 					let n = new le(t.substring(1), null, null, e.getResultPoints(), k.UPC_A);
 					return e.getResultMetadata() != null && n.putAllMetadata(e.getResultMetadata()), n;
 				}
-				throw new D();
+				throw new E();
 			}
 			reset() {
 				this.ean13Reader.reset();
@@ -4563,7 +4566,7 @@ var T = function() {
 					let t = String.fromCharCode(48 + n), i = String.fromCharCode(48 + r);
 					return t + e + i;
 				}
-				throw D.getNotFoundInstance();
+				throw E.getNotFoundInstance();
 			}
 			getBarcodeFormat() {
 				return k.UPC_E;
@@ -4619,7 +4622,7 @@ var T = function() {
 			22,
 			26
 		])];
-		class Ue extends Ne {
+		class Ue extends Me {
 			constructor(e) {
 				super();
 				let n = e == null ? null : e.get(b.POSSIBLE_FORMATS), r = [];
@@ -4634,13 +4637,13 @@ var T = function() {
 					}
 					return i;
 				} catch {}
-				throw new D();
+				throw new E();
 			}
 			reset() {
 				for (let e of this.readers) e.reset();
 			}
 		}
-		class We extends Ne {
+		class We extends Me {
 			constructor() {
 				super(), this.decodeFinderCounters = /* @__PURE__ */ new Int32Array(4), this.dataCharacterCounters = /* @__PURE__ */ new Int32Array(8), this.oddRoundingErrors = [
 					,
@@ -4673,11 +4676,11 @@ var T = function() {
 				return this.evenCounts;
 			}
 			parseFinderValue(e, t) {
-				for (let n = 0; n < t.length; n++) if (Ne.patternMatchVariance(e, t[n], We.MAX_INDIVIDUAL_VARIANCE) < We.MAX_AVG_VARIANCE) return n;
-				throw new D();
+				for (let n = 0; n < t.length; n++) if (Me.patternMatchVariance(e, t[n], We.MAX_INDIVIDUAL_VARIANCE) < We.MAX_AVG_VARIANCE) return n;
+				throw new E();
 			}
 			static count(e) {
-				return M.sum(new Int32Array(e));
+				return N.sum(new Int32Array(e));
 			}
 			static increment(e, t) {
 				let n = 0, r = t[0];
@@ -4724,7 +4727,7 @@ var T = function() {
 		}
 		class Ke {
 			constructor(e, t, n, r, i) {
-				this.value = e, this.startEnd = t, this.value = e, this.startEnd = t, this.resultPoints = [], this.resultPoints.push(new N(n, i)), this.resultPoints.push(new N(r, i));
+				this.value = e, this.startEnd = t, this.value = e, this.startEnd = t, this.resultPoints = [], this.resultPoints.push(new P(n, i)), this.resultPoints.push(new P(r, i));
 			}
 			getValue() {
 				return this.value;
@@ -4865,22 +4868,22 @@ var T = function() {
 			constructor() {}
 			static parseFieldsInGeneralPurpose(e) {
 				if (!e) return null;
-				if (e.length < 2) throw new D();
+				if (e.length < 2) throw new E();
 				let t = e.substring(0, 2);
 				for (let n of L.TWO_DIGIT_DATA_LENGTH) if (n[0] === t) return n[1] === L.VARIABLE_LENGTH ? L.processVariableAI(2, n[2], e) : L.processFixedAI(2, n[1], e);
-				if (e.length < 3) throw new D();
+				if (e.length < 3) throw new E();
 				let n = e.substring(0, 3);
 				for (let t of L.THREE_DIGIT_DATA_LENGTH) if (t[0] === n) return t[1] === L.VARIABLE_LENGTH ? L.processVariableAI(3, t[2], e) : L.processFixedAI(3, t[1], e);
 				for (let t of L.THREE_DIGIT_PLUS_DIGIT_DATA_LENGTH) if (t[0] === n) return t[1] === L.VARIABLE_LENGTH ? L.processVariableAI(4, t[2], e) : L.processFixedAI(4, t[1], e);
-				if (e.length < 4) throw new D();
+				if (e.length < 4) throw new E();
 				let r = e.substring(0, 4);
 				for (let t of L.FOUR_DIGIT_DATA_LENGTH) if (t[0] === r) return t[1] === L.VARIABLE_LENGTH ? L.processVariableAI(4, t[2], e) : L.processFixedAI(4, t[1], e);
-				throw new D();
+				throw new E();
 			}
 			static processFixedAI(e, t, n) {
-				if (n.length < e) throw new D();
+				if (n.length < e) throw new E();
 				let r = n.substring(0, e);
-				if (n.length < e + t) throw new D();
+				if (n.length < e + t) throw new E();
 				let i = n.substring(e, e + t), a = n.substring(e + t), o = "(" + r + ")" + i, s = L.parseFieldsInGeneralPurpose(a);
 				return s == null ? o : o + s;
 			}
@@ -5388,7 +5391,7 @@ var T = function() {
 					case 62:
 						r = "/";
 						break;
-					default: throw new ve("Decoding invalid alphanumeric value: " + n);
+					default: throw new M("Decoding invalid alphanumeric value: " + n);
 				}
 				return new Ze(e + 6, r);
 			}
@@ -5486,7 +5489,7 @@ var T = function() {
 				super(e);
 			}
 			parseInformation() {
-				if (this.getInformation().getSize() != ot.HEADER_SIZE + at.GTIN_SIZE + ot.WEIGHT_SIZE) throw new D();
+				if (this.getInformation().getSize() != ot.HEADER_SIZE + at.GTIN_SIZE + ot.WEIGHT_SIZE) throw new E();
 				let e = new T();
 				return this.encodeCompressedGtin(e, ot.HEADER_SIZE), this.encodeCompressedWeight(e, ot.HEADER_SIZE + at.GTIN_SIZE, ot.WEIGHT_SIZE), e.toString();
 			}
@@ -5519,7 +5522,7 @@ var T = function() {
 				super(e);
 			}
 			parseInformation() {
-				if (this.getInformation().getSize() < lt.HEADER_SIZE + nt.GTIN_SIZE) throw new D();
+				if (this.getInformation().getSize() < lt.HEADER_SIZE + nt.GTIN_SIZE) throw new E();
 				let e = new T();
 				this.encodeCompressedGtin(e, lt.HEADER_SIZE);
 				let t = this.getGeneralDecoder().extractNumericValueFromBitArray(lt.HEADER_SIZE + nt.GTIN_SIZE, lt.LAST_DIGIT_SIZE);
@@ -5534,7 +5537,7 @@ var T = function() {
 				super(e);
 			}
 			parseInformation() {
-				if (this.getInformation().getSize() < ut.HEADER_SIZE + nt.GTIN_SIZE) throw new D();
+				if (this.getInformation().getSize() < ut.HEADER_SIZE + nt.GTIN_SIZE) throw new E();
 				let e = new T();
 				this.encodeCompressedGtin(e, ut.HEADER_SIZE);
 				let t = this.getGeneralDecoder().extractNumericValueFromBitArray(ut.HEADER_SIZE + nt.GTIN_SIZE, ut.LAST_DIGIT_SIZE);
@@ -5546,17 +5549,17 @@ var T = function() {
 			}
 		}
 		ut.HEADER_SIZE = 8, ut.LAST_DIGIT_SIZE = 2, ut.FIRST_THREE_DIGITS_SIZE = 10;
-		class dt extends at {
+		class R extends at {
 			constructor(e, t, n) {
 				super(e), this.dateCode = n, this.firstAIdigits = t;
 			}
 			parseInformation() {
-				if (this.getInformation().getSize() != dt.HEADER_SIZE + dt.GTIN_SIZE + dt.WEIGHT_SIZE + dt.DATE_SIZE) throw new D();
+				if (this.getInformation().getSize() != R.HEADER_SIZE + R.GTIN_SIZE + R.WEIGHT_SIZE + R.DATE_SIZE) throw new E();
 				let e = new T();
-				return this.encodeCompressedGtin(e, dt.HEADER_SIZE), this.encodeCompressedWeight(e, dt.HEADER_SIZE + dt.GTIN_SIZE, dt.WEIGHT_SIZE), this.encodeCompressedDate(e, dt.HEADER_SIZE + dt.GTIN_SIZE + dt.WEIGHT_SIZE), e.toString();
+				return this.encodeCompressedGtin(e, R.HEADER_SIZE), this.encodeCompressedWeight(e, R.HEADER_SIZE + R.GTIN_SIZE, R.WEIGHT_SIZE), this.encodeCompressedDate(e, R.HEADER_SIZE + R.GTIN_SIZE + R.WEIGHT_SIZE), e.toString();
 			}
 			encodeCompressedDate(e, t) {
-				let n = this.getGeneralDecoder().extractNumericValueFromBitArray(t, dt.DATE_SIZE);
+				let n = this.getGeneralDecoder().extractNumericValueFromBitArray(t, R.DATE_SIZE);
 				if (n == 38400) return;
 				e.append("("), e.append(this.dateCode), e.append(")");
 				let r = n % 32;
@@ -5573,8 +5576,8 @@ var T = function() {
 				return e % 1e5;
 			}
 		}
-		dt.HEADER_SIZE = 8, dt.WEIGHT_SIZE = 20, dt.DATE_SIZE = 16;
-		function ft(e) {
+		R.HEADER_SIZE = 8, R.WEIGHT_SIZE = 20, R.DATE_SIZE = 16;
+		function dt(e) {
 			try {
 				if (e.get(1)) return new rt(e);
 				if (!e.get(2)) return new it(e);
@@ -5587,20 +5590,20 @@ var T = function() {
 					case 13: return new ut(e);
 				}
 				switch (et.extractNumericValueFromBitArray(e, 1, 7)) {
-					case 56: return new dt(e, "310", "11");
-					case 57: return new dt(e, "320", "11");
-					case 58: return new dt(e, "310", "13");
-					case 59: return new dt(e, "320", "13");
-					case 60: return new dt(e, "310", "15");
-					case 61: return new dt(e, "320", "15");
-					case 62: return new dt(e, "310", "17");
-					case 63: return new dt(e, "320", "17");
+					case 56: return new R(e, "310", "11");
+					case 57: return new R(e, "320", "11");
+					case 58: return new R(e, "310", "13");
+					case 59: return new R(e, "320", "13");
+					case 60: return new R(e, "310", "15");
+					case 61: return new R(e, "320", "15");
+					case 62: return new R(e, "310", "17");
+					case 63: return new R(e, "320", "17");
 				}
 			} catch (t) {
-				throw console.log(t), new ve("unknown decoder: " + e);
+				throw console.log(t), new M("unknown decoder: " + e);
 			}
 		}
-		class pt {
+		class ft {
 			constructor(e, t, n, r) {
 				this.leftchar = e, this.rightchar = t, this.finderpattern = n, this.maybeLast = r;
 			}
@@ -5623,16 +5626,16 @@ var T = function() {
 				return "[ " + this.leftchar + ", " + this.rightchar + " : " + (this.finderpattern == null ? "null" : this.finderpattern.getValue()) + " ]";
 			}
 			static equals(e, t) {
-				return e instanceof pt && pt.equalsOrNull(e.leftchar, t.leftchar) && pt.equalsOrNull(e.rightchar, t.rightchar) && pt.equalsOrNull(e.finderpattern, t.finderpattern);
+				return e instanceof ft && ft.equalsOrNull(e.leftchar, t.leftchar) && ft.equalsOrNull(e.rightchar, t.rightchar) && ft.equalsOrNull(e.finderpattern, t.finderpattern);
 			}
 			static equalsOrNull(e, t) {
-				return e === null ? t === null : pt.equals(e, t);
+				return e === null ? t === null : ft.equals(e, t);
 			}
 			hashCode() {
 				return this.leftchar.getValue() ^ this.rightchar.getValue() ^ this.finderpattern.getValue();
 			}
 		}
-		class mt {
+		class pt {
 			constructor(e, t, n) {
 				this.pairs = e, this.rowNumber = t, this.wasReversed = n;
 			}
@@ -5652,7 +5655,7 @@ var T = function() {
 				return "{ " + this.pairs + " }";
 			}
 			equals(e, t) {
-				return e instanceof mt && this.checkEqualitity(e, t) && e.wasReversed === t.wasReversed;
+				return e instanceof pt && this.checkEqualitity(e, t) && e.wasReversed === t.wasReversed;
 			}
 			checkEqualitity(e, t) {
 				if (!e || !t) return;
@@ -5664,18 +5667,18 @@ var T = function() {
 				}), n;
 			}
 		}
-		class R extends We {
+		class z extends We {
 			constructor(e) {
-				super(...arguments), this.pairs = Array(R.MAX_PAIRS), this.rows = [], this.startEnd = [2], this.verbose = e === !0;
+				super(...arguments), this.pairs = Array(z.MAX_PAIRS), this.rows = [], this.startEnd = [2], this.verbose = e === !0;
 			}
 			decodeRow(e, t, n) {
 				this.pairs.length = 0, this.startFromEven = !1;
 				try {
-					return R.constructResult(this.decodeRow2pairs(e, t));
+					return z.constructResult(this.decodeRow2pairs(e, t));
 				} catch (e) {
 					this.verbose && console.log(e);
 				}
-				return this.pairs.length = 0, this.startFromEven = !0, R.constructResult(this.decodeRow2pairs(e, t));
+				return this.pairs.length = 0, this.startFromEven = !0, z.constructResult(this.decodeRow2pairs(e, t));
 			}
 			reset() {
 				this.pairs.length = 0, this.rows.length = 0;
@@ -5685,8 +5688,8 @@ var T = function() {
 				for (; !n;) try {
 					this.pairs.push(this.retrieveNextPair(t, this.pairs, e));
 				} catch (e) {
-					if (e instanceof D) {
-						if (!this.pairs.length) throw new D();
+					if (e instanceof E) {
+						if (!this.pairs.length) throw new E();
 						n = !0;
 					}
 				}
@@ -5696,7 +5699,7 @@ var T = function() {
 					let e = this.checkRowsBoolean(!1);
 					if (e != null || (e = this.checkRowsBoolean(!0), e != null)) return e;
 				}
-				throw new D();
+				throw new E();
 			}
 			checkRowsBoolean(e) {
 				if (this.rows.length > 25) return this.rows.length = 0, null;
@@ -5714,7 +5717,7 @@ var T = function() {
 					let t = this.rows[n];
 					this.pairs.length = 0;
 					for (let t of e) this.pairs.push(t.getPairs());
-					if (this.pairs.push(t.getPairs()), !R.isValidSequence(this.pairs)) continue;
+					if (this.pairs.push(t.getPairs()), !z.isValidSequence(this.pairs)) continue;
 					if (this.checkChecksum()) return this.pairs;
 					let r = Array(e);
 					r.push(t);
@@ -5724,10 +5727,10 @@ var T = function() {
 						this.verbose && console.log(e);
 					}
 				}
-				throw new D();
+				throw new E();
 			}
 			static isValidSequence(e) {
-				for (let t of R.FINDER_PATTERN_SEQUENCES) {
+				for (let t of z.FINDER_PATTERN_SEQUENCES) {
 					if (e.length > t.length) continue;
 					let n = !0;
 					for (let r = 0; r < e.length; r++) if (e[r].getFinderPattern().getValue() != t[r]) {
@@ -5748,11 +5751,11 @@ var T = function() {
 					}
 					r = t.isEquivalent(this.pairs), n++;
 				}
-				i || r || R.isPartialRow(this.pairs, this.rows) || (this.rows.push(n, new mt(this.pairs, e, t)), this.removePartialRows(this.pairs, this.rows));
+				i || r || z.isPartialRow(this.pairs, this.rows) || (this.rows.push(n, new pt(this.pairs, e, t)), this.removePartialRows(this.pairs, this.rows));
 			}
 			removePartialRows(e, t) {
 				for (let n of t) if (n.getPairs().length !== e.length) {
-					for (let t of n.getPairs()) for (let n of e) if (pt.equals(t, n)) break;
+					for (let t of n.getPairs()) for (let n of e) if (ft.equals(t, n)) break;
 				}
 			}
 			static isPartialRow(e, t) {
@@ -5777,7 +5780,7 @@ var T = function() {
 				return this.rows;
 			}
 			static constructResult(e) {
-				let t = ft(Je.buildBitArray(e)).parseInformation(), n = e[0].getFinderPattern().getResultPoints(), r = e[e.length - 1].getFinderPattern().getResultPoints(), i = [
+				let t = dt(Je.buildBitArray(e)).parseInformation(), n = e[0].getFinderPattern().getResultPoints(), r = e[e.length - 1].getFinderPattern().getResultPoints(), i = [
 					n[0],
 					n[1],
 					r[0],
@@ -5806,17 +5809,17 @@ var T = function() {
 				this.startFromEven && (r = !r);
 				let i, a = !0, o = -1;
 				do
-					this.findNextPair(e, t, o), i = this.parseFoundFinderPattern(e, n, r), i == null ? o = R.getNextSecondBar(e, this.startEnd[0]) : a = !1;
+					this.findNextPair(e, t, o), i = this.parseFoundFinderPattern(e, n, r), i == null ? o = z.getNextSecondBar(e, this.startEnd[0]) : a = !1;
 				while (a);
 				let s = this.decodeDataCharacter(e, i, r, !0);
-				if (!this.isEmptyPair(t) && t[t.length - 1].mustBeLast()) throw new D();
+				if (!this.isEmptyPair(t) && t[t.length - 1].mustBeLast()) throw new E();
 				let c;
 				try {
 					c = this.decodeDataCharacter(e, i, r, !1);
 				} catch (e) {
 					c = null, this.verbose && console.log(e);
 				}
-				return new pt(s, c, i, !0);
+				return new ft(s, c, i, !0);
 			}
 			isEmptyPair(e) {
 				return e.length === 0;
@@ -5834,15 +5837,15 @@ var T = function() {
 				for (let t = a; t < i; t++) if (e.get(t) != s) r[c]++;
 				else {
 					if (c == 3) {
-						if (o && R.reverseCounters(r), R.isFinderPattern(r)) {
+						if (o && z.reverseCounters(r), z.isFinderPattern(r)) {
 							this.startEnd[0] = l, this.startEnd[1] = t;
 							return;
 						}
-						o && R.reverseCounters(r), l += r[0] + r[1], r[0] = r[2], r[1] = r[3], r[2] = 0, r[3] = 0, c--;
+						o && z.reverseCounters(r), l += r[0] + r[1], r[0] = r[2], r[1] = r[3], r[2] = 0, r[3] = 0, c--;
 					} else c++;
 					r[c] = 1, s = !s;
 				}
-				throw new D();
+				throw new E();
 			}
 			static reverseCounters(e) {
 				let t = e.length;
@@ -5862,7 +5865,7 @@ var T = function() {
 				p.arraycopy(o, 0, o, 1, o.length - 1), o[0] = r;
 				let s;
 				try {
-					s = this.parseFinderValue(o, R.FINDER_PATTERNS);
+					s = this.parseFinderValue(o, z.FINDER_PATTERNS);
 				} catch {
 					return null;
 				}
@@ -5871,24 +5874,24 @@ var T = function() {
 			decodeDataCharacter(e, t, n, r) {
 				let i = this.getDataCharacterCounters();
 				for (let e = 0; e < i.length; e++) i[e] = 0;
-				if (r) R.recordPatternInReverse(e, t.getStartEnd()[0], i);
+				if (r) z.recordPatternInReverse(e, t.getStartEnd()[0], i);
 				else {
-					R.recordPattern(e, t.getStartEnd()[1], i);
+					z.recordPattern(e, t.getStartEnd()[1], i);
 					for (let e = 0, t = i.length - 1; e < t; e++, t--) {
 						let n = i[e];
 						i[e] = i[t], i[t] = n;
 					}
 				}
-				let a = M.sum(new Int32Array(i)) / 17, o = (t.getStartEnd()[1] - t.getStartEnd()[0]) / 15;
-				if (Math.abs(a - o) / o > .3) throw new D();
+				let a = N.sum(new Int32Array(i)) / 17, o = (t.getStartEnd()[1] - t.getStartEnd()[0]) / 15;
+				if (Math.abs(a - o) / o > .3) throw new E();
 				let s = this.getOddCounts(), c = this.getEvenCounts(), l = this.getOddRoundingErrors(), u = this.getEvenRoundingErrors();
 				for (let e = 0; e < i.length; e++) {
 					let t = 1 * i[e] / a, n = t + .5;
 					if (n < 1) {
-						if (t < .3) throw new D();
+						if (t < .3) throw new E();
 						n = 1;
 					} else if (n > 8) {
-						if (t > 8.7) throw new D();
+						if (t > 8.7) throw new E();
 						n = 8;
 					}
 					let r = e / 2;
@@ -5897,83 +5900,83 @@ var T = function() {
 				this.adjustOddEvenCounts(17);
 				let d = 4 * t.getValue() + (n ? 0 : 2) + +!r - 1, f = 0, p = 0;
 				for (let e = s.length - 1; e >= 0; e--) {
-					if (R.isNotA1left(t, n, r)) {
-						let t = R.WEIGHTS[d][2 * e];
+					if (z.isNotA1left(t, n, r)) {
+						let t = z.WEIGHTS[d][2 * e];
 						p += s[e] * t;
 					}
 					f += s[e];
 				}
 				let m = 0;
-				for (let e = c.length - 1; e >= 0; e--) if (R.isNotA1left(t, n, r)) {
-					let t = R.WEIGHTS[d][2 * e + 1];
+				for (let e = c.length - 1; e >= 0; e--) if (z.isNotA1left(t, n, r)) {
+					let t = z.WEIGHTS[d][2 * e + 1];
 					m += c[e] * t;
 				}
 				let h = p + m;
-				if (f & 1 || f > 13 || f < 4) throw new D();
-				let g = (13 - f) / 2, _ = R.SYMBOL_WIDEST[g], v = 9 - _, y = qe.getRSSvalue(s, _, !0), b = qe.getRSSvalue(c, v, !1), x = R.EVEN_TOTAL_SUBSET[g], S = R.GSUM[g], C = y * x + b + S;
+				if (f & 1 || f > 13 || f < 4) throw new E();
+				let g = (13 - f) / 2, _ = z.SYMBOL_WIDEST[g], v = 9 - _, y = qe.getRSSvalue(s, _, !0), b = qe.getRSSvalue(c, v, !1), x = z.EVEN_TOTAL_SUBSET[g], S = z.GSUM[g], C = y * x + b + S;
 				return new Ge(C, h);
 			}
 			static isNotA1left(e, t, n) {
 				return !(e.getValue() == 0 && t && n);
 			}
 			adjustOddEvenCounts(e) {
-				let t = M.sum(new Int32Array(this.getOddCounts())), n = M.sum(new Int32Array(this.getEvenCounts())), r = !1, i = !1;
+				let t = N.sum(new Int32Array(this.getOddCounts())), n = N.sum(new Int32Array(this.getEvenCounts())), r = !1, i = !1;
 				t > 13 ? i = !0 : t < 4 && (r = !0);
 				let a = !1, o = !1;
 				n > 13 ? o = !0 : n < 4 && (a = !0);
 				let s = t + n - e, c = (t & 1) == 1, l = !(n & 1);
 				if (s == 1) {
 					if (c) {
-						if (l) throw new D();
+						if (l) throw new E();
 						i = !0;
 					} else {
-						if (!l) throw new D();
+						if (!l) throw new E();
 						o = !0;
 					}
 				} else if (s == -1) {
 					if (c) {
-						if (l) throw new D();
+						if (l) throw new E();
 						r = !0;
 					} else {
-						if (!l) throw new D();
+						if (!l) throw new E();
 						a = !0;
 					}
 				} else if (s == 0) {
 					if (c) {
-						if (!l) throw new D();
+						if (!l) throw new E();
 						t < n ? (r = !0, o = !0) : (i = !0, a = !0);
-					} else if (l) throw new D();
-				} else throw new D();
+					} else if (l) throw new E();
+				} else throw new E();
 				if (r) {
-					if (i) throw new D();
-					R.increment(this.getOddCounts(), this.getOddRoundingErrors());
+					if (i) throw new E();
+					z.increment(this.getOddCounts(), this.getOddRoundingErrors());
 				}
-				if (i && R.decrement(this.getOddCounts(), this.getOddRoundingErrors()), a) {
-					if (o) throw new D();
-					R.increment(this.getEvenCounts(), this.getOddRoundingErrors());
+				if (i && z.decrement(this.getOddCounts(), this.getOddRoundingErrors()), a) {
+					if (o) throw new E();
+					z.increment(this.getEvenCounts(), this.getOddRoundingErrors());
 				}
-				o && R.decrement(this.getEvenCounts(), this.getEvenRoundingErrors());
+				o && z.decrement(this.getEvenCounts(), this.getEvenRoundingErrors());
 			}
 		}
-		R.SYMBOL_WIDEST = [
+		z.SYMBOL_WIDEST = [
 			7,
 			5,
 			4,
 			3,
 			1
-		], R.EVEN_TOTAL_SUBSET = [
+		], z.EVEN_TOTAL_SUBSET = [
 			4,
 			20,
 			52,
 			104,
 			204
-		], R.GSUM = [
+		], z.GSUM = [
 			0,
 			348,
 			1388,
 			2948,
 			3988
-		], R.FINDER_PATTERNS = [
+		], z.FINDER_PATTERNS = [
 			Int32Array.from([
 				1,
 				8,
@@ -6010,7 +6013,7 @@ var T = function() {
 				9,
 				1
 			])
-		], R.WEIGHTS = [
+		], z.WEIGHTS = [
 			[
 				1,
 				3,
@@ -6241,91 +6244,91 @@ var T = function() {
 				100,
 				89
 			]
-		], R.FINDER_PAT_A = 0, R.FINDER_PAT_B = 1, R.FINDER_PAT_C = 2, R.FINDER_PAT_D = 3, R.FINDER_PAT_E = 4, R.FINDER_PAT_F = 5, R.FINDER_PATTERN_SEQUENCES = [
-			[R.FINDER_PAT_A, R.FINDER_PAT_A],
+		], z.FINDER_PAT_A = 0, z.FINDER_PAT_B = 1, z.FINDER_PAT_C = 2, z.FINDER_PAT_D = 3, z.FINDER_PAT_E = 4, z.FINDER_PAT_F = 5, z.FINDER_PATTERN_SEQUENCES = [
+			[z.FINDER_PAT_A, z.FINDER_PAT_A],
 			[
-				R.FINDER_PAT_A,
-				R.FINDER_PAT_B,
-				R.FINDER_PAT_B
+				z.FINDER_PAT_A,
+				z.FINDER_PAT_B,
+				z.FINDER_PAT_B
 			],
 			[
-				R.FINDER_PAT_A,
-				R.FINDER_PAT_C,
-				R.FINDER_PAT_B,
-				R.FINDER_PAT_D
+				z.FINDER_PAT_A,
+				z.FINDER_PAT_C,
+				z.FINDER_PAT_B,
+				z.FINDER_PAT_D
 			],
 			[
-				R.FINDER_PAT_A,
-				R.FINDER_PAT_E,
-				R.FINDER_PAT_B,
-				R.FINDER_PAT_D,
-				R.FINDER_PAT_C
+				z.FINDER_PAT_A,
+				z.FINDER_PAT_E,
+				z.FINDER_PAT_B,
+				z.FINDER_PAT_D,
+				z.FINDER_PAT_C
 			],
 			[
-				R.FINDER_PAT_A,
-				R.FINDER_PAT_E,
-				R.FINDER_PAT_B,
-				R.FINDER_PAT_D,
-				R.FINDER_PAT_D,
-				R.FINDER_PAT_F
+				z.FINDER_PAT_A,
+				z.FINDER_PAT_E,
+				z.FINDER_PAT_B,
+				z.FINDER_PAT_D,
+				z.FINDER_PAT_D,
+				z.FINDER_PAT_F
 			],
 			[
-				R.FINDER_PAT_A,
-				R.FINDER_PAT_E,
-				R.FINDER_PAT_B,
-				R.FINDER_PAT_D,
-				R.FINDER_PAT_E,
-				R.FINDER_PAT_F,
-				R.FINDER_PAT_F
+				z.FINDER_PAT_A,
+				z.FINDER_PAT_E,
+				z.FINDER_PAT_B,
+				z.FINDER_PAT_D,
+				z.FINDER_PAT_E,
+				z.FINDER_PAT_F,
+				z.FINDER_PAT_F
 			],
 			[
-				R.FINDER_PAT_A,
-				R.FINDER_PAT_A,
-				R.FINDER_PAT_B,
-				R.FINDER_PAT_B,
-				R.FINDER_PAT_C,
-				R.FINDER_PAT_C,
-				R.FINDER_PAT_D,
-				R.FINDER_PAT_D
+				z.FINDER_PAT_A,
+				z.FINDER_PAT_A,
+				z.FINDER_PAT_B,
+				z.FINDER_PAT_B,
+				z.FINDER_PAT_C,
+				z.FINDER_PAT_C,
+				z.FINDER_PAT_D,
+				z.FINDER_PAT_D
 			],
 			[
-				R.FINDER_PAT_A,
-				R.FINDER_PAT_A,
-				R.FINDER_PAT_B,
-				R.FINDER_PAT_B,
-				R.FINDER_PAT_C,
-				R.FINDER_PAT_C,
-				R.FINDER_PAT_D,
-				R.FINDER_PAT_E,
-				R.FINDER_PAT_E
+				z.FINDER_PAT_A,
+				z.FINDER_PAT_A,
+				z.FINDER_PAT_B,
+				z.FINDER_PAT_B,
+				z.FINDER_PAT_C,
+				z.FINDER_PAT_C,
+				z.FINDER_PAT_D,
+				z.FINDER_PAT_E,
+				z.FINDER_PAT_E
 			],
 			[
-				R.FINDER_PAT_A,
-				R.FINDER_PAT_A,
-				R.FINDER_PAT_B,
-				R.FINDER_PAT_B,
-				R.FINDER_PAT_C,
-				R.FINDER_PAT_C,
-				R.FINDER_PAT_D,
-				R.FINDER_PAT_E,
-				R.FINDER_PAT_F,
-				R.FINDER_PAT_F
+				z.FINDER_PAT_A,
+				z.FINDER_PAT_A,
+				z.FINDER_PAT_B,
+				z.FINDER_PAT_B,
+				z.FINDER_PAT_C,
+				z.FINDER_PAT_C,
+				z.FINDER_PAT_D,
+				z.FINDER_PAT_E,
+				z.FINDER_PAT_F,
+				z.FINDER_PAT_F
 			],
 			[
-				R.FINDER_PAT_A,
-				R.FINDER_PAT_A,
-				R.FINDER_PAT_B,
-				R.FINDER_PAT_B,
-				R.FINDER_PAT_C,
-				R.FINDER_PAT_D,
-				R.FINDER_PAT_D,
-				R.FINDER_PAT_E,
-				R.FINDER_PAT_E,
-				R.FINDER_PAT_F,
-				R.FINDER_PAT_F
+				z.FINDER_PAT_A,
+				z.FINDER_PAT_A,
+				z.FINDER_PAT_B,
+				z.FINDER_PAT_B,
+				z.FINDER_PAT_C,
+				z.FINDER_PAT_D,
+				z.FINDER_PAT_D,
+				z.FINDER_PAT_E,
+				z.FINDER_PAT_E,
+				z.FINDER_PAT_F,
+				z.FINDER_PAT_F
 			]
-		], R.MAX_PAIRS = 11;
-		class ht extends Ge {
+		], z.MAX_PAIRS = 11;
+		class mt extends Ge {
 			constructor(e, t, n) {
 				super(e, t), this.count = 0, this.finderPattern = n;
 			}
@@ -6339,19 +6342,19 @@ var T = function() {
 				this.count++;
 			}
 		}
-		class gt extends We {
+		class ht extends We {
 			constructor() {
 				super(...arguments), this.possibleLeftPairs = [], this.possibleRightPairs = [];
 			}
 			decodeRow(e, t, n) {
 				let r = this.decodePair(t, !1, e, n);
-				gt.addOrTally(this.possibleLeftPairs, r), t.reverse();
+				ht.addOrTally(this.possibleLeftPairs, r), t.reverse();
 				let i = this.decodePair(t, !0, e, n);
-				gt.addOrTally(this.possibleRightPairs, i), t.reverse();
+				ht.addOrTally(this.possibleRightPairs, i), t.reverse();
 				for (let e of this.possibleLeftPairs) if (e.getCount() > 1) {
-					for (let t of this.possibleRightPairs) if (t.getCount() > 1 && gt.checkChecksum(e, t)) return gt.constructResult(e, t);
+					for (let t of this.possibleRightPairs) if (t.getCount() > 1 && ht.checkChecksum(e, t)) return ht.constructResult(e, t);
 				}
-				throw new D();
+				throw new E();
 			}
 			static addOrTally(e, t) {
 				if (t == null) return;
@@ -6392,10 +6395,10 @@ var T = function() {
 					let i = this.findFinderPattern(e, t), a = this.parseFoundFinderPattern(e, n, t, i), o = r == null ? null : r.get(b.NEED_RESULT_POINT_CALLBACK);
 					if (o != null) {
 						let r = (i[0] + i[1]) / 2;
-						t && (r = e.getSize() - 1 - r), o.foundPossibleResultPoint(new N(r, n));
+						t && (r = e.getSize() - 1 - r), o.foundPossibleResultPoint(new P(r, n));
 					}
 					let s = this.decodeDataCharacter(e, a, !0), c = this.decodeDataCharacter(e, a, !1);
-					return new ht(1597 * s.getValue() + c.getValue(), s.getChecksumPortion() + 4 * c.getChecksumPortion(), a);
+					return new mt(1597 * s.getValue() + c.getValue(), s.getChecksumPortion() + 4 * c.getChecksumPortion(), a);
 				} catch {
 					return null;
 				}
@@ -6403,15 +6406,15 @@ var T = function() {
 			decodeDataCharacter(e, t, n) {
 				let r = this.getDataCharacterCounters();
 				for (let e = 0; e < r.length; e++) r[e] = 0;
-				if (n) Ne.recordPatternInReverse(e, t.getStartEnd()[0], r);
+				if (n) Me.recordPatternInReverse(e, t.getStartEnd()[0], r);
 				else {
-					Ne.recordPattern(e, t.getStartEnd()[1] + 1, r);
+					Me.recordPattern(e, t.getStartEnd()[1] + 1, r);
 					for (let e = 0, t = r.length - 1; e < t; e++, t--) {
 						let n = r[e];
 						r[e] = r[t], r[t] = n;
 					}
 				}
-				let i = n ? 16 : 15, a = M.sum(new Int32Array(r)) / i, o = this.getOddCounts(), s = this.getEvenCounts(), c = this.getOddRoundingErrors(), l = this.getEvenRoundingErrors();
+				let i = n ? 16 : 15, a = N.sum(new Int32Array(r)) / i, o = this.getOddCounts(), s = this.getEvenCounts(), c = this.getOddRoundingErrors(), l = this.getEvenRoundingErrors();
 				for (let e = 0; e < r.length; e++) {
 					let t = r[e] / a, n = Math.floor(t + .5);
 					n < 1 ? n = 1 : n > 8 && (n = 8);
@@ -6425,13 +6428,13 @@ var T = function() {
 				for (let e = s.length - 1; e >= 0; e--) f *= 9, f += s[e], p += s[e];
 				let m = d + 3 * f;
 				if (n) {
-					if (u & 1 || u > 12 || u < 4) throw new D();
-					let e = (12 - u) / 2, t = gt.OUTSIDE_ODD_WIDEST[e], n = 9 - t, r = qe.getRSSvalue(o, t, !1), i = qe.getRSSvalue(s, n, !0), a = gt.OUTSIDE_EVEN_TOTAL_SUBSET[e], c = gt.OUTSIDE_GSUM[e];
+					if (u & 1 || u > 12 || u < 4) throw new E();
+					let e = (12 - u) / 2, t = ht.OUTSIDE_ODD_WIDEST[e], n = 9 - t, r = qe.getRSSvalue(o, t, !1), i = qe.getRSSvalue(s, n, !0), a = ht.OUTSIDE_EVEN_TOTAL_SUBSET[e], c = ht.OUTSIDE_GSUM[e];
 					return new Ge(r * a + i + c, m);
 				}
 				{
-					if (p & 1 || p > 10 || p < 4) throw new D();
-					let e = (10 - p) / 2, t = gt.INSIDE_ODD_WIDEST[e], n = 9 - t, r = qe.getRSSvalue(o, t, !0), i = qe.getRSSvalue(s, n, !1), a = gt.INSIDE_ODD_TOTAL_SUBSET[e], c = gt.INSIDE_GSUM[e];
+					if (p & 1 || p > 10 || p < 4) throw new E();
+					let e = (10 - p) / 2, t = ht.INSIDE_ODD_WIDEST[e], n = 9 - t, r = qe.getRSSvalue(o, t, !0), i = qe.getRSSvalue(s, n, !1), a = ht.INSIDE_ODD_TOTAL_SUBSET[e], c = ht.INSIDE_GSUM[e];
 					return new Ge(i * a + r + c, m);
 				}
 			}
@@ -6449,7 +6452,7 @@ var T = function() {
 					} else o++;
 					n[o] = 1, i = !i;
 				}
-				throw new D();
+				throw new E();
 			}
 			parseFoundFinderPattern(e, t, n, r) {
 				let i = e.get(r[0]), a = r[0] - 1;
@@ -6457,80 +6460,80 @@ var T = function() {
 				a++;
 				let o = r[0] - a, s = this.getDecodeFinderCounters(), c = new Int32Array(s.length);
 				p.arraycopy(s, 0, c, 1, s.length - 1), c[0] = o;
-				let l = this.parseFinderValue(c, gt.FINDER_PATTERNS), u = a, d = r[1];
+				let l = this.parseFinderValue(c, ht.FINDER_PATTERNS), u = a, d = r[1];
 				return n && (u = e.getSize() - 1 - u, d = e.getSize() - 1 - d), new Ke(l, [a, r[1]], u, d, t);
 			}
 			adjustOddEvenCounts(e, t) {
-				let n = M.sum(new Int32Array(this.getOddCounts())), r = M.sum(new Int32Array(this.getEvenCounts())), i = !1, a = !1, o = !1, s = !1;
+				let n = N.sum(new Int32Array(this.getOddCounts())), r = N.sum(new Int32Array(this.getEvenCounts())), i = !1, a = !1, o = !1, s = !1;
 				e ? (n > 12 ? a = !0 : n < 4 && (i = !0), r > 12 ? s = !0 : r < 4 && (o = !0)) : (n > 11 ? a = !0 : n < 5 && (i = !0), r > 10 ? s = !0 : r < 4 && (o = !0));
 				let c = n + r - t, l = (n & 1) == +!!e, u = (r & 1) == 1;
 				if (c === 1) {
 					if (l) {
-						if (u) throw new D();
+						if (u) throw new E();
 						a = !0;
 					} else {
-						if (!u) throw new D();
+						if (!u) throw new E();
 						s = !0;
 					}
 				} else if (c === -1) {
 					if (l) {
-						if (u) throw new D();
+						if (u) throw new E();
 						i = !0;
 					} else {
-						if (!u) throw new D();
+						if (!u) throw new E();
 						o = !0;
 					}
 				} else if (c === 0) {
 					if (l) {
-						if (!u) throw new D();
+						if (!u) throw new E();
 						n < r ? (i = !0, s = !0) : (a = !0, o = !0);
-					} else if (u) throw new D();
-				} else throw new D();
+					} else if (u) throw new E();
+				} else throw new E();
 				if (i) {
-					if (a) throw new D();
+					if (a) throw new E();
 					We.increment(this.getOddCounts(), this.getOddRoundingErrors());
 				}
 				if (a && We.decrement(this.getOddCounts(), this.getOddRoundingErrors()), o) {
-					if (s) throw new D();
+					if (s) throw new E();
 					We.increment(this.getEvenCounts(), this.getOddRoundingErrors());
 				}
 				s && We.decrement(this.getEvenCounts(), this.getEvenRoundingErrors());
 			}
 		}
-		gt.OUTSIDE_EVEN_TOTAL_SUBSET = [
+		ht.OUTSIDE_EVEN_TOTAL_SUBSET = [
 			1,
 			10,
 			34,
 			70,
 			126
-		], gt.INSIDE_ODD_TOTAL_SUBSET = [
+		], ht.INSIDE_ODD_TOTAL_SUBSET = [
 			4,
 			20,
 			48,
 			81
-		], gt.OUTSIDE_GSUM = [
+		], ht.OUTSIDE_GSUM = [
 			0,
 			161,
 			961,
 			2015,
 			2715
-		], gt.INSIDE_GSUM = [
+		], ht.INSIDE_GSUM = [
 			0,
 			336,
 			1036,
 			1516
-		], gt.OUTSIDE_ODD_WIDEST = [
+		], ht.OUTSIDE_ODD_WIDEST = [
 			8,
 			6,
 			4,
 			3,
 			1
-		], gt.INSIDE_ODD_WIDEST = [
+		], ht.INSIDE_ODD_WIDEST = [
 			2,
 			4,
 			6,
 			8
-		], gt.FINDER_PATTERNS = [
+		], ht.FINDER_PATTERNS = [
 			Int32Array.from([
 				3,
 				8,
@@ -6586,28 +6589,28 @@ var T = function() {
 				1
 			])
 		];
-		class _t extends Ne {
+		class gt extends Me {
 			constructor(e, t) {
 				super(), this.readers = [], this.verbose = t === !0;
 				let n = e ? e.get(b.POSSIBLE_FORMATS) : null, r = e && e.get(b.ASSUME_CODE_39_CHECK_DIGIT) !== void 0;
-				n ? ((n.includes(k.EAN_13) || n.includes(k.UPC_A) || n.includes(k.EAN_8) || n.includes(k.UPC_E)) && this.readers.push(new Ue(e)), n.includes(k.CODE_39) && this.readers.push(new Pe(r)), n.includes(k.CODE_128) && this.readers.push(new P()), n.includes(k.ITF) && this.readers.push(new F()), n.includes(k.RSS_14) && this.readers.push(new gt()), n.includes(k.RSS_EXPANDED) && this.readers.push(new R(this.verbose))) : (this.readers.push(new Ue(e)), this.readers.push(new Pe()), this.readers.push(new Ue(e)), this.readers.push(new P()), this.readers.push(new F()), this.readers.push(new gt()), this.readers.push(new R(this.verbose)));
+				n ? ((n.includes(k.EAN_13) || n.includes(k.UPC_A) || n.includes(k.EAN_8) || n.includes(k.UPC_E)) && this.readers.push(new Ue(e)), n.includes(k.CODE_39) && this.readers.push(new Ne(r)), n.includes(k.CODE_128) && this.readers.push(new F()), n.includes(k.ITF) && this.readers.push(new Pe()), n.includes(k.RSS_14) && this.readers.push(new ht()), n.includes(k.RSS_EXPANDED) && this.readers.push(new z(this.verbose))) : (this.readers.push(new Ue(e)), this.readers.push(new Ne()), this.readers.push(new Ue(e)), this.readers.push(new F()), this.readers.push(new Pe()), this.readers.push(new ht()), this.readers.push(new z(this.verbose)));
 			}
 			decodeRow(e, t, n) {
 				for (let r = 0; r < this.readers.length; r++) try {
 					return this.readers[r].decodeRow(e, t, n);
 				} catch {}
-				throw new D();
+				throw new E();
 			}
 			reset() {
 				this.readers.forEach((e) => e.reset());
 			}
 		}
-		class vt extends ce {
+		class _t extends ce {
 			constructor(e = 500, t) {
-				super(new _t(t), e, t);
+				super(new gt(t), e, t);
 			}
 		}
-		class z {
+		class B {
 			constructor(e, t, n) {
 				this.ecCodewords = e, this.ecBlocks = [t], n && this.ecBlocks.push(n);
 			}
@@ -6618,7 +6621,7 @@ var T = function() {
 				return this.ecBlocks;
 			}
 		}
-		class B {
+		class V {
 			constructor(e, t) {
 				this.count = e, this.dataCodewords = t;
 			}
@@ -6629,7 +6632,7 @@ var T = function() {
 				return this.dataCodewords;
 			}
 		}
-		class V {
+		class H {
 			constructor(e, t, n, r, i, a) {
 				this.versionNumber = e, this.symbolSizeRows = t, this.symbolSizeColumns = n, this.dataRegionSizeRows = r, this.dataRegionSizeColumns = i, this.ecBlocks = a;
 				let o = 0, s = a.getECCodewords(), c = a.getECBlocks();
@@ -6659,7 +6662,7 @@ var T = function() {
 			}
 			static getVersionForDimensions(e, t) {
 				if (e & 1 || t & 1) throw new x();
-				for (let n of V.VERSIONS) if (n.symbolSizeRows === e && n.symbolSizeColumns === t) return n;
+				for (let n of H.VERSIONS) if (n.symbolSizeRows === e && n.symbolSizeColumns === t) return n;
 				throw new x();
 			}
 			toString() {
@@ -6667,52 +6670,52 @@ var T = function() {
 			}
 			static buildVersions() {
 				return [
-					new V(1, 10, 10, 8, 8, new z(5, new B(1, 3))),
-					new V(2, 12, 12, 10, 10, new z(7, new B(1, 5))),
-					new V(3, 14, 14, 12, 12, new z(10, new B(1, 8))),
-					new V(4, 16, 16, 14, 14, new z(12, new B(1, 12))),
-					new V(5, 18, 18, 16, 16, new z(14, new B(1, 18))),
-					new V(6, 20, 20, 18, 18, new z(18, new B(1, 22))),
-					new V(7, 22, 22, 20, 20, new z(20, new B(1, 30))),
-					new V(8, 24, 24, 22, 22, new z(24, new B(1, 36))),
-					new V(9, 26, 26, 24, 24, new z(28, new B(1, 44))),
-					new V(10, 32, 32, 14, 14, new z(36, new B(1, 62))),
-					new V(11, 36, 36, 16, 16, new z(42, new B(1, 86))),
-					new V(12, 40, 40, 18, 18, new z(48, new B(1, 114))),
-					new V(13, 44, 44, 20, 20, new z(56, new B(1, 144))),
-					new V(14, 48, 48, 22, 22, new z(68, new B(1, 174))),
-					new V(15, 52, 52, 24, 24, new z(42, new B(2, 102))),
-					new V(16, 64, 64, 14, 14, new z(56, new B(2, 140))),
-					new V(17, 72, 72, 16, 16, new z(36, new B(4, 92))),
-					new V(18, 80, 80, 18, 18, new z(48, new B(4, 114))),
-					new V(19, 88, 88, 20, 20, new z(56, new B(4, 144))),
-					new V(20, 96, 96, 22, 22, new z(68, new B(4, 174))),
-					new V(21, 104, 104, 24, 24, new z(56, new B(6, 136))),
-					new V(22, 120, 120, 18, 18, new z(68, new B(6, 175))),
-					new V(23, 132, 132, 20, 20, new z(62, new B(8, 163))),
-					new V(24, 144, 144, 22, 22, new z(62, new B(8, 156), new B(2, 155))),
-					new V(25, 8, 18, 6, 16, new z(7, new B(1, 5))),
-					new V(26, 8, 32, 6, 14, new z(11, new B(1, 10))),
-					new V(27, 12, 26, 10, 24, new z(14, new B(1, 16))),
-					new V(28, 12, 36, 10, 16, new z(18, new B(1, 22))),
-					new V(29, 16, 36, 14, 16, new z(24, new B(1, 32))),
-					new V(30, 16, 48, 14, 22, new z(28, new B(1, 49)))
+					new H(1, 10, 10, 8, 8, new B(5, new V(1, 3))),
+					new H(2, 12, 12, 10, 10, new B(7, new V(1, 5))),
+					new H(3, 14, 14, 12, 12, new B(10, new V(1, 8))),
+					new H(4, 16, 16, 14, 14, new B(12, new V(1, 12))),
+					new H(5, 18, 18, 16, 16, new B(14, new V(1, 18))),
+					new H(6, 20, 20, 18, 18, new B(18, new V(1, 22))),
+					new H(7, 22, 22, 20, 20, new B(20, new V(1, 30))),
+					new H(8, 24, 24, 22, 22, new B(24, new V(1, 36))),
+					new H(9, 26, 26, 24, 24, new B(28, new V(1, 44))),
+					new H(10, 32, 32, 14, 14, new B(36, new V(1, 62))),
+					new H(11, 36, 36, 16, 16, new B(42, new V(1, 86))),
+					new H(12, 40, 40, 18, 18, new B(48, new V(1, 114))),
+					new H(13, 44, 44, 20, 20, new B(56, new V(1, 144))),
+					new H(14, 48, 48, 22, 22, new B(68, new V(1, 174))),
+					new H(15, 52, 52, 24, 24, new B(42, new V(2, 102))),
+					new H(16, 64, 64, 14, 14, new B(56, new V(2, 140))),
+					new H(17, 72, 72, 16, 16, new B(36, new V(4, 92))),
+					new H(18, 80, 80, 18, 18, new B(48, new V(4, 114))),
+					new H(19, 88, 88, 20, 20, new B(56, new V(4, 144))),
+					new H(20, 96, 96, 22, 22, new B(68, new V(4, 174))),
+					new H(21, 104, 104, 24, 24, new B(56, new V(6, 136))),
+					new H(22, 120, 120, 18, 18, new B(68, new V(6, 175))),
+					new H(23, 132, 132, 20, 20, new B(62, new V(8, 163))),
+					new H(24, 144, 144, 22, 22, new B(62, new V(8, 156), new V(2, 155))),
+					new H(25, 8, 18, 6, 16, new B(7, new V(1, 5))),
+					new H(26, 8, 32, 6, 14, new B(11, new V(1, 10))),
+					new H(27, 12, 26, 10, 24, new B(14, new V(1, 16))),
+					new H(28, 12, 36, 10, 16, new B(18, new V(1, 22))),
+					new H(29, 16, 36, 14, 16, new B(24, new V(1, 32))),
+					new H(30, 16, 48, 14, 22, new B(28, new V(1, 49)))
 				];
 			}
 		}
-		V.VERSIONS = V.buildVersions();
-		class yt {
+		H.VERSIONS = H.buildVersions();
+		class vt {
 			constructor(e) {
 				let t = e.getHeight();
 				if (t < 8 || t > 144 || t & 1) throw new x();
-				this.version = yt.readVersion(e), this.mappingBitMatrix = this.extractDataRegion(e), this.readMappingMatrix = new E(this.mappingBitMatrix.getWidth(), this.mappingBitMatrix.getHeight());
+				this.version = vt.readVersion(e), this.mappingBitMatrix = this.extractDataRegion(e), this.readMappingMatrix = new ne(this.mappingBitMatrix.getWidth(), this.mappingBitMatrix.getHeight());
 			}
 			getVersion() {
 				return this.version;
 			}
 			static readVersion(e) {
 				let t = e.getHeight(), n = e.getWidth();
-				return V.getVersionForDimensions(t, n);
+				return H.getVersionForDimensions(t, n);
 			}
 			readCodewords() {
 				let e = new Int8Array(this.version.getTotalCodewords()), t = 0, n = 4, r = 0, i = this.mappingBitMatrix.getHeight(), a = this.mappingBitMatrix.getWidth(), o = !1, s = !1, c = !1, l = !1;
@@ -6761,7 +6764,7 @@ var T = function() {
 			extractDataRegion(e) {
 				let t = this.version.getSymbolSizeRows(), n = this.version.getSymbolSizeColumns();
 				if (e.getHeight() !== t) throw new l("Dimension of bitMatrix must match the version size");
-				let r = this.version.getDataRegionSizeRows(), i = this.version.getDataRegionSizeColumns(), a = t / r | 0, o = n / i | 0, s = a * r, c = o * i, u = new E(c, s);
+				let r = this.version.getDataRegionSizeRows(), i = this.version.getDataRegionSizeColumns(), a = t / r | 0, o = n / i | 0, s = a * r, c = o * i, u = new ne(c, s);
 				for (let t = 0; t < a; ++t) {
 					let n = t * r;
 					for (let a = 0; a < o; ++a) {
@@ -6781,7 +6784,7 @@ var T = function() {
 				return u;
 			}
 		}
-		class bt {
+		class yt {
 			constructor(e, t) {
 				this.numDataCodewords = e, this.codewords = t;
 			}
@@ -6791,7 +6794,7 @@ var T = function() {
 				let a = Array(r), o = 0;
 				for (let e of i) for (let t = 0; t < e.getCount(); t++) {
 					let t = e.getDataCodewords(), r = n.getECCodewords() + t;
-					a[o++] = new bt(t, new Uint8Array(r));
+					a[o++] = new yt(t, new Uint8Array(r));
 				}
 				let s = a[0].codewords.length - n.getECCodewords(), c = s - 1, u = 0;
 				for (let t = 0; t < c; t++) for (let n = 0; n < o; n++) a[n].codewords[t] = e[u++];
@@ -6812,7 +6815,7 @@ var T = function() {
 				return this.codewords;
 			}
 		}
-		class xt {
+		class bt {
 			constructor(e) {
 				this.bytes = e, this.byteOffset = 0, this.bitOffset = 0;
 			}
@@ -6842,37 +6845,37 @@ var T = function() {
 				return 8 * (this.bytes.length - this.byteOffset) - this.bitOffset;
 			}
 		}
-		var St;
+		var xt;
 		(function(e) {
 			e[e.PAD_ENCODE = 0] = "PAD_ENCODE", e[e.ASCII_ENCODE = 1] = "ASCII_ENCODE", e[e.C40_ENCODE = 2] = "C40_ENCODE", e[e.TEXT_ENCODE = 3] = "TEXT_ENCODE", e[e.ANSIX12_ENCODE = 4] = "ANSIX12_ENCODE", e[e.EDIFACT_ENCODE = 5] = "EDIFACT_ENCODE", e[e.BASE256_ENCODE = 6] = "BASE256_ENCODE";
-		})(St || (St = {}));
-		class Ct {
+		})(xt || (xt = {}));
+		class St {
 			static decode(e) {
-				let t = new xt(e), n = new T(), r = new T(), i = [], a = St.ASCII_ENCODE;
+				let t = new bt(e), n = new T(), r = new T(), i = [], a = xt.ASCII_ENCODE;
 				do
-					if (a === St.ASCII_ENCODE) a = this.decodeAsciiSegment(t, n, r);
+					if (a === xt.ASCII_ENCODE) a = this.decodeAsciiSegment(t, n, r);
 					else {
 						switch (a) {
-							case St.C40_ENCODE:
+							case xt.C40_ENCODE:
 								this.decodeC40Segment(t, n);
 								break;
-							case St.TEXT_ENCODE:
+							case xt.TEXT_ENCODE:
 								this.decodeTextSegment(t, n);
 								break;
-							case St.ANSIX12_ENCODE:
+							case xt.ANSIX12_ENCODE:
 								this.decodeAnsiX12Segment(t, n);
 								break;
-							case St.EDIFACT_ENCODE:
+							case xt.EDIFACT_ENCODE:
 								this.decodeEdifactSegment(t, n);
 								break;
-							case St.BASE256_ENCODE:
+							case xt.BASE256_ENCODE:
 								this.decodeBase256Segment(t, n, i);
 								break;
 							default: throw new x();
 						}
-						a = St.ASCII_ENCODE;
+						a = xt.ASCII_ENCODE;
 					}
-				while (a !== St.PAD_ENCODE && t.available() > 0);
+				while (a !== xt.PAD_ENCODE && t.available() > 0);
 				return r.length() > 0 && n.append(r.toString()), new pe(e, n.toString(), i.length === 0 ? null : i, null);
 			}
 			static decodeAsciiSegment(e, t, n) {
@@ -6880,14 +6883,14 @@ var T = function() {
 				do {
 					let i = e.readBits(8);
 					if (i === 0) throw new x();
-					if (i <= 128) return r && (i += 128), t.append(String.fromCharCode(i - 1)), St.ASCII_ENCODE;
-					if (i === 129) return St.PAD_ENCODE;
+					if (i <= 128) return r && (i += 128), t.append(String.fromCharCode(i - 1)), xt.ASCII_ENCODE;
+					if (i === 129) return xt.PAD_ENCODE;
 					if (i <= 229) {
 						let e = i - 130;
 						e < 10 && t.append("0"), t.append("" + e);
 					} else switch (i) {
-						case 230: return St.C40_ENCODE;
-						case 231: return St.BASE256_ENCODE;
+						case 230: return xt.C40_ENCODE;
+						case 231: return xt.BASE256_ENCODE;
 						case 232:
 							t.append("");
 							break;
@@ -6902,14 +6905,14 @@ var T = function() {
 						case 237:
 							t.append("[)>06"), n.insert(0, "");
 							break;
-						case 238: return St.ANSIX12_ENCODE;
-						case 239: return St.TEXT_ENCODE;
-						case 240: return St.EDIFACT_ENCODE;
+						case 238: return xt.ANSIX12_ENCODE;
+						case 239: return xt.TEXT_ENCODE;
+						case 240: return xt.EDIFACT_ENCODE;
 						case 241: break;
 						default: if (i !== 254 || e.available() !== 0) throw new x();
 					}
 				} while (e.available() > 0);
-				return St.ASCII_ENCODE;
+				return xt.ASCII_ENCODE;
 			}
 			static decodeC40Segment(e, t) {
 				let n = !1, r = [], i = 0;
@@ -7059,7 +7062,7 @@ var T = function() {
 				try {
 					t.append(te.decode(o, w.ISO88591));
 				} catch (e) {
-					throw new ve("Platform does not support required encoding: " + e.message);
+					throw new M("Platform does not support required encoding: " + e.message);
 				}
 			}
 			static unrandomize255State(e, t) {
@@ -7067,13 +7070,13 @@ var T = function() {
 				return n >= 0 ? n : n + 256;
 			}
 		}
-		Ct.C40_BASIC_SET_CHARS = /* @__PURE__ */ "*** 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""), Ct.C40_SHIFT2_SET_CHARS = /* @__PURE__ */ "!\"#$%&'()*+,-./:;<=>?@[\\]^_".split(""), Ct.TEXT_BASIC_SET_CHARS = /* @__PURE__ */ "*** 0123456789abcdefghijklmnopqrstuvwxyz".split(""), Ct.TEXT_SHIFT2_SET_CHARS = Ct.C40_SHIFT2_SET_CHARS, Ct.TEXT_SHIFT3_SET_CHARS = /* @__PURE__ */ "`ABCDEFGHIJKLMNOPQRSTUVWXYZ{|}~".split("");
-		class wt {
+		St.C40_BASIC_SET_CHARS = /* @__PURE__ */ "*** 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""), St.C40_SHIFT2_SET_CHARS = /* @__PURE__ */ "!\"#$%&'()*+,-./:;<=>?@[\\]^_".split(""), St.TEXT_BASIC_SET_CHARS = /* @__PURE__ */ "*** 0123456789abcdefghijklmnopqrstuvwxyz".split(""), St.TEXT_SHIFT2_SET_CHARS = St.C40_SHIFT2_SET_CHARS, St.TEXT_SHIFT3_SET_CHARS = /* @__PURE__ */ "`ABCDEFGHIJKLMNOPQRSTUVWXYZ{|}~".split("");
+		class Ct {
 			constructor() {
-				this.rsDecoder = new ye(A.DATA_MATRIX_FIELD_256);
+				this.rsDecoder = new _e(j.DATA_MATRIX_FIELD_256);
 			}
 			decode(e) {
-				let t = new yt(e), n = t.getVersion(), r = t.readCodewords(), i = bt.getDataBlocks(r, n), a = 0;
+				let t = new vt(e), n = t.getVersion(), r = t.readCodewords(), i = yt.getDataBlocks(r, n), a = 0;
 				for (let e of i) a += e.getNumDataCodewords();
 				let o = new Uint8Array(a), s = i.length;
 				for (let e = 0; e < s; e++) {
@@ -7081,7 +7084,7 @@ var T = function() {
 					this.correctErrors(n, r);
 					for (let t = 0; t < r; t++) o[t * s + e] = n[t];
 				}
-				return Ct.decode(o);
+				return St.decode(o);
 			}
 			correctErrors(e, t) {
 				let n = new Int32Array(e);
@@ -7093,18 +7096,18 @@ var T = function() {
 				for (let r = 0; r < t; r++) e[r] = n[r];
 			}
 		}
-		class Tt {
+		class wt {
 			constructor(e) {
-				this.image = e, this.rectangleDetector = new we(this.image);
+				this.image = e, this.rectangleDetector = new Ce(this.image);
 			}
 			detect() {
 				let e = this.rectangleDetector.detect(), t = this.detectSolid1(e);
-				if (t = this.detectSolid2(t), t[3] = this.correctTopRight(t), !t[3]) throw new D();
+				if (t = this.detectSolid2(t), t[3] = this.correctTopRight(t), !t[3]) throw new E();
 				t = this.shiftToModuleCenter(t);
 				let n = t[0], r = t[1], i = t[2], a = t[3], o = this.transitionsBetween(n, a) + 1, s = this.transitionsBetween(i, a) + 1;
 				(o & 1) == 1 && (o += 1), (s & 1) == 1 && (s += 1), 4 * o < 7 * s && 4 * s < 7 * o && (o = s = Math.max(o, s));
-				let c = Tt.sampleGrid(this.image, n, r, i, a, o, s);
-				return new Se(c, [
+				let c = wt.sampleGrid(this.image, n, r, i, a, o, s);
+				return new xe(c, [
 					n,
 					r,
 					i,
@@ -7113,11 +7116,11 @@ var T = function() {
 			}
 			static shiftPoint(e, t, n) {
 				let r = (t.getX() - e.getX()) / (n + 1), i = (t.getY() - e.getY()) / (n + 1);
-				return new N(e.getX() + r, e.getY() + i);
+				return new P(e.getX() + r, e.getY() + i);
 			}
 			static moveAway(e, t, n) {
 				let r = e.getX(), i = e.getY();
-				return r < t ? --r : r += 1, i < n ? --i : i += 1, new N(r, i);
+				return r < t ? --r : r += 1, i < n ? --i : i += 1, new P(r, i);
 			}
 			detectSolid1(e) {
 				let t = e[0], n = e[1], r = e[3], i = e[2], a = this.transitionsBetween(t, n), o = this.transitionsBetween(n, r), s = this.transitionsBetween(r, i), c = this.transitionsBetween(i, t), l = a, u = [
@@ -7129,22 +7132,22 @@ var T = function() {
 				return l > o && (l = o, u[0] = t, u[1] = n, u[2] = r, u[3] = i), l > s && (l = s, u[0] = n, u[1] = r, u[2] = i, u[3] = t), l > c && (u[0] = r, u[1] = i, u[2] = t, u[3] = n), u;
 			}
 			detectSolid2(e) {
-				let t = e[0], n = e[1], r = e[2], i = e[3], a = this.transitionsBetween(t, i), o = Tt.shiftPoint(n, r, (a + 1) * 4), s = Tt.shiftPoint(r, n, (a + 1) * 4);
+				let t = e[0], n = e[1], r = e[2], i = e[3], a = this.transitionsBetween(t, i), o = wt.shiftPoint(n, r, (a + 1) * 4), s = wt.shiftPoint(r, n, (a + 1) * 4);
 				return this.transitionsBetween(o, t) < this.transitionsBetween(s, i) ? (e[0] = t, e[1] = n, e[2] = r, e[3] = i) : (e[0] = n, e[1] = r, e[2] = i, e[3] = t), e;
 			}
 			correctTopRight(e) {
-				let t = e[0], n = e[1], r = e[2], i = e[3], a = this.transitionsBetween(t, i), o = this.transitionsBetween(n, i), s = Tt.shiftPoint(t, n, (o + 1) * 4), c = Tt.shiftPoint(r, n, (a + 1) * 4);
+				let t = e[0], n = e[1], r = e[2], i = e[3], a = this.transitionsBetween(t, i), o = this.transitionsBetween(n, i), s = wt.shiftPoint(t, n, (o + 1) * 4), c = wt.shiftPoint(r, n, (a + 1) * 4);
 				a = this.transitionsBetween(s, i), o = this.transitionsBetween(c, i);
-				let l = new N(i.getX() + (r.getX() - n.getX()) / (a + 1), i.getY() + (r.getY() - n.getY()) / (a + 1)), u = new N(i.getX() + (t.getX() - n.getX()) / (o + 1), i.getY() + (t.getY() - n.getY()) / (o + 1));
+				let l = new P(i.getX() + (r.getX() - n.getX()) / (a + 1), i.getY() + (r.getY() - n.getY()) / (a + 1)), u = new P(i.getX() + (t.getX() - n.getX()) / (o + 1), i.getY() + (t.getY() - n.getY()) / (o + 1));
 				return this.isValid(l) ? !this.isValid(u) || this.transitionsBetween(s, l) + this.transitionsBetween(c, l) > this.transitionsBetween(s, u) + this.transitionsBetween(c, u) ? l : u : this.isValid(u) ? u : null;
 			}
 			shiftToModuleCenter(e) {
-				let t = e[0], n = e[1], r = e[2], i = e[3], a = this.transitionsBetween(t, i) + 1, o = this.transitionsBetween(r, i) + 1, s = Tt.shiftPoint(t, n, o * 4), c = Tt.shiftPoint(r, n, a * 4);
+				let t = e[0], n = e[1], r = e[2], i = e[3], a = this.transitionsBetween(t, i) + 1, o = this.transitionsBetween(r, i) + 1, s = wt.shiftPoint(t, n, o * 4), c = wt.shiftPoint(r, n, a * 4);
 				a = this.transitionsBetween(s, i) + 1, o = this.transitionsBetween(c, i) + 1, (a & 1) == 1 && (a += 1), (o & 1) == 1 && (o += 1);
 				let l = (t.getX() + n.getX() + r.getX() + i.getX()) / 4, u = (t.getY() + n.getY() + r.getY() + i.getY()) / 4;
-				t = Tt.moveAway(t, l, u), n = Tt.moveAway(n, l, u), r = Tt.moveAway(r, l, u), i = Tt.moveAway(i, l, u);
+				t = wt.moveAway(t, l, u), n = wt.moveAway(n, l, u), r = wt.moveAway(r, l, u), i = wt.moveAway(i, l, u);
 				let d, f;
-				return s = Tt.shiftPoint(t, n, o * 4), s = Tt.shiftPoint(s, i, a * 4), d = Tt.shiftPoint(n, t, o * 4), d = Tt.shiftPoint(d, r, a * 4), c = Tt.shiftPoint(r, i, o * 4), c = Tt.shiftPoint(c, n, a * 4), f = Tt.shiftPoint(i, r, o * 4), f = Tt.shiftPoint(f, t, a * 4), [
+				return s = wt.shiftPoint(t, n, o * 4), s = wt.shiftPoint(s, i, a * 4), d = wt.shiftPoint(n, t, o * 4), d = wt.shiftPoint(d, r, a * 4), c = wt.shiftPoint(r, i, o * 4), c = wt.shiftPoint(c, n, a * 4), f = wt.shiftPoint(i, r, o * 4), f = wt.shiftPoint(f, t, a * 4), [
 					s,
 					d,
 					c,
@@ -7155,7 +7158,7 @@ var T = function() {
 				return e.getX() >= 0 && e.getX() < this.image.getWidth() && e.getY() > 0 && e.getY() < this.image.getHeight();
 			}
 			static sampleGrid(e, t, n, r, i, a, o) {
-				return Oe.getInstance().sampleGrid(e, a, o, .5, .5, a - .5, .5, a - .5, o - .5, .5, o - .5, t.getX(), t.getY(), i.getX(), i.getY(), r.getX(), r.getY(), n.getX(), n.getY());
+				return De.getInstance().sampleGrid(e, a, o, .5, .5, a - .5, .5, a - .5, o - .5, .5, o - .5, t.getX(), t.getY(), i.getX(), i.getY(), r.getX(), r.getY(), n.getX(), n.getY());
 			}
 			transitionsBetween(e, t) {
 				let n = Math.trunc(e.getX()), r = Math.trunc(e.getY()), i = Math.trunc(t.getX()), a = Math.trunc(t.getY()), o = Math.abs(a - r) > Math.abs(i - n);
@@ -7174,17 +7177,17 @@ var T = function() {
 				return f;
 			}
 		}
-		class Et {
+		class Tt {
 			constructor() {
-				this.decoder = new wt();
+				this.decoder = new Ct();
 			}
 			decode(e, t = null) {
 				let n, r;
 				if (t != null && t.has(b.PURE_BARCODE)) {
-					let t = Et.extractPureBits(e.getBlackMatrix());
-					n = this.decoder.decode(t), r = Et.NO_POINTS;
+					let t = Tt.extractPureBits(e.getBlackMatrix());
+					n = this.decoder.decode(t), r = Tt.NO_POINTS;
 				} else {
-					let t = new Tt(e.getBlackMatrix()).detect();
+					let t = new wt(e.getBlackMatrix()).detect();
 					n = this.decoder.decode(t.getBits()), r = t.getPoints();
 				}
 				let i = n.getRawBytes(), a = new le(n.getText(), i, 8 * i.length, r, k.DATA_MATRIX, p.currentTimeMillis()), o = n.getByteSegments();
@@ -7195,12 +7198,12 @@ var T = function() {
 			reset() {}
 			static extractPureBits(e) {
 				let t = e.getTopLeftOnBit(), n = e.getBottomRightOnBit();
-				if (t == null || n == null) throw new D();
+				if (t == null || n == null) throw new E();
 				let r = this.moduleSize(t, e), i = t[1], a = n[1], o = t[0], s = (n[0] - o + 1) / r, c = (a - i + 1) / r;
-				if (s <= 0 || c <= 0) throw new D();
+				if (s <= 0 || c <= 0) throw new E();
 				let l = r / 2;
 				i += l, o += l;
-				let u = new E(s, c);
+				let u = new ne(s, c);
 				for (let t = 0; t < c; t++) {
 					let n = i + t * r;
 					for (let i = 0; i < s; i++) e.get(o + i * r, n) && u.set(i, t);
@@ -7210,25 +7213,25 @@ var T = function() {
 			static moduleSize(e, t) {
 				let n = t.getWidth(), r = e[0], i = e[1];
 				for (; r < n && t.get(r, i);) r++;
-				if (r === n) throw new D();
+				if (r === n) throw new E();
 				let a = r - e[0];
-				if (a === 0) throw new D();
+				if (a === 0) throw new E();
 				return a;
 			}
 		}
-		Et.NO_POINTS = [];
-		class Dt extends ce {
+		Tt.NO_POINTS = [];
+		class Et extends ce {
 			constructor(e = 500) {
-				super(new Et(), e);
+				super(new Tt(), e);
 			}
 		}
-		var Ot;
+		var Dt;
 		(function(e) {
 			e[e.L = 0] = "L", e[e.M = 1] = "M", e[e.Q = 2] = "Q", e[e.H = 3] = "H";
-		})(Ot || (Ot = {}));
-		class kt {
+		})(Dt || (Dt = {}));
+		class Ot {
 			constructor(e, t, n) {
-				this.value = e, this.stringValue = t, this.bits = n, kt.FOR_BITS.set(n, this), kt.FOR_VALUE.set(e, this);
+				this.value = e, this.stringValue = t, this.bits = n, Ot.FOR_BITS.set(n, this), Ot.FOR_VALUE.set(e, this);
 			}
 			getValue() {
 				return this.value;
@@ -7238,10 +7241,10 @@ var T = function() {
 			}
 			static fromString(e) {
 				switch (e) {
-					case "L": return kt.L;
-					case "M": return kt.M;
-					case "Q": return kt.Q;
-					case "H": return kt.H;
+					case "L": return Ot.L;
+					case "M": return Ot.M;
+					case "Q": return Ot.Q;
+					case "H": return Ot.H;
 					default: throw new c(e + "not available");
 				}
 			}
@@ -7249,36 +7252,36 @@ var T = function() {
 				return this.stringValue;
 			}
 			equals(e) {
-				if (!(e instanceof kt)) return !1;
+				if (!(e instanceof Ot)) return !1;
 				let t = e;
 				return this.value === t.value;
 			}
 			static forBits(e) {
-				if (e < 0 || e >= kt.FOR_BITS.size) throw new l();
-				return kt.FOR_BITS.get(e);
+				if (e < 0 || e >= Ot.FOR_BITS.size) throw new l();
+				return Ot.FOR_BITS.get(e);
 			}
 		}
-		kt.FOR_BITS = /* @__PURE__ */ new Map(), kt.FOR_VALUE = /* @__PURE__ */ new Map(), kt.L = new kt(Ot.L, "L", 1), kt.M = new kt(Ot.M, "M", 0), kt.Q = new kt(Ot.Q, "Q", 3), kt.H = new kt(Ot.H, "H", 2);
-		class At {
+		Ot.FOR_BITS = /* @__PURE__ */ new Map(), Ot.FOR_VALUE = /* @__PURE__ */ new Map(), Ot.L = new Ot(Dt.L, "L", 1), Ot.M = new Ot(Dt.M, "M", 0), Ot.Q = new Ot(Dt.Q, "Q", 3), Ot.H = new Ot(Dt.H, "H", 2);
+		class kt {
 			constructor(e) {
-				this.errorCorrectionLevel = kt.forBits(e >> 3 & 3), this.dataMask = e & 7;
+				this.errorCorrectionLevel = Ot.forBits(e >> 3 & 3), this.dataMask = e & 7;
 			}
 			static numBitsDiffering(e, t) {
 				return _.bitCount(e ^ t);
 			}
 			static decodeFormatInformation(e, t) {
-				let n = At.doDecodeFormatInformation(e, t);
-				return n === null ? At.doDecodeFormatInformation(e ^ At.FORMAT_INFO_MASK_QR, t ^ At.FORMAT_INFO_MASK_QR) : n;
+				let n = kt.doDecodeFormatInformation(e, t);
+				return n === null ? kt.doDecodeFormatInformation(e ^ kt.FORMAT_INFO_MASK_QR, t ^ kt.FORMAT_INFO_MASK_QR) : n;
 			}
 			static doDecodeFormatInformation(e, t) {
 				let n = 2 ** 53 - 1, r = 0;
-				for (let i of At.FORMAT_INFO_DECODE_LOOKUP) {
+				for (let i of kt.FORMAT_INFO_DECODE_LOOKUP) {
 					let a = i[0];
-					if (a === e || a === t) return new At(i[1]);
-					let o = At.numBitsDiffering(e, a);
-					o < n && (r = i[1], n = o), e !== t && (o = At.numBitsDiffering(t, a), o < n && (r = i[1], n = o));
+					if (a === e || a === t) return new kt(i[1]);
+					let o = kt.numBitsDiffering(e, a);
+					o < n && (r = i[1], n = o), e !== t && (o = kt.numBitsDiffering(t, a), o < n && (r = i[1], n = o));
 				}
-				return n <= 3 ? new At(r) : null;
+				return n <= 3 ? new kt(r) : null;
 			}
 			getErrorCorrectionLevel() {
 				return this.errorCorrectionLevel;
@@ -7290,12 +7293,12 @@ var T = function() {
 				return this.errorCorrectionLevel.getBits() << 3 | this.dataMask;
 			}
 			equals(e) {
-				if (!(e instanceof At)) return !1;
+				if (!(e instanceof kt)) return !1;
 				let t = e;
 				return this.errorCorrectionLevel === t.errorCorrectionLevel && this.dataMask === t.dataMask;
 			}
 		}
-		At.FORMAT_INFO_MASK_QR = 21522, At.FORMAT_INFO_DECODE_LOOKUP = [
+		kt.FORMAT_INFO_MASK_QR = 21522, kt.FORMAT_INFO_DECODE_LOOKUP = [
 			Int32Array.from([21522, 0]),
 			Int32Array.from([20773, 1]),
 			Int32Array.from([24188, 2]),
@@ -7329,7 +7332,7 @@ var T = function() {
 			Int32Array.from([11994, 30]),
 			Int32Array.from([11245, 31])
 		];
-		class H {
+		class U {
 			constructor(e, ...t) {
 				this.ecCodewordsPerBlock = e, this.ecBlocks = t;
 			}
@@ -7348,7 +7351,7 @@ var T = function() {
 				return this.ecBlocks;
 			}
 		}
-		class U {
+		class W {
 			constructor(e, t) {
 				this.count = e, this.dataCodewords = t;
 			}
@@ -7359,7 +7362,7 @@ var T = function() {
 				return this.dataCodewords;
 			}
 		}
-		class W {
+		class G {
 			constructor(e, t, ...n) {
 				this.versionNumber = e, this.alignmentPatternCenters = t, this.ecBlocks = n;
 				let r = 0, i = n[0].getECCodewordsPerBlock(), a = n[0].getECBlocks();
@@ -7391,20 +7394,20 @@ var T = function() {
 			}
 			static getVersionForNumber(e) {
 				if (e < 1 || e > 40) throw new l();
-				return W.VERSIONS[e - 1];
+				return G.VERSIONS[e - 1];
 			}
 			static decodeVersionInformation(e) {
 				let t = 2 ** 53 - 1, n = 0;
-				for (let r = 0; r < W.VERSION_DECODE_INFO.length; r++) {
-					let i = W.VERSION_DECODE_INFO[r];
-					if (i === e) return W.getVersionForNumber(r + 7);
-					let a = At.numBitsDiffering(e, i);
+				for (let r = 0; r < G.VERSION_DECODE_INFO.length; r++) {
+					let i = G.VERSION_DECODE_INFO[r];
+					if (i === e) return G.getVersionForNumber(r + 7);
+					let a = kt.numBitsDiffering(e, i);
 					a < t && (n = r + 7, t = a);
 				}
-				return t <= 3 ? W.getVersionForNumber(n) : null;
+				return t <= 3 ? G.getVersionForNumber(n) : null;
 			}
 			buildFunctionPattern() {
-				let e = this.getDimensionForVersion(), t = new E(e);
+				let e = this.getDimensionForVersion(), t = new ne(e);
 				t.setRegion(0, 0, 9, 9), t.setRegion(e - 8, 0, 8, 9), t.setRegion(0, e - 8, 9, 8);
 				let n = this.alignmentPatternCenters.length;
 				for (let e = 0; e < n; e++) {
@@ -7417,7 +7420,7 @@ var T = function() {
 				return "" + this.versionNumber;
 			}
 		}
-		W.VERSION_DECODE_INFO = Int32Array.from([
+		G.VERSION_DECODE_INFO = Int32Array.from([
 			31892,
 			34236,
 			39577,
@@ -7452,196 +7455,196 @@ var T = function() {
 			158308,
 			161089,
 			167017
-		]), W.VERSIONS = [
-			new W(1, /* @__PURE__ */ new Int32Array(), new H(7, new U(1, 19)), new H(10, new U(1, 16)), new H(13, new U(1, 13)), new H(17, new U(1, 9))),
-			new W(2, Int32Array.from([6, 18]), new H(10, new U(1, 34)), new H(16, new U(1, 28)), new H(22, new U(1, 22)), new H(28, new U(1, 16))),
-			new W(3, Int32Array.from([6, 22]), new H(15, new U(1, 55)), new H(26, new U(1, 44)), new H(18, new U(2, 17)), new H(22, new U(2, 13))),
-			new W(4, Int32Array.from([6, 26]), new H(20, new U(1, 80)), new H(18, new U(2, 32)), new H(26, new U(2, 24)), new H(16, new U(4, 9))),
-			new W(5, Int32Array.from([6, 30]), new H(26, new U(1, 108)), new H(24, new U(2, 43)), new H(18, new U(2, 15), new U(2, 16)), new H(22, new U(2, 11), new U(2, 12))),
-			new W(6, Int32Array.from([6, 34]), new H(18, new U(2, 68)), new H(16, new U(4, 27)), new H(24, new U(4, 19)), new H(28, new U(4, 15))),
-			new W(7, Int32Array.from([
+		]), G.VERSIONS = [
+			new G(1, /* @__PURE__ */ new Int32Array(), new U(7, new W(1, 19)), new U(10, new W(1, 16)), new U(13, new W(1, 13)), new U(17, new W(1, 9))),
+			new G(2, Int32Array.from([6, 18]), new U(10, new W(1, 34)), new U(16, new W(1, 28)), new U(22, new W(1, 22)), new U(28, new W(1, 16))),
+			new G(3, Int32Array.from([6, 22]), new U(15, new W(1, 55)), new U(26, new W(1, 44)), new U(18, new W(2, 17)), new U(22, new W(2, 13))),
+			new G(4, Int32Array.from([6, 26]), new U(20, new W(1, 80)), new U(18, new W(2, 32)), new U(26, new W(2, 24)), new U(16, new W(4, 9))),
+			new G(5, Int32Array.from([6, 30]), new U(26, new W(1, 108)), new U(24, new W(2, 43)), new U(18, new W(2, 15), new W(2, 16)), new U(22, new W(2, 11), new W(2, 12))),
+			new G(6, Int32Array.from([6, 34]), new U(18, new W(2, 68)), new U(16, new W(4, 27)), new U(24, new W(4, 19)), new U(28, new W(4, 15))),
+			new G(7, Int32Array.from([
 				6,
 				22,
 				38
-			]), new H(20, new U(2, 78)), new H(18, new U(4, 31)), new H(18, new U(2, 14), new U(4, 15)), new H(26, new U(4, 13), new U(1, 14))),
-			new W(8, Int32Array.from([
+			]), new U(20, new W(2, 78)), new U(18, new W(4, 31)), new U(18, new W(2, 14), new W(4, 15)), new U(26, new W(4, 13), new W(1, 14))),
+			new G(8, Int32Array.from([
 				6,
 				24,
 				42
-			]), new H(24, new U(2, 97)), new H(22, new U(2, 38), new U(2, 39)), new H(22, new U(4, 18), new U(2, 19)), new H(26, new U(4, 14), new U(2, 15))),
-			new W(9, Int32Array.from([
+			]), new U(24, new W(2, 97)), new U(22, new W(2, 38), new W(2, 39)), new U(22, new W(4, 18), new W(2, 19)), new U(26, new W(4, 14), new W(2, 15))),
+			new G(9, Int32Array.from([
 				6,
 				26,
 				46
-			]), new H(30, new U(2, 116)), new H(22, new U(3, 36), new U(2, 37)), new H(20, new U(4, 16), new U(4, 17)), new H(24, new U(4, 12), new U(4, 13))),
-			new W(10, Int32Array.from([
+			]), new U(30, new W(2, 116)), new U(22, new W(3, 36), new W(2, 37)), new U(20, new W(4, 16), new W(4, 17)), new U(24, new W(4, 12), new W(4, 13))),
+			new G(10, Int32Array.from([
 				6,
 				28,
 				50
-			]), new H(18, new U(2, 68), new U(2, 69)), new H(26, new U(4, 43), new U(1, 44)), new H(24, new U(6, 19), new U(2, 20)), new H(28, new U(6, 15), new U(2, 16))),
-			new W(11, Int32Array.from([
+			]), new U(18, new W(2, 68), new W(2, 69)), new U(26, new W(4, 43), new W(1, 44)), new U(24, new W(6, 19), new W(2, 20)), new U(28, new W(6, 15), new W(2, 16))),
+			new G(11, Int32Array.from([
 				6,
 				30,
 				54
-			]), new H(20, new U(4, 81)), new H(30, new U(1, 50), new U(4, 51)), new H(28, new U(4, 22), new U(4, 23)), new H(24, new U(3, 12), new U(8, 13))),
-			new W(12, Int32Array.from([
+			]), new U(20, new W(4, 81)), new U(30, new W(1, 50), new W(4, 51)), new U(28, new W(4, 22), new W(4, 23)), new U(24, new W(3, 12), new W(8, 13))),
+			new G(12, Int32Array.from([
 				6,
 				32,
 				58
-			]), new H(24, new U(2, 92), new U(2, 93)), new H(22, new U(6, 36), new U(2, 37)), new H(26, new U(4, 20), new U(6, 21)), new H(28, new U(7, 14), new U(4, 15))),
-			new W(13, Int32Array.from([
+			]), new U(24, new W(2, 92), new W(2, 93)), new U(22, new W(6, 36), new W(2, 37)), new U(26, new W(4, 20), new W(6, 21)), new U(28, new W(7, 14), new W(4, 15))),
+			new G(13, Int32Array.from([
 				6,
 				34,
 				62
-			]), new H(26, new U(4, 107)), new H(22, new U(8, 37), new U(1, 38)), new H(24, new U(8, 20), new U(4, 21)), new H(22, new U(12, 11), new U(4, 12))),
-			new W(14, Int32Array.from([
+			]), new U(26, new W(4, 107)), new U(22, new W(8, 37), new W(1, 38)), new U(24, new W(8, 20), new W(4, 21)), new U(22, new W(12, 11), new W(4, 12))),
+			new G(14, Int32Array.from([
 				6,
 				26,
 				46,
 				66
-			]), new H(30, new U(3, 115), new U(1, 116)), new H(24, new U(4, 40), new U(5, 41)), new H(20, new U(11, 16), new U(5, 17)), new H(24, new U(11, 12), new U(5, 13))),
-			new W(15, Int32Array.from([
+			]), new U(30, new W(3, 115), new W(1, 116)), new U(24, new W(4, 40), new W(5, 41)), new U(20, new W(11, 16), new W(5, 17)), new U(24, new W(11, 12), new W(5, 13))),
+			new G(15, Int32Array.from([
 				6,
 				26,
 				48,
 				70
-			]), new H(22, new U(5, 87), new U(1, 88)), new H(24, new U(5, 41), new U(5, 42)), new H(30, new U(5, 24), new U(7, 25)), new H(24, new U(11, 12), new U(7, 13))),
-			new W(16, Int32Array.from([
+			]), new U(22, new W(5, 87), new W(1, 88)), new U(24, new W(5, 41), new W(5, 42)), new U(30, new W(5, 24), new W(7, 25)), new U(24, new W(11, 12), new W(7, 13))),
+			new G(16, Int32Array.from([
 				6,
 				26,
 				50,
 				74
-			]), new H(24, new U(5, 98), new U(1, 99)), new H(28, new U(7, 45), new U(3, 46)), new H(24, new U(15, 19), new U(2, 20)), new H(30, new U(3, 15), new U(13, 16))),
-			new W(17, Int32Array.from([
+			]), new U(24, new W(5, 98), new W(1, 99)), new U(28, new W(7, 45), new W(3, 46)), new U(24, new W(15, 19), new W(2, 20)), new U(30, new W(3, 15), new W(13, 16))),
+			new G(17, Int32Array.from([
 				6,
 				30,
 				54,
 				78
-			]), new H(28, new U(1, 107), new U(5, 108)), new H(28, new U(10, 46), new U(1, 47)), new H(28, new U(1, 22), new U(15, 23)), new H(28, new U(2, 14), new U(17, 15))),
-			new W(18, Int32Array.from([
+			]), new U(28, new W(1, 107), new W(5, 108)), new U(28, new W(10, 46), new W(1, 47)), new U(28, new W(1, 22), new W(15, 23)), new U(28, new W(2, 14), new W(17, 15))),
+			new G(18, Int32Array.from([
 				6,
 				30,
 				56,
 				82
-			]), new H(30, new U(5, 120), new U(1, 121)), new H(26, new U(9, 43), new U(4, 44)), new H(28, new U(17, 22), new U(1, 23)), new H(28, new U(2, 14), new U(19, 15))),
-			new W(19, Int32Array.from([
+			]), new U(30, new W(5, 120), new W(1, 121)), new U(26, new W(9, 43), new W(4, 44)), new U(28, new W(17, 22), new W(1, 23)), new U(28, new W(2, 14), new W(19, 15))),
+			new G(19, Int32Array.from([
 				6,
 				30,
 				58,
 				86
-			]), new H(28, new U(3, 113), new U(4, 114)), new H(26, new U(3, 44), new U(11, 45)), new H(26, new U(17, 21), new U(4, 22)), new H(26, new U(9, 13), new U(16, 14))),
-			new W(20, Int32Array.from([
+			]), new U(28, new W(3, 113), new W(4, 114)), new U(26, new W(3, 44), new W(11, 45)), new U(26, new W(17, 21), new W(4, 22)), new U(26, new W(9, 13), new W(16, 14))),
+			new G(20, Int32Array.from([
 				6,
 				34,
 				62,
 				90
-			]), new H(28, new U(3, 107), new U(5, 108)), new H(26, new U(3, 41), new U(13, 42)), new H(30, new U(15, 24), new U(5, 25)), new H(28, new U(15, 15), new U(10, 16))),
-			new W(21, Int32Array.from([
+			]), new U(28, new W(3, 107), new W(5, 108)), new U(26, new W(3, 41), new W(13, 42)), new U(30, new W(15, 24), new W(5, 25)), new U(28, new W(15, 15), new W(10, 16))),
+			new G(21, Int32Array.from([
 				6,
 				28,
 				50,
 				72,
 				94
-			]), new H(28, new U(4, 116), new U(4, 117)), new H(26, new U(17, 42)), new H(28, new U(17, 22), new U(6, 23)), new H(30, new U(19, 16), new U(6, 17))),
-			new W(22, Int32Array.from([
+			]), new U(28, new W(4, 116), new W(4, 117)), new U(26, new W(17, 42)), new U(28, new W(17, 22), new W(6, 23)), new U(30, new W(19, 16), new W(6, 17))),
+			new G(22, Int32Array.from([
 				6,
 				26,
 				50,
 				74,
 				98
-			]), new H(28, new U(2, 111), new U(7, 112)), new H(28, new U(17, 46)), new H(30, new U(7, 24), new U(16, 25)), new H(24, new U(34, 13))),
-			new W(23, Int32Array.from([
+			]), new U(28, new W(2, 111), new W(7, 112)), new U(28, new W(17, 46)), new U(30, new W(7, 24), new W(16, 25)), new U(24, new W(34, 13))),
+			new G(23, Int32Array.from([
 				6,
 				30,
 				54,
 				78,
 				102
-			]), new H(30, new U(4, 121), new U(5, 122)), new H(28, new U(4, 47), new U(14, 48)), new H(30, new U(11, 24), new U(14, 25)), new H(30, new U(16, 15), new U(14, 16))),
-			new W(24, Int32Array.from([
+			]), new U(30, new W(4, 121), new W(5, 122)), new U(28, new W(4, 47), new W(14, 48)), new U(30, new W(11, 24), new W(14, 25)), new U(30, new W(16, 15), new W(14, 16))),
+			new G(24, Int32Array.from([
 				6,
 				28,
 				54,
 				80,
 				106
-			]), new H(30, new U(6, 117), new U(4, 118)), new H(28, new U(6, 45), new U(14, 46)), new H(30, new U(11, 24), new U(16, 25)), new H(30, new U(30, 16), new U(2, 17))),
-			new W(25, Int32Array.from([
+			]), new U(30, new W(6, 117), new W(4, 118)), new U(28, new W(6, 45), new W(14, 46)), new U(30, new W(11, 24), new W(16, 25)), new U(30, new W(30, 16), new W(2, 17))),
+			new G(25, Int32Array.from([
 				6,
 				32,
 				58,
 				84,
 				110
-			]), new H(26, new U(8, 106), new U(4, 107)), new H(28, new U(8, 47), new U(13, 48)), new H(30, new U(7, 24), new U(22, 25)), new H(30, new U(22, 15), new U(13, 16))),
-			new W(26, Int32Array.from([
+			]), new U(26, new W(8, 106), new W(4, 107)), new U(28, new W(8, 47), new W(13, 48)), new U(30, new W(7, 24), new W(22, 25)), new U(30, new W(22, 15), new W(13, 16))),
+			new G(26, Int32Array.from([
 				6,
 				30,
 				58,
 				86,
 				114
-			]), new H(28, new U(10, 114), new U(2, 115)), new H(28, new U(19, 46), new U(4, 47)), new H(28, new U(28, 22), new U(6, 23)), new H(30, new U(33, 16), new U(4, 17))),
-			new W(27, Int32Array.from([
+			]), new U(28, new W(10, 114), new W(2, 115)), new U(28, new W(19, 46), new W(4, 47)), new U(28, new W(28, 22), new W(6, 23)), new U(30, new W(33, 16), new W(4, 17))),
+			new G(27, Int32Array.from([
 				6,
 				34,
 				62,
 				90,
 				118
-			]), new H(30, new U(8, 122), new U(4, 123)), new H(28, new U(22, 45), new U(3, 46)), new H(30, new U(8, 23), new U(26, 24)), new H(30, new U(12, 15), new U(28, 16))),
-			new W(28, Int32Array.from([
+			]), new U(30, new W(8, 122), new W(4, 123)), new U(28, new W(22, 45), new W(3, 46)), new U(30, new W(8, 23), new W(26, 24)), new U(30, new W(12, 15), new W(28, 16))),
+			new G(28, Int32Array.from([
 				6,
 				26,
 				50,
 				74,
 				98,
 				122
-			]), new H(30, new U(3, 117), new U(10, 118)), new H(28, new U(3, 45), new U(23, 46)), new H(30, new U(4, 24), new U(31, 25)), new H(30, new U(11, 15), new U(31, 16))),
-			new W(29, Int32Array.from([
+			]), new U(30, new W(3, 117), new W(10, 118)), new U(28, new W(3, 45), new W(23, 46)), new U(30, new W(4, 24), new W(31, 25)), new U(30, new W(11, 15), new W(31, 16))),
+			new G(29, Int32Array.from([
 				6,
 				30,
 				54,
 				78,
 				102,
 				126
-			]), new H(30, new U(7, 116), new U(7, 117)), new H(28, new U(21, 45), new U(7, 46)), new H(30, new U(1, 23), new U(37, 24)), new H(30, new U(19, 15), new U(26, 16))),
-			new W(30, Int32Array.from([
+			]), new U(30, new W(7, 116), new W(7, 117)), new U(28, new W(21, 45), new W(7, 46)), new U(30, new W(1, 23), new W(37, 24)), new U(30, new W(19, 15), new W(26, 16))),
+			new G(30, Int32Array.from([
 				6,
 				26,
 				52,
 				78,
 				104,
 				130
-			]), new H(30, new U(5, 115), new U(10, 116)), new H(28, new U(19, 47), new U(10, 48)), new H(30, new U(15, 24), new U(25, 25)), new H(30, new U(23, 15), new U(25, 16))),
-			new W(31, Int32Array.from([
+			]), new U(30, new W(5, 115), new W(10, 116)), new U(28, new W(19, 47), new W(10, 48)), new U(30, new W(15, 24), new W(25, 25)), new U(30, new W(23, 15), new W(25, 16))),
+			new G(31, Int32Array.from([
 				6,
 				30,
 				56,
 				82,
 				108,
 				134
-			]), new H(30, new U(13, 115), new U(3, 116)), new H(28, new U(2, 46), new U(29, 47)), new H(30, new U(42, 24), new U(1, 25)), new H(30, new U(23, 15), new U(28, 16))),
-			new W(32, Int32Array.from([
+			]), new U(30, new W(13, 115), new W(3, 116)), new U(28, new W(2, 46), new W(29, 47)), new U(30, new W(42, 24), new W(1, 25)), new U(30, new W(23, 15), new W(28, 16))),
+			new G(32, Int32Array.from([
 				6,
 				34,
 				60,
 				86,
 				112,
 				138
-			]), new H(30, new U(17, 115)), new H(28, new U(10, 46), new U(23, 47)), new H(30, new U(10, 24), new U(35, 25)), new H(30, new U(19, 15), new U(35, 16))),
-			new W(33, Int32Array.from([
+			]), new U(30, new W(17, 115)), new U(28, new W(10, 46), new W(23, 47)), new U(30, new W(10, 24), new W(35, 25)), new U(30, new W(19, 15), new W(35, 16))),
+			new G(33, Int32Array.from([
 				6,
 				30,
 				58,
 				86,
 				114,
 				142
-			]), new H(30, new U(17, 115), new U(1, 116)), new H(28, new U(14, 46), new U(21, 47)), new H(30, new U(29, 24), new U(19, 25)), new H(30, new U(11, 15), new U(46, 16))),
-			new W(34, Int32Array.from([
+			]), new U(30, new W(17, 115), new W(1, 116)), new U(28, new W(14, 46), new W(21, 47)), new U(30, new W(29, 24), new W(19, 25)), new U(30, new W(11, 15), new W(46, 16))),
+			new G(34, Int32Array.from([
 				6,
 				34,
 				62,
 				90,
 				118,
 				146
-			]), new H(30, new U(13, 115), new U(6, 116)), new H(28, new U(14, 46), new U(23, 47)), new H(30, new U(44, 24), new U(7, 25)), new H(30, new U(59, 16), new U(1, 17))),
-			new W(35, Int32Array.from([
+			]), new U(30, new W(13, 115), new W(6, 116)), new U(28, new W(14, 46), new W(23, 47)), new U(30, new W(44, 24), new W(7, 25)), new U(30, new W(59, 16), new W(1, 17))),
+			new G(35, Int32Array.from([
 				6,
 				30,
 				54,
@@ -7649,8 +7652,8 @@ var T = function() {
 				102,
 				126,
 				150
-			]), new H(30, new U(12, 121), new U(7, 122)), new H(28, new U(12, 47), new U(26, 48)), new H(30, new U(39, 24), new U(14, 25)), new H(30, new U(22, 15), new U(41, 16))),
-			new W(36, Int32Array.from([
+			]), new U(30, new W(12, 121), new W(7, 122)), new U(28, new W(12, 47), new W(26, 48)), new U(30, new W(39, 24), new W(14, 25)), new U(30, new W(22, 15), new W(41, 16))),
+			new G(36, Int32Array.from([
 				6,
 				24,
 				50,
@@ -7658,8 +7661,8 @@ var T = function() {
 				102,
 				128,
 				154
-			]), new H(30, new U(6, 121), new U(14, 122)), new H(28, new U(6, 47), new U(34, 48)), new H(30, new U(46, 24), new U(10, 25)), new H(30, new U(2, 15), new U(64, 16))),
-			new W(37, Int32Array.from([
+			]), new U(30, new W(6, 121), new W(14, 122)), new U(28, new W(6, 47), new W(34, 48)), new U(30, new W(46, 24), new W(10, 25)), new U(30, new W(2, 15), new W(64, 16))),
+			new G(37, Int32Array.from([
 				6,
 				28,
 				54,
@@ -7667,8 +7670,8 @@ var T = function() {
 				106,
 				132,
 				158
-			]), new H(30, new U(17, 122), new U(4, 123)), new H(28, new U(29, 46), new U(14, 47)), new H(30, new U(49, 24), new U(10, 25)), new H(30, new U(24, 15), new U(46, 16))),
-			new W(38, Int32Array.from([
+			]), new U(30, new W(17, 122), new W(4, 123)), new U(28, new W(29, 46), new W(14, 47)), new U(30, new W(49, 24), new W(10, 25)), new U(30, new W(24, 15), new W(46, 16))),
+			new G(38, Int32Array.from([
 				6,
 				32,
 				58,
@@ -7676,8 +7679,8 @@ var T = function() {
 				110,
 				136,
 				162
-			]), new H(30, new U(4, 122), new U(18, 123)), new H(28, new U(13, 46), new U(32, 47)), new H(30, new U(48, 24), new U(14, 25)), new H(30, new U(42, 15), new U(32, 16))),
-			new W(39, Int32Array.from([
+			]), new U(30, new W(4, 122), new W(18, 123)), new U(28, new W(13, 46), new W(32, 47)), new U(30, new W(48, 24), new W(14, 25)), new U(30, new W(42, 15), new W(32, 16))),
+			new G(39, Int32Array.from([
 				6,
 				26,
 				54,
@@ -7685,8 +7688,8 @@ var T = function() {
 				110,
 				138,
 				166
-			]), new H(30, new U(20, 117), new U(4, 118)), new H(28, new U(40, 47), new U(7, 48)), new H(30, new U(43, 24), new U(22, 25)), new H(30, new U(10, 15), new U(67, 16))),
-			new W(40, Int32Array.from([
+			]), new U(30, new W(20, 117), new W(4, 118)), new U(28, new W(40, 47), new W(7, 48)), new U(30, new W(43, 24), new W(22, 25)), new U(30, new W(10, 15), new W(67, 16))),
+			new G(40, Int32Array.from([
 				6,
 				30,
 				58,
@@ -7694,13 +7697,13 @@ var T = function() {
 				114,
 				142,
 				170
-			]), new H(30, new U(19, 118), new U(6, 119)), new H(28, new U(18, 47), new U(31, 48)), new H(30, new U(34, 24), new U(34, 25)), new H(30, new U(20, 15), new U(61, 16)))
+			]), new U(30, new W(19, 118), new W(6, 119)), new U(28, new W(18, 47), new W(31, 48)), new U(30, new W(34, 24), new W(34, 25)), new U(30, new W(20, 15), new W(61, 16)))
 		];
-		var jt;
+		var At;
 		(function(e) {
 			e[e.DATA_MASK_000 = 0] = "DATA_MASK_000", e[e.DATA_MASK_001 = 1] = "DATA_MASK_001", e[e.DATA_MASK_010 = 2] = "DATA_MASK_010", e[e.DATA_MASK_011 = 3] = "DATA_MASK_011", e[e.DATA_MASK_100 = 4] = "DATA_MASK_100", e[e.DATA_MASK_101 = 5] = "DATA_MASK_101", e[e.DATA_MASK_110 = 6] = "DATA_MASK_110", e[e.DATA_MASK_111 = 7] = "DATA_MASK_111";
-		})(jt || (jt = {}));
-		class Mt {
+		})(At || (At = {}));
+		class jt {
 			constructor(e, t) {
 				this.value = e, this.isMasked = t;
 			}
@@ -7708,17 +7711,17 @@ var T = function() {
 				for (let n = 0; n < t; n++) for (let r = 0; r < t; r++) this.isMasked(n, r) && e.flip(r, n);
 			}
 		}
-		Mt.values = /* @__PURE__ */ new Map([
-			[jt.DATA_MASK_000, new Mt(jt.DATA_MASK_000, (e, t) => !(e + t & 1))],
-			[jt.DATA_MASK_001, new Mt(jt.DATA_MASK_001, (e, t) => !(e & 1))],
-			[jt.DATA_MASK_010, new Mt(jt.DATA_MASK_010, (e, t) => t % 3 == 0)],
-			[jt.DATA_MASK_011, new Mt(jt.DATA_MASK_011, (e, t) => (e + t) % 3 == 0)],
-			[jt.DATA_MASK_100, new Mt(jt.DATA_MASK_100, (e, t) => !(Math.floor(e / 2) + Math.floor(t / 3) & 1))],
-			[jt.DATA_MASK_101, new Mt(jt.DATA_MASK_101, (e, t) => e * t % 6 == 0)],
-			[jt.DATA_MASK_110, new Mt(jt.DATA_MASK_110, (e, t) => e * t % 6 < 3)],
-			[jt.DATA_MASK_111, new Mt(jt.DATA_MASK_111, (e, t) => !(e + t + e * t % 3 & 1))]
+		jt.values = /* @__PURE__ */ new Map([
+			[At.DATA_MASK_000, new jt(At.DATA_MASK_000, (e, t) => !(e + t & 1))],
+			[At.DATA_MASK_001, new jt(At.DATA_MASK_001, (e, t) => !(e & 1))],
+			[At.DATA_MASK_010, new jt(At.DATA_MASK_010, (e, t) => t % 3 == 0)],
+			[At.DATA_MASK_011, new jt(At.DATA_MASK_011, (e, t) => (e + t) % 3 == 0)],
+			[At.DATA_MASK_100, new jt(At.DATA_MASK_100, (e, t) => !(Math.floor(e / 2) + Math.floor(t / 3) & 1))],
+			[At.DATA_MASK_101, new jt(At.DATA_MASK_101, (e, t) => e * t % 6 == 0)],
+			[At.DATA_MASK_110, new jt(At.DATA_MASK_110, (e, t) => e * t % 6 < 3)],
+			[At.DATA_MASK_111, new jt(At.DATA_MASK_111, (e, t) => !(e + t + e * t % 3 & 1))]
 		]);
-		class Nt {
+		class Mt {
 			constructor(e) {
 				let t = e.getHeight();
 				if (t < 21 || (t & 3) != 1) throw new x();
@@ -7733,27 +7736,27 @@ var T = function() {
 				let t = this.bitMatrix.getHeight(), n = 0, r = t - 7;
 				for (let e = t - 1; e >= r; e--) n = this.copyBit(8, e, n);
 				for (let e = t - 8; e < t; e++) n = this.copyBit(e, 8, n);
-				if (this.parsedFormatInfo = At.decodeFormatInformation(e, n), this.parsedFormatInfo !== null) return this.parsedFormatInfo;
+				if (this.parsedFormatInfo = kt.decodeFormatInformation(e, n), this.parsedFormatInfo !== null) return this.parsedFormatInfo;
 				throw new x();
 			}
 			readVersion() {
 				if (this.parsedVersion !== null && this.parsedVersion !== void 0) return this.parsedVersion;
 				let e = this.bitMatrix.getHeight(), t = Math.floor((e - 17) / 4);
-				if (t <= 6) return W.getVersionForNumber(t);
+				if (t <= 6) return G.getVersionForNumber(t);
 				let n = 0, r = e - 11;
 				for (let t = 5; t >= 0; t--) for (let i = e - 9; i >= r; i--) n = this.copyBit(i, t, n);
-				let i = W.decodeVersionInformation(n);
+				let i = G.decodeVersionInformation(n);
 				if (i !== null && i.getDimensionForVersion() === e) return this.parsedVersion = i, i;
 				n = 0;
 				for (let t = 5; t >= 0; t--) for (let i = e - 9; i >= r; i--) n = this.copyBit(t, i, n);
-				if (i = W.decodeVersionInformation(n), i !== null && i.getDimensionForVersion() === e) return this.parsedVersion = i, i;
+				if (i = G.decodeVersionInformation(n), i !== null && i.getDimensionForVersion() === e) return this.parsedVersion = i, i;
 				throw new x();
 			}
 			copyBit(e, t, n) {
 				return (this.isMirror ? this.bitMatrix.get(t, e) : this.bitMatrix.get(e, t)) ? n << 1 | 1 : n << 1;
 			}
 			readCodewords() {
-				let e = this.readFormatInformation(), t = this.readVersion(), n = Mt.values.get(e.getDataMask()), r = this.bitMatrix.getHeight();
+				let e = this.readFormatInformation(), t = this.readVersion(), n = jt.values.get(e.getDataMask()), r = this.bitMatrix.getHeight();
 				n.unmaskBitMatrix(this.bitMatrix, r);
 				let i = t.buildFunctionPattern(), a = !0, o = new Uint8Array(t.getTotalCodewords()), s = 0, c = 0, l = 0;
 				for (let e = r - 1; e > 0; e -= 2) {
@@ -7769,7 +7772,7 @@ var T = function() {
 			}
 			remask() {
 				if (this.parsedFormatInfo === null) return;
-				let e = Mt.values[this.parsedFormatInfo.getDataMask()], t = this.bitMatrix.getHeight();
+				let e = jt.values[this.parsedFormatInfo.getDataMask()], t = this.bitMatrix.getHeight();
 				e.unmaskBitMatrix(this.bitMatrix, t);
 			}
 			setMirror(e) {
@@ -7780,7 +7783,7 @@ var T = function() {
 				for (let t = 0, n = e.getWidth(); t < n; t++) for (let n = t + 1, r = e.getHeight(); n < r; n++) e.get(t, n) !== e.get(n, t) && (e.flip(n, t), e.flip(t, n));
 			}
 		}
-		class Pt {
+		class Nt {
 			constructor(e, t) {
 				this.numDataCodewords = e, this.codewords = t;
 			}
@@ -7791,7 +7794,7 @@ var T = function() {
 				let o = Array(i), s = 0;
 				for (let e of a) for (let t = 0; t < e.getCount(); t++) {
 					let t = e.getDataCodewords(), n = r.getECCodewordsPerBlock() + t;
-					o[s++] = new Pt(t, new Uint8Array(n));
+					o[s++] = new Nt(t, new Uint8Array(n));
 				}
 				let c = o[0].codewords.length, u = o.length - 1;
 				for (; u >= 0 && o[u].codewords.length !== c;) u--;
@@ -7813,16 +7816,16 @@ var T = function() {
 				return this.codewords;
 			}
 		}
-		var Ft;
+		var Pt;
 		(function(e) {
 			e[e.TERMINATOR = 0] = "TERMINATOR", e[e.NUMERIC = 1] = "NUMERIC", e[e.ALPHANUMERIC = 2] = "ALPHANUMERIC", e[e.STRUCTURED_APPEND = 3] = "STRUCTURED_APPEND", e[e.BYTE = 4] = "BYTE", e[e.ECI = 5] = "ECI", e[e.KANJI = 6] = "KANJI", e[e.FNC1_FIRST_POSITION = 7] = "FNC1_FIRST_POSITION", e[e.FNC1_SECOND_POSITION = 8] = "FNC1_SECOND_POSITION", e[e.HANZI = 9] = "HANZI";
-		})(Ft || (Ft = {}));
-		class G {
+		})(Pt || (Pt = {}));
+		class K {
 			constructor(e, t, n, r) {
-				this.value = e, this.stringValue = t, this.characterCountBitsForVersions = n, this.bits = r, G.FOR_BITS.set(r, this), G.FOR_VALUE.set(e, this);
+				this.value = e, this.stringValue = t, this.characterCountBitsForVersions = n, this.bits = r, K.FOR_BITS.set(r, this), K.FOR_VALUE.set(e, this);
 			}
 			static forBits(e) {
-				let t = G.FOR_BITS.get(e);
+				let t = K.FOR_BITS.get(e);
 				if (t === void 0) throw new l();
 				return t;
 			}
@@ -7837,7 +7840,7 @@ var T = function() {
 				return this.bits;
 			}
 			equals(e) {
-				if (!(e instanceof G)) return !1;
+				if (!(e instanceof K)) return !1;
 				let t = e;
 				return this.value === t.value;
 			}
@@ -7845,95 +7848,95 @@ var T = function() {
 				return this.stringValue;
 			}
 		}
-		G.FOR_BITS = /* @__PURE__ */ new Map(), G.FOR_VALUE = /* @__PURE__ */ new Map(), G.TERMINATOR = new G(Ft.TERMINATOR, "TERMINATOR", Int32Array.from([
+		K.FOR_BITS = /* @__PURE__ */ new Map(), K.FOR_VALUE = /* @__PURE__ */ new Map(), K.TERMINATOR = new K(Pt.TERMINATOR, "TERMINATOR", Int32Array.from([
 			0,
 			0,
 			0
-		]), 0), G.NUMERIC = new G(Ft.NUMERIC, "NUMERIC", Int32Array.from([
+		]), 0), K.NUMERIC = new K(Pt.NUMERIC, "NUMERIC", Int32Array.from([
 			10,
 			12,
 			14
-		]), 1), G.ALPHANUMERIC = new G(Ft.ALPHANUMERIC, "ALPHANUMERIC", Int32Array.from([
+		]), 1), K.ALPHANUMERIC = new K(Pt.ALPHANUMERIC, "ALPHANUMERIC", Int32Array.from([
 			9,
 			11,
 			13
-		]), 2), G.STRUCTURED_APPEND = new G(Ft.STRUCTURED_APPEND, "STRUCTURED_APPEND", Int32Array.from([
+		]), 2), K.STRUCTURED_APPEND = new K(Pt.STRUCTURED_APPEND, "STRUCTURED_APPEND", Int32Array.from([
 			0,
 			0,
 			0
-		]), 3), G.BYTE = new G(Ft.BYTE, "BYTE", Int32Array.from([
+		]), 3), K.BYTE = new K(Pt.BYTE, "BYTE", Int32Array.from([
 			8,
 			16,
 			16
-		]), 4), G.ECI = new G(Ft.ECI, "ECI", Int32Array.from([
+		]), 4), K.ECI = new K(Pt.ECI, "ECI", Int32Array.from([
 			0,
 			0,
 			0
-		]), 7), G.KANJI = new G(Ft.KANJI, "KANJI", Int32Array.from([
+		]), 7), K.KANJI = new K(Pt.KANJI, "KANJI", Int32Array.from([
 			8,
 			10,
 			12
-		]), 8), G.FNC1_FIRST_POSITION = new G(Ft.FNC1_FIRST_POSITION, "FNC1_FIRST_POSITION", Int32Array.from([
+		]), 8), K.FNC1_FIRST_POSITION = new K(Pt.FNC1_FIRST_POSITION, "FNC1_FIRST_POSITION", Int32Array.from([
 			0,
 			0,
 			0
-		]), 5), G.FNC1_SECOND_POSITION = new G(Ft.FNC1_SECOND_POSITION, "FNC1_SECOND_POSITION", Int32Array.from([
+		]), 5), K.FNC1_SECOND_POSITION = new K(Pt.FNC1_SECOND_POSITION, "FNC1_SECOND_POSITION", Int32Array.from([
 			0,
 			0,
 			0
-		]), 9), G.HANZI = new G(Ft.HANZI, "HANZI", Int32Array.from([
+		]), 9), K.HANZI = new K(Pt.HANZI, "HANZI", Int32Array.from([
 			8,
 			10,
 			12
 		]), 13);
-		class It {
+		class Ft {
 			static decode(e, t, n, r) {
-				let i = new xt(e), a = new T(), o = [], s = -1, c = -1;
+				let i = new bt(e), a = new T(), o = [], s = -1, c = -1;
 				try {
 					let e = null, n = !1, l;
 					do {
-						if (i.available() < 4) l = G.TERMINATOR;
+						if (i.available() < 4) l = K.TERMINATOR;
 						else {
 							let e = i.readBits(4);
-							l = G.forBits(e);
+							l = K.forBits(e);
 						}
 						switch (l) {
-							case G.TERMINATOR: break;
-							case G.FNC1_FIRST_POSITION:
-							case G.FNC1_SECOND_POSITION:
+							case K.TERMINATOR: break;
+							case K.FNC1_FIRST_POSITION:
+							case K.FNC1_SECOND_POSITION:
 								n = !0;
 								break;
-							case G.STRUCTURED_APPEND:
+							case K.STRUCTURED_APPEND:
 								if (i.available() < 16) throw new x();
 								s = i.readBits(8), c = i.readBits(8);
 								break;
-							case G.ECI:
-								let u = It.parseECIValue(i);
+							case K.ECI:
+								let u = Ft.parseECIValue(i);
 								if (e = C.getCharacterSetECIByValue(u), e === null) throw new x();
 								break;
-							case G.HANZI:
+							case K.HANZI:
 								let d = i.readBits(4), f = i.readBits(l.getCharacterCountBits(t));
-								d === It.GB2312_SUBSET && It.decodeHanziSegment(i, a, f);
+								d === Ft.GB2312_SUBSET && Ft.decodeHanziSegment(i, a, f);
 								break;
 							default:
 								let p = i.readBits(l.getCharacterCountBits(t));
 								switch (l) {
-									case G.NUMERIC:
-										It.decodeNumericSegment(i, a, p);
+									case K.NUMERIC:
+										Ft.decodeNumericSegment(i, a, p);
 										break;
-									case G.ALPHANUMERIC:
-										It.decodeAlphanumericSegment(i, a, p, n);
+									case K.ALPHANUMERIC:
+										Ft.decodeAlphanumericSegment(i, a, p, n);
 										break;
-									case G.BYTE:
-										It.decodeByteSegment(i, a, p, e, o, r);
+									case K.BYTE:
+										Ft.decodeByteSegment(i, a, p, e, o, r);
 										break;
-									case G.KANJI:
-										It.decodeKanjiSegment(i, a, p);
+									case K.KANJI:
+										Ft.decodeKanjiSegment(i, a, p);
 										break;
 									default: throw new x();
 								}
 						}
-					} while (l !== G.TERMINATOR);
+					} while (l !== K.TERMINATOR);
 				} catch {
 					throw new x();
 				}
@@ -7979,19 +7982,19 @@ var T = function() {
 				i.push(o);
 			}
 			static toAlphaNumericChar(e) {
-				if (e >= It.ALPHANUMERIC_CHARS.length) throw new x();
-				return It.ALPHANUMERIC_CHARS[e];
+				if (e >= Ft.ALPHANUMERIC_CHARS.length) throw new x();
+				return Ft.ALPHANUMERIC_CHARS[e];
 			}
 			static decodeAlphanumericSegment(e, t, n, r) {
 				let i = t.length();
 				for (; n > 1;) {
 					if (e.available() < 11) throw new x();
 					let r = e.readBits(11);
-					t.append(It.toAlphaNumericChar(Math.floor(r / 45))), t.append(It.toAlphaNumericChar(r % 45)), n -= 2;
+					t.append(Ft.toAlphaNumericChar(Math.floor(r / 45))), t.append(Ft.toAlphaNumericChar(r % 45)), n -= 2;
 				}
 				if (n === 1) {
 					if (e.available() < 6) throw new x();
-					t.append(It.toAlphaNumericChar(e.readBits(6)));
+					t.append(Ft.toAlphaNumericChar(e.readBits(6)));
 				}
 				if (r) for (let e = i; e < t.length(); e++) t.charAt(e) === "%" && (e < t.length() - 1 && t.charAt(e + 1) === "%" ? t.deleteCharAt(e + 1) : t.setCharAt(e, ""));
 			}
@@ -8000,18 +8003,18 @@ var T = function() {
 					if (e.available() < 10) throw new x();
 					let r = e.readBits(10);
 					if (r >= 1e3) throw new x();
-					t.append(It.toAlphaNumericChar(Math.floor(r / 100))), t.append(It.toAlphaNumericChar(Math.floor(r / 10) % 10)), t.append(It.toAlphaNumericChar(r % 10)), n -= 3;
+					t.append(Ft.toAlphaNumericChar(Math.floor(r / 100))), t.append(Ft.toAlphaNumericChar(Math.floor(r / 10) % 10)), t.append(Ft.toAlphaNumericChar(r % 10)), n -= 3;
 				}
 				if (n === 2) {
 					if (e.available() < 7) throw new x();
 					let n = e.readBits(7);
 					if (n >= 100) throw new x();
-					t.append(It.toAlphaNumericChar(Math.floor(n / 10))), t.append(It.toAlphaNumericChar(n % 10));
+					t.append(Ft.toAlphaNumericChar(Math.floor(n / 10))), t.append(Ft.toAlphaNumericChar(n % 10));
 				} else if (n === 1) {
 					if (e.available() < 4) throw new x();
 					let n = e.readBits(4);
 					if (n >= 10) throw new x();
-					t.append(It.toAlphaNumericChar(n));
+					t.append(Ft.toAlphaNumericChar(n));
 				}
 			}
 			static parseECIValue(e) {
@@ -8028,8 +8031,8 @@ var T = function() {
 				throw new x();
 			}
 		}
-		It.ALPHANUMERIC_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:", It.GB2312_SUBSET = 1;
-		class Lt {
+		Ft.ALPHANUMERIC_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:", Ft.GB2312_SUBSET = 1;
+		class It {
 			constructor(e) {
 				this.mirrored = e;
 			}
@@ -8042,15 +8045,15 @@ var T = function() {
 				e[0] = e[2], e[2] = t;
 			}
 		}
-		class Rt {
+		class Lt {
 			constructor() {
-				this.rsDecoder = new ye(A.QR_CODE_FIELD_256);
+				this.rsDecoder = new _e(j.QR_CODE_FIELD_256);
 			}
 			decodeBooleanArray(e, t) {
-				return this.decodeBitMatrix(E.parseFromBooleanArray(e), t);
+				return this.decodeBitMatrix(ne.parseFromBooleanArray(e), t);
 			}
 			decodeBitMatrix(e, t) {
-				let n = new Nt(e), r = null;
+				let n = new Mt(e), r = null;
 				try {
 					return this.decodeBitMatrixParser(n, t);
 				} catch (e) {
@@ -8059,13 +8062,13 @@ var T = function() {
 				try {
 					n.remask(), n.setMirror(!0), n.readVersion(), n.readFormatInformation(), n.mirror();
 					let e = this.decodeBitMatrixParser(n, t);
-					return e.setOther(new Lt(!0)), e;
+					return e.setOther(new It(!0)), e;
 				} catch (e) {
 					throw r === null ? e : r;
 				}
 			}
 			decodeBitMatrixParser(e, t) {
-				let n = e.readVersion(), r = e.readFormatInformation().getErrorCorrectionLevel(), i = e.readCodewords(), a = Pt.getDataBlocks(i, n, r), o = 0;
+				let n = e.readVersion(), r = e.readFormatInformation().getErrorCorrectionLevel(), i = e.readCodewords(), a = Nt.getDataBlocks(i, n, r), o = 0;
 				for (let e of a) o += e.getNumDataCodewords();
 				let s = new Uint8Array(o), c = 0;
 				for (let e of a) {
@@ -8073,7 +8076,7 @@ var T = function() {
 					this.correctErrors(t, n);
 					for (let e = 0; e < n; e++) s[c++] = t[e];
 				}
-				return It.decode(s, n, r, t);
+				return Ft.decode(s, n, r, t);
 			}
 			correctErrors(e, t) {
 				let n = new Int32Array(e);
@@ -8085,7 +8088,7 @@ var T = function() {
 				for (let r = 0; r < t; r++) e[r] = n[r];
 			}
 		}
-		class zt extends N {
+		class Rt extends P {
 			constructor(e, t, n) {
 				super(e, t), this.estimatedModuleSize = n;
 			}
@@ -8098,10 +8101,10 @@ var T = function() {
 			}
 			combineEstimate(e, t, n) {
 				let r = (this.getX() + t) / 2, i = (this.getY() + e) / 2, a = (this.estimatedModuleSize + n) / 2;
-				return new zt(r, i, a);
+				return new Rt(r, i, a);
 			}
 		}
-		class Bt {
+		class zt {
 			constructor(e, t, n, r, i, a, o) {
 				this.image = e, this.startX = t, this.startY = n, this.width = r, this.height = i, this.moduleSize = a, this.resultPointCallback = o, this.possibleCenters = [], this.crossCheckStateCount = /* @__PURE__ */ new Int32Array(3);
 			}
@@ -8132,7 +8135,7 @@ var T = function() {
 					}
 				}
 				if (this.possibleCenters.length !== 0) return this.possibleCenters[0];
-				throw new D();
+				throw new E();
 			}
 			static centerFromEnd(e, t) {
 				return t - e[2] - e[1] / 2;
@@ -8155,20 +8158,20 @@ var T = function() {
 				for (; s < a && !i.get(t, s) && o[2] <= n;) o[2]++, s++;
 				if (o[2] > n) return NaN;
 				let c = o[0] + o[1] + o[2];
-				return 5 * Math.abs(c - r) >= 2 * r ? NaN : this.foundPatternCross(o) ? Bt.centerFromEnd(o, s) : NaN;
+				return 5 * Math.abs(c - r) >= 2 * r ? NaN : this.foundPatternCross(o) ? zt.centerFromEnd(o, s) : NaN;
 			}
 			handlePossibleCenter(e, t, n) {
-				let r = e[0] + e[1] + e[2], i = Bt.centerFromEnd(e, n), a = this.crossCheckVertical(t, i, 2 * e[1], r);
+				let r = e[0] + e[1] + e[2], i = zt.centerFromEnd(e, n), a = this.crossCheckVertical(t, i, 2 * e[1], r);
 				if (!isNaN(a)) {
 					let t = (e[0] + e[1] + e[2]) / 3;
 					for (let e of this.possibleCenters) if (e.aboutEquals(t, a, i)) return e.combineEstimate(a, i, t);
-					let n = new zt(i, a, t);
+					let n = new Rt(i, a, t);
 					this.possibleCenters.push(n), this.resultPointCallback !== null && this.resultPointCallback !== void 0 && this.resultPointCallback.foundPossibleResultPoint(n);
 				}
 				return null;
 			}
 		}
-		class Vt extends N {
+		class Bt extends P {
 			constructor(e, t, n, r) {
 				super(e, t), this.estimatedModuleSize = n, this.count = r, r === void 0 && (this.count = 1);
 			}
@@ -8187,10 +8190,10 @@ var T = function() {
 			}
 			combineEstimate(e, t, n) {
 				let r = this.count + 1, i = (this.count * this.getX() + t) / r, a = (this.count * this.getY() + e) / r, o = (this.count * this.estimatedModuleSize + n) / r;
-				return new Vt(i, a, o, r);
+				return new Bt(i, a, o, r);
 			}
 		}
-		class Ht {
+		class Vt {
 			constructor(e) {
 				this.bottomLeft = e[0], this.topLeft = e[1], this.topRight = e[2];
 			}
@@ -8204,7 +8207,7 @@ var T = function() {
 				return this.topRight;
 			}
 		}
-		class Ut {
+		class Ht {
 			constructor(e, t) {
 				this.image = e, this.resultPointCallback = t, this.possibleCenters = [], this.crossCheckStateCount = /* @__PURE__ */ new Int32Array(5), this.resultPointCallback = t;
 			}
@@ -8215,8 +8218,8 @@ var T = function() {
 				return this.possibleCenters;
 			}
 			find(e) {
-				let t = e != null && e.get(b.TRY_HARDER) !== void 0, n = e != null && e.get(b.PURE_BARCODE) !== void 0, r = this.image, i = r.getHeight(), a = r.getWidth(), o = Math.floor(3 * i / (4 * Ut.MAX_MODULES));
-				(o < Ut.MIN_SKIP || t) && (o = Ut.MIN_SKIP);
+				let t = e != null && e.get(b.TRY_HARDER) !== void 0, n = e != null && e.get(b.PURE_BARCODE) !== void 0, r = this.image, i = r.getHeight(), a = r.getWidth(), o = Math.floor(3 * i / (4 * Ht.MAX_MODULES));
+				(o < Ht.MIN_SKIP || t) && (o = Ht.MIN_SKIP);
 				let s = !1, c = /* @__PURE__ */ new Int32Array(5);
 				for (let e = o - 1; e < i && !s; e += o) {
 					c[0] = 0, c[1] = 0, c[2] = 0, c[3] = 0, c[4] = 0;
@@ -8224,7 +8227,7 @@ var T = function() {
 					for (let i = 0; i < a; i++) if (r.get(i, e)) (t & 1) == 1 && t++, c[t]++;
 					else if (t & 1) c[t]++;
 					else if (t === 4) {
-						if (Ut.foundPatternCross(c)) {
+						if (Ht.foundPatternCross(c)) {
 							if (this.handlePossibleCenter(c, e, i, n) === !0) {
 								if (o = 2, this.hasSkipped === !0) s = this.haveMultiplyConfirmedCenters();
 								else {
@@ -8238,10 +8241,10 @@ var T = function() {
 							t = 0, c[0] = 0, c[1] = 0, c[2] = 0, c[3] = 0, c[4] = 0;
 						} else c[0] = c[2], c[1] = c[3], c[2] = c[4], c[3] = 1, c[4] = 0, t = 3;
 					} else c[++t]++;
-					Ut.foundPatternCross(c) && this.handlePossibleCenter(c, e, a, n) === !0 && (o = c[0], this.hasSkipped && (s = this.haveMultiplyConfirmedCenters()));
+					Ht.foundPatternCross(c) && this.handlePossibleCenter(c, e, a, n) === !0 && (o = c[0], this.hasSkipped && (s = this.haveMultiplyConfirmedCenters()));
 				}
 				let l = this.selectBestPatterns();
-				return N.orderBestPatterns(l), new Ht(l);
+				return P.orderBestPatterns(l), new Vt(l);
 			}
 			static centerFromEnd(e, t) {
 				return t - e[4] - e[3] - e[2] / 2;
@@ -8277,7 +8280,7 @@ var T = function() {
 				for (; e + a < s && t + a < c && o.get(t + a, e + a) && i[4] < n;) i[4]++, a++;
 				if (i[4] >= n) return !1;
 				let l = i[0] + i[1] + i[2] + i[3] + i[4];
-				return Math.abs(l - r) < 2 * r && Ut.foundPatternCross(i);
+				return Math.abs(l - r) < 2 * r && Ht.foundPatternCross(i);
 			}
 			crossCheckVertical(e, t, n, r) {
 				let i = this.image, a = i.getHeight(), o = this.getCrossCheckStateCount(), s = e;
@@ -8294,7 +8297,7 @@ var T = function() {
 				for (; s < a && i.get(t, s) && o[4] < n;) o[4]++, s++;
 				if (o[4] >= n) return NaN;
 				let c = o[0] + o[1] + o[2] + o[3] + o[4];
-				return 5 * Math.abs(c - r) >= 2 * r ? NaN : Ut.foundPatternCross(o) ? Ut.centerFromEnd(o, s) : NaN;
+				return 5 * Math.abs(c - r) >= 2 * r ? NaN : Ht.foundPatternCross(o) ? Ht.centerFromEnd(o, s) : NaN;
 			}
 			crossCheckHorizontal(e, t, n, r) {
 				let i = this.image, a = i.getWidth(), o = this.getCrossCheckStateCount(), s = e;
@@ -8311,10 +8314,10 @@ var T = function() {
 				for (; s < a && i.get(s, t) && o[4] < n;) o[4]++, s++;
 				if (o[4] >= n) return NaN;
 				let c = o[0] + o[1] + o[2] + o[3] + o[4];
-				return 5 * Math.abs(c - r) >= r ? NaN : Ut.foundPatternCross(o) ? Ut.centerFromEnd(o, s) : NaN;
+				return 5 * Math.abs(c - r) >= r ? NaN : Ht.foundPatternCross(o) ? Ht.centerFromEnd(o, s) : NaN;
 			}
 			handlePossibleCenter(e, t, n, r) {
-				let i = e[0] + e[1] + e[2] + e[3] + e[4], a = Ut.centerFromEnd(e, n), o = this.crossCheckVertical(t, Math.floor(a), e[2], i);
+				let i = e[0] + e[1] + e[2] + e[3] + e[4], a = Ht.centerFromEnd(e, n), o = this.crossCheckVertical(t, Math.floor(a), e[2], i);
 				if (!isNaN(o) && (a = this.crossCheckHorizontal(Math.floor(a), Math.floor(o), e[2], i), !isNaN(a) && (!r || this.crossCheckDiagonal(Math.floor(o), Math.floor(a), e[2], i)))) {
 					let e = i / 7, t = !1, n = this.possibleCenters;
 					for (let r = 0, i = n.length; r < i; r++) {
@@ -8325,7 +8328,7 @@ var T = function() {
 						}
 					}
 					if (!t) {
-						let t = new Vt(a, o, e);
+						let t = new Bt(a, o, e);
 						n.push(t), this.resultPointCallback !== null && this.resultPointCallback !== void 0 && this.resultPointCallback.foundPossibleResultPoint(t);
 					}
 					return !0;
@@ -8335,7 +8338,7 @@ var T = function() {
 			findRowSkip() {
 				if (this.possibleCenters.length <= 1) return 0;
 				let e = null;
-				for (let t of this.possibleCenters) if (t.getCount() >= Ut.CENTER_QUORUM) {
+				for (let t of this.possibleCenters) if (t.getCount() >= Ht.CENTER_QUORUM) {
 					if (e == null) e = t;
 					else return this.hasSkipped = !0, Math.floor((Math.abs(e.getX() - t.getX()) - Math.abs(e.getY() - t.getY())) / 2);
 				}
@@ -8343,7 +8346,7 @@ var T = function() {
 			}
 			haveMultiplyConfirmedCenters() {
 				let e = 0, t = 0, n = this.possibleCenters.length;
-				for (let n of this.possibleCenters) n.getCount() >= Ut.CENTER_QUORUM && (e++, t += n.getEstimatedModuleSize());
+				for (let n of this.possibleCenters) n.getCount() >= Ht.CENTER_QUORUM && (e++, t += n.getEstimatedModuleSize());
 				if (e < 3) return !1;
 				let r = t / n, i = 0;
 				for (let e of this.possibleCenters) i += Math.abs(e.getEstimatedModuleSize() - r);
@@ -8351,7 +8354,7 @@ var T = function() {
 			}
 			selectBestPatterns() {
 				let e = this.possibleCenters.length;
-				if (e < 3) throw new D();
+				if (e < 3) throw new E();
 				let t = this.possibleCenters, n;
 				if (e > 3) {
 					let r = 0, i = 0;
@@ -8389,8 +8392,8 @@ var T = function() {
 				];
 			}
 		}
-		Ut.CENTER_QUORUM = 2, Ut.MIN_SKIP = 3, Ut.MAX_MODULES = 57;
-		class Wt {
+		Ht.CENTER_QUORUM = 2, Ht.MIN_SKIP = 3, Ht.MAX_MODULES = 57;
+		class Ut {
 			constructor(e) {
 				this.image = e;
 			}
@@ -8402,23 +8405,23 @@ var T = function() {
 			}
 			detect(e) {
 				this.resultPointCallback = e == null ? null : e.get(b.NEED_RESULT_POINT_CALLBACK);
-				let t = new Ut(this.image, this.resultPointCallback).find(e);
+				let t = new Ht(this.image, this.resultPointCallback).find(e);
 				return this.processFinderPatternInfo(t);
 			}
 			processFinderPatternInfo(e) {
 				let t = e.getTopLeft(), n = e.getTopRight(), r = e.getBottomLeft(), i = this.calculateModuleSize(t, n, r);
-				if (i < 1) throw new D("No pattern found in proccess finder.");
-				let a = Wt.computeDimension(t, n, r, i), o = W.getProvisionalVersionForDimension(a), s = o.getDimensionForVersion() - 7, c = null;
+				if (i < 1) throw new E("No pattern found in proccess finder.");
+				let a = Ut.computeDimension(t, n, r, i), o = G.getProvisionalVersionForDimension(a), s = o.getDimensionForVersion() - 7, c = null;
 				if (o.getAlignmentPatternCenters().length > 0) {
 					let e = n.getX() - t.getX() + r.getX(), a = n.getY() - t.getY() + r.getY(), o = 1 - 3 / s, l = Math.floor(t.getX() + o * (e - t.getX())), u = Math.floor(t.getY() + o * (a - t.getY()));
 					for (let e = 4; e <= 16; e <<= 1) try {
 						c = this.findAlignmentInRegion(i, l, u, e);
 						break;
 					} catch (e) {
-						if (!(e instanceof D)) throw e;
+						if (!(e instanceof E)) throw e;
 					}
 				}
-				let l = Wt.createTransform(t, n, r, c, a), u = Wt.sampleGrid(this.image, l, a), d;
+				let l = Ut.createTransform(t, n, r, c, a), u = Ut.sampleGrid(this.image, l, a), d;
 				return d = c === null ? [
 					r,
 					t,
@@ -8428,17 +8431,17 @@ var T = function() {
 					t,
 					n,
 					c
-				], new Se(u, d);
+				], new xe(u, d);
 			}
 			static createTransform(e, t, n, r, i) {
 				let a = i - 3.5, o, s, c, l;
-				return r === null ? (o = t.getX() - e.getX() + n.getX(), s = t.getY() - e.getY() + n.getY(), c = a, l = a) : (o = r.getX(), s = r.getY(), c = a - 3, l = c), Ee.quadrilateralToQuadrilateral(3.5, 3.5, a, 3.5, c, l, 3.5, a, e.getX(), e.getY(), t.getX(), t.getY(), o, s, n.getX(), n.getY());
+				return r === null ? (o = t.getX() - e.getX() + n.getX(), s = t.getY() - e.getY() + n.getY(), c = a, l = a) : (o = r.getX(), s = r.getY(), c = a - 3, l = c), Te.quadrilateralToQuadrilateral(3.5, 3.5, a, 3.5, c, l, 3.5, a, e.getX(), e.getY(), t.getX(), t.getY(), o, s, n.getX(), n.getY());
 			}
 			static sampleGrid(e, t, n) {
-				return Oe.getInstance().sampleGridWithTransform(e, n, n, t);
+				return De.getInstance().sampleGridWithTransform(e, n, n, t);
 			}
 			static computeDimension(e, t, n, r) {
-				let i = M.round(N.distance(e, t) / r), a = M.round(N.distance(e, n) / r), o = Math.floor((i + a) / 2) + 7;
+				let i = N.round(P.distance(e, t) / r), a = N.round(P.distance(e, n) / r), o = Math.floor((i + a) / 2) + 7;
 				switch (o & 3) {
 					case 0:
 						o++;
@@ -8446,7 +8449,7 @@ var T = function() {
 					case 2:
 						o--;
 						break;
-					case 3: throw new D("Dimensions could be not found.");
+					case 3: throw new E("Dimensions could be not found.");
 				}
 				return o;
 			}
@@ -8473,7 +8476,7 @@ var T = function() {
 				for (let n = e, f = t; n !== d; n += c) {
 					let c = i ? f : n, d = i ? n : f;
 					if (u === 1 === this.image.get(c, d)) {
-						if (u === 2) return M.distance(n, f, e, t);
+						if (u === 2) return N.distance(n, f, e, t);
 						u++;
 					}
 					if (s += o, s > 0) {
@@ -8481,19 +8484,19 @@ var T = function() {
 						f += l, s -= a;
 					}
 				}
-				return u === 2 ? M.distance(n + c, r, e, t) : NaN;
+				return u === 2 ? N.distance(n + c, r, e, t) : NaN;
 			}
 			findAlignmentInRegion(e, t, n, r) {
 				let i = Math.floor(r * e), a = Math.max(0, t - i), o = Math.min(this.image.getWidth() - 1, t + i);
-				if (o - a < e * 3) throw new D("Alignment top exceeds estimated module size.");
+				if (o - a < e * 3) throw new E("Alignment top exceeds estimated module size.");
 				let s = Math.max(0, n - i), c = Math.min(this.image.getHeight() - 1, n + i);
-				if (c - s < e * 3) throw new D("Alignment bottom exceeds estimated module size.");
-				return new Bt(this.image, a, s, o - a, c - s, e, this.resultPointCallback).find();
+				if (c - s < e * 3) throw new E("Alignment bottom exceeds estimated module size.");
+				return new zt(this.image, a, s, o - a, c - s, e, this.resultPointCallback).find();
 			}
 		}
-		class Gt {
+		class Wt {
 			constructor() {
-				this.decoder = new Rt();
+				this.decoder = new Lt();
 			}
 			getDecoder() {
 				return this.decoder;
@@ -8501,13 +8504,13 @@ var T = function() {
 			decode(e, t) {
 				let n, r;
 				if (t != null && t.get(b.PURE_BARCODE) !== void 0) {
-					let i = Gt.extractPureBits(e.getBlackMatrix());
-					n = this.decoder.decodeBitMatrix(i, t), r = Gt.NO_POINTS;
+					let i = Wt.extractPureBits(e.getBlackMatrix());
+					n = this.decoder.decodeBitMatrix(i, t), r = Wt.NO_POINTS;
 				} else {
-					let i = new Wt(e.getBlackMatrix()).detect(t);
+					let i = new Ut(e.getBlackMatrix()).detect(t);
 					n = this.decoder.decodeBitMatrix(i.getBits(), t), r = i.getPoints();
 				}
-				n.getOther() instanceof Lt && n.getOther().applyMirroredCorrection(r);
+				n.getOther() instanceof It && n.getOther().applyMirroredCorrection(r);
 				let i = new le(n.getText(), n.getRawBytes(), void 0, r, k.QR_CODE, void 0), a = n.getByteSegments();
 				a !== null && i.putMetadata(fe.BYTE_SEGMENTS, a);
 				let o = n.getECLevel();
@@ -8516,24 +8519,24 @@ var T = function() {
 			reset() {}
 			static extractPureBits(e) {
 				let t = e.getTopLeftOnBit(), n = e.getBottomRightOnBit();
-				if (t === null || n === null) throw new D();
+				if (t === null || n === null) throw new E();
 				let r = this.moduleSize(t, e), i = t[1], a = n[1], o = t[0], s = n[0];
-				if (o >= s || i >= a || a - i !== s - o && (s = o + (a - i), s >= e.getWidth())) throw new D();
+				if (o >= s || i >= a || a - i !== s - o && (s = o + (a - i), s >= e.getWidth())) throw new E();
 				let c = Math.round((s - o + 1) / r), l = Math.round((a - i + 1) / r);
-				if (c <= 0 || l <= 0 || l !== c) throw new D();
+				if (c <= 0 || l <= 0 || l !== c) throw new E();
 				let u = Math.floor(r / 2);
 				i += u, o += u;
 				let d = o + Math.floor((c - 1) * r) - s;
 				if (d > 0) {
-					if (d > u) throw new D();
+					if (d > u) throw new E();
 					o -= d;
 				}
 				let f = i + Math.floor((l - 1) * r) - a;
 				if (f > 0) {
-					if (f > u) throw new D();
+					if (f > u) throw new E();
 					i -= f;
 				}
-				let p = new E(c, l);
+				let p = new ne(c, l);
 				for (let t = 0; t < l; t++) {
 					let n = i + Math.floor(t * r);
 					for (let i = 0; i < c; i++) e.get(o + Math.floor(i * r), n) && p.set(i, t);
@@ -8549,28 +8552,28 @@ var T = function() {
 					}
 					i++, a++;
 				}
-				if (i === r || a === n) throw new D();
+				if (i === r || a === n) throw new E();
 				return (i - e[0]) / 7;
 			}
 		}
-		Gt.NO_POINTS = [];
-		class K {
+		Wt.NO_POINTS = [];
+		class q {
 			PDF417Common() {}
 			static getBitCountSum(e) {
-				return M.sum(e);
+				return N.sum(e);
 			}
 			static toIntArray(e) {
-				if (e == null || !e.length) return K.EMPTY_INT_ARRAY;
+				if (e == null || !e.length) return q.EMPTY_INT_ARRAY;
 				let t = new Int32Array(e.length), n = 0;
 				for (let r of e) t[n++] = r;
 				return t;
 			}
 			static getCodeword(e) {
-				let t = g.binarySearch(K.SYMBOL_TABLE, e & 262143);
-				return t < 0 ? -1 : (K.CODEWORD_TABLE[t] - 1) % K.NUMBER_OF_CODEWORDS;
+				let t = g.binarySearch(q.SYMBOL_TABLE, e & 262143);
+				return t < 0 ? -1 : (q.CODEWORD_TABLE[t] - 1) % q.NUMBER_OF_CODEWORDS;
 			}
 		}
-		K.NUMBER_OF_CODEWORDS = 929, K.MAX_CODEWORDS_IN_BARCODE = K.NUMBER_OF_CODEWORDS - 1, K.MIN_ROWS_IN_BARCODE = 3, K.MAX_ROWS_IN_BARCODE = 90, K.MODULES_IN_CODEWORD = 17, K.MODULES_IN_STOP_PATTERN = 18, K.BARS_IN_MODULE = 8, K.EMPTY_INT_ARRAY = new Int32Array([]), K.SYMBOL_TABLE = Int32Array.from([
+		q.NUMBER_OF_CODEWORDS = 929, q.MAX_CODEWORDS_IN_BARCODE = q.NUMBER_OF_CODEWORDS - 1, q.MIN_ROWS_IN_BARCODE = 3, q.MAX_ROWS_IN_BARCODE = 90, q.MODULES_IN_CODEWORD = 17, q.MODULES_IN_STOP_PATTERN = 18, q.BARS_IN_MODULE = 8, q.EMPTY_INT_ARRAY = new Int32Array([]), q.SYMBOL_TABLE = Int32Array.from([
 			66142,
 			66170,
 			66206,
@@ -11358,7 +11361,7 @@ var T = function() {
 			129960,
 			129974,
 			130010
-		]), K.CODEWORD_TABLE = Int32Array.from([
+		]), q.CODEWORD_TABLE = Int32Array.from([
 			2627,
 			1819,
 			2622,
@@ -14147,7 +14150,7 @@ var T = function() {
 			1491,
 			1700
 		]);
-		class Kt {
+		class Gt {
 			constructor(e, t) {
 				this.bits = e, this.points = t;
 			}
@@ -14158,20 +14161,20 @@ var T = function() {
 				return this.points;
 			}
 		}
-		class q {
+		class J {
 			static detectMultiple(e, t, n) {
-				let r = e.getBlackMatrix(), i = q.detect(n, r);
-				return i.length || (r = r.clone(), r.rotate180(), i = q.detect(n, r)), new Kt(r, i);
+				let r = e.getBlackMatrix(), i = J.detect(n, r);
+				return i.length || (r = r.clone(), r.rotate180(), i = J.detect(n, r)), new Gt(r, i);
 			}
 			static detect(e, t) {
 				let n = [], r = 0, i = 0, a = !1;
 				for (; r < t.getHeight();) {
-					let o = q.findVertices(t, r, i);
+					let o = J.findVertices(t, r, i);
 					if (o[0] == null && o[3] == null) {
 						if (!a) break;
 						a = !1, i = 0;
 						for (let e of n) e[1] != null && (r = Math.trunc(Math.max(r, e[1].getY()))), e[3] != null && (r = Math.max(r, Math.trunc(e[3].getY())));
-						r += q.ROW_STEP;
+						r += J.ROW_STEP;
 						continue;
 					}
 					if (a = !0, n.push(o), !e) break;
@@ -14181,7 +14184,7 @@ var T = function() {
 			}
 			static findVertices(e, t, n) {
 				let r = e.getHeight(), i = e.getWidth(), a = Array(8);
-				return q.copyToResult(a, q.findRowsWithPattern(e, r, i, t, n, q.START_PATTERN), q.INDEXES_START_PATTERN), a[4] != null && (n = Math.trunc(a[4].getX()), t = Math.trunc(a[4].getY())), q.copyToResult(a, q.findRowsWithPattern(e, r, i, t, n, q.STOP_PATTERN), q.INDEXES_STOP_PATTERN), a;
+				return J.copyToResult(a, J.findRowsWithPattern(e, r, i, t, n, J.START_PATTERN), J.INDEXES_START_PATTERN), a[4] != null && (n = Math.trunc(a[4].getX()), t = Math.trunc(a[4].getY())), J.copyToResult(a, J.findRowsWithPattern(e, r, i, t, n, J.STOP_PATTERN), J.INDEXES_STOP_PATTERN), a;
 			}
 			static copyToResult(e, t, n) {
 				for (let r = 0; r < n.length; r++) e[n[r]] = t[r];
@@ -14193,18 +14196,18 @@ var T = function() {
 					,
 					,
 				], s = !1, c = new Int32Array(a.length);
-				for (; r < t; r += q.ROW_STEP) {
-					let t = q.findGuardPattern(e, i, r, n, !1, a, c);
+				for (; r < t; r += J.ROW_STEP) {
+					let t = J.findGuardPattern(e, i, r, n, !1, a, c);
 					if (t != null) {
 						for (; r > 0;) {
-							let o = q.findGuardPattern(e, i, --r, n, !1, a, c);
+							let o = J.findGuardPattern(e, i, --r, n, !1, a, c);
 							if (o != null) t = o;
 							else {
 								r++;
 								break;
 							}
 						}
-						o[0] = new N(t[0], r), o[1] = new N(t[1], r), s = !0;
+						o[0] = new P(t[0], r), o[1] = new P(t[1], r), s = !0;
 						break;
 					}
 				}
@@ -14212,29 +14215,29 @@ var T = function() {
 				if (s) {
 					let r = 0, i = Int32Array.from([Math.trunc(o[0].getX()), Math.trunc(o[1].getX())]);
 					for (; l < t; l++) {
-						let t = q.findGuardPattern(e, i[0], l, n, !1, a, c);
-						if (t != null && Math.abs(i[0] - t[0]) < q.MAX_PATTERN_DRIFT && Math.abs(i[1] - t[1]) < q.MAX_PATTERN_DRIFT) i = t, r = 0;
-						else if (r > q.SKIPPED_ROW_COUNT_MAX) break;
+						let t = J.findGuardPattern(e, i[0], l, n, !1, a, c);
+						if (t != null && Math.abs(i[0] - t[0]) < J.MAX_PATTERN_DRIFT && Math.abs(i[1] - t[1]) < J.MAX_PATTERN_DRIFT) i = t, r = 0;
+						else if (r > J.SKIPPED_ROW_COUNT_MAX) break;
 						else r++;
 					}
-					l -= r + 1, o[2] = new N(i[0], l), o[3] = new N(i[1], l);
+					l -= r + 1, o[2] = new P(i[0], l), o[3] = new P(i[1], l);
 				}
-				return l - r < q.BARCODE_MIN_HEIGHT && g.fill(o, null), o;
+				return l - r < J.BARCODE_MIN_HEIGHT && g.fill(o, null), o;
 			}
 			static findGuardPattern(e, t, n, r, i, a, o) {
 				g.fillWithin(o, 0, o.length, 0);
 				let s = t, c = 0;
-				for (; e.get(s, n) && s > 0 && c++ < q.MAX_PIXEL_DRIFT;) s--;
+				for (; e.get(s, n) && s > 0 && c++ < J.MAX_PIXEL_DRIFT;) s--;
 				let l = s, u = 0, d = a.length;
 				for (let t = i; l < r; l++) if (e.get(l, n) !== t) o[u]++;
 				else {
 					if (u === d - 1) {
-						if (q.patternMatchVariance(o, a, q.MAX_INDIVIDUAL_VARIANCE) < q.MAX_AVG_VARIANCE) return new Int32Array([s, l]);
+						if (J.patternMatchVariance(o, a, J.MAX_INDIVIDUAL_VARIANCE) < J.MAX_AVG_VARIANCE) return new Int32Array([s, l]);
 						s += o[0] + o[1], p.arraycopy(o, 2, o, 0, u - 1), o[u - 1] = 0, o[u] = 0, u--;
 					} else u++;
 					o[u] = 1, t = !t;
 				}
-				return u === d - 1 && q.patternMatchVariance(o, a, q.MAX_INDIVIDUAL_VARIANCE) < q.MAX_AVG_VARIANCE ? new Int32Array([s, l - 1]) : null;
+				return u === d - 1 && J.patternMatchVariance(o, a, J.MAX_INDIVIDUAL_VARIANCE) < J.MAX_AVG_VARIANCE ? new Int32Array([s, l - 1]) : null;
 			}
 			static patternMatchVariance(e, t, n) {
 				let r = e.length, i = 0, a = 0;
@@ -14251,17 +14254,17 @@ var T = function() {
 				return s / i;
 			}
 		}
-		q.INDEXES_START_PATTERN = Int32Array.from([
+		J.INDEXES_START_PATTERN = Int32Array.from([
 			0,
 			4,
 			1,
 			5
-		]), q.INDEXES_STOP_PATTERN = Int32Array.from([
+		]), J.INDEXES_STOP_PATTERN = Int32Array.from([
 			6,
 			2,
 			7,
 			3
-		]), q.MAX_AVG_VARIANCE = .42, q.MAX_INDIVIDUAL_VARIANCE = .8, q.START_PATTERN = Int32Array.from([
+		]), J.MAX_AVG_VARIANCE = .42, J.MAX_INDIVIDUAL_VARIANCE = .8, J.START_PATTERN = Int32Array.from([
 			8,
 			1,
 			1,
@@ -14270,7 +14273,7 @@ var T = function() {
 			1,
 			1,
 			3
-		]), q.STOP_PATTERN = Int32Array.from([
+		]), J.STOP_PATTERN = Int32Array.from([
 			7,
 			1,
 			1,
@@ -14280,8 +14283,8 @@ var T = function() {
 			1,
 			2,
 			1
-		]), q.MAX_PIXEL_DRIFT = 3, q.MAX_PATTERN_DRIFT = 5, q.SKIPPED_ROW_COUNT_MAX = 25, q.ROW_STEP = 5, q.BARCODE_MIN_HEIGHT = 10;
-		class qt {
+		]), J.MAX_PIXEL_DRIFT = 3, J.MAX_PATTERN_DRIFT = 5, J.SKIPPED_ROW_COUNT_MAX = 25, J.ROW_STEP = 5, J.BARCODE_MIN_HEIGHT = 10;
+		class Kt {
 			constructor(e, t) {
 				if (t.length === 0) throw new l();
 				this.field = e;
@@ -14327,43 +14330,43 @@ var T = function() {
 				let r = new Int32Array(n.length), i = n.length - t.length;
 				p.arraycopy(n, 0, r, 0, i);
 				for (let e = i; e < n.length; e++) r[e] = this.field.add(t[e - i], n[e]);
-				return new qt(this.field, r);
+				return new Kt(this.field, r);
 			}
 			subtract(e) {
 				if (!this.field.equals(e.field)) throw new l("ModulusPolys do not have same ModulusGF field");
 				return e.isZero() ? this : this.add(e.negative());
 			}
 			multiply(e) {
-				return e instanceof qt ? this.multiplyOther(e) : this.multiplyScalar(e);
+				return e instanceof Kt ? this.multiplyOther(e) : this.multiplyScalar(e);
 			}
 			multiplyOther(e) {
 				if (!this.field.equals(e.field)) throw new l("ModulusPolys do not have same ModulusGF field");
-				if (this.isZero() || e.isZero()) return new qt(this.field, new Int32Array([0]));
+				if (this.isZero() || e.isZero()) return new Kt(this.field, new Int32Array([0]));
 				let t = this.coefficients, n = t.length, r = e.coefficients, i = r.length, a = new Int32Array(n + i - 1);
 				for (let e = 0; e < n; e++) {
 					let n = t[e];
 					for (let t = 0; t < i; t++) a[e + t] = this.field.add(a[e + t], this.field.multiply(n, r[t]));
 				}
-				return new qt(this.field, a);
+				return new Kt(this.field, a);
 			}
 			negative() {
 				let e = this.coefficients.length, t = new Int32Array(e);
 				for (let n = 0; n < e; n++) t[n] = this.field.subtract(0, this.coefficients[n]);
-				return new qt(this.field, t);
+				return new Kt(this.field, t);
 			}
 			multiplyScalar(e) {
-				if (e === 0) return new qt(this.field, new Int32Array([0]));
+				if (e === 0) return new Kt(this.field, new Int32Array([0]));
 				if (e === 1) return this;
 				let t = this.coefficients.length, n = new Int32Array(t);
 				for (let r = 0; r < t; r++) n[r] = this.field.multiply(this.coefficients[r], e);
-				return new qt(this.field, n);
+				return new Kt(this.field, n);
 			}
 			multiplyByMonomial(e, t) {
 				if (e < 0) throw new l();
-				if (t === 0) return new qt(this.field, new Int32Array([0]));
+				if (t === 0) return new Kt(this.field, new Int32Array([0]));
 				let n = this.coefficients.length, r = new Int32Array(n + e);
 				for (let e = 0; e < n; e++) r[e] = this.field.multiply(this.coefficients[e], t);
-				return new qt(this.field, r);
+				return new Kt(this.field, r);
 			}
 			toString() {
 				let e = new T();
@@ -14374,7 +14377,7 @@ var T = function() {
 				return e.toString();
 			}
 		}
-		class Jt {
+		class qt {
 			add(e, t) {
 				return (e + t) % this.modulus;
 			}
@@ -14389,7 +14392,7 @@ var T = function() {
 				return this.logTable[e];
 			}
 			inverse(e) {
-				if (e === 0) throw new ge();
+				if (e === 0) throw new A();
 				return this.expTable[this.modulus - this.logTable[e] - 1];
 			}
 			multiply(e, t) {
@@ -14402,13 +14405,13 @@ var T = function() {
 				return e === this;
 			}
 		}
-		class Yt extends Jt {
+		class Jt extends qt {
 			constructor(e, t) {
 				super(), this.modulus = e, this.expTable = new Int32Array(e), this.logTable = new Int32Array(e);
 				let n = 1;
 				for (let r = 0; r < e; r++) this.expTable[r] = n, n = n * t % e;
 				for (let t = 0; t < e - 1; t++) this.logTable[this.expTable[t]] = t;
-				this.zero = new qt(this, new Int32Array([0])), this.one = new qt(this, new Int32Array([1]));
+				this.zero = new Kt(this, new Int32Array([0])), this.one = new Kt(this, new Int32Array([1]));
 			}
 			getZero() {
 				return this.zero;
@@ -14420,16 +14423,16 @@ var T = function() {
 				if (e < 0) throw new l();
 				if (t === 0) return this.zero;
 				let n = new Int32Array(e + 1);
-				return n[0] = t, new qt(this, n);
+				return n[0] = t, new Kt(this, n);
 			}
 		}
-		Yt.PDF417_GF = new Yt(K.NUMBER_OF_CODEWORDS, 3);
-		class Xt {
+		Jt.PDF417_GF = new Jt(q.NUMBER_OF_CODEWORDS, 3);
+		class Yt {
 			constructor() {
-				this.field = Yt.PDF417_GF;
+				this.field = Jt.PDF417_GF;
 			}
 			decode(e, t, n) {
-				let r = new qt(this.field, e), i = new Int32Array(t), a = !1;
+				let r = new Kt(this.field, e), i = new Int32Array(t), a = !1;
 				for (let e = t; e > 0; e--) {
 					let n = r.evaluateAt(this.field.exp(e));
 					i[t - e] = n, n !== 0 && (a = !0);
@@ -14437,10 +14440,10 @@ var T = function() {
 				if (!a) return 0;
 				let o = this.field.getOne();
 				if (n != null) for (let t of n) {
-					let n = this.field.exp(e.length - 1 - t), r = new qt(this.field, new Int32Array([this.field.subtract(0, n), 1]));
+					let n = this.field.exp(e.length - 1 - t), r = new Kt(this.field, new Int32Array([this.field.subtract(0, n), 1]));
 					o = o.multiply(r);
 				}
-				let s = new qt(this.field, i), c = this.runEuclideanAlgorithm(this.field.buildMonomial(t, 1), s, t), l = c[0], u = c[1], f = this.findErrorLocations(l), p = this.findErrorMagnitudes(u, l, f);
+				let s = new Kt(this.field, i), c = this.runEuclideanAlgorithm(this.field.buildMonomial(t, 1), s, t), l = c[0], u = c[1], f = this.findErrorLocations(l), p = this.findErrorMagnitudes(u, l, f);
 				for (let t = 0; t < f.length; t++) {
 					let n = e.length - 1 - this.field.log(f[t]);
 					if (n < 0) throw d.getChecksumInstance();
@@ -14479,7 +14482,7 @@ var T = function() {
 			findErrorMagnitudes(e, t, n) {
 				let r = t.getDegree(), i = new Int32Array(r);
 				for (let e = 1; e <= r; e++) i[r - e] = this.field.multiply(e, t.getCoefficient(e));
-				let a = new qt(this.field, i), o = n.length, s = new Int32Array(o);
+				let a = new Kt(this.field, i), o = n.length, s = new Int32Array(o);
 				for (let t = 0; t < o; t++) {
 					let r = this.field.inverse(n[t]), i = this.field.subtract(0, e.evaluateAt(r)), o = this.field.inverse(a.evaluateAt(r));
 					s[t] = this.field.multiply(i, o);
@@ -14487,36 +14490,36 @@ var T = function() {
 				return s;
 			}
 		}
-		class Zt {
+		class Xt {
 			constructor(e, t, n, r, i) {
-				e instanceof Zt ? this.constructor_2(e) : this.constructor_1(e, t, n, r, i);
+				e instanceof Xt ? this.constructor_2(e) : this.constructor_1(e, t, n, r, i);
 			}
 			constructor_1(e, t, n, r, i) {
 				let a = t == null || n == null, o = r == null || i == null;
-				if (a && o) throw new D();
-				a ? (t = new N(0, r.getY()), n = new N(0, i.getY())) : o && (r = new N(e.getWidth() - 1, t.getY()), i = new N(e.getWidth() - 1, n.getY())), this.image = e, this.topLeft = t, this.bottomLeft = n, this.topRight = r, this.bottomRight = i, this.minX = Math.trunc(Math.min(t.getX(), n.getX())), this.maxX = Math.trunc(Math.max(r.getX(), i.getX())), this.minY = Math.trunc(Math.min(t.getY(), r.getY())), this.maxY = Math.trunc(Math.max(n.getY(), i.getY()));
+				if (a && o) throw new E();
+				a ? (t = new P(0, r.getY()), n = new P(0, i.getY())) : o && (r = new P(e.getWidth() - 1, t.getY()), i = new P(e.getWidth() - 1, n.getY())), this.image = e, this.topLeft = t, this.bottomLeft = n, this.topRight = r, this.bottomRight = i, this.minX = Math.trunc(Math.min(t.getX(), n.getX())), this.maxX = Math.trunc(Math.max(r.getX(), i.getX())), this.minY = Math.trunc(Math.min(t.getY(), r.getY())), this.maxY = Math.trunc(Math.max(n.getY(), i.getY()));
 			}
 			constructor_2(e) {
 				this.image = e.image, this.topLeft = e.getTopLeft(), this.bottomLeft = e.getBottomLeft(), this.topRight = e.getTopRight(), this.bottomRight = e.getBottomRight(), this.minX = e.getMinX(), this.maxX = e.getMaxX(), this.minY = e.getMinY(), this.maxY = e.getMaxY();
 			}
 			static merge(e, t) {
-				return e == null ? t : t == null ? e : new Zt(e.image, e.topLeft, e.bottomLeft, t.topRight, t.bottomRight);
+				return e == null ? t : t == null ? e : new Xt(e.image, e.topLeft, e.bottomLeft, t.topRight, t.bottomRight);
 			}
 			addMissingRows(e, t, n) {
 				let r = this.topLeft, i = this.bottomLeft, a = this.topRight, o = this.bottomRight;
 				if (e > 0) {
 					let t = n ? this.topLeft : this.topRight, i = Math.trunc(t.getY() - e);
 					i < 0 && (i = 0);
-					let o = new N(t.getX(), i);
+					let o = new P(t.getX(), i);
 					n ? r = o : a = o;
 				}
 				if (t > 0) {
 					let e = n ? this.bottomLeft : this.bottomRight, r = Math.trunc(e.getY() + t);
 					r >= this.image.getHeight() && (r = this.image.getHeight() - 1);
-					let a = new N(e.getX(), r);
+					let a = new P(e.getX(), r);
 					n ? i = a : o = a;
 				}
-				return new Zt(this.image, r, i, a, o);
+				return new Xt(this.image, r, i, a, o);
 			}
 			getMinX() {
 				return this.minX;
@@ -14543,7 +14546,7 @@ var T = function() {
 				return this.bottomRight;
 			}
 		}
-		class Qt {
+		class Zt {
 			constructor(e, t, n, r) {
 				this.columnCount = e, this.errorCorrectionLevel = r, this.rowCountUpperPart = t, this.rowCountLowerPart = n, this.rowCount = t + n;
 			}
@@ -14563,7 +14566,7 @@ var T = function() {
 				return this.rowCountLowerPart;
 			}
 		}
-		class $t {
+		class Qt {
 			constructor() {
 				this.buffer = "";
 			}
@@ -14603,20 +14606,20 @@ var T = function() {
 				return e.replace(/%(-)?(0?[0-9]+)?([.][0-9]+)?([#][0-9]+)?([scfpexd%])/g, r);
 			}
 			format(e, ...t) {
-				this.buffer += $t.form(e, t);
+				this.buffer += Qt.form(e, t);
 			}
 			toString() {
 				return this.buffer;
 			}
 		}
-		class en {
+		class $t {
 			constructor(e) {
-				this.boundingBox = new Zt(e), this.codewords = Array(e.getMaxY() - e.getMinY() + 1);
+				this.boundingBox = new Xt(e), this.codewords = Array(e.getMaxY() - e.getMinY() + 1);
 			}
 			getCodewordNearby(e) {
 				let t = this.getCodeword(e);
 				if (t != null) return t;
-				for (let n = 1; n < en.MAX_NEARBY_DISTANCE; n++) {
+				for (let n = 1; n < $t.MAX_NEARBY_DISTANCE; n++) {
 					let r = this.imageRowToCodewordIndex(e) - n;
 					if (r >= 0 && (t = this.codewords[r], t != null) || (r = this.imageRowToCodewordIndex(e) + n, r < this.codewords.length && (t = this.codewords[r], t != null))) return t;
 				}
@@ -14638,7 +14641,7 @@ var T = function() {
 				return this.codewords;
 			}
 			toString() {
-				let e = new $t(), t = 0;
+				let e = new Qt(), t = 0;
 				for (let n of this.codewords) {
 					if (n == null) {
 						e.format("%3d:    |   %n", t++);
@@ -14649,8 +14652,8 @@ var T = function() {
 				return e.toString();
 			}
 		}
-		en.MAX_NEARBY_DISTANCE = 5;
-		class tn {
+		$t.MAX_NEARBY_DISTANCE = 5;
+		class en {
 			constructor() {
 				this.values = /* @__PURE__ */ new Map();
 			}
@@ -14668,13 +14671,13 @@ var T = function() {
 					};
 					i.getValue() > e ? (e = i.getValue(), t = [], t.push(i.getKey())) : i.getValue() === e && t.push(i.getKey());
 				}
-				return K.toIntArray(t);
+				return q.toIntArray(t);
 			}
 			getConfidence(e) {
 				return this.values.get(e);
 			}
 		}
-		class nn extends en {
+		class tn extends $t {
 			constructor(e, t) {
 				super(e), this._isLeft = t;
 			}
@@ -14723,7 +14726,7 @@ var T = function() {
 				}
 			}
 			getBarcodeMetadata() {
-				let e = this.getCodewords(), t = new tn(), n = new tn(), r = new tn(), i = new tn();
+				let e = this.getCodewords(), t = new en(), n = new en(), r = new en(), i = new en();
 				for (let a of e) {
 					if (a == null) continue;
 					a.setRowNumberAsRowIndicatorColumn();
@@ -14738,8 +14741,8 @@ var T = function() {
 						case 2: t.setValue(e + 1);
 					}
 				}
-				if (t.getValue().length === 0 || n.getValue().length === 0 || r.getValue().length === 0 || i.getValue().length === 0 || t.getValue()[0] < 1 || n.getValue()[0] + r.getValue()[0] < K.MIN_ROWS_IN_BARCODE || n.getValue()[0] + r.getValue()[0] > K.MAX_ROWS_IN_BARCODE) return null;
-				let a = new Qt(t.getValue()[0], n.getValue()[0], r.getValue()[0], i.getValue()[0]);
+				if (t.getValue().length === 0 || n.getValue().length === 0 || r.getValue().length === 0 || i.getValue().length === 0 || t.getValue()[0] < 1 || n.getValue()[0] + r.getValue()[0] < q.MIN_ROWS_IN_BARCODE || n.getValue()[0] + r.getValue()[0] > q.MAX_ROWS_IN_BARCODE) return null;
+				let a = new Zt(t.getValue()[0], n.getValue()[0], r.getValue()[0], i.getValue()[0]);
 				return this.removeIncorrectCodewords(e, a), a;
 			}
 			removeIncorrectCodewords(e, t) {
@@ -14769,13 +14772,13 @@ var T = function() {
 				return "IsLeft: " + this._isLeft + "\n" + super.toString();
 			}
 		}
-		class rn {
+		class nn {
 			constructor(e, t) {
 				this.ADJUST_ROW_NUMBER_SKIP = 2, this.barcodeMetadata = e, this.barcodeColumnCount = e.getColumnCount(), this.boundingBox = t, this.detectionResultColumns = Array(this.barcodeColumnCount + 2);
 			}
 			getDetectionResultColumns() {
 				this.adjustIndicatorColumnRowNumbers(this.detectionResultColumns[0]), this.adjustIndicatorColumnRowNumbers(this.detectionResultColumns[this.barcodeColumnCount + 1]);
-				let e = K.MAX_CODEWORDS_IN_BARCODE, t;
+				let e = q.MAX_CODEWORDS_IN_BARCODE, t;
 				do
 					t = e, e = this.adjustRowNumbersAndGetCount();
 				while (e > 0 && e < t);
@@ -14812,7 +14815,7 @@ var T = function() {
 					let r = t[n].getRowNumber(), i = 0;
 					for (let t = this.barcodeColumnCount + 1; t > 0 && i < this.ADJUST_ROW_NUMBER_SKIP; t--) {
 						let a = this.detectionResultColumns[t].getCodewords()[n];
-						a != null && (i = rn.adjustRowNumberIfValid(r, i, a), a.hasValidRowNumber() || e++);
+						a != null && (i = nn.adjustRowNumberIfValid(r, i, a), a.hasValidRowNumber() || e++);
 					}
 				}
 				return e;
@@ -14825,7 +14828,7 @@ var T = function() {
 					let r = t[n].getRowNumber(), i = 0;
 					for (let t = 1; t < this.barcodeColumnCount + 1 && i < this.ADJUST_ROW_NUMBER_SKIP; t++) {
 						let a = this.detectionResultColumns[t].getCodewords()[n];
-						a != null && (i = rn.adjustRowNumberIfValid(r, i, a), a.hasValidRowNumber() || e++);
+						a != null && (i = nn.adjustRowNumberIfValid(r, i, a), a.hasValidRowNumber() || e++);
 					}
 				}
 				return e;
@@ -14839,7 +14842,7 @@ var T = function() {
 				this.detectionResultColumns[e + 1] != null && (a = this.detectionResultColumns[e + 1].getCodewords());
 				let o = Array(14);
 				o[2] = i[t], o[3] = a[t], t > 0 && (o[0] = n[t - 1], o[4] = i[t - 1], o[5] = a[t - 1]), t > 1 && (o[8] = n[t - 2], o[10] = i[t - 2], o[11] = a[t - 2]), t < n.length - 1 && (o[1] = n[t + 1], o[6] = i[t + 1], o[7] = a[t + 1]), t < n.length - 2 && (o[9] = n[t + 2], o[12] = i[t + 2], o[13] = a[t + 2]);
-				for (let e of o) if (rn.adjustRowNumber(r, e)) return;
+				for (let e of o) if (nn.adjustRowNumber(r, e)) return;
 			}
 			static adjustRowNumber(e, t) {
 				return t == null ? !1 : t.hasValidRowNumber() && t.getBucket() === e.getBucket() ? (e.setRowNumber(t.getRowNumber()), !0) : !1;
@@ -14868,7 +14871,7 @@ var T = function() {
 			toString() {
 				let e = this.detectionResultColumns[0];
 				e ?? (e = this.detectionResultColumns[this.barcodeColumnCount + 1]);
-				let t = new $t();
+				let t = new Qt();
 				for (let n = 0; n < e.getCodewords().length; n++) {
 					t.format("CW %3d:", n);
 					for (let e = 0; e < this.barcodeColumnCount + 2; e++) {
@@ -14888,15 +14891,15 @@ var T = function() {
 				return t.toString();
 			}
 		}
-		class an {
+		class rn {
 			constructor(e, t, n, r) {
-				this.rowNumber = an.BARCODE_ROW_UNKNOWN, this.startX = Math.trunc(e), this.endX = Math.trunc(t), this.bucket = Math.trunc(n), this.value = Math.trunc(r);
+				this.rowNumber = rn.BARCODE_ROW_UNKNOWN, this.startX = Math.trunc(e), this.endX = Math.trunc(t), this.bucket = Math.trunc(n), this.value = Math.trunc(r);
 			}
 			hasValidRowNumber() {
 				return this.isValidRowNumber(this.rowNumber);
 			}
 			isValidRowNumber(e) {
-				return e !== an.BARCODE_ROW_UNKNOWN && this.bucket === e % 3 * 3;
+				return e !== rn.BARCODE_ROW_UNKNOWN && this.bucket === e % 3 * 3;
 			}
 			setRowNumberAsRowIndicatorColumn() {
 				this.rowNumber = Math.trunc(Math.trunc(this.value / 30) * 3 + Math.trunc(this.bucket / 3));
@@ -14926,34 +14929,34 @@ var T = function() {
 				return this.rowNumber + "|" + this.value;
 			}
 		}
-		an.BARCODE_ROW_UNKNOWN = -1;
-		class on {
+		rn.BARCODE_ROW_UNKNOWN = -1;
+		class an {
 			static initialize() {
-				for (let e = 0; e < K.SYMBOL_TABLE.length; e++) {
-					let t = K.SYMBOL_TABLE[e], n = t & 1;
-					for (let r = 0; r < K.BARS_IN_MODULE; r++) {
+				for (let e = 0; e < q.SYMBOL_TABLE.length; e++) {
+					let t = q.SYMBOL_TABLE[e], n = t & 1;
+					for (let r = 0; r < q.BARS_IN_MODULE; r++) {
 						let i = 0;
 						for (; (t & 1) === n;) i += 1, t >>= 1;
-						n = t & 1, on.RATIOS_TABLE[e] || (on.RATIOS_TABLE[e] = Array(K.BARS_IN_MODULE)), on.RATIOS_TABLE[e][K.BARS_IN_MODULE - r - 1] = Math.fround(i / K.MODULES_IN_CODEWORD);
+						n = t & 1, an.RATIOS_TABLE[e] || (an.RATIOS_TABLE[e] = Array(q.BARS_IN_MODULE)), an.RATIOS_TABLE[e][q.BARS_IN_MODULE - r - 1] = Math.fround(i / q.MODULES_IN_CODEWORD);
 					}
 				}
 				this.bSymbolTableReady = !0;
 			}
 			static getDecodedValue(e) {
-				let t = on.getDecodedCodewordValue(on.sampleBitCounts(e));
-				return t === -1 ? on.getClosestDecodedValue(e) : t;
+				let t = an.getDecodedCodewordValue(an.sampleBitCounts(e));
+				return t === -1 ? an.getClosestDecodedValue(e) : t;
 			}
 			static sampleBitCounts(e) {
-				let t = M.sum(e), n = new Int32Array(K.BARS_IN_MODULE), r = 0, i = 0;
-				for (let a = 0; a < K.MODULES_IN_CODEWORD; a++) {
-					let o = t / (2 * K.MODULES_IN_CODEWORD) + a * t / K.MODULES_IN_CODEWORD;
+				let t = N.sum(e), n = new Int32Array(q.BARS_IN_MODULE), r = 0, i = 0;
+				for (let a = 0; a < q.MODULES_IN_CODEWORD; a++) {
+					let o = t / (2 * q.MODULES_IN_CODEWORD) + a * t / q.MODULES_IN_CODEWORD;
 					i + e[r] <= o && (i += e[r], r++), n[r]++;
 				}
 				return n;
 			}
 			static getDecodedCodewordValue(e) {
-				let t = on.getBitValue(e);
-				return K.getCodeword(t) === -1 ? -1 : t;
+				let t = an.getBitValue(e);
+				return q.getCodeword(t) === -1 ? -1 : t;
 			}
 			static getBitValue(e) {
 				let t = 0;
@@ -14961,23 +14964,23 @@ var T = function() {
 				return Math.trunc(t);
 			}
 			static getClosestDecodedValue(e) {
-				let t = M.sum(e), n = Array(K.BARS_IN_MODULE);
+				let t = N.sum(e), n = Array(q.BARS_IN_MODULE);
 				if (t > 1) for (let r = 0; r < n.length; r++) n[r] = Math.fround(e[r] / t);
-				let r = xe.MAX_VALUE, i = -1;
-				this.bSymbolTableReady || on.initialize();
-				for (let e = 0; e < on.RATIOS_TABLE.length; e++) {
-					let t = 0, a = on.RATIOS_TABLE[e];
-					for (let e = 0; e < K.BARS_IN_MODULE; e++) {
+				let r = be.MAX_VALUE, i = -1;
+				this.bSymbolTableReady || an.initialize();
+				for (let e = 0; e < an.RATIOS_TABLE.length; e++) {
+					let t = 0, a = an.RATIOS_TABLE[e];
+					for (let e = 0; e < q.BARS_IN_MODULE; e++) {
 						let i = Math.fround(a[e] - n[e]);
 						if (t += Math.fround(i * i), t >= r) break;
 					}
-					t < r && (r = t, i = K.SYMBOL_TABLE[e]);
+					t < r && (r = t, i = q.SYMBOL_TABLE[e]);
 				}
 				return i;
 			}
 		}
-		on.bSymbolTableReady = !1, on.RATIOS_TABLE = Array(K.SYMBOL_TABLE.length).map((e) => e = Array(K.BARS_IN_MODULE));
-		class sn {
+		an.bSymbolTableReady = !1, an.RATIOS_TABLE = Array(q.SYMBOL_TABLE.length).map((e) => e = Array(q.BARS_IN_MODULE));
+		class on {
 			constructor() {
 				this.segmentCount = -1, this.fileSize = -1, this.timestamp = -1, this.checksum = -1;
 			}
@@ -15048,27 +15051,27 @@ var T = function() {
 				this.timestamp = e;
 			}
 		}
-		class cn {
+		class sn {
 			static parseLong(e, t = void 0) {
 				return parseInt(e, t);
 			}
 		}
-		class ln extends s {}
-		ln.kind = "NullPointerException";
-		class un {
+		class cn extends s {}
+		cn.kind = "NullPointerException";
+		class ln {
 			writeBytes(e) {
 				this.writeBytesOffset(e, 0, e.length);
 			}
 			writeBytesOffset(e, t, n) {
-				if (e == null) throw new ln();
+				if (e == null) throw new cn();
 				if (t < 0 || t > e.length || n < 0 || t + n > e.length || t + n < 0) throw new m();
 				if (n !== 0) for (let r = 0; r < n; r++) this.write(e[t + r]);
 			}
 			flush() {}
 			close() {}
 		}
-		class dn extends s {}
-		class fn extends un {
+		class un extends s {}
+		class dn extends ln {
 			constructor(e = 32) {
 				if (super(), this.count = 0, e < 0) throw new l("Negative initial size: " + e);
 				this.buf = new Uint8Array(e);
@@ -15079,7 +15082,7 @@ var T = function() {
 			grow(e) {
 				let t = this.buf.length << 1;
 				if (t - e < 0 && (t = e), t < 0) {
-					if (e < 0) throw new dn();
+					if (e < 0) throw new un();
 					t = _.MAX_VALUE;
 				}
 				this.buf = g.copyOfUint8Array(this.buf, t);
@@ -15117,64 +15120,64 @@ var T = function() {
 			}
 			close() {}
 		}
-		var J;
+		var Y;
 		(function(e) {
 			e[e.ALPHA = 0] = "ALPHA", e[e.LOWER = 1] = "LOWER", e[e.MIXED = 2] = "MIXED", e[e.PUNCT = 3] = "PUNCT", e[e.ALPHA_SHIFT = 4] = "ALPHA_SHIFT", e[e.PUNCT_SHIFT = 5] = "PUNCT_SHIFT";
-		})(J || (J = {}));
-		function pn() {
+		})(Y || (Y = {}));
+		function fn() {
 			if (typeof window < "u") return window.BigInt || null;
 			if (typeof global < "u") return global.BigInt || null;
 			if (typeof self < "u") return self.BigInt || null;
 			throw Error("Can't search globals for BigInt!");
 		}
-		let mn;
-		function hn(e) {
-			if (mn === void 0 && (mn = pn()), mn === null) throw Error("BigInt is not supported!");
-			return mn(e);
+		let pn;
+		function mn(e) {
+			if (pn === void 0 && (pn = fn()), pn === null) throw Error("BigInt is not supported!");
+			return pn(e);
 		}
-		function gn() {
+		function hn() {
 			let e = [];
-			e[0] = hn(1);
-			let t = hn(900);
+			e[0] = mn(1);
+			let t = mn(900);
 			e[1] = t;
 			for (let n = 2; n < 16; n++) e[n] = e[n - 1] * t;
 			return e;
 		}
-		class Y {
+		class X {
 			static decode(e, t) {
 				let n = new T(""), r = C.ISO8859_1;
 				n.enableDecoding(r);
-				let i = 1, a = e[i++], o = new sn();
+				let i = 1, a = e[i++], o = new on();
 				for (; i < e[0];) {
 					switch (a) {
-						case Y.TEXT_COMPACTION_MODE_LATCH:
-							i = Y.textCompaction(e, i, n);
+						case X.TEXT_COMPACTION_MODE_LATCH:
+							i = X.textCompaction(e, i, n);
 							break;
-						case Y.BYTE_COMPACTION_MODE_LATCH:
-						case Y.BYTE_COMPACTION_MODE_LATCH_6:
-							i = Y.byteCompaction(a, e, r, i, n);
+						case X.BYTE_COMPACTION_MODE_LATCH:
+						case X.BYTE_COMPACTION_MODE_LATCH_6:
+							i = X.byteCompaction(a, e, r, i, n);
 							break;
-						case Y.MODE_SHIFT_TO_BYTE_COMPACTION_MODE:
+						case X.MODE_SHIFT_TO_BYTE_COMPACTION_MODE:
 							n.append(e[i++]);
 							break;
-						case Y.NUMERIC_COMPACTION_MODE_LATCH:
-							i = Y.numericCompaction(e, i, n);
+						case X.NUMERIC_COMPACTION_MODE_LATCH:
+							i = X.numericCompaction(e, i, n);
 							break;
-						case Y.ECI_CHARSET:
+						case X.ECI_CHARSET:
 							C.getCharacterSetECIByValue(e[i++]);
 							break;
-						case Y.ECI_GENERAL_PURPOSE:
+						case X.ECI_GENERAL_PURPOSE:
 							i += 2;
 							break;
-						case Y.ECI_USER_DEFINED:
+						case X.ECI_USER_DEFINED:
 							i++;
 							break;
-						case Y.BEGIN_MACRO_PDF417_CONTROL_BLOCK:
-							i = Y.decodeMacroBlock(e, i, o);
+						case X.BEGIN_MACRO_PDF417_CONTROL_BLOCK:
+							i = X.decodeMacroBlock(e, i, o);
 							break;
-						case Y.BEGIN_MACRO_PDF417_OPTIONAL_FIELD:
-						case Y.MACRO_PDF417_TERMINATOR: throw new x();
-						default: i--, i = Y.textCompaction(e, i, n);
+						case X.BEGIN_MACRO_PDF417_OPTIONAL_FIELD:
+						case X.MACRO_PDF417_TERMINATOR: throw new x();
+						default: i--, i = X.textCompaction(e, i, n);
 					}
 					if (i < e.length) a = e[i++];
 					else throw x.getFormatInstance();
@@ -15184,48 +15187,48 @@ var T = function() {
 				return s.setOther(o), s;
 			}
 			static decodeMacroBlock(e, t, n) {
-				if (t + Y.NUMBER_OF_SEQUENCE_CODEWORDS > e[0]) throw x.getFormatInstance();
-				let r = new Int32Array(Y.NUMBER_OF_SEQUENCE_CODEWORDS);
-				for (let n = 0; n < Y.NUMBER_OF_SEQUENCE_CODEWORDS; n++, t++) r[n] = e[t];
-				n.setSegmentIndex(_.parseInt(Y.decodeBase900toBase10(r, Y.NUMBER_OF_SEQUENCE_CODEWORDS)));
+				if (t + X.NUMBER_OF_SEQUENCE_CODEWORDS > e[0]) throw x.getFormatInstance();
+				let r = new Int32Array(X.NUMBER_OF_SEQUENCE_CODEWORDS);
+				for (let n = 0; n < X.NUMBER_OF_SEQUENCE_CODEWORDS; n++, t++) r[n] = e[t];
+				n.setSegmentIndex(_.parseInt(X.decodeBase900toBase10(r, X.NUMBER_OF_SEQUENCE_CODEWORDS)));
 				let i = new T();
-				t = Y.textCompaction(e, t, i), n.setFileId(i.toString());
+				t = X.textCompaction(e, t, i), n.setFileId(i.toString());
 				let a = -1;
-				for (e[t] === Y.BEGIN_MACRO_PDF417_OPTIONAL_FIELD && (a = t + 1); t < e[0];) switch (e[t]) {
-					case Y.BEGIN_MACRO_PDF417_OPTIONAL_FIELD:
+				for (e[t] === X.BEGIN_MACRO_PDF417_OPTIONAL_FIELD && (a = t + 1); t < e[0];) switch (e[t]) {
+					case X.BEGIN_MACRO_PDF417_OPTIONAL_FIELD:
 						switch (t++, e[t]) {
-							case Y.MACRO_PDF417_OPTIONAL_FIELD_FILE_NAME:
+							case X.MACRO_PDF417_OPTIONAL_FIELD_FILE_NAME:
 								let r = new T();
-								t = Y.textCompaction(e, t + 1, r), n.setFileName(r.toString());
+								t = X.textCompaction(e, t + 1, r), n.setFileName(r.toString());
 								break;
-							case Y.MACRO_PDF417_OPTIONAL_FIELD_SENDER:
+							case X.MACRO_PDF417_OPTIONAL_FIELD_SENDER:
 								let i = new T();
-								t = Y.textCompaction(e, t + 1, i), n.setSender(i.toString());
+								t = X.textCompaction(e, t + 1, i), n.setSender(i.toString());
 								break;
-							case Y.MACRO_PDF417_OPTIONAL_FIELD_ADDRESSEE:
+							case X.MACRO_PDF417_OPTIONAL_FIELD_ADDRESSEE:
 								let a = new T();
-								t = Y.textCompaction(e, t + 1, a), n.setAddressee(a.toString());
+								t = X.textCompaction(e, t + 1, a), n.setAddressee(a.toString());
 								break;
-							case Y.MACRO_PDF417_OPTIONAL_FIELD_SEGMENT_COUNT:
+							case X.MACRO_PDF417_OPTIONAL_FIELD_SEGMENT_COUNT:
 								let o = new T();
-								t = Y.numericCompaction(e, t + 1, o), n.setSegmentCount(_.parseInt(o.toString()));
+								t = X.numericCompaction(e, t + 1, o), n.setSegmentCount(_.parseInt(o.toString()));
 								break;
-							case Y.MACRO_PDF417_OPTIONAL_FIELD_TIME_STAMP:
+							case X.MACRO_PDF417_OPTIONAL_FIELD_TIME_STAMP:
 								let s = new T();
-								t = Y.numericCompaction(e, t + 1, s), n.setTimestamp(cn.parseLong(s.toString()));
+								t = X.numericCompaction(e, t + 1, s), n.setTimestamp(sn.parseLong(s.toString()));
 								break;
-							case Y.MACRO_PDF417_OPTIONAL_FIELD_CHECKSUM:
+							case X.MACRO_PDF417_OPTIONAL_FIELD_CHECKSUM:
 								let c = new T();
-								t = Y.numericCompaction(e, t + 1, c), n.setChecksum(_.parseInt(c.toString()));
+								t = X.numericCompaction(e, t + 1, c), n.setChecksum(_.parseInt(c.toString()));
 								break;
-							case Y.MACRO_PDF417_OPTIONAL_FIELD_FILE_SIZE:
+							case X.MACRO_PDF417_OPTIONAL_FIELD_FILE_SIZE:
 								let l = new T();
-								t = Y.numericCompaction(e, t + 1, l), n.setFileSize(cn.parseLong(l.toString()));
+								t = X.numericCompaction(e, t + 1, l), n.setFileSize(sn.parseLong(l.toString()));
 								break;
 							default: throw x.getFormatInstance();
 						}
 						break;
-					case Y.MACRO_PDF417_TERMINATOR:
+					case X.MACRO_PDF417_TERMINATOR:
 						t++, n.setLastSegment(!0);
 						break;
 					default: throw x.getFormatInstance();
@@ -15240,167 +15243,167 @@ var T = function() {
 				let r = new Int32Array((e[0] - t) * 2), i = new Int32Array((e[0] - t) * 2), a = 0, o = !1;
 				for (; t < e[0] && !o;) {
 					let n = e[t++];
-					if (n < Y.TEXT_COMPACTION_MODE_LATCH) r[a] = n / 30, r[a + 1] = n % 30, a += 2;
+					if (n < X.TEXT_COMPACTION_MODE_LATCH) r[a] = n / 30, r[a + 1] = n % 30, a += 2;
 					else switch (n) {
-						case Y.TEXT_COMPACTION_MODE_LATCH:
-							r[a++] = Y.TEXT_COMPACTION_MODE_LATCH;
+						case X.TEXT_COMPACTION_MODE_LATCH:
+							r[a++] = X.TEXT_COMPACTION_MODE_LATCH;
 							break;
-						case Y.BYTE_COMPACTION_MODE_LATCH:
-						case Y.BYTE_COMPACTION_MODE_LATCH_6:
-						case Y.NUMERIC_COMPACTION_MODE_LATCH:
-						case Y.BEGIN_MACRO_PDF417_CONTROL_BLOCK:
-						case Y.BEGIN_MACRO_PDF417_OPTIONAL_FIELD:
-						case Y.MACRO_PDF417_TERMINATOR:
+						case X.BYTE_COMPACTION_MODE_LATCH:
+						case X.BYTE_COMPACTION_MODE_LATCH_6:
+						case X.NUMERIC_COMPACTION_MODE_LATCH:
+						case X.BEGIN_MACRO_PDF417_CONTROL_BLOCK:
+						case X.BEGIN_MACRO_PDF417_OPTIONAL_FIELD:
+						case X.MACRO_PDF417_TERMINATOR:
 							t--, o = !0;
 							break;
-						case Y.MODE_SHIFT_TO_BYTE_COMPACTION_MODE: r[a] = Y.MODE_SHIFT_TO_BYTE_COMPACTION_MODE, n = e[t++], i[a] = n, a++;
+						case X.MODE_SHIFT_TO_BYTE_COMPACTION_MODE: r[a] = X.MODE_SHIFT_TO_BYTE_COMPACTION_MODE, n = e[t++], i[a] = n, a++;
 					}
 				}
-				return Y.decodeTextCompaction(r, i, a, n), t;
+				return X.decodeTextCompaction(r, i, a, n), t;
 			}
 			static decodeTextCompaction(e, t, n, r) {
-				let i = J.ALPHA, a = J.ALPHA, o = 0;
+				let i = Y.ALPHA, a = Y.ALPHA, o = 0;
 				for (; o < n;) {
 					let n = e[o], s = "";
 					switch (i) {
-						case J.ALPHA:
+						case Y.ALPHA:
 							if (n < 26) s = String.fromCharCode(65 + n);
 							else switch (n) {
 								case 26:
 									s = " ";
 									break;
-								case Y.LL:
-									i = J.LOWER;
+								case X.LL:
+									i = Y.LOWER;
 									break;
-								case Y.ML:
-									i = J.MIXED;
+								case X.ML:
+									i = Y.MIXED;
 									break;
-								case Y.PS:
-									a = i, i = J.PUNCT_SHIFT;
+								case X.PS:
+									a = i, i = Y.PUNCT_SHIFT;
 									break;
-								case Y.MODE_SHIFT_TO_BYTE_COMPACTION_MODE:
+								case X.MODE_SHIFT_TO_BYTE_COMPACTION_MODE:
 									r.append(t[o]);
 									break;
-								case Y.TEXT_COMPACTION_MODE_LATCH: i = J.ALPHA;
+								case X.TEXT_COMPACTION_MODE_LATCH: i = Y.ALPHA;
 							}
 							break;
-						case J.LOWER:
+						case Y.LOWER:
 							if (n < 26) s = String.fromCharCode(97 + n);
 							else switch (n) {
 								case 26:
 									s = " ";
 									break;
-								case Y.AS:
-									a = i, i = J.ALPHA_SHIFT;
+								case X.AS:
+									a = i, i = Y.ALPHA_SHIFT;
 									break;
-								case Y.ML:
-									i = J.MIXED;
+								case X.ML:
+									i = Y.MIXED;
 									break;
-								case Y.PS:
-									a = i, i = J.PUNCT_SHIFT;
+								case X.PS:
+									a = i, i = Y.PUNCT_SHIFT;
 									break;
-								case Y.MODE_SHIFT_TO_BYTE_COMPACTION_MODE:
+								case X.MODE_SHIFT_TO_BYTE_COMPACTION_MODE:
 									r.append(t[o]);
 									break;
-								case Y.TEXT_COMPACTION_MODE_LATCH: i = J.ALPHA;
+								case X.TEXT_COMPACTION_MODE_LATCH: i = Y.ALPHA;
 							}
 							break;
-						case J.MIXED:
-							if (n < Y.PL) s = Y.MIXED_CHARS[n];
+						case Y.MIXED:
+							if (n < X.PL) s = X.MIXED_CHARS[n];
 							else switch (n) {
-								case Y.PL:
-									i = J.PUNCT;
+								case X.PL:
+									i = Y.PUNCT;
 									break;
 								case 26:
 									s = " ";
 									break;
-								case Y.LL:
-									i = J.LOWER;
+								case X.LL:
+									i = Y.LOWER;
 									break;
-								case Y.AL:
-									i = J.ALPHA;
+								case X.AL:
+									i = Y.ALPHA;
 									break;
-								case Y.PS:
-									a = i, i = J.PUNCT_SHIFT;
+								case X.PS:
+									a = i, i = Y.PUNCT_SHIFT;
 									break;
-								case Y.MODE_SHIFT_TO_BYTE_COMPACTION_MODE:
+								case X.MODE_SHIFT_TO_BYTE_COMPACTION_MODE:
 									r.append(t[o]);
 									break;
-								case Y.TEXT_COMPACTION_MODE_LATCH: i = J.ALPHA;
+								case X.TEXT_COMPACTION_MODE_LATCH: i = Y.ALPHA;
 							}
 							break;
-						case J.PUNCT:
-							if (n < Y.PAL) s = Y.PUNCT_CHARS[n];
+						case Y.PUNCT:
+							if (n < X.PAL) s = X.PUNCT_CHARS[n];
 							else switch (n) {
-								case Y.PAL:
-									i = J.ALPHA;
+								case X.PAL:
+									i = Y.ALPHA;
 									break;
-								case Y.MODE_SHIFT_TO_BYTE_COMPACTION_MODE:
+								case X.MODE_SHIFT_TO_BYTE_COMPACTION_MODE:
 									r.append(t[o]);
 									break;
-								case Y.TEXT_COMPACTION_MODE_LATCH: i = J.ALPHA;
+								case X.TEXT_COMPACTION_MODE_LATCH: i = Y.ALPHA;
 							}
 							break;
-						case J.ALPHA_SHIFT:
+						case Y.ALPHA_SHIFT:
 							if (i = a, n < 26) s = String.fromCharCode(65 + n);
 							else switch (n) {
 								case 26:
 									s = " ";
 									break;
-								case Y.TEXT_COMPACTION_MODE_LATCH: i = J.ALPHA;
+								case X.TEXT_COMPACTION_MODE_LATCH: i = Y.ALPHA;
 							}
 							break;
-						case J.PUNCT_SHIFT: if (i = a, n < Y.PAL) s = Y.PUNCT_CHARS[n];
+						case Y.PUNCT_SHIFT: if (i = a, n < X.PAL) s = X.PUNCT_CHARS[n];
 						else switch (n) {
-							case Y.PAL:
-								i = J.ALPHA;
+							case X.PAL:
+								i = Y.ALPHA;
 								break;
-							case Y.MODE_SHIFT_TO_BYTE_COMPACTION_MODE:
+							case X.MODE_SHIFT_TO_BYTE_COMPACTION_MODE:
 								r.append(t[o]);
 								break;
-							case Y.TEXT_COMPACTION_MODE_LATCH: i = J.ALPHA;
+							case X.TEXT_COMPACTION_MODE_LATCH: i = Y.ALPHA;
 						}
 					}
 					s !== "" && r.append(s), o++;
 				}
 			}
 			static byteCompaction(e, t, n, r, i) {
-				let a = new fn(), o = 0, s = 0, c = !1;
+				let a = new dn(), o = 0, s = 0, c = !1;
 				switch (e) {
-					case Y.BYTE_COMPACTION_MODE_LATCH:
+					case X.BYTE_COMPACTION_MODE_LATCH:
 						let e = /* @__PURE__ */ new Int32Array(6), n = t[r++];
 						for (; r < t[0] && !c;) switch (e[o++] = n, s = 900 * s + n, n = t[r++], n) {
-							case Y.TEXT_COMPACTION_MODE_LATCH:
-							case Y.BYTE_COMPACTION_MODE_LATCH:
-							case Y.NUMERIC_COMPACTION_MODE_LATCH:
-							case Y.BYTE_COMPACTION_MODE_LATCH_6:
-							case Y.BEGIN_MACRO_PDF417_CONTROL_BLOCK:
-							case Y.BEGIN_MACRO_PDF417_OPTIONAL_FIELD:
-							case Y.MACRO_PDF417_TERMINATOR:
+							case X.TEXT_COMPACTION_MODE_LATCH:
+							case X.BYTE_COMPACTION_MODE_LATCH:
+							case X.NUMERIC_COMPACTION_MODE_LATCH:
+							case X.BYTE_COMPACTION_MODE_LATCH_6:
+							case X.BEGIN_MACRO_PDF417_CONTROL_BLOCK:
+							case X.BEGIN_MACRO_PDF417_OPTIONAL_FIELD:
+							case X.MACRO_PDF417_TERMINATOR:
 								r--, c = !0;
 								break;
 							default: if (o % 5 == 0 && o > 0) {
-								for (let e = 0; e < 6; ++e) a.write(Number(hn(s) >> hn(8 * (5 - e))));
+								for (let e = 0; e < 6; ++e) a.write(Number(mn(s) >> mn(8 * (5 - e))));
 								s = 0, o = 0;
 							}
 						}
-						r === t[0] && n < Y.TEXT_COMPACTION_MODE_LATCH && (e[o++] = n);
+						r === t[0] && n < X.TEXT_COMPACTION_MODE_LATCH && (e[o++] = n);
 						for (let t = 0; t < o; t++) a.write(e[t]);
 						break;
-					case Y.BYTE_COMPACTION_MODE_LATCH_6: for (; r < t[0] && !c;) {
+					case X.BYTE_COMPACTION_MODE_LATCH_6: for (; r < t[0] && !c;) {
 						let e = t[r++];
-						if (e < Y.TEXT_COMPACTION_MODE_LATCH) o++, s = 900 * s + e;
+						if (e < X.TEXT_COMPACTION_MODE_LATCH) o++, s = 900 * s + e;
 						else switch (e) {
-							case Y.TEXT_COMPACTION_MODE_LATCH:
-							case Y.BYTE_COMPACTION_MODE_LATCH:
-							case Y.NUMERIC_COMPACTION_MODE_LATCH:
-							case Y.BYTE_COMPACTION_MODE_LATCH_6:
-							case Y.BEGIN_MACRO_PDF417_CONTROL_BLOCK:
-							case Y.BEGIN_MACRO_PDF417_OPTIONAL_FIELD:
-							case Y.MACRO_PDF417_TERMINATOR: r--, c = !0;
+							case X.TEXT_COMPACTION_MODE_LATCH:
+							case X.BYTE_COMPACTION_MODE_LATCH:
+							case X.NUMERIC_COMPACTION_MODE_LATCH:
+							case X.BYTE_COMPACTION_MODE_LATCH_6:
+							case X.BEGIN_MACRO_PDF417_CONTROL_BLOCK:
+							case X.BEGIN_MACRO_PDF417_OPTIONAL_FIELD:
+							case X.MACRO_PDF417_TERMINATOR: r--, c = !0;
 						}
 						if (o % 5 == 0 && o > 0) {
-							for (let e = 0; e < 6; ++e) a.write(Number(hn(s) >> hn(8 * (5 - e))));
+							for (let e = 0; e < 6; ++e) a.write(Number(mn(s) >> mn(8 * (5 - e))));
 							s = 0, o = 0;
 						}
 					}
@@ -15408,37 +15411,37 @@ var T = function() {
 				return i.append(te.decode(a.toByteArray(), n)), r;
 			}
 			static numericCompaction(e, t, n) {
-				let r = 0, i = !1, a = new Int32Array(Y.MAX_NUMERIC_CODEWORDS);
+				let r = 0, i = !1, a = new Int32Array(X.MAX_NUMERIC_CODEWORDS);
 				for (; t < e[0] && !i;) {
 					let o = e[t++];
-					if (t === e[0] && (i = !0), o < Y.TEXT_COMPACTION_MODE_LATCH) a[r] = o, r++;
+					if (t === e[0] && (i = !0), o < X.TEXT_COMPACTION_MODE_LATCH) a[r] = o, r++;
 					else switch (o) {
-						case Y.TEXT_COMPACTION_MODE_LATCH:
-						case Y.BYTE_COMPACTION_MODE_LATCH:
-						case Y.BYTE_COMPACTION_MODE_LATCH_6:
-						case Y.BEGIN_MACRO_PDF417_CONTROL_BLOCK:
-						case Y.BEGIN_MACRO_PDF417_OPTIONAL_FIELD:
-						case Y.MACRO_PDF417_TERMINATOR: t--, i = !0;
+						case X.TEXT_COMPACTION_MODE_LATCH:
+						case X.BYTE_COMPACTION_MODE_LATCH:
+						case X.BYTE_COMPACTION_MODE_LATCH_6:
+						case X.BEGIN_MACRO_PDF417_CONTROL_BLOCK:
+						case X.BEGIN_MACRO_PDF417_OPTIONAL_FIELD:
+						case X.MACRO_PDF417_TERMINATOR: t--, i = !0;
 					}
-					(r % Y.MAX_NUMERIC_CODEWORDS === 0 || o === Y.NUMERIC_COMPACTION_MODE_LATCH || i) && r > 0 && (n.append(Y.decodeBase900toBase10(a, r)), r = 0);
+					(r % X.MAX_NUMERIC_CODEWORDS === 0 || o === X.NUMERIC_COMPACTION_MODE_LATCH || i) && r > 0 && (n.append(X.decodeBase900toBase10(a, r)), r = 0);
 				}
 				return t;
 			}
 			static decodeBase900toBase10(e, t) {
-				let n = hn(0);
-				for (let r = 0; r < t; r++) n += Y.EXP900[t - r - 1] * hn(e[r]);
+				let n = mn(0);
+				for (let r = 0; r < t; r++) n += X.EXP900[t - r - 1] * mn(e[r]);
 				let r = n.toString();
 				if (r.charAt(0) !== "1") throw new x();
 				return r.substring(1);
 			}
 		}
-		Y.TEXT_COMPACTION_MODE_LATCH = 900, Y.BYTE_COMPACTION_MODE_LATCH = 901, Y.NUMERIC_COMPACTION_MODE_LATCH = 902, Y.BYTE_COMPACTION_MODE_LATCH_6 = 924, Y.ECI_USER_DEFINED = 925, Y.ECI_GENERAL_PURPOSE = 926, Y.ECI_CHARSET = 927, Y.BEGIN_MACRO_PDF417_CONTROL_BLOCK = 928, Y.BEGIN_MACRO_PDF417_OPTIONAL_FIELD = 923, Y.MACRO_PDF417_TERMINATOR = 922, Y.MODE_SHIFT_TO_BYTE_COMPACTION_MODE = 913, Y.MAX_NUMERIC_CODEWORDS = 15, Y.MACRO_PDF417_OPTIONAL_FIELD_FILE_NAME = 0, Y.MACRO_PDF417_OPTIONAL_FIELD_SEGMENT_COUNT = 1, Y.MACRO_PDF417_OPTIONAL_FIELD_TIME_STAMP = 2, Y.MACRO_PDF417_OPTIONAL_FIELD_SENDER = 3, Y.MACRO_PDF417_OPTIONAL_FIELD_ADDRESSEE = 4, Y.MACRO_PDF417_OPTIONAL_FIELD_FILE_SIZE = 5, Y.MACRO_PDF417_OPTIONAL_FIELD_CHECKSUM = 6, Y.PL = 25, Y.LL = 27, Y.AS = 27, Y.ML = 28, Y.AL = 28, Y.PS = 29, Y.PAL = 29, Y.PUNCT_CHARS = ";<>@[\\]_`~!\r	,:\n-.$/\"|*()?{}'", Y.MIXED_CHARS = "0123456789&\r	,:#-.$/+%*=^", Y.EXP900 = pn() ? gn() : [], Y.NUMBER_OF_SEQUENCE_CODEWORDS = 2;
-		class X {
+		X.TEXT_COMPACTION_MODE_LATCH = 900, X.BYTE_COMPACTION_MODE_LATCH = 901, X.NUMERIC_COMPACTION_MODE_LATCH = 902, X.BYTE_COMPACTION_MODE_LATCH_6 = 924, X.ECI_USER_DEFINED = 925, X.ECI_GENERAL_PURPOSE = 926, X.ECI_CHARSET = 927, X.BEGIN_MACRO_PDF417_CONTROL_BLOCK = 928, X.BEGIN_MACRO_PDF417_OPTIONAL_FIELD = 923, X.MACRO_PDF417_TERMINATOR = 922, X.MODE_SHIFT_TO_BYTE_COMPACTION_MODE = 913, X.MAX_NUMERIC_CODEWORDS = 15, X.MACRO_PDF417_OPTIONAL_FIELD_FILE_NAME = 0, X.MACRO_PDF417_OPTIONAL_FIELD_SEGMENT_COUNT = 1, X.MACRO_PDF417_OPTIONAL_FIELD_TIME_STAMP = 2, X.MACRO_PDF417_OPTIONAL_FIELD_SENDER = 3, X.MACRO_PDF417_OPTIONAL_FIELD_ADDRESSEE = 4, X.MACRO_PDF417_OPTIONAL_FIELD_FILE_SIZE = 5, X.MACRO_PDF417_OPTIONAL_FIELD_CHECKSUM = 6, X.PL = 25, X.LL = 27, X.AS = 27, X.ML = 28, X.AL = 28, X.PS = 29, X.PAL = 29, X.PUNCT_CHARS = ";<>@[\\]_`~!\r	,:\n-.$/\"|*()?{}'", X.MIXED_CHARS = "0123456789&\r	,:#-.$/+%*=^", X.EXP900 = fn() ? hn() : [], X.NUMBER_OF_SEQUENCE_CODEWORDS = 2;
+		class Z {
 			constructor() {}
 			static decode(e, t, n, r, i, a, o) {
-				let s = new Zt(e, t, n, r, i), c = null, l = null, u;
+				let s = new Xt(e, t, n, r, i), c = null, l = null, u;
 				for (let n = !0;; n = !1) {
-					if (t != null && (c = X.getRowIndicatorColumn(e, s, t, !0, a, o)), r != null && (l = X.getRowIndicatorColumn(e, s, r, !1, a, o)), u = X.merge(c, l), u == null) throw D.getNotFoundInstance();
+					if (t != null && (c = Z.getRowIndicatorColumn(e, s, t, !0, a, o)), r != null && (l = Z.getRowIndicatorColumn(e, s, r, !1, a, o)), u = Z.merge(c, l), u == null) throw E.getNotFoundInstance();
 					let i = u.getBoundingBox();
 					if (n && i != null && (i.getMinY() < s.getMinY() || i.getMaxY() > s.getMaxY())) s = i;
 					else break;
@@ -15451,31 +15454,31 @@ var T = function() {
 					let n = f ? t : d - t;
 					if (u.getDetectionResultColumn(n) !== void 0) continue;
 					let r;
-					r = n === 0 || n === d ? new nn(s, n === 0) : new en(s), u.setDetectionResultColumn(n, r);
+					r = n === 0 || n === d ? new tn(s, n === 0) : new $t(s), u.setDetectionResultColumn(n, r);
 					let i = -1, c = i;
 					for (let t = s.getMinY(); t <= s.getMaxY(); t++) {
-						if (i = X.getStartColumn(u, n, t, f), i < 0 || i > s.getMaxX()) {
+						if (i = Z.getStartColumn(u, n, t, f), i < 0 || i > s.getMaxX()) {
 							if (c === -1) continue;
 							i = c;
 						}
-						let l = X.detectCodeword(e, s.getMinX(), s.getMaxX(), f, i, t, a, o);
+						let l = Z.detectCodeword(e, s.getMinX(), s.getMaxX(), f, i, t, a, o);
 						l != null && (r.setCodeword(t, l), c = i, a = Math.min(a, l.getWidth()), o = Math.max(o, l.getWidth()));
 					}
 				}
-				return X.createDecoderResult(u);
+				return Z.createDecoderResult(u);
 			}
 			static merge(e, t) {
 				if (e == null && t == null) return null;
-				let n = X.getBarcodeMetadata(e, t);
+				let n = Z.getBarcodeMetadata(e, t);
 				if (n == null) return null;
-				let r = Zt.merge(X.adjustBoundingBox(e), X.adjustBoundingBox(t));
-				return new rn(n, r);
+				let r = Xt.merge(Z.adjustBoundingBox(e), Z.adjustBoundingBox(t));
+				return new nn(n, r);
 			}
 			static adjustBoundingBox(e) {
 				if (e == null) return null;
 				let t = e.getRowHeights();
 				if (t == null) return null;
-				let n = X.getMax(t), r = 0;
+				let n = Z.getMax(t), r = 0;
 				for (let e of t) if (r += n - e, e > 0) break;
 				let i = e.getCodewords();
 				for (let e = 0; r > 0 && i[e] == null; e++) r--;
@@ -15496,26 +15499,26 @@ var T = function() {
 				return t == null || (r = t.getBarcodeMetadata()) == null ? n : n.getColumnCount() !== r.getColumnCount() && n.getErrorCorrectionLevel() !== r.getErrorCorrectionLevel() && n.getRowCount() !== r.getRowCount() ? null : n;
 			}
 			static getRowIndicatorColumn(e, t, n, r, i, a) {
-				let o = new nn(t, r);
+				let o = new tn(t, r);
 				for (let s = 0; s < 2; s++) {
 					let c = s === 0 ? 1 : -1, l = Math.trunc(Math.trunc(n.getX()));
 					for (let s = Math.trunc(Math.trunc(n.getY())); s <= t.getMaxY() && s >= t.getMinY(); s += c) {
-						let t = X.detectCodeword(e, 0, e.getWidth(), r, l, s, i, a);
+						let t = Z.detectCodeword(e, 0, e.getWidth(), r, l, s, i, a);
 						t != null && (o.setCodeword(s, t), l = r ? t.getStartX() : t.getEndX());
 					}
 				}
 				return o;
 			}
 			static adjustCodewordCount(e, t) {
-				let n = t[0][1], r = n.getValue(), i = e.getBarcodeColumnCount() * e.getBarcodeRowCount() - X.getNumberOfECCodeWords(e.getBarcodeECLevel());
+				let n = t[0][1], r = n.getValue(), i = e.getBarcodeColumnCount() * e.getBarcodeRowCount() - Z.getNumberOfECCodeWords(e.getBarcodeECLevel());
 				if (r.length === 0) {
-					if (i < 1 || i > K.MAX_CODEWORDS_IN_BARCODE) throw D.getNotFoundInstance();
+					if (i < 1 || i > q.MAX_CODEWORDS_IN_BARCODE) throw E.getNotFoundInstance();
 					n.setValue(i);
 				} else r[0] !== i && n.setValue(i);
 			}
 			static createDecoderResult(e) {
-				let t = X.createBarcodeMatrix(e);
-				X.adjustCodewordCount(e, t);
+				let t = Z.createBarcodeMatrix(e);
+				Z.adjustCodewordCount(e, t);
 				let n = [], r = new Int32Array(e.getBarcodeRowCount() * e.getBarcodeColumnCount()), i = [], a = [];
 				for (let o = 0; o < e.getBarcodeRowCount(); o++) for (let s = 0; s < e.getBarcodeColumnCount(); s++) {
 					let c = t[o][s + 1].getValue(), l = o * e.getBarcodeColumnCount() + s;
@@ -15523,14 +15526,14 @@ var T = function() {
 				}
 				let o = Array(i.length);
 				for (let e = 0; e < o.length; e++) o[e] = i[e];
-				return X.createDecoderResultFromAmbiguousValues(e.getBarcodeECLevel(), r, K.toIntArray(n), K.toIntArray(a), o);
+				return Z.createDecoderResultFromAmbiguousValues(e.getBarcodeECLevel(), r, q.toIntArray(n), q.toIntArray(a), o);
 			}
 			static createDecoderResultFromAmbiguousValues(e, t, n, r, i) {
 				let a = new Int32Array(r.length), o = 100;
 				for (; o-- > 0;) {
 					for (let e = 0; e < a.length; e++) t[r[e]] = i[e][a[e]];
 					try {
-						return X.decodeCodewords(t, e, n);
+						return Z.decodeCodewords(t, e, n);
 					} catch (e) {
 						if (!(e instanceof d)) throw e;
 					}
@@ -15544,7 +15547,7 @@ var T = function() {
 			}
 			static createBarcodeMatrix(e) {
 				let t = Array.from({ length: e.getBarcodeRowCount() }, () => Array(e.getBarcodeColumnCount() + 2));
-				for (let e = 0; e < t.length; e++) for (let n = 0; n < t[e].length; n++) t[e][n] = new tn();
+				for (let e = 0; e < t.length; e++) for (let n = 0; n < t[e].length; n++) t[e][n] = new en();
 				let n = 0;
 				for (let r of e.getDetectionResultColumns()) {
 					if (r != null) {
@@ -15565,11 +15568,11 @@ var T = function() {
 			}
 			static getStartColumn(e, t, n, r) {
 				let i = r ? 1 : -1, a = null;
-				if (X.isValidBarcodeColumn(e, t - i) && (a = e.getDetectionResultColumn(t - i).getCodeword(n)), a != null) return r ? a.getEndX() : a.getStartX();
+				if (Z.isValidBarcodeColumn(e, t - i) && (a = e.getDetectionResultColumn(t - i).getCodeword(n)), a != null) return r ? a.getEndX() : a.getStartX();
 				if (a = e.getDetectionResultColumn(t).getCodewordNearby(n), a != null) return r ? a.getStartX() : a.getEndX();
-				if (X.isValidBarcodeColumn(e, t - i) && (a = e.getDetectionResultColumn(t - i).getCodewordNearby(n)), a != null) return r ? a.getEndX() : a.getStartX();
+				if (Z.isValidBarcodeColumn(e, t - i) && (a = e.getDetectionResultColumn(t - i).getCodewordNearby(n)), a != null) return r ? a.getEndX() : a.getStartX();
 				let o = 0;
-				for (; X.isValidBarcodeColumn(e, t - i);) {
+				for (; Z.isValidBarcodeColumn(e, t - i);) {
 					t -= i;
 					for (let n of e.getDetectionResultColumn(t).getCodewords()) if (n != null) return (r ? n.getEndX() : n.getStartX()) + i * o * (n.getEndX() - n.getStartX());
 					o++;
@@ -15577,10 +15580,10 @@ var T = function() {
 				return r ? e.getBoundingBox().getMinX() : e.getBoundingBox().getMaxX();
 			}
 			static detectCodeword(e, t, n, r, i, a, o, s) {
-				i = X.adjustCodewordStartColumn(e, t, n, r, i, a);
-				let c = X.getModuleBitCount(e, t, n, r, i, a);
+				i = Z.adjustCodewordStartColumn(e, t, n, r, i, a);
+				let c = Z.getModuleBitCount(e, t, n, r, i, a);
 				if (c == null) return null;
-				let l, u = M.sum(c);
+				let l, u = N.sum(c);
 				if (r) l = i + u;
 				else {
 					for (let e = 0; e < c.length / 2; e++) {
@@ -15589,9 +15592,9 @@ var T = function() {
 					}
 					l = i, i = l - u;
 				}
-				if (!X.checkCodewordSkew(u, o, s)) return null;
-				let d = on.getDecodedValue(c), f = K.getCodeword(d);
-				return f === -1 ? null : new an(i, l, X.getCodewordBucketNumber(d), f);
+				if (!Z.checkCodewordSkew(u, o, s)) return null;
+				let d = an.getDecodedValue(c), f = q.getCodeword(d);
+				return f === -1 ? null : new rn(i, l, Z.getCodewordBucketNumber(d), f);
 			}
 			static getModuleBitCount(e, t, n, r, i, a) {
 				let o = i, s = /* @__PURE__ */ new Int32Array(8), c = 0, l = r ? 1 : -1, u = r;
@@ -15605,7 +15608,7 @@ var T = function() {
 				let o = i, s = r ? -1 : 1;
 				for (let c = 0; c < 2; c++) {
 					for (; (r ? o >= t : o < n) && r === e.get(o, a);) {
-						if (Math.abs(i - o) > X.CODEWORD_SKEW_SIZE) return i;
+						if (Math.abs(i - o) > Z.CODEWORD_SKEW_SIZE) return i;
 						o += s;
 					}
 					s = -s, r = !r;
@@ -15613,18 +15616,18 @@ var T = function() {
 				return o;
 			}
 			static checkCodewordSkew(e, t, n) {
-				return t - X.CODEWORD_SKEW_SIZE <= e && e <= n + X.CODEWORD_SKEW_SIZE;
+				return t - Z.CODEWORD_SKEW_SIZE <= e && e <= n + Z.CODEWORD_SKEW_SIZE;
 			}
 			static decodeCodewords(e, t, n) {
 				if (e.length === 0) throw x.getFormatInstance();
-				let r = 1 << t + 1, i = X.correctErrors(e, n, r);
-				X.verifyCodewordCount(e, r);
-				let a = Y.decode(e, "" + t);
+				let r = 1 << t + 1, i = Z.correctErrors(e, n, r);
+				Z.verifyCodewordCount(e, r);
+				let a = X.decode(e, "" + t);
 				return a.setErrorsCorrected(i), a.setErasures(n.length), a;
 			}
 			static correctErrors(e, t, n) {
-				if (t != null && t.length > n / 2 + X.MAX_ERRORS || n < 0 || n > X.MAX_EC_CODEWORDS) throw d.getChecksumInstance();
-				return X.errorCorrection.decode(e, n, t);
+				if (t != null && t.length > n / 2 + Z.MAX_ERRORS || n < 0 || n > Z.MAX_EC_CODEWORDS) throw d.getChecksumInstance();
+				return Z.errorCorrection.decode(e, n, t);
 			}
 			static verifyCodewordCount(e, t) {
 				if (e.length < 4) throw x.getFormatInstance();
@@ -15644,13 +15647,13 @@ var T = function() {
 				return e instanceof Int32Array ? this.getCodewordBucketNumber_Int32Array(e) : this.getCodewordBucketNumber_number(e);
 			}
 			static getCodewordBucketNumber_number(e) {
-				return X.getCodewordBucketNumber(X.getBitCountForCodeword(e));
+				return Z.getCodewordBucketNumber(Z.getBitCountForCodeword(e));
 			}
 			static getCodewordBucketNumber_Int32Array(e) {
 				return (e[0] - e[2] + e[4] - e[6] + 9) % 9;
 			}
 			static toString(e) {
-				let t = new $t();
+				let t = new Qt();
 				for (let n = 0; n < e.length; n++) {
 					t.format("Row %2d: ", n);
 					for (let r = 0; r < e[n].length; r++) {
@@ -15662,24 +15665,24 @@ var T = function() {
 				return t.toString();
 			}
 		}
-		X.CODEWORD_SKEW_SIZE = 2, X.MAX_ERRORS = 3, X.MAX_EC_CODEWORDS = 512, X.errorCorrection = new Xt();
-		class _n {
+		Z.CODEWORD_SKEW_SIZE = 2, Z.MAX_ERRORS = 3, Z.MAX_EC_CODEWORDS = 512, Z.errorCorrection = new Yt();
+		class gn {
 			decode(e, t = null) {
-				let n = _n.decode(e, t, !1);
-				if (n == null || n.length === 0 || n[0] == null) throw D.getNotFoundInstance();
+				let n = gn.decode(e, t, !1);
+				if (n == null || n.length === 0 || n[0] == null) throw E.getNotFoundInstance();
 				return n[0];
 			}
 			decodeMultiple(e, t = null) {
 				try {
-					return _n.decode(e, t, !0);
+					return gn.decode(e, t, !0);
 				} catch (e) {
-					throw e instanceof x || e instanceof d ? D.getNotFoundInstance() : e;
+					throw e instanceof x || e instanceof d ? E.getNotFoundInstance() : e;
 				}
 			}
 			static decode(e, t, n) {
-				let r = [], i = q.detectMultiple(e, t, n);
+				let r = [], i = J.detectMultiple(e, t, n);
 				for (let e of i.getPoints()) {
-					let t = X.decode(i.getBits(), e[4], e[5], e[6], e[7], _n.getMinCodewordWidth(e), _n.getMaxCodewordWidth(e)), n = new le(t.getText(), t.getRawBytes(), void 0, e, k.PDF_417);
+					let t = Z.decode(i.getBits(), e[4], e[5], e[6], e[7], gn.getMinCodewordWidth(e), gn.getMaxCodewordWidth(e)), n = new le(t.getText(), t.getRawBytes(), void 0, e, k.PDF_417);
 					n.putMetadata(fe.ERROR_CORRECTION_LEVEL, t.getECLevel());
 					let a = t.getOther();
 					a != null && n.putMetadata(fe.PDF417_EXTRA_METADATA, a), r.push(n);
@@ -15693,16 +15696,16 @@ var T = function() {
 				return e == null || t == null ? _.MAX_VALUE : Math.trunc(Math.abs(e.getX() - t.getX()));
 			}
 			static getMaxCodewordWidth(e) {
-				return Math.floor(Math.max(Math.max(_n.getMaxWidth(e[0], e[4]), _n.getMaxWidth(e[6], e[2]) * K.MODULES_IN_CODEWORD / K.MODULES_IN_STOP_PATTERN), Math.max(_n.getMaxWidth(e[1], e[5]), _n.getMaxWidth(e[7], e[3]) * K.MODULES_IN_CODEWORD / K.MODULES_IN_STOP_PATTERN)));
+				return Math.floor(Math.max(Math.max(gn.getMaxWidth(e[0], e[4]), gn.getMaxWidth(e[6], e[2]) * q.MODULES_IN_CODEWORD / q.MODULES_IN_STOP_PATTERN), Math.max(gn.getMaxWidth(e[1], e[5]), gn.getMaxWidth(e[7], e[3]) * q.MODULES_IN_CODEWORD / q.MODULES_IN_STOP_PATTERN)));
 			}
 			static getMinCodewordWidth(e) {
-				return Math.floor(Math.min(Math.min(_n.getMinWidth(e[0], e[4]), _n.getMinWidth(e[6], e[2]) * K.MODULES_IN_CODEWORD / K.MODULES_IN_STOP_PATTERN), Math.min(_n.getMinWidth(e[1], e[5]), _n.getMinWidth(e[7], e[3]) * K.MODULES_IN_CODEWORD / K.MODULES_IN_STOP_PATTERN)));
+				return Math.floor(Math.min(Math.min(gn.getMinWidth(e[0], e[4]), gn.getMinWidth(e[6], e[2]) * q.MODULES_IN_CODEWORD / q.MODULES_IN_STOP_PATTERN), Math.min(gn.getMinWidth(e[1], e[5]), gn.getMinWidth(e[7], e[3]) * q.MODULES_IN_CODEWORD / q.MODULES_IN_STOP_PATTERN)));
 			}
 			reset() {}
 		}
-		class vn extends s {}
-		vn.kind = "ReaderException";
-		class yn {
+		class _n extends s {}
+		_n.kind = "ReaderException";
+		class vn {
 			constructor(e, t) {
 				this.verbose = e === !0, t && this.setHints(t);
 			}
@@ -15717,48 +15720,48 @@ var T = function() {
 				let n = !t(e) && e.get(b.TRY_HARDER) === !0, r = t(e) ? null : e.get(b.POSSIBLE_FORMATS), i = [];
 				if (!t(r)) {
 					let t = r.some((e) => e === k.UPC_A || e === k.UPC_E || e === k.EAN_13 || e === k.EAN_8 || e === k.CODABAR || e === k.CODE_39 || e === k.CODE_93 || e === k.CODE_128 || e === k.ITF || e === k.RSS_14 || e === k.RSS_EXPANDED);
-					t && !n && i.push(new _t(e, this.verbose)), r.includes(k.QR_CODE) && i.push(new Gt()), r.includes(k.DATA_MATRIX) && i.push(new Et()), r.includes(k.AZTEC) && i.push(new je()), r.includes(k.PDF_417) && i.push(new _n()), t && n && i.push(new _t(e, this.verbose));
+					t && !n && i.push(new gt(e, this.verbose)), r.includes(k.QR_CODE) && i.push(new Wt()), r.includes(k.DATA_MATRIX) && i.push(new Tt()), r.includes(k.AZTEC) && i.push(new Ae()), r.includes(k.PDF_417) && i.push(new gn()), t && n && i.push(new gt(e, this.verbose));
 				}
-				i.length === 0 && (n || i.push(new _t(e, this.verbose)), i.push(new Gt()), i.push(new Et()), i.push(new je()), i.push(new _n()), n && i.push(new _t(e, this.verbose))), this.readers = i;
+				i.length === 0 && (n || i.push(new gt(e, this.verbose)), i.push(new Wt()), i.push(new Tt()), i.push(new Ae()), i.push(new gn()), n && i.push(new gt(e, this.verbose))), this.readers = i;
 			}
 			reset() {
 				if (this.readers !== null) for (let e of this.readers) e.reset();
 			}
 			decodeInternal(e) {
-				if (this.readers === null) throw new vn("No readers where selected, nothing can be read.");
+				if (this.readers === null) throw new _n("No readers where selected, nothing can be read.");
 				for (let t of this.readers) try {
 					return t.decode(e, this.hints);
 				} catch (e) {
-					if (e instanceof vn) continue;
+					if (e instanceof _n) continue;
 				}
-				throw new D("No MultiFormat Readers were able to detect the code.");
+				throw new E("No MultiFormat Readers were able to detect the code.");
 			}
 		}
-		class bn extends ce {
+		class yn extends ce {
 			constructor(e = null, t = 500) {
-				let n = new yn();
+				let n = new vn();
 				n.setHints(e), super(n, t);
 			}
 			decodeBitmap(e) {
 				return this.reader.decodeWithState(e);
 			}
 		}
+		class bn extends ce {
+			constructor(e = 500) {
+				super(new gn(), e);
+			}
+		}
 		class xn extends ce {
 			constructor(e = 500) {
-				super(new _n(), e);
+				super(new Wt(), e);
 			}
 		}
-		class Sn extends ce {
-			constructor(e = 500) {
-				super(new Gt(), e);
-			}
-		}
-		var Cn;
+		var Sn;
 		(function(e) {
 			e[e.ERROR_CORRECTION = 0] = "ERROR_CORRECTION", e[e.CHARACTER_SET = 1] = "CHARACTER_SET", e[e.DATA_MATRIX_SHAPE = 2] = "DATA_MATRIX_SHAPE", e[e.MIN_SIZE = 3] = "MIN_SIZE", e[e.MAX_SIZE = 4] = "MAX_SIZE", e[e.MARGIN = 5] = "MARGIN", e[e.PDF417_COMPACT = 6] = "PDF417_COMPACT", e[e.PDF417_COMPACTION = 7] = "PDF417_COMPACTION", e[e.PDF417_DIMENSIONS = 8] = "PDF417_DIMENSIONS", e[e.AZTEC_LAYERS = 9] = "AZTEC_LAYERS", e[e.QR_VERSION = 10] = "QR_VERSION";
-		})(Cn || (Cn = {}));
-		var wn = Cn;
-		class Tn {
+		})(Sn || (Sn = {}));
+		var Cn = Sn;
+		class wn {
 			constructor(e) {
 				this.field = e, this.cachedGenerators = [], this.cachedGenerators.push(new he(e, Int32Array.from([1])));
 			}
@@ -15786,10 +15789,10 @@ var T = function() {
 				p.arraycopy(o, 0, e, n + s, o.length);
 			}
 		}
-		class En {
+		class Tn {
 			constructor() {}
 			static applyMaskPenaltyRule1(e) {
-				return En.applyMaskPenaltyRule1Internal(e, !0) + En.applyMaskPenaltyRule1Internal(e, !1);
+				return Tn.applyMaskPenaltyRule1Internal(e, !0) + Tn.applyMaskPenaltyRule1Internal(e, !1);
 			}
 			static applyMaskPenaltyRule2(e) {
 				let t = 0, n = e.getArray(), r = e.getWidth(), i = e.getHeight();
@@ -15800,15 +15803,15 @@ var T = function() {
 						r === i[a + 1] && r === n[e + 1][a] && r === n[e + 1][a + 1] && t++;
 					}
 				}
-				return En.N2 * t;
+				return Tn.N2 * t;
 			}
 			static applyMaskPenaltyRule3(e) {
 				let t = 0, n = e.getArray(), r = e.getWidth(), i = e.getHeight();
 				for (let e = 0; e < i; e++) for (let a = 0; a < r; a++) {
 					let o = n[e];
-					a + 6 < r && o[a] === 1 && o[a + 1] === 0 && o[a + 2] === 1 && o[a + 3] === 1 && o[a + 4] === 1 && o[a + 5] === 0 && o[a + 6] === 1 && (En.isWhiteHorizontal(o, a - 4, a) || En.isWhiteHorizontal(o, a + 7, a + 11)) && t++, e + 6 < i && n[e][a] === 1 && n[e + 1][a] === 0 && n[e + 2][a] === 1 && n[e + 3][a] === 1 && n[e + 4][a] === 1 && n[e + 5][a] === 0 && n[e + 6][a] === 1 && (En.isWhiteVertical(n, a, e - 4, e) || En.isWhiteVertical(n, a, e + 7, e + 11)) && t++;
+					a + 6 < r && o[a] === 1 && o[a + 1] === 0 && o[a + 2] === 1 && o[a + 3] === 1 && o[a + 4] === 1 && o[a + 5] === 0 && o[a + 6] === 1 && (Tn.isWhiteHorizontal(o, a - 4, a) || Tn.isWhiteHorizontal(o, a + 7, a + 11)) && t++, e + 6 < i && n[e][a] === 1 && n[e + 1][a] === 0 && n[e + 2][a] === 1 && n[e + 3][a] === 1 && n[e + 4][a] === 1 && n[e + 5][a] === 0 && n[e + 6][a] === 1 && (Tn.isWhiteVertical(n, a, e - 4, e) || Tn.isWhiteVertical(n, a, e + 7, e + 11)) && t++;
 				}
-				return t * En.N3;
+				return t * Tn.N3;
 			}
 			static isWhiteHorizontal(e, t, n) {
 				t = Math.max(t, 0), n = Math.min(n, e.length);
@@ -15827,7 +15830,7 @@ var T = function() {
 					for (let e = 0; e < r; e++) i[e] === 1 && t++;
 				}
 				let a = e.getHeight() * e.getWidth();
-				return Math.floor(Math.abs(t * 2 - a) * 10 / a) * En.N4;
+				return Math.floor(Math.abs(t * 2 - a) * 10 / a) * Tn.N4;
 			}
 			static getDataMaskBit(e, t, n) {
 				let r, i;
@@ -15866,15 +15869,15 @@ var T = function() {
 					let r = 0, o = -1;
 					for (let s = 0; s < i; s++) {
 						let i = t ? a[e][s] : a[s][e];
-						i === o ? r++ : (r >= 5 && (n += En.N1 + (r - 5)), r = 1, o = i);
+						i === o ? r++ : (r >= 5 && (n += Tn.N1 + (r - 5)), r = 1, o = i);
 					}
-					r >= 5 && (n += En.N1 + (r - 5));
+					r >= 5 && (n += Tn.N1 + (r - 5));
 				}
 				return n;
 			}
 		}
-		En.N1 = 3, En.N2 = 3, En.N3 = 40, En.N4 = 10;
-		class Dn {
+		Tn.N1 = 3, Tn.N2 = 3, Tn.N3 = 40, Tn.N4 = 10;
+		class En {
 			constructor(e, t) {
 				this.width = e, this.height = t;
 				let n = Array(t);
@@ -15903,7 +15906,7 @@ var T = function() {
 				for (let t of this.bytes) g.fill(t, e);
 			}
 			equals(e) {
-				if (!(e instanceof Dn)) return !1;
+				if (!(e instanceof En)) return !1;
 				let t = e;
 				if (this.width !== t.width || this.height !== t.height) return !1;
 				for (let e = 0, n = this.height; e < n; ++e) {
@@ -15930,7 +15933,7 @@ var T = function() {
 				return e.toString();
 			}
 		}
-		class On {
+		class Dn {
 			constructor() {
 				this.maskPattern = -1;
 			}
@@ -15969,12 +15972,12 @@ var T = function() {
 				this.matrix = e;
 			}
 			static isValidMaskPattern(e) {
-				return e >= 0 && e < On.NUM_MASK_PATTERNS;
+				return e >= 0 && e < Dn.NUM_MASK_PATTERNS;
 			}
 		}
-		On.NUM_MASK_PATTERNS = 8;
-		class Z extends s {}
-		Z.kind = "WriterException";
+		Dn.NUM_MASK_PATTERNS = 8;
+		class On extends s {}
+		On.kind = "WriterException";
 		class Q {
 			constructor() {}
 			static clearMatrix(e) {
@@ -16018,13 +16021,13 @@ var T = function() {
 							let s = a - i;
 							if (!Q.isEmpty(n.get(s, o))) continue;
 							let c;
-							r < e.getSize() ? (c = e.get(r), ++r) : c = !1, t !== 255 && En.getDataMaskBit(t, s, o) && (c = !c), n.setBoolean(s, o, c);
+							r < e.getSize() ? (c = e.get(r), ++r) : c = !1, t !== 255 && Tn.getDataMaskBit(t, s, o) && (c = !c), n.setBoolean(s, o, c);
 						}
 						o += i;
 					}
 					i = -i, o += i, a -= 2;
 				}
-				if (r !== e.getSize()) throw new Z("Not all bits consumed: " + r + "/" + e.getSize());
+				if (r !== e.getSize()) throw new On("Not all bits consumed: " + r + "/" + e.getSize());
 			}
 			static findMSBSet(e) {
 				return 32 - _.numberOfLeadingZeros(e);
@@ -16036,18 +16039,18 @@ var T = function() {
 				return e;
 			}
 			static makeTypeInfoBits(e, t, n) {
-				if (!On.isValidMaskPattern(t)) throw new Z("Invalid mask pattern");
+				if (!Dn.isValidMaskPattern(t)) throw new On("Invalid mask pattern");
 				let r = e.getBits() << 3 | t;
 				n.appendBits(r, 5);
 				let i = Q.calculateBCHCode(r, Q.TYPE_INFO_POLY);
 				n.appendBits(i, 10);
 				let a = new v();
-				if (a.appendBits(Q.TYPE_INFO_MASK_PATTERN, 15), n.xor(a), n.getSize() !== 15) throw new Z("should not happen but we got: " + n.getSize());
+				if (a.appendBits(Q.TYPE_INFO_MASK_PATTERN, 15), n.xor(a), n.getSize() !== 15) throw new On("should not happen but we got: " + n.getSize());
 			}
 			static makeVersionInfoBits(e, t) {
 				t.appendBits(e.getVersionNumber(), 6);
 				let n = Q.calculateBCHCode(e.getVersionNumber(), Q.VERSION_INFO_POLY);
-				if (t.appendBits(n, 12), t.getSize() !== 18) throw new Z("should not happen but we got: " + t.getSize());
+				if (t.appendBits(n, 12), t.getSize() !== 18) throw new On("should not happen but we got: " + t.getSize());
 			}
 			static isEmpty(e) {
 				return e === 255;
@@ -16059,18 +16062,18 @@ var T = function() {
 				}
 			}
 			static embedDarkDotAtLeftBottomCorner(e) {
-				if (e.get(8, e.getHeight() - 8) === 0) throw new Z();
+				if (e.get(8, e.getHeight() - 8) === 0) throw new On();
 				e.setNumber(8, e.getHeight() - 8, 1);
 			}
 			static embedHorizontalSeparationPattern(e, t, n) {
 				for (let r = 0; r < 8; ++r) {
-					if (!Q.isEmpty(n.get(e + r, t))) throw new Z();
+					if (!Q.isEmpty(n.get(e + r, t))) throw new On();
 					n.setNumber(e + r, t, 0);
 				}
 			}
 			static embedVerticalSeparationPattern(e, t, n) {
 				for (let r = 0; r < 7; ++r) {
-					if (!Q.isEmpty(n.get(e, t + r))) throw new Z();
+					if (!Q.isEmpty(n.get(e, t + r))) throw new On();
 					n.setNumber(e, t + r, 0);
 				}
 			}
@@ -16594,13 +16597,13 @@ var T = function() {
 		class An {
 			constructor() {}
 			static calculateMaskPenalty(e) {
-				return En.applyMaskPenaltyRule1(e) + En.applyMaskPenaltyRule2(e) + En.applyMaskPenaltyRule3(e) + En.applyMaskPenaltyRule4(e);
+				return Tn.applyMaskPenaltyRule1(e) + Tn.applyMaskPenaltyRule2(e) + Tn.applyMaskPenaltyRule3(e) + Tn.applyMaskPenaltyRule4(e);
 			}
 			static encode(e, t, n = null) {
-				let r = An.DEFAULT_BYTE_MODE_ENCODING, i = n !== null && n.get(wn.CHARACTER_SET) !== void 0;
-				i && (r = n.get(wn.CHARACTER_SET).toString());
+				let r = An.DEFAULT_BYTE_MODE_ENCODING, i = n !== null && n.get(Cn.CHARACTER_SET) !== void 0;
+				i && (r = n.get(Cn.CHARACTER_SET).toString());
 				let a = this.chooseMode(e, r), o = new v();
-				if (a === G.BYTE && (i || An.DEFAULT_BYTE_MODE_ENCODING !== r)) {
+				if (a === K.BYTE && (i || An.DEFAULT_BYTE_MODE_ENCODING !== r)) {
 					let e = C.getCharacterSetECIByName(r);
 					e !== void 0 && this.appendECI(e, o);
 				}
@@ -16608,25 +16611,25 @@ var T = function() {
 				let s = new v();
 				this.appendBytes(e, a, s, r);
 				let c;
-				if (n !== null && n.get(wn.QR_VERSION) !== void 0) {
-					let e = Number.parseInt(n.get(wn.QR_VERSION).toString(), 10);
-					c = W.getVersionForNumber(e);
+				if (n !== null && n.get(Cn.QR_VERSION) !== void 0) {
+					let e = Number.parseInt(n.get(Cn.QR_VERSION).toString(), 10);
+					c = G.getVersionForNumber(e);
 					let r = this.calculateBitsNeeded(a, o, s, c);
-					if (!this.willFit(r, c, t)) throw new Z("Data too big for requested version");
+					if (!this.willFit(r, c, t)) throw new On("Data too big for requested version");
 				} else c = this.recommendVersion(t, a, o, s);
 				let l = new v();
 				l.appendBitArray(o);
-				let u = a === G.BYTE ? s.getSizeInBytes() : e.length;
+				let u = a === K.BYTE ? s.getSizeInBytes() : e.length;
 				this.appendLengthInfo(u, c, a, l), l.appendBitArray(s);
 				let d = c.getECBlocksForLevel(t), f = c.getTotalCodewords() - d.getTotalECCodewords();
 				this.terminateBits(f, l);
-				let p = this.interleaveWithECBytes(l, c.getTotalCodewords(), f, d.getNumBlocks()), m = new On();
+				let p = this.interleaveWithECBytes(l, c.getTotalCodewords(), f, d.getNumBlocks()), m = new Dn();
 				m.setECLevel(t), m.setMode(a), m.setVersion(c);
-				let h = c.getDimensionForVersion(), g = new Dn(h, h), _ = this.chooseMaskPattern(p, t, c, g);
+				let h = c.getDimensionForVersion(), g = new En(h, h), _ = this.chooseMaskPattern(p, t, c, g);
 				return m.setMaskPattern(_), Q.buildMatrix(p, t, c, _, g), m.setMatrix(g), m;
 			}
 			static recommendVersion(e, t, n, r) {
-				let i = this.calculateBitsNeeded(t, n, r, W.getVersionForNumber(1)), a = this.chooseVersion(i, e), o = this.calculateBitsNeeded(t, n, r, a);
+				let i = this.calculateBitsNeeded(t, n, r, G.getVersionForNumber(1)), a = this.chooseVersion(i, e), o = this.calculateBitsNeeded(t, n, r, a);
 				return this.chooseVersion(o, e);
 			}
 			static calculateBitsNeeded(e, t, n, r) {
@@ -16636,15 +16639,15 @@ var T = function() {
 				return e < An.ALPHANUMERIC_TABLE.length ? An.ALPHANUMERIC_TABLE[e] : -1;
 			}
 			static chooseMode(e, t = null) {
-				if (C.SJIS.getName() === t && this.isOnlyDoubleByteKanji(e)) return G.KANJI;
+				if (C.SJIS.getName() === t && this.isOnlyDoubleByteKanji(e)) return K.KANJI;
 				let n = !1, r = !1;
 				for (let t = 0, i = e.length; t < i; ++t) {
 					let i = e.charAt(t);
 					if (An.isDigit(i)) n = !0;
 					else if (this.getAlphanumericCode(i.charCodeAt(0)) !== -1) r = !0;
-					else return G.BYTE;
+					else return K.BYTE;
 				}
-				return r ? G.ALPHANUMERIC : n ? G.NUMERIC : G.BYTE;
+				return r ? K.ALPHANUMERIC : n ? K.NUMERIC : K.BYTE;
 			}
 			static isOnlyDoubleByteKanji(e) {
 				let t;
@@ -16663,7 +16666,7 @@ var T = function() {
 			}
 			static chooseMaskPattern(e, t, n, r) {
 				let i = 2 ** 53 - 1, a = -1;
-				for (let o = 0; o < On.NUM_MASK_PATTERNS; o++) {
+				for (let o = 0; o < Dn.NUM_MASK_PATTERNS; o++) {
 					Q.buildMatrix(e, t, n, o, r);
 					let s = this.calculateMaskPenalty(r);
 					s < i && (i = s, a = o);
@@ -16672,34 +16675,34 @@ var T = function() {
 			}
 			static chooseVersion(e, t) {
 				for (let n = 1; n <= 40; n++) {
-					let r = W.getVersionForNumber(n);
+					let r = G.getVersionForNumber(n);
 					if (An.willFit(e, r, t)) return r;
 				}
-				throw new Z("Data too big");
+				throw new On("Data too big");
 			}
 			static willFit(e, t, n) {
 				return t.getTotalCodewords() - t.getECBlocksForLevel(n).getTotalECCodewords() >= (e + 7) / 8;
 			}
 			static terminateBits(e, t) {
 				let n = e * 8;
-				if (t.getSize() > n) throw new Z("data bits cannot fit in the QR Code" + t.getSize() + " > " + n);
+				if (t.getSize() > n) throw new On("data bits cannot fit in the QR Code" + t.getSize() + " > " + n);
 				for (let e = 0; e < 4 && t.getSize() < n; ++e) t.appendBit(!1);
 				let r = t.getSize() & 7;
 				if (r > 0) for (let e = r; e < 8; e++) t.appendBit(!1);
 				let i = e - t.getSizeInBytes();
 				for (let e = 0; e < i; ++e) t.appendBits(e & 1 ? 17 : 236, 8);
-				if (t.getSize() !== n) throw new Z("Bits size does not equal capacity");
+				if (t.getSize() !== n) throw new On("Bits size does not equal capacity");
 			}
 			static getNumDataBytesAndNumECBytesForBlockID(e, t, n, r, i, a) {
-				if (r >= n) throw new Z("Block ID too large");
+				if (r >= n) throw new On("Block ID too large");
 				let o = e % n, s = n - o, c = Math.floor(e / n), l = c + 1, u = Math.floor(t / n), d = u + 1, f = c - u, p = l - d;
-				if (f !== p) throw new Z("EC bytes mismatch");
-				if (n !== s + o) throw new Z("RS blocks mismatch");
-				if (e !== (u + f) * s + (d + p) * o) throw new Z("Total bytes mismatch");
+				if (f !== p) throw new On("EC bytes mismatch");
+				if (n !== s + o) throw new On("RS blocks mismatch");
+				if (e !== (u + f) * s + (d + p) * o) throw new On("Total bytes mismatch");
 				r < s ? (i[0] = u, a[0] = f) : (i[0] = d, a[0] = p);
 			}
 			static interleaveWithECBytes(e, t, n, r) {
-				if (e.getSizeInBytes() !== n) throw new Z("Number of bits and data bytes does not match");
+				if (e.getSizeInBytes() !== n) throw new On("Number of bits and data bytes does not match");
 				let i = 0, a = 0, o = 0, s = [];
 				for (let c = 0; c < r; ++c) {
 					let l = /* @__PURE__ */ new Int32Array(1), u = /* @__PURE__ */ new Int32Array(1);
@@ -16709,7 +16712,7 @@ var T = function() {
 					let p = An.generateECBytes(f, u[0]);
 					s.push(new kn(f, p)), a = Math.max(a, d), o = Math.max(o, p.length), i += l[0];
 				}
-				if (n !== i) throw new Z("Data bytes does not match offset");
+				if (n !== i) throw new On("Data bytes does not match offset");
 				let c = new v();
 				for (let e = 0; e < a; ++e) for (let t of s) {
 					let n = t.getDataBytes();
@@ -16719,13 +16722,13 @@ var T = function() {
 					let n = t.getErrorCorrectionBytes();
 					e < n.length && c.appendBits(n[e], 8);
 				}
-				if (t !== c.getSizeInBytes()) throw new Z("Interleaving error: " + t + " and " + c.getSizeInBytes() + " differ.");
+				if (t !== c.getSizeInBytes()) throw new On("Interleaving error: " + t + " and " + c.getSizeInBytes() + " differ.");
 				return c;
 			}
 			static generateECBytes(e, t) {
 				let n = e.length, r = new Int32Array(n + t);
 				for (let t = 0; t < n; t++) r[t] = e[t] & 255;
-				new Tn(A.QR_CODE_FIELD_256).encode(r, t);
+				new wn(j.QR_CODE_FIELD_256).encode(r, t);
 				let i = new Uint8Array(t);
 				for (let e = 0; e < t; e++) i[e] = r[n + e];
 				return i;
@@ -16735,24 +16738,24 @@ var T = function() {
 			}
 			static appendLengthInfo(e, t, n, r) {
 				let i = n.getCharacterCountBits(t);
-				if (e >= 1 << i) throw new Z(e + " is bigger than " + ((1 << i) - 1));
+				if (e >= 1 << i) throw new On(e + " is bigger than " + ((1 << i) - 1));
 				r.appendBits(e, i);
 			}
 			static appendBytes(e, t, n, r) {
 				switch (t) {
-					case G.NUMERIC:
+					case K.NUMERIC:
 						An.appendNumericBytes(e, n);
 						break;
-					case G.ALPHANUMERIC:
+					case K.ALPHANUMERIC:
 						An.appendAlphanumericBytes(e, n);
 						break;
-					case G.BYTE:
+					case K.BYTE:
 						An.append8BitBytes(e, n, r);
 						break;
-					case G.KANJI:
+					case K.KANJI:
 						An.appendKanjiBytes(e, n);
 						break;
-					default: throw new Z("Invalid mode: " + t);
+					default: throw new On("Invalid mode: " + t);
 				}
 			}
 			static getDigit(e) {
@@ -16779,10 +16782,10 @@ var T = function() {
 				let n = e.length, r = 0;
 				for (; r < n;) {
 					let i = An.getAlphanumericCode(e.charCodeAt(r));
-					if (i === -1) throw new Z();
+					if (i === -1) throw new On();
 					if (r + 1 < n) {
 						let n = An.getAlphanumericCode(e.charCodeAt(r + 1));
-						if (n === -1) throw new Z();
+						if (n === -1) throw new On();
 						t.appendBits(i * 45 + n, 11), r += 2;
 					} else t.appendBits(i, 6), r++;
 				}
@@ -16792,7 +16795,7 @@ var T = function() {
 				try {
 					r = te.encode(e, n);
 				} catch (e) {
-					throw new Z(e);
+					throw new On(e);
 				}
 				for (let e = 0, n = r.length; e !== n; e++) {
 					let n = r[e];
@@ -16804,18 +16807,18 @@ var T = function() {
 				try {
 					n = te.encode(e, C.SJIS);
 				} catch (e) {
-					throw new Z(e);
+					throw new On(e);
 				}
 				let r = n.length;
 				for (let e = 0; e < r; e += 2) {
 					let r = n[e] & 255, i = n[e + 1] & 255, a = r << 8 & 4294967295 | i, o = -1;
-					if (a >= 33088 && a <= 40956 ? o = a - 33088 : a >= 57408 && a <= 60351 && (o = a - 49472), o === -1) throw new Z("Invalid byte sequence");
+					if (a >= 33088 && a <= 40956 ? o = a - 33088 : a >= 57408 && a <= 60351 && (o = a - 49472), o === -1) throw new On("Invalid byte sequence");
 					let s = (o >> 8) * 192 + (o & 255);
 					t.appendBits(s, 13);
 				}
 			}
 			static appendECI(e, t) {
-				t.appendBits(G.ECI.getBits(), 4), t.appendBits(e.getValue(), 8);
+				t.appendBits(K.ECI.getBits(), 4), t.appendBits(e.getValue(), 8);
 			}
 		}
 		An.ALPHANUMERIC_TABLE = Int32Array.from([
@@ -16920,8 +16923,8 @@ var T = function() {
 			write(e, t, n, r = null) {
 				if (e.length === 0) throw new l("Found empty contents");
 				if (t < 0 || n < 0) throw new l("Requested dimensions are too small: " + t + "x" + n);
-				let i = kt.L, a = jn.QUIET_ZONE_SIZE;
-				r !== null && (r.get(wn.ERROR_CORRECTION) !== void 0 && (i = kt.fromString(r.get(wn.ERROR_CORRECTION).toString())), r.get(wn.MARGIN) !== void 0 && (a = Number.parseInt(r.get(wn.MARGIN).toString(), 10)));
+				let i = Ot.L, a = jn.QUIET_ZONE_SIZE;
+				r !== null && (r.get(Cn.ERROR_CORRECTION) !== void 0 && (i = Ot.fromString(r.get(Cn.ERROR_CORRECTION).toString())), r.get(Cn.MARGIN) !== void 0 && (a = Number.parseInt(r.get(Cn.MARGIN).toString(), 10)));
 				let o = An.encode(e, i, r);
 				return this.renderResult(o, t, n, a);
 			}
@@ -16932,7 +16935,7 @@ var T = function() {
 			}
 			renderResult(e, t, n, r) {
 				let i = e.getMatrix();
-				if (i === null) throw new ve();
+				if (i === null) throw new M();
 				let a = i.getWidth(), o = i.getHeight(), s = a + r * 2, c = o + r * 2, l = Math.max(t, s), u = Math.max(n, c), d = Math.min(Math.floor(l / s), Math.floor(u / c)), f = Math.floor((l - a * d) / 2), p = Math.floor((u - o * d) / 2), m = this.createSVGElement(l, u);
 				for (let e = 0, t = p; e < o; e++, t += d) for (let n = 0, r = f; n < a; n++, r += d) if (i.get(n, e) === 1) {
 					let e = this.createSvgRectElement(r, t, d, d);
@@ -16955,15 +16958,15 @@ var T = function() {
 				if (e.length === 0) throw new l("Found empty contents");
 				if (t !== k.QR_CODE) throw new l("Can only encode QR_CODE, but got " + t);
 				if (n < 0 || r < 0) throw new l(`Requested dimensions are too small: ${n}x${r}`);
-				let a = kt.L, o = Mn.QUIET_ZONE_SIZE;
-				i !== null && (i.get(wn.ERROR_CORRECTION) !== void 0 && (a = kt.fromString(i.get(wn.ERROR_CORRECTION).toString())), i.get(wn.MARGIN) !== void 0 && (o = Number.parseInt(i.get(wn.MARGIN).toString(), 10)));
+				let a = Ot.L, o = Mn.QUIET_ZONE_SIZE;
+				i !== null && (i.get(Cn.ERROR_CORRECTION) !== void 0 && (a = Ot.fromString(i.get(Cn.ERROR_CORRECTION).toString())), i.get(Cn.MARGIN) !== void 0 && (o = Number.parseInt(i.get(Cn.MARGIN).toString(), 10)));
 				let s = An.encode(e, a, i);
 				return Mn.renderResult(s, n, r, o);
 			}
 			static renderResult(e, t, n, r) {
 				let i = e.getMatrix();
-				if (i === null) throw new ve();
-				let a = i.getWidth(), o = i.getHeight(), s = a + r * 2, c = o + r * 2, l = Math.max(t, s), u = Math.max(n, c), d = Math.min(Math.floor(l / s), Math.floor(u / c)), f = Math.floor((l - a * d) / 2), p = Math.floor((u - o * d) / 2), m = new E(l, u);
+				if (i === null) throw new M();
+				let a = i.getWidth(), o = i.getHeight(), s = a + r * 2, c = o + r * 2, l = Math.max(t, s), u = Math.max(n, c), d = Math.min(Math.floor(l / s), Math.floor(u / c)), f = Math.floor((l - a * d) / 2), p = Math.floor((u - o * d) / 2), m = new ne(l, u);
 				for (let e = 0, t = p; e < o; e++, t += d) for (let n = 0, r = f; n < a; n++, r += d) i.get(n, e) === 1 && m.setRegion(r, t, d, d);
 				return m;
 			}
@@ -16981,7 +16984,7 @@ var T = function() {
 				return a.encode(e, t, n, r, i);
 			}
 		}
-		class Pn extends re {
+		class Pn extends O {
 			constructor(e, t, n, r, i, a, o, s) {
 				if (super(a, o), this.yuvData = e, this.dataWidth = t, this.dataHeight = n, this.left = r, this.top = i, r + a > t || i + o > n) throw new l("Crop rectangle does not fit within image data.");
 				s && this.reverseHorizontal(a, o);
@@ -17043,7 +17046,7 @@ var T = function() {
 			}
 		}
 		Pn.THUMBNAIL_SCALE_FACTOR = 2;
-		class Fn extends re {
+		class Fn extends O {
 			constructor(e, t, n, r, i, a, o) {
 				if (super(t, n), this.dataWidth = r, this.dataHeight = i, this.left = a, this.top = o, e.BYTES_PER_ELEMENT === 4) {
 					let r = t * n, i = new Uint8ClampedArray(r);
@@ -17423,7 +17426,7 @@ var T = function() {
 						g[e - n - 1] = t - r - 1, g[e + n] = t + r + 1;
 					}
 				}
-				let y = new E(v);
+				let y = new ne(v);
 				for (let e = 0, t = 0; e < s; e++) {
 					let n = (s - e) * 4 + (o ? 9 : 12);
 					for (let r = 0; r < n; r++) {
@@ -17460,7 +17463,7 @@ var T = function() {
 				}
 			}
 			static generateCheckWords(e, t, n) {
-				let r = e.getSize() / n, i = new Tn($.getGF(n)), a = _.truncDivision(t, n), o = $.bitsToWords(e, n, a);
+				let r = e.getSize() / n, i = new wn($.getGF(n)), a = _.truncDivision(t, n), o = $.bitsToWords(e, n, a);
 				i.encode(o, a - r);
 				let s = t % n, c = new v();
 				c.appendBits(0, s);
@@ -17478,11 +17481,11 @@ var T = function() {
 			}
 			static getGF(e) {
 				switch (e) {
-					case 4: return A.AZTEC_PARAM;
-					case 6: return A.AZTEC_DATA_6;
-					case 8: return A.AZTEC_DATA_8;
-					case 10: return A.AZTEC_DATA_10;
-					case 12: return A.AZTEC_DATA_12;
+					case 4: return j.AZTEC_PARAM;
+					case 6: return j.AZTEC_DATA_6;
+					case 8: return j.AZTEC_DATA_8;
+					case 10: return j.AZTEC_DATA_10;
+					case 12: return j.AZTEC_DATA_12;
 					default: throw new l("Unsupported word size " + e);
 				}
 			}
@@ -17540,7 +17543,7 @@ var T = function() {
 			}
 			encodeWithHints(e, t, n, r, i) {
 				let a = Ln.ISO_8859_1, o = $.DEFAULT_EC_PERCENT, s = $.DEFAULT_AZTEC_LAYERS;
-				return i != null && (i.has(wn.CHARACTER_SET) && (a = In.forName(i.get(wn.CHARACTER_SET).toString())), i.has(wn.ERROR_CORRECTION) && (o = _.parseInt(i.get(wn.ERROR_CORRECTION).toString())), i.has(wn.AZTEC_LAYERS) && (s = _.parseInt(i.get(wn.AZTEC_LAYERS).toString()))), er.encodeLayers(e, t, n, r, a, o, s);
+				return i != null && (i.has(Cn.CHARACTER_SET) && (a = In.forName(i.get(Cn.CHARACTER_SET).toString())), i.has(Cn.ERROR_CORRECTION) && (o = _.parseInt(i.get(Cn.ERROR_CORRECTION).toString())), i.has(Cn.AZTEC_LAYERS) && (s = _.parseInt(i.get(Cn.AZTEC_LAYERS).toString()))), er.encodeLayers(e, t, n, r, a, o, s);
 			}
 			static encodeLayers(e, t, n, r, i, a, o) {
 				if (t !== k.AZTEC) throw new l("Can only encode AZTEC, but got " + t);
@@ -17549,38 +17552,38 @@ var T = function() {
 			}
 			static renderResult(e, t, n) {
 				let r = e.getMatrix();
-				if (r == null) throw new ve();
-				let i = r.getWidth(), a = r.getHeight(), o = Math.max(t, i), s = Math.max(n, a), c = Math.min(o / i, s / a), l = (o - i * c) / 2, u = (s - a * c) / 2, d = new E(o, s);
+				if (r == null) throw new M();
+				let i = r.getWidth(), a = r.getHeight(), o = Math.max(t, i), s = Math.max(n, a), c = Math.min(o / i, s / a), l = (o - i * c) / 2, u = (s - a * c) / 2, d = new ne(o, s);
 				for (let e = 0, t = u; e < a; e++, t += c) for (let n = 0, a = l; n < i; n++, a += c) r.get(n, e) && d.setRegion(a, t, c, c);
 				return d;
 			}
 		}
-		e.AbstractExpandedDecoder = tt, e.ArgumentException = c, e.ArithmeticException = ge, e.AztecCode = Rn, e.AztecCodeReader = je, e.AztecCodeWriter = er, e.AztecDecoder = j, e.AztecDetector = Ae, e.AztecDetectorResult = Ce, e.AztecEncoder = $, e.AztecHighLevelEncoder = $n, e.AztecPoint = ke, e.BarcodeFormat = k, e.Binarizer = f, e.BinaryBitmap = u, e.BitArray = v, e.BitMatrix = E, e.BitSource = xt, e.BrowserAztecCodeReader = Me, e.BrowserBarcodeReader = vt, e.BrowserCodeReader = ce, e.BrowserDatamatrixCodeReader = Dt, e.BrowserMultiFormatReader = bn, e.BrowserPDF417Reader = xn, e.BrowserQRCodeReader = Sn, e.BrowserQRCodeSvgWriter = jn, e.CharacterSetECI = C, e.ChecksumException = d, e.Code128Reader = P, e.Code39Reader = Pe, e.DataMatrixDecodedBitStreamParser = Ct, e.DataMatrixReader = Et, e.DecodeHintType = b, e.DecoderResult = pe, e.DefaultGridSampler = De, e.DetectorResult = Se, e.EAN13Reader = ze, e.EncodeHintType = wn, e.Exception = s, e.FormatException = x, e.GenericGF = A, e.GenericGFPoly = he, e.GlobalHistogramBinarizer = ne, e.GridSampler = Te, e.GridSamplerInstance = Oe, e.HTMLCanvasElementLuminanceSource = ae, e.HybridBinarizer = O, e.ITFReader = F, e.IllegalArgumentException = l, e.IllegalStateException = ve, e.InvertedLuminanceSource = ie, e.LuminanceSource = re, e.MathUtils = M, e.MultiFormatOneDReader = _t, e.MultiFormatReader = yn, e.MultiFormatWriter = Nn, e.NotFoundException = D, e.OneDReader = Ne, e.PDF417DecodedBitStreamParser = Y, e.PDF417DecoderErrorCorrection = Xt, e.PDF417Reader = _n, e.PDF417ResultMetadata = sn, e.PerspectiveTransform = Ee, e.PlanarYUVLuminanceSource = Pn, e.QRCodeByteMatrix = Dn, e.QRCodeDataMask = Mt, e.QRCodeDecodedBitStreamParser = It, e.QRCodeDecoderErrorCorrectionLevel = kt, e.QRCodeDecoderFormatInformation = At, e.QRCodeEncoder = An, e.QRCodeEncoderQRCode = On, e.QRCodeMaskUtil = En, e.QRCodeMatrixUtil = Q, e.QRCodeMode = G, e.QRCodeReader = Gt, e.QRCodeVersion = W, e.QRCodeWriter = Mn, e.RGBLuminanceSource = Fn, e.RSS14Reader = gt, e.RSSExpandedReader = R, e.ReaderException = vn, e.ReedSolomonDecoder = ye, e.ReedSolomonEncoder = Tn, e.ReedSolomonException = _e, e.Result = le, e.ResultMetadataType = fe, e.ResultPoint = N, e.StringUtils = w, e.UnsupportedOperationException = ee, e.VideoInputDevice = oe, e.WhiteRectangleDetector = we, e.WriterException = Z, e.ZXingArrays = g, e.ZXingCharset = In, e.ZXingInteger = _, e.ZXingStandardCharsets = Ln, e.ZXingStringBuilder = T, e.ZXingStringEncoding = te, e.ZXingSystem = p, e.createAbstractExpandedDecoder = ft, Object.defineProperty(e, "__esModule", { value: !0 });
+		e.AbstractExpandedDecoder = tt, e.ArgumentException = c, e.ArithmeticException = A, e.AztecCode = Rn, e.AztecCodeReader = Ae, e.AztecCodeWriter = er, e.AztecDecoder = ye, e.AztecDetector = ke, e.AztecDetectorResult = Se, e.AztecEncoder = $, e.AztecHighLevelEncoder = $n, e.AztecPoint = Oe, e.BarcodeFormat = k, e.Binarizer = f, e.BinaryBitmap = u, e.BitArray = v, e.BitMatrix = ne, e.BitSource = bt, e.BrowserAztecCodeReader = je, e.BrowserBarcodeReader = _t, e.BrowserCodeReader = ce, e.BrowserDatamatrixCodeReader = Et, e.BrowserMultiFormatReader = yn, e.BrowserPDF417Reader = bn, e.BrowserQRCodeReader = xn, e.BrowserQRCodeSvgWriter = jn, e.CharacterSetECI = C, e.ChecksumException = d, e.Code128Reader = F, e.Code39Reader = Ne, e.DataMatrixDecodedBitStreamParser = St, e.DataMatrixReader = Tt, e.DecodeHintType = b, e.DecoderResult = pe, e.DefaultGridSampler = Ee, e.DetectorResult = xe, e.EAN13Reader = ze, e.EncodeHintType = Cn, e.Exception = s, e.FormatException = x, e.GenericGF = j, e.GenericGFPoly = he, e.GlobalHistogramBinarizer = re, e.GridSampler = we, e.GridSamplerInstance = De, e.HTMLCanvasElementLuminanceSource = ae, e.HybridBinarizer = D, e.ITFReader = Pe, e.IllegalArgumentException = l, e.IllegalStateException = M, e.InvertedLuminanceSource = ie, e.LuminanceSource = O, e.MathUtils = N, e.MultiFormatOneDReader = gt, e.MultiFormatReader = vn, e.MultiFormatWriter = Nn, e.NotFoundException = E, e.OneDReader = Me, e.PDF417DecodedBitStreamParser = X, e.PDF417DecoderErrorCorrection = Yt, e.PDF417Reader = gn, e.PDF417ResultMetadata = on, e.PerspectiveTransform = Te, e.PlanarYUVLuminanceSource = Pn, e.QRCodeByteMatrix = En, e.QRCodeDataMask = jt, e.QRCodeDecodedBitStreamParser = Ft, e.QRCodeDecoderErrorCorrectionLevel = Ot, e.QRCodeDecoderFormatInformation = kt, e.QRCodeEncoder = An, e.QRCodeEncoderQRCode = Dn, e.QRCodeMaskUtil = Tn, e.QRCodeMatrixUtil = Q, e.QRCodeMode = K, e.QRCodeReader = Wt, e.QRCodeVersion = G, e.QRCodeWriter = Mn, e.RGBLuminanceSource = Fn, e.RSS14Reader = ht, e.RSSExpandedReader = z, e.ReaderException = _n, e.ReedSolomonDecoder = _e, e.ReedSolomonEncoder = wn, e.ReedSolomonException = ge, e.Result = le, e.ResultMetadataType = fe, e.ResultPoint = P, e.StringUtils = w, e.UnsupportedOperationException = ee, e.VideoInputDevice = oe, e.WhiteRectangleDetector = Ce, e.WriterException = On, e.ZXingArrays = g, e.ZXingCharset = In, e.ZXingInteger = _, e.ZXingStandardCharsets = Ln, e.ZXingStringBuilder = T, e.ZXingStringEncoding = te, e.ZXingSystem = p, e.createAbstractExpandedDecoder = dt, Object.defineProperty(e, "__esModule", { value: !0 });
 	}));
-})))()), re = function() {
+})))()), _e = function() {
 	function e(e, t, n) {
 		if (this.formatMap = /* @__PURE__ */ new Map([
-			[m.QR_CODE, O.BarcodeFormat.QR_CODE],
-			[m.AZTEC, O.BarcodeFormat.AZTEC],
-			[m.CODABAR, O.BarcodeFormat.CODABAR],
-			[m.CODE_39, O.BarcodeFormat.CODE_39],
-			[m.CODE_93, O.BarcodeFormat.CODE_93],
-			[m.CODE_128, O.BarcodeFormat.CODE_128],
-			[m.DATA_MATRIX, O.BarcodeFormat.DATA_MATRIX],
-			[m.MAXICODE, O.BarcodeFormat.MAXICODE],
-			[m.ITF, O.BarcodeFormat.ITF],
-			[m.EAN_13, O.BarcodeFormat.EAN_13],
-			[m.EAN_8, O.BarcodeFormat.EAN_8],
-			[m.PDF_417, O.BarcodeFormat.PDF_417],
-			[m.RSS_14, O.BarcodeFormat.RSS_14],
-			[m.RSS_EXPANDED, O.BarcodeFormat.RSS_EXPANDED],
-			[m.UPC_A, O.BarcodeFormat.UPC_A],
-			[m.UPC_E, O.BarcodeFormat.UPC_E],
-			[m.UPC_EAN_EXTENSION, O.BarcodeFormat.UPC_EAN_EXTENSION]
-		]), this.reverseFormatMap = this.createReverseFormatMap(), !O) throw "Use html5qrcode.min.js without edit, ZXing not found.";
+			[O.QR_CODE, M.BarcodeFormat.QR_CODE],
+			[O.AZTEC, M.BarcodeFormat.AZTEC],
+			[O.CODABAR, M.BarcodeFormat.CODABAR],
+			[O.CODE_39, M.BarcodeFormat.CODE_39],
+			[O.CODE_93, M.BarcodeFormat.CODE_93],
+			[O.CODE_128, M.BarcodeFormat.CODE_128],
+			[O.DATA_MATRIX, M.BarcodeFormat.DATA_MATRIX],
+			[O.MAXICODE, M.BarcodeFormat.MAXICODE],
+			[O.ITF, M.BarcodeFormat.ITF],
+			[O.EAN_13, M.BarcodeFormat.EAN_13],
+			[O.EAN_8, M.BarcodeFormat.EAN_8],
+			[O.PDF_417, M.BarcodeFormat.PDF_417],
+			[O.RSS_14, M.BarcodeFormat.RSS_14],
+			[O.RSS_EXPANDED, M.BarcodeFormat.RSS_EXPANDED],
+			[O.UPC_A, M.BarcodeFormat.UPC_A],
+			[O.UPC_E, M.BarcodeFormat.UPC_E],
+			[O.UPC_EAN_EXTENSION, M.BarcodeFormat.UPC_EAN_EXTENSION]
+		]), this.reverseFormatMap = this.createReverseFormatMap(), !M) throw "Use html5qrcode.min.js without edit, ZXing not found.";
 		this.verbose = t, this.logger = n;
 		var r = this.createZXingFormats(e), i = /* @__PURE__ */ new Map();
-		i.set(O.DecodeHintType.POSSIBLE_FORMATS, r), i.set(O.DecodeHintType.TRY_HARDER, !1), this.hints = i;
+		i.set(M.DecodeHintType.POSSIBLE_FORMATS, r), i.set(M.DecodeHintType.TRY_HARDER, !1), this.hints = i;
 	}
 	return e.prototype.decodeAsync = function(e) {
 		var t = this;
@@ -17592,10 +17595,10 @@ var T = function() {
 			}
 		});
 	}, e.prototype.decode = function(e) {
-		var t = new O.MultiFormatReader(this.verbose, this.hints), n = new O.HTMLCanvasElementLuminanceSource(e), r = new O.BinaryBitmap(new O.HybridBinarizer(n)), i = t.decode(r);
+		var t = new M.MultiFormatReader(this.verbose, this.hints), n = new M.HTMLCanvasElementLuminanceSource(e), r = new M.BinaryBitmap(new M.HybridBinarizer(n)), i = t.decode(r);
 		return {
 			text: i.text,
-			format: b.create(this.toHtml5QrcodeSupportedFormats(i.format)),
+			format: le.create(this.toHtml5QrcodeSupportedFormats(i.format)),
 			debugData: this.createDebugData()
 		};
 	}, e.prototype.createReverseFormatMap = function() {
@@ -17615,7 +17618,7 @@ var T = function() {
 	}, e.prototype.createDebugData = function() {
 		return { decoderName: "zxing-js" };
 	}, e;
-}(), ie = function(e, t, n, r) {
+}(), ve = function(e, t, n, r) {
 	function i(e) {
 		return e instanceof n ? e : new n(function(t) {
 			t(e);
@@ -17641,7 +17644,7 @@ var T = function() {
 		}
 		c((r = r.apply(e, t || [])).next());
 	});
-}, ae = function(e, t) {
+}, ye = function(e, t) {
 	var n = {
 		label: 0,
 		sent: function() {
@@ -17714,22 +17717,22 @@ var T = function() {
 			done: !0
 		};
 	}
-}, oe = function() {
+}, N = function() {
 	function e(t, n, r) {
 		if (this.formatMap = /* @__PURE__ */ new Map([
-			[m.QR_CODE, "qr_code"],
-			[m.AZTEC, "aztec"],
-			[m.CODABAR, "codabar"],
-			[m.CODE_39, "code_39"],
-			[m.CODE_93, "code_93"],
-			[m.CODE_128, "code_128"],
-			[m.DATA_MATRIX, "data_matrix"],
-			[m.ITF, "itf"],
-			[m.EAN_13, "ean_13"],
-			[m.EAN_8, "ean_8"],
-			[m.PDF_417, "pdf417"],
-			[m.UPC_A, "upc_a"],
-			[m.UPC_E, "upc_e"]
+			[O.QR_CODE, "qr_code"],
+			[O.AZTEC, "aztec"],
+			[O.CODABAR, "codabar"],
+			[O.CODE_39, "code_39"],
+			[O.CODE_93, "code_93"],
+			[O.CODE_128, "code_128"],
+			[O.DATA_MATRIX, "data_matrix"],
+			[O.ITF, "itf"],
+			[O.EAN_13, "ean_13"],
+			[O.EAN_8, "ean_8"],
+			[O.PDF_417, "pdf417"],
+			[O.UPC_A, "upc_a"],
+			[O.UPC_E, "upc_e"]
 		]), this.reverseFormatMap = this.createReverseFormatMap(), !e.isSupported()) throw "Use html5qrcode.min.js without edit, Use BarcodeDetectorDelegate only if it isSupported();";
 		this.verbose = n, this.logger = r;
 		var i = this.createBarcodeDetectorFormats(t);
@@ -17738,16 +17741,16 @@ var T = function() {
 	return e.isSupported = function() {
 		return "BarcodeDetector" in window && new BarcodeDetector({ formats: ["qr_code"] }) !== void 0;
 	}, e.prototype.decodeAsync = function(e) {
-		return ie(this, void 0, void 0, function() {
+		return ve(this, void 0, void 0, function() {
 			var t, n;
-			return ae(this, function(r) {
+			return ye(this, function(r) {
 				switch (r.label) {
 					case 0: return [4, this.detector.detect(e)];
 					case 1:
 						if (t = r.sent(), !t || t.length === 0) throw "No barcode or QR code detected.";
 						return n = this.selectLargestBarcode(t), [2, {
 							text: n.rawValue,
-							format: b.create(this.toHtml5QrcodeSupportedFormats(n.format)),
+							format: le.create(this.toHtml5QrcodeSupportedFormats(n.format)),
 							debugData: this.createDebugData()
 						}];
 				}
@@ -17777,7 +17780,7 @@ var T = function() {
 	}, e.prototype.createDebugData = function() {
 		return { decoderName: "BarcodeDetector" };
 	}, e;
-}(), se = function(e, t, n, r) {
+}(), be = function(e, t, n, r) {
 	function i(e) {
 		return e instanceof n ? e : new n(function(t) {
 			t(e);
@@ -17803,7 +17806,7 @@ var T = function() {
 		}
 		c((r = r.apply(e, t || [])).next());
 	});
-}, ce = function(e, t) {
+}, P = function(e, t) {
 	var n = {
 		label: 0,
 		sent: function() {
@@ -17876,14 +17879,14 @@ var T = function() {
 			done: !0
 		};
 	}
-}, le = function() {
+}, xe = function() {
 	function e(e, t, n, r) {
-		this.EXECUTIONS_TO_REPORT_PERFORMANCE = 100, this.executions = 0, this.executionResults = [], this.wasPrimaryDecoderUsedInLastDecode = !1, this.verbose = n, t && oe.isSupported() ? (this.primaryDecoder = new oe(e, n, r), this.secondaryDecoder = new re(e, n, r)) : this.primaryDecoder = new re(e, n, r);
+		this.EXECUTIONS_TO_REPORT_PERFORMANCE = 100, this.executions = 0, this.executionResults = [], this.wasPrimaryDecoderUsedInLastDecode = !1, this.verbose = n, t && N.isSupported() ? (this.primaryDecoder = new N(e, n, r), this.secondaryDecoder = new _e(e, n, r)) : this.primaryDecoder = new _e(e, n, r);
 	}
 	return e.prototype.decodeAsync = function(e) {
-		return se(this, void 0, void 0, function() {
+		return be(this, void 0, void 0, function() {
 			var t;
-			return ce(this, function(n) {
+			return P(this, function(n) {
 				switch (n.label) {
 					case 0: t = performance.now(), n.label = 1;
 					case 1: return n.trys.push([
@@ -17899,9 +17902,9 @@ var T = function() {
 			});
 		});
 	}, e.prototype.decodeRobustlyAsync = function(e) {
-		return se(this, void 0, void 0, function() {
+		return be(this, void 0, void 0, function() {
 			var t, n;
-			return ce(this, function(r) {
+			return P(this, function(r) {
 				switch (r.label) {
 					case 0: t = performance.now(), r.label = 1;
 					case 1: return r.trys.push([
@@ -17936,7 +17939,7 @@ var T = function() {
 			console.log(`${i} ms for ${this.executionResults.length} last runs.`), this.executions = 0, this.executionResults = [];
 		}
 	}, e;
-}(), ue = (function() {
+}(), Se = (function() {
 	var e = function(t, n) {
 		return e = Object.setPrototypeOf || { __proto__: [] } instanceof Array && function(e, t) {
 			e.__proto__ = t;
@@ -17952,7 +17955,7 @@ var T = function() {
 		}
 		t.prototype = n === null ? Object.create(n) : (r.prototype = n.prototype, new r());
 	};
-})(), k = function(e, t, n, r) {
+})(), Ce = function(e, t, n, r) {
 	function i(e) {
 		return e instanceof n ? e : new n(function(t) {
 			t(e);
@@ -17978,7 +17981,7 @@ var T = function() {
 		}
 		c((r = r.apply(e, t || [])).next());
 	});
-}, de = function(e, t) {
+}, we = function(e, t) {
 	var n = {
 		label: 0,
 		sent: function() {
@@ -18051,7 +18054,7 @@ var T = function() {
 			done: !0
 		};
 	}
-}, fe = function() {
+}, Te = function() {
 	function e(e, t) {
 		this.name = e, this.track = t;
 	}
@@ -18066,14 +18069,14 @@ var T = function() {
 		var e = this.track.getSettings();
 		return this.name in e ? e[this.name] : null;
 	}, e;
-}(), pe = function(e) {
-	ue(t, e);
+}(), Ee = function(e) {
+	Se(t, e);
 	function t(t) {
 		return e.call(this, "zoom", t) || this;
 	}
 	return t;
 }(function(e) {
-	ue(t, e);
+	Se(t, e);
 	function t(t, n) {
 		return e.call(this, t, n) || this;
 	}
@@ -18099,22 +18102,22 @@ var T = function() {
 	}, t.prototype.failIfNotSupported = function() {
 		if (!this.isSupported()) throw Error(`${this.name} capability not supported`);
 	}, t;
-}(fe)), me = function(e) {
-	ue(t, e);
+}(Te)), De = function(e) {
+	Se(t, e);
 	function t(t) {
 		return e.call(this, "torch", t) || this;
 	}
 	return t;
-}(fe), he = function() {
+}(Te), Oe = function() {
 	function e(e) {
 		this.track = e;
 	}
 	return e.prototype.zoomFeature = function() {
-		return new pe(this.track);
+		return new Ee(this.track);
 	}, e.prototype.torchFeature = function() {
-		return new me(this.track);
+		return new De(this.track);
 	}, e;
-}(), ge = function() {
+}(), ke = function() {
 	function e(e, t, n) {
 		this.isClosed = !1, this.parentElement = e, this.mediaStream = t, this.callbacks = n, this.surface = this.createVideoElement(this.parentElement.clientWidth), e.append(this.surface);
 	}
@@ -18134,9 +18137,9 @@ var T = function() {
 		};
 		this.surface.addEventListener("playing", t), this.surface.srcObject = this.mediaStream, this.surface.play();
 	}, e.create = function(t, n, r, i) {
-		return k(this, void 0, void 0, function() {
+		return Ce(this, void 0, void 0, function() {
 			var a, o;
-			return de(this, function(s) {
+			return we(this, function(s) {
 				switch (s.label) {
 					case 0: return a = new e(t, n, i), r.aspectRatio ? (o = { aspectRatio: r.aspectRatio }, [4, a.getFirstTrackOrFail().applyConstraints(o)]) : [3, 2];
 					case 1: s.sent(), s.label = 2;
@@ -18166,8 +18169,8 @@ var T = function() {
 	}, e.prototype.getRunningTrackSettings = function() {
 		return this.getFirstTrackOrFail().getSettings();
 	}, e.prototype.applyVideoConstraints = function(e) {
-		return k(this, void 0, void 0, function() {
-			return de(this, function(t) {
+		return Ce(this, void 0, void 0, function() {
+			return we(this, function(t) {
 				if ("aspectRatio" in e) throw "Changing 'aspectRatio' in run-time is not yet supported.";
 				return [2, this.getFirstTrackOrFail().applyConstraints(e)];
 			});
@@ -18182,22 +18185,22 @@ var T = function() {
 			});
 		});
 	}, e.prototype.getCapabilities = function() {
-		return new he(this.getFirstTrackOrFail());
+		return new Oe(this.getFirstTrackOrFail());
 	}, e;
-}(), A = function() {
+}(), Ae = function() {
 	function e(e) {
 		this.mediaStream = e;
 	}
 	return e.prototype.render = function(e, t, n) {
-		return k(this, void 0, void 0, function() {
-			return de(this, function(r) {
-				return [2, ge.create(e, this.mediaStream, t, n)];
+		return Ce(this, void 0, void 0, function() {
+			return we(this, function(r) {
+				return [2, ke.create(e, this.mediaStream, t, n)];
 			});
 		});
 	}, e.create = function(t) {
-		return k(this, void 0, void 0, function() {
+		return Ce(this, void 0, void 0, function() {
 			var n, r;
-			return de(this, function(i) {
+			return we(this, function(i) {
 				switch (i.label) {
 					case 0:
 						if (!navigator.mediaDevices) throw "navigator.mediaDevices not supported";
@@ -18210,7 +18213,7 @@ var T = function() {
 			});
 		});
 	}, e;
-}(), _e = function(e, t, n, r) {
+}(), je = function(e, t, n, r) {
 	function i(e) {
 		return e instanceof n ? e : new n(function(t) {
 			t(e);
@@ -18236,7 +18239,7 @@ var T = function() {
 		}
 		c((r = r.apply(e, t || [])).next());
 	});
-}, ve = function(e, t) {
+}, Me = function(e, t) {
 	var n = {
 		label: 0,
 		sent: function() {
@@ -18309,23 +18312,23 @@ var T = function() {
 			done: !0
 		};
 	}
-}, ye = function() {
+}, F = function() {
 	function e() {}
 	return e.failIfNotSupported = function() {
-		return _e(this, void 0, void 0, function() {
-			return ve(this, function(t) {
+		return je(this, void 0, void 0, function() {
+			return Me(this, function(t) {
 				if (!navigator.mediaDevices) throw "navigator.mediaDevices not supported";
 				return [2, new e()];
 			});
 		});
 	}, e.prototype.create = function(e) {
-		return _e(this, void 0, void 0, function() {
-			return ve(this, function(t) {
-				return [2, A.create(e)];
+		return je(this, void 0, void 0, function() {
+			return Me(this, function(t) {
+				return [2, Ae.create(e)];
 			});
 		});
 	}, e;
-}(), be = function(e, t, n, r) {
+}(), Ne = function(e, t, n, r) {
 	function i(e) {
 		return e instanceof n ? e : new n(function(t) {
 			t(e);
@@ -18351,7 +18354,7 @@ var T = function() {
 		}
 		c((r = r.apply(e, t || [])).next());
 	});
-}, j = function(e, t) {
+}, Pe = function(e, t) {
 	var n = {
 		label: 0,
 		sent: function() {
@@ -18424,21 +18427,21 @@ var T = function() {
 			done: !0
 		};
 	}
-}, M = function() {
+}, Fe = function() {
 	function e() {}
 	return e.retrieve = function() {
 		return navigator.mediaDevices ? e.getCamerasFromMediaDevices() : MediaStreamTrack && MediaStreamTrack.getSources ? e.getCamerasFromMediaStreamTrack() : e.rejectWithError();
 	}, e.rejectWithError = function() {
-		var t = T.unableToQuerySupportedDevices();
-		return e.isHttpsOrLocalhost() || (t = T.insecureContextCameraQueryError()), Promise.reject(t);
+		var t = he.unableToQuerySupportedDevices();
+		return e.isHttpsOrLocalhost() || (t = he.insecureContextCameraQueryError()), Promise.reject(t);
 	}, e.isHttpsOrLocalhost = function() {
 		if (location.protocol === "https:") return !0;
 		var e = location.host.split(":")[0];
 		return e === "127.0.0.1" || e === "localhost";
 	}, e.getCamerasFromMediaDevices = function() {
-		return be(this, void 0, void 0, function() {
+		return Ne(this, void 0, void 0, function() {
 			var e, t, n, r, i, a, o;
-			return j(this, function(s) {
+			return Pe(this, function(s) {
 				switch (s.label) {
 					case 0: return e = function(e) {
 						for (var t = e.getVideoTracks(), n = 0, r = t; n < r.length; n++) {
@@ -18473,42 +18476,42 @@ var T = function() {
 			});
 		});
 	}, e;
-}(), xe;
+}(), Ie;
 (function(e) {
 	e[e.UNKNOWN = 0] = "UNKNOWN", e[e.NOT_STARTED = 1] = "NOT_STARTED", e[e.SCANNING = 2] = "SCANNING", e[e.PAUSED = 3] = "PAUSED";
-})(xe || (xe = {}));
-var N = function() {
+})(Ie || (Ie = {}));
+var Le = function() {
 	function e() {
-		this.state = xe.NOT_STARTED, this.onGoingTransactionNewState = xe.UNKNOWN;
+		this.state = Ie.NOT_STARTED, this.onGoingTransactionNewState = Ie.UNKNOWN;
 	}
 	return e.prototype.directTransition = function(e) {
 		this.failIfTransitionOngoing(), this.validateTransition(e), this.state = e;
 	}, e.prototype.startTransition = function(e) {
 		return this.failIfTransitionOngoing(), this.validateTransition(e), this.onGoingTransactionNewState = e, this;
 	}, e.prototype.execute = function() {
-		if (this.onGoingTransactionNewState === xe.UNKNOWN) throw "Transaction is already cancelled, cannot execute().";
+		if (this.onGoingTransactionNewState === Ie.UNKNOWN) throw "Transaction is already cancelled, cannot execute().";
 		var e = this.onGoingTransactionNewState;
-		this.onGoingTransactionNewState = xe.UNKNOWN, this.directTransition(e);
+		this.onGoingTransactionNewState = Ie.UNKNOWN, this.directTransition(e);
 	}, e.prototype.cancel = function() {
-		if (this.onGoingTransactionNewState === xe.UNKNOWN) throw "Transaction is already cancelled, cannot cancel().";
-		this.onGoingTransactionNewState = xe.UNKNOWN;
+		if (this.onGoingTransactionNewState === Ie.UNKNOWN) throw "Transaction is already cancelled, cannot cancel().";
+		this.onGoingTransactionNewState = Ie.UNKNOWN;
 	}, e.prototype.getState = function() {
 		return this.state;
 	}, e.prototype.failIfTransitionOngoing = function() {
-		if (this.onGoingTransactionNewState !== xe.UNKNOWN) throw "Cannot transition to a new state, already under transition";
+		if (this.onGoingTransactionNewState !== Ie.UNKNOWN) throw "Cannot transition to a new state, already under transition";
 	}, e.prototype.validateTransition = function(e) {
 		switch (this.state) {
-			case xe.UNKNOWN: throw "Transition from unknown is not allowed";
-			case xe.NOT_STARTED:
-				this.failIfNewStateIs(e, [xe.PAUSED]);
+			case Ie.UNKNOWN: throw "Transition from unknown is not allowed";
+			case Ie.NOT_STARTED:
+				this.failIfNewStateIs(e, [Ie.PAUSED]);
 				break;
-			case xe.SCANNING: break;
-			case xe.PAUSED:
+			case Ie.SCANNING: break;
+			case Ie.PAUSED:
 		}
 	}, e.prototype.failIfNewStateIs = function(e, t) {
 		for (var n = 0, r = t; n < r.length; n++) if (e === r[n]) throw `Cannot transition from ${this.state} to ${e}`;
 	}, e;
-}(), Se = function() {
+}(), Re = function() {
 	function e(e) {
 		this.stateManager = e;
 	}
@@ -18519,20 +18522,20 @@ var N = function() {
 	}, e.prototype.getState = function() {
 		return this.stateManager.getState();
 	}, e.prototype.canScanFile = function() {
-		return this.stateManager.getState() === xe.NOT_STARTED;
+		return this.stateManager.getState() === Ie.NOT_STARTED;
 	}, e.prototype.isScanning = function() {
-		return this.stateManager.getState() !== xe.NOT_STARTED;
+		return this.stateManager.getState() !== Ie.NOT_STARTED;
 	}, e.prototype.isStrictlyScanning = function() {
-		return this.stateManager.getState() === xe.SCANNING;
+		return this.stateManager.getState() === Ie.SCANNING;
 	}, e.prototype.isPaused = function() {
-		return this.stateManager.getState() === xe.PAUSED;
+		return this.stateManager.getState() === Ie.PAUSED;
 	}, e;
-}(), Ce = function() {
+}(), I = function() {
 	function e() {}
 	return e.create = function() {
-		return new Se(new N());
+		return new Re(new Le());
 	}, e;
-}(), we = (function() {
+}(), ze = (function() {
 	var e = function(t, n) {
 		return e = Object.setPrototypeOf || { __proto__: [] } instanceof Array && function(e, t) {
 			e.__proto__ = t;
@@ -18548,41 +18551,41 @@ var N = function() {
 		}
 		t.prototype = n === null ? Object.create(n) : (r.prototype = n.prototype, new r());
 	};
-})(), Te = function(e) {
-	we(t, e);
+})(), Be = function(e) {
+	ze(t, e);
 	function t() {
 		return e !== null && e.apply(this, arguments) || this;
 	}
 	return t.DEFAULT_WIDTH = 300, t.DEFAULT_WIDTH_OFFSET = 2, t.FILE_SCAN_MIN_HEIGHT = 300, t.FILE_SCAN_HIDDEN_CANVAS_PADDING = 100, t.MIN_QR_BOX_SIZE = 50, t.SHADED_LEFT = 1, t.SHADED_RIGHT = 2, t.SHADED_TOP = 3, t.SHADED_BOTTOM = 4, t.SHADED_REGION_ELEMENT_ID = "qr-shaded-region", t.VERBOSE = !1, t.BORDER_SHADER_DEFAULT_COLOR = "#ffffff", t.BORDER_SHADER_MATCH_COLOR = "rgb(90, 193, 56)", t;
-}(y), Ee = function() {
+}(ce), Ve = function() {
 	function e(e, t) {
-		this.logger = t, this.fps = Te.SCAN_DEFAULT_FPS, e ? (e.fps && (this.fps = e.fps), this.disableFlip = e.disableFlip === !0, this.qrbox = e.qrbox, this.aspectRatio = e.aspectRatio, this.videoConstraints = e.videoConstraints) : this.disableFlip = Te.DEFAULT_DISABLE_FLIP;
+		this.logger = t, this.fps = Be.SCAN_DEFAULT_FPS, e ? (e.fps && (this.fps = e.fps), this.disableFlip = e.disableFlip === !0, this.qrbox = e.qrbox, this.aspectRatio = e.aspectRatio, this.videoConstraints = e.videoConstraints) : this.disableFlip = Be.DEFAULT_DISABLE_FLIP;
 	}
 	return e.prototype.isMediaStreamConstraintsValid = function() {
-		return this.videoConstraints ? ne.isMediaStreamConstraintsValid(this.videoConstraints, this.logger) : (this.logger.logError("Empty videoConstraints", !0), !1);
+		return this.videoConstraints ? ge.isMediaStreamConstraintsValid(this.videoConstraints, this.logger) : (this.logger.logError("Empty videoConstraints", !0), !1);
 	}, e.prototype.isShadedBoxEnabled = function() {
-		return !te(this.qrbox);
+		return !pe(this.qrbox);
 	}, e.create = function(t, n) {
 		return new e(t, n);
 	}, e;
-}(), De = function() {
+}(), He = function() {
 	function e(e, t) {
 		if (this.element = null, this.canvasElement = null, this.scannerPausedUiElement = null, this.hasBorderShaders = null, this.borderShaders = null, this.qrMatch = null, this.renderedCamera = null, this.qrRegion = null, this.context = null, this.lastScanImageFile = null, this.isScanning = !1, !document.getElementById(e)) throw `HTML Element with id=${e} not found`;
 		this.elementId = e, this.verbose = !1;
 		var n;
-		typeof t == "boolean" ? this.verbose = t === !0 : t && (n = t, this.verbose = n.verbose === !0, n.experimentalFeatures), this.logger = new ee(this.verbose), this.qrcode = new le(this.getSupportedFormats(t), this.getUseBarCodeDetectorIfSupported(n), this.verbose, this.logger), this.foreverScanTimeout, this.shouldScan = !0, this.stateManagerProxy = Ce.create();
+		typeof t == "boolean" ? this.verbose = t === !0 : t && (n = t, this.verbose = n.verbose === !0, n.experimentalFeatures), this.logger = new fe(this.verbose), this.qrcode = new xe(this.getSupportedFormats(t), this.getUseBarCodeDetectorIfSupported(n), this.verbose, this.logger), this.foreverScanTimeout, this.shouldScan = !0, this.stateManagerProxy = I.create();
 	}
 	return e.prototype.start = function(e, t, n, r) {
 		var i = this;
 		if (!e) throw "cameraIdOrConfig is required";
 		if (!n || typeof n != "function") throw "qrCodeSuccessCallback is required and should be a function.";
-		var a = r || (this.verbose ? this.logger.log : function() {}), o = Ee.create(t, this.logger);
+		var a = r || (this.verbose ? this.logger.log : function() {}), o = Ve.create(t, this.logger);
 		this.clearElement();
 		var s = !1;
 		o.videoConstraints && (o.isMediaStreamConstraintsValid() ? s = !0 : this.logger.logError("'videoConstraints' is not valid 'MediaStreamConstraints, it will be ignored.'", !0));
 		var c = s, l = document.getElementById(this.elementId);
-		l.clientWidth ? l.clientWidth : Te.DEFAULT_WIDTH, l.style.position = "relative", this.shouldScan = !0, this.element = l;
-		var u = this, d = this.stateManagerProxy.startTransition(xe.SCANNING);
+		l.clientWidth ? l.clientWidth : Be.DEFAULT_WIDTH, l.style.position = "relative", this.shouldScan = !0, this.element = l;
+		var u = this, d = this.stateManagerProxy.startTransition(Ie.SCANNING);
 		return new Promise(function(t, r) {
 			var s = c ? o.videoConstraints : u.createVideoConstraints(e);
 			if (!s) {
@@ -18594,7 +18597,7 @@ var N = function() {
 			var f = { onRenderSurfaceReady: function(e, t) {
 				u.setupUi(e, t, o), u.isScanning = !0, u.foreverScan(o, n, a);
 			} };
-			ye.failIfNotSupported().then(function(e) {
+			F.failIfNotSupported().then(function(e) {
 				e.create(s).then(function(e) {
 					return e.render(i.element, l, f).then(function(e) {
 						u.renderedCamera = e, d.execute(), t(null);
@@ -18602,20 +18605,20 @@ var N = function() {
 						d.cancel(), r(e);
 					});
 				}).catch(function(e) {
-					d.cancel(), r(T.errorGettingUserMedia(e));
+					d.cancel(), r(he.errorGettingUserMedia(e));
 				});
 			}).catch(function(e) {
-				d.cancel(), r(T.cameraStreamingNotSupported());
+				d.cancel(), r(he.cameraStreamingNotSupported());
 			});
 		});
 	}, e.prototype.pause = function(e) {
 		if (!this.stateManagerProxy.isStrictlyScanning()) throw "Cannot pause, scanner is not scanning.";
-		this.stateManagerProxy.directTransition(xe.PAUSED), this.showPausedState(), (te(e) || e !== !0) && (e = !1), e && this.renderedCamera && this.renderedCamera.pause();
+		this.stateManagerProxy.directTransition(Ie.PAUSED), this.showPausedState(), (pe(e) || e !== !0) && (e = !1), e && this.renderedCamera && this.renderedCamera.pause();
 	}, e.prototype.resume = function() {
 		if (!this.stateManagerProxy.isPaused()) throw "Cannot result, scanner is not paused.";
 		if (!this.renderedCamera) throw "renderedCamera doesn't exist while trying resume()";
 		var e = this, t = function() {
-			e.stateManagerProxy.directTransition(xe.SCANNING), e.hidePausedState();
+			e.stateManagerProxy.directTransition(Ie.SCANNING), e.hidePausedState();
 		};
 		if (!this.renderedCamera.isPaused()) {
 			t();
@@ -18629,11 +18632,11 @@ var N = function() {
 	}, e.prototype.stop = function() {
 		var e = this;
 		if (!this.stateManagerProxy.isScanning()) throw "Cannot stop, scanner is not running or paused.";
-		var t = this.stateManagerProxy.startTransition(xe.NOT_STARTED);
+		var t = this.stateManagerProxy.startTransition(Ie.NOT_STARTED);
 		this.shouldScan = !1, this.foreverScanTimeout && clearTimeout(this.foreverScanTimeout);
 		var n = function() {
 			if (e.element) {
-				var t = document.getElementById(Te.SHADED_REGION_ELEMENT_ID);
+				var t = document.getElementById(Be.SHADED_REGION_ELEMENT_ID);
 				t && e.element.removeChild(t);
 			}
 		}, r = this;
@@ -18647,12 +18650,12 @@ var N = function() {
 	}, e.prototype.scanFileV2 = function(e, t) {
 		var n = this;
 		if (!e || !(e instanceof File)) throw "imageFile argument is mandatory and should be instance of File. Use 'event.target.files[0]'.";
-		if (te(t) && (t = !0), !this.stateManagerProxy.canScanFile()) throw "Cannot start file scan - ongoing camera scan";
+		if (pe(t) && (t = !0), !this.stateManagerProxy.canScanFile()) throw "Cannot start file scan - ongoing camera scan";
 		return new Promise(function(r, i) {
 			n.possiblyCloseLastScanImageFile(), n.clearElement(), n.lastScanImageFile = URL.createObjectURL(e);
 			var a = new Image();
 			a.onload = function() {
-				var e = a.width, o = a.height, s = document.getElementById(n.elementId), c = s.clientWidth ? s.clientWidth : Te.DEFAULT_WIDTH, l = Math.max(s.clientHeight ? s.clientHeight : o, Te.FILE_SCAN_MIN_HEIGHT), u = n.computeCanvasDrawConfig(e, o, c, l);
+				var e = a.width, o = a.height, s = document.getElementById(n.elementId), c = s.clientWidth ? s.clientWidth : Be.DEFAULT_WIDTH, l = Math.max(s.clientHeight ? s.clientHeight : o, Be.FILE_SCAN_MIN_HEIGHT), u = n.computeCanvasDrawConfig(e, o, c, l);
 				if (t) {
 					var d = n.createCanvasElement(c, l, "qr-canvas-visible");
 					d.style.display = "inline-block", s.appendChild(d);
@@ -18660,14 +18663,14 @@ var N = function() {
 					if (!f) throw "Unable to get 2d context from canvas";
 					f.canvas.width = c, f.canvas.height = l, f.drawImage(a, 0, 0, e, o, u.x, u.y, u.width, u.height);
 				}
-				var p = Te.FILE_SCAN_HIDDEN_CANVAS_PADDING, m = Math.max(a.width, u.width), h = Math.max(a.height, u.height), g = m + 2 * p, _ = h + 2 * p, v = n.createCanvasElement(g, _);
+				var p = Be.FILE_SCAN_HIDDEN_CANVAS_PADDING, m = Math.max(a.width, u.width), h = Math.max(a.height, u.height), g = m + 2 * p, _ = h + 2 * p, v = n.createCanvasElement(g, _);
 				s.appendChild(v);
 				var y = v.getContext("2d");
 				if (!y) throw "Unable to get 2d context from canvas";
 				y.canvas.width = g, y.canvas.height = _, y.drawImage(a, 0, 0, e, o, p, p, m, h);
 				try {
 					n.qrcode.decodeRobustlyAsync(v).then(function(e) {
-						r(x.createFromQrcodeResult(e));
+						r(ue.createFromQrcodeResult(e));
 					}).catch(i);
 				} catch (e) {
 					i(`QR code parse error, error = ${e}`);
@@ -18677,7 +18680,7 @@ var N = function() {
 	}, e.prototype.clear = function() {
 		this.clearElement();
 	}, e.getCameras = function() {
-		return M.retrieve();
+		return Fe.retrieve();
 	}, e.prototype.getRunningTrackCapabilities = function() {
 		return this.getRenderedCameraOrFail().getRunningTrackCapabilities();
 	}, e.prototype.getRunningTrackSettings = function() {
@@ -18686,51 +18689,51 @@ var N = function() {
 		return this.getRenderedCameraOrFail().getCapabilities();
 	}, e.prototype.applyVideoConstraints = function(e) {
 		if (!e) throw "videoConstaints is required argument.";
-		if (!ne.isMediaStreamConstraintsValid(e, this.logger)) throw "invalid videoConstaints passed, check logs for more details";
+		if (!ge.isMediaStreamConstraintsValid(e, this.logger)) throw "invalid videoConstaints passed, check logs for more details";
 		return this.getRenderedCameraOrFail().applyVideoConstraints(e);
 	}, e.prototype.getRenderedCameraOrFail = function() {
 		if (this.renderedCamera == null) throw "Scanning is not in running state, call this API only when QR code scanning using camera is in running state.";
 		return this.renderedCamera;
 	}, e.prototype.getSupportedFormats = function(e) {
 		var t = [
-			m.QR_CODE,
-			m.AZTEC,
-			m.CODABAR,
-			m.CODE_39,
-			m.CODE_93,
-			m.CODE_128,
-			m.DATA_MATRIX,
-			m.MAXICODE,
-			m.ITF,
-			m.EAN_13,
-			m.EAN_8,
-			m.PDF_417,
-			m.RSS_14,
-			m.RSS_EXPANDED,
-			m.UPC_A,
-			m.UPC_E,
-			m.UPC_EAN_EXTENSION
+			O.QR_CODE,
+			O.AZTEC,
+			O.CODABAR,
+			O.CODE_39,
+			O.CODE_93,
+			O.CODE_128,
+			O.DATA_MATRIX,
+			O.MAXICODE,
+			O.ITF,
+			O.EAN_13,
+			O.EAN_8,
+			O.PDF_417,
+			O.RSS_14,
+			O.RSS_EXPANDED,
+			O.UPC_A,
+			O.UPC_E,
+			O.UPC_EAN_EXTENSION
 		];
 		if (!e || typeof e == "boolean" || !e.formatsToSupport) return t;
 		if (!Array.isArray(e.formatsToSupport)) throw "configOrVerbosityFlag.formatsToSupport should be undefined or an array.";
 		if (e.formatsToSupport.length === 0) throw "Atleast 1 formatsToSupport is needed.";
 		for (var n = [], r = 0, i = e.formatsToSupport; r < i.length; r++) {
 			var a = i[r];
-			_(a) ? n.push(a) : this.logger.warn(`Invalid format: ${a} passed in config, ignoring.`);
+			oe(a) ? n.push(a) : this.logger.warn(`Invalid format: ${a} passed in config, ignoring.`);
 		}
 		if (n.length === 0) throw "None of formatsToSupport match supported values.";
 		return n;
 	}, e.prototype.getUseBarCodeDetectorIfSupported = function(e) {
-		if (te(e)) return !0;
-		if (!te(e.useBarCodeDetectorIfSupported)) return e.useBarCodeDetectorIfSupported !== !1;
-		if (te(e.experimentalFeatures)) return !0;
+		if (pe(e)) return !0;
+		if (!pe(e.useBarCodeDetectorIfSupported)) return e.useBarCodeDetectorIfSupported !== !1;
+		if (pe(e.experimentalFeatures)) return !0;
 		var t = e.experimentalFeatures;
-		return te(t.useBarCodeDetectorIfSupported) ? !0 : t.useBarCodeDetectorIfSupported !== !1;
+		return pe(t.useBarCodeDetectorIfSupported) ? !0 : t.useBarCodeDetectorIfSupported !== !1;
 	}, e.prototype.validateQrboxSize = function(e, t, n) {
 		var r = this, i = n.qrbox;
 		this.validateQrboxConfig(i);
 		var a = this.toQrdimensions(e, t, i), o = function(e) {
-			if (e < Te.MIN_QR_BOX_SIZE) throw `minimum size of 'config.qrbox' dimension value is ${Te.MIN_QR_BOX_SIZE}px.`;
+			if (e < Be.MIN_QR_BOX_SIZE) throw `minimum size of 'config.qrbox' dimension value is ${Be.MIN_QR_BOX_SIZE}px.`;
 		};
 		o(a.width), o(a.height), a.width = function(t) {
 			return t > e && (r.logger.warn("`qrbox.width` or `qrbox` is larger than the width of the root element. The width will be truncated to the width of root element."), t = e), t;
@@ -18750,7 +18753,7 @@ var N = function() {
 		return n;
 	}, e.prototype.setupUi = function(e, t, n) {
 		n.isShadedBoxEnabled() && this.validateQrboxSize(e, t, n);
-		var r = te(n.qrbox) ? {
+		var r = pe(n.qrbox) ? {
 			width: e,
 			height: t
 		} : n.qrbox;
@@ -18766,15 +18769,15 @@ var N = function() {
 		c.canvas.width = o.width, c.canvas.height = o.height, this.element.append(s), a && this.possiblyInsertShadingElement(this.element, e, t, i), this.createScannerPausedUiElement(this.element), this.qrRegion = o, this.context = c, this.canvasElement = s;
 	}, e.prototype.createScannerPausedUiElement = function(e) {
 		var t = document.createElement("div");
-		t.innerText = T.scannerPaused(), t.style.display = "none", t.style.position = "absolute", t.style.top = "0px", t.style.zIndex = "1", t.style.background = "rgba(9, 9, 9, 0.46)", t.style.color = "#FFECEC", t.style.textAlign = "center", t.style.width = "100%", e.appendChild(t), this.scannerPausedUiElement = t;
+		t.innerText = he.scannerPaused(), t.style.display = "none", t.style.position = "absolute", t.style.top = "0px", t.style.zIndex = "1", t.style.background = "rgba(9, 9, 9, 0.46)", t.style.color = "#FFECEC", t.style.textAlign = "center", t.style.width = "100%", e.appendChild(t), this.scannerPausedUiElement = t;
 	}, e.prototype.scanContext = function(e, t) {
 		var n = this;
 		return this.stateManagerProxy.isPaused() ? Promise.resolve(!1) : this.qrcode.decodeAsync(this.canvasElement).then(function(t) {
-			return e(t.text, x.createFromQrcodeResult(t)), n.possiblyUpdateShaders(!0), !0;
+			return e(t.text, ue.createFromQrcodeResult(t)), n.possiblyUpdateShaders(!0), !0;
 		}).catch(function(e) {
 			n.possiblyUpdateShaders(!1);
-			var r = T.codeParseError(e);
-			return t(r, C.createFrom(r)), !1;
+			var r = he.codeParseError(e);
+			return t(r, de.createFrom(r)), !1;
 		});
 	}, e.prototype.foreverScan = function(e, t, n) {
 		var r = this;
@@ -18844,13 +18847,13 @@ var N = function() {
 		e && (e.innerHTML = "");
 	}, e.prototype.possiblyUpdateShaders = function(e) {
 		this.qrMatch !== e && (this.hasBorderShaders && this.borderShaders && this.borderShaders.length && this.borderShaders.forEach(function(t) {
-			t.style.backgroundColor = e ? Te.BORDER_SHADER_MATCH_COLOR : Te.BORDER_SHADER_DEFAULT_COLOR;
+			t.style.backgroundColor = e ? Be.BORDER_SHADER_MATCH_COLOR : Be.BORDER_SHADER_DEFAULT_COLOR;
 		}), this.qrMatch = e);
 	}, e.prototype.possiblyCloseLastScanImageFile = function() {
 		this.lastScanImageFile && (URL.revokeObjectURL(this.lastScanImageFile), this.lastScanImageFile = null);
 	}, e.prototype.createCanvasElement = function(e, t, n) {
 		var r = e, i = t, a = document.createElement("canvas");
-		return a.style.width = `${r}px`, a.style.height = `${i}px`, a.style.display = "none", a.id = te(n) ? "qr-canvas" : n, a;
+		return a.style.width = `${r}px`, a.style.height = `${i}px`, a.style.display = "none", a.id = pe(n) ? "qr-canvas" : n, a;
 	}, e.prototype.getShadedRegionBounds = function(e, t, n) {
 		if (n.width > e || n.height > t) throw "'config.qrbox' dimensions should not be greater than the dimensions of the root HTML element.";
 		return {
@@ -18864,7 +18867,7 @@ var N = function() {
 			var i = document.createElement("div");
 			i.style.position = "absolute";
 			var a = (t - r.width) / 2, o = (n - r.height) / 2;
-			if (i.style.borderLeft = `${a}px solid rgba(0, 0, 0, 0.48)`, i.style.borderRight = `${a}px solid rgba(0, 0, 0, 0.48)`, i.style.borderTop = `${o}px solid rgba(0, 0, 0, 0.48)`, i.style.borderBottom = `${o}px solid rgba(0, 0, 0, 0.48)`, i.style.boxSizing = "border-box", i.style.top = "0px", i.style.bottom = "0px", i.style.left = "0px", i.style.right = "0px", i.id = `${Te.SHADED_REGION_ELEMENT_ID}`, t - r.width < 11 || n - r.height < 11) this.hasBorderShaders = !1;
+			if (i.style.borderLeft = `${a}px solid rgba(0, 0, 0, 0.48)`, i.style.borderRight = `${a}px solid rgba(0, 0, 0, 0.48)`, i.style.borderTop = `${o}px solid rgba(0, 0, 0, 0.48)`, i.style.borderBottom = `${o}px solid rgba(0, 0, 0, 0.48)`, i.style.boxSizing = "border-box", i.style.top = "0px", i.style.bottom = "0px", i.style.left = "0px", i.style.right = "0px", i.id = `${Be.SHADED_REGION_ELEMENT_ID}`, t - r.width < 11 || n - r.height < 11) this.hasBorderShaders = !1;
 			else {
 				var s = 5, c = 40;
 				this.insertShaderBorders(i, c, s, -s, null, 0, !0), this.insertShaderBorders(i, c, s, -s, null, 0, !1), this.insertShaderBorders(i, c, s, null, -s, 0, !0), this.insertShaderBorders(i, c, s, null, -s, 0, !1), this.insertShaderBorders(i, s, c + s, -s, null, -s, !0), this.insertShaderBorders(i, s, c + s, null, -s, -s, !0), this.insertShaderBorders(i, s, c + s, -s, null, -s, !1), this.insertShaderBorders(i, s, c + s, null, -s, -s, !1), this.hasBorderShaders = !0;
@@ -18873,7 +18876,7 @@ var N = function() {
 		}
 	}, e.prototype.insertShaderBorders = function(e, t, n, r, i, a, o) {
 		var s = document.createElement("div");
-		s.style.position = "absolute", s.style.backgroundColor = Te.BORDER_SHADER_DEFAULT_COLOR, s.style.width = `${t}px`, s.style.height = `${n}px`, r !== null && (s.style.top = `${r}px`), i !== null && (s.style.bottom = `${i}px`), o ? s.style.left = `${a}px` : s.style.right = `${a}px`, this.borderShaders || (this.borderShaders = []), this.borderShaders.push(s), e.appendChild(s);
+		s.style.position = "absolute", s.style.backgroundColor = Be.BORDER_SHADER_DEFAULT_COLOR, s.style.width = `${t}px`, s.style.height = `${n}px`, r !== null && (s.style.top = `${r}px`), i !== null && (s.style.bottom = `${i}px`), o ? s.style.left = `${a}px` : s.style.right = `${a}px`, this.borderShaders || (this.borderShaders = []), this.borderShaders.push(s), e.appendChild(s);
 	}, e.prototype.showPausedState = function() {
 		if (!this.scannerPausedUiElement) throw "[internal error] scanner paused UI element not found";
 		this.scannerPausedUiElement.style.display = "block";
@@ -18883,7 +18886,7 @@ var N = function() {
 	}, e.prototype.getTimeoutFps = function(e) {
 		return 1e3 / e;
 	}, e;
-}(), Oe = "data:image/svg+xml;base64,", ke = Oe + "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNzEuNjQzIDM3MS42NDMiIHN0eWxlPSJlbmFibGUtYmFja2dyb3VuZDpuZXcgMCAwIDM3MS42NDMgMzcxLjY0MyIgeG1sOnNwYWNlPSJwcmVzZXJ2ZSI+PHBhdGggZD0iTTEwNS4wODQgMzguMjcxaDE2My43Njh2MjBIMTA1LjA4NHoiLz48cGF0aCBkPSJNMzExLjU5NiAxOTAuMTg5Yy03LjQ0MS05LjM0Ny0xOC40MDMtMTYuMjA2LTMyLjc0My0yMC41MjJWMzBjMC0xNi41NDItMTMuNDU4LTMwLTMwLTMwSDEyNS4wODRjLTE2LjU0MiAwLTMwIDEzLjQ1OC0zMCAzMHYxMjAuMTQzaC04LjI5NmMtMTYuNTQyIDAtMzAgMTMuNDU4LTMwIDMwdjEuMzMzYTI5LjgwNCAyOS44MDQgMCAwIDAgNC42MDMgMTUuOTM5Yy03LjM0IDUuNDc0LTEyLjEwMyAxNC4yMjEtMTIuMTAzIDI0LjA2MXYxLjMzM2MwIDkuODQgNC43NjMgMTguNTg3IDEyLjEwMyAyNC4wNjJhMjkuODEgMjkuODEgMCAwIDAtNC42MDMgMTUuOTM4djEuMzMzYzAgMTYuNTQyIDEzLjQ1OCAzMCAzMCAzMGg4LjMyNGMuNDI3IDExLjYzMSA3LjUwMyAyMS41ODcgMTcuNTM0IDI2LjE3Ny45MzEgMTAuNTAzIDQuMDg0IDMwLjE4NyAxNC43NjggNDUuNTM3YTkuOTg4IDkuOTg4IDAgMCAwIDguMjE2IDQuMjg4IDkuOTU4IDkuOTU4IDAgMCAwIDUuNzA0LTEuNzkzYzQuNTMzLTMuMTU1IDUuNjUtOS4zODggMi40OTUtMTMuOTIxLTYuNzk4LTkuNzY3LTkuNjAyLTIyLjYwOC0xMC43Ni0zMS40aDgyLjY4NWMuMjcyLjQxNC41NDUuODE4LjgxNSAxLjIxIDMuMTQyIDQuNTQxIDkuMzcyIDUuNjc5IDEzLjkxMyAyLjUzNCA0LjU0Mi0zLjE0MiA1LjY3Ny05LjM3MSAyLjUzNS0xMy45MTMtMTEuOTE5LTE3LjIyOS04Ljc4Ny0zNS44ODQgOS41ODEtNTcuMDEyIDMuMDY3LTIuNjUyIDEyLjMwNy0xMS43MzIgMTEuMjE3LTI0LjAzMy0uODI4LTkuMzQzLTcuMTA5LTE3LjE5NC0xOC42NjktMjMuMzM3YTkuODU3IDkuODU3IDAgMCAwLTEuMDYxLS40ODZjLS40NjYtLjE4Mi0xMS40MDMtNC41NzktOS43NDEtMTUuNzA2IDEuMDA3LTYuNzM3IDE0Ljc2OC04LjI3MyAyMy43NjYtNy42NjYgMjMuMTU2IDEuNTY5IDM5LjY5OCA3LjgwMyA0Ny44MzYgMTguMDI2IDUuNzUyIDcuMjI1IDcuNjA3IDE2LjYyMyA1LjY3MyAyOC43MzMtLjQxMyAyLjU4NS0uODI0IDUuMjQxLTEuMjQ1IDcuOTU5LTUuNzU2IDM3LjE5NC0xMi45MTkgODMuNDgzLTQ5Ljg3IDExNC42NjEtNC4yMjEgMy41NjEtNC43NTYgOS44Ny0xLjE5NCAxNC4wOTJhOS45OCA5Ljk4IDAgMCAwIDcuNjQ4IDMuNTUxIDkuOTU1IDkuOTU1IDAgMCAwIDYuNDQ0LTIuMzU4YzQyLjY3Mi0zNi4wMDUgNTAuODAyLTg4LjUzMyA1Ni43MzctMTI2Ljg4OC40MTUtMi42ODQuODIxLTUuMzA5IDEuMjI5LTcuODYzIDIuODM0LTE3LjcyMS0uNDU1LTMyLjY0MS05Ljc3Mi00NC4zNDV6bS0yMzIuMzA4IDQyLjYyYy01LjUxNCAwLTEwLTQuNDg2LTEwLTEwdi0xLjMzM2MwLTUuNTE0IDQuNDg2LTEwIDEwLTEwaDE1djIxLjMzM2gtMTV6bS0yLjUtNTIuNjY2YzAtNS41MTQgNC40ODYtMTAgMTAtMTBoNy41djIxLjMzM2gtNy41Yy01LjUxNCAwLTEwLTQuNDg2LTEwLTEwdi0xLjMzM3ptMTcuNSA5My45OTloLTcuNWMtNS41MTQgMC0xMC00LjQ4Ni0xMC0xMHYtMS4zMzNjMC01LjUxNCA0LjQ4Ni0xMCAxMC0xMGg3LjV2MjEuMzMzem0zMC43OTYgMjguODg3Yy01LjUxNCAwLTEwLTQuNDg2LTEwLTEwdi04LjI3MWg5MS40NTdjLS44NTEgNi42NjgtLjQzNyAxMi43ODcuNzMxIDE4LjI3MWgtODIuMTg4em03OS40ODItMTEzLjY5OGMtMy4xMjQgMjAuOTA2IDEyLjQyNyAzMy4xODQgMjEuNjI1IDM3LjA0IDUuNDQxIDIuOTY4IDcuNTUxIDUuNjQ3IDcuNzAxIDcuMTg4LjIxIDIuMTUtMi41NTMgNS42ODQtNC40NzcgNy4yNTEtLjQ4Mi4zNzgtLjkyOS44LTEuMzM1IDEuMjYxLTYuOTg3IDcuOTM2LTExLjk4MiAxNS41Mi0xNS40MzIgMjIuNjg4aC05Ny41NjRWMzBjMC01LjUxNCA0LjQ4Ni0xMCAxMC0xMGgxMjMuNzY5YzUuNTE0IDAgMTAgNC40ODYgMTAgMTB2MTM1LjU3OWMtMy4wMzItLjM4MS02LjE1LS42OTQtOS4zODktLjkxNC0yNS4xNTktMS42OTQtNDIuMzcgNy43NDgtNDQuODk4IDI0LjY2NnoiLz48cGF0aCBkPSJNMTc5LjEyOSA4My4xNjdoLTI0LjA2YTUgNSAwIDAgMC01IDV2MjQuMDYxYTUgNSAwIDAgMCA1IDVoMjQuMDZhNSA1IDAgMCAwIDUtNVY4OC4xNjdhNSA1IDAgMCAwLTUtNXpNMTcyLjYyOSAxNDIuODZoLTEyLjU2VjEzMC44YTUgNSAwIDEgMC0xMCAwdjE3LjA2MWE1IDUgMCAwIDAgNSA1aDE3LjU2YTUgNSAwIDEgMCAwLTEwLjAwMXpNMjE2LjU2OCA4My4xNjdoLTI0LjA2YTUgNSAwIDAgMC01IDV2MjQuMDYxYTUgNSAwIDAgMCA1IDVoMjQuMDZhNSA1IDAgMCAwIDUtNVY4OC4xNjdhNSA1IDAgMCAwLTUtNXptLTUgMjQuMDYxaC0xNC4wNlY5My4xNjdoMTQuMDZ2MTQuMDYxek0yMTEuNjY5IDEyNS45MzZIMTk3LjQxYTUgNSAwIDAgMC01IDV2MTQuMjU3YTUgNSAwIDAgMCA1IDVoMTQuMjU5YTUgNSAwIDAgMCA1LTV2LTE0LjI1N2E1IDUgMCAwIDAtNS01eiIvPjwvc3ZnPg==", Ae = Oe + "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1OS4wMTggNTkuMDE4IiBzdHlsZT0iZW5hYmxlLWJhY2tncm91bmQ6bmV3IDAgMCA1OS4wMTggNTkuMDE4IiB4bWw6c3BhY2U9InByZXNlcnZlIj48cGF0aCBkPSJtNTguNzQxIDU0LjgwOS01Ljk2OS02LjI0NGExMC43NCAxMC43NCAwIDAgMCAyLjgyLTcuMjVjMC01Ljk1My00Ljg0My0xMC43OTYtMTAuNzk2LTEwLjc5NlMzNCAzNS4zNjEgMzQgNDEuMzE0IDM4Ljg0MyA1Mi4xMSA0NC43OTYgNTIuMTFjMi40NDEgMCA0LjY4OC0uODI0IDYuNDk5LTIuMTk2bDYuMDAxIDYuMjc3YS45OTguOTk4IDAgMCAwIDEuNDE0LjAzMiAxIDEgMCAwIDAgLjAzMS0xLjQxNHpNMzYgNDEuMzE0YzAtNC44NSAzLjk0Ni04Ljc5NiA4Ljc5Ni04Ljc5NnM4Ljc5NiAzLjk0NiA4Ljc5NiA4Ljc5Ni0zLjk0NiA4Ljc5Ni04Ljc5NiA4Ljc5NlMzNiA0Ni4xNjQgMzYgNDEuMzE0ek0xMC40MzEgMTYuMDg4YzAgMy4wNyAyLjQ5OCA1LjU2OCA1LjU2OSA1LjU2OHM1LjU2OS0yLjQ5OCA1LjU2OS01LjU2OGMwLTMuMDcxLTIuNDk4LTUuNTY5LTUuNTY5LTUuNTY5cy01LjU2OSAyLjQ5OC01LjU2OSA1LjU2OXptOS4xMzggMGMwIDEuOTY4LTEuNjAyIDMuNTY4LTMuNTY5IDMuNTY4cy0zLjU2OS0xLjYwMS0zLjU2OS0zLjU2OCAxLjYwMi0zLjU2OSAzLjU2OS0zLjU2OSAzLjU2OSAxLjYwMSAzLjU2OSAzLjU2OXoiLz48cGF0aCBkPSJtMzAuODgyIDI4Ljk4NyA5LjE4LTEwLjA1NCAxMS4yNjIgMTAuMzIzYTEgMSAwIDAgMCAxLjM1MS0xLjQ3NWwtMTItMTFhMSAxIDAgMCAwLTEuNDE0LjA2M2wtOS43OTQgMTAuNzI3LTQuNzQzLTQuNzQzYTEuMDAzIDEuMDAzIDAgMCAwLTEuMzY4LS4wNDRMNi4zMzkgMzcuNzY4YTEgMSAwIDEgMCAxLjMyMiAxLjUwMWwxNi4zMTMtMTQuMzYyIDcuMzE5IDcuMzE4YS45OTkuOTk5IDAgMSAwIDEuNDE0LTEuNDE0bC0xLjgyNS0xLjgyNHoiLz48cGF0aCBkPSJNMzAgNDYuNTE4SDJ2LTQyaDU0djI4YTEgMSAwIDEgMCAyIDB2LTI5YTEgMSAwIDAgMC0xLTFIMWExIDEgMCAwIDAtMSAxdjQ0YTEgMSAwIDAgMCAxIDFoMjlhMSAxIDAgMSAwIDAtMnoiLz48L3N2Zz4=", je = Oe + "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0NjAgNDYwIiBzdHlsZT0iZW5hYmxlLWJhY2tncm91bmQ6bmV3IDAgMCA0NjAgNDYwIiB4bWw6c3BhY2U9InByZXNlcnZlIj48cGF0aCBkPSJNMjMwIDBDMTAyLjk3NSAwIDAgMTAyLjk3NSAwIDIzMHMxMDIuOTc1IDIzMCAyMzAgMjMwIDIzMC0xMDIuOTc0IDIzMC0yMzBTMzU3LjAyNSAwIDIzMCAwem0zOC4zMzMgMzc3LjM2YzAgOC42NzYtNy4wMzQgMTUuNzEtMTUuNzEgMTUuNzFoLTQzLjEwMWMtOC42NzYgMC0xNS43MS03LjAzNC0xNS43MS0xNS43MVYyMDIuNDc3YzAtOC42NzYgNy4wMzMtMTUuNzEgMTUuNzEtMTUuNzFoNDMuMTAxYzguNjc2IDAgMTUuNzEgNy4wMzMgMTUuNzEgMTUuNzFWMzc3LjM2ek0yMzAgMTU3Yy0yMS41MzkgMC0zOS0xNy40NjEtMzktMzlzMTcuNDYxLTM5IDM5LTM5IDM5IDE3LjQ2MSAzOSAzOS0xNy40NjEgMzktMzkgMzl6Ii8+PC9zdmc+", Me = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAQgAAAEIBarqQRAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAE1SURBVDiNfdI7S0NBEAXgLya1otFgpbYSbISAgpXYi6CmiH9KCAiChaVga6OiWPgfRDQ+0itaGVNosXtluWwcuMzePfM4M3sq8lbHBubwg1dc4m1E/J/N4ghDPOIsfk/4xiEao5KX0McFljN4C9d4QTPXuY99jP3DsIoDPGM6BY5i5yI5R7O4q+ImFkJY2DCh3cAH2klyB+9J1xUMMAG7eCh1a+Mr+k48b5diXrFVwwLuS+BJ9MfR7+G0FHOHhTHhnXNWS87VDF4pcnfQK4Ep7XScNLmPTZgURNKKYENYWDpzW1BhscS1WHS8CDgURFJQrWcoF3c13KKbgg1BYQfy8xZWEzTTw1QZbAoKu8FqJnktdu5hcVSHmchiILzzuaDQvjBzV2m8yohCE1jHfPx/xhU+y4G/D75ELlRJsSYAAAAASUVORK5CYII=", Ne = function() {
+}(), Ue = "data:image/svg+xml;base64,", We = Ue + "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNzEuNjQzIDM3MS42NDMiIHN0eWxlPSJlbmFibGUtYmFja2dyb3VuZDpuZXcgMCAwIDM3MS42NDMgMzcxLjY0MyIgeG1sOnNwYWNlPSJwcmVzZXJ2ZSI+PHBhdGggZD0iTTEwNS4wODQgMzguMjcxaDE2My43Njh2MjBIMTA1LjA4NHoiLz48cGF0aCBkPSJNMzExLjU5NiAxOTAuMTg5Yy03LjQ0MS05LjM0Ny0xOC40MDMtMTYuMjA2LTMyLjc0My0yMC41MjJWMzBjMC0xNi41NDItMTMuNDU4LTMwLTMwLTMwSDEyNS4wODRjLTE2LjU0MiAwLTMwIDEzLjQ1OC0zMCAzMHYxMjAuMTQzaC04LjI5NmMtMTYuNTQyIDAtMzAgMTMuNDU4LTMwIDMwdjEuMzMzYTI5LjgwNCAyOS44MDQgMCAwIDAgNC42MDMgMTUuOTM5Yy03LjM0IDUuNDc0LTEyLjEwMyAxNC4yMjEtMTIuMTAzIDI0LjA2MXYxLjMzM2MwIDkuODQgNC43NjMgMTguNTg3IDEyLjEwMyAyNC4wNjJhMjkuODEgMjkuODEgMCAwIDAtNC42MDMgMTUuOTM4djEuMzMzYzAgMTYuNTQyIDEzLjQ1OCAzMCAzMCAzMGg4LjMyNGMuNDI3IDExLjYzMSA3LjUwMyAyMS41ODcgMTcuNTM0IDI2LjE3Ny45MzEgMTAuNTAzIDQuMDg0IDMwLjE4NyAxNC43NjggNDUuNTM3YTkuOTg4IDkuOTg4IDAgMCAwIDguMjE2IDQuMjg4IDkuOTU4IDkuOTU4IDAgMCAwIDUuNzA0LTEuNzkzYzQuNTMzLTMuMTU1IDUuNjUtOS4zODggMi40OTUtMTMuOTIxLTYuNzk4LTkuNzY3LTkuNjAyLTIyLjYwOC0xMC43Ni0zMS40aDgyLjY4NWMuMjcyLjQxNC41NDUuODE4LjgxNSAxLjIxIDMuMTQyIDQuNTQxIDkuMzcyIDUuNjc5IDEzLjkxMyAyLjUzNCA0LjU0Mi0zLjE0MiA1LjY3Ny05LjM3MSAyLjUzNS0xMy45MTMtMTEuOTE5LTE3LjIyOS04Ljc4Ny0zNS44ODQgOS41ODEtNTcuMDEyIDMuMDY3LTIuNjUyIDEyLjMwNy0xMS43MzIgMTEuMjE3LTI0LjAzMy0uODI4LTkuMzQzLTcuMTA5LTE3LjE5NC0xOC42NjktMjMuMzM3YTkuODU3IDkuODU3IDAgMCAwLTEuMDYxLS40ODZjLS40NjYtLjE4Mi0xMS40MDMtNC41NzktOS43NDEtMTUuNzA2IDEuMDA3LTYuNzM3IDE0Ljc2OC04LjI3MyAyMy43NjYtNy42NjYgMjMuMTU2IDEuNTY5IDM5LjY5OCA3LjgwMyA0Ny44MzYgMTguMDI2IDUuNzUyIDcuMjI1IDcuNjA3IDE2LjYyMyA1LjY3MyAyOC43MzMtLjQxMyAyLjU4NS0uODI0IDUuMjQxLTEuMjQ1IDcuOTU5LTUuNzU2IDM3LjE5NC0xMi45MTkgODMuNDgzLTQ5Ljg3IDExNC42NjEtNC4yMjEgMy41NjEtNC43NTYgOS44Ny0xLjE5NCAxNC4wOTJhOS45OCA5Ljk4IDAgMCAwIDcuNjQ4IDMuNTUxIDkuOTU1IDkuOTU1IDAgMCAwIDYuNDQ0LTIuMzU4YzQyLjY3Mi0zNi4wMDUgNTAuODAyLTg4LjUzMyA1Ni43MzctMTI2Ljg4OC40MTUtMi42ODQuODIxLTUuMzA5IDEuMjI5LTcuODYzIDIuODM0LTE3LjcyMS0uNDU1LTMyLjY0MS05Ljc3Mi00NC4zNDV6bS0yMzIuMzA4IDQyLjYyYy01LjUxNCAwLTEwLTQuNDg2LTEwLTEwdi0xLjMzM2MwLTUuNTE0IDQuNDg2LTEwIDEwLTEwaDE1djIxLjMzM2gtMTV6bS0yLjUtNTIuNjY2YzAtNS41MTQgNC40ODYtMTAgMTAtMTBoNy41djIxLjMzM2gtNy41Yy01LjUxNCAwLTEwLTQuNDg2LTEwLTEwdi0xLjMzM3ptMTcuNSA5My45OTloLTcuNWMtNS41MTQgMC0xMC00LjQ4Ni0xMC0xMHYtMS4zMzNjMC01LjUxNCA0LjQ4Ni0xMCAxMC0xMGg3LjV2MjEuMzMzem0zMC43OTYgMjguODg3Yy01LjUxNCAwLTEwLTQuNDg2LTEwLTEwdi04LjI3MWg5MS40NTdjLS44NTEgNi42NjgtLjQzNyAxMi43ODcuNzMxIDE4LjI3MWgtODIuMTg4em03OS40ODItMTEzLjY5OGMtMy4xMjQgMjAuOTA2IDEyLjQyNyAzMy4xODQgMjEuNjI1IDM3LjA0IDUuNDQxIDIuOTY4IDcuNTUxIDUuNjQ3IDcuNzAxIDcuMTg4LjIxIDIuMTUtMi41NTMgNS42ODQtNC40NzcgNy4yNTEtLjQ4Mi4zNzgtLjkyOS44LTEuMzM1IDEuMjYxLTYuOTg3IDcuOTM2LTExLjk4MiAxNS41Mi0xNS40MzIgMjIuNjg4aC05Ny41NjRWMzBjMC01LjUxNCA0LjQ4Ni0xMCAxMC0xMGgxMjMuNzY5YzUuNTE0IDAgMTAgNC40ODYgMTAgMTB2MTM1LjU3OWMtMy4wMzItLjM4MS02LjE1LS42OTQtOS4zODktLjkxNC0yNS4xNTktMS42OTQtNDIuMzcgNy43NDgtNDQuODk4IDI0LjY2NnoiLz48cGF0aCBkPSJNMTc5LjEyOSA4My4xNjdoLTI0LjA2YTUgNSAwIDAgMC01IDV2MjQuMDYxYTUgNSAwIDAgMCA1IDVoMjQuMDZhNSA1IDAgMCAwIDUtNVY4OC4xNjdhNSA1IDAgMCAwLTUtNXpNMTcyLjYyOSAxNDIuODZoLTEyLjU2VjEzMC44YTUgNSAwIDEgMC0xMCAwdjE3LjA2MWE1IDUgMCAwIDAgNSA1aDE3LjU2YTUgNSAwIDEgMCAwLTEwLjAwMXpNMjE2LjU2OCA4My4xNjdoLTI0LjA2YTUgNSAwIDAgMC01IDV2MjQuMDYxYTUgNSAwIDAgMCA1IDVoMjQuMDZhNSA1IDAgMCAwIDUtNVY4OC4xNjdhNSA1IDAgMCAwLTUtNXptLTUgMjQuMDYxaC0xNC4wNlY5My4xNjdoMTQuMDZ2MTQuMDYxek0yMTEuNjY5IDEyNS45MzZIMTk3LjQxYTUgNSAwIDAgMC01IDV2MTQuMjU3YTUgNSAwIDAgMCA1IDVoMTQuMjU5YTUgNSAwIDAgMCA1LTV2LTE0LjI1N2E1IDUgMCAwIDAtNS01eiIvPjwvc3ZnPg==", Ge = Ue + "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1OS4wMTggNTkuMDE4IiBzdHlsZT0iZW5hYmxlLWJhY2tncm91bmQ6bmV3IDAgMCA1OS4wMTggNTkuMDE4IiB4bWw6c3BhY2U9InByZXNlcnZlIj48cGF0aCBkPSJtNTguNzQxIDU0LjgwOS01Ljk2OS02LjI0NGExMC43NCAxMC43NCAwIDAgMCAyLjgyLTcuMjVjMC01Ljk1My00Ljg0My0xMC43OTYtMTAuNzk2LTEwLjc5NlMzNCAzNS4zNjEgMzQgNDEuMzE0IDM4Ljg0MyA1Mi4xMSA0NC43OTYgNTIuMTFjMi40NDEgMCA0LjY4OC0uODI0IDYuNDk5LTIuMTk2bDYuMDAxIDYuMjc3YS45OTguOTk4IDAgMCAwIDEuNDE0LjAzMiAxIDEgMCAwIDAgLjAzMS0xLjQxNHpNMzYgNDEuMzE0YzAtNC44NSAzLjk0Ni04Ljc5NiA4Ljc5Ni04Ljc5NnM4Ljc5NiAzLjk0NiA4Ljc5NiA4Ljc5Ni0zLjk0NiA4Ljc5Ni04Ljc5NiA4Ljc5NlMzNiA0Ni4xNjQgMzYgNDEuMzE0ek0xMC40MzEgMTYuMDg4YzAgMy4wNyAyLjQ5OCA1LjU2OCA1LjU2OSA1LjU2OHM1LjU2OS0yLjQ5OCA1LjU2OS01LjU2OGMwLTMuMDcxLTIuNDk4LTUuNTY5LTUuNTY5LTUuNTY5cy01LjU2OSAyLjQ5OC01LjU2OSA1LjU2OXptOS4xMzggMGMwIDEuOTY4LTEuNjAyIDMuNTY4LTMuNTY5IDMuNTY4cy0zLjU2OS0xLjYwMS0zLjU2OS0zLjU2OCAxLjYwMi0zLjU2OSAzLjU2OS0zLjU2OSAzLjU2OSAxLjYwMSAzLjU2OSAzLjU2OXoiLz48cGF0aCBkPSJtMzAuODgyIDI4Ljk4NyA5LjE4LTEwLjA1NCAxMS4yNjIgMTAuMzIzYTEgMSAwIDAgMCAxLjM1MS0xLjQ3NWwtMTItMTFhMSAxIDAgMCAwLTEuNDE0LjA2M2wtOS43OTQgMTAuNzI3LTQuNzQzLTQuNzQzYTEuMDAzIDEuMDAzIDAgMCAwLTEuMzY4LS4wNDRMNi4zMzkgMzcuNzY4YTEgMSAwIDEgMCAxLjMyMiAxLjUwMWwxNi4zMTMtMTQuMzYyIDcuMzE5IDcuMzE4YS45OTkuOTk5IDAgMSAwIDEuNDE0LTEuNDE0bC0xLjgyNS0xLjgyNHoiLz48cGF0aCBkPSJNMzAgNDYuNTE4SDJ2LTQyaDU0djI4YTEgMSAwIDEgMCAyIDB2LTI5YTEgMSAwIDAgMC0xLTFIMWExIDEgMCAwIDAtMSAxdjQ0YTEgMSAwIDAgMCAxIDFoMjlhMSAxIDAgMSAwIDAtMnoiLz48L3N2Zz4=", Ke = Ue + "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0NjAgNDYwIiBzdHlsZT0iZW5hYmxlLWJhY2tncm91bmQ6bmV3IDAgMCA0NjAgNDYwIiB4bWw6c3BhY2U9InByZXNlcnZlIj48cGF0aCBkPSJNMjMwIDBDMTAyLjk3NSAwIDAgMTAyLjk3NSAwIDIzMHMxMDIuOTc1IDIzMCAyMzAgMjMwIDIzMC0xMDIuOTc0IDIzMC0yMzBTMzU3LjAyNSAwIDIzMCAwem0zOC4zMzMgMzc3LjM2YzAgOC42NzYtNy4wMzQgMTUuNzEtMTUuNzEgMTUuNzFoLTQzLjEwMWMtOC42NzYgMC0xNS43MS03LjAzNC0xNS43MS0xNS43MVYyMDIuNDc3YzAtOC42NzYgNy4wMzMtMTUuNzEgMTUuNzEtMTUuNzFoNDMuMTAxYzguNjc2IDAgMTUuNzEgNy4wMzMgMTUuNzEgMTUuNzFWMzc3LjM2ek0yMzAgMTU3Yy0yMS41MzkgMC0zOS0xNy40NjEtMzktMzlzMTcuNDYxLTM5IDM5LTM5IDM5IDE3LjQ2MSAzOSAzOS0xNy40NjEgMzktMzkgMzl6Ii8+PC9zdmc+", qe = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAQgAAAEIBarqQRAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAE1SURBVDiNfdI7S0NBEAXgLya1otFgpbYSbISAgpXYi6CmiH9KCAiChaVga6OiWPgfRDQ+0itaGVNosXtluWwcuMzePfM4M3sq8lbHBubwg1dc4m1E/J/N4ghDPOIsfk/4xiEao5KX0McFljN4C9d4QTPXuY99jP3DsIoDPGM6BY5i5yI5R7O4q+ImFkJY2DCh3cAH2klyB+9J1xUMMAG7eCh1a+Mr+k48b5diXrFVwwLuS+BJ9MfR7+G0FHOHhTHhnXNWS87VDF4pcnfQK4Ep7XScNLmPTZgURNKKYENYWDpzW1BhscS1WHS8CDgURFJQrWcoF3c13KKbgg1BYQfy8xZWEzTTw1QZbAoKu8FqJnktdu5hcVSHmchiILzzuaDQvjBzV2m8yohCE1jHfPx/xhU+y4G/D75ELlRJsSYAAAAASUVORK5CYII=", Je = function() {
 	function e() {}
 	return e.createDefault = function() {
 		return {
@@ -18891,9 +18894,9 @@ var N = function() {
 			lastUsedCameraId: null
 		};
 	}, e;
-}(), P = function() {
+}(), Ye = function() {
 	function e() {
-		this.data = Ne.createDefault();
+		this.data = Je.createDefault();
 		var t = localStorage.getItem(e.LOCAL_STORAGE_KEY);
 		t ? this.data = JSON.parse(t) : this.reset();
 	}
@@ -18908,34 +18911,34 @@ var N = function() {
 	}, e.prototype.resetLastUsedCameraId = function() {
 		this.data.lastUsedCameraId = null, this.flush();
 	}, e.prototype.reset = function() {
-		this.data = Ne.createDefault(), this.flush();
+		this.data = Je.createDefault(), this.flush();
 	}, e.prototype.flush = function() {
 		localStorage.setItem(e.LOCAL_STORAGE_KEY, JSON.stringify(this.data));
 	}, e.LOCAL_STORAGE_KEY = "HTML5_QRCODE_DATA", e;
-}(), Pe = function() {
+}(), Xe = function() {
 	function e() {
 		this.infoDiv = document.createElement("div");
 	}
 	return e.prototype.renderInto = function(e) {
-		this.infoDiv.style.position = "absolute", this.infoDiv.style.top = "10px", this.infoDiv.style.right = "10px", this.infoDiv.style.zIndex = "2", this.infoDiv.style.display = "none", this.infoDiv.style.padding = "5pt", this.infoDiv.style.border = "1px solid #171717", this.infoDiv.style.fontSize = "10pt", this.infoDiv.style.background = "rgb(0 0 0 / 69%)", this.infoDiv.style.borderRadius = "5px", this.infoDiv.style.textAlign = "center", this.infoDiv.style.fontWeight = "400", this.infoDiv.style.color = "white", this.infoDiv.innerText = D.poweredBy();
+		this.infoDiv.style.position = "absolute", this.infoDiv.style.top = "10px", this.infoDiv.style.right = "10px", this.infoDiv.style.zIndex = "2", this.infoDiv.style.display = "none", this.infoDiv.style.padding = "5pt", this.infoDiv.style.border = "1px solid #171717", this.infoDiv.style.fontSize = "10pt", this.infoDiv.style.background = "rgb(0 0 0 / 69%)", this.infoDiv.style.borderRadius = "5px", this.infoDiv.style.textAlign = "center", this.infoDiv.style.fontWeight = "400", this.infoDiv.style.color = "white", this.infoDiv.innerText = j.poweredBy();
 		var t = document.createElement("a");
 		t.innerText = "ScanApp", t.href = "https://scanapp.org", t.target = "new", t.style.color = "white", this.infoDiv.appendChild(t);
 		var n = document.createElement("br"), r = document.createElement("br");
 		this.infoDiv.appendChild(n), this.infoDiv.appendChild(r);
 		var i = document.createElement("a");
-		i.innerText = D.reportIssues(), i.href = "https://github.com/mebjas/html5-qrcode/issues", i.target = "new", i.style.color = "white", this.infoDiv.appendChild(i), e.appendChild(this.infoDiv);
+		i.innerText = j.reportIssues(), i.href = "https://github.com/mebjas/html5-qrcode/issues", i.target = "new", i.style.color = "white", this.infoDiv.appendChild(i), e.appendChild(this.infoDiv);
 	}, e.prototype.show = function() {
 		this.infoDiv.style.display = "block";
 	}, e.prototype.hide = function() {
 		this.infoDiv.style.display = "none";
 	}, e;
-}(), F = function() {
+}(), Ze = function() {
 	function e(e, t) {
 		this.isShowingInfoIcon = !0, this.onTapIn = e, this.onTapOut = t, this.infoIcon = document.createElement("img");
 	}
 	return e.prototype.renderInto = function(e) {
 		var t = this;
-		this.infoIcon.alt = "Info icon", this.infoIcon.src = je, this.infoIcon.style.position = "absolute", this.infoIcon.style.top = "4px", this.infoIcon.style.right = "4px", this.infoIcon.style.opacity = "0.6", this.infoIcon.style.cursor = "pointer", this.infoIcon.style.zIndex = "2", this.infoIcon.style.width = "16px", this.infoIcon.style.height = "16px", this.infoIcon.onmouseover = function(e) {
+		this.infoIcon.alt = "Info icon", this.infoIcon.src = Ke, this.infoIcon.style.position = "absolute", this.infoIcon.style.top = "4px", this.infoIcon.style.right = "4px", this.infoIcon.style.opacity = "0.6", this.infoIcon.style.cursor = "pointer", this.infoIcon.style.zIndex = "2", this.infoIcon.style.width = "16px", this.infoIcon.style.height = "16px", this.infoIcon.onmouseover = function(e) {
 			return t.onHoverIn();
 		}, this.infoIcon.onmouseout = function(e) {
 			return t.onHoverOut();
@@ -18947,12 +18950,12 @@ var N = function() {
 	}, e.prototype.onHoverOut = function() {
 		this.isShowingInfoIcon && (this.infoIcon.style.opacity = "0.6");
 	}, e.prototype.onClick = function() {
-		this.isShowingInfoIcon ? (this.isShowingInfoIcon = !1, this.onTapIn(), this.infoIcon.src = Me, this.infoIcon.style.opacity = "1") : (this.isShowingInfoIcon = !0, this.onTapOut(), this.infoIcon.src = je, this.infoIcon.style.opacity = "0.6");
+		this.isShowingInfoIcon ? (this.isShowingInfoIcon = !1, this.onTapIn(), this.infoIcon.src = qe, this.infoIcon.style.opacity = "1") : (this.isShowingInfoIcon = !0, this.onTapOut(), this.infoIcon.src = Ke, this.infoIcon.style.opacity = "0.6");
 	}, e;
-}(), Fe = function() {
+}(), Qe = function() {
 	function e() {
 		var e = this;
-		this.infoDiv = new Pe(), this.infoIcon = new F(function() {
+		this.infoDiv = new Xe(), this.infoIcon = new Ze(function() {
 			e.infoDiv.show();
 		}, function() {
 			e.infoDiv.hide();
@@ -18961,7 +18964,7 @@ var N = function() {
 	return e.prototype.renderInto = function(e) {
 		this.infoDiv.renderInto(e), this.infoIcon.renderInto(e);
 	}, e;
-}(), Ie = function(e, t, n, r) {
+}(), $e = function(e, t, n, r) {
 	function i(e) {
 		return e instanceof n ? e : new n(function(t) {
 			t(e);
@@ -18987,7 +18990,7 @@ var N = function() {
 		}
 		c((r = r.apply(e, t || [])).next());
 	});
-}, Le = function(e, t) {
+}, L = function(e, t) {
 	var n = {
 		label: 0,
 		sent: function() {
@@ -19060,12 +19063,12 @@ var N = function() {
 			done: !0
 		};
 	}
-}, Re = function() {
+}, et = function() {
 	function e() {}
 	return e.hasPermissions = function() {
-		return Ie(this, void 0, void 0, function() {
+		return $e(this, void 0, void 0, function() {
 			var e, t, n, r;
-			return Le(this, function(i) {
+			return L(this, function(i) {
 				switch (i.label) {
 					case 0: return [4, navigator.mediaDevices.enumerateDevices()];
 					case 1:
@@ -19075,7 +19078,7 @@ var N = function() {
 			});
 		});
 	}, e;
-}(), I = function() {
+}(), tt = function() {
 	function e(e) {
 		this.supportedScanTypes = this.validateAndReturnScanTypes(e);
 	}
@@ -19090,29 +19093,29 @@ var N = function() {
 		}
 		return !1;
 	}, e.isCameraScanType = function(e) {
-		return e === v.SCAN_TYPE_CAMERA;
+		return e === se.SCAN_TYPE_CAMERA;
 	}, e.isFileScanType = function(e) {
-		return e === v.SCAN_TYPE_FILE;
+		return e === se.SCAN_TYPE_FILE;
 	}, e.prototype.validateAndReturnScanTypes = function(e) {
-		if (!e || e.length === 0) return y.DEFAULT_SUPPORTED_SCAN_TYPE;
-		var t = y.DEFAULT_SUPPORTED_SCAN_TYPE.length;
+		if (!e || e.length === 0) return ce.DEFAULT_SUPPORTED_SCAN_TYPE;
+		var t = ce.DEFAULT_SUPPORTED_SCAN_TYPE.length;
 		if (e.length > t) throw `Max ${t} values expected for supportedScanTypes`;
 		for (var n = 0, r = e; n < r.length; n++) {
 			var i = r[n];
-			if (!y.DEFAULT_SUPPORTED_SCAN_TYPE.includes(i)) throw `Unsupported scan type ${i}`;
+			if (!ce.DEFAULT_SUPPORTED_SCAN_TYPE.includes(i)) throw `Unsupported scan type ${i}`;
 		}
 		return e;
 	}, e;
-}(), ze = function() {
+}(), nt = function() {
 	function e() {}
 	return e.ALL_ELEMENT_CLASS = "html5-qrcode-element", e.CAMERA_PERMISSION_BUTTON_ID = "html5-qrcode-button-camera-permission", e.CAMERA_START_BUTTON_ID = "html5-qrcode-button-camera-start", e.CAMERA_STOP_BUTTON_ID = "html5-qrcode-button-camera-stop", e.TORCH_BUTTON_ID = "html5-qrcode-button-torch", e.CAMERA_SELECTION_SELECT_ID = "html5-qrcode-select-camera", e.FILE_SELECTION_BUTTON_ID = "html5-qrcode-button-file-selection", e.ZOOM_SLIDER_ID = "html5-qrcode-input-range-zoom", e.SCAN_TYPE_CHANGE_ANCHOR_ID = "html5-qrcode-anchor-scan-type-change", e.TORCH_BUTTON_CLASS_TORCH_ON = "html5-qrcode-button-torch-on", e.TORCH_BUTTON_CLASS_TORCH_OFF = "html5-qrcode-button-torch-off", e;
-}(), Be = function() {
+}(), rt = function() {
 	function e() {}
 	return e.createElement = function(e, t) {
 		var n = document.createElement(e);
-		return n.id = t, n.classList.add(ze.ALL_ELEMENT_CLASS), e === "button" && n.setAttribute("type", "button"), n;
+		return n.id = t, n.classList.add(nt.ALL_ELEMENT_CLASS), e === "button" && n.setAttribute("type", "button"), n;
 	}, e;
-}(), Ve = function(e, t, n, r) {
+}(), it = function(e, t, n, r) {
 	function i(e) {
 		return e instanceof n ? e : new n(function(t) {
 			t(e);
@@ -19138,7 +19141,7 @@ var N = function() {
 		}
 		c((r = r.apply(e, t || [])).next());
 	});
-}, He = function(e, t) {
+}, at = function(e, t) {
 	var n = {
 		label: 0,
 		sent: function() {
@@ -19211,16 +19214,16 @@ var N = function() {
 			done: !0
 		};
 	}
-}, Ue = function() {
+}, ot = function() {
 	function e(e, t, n) {
 		this.isTorchOn = !1, this.torchCapability = e, this.buttonController = t, this.onTorchActionFailureCallback = n;
 	}
 	return e.prototype.isTorchEnabled = function() {
 		return this.isTorchOn;
 	}, e.prototype.flipState = function() {
-		return Ve(this, void 0, void 0, function() {
+		return it(this, void 0, void 0, function() {
 			var e, t;
-			return He(this, function(n) {
+			return at(this, function(n) {
 				switch (n.label) {
 					case 0: this.buttonController.disable(), e = !this.isTorchOn, n.label = 1;
 					case 1: return n.trys.push([
@@ -19236,33 +19239,33 @@ var N = function() {
 			});
 		});
 	}, e.prototype.updateUiBasedOnLatestSettings = function(e, t) {
-		e === t ? (this.buttonController.setText(t ? E.torchOffButton() : E.torchOnButton()), this.isTorchOn = t) : this.propagateFailure(t), this.buttonController.enable();
+		e === t ? (this.buttonController.setText(t ? A.torchOffButton() : A.torchOnButton()), this.isTorchOn = t) : this.propagateFailure(t), this.buttonController.enable();
 	}, e.prototype.propagateFailure = function(e, t) {
-		var n = e ? E.torchOnFailedMessage() : E.torchOffFailedMessage();
+		var n = e ? A.torchOnFailedMessage() : A.torchOffFailedMessage();
 		t && (n += "; Error = " + t), this.onTorchActionFailureCallback(n);
 	}, e.prototype.reset = function() {
 		this.isTorchOn = !1;
 	}, e;
-}(), We = function() {
+}(), st = function() {
 	function e(e, t) {
-		this.onTorchActionFailureCallback = t, this.torchButton = Be.createElement("button", ze.TORCH_BUTTON_ID), this.torchController = new Ue(e, this, t);
+		this.onTorchActionFailureCallback = t, this.torchButton = rt.createElement("button", nt.TORCH_BUTTON_ID), this.torchController = new ot(e, this, t);
 	}
 	return e.prototype.render = function(e, t) {
 		var n = this;
-		this.torchButton.innerText = E.torchOnButton(), this.torchButton.style.display = t.display, this.torchButton.style.marginLeft = t.marginLeft;
+		this.torchButton.innerText = A.torchOnButton(), this.torchButton.style.display = t.display, this.torchButton.style.marginLeft = t.marginLeft;
 		var r = this;
 		this.torchButton.addEventListener("click", function(e) {
-			return Ve(n, void 0, void 0, function() {
-				return He(this, function(e) {
+			return it(n, void 0, void 0, function() {
+				return at(this, function(e) {
 					switch (e.label) {
 						case 0: return [4, r.torchController.flipState()];
-						case 1: return e.sent(), r.torchController.isTorchEnabled() ? (r.torchButton.classList.remove(ze.TORCH_BUTTON_CLASS_TORCH_OFF), r.torchButton.classList.add(ze.TORCH_BUTTON_CLASS_TORCH_ON)) : (r.torchButton.classList.remove(ze.TORCH_BUTTON_CLASS_TORCH_ON), r.torchButton.classList.add(ze.TORCH_BUTTON_CLASS_TORCH_OFF)), [2];
+						case 1: return e.sent(), r.torchController.isTorchEnabled() ? (r.torchButton.classList.remove(nt.TORCH_BUTTON_CLASS_TORCH_OFF), r.torchButton.classList.add(nt.TORCH_BUTTON_CLASS_TORCH_ON)) : (r.torchButton.classList.remove(nt.TORCH_BUTTON_CLASS_TORCH_ON), r.torchButton.classList.add(nt.TORCH_BUTTON_CLASS_TORCH_OFF)), [2];
 					}
 				});
 			});
 		}), e.appendChild(this.torchButton);
 	}, e.prototype.updateTorchCapability = function(e) {
-		this.torchController = new Ue(e, this, this.onTorchActionFailureCallback);
+		this.torchController = new ot(e, this, this.onTorchActionFailureCallback);
 	}, e.prototype.getTorchButton = function() {
 		return this.torchButton;
 	}, e.prototype.hide = function() {
@@ -19276,18 +19279,18 @@ var N = function() {
 	}, e.prototype.setText = function(e) {
 		this.torchButton.innerText = e;
 	}, e.prototype.reset = function() {
-		this.torchButton.innerText = E.torchOnButton(), this.torchController.reset();
+		this.torchButton.innerText = A.torchOnButton(), this.torchController.reset();
 	}, e.create = function(t, n, r, i) {
 		var a = new e(n, i);
 		return a.render(t, r), a;
 	}, e;
-}(), Ge = function() {
+}(), ct = function() {
 	function e(e, t, n) {
 		this.fileBasedScanRegion = this.createFileBasedScanRegion(), this.fileBasedScanRegion.style.display = t ? "block" : "none", e.appendChild(this.fileBasedScanRegion);
 		var r = document.createElement("label");
-		r.setAttribute("for", this.getFileScanInputId()), r.style.display = "inline-block", this.fileBasedScanRegion.appendChild(r), this.fileSelectionButton = Be.createElement("button", ze.FILE_SELECTION_BUTTON_ID), this.setInitialValueToButton(), this.fileSelectionButton.addEventListener("click", function(e) {
+		r.setAttribute("for", this.getFileScanInputId()), r.style.display = "inline-block", this.fileBasedScanRegion.appendChild(r), this.fileSelectionButton = rt.createElement("button", nt.FILE_SELECTION_BUTTON_ID), this.setInitialValueToButton(), this.fileSelectionButton.addEventListener("click", function(e) {
 			r.click();
-		}), r.append(this.fileSelectionButton), this.fileScanInput = Be.createElement("input", this.getFileScanInputId()), this.fileScanInput.type = "file", this.fileScanInput.accept = "image/*", this.fileScanInput.style.display = "none", r.appendChild(this.fileScanInput);
+		}), r.append(this.fileSelectionButton), this.fileScanInput = rt.createElement("input", this.getFileScanInputId()), this.fileScanInput.type = "file", this.fileScanInput.accept = "image/*", this.fileScanInput.style.display = "none", r.appendChild(this.fileScanInput);
 		var i = this;
 		this.fileScanInput.addEventListener("change", function(e) {
 			if (e != null && e.target != null) {
@@ -19316,11 +19319,11 @@ var N = function() {
 					if (c && c.type.match(/image.*/)) {
 						o = !0;
 						var l = c.name;
-						i.setImageNameToButton(l), n(c), a.innerText = E.dragAndDropMessage();
+						i.setImageNameToButton(l), n(c), a.innerText = A.dragAndDropMessage();
 						break;
 					}
 				}
-				o || (a.innerText = E.dragAndDropMessageOnlyImages());
+				o || (a.innerText = A.dragAndDropMessageOnlyImages());
 			}
 		});
 	}
@@ -19341,35 +19344,35 @@ var N = function() {
 		return "6px dashed rgb(153 151 151)";
 	}, e.prototype.createDragAndDropMessage = function() {
 		var e = document.createElement("div");
-		return e.innerText = E.dragAndDropMessage(), e.style.fontWeight = "400", e;
+		return e.innerText = A.dragAndDropMessage(), e.style.fontWeight = "400", e;
 	}, e.prototype.setImageNameToButton = function(e) {
 		if (e.length > 20) {
 			var t = e.substring(0, 8), n = e.length;
 			e = `${t}....${e.substring(n - 8, n)}`;
 		}
-		var r = E.fileSelectionChooseAnother() + " - " + e;
+		var r = A.fileSelectionChooseAnother() + " - " + e;
 		this.fileSelectionButton.innerText = r;
 	}, e.prototype.setInitialValueToButton = function() {
-		var e = E.fileSelectionChooseImage() + " - " + E.fileSelectionNoImageSelected();
+		var e = A.fileSelectionChooseImage() + " - " + A.fileSelectionNoImageSelected();
 		this.fileSelectionButton.innerText = e;
 	}, e.prototype.getFileScanInputId = function() {
 		return "html5-qrcode-private-filescan-input";
 	}, e.create = function(t, n, r) {
 		return new e(t, n, r);
 	}, e;
-}(), Ke = function() {
+}(), lt = function() {
 	function e(e) {
-		this.selectElement = Be.createElement("select", ze.CAMERA_SELECTION_SELECT_ID), this.cameras = e, this.options = [];
+		this.selectElement = rt.createElement("select", nt.CAMERA_SELECTION_SELECT_ID), this.cameras = e, this.options = [];
 	}
 	return e.prototype.render = function(e) {
 		var t = document.createElement("span");
 		t.style.marginRight = "10px";
 		var n = this.cameras.length;
 		if (n === 0) throw Error("No cameras found");
-		n === 1 ? t.style.display = "none" : t.innerText = `${E.selectCamera()} (${this.cameras.length})  `;
+		n === 1 ? t.style.display = "none" : t.innerText = `${A.selectCamera()} (${this.cameras.length})  `;
 		for (var r = 1, i = 0, a = this.cameras; i < a.length; i++) {
 			var o = a[i], s = o.id, c = o.label == null ? s : o.label;
-			(!c || c === "") && (c = [E.anonymousCameraPrefix(), r++].join(" "));
+			(!c || c === "") && (c = [A.anonymousCameraPrefix(), r++].join(" "));
 			var l = document.createElement("option");
 			l.value = s, l.innerText = c, this.options.push(l), this.selectElement.appendChild(l);
 		}
@@ -19396,13 +19399,13 @@ var N = function() {
 		var r = new e(n);
 		return r.render(t), r;
 	}, e;
-}(), qe = function() {
+}(), ut = function() {
 	function e() {
-		this.onChangeCallback = null, this.zoomElementContainer = document.createElement("div"), this.rangeInput = Be.createElement("input", ze.ZOOM_SLIDER_ID), this.rangeInput.type = "range", this.rangeText = document.createElement("span"), this.rangeInput.min = "1", this.rangeInput.max = "5", this.rangeInput.value = "1", this.rangeInput.step = "0.1";
+		this.onChangeCallback = null, this.zoomElementContainer = document.createElement("div"), this.rangeInput = rt.createElement("input", nt.ZOOM_SLIDER_ID), this.rangeInput.type = "range", this.rangeText = document.createElement("span"), this.rangeInput.min = "1", this.rangeInput.max = "5", this.rangeInput.value = "1", this.rangeInput.step = "0.1";
 	}
 	return e.prototype.render = function(e, t) {
 		this.zoomElementContainer.style.display = t ? "block" : "none", this.zoomElementContainer.style.padding = "5px 10px", this.zoomElementContainer.style.textAlign = "center", e.appendChild(this.zoomElementContainer), this.rangeInput.style.display = "inline-block", this.rangeInput.style.width = "50%", this.rangeInput.style.height = "5px", this.rangeInput.style.background = "#d3d3d3", this.rangeInput.style.outline = "none", this.rangeInput.style.opacity = "0.7";
-		var n = E.zoom();
+		var n = A.zoom();
 		this.rangeText.innerText = `${this.rangeInput.value}x ${n}`, this.rangeText.style.marginRight = "10px";
 		var r = this;
 		this.rangeInput.addEventListener("input", function() {
@@ -19411,7 +19414,7 @@ var N = function() {
 			return r.onValueChange();
 		}), this.zoomElementContainer.appendChild(this.rangeInput), this.zoomElementContainer.appendChild(this.rangeText);
 	}, e.prototype.onValueChange = function() {
-		var e = E.zoom();
+		var e = A.zoom();
 		this.rangeText.innerText = `${this.rangeInput.value}x ${e}`, this.onChangeCallback && this.onChangeCallback(parseFloat(this.rangeInput.value));
 	}, e.prototype.setValues = function(e, t, n, r) {
 		this.rangeInput.min = e.toString(), this.rangeInput.max = t.toString(), this.rangeInput.step = r.toString(), this.rangeInput.value = n.toString(), this.onValueChange();
@@ -19427,11 +19430,11 @@ var N = function() {
 		var r = new e();
 		return r.render(t, n), r;
 	}, e;
-}(), Je;
+}(), R;
 (function(e) {
 	e[e.STATUS_DEFAULT = 0] = "STATUS_DEFAULT", e[e.STATUS_SUCCESS = 1] = "STATUS_SUCCESS", e[e.STATUS_WARNING = 2] = "STATUS_WARNING", e[e.STATUS_REQUESTING_PERMISSION = 3] = "STATUS_REQUESTING_PERMISSION";
-})(Je || (Je = {}));
-function Ye(e) {
+})(R || (R = {}));
+function dt(e) {
 	return {
 		fps: e.fps,
 		qrbox: e.qrbox,
@@ -19440,7 +19443,7 @@ function Ye(e) {
 		videoConstraints: e.videoConstraints
 	};
 }
-function Xe(e, t) {
+function ft(e, t) {
 	return {
 		formatsToSupport: e.formatsToSupport,
 		useBarCodeDetectorIfSupported: e.useBarCodeDetectorIfSupported,
@@ -19451,7 +19454,7 @@ function Xe(e, t) {
 (function() {
 	function e(e, t, n) {
 		if (this.lastMatchFound = null, this.cameraScanImage = null, this.fileScanImage = null, this.fileSelectionUi = null, this.elementId = e, this.config = this.createConfig(t), this.verbose = n === !0, !document.getElementById(e)) throw `HTML Element with id=${e} not found`;
-		this.scanTypeSelector = new I(this.config.supportedScanTypes), this.currentScanType = this.scanTypeSelector.getDefaultScanType(), this.sectionSwapAllowed = !0, this.logger = new ee(this.verbose), this.persistedDataManager = new P(), t.rememberLastUsedCamera !== !0 && this.persistedDataManager.reset();
+		this.scanTypeSelector = new tt(this.config.supportedScanTypes), this.currentScanType = this.scanTypeSelector.getDefaultScanType(), this.sectionSwapAllowed = !0, this.logger = new fe(this.verbose), this.persistedDataManager = new Ye(), t.rememberLastUsedCamera !== !0 && this.persistedDataManager.reset();
 	}
 	return e.prototype.render = function(e, t) {
 		var n = this;
@@ -19459,16 +19462,16 @@ function Xe(e, t) {
 			if (e) e(t, r);
 			else {
 				if (n.lastMatchFound === t) return;
-				n.lastMatchFound = t, n.setHeaderMessage(E.lastMatch(t), Je.STATUS_SUCCESS);
+				n.lastMatchFound = t, n.setHeaderMessage(A.lastMatch(t), R.STATUS_SUCCESS);
 			}
 		}, this.qrCodeErrorCallback = function(e, n) {
 			t && t(e, n);
 		};
 		var r = document.getElementById(this.elementId);
 		if (!r) throw `HTML Element with id=${this.elementId} not found`;
-		r.innerHTML = "", this.createBasicLayout(r), this.html5Qrcode = new De(this.getScanRegionId(), Xe(this.config, this.verbose));
+		r.innerHTML = "", this.createBasicLayout(r), this.html5Qrcode = new He(this.getScanRegionId(), ft(this.config, this.verbose));
 	}, e.prototype.pause = function(e) {
-		(te(e) || e !== !0) && (e = !1), this.getHtml5QrcodeOrFail().pause(e);
+		(pe(e) || e !== !0) && (e = !1), this.getHtml5QrcodeOrFail().pause(e);
 	}, e.prototype.resume = function() {
 		this.getHtml5QrcodeOrFail().resume();
 	}, e.prototype.getState = function() {
@@ -19503,15 +19506,15 @@ function Xe(e, t) {
 		if (!this.html5Qrcode) throw "Code scanner not initialized.";
 		return this.html5Qrcode;
 	}, e.prototype.createConfig = function(e) {
-		return e ? (e.fps || (e.fps = y.SCAN_DEFAULT_FPS), e.rememberLastUsedCamera !== !y.DEFAULT_REMEMBER_LAST_CAMERA_USED && (e.rememberLastUsedCamera = y.DEFAULT_REMEMBER_LAST_CAMERA_USED), e.supportedScanTypes || (e.supportedScanTypes = y.DEFAULT_SUPPORTED_SCAN_TYPE), e) : {
-			fps: y.SCAN_DEFAULT_FPS,
-			rememberLastUsedCamera: y.DEFAULT_REMEMBER_LAST_CAMERA_USED,
-			supportedScanTypes: y.DEFAULT_SUPPORTED_SCAN_TYPE
+		return e ? (e.fps || (e.fps = ce.SCAN_DEFAULT_FPS), e.rememberLastUsedCamera !== !ce.DEFAULT_REMEMBER_LAST_CAMERA_USED && (e.rememberLastUsedCamera = ce.DEFAULT_REMEMBER_LAST_CAMERA_USED), e.supportedScanTypes || (e.supportedScanTypes = ce.DEFAULT_SUPPORTED_SCAN_TYPE), e) : {
+			fps: ce.SCAN_DEFAULT_FPS,
+			rememberLastUsedCamera: ce.DEFAULT_REMEMBER_LAST_CAMERA_USED,
+			supportedScanTypes: ce.DEFAULT_SUPPORTED_SCAN_TYPE
 		};
 	}, e.prototype.createBasicLayout = function(e) {
 		e.style.position = "relative", e.style.padding = "0px", e.style.border = "1px solid silver", this.createHeader(e);
 		var t = document.createElement("div");
-		t.id = this.getScanRegionId(), t.style.width = "100%", t.style.minHeight = "100px", t.style.textAlign = "center", e.appendChild(t), I.isCameraScanType(this.currentScanType) ? this.insertCameraScanImageToScanRegion() : this.insertFileScanImageToScanRegion();
+		t.id = this.getScanRegionId(), t.style.width = "100%", t.style.minHeight = "100px", t.style.textAlign = "center", e.appendChild(t), tt.isCameraScanType(this.currentScanType) ? this.insertCameraScanImageToScanRegion() : this.insertFileScanImageToScanRegion();
 		var n = document.createElement("div");
 		n.id = this.getDashboardId(), n.style.width = "100%", e.appendChild(n), this.setupInitialDashboard(n);
 	}, e.prototype.resetBasicLayout = function(e) {
@@ -19520,7 +19523,7 @@ function Xe(e, t) {
 		this.createSection(e), this.createSectionControlPanel(), this.scanTypeSelector.hasMoreThanOneScanType() && this.createSectionSwap();
 	}, e.prototype.createHeader = function(e) {
 		var t = document.createElement("div");
-		t.style.textAlign = "left", t.style.margin = "0px", e.appendChild(t), new Fe().renderInto(t);
+		t.style.textAlign = "left", t.style.margin = "0px", e.appendChild(t), new Qe().renderInto(t);
 		var n = document.createElement("div");
 		n.id = this.getHeaderMessageContainerId(), n.style.display = "none", n.style.textAlign = "center", n.style.fontSize = "14px", n.style.padding = "2px 10px", n.style.margin = "4px", n.style.borderTop = "1px solid #f6f6f6", t.appendChild(n);
 	}, e.prototype.createSection = function(e) {
@@ -19528,24 +19531,24 @@ function Xe(e, t) {
 		t.id = this.getDashboardSectionId(), t.style.width = "100%", t.style.padding = "10px 0px 10px 0px", t.style.textAlign = "left", e.appendChild(t);
 	}, e.prototype.createCameraListUi = function(e, t, n) {
 		var r = this;
-		r.showHideScanTypeSwapLink(!1), r.setHeaderMessage(E.cameraPermissionRequesting());
+		r.showHideScanTypeSwapLink(!1), r.setHeaderMessage(A.cameraPermissionRequesting());
 		var i = function() {
 			n || r.createPermissionButton(e, t);
 		};
-		De.getCameras().then(function(n) {
-			r.persistedDataManager.setHasPermission(!0), r.showHideScanTypeSwapLink(!0), r.resetHeaderMessage(), n && n.length > 0 ? (e.removeChild(t), r.renderCameraSelection(n)) : (r.setHeaderMessage(E.noCameraFound(), Je.STATUS_WARNING), i());
+		He.getCameras().then(function(n) {
+			r.persistedDataManager.setHasPermission(!0), r.showHideScanTypeSwapLink(!0), r.resetHeaderMessage(), n && n.length > 0 ? (e.removeChild(t), r.renderCameraSelection(n)) : (r.setHeaderMessage(A.noCameraFound(), R.STATUS_WARNING), i());
 		}).catch(function(e) {
-			r.persistedDataManager.setHasPermission(!1), n ? n.disabled = !1 : i(), r.setHeaderMessage(e, Je.STATUS_WARNING), r.showHideScanTypeSwapLink(!0);
+			r.persistedDataManager.setHasPermission(!1), n ? n.disabled = !1 : i(), r.setHeaderMessage(e, R.STATUS_WARNING), r.showHideScanTypeSwapLink(!0);
 		});
 	}, e.prototype.createPermissionButton = function(e, t) {
-		var n = this, r = Be.createElement("button", this.getCameraPermissionButtonId());
-		r.innerText = E.cameraPermissionTitle(), r.addEventListener("click", function() {
+		var n = this, r = rt.createElement("button", this.getCameraPermissionButtonId());
+		r.innerText = A.cameraPermissionTitle(), r.addEventListener("click", function() {
 			r.disabled = !0, n.createCameraListUi(e, t, r);
 		}), t.appendChild(r);
 	}, e.prototype.createPermissionsUi = function(e, t) {
 		var n = this;
-		if (I.isCameraScanType(this.currentScanType) && this.persistedDataManager.hasCameraPermissions()) {
-			Re.hasPermissions().then(function(r) {
+		if (tt.isCameraScanType(this.currentScanType) && this.persistedDataManager.hasCameraPermissions()) {
+			et.hasPermissions().then(function(r) {
 				r ? n.createCameraListUi(e, t) : (n.persistedDataManager.setHasPermission(!1), n.createPermissionButton(e, t));
 			}).catch(function(r) {
 				n.persistedDataManager.setHasPermission(!1), n.createPermissionButton(e, t);
@@ -19557,87 +19560,87 @@ function Xe(e, t) {
 		var e = document.getElementById(this.getDashboardSectionId()), t = document.createElement("div");
 		e.appendChild(t);
 		var n = document.createElement("div");
-		n.id = this.getDashboardSectionCameraScanRegionId(), n.style.display = I.isCameraScanType(this.currentScanType) ? "block" : "none", t.appendChild(n);
+		n.id = this.getDashboardSectionCameraScanRegionId(), n.style.display = tt.isCameraScanType(this.currentScanType) ? "block" : "none", t.appendChild(n);
 		var r = document.createElement("div");
 		r.style.textAlign = "center", n.appendChild(r), this.scanTypeSelector.isCameraScanRequired() && this.createPermissionsUi(n, r), this.renderFileScanUi(t);
 	}, e.prototype.renderFileScanUi = function(e) {
-		var t = I.isFileScanType(this.currentScanType), n = this, r = function(e) {
+		var t = tt.isFileScanType(this.currentScanType), n = this, r = function(e) {
 			if (!n.html5Qrcode) throw "html5Qrcode not defined";
-			I.isFileScanType(n.currentScanType) && (n.setHeaderMessage(E.loadingImage()), n.html5Qrcode.scanFileV2(e, !0).then(function(e) {
+			tt.isFileScanType(n.currentScanType) && (n.setHeaderMessage(A.loadingImage()), n.html5Qrcode.scanFileV2(e, !0).then(function(e) {
 				n.resetHeaderMessage(), n.qrCodeSuccessCallback(e.decodedText, e);
 			}).catch(function(e) {
-				n.setHeaderMessage(e, Je.STATUS_WARNING), n.qrCodeErrorCallback(e, C.createFrom(e));
+				n.setHeaderMessage(e, R.STATUS_WARNING), n.qrCodeErrorCallback(e, de.createFrom(e));
 			}));
 		};
-		this.fileSelectionUi = Ge.create(e, t, r);
+		this.fileSelectionUi = ct.create(e, t, r);
 	}, e.prototype.renderCameraSelection = function(e) {
 		var t = this, n = this, r = document.getElementById(this.getDashboardSectionCameraScanRegionId());
 		r.style.textAlign = "center";
-		var i = qe.create(r, !1), a = function(e) {
+		var i = ut.create(r, !1), a = function(e) {
 			var n = e.zoomFeature();
 			if (n.isSupported()) {
 				i.setOnCameraZoomValueChangeCallback(function(e) {
 					n.apply(e);
 				});
 				var r = 1;
-				t.config.defaultZoomValueIfSupported && (r = t.config.defaultZoomValueIfSupported), r = w(r, n.min(), n.max()), i.setValues(n.min(), n.max(), r, n.step()), i.show();
+				t.config.defaultZoomValueIfSupported && (r = t.config.defaultZoomValueIfSupported), r = me(r, n.min(), n.max()), i.setValues(n.min(), n.max(), r, n.step()), i.show();
 			}
-		}, o = Ke.create(r, e), s = document.createElement("span"), c = Be.createElement("button", ze.CAMERA_START_BUTTON_ID);
-		c.innerText = E.scanButtonStartScanningText(), s.appendChild(c);
-		var l = Be.createElement("button", ze.CAMERA_STOP_BUTTON_ID);
-		l.innerText = E.scanButtonStopScanningText(), l.style.display = "none", l.disabled = !0, s.appendChild(l);
+		}, o = lt.create(r, e), s = document.createElement("span"), c = rt.createElement("button", nt.CAMERA_START_BUTTON_ID);
+		c.innerText = A.scanButtonStartScanningText(), s.appendChild(c);
+		var l = rt.createElement("button", nt.CAMERA_STOP_BUTTON_ID);
+		l.innerText = A.scanButtonStopScanningText(), l.style.display = "none", l.disabled = !0, s.appendChild(l);
 		var u, d = function(e) {
 			if (!e.torchFeature().isSupported()) {
 				u && u.hide();
 				return;
 			}
-			u ? u.updateTorchCapability(e.torchFeature()) : u = We.create(s, e.torchFeature(), {
+			u ? u.updateTorchCapability(e.torchFeature()) : u = st.create(s, e.torchFeature(), {
 				display: "none",
 				marginLeft: "5px"
 			}, function(e) {
-				n.setHeaderMessage(e, Je.STATUS_WARNING);
+				n.setHeaderMessage(e, R.STATUS_WARNING);
 			}), u.show();
 		};
 		r.appendChild(s);
 		var f = function(e) {
-			e || (c.style.display = "none"), c.innerText = E.scanButtonStartScanningText(), c.style.opacity = "1", c.disabled = !1, e && (c.style.display = "inline-block");
+			e || (c.style.display = "none"), c.innerText = A.scanButtonStartScanningText(), c.style.opacity = "1", c.disabled = !1, e && (c.style.display = "inline-block");
 		};
 		if (c.addEventListener("click", function(e) {
-			c.innerText = E.scanButtonScanningStarting(), o.disable(), c.disabled = !0, c.style.opacity = "0.5", t.scanTypeSelector.hasMoreThanOneScanType() && n.showHideScanTypeSwapLink(!1), n.resetHeaderMessage();
+			c.innerText = A.scanButtonScanningStarting(), o.disable(), c.disabled = !0, c.style.opacity = "0.5", t.scanTypeSelector.hasMoreThanOneScanType() && n.showHideScanTypeSwapLink(!1), n.resetHeaderMessage();
 			var r = o.getValue();
-			n.persistedDataManager.setLastUsedCameraId(r), n.html5Qrcode.start(r, Ye(n.config), n.qrCodeSuccessCallback, n.qrCodeErrorCallback).then(function(e) {
+			n.persistedDataManager.setLastUsedCameraId(r), n.html5Qrcode.start(r, dt(n.config), n.qrCodeSuccessCallback, n.qrCodeErrorCallback).then(function(e) {
 				l.disabled = !1, l.style.display = "inline-block", f(!1);
 				var r = n.html5Qrcode.getRunningTrackCameraCapabilities();
 				t.config.showTorchButtonIfSupported === !0 && d(r), t.config.showZoomSliderIfSupported === !0 && a(r);
 			}).catch(function(e) {
-				n.showHideScanTypeSwapLink(!0), o.enable(), f(!0), n.setHeaderMessage(e, Je.STATUS_WARNING);
+				n.showHideScanTypeSwapLink(!0), o.enable(), f(!0), n.setHeaderMessage(e, R.STATUS_WARNING);
 			});
 		}), o.hasSingleItem() && c.click(), l.addEventListener("click", function(e) {
 			if (!n.html5Qrcode) throw "html5Qrcode not defined";
 			l.disabled = !0, n.html5Qrcode.stop().then(function(e) {
 				t.scanTypeSelector.hasMoreThanOneScanType() && n.showHideScanTypeSwapLink(!0), o.enable(), c.disabled = !1, l.style.display = "none", c.style.display = "inline-block", u && (u.reset(), u.hide()), i.removeOnCameraZoomValueChangeCallback(), i.hide(), n.insertCameraScanImageToScanRegion();
 			}).catch(function(e) {
-				l.disabled = !1, n.setHeaderMessage(e, Je.STATUS_WARNING);
+				l.disabled = !1, n.setHeaderMessage(e, R.STATUS_WARNING);
 			});
 		}), n.persistedDataManager.getLastUsedCameraId()) {
 			var p = n.persistedDataManager.getLastUsedCameraId();
 			o.hasValue(p) ? (o.setValue(p), c.click()) : n.persistedDataManager.resetLastUsedCameraId();
 		}
 	}, e.prototype.createSectionSwap = function() {
-		var e = this, t = E.textIfCameraScanSelected(), n = E.textIfFileScanSelected(), r = document.getElementById(this.getDashboardSectionId()), i = document.createElement("div");
+		var e = this, t = A.textIfCameraScanSelected(), n = A.textIfFileScanSelected(), r = document.getElementById(this.getDashboardSectionId()), i = document.createElement("div");
 		i.style.textAlign = "center";
-		var a = Be.createElement("span", this.getDashboardSectionSwapLinkId());
-		a.style.textDecoration = "underline", a.style.cursor = "pointer", a.innerText = I.isCameraScanType(this.currentScanType) ? t : n, a.addEventListener("click", function() {
+		var a = rt.createElement("span", this.getDashboardSectionSwapLinkId());
+		a.style.textDecoration = "underline", a.style.cursor = "pointer", a.innerText = tt.isCameraScanType(this.currentScanType) ? t : n, a.addEventListener("click", function() {
 			if (!e.sectionSwapAllowed) {
 				e.verbose && e.logger.logError("Section swap called when not allowed");
 				return;
 			}
-			e.resetHeaderMessage(), e.fileSelectionUi.resetValue(), e.sectionSwapAllowed = !1, I.isCameraScanType(e.currentScanType) ? (e.clearScanRegion(), e.getCameraScanRegion().style.display = "none", e.fileSelectionUi.show(), a.innerText = n, e.currentScanType = v.SCAN_TYPE_FILE, e.insertFileScanImageToScanRegion()) : (e.clearScanRegion(), e.getCameraScanRegion().style.display = "block", e.fileSelectionUi.hide(), a.innerText = t, e.currentScanType = v.SCAN_TYPE_CAMERA, e.insertCameraScanImageToScanRegion(), e.startCameraScanIfPermissionExistsOnSwap()), e.sectionSwapAllowed = !0;
+			e.resetHeaderMessage(), e.fileSelectionUi.resetValue(), e.sectionSwapAllowed = !1, tt.isCameraScanType(e.currentScanType) ? (e.clearScanRegion(), e.getCameraScanRegion().style.display = "none", e.fileSelectionUi.show(), a.innerText = n, e.currentScanType = se.SCAN_TYPE_FILE, e.insertFileScanImageToScanRegion()) : (e.clearScanRegion(), e.getCameraScanRegion().style.display = "block", e.fileSelectionUi.hide(), a.innerText = t, e.currentScanType = se.SCAN_TYPE_CAMERA, e.insertCameraScanImageToScanRegion(), e.startCameraScanIfPermissionExistsOnSwap()), e.sectionSwapAllowed = !0;
 		}), i.appendChild(a), r.appendChild(i);
 	}, e.prototype.startCameraScanIfPermissionExistsOnSwap = function() {
 		var e = this, t = this;
 		if (this.persistedDataManager.hasCameraPermissions()) {
-			Re.hasPermissions().then(function(n) {
+			et.hasPermissions().then(function(n) {
 				if (n) {
 					var r = document.getElementById(t.getCameraPermissionButtonId());
 					if (!r) throw e.logger.logError("Permission button not found, fail;"), "Permission button not found";
@@ -19652,16 +19655,16 @@ function Xe(e, t) {
 		var e = document.getElementById(this.getHeaderMessageContainerId());
 		e.style.display = "none";
 	}, e.prototype.setHeaderMessage = function(e, t) {
-		t || (t = Je.STATUS_DEFAULT);
+		t || (t = R.STATUS_DEFAULT);
 		var n = this.getHeaderMessageDiv();
 		switch (n.innerText = e, n.style.display = "block", t) {
-			case Je.STATUS_SUCCESS:
+			case R.STATUS_SUCCESS:
 				n.style.background = "rgba(106, 175, 80, 0.26)", n.style.color = "#477735";
 				break;
-			case Je.STATUS_WARNING:
+			case R.STATUS_WARNING:
 				n.style.background = "rgba(203, 36, 49, 0.14)", n.style.color = "#cb2431";
 				break;
-			case Je.STATUS_DEFAULT:
+			case R.STATUS_DEFAULT:
 			default: n.style.background = "rgba(0, 0, 0, 0)", n.style.color = "rgb(17, 17, 17)";
 		}
 	}, e.prototype.showHideScanTypeSwapLink = function(e) {
@@ -19674,7 +19677,7 @@ function Xe(e, t) {
 		}
 		this.cameraScanImage = new Image(), this.cameraScanImage.onload = function(n) {
 			t.innerHTML = "<br>", t.appendChild(e.cameraScanImage);
-		}, this.cameraScanImage.width = 64, this.cameraScanImage.style.opacity = "0.8", this.cameraScanImage.src = ke, this.cameraScanImage.alt = E.cameraScanAltText();
+		}, this.cameraScanImage.width = 64, this.cameraScanImage.style.opacity = "0.8", this.cameraScanImage.src = We, this.cameraScanImage.alt = A.cameraScanAltText();
 	}, e.prototype.insertFileScanImageToScanRegion = function() {
 		var e = this, t = document.getElementById(this.getScanRegionId());
 		if (this.fileScanImage) {
@@ -19683,7 +19686,7 @@ function Xe(e, t) {
 		}
 		this.fileScanImage = new Image(), this.fileScanImage.onload = function(n) {
 			t.innerHTML = "<br>", t.appendChild(e.fileScanImage);
-		}, this.fileScanImage.width = 64, this.fileScanImage.style.opacity = "0.8", this.fileScanImage.src = Ae, this.fileScanImage.alt = E.fileScanAltText();
+		}, this.fileScanImage.width = 64, this.fileScanImage.style.opacity = "0.8", this.fileScanImage.src = Ge, this.fileScanImage.alt = A.fileScanAltText();
 	}, e.prototype.clearScanRegion = function() {
 		var e = document.getElementById(this.getScanRegionId());
 		e.innerHTML = "";
@@ -19692,7 +19695,7 @@ function Xe(e, t) {
 	}, e.prototype.getDashboardSectionCameraScanRegionId = function() {
 		return `${this.elementId}__dashboard_section_csr`;
 	}, e.prototype.getDashboardSectionSwapLinkId = function() {
-		return ze.SCAN_TYPE_CHANGE_ANCHOR_ID;
+		return nt.SCAN_TYPE_CHANGE_ANCHOR_ID;
 	}, e.prototype.getScanRegionId = function() {
 		return `${this.elementId}__scan_region`;
 	}, e.prototype.getDashboardId = function() {
@@ -19700,7 +19703,7 @@ function Xe(e, t) {
 	}, e.prototype.getHeaderMessageContainerId = function() {
 		return `${this.elementId}__header_message`;
 	}, e.prototype.getCameraPermissionButtonId = function() {
-		return ze.CAMERA_PERMISSION_BUTTON_ID;
+		return nt.CAMERA_PERMISSION_BUTTON_ID;
 	}, e.prototype.getCameraScanRegion = function() {
 		return document.getElementById(this.getDashboardSectionCameraScanRegionId());
 	}, e.prototype.getDashboardSectionSwapLink = function() {
@@ -19711,52 +19714,52 @@ function Xe(e, t) {
 })();
 //#endregion
 //#region src/components/BarcodeScanner.tsx
-function Ze({ onScan: a, onClose: o }) {
-	let s = t(!1), [c, l] = n(null);
-	return e(() => {
-		let e = new De("pos-camera-reader"), t = !1;
-		async function n() {
-			if (!s.current) {
-				s.current = !0;
+function pt({ onScan: e, onClose: t }) {
+	let n = o(!1), [r, i] = s(null);
+	return a(() => {
+		let r = new He("pos-camera-reader"), a = !1;
+		async function o() {
+			if (!n.current) {
+				n.current = !0;
 				try {
-					await e.start({ facingMode: "environment" }, {
+					await r.start({ facingMode: "environment" }, {
 						fps: 8,
 						qrbox: {
 							width: 260,
 							height: 140
 						}
 					}, (n) => {
-						t || e.stop().finally(() => {
-							a(n), o();
+						a || r.stop().finally(() => {
+							e(n), t();
 						});
 					}, () => void 0);
 				} catch {
-					t || l("Не вдалося відкрити камеру. Перевірте дозвіл у браузері.");
+					a || i("Не вдалося відкрити камеру. Перевірте дозвіл у браузері.");
 				}
 			}
 		}
-		return n(), () => {
-			t = !0, e.isScanning && e.stop().catch(() => void 0);
+		return o(), () => {
+			a = !0, r.isScanning && r.stop().catch(() => void 0);
 		};
-	}, [o, a]), /* @__PURE__ */ r("div", {
+	}, [t, e]), /* @__PURE__ */ x("div", {
 		className: "fixed inset-0 z-50 bg-black/50 grid place-items-center p-4",
-		children: /* @__PURE__ */ i("div", {
+		children: /* @__PURE__ */ S("div", {
 			className: "bg-white rounded-sq p-4 w-full max-w-md space-y-3",
-			children: [/* @__PURE__ */ i("div", {
+			children: [/* @__PURE__ */ S("div", {
 				className: "flex items-center justify-between gap-3",
-				children: [/* @__PURE__ */ r("h3", {
+				children: [/* @__PURE__ */ x("h3", {
 					className: "font-semibold text-sq-text",
 					children: "Сканування камерою"
-				}), /* @__PURE__ */ r("button", {
+				}), /* @__PURE__ */ x("button", {
 					type: "button",
-					onClick: o,
+					onClick: t,
 					className: "min-h-11 text-sm text-sq-secondary hover:text-sq-text",
 					children: "Закрити"
 				})]
-			}), c ? /* @__PURE__ */ r("p", {
+			}), r ? /* @__PURE__ */ x("p", {
 				className: "text-sm text-red-600 py-6 text-center",
-				children: c
-			}) : /* @__PURE__ */ r("div", {
+				children: r
+			}) : /* @__PURE__ */ x("div", {
 				id: "pos-camera-reader",
 				className: "overflow-hidden rounded-sq"
 			})]
@@ -19764,4 +19767,842 @@ function Ze({ onScan: a, onClose: o }) {
 	});
 }
 //#endregion
-export { Ze as BarcodeScanner };
+//#region src/platform/glyphs.tsx
+function z({ size: e = 24, ...t }) {
+	return /* @__PURE__ */ S("svg", {
+		width: e,
+		height: e,
+		viewBox: "0 0 24 24",
+		fill: "none",
+		"aria-hidden": "true",
+		focusable: "false",
+		"data-glyph": "ClipboardCheck",
+		...t,
+		children: [
+			/* @__PURE__ */ x("rect", {
+				x: "4",
+				y: "5",
+				width: "16",
+				height: "16",
+				rx: "3",
+				fill: "#2E9F91",
+				fillOpacity: ".22",
+				stroke: "#2E9F91",
+				strokeWidth: "2"
+			}),
+			/* @__PURE__ */ x("rect", {
+				x: "8",
+				y: "2",
+				width: "8",
+				height: "5",
+				rx: "1.5",
+				fill: "#2E9F91"
+			}),
+			/* @__PURE__ */ x("path", {
+				d: "M8.5 13.5 11 16 15.5 11",
+				fill: "none",
+				stroke: "#2E9F91",
+				strokeWidth: "2",
+				strokeLinecap: "round",
+				strokeLinejoin: "round"
+			})
+		]
+	});
+}
+function mt({ size: e = 24, ...t }) {
+	return /* @__PURE__ */ S("svg", {
+		width: e,
+		height: e,
+		viewBox: "0 0 24 24",
+		fill: "none",
+		"aria-hidden": "true",
+		focusable: "false",
+		"data-glyph": "ScanLine",
+		...t,
+		children: [/* @__PURE__ */ x("path", {
+			d: "M3 8V6a3 3 0 0 1 3-3h2M16 3h2a3 3 0 0 1 3 3v2M21 16v2a3 3 0 0 1-3 3h-2M8 21H6a3 3 0 0 1-3-3v-2",
+			fill: "none",
+			stroke: "#1B9DF0",
+			strokeWidth: "2",
+			strokeLinecap: "round",
+			strokeLinejoin: "round"
+		}), /* @__PURE__ */ x("path", {
+			d: "M6 7h2v10H6zM9 7h1v10H9zM11 7h2v10h-2zM14 7h1v10h-1zM16 7h2v10h-2z",
+			fill: "#1B9DF0"
+		})]
+	});
+}
+function ht({ size: e = 20, ...t }) {
+	return /* @__PURE__ */ x("svg", {
+		width: e,
+		height: e,
+		viewBox: "0 0 20 20",
+		fill: "none",
+		"aria-hidden": "true",
+		focusable: "false",
+		"data-glyph": "ArrowLeft",
+		...t,
+		children: /* @__PURE__ */ x("path", {
+			d: "M16 10H4M9 5 4 10l5 5",
+			fill: "none",
+			stroke: "currentColor",
+			strokeWidth: "2",
+			strokeLinecap: "round",
+			strokeLinejoin: "round"
+		})
+	});
+}
+function gt({ size: e = 20, ...t }) {
+	return e <= 16 ? /* @__PURE__ */ S("svg", {
+		width: e,
+		height: e,
+		viewBox: "0 0 16 16",
+		fill: "none",
+		"aria-hidden": "true",
+		focusable: "false",
+		"data-glyph": "Camera",
+		...t,
+		children: [
+			/* @__PURE__ */ x("rect", {
+				x: "2",
+				y: "5",
+				width: "12",
+				height: "9",
+				rx: "2",
+				fill: "none",
+				stroke: "currentColor",
+				strokeWidth: "2",
+				strokeLinecap: "round",
+				strokeLinejoin: "round"
+			}),
+			/* @__PURE__ */ x("path", {
+				d: "M6 5l1-2h2l1 2",
+				fill: "none",
+				stroke: "currentColor",
+				strokeWidth: "2",
+				strokeLinecap: "round",
+				strokeLinejoin: "round"
+			}),
+			/* @__PURE__ */ x("circle", {
+				cx: "8",
+				cy: "9.5",
+				r: "2",
+				fill: "none",
+				stroke: "currentColor",
+				strokeWidth: "2",
+				strokeLinecap: "round",
+				strokeLinejoin: "round"
+			})
+		]
+	}) : /* @__PURE__ */ S("svg", {
+		width: e,
+		height: e,
+		viewBox: "0 0 20 20",
+		fill: "none",
+		"aria-hidden": "true",
+		focusable: "false",
+		"data-glyph": "Camera",
+		...t,
+		children: [
+			/* @__PURE__ */ x("rect", {
+				x: "2",
+				y: "6",
+				width: "16",
+				height: "11",
+				rx: "2.5",
+				fill: "none",
+				stroke: "currentColor",
+				strokeWidth: "2",
+				strokeLinecap: "round",
+				strokeLinejoin: "round"
+			}),
+			/* @__PURE__ */ x("path", {
+				d: "M7 6 8.25 3.5h3.5L13 6",
+				fill: "none",
+				stroke: "currentColor",
+				strokeWidth: "2",
+				strokeLinecap: "round",
+				strokeLinejoin: "round"
+			}),
+			/* @__PURE__ */ x("circle", {
+				cx: "10",
+				cy: "11.5",
+				r: "3",
+				fill: "none",
+				stroke: "currentColor",
+				strokeWidth: "2",
+				strokeLinecap: "round",
+				strokeLinejoin: "round"
+			})
+		]
+	});
+}
+function _t({ size: e = 20, ...t }) {
+	return e <= 16 ? /* @__PURE__ */ x("svg", {
+		width: e,
+		height: e,
+		viewBox: "0 0 16 16",
+		fill: "none",
+		"aria-hidden": "true",
+		focusable: "false",
+		"data-glyph": "Minus",
+		...t,
+		children: /* @__PURE__ */ x("path", {
+			d: "M3 8H13",
+			fill: "none",
+			stroke: "currentColor",
+			strokeWidth: "2",
+			strokeLinecap: "round",
+			strokeLinejoin: "round"
+		})
+	}) : /* @__PURE__ */ x("svg", {
+		width: e,
+		height: e,
+		viewBox: "0 0 20 20",
+		fill: "none",
+		"aria-hidden": "true",
+		focusable: "false",
+		"data-glyph": "Minus",
+		...t,
+		children: /* @__PURE__ */ x("path", {
+			d: "M4 10H16",
+			fill: "none",
+			stroke: "currentColor",
+			strokeWidth: "2",
+			strokeLinecap: "round",
+			strokeLinejoin: "round"
+		})
+	});
+}
+function B({ size: e = 20, ...t }) {
+	return e <= 16 ? /* @__PURE__ */ x("svg", {
+		width: e,
+		height: e,
+		viewBox: "0 0 16 16",
+		fill: "none",
+		"aria-hidden": "true",
+		focusable: "false",
+		"data-glyph": "Plus",
+		...t,
+		children: /* @__PURE__ */ x("path", {
+			d: "M8 3V13M3 8H13",
+			fill: "none",
+			stroke: "currentColor",
+			strokeWidth: "2",
+			strokeLinecap: "round",
+			strokeLinejoin: "round"
+		})
+	}) : /* @__PURE__ */ x("svg", {
+		width: e,
+		height: e,
+		viewBox: "0 0 20 20",
+		fill: "none",
+		"aria-hidden": "true",
+		focusable: "false",
+		"data-glyph": "Plus",
+		...t,
+		children: /* @__PURE__ */ x("path", {
+			d: "M10 4V16M4 10H16",
+			fill: "none",
+			stroke: "currentColor",
+			strokeWidth: "2",
+			strokeLinecap: "round",
+			strokeLinejoin: "round"
+		})
+	});
+}
+function V({ size: e = 20, ...t }) {
+	return e <= 16 ? /* @__PURE__ */ x("svg", {
+		width: e,
+		height: e,
+		viewBox: "0 0 16 16",
+		fill: "none",
+		"aria-hidden": "true",
+		focusable: "false",
+		"data-glyph": "X",
+		...t,
+		children: /* @__PURE__ */ x("path", {
+			d: "M4 4 12 12M12 4 4 12",
+			fill: "none",
+			stroke: "currentColor",
+			strokeWidth: "2",
+			strokeLinecap: "round",
+			strokeLinejoin: "round"
+		})
+	}) : /* @__PURE__ */ x("svg", {
+		width: e,
+		height: e,
+		viewBox: "0 0 20 20",
+		fill: "none",
+		"aria-hidden": "true",
+		focusable: "false",
+		"data-glyph": "X",
+		...t,
+		children: /* @__PURE__ */ x("path", {
+			d: "M5 5 15 15M15 5 5 15",
+			fill: "none",
+			stroke: "currentColor",
+			strokeWidth: "2",
+			strokeLinecap: "round",
+			strokeLinejoin: "round"
+		})
+	});
+}
+//#endregion
+//#region src/modules/stocktake/data/repository.ts
+function H(e) {
+	return [e.product_name, e.label].filter((e) => e && e.trim()).join(" · ");
+}
+async function vt(e) {
+	return (await t.sheets.where("storeId").equals(e).toArray()).sort((e, t) => t.createdAt - e.createdAt);
+}
+function yt(e) {
+	return t.sheets.get(e);
+}
+async function bt(e) {
+	return (await t.lines.where("sheetId").equals(e).toArray()).sort((e, t) => t.updatedAt - e.updatedAt);
+}
+async function xt(e) {
+	let n = {
+		id: crypto.randomUUID(),
+		storeId: e.storeId,
+		staffId: e.staffId,
+		status: "counting",
+		note: e.note?.trim() || null,
+		createdAt: Date.now(),
+		attempts: 0
+	};
+	return await t.sheets.add(n), n;
+}
+async function St(e) {
+	let n = await t.sheets.get(e);
+	if (!n) throw Error("Лист не знайдено");
+	if (n.status !== "counting") throw Error("Лист уже завершено");
+	return n;
+}
+async function Ct(e, n, r = 1) {
+	await St(e);
+	let i = [e, n.variant_id], a = await t.lines.get(i), o = {
+		sheetId: e,
+		variantId: n.variant_id,
+		countedQty: Math.max(0, (a?.countedQty ?? 0) + r),
+		label: a?.label ?? H(n),
+		barcode: n.barcode ?? a?.barcode ?? null,
+		updatedAt: Date.now(),
+		unit: n.unit ?? a?.unit,
+		packQty: n.pack_qty ?? a?.packQty ?? null,
+		packLabel: n.pack_label ?? a?.packLabel ?? ""
+	};
+	return await t.lines.put(o), o;
+}
+async function wt(e, n, r) {
+	await St(e);
+	let i = [e, n], a = await t.lines.get(i);
+	if (!a) throw Error("Рядок не знайдено");
+	await t.lines.put({
+		...a,
+		countedQty: Math.max(0, Math.floor(r)),
+		updatedAt: Date.now()
+	});
+}
+async function Tt(e, n) {
+	await St(e), await t.lines.delete([e, n]);
+}
+async function Et(e) {
+	let n = await St(e);
+	if (await t.lines.where("sheetId").equals(e).count() === 0) throw Error("Порожній лист — відскануйте хоча б один товар");
+	let r = {
+		...n,
+		status: "queued",
+		finishedAt: Date.now()
+	};
+	return await t.sheets.put(r), r;
+}
+async function Dt(e) {
+	let n = await t.sheets.get(e);
+	if (n) {
+		if (n.status === "synced") throw Error("Надісланий лист не видаляється");
+		await t.transaction("rw", t.sheets, t.lines, async () => {
+			await t.lines.where("sheetId").equals(e).delete(), await t.sheets.delete(e);
+		});
+	}
+}
+async function Ot(e) {
+	let t = e.trim();
+	if (!t) return null;
+	let n = await l.getCatalog({
+		barcode: t,
+		include_unsellable: !0
+	});
+	return n.find((e) => e.barcode === t) ?? (n.length === 1 ? n[0] : null);
+}
+async function kt(e) {
+	let t = e.trim();
+	return t.length < 2 ? [] : (await l.getCatalog({
+		q: t,
+		include_unsellable: !0
+	})).slice(0, 20);
+}
+//#endregion
+//#region src/modules/stocktake/components/SheetStatusBadge.tsx
+var U = {
+	counting: "Рахую",
+	queued: "В черзі",
+	error: "Помилка, повторю",
+	synced: "Надіслано",
+	dead: "Відхилено"
+}, W = {
+	counting: "bg-sq-blue/10 text-sq-blue",
+	queued: "bg-amber-50 text-amber-800",
+	error: "bg-amber-50 text-amber-800",
+	synced: "bg-sq-success/10 text-sq-success-ink",
+	dead: "bg-sq-danger/10 text-sq-danger"
+};
+function G({ sheet: e }) {
+	let t = e.status === "synced" && e.serverDocNumber ? `${U.synced} · ${e.serverDocNumber}` : U[e.status];
+	return /* @__PURE__ */ x("span", {
+		className: `inline-flex items-center h-[22px] px-2 rounded-md text-xs font-medium whitespace-nowrap ${W[e.status]}`,
+		children: t
+	});
+}
+//#endregion
+//#region src/modules/stocktake/pages/StocktakePage.tsx
+function At(e) {
+	return new Date(e).toLocaleString("uk-UA", {
+		dateStyle: "short",
+		timeStyle: "short"
+	});
+}
+function jt() {
+	let e = p((e) => e.auth), n = m((e) => e.online), r = v(), [o, c] = s([]), [l, d] = s({}), [f, h] = s(null), g = e?.store.id ?? null, _ = i(async () => {
+		if (g == null) return;
+		let e = await vt(g), n = {};
+		await Promise.all(e.map(async (e) => {
+			n[e.id] = await t.lines.where("sheetId").equals(e.id).count();
+		})), c(e), d(n);
+	}, [g]);
+	a(() => {
+		_();
+		let e = window.setInterval(() => void _(), 3e3);
+		return () => window.clearInterval(e);
+	}, [_]);
+	async function y() {
+		if (e) {
+			h(null);
+			try {
+				let t = await xt({
+					storeId: e.store.id,
+					staffId: e.staff.id
+				});
+				r(`/stocktake/${t.id}`);
+			} catch (e) {
+				h(e instanceof Error ? e.message : "Помилка");
+			}
+		}
+	}
+	async function b(e) {
+		h(null);
+		try {
+			await Dt(e.id), await _();
+		} catch (e) {
+			h(e instanceof Error ? e.message : "Помилка");
+		}
+	}
+	return /* @__PURE__ */ x("div", {
+		className: "flex-1 min-h-0 overflow-auto bg-sq-bg text-sq-text",
+		children: /* @__PURE__ */ S("div", {
+			className: "mx-auto max-w-2xl px-4 md:px-7 pb-6",
+			children: [
+				/* @__PURE__ */ S("div", {
+					className: "flex flex-wrap items-center gap-3 py-4 md:min-h-[72px]",
+					children: [
+						/* @__PURE__ */ x(z, {
+							size: 24,
+							className: "shrink-0"
+						}),
+						/* @__PURE__ */ x("h1", {
+							className: "text-2xl font-bold text-sq-heading",
+							children: "Інвентаризація"
+						}),
+						/* @__PURE__ */ S("button", {
+							type: "button",
+							className: "pos-btn-primary ml-auto min-h-11 px-4 rounded-xl text-[15px] gap-1.5",
+							onClick: y,
+							children: [/* @__PURE__ */ x(B, { size: 20 }), "Новий підрахунок"]
+						})
+					]
+				}),
+				/* @__PURE__ */ S("p", {
+					className: "text-[15px] text-sq-secondary leading-relaxed",
+					children: ["Порахуйте товар сканером; завершений лист стане чернеткою інвентаризації, яку проведе власник.", u() && !n && " Зараз офлайн — листи відправляться, щойно з’явиться мережа."]
+				}),
+				f && /* @__PURE__ */ x("p", {
+					className: "mt-3 text-sm text-red-600",
+					children: f
+				}),
+				o.length === 0 ? /* @__PURE__ */ S("div", {
+					className: "py-14 text-center",
+					children: [/* @__PURE__ */ x(z, {
+						size: 48,
+						className: "mx-auto"
+					}), /* @__PURE__ */ x("p", {
+						className: "mt-3 text-[15px] text-sq-secondary",
+						children: "Ще немає жодного листа."
+					})]
+				}) : /* @__PURE__ */ x("ul", {
+					className: "mt-4 divide-y divide-sq-divider rounded-card bg-white shadow-card overflow-hidden",
+					children: o.map((e) => /* @__PURE__ */ S("li", {
+						className: "flex items-center gap-3 pl-4 pr-2",
+						children: [/* @__PURE__ */ S("button", {
+							type: "button",
+							className: "min-w-0 flex-1 min-h-[60px] py-2.5 text-left flex items-center gap-3",
+							onClick: () => r(`/stocktake/${e.id}`),
+							children: [/* @__PURE__ */ S("span", {
+								className: "min-w-0 flex-1",
+								children: [/* @__PURE__ */ x("span", {
+									className: "block text-base text-sq-text tabular-nums",
+									children: At(e.createdAt)
+								}), /* @__PURE__ */ S("span", {
+									className: "block text-[13px] text-sq-muted tabular-nums",
+									children: [
+										"Рядків: ",
+										l[e.id] ?? 0,
+										e.lastError && e.status !== "synced" && /* @__PURE__ */ x("span", {
+											className: "ml-2 text-red-600",
+											children: e.lastError
+										})
+									]
+								})]
+							}), /* @__PURE__ */ x(G, { sheet: e })]
+						}), e.status !== "synced" && /* @__PURE__ */ x("button", {
+							type: "button",
+							className: "min-h-11 px-2.5 rounded-sq text-[15px] font-semibold text-red-600 hover:bg-sq-empty",
+							onClick: () => b(e),
+							children: "Видалити"
+						})]
+					}, e.id))
+				})
+			]
+		})
+	});
+}
+//#endregion
+//#region src/modules/stocktake/pages/CountSheetPage.tsx
+var Mt = r(() => import("./ui-CD-82m-w.js").then((e) => ({ default: e.BarcodeScanner })));
+function Nt() {
+	let { id: t = "" } = y(), r = m((e) => e.online), [l, p] = s(void 0), [g, _] = s([]), [v, C] = s(""), [ee, te] = s(""), [w, T] = s([]), [ne, E] = s(!1), [re, D] = s(null), [O, ie] = s(null), [ae, oe] = s(!1), [se, ce] = s({}), le = o(null), ue = i(async () => {
+		let [e, n] = await Promise.all([yt(t), bt(t)]);
+		p(e ?? null), _(n);
+	}, [t]);
+	a(() => {
+		ue();
+	}, [ue]), a(() => {
+		if (!l || l.status === "counting" || l.status === "synced" || l.status === "dead") return;
+		let e = window.setInterval(() => void ue(), 3e3);
+		return () => window.clearInterval(e);
+	}, [l, ue]), a(() => {
+		let e = ee.trim();
+		if (e.length < 2) {
+			T([]);
+			return;
+		}
+		let t = window.setTimeout(() => {
+			kt(e).then(T).catch(() => T([]));
+		}, 300);
+		return () => window.clearTimeout(t);
+	}, [ee]);
+	let k = l?.status === "counting", de = (e) => se[e] ?? "base", fe = (e) => d({
+		pack_qty: e.packQty,
+		pack_label: e.packLabel
+	});
+	async function pe(e, n = 1) {
+		ie(null);
+		try {
+			await Ct(t, e, n), await ue();
+		} catch (e) {
+			ie(e instanceof Error ? e.message : "Помилка");
+		}
+	}
+	async function me(e) {
+		let t = e.trim();
+		if (t) {
+			C(""), D(null);
+			try {
+				let e = await Ot(t);
+				if (!e) {
+					D(`Штрихкод ${t} не знайдено в каталозі`);
+					return;
+				}
+				await pe(e), D(`+1 · ${e.product_name}`);
+			} catch (e) {
+				ie(e instanceof Error ? e.message : "Помилка");
+			} finally {
+				le.current?.focus();
+			}
+		}
+	}
+	async function he(e, n) {
+		ie(null);
+		try {
+			let r = fe(e), i = de(e.variantId) === "pack" && r ? n * r.qty : n;
+			await wt(t, e.variantId, e.countedQty + i), await ue();
+		} catch (e) {
+			ie(e instanceof Error ? e.message : "Помилка");
+		}
+	}
+	async function A(e, n) {
+		let r = Number(n);
+		if (!Number.isFinite(r)) return;
+		let i = f(r, de(e.variantId), fe(e));
+		await wt(t, e.variantId, i).catch(() => void 0), await ue();
+	}
+	async function j() {
+		oe(!0), ie(null);
+		try {
+			await Et(t), await e(), await ue();
+		} catch (e) {
+			ie(e instanceof Error ? e.message : "Помилка");
+		} finally {
+			oe(!1);
+		}
+	}
+	if (l === void 0) return /* @__PURE__ */ x("div", {
+		className: "px-4 md:px-7 py-6 text-sm text-sq-secondary",
+		children: "Завантаження…"
+	});
+	if (l === null) return /* @__PURE__ */ S("div", {
+		className: "px-4 md:px-7 py-6 text-[15px] text-sq-secondary",
+		children: [
+			"Лист не знайдено.",
+			" ",
+			/* @__PURE__ */ x(h, {
+				to: "/stocktake",
+				className: "font-semibold text-sq-blue",
+				children: "До списку"
+			})
+		]
+	});
+	let ge = g.reduce((e, t) => e + t.countedQty, 0);
+	return /* @__PURE__ */ x("div", {
+		className: "flex-1 min-h-0 overflow-auto bg-sq-bg text-sq-text",
+		children: /* @__PURE__ */ S("div", {
+			className: "mx-auto max-w-2xl px-4 md:px-7 pb-6",
+			children: [
+				/* @__PURE__ */ S("div", {
+					className: "flex flex-wrap items-center gap-3 py-4 md:min-h-[72px]",
+					children: [
+						/* @__PURE__ */ S(h, {
+							to: "/stocktake",
+							className: "-ml-1 inline-flex items-center gap-1 min-h-11 pr-1 text-[15px] font-semibold text-sq-blue",
+							children: [/* @__PURE__ */ x(ht, {
+								size: 20,
+								"aria-hidden": !0
+							}), "Листи"]
+						}),
+						/* @__PURE__ */ x(G, { sheet: l }),
+						/* @__PURE__ */ S("span", {
+							className: "ml-auto text-[15px] text-sq-muted tabular-nums",
+							children: [
+								g.length,
+								" поз. · ",
+								ge,
+								" шт."
+							]
+						})
+					]
+				}),
+				l.status === "synced" && /* @__PURE__ */ S("p", {
+					className: "mb-3 rounded-xl bg-sq-success/10 px-4 py-3 text-sm text-sq-success-ink",
+					children: [
+						"Надіслано як чернетку інвентаризації ",
+						l.serverDocNumber ?? "",
+						". Провести її може власник у розділі «Склад»."
+					]
+				}),
+				(l.status === "queued" || l.status === "error") && /* @__PURE__ */ S("p", {
+					className: "mb-3 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800",
+					children: [u() && !r ? "Офлайн. Лист у черзі — відправиться автоматично, щойно з’явиться мережа." : "Лист у черзі на відправлення.", l.lastError && ` (${l.lastError})`]
+				}),
+				l.status === "dead" && /* @__PURE__ */ S("p", {
+					className: "mb-3 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700",
+					children: [
+						"Сервер відхилив лист: ",
+						l.lastError ?? "невідома помилка",
+						". Видаліть його і порахуйте знову."
+					]
+				}),
+				O && /* @__PURE__ */ x("p", {
+					className: "mb-3 text-sm text-red-600",
+					children: O
+				}),
+				k && /* @__PURE__ */ S("div", {
+					className: "mb-4 space-y-3",
+					children: [
+						/* @__PURE__ */ S("form", {
+							className: "flex gap-2",
+							onSubmit: (e) => {
+								e.preventDefault(), me(v);
+							},
+							children: [
+								/* @__PURE__ */ x("input", {
+									ref: le,
+									autoFocus: !0,
+									value: v,
+									onChange: (e) => C(e.target.value),
+									placeholder: "Скануйте штрихкод або введіть його",
+									inputMode: "numeric",
+									"aria-label": "Штрихкод",
+									className: "pos-field min-w-0 flex-1"
+								}),
+								/* @__PURE__ */ x("button", {
+									type: "submit",
+									className: "pos-btn-primary min-h-12 px-5 rounded-sq text-[17px] tabular-nums",
+									children: "+1"
+								}),
+								/* @__PURE__ */ S("button", {
+									type: "button",
+									className: "sq-btn-quiet min-h-12",
+									onClick: () => E((e) => !e),
+									children: [/* @__PURE__ */ x(gt, { size: 20 }), ne ? "Закрити камеру" : "Камера"]
+								})
+							]
+						}),
+						ne && /* @__PURE__ */ x(n, {
+							fallback: /* @__PURE__ */ x("p", {
+								className: "text-sm text-sq-secondary",
+								children: "Вмикаю камеру…"
+							}),
+							children: /* @__PURE__ */ x(Mt, {
+								onScan: (e) => void me(e),
+								onClose: () => E(!1)
+							})
+						}),
+						re && /* @__PURE__ */ x("p", {
+							className: "text-[15px] text-sq-secondary",
+							children: re
+						}),
+						/* @__PURE__ */ x("input", {
+							value: ee,
+							onChange: (e) => te(e.target.value),
+							placeholder: "Або знайдіть за назвою / артикулом",
+							"aria-label": "Пошук товару",
+							className: "pos-field"
+						}),
+						w.length > 0 && /* @__PURE__ */ x("ul", {
+							className: "divide-y divide-sq-divider rounded-card bg-white shadow-card overflow-hidden",
+							children: w.map((e) => /* @__PURE__ */ x("li", { children: /* @__PURE__ */ S("button", {
+								type: "button",
+								className: "flex w-full min-h-12 items-center justify-between gap-3 px-4 py-2 text-left hover:bg-sq-sidebar",
+								onClick: () => {
+									pe(e), te("");
+								},
+								children: [/* @__PURE__ */ x("span", {
+									className: "min-w-0 truncate text-base text-sq-text",
+									children: H(e)
+								}), /* @__PURE__ */ x("span", {
+									className: "shrink-0 text-[15px] font-semibold text-sq-blue tabular-nums",
+									children: "+1"
+								})]
+							}) }, e.variant_id))
+						})
+					]
+				}),
+				g.length === 0 ? /* @__PURE__ */ S("div", {
+					className: "py-12 text-center",
+					children: [k && /* @__PURE__ */ x(mt, {
+						size: 48,
+						className: "mx-auto mb-3"
+					}), /* @__PURE__ */ x("p", {
+						className: "text-[15px] text-sq-secondary",
+						children: k ? "Відскануйте перший товар." : "Порожній лист."
+					})]
+				}) : /* @__PURE__ */ x("ul", {
+					className: "divide-y divide-sq-divider rounded-card bg-white shadow-card overflow-hidden",
+					children: g.map((e) => {
+						let n = fe(e), r = de(e.variantId), i = r === "pack" && n ? Math.round(e.countedQty / n.qty * 1e4) / 1e4 : e.countedQty;
+						return /* @__PURE__ */ S("li", {
+							className: "pl-4 pr-2 py-2.5",
+							children: [/* @__PURE__ */ S("div", {
+								className: "flex items-center gap-2",
+								children: [/* @__PURE__ */ S("div", {
+									className: "min-w-0 flex-1",
+									children: [/* @__PURE__ */ x("div", {
+										className: "truncate text-base text-sq-text",
+										children: e.label
+									}), e.barcode && /* @__PURE__ */ x("div", {
+										className: "text-[13px] text-sq-muted tabular-nums",
+										children: e.barcode
+									})]
+								}), k ? /* @__PURE__ */ S(b, { children: [
+									/* @__PURE__ */ x("button", {
+										type: "button",
+										"aria-label": "Менше",
+										className: "w-11 h-11 grid place-items-center rounded-sq bg-sq-empty text-sq-text hover:bg-sq-selected",
+										onClick: () => he(e, -1),
+										children: /* @__PURE__ */ x(_t, { size: 20 })
+									}),
+									/* @__PURE__ */ x("input", {
+										type: "number",
+										min: 0,
+										step: "any",
+										value: i,
+										"aria-label": `Кількість: ${e.label}`,
+										onChange: (t) => void A(e, t.target.value),
+										className: "h-11 w-20 rounded-sq border-0 bg-sq-empty text-center text-[17px] font-semibold tabular-nums text-sq-text outline-none focus:bg-white focus:ring-2 focus:ring-sq-blue"
+									}),
+									/* @__PURE__ */ x("button", {
+										type: "button",
+										"aria-label": "Більше",
+										className: "w-11 h-11 grid place-items-center rounded-sq bg-sq-empty text-sq-text hover:bg-sq-selected",
+										onClick: () => he(e, 1),
+										children: /* @__PURE__ */ x(B, { size: 20 })
+									}),
+									/* @__PURE__ */ x("button", {
+										type: "button",
+										"aria-label": "Прибрати",
+										className: "w-11 h-11 grid place-items-center rounded-full text-sq-muted hover:bg-sq-empty hover:text-red-600",
+										onClick: () => void Tt(t, e.variantId).then(ue),
+										children: /* @__PURE__ */ x(V, { size: 20 })
+									})
+								] }) : /* @__PURE__ */ x("span", {
+									className: "w-16 pr-2 text-right text-[17px] font-semibold text-sq-text tabular-nums",
+									children: e.countedQty
+								})]
+							}), k && /* @__PURE__ */ x(c, {
+								className: "mt-1 w-40 ml-auto",
+								pack: n,
+								unit: e.unit ?? "",
+								mode: r,
+								value: i,
+								onModeChange: (t) => ce((n) => ({
+									...n,
+									[e.variantId]: t
+								}))
+							})]
+						}, e.variantId);
+					})
+				}),
+				k && /* @__PURE__ */ x("button", {
+					type: "button",
+					disabled: ae || g.length === 0,
+					className: "pos-btn-primary mt-4 w-full min-h-[52px] rounded-xl text-[17px]",
+					onClick: j,
+					children: ae ? "Відправляю…" : "Завершити і відправити"
+				})
+			]
+		})
+	});
+}
+//#endregion
+//#region src/modules/stocktake/pages/StocktakeRoutes.tsx
+function Pt() {
+	return /* @__PURE__ */ S(_, { children: [/* @__PURE__ */ x(g, {
+		index: !0,
+		element: /* @__PURE__ */ x(jt, {})
+	}), /* @__PURE__ */ x(g, {
+		path: ":id",
+		element: /* @__PURE__ */ x(Nt, {})
+	})] });
+}
+//#endregion
+export { Pt as StocktakeRoutes, B as a, pt as c, _t as i, gt as n, mt as o, z as r, V as s, ht as t };
