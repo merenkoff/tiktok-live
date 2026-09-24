@@ -96,7 +96,7 @@ test('picking a cart up puts it back on the screen', async ({ page }) => {
   await expect(page.getByText(catalog[0].product_name).first()).toBeVisible();
   expect(calls).toContain('POST /parked-carts/77/pick-up');
   // Two of them at 450 each, exactly as parked.
-  await expect(page.getByRole('button', { name: /^Сплатити/ }).first()).toContainText('900');
+  await expect(page.getByRole('button', { name: /^Оплатити/ }).first()).toHaveAccessibleName(/900/);
 });
 
 test('a cart with something in it parks under a name', async ({ page }) => {
@@ -195,5 +195,5 @@ test('a parked bouquet comes back at its assembled price', async ({ page }) => {
   await page.getByTestId('open-parked').first().click();
   await page.getByTestId('parked-pick-up').first().click();
 
-  await expect(page.getByRole('button', { name: /^Сплатити/ }).first()).toContainText('1818,75');
+  await expect(page.getByRole('button', { name: /^Оплатити/ }).first()).toHaveAccessibleName(/1818,75/);
 });

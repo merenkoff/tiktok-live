@@ -4,6 +4,7 @@
 
 import type { ComponentType, LazyExoticComponent } from 'react';
 import type { Glyph } from '../platform/glyphs';
+import type { NavGroupId } from './navGroups';
 // Direct import, not via '@pos/platform' — the barrel re-exports the module
 // manifests, which import this file; `platform/icons.ts` is a leaf.
 import type { NavIconName } from '../platform/icons';
@@ -79,6 +80,12 @@ export interface NavItem {
    */
   icon?: NavIconName | (string & {}) | Glyph;
   location: NavLocation;
+  /**
+   * The owner's sidebar group. Usually left out — the host decides by module
+   * id (`navGroups.ts`), so a bundle released before groups existed still
+   * lands in the right one; `selectNavItems` fills it in either way.
+   */
+  group?: NavGroupId;
   /** Sort key within a location. */
   order: number;
   /** Active-state path prefix; defaults to `to`. */

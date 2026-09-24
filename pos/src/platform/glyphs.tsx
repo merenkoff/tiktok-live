@@ -738,6 +738,21 @@ export function ChevronDown({ size = 20, ...props }: GlyphProps) {
 }
 
 /** UI glyph, 20 px grid (+ a 16 px drawing for size ≤ 16). */
+export function ChevronLeft({ size = 20, ...props }: GlyphProps) {
+  if (size <= 16)
+    return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false" data-glyph="ChevronLeft" {...props}>
+      <path d="M10 3.5 5.5 8 10 12.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+    );
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="ChevronLeft" {...props}>
+      <path d="M12 4.5 6.5 10 12 15.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** UI glyph, 20 px grid (+ a 16 px drawing for size ≤ 16). */
 export function ChevronRight({ size = 20, ...props }: GlyphProps) {
   if (size <= 16)
     return (
@@ -1062,4 +1077,4 @@ export function X({ size = 20, ...props }: GlyphProps) {
 export const COLOR_GLYPHS = { AlertTriangle, BarChart3, Barcode, Bell, Bot, Boxes, Building2, Calendar, CalendarClock, CameraColor, ChefHat, ClipboardCheck, ClipboardList, CloudOff, Coffee, Coins, CreditCard, Download, FileText, Flower2, Gift, Grid3X3, Heart, Home, Info, KeyRound, Laptop, Layers, ListOrdered, Lock, MapPinColor, Megaphone, MessageCircle, MessageSquare, Monitor, Package, PackageCheck, Percent, PieChart, PrinterColor, Puzzle, QrCode, Receipt, RefreshCwColor, Repeat, ScanLine, SearchColor, Settings, ShieldCheck, Shirt, ShoppingBag, ShoppingCart, Sparkles, Star, Store, Table, Tag, Terminal, TrendingUp, Truck, Usb, User, Users, UtensilsCrossed, Video, Wallet, Warehouse, WifiOff, Wrench } as const satisfies Record<string, Glyph>;
 
 /** Every UI glyph by name. */
-export const UI_GLYPHS = { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookMarked, Camera, Check, ChevronDown, ChevronRight, Clock, Delete, DownloadLine, Folder, GripVertical, ImagePlus, Inbox, LayoutGrid, LogOut, MapPin, Minus, MoreHorizontal, PackageLine, Pencil, Phone, Plus, Printer, RefreshCw, RotateCcw, Scissors, Search, TagLine, Trash2, X } as const satisfies Record<string, Glyph>;
+export const UI_GLYPHS = { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookMarked, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Delete, DownloadLine, Folder, GripVertical, ImagePlus, Inbox, LayoutGrid, LogOut, MapPin, Minus, MoreHorizontal, PackageLine, Pencil, Phone, Plus, Printer, RefreshCw, RotateCcw, Scissors, Search, TagLine, Trash2, X } as const satisfies Record<string, Glyph>;

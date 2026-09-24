@@ -24,24 +24,40 @@ const hrefs = () =>
   screen.getAllByRole('link').map((el) => el.getAttribute('href'));
 
 describe('Nav — admin sidebar', () => {
-  it('renders the owner sections as labelled links', () => {
+  it('renders the owner sections as labelled links, in Things-style groups', () => {
     signIn('owner');
     renderWithProviders(<Nav location="admin-sidebar" />, { route: '/admin' });
 
+    // «Сьогодні» on top, then Продажі, Каталог, and the system entries last.
     expect(hrefs()).toEqual([
       '/admin',
+      '/admin/customers',
+      '/admin/sales',
       '/admin/products',
       '/admin/tech-cards',
       '/admin/modifiers',
       '/admin/stock',
-      '/admin/customers',
-      '/admin/sales',
-      '/admin/staff',
       '/admin/gtin',
+      '/admin/staff',
       '/admin/settings',
       '/admin/appearance',
     ]);
     expect(screen.getByRole('link', { name: 'Сьогодні' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Продажі' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Каталог' })).toBeInTheDocument();
+  });
+
+  it('draws a glyph on every owner section, named or not', () => {
+    signIn('owner');
+    const { container } = renderWithProviders(<Nav location="admin-sidebar" />, { route: '/admin' });
+    expect(container.querySelector('a[href="/admin"] svg')).toHaveAttribute('data-glyph', 'Star');
+    expect(container.querySelector('a[href="/admin/stock"] svg')).toHaveAttribute('data-glyph', 'Warehouse');
+  });
+
+  it('adds the till under «Сьогодні» when asked', () => {
+    signIn('owner');
+    renderWithProviders(<Nav location="admin-sidebar" tillLink />, { route: '/admin' });
+    expect(hrefs().slice(0, 2)).toEqual(['/admin', '/register']);
   });
 
   it('drops the sections of a disabled module', () => {

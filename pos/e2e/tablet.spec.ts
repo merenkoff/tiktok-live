@@ -159,7 +159,7 @@ test('without a network the tablet opens, shows the menu it saw, and refuses to 
 
   // A sale is refused before anything is written — no queue on a tablet.
   await page.getByText(catalog[0].product_name).first().click();
-  await page.getByRole('button', { name: /^Сплатити/ }).first().click();
+  await page.getByRole('button', { name: /^Оплатити/ }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Оплата' });
   await dialog.getByRole('button', { name: 'Готівка' }).click();
   await dialog.getByRole('button', { name: 'Готово' }).click();

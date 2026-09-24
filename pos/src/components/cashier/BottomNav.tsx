@@ -9,17 +9,23 @@ interface Props {
   onLogout: () => void;
 }
 
+/** The phone / portrait-tablet tab bar — Things' light bar, glyph over label. */
 export function BottomNav({ onLogout }: Props) {
   return (
-    <nav className="h-14 border-t border-sq-divider bg-white flex items-stretch px-2">
+    <nav
+      aria-label="Меню каси"
+      className="h-16 pb-[env(safe-area-inset-bottom)] border-t border-sq-divider/70 bg-sq-sidebar/95 backdrop-blur flex items-stretch px-2"
+    >
       <Nav location="cashier-primary" variant="bottom" />
       <button
         type="button"
         onClick={onLogout}
-        className="flex-1 flex flex-col items-center justify-center text-sq-secondary hover:text-sq-text"
+        className="flex-1 flex flex-col items-center justify-center gap-1 text-sq-secondary"
       >
-        <LogOut size={20} />
-        <span className="text-[11px] mt-0.5 font-medium">Вихід</span>
+        <span className="w-14 h-8 grid place-items-center">
+          <LogOut size={20} />
+        </span>
+        <span className="text-[11px] font-semibold leading-none">Вихід</span>
       </button>
     </nav>
   );

@@ -282,7 +282,7 @@ test('the bench prices a bouquet as it is assembled, and rings it as one line', 
   // template card's own.
   await expect(page.getByText('12 стебел')).toBeVisible();
 
-  await page.getByRole('button', { name: /^Сплатити/ }).first().click();
+  await page.getByRole('button', { name: /^Оплатити/ }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Оплата' });
   await dialog.getByRole('button', { name: 'Готівка' }).click();
   await dialog.getByRole('button', { name: 'Готово' }).click();

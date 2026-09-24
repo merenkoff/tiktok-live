@@ -18,6 +18,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, GripVertical, RotateCcw, Search } from '../../platform/glyphs';
 import { api, useAuthStore, useEnabledModules, resolveNavIcon, NAV_ICONS } from '@pos/platform';
+import { adminIconOf } from '../../modules/navGroups';
 import { allModules } from '../../modules/registry';
 import {
   collectNavEntries,
@@ -37,7 +38,7 @@ const LOCATIONS: Array<{ id: NavLocation; label: string; hint: string }> = [
   {
     id: 'admin-sidebar',
     label: 'Адмінка',
-    hint: 'Ліве меню адмінки. Воно текстове — іконок не показує.',
+    hint: 'Ліве меню адмінки: іконка й назва пункту, у групах.',
   },
 ];
 
@@ -334,8 +335,8 @@ function NavEntryRow({
   onReset,
 }: RowProps) {
   const hints = scopeHints(entry, location);
-  const showIcon = location === 'cashier-primary';
-  const effectiveIcon = override?.icon ?? entry.item.icon;
+  const showIcon = true;
+  const effectiveIcon = override?.icon ?? (location === 'admin-sidebar' ? adminIconOf(entry.item) : entry.item.icon);
 
   return (
     <li
@@ -542,7 +543,7 @@ function NavPreview({
   const items: NavItem[] = entries.map((e) => ({
     ...e.item,
     label: overrides[e.key]?.label ?? e.item.label,
-    icon: overrides[e.key]?.icon ?? e.item.icon,
+    icon: overrides[e.key]?.icon ?? (location === 'admin-sidebar' ? adminIconOf(e.item) : e.item.icon),
   }));
 
   return (
@@ -551,18 +552,21 @@ function NavPreview({
 
       {location === 'cashier-primary' ? (
         <div className="flex gap-3">
-          <div className="w-14 shrink-0 rounded-sq bg-[#1A1A1A] py-3 flex flex-col items-center gap-1">
+          <div className="w-[84px] shrink-0 rounded-card bg-sq-sidebar border border-sq-divider/70 py-2 flex flex-col items-center gap-1">
             {items.map((n, i) => {
               const Icon = resolveNavIcon(n.icon);
               return (
                 <div
                   key={`${n.to}#${i}`}
                   title={n.label}
-                  className={`w-12 h-12 grid place-items-center rounded-sq ${
-                    i === 0 ? 'bg-white/15 text-white' : 'text-white/70'
+                  className={`w-[68px] min-h-[56px] py-1.5 flex flex-col items-center justify-center gap-1 rounded-xl ${
+                    i === 0 ? 'bg-sq-selected' : ''
                   }`}
                 >
                   {Icon && <Icon size={24} />}
+                  <span className="max-w-[64px] text-center text-[10px] font-semibold leading-tight text-sq-secondary break-words">
+                    {n.label}
+                  </span>
                 </div>
               );
             })}
@@ -584,24 +588,28 @@ function NavPreview({
           </ul>
         </div>
       ) : (
-        <div className="rounded-sq border border-sq-divider bg-[#F0F0F0] p-2 space-y-0.5">
-          {items.map((n, i) => (
-            <div
-              key={`${n.to}#${i}`}
-              className={`px-3 py-2 rounded-[4px] text-sm font-medium truncate ${
-                i === 0 ? 'sq-nav-active' : 'sq-nav-idle'
-              }`}
-            >
-              {n.label}
-            </div>
-          ))}
+        <div className="rounded-card border border-sq-divider/70 bg-sq-sidebar p-2 space-y-0.5">
+          {items.map((n, i) => {
+            const Icon = resolveNavIcon(n.icon);
+            return (
+              <div
+                key={`${n.to}#${i}`}
+                className={`flex items-center gap-2.5 min-h-[36px] px-2.5 rounded-lg text-sm truncate ${
+                  i === 0 ? 'bg-sq-selected font-semibold' : 'font-medium'
+                }`}
+              >
+                {Icon && <Icon size={24} className="shrink-0" />}
+                <span className="truncate">{n.label}</span>
+              </div>
+            );
+          })}
         </div>
       )}
 
       <p className="text-xs text-sq-muted">
         {location === 'cashier-primary'
-          ? 'Ліворуч — бічна панель каси, праворуч ті самі пункти з підписами.'
-          : 'Підписи без іконок — так це меню й виглядає.'}
+          ? 'Ліворуч — бічна панель каси, праворуч ті самі пункти списком.'
+          : 'Так пункти виглядають у лівому меню адмінки; групи вона розставляє сама.'}
       </p>
     </div>
   );

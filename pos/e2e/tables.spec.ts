@@ -326,7 +326,7 @@ test('with the module CDN down there are no tables, and the till still sells', a
 
   // And the till sells exactly as it did before the restaurant existed.
   await page.goto('/register');
-  await expect(page.getByPlaceholder('Пошук')).toBeVisible();
+  await expect(page.getByPlaceholder(/^Пошук/)).toBeVisible();
 });
 
 /**

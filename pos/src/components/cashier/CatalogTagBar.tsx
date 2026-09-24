@@ -4,6 +4,7 @@
 
 import { useDragScroll } from '../../hooks/useDragScroll';
 import type { PosTag } from '../../types';
+import { ChevronLeft } from '../../platform/glyphs';
 
 /**
  * The horizontal strip of catalog tags above the product grid: «Усі товари»,
@@ -26,22 +27,22 @@ export function CatalogTagBar({
   onBack: () => void;
 }) {
   const ref = useDragScroll<HTMLDivElement>();
+  // Things' filter chips: plain text, the chosen one on a grey plate.
   const chip = (active: boolean) =>
-    `shrink-0 px-3 py-2 text-sm whitespace-nowrap border-b-2 ${
-      active
-        ? 'font-semibold text-sq-text border-sq-text'
-        : 'font-medium text-sq-secondary border-transparent'
+    `shrink-0 min-h-9 px-3.5 rounded-[10px] text-[15px] whitespace-nowrap transition-colors ${
+      active ? 'bg-sq-selected font-semibold text-sq-text' : 'font-medium text-sq-secondary hover:bg-sq-selected/50'
     }`;
 
   return (
-    <div ref={ref} className="flex items-stretch gap-0 overflow-x-auto -mx-1 px-1 select-none">
+    <div ref={ref} className="flex items-center gap-1 overflow-x-auto -mx-1 px-1 py-1 select-none">
       {showBack && (
         <button
           type="button"
           onClick={onBack}
-          className="shrink-0 px-3 py-2 text-sm font-medium text-sq-blue whitespace-nowrap"
+          className="shrink-0 min-h-9 px-2.5 rounded-[10px] text-[15px] font-semibold text-sq-blue whitespace-nowrap inline-flex items-center gap-0.5 hover:bg-sq-selected/50"
         >
-          ‹ {backLabel}
+          <ChevronLeft size={16} />
+          {backLabel}
         </button>
       )}
       <button type="button" onClick={() => onSelect(null)} className={chip(activeId === 'all')}>

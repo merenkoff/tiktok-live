@@ -221,9 +221,10 @@ export function MobileCartSheet({
             type="button"
             disabled={lines.length === 0}
             onClick={onCharge}
-            className="pos-btn-primary flex-[2] min-h-[48px] text-[15px]"
+            aria-label={`Оплатити ${formatUah(total)}`}
+            className="pos-btn-primary flex-[2] min-h-[52px] !rounded-xl text-[16px]"
           >
-            Сплатити {formatUah(total)}
+            Оплатити · {formatUah(total)}
           </button>
         </div>
       </div>

@@ -120,7 +120,7 @@ test('a flower shop sells through its own catalog module', async ({ page }) => {
   // …and the host frame still takes the money.
   await page.goto('/register');
   await page.getByText('Футболка базова').first().click();
-  await page.getByRole('button', { name: /^Сплатити/ }).first().click();
+  await page.getByRole('button', { name: /^Оплатити/ }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Оплата' });
   await dialog.getByRole('button', { name: 'Готівка' }).click();
   await dialog.getByRole('button', { name: 'Готово' }).click();
@@ -134,7 +134,7 @@ test('with the module CDN down the till still sells, on the bundled catalog', as
   await page.goto('/register');
   await expect(page.getByTestId('flowers-catalog')).toHaveCount(0);
   // The bundled catalog is there instead: same search box, same tiles.
-  await expect(page.getByPlaceholder('Пошук')).toBeVisible();
+  await expect(page.getByPlaceholder(/^Пошук/)).toBeVisible();
   await expect(page.getByText('Футболка базова')).toBeVisible();
 });
 

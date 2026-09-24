@@ -167,14 +167,14 @@ describe('AppearancePage', () => {
     });
   });
 
-  it('offers icons only where the menu actually draws them', async () => {
+  it('offers icons on both menus — the owner sidebar draws them too', async () => {
     const user = userEvent.setup();
     renderWithProviders(<AppearancePage />, { route: '/admin/appearance' });
 
     expect(await screen.findByLabelText('Іконка пункту «Каса»')).toBeInTheDocument();
 
     await user.click(screen.getByRole('tab', { name: 'Адмінка' }));
-    await waitFor(() => expect(screen.queryByLabelText(/^Іконка пункту/)).not.toBeInTheDocument());
+    expect(await screen.findByLabelText('Іконка пункту «Склад»')).toBeInTheDocument();
   });
 
   it('picks an icon from the ones this build can actually draw', async () => {
