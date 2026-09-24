@@ -785,7 +785,10 @@ export function RegisterPage() {
           </div>
         )}
 
-        <div className="flex-1 grid lg:grid-cols-[1fr_360px] min-h-0">
+        {/* `minmax(0,1fr)`, not `1fr`: a bare `1fr` never shrinks below its
+            content, and a store with nine tags in the category row pushed the
+            receipt off the right edge at 1366–1440 px. The row scrolls instead. */}
+        <div className="flex-1 grid lg:grid-cols-[minmax(0,1fr)_360px] min-h-0">
           <CatalogBoundary
             key={moduleId}
             moduleId={moduleId}
