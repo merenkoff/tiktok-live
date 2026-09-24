@@ -86,6 +86,12 @@ updates:
     ignore:
       - dependency-name: '*'
         update-types: [version-update:semver-major]
+      # A 0.x package breaks on a "minor": dependabot counts 0.4 -> 0.5 as
+      # minor, so the rule above does not catch it. 0.5 needs eslint 9 (peer
+      # ^9 || ^10) and broke `npm ci` in admin/ and pos/ (PR #166). Drop this
+      # together with the eslint 9 migration.
+      - dependency-name: eslint-plugin-react-refresh
+        versions: ['>=0.5.0']
 
   # ── Tauri desktop shell (Rust) ───────────────────────────────────────────
   # tauri-check.yml compiles the crate on any change under pos/src-tauri/, so
