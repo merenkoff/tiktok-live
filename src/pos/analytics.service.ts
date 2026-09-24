@@ -23,6 +23,8 @@ export interface SalesSummary {
     variant_label: string;
     qty_sold: number;
     revenue_cents: number;
+    /** The product's picture, for the owner's «Популярні товари» row; null for a placeholder line. */
+    image_url: string | null;
   }>;
   payments: Array<{ method: PaymentMethod; amount_cents: number; unconfirmed_cents: number }>;
   daily: Array<{ date: string; gross_cents: number; net_cents: number; sales_count: number }>;
@@ -89,9 +91,13 @@ export async function getSalesSummary(
        si.product_name,
        si.variant_label,
        SUM(si.quantity - si.refunded_quantity)::int AS qty_sold,
-       SUM((si.quantity - si.refunded_quantity) * si.unit_price_cents)::int AS revenue_cents
+       SUM((si.quantity - si.refunded_quantity) * si.unit_price_cents)::int AS revenue_cents,
+       MAX(p.image_url) AS image_url
      FROM pos_sale_items si
      JOIN pos_sales s ON s.id = si.sale_id
+     -- LEFT: a receipt's placeholder line names no variant, and it still sold.
+     LEFT JOIN pos_variants v ON v.id = si.variant_id
+     LEFT JOIN pos_products p ON p.id = v.product_id
      CROSS JOIN bounds b
      WHERE s.store_id = $1
        AND s.status <> 'voided'
@@ -104,21 +110,45 @@ export async function getSalesSummary(
     params
   );
 
+  // A cash payment is stored as what the customer handed over — the receipt
+  // prints «ГОТІВКА 500 / РЕШТА 250» from it — so the change has to come off
+  // here, or a 250 ₴ sale paid with a 500 ₴ note reads as 500 ₴ of cash takings
+  // and the split no longer adds up to «Виторг». Per sale, because an even
+  // split may carry several cash rows and the change must leave only once;
+  // change is only ever given in cash, and never more than the cash there was.
   const paymentsResult = await pool.query(
-    `${BOUNDS_CTE}
-     SELECT p.method,
-            COALESCE(SUM(p.amount_cents), 0)::int AS amount_cents,
-            COALESCE(SUM(p.amount_cents) FILTER (
-              WHERE p.method = 'qr' AND p.confirmed_at IS NULL
-            ), 0)::int AS unconfirmed_cents
-     FROM pos_payments p
-     JOIN pos_sales s ON s.id = p.sale_id
-     CROSS JOIN bounds b
-     WHERE s.store_id = $1
-       AND s.status <> 'voided'
-       AND s.created_at >= b.range_start
-       AND s.created_at < b.range_end
-     GROUP BY p.method`,
+    `${BOUNDS_CTE},
+     per_sale AS (
+       SELECT s.id AS sale_id,
+              s.total_cents,
+              p.method,
+              SUM(p.amount_cents) AS amount_cents,
+              SUM(p.amount_cents) FILTER (
+                WHERE p.method = 'qr' AND p.confirmed_at IS NULL
+              ) AS unconfirmed_cents
+       FROM pos_payments p
+       JOIN pos_sales s ON s.id = p.sale_id
+       CROSS JOIN bounds b
+       WHERE s.store_id = $1
+         AND s.status <> 'voided'
+         AND s.created_at >= b.range_start
+         AND s.created_at < b.range_end
+       GROUP BY s.id, s.total_cents, p.method
+     ),
+     change AS (
+       SELECT sale_id, GREATEST(0, SUM(amount_cents) - MAX(total_cents)) AS change_cents
+       FROM per_sale
+       GROUP BY sale_id
+     )
+     SELECT ps.method,
+            COALESCE(SUM(
+              ps.amount_cents
+              - CASE WHEN ps.method = 'cash' THEN LEAST(ps.amount_cents, c.change_cents) ELSE 0 END
+            ), 0)::int AS amount_cents,
+            COALESCE(SUM(ps.unconfirmed_cents), 0)::int AS unconfirmed_cents
+     FROM per_sale ps
+     JOIN change c ON c.sale_id = ps.sale_id
+     GROUP BY ps.method`,
     params
   );
 
@@ -165,6 +195,7 @@ export async function getSalesSummary(
       variant_label: item.variant_label,
       qty_sold: Number(item.qty_sold),
       revenue_cents: Number(item.revenue_cents),
+      image_url: (item.image_url as string | null) ?? null,
     })),
     payments: paymentsResult.rows.map((p) => ({
       method: p.method as PaymentMethod,

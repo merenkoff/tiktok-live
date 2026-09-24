@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '@pos/platform';
 import type { StockMovementRow } from '@pos/platform';
+import { ListOrdered, PageHeader } from '@pos/platform/ui';
 
 const REASON_UK: Record<string, string> = {
   sale: 'Продаж',
@@ -36,26 +37,25 @@ export function StockHistoryPage() {
     void reload().catch(() => setError('Не вдалося завантажити історію'));
   }, []);
 
-  return (
-    <div className="max-w-5xl space-y-4">
-      <Link to="/admin/stock" className="text-sm text-[#006AFF] hover:underline">
-        ← Склад
-      </Link>
-      <div>
-        <p className="sq-section-label">Inventory history</p>
-        <h1 className="text-2xl font-semibold mt-1">Історія рухів</h1>
-      </div>
+  /** A tag-bar chip: the chosen one is grey, the rest are quiet text. */
+  const chip = (on: boolean) =>
+    `h-9 px-3.5 rounded-[10px] text-[15px] whitespace-nowrap transition-colors ${
+      on ? 'bg-sq-selected font-semibold text-sq-text' : 'text-sq-secondary hover:bg-sq-selected/50'
+    }`;
 
-      <div className="flex flex-wrap gap-1.5">
+  return (
+    <div className="max-w-5xl space-y-5 animate-fade-up text-sq-text">
+      <PageHeader back={{ to: '/admin/stock', label: 'Склад' }} glyph={ListOrdered} title="Історія рухів" />
+
+      <div className="flex flex-wrap gap-1" role="group" aria-label="Причина">
         <button
           type="button"
+          aria-pressed={!reason}
           onClick={() => {
             setReason('');
             void reload('');
           }}
-          className={`px-3 py-1.5 text-sm rounded-[4px] border ${
-            !reason ? 'border-[#006AFF] bg-[#E8F1FF] text-[#006AFF]' : 'border-[#E0E0E0] bg-white'
-          }`}
+          className={chip(!reason)}
         >
           Усі
         </button>
@@ -63,15 +63,12 @@ export function StockHistoryPage() {
           <button
             key={code}
             type="button"
+            aria-pressed={reason === code}
             onClick={() => {
               setReason(code);
               void reload(code);
             }}
-            className={`px-3 py-1.5 text-sm rounded-[4px] border ${
-              reason === code
-                ? 'border-[#006AFF] bg-[#E8F1FF] text-[#006AFF]'
-                : 'border-[#E0E0E0] bg-white'
-            }`}
+            className={chip(reason === code)}
           >
             {label}
           </button>
@@ -80,29 +77,29 @@ export function StockHistoryPage() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <div className="rounded-[4px] border border-[#E0E0E0] bg-white divide-y divide-[#E0E0E0]">
+      <ul>
         {rows.map((row) => (
-          <div key={row.id} className="px-4 py-3 flex flex-wrap gap-3 justify-between text-sm">
-            <div>
-              <p className="font-medium">
+          <li key={row.id} className="sq-row min-h-12 py-2 flex gap-3 justify-between">
+            <div className="min-w-0">
+              <p className="text-base">
                 {row.product_name}{' '}
-                <span className="text-[#6E6E6E] font-normal">
+                <span className="text-sq-muted">
                   {row.label}
                 </span>
               </p>
-              <p className="text-xs text-[#6E6E6E] mt-0.5">
+              <p className="text-[13px] text-sq-secondary mt-0.5">
                 {REASON_UK[row.reason] ?? row.reason}
                 {row.staff_name ? ` · ${row.staff_name}` : ''}
                 {row.note ? ` · ${row.note}` : ''}
               </p>
-              <p className="text-xs text-[#6E6E6E]">
+              <p className="text-[13px] text-sq-muted tabular-nums">
                 {new Date(row.occurred_at).toLocaleString('uk-UA')}
               </p>
             </div>
-            <div className="text-right">
+            <div className="text-right shrink-0">
               <p
-                className={`font-semibold tabular-nums ${
-                  row.delta >= 0 ? 'text-emerald-700' : 'text-red-600'
+                className={`text-base font-semibold tabular-nums ${
+                  row.delta >= 0 ? 'text-sq-success-ink' : 'text-sq-danger'
                 }`}
               >
                 {row.delta >= 0 ? `+${row.delta}` : row.delta}
@@ -110,18 +107,21 @@ export function StockHistoryPage() {
               {row.reference_type === 'stock_document' && row.reference_id && (
                 <Link
                   to={`/admin/stock/documents/${row.reference_id}`}
-                  className="text-xs text-[#006AFF] hover:underline"
+                  className="text-[13px] font-semibold text-sq-blue"
                 >
                   Документ
                 </Link>
               )}
             </div>
-          </div>
+          </li>
         ))}
-        {rows.length === 0 && (
-          <p className="p-6 text-sm text-[#6E6E6E] text-center">Немає рухів за період</p>
-        )}
-      </div>
+      </ul>
+      {rows.length === 0 && (
+        <div className="py-10 flex flex-col items-center gap-2">
+          <ListOrdered size={48} />
+          <p className="text-[15px] text-sq-secondary">Немає рухів за період</p>
+        </div>
+      )}
     </div>
   );
 }

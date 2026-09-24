@@ -21,6 +21,7 @@
 
 import { useState } from 'react';
 import { usePosShell, useOfflineStatus } from '@pos/platform';
+import { Lock } from '@pos/platform/ui';
 import {
   claimRegister,
   confirmHandover,
@@ -108,23 +109,26 @@ export function HolderPanel({ status, onChanged }: HolderPanelProps) {
     });
 
   return (
-    <div className="rounded-sq bg-sq-surface border border-sq-divider p-4 space-y-3">
-      <p className="sq-section-label">Каса ПРРО</p>
+    <section className="rounded-card bg-sq-surface shadow-card p-5 space-y-3">
+      <div className="flex items-center gap-3 pb-1">
+        <Lock size={24} className="shrink-0" />
+        <h2 className="text-[17px] font-semibold text-sq-heading">Каса ПРРО</h2>
+      </div>
 
       {!holder && (
         <>
-          <p className="text-sm text-sq-secondary">Вільна</p>
+          <p className="text-[15px] text-sq-secondary">Вільна</p>
           {canAct ? (
             <button
               type="button"
-              className="pos-btn-primary px-4 py-2"
+              className="pos-btn-primary w-full min-h-[52px] rounded-xl text-[17px]"
               disabled={busy}
               onClick={() => void claim()}
             >
               Зайняти касу
             </button>
           ) : (
-            <p className="text-xs text-sq-muted">
+            <p className="text-[13px] text-sq-muted">
               Касу займе перший пристрій, який проведе продаж.
             </p>
           )}
@@ -133,19 +137,20 @@ export function HolderPanel({ status, onChanged }: HolderPanelProps) {
 
       {holder?.is_me && (
         <>
-          <p className="text-sm font-semibold text-emerald-600">Ця каса{since(holder.since)}</p>
+          <p className="text-[15px] font-semibold text-sq-success-ink">Ця каса{since(holder.since)}</p>
           {holder.handover_request && (
-            <div className="rounded-sq bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            <div className="rounded-xl bg-amber-50 px-4 py-3 text-[15px] text-amber-800 space-y-2">
               <p className="font-semibold">
                 Пристрій {deviceLabel(holder.handover_request.name, holder.handover_request.device_id)}{' '}
                 просить передати касу
               </p>
               {outboxPending > 0 && (
-                <p className="mt-1">Спершу синхронізуйте чеки, що очікують: {outboxPending}.</p>
+                <p>Спершу синхронізуйте чеки, що очікують: {outboxPending}.</p>
               )}
-              <label className="mt-2 flex items-center gap-2 text-sm">
+              <label className="min-h-11 flex items-center gap-3 text-[15px]">
                 <input
                   type="checkbox"
+                  className="w-5 h-5 shrink-0 accent-[rgb(var(--sq-blue-rgb))]"
                   checked={closeShift}
                   disabled={busy}
                   onChange={(e) => setCloseShift(e.target.checked)}
@@ -154,7 +159,7 @@ export function HolderPanel({ status, onChanged }: HolderPanelProps) {
               </label>
               <button
                 type="button"
-                className="pos-btn-primary mt-2 px-4 py-2"
+                className="pos-btn-primary w-full min-h-[52px] rounded-xl text-[17px]"
                 disabled={busy}
                 onClick={() => void confirm()}
               >
@@ -164,7 +169,7 @@ export function HolderPanel({ status, onChanged }: HolderPanelProps) {
           )}
           <button
             type="button"
-            className="rounded-sq border border-sq-divider px-4 py-2 text-sm font-medium"
+            className="w-full min-h-[52px] rounded-xl bg-sq-surface px-4 ring-1 ring-inset ring-sq-divider text-[17px] font-semibold text-sq-text hover:bg-sq-sidebar disabled:opacity-50"
             disabled={busy}
             onClick={() => void release()}
           >
@@ -175,12 +180,12 @@ export function HolderPanel({ status, onChanged }: HolderPanelProps) {
 
       {holder && !holder.is_me && (
         <>
-          <p className="text-sm text-sq-secondary">
+          <p className="text-[15px] text-sq-text">
             Каса зайнята пристроєм {deviceLabel(holder.name, holder.device_id)}
             {since(holder.since)}
           </p>
           {holder.stale && (
-            <p className="text-xs text-amber-700">
+            <p className="text-[13px] text-amber-700">
               Каса не відповідає, можливо продає офлайн. Якщо вона не повернеться, власник може
               забрати касу примусово в налаштуваннях ПРРО.
             </p>
@@ -188,7 +193,7 @@ export function HolderPanel({ status, onChanged }: HolderPanelProps) {
           {canAct && (
             <button
               type="button"
-              className="rounded-sq border border-sq-divider px-4 py-2 text-sm font-medium"
+              className="w-full min-h-[52px] rounded-xl bg-sq-surface px-4 ring-1 ring-inset ring-sq-divider text-[17px] font-semibold text-sq-text hover:bg-sq-sidebar disabled:opacity-50"
               disabled={busy}
               onClick={() => void ask()}
             >
@@ -198,16 +203,16 @@ export function HolderPanel({ status, onChanged }: HolderPanelProps) {
         </>
       )}
 
-      {note && <p className="text-sm text-sq-secondary">{note}</p>}
+      {note && <p className="text-[15px] text-sq-secondary">{note}</p>}
       {zReportText && (
         <div>
-          <p className="sq-section-label">Z-звіт</p>
-          <pre className="mt-1 max-h-64 overflow-auto rounded-sq bg-sq-bg p-3 font-mono text-xs whitespace-pre-wrap">
+          <p className="text-[13px] font-semibold text-sq-secondary">Z-звіт</p>
+          <pre className="mt-2 max-h-64 overflow-auto rounded-xl bg-sq-sidebar p-3 font-mono text-[13px] whitespace-pre-wrap">
             {zReportText}
           </pre>
         </div>
       )}
       {Boolean(error) && <FiscalErrorCard error={error} />}
-    </div>
+    </section>
   );
 }

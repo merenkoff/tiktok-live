@@ -236,10 +236,15 @@ install, і пропонувати нема чого) → `ready`. `TabletApp` �
 
 `public/tablet.webmanifest` (`display: standalone`, іконки 192/512 `any` +
 512 `maskable`, `theme_color` з токенів). Іконки — `scripts/gen-pwa-icons.mjs`
-растеризує один inline-SVG тим Chromium, що Playwright і так ставить для
-e2e; результат **закомічено** в `public/icons/`, бо Docker-збірка робить
-`npm ci` без браузера. `npm run pwa:icons` (з `PW_CHROMIUM=/шлях/до/chrome`,
-якщо Playwright новіший за встановлені браузери).
+растеризує іконку програми `design/app-icon/app-icon.svg` (концепт A «Чек», той
+самий малюнок, що й favicon сайту) тим Chromium, що Playwright і так ставить для
+e2e: `any` — сквіркл із прозорими кутами, `apple-touch-icon` — квадрат (iOS
+маскує сам), `maskable` — синій до країв, а чек зменшено в безпечне коло 80 %.
+Результат **закомічено** в `public/icons/`, бо Docker-збірка робить `npm ci` без
+браузера. `npm run pwa:icons` (з `PW_CHROMIUM=/шлях/до/chrome`, якщо Playwright
+новіший за встановлені браузери); з `--tauri` той самий скрипт через `tauri icon`
+перегенеровує й іконки десктоп-каси в `src-tauri/icons/` (для macOS — на сітці
+Big Sur, 824 з 1024).
 
 `lib/installPrompt.ts` ловить `beforeinstallprompt` при старті й тримає для
 кнопки «Встановити на планшет» на `LoginPage` (лише `shell === 'tablet'` і не

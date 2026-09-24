@@ -17,6 +17,7 @@
 // Provider-neutral, so it lives in `fiscal-core`: which provider is behind the
 // reserve changes nothing about what the cashier is being told.
 
+import { CloudOff } from '@pos/platform/ui';
 import type { FiscalStatus, OfflineSessionView } from '../types';
 
 /** Hours, the unit the tax office's limits are written in. */
@@ -40,7 +41,7 @@ function SessionLine({ session }: { session: OfflineSessionView }) {
 
   if (session.status === 'stuck') {
     return (
-      <div role="alert" className="rounded-sq bg-red-50 px-3 py-2 text-sm text-red-700">
+      <div role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-[15px] text-red-700">
         <p className="font-semibold">Офлайн-чеки не надіслані в ДПС</p>
         {session.error_message && <p className="mt-1">{session.error_message}</p>}
         <p className="mt-1">
@@ -52,7 +53,7 @@ function SessionLine({ session }: { session: OfflineSessionView }) {
 
   if (session.status === 'replaying') {
     return (
-      <div className="rounded-sq bg-amber-50 px-3 py-2 text-sm text-amber-900">
+      <div className="rounded-xl bg-amber-50 px-4 py-3 text-[15px] text-amber-800">
         <p className="font-semibold">Надсилаємо чеки в ДПС…</p>
         <p className="mt-1">
           {docs.done} з {total}
@@ -64,7 +65,7 @@ function SessionLine({ session }: { session: OfflineSessionView }) {
 
   // `open`: we are selling from the reserve right now.
   return (
-    <div className="rounded-sq bg-amber-50 px-3 py-2 text-sm text-amber-900">
+    <div className="rounded-xl bg-amber-50 px-4 py-3 text-[15px] text-amber-800">
       <p className="font-semibold">Працюємо офлайн з {time(session.started_at)}</p>
       <p className="mt-1">
         Чеків у сесії: {total}. Зв’язок із ПРРО відновиться автоматично — чеки підуть у ДПС самі.
@@ -95,30 +96,37 @@ export function OfflinePanel({ status }: { status: FiscalStatus }) {
   const monthLow = month ? month.limit_ms - month.used_ms <= 12 * 3_600_000 : false;
 
   return (
-    <div className="rounded-sq bg-sq-surface border border-sq-divider p-4 space-y-2">
-      <p className="sq-section-label">Офлайн-режим ПРРО</p>
-      <p className={`text-sm font-semibold ${low ? 'text-amber-600' : 'text-sq-secondary'}`}>
+    <section className="rounded-card bg-sq-surface shadow-card p-5 space-y-2">
+      <div className="flex items-center gap-3 pb-1">
+        <CloudOff size={24} className="shrink-0" />
+        <h2 className="text-[17px] font-semibold text-sq-heading">Офлайн-режим ПРРО</h2>
+      </div>
+      <p className={`text-[15px] font-semibold tabular-nums ${low ? 'text-amber-700' : 'text-sq-text'}`}>
         Запас фіскальних кодів: {free}
       </p>
       {mine > 0 && (
         // The store's reserve is not what this till can spend: only the codes
         // leased to it travel into an outage with it (фаза 3).
-        <p className="text-sm text-sq-secondary">Із них на цій касі: {mine}</p>
+        <p className="text-[15px] text-sq-secondary tabular-nums">Із них на цій касі: {mine}</p>
       )}
       {low && (
-        <p className="text-xs text-amber-700">
+        <p className="text-[13px] text-amber-700">
           Запас майже вичерпано. Поки ПРРО доступне, він поповнюється автоматично.
         </p>
       )}
       {month && (
         // 168 годин на календарний місяць — a limit of the register, not of
         // this till: another till's outage spends the same hours.
-        <p className={`text-sm ${monthLow ? 'text-amber-600 font-semibold' : 'text-sq-secondary'}`}>
+        <p className={`text-[15px] tabular-nums ${monthLow ? 'text-amber-700 font-semibold' : 'text-sq-secondary'}`}>
           Офлайн цього місяця: {hours(month.used_ms)} із {hours(month.limit_ms)}
           {monthLow && ' — залишок малий'}
         </p>
       )}
-      {offline.session && <SessionLine session={offline.session} />}
-    </div>
+      {offline.session && (
+        <div className="pt-1">
+          <SessionLine session={offline.session} />
+        </div>
+      )}
+    </section>
   );
 }

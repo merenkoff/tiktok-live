@@ -425,6 +425,7 @@ describe.skipIf(!hasDb)('POS bills', () => {
     for (const row of summary) {
       expect(row.bill_no).toBeGreaterThan(0);
       expect(row.opened_by_name).toBeTruthy();
+      expect(Number.isInteger(row.opened_by)).toBe(true);
     }
     const withRound = summary.find((row) => row.prep_status === 'new');
     expect(withRound?.fired_total_cents).toBeGreaterThan(0);

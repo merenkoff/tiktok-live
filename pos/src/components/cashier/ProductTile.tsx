@@ -12,6 +12,7 @@ import { formatUah } from '../../lib/money';
 // while the cart — host code, host copy — showed the same photos fine.
 // `@pos/platform` is external in a remote, so this is always the host's.
 import { assetUrl } from '@pos/platform';
+import { MoreHorizontal } from '../../platform/glyphs';
 
 interface Props {
   name: string;
@@ -62,62 +63,65 @@ export function ProductTile({
   const [broken, setBroken] = useState(false);
   const src = !broken ? assetUrl(imageUrl) : null;
 
+  // A Things-style card: the photo on top, the name and the price under it —
+  // not over it, so neither fights the picture. Badges sit on the photo.
+  const muted = disabled || !!badge || (stock != null && stock <= 0);
   const tile = (
     <button
       type="button"
       disabled={disabled}
       onClick={onClick}
       data-testid={testId}
-      className={`${onMore ? 'w-full h-full' : 'aspect-square'} rounded-sq overflow-hidden relative text-left bg-sq-empty hover:brightness-[0.97] transition-[filter] disabled:opacity-50 disabled:cursor-not-allowed ${
-        count ? 'ring-2 ring-sq-blue' : ''
+      className={`w-full ${onMore ? 'h-full' : ''} flex flex-col rounded-[14px] overflow-hidden text-left bg-sq-surface transition-shadow disabled:opacity-50 disabled:cursor-not-allowed ${
+        count ? 'ring-2 ring-sq-blue' : 'ring-1 ring-sq-divider hover:ring-sq-muted/50'
       }`}
     >
-      {src ? (
-        <img
-          src={src}
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-          onError={() => setBroken(true)}
-        />
-      ) : (
-        <div className="absolute inset-0 grid place-items-center text-sq-secondary text-xs px-2 font-medium pointer-events-none">
-          {subtitle || ' '}
-        </div>
-      )}
+      <div className="relative w-full aspect-[4/3] bg-sq-empty shrink-0">
+        {src ? (
+          <img
+            src={src}
+            alt=""
+            className={`absolute inset-0 w-full h-full object-cover pointer-events-none ${muted ? 'opacity-45' : ''}`}
+            onError={() => setBroken(true)}
+          />
+        ) : (
+          <div className="absolute inset-0 grid place-items-center text-sq-secondary text-xs px-2 font-medium pointer-events-none">
+            {subtitle || ' '}
+          </div>
+        )}
 
-      <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/55 to-transparent pointer-events-none" />
+        {count != null && count > 0 && (
+          <span
+            className="absolute top-2 left-2 min-w-7 h-7 px-2 grid place-items-center rounded-full bg-sq-blue text-white text-[13px] font-bold tabular-nums pointer-events-none"
+            data-testid="tile-count"
+          >
+            {count}
+          </span>
+        )}
 
-      <div className="absolute bottom-2 left-2 right-2 text-white pointer-events-none">
-        <p className="text-[12px] leading-tight font-medium line-clamp-2 drop-shadow-sm">{name}</p>
-        {priceCents != null && (
-          <p className="text-[12px] mt-0.5 opacity-95 drop-shadow-sm">{formatUah(priceCents)}</p>
+        {badge ? (
+          <span
+            className={`absolute ${count ? 'top-10' : 'top-2'} left-2 text-[12px] font-semibold bg-[#F4386A] text-white px-2 py-0.5 rounded-md pointer-events-none`}
+            data-testid="tile-badge"
+          >
+            {badge}
+          </span>
+        ) : (
+          stock != null &&
+          stock <= 0 && (
+            <span className={`absolute ${count ? 'top-10' : 'top-2'} left-2 text-[12px] font-semibold bg-sq-secondary text-white px-2 py-0.5 rounded-md pointer-events-none`}>
+              немає
+            </span>
+          )
         )}
       </div>
 
-      {count != null && count > 0 && (
-        <span
-          className="absolute top-2 left-2 min-w-7 h-7 px-1.5 grid place-items-center rounded-full bg-sq-blue text-white text-[13px] font-semibold tabular-nums shadow-sm pointer-events-none"
-          data-testid="tile-count"
-        >
-          {count}
-        </span>
-      )}
-
-      {badge ? (
-        <span
-          className="absolute top-2 right-2 text-[10px] font-semibold bg-black/55 text-white px-1.5 py-0.5 rounded-sq pointer-events-none"
-          data-testid="tile-badge"
-        >
-          {badge}
-        </span>
-      ) : (
-        stock != null &&
-        stock <= 0 && (
-          <span className="absolute top-2 right-2 text-[10px] font-semibold bg-black/55 text-white px-1.5 py-0.5 rounded-sq pointer-events-none">
-            немає
-          </span>
-        )
-      )}
+      <div className="px-3 pt-2 pb-2.5 flex flex-col gap-0.5 min-w-0 pointer-events-none">
+        <p className={`text-[14px] leading-tight font-semibold line-clamp-2 ${muted ? 'text-sq-muted' : 'text-sq-text'}`}>{name}</p>
+        {priceCents != null && (
+          <p className="text-[14px] text-sq-secondary tabular-nums">{formatUah(priceCents)}</p>
+        )}
+      </div>
     </button>
   );
 
@@ -126,17 +130,19 @@ export function ProductTile({
   // A sibling of the tile, not a child: a button inside a button is invalid
   // HTML, and its click would bubble into the tile and add the line as well.
   return (
-    <div className="relative aspect-square">
+    <div className="relative">
       {tile}
       {!disabled && (
         <button
           type="button"
           onClick={onMore}
           aria-label={`Змінити: ${name}`}
-          className="absolute top-1 right-1 w-11 h-11 grid place-items-center rounded-full bg-black/45 text-white text-xl leading-none shadow-sm hover:bg-black/60"
+          className="absolute top-0.5 right-0.5 w-11 h-11 grid place-items-center"
           data-testid={testId ? `${testId}-more` : 'tile-more'}
         >
-          ⋯
+          <span className="w-8 h-8 grid place-items-center rounded-full bg-white/95 text-sq-text shadow-[0_1px_3px_rgba(0,0,0,0.15)]">
+            <MoreHorizontal size={20} />
+          </span>
         </button>
       )}
     </div>

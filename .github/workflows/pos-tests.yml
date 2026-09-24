@@ -5,10 +5,14 @@ on:
     branches: [main]
     paths:
       - 'pos/**'
+      - 'design/icons/**'
+      - 'scripts/gen-icons.mjs'
       - '.github/workflows/pos-tests.yml'
   pull_request:
     paths:
       - 'pos/**'
+      - 'design/icons/**'
+      - 'scripts/gen-icons.mjs'
       - '.github/workflows/pos-tests.yml'
 
 jobs:
@@ -27,6 +31,11 @@ jobs:
           cache-dependency-path: pos/package-lock.json
       - run: npm ci
       - run: npm run lint
+      # The glyphs are drawn on a pixel grid (design/icons) and generated into
+      # src/platform/glyphs.tsx; fails on an off-grid coordinate or a stale file.
+      - name: Glyphs on the grid and up to date
+        working-directory: .
+        run: node scripts/gen-icons.mjs --check
       - run: npm run check:platform-boundary
       - run: npm run check:tauri-capabilities
       - run: npm run test:coverage

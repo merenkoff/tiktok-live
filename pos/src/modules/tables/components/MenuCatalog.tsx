@@ -24,7 +24,7 @@
 // ever printed: the guest is looking at this screen (§5).
 
 import { useEffect, useState } from 'react';
-import { Search } from 'lucide-react';
+import { Search } from '@pos/platform/ui';
 import { defaultModifierIds, groupsOf, needsModifierSheet, useSalesCatalog, useVertical } from '@pos/platform';
 import type { CatalogItem } from '@pos/platform';
 import { CatalogTagBar, ModifierSheet, ProductTile, ScanWedge, TagFolderTile, useDragScroll } from '@pos/platform/ui';
@@ -114,11 +114,11 @@ export function MenuCatalog({
       <div className="shrink-0 space-y-2 border-b border-sq-divider px-3 pb-2 pt-3">
         <div className="relative">
           <Search
-            size={18}
+            size={20}
             className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sq-muted"
           />
           <input
-            className="pos-field text-sm !pl-10 !bg-sq-bg !border-sq-divider"
+            className="pos-field text-[15px] !pl-11 !bg-sq-empty !border-transparent !rounded-xl"
             placeholder="Що додати?"
             data-testid="menu-search"
             value={catalog.query}
@@ -141,7 +141,7 @@ export function MenuCatalog({
         {catalog.loading && catalog.grouped.length === 0 && (
           <p className="text-sm text-sq-muted">Завантаження…</p>
         )}
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 xl:grid-cols-5">
+        <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 xl:grid-cols-5">
           {catalog.folderTiles.map((folder) => (
             <div key={folder.id} data-testid={`menu-folder-${folder.id}`}>
               <TagFolderTile name={folder.name} color={folder.color} onClick={() => catalog.enterTag(folder)} />
@@ -195,8 +195,8 @@ export function MenuCatalog({
           variantLabel={sizeLabel}
           initialVariantId={sheet.initialVariantId}
           initialModifierIds={defaultModifierIds(groupsOf(sheet.variants))}
-          onAdd={({ item, modifiers, note }) => {
-            onAdd({ item, modifiers, note });
+          onAdd={({ item, modifiers, note, quantity }) => {
+            onAdd({ item, modifiers, note, quantity });
             setSheet(null);
           }}
           onClose={() => setSheet(null)}

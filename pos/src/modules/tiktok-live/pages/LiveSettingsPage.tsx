@@ -27,6 +27,7 @@ import { useLiveSettings } from '../hooks/useLiveSettings';
 import { useLiveSession } from '../hooks/useLiveSession';
 import { SupportCode } from '../components/SupportCode';
 import type { LiveSettingsPatch } from '../types';
+import { AlertTriangle, Download, PageHeader, SectionHead, Video, type Glyph } from '@pos/platform/ui';
 
 const RESERVATION_CHOICES = [3, 5, 10, 15, 30];
 
@@ -80,7 +81,7 @@ export function LiveSettingsPage() {
   if (status === 'host-too-old') {
     return (
       <CenteredCard
-        icon="⬆️"
+        icon={Download}
         title="Застосунок каси застарів для цього екрана"
         body="Екран ефіру працює, а його налаштування зʼявляться після оновлення застосунку. Поки що змінюйте їх у старій адмінці."
         diagnostic={diagnostic}
@@ -91,7 +92,7 @@ export function LiveSettingsPage() {
   if (status === 'not-configured') {
     return (
       <CenteredCard
-        icon="🔌"
+        icon={Video}
         title="Магазин не підʼєднано до TikTok LIVE"
         body="Вкажіть нікнейм TikTok-акаунта в Налаштуваннях магазину — після цього тут зʼявляться налаштування ефіру."
         link={{ to: '/admin/settings', label: 'Перейти до Налаштувань' }}
@@ -102,7 +103,7 @@ export function LiveSettingsPage() {
   if (status === 'error' || !settings) {
     return (
       <CenteredCard
-        icon="⚠️"
+        icon={AlertTriangle}
         title="Не вдалося завантажити налаштування"
         body="Спробуйте ще раз. Якщо помилка повторюється — передайте код нижче в підтримку."
         action={{ label: 'Спробувати ще раз', onClick: reload }}
@@ -133,18 +134,22 @@ export function LiveSettingsPage() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="mx-auto w-full max-w-2xl space-y-6 pb-10">
-      <div>
-        <h1 className="text-lg font-semibold text-sq-text">Прямий ефір</h1>
-        <p className="mt-1 text-sm text-sq-secondary">
-          Інтеграції та таймер бронювання для трансляцій.
-        </p>
-      </div>
+    <form onSubmit={onSubmit} className="w-full max-w-2xl space-y-7 pb-10 text-sq-text animate-fade-up">
+      <PageHeader
+        glyph={Video}
+        title="Прямий ефір"
+        subtitle="Інтеграції та таймер бронювання для трансляцій."
+        actions={
+          <Link to="/live" className="sq-btn-quiet">
+            Відкрити екран ефіру
+          </Link>
+        }
+      />
 
       {saved && (
         <div
           role="status"
-          className="rounded-sq border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800"
+          className="rounded-xl bg-sq-success/10 px-4 py-3 text-[15px] font-medium text-sq-success-ink"
         >
           Збережено
           {isActive && ' — зміни застосуються після перезапуску ефіру.'}
@@ -152,181 +157,175 @@ export function LiveSettingsPage() {
       )}
 
       {saveError && (
-        <div
-          role="alert"
-          className="rounded-sq border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
-        >
+        <div role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-[15px] text-red-700">
           {saveError}
         </div>
       )}
 
       {/* ── Account ── */}
-      <section className="sq-card space-y-3 p-5">
-        <p className="sq-section-label">Акаунт</p>
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <section>
+        <SectionHead title="Акаунт" />
+        <div className="pt-2 space-y-3">
           <div>
-            <p className="font-medium text-sq-text">
+            <p className="text-base font-semibold text-sq-text">
               {settings.tiktok_username ? `@${settings.tiktok_username}` : '—'}
             </p>
-            <p className="mt-0.5 text-xs text-sq-muted">
+            <p className="mt-0.5 text-[13px] text-sq-muted">
               Нікнейм змінюється в{' '}
-              <Link to="/admin/settings" className="text-sq-blue underline">
+              <Link to="/admin/settings" className="font-semibold text-sq-blue">
                 Налаштуваннях магазину
               </Link>
               .
             </p>
           </div>
-          <Link to="/live" className="rounded-sq border border-sq-divider px-3 py-2 text-sm font-medium">
-            Відкрити екран ефіру
-          </Link>
-        </div>
-        {isActive && (
-          <p className="rounded-sq bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            Зараз іде ефір. Він працює зі знімком налаштувань, зробленим на старті — щоб зміни
-            подіяли, зупиніть і запустіть ефір знову.
-          </p>
-        )}
-      </section>
-
-      {/* ── Telegram ── */}
-      <section className="sq-card space-y-4 p-5">
-        <div>
-          <p className="sq-section-label">Telegram</p>
-          <p className="mt-1 text-xs text-sq-muted">
-            Бот, який приймає замовлення з коментарів ефіру.
-          </p>
-        </div>
-
-        <SecretField
-          label="Токен бота"
-          name="telegram_bot_token"
-          value={botToken}
-          stored={botTokenStored}
-          clearing={clearBotToken}
-          hint="Отримайте у @BotFather."
-          placeholder="123456:ABC-DEF1234ghIkl"
-          onChange={(v) => {
-            setBotToken(v);
-            setClearBotToken(false);
-            clearSaved();
-          }}
-          onClear={() => {
-            setClearBotToken(true);
-            setBotToken('');
-          }}
-          onCancelClear={() => setClearBotToken(false)}
-        />
-
-        <Field label="ID каналу" hint="Через @userinfobot. Порожнє поле — прибрати.">
-          <input
-            name="telegram_channel_id"
-            type="text"
-            inputMode="numeric"
-            className="pos-field text-sm"
-            placeholder="-1001234567890"
-            value={channelId}
-            onChange={(e) => {
-              setChannelId(e.target.value);
-              clearSaved();
-            }}
-          />
-        </Field>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={() => void testTelegram()}
-            disabled={testing || !botTokenStored}
-            className="rounded-sq border border-sq-divider px-3 py-2 text-sm font-medium disabled:opacity-50"
-          >
-            {testing ? 'Перевірка…' : 'Перевірити зʼєднання'}
-          </button>
-          {testResult && (
-            <span
-              role="status"
-              className={`text-sm ${testResult.ok ? 'text-emerald-700' : 'text-rose-600'}`}
-            >
-              {testResult.ok
-                ? `Бот працює${testResult.username ? ` — @${testResult.username}` : ''}`
-                : testResult.error}
-            </span>
+          {isActive && (
+            <p className="rounded-xl bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
+              Зараз іде ефір. Він працює зі знімком налаштувань, зробленим на старті — щоб зміни
+              подіяли, зупиніть і запустіть ефір знову.
+            </p>
           )}
         </div>
       </section>
 
-      {/* ── Nova Poshta ── */}
-      <section className="sq-card space-y-4 p-5">
-        <div>
-          <p className="sq-section-label">Нова Пошта</p>
-          <p className="mt-1 text-xs text-sq-muted">
-            Необовʼязково — для ТТН та відстеження посилок.
-          </p>
-        </div>
+      {/* ── Telegram ── */}
+      <section>
+        <SectionHead title="Telegram" />
+        <div className="pt-2 space-y-4">
+          <p className="text-[13px] text-sq-muted">Бот, який приймає замовлення з коментарів ефіру.</p>
 
-        <SecretField
-          label="API-ключ"
-          name="novaposhta_api_key"
-          value={npKey}
-          stored={npKeyStored}
-          clearing={clearNpKey}
-          hint="developers.novaposhta.ua"
-          placeholder="Ваш API-ключ"
-          onChange={(v) => {
-            setNpKey(v);
-            setClearNpKey(false);
-            clearSaved();
-          }}
-          onClear={() => {
-            setClearNpKey(true);
-            setNpKey('');
-          }}
-          onCancelClear={() => setClearNpKey(false)}
-        />
-
-        <Field label="Назва відправника" hint="Показується в замовленнях і ТТН.">
-          <input
-            name="novaposhta_merchant_name"
-            type="text"
-            className="pos-field text-sm"
-            placeholder="Назва вашого магазину"
-            value={merchantName}
-            onChange={(e) => {
-              setMerchantName(e.target.value);
+          <SecretField
+            label="Токен бота"
+            name="telegram_bot_token"
+            value={botToken}
+            stored={botTokenStored}
+            clearing={clearBotToken}
+            hint="Отримайте у @BotFather."
+            placeholder="123456:ABC-DEF1234ghIkl"
+            onChange={(v) => {
+              setBotToken(v);
+              setClearBotToken(false);
               clearSaved();
             }}
+            onClear={() => {
+              setClearBotToken(true);
+              setBotToken('');
+            }}
+            onCancelClear={() => setClearBotToken(false)}
           />
-        </Field>
+
+          <Field label="ID каналу" hint="Через @userinfobot. Порожнє поле — прибрати.">
+            <input
+              name="telegram_channel_id"
+              type="text"
+              inputMode="numeric"
+              className="sq-input tabular-nums"
+              placeholder="-1001234567890"
+              value={channelId}
+              onChange={(e) => {
+                setChannelId(e.target.value);
+                clearSaved();
+              }}
+            />
+          </Field>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => void testTelegram()}
+              disabled={testing || !botTokenStored}
+              className="sq-btn-quiet"
+            >
+              {testing ? 'Перевірка…' : 'Перевірити зʼєднання'}
+            </button>
+            {testResult && (
+              <span
+                role="status"
+                className={`text-sm ${testResult.ok ? 'text-sq-success-ink' : 'text-red-600'}`}
+              >
+                {testResult.ok
+                  ? `Бот працює${testResult.username ? ` — @${testResult.username}` : ''}`
+                  : testResult.error}
+              </span>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Nova Poshta ── */}
+      <section>
+        <SectionHead title="Нова Пошта" />
+        <div className="pt-2 space-y-4">
+          <p className="text-[13px] text-sq-muted">Необовʼязково — для ТТН та відстеження посилок.</p>
+
+          <SecretField
+            label="API-ключ"
+            name="novaposhta_api_key"
+            value={npKey}
+            stored={npKeyStored}
+            clearing={clearNpKey}
+            hint="developers.novaposhta.ua"
+            placeholder="Ваш API-ключ"
+            onChange={(v) => {
+              setNpKey(v);
+              setClearNpKey(false);
+              clearSaved();
+            }}
+            onClear={() => {
+              setClearNpKey(true);
+              setNpKey('');
+            }}
+            onCancelClear={() => setClearNpKey(false)}
+          />
+
+          <Field label="Назва відправника" hint="Показується в замовленнях і ТТН.">
+            <input
+              name="novaposhta_merchant_name"
+              type="text"
+              className="sq-input"
+              placeholder="Назва вашого магазину"
+              value={merchantName}
+              onChange={(e) => {
+                setMerchantName(e.target.value);
+                clearSaved();
+              }}
+            />
+          </Field>
+        </div>
       </section>
 
       {/* ── Reservation timer ── */}
-      <section className="sq-card space-y-4 p-5">
-        <div>
-          <p className="sq-section-label">Бронювання</p>
-          <p className="mt-1 text-xs text-sq-muted">
+      <section>
+        <SectionHead title="Бронювання" />
+        <div className="pt-2 space-y-4">
+          <p className="text-[13px] text-sq-muted">
             Скільки часу товар утримується за глядачем після коментаря.
           </p>
+          <Field label="Таймер броні">
+            <select
+              name="reservation_timeout_minutes"
+              className="sq-input"
+              value={reservationMinutes}
+              onChange={(e) => {
+                setReservationMinutes(parseInt(e.target.value, 10));
+                clearSaved();
+              }}
+            >
+              {RESERVATION_CHOICES.map((v) => (
+                <option key={v} value={v}>
+                  {v} хвилин
+                </option>
+              ))}
+            </select>
+          </Field>
         </div>
-        <Field label="Таймер броні">
-          <select
-            name="reservation_timeout_minutes"
-            className="pos-field text-sm"
-            value={reservationMinutes}
-            onChange={(e) => {
-              setReservationMinutes(parseInt(e.target.value, 10));
-              clearSaved();
-            }}
-          >
-            {RESERVATION_CHOICES.map((v) => (
-              <option key={v} value={v}>
-                {v} хвилин
-              </option>
-            ))}
-          </select>
-        </Field>
       </section>
 
-      <div className="flex justify-end">
-        <button type="submit" disabled={saving} className="sq-btn-primary px-5 py-2.5 text-sm">
+      <div className="flex">
+        <button
+          type="submit"
+          disabled={saving}
+          className="pos-btn-primary min-h-11 px-5 rounded-sq text-[15px]"
+        >
           {saving ? 'Збереження…' : 'Зберегти'}
         </button>
       </div>
@@ -344,10 +343,10 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="block">
-      <span className="mb-1.5 block text-xs font-semibold text-sq-text">{label}</span>
+    <label className="flex flex-col gap-1.5">
+      <span className="text-[13px] font-semibold text-sq-secondary">{label}</span>
       {children}
-      {hint && <span className="mt-1.5 block text-xs text-sq-muted">{hint}</span>}
+      {hint && <span className="text-[13px] text-sq-muted">{hint}</span>}
     </label>
   );
 }
@@ -385,15 +384,15 @@ function SecretField({
         name={name}
         type="password"
         autoComplete="off"
-        className="pos-field text-sm"
+        className="sq-input"
         placeholder={stored ? '•••••••• збережено' : placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
       {clearing ? (
-        <span className="mt-1.5 block text-xs text-rose-600">
+        <span className="text-[13px] text-red-600">
           Буде видалено при збереженні.{' '}
-          <button type="button" className="underline" onClick={onCancelClear}>
+          <button type="button" className="font-semibold text-sq-blue" onClick={onCancelClear}>
             Скасувати
           </button>
         </span>
@@ -401,7 +400,7 @@ function SecretField({
         stored && (
           <button
             type="button"
-            className="mt-1.5 text-xs text-sq-secondary underline"
+            className="self-start text-[13px] font-semibold text-red-600"
             onClick={onClear}
           >
             Видалити збережене значення
@@ -420,26 +419,35 @@ function CenteredCard({
   link,
   diagnostic,
 }: {
-  icon?: string;
+  icon?: Glyph;
   title: string;
   body?: string;
   action?: { label: string; onClick: () => void };
   link?: { to: string; label: string };
   diagnostic?: import('../lib/diagnostics').LiveDiagnostic | null;
 }) {
+  const Icon = icon;
   return (
     <div className="grid min-h-[60vh] place-items-center px-6">
-      <div className="sq-card animate-fade-up max-w-md p-8 text-center">
-        {icon && <div className="mb-4 text-4xl">{icon}</div>}
-        <h2 className="text-lg font-semibold text-sq-text">{title}</h2>
-        {body && <p className="mt-3 text-sm leading-relaxed text-sq-secondary">{body}</p>}
+      <div className="sq-card animate-fade-up w-full max-w-md p-8 text-center">
+        {Icon && (
+          <div className="mb-4 flex justify-center">
+            <Icon size={48} />
+          </div>
+        )}
+        <h2 className="text-[19px] font-bold text-sq-heading">{title}</h2>
+        {body && <p className="mt-2 text-[15px] leading-relaxed text-sq-secondary">{body}</p>}
         {action && (
-          <button type="button" onClick={action.onClick} className="sq-btn-primary mt-6 px-4 py-2.5">
+          <button
+            type="button"
+            onClick={action.onClick}
+            className="pos-btn-primary mt-6 min-h-11 px-5 rounded-sq text-[15px]"
+          >
             {action.label}
           </button>
         )}
         {link && (
-          <Link to={link.to} className="sq-btn-primary mt-6 inline-block px-4 py-2.5">
+          <Link to={link.to} className="pos-btn-primary mt-6 min-h-11 px-5 rounded-sq text-[15px]">
             {link.label}
           </Link>
         )}

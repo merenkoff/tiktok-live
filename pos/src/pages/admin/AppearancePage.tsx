@@ -16,8 +16,10 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, GripVertical, RotateCcw, Search } from 'lucide-react';
+import { ArrowDown, ArrowUp, GripVertical, RotateCcw, Search, Sparkles } from '../../platform/glyphs';
+import { PageHeader, SectionHead } from '../../components/ui/Page';
 import { api, useAuthStore, useEnabledModules, resolveNavIcon, NAV_ICONS } from '@pos/platform';
+import { adminIconOf } from '../../modules/navGroups';
 import { allModules } from '../../modules/registry';
 import {
   collectNavEntries,
@@ -37,7 +39,7 @@ const LOCATIONS: Array<{ id: NavLocation; label: string; hint: string }> = [
   {
     id: 'admin-sidebar',
     label: 'Адмінка',
-    hint: 'Ліве меню адмінки. Воно текстове — іконок не показує.',
+    hint: 'Ліве меню адмінки: іконка й назва пункту, у групах.',
   },
 ];
 
@@ -186,63 +188,66 @@ export function AppearancePage() {
 
   return (
     <div className="space-y-6 animate-fade-up text-sq-text">
-      <div>
-        <h2 className="text-2xl font-semibold">Вигляд меню</h2>
-        <p className="text-sq-secondary mt-1 text-sm max-w-2xl">
-          Назва, порядок та іконка пунктів меню — окремо для каси та для адмінки. Які модулі
-          взагалі є в магазині, вмикають на сторінці «Налаштування»; тут лише вигляд, тому
-          жоден пункт не можна втратити.
-        </p>
-      </div>
+      <PageHeader
+        glyph={Sparkles}
+        title="Вигляд меню"
+        subtitle="Назва, порядок та іконка пунктів меню — окремо для каси та для адмінки. Які модулі взагалі є в магазині, вмикають на сторінці «Налаштування»; тут лише вигляд, тому жоден пункт не можна втратити."
+      />
 
-      <div
-        role="tablist"
-        aria-label="Яке меню налаштовуємо"
-        className="inline-flex rounded-sq border border-sq-divider bg-sq-empty p-1"
-      >
-        {LOCATIONS.map((l) => (
-          <button
-            key={l.id}
-            type="button"
-            role="tab"
-            aria-selected={location === l.id}
-            onClick={() => setLocation(l.id)}
-            className={`px-4 py-1.5 text-sm font-medium rounded-[4px] transition-colors ${
-              location === l.id
-                ? 'bg-sq-surface text-sq-text shadow-sm'
-                : 'text-sq-secondary hover:text-sq-text'
-            }`}
-          >
-            {l.label}
-          </button>
-        ))}
-      </div>
-      <p className="text-sq-secondary text-sm -mt-3">{active?.hint}</p>
-
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_260px] items-start">
-        <div className="bg-sq-surface border border-sq-divider rounded-sq shadow-sm">
-          <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-sq-divider">
-            <p className="sq-section-label">Пункти меню</p>
+      <div className="space-y-2.5">
+        {/* Tabs rather than `Segmented`: the two menus are two views of one
+            editor, and the tab roles are what the tests and screen readers use. */}
+        <div
+          role="tablist"
+          aria-label="Яке меню налаштовуємо"
+          className="inline-flex gap-1 p-[3px] rounded-xl bg-sq-empty"
+        >
+          {LOCATIONS.map((l) => (
             <button
+              key={l.id}
               type="button"
-              onClick={resetLocation}
-              disabled={!customisedHere}
-              className="inline-flex items-center gap-1.5 rounded-sq border border-sq-divider px-2.5 py-1 text-xs text-sq-secondary hover:bg-sq-empty disabled:opacity-40 disabled:hover:bg-transparent"
+              role="tab"
+              aria-selected={location === l.id}
+              onClick={() => setLocation(l.id)}
+              className={`min-h-[34px] px-3.5 rounded-[9px] text-[15px] transition-colors ${
+                location === l.id
+                  ? 'bg-white shadow-[0_1px_3px_rgba(0,0,0,.12)] font-semibold text-sq-text'
+                  : 'font-medium text-sq-secondary hover:text-sq-text'
+              }`}
             >
-              <RotateCcw size={13} strokeWidth={1.75} />
-              Відновити типове
+              {l.label}
             </button>
-          </div>
+          ))}
+        </div>
+        <p className="text-[15px] text-sq-secondary">{active?.hint}</p>
+      </div>
 
-          {!loaded && <p className="px-5 py-6 text-sm text-sq-secondary">Завантаження…</p>}
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_260px] items-start">
+        <section>
+          <SectionHead
+            title="Пункти меню"
+            action={
+              <button
+                type="button"
+                onClick={resetLocation}
+                disabled={!customisedHere}
+                className="inline-flex items-center gap-1.5 min-h-8 disabled:text-sq-muted disabled:opacity-60"
+              >
+                <RotateCcw size={16} />
+                Відновити типове
+              </button>
+            }
+          />
+
+          {!loaded && <p className="py-4 text-[15px] text-sq-secondary">Завантаження…</p>}
 
           {loaded && entries.length === 0 && (
-            <p className="px-5 py-6 text-sm text-sq-secondary">
+            <p className="py-4 text-[15px] text-sq-secondary">
               У цьому меню немає пунктів — увімкніть модулі на сторінці «Налаштування».
             </p>
           )}
 
-          <ul className="divide-y divide-sq-divider">
+          <ul>
             {entries.map((entry, index) => (
               <NavEntryRow
                 key={entry.key}
@@ -268,32 +273,36 @@ export function AppearancePage() {
               />
             ))}
           </ul>
-        </div>
+        </section>
 
         <NavPreview location={location} entries={entries} overrides={draft} />
       </div>
 
-      <div className="flex items-center gap-3 sticky bottom-0 bg-[#F5F5F5] py-3">
+      <div className="flex flex-wrap items-center gap-3 sticky bottom-0 py-3 bg-sq-surface shadow-[0_-1px_0_rgb(var(--sq-divider-rgb))]">
         <button
           type="button"
           onClick={() => void save()}
           disabled={!dirty || saving}
-          className="sq-btn-primary px-4 py-2.5"
+          className="pos-btn-primary min-h-11 px-5 rounded-sq text-[15px]"
         >
           {saving ? 'Збереження…' : 'Зберегти'}
         </button>
         {dirty && (
-          <button
-            type="button"
-            onClick={() => setDraft(saved)}
-            className="rounded-sq border border-sq-divider bg-sq-surface px-4 py-2.5 text-sm"
-          >
+          <button type="button" onClick={() => setDraft(saved)} className="sq-btn-quiet">
             Скасувати зміни
           </button>
         )}
-        {message && <p className="text-sm text-sq-blue font-medium">{message}</p>}
+        {message && (
+          <p
+            className={`text-[15px] font-medium ${
+              message === 'Збережено' ? 'text-sq-success-ink' : 'text-red-600'
+            }`}
+          >
+            {message}
+          </p>
+        )}
         {dirty && !message && (
-          <p className="text-sm text-sq-secondary">
+          <p className="text-[15px] text-sq-secondary">
             Каси підхоплять зміни після наступного входу.
           </p>
         )}
@@ -334,8 +343,8 @@ function NavEntryRow({
   onReset,
 }: RowProps) {
   const hints = scopeHints(entry, location);
-  const showIcon = location === 'cashier-primary';
-  const effectiveIcon = override?.icon ?? entry.item.icon;
+  const showIcon = true;
+  const effectiveIcon = override?.icon ?? (location === 'admin-sidebar' ? adminIconOf(entry.item) : entry.item.icon);
 
   return (
     <li
@@ -343,7 +352,7 @@ function NavEntryRow({
         e.preventDefault();
         onDragOverRow();
       }}
-      className={`flex items-center gap-3 px-5 py-3 ${dragging ? 'opacity-50' : ''}`}
+      className={`sq-row flex items-center gap-3 py-2.5 ${dragging ? 'opacity-50' : ''}`}
     >
       {/* Only the handle is the drag source: a draggable row would fight text
           selection inside the name field, and the arrows below are the path for
@@ -353,9 +362,9 @@ function NavEntryRow({
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
         title="Перетягніть, щоб змінити порядок"
-        className="shrink-0 text-sq-muted cursor-grab active:cursor-grabbing"
+        className="shrink-0 -ml-1 p-1 text-sq-muted cursor-grab active:cursor-grabbing"
       >
-        <GripVertical size={16} strokeWidth={1.75} aria-hidden />
+        <GripVertical size={16} aria-hidden />
       </span>
 
       {showIcon && (
@@ -373,9 +382,9 @@ function NavEntryRow({
           placeholder={entry.item.label}
           maxLength={NAV_LABEL_MAX}
           onChange={(e) => onLabel(e.target.value)}
-          className="w-full rounded-sq border border-sq-divider bg-sq-bg px-2.5 py-1.5 text-sm text-sq-text"
+          className="sq-input"
         />
-        <p className="mt-1 text-xs text-sq-muted truncate">
+        <p className="mt-1 text-[13px] text-sq-muted truncate">
           {entry.moduleTitle} · {entry.item.to}
           {hints.length > 0 && ` · ${hints.join(', ')}`}
         </p>
@@ -387,18 +396,18 @@ function NavEntryRow({
           aria-label="Вище"
           disabled={index === 0}
           onClick={() => onMove(-1)}
-          className="w-8 h-8 grid place-items-center rounded-sq text-sq-secondary hover:bg-sq-empty disabled:opacity-30 disabled:hover:bg-transparent"
+          className="w-9 h-9 grid place-items-center rounded-full text-sq-secondary hover:bg-sq-empty disabled:opacity-30 disabled:hover:bg-transparent"
         >
-          <ArrowUp size={15} strokeWidth={1.75} />
+          <ArrowUp size={20} />
         </button>
         <button
           type="button"
           aria-label="Нижче"
           disabled={index === total - 1}
           onClick={() => onMove(1)}
-          className="w-8 h-8 grid place-items-center rounded-sq text-sq-secondary hover:bg-sq-empty disabled:opacity-30 disabled:hover:bg-transparent"
+          className="w-9 h-9 grid place-items-center rounded-full text-sq-secondary hover:bg-sq-empty disabled:opacity-30 disabled:hover:bg-transparent"
         >
-          <ArrowDown size={15} strokeWidth={1.75} />
+          <ArrowDown size={20} />
         </button>
         <button
           type="button"
@@ -406,9 +415,9 @@ function NavEntryRow({
           title="Відновити типове"
           disabled={!override}
           onClick={onReset}
-          className="w-8 h-8 grid place-items-center rounded-sq text-sq-secondary hover:bg-sq-empty disabled:opacity-30 disabled:hover:bg-transparent"
+          className="w-9 h-9 grid place-items-center rounded-full text-sq-secondary hover:bg-sq-empty disabled:opacity-30 disabled:hover:bg-transparent"
         >
-          <RotateCcw size={15} strokeWidth={1.75} />
+          <RotateCcw size={20} />
         </button>
       </div>
     </li>
@@ -419,7 +428,7 @@ const ICON_NAMES = Object.keys(NAV_ICONS).sort();
 
 /**
  * The icon the host can actually draw — the hand-picked `NAV_ICONS` allowlist,
- * not all of lucide. Picking from what the app ships is the point: a name it
+ * not every icon there is. Picking from what the app ships is the point: a name it
  * does not have would silently fall back to a placeholder glyph on the till.
  */
 function IconPicker({
@@ -467,26 +476,26 @@ function IconPicker({
         aria-label={`Іконка пункту «${label}»`}
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="w-9 h-9 grid place-items-center rounded-sq border border-sq-divider bg-sq-bg text-sq-text hover:bg-sq-empty"
+        className="w-11 h-11 grid place-items-center rounded-sq bg-sq-empty text-sq-text hover:bg-sq-selected"
       >
-        {Icon ? <Icon size={18} strokeWidth={1.75} /> : <span className="text-xs text-sq-muted">—</span>}
+        {Icon ? <Icon size={24} /> : <span className="text-[13px] text-sq-muted">—</span>}
       </button>
 
       {open && (
-        <div className="absolute z-20 mt-1 w-64 rounded-sq border border-sq-divider bg-sq-surface p-2 shadow-lg">
-          <div className="flex items-center gap-1.5 rounded-sq border border-sq-divider bg-sq-bg px-2">
-            <Search size={13} strokeWidth={1.75} className="text-sq-muted" aria-hidden />
+        <div className="absolute z-20 mt-1.5 w-72 rounded-xl bg-sq-surface p-2.5 shadow-[0_12px_32px_rgba(0,20,60,.18),0_0_2px_rgba(0,0,0,.12)]">
+          <div className="flex items-center gap-2 rounded-sq bg-sq-empty px-2.5">
+            <Search size={16} className="text-sq-muted" aria-hidden />
             <input
               autoFocus
               aria-label="Пошук іконки"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Пошук"
-              className="w-full bg-transparent py-1.5 text-xs text-sq-text outline-none"
+              className="w-full min-h-9 bg-transparent text-[15px] text-sq-text outline-none"
             />
           </div>
 
-          <div className="mt-2 grid grid-cols-6 gap-1 max-h-48 overflow-y-auto">
+          <div className="mt-2 grid grid-cols-6 gap-1 max-h-56 overflow-y-auto">
             {shown.map((name) => {
               const Candidate = NAV_ICONS[name as keyof typeof NAV_ICONS];
               return (
@@ -499,11 +508,11 @@ function IconPicker({
                     onChange(name);
                     setOpen(false);
                   }}
-                  className={`w-9 h-9 grid place-items-center rounded-sq hover:bg-sq-empty ${
-                    selected === name ? 'bg-sq-empty ring-1 ring-sq-blue' : ''
+                  className={`w-10 h-10 grid place-items-center rounded-sq hover:bg-sq-empty ${
+                    selected === name ? 'bg-sq-selected ring-2 ring-inset ring-sq-blue' : ''
                   }`}
                 >
-                  <Candidate size={17} strokeWidth={1.75} />
+                  <Candidate size={24} />
                 </button>
               );
             })}
@@ -515,7 +524,7 @@ function IconPicker({
               onChange(undefined);
               setOpen(false);
             }}
-            className="mt-2 w-full rounded-sq border border-sq-divider px-2 py-1.5 text-xs text-sq-secondary hover:bg-sq-empty"
+            className="sq-btn-quiet mt-2 w-full"
           >
             Типова іконка
           </button>
@@ -542,27 +551,30 @@ function NavPreview({
   const items: NavItem[] = entries.map((e) => ({
     ...e.item,
     label: overrides[e.key]?.label ?? e.item.label,
-    icon: overrides[e.key]?.icon ?? e.item.icon,
+    icon: overrides[e.key]?.icon ?? (location === 'admin-sidebar' ? adminIconOf(e.item) : e.item.icon),
   }));
 
   return (
-    <div className="lg:sticky lg:top-8 space-y-2">
-      <p className="sq-section-label">Попередній перегляд</p>
+    <section className="lg:sticky lg:top-8 space-y-3">
+      <SectionHead title="Попередній перегляд" />
 
       {location === 'cashier-primary' ? (
         <div className="flex gap-3">
-          <div className="w-14 shrink-0 rounded-sq bg-[#1A1A1A] py-3 flex flex-col items-center gap-1">
+          <div className="w-[84px] shrink-0 rounded-card bg-sq-sidebar border border-sq-divider/70 py-2 flex flex-col items-center gap-1">
             {items.map((n, i) => {
               const Icon = resolveNavIcon(n.icon);
               return (
                 <div
                   key={`${n.to}#${i}`}
                   title={n.label}
-                  className={`w-12 h-12 grid place-items-center rounded-sq ${
-                    i === 0 ? 'bg-white/15 text-white' : 'text-white/70'
+                  className={`w-[68px] min-h-[56px] py-1.5 flex flex-col items-center justify-center gap-1 rounded-xl ${
+                    i === 0 ? 'bg-sq-selected' : ''
                   }`}
                 >
-                  {Icon && <Icon size={22} strokeWidth={1.75} />}
+                  {Icon && <Icon size={24} />}
+                  <span className="max-w-[64px] text-center text-[10px] font-semibold leading-tight text-sq-secondary break-words">
+                    {n.label}
+                  </span>
                 </div>
               );
             })}
@@ -574,9 +586,9 @@ function NavPreview({
               return (
                 <li
                   key={`${n.to}#${i}`}
-                  className="flex items-center gap-2 text-sm text-sq-secondary truncate"
+                  className="flex items-center gap-2 text-[15px] text-sq-secondary truncate"
                 >
-                  {Icon && <Icon size={15} strokeWidth={1.75} className="shrink-0" />}
+                  {Icon && <Icon size={24} className="shrink-0" />}
                   <span className="truncate">{n.label}</span>
                 </li>
               );
@@ -584,25 +596,29 @@ function NavPreview({
           </ul>
         </div>
       ) : (
-        <div className="rounded-sq border border-sq-divider bg-[#F0F0F0] p-2 space-y-0.5">
-          {items.map((n, i) => (
-            <div
-              key={`${n.to}#${i}`}
-              className={`px-3 py-2 rounded-[4px] text-sm font-medium truncate ${
-                i === 0 ? 'sq-nav-active' : 'sq-nav-idle'
-              }`}
-            >
-              {n.label}
-            </div>
-          ))}
+        <div className="rounded-card border border-sq-divider/70 bg-sq-sidebar p-2 space-y-0.5">
+          {items.map((n, i) => {
+            const Icon = resolveNavIcon(n.icon);
+            return (
+              <div
+                key={`${n.to}#${i}`}
+                className={`flex items-center gap-2.5 min-h-[36px] px-2.5 rounded-lg text-sm truncate ${
+                  i === 0 ? 'bg-sq-selected font-semibold' : 'font-medium'
+                }`}
+              >
+                {Icon && <Icon size={24} className="shrink-0" />}
+                <span className="truncate">{n.label}</span>
+              </div>
+            );
+          })}
         </div>
       )}
 
-      <p className="text-xs text-sq-muted">
+      <p className="text-[13px] text-sq-muted">
         {location === 'cashier-primary'
-          ? 'Ліворуч — бічна панель каси, праворуч ті самі пункти з підписами.'
-          : 'Підписи без іконок — так це меню й виглядає.'}
+          ? 'Ліворуч — бічна панель каси, праворуч ті самі пункти списком.'
+          : 'Так пункти виглядають у лівому меню адмінки; групи вона розставляє сама.'}
       </p>
-    </div>
+    </section>
   );
 }

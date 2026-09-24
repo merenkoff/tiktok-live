@@ -156,6 +156,26 @@ describe('useBench', () => {
       expect(result.current.countOf(2)).toBe(3);
     });
 
+    it('takes a zero only on the end of a number — ten roses, never none', () => {
+      const { result } = renderHook(() => useBench(0));
+      act(() => result.current.add(rose(), 1));
+      act(() => result.current.typeDigit(0));
+      expect(result.current.countOf(1)).toBe(1);
+      act(() => result.current.typeDigit(1));
+      act(() => result.current.typeDigit(0));
+      expect(result.current.countOf(1)).toBe(10);
+    });
+
+    it('«C» puts the stem back to one and starts a fresh number', () => {
+      const { result } = renderHook(() => useBench(0));
+      act(() => result.current.add(rose(), 1));
+      act(() => result.current.typeDigit(9));
+      act(() => result.current.clearTyped());
+      expect(result.current.countOf(1)).toBe(1);
+      act(() => result.current.typeDigit(7));
+      expect(result.current.countOf(1)).toBe(7);
+    });
+
     it('backspace rubs out the last digit', () => {
       const { result } = renderHook(() => useBench(0));
       act(() => result.current.add(rose(), 1));

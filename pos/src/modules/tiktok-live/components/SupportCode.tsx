@@ -26,26 +26,26 @@ export function SupportCode({ diagnostic }: { diagnostic: LiveDiagnostic }) {
 
   return (
     <div className="mt-6 border-t border-sq-divider pt-4 text-left">
-      <div className="sq-section-label">Код для підтримки</div>
-      <div className="mt-1.5 flex items-center gap-2">
+      <div className="text-[13px] font-semibold text-sq-secondary">Код для підтримки</div>
+      <div className="mt-1.5 flex flex-wrap items-center gap-2">
         <code
           data-testid="live-support-code"
-          className="select-all rounded-sq bg-sq-bg px-2 py-1 font-mono text-sm text-sq-text"
+          className="select-all rounded-md bg-sq-empty px-2 py-1 font-mono text-sm text-sq-text"
         >
           {diagnostic.code}
         </code>
         <button
           type="button"
           onClick={() => void copy()}
-          className="rounded-sq border border-sq-divider px-2.5 py-1 text-xs font-medium text-sq-secondary hover:bg-sq-bg"
+          className="min-h-9 px-3 rounded-sq bg-white ring-1 ring-sq-divider text-[13px] font-semibold text-sq-text hover:bg-sq-sidebar"
         >
           {copied ? 'Скопійовано' : 'Копіювати деталі'}
         </button>
       </div>
 
       <details className="mt-3">
-        <summary className="cursor-pointer text-xs text-sq-muted">Технічні деталі</summary>
-        <pre className="mt-2 max-h-48 select-all overflow-auto rounded-sq bg-sq-bg p-2 font-mono text-[11px] leading-relaxed text-sq-secondary">
+        <summary className="cursor-pointer text-[13px] text-sq-muted">Технічні деталі</summary>
+        <pre className="mt-2 max-h-48 select-all overflow-auto rounded-sq bg-sq-sidebar p-2.5 font-mono text-[11px] leading-relaxed text-sq-secondary">
           {diagnosticText(diagnostic)}
         </pre>
       </details>

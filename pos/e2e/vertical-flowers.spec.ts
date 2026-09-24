@@ -120,10 +120,10 @@ test('a flower shop sells through its own catalog module', async ({ page }) => {
   // …and the host frame still takes the money.
   await page.goto('/register');
   await page.getByText('Футболка базова').first().click();
-  await page.getByRole('button', { name: /^Сплатити/ }).first().click();
+  await page.getByRole('button', { name: /^Оплатити/ }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Оплата' });
   await dialog.getByRole('button', { name: 'Готівка' }).click();
-  await dialog.getByRole('button', { name: 'Готово' }).click();
+  await dialog.getByRole('button', { name: /^Прийняти/ }).click();
   await expect(page.getByText('ЧК-000005')).toBeVisible();
   expect(completed).toHaveLength(1);
 });
@@ -134,7 +134,7 @@ test('with the module CDN down the till still sells, on the bundled catalog', as
   await page.goto('/register');
   await expect(page.getByTestId('flowers-catalog')).toHaveCount(0);
   // The bundled catalog is there instead: same search box, same tiles.
-  await expect(page.getByPlaceholder('Пошук')).toBeVisible();
+  await expect(page.getByPlaceholder(/^Пошук/)).toBeVisible();
   await expect(page.getByText('Футболка базова')).toBeVisible();
 });
 
@@ -289,7 +289,7 @@ test('the florist’s three figures land on the owner’s «Сьогодні»',
   await expect(panels.getByTestId('panel-loss')).toContainText('500');
   await expect(panels.getByTestId('panel-loss')).toContainText('здебільшого: завʼяло');
   // Whether the florist's work is where the takings are: 1800 of 2400.
-  await expect(panels.getByTestId('panel-bouquet-revenue')).toContainText('1800');
+  await expect(panels.getByTestId('panel-bouquet-revenue')).toContainText('1 800,00 ₴');
   await expect(panels.getByTestId('panel-bouquet-revenue')).toContainText('75%');
   // Realised markup next to the rate the shop asks — never one without the other.
   await expect(panels.getByTestId('panel-bouquet-markup')).toContainText('100%');
@@ -307,7 +307,7 @@ test('with the module CDN down «Сьогодні» is simply the dashboard it a
   await signInAsFlorist(page, { down: true });
 
   await page.goto('/admin');
-  await expect(page.getByText('Загальний огляд продажів')).toBeVisible();
+  await expect(page.getByTestId('dashboard-stats')).toBeVisible();
   await expect(page.getByTestId('flower-panels')).toHaveCount(0);
 });
 
@@ -315,7 +315,7 @@ test('a clothes shop’s «Сьогодні» never borrows another vertical’s
   await mockPosApi(page);
   await loginAsOwner(page);
 
-  await expect(page.getByText('Загальний огляд продажів')).toBeVisible();
+  await expect(page.getByTestId('dashboard-stats')).toBeVisible();
   await expect(page.getByTestId('flower-panels')).toHaveCount(0);
 });
 

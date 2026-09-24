@@ -101,7 +101,7 @@ test('handing an order over puts the promised price on the till, not today’s',
 
   // 2 × 450.00 promised. The catalogue card says 450.00 each today, so the
   // number that proves the lock is the line price, not the total: see below.
-  await expect(page.getByRole('button', { name: /^Сплатити/ }).first()).toContainText('900');
+  await expect(page.getByRole('button', { name: /^Оплатити/ }).first()).toHaveAccessibleName(/900/);
 });
 
 test('a promise on the till is not an editable cart', async ({ page }) => {
@@ -150,10 +150,10 @@ test('the sale names the order and never a price', async ({ page }) => {
   await page.getByTestId('preorder-hand-over').first().click();
   await page.waitForURL(/\/register$/);
 
-  await page.getByRole('button', { name: /^Сплатити/ }).first().click();
+  await page.getByRole('button', { name: /^Оплатити/ }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Оплата' });
   await dialog.getByRole('button', { name: 'Готівка' }).click();
-  await dialog.getByRole('button', { name: 'Готово' }).click();
+  await dialog.getByRole('button', { name: /^Прийняти/ }).click();
 
   await expect.poll(() => completed.length).toBeGreaterThan(0);
   const body = completed[0];

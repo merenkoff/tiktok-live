@@ -19,7 +19,7 @@
  */
 
 import { useState } from 'react';
-import { Printer, X } from 'lucide-react';
+import { Printer, Store, X } from '@pos/platform/ui';
 import { formatUah, uahInputToCents } from '@pos/platform';
 import { BouquetPhoto } from './BouquetPhoto';
 
@@ -67,31 +67,34 @@ export function ShowcaseSheet({ computedCents, busy, error, onSubmit, onClose }:
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 grid place-items-end md:place-items-center p-4">
+    <div className="fixed inset-0 z-50 bg-[rgba(28,32,38,.32)] grid place-items-end md:place-items-center p-4">
       <div
-        className="bg-white rounded-sq w-full max-w-sm overflow-hidden animate-fade-up shadow-lg"
+        role="dialog"
+        aria-label="Букет на вітрину"
+        className="bg-white rounded-card w-full max-w-[460px] overflow-hidden animate-fade-up shadow-[0_24px_60px_rgba(0,20,60,.28)]"
         data-testid="showcase-sheet"
       >
-        <div className="px-4 py-3.5 border-b border-sq-divider flex items-center justify-between gap-3">
-          <h3 className="font-semibold text-sq-text">Букет на вітрину</h3>
+        <div className="px-5 pt-[18px] pb-3.5 flex items-center gap-2.5">
+          <Store size={24} />
+          <h3 className="flex-1 text-[19px] font-bold text-sq-heading">Букет на вітрину</h3>
           <button
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="min-h-11 min-w-11 grid place-items-center text-sq-secondary disabled:opacity-40"
+            className="w-9 h-9 grid place-items-center rounded-full text-sq-secondary hover:bg-sq-empty disabled:opacity-40"
             aria-label="Закрити"
           >
             <X size={20} />
           </button>
         </div>
 
-        <div className="p-4 space-y-4">
+        <div className="px-5 pb-5 flex flex-col gap-3.5">
           <BouquetPhoto value={imageUrl} onChange={setImageUrl} disabled={busy} />
 
-          <label className="block">
-            <span className="text-sm text-sq-secondary">Назва</span>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[13px] font-semibold text-sq-secondary">Назва</span>
             <input
-              className="pos-field mt-1.5"
+              className={fieldClass}
               value={name}
               onChange={(e) => setName(e.target.value)}
               // Left blank on purpose: the number comes from the production
@@ -102,18 +105,18 @@ export function ShowcaseSheet({ computedCents, busy, error, onSubmit, onClose }:
             />
           </label>
 
-          <label className="block">
-            <span className="text-sm text-sq-secondary">Ціна на цінник</span>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[13px] font-semibold text-sq-secondary">Ціна на цінник</span>
             <input
-              className="pos-field mt-1.5 text-lg"
+              className={`${fieldClass} text-lg font-semibold tabular-nums`}
               inputMode="decimal"
               value={priceText}
               onChange={(e) => setPriceText(e.target.value.replace(/[^\d.,]/g, ''))}
               data-testid="showcase-price"
             />
-            <span className="mt-1 block text-xs text-sq-muted">
+            <span className="text-[13px] text-sq-muted">
               {rounded
-                ? `Розраховано: ${formatUah(computedCents)}`
+                ? `Стебла й робота флориста — ${formatUah(computedCents)}, округлено`
                 : 'Стебла та робота флориста'}
             </span>
           </label>
@@ -124,29 +127,30 @@ export function ShowcaseSheet({ computedCents, busy, error, onSubmit, onClose }:
             </p>
           )}
 
-          <div className="space-y-2">
-            <button
-              type="button"
-              disabled={busy || priceCents <= 0}
-              onClick={() => submit(true)}
-              className="sq-btn-primary min-h-12 w-full flex items-center justify-center gap-2"
-              data-testid="showcase-submit-print"
-            >
-              <Printer size={18} />
-              {busy ? 'Робимо…' : 'Зробити і надрукувати цінник'}
-            </button>
-            <button
-              type="button"
-              disabled={busy || priceCents <= 0}
-              onClick={() => submit(false)}
-              className="min-h-12 w-full rounded-sq border border-sq-divider text-sq-text disabled:opacity-50"
-              data-testid="showcase-submit"
-            >
-              Зробити без цінника
-            </button>
-          </div>
+          <button
+            type="button"
+            disabled={busy || priceCents <= 0}
+            onClick={() => submit(true)}
+            className="pos-btn-primary min-h-[52px] rounded-xl w-full text-[17px] gap-2"
+            data-testid="showcase-submit-print"
+          >
+            <Printer size={20} />
+            {busy ? 'Робимо…' : 'Зробити і надрукувати цінник'}
+          </button>
+          <button
+            type="button"
+            disabled={busy || priceCents <= 0}
+            onClick={() => submit(false)}
+            className="min-h-11 w-full text-base font-semibold text-sq-blue disabled:opacity-50"
+            data-testid="showcase-submit"
+          >
+            Зробити без цінника
+          </button>
         </div>
       </div>
     </div>
   );
 }
+
+const fieldClass =
+  'h-[46px] rounded-[10px] bg-sq-empty px-3.5 text-base text-sq-text outline-none border-0 focus:ring-2 focus:ring-sq-blue focus:bg-white placeholder:text-sq-muted';

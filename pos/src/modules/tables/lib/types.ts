@@ -37,7 +37,10 @@ export interface OpenBillSummary {
   table_id: number;
   guests: number;
   opened_at: string;
+  /** Who seated it — «мій стіл». Absent in a mirror an older till wrote. */
+  opened_by?: number;
   opened_by_name: string;
+  /** Set when the pre-bill was printed: the guests asked for the bill. */
   precheck_printed_at: string | null;
   /** Money owed — fired rounds at their locked price. */
   fired_total_cents: number;

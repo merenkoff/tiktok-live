@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { useRef, useState } from 'react';
-import { ImagePlus, Trash2 } from 'lucide-react';
+import { ImagePlus, Trash2 } from '../platform/glyphs';
 import { api, assetUrl } from '@pos/platform';
 
 interface Props {
@@ -41,13 +41,13 @@ export function ProductPhotoField({ value, onChange, label = 'Фото' }: Props
 
   return (
     <div className="sm:col-span-2 space-y-2">
-      <p className="text-xs font-semibold text-sq-secondary">{label}</p>
+      <p className="text-[13px] font-semibold text-sq-secondary">{label}</p>
       <div className="flex flex-wrap items-start gap-3">
-        <div className="w-28 h-28 rounded-sq border border-sq-divider bg-sq-bg overflow-hidden grid place-items-center shrink-0">
+        <div className="w-28 h-28 rounded-[14px] bg-sq-sidebar ring-1 ring-inset ring-sq-divider overflow-hidden grid place-items-center shrink-0">
           {value ? (
             <img src={assetUrl(value) ?? undefined} alt="" className="w-full h-full object-cover" />
           ) : (
-            <ImagePlus size={28} className="text-sq-muted" strokeWidth={1.5} />
+            <ImagePlus size={40} className="text-sq-muted" />
           )}
         </div>
         <div className="flex flex-col gap-2 min-w-0">
@@ -62,7 +62,7 @@ export function ProductPhotoField({ value, onChange, label = 'Фото' }: Props
             type="button"
             disabled={uploading}
             onClick={() => inputRef.current?.click()}
-            className="sq-btn-primary px-3 py-2 text-sm w-fit"
+            className="sq-btn-quiet w-fit"
           >
             {uploading ? 'Завантаження…' : value ? 'Змінити фото' : 'Додати фото'}
           </button>
@@ -73,7 +73,7 @@ export function ProductPhotoField({ value, onChange, label = 'Фото' }: Props
               onClick={() => onChange(null)}
               className="inline-flex items-center gap-1.5 text-sm font-semibold text-red-600 w-fit"
             >
-              <Trash2 size={14} />
+              <Trash2 size={16} />
               Прибрати
             </button>
           )}

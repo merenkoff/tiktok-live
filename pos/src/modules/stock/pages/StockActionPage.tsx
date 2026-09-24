@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   api,
   baseToPack,
@@ -27,7 +27,8 @@ import type {
   Supplier,
   VerticalPublicConfig,
 } from '@pos/platform';
-import { AttributeFields, useDragScroll } from '@pos/platform/ui';
+import { AttributeFields, Package, PageHeader, Plus, SectionHead, useDragScroll } from '@pos/platform/ui';
+import { TYPE_GLYPH } from '../lib/documents';
 import { ADJUST_REASONS, defaultReason, writeoffReasonsOf } from '../lib/reasons';
 
 /**
@@ -542,23 +543,25 @@ export function StockActionPage({ type }: Props) {
   const showCreateCta = type === 'receipt' && !loading && searchHits.length === 0 && q.trim().length > 0;
 
   return (
-    <form className="max-w-3xl space-y-5 pb-24" onSubmit={(e) => void onSubmit(e, false)}>
-      <div>
-        <Link to="/admin/stock" className="text-sm text-[#006AFF] hover:underline">
-          ← Склад
-        </Link>
-        <h1 className="text-2xl font-semibold mt-2">{title}</h1>
-        <p className="text-sm text-[#6E6E6E] mt-1">{subtitle}</p>
-      </div>
+    <form
+      className="max-w-3xl space-y-6 pb-24 animate-fade-up text-sq-text"
+      onSubmit={(e) => void onSubmit(e, false)}
+    >
+      <PageHeader
+        back={{ to: '/admin/stock', label: 'Склад' }}
+        glyph={TYPE_GLYPH[type]}
+        title={title}
+        subtitle={subtitle}
+      />
 
       {type === 'receipt' && (
         <div className="grid sm:grid-cols-2 gap-3">
-          <label className="block space-y-1">
-            <span className="text-sm text-[#6E6E6E]">Постачальник</span>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[13px] font-semibold text-sq-secondary">Постачальник</span>
             <select
               value={supplierId}
               onChange={(e) => setSupplierId(e.target.value ? Number(e.target.value) : '')}
-              className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2.5 text-sm"
+              className="sq-input"
             >
               <option value="">Без постачальника</option>
               {suppliers.map((s) => (
@@ -568,13 +571,13 @@ export function StockActionPage({ type }: Props) {
               ))}
             </select>
           </label>
-          <label className="block space-y-1">
-            <span className="text-sm text-[#6E6E6E]">Або новий</span>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[13px] font-semibold text-sq-secondary">Або новий</span>
             <input
               value={newSupplier}
               onChange={(e) => setNewSupplier(e.target.value)}
               placeholder="Назва постачальника"
-              className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2.5 text-sm"
+              className="sq-input"
             />
           </label>
         </div>
@@ -582,17 +585,18 @@ export function StockActionPage({ type }: Props) {
 
       {type !== 'receipt' && (
         <div>
-          <p className="text-sm text-[#6E6E6E] mb-1.5">Причина</p>
+          <p className="text-[13px] font-semibold text-sq-secondary mb-1.5">Причина</p>
           <div className="flex flex-wrap gap-1.5">
             {reasons.map((r) => (
               <button
                 key={r.code}
                 type="button"
+                aria-pressed={reason === r.code}
                 onClick={() => setReason(r.code)}
-                className={`px-3 py-1.5 text-sm rounded-[4px] border ${
+                className={`h-9 px-3.5 rounded-[10px] text-[15px] transition-colors ${
                   reason === r.code
-                    ? 'border-[#006AFF] bg-[#E8F1FF] text-[#006AFF]'
-                    : 'border-[#E0E0E0] bg-white'
+                    ? 'bg-sq-selected font-semibold text-sq-text'
+                    : 'text-sq-secondary hover:bg-sq-selected/50'
                 }`}
               >
                 {r.label}
@@ -602,49 +606,48 @@ export function StockActionPage({ type }: Props) {
         </div>
       )}
 
-      <label className="block space-y-1">
-        <span className="text-sm text-[#6E6E6E]">Коментар</span>
+      <label className="flex flex-col gap-1.5">
+        <span className="text-[13px] font-semibold text-sq-secondary">Коментар</span>
         <input
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2.5 text-sm"
+          className="sq-input"
           placeholder={reason === 'other' ? 'обовʼязково для «Інше»' : 'необовʼязково'}
         />
       </label>
 
-      <div className="space-y-2">
-        <div className="flex items-baseline justify-between gap-2">
-          <p className="text-sm font-medium">Товари в документі</p>
-          <p className="text-xs text-[#6E6E6E]">{lines.length} поз.</p>
-        </div>
-
-        <div className="rounded-[4px] border border-[#E0E0E0] bg-white divide-y divide-[#E0E0E0]">
+      <section>
+        <SectionHead title="Товари в документі" count={lines.length} />
+        <div>
           {lines.length === 0 && (
-            <p className="p-4 text-sm text-[#6E6E6E]">
-              Поки порожньо — оберіть товар зі списку каталогу нижче.
-            </p>
+            <div className="py-6 flex flex-col items-center gap-2 text-center">
+              <Package size={48} />
+              <p className="text-[15px] text-sq-secondary">
+                Поки порожньо — оберіть товар зі списку каталогу нижче.
+              </p>
+            </div>
           )}
           {lines.map((line, idx) => {
             if (line.kind === 'placeholder') {
               return (
-                <div key={line.clientKey} className="p-3 flex flex-wrap gap-3 items-center">
-                  <div className="flex-1 min-w-[140px]">
+                <div key={line.clientKey} className="sq-row py-3 flex flex-wrap gap-3 items-end">
+                  <div className="flex-1 min-w-[140px] self-center">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-medium">{line.name}</p>
-                      <span className="text-[11px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-[3px] bg-[#FFF4E5] text-[#B54708]">
+                      <p className="text-base font-semibold">{line.name}</p>
+                      <span className="h-[22px] px-2 rounded-md inline-flex items-center bg-amber-50 text-amber-800 text-xs font-medium">
                         Новий
                       </span>
                     </div>
-                    <p className="text-xs text-[#6E6E6E]">Створиться при проведенні</p>
+                    <p className="text-[13px] text-sq-muted">Створиться при проведенні</p>
                     {(line.summary || line.barcode) && (
-                      <p className="text-xs text-[#6E6E6E]">
+                      <p className="text-[13px] text-sq-muted">
                         {line.summary}
                         {line.barcode ? ` · ${line.barcode}` : ''}
                       </p>
                     )}
                   </div>
-                  <label className="text-sm">
-                    К-сть{' '}
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[13px] font-semibold text-sq-secondary">К-сть</span>
                     <input
                       type="number"
                       min={1}
@@ -657,11 +660,11 @@ export function StockActionPage({ type }: Props) {
                           )
                         );
                       }}
-                      className="ml-1 w-20 rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-2 py-1.5"
+                      className="sq-input max-w-[6rem]"
                     />
                   </label>
-                  <label className="text-sm">
-                    Ціна ₴{' '}
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[13px] font-semibold text-sq-secondary">Ціна ₴</span>
                     <input
                       value={(line.price_cents / 100).toFixed(2)}
                       onChange={(e) => {
@@ -672,11 +675,11 @@ export function StockActionPage({ type }: Props) {
                           )
                         );
                       }}
-                      className="ml-1 w-24 rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-2 py-1.5"
+                      className="sq-input max-w-[7rem]"
                     />
                   </label>
-                  <label className="text-sm">
-                    Закупка ₴{' '}
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[13px] font-semibold text-sq-secondary">Закупка ₴</span>
                     <input
                       value={((line.unit_cost_cents ?? 0) / 100).toFixed(2)}
                       onChange={(e) => {
@@ -689,13 +692,13 @@ export function StockActionPage({ type }: Props) {
                           )
                         );
                       }}
-                      className="ml-1 w-24 rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-2 py-1.5"
+                      className="sq-input max-w-[7rem]"
                     />
                   </label>
                   <button
                     type="button"
                     onClick={() => setLines((prev) => prev.filter((_, i) => i !== idx))}
-                    className="text-sm text-red-600"
+                    className="min-h-11 text-[15px] text-red-600 font-semibold"
                   >
                     Прибрати
                   </button>
@@ -705,17 +708,17 @@ export function StockActionPage({ type }: Props) {
 
             const delta = (line.target_qty ?? line.on_hand) - line.on_hand;
             return (
-              <div key={line.variant_id} className="p-3 flex flex-wrap gap-3 items-center">
-                <div className="flex-1 min-w-[140px]">
-                  <p className="text-sm font-medium">{line.label}</p>
-                  <p className="text-xs text-[#6E6E6E]">
+              <div key={line.variant_id} className="sq-row py-3 flex flex-wrap gap-3 items-end">
+                <div className="flex-1 min-w-[140px] self-center">
+                  <p className="text-base font-semibold">{line.label}</p>
+                  <p className="text-[13px] text-sq-muted tabular-nums">
                     Зараз на складі: {line.on_hand} {line.unit}
                   </p>
                 </div>
                 {type === 'adjustment' ? (
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm whitespace-nowrap">
-                      Має бути{' '}
+                  <div className="flex items-end gap-3">
+                    <label className="flex flex-col gap-1 whitespace-nowrap">
+                      <span className="text-[13px] font-semibold text-sq-secondary">Має бути</span>
                       <input
                         type="number"
                         min={0}
@@ -731,16 +734,16 @@ export function StockActionPage({ type }: Props) {
                             )
                           );
                         }}
-                        className="ml-1 w-20 rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-2 py-1.5 font-semibold"
+                        className="sq-input max-w-[6rem] !font-semibold"
                       />
                     </label>
                     <span
-                      className={`text-sm tabular-nums font-medium ${
+                      className={`min-h-11 inline-flex items-center text-[15px] tabular-nums font-semibold ${
                         delta === 0
-                          ? 'text-[#6E6E6E]'
+                          ? 'text-sq-muted'
                           : delta > 0
-                            ? 'text-emerald-700'
-                            : 'text-red-600'
+                            ? 'text-sq-success-ink'
+                            : 'text-sq-danger'
                       }`}
                     >
                       {delta === 0 ? 'без змін' : delta > 0 ? `+${delta}` : delta}
@@ -748,8 +751,8 @@ export function StockActionPage({ type }: Props) {
                   </div>
                 ) : (
                   <>
-                    <label className="text-sm">
-                      К-сть{' '}
+                    <label className="flex flex-col gap-1">
+                      <span className="text-[13px] font-semibold text-sq-secondary">К-сть</span>
                       <input
                         type="number"
                         min={0}
@@ -763,12 +766,14 @@ export function StockActionPage({ type }: Props) {
                             )
                           );
                         }}
-                        className="ml-1 w-20 rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-2 py-1.5"
+                        className="sq-input max-w-[6rem]"
                       />
                     </label>
                     {type === 'receipt' && (
-                      <label className="text-sm">
-                        Закупка за {line.packMode === 'pack' ? line.pack_label : line.unit} ₴{' '}
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[13px] font-semibold text-sq-secondary">
+                          Закупка за {line.packMode === 'pack' ? line.pack_label : line.unit} ₴
+                        </span>
                         <input
                           value={(shownCost(line, line.unit_cost_cents ?? 0) / 100).toFixed(2)}
                           onChange={(e) => {
@@ -781,7 +786,7 @@ export function StockActionPage({ type }: Props) {
                               )
                             );
                           }}
-                          className="ml-1 w-24 rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-2 py-1.5"
+                          className="sq-input max-w-[7rem]"
                         />
                       </label>
                     )}
@@ -807,7 +812,7 @@ export function StockActionPage({ type }: Props) {
                 <button
                   type="button"
                   onClick={() => setLines((prev) => prev.filter((_, i) => i !== idx))}
-                  className="text-sm text-red-600"
+                  className="min-h-11 text-[15px] text-red-600 font-semibold"
                 >
                   Прибрати
                 </button>
@@ -815,34 +820,32 @@ export function StockActionPage({ type }: Props) {
             );
           })}
         </div>
-      </div>
+      </section>
 
-      <div className="space-y-2">
-        <p className="text-sm font-medium">Каталог — натисніть, щоб додати</p>
+      <section>
+        <SectionHead title="Каталог — натисніть, щоб додати" />
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Пошук назви, SKU або штрихкоду…"
-          className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2.5 text-sm"
+          className="sq-input mt-3 mb-1"
           autoFocus
         />
-        <div
-          ref={catalogScrollRef}
-          className="rounded-[4px] border border-[#E0E0E0] bg-white max-h-72 overflow-auto divide-y divide-[#E0E0E0] select-none"
-        >
-          {loading && <p className="p-4 text-sm text-[#6E6E6E]">Завантаження каталогу…</p>}
+        <div ref={catalogScrollRef} className="max-h-72 overflow-auto select-none">
+          {loading && <p className="py-4 text-sm text-sq-muted">Завантаження каталогу…</p>}
           {!loading && searchHits.length === 0 && (
-            <div className="p-4 space-y-3">
-              <p className="text-sm text-[#6E6E6E]">
+            <div className="py-4 space-y-3">
+              <p className="text-[15px] text-sq-secondary">
                 Нічого не знайдено{q.trim() ? ` для «${q.trim()}»` : ''}
               </p>
               {showCreateCta && (
                 <button
                   type="button"
                   onClick={openStubForm}
-                  className="sq-btn-primary px-4 py-2 text-sm"
+                  className="pos-btn-primary min-h-11 px-4 rounded-sq text-[15px] gap-1.5"
                 >
-                  + Створити новий товар
+                  <Plus size={20} />
+                  Створити новий товар
                 </button>
               )}
             </div>
@@ -855,46 +858,46 @@ export function StockActionPage({ type }: Props) {
                 type="button"
                 disabled={added}
                 onClick={() => addVariant(row)}
-                className={`w-full text-left px-3 py-2.5 text-sm flex justify-between gap-3 ${
-                  added ? 'bg-[#F5F5F5] text-[#6E6E6E]' : 'hover:bg-[#E8F1FF]'
+                className={`sq-row w-full min-h-11 text-left px-2 py-2 text-[15px] flex items-center justify-between gap-3 ${
+                  added ? 'text-sq-muted' : 'hover:bg-sq-sidebar/60'
                 }`}
               >
                 <span>
-                  <span className="font-medium">{row.product_name}</span>{' '}
-                  <span className="text-[#6E6E6E]">
+                  <span className={added ? '' : 'text-sq-text'}>{row.product_name}</span>{' '}
+                  <span className="text-sq-muted">
                     {row.label}
                   </span>
                 </span>
-                <span className="tabular-nums whitespace-nowrap text-[#6E6E6E]">
+                <span className="text-sm tabular-nums whitespace-nowrap text-sq-muted">
                   {added ? 'додано' : `${row.quantity} шт`}
                 </span>
               </button>
             );
           })}
         </div>
-      </div>
+      </section>
 
       {stubOpen && type === 'receipt' && (
-        <div className="rounded-[4px] border border-[#E0E0E0] bg-white p-4 space-y-3">
+        <div className="sq-card p-5 space-y-4">
           <div>
-            <p className="text-sm font-semibold">Новий товар у приході</p>
-            <p className="text-xs text-[#6E6E6E] mt-0.5">
+            <h3 className="text-[17px] font-bold text-sq-heading">Новий товар у приході</h3>
+            <p className="text-[13px] text-sq-secondary mt-0.5">
               Картка зʼявиться в каталозі лише після «Провести».
             </p>
           </div>
           {similarWarn.length > 0 && (
-            <p className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-[4px] px-3 py-2">
+            <p className="text-sm text-amber-800 bg-amber-50 rounded-sq px-3 py-2">
               Можливо це вже є: {similarWarn.join(', ')}?
             </p>
           )}
           {gtinLooking && (
-            <p className="text-xs text-[#6E6E6E]">Шукаємо назву за штрихкодом…</p>
+            <p className="text-[13px] text-sq-muted">Шукаємо назву за штрихкодом…</p>
           )}
           {gtinHint?.name && (
             // Brand and picture are here to answer one question the name alone
             // cannot: is this the item in my hand? The cache stored both all
             // along and showed neither.
-            <div className="flex items-start gap-3 text-sm bg-[#E8F1FF] border border-[#C5DBFF] rounded-[4px] px-3 py-2">
+            <div className="flex items-start gap-3 text-sm text-sq-text bg-sq-blue/10 rounded-sq px-3 py-2.5">
               {gtinHint.image_url && !gtinImageBroken && (
                 <img
                   src={gtinHint.image_url}
@@ -904,14 +907,14 @@ export function StockActionPage({ type }: Props) {
                   // the image leaks nothing new — but send no referrer anyway.
                   referrerPolicy="no-referrer"
                   onError={() => setGtinImageBroken(true)}
-                  className="w-12 h-12 rounded-[4px] object-cover bg-white shrink-0"
+                  className="w-12 h-12 rounded-lg object-cover bg-white shrink-0"
                 />
               )}
               <div className="min-w-0 flex-1">
                 <p>
                   Знайдено: <span className="font-medium">{gtinHint.name}</span>
                 </p>
-                <p className="text-xs text-[#4A6791]">
+                <p className="text-[13px] text-sq-secondary">
                   {gtinHint.brand ? `${gtinHint.brand} · ` : ''}
                   {gtinSourceLabel(gtinHint.best_source)}
                 </p>
@@ -919,43 +922,43 @@ export function StockActionPage({ type }: Props) {
               <button
                 type="button"
                 onClick={clearGtinHint}
-                className="text-[#006AFF] text-xs underline shrink-0"
+                className="text-sq-blue text-[13px] font-semibold shrink-0"
               >
                 Очистити підказку
               </button>
             </div>
           )}
           <div className="grid sm:grid-cols-2 gap-3">
-            <label className="block space-y-1 sm:col-span-2">
-              <span className="text-sm text-[#6E6E6E]">Назва *</span>
+            <label className="flex flex-col gap-1.5 sm:col-span-2">
+              <span className="text-[13px] font-semibold text-sq-secondary">Назва *</span>
               <input
                 value={stubName}
                 onChange={(e) => setStubName(e.target.value)}
-                className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2.5 text-sm"
+                className="sq-input"
                 autoFocus
               />
             </label>
-            <label className="block space-y-1">
-              <span className="text-sm text-[#6E6E6E]">Кількість *</span>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-semibold text-sq-secondary">Кількість *</span>
               <input
                 type="number"
                 min={1}
                 value={stubQty}
                 onChange={(e) => setStubQty(e.target.value)}
-                className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2.5 text-sm"
+                className="sq-input"
               />
             </label>
-            <label className="block space-y-1">
-              <span className="text-sm text-[#6E6E6E]">Ціна продажу *</span>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-semibold text-sq-secondary">Ціна продажу *</span>
               <input
                 value={stubPrice}
                 onChange={(e) => setStubPrice(e.target.value)}
                 placeholder="грн"
-                className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2.5 text-sm"
+                className="sq-input"
               />
             </label>
-            <label className="block space-y-1">
-              <span className="text-sm text-[#6E6E6E]">Закупка</span>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-semibold text-sq-secondary">Закупка</span>
               <input
                 value={stubCost}
                 onChange={(e) => {
@@ -964,7 +967,7 @@ export function StockActionPage({ type }: Props) {
                   if (!stubPrice.trim() && v.trim()) setStubPrice(v);
                 }}
                 placeholder="грн"
-                className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2.5 text-sm"
+                className="sq-input"
               />
             </label>
             <AttributeFields
@@ -974,47 +977,47 @@ export function StockActionPage({ type }: Props) {
               onChange={setStubAttributes}
               unit={{ value: stubUnit, options: vertical.units, onChange: setStubUnit }}
             />
-            <label className="block space-y-1">
-              <span className="text-sm text-[#6E6E6E]">Артикул (SKU)</span>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-semibold text-sq-secondary">Артикул (SKU)</span>
               <input
                 value={stubSku}
                 onChange={(e) => setStubSku(e.target.value)}
-                className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2.5 text-sm"
+                className="sq-input"
               />
-              <span className="block text-xs text-[#9A9A9A]">код з бирки постачальника</span>
+              <span className="block text-[13px] text-sq-muted">код з бирки постачальника</span>
             </label>
-            <label className="block space-y-1">
-              <span className="text-sm text-[#6E6E6E]">Штрихкод</span>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-semibold text-sq-secondary">Штрихкод</span>
               <div className="flex gap-2">
                 <input
                   value={stubBarcode}
                   onChange={(e) => onStubBarcodeChange(e.target.value)}
-                  className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2.5 text-sm"
+                  className="sq-input"
                 />
                 <button
                   type="button"
                   disabled={stubBarcodeBusy}
                   onClick={() => void generateStubBarcode()}
                   title="Внутрішній код магазину — коли бирка не сканується"
-                  className="shrink-0 rounded-[4px] border border-[#E0E0E0] bg-white px-3 text-sm whitespace-nowrap disabled:opacity-50"
+                  className="sq-btn-quiet shrink-0 whitespace-nowrap"
                 >
                   Згенерувати
                 </button>
               </div>
-              <span className="block text-xs text-[#9A9A9A]">
+              <span className="block text-[13px] text-sq-muted">
                 те, що читає сканер — або згенеруйте внутрішній код
               </span>
             </label>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={addStubToDocument} className="sq-btn-primary px-4 py-2 text-sm">
-              Додати в прихід
-            </button>
             <button
               type="button"
-              onClick={() => setStubOpen(false)}
-              className="rounded-[4px] border border-[#E0E0E0] bg-white px-4 py-2 text-sm"
+              onClick={addStubToDocument}
+              className="pos-btn-primary min-h-11 px-4 rounded-sq text-[15px]"
             >
+              Додати в прихід
+            </button>
+            <button type="button" onClick={() => setStubOpen(false)} className="sq-btn-quiet">
               Скасувати
             </button>
           </div>
@@ -1023,21 +1026,25 @@ export function StockActionPage({ type }: Props) {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <div className="flex flex-wrap gap-2 sticky bottom-0 z-10 -mx-1 px-1 py-3 bg-[#F5F5F5] border-t border-[#E0E0E0]">
+      <div className="flex flex-wrap gap-2 sticky bottom-0 z-10 -mx-1 px-1 py-3 bg-sq-surface shadow-[0_-1px_0_rgb(var(--sq-divider-rgb))]">
         <button
           type="button"
           disabled={saving}
           onClick={(e) => void onSubmit(e as unknown as FormEvent, true)}
-          className="rounded-[4px] border border-[#E0E0E0] bg-white px-4 py-2.5 text-sm"
+          className="sq-btn-quiet"
         >
           Зберегти чернетку
         </button>
-        <button type="submit" disabled={saving || loading} className="sq-btn-primary px-6 py-2.5 text-sm">
+        <button
+          type="submit"
+          disabled={saving || loading}
+          className="pos-btn-primary min-h-11 px-6 rounded-sq text-[15px]"
+        >
           {saving ? '…' : 'Провести'}
         </button>
       </div>
       {type === 'receipt' && lines.length > 0 && (
-        <p className="text-xs text-[#6E6E6E]">
+        <p className="text-[13px] text-sq-muted tabular-nums">
           Сума закупки:{' '}
           {formatUah(
             lines.reduce((s, l) => {

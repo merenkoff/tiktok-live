@@ -27,7 +27,7 @@
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Coffee } from 'lucide-react';
+import { Coffee } from '@pos/platform/ui';
 import { formatUah } from '@pos/platform';
 import type { AnalyticsPanelProps } from '@pos/platform';
 import { Stat } from '../ui/Stat';
@@ -62,19 +62,13 @@ export default function CafePanels({ from, to }: AnalyticsPanelProps) {
   const tables = data?.tables ?? null;
 
   return (
-    <section
-      className="bg-sq-surface border border-sq-divider rounded-sq p-5 shadow-sm"
-      data-testid="cafe-panels"
-    >
-      <div className="flex items-center justify-between mb-4">
-        <p className="sq-section-label flex items-center gap-2">
-          <Coffee size={14} className="text-sq-blue" />
+    <section data-testid="cafe-panels">
+      <div className="flex items-center justify-between gap-3 pb-1.5 mb-3 shadow-[0_1px_0_rgb(var(--sq-divider-rgb))]">
+        <h3 className="flex items-center gap-2 text-[15px] font-bold text-sq-blue">
+          <Coffee size={24} />
           Кухня
-        </p>
-        <Link
-          to="/admin/cafe"
-          className="text-xs font-semibold text-sq-blue uppercase tracking-wide"
-        >
+        </h3>
+        <Link to="/admin/cafe" className="text-[15px] font-semibold text-sq-blue hover:underline">
           Докладніше
         </Link>
       </div>

@@ -122,7 +122,10 @@ describe('HallMapPage', () => {
   it('draws the room and says what each table is doing', async () => {
     renderWithProviders(<HallMapPage />);
     const seated = await screen.findByTestId('table-tile-11');
-    expect(seated).toHaveAttribute('data-tone', 'ready');
+    // Somebody else seated it (the signed-in staff member is not Марта), and
+    // its food is on the pass.
+    expect(seated).toHaveAttribute('data-tone', 'busy');
+    expect(seated).toHaveAttribute('data-kitchen', 'ready');
     expect(seated).toHaveTextContent('5');
     expect(seated).toHaveTextContent('240');
     expect(seated).toHaveTextContent('42 хв');
@@ -131,7 +134,22 @@ describe('HallMapPage', () => {
 
     const free = screen.getByTestId('table-tile-12');
     expect(free).toHaveAttribute('data-tone', 'free');
-    expect(free).toHaveTextContent('2 місць');
+    expect(free).toHaveTextContent('2 місця');
+  });
+
+  it('marks my own tables, and a table whose pre-bill was printed as asking for the bill', async () => {
+    const me = useAuthStore.getState().auth!.staff.id;
+    bills = [{ ...bills[0], opened_by: me, prep_status: null }];
+    const { unmount } = renderWithProviders(<HallMapPage />);
+    expect(await screen.findByTestId('table-tile-11')).toHaveAttribute('data-tone', 'mine');
+    unmount();
+
+    bills = [{ ...bills[0], precheck_printed_at: new Date().toISOString() }];
+    renderWithProviders(<HallMapPage />);
+    const asking = await screen.findByTestId('table-tile-11');
+    await waitFor(() => expect(asking).toHaveAttribute('data-tone', 'bill'));
+    expect(screen.getByTestId('table-precheck-11')).toHaveTextContent('Просять рахунок');
+    expect(screen.getByTestId('tables-legend')).toHaveTextContent('Мій стіл');
   });
 
   it('opens the bill on one tap, whether the table was free or not', async () => {

@@ -44,7 +44,7 @@ export const fiscalCheckboxModule: RemoteModuleDescriptor = {
     {
       to: '/fiscal',
       label: 'Зміна',
-      icon: 'Receipt',
+      icon: 'ShieldCheck',
       location: 'cashier-primary',
       order: 90,
       match: '/fiscal',

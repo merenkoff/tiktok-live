@@ -6,6 +6,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, formatUah } from '@pos/platform';
 import type { Product, ProductVariant } from '@pos/platform';
+import { PageHeader, Puzzle, SectionHead } from '@pos/platform/ui';
 
 /**
  * Assembling composites: the florist makes ten bouquets, each taking its stems
@@ -123,27 +124,29 @@ export function StockProductionPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-3xl">
-      <div>
-        <p className="sq-section-label">Склад</p>
-        <h1 className="text-2xl font-semibold mt-1">Виробництво</h1>
-        <p className="text-sm text-sq-secondary mt-1">
-          Збираємо складений товар зі складників. Складники спишуться, зібране стане на облік.
-        </p>
-      </div>
+    <div className="space-y-6 max-w-3xl animate-fade-up text-sq-text">
+      <PageHeader
+        back={{ to: '/admin/stock', label: 'Склад' }}
+        glyph={Puzzle}
+        title="Виробництво"
+        subtitle="Збираємо складений товар зі складників. Складники спишуться, зібране стане на облік."
+      />
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       {producible.length === 0 ? (
-        <p className="text-sm text-sq-secondary">
-          Немає що збирати. Створіть товар «Складений — збираємо заздалегідь» у розділі «Товари».
-        </p>
+        <div className="py-10 flex flex-col items-center gap-2 text-center">
+          <Puzzle size={48} />
+          <p className="text-[15px] text-sq-secondary max-w-md">
+            Немає що збирати. Створіть товар «Складений — збираємо заздалегідь» у розділі «Товари».
+          </p>
+        </div>
       ) : (
-        <form onSubmit={(e) => void submit(e)} className="space-y-4">
-          <label className="block space-y-1">
-            <span className="text-xs text-sq-secondary">Що збираємо</span>
+        <form onSubmit={(e) => void submit(e)} className="space-y-5">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[13px] font-semibold text-sq-secondary">Що збираємо</span>
             <select
-              className="w-full rounded-sq border border-sq-divider bg-sq-surface px-3 py-2.5 text-sm"
+              className="sq-input"
               value={variantId}
               onChange={(e) => setVariantId(e.target.value === '' ? '' : Number(e.target.value))}
             >
@@ -156,20 +159,20 @@ export function StockProductionPage() {
             </select>
           </label>
 
-          <label className="block space-y-1 max-w-[12rem]">
-            <span className="text-xs text-sq-secondary">Скільки зібрати</span>
+          <label className="flex flex-col gap-1.5 max-w-[12rem]">
+            <span className="text-[13px] font-semibold text-sq-secondary">Скільки зібрати</span>
             <input
-              className="w-full rounded-sq border border-sq-divider bg-sq-surface px-3 py-2.5 text-sm"
+              className="sq-input !text-lg !font-semibold"
               inputMode="numeric"
               value={qty}
               onChange={(e) => setQty(e.target.value.replace(/\D/g, ''))}
             />
           </label>
 
-          <label className="block space-y-1">
-            <span className="text-xs text-sq-secondary">Примітка (необовʼязково)</span>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[13px] font-semibold text-sq-secondary">Примітка (необовʼязково)</span>
             <input
-              className="w-full rounded-sq border border-sq-divider bg-sq-surface px-3 py-2.5 text-sm"
+              className="sq-input"
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Наприклад: замовлення на суботу"
@@ -177,32 +180,30 @@ export function StockProductionPage() {
           </label>
 
           {selected && (
-            <div className="rounded-sq border border-sq-divider bg-sq-surface p-4 space-y-2">
-              <div className="flex items-baseline justify-between gap-2">
-                <p className="text-sm font-semibold text-sq-text">Піде на це</p>
-                <p className="text-xs text-sq-secondary">
-                  Зі складників вистачить на {Number.isFinite(maxRuns) ? maxRuns : 0} шт
-                </p>
-              </div>
+            <section>
+              <SectionHead title="Піде на це" />
+              <p className="pt-2 text-[13px] text-sq-muted tabular-nums">
+                Зі складників вистачить на {Number.isFinite(maxRuns) ? maxRuns : 0} шт
+              </p>
               {bom.length === 0 && (
-                <p className="text-sm text-red-600">
+                <p className="pt-2 text-sm text-red-600">
                   У цього варіанта порожній склад — заповніть його в картці товару.
                 </p>
               )}
-              <table className="w-full text-sm">
+              <table className="sq-table">
                 <tbody>
                   {bom.map((row) => (
-                    <tr key={row.component_variant_id} className="border-t border-sq-divider">
-                      <td className="py-2 pr-2">
+                    <tr key={row.component_variant_id}>
+                      <td>
                         {row.product_name}
                         {row.label ? ` · ${row.label}` : ''}
                       </td>
-                      <td className="py-2 pr-2 text-right whitespace-nowrap">
+                      <td className="text-right whitespace-nowrap tabular-nums">
                         {row.need} {row.unit}
                       </td>
                       <td
-                        className={`py-2 text-right whitespace-nowrap text-xs ${
-                          row.short ? 'text-red-600 font-semibold' : 'text-sq-secondary'
+                        className={`text-right whitespace-nowrap text-sm tabular-nums ${
+                          row.short ? 'text-sq-danger font-semibold' : 'text-sq-muted'
                         }`}
                       >
                         є {row.have} {row.unit}
@@ -211,17 +212,17 @@ export function StockProductionPage() {
                   ))}
                 </tbody>
               </table>
-              <p className="text-xs text-sq-secondary pt-1">
+              <p className="pt-3 text-[13px] text-sq-secondary">
                 Собівартість зібраного порахується зі складників. Поточна ціна продажу —{' '}
                 {formatUah(selected.variant.price_cents)}.
               </p>
-            </div>
+            </section>
           )}
 
           <button
             type="submit"
             disabled={saving || !selected || quantity <= 0 || bom.length === 0}
-            className="sq-btn-primary px-5 py-2.5 text-sm disabled:opacity-50"
+            className="pos-btn-primary min-h-11 px-5 rounded-sq text-[15px]"
           >
             {saving ? 'Проведення…' : 'Зібрати і провести'}
           </button>

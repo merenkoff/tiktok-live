@@ -28,6 +28,8 @@
 
 import { useMemo, useState } from 'react';
 import { formatUah } from '@pos/platform';
+import { ArrowLeft, Banknote, Check, CreditCard, Minus, Plus, Split } from '@pos/platform/ui';
+import type { Glyph } from '@pos/platform/ui';
 import { evenShares, lineCents, payableLines, selectionCents } from '../lib/pay';
 import { lineTitle } from '../lib/bill';
 import type { PayPart } from '../lib/tablesApi';
@@ -42,9 +44,9 @@ export interface PaySheetProps {
 
 type Method = 'cash' | 'card';
 
-const METHODS: Array<{ id: Method; label: string }> = [
-  { id: 'cash', label: 'Готівка' },
-  { id: 'card', label: 'Картка' },
+const METHODS: Array<{ id: Method; label: string; glyph: Glyph }> = [
+  { id: 'cash', label: 'Готівка', glyph: Banknote },
+  { id: 'card', label: 'Картка', glyph: CreditCard },
 ];
 
 export function PaySheet({ bill, busy, onClose, onPay }: PaySheetProps): JSX.Element {
@@ -80,118 +82,166 @@ export function PaySheet({ bill, busy, onClose, onPay }: PaySheetProps): JSX.Ele
     onPay([part]);
   }
 
+  const chosen = lines.filter(({ line }) => selected.has(line.id)).length;
+
   return (
     <div className="absolute inset-0 z-30 flex flex-col bg-sq-bg" data-testid="pay-sheet">
-      <div className="flex items-center justify-between gap-2 border-b border-sq-divider p-3">
-        <p className="text-lg font-semibold">Оплата · стіл {bill.table_name}</p>
-        <button type="button" className="sq-link" onClick={onClose} data-testid="pay-close">
-          Назад
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-auto p-3">
-        <div className="mb-2 flex items-center justify-between">
-          <p className="sq-section-label">Що оплачуємо</p>
-          <button
-            type="button"
-            className="sq-link"
-            data-testid="pay-select-all"
-            onClick={() =>
-              setSelected(whole ? new Set() : new Set(lines.map(({ line }) => line.id)))
-            }
-          >
-            {whole ? 'Зняти все' : 'Обрати все'}
-          </button>
-        </div>
-
-        {lines.map(({ line, round }) => {
-          const on = selected.has(line.id);
-          return (
-            <button
-              key={line.id}
-              type="button"
-              data-testid={`pay-line-${line.id}`}
-              aria-pressed={on}
-              disabled={busy}
-              onClick={() => toggle(line.id)}
-              className={`mb-1 flex w-full items-center justify-between gap-3 rounded-lg border p-2 text-left ${
-                on ? 'border-sq-blue bg-sq-blue/10' : 'border-sq-divider'
-              }`}
-            >
-              <span className="min-w-0">
-                <span className="block truncate">
-                  <span className="tabular-nums">{line.quantity}×</span> {lineTitle(line, true)}
-                </span>
-                <span className="block text-xs text-sq-muted">раунд {round.seq}</span>
-              </span>
-              <span className="shrink-0 tabular-nums">{formatUah(lineCents(line))}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="border-t border-sq-divider p-3">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <span className="text-sm text-sq-muted">Порівну на</span>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="sq-btn-tile"
-              data-testid="pay-ways-less"
-              disabled={busy || ways <= 1}
-              onClick={() => setWays((n) => Math.max(1, n - 1))}
-            >
-              −
-            </button>
-            <span className="min-w-8 text-center tabular-nums" data-testid="pay-ways">
-              {ways}
-            </span>
-            <button
-              type="button"
-              className="sq-btn-tile"
-              data-testid="pay-ways-more"
-              disabled={busy || ways >= 10}
-              onClick={() => setWays((n) => Math.min(10, n + 1))}
-            >
-              +
-            </button>
-          </div>
-        </div>
-
-        {ways > 1 && (
-          <p className="mb-2 text-xs text-sq-muted" data-testid="pay-shares">
-            {shares.map((c) => formatUah(c)).join(' + ')} — один чек, {ways} оплат
-          </p>
-        )}
-
-        <div className="mb-2 flex gap-2">
-          {METHODS.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              data-testid={`pay-method-${m.id}`}
-              aria-pressed={method === m.id}
-              onClick={() => setMethod(m.id)}
-              className={`flex-1 rounded-lg border p-2 ${
-                method === m.id ? 'border-sq-blue bg-sq-blue/10' : 'border-sq-divider'
-              }`}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
-
+      <header className="flex shrink-0 items-center gap-3.5 px-4 md:px-7 min-h-[68px]">
         <button
           type="button"
-          className="sq-btn-primary w-full"
-          data-testid="pay-submit"
-          disabled={busy || total <= 0}
-          onClick={pay}
+          className="shrink-0 min-h-11 -ml-1 pr-1 inline-flex items-center gap-1 text-[15px] font-semibold text-sq-blue"
+          onClick={onClose}
+          data-testid="pay-close"
         >
-          Оплатити {formatUah(total)}
-          {whole ? '' : ' (частина)'}
+          <ArrowLeft size={20} />
+          Стіл {bill.table_name}
         </button>
+        <p className="flex-1 min-w-0 truncate text-center text-xl font-bold text-sq-heading md:pr-24">
+          Оплата · стіл {bill.table_name}
+        </p>
+      </header>
+
+      <div className="flex-1 min-h-0 overflow-auto md:overflow-hidden px-4 md:px-7 pb-4 md:pb-6 flex flex-col md:flex-row gap-4 md:gap-5">
+        <section className="md:flex-1 min-w-0 rounded-card bg-white shadow-card px-5 py-4 flex flex-col md:min-h-0">
+          <div className="flex items-center justify-between pb-2 shadow-[0_1px_0_rgb(var(--sq-divider-rgb))]">
+            <p className="text-[15px] font-bold text-sq-blue">Що оплачуємо</p>
+            <button
+              type="button"
+              className="min-h-9 text-[15px] font-semibold text-sq-blue"
+              data-testid="pay-select-all"
+              onClick={() =>
+                setSelected(whole ? new Set() : new Set(lines.map(({ line }) => line.id)))
+              }
+            >
+              {whole ? 'Зняти все' : 'Обрати все'}
+            </button>
+          </div>
+
+          <div className="md:flex-1 md:min-h-0 md:overflow-auto">
+            {lines.map(({ line, round }) => {
+              const on = selected.has(line.id);
+              return (
+                <button
+                  key={line.id}
+                  type="button"
+                  data-testid={`pay-line-${line.id}`}
+                  aria-pressed={on}
+                  disabled={busy}
+                  onClick={() => toggle(line.id)}
+                  className="flex w-full min-h-[54px] items-center gap-3.5 text-left shadow-[0_1px_0_#E6E8EC]"
+                >
+                  <span
+                    aria-hidden
+                    className={`w-[22px] h-[22px] rounded-md shrink-0 grid place-items-center ${
+                      on ? 'bg-sq-blue text-white' : 'ring-2 ring-inset ring-sq-divider'
+                    }`}
+                  >
+                    {on && <Check size={16} />}
+                  </span>
+                  <span className="min-w-0 flex-1 py-1.5">
+                    <span className={`block truncate text-base ${on ? 'text-sq-text' : 'text-sq-secondary'}`}>
+                      {line.quantity > 1 && <span className="tabular-nums">{line.quantity}× </span>}
+                      {lineTitle(line, true)}
+                    </span>
+                    <span className="block text-[13px] text-sq-muted">раунд {round.seq}</span>
+                  </span>
+                  <span className={`shrink-0 text-base tabular-nums ${on ? 'text-sq-text' : 'text-sq-muted'}`}>
+                    {formatUah(lineCents(line))}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="md:w-[420px] md:shrink-0 flex flex-col gap-3.5">
+          <div className="rounded-card bg-white shadow-card px-5 py-[18px] flex flex-col gap-2.5">
+            <div className="flex justify-between text-[15px] text-sq-secondary">
+              <span>
+                Вибрано {chosen} з {lines.length}
+              </span>
+              <span className="tabular-nums">{formatUah(total)}</span>
+            </div>
+            <div className="flex items-center justify-between py-2 shadow-[0_-1px_0_#E6E8EC,0_1px_0_#E6E8EC]">
+              <span className="flex items-center gap-2.5 text-base text-sq-text">
+                <Split size={24} />
+                Порівну на
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  aria-label="Менше"
+                  className={stepClass}
+                  data-testid="pay-ways-less"
+                  disabled={busy || ways <= 1}
+                  onClick={() => setWays((n) => Math.max(1, n - 1))}
+                >
+                  <Minus size={20} />
+                </button>
+                <span className="w-11 text-center text-[17px] font-semibold tabular-nums" data-testid="pay-ways">
+                  {ways}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Більше"
+                  className={stepClass}
+                  data-testid="pay-ways-more"
+                  disabled={busy || ways >= 10}
+                  onClick={() => setWays((n) => Math.min(10, n + 1))}
+                >
+                  <Plus size={20} />
+                </button>
+              </div>
+            </div>
+            {ways > 1 && (
+              <p className="text-[13px] text-sq-muted tabular-nums" data-testid="pay-shares">
+                {shares.map((c) => formatUah(c)).join(' + ')} — один чек, {ways} оплат
+              </p>
+            )}
+            <div className="flex items-baseline justify-between">
+              <span className="text-lg font-bold text-sq-heading">До сплати</span>
+              <span className="text-[30px] font-bold text-sq-heading tabular-nums">{formatUah(total)}</span>
+            </div>
+          </div>
+
+          <div className="flex gap-2.5">
+            {METHODS.map((m) => {
+              const on = method === m.id;
+              const Icon = m.glyph;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  data-testid={`pay-method-${m.id}`}
+                  aria-pressed={on}
+                  onClick={() => setMethod(m.id)}
+                  className={`flex-1 min-h-16 rounded-[14px] bg-white inline-flex items-center justify-center gap-2.5 text-base font-semibold text-sq-text ${
+                    on ? 'ring-2 ring-sq-blue' : 'ring-1 ring-sq-divider'
+                  }`}
+                >
+                  <Icon size={24} />
+                  {m.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex-1" />
+          <button
+            type="button"
+            className="pos-btn-primary w-full min-h-[60px] rounded-xl text-lg"
+            data-testid="pay-submit"
+            disabled={busy || total <= 0}
+            onClick={pay}
+          >
+            Оплатити {formatUah(total)}
+            {whole ? '' : ' (частина)'}
+          </button>
+        </section>
       </div>
     </div>
   );
 }
+
+const stepClass =
+  'w-10 h-10 rounded-sq bg-white ring-1 ring-sq-divider grid place-items-center text-sq-text disabled:opacity-40';

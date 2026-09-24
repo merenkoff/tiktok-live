@@ -77,7 +77,7 @@ describe('RegisterPage as the sell-screen frame', () => {
   it('renders the bundled clothing catalog for a clothing store', async () => {
     signIn('clothing');
     renderWithProviders(<RegisterPage />, { shell: 'cashier' });
-    expect(await screen.findByPlaceholderText('Пошук')).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(/^Пошук/)).toBeInTheDocument();
   });
 
   it("renders the store vertical's own catalog when its module is loaded", async () => {
@@ -92,7 +92,7 @@ describe('RegisterPage as the sell-screen frame', () => {
     // and the shop still has to be able to sell.
     signIn('flowers');
     renderWithProviders(<RegisterPage />, { shell: 'cashier' });
-    expect(await screen.findByPlaceholderText('Пошук')).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(/^Пошук/)).toBeInTheDocument();
   });
 
   it('falls back when the vertical catalog throws while rendering', async () => {
@@ -101,7 +101,7 @@ describe('RegisterPage as the sell-screen frame', () => {
       throw new Error('boom');
     });
     renderWithProviders(<RegisterPage />, { shell: 'cashier' });
-    await waitFor(() => expect(screen.getByPlaceholderText('Пошук')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByPlaceholderText(/^Пошук/)).toBeInTheDocument());
   });
 });
 
@@ -129,7 +129,7 @@ describe('RegisterPage with a café line', () => {
     signIn('cafe');
     ringOatLatte();
     renderWithProviders(<RegisterPage />, { shell: 'cashier' });
-    expect(await screen.findByPlaceholderText('Пошук')).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(/^Пошук/)).toBeInTheDocument();
 
     expect(screen.getAllByText('M · вівсяне').length).toBeGreaterThan(0);
     expect(screen.getAllByTestId('cart-line-note')[0]).toHaveTextContent('гарячіше');
@@ -143,7 +143,7 @@ describe('RegisterPage with a café line', () => {
     const parkCart = vi.spyOn(api, 'parkCart').mockResolvedValue({ id: 1, label: 'Оксана', items: [] } as never);
     vi.spyOn(api, 'listParkedCarts').mockResolvedValue([]);
     renderWithProviders(<RegisterPage />, { shell: 'cashier' });
-    expect(await screen.findByPlaceholderText('Пошук')).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(/^Пошук/)).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByTestId('park-cart')[0]);
     const sheet = await screen.findByTestId('park-cart-sheet');
@@ -177,10 +177,10 @@ describe('RegisterPage success screen — the order number (К3d)', () => {
   }
 
   async function payCash(): Promise<void> {
-    fireEvent.click(screen.getAllByRole('button', { name: /^Сплатити/ })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Оплатити/ })[0]);
     const dialog = await screen.findByRole('dialog', { name: 'Оплата' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Готівка' }));
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Готово' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Прийняти/ }));
   }
 
   it('shows the till’s own «К1» with its caption on a sale queued offline', async () => {
@@ -190,12 +190,12 @@ describe('RegisterPage success screen — the order number (К3d)', () => {
       makeSaleDetail({ order_no: null, local_order_no: 1, receipt_number: 'OFF-ABCD1234' })
     );
     renderWithProviders(<RegisterPage />, { shell: 'cashier' });
-    expect(await screen.findByPlaceholderText('Пошук')).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(/^Пошук/)).toBeInTheDocument();
 
     await payCash();
     expect(await screen.findByTestId('order-no')).toHaveTextContent('К1');
     expect(screen.getByTestId('order-no-local')).toHaveTextContent('сервер призначить свій');
-    expect(screen.getByText('Чек OFF-ABCD1234')).toBeInTheDocument();
+    expect(screen.getByText(/^Чек OFF-ABCD1234/)).toBeInTheDocument();
   });
 
   it('shows the server’s number bare, with no caption, once there is one', async () => {
@@ -205,7 +205,7 @@ describe('RegisterPage success screen — the order number (К3d)', () => {
       makeSaleDetail({ order_no: 42, receipt_number: 'ЧК-000042' })
     );
     renderWithProviders(<RegisterPage />, { shell: 'cashier' });
-    expect(await screen.findByPlaceholderText('Пошук')).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(/^Пошук/)).toBeInTheDocument();
 
     await payCash();
     expect(await screen.findByTestId('order-no')).toHaveTextContent('42');
@@ -219,12 +219,13 @@ describe('RegisterPage success screen — the order number (К3d)', () => {
       makeSaleDetail({ order_no: null, local_order_no: 1, receipt_number: 'OFF-ABCD1234' })
     );
     renderWithProviders(<RegisterPage />, { shell: 'cashier' });
-    expect(await screen.findByPlaceholderText('Пошук')).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(/^Пошук/)).toBeInTheDocument();
 
     await payCash();
-    expect(await screen.findByText('Чек')).toBeInTheDocument();
+    // The receipt number first: the sell screen has its own «Чек» heading too.
+    expect(await screen.findByText('OFF-ABCD1234')).toBeInTheDocument();
     expect(screen.queryByTestId('order-no')).toBeNull();
-    expect(screen.getByText('OFF-ABCD1234')).toBeInTheDocument();
+    expect(screen.getByText('Оплачено')).toBeInTheDocument();
   });
 });
 
@@ -238,10 +239,10 @@ describe('RegisterPage success screen — the kitchen ticket (К3e)', () => {
   }
 
   async function payCash(): Promise<void> {
-    fireEvent.click(screen.getAllByRole('button', { name: /^Сплатити/ })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Оплатити/ })[0]);
     const dialog = await screen.findByRole('dialog', { name: 'Оплата' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Готівка' }));
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Готово' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Прийняти/ }));
   }
 
   it('sends a café sale to the kitchen once, the moment it is rung, and offers to print again', async () => {
@@ -250,7 +251,7 @@ describe('RegisterPage success screen — the kitchen ticket (К3e)', () => {
     const sold = makeSaleDetail({ order_no: 42, receipt_number: 'ЧК-000042', client_uuid: 'u-42' });
     vi.spyOn(cashierApi, 'completeSale').mockResolvedValue(sold);
     renderWithProviders(<RegisterPage />, { shell: 'cashier' });
-    expect(await screen.findByPlaceholderText('Пошук')).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(/^Пошук/)).toBeInTheDocument();
 
     await payCash();
     expect(await screen.findByTestId('kitchen-status')).toHaveTextContent('Тікет надіслано на кухню');
@@ -267,7 +268,7 @@ describe('RegisterPage success screen — the kitchen ticket (К3e)', () => {
     vi.mocked(printKitchenTickets).mockResolvedValueOnce('no-printer');
     vi.spyOn(cashierApi, 'completeSale').mockResolvedValue(makeSaleDetail({ order_no: 42 }));
     renderWithProviders(<RegisterPage />, { shell: 'cashier' });
-    expect(await screen.findByPlaceholderText('Пошук')).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(/^Пошук/)).toBeInTheDocument();
 
     await payCash();
     expect(await screen.findByTestId('order-no')).toHaveTextContent('42');
@@ -280,7 +281,7 @@ describe('RegisterPage success screen — the kitchen ticket (К3e)', () => {
     ringEspresso();
     vi.spyOn(cashierApi, 'completeSale').mockResolvedValue(makeSaleDetail({ receipt_number: 'ЧК-000001' }));
     renderWithProviders(<RegisterPage />, { shell: 'cashier' });
-    expect(await screen.findByPlaceholderText('Пошук')).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(/^Пошук/)).toBeInTheDocument();
 
     await payCash();
     expect(await screen.findByText('ЧК-000001')).toBeInTheDocument();

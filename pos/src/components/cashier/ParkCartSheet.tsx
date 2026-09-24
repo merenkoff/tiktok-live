@@ -20,7 +20,7 @@
  */
 
 import { useState } from 'react';
-import { Inbox, X } from 'lucide-react';
+import { Inbox, X } from '../../platform/glyphs';
 import { formatUah } from '../../lib/money';
 
 interface Props {
@@ -48,34 +48,36 @@ export function ParkCartSheet({
   const [note, setNote] = useState('');
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 grid place-items-end md:place-items-center p-4">
+    <div className="fixed inset-0 z-50 bg-[rgba(28,32,38,.32)] grid place-items-end md:place-items-center p-4">
       <div
-        className="bg-white rounded-sq w-full max-w-sm overflow-hidden animate-fade-up shadow-lg"
+        role="dialog"
+        aria-label="Відкласти кошик"
+        className="bg-white rounded-card w-full max-w-sm overflow-hidden animate-fade-up shadow-[0_24px_60px_rgba(0,20,60,.28)]"
         data-testid="park-cart-sheet"
       >
-        <div className="px-4 py-3.5 border-b border-sq-divider flex items-center justify-between gap-3">
-          <h3 className="font-semibold text-sq-text">Відкласти кошик</h3>
+        <div className="pl-5 pr-3 pt-4 pb-2 flex items-center justify-between gap-3">
+          <h3 className="text-[19px] font-bold text-sq-heading">Відкласти кошик</h3>
           <button
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="min-h-11 min-w-11 grid place-items-center text-sq-secondary disabled:opacity-40"
+            className="w-10 h-10 grid place-items-center rounded-full text-sq-secondary hover:bg-sq-empty disabled:opacity-40 shrink-0"
             aria-label="Закрити"
           >
             <X size={20} />
           </button>
         </div>
 
-        <div className="p-4 space-y-4">
-          <p className="text-xs text-sq-muted">
-            {lineCount} поз. на {formatUah(totalCents)}. Товар буде зарезервовано на 4 години —
+        <div className="px-5 pt-1 pb-5 space-y-4">
+          <p className="text-sm text-sq-secondary">
+            {lineCount} поз. на <span className="tabular-nums">{formatUah(totalCents)}</span>. Товар буде зарезервовано на 4 години —
             його не запропонують іншій касі, доки кошик не заберуть або не повернуть.
           </p>
 
-          <label className="block">
-            <span className="text-sm text-sq-secondary">Для кого</span>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[13px] font-semibold text-sq-secondary">Для кого</span>
             <input
-              className="pos-field mt-1.5"
+              className="pos-field"
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               placeholder="Оксана, троянди"
@@ -84,10 +86,10 @@ export function ParkCartSheet({
             />
           </label>
 
-          <label className="block">
-            <span className="text-sm text-sq-secondary">Примітка</span>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[13px] font-semibold text-sq-secondary">Примітка</span>
             <input
-              className="pos-field mt-1.5"
+              className="pos-field"
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Забере після 17:00"
@@ -105,10 +107,10 @@ export function ParkCartSheet({
             type="button"
             disabled={busy || !online || !label.trim()}
             onClick={() => onSubmit(label.trim(), note.trim() || null)}
-            className="sq-btn-primary min-h-12 w-full flex items-center justify-center gap-2"
+            className="pos-btn-primary min-h-[52px] w-full rounded-xl text-[17px] gap-2"
             data-testid="park-submit"
           >
-            <Inbox size={18} />
+            <Inbox size={20} />
             {!online ? 'Потрібна мережа' : busy ? 'Відкладаємо…' : 'Відкласти'}
           </button>
         </div>

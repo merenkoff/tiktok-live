@@ -26,7 +26,7 @@ export const catalogCheckoutModule: ModuleDescriptor = {
     { path: '/orders', element: PreordersPage },
   ],
   nav: [
-    { to: '/register', label: 'Каса', icon: 'Grid3X3', location: 'cashier-primary', order: 10 },
+    { to: '/register', label: 'Каса', icon: 'ShoppingCart', location: 'cashier-primary', order: 10 },
     {
       to: '/orders',
       label: 'Замовлення',

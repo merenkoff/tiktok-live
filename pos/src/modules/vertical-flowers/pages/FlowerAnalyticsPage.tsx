@@ -18,7 +18,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Flower2, Scissors, TrendingUp, Trash2 } from 'lucide-react';
+import { Flower2, PageHeader, SectionHead, Segmented } from '@pos/platform/ui';
 import { api, formatUah } from '@pos/platform';
 import type { FlowerAnalytics } from '@pos/platform';
 // Shared with the «Сьогодні» panels, so a reason or a percentage cannot be
@@ -35,6 +35,12 @@ const RANGES = [
   { days: 30, label: 'Місяць' },
   { days: 90, label: 'Квартал' },
 ];
+
+const RANGE_OPTIONS = RANGES.map((range) => ({
+  value: String(range.days),
+  label: range.label,
+  testId: `range-${range.days}`,
+}));
 
 export default function FlowerAnalyticsPage() {
   const [days, setDays] = useState(30);
@@ -73,35 +79,20 @@ export default function FlowerAnalyticsPage() {
   );
 
   return (
-    <div className="p-4 md:p-6 space-y-6" data-testid="flower-analytics">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-sq-text flex items-center gap-2">
-            <Flower2 size={22} className="text-sq-blue" />
-            Квіти
-          </h1>
-          <p className="text-sm text-sq-muted mt-0.5">
-            Що завʼяло, що справді йде і чи заробила робота флориста.
-          </p>
-        </div>
-        <div className="flex gap-1.5" role="group" aria-label="Період">
-          {RANGES.map((range) => (
-            <button
-              key={range.days}
-              type="button"
-              onClick={() => setDays(range.days)}
-              className={`min-h-10 px-3 rounded-sq text-sm font-semibold ${
-                days === range.days
-                  ? 'bg-sq-blue text-white'
-                  : 'bg-sq-bg text-sq-secondary hover:text-sq-text'
-              }`}
-              data-testid={`range-${range.days}`}
-            >
-              {range.label}
-            </button>
-          ))}
-        </div>
-      </header>
+    <div className="space-y-7 animate-fade-up max-w-4xl text-sq-text" data-testid="flower-analytics">
+      <PageHeader
+        glyph={Flower2}
+        title="Квіти"
+        subtitle="Що завʼяло, що справді йде і чи заробила робота флориста."
+        actions={
+          <Segmented
+            value={String(days)}
+            options={RANGE_OPTIONS}
+            onChange={(next) => setDays(Number(next))}
+            ariaLabel="Період"
+          />
+        }
+      />
 
       {loading && <p className="text-sm text-sq-muted">Рахуємо…</p>}
       {error && (
@@ -113,156 +104,156 @@ export default function FlowerAnalyticsPage() {
       {data && !loading && !error && (
         <>
           {/* ── Що в смітнику ─────────────────────────────────────────── */}
-          <section className="bg-white rounded-sq border border-sq-divider p-4">
-            <h2 className="font-semibold text-sq-text flex items-center gap-2">
-              <Trash2 size={18} className="text-sq-secondary" />У смітнику
-            </h2>
+          <section>
+            <SectionHead title="У смітнику" />
 
-            <p className="mt-2 text-2xl font-semibold text-sq-text" data-testid="loss-total">
+            <p
+              className="mt-3 text-[26px] font-bold text-sq-heading tabular-nums leading-tight"
+              data-testid="loss-total"
+            >
               {formatUah(data.loss.total_cost_cents)}
             </p>
-            <p className="text-xs text-sq-muted">за собівартістю, {data.from} — {data.to}</p>
+            <p className="mt-0.5 text-[13px] text-sq-muted tabular-nums">
+              за собівартістю, {data.from} — {data.to}
+            </p>
 
             {data.loss.by_reason.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2">
+              <ul className="mt-2">
                 {data.loss.by_reason.map((row) => (
-                  <span
-                    key={row.reason}
-                    className="text-xs px-2 py-1 rounded-[3px] bg-sq-bg text-sq-secondary"
-                  >
-                    {REASON_LABEL[row.reason]}: {formatUah(row.cost_cents)} ({row.quantity})
-                  </span>
+                  <li key={row.reason} className="sq-row min-h-11 py-1.5 flex items-center gap-3">
+                    <span className="flex-1 min-w-0 text-[15px] text-sq-text">
+                      {REASON_LABEL[row.reason]}
+                    </span>
+                    <span className="text-sm text-sq-muted tabular-nums">({row.quantity})</span>
+                    <span className="w-28 text-right text-[15px] font-semibold text-sq-text tabular-nums">
+                      {formatUah(row.cost_cents)}
+                    </span>
+                  </li>
                 ))}
-              </div>
+              </ul>
             )}
 
             {/* One line worth drawing: a spike says a delivery sat too long. */}
-            <div className="mt-4 flex items-end gap-[2px] h-16" aria-hidden="true">
+            <div className="mt-5 flex items-end gap-1 h-20" aria-hidden="true">
               {data.daily_loss.map((day) => (
                 <div
                   key={day.date}
                   title={`${day.date}: ${formatUah(day.cost_cents)}`}
-                  className="flex-1 bg-sq-blue/20 rounded-t-[2px] min-h-[2px]"
+                  className="flex-1 bg-sq-blue rounded-t-[4px] min-h-[2px]"
                   style={{ height: `${Math.round((day.cost_cents / peakLoss) * 100)}%` }}
                 />
               ))}
             </div>
 
             {data.loss.top_variants.length === 0 ? (
-              <p className="mt-4 text-sm text-sq-muted">За цей період нічого не списували.</p>
+              <p className="mt-4 text-[15px] text-sq-secondary">За цей період нічого не списували.</p>
             ) : (
-              <table className="mt-4 w-full text-sm">
-                <thead className="text-xs text-sq-muted">
-                  <tr className="text-left">
-                    <th className="font-normal pb-1">Позиція</th>
-                    <th className="font-normal pb-1 text-right">Списано</th>
-                    <th className="font-normal pb-1 text-right">Прийшло</th>
-                    <th className="font-normal pb-1 text-right">Частка</th>
-                    <th className="font-normal pb-1 text-right">Собівартість</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.loss.top_variants.map((row) => (
-                    <tr key={row.variant_id} className="border-t border-sq-divider">
-                      <td className="py-1.5">
-                        {row.product_name}
-                        {row.label && <span className="text-sq-muted"> · {row.label}</span>}
-                      </td>
-                      <td className="py-1.5 text-right tabular-nums">
-                        {row.written_off} {row.unit}
-                      </td>
-                      <td className="py-1.5 text-right tabular-nums text-sq-muted">
-                        {row.received || '—'}
-                      </td>
-                      <td
-                        className={`py-1.5 text-right tabular-nums font-semibold ${
-                          (row.waste_bps ?? 0) >= 2000 ? 'text-red-600' : 'text-sq-text'
-                        }`}
-                      >
-                        {pct(row.waste_bps)}
-                      </td>
-                      <td className="py-1.5 text-right tabular-nums">
-                        {formatUah(row.cost_cents)}
-                      </td>
+              <div className="mt-5 overflow-x-auto">
+                <table className="sq-table">
+                  <thead>
+                    <tr>
+                      <th>Позиція</th>
+                      <th className="text-right">Списано</th>
+                      <th className="text-right">Прийшло</th>
+                      <th className="text-right">Частка</th>
+                      <th className="text-right">Собівартість</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {data.loss.top_variants.map((row) => (
+                      <tr key={row.variant_id}>
+                        <td>
+                          {row.product_name}
+                          {row.label && <span className="text-sq-muted"> · {row.label}</span>}
+                        </td>
+                        <td className="text-right tabular-nums">
+                          {row.written_off} {row.unit}
+                        </td>
+                        <td className="text-right tabular-nums text-sq-muted">
+                          {row.received || '—'}
+                        </td>
+                        <td
+                          className={`text-right tabular-nums font-semibold ${
+                            (row.waste_bps ?? 0) >= 2000 ? 'text-sq-danger' : 'text-sq-text'
+                          }`}
+                        >
+                          {pct(row.waste_bps)}
+                        </td>
+                        <td className="text-right tabular-nums">{formatUah(row.cost_cents)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
-            <p className="mt-2 text-xs text-sq-muted">
+            <p className="mt-3 text-[13px] text-sq-muted leading-relaxed">
               «Частка» — списано проти того, що прийшло за цей самий період. Магазин не веде
               партій, тож це орієнтир для закупівлі, а не вік конкретного стебла.
             </p>
           </section>
 
           {/* ── Топ стебел ────────────────────────────────────────────── */}
-          <section className="bg-white rounded-sq border border-sq-divider p-4">
-            <h2 className="font-semibold text-sq-text flex items-center gap-2">
-              <Scissors size={18} className="text-sq-secondary" />
-              Що справді йде
-            </h2>
-            <p className="mt-1 text-xs text-sq-muted">
+          <section>
+            <SectionHead title="Що справді йде" />
+            <p className="mt-2 text-[13px] text-sq-muted leading-relaxed">
               Разом із тим, що пішло всередині букетів — цього не видно у звичайному топі
               товарів, бо там рахуються картки букетів, а не стебла.
             </p>
 
             {data.stems.length === 0 ? (
-              <p className="mt-4 text-sm text-sq-muted">За цей період нічого не продали.</p>
+              <p className="mt-4 text-[15px] text-sq-secondary">За цей період нічого не продали.</p>
             ) : (
-              <table className="mt-3 w-full text-sm" data-testid="stem-table">
-                <thead className="text-xs text-sq-muted">
-                  <tr className="text-left">
-                    <th className="font-normal pb-1">Позиція</th>
-                    <th className="font-normal pb-1 text-right">Поштучно</th>
-                    <th className="font-normal pb-1 text-right">У букетах</th>
-                    <th className="font-normal pb-1 text-right">Разом</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.stems.map((row) => (
-                    <tr key={row.variant_id} className="border-t border-sq-divider">
-                      <td className="py-1.5">
-                        {row.product_name}
-                        {row.label && <span className="text-sq-muted"> · {row.label}</span>}
-                      </td>
-                      <td className="py-1.5 text-right tabular-nums text-sq-muted">{row.loose}</td>
-                      <td className="py-1.5 text-right tabular-nums text-sq-muted">
-                        {row.in_bouquets}
-                      </td>
-                      <td className="py-1.5 text-right tabular-nums font-semibold">
-                        {row.total} {row.unit}
-                      </td>
+              <div className="mt-3 overflow-x-auto">
+                <table className="sq-table" data-testid="stem-table">
+                  <thead>
+                    <tr>
+                      <th>Позиція</th>
+                      <th className="text-right">Поштучно</th>
+                      <th className="text-right">У букетах</th>
+                      <th className="text-right">Разом</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {data.stems.map((row) => (
+                      <tr key={row.variant_id}>
+                        <td>
+                          {row.product_name}
+                          {row.label && <span className="text-sq-muted"> · {row.label}</span>}
+                        </td>
+                        <td className="text-right tabular-nums text-sq-muted">{row.loose}</td>
+                        <td className="text-right tabular-nums text-sq-muted">{row.in_bouquets}</td>
+                        <td className="text-right tabular-nums font-semibold text-sq-heading">
+                          {row.total} {row.unit}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </section>
 
           {/* ── Реалізована націнка ───────────────────────────────────── */}
-          <section className="bg-white rounded-sq border border-sq-divider p-4">
-            <h2 className="font-semibold text-sq-text flex items-center gap-2">
-              <TrendingUp size={18} className="text-sq-secondary" />
-              Реалізована націнка
-            </h2>
+          <section>
+            <SectionHead title="Реалізована націнка" />
 
-            <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3.5">
               <Stat label="Виторг" value={formatUah(data.margin.total_revenue_cents)} />
               <Stat label="Собівартість" value={formatUah(data.margin.total_cost_cents)} />
               <Stat label="Заробіток" value={formatUah(data.margin.total_margin_cents)} strong />
             </div>
 
             {bouquets && (
-              <p className="mt-4 text-sm text-sq-text" data-testid="bouquet-markup">
+              <p className="mt-4 text-[15px] text-sq-text" data-testid="bouquet-markup">
                 На букетах — <strong>{pct(bouquets.markup_bps)}</strong> націнки на собівартість
                 стебел, {bouquets.lines}{' '}
                 {bouquets.lines === 1 ? 'рядок' : bouquets.lines < 5 ? 'рядки' : 'рядків'}.
               </p>
             )}
-            <p className="mt-1 text-xs text-sq-muted">
-              Магазин просить <strong>{pct(data.margin.labour_bps)}</strong> за збирання поверх
-              роздрібної ціни стебел. Цифра вище — те, що лишилося після знижок, і рахується вона
-              від собівартості, тож більша за неї.
+            <p className="mt-2 text-[13px] text-sq-muted leading-relaxed">
+              Магазин просить <strong className="text-sq-secondary">{pct(data.margin.labour_bps)}</strong>{' '}
+              за збирання поверх роздрібної ціни стебел. Цифра вище — те, що лишилося після знижок,
+              і рахується вона від собівартості, тож більша за неї.
             </p>
           </section>
         </>

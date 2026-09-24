@@ -6,13 +6,12 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '@pos/platform';
 import type { ModifierGroup, Product } from '@pos/platform';
+import { Layers, PageHeader, Plus, SectionHead } from '@pos/platform/ui';
 import { ModifierEditor } from '../components/ModifierEditor';
 import { errorText } from '../components/modifierInput';
 import { componentOptions } from '../components/componentOptions';
 
-const fieldClass =
-  'w-full rounded-sq border border-sq-divider bg-sq-surface px-3 py-2.5 text-sm ' +
-  'text-sq-text placeholder:text-sq-muted focus:outline-none focus:border-sq-blue';
+const captionClass = 'text-[13px] font-semibold text-sq-secondary';
 
 function rangeText(group: ModifierGroup): string {
   if (group.min_select >= 1 && group.max_select === 1) return 'обовʼязково · одна відповідь';
@@ -117,97 +116,115 @@ export function ModifiersPage() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-up text-sq-text">
-      <div>
-        <h2 className="text-2xl font-semibold">Модифікатори</h2>
-        <p className="text-sq-secondary mt-1 text-sm">
-          Питання, які каса ставить про товар, і відповіді на них. Ціна відповіді додається
-          до ціни картки; відповідь може списувати інгредієнт. Які товари що питають —
-          у <Link to="/admin/products" className="text-sq-blue">картці товару</Link>.
-        </p>
-      </div>
+    <div className="animate-fade-up text-sq-text max-w-5xl">
+      <PageHeader
+        glyph={Layers}
+        title="Модифікатори"
+        subtitle={
+          <>
+            Питання, які каса ставить про товар, і відповіді на них. Ціна відповіді додається
+            до ціни картки; відповідь може списувати інгредієнт. Які товари що питають —
+            у{' '}
+            <Link to="/admin/products" className="text-sq-blue font-semibold">
+              картці товару
+            </Link>
+            .
+          </>
+        }
+      />
 
-      {error && (
-        <div className="rounded-sq bg-red-50 text-red-700 px-3 py-2 text-sm" data-testid="modifiers-error">
-          {error}
-        </div>
-      )}
+      <div className="space-y-6">
+        {error && (
+          <div className="rounded-sq bg-red-50 text-red-700 px-4 py-3 text-sm" data-testid="modifiers-error">
+            {error}
+          </div>
+        )}
 
-      <form
-        onSubmit={onCreate}
-        className="bg-sq-surface border border-sq-divider rounded-sq p-5 grid sm:grid-cols-[1fr_110px_110px_auto] gap-3 items-end shadow-sm"
-      >
-        <label className="text-xs text-sq-secondary">
-          Питання
-          <input
-            className={fieldClass}
-            placeholder="Молоко"
-            value={draft.name}
-            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-            required
-            data-testid="group-form-name"
-          />
-        </label>
-        <label className="text-xs text-sq-secondary">
-          Щонайменше
-          <input
-            className={fieldClass}
-            type="number"
-            min={0}
-            max={50}
-            value={draft.min}
-            onChange={(e) => setDraft({ ...draft, min: e.target.value })}
-            data-testid="group-form-min"
-          />
-        </label>
-        <label className="text-xs text-sq-secondary">
-          Щонайбільше
-          <input
-            className={fieldClass}
-            type="number"
-            min={1}
-            max={50}
-            value={draft.max}
-            onChange={(e) => setDraft({ ...draft, max: e.target.value })}
-            data-testid="group-form-max"
-          />
-        </label>
-        <button type="submit" className="sq-btn-primary px-4 py-2.5" data-testid="group-form-submit">
-          Додати групу
-        </button>
-        <p className="sm:col-span-4 text-[11px] text-sq-secondary">
-          «Щонайменше 1» робить питання обовʼязковим — тоді одну відповідь позначте «за
-          умовчанням», щоб «як завжди» лишалось одним тапом. «Щонайбільше» — скільки
-          відповідей можна обрати разом.
-        </p>
-      </form>
+        <form
+          onSubmit={onCreate}
+          className="rounded-card bg-sq-surface shadow-card p-5 grid sm:grid-cols-[1fr_120px_120px_auto] gap-3 items-end"
+        >
+          <label className="flex flex-col gap-1.5">
+            <span className={captionClass}>Питання</span>
+            <input
+              className="sq-input"
+              placeholder="Молоко"
+              value={draft.name}
+              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+              required
+              data-testid="group-form-name"
+            />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className={captionClass}>Щонайменше</span>
+            <input
+              className="sq-input tabular-nums"
+              type="number"
+              min={0}
+              max={50}
+              value={draft.min}
+              onChange={(e) => setDraft({ ...draft, min: e.target.value })}
+              data-testid="group-form-min"
+            />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className={captionClass}>Щонайбільше</span>
+            <input
+              className="sq-input tabular-nums"
+              type="number"
+              min={1}
+              max={50}
+              value={draft.max}
+              onChange={(e) => setDraft({ ...draft, max: e.target.value })}
+              data-testid="group-form-max"
+            />
+          </label>
+          <button
+            type="submit"
+            className="pos-btn-primary min-h-11 px-4 rounded-sq text-[15px] gap-1.5"
+            data-testid="group-form-submit"
+          >
+            <Plus size={20} />
+            Додати групу
+          </button>
+          <p className="sm:col-span-4 text-[13px] text-sq-muted leading-relaxed">
+            «Щонайменше 1» робить питання обовʼязковим — тоді одну відповідь позначте «за
+            умовчанням», щоб «як завжди» лишалось одним тапом. «Щонайбільше» — скільки
+            відповідей можна обрати разом.
+          </p>
+        </form>
 
-      {groups.length === 0 && (
-        <p className="text-sm text-sq-muted">Поки жодного питання.</p>
-      )}
+        {groups.length === 0 && (
+          <div className="py-10 flex flex-col items-center gap-3 text-center">
+            <Layers size={48} />
+            <p className="text-[15px] text-sq-secondary">Поки жодного питання.</p>
+          </div>
+        )}
 
-      <div className="space-y-4">
         {groups.map((group) => (
           <section
             key={group.id}
-            className="bg-sq-surface border border-sq-divider rounded-sq p-5 space-y-4 shadow-sm"
+            className="rounded-card bg-sq-surface shadow-card p-5 space-y-3"
             data-testid={`group-card-${group.id}`}
           >
             {editing?.id === group.id ? (
-              <form onSubmit={onSaveEdit} className="grid sm:grid-cols-[1fr_110px_110px_auto_auto] gap-3 items-end">
-                <label className="text-xs text-sq-secondary">
-                  Питання
+              <form
+                onSubmit={onSaveEdit}
+                className="grid sm:grid-cols-[1fr_120px_120px_auto_auto] gap-3 items-end pb-3 shadow-[0_1px_0_rgb(var(--sq-divider-rgb))]"
+              >
+                <label className="flex flex-col gap-1.5">
+                  <span className={captionClass}>Питання</span>
                   <input
-                    className={fieldClass}
+                    className="sq-input"
                     value={editing.draft.name}
                     onChange={(e) => setEditing({ ...editing, draft: { ...editing.draft, name: e.target.value } })}
                     required
                   />
                 </label>
-                <label className="text-xs text-sq-secondary">
-                  Щонайменше
+                <label className="flex flex-col gap-1.5">
+                  <span className={captionClass}>Щонайменше</span>
                   <input
-                    className={fieldClass}
+                    className="sq-input tabular-nums"
                     type="number"
                     min={0}
                     max={50}
@@ -215,10 +232,10 @@ export function ModifiersPage() {
                     onChange={(e) => setEditing({ ...editing, draft: { ...editing.draft, min: e.target.value } })}
                   />
                 </label>
-                <label className="text-xs text-sq-secondary">
-                  Щонайбільше
+                <label className="flex flex-col gap-1.5">
+                  <span className={captionClass}>Щонайбільше</span>
                   <input
-                    className={fieldClass}
+                    className="sq-input tabular-nums"
                     type="number"
                     min={1}
                     max={50}
@@ -226,54 +243,69 @@ export function ModifiersPage() {
                     onChange={(e) => setEditing({ ...editing, draft: { ...editing.draft, max: e.target.value } })}
                   />
                 </label>
-                <button type="submit" className="sq-btn-primary px-3 py-2">
+                <button type="submit" className="pos-btn-primary min-h-11 px-4 rounded-sq text-[15px]">
                   Зберегти
                 </button>
-                <button type="button" className="text-sm text-sq-secondary" onClick={() => setEditing(null)}>
+                <button
+                  type="button"
+                  className="min-h-11 px-1 text-[15px] font-semibold text-sq-secondary"
+                  onClick={() => setEditing(null)}
+                >
                   Скасувати
                 </button>
               </form>
             ) : (
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <h3 className="text-lg font-semibold text-sq-text">{group.name}</h3>
-                <span className="text-sm text-sq-secondary">{rangeText(group)}</span>
-                {!group.is_active && <span className="text-xs text-sq-muted">вимкнено</span>}
-                <span className="ml-auto flex gap-3 text-sm">
-                  <label className="inline-flex items-center gap-1.5 text-sq-text">
-                    <input
-                      type="checkbox"
-                      checked={group.is_active}
-                      onChange={() => void toggleActive(group)}
-                      data-testid={`group-active-${group.id}`}
-                    />
-                    активна
-                  </label>
-                  <button
-                    type="button"
-                    className="text-sq-blue"
-                    onClick={() =>
-                      setEditing({
-                        id: group.id,
-                        draft: {
-                          name: group.name,
-                          min: String(group.min_select),
-                          max: String(group.max_select),
-                        },
-                      })
-                    }
-                  >
-                    Змінити
-                  </button>
-                  <button
-                    type="button"
-                    className="text-red-600"
-                    onClick={() => void remove(group)}
-                    data-testid={`group-delete-${group.id}`}
-                  >
-                    Видалити
-                  </button>
-                </span>
-              </div>
+              <SectionHead
+                title={
+                  <>
+                    {group.name}
+                    <span className="text-[13px] font-normal text-sq-muted">{rangeText(group)}</span>
+                    {!group.is_active && (
+                      <span className="self-center h-[22px] px-2 rounded-md ring-1 ring-inset ring-sq-divider text-xs font-medium text-sq-secondary inline-flex items-center">
+                        вимкнено
+                      </span>
+                    )}
+                  </>
+                }
+                action={
+                  <span className="flex items-center gap-1">
+                    <label className="inline-flex items-center gap-2 min-h-9 px-2 font-medium text-sq-text cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 accent-[rgb(var(--sq-blue-rgb))]"
+                        checked={group.is_active}
+                        onChange={() => void toggleActive(group)}
+                        data-testid={`group-active-${group.id}`}
+                      />
+                      активна
+                    </label>
+                    <button
+                      type="button"
+                      className="min-h-9 px-2 rounded-lg text-sq-blue hover:bg-sq-sidebar"
+                      onClick={() =>
+                        setEditing({
+                          id: group.id,
+                          draft: {
+                            name: group.name,
+                            min: String(group.min_select),
+                            max: String(group.max_select),
+                          },
+                        })
+                      }
+                    >
+                      Змінити
+                    </button>
+                    <button
+                      type="button"
+                      className="min-h-9 px-2 rounded-lg text-red-600 hover:bg-red-50"
+                      onClick={() => void remove(group)}
+                      data-testid={`group-delete-${group.id}`}
+                    >
+                      Видалити
+                    </button>
+                  </span>
+                }
+              />
             )}
 
             <ModifierEditor

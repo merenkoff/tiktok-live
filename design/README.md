@@ -33,14 +33,23 @@ never downloaded. Prices use `tabular-nums` of the same font; there is no separa
 Hand-drawn in Things' style, not copied from it: one hue per icon, a heavy rounded 2 px line, a light fill of the same
 hue inside.
 
-- `color/` — 24 px grid, own colours (`data-hue` names the hue). Navigation, section marks, feature cards.
+- `color/` — 24 px grid, own colours (`data-hue` names the hue). Navigation, section marks, feature cards,
+  empty states (48 px). Never smaller than 24 — where a small icon is needed, it is a UI glyph.
 - `ui/` — 20 px grid, `currentColor`. Buttons and actions.
+- `ui16/` — a second, separate 16 px drawing of a UI glyph the till shows at 16 or smaller (a cart line's tag, a
+  phone number, a drag handle). The component picks it by itself at `size ≤ 16`, the way SF Symbols ships more
+  than one size; the 20 px drawing scaled down would put its edges between pixels.
 - Names follow lucide's (`Package`, `ShieldCheck`, …) because the POS stores nav icons by name in
-  `pos_stores.nav_overrides` and `module_remotes`.
+  `pos_stores.nav_overrides` and `module_remotes`. A name drawn both ways takes a suffix on the side that came
+  second: the colour magnifier is `SearchColor` because `Search` is the UI one; a UI tag is `TagLine` because
+  `Tag` is the colour one. The POS nav registry (`pos/src/platform/icons.ts`, `NAV_ICONS`) maps the stored key to
+  whichever colour glyph draws it.
+- Sizes in use: colour 24 / 48, UI 16 / 20 / 40.
 
-`node scripts/gen-icons.mjs` writes the React components (`site/src/components/glyphs.tsx`; the POS target comes with
-its phase). `--check` (CI) fails on a `<rect>` off whole pixels, a path or circle off the quarter-pixel grid, a
-fractional stroke width, or a stale generated file. Render a glyph at its grid size or twice it.
+`node scripts/gen-icons.mjs` writes the React components into both apps (`site/src/components/glyphs.tsx`,
+`pos/src/platform/glyphs.tsx`, re-exported by `@pos/platform/ui`). Every glyph carries `data-glyph="<Name>"` for
+tests. `--check` (CI, site and POS) fails on a `<rect>` off whole pixels, a path or circle off the quarter-pixel
+grid, a fractional stroke width, a 16 px drawing without its 20 px glyph, or a stale generated file.
 
 ## App icon — `design/app-icon/app-icon.svg`
 

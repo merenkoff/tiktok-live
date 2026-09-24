@@ -3,14 +3,19 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { describe, expect, it } from 'vitest';
-import { Gift, Package } from 'lucide-react';
+import { Gift, Package, SearchColor } from './glyphs';
 import { FALLBACK_NAV_ICON, NAV_ICONS, isNavIconName, resolveNavIcon } from './icons';
 import { MODULES } from '../modules/registry';
 
 describe('resolveNavIcon', () => {
-  it('maps a known lucide name to its component', () => {
+  it('maps a known name to its colour glyph', () => {
     expect(resolveNavIcon('Package')).toBe(Package);
     expect(resolveNavIcon('Gift')).toBe(Gift);
+  });
+
+  it('maps a name a UI glyph owns to the colour one behind the key', () => {
+    // Stored settings say 'Search'; the nav draws the colour magnifier.
+    expect(resolveNavIcon('Search')).toBe(SearchColor);
   });
 
   it('falls back for a name this build does not ship — never a blank nav entry', () => {

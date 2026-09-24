@@ -17,7 +17,7 @@
  */
 
 import { useState } from 'react';
-import { Inbox, RotateCcw, X } from 'lucide-react';
+import { Inbox, RotateCcw, ShoppingBag, X } from '../../platform/glyphs';
 import { formatUah } from '../../lib/money';
 import type { ParkedCart } from '../../types';
 
@@ -55,61 +55,66 @@ export function ParkedCartsSheet({
   const [confirming, setConfirming] = useState<number | null>(null);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 grid place-items-end md:place-items-center p-4">
+    <div className="fixed inset-0 z-50 bg-[rgba(28,32,38,.32)] grid place-items-end md:place-items-center p-4">
       <div
-        className="bg-white rounded-sq w-full max-w-md overflow-hidden animate-fade-up shadow-lg flex flex-col max-h-[85vh]"
+        role="dialog"
+        aria-label="Відкладені кошики"
+        className="bg-white rounded-card w-full max-w-md overflow-hidden animate-fade-up shadow-[0_24px_60px_rgba(0,20,60,.28)] flex flex-col max-h-[85vh]"
         data-testid="parked-carts-sheet"
       >
-        <div className="px-4 py-3.5 border-b border-sq-divider flex items-center justify-between gap-3">
-          <h3 className="font-semibold text-sq-text">Відкладені кошики</h3>
+        <div className="pl-5 pr-3 pt-4 pb-2 flex items-center justify-between gap-3 shrink-0">
+          <h3 className="text-[19px] font-bold text-sq-heading">Відкладені кошики</h3>
           <button
             type="button"
             onClick={onClose}
-            className="min-h-11 min-w-11 grid place-items-center text-sq-secondary"
+            className="w-10 h-10 grid place-items-center rounded-full text-sq-secondary hover:bg-sq-empty shrink-0"
             aria-label="Закрити"
           >
             <X size={20} />
           </button>
         </div>
 
-        <div className="overflow-y-auto p-3 space-y-2">
-          {loading && <p className="p-3 text-sm text-sq-muted">Завантаження…</p>}
+        <div className="overflow-y-auto px-5 pb-3">
+          {loading && <p className="py-3 text-sm text-sq-muted">Завантаження…</p>}
 
           {error && (
-            <p className="p-3 text-sm text-red-600" data-testid="parked-error">
+            <p className="py-3 text-sm text-red-600" data-testid="parked-error">
               {error}
             </p>
           )}
 
           {!loading && !error && carts.length === 0 && (
-            <p className="p-6 text-center text-sm text-sq-muted">
-              Нічого не відкладено. Кошик, відкладений на будь-якій касі, зʼявиться тут.
-            </p>
+            <div className="py-10 flex flex-col items-center gap-3 text-center">
+              <ShoppingBag size={48} />
+              <p className="text-[15px] text-sq-secondary">
+                Нічого не відкладено. Кошик, відкладений на будь-якій касі, зʼявиться тут.
+              </p>
+            </div>
           )}
 
           {carts.map((cart) => (
             <div
               key={cart.id}
-              className="rounded-sq border border-sq-divider p-3"
+              className="sq-row last:shadow-none py-3.5"
               data-testid="parked-cart-row"
             >
               <div className="flex items-baseline justify-between gap-3">
-                <span className="font-semibold text-sq-text truncate">{cart.label}</span>
-                <span className="text-sm font-semibold text-sq-text shrink-0">
+                <span className="text-[17px] font-semibold text-sq-heading truncate">{cart.label}</span>
+                <span className="text-[17px] font-semibold text-sq-heading tabular-nums shrink-0">
                   {formatUah(cart.total_cents)}
                 </span>
               </div>
-              <p className="mt-0.5 text-xs text-sq-muted">
+              <p className="mt-0.5 text-[13px] text-sq-muted">
                 {cart.staff_name ?? '—'} · {cart.items.length} поз. · {holdsFor(cart.expires_at)}
               </p>
-              {cart.note && <p className="mt-1 text-xs text-sq-secondary">{cart.note}</p>}
+              {cart.note && <p className="mt-1 text-sm text-sq-secondary">{cart.note}</p>}
 
               {confirming === cart.id ? (
-                <div className="mt-2.5 flex gap-2">
+                <div className="mt-3 flex gap-2">
                   <button
                     type="button"
                     onClick={() => setConfirming(null)}
-                    className="flex-1 min-h-11 rounded-sq bg-sq-bg text-sq-secondary text-sm font-semibold"
+                    className={quietClass + ' flex-1'}
                   >
                     Скасувати
                   </button>
@@ -119,32 +124,32 @@ export function ParkedCartsSheet({
                       setConfirming(null);
                       onRelease(cart);
                     }}
-                    className="flex-1 min-h-11 rounded-sq bg-red-50 text-red-600 text-sm font-semibold"
+                    className="flex-1 min-h-11 rounded-xl bg-red-50 text-red-600 text-[15px] font-semibold"
                     data-testid="parked-release-confirm"
                   >
                     Повернути товар
                   </button>
                 </div>
               ) : (
-                <div className="mt-2.5 flex gap-2">
+                <div className="mt-3 flex gap-2">
                   <button
                     type="button"
                     onClick={() => setConfirming(cart.id)}
                     disabled={busyId != null}
-                    className="min-h-11 px-3 rounded-sq bg-sq-bg text-sq-secondary text-sm font-semibold disabled:opacity-40 flex items-center gap-1.5"
+                    className={quietClass + ' px-3.5 inline-flex items-center gap-1.5'}
                     data-testid="parked-release"
                   >
-                    <RotateCcw size={16} />
+                    <RotateCcw size={20} />
                     Повернути
                   </button>
                   <button
                     type="button"
                     onClick={() => onPickUp(cart)}
                     disabled={busyId != null}
-                    className="pos-btn-primary flex-1 min-h-11 text-sm flex items-center justify-center gap-1.5 disabled:opacity-40"
+                    className="pos-btn-primary flex-1 min-h-11 rounded-xl text-[15px] gap-1.5"
                     data-testid="parked-pick-up"
                   >
-                    <Inbox size={16} />
+                    <Inbox size={20} />
                     {busyId === cart.id ? 'Забираємо…' : 'Забрати'}
                   </button>
                 </div>
@@ -156,3 +161,7 @@ export function ParkedCartsSheet({
     </div>
   );
 }
+
+/** The white button beside the primary one: a hairline ring, never a fill. */
+const quietClass =
+  'min-h-11 rounded-xl bg-white ring-1 ring-sq-divider text-[15px] font-semibold text-sq-text hover:bg-sq-sidebar disabled:opacity-40';

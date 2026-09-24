@@ -40,7 +40,7 @@ export function BudgetBar({
       <button
         type="button"
         onClick={onOpenBudget}
-        className="w-full min-h-11 rounded-sq border border-dashed border-sq-divider text-sm text-sq-secondary hover:text-sq-text hover:border-sq-blue"
+        className="w-full min-h-11 rounded-xl bg-sq-empty text-[15px] font-semibold text-sq-secondary hover:text-sq-text hover:bg-sq-selected"
         data-testid="bench-set-budget"
       >
         Поставити бюджет
@@ -49,32 +49,33 @@ export function BudgetBar({
   }
 
   return (
-    <div data-testid="bench-budget">
-      <div className="h-2.5 rounded-full bg-sq-bg overflow-hidden">
-        <div
-          className={`h-full rounded-full transition-[width] duration-150 ${
-            over ? 'bg-red-500' : 'bg-sq-blue'
-          }`}
-          style={{ width: `${Math.round(ratio * 100)}%` }}
-        />
-      </div>
-      <button
-        type="button"
-        onClick={onOpenBudget}
-        className="mt-1.5 w-full min-h-11 flex items-baseline justify-between gap-3 text-left"
-      >
-        <span className={`text-sm ${over ? 'text-red-600 font-medium' : 'text-sq-secondary'}`}>
+    <button
+      type="button"
+      onClick={onOpenBudget}
+      className="w-full flex flex-col gap-1.5 text-left min-h-11 justify-center"
+      data-testid="bench-budget"
+    >
+      <span className="w-full flex items-baseline justify-between gap-3 text-[13px]">
+        <span className={over ? 'text-sq-danger font-semibold' : 'text-sq-secondary'}>
           {over
             ? `Перебір на ${formatUah(-remainingCents)}`
             : nextStems != null && nextStems > 0
-              ? `Ще ≈${nextStems} ${plural(nextStems)}`
-              : 'У бюджеті'}
+              ? `Бюджет · ще ≈ ${nextStems} ${plural(nextStems)}`
+              : 'Бюджет · у межах'}
         </span>
-        <span className="text-sm text-sq-secondary tabular-nums shrink-0">
-          {formatUah(totalCents)} / {formatUah(budgetCents)}
+        <span className="font-semibold text-sq-text tabular-nums shrink-0">
+          {formatUah(totalCents)} з {formatUah(budgetCents)}
         </span>
-      </button>
-    </div>
+      </span>
+      <span className="block w-full h-2 rounded-full bg-sq-empty overflow-hidden">
+        <span
+          className={`block h-full rounded-full transition-[width] duration-150 ${
+            over ? 'bg-sq-danger' : 'bg-sq-success'
+          }`}
+          style={{ width: `${Math.round(ratio * 100)}%` }}
+        />
+      </span>
+    </button>
   );
 }
 

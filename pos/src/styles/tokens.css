@@ -27,6 +27,11 @@
   --sq-muted-rgb: 142 145 150;
   --sq-divider-rgb: 223 227 232;
   --sq-empty-rgb: 236 238 240;
+  /* Status hues from the glyph set: «Оплачено», change due, a free table. */
+  --sq-success-rgb: 67 174 89;
+  --sq-success-ink-rgb: 47 125 64;
+  --sq-danger-rgb: 244 56 106;
+  --sq-warning-rgb: 244 137 31;
 
   --pos-primary: rgb(var(--sq-blue-rgb));
   --pos-primary-press: rgb(var(--sq-blue-press-rgb));
@@ -301,17 +306,98 @@ textarea::placeholder {
   opacity: 1;
 }
 
-.pos-field,
-.sq-field {
+/* Things' field: a grey well without a border; focus lifts it to white with
+   the accent ring. `.sq-input` is the compact (44 px) one for admin forms,
+   `.pos-field` the touch-sized one (48 px) for the till. */
+/* Width sits at zero specificity, so a `w-24` / `max-w-*` utility on the
+   field wins wherever the sheets land: this file loads after the host's
+   utilities, and a module's own sheet is inserted before both. */
+:where(.pos-field, .sq-field, .sq-input) {
   width: 100%;
+}
+.pos-field,
+.sq-field,
+.sq-input {
   min-height: 3rem;
   padding: 0.75rem 1rem;
-  border: 1px solid var(--pos-divider);
+  border: 1px solid transparent;
   border-radius: var(--pos-radius);
-  background-color: var(--pos-surface);
+  background-color: rgb(var(--sq-empty-rgb));
   color: var(--pos-text);
   caret-color: var(--pos-text);
   font: inherit;
+  transition: background-color 120ms, box-shadow 120ms;
+}
+.sq-input {
+  min-height: 2.75rem;
+  padding: 0.5rem 0.875rem;
+  font-size: 15px;
+}
+.pos-field:focus,
+.sq-field:focus,
+.sq-input:focus {
+  outline: none;
+  background-color: var(--pos-surface);
+  box-shadow: 0 0 0 2px var(--pos-primary);
+}
+.pos-field:disabled,
+.sq-field:disabled,
+.sq-input:disabled {
+  opacity: 0.6;
+}
+
+/* The white button beside a primary one: a hairline ring, never a fill. */
+button.sq-btn-quiet,
+a.sq-btn-quiet {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0 1rem;
+  border-radius: var(--pos-radius);
+  background: var(--pos-surface);
+  box-shadow: 0 0 0 1px var(--pos-divider);
+  color: var(--pos-text);
+  font-weight: 600;
+  font-size: 15px;
+}
+button.sq-btn-quiet:hover:not(:disabled),
+a.sq-btn-quiet:hover {
+  background: var(--pos-sidebar);
+}
+button.sq-btn-quiet:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* A Things list row: no box, a hairline under it. */
+.sq-row {
+  box-shadow: 0 1px 0 #e6e8ec;
+}
+
+/* A table in the same voice: quiet 13/600 headings, hairline rows. */
+.sq-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+.sq-table th {
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pos-muted);
+  padding: 0.5rem 0.75rem 0.5rem 0;
+  box-shadow: 0 1px 0 var(--pos-divider);
+  white-space: nowrap;
+}
+.sq-table td {
+  padding: 0.625rem 0.75rem 0.625rem 0;
+  box-shadow: 0 1px 0 #e6e8ec;
+  vertical-align: middle;
+}
+.sq-table tbody tr:hover td {
+  background: rgb(var(--sq-sidebar-rgb) / 0.6);
 }
 
 .pos-field-underline,

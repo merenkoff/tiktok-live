@@ -16,7 +16,7 @@
  */
 
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
-import { Camera, Flower2, Search } from 'lucide-react';
+import { Camera, Flower2, Search } from '@pos/platform/ui';
 import {
   customBouquetLabel,
   formatUah,
@@ -111,16 +111,16 @@ function FlowersCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
         onScan={(code) => void handleBarcode(code)}
       />
 
-      <div className="px-3 pt-3 pb-2 space-y-2 border-b border-sq-divider shrink-0">
+      <div className="px-4 pt-3 pb-1 space-y-2 shrink-0">
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <Search
-              size={18}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-sq-muted pointer-events-none"
+              size={20}
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sq-muted pointer-events-none"
             />
             <input
-              className="pos-field text-sm !pl-10 !bg-sq-bg !border-sq-divider"
-              placeholder="Пошук"
+              className="pos-field text-[15px] !pl-11 !bg-sq-empty !border-transparent !rounded-xl"
+              placeholder="Пошук або скан штрихкоду"
               value={catalog.query}
               onChange={(e) => catalog.setQuery(e.target.value)}
             />
@@ -128,7 +128,7 @@ function FlowersCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
           <button
             type="button"
             onClick={() => setCameraOpen(true)}
-            className="min-h-12 min-w-12 grid place-items-center rounded-sq text-sq-blue border border-sq-divider bg-white"
+            className="min-h-12 min-w-12 grid place-items-center rounded-xl text-sq-blue bg-sq-empty hover:bg-sq-selected transition-colors"
             aria-label="Камера"
           >
             <Camera size={20} />
@@ -151,7 +151,7 @@ function FlowersCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
               className="min-h-12 px-3 flex items-center gap-2 rounded-sq text-white bg-sq-blue font-medium shrink-0"
               data-testid="start-bouquet"
             >
-              <Flower2 size={18} />
+              <Flower2 size={24} />
               <span className="hidden sm:inline">Зібрати букет</span>
             </button>
           )}
@@ -169,9 +169,9 @@ function FlowersCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
         )}
       </div>
 
-      <div ref={gridRef} className="flex-1 overflow-auto p-3 bg-white select-none">
+      <div ref={gridRef} className="flex-1 overflow-auto px-4 pt-2 pb-4 bg-white select-none">
         {catalog.loading && <p className="text-sm text-sq-muted">Завантаження…</p>}
-        <div className="grid grid-cols-3 sm:grid-cols-4 xl:grid-cols-5 gap-2">
+        <div className="grid grid-cols-3 sm:grid-cols-4 xl:grid-cols-5 gap-3">
           {catalog.folderTiles.map((folder) => (
             <TagFolderTile
               key={folder.id}

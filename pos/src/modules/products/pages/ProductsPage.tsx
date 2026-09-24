@@ -2,9 +2,19 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { DEFAULT_TAG_COLOR, api, assetUrl, formatUah, type TagColorKey, uahInputToCents, useAuthStore, useVertical } from '@pos/platform';
+import {
+  DEFAULT_TAG_COLOR,
+  api,
+  assetUrl,
+  formatUah,
+  resolveTagColorHex,
+  type TagColorKey,
+  uahInputToCents,
+  useAuthStore,
+  useVertical,
+} from '@pos/platform';
 import { PriceTagsDialog } from '../components/PriceTagsDialog';
 import type {
   ModifierGroup,
@@ -23,7 +33,18 @@ import { componentOptions } from '../components/componentOptions';
 import { listTechCards, type TechCardRow } from '../data/techCardsApi';
 import { foodCostPercent, missingReason } from '../data/techCards';
 import type { ComponentOption } from '../components/componentOptions';
-import { AttributeFields, ProductPhotoField, useDragScroll } from '@pos/platform/ui';
+import {
+  AttributeFields,
+  Inbox,
+  LayoutGrid,
+  Package,
+  PackageLine,
+  PageHeader,
+  Plus,
+  Printer,
+  ProductPhotoField,
+  useDragScroll,
+} from '@pos/platform/ui';
 import { TagColorSwatches } from '../components/TagColorSwatches';
 
 const MAX_TAG_DEPTH = 3;
@@ -75,8 +96,14 @@ function tagPathLabel(flatTags: PosTag[], tag: PosTag): string {
   return parts.join(' / ');
 }
 
-const fieldClass =
-  'rounded-sq border border-sq-divider bg-sq-bg px-3 py-2.5 text-sm text-sq-text w-full';
+/** A caption above a field — Things' 13/600, never inside the label's own text (the field would inherit it). */
+const captionClass = 'text-[13px] font-semibold text-sq-secondary';
+/** Native checkbox in the accent blue. */
+const checkboxClass = 'w-4 h-4 shrink-0 accent-[rgb(var(--sq-blue-rgb))]';
+/** On the grey tag panel a grey well would vanish, so the fields there are white. */
+const panelFieldClass = 'sq-input !bg-sq-surface';
+/** Things' quiet chip: 22 px, a small radius, a hue only where it means something. */
+const chipClass = 'h-[22px] px-2 rounded-md text-xs font-medium inline-flex items-center whitespace-nowrap';
 
 export function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -305,129 +332,143 @@ export function ProductsPage() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-up">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold">Товари</h2>
-          <p className="text-sm text-sq-secondary mt-1">Мітки, варіанти та залишки.</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            setShowCreate((v) => !v);
-            setEditId(null);
-          }}
-          className="sq-btn-primary px-4 py-2.5 text-sm"
-        >
-          {showCreate ? 'Сховати' : 'Додати товар'}
-        </button>
-      </div>
+    <div className="animate-fade-up text-sq-text">
+      <PageHeader
+        glyph={Package}
+        title="Товари"
+        subtitle="Мітки, варіанти та залишки."
+        actions={
+          <button
+            type="button"
+            onClick={() => {
+              setShowCreate((v) => !v);
+              setEditId(null);
+            }}
+            className={
+              showCreate ? 'sq-btn-quiet' : 'pos-btn-primary min-h-11 px-4 rounded-sq text-[15px] gap-1.5'
+            }
+          >
+            {showCreate ? (
+              'Сховати'
+            ) : (
+              <>
+                <Plus size={20} />
+                Додати товар
+              </>
+            )}
+          </button>
+        }
+      />
 
       {error && (
-        <div className="rounded-sq bg-red-50 text-red-700 px-3 py-2 text-sm">{error}</div>
+        <div className="mb-5 rounded-sq bg-red-50 text-red-700 px-4 py-3 text-sm">{error}</div>
       )}
 
-      <div className="grid lg:grid-cols-[260px_1fr] gap-4">
-        <section className="border border-sq-divider rounded-sq bg-sq-surface p-4 space-y-3 shadow-sm">
-          <p className="sq-section-label">Мітки</p>
-          <button
-            type="button"
-            onClick={() => setFilterTag('all')}
-            className={`w-full text-left px-3 py-2 rounded-[4px] text-sm font-medium ${
-              filterTag === 'all' ? 'sq-nav-active' : 'sq-nav-idle'
-            }`}
-          >
-            Усі товари
-          </button>
-          <button
-            type="button"
-            onClick={() => setFilterTag('needs_review')}
-            className={`w-full text-left px-3 py-2 rounded-[4px] text-sm font-medium ${
-              filterTag === 'needs_review' ? 'sq-nav-active' : 'sq-nav-idle'
-            }`}
-          >
-            З приходу — перевірте
-            {needsReviewCount > 0 ? ` (${needsReviewCount})` : ''}
-          </button>
-          {tags.map((root) => (
-            <TagTreeNode
-              key={root.id}
-              tag={root}
-              depth={1}
-              filterTag={filterTag}
-              savingTagId={savingTagId}
-              onFilter={setFilterTag}
-              onColor={(tag, color) => void patchTag(tag, { color })}
-              onCatalogBar={(tag, show_in_catalog_bar) =>
-                void patchTag(tag, { show_in_catalog_bar })
-              }
-              onStation={(tag, station) => void patchTag(tag, { station })}
-              // Only a café prints a kitchen ticket; a boutique's tags have no
-              // station to pick and no reason to see the control.
-              showStation={vertical.id === 'cafe'}
-              onCreateChild={createChildTag}
+      <div className="grid lg:grid-cols-[260px_1fr] gap-6 items-start">
+        {/* Drawn like the admin sidebar: a grey panel, 38 px rows, the
+            selection grey rather than blue. A tag's own settings open under
+            it when it is the one selected, so the column reads as a list of
+            tags and not as a wall of swatches. */}
+        <aside
+          aria-label="Мітки"
+          className="rounded-card bg-sq-sidebar p-2 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto"
+        >
+          <p className="px-2.5 pt-2 pb-1 text-xs font-semibold text-sq-muted">Мітки</p>
+          <div className="space-y-0.5">
+            <FilterRow
+              active={filterTag === 'all'}
+              onClick={() => setFilterTag('all')}
+              icon={<LayoutGrid size={20} className="text-sq-secondary" />}
+              label="Усі товари"
             />
-          ))}
+            <FilterRow
+              active={filterTag === 'needs_review'}
+              onClick={() => setFilterTag('needs_review')}
+              icon={<Inbox size={20} className="text-sq-secondary" />}
+              label="З приходу — перевірте"
+              count={needsReviewCount}
+            />
+            {tags.map((root) => (
+              <TagTreeNode
+                key={root.id}
+                tag={root}
+                depth={1}
+                filterTag={filterTag}
+                savingTagId={savingTagId}
+                onFilter={setFilterTag}
+                onColor={(tag, color) => void patchTag(tag, { color })}
+                onCatalogBar={(tag, show_in_catalog_bar) =>
+                  void patchTag(tag, { show_in_catalog_bar })
+                }
+                onStation={(tag, station) => void patchTag(tag, { station })}
+                // Only a café prints a kitchen ticket; a boutique's tags have no
+                // station to pick and no reason to see the control.
+                showStation={vertical.id === 'cafe'}
+                onCreateChild={createChildTag}
+              />
+            ))}
+          </div>
 
-          <form onSubmit={onCreateTag} className="pt-3 border-t border-sq-divider space-y-2">
-            <p className="text-xs font-semibold text-sq-secondary">Нова коренева група</p>
-            <input
-              className={fieldClass}
-              placeholder="Назва"
-              value={newTagName}
-              onChange={(e) => setNewTagName(e.target.value)}
-              required
-            />
-            <div className="space-y-1">
-              <p className="text-[11px] text-sq-secondary">Колір плитки</p>
+          <form onSubmit={onCreateTag} className="mt-3 mx-1 pt-4 pb-1 border-t border-sq-divider space-y-3">
+            <label className="flex flex-col gap-1.5">
+              <span className={captionClass}>Нова коренева група</span>
+              <input
+                className={panelFieldClass}
+                placeholder="Назва"
+                value={newTagName}
+                onChange={(e) => setNewTagName(e.target.value)}
+                required
+              />
+            </label>
+            <div className="space-y-2">
+              <p className="text-[13px] font-medium text-sq-secondary">Колір плитки</p>
               <TagColorSwatches value={newTagColor} onChange={setNewTagColor} size="sm" />
             </div>
-            <label className="flex items-start gap-2 text-sm text-sq-text cursor-pointer">
+            <label className="flex items-start gap-2.5 text-[15px] text-sq-text cursor-pointer">
               <input
                 type="checkbox"
-                className="mt-0.5"
+                className={`${checkboxClass} mt-1`}
                 checked={newTagCatalogBar}
                 onChange={(e) => setNewTagCatalogBar(e.target.checked)}
               />
               <span>
                 Показувати в рядку категорій
-                <span className="block text-[11px] text-sq-secondary">Рядок категорій на касі</span>
+                <span className="block text-[13px] text-sq-muted">Рядок категорій на касі</span>
               </span>
             </label>
-            <button type="submit" className="sq-btn-primary w-full py-2.5 text-sm">
+            <button type="submit" className="pos-btn-primary w-full min-h-11 rounded-sq text-[15px]">
               Додати групу
             </button>
           </form>
-        </section>
+        </aside>
 
-        <div className="space-y-4">
+        <div className="space-y-4 min-w-0">
           {selected.size > 0 && (
-            <div className="flex flex-wrap items-center gap-2 border border-sq-divider rounded-sq p-3 bg-sq-bg">
-              <span className="text-sm text-sq-secondary">Обрано: {selected.size}</span>
-              <select
-                className="rounded-sq border border-sq-divider px-3 py-2 text-sm"
-                value={bulkTagId}
-                onChange={(e) => setBulkTagId(e.target.value === '' ? '' : Number(e.target.value))}
-              >
-                <option value="">Мітка…</option>
-                {flatTags.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {tagPathLabel(flatTags, t)}
-                  </option>
-                ))}
-              </select>
+            <div className="flex flex-wrap items-center gap-2 rounded-xl bg-sq-sidebar px-3 py-2.5">
+              <span className="text-[15px] text-sq-secondary tabular-nums mr-1">Обрано: {selected.size}</span>
+              <div className="w-56 max-w-full">
+                <select
+                  className={panelFieldClass}
+                  value={bulkTagId}
+                  onChange={(e) => setBulkTagId(e.target.value === '' ? '' : Number(e.target.value))}
+                >
+                  <option value="">Мітка…</option>
+                  {flatTags.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {tagPathLabel(flatTags, t)}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <button
                 type="button"
                 onClick={() => void onBulkAssign()}
-                className="sq-btn-primary px-3 py-2 text-sm"
+                className="pos-btn-primary min-h-11 px-4 rounded-sq text-[15px]"
               >
                 Додати мітку
               </button>
-              <button
-                type="button"
-                onClick={() => setTagsOpen(true)}
-                className="rounded-sq border border-sq-divider bg-sq-surface px-3 py-2 text-sm"
-              >
+              <button type="button" onClick={() => setTagsOpen(true)} className="sq-btn-quiet">
+                <Printer size={20} />
                 Друк цінників
               </button>
             </div>
@@ -445,19 +486,22 @@ export function ProductsPage() {
           {showCreate && (
             <form
               onSubmit={onCreate}
-              className="border border-sq-divider rounded-sq p-4 grid sm:grid-cols-2 gap-3 bg-sq-surface shadow-sm"
+              className="rounded-card bg-sq-surface shadow-card p-5 grid sm:grid-cols-2 gap-x-4 gap-y-4"
             >
-              <p className="sm:col-span-2 text-sm font-semibold text-sq-text">Новий товар</p>
+              <h3 className="sm:col-span-2 text-[19px] font-bold text-sq-heading">Новий товар</h3>
               <ProductPhotoField value={imageUrl} onChange={setImageUrl} />
-              <input className={fieldClass} placeholder="Назва" value={name} onChange={(e) => setName(e.target.value)} required />
+              <label className="flex flex-col gap-1.5">
+                <span className={captionClass}>Назва</span>
+                <input className="sq-input" placeholder="Назва" value={name} onChange={(e) => setName(e.target.value)} required />
+              </label>
               {/* Directly under the name on purpose: this choice decides what the
                   rest of the form means (a derived composite has no opening
                   stock, a composite needs a composition). Below the fold it was
                   simply never found. */}
-              <label className="block space-y-1">
-                <span className="text-xs text-sq-secondary">Що це за товар</span>
+              <label className="flex flex-col gap-1.5">
+                <span className={captionClass}>Що це за товар</span>
                 <select
-                  className={fieldClass}
+                  className="sq-input"
                   value={composite}
                   onChange={(e) => setComposite(e.target.value as ProductShape)}
                 >
@@ -468,36 +512,38 @@ export function ProductsPage() {
                   ))}
                 </select>
               </label>
-              <label className="flex items-start gap-2 text-sm text-sq-text cursor-pointer sm:col-span-2">
-                <input
-                  type="checkbox"
-                  className="mt-0.5"
-                  checked={sellable}
-                  onChange={(e) => setSellable(e.target.checked)}
-                />
-                <span>
-                  Продається на касі
-                  <span className="block text-[11px] text-sq-secondary">
-                    Вимкніть для інгредієнта чи заготовки: склад і рецепти його бачать, екран
-                    продажу — ні
-                  </span>
-                </span>
-              </label>
+              <SellableField checked={sellable} onChange={setSellable} />
               <ModifierGroupChips groups={groups} value={groupIds} onChange={setGroupIds} />
               <AttributeFields
-                className="sm:col-span-2 grid gap-2 sm:grid-cols-2"
+                className="sm:col-span-2 grid gap-3 sm:grid-cols-2"
                 schema={vertical.attributes}
                 value={attributes}
                 onChange={setAttributes}
                 unit={{ value: unit, options: vertical.units, onChange: setUnit }}
               />
-              <input className={fieldClass} placeholder="Ціна, грн" value={price} onChange={(e) => setPrice(e.target.value)} />
+              <label className="flex flex-col gap-1.5">
+                <span className={captionClass}>Ціна, грн</span>
+                <input
+                  className="sq-input tabular-nums"
+                  placeholder="Ціна, грн"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                />
+              </label>
               {composite === 'derived' ? (
-                <p className="text-xs text-sq-secondary self-center">
+                <p className="text-[13px] text-sq-muted self-end pb-3">
                   Залишок рахується зі складників.
                 </p>
               ) : (
-                <input className={fieldClass} placeholder="Залишок" value={qty} onChange={(e) => setQty(e.target.value)} />
+                <label className="flex flex-col gap-1.5">
+                  <span className={captionClass}>Залишок</span>
+                  <input
+                    className="sq-input tabular-nums"
+                    placeholder="Залишок"
+                    value={qty}
+                    onChange={(e) => setQty(e.target.value)}
+                  />
+                </label>
               )}
               {composite && (
                 <div className="sm:col-span-2">
@@ -506,19 +552,19 @@ export function ProductsPage() {
                     options={partOptions}
                     onChange={setComponents}
                   />
-                  <p className="text-xs text-sq-secondary mt-1">
+                  <p className="text-[13px] text-sq-muted mt-1.5">
                     {compositionHint(composite)}
                   </p>
                 </div>
               )}
-              <label className="block space-y-1">
-                <span className="text-xs text-sq-secondary">Артикул (SKU) — ваш внутрішній код</span>
-                <input className={fieldClass} value={sku} onChange={(e) => setSku(e.target.value)} />
+              <label className="flex flex-col gap-1.5">
+                <span className={captionClass}>Артикул (SKU) — ваш внутрішній код</span>
+                <input className="sq-input" value={sku} onChange={(e) => setSku(e.target.value)} />
               </label>
-              <label className="block space-y-1">
-                <span className="text-xs text-sq-secondary">Штрихкод — те, що читає сканер</span>
+              <label className="flex flex-col gap-1.5">
+                <span className={captionClass}>Штрихкод — те, що читає сканер</span>
                 <div className="flex gap-2">
-                  <input className={fieldClass} value={barcode} onChange={(e) => setBarcode(e.target.value)} />
+                  <input className="sq-input tabular-nums min-w-0" value={barcode} onChange={(e) => setBarcode(e.target.value)} />
                   <GenerateBarcodeButton onGenerated={setBarcode} />
                 </div>
               </label>
@@ -529,7 +575,10 @@ export function ProductsPage() {
                 unit={unit}
                 onChange={setPack}
               />
-              <button type="submit" className="sq-btn-primary sm:col-span-2 py-2.5 text-sm">
+              <button
+                type="submit"
+                className="pos-btn-primary sm:col-span-2 sm:justify-self-end min-h-11 px-6 rounded-sq text-[15px]"
+              >
                 Зберегти
               </button>
             </form>
@@ -555,63 +604,57 @@ export function ProductsPage() {
                   onCloseAfterSave={() => setEditId(null)}
                 />
               ) : (
-                <section
-                  key={product.id}
-                  className="border border-sq-divider rounded-sq p-4 bg-sq-surface shadow-sm"
-                >
+                <section key={product.id} className="rounded-card bg-sq-surface shadow-card p-4">
                   <div className="flex items-start gap-3">
                     <input
                       type="checkbox"
-                      className="mt-1"
+                      aria-label={`Обрати «${product.name}»`}
+                      className={`${checkboxClass} mt-3`}
                       checked={selected.has(product.id)}
                       onChange={() => toggleSelect(product.id)}
                     />
+                    <div className="w-10 h-10 rounded-lg bg-sq-empty overflow-hidden shrink-0 grid place-items-center">
+                      {product.image_url ? (
+                        <img
+                          src={assetUrl(product.image_url) ?? undefined}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <PackageLine size={20} className="text-sq-muted" />
+                      )}
+                    </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-12 h-12 rounded-sq border border-sq-divider bg-sq-bg overflow-hidden shrink-0 grid place-items-center">
-                            {product.image_url ? (
-                              <img
-                                src={assetUrl(product.image_url) ?? undefined}
-                                alt=""
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <span className="text-[10px] text-sq-muted">фото</span>
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h3 className="font-semibold text-sq-text truncate">{product.name}</h3>
-                              {product.needs_review && (
-                                <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-[3px] bg-[#FFF4E5] text-[#B54708]">
-                                  Потребує перевірки
-                                </span>
-                              )}
-                              {product.kind === 'composite' && (
-                                <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-[3px] bg-[#EEF4FF] text-[#2B4ACB]">
-                                  {product.stock_mode === 'derived'
-                                    ? 'Складений · при продажу'
-                                    : 'Складений · збираємо'}
-                                </span>
-                              )}
-                              {product.sellable === false && (
-                                <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-[3px] bg-sq-bg text-sq-secondary">
-                                  Не на касі
-                                </span>
-                              )}
-                              {(product.modifier_group_ids?.length ?? 0) > 0 && (
-                                <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-[3px] bg-[#EEF4FF] text-[#2B4ACB]">
-                                  Модифікатори · {product.modifier_group_ids?.length}
-                                </span>
-                              )}
-                            </div>
-                          </div>
+                      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+                        <div className="min-w-0 min-h-10 flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <h3 className="text-base font-semibold text-sq-text truncate">{product.name}</h3>
+                          {product.needs_review && (
+                            <span className={`${chipClass} bg-amber-50 text-amber-800`}>
+                              Потребує перевірки
+                            </span>
+                          )}
+                          {product.kind === 'composite' && (
+                            <span className={`${chipClass} bg-sq-blue/10 text-sq-blue-press`}>
+                              {product.stock_mode === 'derived'
+                                ? 'Складений · при продажу'
+                                : 'Складений · збираємо'}
+                            </span>
+                          )}
+                          {product.sellable === false && (
+                            <span className={`${chipClass} ring-1 ring-inset ring-sq-divider text-sq-secondary`}>
+                              Не на касі
+                            </span>
+                          )}
+                          {(product.modifier_group_ids?.length ?? 0) > 0 && (
+                            <span className={`${chipClass} bg-sq-blue/10 text-sq-blue-press`}>
+                              Модифікатори · {product.modifier_group_ids?.length}
+                            </span>
+                          )}
                         </div>
-                        <div className="flex gap-3 text-sm font-semibold">
+                        <div className="flex items-center gap-1 text-[15px] font-semibold">
                           <button
                             type="button"
-                            className="text-sq-blue"
+                            className="min-h-9 px-2.5 rounded-lg text-sq-blue hover:bg-sq-sidebar"
                             onClick={() => {
                               setShowCreate(false);
                               setEditId(product.id);
@@ -621,26 +664,29 @@ export function ProductsPage() {
                           </button>
                           <button
                             type="button"
-                            className="text-red-600"
+                            className="min-h-9 px-2.5 rounded-lg text-red-600 hover:bg-red-50"
                             onClick={() => void onArchiveProduct(product)}
                           >
                             Архів
                           </button>
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-1.5 mt-2">
-                        {(product.tag_ids ?? []).map((tid) => {
-                          const tag = flatTags.find((t) => t.id === tid);
-                          return (
-                            <span
-                              key={tid}
-                              className="text-xs px-2 py-0.5 rounded-full bg-sq-bg text-sq-secondary border border-sq-divider"
-                            >
-                              {tag?.name ?? tid}
-                            </span>
-                          );
-                        })}
-                      </div>
+                      {(product.tag_ids?.length ?? 0) > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                          {(product.tag_ids ?? []).map((tid) => {
+                            const tag = flatTags.find((t) => t.id === tid);
+                            return (
+                              <span
+                                key={tid}
+                                className={`${chipClass} gap-1.5 ring-1 ring-inset ring-sq-divider text-sq-secondary`}
+                              >
+                                <TagDot color={tag?.color} />
+                                {tag?.name ?? tid}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
                       <VariantsTable
                         variants={product.variants.filter((v) => v.is_active)}
                         derived={product.kind === 'composite' && product.stock_mode === 'derived'}
@@ -651,12 +697,75 @@ export function ProductsPage() {
               )
             )}
             {visible.length === 0 && (
-              <p className="text-sm text-sq-secondary">Немає товарів у цьому фільтрі.</p>
+              <div className="py-12 flex flex-col items-center gap-3 text-center">
+                <Package size={48} />
+                <p className="text-[15px] text-sq-secondary">Немає товарів у цьому фільтрі.</p>
+              </div>
             )}
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+/** A tag's tile colour, as a dot — the same hue the till's folder tile wears. */
+function TagDot({ color, size = 'sm' }: { color: string | null | undefined; size?: 'sm' | 'md' }) {
+  return (
+    <span
+      aria-hidden
+      className={`${size === 'md' ? 'w-2.5 h-2.5' : 'w-2 h-2'} rounded-full shrink-0`}
+      style={{ backgroundColor: resolveTagColorHex(color) }}
+    />
+  );
+}
+
+/** One row of the tag panel that is not a tag: «Усі товари», «З приходу». */
+function FilterRow({
+  active,
+  onClick,
+  icon,
+  label,
+  count,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: ReactNode;
+  label: string;
+  count?: number;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full flex items-center gap-2.5 min-h-[38px] px-2.5 rounded-lg text-left text-[15px] text-sq-text transition-colors ${
+        active ? 'bg-sq-selected font-semibold' : 'font-medium hover:bg-sq-selected/50'
+      }`}
+    >
+      <span className="w-5 h-5 grid place-items-center shrink-0">{icon}</span>
+      <span className="flex-1 min-w-0 truncate">{label}</span>
+      {count ? <span className="text-[13px] font-normal text-sq-muted tabular-nums">{count}</span> : null}
+    </button>
+  );
+}
+
+/** «Продається на касі» — the same switch in the create and the edit form. */
+function SellableField({ checked, onChange }: { checked: boolean; onChange: (next: boolean) => void }) {
+  return (
+    <label className="flex items-start gap-2.5 text-[15px] text-sq-text cursor-pointer sm:col-span-2">
+      <input
+        type="checkbox"
+        className={`${checkboxClass} mt-1`}
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span>
+        Продається на касі
+        <span className="block text-[13px] text-sq-muted">
+          Вимкніть для інгредієнта чи заготовки: склад і рецепти його бачать, екран продажу — ні
+        </span>
+      </span>
+    </label>
   );
 }
 
@@ -704,7 +813,7 @@ function GenerateBarcodeButton({ onGenerated }: { onGenerated: (code: string) =>
       onClick={() => void generate()}
       disabled={busy}
       title="Внутрішній код магазину — коли бирка не сканується"
-      className="shrink-0 rounded-sq border border-sq-divider bg-sq-surface px-3 text-sm whitespace-nowrap disabled:opacity-50"
+      className="sq-btn-quiet shrink-0 whitespace-nowrap"
     >
       Згенерувати
     </button>
@@ -722,30 +831,28 @@ function VariantsTable({
   const scrollRef = useDragScroll<HTMLDivElement>();
 
   return (
-    <div ref={scrollRef} className="mt-3 overflow-x-auto select-none">
-      <table className="w-full text-sm">
+    <div ref={scrollRef} className="mt-2 overflow-x-auto select-none">
+      <table className="sq-table">
         <thead>
-          <tr className="text-left text-sq-secondary">
-            <th className="py-1 pr-2 font-medium">Варіант</th>
-            <th className="py-1 pr-2 font-medium">Ціна</th>
-            <th className="py-1 pr-2 font-medium">{derived ? 'Можна зібрати' : 'Залишок'}</th>
-            <th className="py-1 pr-2 font-medium">Артикул</th>
-            <th className="py-1 font-medium">Штрихкод</th>
+          <tr>
+            <th>Варіант</th>
+            <th className="!text-right">Ціна</th>
+            <th className="!text-right">{derived ? 'Можна зібрати' : 'Залишок'}</th>
+            <th>Артикул</th>
+            <th className="!pr-0">Штрихкод</th>
           </tr>
         </thead>
         <tbody>
           {variants.map((v) => (
-            <tr key={v.id} className="border-t border-sq-divider">
-              <td className="py-2 pr-2">
-                {v.label || '—'}
-              </td>
-              <td className="py-2 pr-2">{formatUah(v.price_cents)}</td>
-              <td className="py-2 pr-2">
+            <tr key={v.id}>
+              <td>{v.label || '—'}</td>
+              <td className="text-right tabular-nums whitespace-nowrap">{formatUah(v.price_cents)}</td>
+              <td className="text-right tabular-nums whitespace-nowrap">
                 {v.quantity}
-                {v.unit ? <span className="text-xs text-sq-muted"> {v.unit}</span> : null}
+                {v.unit ? <span className="text-[13px] text-sq-muted"> {v.unit}</span> : null}
               </td>
-              <td className="py-2 pr-2 font-mono text-xs">{v.sku || '—'}</td>
-              <td className="py-2 font-mono text-xs">{v.barcode || '—'}</td>
+              <td className="text-[13px] text-sq-secondary tabular-nums">{v.sku || '—'}</td>
+              <td className="!pr-0 text-[13px] text-sq-secondary tabular-nums">{v.barcode || '—'}</td>
             </tr>
           ))}
         </tbody>
@@ -795,7 +902,7 @@ function TagTreeNode({
   }
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-0.5">
       <TagAdminRow
         tag={tag}
         nested={depth > 1}
@@ -809,7 +916,7 @@ function TagTreeNode({
         onAddChild={() => setAdding((v) => !v)}
       />
       {(adding || children.length > 0) && (
-        <div className="ml-3 space-y-1 border-l border-sq-divider pl-2">
+        <div className="pl-4 space-y-0.5">
           {children.map((child) => (
             <TagTreeNode
               key={child.id}
@@ -826,16 +933,16 @@ function TagTreeNode({
             />
           ))}
           {adding && (
-            <form onSubmit={(e) => void submitChild(e)} className="flex gap-1.5 pt-1">
+            <form onSubmit={(e) => void submitChild(e)} className="flex gap-1.5 py-1 pr-1">
               <input
                 autoFocus
-                className={fieldClass}
+                className={panelFieldClass}
                 placeholder={`Підгрупа в «${tag.name}»`}
                 value={childName}
                 onChange={(e) => setChildName(e.target.value)}
                 required
               />
-              <button type="submit" className="sq-btn-primary px-3 text-sm shrink-0">
+              <button type="submit" className="pos-btn-primary min-h-11 px-3.5 rounded-sq text-[15px] shrink-0">
                 OK
               </button>
             </form>
@@ -871,22 +978,25 @@ function TagAdminRow({
   onAddChild: () => void;
 }) {
   return (
-    <div
-      className={`rounded-[4px] border border-transparent p-1.5 space-y-1.5 ${
-        active ? 'bg-sq-blue/10 border-sq-blue/30' : ''
-      } ${saving ? 'opacity-60' : ''}`}
-    >
-      <div className="flex items-center gap-1">
+    <div className={saving ? 'opacity-60' : ''}>
+      <div
+        className={`flex items-center rounded-lg transition-colors ${
+          active ? 'bg-sq-selected' : 'hover:bg-sq-selected/50'
+        }`}
+      >
         <button
           type="button"
           onClick={onFilter}
-          className={`flex-1 text-left px-2 py-1 rounded-[4px] font-medium ${
-            nested ? 'text-sm text-[#6E6E6E]' : 'text-sm'
-          } ${active ? 'text-sq-blue' : 'text-sq-text'}`}
+          className={`flex-1 min-w-0 flex items-center gap-2.5 min-h-[38px] pl-2.5 pr-1 text-left text-[15px] ${
+            active ? 'font-semibold' : 'font-medium'
+          } ${nested && !active ? 'text-sq-secondary' : 'text-sq-text'}`}
         >
-          {tag.name}
+          <span className="w-5 h-5 grid place-items-center shrink-0">
+            <TagDot color={tag.color} size="md" />
+          </span>
+          <span className="truncate">{tag.name}</span>
           {tag.show_in_catalog_bar && (
-            <span className="ml-1.5 text-[10px] font-normal text-sq-blue">рядок</span>
+            <span className="text-xs font-normal text-sq-muted shrink-0">рядок</span>
           )}
         </button>
         {canAddChild && (
@@ -894,52 +1004,62 @@ function TagAdminRow({
             type="button"
             onClick={onAddChild}
             title="Додати підгрупу"
-            className="shrink-0 text-xs font-semibold text-sq-blue px-1.5 py-1 rounded-[4px] hover:bg-sq-blue/10"
+            aria-label="Додати підгрупу"
+            className="shrink-0 w-8 h-8 mr-1 grid place-items-center rounded-md text-sq-muted hover:text-sq-blue hover:bg-sq-surface/70"
           >
-            + підгрупа
+            <Plus size={16} />
           </button>
         )}
       </div>
-      <TagColorSwatches
-        value={tag.color}
-        onChange={onColor}
-        size="sm"
-      />
-      <label className="flex items-center gap-1.5 px-1 text-[11px] text-sq-secondary cursor-pointer">
-        <input
-          type="checkbox"
-          checked={tag.show_in_catalog_bar}
-          disabled={saving}
-          onChange={(e) => onCatalogBar(e.target.checked)}
-        />
-        У рядку категорій
-      </label>
-      {onStation && (
-        <div
-          className="flex items-center gap-1 px-1 text-[11px] text-sq-secondary"
-          data-testid={`tag-station-${tag.id}`}
-        >
-          <span className="mr-0.5">Станція:</span>
-          {STATION_CHOICES.map(([value, label]) => {
-            const current = tag.station ?? null;
-            const on = current === value;
-            return (
-              <button
-                key={label}
-                type="button"
-                disabled={saving}
-                aria-pressed={on}
-                onClick={() => {
-                  if (!on) onStation(value);
-                }}
-                className={`rounded-full border px-2 py-0.5 ${
-                  on ? 'border-sq-blue bg-sq-blue text-white' : 'border-sq-divider text-sq-text'
-                }`}
-              >
-                {label}
-              </button>
-            );
-          })}
+      {active && (
+        <div className="pl-[42px] pr-2 pt-2 pb-3 space-y-2.5">
+          <TagColorSwatches
+            value={tag.color}
+            onChange={onColor}
+            size="sm"
+          />
+          <label className="flex items-center gap-2 text-[13px] text-sq-secondary cursor-pointer">
+            <input
+              type="checkbox"
+              className={checkboxClass}
+              checked={tag.show_in_catalog_bar}
+              disabled={saving}
+              onChange={(e) => onCatalogBar(e.target.checked)}
+            />
+            У рядку категорій
+          </label>
+          {onStation && (
+            <div
+              className="flex flex-wrap items-center gap-2 text-[13px] text-sq-secondary"
+              data-testid={`tag-station-${tag.id}`}
+            >
+              <span>Станція:</span>
+              <div className="inline-flex gap-0.5 p-[2px] rounded-lg bg-sq-empty">
+                {STATION_CHOICES.map(([value, label]) => {
+                  const current = tag.station ?? null;
+                  const on = current === value;
+                  return (
+                    <button
+                      key={label}
+                      type="button"
+                      disabled={saving}
+                      aria-pressed={on}
+                      onClick={() => {
+                        if (!on) onStation(value);
+                      }}
+                      className={`h-7 px-2.5 rounded-md text-[13px] transition-colors ${
+                        on
+                          ? 'bg-sq-surface shadow-[0_1px_3px_rgba(0,0,0,.12)] font-semibold text-sq-text'
+                          : 'font-medium text-sq-secondary hover:text-sq-text'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -965,13 +1085,13 @@ function TechCardLine({ card }: { card?: TechCardRow }) {
   if (!card) return null;
   const reason = missingReason(card);
   return (
-    <p className="text-xs text-sq-secondary">
-      Собівартість: <strong className="text-sq-text">{formatUah(card.cost_cents)}</strong>
+    <p className="text-[13px] text-sq-secondary">
+      Собівартість: <strong className="font-semibold text-sq-text tabular-nums">{formatUah(card.cost_cents)}</strong>
       {' · food cost: '}
       {reason ? (
         <span>— ({reason})</span>
       ) : (
-        <strong className="text-sq-text">{foodCostPercent(card.food_cost_bps!)}</strong>
+        <strong className="font-semibold text-sq-text tabular-nums">{foodCostPercent(card.food_cost_bps!)}</strong>
       )}
       {' · за останніми цінами закупівлі'}
     </p>
@@ -1163,11 +1283,15 @@ function EditProductInline({
   return (
     <form
       onSubmit={(e) => void save(e)}
-      className="border border-sq-blue/40 rounded-sq p-4 grid sm:grid-cols-2 gap-3 bg-sq-surface shadow-sm"
+      className="rounded-card bg-sq-surface shadow-card ring-2 ring-sq-blue/25 p-5 grid sm:grid-cols-2 gap-x-4 gap-y-4"
     >
       <div className="sm:col-span-2 flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-sq-text">Редагування</p>
-        <button type="button" className="text-sm text-sq-secondary font-medium" onClick={onCancel}>
+        <h3 className="text-[19px] font-bold text-sq-heading">Редагування</h3>
+        <button
+          type="button"
+          className="min-h-9 px-3 rounded-lg text-[15px] font-semibold text-sq-secondary hover:bg-sq-sidebar"
+          onClick={onCancel}
+        >
           Сховати
         </button>
       </div>
@@ -1176,24 +1300,30 @@ function EditProductInline({
 
       <ProductPhotoField value={imageUrl} onChange={setImageUrl} />
 
-      <input
-        className={fieldClass}
-        placeholder="Назва"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        required
-      />
-      <input
-        className={fieldClass}
-        placeholder="Опис"
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-      />
+      <label className="flex flex-col gap-1.5">
+        <span className={captionClass}>Назва</span>
+        <input
+          className="sq-input"
+          placeholder="Назва"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+        />
+      </label>
+      <label className="flex flex-col gap-1.5">
+        <span className={captionClass}>Опис</span>
+        <input
+          className="sq-input"
+          placeholder="Опис"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
+      </label>
 
-      <label className="block space-y-1 sm:col-span-2">
-        <span className="text-xs text-sq-secondary">Що це за товар</span>
+      <label className="flex flex-col gap-1.5 sm:col-span-2">
+        <span className={captionClass}>Що це за товар</span>
         <select
-          className={fieldClass}
+          className="sq-input"
           value={shape}
           onChange={(e) => setShape(e.target.value as ProductShape)}
         >
@@ -1204,43 +1334,39 @@ function EditProductInline({
           ))}
         </select>
         {shape !== '' && (
-          <span className="text-xs text-sq-secondary">{compositionHint(shape)}</span>
+          <span className="text-[13px] text-sq-muted">{compositionHint(shape)}</span>
         )}
       </label>
 
-      <label className="flex items-start gap-2 text-sm text-sq-text cursor-pointer sm:col-span-2">
-        <input
-          type="checkbox"
-          className="mt-0.5"
-          checked={sellable}
-          onChange={(e) => setSellable(e.target.checked)}
-        />
-        <span>
-          Продається на касі
-          <span className="block text-[11px] text-sq-secondary">
-            Вимкніть для інгредієнта чи заготовки: склад і рецепти його бачать, екран продажу — ні
-          </span>
-        </span>
-      </label>
+      <SellableField checked={sellable} onChange={setSellable} />
 
       <div className="sm:col-span-2">
-        <p className="text-xs font-semibold text-sq-secondary mb-2">Мітки</p>
+        <p className={`${captionClass} mb-2`}>Мітки</p>
         <div className="flex flex-wrap gap-2">
-          {flatTags.map((t) => (
-            <label
-              key={t.id}
-              className="inline-flex items-center gap-1.5 text-sm border border-sq-divider rounded-full px-2.5 py-1 bg-sq-bg"
-            >
-              <input
-                type="checkbox"
-                checked={tagIds.includes(t.id)}
-                onChange={() => toggleTag(t.id)}
-              />
-              {tagPathLabel(flatTags, t)}
-            </label>
-          ))}
+          {flatTags.map((t) => {
+            const on = tagIds.includes(t.id);
+            return (
+              <label
+                key={t.id}
+                className={`inline-flex items-center gap-2 min-h-9 px-3 rounded-[10px] text-[15px] cursor-pointer transition-colors ${
+                  on
+                    ? 'bg-sq-blue/[0.08] ring-1 ring-inset ring-sq-blue/40 text-sq-text font-medium'
+                    : 'bg-sq-surface ring-1 ring-inset ring-sq-divider text-sq-text hover:bg-sq-sidebar'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  className={checkboxClass}
+                  checked={on}
+                  onChange={() => toggleTag(t.id)}
+                />
+                <TagDot color={t.color} />
+                {tagPathLabel(flatTags, t)}
+              </label>
+            );
+          })}
           {flatTags.length === 0 && (
-            <span className="text-sm text-sq-muted">Немає міток</span>
+            <span className="text-[15px] text-sq-muted">Немає міток</span>
           )}
         </div>
       </div>
@@ -1248,9 +1374,9 @@ function EditProductInline({
       <ModifierGroupChips groups={groups} value={groupIds} onChange={setGroupIds} />
 
       <div className="sm:col-span-2 space-y-3">
-        <p className="text-xs font-semibold text-sq-secondary">Варіанти</p>
+        <p className={captionClass}>Варіанти</p>
         {variants.map((v, idx) => (
-          <div key={v.id} className="border border-sq-divider rounded-sq p-3 space-y-2 bg-sq-bg/40">
+          <div key={v.id} className="rounded-xl ring-1 ring-inset ring-sq-divider p-4 space-y-3">
             <AttributeFields
               schema={vertical.attributes}
               value={v.attributes}
@@ -1269,20 +1395,23 @@ function EditProductInline({
                 },
               }}
             />
-            <div className="grid sm:grid-cols-[1fr_auto] gap-2 items-center">
-              <input
-                className={fieldClass}
-                value={(v.price_cents / 100).toFixed(2)}
-                onChange={(e) => {
-                  const next = [...variants];
-                  next[idx] = { ...v, price_cents: uahInputToCents(e.target.value) };
-                  setVariants(next);
-                }}
-                placeholder="Ціна, грн"
-              />
+            <div className="grid sm:grid-cols-[1fr_auto] gap-2 items-end">
+              <label className="flex flex-col gap-1.5">
+                <span className={captionClass}>Ціна, грн</span>
+                <input
+                  className="sq-input tabular-nums"
+                  value={(v.price_cents / 100).toFixed(2)}
+                  onChange={(e) => {
+                    const next = [...variants];
+                    next[idx] = { ...v, price_cents: uahInputToCents(e.target.value) };
+                    setVariants(next);
+                  }}
+                  placeholder="Ціна, грн"
+                />
+              </label>
               <button
                 type="button"
-                className="text-sm font-semibold text-red-600 min-h-11 px-2"
+                className="text-[15px] font-semibold text-red-600 min-h-11 px-2"
                 onClick={() => void archiveVariant(v.id)}
               >
                 Архів
@@ -1307,11 +1436,11 @@ function EditProductInline({
                 <TechCardLine card={techCards.get(v.id)} />
               </>
             )}
-            <div className="grid sm:grid-cols-2 gap-2">
-              <label className="block space-y-1">
-                <span className="text-xs text-sq-secondary">Артикул (SKU)</span>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <label className="flex flex-col gap-1.5">
+                <span className={captionClass}>Артикул (SKU)</span>
                 <input
-                  className={fieldClass}
+                  className="sq-input"
                   value={v.sku ?? ''}
                   onChange={(e) => {
                     const next = [...variants];
@@ -1320,11 +1449,11 @@ function EditProductInline({
                   }}
                 />
               </label>
-              <label className="block space-y-1">
-                <span className="text-xs text-sq-secondary">Штрихкод</span>
+              <label className="flex flex-col gap-1.5">
+                <span className={captionClass}>Штрихкод</span>
                 <div className="flex gap-2">
                   <input
-                    className={fieldClass}
+                    className="sq-input tabular-nums min-w-0"
                     value={v.barcode ?? ''}
                     onChange={(e) => {
                       const next = [...variants];
@@ -1359,7 +1488,7 @@ function EditProductInline({
           </div>
         ))}
 
-        <div className="space-y-2 pt-1 border-t border-sq-divider">
+        <div className="space-y-3 pt-4 border-t border-sq-divider">
           <AttributeFields
             schema={vertical.attributes}
             value={newAttributes}
@@ -1379,25 +1508,33 @@ function EditProductInline({
             unit={newUnit}
             onChange={setNewPack}
           />
-          <div className="grid sm:grid-cols-[1fr_auto] gap-2 items-center">
-            <input
-              className={fieldClass}
-              placeholder="Ціна, грн"
-              value={newPrice}
-              onChange={(e) => setNewPrice(e.target.value)}
-            />
+          <div className="grid sm:grid-cols-[1fr_auto] gap-2 items-end">
+            <label className="flex flex-col gap-1.5">
+              <span className={captionClass}>Ціна, грн</span>
+              <input
+                className="sq-input tabular-nums"
+                placeholder="Ціна, грн"
+                value={newPrice}
+                onChange={(e) => setNewPrice(e.target.value)}
+              />
+            </label>
             <button
               type="button"
-              className="text-sm font-semibold text-sq-blue min-h-11 px-2"
+              className="inline-flex items-center gap-1 text-[15px] font-semibold text-sq-blue min-h-11 px-2"
               onClick={() => void addVariant()}
             >
-              + Варіант
+              <Plus size={20} />
+              Варіант
             </button>
           </div>
         </div>
       </div>
 
-      <button type="submit" disabled={saving} className="sq-btn-primary sm:col-span-2 py-2.5 text-sm">
+      <button
+        type="submit"
+        disabled={saving}
+        className="pos-btn-primary sm:col-span-2 sm:justify-self-end min-h-11 px-6 rounded-sq text-[15px]"
+      >
         {saving ? 'Збереження…' : 'Зберегти'}
       </button>
     </form>
@@ -1419,32 +1556,34 @@ function VariantDiscountEditor({
   const hasDiscount = compareAtCents != null && compareAtCents > priceCents;
 
   return (
-    <div className="space-y-1.5 text-sm">
-      <p className="text-[11px] font-semibold text-sq-secondary">Знижка товару</p>
+    <div className="space-y-2">
+      <p className={captionClass}>Знижка товару</p>
       {hasDiscount ? (
-        <p className="text-xs text-sq-secondary">
+        <p className="text-[13px] text-sq-secondary tabular-nums">
           Стара: {(compareAtCents / 100).toFixed(2)} ₴ → нова: {(priceCents / 100).toFixed(2)} ₴
           <button
             type="button"
-            className="ml-2 text-sq-blue font-medium"
+            className="ml-2 text-sq-blue font-semibold"
             onClick={() => onChange(compareAtCents, null)}
           >
             Скинути знижку
           </button>
         </p>
       ) : (
-        <p className="text-xs text-sq-muted">Без знижки</p>
+        <p className="text-[13px] text-sq-muted">Без знижки</p>
       )}
       <div className="flex flex-wrap gap-2 items-center">
-        <input
-          className={`${fieldClass} max-w-[100px]`}
-          placeholder="% знижки"
-          value={pct}
-          onChange={(e) => setPct(e.target.value)}
-        />
+        <div className="w-28">
+          <input
+            className="sq-input tabular-nums"
+            placeholder="% знижки"
+            value={pct}
+            onChange={(e) => setPct(e.target.value)}
+          />
+        </div>
         <button
           type="button"
-          className="text-xs font-semibold text-sq-blue px-2 py-1"
+          className="min-h-11 px-2 text-[15px] font-semibold text-sq-blue"
           onClick={() => {
             const p = Number(pct);
             if (!Number.isFinite(p) || p <= 0 || p >= 100) return;
@@ -1454,17 +1593,19 @@ function VariantDiscountEditor({
             setPct('');
           }}
         >
-          За % 
+          За %
         </button>
-        <input
-          className={`${fieldClass} max-w-[120px]`}
-          placeholder="Нова ціна, грн"
-          value={newPrice}
-          onChange={(e) => setNewPrice(e.target.value)}
-        />
+        <div className="w-36">
+          <input
+            className="sq-input tabular-nums"
+            placeholder="Нова ціна, грн"
+            value={newPrice}
+            onChange={(e) => setNewPrice(e.target.value)}
+          />
+        </div>
         <button
           type="button"
-          className="text-xs font-semibold text-sq-blue px-2 py-1"
+          className="min-h-11 px-2 text-[15px] font-semibold text-sq-blue"
           onClick={() => {
             const next = uahInputToCents(newPrice);
             if (next <= 0 || next >= priceCents) return;

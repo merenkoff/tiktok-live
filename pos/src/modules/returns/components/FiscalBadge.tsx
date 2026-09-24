@@ -9,16 +9,17 @@
 // version every remote module then has to clear.
 
 import type { SaleFiscalDoc, SaleFiscalStatus } from '@pos/platform';
+import { Chip } from './SaleChips';
 
-const FISCAL_UK: Record<string, { label: string; cls: string }> = {
-  pending: { label: 'ПРРО: реєструється', cls: 'text-amber-600' },
-  failed: { label: 'ПРРО: не зареєстровано', cls: 'text-red-600' },
-  done: { label: 'ПРРО', cls: 'text-emerald-600' },
+const FISCAL_UK: Record<string, { label: string; tone: 'success' | 'warning' | 'danger' }> = {
+  pending: { label: 'ПРРО: реєструється', tone: 'warning' },
+  failed: { label: 'ПРРО: не зареєстровано', tone: 'danger' },
+  done: { label: 'ПРРО', tone: 'success' },
 };
 
 /**
- * A one-line marker next to the receipt status, in the same place `qr_pending`
- * already sits.
+ * A chip next to the receipt status, in the same place `qr_pending` already
+ * sits.
  *
  * `'none'` and `undefined` render **nothing** — that is what keeps every screen
  * in a store that does not fiscalise byte-identical to before, which is the
@@ -38,11 +39,11 @@ export function FiscalBadge({
   mode?: SaleFiscalDoc['mode'];
 }) {
   if (status === 'pending' && mode === 'offline') {
-    return <span className="ml-2 text-xs font-semibold text-amber-600">ПРРО: офлайн</span>;
+    return <Chip tone="warning">ПРРО: офлайн</Chip>;
   }
   const view = status ? FISCAL_UK[status] : undefined;
   if (!view) return null;
-  return <span className={`ml-2 text-xs font-semibold ${view.cls}`}>{view.label}</span>;
+  return <Chip tone={view.tone}>{view.label}</Chip>;
 }
 
 /** The fiscal document itself, on a receipt's detail panel. */
@@ -51,17 +52,17 @@ export function FiscalDetailCard({ doc }: { doc?: SaleFiscalDoc | null }) {
 
   if (doc.status === 'done') {
     return (
-      <div className="mt-3 rounded-sq bg-sq-surface border border-sq-divider px-3 py-2 text-sm">
+      <div className="mt-3 rounded-xl bg-sq-sidebar px-4 py-3 text-sm">
         <p className="sq-section-label">Фіскальний чек</p>
         {doc.fiscal_code && (
-          <p className="mt-1 font-semibold select-all">{doc.fiscal_code}</p>
+          <p className="mt-1 text-[15px] font-semibold text-sq-text tabular-nums select-all">{doc.fiscal_code}</p>
         )}
         {doc.tax_url && (
           <a
             href={doc.tax_url}
             target="_blank"
             rel="noreferrer"
-            className="mt-1 inline-block text-sq-blue underline break-all"
+            className="mt-1 inline-block font-semibold text-sq-blue break-all"
           >
             Перевірити в кабінеті ДПС
           </a>
@@ -76,7 +77,7 @@ export function FiscalDetailCard({ doc }: { doc?: SaleFiscalDoc | null }) {
   // given.
   if (doc.status === 'pending' && doc.mode === 'offline') {
     return (
-      <div className="mt-3 rounded-sq bg-amber-50 px-3 py-2 text-sm text-amber-900">
+      <div className="mt-3 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
         <p className="font-semibold">Чек з офлайн-резерву ПРРО</p>
         {doc.fiscal_code && <p className="mt-1 font-semibold select-all">{doc.fiscal_code}</p>}
         <p className="mt-1">
@@ -89,7 +90,7 @@ export function FiscalDetailCard({ doc }: { doc?: SaleFiscalDoc | null }) {
   const failed = doc.status === 'failed' || doc.status === 'abandoned';
   return (
     <div
-      className={`mt-3 rounded-sq px-3 py-2 text-sm ${
+      className={`mt-3 rounded-xl px-4 py-3 text-sm ${
         failed ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-900'
       }`}
     >

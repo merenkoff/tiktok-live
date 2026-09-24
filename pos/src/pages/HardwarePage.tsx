@@ -3,7 +3,17 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { useCallback, useEffect, useState } from 'react';
-import { Download, Printer, RefreshCw, ScanLine, Usb } from 'lucide-react';
+import {
+  Check,
+  Download,
+  DownloadLine,
+  Printer,
+  PrinterColor,
+  RefreshCw,
+  ScanLine,
+  Usb,
+  type Glyph,
+} from '../platform/glyphs';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { HardwareDevice, listHardware } from '../lib/hardware';
 import { installUpdate } from '../lib/updates';
@@ -89,69 +99,119 @@ function StationPrinterSection({
   testStatus,
 }: StationPrinterSectionProps) {
   return (
-    <div data-testid={`station-printer-${station}`}>
-      <p className="sq-section-label">{title}</p>
-      <p className="text-sq-secondary text-sm">{hint}</p>
+    <section className={CARD} data-testid={`station-printer-${station}`}>
+      <CardTitle glyph={PrinterColor} title={title} hint={hint} />
       {printers.length === 0 && (
-        <p className="text-sm text-sq-secondary mt-2">Принтерів не знайдено — див. «Принтер чеків».</p>
+        <p className="text-[15px] text-sq-secondary mt-3">Принтерів не знайдено — див. «Принтер чеків».</p>
       )}
-      <ul className="space-y-2 mt-2">
-        {printers.map((printer) => (
-          <li key={printer.name}>
-            <button
-              type="button"
-              onClick={() => onSelect(printer.name)}
-              className={`w-full flex items-center gap-3 border rounded-sq p-4 text-left ${
-                selected === printer.name ? 'border-sq-blue bg-sq-surface' : 'border-sq-divider bg-sq-surface'
-              }`}
-            >
-              <span
-                className={`w-2 h-2 rounded-full shrink-0 ${selected === printer.name ? 'bg-sq-blue' : 'bg-sq-muted'}`}
-                aria-hidden
-              />
-              <span className="block text-sm font-medium truncate min-w-0 flex-1">{printer.name}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
+      <PrinterList printers={printers} selected={selected} onSelect={onSelect} />
       {selected && (
         <>
-          <div className="mt-2 inline-flex rounded-sq border border-sq-divider overflow-hidden">
-            {RECEIPT_PAPER_WIDTHS.map((mm) => (
-              <button
-                key={mm}
-                type="button"
-                onClick={() => onPaperWidth(mm)}
-                className={`min-h-11 px-4 text-sm font-medium ${
-                  paperWidth === mm ? 'bg-sq-blue text-white' : 'bg-sq-surface text-sq-text'
-                }`}
-              >
-                {mm} мм
-              </button>
-            ))}
-          </div>
-          <div className="mt-3 flex items-center gap-3 flex-wrap">
-            <button
-              type="button"
-              onClick={onTest}
-              disabled={testing}
-              className="min-h-11 px-4 text-sm font-medium text-sq-blue disabled:opacity-50"
-            >
+          <PaperWidthPicker value={paperWidth} onChange={onPaperWidth} />
+          <div className="mt-4 flex items-center gap-3 flex-wrap">
+            <button type="button" onClick={onTest} disabled={testing} className="sq-btn-quiet">
+              <Printer size={20} />
               {testing ? 'Друк…' : 'Тестовий тікет'}
             </button>
             {onFollowKitchen && (
               <button
                 type="button"
                 onClick={onFollowKitchen}
-                className="min-h-11 px-4 text-sm font-medium text-sq-secondary"
+                className="min-h-11 px-2 text-[15px] font-semibold text-sq-blue"
               >
                 Той самий, що кухня
               </button>
             )}
-            {testStatus && <span className="text-sm text-sq-secondary">{testStatus}</span>}
+            {testStatus && <span className="text-[15px] text-sq-secondary">{testStatus}</span>}
           </div>
         </>
       )}
+    </section>
+  );
+}
+
+// Till screens group their content in white cards on the grey page.
+const CARD = 'rounded-card bg-sq-surface shadow-card p-5';
+
+/** A card's head: colour glyph, title, and the sentence that says what it is for. */
+function CardTitle({ glyph: Icon, title, hint }: { glyph: Glyph; title: string; hint?: string }) {
+  return (
+    <div className="flex items-start gap-3">
+      <Icon size={24} className="shrink-0 mt-0.5" />
+      <div className="min-w-0">
+        <h2 className="text-[17px] font-semibold text-sq-heading">{title}</h2>
+        {hint && <p className="text-[15px] text-sq-secondary mt-0.5">{hint}</p>}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The printers the OS reports, as a pick-one list: hairline rows with the
+ * chosen one ticked, the way a Things list marks its selection.
+ */
+function PrinterList({
+  printers,
+  selected,
+  onSelect,
+}: {
+  printers: PrinterInfo[];
+  selected: string | null;
+  onSelect: (name: string) => void;
+}) {
+  if (printers.length === 0) return null;
+  return (
+    <ul className="mt-3">
+      {printers.map((printer) => {
+        const on = selected === printer.name;
+        return (
+          <li key={printer.name} className="sq-row">
+            <button
+              type="button"
+              onClick={() => onSelect(printer.name)}
+              className={`w-full min-h-12 py-2 -mx-2 px-2 rounded-lg flex items-center gap-3 text-left hover:bg-sq-sidebar/60 ${
+                on ? 'font-semibold' : ''
+              }`}
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block text-base text-sq-text truncate">{printer.name}</span>
+                {printer.is_default && (
+                  <span className="block text-[13px] font-normal text-sq-muted">Системний за замовчуванням</span>
+                )}
+              </span>
+              {on && <Check size={20} className="shrink-0 text-sq-blue" />}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** Roll width, as the segmented control — touch-sized, since this is the till. */
+function PaperWidthPicker({
+  value,
+  onChange,
+}: {
+  value: ReceiptPaperWidth;
+  onChange: (mm: ReceiptPaperWidth) => void;
+}) {
+  return (
+    <div className="mt-4 inline-flex gap-1 p-[3px] rounded-xl bg-sq-empty">
+      {RECEIPT_PAPER_WIDTHS.map((mm) => (
+        <button
+          key={mm}
+          type="button"
+          onClick={() => onChange(mm)}
+          className={`min-h-[42px] px-5 rounded-[9px] text-[15px] transition-colors ${
+            value === mm
+              ? 'bg-white shadow-[0_1px_3px_rgba(0,0,0,.12)] font-semibold text-sq-text'
+              : 'font-medium text-sq-secondary hover:text-sq-text'
+          }`}
+        >
+          {mm} мм
+        </button>
+      ))}
     </div>
   );
 }
@@ -181,9 +241,10 @@ function testReceipt(storeName: string): ReceiptData {
   };
 }
 
+// Colour glyphs: a device list row is a Things list row, glyph first.
 const kindIcon = {
   scanner: ScanLine,
-  printer: Printer,
+  printer: PrinterColor,
   unknown: Usb,
 };
 
@@ -329,47 +390,45 @@ export function HardwarePage() {
   }
 
   const body = (
-    <div className="flex-1 overflow-auto p-4 max-w-3xl mx-auto w-full space-y-6 text-sq-text">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold">Обладнання</h1>
-          <p className="text-sq-secondary mt-1 text-sm">
+    <div className="flex-1 overflow-auto px-4 py-5 md:px-7 max-w-3xl mx-auto w-full space-y-4 text-sq-text">
+      <div className="flex items-center justify-between gap-3 pb-1">
+        <div className="min-w-0">
+          <div className="flex items-center gap-3">
+            <ScanLine size={24} className="shrink-0" />
+            <h1 className="text-2xl font-bold text-sq-heading">Обладнання</h1>
+          </div>
+          <p className="text-[15px] text-sq-secondary mt-1">
             Пристрої, підключені до цього комп'ютера.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={refresh}
-          disabled={loading}
-          className="min-h-11 px-3 flex items-center gap-2 text-sm text-sq-secondary hover:text-sq-text disabled:opacity-50"
-        >
-          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+        <button type="button" onClick={refresh} disabled={loading} className="sq-btn-quiet shrink-0">
+          <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
           Оновити
         </button>
       </div>
 
-      <div className="bg-sq-surface border border-sq-divider rounded-sq p-4">
-        <p className="sq-section-label">Версія програми</p>
+      <section className={CARD}>
+        <CardTitle glyph={Download} title="Версія програми" />
         {updateInfo?.update_available ? (
-          <div className="mt-1 space-y-2">
-            <p className="text-sm">
-              Встановлено <span className="font-medium">{updateInfo.current_version}</span>,
-              доступна <span className="font-medium text-amber-600">{updateInfo.latest_version}</span>
+          <div className="mt-3 space-y-3">
+            <p className="text-[15px]">
+              Встановлено <span className="font-semibold tabular-nums">{updateInfo.current_version}</span>,
+              доступна <span className="font-semibold tabular-nums text-sq-warning">{updateInfo.latest_version}</span>
             </p>
             {updateInfo.notes && (
-              <p className="text-xs text-sq-muted whitespace-pre-line line-clamp-3">{updateInfo.notes}</p>
+              <p className="text-[13px] text-sq-muted whitespace-pre-line line-clamp-3">{updateInfo.notes}</p>
             )}
             {updateInfo.can_self_update ? (
               <button
                 type="button"
                 onClick={() => void runUpdate()}
                 disabled={installing}
-                className="min-h-11 px-4 flex items-center gap-2 text-sm font-medium text-sq-blue disabled:opacity-50"
+                className="pos-btn-primary min-h-11 px-4 rounded-sq text-[15px] gap-2"
               >
                 {installing ? (
-                  <RefreshCw size={16} className="animate-spin" />
+                  <RefreshCw size={20} className="animate-spin" />
                 ) : (
-                  <Download size={16} />
+                  <DownloadLine size={20} />
                 )}
                 {installing ? 'Встановлення… програма перезапуститься' : 'Встановити оновлення'}
               </button>
@@ -380,163 +439,122 @@ export function HardwarePage() {
                   const url = updateInfo.download_url ?? updateInfo.release_url;
                   if (url) void openUrl(url);
                 }}
-                className="min-h-11 px-4 flex items-center gap-2 text-sm font-medium text-sq-blue"
+                className="pos-btn-primary min-h-11 px-4 rounded-sq text-[15px] gap-2"
               >
-                <Download size={16} />
+                <DownloadLine size={20} />
                 Завантажити оновлення
               </button>
             )}
-            {installError && <p className="text-xs text-red-600">{installError}</p>}
+            {installError && <p className="text-[13px] text-red-600">{installError}</p>}
           </div>
         ) : (
-          <p className="text-sm text-sq-secondary mt-1">
+          <p className="text-[15px] text-sq-secondary mt-2">
             {updateInfo ? `Встановлено ${updateInfo.current_version} — актуальна версія.` : 'Перевірка версії…'}
           </p>
         )}
-      </div>
+      </section>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      <section className={CARD}>
+        <CardTitle glyph={Usb} title="Пристрої" />
+        {error && <p className="text-[15px] text-red-600 mt-3">{error}</p>}
 
-      {!loading && !error && devices.length === 0 && (
-        <p className="text-sm text-sq-secondary py-6 text-center bg-sq-surface border border-sq-divider rounded-sq">
-          Пристроїв не знайдено.
-        </p>
-      )}
-
-      <ul className="space-y-2">
-        {devices.map((device, i) => {
-          const Icon = kindIcon[device.kind];
-          return (
-            <li
-              key={`${device.vendor_id}-${device.product_id}-${i}`}
-              className="flex items-center gap-3 bg-sq-surface border border-sq-divider rounded-sq p-4"
-            >
-              <span
-                className={`w-2 h-2 rounded-full shrink-0 ${
-                  device.recognized ? 'bg-emerald-500' : 'bg-amber-500'
-                }`}
-                aria-hidden
-              />
-              <Icon size={20} className="text-sq-secondary shrink-0" strokeWidth={1.75} />
-              <div className="min-w-0">
-                <p className="text-sm font-medium truncate">
-                  {device.name ?? kindLabel[device.kind]}
-                </p>
-                <p className="text-xs text-sq-muted">
-                  VID:PID {formatId(device.vendor_id)}:{formatId(device.product_id)}
-                </p>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-
-      <div>
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="sq-section-label">Принтер чеків</p>
-            <p className="text-sq-secondary text-sm">Оберіть, куди друкувати чеки продажу.</p>
+        {!loading && !error && devices.length === 0 && (
+          <div className="py-6 flex flex-col items-center gap-2 text-center">
+            <Usb size={48} />
+            <p className="text-[15px] text-sq-secondary">Пристроїв не знайдено.</p>
           </div>
+        )}
+
+        {devices.length > 0 && (
+          <ul className="mt-3">
+            {devices.map((device, i) => {
+              const Icon = kindIcon[device.kind];
+              return (
+                <li
+                  key={`${device.vendor_id}-${device.product_id}-${i}`}
+                  className="sq-row min-h-12 py-2 flex items-center gap-3"
+                >
+                  <Icon size={24} className="shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-base text-sq-text truncate">
+                      {device.name ?? kindLabel[device.kind]}
+                    </p>
+                    <p className="text-[13px] text-sq-muted tabular-nums">
+                      VID:PID {formatId(device.vendor_id)}:{formatId(device.product_id)}
+                    </p>
+                  </div>
+                  <span
+                    className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                      device.recognized ? 'bg-sq-success' : 'bg-sq-warning'
+                    }`}
+                    aria-hidden
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      <section className={CARD}>
+        <div className="flex items-start justify-between gap-3">
+          <CardTitle glyph={PrinterColor} title="Принтер чеків" hint="Оберіть, куди друкувати чеки продажу." />
           <button
             type="button"
             onClick={refreshPrinters}
             disabled={printersLoading}
-            className="min-h-11 px-3 flex items-center gap-2 text-sm text-sq-secondary hover:text-sq-text disabled:opacity-50"
+            className="sq-btn-quiet shrink-0"
           >
-            <RefreshCw size={16} className={printersLoading ? 'animate-spin' : ''} />
+            <RefreshCw size={20} className={printersLoading ? 'animate-spin' : ''} />
             Оновити
           </button>
         </div>
 
-        {printersError && <p className="text-sm text-red-600 mt-2">{printersError}</p>}
+        {printersError && <p className="text-[15px] text-red-600 mt-3">{printersError}</p>}
 
         {!printersLoading && !printersError && printers.length === 0 && (
-          <div className="py-6 text-center bg-sq-surface border border-sq-divider rounded-sq mt-2 px-4">
-            <p className="text-sm text-sq-secondary">
+          <div className="pt-6 pb-2 flex flex-col items-center text-center">
+            <PrinterColor size={48} />
+            <p className="text-[15px] text-sq-secondary mt-3">
               Принтерів не знайдено. Встановіть принтер як системний і натисніть "Оновити".
             </p>
-            <p className="text-sm text-sq-secondary mt-2">
+            <p className="text-[15px] text-sq-secondary mt-2 max-w-lg">
               Немає чекового принтера? Друкуйте чеки через системний діалог друку — оберіть "Зберегти
               як PDF" (на macOS і Windows цей варіант вбудований; на Linux залежить від дистрибутива).
             </p>
             <button
               type="button"
               onClick={() => printToPdf(testReceipt(storeName))}
-              className="mt-3 min-h-11 px-4 text-sm font-medium text-sq-blue"
+              className="sq-btn-quiet mt-4"
             >
+              <Printer size={20} />
               Тестовий друк у PDF
             </button>
           </div>
         )}
 
-        <ul className="space-y-2 mt-2">
-          {printers.map((printer) => (
-            <li key={printer.name}>
-              <button
-                type="button"
-                onClick={() => selectPrinter(printer.name)}
-                className={`w-full flex items-center gap-3 border rounded-sq p-4 text-left ${
-                  selectedPrinter === printer.name
-                    ? 'border-sq-blue bg-sq-surface'
-                    : 'border-sq-divider bg-sq-surface'
-                }`}
-              >
-                <span
-                  className={`w-2 h-2 rounded-full shrink-0 ${
-                    selectedPrinter === printer.name ? 'bg-sq-blue' : 'bg-sq-muted'
-                  }`}
-                  aria-hidden
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-medium truncate">{printer.name}</span>
-                  {printer.is_default && (
-                    <span className="block text-xs text-sq-muted">Системний за замовчуванням</span>
-                  )}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        <PrinterList printers={printers} selected={selectedPrinter} onSelect={selectPrinter} />
 
         {selectedPrinter && (
           <>
-            <div className="mt-4">
-              <p className="sq-section-label">Ширина стрічки</p>
-              <p className="text-sq-secondary text-sm">
+            <div className="mt-5">
+              <p className="text-[15px] font-semibold text-sq-heading">Ширина стрічки</p>
+              <p className="text-[15px] text-sq-secondary">
                 Оберіть розмір рулону чекового принтера.
               </p>
-              <div className="mt-2 inline-flex rounded-sq border border-sq-divider overflow-hidden">
-                {RECEIPT_PAPER_WIDTHS.map((mm) => (
-                  <button
-                    key={mm}
-                    type="button"
-                    onClick={() => selectPaperWidth(mm)}
-                    className={`min-h-11 px-4 text-sm font-medium ${
-                      paperWidth === mm
-                        ? 'bg-sq-blue text-white'
-                        : 'bg-sq-surface text-sq-text'
-                    }`}
-                  >
-                    {mm} мм
-                  </button>
-                ))}
-              </div>
+              <PaperWidthPicker value={paperWidth} onChange={selectPaperWidth} />
             </div>
 
-            <div className="mt-3 flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => void testPrint()}
-                disabled={testing}
-                className="min-h-11 px-4 text-sm font-medium text-sq-blue disabled:opacity-50"
-              >
+            <div className="mt-4 flex items-center gap-3 flex-wrap">
+              <button type="button" onClick={() => void testPrint()} disabled={testing} className="sq-btn-quiet">
+                <Printer size={20} />
                 {testing ? 'Друк…' : 'Тестовий друк'}
               </button>
-              {testStatus && <span className="text-sm text-sq-secondary">{testStatus}</span>}
+              {testStatus && <span className="text-[15px] text-sq-secondary">{testStatus}</span>}
             </div>
           </>
         )}
-      </div>
+      </section>
 
       {cafe && (
         <>

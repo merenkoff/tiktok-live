@@ -5,6 +5,7 @@
 import { useRef, useState } from 'react';
 import { api } from '@pos/platform';
 import type { GtinLearnResult } from '@pos/platform';
+import { SectionHead } from '@pos/platform/ui';
 import { parseDelimited, type DelimitedTable } from '../lib/parseDelimited';
 import {
   buildPlan,
@@ -14,9 +15,9 @@ import {
   type ImportPlan,
 } from '../lib/importPlan';
 
-const BTN = 'rounded-sq border border-sq-divider bg-sq-surface px-3 py-2 text-sm disabled:opacity-50';
-const BTN_PRIMARY = 'sq-btn-primary px-4 py-2 text-sm';
-const SELECT = 'mt-1 w-full rounded-sq border border-sq-divider bg-sq-bg px-2 py-2 text-sm text-sq-text';
+const BTN = 'sq-btn-quiet';
+const BTN_PRIMARY = 'pos-btn-primary min-h-11 px-4 rounded-sq text-[15px]';
+const SELECT = 'sq-input';
 
 type Totals = { accepted: number; upserted: number; skipped: GtinLearnResult['skipped'] };
 
@@ -129,15 +130,15 @@ export function SupplierImportPanel({ onImported }: { onImported: () => void }) 
   const busy = progress != null;
 
   return (
-    <section className="bg-sq-surface border border-sq-divider rounded-sq p-5 space-y-4 shadow-sm">
+    <section className="space-y-4">
       <div>
-        <p className="sq-section-label">Імпорт прайсу постачальника</p>
-        <p className="text-sq-secondary text-sm mt-1">
+        <SectionHead title="Імпорт прайсу постачальника" />
+        <p className="text-[15px] text-sq-secondary mt-2 max-w-3xl leading-relaxed">
           CSV або TSV зі зв’язкою «штрихкод → назва». Для одягу це єдине джерело, яке справді
           знає ваш асортимент — у відкритих базах таких товарів немає. Назви з прайсу мають вищий
           пріоритет за автоматичний пошук, але нижчий за ручну правку касира.
         </p>
-        <p className="text-xs text-sq-muted mt-1">
+        <p className="text-[13px] text-sq-muted mt-1">
           З Excel: «Зберегти як» → CSV. Роздільник і кодування (зокрема windows-1251) визначаються
           самі.
         </p>
@@ -154,7 +155,7 @@ export function SupplierImportPanel({ onImported }: { onImported: () => void }) 
         <button type="button" className={BTN} onClick={() => inputRef.current?.click()} disabled={busy}>
           Обрати файл
         </button>
-        {fileName && <span className="text-sm text-sq-secondary truncate">{fileName}</span>}
+        {fileName && <span className="text-[15px] text-sq-secondary truncate">{fileName}</span>}
         {fileName && (
           <button type="button" className={BTN} onClick={reset} disabled={busy}>
             Скинути
@@ -162,14 +163,14 @@ export function SupplierImportPanel({ onImported }: { onImported: () => void }) 
         )}
       </div>
 
-      {error && <div className="rounded-sq bg-red-50 text-red-700 px-3 py-2 text-sm">{error}</div>}
+      {error && <div className="rounded-sq bg-red-50 text-red-700 px-4 py-3 text-sm">{error}</div>}
 
       {table && (
-        <div className="space-y-4 border-t border-sq-divider pt-4">
-          <label className="flex items-center gap-2 text-sm text-sq-secondary">
+        <div className="space-y-4 rounded-card bg-sq-surface shadow-card p-5">
+          <label className="inline-flex items-center gap-2 text-[15px] text-sq-text cursor-pointer">
             <input
               type="checkbox"
-              className="h-4 w-4"
+              className="w-4 h-4 accent-[rgb(var(--sq-blue-rgb))]"
               checked={hasHeader}
               onChange={(e) => toggleHeader(e.target.checked)}
               disabled={busy}
@@ -179,8 +180,8 @@ export function SupplierImportPanel({ onImported }: { onImported: () => void }) 
 
           <div className="grid sm:grid-cols-3 gap-3">
             {FIELDS.map((f) => (
-              <label key={f.key} className="block">
-                <span className="text-sm text-sq-secondary">
+              <label key={f.key} className="flex flex-col gap-1.5">
+                <span className="text-[13px] font-semibold text-sq-secondary">
                   {f.label}
                   {f.required ? '' : ' (необов’язково)'}
                 </span>
@@ -202,30 +203,30 @@ export function SupplierImportPanel({ onImported }: { onImported: () => void }) 
           </div>
 
           {plan && (
-            <div className="space-y-2 text-sm">
-              <p className="text-sq-text">
-                Готово до імпорту: <strong>{plan.items.length}</strong> із {table.rows.length}
+            <div className="space-y-2 text-[15px]">
+              <p className="text-sq-text tabular-nums">
+                Готово до імпорту: <strong className="font-semibold">{plan.items.length}</strong> із {table.rows.length}
                 {plan.droppedTotal > 0 && (
                   <span className="text-sq-secondary"> · пропущено {plan.droppedTotal}</span>
                 )}
               </p>
 
               {plan.items.length > 0 && (
-                <div className="overflow-x-auto border border-sq-divider rounded-sq">
-                  <table className="w-full text-sm">
-                    <thead className="bg-sq-bg text-sq-secondary">
+                <div className="overflow-x-auto">
+                  <table className="sq-table">
+                    <thead>
                       <tr>
-                        <th className="text-left px-3 py-2 font-medium">Штрихкод</th>
-                        <th className="text-left px-3 py-2 font-medium">Назва</th>
-                        <th className="text-left px-3 py-2 font-medium">Бренд</th>
+                        <th>Штрихкод</th>
+                        <th>Назва</th>
+                        <th>Бренд</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-sq-divider">
+                    <tbody>
                       {plan.items.slice(0, 5).map((it, i) => (
                         <tr key={`${it.gtin}-${i}`}>
-                          <td className="px-3 py-2 font-mono text-sq-secondary">{it.gtin}</td>
-                          <td className="px-3 py-2 text-sq-text">{it.name}</td>
-                          <td className="px-3 py-2 text-sq-secondary">{it.brand ?? '—'}</td>
+                          <td className="text-[13px] text-sq-secondary tabular-nums">{it.gtin}</td>
+                          <td className="text-sq-text">{it.name}</td>
+                          <td className="text-sq-secondary">{it.brand ?? '—'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -235,8 +236,8 @@ export function SupplierImportPanel({ onImported }: { onImported: () => void }) 
 
               {plan.dropped.length > 0 && (
                 <details className="text-sq-secondary">
-                  <summary className="cursor-pointer">Чому пропущено</summary>
-                  <ul className="mt-2 space-y-1 text-xs">
+                  <summary className="cursor-pointer font-semibold text-sq-blue">Чому пропущено</summary>
+                  <ul className="mt-2 space-y-1 text-[13px]">
                     {plan.dropped.map((d) => (
                       <li key={d.row}>
                         рядок {d.row} — {d.reason}
@@ -261,7 +262,7 @@ export function SupplierImportPanel({ onImported }: { onImported: () => void }) 
               {busy ? `Імпорт… ${progress.done}/${progress.total}` : 'Імпортувати'}
             </button>
             {(mapping.gtin < 0 || mapping.name < 0) && (
-              <span className="text-sm text-sq-secondary">
+              <span className="text-[15px] text-sq-secondary">
                 Оберіть колонки зі штрихкодом і назвою.
               </span>
             )}
@@ -270,26 +271,26 @@ export function SupplierImportPanel({ onImported }: { onImported: () => void }) 
       )}
 
       {totals && (
-        <div className="border-t border-sq-divider pt-4 space-y-2 text-sm">
-          <p className="text-sq-text">
-            Прийнято <strong>{totals.accepted}</strong>, оновлено в довіднику{' '}
-            <strong>{totals.upserted}</strong>.
+        <div className="rounded-xl bg-sq-sidebar px-[18px] py-4 space-y-2 text-[15px]">
+          <p className="text-sq-text tabular-nums">
+            Прийнято <strong className="font-semibold">{totals.accepted}</strong>, оновлено в довіднику{' '}
+            <strong className="font-semibold">{totals.upserted}</strong>.
           </p>
           {totals.accepted > totals.upserted && (
-            <p className="text-sq-secondary text-xs">
+            <p className="text-sq-secondary text-[13px]">
               Різниця — рядки, які нічого не змінили: така назва вже стояла, або запис має ручну
               правку, що має вищий пріоритет.
             </p>
           )}
           {totals.skipped.length > 0 && (
             <details className="text-sq-secondary">
-              <summary className="cursor-pointer">
+              <summary className="cursor-pointer font-semibold text-sq-blue">
                 Сервер відхилив {totals.skipped.length} рядків
               </summary>
-              <ul className="mt-2 space-y-1 text-xs">
+              <ul className="mt-2 space-y-1 text-[13px]">
                 {totals.skipped.map((sk, i) => (
                   <li key={`${sk.gtin}-${i}`}>
-                    <span className="font-mono">{sk.gtin}</span> — {skipLabel(sk.reason)}
+                    <span className="tabular-nums">{sk.gtin}</span> — {skipLabel(sk.reason)}
                   </li>
                 ))}
               </ul>

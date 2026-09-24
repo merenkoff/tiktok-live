@@ -9,7 +9,7 @@ test('shows the login form when there is no session', async ({ page }) => {
   await page.goto('/');
 
   await expect(page.getByRole('heading', { name: 'Вхід' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Продавець (PIN)' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Продавець · PIN' })).toBeVisible();
 });
 
 test('an owner signs in and lands in the admin area', async ({ page }) => {

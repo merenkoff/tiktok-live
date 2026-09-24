@@ -16,6 +16,7 @@ import {
   useVertical,
 } from '@pos/platform';
 import type { OnHandRow, PackMode } from '@pos/platform';
+import { Segmented, Warehouse, X } from '@pos/platform/ui';
 import { ADJUST_REASONS, defaultReason, writeoffReasonsOf } from '../lib/reasons';
 
 type Mode = 'receive' | 'writeoff' | 'set';
@@ -133,138 +134,151 @@ export function ManageStockModal({ row, onClose, onSaved }: Props) {
   const label =
     mode === 'receive' ? 'Скільки надійшло' : mode === 'writeoff' ? 'Скільки списати' : 'Має бути';
 
+  /** A tab switches what the box means, so it resets what is in it too. */
+  function chooseMode(m: Mode): void {
+    setMode(m);
+    switchPackMode(defaultPackMode(m === 'receive' ? 'receive' : 'count', pack));
+    // «1» means one pack when the box opens in packs — the number
+    // and the caption above it always agree.
+    setQty(m === 'set' ? String(row.quantity) : '1');
+    setReason(m === 'writeoff' ? defaultReason(writeoffReasons) : 'data_fix');
+  }
+
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-[rgba(28,32,38,.32)] p-4"
+      onClick={onClose}
+    >
       <form
+        role="dialog"
+        aria-modal="true"
+        aria-label="Керувати залишком"
         onClick={(e) => e.stopPropagation()}
         onSubmit={(e) => void onSubmit(e)}
-        className="w-full max-w-md rounded-[4px] bg-white border border-[#E0E0E0] p-5 space-y-4 shadow-lg"
+        className="w-full max-w-md bg-white rounded-card shadow-[0_24px_60px_rgba(0,20,60,.28)] animate-fade-up"
       >
-        <div>
-          <p className="sq-section-label">Керувати залишком</p>
-          <h2 className="text-lg font-semibold mt-1">
-            {row.product_name}{' '}
-            <span className="text-[#6E6E6E] font-normal">
-              {row.label}
-            </span>
-          </h2>
-          <p className="text-sm text-[#6E6E6E] mt-1">
-            Зараз: <strong className="text-[#1A1A1A]">{row.quantity}</strong> {row.unit} ·{' '}
-            {formatUah(row.price_cents)}
-          </p>
-        </div>
-
-        <div className="flex gap-1 p-1 bg-[#F5F5F5] rounded-[4px]">
-          {(
-            [
-              ['set', 'Має бути'],
-              ['receive', 'Прихід'],
-              ['writeoff', 'Списання'],
-            ] as const
-          ).map(([m, t]) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => {
-                setMode(m);
-                switchPackMode(defaultPackMode(m === 'receive' ? 'receive' : 'count', pack));
-                // «1» means one pack when the box opens in packs — the number
-                // and the caption above it always agree.
-                setQty(m === 'set' ? String(row.quantity) : '1');
-                setReason(m === 'writeoff' ? defaultReason(writeoffReasons) : 'data_fix');
-              }}
-              className={`flex-1 py-2 text-sm rounded-[4px] ${
-                mode === m ? 'bg-white font-medium shadow-sm' : 'text-[#6E6E6E]'
-              }`}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-
-        <div className="space-y-1">
-          <label className="block space-y-1">
-            <span className="text-sm text-[#6E6E6E]">{label}</span>
-            <input
-              type="number"
-              min={0}
-              // A number box defaults to step=1, and native validation would
-              // then block «1,5 ящика» with a browser tooltip instead of the
-              // named message below. Half a pack is a legitimate thing to
-              // type; what is refused is the base units it comes out to.
-              step="any"
-              value={qty}
-              onChange={(e) => setQty(e.target.value)}
-              className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-3 text-lg font-semibold"
-              autoFocus
-            />
-          </label>
-          <QuantityUnitToggle
-            pack={pack}
-            unit={row.unit}
-            mode={packMode}
-            value={Number(qty)}
-            onModeChange={switchPackMode}
-          />
-        </div>
-
-        {mode === 'receive' && (
-          <label className="block space-y-1">
-            <span className="text-sm text-[#6E6E6E]">
-              {packMode === 'pack' && pack
-                ? `Ціна закупки за ${pack.label} (₴)`
-                : `Ціна закупки за ${row.unit} (₴)`}
-            </span>
-            <input
-              value={cost}
-              onChange={(e) => setCost(e.target.value)}
-              className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2.5 text-sm"
-            />
-          </label>
-        )}
-
-        {mode !== 'receive' && (
-          <div className="flex flex-wrap gap-1.5">
-            {reasons.map((r) => (
-              <button
-                key={r.code}
-                type="button"
-                onClick={() => setReason(r.code)}
-                className={`px-3 py-1.5 text-sm rounded-[4px] border ${
-                  reason === r.code
-                    ? 'border-[#006AFF] bg-[#E8F1FF] text-[#006AFF]'
-                    : 'border-[#E0E0E0] bg-white'
-                }`}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        <label className="block space-y-1">
-          <span className="text-sm text-[#6E6E6E]">Коментар</span>
-          <input
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2.5 text-sm"
-            placeholder="необовʼязково"
-          />
-        </label>
-
-        {error && <p className="text-sm text-red-600">{error}</p>}
-
-        <div className="flex gap-2 pt-1">
+        <div className="px-5 pt-[18px] pb-3 flex items-center gap-2.5">
+          <Warehouse size={24} className="shrink-0" />
+          <h3 className="flex-1 text-[19px] font-bold text-sq-heading">Керувати залишком</h3>
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 rounded-[4px] border border-[#E0E0E0] py-2.5 text-sm"
+            aria-label="Закрити"
+            className="w-9 h-9 grid place-items-center rounded-full text-sq-secondary hover:bg-sq-empty"
           >
-            Скасувати
+            <X size={20} />
           </button>
-          <button type="submit" disabled={saving} className="sq-btn-primary flex-1 py-2.5 text-sm">
-            {saving ? 'Збереження…' : 'Провести'}
-          </button>
+        </div>
+
+        <div className="px-5 pb-5 space-y-4">
+          <div>
+            <p className="text-base font-semibold text-sq-text">
+              {row.product_name}{' '}
+              <span className="text-sq-muted font-normal">
+                {row.label}
+              </span>
+            </p>
+            <p className="text-sm text-sq-secondary mt-0.5 tabular-nums">
+              Зараз: <strong className="text-sq-text">{row.quantity}</strong> {row.unit} ·{' '}
+              {formatUah(row.price_cents)}
+            </p>
+          </div>
+
+          <Segmented<Mode>
+            value={mode}
+            onChange={chooseMode}
+            options={[
+              { value: 'set', label: 'Має бути' },
+              { value: 'receive', label: 'Прихід' },
+              { value: 'writeoff', label: 'Списання' },
+            ]}
+          />
+
+          <div className="space-y-1.5">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-semibold text-sq-secondary">{label}</span>
+              <input
+                type="number"
+                min={0}
+                // A number box defaults to step=1, and native validation would
+                // then block «1,5 ящика» with a browser tooltip instead of the
+                // named message below. Half a pack is a legitimate thing to
+                // type; what is refused is the base units it comes out to.
+                step="any"
+                value={qty}
+                onChange={(e) => setQty(e.target.value)}
+                className="sq-input !text-lg !font-semibold"
+                autoFocus
+              />
+            </label>
+            <QuantityUnitToggle
+              pack={pack}
+              unit={row.unit}
+              mode={packMode}
+              value={Number(qty)}
+              onModeChange={switchPackMode}
+            />
+          </div>
+
+          {mode === 'receive' && (
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-semibold text-sq-secondary">
+                {packMode === 'pack' && pack
+                  ? `Ціна закупки за ${pack.label} (₴)`
+                  : `Ціна закупки за ${row.unit} (₴)`}
+              </span>
+              <input
+                value={cost}
+                onChange={(e) => setCost(e.target.value)}
+                className="sq-input"
+              />
+            </label>
+          )}
+
+          {mode !== 'receive' && (
+            <div className="flex flex-wrap gap-1.5">
+              {reasons.map((r) => (
+                <button
+                  key={r.code}
+                  type="button"
+                  aria-pressed={reason === r.code}
+                  onClick={() => setReason(r.code)}
+                  className={`h-9 px-3.5 rounded-[10px] text-[15px] transition-colors ${
+                    reason === r.code
+                      ? 'bg-sq-selected font-semibold text-sq-text'
+                      : 'text-sq-secondary hover:bg-sq-selected/50'
+                  }`}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[13px] font-semibold text-sq-secondary">Коментар</span>
+            <input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="sq-input"
+              placeholder="необовʼязково"
+            />
+          </label>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <div className="flex gap-2 pt-1">
+            <button type="button" onClick={onClose} className="sq-btn-quiet flex-1">
+              Скасувати
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="pos-btn-primary flex-1 min-h-11 px-4 rounded-sq text-[15px]"
+            >
+              {saving ? 'Збереження…' : 'Провести'}
+            </button>
+          </div>
         </div>
       </form>
     </div>

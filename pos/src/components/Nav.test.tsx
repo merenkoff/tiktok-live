@@ -24,24 +24,56 @@ const hrefs = () =>
   screen.getAllByRole('link').map((el) => el.getAttribute('href'));
 
 describe('Nav — admin sidebar', () => {
-  it('renders the owner sections as labelled links', () => {
+  it('renders the owner sections as labelled links, in Things-style groups', () => {
     signIn('owner');
     renderWithProviders(<Nav location="admin-sidebar" />, { route: '/admin' });
 
+    // «Сьогодні» on top, then Продажі, Каталог, and the system entries last.
     expect(hrefs()).toEqual([
       '/admin',
+      '/admin/customers',
+      '/admin/sales',
       '/admin/products',
       '/admin/tech-cards',
       '/admin/modifiers',
       '/admin/stock',
-      '/admin/customers',
-      '/admin/sales',
-      '/admin/staff',
       '/admin/gtin',
+      '/admin/staff',
       '/admin/settings',
       '/admin/appearance',
     ]);
     expect(screen.getByRole('link', { name: 'Сьогодні' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Продажі' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Каталог' })).toBeInTheDocument();
+  });
+
+  it('draws a glyph on every owner section, named or not', () => {
+    signIn('owner');
+    const { container } = renderWithProviders(<Nav location="admin-sidebar" />, { route: '/admin' });
+    expect(container.querySelector('a[href="/admin"] svg')).toHaveAttribute('data-glyph', 'Star');
+    expect(container.querySelector('a[href="/admin/stock"] svg')).toHaveAttribute('data-glyph', 'Warehouse');
+  });
+
+  it('adds the till under «Сьогодні» when asked', () => {
+    signIn('owner');
+    renderWithProviders(<Nav location="admin-sidebar" tillLink />, { route: '/admin' });
+    expect(hrefs().slice(0, 2)).toEqual(['/admin', '/register']);
+  });
+
+  it('shows a count beside a row, and a red pill for trouble', () => {
+    signIn('owner');
+    const { container } = renderWithProviders(
+      <Nav
+        location="admin-sidebar"
+        counts={{ '/admin': { count: 3 }, '/admin/stock': { count: 120, alert: true } }}
+      />,
+      { route: '/admin' }
+    );
+    expect(container.querySelector('a[href="/admin"] [data-testid=nav-count]')).toHaveTextContent('3');
+    const stock = container.querySelector('a[href="/admin/stock"] [data-testid=nav-count]');
+    expect(stock).toHaveTextContent('99+');
+    expect(stock).toHaveAttribute('data-alert', 'true');
+    expect(container.querySelector('a[href="/admin/customers"] [data-testid=nav-count]')).toBeNull();
   });
 
   it('drops the sections of a disabled module', () => {
@@ -87,10 +119,10 @@ describe('Nav — cashier rail', () => {
       { route: '/register', shell: 'cashier' }
     );
 
-    // Every rail entry names its icon by lucide export name; the host resolves it.
+    // Every rail entry names its icon as a string; the host resolves it to a glyph.
     const till = container.querySelector('a[href="/register"] svg');
     expect(till).toBeInTheDocument();
-    expect(till).toHaveClass('lucide-grid3x3');
+    expect(till).toHaveAttribute('data-glyph', 'ShoppingCart');
   });
 
   it('marks the hardware entry when an app update is waiting', () => {
@@ -134,7 +166,7 @@ describe('Nav — store menu appearance', () => {
     signIn('seller', undefined, {
       'catalog-checkout:cashier-primary:/register': {
         label: 'Продаж',
-        icon: 'ShoppingCart',
+        icon: 'Store',
         order: 100,
       },
     });
@@ -146,7 +178,7 @@ describe('Nav — store menu appearance', () => {
     // Last in the bar now, under its new name and its new glyph.
     expect(hrefs()).toEqual(['/orders', '/customers', '/sales', '/hardware', '/register']);
     expect(screen.getByRole('link', { name: 'Продаж' })).toBeInTheDocument();
-    expect(container.querySelector('a[href="/register"] svg')).toHaveClass('lucide-shopping-cart');
+    expect(container.querySelector('a[href="/register"] svg')).toHaveAttribute('data-glyph', 'Store');
   });
 
   it('renames an admin section too', () => {

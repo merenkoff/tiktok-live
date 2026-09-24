@@ -20,7 +20,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Flower2 } from 'lucide-react';
+import { Flower2 } from '@pos/platform/ui';
 import { api, useAuthStore } from '@pos/platform';
 
 /** «25», «12.5» → 2500, 1250. A comma is what a Ukrainian keyboard gives. */
@@ -83,7 +83,7 @@ export default function FloristLabourCard() {
       data-testid="florist-labour-card"
     >
       <p className="sq-section-label flex items-center gap-2">
-        <Flower2 size={14} className="text-sq-blue" />
+        <Flower2 size={24} className="text-sq-blue" />
         Робота флориста
       </p>
 

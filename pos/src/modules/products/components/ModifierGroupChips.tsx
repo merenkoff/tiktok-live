@@ -31,7 +31,7 @@ export function ModifierGroupChips({
 
   return (
     <div className="sm:col-span-2">
-      <p className="text-xs font-semibold text-sq-secondary mb-2">Модифікатори</p>
+      <p className="text-[13px] font-semibold text-sq-secondary mb-2">Модифікатори</p>
       <div className="flex flex-wrap gap-2">
         {shown.map((group) => {
           const index = value.indexOf(group.id);
@@ -43,22 +43,26 @@ export function ModifierGroupChips({
               onClick={() => toggle(group.id)}
               aria-pressed={on}
               data-testid={`modifier-group-chip-${group.id}`}
-              className={`inline-flex items-center gap-1.5 text-sm border rounded-full px-2.5 py-1 ${
+              className={`inline-flex items-center gap-2 min-h-9 px-3 rounded-[10px] text-[15px] transition-colors ${
                 on
-                  ? 'border-sq-blue bg-sq-blue text-white'
-                  : 'border-sq-divider bg-sq-bg text-sq-text'
+                  ? 'bg-sq-blue/[0.08] ring-2 ring-inset ring-sq-blue text-sq-blue font-semibold'
+                  : 'bg-sq-surface ring-1 ring-inset ring-sq-divider text-sq-text font-medium hover:bg-sq-sidebar'
               }`}
             >
-              {on && <span className="text-[11px] font-semibold tabular-nums">{index + 1}</span>}
+              {on && (
+                <span className="min-w-5 h-5 px-1 rounded-full bg-sq-blue text-white text-[11px] font-semibold tabular-nums grid place-items-center">
+                  {index + 1}
+                </span>
+              )}
               {group.name}
-              <span className={`text-[11px] ${on ? 'opacity-80' : 'text-sq-secondary'}`}>
+              <span className={`text-[13px] font-normal ${on ? 'text-sq-blue/80' : 'text-sq-muted'}`}>
                 {group.min_select >= 1 ? 'обовʼязково' : 'за бажанням'}
               </span>
             </button>
           );
         })}
         {shown.length === 0 && (
-          <span className="text-sm text-sq-muted">
+          <span className="text-[15px] text-sq-muted">
             Немає груп — заведіть їх на сторінці «Модифікатори»
           </span>
         )}

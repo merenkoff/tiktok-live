@@ -17,6 +17,7 @@ import { LiveLogs } from '../components/LiveLogs';
 import { SessionControl } from '../components/SessionControl';
 import { SupportCode } from '../components/SupportCode';
 import type { LiveDiagnostic, LiveFailureReason } from '../lib/diagnostics';
+import { AlertTriangle, Download, MessageCircle, ShoppingBag, Video, WifiOff, Wrench, type Glyph } from '@pos/platform/ui';
 
 /**
  * What to tell the operator per failure, keyed by reason so the copy and the
@@ -28,32 +29,32 @@ import type { LiveDiagnostic, LiveFailureReason } from '../lib/diagnostics';
  * it is an errand for the store owner rather than a fault.
  */
 const FAILURE_COPY: Record<Exclude<LiveFailureReason, 'not_configured'>, {
-  icon: string;
+  icon: Glyph;
   title: string;
   body: string;
 }> = {
   host_too_old: {
-    icon: '⬆️',
+    icon: Download,
     title: 'Застосунок каси застарів для модуля ефіру',
     body: 'Оновіть застосунок до останньої версії. Якщо після оновлення нічого не змінилось — передайте код нижче в підтримку.',
   },
   server_missing_bridge: {
-    icon: '🛠',
+    icon: Wrench,
     title: 'Сервер не підтримує модуль ефіру',
     body: 'Схоже, сервер магазину ще не оновлено. Передайте код нижче в підтримку — оновлення на нашому боці.',
   },
   server_error: {
-    icon: '⚠️',
+    icon: AlertTriangle,
     title: 'Сервер відповів помилкою',
     body: 'Спробуйте ще раз. Якщо помилка повторюється — передайте код нижче в підтримку.',
   },
   network: {
-    icon: '📡',
+    icon: WifiOff,
     title: 'Немає зʼєднання з сервером',
     body: 'Модуль ефіру працює лише онлайн. Перевірте інтернет і спробуйте ще раз.',
   },
   unknown: {
-    icon: '⚠️',
+    icon: AlertTriangle,
     title: 'Не вдалося підключитися до TikTok LIVE',
     body: 'Спробуйте ще раз. Якщо помилка повторюється — передайте код нижче в підтримку.',
   },
@@ -103,7 +104,7 @@ export function LiveDeskPage() {
   if (status === 'not-configured') {
     return (
       <CenteredCard
-        icon="🔌"
+        icon={Video}
         title="Магазин не під’єднано до TikTok LIVE"
         body={
           shell === 'web'
@@ -136,89 +137,87 @@ export function LiveDeskPage() {
   const errorCount = logs.filter((l) => l.log_type === 'error').length;
 
   return (
-    <div className="animate-fade-up space-y-6 text-sq-text">
-      <div className="sq-card p-6 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-6">
-          <div>
-            <div className="flex items-center gap-3">
-              <span
-                className={`h-3 w-3 flex-shrink-0 rounded-full ${
-                  isActive ? 'bg-emerald-500' : 'bg-sq-muted'
-                }`}
-              />
-              <h2 className="text-2xl font-semibold">Прямий ефір</h2>
-              <span
-                className={`rounded-sq px-2 py-0.5 text-xs font-semibold ${
-                  isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-sq-empty text-sq-secondary'
-                }`}
-                data-testid="session-status"
-              >
-                {isActive ? 'Активна' : 'Зупинена'}
-              </span>
-            </div>
-            <p className="mt-2 text-sm text-sq-secondary">
+    <div className="flex-1 min-h-0 overflow-auto bg-sq-bg text-sq-text">
+      <div className="flex flex-wrap items-center gap-3 px-4 md:px-7 py-4 md:min-h-[72px]">
+        <Video size={24} className="shrink-0" />
+        <h1 className="text-2xl font-bold text-sq-heading">Прямий ефір</h1>
+        <span
+          className={`inline-flex items-center gap-1.5 h-[22px] px-2 rounded-md text-xs font-medium ${
+            isActive
+              ? 'bg-sq-success/10 text-sq-success-ink'
+              : 'ring-1 ring-inset ring-sq-divider text-sq-secondary'
+          }`}
+          data-testid="session-status"
+        >
+          <span
+            aria-hidden
+            className={`h-2 w-2 flex-shrink-0 rounded-full ${isActive ? 'bg-sq-success' : 'bg-sq-muted'}`}
+          />
+          {isActive ? 'Активна' : 'Зупинена'}
+        </span>
+      </div>
+
+      <div className="animate-fade-up space-y-5 px-4 md:px-7 pb-6">
+        <section className="rounded-card bg-white shadow-card p-5">
+          <div className="flex flex-wrap items-center justify-between gap-5">
+            <p className="text-[15px] text-sq-secondary">
               {username ? `Акаунт @${username} · ` : ''}
               WebSocket:{' '}
-              <span className={isConnected ? 'text-emerald-700' : 'text-rose-700'}>
+              <span className={isConnected ? 'text-sq-success-ink' : 'text-sq-danger'}>
                 {isConnected ? 'підключено' : 'відключено'}
               </span>
             </p>
+
+            {isActive && (
+              <div className="rounded-xl bg-sq-sidebar px-[18px] py-3 text-center">
+                <div className="text-[13px] font-medium text-sq-secondary">Тривалість</div>
+                <div className="mt-0.5 text-[26px] font-bold leading-tight text-sq-success-ink tabular-nums">
+                  {duration}
+                </div>
+              </div>
+            )}
           </div>
 
-          {isActive && (
-            <div className="rounded-sq border border-sq-divider bg-sq-bg px-6 py-3 text-center">
-              <div className="sq-section-label">Тривалість</div>
-              <div className="mt-1 font-mono text-3xl font-semibold text-emerald-700">
-                {duration}
-              </div>
-            </div>
-          )}
-        </div>
+          <div className="mt-5 flex flex-wrap items-center gap-4 pt-5 shadow-[0_-1px_0_rgb(var(--sq-divider-rgb))]">
+            <SessionControl
+              isActive={isActive}
+              onStart={() => void start()}
+              onStop={() => void stop()}
+              isStarting={isStarting}
+              isStopping={isStopping}
+            />
+            {actionError && <span className="text-sm text-red-600">{actionError}</span>}
+            {isError && (
+              <span className="text-sm text-sq-secondary">
+                Статус ефіру недоступний — повторюємо спробу…
+                {pollDiagnostic && (
+                  <>
+                    {' '}
+                    <code
+                      data-testid="live-poll-support-code"
+                      className="select-all font-mono text-xs text-sq-muted"
+                    >
+                      {pollDiagnostic.code}
+                    </code>
+                  </>
+                )}
+              </span>
+            )}
+          </div>
+        </section>
 
-        <div className="mt-6 flex flex-wrap items-center gap-4 border-t border-sq-divider pt-6">
-          <SessionControl
-            isActive={isActive}
-            onStart={() => void start()}
-            onStop={() => void stop()}
-            isStarting={isStarting}
-            isStopping={isStopping}
-          />
-          {actionError && <span className="text-sm text-rose-700">{actionError}</span>}
-          {isError && (
-            <span className="text-sm text-sq-secondary">
-              Статус ефіру недоступний — повторюємо спробу…
-              {pollDiagnostic && (
-                <>
-                  {' '}
-                  <code
-                    data-testid="live-poll-support-code"
-                    className="select-all font-mono text-xs text-sq-muted"
-                  >
-                    {pollDiagnostic.code}
-                  </code>
-                </>
-              )}
-            </span>
-          )}
-        </div>
-      </div>
+        <div className="grid gap-5 lg:grid-cols-[260px_1fr]">
+          <div className="flex flex-col gap-3">
+            <span className="sq-section-label">Статистика ефіру</span>
+            <StatCard label="Замовлень" value={orderCount} icon={ShoppingBag} />
+            <StatCard label="Коментарів" value={commentCount} icon={MessageCircle} />
+            <StatCard label="Помилок" value={errorCount} icon={AlertTriangle} alert={errorCount > 0} />
+          </div>
 
-      <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
-        <div className="flex flex-col gap-4">
-          <span className="sq-section-label">Статистика ефіру</span>
-          <StatCard label="Замовлень" value={orderCount} icon="🛍" tone="text-emerald-700" />
-          <StatCard label="Коментарів" value={commentCount} icon="💬" tone="text-blue-700" />
-          <StatCard
-            label="Помилок"
-            value={errorCount}
-            icon="⚠"
-            tone={errorCount > 0 ? 'text-rose-700' : 'text-sq-muted'}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <span className="sq-section-label">Лайв-лог</span>
-          <LiveLogs logs={logs} isConnected={isConnected} onReconnect={reconnect} />
+          <div className="flex flex-col gap-3">
+            <span className="sq-section-label">Лайв-лог</span>
+            <LiveLogs logs={logs} isConnected={isConnected} onReconnect={reconnect} />
+          </div>
         </div>
       </div>
     </div>
@@ -229,21 +228,27 @@ function StatCard({
   label,
   value,
   icon,
-  tone,
+  alert,
 }: {
   label: string;
   value: number;
-  icon: string;
-  tone: string;
+  icon: Glyph;
+  /** A count the operator should look at — the only figure drawn in colour. */
+  alert?: boolean;
 }) {
+  const Icon = icon;
   return (
-    <div className="sq-card flex items-center gap-4 p-4">
-      <div className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-sq bg-sq-bg text-xl">
-        {icon}
-      </div>
+    <div className="flex items-center gap-3.5 rounded-card bg-white shadow-card px-[18px] py-4">
+      <Icon size={24} className="shrink-0" />
       <div>
-        <div className="sq-section-label">{label}</div>
-        <div className={`font-mono text-2xl font-bold ${tone}`}>{value}</div>
+        <div className="text-[13px] font-medium text-sq-secondary">{label}</div>
+        <div
+          className={`text-[26px] font-bold leading-tight tabular-nums ${
+            alert ? 'text-sq-danger' : 'text-sq-heading'
+          }`}
+        >
+          {value}
+        </div>
       </div>
     </div>
   );
@@ -256,23 +261,28 @@ function CenteredCard({
   action,
   diagnostic,
 }: {
-  icon?: string;
+  icon?: Glyph;
   title: string;
   body?: string;
   action?: { label: string; onClick: () => void };
   diagnostic?: LiveDiagnostic | null;
 }) {
+  const Icon = icon;
   return (
-    <div className="grid min-h-[60vh] place-items-center px-6">
-      <div className="sq-card animate-fade-up max-w-md p-8 text-center">
-        {icon && <div className="mb-4 text-4xl">{icon}</div>}
-        <h2 className="text-lg font-semibold text-sq-text">{title}</h2>
-        {body && <p className="mt-3 text-sm leading-relaxed text-sq-secondary">{body}</p>}
+    <div className="flex-1 min-h-0 overflow-auto bg-sq-bg grid place-items-center px-4 py-8">
+      <div className="animate-fade-up w-full max-w-md rounded-card bg-white shadow-card p-8 text-center">
+        {Icon && (
+          <div className="mb-4 flex justify-center">
+            <Icon size={48} />
+          </div>
+        )}
+        <h2 className="text-[19px] font-bold text-sq-heading">{title}</h2>
+        {body && <p className="mt-2 text-[15px] leading-relaxed text-sq-secondary">{body}</p>}
         {action && (
           <button
             type="button"
             onClick={action.onClick}
-            className="sq-btn-primary mt-6 px-4 py-2.5"
+            className="pos-btn-primary mt-6 min-h-11 px-5 rounded-xl text-[15px]"
           >
             {action.label}
           </button>

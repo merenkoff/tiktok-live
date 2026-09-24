@@ -4,15 +4,25 @@
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { displayGtin, gtinSourceLabel } from '@pos/platform';
+import {
+  Barcode,
+  ChevronLeft,
+  ChevronRight,
+  PackageLine,
+  PageHeader,
+  Search,
+  SectionHead,
+} from '@pos/platform/ui';
 import { gtinCacheApi, type GtinCacheEntry } from '../data/gtinCacheApi';
 import { SupplierImportPanel } from '../components/SupplierImportPanel';
 
 const PAGE_SIZE = 25;
 
-// No neutral button primitive in the `.sq-*` layer yet — the admin pages spell
-// this combination out. Kept in one place rather than repeated six times.
-const BTN = 'rounded-sq border border-sq-divider bg-sq-surface px-3 py-2 text-sm disabled:opacity-50';
-const BTN_PRIMARY = 'sq-btn-primary px-4 py-2 text-sm';
+// The white button beside a primary one is `.sq-btn-quiet` now; the destructive
+// one is a red text button, as everywhere else in the owner's screens.
+const BTN = 'sq-btn-quiet';
+const BTN_PRIMARY = 'pos-btn-primary min-h-11 px-4 rounded-sq text-[15px]';
+const BTN_DANGER = 'min-h-11 px-3 rounded-sq text-[15px] font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50';
 
 /** Brand · source · date, skipping whatever this row does not have. */
 function metaLine(entry: GtinCacheEntry): string {
@@ -124,169 +134,191 @@ export function GtinCachePage() {
   const page = Math.floor(offset / PAGE_SIZE) + 1;
 
   return (
-    <div className="space-y-6 animate-fade-up text-sq-text">
-      <div>
-        <h2 className="text-2xl font-semibold">GTIN-довідник</h2>
-        <p className="text-sq-secondary mt-1 text-sm">
-          Назви, які каса підтягує за штрихкодом під час приймання товару. Довідник спільний —
-          виправлення бачать усі магазини. Пріоритет: ручна правка касира → прайс постачальника →
-          автоматичний пошук.
-        </p>
-      </div>
+    <div className="animate-fade-up text-sq-text max-w-5xl">
+      <PageHeader
+        glyph={Barcode}
+        title="GTIN-довідник"
+        subtitle={
+          <>
+            Назви, які каса підтягує за штрихкодом під час приймання товару. Довідник спільний —
+            виправлення бачать усі магазини. Пріоритет: ручна правка касира → прайс постачальника →
+            автоматичний пошук.
+          </>
+        }
+      />
 
-      <SupplierImportPanel onImported={() => void reload()} />
+      <div className="space-y-8">
+        <SupplierImportPanel onImported={() => void reload()} />
 
-      <form onSubmit={onSearch} className="flex flex-wrap items-center gap-3">
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Штрихкод або назва"
-          className="flex-1 min-w-[220px] rounded-sq border border-sq-divider bg-sq-bg px-3 py-2.5 text-sq-text"
-        />
-        <button type="submit" className={BTN_PRIMARY}>
-          Знайти
-        </button>
-        <label className="flex items-center gap-2 text-sm text-sq-secondary">
-          <input
-            type="checkbox"
-            className="h-4 w-4"
-            checked={blockedOnly}
-            onChange={(e) => {
-              setOffset(0);
-              setBlockedOnly(e.target.checked);
-            }}
-          />
-          Лише очищені
-        </label>
-      </form>
+        <section className="space-y-4">
+          <SectionHead title="Довідник" count={total} />
 
-      {error && <div className="rounded-sq bg-red-50 text-red-700 px-3 py-2 text-sm">{error}</div>}
+          <form onSubmit={onSearch} className="flex flex-wrap items-center gap-3">
+            <label className="flex-1 min-w-[220px] h-11 rounded-sq bg-sq-empty flex items-center gap-2.5 px-3.5 transition-colors focus-within:bg-sq-surface focus-within:ring-2 focus-within:ring-sq-blue">
+              <Search size={20} className="text-sq-muted shrink-0" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Штрихкод або назва"
+                className="flex-1 min-w-0 bg-transparent border-0 outline-none text-[15px] text-sq-text placeholder:text-sq-muted"
+              />
+            </label>
+            <button type="submit" className={BTN_PRIMARY}>
+              Знайти
+            </button>
+            <label className="inline-flex items-center gap-2 min-h-11 text-[15px] text-sq-secondary cursor-pointer">
+              <input
+                type="checkbox"
+                className="w-4 h-4 accent-[rgb(var(--sq-blue-rgb))]"
+                checked={blockedOnly}
+                onChange={(e) => {
+                  setOffset(0);
+                  setBlockedOnly(e.target.checked);
+                }}
+              />
+              Лише очищені
+            </label>
+          </form>
 
-      <section className="bg-sq-surface border border-sq-divider rounded-sq divide-y divide-sq-divider overflow-hidden shadow-sm">
-        {items.map((entry) => {
-          const isEditing = editing === entry.gtin;
-          const working = busy === entry.gtin;
-          return (
-            <div key={entry.gtin} className="px-4 py-3 space-y-3">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                {entry.image_url && !entry.blocked && !brokenImages.has(entry.image_url) && (
-                  <img
-                    src={entry.image_url}
-                    alt=""
-                    loading="lazy"
-                    referrerPolicy="no-referrer"
-                    onError={() =>
-                      setBrokenImages((prev) => new Set(prev).add(entry.image_url!))
-                    }
-                    className="w-12 h-12 rounded-sq object-cover bg-sq-bg border border-sq-divider shrink-0"
-                  />
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="font-mono text-sm text-sq-secondary">{displayGtin(entry.gtin)}</p>
-                  {entry.blocked ? (
-                    <p className="font-semibold text-amber-600">Очищено власником</p>
-                  ) : (
-                    <p className="font-semibold text-sq-text truncate">
-                      {entry.name ?? 'Без назви'}
-                    </p>
-                  )}
-                  <p className="text-xs text-sq-secondary">{metaLine(entry)}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {entry.blocked ? (
-                    <button
-                      type="button"
-                      disabled={working}
-                      className={BTN}
-                      onClick={() => void run(entry.gtin, () => gtinCacheApi.unblock(entry.gtin))}
-                    >
-                      Розблокувати
-                    </button>
-                  ) : (
-                    <>
+          {error && <div className="rounded-sq bg-red-50 text-red-700 px-4 py-3 text-sm">{error}</div>}
+
+          <ul>
+            {items.map((entry) => {
+              const isEditing = editing === entry.gtin;
+              const working = busy === entry.gtin;
+              const showImage = entry.image_url && !entry.blocked && !brokenImages.has(entry.image_url);
+              return (
+                <li key={entry.gtin} className="sq-row py-3 space-y-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-sq-empty overflow-hidden shrink-0 grid place-items-center">
+                      {showImage ? (
+                        <img
+                          src={entry.image_url!}
+                          alt=""
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                          onError={() =>
+                            setBrokenImages((prev) => new Set(prev).add(entry.image_url!))
+                          }
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <PackageLine size={20} className="text-sq-muted" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] text-sq-muted tabular-nums">{displayGtin(entry.gtin)}</p>
+                      {entry.blocked ? (
+                        <p className="text-base font-semibold text-amber-700">Очищено власником</p>
+                      ) : (
+                        <p className="text-base font-semibold text-sq-text truncate">
+                          {entry.name ?? 'Без назви'}
+                        </p>
+                      )}
+                      <p className="text-[13px] text-sq-muted">{metaLine(entry)}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {entry.blocked ? (
+                        <button
+                          type="button"
+                          disabled={working}
+                          className={BTN}
+                          onClick={() => void run(entry.gtin, () => gtinCacheApi.unblock(entry.gtin))}
+                        >
+                          Розблокувати
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            disabled={working}
+                            className={BTN}
+                            onClick={() => (isEditing ? setEditing(null) : startEdit(entry))}
+                          >
+                            {isEditing ? 'Скасувати' : 'Виправити'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={working}
+                            className={BTN_DANGER}
+                            onClick={() => void onEvict(entry)}
+                          >
+                            Очистити
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {isEditing && (
+                    <div className="grid sm:grid-cols-[1fr_1fr_auto] gap-2 pl-[52px]">
+                      <input
+                        value={draftName}
+                        onChange={(e) => setDraftName(e.target.value)}
+                        placeholder="Назва"
+                        className="sq-input"
+                      />
+                      <input
+                        value={draftBrand}
+                        onChange={(e) => setDraftBrand(e.target.value)}
+                        placeholder="Бренд"
+                        className="sq-input"
+                      />
                       <button
                         type="button"
                         disabled={working}
-                        className={BTN}
-                        onClick={() => (isEditing ? setEditing(null) : startEdit(entry))}
+                        className={BTN_PRIMARY}
+                        onClick={() => void onSave(entry)}
                       >
-                        {isEditing ? 'Скасувати' : 'Виправити'}
+                        Зберегти
                       </button>
-                      <button
-                        type="button"
-                        disabled={working}
-                        className={`${BTN} text-red-600`}
-                        onClick={() => void onEvict(entry)}
-                      >
-                        Очистити
-                      </button>
-                    </>
+                    </div>
                   )}
-                </div>
-              </div>
+                </li>
+              );
+            })}
+          </ul>
 
-              {isEditing && (
-                <div className="grid sm:grid-cols-[1fr_1fr_auto] gap-2 border-t border-sq-divider pt-3">
-                  <input
-                    value={draftName}
-                    onChange={(e) => setDraftName(e.target.value)}
-                    placeholder="Назва"
-                    className="rounded-sq border border-sq-divider bg-sq-bg px-3 py-2 text-sq-text"
-                  />
-                  <input
-                    value={draftBrand}
-                    onChange={(e) => setDraftBrand(e.target.value)}
-                    placeholder="Бренд"
-                    className="rounded-sq border border-sq-divider bg-sq-bg px-3 py-2 text-sq-text"
-                  />
-                  <button
-                    type="button"
-                    disabled={working}
-                    className={BTN_PRIMARY}
-                    onClick={() => void onSave(entry)}
-                  >
-                    Зберегти
-                  </button>
-                </div>
-              )}
+          {items.length === 0 && (
+            <div className="py-10 flex flex-col items-center gap-3 text-center">
+              {!loading && <Barcode size={48} />}
+              <p className="text-[15px] text-sq-secondary max-w-md">
+                {loading
+                  ? 'Завантаження…'
+                  : applied
+                    ? 'Нічого не знайдено.'
+                    : 'Довідник поки порожній — він наповнюється під час приймання товару.'}
+              </p>
             </div>
-          );
-        })}
+          )}
 
-        {items.length === 0 && (
-          <p className="p-4 text-sq-secondary text-sm">
-            {loading
-              ? 'Завантаження…'
-              : applied
-                ? 'Нічого не знайдено.'
-                : 'Довідник поки порожній — він наповнюється під час приймання товару.'}
-          </p>
-        )}
-      </section>
-
-      {total > PAGE_SIZE && (
-        <div className="flex items-center justify-between text-sm text-sq-secondary">
-          <button
-            type="button"
-            className={BTN}
-            disabled={offset === 0}
-            onClick={() => setOffset((prev) => Math.max(prev - PAGE_SIZE, 0))}
-          >
-            Назад
-          </button>
-          <span>
-            {page} / {pages} · всього {total}
-          </span>
-          <button
-            type="button"
-            className={BTN}
-            disabled={offset + PAGE_SIZE >= total}
-            onClick={() => setOffset((prev) => prev + PAGE_SIZE)}
-          >
-            Далі
-          </button>
-        </div>
-      )}
+          {total > PAGE_SIZE && (
+            <div className="flex items-center justify-between gap-3 text-[15px] text-sq-secondary">
+              <button
+                type="button"
+                className={BTN}
+                disabled={offset === 0}
+                onClick={() => setOffset((prev) => Math.max(prev - PAGE_SIZE, 0))}
+              >
+                <ChevronLeft size={20} />
+                Назад
+              </button>
+              <span className="tabular-nums">
+                {page} / {pages} · всього {total}
+              </span>
+              <button
+                type="button"
+                className={BTN}
+                disabled={offset + PAGE_SIZE >= total}
+                onClick={() => setOffset((prev) => prev + PAGE_SIZE)}
+              >
+                Далі
+                <ChevronRight size={20} />
+              </button>
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

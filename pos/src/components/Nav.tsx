@@ -8,12 +8,21 @@ import { useUpdateStore } from '../hooks/useUpdateCheck';
 import { allModules } from '../modules/registry';
 import { selectNavItems } from '../modules/selectNav';
 import { useNavOverrides } from '../modules/useNavOverrides';
+import { adminIconOf, groupNavItems, navGroupLabel } from '../modules/navGroups';
 import type { NavCtx, NavItem, NavLocation, NavVariant } from '../modules/types';
+import { ShoppingCart } from '../platform/glyphs';
 
 interface Props {
   location: NavLocation;
   /** Required for `cashier-primary`; ignored for the admin sidebar. */
   variant?: NavVariant;
+  /** Admin sidebar: add «Каса» (the till) under «Сьогодні». */
+  tillLink?: boolean;
+  /**
+   * Admin sidebar: a number beside a row, by route — Things' counts. `alert`
+   * draws it as a red pill: something is wrong, not merely waiting.
+   */
+  counts?: Readonly<Record<string, { count: number; alert?: boolean }>>;
 }
 
 /**
@@ -21,35 +30,76 @@ interface Props {
  * the current shell/role/variant. Replaces the hand-maintained link lists in
  * `AdminLayout`, `AppRail` and `BottomNav`.
  */
-export function Nav({ location, variant }: Props) {
+export function Nav({ location, variant, tillLink, counts }: Props) {
   const shell = usePosShell();
   const role = useAuthStore((s) => s.role());
   const enabled = useEnabledModules();
   const overrides = useNavOverrides();
   const { pathname } = useLocation();
   const updateAvailable = useUpdateStore((s) => s.updateInfo?.update_available ?? false);
+  const vertical = useAuthStore((s) => s.auth?.store.vertical?.id ?? null);
 
   const ctx: NavCtx = { shell, role, variant };
   const items: NavItem[] = selectNavItems(allModules(), enabled, ctx, location, overrides);
 
   if (location === 'admin-sidebar') {
+    // Things' sidebar: a glyph and a label per row, the rows split into
+    // groups with a quiet caption, the system entries pushed to the bottom.
+    // Below `md` the sidebar is a horizontal strip, so the captions go.
+    const row = (n: NavItem) => {
+      const Icon = resolveNavIcon(adminIconOf(n));
+      return (
+        <NavLink
+          key={n.to}
+          to={n.to}
+          end={n.end}
+          title={n.indicator === 'pending' ? `${n.label} — модуль ще не завантажено` : undefined}
+          className={({ isActive }) =>
+            `flex items-center gap-2.5 min-h-[38px] px-2.5 rounded-lg text-[15px] whitespace-nowrap transition-colors ${
+              isActive ? 'bg-sq-selected font-semibold text-sq-text' : 'font-medium text-sq-text hover:bg-sq-selected/50'
+            }${n.indicator === 'pending' ? ' opacity-50' : ''}`
+          }
+        >
+          {Icon && <Icon size={24} className="shrink-0" />}
+          <span className="md:flex-1">{n.label}</span>
+          <NavCount value={counts?.[n.to]} />
+        </NavLink>
+      );
+    };
+    const till = tillLink ? (
+      <NavLink
+        key="/register"
+        to="/register"
+        className="flex items-center gap-2.5 min-h-[38px] px-2.5 rounded-lg text-[15px] font-medium text-sq-text whitespace-nowrap hover:bg-sq-selected/50 transition-colors"
+      >
+        <ShoppingCart size={24} className="shrink-0" />
+        Каса
+      </NavLink>
+    ) : null;
+    const groups = groupNavItems(items);
+    if (groups.length === 0 || (groups.length === 1 && groups[0].group === 'top' && !till)) {
+      return <>{items.map(row)}</>;
+    }
     return (
       <>
-        {items.map((n) => (
-          <NavLink
-            key={n.to}
-            to={n.to}
-            end={n.end}
-            title={n.indicator === 'pending' ? `${n.label} — модуль ще не завантажено` : undefined}
-            className={({ isActive }) =>
-              `px-3 py-2.5 rounded-[4px] text-sm font-medium whitespace-nowrap ${
-                isActive ? 'sq-nav-active' : 'sq-nav-idle'
-              }${n.indicator === 'pending' ? ' opacity-50' : ''}`
-            }
-          >
-            {n.label}
-          </NavLink>
-        ))}
+        {groups.map(({ group, items: rows }) => {
+          const label = navGroupLabel(group, vertical);
+          return (
+            <div
+              key={group}
+              role="group"
+              aria-label={label ?? undefined}
+              className={`flex md:flex-col gap-0.5 ${group === 'system' ? 'md:mt-auto md:pt-4' : ''}`}
+            >
+              {label && (
+                <span className="hidden md:block px-2.5 pt-4 pb-1 text-xs font-semibold text-sq-muted">{label}</span>
+              )}
+              {rows.map(row)}
+              {group === 'top' && till}
+            </div>
+          );
+        })}
+        {!groups.some((g) => g.group === 'top') && till}
       </>
     );
   }
@@ -62,49 +112,64 @@ export function Nav({ location, variant }: Props) {
         const pending = n.indicator === 'pending';
 
         if (variant === 'bottom') {
+          // The tab bar speaks the rail's language: glyph and label on one
+          // grey plate with the rail's 12 px corners, not a pill round the
+          // glyph alone — the whole entry reads as selected.
           return (
             <Link
               key={n.to}
               to={n.to}
               title={pending ? `${n.label} — модуль ще не завантажено` : undefined}
-              className={`flex-1 flex flex-col items-center justify-center ${
-                pending
-                  ? 'text-sq-secondary opacity-50'
-                  : active
-                    ? 'text-sq-blue'
-                    : 'text-sq-secondary hover:text-sq-text'
-              }`}
+              aria-current={active ? 'page' : undefined}
+              className={`flex-1 min-w-0 flex items-stretch justify-center px-0.5 py-1.5 ${pending ? 'opacity-50' : ''}`}
             >
-              {Icon && <Icon size={20} strokeWidth={1.75} />}
-              <span className="text-[11px] mt-0.5 font-medium">{n.label}</span>
+              <span
+                className={`w-full max-w-[88px] rounded-xl flex flex-col items-center justify-center gap-1 px-1 py-1 transition-colors ${
+                  active ? 'bg-sq-selected' : 'active:bg-sq-selected/50'
+                }`}
+              >
+                {Icon && <Icon size={24} />}
+                <span
+                  className={`max-w-full text-center text-[11px] font-semibold leading-[1.15] hyphens-auto break-words ${
+                    active ? 'text-sq-text' : 'text-sq-secondary'
+                  }`}
+                >
+                  {n.label}
+                </span>
+              </span>
             </Link>
           );
         }
 
         const showDot = n.indicator === 'update' && updateAvailable;
+        const title = pending
+          ? `${n.label} — модуль ще не завантажено`
+          : showDot
+            ? `${n.label} · доступне оновлення`
+            : n.label;
+        // The till's sidebar the way Things draws one: light, a colour glyph
+        // over a small label, the selected entry on a grey plate.
         return (
           <Link
             key={n.to}
             to={n.to}
-            title={
-              pending
-                ? `${n.label} — модуль ще не завантажено`
-                : showDot
-                  ? `${n.label} · доступне оновлення`
-                  : n.label
-            }
-            className={`${showDot ? 'relative ' : ''}w-12 h-12 grid place-items-center rounded-sq transition-colors ${
-              pending
-                ? 'text-white/40'
-                : active
-                  ? 'bg-white/15 text-white'
-                  : 'text-white/70 hover:text-white hover:bg-white/10'
+            title={title}
+            aria-label={title}
+            className={`relative w-[68px] min-h-[62px] py-2 flex flex-col items-center justify-center gap-1 rounded-xl transition-colors ${
+              pending ? 'opacity-50' : active ? 'bg-sq-selected' : 'hover:bg-sq-selected/50'
             }`}
           >
-            {Icon && <Icon size={22} strokeWidth={1.75} />}
+            {Icon && <Icon size={24} />}
+            <span
+              className={`max-w-[64px] text-center text-[11px] font-semibold leading-[1.15] hyphens-auto break-words ${
+                active ? 'text-sq-text' : 'text-sq-secondary'
+              }`}
+            >
+              {n.label}
+            </span>
             {showDot && (
               <span
-                className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500"
+                className="absolute top-1.5 right-2.5 w-2 h-2 rounded-full bg-amber-500"
                 aria-hidden
               />
             )}
@@ -112,5 +177,23 @@ export function Nav({ location, variant }: Props) {
         );
       })}
     </>
+  );
+}
+
+function NavCount({ value }: { value?: { count: number; alert?: boolean } }) {
+  if (!value || value.count <= 0) return null;
+  const text = value.count > 99 ? '99+' : String(value.count);
+  return value.alert ? (
+    <span
+      className="min-w-[22px] h-5 px-1.5 rounded-full bg-sq-danger text-white text-xs font-bold tabular-nums grid place-items-center"
+      data-testid="nav-count"
+      data-alert="true"
+    >
+      {text}
+    </span>
+  ) : (
+    <span className="text-[13px] text-sq-muted tabular-nums" data-testid="nav-count">
+      {text}
+    </span>
   );
 }

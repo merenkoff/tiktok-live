@@ -54,7 +54,7 @@ export function isAllowedRemoteUrl(value: unknown): value is string {
 const NAV_LOCATIONS = ['cashier-primary', 'admin-sidebar'] as const;
 
 /**
- * A lucide export name (roadmap #13 Part D) — shape only; whether this build
+ * A nav icon name (a `NAV_ICONS` key) (roadmap #13 Part D) — shape only; whether this build
  * actually ships the icon is `resolveNavIcon`'s problem, and it has a fallback.
  */
 function isIconName(value: unknown): value is string {

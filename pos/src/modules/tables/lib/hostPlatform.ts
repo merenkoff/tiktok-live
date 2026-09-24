@@ -23,6 +23,8 @@ export const REQUIRED_HOST_API = [
   'api.posRequest',
   'useOfflineStatus',
   'formatUah',
+  // The hall tile's «1 240 ₴» (platform 17) — the host's grouping, not a copy.
+  'formatUahCompact',
   // The menu beside the bill (К4l) is the till's own catalog machinery: tags,
   // folders, search and the shell-aware fetch, so the desktop till reads its
   // mirror and the web reads the server without this module knowing which it

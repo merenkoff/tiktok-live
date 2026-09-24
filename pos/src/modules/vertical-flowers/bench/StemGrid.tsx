@@ -43,12 +43,12 @@ export function StemGrid({
   return (
     <div
       ref={gridRef}
-      className="flex-1 overflow-auto p-3 bg-white select-none"
+      className="flex-1 overflow-auto px-5 pt-3 pb-4 bg-white select-none"
       data-testid="bench-grid"
     >
       {loading && <p className="text-sm text-sq-muted">Завантаження…</p>}
 
-      <div className="grid grid-cols-3 sm:grid-cols-4 xl:grid-cols-6 gap-2">
+      <div className="grid grid-cols-3 sm:grid-cols-4 xl:grid-cols-6 gap-3">
         {folderTiles.map((folder) => (
           <TagFolderTile
             key={folder.id}
@@ -81,7 +81,7 @@ export function StemGrid({
       </div>
 
       {!loading && folderTiles.length === 0 && grouped.length === 0 && (
-        <div className="rounded-sq border border-dashed border-sq-divider p-8 text-center text-sq-muted text-sm mt-4">
+        <div className="rounded-card bg-sq-sidebar p-8 text-center text-sq-muted text-sm mt-4">
           Порожньо
         </div>
       )}

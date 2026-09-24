@@ -2,7 +2,7 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { Folder } from 'lucide-react';
+import { Folder } from '../../platform/glyphs';
 import { resolveTagColorHex } from '../../lib/tagColors';
 
 interface Props {
@@ -11,7 +11,10 @@ interface Props {
   onClick: () => void;
 }
 
-/** Colored Square-style folder tile — icon top-left, label bottom-left */
+/**
+ * A tag folder as a card of the same shape as a product tile: the tag's own
+ * colour fills the picture area with a folder glyph, the name sits under it.
+ */
 export function TagFolderTile({ name, color, onClick }: Props) {
   const bg = resolveTagColorHex(color);
 
@@ -19,12 +22,14 @@ export function TagFolderTile({ name, color, onClick }: Props) {
     <button
       type="button"
       onClick={onClick}
-      className="aspect-square rounded-sq overflow-hidden relative text-left p-2.5 hover:brightness-110 transition-[filter]"
-      style={{ backgroundColor: bg }}
+      className="w-full flex flex-col rounded-[14px] overflow-hidden text-left bg-sq-surface ring-1 ring-sq-divider hover:ring-sq-muted/50 transition-shadow"
     >
-      <Folder size={22} strokeWidth={1.75} className="text-white/95 absolute top-2.5 left-2.5" />
-      <span className="absolute bottom-2.5 left-2.5 right-2 text-[13px] font-medium leading-tight line-clamp-2 text-white">
+      <span className="relative w-full aspect-[4/3] grid place-items-center" style={{ backgroundColor: bg }}>
+        <Folder size={40} className="text-white/95" />
+      </span>
+      <span className="px-3 pt-2 pb-2.5 text-[14px] font-semibold leading-tight line-clamp-2 text-sq-text">
         {name}
+        <span className="block text-[14px] font-normal text-sq-secondary">Папка</span>
       </span>
     </button>
   );

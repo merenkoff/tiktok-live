@@ -10,6 +10,7 @@
 // tablet's own clock is nobody's to set, and a table that reads «−3 хв»
 // because a device drifted is worse than no number at all.
 
+import { formatUahCompact } from '@pos/platform';
 import type { OpenBillSummary, PosHall, PosTable } from './types';
 
 /** A table, plus the bill on it when somebody is sitting there. */
@@ -20,9 +21,13 @@ export interface TableSeat {
 
 /**
  * What the tile's colour says. Deliberately four states and no more — a map
- * read from three metres away can carry four.
+ * read from three metres away can carry four: nobody there, my table,
+ * somebody else's, and a table that asked for the bill.
  */
-export type TableTone = 'free' | 'seated' | 'waiting' | 'ready';
+export type TableTone = 'free' | 'mine' | 'busy' | 'bill';
+
+/** What the kitchen is doing for the table — a small pill on the tile, not its colour. */
+export type KitchenState = 'waiting' | 'ready';
 
 /**
  * Pair every table of a hall with its open bill.
@@ -44,17 +49,64 @@ export function seatsOfHall(
 }
 
 /**
- * The tile's state.
+ * The tile's colour.
  *
- * `ready` beats `waiting` on purpose: a table whose food is on the pass is
- * the one the waiter should walk to, and it is the only state that asks for
- * something to be done right now.
+ * «Просять рахунок» beats everything: a printed pre-bill (`precheck_printed_at`)
+ * means the guests asked for it, and it is the state that costs the house
+ * most when nobody walks over. Then whose table it is — `meId` is the staff
+ * member holding the till; a mirror an older till wrote has no `opened_by`,
+ * and such a table reads as somebody else's rather than guessing.
  */
-export function tableTone(bill: OpenBillSummary | null): TableTone {
+export function tableTone(bill: OpenBillSummary | null, meId: number | null = null): TableTone {
   if (!bill) return 'free';
-  if (bill.prep_status === 'ready') return 'ready';
-  if (bill.prep_status === 'new') return 'waiting';
-  return 'seated';
+  if (bill.precheck_printed_at) return 'bill';
+  if (meId != null && bill.opened_by === meId) return 'mine';
+  return 'busy';
+}
+
+/**
+ * The kitchen's pill. `ready` beats `waiting` on purpose: a table whose food
+ * is on the pass is the one the waiter should walk to.
+ */
+export function kitchenState(bill: OpenBillSummary | null): KitchenState | null {
+  if (bill?.prep_status === 'ready') return 'ready';
+  if (bill?.prep_status === 'new') return 'waiting';
+  return null;
+}
+
+/** «2 місця», «5 місць», «1 місце». */
+export function seatsLabel(n: number): string {
+  const tens = n % 100;
+  const units = n % 10;
+  if (tens >= 11 && tens <= 14) return `${n} місць`;
+  if (units === 1) return `${n} місце`;
+  if (units >= 2 && units <= 4) return `${n} місця`;
+  return `${n} місць`;
+}
+
+/** «2 гості», «5 гостей», «1 гість». */
+export function guestsLabel(n: number): string {
+  const tens = n % 100;
+  const units = n % 10;
+  if (tens >= 11 && tens <= 14) return `${n} гостей`;
+  if (units === 1) return `${n} гість`;
+  if (units >= 2 && units <= 4) return `${n} гості`;
+  return `${n} гостей`;
+}
+
+/** «1 позиція», «3 позиції», «5 позицій» — the draft card's count. */
+export function positionsLabel(n: number): string {
+  const tens = n % 100;
+  const units = n % 10;
+  if (tens >= 11 && tens <= 14) return `${n} позицій`;
+  if (units === 1) return `${n} позиція`;
+  if (units >= 2 && units <= 4) return `${n} позиції`;
+  return `${n} позицій`;
+}
+
+/** «1 240 ₴» — whole hryvnias on a tile read from three metres away. */
+export function tileSum(cents: number): string {
+  return formatUahCompact(Math.round(cents / 100) * 100);
 }
 
 /**

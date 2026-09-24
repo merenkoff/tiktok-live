@@ -32,7 +32,7 @@
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Flower2 } from 'lucide-react';
+import { Flower2 } from '@pos/platform/ui';
 import { api, formatUah } from '@pos/platform';
 import type { AnalyticsPanelProps, FlowerAnalytics } from '@pos/platform';
 import { Stat } from '../ui/Stat';
@@ -67,19 +67,13 @@ export default function FlowerPanels({ from, to }: AnalyticsPanelProps) {
   const leading = data ? leadingLossReason(data.loss) : null;
 
   return (
-    <section
-      className="bg-sq-surface border border-sq-divider rounded-sq p-5 shadow-sm"
-      data-testid="flower-panels"
-    >
-      <div className="flex items-center justify-between mb-4">
-        <p className="sq-section-label flex items-center gap-2">
-          <Flower2 size={14} className="text-sq-blue" />
+    <section data-testid="flower-panels">
+      <div className="flex items-center justify-between gap-3 pb-1.5 mb-3 shadow-[0_1px_0_rgb(var(--sq-divider-rgb))]">
+        <h3 className="flex items-center gap-2 text-[15px] font-bold text-sq-blue">
+          <Flower2 size={24} />
           Квіти
-        </p>
-        <Link
-          to="/admin/flowers"
-          className="text-xs font-semibold text-sq-blue uppercase tracking-wide"
-        >
+        </h3>
+        <Link to="/admin/flowers" className="text-[15px] font-semibold text-sq-blue hover:underline">
           Докладніше
         </Link>
       </div>

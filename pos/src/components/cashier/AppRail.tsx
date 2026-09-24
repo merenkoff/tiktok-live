@@ -2,29 +2,37 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { LogOut } from 'lucide-react';
+import { LogOut } from '../../platform/glyphs';
+import { AppIcon } from '../AppIcon';
 import { Nav } from '../Nav';
 
 interface Props {
   onLogout: () => void;
 }
 
+/**
+ * The till's sidebar, the way Things draws one: light grey, the app's own
+ * icon on top, a colour glyph over a small label per section, the selected one
+ * on a grey plate — replacing the dark Square-style rail.
+ */
 export function AppRail({ onLogout }: Props) {
   return (
     <nav
-      className="hidden lg:flex w-14 shrink-0 flex-col items-center py-3 bg-[#1A1A1A] text-white"
+      className="hidden lg:flex w-[84px] shrink-0 flex-col items-center gap-1 py-3.5 bg-sq-sidebar border-r border-sq-divider/70"
       aria-label="Меню каси"
     >
-      <div className="flex flex-col items-center gap-1 flex-1">
+      <AppIcon size={40} className="mb-3 shrink-0" />
+      <div className="flex flex-col items-center gap-1 flex-1 min-h-0 overflow-y-auto">
         <Nav location="cashier-primary" variant="rail" />
       </div>
       <button
         type="button"
         onClick={onLogout}
-        className="w-12 h-12 grid place-items-center rounded-sq transition-colors text-white/70 hover:text-white hover:bg-white/10"
+        className="w-[68px] min-h-[62px] py-2 flex flex-col items-center justify-center gap-1 rounded-xl text-sq-secondary transition-colors hover:bg-sq-selected/50"
         title="Вихід"
       >
-        <LogOut size={22} strokeWidth={1.75} />
+        <LogOut size={20} />
+        <span className="text-[11px] font-semibold leading-none">Вихід</span>
       </button>
     </nav>
   );

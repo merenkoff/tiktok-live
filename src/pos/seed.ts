@@ -127,7 +127,7 @@ async function registerCafeModule(): Promise<void> {
     // route and label.
     routePath: '/kitchen',
     icon: 'Coffee',
-    nav: [{ label: 'Кухня', location: 'cashier-primary', order: 80, icon: 'ClipboardList', match: '/kitchen' }],
+    nav: [{ label: 'Кухня', location: 'cashier-primary', order: 80, icon: 'ChefHat', match: '/kitchen' }],
   };
   await pool.query(
     `UPDATE pos_stores
@@ -167,8 +167,8 @@ async function registerTablesModule(): Promise<void> {
     url: process.env.POS_SEED_TABLES_URL || 'http://localhost:5009/remote-entry.js',
     title: 'Столи',
     routePath: '/tables',
-    icon: 'Grid3X3',
-    nav: [{ label: 'Столи', location: 'cashier-primary', order: 60, icon: 'Grid3X3', match: '/tables' }],
+    icon: 'Table',
+    nav: [{ label: 'Столи', location: 'cashier-primary', order: 60, icon: 'Table', match: '/tables' }],
   };
   await pool.query(
     `UPDATE pos_stores

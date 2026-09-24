@@ -4,16 +4,18 @@
 
 // Ported from `admin/src/components/LiveLogs.tsx`: same feed, same auto-scroll,
 // same reconnect affordance, restyled from the admin SPA's CSS variables onto
-// Tailwind + the POS `sq-*` layer.
+// Tailwind + the POS `sq-*` layer — a Things list: a colour glyph per type,
+// a hairline under every row.
 //
 // Every per-type class below is a COMPLETE literal string in the map. Tailwind
 // generates this module's stylesheet by scanning its source (see
-// `scripts/module-tailwind.mjs`), so a composed class like `border-l-${c}-500`
+// `scripts/module-tailwind.mjs`), so a composed class like `text-${c}`
 // would compile to nothing and ship unstyled — `check:tiktok-live-css-coverage`
 // exists to catch exactly that.
 
 import { useEffect, useRef } from 'react';
 import type { SessionLog, SessionLogType } from '../types';
+import { AlertTriangle, FileText, Info, MessageCircle, PackageCheck, RefreshCw, Video, type Glyph } from '@pos/platform/ui';
 
 interface LiveLogsProps {
   logs: SessionLog[];
@@ -21,28 +23,21 @@ interface LiveLogsProps {
   onReconnect?: () => void;
 }
 
-const ROW_CLASS: Record<SessionLogType, string> = {
-  tiktok_comment: 'border-l-blue-500 bg-blue-50',
-  telegram_message: 'border-l-violet-500 bg-violet-50',
-  order: 'border-l-emerald-500 bg-emerald-50',
-  error: 'border-l-rose-500 bg-rose-50',
-  info: 'border-l-amber-500 bg-amber-50',
-};
-
+/** The type's caption. The glyph carries the colour; only a failure is red in words too. */
 const LABEL_CLASS: Record<SessionLogType, string> = {
-  tiktok_comment: 'text-blue-700',
-  telegram_message: 'text-violet-700',
-  order: 'text-emerald-700',
-  error: 'text-rose-700',
-  info: 'text-amber-700',
+  tiktok_comment: 'text-sq-secondary',
+  telegram_message: 'text-sq-secondary',
+  order: 'text-sq-success-ink',
+  error: 'text-sq-danger',
+  info: 'text-sq-secondary',
 };
 
-const ICON: Record<SessionLogType, string> = {
-  tiktok_comment: '🎬',
-  telegram_message: '💬',
-  order: '✅',
-  error: '❌',
-  info: 'ℹ️',
+const ICON: Record<SessionLogType, Glyph> = {
+  tiktok_comment: Video,
+  telegram_message: MessageCircle,
+  order: PackageCheck,
+  error: AlertTriangle,
+  info: Info,
 };
 
 const LABEL: Record<SessionLogType, string> = {
@@ -52,8 +47,6 @@ const LABEL: Record<SessionLogType, string> = {
   error: 'Помилка',
   info: 'Інфо',
 };
-
-const FALLBACK_ROW = 'border-l-sq-divider bg-sq-bg';
 
 function formatTime(timestamp: string): string {
   return new Date(timestamp).toLocaleTimeString('uk-UA', {
@@ -71,23 +64,26 @@ export function LiveLogs({ logs, isConnected, onReconnect }: LiveLogsProps) {
   }, [logs]);
 
   return (
-    <div className="sq-card flex h-[600px] flex-col overflow-hidden" data-testid="live-logs">
-      <div className="flex flex-shrink-0 items-center justify-between border-b border-sq-divider px-5 py-4">
+    <div
+      className="flex h-[600px] flex-col overflow-hidden rounded-card bg-white shadow-card"
+      data-testid="live-logs"
+    >
+      <div className="flex flex-shrink-0 items-center justify-between gap-3 px-5 py-3.5 shadow-[0_1px_0_rgb(var(--sq-divider-rgb))]">
         <div>
-          <div className="text-sm font-semibold text-sq-text">Стрічка ефіру</div>
-          <div className="text-xs text-sq-muted">
+          <div className="text-[15px] font-bold text-sq-heading">Стрічка ефіру</div>
+          <div className="text-[13px] text-sq-muted tabular-nums">
             {logs.length} повідомлень · автоскрол увімкнено
           </div>
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1.5 text-xs font-semibold">
+          <span className="flex items-center gap-1.5 text-[13px] font-semibold">
             <span
               className={`h-2 w-2 flex-shrink-0 rounded-full ${
-                isConnected ? 'bg-emerald-500' : 'bg-rose-500'
+                isConnected ? 'bg-sq-success' : 'bg-sq-danger'
               }`}
             />
-            <span className={isConnected ? 'text-emerald-700' : 'text-rose-700'}>
+            <span className={isConnected ? 'text-sq-success-ink' : 'text-sq-danger'}>
               {isConnected ? 'Підключено' : 'Відключено'}
             </span>
           </span>
@@ -97,61 +93,63 @@ export function LiveLogs({ logs, isConnected, onReconnect }: LiveLogsProps) {
               type="button"
               onClick={onReconnect}
               title="Перепідключити без перезавантаження сторінки"
-              className="rounded-sq border border-sq-divider px-3 py-1.5 text-xs font-medium text-sq-secondary hover:bg-sq-bg"
+              className="inline-flex items-center gap-1.5 min-h-9 px-3 rounded-sq bg-white ring-1 ring-sq-divider text-[13px] font-semibold text-sq-text hover:bg-sq-sidebar"
             >
-              ↺ Перепідключити
+              <RefreshCw size={16} />
+              Перепідключити
             </button>
           )}
         </div>
       </div>
 
-      <div ref={scrollRef} className="flex flex-1 flex-col gap-2 overflow-y-auto p-4">
+      <div ref={scrollRef} className="flex flex-1 flex-col overflow-y-auto px-5">
         {logs.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center text-sq-muted">
-            <span className="text-3xl opacity-40">📭</span>
-            <div className="text-sm font-semibold text-sq-secondary">Повідомлень поки немає</div>
-            <div className="text-sm">
+          <div className="flex flex-1 flex-col items-center justify-center gap-1 px-4 text-center">
+            <Video size={48} className="mb-2" />
+            <div className="text-[15px] font-semibold text-sq-text">Повідомлень поки немає</div>
+            <div className="text-[15px] text-sq-secondary">
               Почніть ефір — коментарі та замовлення з TikTok LIVE з’являться тут
             </div>
           </div>
         ) : (
           logs.map((log) => (
-            <div
-              key={log.id}
-              data-testid="live-log-row"
-              className={`rounded-sq border-l-[3px] px-3.5 py-2.5 ${
-                ROW_CLASS[log.log_type] ?? FALLBACK_ROW
-              }`}
-            >
-              <div className="mb-1.5 flex items-center gap-1.5">
-                <span className="text-sm leading-none">{ICON[log.log_type] ?? '📝'}</span>
-                <span
-                  className={`text-[11px] font-bold uppercase tracking-wider ${
-                    LABEL_CLASS[log.log_type] ?? 'text-sq-secondary'
-                  }`}
-                >
-                  {LABEL[log.log_type] ?? log.log_type}
-                </span>
-                <span className="ml-auto font-mono text-[11px] text-sq-muted">
-                  {formatTime(log.created_at)}
-                </span>
-              </div>
-
-              <p className="break-words text-[13px] leading-relaxed text-sq-text">{log.message}</p>
-
-              {log.data && Object.keys(log.data).length > 0 && (
-                <div className="mt-1.5 flex flex-wrap gap-2 border-t border-black/5 pt-1.5">
-                  {Object.entries(log.data).map(([key, value]) => (
-                    <span key={key} className="font-mono text-[11px] text-sq-muted">
-                      <span className="text-sq-secondary">{key}:</span> {JSON.stringify(value)}
-                    </span>
-                  ))}
+            <div key={log.id} data-testid="live-log-row" className="sq-row flex gap-3 py-3">
+              <LogIcon type={log.log_type} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`text-[13px] font-semibold ${
+                      LABEL_CLASS[log.log_type] ?? 'text-sq-secondary'
+                    }`}
+                  >
+                    {LABEL[log.log_type] ?? log.log_type}
+                  </span>
+                  <span className="ml-auto text-[13px] text-sq-muted tabular-nums">
+                    {formatTime(log.created_at)}
+                  </span>
                 </div>
-              )}
+
+                <p className="mt-0.5 break-words text-[15px] leading-snug text-sq-text">{log.message}</p>
+
+                {log.data && Object.keys(log.data).length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                    {Object.entries(log.data).map(([key, value]) => (
+                      <span key={key} className="font-mono text-[11px] text-sq-muted">
+                        <span className="text-sq-secondary">{key}:</span> {JSON.stringify(value)}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           ))
         )}
       </div>
     </div>
   );
+}
+
+function LogIcon({ type }: { type: SessionLogType }) {
+  const Icon = ICON[type] ?? FileText;
+  return <Icon size={24} className="shrink-0" />;
 }

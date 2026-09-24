@@ -2,10 +2,12 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { FormEvent, Suspense, useEffect, useMemo, useState } from 'react';
+import { FormEvent, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { api, useAuthStore, sameRemoteMap, useVertical, PLATFORM_VERSION } from '@pos/platform';
 import { ProductPhotoField } from '../../components/ProductPhotoField';
+import { PageHeader, SectionHead } from '../../components/ui/Page';
+import { Plus, Settings } from '../../platform/glyphs';
 import { FiscalSettingsCard } from './FiscalSettingsCard';
 import { MODULES } from '../../modules/registry';
 import { SlotBoundary } from '../../modules/SlotBoundary';
@@ -266,43 +268,30 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-up max-w-xl text-sq-text">
-      <div>
-        <h2 className="text-2xl font-semibold">Налаштування</h2>
-        <p className="text-sq-secondary mt-1 text-sm">Базові параметри магазину.</p>
-      </div>
+    <div className="space-y-8 animate-fade-up max-w-2xl text-sq-text">
+      <PageHeader glyph={Settings} title="Налаштування" subtitle="Базові параметри магазину." />
 
-      <form onSubmit={onSave} className="space-y-6">
-        <div className="bg-sq-surface border border-sq-divider rounded-sq p-5 space-y-4 shadow-sm">
-          <label className="block">
-            <span className="text-sm text-sq-secondary">Назва магазину</span>
-            <input
-              className="mt-1.5 w-full rounded-sq border border-sq-divider bg-sq-bg px-3 py-2.5 text-sq-text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </label>
-          <label className="block">
-            <span className="text-sm text-sq-secondary">Код для PIN-входу</span>
-            <input
-              className="mt-1.5 w-full rounded-sq border border-sq-divider bg-sq-empty px-3 py-2.5 text-sq-secondary"
-              value={slug}
-              disabled
-            />
-          </label>
-          <label className="block">
-            <span className="text-sm text-sq-secondary">Тип магазину</span>
-            <input
-              className="mt-1.5 w-full rounded-sq border border-sq-divider bg-sq-empty px-3 py-2.5 text-sq-secondary"
-              value={vertical.title}
-              disabled
-            />
-            <span className="mt-1 block text-xs text-sq-muted">
-              Визначає поля товару та екран продажу. Змінює адміністратор платформи.
-            </span>
-          </label>
-          <p className="text-sm text-sq-secondary">Валюта: грн (UAH)</p>
-        </div>
+      <form onSubmit={onSave} className="space-y-9">
+        <section>
+          <SectionHead title="Магазин" />
+          <div className="pt-4 space-y-4">
+            <Field label="Назва магазину">
+              <input className="sq-input" value={name} onChange={(e) => setName(e.target.value)} />
+            </Field>
+            <div className="grid gap-4 sm:grid-cols-2 items-start">
+              <Field label="Код для PIN-входу">
+                <input className="sq-input" value={slug} disabled />
+              </Field>
+              <Field
+                label="Тип магазину"
+                hint="Визначає поля товару та екран продажу. Змінює адміністратор платформи."
+              >
+                <input className="sq-input" value={vertical.title} disabled />
+              </Field>
+            </div>
+            <p className="text-[15px] text-sq-secondary">Валюта: грн (UAH)</p>
+          </div>
+        </section>
 
         {/* Whatever this kind of shop configures and the others do not. It sits
             here because «Тип магазину» is directly above it, and it carries its
@@ -327,126 +316,103 @@ export function SettingsPage() {
           </SlotBoundary>
         )}
 
-        <div className="bg-sq-surface border border-sq-divider rounded-sq p-5 space-y-4 shadow-sm">
-          <div>
-            <p className="sq-section-label">QR-код оплата</p>
-            <p className="text-sq-secondary text-sm mt-1">
+        <section>
+          <SectionHead title="QR-код оплата" />
+          <div className="pt-3 space-y-4">
+            <SectionLead>
               Каса приймає оплату по QR без автоматичного підтвердження — касир перевіряє успішність
               у застосунку покупця.
-            </p>
-          </div>
+            </SectionLead>
 
-          <label className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              checked={qrEnabled}
-              onChange={(e) => setQrEnabled(e.target.checked)}
-              className="h-4 w-4"
+            <Toggle checked={qrEnabled} onChange={setQrEnabled}>
+              Показувати «QR-код» на екрані оплати
+            </Toggle>
+
+            <Field label="Режим">
+              <select
+                className="sq-input"
+                value={qrMode}
+                onChange={(e) => setQrMode(e.target.value as QrPaymentMode)}
+              >
+                <option value="static">Статичний — завантажене зображення QR</option>
+                <option value="dynamic">Динамічний — QR з точною сумою (Opendatabot)</option>
+              </select>
+            </Field>
+
+            <ProductPhotoField
+              label="Зображення QR (статичний режим)"
+              value={qrImageUrl}
+              onChange={setQrImageUrl}
             />
-            <span className="text-sm">Показувати «QR-код» на екрані оплати</span>
-          </label>
 
-          <label className="block">
-            <span className="text-sm text-sq-secondary">Режим</span>
-            <select
-              className="mt-1.5 w-full rounded-sq border border-sq-divider bg-sq-bg px-3 py-2.5 text-sq-text"
-              value={qrMode}
-              onChange={(e) => setQrMode(e.target.value as QrPaymentMode)}
-            >
-              <option value="static">Статичний — завантажене зображення QR</option>
-              <option value="dynamic">Динамічний — QR з точною сумою (Opendatabot)</option>
-            </select>
-          </label>
+            {qrMode === 'dynamic' && (
+              <div className="grid gap-4 sm:grid-cols-2 pt-1">
+                <Field label="IBAN отримувача">
+                  <input
+                    className="sq-input"
+                    value={qrIban}
+                    onChange={(e) => setQrIban(e.target.value)}
+                    placeholder="UA…"
+                  />
+                </Field>
+                <Field label="ЄДРПОУ / РНОКПП">
+                  <input className="sq-input" value={qrEdrpou} onChange={(e) => setQrEdrpou(e.target.value)} />
+                </Field>
+                <div className="sm:col-span-2">
+                  <Field label="Отримувач">
+                    <input
+                      className="sq-input"
+                      value={qrRecipient}
+                      onChange={(e) => setQrRecipient(e.target.value)}
+                    />
+                  </Field>
+                </div>
+                <div className="sm:col-span-2">
+                  <Field
+                    label="Призначення платежу (шаблон)"
+                    hint={<>Плейсхолдери: {'{ref}'} — номер чека, {'{store}'} — назва магазину.</>}
+                  >
+                    <input
+                      className="sq-input"
+                      value={qrPurposeTemplate}
+                      onChange={(e) => setQrPurposeTemplate(e.target.value)}
+                      placeholder="Оплата, чек {ref}, {store}"
+                    />
+                  </Field>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
 
-          <ProductPhotoField
-            label="Зображення QR (статичний режим)"
-            value={qrImageUrl}
-            onChange={setQrImageUrl}
-          />
-
-          {qrMode === 'dynamic' && (
-            <div className="space-y-4 border-t border-sq-divider pt-4">
-              <label className="block">
-                <span className="text-sm text-sq-secondary">IBAN отримувача</span>
-                <input
-                  className="mt-1.5 w-full rounded-sq border border-sq-divider bg-sq-bg px-3 py-2.5 text-sq-text"
-                  value={qrIban}
-                  onChange={(e) => setQrIban(e.target.value)}
-                  placeholder="UA…"
-                />
-              </label>
-              <label className="block">
-                <span className="text-sm text-sq-secondary">ЄДРПОУ / РНОКПП</span>
-                <input
-                  className="mt-1.5 w-full rounded-sq border border-sq-divider bg-sq-bg px-3 py-2.5 text-sq-text"
-                  value={qrEdrpou}
-                  onChange={(e) => setQrEdrpou(e.target.value)}
-                />
-              </label>
-              <label className="block">
-                <span className="text-sm text-sq-secondary">Отримувач</span>
-                <input
-                  className="mt-1.5 w-full rounded-sq border border-sq-divider bg-sq-bg px-3 py-2.5 text-sq-text"
-                  value={qrRecipient}
-                  onChange={(e) => setQrRecipient(e.target.value)}
-                />
-              </label>
-              <label className="block">
-                <span className="text-sm text-sq-secondary">Призначення платежу (шаблон)</span>
-                <input
-                  className="mt-1.5 w-full rounded-sq border border-sq-divider bg-sq-bg px-3 py-2.5 text-sq-text"
-                  value={qrPurposeTemplate}
-                  onChange={(e) => setQrPurposeTemplate(e.target.value)}
-                  placeholder="Оплата, чек {ref}, {store}"
-                />
-                <span className="text-xs text-sq-muted mt-1 block">
-                  Плейсхолдери: {'{ref}'} — номер чека, {'{store}'} — назва магазину.
-                </span>
-              </label>
-            </div>
-          )}
-        </div>
-
-        <div className="bg-sq-surface border border-sq-divider rounded-sq p-5 space-y-4 shadow-sm">
-          <div>
-            <p className="sq-section-label">Штрихкоди (GTIN)</p>
-            <p className="text-sq-secondary text-sm mt-1">
+        <section>
+          <SectionHead title="Штрихкоди (GTIN)" />
+          <div className="pt-3 space-y-3">
+            <SectionLead>
               Під час приймання товару каса підтягує назву та бренд за штрихкодом із відкритих
               баз Open Food/Products/Beauty Facts і UPCitemdb. На роботу касира не впливає.
               Виправити чи прибрати конкретний запис — на сторінці «GTIN-довідник».
-            </p>
+            </SectionLead>
+
+            <Toggle checked={gtinLookupEnabled} onChange={setGtinLookupEnabled}>
+              Шукати товар за штрихкодом
+            </Toggle>
           </div>
+        </section>
 
-          <label className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              checked={gtinLookupEnabled}
-              onChange={(e) => setGtinLookupEnabled(e.target.checked)}
-              className="h-4 w-4"
-            />
-            <span className="text-sm">Шукати товар за штрихкодом</span>
-          </label>
-        </div>
-
-        <div className="bg-sq-surface border border-sq-divider rounded-sq p-5 space-y-4 shadow-sm">
-          <div>
-            <p className="sq-section-label">Друк чеків</p>
-            <p className="text-sq-secondary text-sm mt-1">
+        <section>
+          <SectionHead title="Друк чеків" />
+          <div className="pt-3 space-y-3">
+            <SectionLead>
               Працює лише на робочому місці каси з налаштованим чековим принтером
               (десктоп-застосунок). У браузері та без принтера чек не друкується автоматично.
-            </p>
-          </div>
+            </SectionLead>
 
-          <label className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              checked={autoPrintReceipt}
-              onChange={(e) => setAutoPrintReceipt(e.target.checked)}
-              className="h-4 w-4"
-            />
-            <span className="text-sm">Автоматично друкувати чек після продажу</span>
-          </label>
-        </div>
+            <Toggle checked={autoPrintReceipt} onChange={setAutoPrintReceipt}>
+              Автоматично друкувати чек після продажу
+            </Toggle>
+          </div>
+        </section>
 
         {/* Its own endpoint and its own save button — see the card's header for
             why it must not join this page's single all-fields form. The guard
@@ -454,189 +420,194 @@ export function SettingsPage() {
             whole settings screen on a method it does not have. */}
         {typeof api.fiscalSettings === 'function' && <FiscalSettingsCard />}
 
-        <div className="bg-sq-surface border border-sq-divider rounded-sq p-5 space-y-4 shadow-sm">
-          <div>
-            <p className="sq-section-label">TikTok LIVE</p>
-            <p className="text-sq-secondary text-sm mt-1">
+        <section>
+          <SectionHead title="TikTok LIVE" />
+          <div className="pt-3 space-y-4">
+            <SectionLead>
               Нікнейм акаунта, з якого ви ведете прямі ефіри. Після збереження екран «Прямий
               ефір» працює і в касі, і тут — окремий вхід не потрібен.
-            </p>
+            </SectionLead>
+
+            <Field label="Нікнейм TikTok" hint="Без «@». Порожнє поле — магазин від’єднано від TikTok LIVE.">
+              <input
+                className="sq-input"
+                value={liveTiktokUsername}
+                onChange={(e) => setLiveTiktokUsername(e.target.value)}
+                placeholder="my_shop"
+                autoComplete="off"
+              />
+            </Field>
           </div>
+        </section>
 
-          <label className="block">
-            <span className="text-sm text-sq-secondary">Нікнейм TikTok</span>
-            <input
-              className="mt-1.5 w-full rounded-sq border border-sq-divider bg-sq-bg px-3 py-2.5 text-sq-text"
-              value={liveTiktokUsername}
-              onChange={(e) => setLiveTiktokUsername(e.target.value)}
-              placeholder="my_shop"
-              autoComplete="off"
-            />
-            <span className="text-xs text-sq-muted mt-1 block">
-              Без «@». Порожнє поле — магазин від’єднано від TikTok LIVE.
-            </span>
-          </label>
-        </div>
-
-        <div className="bg-sq-surface border border-sq-divider rounded-sq p-5 space-y-4 shadow-sm">
-          <div>
-            <p className="sq-section-label">Модулі магазину</p>
-            <p className="text-sq-secondary text-sm mt-1">
+        <section>
+          <SectionHead title="Модулі магазину" />
+          <div className="pt-3 space-y-3">
+            <SectionLead>
               Вимкнений модуль зникає з меню й стає недоступним у касі та адмінці. Каси
               підхоплять зміни після наступного входу. Назву, порядок та іконку пунктів
               меню змінюють на сторінці <Link to="/admin/appearance" className="sq-link">
               «Вигляд меню»</Link>.
+            </SectionLead>
+
+            <ul>
+              {/*
+                A vertical module is not something an owner chooses here — the sell
+                screen renders whichever one matches «Тип магазину» above, and the
+                bundled clothing catalog is the fallback. Listing it as "always on"
+                would invite the question of how to turn it off.
+              */}
+              {MODULES.filter((m) => m.core && !m.id.startsWith('vertical-')).map((m) => (
+                <li key={m.id} className="sq-row">
+                  <label className="min-h-11 py-1.5 flex items-center gap-3">
+                    <input type="checkbox" checked disabled className={`${CHECKBOX} opacity-50`} />
+                    <span className="flex-1 min-w-0 text-[15px] text-sq-secondary">{m.title}</span>
+                    <span className="h-[22px] px-2 rounded-md ring-1 ring-inset ring-sq-divider text-xs font-medium text-sq-secondary inline-flex items-center shrink-0">
+                      завжди увімкнено
+                    </span>
+                  </label>
+                </li>
+              ))}
+
+              {MODULES.filter((m) => !m.core && m.id !== 'live-selling').map((m) => (
+                <li key={m.id} className="sq-row">
+                  <label className="min-h-11 py-1.5 flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={enabledModules.has(m.id)}
+                      onChange={(e) =>
+                        setEnabledModules((prev) => {
+                          const next = new Set(prev);
+                          if (e.target.checked) next.add(m.id);
+                          else next.delete(m.id);
+                          return next;
+                        })
+                      }
+                      className={CHECKBOX}
+                    />
+                    <span className="flex-1 min-w-0 text-[15px] text-sq-text">{m.title}</span>
+                  </label>
+                  {enabledModules.has(m.id) && (
+                    <div className="pl-8 pb-3">
+                      <input
+                        type="url"
+                        inputMode="url"
+                        placeholder="Джерело (URL) — типово вбудований"
+                        value={moduleRemotes[m.id] ?? ''}
+                        onChange={(e) => setModuleRemote(m.id, e.target.value)}
+                        className="sq-input"
+                      />
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+
+            <p className="text-[13px] leading-relaxed text-sq-muted">
+              Джерело (URL) вантажить модуль із окремої збірки під час завантаження — на сайті
+              та в десктоп-касі (каса тримає перевірену копію в кеші, тому працює і офлайн).
+              Дозволені <code>https://</code>, шлях від кореня <code>/…</code> або
+              <code>http://localhost</code>. Збірка, зроблена під новішу платформу, ніж у
+              застосунку, не завантажиться — лишиться вбудований модуль. Зміни потребують
+              перезавантаження.
             </p>
           </div>
+        </section>
 
-          {/*
-            A vertical module is not something an owner chooses here — the sell
-            screen renders whichever one matches «Тип магазину» above, and the
-            bundled clothing catalog is the fallback. Listing it as "always on"
-            would invite the question of how to turn it off.
-          */}
-          {MODULES.filter((m) => m.core && !m.id.startsWith('vertical-')).map((m) => (
-            <label key={m.id} className="flex items-center gap-3 opacity-60">
-              <input type="checkbox" checked disabled className="h-4 w-4" />
-              <span className="text-sm">
-                {m.title} <span className="text-xs text-sq-muted">— завжди увімкнено</span>
-              </span>
-            </label>
-          ))}
+        <section>
+          <SectionHead title="Онлайн-модулі" />
+          <div className="pt-3 space-y-4">
+            <SectionLead>
+              Модулі, під які застосунок каси не везе код, — завантажуються з вказаного джерела
+              (напр. «Прямий ефір»). З'являться в касі після наступного входу.
+            </SectionLead>
 
-          {MODULES.filter((m) => !m.core && m.id !== 'live-selling').map((m) => (
-            <div key={m.id} className="space-y-1.5">
-              <label className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={enabledModules.has(m.id)}
-                  onChange={(e) =>
-                    setEnabledModules((prev) => {
-                      const next = new Set(prev);
-                      if (e.target.checked) next.add(m.id);
-                      else next.delete(m.id);
-                      return next;
-                    })
-                  }
-                  className="h-4 w-4"
-                />
-                <span className="text-sm">{m.title}</span>
-              </label>
-              {enabledModules.has(m.id) && (
-                <input
-                  type="url"
-                  inputMode="url"
-                  placeholder="Джерело (URL) — типово вбудований"
-                  value={moduleRemotes[m.id] ?? ''}
-                  onChange={(e) => setModuleRemote(m.id, e.target.value)}
-                  className="ml-7 w-[calc(100%-1.75rem)] rounded-sq border border-sq-divider bg-sq-bg px-2.5 py-1.5 text-xs text-sq-secondary"
-                />
-              )}
-            </div>
-          ))}
-
-          <p className="text-sq-muted text-xs">
-            Джерело (URL) вантажить модуль із окремої збірки під час завантаження — на сайті
-            та в десктоп-касі (каса тримає перевірену копію в кеші, тому працює і офлайн).
-            Дозволені <code>https://</code>, шлях від кореня <code>/…</code> або
-            <code>http://localhost</code>. Збірка, зроблена під новішу платформу, ніж у
-            застосунку, не завантажиться — лишиться вбудований модуль. Зміни потребують
-            перезавантаження.
-          </p>
-
-          <div className="border-t border-sq-divider pt-4 space-y-3">
-            <div>
-              <p className="sq-section-label">Онлайн-модулі</p>
-              <p className="text-sq-secondary text-sm mt-1">
-                Модулі, під які застосунок каси не везе код, — завантажуються з вказаного джерела
-                (напр. «Прямий ефір»). З'являться в касі після наступного входу.
-              </p>
-            </div>
-
-            {Object.entries(remoteObjects).map(([id, entry]) => (
-              <div
-                key={id}
-                className="rounded-sq border border-sq-divider bg-sq-bg px-3 py-2 space-y-2"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium">
-                      {entry.title} <span className="text-xs text-sq-muted">({id})</span>
+            {Object.entries(remoteObjects).length > 0 && (
+              <div className="space-y-2">
+                {Object.entries(remoteObjects).map(([id, entry]) => (
+                  <div key={id} className="rounded-sq bg-sq-sidebar px-4 py-3 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-[15px] font-semibold text-sq-text">
+                          {entry.title} <span className="text-[13px] font-normal text-sq-muted">({id})</span>
+                        </div>
+                        <div className="truncate text-[13px] text-sq-muted">
+                          {entry.routePath} · {entry.url}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-4">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            editingId === id ? cancelEditingRemote() : startEditingRemote(id, entry.url)
+                          }
+                          className="min-h-9 text-[15px] font-semibold text-sq-blue"
+                        >
+                          {editingId === id ? 'Скасувати' : 'Оновити джерело'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeRemoteModule(id)}
+                          className="min-h-9 text-[15px] font-semibold text-red-600"
+                        >
+                          Видалити
+                        </button>
+                      </div>
                     </div>
-                    <div className="truncate text-xs text-sq-muted">
-                      {entry.routePath} · {entry.url}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        editingId === id ? cancelEditingRemote() : startEditingRemote(id, entry.url)
-                      }
-                      className="rounded-sq border border-sq-divider px-2.5 py-1 text-xs text-sq-secondary hover:bg-sq-surface"
-                    >
-                      {editingId === id ? 'Скасувати' : 'Оновити джерело'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeRemoteModule(id)}
-                      className="rounded-sq border border-sq-divider px-2.5 py-1 text-xs text-sq-secondary hover:bg-sq-surface"
-                    >
-                      Видалити
-                    </button>
-                  </div>
-                </div>
 
-                {editingId === id && (
-                  <div className="space-y-2 border-t border-sq-divider pt-2">
-                    <input
-                      aria-label={`Джерело модуля ${id}`}
-                      placeholder="Джерело (URL remote-entry.js)"
-                      value={editingUrl}
-                      onChange={(e) => {
-                        setEditingUrl(e.target.value);
-                        setEditingProbe({ state: 'idle' });
-                        setEditingError(null);
-                      }}
-                      className="w-full rounded-sq border border-sq-divider bg-sq-surface px-2.5 py-1.5 text-xs"
-                    />
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => void checkEditingSource()}
-                        disabled={editingProbe.state === 'busy'}
-                        className="rounded-sq border border-sq-divider px-2.5 py-1 text-xs text-sq-secondary hover:bg-sq-surface disabled:opacity-50"
-                      >
-                        {editingProbe.state === 'busy' ? 'Перевірка…' : 'Перевірити'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={applyEditingRemote}
-                        className="sq-btn-primary px-2.5 py-1 text-xs"
-                      >
-                        Застосувати
-                      </button>
-                      <RemoteProbeNote probe={editingProbe} />
-                    </div>
-                    {editingError && <p className="text-xs text-rose-600">{editingError}</p>}
+                    {editingId === id && (
+                      <div className="space-y-2">
+                        <input
+                          aria-label={`Джерело модуля ${id}`}
+                          placeholder="Джерело (URL remote-entry.js)"
+                          value={editingUrl}
+                          onChange={(e) => {
+                            setEditingUrl(e.target.value);
+                            setEditingProbe({ state: 'idle' });
+                            setEditingError(null);
+                          }}
+                          // A grey well on the grey panel would vanish; white keeps it a field.
+                          className="sq-input !bg-sq-surface"
+                        />
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void checkEditingSource()}
+                            disabled={editingProbe.state === 'busy'}
+                            className="sq-btn-quiet"
+                          >
+                            {editingProbe.state === 'busy' ? 'Перевірка…' : 'Перевірити'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={applyEditingRemote}
+                            className="sq-btn-primary min-h-11 px-4 text-[15px]"
+                          >
+                            Застосувати
+                          </button>
+                          <RemoteProbeNote probe={editingProbe} />
+                        </div>
+                        {editingError && <p className="text-[13px] text-red-600">{editingError}</p>}
+                      </div>
+                    )}
                   </div>
-                )}
+                ))}
               </div>
-            ))}
+            )}
 
-            <div className="space-y-2 rounded-sq border border-dashed border-sq-divider p-3">
-              <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <input
                   placeholder="Ідентифікатор (tiktok-live)"
                   value={newModuleId}
                   onChange={(e) => setNewModuleId(e.target.value)}
-                  className="rounded-sq border border-sq-divider bg-sq-surface px-2.5 py-1.5 text-xs"
+                  className="sq-input"
                 />
                 <input
                   placeholder="Назва (Прямий ефір)"
                   value={newModuleTitle}
                   onChange={(e) => setNewModuleTitle(e.target.value)}
-                  className="rounded-sq border border-sq-divider bg-sq-surface px-2.5 py-1.5 text-xs"
+                  className="sq-input"
                 />
                 <input
                   placeholder="Джерело (URL remote-entry.js)"
@@ -645,14 +616,14 @@ export function SettingsPage() {
                     setNewModuleUrl(e.target.value);
                     setProbe({ state: 'idle' });
                   }}
-                  className="col-span-2 rounded-sq border border-sq-divider bg-sq-surface px-2.5 py-1.5 text-xs"
+                  className="sq-input sm:col-span-2"
                 />
-                <div className="col-span-2 flex flex-wrap items-center gap-2">
+                <div className="sm:col-span-2 flex flex-wrap items-center gap-3">
                   <button
                     type="button"
                     onClick={() => void checkNewModuleSource()}
                     disabled={probe.state === 'busy' || !newModuleUrl.trim()}
-                    className="rounded-sq border border-sq-divider px-2.5 py-1 text-xs text-sq-secondary hover:bg-sq-surface disabled:opacity-50"
+                    className="sq-btn-quiet"
                   >
                     {probe.state === 'busy' ? 'Перевірка…' : 'Перевірити джерело'}
                   </button>
@@ -662,53 +633,104 @@ export function SettingsPage() {
                   placeholder="Маршрут (/live)"
                   value={newModuleRoutePath}
                   onChange={(e) => setNewModuleRoutePath(e.target.value)}
-                  className="rounded-sq border border-sq-divider bg-sq-surface px-2.5 py-1.5 text-xs"
+                  className="sq-input"
                 />
                 <input
-                  placeholder="Іконка lucide (Video) — необов'язково"
+                  placeholder="Іконка, назвою (Video) — необов'язково"
                   value={newModuleIcon}
                   onChange={(e) => setNewModuleIcon(e.target.value)}
-                  className="rounded-sq border border-sq-divider bg-sq-surface px-2.5 py-1.5 text-xs"
+                  className="sq-input"
                 />
                 <input
                   type="number"
                   placeholder="Порядок у меню"
                   value={newModuleOrder}
                   onChange={(e) => setNewModuleOrder(e.target.value)}
-                  className="col-span-2 rounded-sq border border-sq-divider bg-sq-surface px-2.5 py-1.5 text-xs"
+                  className="sq-input sm:col-span-2"
                 />
               </div>
-              {newModuleError && <p className="text-xs text-rose-600">{newModuleError}</p>}
+              {newModuleError && <p className="text-[13px] text-red-600">{newModuleError}</p>}
               <button
                 type="button"
                 onClick={addRemoteModule}
-                className="rounded-sq border border-sq-divider px-3 py-1.5 text-xs font-medium text-sq-secondary hover:bg-sq-surface"
+                className="inline-flex items-center gap-1.5 min-h-9 text-[15px] font-semibold text-sq-blue"
               >
-                + Додати модуль
+                <Plus size={20} />
+                Додати модуль
               </button>
             </div>
           </div>
-        </div>
+        </section>
 
-        {remotesChanged && (
-          <div className="flex items-center gap-3 text-sm">
-            <span className="text-sq-secondary">Джерело модулів змінилося.</span>
-            <button
-              type="button"
-              className="sq-btn-primary px-3 py-1.5"
-              onClick={() => window.location.reload()}
-            >
-              Перезавантажити
+        <div className="space-y-4 pt-1">
+          {remotesChanged && (
+            <div className="flex flex-wrap items-center gap-3 rounded-xl bg-amber-50 px-4 py-3 text-[15px] text-amber-800">
+              <span className="flex-1 min-w-0">Джерело модулів змінилося.</span>
+              <button type="button" className="sq-btn-quiet" onClick={() => window.location.reload()}>
+                Перезавантажити
+              </button>
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="submit" className="pos-btn-primary min-h-11 px-5 rounded-sq text-[15px]">
+              Зберегти
             </button>
+            {message && (
+              <p
+                className={`text-[15px] font-medium ${
+                  message === 'Збережено' ? 'text-sq-success-ink' : 'text-red-600'
+                }`}
+              >
+                {message}
+              </p>
+            )}
           </div>
-        )}
-        {message && <p className="text-sm text-sq-blue font-medium">{message}</p>}
-        <button type="submit" className="sq-btn-primary px-4 py-2.5">
-          Зберегти
-        </button>
+        </div>
       </form>
     </div>
   );
+}
+
+/** Native checkbox in the accent colour, sized to sit on a 15 px text line. */
+const CHECKBOX = 'w-5 h-5 shrink-0 accent-[rgb(var(--sq-blue-rgb))]';
+
+/** A label over its control, the way every owner form reads. */
+function Field({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode }) {
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="text-[13px] font-semibold text-sq-secondary">{label}</span>
+      {children}
+      {hint && <span className="text-[13px] text-sq-muted">{hint}</span>}
+    </label>
+  );
+}
+
+/** A checkbox row: the box, then the sentence it switches. */
+function Toggle({
+  checked,
+  onChange,
+  children,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  children: ReactNode;
+}) {
+  return (
+    <label className="min-h-11 flex items-center gap-3 text-[15px] text-sq-text">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className={CHECKBOX}
+      />
+      <span>{children}</span>
+    </label>
+  );
+}
+
+/** The quiet sentence under a section head that says what the section is for. */
+function SectionLead({ children }: { children: ReactNode }) {
+  return <p className="text-[15px] leading-relaxed text-sq-secondary">{children}</p>;
 }
 
 /**
@@ -732,7 +754,7 @@ function RemoteProbeNote({
     // Saving is still allowed — the entry starts working once the apps update.
     const needsNewer = probe.info.minHostPlatform > PLATFORM_VERSION;
     return (
-      <span className={`text-xs ${needsNewer ? 'text-amber-700' : 'text-emerald-700'}`}>
+      <span className={`text-[13px] ${needsNewer ? 'text-amber-700' : 'text-sq-success-ink'}`}>
         Підпис дійсний · {probe.info.moduleId} {probe.info.version}
         {needsNewer &&
           ` · потребує платформу ${probe.info.minHostPlatform}, тут ${PLATFORM_VERSION} — сайт і касу треба оновити, доти лишиться вбудований модуль`}
@@ -740,7 +762,7 @@ function RemoteProbeNote({
     );
   }
   if (probe.state === 'error') {
-    return <span className="text-xs text-rose-600">{probe.message}</span>;
+    return <span className="text-[13px] text-red-600">{probe.message}</span>;
   }
   return null;
 }

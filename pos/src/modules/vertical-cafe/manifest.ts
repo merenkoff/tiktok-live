@@ -49,7 +49,7 @@ export const verticalCafeModule: RemoteModuleDescriptor = {
     {
       to: '/kitchen',
       label: 'Кухня',
-      icon: 'ClipboardList',
+      icon: 'ChefHat',
       location: 'cashier-primary',
       order: 80,
       match: '/kitchen',

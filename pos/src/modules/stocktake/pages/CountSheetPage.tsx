@@ -33,6 +33,7 @@ import {
 } from '../data/repository';
 import { syncSheets } from '../data/sync';
 import { SheetStatusBadge } from '../components/SheetStatusBadge';
+import { ArrowLeft, Camera, Minus, Plus, ScanLine, X } from '@pos/platform/ui';
 
 /** One count sheet: scan, search, adjust, finish. Read-only once it left the till. */
 export function CountSheetPage() {
@@ -159,12 +160,15 @@ export function CountSheetPage() {
   }
 
   if (sheet === undefined) {
-    return <div className="px-4 py-6 text-sm text-sq-secondary">Завантаження…</div>;
+    return <div className="px-4 md:px-7 py-6 text-sm text-sq-secondary">Завантаження…</div>;
   }
   if (sheet === null) {
     return (
-      <div className="px-4 py-6 text-sm text-sq-secondary">
-        Лист не знайдено. <Link to="/stocktake" className="underline">До списку</Link>
+      <div className="px-4 md:px-7 py-6 text-[15px] text-sq-secondary">
+        Лист не знайдено.{' '}
+        <Link to="/stocktake" className="font-semibold text-sq-blue">
+          До списку
+        </Link>
       </div>
     );
   }
@@ -172,205 +176,214 @@ export function CountSheetPage() {
   const total = lines.reduce((sum, l) => sum + l.countedQty, 0);
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Link to="/stocktake" className="text-sm text-sq-secondary hover:text-sq-text">
-            ← Листи
+    <div className="flex-1 min-h-0 overflow-auto bg-sq-bg text-sq-text">
+      <div className="mx-auto max-w-2xl px-4 md:px-7 pb-6">
+        <div className="flex flex-wrap items-center gap-3 py-4 md:min-h-[72px]">
+          <Link
+            to="/stocktake"
+            className="-ml-1 inline-flex items-center gap-1 min-h-11 pr-1 text-[15px] font-semibold text-sq-blue"
+          >
+            <ArrowLeft size={20} aria-hidden />
+            Листи
           </Link>
           <SheetStatusBadge sheet={sheet} />
+          <span className="ml-auto text-[15px] text-sq-muted tabular-nums">
+            {lines.length} поз. · {total} шт.
+          </span>
         </div>
-        <span className="text-sm text-sq-secondary">
-          {lines.length} поз. · {total} шт.
-        </span>
-      </div>
 
-      {sheet.status === 'synced' && (
-        <p className="mt-3 rounded-sq bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-          Надіслано як чернетку інвентаризації {sheet.serverDocNumber ?? ''}. Провести її може
-          власник у розділі «Склад».
-        </p>
-      )}
-      {(sheet.status === 'queued' || sheet.status === 'error') && (
-        <p className="mt-3 rounded-sq bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          {isOfflinePosEnabled() && !online
-            ? 'Офлайн. Лист у черзі — відправиться автоматично, щойно з’явиться мережа.'
-            : 'Лист у черзі на відправлення.'}
-          {sheet.lastError && ` (${sheet.lastError})`}
-        </p>
-      )}
-      {sheet.status === 'dead' && (
-        <p className="mt-3 rounded-sq bg-red-50 px-3 py-2 text-sm text-red-800">
-          Сервер відхилив лист: {sheet.lastError ?? 'невідома помилка'}. Видаліть його і порахуйте
-          знову.
-        </p>
-      )}
-      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-
-      {counting && (
-        <div className="mt-4 space-y-3">
-          <form
-            className="flex gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void handleScan(scan);
-            }}
-          >
-            <input
-              ref={scanRef}
-              autoFocus
-              value={scan}
-              onChange={(e) => setScan(e.target.value)}
-              placeholder="Скануйте штрихкод або введіть його"
-              inputMode="numeric"
-              aria-label="Штрихкод"
-              className="min-w-0 flex-1 rounded-sq border border-sq-divider bg-sq-bg px-3 py-2 text-sm text-sq-text"
-            />
-            <button type="submit" className="sq-btn-primary px-3 py-2">
-              +1
-            </button>
-            <button
-              type="button"
-              className="rounded-sq border border-sq-divider px-3 py-2 text-sm text-sq-secondary"
-              onClick={() => setCamera((v) => !v)}
-            >
-              {camera ? 'Закрити камеру' : 'Камера'}
-            </button>
-          </form>
-          {camera && (
-            <Suspense fallback={<p className="text-sm text-sq-secondary">Вмикаю камеру…</p>}>
-              <BarcodeScanner
-                onScan={(code) => void handleScan(code)}
-                onClose={() => setCamera(false)}
-              />
-            </Suspense>
-          )}
-          {notice && <p className="text-sm text-sq-secondary">{notice}</p>}
-
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Або знайдіть за назвою / артикулом"
-            aria-label="Пошук товару"
-            className="w-full rounded-sq border border-sq-divider bg-sq-bg px-3 py-2 text-sm text-sq-text"
-          />
-          {results.length > 0 && (
-            <ul className="divide-y divide-sq-divider rounded-sq border border-sq-divider bg-sq-surface">
-              {results.map((item) => (
-                <li key={item.variant_id}>
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-between px-3 py-2 text-left text-sm"
-                    onClick={() => {
-                      void add(item);
-                      setQuery('');
-                    }}
-                  >
-                    <span className="text-sq-text">
-                      {lineLabel(item)}
-                    </span>
-                    <span className="text-sq-secondary">+1</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-
-      <ul className="mt-4 divide-y divide-sq-divider rounded-sq border border-sq-divider bg-sq-surface">
-        {lines.length === 0 && (
-          <li className="px-4 py-6 text-center text-sm text-sq-secondary">
-            {counting ? 'Відскануйте перший товар.' : 'Порожній лист.'}
-          </li>
+        {sheet.status === 'synced' && (
+          <p className="mb-3 rounded-xl bg-sq-success/10 px-4 py-3 text-sm text-sq-success-ink">
+            Надіслано як чернетку інвентаризації {sheet.serverDocNumber ?? ''}. Провести її може
+            власник у розділі «Склад».
+          </p>
         )}
-        {lines.map((line) => {
-          const pack = linePack(line);
-          const mode = packModeOf(line.variantId);
-          const shown =
-            mode === 'pack' && pack
-              ? Math.round((line.countedQty / pack.qty) * 10000) / 10000
-              : line.countedQty;
-          return (
-            <li key={line.variantId} className="px-3 py-2">
-              <div className="flex items-center gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm text-sq-text">{line.label}</div>
-                  {line.barcode && (
-                    <div className="text-xs text-sq-secondary">{line.barcode}</div>
-                  )}
-                </div>
-                {counting ? (
-                  <>
-                    <button
-                      type="button"
-                      aria-label="Менше"
-                      className="h-9 w-9 rounded-sq border border-sq-divider text-sq-text"
-                      onClick={() => adjust(line, -1)}
-                    >
-                      −
-                    </button>
-                    <input
-                      type="number"
-                      min={0}
-                      // Packs may be fractional on screen; `setCount` is what
-                      // floors the base units that come out.
-                      step="any"
-                      value={shown}
-                      aria-label={`Кількість: ${line.label}`}
-                      onChange={(e) => void typed(line, e.target.value)}
-                      className="h-9 w-16 rounded-sq border border-sq-divider bg-sq-bg text-center text-sm text-sq-text"
-                    />
-                    <button
-                      type="button"
-                      aria-label="Більше"
-                      className="h-9 w-9 rounded-sq border border-sq-divider text-sq-text"
-                      onClick={() => adjust(line, 1)}
-                    >
-                      +
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Прибрати"
-                      className="px-2 text-xs text-sq-secondary hover:text-red-600"
-                      onClick={() => void removeLine(id, line.variantId).then(reload)}
-                    >
-                      ✕
-                    </button>
-                  </>
-                ) : (
-                  <span className="w-16 text-right text-sm font-medium text-sq-text">
-                    {line.countedQty}
-                  </span>
-                )}
-              </div>
-              {counting && (
-                <QuantityUnitToggle
-                  className="mt-1 w-40 ml-auto"
-                  pack={pack}
-                  unit={line.unit ?? ''}
-                  mode={mode}
-                  value={shown}
-                  onModeChange={(next) =>
-                    setPackModes((prev) => ({ ...prev, [line.variantId]: next }))
-                  }
-                />
-              )}
-            </li>
-          );
-        })}
-      </ul>
+        {(sheet.status === 'queued' || sheet.status === 'error') && (
+          <p className="mb-3 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            {isOfflinePosEnabled() && !online
+              ? 'Офлайн. Лист у черзі — відправиться автоматично, щойно з’явиться мережа.'
+              : 'Лист у черзі на відправлення.'}
+            {sheet.lastError && ` (${sheet.lastError})`}
+          </p>
+        )}
+        {sheet.status === 'dead' && (
+          <p className="mb-3 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+            Сервер відхилив лист: {sheet.lastError ?? 'невідома помилка'}. Видаліть його і порахуйте
+            знову.
+          </p>
+        )}
+        {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
 
-      {counting && (
-        <button
-          type="button"
-          disabled={busy || lines.length === 0}
-          className="sq-btn-primary mt-4 w-full py-3 disabled:opacity-50"
-          onClick={finish}
-        >
-          {busy ? 'Відправляю…' : 'Завершити і відправити'}
-        </button>
-      )}
+        {counting && (
+          <div className="mb-4 space-y-3">
+            <form
+              className="flex gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void handleScan(scan);
+              }}
+            >
+              <input
+                ref={scanRef}
+                autoFocus
+                value={scan}
+                onChange={(e) => setScan(e.target.value)}
+                placeholder="Скануйте штрихкод або введіть його"
+                inputMode="numeric"
+                aria-label="Штрихкод"
+                className="pos-field min-w-0 flex-1"
+              />
+              <button type="submit" className="pos-btn-primary min-h-12 px-5 rounded-sq text-[17px] tabular-nums">
+                +1
+              </button>
+              <button
+                type="button"
+                className="sq-btn-quiet min-h-12"
+                onClick={() => setCamera((v) => !v)}
+              >
+                <Camera size={20} />
+                {camera ? 'Закрити камеру' : 'Камера'}
+              </button>
+            </form>
+            {camera && (
+              <Suspense fallback={<p className="text-sm text-sq-secondary">Вмикаю камеру…</p>}>
+                <BarcodeScanner
+                  onScan={(code) => void handleScan(code)}
+                  onClose={() => setCamera(false)}
+                />
+              </Suspense>
+            )}
+            {notice && <p className="text-[15px] text-sq-secondary">{notice}</p>}
+
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Або знайдіть за назвою / артикулом"
+              aria-label="Пошук товару"
+              className="pos-field"
+            />
+            {results.length > 0 && (
+              <ul className="divide-y divide-sq-divider rounded-card bg-white shadow-card overflow-hidden">
+                {results.map((item) => (
+                  <li key={item.variant_id}>
+                    <button
+                      type="button"
+                      className="flex w-full min-h-12 items-center justify-between gap-3 px-4 py-2 text-left hover:bg-sq-sidebar"
+                      onClick={() => {
+                        void add(item);
+                        setQuery('');
+                      }}
+                    >
+                      <span className="min-w-0 truncate text-base text-sq-text">
+                        {lineLabel(item)}
+                      </span>
+                      <span className="shrink-0 text-[15px] font-semibold text-sq-blue tabular-nums">+1</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {lines.length === 0 ? (
+          <div className="py-12 text-center">
+            {counting && <ScanLine size={48} className="mx-auto mb-3" />}
+            <p className="text-[15px] text-sq-secondary">
+              {counting ? 'Відскануйте перший товар.' : 'Порожній лист.'}
+            </p>
+          </div>
+        ) : (
+          <ul className="divide-y divide-sq-divider rounded-card bg-white shadow-card overflow-hidden">
+            {lines.map((line) => {
+              const pack = linePack(line);
+              const mode = packModeOf(line.variantId);
+              const shown =
+                mode === 'pack' && pack
+                  ? Math.round((line.countedQty / pack.qty) * 10000) / 10000
+                  : line.countedQty;
+              return (
+                <li key={line.variantId} className="pl-4 pr-2 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-base text-sq-text">{line.label}</div>
+                      {line.barcode && (
+                        <div className="text-[13px] text-sq-muted tabular-nums">{line.barcode}</div>
+                      )}
+                    </div>
+                    {counting ? (
+                      <>
+                        <button
+                          type="button"
+                          aria-label="Менше"
+                          className="w-11 h-11 grid place-items-center rounded-sq bg-sq-empty text-sq-text hover:bg-sq-selected"
+                          onClick={() => adjust(line, -1)}
+                        >
+                          <Minus size={20} />
+                        </button>
+                        <input
+                          type="number"
+                          min={0}
+                          // Packs may be fractional on screen; `setCount` is what
+                          // floors the base units that come out.
+                          step="any"
+                          value={shown}
+                          aria-label={`Кількість: ${line.label}`}
+                          onChange={(e) => void typed(line, e.target.value)}
+                          className="h-11 w-20 rounded-sq border-0 bg-sq-empty text-center text-[17px] font-semibold tabular-nums text-sq-text outline-none focus:bg-white focus:ring-2 focus:ring-sq-blue"
+                        />
+                        <button
+                          type="button"
+                          aria-label="Більше"
+                          className="w-11 h-11 grid place-items-center rounded-sq bg-sq-empty text-sq-text hover:bg-sq-selected"
+                          onClick={() => adjust(line, 1)}
+                        >
+                          <Plus size={20} />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Прибрати"
+                          className="w-11 h-11 grid place-items-center rounded-full text-sq-muted hover:bg-sq-empty hover:text-red-600"
+                          onClick={() => void removeLine(id, line.variantId).then(reload)}
+                        >
+                          <X size={20} />
+                        </button>
+                      </>
+                    ) : (
+                      <span className="w-16 pr-2 text-right text-[17px] font-semibold text-sq-text tabular-nums">
+                        {line.countedQty}
+                      </span>
+                    )}
+                  </div>
+                  {counting && (
+                    <QuantityUnitToggle
+                      className="mt-1 w-40 ml-auto"
+                      pack={pack}
+                      unit={line.unit ?? ''}
+                      mode={mode}
+                      value={shown}
+                      onModeChange={(next) =>
+                        setPackModes((prev) => ({ ...prev, [line.variantId]: next }))
+                      }
+                    />
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {counting && (
+          <button
+            type="button"
+            disabled={busy || lines.length === 0}
+            className="pos-btn-primary mt-4 w-full min-h-[52px] rounded-xl text-[17px]"
+            onClick={finish}
+          >
+            {busy ? 'Відправляю…' : 'Завершити і відправити'}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

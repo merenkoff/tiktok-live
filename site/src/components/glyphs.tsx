@@ -13,11 +13,47 @@ export type Glyph = (props: GlyphProps) => JSX.Element;
 /** Masks need an id unique in the document; useId is stable across SSR and hydration. */
 const useGlyphId = () => useId().replace(/:/g, '') + '-';
 
+/** Colour glyph, 24 px grid · orange. */
+export function AlertTriangle({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="AlertTriangle" {...props}>
+      <path d="M12 3.5c.5 0 1 .25 1.25.75l8 14A1.5 1.5 0 0 1 20 20.5H4a1.5 1.5 0 0 1-1.25-2.25l8-14c.25-.5.75-.75 1.25-.75Z" fill="#F4891F"/><rect x="11" y="9" width="2" height="6" rx="1" fill="#FFFFFF"/><circle cx="12" cy="17.25" r="1.25" fill="#FFFFFF"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · green. */
+export function Banknote({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Banknote" {...props}>
+      <rect x="2" y="6" width="20" height="12" rx="2.5" fill="#43AE59"/><circle cx="12" cy="12" r="3" fill="#FFFFFF" fillOpacity=".6"/><rect x="5" y="9" width="2" height="2" rx="1" fill="#FFFFFF" fillOpacity=".6"/><rect x="17" y="13" width="2" height="2" rx="1" fill="#FFFFFF" fillOpacity=".6"/>
+    </svg>
+  );
+}
+
 /** Colour glyph, 24 px grid · green. */
 export function BarChart3({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="BarChart3" {...props}>
       <rect x="3" y="13" width="4" height="8" rx="1.5" fill="#43AE59" fillOpacity=".45"/><rect x="10" y="8" width="4" height="13" rx="1.5" fill="#43AE59" fillOpacity=".7"/><rect x="17" y="3" width="4" height="18" rx="1.5" fill="#43AE59"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · slate. */
+export function Barcode({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Barcode" {...props}>
+      <g fill="#6C7D93"><rect x="3" y="5" width="2" height="14" rx="1"/><rect x="6" y="5" width="1" height="14"/><rect x="8" y="5" width="2" height="14" rx="1"/><rect x="11" y="5" width="1" height="14"/><rect x="13" y="5" width="3" height="14" rx="1"/><rect x="17" y="5" width="1" height="14"/><rect x="19" y="5" width="2" height="14" rx="1"/></g>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · yellow. */
+export function Bell({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Bell" {...props}>
+      <path d="M12 3a1.5 1.5 0 0 1 1.5 1.5v.25A6 6 0 0 1 18 10.5V15l2 2.5H4L6 15v-4.5A6 6 0 0 1 10.5 4.75V4.5A1.5 1.5 0 0 1 12 3Z" fill="#F8C00F"/><path d="M9.5 19.5a2.5 2.5 0 0 0 5 0Z" fill="#F8C00F" fillOpacity=".6"/>
     </svg>
   );
 }
@@ -25,8 +61,17 @@ export function BarChart3({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · violet. */
 export function Bot({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Bot" {...props}>
       <path d="M12 7V4.5" fill="none" stroke="#8A6CEF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><circle cx="12" cy="3.5" r="1.5" fill="#8A6CEF"/><rect x="4" y="7" width="16" height="13" rx="4" fill="#8A6CEF"/><g fill="#8A6CEF" fillOpacity=".6"><rect x="1" y="11" width="2" height="5" rx="1"/><rect x="21" y="11" width="2" height="5" rx="1"/></g><g fill="#FFFFFF"><circle cx="9" cy="12.5" r="1.75"/><circle cx="15" cy="12.5" r="1.75"/><rect x="10" y="16" width="4" height="1" rx=".5" fillOpacity=".7"/></g>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · khaki. */
+export function Boxes({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Boxes" {...props}>
+      <rect x="4" y="12" width="16" height="9" rx="2" fill="#C0A96B"/><rect x="6" y="3" width="12" height="8" rx="2" fill="#C0A96B" fillOpacity=".75"/><path d="M11 12h2v4h-2zM11 3h2v3h-2z" fill="#FFFFFF" fillOpacity=".6"/>
     </svg>
   );
 }
@@ -34,8 +79,17 @@ export function Bot({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · slate. */
 export function Building2({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Building2" {...props}>
       <rect x="4" y="3" width="11" height="18" rx="2" fill="#6C7D93"/><rect x="16" y="9" width="5" height="12" rx="1.5" fill="#6C7D93" fillOpacity=".55"/><g fill="#FFFFFF" fillOpacity=".6"><rect x="6" y="6" width="2" height="2"/><rect x="11" y="6" width="2" height="2"/><rect x="6" y="10" width="2" height="2"/><rect x="11" y="10" width="2" height="2"/><rect x="6" y="14" width="2" height="2"/><rect x="11" y="14" width="2" height="2"/><rect x="8" y="17" width="3" height="4"/></g>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · red. */
+export function Calendar({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Calendar" {...props}>
+      <rect x="3" y="5" width="18" height="16" rx="3" fill="#F4386A" fillOpacity=".2" stroke="#F4386A" strokeWidth="2"/><path d="M3 8a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v2H3Z" fill="#F4386A"/><path d="M6 13h2v2H6zM11 13h2v2h-2zM16 13h2v2h-2zM6 17h2v2H6zM11 17h2v2h-2z" fill="#F4386A"/><path d="M8 3V6M16 3V6" fill="none" stroke="#F4386A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
@@ -44,8 +98,17 @@ export function Building2({ size = 24, ...props }: GlyphProps) {
 export function CalendarClock({ size = 24, ...props }: GlyphProps) {
   const u = useGlyphId();
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="CalendarClock" {...props}>
       <mask id={u + 'cut'} maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24"><rect x="0" y="0" width="24" height="24" fill="#FFFFFF"/><circle cx="17" cy="17" r="6.5" fill="#000000"/></mask><g mask={'url(#' + u + 'cut)'}><rect x="3" y="5" width="18" height="16" rx="3" fill="#F4386A" fillOpacity=".2" stroke="#F4386A" strokeWidth="2"/><path d="M3 8a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v2H3Z" fill="#F4386A"/><path d="M6 13h2v2H6zM10 13h2v2h-2zM6 16h2v2H6z" fill="#F4386A"/></g><path d="M8 3V6M16 3V6" fill="none" stroke="#F4386A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><circle cx="17" cy="17" r="4.5" fill="#F4386A" fillOpacity=".2" stroke="#F4386A" strokeWidth="2"/><path d="M17 15V17H18.5" fill="none" stroke="#F4386A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · slate. */
+export function CameraColor({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="CameraColor" {...props}>
+      <path d="M8 7 9.5 4h5L16 7Z" fill="#6C7D93"/><rect x="2" y="7" width="20" height="13" rx="3" fill="#6C7D93"/><circle cx="12" cy="13.5" r="4" fill="#FFFFFF" fillOpacity=".9"/><circle cx="12" cy="13.5" r="2" fill="#6C7D93" fillOpacity=".6"/><rect x="17" y="9" width="2" height="2" rx="1" fill="#FFFFFF" fillOpacity=".6"/>
     </svg>
   );
 }
@@ -53,7 +116,7 @@ export function CalendarClock({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · orange. */
 export function ChefHat({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="ChefHat" {...props}>
       <g fill="#F4891F"><circle cx="8" cy="9.5" r="4"/><circle cx="16" cy="9.5" r="4"/><circle cx="12" cy="7.5" r="5"/><rect x="7" y="10" width="10" height="7"/><rect x="7" y="18" width="10" height="3" rx="1"/></g><path d="M10 13v2.5M14 13v2.5" fill="none" stroke="#FFFFFF" strokeOpacity=".55" strokeWidth="2" strokeLinecap="round"/>
     </svg>
   );
@@ -62,8 +125,27 @@ export function ChefHat({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · teal. */
 export function ClipboardCheck({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="ClipboardCheck" {...props}>
       <rect x="4" y="5" width="16" height="16" rx="3" fill="#2E9F91" fillOpacity=".22" stroke="#2E9F91" strokeWidth="2"/><rect x="8" y="2" width="8" height="5" rx="1.5" fill="#2E9F91"/><path d="M8.5 13.5 11 16 15.5 11" fill="none" stroke="#2E9F91" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · teal. */
+export function ClipboardList({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="ClipboardList" {...props}>
+      <rect x="4" y="5" width="16" height="16" rx="3" fill="#2E9F91" fillOpacity=".22" stroke="#2E9F91" strokeWidth="2"/><rect x="8" y="2" width="8" height="5" rx="1.5" fill="#2E9F91"/><path d="M8 12H16M8 16H13" fill="none" stroke="#2E9F91" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · gray. */
+export function CloudOff({ size = 24, ...props }: GlyphProps) {
+  const u = useGlyphId();
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="CloudOff" {...props}>
+      <mask id={u + 'cut'} maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24"><rect x="0" y="0" width="24" height="24" fill="#FFFFFF"/><path d="M4 4 20 20" stroke="#000000" strokeWidth="5" strokeLinecap="round"/></mask><g mask={'url(#' + u + 'cut)'} fill="#8E9196"><circle cx="9" cy="14" r="4"/><circle cx="13.5" cy="11.5" r="5"/><circle cx="17.5" cy="14.5" r="3.5"/><rect x="9" y="14" width="9" height="4"/></g><path d="M4 4 20 20" fill="none" stroke="#8E9196" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
@@ -71,7 +153,7 @@ export function ClipboardCheck({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · orange. */
 export function Coffee({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Coffee" {...props}>
       <path d="M8 3.5V6M12 3.5V6" fill="none" stroke="#F4891F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeOpacity=".5"/><path d="M4 9H17V14A5 5 0 0 1 12 19H9A5 5 0 0 1 4 14Z" fill="#F4891F"/><path d="M17 11h1.5a2.5 2.5 0 0 1 0 5H16.5" fill="none" stroke="#F4891F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><rect x="3" y="20" width="15" height="2" rx="1" fill="#F4891F" fillOpacity=".5"/>
     </svg>
   );
@@ -81,8 +163,17 @@ export function Coffee({ size = 24, ...props }: GlyphProps) {
 export function Coins({ size = 24, ...props }: GlyphProps) {
   const u = useGlyphId();
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Coins" {...props}>
       <mask id={u + 'cut'} maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24"><rect x="0" y="0" width="24" height="24" fill="#FFFFFF"/><circle cx="9" cy="15" r="7.5" fill="#000000"/></mask><circle cx="15" cy="9" r="6" fill="#F8C00F" fillOpacity=".55" mask={'url(#' + u + 'cut)'}/><circle cx="9" cy="15" r="6" fill="#F8C00F"/><circle cx="9" cy="15" r="3.5" fill="none" stroke="#FFFFFF" strokeOpacity=".6" strokeWidth="2"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · blue. */
+export function CreditCard({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="CreditCard" {...props}>
+      <rect x="2" y="5" width="20" height="14" rx="3" fill="#1B9DF0"/><rect x="2" y="8" width="20" height="3" fill="#000000" fillOpacity=".22"/><rect x="5" y="14" width="5" height="2" rx="1" fill="#FFFFFF" fillOpacity=".75"/>
     </svg>
   );
 }
@@ -90,8 +181,17 @@ export function Coins({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · blue. */
 export function Download({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Download" {...props}>
       <path d="M4 14v3.5A3.5 3.5 0 0 0 7.5 21h9a3.5 3.5 0 0 0 3.5-3.5V14" fill="none" stroke="#1B9DF0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M12 3v11M7.5 9.5 12 14l4.5-4.5" fill="none" stroke="#1B9DF0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · blue. */
+export function FileText({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="FileText" {...props}>
+      <path d="M6 3h8l5 5v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" fill="#1B9DF0" fillOpacity=".22" stroke="#1B9DF0" strokeWidth="2" strokeLinejoin="round"/><path d="M14 3v5h5" fill="none" stroke="#1B9DF0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M9 12H15M9 16H13" fill="none" stroke="#1B9DF0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
@@ -99,17 +199,53 @@ export function Download({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · pink. */
 export function Flower2({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Flower2" {...props}>
       <path d="M12 14V21" fill="none" stroke="#EE5B93" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M13 18.5C13 16.5 14.5 15 17 15 17 17 15.5 18.5 13 18.5Z" fill="#EE5B93" fillOpacity=".6"/><g fill="#EE5B93"><circle cx="12" cy="5.25" r="3.25"/><circle cx="15.5" cy="7.75" r="3.25"/><circle cx="14.25" cy="12" r="3.25"/><circle cx="9.75" cy="12" r="3.25"/><circle cx="8.5" cy="7.75" r="3.25"/></g><circle cx="12" cy="9" r="2" fill="#FFFFFF" fillOpacity=".75"/>
     </svg>
   );
 }
 
-/** Colour glyph, 24 px grid · orange. */
+/** Colour glyph, 24 px grid · red. */
+export function Gift({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Gift" {...props}>
+      <path d="M12 10C10.5 6.5 7 6 7 8s3 2 5 2Zm0 0c1.5-3.5 5-4 5-2s-3 2-5 2Z" fill="#F4386A" fillOpacity=".7"/><rect x="3" y="10" width="18" height="4" rx="1.5" fill="#F4386A"/><rect x="5" y="15" width="14" height="6" rx="1.5" fill="#F4386A"/><path d="M11 10h2v11h-2z" fill="#FFFFFF" fillOpacity=".65"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · blue. */
 export function Grid3X3({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
-      <rect x="6" y="6" width="12" height="12" rx="3" fill="#F4891F"/><g fill="#F4891F" fillOpacity=".5"><rect x="9" y="2" width="6" height="2" rx="1"/><rect x="9" y="20" width="6" height="2" rx="1"/><rect x="2" y="9" width="2" height="6" rx="1"/><rect x="20" y="9" width="2" height="6" rx="1"/></g>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Grid3X3" {...props}>
+      <g fill="#1B9DF0"><rect x="3" y="3" width="5" height="5" rx="1.5"/><rect x="10" y="3" width="5" height="5" rx="1.5" fillOpacity=".55"/><rect x="17" y="3" width="5" height="5" rx="1.5"/><rect x="3" y="10" width="5" height="5" rx="1.5" fillOpacity=".55"/><rect x="10" y="10" width="5" height="5" rx="1.5"/><rect x="17" y="10" width="5" height="5" rx="1.5" fillOpacity=".55"/><rect x="3" y="17" width="5" height="5" rx="1.5"/><rect x="10" y="17" width="5" height="5" rx="1.5" fillOpacity=".55"/><rect x="17" y="17" width="5" height="5" rx="1.5"/></g>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · red. */
+export function Heart({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Heart" {...props}>
+      <path d="M12 20.5S3.5 15.5 3.5 9.5A4.5 4.5 0 0 1 12 7.25 4.5 4.5 0 0 1 20.5 9.5c0 6-8.5 11-8.5 11Z" fill="#F4386A"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · blue. */
+export function Home({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Home" {...props}>
+      <rect x="5" y="10" width="14" height="11" rx="2" fill="#1B9DF0"/><path d="M3 11.5 12 4l9 7.5" fill="none" stroke="#1B9DF0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><rect x="10" y="15" width="4" height="6" rx="1" fill="#FFFFFF" fillOpacity=".7"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · blue. */
+export function Info({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Info" {...props}>
+      <circle cx="12" cy="12" r="9.5" fill="#1B9DF0"/><rect x="11" y="11" width="2" height="6" rx="1" fill="#FFFFFF"/><circle cx="12" cy="7.75" r="1.25" fill="#FFFFFF"/>
     </svg>
   );
 }
@@ -117,7 +253,7 @@ export function Grid3X3({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · khaki. */
 export function KeyRound({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="KeyRound" {...props}>
       <path fillRule="evenodd" d="M7 7a5 5 0 1 1 0 10A5 5 0 0 1 7 7Zm0 3.25a1.75 1.75 0 1 0 0 3.5 1.75 1.75 0 0 0 0-3.5Z" fill="#C0A96B"/><g fill="#C0A96B"><rect x="11" y="11" width="10" height="2"/><rect x="16" y="13" width="2" height="3"/><rect x="19" y="13" width="2" height="4"/></g>
     </svg>
   );
@@ -126,8 +262,26 @@ export function KeyRound({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · gray. */
 export function Laptop({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Laptop" {...props}>
       <rect x="5" y="5" width="14" height="9" rx="2" fill="#8E9196" fillOpacity=".22" stroke="#8E9196" strokeWidth="2"/><rect x="2" y="16" width="20" height="3" rx="1.5" fill="#8E9196"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · teal. */
+export function Layers({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Layers" {...props}>
+      <path d="M12 3 21 8l-9 5-9-5Z" fill="#2E9F91" stroke="#2E9F91" strokeWidth="2" strokeLinejoin="round"/><path d="M3 12.5l9 5 9-5" fill="none" stroke="#2E9F91" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M3 16.5l9 5 9-5" fill="none" stroke="#2E9F91" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeOpacity=".55"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · blue. */
+export function ListOrdered({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="ListOrdered" {...props}>
+      <g fill="#1B9DF0"><circle cx="5" cy="6" r="2"/><circle cx="5" cy="12" r="2"/><circle cx="5" cy="18" r="2"/></g><path d="M10 6H20M10 12H20M10 18H17" fill="none" stroke="#1B9DF0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
@@ -135,8 +289,26 @@ export function Laptop({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · gray. */
 export function Lock({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Lock" {...props}>
       <path d="M8 10V7.5a4 4 0 0 1 8 0V10" fill="none" stroke="#8E9196" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><rect x="4" y="10" width="16" height="11" rx="3" fill="#8E9196"/><rect x="11" y="14" width="2" height="4" rx="1" fill="#FFFFFF" fillOpacity=".85"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · red. */
+export function MapPinColor({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="MapPinColor" {...props}>
+      <path d="M12 21.5s7-6 7-11.5a7 7 0 0 0-14 0c0 5.5 7 11.5 7 11.5Z" fill="#F4386A"/><circle cx="12" cy="10" r="2.5" fill="#FFFFFF" fillOpacity=".85"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · orange. */
+export function Megaphone({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Megaphone" {...props}>
+      <path d="M4 9.5h3l9-5v15l-9-5H4a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1Z" fill="#F4891F"/><path d="M19 9.5a3 3 0 0 1 0 5" fill="none" stroke="#F4891F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M7.5 14.5 9 20" fill="none" stroke="#F4891F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
@@ -144,8 +316,17 @@ export function Lock({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · blue. */
 export function MessageCircle({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="MessageCircle" {...props}>
       <path d="M12 4c5 0 9 3.25 9 7.5S17 19 12 19c-1 0-2-.25-2.75-.5L5 20.5l1.25-3.5C4.25 15.5 3 13.5 3 11.5 3 7.25 7 4 12 4Z" fill="#1B9DF0" fillOpacity=".22" stroke="#1B9DF0" strokeWidth="2" strokeLinejoin="round"/><g fill="#1B9DF0"><circle cx="8.5" cy="11.5" r="1.25"/><circle cx="12" cy="11.5" r="1.25"/><circle cx="15.5" cy="11.5" r="1.25"/></g>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · blue. */
+export function MessageSquare({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="MessageSquare" {...props}>
+      <path d="M5 4h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9.5L5 20.5V17a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" fill="#1B9DF0" fillOpacity=".22" stroke="#1B9DF0" strokeWidth="2" strokeLinejoin="round"/><path d="M8 9H16M8 13H13" fill="none" stroke="#1B9DF0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
@@ -153,7 +334,7 @@ export function MessageCircle({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · slate. */
 export function Monitor({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Monitor" {...props}>
       <rect x="3" y="4" width="18" height="12" rx="2.5" fill="#6C7D93" fillOpacity=".22" stroke="#6C7D93" strokeWidth="2"/><path d="M12 16v4M8 20h8" fill="none" stroke="#6C7D93" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
@@ -162,8 +343,53 @@ export function Monitor({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · khaki. */
 export function Package({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Package" {...props}>
       <path d="M5 3H19L21 7H3Z" fill="#C0A96B" fillOpacity=".6"/><rect x="3" y="7" width="18" height="14" rx="2.5" fill="#C0A96B"/><path d="M10 3h4v8h-4z" fill="#FFFFFF" fillOpacity=".6"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · khaki. */
+export function PackageCheck({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="PackageCheck" {...props}>
+      <path d="M5 3H19L21 7H3Z" fill="#C0A96B" fillOpacity=".6"/><rect x="3" y="7" width="18" height="14" rx="2.5" fill="#C0A96B"/><path d="M8.5 13.5 11 16l4.5-4.5" fill="none" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · red. */
+export function Percent({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Percent" {...props}>
+      <circle cx="12" cy="12" r="9.5" fill="#F4386A"/><path d="M8.5 15.5l7-7" fill="none" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><g fill="#FFFFFF"><circle cx="9" cy="9" r="1.5"/><circle cx="15" cy="15" r="1.5"/></g>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · violet. */
+export function PieChart({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="PieChart" {...props}>
+      <path d="M11 4a8 8 0 1 0 8 8h-8Z" fill="#8A6CEF" fillOpacity=".5"/><path d="M13 2a9 9 0 0 1 9 9h-9Z" fill="#8A6CEF"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · slate. */
+export function PrinterColor({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="PrinterColor" {...props}>
+      <rect x="6" y="3" width="12" height="5" rx="1" fill="#6C7D93" fillOpacity=".45"/><rect x="2" y="8" width="20" height="9" rx="2.5" fill="#6C7D93"/><rect x="6" y="14" width="12" height="7" rx="1" fill="#FFFFFF" stroke="#6C7D93" strokeWidth="2"/><rect x="17" y="10" width="2" height="2" rx="1" fill="#FFFFFF" fillOpacity=".7"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · gray. */
+export function Puzzle({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Puzzle" {...props}>
+      <rect x="4" y="7" width="13" height="13" rx="2.5" fill="#8E9196"/><circle cx="10.5" cy="6" r="2.75" fill="#8E9196"/><circle cx="18" cy="13.5" r="2.75" fill="#8E9196"/>
     </svg>
   );
 }
@@ -171,7 +397,7 @@ export function Package({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · slate. */
 export function QrCode({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="QrCode" {...props}>
       <rect x="3" y="3" width="7" height="7" rx="2" fill="none" stroke="#6C7D93" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><rect x="14" y="3" width="7" height="7" rx="2" fill="none" stroke="#6C7D93" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><rect x="3" y="14" width="7" height="7" rx="2" fill="none" stroke="#6C7D93" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><g fill="#6C7D93"><rect x="5" y="5" width="3" height="3" rx=".5"/><rect x="16" y="5" width="3" height="3" rx=".5"/><rect x="5" y="16" width="3" height="3" rx=".5"/><rect x="14" y="14" width="3" height="3" rx=".5"/><rect x="18" y="18" width="3" height="3" rx=".5"/></g><g fill="#6C7D93" fillOpacity=".45"><rect x="18" y="14" width="3" height="3" rx=".5"/><rect x="14" y="18" width="3" height="3" rx=".5"/></g>
     </svg>
   );
@@ -180,8 +406,26 @@ export function QrCode({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · blue. */
 export function Receipt({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Receipt" {...props}>
       <path d="M5 20.5V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v14.5L17.25 19 15.5 20.5 13.75 19 12 20.5 10.25 19 8.5 20.5 6.75 19Z" fill="#1B9DF0" fillOpacity=".22" stroke="#1B9DF0" strokeWidth="2" strokeLinejoin="round"/><path d="M9 9H15M9 13H13" fill="none" stroke="#1B9DF0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · blue. */
+export function RefreshCwColor({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="RefreshCwColor" {...props}>
+      <path d="M20 11A8 8 0 0 0 5.5 7.5M4 13a8 8 0 0 0 14.5 3.5" fill="none" stroke="#1B9DF0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M5 3.5V8h4.5M19 20.5V16h-4.5" fill="none" stroke="#1B9DF0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · violet. */
+export function Repeat({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Repeat" {...props}>
+      <path d="M4 11V9a3 3 0 0 1 3-3h12M16 3l3 3-3 3" fill="none" stroke="#8A6CEF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M20 13v2a3 3 0 0 1-3 3H5M8 21l-3-3 3-3" fill="none" stroke="#8A6CEF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
@@ -189,8 +433,17 @@ export function Receipt({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · blue. */
 export function ScanLine({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="ScanLine" {...props}>
       <path d="M3 8V6a3 3 0 0 1 3-3h2M16 3h2a3 3 0 0 1 3 3v2M21 16v2a3 3 0 0 1-3 3h-2M8 21H6a3 3 0 0 1-3-3v-2" fill="none" stroke="#1B9DF0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M6 7h2v10H6zM9 7h1v10H9zM11 7h2v10h-2zM14 7h1v10h-1zM16 7h2v10h-2z" fill="#1B9DF0"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · blue. */
+export function SearchColor({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="SearchColor" {...props}>
+      <circle cx="10.5" cy="10.5" r="6.5" fill="#1B9DF0" fillOpacity=".22" stroke="#1B9DF0" strokeWidth="2"/><path d="M15.5 15.5 20 20" fill="none" stroke="#1B9DF0" strokeWidth="3" strokeLinecap="round"/>
     </svg>
   );
 }
@@ -198,7 +451,7 @@ export function ScanLine({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · gray. */
 export function Settings({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Settings" {...props}>
       <circle cx="12" cy="12" r="5.5" fill="none" stroke="#8E9196" strokeWidth="4"/><g fill="#8E9196"><rect x="10" y="2" width="4" height="5" rx="1" transform="rotate(0 12 12)"/><rect x="10" y="2" width="4" height="5" rx="1" transform="rotate(45 12 12)"/><rect x="10" y="2" width="4" height="5" rx="1" transform="rotate(90 12 12)"/><rect x="10" y="2" width="4" height="5" rx="1" transform="rotate(135 12 12)"/><rect x="10" y="2" width="4" height="5" rx="1" transform="rotate(180 12 12)"/><rect x="10" y="2" width="4" height="5" rx="1" transform="rotate(225 12 12)"/><rect x="10" y="2" width="4" height="5" rx="1" transform="rotate(270 12 12)"/><rect x="10" y="2" width="4" height="5" rx="1" transform="rotate(315 12 12)"/></g>
     </svg>
   );
@@ -207,7 +460,7 @@ export function Settings({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · slate. */
 export function ShieldCheck({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="ShieldCheck" {...props}>
       <path d="M12 3 19 5.5V11.25C19 15.75 16 19.25 12 21 8 19.25 5 15.75 5 11.25V5.5Z" fill="#6C7D93" stroke="#6C7D93" strokeWidth="2" strokeLinejoin="round"/><path d="M8.5 12 11 14.5 15.5 9.5" fill="none" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
@@ -216,8 +469,17 @@ export function ShieldCheck({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · blue. */
 export function Shirt({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Shirt" {...props}>
       <path d="M8 3.5C8.5 5 10 6 12 6S15.5 5 16 3.5L21 6.5 19 10.5 17 9.75V20a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V9.75L5 10.5 3 6.5Z" fill="#1B9DF0"/><path d="M9.5 4.5C10 5.5 11 6 12 6S14 5.5 14.5 4.5" fill="none" stroke="#FFFFFF" strokeOpacity=".6" strokeWidth="1" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · pink. */
+export function ShoppingBag({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="ShoppingBag" {...props}>
+      <path d="M9 9V7a3 3 0 0 1 6 0v2" fill="none" stroke="#EE5B93" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M5 8h14l-1 12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1Z" fill="#EE5B93"/><g fill="#FFFFFF" fillOpacity=".7"><circle cx="9" cy="11.5" r="1.25"/><circle cx="15" cy="11.5" r="1.25"/></g>
     </svg>
   );
 }
@@ -225,7 +487,7 @@ export function Shirt({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · blue. */
 export function ShoppingCart({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="ShoppingCart" {...props}>
       <path d="M7 9V8a5 5 0 0 1 10 0v1" fill="none" stroke="#1B9DF0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M5 12 6.25 19.25A1 1 0 0 0 7.25 20H16.75A1 1 0 0 0 17.75 19.25L19 12Z" fill="#1B9DF0" fillOpacity=".22" stroke="#1B9DF0" strokeWidth="2" strokeLinejoin="round"/><rect x="2" y="9" width="20" height="3" rx="1.5" fill="#1B9DF0"/><path d="M10 14.5V17M14 14.5V17" fill="none" stroke="#1B9DF0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
@@ -234,8 +496,17 @@ export function ShoppingCart({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · yellow. */
 export function Sparkles({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Sparkles" {...props}>
       <path d="M10 3C10.75 7.25 12.75 9.25 17 10 12.75 10.75 10.75 12.75 10 17 9.25 12.75 7.25 10.75 3 10 7.25 9.25 9.25 7.25 10 3Z" fill="#F8C00F"/><path d="M18 13.5C18.25 15.75 19.25 16.75 21.5 17 19.25 17.25 18.25 18.25 18 20.5 17.75 18.25 16.75 17.25 14.5 17 16.75 16.75 17.75 15.75 18 13.5Z" fill="#F8C00F" fillOpacity=".7"/><circle cx="18.5" cy="5.5" r="1.5" fill="#F8C00F" fillOpacity=".5"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · violet. */
+export function Split({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Split" {...props}>
+      <rect x="2" y="5" width="9" height="14" rx="2.5" fill="#8A6CEF"/><rect x="13" y="5" width="9" height="14" rx="2.5" fill="#8A6CEF" fillOpacity=".5"/>
     </svg>
   );
 }
@@ -243,7 +514,7 @@ export function Sparkles({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · yellow. */
 export function Star({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Star" {...props}>
       <path d="M12 3.5 14.5 9 20.5 9.5 16.5 14 17.5 20 12 17 6.5 20 7.5 14 3.5 9.5 9.5 9Z" fill="#F8C00F" stroke="#F8C00F" strokeWidth="2" strokeLinejoin="round"/>
     </svg>
   );
@@ -252,8 +523,17 @@ export function Star({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · red. */
 export function Store({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Store" {...props}>
       <path d="M5 12.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7.5" fill="#F4386A" fillOpacity=".22" stroke="#F4386A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><rect x="10" y="15" width="4" height="6" rx="1" fill="#F4386A"/><path d="M3 8.5 4.75 4h14.5L21 8.5v1a2.25 2.25 0 0 1-4.5 0 2.25 2.25 0 0 1-4.5 0 2.25 2.25 0 0 1-4.5 0 2.25 2.25 0 0 1-4.5 0Z" fill="#F4386A"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · orange. */
+export function Table({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Table" {...props}>
+      <rect x="6" y="6" width="12" height="12" rx="3" fill="#F4891F"/><g fill="#F4891F" fillOpacity=".5"><rect x="9" y="2" width="6" height="2" rx="1"/><rect x="9" y="20" width="6" height="2" rx="1"/><rect x="2" y="9" width="2" height="6" rx="1"/><rect x="20" y="9" width="2" height="6" rx="1"/></g>
     </svg>
   );
 }
@@ -262,7 +542,7 @@ export function Store({ size = 24, ...props }: GlyphProps) {
 export function Tag({ size = 24, ...props }: GlyphProps) {
   const u = useGlyphId();
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Tag" {...props}>
       <mask id={u + 'cut'} maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24"><rect x="0" y="0" width="24" height="24" fill="#FFFFFF"/><circle cx="9.5" cy="12" r="1.75" fill="#000000"/></mask><path d="M9.5 6H18a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H9.5L3.5 12Z" fill="#8A6CEF" stroke="#8A6CEF" strokeWidth="2" strokeLinejoin="round" mask={'url(#' + u + 'cut)'}/>
     </svg>
   );
@@ -271,8 +551,44 @@ export function Tag({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · gray. */
 export function Terminal({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Terminal" {...props}>
       <rect x="3" y="4" width="18" height="16" rx="3" fill="#8E9196"/><path d="M7 9.5 9.5 12 7 14.5" fill="none" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M12 15h5" fill="none" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeOpacity=".7"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · green. */
+export function TrendingUp({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="TrendingUp" {...props}>
+      <path d="M3 17 9 11l4 4 8-8" fill="none" stroke="#43AE59" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M15 7h6v6" fill="none" stroke="#43AE59" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · orange. */
+export function Truck({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Truck" {...props}>
+      <rect x="2" y="5" width="12" height="11" rx="1.5" fill="#F4891F"/><path d="M14 8h4l3 3.5V16h-7Z" fill="#F4891F" fillOpacity=".7"/><g fill="#F4891F"><circle cx="7" cy="17.5" r="2.5"/><circle cx="17" cy="17.5" r="2.5"/></g><g fill="#FFFFFF"><circle cx="7" cy="17.5" r="1"/><circle cx="17" cy="17.5" r="1"/></g>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · slate. */
+export function Usb({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Usb" {...props}>
+      <rect x="8" y="2" width="8" height="6" rx="1" fill="#6C7D93" fillOpacity=".5"/><path d="M10 4h1v2h-1zM13 4h1v2h-1z" fill="#FFFFFF"/><rect x="6" y="8" width="12" height="14" rx="3" fill="#6C7D93"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · violet. */
+export function User({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="User" {...props}>
+      <circle cx="12" cy="8" r="4.5" fill="#8A6CEF"/><path d="M4 20c0-4 3.5-6.5 8-6.5s8 2.5 8 6.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z" fill="#8A6CEF"/>
     </svg>
   );
 }
@@ -281,7 +597,7 @@ export function Terminal({ size = 24, ...props }: GlyphProps) {
 export function Users({ size = 24, ...props }: GlyphProps) {
   const u = useGlyphId();
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Users" {...props}>
       <mask id={u + 'cut'} maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24"><rect x="0" y="0" width="24" height="24" fill="#FFFFFF"/><circle cx="9" cy="8" r="4" fill="#000000" stroke="#000000" strokeWidth="3"/><path d="M2 19.5C2 16 5 14 9 14s7 2 7 5.5V21H2Z" fill="#000000" stroke="#000000" strokeWidth="3"/></mask><g mask={'url(#' + u + 'cut)'} fill="#8A6CEF" fillOpacity=".5"><circle cx="16.5" cy="7.5" r="3"/><path d="M12 13.5C13.25 12.75 14.75 12.5 16.5 12.5 19.5 12.5 22 14 22 17V18a1 1 0 0 1-1 1H12Z"/></g><circle cx="9" cy="8" r="4" fill="#8A6CEF"/><path d="M2 19.5C2 16 5 14 9 14s7 2 7 5.5V20a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1Z" fill="#8A6CEF"/>
     </svg>
   );
@@ -290,7 +606,7 @@ export function Users({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · slate. */
 export function UtensilsCrossed({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="UtensilsCrossed" {...props}>
       <path d="M5 3v4.5a2 2 0 0 0 4 0V3M7 3v4M7 9.5V21" fill="none" stroke="#6C7D93" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M18 3C15.25 4.25 14 7.75 14 12.5H18Z" fill="#6C7D93"/><rect x="16" y="12" width="2" height="9" rx="1" fill="#6C7D93"/>
     </svg>
   );
@@ -299,8 +615,17 @@ export function UtensilsCrossed({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · live. */
 export function Video({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Video" {...props}>
       <circle cx="12" cy="12" r="3" fill="#FF3D7A"/><path d="M7.75 7.75A6 6 0 0 0 7.75 16.25M16.25 7.75A6 6 0 0 1 16.25 16.25" fill="none" stroke="#FF3D7A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M5.5 5.5A9.25 9.25 0 0 0 5.5 18.5M18.5 5.5A9.25 9.25 0 0 1 18.5 18.5" fill="none" stroke="#FF3D7A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeOpacity=".5"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · khaki. */
+export function Wallet({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Wallet" {...props}>
+      <path d="M5 6 16 3l1 3Z" fill="#C0A96B" fillOpacity=".55"/><rect x="3" y="6" width="18" height="15" rx="3" fill="#C0A96B"/><rect x="14" y="10" width="8" height="7" rx="2" fill="#FFFFFF" fillOpacity=".45"/><circle cx="17.5" cy="13.5" r="1.25" fill="#C0A96B"/>
     </svg>
   );
 }
@@ -308,7 +633,7 @@ export function Video({ size = 24, ...props }: GlyphProps) {
 /** Colour glyph, 24 px grid · teal. */
 export function Warehouse({ size = 24, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Warehouse" {...props}>
       <rect x="7" y="3" width="10" height="8" rx="1.5" fill="#2E9F91"/><rect x="2" y="13" width="9" height="8" rx="1.5" fill="#2E9F91"/><rect x="13" y="13" width="9" height="8" rx="1.5" fill="#2E9F91"/><path d="M11 3h2v3h-2zM5 13h3v3H5zM16 13h3v3h-3z" fill="#FFFFFF" fillOpacity=".6"/>
     </svg>
   );
@@ -318,8 +643,41 @@ export function Warehouse({ size = 24, ...props }: GlyphProps) {
 export function WifiOff({ size = 24, ...props }: GlyphProps) {
   const u = useGlyphId();
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="WifiOff" {...props}>
       <mask id={u + 'cut'} maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24"><rect x="0" y="0" width="24" height="24" fill="#FFFFFF"/><path d="M4 4 20 20" stroke="#000000" strokeWidth="5" strokeLinecap="round"/></mask><g mask={'url(#' + u + 'cut)'}><path d="M5.25 11.25a9.5 9.5 0 0 1 13.5 0M8.5 14.5a5 5 0 0 1 7 0" fill="none" stroke="#6C7D93" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><circle cx="12" cy="18.5" r="1.75" fill="#6C7D93"/></g><path d="M4 4 20 20" fill="none" stroke="#6C7D93" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · gray. */
+export function Wrench({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Wrench" {...props}>
+      <path d="M14.5 3.5a5 5 0 0 0-4.75 6.5L3.5 16.25a2 2 0 0 0 0 2.75l1.5 1.5a2 2 0 0 0 2.75 0L14 14.25a5 5 0 0 0 6.5-4.75l-3 3-2.5-.5-.5-2.5 3-3Z" fill="#8E9196"/>
+    </svg>
+  );
+}
+
+/** UI glyph, 20 px grid (+ a 16 px drawing for size ≤ 16). */
+export function ArrowDown({ size = 20, ...props }: GlyphProps) {
+  if (size <= 16)
+    return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false" data-glyph="ArrowDown" {...props}>
+      <path d="M8 3v10M4 9l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+    );
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="ArrowDown" {...props}>
+      <path d="M10 4V16M5 11l5 5 5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** UI glyph, 20 px grid. */
+export function ArrowLeft({ size = 20, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="ArrowLeft" {...props}>
+      <path d="M16 10H4M9 5 4 10l5 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
@@ -327,16 +685,61 @@ export function WifiOff({ size = 24, ...props }: GlyphProps) {
 /** UI glyph, 20 px grid. */
 export function ArrowRight({ size = 20, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="ArrowRight" {...props}>
       <path d="M4 10H16M11 5 16 10 11 15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
 
-/** UI glyph, 20 px grid. */
-export function Check({ size = 20, ...props }: GlyphProps) {
+/** UI glyph, 20 px grid (+ a 16 px drawing for size ≤ 16). */
+export function ArrowUp({ size = 20, ...props }: GlyphProps) {
+  if (size <= 16)
+    return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false" data-glyph="ArrowUp" {...props}>
+      <path d="M8 13V3M4 7l4-4 4 4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+    );
   return (
-    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="ArrowUp" {...props}>
+      <path d="M10 16V4M5 9l5-5 5 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** UI glyph, 20 px grid. */
+export function BookMarked({ size = 20, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="BookMarked" {...props}>
+      <rect x="4" y="2" width="12" height="16" rx="2" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M8 2v6l2-1.5L12 8V2" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** UI glyph, 20 px grid (+ a 16 px drawing for size ≤ 16). */
+export function Camera({ size = 20, ...props }: GlyphProps) {
+  if (size <= 16)
+    return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false" data-glyph="Camera" {...props}>
+      <rect x="2" y="5" width="12" height="9" rx="2" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M6 5l1-2h2l1 2" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><circle cx="8" cy="9.5" r="2" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+    );
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="Camera" {...props}>
+      <rect x="2" y="6" width="16" height="11" rx="2.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M7 6 8.25 3.5h3.5L13 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><circle cx="10" cy="11.5" r="3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** UI glyph, 20 px grid (+ a 16 px drawing for size ≤ 16). */
+export function Check({ size = 20, ...props }: GlyphProps) {
+  if (size <= 16)
+    return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false" data-glyph="Check" {...props}>
+      <path d="M3 8.5 6.5 12 13 4.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+    );
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="Check" {...props}>
       <path d="M4 10.5 8 14.5 16 5.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
@@ -345,17 +748,167 @@ export function Check({ size = 20, ...props }: GlyphProps) {
 /** UI glyph, 20 px grid. */
 export function ChevronDown({ size = 20, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="ChevronDown" {...props}>
       <path d="M4.5 8 10 13.5 15.5 8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
 
-/** UI glyph, 20 px grid. */
-export function ChevronRight({ size = 20, ...props }: GlyphProps) {
+/** UI glyph, 20 px grid (+ a 16 px drawing for size ≤ 16). */
+export function ChevronLeft({ size = 20, ...props }: GlyphProps) {
+  if (size <= 16)
+    return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false" data-glyph="ChevronLeft" {...props}>
+      <path d="M10 3.5 5.5 8 10 12.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+    );
   return (
-    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="ChevronLeft" {...props}>
+      <path d="M12 4.5 6.5 10 12 15.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** UI glyph, 20 px grid (+ a 16 px drawing for size ≤ 16). */
+export function ChevronRight({ size = 20, ...props }: GlyphProps) {
+  if (size <= 16)
+    return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false" data-glyph="ChevronRight" {...props}>
+      <path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+    );
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="ChevronRight" {...props}>
       <path d="M8 4.5 13.5 10 8 15.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** UI glyph, 20 px grid. */
+export function Clock({ size = 20, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="Clock" {...props}>
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M10 6v4l2.5 2.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** UI glyph, 20 px grid. */
+export function Delete({ size = 20, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="Delete" {...props}>
+      <path d="M7 4h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H7L2 10Z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M10 8l4 4M14 8l-4 4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** UI glyph, 20 px grid (+ a 16 px drawing for size ≤ 16). */
+export function DownloadLine({ size = 20, ...props }: GlyphProps) {
+  if (size <= 16)
+    return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false" data-glyph="DownloadLine" {...props}>
+      <path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M3 14H13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+    );
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="DownloadLine" {...props}>
+      <path d="M10 3v10M5.5 8.5 10 13l4.5-4.5M3 17H17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** UI glyph, 20 px grid. */
+export function Folder({ size = 20, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="Folder" {...props}>
+      <path d="M2 6a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2Z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** UI glyph, 20 px grid (+ a 16 px drawing for size ≤ 16). */
+export function GripVertical({ size = 20, ...props }: GlyphProps) {
+  if (size <= 16)
+    return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false" data-glyph="GripVertical" {...props}>
+      <g fill="currentColor"><circle cx="6" cy="4" r="1.25"/><circle cx="10" cy="4" r="1.25"/><circle cx="6" cy="8" r="1.25"/><circle cx="10" cy="8" r="1.25"/><circle cx="6" cy="12" r="1.25"/><circle cx="10" cy="12" r="1.25"/></g>
+    </svg>
+    );
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="GripVertical" {...props}>
+      <g fill="currentColor"><circle cx="7" cy="5" r="1.5"/><circle cx="13" cy="5" r="1.5"/><circle cx="7" cy="10" r="1.5"/><circle cx="13" cy="10" r="1.5"/><circle cx="7" cy="15" r="1.5"/><circle cx="13" cy="15" r="1.5"/></g>
+    </svg>
+  );
+}
+
+/** UI glyph, 20 px grid. */
+export function ImagePlus({ size = 20, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="ImagePlus" {...props}>
+      <path d="M17 10v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M3 14l4-4 3 3 2-2 5 5M15 2v6M12 5h6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** UI glyph, 20 px grid (+ a 16 px drawing for size ≤ 16). */
+export function Inbox({ size = 20, ...props }: GlyphProps) {
+  if (size <= 16)
+    return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false" data-glyph="Inbox" {...props}>
+      <path d="M2 9h3.5l1 2h3l1-2H14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M4 3h8l2 6v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V9Z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+    );
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="Inbox" {...props}>
+      <path d="M2 11h5l1 2h4l1-2h5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M5 4h10l3 7v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-4Z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** UI glyph, 20 px grid. */
+export function LayoutGrid({ size = 20, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="LayoutGrid" {...props}>
+      <rect x="3" y="3" width="6" height="6" rx="1.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><rect x="11" y="3" width="6" height="6" rx="1.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><rect x="3" y="11" width="6" height="6" rx="1.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><rect x="11" y="11" width="6" height="6" rx="1.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** UI glyph, 20 px grid. */
+export function LogOut({ size = 20, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="LogOut" {...props}>
+      <path d="M8 17H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M8 10H17M13 6l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** UI glyph, 20 px grid (+ a 16 px drawing for size ≤ 16). */
+export function MapPin({ size = 20, ...props }: GlyphProps) {
+  if (size <= 16)
+    return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false" data-glyph="MapPin" {...props}>
+      <path d="M8 14s5-4 5-8a5 5 0 0 0-10 0c0 4 5 8 5 8Z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><circle cx="8" cy="6" r="1.5" fill="currentColor"/>
+    </svg>
+    );
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="MapPin" {...props}>
+      <path d="M10 18s6-5 6-10a6 6 0 0 0-12 0c0 5 6 10 6 10Z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><circle cx="10" cy="8" r="2" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** UI glyph, 20 px grid (+ a 16 px drawing for size ≤ 16). */
+export function Minus({ size = 20, ...props }: GlyphProps) {
+  if (size <= 16)
+    return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false" data-glyph="Minus" {...props}>
+      <path d="M3 8H13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+    );
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="Minus" {...props}>
+      <path d="M4 10H16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
@@ -363,59 +916,182 @@ export function ChevronRight({ size = 20, ...props }: GlyphProps) {
 /** UI glyph, 20 px grid. */
 export function MoreHorizontal({ size = 20, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="MoreHorizontal" {...props}>
       <g fill="currentColor"><circle cx="4" cy="10" r="1.75"/><circle cx="10" cy="10" r="1.75"/><circle cx="16" cy="10" r="1.75"/></g>
     </svg>
   );
 }
 
-/** UI glyph, 20 px grid. */
-export function Pencil({ size = 20, ...props }: GlyphProps) {
+/** UI glyph, 20 px grid (+ a 16 px drawing for size ≤ 16). */
+export function PackageLine({ size = 20, ...props }: GlyphProps) {
+  if (size <= 16)
+    return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false" data-glyph="PackageLine" {...props}>
+      <rect x="2" y="5" width="12" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M8 2v5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+    );
   return (
-    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="PackageLine" {...props}>
+      <rect x="3" y="6" width="14" height="11" rx="2" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M4 6 5.5 3h9L16 6M10 3v5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** UI glyph, 20 px grid (+ a 16 px drawing for size ≤ 16). */
+export function Pencil({ size = 20, ...props }: GlyphProps) {
+  if (size <= 16)
+    return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false" data-glyph="Pencil" {...props}>
+      <path d="M10.5 3 13 5.5 5.5 13H3v-2.5ZM9 4.5 11.5 7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+    );
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="Pencil" {...props}>
       <path d="M13 3.5 16.5 7 7 16.5H3.5V13ZM11 5.5 14.5 9" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
 
-/** UI glyph, 20 px grid. */
-export function Plus({ size = 20, ...props }: GlyphProps) {
+/** UI glyph, 20 px grid (+ a 16 px drawing for size ≤ 16). */
+export function Phone({ size = 20, ...props }: GlyphProps) {
+  if (size <= 16)
+    return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false" data-glyph="Phone" {...props}>
+      <path d="M5 2H3.5a1 1 0 0 0-1 1C2.5 9 7 13.5 13 13.5a1 1 0 0 0 1-1V11l-3-1.5-1.5 1.5C8 10 6 8 5 6.5L6.5 5Z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+    );
   return (
-    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="Phone" {...props}>
+      <path d="M6 2H4a1 1 0 0 0-1 1c0 8 6 14 14 14a1 1 0 0 0 1-1v-2l-4-2-2 2c-2-1-4-3-5-5l2-2Z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** UI glyph, 20 px grid (+ a 16 px drawing for size ≤ 16). */
+export function Plus({ size = 20, ...props }: GlyphProps) {
+  if (size <= 16)
+    return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false" data-glyph="Plus" {...props}>
+      <path d="M8 3V13M3 8H13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+    );
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="Plus" {...props}>
       <path d="M10 4V16M4 10H16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
 
 /** UI glyph, 20 px grid. */
-export function Search({ size = 20, ...props }: GlyphProps) {
+export function Printer({ size = 20, ...props }: GlyphProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="Printer" {...props}>
+      <path d="M5 8V3h10v5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><rect x="2" y="8" width="16" height="7" rx="2" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M5 13h10v5H5Z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** UI glyph, 20 px grid (+ a 16 px drawing for size ≤ 16). */
+export function RefreshCw({ size = 20, ...props }: GlyphProps) {
+  if (size <= 16)
+    return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false" data-glyph="RefreshCw" {...props}>
+      <path d="M13 7A5 5 0 0 0 4 4.5M3 9a5 5 0 0 0 9 2.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M3 2v3h3M13 14v-3h-3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+    );
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="RefreshCw" {...props}>
+      <path d="M16.5 9A6.5 6.5 0 0 0 4.5 6M3.5 11a6.5 6.5 0 0 0 12 3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M4 2v4h4M16 18v-4h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** UI glyph, 20 px grid (+ a 16 px drawing for size ≤ 16). */
+export function RotateCcw({ size = 20, ...props }: GlyphProps) {
+  if (size <= 16)
+    return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false" data-glyph="RotateCcw" {...props}>
+      <path d="M3 7a5 5 0 1 1 1 4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M2 3v4h4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+    );
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="RotateCcw" {...props}>
+      <path d="M3.5 9A6.5 6.5 0 1 1 5 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M3 4v5h5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** UI glyph, 20 px grid. */
+export function Scissors({ size = 20, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="Scissors" {...props}>
+      <circle cx="5.5" cy="5.5" r="2.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><circle cx="5.5" cy="14.5" r="2.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M8 7 17 16M8 13l9-9" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+/** UI glyph, 20 px grid (+ a 16 px drawing for size ≤ 16). */
+export function Search({ size = 20, ...props }: GlyphProps) {
+  if (size <= 16)
+    return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false" data-glyph="Search" {...props}>
+      <circle cx="7" cy="7" r="4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M10 10 13 13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+    );
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="Search" {...props}>
       <circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M12.5 12.5 16.5 16.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
 
-/** UI glyph, 20 px grid. */
-export function Trash2({ size = 20, ...props }: GlyphProps) {
+/** UI glyph, 20 px grid (+ a 16 px drawing for size ≤ 16). */
+export function TagLine({ size = 20, ...props }: GlyphProps) {
+  if (size <= 16)
+    return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false" data-glyph="TagLine" {...props}>
+      <path d="M2 2h5.5l6.5 6.5-5.5 5.5L2 7.5Z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor"/>
+    </svg>
+    );
   return (
-    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="TagLine" {...props}>
+      <path d="M3 3h6.5l8 8-6.5 6.5-8-8Z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><circle cx="7" cy="7" r="1.5" fill="currentColor"/>
+    </svg>
+  );
+}
+
+/** UI glyph, 20 px grid (+ a 16 px drawing for size ≤ 16). */
+export function Trash2({ size = 20, ...props }: GlyphProps) {
+  if (size <= 16)
+    return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false" data-glyph="Trash2" {...props}>
+      <path d="M2 4H14M6 4V3h4v1M4 4l.75 9h6.5L12 4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+    );
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="Trash2" {...props}>
       <path d="M3 5H17M8 5V4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1M5 5l.75 11a1 1 0 0 0 1 1h6.5a1 1 0 0 0 1-1L15 5M8 8.5v5M12 8.5v5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
 
-/** UI glyph, 20 px grid. */
+/** UI glyph, 20 px grid (+ a 16 px drawing for size ≤ 16). */
 export function X({ size = 20, ...props }: GlyphProps) {
+  if (size <= 16)
+    return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false" data-glyph="X" {...props}>
+      <path d="M4 4 12 12M12 4 4 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+    );
   return (
-    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" {...props}>
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false" data-glyph="X" {...props}>
       <path d="M5 5 15 15M15 5 5 15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
 
 /** Every colour glyph by name. */
-export const COLOR_GLYPHS = { BarChart3, Bot, Building2, CalendarClock, ChefHat, ClipboardCheck, Coffee, Coins, Download, Flower2, Grid3X3, KeyRound, Laptop, Lock, MessageCircle, Monitor, Package, QrCode, Receipt, ScanLine, Settings, ShieldCheck, Shirt, ShoppingCart, Sparkles, Star, Store, Tag, Terminal, Users, UtensilsCrossed, Video, Warehouse, WifiOff } as const satisfies Record<string, Glyph>;
+export const COLOR_GLYPHS = { AlertTriangle, Banknote, BarChart3, Barcode, Bell, Bot, Boxes, Building2, Calendar, CalendarClock, CameraColor, ChefHat, ClipboardCheck, ClipboardList, CloudOff, Coffee, Coins, CreditCard, Download, FileText, Flower2, Gift, Grid3X3, Heart, Home, Info, KeyRound, Laptop, Layers, ListOrdered, Lock, MapPinColor, Megaphone, MessageCircle, MessageSquare, Monitor, Package, PackageCheck, Percent, PieChart, PrinterColor, Puzzle, QrCode, Receipt, RefreshCwColor, Repeat, ScanLine, SearchColor, Settings, ShieldCheck, Shirt, ShoppingBag, ShoppingCart, Sparkles, Split, Star, Store, Table, Tag, Terminal, TrendingUp, Truck, Usb, User, Users, UtensilsCrossed, Video, Wallet, Warehouse, WifiOff, Wrench } as const satisfies Record<string, Glyph>;
 
 /** Every UI glyph by name. */
-export const UI_GLYPHS = { ArrowRight, Check, ChevronDown, ChevronRight, MoreHorizontal, Pencil, Plus, Search, Trash2, X } as const satisfies Record<string, Glyph>;
+export const UI_GLYPHS = { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookMarked, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Delete, DownloadLine, Folder, GripVertical, ImagePlus, Inbox, LayoutGrid, LogOut, MapPin, Minus, MoreHorizontal, PackageLine, Pencil, Phone, Plus, Printer, RefreshCw, RotateCcw, Scissors, Search, TagLine, Trash2, X } as const satisfies Record<string, Glyph>;

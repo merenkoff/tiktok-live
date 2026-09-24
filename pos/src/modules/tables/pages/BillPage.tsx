@@ -36,7 +36,7 @@ import {
   useVertical,
 } from '@pos/platform';
 import type { CatalogItem, ReceiptPaperWidth } from '@pos/platform';
-import { ModifierSheet } from '@pos/platform/ui';
+import { ArrowLeft, ModifierSheet } from '@pos/platform/ui';
 import { BillBar } from '../components/BillBar';
 import { BillPane } from '../components/BillPane';
 import { BillSheet } from '../components/BillSheet';
@@ -48,6 +48,7 @@ import { isSettled, payableLines } from '../lib/pay';
 import { buildPrecheck } from '../lib/precheck';
 import { useBill } from '../lib/useBill';
 import { useIsWide } from '../lib/useIsWide';
+import { guestsLabel, seatedFor } from '../lib/hallMap';
 import * as tablesApi from '../lib/tablesApi';
 import type { PayPart } from '../lib/tablesApi';
 
@@ -254,21 +255,27 @@ export function BillPage(): JSX.Element {
   );
 
   return (
-    <div className="relative flex h-full flex-col" data-testid="bill-page">
-      <header className="flex shrink-0 items-baseline justify-between gap-2 border-b border-sq-divider px-3 py-2">
-        <div className="min-w-0">
-          <p className="truncate text-lg font-bold">Стіл {bill.table_name}</p>
-          <p className="truncate text-xs text-sq-muted">
-            {bill.hall_name} · рахунок {bill.bill_no} · {bill.guests} гост. · {bill.opened_by_name}
+    <div className="relative flex h-full min-h-0 flex-col" data-testid="bill-page">
+      <header className="flex shrink-0 items-center gap-3.5 px-4 md:px-6 min-h-[68px] py-2 shadow-[0_1px_0_#E6E8EC]">
+        <button
+          type="button"
+          className="shrink-0 min-h-11 -ml-1 pr-1 inline-flex items-center gap-1 text-[15px] font-semibold text-sq-blue"
+          onClick={() => navigate('/tables')}
+        >
+          <ArrowLeft size={20} />
+          {bill.hall_name || 'Зала'}
+        </button>
+        <div className={`min-w-0 flex-1 ${wide ? '' : 'text-center pr-16'}`}>
+          <p className="truncate text-xl font-bold text-sq-heading">Стіл {bill.table_name}</p>
+          <p className="truncate text-[13px] text-sq-muted">
+            {guestsLabel(bill.guests)} · {bill.opened_by_name} · {seatedFor(bill.opened_at, new Date().toISOString())} ·
+            рахунок {bill.bill_no}
           </p>
         </div>
-        <button type="button" className="sq-link shrink-0" onClick={() => navigate('/tables')}>
-          До зали
-        </button>
       </header>
 
       {stale && (
-        <p className="mx-3 mt-2 rounded-lg bg-amber-500/15 p-2 text-sm" data-testid="bill-stale">
+        <p className="mx-4 md:mx-6 mt-2 rounded-sq bg-amber-50 text-amber-900 px-3 py-2 text-sm" data-testid="bill-stale">
           Немає звʼязку — рахунок з памʼяті каси
           {savedAt == null
             ? ''
@@ -280,7 +287,7 @@ export function BillPage(): JSX.Element {
       )}
 
       {banner && (
-        <p className="mx-3 mt-2 rounded-lg bg-rose-500/15 p-2 text-sm" data-testid="bill-banner">
+        <p className="mx-4 md:mx-6 mt-2 rounded-sq bg-red-50 text-red-700 px-3 py-2 text-sm" data-testid="bill-banner">
           {banner}{' '}
           <button type="button" className="sq-link" onClick={clearBanner}>
             Зрозуміло
@@ -288,7 +295,7 @@ export function BillPage(): JSX.Element {
         </p>
       )}
 
-      <div className={`min-h-0 flex-1 ${wide ? 'grid grid-cols-[1fr_360px]' : 'flex flex-col'}`}>
+      <div className={`min-h-0 flex-1 ${wide ? 'grid grid-cols-[1fr_372px]' : 'flex flex-col'}`}>
         <MenuCatalog
           counts={counts}
           online={online}
@@ -299,12 +306,14 @@ export function BillPage(): JSX.Element {
           onRows={setGrouped}
         />
         {wide && (
-          <aside className="flex min-h-0 flex-col border-l border-sq-divider bg-sq-bg">{pane}</aside>
+          <aside className="flex min-h-0 flex-col bg-sq-sidebar shadow-[-1px_0_0_#E6E8EC]">{pane}</aside>
         )}
       </div>
 
       {!wide && (
         <BillBar
+          draft={draft}
+          rounds={bill.rounds}
           summary={summary}
           owedCents={bill.fired_total_cents}
           hasPending={pending.length > 0}
@@ -337,6 +346,7 @@ export function BillPage(): JSX.Element {
             initialModifierIds={editing.row.modifierIds}
             initialNote={editing.row.note}
             submitLabel="Зберегти"
+            withQuantity={false}
             onAdd={({ item, modifiers, note }) => saveEdit(item, modifiers, note)}
             onClose={() => setEditing(null)}
           />

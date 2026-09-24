@@ -198,3 +198,29 @@ TechDocs/POS_FLORIST_BENCH.md і коментар до `PLATFORM_VERSION` у `ve
 правильно: на ньому `runsInShell` ще нема, а бандл із `shells: ['web',
 'cashier', 'tablet']` він і так читає як «обидві старі» — просто планшета там
 не існує.
+
+### 17 (2026-09-24) — гліфи замість lucide
+
+Каса переходить на власний набір іконок у стилі Things (`design/README.md`):
+`scripts/gen-icons.mjs` генерує `src/platform/glyphs.tsx` з `design/icons/`,
+а `@pos/platform/ui` реекспортує всі гліфи — кольорові на сітці 24 px зі своїм
+відтінком, службові на 20 px (для дрібних — окремий малюнок на 16 px) у
+`currentColor` — плюс `Glyph` / `GlyphProps` / `COLOR_GLYPHS` / `UI_GLYPHS`.
+Імена нових експортів — отже бамп. `NAV_ICONS` лишив **ті самі ключі** (їх
+зберігають `nav_overrides` і `module_remotes`), але тепер веде на гліфи і
+отримав `ChefHat`, `Table`, `ShieldCheck`, `UtensilsCrossed`; де ім'я належить
+службовому гліфу (`Search`, `Camera`, `Printer`, `RefreshCw`, `MapPin`), ключ
+веде на кольоровий із суфіксом (`SearchColor`…). Старий модуль, що малював
+lucide, на цьому хості працює як і був — жоден його імпорт не зник; новий,
+зібраний проти 17, на хості 16 не завантажиться, і це правильно: там нема
+`@pos/platform/ui` з гліфами.
+
+До випуску 17 у ту саму версію увійшли ще (вона не була опублікована, тож
+окремого бампу нема): гліфи `ChevronLeft`, `Banknote`, `Split`; каркас екрана
+власника в мові Things — `PageHeader` (заголовок із кольоровим гліфом, «назад»,
+дії), `SectionHead` (синій заголовок секції над волосяною лінією) і `Segmented`
+(сегменти) — щоб сторінка модуля виглядала як сторінка хоста без копіювання
+розмітки; `ModifierSheet` віддає ще й `quantity` (крокер у шторці) і приймає
+`withQuantity` / `notePlaceholder`. Класи `.sq-input`, `.sq-btn-quiet`,
+`.sq-row`, `.sq-table` живуть у `styles/tokens.css` і приходять разом зі
+сторінкою хоста.

@@ -6,6 +6,7 @@ import type { ModuleId, NavCtx, NavItem, NavLocation } from './types';
 import type { AnyModuleDescriptor } from './registry';
 import { applyNavOverride, navItemKey, type NavOverrides } from './navOverrides';
 import { runsInShell } from './shells';
+import { navGroupOf } from './navGroups';
 
 /**
  * The nav entries a given shell/role/variant should see, in display order:
@@ -39,7 +40,7 @@ export function selectNavItems(
     .flatMap((m) =>
       m.nav
         .filter((n) => n.location === location && (!n.visible || n.visible(ctx)))
-        .map((n) => applyNavOverride(n, overrides[navItemKey(m.id, n)]))
+        .map((n) => ({ ...applyNavOverride(n, overrides[navItemKey(m.id, n)]), group: navGroupOf(m.id, n.group) }))
     )
     .sort((a, b) => a.order - b.order);
 }

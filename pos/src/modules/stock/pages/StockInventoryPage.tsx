@@ -3,9 +3,11 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '@pos/platform';
 import type { StockDocument, StockDocumentLine } from '@pos/platform';
+import { ClipboardCheck, PageHeader } from '@pos/platform/ui';
+import { STATUS_LABEL } from '../lib/documents';
 
 export function StockInventoryPage() {
   const { id } = useParams();
@@ -95,20 +97,19 @@ export function StockInventoryPage() {
 
   if (!id) {
     return (
-      <div className="max-w-xl space-y-4">
-        <Link to="/admin/stock" className="text-sm text-[#006AFF] hover:underline">
-          ← Склад
-        </Link>
-        <h1 className="text-2xl font-semibold">Інвентаризація</h1>
-        <p className="text-sm text-[#6E6E6E]">
-          Порахуйте фактичні залишки. Система порівняє з обліком і виправить різницю після проведення.
-        </p>
+      <div className="max-w-xl space-y-5 animate-fade-up text-sq-text">
+        <PageHeader
+          back={{ to: '/admin/stock', label: 'Склад' }}
+          glyph={ClipboardCheck}
+          title="Інвентаризація"
+          subtitle="Порахуйте фактичні залишки. Система порівняє з обліком і виправить різницю після проведення."
+        />
         {error && <p className="text-sm text-red-600">{error}</p>}
         <button
           type="button"
           disabled={busy}
           onClick={() => void startFull()}
-          className="sq-btn-primary px-5 py-3 text-sm"
+          className="pos-btn-primary min-h-11 px-5 rounded-sq text-[15px]"
         >
           Почати повну інвентаризацію
         </button>
@@ -116,105 +117,98 @@ export function StockInventoryPage() {
     );
   }
 
+  const statusText =
+    doc?.status === 'draft'
+      ? 'Чернетка — можна правити'
+      : doc
+        ? STATUS_LABEL[doc.status] ?? doc.status
+        : '…';
+
   return (
-    <div className="max-w-4xl space-y-4 pb-24">
-      <Link to="/admin/stock" className="text-sm text-[#006AFF] hover:underline">
-        ← Склад
-      </Link>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="sq-section-label">Інвентаризація</p>
-          <h1 className="text-2xl font-semibold">{doc?.doc_number ?? '…'}</h1>
-          <p className="text-sm text-[#6E6E6E]">
-            {doc?.status === 'draft'
-              ? 'Чернетка — можна правити'
-              : `Статус: ${
-                  doc?.status === 'posted'
-                    ? 'Проведено'
-                    : doc?.status === 'voided'
-                      ? 'Скасовано'
-                      : doc?.status === 'reversed'
-                        ? 'Відмінено'
-                        : doc?.status ?? '…'
-                }`}
-          </p>
-        </div>
-        {doc?.status === 'draft' && (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void refresh()}
-            className="rounded-[4px] border border-[#E0E0E0] bg-white px-3 py-2 text-sm"
-          >
-            Оновити облікові
-          </button>
-        )}
-      </div>
+    // No `animate-fade-up` here: while it runs, the wrapper's transform would
+    // make it the containing block of the fixed «Провести» bar below.
+    <div className="max-w-4xl space-y-5 pb-24 text-sq-text">
+      <PageHeader
+        back={{ to: '/admin/stock', label: 'Склад' }}
+        glyph={ClipboardCheck}
+        title={doc?.doc_number ?? '…'}
+        subtitle={`Інвентаризація · ${statusText}`}
+        actions={
+          doc?.status === 'draft' && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void refresh()}
+              className="sq-btn-quiet"
+            >
+              Оновити облікові
+            </button>
+          )
+        }
+      />
 
       <input
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="Пошук…"
-        className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2.5 text-sm"
+        className="sq-input"
       />
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <div className="rounded-[4px] border border-[#E0E0E0] bg-white overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-[#F5F5F5] text-left text-[#6E6E6E]">
-            <tr>
-              <th className="px-3 py-2 font-medium">Товар</th>
-              <th className="px-3 py-2 font-medium text-right">Облік</th>
-              <th className="px-3 py-2 font-medium text-right">Пораховано</th>
-              <th className="px-3 py-2 font-medium text-right">Різниця</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((line) => {
-              const system = line.system_qty ?? 0;
-              const counted = line.counted_qty ?? system;
-              const diff = counted - system;
-              return (
-                <tr key={line.id} className="border-t border-[#E0E0E0]">
-                  <td className="px-3 py-2">
-                    {line.product_name}{' '}
-                    <span className="text-[#6E6E6E]">
-                      {line.label}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">{system}</td>
-                  <td className="px-3 py-2 text-right">
-                    {doc?.status === 'draft' ? (
-                      <input
-                        type="number"
-                        min={0}
-                        value={counted}
-                        onChange={(e) => void setCounted(line, Number(e.target.value))}
-                        className="w-20 text-right rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-2 py-1"
-                      />
-                    ) : (
-                      <span className="tabular-nums">{counted}</span>
-                    )}
-                  </td>
-                  <td
-                    className={`px-3 py-2 text-right tabular-nums font-medium ${
-                      diff === 0 ? 'text-[#6E6E6E]' : diff < 0 ? 'text-red-600' : 'text-emerald-700'
-                    }`}
-                  >
-                    {diff === 0 ? '—' : diff > 0 ? `+${diff}` : diff}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <table className="sq-table">
+        <thead>
+          <tr>
+            <th>Товар</th>
+            <th className="text-right">Облік</th>
+            <th className="text-right">Пораховано</th>
+            <th className="text-right">Різниця</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filtered.map((line) => {
+            const system = line.system_qty ?? 0;
+            const counted = line.counted_qty ?? system;
+            const diff = counted - system;
+            return (
+              <tr key={line.id}>
+                <td>
+                  {line.product_name}{' '}
+                  <span className="text-sq-muted">
+                    {line.label}
+                  </span>
+                </td>
+                <td className="text-right tabular-nums">{system}</td>
+                <td className="text-right">
+                  {doc?.status === 'draft' ? (
+                    <input
+                      type="number"
+                      min={0}
+                      value={counted}
+                      onChange={(e) => void setCounted(line, Number(e.target.value))}
+                      className="sq-input max-w-[6rem] text-right"
+                    />
+                  ) : (
+                    <span className="tabular-nums">{counted}</span>
+                  )}
+                </td>
+                <td
+                  className={`text-right tabular-nums font-semibold ${
+                    diff === 0 ? 'text-sq-muted' : diff < 0 ? 'text-sq-danger' : 'text-sq-success-ink'
+                  }`}
+                >
+                  {diff === 0 ? '—' : diff > 0 ? `+${diff}` : diff}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
 
       {doc?.status === 'draft' && (
-        <div className="fixed bottom-0 left-0 right-0 md:left-[240px] border-t border-[#E0E0E0] bg-white p-4 flex items-center justify-between gap-3">
-          <p className="text-sm">
-            Розбіжностей: <strong>{variances.length}</strong>
+        <div className="fixed bottom-0 left-0 right-0 md:left-[256px] z-10 bg-sq-surface shadow-[0_-1px_0_rgb(var(--sq-divider-rgb))] px-5 md:px-12 py-3 flex items-center justify-between gap-3">
+          <p className="text-[15px] text-sq-secondary">
+            Розбіжностей: <strong className="text-sq-text tabular-nums">{variances.length}</strong>
           </p>
           <button
             type="button"
@@ -228,7 +222,7 @@ export function StockInventoryPage() {
                 void post();
               }
             }}
-            className="sq-btn-primary px-5 py-2.5 text-sm"
+            className="pos-btn-primary min-h-11 px-5 rounded-sq text-[15px]"
           >
             Провести
           </button>

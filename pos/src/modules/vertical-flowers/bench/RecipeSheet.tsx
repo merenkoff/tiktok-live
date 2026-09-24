@@ -16,7 +16,7 @@
  */
 
 import { useState } from 'react';
-import { BookMarked, X } from 'lucide-react';
+import { BookMarked, X } from '@pos/platform/ui';
 import { api, formatUah, uahInputToCents } from '@pos/platform';
 import { BouquetPhoto } from './BouquetPhoto';
 
@@ -126,7 +126,7 @@ export function RecipeSheet({ computedCents, components, onSaved, onClose }: Pro
             className="sq-btn-primary min-h-12 w-full flex items-center justify-center gap-2"
             data-testid="recipe-submit"
           >
-            <BookMarked size={18} />
+            <BookMarked size={20} />
             {busy ? 'Зберігаємо…' : 'Зберегти рецепт'}
           </button>
         </div>

@@ -270,10 +270,10 @@ async function captureCheckout(page: Page) {
 }
 
 async function payCash(page: Page) {
-  await page.getByRole('button', { name: /^Сплатити/ }).first().click();
+  await page.getByRole('button', { name: /^Оплатити/ }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Оплата' });
   await dialog.getByRole('button', { name: 'Готівка' }).click();
-  await dialog.getByRole('button', { name: 'Готово' }).click();
+  await dialog.getByRole('button', { name: /^Прийняти/ }).click();
 }
 
 test('«як завжди» is one tap, and the counter gets its number', async ({ page }) => {
@@ -389,7 +389,7 @@ test('the kitchen board takes two taps: «Готово» moves the order to «В
   // The answer is in the fired caption, and only there — not listed a second time.
   await expect(inWork.getByText('M · вівсяне')).toBeVisible();
   await expect(inWork.getByText('вівсяне', { exact: true })).toHaveCount(0);
-  await expect(inWork.getByText('✎ гарячіше')).toBeVisible();
+  await expect(inWork.getByText('гарячіше')).toBeVisible();
   await expect(pickup.getByText('Нічого не чекає видачі')).toBeVisible();
 
   // Tap 1. The card moves before the server answers (optimistically), so
@@ -443,7 +443,7 @@ test('with the module CDN down the till still sells, on the bundled catalog', as
 
   await page.goto('/register');
   await expect(page.getByTestId('cafe-catalog')).toHaveCount(0);
-  await expect(page.getByPlaceholder('Пошук')).toBeVisible();
+  await expect(page.getByPlaceholder(/^Пошук/)).toBeVisible();
 });
 
 /** What `GET /analytics/cafe` answers, with the sample knob the matrix turns on. */

@@ -2,49 +2,64 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { Outlet, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo } from 'react';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@pos/platform';
 import { useDragScroll } from '../../hooks/useDragScroll';
 import { Nav } from '../../components/Nav';
+import { AppIcon } from '../../components/AppIcon';
+import { LogOut } from '../../platform/glyphs';
+import { navCounts, useAttention } from './attention';
 
 export function AdminLayout() {
   const auth = useAuthStore((s) => s.auth);
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
   const navRef = useDragScroll<HTMLElement>();
+  const { pathname } = useLocation();
+  const vertical = auth?.store.vertical?.id ?? 'clothing';
+  const fiscalEnabled = Boolean(auth?.store.fiscal?.enabled);
+  const attention = useAttention((s) => s.items);
+  const counts = useMemo(() => navCounts(attention ?? []), [attention]);
+
+  // The sidebar's numbers follow the owner around the cabinet: re-read on a
+  // page change once the last read is a minute old, never on every render.
+  useEffect(() => {
+    if (!auth) return;
+    void useAttention.getState().load({ vertical, fiscalEnabled });
+  }, [auth, pathname, vertical, fiscalEnabled]);
 
   return (
-    <div className="min-h-screen md:grid md:grid-cols-[240px_1fr] bg-sq-bg font-sans text-sq-text">
-      <aside className="bg-sq-sidebar border-r border-sq-divider flex flex-col md:sticky md:top-0 md:h-screen">
-        <div className="px-4 py-5 border-b border-sq-divider bg-sq-surface">
-          <p className="sq-section-label">Cloth POS</p>
-          <h1 className="text-lg font-semibold mt-1">{auth?.store.name}</h1>
-          <p className="text-sm text-sq-secondary mt-0.5">{auth?.staff.display_name}</p>
+    <div className="min-h-screen md:grid md:grid-cols-[256px_1fr] bg-sq-surface font-sans text-sq-text">
+      {/* Things' sidebar: grey, the app's icon and the store on top, the
+          sections as glyph rows in groups, the system ones at the bottom. */}
+      <aside className="bg-sq-sidebar md:border-r border-sq-divider/70 flex flex-col md:sticky md:top-0 md:h-screen">
+        <div className="px-4 pt-4 pb-2 flex items-center gap-2.5">
+          <AppIcon size={32} className="shrink-0" />
+          <div className="min-w-0">
+            <h1 className="text-[15px] font-bold leading-tight truncate">{auth?.store.name}</h1>
+            <p className="text-xs text-sq-muted truncate">{auth?.staff.display_name}</p>
+          </div>
         </div>
         <nav
           ref={navRef}
-          className="flex md:flex-col overflow-x-auto md:overflow-y-auto md:flex-1 p-2 gap-0.5 select-none"
+          aria-label="Кабінет"
+          className="flex md:flex-col overflow-x-auto md:overflow-y-auto md:flex-1 px-2 pb-2 gap-0.5 select-none"
         >
-          <Nav location="admin-sidebar" />
+          <Nav location="admin-sidebar" tillLink counts={counts} />
         </nav>
-        <div className="mt-auto p-3 space-y-2 border-t border-sq-divider bg-sq-surface">
-          <button
-            type="button"
-            onClick={() => navigate('/register')}
-            className="sq-btn-primary w-full px-3 py-2.5 text-sm"
-          >
-            Відкрити касу
-          </button>
+        <div className="p-2 border-t border-sq-divider/70">
           <button
             type="button"
             onClick={() => void logout().then(() => navigate('/login'))}
-            className="w-full rounded-sq border border-sq-divider bg-sq-surface px-3 py-2.5 text-sm text-sq-text"
+            className="w-full flex items-center gap-2.5 min-h-[38px] px-2.5 rounded-lg text-[15px] font-medium text-sq-secondary hover:bg-sq-selected/50 transition-colors"
           >
+            <LogOut size={20} className="shrink-0 mx-0.5" />
             Вийти
           </button>
         </div>
       </aside>
-      <main className="p-5 md:p-8 min-h-screen">
+      <main className="p-5 md:px-12 md:py-10 min-h-screen min-w-0">
         <Outlet />
       </main>
     </div>

@@ -36,11 +36,11 @@ export function PackFields({
   const half = (qty.trim() !== '') !== (label.trim() !== '');
 
   return (
-    <div className={`space-y-1 ${className}`}>
+    <div className={`space-y-2 ${className}`}>
       <p className="sq-section-label">Фасування — як товар приходить</p>
-      <div className="grid gap-2 sm:grid-cols-2">
-        <label className="block space-y-1">
-          <span className="text-xs text-sq-secondary">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="flex flex-col gap-1.5">
+          <span className="text-[13px] font-medium text-sq-secondary">
             Скільки {unit || 'одиниць'} в упаковці
           </span>
           <input
@@ -48,23 +48,23 @@ export function PackFields({
             min={1}
             inputMode="numeric"
             placeholder="1000"
-            className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2 text-sm"
+            className="sq-input tabular-nums"
             value={qty}
             onChange={(e) => onChange({ qty: e.target.value, label })}
           />
         </label>
-        <label className="block space-y-1">
-          <span className="text-xs text-sq-secondary">Як зветься упаковка</span>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-[13px] font-medium text-sq-secondary">Як зветься упаковка</span>
           <input
             placeholder="пляшка"
             maxLength={32}
-            className="w-full rounded-[4px] border border-[#E0E0E0] bg-[#F5F5F5] px-3 py-2 text-sm"
+            className="sq-input"
             value={label}
             onChange={(e) => onChange({ qty, label: e.target.value })}
           />
         </label>
       </div>
-      <p className="text-xs text-sq-secondary">
+      <p className={`text-[13px] ${half ? 'text-amber-700' : 'text-sq-muted'}`}>
         {pack
           ? `${packHint(1, 'pack', pack, unit)}. Склад і далі рахується в ${unit || 'одиницях'} — упаковка лише полегшує введення приходу.`
           : half

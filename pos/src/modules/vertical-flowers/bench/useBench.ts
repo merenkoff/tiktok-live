@@ -61,6 +61,8 @@ export interface Bench {
   loadComposition: (rows: Array<{ item: CatalogItem; quantity: number }>) => void;
   /** Rubs out the last digit; rubbing out the only one takes the stem out. */
   backspace: () => void;
+  /** «C» on the pad: the selected stem back to one, and the next digit starts a new number. */
+  clearTyped: () => void;
   totals: BenchTotals;
   labourBps: number;
   budgetCents: number | null;
@@ -153,6 +155,9 @@ export function useBench(labourBps: number): Bench {
   const typeDigit = useCallback(
     (digit: number) => {
       if (selectedId == null) return;
+      // A leading zero is nothing: it must neither empty the row nor start a
+      // number, or «0», «1» would read as eleven.
+      if (!typing && digit === 0) return;
       setStems((prev) => {
         const at = prev.findIndex((s) => s.item.variant_id === selectedId);
         if (at === -1) return prev;
@@ -179,6 +184,16 @@ export function useBench(labourBps: number): Bench {
       next[at] = { ...next[at], quantity: shorter };
       return next;
     });
+  }, [selectedId]);
+
+  const clearTyped = useCallback(() => {
+    if (selectedId == null) return;
+    setStems((prev) =>
+      prev.map((s) =>
+        s.item.variant_id === selectedId && s.item.quantity >= 1 ? { ...s, quantity: 1 } : s
+      )
+    );
+    setTyping(false);
   }, [selectedId]);
 
   const components = useMemo<CartLineComponent[]>(
@@ -228,6 +243,7 @@ export function useBench(labourBps: number): Bench {
     select,
     typeDigit,
     backspace,
+    clearTyped,
     loadComposition,
   };
 }

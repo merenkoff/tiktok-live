@@ -14,10 +14,10 @@ const STATUS_LABEL: Record<SheetRow['status'], string> = {
 
 const STATUS_TONE: Record<SheetRow['status'], string> = {
   counting: 'bg-sq-blue/10 text-sq-blue',
-  queued: 'bg-amber-100 text-amber-800',
-  error: 'bg-amber-100 text-amber-800',
-  synced: 'bg-emerald-100 text-emerald-800',
-  dead: 'bg-red-100 text-red-800',
+  queued: 'bg-amber-50 text-amber-800',
+  error: 'bg-amber-50 text-amber-800',
+  synced: 'bg-sq-success/10 text-sq-success-ink',
+  dead: 'bg-sq-danger/10 text-sq-danger',
 };
 
 export function SheetStatusBadge({ sheet }: { sheet: SheetRow }) {
@@ -26,7 +26,9 @@ export function SheetStatusBadge({ sheet }: { sheet: SheetRow }) {
       ? `${STATUS_LABEL.synced} · ${sheet.serverDocNumber}`
       : STATUS_LABEL[sheet.status];
   return (
-    <span className={`rounded-sq px-2 py-0.5 text-xs font-medium ${STATUS_TONE[sheet.status]}`}>
+    <span
+      className={`inline-flex items-center h-[22px] px-2 rounded-md text-xs font-medium whitespace-nowrap ${STATUS_TONE[sheet.status]}`}
+    >
       {text}
     </span>
   );

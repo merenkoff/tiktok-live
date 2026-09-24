@@ -100,7 +100,17 @@ export const POS_API_CLIENT_VERSION = 2;
 //     / `offlineMode` join `isOfflinePosEnabled`: the tablet reads its mirror
 //     but never queues a write, and `OfflineWriteError` is what a write with no
 //     network throws there.
-export const PLATFORM_VERSION = 16;
+// 17 (2026-09-24): the glyph set replaces lucide (design/icons, drawn in the
+//     style of Things). `@pos/platform/ui` re-exports every glyph — colour ones
+//     on a 24 px grid, UI ones on 20 (with 16 px drawings) — and `Glyph` /
+//     `GlyphProps` / `COLOR_GLYPHS` / `UI_GLYPHS`; `NAV_ICONS` keeps its keys
+//     (stored in `nav_overrides` / `module_remotes`) but resolves to glyphs and
+//     gains `ChefHat`, `Table`, `ShieldCheck`, `UtensilsCrossed`. A module that
+//     drew lucide keeps working on this host — nothing it imported went away.
+//     Before 17 shipped it also took `PageHeader` / `SectionHead` / `Segmented`
+//     (the owner screen's frame) and the `Banknote` / `Split` / `ChevronLeft`
+//     glyphs; the modifier sheet hands back a `quantity`.
+export const PLATFORM_VERSION = 17;
 
 /**
  * Build version of this bundle — the host web/cashier build, or a module-remote

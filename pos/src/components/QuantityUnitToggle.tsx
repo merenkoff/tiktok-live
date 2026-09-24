@@ -43,22 +43,25 @@ export function QuantityUnitToggle({
 
   return (
     <div className={`space-y-1 ${className}`}>
-      <div className="flex gap-1 p-0.5 bg-[#F5F5F5] rounded-[4px]">
+      {/* Things' segmented control, small: a grey track, the chosen side a white chip. */}
+      <div className="flex gap-0.5 p-[2px] bg-sq-empty rounded-[8px]">
         {options.map(([m, caption]) => (
           <button
             key={m}
             type="button"
             aria-pressed={mode === m}
             onClick={() => onModeChange(m)}
-            className={`flex-1 px-2 py-1 text-xs rounded-[4px] ${
-              mode === m ? 'bg-white font-medium shadow-sm' : 'text-[#6E6E6E]'
+            className={`flex-1 min-h-7 px-2 text-[13px] rounded-[6px] transition-colors ${
+              mode === m
+                ? 'bg-white font-semibold text-sq-text shadow-[0_1px_3px_rgba(0,0,0,.12)]'
+                : 'font-medium text-sq-secondary hover:text-sq-text'
             }`}
           >
             {caption}
           </button>
         ))}
       </div>
-      <p className="text-xs text-[#6E6E6E]">{packHint(value, mode, pack, unit)}</p>
+      <p className="text-xs text-sq-muted">{packHint(value, mode, pack, unit)}</p>
     </div>
   );
 }
