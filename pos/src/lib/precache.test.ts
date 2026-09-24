@@ -40,6 +40,22 @@ describe('entryClosure', () => {
     ]);
   });
 
+  it('takes the files a stylesheet references — the bundled fonts', () => {
+    const withFonts = {
+      'tablet.html': {
+        file: 'assets/tablet-abc.js',
+        css: ['assets/tablet-abc.css'],
+        assets: ['assets/inter-cyrillic-opsz-normal-1.woff2', 'assets/inter-latin-opsz-normal-2.woff2'],
+      },
+    };
+    expect(entryClosure(withFonts, 'tablet.html')).toEqual([
+      'assets/inter-cyrillic-opsz-normal-1.woff2',
+      'assets/inter-latin-opsz-normal-2.woff2',
+      'assets/tablet-abc.css',
+      'assets/tablet-abc.js',
+    ]);
+  });
+
   it('is empty for an entry the manifest does not have', () => {
     expect(entryClosure(manifest, 'nope.html')).toEqual([]);
   });

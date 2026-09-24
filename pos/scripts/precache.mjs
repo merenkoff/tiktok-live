@@ -19,7 +19,7 @@
 import { createHash } from 'node:crypto';
 
 /**
- * @param {Record<string, {file: string, css?: string[], imports?: string[], dynamicImports?: string[]}>} manifest
+ * @param {Record<string, {file: string, css?: string[], assets?: string[], imports?: string[], dynamicImports?: string[]}>} manifest
  * @param {string} entry  key of the entry in the manifest, e.g. 'tablet.html'
  * @returns {string[]} files of that entry's closure, relative to dist
  */
@@ -33,6 +33,9 @@ export function entryClosure(manifest, entry) {
     if (!chunk) return;
     out.add(chunk.file);
     for (const css of chunk.css ?? []) out.add(css);
+    // Files a stylesheet references — the bundled Inter woff2 (styles/fonts.css).
+    // Without them the tablet opens offline in a fallback font.
+    for (const asset of chunk.assets ?? []) out.add(asset);
     for (const dep of chunk.imports ?? []) visit(dep);
     for (const dep of chunk.dynamicImports ?? []) visit(dep);
   };

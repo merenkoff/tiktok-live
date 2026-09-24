@@ -19,6 +19,10 @@ import { maybeStartTelemetryBeacon } from './modules/telemetryBeacon';
 import { captureInstallPrompt } from './lib/installPrompt';
 import './index.css';
 import './styles/tokens.css';
+import './styles/fonts.css';
+import { markApplePlatform } from './lib/applePlatform';
+
+markApplePlatform();
 
 enableOfflineReads();
 captureInstallPrompt();

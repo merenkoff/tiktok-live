@@ -4,15 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Планшет офіціанта</title>
-    <!-- No Google Fonts here, unlike index.html: a stylesheet request that
-         black-holes without a network holds the first paint, and the tablet's
-         whole point is opening without one. `--pos-font` falls back to
-         system-ui (styles/tokens.css). -->
+    <!-- No web-font stylesheet request: Inter is bundled (styles/fonts.css) and
+         precached, because a request that black-holes without a network would
+         hold the first paint, and the tablet's whole point is opening without one. -->
     <link rel="manifest" href="/tablet.webmanifest" />
-    <meta name="theme-color" content="#1a1a1a" />
+    <meta name="theme-color" content="#f2f5f7" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Планшет" />
     <link rel="apple-touch-icon" href="/icons/tablet-180.png" />
   </head>
