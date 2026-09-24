@@ -8,6 +8,13 @@ name: POS Release
 # Cargo.toml and Cargo.lock, commits that to main, (re)points the tag at that
 # commit, then builds every platform and attaches the installers to a GitHub
 # Release for the tag. Nothing to bump or commit by hand.
+#
+# Release notes: if `.github/releases/<tag>.md` exists (e.g.
+# `.github/releases/pos-v2.3.0.md`), it becomes the Release body AND the
+# message of an annotated tag — so the notes are reviewed in the PR that
+# ships them and `git show pos-v2.3.0` reads the same text people see. Without
+# the file the tag stays lightweight and the body is the placeholder below.
+# Either way the Release is created as a draft; publishing is a human's tap.
 
 on:
   workflow_dispatch:
@@ -33,6 +40,7 @@ jobs:
     outputs:
       version: ${{ steps.resolve.outputs.version }}
       tag: ${{ steps.resolve.outputs.tag }}
+      body: ${{ steps.notes.outputs.body }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -58,9 +66,40 @@ jobs:
           echo "tag=pos-v$version"  >> "$GITHUB_OUTPUT"
           echo "Releasing pos-v$version" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Release notes
+        id: notes
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+        run: |
+          set -euo pipefail
+          notes=".github/releases/${TAG}.md"
+          if [ -f "$notes" ]; then
+            echo "notes=$notes" >> "$GITHUB_OUTPUT"
+            echo "Release notes from $notes" >> "$GITHUB_STEP_SUMMARY"
+            body="$(cat "$notes")"
+          else
+            echo "No $notes — placeholder body, lightweight tag" >> "$GITHUB_STEP_SUMMARY"
+            # Placeholder until the notes are written by hand. The body is
+            # user-facing twice over: on the release page, and inside the
+            # cashier itself — HardwarePage shows the first lines of it as the
+            # update notes — so it is in the same language as the app.
+            body="$(printf '%s\n' \
+              'Оновлення десктопної каси Cloth POS.' \
+              '' \
+              'Збірка без підпису Apple/Microsoft — на першому запуску система може показати попередження.' \
+              'Встановлення на macOS однією командою, без попереджень:' \
+              'curl -fsSL https://raw.githubusercontent.com/merenkoff/tiktok-live/main/pos/scripts/install-macos.sh | bash')"
+          fi
+          {
+            echo "body<<__RELEASE_BODY__"
+            echo "$body"
+            echo "__RELEASE_BODY__"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Commit bump + (re)point tag
         env:
           TAG: ${{ steps.resolve.outputs.tag }}
+          NOTES: ${{ steps.notes.outputs.notes }}
         run: |
           set -euo pipefail
           git config user.name  "github-actions[bot]"
@@ -75,7 +114,12 @@ jobs:
           fi
           # Tag the exact commit the installers are built from. Its message
           # carries [skip ci], so this (force-)push does not retrigger anything.
-          git tag -f "${TAG}"
+          # With release notes in the repo the tag is annotated with them.
+          if [ -n "${NOTES}" ]; then
+            git tag -f -a "${TAG}" -F "${NOTES}"
+          else
+            git tag -f "${TAG}"
+          fi
           git push -f origin "${TAG}"
 
   release:
@@ -148,16 +192,9 @@ jobs:
           projectPath: pos
           tagName: ${{ needs.version.outputs.tag }}
           releaseName: 'Cloth POS v${{ needs.version.outputs.version }}'
-          # Placeholder body until the release notes are written by hand. It is
-          # user-facing twice over: on the release page, and inside the cashier
-          # itself — HardwarePage shows the first lines of it as the update
-          # notes — so it is in the same language as the app.
-          releaseBody: |
-            Оновлення десктопної каси Cloth POS.
-
-            Збірка без підпису Apple/Microsoft — на першому запуску система може показати попередження.
-            Встановлення на macOS однією командою, без попереджень:
-            curl -fsSL https://raw.githubusercontent.com/merenkoff/tiktok-live/main/pos/scripts/install-macos.sh | bash
+          # `.github/releases/<tag>.md` when it exists, else the placeholder —
+          # resolved by the `version` job above.
+          releaseBody: ${{ needs.version.outputs.body }}
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: ${{ steps.signing.outputs.enabled == 'true' }}

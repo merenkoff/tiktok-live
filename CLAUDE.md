@@ -67,6 +67,7 @@ npm run test:e2e               # Playwright against `vite preview`, routes mocke
 ```
 Also runnable from repo root: `npm run test:pos`, `npm run test:pos:coverage`.
 CI: `.github/workflows/pos-tests.yml` runs lint, unit+coverage and e2e on PRs/pushes touching `pos/**`.
+Releases: nothing is bumped by hand. Actions → «POS Release» (`bump: patch|minor|major`) writes the version into `pos/package.json` + the Tauri manifests, commits to `main`, tags `pos-vX.Y.Z`, builds the installers and creates a **draft** GitHub Release; its body (and the tag's annotation) is `.github/releases/pos-vX.Y.Z.md` when that file exists — write it in the PR that ships the release, in Ukrainian, for shop owners (the cashier's `HardwarePage` shows its first lines as the update notes). Then Actions → «Module Release» (`module: <id>`) once per module that changed since its last tag: it tags `module-<id>-v<pos/package.json version>`, so it runs after the version commit, and modules built from `main` get `minHostPlatform` = the current `PLATFORM_VERSION` — ship the app first, then the modules, then repoint stores' `module_remotes` (super admin). See `TechDocs/POS_MODULE_REMOTE_ROADMAP.md`.
 
 #### Running the POS locally against a demo store
 ```bash
