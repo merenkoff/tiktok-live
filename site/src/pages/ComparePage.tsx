@@ -7,6 +7,8 @@ import { Faq } from '../components/Faq';
 import { BrowserFrame } from '../components/BrowserFrame';
 import { Reveal } from '../components/Reveal';
 import { StickyCta } from '../components/StickyCta';
+import { SectionHeading } from '../components/SectionHeading';
+import { Check, ChevronRight, MessageCircle, ScanLine, Store } from '../components/glyphs';
 import { useScrollToHash } from '../hooks/useScrollToHash';
 import { PRODUCT, PRICING } from '../lib/productFacts';
 import type { FaqItem } from '../lib/faqJsonLd';
@@ -56,50 +58,42 @@ export function ComparePage() {
 
       <main className="flex-1">
         {/* Hero */}
-        <section ref={heroRef} className="max-w-4xl mx-auto px-6 pt-16 pb-16 text-center">
-          <Reveal>
-            <p className="text-sm font-semibold uppercase tracking-wide text-pos">
+        <section ref={heroRef} className="max-w-4xl mx-auto px-6 pt-16 sm:pt-20 pb-20 text-center">
+          <Reveal className="flex flex-col items-center">
+            <div className="w-20 h-20 rounded-[20px] bg-paper shadow-card grid place-items-center">
+              <Store size={48} />
+            </div>
+            <p className="eyebrow text-pos mt-8">
               POS каса для магазину одягу
             </p>
-            <h1 className="text-5xl sm:text-6xl font-extrabold tracking-tight mt-4 leading-[1.05]">
+            <h1 className="h-display mt-3">
               Яку касу обрати для магазину одягу
             </h1>
-            <p className="text-muted text-lg mt-6 leading-relaxed max-w-2xl mx-auto">
+            <p className="lede mt-6 max-w-2xl mx-auto">
               Чесний гід, а не реклама одного сервісу: на що дивитись при виборі каси для
               магазину одягу, чим відрізняються типові хмарні каси, і де в цьому порівнянні
               стоїть {PRODUCT.pos.name}.
             </p>
-            <div className="mt-8 flex flex-wrap justify-center gap-3">
-              <a
-                href="#comparison"
-                className="bg-ink hover:bg-black transition-colors text-white text-sm font-semibold px-6 py-3.5 rounded-full"
-              >
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
+              <a href="#comparison" className="btn-pos">
                 Порівняти можливості
               </a>
-              <a
-                href="/pos/odyah"
-                className="border border-line hover:border-ink transition-colors text-sm font-semibold px-6 py-3.5 rounded-full"
-              >
-                Детальніше про касу для одягу
+              <a href="/pos/odyah" className="link-more text-[17px]">
+                Детальніше про касу для одягу <ChevronRight size={20} />
               </a>
             </div>
           </Reveal>
         </section>
 
         {/* Criteria checklist */}
-        <section className="bg-mist border-y border-line">
-          <div className="max-w-4xl mx-auto px-6 py-20">
+        <section className="band">
+          <div className="max-w-4xl mx-auto px-6 py-24">
             <Reveal>
-              <h2 className="text-2xl sm:text-3xl font-bold text-center max-w-xl mx-auto">
-                На що звертати увагу при виборі каси для магазину одягу
-              </h2>
-              <ul className="mt-10 space-y-4">
+              <SectionHeading icon={<ScanLine size={48} />} title="На що звертати увагу при виборі каси для магазину одягу" />
+              <ul className="mt-12 card-flat divide-y divide-line">
                 {CRITERIA.map((c) => (
-                  <li
-                    key={c}
-                    className="flex items-start gap-3 text-sm sm:text-base bg-paper border border-line rounded-card p-4"
-                  >
-                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-pos shrink-0" />
+                  <li key={c} className="flex items-start gap-3 text-[15px] sm:text-base text-body px-6 py-4">
+                    <Check size={20} className="text-pos shrink-0 mt-0.5" />
                     {c}
                   </li>
                 ))}
@@ -107,8 +101,8 @@ export function ComparePage() {
               <p className="text-sm text-muted mt-6 text-center">
                 Четвертий пункт часто пропускають — а саме він визначає, чи втратите ви день
                 продажів через зламаний ноутбук.{' '}
-                <a href={HANDOVER_ARTICLE} className="text-pos font-semibold">
-                  Розбір у довідці →
+                <a href={HANDOVER_ARTICLE} className="link-more">
+                  Розбір у довідці <ChevronRight size={20} />
                 </a>
               </p>
             </Reveal>
@@ -116,11 +110,9 @@ export function ComparePage() {
         </section>
 
         {/* Comparison */}
-        <section id="comparison" className="max-w-6xl mx-auto px-6 py-20">
+        <section id="comparison" className="max-w-6xl mx-auto px-6 py-24 scroll-mt-16">
           <Reveal>
-            <h2 className="text-2xl sm:text-3xl font-bold text-center max-w-xl mx-auto mb-10">
-              Типова хмарна каса чи {PRODUCT.pos.name}?
-            </h2>
+            <SectionHeading title={<>Типова хмарна каса чи {PRODUCT.pos.name}?</>} className="mb-12" />
           </Reveal>
           <TwoColumnCompare
             accentClass="text-pos"
@@ -146,11 +138,11 @@ export function ComparePage() {
         </section>
 
         {/* Market overview */}
-        <section className="bg-mist border-y border-line">
-          <div className="max-w-3xl mx-auto px-6 py-16">
+        <section className="band">
+          <div className="max-w-3xl mx-auto px-6 py-24">
             <Reveal>
-              <h2 className="text-2xl font-bold text-center">Огляд систем обліку в Україні</h2>
-              <p className="text-muted mt-5 leading-relaxed">
+              <SectionHeading title="Огляд систем обліку в Україні" />
+              <p className="text-body mt-6 leading-relaxed">
                 На ринку є кілька усталених рішень: <strong>Poster</strong> — хмарна каса з
                 вбудованою фіскалізацією (ПРРО) та функцією прогнозування попиту;{' '}
                 <strong>Checkbox</strong> — провідний спеціалізований сервіс програмного РРО для
@@ -167,20 +159,14 @@ export function ComparePage() {
         {/* Visual */}
         <section className="max-w-4xl mx-auto px-6 py-20">
           <Reveal>
-            <BrowserFrame
-              src={posProducts}
-              alt="Сторінка товарів із деревом категорій"
-              accentClass="border-pos/30"
-            />
+            <BrowserFrame src={posProducts} alt="Сторінка товарів із деревом категорій" elevated />
           </Reveal>
         </section>
 
         {/* FAQ */}
-        <section className="max-w-3xl mx-auto px-6 pb-20">
+        <section className="max-w-3xl mx-auto px-6 pb-24">
           <Reveal>
-            <h2 className="text-2xl sm:text-3xl font-bold text-center mb-10">
-              Питання, які запитують найчастіше
-            </h2>
+            <SectionHeading icon={<MessageCircle size={48} />} title="Питання, які запитують найчастіше" className="mb-10" />
           </Reveal>
           <Faq items={FAQ_ITEMS} />
         </section>

@@ -4,9 +4,9 @@ import { useLeadSubmit } from '../hooks/useLeadSubmit';
 type Accent = 'ink' | 'live' | 'pos';
 
 const BUTTON_CLASS: Record<Accent, string> = {
-  ink: 'bg-ink hover:bg-black',
-  live: 'bg-live hover:bg-live-press',
-  pos: 'bg-pos hover:bg-pos-press',
+  ink: 'btn bg-ink hover:bg-ink-strong',
+  live: 'btn-live',
+  pos: 'btn-pos',
 };
 
 interface Props {
@@ -33,16 +33,17 @@ export function CTAForm({ id, accent, heading, subheading, buttonLabel, showName
   }
 
   return (
-    <div id={id} className="bg-mist border border-line rounded-card p-6 sm:p-8">
-      <h3 className="text-xl font-bold">{heading}</h3>
-      {subheading && <p className="text-muted mt-1.5 text-sm">{subheading}</p>}
+    <div id={id} className="card p-6 sm:p-8 scroll-mt-24">
+      <h3 className="text-[22px] font-bold text-ink-strong">{heading}</h3>
+      {subheading && <p className="text-muted mt-1.5 text-[15px] leading-relaxed">{subheading}</p>}
       <form onSubmit={onSubmit} className="mt-5 flex flex-col sm:flex-row gap-3">
         {showNameField && (
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Ім'я"
-            className="flex-1 rounded-full border border-line bg-paper px-4 py-3 text-sm outline-none focus:border-ink focus:ring-2 focus:ring-ink/10 transition-colors"
+            aria-label="Ім'я"
+            className="flex-1 h-12 rounded-xl bg-side px-4 text-[15px] outline-none placeholder:text-faint focus:bg-paper focus:ring-2 focus:ring-pos/40 transition"
           />
         )}
         <input
@@ -50,12 +51,13 @@ export function CTAForm({ id, accent, heading, subheading, buttonLabel, showName
           onChange={(e) => setPhone(e.target.value)}
           placeholder="+380 XX XXX XX XX"
           inputMode="tel"
-          className="flex-1 rounded-full border border-line bg-paper px-4 py-3 text-sm outline-none focus:border-ink transition-colors"
+          aria-label="Телефон"
+          className="flex-1 h-12 rounded-xl bg-side px-4 text-[15px] outline-none placeholder:text-faint focus:bg-paper focus:ring-2 focus:ring-pos/40 transition"
         />
         <button
           type="submit"
           disabled={status === 'sending'}
-          className={`shrink-0 text-white text-sm font-semibold px-6 py-3 rounded-full transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none ${BUTTON_CLASS[accent]}`}
+          className={`shrink-0 disabled:opacity-60 ${BUTTON_CLASS[accent]}`}
         >
           {status === 'sending' ? 'Надсилаємо…' : buttonLabel}
         </button>

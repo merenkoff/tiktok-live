@@ -6,11 +6,15 @@ on:
     paths:
       - 'site/**'
       - 'TechDocs/guides/**'
+      - 'design/**'
+      - 'scripts/gen-icons.mjs'
       - '.github/workflows/site-build.yml'
   pull_request:
     paths:
       - 'site/**'
       - 'TechDocs/guides/**'
+      - 'design/**'
+      - 'scripts/gen-icons.mjs'
       - '.github/workflows/site-build.yml'
 
 jobs:
@@ -28,6 +32,11 @@ jobs:
           cache: npm
           cache-dependency-path: site/package-lock.json
       - run: npm ci
+      # The glyphs are drawn on a pixel grid and generated into src/components/glyphs.tsx;
+      # this fails on an off-grid coordinate or a stale generated file.
+      - name: Glyphs on the grid and up to date
+        working-directory: .
+        run: node scripts/gen-icons.mjs --check
       # tsc + client build + SSR build + scripts/prerender.mjs (its own asserts
       # fail the build when a page ships without <h1>, JSON-LD or an asset).
       - run: npm run build

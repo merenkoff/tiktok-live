@@ -4,7 +4,10 @@ import { CTAForm } from '../components/CTAForm';
 import { Reveal } from '../components/Reveal';
 import { VerticalCards } from '../components/VerticalCards';
 import { ORG, PRODUCT, PRICING } from '../lib/productFacts';
-import { Building2, Store, Radio, ShieldCheck } from 'lucide-react';
+import { AppIcon } from '../components/AppIcon';
+import { SectionHeading } from '../components/SectionHeading';
+import { VerticalsMark } from '../components/VerticalsMark';
+import { Building2, ShieldCheck, Store, Video } from '../components/glyphs';
 
 const FACTS = [
   {
@@ -18,7 +21,7 @@ const FACTS = [
     d: `${PRODUCT.pos.name} — каса для магазину одягу, квіткової крамниці, кав'ярні й ресторану: товари й склад, фіскальний чек ПРРО, QR-оплата і десктопний термінал, який продає без інтернету.`,
   },
   {
-    icon: Radio,
+    icon: Video,
     t: 'І ще — ефір',
     d: `${PRODUCT.live.name}: бот читає коментарі TikTok LIVE, тримає товар бронею, збирає дані покупця в Telegram і створює ТТН Нової Пошти.`,
   },
@@ -35,13 +38,14 @@ export function AboutPage() {
       <Nav variant="dovidka" activePath="/about" />
 
       <main className="flex-1">
-        <section className="max-w-3xl mx-auto px-6 pt-16 pb-12">
-          <Reveal>
-            <p className="text-sm font-semibold uppercase tracking-wide text-pos">Про сервіс</p>
-            <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight mt-3">
+        <section className="max-w-3xl mx-auto px-6 pt-16 sm:pt-20 pb-16 text-center">
+          <Reveal className="flex flex-col items-center">
+            <AppIcon size={112} className="drop-shadow-[0_12px_20px_rgba(0,30,80,0.2)]" />
+            <p className="eyebrow text-pos mt-8">Про сервіс</p>
+            <h1 className="h-display mt-3">
               LiveShop — каса і продажі в ефірі від однієї команди
             </h1>
-            <p className="text-muted text-lg mt-5 leading-relaxed">
+            <p className="lede mt-6">
               Ми робимо касу для невеликого бізнесу в Україні — магазину одягу, квіткової крамниці,
               кав'ярні й ресторану — і бота, який продає в TikTok LIVE. Обидва продукти живуть на одному
               сервері, але підключаються окремо: беріть те, що зараз болить більше.
@@ -49,38 +53,36 @@ export function AboutPage() {
           </Reveal>
         </section>
 
-        <section className="max-w-6xl mx-auto px-6 pb-16">
-          <div className="grid sm:grid-cols-2 gap-5">
+        <section className="max-w-6xl mx-auto px-6 pb-24">
+          <div className="grid sm:grid-cols-2 gap-6">
             {FACTS.map((f) => (
-              <Reveal key={f.t}>
-                <div className="h-full border border-line rounded-card p-6 bg-paper">
-                  <div className="w-10 h-10 rounded-full bg-pos/5 grid place-items-center">
-                    <f.icon className="w-5 h-5 text-pos" strokeWidth={1.75} />
-                  </div>
-                  <h2 className="font-bold mt-4">{f.t}</h2>
-                  <p className="text-muted text-sm mt-2.5 leading-relaxed">{f.d}</p>
+              <Reveal key={f.t} className="h-full">
+                <div className="h-full card p-7">
+                  <f.icon size={24} />
+                  <h2 className="text-lg font-bold text-ink-strong mt-3">{f.t}</h2>
+                  <p className="text-muted text-[15px] mt-2 leading-relaxed">{f.d}</p>
                 </div>
               </Reveal>
             ))}
           </div>
         </section>
 
-        <section className="max-w-6xl mx-auto px-6 pb-16">
+        <section className="max-w-6xl mx-auto px-6 pb-24">
           <Reveal>
-            <h2 className="text-2xl font-bold mb-8">Для якого бізнесу</h2>
+            <SectionHeading icon={<VerticalsMark size={64} />} title="Для якого бізнесу" className="mb-12" />
           </Reveal>
           <VerticalCards />
         </section>
 
-        <section className="bg-mist border-y border-line">
-          <div className="max-w-3xl mx-auto px-6 py-14">
+        <section className="band">
+          <div className="max-w-3xl mx-auto px-6 py-20">
             <Reveal>
-              <h2 className="text-2xl font-bold">Реквізити</h2>
-              <dl className="mt-6 grid sm:grid-cols-[auto_1fr] gap-x-8 gap-y-3 text-sm">
+              <SectionHeading icon={<Building2 size={48} />} title="Реквізити" />
+              <dl className="mt-10 card-flat p-6 sm:p-8 grid sm:grid-cols-[auto_1fr] gap-x-8 gap-y-3 text-[15px]">
                 <dt className="text-muted">Юридична особа</dt>
                 <dd className="font-medium">{ORG.legalName}</dd>
                 <dt className="text-muted">Код ЄДРПОУ</dt>
-                <dd className="font-mono font-medium">{ORG.taxId}</dd>
+                <dd className="tabular-nums font-medium">{ORG.taxId}</dd>
                 <dt className="text-muted">Сайт</dt>
                 <dd>
                   <a href={ORG.url} className="text-pos font-semibold">
@@ -99,7 +101,7 @@ export function AboutPage() {
           </div>
         </section>
 
-        <section className="max-w-3xl mx-auto px-6 py-16">
+        <section className="max-w-3xl mx-auto px-6 py-24">
           <CTAForm
             id="cta"
             accent="pos"

@@ -32,8 +32,8 @@ export function ArticlePage({ article }: { article: Article }) {
           </nav>
 
           <header className="mt-6">
-            <p className="text-sm font-semibold uppercase tracking-wide text-pos">{meta.eyebrow}</p>
-            <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight mt-3 leading-[1.08]">
+            <p className="eyebrow text-pos">{meta.eyebrow}</p>
+            <h1 className="text-4xl sm:text-5xl font-bold tracking-[-0.02em] text-ink-strong mt-3 leading-[1.08]">
               {meta.title}
             </h1>
             <p className="text-muted text-sm mt-5">
@@ -46,12 +46,12 @@ export function ArticlePage({ article }: { article: Article }) {
           {meta.kind === 'guide' && <GuideSwitcher current={meta.slug} />}
           {meta.headings && meta.headings.length > 3 && <Toc headings={meta.headings} />}
 
-          <div className="article mt-10">
+          <div className="article card mt-10 px-6 py-8 sm:px-10 sm:py-10">
             <Body />
           </div>
 
           <section className="mt-16">
-            <h2 className="text-2xl sm:text-3xl font-bold mb-8">Питання, які запитують найчастіше</h2>
+            <h2 className="h-section mb-8">Питання, які запитують найчастіше</h2>
             <Faq items={meta.faq} />
           </section>
         </article>
@@ -91,14 +91,14 @@ function GuideSwitcher({ current }: { current: string }) {
     <nav aria-label="Посібники" className="mt-8 flex flex-wrap gap-2">
       {guides.map(({ meta }) =>
         meta.slug === current ? (
-          <span key={meta.slug} aria-current="page" className="rounded-full bg-pos text-white text-sm font-semibold px-4 py-1.5">
+          <span key={meta.slug} aria-current="page" className="rounded-full bg-selected text-ink text-sm font-semibold px-4 py-1.5">
             {meta.shortTitle ?? meta.title}
           </span>
         ) : (
           <a
             key={meta.slug}
             href={`/dovidka/${meta.slug}`}
-            className="rounded-full border border-line text-sm font-semibold px-4 py-1.5 text-ink hover:border-pos/40 hover:text-pos transition-colors"
+            className="rounded-full text-sm font-semibold px-4 py-1.5 text-muted hover:text-ink hover:bg-side transition-colors"
           >
             {meta.shortTitle ?? meta.title}
           </a>
@@ -111,7 +111,7 @@ function GuideSwitcher({ current }: { current: string }) {
 
 function Toc({ headings }: { headings: Heading[] }) {
   return (
-    <nav aria-label="Зміст" className="mt-8 border border-line rounded-card bg-mist p-5 text-sm">
+    <nav aria-label="Зміст" className="mt-8 card p-5 text-sm">
       <p className="font-semibold text-ink mb-3">Зміст</p>
       <ol className="space-y-1.5">
         {headings.map((h) => (

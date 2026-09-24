@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" data-hue="violet">
+  <mask id="cut" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24"><rect x="0" y="0" width="24" height="24" fill="#FFFFFF"/><circle cx="9" cy="8" r="4" fill="#000000" stroke="#000000" stroke-width="3"/><path d="M2 19.5C2 16 5 14 9 14s7 2 7 5.5V21H2Z" fill="#000000" stroke="#000000" stroke-width="3"/></mask>
+  <g mask="url(#cut)" fill="#8A6CEF" fill-opacity=".5"><circle cx="16.5" cy="7.5" r="3"/><path d="M12 13.5C13.25 12.75 14.75 12.5 16.5 12.5 19.5 12.5 22 14 22 17V18a1 1 0 0 1-1 1H12Z"/></g>
+  <circle cx="9" cy="8" r="4" fill="#8A6CEF"/>
+  <path d="M2 19.5C2 16 5 14 9 14s7 2 7 5.5V20a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1Z" fill="#8A6CEF"/>
+</svg>

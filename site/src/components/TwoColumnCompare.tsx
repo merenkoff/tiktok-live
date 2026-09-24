@@ -1,4 +1,5 @@
 import { Reveal } from './Reveal';
+import { Check, X } from './glyphs';
 
 interface Column {
   title: string;
@@ -18,23 +19,23 @@ export function TwoColumnCompare({
   return (
     <Reveal>
       <div className="grid sm:grid-cols-2 gap-6">
-        <div className="rounded-card border border-line p-6 bg-mist">
-          <h4 className="font-bold text-lg">{left.title}</h4>
-          <ul className="mt-4 space-y-2.5 text-sm text-muted">
+        <div className="rounded-card ring-1 ring-inset ring-line p-6">
+          <h4 className="font-bold text-lg text-ink">{left.title}</h4>
+          <ul className="mt-4 space-y-2.5 text-[15px] text-muted">
             {left.points.map((p) => (
-              <li key={p} className="flex items-start gap-2.5">
-                <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-muted shrink-0" />
+              <li key={p} className="flex items-start gap-2">
+                <X size={20} className="shrink-0 text-faint" />
                 {p}
               </li>
             ))}
           </ul>
         </div>
-        <div className="rounded-card border border-line p-6 bg-paper shadow-sm">
+        <div className="card p-6">
           <h4 className={`font-bold text-lg ${accentClass}`}>{right.title}</h4>
-          <ul className="mt-4 space-y-2.5 text-sm text-ink/90">
+          <ul className="mt-4 space-y-2.5 text-[15px] text-body">
             {right.points.map((p) => (
-              <li key={p} className="flex items-start gap-2.5">
-                <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${accentClass.replace('text-', 'bg-')}`} />
+              <li key={p} className="flex items-start gap-2">
+                <Check size={20} className={`shrink-0 ${accentClass}`} />
                 {p}
               </li>
             ))}

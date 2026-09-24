@@ -4,6 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <script>document.documentElement.classList.add("js");</script>
+    <!-- SF on Apple devices, Inter everywhere else (index.css). Not a font stack: Chrome treats
+         BlinkMacSystemFont as system-ui, which on Windows is Segoe UI. -->
+    <script>/Mac|iPhone|iPad|iPod/.test(navigator.platform)&&document.documentElement.classList.add("apple");</script>
     <title>Яку касу обрати для магазину одягу — порівняння систем обліку | The Live Shop POS</title>
     <meta
       name="description"
@@ -39,12 +42,6 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="manifest" href="/icons/site.webmanifest" />
 
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap"
-      rel="stylesheet"
-    />
 
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-JV12W8H15K"></script>

@@ -3,8 +3,8 @@ import { RefObject, useEffect, useState } from 'react';
 type Accent = 'live' | 'pos';
 
 const BUTTON_CLASS: Record<Accent, string> = {
-  live: 'bg-live hover:bg-live-press',
-  pos: 'bg-pos hover:bg-pos-press',
+  live: 'btn-live',
+  pos: 'btn-pos',
 };
 
 /** Appears once `heroRef`'s element has scrolled out of view. */
@@ -38,7 +38,7 @@ export function StickyCta({
       <div className="max-w-6xl mx-auto px-6 pb-4">
         <a
           href={href}
-          className={`flex items-center justify-center gap-2 text-white text-sm font-semibold py-3.5 rounded-full shadow-2xl transition-colors ${BUTTON_CLASS[accent]}`}
+          className={`w-full shadow-card-hover ${BUTTON_CLASS[accent]}`}
         >
           {label}
         </a>
