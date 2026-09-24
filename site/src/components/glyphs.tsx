@@ -23,6 +23,15 @@ export function AlertTriangle({ size = 24, ...props }: GlyphProps) {
 }
 
 /** Colour glyph, 24 px grid · green. */
+export function Banknote({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Banknote" {...props}>
+      <rect x="2" y="6" width="20" height="12" rx="2.5" fill="#43AE59"/><circle cx="12" cy="12" r="3" fill="#FFFFFF" fillOpacity=".6"/><rect x="5" y="9" width="2" height="2" rx="1" fill="#FFFFFF" fillOpacity=".6"/><rect x="17" y="13" width="2" height="2" rx="1" fill="#FFFFFF" fillOpacity=".6"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · green. */
 export function BarChart3({ size = 24, ...props }: GlyphProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="BarChart3" {...props}>
@@ -489,6 +498,15 @@ export function Sparkles({ size = 24, ...props }: GlyphProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Sparkles" {...props}>
       <path d="M10 3C10.75 7.25 12.75 9.25 17 10 12.75 10.75 10.75 12.75 10 17 9.25 12.75 7.25 10.75 3 10 7.25 9.25 9.25 7.25 10 3Z" fill="#F8C00F"/><path d="M18 13.5C18.25 15.75 19.25 16.75 21.5 17 19.25 17.25 18.25 18.25 18 20.5 17.75 18.25 16.75 17.25 14.5 17 16.75 16.75 17.75 15.75 18 13.5Z" fill="#F8C00F" fillOpacity=".7"/><circle cx="18.5" cy="5.5" r="1.5" fill="#F8C00F" fillOpacity=".5"/>
+    </svg>
+  );
+}
+
+/** Colour glyph, 24 px grid · violet. */
+export function Split({ size = 24, ...props }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" data-glyph="Split" {...props}>
+      <rect x="2" y="5" width="9" height="14" rx="2.5" fill="#8A6CEF"/><rect x="13" y="5" width="9" height="14" rx="2.5" fill="#8A6CEF" fillOpacity=".5"/>
     </svg>
   );
 }
@@ -1073,7 +1091,7 @@ export function X({ size = 20, ...props }: GlyphProps) {
 }
 
 /** Every colour glyph by name. */
-export const COLOR_GLYPHS = { AlertTriangle, BarChart3, Barcode, Bell, Bot, Boxes, Building2, Calendar, CalendarClock, CameraColor, ChefHat, ClipboardCheck, ClipboardList, CloudOff, Coffee, Coins, CreditCard, Download, FileText, Flower2, Gift, Grid3X3, Heart, Home, Info, KeyRound, Laptop, Layers, ListOrdered, Lock, MapPinColor, Megaphone, MessageCircle, MessageSquare, Monitor, Package, PackageCheck, Percent, PieChart, PrinterColor, Puzzle, QrCode, Receipt, RefreshCwColor, Repeat, ScanLine, SearchColor, Settings, ShieldCheck, Shirt, ShoppingBag, ShoppingCart, Sparkles, Star, Store, Table, Tag, Terminal, TrendingUp, Truck, Usb, User, Users, UtensilsCrossed, Video, Wallet, Warehouse, WifiOff, Wrench } as const satisfies Record<string, Glyph>;
+export const COLOR_GLYPHS = { AlertTriangle, Banknote, BarChart3, Barcode, Bell, Bot, Boxes, Building2, Calendar, CalendarClock, CameraColor, ChefHat, ClipboardCheck, ClipboardList, CloudOff, Coffee, Coins, CreditCard, Download, FileText, Flower2, Gift, Grid3X3, Heart, Home, Info, KeyRound, Laptop, Layers, ListOrdered, Lock, MapPinColor, Megaphone, MessageCircle, MessageSquare, Monitor, Package, PackageCheck, Percent, PieChart, PrinterColor, Puzzle, QrCode, Receipt, RefreshCwColor, Repeat, ScanLine, SearchColor, Settings, ShieldCheck, Shirt, ShoppingBag, ShoppingCart, Sparkles, Split, Star, Store, Table, Tag, Terminal, TrendingUp, Truck, Usb, User, Users, UtensilsCrossed, Video, Wallet, Warehouse, WifiOff, Wrench } as const satisfies Record<string, Glyph>;
 
 /** Every UI glyph by name. */
 export const UI_GLYPHS = { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookMarked, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Delete, DownloadLine, Folder, GripVertical, ImagePlus, Inbox, LayoutGrid, LogOut, MapPin, Minus, MoreHorizontal, PackageLine, Pencil, Phone, Plus, Printer, RefreshCw, RotateCcw, Scissors, Search, TagLine, Trash2, X } as const satisfies Record<string, Glyph>;

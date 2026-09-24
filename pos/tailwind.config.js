@@ -27,6 +27,10 @@ export default {
           muted: sq('muted', '142 145 150'),
           divider: sq('divider', '223 227 232'),
           empty: sq('empty', '236 238 240'),
+          success: sq('success', '67 174 89'),
+          'success-ink': sq('success-ink', '47 125 64'),
+          danger: sq('danger', '244 56 106'),
+          warning: sq('warning', '244 137 31'),
         },
       },
       // Inter by default, SF under `html.apple` — the switch lives in the

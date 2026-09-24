@@ -123,7 +123,7 @@ test('a flower shop sells through its own catalog module', async ({ page }) => {
   await page.getByRole('button', { name: /^Оплатити/ }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Оплата' });
   await dialog.getByRole('button', { name: 'Готівка' }).click();
-  await dialog.getByRole('button', { name: 'Готово' }).click();
+  await dialog.getByRole('button', { name: /^Прийняти/ }).click();
   await expect(page.getByText('ЧК-000005')).toBeVisible();
   expect(completed).toHaveLength(1);
 });

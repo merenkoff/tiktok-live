@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { ReactNode, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { Check } from '../../platform/glyphs';
+import { Check, DownloadLine, Printer, ShieldCheck } from '../../platform/glyphs';
 import { api, cashierApi, useAuthStore, useCartStore, useOfflineStatus } from '@pos/platform';
 import { formatUah } from '../../lib/money';
 import { localOrderLabel } from '../../lib/localOrderNo';
@@ -608,17 +608,29 @@ export function RegisterPage() {
           : null;
     const showOrderNo = vertical === 'cafe' && orderCaption != null;
 
+    const paidCents = success.payments.reduce((sum, p) => sum + p.amount_cents, 0);
+    const changeCents = Math.max(0, paidCents - success.total_cents);
+    const payLine = [payText, changeCents > 0 ? `решта ${formatUah(changeCents)}` : '']
+      .filter(Boolean)
+      .join(' · ');
+    const fiscalDoc = success.fiscal ?? null;
+    const actionClass =
+      'min-h-12 px-[18px] rounded-xl bg-white ring-1 ring-sq-divider text-[15px] font-semibold text-sq-text inline-flex items-center gap-2 disabled:opacity-50 hover:bg-sq-sidebar';
+
     return (
-      <div className="min-h-screen bg-white grid place-items-center p-6 font-sans">
-        <div className="text-center max-w-sm w-full animate-fade-up">
-          <div className="mx-auto w-14 h-14 rounded-full bg-sq-blue text-white grid place-items-center">
+      <div className="min-h-screen bg-sq-bg grid place-items-center p-4 sm:p-6">
+        <div
+          className="w-full max-w-[520px] bg-white rounded-[22px] shadow-[0_12px_40px_rgba(0,20,60,.12),0_0_2px_rgba(0,0,0,.1)] px-6 pt-9 pb-7 sm:px-10 sm:pb-[30px] flex flex-col items-center text-center animate-fade-up"
+          data-testid="sale-success"
+        >
+          <div className="w-16 h-16 rounded-full bg-sq-success text-white grid place-items-center">
             <Check size={40} />
           </div>
           {showOrderNo ? (
             <>
-              <p className="sq-section-label mt-6">Замовлення</p>
+              <p className="mt-[18px] text-sm font-semibold text-sq-secondary">Замовлення</p>
               <p
-                className="text-7xl font-bold mt-2 text-sq-text tabular-nums leading-none"
+                className="text-[88px] font-bold leading-none text-sq-heading tabular-nums mt-1"
                 data-testid="order-no"
               >
                 {orderCaption}
@@ -628,21 +640,44 @@ export function RegisterPage() {
                   Номер каси — сервер призначить свій після синхронізації
                 </p>
               )}
-              <p className="text-sm text-sq-secondary mt-3">Чек {success.receipt_number}</p>
+              <p className="text-sm text-sq-muted mt-1.5">
+                Чек {success.receipt_number}
+                {success.staff_name ? ` · ${success.staff_name}` : ''}
+              </p>
             </>
           ) : (
             <>
-              <p className="sq-section-label mt-6">Чек</p>
-              <h2 className="text-2xl font-bold mt-2 text-sq-text">{success.receipt_number}</h2>
+              <p className="mt-[18px] text-sm font-semibold text-sq-secondary">Оплачено</p>
+              <h2 className="text-2xl font-bold mt-1 text-sq-heading tabular-nums">{success.receipt_number}</h2>
+              {success.staff_name && <p className="text-sm text-sq-muted mt-1">{success.staff_name}</p>}
             </>
           )}
-          <p className="text-5xl font-bold mt-6 text-sq-text">{formatUah(success.total_cents)}</p>
-          <p className="text-sq-secondary mt-3 text-sm">{success.staff_name}</p>
-          {payText && <p className="text-sq-secondary mt-1 text-sm">{payText}</p>}
+          <p className="mt-[18px] text-[34px] font-bold text-sq-heading tabular-nums leading-tight">
+            {formatUah(success.total_cents)}
+          </p>
+          {payLine && <p className="text-[15px] text-sq-secondary mt-0.5 tabular-nums">{payLine}</p>}
+
+          {fiscalDoc?.fiscal_code && !fiscalNotice && (
+            <div
+              className={`mt-3 inline-flex items-center gap-2 px-3 py-2 rounded-sq text-sm ${
+                fiscalDoc.status === 'done' && fiscalDoc.mode !== 'offline'
+                  ? 'bg-sq-success/10 text-sq-success-ink'
+                  : 'bg-amber-50 text-amber-800'
+              }`}
+              data-testid="sale-fiscal"
+            >
+              <ShieldCheck size={24} />
+              {fiscalDoc.mode === 'offline'
+                ? `Фіскальний чек № ${fiscalDoc.fiscal_code} · офлайн`
+                : fiscalDoc.status === 'done'
+                  ? `Фіскальний чек № ${fiscalDoc.fiscal_code} зареєстровано`
+                  : `Фіскальний чек № ${fiscalDoc.fiscal_code} · реєструється`}
+            </div>
+          )}
           {fiscalNotice && (
             <div
               role="alert"
-              className="mt-6 rounded-sq bg-amber-50 text-amber-900 px-3 py-2 text-sm text-left"
+              className="mt-5 w-full rounded-sq bg-amber-50 text-amber-900 px-3 py-2 text-sm text-left"
             >
               <p className="font-semibold">Чек не зареєстровано в ПРРО</p>
               <p className="mt-1">{fiscalNotice.message}</p>
@@ -653,15 +688,57 @@ export function RegisterPage() {
             </div>
           )}
           {cancelRung.result && (
-            <p className="mt-6 rounded-sq bg-red-50 text-red-700 px-3 py-2 text-sm font-semibold">
+            <p className="mt-5 w-full rounded-sq bg-red-50 text-red-700 px-3 py-2 text-sm font-semibold">
               {cancelRung.result === 'partially_refunded'
                 ? 'Частину чека повернуто — товар повернувся на склад.'
                 : 'Чек скасовано — кошти й товар повернуто.'}
             </p>
           )}
+
+          <div className="mt-[22px] flex flex-wrap justify-center gap-2.5">
+            {receiptPrinterName && (
+              <button
+                type="button"
+                className={actionClass}
+                onClick={() => void printSuccessReceipt()}
+                disabled={printing}
+              >
+                <Printer size={20} />
+                {printing ? 'Друк…' : 'Друкувати'}
+              </button>
+            )}
+            <button
+              type="button"
+              className={actionClass}
+              onClick={printSuccessReceiptAsPdf}
+              title={receiptPrinterName ? undefined : 'Принтер не обрано'}
+            >
+              <DownloadLine size={20} />
+              PDF
+            </button>
+            {vertical === 'cafe' && kitchenPrinter && (
+              <button
+                type="button"
+                className={actionClass}
+                onClick={() => void printKitchenTicketAgain()}
+                disabled={kitchenPrinting}
+                data-testid="print-kitchen-ticket"
+              >
+                <Printer size={20} />
+                {kitchenPrinting ? 'Друк…' : 'Тікет'}
+              </button>
+            )}
+          </div>
+          {printStatus && <p className="text-sq-secondary text-sm mt-2">{printStatus}</p>}
+          {kitchenStatus && (
+            <p className="text-sq-secondary text-sm mt-2" data-testid="kitchen-status">
+              {kitchenStatus}
+            </p>
+          )}
+
           <button
             type="button"
-            className="pos-btn-primary mt-10 w-full py-3.5"
+            className="pos-btn-primary mt-4 w-full min-h-14 rounded-xl text-[17px]"
             onClick={() => {
               setSuccess(null);
               setFiscalNotice(null);
@@ -669,58 +746,24 @@ export function RegisterPage() {
               cancelRung.reset();
             }}
           >
-            Новий чек
+            Новий продаж
           </button>
           {fiscalNotice && (
             // Cancelling routes through a refund, and a refund against a sale
             // with no fiscal document can never itself be fiscalised — it would
             // leave an orphan no reconciler can see. Wait for the retry instead.
-            <p className="mt-3 rounded-sq bg-sq-surface border border-sq-divider px-3 py-2 text-xs text-sq-secondary text-left">
+            <p className="mt-3 text-xs text-sq-secondary">
               Повернення буде доступне після реєстрації чека в ПРРО.
             </p>
           )}
           {!fiscalNotice && cancelRung.result !== 'refunded' && cancelRung.result !== 'voided' && (
             <button
               type="button"
-              className="mt-3 w-full min-h-12 rounded-sq border border-red-300 bg-red-50 text-red-700 text-sm font-semibold"
+              className="mt-2 min-h-11 px-4 text-[15px] font-semibold text-red-600 hover:text-red-700"
               onClick={() => cancelRung.open(success)}
             >
               Скасувати чек
             </button>
-          )}
-          {receiptPrinterName && (
-            <button
-              type="button"
-              className="mt-3 w-full py-3 text-sm font-medium text-sq-blue disabled:opacity-50"
-              onClick={() => void printSuccessReceipt()}
-              disabled={printing}
-            >
-              {printing ? 'Друк…' : 'Друкувати чек'}
-            </button>
-          )}
-          {vertical === 'cafe' && kitchenPrinter && (
-            <button
-              type="button"
-              className="mt-3 w-full py-3 text-sm font-medium text-sq-blue disabled:opacity-50"
-              onClick={() => void printKitchenTicketAgain()}
-              disabled={kitchenPrinting}
-              data-testid="print-kitchen-ticket"
-            >
-              {kitchenPrinting ? 'Друк…' : 'Друкувати тікет'}
-            </button>
-          )}
-          <button
-            type="button"
-            className={`w-full py-3 text-sm font-medium text-sq-blue ${receiptPrinterName ? '' : 'mt-3'}`}
-            onClick={printSuccessReceiptAsPdf}
-          >
-            {receiptPrinterName ? 'Зберегти чек як PDF' : 'Принтер не обрано — зберегти чек як PDF'}
-          </button>
-          {printStatus && <p className="text-sq-secondary text-sm mt-1">{printStatus}</p>}
-          {kitchenStatus && (
-            <p className="text-sq-secondary text-sm mt-1" data-testid="kitchen-status">
-              {kitchenStatus}
-            </p>
           )}
         </div>
         {printablePortal}
@@ -802,6 +845,7 @@ export function RegisterPage() {
       {checkoutOpen && (
         <CheckoutModal
           totalCents={totalCents()}
+          itemCount={lines.length}
           loading={paying}
           saleRef={saleDraftId}
           error={checkoutError}

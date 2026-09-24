@@ -14,56 +14,76 @@
  * Deliberately always on screen rather than behind a long-press or a dialog:
  * §4 says hands are wet and often holding a half-tied bouquet, and a gesture
  * that needs a steady 500 ms contact is the first thing such a hand fails at.
- * It is also why there is no `0` key — setting a count to zero is what the bin
- * button is for, and a key that silently deletes a row is a worse trade than
- * one missing digit.
+ * `0` only ever appends — «1», «0» is ten roses — and never sets a count to
+ * zero: that is what the bin button is for, and a key that silently deletes a
+ * row would be a worse trade. `C` puts the stem back to one and starts over.
  *
- * Keys are 1..9 and ⌫ over two rows, so each stays above the 44 px the same
- * section demands (WCAG 2.5.5 Enhanced), even in the 22 rem till panel.
+ * Keys are 1..9, C, 0 and ⌫ over two rows of six, so each stays at the 44 px
+ * the same section demands (WCAG 2.5.5 Enhanced), even in the till panel.
  */
 
 import { Delete } from '@pos/platform/ui';
 
 interface Props {
-  /** What the digits will land on — shown so the florist can see the target. */
+  /** What the digits will land on — named for a screen reader; the card itself is highlighted. */
   targetName: string | null;
   onDigit: (digit: number) => void;
   onBackspace: () => void;
+  onClear: () => void;
 }
 
-const KEYS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', 'del'] as const;
 
-export function QuantityPad({ targetName, onDigit, onBackspace }: Props) {
+const keyClass =
+  'min-h-11 rounded-[10px] bg-white shadow-[0_1px_2px_rgba(0,0,0,.12)] text-lg font-semibold text-sq-text grid place-items-center disabled:opacity-40 active:bg-sq-selected';
+
+export function QuantityPad({ targetName, onDigit, onBackspace, onClear }: Props) {
   const idle = targetName == null;
 
   return (
-    <div className="px-3 py-2 border-t border-sq-divider bg-white" data-testid="bench-pad">
-      <p className="text-xs text-sq-muted mb-1.5 truncate h-4">
+    <div className="px-3 pt-1.5 pb-3" data-testid="bench-pad">
+      <p className="sr-only" aria-live="polite">
         {idle ? 'Торкніться квітки, щоб набрати кількість' : `Кількість: ${targetName}`}
       </p>
-      <div className="grid grid-cols-5 gap-1.5">
-        {KEYS.map((digit) => (
-          <button
-            key={digit}
-            type="button"
-            disabled={idle}
-            onClick={() => onDigit(digit)}
-            className="min-h-11 rounded-sq border border-sq-divider bg-white text-base font-semibold text-sq-text disabled:opacity-40"
-            data-testid={`bench-pad-${digit}`}
-          >
-            {digit}
-          </button>
-        ))}
-        <button
-          type="button"
-          disabled={idle}
-          onClick={onBackspace}
-          className="min-h-11 rounded-sq border border-sq-divider bg-white grid place-items-center text-sq-secondary disabled:opacity-40"
-          aria-label="Стерти цифру"
-          data-testid="bench-pad-backspace"
-        >
-          <Delete size={20} />
-        </button>
+      <div className="grid grid-cols-6 gap-1.5">
+        {KEYS.map((key) =>
+          key === 'del' ? (
+            <button
+              key={key}
+              type="button"
+              disabled={idle}
+              onClick={onBackspace}
+              className={keyClass}
+              aria-label="Стерти цифру"
+              data-testid="bench-pad-backspace"
+            >
+              <Delete size={20} />
+            </button>
+          ) : key === 'C' ? (
+            <button
+              key={key}
+              type="button"
+              disabled={idle}
+              onClick={onClear}
+              className={keyClass}
+              aria-label="Скинути до одного"
+              data-testid="bench-pad-clear"
+            >
+              C
+            </button>
+          ) : (
+            <button
+              key={key}
+              type="button"
+              disabled={idle}
+              onClick={() => onDigit(Number(key))}
+              className={keyClass}
+              data-testid={`bench-pad-${key}`}
+            >
+              {key}
+            </button>
+          )
+        )}
       </div>
     </div>
   );

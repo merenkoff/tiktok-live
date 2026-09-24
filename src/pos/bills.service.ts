@@ -148,6 +148,8 @@ export interface OpenBillSummary {
   table_id: number;
   guests: number;
   opened_at: string;
+  /** Who seated the table — the hall map's «мій стіл». */
+  opened_by: number;
   opened_by_name: string;
   precheck_printed_at: string | null;
   fired_total_cents: number;
@@ -465,7 +467,7 @@ export async function getBill(storeId: number, billId: number): Promise<Bill> {
 export async function listOpenBills(storeId: number): Promise<OpenBillSummary[]> {
   const result = await pool.query(
     `SELECT b.id, b.bill_no, b.table_id, b.guests, b.opened_at, b.precheck_printed_at,
-            s.display_name AS opened_by_name,
+            b.opened_by, s.display_name AS opened_by_name,
             COALESCE(fired.total, 0) AS fired_total,
             COALESCE(draft.lines, 0) AS draft_lines,
             waiting.prep_status
@@ -500,6 +502,7 @@ export async function listOpenBills(storeId: number): Promise<OpenBillSummary[]>
     table_id: Number(row.table_id),
     guests: Number(row.guests),
     opened_at: new Date(row.opened_at as string).toISOString(),
+    opened_by: Number(row.opened_by),
     opened_by_name: String(row.opened_by_name ?? ''),
     precheck_printed_at:
       row.precheck_printed_at == null

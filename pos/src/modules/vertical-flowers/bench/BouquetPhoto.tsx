@@ -23,7 +23,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Camera, ImagePlus, Trash2 } from '@pos/platform/ui';
+import { Camera, Trash2 } from '@pos/platform/ui';
 import { api, assetUrl } from '@pos/platform';
 
 /**
@@ -139,15 +139,15 @@ export function BouquetPhoto({ value, onChange, disabled }: Props) {
 
   return (
     <div className="space-y-2" data-testid="bouquet-photo">
-      <div className="flex items-start gap-3">
-        <div className="w-20 h-20 rounded-sq border border-sq-divider bg-sq-bg overflow-hidden grid place-items-center shrink-0">
+      <div className="flex items-center gap-3.5">
+        <div className="w-24 h-24 rounded-[14px] bg-sq-sidebar ring-1 ring-inset ring-sq-divider overflow-hidden grid place-items-center shrink-0">
           {value ? (
             <img src={assetUrl(value) ?? undefined} alt="" className="w-full h-full object-cover" />
           ) : (
-            <ImagePlus size={40} className="text-sq-muted" />
+            <Camera size={20} className="text-sq-muted" />
           )}
         </div>
-        <div className="flex flex-col gap-1.5 min-w-0">
+        <div className="flex flex-col items-start gap-1.5 min-w-0">
           <input
             ref={inputRef}
             type="file"
@@ -166,12 +166,13 @@ export function BouquetPhoto({ value, onChange, disabled }: Props) {
             type="button"
             disabled={disabled || busy}
             onClick={() => void openCamera()}
-            className="min-h-11 px-3 rounded-sq border border-sq-divider text-sm flex items-center gap-2 disabled:opacity-50"
+            className="min-h-10 px-3.5 rounded-[10px] bg-sq-empty text-[15px] font-semibold text-sq-text flex items-center gap-2 disabled:opacity-50 hover:bg-sq-selected"
             data-testid="bouquet-photo-shoot"
           >
-            <Camera size={16} />
+            <Camera size={20} />
             {busy ? 'Завантаження…' : value ? 'Зняти ще раз' : 'Зняти букет'}
           </button>
+          {!value && <span className="text-[13px] text-sq-muted">Фото допоможе знайти його на вітрині</span>}
           {value && (
             <button
               type="button"
@@ -205,14 +206,14 @@ export function BouquetPhoto({ value, onChange, disabled }: Props) {
             <button
               type="button"
               onClick={stopLive}
-              className="min-h-12 px-4 rounded-sq border border-white/30 text-white"
+              className="min-h-12 px-4 rounded-xl ring-1 ring-white/30 text-white font-semibold"
             >
               Скасувати
             </button>
             <button
               type="button"
               onClick={() => void grabFrame()}
-              className="sq-btn-primary min-h-12 flex-1"
+              className="pos-btn-primary min-h-12 rounded-xl flex-1"
               data-testid="bouquet-photo-capture"
             >
               Зняти

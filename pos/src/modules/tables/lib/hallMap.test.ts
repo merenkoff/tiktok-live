@@ -3,7 +3,17 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { describe, expect, it } from 'vitest';
-import { hallExtent, seatedFor, seatsOfHall, tableTone, visibleHalls } from './hallMap';
+import {
+  guestsLabel,
+  hallExtent,
+  kitchenState,
+  seatedFor,
+  seatsLabel,
+  seatsOfHall,
+  tableTone,
+  tileSum,
+  visibleHalls,
+} from './hallMap';
 import type { OpenBillSummary, PosHall, PosTable } from './types';
 
 const table = (over: Partial<PosTable> = {}): PosTable => ({
@@ -69,12 +79,42 @@ describe('seatsOfHall', () => {
 });
 
 describe('tableTone', () => {
-  it('says free, seated, waiting or ready — and ready wins', () => {
-    expect(tableTone(null)).toBe('free');
-    expect(tableTone(bill())).toBe('seated');
-    expect(tableTone(bill({ prep_status: 'new' }))).toBe('waiting');
+  it('says free, mine, somebody else’s — and a printed pre-bill wins', () => {
+    expect(tableTone(null, 7)).toBe('free');
+    expect(tableTone(bill({ opened_by: 7 }), 7)).toBe('mine');
+    expect(tableTone(bill({ opened_by: 8 }), 7)).toBe('busy');
+    expect(tableTone(bill({ opened_by: 7, precheck_printed_at: '2026-09-21T19:00:00Z' }), 7)).toBe('bill');
+  });
+
+  it('reads a table from an older mirror, with no waiter id, as somebody else’s', () => {
+    expect(tableTone(bill({ opened_by: undefined }), 7)).toBe('busy');
+    expect(tableTone(bill({ opened_by: 7 }), null)).toBe('busy');
+  });
+});
+
+describe('kitchenState', () => {
+  it('says waiting or ready — and ready wins', () => {
+    expect(kitchenState(null)).toBeNull();
+    expect(kitchenState(bill())).toBeNull();
+    expect(kitchenState(bill({ prep_status: 'new' }))).toBe('waiting');
     // The only state that asks the waiter to walk over right now.
-    expect(tableTone(bill({ prep_status: 'ready' }))).toBe('ready');
+    expect(kitchenState(bill({ prep_status: 'ready' }))).toBe('ready');
+  });
+});
+
+describe('labels', () => {
+  it('declines seats and guests the Ukrainian way', () => {
+    expect(seatsLabel(1)).toBe('1 місце');
+    expect(seatsLabel(2)).toBe('2 місця');
+    expect(seatsLabel(6)).toBe('6 місць');
+    expect(guestsLabel(1)).toBe('1 гість');
+    expect(guestsLabel(3)).toBe('3 гості');
+    expect(guestsLabel(12)).toBe('12 гостей');
+  });
+
+  it('rounds a tile’s sum to whole hryvnias', () => {
+    expect(tileSum(52_500)).toBe('525 ₴');
+    expect(tileSum(124_049).replace(/\s/g, ' ')).toBe('1 240 ₴');
   });
 });
 

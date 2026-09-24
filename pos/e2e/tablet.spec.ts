@@ -162,7 +162,7 @@ test('without a network the tablet opens, shows the menu it saw, and refuses to 
   await page.getByRole('button', { name: /^Оплатити/ }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Оплата' });
   await dialog.getByRole('button', { name: 'Готівка' }).click();
-  await dialog.getByRole('button', { name: 'Готово' }).click();
+  await dialog.getByRole('button', { name: /^Прийняти/ }).click();
   await expect(dialog.getByRole('alert')).toContainText('Потрібна мережа');
 
   // Back online the same tap goes through.
@@ -294,7 +294,7 @@ test.describe('portrait tablet', () => {
     await expect(page.getByTestId('bill-bar')).toBeVisible();
     await expect(page.getByTestId('bill-owed')).toHaveCount(0);
     await page.getByTestId('menu-tile-4').click();
-    await expect(page.getByTestId('bill-bar')).toContainText('Чернетка · 1 поз.');
+    await expect(page.getByTestId('bill-bar')).toContainText('Чернетка · 1 позиція');
     await expect(page.getByTestId('bill-bar-fire')).toContainText('На кухню · 1');
 
     await page.getByTestId('bill-bar-open').click();

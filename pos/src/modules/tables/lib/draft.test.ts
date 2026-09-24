@@ -89,6 +89,10 @@ describe('pendingLine', () => {
     // A bare line keys on the variant alone, exactly as the cart does.
     expect(pendingLine({ item: croissant, modifiers: [], note: '' }, 't2').uid).toBe('9');
   });
+
+  it('takes the count from the sheet’s stepper', () => {
+    expect(pendingLine({ item: croissant, modifiers: [], note: '', quantity: 3 }, 't3').quantity).toBe(3);
+  });
 });
 
 describe('draftView', () => {

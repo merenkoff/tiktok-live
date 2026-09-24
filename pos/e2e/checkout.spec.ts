@@ -40,7 +40,7 @@ test('a ПРРО outage is readable on top of the payment screen, and the cart s
 
   const dialogEarly = page.getByRole('dialog', { name: 'Оплата' });
   await dialogEarly.getByRole('button', { name: 'Готівка' }).click();
-  await dialogEarly.getByRole('button', { name: 'Готово' }).click();
+  await dialogEarly.getByRole('button', { name: /^Прийняти/ }).click();
 
   const dialog = page.getByRole('dialog', { name: 'Оплата' });
   await expect(dialog).toBeVisible();

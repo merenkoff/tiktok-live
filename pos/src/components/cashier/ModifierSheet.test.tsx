@@ -118,7 +118,7 @@ describe('ModifierSheet', () => {
     fireEvent.change(note, { target: { value: '  гарячіше ' } });
     fireEvent.click(addButton());
 
-    expect(onAdd).toHaveBeenCalledWith({ item: latte, modifiers: [12, 21], note: 'гарячіше' });
+    expect(onAdd).toHaveBeenCalledWith({ item: latte, modifiers: [12, 21], note: 'гарячіше', quantity: 1 });
   });
 
   it('adds on Enter in the note, but only when the choice is valid', () => {
@@ -148,7 +148,37 @@ describe('ModifierSheet', () => {
     fireEvent.click(screen.getByTestId('modifier-chip-12'));
     expect(price()).toBe('80,00 ₴');
     fireEvent.click(addButton());
-    expect(onAdd).toHaveBeenCalledWith({ item: m, modifiers: [12], note: '' });
+    expect(onAdd).toHaveBeenCalledWith({ item: m, modifiers: [12], note: '', quantity: 1 });
+  });
+
+  it('adds several at once and prices the button for all of them', () => {
+    const { onAdd } = renderSheet();
+    const minus = screen.getByTestId('modifier-qty-minus') as HTMLButtonElement;
+    expect(minus.disabled).toBe(true);
+    fireEvent.click(screen.getByTestId('modifier-qty-plus'));
+    fireEvent.click(screen.getByTestId('modifier-qty-plus'));
+    expect(screen.getByTestId('modifier-qty-value')).toHaveTextContent('3');
+    fireEvent.click(screen.getByTestId('modifier-chip-12'));
+    expect(price()).toBe('240,00 ₴');
+    fireEvent.click(minus);
+    expect(price()).toBe('160,00 ₴');
+    fireEvent.click(addButton());
+    expect(onAdd).toHaveBeenCalledWith({ item: latte, modifiers: [12], note: '', quantity: 2 });
+  });
+
+  it('has no stepper when it edits a line, and hands back one', () => {
+    const { onAdd } = renderSheet({ withQuantity: false, submitLabel: 'Зберегти' });
+    expect(screen.queryByTestId('modifier-qty')).toBeNull();
+    fireEvent.click(addButton());
+    expect(onAdd).toHaveBeenCalledWith({ item: latte, modifiers: [11], note: '', quantity: 1 });
+  });
+
+  it('shows the line caption the receipt will print, and names what a group allows', () => {
+    renderSheet();
+    fireEvent.click(screen.getByTestId('modifier-chip-21'));
+    expect(screen.getByTestId('modifier-caption')).toHaveTextContent('M · звичайне · карамель');
+    expect(screen.getByTestId('modifier-group-1')).toHaveTextContent('обовʼязково');
+    expect(screen.getByTestId('modifier-group-2')).toHaveTextContent('до 2');
   });
 
   it('refuses a price below zero', () => {
@@ -175,8 +205,8 @@ describe('ModifierSheet', () => {
 
   it('closes on the scrim, the button and Escape', () => {
     const { onClose } = renderSheet();
-    fireEvent.click(screen.getByLabelText('Закрити'));
-    fireEvent.click(screen.getByTestId('modifier-close'));
+    fireEvent.click(screen.getByTestId('modifier-scrim'));
+    fireEvent.click(screen.getByRole('button', { name: 'Закрити' }));
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(3);
   });

@@ -285,7 +285,7 @@ test('the bench prices a bouquet as it is assembled, and rings it as one line', 
   await page.getByRole('button', { name: /^Оплатити/ }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Оплата' });
   await dialog.getByRole('button', { name: 'Готівка' }).click();
-  await dialog.getByRole('button', { name: 'Готово' }).click();
+  await dialog.getByRole('button', { name: /^Прийняти/ }).click();
   await expect(page.getByText('ЧК-000007')).toBeVisible();
   expect(completed).toHaveLength(1);
 

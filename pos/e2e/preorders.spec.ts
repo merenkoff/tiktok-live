@@ -153,7 +153,7 @@ test('the sale names the order and never a price', async ({ page }) => {
   await page.getByRole('button', { name: /^Оплатити/ }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Оплата' });
   await dialog.getByRole('button', { name: 'Готівка' }).click();
-  await dialog.getByRole('button', { name: 'Готово' }).click();
+  await dialog.getByRole('button', { name: /^Прийняти/ }).click();
 
   await expect.poll(() => completed.length).toBeGreaterThan(0);
   const body = completed[0];

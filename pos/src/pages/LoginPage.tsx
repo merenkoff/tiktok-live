@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuthStore, loadLastStoreSlug, usePosShell, OfflineAuthError } from '@pos/platform';
 import { isIos, isStandalone, useInstallPrompt } from '../lib/installPrompt';
+import { AppIcon } from '../components/AppIcon';
 
 function loginErrorMessage(error: unknown): string {
   if (error instanceof OfflineAuthError) return error.message;
@@ -78,13 +79,21 @@ export function LoginPage() {
     }
   }
 
+  const pinDots = Math.max(4, pin.length);
+  const segClass = (on: boolean) =>
+    `flex-1 min-h-[38px] rounded-[9px] text-[15px] transition-colors ${
+      on ? 'bg-white shadow-[0_1px_3px_rgba(0,0,0,.12)] font-semibold text-sq-text' : 'font-medium text-sq-secondary'
+    }`;
+
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-sq-bg font-sans">
-      <div className="w-full max-w-md animate-fade-up">
-        <div className="mb-8 text-center">
-          <p className="sq-section-label">Cloth POS</p>
-          <h1 className="text-3xl font-bold text-sq-text mt-2">Вхід</h1>
-          <p className="text-sq-secondary mt-2 text-sm">
+    <div className="min-h-screen flex items-center justify-center p-6 bg-sq-bg">
+      <div className="w-full max-w-[420px] flex flex-col items-center gap-[22px] animate-fade-up">
+        <div className="drop-shadow-[0_10px_18px_rgba(0,30,80,.2)]">
+          <AppIcon size={84} />
+        </div>
+        <div className="text-center">
+          <h1 className="text-[30px] font-bold text-sq-heading leading-tight">Вхід</h1>
+          <p className="text-[15px] text-sq-secondary mt-1">
             {shell === 'cashier'
               ? 'Каса'
               : shell === 'tablet'
@@ -93,66 +102,73 @@ export function LoginPage() {
           </p>
         </div>
 
-        <div className="flex border-b border-sq-divider mb-6">
-          <button
-            type="button"
-            onClick={() => setMode('pin')}
-            className={`flex-1 min-h-11 py-3 text-sm font-medium border-b-2 -mb-px ${
-              mode === 'pin' ? 'text-sq-blue border-sq-blue' : 'text-sq-secondary border-transparent'
-            }`}
-          >
-            Продавець (PIN)
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode('owner')}
-            className={`flex-1 min-h-11 py-3 text-sm font-medium border-b-2 -mb-px ${
-              mode === 'owner' ? 'text-sq-blue border-sq-blue' : 'text-sq-secondary border-transparent'
-            }`}
-          >
-            Власник
-          </button>
-        </div>
+        <form
+          onSubmit={onSubmit}
+          className="w-full bg-white rounded-card shadow-card p-5 flex flex-col gap-3.5"
+        >
+          <div className="flex gap-1 p-[3px] rounded-xl bg-sq-empty" role="group" aria-label="Хто входить">
+            <button type="button" aria-pressed={mode === 'pin'} onClick={() => setMode('pin')} className={segClass(mode === 'pin')}>
+              Продавець · PIN
+            </button>
+            <button type="button" aria-pressed={mode === 'owner'} onClick={() => setMode('owner')} className={segClass(mode === 'owner')}>
+              Власник
+            </button>
+          </div>
 
-        <form onSubmit={onSubmit} className="bg-white border border-sq-divider rounded-sq p-6 space-y-4">
           {mode === 'pin' ? (
             <>
-              <label className="block text-sm">
-                <span className="text-sq-secondary">Код магазину</span>
+              <label className="flex flex-col gap-1.5">
+                <span className={labelClass}>Код магазину</span>
                 <input
-                  className="pos-field mt-1.5"
+                  className={fieldClass}
                   value={storeSlug}
                   onChange={(e) => setStoreSlug(e.target.value)}
                   autoComplete="organization"
+                  autoCapitalize="none"
                 />
               </label>
-              <label className="block text-sm">
-                <span className="text-sq-secondary">PIN</span>
-                <input
-                  className="pos-field mt-1.5 tracking-[0.35em] text-center text-2xl"
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  inputMode="numeric"
-                  autoFocus
-                />
+              <label className="flex flex-col gap-2">
+                <span className={labelClass}>PIN</span>
+                <span className="relative flex justify-center gap-2.5 py-1.5" data-testid="pin-dots">
+                  {Array.from({ length: pinDots }, (_, i) => (
+                    <span
+                      key={i}
+                      aria-hidden
+                      className={`w-4 h-4 rounded-full ${
+                        i < pin.length ? 'bg-sq-heading' : 'ring-2 ring-inset ring-sq-divider'
+                      }`}
+                    />
+                  ))}
+                  {/* The real field sits over the dots: taps focus it, a
+                      keyboard or a password manager types into it. */}
+                  <input
+                    className="absolute inset-0 w-full opacity-0 cursor-text"
+                    value={pin}
+                    onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    autoFocus
+                  />
+                </span>
               </label>
             </>
           ) : (
             <>
-              <label className="block text-sm">
-                <span className="text-sq-secondary">Email / логін</span>
+              <label className="flex flex-col gap-1.5">
+                <span className={labelClass}>Email / логін</span>
                 <input
-                  className="pos-field mt-1.5"
+                  className={fieldClass}
                   value={login}
                   onChange={(e) => setLogin(e.target.value)}
                   autoComplete="username"
+                  autoCapitalize="none"
                 />
               </label>
-              <label className="block text-sm">
-                <span className="text-sq-secondary">Пароль</span>
+              <label className="flex flex-col gap-1.5">
+                <span className={labelClass}>Пароль</span>
                 <input
                   type="password"
-                  className="pos-field mt-1.5"
+                  className={fieldClass}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="current-password"
@@ -163,7 +179,7 @@ export function LoginPage() {
 
           {error && <div className="rounded-sq bg-red-50 text-red-700 text-sm px-3 py-2">{error}</div>}
 
-          <button type="submit" disabled={loading} className="pos-btn-primary w-full py-3.5">
+          <button type="submit" disabled={loading} className="pos-btn-primary w-full min-h-[52px] rounded-xl text-[17px]">
             {loading ? 'Вхід…' : 'Увійти'}
           </button>
         </form>
@@ -172,19 +188,19 @@ export function LoginPage() {
           <button
             type="button"
             onClick={() => void install()}
-            className="mt-4 w-full min-h-11 py-3 rounded-sq border border-sq-divider bg-white text-sm font-medium text-sq-text"
+            className="w-full min-h-12 rounded-xl bg-white ring-1 ring-sq-divider text-[15px] font-semibold text-sq-text"
             data-testid="install-app"
           >
             Встановити на планшет
           </button>
         )}
         {installHint && !canInstall && isIos() && (
-          <p className="mt-4 text-center text-xs text-sq-muted" data-testid="install-hint-ios">
+          <p className="text-center text-[13px] text-sq-muted" data-testid="install-hint-ios">
             Щоб відкривати як застосунок: «Поділитися» → «На Початковий екран».
           </p>
         )}
 
-        <p className="mt-4 text-center text-xs text-sq-muted">
+        <p className="text-center text-[13px] text-sq-muted">
           Демо: магазин <span className="font-medium">demo</span>, PIN{' '}
           <span className="font-medium">1234</span> · власник{' '}
           <span className="font-medium">owner@demo.shop</span> /{' '}
@@ -194,3 +210,7 @@ export function LoginPage() {
     </div>
   );
 }
+
+const labelClass = 'text-[13px] font-semibold text-sq-secondary';
+const fieldClass =
+  'h-12 rounded-xl bg-sq-empty px-3.5 text-[17px] text-sq-text outline-none border-0 focus:ring-2 focus:ring-sq-blue focus:bg-white transition-colors';

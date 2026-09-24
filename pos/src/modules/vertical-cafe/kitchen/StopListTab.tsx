@@ -13,7 +13,7 @@ import { refreshCatalog } from '../lib/hostPlatform';
 import * as kitchenApi from './kitchenApi';
 import { groupStopList, serverMessage, type StopListEntry } from './lib/kitchen';
 
-export function StopListTab() {
+export function StopListTab({ onCount }: { onCount?: (stopped: number) => void } = {}) {
   const [rows, setRows] = useState<StopListEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
@@ -31,6 +31,11 @@ export function StopListTab() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // The header's «Стоп-лист · 2» follows every switch made here.
+  useEffect(() => {
+    if (rows) onCount?.(rows.filter((r) => r.stop_listed).length);
+  }, [rows, onCount]);
 
   async function toggle(row: StopListEntry): Promise<void> {
     setBusy(row.product_id);
@@ -53,7 +58,7 @@ export function StopListTab() {
   }
 
   return (
-    <div className="flex-1 min-h-0 overflow-auto p-3 space-y-3" data-testid="kitchen-stop-list">
+    <div className="flex-1 min-h-0 overflow-auto px-4 md:px-7 pb-6 space-y-3 max-w-3xl" data-testid="kitchen-stop-list">
       <p className="text-sm text-sq-secondary">
         Чого сьогодні не робимо. Знімається само опівночі; плитка на касі сіріє з підписом «стоп».
       </p>
@@ -64,27 +69,25 @@ export function StopListTab() {
       )}
       {rows === null && <p className="text-sm text-sq-muted">Завантаження…</p>}
       {rows !== null && rows.length === 0 && (
-        <p className="rounded-sq border border-dashed border-sq-divider p-6 text-center text-sm text-sq-muted">
-          Меню порожнє
-        </p>
+        <p className="rounded-card bg-white/60 p-6 text-center text-sm text-sq-muted">Меню порожнє</p>
       )}
-      <ul className="divide-y divide-sq-divider rounded-sq border border-sq-divider bg-white">
+      <ul className="divide-y divide-sq-divider rounded-card bg-white shadow-card overflow-hidden">
         {(rows ?? []).map((row) => {
           const src = assetUrl(row.image_url);
           return (
             <li
               key={row.product_id}
-              className="flex items-center gap-3 px-3 py-2"
+              className="flex items-center gap-3 px-4 py-2.5"
               data-testid={`stop-list-${row.product_id}`}
             >
-              <div className="w-10 h-10 rounded-sq bg-sq-empty overflow-hidden shrink-0">
+              <div className="w-11 h-11 rounded-xl bg-sq-empty overflow-hidden shrink-0">
                 {src && <img src={src} alt="" className="w-full h-full object-cover" />}
               </div>
               <div className="flex-1 min-w-0">
-                <p className={`font-medium truncate ${row.stop_listed ? 'text-sq-muted line-through' : ''}`}>
+                <p className={`text-base font-semibold truncate ${row.stop_listed ? 'text-sq-muted line-through' : 'text-sq-text'}`}>
                   {row.name}
                 </p>
-                {row.stock <= 0 && <p className="text-xs text-sq-secondary">немає — закінчилось</p>}
+                {row.stock <= 0 && <p className="text-[13px] text-sq-muted">немає — закінчилось</p>}
               </div>
               <button
                 type="button"
@@ -94,10 +97,8 @@ export function StopListTab() {
                 disabled={busy === row.product_id}
                 onClick={() => void toggle(row)}
                 data-testid={`stop-list-toggle-${row.product_id}`}
-                className={`min-h-12 min-w-24 rounded-full px-3 text-sm font-semibold border ${
-                  row.stop_listed
-                    ? 'border-red-600 bg-red-600 text-white'
-                    : 'border-sq-divider bg-white text-sq-text'
+                className={`min-h-11 min-w-24 rounded-sq px-3 text-[15px] font-semibold ${
+                  row.stop_listed ? 'bg-sq-danger text-white' : 'bg-sq-empty text-sq-text hover:bg-sq-selected'
                 }`}
               >
                 {row.stop_listed ? 'Стоп' : 'Робимо'}

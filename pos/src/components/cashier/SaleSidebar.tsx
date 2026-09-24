@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Minus, MoreHorizontal, Pencil, Plus, TagLine, Trash2, User } from '../../platform/glyphs';
 import { formatUah } from '../../lib/money';
+import { positionsText } from '../../lib/plural';
 import type { CartDiscount, CartLine } from '@pos/platform';
 import { computeCartDiscountCents } from '@pos/platform';
 import type { PosCustomer } from '../../types';
@@ -276,7 +277,7 @@ export function SaleSidebar({
       <div className="px-5 pt-4 pb-5 bg-sq-sidebar border-t border-sq-divider/70 space-y-2.5">
         <div className="flex justify-between text-[15px] text-sq-secondary">
           <span>
-            {positions} {positions === 1 ? 'позиція' : positions >= 2 && positions <= 4 ? 'позиції' : 'позицій'}
+            {positionsText(positions)}
           </span>
           <span className="tabular-nums">{formatUah(subtotal)}</span>
         </div>

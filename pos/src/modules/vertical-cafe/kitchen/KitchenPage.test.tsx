@@ -148,7 +148,7 @@ describe('KitchenPage', () => {
     const card = await screen.findByTestId('kitchen-order-sale-7');
     expect(within(screen.getByTestId('kitchen-in-work')).getByTestId('kitchen-order-sale-7')).toBe(card);
     expect(within(card).getByTestId('kitchen-order-no')).toHaveTextContent('42');
-    expect(card).toHaveTextContent('2 × Латте');
+    expect(card).toHaveTextContent('2×Латте');
     // The caption already carries the answer («M · вівсяне»): once, not twice.
     expect(card).toHaveTextContent('Латте M · вівсяне');
     expect((card.textContent ?? '').match(/вівсяне/g)).toHaveLength(1);

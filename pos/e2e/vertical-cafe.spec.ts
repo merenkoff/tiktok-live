@@ -273,7 +273,7 @@ async function payCash(page: Page) {
   await page.getByRole('button', { name: /^Оплатити/ }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Оплата' });
   await dialog.getByRole('button', { name: 'Готівка' }).click();
-  await dialog.getByRole('button', { name: 'Готово' }).click();
+  await dialog.getByRole('button', { name: /^Прийняти/ }).click();
 }
 
 test('«як завжди» is one tap, and the counter gets its number', async ({ page }) => {

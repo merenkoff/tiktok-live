@@ -24,7 +24,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore, useOfflineStatus, usePosShell } from '@pos/platform';
-import { TableTile } from '../components/TableTile';
+import { TableTile, ToneLegend } from '../components/TableTile';
 import { hallExtent, seatsOfHall, visibleHalls } from '../lib/hallMap';
 import type { TableSeat } from '../lib/hallMap';
 import { serverMessage, useHallMap } from '../lib/useHallMap';
@@ -40,6 +40,7 @@ export function HallMapPage(): JSX.Element {
   const online = useOfflineStatus((s) => s.online);
   const shell = usePosShell();
   const storeId = useAuthStore((s) => s.auth?.store.id ?? null);
+  const meId = useAuthStore((s) => s.auth?.staff.id ?? null);
   const { halls, bills, now, loading, error, stale, savedAt, refresh } = useHallMap({
     online,
     // The till and the tablet PWA keep a copy; the web shell has no offline
@@ -99,30 +100,39 @@ export function HallMapPage(): JSX.Element {
   }
 
   return (
-    <div className="flex h-full flex-col" data-testid="hall-map">
-      {rooms.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto p-3">
-          {rooms.map((hall) => (
-            <button
-              key={hall.id}
-              type="button"
-              data-testid={`hall-tab-${hall.id}`}
-              onClick={() => setHallId(hall.id)}
-              className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-sm ${
-                current?.id === hall.id
-                  ? 'border-sq-blue bg-sq-blue text-white'
-                  : 'border-sq-divider bg-sq-surface text-sq-text'
-              }`}
-            >
-              {hall.name}
-            </button>
-          ))}
-        </div>
-      )}
+    <div className="flex h-full min-h-0 flex-col bg-sq-bg" data-testid="hall-map">
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-3 px-4 md:px-7 py-4 md:min-h-[72px] shrink-0">
+        <h1 className="text-2xl font-bold text-sq-heading">Столи</h1>
+        {rooms.length > 1 && (
+          <div className="flex gap-1 p-[3px] rounded-xl bg-sq-empty overflow-x-auto max-w-full">
+            {rooms.map((hall) => {
+              const on = current?.id === hall.id;
+              return (
+                <button
+                  key={hall.id}
+                  type="button"
+                  aria-pressed={on}
+                  data-testid={`hall-tab-${hall.id}`}
+                  onClick={() => setHallId(hall.id)}
+                  className={`whitespace-nowrap min-h-[34px] px-4 rounded-[9px] text-[15px] transition-colors ${
+                    on
+                      ? 'bg-white shadow-[0_1px_3px_rgba(0,0,0,.12)] font-semibold text-sq-text'
+                      : 'font-medium text-sq-secondary'
+                  }`}
+                >
+                  {hall.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div className="flex-1" />
+        {current && <ToneLegend />}
+      </header>
 
       {stale && (
         <p
-          className="mx-3 mb-2 rounded-lg bg-amber-500/15 p-2 text-sm"
+          className="mx-4 md:mx-7 mb-3 rounded-sq bg-amber-50 text-amber-900 px-3 py-2 text-sm"
           data-testid="tables-stale"
         >
           Немає звʼязку — зала з памʼяті каси
@@ -131,7 +141,7 @@ export function HallMapPage(): JSX.Element {
       )}
 
       {banner && (
-        <p className="mx-3 mb-2 rounded-lg bg-rose-500/15 p-2 text-sm" data-testid="tables-banner">
+        <p className="mx-4 md:mx-7 mb-3 rounded-sq bg-red-50 text-red-700 px-3 py-2 text-sm" data-testid="tables-banner">
           {banner}
         </p>
       )}
@@ -141,10 +151,10 @@ export function HallMapPage(): JSX.Element {
       )}
 
       {!loading && error && (
-        <div className="p-4">
+        <div className="px-4 md:px-7">
           <div className="sq-card p-6 text-center">
             <p className="text-sm">{error}</p>
-            <button type="button" className="sq-btn-primary mt-3" onClick={() => void refresh()}>
+            <button type="button" className="sq-btn-primary mt-3 px-4 py-2.5" onClick={() => void refresh()}>
               Повторити
             </button>
           </div>
@@ -152,7 +162,7 @@ export function HallMapPage(): JSX.Element {
       )}
 
       {!loading && !error && rooms.length === 0 && (
-        <div className="p-4">
+        <div className="px-4 md:px-7">
           <div className="sq-card p-6 text-center" data-testid="tables-empty">
             <p className="text-lg font-semibold">Зали ще не створені</p>
             <p className="mt-1 text-sm text-sq-muted">
@@ -164,10 +174,12 @@ export function HallMapPage(): JSX.Element {
 
       {current && (
         <div
-          className="grid flex-1 content-start gap-2 overflow-auto p-3"
+          className="grid flex-1 content-start gap-3 lg:gap-5 overflow-auto px-4 md:px-7 pt-1 pb-6"
           style={{
-            gridTemplateColumns: `repeat(${extent.cols}, minmax(4.5rem, 1fr))`,
-            gridAutoRows: 'minmax(4.5rem, auto)',
+            // Cells, not tables: a table spans the owner's width × height of
+            // them, so a two-by-two table lands near the board's 200 × 132.
+            gridTemplateColumns: `repeat(${extent.cols}, minmax(2.5rem, 1fr))`,
+            gridAutoRows: 'minmax(3.75rem, auto)',
           }}
         >
           {seats.map((seat) => (
@@ -175,6 +187,7 @@ export function HallMapPage(): JSX.Element {
               key={seat.table.id}
               seat={seat}
               now={now}
+              meId={meId}
               disabled={busy}
               onOpen={(s) => void open(s)}
             />

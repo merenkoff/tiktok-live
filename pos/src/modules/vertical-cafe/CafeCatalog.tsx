@@ -49,6 +49,7 @@ const BarcodeScanner = lazy(() =>
 );
 import { HostTooOldError, missingHostApi } from './lib/hostPlatform';
 import { isStopListed } from './lib/stopList';
+import { stationOf } from './lib/station';
 
 export default function CafeCatalog({ active, stockEpoch }: SalesCatalogProps) {
   // Throws into the host's `CatalogBoundary`, which falls back to the bundled
@@ -223,8 +224,13 @@ function CafeCatalogBody({ active, stockEpoch }: SalesCatalogProps) {
           variantLabel={sizeLabel}
           initialVariantId={sheet.initialVariantId}
           initialModifierIds={defaultModifierIds(groupsOf(sheet.variants))}
-          onAdd={({ item, modifiers, note }) => {
-            addItem(item, 1, { modifiers, note });
+          notePlaceholder={
+            stationOf(sheet.variants[0], catalog.catalogBarTags) === 'bar'
+              ? 'Коментар для бару'
+              : 'Коментар для кухні'
+          }
+          onAdd={({ item, modifiers, note, quantity }) => {
+            addItem(item, quantity, { modifiers, note });
             setSheet(null);
           }}
           onClose={() => setSheet(null)}

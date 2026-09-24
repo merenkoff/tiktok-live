@@ -28,7 +28,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BookMarked, ChevronDown, Search, Store, X } from '@pos/platform/ui';
+import { BookMarked, ChevronDown, Flower2, Search, Store, X } from '@pos/platform/ui';
 import {
   api,
   buildPriceTags,
@@ -259,17 +259,20 @@ export function FloristBench({
     <div className="fixed inset-0 z-40 bg-white flex flex-col" data-testid="florist-bench">
       <ScanWedge active={!picker && !budgetOpen} onScan={(code) => void handleBarcode(code)} />
 
-      <header className="px-4 py-3 border-b border-sq-divider flex items-center gap-3 shrink-0">
-        <div className="min-w-0">
-          <h2 className="font-semibold text-sq-text truncate">{card.product_name}</h2>
-          <p className={`text-xs ${notice ? 'text-amber-700' : 'text-sq-secondary'}`}>
-            {notice ??
-              (bench.totals.stemCount > 0
-                ? `${bench.totals.stemCount} у букеті`
-                : 'Збираємо букет')}
-          </p>
+      <header className="min-h-[72px] pl-6 pr-5 py-2 flex items-center gap-6 shrink-0 shadow-[0_1px_0_#E6E8EC]">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <Flower2 size={24} />
+          <div className="min-w-0">
+            <h2 className="text-xl font-bold text-sq-heading truncate">{card.product_name}</h2>
+            <p className={`text-[13px] truncate ${notice ? 'text-amber-700' : 'text-sq-muted'}`}>
+              {notice ??
+                (bench.totals.stemCount > 0
+                  ? `${bench.totals.stemCount} у букеті`
+                  : 'Збираємо букет')}
+            </p>
+          </div>
         </div>
-        <div className="hidden lg:block w-80 xl:w-96 ml-auto">
+        <div className="hidden lg:block w-[380px] shrink-0">
           <BudgetBar
             totalCents={bench.totals.totalCents}
             budgetCents={bench.budgetCents}
@@ -283,7 +286,7 @@ export function FloristBench({
         <button
           type="button"
           onClick={onClose}
-          className="min-h-11 min-w-11 grid place-items-center rounded-sq text-sq-secondary hover:text-sq-text lg:ml-0 ml-auto shrink-0"
+          className="w-11 h-11 grid place-items-center rounded-full text-sq-secondary hover:bg-sq-empty shrink-0"
           aria-label="Закрити"
         >
           <X size={20} />
@@ -292,15 +295,15 @@ export function FloristBench({
 
       <div className="flex-1 flex min-h-0">
         <section className="flex-1 flex flex-col min-w-0 min-h-0">
-          <div className="px-3 pt-3 pb-2 space-y-2 border-b border-sq-divider shrink-0">
+          <div className="px-5 pt-3.5 space-y-2.5 shrink-0">
             <div className="relative">
               <Search
                 size={20}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-sq-muted pointer-events-none"
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sq-muted pointer-events-none"
               />
               <input
-                className="pos-field text-sm !pl-10 !bg-sq-bg !border-sq-divider"
-                placeholder="Пошук"
+                className="w-full h-11 rounded-xl bg-sq-empty pl-11 pr-3.5 text-[15px] text-sq-text outline-none border-0 focus:ring-2 focus:ring-sq-blue focus:bg-white placeholder:text-sq-muted"
+                placeholder="Пошук стебла"
                 value={catalog.query}
                 onChange={(e) => catalog.setQuery(e.target.value)}
               />
@@ -328,10 +331,13 @@ export function FloristBench({
           />
         </section>
 
-        <aside className="hidden lg:flex w-[22rem] xl:w-[26rem] shrink-0 flex-col border-l border-sq-divider bg-sq-sidebar min-h-0">
-          <h3 className="px-4 py-3 text-sm font-semibold text-sq-text border-b border-sq-divider bg-white shrink-0">
-            Склад букета
-          </h3>
+        <aside className="hidden lg:flex w-[22rem] xl:w-[25rem] shrink-0 flex-col bg-sq-sidebar shadow-[-1px_0_0_#E6E8EC] min-h-0">
+          <div className="px-5 pt-4 pb-2 flex items-baseline justify-between shrink-0">
+            <h3 className="text-[17px] font-bold text-sq-heading">Склад букета</h3>
+            {bench.stems.length > 0 && (
+              <span className="text-[13px] text-sq-muted">{positionsWord(bench.stems.length)}</span>
+            )}
+          </div>
           <CompositionPanel
             stems={bench.stems}
             totals={bench.totals}
@@ -348,6 +354,7 @@ export function FloristBench({
             targetName={selectedName}
             onDigit={bench.typeDigit}
             onBackspace={bench.backspace}
+            onClear={bench.clearTyped}
           />
         </aside>
       </div>
@@ -355,7 +362,7 @@ export function FloristBench({
       {/* Tablet: the summary lives in the footer bar, because the sheet that
           holds the composition is closed most of the time and the price is the
           one thing that may never be out of sight. */}
-      <div className="lg:hidden border-t border-sq-divider px-4 py-2 bg-white shrink-0 space-y-2">
+      <div className="lg:hidden px-4 py-2.5 bg-white shrink-0 space-y-2 shadow-[0_-1px_0_#E6E8EC]">
         <BudgetBar
           totalCents={bench.totals.totalCents}
           budgetCents={bench.budgetCents}
@@ -368,14 +375,14 @@ export function FloristBench({
         <button
           type="button"
           onClick={() => setSheetOpen(true)}
-          className="w-full min-h-12 flex items-center justify-between gap-3 rounded-sq border border-sq-divider px-3"
+          className="w-full min-h-12 flex items-center justify-between gap-3 rounded-xl bg-sq-sidebar px-4"
           data-testid="bench-open-sheet"
         >
-          <span className="text-sm text-sq-secondary">
-            Склад · {bench.totals.stemCount || '—'}
+          <span className="text-[15px] font-semibold text-sq-text">
+            Склад букета · {bench.totals.stemCount || '—'}
           </span>
           <span className="flex items-center gap-2">
-            <span className="text-lg font-semibold tabular-nums" data-testid="bench-total-mobile">
+            <span className="text-lg font-bold tabular-nums text-sq-heading" data-testid="bench-total-mobile">
               {formatUah(bench.totals.totalCents)}
             </span>
             <ChevronDown size={20} className="text-sq-muted rotate-180" />
@@ -383,12 +390,8 @@ export function FloristBench({
         </button>
       </div>
 
-      <footer className="border-t border-sq-divider px-4 py-3 flex items-center gap-3 shrink-0 bg-white">
-        <button
-          type="button"
-          onClick={onClose}
-          className="min-h-12 px-4 rounded-sq border border-sq-divider text-sq-text"
-        >
+      <footer className="min-h-[76px] px-5 py-3 flex items-center gap-2.5 shrink-0 bg-white shadow-[0_-1px_0_#E6E8EC]">
+        <button type="button" onClick={onClose} className={quietClass}>
           Скасувати
         </button>
         <button
@@ -402,7 +405,7 @@ export function FloristBench({
             setShowcaseError(null);
             setShowcase({ uuid: crypto.randomUUID() });
           }}
-          className="min-h-12 px-4 rounded-sq border border-sq-divider text-sq-text disabled:opacity-50 flex items-center gap-2"
+          className={quietClass}
           data-testid="bench-to-showcase"
         >
           <Store size={24} />
@@ -413,11 +416,11 @@ export function FloristBench({
           disabled={empty || !online}
           title={!online ? 'Потрібна мережа' : undefined}
           onClick={() => setRecipeOpen(true)}
-          className="min-h-12 px-4 rounded-sq border border-sq-divider text-sq-text disabled:opacity-50 flex items-center gap-2"
+          className={quietClass}
           data-testid="bench-save-recipe"
         >
           <BookMarked size={20} />
-          <span className="hidden lg:inline">Рецепт</span>
+          <span className="hidden lg:inline">Зберегти рецепт</span>
         </button>
         <button
           type="button"
@@ -425,7 +428,7 @@ export function FloristBench({
           onClick={() =>
             onDone({ unit_price_cents: bench.totals.totalCents, components: bench.components })
           }
-          className="sq-btn-primary min-h-12 flex-1"
+          className="pos-btn-primary min-h-[52px] rounded-xl px-[22px] text-[17px] flex-1"
           data-testid="bench-add-to-cart"
         >
           Додати в чек · {formatUah(bench.totals.totalCents)}
@@ -436,14 +439,15 @@ export function FloristBench({
         <div className="fixed inset-0 z-50 lg:hidden">
           <button
             type="button"
-            className="absolute inset-0 bg-black/40"
+            className="absolute inset-0 bg-[rgba(28,32,38,.32)]"
             aria-label="Закрити склад"
             onClick={() => setSheetOpen(false)}
           />
-          <div className="absolute inset-x-0 bottom-0 max-h-[85dvh] bg-sq-sidebar rounded-t-sq flex flex-col animate-fade-up">
-            <div className="px-4 py-3 border-b border-sq-divider bg-white shrink-0">
+          <div className="absolute inset-x-0 bottom-0 max-h-[88dvh] bg-sq-sidebar rounded-t-card shadow-[0_-12px_40px_rgba(0,20,60,.18)] flex flex-col animate-fade-up overflow-hidden">
+            <div className="px-5 pt-2 pb-3 bg-white shrink-0 shadow-[0_1px_0_#E6E8EC]">
+              <div aria-hidden className="w-10 h-[5px] rounded-full bg-sq-divider mx-auto mb-2" />
               <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-sq-text">Склад букета</h3>
+                <h3 className="text-[17px] font-bold text-sq-heading">Склад букета</h3>
                 <button
                   type="button"
                   onClick={() => setSheetOpen(false)}
@@ -481,6 +485,7 @@ export function FloristBench({
               targetName={selectedName}
               onDigit={bench.typeDigit}
               onBackspace={bench.backspace}
+              onClear={bench.clearTyped}
             />
           </div>
         </div>
@@ -557,10 +562,10 @@ function BudgetDialog({
   const [text, setText] = useState(valueCents != null ? String(valueCents / 100) : '');
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 grid place-items-end md:place-items-center p-4">
-      <div className="bg-white rounded-sq w-full max-w-sm overflow-hidden animate-fade-up shadow-lg">
-        <div className="px-4 py-3.5 border-b border-sq-divider flex items-center justify-between gap-3">
-          <h3 className="font-semibold text-sq-text">Бюджет клієнта</h3>
+    <div className="fixed inset-0 z-50 bg-[rgba(28,32,38,.32)] grid place-items-end md:place-items-center p-4">
+      <div className="bg-white rounded-card w-full max-w-sm overflow-hidden animate-fade-up shadow-[0_24px_60px_rgba(0,20,60,.28)]">
+        <div className="px-5 pt-4 pb-2 flex items-center justify-between gap-3">
+          <h3 className="text-[19px] font-bold text-sq-heading">Бюджет клієнта</h3>
           <button
             type="button"
             onClick={onClose}
@@ -570,9 +575,9 @@ function BudgetDialog({
             <X size={20} />
           </button>
         </div>
-        <div className="p-4 space-y-3">
+        <div className="px-5 pb-5 space-y-3">
           <input
-            className="pos-field text-lg"
+            className="w-full h-12 rounded-[10px] bg-sq-empty px-3.5 text-lg font-semibold tabular-nums text-sq-text outline-none border-0 focus:ring-2 focus:ring-sq-blue focus:bg-white"
             inputMode="decimal"
             autoFocus
             placeholder="1500"
@@ -590,7 +595,7 @@ function BudgetDialog({
               <button
                 type="button"
                 onClick={() => onSubmit(null)}
-                className="min-h-12 px-4 rounded-sq border border-sq-divider text-sq-text"
+                className="min-h-12 px-4 rounded-xl bg-white ring-1 ring-sq-divider font-semibold text-sq-text"
               >
                 Прибрати
               </button>
@@ -598,7 +603,7 @@ function BudgetDialog({
             <button
               type="button"
               onClick={() => onSubmit(uahInputToCents(text) || null)}
-              className="sq-btn-primary min-h-12 flex-1"
+              className="pos-btn-primary min-h-12 rounded-xl flex-1"
             >
               Готово
             </button>
@@ -607,4 +612,17 @@ function BudgetDialog({
       </div>
     </div>
   );
+}
+
+const quietClass =
+  'min-h-[52px] px-[18px] rounded-xl bg-white ring-1 ring-sq-divider text-base font-semibold text-sq-text inline-flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-sq-sidebar';
+
+/** «3 позиції» — how many kinds of stem, not how many stems. */
+function positionsWord(n: number): string {
+  const tens = n % 100;
+  const units = n % 10;
+  if (tens >= 11 && tens <= 14) return `${n} позицій`;
+  if (units === 1) return `${n} позиція`;
+  if (units >= 2 && units <= 4) return `${n} позиції`;
+  return `${n} позицій`;
 }

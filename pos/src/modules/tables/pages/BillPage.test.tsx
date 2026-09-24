@@ -481,7 +481,7 @@ describe('BillPage', () => {
     try {
       renderWithProviders(<BillPage />, { route: '/tables/90' });
       const bar = await screen.findByTestId('bill-bar');
-      expect(bar).toHaveTextContent('Чернетка · 1 поз.');
+      expect(bar).toHaveTextContent('Чернетка · 1 позиція');
       expect(screen.getByTestId('bill-bar-fire')).toHaveTextContent('На кухню · 1');
       expect(screen.queryByTestId('bill-owed')).toBeNull();
       await userEvent.click(screen.getByTestId('bill-bar-open'));

@@ -195,8 +195,8 @@ export function MenuCatalog({
           variantLabel={sizeLabel}
           initialVariantId={sheet.initialVariantId}
           initialModifierIds={defaultModifierIds(groupsOf(sheet.variants))}
-          onAdd={({ item, modifiers, note }) => {
-            onAdd({ item, modifiers, note });
+          onAdd={({ item, modifiers, note, quantity }) => {
+            onAdd({ item, modifiers, note, quantity });
             setSheet(null);
           }}
           onClose={() => setSheet(null)}

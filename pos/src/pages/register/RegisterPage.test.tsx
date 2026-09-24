@@ -180,7 +180,7 @@ describe('RegisterPage success screen — the order number (К3d)', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /^Оплатити/ })[0]);
     const dialog = await screen.findByRole('dialog', { name: 'Оплата' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Готівка' }));
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Готово' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Прийняти/ }));
   }
 
   it('shows the till’s own «К1» with its caption on a sale queued offline', async () => {
@@ -195,7 +195,7 @@ describe('RegisterPage success screen — the order number (К3d)', () => {
     await payCash();
     expect(await screen.findByTestId('order-no')).toHaveTextContent('К1');
     expect(screen.getByTestId('order-no-local')).toHaveTextContent('сервер призначить свій');
-    expect(screen.getByText('Чек OFF-ABCD1234')).toBeInTheDocument();
+    expect(screen.getByText(/^Чек OFF-ABCD1234/)).toBeInTheDocument();
   });
 
   it('shows the server’s number bare, with no caption, once there is one', async () => {
@@ -225,7 +225,7 @@ describe('RegisterPage success screen — the order number (К3d)', () => {
     // The receipt number first: the sell screen has its own «Чек» heading too.
     expect(await screen.findByText('OFF-ABCD1234')).toBeInTheDocument();
     expect(screen.queryByTestId('order-no')).toBeNull();
-    expect(screen.getByText('Чек')).toBeInTheDocument();
+    expect(screen.getByText('Оплачено')).toBeInTheDocument();
   });
 });
 
@@ -242,7 +242,7 @@ describe('RegisterPage success screen — the kitchen ticket (К3e)', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /^Оплатити/ })[0]);
     const dialog = await screen.findByRole('dialog', { name: 'Оплата' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Готівка' }));
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Готово' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Прийняти/ }));
   }
 
   it('sends a café sale to the kitchen once, the moment it is rung, and offers to print again', async () => {

@@ -17,12 +17,14 @@
  * shells, so only the content is drawn here.
  */
 
-import { useState } from 'react';
-import { WifiOff } from '@pos/platform/ui';
+import { useEffect, useState } from 'react';
+import { ChefHat, WifiOff } from '@pos/platform/ui';
 import { useOfflineStatus, useVertical } from '@pos/platform';
 import { HostTooOldError, missingHostApi } from '../lib/hostPlatform';
 import { OrdersTab } from './OrdersTab';
 import { StopListTab } from './StopListTab';
+import * as kitchenApi from './kitchenApi';
+import { groupStopList } from './lib/kitchen';
 
 type Tab = 'orders' | 'stop';
 
@@ -38,6 +40,22 @@ function KitchenBody() {
   const vertical = useVertical();
   const online = useOfflineStatus((s) => s.online);
   const [tab, setTab] = useState<Tab>('orders');
+  // «Стоп-лист · 2» on the tab, read once here; the tab itself keeps it current.
+  const [stopped, setStopped] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!online || vertical.id !== 'cafe') return;
+    let cancelled = false;
+    void kitchenApi
+      .menu()
+      .then((menu) => {
+        if (!cancelled) setStopped(groupStopList(menu).filter((r) => r.stop_listed).length);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [online, vertical.id]);
 
   if (vertical.id !== 'cafe') {
     return (
@@ -51,20 +69,25 @@ function KitchenBody() {
   }
 
   return (
-    <div className="flex flex-col h-full min-h-0 text-sq-text" data-testid="kitchen-board">
-      <div className="flex items-center gap-2 px-3 pt-3 pb-2 border-b border-sq-divider shrink-0">
-        <h1 className="text-lg font-semibold mr-2">Кухня</h1>
-        <TabButton active={tab === 'orders'} onClick={() => setTab('orders')} testId="kitchen-tab-orders">
-          Замовлення
-        </TabButton>
-        <TabButton active={tab === 'stop'} onClick={() => setTab('stop')} testId="kitchen-tab-stop">
-          Стоп-лист
-        </TabButton>
+    <div className="flex flex-col h-full min-h-0 bg-sq-bg text-sq-text" data-testid="kitchen-board">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 md:px-7 py-4 md:min-h-[72px] shrink-0">
+        <div className="flex items-center gap-3">
+          <ChefHat size={24} />
+          <h1 className="text-2xl font-bold text-sq-heading">Кухня</h1>
+        </div>
+        <div className="flex gap-1 p-[3px] rounded-xl bg-sq-empty">
+          <TabButton active={tab === 'orders'} onClick={() => setTab('orders')} testId="kitchen-tab-orders">
+            Замовлення
+          </TabButton>
+          <TabButton active={tab === 'stop'} onClick={() => setTab('stop')} testId="kitchen-tab-stop">
+            {stopped ? `Стоп-лист · ${stopped}` : 'Стоп-лист'}
+          </TabButton>
+        </div>
       </div>
 
       {!online ? (
         <div
-          className="m-4 rounded-sq border border-dashed border-sq-divider p-8 text-center"
+          className="mx-4 md:mx-7 rounded-card bg-white shadow-card p-8 text-center"
           data-testid="kitchen-offline"
         >
           <WifiOff size={48} className="mx-auto text-sq-muted" />
@@ -76,7 +99,7 @@ function KitchenBody() {
       ) : tab === 'orders' ? (
         <OrdersTab />
       ) : (
-        <StopListTab />
+        <StopListTab onCount={setStopped} />
       )}
     </div>
   );
@@ -99,8 +122,10 @@ function TabButton({
       onClick={onClick}
       aria-pressed={active}
       data-testid={testId}
-      className={`min-h-11 rounded-full px-4 text-sm font-medium border ${
-        active ? 'border-sq-blue bg-sq-blue text-white' : 'border-sq-divider bg-white text-sq-text'
+      className={`min-h-[38px] rounded-[9px] px-4 text-[15px] transition-colors ${
+        active
+          ? 'bg-white shadow-[0_1px_3px_rgba(0,0,0,.12)] font-semibold text-sq-text'
+          : 'font-medium text-sq-secondary'
       }`}
     >
       {children}

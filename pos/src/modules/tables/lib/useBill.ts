@@ -213,7 +213,7 @@ export function useBill(
         write: () =>
           tablesApi.addLine(billId, {
             variant_id: line.variant_id,
-            quantity: 1,
+            quantity: line.quantity,
             modifiers: line.modifiers,
             note: line.note,
           }),

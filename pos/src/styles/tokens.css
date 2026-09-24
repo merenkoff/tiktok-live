@@ -27,6 +27,11 @@
   --sq-muted-rgb: 142 145 150;
   --sq-divider-rgb: 223 227 232;
   --sq-empty-rgb: 236 238 240;
+  /* Status hues from the glyph set: «Оплачено», change due, a free table. */
+  --sq-success-rgb: 67 174 89;
+  --sq-success-ink-rgb: 47 125 64;
+  --sq-danger-rgb: 244 56 106;
+  --sq-warning-rgb: 244 137 31;
 
   --pos-primary: rgb(var(--sq-blue-rgb));
   --pos-primary-press: rgb(var(--sq-blue-press-rgb));

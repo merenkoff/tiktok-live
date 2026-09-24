@@ -26,6 +26,8 @@ export interface DishChoice {
   item: CatalogItem;
   modifiers: number[];
   note: string;
+  /** From the sheet's stepper; a plain tap is one. */
+  quantity?: number;
 }
 
 /** One tap that has not been answered yet. */
@@ -94,7 +96,7 @@ export function pendingLine(choice: DishChoice, token: string): PendingLine {
     product_id: item.product_id,
     product_name: item.product_name,
     variant_label: item.label,
-    quantity: 1,
+    quantity: choice.quantity ?? 1,
     modifiers: [...modifiers],
     modifierNames: resolved.error ? [] : resolved.names,
     note,
