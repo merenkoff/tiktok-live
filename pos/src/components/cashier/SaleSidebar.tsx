@@ -10,7 +10,7 @@ import type { CartDiscount, CartLine } from '@pos/platform';
 import { computeCartDiscountCents } from '@pos/platform';
 import type { PosCustomer } from '../../types';
 import { CustomerPicker } from './CustomerPicker';
-import { uahInputToCents } from '../../lib/money';
+import { CartDiscountSheet } from './CartDiscountSheet';
 import { useDragScroll } from '../../hooks/useDragScroll';
 
 interface Props {
@@ -362,93 +362,5 @@ export function SaleSidebar({
         />
       )}
     </aside>
-  );
-}
-
-function CartDiscountSheet({
-  current,
-  onClose,
-  onApply,
-}: {
-  current: CartDiscount | null;
-  onClose: () => void;
-  onApply: (d: CartDiscount | null) => void;
-}) {
-  const [type, setType] = useState<'percent' | 'fixed'>(current?.type ?? 'percent');
-  const [value, setValue] = useState(
-    current
-      ? current.type === 'percent'
-        ? String(current.value)
-        : (current.value / 100).toFixed(2)
-      : ''
-  );
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      <button type="button" className="absolute inset-0 bg-black/40" onClick={onClose} aria-label="Закрити" />
-      <div className="relative w-full max-w-sm bg-white rounded-t-sq sm:rounded-sq p-4 space-y-3 shadow-lg">
-        <p className="font-semibold">Знижка на чек</p>
-        <p className="text-xs text-sq-secondary">
-          Лише на позиції без товарної знижки
-        </p>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            className={`flex-1 py-2 rounded-sq text-sm font-medium border ${
-              type === 'percent' ? 'border-sq-blue text-sq-blue bg-sq-blue/5' : 'border-sq-divider'
-            }`}
-            onClick={() => setType('percent')}
-          >
-            %
-          </button>
-          <button
-            type="button"
-            className={`flex-1 py-2 rounded-sq text-sm font-medium border ${
-              type === 'fixed' ? 'border-sq-blue text-sq-blue bg-sq-blue/5' : 'border-sq-divider'
-            }`}
-            onClick={() => setType('fixed')}
-          >
-            ₴
-          </button>
-        </div>
-        <input
-          className="pos-field text-sm"
-          inputMode="decimal"
-          placeholder={type === 'percent' ? 'Напр. 10' : 'Сума, грн'}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-        />
-        <div className="flex gap-2">
-          <button
-            type="button"
-            className="flex-1 py-2.5 text-sm text-sq-secondary"
-            onClick={() => {
-              onApply(null);
-              onClose();
-            }}
-          >
-            Скинути
-          </button>
-          <button
-            type="button"
-            className="pos-btn-primary flex-[2] py-2.5 text-sm"
-            onClick={() => {
-              if (type === 'percent') {
-                const pct = Math.round(Number(value));
-                if (!Number.isFinite(pct) || pct <= 0) return;
-                onApply({ type: 'percent', value: Math.min(100, pct) });
-              } else {
-                const cents = uahInputToCents(value);
-                if (cents <= 0) return;
-                onApply({ type: 'fixed', value: cents });
-              }
-              onClose();
-            }}
-          >
-            Застосувати
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }
