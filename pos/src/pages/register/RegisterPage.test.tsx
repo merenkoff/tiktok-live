@@ -288,3 +288,55 @@ describe('RegisterPage success screen — the kitchen ticket (К3e)', () => {
     expect(printKitchenTickets).not.toHaveBeenCalled();
   });
 });
+
+describe('RegisterPage — clearing the cart', () => {
+  it('asks in its own sheet, never `window.confirm`, and empties the receipt', async () => {
+    // The desktop till's webview does not implement `window.confirm` and
+    // answers «no» without drawing anything, so «Очистити кошик» used to do
+    // nothing there.
+    const nativeConfirm = vi.spyOn(window, 'confirm');
+    signIn('clothing');
+    useCartStore.getState().restore({
+      lines: [
+        {
+          uid: '1',
+          variant_id: 1,
+          product_name: 'Футболка',
+          variant_label: 'M',
+          unit: 'шт',
+          unit_price_cents: 69000,
+          quantity: 2,
+          max_quantity: 9,
+        },
+      ],
+    });
+    renderWithProviders(<RegisterPage />, { shell: 'cashier' });
+    expect(await screen.findByPlaceholderText(/^Пошук/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Меню чека' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Очистити кошик' }));
+    const sheet = await screen.findByTestId('confirm-sheet');
+    expect(sheet).toHaveTextContent('Очистити чек?');
+    expect(sheet).toHaveTextContent('1 позиція буде прибрано з чека.');
+
+    fireEvent.click(screen.getByTestId('confirm-sheet-ok'));
+    expect(useCartStore.getState().lines).toHaveLength(0);
+    expect(screen.queryByTestId('confirm-sheet')).toBeNull();
+    expect(nativeConfirm).not.toHaveBeenCalled();
+  });
+
+  it('keeps the receipt when the cashier changes their mind', async () => {
+    signIn('clothing');
+    useCartStore.getState().restore({
+      lines: [
+        { uid: '1', variant_id: 1, product_name: 'Футболка', variant_label: 'M', unit: 'шт', unit_price_cents: 69000, quantity: 1, max_quantity: 9 },
+      ],
+    });
+    renderWithProviders(<RegisterPage />, { shell: 'cashier' });
+    expect(await screen.findByPlaceholderText(/^Пошук/)).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Меню чека' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Очистити кошик' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Скасувати' }));
+    expect(useCartStore.getState().lines).toHaveLength(1);
+  });
+});
