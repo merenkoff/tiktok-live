@@ -19,6 +19,8 @@ import { getMeta } from '../../offline/db';
 import { printKitchenTickets } from '../../offline/kitchenTickets';
 import type { PaymentMethod, SaleDetail, SalePaymentInput } from '../../types';
 import { CheckoutModal } from '../../components/CheckoutModal';
+import { ConfirmSheet } from '../../components/cashier/ConfirmSheet';
+import { positionsText } from '../../lib/plural';
 import { SaleSidebar } from '../../components/cashier/SaleSidebar';
 import { MobileCartSheet } from '../../components/cashier/MobileCartSheet';
 import { ParkCartSheet } from '../../components/cashier/ParkCartSheet';
@@ -104,6 +106,8 @@ export function RegisterPage() {
   const [preorderError, setPreorderError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
   const [success, setSuccess] = useState<SaleDetail | null>(null);
+  // «Очистити кошик» asks in the till's own sheet — see `ConfirmSheet` for why not `confirm()`.
+  const [clearAsk, setClearAsk] = useState(false);
   /** The kitchen ticket's fate for this sale (К3e): status text, and whether a station printer exists. */
   const [kitchenStatus, setKitchenStatus] = useState<string | null>(null);
   const [kitchenPrinter, setKitchenPrinter] = useState(false);
@@ -813,7 +817,7 @@ export function RegisterPage() {
               onSetQty={setQty}
               onRemove={remove}
               onClear={() => {
-                if (lines.length && confirm('Очистити кошик?')) clear();
+                if (lines.length) setClearAsk(true);
               }}
               onCharge={() => setCheckoutOpen(true)}
               onSaveBasket={openPark}
@@ -844,6 +848,20 @@ export function RegisterPage() {
             Сплатити
           </button>
         </div>
+
+      {clearAsk && (
+        <ConfirmSheet
+          title="Очистити чек?"
+          message={`${positionsText(lines.length)} буде прибрано з чека.`}
+          confirmLabel="Очистити"
+          tone="danger"
+          onConfirm={() => {
+            clear();
+            setClearAsk(false);
+          }}
+          onCancel={() => setClearAsk(false)}
+        />
+      )}
 
       {checkoutOpen && (
         <CheckoutModal
