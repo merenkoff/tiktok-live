@@ -12,7 +12,7 @@ import { Check, ChevronRight, MessageCircle, ScanLine, Store } from '../componen
 import { useScrollToHash } from '../hooks/useScrollToHash';
 import { PRODUCT, PRICING } from '../lib/productFacts';
 import type { FaqItem } from '../lib/faqJsonLd';
-import posProducts from '../assets/screenshots/pos-products.png';
+import posProducts from '../assets/screenshots/clothing-products.png';
 
 const HANDOVER_ARTICLE = '/dovidka/zmina-prro-zamina-kasy';
 
