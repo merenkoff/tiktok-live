@@ -4,11 +4,12 @@
 
 import { useEffect, useState } from 'react';
 import { Minus, Pencil, Plus, TagLine, Trash2, User, X } from '../../platform/glyphs';
-import { formatUah, uahInputToCents } from '../../lib/money';
+import { formatUah } from '../../lib/money';
 import type { CartDiscount, CartLine } from '@pos/platform';
 import { computeCartDiscountCents } from '@pos/platform';
 import type { PosCustomer } from '../../types';
 import { CustomerPicker } from './CustomerPicker';
+import { CartDiscountSheet } from './CartDiscountSheet';
 import { useDragScroll } from '../../hooks/useDragScroll';
 
 interface Props {
@@ -254,106 +255,12 @@ export function MobileCartSheet({
         />
       )}
       {discountOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center">
-          <button
-            type="button"
-            className="absolute inset-0 bg-[rgba(28,32,38,.32)]"
-            aria-label="Закрити"
-            onClick={() => setDiscountOpen(false)}
-          />
-          <MobileDiscountForm
-            current={cartDiscount}
-            onClose={() => setDiscountOpen(false)}
-            onApply={onSetCartDiscount}
-          />
-        </div>
+        <CartDiscountSheet
+          current={cartDiscount}
+          onClose={() => setDiscountOpen(false)}
+          onApply={onSetCartDiscount}
+        />
       )}
-    </div>
-  );
-}
-
-function MobileDiscountForm({
-  current,
-  onClose,
-  onApply,
-}: {
-  current: CartDiscount | null;
-  onClose: () => void;
-  onApply: (d: CartDiscount | null) => void;
-}) {
-  const [type, setType] = useState<'percent' | 'fixed'>(current?.type ?? 'percent');
-  const [value, setValue] = useState(
-    current
-      ? current.type === 'percent'
-        ? String(current.value)
-        : (current.value / 100).toFixed(2)
-      : ''
-  );
-
-  return (
-    <div
-      role="dialog"
-      aria-label="Знижка на чек"
-      className="relative w-full bg-white rounded-t-card shadow-[0_-12px_40px_rgba(0,20,60,.18)] px-5 pb-5 space-y-4 animate-fade-up"
-    >
-      <div aria-hidden className="w-10 h-[5px] rounded-full bg-sq-divider mx-auto mt-2" />
-      <p className="text-[19px] font-bold text-sq-heading">Знижка на чек</p>
-      <div className="flex gap-1 p-[3px] rounded-xl bg-sq-empty" role="group" aria-label="Тип знижки">
-        {(['percent', 'fixed'] as const).map((t) => {
-          const on = type === t;
-          return (
-            <button
-              key={t}
-              type="button"
-              aria-pressed={on}
-              className={`flex-1 min-h-11 rounded-[9px] text-[17px] transition-colors ${
-                on
-                  ? 'bg-white shadow-[0_1px_3px_rgba(0,0,0,.12)] font-semibold text-sq-text'
-                  : 'font-medium text-sq-secondary'
-              }`}
-              onClick={() => setType(t)}
-            >
-              {t === 'percent' ? '%' : '₴'}
-            </button>
-          );
-        })}
-      </div>
-      <input
-        className="pos-field tabular-nums"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder={type === 'percent' ? '%' : 'грн'}
-      />
-      <div className="flex gap-2.5">
-        <button
-          type="button"
-          className="flex-1 min-h-[52px] rounded-xl bg-white ring-1 ring-sq-divider text-[16px] font-semibold text-sq-text"
-          onClick={() => {
-            onApply(null);
-            onClose();
-          }}
-        >
-          Скинути
-        </button>
-        <button
-          type="button"
-          className="pos-btn-primary flex-[2] min-h-[52px] rounded-xl text-[17px]"
-          onClick={() => {
-            if (type === 'percent') {
-              const pct = Math.round(Number(value));
-              if (!Number.isFinite(pct) || pct <= 0) return;
-              onApply({ type: 'percent', value: Math.min(100, pct) });
-            } else {
-              const cents = uahInputToCents(value);
-              if (cents <= 0) return;
-              onApply({ type: 'fixed', value: cents });
-            }
-            onClose();
-          }}
-        >
-          Застосувати
-        </button>
-      </div>
     </div>
   );
 }
