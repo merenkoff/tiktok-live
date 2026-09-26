@@ -87,6 +87,39 @@ describe('RegisterPage as the sell-screen frame', () => {
     expect(await screen.findByText('КВІТКОВИЙ КАТАЛОГ')).toBeInTheDocument();
   });
 
+  it('never arms the scanner wedge on the tablet — its hidden input was the keyboard popping up', async () => {
+    signIn('flowers');
+    const seen: boolean[] = [];
+    installVertical(({ active }) => {
+      seen.push(active);
+      return <div>КВІТКОВИЙ КАТАЛОГ</div>;
+    });
+    renderWithProviders(<RegisterPage />, { shell: 'tablet' });
+    expect(await screen.findByText('КВІТКОВИЙ КАТАЛОГ')).toBeInTheDocument();
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((active) => active === false)).toBe(true);
+  });
+
+  it('mounts no wedge input at all on the tablet with the bundled clothing catalog', async () => {
+    signIn('clothing');
+    const { container } = renderWithProviders(<RegisterPage />, { shell: 'tablet' });
+    await screen.findByPlaceholderText(/^Пошук/);
+    expect(container.querySelector('input.sr-only')).toBeNull();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('arms the wedge on a till and on the web, where a USB scanner may be plugged in', async () => {
+    signIn('flowers');
+    const seen: boolean[] = [];
+    installVertical(({ active }) => {
+      seen.push(active);
+      return <div>КВІТКОВИЙ КАТАЛОГ</div>;
+    });
+    renderWithProviders(<RegisterPage />, { shell: 'web' });
+    expect(await screen.findByText('КВІТКОВИЙ КАТАЛОГ')).toBeInTheDocument();
+    expect(seen[seen.length - 1]).toBe(true);
+  });
+
   it('falls back to the bundled catalog when the vertical module is not there', async () => {
     // The web shell for a remote that 404s: the module simply does not exist,
     // and the shop still has to be able to sell.

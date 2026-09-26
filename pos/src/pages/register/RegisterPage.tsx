@@ -4,7 +4,7 @@
 
 import { ReactNode, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, DownloadLine, Printer, ShieldCheck } from '../../platform/glyphs';
-import { api, cashierApi, useAuthStore, useCartStore, useOfflineStatus } from '@pos/platform';
+import { api, cashierApi, useAuthStore, useCartStore, useOfflineStatus, usePosShell } from '@pos/platform';
 import { formatUah } from '../../lib/money';
 import { localOrderLabel } from '../../lib/localOrderNo';
 import {
@@ -48,6 +48,7 @@ function paymentLabel(method: PaymentMethod): string {
  * other side of it is not.
  */
 export function RegisterPage() {
+  const shell = usePosShell();
   const auth = useAuthStore((s) => s.auth);
   const vertical = auth?.store.vertical?.id ?? 'clothing';
   const { Catalog, moduleId, source, reason } = useMemo(
@@ -779,7 +780,14 @@ export function RegisterPage() {
   const lineCount = lines.reduce((s, l) => s + l.quantity, 0);
   // Anything opaque on top of the catalog takes the scanner with it: a wedge
   // scan landing behind the payment modal would ring up an invisible item.
-  const catalogActive = !checkoutOpen && !mobileCartOpen && !success;
+  // `active` is what arms the catalog's scanner wedge (that is its only use
+  // in every vertical), and on the tablet the wedge's hidden input is the
+  // on-screen keyboard popping up at every open. `ScanWedge` itself now
+  // renders nothing under the tablet shell, but that copy is compiled into
+  // each remote bundle and reaches a store only when the vertical is
+  // republished — this gate on the host is what fixes the bundles already
+  // out there.
+  const catalogActive = shell !== 'tablet' && !checkoutOpen && !mobileCartOpen && !success;
 
   return (
     <>
