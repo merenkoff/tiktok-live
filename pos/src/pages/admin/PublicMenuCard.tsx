@@ -33,6 +33,11 @@ interface PublicMenuSettings {
   enabled: boolean;
   token: string | null;
   url: string | null;
+  /**
+   * Live tables the store has (phase Q2). Absent from an older backend, which
+   * is the same as none: the sheet is offered only when there is one.
+   */
+  tables?: number;
 }
 
 type LoadState = 'loading' | 'ready' | 'hidden' | 'error';
@@ -127,6 +132,7 @@ export function PublicMenuCard() {
   }
 
   const live = settings.enabled && settings.url;
+  const tables = settings.tables ?? 0;
 
   return (
     <section>
@@ -164,6 +170,14 @@ export function PublicMenuCard() {
               <a className="sq-btn-primary" href={`${settings.url}/qr`} target="_blank" rel="noopener noreferrer">
                 Друкувати QR
               </a>
+              {tables > 0 && (
+                // One page with a card for every table, each QR carrying its
+                // table's number. Server-drawn, so this card needs no library
+                // and the `tables` module no release.
+                <a className="sq-btn-quiet" href={`${settings.url}/tables`} target="_blank" rel="noopener noreferrer">
+                  QR для всіх столів ({tables})
+                </a>
+              )}
               <a className="sq-btn-quiet" href={settings.url ?? undefined} target="_blank" rel="noopener noreferrer">
                 Відкрити меню
               </a>

@@ -17,10 +17,14 @@ import {
 import {
   MENU_PAGE_HEADERS,
   escapeHtml,
+  qrSvg,
   renderMenuPage,
   renderQrCard,
+  renderTablesSheet,
   renderUnavailable,
+  tableLabel,
 } from '../pos/public-menu/render.js';
+import { tableMenuUrl } from '../pos/public-menu/menu.service.js';
 import type { PosTag } from '../pos/tags.service.js';
 
 describe('the guest reads the till’s figures', () => {
@@ -245,6 +249,51 @@ describe('the QR card', () => {
     expect(html).toContain('/m/tok_ABCdef12');
     expect(html).toContain('Зерно &lt;b&gt;');
     expect(html).toContain('data-print');
+  });
+});
+
+describe('a table on the guest’s screen', () => {
+  it('reads «Стіл 5», and does not say «Стіл» twice', () => {
+    expect(tableLabel('5')).toBe('Стіл 5');
+    expect(tableLabel(' VIP ')).toBe('Стіл VIP');
+    expect(tableLabel('Стіл біля вікна')).toBe('Стіл біля вікна');
+    expect(tableLabel('стіл 3')).toBe('стіл 3');
+  });
+
+  it('is a caption on the menu page, escaped, and absent without a table', () => {
+    const at = renderMenuPage(MENU, 'tok_ABCdef12', { id: 5, name: '<b>5</b>', hall: 'Зал & тераса' });
+    expect(at).toContain('<p class="at-table"><b>Стіл &lt;b&gt;5&lt;/b&gt;</b> · Зал &amp; тераса</p>');
+    expect(at).not.toContain('<b>5</b>');
+    expect(renderMenuPage(MENU, 'tok_ABCdef12')).not.toContain('at-table');
+  });
+
+  it('puts the table into the address the card’s QR holds', () => {
+    const html = renderQrCard('Зерно', 'tok_ABCdef12', { id: 42, name: '7', hall: 'Тераса' });
+    expect(html).toContain('<b>Стіл 7</b><span>Тераса</span>');
+    expect(html).toContain('the-live.shop/m/tok_ABCdef12?t=42');
+    expect(html).toContain(qrSvg(tableMenuUrl('tok_ABCdef12', 42)));
+  });
+
+  it('draws the sheet: a card and its own QR per table, the count in the head', () => {
+    const tables = [
+      { id: 1, name: '1', hall: 'Зал' },
+      { id: 2, name: '2', hall: 'Зал' },
+      { id: 3, name: 'Т<1>', hall: 'Тераса' },
+    ];
+    const html = renderTablesSheet('Зерно', 'tok_ABCdef12', tables);
+    expect(html).toContain('столів: 3');
+    expect(html.match(/class="card table-card"/g)).toHaveLength(3);
+    for (const t of tables) expect(html).toContain(qrSvg(tableMenuUrl('tok_ABCdef12', t.id)));
+    expect(html).toContain('Стіл Т&lt;1&gt;');
+    expect(html).not.toContain('Т<1>');
+    expect(html).toContain('data-print');
+  });
+
+  it('says there are no tables, with nothing to print', () => {
+    const html = renderTablesSheet('Зерно', 'tok_ABCdef12', []);
+    expect(html).toContain('Столів ще немає');
+    expect(html).not.toContain('data-print');
+    expect(html).not.toContain('<svg');
   });
 });
 

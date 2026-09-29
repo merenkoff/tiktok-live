@@ -39,6 +39,11 @@ a { color: var(--accent); }
 .top { padding: 28px 16px 8px; max-width: 720px; margin: 0 auto; }
 .top h1 { margin: 0; font-size: 28px; line-height: 1.15; letter-spacing: -0.01em; }
 .top .sub { margin: 4px 0 0; color: var(--muted); }
+.at-table {
+  display: inline-block; margin: 10px 0 0; padding: 4px 12px; border-radius: 999px;
+  background: var(--card); border: 1px solid var(--line); font-size: 15px; color: var(--muted);
+}
+.at-table b { color: var(--ink); }
 
 .tabs {
   position: sticky; top: 0; z-index: 5;
@@ -120,6 +125,27 @@ main { max-width: 720px; margin: 0 auto; padding: 0 16px 24px; }
 .card .lead { margin: 6px 0 16px; font-size: 18px; font-weight: 600; }
 .qr { width: 260px; max-width: 100%; margin: 0 auto; }
 .qr svg { width: 100%; height: auto; display: block; }
+.seat { margin: 6px 0 0; }
+.seat b { display: block; font-size: 30px; line-height: 1.1; }
+.seat span { display: block; margin-top: 2px; color: var(--muted); font-size: 15px; }
+
+.sheet-head {
+  max-width: 900px; margin: 24px auto 0; padding: 0 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+}
+.sheet-head h1 { margin: 0; font-size: 24px; }
+.sheet-head p { margin: 2px 0 0; color: var(--muted); }
+.sheet-head .print { margin-top: 0; }
+.sheet {
+  max-width: 900px; margin: 16px auto 32px; padding: 0 16px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px;
+}
+.sheet .empty { grid-column: 1 / -1; }
+.table-card { margin: 0; max-width: none; padding: 20px 16px; }
+.table-card h2 { margin: 0; font-size: 16px; color: var(--muted); font-weight: 600; }
+.table-card .qr { width: 180px; margin-top: 12px; }
+.table-card .hint { margin-top: 10px; }
+
 .card .url { margin: 12px 0 0; color: var(--muted); font-size: 13px; word-break: break-all; }
 .card .hint { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
 .print {
@@ -127,11 +153,28 @@ main { max-width: 720px; margin: 0 auto; padding: 0 16px 24px; }
   background: var(--accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
 }
 
+/* Explicit sizes: `A6` is not a page-size keyword in CSS (only A5, A4, A3, B5,
+   B4, JIS-B5, JIS-B4, letter, legal, ledger), and an invalid `size` is dropped
+   silently — the card would print on Letter. */
+@page card { size: 105mm 148mm; margin: 8mm; }
+@page sheet { size: 210mm 297mm; margin: 10mm; }
+.qr-page { page: card; }
+.sheet-page { page: sheet; }
+
 @media print {
-  @page { size: A6 portrait; margin: 8mm; }
   body { background: #fff; color: #000; }
   .print { display: none; }
+  /* The heading and the button are for the screen; on paper the cards get
+     the whole page — three rows of two fit an A4, ten tables take two sheets. */
+  .sheet-head { display: none; }
+  .sheet { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5mm; margin: 0; padding: 0; max-width: none; }
   .card { border: 0; margin: 0 auto; padding: 0; background: #fff; max-width: none; }
   .card .lead, .card h1, .card .url, .card .hint { color: #000; }
   .qr { width: 70mm; }
+  /* After the single-card rules above: a table card on the sheet keeps its
+     cut line and its own, smaller QR. */
+  .table-card { break-inside: avoid; border: 1px dashed #999; border-radius: 4mm; padding: 4mm; background: #fff; margin: 0; }
+  .table-card h2, .seat span { color: #333; }
+  .table-card .qr { width: 44mm; margin-top: 3mm; }
+  .table-card .hint { margin-top: 2mm; }
 }
