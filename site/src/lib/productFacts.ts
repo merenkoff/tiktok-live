@@ -173,6 +173,7 @@ export const FEATURES = {
   cafeKitchenTicket: { status: 'available', label: 'Кухонний тікет на принтер станції (десктоп-каса)' },
   cafeMenuMatrix: { status: 'available', label: 'Матриця меню, середній чек, замовлення за годинами' },
   qrMenu: { status: 'available', label: 'QR-меню для гостей зі стоп-листом наживо' },
+  qrMenuTables: { status: 'available', label: 'QR на кожен стіл із номером столу й лист QR для друку' },
   tablesFloorPlan: { status: 'available', label: 'План залу з відкритими рахунками столів' },
   tablesRounds: { status: 'available', label: 'Раунди на кухню: ціна замикається, склад списується при відправці' },
   tablesPrecheck: { status: 'available', label: 'Передчек на принтері (десктоп-каса)' },
@@ -206,6 +207,7 @@ export const POS_FEATURE_IDS: FeatureId[] = [
   'cafeKitchenTicket',
   'cafeMenuMatrix',
   'qrMenu',
+  'qrMenuTables',
   'tablesFloorPlan',
   'tablesRounds',
   'tablesPrecheck',
@@ -293,7 +295,7 @@ export const VERTICALS: readonly VerticalFact[] = [
     eyebrow: 'Програма для ресторану зі столами',
     tagline: 'План залу, відкриті рахунки, раунди на кухню, передчек і розділення рахунку — з планшета офіціанта.',
     bullets: ['План залу з рахунками столів', 'Раунди на кухню з планшета', 'Розділити рахунок, передчек'],
-    featureIds: ['tablesFloorPlan', 'tablesRounds', 'tablesSplitBill', 'tablesPrecheck', 'cafeKitchenBoard', 'qrMenu'],
+    featureIds: ['tablesFloorPlan', 'tablesRounds', 'tablesSplitBill', 'tablesPrecheck', 'cafeKitchenBoard', 'qrMenu', 'qrMenuTables'],
     illustrations: ['/demo-restaurant/borscht.svg', '/demo-restaurant/ribeye.svg', '/demo-restaurant/wine-red.svg'],
     tint: 'bg-tint-restaurant',
   },
@@ -447,13 +449,6 @@ export const ROADMAP: readonly RoadmapItem[] = [
     title: 'Планшет офіціанта без мережі',
     body: 'Прийняти замовлення на терасі, де не ловить Wi-Fi, і відправити на кухню, щойно зв\'язок повернеться.',
     progress: 10,
-  },
-  {
-    id: 'table-qr',
-    vertical: 'restaurant',
-    title: 'QR-меню на кожен стіл',
-    body: 'Свій QR на кожному столі: гість сканує й бачить меню з номером свого столу. Лист QR для всіх столів друкується з плану залу. Зараз є одне меню на весь заклад.',
-    progress: 15,
   },
 ];
 

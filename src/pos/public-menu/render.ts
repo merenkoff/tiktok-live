@@ -17,7 +17,14 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import qrcode from 'qrcode-generator';
 import { deltaText, formatUahGuestCompact, groupHint } from './format.js';
-import { menuUrl, publicBaseUrl, type PublicMenu, type PublicMenuProduct } from './menu.service.js';
+import {
+  menuUrl,
+  publicBaseUrl,
+  tableMenuUrl,
+  type MenuTable,
+  type PublicMenu,
+  type PublicMenuProduct,
+} from './menu.service.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 /** `public/` at the repo root — the same directory `api.ts` mounts at `/`. */
@@ -137,7 +144,12 @@ function renderProduct(product: PublicMenuProduct): string {
   );
 }
 
-export function renderMenuPage(menu: PublicMenu, token: string): string {
+/** «Стіл 5»; an owner who already named it «Стіл 5» does not get «Стіл Стіл 5». */
+export function tableLabel(name: string): string {
+  return /^стіл/i.test(name.trim()) ? name.trim() : `Стіл ${name.trim()}`;
+}
+
+export function renderMenuPage(menu: PublicMenu, token: string, table: MenuTable | null = null): string {
   const tabs = menu.categories
     .map((c, i) => `<a href="#c-${c.id ?? 'other'}"${i === 0 ? ' class="on"' : ''}>${escapeHtml(c.name)}</a>`)
     .join('');
@@ -149,7 +161,10 @@ export function renderMenuPage(menu: PublicMenu, token: string): string {
     )
     .join('\n');
   const empty = menu.categories.length === 0 ? '<p class="empty">Меню поки порожнє.</p>' : '';
-  const body = `<header class="top"><h1>${escapeHtml(menu.store.name)}</h1><p class="sub">Меню</p></header>
+  const seat = table
+    ? `<p class="at-table"><b>${escapeHtml(tableLabel(table.name))}</b> · ${escapeHtml(table.hall)}</p>`
+    : '';
+  const body = `<header class="top"><h1>${escapeHtml(menu.store.name)}</h1><p class="sub">Меню</p>${seat}</header>
 ${tabs ? `<nav class="tabs" aria-label="Розділи меню">${tabs}</nav>` : ''}
 <main>
 ${empty}${sections}
@@ -172,17 +187,47 @@ export function qrSvg(url: string): string {
   return qr.createSvgTag({ cellSize: 1, margin: 4, scalable: true });
 }
 
-export function renderQrCard(storeName: string, token: string): string {
-  const url = menuUrl(token);
+export function renderQrCard(storeName: string, token: string, table: MenuTable | null = null): string {
+  const url = table ? tableMenuUrl(token, table.id) : menuUrl(token);
+  const seat = table
+    ? `<p class="seat"><b>${escapeHtml(tableLabel(table.name))}</b><span>${escapeHtml(table.hall)}</span></p>`
+    : '';
   const body = `<main class="card">
 <h1>${escapeHtml(storeName)}</h1>
-<p class="lead">Скануйте — меню на телефоні</p>
+${seat}<p class="lead">Скануйте — меню на телефоні</p>
 <div class="qr">${qrSvg(url)}</div>
 <p class="url">${escapeHtml(url.replace(/^https?:\/\//, ''))}</p>
 <p class="hint">Ціни, розміри й те, що сьогодні закінчилось, — актуальні.</p>
 <button type="button" class="print" data-print>Друкувати</button>
 </main>`;
   return shell(`QR-меню — ${storeName}`, body, ' class="qr-page"');
+}
+
+/**
+ * One sheet with a QR card for every table, ready to print and cut: the owner
+ * lays out the room once and prints it once. Public by the same token as the
+ * menu — the names of the tables are what is printed on the tables — and it
+ * carries no bill, no seat count and no layout.
+ */
+export function renderTablesSheet(storeName: string, token: string, tables: MenuTable[]): string {
+  const cards = tables
+    .map(
+      (table) => `<article class="card table-card">
+<h2>${escapeHtml(storeName)}</h2>
+<p class="seat"><b>${escapeHtml(tableLabel(table.name))}</b><span>${escapeHtml(table.hall)}</span></p>
+<div class="qr">${qrSvg(tableMenuUrl(token, table.id))}</div>
+<p class="hint">Скануйте — меню на телефоні</p>
+</article>`
+    )
+    .join('\n');
+  const body = `<header class="sheet-head">
+<div><h1>QR для столів</h1><p>${escapeHtml(storeName)} · столів: ${tables.length}</p></div>
+${tables.length ? '<button type="button" class="print" data-print>Друкувати</button>' : ''}
+</header>
+<main class="sheet">
+${cards || '<p class="empty">Столів ще немає. Додайте зали й столи в розділі «Зали і столи» — і QR для кожного з’явиться тут.</p>'}
+</main>`;
+  return shell(`QR для столів — ${storeName}`, body, ' class="sheet-page"');
 }
 
 // ── nothing here ────────────────────────────────────────────────────

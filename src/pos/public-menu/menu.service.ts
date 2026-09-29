@@ -100,6 +100,13 @@ interface MenuStore {
   name: string;
 }
 
+/** A table, as far as a guest is told: what the QR on it says, and which room it is in. */
+export interface MenuTable {
+  id: number;
+  name: string;
+  hall: string;
+}
+
 export class PublicMenuError extends Error {}
 
 export function publicBaseUrl(): string {
@@ -108,6 +115,70 @@ export function publicBaseUrl(): string {
 
 export function menuUrl(token: string): string {
   return `${publicBaseUrl()}/m/${token}`;
+}
+
+/** The address a table's QR carries: the menu, plus which table asked. Display only — nothing is ordered from it. */
+export function tableMenuUrl(token: string, tableId: number): string {
+  return `${menuUrl(token)}?t=${tableId}`;
+}
+
+// ── tables ──────────────────────────────────────────────────────────
+
+/** A table id as it comes in a query string: plain digits, and short enough to be an exact JS number. */
+export const TABLE_ID_RE = /^[1-9]\d{0,14}$/;
+
+/**
+ * The table a `?t=` names — or null for anything that is not one of THIS
+ * store's live tables: a foreign id, a retired table, a retired room, junk.
+ * Null is not an error: a QR on a table that was later deleted must still
+ * open the menu, just without a table's name on it. The row is looked up by
+ * `store_id` as well as by id (ids are one sequence for every store, so a
+ * guest counting upward would otherwise read other restaurants' tables), and
+ * only the name and the room ever leave.
+ */
+export async function findMenuTable(storeId: number, raw: unknown): Promise<MenuTable | null> {
+  if (typeof raw !== 'string' || !TABLE_ID_RE.test(raw)) return null;
+  const result = await pool.query(
+    `SELECT t.id, t.name, h.name AS hall
+     FROM pos_tables t
+     JOIN pos_halls h ON h.id = t.hall_id
+     WHERE t.id = $1::bigint AND t.store_id = $2 AND t.is_active = TRUE AND h.is_active = TRUE`,
+    [raw, storeId]
+  );
+  const row = result.rows[0];
+  return row ? { id: Number(row.id), name: String(row.name), hall: String(row.hall) } : null;
+}
+
+/** Every live table of the store, room by room, in the order a person reads them («2» before «10»). */
+export async function listMenuTables(storeId: number): Promise<MenuTable[]> {
+  const result = await pool.query(
+    `SELECT t.id, t.name, h.name AS hall
+     FROM pos_tables t
+     JOIN pos_halls h ON h.id = t.hall_id
+     WHERE t.store_id = $1 AND t.is_active = TRUE AND h.is_active = TRUE
+     ORDER BY h.sort_order ASC, h.id ASC`,
+    [storeId]
+  );
+  // SQL orders the rooms; within a room the names sort as numbers do.
+  const rooms = new Map<string, MenuTable[]>();
+  for (const row of result.rows) {
+    const table = { id: Number(row.id), name: String(row.name), hall: String(row.hall) };
+    rooms.set(table.hall, [...(rooms.get(table.hall) ?? []), table]);
+  }
+  return [...rooms.values()].flatMap((tables) =>
+    tables.sort((a, b) => a.name.localeCompare(b.name, 'uk', { numeric: true }))
+  );
+}
+
+async function countMenuTables(storeId: number): Promise<number> {
+  const result = await pool.query(
+    `SELECT COUNT(*)::int AS n
+     FROM pos_tables t
+     JOIN pos_halls h ON h.id = t.hall_id
+     WHERE t.store_id = $1 AND t.is_active = TRUE AND h.is_active = TRUE`,
+    [storeId]
+  );
+  return Number(result.rows[0]?.n ?? 0);
 }
 
 // ── projection ──────────────────────────────────────────────────────
@@ -338,6 +409,12 @@ export interface PublicMenuSettings {
   enabled: boolean;
   token: string | null;
   url: string | null;
+  /**
+   * How many live tables the store has: the owner's card offers «QR для всіх
+   * столів» only when there is something to print. Zero for a café with no
+   * halls, which is most of them.
+   */
+  tables: number;
 }
 
 const NOT_AVAILABLE = 'Меню за QR доступне для кав’ярні й ресторану';
@@ -350,13 +427,14 @@ function isUniqueViolation(error: unknown): boolean {
   return typeof error === 'object' && error !== null && (error as { code?: string }).code === '23505';
 }
 
-function toSettings(row: Record<string, unknown> | undefined): PublicMenuSettings {
+function toSettings(row: Record<string, unknown> | undefined, tables = 0): PublicMenuSettings {
   const token = typeof row?.public_menu_token === 'string' ? row.public_menu_token : null;
   return {
     available: verticalOrDefault(row?.vertical as string | undefined).kitchen,
     enabled: row?.public_menu_enabled === true,
     token,
     url: token ? menuUrl(token) : null,
+    tables,
   };
 }
 
@@ -371,7 +449,7 @@ async function readRow(storeId: number): Promise<Record<string, unknown>> {
 }
 
 export async function getPublicMenuSettings(storeId: number): Promise<PublicMenuSettings> {
-  return toSettings(await readRow(storeId));
+  return toSettings(await readRow(storeId), await countMenuTables(storeId));
 }
 
 /**
@@ -395,7 +473,7 @@ export async function setPublicMenuEnabled(storeId: number, enabled: boolean): P
         [storeId, enabled, enabled && !hasToken ? newToken() : null]
       );
       invalidatePublicMenu(storeId);
-      return toSettings(result.rows[0]);
+      return toSettings(result.rows[0], await countMenuTables(storeId));
     } catch (error) {
       // A 144-bit collision is not going to happen; the retry is for the
       // principle that a unique index can always say no.
@@ -418,7 +496,7 @@ export async function rotatePublicMenuToken(storeId: number): Promise<PublicMenu
         [storeId, newToken()]
       );
       invalidatePublicMenu(storeId);
-      return toSettings(result.rows[0]);
+      return toSettings(result.rows[0], await countMenuTables(storeId));
     } catch (error) {
       if (!isUniqueViolation(error) || attempt >= 2) throw error;
     }

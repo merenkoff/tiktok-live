@@ -24,10 +24,12 @@ import {
 import { createProduct } from '../pos/products.service.js';
 import * as modifiers from '../pos/modifiers.service.js';
 import { createTag } from '../pos/tags.service.js';
+import { createHall, createTable } from '../pos/tables.service.js';
 import { localDateString } from '../pos/core/localDate.js';
 import { readMigration } from '../pos/migrations.js';
 import { resetPublicMenuCache, invalidatePublicMenu } from '../pos/public-menu/menu.service.js';
-import type { PublicMenu } from '../pos/public-menu/menu.service.js';
+import { tableMenuUrl, type PublicMenu } from '../pos/public-menu/menu.service.js';
+import { qrSvg } from '../pos/public-menu/render.js';
 
 describe.skipIf(!hasDb)('POS guest QR menu', () => {
   let app: FastifyInstance;
@@ -172,7 +174,7 @@ describe.skipIf(!hasDb)('POS guest QR menu', () => {
         headers: auth(cafe.ownerToken),
       });
       expect(before.statusCode).toBe(200);
-      expect(before.json()).toEqual({ available: true, enabled: false, token: null, url: null });
+      expect(before.json()).toEqual({ available: true, enabled: false, token: null, url: null, tables: 0 });
       expect((await page('never_issued_1')).statusCode).toBe(404);
     });
 
@@ -472,6 +474,155 @@ describe.skipIf(!hasDb)('POS guest QR menu', () => {
 
     it('is not a route under the till’s prefix: the JSON stays where the API is', async () => {
       expect((await app.inject({ method: 'GET', url: `/api/pos/m/${token}` })).statusCode).toBe(404);
+    });
+  });
+
+  describe('the tables (phase Q2)', () => {
+    let table5 = 0;
+    let table10 = 0;
+    let table2 = 0;
+    let terrace = 0;
+    let retiredTable = 0;
+    let retiredHallTable = 0;
+    let evilTable = 0;
+    let foreignTable = 0;
+
+    beforeAll(async () => {
+      const room = await createHall(cafe.storeId, { name: 'Основний зал', sort_order: 10 });
+      const patio = await createHall(cafe.storeId, { name: 'Тераса', sort_order: 20 });
+      const closed = await createHall(cafe.storeId, { name: 'Закрита', sort_order: 30, is_active: false });
+      const t = (hallId: number, name: string, extra: Record<string, unknown> = {}) =>
+        createTable(cafe.storeId, { hall_id: hallId, name, ...extra }).then((row) => row.id);
+      // Created out of order on purpose: «10» must still print after «5».
+      table10 = await t(room.id, '10');
+      table5 = await t(room.id, '5');
+      table2 = await t(room.id, '2');
+      terrace = await t(patio.id, 'Т1');
+      retiredTable = await t(room.id, '7', { is_active: false });
+      retiredHallTable = await t(closed.id, '99');
+      evilTable = await t(room.id, '"><script>alert(1)</script>');
+      const elsewhere = await createHall(other.storeId, { name: 'Чужий зал' });
+      foreignTable = (await createTable(other.storeId, { hall_id: elsewhere.id, name: 'ЧУЖИЙ-СТІЛ' })).id;
+      invalidatePublicMenu(cafe.storeId);
+    });
+
+    it('names the table on the menu a table’s QR opens, in its room', async () => {
+      const html = (await page(token, `?t=${table5}`)).body;
+      expect(html).toContain('<p class="at-table"><b>Стіл 5</b> · Основний зал</p>');
+      // …and it is still the whole menu.
+      expect(html).toContain('data-product=');
+      const terraceHtml = (await page(token, `?t=${terrace}`)).body;
+      expect(terraceHtml).toContain('<b>Стіл Т1</b> · Тераса');
+    });
+
+    it('does not double the word when the owner already called it «Стіл …»', async () => {
+      const named = await createTable(cafe.storeId, {
+        hall_id: (await pool.query(`SELECT hall_id FROM pos_tables WHERE id = $1`, [table5])).rows[0].hall_id,
+        name: 'Стіл біля вікна',
+      });
+      const html = (await page(token, `?t=${named.id}`)).body;
+      expect(html).toContain('<b>Стіл біля вікна</b>');
+      expect(html).not.toContain('Стіл Стіл');
+    });
+
+    it('never reads another restaurant’s tables — ids are one sequence for every store', async () => {
+      const res = await page(token, `?t=${foreignTable}`);
+      expect(res.statusCode).toBe(200);
+      expect(res.body).not.toContain('ЧУЖИЙ-СТІЛ');
+      expect(res.body).not.toContain('Чужий зал');
+      expect(res.body).not.toContain('class="at-table"');
+      const sheet = (await page(token, '/tables')).body;
+      expect(sheet).not.toContain('ЧУЖИЙ-СТІЛ');
+    });
+
+    it('ignores a retired table, a table in a retired room and junk, and still opens the menu', async () => {
+      for (const t of [retiredTable, retiredHallTable, 'abc', '1e3', '0', '-5', '5.5', '', '9'.repeat(30), '5 OR 1=1']) {
+        const res = await page(token, `?t=${encodeURIComponent(String(t))}`);
+        expect(res.statusCode).toBe(200);
+        expect(res.body).not.toContain('class="at-table"');
+        expect(res.body).toContain('data-product=');
+      }
+      // A repeated parameter is an array, not an id.
+      const twice = await app.inject({ method: 'GET', url: `/m/${token}?t=${table5}&t=${table2}` });
+      expect(twice.statusCode).toBe(200);
+      expect(twice.body).not.toContain('class="at-table"');
+    });
+
+    it('escapes what the owner named a table', async () => {
+      const html = (await page(token, `?t=${evilTable}`)).body;
+      expect(html).not.toContain('<script>alert(1)');
+      expect(html).toContain('&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;');
+    });
+
+    it('draws a card for one table, carrying the table in the address the QR holds', async () => {
+      const card = await page(token, `/qr?t=${table5}`);
+      expect(card.statusCode).toBe(200);
+      expect(card.body).toContain('<b>Стіл 5</b>');
+      expect(card.body).toContain(`/m/${token}?t=${table5}`);
+      expect(card.body).toContain('<svg');
+      // Without a table it is the plain card, as before.
+      const plain = (await page(token, '/qr')).body;
+      expect(plain).not.toContain('class="seat"');
+    });
+
+    it('prints one card per live table, room by room, «2» before «5» before «10»', async () => {
+      const res = await page(token, '/tables');
+      expect(res.statusCode).toBe(200);
+      const html = res.body;
+      const order = ['Стіл 2', 'Стіл 5', 'Стіл 10', 'Стіл Т1'].map((label) => html.indexOf(`<b>${label}</b>`));
+      expect(order.every((i) => i > -1)).toBe(true);
+      expect([...order].sort((a, b) => a - b)).toEqual(order);
+      // Live tables only: not the retired table, not the retired room's.
+      expect(html).not.toContain('<b>Стіл 7</b>');
+      expect(html).not.toContain('<b>Стіл 99</b>');
+      // One QR per card, and each one is the QR of ITS table's address (the
+      // drawing is deterministic, so the exact SVG can be compared).
+      for (const id of [table2, table5, table10, terrace]) {
+        expect(html).toContain(qrSvg(tableMenuUrl(token, id)));
+      }
+      expect((html.match(/<svg/g) ?? []).length).toBe((html.match(/<article class="card table-card">/g) ?? []).length);
+      expect(html).toContain('Основний зал');
+      expect(html).toContain('Тераса');
+    });
+
+    it('answers a sheet for a token that does not work with the same page as everywhere else', async () => {
+      const bad = await page('a_token_nobody_has', '/tables');
+      const menuBad = await page('a_token_nobody_has');
+      expect(bad.statusCode).toBe(404);
+      expect(bad.body).toBe(menuBad.body);
+    });
+
+    it('says so when a café has no tables yet, instead of printing an empty page', async () => {
+      const html = (await page(otherToken, '/tables')).body;
+      // `other` has one table (the foreign one above) — use a store with none.
+      const bare = await createTestStore('pubmenu4');
+      try {
+        await pool.query(`UPDATE pos_stores SET vertical = 'cafe' WHERE id = $1`, [bare.storeId]);
+        const bareToken = (await enable(bare)).json().token;
+        const empty = (await page(bareToken, '/tables')).body;
+        expect(empty).toContain('Столів ще немає');
+        expect(empty).not.toContain('data-print');
+      } finally {
+        await dropTestStore(bare.storeId);
+      }
+      expect(html).toContain('ЧУЖИЙ-СТІЛ');
+    });
+
+    it('tells the owner how many live tables there are, so the card offers the sheet only when it has something to print', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/pos/store/public-menu',
+        headers: auth(cafe.ownerToken),
+      });
+      // 10, 5, 2, Т1, the evil one and «Стіл біля вікна»; not the retired table or the retired room's.
+      expect(res.json().tables).toBe(6);
+      expect((await enable(cafe, true)).json().tables).toBe(6);
+    });
+
+    it('does not put a table into the JSON the page polls: it is one menu', async () => {
+      const res = await json(token);
+      expect(res.body).not.toContain('Стіл');
+      expect(Object.keys(res.json()).sort()).toEqual(['categories', 'generated_at', 'store', 'store_day']);
     });
   });
 

@@ -13,7 +13,13 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '../../test/utils';
 
-type Settings = { available: boolean; enabled: boolean; token: string | null; url: string | null };
+type Settings = {
+  available: boolean;
+  enabled: boolean;
+  token: string | null;
+  url: string | null;
+  tables?: number;
+};
 
 const posRequest = vi.fn<[string, string, unknown?], Promise<Settings>>();
 
@@ -80,6 +86,28 @@ describe('PublicMenuCard', () => {
     expect(screen.getByText('Друкувати QR')).toHaveAttribute('rel', 'noopener noreferrer');
     expect(screen.getByText('Відкрити меню')).toHaveAttribute('href', ON.url);
     expect(screen.getByRole('status')).toHaveTextContent('Меню відкрито для гостей.');
+  });
+
+  it('offers one sheet with a QR for every table, only when the store has tables', async () => {
+    posRequest.mockResolvedValueOnce({ ...ON, tables: 12 });
+    const withTables = renderWithProviders(<PublicMenuCard />);
+    const link = await screen.findByText('QR для всіх столів (12)');
+    expect(link).toHaveAttribute('href', `${ON.url}/tables`);
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    withTables.unmount();
+
+    // A café with no halls (and an older backend that sends no count) sees nothing to print.
+    posRequest.mockResolvedValueOnce({ ...ON, tables: 0 });
+    const none = renderWithProviders(<PublicMenuCard />);
+    await screen.findByText('Друкувати QR');
+    expect(screen.queryByText(/QR для всіх столів/)).not.toBeInTheDocument();
+    none.unmount();
+
+    posRequest.mockResolvedValueOnce(ON);
+    renderWithProviders(<PublicMenuCard />);
+    await screen.findByText('Друкувати QR');
+    expect(screen.queryByText(/QR для всіх столів/)).not.toBeInTheDocument();
   });
 
   it('turns it off and hides the address, keeping the retire button (the token still exists)', async () => {
