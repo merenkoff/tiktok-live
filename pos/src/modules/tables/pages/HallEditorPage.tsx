@@ -19,12 +19,21 @@
 // refuses in those words, and the screen offers «Прибрати із зали», which is
 // `is_active: false`: the terrace closes for the winter and its bills stay
 // readable.
+//
+// The QR for a table (TechDocs/POS_QR_MENU.md, Q2) is reached from here because
+// this is where the owner is looking at their tables: «QR цього столу» in the
+// form of the table being edited, «QR для всіх столів» in the header. Both are
+// plain links to pages the SERVER draws, so this screen carries no QR library —
+// and none of it appears for a store with no guest menu (`lib/publicMenu.ts`).
+// Not on the tile itself: a tile is a draggable button, and a link inside a
+// button is neither valid nor a thing a thumb can hit while dragging.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader, Plus, Segmented, Table } from '@pos/platform/ui';
 import { CELL_PX, changedPositions, droppedAt, editorExtent, cellsMoved, withDroppedTable } from '../lib/layout';
 import { useTableDrag } from '../lib/useTableDrag';
 import { seatsLabel } from '../lib/hallMap';
+import { loadPublicMenu, tableQrUrl, tablesSheetUrl, type PublicMenuState } from '../lib/publicMenu';
 import { serverMessage } from '../lib/useHallMap';
 import * as tablesApi from '../lib/tablesApi';
 import type { PosHall, PosTable, TableShape } from '../lib/types';
@@ -48,6 +57,19 @@ export function HallEditorPage(): JSX.Element {
   const [editing, setEditing] = useState<number | 'new' | null>(null);
   const [draft, setDraft] = useState<Draft>(NEW_TABLE);
   const [hallName, setHallName] = useState('');
+  const [menu, setMenu] = useState<PublicMenuState>({ kind: 'none' });
+
+  // Once, and never blocking: the plan draws without it, and a failure is
+  // simply «no guest menu» (`loadPublicMenu` does not throw).
+  useEffect(() => {
+    let alive = true;
+    void loadPublicMenu().then((state) => {
+      if (alive) setMenu(state);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // Deliberately never clears the banner: a write that was refused reloads
   // the room right after, and clearing here would flash the server's words
@@ -71,6 +93,11 @@ export function HallEditorPage(): JSX.Element {
   const hall = halls.find((h) => h.id === hallId) ?? halls[0] ?? null;
   const tables = useMemo(() => hall?.tables ?? [], [hall]);
   const extent = useMemo(() => editorExtent(tables), [tables]);
+  // The table whose form is open — and only a table that is on the plan has a
+  // QR: the guest page ignores a retired table or a retired room.
+  const editingTable = typeof editing === 'number' ? tables.find((t) => t.id === editing) : undefined;
+  const editingOnPlan = Boolean(editingTable?.is_active && hall?.is_active);
+  const anyTableOnPlan = halls.some((h) => h.is_active && h.tables.some((t) => t.is_active));
 
   /** Run a write, keep the server's answer, and say its words on a refusal. */
   async function run(write: () => Promise<unknown>): Promise<boolean> {
@@ -142,19 +169,32 @@ export function HallEditorPage(): JSX.Element {
         subtitle={hall ? 'Перетягніть стіл, щоб поставити його на місце. Тап — щоб змінити.' : undefined}
         actions={
           hall && (
-            <button
-              type="button"
-              className="pos-btn-primary min-h-11 px-4 rounded-sq text-[15px] gap-1.5"
-              data-testid="editor-table-add"
-              disabled={busy}
-              onClick={() => {
-                setEditing('new');
-                setDraft(NEW_TABLE);
-              }}
-            >
-              <Plus size={20} />
-              Стіл
-            </button>
+            <>
+              {menu.kind === 'on' && anyTableOnPlan && (
+                <a
+                  className="sq-btn-quiet whitespace-nowrap"
+                  data-testid="editor-qr-sheet"
+                  href={tablesSheetUrl(menu.url)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  QR для всіх столів
+                </a>
+              )}
+              <button
+                type="button"
+                className="pos-btn-primary min-h-11 px-4 rounded-sq text-[15px] gap-1.5"
+                data-testid="editor-table-add"
+                disabled={busy}
+                onClick={() => {
+                  setEditing('new');
+                  setDraft(NEW_TABLE);
+                }}
+              >
+                <Plus size={20} />
+                Стіл
+              </button>
+            </>
           )
         }
       />
@@ -350,6 +390,17 @@ export function HallEditorPage(): JSX.Element {
             <button type="button" className="sq-btn-quiet" onClick={() => setEditing(null)}>
               Скасувати
             </button>
+            {editingOnPlan && menu.kind === 'on' && (
+              <a
+                className="sq-btn-quiet whitespace-nowrap"
+                data-testid="editor-form-qr"
+                href={tableQrUrl(menu.url, editing as number)}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                QR цього столу
+              </a>
+            )}
             {editing !== 'new' && (
               <button
                 type="button"
@@ -370,6 +421,13 @@ export function HallEditorPage(): JSX.Element {
               </button>
             )}
           </div>
+          {editingOnPlan && menu.kind === 'off' && (
+            // The one case worth a sentence: the owner can fix it in one tick,
+            // and would otherwise wonder where the button is.
+            <p className="mt-3 text-[13px] text-sq-muted" data-testid="editor-form-qr-hint">
+              QR для столу з’явиться, коли ви ввімкнете меню для гостей у «Налаштуваннях».
+            </p>
+          )}
         </div>
       )}
     </div>
