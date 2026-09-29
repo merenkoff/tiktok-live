@@ -4,6 +4,8 @@ import type { VerticalId } from '../../lib/productFacts';
 export interface Shot {
   src: string;
   alt: string;
+  /** A phone screen (a guest's view): framed as a phone, not as a browser window. */
+  phone?: boolean;
 }
 
 export interface VerticalRow {
@@ -42,6 +44,8 @@ export interface VerticalContent {
   overview?: VerticalOverview;
   rows: VerticalRow[];
   faq: FaqItem[];
+  /** A live page worth opening from the hero — the demo café's guest menu. */
+  demoLink?: { href: string; label: string };
   /** The Довідка guide for this business, linked under the FAQ; routes.tsx checks the slug exists. */
   guide?: { slug: string; label: string };
   /** «Читайте також»: the articles that answer this business's search questions. */
