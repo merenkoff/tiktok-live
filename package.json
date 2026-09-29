@@ -34,7 +34,7 @@
   "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
     "@fastify/cors": "^11.3.0",
-    "@fastify/multipart": "^10.1.1",
+    "@fastify/multipart": "^10.1.2",
     "@fastify/static": "^10.1.4",
     "@fastify/websocket": "^11.3.1",
     "axios": "^1.20.0",
