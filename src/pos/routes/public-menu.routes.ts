@@ -11,11 +11,13 @@
 //     answers a wrong, rotated or switched-off token exactly like a token that
 //     never existed. The page's script polls it for the stop-list.
 //
-//   /store/public-menu — the OWNER's switch. A dedicated endpoint rather than a
-//     field on `PATCH /store`, which copies each column by hand (a forgotten
-//     line there once made the florist's charge a silent no-op) — and because
-//     turning a menu on also issues the token, which is a side effect a plain
-//     column write would not have.
+//   /store/public-menu — the OWNER's switch. PATCH, because the till's client
+//     reaches it through `posRequest`, which has no PUT, and it is a partial
+//     update anyway. A dedicated endpoint rather than a field on `PATCH
+//     /store`, which copies each column by hand (a forgotten line there once
+//     made the florist's charge a silent no-op) — and because turning a menu
+//     on also issues the token, a side effect a plain column write would not
+//     have.
 //
 // Core, not a module: the till that owns the kitchen board opts in through
 // `module_remotes`, so there is no `enabled_modules` entry to gate on. The
@@ -49,7 +51,7 @@ export function registerPublicMenuRoutes(fastify: FastifyInstance): void {
     return getPublicMenuSettings(auth.storeId);
   });
 
-  fastify.put('/store/public-menu', async (request, reply) => {
+  fastify.patch('/store/public-menu', async (request, reply) => {
     const auth = await ensurePosOwner(request, reply);
     if (!auth) return;
     const body = (request.body ?? {}) as { enabled?: unknown };

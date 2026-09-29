@@ -43,7 +43,7 @@ describe.skipIf(!hasDb)('POS guest QR menu', () => {
 
   const enable = (store: TestStore, enabled = true, bearer = store.ownerToken) =>
     app.inject({
-      method: 'PUT',
+      method: 'PATCH',
       url: '/api/pos/store/public-menu',
       headers: auth(bearer),
       payload: { enabled },
@@ -188,7 +188,7 @@ describe.skipIf(!hasDb)('POS guest QR menu', () => {
 
     it('rejects a body that is not a boolean', async () => {
       const res = await app.inject({
-        method: 'PUT',
+        method: 'PATCH',
         url: '/api/pos/store/public-menu',
         headers: auth(cafe.ownerToken),
         payload: { enabled: 'yes' },

@@ -9,6 +9,7 @@ import { ProductPhotoField } from '../../components/ProductPhotoField';
 import { PageHeader, SectionHead } from '../../components/ui/Page';
 import { Plus, Settings } from '../../platform/glyphs';
 import { FiscalSettingsCard } from './FiscalSettingsCard';
+import { PublicMenuCard } from './PublicMenuCard';
 import { MODULES } from '../../modules/registry';
 import { SlotBoundary } from '../../modules/SlotBoundary';
 import { reportModuleEvent } from '../../modules/telemetry';
@@ -419,6 +420,11 @@ export function SettingsPage() {
             keeps an older `@pos/platform` (or a test double) from crashing the
             whole settings screen on a method it does not have. */}
         {typeof api.fiscalSettings === 'function' && <FiscalSettingsCard />}
+
+        {/* The guest's QR menu: a café's, and its own endpoint and buttons for
+            the same reason as the card above. A store with no kitchen never
+            asks. `posRequest` is the only client method it needs. */}
+        {vertical.id === 'cafe' && typeof api.posRequest === 'function' && <PublicMenuCard />}
 
         <section>
           <SectionHead title="TikTok LIVE" />
