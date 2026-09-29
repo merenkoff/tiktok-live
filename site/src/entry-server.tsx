@@ -48,6 +48,9 @@ export function buildLlmsTxt(pages: LlmsPage[]): string {
   const features = (ids: typeof POS_FEATURE_IDS) =>
     ids.map((id) => `  - ${FEATURES[id].label}${FEATURES[id].status === 'coming' ? ' — у планах' : ''}`).join('\n');
   const articles = ROUTES.filter((r) => r.path.startsWith('/dovidka/'));
+  const cafe = VERTICALS.find((v) => v.id === 'cafe');
+  const kavapp = COMPETITOR_FACTS.kavapp;
+  const [kS, kM, kL] = kavapp.plans;
 
   return [
     '# The Live Shop',
@@ -70,6 +73,14 @@ export function buildLlmsTxt(pages: LlmsPage[]): string {
     ),
     ...PRICING.pos.addons.map((addon) => `- ${addon.name}: +${addon.price} ${PRICING.pos.currency}/міс.`),
     `- ${PRICING.pos.billing} Для порівняння: ${COMPETITOR_FACTS.checkbox.name} з ${COMPETITOR_FACTS.checkbox.priceFromDate} піднімає ціну з ${COMPETITOR_FACTS.checkbox.priceNow} до ${COMPETITOR_FACTS.checkbox.priceFrom} грн/міс за касу і фіксує стару лише передплатою до ${COMPETITOR_FACTS.checkbox.lockBy} (максимум ${COMPETITOR_FACTS.checkbox.lockMaxMonths} місяців, не далі ${COMPETITOR_FACTS.checkbox.lockUntil}); джерело: ${COMPETITOR_FACTS.checkbox.source}, станом на ${COMPETITOR_FACTS.checkbox.checkedAt}.`,
+    '',
+    "## Програма для кав'ярні",
+    '',
+    cafe
+      ? `- ${PRODUCT.pos.name} для кав'ярні (${SITE_URL}${cafe.path}): ${cafe.tagline} Ціна: ${PRICING.pos.label.toLowerCase()}.`
+      : '',
+    cafe ? features(cafe.featureIds) : '',
+    `- Kavapp для порівняння (станом на ${kavapp.checkedAt}): $${kS.priceUsd.toFixed(2)} / $${kM.priceUsd.toFixed(2)} / $${kL.priceUsd.toFixed(2)} за торгову точку на місяць (тарифи S / M / L); ПРРО входить у всі тарифи; модифікатори напоїв і QR-меню — лише в тарифі L; розрахунок собівартості — з тарифу M. Джерело: ${kavapp.sources.tariffs}. Різниця з ${PRODUCT.pos.name}: ${SITE_URL}/dovidka/kavapp-chy-liveshop-dlya-kavyarni.`,
     '',
     '## У планах (входить у тариф перших користувачів)',
     '',

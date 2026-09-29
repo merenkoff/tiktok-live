@@ -4,16 +4,8 @@ import { CTAForm } from '../components/CTAForm';
 import { Faq } from '../components/Faq';
 import { useScrollToHash } from '../hooks/useScrollToHash';
 import { ARTICLES } from '../content/dovidka';
+import { formatDateUk } from '../lib/formatDate';
 import type { Article, Heading } from '../content/dovidka/types';
-
-function formatDate(iso: string): string {
-  const [y, m, d] = iso.split('-').map(Number);
-  const months = [
-    'січня', 'лютого', 'березня', 'квітня', 'травня', 'червня',
-    'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня',
-  ];
-  return `${d} ${months[m - 1]} ${y}`;
-}
 
 export function ArticlePage({ article }: { article: Article }) {
   const { meta, Body } = article;
@@ -37,7 +29,7 @@ export function ArticlePage({ article }: { article: Article }) {
               {meta.title}
             </h1>
             <p className="text-muted text-sm mt-5">
-              <time dateTime={meta.updatedAt}>Оновлено {formatDate(meta.updatedAt)}</time>
+              <time dateTime={meta.updatedAt}>Оновлено {formatDateUk(meta.updatedAt)}</time>
               <span aria-hidden> · </span>
               {meta.readingMinutes} хв читання
             </p>

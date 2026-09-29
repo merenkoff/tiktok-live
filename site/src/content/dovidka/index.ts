@@ -1,9 +1,17 @@
 import type { Article } from './types';
 import { zminaPrroZaminaKasy } from './zmina-prro-zamina-kasy';
+import { yakObratyProgramuDlyaKavyarni } from './yak-obraty-programu-dlya-kavyarni';
+import { tehkartaIFudkostKavyarni } from './tehkarta-i-fudkost-kavyarni';
+import { kavappChyLiveshopDlyaKavyarni } from './kavapp-chy-liveshop-dlya-kavyarni';
 import { GUIDE_ARTICLES } from './guides';
 
 /** Hand-written answers, newest first. */
-const STANDALONE: Article[] = [zminaPrroZaminaKasy];
+const STANDALONE: Article[] = [
+  kavappChyLiveshopDlyaKavyarni,
+  yakObratyProgramuDlyaKavyarni,
+  tehkartaIFudkostKavyarni,
+  zminaPrroZaminaKasy,
+];
 
 /** Guides first (in reading order), then the articles — the index page and llms.txt list them this way. */
 export const ARTICLES: Article[] = [...GUIDE_ARTICLES, ...STANDALONE];

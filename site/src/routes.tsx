@@ -18,6 +18,7 @@ import { posSoftwareJsonLd, liveSoftwareJsonLd } from './lib/jsonLd/softwareAppl
 import { buildFaqJsonLd } from './lib/faqJsonLd';
 import { breadcrumbJsonLd } from './lib/jsonLd/breadcrumb';
 import { techArticleJsonLd } from './lib/jsonLd/article';
+import { verticalPageJsonLd } from './lib/jsonLd/verticalPage';
 
 export interface SiteRoute {
   path: string;
@@ -42,6 +43,9 @@ const POS_CRUMB = { name: 'POS каса', path: '/pos' };
 for (const { content } of VERTICAL_PAGES) {
   if (content.guide && !findArticle(content.guide.slug)) {
     throw new Error(`routes: ${content.id} links the unknown guide /dovidka/${content.guide.slug}`);
+  }
+  for (const a of content.articles ?? []) {
+    if (!findArticle(a.slug)) throw new Error(`routes: ${content.id} links the unknown article /dovidka/${a.slug}`);
   }
 }
 
@@ -74,7 +78,9 @@ export const ROUTES: SiteRoute[] = [
     sitemap: true,
   },
   // One landing per vertical, prerendered from the shared template the way
-  // Довідка is. The SoftwareApplication schema stays on /pos — one product.
+  // Довідка is. The full SoftwareApplication (offers, every feature) stays on
+  // /pos — one product; a landing's WebPage points at it by `@id` and lists
+  // the features this business uses.
   ...VERTICAL_PAGES.map(({ fact, content }): SiteRoute => ({
     path: fact.path,
     template: 'vertical.html',
@@ -88,6 +94,7 @@ export const ROUTES: SiteRoute[] = [
     },
     jsonLd: [
       org,
+      verticalPageJsonLd(fact, { ...content.head, updatedAt: content.updatedAt }),
       buildFaqJsonLd(content.faq),
       breadcrumbJsonLd([POS_CRUMB, { name: fact.eyebrow, path: fact.path }]),
     ],

@@ -116,6 +116,34 @@ export const COMPETITOR_FACTS = {
     /** …and never past this date. */
     lockUntil: '2027-10-19',
   },
+  /**
+   * Read from kavapp.com on `checkedAt`, page by page — the tariff page's own
+   * FAQ («Чим відрізняються тарифні плани?») is what says which plan carries
+   * what, because the cards above it list every feature under every plan.
+   * «Not mentioned» below means not mentioned on those pages, never «does not
+   * exist»; the comparison article words it that way.
+   */
+  kavapp: {
+    name: 'Kavapp',
+    checkedAt: '2026-09-29',
+    sources: {
+      tariffs: 'https://kavapp.com/uk/tariffs',
+      prro: 'https://kavapp.com/uk/prro',
+      seller: 'https://kavapp.com/uk/seller',
+      coffeeShop: 'https://kavapp.com/uk/for-whom/coffee-shop',
+    },
+    /** USD per outlet per month, exactly as the tariff page prints it. */
+    plans: [
+      { id: 'S', priceUsd: 3.85, note: 'без розрахунку собівартості позицій' },
+      { id: 'M', priceUsd: 6.28, note: 'собівартість, облік закупівель, дисконтна система, конструктор акцій, заготівлі, месенджер' },
+      { id: 'L', priceUsd: 9.48, note: 'конструктор позицій меню (параметри й модифікатори напоїв), централізована логістика, різні меню й ціни по точках, QR-меню' },
+    ],
+    /** The tariff page's own <title>: «від 154 грн/міс». */
+    fromUah: 154,
+    trialDays: 14,
+    /** «ПРРО входить у всі тарифи Kavapp і не потребує додаткової оплати». */
+    prroIncluded: true,
+  },
 } as const;
 
 export type FeatureStatus = 'available' | 'coming';
