@@ -45,6 +45,7 @@
     "ioredis": "^5.3.2",
     "node-cron": "^4.6.0",
     "pg": "^8.23.0",
+    "qrcode-generator": "^2.0.4",
     "telegraf": "^4.15.0",
     "tiktok-live-connector": "^2.5.0",
     "winston": "^3.11.0",

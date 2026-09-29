@@ -24,6 +24,7 @@ import { registerKitchenRoutes } from './routes/kitchen.routes.js';
 import { registerTablesRoutes } from './routes/tables.routes.js';
 import { registerFiscalRoutes } from './routes/fiscal.routes.js';
 import { registerSuperRoutes } from './routes/super.routes.js';
+import { registerPublicMenuRoutes } from './routes/public-menu.routes.js';
 
 export interface PosRouteGroup {
   /** null = core: always registered, no per-request module gate. */
@@ -67,6 +68,11 @@ export const POS_ROUTE_GROUPS: PosRouteGroup[] = [
   // `fiscal-<provider>` UI module opts in through `module_remotes`, not
   // `enabled_modules`. The gate is `ensurePosOwner`.
   { moduleId: null, register: registerFiscalRoutes },
+  // Core for the same reason as `registerKitchenRoutes`: the guest menu is the
+  // café's, and that store opts into its kitchen through `module_remotes`. Two
+  // audiences in one group — an unauthenticated read by token, and the
+  // owner's switch (`ensurePosOwner`); the HTML pages are at the site's root.
+  { moduleId: null, register: registerPublicMenuRoutes },
   // Core and store-less: the cross-store admin behind `POS_SUPER_PASSWORD`
   // (TechDocs/POS_SUPER_ADMIN.md). Its gate is `ensureSuper`, not a session.
   { moduleId: null, register: registerSuperRoutes },

@@ -4,6 +4,7 @@ import { Footer } from '../components/Footer';
 import { CTAForm } from '../components/CTAForm';
 import { Faq } from '../components/Faq';
 import { BrowserFrame } from '../components/BrowserFrame';
+import { PhoneFrame } from '../components/PhoneFrame';
 import { FeatureRow } from '../components/FeatureRow';
 import { Reveal, StaggerGroup, StaggerItem } from '../components/Reveal';
 import { SectionHeading } from '../components/SectionHeading';
@@ -55,6 +56,11 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
               </a>
             </div>
             <p className="text-sm text-muted mt-5">{PRICING.pos.label}.</p>
+            {content.demoLink && (
+              <a href={content.demoLink.href} className="link-more text-[15px] mt-3" rel="noopener">
+                {content.demoLink.label} <ChevronRight size={20} />
+              </a>
+            )}
           </Reveal>
           <Reveal className="mt-14 max-w-5xl mx-auto">
             <BrowserFrame src={content.hero.src} alt={content.hero.alt} elevated />
@@ -97,7 +103,15 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
               bullets={row.bullets}
               accentClass="text-pos"
               reverse={i % 2 === 1}
-              visual={row.shot ? <BrowserFrame src={row.shot.src} alt={row.shot.alt} /> : undefined}
+              visual={
+                row.shot ? (
+                  row.shot.phone ? (
+                    <PhoneFrame src={row.shot.src} alt={row.shot.alt} />
+                  ) : (
+                    <BrowserFrame src={row.shot.src} alt={row.shot.alt} />
+                  )
+                ) : undefined
+              }
             />
           ))}
         </section>
