@@ -21,6 +21,7 @@ import { readStoreClock } from './core/storeClock.js';
 import type { TagStation } from './tags.service.js';
 import type { PrepStatus } from './types.js';
 import { parseLineModifierSnapshot } from './modifiers.service.js';
+import { invalidatePublicMenu } from './public-menu/menu.service.js';
 
 export class KitchenError extends Error {
   constructor(message: string) {
@@ -394,6 +395,8 @@ export async function setStopListed(params: {
     [params.productId, params.storeId, params.stopListed, clock.today]
   );
   if (result.rows.length === 0) throw new KitchenNotFound('Товар не знайдено');
+  // The guest's menu greys the dish within one poll, not one cache lifetime.
+  invalidatePublicMenu(params.storeId);
   const on = (result.rows[0].stop_listed_on as string | null) ?? null;
   return { product_id: params.productId, stop_listed: on === clock.today, stop_listed_on: on };
 }

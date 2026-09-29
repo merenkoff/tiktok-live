@@ -10,6 +10,7 @@ import staticPlugin from '@fastify/static';
 import type { FastifyInstance } from 'fastify';
 import { registerPosRoutes } from './pos.controller.js';
 import { registerPosVersioning } from './pos.versioning.js';
+import { registerPublicMenuPages } from './public-menu/pages.routes.js';
 import { ensureUploadsDir, POS_UPLOADS_DIR, POS_UPLOADS_PREFIX } from './uploads.service.js';
 import { logger } from '../logger.js';
 
@@ -28,6 +29,10 @@ export async function registerPosPlugin(fastify: FastifyInstance): Promise<void>
     prefix: `${POS_UPLOADS_PREFIX}/`,
     decorateReply: false,
   });
+
+  // The guest's menu lives at the site's root (/m/<token>), not under /api/pos:
+  // it is the address printed on a table (TechDocs/POS_QR_MENU.md).
+  registerPublicMenuPages(fastify);
 
   await fastify.register(
     async (instance) => {

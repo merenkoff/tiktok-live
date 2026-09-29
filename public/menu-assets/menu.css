@@ -1,0 +1,137 @@
+/* The guest's menu (TechDocs/POS_QR_MENU.md). Served from /menu-assets/ rather
+   than /m/…, so the param route never has to tell a file from a token. Kept
+   plain on purpose: it is a page for a phone at a counter, not part of the
+   marketing design system, and it must not need a build step. */
+
+:root {
+  --bg: #f6f7f8;
+  --card: #fff;
+  --ink: #1c2126;
+  --muted: #667079;
+  --line: #e3e6e9;
+  --accent: #0a6cff;
+  --off: #9aa3ab;
+  --badge: #eceff2;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171a;
+    --card: #1e2226;
+    --ink: #f1f3f4;
+    --muted: #a0a9b1;
+    --line: #2d3339;
+    --accent: #5aa0ff;
+    --off: #6c757d;
+    --badge: #2a3036;
+  }
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+a { color: var(--accent); }
+
+.top { padding: 28px 16px 8px; max-width: 720px; margin: 0 auto; }
+.top h1 { margin: 0; font-size: 28px; line-height: 1.15; letter-spacing: -0.01em; }
+.top .sub { margin: 4px 0 0; color: var(--muted); }
+
+.tabs {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; gap: 8px; overflow-x: auto;
+  padding: 10px 16px; margin-top: 8px;
+  background: var(--bg); border-bottom: 1px solid var(--line);
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tabs a {
+  flex: none; padding: 8px 14px; border-radius: 999px;
+  background: var(--card); border: 1px solid var(--line);
+  color: var(--ink); text-decoration: none; font-weight: 600; font-size: 15px;
+}
+.tabs a.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+main { max-width: 720px; margin: 0 auto; padding: 0 16px 24px; }
+.cat { padding-top: 24px; scroll-margin-top: 64px; }
+.cat h2 { margin: 0 0 12px; font-size: 22px; letter-spacing: -0.01em; }
+.items { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.empty { color: var(--muted); padding: 32px 0; text-align: center; }
+
+.item {
+  display: flex; gap: 14px; align-items: flex-start;
+  background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 12px;
+}
+.pic { flex: none; width: 88px; height: 88px; border-radius: 12px; overflow: hidden; background: var(--badge); }
+.pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.body { flex: 1; min-width: 0; }
+.body h3 { margin: 0; font-size: 17px; line-height: 1.25; }
+.desc { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+.price { margin: 6px 0 0; font-weight: 700; }
+
+.badge {
+  display: inline-block; vertical-align: 2px; margin-left: 6px;
+  padding: 1px 8px; border-radius: 999px;
+  background: var(--badge); color: var(--muted);
+  font-size: 12px; font-weight: 600; letter-spacing: 0.02em;
+}
+.badge:empty { display: none; }
+
+/* A dish that is stopped or out stays on the page, greyed and captioned:
+   «Сирника немає» is an answer to the guest, an empty gap is not. */
+.item[data-state="stop"] .pic, .item[data-state="out"] .pic { opacity: 0.45; }
+.item[data-state="stop"] h3, .item[data-state="out"] h3,
+.item[data-state="stop"] .price, .item[data-state="out"] .price,
+.item[data-state="stop"] .desc, .item[data-state="out"] .desc { color: var(--off); }
+
+.sizes { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.sizes li {
+  padding: 4px 10px; border-radius: 10px; border: 1px solid var(--line);
+  font-size: 14px; white-space: nowrap;
+}
+.sizes li b { font-weight: 700; }
+.sizes li.off { color: var(--off); text-decoration: line-through; }
+
+.mods { margin-top: 8px; font-size: 14px; }
+.mods summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+.group { margin-top: 8px; }
+.group h4 { margin: 0; font-size: 14px; }
+.group h4 small { color: var(--muted); font-weight: 400; margin-left: 4px; }
+.group p { margin: 2px 0 0; color: var(--muted); }
+.group b { color: var(--ink); font-weight: 600; white-space: nowrap; }
+
+.foot { max-width: 720px; margin: 0 auto; padding: 8px 16px 40px; color: var(--muted); font-size: 13px; text-align: center; }
+.foot p { margin: 4px 0; }
+
+.gone { max-width: 420px; margin: 20vh auto 0; padding: 0 20px; text-align: center; }
+.gone h1 { font-size: 24px; margin: 0 0 8px; }
+.gone p { color: var(--muted); margin: 0; }
+
+/* The table-tent card. */
+.qr-page { background: var(--bg); }
+.card {
+  max-width: 360px; margin: 32px auto; padding: 28px 24px; text-align: center;
+  background: var(--card); border: 1px solid var(--line); border-radius: 20px;
+}
+.card h1 { margin: 0; font-size: 26px; line-height: 1.15; }
+.card .lead { margin: 6px 0 16px; font-size: 18px; font-weight: 600; }
+.qr { width: 260px; max-width: 100%; margin: 0 auto; }
+.qr svg { width: 100%; height: auto; display: block; }
+.card .url { margin: 12px 0 0; color: var(--muted); font-size: 13px; word-break: break-all; }
+.card .hint { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+.print {
+  margin-top: 20px; padding: 12px 22px; border: 0; border-radius: 12px;
+  background: var(--accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+}
+
+@media print {
+  @page { size: A6 portrait; margin: 8mm; }
+  body { background: #fff; color: #000; }
+  .print { display: none; }
+  .card { border: 0; margin: 0 auto; padding: 0; background: #fff; max-width: none; }
+  .card .lead, .card h1, .card .url, .card .hint { color: #000; }
+  .qr { width: 70mm; }
+}
