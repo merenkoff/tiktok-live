@@ -448,6 +448,13 @@ export const ROADMAP: readonly RoadmapItem[] = [
     body: 'Прийняти замовлення на терасі, де не ловить Wi-Fi, і відправити на кухню, щойно зв\'язок повернеться.',
     progress: 10,
   },
+  {
+    id: 'table-qr',
+    vertical: 'restaurant',
+    title: 'QR-меню на кожен стіл',
+    body: 'Свій QR на кожному столі: гість сканує й бачить меню з номером свого столу. Лист QR для всіх столів друкується з плану залу. Зараз є одне меню на весь заклад.',
+    progress: 15,
+  },
 ];
 
 export function roadmapFor(vertical: VerticalId): RoadmapItem[] {
