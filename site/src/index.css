@@ -152,6 +152,14 @@ html.apple {
 .article th {
   @apply bg-side font-semibold;
 }
+/* A wide comparison table scrolls inside the card on a phone instead of
+   pushing the whole page sideways. */
+.article .table-scroll {
+  @apply overflow-x-auto;
+}
+.article .table-scroll table {
+  min-width: 34rem;
+}
 .article .lead {
   @apply text-lg text-ink leading-relaxed border-l-4 border-pos pl-5 my-6;
 }

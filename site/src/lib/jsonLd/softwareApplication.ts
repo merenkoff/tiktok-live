@@ -7,6 +7,9 @@ import {
   availableFeatureLabels,
 } from '../productFacts';
 
+/** The one product node: /pos describes it in full, every vertical landing points at it by this id. */
+export const POS_SOFTWARE_ID = `${PRODUCT.pos.url}#software`;
+
 const provider = { '@type': 'Organization', '@id': `${ORG.url}/#organization`, name: ORG.name };
 
 const IN_STOCK = 'https://schema.org/InStock';
@@ -27,6 +30,7 @@ export function posSoftwareJsonLd() {
   return {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
+    '@id': POS_SOFTWARE_ID,
     name: PRODUCT.pos.name,
     alternateName: PRODUCT.pos.alternateName,
     applicationCategory: 'BusinessApplication',

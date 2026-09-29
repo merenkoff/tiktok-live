@@ -61,6 +61,28 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
           </Reveal>
         </section>
 
+        {/* Answer-first summary */}
+        {content.overview && (
+          <section className="max-w-4xl mx-auto px-6 pb-20" aria-labelledby="overview-title">
+            <Reveal>
+              <div className="card p-6 sm:p-10">
+                <h2 id="overview-title" className="h-section text-left">
+                  {content.overview.title}
+                </h2>
+                <p className="text-body text-[17px] leading-relaxed mt-4">{content.overview.body}</p>
+                <dl className="mt-8 grid sm:grid-cols-2 gap-x-10 gap-y-5">
+                  {content.overview.facts.map((f) => (
+                    <div key={f.label}>
+                      <dt className="text-[13px] font-semibold text-muted">{f.label}</dt>
+                      <dd className="text-[15px] text-ink mt-1 leading-relaxed">{f.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            </Reveal>
+          </section>
+        )}
+
         {/* Rows */}
         <section className="max-w-6xl mx-auto px-6 pb-12">
           <Reveal>
@@ -128,6 +150,28 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
             )}
           </Reveal>
         </section>
+
+        {/* Articles that answer this business's search questions */}
+        {content.articles && content.articles.length > 0 && (
+          <section className="max-w-6xl mx-auto px-6 pb-24">
+            <Reveal>
+              <SectionHeading title="Читайте також" className="mb-10" />
+            </Reveal>
+            <StaggerGroup className="grid md:grid-cols-3 gap-6">
+              {content.articles.map((a) => (
+                <StaggerItem key={a.slug} className="h-full">
+                  <a href={`/dovidka/${a.slug}`} className="block h-full card-flat p-6 transition-colors hover:bg-selected">
+                    <h3 className="font-bold text-ink-strong leading-snug">{a.title}</h3>
+                    <p className="text-muted text-[15px] mt-2 leading-relaxed">{a.blurb}</p>
+                    <span className="link-more text-[15px] mt-4">
+                      Читати <ChevronRight size={20} />
+                    </span>
+                  </a>
+                </StaggerItem>
+              ))}
+            </StaggerGroup>
+          </section>
+        )}
 
         {/* Other verticals */}
         <section className="max-w-6xl mx-auto px-6 pb-24">
