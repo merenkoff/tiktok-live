@@ -10,6 +10,7 @@ import { PageHeader, SectionHead } from '../../components/ui/Page';
 import { Plus, Settings } from '../../platform/glyphs';
 import { FiscalSettingsCard } from './FiscalSettingsCard';
 import { PublicMenuCard } from './PublicMenuCard';
+import { StoreProfileCard } from './StoreProfileCard';
 import { MODULES } from '../../modules/registry';
 import { SlotBoundary } from '../../modules/SlotBoundary';
 import { reportModuleEvent } from '../../modules/telemetry';
@@ -425,6 +426,11 @@ export function SettingsPage() {
             the same reason as the card above. A store with no kitchen never
             asks. `posRequest` is the only client method it needs. */}
         {vertical.id === 'cafe' && typeof api.posRequest === 'function' && <PublicMenuCard />}
+
+        {/* What that page says about the place itself — logo, address, phone,
+            hours. Same reasons for a card of its own; hides itself for a seller
+            and for a backend that has no such route yet. */}
+        {vertical.id === 'cafe' && typeof api.posRequest === 'function' && <StoreProfileCard />}
 
         <section>
           <SectionHead title="TikTok LIVE" />

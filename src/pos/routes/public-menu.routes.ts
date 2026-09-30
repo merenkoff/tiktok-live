@@ -11,6 +11,12 @@
 //     answers a wrong, rotated or switched-off token exactly like a token that
 //     never existed. The page's script polls it for the stop-list.
 //
+//   /store/profile, /store/logo — the OWNER's card for the place itself: logo,
+//     address, phone, opening hours (phase Q3a). Its own endpoints for the same
+//     reason as the switch below, and because the logo is a file: an owner-only
+//     upload that does not need the `products` module the till's `/uploads`
+//     asks for — settings are core, reachable with every module switched off.
+//
 //   /store/public-menu — the OWNER's switch. PATCH, because the till's client
 //     reaches it through `posRequest`, which has no PUT, and it is a partial
 //     update anyway. A dedicated endpoint rather than a field on `PATCH
@@ -40,15 +46,20 @@ import {
   PublicMenuError,
   findMenuTable,
   getPublicMenuSettings,
+  getStoreProfile,
   loadPublicMenu,
   rotatePublicMenuToken,
   setPublicMenuBill,
   setPublicMenuEnabled,
   setPublicMenuOrdering,
+  updateStoreProfile,
   type MenuTable,
 } from '../public-menu/menu.service.js';
+import { PROFILE_FIELDS, ProfileError, normalizeProfilePatch } from '../public-menu/profile.js';
 import { MENU_PAGE_HEADERS } from '../public-menu/render.js';
 import { verifyTableKey } from '../public-menu/table-keys.js';
+import { saveProductImage } from '../uploads.service.js';
+import { errorMessage } from './_shared.js';
 
 /** A guest's request for dishes answers with these statuses; anything else is a real 500. */
 function sendGuestOrderError(reply: FastifyReply, error: unknown): unknown {
@@ -170,6 +181,45 @@ export function registerPublicMenuRoutes(fastify: FastifyInstance): void {
     } catch (error) {
       if (error instanceof PublicMenuError) return reply.code(409).send({ error: error.message });
       throw error;
+    }
+  });
+
+  fastify.get('/store/profile', async (request, reply) => {
+    const auth = await ensurePosOwner(request, reply);
+    if (!auth) return;
+    return getStoreProfile(auth.storeId);
+  });
+
+  // A field left out is left alone; `null` clears it. Every value is checked
+  // before anything is written, so a bad phone cannot half-save the hours.
+  fastify.patch('/store/profile', async (request, reply) => {
+    const auth = await ensurePosOwner(request, reply);
+    if (!auth) return;
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    if (!PROFILE_FIELDS.some((field) => body[field] !== undefined)) {
+      return reply.code(400).send({ error: 'Потрібне logo_url, address, phone або hours' });
+    }
+    try {
+      return await updateStoreProfile(auth.storeId, normalizeProfilePatch(body));
+    } catch (error) {
+      if (error instanceof ProfileError) return reply.code(400).send({ error: error.message });
+      if (error instanceof PublicMenuError) return reply.code(409).send({ error: error.message });
+      throw error;
+    }
+  });
+
+  // Only stores the file; `PATCH /store/profile` is what makes it the logo, so
+  // an upload the owner abandons changes nothing on the guest's page.
+  fastify.post('/store/logo', async (request, reply) => {
+    const auth = await ensurePosOwner(request, reply);
+    if (!auth) return;
+    try {
+      const file = await request.file();
+      if (!file) return reply.code(400).send({ error: 'file required' });
+      const saved = await saveProductImage(file);
+      return reply.code(201).send(saved);
+    } catch (error) {
+      return reply.code(400).send({ error: errorMessage(error) });
     }
   });
 

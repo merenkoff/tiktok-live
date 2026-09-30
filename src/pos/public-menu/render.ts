@@ -17,6 +17,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import qrcode from 'qrcode-generator';
 import { deltaText, formatUahGuestCompact, groupHint, tableLabel } from './format.js';
+import { phoneHref } from './profile.js';
 
 export { tableLabel };
 import {
@@ -26,6 +27,7 @@ import {
   type MenuTable,
   type PublicMenu,
   type PublicMenuProduct,
+  type PublicMenuStore,
 } from './menu.service.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -148,6 +150,41 @@ function renderProduct(product: PublicMenuProduct, ordering = false): string {
   );
 }
 
+/**
+ * The place's own details under its name: the address (a map link built HERE
+ * from the address text — an owner-typed URL is never trusted), the phone (a
+ * `tel:` link built from its digits), and today's hours with the week folded
+ * under them. Each line is there only if the owner filled it in; a bare menu
+ * with none of them is exactly the header it always was.
+ */
+function renderContacts(store: PublicMenuStore): string {
+  const items: string[] = [];
+  if (store.address) {
+    const map = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(store.address)}`;
+    items.push(
+      `<li class="c-addr"><a href="${escapeHtml(map)}" target="_blank" rel="noopener noreferrer">${escapeHtml(store.address)}</a></li>`
+    );
+  }
+  const tel = phoneHref(store.phone);
+  if (store.phone && tel) {
+    items.push(`<li class="c-phone"><a href="${escapeHtml(tel)}">${escapeHtml(store.phone)}</a></li>`);
+  }
+  if (store.hours_today) {
+    if (store.hours.length > 1) {
+      const week = store.hours
+        .map((row) => `<li><span>${escapeHtml(row.days)}</span><b>${escapeHtml(row.text)}</b></li>`)
+        .join('');
+      items.push(
+        `<li class="c-hours"><details><summary>Сьогодні ${escapeHtml(store.hours_today)}</summary><ul class="week">${week}</ul></details></li>`
+      );
+    } else {
+      const only = store.hours[0];
+      items.push(`<li class="c-hours">${escapeHtml(only ? `${only.days} ${only.text}` : `Сьогодні ${store.hours_today}`)}</li>`);
+    }
+  }
+  return items.length ? `<ul class="contacts">${items.join('')}</ul>` : '';
+}
+
 export interface MenuPageOptions {
   /**
    * The QR carried this table's key and the owner lets guests read the bill:
@@ -185,7 +222,11 @@ export function renderMenuPage(
   const seat = table
     ? `<p class="at-table"><b>${escapeHtml(tableLabel(table.name))}</b> · ${escapeHtml(table.hall)}</p>`
     : '';
-  const body = `<header class="top"><h1>${escapeHtml(menu.store.name)}</h1><p class="sub">Меню</p>${seat}</header>
+  // The size is in attributes, not a style: the page's CSP has no inline style.
+  const logo = menu.store.logo_url
+    ? `<img class="logo" src="${escapeHtml(menu.store.logo_url)}" width="56" height="56" alt="">`
+    : '';
+  const body = `<header class="top"><div class="brand">${logo}<div><h1>${escapeHtml(menu.store.name)}</h1><p class="sub">Меню</p></div></div>${seat}${renderContacts(menu.store)}</header>
 ${tabs ? `<nav class="tabs" aria-label="Розділи меню">${tabs}</nav>` : ''}
 <main>
 ${empty}${sections}

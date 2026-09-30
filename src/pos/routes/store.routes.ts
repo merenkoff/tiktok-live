@@ -14,6 +14,7 @@ import {
 } from '../core/modules.js';
 import { sanitizeNavOverrides } from '../core/nav.js';
 import { getFiscalSettings } from '../fiscal/settings.service.js';
+import { invalidatePublicMenu } from '../public-menu/menu.service.js';
 import { errorMessage } from './_shared.js';
 
 export function registerStoreRoutes(fastify: FastifyInstance): void {
@@ -138,7 +139,11 @@ export function registerStoreRoutes(fastify: FastifyInstance): void {
       if (body.florist_labour_bps !== undefined) {
         patch.florist_labour_bps = body.florist_labour_bps as number;
       }
-      return await analyticsService.updateStore(auth.storeId, patch);
+      const updated = await analyticsService.updateStore(auth.storeId, patch);
+      // The name is the guest menu's heading (and, on the QR-menu's cached store
+      // row, up to 15 s stale otherwise).
+      invalidatePublicMenu(auth.storeId);
+      return updated;
     } catch (error) {
       return reply.code(400).send({ error: errorMessage(error) });
     }
