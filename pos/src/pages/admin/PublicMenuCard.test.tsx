@@ -19,6 +19,8 @@ type Settings = {
   token: string | null;
   url: string | null;
   tables?: number;
+  bill_enabled?: boolean;
+  print?: string | null;
 };
 
 const posRequest = vi.fn<[string, string, unknown?], Promise<Settings>>();
@@ -92,7 +94,7 @@ describe('PublicMenuCard', () => {
     posRequest.mockResolvedValueOnce({ ...ON, tables: 12 });
     const withTables = renderWithProviders(<PublicMenuCard />);
     const link = await screen.findByText('QR для всіх столів (12)');
-    expect(link).toHaveAttribute('href', `${ON.url}/tables`);
+    expect(link).toHaveAttribute('href', `${ON.url}/tables`); // no print link in this answer
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
     withTables.unmount();
@@ -108,6 +110,48 @@ describe('PublicMenuCard', () => {
     renderWithProviders(<PublicMenuCard />);
     await screen.findByText('Друкувати QR');
     expect(screen.queryByText(/QR для всіх столів/)).not.toBeInTheDocument();
+  });
+
+  it('signs the sheet of tables with the print link the server sent, and refuses one that is not the server’s shape', async () => {
+    const print = `1790750000.${'D'.repeat(43)}`;
+    posRequest.mockResolvedValueOnce({ ...ON, tables: 4, print });
+    const signed = renderWithProviders(<PublicMenuCard />);
+    expect(await screen.findByText('QR для всіх столів (4)')).toHaveAttribute('href', `${ON.url}/tables?p=${print}`);
+    signed.unmount();
+
+    posRequest.mockResolvedValueOnce({ ...ON, tables: 4, print: 'x&y=1' });
+    renderWithProviders(<PublicMenuCard />);
+    expect(await screen.findByText('QR для всіх столів (4)')).toHaveAttribute('href', `${ON.url}/tables`);
+  });
+
+  it('offers the guest-bill switch only where there are tables, and keeps it once it is on', async () => {
+    posRequest.mockResolvedValueOnce({ ...ON, tables: 0 });
+    const counter = renderWithProviders(<PublicMenuCard />);
+    await screen.findByText('Друкувати QR');
+    expect(screen.queryByLabelText('Показувати гостю рахунок його столу')).not.toBeInTheDocument();
+    counter.unmount();
+
+    posRequest.mockResolvedValueOnce({ ...ON, tables: 0, bill_enabled: true });
+    const stillOn = renderWithProviders(<PublicMenuCard />);
+    expect(await screen.findByLabelText('Показувати гостю рахунок його столу')).toBeChecked();
+    stillOn.unmount();
+
+    posRequest.mockResolvedValueOnce({ ...ON, tables: 6, bill_enabled: false });
+    renderWithProviders(<PublicMenuCard />);
+    expect(await screen.findByLabelText('Показувати гостю рахунок його столу')).not.toBeChecked();
+  });
+
+  it('switches the guest bill with its own field, leaving the menu’s switch alone', async () => {
+    posRequest
+      .mockResolvedValueOnce({ ...ON, tables: 6, bill_enabled: false })
+      .mockResolvedValueOnce({ ...ON, tables: 6, bill_enabled: true });
+    renderWithProviders(<PublicMenuCard />);
+    await userEvent.click(await screen.findByLabelText('Показувати гостю рахунок його столу'));
+
+    expect(posRequest).toHaveBeenLastCalledWith('patch', '/store/public-menu', { bill_enabled: true });
+    expect(await screen.findByLabelText('Показувати гостю рахунок його столу')).toBeChecked();
+    expect(screen.getByRole('status')).toHaveTextContent('бачитиме рахунок');
+    expect(toggle()).toBeChecked(); // the menu itself is still published
   });
 
   it('turns it off and hides the address, keeping the retire button (the token still exists)', async () => {

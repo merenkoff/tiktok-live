@@ -26,14 +26,18 @@
 
 import type { FastifyInstance } from 'fastify';
 import { ensurePosOwner } from '../core/auth.js';
+import { loadGuestBill } from '../public-menu/guest-bill.js';
 import {
   PublicMenuError,
+  findMenuTable,
   getPublicMenuSettings,
   loadPublicMenu,
   rotatePublicMenuToken,
+  setPublicMenuBill,
   setPublicMenuEnabled,
 } from '../public-menu/menu.service.js';
 import { MENU_PAGE_HEADERS } from '../public-menu/render.js';
+import { verifyTableKey } from '../public-menu/table-keys.js';
 
 export function registerPublicMenuRoutes(fastify: FastifyInstance): void {
   fastify.get('/public/menu/:token', async (request, reply) => {
@@ -45,6 +49,24 @@ export function registerPublicMenuRoutes(fastify: FastifyInstance): void {
     return found.menu;
   });
 
+  // The bill of the guest's own table (phase Q5). Behind three checks that all
+  // answer with the SAME 404 — a wrong or rotated token, a bill switch that is
+  // off, a table or key that does not match — so the response never says which
+  // tokens or tables exist. `t` and `k` are the two halves of what the table's
+  // QR carries.
+  fastify.get('/public/menu/:token/bill', async (request, reply) => {
+    const { token } = request.params as { token: string };
+    reply.header('Cache-Control', 'no-store');
+    reply.header('X-Robots-Tag', MENU_PAGE_HEADERS['X-Robots-Tag']!);
+    const query = (request.query ?? {}) as { t?: unknown; k?: unknown };
+    const found = await loadPublicMenu(token);
+    const table = found && found.store.billEnabled ? await findMenuTable(found.store.id, query.t) : null;
+    if (!found || !table || !(await verifyTableKey(found.store.id, table.id, query.k))) {
+      return reply.code(404).send({ error: 'Рахунок недоступний' });
+    }
+    return loadGuestBill(found.store.id, table);
+  });
+
   fastify.get('/store/public-menu', async (request, reply) => {
     const auth = await ensurePosOwner(request, reply);
     if (!auth) return;
@@ -54,12 +76,22 @@ export function registerPublicMenuRoutes(fastify: FastifyInstance): void {
   fastify.patch('/store/public-menu', async (request, reply) => {
     const auth = await ensurePosOwner(request, reply);
     if (!auth) return;
-    const body = (request.body ?? {}) as { enabled?: unknown };
-    if (typeof body.enabled !== 'boolean') {
-      return reply.code(400).send({ error: 'enabled має бути true або false' });
+    const body = (request.body ?? {}) as { enabled?: unknown; bill_enabled?: unknown };
+    const hasEnabled = body.enabled !== undefined;
+    const hasBill = body.bill_enabled !== undefined;
+    if (!hasEnabled && !hasBill) {
+      return reply.code(400).send({ error: 'Потрібне enabled або bill_enabled' });
+    }
+    if ((hasEnabled && typeof body.enabled !== 'boolean') || (hasBill && typeof body.bill_enabled !== 'boolean')) {
+      return reply.code(400).send({ error: 'enabled і bill_enabled мають бути true або false' });
     }
     try {
-      return await setPublicMenuEnabled(auth.storeId, body.enabled);
+      // One field per call is what the card sends; both at once apply in order
+      // and the answer is the state after the last.
+      let settings = null;
+      if (hasEnabled) settings = await setPublicMenuEnabled(auth.storeId, body.enabled as boolean);
+      if (hasBill) settings = await setPublicMenuBill(auth.storeId, body.bill_enabled as boolean);
+      return settings;
     } catch (error) {
       if (error instanceof PublicMenuError) return reply.code(409).send({ error: error.message });
       throw error;

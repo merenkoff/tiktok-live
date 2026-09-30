@@ -32,7 +32,19 @@ describe('loadPublicMenu', () => {
 
   it('is «on» with the address of a published menu, minus a trailing slash', async () => {
     posRequest.mockResolvedValue({ available: true, enabled: true, url: 'https://the-live.shop/m/tok_ABC/' });
-    expect(await loadPublicMenu()).toEqual({ kind: 'on', url: 'https://the-live.shop/m/tok_ABC' });
+    expect(await loadPublicMenu()).toEqual({ kind: 'on', url: 'https://the-live.shop/m/tok_ABC', print: null });
+  });
+
+  it('carries the owner’s print link, and only one that looks like the server’s', async () => {
+    const link = `1790750000.${'A'.repeat(43)}`;
+    posRequest.mockResolvedValue({ available: true, enabled: true, url: 'https://the-live.shop/m/tok_ABC', print: link });
+    expect(await loadPublicMenu()).toEqual({ kind: 'on', url: 'https://the-live.shop/m/tok_ABC', print: link });
+    // A value that is not the server's shape never reaches a URL.
+    for (const print of ['x&y=1', '../..', `${link}&t=1`, '', 5, null, undefined]) {
+      posRequest.mockReset();
+      posRequest.mockResolvedValue({ available: true, enabled: true, url: 'https://the-live.shop/m/tok_ABC', print });
+      expect(await loadPublicMenu()).toMatchObject({ kind: 'on', print: null });
+    }
   });
 
   it('is «off» when the menu exists but is switched off — the one case worth a sentence', async () => {
@@ -75,5 +87,11 @@ describe('the addresses the server draws', () => {
 
   it('names the sheet of every table', () => {
     expect(tablesSheetUrl('https://the-live.shop/m/tok_ABC')).toBe('https://the-live.shop/m/tok_ABC/tables');
+  });
+
+  it('adds the print link, so the server puts each table’s key into its QR', () => {
+    const link = `1790750000.${'B'.repeat(43)}`;
+    expect(tableQrUrl('https://the-live.shop/m/tok_ABC', 42, link)).toBe(`https://the-live.shop/m/tok_ABC/qr?t=42&p=${link}`);
+    expect(tablesSheetUrl('https://the-live.shop/m/tok_ABC', link)).toBe(`https://the-live.shop/m/tok_ABC/tables?p=${link}`);
   });
 });

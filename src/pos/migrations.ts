@@ -92,6 +92,8 @@ export const POS_MIGRATIONS = [
   '055_pos_demo_clothing_store.sql',
   // The guest's QR menu: switch + URL token, and a fixed token for the demo cafés.
   '056_pos_public_menu.sql',
+  // The guest sees their own table's bill: a per-table key, the owner's switch, the print-link secret.
+  '057_pos_guest_bill.sql',
 ] as const;
 
 export function readMigration(file: string): string {

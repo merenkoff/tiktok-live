@@ -16,7 +16,9 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import qrcode from 'qrcode-generator';
-import { deltaText, formatUahGuestCompact, groupHint } from './format.js';
+import { deltaText, formatUahGuestCompact, groupHint, tableLabel } from './format.js';
+
+export { tableLabel };
 import {
   menuUrl,
   publicBaseUrl,
@@ -144,12 +146,22 @@ function renderProduct(product: PublicMenuProduct): string {
   );
 }
 
-/** «Стіл 5»; an owner who already named it «Стіл 5» does not get «Стіл Стіл 5». */
-export function tableLabel(name: string): string {
-  return /^стіл/i.test(name.trim()) ? name.trim() : `Стіл ${name.trim()}`;
+export interface MenuPageOptions {
+  /**
+   * The QR carried this table's key and the owner lets guests read the bill:
+   * the page gets a «Рахунок» bar and a sheet the script fills from `/bill`.
+   * Never true without a table — the bill is a table's.
+   */
+  bill?: boolean;
 }
 
-export function renderMenuPage(menu: PublicMenu, token: string, table: MenuTable | null = null): string {
+export function renderMenuPage(
+  menu: PublicMenu,
+  token: string,
+  table: MenuTable | null = null,
+  options: MenuPageOptions = {}
+): string {
+  const showBill = Boolean(options.bill && table);
   const tabs = menu.categories
     .map((c, i) => `<a href="#c-${c.id ?? 'other'}"${i === 0 ? ' class="on"' : ''}>${escapeHtml(c.name)}</a>`)
     .join('');
@@ -169,12 +181,32 @@ ${tabs ? `<nav class="tabs" aria-label="Розділи меню">${tabs}</nav>` 
 <main>
 ${empty}${sections}
 </main>
-<footer class="foot"><p>Стоп-лист і ціни оновлюються самі.</p><p><a href="${escapeHtml(publicBaseUrl())}/pos/kafe" rel="noopener">Меню працює на The Live Shop POS</a></p></footer>`;
+<footer class="foot"><p>Стоп-лист і ціни оновлюються самі.</p><p><a href="${escapeHtml(publicBaseUrl())}/pos/kafe" rel="noopener">Меню працює на The Live Shop POS</a></p></footer>${showBill ? billMarkup(table!) : ''}`;
   return shell(
     `${menu.store.name} — меню`,
     body,
-    ` data-menu-url="/api/pos/public/menu/${escapeHtml(token)}" data-store-day="${escapeHtml(menu.store_day)}"`
+    ` data-menu-url="/api/pos/public/menu/${escapeHtml(token)}" data-store-day="${escapeHtml(menu.store_day)}"` +
+      (showBill ? ` data-bill-url="/api/pos/public/menu/${escapeHtml(token)}/bill"` : '')
   );
+}
+
+/**
+ * The guest's bill: a bar pinned to the bottom and a sheet over the page. Only
+ * the frame is server-rendered — the lines arrive from `/bill` and are put in
+ * with `textContent`, so nothing an owner typed is ever parsed as markup by the
+ * script. The table's key is not here: the script reads it from the address
+ * bar, where the QR put it.
+ */
+function billMarkup(table: MenuTable): string {
+  const label = escapeHtml(tableLabel(table.name));
+  return `
+<button type="button" class="bill-bar" data-bill-open>Рахунок · ${label}</button>
+<div class="bill-sheet" data-bill-sheet hidden role="dialog" aria-modal="true" aria-labelledby="bill-title">
+<div class="bill-panel">
+<header class="bill-head"><h2 id="bill-title">Рахунок · ${label}</h2><button type="button" class="bill-close" data-bill-close aria-label="Закрити">×</button></header>
+<div class="bill-body" data-bill-body aria-live="polite"></div>
+</div>
+</div>`;
 }
 
 // ── the QR card ─────────────────────────────────────────────────────
@@ -187,12 +219,35 @@ export function qrSvg(url: string): string {
   return qr.createSvgTag({ cellSize: 1, margin: 4, scalable: true });
 }
 
-export function renderQrCard(storeName: string, token: string, table: MenuTable | null = null): string {
-  const url = table ? tableMenuUrl(token, table.id) : menuUrl(token);
+export interface PrintOptions {
+  /**
+   * The key printed in the table's QR — passed only when the request carried a
+   * valid print link. Without it the QR still opens the menu with the table's
+   * name on it, but the guest cannot read the bill.
+   */
+  key?: string;
+  /** The owner lets guests read the bill, yet this page was opened without a print link. */
+  missingKey?: boolean;
+}
+
+const MISSING_KEY_NOTICE =
+  'Ця сторінка відкрита без ключа столу: QR відкриє меню, але не рахунок. Відкрийте її кнопкою «QR для всіх столів» у «Налаштуваннях» або в «Залах і столах».';
+
+function notice(options: PrintOptions): string {
+  return options.missingKey ? `<p class="notice">${escapeHtml(MISSING_KEY_NOTICE)}</p>` : '';
+}
+
+export function renderQrCard(
+  storeName: string,
+  token: string,
+  table: MenuTable | null = null,
+  options: PrintOptions = {}
+): string {
+  const url = table ? tableMenuUrl(token, table.id, options.key) : menuUrl(token);
   const seat = table
     ? `<p class="seat"><b>${escapeHtml(tableLabel(table.name))}</b><span>${escapeHtml(table.hall)}</span></p>`
     : '';
-  const body = `<main class="card">
+  const body = `${table ? notice(options) : ''}<main class="card">
 <h1>${escapeHtml(storeName)}</h1>
 ${seat}<p class="lead">Скануйте — меню на телефоні</p>
 <div class="qr">${qrSvg(url)}</div>
@@ -205,17 +260,23 @@ ${seat}<p class="lead">Скануйте — меню на телефоні</p>
 
 /**
  * One sheet with a QR card for every table, ready to print and cut: the owner
- * lays out the room once and prints it once. Public by the same token as the
- * menu — the names of the tables are what is printed on the tables — and it
- * carries no bill, no seat count and no layout.
+ * lays out the room once and prints it once. Reachable by the same token as
+ * the menu — the names of the tables are what is printed on the tables — and
+ * it carries no bill, no seat count and no layout. The tables' KEYS go into
+ * the QR codes only when the request brought a valid print link (`options.keys`).
  */
-export function renderTablesSheet(storeName: string, token: string, tables: MenuTable[]): string {
+export function renderTablesSheet(
+  storeName: string,
+  token: string,
+  tables: MenuTable[],
+  options: PrintOptions & { keys?: Map<number, string> } = {}
+): string {
   const cards = tables
     .map(
       (table) => `<article class="card table-card">
 <h2>${escapeHtml(storeName)}</h2>
 <p class="seat"><b>${escapeHtml(tableLabel(table.name))}</b><span>${escapeHtml(table.hall)}</span></p>
-<div class="qr">${qrSvg(tableMenuUrl(token, table.id))}</div>
+<div class="qr">${qrSvg(tableMenuUrl(token, table.id, options.keys?.get(table.id)))}</div>
 <p class="hint">Скануйте — меню на телефоні</p>
 </article>`
     )
@@ -224,7 +285,7 @@ export function renderTablesSheet(storeName: string, token: string, tables: Menu
 <div><h1>QR для столів</h1><p>${escapeHtml(storeName)} · столів: ${tables.length}</p></div>
 ${tables.length ? '<button type="button" class="print" data-print>Друкувати</button>' : ''}
 </header>
-<main class="sheet">
+${tables.length ? notice(options) : ''}<main class="sheet">
 ${cards || '<p class="empty">Столів ще немає. Додайте зали й столи в розділі «Зали і столи» — і QR для кожного з’явиться тут.</p>'}
 </main>`;
   return shell(`QR для столів — ${storeName}`, body, ' class="sheet-page"');

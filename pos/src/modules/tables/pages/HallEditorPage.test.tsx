@@ -39,7 +39,8 @@ let halls: Array<Record<string, unknown>>;
 let menu: Record<string, unknown> | undefined;
 
 const MENU_URL = 'https://the-live.shop/m/tok_ABCdef123456';
-const publishedMenu = { available: true, enabled: true, token: 'tok_ABCdef123456', url: MENU_URL, tables: 1 };
+const PRINT = `1790750000.${'C'.repeat(43)}`;
+const publishedMenu = { available: true, enabled: true, token: 'tok_ABCdef123456', url: MENU_URL, tables: 1, print: PRINT };
 
 beforeEach(() => {
   halls = [{ id: 1, name: 'Зала', sort_order: 0, is_active: true, tables: [table()] }];
@@ -155,7 +156,7 @@ describe('HallEditorPage', () => {
       const link = await screen.findByTestId('editor-form-qr');
       expect(link).toHaveTextContent('QR цього столу');
       // The id, not the name: the owner can rename a table, the printed QR must not die with it.
-      expect(link).toHaveAttribute('href', `${MENU_URL}/qr?t=11`);
+      expect(link).toHaveAttribute('href', `${MENU_URL}/qr?t=11&p=${PRINT}`);
       expect(link).toHaveAttribute('target', '_blank');
       expect(link).toHaveAttribute('rel', 'noopener noreferrer');
     });
@@ -173,10 +174,10 @@ describe('HallEditorPage', () => {
       ];
       renderWithProviders(<HallEditorPage />);
       await openTable(11);
-      expect(await screen.findByTestId('editor-form-qr')).toHaveAttribute('href', `${MENU_URL}/qr?t=11`);
+      expect(await screen.findByTestId('editor-form-qr')).toHaveAttribute('href', `${MENU_URL}/qr?t=11&p=${PRINT}`);
       await userEvent.click(screen.getByTestId('editor-table-12'));
       await waitFor(() =>
-        expect(screen.getByTestId('editor-form-qr')).toHaveAttribute('href', `${MENU_URL}/qr?t=12`)
+        expect(screen.getByTestId('editor-form-qr')).toHaveAttribute('href', `${MENU_URL}/qr?t=12&p=${PRINT}`)
       );
     });
 
@@ -185,7 +186,7 @@ describe('HallEditorPage', () => {
       renderWithProviders(<HallEditorPage />);
       const link = await screen.findByTestId('editor-qr-sheet');
       expect(link).toHaveTextContent('QR для всіх столів');
-      expect(link).toHaveAttribute('href', `${MENU_URL}/tables`);
+      expect(link).toHaveAttribute('href', `${MENU_URL}/tables?p=${PRINT}`);
       expect(link).toHaveAttribute('target', '_blank');
       expect(link).toHaveAttribute('rel', 'noopener noreferrer');
     });

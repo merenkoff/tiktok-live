@@ -174,7 +174,7 @@ export function HallEditorPage(): JSX.Element {
                 <a
                   className="sq-btn-quiet whitespace-nowrap"
                   data-testid="editor-qr-sheet"
-                  href={tablesSheetUrl(menu.url)}
+                  href={tablesSheetUrl(menu.url, menu.print)}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -394,7 +394,7 @@ export function HallEditorPage(): JSX.Element {
               <a
                 className="sq-btn-quiet whitespace-nowrap"
                 data-testid="editor-form-qr"
-                href={tableQrUrl(menu.url, editing as number)}
+                href={tableQrUrl(menu.url, editing as number, menu.print)}
                 target="_blank"
                 rel="noopener noreferrer"
               >

@@ -94,6 +94,123 @@
   });
   if (!document.hidden) start();
 
+  /* The guest's bill (phase Q5). The page only has the frame; every word inside
+     the sheet arrives from /bill and goes in with textContent, so nothing an
+     owner typed is ever parsed as markup here. The table's key is read from the
+     address bar, where the QR put it. */
+  var billUrl = document.body.getAttribute('data-bill-url');
+  if (billUrl) initBill(billUrl);
+
+  function initBill(endpoint) {
+    var params = new URLSearchParams(window.location.search);
+    var table = params.get('t') || '';
+    var key = params.get('k') || '';
+    var bar = document.querySelector('[data-bill-open]');
+    var sheet = document.querySelector('[data-bill-sheet]');
+    var target = document.querySelector('[data-bill-body]');
+    var closer = document.querySelector('[data-bill-close]');
+    if (!bar || !sheet || !target || !closer) return;
+    var BILL_POLL_MS = 20000;
+    var billTimer = null;
+
+    var STATUS = { cooking: 'Готується', ready: 'Готово, зараз принесуть', served: 'Подано' };
+
+    function node(tag, className, text) {
+      var el = document.createElement(tag);
+      if (className) el.className = className;
+      if (text != null) el.textContent = text;
+      return el;
+    }
+
+    function say(message) {
+      target.textContent = '';
+      target.appendChild(node('p', 'bill-note', message));
+    }
+
+    function render(bill) {
+      target.textContent = '';
+      if (!bill.open) {
+        say('Рахунок ще не відкрито. Коли замовлення піде на кухню, воно з’явиться тут.');
+        return;
+      }
+      if (!bill.rounds.length) {
+        say('Поки нічого не відправлено на кухню.');
+        return;
+      }
+      bill.rounds.forEach(function (round) {
+        var block = node('section', 'bill-round');
+        var head = node('h3', 'bill-round-head');
+        head.appendChild(node('span', null, 'Замовлення ' + round.seq + ' · ' + round.at));
+        head.appendChild(node('small', 'bill-status', STATUS[round.status] || STATUS.cooking));
+        block.appendChild(head);
+        round.lines.forEach(function (line) {
+          var row = node('div', 'bill-line' + (line.paid ? ' paid' : ''));
+          var name = node('div', 'bill-line-name');
+          name.appendChild(node('span', null, line.quantity + ' × ' + line.name));
+          if (line.caption) name.appendChild(node('small', null, line.caption));
+          if (line.paid) name.appendChild(node('small', 'bill-paid', 'оплачено'));
+          row.appendChild(name);
+          row.appendChild(node('b', null, line.total_text));
+          block.appendChild(row);
+        });
+        target.appendChild(block);
+      });
+      var total = node('div', 'bill-total');
+      total.appendChild(node('span', null, 'До сплати'));
+      total.appendChild(node('b', null, bill.to_pay_text));
+      target.appendChild(total);
+      if (bill.paid_text) target.appendChild(node('p', 'bill-note', 'Уже оплачено: ' + bill.paid_text));
+      target.appendChild(node('p', 'bill-note', 'Ціни зафіксовані в момент відправлення на кухню. Оновлюється саме.'));
+    }
+
+    function load() {
+      var url = endpoint + '?t=' + encodeURIComponent(table) + '&k=' + encodeURIComponent(key);
+      fetch(url, { cache: 'no-store', headers: { Accept: 'application/json' } })
+        .then(function (response) {
+          if (response.status === 404) {
+            // Switched off, or the QR is not this table's: no bill, and no bar to open it.
+            say('Рахунок цього столу зараз недоступний.');
+            bar.hidden = true;
+            return null;
+          }
+          return response.ok ? response.json() : null;
+        })
+        .then(function (bill) { if (bill) render(bill); })
+        .catch(function () { /* offline: keep what is on screen */ });
+    }
+
+    function stopBill() {
+      if (billTimer) window.clearInterval(billTimer);
+      billTimer = null;
+    }
+    function startBill() {
+      if (!billTimer) billTimer = window.setInterval(load, BILL_POLL_MS);
+    }
+    function open() {
+      sheet.hidden = false;
+      document.body.classList.add('bill-open');
+      say('Завантажуємо…');
+      load();
+      startBill();
+      closer.focus();
+    }
+    function close() {
+      sheet.hidden = true;
+      document.body.classList.remove('bill-open');
+      stopBill();
+      bar.focus();
+    }
+
+    bar.addEventListener('click', open);
+    closer.addEventListener('click', close);
+    sheet.addEventListener('click', function (event) { if (event.target === sheet) close(); });
+    document.addEventListener('keydown', function (event) { if (event.key === 'Escape' && !sheet.hidden) close(); });
+    document.addEventListener('visibilitychange', function () {
+      if (sheet.hidden) return;
+      if (document.hidden) { stopBill(); } else { load(); startBill(); }
+    });
+  }
+
   /* The tab that matches the section in view. */
   var links = document.querySelectorAll('.tabs a');
   if (links.length && 'IntersectionObserver' in window) {
