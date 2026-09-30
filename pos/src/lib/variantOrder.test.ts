@@ -49,6 +49,38 @@ const KIDS_CASES: Array<{ name: string; input: string[]; expected: string[] }> =
     expected: ['бежевий / 86-92', 'бежевий / 98/104', 'бежевий / 104-110'],
   },
   {
+    // C1d: an age with its unit and a height are the same ladder, ordered by the size they are named after.
+    name: 'a height and an age in months are one ladder',
+    input: ['86', '3–6 міс', '62', '9–12 міс', '0–3 міс', '80'],
+    expected: ['0–3 міс', '62', '3–6 міс', '9–12 міс', '80', '86'],
+  },
+  {
+    name: 'an age in years runs in years, not as text',
+    input: ['3–4 роки', '1–2 роки', '10–11 років', '2–3 роки', '13–14 років'],
+    expected: ['1–2 роки', '2–3 роки', '3–4 роки', '10–11 років', '13–14 років'],
+  },
+  {
+    name: 'the order crosses the unit: months, then years',
+    input: ['2–3 роки', '9–12 міс', '12–18 міс', '1–2 роки', '6–9 міс'],
+    expected: ['6–9 міс', '9–12 міс', '12–18 міс', '1–2 роки', '2–3 роки'],
+  },
+  {
+    name: 'a pair of heights sits beside the age it names',
+    input: ['98-104', '3–4 роки', '2–3 роки'],
+    expected: ['2–3 роки', '98-104', '3–4 роки'],
+  },
+  {
+    name: 'a colour first, then the ages within it',
+    input: ['рожевий / 2–3 роки', 'блакитний / 12–18 міс', 'блакитний / 3–6 міс'],
+    expected: ['блакитний / 3–6 міс', 'блакитний / 12–18 міс', 'рожевий / 2–3 роки'],
+  },
+  {
+    // C1d: a garment marked «98-104» is a size 104 (it fits up to 104 cm), so it comes AFTER a plain 100.
+    name: 'a pair of heights is named after its larger height',
+    input: ['104', '98-104', '100'],
+    expected: ['100', '98-104', '104'],
+  },
+  {
     name: 'adult letters are untouched by any of this',
     input: ['XL', 'S', 'M', 'XXL'],
     expected: ['S', 'M', 'XL', 'XXL'],

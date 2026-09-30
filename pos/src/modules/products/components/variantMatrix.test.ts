@@ -3,6 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { describe, expect, it } from 'vitest';
+import { parseSize, sizeHint } from '../../../lib/sizeLadder';
 import {
   buildCells,
   canonicalColour,
@@ -24,10 +25,10 @@ describe('SIZE_SCALES — children first', () => {
     expect(SIZE_SCALES.slice(0, 6).map((s) => s.id)).toEqual([
       'baby-height',
       'kid-height',
-      'height-pairs',
       'months',
       'years',
-      'year-pairs',
+      'height-pairs',
+      'adult',
     ]);
     expect(DEFAULT_SCALE_ID).toBe('baby-height');
   });
@@ -54,12 +55,31 @@ describe('SIZE_SCALES — children first', () => {
     }
   });
 
-  it('has months and years, single and paired', () => {
-    expect(scale('months')).toEqual(['0-3', '3-6', '6-9', '9-12', '12-18', '18-24']);
-    expect(scale('years')[0]).toBe('1');
-    expect(scale('years').at(-1)).toBe('14');
-    expect(scale('year-pairs').slice(0, 3)).toEqual(['1-2', '2-3', '3-4']);
-    expect(scale('year-pairs').at(-1)).toBe('13-14');
+  it('words an age with its unit and as a range — never a bare digit', () => {
+    expect(scale('months')).toEqual(['0–3 міс', '3–6 міс', '6–9 міс', '9–12 міс', '12–18 міс', '18–24 міс']);
+    const years = scale('years');
+    expect(years).toHaveLength(13);
+    expect(years.slice(0, 4)).toEqual(['1–2 роки', '2–3 роки', '3–4 роки', '4–5 років']);
+    expect(years.at(-1)).toBe('13–14 років');
+  });
+
+  it('gives every children\'s size a hint in the other system, and reads every age label back', () => {
+    for (const id of ['baby-height', 'kid-height', 'months', 'years', 'height-pairs']) {
+      for (const size of scale(id)) {
+        expect(parseSize(size), `${id}: ${size}`).not.toBeNull();
+        expect(sizeHint(size), `${id}: ${size}`).not.toBeNull();
+      }
+    }
+  });
+
+  it('gives an adult letter or a shoe size no hint: it is not a child\'s size', () => {
+    for (const id of ['adult', 'trousers', 'kids-shoes', 'shoes', 'one']) {
+      for (const size of scale(id)) expect(sizeHint(size), `${id}: ${size}`).toBeNull();
+    }
+  });
+
+  it('opens a device that remembered the old «years in pairs» scale on the years scale', () => {
+    expect(scaleById('year-pairs').id).toBe('years');
   });
 
   it('keeps the adult letters, trousers and both kinds of shoes', () => {

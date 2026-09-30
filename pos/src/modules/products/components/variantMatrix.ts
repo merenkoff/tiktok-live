@@ -13,6 +13,8 @@
 // card per colour and batch (26 cards that share a name) instead of a card per
 // model.
 
+import { monthsLabel, yearsLabel } from '../../../lib/sizeLadder';
+
 /** One ready-made set of sizes. The owner picks the ones a model actually comes in. */
 export interface SizeScale {
   id: string;
@@ -34,18 +36,36 @@ function pairs(from: number, to: number, step: number): string[] {
   return out;
 }
 
+/** The age sizes, worded once: months up to two years, then years — `3–6 міс`, `3–4 роки`. */
+const MONTH_STEPS: ReadonlyArray<readonly [number, number]> = [
+  [0, 3],
+  [3, 6],
+  [6, 9],
+  [9, 12],
+  [12, 18],
+  [18, 24],
+];
+
+function yearSteps(from: number, to: number): string[] {
+  const out: string[] = [];
+  for (let y = from; y < to; y++) out.push(yearsLabel(y, y + 1));
+  return out;
+}
+
 /**
  * Children's first: the store this was built for sells babies' and children's
  * wear, where a size is a HEIGHT in centimetres («86»), a pair of heights
- * («98-104») or an age («6-9» months, «4» years) — not S, M, L.
+ * («98-104») or an age — and an age is written with its unit and as a range
+ * («3–6 міс», «3–4 роки»), never as a bare «4» that could be an age, a height or
+ * a shoe. Under every chip the matrix shows the same size in the other system
+ * (`sizeHint`: «12–18 міс» under «86», «≈ 104 см» under «3–4 роки»).
  */
 export const SIZE_SCALES: readonly SizeScale[] = [
   { id: 'baby-height', label: 'Малюки · зріст, см', sizes: ladder(56, 92, 6) },
   { id: 'kid-height', label: 'Діти · зріст, см', sizes: ladder(92, 164, 6) },
-  { id: 'height-pairs', label: 'Пари зростів', sizes: pairs(56, 164, 6) },
-  { id: 'months', label: 'Вік · місяці', sizes: ['0-3', '3-6', '6-9', '9-12', '12-18', '18-24'] },
-  { id: 'years', label: 'Вік · роки', sizes: ladder(1, 14) },
-  { id: 'year-pairs', label: 'Вік · роки, пари', sizes: pairs(1, 14, 1) },
+  { id: 'months', label: 'Вік · місяці', sizes: MONTH_STEPS.map(([a, b]) => monthsLabel(a, b)) },
+  { id: 'years', label: 'Вік · роки', sizes: yearSteps(1, 14) },
+  { id: 'height-pairs', label: 'Зріст від–до, см', sizes: pairs(56, 164, 6) },
   { id: 'adult', label: 'Дорослі (XS–XXL)', sizes: ['XS', 'S', 'M', 'L', 'XL', 'XXL'] },
   { id: 'trousers', label: 'Штани, джинси', sizes: ladder(26, 34) },
   { id: 'kids-shoes', label: 'Взуття дитяче', sizes: ladder(16, 35) },
@@ -55,8 +75,12 @@ export const SIZE_SCALES: readonly SizeScale[] = [
 
 export const DEFAULT_SCALE_ID = SIZE_SCALES[0]!.id;
 
+/** Scales that were renamed or folded into another; a device that remembered the old id opens on the new. */
+const SCALE_ALIASES: Record<string, string> = { 'year-pairs': 'years' };
+
 export function scaleById(id: string | null | undefined): SizeScale {
-  return SIZE_SCALES.find((s) => s.id === id) ?? SIZE_SCALES[0]!;
+  const wanted = id == null ? id : (SCALE_ALIASES[id] ?? id);
+  return SIZE_SCALES.find((s) => s.id === wanted) ?? SIZE_SCALES[0]!;
 }
 
 /** The two attributes the matrix fills. A vertical without both keeps the one-variant form. */
