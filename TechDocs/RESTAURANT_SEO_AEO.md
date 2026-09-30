@@ -31,8 +31,9 @@ monobank.
 частина, тому рахунок гостя = рахунок POS (раунди, зафіксовані ціни, стан кухні). Вони —
 сервіси поверх чужої каси. Чесно кажемо, де вони сильніші: **оплата й чайові з телефону
 (обидва), замовлення до столу (ChoiceQR), доставка, бронювання, масштаб, інтеграції з
-наявними касами.** Ми поки що не приймаємо оплату й замовлення з телефону — вони в `ROADMAP`
-(«guest-order», «guest-pay»).
+наявними касами.** Замовлення з телефону в нас є (з 2026-09-30, `FEATURES.guestOrder`, через
+підтвердження офіціанта); оплату з телефону ми поки не приймаємо — вона в `ROADMAP`
+(«guest-pay»).
 
 ## Правила (ті самі, що в `CAFE_SEO_AEO.md`, коротко)
 
@@ -47,15 +48,20 @@ monobank.
 6. Нічого не видаляти з сайту: обіцянка, якої немає в `ROADMAP`, спершу записується;
    переписуючи title/H1/description/FAQ — старий текст має бути підмножиною нового.
 7. Що ми можемо стверджувати про власний продукт — лише те, що `FEATURES[id].status ===
-   'available'`. Коли з'явиться замовлення гостя чи оплата — перевести id в `available`,
-   розширити (не замінити) рядки, що зараз кажуть «лише перегляд» (`restoran.ts`, гід
-   `restoran-ta-kafe.md`, `CLAUDE.md`, обидві статті), і додати рядки в таблиці.
+   'available'`. Замовлення гостя переведено в `available` 2026-09-30 (після Module Release
+   `tables` v2.4.2): рядки «лише перегляд» розширено, а не замінено (`restoran.ts`, гід
+   `restoran-ta-kafe.md`, обидві статті), у таблицях порівняння рядок замовлення читає
+   `isAvailable('guestOrder')`. Коли з'явиться оплата — те саме: перевести `guestPay`
+   (його ще немає у `FEATURES`, зараз це `ROADMAP` «guest-pay») в `available`, розширити
+   рядки «оплата з телефону — у планах» у `restoran.ts`, гіді й обох статтях.
 
 ## Що вже на сайті
 
 - Статті: `expirenza-chy-liveshop-dlya-restoranu`, `choiceqr-chy-liveshop-dlya-restoranu`
   (`content/dovidka/`), у «Читайте також» на `/pos/restoran` (`VerticalContent.articles`).
-- `FEATURES.guestBill` (`available`), `ROADMAP`: `guest-order`, `guest-pay`.
+- `FEATURES.guestBill`, `FEATURES.guestOrder` (`available`), `ROADMAP`: `guest-pay`. У
+  `/pos/restoran` — окремий рядок «Замовлення з телефону» з телефонним скріншотом кошика
+  (`assets/screenshots/restaurant-guest-order.png`, з демо-ресторану) і чотири питання FAQ.
 - `llms.txt`: блок «Програма для ресторану» з двома конкурентами.
 - `/pos/restoran`, гід `restoran-ta-kafe`, FAQ на `/pos` — розширено про рахунок гостя.
 
