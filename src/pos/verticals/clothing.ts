@@ -46,4 +46,5 @@ export const clothingVertical: VerticalDefinition = {
   productKinds: ['simple'],
   maxCompositionDepth: 1,
   kitchen: false,
+  autoBarcode: true,
 };

@@ -99,6 +99,7 @@ describe('the create form', () => {
     const form = await openCreateForm();
 
     await userEvent.type(form.getByPlaceholderText('Назва'), 'Круасан');
+    await userEvent.type(form.getByPlaceholderText('Ціна, грн'), '75');
     await userEvent.type(form.getByPlaceholderText('Опис'), 'Масляний');
     await userEvent.type(form.getByLabelText(/Склад для гостя/), 'Борошно, масло, яйця');
     await userEvent.click(form.getByTestId('allergen-chip-milk'));
@@ -118,6 +119,7 @@ describe('the create form', () => {
   it('sends «not said» for what was left alone: an empty composition and no allergens', async () => {
     const form = await openCreateForm();
     await userEvent.type(form.getByPlaceholderText('Назва'), 'Чай');
+    await userEvent.type(form.getByPlaceholderText('Ціна, грн'), '40');
     await userEvent.click(form.getByRole('button', { name: 'Зберегти' }));
 
     await waitFor(() => expect(createProduct).toHaveBeenCalledTimes(1));

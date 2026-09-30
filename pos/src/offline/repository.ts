@@ -29,6 +29,7 @@ export type RefundedSaleRow = LocalSaleRow & {
   refund_fiscal?: import('../types').FiscalActionResult | null;
 };
 import { filterCatalog } from './catalog-filter';
+import { orderCatalog } from '../lib/variantOrder';
 import { customBouquetLabel, priceOfComponents } from '../lib/bouquet';
 import { advanceLocalOrderNo, deviceLocalDay, type LocalOrderCounter } from '../lib/localOrderNo';
 import { lineCaption, resolveLineModifiers, shiftCompareAt } from '../lib/modifiers';
@@ -145,7 +146,9 @@ export async function getCatalog(opts?: {
 }): Promise<CatalogItem[]> {
   await ensureSnapshot();
   const [items, tags] = await Promise.all([db.catalog.toArray(), getCachedTags()]);
-  return withCachedImages(filterCatalog(items, tags, opts, opts?.searchKeys ?? []));
+  // IndexedDB hands rows back by `variant_id`; the sell screen wants a card's
+  // variants together and in size order, as the online catalogue sends them.
+  return withCachedImages(orderCatalog(filterCatalog(items, tags, opts, opts?.searchKeys ?? [])));
 }
 
 function normalizePhone(phone: string): string {

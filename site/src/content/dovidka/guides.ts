@@ -13,7 +13,7 @@ const GUIDES: Array<{ slug: string; shortTitle: string; title: string; descripti
     description:
       'Від першого входу до першого чека: налаштування магазину, співробітники й PIN-коди, товари, склад, знижки, звіти, принтер чеків, ПРРО і вигляд меню. Однаково для магазину одягу, квіткового, кав\'ярні й ресторану.',
     publishedAt: '2026-09-24',
-    updatedAt: '2026-09-24',
+    updatedAt: '2026-09-30',
   },
   {
     slug: 'kasyr',
@@ -22,7 +22,7 @@ const GUIDES: Array<{ slug: string; shortTitle: string; title: string; descripti
     description:
       'Усе, що потрібно людині за касою, на десять хвилин читання: вхід за PIN-кодом, пошук товару сканером, чек і знижки, оплата готівкою, карткою і QR, повернення, відкладений чек і робота без інтернету.',
     publishedAt: '2026-09-24',
-    updatedAt: '2026-09-24',
+    updatedAt: '2026-09-30',
   },
   {
     slug: 'restoran-ta-kafe',

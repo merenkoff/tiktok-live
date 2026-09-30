@@ -79,6 +79,7 @@ describe('vertical registry', () => {
       ],
       productKinds: ['simple', 'composite'],
       dishFacts: false,
+      autoBarcode: false,
     });
     expect('labelOf' in config).toBe(false);
   });
@@ -90,6 +91,15 @@ describe('vertical registry', () => {
     expect(publicConfigOf(clothingVertical)).toMatchObject({ productKinds: ['simple'], dishFacts: false });
     expect(publicConfigOf(flowersVertical)).toMatchObject({ productKinds: ['simple', 'composite'], dishFacts: false });
     expect(publicConfigOf(cafeVertical)).toMatchObject({ productKinds: ['simple', 'composite'], dishFacts: true });
+  });
+
+  it('says which vertical mints a barcode for a new variant: the boutique does, the others do not', () => {
+    // TechDocs/POS_CLOTHING.md phase C1. A garment carries a printed tag and its
+    // owner forgets the button; a florist's stems and a café's drinks come with
+    // their own codes (or none that is ever scanned).
+    expect(publicConfigOf(clothingVertical).autoBarcode).toBe(true);
+    expect(publicConfigOf(flowersVertical).autoBarcode).toBe(false);
+    expect(publicConfigOf(cafeVertical).autoBarcode).toBe(false);
   });
 
   it('sends a copy of the shapes, not the definition\'s own array', () => {
@@ -109,6 +119,7 @@ describe('vertical registry', () => {
       productKinds: ['simple'],
       maxCompositionDepth: 1,
       kitchen: false,
+      autoBarcode: false,
     };
     registerVertical(fake);
     expect(getVertical('flowers').title).toBe('Тест');

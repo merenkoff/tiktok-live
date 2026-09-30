@@ -30,6 +30,9 @@ import { CompositionEditor } from '../components/CompositionEditor';
 import { DishFactsFields } from '../components/DishFactsFields';
 import { ModifierGroupChips } from '../components/ModifierGroupChips';
 import { PackFields } from '../components/PackFields';
+import { VariantMatrix, type MatrixResult } from '../components/VariantMatrix';
+import { colourVocabulary, supportsMatrix, type ColourUse } from '../components/variantMatrix';
+import { productMatchesQuery } from '../components/productSearch';
 import { productFormScope } from '../components/productFormScope';
 import { componentOptions } from '../components/componentOptions';
 import { listTechCards, type TechCardRow } from '../data/techCardsApi';
@@ -152,8 +155,14 @@ export function ProductsPage() {
   const [newAllergens, setNewAllergens] = useState<string[]>([]);
   const [attributes, setAttributes] = useState<AttributeValues>({});
   const [unit, setUnit] = useState(vertical.defaultUnit);
-  const [price, setPrice] = useState('690');
+  // No invented price: a garment that went in at «690» because the box was left
+  // alone is a wrong price nobody sees until the till.
+  const [price, setPrice] = useState('');
   const [qty, setQty] = useState('1');
+  // The size × colour matrix (clothing): what it would create, and why it cannot yet.
+  const [matrix, setMatrix] = useState<MatrixResult | null>(null);
+  // The search box above the list — words, every one of which has to match.
+  const [query, setQuery] = useState('');
   const [barcode, setBarcode] = useState('');
   const [sku, setSku] = useState('');
   // How it arrives, not how it is counted (migration 054). Raw text: the pair
@@ -180,6 +189,12 @@ export function ProductsPage() {
     () => componentOptions(products, { maxDepth }),
     [products, maxDepth]
   );
+  // A garment is one card with a dozen variants, so a vertical with both colour
+  // and size fills them as a matrix; every other vertical (and a composite, which
+  // the matrix cannot compose) keeps the one-variant form.
+  const matrixVertical = supportsMatrix(vertical.attributes);
+  const useMatrix = matrixVertical && composite === '';
+  const colours = useMemo(() => colourVocabulary(products), [products]);
 
   async function reload() {
     const [plist, tlist, glist, cards] = await Promise.all([
@@ -214,6 +229,7 @@ export function ProductsPage() {
 
   const visible = products.filter((p) => {
     if (!p.is_active) return false;
+    if (!productMatchesQuery(p, query)) return false;
     if (filterTag === 'needs_review') return Boolean(p.needs_review);
     if (filterTag === 'all') return true;
     return p.tag_ids?.includes(filterTag);
@@ -224,6 +240,14 @@ export function ProductsPage() {
   async function onCreate(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    if (useMatrix && matrix?.problem) {
+      setError(matrix.problem);
+      return;
+    }
+    if (!useMatrix && uahInputToCents(price) <= 0) {
+      setError('Вкажіть ціну');
+      return;
+    }
     try {
       const created = await api.createProduct({
         name,
@@ -233,21 +257,24 @@ export function ProductsPage() {
         image_url: imageUrl,
         ...(composite ? { kind: 'composite' as const, stock_mode: composite } : {}),
         sellable,
-        variants: [
-          {
-            attributes,
-            unit,
-            sku: sku || undefined,
-            barcode: barcode || undefined,
-            price_cents: uahInputToCents(price),
-            // A derived composite keeps no stock of its own; the server refuses
-            // an opening quantity on one rather than silently dropping it.
-            quantity: composite === 'derived' ? 0 : Number(qty) || 0,
-            pack_qty: pack.qty.trim() === '' ? null : Number(pack.qty),
-            pack_label: pack.label.trim() === '' ? null : pack.label,
-            ...(composite ? { components } : {}),
-          },
-        ],
+        variants:
+          useMatrix && matrix
+            ? matrix.variants
+            : [
+                {
+                  attributes,
+                  unit,
+                  sku: sku || undefined,
+                  barcode: barcode || undefined,
+                  price_cents: uahInputToCents(price),
+                  // A derived composite keeps no stock of its own; the server refuses
+                  // an opening quantity on one rather than silently dropping it.
+                  quantity: composite === 'derived' ? 0 : Number(qty) || 0,
+                  pack_qty: pack.qty.trim() === '' ? null : Number(pack.qty),
+                  pack_label: pack.label.trim() === '' ? null : pack.label,
+                  ...(composite ? { components } : {}),
+                },
+              ],
       });
       // The questions travel separately, like tags — and only when there are any.
       if (groupIds.length) await api.setProductModifierGroups(created.id, groupIds);
@@ -258,6 +285,8 @@ export function ProductsPage() {
       setNewAllergens([]);
       setBarcode('');
       setSku('');
+      setPrice('');
+      setMatrix(null);
       setPack({ qty: '', label: '' });
       setImageUrl(null);
       setComposite('');
@@ -459,6 +488,14 @@ export function ProductsPage() {
         </aside>
 
         <div className="space-y-4 min-w-0">
+          <input
+            type="search"
+            className="sq-input"
+            aria-label="Пошук товарів"
+            placeholder="Пошук: назва, колір, розмір, артикул, штрихкод"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
           {selected.size > 0 && (
             <div className="flex flex-wrap items-center gap-2 rounded-xl bg-sq-sidebar px-3 py-2.5">
               <span className="text-[15px] text-sq-secondary tabular-nums mr-1">Обрано: {selected.size}</span>
@@ -549,67 +586,79 @@ export function ProductsPage() {
                 />
               )}
               <ModifierGroupChips groups={groups} value={groupIds} onChange={setGroupIds} />
-              <AttributeFields
-                className="sm:col-span-2 grid gap-3 sm:grid-cols-2"
-                schema={vertical.attributes}
-                value={attributes}
-                onChange={setAttributes}
-                unit={{ value: unit, options: vertical.units, onChange: setUnit }}
-              />
-              <label className="flex flex-col gap-1.5">
-                <span className={captionClass}>Ціна, грн</span>
-                <input
-                  className="sq-input tabular-nums"
-                  placeholder="Ціна, грн"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
+              {useMatrix ? (
+                <VariantMatrix
+                  unit={vertical.defaultUnit}
+                  vocabulary={colours}
+                  autoBarcode={vertical.autoBarcode === true}
+                  onChange={setMatrix}
                 />
-              </label>
-              {composite === 'derived' ? (
-                <p className="text-[13px] text-sq-muted self-end pb-3">
-                  Залишок рахується зі складників.
-                </p>
               ) : (
-                <label className="flex flex-col gap-1.5">
-                  <span className={captionClass}>Залишок</span>
-                  <input
-                    className="sq-input tabular-nums"
-                    placeholder="Залишок"
-                    value={qty}
-                    onChange={(e) => setQty(e.target.value)}
+                <>
+                  <AttributeFields
+                    className="sm:col-span-2 grid gap-3 sm:grid-cols-2"
+                    schema={vertical.attributes}
+                    value={attributes}
+                    onChange={setAttributes}
+                    unit={{ value: unit, options: vertical.units, onChange: setUnit }}
                   />
-                </label>
-              )}
-              {composite && (
-                <div className="sm:col-span-2">
-                  <CompositionEditor
-                    value={components}
-                    options={partOptions}
-                    onChange={setComponents}
+                  <label className="flex flex-col gap-1.5">
+                    <span className={captionClass}>Ціна, грн</span>
+                    <input
+                      className="sq-input tabular-nums"
+                      placeholder="Ціна, грн"
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      required
+                    />
+                  </label>
+                  {composite === 'derived' ? (
+                    <p className="text-[13px] text-sq-muted self-end pb-3">
+                      Залишок рахується зі складників.
+                    </p>
+                  ) : (
+                    <label className="flex flex-col gap-1.5">
+                      <span className={captionClass}>Залишок</span>
+                      <input
+                        className="sq-input tabular-nums"
+                        placeholder="Залишок"
+                        value={qty}
+                        onChange={(e) => setQty(e.target.value)}
+                      />
+                    </label>
+                  )}
+                  {composite && (
+                    <div className="sm:col-span-2">
+                      <CompositionEditor
+                        value={components}
+                        options={partOptions}
+                        onChange={setComponents}
+                      />
+                      <p className="text-[13px] text-sq-muted mt-1.5">
+                        {compositionHint(composite)}
+                      </p>
+                    </div>
+                  )}
+                  <label className="flex flex-col gap-1.5">
+                    <span className={captionClass}>Артикул (SKU) — ваш внутрішній код</span>
+                    <input className="sq-input" value={sku} onChange={(e) => setSku(e.target.value)} />
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className={captionClass}>Штрихкод — те, що читає сканер</span>
+                    <div className="flex gap-2">
+                      <input className="sq-input tabular-nums min-w-0" value={barcode} onChange={(e) => setBarcode(e.target.value)} />
+                      <GenerateBarcodeButton onGenerated={setBarcode} />
+                    </div>
+                  </label>
+                  <PackFields
+                    className="sm:col-span-2"
+                    qty={pack.qty}
+                    label={pack.label}
+                    unit={unit}
+                    onChange={setPack}
                   />
-                  <p className="text-[13px] text-sq-muted mt-1.5">
-                    {compositionHint(composite)}
-                  </p>
-                </div>
+                </>
               )}
-              <label className="flex flex-col gap-1.5">
-                <span className={captionClass}>Артикул (SKU) — ваш внутрішній код</span>
-                <input className="sq-input" value={sku} onChange={(e) => setSku(e.target.value)} />
-              </label>
-              <label className="flex flex-col gap-1.5">
-                <span className={captionClass}>Штрихкод — те, що читає сканер</span>
-                <div className="flex gap-2">
-                  <input className="sq-input tabular-nums min-w-0" value={barcode} onChange={(e) => setBarcode(e.target.value)} />
-                  <GenerateBarcodeButton onGenerated={setBarcode} />
-                </div>
-              </label>
-              <PackFields
-                className="sm:col-span-2"
-                qty={pack.qty}
-                label={pack.label}
-                unit={unit}
-                onChange={setPack}
-              />
               <button
                 type="submit"
                 className="pos-btn-primary sm:col-span-2 sm:justify-self-end min-h-11 px-6 rounded-sq text-[15px]"
@@ -617,6 +666,10 @@ export function ProductsPage() {
                 Зберегти
               </button>
             </form>
+          )}
+
+          {query.trim() !== '' && visible.length === 0 && (
+            <p className="text-[15px] text-sq-muted px-1">Нічого не знайдено за «{query.trim()}»</p>
           )}
 
           <div className="space-y-3">
@@ -627,6 +680,7 @@ export function ProductsPage() {
                   product={product}
                   flatTags={flatTags}
                   groups={groups}
+                  colours={colours}
                   partOptions={componentOptions(products, {
                     excludeProductId: product.id,
                     maxDepth,
@@ -810,6 +864,23 @@ function SellableField({ checked, onChange }: { checked: boolean; onChange: (nex
  * can act on. Folding it into "Не вдалося зберегти" left her no way to know
  * she should simply generate another code.
  */
+/**
+ * The batch's own complaint, when it has one: a 409 from `addVariants` says WHICH
+ * article or barcode was taken («Артикул «KZ-86» вже є в магазині»), which is the
+ * one thing the owner needs to fix that row — the generic 409 text above would
+ * send them hunting through a dozen rows.
+ */
+function batchErrorMessage(err: unknown, fallback: string): string {
+  const response =
+    typeof err === 'object' && err && 'response' in err
+      ? (err as { response?: { status?: number; data?: { error?: unknown } } }).response
+      : undefined;
+  if (response?.status === 409 && typeof response.data?.error === 'string' && response.data.error) {
+    return response.data.error;
+  }
+  return saveErrorMessage(err, fallback);
+}
+
 function saveErrorMessage(err: unknown, fallback: string): string {
   const status =
     typeof err === 'object' && err && 'response' in err
@@ -1137,6 +1208,7 @@ function EditProductInline({
   product,
   flatTags,
   groups,
+  colours,
   partOptions,
   techCards,
   onCancel,
@@ -1146,6 +1218,8 @@ function EditProductInline({
   product: Product;
   flatTags: PosTag[];
   groups: ModifierGroup[];
+  /** The store's colours, most used first — the matrix suggests them and reuses their spelling. */
+  colours: ColourUse[];
   partOptions: ComponentOption[];
   /** What each composite variant costs to assemble, by variant id. */
   techCards: Map<number, TechCardRow>;
@@ -1196,7 +1270,13 @@ function EditProductInline({
   );
   const [newAttributes, setNewAttributes] = useState<AttributeValues>({});
   const [newUnit, setNewUnit] = useState(vertical.defaultUnit);
-  const [newPrice, setNewPrice] = useState('690');
+  const [newPrice, setNewPrice] = useState('');
+  // The matrix adds a whole set of variants in one request (clothing). `resetKey`
+  // clears its picks once they have been saved; the rows the owner has edited
+  // above are left exactly as they are — adding variants must not eat an edit.
+  const [matrix, setMatrix] = useState<MatrixResult | null>(null);
+  const [matrixReset, setMatrixReset] = useState(0);
+  const useMatrix = supportsMatrix(vertical.attributes) && !composite;
   const [newPack, setNewPack] = useState({ qty: '', label: '' });
   const [newComponents, setNewComponents] = useState<ProductComponentInput[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -1281,7 +1361,37 @@ function EditProductInline({
     }
   }
 
+  /**
+   * The card after a variant was added on the server: the server's rows in the
+   * server's order (sized and sorted), but each one the owner already has open
+   * keeps what they typed into it — replacing the list wholesale threw away an
+   * unsaved edit of another row.
+   */
+  function mergeAdded(updated: Product) {
+    const mine = new Map(variants.map((v) => [v.id, v]));
+    const active = updated.variants.filter((v) => v.is_active).map((v) => mine.get(v.id) ?? v);
+    setVariants(active);
+    setCompositions((prev) => ({
+      ...Object.fromEntries(
+        active
+          .filter((v) => !(v.id in prev))
+          .map((v) => [
+            v.id,
+            (v.components ?? []).map((c) => ({
+              component_variant_id: c.component_variant_id,
+              quantity: c.quantity,
+            })),
+          ])
+      ),
+      ...prev,
+    }));
+  }
+
   async function addVariant() {
+    if (uahInputToCents(newPrice) <= 0) {
+      setError('Вкажіть ціну');
+      return;
+    }
     try {
       const updated = await api.addVariant(product.id, {
         attributes: newAttributes,
@@ -1292,27 +1402,35 @@ function EditProductInline({
         pack_label: newPack.label.trim() === '' ? null : newPack.label,
         ...(composite ? { components: newComponents } : {}),
       });
-      const active = updated.variants.filter((v) => v.is_active);
-      setVariants(active);
-      setCompositions(
-        Object.fromEntries(
-          active.map((v) => [
-            v.id,
-            (v.components ?? []).map((c) => ({
-              component_variant_id: c.component_variant_id,
-              quantity: c.quantity,
-            })),
-          ])
-        )
-      );
+      mergeAdded(updated);
       setNewAttributes({});
       setNewUnit(vertical.defaultUnit);
-      setNewPrice('690');
+      setNewPrice('');
       setNewPack({ qty: '', label: '' });
       setNewComponents([]);
       await onSaved();
     } catch {
       setError('Не вдалося додати варіант');
+    }
+  }
+
+  async function addMatrix() {
+    setError(null);
+    if (!matrix || matrix.problem) {
+      setError(matrix?.problem ?? 'Оберіть кольори й розміри');
+      return;
+    }
+    if (matrix.variants.length === 0) {
+      setError('Оберіть кольори й розміри');
+      return;
+    }
+    try {
+      const updated = await api.addVariants(product.id, matrix.variants);
+      mergeAdded(updated);
+      setMatrixReset((n) => n + 1);
+      await onSaved();
+    } catch (err) {
+      setError(batchErrorMessage(err, 'Не вдалося додати варіанти'));
     }
   }
 
@@ -1542,44 +1660,70 @@ function EditProductInline({
         ))}
 
         <div className="space-y-3 pt-4 border-t border-sq-divider">
-          <AttributeFields
-            schema={vertical.attributes}
-            value={newAttributes}
-            onChange={setNewAttributes}
-            unit={{ value: newUnit, options: vertical.units, onChange: setNewUnit }}
-          />
-          {composite && (
-            <CompositionEditor
-              value={newComponents}
-              options={partOptions}
-              onChange={setNewComponents}
-            />
-          )}
-          <PackFields
-            qty={newPack.qty}
-            label={newPack.label}
-            unit={newUnit}
-            onChange={setNewPack}
-          />
-          <div className="grid sm:grid-cols-[1fr_auto] gap-2 items-end">
-            <label className="flex flex-col gap-1.5">
-              <span className={captionClass}>Ціна, грн</span>
-              <input
-                className="sq-input tabular-nums"
-                placeholder="Ціна, грн"
-                value={newPrice}
-                onChange={(e) => setNewPrice(e.target.value)}
+          {useMatrix ? (
+            <>
+              <p className={captionClass}>Додати розміри й кольори</p>
+              <VariantMatrix
+                unit={vertical.defaultUnit}
+                vocabulary={colours}
+                existing={variants}
+                autoBarcode={vertical.autoBarcode === true}
+                onChange={setMatrix}
+                resetKey={matrixReset}
               />
-            </label>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 text-[15px] font-semibold text-sq-blue min-h-11 px-2"
-              onClick={() => void addVariant()}
-            >
-              <Plus size={20} />
-              Варіант
-            </button>
-          </div>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 text-[15px] font-semibold text-sq-blue min-h-11 px-2"
+                onClick={() => void addMatrix()}
+              >
+                <Plus size={20} />
+                {matrix && matrix.variants.length > 0
+                  ? `Додати варіантів: ${matrix.variants.length}`
+                  : 'Додати варіанти'}
+              </button>
+            </>
+          ) : (
+            <>
+              <AttributeFields
+                schema={vertical.attributes}
+                value={newAttributes}
+                onChange={setNewAttributes}
+                unit={{ value: newUnit, options: vertical.units, onChange: setNewUnit }}
+              />
+              {composite && (
+                <CompositionEditor
+                  value={newComponents}
+                  options={partOptions}
+                  onChange={setNewComponents}
+                />
+              )}
+              <PackFields
+                qty={newPack.qty}
+                label={newPack.label}
+                unit={newUnit}
+                onChange={setNewPack}
+              />
+              <div className="grid sm:grid-cols-[1fr_auto] gap-2 items-end">
+                <label className="flex flex-col gap-1.5">
+                  <span className={captionClass}>Ціна, грн</span>
+                  <input
+                    className="sq-input tabular-nums"
+                    placeholder="Ціна, грн"
+                    value={newPrice}
+                    onChange={(e) => setNewPrice(e.target.value)}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 text-[15px] font-semibold text-sq-blue min-h-11 px-2"
+                  onClick={() => void addVariant()}
+                >
+                  <Plus size={20} />
+                  Варіант
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
 

@@ -77,7 +77,10 @@ export async function listOnHand(storeId: number): Promise<OnHandRow[]> {
        -- Its own row sits at 0 forever, so listing it would only add noise to
        -- the sheet a stocktake is counted against.
        AND NOT (p.kind = 'composite' AND p.stock_mode = 'derived')
-     ORDER BY p.name ASC, v.label ASC, v.id ASC`,
+     -- p.id after the name: two cards with one name must not interleave their
+     -- variants, or the size order (applied per product afterwards) would see a
+     -- run split by another product's rows.
+     ORDER BY p.name ASC, p.id ASC, v.label ASC, v.id ASC`,
     [storeId]
   );
   return sortVariantRuns(
@@ -201,7 +204,7 @@ export async function movementReport(
 ): Promise<MovementSummaryRow[]> {
   const result = await pool.query(
     `WITH variants AS (
-       SELECT v.id AS variant_id, p.name AS product_name, v.label, v.unit
+       SELECT v.id AS variant_id, p.id AS product_id, p.name AS product_name, v.label, v.unit
        FROM pos_variants v
        JOIN pos_products p ON p.id = v.product_id
        WHERE v.store_id = $1 AND v.is_active = TRUE
@@ -228,7 +231,7 @@ export async function movementReport(
          AND occurred_at <= $3::timestamptz
        GROUP BY variant_id
      )
-     SELECT v.variant_id, v.product_name, v.label, v.unit,
+     SELECT v.variant_id, v.product_id, v.product_name, v.label, v.unit,
             COALESCE(o.qty, 0) AS opening,
             COALESCE(p.receipt, 0) AS receipt,
             COALESCE(p.sale, 0) AS sale,
@@ -242,13 +245,13 @@ export async function movementReport(
      LEFT JOIN opening o ON o.variant_id = v.variant_id
      LEFT JOIN period p ON p.variant_id = v.variant_id
      WHERE COALESCE(o.qty, 0) <> 0 OR COALESCE(p.total, 0) <> 0
-     ORDER BY v.product_name, v.label`,
+     ORDER BY v.product_name, v.product_id, v.label, v.variant_id`,
     [storeId, from, to]
   );
 
   return sortVariantRuns(
     result.rows,
-    (r) => String(r.product_name),
+    (r) => Number(r.product_id),
     (r) => String(r.label ?? '')
   ).map((row) => ({
     variant_id: Number(row.variant_id),

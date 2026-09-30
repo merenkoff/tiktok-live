@@ -91,11 +91,15 @@ export function compareVariantLabels(a: string, b: string): number {
 /**
  * Re-sorts the variants of each product by `compareVariantLabels`, leaving the
  * order of the products — and of the rows a LIMIT kept — exactly as the query
- * gave it. The rows of a product are a contiguous run (`ORDER BY name, label`,
- * or `product_id, label`), so each run is sorted on its own, stably.
+ * gave it. The rows of a product are a contiguous run, so each run is sorted on
+ * its own, stably.
  *
- * `runKey` says which rows belong together: the product id where the query has
- * one, the product name where it has only that.
+ * Contiguous only because every caller's query orders `name, product id, label`
+ * (or `product id, label`): with `name, label` alone two cards that share a name
+ * — a children's shop makes a card per colour and batch — dealt their variants
+ * into each other and no run was left to sort (TechDocs/POS_CLOTHING.md, C1).
+ *
+ * `runKey` says which rows belong together: always the product id.
  */
 export function sortVariantRuns<T>(
   rows: readonly T[],

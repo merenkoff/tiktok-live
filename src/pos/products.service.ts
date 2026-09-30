@@ -13,6 +13,7 @@ import { getProductTagIds, resolveTagFilterIds } from './tags.service.js';
 import { loadStoreVertical, normalizeVariant, searchableAttributeKeys } from './verticals/index.js';
 import type { VerticalDefinition } from './verticals/types.js';
 import { sortVariantRuns } from './verticals/variantOrder.js';
+import { escapeLike, searchTokens } from './searchTokens.js';
 import { storeClock } from './core/storeClock.js';
 import { normalizeAllergens, normalizeComposition } from './allergens.js';
 import {
@@ -291,6 +292,81 @@ export async function getProduct(storeId: number, productId: number) {
   return products.find((p) => p.id === productId) ?? null;
 }
 
+/**
+ * One variant of an existing product: the row, its stock row, the seed movement
+ * and — for a composite — its composition. Shared by creating a product, adding
+ * a variant and adding a batch of them, so the three cannot drift apart.
+ *
+ * A variant that arrives without a barcode gets one of the store's own when its
+ * vertical says so (`autoBarcode`): the owner of a clothing shop prints a tag
+ * for every garment and forgets the button that makes the number. An explicit
+ * barcode is never replaced.
+ */
+async function insertVariantTx(
+  client: DbClient,
+  storeId: number,
+  productId: number,
+  shape: { kind: ProductKind; stock_mode: ProductStockMode },
+  vertical: VerticalDefinition,
+  variant: VariantInput
+): Promise<number> {
+  if (variant.price_cents == null || variant.price_cents < 0) {
+    throw new Error('Variant price must be >= 0');
+  }
+  const quantity = variant.quantity ?? 0;
+  if (quantity < 0) throw new Error('Quantity must be >= 0');
+  assertVariantShape(shape, variant.components, quantity);
+
+  const compareAt = normalizeCompareAt(variant.price_cents, variant.compare_at_cents);
+  const derived = normalizeVariant(vertical, variant);
+  const pack = normalizePack(variant);
+  const barcode =
+    emptyToNull(variant.barcode) ??
+    (vertical.autoBarcode ? await generateInternalBarcode(storeId, client) : null);
+  const variantResult = await client.query(
+    `INSERT INTO pos_variants
+       (store_id, product_id, attributes, label, unit, sku, barcode, price_cents, cost_cents, compare_at_cents,
+        pack_qty, pack_label)
+     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+     RETURNING id`,
+    [
+      storeId,
+      productId,
+      JSON.stringify(derived.attributes),
+      derived.label,
+      derived.unit,
+      emptyToNull(variant.sku),
+      barcode,
+      variant.price_cents,
+      variant.cost_cents ?? 0,
+      compareAt,
+      pack.pack_qty,
+      pack.pack_label,
+    ]
+  );
+  const variantId = Number(variantResult.rows[0].id);
+
+  await client.query(
+    `INSERT INTO pos_stock (variant_id, store_id, quantity)
+     VALUES ($1, $2, $3)`,
+    [variantId, storeId, quantity]
+  );
+
+  if (quantity > 0) {
+    await client.query(
+      `INSERT INTO pos_stock_movements
+         (store_id, variant_id, delta, reason, note)
+       VALUES ($1, $2, $3, 'seed', 'Initial stock')`,
+      [storeId, variantId, quantity]
+    );
+  }
+
+  if (shape.kind === 'composite') {
+    await setComponents(client, storeId, variantId, variant.components ?? []);
+  }
+  return variantId;
+}
+
 /** Insert product+variants+stock inside an open transaction. qty>0 writes seed movement. */
 export async function createProductInTx(
   client: DbClient,
@@ -328,58 +404,7 @@ export async function createProductInTx(
   const vertical = await loadStoreVertical(client, storeId);
 
   for (const variant of input.variants) {
-    if (variant.price_cents == null || variant.price_cents < 0) {
-      throw new Error('Variant price must be >= 0');
-    }
-    const quantity = variant.quantity ?? 0;
-    if (quantity < 0) throw new Error('Quantity must be >= 0');
-    assertVariantShape(shape, variant.components, quantity);
-
-    const compareAt = normalizeCompareAt(variant.price_cents, variant.compare_at_cents);
-    const derived = normalizeVariant(vertical, variant);
-    const pack = normalizePack(variant);
-    const variantResult = await client.query(
-      `INSERT INTO pos_variants
-         (store_id, product_id, attributes, label, unit, sku, barcode, price_cents, cost_cents, compare_at_cents,
-          pack_qty, pack_label)
-       VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-       RETURNING id`,
-      [
-        storeId,
-        productId,
-        JSON.stringify(derived.attributes),
-        derived.label,
-        derived.unit,
-        emptyToNull(variant.sku),
-        emptyToNull(variant.barcode),
-        variant.price_cents,
-        variant.cost_cents ?? 0,
-        compareAt,
-        pack.pack_qty,
-        pack.pack_label,
-      ]
-    );
-    const variantId = Number(variantResult.rows[0].id);
-    variantIds.push(variantId);
-
-    await client.query(
-      `INSERT INTO pos_stock (variant_id, store_id, quantity)
-       VALUES ($1, $2, $3)`,
-      [variantId, storeId, quantity]
-    );
-
-    if (quantity > 0) {
-      await client.query(
-        `INSERT INTO pos_stock_movements
-           (store_id, variant_id, delta, reason, note)
-         VALUES ($1, $2, $3, 'seed', 'Initial stock')`,
-        [storeId, variantId, quantity]
-      );
-    }
-
-    if (shape.kind === 'composite') {
-      await setComponents(client, storeId, variantId, variant.components ?? []);
-    }
+    variantIds.push(await insertVariantTx(client, storeId, productId, shape, vertical, variant));
   }
 
   return { productId, variantIds };
@@ -552,62 +577,23 @@ export async function updateProduct(
   return getProduct(storeId, productId);
 }
 
-export async function addVariant(storeId: number, productId: number, variant: VariantInput) {
+/** The product a variant is being added to, with the shape every variant must fit. */
+async function loadProductShape(storeId: number, productId: number) {
   const product = await pool.query(
     `SELECT id, kind, stock_mode FROM pos_products WHERE id = $1 AND store_id = $2`,
     [productId, storeId]
   );
   if (product.rows.length === 0) throw new Error('Product not found');
-  if (variant.price_cents == null || variant.price_cents < 0) {
-    throw new Error('Variant price must be >= 0');
-  }
+  return resolveCompositeShape(product.rows[0].kind, product.rows[0].stock_mode);
+}
 
-  const shape = resolveCompositeShape(product.rows[0].kind, product.rows[0].stock_mode);
-  const quantity = variant.quantity ?? 0;
-  assertVariantShape(shape, variant.components, quantity);
-  const compareAt = normalizeCompareAt(variant.price_cents, variant.compare_at_cents);
+export async function addVariant(storeId: number, productId: number, variant: VariantInput) {
+  const shape = await loadProductShape(storeId, productId);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const derived = normalizeVariant(await loadStoreVertical(client, storeId), variant);
-    const pack = normalizePack(variant);
-    const variantResult = await client.query(
-      `INSERT INTO pos_variants
-         (store_id, product_id, attributes, label, unit, sku, barcode, price_cents, cost_cents, compare_at_cents,
-          pack_qty, pack_label)
-       VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-       RETURNING id`,
-      [
-        storeId,
-        productId,
-        JSON.stringify(derived.attributes),
-        derived.label,
-        derived.unit,
-        emptyToNull(variant.sku),
-        emptyToNull(variant.barcode),
-        variant.price_cents,
-        variant.cost_cents ?? 0,
-        compareAt,
-        pack.pack_qty,
-        pack.pack_label,
-      ]
-    );
-    const variantId = Number(variantResult.rows[0].id);
-    await client.query(
-      `INSERT INTO pos_stock (variant_id, store_id, quantity) VALUES ($1, $2, $3)`,
-      [variantId, storeId, quantity]
-    );
-    if (quantity > 0) {
-      await client.query(
-        `INSERT INTO pos_stock_movements
-           (store_id, variant_id, delta, reason, note)
-         VALUES ($1, $2, $3, 'seed', 'Initial stock')`,
-        [storeId, variantId, quantity]
-      );
-    }
-    if (shape.kind === 'composite') {
-      await setComponents(client, storeId, variantId, variant.components ?? []);
-    }
+    const vertical = await loadStoreVertical(client, storeId);
+    await insertVariantTx(client, storeId, productId, shape, vertical, variant);
     await client.query('COMMIT');
     return getProduct(storeId, productId);
   } catch (error) {
@@ -616,6 +602,57 @@ export async function addVariant(storeId: number, productId: number, variant: Va
   } finally {
     client.release();
   }
+}
+
+/** The most variants one batch may add — a colour × size matrix is a few dozen. */
+export const MAX_VARIANT_BATCH = 200;
+
+/**
+ * Several variants in ONE transaction — the size × colour matrix of a garment
+ * (TechDocs/POS_CLOTHING.md, C1). All of them or none: a clash on the fortieth
+ * leaves nothing half-added, and the answer says WHICH article or barcode was
+ * taken (`describeUniqueViolation`) so the owner can fix that one row.
+ */
+export async function addVariants(storeId: number, productId: number, variants: VariantInput[]) {
+  if (!Array.isArray(variants) || variants.length === 0) {
+    throw new Error('Додайте хоча б один варіант');
+  }
+  if (variants.length > MAX_VARIANT_BATCH) {
+    throw new Error(`За один раз можна додати не більше ${MAX_VARIANT_BATCH} варіантів`);
+  }
+  const shape = await loadProductShape(storeId, productId);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const vertical = await loadStoreVertical(client, storeId);
+    for (const variant of variants) {
+      await insertVariantTx(client, storeId, productId, shape, vertical, variant);
+    }
+    await client.query('COMMIT');
+    return getProduct(storeId, productId);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw describeUniqueViolation(error);
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * A unique-index violation on an article or a barcode, in the owner's words and
+ * naming the value; anything else comes back unchanged. The index is the
+ * authority (`idx_pos_variants_store_sku` / `_barcode`) — this only reads its
+ * complaint. The error keeps its pg `code`, so the route still answers 409.
+ */
+function describeUniqueViolation(error: unknown): unknown {
+  const e = error as { code?: string; detail?: string; constraint?: string };
+  if (e?.code !== '23505') return error;
+  const value = /=\((?:[^,]*,\s*)?([^)]*)\)/.exec(e.detail ?? '')?.[1]?.trim();
+  const what = /barcode/.test(e.constraint ?? '') ? 'Штрихкод' : /sku/.test(e.constraint ?? '') ? 'Артикул' : null;
+  if (!what) return error;
+  const out = new Error(`${what}${value ? ` «${value}»` : ''} вже є в магазині`) as Error & { code?: string };
+  out.code = '23505';
+  return out;
 }
 
 export async function updateVariant(
@@ -767,13 +804,16 @@ export async function archiveVariant(storeId: number, variantId: number) {
  * covers the two ways a `29…` code can already exist: an operator typing one in
  * by hand, and a database restored from a partial dump with a rewound sequence.
  */
-export async function generateInternalBarcode(storeId: number): Promise<string> {
+export async function generateInternalBarcode(
+  storeId: number,
+  db: DbClient = pool
+): Promise<string> {
   for (let attempt = 0; attempt < 10; attempt++) {
-    const seq = await pool.query<{ n: string }>(
+    const seq = await db.query<{ n: string }>(
       `SELECT nextval('pos_internal_barcode_seq')::bigint AS n`
     );
     const barcode = buildInternalBarcode(Number(seq.rows[0].n));
-    const taken = await pool.query(
+    const taken = await db.query(
       `SELECT 1 FROM pos_variants WHERE store_id = $1 AND barcode = $2 LIMIT 1`,
       [storeId, barcode]
     );
@@ -843,25 +883,44 @@ export async function getCatalog(
   if (!snapshot && opts.barcode?.trim()) {
     params.push(opts.barcode.trim());
     conditions.push(`v.barcode = $${params.length}`);
-  } else if (!snapshot && opts.q?.trim()) {
-    params.push(`%${opts.q.trim().toLowerCase()}%`);
-    const idx = params.length;
-    // The label covers whatever the vertical puts in it; the `inSearch`
-    // attributes cover what it does not (a florist searching by country).
-    // `pos/src/offline/catalog-filter.ts` mirrors this for the offline till.
+  } else if (!snapshot && searchTokens(opts.q).length > 0) {
+    // Every WORD has to match something about the variant (`searchTokens`), in
+    // any order: «зайчик 86» is a product and a size, and no single field holds
+    // both. The label covers whatever the vertical puts in it; the `inSearch`
+    // attributes cover what it does not (a florist searching by country). A
+    // range typed «98/104» finds the one saved «98-104» — both sides are folded
+    // the same way — and a short number is a size, never an EAN fragment.
+    // `pos/src/offline/catalog-filter.ts` mirrors all of this for the offline till.
     const searchKeys = searchableAttributeKeys(vertical);
     params.push(searchKeys);
     const keysIdx = params.length;
-    conditions.push(
-      `(lower(p.name) LIKE $${idx}
-        OR lower(COALESCE(v.sku, '')) LIKE $${idx}
-        OR lower(COALESCE(v.barcode, '')) LIKE $${idx}
-        OR lower(v.label) LIKE $${idx}
-        OR EXISTS (
+    const fold = (column: string) => `translate(lower(${column}), '–—/', '---')`;
+    for (const token of searchTokens(opts.q)) {
+      params.push(`%${escapeLike(token.text)}%`);
+      const idx = params.length;
+      // A short number is a size: it finds an article or a barcode only when
+      // that IS the number, never as a fragment of an EAN.
+      let codes: string;
+      if (token.shortNumber) {
+        params.push(token.text);
+        const exact = params.length;
+        codes = `OR lower(COALESCE(v.sku, '')) = $${exact}
+        OR COALESCE(v.barcode, '') = $${exact}
+        `;
+      } else {
+        codes = `OR ${fold("COALESCE(v.sku, '')")} LIKE $${idx}
+        OR ${fold("COALESCE(v.barcode, '')")} LIKE $${idx}
+        `;
+      }
+      conditions.push(
+        `(${fold('p.name')} LIKE $${idx}
+        OR ${fold('v.label')} LIKE $${idx}
+        ${codes}OR EXISTS (
              SELECT 1 FROM jsonb_each_text(v.attributes) attr
-             WHERE attr.key = ANY($${keysIdx}::text[]) AND lower(attr.value) LIKE $${idx}
+             WHERE attr.key = ANY($${keysIdx}::text[]) AND ${fold('attr.value')} LIKE $${idx}
            ))`
-    );
+      );
+    }
   }
 
   const limit = snapshot ? 10000 : 200;
@@ -949,7 +1008,10 @@ export async function getCatalog(
      LEFT JOIN pos_stock_reserved res
        ON res.variant_id = v.id AND res.store_id = p.store_id
      WHERE ${conditions.join(' AND ')}
-     ORDER BY p.name ASC, v.label ASC, v.id ASC
+     -- p.id between the name and the label: two cards called «Костюмчик Зайчик» must
+     -- not interleave their variants, or the size order (applied per product after
+     -- this query) would see one product's rows split by another's.
+     ORDER BY p.name ASC, p.id ASC, v.label ASC, v.id ASC
      LIMIT ${limit}`,
     params
   );
