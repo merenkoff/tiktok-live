@@ -1,6 +1,6 @@
 # Railway: підняти POS (каса одягу)
 
-POS ділить **той самий Postgres**, що й LIVE API. UI каси — окремий сервіс (як admin), API — існуючий backend на порті `PORT`.
+POS ділить **той самий Postgres**, що й LIVE API. UI каси — окремий сервіс (як admin), API — існуючий backend, що слухає порт `API_PORT` (`src/index.ts`; змінну `PORT` від Railway він не читає, тож порт у доменах сервісу має збігатися з `API_PORT`).
 
 Сайт як і раніше: **адмінка + каса в браузері**. Десктопна каса (Tauri 2, окремий entry) — не цей деплой, див. [[POS_DESKTOP]].
 
@@ -43,6 +43,11 @@ POS ділить **той самий Postgres**, що й LIVE API. UI каси �
 1. API service → **Settings → Volumes**
 2. Mount path: `/app/data/pos-uploads`
 3. Redeploy API
+
+**Наслідок: API — одна репліка.** Railway не дозволяє репліки на сервісі з томом («Replicas cannot be
+used with volumes»), тож кеші, ліміти й сесії в пам'яті процесу (меню гостя, `guest-orders`,
+`superAuth`, ПРРО, LIVE-сесії) правильні за конструкцією. Що зламається з другим інстансом і в якому
+порядку це робити — `POS_SINGLE_INSTANCE.md`. Redis на Railway у цьому проєкті немає.
 
 ### Перевірка API
 
@@ -122,5 +127,6 @@ cd pos && npm run tauri:dev     # вікно Tauri, див. [[POS_DESKTOP]]
 | CORS error у Tauri | origin `https://tauri.localhost` (або `http://tauri.localhost`) має бути в allowlist `src/api.ts` — див. [[POS_DESKTOP]] |
 | API 404 на `/api/pos` | старий деплой без `src/pos`; потрібен цей коміт |
 | Фото 404 | volume + API віддає `/pos-uploads/`; `VITE_API_BASE` на UI |
+| 502 `connection refused` на домені API | порт домену (Settings → Networking) має збігатися з `API_PORT`; 2026-09-30 `the-live.shop` → 3000 (відповідає), а `www.the-live.shop` і `*.up.railway.app` → 8080 (502) |
 | Порожня каса / login fail | migrate + seed; ті самі Postgres credentials |
 | `VITE_API_BASE` не діє | змінна має бути **Docker build arg**, не лише runtime env |

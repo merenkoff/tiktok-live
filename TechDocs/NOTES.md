@@ -2,6 +2,10 @@
 
 POS post-MVP / штрихкоди: [[POS_POST_MVP]] · [[POS_GTIN_ENRICHMENT]] · [[POS_GTIN_SETUP]] · [[POS_GTIN_LEARNING_API]] · [[POS_GTIN_TODO]] · [[RAILWAY_POS]] · [[POS_DESKTOP]] · [[POS_PWA]]
 
+## «Redis в стеке» и «несколько реплик» — неверно (2026-09-30)
+
+Найдено при фазе Q4 QR-меню ([[POS_SINGLE_INSTANCE]]): комментарии в `fiscal/rateLimit.ts`, `core/superAuth.ts`, `fiscal/shifts.service.ts` и доки ПРРО/супер-админки говорили «Redis уже в стеке» и «Railway может запускать больше одной реплики». На деле API-сервис — **одна реплика** (к нему подключён том с фото, а Railway не даёт реплики сервису с томом), Redis в проде нет (`ioredis`/`bullmq` лежат в `package.json` без единого импорта; `docker-compose` — только локально). Доки исправлены, три комментария в коде — нет (код в Q4 не трогали): поправить при ближайшей правке этих файлов.
+
 ## Две копии через границу чанка `@pos/platform` (2026-09-23)
 
 Найдено при PWA-треке ([[POS_PWA]] §2), оба в проде до него:
