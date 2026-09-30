@@ -625,9 +625,17 @@ class PosApi {
   async posRequest<T>(
     method: 'get' | 'post' | 'patch' | 'delete',
     path: string,
-    body?: unknown
+    body?: unknown,
+    // A file upload outlasts the client's 15 s default on a slow line; nothing
+    // else needs to say more than the default does.
+    options?: { timeout?: number }
   ): Promise<T> {
-    const { data } = await this.client.request<T>({ method, url: path, data: body });
+    const { data } = await this.client.request<T>({
+      method,
+      url: path,
+      data: body,
+      ...(options?.timeout ? { timeout: options.timeout } : {}),
+    });
     return data;
   }
 

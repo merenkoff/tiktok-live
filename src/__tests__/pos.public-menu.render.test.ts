@@ -163,7 +163,7 @@ describe('categories the way the till’s bar has them', () => {
 });
 
 const MENU: PublicMenu = {
-  store: { name: 'Кав\'ярня "<Зерно>"' },
+  store: { name: 'Кав\'ярня "<Зерно>"', logo_url: null, address: null, phone: null, hours_today: null, hours: [] },
   store_day: '2026-09-30',
   generated_at: '2026-09-30T08:00:00.000Z',
   categories: [

@@ -33,6 +33,14 @@ import { listTagsFlat, type PosTag } from '../tags.service.js';
 import { storeClock } from '../core/storeClock.js';
 import { verticalOrDefault } from '../verticals/index.js';
 import { issuePrintLink } from './table-keys.js';
+import {
+  groupHours,
+  hoursTodayText,
+  readHours,
+  type HoursRow,
+  type ProfilePatch,
+  type WeekHours,
+} from './profile.js';
 import type { CatalogItem } from '../types.js';
 
 /** What a URL token looks like. Checked before any query, so junk never reaches the database. */
@@ -90,8 +98,20 @@ export interface PublicMenuCategory {
   products: PublicMenuProduct[];
 }
 
+/** What the page says about the place itself (phase Q3a). Every field but the name may be absent. */
+export interface PublicMenuStore {
+  name: string;
+  logo_url: string | null;
+  address: string | null;
+  phone: string | null;
+  /** «08:00–22:00» or «зачинено» for today in the store's zone; null when the owner gave no hours. */
+  hours_today: string | null;
+  /** The week, neighbouring days with the same hours folded into one row; empty when no hours. */
+  hours: HoursRow[];
+}
+
 export interface PublicMenu {
-  store: { name: string };
+  store: PublicMenuStore;
   /** The store-local `YYYY-MM-DD`: the page reloads itself when this rolls over. */
   store_day: string;
   generated_at: string;
@@ -102,6 +122,10 @@ export interface PublicMenu {
 interface MenuStore {
   id: number;
   name: string;
+  logoUrl: string | null;
+  address: string | null;
+  phone: string | null;
+  hours: WeekHours | null;
   /** The owner lets a guest read their own table's bill (phase Q5). */
   billEnabled: boolean;
   /** The owner lets a guest send dishes to a waiter for acceptance (phase Q6). */
@@ -324,7 +348,16 @@ async function buildPublicMenu(store: MenuStore): Promise<PublicMenu> {
   }));
   const tags = await listTagsFlat(store.id);
   return {
-    store: { name: store.name },
+    store: {
+      name: store.name,
+      // The same gate every picture goes through: an owner-typed URL that is
+      // not a site path or https never reaches an `<img>`.
+      logo_url: safeImageUrl(store.logoUrl),
+      address: store.address,
+      phone: store.phone,
+      hours_today: hoursTodayText(store.hours, new Date(), clock.timezone),
+      hours: groupHours(store.hours),
+    },
     store_day: clock.today,
     generated_at: new Date().toISOString(),
     categories: groupIntoCategories(products, tags),
@@ -378,7 +411,8 @@ export async function findMenuStore(token: string): Promise<MenuStore | null> {
   const hit = storeByToken.get(token);
   if (hit && hit.expires > Date.now()) return hit.value;
   const result = await pool.query(
-    `SELECT id, name, vertical, public_menu_enabled, public_menu_bill, public_menu_ordering
+    `SELECT id, name, vertical, public_menu_enabled, public_menu_bill, public_menu_ordering,
+            public_logo_url, public_address, public_phone, public_hours
      FROM pos_stores
      WHERE public_menu_token = $1`,
     [token]
@@ -389,6 +423,10 @@ export async function findMenuStore(token: string): Promise<MenuStore | null> {
   const store: MenuStore = {
     id: Number(row.id),
     name: String(row.name),
+    logoUrl: typeof row.public_logo_url === 'string' ? row.public_logo_url : null,
+    address: typeof row.public_address === 'string' ? row.public_address : null,
+    phone: typeof row.public_phone === 'string' ? row.public_phone : null,
+    hours: readHours(row.public_hours),
     billEnabled: row.public_menu_bill === true,
     orderingEnabled: row.public_menu_ordering === true,
   };
@@ -584,4 +622,63 @@ export async function setPublicMenuOrdering(storeId: number, enabled: boolean): 
   );
   invalidatePublicMenu(storeId);
   return settingsFor(storeId, result.rows[0]);
+}
+
+// ── the owner's profile card (phase Q3a) ────────────────────────────
+
+/** The place's public details as the owner's card reads and edits them. */
+export interface StoreProfile {
+  /** This kind of store can publish a menu at all; the card hides itself when not. */
+  available: boolean;
+  logo_url: string | null;
+  address: string | null;
+  phone: string | null;
+  /** Raw week for the editor: a missing day is closed; null = never said. */
+  hours: WeekHours | null;
+}
+
+async function readProfile(storeId: number): Promise<StoreProfile> {
+  const result = await pool.query(
+    `SELECT vertical, public_logo_url, public_address, public_phone, public_hours FROM pos_stores WHERE id = $1`,
+    [storeId]
+  );
+  const row = result.rows[0];
+  if (!row) throw new PublicMenuError('Магазин не знайдено');
+  return {
+    available: verticalOrDefault(row.vertical as string | undefined).kitchen,
+    logo_url: typeof row.public_logo_url === 'string' ? row.public_logo_url : null,
+    address: typeof row.public_address === 'string' ? row.public_address : null,
+    phone: typeof row.public_phone === 'string' ? row.public_phone : null,
+    hours: readHours(row.public_hours),
+  };
+}
+
+export function getStoreProfile(storeId: number): Promise<StoreProfile> {
+  return readProfile(storeId);
+}
+
+/**
+ * Write the fields the owner sent (already checked by `normalizeProfilePatch`)
+ * and leave the rest alone, then make the change visible on the guest's page
+ * at once. Refused for a store whose vertical has no kitchen: the profile has
+ * no other place to appear.
+ */
+export async function updateStoreProfile(storeId: number, patch: ProfilePatch): Promise<StoreProfile> {
+  const current = await readProfile(storeId);
+  if (!current.available) throw new PublicMenuError(NOT_AVAILABLE);
+  const values: unknown[] = [storeId];
+  const sets: string[] = [];
+  const set = (column: string, value: unknown, cast = ''): void => {
+    values.push(value);
+    sets.push(`${column} = $${values.length}${cast}`);
+  };
+  if (patch.logo_url !== undefined) set('public_logo_url', patch.logo_url);
+  if (patch.address !== undefined) set('public_address', patch.address);
+  if (patch.phone !== undefined) set('public_phone', patch.phone);
+  if (patch.hours !== undefined) set('public_hours', patch.hours === null ? null : JSON.stringify(patch.hours), '::jsonb');
+  if (sets.length > 0) {
+    await pool.query(`UPDATE pos_stores SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $1`, values);
+    invalidatePublicMenu(storeId);
+  }
+  return readProfile(storeId);
 }

@@ -45,6 +45,15 @@ a { color: var(--accent); }
 }
 .at-table b { color: var(--ink); }
 
+.brand { display: flex; align-items: center; gap: 14px; }
+.logo { flex: none; width: 56px; height: 56px; border-radius: 14px; object-fit: contain; background: var(--card); border: 1px solid var(--line); }
+.contacts { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 4px; font-size: 15px; color: var(--muted); }
+.contacts a { color: var(--ink); text-decoration-color: var(--line); text-underline-offset: 3px; }
+.c-hours summary { cursor: pointer; color: var(--ink); }
+.week { list-style: none; margin: 6px 0 0; padding: 8px 12px; display: grid; gap: 2px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+.week li { display: flex; justify-content: space-between; gap: 16px; }
+.week b { font-weight: 600; color: var(--ink); white-space: nowrap; }
+
 .tabs {
   position: sticky; top: 0; z-index: 5;
   display: flex; gap: 8px; overflow-x: auto;
