@@ -106,7 +106,7 @@ function stateOf(product: PublicMenuProduct): 'ok' | 'stop' | 'out' {
 
 const BADGE_TEXT = { ok: '', stop: 'стоп', out: 'немає' } as const;
 
-function renderProduct(product: PublicMenuProduct): string {
+function renderProduct(product: PublicMenuProduct, ordering = false): string {
   const state = stateOf(product);
   const multi = product.variants.length > 1;
   const price = multi
@@ -142,7 +142,9 @@ function renderProduct(product: PublicMenuProduct): string {
     picture +
     `<div class="body"><h3>${escapeHtml(product.name)} <span class="badge">${BADGE_TEXT[state]}</span></h3>` +
     (product.description ? `<p class="desc">${escapeHtml(product.description)}</p>` : '') +
-    `<p class="price">${price}</p>${sizes}${groups}</div></li>`
+    `<p class="price">${price}</p>${sizes}${groups}` +
+    (ordering ? `<button type="button" class="add" data-add="${product.id}">Додати</button>` : '') +
+    `</div></li>`
   );
 }
 
@@ -153,6 +155,12 @@ export interface MenuPageOptions {
    * Never true without a table — the bill is a table's.
    */
   bill?: boolean;
+  /**
+   * Same proof, and the owner lets guests send dishes to a waiter (phase Q6):
+   * every available dish gets an «Додати» button, and the page a cart and a
+   * list of the guest's own requests. Never true without a table.
+   */
+  ordering?: boolean;
 }
 
 export function renderMenuPage(
@@ -162,6 +170,7 @@ export function renderMenuPage(
   options: MenuPageOptions = {}
 ): string {
   const showBill = Boolean(options.bill && table);
+  const ordering = Boolean(options.ordering && table);
   const tabs = menu.categories
     .map((c, i) => `<a href="#c-${c.id ?? 'other'}"${i === 0 ? ' class="on"' : ''}>${escapeHtml(c.name)}</a>`)
     .join('');
@@ -169,7 +178,7 @@ export function renderMenuPage(
     .map(
       (c) =>
         `<section class="cat" id="c-${c.id ?? 'other'}"><h2>${escapeHtml(c.name)}</h2>` +
-        `<ul class="items">${c.products.map(renderProduct).join('')}</ul></section>`
+        `<ul class="items">${c.products.map((p) => renderProduct(p, ordering)).join('')}</ul></section>`
     )
     .join('\n');
   const empty = menu.categories.length === 0 ? '<p class="empty">Меню поки порожнє.</p>' : '';
@@ -181,32 +190,49 @@ ${tabs ? `<nav class="tabs" aria-label="Розділи меню">${tabs}</nav>` 
 <main>
 ${empty}${sections}
 </main>
-<footer class="foot"><p>Стоп-лист і ціни оновлюються самі.</p><p><a href="${escapeHtml(publicBaseUrl())}/pos/kafe" rel="noopener">Меню працює на The Live Shop POS</a></p></footer>${showBill ? billMarkup(table!) : ''}`;
+<footer class="foot"><p>Стоп-лист і ціни оновлюються самі.</p><p><a href="${escapeHtml(publicBaseUrl())}/pos/kafe" rel="noopener">Меню працює на The Live Shop POS</a></p></footer>${showBill || ordering ? dockMarkup(table!, showBill, ordering) : ''}`;
   return shell(
     `${menu.store.name} — меню`,
     body,
     ` data-menu-url="/api/pos/public/menu/${escapeHtml(token)}" data-store-day="${escapeHtml(menu.store_day)}"` +
-      (showBill ? ` data-bill-url="/api/pos/public/menu/${escapeHtml(token)}/bill"` : '')
+      (showBill ? ` data-bill-url="/api/pos/public/menu/${escapeHtml(token)}/bill"` : '') +
+      (ordering ? ` data-order-url="/api/pos/public/menu/${escapeHtml(token)}/orders"` : '')
   );
 }
 
 /**
- * The guest's bill: a bar pinned to the bottom and a sheet over the page. Only
- * the frame is server-rendered — the lines arrive from `/bill` and are put in
- * with `textContent`, so nothing an owner typed is ever parsed as markup by the
- * script. The table's key is not here: the script reads it from the address
- * bar, where the QR put it.
+ * What is pinned to the bottom of the page and what opens over it. Only the
+ * frames are server-rendered: the bill's lines come from `/bill` and the cart's
+ * from the dishes the guest picked, and both are put in with `textContent`, so
+ * nothing an owner typed is ever parsed as markup by the script. The table's
+ * key is not here at all: the script reads it from the address bar, where the
+ * QR put it.
  */
-function billMarkup(table: MenuTable): string {
+function dockMarkup(table: MenuTable, bill: boolean, ordering: boolean): string {
   const label = escapeHtml(tableLabel(table.name));
-  return `
-<button type="button" class="bill-bar" data-bill-open>Рахунок · ${label}</button>
+  const bars =
+    (ordering ? '<button type="button" class="cart-bar" data-cart-open hidden></button>' : '') +
+    (bill ? `<button type="button" class="bill-bar" data-bill-open>Рахунок · ${label}</button>` : '');
+  const billSheet = bill
+    ? `
 <div class="bill-sheet" data-bill-sheet hidden role="dialog" aria-modal="true" aria-labelledby="bill-title">
 <div class="bill-panel">
 <header class="bill-head"><h2 id="bill-title">Рахунок · ${label}</h2><button type="button" class="bill-close" data-bill-close aria-label="Закрити">×</button></header>
 <div class="bill-body" data-bill-body aria-live="polite"></div>
 </div>
-</div>`;
+</div>`
+    : '';
+  const orderSheet = ordering
+    ? `
+<div class="bill-sheet" data-order-sheet hidden role="dialog" aria-modal="true" aria-labelledby="order-title">
+<div class="bill-panel">
+<header class="bill-head"><h2 id="order-title" data-order-title>Замовлення · ${label}</h2><button type="button" class="bill-close" data-order-close aria-label="Закрити">×</button></header>
+<div class="bill-body" data-order-body aria-live="polite"></div>
+<div class="order-foot" data-order-foot></div>
+</div>
+</div>`
+    : '';
+  return `\n<div class="dock">${bars}</div>${billSheet}${orderSheet}`;
 }
 
 // ── the QR card ─────────────────────────────────────────────────────

@@ -54,12 +54,15 @@ export interface PublicMenuVariant {
 }
 
 export interface PublicMenuModifier {
+  /** What a guest's request names an answer by; the waiter's accept re-resolves it against the live groups. */
+  id: number;
   name: string;
   price_delta_cents: number;
   is_default: boolean;
 }
 
 export interface PublicMenuGroup {
+  id: number;
   name: string;
   min_select: number;
   max_select: number;
@@ -101,6 +104,8 @@ interface MenuStore {
   name: string;
   /** The owner lets a guest read their own table's bill (phase Q5). */
   billEnabled: boolean;
+  /** The owner lets a guest send dishes to a waiter for acceptance (phase Q6). */
+  orderingEnabled: boolean;
 }
 
 /** A table, as far as a guest is told: what the QR on it says, and which room it is in. */
@@ -230,12 +235,14 @@ function projectProduct(rows: CatalogItem[], description: string): PublicMenuPro
   }));
   const groups = (first.modifier_groups ?? [])
     .map((group) => ({
+      id: group.id,
       name: group.name,
       min_select: group.min_select,
       max_select: group.max_select,
       // Written out field by field: the till's group also carries the
       // ingredient each answer writes off, and that stays behind.
       modifiers: group.modifiers.map((m) => ({
+        id: m.id,
         name: m.name,
         price_delta_cents: m.price_delta_cents,
         is_default: m.is_default,
@@ -371,7 +378,7 @@ export async function findMenuStore(token: string): Promise<MenuStore | null> {
   const hit = storeByToken.get(token);
   if (hit && hit.expires > Date.now()) return hit.value;
   const result = await pool.query(
-    `SELECT id, name, vertical, public_menu_enabled, public_menu_bill
+    `SELECT id, name, vertical, public_menu_enabled, public_menu_bill, public_menu_ordering
      FROM pos_stores
      WHERE public_menu_token = $1`,
     [token]
@@ -379,7 +386,12 @@ export async function findMenuStore(token: string): Promise<MenuStore | null> {
   const row = result.rows[0];
   if (!row || row.public_menu_enabled !== true) return null;
   if (!verticalOrDefault(row.vertical as string | undefined).kitchen) return null;
-  const store: MenuStore = { id: Number(row.id), name: String(row.name), billEnabled: row.public_menu_bill === true };
+  const store: MenuStore = {
+    id: Number(row.id),
+    name: String(row.name),
+    billEnabled: row.public_menu_bill === true,
+    orderingEnabled: row.public_menu_ordering === true,
+  };
   storeByToken.set(token, { value: store, expires: Date.now() + CACHE_TTL_MS });
   return store;
 }
@@ -425,6 +437,11 @@ export interface PublicMenuSettings {
   /** A guest may read the bill of their own table (their QR carries the table's key). */
   bill_enabled: boolean;
   /**
+   * A guest may send dishes to a waiter, who accepts them. Only meaningful
+   * once the waiters' screens show the requests; off until the owner says so.
+   */
+  ordering_enabled: boolean;
+  /**
    * A short-lived signed suffix (`?p=`) for the print pages: without it
    * `/m/<token>/qr` and `/tables` print QR codes with no table key in them,
    * because the store token is visible to every guest. Null until there is a
@@ -452,6 +469,7 @@ function toSettings(row: Record<string, unknown> | undefined, tables = 0, print:
     url: token ? menuUrl(token) : null,
     tables,
     bill_enabled: row?.public_menu_bill === true,
+    ordering_enabled: row?.public_menu_ordering === true,
     print: token ? print : null,
   };
 }
@@ -464,7 +482,7 @@ async function settingsFor(storeId: number, row: Record<string, unknown>): Promi
 
 async function readRow(storeId: number): Promise<Record<string, unknown>> {
   const result = await pool.query(
-    `SELECT vertical, public_menu_enabled, public_menu_token, public_menu_bill FROM pos_stores WHERE id = $1`,
+    `SELECT vertical, public_menu_enabled, public_menu_token, public_menu_bill, public_menu_ordering FROM pos_stores WHERE id = $1`,
     [storeId]
   );
   const row = result.rows[0];
@@ -493,7 +511,7 @@ export async function setPublicMenuEnabled(storeId: number, enabled: boolean): P
              public_menu_token = COALESCE(public_menu_token, $3),
              updated_at = NOW()
          WHERE id = $1
-         RETURNING vertical, public_menu_enabled, public_menu_token, public_menu_bill`,
+         RETURNING vertical, public_menu_enabled, public_menu_token, public_menu_bill, public_menu_ordering`,
         [storeId, enabled, enabled && !hasToken ? newToken() : null]
       );
       invalidatePublicMenu(storeId);
@@ -518,7 +536,7 @@ export async function rotatePublicMenuToken(storeId: number): Promise<PublicMenu
         `UPDATE pos_stores
          SET public_menu_token = $2, public_menu_secret = NULL, updated_at = NOW()
          WHERE id = $1
-         RETURNING vertical, public_menu_enabled, public_menu_token, public_menu_bill`,
+         RETURNING vertical, public_menu_enabled, public_menu_token, public_menu_bill, public_menu_ordering`,
         [storeId, newToken()]
       );
       invalidatePublicMenu(storeId);
@@ -541,7 +559,27 @@ export async function setPublicMenuBill(storeId: number, enabled: boolean): Prom
     `UPDATE pos_stores
      SET public_menu_bill = $2, updated_at = NOW()
      WHERE id = $1
-     RETURNING vertical, public_menu_enabled, public_menu_token, public_menu_bill`,
+     RETURNING vertical, public_menu_enabled, public_menu_token, public_menu_bill, public_menu_ordering`,
+    [storeId, enabled]
+  );
+  invalidatePublicMenu(storeId);
+  return settingsFor(storeId, result.rows[0]);
+}
+
+/**
+ * Let guests send dishes to a waiter, or stop. Like the bill switch it is
+ * independent of the menu's own and only has an effect while the menu is
+ * published. Requests already waiting are left as they are — a waiter can
+ * still answer them.
+ */
+export async function setPublicMenuOrdering(storeId: number, enabled: boolean): Promise<PublicMenuSettings> {
+  const row = await readRow(storeId);
+  if (enabled && !toSettings(row).available) throw new PublicMenuError(NOT_AVAILABLE);
+  const result = await pool.query(
+    `UPDATE pos_stores
+     SET public_menu_ordering = $2, updated_at = NOW()
+     WHERE id = $1
+     RETURNING vertical, public_menu_enabled, public_menu_token, public_menu_bill, public_menu_ordering`,
     [storeId, enabled]
   );
   invalidatePublicMenu(storeId);

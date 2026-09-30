@@ -24,8 +24,17 @@
 // owner's gate is `ensurePosOwner` plus a 409 for a store that has no kitchen.
 // The HTML pages live in `public-menu/pages.routes.ts`, at the site's root.
 
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { ensurePosOwner } from '../core/auth.js';
+import {
+  GuestOrderConflict,
+  GuestOrderError,
+  GuestOrderNotFound,
+  GuestOrderTooMany,
+  cancelOwnGuestOrder,
+  createGuestOrder,
+  listOwnGuestOrders,
+} from '../guest-orders.service.js';
 import { loadGuestBill } from '../public-menu/guest-bill.js';
 import {
   PublicMenuError,
@@ -35,11 +44,43 @@ import {
   rotatePublicMenuToken,
   setPublicMenuBill,
   setPublicMenuEnabled,
+  setPublicMenuOrdering,
+  type MenuTable,
 } from '../public-menu/menu.service.js';
 import { MENU_PAGE_HEADERS } from '../public-menu/render.js';
 import { verifyTableKey } from '../public-menu/table-keys.js';
 
+/** A guest's request for dishes answers with these statuses; anything else is a real 500. */
+function sendGuestOrderError(reply: FastifyReply, error: unknown): unknown {
+  if (error instanceof GuestOrderNotFound) return reply.code(404).send({ error: error.message });
+  if (error instanceof GuestOrderTooMany) return reply.code(429).send({ error: error.message });
+  if (error instanceof GuestOrderConflict) return reply.code(409).send({ error: error.message });
+  if (error instanceof GuestOrderError) return reply.code(400).send({ error: error.message });
+  throw error;
+}
+
 export function registerPublicMenuRoutes(fastify: FastifyInstance): void {
+  /**
+   * The store behind the token, the table behind `t`, and proof that this QR is
+   * that table's (`k`) — or null after ONE 404 for every way of failing,
+   * including the owner's ordering switch being off, so the response never says
+   * which tokens, tables or switches exist.
+   */
+  async function guestContext(request: FastifyRequest, reply: FastifyReply) {
+    const { token } = request.params as { token: string };
+    reply.header('Cache-Control', 'no-store');
+    reply.header('X-Robots-Tag', MENU_PAGE_HEADERS['X-Robots-Tag']!);
+    const query = (request.query ?? {}) as { t?: unknown; k?: unknown };
+    const found = await loadPublicMenu(token);
+    const table: MenuTable | null =
+      found && found.store.orderingEnabled ? await findMenuTable(found.store.id, query.t) : null;
+    if (!found || !table || !(await verifyTableKey(found.store.id, table.id, query.k))) {
+      reply.code(404).send({ error: 'Замовлення недоступне' });
+      return null;
+    }
+    return { found, table };
+  }
+
   fastify.get('/public/menu/:token', async (request, reply) => {
     const { token } = request.params as { token: string };
     reply.header('Cache-Control', 'no-store');
@@ -67,6 +108,37 @@ export function registerPublicMenuRoutes(fastify: FastifyInstance): void {
     return loadGuestBill(found.store.id, table);
   });
 
+  // A guest asks for dishes (phase Q6). Nothing here touches the bill: the
+  // request waits for a waiter (`guest-orders.service.ts`). The body is capped
+  // well under what thirty lines need, because this is unauthenticated.
+  fastify.post('/public/menu/:token/orders', { bodyLimit: 8192 }, async (request, reply) => {
+    const ctx = await guestContext(request, reply);
+    if (!ctx) return;
+    try {
+      const view = await createGuestOrder(ctx.found.store.id, ctx.table, ctx.found.menu, (request.body ?? {}) as Record<string, unknown>);
+      return reply.code(201).send(view);
+    } catch (error) {
+      return sendGuestOrderError(reply, error);
+    }
+  });
+
+  fastify.get('/public/menu/:token/orders', async (request, reply) => {
+    const ctx = await guestContext(request, reply);
+    if (!ctx) return;
+    const ids = (request.query as { ids?: unknown }).ids;
+    return { orders: await listOwnGuestOrders(ctx.found.store.id, ctx.table, ids) };
+  });
+
+  fastify.post('/public/menu/:token/orders/:uuid/cancel', async (request, reply) => {
+    const ctx = await guestContext(request, reply);
+    if (!ctx) return;
+    try {
+      return await cancelOwnGuestOrder(ctx.found.store.id, ctx.table, (request.params as { uuid: string }).uuid);
+    } catch (error) {
+      return sendGuestOrderError(reply, error);
+    }
+  });
+
   fastify.get('/store/public-menu', async (request, reply) => {
     const auth = await ensurePosOwner(request, reply);
     if (!auth) return;
@@ -76,21 +148,24 @@ export function registerPublicMenuRoutes(fastify: FastifyInstance): void {
   fastify.patch('/store/public-menu', async (request, reply) => {
     const auth = await ensurePosOwner(request, reply);
     if (!auth) return;
-    const body = (request.body ?? {}) as { enabled?: unknown; bill_enabled?: unknown };
-    const hasEnabled = body.enabled !== undefined;
-    const hasBill = body.bill_enabled !== undefined;
-    if (!hasEnabled && !hasBill) {
-      return reply.code(400).send({ error: 'Потрібне enabled або bill_enabled' });
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const fields = ['enabled', 'bill_enabled', 'ordering_enabled'] as const;
+    const given = fields.filter((field) => body[field] !== undefined);
+    if (given.length === 0) {
+      return reply.code(400).send({ error: 'Потрібне enabled, bill_enabled або ordering_enabled' });
     }
-    if ((hasEnabled && typeof body.enabled !== 'boolean') || (hasBill && typeof body.bill_enabled !== 'boolean')) {
-      return reply.code(400).send({ error: 'enabled і bill_enabled мають бути true або false' });
+    if (given.some((field) => typeof body[field] !== 'boolean')) {
+      return reply.code(400).send({ error: 'enabled, bill_enabled і ordering_enabled мають бути true або false' });
     }
     try {
-      // One field per call is what the card sends; both at once apply in order
-      // and the answer is the state after the last.
+      // One field per call is what the card sends; several at once apply in
+      // order and the answer is the state after the last.
       let settings = null;
-      if (hasEnabled) settings = await setPublicMenuEnabled(auth.storeId, body.enabled as boolean);
-      if (hasBill) settings = await setPublicMenuBill(auth.storeId, body.bill_enabled as boolean);
+      if (given.includes('enabled')) settings = await setPublicMenuEnabled(auth.storeId, body.enabled as boolean);
+      if (given.includes('bill_enabled')) settings = await setPublicMenuBill(auth.storeId, body.bill_enabled as boolean);
+      if (given.includes('ordering_enabled')) {
+        settings = await setPublicMenuOrdering(auth.storeId, body.ordering_enabled as boolean);
+      }
       return settings;
     } catch (error) {
       if (error instanceof PublicMenuError) return reply.code(409).send({ error: error.message });

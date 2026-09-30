@@ -44,6 +44,11 @@ interface PublicMenuSettings {
    */
   bill_enabled?: boolean;
   /**
+   * The guest may send dishes to a waiter, who accepts them (phase Q6). Absent
+   * from an older backend, which is the same as off.
+   */
+  ordering_enabled?: boolean;
+  /**
    * A short-lived signed suffix (`?p=`) that makes the print pages write each
    * table's key into its QR. Without it the QR still opens the menu, but not
    * the bill.
@@ -119,6 +124,15 @@ export function PublicMenuCard() {
           : 'Рахунок гостям більше не показується.'
     );
 
+  const toggleOrdering = (enabled: boolean) =>
+    run(
+      () => api.posRequest<PublicMenuSettings>('patch', '/store/public-menu', { ordering_enabled: enabled }),
+      (view) =>
+        view.ordering_enabled
+          ? 'Гості зможуть надсилати замовлення — вони з’являться в офіціанта.'
+          : 'Замовлення з телефону вимкнено. Запити, що вже чекають, офіціант ще може прийняти.'
+    );
+
   const rotate = () =>
     run(
       () => api.posRequest<PublicMenuSettings>('post', '/store/public-menu/rotate'),
@@ -160,6 +174,7 @@ export function PublicMenuCard() {
   // The switch is about tables, so it shows where there are some — and stays
   // visible once on, so an owner can always turn it off.
   const showBillSwitch = tables > 0 || settings.bill_enabled === true;
+  const showOrderingSwitch = tables > 0 || settings.ordering_enabled === true;
 
   return (
     <section>
@@ -236,6 +251,26 @@ export function PublicMenuCard() {
               Гість, що відсканував QR свого столу, бачить, що вже пішло на кухню, і суму до сплати. Рахунок
               відкривається лише за ключем, який лежить у QR столу: друкуйте QR кнопкою «QR для всіх столів» —
               старі роздруківки без ключа відкриють меню, але не рахунок.
+            </p>
+          </div>
+        )}
+
+        {showOrderingSwitch && (
+          <div className="space-y-1.5">
+            <label className="min-h-11 flex items-center gap-3 text-[15px] text-sq-text">
+              <input
+                type="checkbox"
+                className={CHECKBOX}
+                checked={settings.ordering_enabled === true}
+                disabled={saving}
+                onChange={(e) => void toggleOrdering(e.target.checked)}
+              />
+              <span>Приймати замовлення гостей з телефону</span>
+            </label>
+            <p className="pl-8 text-[13px] leading-relaxed text-sq-muted">
+              Гість додає страви з меню свого столу й надсилає запит; на кухню нічого не йде, доки офіціант
+              не прийме його. Вмикайте, коли офіціанти вже мають оновлений модуль «Столи» (запити з’являються
+              на плитці столу) — інакше їх ніхто не побачить.
             </p>
           </div>
         )}

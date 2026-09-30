@@ -251,6 +251,31 @@ function mapLine(row: Record<string, unknown>, preview: number | null): BillLine
  * partial unique index with a message nobody can act on.
  */
 export async function openBill(input: OpenBillInput): Promise<{ bill: Bill; created: boolean }> {
+  const client = await pool.connect();
+  let opened: { billId: number; created: boolean };
+  try {
+    await client.query('BEGIN');
+    opened = await openBillTx(client, input);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+  return { bill: await getBill(input.storeId, opened.billId), created: opened.created };
+}
+
+/**
+ * The body of `openBill` for a caller that already holds a transaction — the
+ * waiter accepting a guest's request opens the bill and adds its lines in ONE,
+ * so a refusal on the third dish leaves no bill and no half of an order. The
+ * caller owns BEGIN/COMMIT and reads the bill back afterwards.
+ */
+export async function openBillTx(
+  client: DbClient,
+  input: OpenBillInput
+): Promise<{ billId: number; created: boolean }> {
   const clientUuid =
     input.clientUuid == null ? null : String(input.clientUuid).trim().toLowerCase();
   if (clientUuid !== null && !UUID_RE.test(clientUuid)) {
@@ -259,74 +284,49 @@ export async function openBill(input: OpenBillInput): Promise<{ bill: Bill; crea
   const guests = input.guests === undefined ? 1 : intField(input.guests, 'Гостей', 1, MAX_GUESTS);
   const note = cleanNote(input.note);
 
-  const client = await pool.connect();
-  let billId: number;
-  let created = false;
-  try {
-    await client.query('BEGIN');
-    await assertRoomExists(client, input.storeId);
+  await assertRoomExists(client, input.storeId);
 
-    const table = await client.query(
-      `SELECT id FROM pos_tables WHERE store_id = $1 AND id = $2 FOR UPDATE`,
-      [input.storeId, input.tableId]
+  const table = await client.query(
+    `SELECT id FROM pos_tables WHERE store_id = $1 AND id = $2 FOR UPDATE`,
+    [input.storeId, input.tableId]
+  );
+  if (table.rows.length === 0) throw new BillNotFound('Стіл не знайдено');
+
+  // A replay of the same tap, even if that bill has since been paid: the
+  // answer must be the row the first request made, never a second bill.
+  if (clientUuid) {
+    const replay = await client.query(
+      `SELECT id FROM pos_bills WHERE store_id = $1 AND client_uuid = $2`,
+      [input.storeId, clientUuid]
     );
-    if (table.rows.length === 0) throw new BillNotFound('Стіл не знайдено');
-
-    // A replay of the same tap, even if that bill has since been paid: the
-    // answer must be the row the first request made, never a second bill.
-    if (clientUuid) {
-      const replay = await client.query(
-        `SELECT id FROM pos_bills WHERE store_id = $1 AND client_uuid = $2`,
-        [input.storeId, clientUuid]
-      );
-      if (replay.rows.length > 0) {
-        const replayed = Number(replay.rows[0].id);
-        await client.query('COMMIT');
-        client.release();
-        return { bill: await getBill(input.storeId, replayed), created: false };
-      }
-    }
-
-    const open = await client.query(
-      `SELECT id FROM pos_bills WHERE store_id = $1 AND table_id = $2 AND status = 'open'`,
-      [input.storeId, input.tableId]
-    );
-    if (open.rows.length > 0) {
-      billId = Number(open.rows[0].id);
-    } else {
-      const clock = await storeClock(client, input.storeId);
-      const billNo = await nextCounterValue(
-        client,
-        input.storeId,
-        dailyCounterKey('bill', clock.today)
-      );
-      const inserted = await client.query(
-        `INSERT INTO pos_bills
-           (store_id, table_id, bill_no, guests, note, customer_id, opened_by, client_uuid)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         RETURNING id`,
-        [
-          input.storeId,
-          input.tableId,
-          billNo,
-          guests,
-          note,
-          input.customerId ?? null,
-          input.staffId,
-          clientUuid,
-        ]
-      );
-      billId = Number(inserted.rows[0].id);
-      created = true;
-    }
-    await client.query('COMMIT');
-    client.release();
-  } catch (error) {
-    await client.query('ROLLBACK');
-    client.release();
-    throw error;
+    if (replay.rows.length > 0) return { billId: Number(replay.rows[0].id), created: false };
   }
-  return { bill: await getBill(input.storeId, billId), created };
+
+  const open = await client.query(
+    `SELECT id FROM pos_bills WHERE store_id = $1 AND table_id = $2 AND status = 'open'`,
+    [input.storeId, input.tableId]
+  );
+  if (open.rows.length > 0) return { billId: Number(open.rows[0].id), created: false };
+
+  const clock = await storeClock(client, input.storeId);
+  const billNo = await nextCounterValue(client, input.storeId, dailyCounterKey('bill', clock.today));
+  const inserted = await client.query(
+    `INSERT INTO pos_bills
+       (store_id, table_id, bill_no, guests, note, customer_id, opened_by, client_uuid)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     RETURNING id`,
+    [
+      input.storeId,
+      input.tableId,
+      billNo,
+      guests,
+      note,
+      input.customerId ?? null,
+      input.staffId,
+      clientUuid,
+    ]
+  );
+  return { billId: Number(inserted.rows[0].id), created: true };
 }
 
 // ── reading ────────────────────────────────────────────────────────────────
@@ -536,12 +536,13 @@ async function loadOpenBill(client: DbClient, storeId: number, billId: number): 
  * required groups, and the dish is not on today's stop-list. Price and stock
  * are К4c's, at fire time.
  */
-export async function addDraftItem(
+export async function addDraftItemTx(
+  client: DbClient,
   storeId: number,
   staffId: number,
   billId: number,
   input: DraftItemInput
-): Promise<Bill> {
+): Promise<void> {
   const variantId = intField(input.variant_id, 'Позиція', 1, Number.MAX_SAFE_INTEGER);
   const quantity = intField(input.quantity, 'Кількість', 1, 9999);
   const modifierIds = modifiers.normalizeModifierIds(input.modifiers);
@@ -550,85 +551,93 @@ export async function addDraftItem(
     throw new BillError('Позиція з власним складом не приймає модифікаторів');
   }
 
+  await loadOpenBill(client, storeId, billId);
+
+  const clock = await storeClock(client, storeId);
+  const variant = await client.query(
+    `SELECT v.id, p.is_active, p.name, p.stop_listed_on::text AS stop_listed_on
+       FROM pos_variants v
+       JOIN pos_products p ON p.id = v.product_id
+      WHERE v.id = $1 AND v.store_id = $2`,
+    [variantId, storeId]
+  );
+  if (variant.rows.length === 0) throw new BillNotFound('Позицію не знайдено');
+  const dish = variant.rows[0];
+  if (!dish.is_active) throw new BillConflict(`«${String(dish.name)}» знято з меню`);
+  // The stop-list refuses here, where the waiter is still standing at the
+  // table and can offer something else — never at payment, which would
+  // refuse a dish the guest has already eaten (§9).
+  if (dish.stop_listed_on === clock.today) {
+    throw new BillConflict(`«${String(dish.name)}» сьогодні в стоп-листі`);
+  }
+
+  const chosen = await modifiers.resolveForVariant(client, storeId, variantId, modifierIds);
+  const components = input.components?.length
+    ? await validateComponents(client, storeId, variantId, input.components)
+    : null;
+
+  // A line carrying its own composition never merges: two plates assembled
+  // at the counter are two plates, and merging would throw one away.
+  if (!components) {
+    const existing = await client.query(
+      `SELECT id, quantity, modifiers, note FROM pos_bill_items
+        WHERE bill_id = $1 AND round_id IS NULL AND variant_id = $2 AND components IS NULL`,
+      [billId, variantId]
+    );
+    const wanted = lineKey(variantId, modifierIds, note);
+    for (const row of existing.rows) {
+      const rowIds = modifiers
+        .parseLineModifierSnapshot(row.modifiers)
+        .map((m) => m.modifier_id)
+        .filter((id): id is number => id != null)
+        .sort((a, b) => a - b);
+      if (lineKey(variantId, rowIds, String(row.note ?? '')) === wanted) {
+        await client.query(`UPDATE pos_bill_items SET quantity = quantity + $2 WHERE id = $1`, [
+          row.id,
+          quantity,
+        ]);
+        return;
+      }
+    }
+  }
+
+  const count = await client.query(`SELECT COUNT(*) AS n FROM pos_bill_items WHERE bill_id = $1`, [
+    billId,
+  ]);
+  if (Number(count.rows[0].n) >= MAX_LINES) throw new BillError('Забагато позицій у рахунку');
+
+  const order = await client.query(
+    `SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM pos_bill_items WHERE bill_id = $1`,
+    [billId]
+  );
+  await client.query(
+    `INSERT INTO pos_bill_items
+       (store_id, bill_id, variant_id, quantity, components, modifiers, note, added_by, sort_order)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8, $9)`,
+    [
+      storeId,
+      billId,
+      variantId,
+      quantity,
+      components?.length ? JSON.stringify(components) : null,
+      chosen.snapshot.length ? JSON.stringify(chosen.snapshot) : null,
+      note,
+      staffId,
+      Number(order.rows[0].next),
+    ]
+  );
+}
+
+export async function addDraftItem(
+  storeId: number,
+  staffId: number,
+  billId: number,
+  input: DraftItemInput
+): Promise<Bill> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await loadOpenBill(client, storeId, billId);
-
-    const clock = await storeClock(client, storeId);
-    const variant = await client.query(
-      `SELECT v.id, p.is_active, p.name, p.stop_listed_on::text AS stop_listed_on
-         FROM pos_variants v
-         JOIN pos_products p ON p.id = v.product_id
-        WHERE v.id = $1 AND v.store_id = $2`,
-      [variantId, storeId]
-    );
-    if (variant.rows.length === 0) throw new BillNotFound('Позицію не знайдено');
-    const dish = variant.rows[0];
-    if (!dish.is_active) throw new BillConflict(`«${String(dish.name)}» знято з меню`);
-    // The stop-list refuses here, where the waiter is still standing at the
-    // table and can offer something else — never at payment, which would
-    // refuse a dish the guest has already eaten (§9).
-    if (dish.stop_listed_on === clock.today) {
-      throw new BillConflict(`«${String(dish.name)}» сьогодні в стоп-листі`);
-    }
-
-    const chosen = await modifiers.resolveForVariant(client, storeId, variantId, modifierIds);
-    const components = input.components?.length
-      ? await validateComponents(client, storeId, variantId, input.components)
-      : null;
-
-    // A line carrying its own composition never merges: two plates assembled
-    // at the counter are two plates, and merging would throw one away.
-    if (!components) {
-      const existing = await client.query(
-        `SELECT id, quantity, modifiers, note FROM pos_bill_items
-          WHERE bill_id = $1 AND round_id IS NULL AND variant_id = $2 AND components IS NULL`,
-        [billId, variantId]
-      );
-      const wanted = lineKey(variantId, modifierIds, note);
-      for (const row of existing.rows) {
-        const rowIds = modifiers
-          .parseLineModifierSnapshot(row.modifiers)
-          .map((m) => m.modifier_id)
-          .filter((id): id is number => id != null)
-          .sort((a, b) => a - b);
-        if (lineKey(variantId, rowIds, String(row.note ?? '')) === wanted) {
-          await client.query(`UPDATE pos_bill_items SET quantity = quantity + $2 WHERE id = $1`, [
-            row.id,
-            quantity,
-          ]);
-          await client.query('COMMIT');
-          return await getBill(storeId, billId);
-        }
-      }
-    }
-
-    const count = await client.query(`SELECT COUNT(*) AS n FROM pos_bill_items WHERE bill_id = $1`, [
-      billId,
-    ]);
-    if (Number(count.rows[0].n) >= MAX_LINES) throw new BillError('Забагато позицій у рахунку');
-
-    const order = await client.query(
-      `SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM pos_bill_items WHERE bill_id = $1`,
-      [billId]
-    );
-    await client.query(
-      `INSERT INTO pos_bill_items
-         (store_id, bill_id, variant_id, quantity, components, modifiers, note, added_by, sort_order)
-       VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8, $9)`,
-      [
-        storeId,
-        billId,
-        variantId,
-        quantity,
-        components?.length ? JSON.stringify(components) : null,
-        chosen.snapshot.length ? JSON.stringify(chosen.snapshot) : null,
-        note,
-        staffId,
-        Number(order.rows[0].next),
-      ]
-    );
+    await addDraftItemTx(client, storeId, staffId, billId, input);
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');

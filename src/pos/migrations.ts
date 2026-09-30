@@ -94,6 +94,8 @@ export const POS_MIGRATIONS = [
   '056_pos_public_menu.sql',
   // The guest sees their own table's bill: a per-table key, the owner's switch, the print-link secret.
   '057_pos_guest_bill.sql',
+  // A guest's request for dishes at a table, accepted (or not) by a waiter; the owner's ordering switch.
+  '058_pos_guest_orders.sql',
 ] as const;
 
 export function readMigration(file: string): string {
