@@ -4,6 +4,7 @@
 
 import { create } from 'zustand';
 import type { CatalogItem, PosCustomer } from '../types';
+import { discountAfterCustomerChange } from '../lib/customerDiscount';
 import {
   cartLineUid,
   cleanLineNote,
@@ -183,7 +184,11 @@ export const useCartStore = create<CartStore>((set, get) => ({
 
   setBanner: (msg) => set({ banner: msg }),
   setCartDiscount: (discount) => set({ cartDiscount: discount }),
-  setCustomer: (customer) => set({ customer }),
+  setCustomer: (customer) =>
+    set((state) => ({
+      customer,
+      cartDiscount: discountAfterCustomerChange(state.cartDiscount, state.customer, customer),
+    })),
 
   addItem: (item, qty = 1, choice) => {
     if (item.quantity <= 0) {

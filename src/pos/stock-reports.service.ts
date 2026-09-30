@@ -6,6 +6,7 @@
 
 import { pool } from '../db.js';
 import type { StockReason } from './types.js';
+import { sortVariantRuns } from './verticals/variantOrder.js';
 
 export interface OnHandRow {
   variant_id: number;
@@ -79,7 +80,11 @@ export async function listOnHand(storeId: number): Promise<OnHandRow[]> {
      ORDER BY p.name ASC, v.label ASC, v.id ASC`,
     [storeId]
   );
-  return result.rows.map((row) => ({
+  return sortVariantRuns(
+    result.rows,
+    (r) => Number(r.product_id),
+    (r) => String(r.label ?? '')
+  ).map((row) => ({
     variant_id: Number(row.variant_id),
     product_id: Number(row.product_id),
     product_name: row.product_name,
@@ -241,7 +246,11 @@ export async function movementReport(
     [storeId, from, to]
   );
 
-  return result.rows.map((row) => ({
+  return sortVariantRuns(
+    result.rows,
+    (r) => String(r.product_name),
+    (r) => String(r.label ?? '')
+  ).map((row) => ({
     variant_id: Number(row.variant_id),
     product_name: row.product_name,
     label: row.label ?? '',

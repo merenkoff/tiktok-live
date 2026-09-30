@@ -77,8 +77,25 @@ describe('vertical registry', () => {
         { code: 'gift', label: 'Подарунок' },
         { code: 'other', label: 'Інше' },
       ],
+      productKinds: ['simple', 'composite'],
+      dishFacts: false,
     });
     expect('labelOf' in config).toBe(false);
+  });
+
+  it('tells the product form what to ask: a boutique is not asked about composites or allergens', () => {
+    // TechDocs/POS_CLOTHING.md phase C0. `dishFacts` is what a kitchen vertical
+    // earns (a guest menu), sent as its own field so `kitchen` itself stays off
+    // the wire.
+    expect(publicConfigOf(clothingVertical)).toMatchObject({ productKinds: ['simple'], dishFacts: false });
+    expect(publicConfigOf(flowersVertical)).toMatchObject({ productKinds: ['simple', 'composite'], dishFacts: false });
+    expect(publicConfigOf(cafeVertical)).toMatchObject({ productKinds: ['simple', 'composite'], dishFacts: true });
+  });
+
+  it('sends a copy of the shapes, not the definition\'s own array', () => {
+    const config = publicConfigOf(cafeVertical);
+    config.productKinds.push('simple');
+    expect(cafeVertical.productKinds).toEqual(['simple', 'composite']);
   });
 
   it('takes a registered vertical and restores the built-ins on reset', () => {

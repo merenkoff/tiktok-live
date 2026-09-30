@@ -12,6 +12,7 @@ export type { ProductKind, ProductStockMode };
 import { getProductTagIds, resolveTagFilterIds } from './tags.service.js';
 import { loadStoreVertical, normalizeVariant, searchableAttributeKeys } from './verticals/index.js';
 import type { VerticalDefinition } from './verticals/types.js';
+import { sortVariantRuns } from './verticals/variantOrder.js';
 import { storeClock } from './core/storeClock.js';
 import { normalizeAllergens, normalizeComposition } from './allergens.js';
 import {
@@ -228,7 +229,12 @@ export async function listProducts(storeId: number) {
   const components = await listComponentsForStore(storeId);
 
   const byProduct = new Map<number, unknown[]>();
-  for (const row of variants.rows) {
+  // A size run reads S, M, L, XL — not the alphabet (see verticals/variantOrder.ts).
+  for (const row of sortVariantRuns(
+    variants.rows,
+    (r) => Number(r.product_id),
+    (r) => String(r.label ?? '')
+  )) {
     const productId = Number(row.product_id);
     const list = byProduct.get(productId) ?? [];
     list.push({
@@ -958,7 +964,11 @@ export async function getCatalog(
     { activeOnly: true }
   );
 
-  return result.rows.map((row) => ({
+  return sortVariantRuns(
+    result.rows,
+    (r) => Number(r.product_id),
+    (r) => String(r.label ?? '')
+  ).map((row) => ({
     variant_id: Number(row.variant_id),
     product_id: Number(row.product_id),
     product_name: row.product_name,

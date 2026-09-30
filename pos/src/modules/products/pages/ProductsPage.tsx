@@ -30,6 +30,7 @@ import { CompositionEditor } from '../components/CompositionEditor';
 import { DishFactsFields } from '../components/DishFactsFields';
 import { ModifierGroupChips } from '../components/ModifierGroupChips';
 import { PackFields } from '../components/PackFields';
+import { productFormScope } from '../components/productFormScope';
 import { componentOptions } from '../components/componentOptions';
 import { listTechCards, type TechCardRow } from '../data/techCardsApi';
 import { foodCostPercent, missingReason } from '../data/techCards';
@@ -171,6 +172,10 @@ export function ProductsPage() {
   // A recipe may go into a recipe only where the vertical says so (a café's
   // sauce inside a sandwich, never a bouquet inside a bouquet).
   const maxDepth = vertical.maxCompositionDepth ?? 1;
+  // What this kind of store is asked about: a boutique is not asked what a
+  // composite is, nor for a dish's composition and allergens. An older cached
+  // auth carries neither field, and then everything shows, as it always did.
+  const { canComposite, askDishFacts } = productFormScope(vertical);
   const partOptions = useMemo(
     () => componentOptions(products, { maxDepth }),
     [products, maxDepth]
@@ -509,20 +514,22 @@ export function ProductsPage() {
                   rest of the form means (a derived composite has no opening
                   stock, a composite needs a composition). Below the fold it was
                   simply never found. */}
-              <label className="flex flex-col gap-1.5">
-                <span className={captionClass}>Що це за товар</span>
-                <select
-                  className="sq-input"
-                  value={composite}
-                  onChange={(e) => setComposite(e.target.value as ProductShape)}
-                >
-                  {SHAPE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {canComposite && (
+                <label className="flex flex-col gap-1.5">
+                  <span className={captionClass}>Що це за товар</span>
+                  <select
+                    className="sq-input"
+                    value={composite}
+                    onChange={(e) => setComposite(e.target.value as ProductShape)}
+                  >
+                    {SHAPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <SellableField checked={sellable} onChange={setSellable} />
               <label className="flex flex-col gap-1.5 sm:col-span-2">
                 <span className={captionClass}>Опис</span>
@@ -533,12 +540,14 @@ export function ProductsPage() {
                   onChange={(e) => setNewDescription(e.target.value)}
                 />
               </label>
-              <DishFactsFields
-                composition={newComposition}
-                onComposition={setNewComposition}
-                allergens={newAllergens}
-                onAllergens={setNewAllergens}
-              />
+              {askDishFacts && (
+                <DishFactsFields
+                  composition={newComposition}
+                  onComposition={setNewComposition}
+                  allergens={newAllergens}
+                  onAllergens={setNewAllergens}
+                />
+              )}
               <ModifierGroupChips groups={groups} value={groupIds} onChange={setGroupIds} />
               <AttributeFields
                 className="sm:col-span-2 grid gap-3 sm:grid-cols-2"
@@ -1152,6 +1161,12 @@ function EditProductInline({
   // reachable only from the create form.
   const [shape, setShape] = useState<ProductShape>(savedShape);
   const composite = shape !== '';
+  // A boutique is not asked what a composite is, nor for a dish's words — but a
+  // card that already HAS them keeps them on screen (a store that changed its
+  // vertical, a florist's bouquet): hiding existing data is not cleaning up.
+  const scope = productFormScope(vertical);
+  const showShape = scope.canComposite || savedShape !== '';
+  const showDishFacts = scope.askDishFacts || !!product.composition || (product.allergens?.length ?? 0) > 0;
   const [name, setName] = useState(product.name);
   const [description, setDescription] = useState(product.description ?? '');
   const [composition, setComposition] = useState(product.composition ?? '');
@@ -1347,30 +1362,34 @@ function EditProductInline({
           onChange={(e) => setDescription(e.target.value)}
         />
       </label>
-      <DishFactsFields
-        composition={composition}
-        onComposition={setComposition}
-        allergens={allergens}
-        onAllergens={setAllergens}
-      />
+      {showDishFacts && (
+        <DishFactsFields
+          composition={composition}
+          onComposition={setComposition}
+          allergens={allergens}
+          onAllergens={setAllergens}
+        />
+      )}
 
-      <label className="flex flex-col gap-1.5 sm:col-span-2">
-        <span className={captionClass}>Що це за товар</span>
-        <select
-          className="sq-input"
-          value={shape}
-          onChange={(e) => setShape(e.target.value as ProductShape)}
-        >
-          {SHAPE_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        {shape !== '' && (
-          <span className="text-[13px] text-sq-muted">{compositionHint(shape)}</span>
-        )}
-      </label>
+      {showShape && (
+        <label className="flex flex-col gap-1.5 sm:col-span-2">
+          <span className={captionClass}>Що це за товар</span>
+          <select
+            className="sq-input"
+            value={shape}
+            onChange={(e) => setShape(e.target.value as ProductShape)}
+          >
+            {SHAPE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          {shape !== '' && (
+            <span className="text-[13px] text-sq-muted">{compositionHint(shape)}</span>
+          )}
+        </label>
+      )}
 
       <SellableField checked={sellable} onChange={setSellable} />
 

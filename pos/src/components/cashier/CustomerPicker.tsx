@@ -7,6 +7,7 @@ import { Check, Plus, Search, X } from '../../platform/glyphs';
 import { cashierApi } from '@pos/platform';
 import type { PosCustomer } from '../../types';
 import { useDragScroll } from '../../hooks/useDragScroll';
+import { customerDiscountPercent } from '../../lib/customerDiscount';
 
 interface Props {
   onClose: () => void;
@@ -163,6 +164,11 @@ export function CustomerPicker({ onClose, onSelect, currentId }: Props) {
                     <span className="block text-base font-medium text-sq-text truncate">{c.name}</span>
                     <span className="block text-sm text-sq-muted tabular-nums truncate">{c.phone}</span>
                   </span>
+                  {customerDiscountPercent(c) > 0 && (
+                    <span className="shrink-0 inline-flex items-center h-[22px] px-2 rounded-md ring-1 ring-inset ring-sq-divider text-xs font-semibold text-sq-secondary tabular-nums">
+                      −{customerDiscountPercent(c)}%
+                    </span>
+                  )}
                   {current && <Check size={20} aria-hidden className="text-sq-blue shrink-0" />}
                 </button>
               </li>

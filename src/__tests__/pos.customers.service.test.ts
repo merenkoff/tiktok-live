@@ -9,6 +9,7 @@
 // merge into the existing row instead" recovery path that the offline cashier
 // depends on when it replays queued customer writes.
 
+import { randomUUID } from 'crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { pool } from '../db.js';
 import * as customers from '../pos/customers.service.js';
@@ -27,6 +28,25 @@ describe('normalizePhone', () => {
 
   it('collapses an all-punctuation phone to an empty string', () => {
     expect(customers.normalizePhone('++--()')).toBe('');
+  });
+});
+
+describe('parseDiscountPercent', () => {
+  it('reads a whole percent from 0 to 100', () => {
+    expect(customers.parseDiscountPercent(0)).toBe(0);
+    expect(customers.parseDiscountPercent(7)).toBe(7);
+    expect(customers.parseDiscountPercent(100)).toBe(100);
+    expect(customers.parseDiscountPercent('15')).toBe(15);
+  });
+
+  it('reads «nothing» as no discount', () => {
+    expect(customers.parseDiscountPercent(undefined)).toBe(0);
+    expect(customers.parseDiscountPercent(null)).toBe(0);
+    expect(customers.parseDiscountPercent('')).toBe(0);
+  });
+
+  it.each([-1, 101, 2.5, NaN, 'abc', '7%', {}, [5], true])('refuses %j', (value) => {
+    expect(() => customers.parseDiscountPercent(value)).toThrow('ціле число відсотків від 0 до 100');
   });
 });
 
@@ -284,6 +304,90 @@ describe.skipIf(!hasDb)('POS customers service', () => {
       await expect(customers.deleteCustomer(store.storeId, 999_999_999)).rejects.toThrow(
         'Customer not found'
       );
+    });
+  });
+  describe('personal discount', () => {
+    it('defaults to 0 and round-trips a whole percent', async () => {
+      const plain = await customers.createCustomer(store.storeId, { name: 'Plain', phone: '380670990001' });
+      expect(plain.discount_percent).toBe(0);
+      const gold = await customers.createCustomer(store.storeId, {
+        name: 'Gold',
+        phone: '380670990002',
+        discount_percent: 10,
+      });
+      expect(gold.discount_percent).toBe(10);
+      expect((await customers.getCustomer(store.storeId, gold.id))?.discount_percent).toBe(10);
+    });
+
+    it('is returned by the list, including the offline snapshot', async () => {
+      const created = await customers.createCustomer(store.storeId, {
+        name: 'Listed',
+        phone: '380670990003',
+        discount_percent: 5,
+      });
+      const all = await customers.listCustomers(store.storeId, undefined, true);
+      expect(all.find((c) => c.id === created.id)?.discount_percent).toBe(5);
+    });
+
+    it('is left alone by an update that does not mention it', async () => {
+      const created = await customers.createCustomer(store.storeId, {
+        name: 'Keeps',
+        phone: '380670990004',
+        discount_percent: 12,
+      });
+      const renamed = await customers.updateCustomer(store.storeId, created.id, { name: 'Keeps renamed' });
+      expect(renamed.discount_percent).toBe(12);
+    });
+
+    it('is set, changed and cleared by an update that does', async () => {
+      const created = await customers.createCustomer(store.storeId, { name: 'Moves', phone: '380670990005' });
+      expect((await customers.updateCustomer(store.storeId, created.id, { discount_percent: 8 })).discount_percent).toBe(8);
+      expect((await customers.updateCustomer(store.storeId, created.id, { discount_percent: 3 })).discount_percent).toBe(3);
+      expect((await customers.updateCustomer(store.storeId, created.id, { discount_percent: null })).discount_percent).toBe(0);
+    });
+
+    it('is left alone when a replayed write (no discount) merges into the card', async () => {
+      const replayUuid = randomUUID();
+      const created = await customers.createCustomer(store.storeId, {
+        name: 'Merged',
+        phone: '380670990006',
+        discount_percent: 20,
+        client_uuid: replayUuid,
+      });
+      // Same phone, no discount: the offline cashier's replay of a queued write.
+      const merged = await customers.createCustomer(store.storeId, {
+        name: 'Merged again',
+        phone: '380670990006',
+      });
+      expect(merged.id).toBe(created.id);
+      expect(merged.discount_percent).toBe(20);
+      const replay = await customers.createCustomer(store.storeId, {
+        name: 'Merged third',
+        phone: '380670990006',
+        client_uuid: replayUuid,
+      });
+      expect(replay.discount_percent).toBe(20);
+    });
+
+    it('refuses a value outside 0..100 or a fraction, on create and on update', async () => {
+      await expect(
+        customers.createCustomer(store.storeId, { name: 'Bad', phone: '380670990007', discount_percent: 101 })
+      ).rejects.toThrow('від 0 до 100');
+      const ok = await customers.createCustomer(store.storeId, { name: 'Ok', phone: '380670990008' });
+      await expect(customers.updateCustomer(store.storeId, ok.id, { discount_percent: 2.5 })).rejects.toThrow(
+        'ціле число'
+      );
+      await expect(customers.updateCustomer(store.storeId, ok.id, { discount_percent: -5 })).rejects.toThrow('від 0 до 100');
+    });
+
+    it('is also held by the database, for a writer that skips the service', async () => {
+      const created = await customers.createCustomer(store.storeId, { name: 'Db guard', phone: '380670990009' });
+      await expect(
+        pool.query(`UPDATE pos_customers SET discount_percent = 101 WHERE id = $1`, [created.id])
+      ).rejects.toThrow(/pos_customers_discount_percent_check/);
+      await expect(
+        pool.query(`UPDATE pos_customers SET discount_percent = -1 WHERE id = $1`, [created.id])
+      ).rejects.toThrow(/pos_customers_discount_percent_check/);
     });
   });
 });

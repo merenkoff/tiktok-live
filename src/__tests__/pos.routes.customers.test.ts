@@ -338,4 +338,115 @@ describe.skipIf(!hasDb)('POS customers routes', () => {
       expect(res.json().error).toBe('Customer not found');
     });
   });
+  describe('personal discount — the owner gives it, the cashier cannot', () => {
+    const post = (token: string, payload: Record<string, unknown>) =>
+      app.inject({ method: 'POST', url: '/api/pos/customers', headers: auth(token), payload });
+    const patch = (token: string, id: number, payload: Record<string, unknown>) =>
+      app.inject({ method: 'PATCH', url: `/api/pos/customers/${id}`, headers: auth(token), payload });
+    const stored = async (id: number) =>
+      Number((await pool.query(`SELECT discount_percent FROM pos_customers WHERE id = $1`, [id])).rows[0].discount_percent);
+
+    it('lets the owner create a card with a discount; it defaults to 0', async () => {
+      const gold = await post(store.ownerToken, { name: 'Gold', phone: '380672000001', discount_percent: 7 });
+      expect(gold.statusCode).toBe(201);
+      expect(gold.json().discount_percent).toBe(7);
+      const plain = await post(store.ownerToken, { name: 'Plain', phone: '380672000002' });
+      expect(plain.json().discount_percent).toBe(0);
+    });
+
+    it('403s a seller who tries to create a card with a discount — and writes nothing', async () => {
+      const res = await post(store.sellerToken, { name: 'Sneaky', phone: '380672000003', discount_percent: 5 });
+      expect(res.statusCode).toBe(403);
+      expect(res.json().error).toBe('Знижку клієнта задає лише власник');
+      const rows = await pool.query(`SELECT 1 FROM pos_customers WHERE store_id = $1 AND phone = '380672000003'`, [
+        store.storeId,
+      ]);
+      expect(rows.rowCount).toBe(0);
+    });
+
+    it('lets a seller open a card without one, and it gets 0', async () => {
+      const res = await post(store.sellerToken, { name: 'Honest', phone: '380672000004' });
+      expect(res.statusCode).toBe(201);
+      expect(res.json().discount_percent).toBe(0);
+    });
+
+    it('does not let a seller\'s duplicate-phone write reset the owner\'s discount — even with an explicit 0', async () => {
+      const made = await post(store.ownerToken, { name: 'Loyal', phone: '380672000005', discount_percent: 10 });
+      const merged = await post(store.sellerToken, { name: 'Loyal renamed', phone: '380672000005', discount_percent: 0 });
+      expect(merged.statusCode).toBe(201);
+      expect(merged.json().id).toBe(made.json().id);
+      expect(merged.json().name).toBe('Loyal renamed');
+      expect(await stored(made.json().id)).toBe(10);
+    });
+
+    it('lets the owner\'s duplicate-phone write set the discount on the existing card', async () => {
+      const made = await post(store.sellerToken, { name: 'Walk-in', phone: '380672000006' });
+      const merged = await post(store.ownerToken, { name: 'Walk-in', phone: '380672000006', discount_percent: 15 });
+      expect(merged.json().id).toBe(made.json().id);
+      expect(await stored(made.json().id)).toBe(15);
+    });
+
+    it('lets the owner set, change and clear it with PATCH', async () => {
+      const made = await post(store.ownerToken, { name: 'Patched', phone: '380672000007' });
+      const id = made.json().id as number;
+      expect((await patch(store.ownerToken, id, { discount_percent: 12 })).json().discount_percent).toBe(12);
+      expect((await patch(store.ownerToken, id, { discount_percent: 4 })).json().discount_percent).toBe(4);
+      expect((await patch(store.ownerToken, id, { discount_percent: null })).json().discount_percent).toBe(0);
+    });
+
+    it('403s a seller who PATCHes a different discount, and leaves the stored one', async () => {
+      const made = await post(store.ownerToken, { name: 'Guarded', phone: '380672000008', discount_percent: 6 });
+      const id = made.json().id as number;
+      const res = await patch(store.sellerToken, id, { name: 'Guarded renamed', discount_percent: 60 });
+      expect(res.statusCode).toBe(403);
+      expect(res.json().error).toBe('Знижку клієнта задає лише власник');
+      expect(await stored(id)).toBe(6);
+      // The refused write is refused whole: the name did not change either.
+      const row = await pool.query(`SELECT name FROM pos_customers WHERE id = $1`, [id]);
+      expect(row.rows[0].name).toBe('Guarded');
+    });
+
+    it('lets a seller send a card back whole — the unchanged discount is not a price change', async () => {
+      const made = await post(store.ownerToken, { name: 'Whole card', phone: '380672000009', discount_percent: 9 });
+      const id = made.json().id as number;
+      const res = await patch(store.sellerToken, id, { name: 'Whole card fixed', discount_percent: 9 });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().name).toBe('Whole card fixed');
+      expect(res.json().discount_percent).toBe(9);
+    });
+
+    it('lets a seller edit the rest of a card without touching the discount', async () => {
+      const made = await post(store.ownerToken, { name: 'Edited', phone: '380672000010', discount_percent: 11 });
+      const res = await patch(store.sellerToken, made.json().id as number, { email: 'edited@example.com' });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().discount_percent).toBe(11);
+    });
+
+    it.each([
+      [101, '380672000021'],
+      [-1, '380672000022'],
+      [2.5, '380672000023'],
+      ['abc', '380672000024'],
+    ])('400s %j from the owner, on create and on update', async (value, phone) => {
+      const created = await post(store.ownerToken, { name: 'Bad value', phone, discount_percent: value });
+      expect(created.statusCode).toBe(400);
+      expect(created.json().error).toContain('від 0 до 100');
+      const made = await post(store.ownerToken, { name: 'Bad patch', phone: `${phone}0` });
+      const res = await patch(store.ownerToken, made.json().id as number, { discount_percent: value });
+      expect(res.statusCode).toBe(400);
+      expect(await stored(made.json().id)).toBe(0);
+    });
+
+    it('returns the discount in the list and the snapshot the offline till downloads', async () => {
+      const made = await post(store.ownerToken, { name: 'Snapshot me', phone: '380672000011', discount_percent: 3 });
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/pos/customers?snapshot=1',
+        headers: auth(store.sellerToken),
+      });
+      expect(res.statusCode).toBe(200);
+      const row = (res.json() as Array<{ id: number; discount_percent: number }>).find((c) => c.id === made.json().id);
+      expect(row?.discount_percent).toBe(3);
+    });
+  });
 });
