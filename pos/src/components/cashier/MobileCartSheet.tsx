@@ -10,6 +10,7 @@ import { computeCartDiscountCents } from '@pos/platform';
 import type { PosCustomer } from '../../types';
 import { CustomerPicker } from './CustomerPicker';
 import { CartDiscountSheet } from './CartDiscountSheet';
+import { cartDiscountLabel, isCustomerDiscount } from '../../lib/customerDiscount';
 import { useDragScroll } from '../../hooks/useDragScroll';
 
 interface Props {
@@ -193,9 +194,13 @@ export function MobileCartSheet({
         <div className="px-5 pt-3 pb-4 bg-sq-sidebar border-t border-sq-divider/70 space-y-2.5 shrink-0 safe-pb">
           {discountCents > 0 && (
             <div className="flex justify-between text-[15px] text-sq-secondary">
-              <span>Знижка на чек</span>
+              <span>{cartDiscountLabel(cartDiscount, customer)}</span>
               <span className="tabular-nums">−{formatUah(discountCents)}</span>
             </div>
+          )}
+          {/* A customer's discount that took nothing off: say why, or it reads as a bug. */}
+          {discountCents === 0 && lines.length > 0 && isCustomerDiscount(cartDiscount, customer) && (
+            <p className="text-[13px] text-sq-muted">Знижка клієнта не діє на товари зі своєю знижкою</p>
           )}
           {!locked && (
             <button type="button" className="text-sq-blue text-[13px] font-semibold" onClick={() => setDiscountOpen(true)}>

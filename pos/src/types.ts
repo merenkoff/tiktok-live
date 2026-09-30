@@ -1071,6 +1071,12 @@ export interface PosCustomer {
   phone: string;
   email: string | null;
   children_birthdays: CustomerChild[];
+  /**
+   * Personal discount, whole percent 0..100 (0 or absent = none). Optional on
+   * purpose: a till that cached its customers before the field existed, or an
+   * older backend, has rows without it, and «no discount» is the right reading.
+   */
+  discount_percent?: number;
   created_at: string;
   updated_at: string;
   client_uuid?: string | null;

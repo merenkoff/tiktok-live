@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { beforeEach, describe, expect, it } from 'vitest';
-import { makeCatalogItem } from '../test/utils';
+import { makeCatalogItem, makeCustomer } from '../test/utils';
 import { cartLinesFromParked } from '../lib/parkedCart';
 import { computeCartDiscountCents, useCartStore, type CartLine } from './useCart';
 
@@ -446,5 +446,124 @@ describe('useCartStore with modifiers', () => {
     });
     cart().addItem(latte(), 1, { modifiers: [11] });
     expect(cart().lines).toHaveLength(2);
+  });
+});
+
+describe('useCartStore — a customer\'s personal discount', () => {
+  const gold = makeCustomer({ id: 1, name: 'Золота', discount_percent: 10 });
+  const silver = makeCustomer({ id: 2, name: 'Срібна', discount_percent: 5 });
+  const plain = makeCustomer({ id: 3, name: 'Без знижки', discount_percent: 0 });
+
+  beforeEach(() => {
+    cart().clear();
+    cart().addItem(makeCatalogItem({ variant_id: 1, price_cents: 10000, quantity: 10 }), 2);
+  });
+
+  it('goes in as the cart discount the moment the customer is chosen', () => {
+    cart().setCustomer(gold);
+
+    expect(cart().cartDiscount).toEqual({ type: 'percent', value: 10 });
+    // 10 % of 2 × 100 ₴.
+    expect(cart().cartDiscountCents()).toBe(2000);
+    expect(cart().totalCents()).toBe(18000);
+  });
+
+  it('puts nothing in for a customer with no discount', () => {
+    cart().setCustomer(plain);
+
+    expect(cart().cartDiscount).toBeNull();
+    expect(cart().totalCents()).toBe(20000);
+  });
+
+  it('comes off again when the customer is taken off the cart', () => {
+    cart().setCustomer(gold);
+    cart().setCustomer(null);
+
+    expect(cart().customer).toBeNull();
+    expect(cart().cartDiscount).toBeNull();
+    expect(cart().totalCents()).toBe(20000);
+  });
+
+  it('is swapped for the next customer\'s', () => {
+    cart().setCustomer(gold);
+    cart().setCustomer(silver);
+
+    expect(cart().cartDiscount).toEqual({ type: 'percent', value: 5 });
+  });
+
+  it('leaves a product\'s own markdown alone: the line keeps its price, the discount takes nothing off it', () => {
+    cart().clear();
+    cart().addItem(makeCatalogItem({ variant_id: 9, price_cents: 8000, compare_at_cents: 10000, quantity: 10 }), 1);
+    cart().setCustomer(gold);
+
+    expect(cart().cartDiscount).toEqual({ type: 'percent', value: 10 });
+    expect(cart().cartDiscountCents()).toBe(0);
+    expect(cart().totalCents()).toBe(8000);
+  });
+
+  it('takes a markdown line out of the base when the cart mixes both kinds', () => {
+    cart().addItem(makeCatalogItem({ variant_id: 9, price_cents: 8000, compare_at_cents: 10000, quantity: 10 }), 1);
+    cart().setCustomer(gold);
+
+    // 10 % of the two full-price units only: 2000, not of the 28000 subtotal.
+    expect(cart().cartDiscountCents()).toBe(2000);
+    expect(cart().totalCents()).toBe(26000);
+  });
+
+  it('keeps a one-off the cashier typed, through a customer being chosen, swapped and removed', () => {
+    cart().setCartDiscount({ type: 'fixed', value: 3000 });
+    cart().setCustomer(gold);
+    expect(cart().cartDiscount).toEqual({ type: 'fixed', value: 3000 });
+    cart().setCustomer(silver);
+    expect(cart().cartDiscount).toEqual({ type: 'fixed', value: 3000 });
+    cart().setCustomer(null);
+    expect(cart().cartDiscount).toEqual({ type: 'fixed', value: 3000 });
+  });
+
+  it('lets the cashier replace the customer\'s discount with their own, and that one stays', () => {
+    cart().setCustomer(gold);
+    cart().setCartDiscount({ type: 'percent', value: 20 });
+    cart().setCustomer(silver);
+
+    expect(cart().cartDiscount).toEqual({ type: 'percent', value: 20 });
+  });
+
+  it('lets the cashier take the customer\'s discount off for this receipt', () => {
+    cart().setCustomer(gold);
+    cart().setCartDiscount(null);
+
+    expect(cart().customer?.id).toBe(1);
+    expect(cart().cartDiscount).toBeNull();
+    expect(cart().totalCents()).toBe(20000);
+  });
+
+  it('sends the server a plain { type, value } — the same shape a cashier\'s own discount has', () => {
+    cart().setCustomer(gold);
+
+    expect(Object.keys(cart().cartDiscount ?? {}).sort()).toEqual(['type', 'value']);
+  });
+
+  it('comes back with a parked cart: the discount and the customer are restored together', () => {
+    cart().setCustomer(gold);
+    const parked = { lines: cart().lines, discount: cart().cartDiscount, customer: cart().customer };
+    cart().clear();
+
+    cart().restore({
+      lines: parked.lines,
+      cartDiscount: parked.discount,
+      customer: parked.customer,
+    });
+
+    expect(cart().cartDiscount).toEqual({ type: 'percent', value: 10 });
+    // Still recognised as the customer's own: taking the customer off removes it.
+    cart().setCustomer(null);
+    expect(cart().cartDiscount).toBeNull();
+  });
+
+  it('is gone with clear()', () => {
+    cart().setCustomer(gold);
+    cart().clear();
+
+    expect(cart()).toMatchObject({ customer: null, cartDiscount: null });
   });
 });

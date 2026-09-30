@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import { api, cashierApi } from '@pos/platform';
 import type { CustomerChild, PosCustomer } from '../../types';
 import { useDragScroll } from '../../hooks/useDragScroll';
+import { customerDiscountPercent } from '../../lib/customerDiscount';
 import { PageHeader } from '../../components/ui/Page';
 import { ArrowLeft, Plus, Search, Users, X } from '../../platform/glyphs';
 
@@ -169,6 +170,11 @@ export function CustomersPage({ cashierShell }: Props) {
                         </span>
                       )}
                     </span>
+                    {customerDiscountPercent(c) > 0 && (
+                      <span className="shrink-0 inline-flex items-center h-[22px] px-2 rounded-md ring-1 ring-inset ring-sq-divider text-xs font-semibold text-sq-secondary tabular-nums">
+                        −{customerDiscountPercent(c)}%
+                      </span>
+                    )}
                     <span className="text-sm text-sq-muted tabular-nums shrink-0">{c.phone}</span>
                   </button>
                 </li>
@@ -204,6 +210,11 @@ function CustomerForm({
   const [children, setChildren] = useState<CustomerChild[]>(
     initial?.children_birthdays?.length ? [...initial.children_birthdays] : []
   );
+  // The discount is the owner's to give: the field exists only in the web
+  // admin (the owner's shell). At the till it is shown, never editable — and
+  // never sent, so a cashier's save cannot touch it (the server refuses anyway).
+  const canSetDiscount = !cashierShell;
+  const [discount, setDiscount] = useState(String(customerDiscountPercent(initial)));
   const [saving, setSaving] = useState(false);
 
   async function save(e: FormEvent) {
@@ -216,7 +227,12 @@ function CustomerForm({
         phone,
         email: email || null,
         children_birthdays: children.filter((c) => c.name.trim() && c.birthday),
+        ...(canSetDiscount ? { discount_percent: Math.round(Number(discount) || 0) } : {}),
       };
+      if (canSetDiscount && (!Number.isFinite(Number(discount)) || Number(discount) < 0 || Number(discount) > 100)) {
+        onError('Знижка клієнта — число відсотків від 0 до 100');
+        return;
+      }
       if (initial) await cashierApi.updateCustomer(initial.id, payload);
       else await cashierApi.createCustomer(payload);
       await onSaved();
@@ -263,6 +279,34 @@ function CustomerForm({
           <span className={captionClass}>Email</span>
           <input className={fieldClass} type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         </label>
+        {canSetDiscount ? (
+          <div className={labelClass}>
+            <label className="flex flex-col gap-1.5">
+              <span className={captionClass}>Знижка клієнта, %</span>
+              <input
+                className={`${fieldClass} tabular-nums`}
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={100}
+                step={1}
+                value={discount}
+                onChange={(e) => setDiscount(e.target.value)}
+                aria-describedby="customer-discount-hint"
+              />
+            </label>
+            <span id="customer-discount-hint" className="text-[13px] text-sq-muted">
+              Підставляється на касі, коли обрано клієнта. Не діє на товари зі своєю знижкою. 0 — без знижки.
+            </span>
+          </div>
+        ) : (
+          customerDiscountPercent(initial) > 0 && (
+            <p className="text-[15px] text-sq-secondary sm:col-span-2">
+              Знижка клієнта: <span className="font-semibold tabular-nums">{customerDiscountPercent(initial)}%</span>{' '}
+              <span className="text-sq-muted">(змінює власник)</span>
+            </p>
+          )
+        )}
       </div>
 
       <div className="space-y-2">

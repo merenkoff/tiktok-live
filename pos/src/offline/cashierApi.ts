@@ -150,6 +150,7 @@ export const cashierApi = {
     phone: string;
     email?: string | null;
     children_birthdays?: PosCustomer['children_birthdays'];
+    discount_percent?: number | null;
     client_uuid?: string | null;
   }): Promise<PosCustomer> {
     if (isOfflinePosEnabled()) return repo.createCustomer(payload);
@@ -164,6 +165,7 @@ export const cashierApi = {
       phone?: string;
       email?: string | null;
       children_birthdays?: PosCustomer['children_birthdays'];
+      discount_percent?: number | null;
       client_uuid?: string | null;
     }
   ): Promise<PosCustomer> {

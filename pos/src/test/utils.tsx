@@ -6,7 +6,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { render, type RenderOptions } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { PosShellContext, type PosShell } from '../shell';
-import type { AuthResponse, CatalogItem, PosTag, SaleDetail, SaleListItem } from '../types';
+import type { AuthResponse, CatalogItem, PosCustomer, PosTag, SaleDetail, SaleListItem } from '../types';
 
 interface ProvidersOptions {
   route?: string;
@@ -65,6 +65,21 @@ export function makeCatalogItem(overrides: Partial<CatalogItem> = {}): CatalogIt
     price_cents: 45000,
     quantity: 5,
     image_url: null,
+    ...overrides,
+  };
+}
+
+export function makeCustomer(overrides: Partial<PosCustomer> = {}): PosCustomer {
+  return {
+    id: 1,
+    store_id: 1,
+    name: 'Марія Коваленко',
+    phone: '380671234567',
+    email: null,
+    children_birthdays: [],
+    discount_percent: 0,
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z',
     ...overrides,
   };
 }

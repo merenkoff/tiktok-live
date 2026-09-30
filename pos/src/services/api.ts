@@ -497,6 +497,8 @@ class PosApi {
     phone: string;
     email?: string | null;
     children_birthdays?: CustomerChild[];
+    /** Owner only: the server answers 403 to a cashier who sets one. */
+    discount_percent?: number | null;
     client_uuid?: string | null;
   }): Promise<PosCustomer> {
     const { data } = await this.client.post<PosCustomer>('/customers', payload);
@@ -510,6 +512,8 @@ class PosApi {
       phone?: string;
       email?: string | null;
       children_birthdays?: CustomerChild[];
+      /** Owner only: the server answers 403 to a cashier who changes it. */
+      discount_percent?: number | null;
       client_uuid?: string | null;
     }
   ): Promise<PosCustomer> {

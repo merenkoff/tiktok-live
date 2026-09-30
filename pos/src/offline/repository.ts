@@ -192,6 +192,12 @@ export async function createCustomer(payload: {
   phone: string;
   email?: string | null;
   children_birthdays?: PosCustomer['children_birthdays'];
+  /**
+   * Sent on when the write goes straight to the server. Never queued: a
+   * discount is the owner's to give, and the owner sets it on the web, where
+   * nothing is offline. A card made while the network is down starts at 0.
+   */
+  discount_percent?: number | null;
   client_uuid?: string | null;
 }): Promise<PosCustomer> {
   const clientUuid = payload.client_uuid?.trim() || crypto.randomUUID();
@@ -214,6 +220,7 @@ export async function createCustomer(payload: {
     phone: normalizePhone(payload.phone),
     email: payload.email?.trim() || null,
     children_birthdays: payload.children_birthdays ?? [],
+    discount_percent: 0,
     created_at: now,
     updated_at: now,
     client_uuid: clientUuid,
@@ -238,6 +245,8 @@ export async function updateCustomer(
     phone?: string;
     email?: string | null;
     children_birthdays?: PosCustomer['children_birthdays'];
+    /** As on create: sent online, never queued, and an offline edit keeps what the card has. */
+    discount_percent?: number | null;
     client_uuid?: string | null;
   }
 ): Promise<PosCustomer> {

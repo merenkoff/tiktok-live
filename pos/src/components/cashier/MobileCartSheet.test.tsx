@@ -10,6 +10,8 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { CartLine } from '@pos/platform';
+import type { CartDiscount } from '@pos/platform';
+import { makeCustomer } from '../../test/utils';
 import { MobileCartSheet } from './MobileCartSheet';
 
 const line: CartLine = {
@@ -68,5 +70,58 @@ describe('MobileCartSheet — a pre-order on the phone', () => {
     expect(onRemove).toHaveBeenCalledWith('7');
     expect(screen.getByText('Знижка на чек')).toBeInTheDocument();
     expect(screen.queryByTestId('preorder-put-back-mobile')).toBeNull();
+  });
+});
+
+describe('MobileCartSheet — a customer\'s personal discount', () => {
+  const gold = makeCustomer({ name: 'Золота', discount_percent: 10 });
+
+  function renderWith(lines: CartLine[], cartDiscount: CartDiscount | null, customer = gold) {
+    render(
+      <MobileCartSheet
+        lines={lines}
+        customer={customer}
+        cartDiscount={cartDiscount}
+        onSetCustomer={vi.fn()}
+        onSetCartDiscount={vi.fn()}
+        onCharge={vi.fn()}
+        onClose={vi.fn()}
+        onSaveBasket={vi.fn()}
+        onSetQty={vi.fn()}
+        onRemove={vi.fn()}
+      />
+    );
+  }
+
+  it('names the discount as the customer\'s, with its percent and what it took off', () => {
+    renderWith([{ ...line, unit_price_cents: 10_000, quantity: 2 }], { type: 'percent', value: 10 });
+
+    expect(screen.getByText('Знижка клієнта 10%')).toBeInTheDocument();
+    expect(screen.queryByText('Знижка на чек')).toBeNull();
+    expect(screen.queryByText('Знижка клієнта не діє на товари зі своєю знижкою')).toBeNull();
+  });
+
+  it('keeps calling a cashier\'s own discount «Знижка на чек», even with a customer on the cart', () => {
+    renderWith([{ ...line, unit_price_cents: 10_000, quantity: 2 }], { type: 'percent', value: 15 });
+
+    expect(screen.getByText('Знижка на чек')).toBeInTheDocument();
+    expect(screen.queryByText(/Знижка клієнта/)).toBeNull();
+  });
+
+  it('says why a customer\'s discount took nothing off when every line has a markdown of its own', () => {
+    renderWith(
+      [{ ...line, unit_price_cents: 8_000, compare_at_cents: 10_000, quantity: 1 }],
+      { type: 'percent', value: 10 }
+    );
+
+    expect(screen.getByText('Знижка клієнта не діє на товари зі своєю знижкою')).toBeInTheDocument();
+    // No «−0 ₴» row pretending the discount applied.
+    expect(screen.queryByText('Знижка клієнта 10%')).toBeNull();
+  });
+
+  it('says nothing about a discount when there is none', () => {
+    renderWith([line], null);
+
+    expect(screen.queryByText(/Знижка клієнта/)).toBeNull();
   });
 });
