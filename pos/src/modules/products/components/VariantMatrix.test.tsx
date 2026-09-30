@@ -50,15 +50,66 @@ describe('VariantMatrix — the scales', () => {
   it('opens on the baby heights, the first children\'s scale', () => {
     setup();
     expect(screen.getByLabelText('Сітка розмірів')).toHaveValue('baby-height');
-    const chips = sizeChips().getAllByRole('button').map((b) => b.textContent);
+    const chips = sizeChips().getAllByRole('button').map((b) => b.getAttribute('aria-label'));
     expect(chips).toEqual(['56', '62', '68', '74', '80', '86', '92']);
   });
 
-  it('lists the children\'s scales before the adult ones', () => {
+  it('lists the children\'s scales before the adult ones, in plain words', () => {
     setup();
     const options = within(screen.getByLabelText('Сітка розмірів')).getAllByRole('option').map((o) => o.textContent);
-    expect(options.slice(0, 3)).toEqual(['Малюки · зріст, см', 'Діти · зріст, см', 'Пари зростів']);
-    expect(options.indexOf('Дорослі (XS–XXL)')).toBeGreaterThan(options.indexOf('Вік · роки, пари'));
+    expect(options.slice(0, 5)).toEqual([
+      'Малюки · зріст, см',
+      'Діти · зріст, см',
+      'Вік · місяці',
+      'Вік · роки',
+      'Зріст від–до, см',
+    ]);
+    expect(options.indexOf('Дорослі (XS–XXL)')).toBeGreaterThan(options.indexOf('Зріст від–до, см'));
+  });
+
+  it('shows the age under every height: the main label short, the explanation a second line', () => {
+    setup();
+    const hints = Object.fromEntries(
+      sizeChips().getAllByRole('button').map((b) => [b.getAttribute('aria-label'), b.textContent!.replace(b.getAttribute('aria-label')!, '')])
+    );
+    expect(hints).toEqual({
+      '56': '0–1 міс',
+      '62': '1–3 міс',
+      '68': '3–6 міс',
+      '74': '6–9 міс',
+      '80': '9–12 міс',
+      '86': '12–18 міс',
+      '92': '18–24 міс',
+    });
+  });
+
+  it('shows the height under every age, and saves the age as worded — with its unit', async () => {
+    const { user } = setup();
+    await user.selectOptions(screen.getByLabelText('Сітка розмірів'), 'years');
+
+    const chip = sizeChips().getByRole('button', { name: '3–4 роки' });
+    expect(chip).toHaveTextContent('≈ 104 см');
+
+    await addColour(user, 'блакитний');
+    await user.click(chip);
+    await price(user, '400');
+    expect(last!.variants[0]!.attributes).toEqual({ color: 'блакитний', size: '3–4 роки' });
+  });
+
+  it('gives an adult size no hint', async () => {
+    const { user } = setup();
+    await user.selectOptions(screen.getByLabelText('Сітка розмірів'), 'adult');
+
+    for (const chip of sizeChips().getAllByRole('button')) {
+      expect(chip.textContent).toBe(chip.getAttribute('aria-label'));
+    }
+  });
+
+  it('explains a size typed by hand, when it is on the ladder: a pair the scale does not list', async () => {
+    const { user } = setup();
+    await user.type(screen.getByLabelText('Свій розмір'), '98/104{Enter}');
+
+    expect(sizeChips().getByRole('button', { name: '98/104' })).toHaveTextContent('2–4 роки');
   });
 
   it('offers pairs of heights written the way the shop writes them', async () => {
@@ -76,6 +127,12 @@ describe('VariantMatrix — the scales', () => {
 
     setup();
     expect(screen.getByLabelText('Сітка розмірів')).toHaveValue('months');
+  });
+
+  it('opens on the years scale for a device that remembered the old «years in pairs» one', () => {
+    window.localStorage.setItem('pos.variantMatrix.scale', 'year-pairs');
+    setup();
+    expect(screen.getByLabelText('Сітка розмірів')).toHaveValue('years');
   });
 
   it('still works when the browser will not store anything', async () => {

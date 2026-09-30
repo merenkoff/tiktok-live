@@ -3,6 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { sizeHint } from '../../../lib/sizeLadder';
 import {
   buildCells,
   canonicalColour,
@@ -60,6 +61,35 @@ const chipOn =
   'inline-flex items-center gap-1 min-h-9 px-3 rounded-[10px] text-[15px] transition-colors bg-sq-blue/[0.08] ring-2 ring-inset ring-sq-blue text-sq-blue font-semibold';
 const chipOff =
   'inline-flex items-center gap-1 min-h-9 px-3 rounded-[10px] text-[15px] transition-colors bg-sq-surface ring-1 ring-inset ring-sq-divider text-sq-text font-medium hover:bg-sq-sidebar';
+
+/**
+ * A size chip: the size as saved, and under it the same size in the other
+ * system («12–18 міс» under «86», «≈ 104 см» under «3–4 роки») — the main label
+ * short, the explanation a quiet second line (TechDocs/POS_CLOTHING.md, C1d).
+ * The hint is computed, never saved, and is `aria-hidden`: the button's name
+ * stays the size itself, so nothing about choosing one changes for a screen
+ * reader or a test.
+ */
+function SizeChip({ size, pressed, onClick }: { size: string; pressed: boolean; onClick: () => void }) {
+  const hint = sizeHint(size);
+  return (
+    <button
+      type="button"
+      aria-label={size}
+      aria-pressed={pressed}
+      title={hint ?? undefined}
+      className={`${pressed ? chipOn : chipOff} ${hint ? '!flex-col !gap-0 !py-1 leading-tight' : ''}`}
+      onClick={onClick}
+    >
+      <span>{size}</span>
+      {hint && (
+        <span aria-hidden="true" className={`text-[11px] font-normal ${pressed ? 'text-sq-blue/80' : 'text-sq-muted'}`}>
+          {hint}
+        </span>
+      )}
+    </button>
+  );
+}
 
 /** `12,5` and `12.5` and `1 250` are all prices; nothing else is. `null` for blank or nonsense. */
 function parseMoney(text: string): number | null {
@@ -339,15 +369,7 @@ export function VariantMatrix({
         </div>
         <div className="flex flex-wrap gap-2" role="group" aria-label="Розміри">
           {shownSizes.map((size) => (
-            <button
-              key={size}
-              type="button"
-              aria-pressed={isPicked(size)}
-              className={isPicked(size) ? chipOn : chipOff}
-              onClick={() => toggleSize(size)}
-            >
-              {size}
-            </button>
+            <SizeChip key={size} size={size} pressed={isPicked(size)} onClick={() => toggleSize(size)} />
           ))}
         </div>
         <input

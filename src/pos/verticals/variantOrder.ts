@@ -16,6 +16,8 @@
 // string, not a column a database can rank by size, and the catalogue's LIMIT
 // must keep cutting on the same key it always did.
 
+import { parseSize } from './sizeLadder.js';
+
 /** The separators a derived label joins its attributes with (`labelOf` — «Колір / Розмір»; a café caption — «M · вівсяне»). */
 const PART_SEPARATOR = /\s*[/·]\s*/;
 
@@ -68,6 +70,18 @@ function comparePart(a: string, b: string): number {
   // sizes first, so a mixed list does not interleave them.
   if (ra !== null) return -1;
   if (rb !== null) return 1;
+  // Children's sizes on one ladder (TechDocs/POS_CLOTHING.md, C1d): a height
+  // («86», «98-104») and an age with its unit («3–6 міс», «3–4 роки») are the same
+  // kind of thing, ordered by the size they are named after — the largest height
+  // they cover — so «3–6 міс» sits between «62» and «74». A bare small number is
+  // NOT read this way (it could be an age, a height or a shoe) and keeps the old
+  // number-by-number order below.
+  const pa = parseSize(a);
+  const pb = parseSize(b);
+  if (pa && pb) {
+    const byLadder = pa.high - pb.high || pa.low - pb.low;
+    if (byLadder !== 0) return byLadder;
+  }
   return collator.compare(a, b);
 }
 
