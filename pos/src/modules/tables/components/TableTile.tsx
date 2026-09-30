@@ -9,7 +9,7 @@
 // and everything else is a line of small text under it. A free table shows its
 // seats and nothing more — there is nothing else true about it.
 
-import { Pencil } from '@pos/platform/ui';
+import { Bell, Pencil } from '@pos/platform/ui';
 import type { TableSeat, TableTone } from '../lib/hallMap';
 import { guestsLabel, kitchenState, seatedFor, seatsLabel, tableTone, tileSum } from '../lib/hallMap';
 
@@ -36,9 +36,18 @@ export interface TableTileProps {
   meId: number | null;
   onOpen: (seat: TableSeat) => void;
   disabled?: boolean;
+  /**
+   * How many requests from the guests' phones wait for a waiter at this table
+   * (Q7). A count and not a flag: two people at one table each sending their
+   * own is ordinary, and the number is what tells a waiter it is worth the walk.
+   * Drawn as a bell and, from two up, the number — no words: on a phone the
+   * tiles are narrow, and a word beside the kitchen's pill would sit on top of
+   * the table number. The legend says what the bell is.
+   */
+  guestWaiting?: number;
 }
 
-export function TableTile({ seat, now, meId, onOpen, disabled }: TableTileProps): JSX.Element {
+export function TableTile({ seat, now, meId, onOpen, disabled, guestWaiting = 0 }: TableTileProps): JSX.Element {
   const { table, bill } = seat;
   const tone = tableTone(bill, meId);
   const kitchen = kitchenState(bill);
@@ -49,6 +58,7 @@ export function TableTile({ seat, now, meId, onOpen, disabled }: TableTileProps)
       data-testid={`table-tile-${table.id}`}
       data-tone={tone}
       data-kitchen={kitchen ?? undefined}
+      data-guest={guestWaiting > 0 ? guestWaiting : undefined}
       disabled={disabled}
       onClick={() => onOpen(seat)}
       style={{
@@ -65,8 +75,19 @@ export function TableTile({ seat, now, meId, onOpen, disabled }: TableTileProps)
           className={`absolute top-3 w-2.5 h-2.5 rounded-full ${round ? 'right-[18%]' : 'right-3.5'} ${TONE[tone].dot}`}
         />
       )}
-      {(kitchen || (bill && bill.draft_count > 0)) && (
+      {(kitchen || guestWaiting > 0 || (bill && bill.draft_count > 0)) && (
         <span className={`absolute top-2.5 flex items-center gap-1 ${round ? 'left-[16%]' : 'left-3'}`}>
+          {guestWaiting > 0 && (
+            <span
+              data-testid={`table-guest-${table.id}`}
+              title="Гість надіслав запит із телефону"
+              className="h-5 px-1.5 rounded-md bg-sq-blue text-white text-[11px] font-semibold inline-flex items-center gap-1 animate-pulse"
+            >
+              <Bell size={13} aria-hidden />
+              {guestWaiting > 1 ? guestWaiting : null}
+              <span className="sr-only">{guestWaiting > 1 ? `Запитів гостей: ${guestWaiting}` : 'Запит гостя'}</span>
+            </span>
+          )}
           {kitchen && (
             <span
               className={`h-5 px-1.5 rounded-md text-[11px] font-semibold inline-flex items-center ${
@@ -108,8 +129,12 @@ export function TableTile({ seat, now, meId, onOpen, disabled }: TableTileProps)
   );
 }
 
-/** The four states in words, for the header — the same colours as the tiles. */
-export function ToneLegend(): JSX.Element {
+/**
+ * The four states in words, for the header — the same colours as the tiles.
+ * `guest` adds the fifth mark, shown only while some guest is waiting: a
+ * legend that explains a badge nobody can see is noise.
+ */
+export function ToneLegend({ guest = false }: { guest?: boolean }): JSX.Element {
   const dots: Record<TableTone, string> = {
     free: 'bg-sq-divider',
     mine: 'bg-sq-blue',
@@ -124,6 +149,12 @@ export function ToneLegend(): JSX.Element {
           {TONE_LABEL[tone]}
         </span>
       ))}
+      {guest && (
+        <span className="flex items-center gap-1.5">
+          <Bell size={14} className="text-sq-blue" aria-hidden />
+          Запит гостя
+        </span>
+      )}
     </div>
   );
 }

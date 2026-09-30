@@ -15,18 +15,29 @@
 // same on a laptop and on a tablet. Tables may overlap — a sofa stands
 // against a wall — and nothing here tries to prevent it.
 //
+// The requests guests send from the QR menu (Q7) are listed above the room,
+// not only badged on their tiles: a FREE table has no bill to open, so the map
+// is where its request is answered — and answering it is the one thing here
+// that seats a table for the waiter, because accepting opens the bill.
+//
 // Writes are online only, and the screen says so rather than pretending: the
 // bill lives on the server (§4.10). Reads are not: К4j gives the till a
 // read-only mirror, so when the Wi-Fi blinks the waiter still sees which
 // tables are taken, for how long and for how much — with «станом на» over it,
 // because a map that might be minutes old must never pass for a live one.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore, useOfflineStatus, usePosShell } from '@pos/platform';
+import { Bell } from '@pos/platform/ui';
+import { GuestOrdersPanel } from '../components/GuestOrdersPanel';
+import type { AcceptOutcome } from '../components/GuestOrdersPanel';
 import { TableTile, ToneLegend } from '../components/TableTile';
 import { hallExtent, seatsOfHall, visibleHalls } from '../lib/hallMap';
 import type { TableSeat } from '../lib/hallMap';
+import { refusedLineId, requestsLabel, waitingByTable } from '../lib/guestOrders';
+import type { GuestOrder } from '../lib/types';
+import { useGuestOrders } from '../lib/useGuestOrders';
 import { serverMessage, useHallMap } from '../lib/useHallMap';
 import * as tablesApi from '../lib/tablesApi';
 
@@ -49,10 +60,22 @@ export function HallMapPage(): JSX.Element {
     mirrored: shell !== 'web',
     storeId,
   });
+  const { orders: requests, refresh: refreshRequests } = useGuestOrders({ online });
   const [hallId, setHallId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
+  // A success worth a line («прийнято»), which is not an error and must not
+  // wear the red of one.
+  const [note, setNote] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  const waiting = useMemo(() => waitingByTable(requests), [requests]);
+
+  useEffect(() => {
+    if (note == null) return;
+    const id = setTimeout(() => setNote(null), 8000);
+    return () => clearTimeout(id);
+  }, [note]);
 
   const rooms = useMemo(() => visibleHalls(halls, bills), [halls, bills]);
   const current = rooms.find((h) => h.id === hallId) ?? rooms[0] ?? null;
@@ -84,6 +107,71 @@ export function HallMapPage(): JSX.Element {
     }
   }
 
+  /**
+   * Accept a guest's request: its lines go into the table's bill under this
+   * waiter's name, and to the kitchen when the draft held nothing of the
+   * waiter's own. When it could not go all the way — the round did not go out,
+   * or the waiter had lines of their own in the draft — the bill opens with the
+   * server's warning on it, because that is where the rest of the job is.
+   */
+  async function acceptRequest(order: GuestOrder, excludeLineIds: number[]): Promise<AcceptOutcome> {
+    if (busy) return { ok: false };
+    if (!online) {
+      setBanner('Потрібна мережа, щоб прийняти запит');
+      return { ok: false };
+    }
+    setBusy(true);
+    setBanner(null);
+    setNote(null);
+    try {
+      const done = await tablesApi.acceptGuestOrder(order.id, excludeLineIds);
+      void refreshRequests();
+      void refresh();
+      if (done.warning) {
+        navigate(`/tables/${done.bill.id}`, { state: { notice: done.warning } });
+      } else {
+        setNote(
+          done.already
+            ? `Стіл ${order.table_name}: запит уже було прийнято`
+            : `Стіл ${order.table_name}: прийнято — замовлення на кухні`
+        );
+      }
+      return { ok: true };
+    } catch (err) {
+      // The server's words say which dish and why («сьогодні в стоп-листі»);
+      // the card marks the line the server named, so the next tap can go
+      // without it.
+      setBanner(serverMessage(err, 'Не вдалося прийняти запит'));
+      void refreshRequests();
+      return { ok: false, refusedLineId: refusedLineId(err) };
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function rejectRequest(order: GuestOrder, reason: string | null): Promise<boolean> {
+    if (busy) return false;
+    if (!online) {
+      setBanner('Потрібна мережа, щоб відхилити запит');
+      return false;
+    }
+    setBusy(true);
+    setBanner(null);
+    setNote(null);
+    try {
+      await tablesApi.rejectGuestOrder(order.id, reason ?? undefined);
+      void refreshRequests();
+      setNote(`Стіл ${order.table_name}: запит відхилено`);
+      return true;
+    } catch (err) {
+      setBanner(serverMessage(err, 'Не вдалося відхилити запит'));
+      void refreshRequests();
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
   // Offline with nothing remembered — the honest empty state. With a mirror
   // the map draws below instead, marked as a memory.
   if (!online && !stale && !loading) {
@@ -107,6 +195,9 @@ export function HallMapPage(): JSX.Element {
           <div className="flex gap-1 p-[3px] rounded-xl bg-sq-empty overflow-x-auto max-w-full">
             {rooms.map((hall) => {
               const on = current?.id === hall.id;
+              // A request at a table in ANOTHER hall must not be missed by a
+              // waiter standing in this one.
+              const asking = hall.tables.reduce((sum, t) => sum + (waiting.get(t.id) ?? 0), 0);
               return (
                 <button
                   key={hall.id}
@@ -121,13 +212,22 @@ export function HallMapPage(): JSX.Element {
                   }`}
                 >
                   {hall.name}
+                  {asking > 0 && (
+                    <span
+                      data-testid={`hall-tab-guest-${hall.id}`}
+                      className="ml-1.5 inline-flex items-center gap-0.5 text-sq-blue font-semibold"
+                    >
+                      <Bell size={14} aria-hidden />
+                      {asking}
+                    </span>
+                  )}
                 </button>
               );
             })}
           </div>
         )}
         <div className="flex-1" />
-        {current && <ToneLegend />}
+        {current && <ToneLegend guest={requests.length > 0} />}
       </header>
 
       {stale && (
@@ -144,6 +244,30 @@ export function HallMapPage(): JSX.Element {
         <p className="mx-4 md:mx-7 mb-3 rounded-sq bg-red-50 text-red-700 px-3 py-2 text-sm" data-testid="tables-banner">
           {banner}
         </p>
+      )}
+
+      {note && (
+        <p
+          className="mx-4 md:mx-7 mb-3 rounded-sq bg-sq-success/10 text-sq-success-ink px-3 py-2 text-sm"
+          data-testid="tables-note"
+        >
+          {note}
+        </p>
+      )}
+
+      {requests.length > 0 && (
+        <section className="mx-4 md:mx-7 mb-3 max-h-[45vh] overflow-auto" data-testid="tables-requests">
+          <p className="pb-1.5 text-[13px] font-semibold text-sq-secondary">
+            З телефонів гостей · {requestsLabel(requests.length)}
+          </p>
+          <GuestOrdersPanel
+            orders={requests}
+            showTable
+            busy={busy}
+            onAccept={acceptRequest}
+            onReject={rejectRequest}
+          />
+        </section>
       )}
 
       {loading && rooms.length === 0 && (
@@ -189,6 +313,7 @@ export function HallMapPage(): JSX.Element {
               now={now}
               meId={meId}
               disabled={busy}
+              guestWaiting={waiting.get(seat.table.id) ?? 0}
               onOpen={(s) => void open(s)}
             />
           ))}

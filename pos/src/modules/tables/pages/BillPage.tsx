@@ -23,9 +23,14 @@
 // «На кухню» is the only button that changes the world: it locks the prices,
 // moves the stock and puts the ticket on the pass. It carries a `client_uuid`
 // so a second tap on a bad connection is the same round, not dinner twice.
+//
+// What this table's guests have asked for from the QR menu (Q7) sits above
+// the menu, not inside the bill: it is not on the bill yet, and it must not
+// look like it is. Accepting goes through the same serial queue as every other
+// write, so it can never overtake the taps before it.
 
-import { useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   DEFAULT_RECEIPT_PAPER_WIDTH,
   getMeta,
@@ -40,6 +45,8 @@ import { ArrowLeft, ModifierSheet } from '@pos/platform/ui';
 import { BillBar } from '../components/BillBar';
 import { BillPane } from '../components/BillPane';
 import { BillSheet } from '../components/BillSheet';
+import { GuestOrdersPanel } from '../components/GuestOrdersPanel';
+import type { AcceptOutcome } from '../components/GuestOrdersPanel';
 import { MenuCatalog } from '../components/MenuCatalog';
 import { PaySheet } from '../components/PaySheet';
 import { countsByProduct, draftSummary, draftView } from '../lib/draft';
@@ -47,10 +54,14 @@ import type { DraftLineView } from '../lib/draft';
 import { isSettled, payableLines } from '../lib/pay';
 import { buildPrecheck } from '../lib/precheck';
 import { useBill } from '../lib/useBill';
+import { useGuestOrders } from '../lib/useGuestOrders';
 import { useIsWide } from '../lib/useIsWide';
 import { guestsLabel, seatedFor } from '../lib/hallMap';
+import { refusedLineId } from '../lib/guestOrders';
+import { serverMessage } from '../lib/useHallMap';
 import * as tablesApi from '../lib/tablesApi';
 import type { PayPart } from '../lib/tablesApi';
+import type { GuestOrder } from '../lib/types';
 
 function newUuid(): string {
   const c = globalThis.crypto as { randomUUID?: () => string } | undefined;
@@ -97,7 +108,23 @@ export function BillPage(): JSX.Element {
   // looked up in the menu's own rows (К4m).
   const [editing, setEditing] = useState<{ row: DraftLineView; variants: CatalogItem[] } | null>(null);
   const [printStatus, setPrintStatus] = useState<string | null>(null);
+  const [answering, setAnswering] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // This table's requests only, and only once we know which table this is —
+  // without it the hook would read the whole room's.
+  const { orders: requests, refresh: refreshRequests } = useGuestOrders({
+    online: online && bill != null,
+    tableId: bill?.table_id ?? null,
+  });
+
+  // The hall map sends the server's warning along when accepting a request
+  // left something for this screen to finish («відправте на кухню самі»).
+  const arrival = (location.state as { notice?: unknown } | null)?.notice;
+  useEffect(() => {
+    if (typeof arrival === 'string' && arrival) notice(arrival);
+  }, [arrival, notice]);
 
   const draft = useMemo(() => (bill ? draftView(bill.draft, pending) : []), [bill, pending]);
   const summary = useMemo(() => draftSummary(draft), [draft]);
@@ -229,6 +256,52 @@ export function BillPage(): JSX.Element {
     void run(() => tablesApi.updateLine(bill.id, lineId, { variant_id: item.variant_id, modifiers, note }));
   };
 
+  /**
+   * Accept a guest's request into THIS bill, through the write queue: the
+   * answer is the bill as it stands, so the new lines (and the round, when the
+   * draft held nothing else) appear without a second read. A refusal names the
+   * request line the server could not add, and the card marks it.
+   */
+  const acceptRequest = async (order: GuestOrder, excludeLineIds: number[]): Promise<AcceptOutcome> => {
+    const result: { warning: string | null; refused: number | null } = { warning: null, refused: null };
+    const ok = await run(
+      async () => {
+        try {
+          const done = await tablesApi.acceptGuestOrder(order.id, excludeLineIds);
+          result.warning = done.warning;
+          return done.bill;
+        } catch (err) {
+          result.refused = refusedLineId(err);
+          throw err;
+        }
+      },
+      { stock: true }
+    );
+    void refreshRequests();
+    if (ok && result.warning) notice(result.warning);
+    return { ok, refusedLineId: result.refused };
+  };
+
+  const rejectRequest = async (order: GuestOrder, reason: string | null): Promise<boolean> => {
+    if (!online) {
+      notice('Потрібна мережа');
+      return false;
+    }
+    setAnswering(true);
+    clearBanner();
+    try {
+      await tablesApi.rejectGuestOrder(order.id, reason ?? undefined);
+      void refreshRequests();
+      return true;
+    } catch (err) {
+      notice(serverMessage(err, 'Не вдалося відхилити запит'));
+      void refreshRequests();
+      return false;
+    } finally {
+      setAnswering(false);
+    }
+  };
+
   const pane = (
     <BillPane
       bill={bill}
@@ -293,6 +366,18 @@ export function BillPage(): JSX.Element {
             Зрозуміло
           </button>
         </p>
+      )}
+
+      {requests.length > 0 && (
+        <section className="mx-4 md:mx-6 mt-2 max-h-[40vh] shrink-0 overflow-auto" data-testid="bill-requests">
+          <GuestOrdersPanel
+            orders={requests}
+            showTable={false}
+            busy={busy || answering}
+            onAccept={acceptRequest}
+            onReject={rejectRequest}
+          />
+        </section>
       )}
 
       <div className={`min-h-0 flex-1 ${wide ? 'grid grid-cols-[minmax(0,1fr)_372px]' : 'flex flex-col'}`}>

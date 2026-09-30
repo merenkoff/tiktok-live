@@ -20,6 +20,14 @@
 // One queue, one request in flight. Every answer is the whole bill and is
 // newer than the one before, so applying them in order is all the ordering
 // there is — and a tap can never race the «На кухню» that follows it.
+//
+// The bill is also re-read every few seconds while the screen is in view (Q7):
+// a guest's request accepted from the hall map, or a round another waiter
+// cancelled, must show up on the screen of the waiter standing at the table
+// without a tap. The poll never competes with a write — it does not start
+// while the queue has anything in it, and an answer that lands after a write
+// began or finished is thrown away, because it is older than what the write
+// answered with.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as tablesApi from './tablesApi';
@@ -27,6 +35,7 @@ import * as mirror from '../data/mirror';
 import { pendingLine } from './draft';
 import type { DishChoice, PendingLine } from './draft';
 import { serverMessage } from './useHallMap';
+import { useVisiblePoll } from './usePolling';
 import type { Bill } from './types';
 
 export interface BillState {
@@ -92,6 +101,9 @@ export function useBill(
   const pumpingRef = useRef(false);
   // Read synchronously by `run`: the state may lag a tap by a render.
   const blockingRef = useRef(false);
+  // Bumped whenever a write's answer is applied, so a poll that started before
+  // it can tell it is out of date.
+  const writeSeqRef = useRef(0);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -145,6 +157,31 @@ export function useBill(
     void reload();
   }, [reload]);
 
+  /**
+   * One quiet re-read. Unlike `reload` it never shows an error (a blink of the
+   * Wi-Fi must not put a banner over a bill that is on screen), never falls
+   * back to the mirror (that is `reload`'s job on the first draw), and never
+   * replaces the bill with an identical one.
+   */
+  const poll = useCallback(async () => {
+    const busyNow = () => pumpingRef.current || queueRef.current.length > 0;
+    if (!online || busyNow()) return;
+    const seq = writeSeqRef.current;
+    try {
+      const fresh = await tablesApi.getBill(billId);
+      if (!mountedRef.current || seq !== writeSeqRef.current || busyNow()) return;
+      setBill((prev) => (prev != null && JSON.stringify(prev) === JSON.stringify(fresh) ? prev : fresh));
+      setError(null);
+      setStale(false);
+      setSavedAt(null);
+      if (mirrored && storeId != null) void mirror.saveBill(storeId, fresh);
+    } catch {
+      // The next tick tries again.
+    }
+  }, [billId, online, mirrored, storeId]);
+
+  useVisiblePoll(poll, online);
+
   /** Drain the queue, one request at a time, applying each answer as it lands. */
   const pump = useCallback(async () => {
     if (pumpingRef.current) return;
@@ -159,6 +196,7 @@ export function useBill(
         }
         try {
           const fresh = await job.write();
+          writeSeqRef.current += 1;
           if (mountedRef.current) {
             setBill(fresh);
             setStale(false);
@@ -223,6 +261,10 @@ export function useBill(
     [billId, online, pump]
   );
 
+  const clearBanner = useCallback(() => setBanner(null), []);
+  /** Say something in the bill's own voice — a refusal the screen found before the server could. */
+  const notice = useCallback((text: string) => setBanner(text), []);
+
   const run = useCallback(
     (write: () => Promise<Bill>, opts: { stock?: boolean } = {}): Promise<boolean> => {
       // A second «На кухню» while the first is in flight would be a second
@@ -251,9 +293,8 @@ export function useBill(
     epoch,
     stale,
     savedAt,
-    clearBanner: () => setBanner(null),
-    /** Say something in the bill's own voice — a refusal the screen found before the server could. */
-    notice: (text: string) => setBanner(text),
+    clearBanner,
+    notice,
     reload,
     addLine,
     run,
