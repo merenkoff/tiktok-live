@@ -108,6 +108,22 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
     }
   });
 
+  // A whole size × colour matrix in one request (TechDocs/POS_CLOTHING.md, C1):
+  // all of it or nothing, and a clash says which article or barcode was taken.
+  fastify.post('/products/:id/variants/batch', async (request, reply) => {
+    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    if (!auth) return;
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { variants?: productsService.VariantInput[] };
+    try {
+      const product = await productsService.addVariants(auth.storeId, Number(id), body.variants ?? []);
+      return reply.code(201).send(product);
+    } catch (error) {
+      const status = isUniqueViolation(error) ? 409 : 400;
+      return reply.code(status).send({ error: errorMessage(error) });
+    }
+  });
+
   // Mint a store-local barcode for a tag that will not scan. Static segment,
   // so it never shadows `PATCH /variants/:id`.
   fastify.post('/variants/internal-barcode', async (request, reply) => {

@@ -56,4 +56,5 @@ export const cafeVertical: VerticalDefinition = {
   // A latte is made after it is paid for; the board and the ticket exist for
   // exactly that gap.
   kitchen: true,
+  autoBarcode: false,
 };

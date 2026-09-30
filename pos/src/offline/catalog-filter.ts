@@ -2,6 +2,7 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
+import { matchesToken, searchTokens } from '../lib/searchTokens';
 import type { CatalogItem, PosTag } from '../types';
 
 export function flattenTags(tags: PosTag[]): PosTag[] {
@@ -54,20 +55,11 @@ export function filterCatalog(
   }
 
   let next = items;
-  const q = opts?.q?.trim().toLowerCase();
-  if (q) {
-    next = next.filter((item) => {
-      const hay = [
-        item.product_name,
-        item.sku ?? '',
-        item.barcode ?? '',
-        item.label,
-        ...searchKeys.map((key) => String(item.attributes?.[key] ?? '')),
-      ]
-        .join(' ')
-        .toLowerCase();
-      return hay.includes(q);
-    });
+  // Every WORD of the query has to match something about the variant, in any
+  // order — the mirror of the server's per-word condition (`searchTokens`).
+  const tokens = searchTokens(opts?.q);
+  if (tokens.length) {
+    next = next.filter((item) => tokens.every((token) => matchesToken(item, token, searchKeys)));
   }
 
   if (opts?.tag_id) {

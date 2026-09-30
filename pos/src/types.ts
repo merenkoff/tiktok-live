@@ -131,6 +131,12 @@ export interface VerticalPublicConfig {
    * store has a guest menu. Absent (an older cached auth) reads as «yes».
    */
   dishFacts?: boolean;
+  /**
+   * The server gives a new variant a barcode of the store's own when none is
+   * typed (clothing). Absent (an older cached auth) reads as «no», which only
+   * means the form shows the old empty field.
+   */
+  autoBarcode?: boolean;
 }
 
 /** One answer to «чому списуємо»: the stored code and what the owner reads. */

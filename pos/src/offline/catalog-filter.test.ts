@@ -148,3 +148,78 @@ describe('filterCatalog — what is not on the menu', () => {
     expect(filterCatalog([old as never], tags).map((i) => i.variant_id)).toEqual([9]);
   });
 });
+
+describe('filterCatalog — the query is read as words', () => {
+  // The same fixtures and the same expected results as the server runs against
+  // Postgres (`src/__tests__/pos.catalog-search.test.ts`): the offline till
+  // must find exactly what the online one finds.
+  const FIXTURES = [
+    { key: 'A', name: 'Костюмчик Зайчик', color: 'блакитний', size: '86', sku: 'KZ-86', barcode: '2900000000011' },
+    { key: 'B', name: 'Костюмчик Зайчик', color: 'блакитний', size: '98-104', sku: 'KZ-98', barcode: '2900000000028' },
+    { key: 'C', name: 'Костюмчик Зайчик', color: 'рожевий', size: '86', sku: 'KZ-R86', barcode: '2900000008606' },
+    { key: 'D', name: 'Сукня Свято', color: 'біла', size: '92-98', sku: 'SS-1', barcode: '4820086123456' },
+    { key: 'E', name: 'Комплект 100%', color: 'молочний', size: '62', sku: 'K_1', barcode: '5901234123457' },
+    { key: 'F', name: 'Реглан', color: 'сірий', size: '110', sku: '0054', barcode: '2900000000554' },
+    { key: 'G', name: 'Боді', color: 'жовтий', size: '98/104', sku: 'BD-1', barcode: '5901234000016' },
+    { key: 'H', name: 'Боді', color: 'жовтий', size: '104–110', sku: 'BD-2', barcode: '5901234000023' },
+    { key: 'I', name: 'Шапка', color: 'сіра', size: 'OS', sku: '77', barcode: '5901234000030' },
+    { key: 'J', name: 'Шарф', color: 'сірий', size: 'OS', sku: 'J-1', barcode: '5907712345678' },
+  ];
+  const rows = FIXTURES.map((f, i) =>
+    makeCatalogItem({
+      variant_id: i + 1,
+      product_id: i + 1,
+      product_name: f.name,
+      attributes: { color: f.color, size: f.size },
+      label: `${f.color} / ${f.size}`,
+      sku: f.sku,
+      barcode: f.barcode,
+    })
+  );
+  const keyOf = (variantId: number) => FIXTURES[variantId - 1]!.key;
+  const find = (q: string) =>
+    filterCatalog(rows, tags, { q }, ['color', 'size'])
+      .map((r) => keyOf(r.variant_id))
+      .sort()
+      .join('');
+
+  const MATCH_CASES: Array<{ query: string; expected: string }> = [
+    { query: 'зайчик 86', expected: 'AC' },
+    { query: 'зайчик', expected: 'ABC' },
+    { query: 'ЗАЙЧИК', expected: 'ABC' },
+    { query: '86 зайчик', expected: 'AC' },
+    { query: 'блакитний 98/104', expected: 'B' },
+    // The field is folded too, so a pair saved with a slash or an en dash is one of these.
+    { query: '98-104', expected: 'BG' },
+    { query: '98–104', expected: 'BG' },
+    { query: '98/104', expected: 'BG' },
+    { query: '104-110', expected: 'H' },
+    { query: '104–110 жовтий', expected: 'H' },
+    { query: 'зайчик сукня', expected: '' },
+    // A short number is a size: «86» is in the barcode of D too, and must not find it.
+    { query: '86', expected: 'AC' },
+    // …while a fragment of a scan (six digits) still does.
+    { query: '086123', expected: 'D' },
+    { query: '4820086123456', expected: 'D' },
+    { query: '0054', expected: 'F' },
+    { query: '54', expected: '' },
+    { query: '77', expected: 'I' },
+    { query: '5907712345678', expected: 'J' },
+    { query: '907712', expected: 'J' },
+    { query: 'kz-86', expected: 'A' },
+    { query: 'реглан 110', expected: 'F' },
+    // `%` and `_` mean themselves.
+    { query: '100%', expected: 'E' },
+    { query: '%', expected: 'E' },
+    { query: '_', expected: 'E' },
+    { query: 'k_1', expected: 'E' },
+    // Only six words count: the seventh («lol») would exclude everything.
+    { query: 'костюмчик зайчик блакитний 86 2900000000011 kz-86 lol', expected: 'A' },
+    { query: '', expected: 'ABCDEFGHIJ' },
+    { query: '   ', expected: 'ABCDEFGHIJ' },
+  ];
+
+  it.each(MATCH_CASES)('«$query» finds $expected', ({ query, expected }) => {
+    expect(find(query)).toBe(expected);
+  });
+});

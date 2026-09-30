@@ -125,6 +125,16 @@ export interface VerticalDefinition {
    * board from the module that draws it, not from the vertical config.
    */
   kitchen: boolean;
+  /**
+   * Whether a new variant that arrives without a barcode is given one of the
+   * store's own (`29…` EAN-13, `generateInternalBarcode`). A boutique sticks a
+   * printed tag on every garment and its owner forgets the «Згенерувати»
+   * button — so the server does it (TechDocs/POS_CLOTHING.md, C1). Only for
+   * creation: an EXPLICIT barcode is never replaced, and an existing variant is
+   * never touched here. Off where the goods come with their own code (a
+   * florist's stems, a café's drinks).
+   */
+  autoBarcode: boolean;
 }
 
 /**
@@ -159,4 +169,10 @@ export interface VerticalPublicConfig {
    * the module that draws it. A shirt has no allergens.
    */
   dishFacts: boolean;
+  /**
+   * The server mints a barcode for a new variant that has none — the form
+   * says «автоматично» instead of an empty field. See
+   * `VerticalDefinition.autoBarcode`.
+   */
+  autoBarcode: boolean;
 }

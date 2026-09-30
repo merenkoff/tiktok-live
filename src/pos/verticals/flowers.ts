@@ -61,4 +61,5 @@ export const flowersVertical: VerticalDefinition = {
   // labour (`priceOfComposition`), and no florist asked for it.
   maxCompositionDepth: 1,
   kitchen: false,
+  autoBarcode: false,
 };

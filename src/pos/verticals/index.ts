@@ -67,6 +67,7 @@ export function publicConfigOf(def: VerticalDefinition): VerticalPublicConfig {
     writeoffReasons: [...def.writeoffReasons],
     productKinds: [...def.productKinds],
     dishFacts: def.kitchen,
+    autoBarcode: def.autoBarcode,
   };
 }
 
