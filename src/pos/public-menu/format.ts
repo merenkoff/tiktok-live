@@ -50,3 +50,8 @@ export function groupHint(group: { min_select: number; max_select: number; modif
   if (group.max_select >= group.modifiers.length) return 'скільки завгодно';
   return `до ${group.max_select}`;
 }
+
+/** «Стіл 5»; an owner who already named it «Стіл 5» does not get «Стіл Стіл 5». */
+export function tableLabel(name: string): string {
+  return /^стіл/i.test(name.trim()) ? name.trim() : `Стіл ${name.trim()}`;
+}

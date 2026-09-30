@@ -32,6 +32,7 @@ import { getCatalog } from '../products.service.js';
 import { listTagsFlat, type PosTag } from '../tags.service.js';
 import { storeClock } from '../core/storeClock.js';
 import { verticalOrDefault } from '../verticals/index.js';
+import { issuePrintLink } from './table-keys.js';
 import type { CatalogItem } from '../types.js';
 
 /** What a URL token looks like. Checked before any query, so junk never reaches the database. */
@@ -98,6 +99,8 @@ export interface PublicMenu {
 interface MenuStore {
   id: number;
   name: string;
+  /** The owner lets a guest read their own table's bill (phase Q5). */
+  billEnabled: boolean;
 }
 
 /** A table, as far as a guest is told: what the QR on it says, and which room it is in. */
@@ -117,9 +120,13 @@ export function menuUrl(token: string): string {
   return `${publicBaseUrl()}/m/${token}`;
 }
 
-/** The address a table's QR carries: the menu, plus which table asked. Display only — nothing is ordered from it. */
-export function tableMenuUrl(token: string, tableId: number): string {
-  return `${menuUrl(token)}?t=${tableId}`;
+/**
+ * The address a table's QR carries: the menu, plus which table asked. Without
+ * a key it only captions the page; with the table's key (`?k=`) the guest may
+ * also read that table's bill.
+ */
+export function tableMenuUrl(token: string, tableId: number, key?: string): string {
+  return `${menuUrl(token)}?t=${tableId}${key ? `&k=${key}` : ''}`;
 }
 
 // ── tables ──────────────────────────────────────────────────────────
@@ -364,7 +371,7 @@ export async function findMenuStore(token: string): Promise<MenuStore | null> {
   const hit = storeByToken.get(token);
   if (hit && hit.expires > Date.now()) return hit.value;
   const result = await pool.query(
-    `SELECT id, name, vertical, public_menu_enabled
+    `SELECT id, name, vertical, public_menu_enabled, public_menu_bill
      FROM pos_stores
      WHERE public_menu_token = $1`,
     [token]
@@ -372,7 +379,7 @@ export async function findMenuStore(token: string): Promise<MenuStore | null> {
   const row = result.rows[0];
   if (!row || row.public_menu_enabled !== true) return null;
   if (!verticalOrDefault(row.vertical as string | undefined).kitchen) return null;
-  const store: MenuStore = { id: Number(row.id), name: String(row.name) };
+  const store: MenuStore = { id: Number(row.id), name: String(row.name), billEnabled: row.public_menu_bill === true };
   storeByToken.set(token, { value: store, expires: Date.now() + CACHE_TTL_MS });
   return store;
 }
@@ -415,6 +422,15 @@ export interface PublicMenuSettings {
    * halls, which is most of them.
    */
   tables: number;
+  /** A guest may read the bill of their own table (their QR carries the table's key). */
+  bill_enabled: boolean;
+  /**
+   * A short-lived signed suffix (`?p=`) for the print pages: without it
+   * `/m/<token>/qr` and `/tables` print QR codes with no table key in them,
+   * because the store token is visible to every guest. Null until there is a
+   * token. Only ever sent to the owner.
+   */
+  print: string | null;
 }
 
 const NOT_AVAILABLE = 'Меню за QR доступне для кав’ярні й ресторану';
@@ -427,7 +443,7 @@ function isUniqueViolation(error: unknown): boolean {
   return typeof error === 'object' && error !== null && (error as { code?: string }).code === '23505';
 }
 
-function toSettings(row: Record<string, unknown> | undefined, tables = 0): PublicMenuSettings {
+function toSettings(row: Record<string, unknown> | undefined, tables = 0, print: string | null = null): PublicMenuSettings {
   const token = typeof row?.public_menu_token === 'string' ? row.public_menu_token : null;
   return {
     available: verticalOrDefault(row?.vertical as string | undefined).kitchen,
@@ -435,12 +451,20 @@ function toSettings(row: Record<string, unknown> | undefined, tables = 0): Publi
     token,
     url: token ? menuUrl(token) : null,
     tables,
+    bill_enabled: row?.public_menu_bill === true,
+    print: token ? print : null,
   };
+}
+
+/** The settings as the owner's screen reads them: the row, the table count, a fresh print link. */
+async function settingsFor(storeId: number, row: Record<string, unknown>): Promise<PublicMenuSettings> {
+  const token = typeof row.public_menu_token === 'string';
+  return toSettings(row, await countMenuTables(storeId), token ? await issuePrintLink(storeId) : null);
 }
 
 async function readRow(storeId: number): Promise<Record<string, unknown>> {
   const result = await pool.query(
-    `SELECT vertical, public_menu_enabled, public_menu_token FROM pos_stores WHERE id = $1`,
+    `SELECT vertical, public_menu_enabled, public_menu_token, public_menu_bill FROM pos_stores WHERE id = $1`,
     [storeId]
   );
   const row = result.rows[0];
@@ -449,7 +473,7 @@ async function readRow(storeId: number): Promise<Record<string, unknown>> {
 }
 
 export async function getPublicMenuSettings(storeId: number): Promise<PublicMenuSettings> {
-  return toSettings(await readRow(storeId), await countMenuTables(storeId));
+  return settingsFor(storeId, await readRow(storeId));
 }
 
 /**
@@ -469,11 +493,11 @@ export async function setPublicMenuEnabled(storeId: number, enabled: boolean): P
              public_menu_token = COALESCE(public_menu_token, $3),
              updated_at = NOW()
          WHERE id = $1
-         RETURNING vertical, public_menu_enabled, public_menu_token`,
+         RETURNING vertical, public_menu_enabled, public_menu_token, public_menu_bill`,
         [storeId, enabled, enabled && !hasToken ? newToken() : null]
       );
       invalidatePublicMenu(storeId);
-      return toSettings(result.rows[0], await countMenuTables(storeId));
+      return settingsFor(storeId, result.rows[0]);
     } catch (error) {
       // A 144-bit collision is not going to happen; the retry is for the
       // principle that a unique index can always say no.
@@ -489,16 +513,37 @@ export async function rotatePublicMenuToken(storeId: number): Promise<PublicMenu
   for (let attempt = 0; ; attempt += 1) {
     try {
       const result = await pool.query(
+        // The print-link secret goes with the token: a link the owner's screen
+        // holds for the old address must not open the print pages of the new one.
         `UPDATE pos_stores
-         SET public_menu_token = $2, updated_at = NOW()
+         SET public_menu_token = $2, public_menu_secret = NULL, updated_at = NOW()
          WHERE id = $1
-         RETURNING vertical, public_menu_enabled, public_menu_token`,
+         RETURNING vertical, public_menu_enabled, public_menu_token, public_menu_bill`,
         [storeId, newToken()]
       );
       invalidatePublicMenu(storeId);
-      return toSettings(result.rows[0], await countMenuTables(storeId));
+      return settingsFor(storeId, result.rows[0]);
     } catch (error) {
       if (!isUniqueViolation(error) || attempt >= 2) throw error;
     }
   }
+}
+
+/**
+ * Let guests read the bill of their own table, or stop. Independent of the
+ * menu's own switch — it only ever has an effect while the menu is published —
+ * so an owner can decide it before or after switching the menu on.
+ */
+export async function setPublicMenuBill(storeId: number, enabled: boolean): Promise<PublicMenuSettings> {
+  const row = await readRow(storeId);
+  if (enabled && !toSettings(row).available) throw new PublicMenuError(NOT_AVAILABLE);
+  const result = await pool.query(
+    `UPDATE pos_stores
+     SET public_menu_bill = $2, updated_at = NOW()
+     WHERE id = $1
+     RETURNING vertical, public_menu_enabled, public_menu_token, public_menu_bill`,
+    [storeId, enabled]
+  );
+  invalidatePublicMenu(storeId);
+  return settingsFor(storeId, result.rows[0]);
 }

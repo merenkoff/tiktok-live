@@ -153,6 +153,58 @@ main { max-width: 720px; margin: 0 auto; padding: 0 16px 24px; }
   background: var(--accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
 }
 
+/* The guest's bill (phase Q5): a bar over the bottom edge and a sheet over the page. */
+.bill-bar {
+  position: fixed; left: 16px; right: 16px; bottom: 16px; z-index: 20;
+  max-width: 688px; margin: 0 auto; padding: 14px 20px; border: 0; border-radius: 14px;
+  background: var(--ink); color: var(--bg); font: inherit; font-weight: 700; cursor: pointer;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22);
+}
+.bill-bar[hidden] { display: none; }
+body:has(.bill-bar:not([hidden])) .foot { padding-bottom: 96px; }
+.bill-sheet {
+  position: fixed; inset: 0; z-index: 30; display: flex; align-items: flex-end; justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+.bill-sheet[hidden] { display: none; }
+body.bill-open { overflow: hidden; }
+.bill-panel {
+  width: 100%; max-width: 720px; max-height: 88vh; overflow: auto;
+  background: var(--card); border-radius: 20px 20px 0 0; padding: 0 20px 24px;
+}
+.bill-head {
+  position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 18px 0 10px; background: var(--card); border-bottom: 1px solid var(--line);
+}
+.bill-head h2 { margin: 0; font-size: 20px; }
+.bill-close {
+  width: 40px; height: 40px; border: 0; border-radius: 999px; background: var(--badge); color: var(--ink);
+  font: inherit; font-size: 24px; line-height: 1; cursor: pointer;
+}
+.bill-round { padding-top: 16px; }
+.bill-round-head {
+  margin: 0 0 6px; display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  font-size: 15px; color: var(--muted);
+}
+.bill-status { padding: 1px 8px; border-radius: 999px; background: var(--badge); font-size: 12px; font-weight: 600; }
+.bill-line { display: flex; justify-content: space-between; gap: 16px; padding: 6px 0; }
+.bill-line-name { min-width: 0; }
+.bill-line-name small { display: block; color: var(--muted); font-size: 13px; }
+.bill-line.paid { color: var(--off); }
+.bill-line b { white-space: nowrap; }
+.bill-paid { color: var(--off); }
+.bill-total {
+  display: flex; justify-content: space-between; gap: 16px; margin-top: 16px; padding-top: 14px;
+  border-top: 2px solid var(--ink); font-size: 20px; font-weight: 700;
+}
+.bill-note { margin: 12px 0 0; color: var(--muted); font-size: 14px; }
+
+/* A print page opened without the owner's link: visible on screen, never on paper. */
+.notice {
+  max-width: 900px; margin: 16px auto 0; padding: 10px 14px; border-radius: 12px;
+  background: var(--badge); color: var(--ink); font-size: 14px;
+}
+
 /* Explicit sizes: `A6` is not a page-size keyword in CSS (only A5, A4, A3, B5,
    B4, JIS-B5, JIS-B4, letter, legal, ledger), and an invalid `size` is dropped
    silently — the card would print on Letter. */
@@ -163,7 +215,7 @@ main { max-width: 720px; margin: 0 auto; padding: 0 16px 24px; }
 
 @media print {
   body { background: #fff; color: #000; }
-  .print { display: none; }
+  .print, .notice, .bill-bar, .bill-sheet { display: none; }
   /* The heading and the button are for the screen; on paper the cards get
      the whole page — three rows of two fit an A4, ten tables take two sheets. */
   .sheet-head { display: none; }

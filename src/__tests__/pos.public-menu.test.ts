@@ -174,7 +174,16 @@ describe.skipIf(!hasDb)('POS guest QR menu', () => {
         headers: auth(cafe.ownerToken),
       });
       expect(before.statusCode).toBe(200);
-      expect(before.json()).toEqual({ available: true, enabled: false, token: null, url: null, tables: 0 });
+      // No token yet, so there is nothing to sign a print link for either.
+      expect(before.json()).toEqual({
+        available: true,
+        enabled: false,
+        token: null,
+        url: null,
+        tables: 0,
+        bill_enabled: false,
+        print: null,
+      });
       expect((await page('never_issued_1')).statusCode).toBe(404);
     });
 

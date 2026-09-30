@@ -38,7 +38,21 @@ interface PublicMenuSettings {
    * is the same as none: the sheet is offered only when there is one.
    */
   tables?: number;
+  /**
+   * The guest may read the bill of their own table (phase Q5). Absent from an
+   * older backend, which is the same as off — and then there is nothing to switch.
+   */
+  bill_enabled?: boolean;
+  /**
+   * A short-lived signed suffix (`?p=`) that makes the print pages write each
+   * table's key into its QR. Without it the QR still opens the menu, but not
+   * the bill.
+   */
+  print?: string | null;
 }
+
+/** What the server's print link looks like; anything else is not appended to a URL. */
+const PRINT_LINK = /^\d{9,12}\.[A-Za-z0-9_-]{43}$/;
 
 type LoadState = 'loading' | 'ready' | 'hidden' | 'error';
 
@@ -96,6 +110,15 @@ export function PublicMenuCard() {
       (view) => (view.enabled ? 'Меню відкрито для гостей.' : 'Меню вимкнено: за QR тепер нічого не відкриється.')
     );
 
+  const toggleBill = (enabled: boolean) =>
+    run(
+      () => api.posRequest<PublicMenuSettings>('patch', '/store/public-menu', { bill_enabled: enabled }),
+      (view) =>
+        view.bill_enabled
+          ? 'Гість, що відсканував QR свого столу, бачитиме рахунок.'
+          : 'Рахунок гостям більше не показується.'
+    );
+
   const rotate = () =>
     run(
       () => api.posRequest<PublicMenuSettings>('post', '/store/public-menu/rotate'),
@@ -133,6 +156,10 @@ export function PublicMenuCard() {
 
   const live = settings.enabled && settings.url;
   const tables = settings.tables ?? 0;
+  const print = typeof settings.print === 'string' && PRINT_LINK.test(settings.print) ? settings.print : null;
+  // The switch is about tables, so it shows where there are some — and stays
+  // visible once on, so an owner can always turn it off.
+  const showBillSwitch = tables > 0 || settings.bill_enabled === true;
 
   return (
     <section>
@@ -172,9 +199,14 @@ export function PublicMenuCard() {
               </a>
               {tables > 0 && (
                 // One page with a card for every table, each QR carrying its
-                // table's number. Server-drawn, so this card needs no library
-                // and the `tables` module no release.
-                <a className="sq-btn-quiet" href={`${settings.url}/tables`} target="_blank" rel="noopener noreferrer">
+                // table's number — and, with the print link, its key. Server-
+                // drawn, so this card needs no library.
+                <a
+                  className="sq-btn-quiet"
+                  href={`${settings.url}/tables${print ? `?p=${print}` : ''}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   QR для всіх столів ({tables})
                 </a>
               )}
@@ -185,6 +217,26 @@ export function PublicMenuCard() {
                 Копіювати посилання
               </button>
             </div>
+          </div>
+        )}
+
+        {showBillSwitch && (
+          <div className="space-y-1.5">
+            <label className="min-h-11 flex items-center gap-3 text-[15px] text-sq-text">
+              <input
+                type="checkbox"
+                className={CHECKBOX}
+                checked={settings.bill_enabled === true}
+                disabled={saving}
+                onChange={(e) => void toggleBill(e.target.checked)}
+              />
+              <span>Показувати гостю рахунок його столу</span>
+            </label>
+            <p className="pl-8 text-[13px] leading-relaxed text-sq-muted">
+              Гість, що відсканував QR свого столу, бачить, що вже пішло на кухню, і суму до сплати. Рахунок
+              відкривається лише за ключем, який лежить у QR столу: друкуйте QR кнопкою «QR для всіх столів» —
+              старі роздруківки без ключа відкриють меню, але не рахунок.
+            </p>
           </div>
         )}
 
