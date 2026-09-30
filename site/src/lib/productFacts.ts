@@ -144,6 +144,56 @@ export const COMPETITOR_FACTS = {
     /** «ПРРО входить у всі тарифи Kavapp і не потребує додаткової оплати». */
     prroIncluded: true,
   },
+  /**
+   * monobank Expirenza — read on `checkedAt`, the service's own page first and
+   * two press pieces for what the page does not say. Same rule as above:
+   * «not mentioned» means not mentioned on those pages, never «does not
+   * exist». The page prints NO commission, so none is recorded here: figures
+   * in older press differ from each other and are not ours to repeat.
+   */
+  expirenza: {
+    name: 'monobank Expirenza',
+    checkedAt: '2026-09-30',
+    sources: {
+      service: 'https://expz.monobank.ua/',
+      /** mind.ua, 25.06.2024: guests do not need the monobank app, they scan a QR. */
+      press: 'https://mind.ua/news/20272773-monobank-zapuskae-mobilnij-zastosunok-dlya-klientiv-kafe-bariv-i-restoraniv',
+      /** kosht.media, 15.07.2024: the partnership with ChoiceQR. */
+      partnership: 'https://kosht.media/choiceqr-ta-expirenza-vid-mono-ob-iednuiutsia-shcho-zminylos-dlia-kliientiv/',
+    },
+    /** «3 800+ закладів по всій Україні» / «95 міст та містечок» — the service page's own figures. */
+    establishments: 3800,
+    cities: 95,
+    /** What a guest does with the table's QR, as the service page lists it. */
+    guestDoes: ['бачить цифрове меню', 'отримує рахунок в один дотик', 'платить', 'залишає чайові', 'залишає відгук', 'бронює стіл'],
+    /** The page: «рахунки — з вашої POS-системи» (no cash-register program is named). */
+    billFrom: 'з POS-системи закладу',
+  },
+  /**
+   * ChoiceQR — read on `checkedAt`: the Ukrainian page (products and named
+   * integrations), the English page for what only it lists (pay at table with
+   * bill splitting, delivery and pickup) and the tariff page, whose prices did
+   * not render for us — so no price is recorded, and the article says why.
+   */
+  choiceqr: {
+    name: 'ChoiceQR',
+    checkedAt: '2026-09-30',
+    sources: {
+      ua: 'https://choiceqr.com/uk',
+      en: 'https://choiceqr.com/',
+      tariffs: 'https://choiceqr.com/uk/pricing/',
+      /** kosht.media, 15.07.2024: ChoiceQR ↔ Expirenza. */
+      partnership: 'https://kosht.media/choiceqr-ta-expirenza-vid-mono-ob-iednuiutsia-shcho-zminylos-dlia-kliientiv/',
+    },
+    /** «25 000+ закладів вже з Choice» у «25+ країнах світу». */
+    establishments: 25000,
+    countries: 25,
+    trialDays: 14,
+    /** Products the Ukrainian page names. */
+    products: ['Онлайн-меню', 'Замовлення до столу'],
+    /** Cash-register programs the Ukrainian page names as integrations. */
+    posIntegrations: ['Poster', 'Syrve', 'Servio', 'Profit', 'R-Keeper'],
+  },
 } as const;
 
 export type FeatureStatus = 'available' | 'coming';

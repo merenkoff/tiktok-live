@@ -50,6 +50,9 @@ export function buildLlmsTxt(pages: LlmsPage[]): string {
   const articles = ROUTES.filter((r) => r.path.startsWith('/dovidka/'));
   const cafe = VERTICALS.find((v) => v.id === 'cafe');
   const kavapp = COMPETITOR_FACTS.kavapp;
+  const expirenza = COMPETITOR_FACTS.expirenza;
+  const choiceqr = COMPETITOR_FACTS.choiceqr;
+  const restaurant = VERTICALS.find((v) => v.id === 'restaurant');
   const [kS, kM, kL] = kavapp.plans;
 
   return [
@@ -81,6 +84,15 @@ export function buildLlmsTxt(pages: LlmsPage[]): string {
       : '',
     cafe ? features(cafe.featureIds) : '',
     `- Kavapp для порівняння (станом на ${kavapp.checkedAt}): $${kS.priceUsd.toFixed(2)} / $${kM.priceUsd.toFixed(2)} / $${kL.priceUsd.toFixed(2)} за торгову точку на місяць (тарифи S / M / L); ПРРО входить у всі тарифи; модифікатори напоїв і QR-меню — лише в тарифі L; розрахунок собівартості — з тарифу M. Джерело: ${kavapp.sources.tariffs}. Різниця з ${PRODUCT.pos.name}: ${SITE_URL}/dovidka/kavapp-chy-liveshop-dlya-kavyarni.`,
+    '',
+    '## Програма для ресторану',
+    '',
+    restaurant
+      ? `- ${PRODUCT.pos.name} для ресторану (${SITE_URL}${restaurant.path}): ${restaurant.tagline} Ціна: ${PRICING.pos.label.toLowerCase()}.`
+      : '',
+    restaurant ? features(restaurant.featureIds) : '',
+    `- ${expirenza.name} для порівняння (станом на ${expirenza.checkedAt}): сервіс для гостя за QR — цифрове меню, рахунок, оплата, чайові, відгуки, бронювання; рахунки бере з POS-системи закладу; ${expirenza.establishments}+ закладів у ${expirenza.cities} містах; комісію на сторінці не вказано; замовлення страв зі столу на сторінці не згадано. Джерело: ${expirenza.sources.service}. Різниця з ${PRODUCT.pos.name}: ${SITE_URL}/dovidka/expirenza-chy-liveshop-dlya-restoranu.`,
+    `- ${choiceqr.name} для порівняння (станом на ${choiceqr.checkedAt}): QR-меню, замовлення до столу, інтеграції з ${choiceqr.posIntegrations.join(', ')}; ${choiceqr.establishments}+ закладів у ${choiceqr.countries}+ країнах; ціни на сторінці тарифів не видно. Джерело: ${choiceqr.sources.ua}. Різниця з ${PRODUCT.pos.name}: ${SITE_URL}/dovidka/choiceqr-chy-liveshop-dlya-restoranu.`,
     '',
     '## У планах (входить у тариф перших користувачів)',
     '',

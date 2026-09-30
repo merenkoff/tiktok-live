@@ -74,7 +74,7 @@ export const ROUTES: SiteRoute[] = [
     out: 'pos.html',
     Component: PosPage,
     jsonLd: [org, posSoftwareJsonLd(), buildFaqJsonLd(POS_FAQ)],
-    updatedAt: '2026-09-23',
+    updatedAt: '2026-09-30',
     sitemap: true,
   },
   // One landing per vertical, prerendered from the shared template the way
@@ -127,7 +127,7 @@ export const ROUTES: SiteRoute[] = [
       ogImage: '/og/pos.png',
     },
     jsonLd: [org, breadcrumbJsonLd([DOVIDKA_CRUMB])],
-    updatedAt: '2026-09-24',
+    updatedAt: '2026-09-30',
     sitemap: true,
   },
   {
