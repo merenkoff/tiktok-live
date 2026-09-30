@@ -182,6 +182,7 @@ describe.skipIf(!hasDb)('POS guest QR menu', () => {
         url: null,
         tables: 0,
         bill_enabled: false,
+        ordering_enabled: false,
         print: null,
       });
       expect((await page('never_issued_1')).statusCode).toBe(404);
@@ -309,10 +310,20 @@ describe.skipIf(!hasDb)('POS guest QR menu', () => {
         'variants',
       ]);
       expect(Object.keys(latte.variants[0]!).sort()).toEqual(['available', 'id', 'label', 'price_cents']);
+      // The ids are what a guest's request names an answer by (phase Q6); the
+      // ingredient each answer writes off is still not among them.
       expect(Object.keys(latte.modifier_groups[0]!.modifiers[0]!).sort()).toEqual([
+        'id',
         'is_default',
         'name',
         'price_delta_cents',
+      ]);
+      expect(Object.keys(latte.modifier_groups[0]!).sort()).toEqual([
+        'id',
+        'max_select',
+        'min_select',
+        'modifiers',
+        'name',
       ]);
       for (const leak of ['quantity', 'sku', 'barcode', 'component', 'stop_listed', 'cost', 'store_id', 'station', 'qr_iban']) {
         expect(res.body).not.toContain(leak);
@@ -350,8 +361,8 @@ describe.skipIf(!hasDb)('POS guest QR menu', () => {
       const latte = find(await menu(), 'Латте')!;
       expect(latte.modifier_groups.map((g) => g.name)).toEqual(['Молоко']);
       expect(latte.modifier_groups[0]!.modifiers).toEqual([
-        { name: 'звичайне', price_delta_cents: 0, is_default: true },
-        { name: 'вівсяне', price_delta_cents: 1500, is_default: false },
+        { id: expect.any(Number), name: 'звичайне', price_delta_cents: 0, is_default: true },
+        { id: expect.any(Number), name: 'вівсяне', price_delta_cents: 1500, is_default: false },
       ]);
     });
 

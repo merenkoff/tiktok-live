@@ -20,6 +20,7 @@ type Settings = {
   url: string | null;
   tables?: number;
   bill_enabled?: boolean;
+  ordering_enabled?: boolean;
   print?: string | null;
 };
 
@@ -152,6 +153,34 @@ describe('PublicMenuCard', () => {
     expect(await screen.findByLabelText('Показувати гостю рахунок його столу')).toBeChecked();
     expect(screen.getByRole('status')).toHaveTextContent('бачитиме рахунок');
     expect(toggle()).toBeChecked(); // the menu itself is still published
+  });
+
+  it('offers the ordering switch beside the bill one, says what it needs, and switches only its own field', async () => {
+    posRequest
+      .mockResolvedValueOnce({ ...ON, tables: 6, ordering_enabled: false })
+      .mockResolvedValueOnce({ ...ON, tables: 6, ordering_enabled: true });
+    renderWithProviders(<PublicMenuCard />);
+    const box = await screen.findByLabelText('Приймати замовлення гостей з телефону');
+    expect(box).not.toBeChecked();
+    // The owner is told the waiters need the updated module BEFORE they switch it on.
+    expect(screen.getByText(/оновлений модуль «Столи»/)).toBeInTheDocument();
+
+    await userEvent.click(box);
+    expect(posRequest).toHaveBeenLastCalledWith('patch', '/store/public-menu', { ordering_enabled: true });
+    expect(await screen.findByLabelText('Приймати замовлення гостей з телефону')).toBeChecked();
+    expect(screen.getByRole('status')).toHaveTextContent('з’являться в офіціанта');
+  });
+
+  it('shows no ordering switch without tables, and keeps it once it is on', async () => {
+    posRequest.mockResolvedValueOnce({ ...ON, tables: 0 });
+    const counter = renderWithProviders(<PublicMenuCard />);
+    await screen.findByText('Друкувати QR');
+    expect(screen.queryByLabelText('Приймати замовлення гостей з телефону')).not.toBeInTheDocument();
+    counter.unmount();
+
+    posRequest.mockResolvedValueOnce({ ...ON, tables: 0, ordering_enabled: true });
+    renderWithProviders(<PublicMenuCard />);
+    expect(await screen.findByLabelText('Приймати замовлення гостей з телефону')).toBeChecked();
   });
 
   it('turns it off and hides the address, keeping the retire button (the token still exists)', async () => {

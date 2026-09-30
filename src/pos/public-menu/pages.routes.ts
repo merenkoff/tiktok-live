@@ -49,9 +49,15 @@ export function registerPublicMenuPages(fastify: FastifyInstance): void {
     const found = await loadPublicMenu(token);
     if (!found) return sendPage(reply, 404, renderUnavailable());
     const table = await findMenuTable(found.store.id, queryParam(request, 't'));
-    const bill =
-      found.store.billEnabled && table !== null && (await verifyTableKey(found.store.id, table.id, queryParam(request, 'k')));
-    return sendPage(reply, 200, renderMenuPage(found.menu, token, table, { bill }));
+    const keyed = table !== null && (await verifyTableKey(found.store.id, table.id, queryParam(request, 'k')));
+    return sendPage(
+      reply,
+      200,
+      renderMenuPage(found.menu, token, table, {
+        bill: keyed && found.store.billEnabled,
+        ordering: keyed && found.store.orderingEnabled,
+      })
+    );
   });
 
   fastify.get('/m/:token/qr', async (request, reply) => {

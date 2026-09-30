@@ -154,14 +154,19 @@ main { max-width: 720px; margin: 0 auto; padding: 0 16px 24px; }
 }
 
 /* The guest's bill (phase Q5): a bar over the bottom edge and a sheet over the page. */
-.bill-bar {
+.dock {
   position: fixed; left: 16px; right: 16px; bottom: 16px; z-index: 20;
-  max-width: 688px; margin: 0 auto; padding: 14px 20px; border: 0; border-radius: 14px;
-  background: var(--ink); color: var(--bg); font: inherit; font-weight: 700; cursor: pointer;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22);
+  max-width: 688px; margin: 0 auto; display: grid; gap: 8px;
 }
-.bill-bar[hidden] { display: none; }
-body:has(.bill-bar:not([hidden])) .foot { padding-bottom: 96px; }
+.dock:empty { display: none; }
+.bill-bar, .cart-bar {
+  width: 100%; padding: 14px 20px; border: 0; border-radius: 14px;
+  font: inherit; font-weight: 700; cursor: pointer; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22);
+}
+.bill-bar { background: var(--ink); color: var(--bg); }
+.cart-bar { background: var(--accent); color: #fff; }
+.bill-bar[hidden], .cart-bar[hidden] { display: none; }
+body:has(.dock:not(:empty)) .foot { padding-bottom: 150px; }
 .bill-sheet {
   position: fixed; inset: 0; z-index: 30; display: flex; align-items: flex-end; justify-content: center;
   background: rgba(0, 0, 0, 0.45);
@@ -199,6 +204,50 @@ body.bill-open { overflow: hidden; }
 }
 .bill-note { margin: 12px 0 0; color: var(--muted); font-size: 14px; }
 
+/* Ordering (phase Q6): the «Додати» button on a dish, the sheet that asks the
+   dish's questions, the cart, and the guest's own requests. */
+.add {
+  margin-top: 10px; padding: 8px 16px; border: 0; border-radius: 999px;
+  background: var(--accent); color: #fff; font: inherit; font-weight: 700; font-size: 14px; cursor: pointer;
+}
+.item[data-state="stop"] .add, .item[data-state="out"] .add { display: none; }
+.opt-head { margin: 18px 0 6px; font-size: 15px; }
+.opt-head small { color: var(--muted); font-weight: 400; margin-left: 6px; }
+.opt {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 12px; margin-top: 6px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer;
+}
+.opt.on { border-color: var(--accent); background: var(--badge); }
+.opt.off { color: var(--off); text-decoration: line-through; cursor: default; }
+.opt input { margin-right: 10px; }
+.opt span { flex: 1; }
+.opt b { white-space: nowrap; font-weight: 600; }
+.note-input {
+  width: 100%; margin-top: 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--bg); color: var(--ink); font: inherit;
+}
+.qty { display: inline-flex; align-items: center; gap: 12px; }
+.qty button {
+  width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 999px; background: var(--card);
+  color: var(--ink); font: inherit; font-size: 20px; line-height: 1; cursor: pointer;
+}
+.qty output { min-width: 1.5em; text-align: center; font-weight: 700; }
+.order-foot { position: sticky; bottom: 0; padding: 12px 0 0; background: var(--card); }
+.primary {
+  width: 100%; padding: 14px 20px; border: 0; border-radius: 14px;
+  background: var(--accent); color: #fff; font: inherit; font-weight: 700; cursor: pointer;
+}
+.primary:disabled { opacity: 0.45; cursor: default; }
+.link-btn { border: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; padding: 0; }
+.cart-line { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.cart-line small { display: block; color: var(--muted); font-size: 13px; }
+.cart-line .qty { flex: none; }
+.req { padding: 10px 12px; margin-top: 8px; border: 1px solid var(--line); border-radius: 12px; font-size: 14px; }
+.req b { display: block; }
+.req small { display: block; color: var(--muted); }
+.req.pending b { color: var(--accent); }
+.error { margin: 10px 0 0; color: #c0392b; font-size: 14px; }
+
 /* A print page opened without the owner's link: visible on screen, never on paper. */
 .notice {
   max-width: 900px; margin: 16px auto 0; padding: 10px 14px; border-radius: 12px;
@@ -215,7 +264,7 @@ body.bill-open { overflow: hidden; }
 
 @media print {
   body { background: #fff; color: #000; }
-  .print, .notice, .bill-bar, .bill-sheet { display: none; }
+  .print, .notice, .dock, .bill-sheet, .add { display: none; }
   /* The heading and the button are for the screen; on paper the cards get
      the whole page — three rows of two fit an A4, ten tables take two sheets. */
   .sheet-head { display: none; }
