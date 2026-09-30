@@ -59,6 +59,26 @@ function u({ size: e = 24, ...t }) {
 		fill: "none",
 		"aria-hidden": "true",
 		focusable: "false",
+		"data-glyph": "Bell",
+		...t,
+		children: [/* @__PURE__ */ i("path", {
+			d: "M12 3a1.5 1.5 0 0 1 1.5 1.5v.25A6 6 0 0 1 18 10.5V15l2 2.5H4L6 15v-4.5A6 6 0 0 1 10.5 4.75V4.5A1.5 1.5 0 0 1 12 3Z",
+			fill: "#F8C00F"
+		}), /* @__PURE__ */ i("path", {
+			d: "M9.5 19.5a2.5 2.5 0 0 0 5 0Z",
+			fill: "#F8C00F",
+			fillOpacity: ".6"
+		})]
+	});
+}
+function d({ size: e = 24, ...t }) {
+	return /* @__PURE__ */ a("svg", {
+		width: e,
+		height: e,
+		viewBox: "0 0 24 24",
+		fill: "none",
+		"aria-hidden": "true",
+		focusable: "false",
 		"data-glyph": "ChefHat",
 		...t,
 		children: [/* @__PURE__ */ a("g", {
@@ -103,7 +123,7 @@ function u({ size: e = 24, ...t }) {
 		})]
 	});
 }
-function d({ size: e = 24, ...t }) {
+function f({ size: e = 24, ...t }) {
 	return /* @__PURE__ */ a("svg", {
 		width: e,
 		height: e,
@@ -147,7 +167,7 @@ function d({ size: e = 24, ...t }) {
 		]
 	});
 }
-function f({ size: e = 24, ...t }) {
+function p({ size: e = 24, ...t }) {
 	return /* @__PURE__ */ a("svg", {
 		width: e,
 		height: e,
@@ -186,7 +206,7 @@ function f({ size: e = 24, ...t }) {
 		]
 	});
 }
-function p({ size: e = 24, ...t }) {
+function m({ size: e = 24, ...t }) {
 	return /* @__PURE__ */ a("svg", {
 		width: e,
 		height: e,
@@ -214,7 +234,7 @@ function p({ size: e = 24, ...t }) {
 		})]
 	});
 }
-function m({ size: e = 24, ...t }) {
+function h({ size: e = 24, ...t }) {
 	return /* @__PURE__ */ a("svg", {
 		width: e,
 		height: e,
@@ -267,7 +287,7 @@ function m({ size: e = 24, ...t }) {
 		})]
 	});
 }
-function h({ size: e = 20, ...t }) {
+function g({ size: e = 20, ...t }) {
 	return /* @__PURE__ */ i("svg", {
 		width: e,
 		height: e,
@@ -287,7 +307,7 @@ function h({ size: e = 20, ...t }) {
 		})
 	});
 }
-function g({ size: e = 20, ...t }) {
+function _({ size: e = 20, ...t }) {
 	return e <= 16 ? /* @__PURE__ */ i("svg", {
 		width: e,
 		height: e,
@@ -324,7 +344,7 @@ function g({ size: e = 20, ...t }) {
 		})
 	});
 }
-function _({ size: e = 20, ...t }) {
+function v({ size: e = 20, ...t }) {
 	return e <= 16 ? /* @__PURE__ */ i("svg", {
 		width: e,
 		height: e,
@@ -361,7 +381,7 @@ function _({ size: e = 20, ...t }) {
 		})
 	});
 }
-function v({ size: e = 20, ...t }) {
+function y({ size: e = 20, ...t }) {
 	return /* @__PURE__ */ i("svg", {
 		width: e,
 		height: e,
@@ -381,7 +401,7 @@ function v({ size: e = 20, ...t }) {
 		})
 	});
 }
-function y({ size: e = 20, ...t }) {
+function b({ size: e = 20, ...t }) {
 	return e <= 16 ? /* @__PURE__ */ i("svg", {
 		width: e,
 		height: e,
@@ -418,7 +438,7 @@ function y({ size: e = 20, ...t }) {
 		})
 	});
 }
-function b({ size: e = 20, ...t }) {
+function x({ size: e = 20, ...t }) {
 	return /* @__PURE__ */ i("svg", {
 		width: e,
 		height: e,
@@ -450,7 +470,7 @@ function b({ size: e = 20, ...t }) {
 		})
 	});
 }
-function x({ size: e = 20, ...t }) {
+function S({ size: e = 20, ...t }) {
 	return e <= 16 ? /* @__PURE__ */ i("svg", {
 		width: e,
 		height: e,
@@ -487,7 +507,7 @@ function x({ size: e = 20, ...t }) {
 		})
 	});
 }
-function S({ size: e = 20, ...t }) {
+function C({ size: e = 20, ...t }) {
 	return e <= 16 ? /* @__PURE__ */ i("svg", {
 		width: e,
 		height: e,
@@ -524,7 +544,7 @@ function S({ size: e = 20, ...t }) {
 		})
 	});
 }
-function C({ size: e = 20, ...t }) {
+function w({ size: e = 20, ...t }) {
 	return /* @__PURE__ */ a("svg", {
 		width: e,
 		height: e,
@@ -566,7 +586,7 @@ function C({ size: e = 20, ...t }) {
 		]
 	});
 }
-function w({ size: e = 20, ...t }) {
+function T({ size: e = 20, ...t }) {
 	return e <= 16 ? /* @__PURE__ */ a("svg", {
 		width: e,
 		height: e,
@@ -621,7 +641,7 @@ function w({ size: e = 20, ...t }) {
 		})]
 	});
 }
-function T({ size: e = 20, ...t }) {
+function E({ size: e = 20, ...t }) {
 	return e <= 16 ? /* @__PURE__ */ i("svg", {
 		width: e,
 		height: e,
@@ -660,7 +680,7 @@ function T({ size: e = 20, ...t }) {
 }
 //#endregion
 //#region src/modules/tables/lib/hallMap.ts
-function E(e, t) {
+function D(e, t) {
 	let n = /* @__PURE__ */ new Map();
 	for (let e of t) n.set(e.table_id, e);
 	return e.tables.map((e) => ({
@@ -668,35 +688,35 @@ function E(e, t) {
 		bill: n.get(e.id) ?? null
 	})).filter((e) => e.table.is_active || e.bill != null);
 }
-function D(e, t = null) {
+function O(e, t = null) {
 	return e ? e.precheck_printed_at ? "bill" : t != null && e.opened_by === t ? "mine" : "busy" : "free";
 }
-function O(e) {
-	return e?.prep_status === "ready" ? "ready" : e?.prep_status === "new" ? "waiting" : null;
-}
 function ee(e) {
-	let t = e % 100, n = e % 10;
-	return t >= 11 && t <= 14 ? `${e} місць` : n === 1 ? `${e} місце` : n >= 2 && n <= 4 ? `${e} місця` : `${e} місць`;
+	return e?.prep_status === "ready" ? "ready" : e?.prep_status === "new" ? "waiting" : null;
 }
 function te(e) {
 	let t = e % 100, n = e % 10;
-	return t >= 11 && t <= 14 ? `${e} гостей` : n === 1 ? `${e} гість` : n >= 2 && n <= 4 ? `${e} гості` : `${e} гостей`;
+	return t >= 11 && t <= 14 ? `${e} місць` : n === 1 ? `${e} місце` : n >= 2 && n <= 4 ? `${e} місця` : `${e} місць`;
 }
 function ne(e) {
 	let t = e % 100, n = e % 10;
-	return t >= 11 && t <= 14 ? `${e} позицій` : n === 1 ? `${e} позиція` : n >= 2 && n <= 4 ? `${e} позиції` : `${e} позицій`;
+	return t >= 11 && t <= 14 ? `${e} гостей` : n === 1 ? `${e} гість` : n >= 2 && n <= 4 ? `${e} гості` : `${e} гостей`;
 }
 function re(e) {
+	let t = e % 100, n = e % 10;
+	return t >= 11 && t <= 14 ? `${e} позицій` : n === 1 ? `${e} позиція` : n >= 2 && n <= 4 ? `${e} позиції` : `${e} позицій`;
+}
+function k(e) {
 	return s(Math.round(e / 100) * 100);
 }
-function k(e, t) {
+function A(e, t) {
 	let n = Math.max(0, Math.floor((new Date(t).getTime() - new Date(e).getTime()) / 6e4));
 	return Number.isFinite(n) ? n < 60 ? `${n} хв` : `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}` : "";
 }
-function A(e, t) {
-	return e.filter((e) => e.is_active || E(e, t).some((e) => e.bill));
+function j(e, t) {
+	return e.filter((e) => e.is_active || D(e, t).some((e) => e.bill));
 }
-function j(e) {
+function M(e) {
 	let t = 1, n = 1;
 	for (let { table: r } of e) t = Math.max(t, r.pos_x + r.width), n = Math.max(n, r.pos_y + r.height);
 	return {
@@ -706,36 +726,36 @@ function j(e) {
 }
 //#endregion
 //#region \0@oxc-project+runtime@0.149.0/helpers/esm/typeof.js
-function M(e) {
+function N(e) {
 	"@babel/helpers - typeof";
-	return M = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
+	return N = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
 		return typeof e;
 	} : function(e) {
 		return e && typeof Symbol == "function" && e.constructor === Symbol && e !== Symbol.prototype ? "symbol" : typeof e;
-	}, M(e);
+	}, N(e);
 }
 //#endregion
 //#region \0@oxc-project+runtime@0.149.0/helpers/esm/toPrimitive.js
-function N(e, t) {
-	if (M(e) != "object" || !e) return e;
+function P(e, t) {
+	if (N(e) != "object" || !e) return e;
 	var n = e[Symbol.toPrimitive];
 	if (n !== void 0) {
 		var r = n.call(e, t || "default");
-		if (M(r) != "object") return r;
+		if (N(r) != "object") return r;
 		throw TypeError("@@toPrimitive must return a primitive value.");
 	}
 	return (t === "string" ? String : Number)(e);
 }
 //#endregion
 //#region \0@oxc-project+runtime@0.149.0/helpers/esm/toPropertyKey.js
-function P(e) {
-	var t = N(e, "string");
-	return M(t) == "symbol" ? t : t + "";
+function F(e) {
+	var t = P(e, "string");
+	return N(t) == "symbol" ? t : t + "";
 }
 //#endregion
 //#region \0@oxc-project+runtime@0.149.0/helpers/esm/defineProperty.js
-function F(e, t, n) {
-	return (t = P(t)) in e ? Object.defineProperty(e, t, {
+function I(e, t, n) {
+	return (t = F(t)) in e ? Object.defineProperty(e, t, {
 		value: n,
 		enumerable: !0,
 		configurable: !0,
@@ -744,7 +764,7 @@ function F(e, t, n) {
 }
 //#endregion
 //#region src/modules/tables/lib/hostPlatform.ts
-var I = [
+var L = [
 	"api.posRequest",
 	"useOfflineStatus",
 	"formatUah",
@@ -757,83 +777,92 @@ var I = [
 	"printPrecheck",
 	"getMeta",
 	"usePosShell"
-], L = class extends Error {
+], R = class extends Error {
 	constructor(e) {
-		super(`host is missing: ${e.join(", ")}`), F(this, "missing", void 0), this.missing = e, this.name = "HostTooOldError";
+		super(`host is missing: ${e.join(", ")}`), I(this, "missing", void 0), this.missing = e, this.name = "HostTooOldError";
 	}
 };
-function R(e) {
+function z(e) {
 	return typeof e == "function";
 }
-function z(e) {
+function B(e) {
 	return e.split(".").reduce((e, t) => e?.[t], o);
 }
-function B() {
-	return I.filter((e) => !R(z(e)));
+function V() {
+	return L.filter((e) => !z(B(e)));
 }
-function V(e, t, n) {
-	let r = B();
-	return r.length > 0 ? Promise.reject(new L(r)) : o.api.posRequest(e, t, n);
+function H(e, t, n) {
+	let r = V();
+	return r.length > 0 ? Promise.reject(new R(r)) : o.api.posRequest(e, t, n);
 }
 //#endregion
 //#region src/modules/tables/lib/tablesApi.ts
-function H() {
-	return V("get", "/halls");
-}
 function U() {
-	return V("get", "/bills");
+	return H("get", "/halls");
 }
-function W(e, t) {
-	return V("post", "/bills", {
+function W() {
+	return H("get", "/bills");
+}
+function G(e, t) {
+	return H("post", "/bills", {
 		table_id: e,
 		...t ? { guests: t } : {}
 	});
 }
-function G(e) {
-	return V("get", `/bills/${e}`);
+function K(e) {
+	return H("get", `/bills/${e}`);
 }
-function K(e, t) {
-	return V("post", `/bills/${e}/items`, t);
-}
-function q(e, t, n) {
-	return V("patch", `/bills/${e}/items/${t}`, { quantity: n });
+function q(e, t) {
+	return H("post", `/bills/${e}/items`, t);
 }
 function J(e, t, n) {
-	return V("patch", `/bills/${e}/items/${t}`, n);
+	return H("patch", `/bills/${e}/items/${t}`, { quantity: n });
 }
-function ie(e, t) {
-	return V("delete", `/bills/${e}/items/${t}`);
+function ie(e, t, n) {
+	return H("patch", `/bills/${e}/items/${t}`, n);
 }
 function Y(e, t) {
-	return V("post", `/bills/${e}/fire`, { client_uuid: t });
+	return H("delete", `/bills/${e}/items/${t}`);
 }
 function ae(e, t) {
-	return V("post", `/bills/${e}/rounds/${t}/cancel`);
+	return H("post", `/bills/${e}/fire`, { client_uuid: t });
 }
 function oe(e, t) {
-	return V("post", `/bills/${e}/pay`, { parts: t });
+	return H("post", `/bills/${e}/rounds/${t}/cancel`);
 }
-function se(e) {
-	return V("post", `/bills/${e}/precheck`);
+function se(e, t) {
+	return H("post", `/bills/${e}/pay`, { parts: t });
 }
 function ce(e) {
-	return V("post", "/halls", { name: e });
+	return H("post", `/bills/${e}/precheck`);
 }
-function le(e, t) {
-	return V("patch", `/halls/${e}`, t);
+function le(e) {
+	return H("get", e == null ? "/guest-orders" : `/guest-orders?table_id=${e}`);
 }
-function ue(e) {
-	return V("post", "/tables", e);
+function ue(e, t = []) {
+	return H("post", `/guest-orders/${e}/accept`, t.length > 0 ? { exclude_item_ids: t } : {});
 }
 function de(e, t) {
-	return V("patch", `/tables/${e}`, t);
+	return H("post", `/guest-orders/${e}/reject`, t ? { reason: t } : {});
 }
 function fe(e) {
-	return V("patch", "/tables/positions", { positions: e });
+	return H("post", "/halls", { name: e });
+}
+function pe(e, t) {
+	return H("patch", `/halls/${e}`, t);
+}
+function me(e) {
+	return H("post", "/tables", e);
+}
+function he(e, t) {
+	return H("patch", `/tables/${e}`, t);
+}
+function ge(e) {
+	return H("patch", "/tables/positions", { positions: e });
 }
 var X = new class extends c {
 	constructor() {
-		super("cloth-pos-module-tables"), F(this, "room", void 0), F(this, "bills", void 0), this.version(1).stores({
+		super("cloth-pos-module-tables"), I(this, "room", void 0), I(this, "bills", void 0), this.version(1).stores({
 			room: "id",
 			bills: "id, storeId"
 		});
@@ -846,7 +875,7 @@ async function Z(e, t) {
 		return t;
 	}
 }
-async function pe(e, t) {
+async function _e(e, t) {
 	await Z(() => X.room.put({
 		id: 1,
 		storeId: e,
@@ -854,13 +883,13 @@ async function pe(e, t) {
 		savedAt: Date.now()
 	}), void 0);
 }
-async function me(e) {
+async function Q(e) {
 	return Z(async () => {
 		let t = await X.room.get(1);
 		return t && t.storeId === e ? t : null;
 	}, null);
 }
-async function he(e, t) {
+async function ve(e, t) {
 	await Z(() => X.bills.put({
 		id: t.id,
 		storeId: e,
@@ -868,13 +897,13 @@ async function he(e, t) {
 		savedAt: Date.now()
 	}), void 0);
 }
-async function ge(e, t) {
+async function ye(e, t) {
 	return Z(async () => {
 		let n = await X.bills.get(t);
 		return n && n.storeId === e ? n : null;
 	}, null);
 }
-async function _e(e, t) {
+async function be(e, t) {
 	await Z(async () => {
 		let n = new Set(t), r = (await X.bills.where("storeId").equals(e).toArray()).filter((e) => !n.has(e.id)).map((e) => e.id);
 		r.length > 0 && await X.bills.bulkDelete(r);
@@ -882,29 +911,29 @@ async function _e(e, t) {
 }
 //#endregion
 //#region src/modules/tables/lib/useHallMap.ts
-var Q = 1e4;
+var xe = 1e4;
 function $(e, t) {
 	let n = e?.response?.data;
 	return n && typeof n.error == "string" ? n.error : t;
 }
-function ve({ online: i, mirrored: a = !1, storeId: o = null }) {
+function Se({ online: i, mirrored: a = !1, storeId: o = null }) {
 	let [s, c] = r([]), [l, u] = r([]), [d, f] = r(() => (/* @__PURE__ */ new Date()).toISOString()), [p, m] = r(!0), [h, g] = r(null), [_, v] = r(!1), [y, b] = r(null), x = n(!0);
 	t(() => (x.current = !0, () => {
 		x.current = !1;
 	}), []);
 	let S = e(async () => {
 		if (!a || o == null) return !1;
-		let e = await me(o);
+		let e = await Q(o);
 		return !e || !x.current ? !1 : (c(e.halls), u(e.bills), f(e.now), v(!0), b(e.savedAt), m(!1), !0);
 	}, [a, o]), C = e(async () => {
 		try {
-			let [e, t] = await Promise.all([H(), U()]);
+			let [e, t] = await Promise.all([U(), W()]);
 			if (!x.current) return;
-			c(e.halls), u(t.bills), f((/* @__PURE__ */ new Date()).toISOString()), g(null), v(!1), b(null), a && o != null && (pe(o, {
+			c(e.halls), u(t.bills), f((/* @__PURE__ */ new Date()).toISOString()), g(null), v(!1), b(null), a && o != null && (_e(o, {
 				halls: e.halls,
 				bills: t.bills,
 				now: (/* @__PURE__ */ new Date()).toISOString()
-			}), _e(o, t.bills.map((e) => e.id)));
+			}), be(o, t.bills.map((e) => e.id)));
 		} catch (e) {
 			if (!x.current) return;
 			let t = await S();
@@ -927,7 +956,7 @@ function ve({ online: i, mirrored: a = !1, storeId: o = null }) {
 		C();
 		let e = setInterval(() => {
 			typeof document < "u" && document.visibilityState !== "visible" || C();
-		}, Q);
+		}, xe);
 		return () => clearInterval(e);
 	}, [i, C]), {
 		halls: s,
@@ -941,4 +970,4 @@ function ve({ online: i, mirrored: a = !1, storeId: o = null }) {
 	};
 }
 //#endregion
-export { A, b as B, O as C, E as D, ee as E, _ as F, p as G, S as H, d as I, m as K, f as L, l as M, g as N, D as O, u as P, v as R, j as S, k as T, C as U, x as V, w as W, q as _, K as a, de as b, ue as c, H as d, se as f, W as g, ie as h, he as i, h as j, re as k, Y as l, oe as m, ve as n, ae as o, fe as p, T as q, ge as r, ce as s, $ as t, G as u, le as v, ne as w, te as x, J as y, y as z };
+export { te as A, v as B, he as C, ee as D, M as E, g as F, x as G, p as H, l as I, w as J, S as K, u as L, O as M, k as N, re as O, j as P, E as Q, _ as R, ie as S, ne as T, y as U, f as V, b as W, m as X, T as Y, h as Z, de as _, ue as a, J as b, fe as c, K as d, le as f, se as g, ge as h, ve as i, D as j, A as k, me as l, ce as m, Se as n, q as o, U as p, C as q, ye as r, oe as s, $ as t, ae as u, Y as v, H as w, pe as x, G as y, d as z };
