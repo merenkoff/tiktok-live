@@ -71,6 +71,9 @@ describe.skipIf(!hasDb)('POS store, analytics, QR & GTIN routes', () => {
         units: ['шт'],
         defaultUnit: 'шт',
         maxCompositionDepth: 1,
+        // What the product form reads: a boutique is not asked about composites.
+        productKinds: ['simple'],
+        dishFacts: false,
       });
       expect(res.json().vertical.attributes.map((a: { key: string }) => a.key)).toEqual([
         'color',

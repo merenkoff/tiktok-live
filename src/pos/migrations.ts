@@ -102,6 +102,8 @@ export const POS_MIGRATIONS = [
   '060_pos_product_composition_allergens.sql',
   // A regular customer's personal discount, in whole percent; the till puts it in as the cart discount (clothing C0).
   '061_pos_customer_discount.sql',
+  // The clothing demo's purchase prices were a tenth of what they should be; corrected once where 055 is already stamped.
+  '062_pos_demo_clothing_costs.sql',
 ] as const;
 
 export function readMigration(file: string): string {

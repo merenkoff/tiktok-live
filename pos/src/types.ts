@@ -118,6 +118,19 @@ export interface VerticalPublicConfig {
    * the authority either way — it refuses a code outside its own list.
    */
   writeoffReasons?: WriteoffReason[];
+  /**
+   * Which product shapes the owner may create: `'composite'` is a bouquet or a
+   * tech card, and a boutique's product form does not ask about it.
+   *
+   * Optional like the two above: an auth cached before the field was on the
+   * wire has none, and the form then shows everything, as it always did.
+   */
+  productKinds?: Array<'simple' | 'composite'>;
+  /**
+   * Whether the product form asks for a dish's composition and allergens — the
+   * store has a guest menu. Absent (an older cached auth) reads as «yes».
+   */
+  dishFacts?: boolean;
 }
 
 /** One answer to «чому списуємо»: the stored code and what the owner reads. */

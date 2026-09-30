@@ -110,6 +110,88 @@ describe.skipIf(!hasDb)('demo clothing store (migration 055)', () => {
     }
   });
 
+  it('prices what it buys like a clothing shop: cost between a quarter and 60 % of the price', async () => {
+    // TechDocs/POS_CLOTHING.md phase C0: the costs were a tenth of this (~4 %),
+    // so any margin the demo showed read ~96 %.
+    const rows = await pool.query(
+      `SELECT sku, price_cents, cost_cents FROM pos_variants WHERE store_id = $1`,
+      [storeId]
+    );
+    expect(rows.rows.length).toBe(58);
+    for (const row of rows.rows) {
+      const ratio = Number(row.cost_cents) / Number(row.price_cents);
+      expect(ratio, `${row.sku}: cost ${row.cost_cents} of price ${row.price_cents}`).toBeGreaterThan(0.25);
+      expect(ratio, `${row.sku}: cost ${row.cost_cents} of price ${row.price_cents}`).toBeLessThan(0.6);
+    }
+  });
+
+  describe('the cost correction for a store 055 already stamped (migration 062)', () => {
+    const FIX = '062_pos_demo_clothing_costs.sql';
+
+    /** Runs `body` in a transaction that is always rolled back: the demo store is shared by every test file. */
+    async function rolledBack(body: (q: (sql: string, params?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }>) => Promise<void>) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await body((sql, params) => client.query(sql, params));
+      } finally {
+        await client.query('ROLLBACK');
+        client.release();
+      }
+    }
+
+    const costOf = async (
+      q: (sql: string, params?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }>,
+      sku: string
+    ) =>
+      Number(
+        (await q(`SELECT cost_cents FROM pos_variants WHERE store_id = $1 AND sku = $2`, [storeId, sku])).rows[0]
+          .cost_cents
+      );
+
+    it('lifts a cost that is still a tenth of what it should be, exactly once', async () => {
+      await rolledBack(async (q) => {
+        await q(`UPDATE pos_variants SET cost_cents = 2800 WHERE store_id = $1 AND sku = 'TEE-BLK-S'`, [storeId]);
+
+        await q(readMigration(FIX));
+        expect(await costOf(q, 'TEE-BLK-S')).toBe(28000);
+
+        // Every boot re-applies the file: the second pass finds nothing to do.
+        await q(readMigration(FIX));
+        expect(await costOf(q, 'TEE-BLK-S')).toBe(28000);
+      });
+    });
+
+    it('leaves a believable cost alone, and another store\'s variants', async () => {
+      await rolledBack(async (q) => {
+        await q(`UPDATE pos_variants SET cost_cents = 21000 WHERE store_id = $1 AND sku = 'TEE-BLK-M'`, [storeId]);
+        const others = await q(
+          `SELECT COUNT(*)::int AS n FROM pos_variants v JOIN pos_stores s ON s.id = v.store_id
+           WHERE s.slug <> 'demo-clothing' AND v.cost_cents > 0 AND v.cost_cents * 10 <= v.price_cents`
+        );
+
+        await q(readMigration(FIX));
+
+        expect(await costOf(q, 'TEE-BLK-M')).toBe(21000);
+        const after = await q(
+          `SELECT COUNT(*)::int AS n FROM pos_variants v JOIN pos_stores s ON s.id = v.store_id
+           WHERE s.slug <> 'demo-clothing' AND v.cost_cents > 0 AND v.cost_cents * 10 <= v.price_cents`
+        );
+        expect(after.rows[0].n).toBe(others.rows[0].n);
+      });
+    });
+
+    it('leaves a zero cost at zero: «not priced» is not «cheap»', async () => {
+      await rolledBack(async (q) => {
+        await q(`UPDATE pos_variants SET cost_cents = 0 WHERE store_id = $1 AND sku = 'CAP-BLK'`, [storeId]);
+
+        await q(readMigration(FIX));
+
+        expect(await costOf(q, 'CAP-BLK')).toBe(0);
+      });
+    });
+  });
+
   it('balances: every stock row equals the sum of its movements', async () => {
     const drift = await pool.query(
       `SELECT v.id, p.name, s.quantity, COALESCE(SUM(m.delta), 0)::int AS moved

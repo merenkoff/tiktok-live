@@ -65,6 +65,8 @@ export function publicConfigOf(def: VerticalDefinition): VerticalPublicConfig {
     defaultUnit: def.units[0],
     maxCompositionDepth: def.maxCompositionDepth,
     writeoffReasons: [...def.writeoffReasons],
+    productKinds: [...def.productKinds],
+    dishFacts: def.kitchen,
   };
 }
 

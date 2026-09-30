@@ -146,4 +146,17 @@ export interface VerticalPublicConfig {
    * older than this field and must fall back rather than draw no buttons.
    */
   writeoffReasons: WriteoffReason[];
+  /**
+   * Which product shapes the owner may create — `'composite'` is a bouquet or
+   * a tech card. The product form offers «Складений» only where it is in the
+   * list; a boutique is never asked what a composite is.
+   */
+  productKinds: Array<'simple' | 'composite'>;
+  /**
+   * Whether a dish's composition and allergens are asked: the store publishes
+   * a guest menu (a kitchen vertical). Derived from `kitchen` here rather than
+   * putting `kitchen` itself on the wire — the till learns about the board from
+   * the module that draws it. A shirt has no allergens.
+   */
+  dishFacts: boolean;
 }
