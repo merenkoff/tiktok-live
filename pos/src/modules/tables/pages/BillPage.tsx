@@ -173,15 +173,26 @@ export function BillPage(): JSX.Element {
    * to «що лишилось».
    */
   const pay = async (parts: PayPart[]): Promise<void> => {
-    let settled = false;
+    // An object rather than two `let`s: TypeScript cannot see the closure
+    // assign them, and would narrow both to their initial value below.
+    const outcome = { settled: false, warning: null as string | null };
     const ok = await run(async () => {
       const paid = await tablesApi.payBill(bill.id, parts);
-      settled = isSettled(paid.bill);
+      outcome.settled = isSettled(paid.bill);
+      outcome.warning = paid.warning ?? null;
       return paid.bill;
     }, { stock: true });
     if (!ok) return;
     setPaying(false);
-    if (settled) navigate('/tables');
+    // «Оплату прийнято, але чек ще не зареєстровано»: a success with a
+    // sentence. It goes with the waiter to the map when the table is settled,
+    // and onto the bill when it is not — it must not be lost either way.
+    if (outcome.settled) {
+      if (outcome.warning) navigate('/tables', { state: { note: outcome.warning, warn: true } });
+      else navigate('/tables');
+    } else if (outcome.warning) {
+      notice(outcome.warning);
+    }
   };
 
   /**

@@ -29,10 +29,29 @@
 //    second of three receipts leaves the first and third exactly where they
 //    are, and the bill stays open carrying what is still unpaid — which is
 //    simply `sale_id IS NULL` on its lines.
+// 4. **In a store that fiscalises, a part is not paid until its receipt is
+//    registered — or provably cannot be.** The same three outcomes the till's
+//    checkout has (`checkout.routes.ts`), because the law does not care which
+//    screen took the money:
+//      · ПРРО unreachable BEFORE the part is written → nothing is written, the
+//        plates stay owed (`BillFiscalRefusal`, stage `preflight`);
+//      · the provider REFUSED the document (it cannot exist) → the part is
+//        undone: its sale voided and its plates back on the bill as unpaid
+//        (`abortSale` → `voidBillPartSale`), and NO stock returned, because
+//        the round took it and the dish was cooked (`BillFiscalRefusal`,
+//        stage `document`);
+//      · the outcome is AMBIGUOUS (a timeout — the receipt may exist) → the
+//        sale STANDS, `failed`, for the retry cron to settle, and the answer
+//        carries a warning. Voiding here would double-fiscalise the re-ring.
+//    Before this the route never asked ПРРО anything and every table sale in a
+//    ПРРО store stayed `fiscal_status='none'` forever — no receipt, and a
+//    refund that had nothing to return against.
 
 import * as bills from './bills.service.js';
 import { completeSale } from './sales.service.js';
+import * as fiscalService from './fiscal/fiscal.service.js';
 import { pool } from '../db.js';
+import { logger } from '../logger.js';
 import type { CartDiscountInput, CompleteSalePaymentInput } from './types.js';
 
 /** One receipt: some of the bill's lines, and how they were paid for. */
@@ -44,6 +63,15 @@ export interface BillPaymentPart {
   note?: string;
 }
 
+export interface PayBillFiscal {
+  /**
+   * A pre-flight, asked once PER PART: the gate carries a time budget for the
+   * provider calls of one document, and between two guests of a split a shift
+   * can close or the register change hands. Throws what `preflight` throws.
+   */
+  gateFor: () => Promise<fiscalService.FiscalGate>;
+}
+
 export interface PayBillInput {
   storeId: number;
   staffId: number;
@@ -52,6 +80,52 @@ export interface PayBillInput {
   /** The discount on the BILL — applied once, then shared out (rule 2). */
   cart_discount?: CartDiscountInput | null;
   customer_id?: number | null;
+  /** Absent = the store does not fiscalise from this call (tests, or the gate is off). */
+  fiscal?: PayBillFiscal;
+}
+
+/** One paid part and what its receipt came to. */
+export interface PaidPartFiscal {
+  sale_id: number;
+  fiscal: fiscalService.FiscalView;
+}
+
+export interface PayBillResult {
+  bill: bills.Bill;
+  sale_ids: number[];
+  /** The receipts registered by THIS call, in part order. Empty when the store does not fiscalise. */
+  fiscal: PaidPartFiscal[];
+  /** Set when a part is paid but its receipt is still to be registered — the waiter must not ring it again. */
+  warning: string | null;
+}
+
+/** What a waiter reads when the money is taken and the receipt is not (yet) registered. */
+export const RECEIPT_PENDING_WARNING =
+  'Оплату прийнято, але чек у ПРРО ще не зареєстровано — система повторить спробу сама. Не пробивайте його вдруге.';
+
+/**
+ * A part could not be paid because of ПРРО. Carries what the route needs to
+ * say so truthfully: which parts DID go through before this one, and whether
+ * the failed part's sale was written and undone.
+ */
+export class BillFiscalRefusal extends Error {
+  constructor(
+    message: string,
+    readonly detail: {
+      /** `preflight`: nothing of this part was written. `document`: it was, and has been undone. */
+      stage: 'preflight' | 'document';
+      /** The `FiscalError` behind it (or whatever the pre-flight threw). */
+      cause: unknown;
+      /** Sales of earlier parts of this call — paid and registered. */
+      paidSaleIds: number[];
+      /** The undone part's sale, at stage `document`. */
+      saleId: number | null;
+      voided: boolean;
+    }
+  ) {
+    super(message);
+    this.name = 'BillFiscalRefusal';
+  }
 }
 
 const MAX_PARTS = 20;
@@ -108,9 +182,7 @@ function wholeDiscount(
  * the order the parts were given. Sequential on purpose: each part commits on
  * its own (rule 3), and a part that throws leaves the ones before it paid.
  */
-export async function payBill(
-  input: PayBillInput
-): Promise<{ bill: bills.Bill; sale_ids: number[] }> {
+export async function payBill(input: PayBillInput): Promise<PayBillResult> {
   if (!input.parts?.length) throw new bills.BillError('Немає чим платити');
   if (input.parts.length > MAX_PARTS) {
     throw new bills.BillError(`Рахунок ділиться щонайбільше на ${MAX_PARTS} частин`);
@@ -150,7 +222,25 @@ export async function payBill(
   const shares = shareDiscount(partTotals, wholeDiscount(balance.openCents, input.cart_discount));
 
   const saleIds: number[] = [];
+  const registered: PaidPartFiscal[] = [];
+  let warning: string | null = null;
   for (const [index, part] of input.parts.entries()) {
+    // Asked BEFORE anything of this part is written: no sale row, no burned
+    // receipt number, no stock movement — the whole «block the sale when ПРРО
+    // is unreachable» stance of the till's checkout.
+    let gate: fiscalService.FiscalGate | null = null;
+    if (input.fiscal) {
+      try {
+        gate = await input.fiscal.gateFor();
+      } catch (cause) {
+        throw new BillFiscalRefusal(
+          cause instanceof Error ? cause.message : 'ПРРО недоступне',
+          { stage: 'preflight', cause, paidSaleIds: [...saleIds], saleId: null, voided: false }
+        );
+      }
+    }
+    const fiscalises = gate?.on === true;
+
     const sale = await completeSale({
       storeId: input.storeId,
       staffId: input.staffId,
@@ -162,10 +252,57 @@ export async function payBill(
       // A fixed amount, never the bill's percentage: see rule 2.
       cart_discount: shares[index] > 0 ? { type: 'fixed', value: shares[index] } : null,
       bill_part: { bill_id: input.billId, line_ids: part.line_ids },
+      fiscal_status: fiscalises ? 'pending' : 'none',
     });
-    if (sale) saleIds.push(sale.id);
+    if (!sale) continue;
+    // A part's `client_uuid` that names an already-undone sale must not come
+    // back as a success: the checkout answers the same replay with a 409.
+    if (sale.status !== 'completed') {
+      throw new bills.BillConflict('Цей чек скасовано — почніть оплату спочатку');
+    }
+    saleIds.push(sale.id);
+    if (!gate || !fiscalises || sale.fiscal_status === 'done') continue;
+
+    try {
+      const view = await fiscalService.fiscalizeSale(gate, {
+        ...sale,
+        customer_phone: sale.customer_phone,
+      });
+      registered.push({ sale_id: sale.id, fiscal: view });
+    } catch (error) {
+      if (error instanceof fiscalService.FiscalDocumentFailed && !error.mayExist) {
+        // The document cannot exist at the provider, so this part was never
+        // paid in law: undo it and put its plates back on the bill.
+        const voided = await fiscalService.abortSale(input.storeId, sale.id, input.staffId, error.row);
+        if (voided) {
+          saleIds.pop();
+          throw new BillFiscalRefusal(error.message, {
+            stage: 'document',
+            cause: error.cause,
+            paidSaleIds: [...saleIds],
+            saleId: sale.id,
+            voided: true,
+          });
+        }
+      }
+      // Ambiguous (the receipt may exist), or the undo itself could not run:
+      // the sale STANDS. The retry cron settles it; the waiter is told.
+      logger.error('Table bill part paid, receipt not registered', {
+        storeId: input.storeId,
+        billId: input.billId,
+        saleId: sale.id,
+        mayExistAtProvider: error instanceof fiscalService.FiscalDocumentFailed ? error.mayExist : null,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      warning = RECEIPT_PENDING_WARNING;
+    }
   }
 
   await bills.closeIfSettled(input.storeId, input.staffId, input.billId);
-  return { bill: await bills.getBill(input.storeId, input.billId), sale_ids: saleIds };
+  return {
+    bill: await bills.getBill(input.storeId, input.billId),
+    sale_ids: saleIds,
+    fiscal: registered,
+    warning,
+  };
 }

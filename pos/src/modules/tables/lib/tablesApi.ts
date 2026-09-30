@@ -122,8 +122,23 @@ export interface PayPart {
  * The answer is the bill as it stands afterwards; a part that fails leaves
  * the parts before it paid, so the screen re-reads rather than assumes.
  */
-export function payBill(billId: number, parts: PayPart[]): Promise<{ bill: Bill; sale_ids: number[] }> {
-  return posRequest<{ bill: Bill; sale_ids: number[] }>('post', `/bills/${billId}/pay`, { parts });
+export function payBill(billId: number, parts: PayPart[]): Promise<PaidBill> {
+  return posRequest<PaidBill>('post', `/bills/${billId}/pay`, { parts });
+}
+
+/**
+ * What paying answers with.
+ *
+ * `warning` is the server saying «the money is taken and the receipt is not
+ * registered yet» — the ПРРО timed out and the retry will settle it. It is a
+ * success with a sentence to read, never an error: a waiter who thought the
+ * payment failed would take it a second time. Absent from a backend older than
+ * the fiscal wiring, which is why it is optional.
+ */
+export interface PaidBill {
+  bill: Bill;
+  sale_ids: number[];
+  warning?: string | null;
 }
 
 /**

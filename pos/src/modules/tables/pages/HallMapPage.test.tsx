@@ -14,6 +14,8 @@ import { renderWithProviders } from '../../../test/utils';
 
 const posRequest = vi.fn();
 const navigate = vi.fn();
+// What the bill screen hands the map through the router when it leaves.
+let routeState: unknown = null;
 
 const HALLS = [
   {
@@ -79,7 +81,11 @@ vi.mock('@pos/platform', async () => {
 
 vi.mock('react-router-dom', async () => {
   const real = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
-  return { ...real, useNavigate: () => navigate };
+  return {
+    ...real,
+    useNavigate: () => navigate,
+    useLocation: () => ({ pathname: '/tables', search: '', hash: '', key: 'k', state: routeState }),
+  };
 });
 
 const { HallMapPage } = await import('./HallMapPage');
@@ -89,6 +95,7 @@ const { makeAuthResponse } = await import('../../../test/utils');
 
 beforeEach(async () => {
   navigate.mockReset();
+  routeState = null;
   useOfflineStatus.setState({ online: true });
   useAuthStore.setState({
     auth: makeAuthResponse({ store: { id: 7 } }),
@@ -135,6 +142,19 @@ describe('HallMapPage', () => {
     const free = screen.getByTestId('table-tile-12');
     expect(free).toHaveAttribute('data-tone', 'free');
     expect(free).toHaveTextContent('2 місця');
+  });
+
+  it('reads out what the bill screen left for it: the money is taken, the receipt is not registered yet', async () => {
+    routeState = {
+      note: 'Оплату прийнято, але чек у ПРРО ще не зареєстровано — система повторить спробу сама. Не пробивайте його вдруге.',
+      warn: true,
+    };
+    renderWithProviders(<HallMapPage />);
+    const note = await screen.findByTestId('tables-note');
+    expect(note).toHaveTextContent('Не пробивайте його вдруге');
+    // Amber, not the green of a plain success — and it does not fade on a timer,
+    // because «не пробивайте вдруге» is worth more than eight seconds.
+    expect(note).toHaveAttribute('data-tone', 'warn');
   });
 
   it('marks my own tables, and a table whose pre-bill was printed as asking for the bill', async () => {

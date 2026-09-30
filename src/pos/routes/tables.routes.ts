@@ -35,7 +35,10 @@ import * as rounds from '../rounds.service.js';
 import { CompositeError } from '../composites.service.js';
 import { ModifierError } from '../modifiers.service.js';
 import * as tables from '../tables.service.js';
-import { errorMessage } from './_shared.js';
+import * as fiscalService from '../fiscal/fiscal.service.js';
+import { asFiscalError, cashierMessage, supportCode } from '../fiscal/errors.js';
+import { holderFromError } from '../fiscal/offline/holder.js';
+import { errorMessage, readDeviceId } from './_shared.js';
 
 function idOf(value: string): number | null {
   const id = Number(value);
@@ -71,6 +74,52 @@ function sendError(reply: { code: (n: number) => { send: (b: unknown) => unknown
     return reply.code(400).send({ error: errorMessage(error) });
   }
   throw error;
+}
+
+/**
+ * A part of a bill could not be paid because of ПРРО.
+ *
+ * `preflight` — nothing of the part was written: 503, or 409 when another till
+ * holds the register (the same split the checkout makes, so a till shows the
+ * handover screen rather than a retry one). `document` — the provider refused
+ * the receipt, the part was undone and its plates are owed again: 502.
+ * Either way the answer names the bill as it stands and the sales of earlier
+ * parts that DID go through, so the screen redraws the truth instead of
+ * guessing which of three receipts was rung.
+ */
+async function sendFiscalRefusal(
+  reply: { code: (n: number) => { send: (b: unknown) => unknown } },
+  storeId: number,
+  billId: number,
+  refusal: billPayment.BillFiscalRefusal
+): Promise<unknown> {
+  const fiscal = asFiscalError(refusal.detail.cause, 'Немає звʼязку з ПРРО');
+  const bill = await bills.getBill(storeId, billId);
+  const common = {
+    code: fiscal.kind,
+    message: cashierMessage(fiscal.kind),
+    support_code: supportCode(fiscal),
+    bill,
+    sale_ids: refusal.detail.paidSaleIds,
+  };
+  if (refusal.detail.stage === 'document') {
+    return reply.code(502).send({
+      // The waiter's sentence — and what happened to the money, in words.
+      error: `${cashierMessage(fiscal.kind)}. Оплату цієї частини скасовано, страви знову в рахунку.`,
+      ...common,
+      sale_id: refusal.detail.saleId,
+      sale_voided: refusal.detail.voided,
+      sale_kept: !refusal.detail.voided,
+    });
+  }
+  if (fiscal.kind === 'register_held') {
+    return reply.code(409).send({
+      error: cashierMessage(fiscal.kind),
+      ...common,
+      holder: holderFromError(fiscal),
+    });
+  }
+  return reply.code(503).send({ error: cashierMessage(fiscal.kind), ...common });
 }
 
 function readPositions(body: unknown): tables.TablePosition[] {
@@ -373,6 +422,14 @@ export function registerTablesRoutes(fastify: FastifyInstance): void {
   // Pay the bill — as one receipt, or as several. A part with its own
   // `line_ids` is a split by dishes (its own sale, its own fiscal receipt);
   // one part with several payments is a split by sum (§4.4).
+  //
+  // In a store that fiscalises, every part is registered with ПРРО before it
+  // counts as paid, on the same three outcomes the till's checkout has — see
+  // rule 4 of `bill-payment.service.ts`. What differs is the SHAPE of the
+  // refusal: `error` carries the waiter's sentence (the `tables` module shows
+  // `error` verbatim, and an older build of it must not print «fiscal_failed»),
+  // with the machine-readable fields beside it, plus the bill as it stands and
+  // the sales of any earlier part that did go through.
   fastify.post('/bills/:id/pay', async (request, reply) => {
     const auth = await ensurePosAuth(request, reply);
     if (!auth) return;
@@ -390,8 +447,14 @@ export function registerTablesRoutes(fastify: FastifyInstance): void {
         parts,
         cart_discount: (body.cart_discount ?? null) as never,
         customer_id: body.customer_id == null ? null : Number(body.customer_id),
+        fiscal: {
+          gateFor: () => fiscalService.preflight(auth.storeId, auth.staffId, readDeviceId(request)),
+        },
       });
     } catch (error) {
+      if (error instanceof billPayment.BillFiscalRefusal) {
+        return sendFiscalRefusal(reply, auth.storeId, id, error);
+      }
       return sendError(reply, error);
     }
   });
