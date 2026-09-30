@@ -313,6 +313,110 @@ test('one evening at table 5: seat, ring, fire, pay', async ({ page }) => {
   expect(paid.parts[0].payments[0].amount_cents).toBe(5500);
 });
 
+/**
+ * A guest's request from the QR menu (Q7), through the REAL signed bundle: the
+ * bell is on the table that asked, the request is listed above the room, and
+ * one tap accepts it — from the map for a free table, and from the bill screen
+ * for a table that is already seated. Nothing here is on a bill until the
+ * waiter says so, which is the whole point of the design.
+ */
+function guestRequest(over: Record<string, unknown> = {}) {
+  return {
+    id: 5,
+    table_id: 11,
+    table_name: '5',
+    hall_name: 'Зала',
+    created_at: new Date(Date.now() - 90_000).toISOString(),
+    expires_at: new Date(Date.now() + 28 * 60_000).toISOString(),
+    has_open_bill: false,
+    lines: [
+      { id: 51, name: 'Круасан', caption: '', quantity: 2, note: 'без цукру', problem: null },
+      { id: 52, name: 'Латте', caption: 'M · вівсяне', quantity: 1, note: '', problem: null },
+    ],
+    ...over,
+  };
+}
+
+async function mockGuestRequests(page: Page, sent: Array<{ path: string; body: unknown }>) {
+  let waiting = [guestRequest()];
+  // Registered AFTER `mockPosApi`, like `mockTables`: its catch-all is older.
+  await page.route(/\/api\/pos\/guest-orders(\?.*)?$/, async (route) => {
+    const table = new URL(route.request().url()).searchParams.get('table_id');
+    return route.fulfill({
+      json: { orders: table == null ? waiting : waiting.filter((o) => o.table_id === Number(table)) },
+    });
+  });
+  await page.route('**/api/pos/guest-orders/5/accept', async (route) => {
+    sent.push({ path: '/guest-orders/5/accept', body: route.request().postDataJSON() });
+    waiting = [];
+    await route.fulfill({
+      json: {
+        bill: bill({
+          rounds: [
+            {
+              id: 8,
+              seq: 1,
+              fired_at: new Date().toISOString(),
+              fired_by: 1,
+              fired_by_name: 'Олена',
+              prep_status: 'new',
+              ready_at: null,
+              served_at: null,
+              cancelled_at: null,
+              items: [line({ id: 61, quantity: 2, unit_price_cents: 5500, preview_unit_price_cents: null })],
+              total_cents: 11000,
+            },
+          ],
+          fired_total_cents: 11000,
+        }),
+        fired: true,
+        warning: null,
+        already: false,
+      },
+    });
+  });
+}
+
+test('a guest asks from the phone: the bell is on the table, one tap on the map accepts', async ({ page }) => {
+  await signInAsWaiter(page);
+  const sent = await mockTables(page);
+  await mockGuestRequests(page, sent);
+
+  await page.goto('/tables');
+  // A FREE table: no bill to open, so the request itself is the sign of life.
+  await expect(page.getByTestId('table-tile-11')).toHaveAttribute('data-tone', 'free');
+  await expect(page.getByTestId('table-tile-11')).toHaveAttribute('data-guest', '1');
+  await expect(page.getByTestId('tables-requests')).toContainText('Стіл 5');
+  await expect(page.getByTestId('guest-line-51')).toContainText('без цукру');
+  await expect(page.getByTestId('guest-order-5')).toContainText('Відкриється рахунок столу');
+
+  await page.getByTestId('guest-order-accept-5').click();
+  await expect(page.getByTestId('tables-note')).toContainText('Стіл 5: прийнято');
+  await expect(page.getByTestId('tables-requests')).toHaveCount(0);
+  await expect(page.getByTestId('table-tile-11')).not.toHaveAttribute('data-guest', /.*/);
+  // Nothing was left out, and the waiter never opened the table themselves.
+  expect(sent.find((s) => s.path === '/guest-orders/5/accept')?.body).toEqual({});
+  expect(sent.find((s) => s.path === '/bills')).toBeUndefined();
+});
+
+test('a guest’s request on the bill screen: accepted into that bill, round on the pass', async ({ page }) => {
+  await signInAsWaiter(page);
+  const sent = await mockTables(page);
+  await mockGuestRequests(page, sent);
+
+  await page.goto('/tables');
+  await page.getByTestId('table-tile-11').click();
+  await expect(page.getByTestId('bill-page')).toContainText('Стіл 5');
+  // This table's requests only, above the menu — and not on the bill yet.
+  await expect(page.getByTestId('bill-requests')).toContainText('Гість просить');
+  await expect(page.getByTestId('bill-owed')).toContainText('0');
+
+  await page.getByTestId('guest-order-accept-5').click();
+  await expect(page.getByTestId('bill-owed')).toContainText('110');
+  await expect(page.getByTestId('bill-round-8')).toContainText('Круасан');
+  await expect(page.getByTestId('bill-requests')).toHaveCount(0);
+});
+
 test('with the module CDN down there are no tables, and the till still sells', async ({ page }) => {
   await signInAsWaiter(page, { down: true });
   await mockTables(page);

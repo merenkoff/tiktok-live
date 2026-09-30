@@ -125,3 +125,41 @@ export interface Bill {
   /** Σ of the draft at today's prices. Indicative; it is not owed yet. */
   draft_preview_cents: number;
 }
+
+// ── a guest's request (Q6/Q7, `src/pos/guest-orders.service.ts`) ────────────
+
+/** One dish a guest asked for, as the waiter sees it before accepting. */
+export interface GuestOrderLine {
+  id: number;
+  name: string;
+  /** The size and answers the guest chose, as the menu captioned them. */
+  caption: string;
+  quantity: number;
+  note: string;
+  /** Why this line cannot be accepted right now (stopped, taken off the menu), or null. */
+  problem: string | null;
+}
+
+/** A request waiting for a waiter. Nothing in it has reached the bill, the stock or the kitchen. */
+export interface GuestOrder {
+  id: number;
+  table_id: number;
+  table_name: string;
+  hall_name: string;
+  created_at: string;
+  expires_at: string;
+  /** The table already has an open bill: accepting adds to it rather than opening one. */
+  has_open_bill: boolean;
+  lines: GuestOrderLine[];
+}
+
+/** What accepting answers with — the bill as it stands, and whether the round went out. */
+export interface GuestOrderAccepted {
+  bill: Bill;
+  /** The lines went to the kitchen as a round. */
+  fired: boolean;
+  /** Set when the lines are in the bill but the round did not go out. */
+  warning: string | null;
+  /** The request had been accepted already; nothing was done a second time. */
+  already: boolean;
+}

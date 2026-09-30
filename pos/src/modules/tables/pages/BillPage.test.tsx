@@ -16,6 +16,10 @@ import type { Bill, BillLine, BillRound } from '../lib/types';
 const posRequest = vi.fn();
 const getCatalog = vi.fn();
 const navigate = vi.fn();
+// The menu's «re-read what is left», counted (the bill bumps its epoch after a write that moved stock).
+const refreshCatalog = vi.fn();
+// What the hall map hands the bill screen through the router (Q7).
+let routeState: unknown = null;
 const getMeta = vi.fn();
 const printPrecheck = vi.fn();
 
@@ -48,7 +52,9 @@ vi.mock('@pos/platform', async () => {
       selectCatalogBarTag: () => undefined,
       goBackOne: () => undefined,
       lookupBarcode: async () => [],
-      refresh: async () => undefined,
+      refresh: async () => {
+        refreshCatalog();
+      },
     };
   }
   return {
@@ -63,7 +69,12 @@ vi.mock('@pos/platform', async () => {
 
 vi.mock('react-router-dom', async () => {
   const real = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
-  return { ...real, useParams: () => ({ billId: '90' }), useNavigate: () => navigate };
+  return {
+    ...real,
+    useParams: () => ({ billId: '90' }),
+    useNavigate: () => navigate,
+    useLocation: () => ({ pathname: '/tables/90', search: '', hash: '', key: 'k', state: routeState }),
+  };
 });
 
 const { BillPage } = await import('./BillPage');
@@ -183,6 +194,8 @@ const MENU = [
 beforeEach(async () => {
   vi.useRealTimers();
   navigate.mockReset();
+  refreshCatalog.mockReset();
+  routeState = null;
   useOfflineStatus.setState({ online: true });
   useAuthStore.setState({
     auth: makeAuthResponse({ store: { id: 7 } }),
@@ -688,3 +701,185 @@ describe('BillPage', () => {
     expect(posRequest).not.toHaveBeenCalled();
   });
 });
+
+// ── Q7: запити гостей цього столу ─────────────────────────────────────────────
+
+describe('BillPage — guest requests (Q7)', () => {
+  const askFor = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
+    id: 5,
+    table_id: 11,
+    table_name: '5',
+    hall_name: 'Зала',
+    created_at: new Date(Date.now() - 2 * 60_000).toISOString(),
+    expires_at: new Date(Date.now() + 28 * 60_000).toISOString(),
+    has_open_bill: true,
+    lines: [
+      { id: 51, name: 'Борщ', caption: 'зі сметаною', quantity: 2, note: '', problem: null },
+      { id: 52, name: 'Стейк', caption: '', quantity: 1, note: '', problem: null },
+    ],
+    ...over,
+  });
+
+  let requests: Array<Record<string, unknown>> = [];
+  let handle: (method: string, path: string, body?: unknown) => unknown = () => undefined;
+
+  beforeEach(() => {
+    requests = [askFor()];
+    handle = () => undefined;
+    posRequest.mockImplementation(async (method: string, path: string, body?: unknown) => {
+      if (method === 'get' && path === '/bills/90') return bill;
+      if (method === 'get' && path === '/guest-orders?table_id=11') return { orders: requests };
+      const custom = handle(method, path, body);
+      if (custom !== undefined) return custom;
+      throw new Error(`unexpected ${method} ${path}`);
+    });
+  });
+
+  const posted = (path: string): unknown[] | undefined =>
+    posRequest.mock.calls.find((c) => c[0] === 'post' && c[1] === path);
+
+  it('lists this table’s requests above the menu, asking the server for this table only', async () => {
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    const list = await screen.findByTestId('bill-requests');
+    expect(within(list).getByTestId('guest-order-5')).toHaveTextContent('Гість просить');
+    expect(within(list).getByTestId('guest-line-51')).toHaveTextContent('Борщ');
+    // Not on the bill yet — and it must not look like it is.
+    expect(within(screen.getByTestId('bill-pane')).queryByText('Борщ')).toBeNull();
+    expect(posRequest).toHaveBeenCalledWith('get', '/guest-orders?table_id=11', undefined);
+    // …and never the whole room's.
+    expect(posRequest).not.toHaveBeenCalledWith('get', '/guest-orders', undefined);
+  });
+
+  it('shows nothing extra when nobody at the table is asking', async () => {
+    requests = [];
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    await screen.findByTestId('bill-owed');
+    expect(screen.queryByTestId('bill-requests')).toBeNull();
+  });
+
+  it('accepts into this bill and shows the answer without a second read', async () => {
+    const accepted: Bill = {
+      ...bill,
+      rounds: [
+        ...bill.rounds,
+        round({
+          id: 8,
+          seq: 2,
+          items: [line({ id: 20, product_name: 'Борщ', variant_label: 'зі сметаною', quantity: 2, unit_price_cents: 16500 })],
+          total_cents: 33000,
+        }),
+      ],
+      fired_total_cents: 41000,
+    };
+    handle = (method, path) => {
+      if (method === 'post' && path === '/guest-orders/5/accept') {
+        requests = [];
+        return { bill: accepted, fired: true, warning: null, already: false };
+      }
+      return undefined;
+    };
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    await userEvent.click(await screen.findByTestId('guest-order-accept-5'));
+    await waitFor(() => expect(screen.getByTestId('bill-owed')).toHaveTextContent('410'));
+    expect(screen.getByTestId('bill-round-8')).toHaveTextContent('Борщ');
+    expect(posted('/guest-orders/5/accept')?.[2]).toEqual({});
+    // Accepting moved stock (the round went to the kitchen), so the menu beside
+    // the bill re-reads what is left, like after any other round.
+    await waitFor(() => expect(refreshCatalog).toHaveBeenCalled());
+    // Answered, so it is no longer waiting.
+    await waitFor(() => expect(screen.queryByTestId('bill-requests')).toBeNull());
+  });
+
+  it('passes the server’s warning on when the dishes are in the bill but did not go to the kitchen', async () => {
+    handle = (method, path) => {
+      if (method === 'post' && path === '/guest-orders/5/accept') {
+        requests = [];
+        return {
+          bill,
+          fired: false,
+          warning: 'У чернетці були ваші позиції — перевірте рахунок і відправте на кухню самі',
+          already: false,
+        };
+      }
+      return undefined;
+    };
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    await userEvent.click(await screen.findByTestId('guest-order-accept-5'));
+    expect(await screen.findByTestId('bill-banner')).toHaveTextContent('відправте на кухню самі');
+  });
+
+  it('names the dish that was refused and accepts the rest on the next tap', async () => {
+    let attempts = 0;
+    handle = (method, path) => {
+      if (method === 'post' && path === '/guest-orders/5/accept') {
+        attempts += 1;
+        if (attempts === 1) {
+          throw { response: { status: 409, data: { error: 'Стейк: сьогодні в стоп-листі', item_id: 52 } } };
+        }
+        requests = [];
+        return { bill, fired: true, warning: null, already: false };
+      }
+      return undefined;
+    };
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    await userEvent.click(await screen.findByTestId('guest-order-accept-5'));
+    expect(await screen.findByTestId('bill-banner')).toHaveTextContent('Стейк: сьогодні в стоп-листі');
+    expect(await screen.findByTestId('guest-line-52')).toHaveAttribute('data-blocked', 'yes');
+
+    await userEvent.click(screen.getByTestId('guest-order-accept-5'));
+    await waitFor(() => expect(attempts).toBe(2));
+    const accepts = posRequest.mock.calls.filter((c) => c[1] === '/guest-orders/5/accept');
+    expect(accepts[1]?.[2]).toEqual({ exclude_item_ids: [52] });
+    // The refused attempt left the bill as it was (the server did nothing by halves).
+    expect(screen.getByTestId('bill-owed')).toHaveTextContent('80');
+  });
+
+  it('turns a request down with a reason, leaving the bill alone', async () => {
+    handle = (method, path) => {
+      if (method === 'post' && path === '/guest-orders/5/reject') {
+        requests = [];
+        return { status: 'rejected' };
+      }
+      return undefined;
+    };
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    await userEvent.click(await screen.findByTestId('guest-order-reject-5'));
+    await userEvent.click(screen.getByTestId('guest-order-reason-5-1'));
+    await waitFor(() => expect(screen.queryByTestId('bill-requests')).toBeNull());
+    expect(posted('/guest-orders/5/reject')?.[2]).toEqual({
+      reason: 'Кухня зараз не приймає — підійдіть до офіціанта',
+    });
+    expect(screen.getByTestId('bill-owed')).toHaveTextContent('80');
+  });
+
+  it('shows the server’s refusal when the request was already answered elsewhere', async () => {
+    handle = (method, path) => {
+      if (method === 'post' && path === '/guest-orders/5/reject') {
+        throw { response: { status: 409, data: { error: 'Запит уже прийнято' } } };
+      }
+      return undefined;
+    };
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    await userEvent.click(await screen.findByTestId('guest-order-reject-5'));
+    await userEvent.click(screen.getByTestId('guest-order-reason-none-5'));
+    expect(await screen.findByTestId('bill-banner')).toHaveTextContent('Запит уже прийнято');
+  });
+
+  it('shows the note the hall map sent along when it opened this bill', async () => {
+    routeState = { notice: 'Замовлення в рахунку, але не відправлено на кухню: помилка' };
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    expect(await screen.findByTestId('bill-banner')).toHaveTextContent('не відправлено на кухню');
+  });
+
+  it('draws the bill as before when the requests cannot be read', async () => {
+    posRequest.mockImplementation(async (method: string, path: string) => {
+      if (method === 'get' && path === '/bills/90') return bill;
+      throw { response: { status: 404, data: { error: 'Not found' } } };
+    });
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    expect(await screen.findByTestId('bill-owed')).toHaveTextContent('80');
+    expect(screen.queryByTestId('bill-requests')).toBeNull();
+    expect(screen.queryByTestId('bill-banner')).toBeNull();
+  });
+});
+

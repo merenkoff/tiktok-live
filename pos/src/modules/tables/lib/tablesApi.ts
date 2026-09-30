@@ -8,7 +8,7 @@
 
 import { posRequest } from './hostPlatform';
 import type { TablePosition } from './layout';
-import type { Bill, OpenBillSummary, PosHall, PosTable, TableShape } from './types';
+import type { Bill, GuestOrder, GuestOrderAccepted, OpenBillSummary, PosHall, PosTable, TableShape } from './types';
 
 /** The room, as the owner laid it out. */
 export function listHalls(): Promise<{ halls: PosHall[] }> {
@@ -135,6 +135,42 @@ export function payBill(billId: number, parts: PayPart[]): Promise<{ bill: Bill;
  */
 export function markPrecheck(billId: number): Promise<Bill> {
   return posRequest<Bill>('post', `/bills/${billId}/precheck`);
+}
+
+// ── a guest's request from the QR menu (Q7) ────────────────────────────────
+
+/**
+ * Everything waiting for a waiter — the whole room's, or one table's.
+ *
+ * Older than its time-to-live is already dropped by the server, so what comes
+ * back is what can still be accepted right now.
+ */
+export function listGuestOrders(tableId?: number): Promise<{ orders: GuestOrder[] }> {
+  return posRequest<{ orders: GuestOrder[] }>(
+    'get',
+    tableId == null ? '/guest-orders' : `/guest-orders?table_id=${tableId}`
+  );
+}
+
+/**
+ * Accept: the lines go into the table's bill (opened if there is none) under
+ * THIS waiter's name, and to the kitchen if the draft held nothing else.
+ *
+ * `exclude_item_ids` are request LINES to leave out — a dish that ran out
+ * between the guest's tap and this one. A line the server cannot add refuses
+ * the whole accept and names it (`item_id`), so nothing is half-done.
+ */
+export function acceptGuestOrder(orderId: number, excludeItemIds: number[] = []): Promise<GuestOrderAccepted> {
+  return posRequest<GuestOrderAccepted>(
+    'post',
+    `/guest-orders/${orderId}/accept`,
+    excludeItemIds.length > 0 ? { exclude_item_ids: excludeItemIds } : {}
+  );
+}
+
+/** Turn a request down; the reason, when there is one, is what the guest reads on their phone. */
+export function rejectGuestOrder(orderId: number, reason?: string): Promise<{ status: 'rejected' }> {
+  return posRequest<{ status: 'rejected' }>('post', `/guest-orders/${orderId}/reject`, reason ? { reason } : {});
 }
 
 // ── the owner's hall editor (К4i) ──────────────────────────────────────────
