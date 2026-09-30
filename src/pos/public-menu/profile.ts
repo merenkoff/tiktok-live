@@ -10,6 +10,8 @@
 // and turned into the few strings the page prints on the way OUT. The page
 // still escapes everything it prints — this is validation, not sanitising.
 
+import { oneLine } from '../core/text.js';
+
 export class ProfileError extends Error {}
 
 // ── hours ───────────────────────────────────────────────────────────
@@ -131,21 +133,11 @@ export function groupHours(hours: WeekHours | null): HoursRow[] {
 const ADDRESS_MAX = 200;
 const PHONE_MAX = 32;
 
-/** Control characters (a NUL would be a database error, a tab or a line break just noise) read as spaces. */
-function withoutControls(text: string): string {
-  let out = '';
-  for (const char of text) {
-    const code = char.codePointAt(0)!;
-    out += code < 0x20 || code === 0x7f ? ' ' : char;
-  }
-  return out;
-}
-
 /** Free text, one line: control characters and line breaks become spaces. */
 export function normalizeAddress(raw: unknown): string | null {
   if (raw === null) return null;
   if (typeof raw !== 'string') throw new ProfileError('Адреса має бути текстом');
-  const text = withoutControls(raw).replace(/\s+/g, ' ').trim();
+  const text = oneLine(raw);
   if (text.length > ADDRESS_MAX) throw new ProfileError(`Адреса задовга: не більше ${ADDRESS_MAX} символів`);
   return text || null;
 }

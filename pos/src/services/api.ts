@@ -232,6 +232,10 @@ class PosApi {
   async createProduct(payload: {
     name: string;
     description?: string;
+    /** What the guest reads under the dish on the QR menu (migration 060) — the owner's words, not the recipe. */
+    composition?: string;
+    /** Codes of the allergens the owner ticked; empty means «not said», not «none». */
+    allergens?: string[];
     image_url?: string | null;
     kind?: ProductKind;
     stock_mode?: ProductStockMode;
@@ -258,6 +262,8 @@ class PosApi {
     payload: Partial<{
       name: string;
       description: string;
+      composition: string | null;
+      allergens: string[];
       image_url: string | null;
       is_active: boolean;
       kind: ProductKind;

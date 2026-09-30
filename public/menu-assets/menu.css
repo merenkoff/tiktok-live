@@ -84,6 +84,15 @@ main { max-width: 720px; margin: 0 auto; padding: 0 16px 24px; }
 .body { flex: 1; min-width: 0; }
 .body h3 { margin: 0; font-size: 17px; line-height: 1.25; }
 .desc { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+.comp { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+.comp b { font-weight: 600; color: var(--ink); }
+.allergens { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.allergens li {
+  padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: var(--badge); color: var(--ink); border: 1px solid var(--line);
+}
+.allergen-line { font-weight: 600; }
+.foot .foot-note { margin: 0 0 8px; color: var(--ink); }
 .price { margin: 6px 0 0; font-weight: 700; }
 
 .badge {
@@ -99,7 +108,9 @@ main { max-width: 720px; margin: 0 auto; padding: 0 16px 24px; }
 .item[data-state="stop"] .pic, .item[data-state="out"] .pic { opacity: 0.45; }
 .item[data-state="stop"] h3, .item[data-state="out"] h3,
 .item[data-state="stop"] .price, .item[data-state="out"] .price,
-.item[data-state="stop"] .desc, .item[data-state="out"] .desc { color: var(--off); }
+.item[data-state="stop"] .desc, .item[data-state="out"] .desc,
+.item[data-state="stop"] .comp, .item[data-state="out"] .comp,
+.item[data-state="stop"] .comp b, .item[data-state="out"] .comp b { color: var(--off); }
 
 .sizes { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .sizes li {

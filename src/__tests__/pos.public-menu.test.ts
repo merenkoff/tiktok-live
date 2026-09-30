@@ -297,9 +297,11 @@ describe.skipIf(!hasDb)('POS guest QR menu', () => {
       const body = res.json() as PublicMenu;
       const latte = find(body, 'Латте')!;
 
-      expect(Object.keys(body).sort()).toEqual(['categories', 'generated_at', 'store', 'store_day']);
+      expect(Object.keys(body).sort()).toEqual(['categories', 'generated_at', 'rev', 'store', 'store_day']);
       expect(Object.keys(latte).sort()).toEqual([
+        'allergens',
         'available',
+        'composition',
         'description',
         'from_price_cents',
         'id',
@@ -642,7 +644,7 @@ describe.skipIf(!hasDb)('POS guest QR menu', () => {
     it('does not put a table into the JSON the page polls: it is one menu', async () => {
       const res = await json(token);
       expect(res.body).not.toContain('Стіл');
-      expect(Object.keys(res.json()).sort()).toEqual(['categories', 'generated_at', 'store', 'store_day']);
+      expect(Object.keys(res.json()).sort()).toEqual(['categories', 'generated_at', 'rev', 'store', 'store_day']);
     });
   });
 

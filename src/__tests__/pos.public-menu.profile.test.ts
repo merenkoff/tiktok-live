@@ -228,6 +228,7 @@ describe('the guest page header', () => {
   };
   const menuOf = (over: Partial<PublicMenu['store']> = {}): PublicMenu => ({
     store: { ...store, ...over },
+    rev: 'a1b2c3d4e5f6',
     store_day: '2026-09-28',
     generated_at: '2026-09-28T10:00:00.000Z',
     categories: [],

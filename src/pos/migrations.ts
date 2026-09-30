@@ -98,6 +98,8 @@ export const POS_MIGRATIONS = [
   '058_pos_guest_orders.sql',
   // The guest menu's header: logo, address, phone and opening hours; the two demo cafés get theirs once.
   '059_pos_store_public_profile.sql',
+  // What a dish says about what is in it: a line of composition and the allergens the owner ticked; demo dishes get theirs once.
+  '060_pos_product_composition_allergens.sql',
 ] as const;
 
 export function readMigration(file: string): string {

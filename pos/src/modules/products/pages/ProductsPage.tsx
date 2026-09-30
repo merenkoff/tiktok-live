@@ -27,6 +27,7 @@ import type {
   ProductVariant,
 } from '@pos/platform';
 import { CompositionEditor } from '../components/CompositionEditor';
+import { DishFactsFields } from '../components/DishFactsFields';
 import { ModifierGroupChips } from '../components/ModifierGroupChips';
 import { PackFields } from '../components/PackFields';
 import { componentOptions } from '../components/componentOptions';
@@ -144,6 +145,10 @@ export function ProductsPage() {
 
   const vertical = useVertical();
   const [name, setName] = useState('');
+  // What the guest reads on the QR menu: the owner's words, not the recipe.
+  const [newDescription, setNewDescription] = useState('');
+  const [newComposition, setNewComposition] = useState('');
+  const [newAllergens, setNewAllergens] = useState<string[]>([]);
   const [attributes, setAttributes] = useState<AttributeValues>({});
   const [unit, setUnit] = useState(vertical.defaultUnit);
   const [price, setPrice] = useState('690');
@@ -217,6 +222,9 @@ export function ProductsPage() {
     try {
       const created = await api.createProduct({
         name,
+        description: newDescription,
+        composition: newComposition,
+        allergens: newAllergens,
         image_url: imageUrl,
         ...(composite ? { kind: 'composite' as const, stock_mode: composite } : {}),
         sellable,
@@ -240,6 +248,9 @@ export function ProductsPage() {
       if (groupIds.length) await api.setProductModifierGroups(created.id, groupIds);
       setShowCreate(false);
       setName('');
+      setNewDescription('');
+      setNewComposition('');
+      setNewAllergens([]);
       setBarcode('');
       setSku('');
       setPack({ qty: '', label: '' });
@@ -513,6 +524,21 @@ export function ProductsPage() {
                 </select>
               </label>
               <SellableField checked={sellable} onChange={setSellable} />
+              <label className="flex flex-col gap-1.5 sm:col-span-2">
+                <span className={captionClass}>Опис</span>
+                <input
+                  className="sq-input"
+                  placeholder="Опис"
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                />
+              </label>
+              <DishFactsFields
+                composition={newComposition}
+                onComposition={setNewComposition}
+                allergens={newAllergens}
+                onAllergens={setNewAllergens}
+              />
               <ModifierGroupChips groups={groups} value={groupIds} onChange={setGroupIds} />
               <AttributeFields
                 className="sm:col-span-2 grid gap-3 sm:grid-cols-2"
@@ -1128,6 +1154,8 @@ function EditProductInline({
   const composite = shape !== '';
   const [name, setName] = useState(product.name);
   const [description, setDescription] = useState(product.description ?? '');
+  const [composition, setComposition] = useState(product.composition ?? '');
+  const [allergens, setAllergens] = useState<string[]>(product.allergens ?? []);
   const [imageUrl, setImageUrl] = useState<string | null>(product.image_url);
   const [sellable, setSellable] = useState(product.sellable !== false);
   const [tagIds, setTagIds] = useState<number[]>(product.tag_ids ?? []);
@@ -1200,7 +1228,7 @@ function EditProductInline({
    *   a perfectly valid `own` composite and the message says what to do.
    */
   async function saveShapeAndVariants(): Promise<void> {
-    const details = { name, description, image_url: imageUrl, sellable };
+    const details = { name, description, composition, allergens, image_url: imageUrl, sellable };
     if (shape === savedShape) {
       await api.updateProduct(product.id, details);
       await writeVariants('keep');
@@ -1319,6 +1347,12 @@ function EditProductInline({
           onChange={(e) => setDescription(e.target.value)}
         />
       </label>
+      <DishFactsFields
+        composition={composition}
+        onComposition={setComposition}
+        allergens={allergens}
+        onAllergens={setAllergens}
+      />
 
       <label className="flex flex-col gap-1.5 sm:col-span-2">
         <span className={captionClass}>Що це за товар</span>
