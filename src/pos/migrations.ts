@@ -100,6 +100,8 @@ export const POS_MIGRATIONS = [
   '059_pos_store_public_profile.sql',
   // What a dish says about what is in it: a line of composition and the allergens the owner ticked; demo dishes get theirs once.
   '060_pos_product_composition_allergens.sql',
+  // A regular customer's personal discount, in whole percent; the till puts it in as the cart discount (clothing C0).
+  '061_pos_customer_discount.sql',
 ] as const;
 
 export function readMigration(file: string): string {

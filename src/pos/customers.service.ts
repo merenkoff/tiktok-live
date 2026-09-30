@@ -18,6 +18,8 @@ export interface PosCustomer {
   phone: string;
   email: string | null;
   children_birthdays: CustomerChild[];
+  /** Personal discount, whole percent 0..100 (0 = none). Written only by the owner. */
+  discount_percent: number;
   created_at: Date;
   updated_at: Date;
   client_uuid?: string | null;
@@ -47,6 +49,21 @@ function validateChildren(raw: unknown): CustomerChild[] {
   });
 }
 
+/**
+ * A personal discount: a whole percent from 0 to 100, `null` meaning «none».
+ * Whole because it travels as the cart discount, whose `cart_discount_value`
+ * column is an INTEGER percent (migration 061); a half-percent tier would need
+ * a second representation on every sale.
+ */
+export function parseDiscountPercent(raw: unknown): number {
+  if (raw === null || raw === undefined || raw === '') return 0;
+  const value = typeof raw === 'string' ? Number(raw.trim()) : raw;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 100) {
+    throw new Error('Знижка клієнта — ціле число відсотків від 0 до 100');
+  }
+  return value;
+}
+
 function mapCustomer(row: Record<string, unknown>): PosCustomer {
   const children = Array.isArray(row.children_birthdays)
     ? (row.children_birthdays as CustomerChild[])
@@ -60,6 +77,7 @@ function mapCustomer(row: Record<string, unknown>): PosCustomer {
     phone: String(row.phone),
     email: row.email == null ? null : String(row.email),
     children_birthdays: children,
+    discount_percent: Number(row.discount_percent ?? 0),
     created_at: row.created_at as Date,
     updated_at: row.updated_at as Date,
     client_uuid: row.client_uuid == null ? null : String(row.client_uuid),
@@ -115,6 +133,7 @@ export async function createCustomer(
     phone: string;
     email?: string | null;
     children_birthdays?: CustomerChild[];
+    discount_percent?: number | null;
     client_uuid?: string | null;
   }
 ): Promise<PosCustomer> {
@@ -124,6 +143,7 @@ export async function createCustomer(
   if (phone.length < 8) throw new Error('Phone is required');
   const email = input.email?.trim() || null;
   const children = validateChildren(input.children_birthdays ?? []);
+  const discount = parseDiscountPercent(input.discount_percent);
   const clientUuid = input.client_uuid?.trim() || null;
 
   if (clientUuid) {
@@ -137,6 +157,7 @@ export async function createCustomer(
         phone,
         email,
         children_birthdays: children,
+        discount_percent: input.discount_percent,
         client_uuid: clientUuid,
       });
     }
@@ -144,10 +165,10 @@ export async function createCustomer(
 
   try {
     const result = await pool.query(
-      `INSERT INTO pos_customers (store_id, name, phone, email, children_birthdays, client_uuid)
-       VALUES ($1, $2, $3, $4, $5::jsonb, $6)
+      `INSERT INTO pos_customers (store_id, name, phone, email, children_birthdays, discount_percent, client_uuid)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)
        RETURNING *`,
-      [storeId, name, phone, email, JSON.stringify(children), clientUuid]
+      [storeId, name, phone, email, JSON.stringify(children), discount, clientUuid]
     );
     return mapCustomer(result.rows[0]);
   } catch (error) {
@@ -168,6 +189,7 @@ export async function createCustomer(
           phone,
           email,
           children_birthdays: children,
+          discount_percent: input.discount_percent,
           client_uuid: clientUuid,
         });
       }
@@ -182,6 +204,7 @@ export async function createCustomer(
       phone,
       email,
       children_birthdays: children,
+      discount_percent: input.discount_percent,
       client_uuid: clientUuid,
     });
   }
@@ -195,6 +218,8 @@ export async function updateCustomer(
     phone?: string;
     email?: string | null;
     children_birthdays?: CustomerChild[];
+    /** Absent = leave as it is (the merge paths below never touch a stored discount). */
+    discount_percent?: number | null;
     client_uuid?: string | null;
   }
 ): Promise<PosCustomer> {
@@ -218,14 +243,18 @@ export async function updateCustomer(
     input.client_uuid !== undefined
       ? input.client_uuid?.trim() || null
       : existing.client_uuid ?? null;
+  const discount =
+    input.discount_percent !== undefined
+      ? parseDiscountPercent(input.discount_percent)
+      : existing.discount_percent;
 
   const result = await pool.query(
     `UPDATE pos_customers
      SET name = $1, phone = $2, email = $3, children_birthdays = $4::jsonb,
-         client_uuid = COALESCE($7, client_uuid), updated_at = NOW()
+         client_uuid = COALESCE($7, client_uuid), discount_percent = $8, updated_at = NOW()
      WHERE id = $5 AND store_id = $6
      RETURNING *`,
-    [name, phone, email, JSON.stringify(children), id, storeId, clientUuid]
+    [name, phone, email, JSON.stringify(children), id, storeId, clientUuid, discount]
   );
   return mapCustomer(result.rows[0]);
 }
