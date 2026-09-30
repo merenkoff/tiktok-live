@@ -7,6 +7,7 @@ import { ensureModule, ensurePosAuth } from '../core/auth.js';
 import { pool } from '../../db.js';
 import { listTechCards } from '../composites.service.js';
 import * as productsService from '../products.service.js';
+import { invalidatePublicMenu } from '../public-menu/menu.service.js';
 import * as tagsService from '../tags.service.js';
 import { saveProductImage } from '../uploads.service.js';
 import { logger } from '../../logger.js';
@@ -47,6 +48,9 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
         auth.storeId,
         request.body as productsService.CreateProductInput
       );
+      // A dish's description, composition and allergens are on the guest's page:
+      // what an owner just wrote must not wait out the menu's 15 s cache.
+      invalidatePublicMenu(auth.storeId);
       return reply.code(201).send(product);
     } catch (error) {
       const status = isUniqueViolation(error) ? 409 : 400;
@@ -60,11 +64,15 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
-      return await productsService.updateProduct(
+      const product = await productsService.updateProduct(
         auth.storeId,
         Number(id),
         request.body as Parameters<typeof productsService.updateProduct>[2]
       );
+      // Allergens are the one thing on that page a stale copy can hurt someone
+      // over, so the change is visible at once (see `invalidatePublicMenu`).
+      invalidatePublicMenu(auth.storeId);
+      return product;
     } catch (error) {
       return reply.code(400).send({ error: errorMessage(error) });
     }

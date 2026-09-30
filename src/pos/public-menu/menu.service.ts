@@ -33,6 +33,7 @@ import { listTagsFlat, type PosTag } from '../tags.service.js';
 import { storeClock } from '../core/storeClock.js';
 import { verticalOrDefault } from '../verticals/index.js';
 import { issuePrintLink } from './table-keys.js';
+import { COMPOSITION_MAX, allergenLabels, type Allergen } from '../allergens.js';
 import {
   groupHours,
   hoursTodayText,
@@ -81,6 +82,10 @@ export interface PublicMenuProduct {
   id: number;
   name: string;
   description: string;
+  /** What is in it, in the owner's words (phase Q3b); empty when they have not said. NOT the recipe. */
+  composition: string;
+  /** The allergens the owner ticked, in canonical order; empty means «not said», never «none». */
+  allergens: Allergen[];
   image_url: string | null;
   /** On the day's stop-list. Wins over «немає» in what the guest reads. */
   stopped: boolean;
@@ -112,6 +117,13 @@ export interface PublicMenuStore {
 
 export interface PublicMenu {
   store: PublicMenuStore;
+  /**
+   * A short hash of everything on the page the script does not patch by itself
+   * (names, texts, allergens, prices, the place's details): an open page whose
+   * `rev` no longer matches reloads, so an allergen the owner just corrected
+   * does not stay wrong on a phone for the rest of the evening.
+   */
+  rev: string;
   /** The store-local `YYYY-MM-DD`: the page reloads itself when this rolls over. */
   store_day: string;
   generated_at: string;
@@ -244,7 +256,16 @@ function barTagFor(tagId: number, byId: Map<number, PosTag>): PosTag | null {
   return null;
 }
 
-function projectProduct(rows: CatalogItem[], description: string): PublicMenuProduct {
+/** The texts of a dish as the guest may read them — already blank for a card nobody has reviewed. */
+interface DishTexts {
+  description: string;
+  composition: string;
+  allergens: Allergen[];
+}
+
+const NO_TEXTS: DishTexts = { description: '', composition: '', allergens: [] };
+
+function projectProduct(rows: CatalogItem[], texts: DishTexts): PublicMenuProduct {
   const first = rows[0]!;
   const stopped = first.stop_listed;
   const sorted = [...rows].sort((a, b) => a.price_cents - b.price_cents || a.variant_id - b.variant_id);
@@ -276,7 +297,9 @@ function projectProduct(rows: CatalogItem[], description: string): PublicMenuPro
   return {
     id: first.product_id,
     name: first.product_name,
-    description,
+    description: texts.description,
+    composition: texts.composition,
+    allergens: texts.allergens,
     image_url: safeImageUrl(first.image_url),
     stopped,
     available: variants.some((v) => v.available),
@@ -331,37 +354,75 @@ async function buildPublicMenu(store: MenuStore): Promise<PublicMenu> {
     byProduct.set(row.product_id, [...(byProduct.get(row.product_id) ?? []), row]);
   }
   const ids = [...byProduct.keys()];
-  const descriptions = new Map<number, string>();
+  const texts = new Map<number, DishTexts>();
   if (ids.length > 0) {
     const result = await pool.query(
-      `SELECT id, description FROM pos_products WHERE store_id = $1 AND id = ANY($2::bigint[])`,
+      `SELECT id, description, composition, allergens, needs_review
+       FROM pos_products WHERE store_id = $1 AND id = ANY($2::bigint[])`,
       [store.id, ids]
     );
     for (const row of result.rows) {
-      const text = typeof row.description === 'string' ? row.description.trim() : '';
-      descriptions.set(Number(row.id), text.slice(0, DESCRIPTION_MAX));
+      // A card nobody has reviewed yet (made from a receiving document or at the
+      // bench) carries INTERNAL text — «Створено з приходу ПР-12» — in the very
+      // field the guest reads. It stays off the page until the owner edits the
+      // card, which clears the flag; the dish itself is still listed.
+      if (row.needs_review === true) {
+        texts.set(Number(row.id), NO_TEXTS);
+        continue;
+      }
+      const description = typeof row.description === 'string' ? row.description.trim() : '';
+      const composition = typeof row.composition === 'string' ? row.composition.trim() : '';
+      texts.set(Number(row.id), {
+        description: description.slice(0, DESCRIPTION_MAX),
+        composition: composition.slice(0, COMPOSITION_MAX),
+        allergens: allergenLabels(Array.isArray(row.allergens) ? (row.allergens as string[]) : []),
+      });
     }
   }
   const products = [...byProduct.entries()].map(([id, group]) => ({
-    product: projectProduct(group, descriptions.get(id) ?? ''),
+    product: projectProduct(group, texts.get(id) ?? NO_TEXTS),
     tagIds: group[0]!.tag_ids ?? [],
   }));
   const tags = await listTagsFlat(store.id);
+  const categories = groupIntoCategories(products, tags);
+  const publicStore: PublicMenuStore = {
+    name: store.name,
+    // The same gate every picture goes through: an owner-typed URL that is
+    // not a site path or https never reaches an `<img>`.
+    logo_url: safeImageUrl(store.logoUrl),
+    address: store.address,
+    phone: store.phone,
+    hours_today: hoursTodayText(store.hours, new Date(), clock.timezone),
+    hours: groupHours(store.hours),
+  };
   return {
-    store: {
-      name: store.name,
-      // The same gate every picture goes through: an owner-typed URL that is
-      // not a site path or https never reaches an `<img>`.
-      logo_url: safeImageUrl(store.logoUrl),
-      address: store.address,
-      phone: store.phone,
-      hours_today: hoursTodayText(store.hours, new Date(), clock.timezone),
-      hours: groupHours(store.hours),
-    },
+    store: publicStore,
+    rev: contentRev(publicStore, categories),
     store_day: clock.today,
     generated_at: new Date().toISOString(),
-    categories: groupIntoCategories(products, tags),
+    categories,
   };
+}
+
+/**
+ * The menu's content fingerprint. What the page's script already patches on its
+ * own — a dish's «стоп»/«немає», a size being out — is left out, or every stop
+ * would reload every phone; the day's hours are left out because the day rolling
+ * over reloads the page anyway. Everything else, allergens included, goes in.
+ */
+function contentRev(store: PublicMenuStore, categories: PublicMenuCategory[]): string {
+  const stable = {
+    store: { ...store, hours_today: null },
+    categories: categories.map((category) => ({
+      id: category.id,
+      name: category.name,
+      products: category.products.map(({ stopped: _stopped, available: _available, variants, ...rest }) => ({
+        ...rest,
+        variants: variants.map(({ available: _open, ...variant }) => variant),
+      })),
+    })),
+  };
+  return crypto.createHash('sha1').update(JSON.stringify(stable)).digest('hex').slice(0, 12);
 }
 
 // ── cache and lookup ────────────────────────────────────────────────

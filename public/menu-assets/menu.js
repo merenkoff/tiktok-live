@@ -13,6 +13,7 @@
   if (!url) return; // the QR card and the «unavailable» page have nothing to poll
 
   var day = document.body.getAttribute('data-store-day');
+  var rev = document.body.getAttribute('data-rev');
   var POLL_MS = 30000;
   var BADGE = { ok: '', stop: 'стоп', out: 'немає' };
   var timer = null;
@@ -38,6 +39,10 @@
 
   function apply(menu) {
     if (menu.store_day !== day) return reloadOnce();
+    /* The owner changed a text, an allergen or a price since this page was
+       drawn: what is on screen is wrong, and for an allergen wrong is not a
+       cosmetic matter — so redraw rather than patch. */
+    if (menu.rev && rev && menu.rev !== rev) return reloadOnce();
 
     var wanted = {};
     menu.categories.forEach(function (category) {
@@ -333,6 +338,10 @@
         body.textContent = '';
         foot.textContent = '';
         if (product.description) body.appendChild(node('p', 'bill-note', product.description));
+        if (product.composition) body.appendChild(node('p', 'bill-note', 'Склад: ' + product.composition));
+        if (product.allergens && product.allergens.length) {
+          body.appendChild(node('p', 'bill-note allergen-line', 'Містить: ' + product.allergens.map(function (a) { return a.label; }).join(', ')));
+        }
 
         if (sizes.length > 1) {
           body.appendChild(node('h3', 'opt-head', 'Розмір'));

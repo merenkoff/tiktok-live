@@ -13,6 +13,7 @@ import { getProductTagIds, resolveTagFilterIds } from './tags.service.js';
 import { loadStoreVertical, normalizeVariant, searchableAttributeKeys } from './verticals/index.js';
 import type { VerticalDefinition } from './verticals/types.js';
 import { storeClock } from './core/storeClock.js';
+import { normalizeAllergens, normalizeComposition } from './allergens.js';
 import {
   CompositeError,
   listComponentsForStore,
@@ -58,6 +59,13 @@ export interface VariantInput {
 export interface CreateProductInput {
   name: string;
   description?: string | null;
+  /**
+   * One line the guest reads under the dish's name — what is in it, written by
+   * the owner (migration 060). Not the recipe. See `allergens.ts`.
+   */
+  composition?: string | null;
+  /** Codes of the allergens the owner ticked; empty means «not said», not «none». */
+  allergens?: string[];
   image_url?: string | null;
   variants: VariantInput[];
   needs_review?: boolean;
@@ -253,6 +261,8 @@ export async function listProducts(storeId: number) {
     id: Number(p.id),
     name: p.name,
     description: p.description,
+    composition: p.composition ?? null,
+    allergens: Array.isArray(p.allergens) ? (p.allergens as string[]) : [],
     image_url: p.image_url,
     is_active: p.is_active,
     needs_review: Boolean(p.needs_review),
@@ -289,8 +299,8 @@ export async function createProductInTx(
   const productResult = await client.query(
     `INSERT INTO pos_products
        (store_id, name, description, image_url, needs_review, created_from_document_id,
-        kind, stock_mode, one_off, sellable)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        kind, stock_mode, one_off, sellable, composition, allergens)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::text[])
      RETURNING id`,
     [
       storeId,
@@ -303,6 +313,8 @@ export async function createProductInTx(
       shape.stock_mode,
       input.one_off ?? false,
       input.sellable ?? true,
+      normalizeComposition(input.composition),
+      normalizeAllergens(input.allergens),
     ]
   );
   const productId = Number(productResult.rows[0].id);
@@ -444,7 +456,7 @@ export async function updateProduct(
   input: Partial<
     Pick<
       CreateProductInput,
-      'name' | 'description' | 'image_url' | 'kind' | 'stock_mode' | 'sellable'
+      'name' | 'description' | 'composition' | 'allergens' | 'image_url' | 'kind' | 'stock_mode' | 'sellable'
     >
   > & {
     is_active?: boolean;
@@ -480,6 +492,14 @@ export async function updateProduct(
       sets.push(`description = $${i++}`);
       values.push(emptyToNull(input.description));
     }
+    if (input.composition !== undefined) {
+      sets.push(`composition = $${i++}`);
+      values.push(normalizeComposition(input.composition));
+    }
+    if (input.allergens !== undefined) {
+      sets.push(`allergens = $${i++}::text[]`);
+      values.push(normalizeAllergens(input.allergens));
+    }
     if (input.image_url !== undefined) {
       sets.push(`image_url = $${i++}`);
       values.push(emptyToNull(input.image_url));
@@ -498,6 +518,8 @@ export async function updateProduct(
     } else if (
       input.name !== undefined ||
       input.description !== undefined ||
+      input.composition !== undefined ||
+      input.allergens !== undefined ||
       input.image_url !== undefined
     ) {
       // First meaningful edit clears review flag

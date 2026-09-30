@@ -680,6 +680,10 @@ export interface Product {
   id: number;
   name: string;
   description: string | null;
+  /** One line for the guest's QR menu, in the owner's words (migration 060). Absent on an older backend. */
+  composition?: string | null;
+  /** Allergen codes the owner ticked; empty = not said. Absent on an older backend. */
+  allergens?: string[];
   image_url: string | null;
   is_active: boolean;
   needs_review?: boolean;

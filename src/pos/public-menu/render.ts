@@ -144,6 +144,14 @@ function renderProduct(product: PublicMenuProduct, ordering = false): string {
     picture +
     `<div class="body"><h3>${escapeHtml(product.name)} <span class="badge">${BADGE_TEXT[state]}</span></h3>` +
     (product.description ? `<p class="desc">${escapeHtml(product.description)}</p>` : '') +
+    // What is in it, in the owner's own words — and only the allergens they
+    // ticked; a dish with none ticked prints nothing, which says «not said».
+    (product.composition ? `<p class="comp"><b>Склад:</b> ${escapeHtml(product.composition)}</p>` : '') +
+    (product.allergens.length
+      ? `<ul class="allergens" aria-label="Містить алергени">${product.allergens
+          .map((a) => `<li>${escapeHtml(a.label)}</li>`)
+          .join('')}</ul>`
+      : '') +
     `<p class="price">${price}</p>${sizes}${groups}` +
     (ordering ? `<button type="button" class="add" data-add="${product.id}">Додати</button>` : '') +
     `</div></li>`
@@ -219,6 +227,15 @@ export function renderMenuPage(
     )
     .join('\n');
   const empty = menu.categories.length === 0 ? '<p class="empty">Меню поки порожнє.</p>' : '';
+  // Said once, and only where there is something to be careful about: the
+  // owner writes the composition and ticks the allergens, and a modifier's
+  // answer (a different milk) is not part of either.
+  const hasFacts = menu.categories.some((c) =>
+    c.products.some((p) => p.composition !== '' || p.allergens.length > 0)
+  );
+  const factsNote = hasFacts
+    ? '<p class="foot-note">Склад і алергени вказує заклад. Якщо у вас алергія — скажіть офіціанту.</p>'
+    : '';
   const seat = table
     ? `<p class="at-table"><b>${escapeHtml(tableLabel(table.name))}</b> · ${escapeHtml(table.hall)}</p>`
     : '';
@@ -231,11 +248,12 @@ ${tabs ? `<nav class="tabs" aria-label="Розділи меню">${tabs}</nav>` 
 <main>
 ${empty}${sections}
 </main>
-<footer class="foot"><p>Стоп-лист і ціни оновлюються самі.</p><p><a href="${escapeHtml(publicBaseUrl())}/pos/kafe" rel="noopener">Меню працює на The Live Shop POS</a></p></footer>${showBill || ordering ? dockMarkup(table!, showBill, ordering) : ''}`;
+<footer class="foot">${factsNote}<p>Стоп-лист і ціни оновлюються самі.</p><p><a href="${escapeHtml(publicBaseUrl())}/pos/kafe" rel="noopener">Меню працює на The Live Shop POS</a></p></footer>${showBill || ordering ? dockMarkup(table!, showBill, ordering) : ''}`;
   return shell(
     `${menu.store.name} — меню`,
     body,
     ` data-menu-url="/api/pos/public/menu/${escapeHtml(token)}" data-store-day="${escapeHtml(menu.store_day)}"` +
+      ` data-rev="${escapeHtml(menu.rev)}"` +
       (showBill ? ` data-bill-url="/api/pos/public/menu/${escapeHtml(token)}/bill"` : '') +
       (ordering ? ` data-order-url="/api/pos/public/menu/${escapeHtml(token)}/orders"` : '')
   );
