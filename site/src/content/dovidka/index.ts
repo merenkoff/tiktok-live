@@ -3,10 +3,14 @@ import { zminaPrroZaminaKasy } from './zmina-prro-zamina-kasy';
 import { yakObratyProgramuDlyaKavyarni } from './yak-obraty-programu-dlya-kavyarni';
 import { tehkartaIFudkostKavyarni } from './tehkarta-i-fudkost-kavyarni';
 import { kavappChyLiveshopDlyaKavyarni } from './kavapp-chy-liveshop-dlya-kavyarni';
+import { expirenzaChyLiveshopDlyaRestoranu } from './expirenza-chy-liveshop-dlya-restoranu';
+import { choiceqrChyLiveshopDlyaRestoranu } from './choiceqr-chy-liveshop-dlya-restoranu';
 import { GUIDE_ARTICLES } from './guides';
 
 /** Hand-written answers, newest first. */
 const STANDALONE: Article[] = [
+  expirenzaChyLiveshopDlyaRestoranu,
+  choiceqrChyLiveshopDlyaRestoranu,
   kavappChyLiveshopDlyaKavyarni,
   yakObratyProgramuDlyaKavyarni,
   tehkartaIFudkostKavyarni,

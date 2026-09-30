@@ -101,5 +101,17 @@ export const restoran: VerticalContent = {
   ],
   demoLink: { href: '/m/demo-restaurant-menu', label: 'Подивитися, як меню бачить гість (демо)' },
   guide: { slug: 'restoran-ta-kafe', label: 'посібник ресторану й кав\'ярні' },
+  articles: [
+    {
+      slug: 'expirenza-chy-liveshop-dlya-restoranu',
+      title: 'monobank Expirenza чи The Live Shop POS для ресторану: порівняння за фактами',
+      blurb: 'Меню, рахунок, оплата й чайові за QR проти каси зі столами, кухнею й ПРРО — із джерелами й датою перевірки.',
+    },
+    {
+      slug: 'choiceqr-chy-liveshop-dlya-restoranu',
+      title: 'ChoiceQR чи The Live Shop POS для ресторану: порівняння за фактами',
+      blurb: 'QR-меню із замовленням до столу й інтеграціями проти каси, де меню й рахунок гостя вже всередині.',
+    },
+  ],
   updatedAt: '2026-09-30',
 };
