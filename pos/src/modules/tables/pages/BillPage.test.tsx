@@ -569,6 +569,65 @@ describe('BillPage', () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
+  it('carries «оплату прийнято, а чек ще не зареєстровано» to the map when paying settled the table', async () => {
+    bill.draft = [];
+    const warning = 'Оплату прийнято, але чек у ПРРО ще не зареєстровано — система повторить спробу сама. Не пробивайте його вдруге.';
+    posRequest.mockImplementation(async (method: string, path: string) => {
+      if (method === 'post' && path === '/bills/90/pay') {
+        return { bill: { ...bill, status: 'paid' }, sale_ids: [7], warning };
+      }
+      return bill;
+    });
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    await userEvent.click(await screen.findByTestId('bill-pay'));
+    await userEvent.click(await screen.findByTestId('pay-submit'));
+    // A success with a sentence: the waiter leaves for the room and still reads it.
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/tables', { state: { note: warning, warn: true } }));
+  });
+
+  it('keeps the same warning on the bill when only part of it was paid', async () => {
+    bill.draft = [];
+    const warning = 'Оплату прийнято, але чек у ПРРО ще не зареєстровано — система повторить спробу сама. Не пробивайте його вдруге.';
+    posRequest.mockImplementation(async (method: string, path: string) => {
+      if (method === 'post' && path === '/bills/90/pay') {
+        // Not settled: a plate is still owed, so the waiter stays on the bill.
+        return { bill: { ...bill, status: 'open' }, sale_ids: [7], warning };
+      }
+      return bill;
+    });
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    await userEvent.click(await screen.findByTestId('bill-pay'));
+    await userEvent.click(await screen.findByTestId('pay-submit'));
+    expect(await screen.findByTestId('bill-banner')).toHaveTextContent('Не пробивайте його вдруге');
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('shows the server’s sentence when ПРРО refused the receipt, and redraws the bill it sent back', async () => {
+    bill.draft = [];
+    posRequest.mockImplementation(async (method: string, path: string) => {
+      if (method === 'post' && path === '/bills/90/pay') {
+        throw {
+          response: {
+            status: 502,
+            data: {
+              error: 'ПРРО відхилило чек — перевірте товари та ціни. Оплату цієї частини скасовано, страви знову в рахунку.',
+              code: 'rejected',
+              sale_voided: true,
+              sale_kept: false,
+            },
+          },
+        };
+      }
+      return bill;
+    });
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    await userEvent.click(await screen.findByTestId('bill-pay'));
+    await userEvent.click(await screen.findByTestId('pay-submit'));
+    // The sentence itself — not «fiscal_failed» — and the waiter is not sent away.
+    expect(await screen.findByTestId('bill-banner')).toHaveTextContent('Оплату цієї частини скасовано');
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
   it('splits evenly: one receipt, several payment rows that add up', async () => {
     bill.draft = [];
     const posted: Array<{ parts: Array<{ payments: Array<{ amount_cents: number }> }> }> = [];

@@ -1078,6 +1078,54 @@ export async function voidSale(params: {
   }
 }
 
+/**
+ * Undo ONE part of a table bill's payment — a sale whose receipt could not be
+ * registered — without undoing the dinner.
+ *
+ * `voidSale` is the wrong tool here and would be quietly harmful: it returns
+ * every line's stock, but a bill line took its stock when the ROUND was fired
+ * (POS_TABLES.md §4.2), the dish was cooked and put on the table, and
+ * crediting it back would invent produce. What the guest did not do is pay, so
+ * that is all that is reversed: the sale is voided and its plates go back to
+ * the bill as unpaid (`releasePaidLines`), where the waiter can take payment
+ * again. One transaction, so a half-undone part cannot exist.
+ *
+ * Idempotent like `voidSale`, for the same reason: a retry must be a no-op.
+ */
+export async function voidBillPartSale(params: {
+  storeId: number;
+  saleId: number;
+}): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const saleResult = await client.query(
+      `SELECT status, refunded_cents FROM pos_sales WHERE id = $1 AND store_id = $2 FOR UPDATE`,
+      [params.saleId, params.storeId]
+    );
+    if (saleResult.rows.length === 0) throw new Error('Sale not found');
+    const sale = saleResult.rows[0];
+    if (sale.status === 'voided') {
+      await client.query('ROLLBACK');
+      return;
+    }
+    if (sale.status !== 'completed') throw new Error('Only completed sales can be voided');
+    if (Number(sale.refunded_cents) > 0) throw new Error('Cannot void a sale with refunds');
+
+    await client.query(
+      `UPDATE pos_sales SET status = 'voided', voided_at = NOW() WHERE id = $1`,
+      [params.saleId]
+    );
+    await bills.releasePaidLines(client, { storeId: params.storeId, saleId: params.saleId });
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 const REFUND_METHODS: RefundMethod[] = ['cash', 'card', 'qr'];
 
 export async function getRefundByClientUuid(storeId: number, clientUuid: string) {

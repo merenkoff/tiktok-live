@@ -1064,6 +1064,25 @@ export async function attachPaidLine(
   );
 }
 
+/**
+ * The other half of {@link attachPaidLine}: take the plates a voided sale had
+ * covered back OFF that sale, so they read as unpaid again and can be paid.
+ *
+ * The lines' own snapshot of what they took off the shelf is untouched — the
+ * round took it, and nothing here gives it back. `pos_sale_items.bill_item_id`
+ * stays too: that row belongs to a voided receipt, and its link is history.
+ */
+export async function releasePaidLines(
+  client: DbClient,
+  params: { storeId: number; saleId: number }
+): Promise<number> {
+  const released = await client.query(
+    `UPDATE pos_bill_items SET sale_id = NULL WHERE store_id = $1 AND sale_id = $2`,
+    [params.storeId, params.saleId]
+  );
+  return released.rowCount ?? 0;
+}
+
 /** What a bill still owes, and whether anything is left unfired. */
 export async function billBalance(
   client: DbClient,

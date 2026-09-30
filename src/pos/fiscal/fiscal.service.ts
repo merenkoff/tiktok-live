@@ -971,8 +971,16 @@ export async function abortSale(
   row: ledger.FiscalReceiptRow
 ): Promise<boolean> {
   try {
-    const { voidSale } = await import('../sales.service.js');
-    await voidSale({ storeId, saleId, staffId });
+    const { voidSale, voidBillPartSale } = await import('../sales.service.js');
+    // A part of a table bill is not a walk-in sale: its stock left the shelf
+    // when the round was fired, so a plain void would credit back dishes that
+    // were cooked, and would leave its plates «paid» by a corpse.
+    const billPart = await pool.query(
+      `SELECT 1 FROM pos_bill_items WHERE store_id = $1 AND sale_id = $2 LIMIT 1`,
+      [storeId, saleId]
+    );
+    if (billPart.rows.length > 0) await voidBillPartSale({ storeId, saleId });
+    else await voidSale({ storeId, saleId, staffId });
     await ledger.markAbandoned(row.id, 'sale_voided', 'Продаж скасовано через збій фіскалізації');
     return true;
   } catch (error) {

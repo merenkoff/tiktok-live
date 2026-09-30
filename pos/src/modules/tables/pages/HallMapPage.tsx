@@ -27,7 +27,7 @@
 // because a map that might be minutes old must never pass for a live one.
 
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore, useOfflineStatus, usePosShell } from '@pos/platform';
 import { Bell } from '@pos/platform/ui';
 import { GuestOrdersPanel } from '../components/GuestOrdersPanel';
@@ -65,15 +65,31 @@ export function HallMapPage(): JSX.Element {
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   // A success worth a line («прийнято»), which is not an error and must not
-  // wear the red of one.
-  const [note, setNote] = useState<string | null>(null);
+  // wear the red of one. `warn` is the amber variant: a success that leaves
+  // something to know («оплату прийнято, а чек ще не зареєстровано»).
+  const [note, setNoteState] = useState<{ text: string; warn: boolean } | null>(null);
+  const setNote = (text: string | null, warn = false): void => setNoteState(text == null ? null : { text, warn });
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // The bill screen hands its last word to the map when paying settled the
+  // table (`BillPage.pay`): the waiter leaves for the room and must still read
+  // that a receipt is being registered.
+  const arrival = location.state as { note?: unknown; warn?: unknown } | null;
+  const arrivalNote = typeof arrival?.note === 'string' ? arrival.note : null;
+  const arrivalWarn = arrival?.warn === true;
+  useEffect(() => {
+    if (arrivalNote) setNoteState({ text: arrivalNote, warn: arrivalWarn });
+  }, [arrivalNote, arrivalWarn]);
 
   const waiting = useMemo(() => waitingByTable(requests), [requests]);
 
   useEffect(() => {
     if (note == null) return;
-    const id = setTimeout(() => setNote(null), 8000);
+    // A warning is read once and acted on (or not) — eight seconds is too
+    // short for «не пробивайте вдруге», so it stays until the next action.
+    if (note.warn) return;
+    const id = setTimeout(() => setNoteState(null), 8000);
     return () => clearTimeout(id);
   }, [note]);
 
@@ -248,10 +264,13 @@ export function HallMapPage(): JSX.Element {
 
       {note && (
         <p
-          className="mx-4 md:mx-7 mb-3 rounded-sq bg-sq-success/10 text-sq-success-ink px-3 py-2 text-sm"
+          className={`mx-4 md:mx-7 mb-3 rounded-sq px-3 py-2 text-sm ${
+            note.warn ? 'bg-amber-50 text-amber-900' : 'bg-sq-success/10 text-sq-success-ink'
+          }`}
           data-testid="tables-note"
+          data-tone={note.warn ? 'warn' : 'ok'}
         >
-          {note}
+          {note.text}
         </p>
       )}
 
