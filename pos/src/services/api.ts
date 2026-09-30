@@ -246,6 +246,8 @@ class PosApi {
       sku?: string;
       barcode?: string;
       price_cents: number;
+      /** What it cost to buy — the margin reports read it (0 when not said). */
+      cost_cents?: number;
       quantity?: number;
       /** The purchase pack — both halves or neither (migration 054). */
       pack_qty?: number | null;
@@ -301,6 +303,27 @@ class PosApi {
     }
   ): Promise<Product> {
     const { data } = await this.client.post<Product>(`/products/${productId}/variants`, payload);
+    return data;
+  }
+
+  /**
+   * A whole size × colour matrix in one request (TechDocs/POS_CLOTHING.md, C1):
+   * all of it or nothing, and a clash answers 409 naming the article or barcode
+   * that was taken. Barcodes are minted by the server for a vertical that does.
+   */
+  async addVariants(
+    productId: number,
+    variants: Array<{
+      attributes?: AttributeValues;
+      unit?: string;
+      sku?: string;
+      barcode?: string;
+      price_cents: number;
+      cost_cents?: number;
+      quantity?: number;
+    }>
+  ): Promise<Product> {
+    const { data } = await this.client.post<Product>(`/products/${productId}/variants/batch`, { variants });
     return data;
   }
 
