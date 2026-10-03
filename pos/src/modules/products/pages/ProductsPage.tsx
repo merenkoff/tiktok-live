@@ -2,14 +2,12 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   DEFAULT_TAG_COLOR,
   api,
   assetUrl,
-  formatUah,
-  resolveTagColorHex,
   type TagColorKey,
   uahInputToCents,
   useAuthStore,
@@ -23,21 +21,24 @@ import type {
   TagStation,
   Product,
   ProductComponentInput,
-  ProductStockMode,
-  ProductVariant,
 } from '@pos/platform';
 import { CompositionEditor } from '../components/CompositionEditor';
 import { DishFactsFields } from '../components/DishFactsFields';
+import { GenerateBarcodeButton } from '../components/GenerateBarcodeButton';
 import { ModifierGroupChips } from '../components/ModifierGroupChips';
 import { PackFields } from '../components/PackFields';
+import { SellableField } from '../components/ProductSide';
+import { TagDot } from '../components/TagDot';
 import { VariantMatrix, type MatrixResult } from '../components/VariantMatrix';
-import { colourVocabulary, supportsMatrix, type ColourUse } from '../components/variantMatrix';
+import { VariantsTable } from '../components/VariantsTable';
+import { colourVocabulary, supportsMatrix } from '../components/variantMatrix';
+import { captionClass, checkboxClass, chipClass, panelFieldClass } from '../components/formStyles';
 import { productMatchesQuery } from '../components/productSearch';
 import { productFormScope } from '../components/productFormScope';
 import { componentOptions } from '../components/componentOptions';
-import { listTechCards, type TechCardRow } from '../data/techCardsApi';
-import { foodCostPercent, missingReason } from '../data/techCards';
-import type { ComponentOption } from '../components/componentOptions';
+import { flattenTags, tagPathLabel } from '../components/tagLabels';
+import { compositionHint, SHAPE_OPTIONS, type ProductShape } from '../lib/productShape';
+import { saveErrorMessage } from '../lib/saveErrors';
 import {
   AttributeFields,
   Inbox,
@@ -48,67 +49,10 @@ import {
   Plus,
   Printer,
   ProductPhotoField,
-  useDragScroll,
 } from '@pos/platform/ui';
 import { TagColorSwatches } from '../components/TagColorSwatches';
 
 const MAX_TAG_DEPTH = 3;
-
-/**
- * `'' | ProductStockMode` rather than a separate kind + mode pair: the two
- * composite modes behave differently enough at the till that the owner should
- * pick one deliberately, and a checkbox plus a switch invites picking neither.
- */
-type ProductShape = '' | ProductStockMode;
-
-function shapeOf(product: Pick<Product, 'kind' | 'stock_mode'>): ProductShape {
-  if (product.kind !== 'composite') return '';
-  return product.stock_mode === 'derived' ? 'derived' : 'own';
-}
-
-/** Says where the components go, which is the whole difference between the modes. */
-function compositionHint(shape: Exclude<ProductShape, ''>): string {
-  return shape === 'derived'
-    ? 'Продаж спише складники зі складу.'
-    : 'Складники спише документ виробництва — «Склад → Виробництво».';
-}
-
-const SHAPE_OPTIONS: Array<{ value: ProductShape; label: string }> = [
-  { value: '', label: 'Звичайний товар' },
-  { value: 'derived', label: 'Складений — збирається при продажу' },
-  { value: 'own', label: 'Складений — збираємо заздалегідь' },
-];
-
-function flattenTags(tags: PosTag[]): PosTag[] {
-  const out: PosTag[] = [];
-  for (const t of tags) {
-    out.push(t);
-    if (t.children?.length) out.push(...flattenTags(t.children));
-  }
-  return out;
-}
-
-/** "Вік / 0–1 / 3–6 міс" — full path for a nested tag. */
-function tagPathLabel(flatTags: PosTag[], tag: PosTag): string {
-  const parts = [tag.name];
-  let current = tag;
-  while (current.parent_id != null) {
-    const parent = flatTags.find((t) => t.id === current.parent_id);
-    if (!parent) break;
-    parts.unshift(parent.name);
-    current = parent;
-  }
-  return parts.join(' / ');
-}
-
-/** A caption above a field — Things' 13/600, never inside the label's own text (the field would inherit it). */
-const captionClass = 'text-[13px] font-semibold text-sq-secondary';
-/** Native checkbox in the accent blue. */
-const checkboxClass = 'w-4 h-4 shrink-0 accent-[rgb(var(--sq-blue-rgb))]';
-/** On the grey tag panel a grey well would vanish, so the fields there are white. */
-const panelFieldClass = 'sq-input !bg-sq-surface';
-/** Things' quiet chip: 22 px, a small radius, a hue only where it means something. */
-const chipClass = 'h-[22px] px-2 rounded-md text-xs font-medium inline-flex items-center whitespace-nowrap';
 
 export function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -119,28 +63,9 @@ export function ProductsPage() {
   const [tagsOpen, setTagsOpen] = useState(false);
   const storeName = useAuthStore((s) => s.auth?.store.name ?? '');
   const [showCreate, setShowCreate] = useState(false);
-  const [editId, setEditIdState] = useState<number | null>(null);
-  // «Техкарти» links here with `?edit=<id>` — a screen that says which dish
-  // eats the profit has to be able to take the owner to it. The param and the
-  // local state are kept in step, so closing the card also clears the URL.
   const [searchParams, setSearchParams] = useSearchParams();
-  const setEditId = useCallback(
-    (id: number | null) => {
-      setEditIdState(id);
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          if (id == null) next.delete('edit');
-          else next.set('edit', String(id));
-          return next;
-        },
-        { replace: true }
-      );
-    },
-    [setSearchParams]
-  );
-  /** What each composite variant costs to assemble — shown beside its recipe. */
-  const [techCards, setTechCards] = useState<Map<number, TechCardRow>>(new Map());
+  const navigate = useNavigate();
+  const location = useLocation();
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState<TagColorKey>(DEFAULT_TAG_COLOR);
   const [newTagCatalogBar, setNewTagCatalogBar] = useState(false);
@@ -197,35 +122,41 @@ export function ProductsPage() {
   const colours = useMemo(() => colourVocabulary(products), [products]);
 
   async function reload() {
-    const [plist, tlist, glist, cards] = await Promise.all([
+    const [plist, tlist, glist] = await Promise.all([
       api.getProducts(),
       api.getTags(),
       api.listModifierGroups(),
-      // Empty for a shop with no composites, so this costs a clothing store
-      // one round trip that answers `[]` — and never fails the page: the
-      // catalog is the point here, the cost figure is a bonus beside it.
-      listTechCards().catch(() => [] as TechCardRow[]),
     ]);
     setProducts(plist);
     setTags(tlist);
     setGroups(glist);
-    setTechCards(new Map(cards.map((c) => [c.variant_id, c])));
   }
 
   useEffect(() => {
     void reload().catch(() => setError('Не вдалося завантажити'));
   }, []);
 
-  // `?edit=<id>` from «Техкарти». Applied once the catalog is in: opening a
-  // card for a product this owner cannot see would leave the page blank with
-  // the param still on it.
+  // `?edit=<id>` is the address «Техкарти» and older bookmarks used before the
+  // card had a page of its own; it still works — by sending the owner there.
+  // `replace`, so Back from the card returns to where the link was, not to
+  // this redirect. A junk id is dropped from the URL and the list stays.
   useEffect(() => {
     const raw = searchParams.get('edit');
     if (!raw) return;
     const id = Number(raw);
-    if (!Number.isInteger(id) || !products.some((p) => p.id === id)) return;
-    setEditIdState(id);
-  }, [searchParams, products]);
+    if (Number.isInteger(id) && id > 0) {
+      navigate(`/admin/products/${id}`, { replace: true });
+      return;
+    }
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('edit');
+        return next;
+      },
+      { replace: true }
+    );
+  }, [searchParams, navigate, setSearchParams]);
 
   const visible = products.filter((p) => {
     if (!p.is_active) return false;
@@ -363,7 +294,6 @@ export function ProductsPage() {
       return;
     }
     await api.archiveProduct(p.id);
-    if (editId === p.id) setEditId(null);
     await reload();
   }
 
@@ -385,10 +315,7 @@ export function ProductsPage() {
         actions={
           <button
             type="button"
-            onClick={() => {
-              setShowCreate((v) => !v);
-              setEditId(null);
-            }}
+            onClick={() => setShowCreate((v) => !v)}
             className={
               showCreate ? 'sq-btn-quiet' : 'pos-btn-primary min-h-11 px-4 rounded-sq text-[15px] gap-1.5'
             }
@@ -673,26 +600,12 @@ export function ProductsPage() {
           )}
 
           <div className="space-y-3">
-            {visible.map((product) =>
-              editId === product.id ? (
-                <EditProductInline
-                  key={product.id}
-                  product={product}
-                  flatTags={flatTags}
-                  groups={groups}
-                  colours={colours}
-                  partOptions={componentOptions(products, {
-                    excludeProductId: product.id,
-                    maxDepth,
-                  })}
-                  techCards={techCards}
-                  onCancel={() => setEditId(null)}
-                  onSaved={async () => {
-                    await reload();
-                  }}
-                  onCloseAfterSave={() => setEditId(null)}
-                />
-              ) : (
+            {visible.map((product) => {
+              // The card is a page of its own; the list hands it the search
+              // and the tag, so «← Товари» lands back on the same view.
+              const cardTo = `/admin/products/${product.id}`;
+              const cardState = { list: location.search };
+              return (
                 <section key={product.id} className="rounded-card bg-sq-surface shadow-card p-4">
                   <div className="flex items-start gap-3">
                     <input
@@ -716,7 +629,11 @@ export function ProductsPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
                         <div className="min-w-0 min-h-10 flex flex-wrap items-center gap-x-2 gap-y-1">
-                          <h3 className="text-base font-semibold text-sq-text truncate">{product.name}</h3>
+                          <h3 className="text-base font-semibold text-sq-text truncate">
+                            <Link to={cardTo} state={cardState} className="hover:text-sq-blue">
+                              {product.name}
+                            </Link>
+                          </h3>
                           {product.needs_review && (
                             <span className={`${chipClass} bg-amber-50 text-amber-800`}>
                               Потребує перевірки
@@ -741,16 +658,13 @@ export function ProductsPage() {
                           )}
                         </div>
                         <div className="flex items-center gap-1 text-[15px] font-semibold">
-                          <button
-                            type="button"
-                            className="min-h-9 px-2.5 rounded-lg text-sq-blue hover:bg-sq-sidebar"
-                            onClick={() => {
-                              setShowCreate(false);
-                              setEditId(product.id);
-                            }}
+                          <Link
+                            to={cardTo}
+                            state={cardState}
+                            className="inline-flex items-center min-h-9 px-2.5 rounded-lg text-sq-blue hover:bg-sq-sidebar"
                           >
                             Редагувати
-                          </button>
+                          </Link>
                           <button
                             type="button"
                             className="min-h-9 px-2.5 rounded-lg text-red-600 hover:bg-red-50"
@@ -783,8 +697,8 @@ export function ProductsPage() {
                     </div>
                   </div>
                 </section>
-              )
-            )}
+              );
+            })}
             {visible.length === 0 && (
               <div className="py-12 flex flex-col items-center gap-3 text-center">
                 <Package size={48} />
@@ -795,17 +709,6 @@ export function ProductsPage() {
         </div>
       </div>
     </div>
-  );
-}
-
-/** A tag's tile colour, as a dot — the same hue the till's folder tile wears. */
-function TagDot({ color, size = 'sm' }: { color: string | null | undefined; size?: 'sm' | 'md' }) {
-  return (
-    <span
-      aria-hidden
-      className={`${size === 'md' ? 'w-2.5 h-2.5' : 'w-2 h-2'} rounded-full shrink-0`}
-      style={{ backgroundColor: resolveTagColorHex(color) }}
-    />
   );
 }
 
@@ -835,135 +738,6 @@ function FilterRow({
       <span className="flex-1 min-w-0 truncate">{label}</span>
       {count ? <span className="text-[13px] font-normal text-sq-muted tabular-nums">{count}</span> : null}
     </button>
-  );
-}
-
-/** «Продається на касі» — the same switch in the create and the edit form. */
-function SellableField({ checked, onChange }: { checked: boolean; onChange: (next: boolean) => void }) {
-  return (
-    <label className="flex items-start gap-2.5 text-[15px] text-sq-text cursor-pointer sm:col-span-2">
-      <input
-        type="checkbox"
-        className={`${checkboxClass} mt-1`}
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-      />
-      <span>
-        Продається на касі
-        <span className="block text-[13px] text-sq-muted">
-          Вимкніть для інгредієнта чи заготовки: склад і рецепти його бачать, екран продажу — ні
-        </span>
-      </span>
-    </label>
-  );
-}
-
-/**
- * A 409 here means the SKU or barcode is already on another variant of this
- * store — the one failure this design permits, and the only one the operator
- * can act on. Folding it into "Не вдалося зберегти" left her no way to know
- * she should simply generate another code.
- */
-/**
- * The batch's own complaint, when it has one: a 409 from `addVariants` says WHICH
- * article or barcode was taken («Артикул «KZ-86» вже є в магазині»), which is the
- * one thing the owner needs to fix that row — the generic 409 text above would
- * send them hunting through a dozen rows.
- */
-function batchErrorMessage(err: unknown, fallback: string): string {
-  const response =
-    typeof err === 'object' && err && 'response' in err
-      ? (err as { response?: { status?: number; data?: { error?: unknown } } }).response
-      : undefined;
-  if (response?.status === 409 && typeof response.data?.error === 'string' && response.data.error) {
-    return response.data.error;
-  }
-  return saveErrorMessage(err, fallback);
-}
-
-function saveErrorMessage(err: unknown, fallback: string): string {
-  const status =
-    typeof err === 'object' && err && 'response' in err
-      ? (err as { response?: { status?: number } }).response?.status
-      : undefined;
-  if (status === 409) {
-    return 'Такий артикул або штрихкод уже є в цьому магазині — змініть його або згенеруйте новий';
-  }
-  return fallback;
-}
-
-/**
- * Mints a store-local EAN-13 for an item whose tag will not scan.
- *
- * Nothing is reserved: the counter behind it never repeats, so a code generated
- * and never saved is simply a gap. Uniqueness within the store stays with the
- * index at INSERT, which surfaces as the 409 above.
- */
-function GenerateBarcodeButton({ onGenerated }: { onGenerated: (code: string) => void }) {
-  const [busy, setBusy] = useState(false);
-
-  async function generate() {
-    setBusy(true);
-    try {
-      onGenerated(await api.generateInternalBarcode());
-    } catch {
-      // Nothing appears in the field; pressing again is the whole recovery.
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={() => void generate()}
-      disabled={busy}
-      title="Внутрішній код магазину — коли бирка не сканується"
-      className="sq-btn-quiet shrink-0 whitespace-nowrap"
-    >
-      Згенерувати
-    </button>
-  );
-}
-
-function VariantsTable({
-  variants,
-  derived,
-}: {
-  variants: ProductVariant[];
-  /** Whether the quantity column is computed from components rather than stored. */
-  derived?: boolean;
-}) {
-  const scrollRef = useDragScroll<HTMLDivElement>();
-
-  return (
-    <div ref={scrollRef} className="mt-2 overflow-x-auto select-none">
-      <table className="sq-table">
-        <thead>
-          <tr>
-            <th>Варіант</th>
-            <th className="!text-right">Ціна</th>
-            <th className="!text-right">{derived ? 'Можна зібрати' : 'Залишок'}</th>
-            <th>Артикул</th>
-            <th className="!pr-0">Штрихкод</th>
-          </tr>
-        </thead>
-        <tbody>
-          {variants.map((v) => (
-            <tr key={v.id}>
-              <td>{v.label || '—'}</td>
-              <td className="text-right tabular-nums whitespace-nowrap">{formatUah(v.price_cents)}</td>
-              <td className="text-right tabular-nums whitespace-nowrap">
-                {v.quantity}
-                {v.unit ? <span className="text-[13px] text-sq-muted"> {v.unit}</span> : null}
-              </td>
-              <td className="text-[13px] text-sq-secondary tabular-nums">{v.sku || '—'}</td>
-              <td className="!pr-0 text-[13px] text-sq-secondary tabular-nums">{v.barcode || '—'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
   );
 }
 
@@ -1178,642 +952,3 @@ const STATION_CHOICES: ReadonlyArray<[TagStation | null, string]> = [
   ['kitchen', 'Кухня'],
   ['bar', 'Бар'],
 ];
-
-/**
- * What this variant costs to assemble, beside the recipe it is summed from.
- *
- * The same rule as «Техкарти» and for the same reason: a recipe with one
- * unpriced ingredient has no honest food cost, so it says «—» and why. It is
- * the SAVED recipe's figure — edit the composition and it refreshes after the
- * save, which is when the server recomputes it.
- */
-function TechCardLine({ card }: { card?: TechCardRow }) {
-  if (!card) return null;
-  const reason = missingReason(card);
-  return (
-    <p className="text-[13px] text-sq-secondary">
-      Собівартість: <strong className="font-semibold text-sq-text tabular-nums">{formatUah(card.cost_cents)}</strong>
-      {' · food cost: '}
-      {reason ? (
-        <span>— ({reason})</span>
-      ) : (
-        <strong className="font-semibold text-sq-text tabular-nums">{foodCostPercent(card.food_cost_bps!)}</strong>
-      )}
-      {' · за останніми цінами закупівлі'}
-    </p>
-  );
-}
-
-function EditProductInline({
-  product,
-  flatTags,
-  groups,
-  colours,
-  partOptions,
-  techCards,
-  onCancel,
-  onSaved,
-  onCloseAfterSave,
-}: {
-  product: Product;
-  flatTags: PosTag[];
-  groups: ModifierGroup[];
-  /** The store's colours, most used first — the matrix suggests them and reuses their spelling. */
-  colours: ColourUse[];
-  partOptions: ComponentOption[];
-  /** What each composite variant costs to assemble, by variant id. */
-  techCards: Map<number, TechCardRow>;
-  onCancel: () => void;
-  onSaved: () => Promise<void>;
-  onCloseAfterSave: () => void;
-}) {
-  const vertical = useVertical();
-  const savedShape = shapeOf(product);
-  // Editable, not derived from the product: without this there was no way at
-  // all to turn an existing product into a composite — the editor only ever
-  // appeared for one that was already composite, and the whole feature was
-  // reachable only from the create form.
-  const [shape, setShape] = useState<ProductShape>(savedShape);
-  const composite = shape !== '';
-  // A boutique is not asked what a composite is, nor for a dish's words — but a
-  // card that already HAS them keeps them on screen (a store that changed its
-  // vertical, a florist's bouquet): hiding existing data is not cleaning up.
-  const scope = productFormScope(vertical);
-  const showShape = scope.canComposite || savedShape !== '';
-  const showDishFacts = scope.askDishFacts || !!product.composition || (product.allergens?.length ?? 0) > 0;
-  const [name, setName] = useState(product.name);
-  const [description, setDescription] = useState(product.description ?? '');
-  const [composition, setComposition] = useState(product.composition ?? '');
-  const [allergens, setAllergens] = useState<string[]>(product.allergens ?? []);
-  const [imageUrl, setImageUrl] = useState<string | null>(product.image_url);
-  const [sellable, setSellable] = useState(product.sellable !== false);
-  const [tagIds, setTagIds] = useState<number[]>(product.tag_ids ?? []);
-  const [groupIds, setGroupIds] = useState<number[]>(product.modifier_group_ids ?? []);
-  const [variants, setVariants] = useState<ProductVariant[]>(
-    product.variants.filter((v) => v.is_active)
-  );
-  // Kept next to `variants` rather than inside them: the composition is a
-  // separate write, and mixing it into the variant row would make it too easy
-  // to send a half-edited one.
-  const [compositions, setCompositions] = useState<Record<number, ProductComponentInput[]>>(() =>
-    Object.fromEntries(
-      product.variants
-        .filter((v) => v.is_active)
-        .map((v) => [
-          v.id,
-          (v.components ?? []).map((c) => ({
-            component_variant_id: c.component_variant_id,
-            quantity: c.quantity,
-          })),
-        ])
-    )
-  );
-  const [newAttributes, setNewAttributes] = useState<AttributeValues>({});
-  const [newUnit, setNewUnit] = useState(vertical.defaultUnit);
-  const [newPrice, setNewPrice] = useState('');
-  // The matrix adds a whole set of variants in one request (clothing). `resetKey`
-  // clears its picks once they have been saved; the rows the owner has edited
-  // above are left exactly as they are — adding variants must not eat an edit.
-  const [matrix, setMatrix] = useState<MatrixResult | null>(null);
-  const [matrixReset, setMatrixReset] = useState(0);
-  const useMatrix = supportsMatrix(vertical.attributes) && !composite;
-  const [newPack, setNewPack] = useState({ qty: '', label: '' });
-  const [newComponents, setNewComponents] = useState<ProductComponentInput[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  function toggleTag(id: number) {
-    setTagIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  }
-
-  async function writeVariants(components: 'clear' | 'keep'): Promise<void> {
-    for (const v of variants) {
-      await api.updateVariant(v.id, {
-        attributes: v.attributes,
-        unit: v.unit,
-        price_cents: v.price_cents,
-        compare_at_cents: v.compare_at_cents ?? null,
-        sku: v.sku ?? '',
-        barcode: v.barcode ?? '',
-        // Sent as a pair every time: the form owns both halves, and sending
-        // one alone is what the server refuses by name.
-        pack_qty: v.pack_qty ?? null,
-        pack_label: v.pack_label ?? '',
-        ...(components === 'clear'
-          ? { components: [] }
-          : composite
-            ? { components: compositions[v.id] ?? [] }
-            : {}),
-      });
-    }
-  }
-
-  /**
-   * The product's shape and its variants, in whichever order the server will
-   * accept — it enforces four rules and two of them are ordering rules:
-   *
-   * - a simple product may not carry a composition, so becoming composite has
-   *   to happen **before** the compositions are written;
-   * - a composite may not become simple while a composition still exists, so
-   *   those have to be cleared **first**;
-   * - a derived composite needs every variant composed, so simple → derived
-   *   cannot be one write. It goes through `own` (which has no such rule),
-   *   the compositions land, and only then the mode flips. If that last step
-   *   is refused — a derived composite may not hold stock — the product stays
-   *   a perfectly valid `own` composite and the message says what to do.
-   */
-  async function saveShapeAndVariants(): Promise<void> {
-    const details = { name, description, composition, allergens, image_url: imageUrl, sellable };
-    if (shape === savedShape) {
-      await api.updateProduct(product.id, details);
-      await writeVariants('keep');
-      return;
-    }
-
-    if (shape === '') {
-      await writeVariants('clear');
-      await api.updateProduct(product.id, { ...details, kind: 'simple' });
-      return;
-    }
-
-    await api.updateProduct(product.id, { ...details, kind: 'composite', stock_mode: 'own' });
-    await writeVariants('keep');
-    if (shape === 'derived') {
-      await api.updateProduct(product.id, { stock_mode: 'derived' });
-    }
-  }
-
-  async function save(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setSaving(true);
-    try {
-      await saveShapeAndVariants();
-      await api.setProductTags(product.id, tagIds);
-      // Always, like tags: sending the empty list is how a question is taken away.
-      await api.setProductModifierGroups(product.id, groupIds);
-      await onSaved();
-      onCloseAfterSave();
-    } catch (err) {
-      setError(saveErrorMessage(err, 'Не вдалося зберегти'));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  /**
-   * The card after a variant was added on the server: the server's rows in the
-   * server's order (sized and sorted), but each one the owner already has open
-   * keeps what they typed into it — replacing the list wholesale threw away an
-   * unsaved edit of another row.
-   */
-  function mergeAdded(updated: Product) {
-    const mine = new Map(variants.map((v) => [v.id, v]));
-    const active = updated.variants.filter((v) => v.is_active).map((v) => mine.get(v.id) ?? v);
-    setVariants(active);
-    setCompositions((prev) => ({
-      ...Object.fromEntries(
-        active
-          .filter((v) => !(v.id in prev))
-          .map((v) => [
-            v.id,
-            (v.components ?? []).map((c) => ({
-              component_variant_id: c.component_variant_id,
-              quantity: c.quantity,
-            })),
-          ])
-      ),
-      ...prev,
-    }));
-  }
-
-  async function addVariant() {
-    if (uahInputToCents(newPrice) <= 0) {
-      setError('Вкажіть ціну');
-      return;
-    }
-    try {
-      const updated = await api.addVariant(product.id, {
-        attributes: newAttributes,
-        unit: newUnit,
-        price_cents: uahInputToCents(newPrice),
-        quantity: 0,
-        pack_qty: newPack.qty.trim() === '' ? null : Number(newPack.qty),
-        pack_label: newPack.label.trim() === '' ? null : newPack.label,
-        ...(composite ? { components: newComponents } : {}),
-      });
-      mergeAdded(updated);
-      setNewAttributes({});
-      setNewUnit(vertical.defaultUnit);
-      setNewPrice('');
-      setNewPack({ qty: '', label: '' });
-      setNewComponents([]);
-      await onSaved();
-    } catch {
-      setError('Не вдалося додати варіант');
-    }
-  }
-
-  async function addMatrix() {
-    setError(null);
-    if (!matrix || matrix.problem) {
-      setError(matrix?.problem ?? 'Оберіть кольори й розміри');
-      return;
-    }
-    if (matrix.variants.length === 0) {
-      setError('Оберіть кольори й розміри');
-      return;
-    }
-    try {
-      const updated = await api.addVariants(product.id, matrix.variants);
-      mergeAdded(updated);
-      setMatrixReset((n) => n + 1);
-      await onSaved();
-    } catch (err) {
-      setError(batchErrorMessage(err, 'Не вдалося додати варіанти'));
-    }
-  }
-
-  async function archiveVariant(id: number) {
-    if (!confirm('Архівувати варіант? Зникне з каси.')) return;
-    const updated = await api.archiveVariant(id);
-    setVariants(updated.variants.filter((v) => v.is_active));
-    await onSaved();
-  }
-
-  return (
-    <form
-      onSubmit={(e) => void save(e)}
-      className="rounded-card bg-sq-surface shadow-card ring-2 ring-sq-blue/25 p-5 grid sm:grid-cols-2 gap-x-4 gap-y-4"
-    >
-      <div className="sm:col-span-2 flex items-center justify-between gap-2">
-        <h3 className="text-[19px] font-bold text-sq-heading">Редагування</h3>
-        <button
-          type="button"
-          className="min-h-9 px-3 rounded-lg text-[15px] font-semibold text-sq-secondary hover:bg-sq-sidebar"
-          onClick={onCancel}
-        >
-          Сховати
-        </button>
-      </div>
-
-      {error && <p className="sm:col-span-2 text-sm text-red-600">{error}</p>}
-
-      <ProductPhotoField value={imageUrl} onChange={setImageUrl} />
-
-      <label className="flex flex-col gap-1.5">
-        <span className={captionClass}>Назва</span>
-        <input
-          className="sq-input"
-          placeholder="Назва"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-        />
-      </label>
-      <label className="flex flex-col gap-1.5">
-        <span className={captionClass}>Опис</span>
-        <input
-          className="sq-input"
-          placeholder="Опис"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-      </label>
-      {showDishFacts && (
-        <DishFactsFields
-          composition={composition}
-          onComposition={setComposition}
-          allergens={allergens}
-          onAllergens={setAllergens}
-        />
-      )}
-
-      {showShape && (
-        <label className="flex flex-col gap-1.5 sm:col-span-2">
-          <span className={captionClass}>Що це за товар</span>
-          <select
-            className="sq-input"
-            value={shape}
-            onChange={(e) => setShape(e.target.value as ProductShape)}
-          >
-            {SHAPE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          {shape !== '' && (
-            <span className="text-[13px] text-sq-muted">{compositionHint(shape)}</span>
-          )}
-        </label>
-      )}
-
-      <SellableField checked={sellable} onChange={setSellable} />
-
-      <div className="sm:col-span-2">
-        <p className={`${captionClass} mb-2`}>Мітки</p>
-        <div className="flex flex-wrap gap-2">
-          {flatTags.map((t) => {
-            const on = tagIds.includes(t.id);
-            return (
-              <label
-                key={t.id}
-                className={`inline-flex items-center gap-2 min-h-9 px-3 rounded-[10px] text-[15px] cursor-pointer transition-colors ${
-                  on
-                    ? 'bg-sq-blue/[0.08] ring-1 ring-inset ring-sq-blue/40 text-sq-text font-medium'
-                    : 'bg-sq-surface ring-1 ring-inset ring-sq-divider text-sq-text hover:bg-sq-sidebar'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  className={checkboxClass}
-                  checked={on}
-                  onChange={() => toggleTag(t.id)}
-                />
-                <TagDot color={t.color} />
-                {tagPathLabel(flatTags, t)}
-              </label>
-            );
-          })}
-          {flatTags.length === 0 && (
-            <span className="text-[15px] text-sq-muted">Немає міток</span>
-          )}
-        </div>
-      </div>
-
-      <ModifierGroupChips groups={groups} value={groupIds} onChange={setGroupIds} />
-
-      <div className="sm:col-span-2 space-y-3">
-        <p className={captionClass}>Варіанти</p>
-        {variants.map((v, idx) => (
-          <div key={v.id} className="rounded-xl ring-1 ring-inset ring-sq-divider p-4 space-y-3">
-            <AttributeFields
-              schema={vertical.attributes}
-              value={v.attributes}
-              onChange={(attrs) => {
-                const next = [...variants];
-                next[idx] = { ...v, attributes: attrs };
-                setVariants(next);
-              }}
-              unit={{
-                value: v.unit,
-                options: vertical.units,
-                onChange: (u) => {
-                  const next = [...variants];
-                  next[idx] = { ...v, unit: u };
-                  setVariants(next);
-                },
-              }}
-            />
-            <div className="grid sm:grid-cols-[1fr_auto] gap-2 items-end">
-              <label className="flex flex-col gap-1.5">
-                <span className={captionClass}>Ціна, грн</span>
-                <input
-                  className="sq-input tabular-nums"
-                  value={(v.price_cents / 100).toFixed(2)}
-                  onChange={(e) => {
-                    const next = [...variants];
-                    next[idx] = { ...v, price_cents: uahInputToCents(e.target.value) };
-                    setVariants(next);
-                  }}
-                  placeholder="Ціна, грн"
-                />
-              </label>
-              <button
-                type="button"
-                className="text-[15px] font-semibold text-red-600 min-h-11 px-2"
-                onClick={() => void archiveVariant(v.id)}
-              >
-                Архів
-              </button>
-            </div>
-            <VariantDiscountEditor
-              priceCents={v.price_cents}
-              compareAtCents={v.compare_at_cents ?? null}
-              onChange={(price_cents, compare_at_cents) => {
-                const next = [...variants];
-                next[idx] = { ...v, price_cents, compare_at_cents };
-                setVariants(next);
-              }}
-            />
-            {composite && (
-              <>
-                <CompositionEditor
-                  value={compositions[v.id] ?? []}
-                  options={partOptions}
-                  onChange={(next) => setCompositions((prev) => ({ ...prev, [v.id]: next }))}
-                />
-                <TechCardLine card={techCards.get(v.id)} />
-              </>
-            )}
-            <div className="grid sm:grid-cols-2 gap-3">
-              <label className="flex flex-col gap-1.5">
-                <span className={captionClass}>Артикул (SKU)</span>
-                <input
-                  className="sq-input"
-                  value={v.sku ?? ''}
-                  onChange={(e) => {
-                    const next = [...variants];
-                    next[idx] = { ...v, sku: e.target.value };
-                    setVariants(next);
-                  }}
-                />
-              </label>
-              <label className="flex flex-col gap-1.5">
-                <span className={captionClass}>Штрихкод</span>
-                <div className="flex gap-2">
-                  <input
-                    className="sq-input tabular-nums min-w-0"
-                    value={v.barcode ?? ''}
-                    onChange={(e) => {
-                      const next = [...variants];
-                      next[idx] = { ...v, barcode: e.target.value };
-                      setVariants(next);
-                    }}
-                  />
-                  <GenerateBarcodeButton
-                    onGenerated={(code) => {
-                      const next = [...variants];
-                      next[idx] = { ...v, barcode: code };
-                      setVariants(next);
-                    }}
-                  />
-                </div>
-              </label>
-            </div>
-            <PackFields
-              qty={v.pack_qty == null ? '' : String(v.pack_qty)}
-              label={v.pack_label ?? ''}
-              unit={v.unit}
-              onChange={({ qty, label }) => {
-                const next = [...variants];
-                next[idx] = {
-                  ...v,
-                  pack_qty: qty.trim() === '' ? null : Number(qty),
-                  pack_label: label,
-                };
-                setVariants(next);
-              }}
-            />
-          </div>
-        ))}
-
-        <div className="space-y-3 pt-4 border-t border-sq-divider">
-          {useMatrix ? (
-            <>
-              <p className={captionClass}>Додати розміри й кольори</p>
-              <VariantMatrix
-                unit={vertical.defaultUnit}
-                vocabulary={colours}
-                existing={variants}
-                autoBarcode={vertical.autoBarcode === true}
-                onChange={setMatrix}
-                resetKey={matrixReset}
-              />
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 text-[15px] font-semibold text-sq-blue min-h-11 px-2"
-                onClick={() => void addMatrix()}
-              >
-                <Plus size={20} />
-                {matrix && matrix.variants.length > 0
-                  ? `Додати варіантів: ${matrix.variants.length}`
-                  : 'Додати варіанти'}
-              </button>
-            </>
-          ) : (
-            <>
-              <AttributeFields
-                schema={vertical.attributes}
-                value={newAttributes}
-                onChange={setNewAttributes}
-                unit={{ value: newUnit, options: vertical.units, onChange: setNewUnit }}
-              />
-              {composite && (
-                <CompositionEditor
-                  value={newComponents}
-                  options={partOptions}
-                  onChange={setNewComponents}
-                />
-              )}
-              <PackFields
-                qty={newPack.qty}
-                label={newPack.label}
-                unit={newUnit}
-                onChange={setNewPack}
-              />
-              <div className="grid sm:grid-cols-[1fr_auto] gap-2 items-end">
-                <label className="flex flex-col gap-1.5">
-                  <span className={captionClass}>Ціна, грн</span>
-                  <input
-                    className="sq-input tabular-nums"
-                    placeholder="Ціна, грн"
-                    value={newPrice}
-                    onChange={(e) => setNewPrice(e.target.value)}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1 text-[15px] font-semibold text-sq-blue min-h-11 px-2"
-                  onClick={() => void addVariant()}
-                >
-                  <Plus size={20} />
-                  Варіант
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      <button
-        type="submit"
-        disabled={saving}
-        className="pos-btn-primary sm:col-span-2 sm:justify-self-end min-h-11 px-6 rounded-sq text-[15px]"
-      >
-        {saving ? 'Збереження…' : 'Зберегти'}
-      </button>
-    </form>
-  );
-}
-
-function VariantDiscountEditor({
-  priceCents,
-  compareAtCents,
-  onChange,
-}: {
-  priceCents: number;
-  compareAtCents: number | null;
-  onChange: (priceCents: number, compareAtCents: number | null) => void;
-}) {
-  const [pct, setPct] = useState('');
-  const [newPrice, setNewPrice] = useState('');
-
-  const hasDiscount = compareAtCents != null && compareAtCents > priceCents;
-
-  return (
-    <div className="space-y-2">
-      <p className={captionClass}>Знижка товару</p>
-      {hasDiscount ? (
-        <p className="text-[13px] text-sq-secondary tabular-nums">
-          Стара: {(compareAtCents / 100).toFixed(2)} ₴ → нова: {(priceCents / 100).toFixed(2)} ₴
-          <button
-            type="button"
-            className="ml-2 text-sq-blue font-semibold"
-            onClick={() => onChange(compareAtCents, null)}
-          >
-            Скинути знижку
-          </button>
-        </p>
-      ) : (
-        <p className="text-[13px] text-sq-muted">Без знижки</p>
-      )}
-      <div className="flex flex-wrap gap-2 items-center">
-        <div className="w-28">
-          <input
-            className="sq-input tabular-nums"
-            placeholder="% знижки"
-            value={pct}
-            onChange={(e) => setPct(e.target.value)}
-          />
-        </div>
-        <button
-          type="button"
-          className="min-h-11 px-2 text-[15px] font-semibold text-sq-blue"
-          onClick={() => {
-            const p = Number(pct);
-            if (!Number.isFinite(p) || p <= 0 || p >= 100) return;
-            const base = compareAtCents ?? priceCents;
-            const nextPrice = Math.round((base * (100 - p)) / 100);
-            onChange(nextPrice, base);
-            setPct('');
-          }}
-        >
-          За %
-        </button>
-        <div className="w-36">
-          <input
-            className="sq-input tabular-nums"
-            placeholder="Нова ціна, грн"
-            value={newPrice}
-            onChange={(e) => setNewPrice(e.target.value)}
-          />
-        </div>
-        <button
-          type="button"
-          className="min-h-11 px-2 text-[15px] font-semibold text-sq-blue"
-          onClick={() => {
-            const next = uahInputToCents(newPrice);
-            if (next <= 0 || next >= priceCents) return;
-            const base = compareAtCents ?? priceCents;
-            onChange(next, base);
-            setNewPrice('');
-          }}
-        >
-          За новою ціною
-        </button>
-      </div>
-    </div>
-  );
-}

@@ -2,11 +2,12 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-// The product form asks what the store sells (TechDocs/POS_CLOTHING.md, phase
+// The create form asks what the store sells (TechDocs/POS_CLOTHING.md, phase
 // C0): a boutique owner adding a shirt was being asked what a composite is and
 // for a dish's composition and allergens. The vertical said so all along
-// (`productKinds`, `dishFacts`); the form now listens — and never hides what a
-// card already holds.
+// (`productKinds`, `dishFacts`); the form now listens. The card's own page —
+// which also never hides what a card already holds — is covered by
+// `ProductPage.formScope.test.tsx` (C1e).
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -95,11 +96,6 @@ async function openCreate() {
   return within(screen.getByRole('heading', { name: 'Новий товар' }).closest('form')!);
 }
 
-async function openEdit() {
-  renderWithProviders(<ProductsPage />, { route: '/admin/products?edit=7' });
-  await screen.findByRole('button', { name: 'Зберегти' });
-}
-
 const SHAPE = 'Що це за товар';
 const FACTS = /Склад для гостя/;
 
@@ -136,57 +132,5 @@ describe('the create form — by what the store sells', () => {
 
     expect(form.getByText(SHAPE)).toBeInTheDocument();
     expect(form.getByLabelText(FACTS)).toBeInTheDocument();
-  });
-});
-
-describe('the edit form — by what the store sells, and never hiding what the card holds', () => {
-  it('shows a boutique\'s simple card neither question', async () => {
-    setVertical('clothing', { productKinds: ['simple'], dishFacts: false });
-    await openEdit();
-
-    expect(screen.queryByText(SHAPE)).toBeNull();
-    expect(screen.queryByLabelText(FACTS)).toBeNull();
-  });
-
-  it('keeps the shape question on a card that is already a composite (a store that changed its vertical)', async () => {
-    setVertical('clothing', { productKinds: ['simple'], dishFacts: false });
-    getProducts.mockResolvedValue([card({ kind: 'composite', stock_mode: 'derived' } as Partial<Product>)]);
-    await openEdit();
-
-    expect(screen.getByText(SHAPE)).toBeInTheDocument();
-  });
-
-  it('keeps a composition already written on a card, and its allergens', async () => {
-    setVertical('clothing', { productKinds: ['simple'], dishFacts: false });
-    getProducts.mockResolvedValue([card({ composition: 'Бавовна 100%', allergens: [] })]);
-    await openEdit();
-
-    expect(screen.getByLabelText(FACTS)).toHaveValue('Бавовна 100%');
-  });
-
-  it('keeps ticked allergens on a card, even where the store asks for none', async () => {
-    setVertical('clothing', { productKinds: ['simple'], dishFacts: false });
-    getProducts.mockResolvedValue([card({ allergens: ['milk'] })]);
-    await openEdit();
-
-    expect(screen.getByTestId('allergen-chip-milk')).toHaveAttribute('aria-pressed', 'true');
-  });
-
-  it('does not make a field vanish mid-edit: clearing a stored composition leaves the box on screen', async () => {
-    setVertical('clothing', { productKinds: ['simple'], dishFacts: false });
-    getProducts.mockResolvedValue([card({ composition: 'Бавовна' })]);
-    await openEdit();
-
-    await userEvent.clear(screen.getByLabelText(FACTS));
-
-    expect(screen.getByLabelText(FACTS)).toHaveValue('');
-  });
-
-  it('shows a café both', async () => {
-    setVertical('cafe', { productKinds: ['simple', 'composite'], dishFacts: true });
-    await openEdit();
-
-    expect(screen.getByText(SHAPE)).toBeInTheDocument();
-    expect(screen.getByLabelText(FACTS)).toBeInTheDocument();
   });
 });

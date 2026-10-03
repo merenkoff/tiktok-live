@@ -16,10 +16,13 @@ export function ModifierGroupChips({
   groups,
   value,
   onChange,
+  caption = 'Модифікатори',
 }: {
   groups: ModifierGroup[];
   value: number[];
   onChange: (next: number[]) => void;
+  /** The caption above the chips; `null` where a section head already says it. */
+  caption?: string | null;
 }) {
   // An inactive group stays visible while the product still asks it, so the
   // owner can see — and remove — a question the till no longer shows.
@@ -31,7 +34,7 @@ export function ModifierGroupChips({
 
   return (
     <div className="sm:col-span-2">
-      <p className="text-[13px] font-semibold text-sq-secondary mb-2">Модифікатори</p>
+      {caption && <p className="text-[13px] font-semibold text-sq-secondary mb-2">{caption}</p>}
       <div className="flex flex-wrap gap-2">
         {shown.map((group) => {
           const index = value.indexOf(group.id);

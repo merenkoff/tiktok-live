@@ -294,6 +294,8 @@ class PosApi {
       sku?: string;
       barcode?: string;
       price_cents: number;
+      /** What it cost to buy — the margin reports read it (0 when not said). */
+      cost_cents?: number;
       quantity?: number;
       compare_at_cents?: number | null;
       /** The purchase pack — both halves or neither (migration 054). */
@@ -337,6 +339,8 @@ class PosApi {
       barcode: string;
       price_cents: number;
       compare_at_cents: number | null;
+      /** The purchase price — «Техкарти» and the margin reports read it. Left out = unchanged. */
+      cost_cents: number;
       is_active: boolean;
       /**
        * The purchase pack. Leaving both out keeps whatever the row has; an

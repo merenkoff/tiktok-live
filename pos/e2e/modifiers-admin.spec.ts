@@ -148,10 +148,8 @@ test('the owner asks a question, gives it an answer that takes milk, and attache
 
   // 3. The drink asks it.
   await page.goto('/admin/products');
-  await page
-    .locator('section', { hasText: 'Латте' })
-    .getByRole('button', { name: 'Редагувати' })
-    .click();
+  await page.getByRole('link', { name: 'Латте' }).click();
+  await expect(page).toHaveURL(/\/admin\/products\/1$/);
   await page.getByTestId('modifier-group-chip-7').click();
   await expect(page.getByTestId('modifier-group-chip-7')).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Зберегти' }).click();
