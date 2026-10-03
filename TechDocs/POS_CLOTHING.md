@@ -197,7 +197,7 @@
 **Не входить (C1c):** згортання рядків матриці під «Змінити в рядках», мінімум залишку на варіант, «Об'єднати дублікати», прихід
 матрицею.
 
-### C1e — картка товару без простині (PR1 зроблено 2026-10-03; PR2–PR3 далі)
+### C1e — картка товару без простині (PR1–PR2 зроблено 2026-10-03; PR3 далі)
 
 **Звідки.** «Редагувати» підміняло картку в списку інлайн-формою, де **кожен варіант був розгорнутий повністю** (~500 px:
 колір, розмір, ціна, редактор знижки, SKU, штрихкод, фасування), під ними — матриця, і єдине «Зберегти» внизу: десять варіантів —
@@ -216,9 +216,9 @@
 | K2 | PR1 | маршрут `products/:id`; `?edit=<id>` → редірект (`replace`); лінк Техкарт; у списку назва й «Редагувати» — `Link` | `manifest.ts`, `ProductsPage.tsx` (1 819 → 955 рядків), `TechCardsPage.tsx` | ✔ |
 | K3 | PR1 | тести `ProductPage.{variants,save,leave,dishFacts,formScope}`, `Dialog`, `productDraft`, deepLink, TechCards; e2e composites + modifiers | `pages/*.test.tsx`, `e2e/*` | ✔ |
 | K4 | PR1 | `pos/UI_CASHIER.md` «Картка товару», цей розділ, `CLAUDE.md` | docs | ✔ |
-| K5 | PR2 | «Новий товар» на `/admin/products/new`: інлайн-матриця / `NewVariantFields`, create → navigate на картку, flash про невдалі follow-up; список без інлайн-форми | `ProductPage.tsx`, `ProductsPage.tsx` | |
-| K6 | PR2 | `ProductPage.create.test.tsx` (+navigate, +дубль), create-половини dishFacts/formScope | tests | |
-| K7 | PR2 | гайд `vlasnyk-pochatok.md` (картка з назви, «Додати варіанти», «Знижка товару» — у «Ще»), `guides.ts` `updatedAt` | docs | |
+| K5 | PR2 | «Новий товар» на `/admin/products/new`: інлайн-матриця / `NewVariantFields`, create → navigate на картку, flash про невдалі follow-up; список без інлайн-форми (`ProductsPage.tsx` 954 → 667) | `ProductPage.tsx`, `ProductsPage.tsx`, `manifest.ts` | ✔ |
+| K6 | PR2 | `ProductPage.create.test.tsx` (+navigate, +дубль при невдалому follow-up, +409 сервера дослівно, +квіти з залишком), create-половини dishFacts/formScope переїхали на картку, `ProductsPage.matrix` → `ProductsPage.search` | tests | ✔ |
+| K7 | PR2 | гайд `vlasnyk-pochatok.md` (картка з назви, «+ Додати варіанти», «⋯» варіанта, «Знижка товару»), `guides.ts` `updatedAt`, UI_CASHIER «Новий товар» | docs | ✔ |
 | K8 | PR3 | список: `ProductRow` (рядок + шеврон розгортає `VariantsTable`), `productSummary` («4 варіанти · 350–420 ₴ · 12 шт»), `listParams` (`q`/`tag` в URL), винос `TagTree`, `ConfirmSheet` для архіву товару | `ProductsPage.tsx`, `components/{ProductRow,TagTree}.tsx`, `lib/*` | |
 | K9 | PR3 | `ProductsPage.{rows,filters,search}`, `productSummary`, `listParams`; браузер на `demo-clothing` | tests | |
 | K10 | PR3 | UI_CASHIER (список), цей розділ ✔, CLAUDE.md | docs | |
@@ -248,8 +248,13 @@
 8. `getProducts()` на відкриття картки — як і список: він потрібен словнику кольорів, `componentOptions` і «вже є» матриці; окремий
    `getProduct(id)` не вводився (усі моки й e2e стаблять лише `GET /products`).
 
-**Що лишилось у списку до PR2–PR3:** інлайн-форма «Новий товар» (стара), картки з повною таблицею варіантів, `window.confirm` на
-архіві товару.
+**PR2 — як створення працює.** Той самий `ProductPage` без `:id`: `draft = emptyDraft()`, `snapshot = null`, dirty =
+`createDirty(draft, variantsTyped)`; секція «Варіанти» — матриця або `NewVariantFields` інлайн (картка створюється з варіантами одним
+`createProduct`); кнопка «Створити». Після відповіді сервера — `navigate(/admin/products/:id, { replace })` **завжди**, а
+`setProductModifierGroups`/`setProductTags` — кожен у своєму `catch`; що не записалось, картка каже один раз (`state.flash`).
+Відмова самого `createProduct` лишає форму з реченням сервера (`batchErrorMessage`).
+
+**Що лишилось у списку до PR3:** картки з повною таблицею варіантів, `window.confirm` на архіві товару.
 
 ### Знижка клієнта — рішення
 

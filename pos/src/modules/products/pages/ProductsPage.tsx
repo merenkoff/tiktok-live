@@ -4,52 +4,15 @@
 
 import { FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import {
-  DEFAULT_TAG_COLOR,
-  api,
-  assetUrl,
-  type TagColorKey,
-  uahInputToCents,
-  useAuthStore,
-  useVertical,
-} from '@pos/platform';
+import { DEFAULT_TAG_COLOR, api, assetUrl, type TagColorKey, useAuthStore, useVertical } from '@pos/platform';
 import { PriceTagsDialog } from '../components/PriceTagsDialog';
-import type {
-  ModifierGroup,
-  AttributeValues,
-  PosTag,
-  TagStation,
-  Product,
-  ProductComponentInput,
-} from '@pos/platform';
-import { CompositionEditor } from '../components/CompositionEditor';
-import { DishFactsFields } from '../components/DishFactsFields';
-import { GenerateBarcodeButton } from '../components/GenerateBarcodeButton';
-import { ModifierGroupChips } from '../components/ModifierGroupChips';
-import { PackFields } from '../components/PackFields';
-import { SellableField } from '../components/ProductSide';
+import type { PosTag, TagStation, Product } from '@pos/platform';
 import { TagDot } from '../components/TagDot';
-import { VariantMatrix, type MatrixResult } from '../components/VariantMatrix';
 import { VariantsTable } from '../components/VariantsTable';
-import { colourVocabulary, supportsMatrix } from '../components/variantMatrix';
 import { captionClass, checkboxClass, chipClass, panelFieldClass } from '../components/formStyles';
 import { productMatchesQuery } from '../components/productSearch';
-import { productFormScope } from '../components/productFormScope';
-import { componentOptions } from '../components/componentOptions';
 import { flattenTags, tagPathLabel } from '../components/tagLabels';
-import { compositionHint, SHAPE_OPTIONS, type ProductShape } from '../lib/productShape';
-import { saveErrorMessage } from '../lib/saveErrors';
-import {
-  AttributeFields,
-  Inbox,
-  LayoutGrid,
-  Package,
-  PackageLine,
-  PageHeader,
-  Plus,
-  Printer,
-  ProductPhotoField,
-} from '@pos/platform/ui';
+import { Inbox, LayoutGrid, Package, PackageLine, PageHeader, Plus, Printer } from '@pos/platform/ui';
 import { TagColorSwatches } from '../components/TagColorSwatches';
 
 const MAX_TAG_DEPTH = 3;
@@ -62,7 +25,6 @@ export function ProductsPage() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [tagsOpen, setTagsOpen] = useState(false);
   const storeName = useAuthStore((s) => s.auth?.store.name ?? '');
-  const [showCreate, setShowCreate] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -73,63 +35,15 @@ export function ProductsPage() {
   const [savingTagId, setSavingTagId] = useState<number | null>(null);
 
   const vertical = useVertical();
-  const [name, setName] = useState('');
-  // What the guest reads on the QR menu: the owner's words, not the recipe.
-  const [newDescription, setNewDescription] = useState('');
-  const [newComposition, setNewComposition] = useState('');
-  const [newAllergens, setNewAllergens] = useState<string[]>([]);
-  const [attributes, setAttributes] = useState<AttributeValues>({});
-  const [unit, setUnit] = useState(vertical.defaultUnit);
-  // No invented price: a garment that went in at «690» because the box was left
-  // alone is a wrong price nobody sees until the till.
-  const [price, setPrice] = useState('');
-  const [qty, setQty] = useState('1');
-  // The size × colour matrix (clothing): what it would create, and why it cannot yet.
-  const [matrix, setMatrix] = useState<MatrixResult | null>(null);
   // The search box above the list — words, every one of which has to match.
   const [query, setQuery] = useState('');
-  const [barcode, setBarcode] = useState('');
-  const [sku, setSku] = useState('');
-  // How it arrives, not how it is counted (migration 054). Raw text: the pair
-  // is validated by the server, and half of it is refused there by name.
-  const [pack, setPack] = useState({ qty: '', label: '' });
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [composite, setComposite] = useState<ProductShape>('');
-  // An ingredient or a semi-finished product: on the shelf, off the menu.
-  const [sellable, setSellable] = useState(true);
-  const [components, setComponents] = useState<ProductComponentInput[]>([]);
-  // The questions the new product asks, in order (`/admin/modifiers` owns the questions).
-  const [groupIds, setGroupIds] = useState<number[]>([]);
-  const [groups, setGroups] = useState<ModifierGroup[]>([]);
 
   const flatTags = useMemo(() => flattenTags(tags), [tags]);
-  // A recipe may go into a recipe only where the vertical says so (a café's
-  // sauce inside a sandwich, never a bouquet inside a bouquet).
-  const maxDepth = vertical.maxCompositionDepth ?? 1;
-  // What this kind of store is asked about: a boutique is not asked what a
-  // composite is, nor for a dish's composition and allergens. An older cached
-  // auth carries neither field, and then everything shows, as it always did.
-  const { canComposite, askDishFacts } = productFormScope(vertical);
-  const partOptions = useMemo(
-    () => componentOptions(products, { maxDepth }),
-    [products, maxDepth]
-  );
-  // A garment is one card with a dozen variants, so a vertical with both colour
-  // and size fills them as a matrix; every other vertical (and a composite, which
-  // the matrix cannot compose) keeps the one-variant form.
-  const matrixVertical = supportsMatrix(vertical.attributes);
-  const useMatrix = matrixVertical && composite === '';
-  const colours = useMemo(() => colourVocabulary(products), [products]);
 
   async function reload() {
-    const [plist, tlist, glist] = await Promise.all([
-      api.getProducts(),
-      api.getTags(),
-      api.listModifierGroups(),
-    ]);
+    const [plist, tlist] = await Promise.all([api.getProducts(), api.getTags()]);
     setProducts(plist);
     setTags(tlist);
-    setGroups(glist);
   }
 
   useEffect(() => {
@@ -167,68 +81,6 @@ export function ProductsPage() {
   });
 
   const needsReviewCount = products.filter((p) => p.is_active && p.needs_review).length;
-
-  async function onCreate(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    if (useMatrix && matrix?.problem) {
-      setError(matrix.problem);
-      return;
-    }
-    if (!useMatrix && uahInputToCents(price) <= 0) {
-      setError('Вкажіть ціну');
-      return;
-    }
-    try {
-      const created = await api.createProduct({
-        name,
-        description: newDescription,
-        composition: newComposition,
-        allergens: newAllergens,
-        image_url: imageUrl,
-        ...(composite ? { kind: 'composite' as const, stock_mode: composite } : {}),
-        sellable,
-        variants:
-          useMatrix && matrix
-            ? matrix.variants
-            : [
-                {
-                  attributes,
-                  unit,
-                  sku: sku || undefined,
-                  barcode: barcode || undefined,
-                  price_cents: uahInputToCents(price),
-                  // A derived composite keeps no stock of its own; the server refuses
-                  // an opening quantity on one rather than silently dropping it.
-                  quantity: composite === 'derived' ? 0 : Number(qty) || 0,
-                  pack_qty: pack.qty.trim() === '' ? null : Number(pack.qty),
-                  pack_label: pack.label.trim() === '' ? null : pack.label,
-                  ...(composite ? { components } : {}),
-                },
-              ],
-      });
-      // The questions travel separately, like tags — and only when there are any.
-      if (groupIds.length) await api.setProductModifierGroups(created.id, groupIds);
-      setShowCreate(false);
-      setName('');
-      setNewDescription('');
-      setNewComposition('');
-      setNewAllergens([]);
-      setBarcode('');
-      setSku('');
-      setPrice('');
-      setMatrix(null);
-      setPack({ qty: '', label: '' });
-      setImageUrl(null);
-      setComposite('');
-      setSellable(true);
-      setComponents([]);
-      setGroupIds([]);
-      await reload();
-    } catch (err) {
-      setError(saveErrorMessage(err, 'Не вдалося створити товар'));
-    }
-  }
 
   async function onCreateTag(e: FormEvent) {
     e.preventDefault();
@@ -313,22 +165,14 @@ export function ProductsPage() {
         title="Товари"
         subtitle="Мітки, варіанти та залишки."
         actions={
-          <button
-            type="button"
-            onClick={() => setShowCreate((v) => !v)}
-            className={
-              showCreate ? 'sq-btn-quiet' : 'pos-btn-primary min-h-11 px-4 rounded-sq text-[15px] gap-1.5'
-            }
+          <Link
+            to="/admin/products/new"
+            state={{ list: location.search }}
+            className="pos-btn-primary min-h-11 px-4 rounded-sq text-[15px] gap-1.5"
           >
-            {showCreate ? (
-              'Сховати'
-            ) : (
-              <>
-                <Plus size={20} />
-                Додати товар
-              </>
-            )}
-          </button>
+            <Plus size={20} />
+            Додати товар
+          </Link>
         }
       />
 
@@ -461,138 +305,6 @@ export function ProductsPage() {
               onClose={() => setTagsOpen(false)}
               onBarcodeGenerated={() => void reload()}
             />
-          )}
-
-          {showCreate && (
-            <form
-              onSubmit={onCreate}
-              className="rounded-card bg-sq-surface shadow-card p-5 grid sm:grid-cols-2 gap-x-4 gap-y-4"
-            >
-              <h3 className="sm:col-span-2 text-[19px] font-bold text-sq-heading">Новий товар</h3>
-              <ProductPhotoField value={imageUrl} onChange={setImageUrl} />
-              <label className="flex flex-col gap-1.5">
-                <span className={captionClass}>Назва</span>
-                <input className="sq-input" placeholder="Назва" value={name} onChange={(e) => setName(e.target.value)} required />
-              </label>
-              {/* Directly under the name on purpose: this choice decides what the
-                  rest of the form means (a derived composite has no opening
-                  stock, a composite needs a composition). Below the fold it was
-                  simply never found. */}
-              {canComposite && (
-                <label className="flex flex-col gap-1.5">
-                  <span className={captionClass}>Що це за товар</span>
-                  <select
-                    className="sq-input"
-                    value={composite}
-                    onChange={(e) => setComposite(e.target.value as ProductShape)}
-                  >
-                    {SHAPE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              <SellableField checked={sellable} onChange={setSellable} />
-              <label className="flex flex-col gap-1.5 sm:col-span-2">
-                <span className={captionClass}>Опис</span>
-                <input
-                  className="sq-input"
-                  placeholder="Опис"
-                  value={newDescription}
-                  onChange={(e) => setNewDescription(e.target.value)}
-                />
-              </label>
-              {askDishFacts && (
-                <DishFactsFields
-                  composition={newComposition}
-                  onComposition={setNewComposition}
-                  allergens={newAllergens}
-                  onAllergens={setNewAllergens}
-                />
-              )}
-              <ModifierGroupChips groups={groups} value={groupIds} onChange={setGroupIds} />
-              {useMatrix ? (
-                <VariantMatrix
-                  unit={vertical.defaultUnit}
-                  vocabulary={colours}
-                  autoBarcode={vertical.autoBarcode === true}
-                  onChange={setMatrix}
-                />
-              ) : (
-                <>
-                  <AttributeFields
-                    className="sm:col-span-2 grid gap-3 sm:grid-cols-2"
-                    schema={vertical.attributes}
-                    value={attributes}
-                    onChange={setAttributes}
-                    unit={{ value: unit, options: vertical.units, onChange: setUnit }}
-                  />
-                  <label className="flex flex-col gap-1.5">
-                    <span className={captionClass}>Ціна, грн</span>
-                    <input
-                      className="sq-input tabular-nums"
-                      placeholder="Ціна, грн"
-                      value={price}
-                      onChange={(e) => setPrice(e.target.value)}
-                      required
-                    />
-                  </label>
-                  {composite === 'derived' ? (
-                    <p className="text-[13px] text-sq-muted self-end pb-3">
-                      Залишок рахується зі складників.
-                    </p>
-                  ) : (
-                    <label className="flex flex-col gap-1.5">
-                      <span className={captionClass}>Залишок</span>
-                      <input
-                        className="sq-input tabular-nums"
-                        placeholder="Залишок"
-                        value={qty}
-                        onChange={(e) => setQty(e.target.value)}
-                      />
-                    </label>
-                  )}
-                  {composite && (
-                    <div className="sm:col-span-2">
-                      <CompositionEditor
-                        value={components}
-                        options={partOptions}
-                        onChange={setComponents}
-                      />
-                      <p className="text-[13px] text-sq-muted mt-1.5">
-                        {compositionHint(composite)}
-                      </p>
-                    </div>
-                  )}
-                  <label className="flex flex-col gap-1.5">
-                    <span className={captionClass}>Артикул (SKU) — ваш внутрішній код</span>
-                    <input className="sq-input" value={sku} onChange={(e) => setSku(e.target.value)} />
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <span className={captionClass}>Штрихкод — те, що читає сканер</span>
-                    <div className="flex gap-2">
-                      <input className="sq-input tabular-nums min-w-0" value={barcode} onChange={(e) => setBarcode(e.target.value)} />
-                      <GenerateBarcodeButton onGenerated={setBarcode} />
-                    </div>
-                  </label>
-                  <PackFields
-                    className="sm:col-span-2"
-                    qty={pack.qty}
-                    label={pack.label}
-                    unit={unit}
-                    onChange={setPack}
-                  />
-                </>
-              )}
-              <button
-                type="submit"
-                className="pos-btn-primary sm:col-span-2 sm:justify-self-end min-h-11 px-6 rounded-sq text-[15px]"
-              >
-                Зберегти
-              </button>
-            </form>
           )}
 
           {query.trim() !== '' && visible.length === 0 && (
