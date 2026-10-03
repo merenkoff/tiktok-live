@@ -93,7 +93,7 @@ describe('TechCardsPage', () => {
     posRequest.mockResolvedValue([card({ product_id: 42 })]);
     renderWithProviders(<TechCardsPage />);
     const link = await screen.findByRole('link', { name: 'Борщ' });
-    expect(link).toHaveAttribute('href', '/admin/products?edit=42');
+    expect(link).toHaveAttribute('href', '/admin/products/42');
   });
 
   // A clothing shop sees this item in the sidebar too — it CAN make a product

@@ -2,10 +2,11 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-// What the product card sends about a dish's guest-facing words (migration 060,
-// phase Q3b): the create form now has a description at all — it never did — and
-// both forms carry the composition line and the ticked allergens. A field that
-// is on screen but not in the request is the failure this pins.
+// What the create form sends about a dish's guest-facing words (migration 060,
+// phase Q3b): it has a description at all — it never did — and carries the
+// composition line and the ticked allergens. A field that is on screen but not
+// in the request is the failure this pins. The card's own page is covered by
+// `ProductPage.dishFacts.test.tsx` (C1e).
 
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -24,8 +25,6 @@ const CAFE = {
 
 const getProducts = vi.fn<[], Promise<Product[]>>();
 const createProduct = vi.fn();
-const updateProduct = vi.fn();
-const updateVariant = vi.fn();
 
 vi.mock('@pos/platform', async () => {
   const real = await vi.importActual<typeof import('@pos/platform')>('@pos/platform');
@@ -39,8 +38,6 @@ vi.mock('@pos/platform', async () => {
       listModifierGroups: () => Promise.resolve([]),
       posRequest: () => Promise.resolve([]),
       createProduct: (...a: unknown[]) => createProduct(...a),
-      updateProduct: (...a: unknown[]) => updateProduct(...a),
-      updateVariant: (...a: unknown[]) => updateVariant(...a),
       setProductTags: () => Promise.resolve([]),
       setProductModifierGroups: () => Promise.resolve([]),
     },
@@ -90,8 +87,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   getProducts.mockResolvedValue([latte()]);
   createProduct.mockResolvedValue({ id: 99 });
-  updateProduct.mockResolvedValue(latte());
-  updateVariant.mockResolvedValue(latte());
 });
 
 describe('the create form', () => {
@@ -124,46 +119,5 @@ describe('the create form', () => {
 
     await waitFor(() => expect(createProduct).toHaveBeenCalledTimes(1));
     expect(createProduct.mock.calls[0]![0]).toMatchObject({ composition: '', allergens: [] });
-  });
-});
-
-describe('the edit form', () => {
-  it('opens with what is stored, and saves a change to either field', async () => {
-    renderWithProviders(<ProductsPage />, { route: '/admin/products?edit=42' });
-    const composition = await screen.findByLabelText(/Склад для гостя/);
-    expect(composition).toHaveValue('Еспресо, молоко');
-    expect(screen.getByTestId('allergen-chip-milk')).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByTestId('allergen-chip-eggs')).toHaveAttribute('aria-pressed', 'false');
-
-    await userEvent.clear(composition);
-    await userEvent.type(composition, 'Еспресо, вівсяне молоко');
-    await userEvent.click(screen.getByTestId('allergen-chip-eggs'));
-    await userEvent.click(screen.getByRole('button', { name: 'Зберегти' }));
-
-    await waitFor(() => expect(updateProduct).toHaveBeenCalled());
-    expect(updateProduct.mock.calls[0]![0]).toBe(42);
-    expect(updateProduct.mock.calls[0]![1]).toMatchObject({
-      name: 'Латте',
-      description: 'Ніжний',
-      composition: 'Еспресо, вівсяне молоко',
-      allergens: ['eggs', 'milk'],
-    });
-  });
-
-  it('takes a card from an older backend — no such fields — as «not said»', async () => {
-    getProducts.mockResolvedValue([latte({ composition: undefined, allergens: undefined })]);
-    renderWithProviders(<ProductsPage />, { route: '/admin/products?edit=42' });
-    expect(await screen.findByLabelText(/Склад для гостя/)).toHaveValue('');
-    expect(screen.getByTestId('allergen-chip-milk')).toHaveAttribute('aria-pressed', 'false');
-  });
-
-  it('can take every allergen away: an empty set is sent, not left out', async () => {
-    renderWithProviders(<ProductsPage />, { route: '/admin/products?edit=42' });
-    await screen.findByLabelText(/Склад для гостя/);
-    await userEvent.click(screen.getByTestId('allergen-chip-milk'));
-    await userEvent.click(screen.getByRole('button', { name: 'Зберегти' }));
-
-    await waitFor(() => expect(updateProduct).toHaveBeenCalled());
-    expect(updateProduct.mock.calls[0]![1]).toMatchObject({ allergens: [] });
   });
 });

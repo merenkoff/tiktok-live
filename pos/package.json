@@ -25,7 +25,7 @@
     "build:products-remote": "vite build --config vite.products-remote.config.ts && node scripts/sign-remote.mjs products",
     "remote:sign": "node scripts/sign-remote.mjs",
     "serve:products-remote": "npx --yes serve -l 5003 --cors --no-clipboard dist-remotes/products",
-    "check:products-css-coverage": "node scripts/check-module-css-coverage.mjs src/modules/products dist-remotes/products/style.css src/components/ui/Page.tsx",
+    "check:products-css-coverage": "node scripts/check-module-css-coverage.mjs src/modules/products dist-remotes/products/style.css src/components/ui/Page.tsx src/components/cashier/ConfirmSheet.tsx",
     "build:tiktok-live-remote": "vite build --config vite.tiktok-live-remote.config.ts && node scripts/sign-remote.mjs tiktok-live",
     "build:vertical-flowers-remote": "vite build --config vite.vertical-flowers-remote.config.ts && node scripts/sign-remote.mjs vertical-flowers",
     "serve:tiktok-live-remote": "npx --yes serve -l 5004 --cors --no-clipboard dist-remotes/tiktok-live",

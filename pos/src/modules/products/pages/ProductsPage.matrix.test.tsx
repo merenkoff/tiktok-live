@@ -4,7 +4,8 @@
 
 // The product form for a garment (TechDocs/POS_CLOTHING.md, phase C1): one card,
 // a size × colour matrix, one request — and no invented «690». Plus the search
-// box the admin's product list never had.
+// box the admin's product list never had. Adding to an EXISTING card moved to
+// its own page — `ProductPage.variants.test.tsx` (C1e).
 
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -32,9 +33,6 @@ const setVertical = (id: 'clothing' | 'flowers') => {
 
 const getProducts = vi.fn<[], Promise<Product[]>>();
 const createProduct = vi.fn();
-const addVariant = vi.fn();
-const addVariants = vi.fn();
-const updateVariant = vi.fn(() => Promise.resolve({}));
 
 vi.mock('@pos/platform', async () => {
   const real = await vi.importActual<typeof import('@pos/platform')>('@pos/platform');
@@ -48,10 +46,7 @@ vi.mock('@pos/platform', async () => {
       listModifierGroups: () => Promise.resolve([]),
       posRequest: () => Promise.resolve([]),
       createProduct: (payload: unknown) => createProduct(payload),
-      addVariant: (id: number, payload: unknown) => addVariant(id, payload),
-      addVariants: (id: number, payload: unknown) => addVariants(id, payload),
       updateProduct: () => Promise.resolve({}),
-      updateVariant: (id: number, payload: unknown) => updateVariant(id, payload),
       setProductTags: () => Promise.resolve([]),
       setProductModifierGroups: () => Promise.resolve([]),
       generateInternalBarcode: () => Promise.resolve('2900000000011'),
@@ -116,12 +111,6 @@ async function openCreate() {
   await screen.findByText('Костюмчик Зайчик');
   await userEvent.click(screen.getByRole('button', { name: /Додати товар/ }));
   return within(screen.getByRole('heading', { name: 'Новий товар' }).closest('form')!);
-}
-
-async function openEdit(id = 7) {
-  renderWithProviders(<ProductsPage />, { route: `/admin/products?edit=${id}` });
-  await screen.findByRole('button', { name: 'Зберегти' });
-  return within(screen.getByRole('heading', { name: 'Редагування' }).closest('form')!);
 }
 
 const sizes = (scope: ReturnType<typeof within>) => within(scope.getByRole('group', { name: 'Розміри' }));
@@ -204,93 +193,6 @@ describe('the create form — the price is never invented', () => {
     expect(field).toHaveValue('');
     expect(field).toBeRequired();
     expect(form.getByText(/Артикул \(SKU\)/)).toBeInTheDocument();
-  });
-});
-
-describe('the edit form — adding sizes and colours to a card', () => {
-  it('lists what the card already has as «вже є» and adds only the rest, in one request', async () => {
-    const user = userEvent.setup();
-    const form = await openEdit();
-    addVariants.mockResolvedValue({
-      ...ZAICHYK,
-      variants: [...ZAICHYK.variants, variant(72, 7, 'блакитний', '92')],
-    });
-
-    await user.type(form.getByLabelText('Новий колір'), 'блакитний{Enter}');
-    await user.click(sizes(form).getByRole('button', { name: '86' }));
-    await user.click(sizes(form).getByRole('button', { name: '92' }));
-    const matrix = within(form.getByTestId('variant-matrix'));
-    await user.type(matrix.getByPlaceholderText('Ціна, грн'), '400');
-
-    expect(matrix.getByText('вже є')).toBeInTheDocument();
-    await user.click(form.getByRole('button', { name: 'Додати варіантів: 1' }));
-
-    await waitFor(() => expect(addVariants).toHaveBeenCalledTimes(1));
-    expect(addVariants.mock.calls[0]![0]).toBe(7);
-    expect(addVariants.mock.calls[0]![1]).toEqual([
-      { attributes: { color: 'блакитний', size: '92' }, unit: 'шт', price_cents: 40000, quantity: 0 },
-    ]);
-  });
-
-  it('keeps what was typed into another row of the card while it adds', async () => {
-    const user = userEvent.setup();
-    const form = await openEdit();
-    addVariants.mockResolvedValue({
-      ...ZAICHYK,
-      variants: [...ZAICHYK.variants, variant(72, 7, 'рожевий', '86')],
-    });
-
-    // An unsaved edit of the first existing variant's article…
-    const article = form.getAllByLabelText(/Артикул \(SKU\)/)[0]!;
-    await user.type(article, 'MY-SKU');
-
-    await user.type(form.getByLabelText('Новий колір'), 'рожевий{Enter}');
-    await user.click(sizes(form).getByRole('button', { name: '86' }));
-    await user.type(within(form.getByTestId('variant-matrix')).getByPlaceholderText('Ціна, грн'), '400');
-    await user.click(form.getByRole('button', { name: 'Додати варіантів: 1' }));
-
-    await waitFor(() => expect(addVariants).toHaveBeenCalledTimes(1));
-    // …is still on screen afterwards (the list used to be replaced by the server's).
-    await waitFor(() => expect(form.getAllByLabelText(/Артикул \(SKU\)/)).toHaveLength(3));
-    expect(form.getAllByLabelText(/Артикул \(SKU\)/)[0]).toHaveValue('MY-SKU');
-  });
-
-  it('shows the server\'s own words when an article or barcode is taken', async () => {
-    const user = userEvent.setup();
-    const form = await openEdit();
-    addVariants.mockRejectedValue({
-      response: { status: 409, data: { error: 'Артикул «KZ-86» вже є в магазині' } },
-    });
-
-    await user.type(form.getByLabelText('Новий колір'), 'рожевий{Enter}');
-    await user.click(sizes(form).getByRole('button', { name: '86' }));
-    await user.type(within(form.getByTestId('variant-matrix')).getByPlaceholderText('Ціна, грн'), '400');
-    await user.click(form.getByRole('button', { name: 'Додати варіантів: 1' }));
-
-    expect(await screen.findByText('Артикул «KZ-86» вже є в магазині')).toBeInTheDocument();
-  });
-
-  it('will not add a blank variant when nothing is chosen', async () => {
-    const user = userEvent.setup();
-    const form = await openEdit();
-
-    await user.click(form.getByRole('button', { name: 'Додати варіанти' }));
-
-    expect((await screen.findAllByText('Оберіть кольори й розміри')).length).toBeGreaterThan(0);
-    expect(addVariants).not.toHaveBeenCalled();
-  });
-
-  it('keeps the old «+ Варіант» for a vertical with no size, and asks for its price', async () => {
-    setVertical('flowers');
-    getProducts.mockResolvedValue([card(1, 'Троянда', [variant(10, 1, 'червона', '60')])]);
-    const user = userEvent.setup();
-    const form = await openEdit(1);
-
-    expect(form.queryByTestId('variant-matrix')).toBeNull();
-    await user.click(form.getByRole('button', { name: 'Варіант' }));
-
-    expect(await screen.findByText('Вкажіть ціну')).toBeInTheDocument();
-    expect(addVariant).not.toHaveBeenCalled();
   });
 });
 

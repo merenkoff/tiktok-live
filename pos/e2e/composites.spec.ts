@@ -125,14 +125,16 @@ test('the owner gives a bouquet its composition', async ({ page }) => {
 
   await expect(page.getByText('Складений · збираємо')).toBeVisible();
 
-  await page
-    .locator('section', { hasText: 'Букет «Ранковий»' })
-    .getByRole('button', { name: 'Редагувати' })
-    .click();
+  // The card is a page of its own (C1e); the recipe of one variant lives in
+  // that variant's sheet, behind «Ще».
+  await page.getByRole('link', { name: 'Букет «Ранковий»' }).click();
+  await expect(page).toHaveURL(/\/admin\/products\/3$/);
+  await page.getByRole('button', { name: 'Ще · Рожевий' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Рожевий' });
 
   // Six stems and a wrap go in today. The florist makes it nine stems and
   // drops the wrap.
-  const rows = page.getByTestId('composition-row');
+  const rows = sheet.getByTestId('composition-row');
   await expect(rows).toHaveCount(2);
   await expect(rows.first()).toContainText('Троянда Freedom · Червона');
   await expect(rows.nth(1)).toContainText('Крафт-пакування');
@@ -141,6 +143,7 @@ test('the owner gives a bouquet its composition', async ({ page }) => {
   await rows.nth(1).getByRole('button', { name: 'Прибрати' }).click();
   await expect(rows).toHaveCount(1);
 
+  await sheet.getByRole('button', { name: 'Готово' }).click();
   await page.getByRole('button', { name: 'Зберегти' }).click();
 
   await expect.poll(() => variantPatches.length).toBeGreaterThan(0);
@@ -177,27 +180,28 @@ test('an existing plain product can be turned into a bouquet', async ({ page }) 
   await loginAsOwner(page);
   await page.goto('/admin/products');
 
-  await page
-    .locator('section', { hasText: 'Крафт-пакування' })
-    .getByRole('button', { name: 'Редагувати' })
-    .click();
+  await page.getByRole('link', { name: 'Крафт-пакування' }).click();
+  await expect(page).toHaveURL(/\/admin\/products\/2$/);
 
   // Nothing composite on screen until it is chosen.
-  await expect(page.getByTestId('composition-row')).toHaveCount(0);
+  await expect(page.getByText('Склад ·')).toHaveCount(0);
 
   await page
     .getByLabel('Що це за товар')
     .selectOption({ label: 'Складений — збирається при продажу' });
 
-  // The editor appears immediately, before saving. `.first()` because the edit
-  // form carries one editor per variant plus one on the new-variant row.
-  await page
+  // The recipe editor is in the variant's sheet, before saving: a variant with
+  // no caption is named «Варіант».
+  await page.getByRole('button', { name: 'Ще · Варіант' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Варіант' });
+  await sheet
     .getByLabel('Складник', { exact: true })
-    .first()
     .selectOption({ label: 'Троянда Freedom · Червона' });
-  await page.getByLabel('Кількість складника').first().fill('5');
-  await page.getByRole('button', { name: 'Додати', exact: true }).first().click();
-  await expect(page.getByTestId('composition-row')).toHaveCount(1);
+  await sheet.getByLabel('Кількість складника').fill('5');
+  await sheet.getByRole('button', { name: 'Додати', exact: true }).click();
+  await expect(sheet.getByTestId('composition-row')).toHaveCount(1);
+  await sheet.getByRole('button', { name: 'Готово' }).click();
+  await expect(page.getByText('Склад · 1')).toBeVisible();
 
   await page.getByRole('button', { name: 'Зберегти' }).click();
 

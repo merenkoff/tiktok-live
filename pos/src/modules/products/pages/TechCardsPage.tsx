@@ -94,7 +94,7 @@ export function TechCardsPage() {
                 <tr key={row.variant_id}>
                   <td>
                     <Link
-                      to={`/admin/products?edit=${row.product_id}`}
+                      to={`/admin/products/${row.product_id}`}
                       className="text-sq-blue font-medium"
                     >
                       {row.product_name}
