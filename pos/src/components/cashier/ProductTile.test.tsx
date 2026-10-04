@@ -117,3 +117,22 @@ describe('ProductTile', () => {
     expect(screen.getByText('немає')).toBeInTheDocument();
   });
 });
+
+describe('ProductTile — the price before a markdown', () => {
+  it('strikes the old price through beside the price', () => {
+    render(<ProductTile name="Кепка" priceCents={45000} compareAtCents={59000} onClick={() => {}} />);
+    const old = screen.getByTestId('tile-old-price');
+    expect(old.tagName).toBe('S');
+    expect(old).toHaveTextContent('590,00 ₴');
+    expect(screen.getByText('450,00 ₴')).toBeInTheDocument();
+  });
+
+  it('draws nothing when there is no markdown, or when the old price is not above the price', () => {
+    const { rerender } = render(<ProductTile name="Кепка" priceCents={45000} onClick={() => {}} />);
+    expect(screen.queryByTestId('tile-old-price')).toBeNull();
+    rerender(<ProductTile name="Кепка" priceCents={45000} compareAtCents={null} onClick={() => {}} />);
+    expect(screen.queryByTestId('tile-old-price')).toBeNull();
+    rerender(<ProductTile name="Кепка" priceCents={45000} compareAtCents={45000} onClick={() => {}} />);
+    expect(screen.queryByTestId('tile-old-price')).toBeNull();
+  });
+});

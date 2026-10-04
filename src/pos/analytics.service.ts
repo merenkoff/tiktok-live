@@ -91,7 +91,21 @@ export async function getSalesSummary(
        si.product_name,
        si.variant_label,
        SUM(si.quantity - si.refunded_quantity)::int AS qty_sold,
-       SUM((si.quantity - si.refunded_quantity) * si.unit_price_cents)::int AS revenue_cents,
+       -- What the line actually brought in, not its list price: the product's
+       -- own markdown is already inside unit_price_cents, the line's share of
+       -- the cart discount is line_discount_cents (already taken off
+       -- line_total_cents), and a refund credits the DISCOUNTED total,
+       -- cumulatively (refundLineAmount) — so what came back is what
+       -- pos_refund_items recorded, never quantity × price. This is what makes
+       -- these five rows add up to «Чистими» instead of overstating every
+       -- receipt that carried a discount.
+       SUM(
+         si.line_total_cents
+         - COALESCE(
+             (SELECT SUM(ri.line_total_cents) FROM pos_refund_items ri WHERE ri.sale_item_id = si.id),
+             0
+           )
+       )::int AS revenue_cents,
        MAX(p.image_url) AS image_url
      FROM pos_sale_items si
      JOIN pos_sales s ON s.id = si.sale_id

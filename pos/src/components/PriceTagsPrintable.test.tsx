@@ -256,3 +256,37 @@ describe('the tag on the roll', () => {
     expect(moduleWidthMm(paper) * (THERMAL_DPI / 25.4)).toBeGreaterThanOrEqual(2);
   });
 });
+
+describe('the old price', () => {
+  function marked(compare_at_cents: number | null) {
+    return buildPriceTags('Demo Boutique', [
+      {
+        product: { name: 'Піжама' },
+        variant: {
+          id: 1,
+          label: 'Рожевий · 98/104',
+          unit: 'шт',
+          price_cents: 45000,
+          compare_at_cents,
+          sku: '068-130',
+          barcode: CODE,
+          quantity: 1,
+        },
+        copies: 1,
+      },
+    ]);
+  }
+
+  it('prints the price before the markdown, struck through, above the price', () => {
+    render(<PriceTagsPrintable tags={marked(59000)} paperWidth={58} />);
+    const old = document.querySelector('.price-tag-old');
+    expect(old?.textContent).toBe('590 ₴');
+    expect(old?.nextElementSibling).toHaveClass('price-tag-price');
+    expect(document.querySelector('.price-tag-price')?.textContent).toBe('450 ₴');
+  });
+
+  it('prints no such line on a tag that is not marked down', () => {
+    render(<PriceTagsPrintable tags={marked(null)} paperWidth={58} />);
+    expect(document.querySelector('.price-tag-old')).toBeNull();
+  });
+});

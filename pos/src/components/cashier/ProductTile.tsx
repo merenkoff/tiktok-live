@@ -18,6 +18,13 @@ interface Props {
   name: string;
   subtitle?: string;
   priceCents?: number;
+  /**
+   * The price before a markdown, struck through beside the price. Drawn only
+   * when it is larger than `priceCents` — a card whose cheapest size is not the
+   * marked-down one must not borrow another size's old price (the clothing
+   * catalog decides that with `tileCompareAt`; here it is only drawn).
+   */
+  compareAtCents?: number | null;
   imageUrl?: string | null;
   stock?: number;
   onClick: () => void;
@@ -51,6 +58,7 @@ export function ProductTile({
   name,
   subtitle,
   priceCents,
+  compareAtCents,
   imageUrl,
   stock,
   onClick,
@@ -119,7 +127,14 @@ export function ProductTile({
       <div className="px-3 pt-2 pb-2.5 flex flex-col gap-0.5 min-w-0 pointer-events-none">
         <p className={`text-[14px] leading-tight font-semibold line-clamp-2 ${muted ? 'text-sq-muted' : 'text-sq-text'}`}>{name}</p>
         {priceCents != null && (
-          <p className="text-[14px] text-sq-secondary tabular-nums">{formatUah(priceCents)}</p>
+          <p className="text-[14px] text-sq-secondary tabular-nums flex items-baseline gap-1.5">
+            {compareAtCents != null && compareAtCents > priceCents && (
+              <s className="text-[12px] text-sq-muted" data-testid="tile-old-price">
+                {formatUah(compareAtCents)}
+              </s>
+            )}
+            <span>{formatUah(priceCents)}</span>
+          </p>
         )}
       </div>
     </button>

@@ -70,6 +70,13 @@ API: розширити create/update variant — поле `compare_at_cents`
 
 [`SaleSidebar.tsx`](../pos/src/components/cashier/SaleSidebar.tsx) / [`MobileCartSheet.tsx`](../pos/src/components/cashier/MobileCartSheet.tsx) уже вміють малювати label + strikethrough — підключити реальні дані.
 
+**Де ще видно `compare_at` (одяг D3, 2026-10-04):** плитка каталогу (`ProductTile.compareAtCents` — лише коли стара
+ціна належить саме тій, найдешевшій, ціні картки: `tileCompareAt` у `vertical-clothing`), пікер варіантів
+(`VariantPicker`: заголовок чипів / чип свого розміру / над ціною в списку) і цінник (`PriceTag.compareAtCents`,
+`.price-tag-old`). Стара ціна, що не більша за ціну, не малюється ніде. **Звіт (D6):** «Популярні товари» на дашборді
+рахують виручку рядка з `line_total_cents` мінус кредитоване поверненнями (`pos_refund_items.line_total_cents`), а не
+з `unit_price_cents` × кількість, тож рядки сходяться з «Чистими».
+
 ### Продаж
 
 У `completeSale` ([`src/pos/sales.service.ts`](../src/pos/sales.service.ts)): читати `v.price_cents` і `v.compare_at_cents`; писати знімок у `pos_sale_items` (див. поля нижче).

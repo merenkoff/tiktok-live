@@ -23,6 +23,11 @@ export type PriceTag = {
   /** The variant's caption ("Рожевий · 98/104"), or empty when it has none. */
   variantLabel: string;
   priceCents: number;
+  /**
+   * The price before the markdown, printed struck through above the price;
+   * null when the item is not marked down. Only ever larger than `priceCents`.
+   */
+  compareAtCents: number | null;
   sku: string | null;
   /** Only ever a printable EAN-13; anything else is reported as missing. */
   barcode: string | null;
@@ -34,7 +39,7 @@ export type PriceTagSource = {
   product: Pick<Product, 'name'>;
   variant: Pick<
     ProductVariant,
-    'id' | 'label' | 'unit' | 'price_cents' | 'sku' | 'barcode' | 'quantity'
+    'id' | 'label' | 'unit' | 'price_cents' | 'compare_at_cents' | 'sku' | 'barcode' | 'quantity'
   >;
   /** Overrides the stock-derived default. */
   copies?: number;
@@ -71,6 +76,12 @@ export function buildPriceTags(storeName: string, items: PriceTagSource[]): Pric
     productName: product.name.trim(),
     variantLabel: variantLabel(variant),
     priceCents: variant.price_cents,
+    // The server already refuses a compare-at that is not above the price,
+    // but a tag is printed on paper: the belt costs nothing here.
+    compareAtCents:
+      variant.compare_at_cents != null && variant.compare_at_cents > variant.price_cents
+        ? variant.compare_at_cents
+        : null,
     sku: variant.sku?.trim() || null,
     // A tag whose barcode cannot be drawn is still a useful tag — it just has
     // no bars. Silently printing a mangled one would be worse.

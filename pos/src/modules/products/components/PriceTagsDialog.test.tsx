@@ -101,3 +101,15 @@ describe('the roll', () => {
     expect(screen.getByText('Ширина цінника: 43.5 мм')).toBeInTheDocument();
   });
 });
+
+describe('a marked-down item', () => {
+  it('says what it used to cost under the price, so the owner knows the tag will carry it', () => {
+    open({ compare_at_cents: 59000 });
+    expect(screen.getByText(/^було 590,00/)).toBeInTheDocument();
+  });
+
+  it('says nothing of the kind when there is no markdown', () => {
+    open();
+    expect(screen.queryByText(/^було/)).toBeNull();
+  });
+});
