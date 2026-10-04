@@ -324,3 +324,12 @@ export interface RefundItemInput {
 
 /** How refunded money goes back to the customer — same set as PaymentMethod. */
 export type RefundMethod = PaymentMethod;
+
+/**
+ * Why the goods came back (migration 064). The first three are ст. 9 of the
+ * consumer law — proper quality, did not fit — and leave the stock rule
+ * alone; `defect` is ст. 8 and is the one that changes what happens to the
+ * goods: they are written off in the refund's own transaction instead of
+ * going back on the shelf.
+ */
+export type RefundReasonCode = 'size' | 'color' | 'style' | 'defect' | 'other';

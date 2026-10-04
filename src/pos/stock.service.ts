@@ -6,7 +6,9 @@
 
 import { pool } from '../db.js';
 import { assertStockable } from './composites.service.js';
-import type { StockReason } from './types.js';
+import type { StockReason, WriteoffReasonCode } from './types.js';
+
+type DbClient = { query: typeof pool.query };
 
 export async function adjustStock(params: {
   storeId: number;
@@ -99,6 +101,110 @@ export async function applyStockDelta(
   );
 
   return next;
+}
+
+/**
+ * The write-off counter — `СП-YYYY-NNNNN`, the same key `stock-documents`
+ * and the florist's bench already draw from, so a write-off made from a
+ * refund slots into the owner's list in sequence.
+ */
+export async function nextWriteoffNumber(client: DbClient, storeId: number): Promise<string> {
+  const year = new Date().getFullYear();
+  const counterKey = `writeoff_${year}`;
+  await client.query(
+    `INSERT INTO pos_store_counters (store_id, counter_key, next_value)
+     VALUES ($1, $2, 1)
+     ON CONFLICT (store_id, counter_key) DO NOTHING`,
+    [storeId, counterKey]
+  );
+  const result = await client.query(
+    `UPDATE pos_store_counters
+     SET next_value = next_value + 1
+     WHERE store_id = $1 AND counter_key = $2
+     RETURNING next_value - 1 AS seq`,
+    [storeId, counterKey]
+  );
+  return `СП-${year}-${String(Number(result.rows[0].seq)).padStart(5, '0')}`;
+}
+
+/**
+ * A write-off written and posted in one go, inside the caller's transaction.
+ *
+ * `createDocument` / `addLine` / `postDocument` each open their own
+ * transaction, which is right for the owner's screen and wrong for a refund
+ * that must take defective goods off the shelf in the SAME transaction that
+ * put them back — a crash in between would leave a torn jacket counted as
+ * sellable. Same shape as the bench's showcase write-off: the row is born
+ * `posted`, each line carries the variant's purchase cost so the loss report
+ * can price it, and the movement points back at the document so the owner's
+ * reversal (`reverseDocument`) credits exactly these units.
+ */
+export async function writeOffPostedTx(
+  client: DbClient,
+  params: {
+    storeId: number;
+    staffId: number;
+    reasonCode: WriteoffReasonCode;
+    note: string;
+    clientUuid: string | null;
+    lines: Array<{ variantId: number; quantity: number }>;
+  }
+): Promise<{ documentId: number; docNumber: string }> {
+  if (params.lines.length === 0) throw new Error('Write-off has no lines');
+  const docNumber = await nextWriteoffNumber(client, params.storeId);
+  const doc = await client.query(
+    `INSERT INTO pos_stock_documents
+       (store_id, type, status, doc_number, occurred_at, reason_code, note, created_by,
+        posted_by, posted_at, client_uuid)
+     VALUES ($1, 'writeoff', 'posted', $2, NOW(), $3, $4, $5, $5, NOW(), $6)
+     RETURNING id`,
+    [params.storeId, docNumber, params.reasonCode, params.note, params.staffId, params.clientUuid]
+  );
+  const documentId = Number(doc.rows[0].id);
+
+  for (const line of params.lines) {
+    if (line.quantity <= 0) continue;
+    const variant = await client.query(
+      `SELECT v.cost_cents, p.name
+       FROM pos_variants v
+       JOIN pos_products p ON p.id = v.product_id
+       WHERE v.id = $1 AND v.store_id = $2`,
+      [line.variantId, params.storeId]
+    );
+    const unitCost =
+      variant.rows[0]?.cost_cents == null ? null : Number(variant.rows[0].cost_cents);
+    await client.query(
+      `INSERT INTO pos_stock_document_lines
+         (document_id, store_id, variant_id, quantity, unit_cost_cents)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [documentId, params.storeId, line.variantId, line.quantity, unitCost]
+    );
+    try {
+      await applyStockDelta(client, {
+        storeId: params.storeId,
+        variantId: line.variantId,
+        delta: -line.quantity,
+        reason: 'writeoff',
+        staffId: params.staffId,
+        referenceType: 'stock_document',
+        referenceId: documentId,
+        note: params.note,
+        unitCostCents: unitCost,
+      });
+    } catch (error) {
+      // Only reachable when the shelf was already below zero before the
+      // units came back: the owner has a count to fix before a defect can
+      // be written off against it.
+      if (error instanceof Error && error.message.startsWith('Insufficient stock')) {
+        const name = String(variant.rows[0]?.name ?? `#${line.variantId}`);
+        throw new Error(
+          `Залишок «${name}» відʼємний — спершу виправте залишок, потім оформлюйте брак`
+        );
+      }
+      throw error;
+    }
+  }
+  return { documentId, docNumber };
 }
 
 export async function listLowStock(storeId: number, threshold = 3) {

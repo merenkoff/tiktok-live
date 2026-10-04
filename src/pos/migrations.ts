@@ -106,6 +106,8 @@ export const POS_MIGRATIONS = [
   '062_pos_demo_clothing_costs.sql',
   // Mass markdown campaigns with a per-variant before/after snapshot (clothing D2).
   '063_pos_markdowns.sql',
+  // Exchange link, refund reason/buyer, defect write-off (clothing R1/R2/R4).
+  '064_pos_exchange.sql',
 ] as const;
 
 export function readMigration(file: string): string {

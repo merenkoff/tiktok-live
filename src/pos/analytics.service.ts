@@ -27,7 +27,14 @@ export interface SalesSummary {
     image_url: string | null;
   }>;
   payments: Array<{ method: PaymentMethod; amount_cents: number; unconfirmed_cents: number }>;
-  daily: Array<{ date: string; gross_cents: number; net_cents: number; sales_count: number }>;
+  daily: Array<{
+    date: string;
+    gross_cents: number;
+    /** Refunds made ON this day, whatever day their receipts were rung. */
+    refunded_cents: number;
+    net_cents: number;
+    sales_count: number;
+  }>;
 }
 
 function todayDateString(timezone: string): string {
@@ -67,12 +74,7 @@ export async function getSalesSummary(
     `${BOUNDS_CTE}
      SELECT
        COUNT(*) FILTER (WHERE s.status <> 'voided')::int AS sales_count,
-       COALESCE(SUM(s.total_cents) FILTER (WHERE s.status <> 'voided'), 0)::int AS gross_cents,
-       COALESCE(SUM(s.refunded_cents) FILTER (WHERE s.status <> 'voided'), 0)::int AS refunded_cents,
-       COALESCE(
-         SUM(s.total_cents - s.refunded_cents) FILTER (WHERE s.status <> 'voided'),
-         0
-       )::int AS net_cents
+       COALESCE(SUM(s.total_cents) FILTER (WHERE s.status <> 'voided'), 0)::int AS gross_cents
      FROM pos_sales s, bounds b
      WHERE s.store_id = $1
        AND s.created_at >= b.range_start
@@ -80,9 +82,29 @@ export async function getSalesSummary(
     params
   );
 
+  // Refunds on the day they HAPPENED, not the day their receipt was rung. A
+  // single-tax payer's income drops in the period of the return (ПКУ п. 292.11
+  // пп. 5), and «Чистими» for a quarter is what the declaration wants; the old
+  // `SUM(s.refunded_cents)` rewrote last month's figures when a coat came back.
+  const refundsResult = await pool.query(
+    `${BOUNDS_CTE}
+     SELECT COALESCE(SUM(r.total_cents), 0)::int AS refunded_cents
+     FROM pos_refunds r
+     JOIN pos_sales s ON s.id = r.sale_id
+     CROSS JOIN bounds b
+     WHERE r.store_id = $1
+       AND s.status <> 'voided'
+       AND r.created_at >= b.range_start
+       AND r.created_at < b.range_end`,
+    params
+  );
+
   const row = result.rows[0];
   const salesCount = Number(row.sales_count);
-  const netCents = Number(row.net_cents);
+  const refundedCents = Number(refundsResult.rows[0].refunded_cents);
+  const netCents = Number(row.gross_cents) - refundedCents;
+  // Net over the receipts of the window; a day that only saw a return reads
+  // negative, which is the truth of that day.
   const avgCents = salesCount > 0 ? Math.round(netCents / salesCount) : 0;
 
   const topResult = await pool.query(
@@ -171,11 +193,7 @@ export async function getSalesSummary(
      SELECT
        to_char(date_trunc('day', s.created_at AT TIME ZONE $4), 'YYYY-MM-DD') AS day,
        COUNT(*) FILTER (WHERE s.status <> 'voided')::int AS sales_count,
-       COALESCE(SUM(s.total_cents) FILTER (WHERE s.status <> 'voided'), 0)::int AS gross_cents,
-       COALESCE(
-         SUM(s.total_cents - s.refunded_cents) FILTER (WHERE s.status <> 'voided'),
-         0
-       )::int AS net_cents
+       COALESCE(SUM(s.total_cents) FILTER (WHERE s.status <> 'voided'), 0)::int AS gross_cents
      FROM pos_sales s, bounds b
      WHERE s.store_id = $1
        AND s.created_at >= b.range_start
@@ -184,15 +202,36 @@ export async function getSalesSummary(
      ORDER BY 1`,
     params
   );
+  const dailyRefunds = await pool.query(
+    `${BOUNDS_CTE}
+     SELECT
+       to_char(date_trunc('day', r.created_at AT TIME ZONE $4), 'YYYY-MM-DD') AS day,
+       COALESCE(SUM(r.total_cents), 0)::int AS refunded_cents
+     FROM pos_refunds r
+     JOIN pos_sales s ON s.id = r.sale_id
+     CROSS JOIN bounds b
+     WHERE r.store_id = $1
+       AND s.status <> 'voided'
+       AND r.created_at >= b.range_start
+       AND r.created_at < b.range_end
+     GROUP BY 1`,
+    params
+  );
 
   const byDay = new Map(dailyResult.rows.map((r) => [String(r.day), r]));
+  const refundsByDay = new Map(
+    dailyRefunds.rows.map((r) => [String(r.day), Number(r.refunded_cents)])
+  );
   const daily = eachDate(from, to).map((date) => {
     const r = byDay.get(date);
+    const gross = r ? Number(r.gross_cents) : 0;
+    const refunded = refundsByDay.get(date) ?? 0;
     return {
       date,
       sales_count: r ? Number(r.sales_count) : 0,
-      gross_cents: r ? Number(r.gross_cents) : 0,
-      net_cents: r ? Number(r.net_cents) : 0,
+      gross_cents: gross,
+      refunded_cents: refunded,
+      net_cents: gross - refunded,
     };
   });
 
@@ -201,7 +240,7 @@ export async function getSalesSummary(
     to,
     sales_count: salesCount,
     gross_cents: Number(row.gross_cents),
-    refunded_cents: Number(row.refunded_cents),
+    refunded_cents: refundedCents,
     net_cents: netCents,
     avg_check_cents: avgCents,
     top_items: topResult.rows.map((item) => ({

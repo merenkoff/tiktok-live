@@ -153,7 +153,13 @@ describe.skipIf(!hasDb)('POS refunds and voids', () => {
   });
 
   it('is idempotent per client_uuid and numbers each refund document', async () => {
-    const sale = await sell();
+    // Paid by card, so the card refund below is the lawful one (migration 064:
+    // the money goes back the way it came).
+    const sale = await completeSale({
+      storeId, staffId,
+      items: [{ variant_id: variantId, quantity: 2 }],
+      payments: [{ method: 'card' as const, amount_cents: 2000 }],
+    });
     const uuid = crypto.randomUUID();
     const args = { storeId, saleId: sale!.id, staffId, method: 'card' as const,
       items: [{ sale_item_id: sale!.items[0].id, quantity: 1 }], client_uuid: uuid };
@@ -168,5 +174,92 @@ describe.skipIf(!hasDb)('POS refunds and voids', () => {
     expect(doc.refund_number).toMatch(/^RF-\d{5}$/);
     expect(doc.method).toBe('card');
     expect(doc.client_uuid).toBe(uuid);
+  });
+
+  describe('the method the money goes back by (migration 064)', () => {
+    beforeAll(async () => {
+      // The suites above sell two units a time off a shelf of ten and let it go
+      // negative (a sale may); a return onto a shelf below zero is refused, so
+      // top it up before these.
+      await pool.query(`UPDATE pos_stock SET quantity = 100 WHERE variant_id = $1`, [variantId]);
+    });
+
+    it('defaults to how the receipt was paid when the method is not named', async () => {
+      const sale = await sell();
+      const done = await refundSale({
+        storeId, saleId: sale!.id, staffId,
+        items: [{ sale_item_id: sale!.items[0].id, quantity: 1 }],
+        client_uuid: crypto.randomUUID(),
+      });
+      expect(done!.refunds[0].method).toBe('cash');
+    });
+
+    it('refuses to hand out cash for a receipt paid by card, in the cashier\'s words', async () => {
+      const sale = await completeSale({
+        storeId, staffId,
+        items: [{ variant_id: variantId, quantity: 1 }],
+        payments: [{ method: 'card' as const, amount_cents: 1000 }],
+      });
+      await expect(
+        refundSale({
+          storeId, saleId: sale!.id, staffId, method: 'cash',
+          items: [{ sale_item_id: sale!.items[0].id, quantity: 1 }],
+          client_uuid: crypto.randomUUID(),
+        })
+      ).rejects.toThrow('Чек оплачено карткою — повернення теж на картку');
+    });
+
+    it('asks for a choice on a receipt paid two ways, and takes either of them', async () => {
+      const sale = await completeSale({
+        storeId, staffId,
+        items: [{ variant_id: variantId, quantity: 2 }],
+        payments: [
+          { method: 'cash' as const, amount_cents: 500 },
+          { method: 'card' as const, amount_cents: 1500 },
+        ],
+      });
+      const line = { sale_item_id: sale!.items[0].id, quantity: 1 };
+      await expect(
+        refundSale({ storeId, saleId: sale!.id, staffId, items: [line], client_uuid: crypto.randomUUID() })
+      ).rejects.toThrow('Оберіть спосіб повернення');
+      await expect(
+        refundSale({ storeId, saleId: sale!.id, staffId, method: 'qr', items: [line], client_uuid: crypto.randomUUID() })
+      ).rejects.toThrow('Чек оплачено готівкою та карткою — оберіть один із цих способів');
+      const done = await refundSale({
+        storeId, saleId: sale!.id, staffId, method: 'card', items: [line], client_uuid: crypto.randomUUID(),
+      });
+      expect(done!.refunds[0].method).toBe('card');
+    });
+
+    it('keeps the reason code and the buyer for the act, and refuses a code it does not know', async () => {
+      const sale = await sell();
+      const done = await refundSale({
+        storeId, saleId: sale!.id, staffId, method: 'cash',
+        items: [{ sale_item_id: sale!.items[0].id, quantity: 1 }],
+        client_uuid: crypto.randomUUID(),
+        reason_code: 'size',
+        buyer_name: '  Коваль Олена  ',
+        buyer_document: 'паспорт КВ 123456',
+      });
+      const doc = done!.refunds[0];
+      expect(doc.reason_code).toBe('size');
+      expect(doc.buyer_name).toBe('Коваль Олена');
+      expect(doc.buyer_document).toBe('паспорт КВ 123456');
+      expect(doc.items).toEqual([
+        expect.objectContaining({ sale_item_id: sale!.items[0].id, quantity: 1, line_total_cents: 1000 }),
+      ]);
+      expect(doc.fiscal_status).toBe('none');
+      expect(doc.exchange_sale).toBeNull();
+
+      const other = await sell();
+      await expect(
+        refundSale({
+          storeId, saleId: other!.id, staffId, method: 'cash',
+          items: [{ sale_item_id: other!.items[0].id, quantity: 1 }],
+          client_uuid: crypto.randomUUID(),
+          reason_code: 'broken' as never,
+        })
+      ).rejects.toThrow('Невідома причина повернення');
+    });
   });
 });
