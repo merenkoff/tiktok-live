@@ -3,19 +3,18 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { useEffect, useMemo, useState } from 'react';
-import { formatUah, useVertical } from '@pos/platform';
-import type { SaleDetail, SaleListItem } from '@pos/platform';
+import { formatUah, saleRowFromDetail, useAuthStore, useVertical } from '@pos/platform';
+import type { LocalSaleRow, SaleDetail, SaleListItem } from '@pos/platform';
 import { adminReturnsApi } from '../data/returnsApi';
 import { FiscalBadge, FiscalDetailCard } from '../components/FiscalBadge';
-import { Chip, SaleStatusChip } from '../components/SaleChips';
+import { Chip, ExchangeChip, SaleStatusChip } from '../components/SaleChips';
+import { RefundSaleDialog } from '../components/RefundSaleDialog';
+import { RefundRows } from '../components/RefundRows';
 import { useDebouncedValue } from '../lib/receiptFilters';
+import { PAYMENT_LABEL_UK } from '../lib/refundReasons';
+import { buildActPayload } from '../lib/actPayload';
+import { usePrintableAct } from '../hooks/usePrintableAct';
 import { PageHeader, Pencil, Receipt, SectionHead } from '@pos/platform/ui';
-
-const PAYMENT_LABEL_UK: Record<string, string> = {
-  cash: 'Готівка',
-  card: 'Картка',
-  qr: 'QR-код',
-};
 
 const PAGE = 100;
 
@@ -28,7 +27,12 @@ export function AdminSalesPage() {
   const [to, setTo] = useState('');
   const [selected, setSelected] = useState<SaleDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [refundQty, setRefundQty] = useState<Record<number, number>>({});
+  // The same dialog the till uses (clothing R1/R2/R4): one place that knows
+  // the reasons, the lawful methods, the buyer for the act. `selectAll` is
+  // «Повернути все» — cancelling a receipt is a refund of everything on it.
+  const [refunding, setRefunding] = useState<{ selectAll: boolean } | null>(null);
+  const auth = useAuthStore((s) => s.auth);
+  const { printAct, actPortal } = usePrintableAct();
 
   // The search (clothing R3): what was typed, between two of the store's
   // days. The server does the matching — it has the barcodes, the phones and
@@ -65,66 +69,27 @@ export function AdminSalesPage() {
   }
 
   async function openSale(id: number) {
-    const sale = await adminReturnsApi.getSale(id);
-    setSelected(sale);
-    const initial: Record<number, number> = {};
-    for (const item of sale.items) {
-      initial[item.id] = 0;
-    }
-    setRefundQty(initial);
-  }
-
-  // Cancelling a receipt is a refund of everything left on it. Under ПРРО a
-  // receipt the tax service has seen can only be undone that way, so the admin
-  // and the till share one model rather than two.
-  async function onRefundAll() {
-    if (!selected) return;
-    const items = selected.items
-      .map((item) => ({
-        sale_item_id: item.id,
-        quantity: item.quantity - item.refunded_quantity,
-      }))
-      .filter((line) => line.quantity > 0);
-    if (items.length === 0) {
-      setError('За цим чеком уже все повернуто');
-      return;
-    }
-    if (!confirm('Повернути весь чек і товар на склад?')) return;
-    await submitRefund(items);
-  }
-
-  async function onRefund() {
-    if (!selected) return;
-    const items = Object.entries(refundQty)
-      .filter(([, qty]) => qty > 0)
-      .map(([sale_item_id, quantity]) => ({
-        sale_item_id: Number(sale_item_id),
-        quantity,
-      }));
-    if (items.length === 0) {
-      setError('Оберіть кількість для повернення');
-      return;
-    }
-    await submitRefund(items);
-  }
-
-  async function submitRefund(items: Array<{ sale_item_id: number; quantity: number }>) {
-    if (!selected) return;
+    setError(null);
     try {
-      const sale = await adminReturnsApi.refundSale(selected.id, items, {
-        client_uuid: crypto.randomUUID(),
-      });
-      setSelected(sale);
-      setRefundQty(Object.fromEntries(sale.items.map((i) => [i.id, 0])));
-      await reload();
+      setSelected(await adminReturnsApi.getSale(id));
     } catch {
-      setError('Не вдалося оформити повернення');
+      setError('Не вдалося завантажити чек');
     }
+  }
+
+  // The dialog stays up: its success pane is where the owner prints the
+  // return receipt and the act. «Готово» there is what closes it.
+  function onRefunded(row: LocalSaleRow) {
+    if (row.detail) setSelected(row.detail);
+    void reload().catch(() => undefined);
   }
 
   // The daily order number is a café's — the counter calls it out. Anywhere
   // else the receipt number is the only name a sale has.
   const cafe = useVertical().id === 'cafe';
+  const storeInfo = { name: auth?.store.name ?? '', fiscal: auth?.store.fiscal ?? null };
+  const refundable =
+    selected != null && (selected.status === 'completed' || selected.status === 'partially_refunded');
 
   return (
     <div className="animate-fade-up text-sq-text">
@@ -207,6 +172,7 @@ export function AdminSalesPage() {
                         </span>
                         <span className="flex flex-wrap justify-end gap-1">
                           <SaleStatusChip status={sale.status} />
+                          <ExchangeChip of={sale.exchange_of_receipt_number} to={sale.exchange_sale_number} />
                           {sale.qr_pending && <Chip tone="warning">QR не підтверджено</Chip>}
                           <FiscalBadge status={sale.fiscal_status} />
                         </span>
@@ -245,6 +211,10 @@ export function AdminSalesPage() {
                 </h3>
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   <SaleStatusChip status={selected.status} />
+                  <ExchangeChip
+                    of={selected.exchange_of?.receipt_number}
+                    to={selected.refunds.find((r) => r.exchange_sale)?.exchange_sale?.receipt_number}
+                  />
                   <FiscalBadge status={selected.fiscal_status} mode={selected.fiscal?.mode} />
                   <span className="text-[15px] text-sq-secondary">{selected.staff_name}</span>
                 </div>
@@ -261,27 +231,9 @@ export function AdminSalesPage() {
                       </p>
                       {item.note && <p className="text-[13px] text-sq-muted italic"><Pencil size={16} aria-hidden className="inline-block align-[-3px] mr-1" />{item.note}</p>}
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      {selected.status !== 'voided' && selected.status !== 'refunded' && (
-                        <input
-                          type="number"
-                          min={0}
-                          max={item.quantity - item.refunded_quantity}
-                          aria-label={`Повернути: ${item.product_name}`}
-                          className="sq-input !w-20 text-center tabular-nums"
-                          value={refundQty[item.id] ?? 0}
-                          onChange={(e) =>
-                            setRefundQty((prev) => ({
-                              ...prev,
-                              [item.id]: Number(e.target.value),
-                            }))
-                          }
-                        />
-                      )}
-                      <span className="w-24 text-right text-base font-medium text-sq-text tabular-nums">
-                        {formatUah(item.line_total_cents)}
-                      </span>
-                    </div>
+                    <span className="w-24 text-right text-base font-medium text-sq-text tabular-nums shrink-0">
+                      {formatUah(item.line_total_cents)}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -312,33 +264,25 @@ export function AdminSalesPage() {
               {selected.refunds.length > 0 && (
                 <div>
                   <SectionHead title="Повернення" />
-                  <ul>
-                    {selected.refunds.map((r) => (
-                      <li key={r.id} className="sq-row min-h-11 py-2 flex justify-between items-center gap-2 text-[15px]">
-                        <span className="text-sq-secondary">
-                          {r.refund_number ?? '—'}
-                          {r.method ? ` · ${PAYMENT_LABEL_UK[r.method] ?? r.method}` : ''}
-                          {r.reason ? ` · ${r.reason}` : ''}
-                        </span>
-                        <span className="text-sq-text tabular-nums shrink-0">−{formatUah(r.total_cents)}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <RefundRows
+                    sale={selected}
+                    onPrintAct={(refund) => printAct(buildActPayload(selected, refund, storeInfo))}
+                  />
                 </div>
               )}
 
-              {(selected.status === 'completed' || selected.status === 'partially_refunded') && (
+              {refundable && (
                 <div className="flex flex-wrap justify-end gap-2 pt-1">
                   <button
                     type="button"
-                    onClick={() => void onRefundAll()}
+                    onClick={() => setRefunding({ selectAll: true })}
                     className="sq-btn-quiet !text-red-600"
                   >
                     Повернути все
                   </button>
                   <button
                     type="button"
-                    onClick={() => void onRefund()}
+                    onClick={() => setRefunding({ selectAll: false })}
                     className="pos-btn-primary min-h-11 px-4 rounded-sq text-[15px]"
                   >
                     Повернення
@@ -349,6 +293,17 @@ export function AdminSalesPage() {
           )}
         </section>
       </div>
+
+      {refunding && selected && (
+        <RefundSaleDialog
+          sale={saleRowFromDetail(selected)}
+          detail={selected}
+          selectAll={refunding.selectAll}
+          onClose={() => setRefunding(null)}
+          onRefunded={onRefunded}
+        />
+      )}
+      {actPortal}
     </div>
   );
 }

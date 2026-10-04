@@ -239,8 +239,10 @@ fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> 
         }
     }
     if receipt.kind == ReceiptKind::Refund {
+        // Рядок 31 of Положення № 13: the return receipt is captioned
+        // «ВИДАТКОВИЙ ЧЕК» — the regulation's name for it, not ours.
         printer
-            .writeln(&format!("ЧЕК ПОВЕРНЕННЯ {}", receipt.receipt_number))
+            .writeln(&format!("ВИДАТКОВИЙ ЧЕК {}", receipt.receipt_number))
             .map_err(|e| e.to_string())?;
         if let Some(origin) = &receipt.refund_of_receipt {
             printer

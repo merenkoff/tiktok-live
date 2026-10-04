@@ -168,6 +168,9 @@ export interface LocalSaleRow {
   fiscal_status?: SaleFiscalStatus;
   /** `'dead'` when this row's outbox entry was given up on. */
   sync_state?: 'dead' | 'discarded';
+  /** Exchange badges mirrored from the server row (migration 064); absent on old rows. */
+  exchange_of_receipt_number?: string | null;
+  exchange_sale_number?: string | null;
 }
 
 class PosOfflineDB extends Dexie {

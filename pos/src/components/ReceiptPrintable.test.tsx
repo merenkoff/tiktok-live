@@ -56,6 +56,18 @@ describe('ReceiptPrintable', () => {
     expect(screen.getByText('Дякуємо за покупку!')).toBeInTheDocument();
   });
 
+  it('captions a return receipt «ВИДАТКОВИЙ ЧЕК», as Положення № 13 names it', () => {
+    render(
+      <ReceiptPrintable
+        receipt={receipt({ kind: 'refund', receipt_number: 'RF-00007', refund_of_receipt: 'R-00042' })}
+      />
+    );
+    expect(screen.getByText('ВИДАТКОВИЙ ЧЕК RF-00007')).toBeInTheDocument();
+    expect(screen.getByText('до чека R-00042')).toBeInTheDocument();
+    expect(screen.getByText('Кошти повернуто')).toBeInTheDocument();
+    expect(screen.queryByText(/ЧЕК ПОВЕРНЕННЯ/)).not.toBeInTheDocument();
+  });
+
   it('shows no fiscal block for a store that does not fiscalise', () => {
     render(<ReceiptPrintable receipt={receipt()} />);
     expect(screen.queryByText('ФІСКАЛЬНИЙ ЧЕК')).not.toBeInTheDocument();

@@ -44,3 +44,23 @@ function statusTone(status: string): ChipTone {
 export function SaleStatusChip({ status }: { status: string }) {
   return <Chip tone={statusTone(status)}>{SALE_STATUS_UK[status] ?? status}</Chip>;
 }
+
+/**
+ * The two halves of an exchange (migration 064), each pointing at the other:
+ * on the NEW receipt «Обмін чека R-…» (where the goods came back from), on
+ * the original «Обмін → R-…» (what they were swapped for). Quiet, because
+ * neither needs doing anything about — it is the link that matters.
+ */
+export function ExchangeChip({
+  of,
+  to,
+}: {
+  /** The receipt this sale swapped goods from. */
+  of?: string | null;
+  /** The receipt a refund of this sale became. */
+  to?: string | null;
+}) {
+  if (of) return <Chip>Обмін чека {of}</Chip>;
+  if (to) return <Chip>Обмін → {to}</Chip>;
+  return null;
+}

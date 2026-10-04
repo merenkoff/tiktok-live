@@ -974,6 +974,10 @@ export interface SaleListItem {
   qr_pending?: boolean;
   /** ПРРО projection. Absent/`'none'` for a store that does not fiscalise. */
   fiscal_status?: SaleFiscalStatus;
+  /** This sale is the sale half of an exchange: the receipt the goods came back from (migration 064). */
+  exchange_of_receipt_number?: string | null;
+  /** A refund of this sale became an exchange: the new receipt's number. */
+  exchange_sale_number?: string | null;
 }
 
 /**
@@ -1073,6 +1077,26 @@ export interface SaleDetail {
     reason: string | null;
     staff_name: string;
     created_at: string;
+    /** Why the goods came back (migration 064); absent from a backend older than it. */
+    reason_code?: RefundReasonCode | null;
+    /** The buyer named on the «Акт про видачу коштів» — optional, the buyer may decline. */
+    buyer_name?: string | null;
+    buyer_document?: string | null;
+    /** The posted write-off a «Брак» return made (`СП-…`); null for a proper-quality return. */
+    writeoff_doc_number?: string | null;
+    /** The REFUND's own ПРРО projection and document, so a re-opened receipt can say whether the return receipt was registered. */
+    fiscal_status?: SaleFiscalStatus | string;
+    fiscal?: SaleFiscalDoc | null;
+    /** The sale half of an exchange this refund opened; null for a plain refund. */
+    exchange_sale?: { id: number; receipt_number: string; status: string } | null;
+    /** What came back, line by line — the act names the goods. */
+    items?: Array<{
+      sale_item_id: number;
+      variant_id: number;
+      quantity: number;
+      unit_price_cents: number;
+      line_total_cents: number;
+    }>;
   }>;
   /** ПРРО projection. Absent/`'none'` for a store that does not fiscalise. */
   fiscal_status?: SaleFiscalStatus;
@@ -1083,12 +1107,42 @@ export interface SaleDetail {
    * document, not the sale's, and is never persisted on the sale.
    */
   refund_fiscal?: FiscalActionResult | null;
+  /**
+   * Set when THIS sale is the sale half of an exchange (migration 064): the
+   * refund it completes and the receipt the goods came back from.
+   */
+  exchange_of?: {
+    refund_id: number;
+    refund_number: string | null;
+    refund_total_cents: number;
+    sale_id: number;
+    receipt_number: string;
+  } | null;
 }
 
 /** One line of a refund request — how many units of a sale item go back. */
 export interface RefundLineInput {
   sale_item_id: number;
   quantity: number;
+}
+
+/**
+ * Why the goods came back (migration 064). The first three are ст. 9 of the
+ * consumer law — proper quality, did not fit; `defect` is ст. 8 and is the one
+ * that changes what happens to the goods: the server writes them off instead
+ * of putting them back on the shelf.
+ */
+export type RefundReasonCode = 'size' | 'color' | 'style' | 'defect' | 'other';
+
+/** What a refund says about itself beyond its lines. All optional on the wire. */
+export interface RefundOptions {
+  method?: PaymentMethod | null;
+  /** Free text — the cashier's comment, kept beside the code. */
+  reason?: string;
+  reason_code?: RefundReasonCode | null;
+  /** For the «Акт про видачу коштів» (refunds over 100 ₴); the buyer may decline. */
+  buyer_name?: string | null;
+  buyer_document?: string | null;
 }
 
 export interface CustomerChild {

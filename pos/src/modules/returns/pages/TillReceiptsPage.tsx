@@ -4,20 +4,18 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { formatUah, useVertical } from '@pos/platform';
+import { formatUah, useAuthStore, useVertical } from '@pos/platform';
 import type { LocalSaleRow, SaleDetail } from '@pos/platform';
 import { ArrowLeft, Pencil, Receipt, ScanWedge, SectionHead, Segmented, useDragScroll, X } from '@pos/platform/ui';
 import { returnsApi } from '../data/returnsApi';
 import { PERIOD_OPTIONS, periodFrom, useDebouncedValue, type ReceiptPeriod } from '../lib/receiptFilters';
+import { PAYMENT_LABEL_UK } from '../lib/refundReasons';
+import { buildActPayload } from '../lib/actPayload';
+import { usePrintableAct } from '../hooks/usePrintableAct';
 import { RefundSaleDialog } from '../components/RefundSaleDialog';
+import { RefundRows } from '../components/RefundRows';
 import { FiscalBadge, FiscalDetailCard } from '../components/FiscalBadge';
-import { SaleStatusChip } from '../components/SaleChips';
-
-const PAYMENT_LABEL_UK: Record<string, string> = {
-  cash: 'Готівка',
-  card: 'Картка',
-  qr: 'QR-код',
-};
+import { ExchangeChip, SaleStatusChip } from '../components/SaleChips';
 
 /** Anything still holding unreturned units can be refunded further. */
 function canRefund(row: LocalSaleRow): boolean {
@@ -49,6 +47,15 @@ export function TillReceiptsPage() {
   const [refunding, setRefunding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const listRef = useDragScroll<HTMLDivElement>();
+  const auth = useAuthStore((s) => s.auth);
+  const { printAct, actPortal } = usePrintableAct();
+  // The «Акт про видачу коштів» for a refund made earlier (clothing R1/R2/R4):
+  // the receipt card keeps the refund's lines and buyer, so the act prints
+  // from here as well as right after the refund.
+  const onPrintAct = (sale: SaleDetail, refund: SaleDetail['refunds'][number]) =>
+    printAct(
+      buildActPayload(sale, refund, { name: auth?.store.name ?? '', fiscal: auth?.store.fiscal ?? null })
+    );
 
   const debouncedQuery = useDebouncedValue(query, 300);
   const filter = useMemo(
@@ -184,6 +191,7 @@ export function TillReceiptsPage() {
                           </span>
                           <span className="flex flex-wrap justify-end gap-1">
                             <SaleStatusChip status={row.status} />
+                            <ExchangeChip of={row.exchange_of_receipt_number} to={row.exchange_sale_number} />
                             <FiscalBadge status={row.fiscal_status} />
                           </span>
                         </span>
@@ -220,6 +228,7 @@ export function TillReceiptsPage() {
               loading={detailLoading}
               onRefund={() => setRefunding(true)}
               onDiscard={() => void discard(selected)}
+              onPrintAct={onPrintAct}
             />
           )}
         </section>
@@ -245,6 +254,7 @@ export function TillReceiptsPage() {
             loading={detailLoading}
             onRefund={() => setRefunding(true)}
             onDiscard={() => void discard(selected)}
+            onPrintAct={onPrintAct}
           />
         </div>
       )}
@@ -257,6 +267,7 @@ export function TillReceiptsPage() {
           onRefunded={onRefunded}
         />
       )}
+      {actPortal}
     </>
   );
 }
@@ -267,12 +278,14 @@ function SaleDetailPanel({
   loading,
   onRefund,
   onDiscard,
+  onPrintAct,
 }: {
   row: LocalSaleRow;
   detail: SaleDetail | null;
   loading: boolean;
   onRefund: () => void;
   onDiscard?: () => void;
+  onPrintAct?: (sale: SaleDetail, refund: SaleDetail['refunds'][number]) => void;
 }) {
   const bodyRef = useDragScroll<HTMLDivElement>();
   // A café's daily number sits on the detail, which is the only request that
@@ -309,6 +322,13 @@ function SaleDetailPanel({
           </p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             <SaleStatusChip status={row.status} />
+            <ExchangeChip
+              of={detail?.exchange_of?.receipt_number ?? row.exchange_of_receipt_number}
+              to={
+                detail?.refunds?.find((r) => r.exchange_sale)?.exchange_sale?.receipt_number ??
+                row.exchange_sale_number
+              }
+            />
             {/* The list rows next to this one carry only `fiscal_status` — the
                 mode lives on the document, which only the detail request
                 returns. So an offline receipt reads as «реєструється» in the
@@ -361,20 +381,10 @@ function SaleDetailPanel({
         {detail && detail.refunds.length > 0 && (
           <div>
             <SectionHead title="Повернення" />
-            <ul>
-              {detail.refunds.map((r) => (
-                <li key={r.id} className="sq-row min-h-11 py-2 flex justify-between items-center gap-2 text-[15px]">
-                  <span className="text-sq-secondary">
-                    {r.refund_number ?? '—'}
-                    {r.method ? ` · ${PAYMENT_LABEL_UK[r.method] ?? r.method}` : ''}
-                    {r.reason ? ` · ${r.reason}` : ''}
-                  </span>
-                  <span className="text-sq-text tabular-nums shrink-0">
-                    −{formatUah(r.total_cents)}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <RefundRows
+              sale={detail}
+              onPrintAct={onPrintAct ? (refund) => onPrintAct(detail, refund) : undefined}
+            />
           </div>
         )}
       </div>
