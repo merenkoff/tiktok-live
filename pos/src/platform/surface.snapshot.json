@@ -1,5 +1,5 @@
 {
-  "platformVersion": 17,
+  "platformVersion": 18,
   "exports": {
     "platform": [
       "DEFAULT_RECEIPT_PAPER_WIDTH",
@@ -9,6 +9,7 @@
       "MAX_LINE_NOTE",
       "NAV_ICONS",
       "OfflineAuthError",
+      "OfflineExchangeError",
       "OfflineRefundError",
       "OfflineWriteError",
       "PLATFORM_VERSION",

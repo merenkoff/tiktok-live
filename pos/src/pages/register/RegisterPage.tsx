@@ -3,9 +3,10 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { ReactNode, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, DownloadLine, Printer, ShieldCheck } from '../../platform/glyphs';
+import { Check, DownloadLine, Printer, Repeat, ShieldCheck } from '../../platform/glyphs';
 import { api, cashierApi, useAuthStore, useCartStore, useOfflineStatus, usePosShell } from '@pos/platform';
 import { formatUah } from '../../lib/money';
+import { exchangeOutcome } from '../../lib/exchange';
 import { localOrderLabel } from '../../lib/localOrderNo';
 import {
   classifyCheckoutError,
@@ -13,12 +14,13 @@ import {
   type CheckoutFailure,
 } from '../../lib/checkoutError';
 import { DEFAULT_RECEIPT_PAPER_WIDTH, ReceiptPaperWidth, printReceipt } from '../../lib/printer';
-import { buildReceiptPayload, fiscalBlockComplete } from '../../lib/receipt';
+import { buildReceiptPayload, buildRefundReceiptPayload, fiscalBlockComplete } from '../../lib/receipt';
 import { usePrintableReceipt } from '../../hooks/usePrintableReceipt';
 import { getMeta } from '../../offline/db';
 import { printKitchenTickets } from '../../offline/kitchenTickets';
-import type { PaymentMethod, SaleDetail, SalePaymentInput } from '../../types';
+import type { ExchangeResult, PaymentMethod, SaleDetail, SalePaymentInput } from '../../types';
 import { CheckoutModal } from '../../components/CheckoutModal';
+import { ExchangeCheckout } from '../../components/cashier/ExchangeCheckout';
 import { ConfirmSheet } from '../../components/cashier/ConfirmSheet';
 import { positionsText } from '../../lib/plural';
 import { SaleSidebar } from '../../components/cashier/SaleSidebar';
@@ -28,7 +30,7 @@ import { ParkedCartsSheet } from '../../components/cashier/ParkedCartsSheet';
 import { PreorderSheet } from '../../components/cashier/PreorderSheet';
 import { cartLinesFromParked } from '../../lib/parkedCart';
 import type { ParkedCart } from '../../types';
-import { useCancelRungSale } from '../../modules/returns';
+import { buildActPayload, needsAct, useCancelRungSale, usePrintableAct } from '../../modules/returns';
 import { resolveSalesCatalog } from '../../modules/verticals';
 import { ClothingCatalog } from '../../modules/vertical-clothing/ClothingCatalog';
 import { reportModuleEvent } from '../../modules/telemetry';
@@ -37,6 +39,7 @@ import { CatalogBoundary } from './CatalogBoundary';
 function paymentLabel(method: PaymentMethod): string {
   return method === 'cash' ? 'Готівка' : method === 'card' ? 'Картка' : 'QR-код';
 }
+
 
 /**
  * The sell screen's frame: the cart, payment, ПРРО outcomes, the receipt and
@@ -85,6 +88,10 @@ export function RegisterPage() {
 
   const restore = useCartStore((s) => s.restore);
   const preorderId = useCartStore((s) => s.preorderId);
+  // The return half of an exchange this cart is the sale half of (clothing
+  // R1): drafted on «Чеки», paid here through the exchange checkout.
+  const exchange = useCartStore((s) => s.exchange);
+  const cancelExchange = useCartStore((s) => s.cancelExchange);
   const online = useOfflineStatus((s) => s.online);
 
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -107,6 +114,19 @@ export function RegisterPage() {
   const [preorderError, setPreorderError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
   const [success, setSuccess] = useState<SaleDetail | null>(null);
+  /** Set beside `success` when the sale on screen is the sale half of an exchange. */
+  const [exchangeDone, setExchangeDone] = useState<ExchangeResult | null>(null);
+  /**
+   * The new receipt's idempotency key, one per exchange attempt. A retry after
+   * a timeout re-sends the very same body, and the server replays its answer
+   * rather than refunding or selling a second time; a fresh key is minted only
+   * when a different exchange starts.
+   */
+  const exchangeSaleUuidRef = useRef<string | null>(null);
+  useEffect(() => {
+    exchangeSaleUuidRef.current = null;
+  }, [exchange]);
+  const { printAct, actPortal } = usePrintableAct();
   // «Очистити кошик» asks in the till's own sheet — see `ConfirmSheet` for why not `confirm()`.
   const [clearAsk, setClearAsk] = useState(false);
   /** The kitchen ticket's fate for this sale (К3e): status text, and whether a station printer exists. */
@@ -447,6 +467,147 @@ export function RegisterPage() {
   }
 
   /**
+   * The exchange's payment (clothing R1): the return half the dialog drafted
+   * and the cart as the new receipt, one request. The customer the draft's
+   * receipt named is kept unless the cashier picked another — the key is
+   * omitted, and the server defaults to the original receipt's.
+   */
+  async function payExchange(payments: SalePaymentInput[]) {
+    if (!exchange) return;
+    setPaying(true);
+    setCheckoutError(null);
+    const saleUuid = (exchangeSaleUuidRef.current ??= crypto.randomUUID());
+    try {
+      const result = await cashierApi.exchangeSale(exchange, {
+        refund: exchange.refund,
+        sale: {
+          items: lines.map(wireLine),
+          payments,
+          cart_discount: cartDiscount,
+          ...(customer ? { customer_id: customer.id } : {}),
+          client_uuid: saleUuid,
+        },
+      });
+      exchangeSaleUuidRef.current = null;
+      clear();
+      setFromParkedId(null);
+      setCheckoutOpen(false);
+      setMobileCartOpen(false);
+      setExchangeDone(result);
+      setSuccess(result.sale);
+      setFiscalNotice(null);
+      setPrintStatus(null);
+      setStockEpoch((n) => n + 1);
+    } catch (error) {
+      await handleExchangeFailure(classifyCheckoutError(error), payments);
+    } finally {
+      setPaying(false);
+    }
+  }
+
+  /**
+   * An exchange that did not go through whole. The one thing that must never
+   * be said is «пробийте ще раз»: the return receipt may already stand — the
+   * money is back with the customer — and a second exchange would refund the
+   * same goods twice. So a voided new receipt turns the cart into an ordinary
+   * sale with the refund named on the banner, and a kept one is the success
+   * screen with the ПРРО warning, as for a plain sale.
+   */
+  async function handleExchangeFailure(
+    failure: CheckoutFailure,
+    payments: SalePaymentInput[]
+  ): Promise<void> {
+    const draft = exchange;
+    if (failure.kind === 'fiscal_failed_kept') {
+      exchangeSaleUuidRef.current = null;
+      clear();
+      setCheckoutOpen(false);
+      setMobileCartOpen(false);
+      setPrintStatus(null);
+      setFiscalNotice({ message: failure.message, supportCode: failure.supportCode });
+      try {
+        const sale = await api.getSale(failure.saleId);
+        setSuccess(sale);
+        if (failure.exchange) {
+          setExchangeDone({
+            refund: { ...failure.exchange.refund, refund_id: failure.exchange.refundId },
+            sale,
+            difference_cents:
+              failure.exchange.differenceCents ?? sale.total_cents - (draft?.returnedCents ?? 0),
+          });
+        }
+      } catch {
+        setSuccess(null);
+        setBanner(`${failure.message} Чек №${failure.saleId}.`);
+      }
+      setStockEpoch((n) => n + 1);
+      return;
+    }
+
+    if (failure.kind === 'fiscal_failed_voided' || failure.kind === 'exchange_sale_voided') {
+      // The refund stands, the new receipt does not. The goods in the cart are
+      // sold on a receipt of their own — never by starting the exchange again.
+      exchangeSaleUuidRef.current = null;
+      cancelExchange();
+      setCheckoutOpen(false);
+      const refundNumber = failure.exchange?.refund.refunds.find(
+        (r) => r.id === failure.exchange?.refundId
+      )?.refund_number;
+      setBanner(
+        `Повернення${refundNumber ? ` ${refundNumber}` : ''}${
+          draft ? ` за чеком ${draft.receiptNumber}` : ''
+        } оформлено, а новий чек не зареєстровано в ПРРО: ${failure.message} Пробийте товар окремим чеком.`
+      );
+      setStockEpoch((n) => n + 1);
+      return;
+    }
+
+    if (keepsModalOpen(failure)) {
+      showCheckoutRefusal(failure, () => void payExchange(payments));
+      return;
+    }
+
+    setCheckoutOpen(false);
+    if (failure.kind === 'rejected' && failure.code === 'exchange_inconsistent') {
+      // One of the keys met another operation; the server asks for a fresh start.
+      exchangeSaleUuidRef.current = null;
+      cancelExchange();
+    }
+    setBanner(failure.message);
+  }
+
+  /**
+   * A refusal the cashier has to read before doing anything else, inside the
+   * opaque payment overlay; `retry` is the same action again, offered only
+   * where that is both safe and the obvious next step.
+   */
+  function showCheckoutRefusal(failure: CheckoutFailure, retry: () => void): void {
+    setCheckoutError({
+      message:
+        // Which machine holds the register is the only thing the cashier
+        // needs to know to fix this; the handover itself is on «Зміна ПРРО».
+        // No link: that screen belongs to the provider's bundle and does not
+        // exist as a route until it has loaded.
+        failure.kind === 'register_held'
+          ? `${failure.message}.${
+              failure.holderName ? ` Зараз касу тримає «${failure.holderName}».` : ''
+            } Передати її можна на екрані «Зміна ПРРО».`
+          : failure.message,
+      supportCode: 'supportCode' in failure ? failure.supportCode : null,
+      action:
+        failure.kind === 'unknown_state' ? (
+          <button
+            type="button"
+            onClick={retry}
+            className="mt-2 min-h-11 px-3 rounded-sq bg-red-600 text-white text-sm font-semibold"
+          >
+            Перевірити ще раз
+          </button>
+        ) : undefined,
+    });
+  }
+
+  /**
    * Render a checkout failure by what it means for the customer, not by status.
    *
    * The distinction that matters: did the customer pay and leave with the
@@ -476,29 +637,9 @@ export function RegisterPage() {
     }
 
     if (keepsModalOpen(failure)) {
-      setCheckoutError({
-        message:
-          // Which machine holds the register is the only thing the cashier
-          // needs to know to fix this; the handover itself is on «Зміна ПРРО».
-          // No link: that screen belongs to the provider's bundle and does not
-          // exist as a route until it has loaded.
-          failure.kind === 'register_held'
-            ? `${failure.message}.${
-                failure.holderName ? ` Зараз касу тримає «${failure.holderName}».` : ''
-              } Передати її можна на екрані «Зміна ПРРО».`
-            : failure.message,
-        supportCode: 'supportCode' in failure ? failure.supportCode : null,
-        action:
-          failure.kind === 'unknown_state' ? (
-            <button
-              type="button"
-              onClick={() => void pay(payments, { clientUuid: failure.clientUuid })}
-              className="mt-2 min-h-11 px-3 rounded-sq bg-red-600 text-white text-sm font-semibold"
-            >
-              Перевірити ще раз
-            </button>
-          ) : undefined,
-      });
+      showCheckoutRefusal(failure, () =>
+        void pay(payments, failure.kind === 'unknown_state' ? { clientUuid: failure.clientUuid } : {})
+      );
       return;
     }
 
@@ -596,6 +737,76 @@ export function RegisterPage() {
     printToPdf(buildReceiptPayload(success, receiptStore()));
   }
 
+  // ── The exchange's return half on the success screen (clothing R1) ──────
+
+  /** The refund document the exchange made, as the server re-read it. */
+  const exchangeRefund = exchangeDone
+    ? (exchangeDone.refund.refunds.find((r) => r.id === exchangeDone.refund.refund_id) ?? null)
+    : null;
+
+  function returnReceiptPayload() {
+    if (!exchangeDone || !exchangeRefund) return null;
+    return buildRefundReceiptPayload(
+      exchangeDone.refund,
+      exchangeRefund,
+      (exchangeRefund.items ?? []).map((line) => ({
+        sale_item_id: line.sale_item_id,
+        quantity: line.quantity,
+      })),
+      receiptStore(),
+      exchangeDone.refund.refund_fiscal ?? null
+    );
+  }
+
+  async function printReturnReceipt() {
+    const payload = returnReceiptPayload();
+    if (!payload) return;
+    setPrintStatus(null);
+    if (!receiptPrinterName) {
+      printToPdf(payload);
+      return;
+    }
+    setPrinting(true);
+    try {
+      await printReceipt(receiptPrinterName, payload, receiptPaperWidth);
+      setPrintStatus('Видатковий чек надіслано на друк');
+    } catch (e) {
+      setPrintStatus(`Не вдалося надрукувати видатковий чек: ${typeof e === 'string' ? e : String(e)}`);
+    } finally {
+      setPrinting(false);
+    }
+  }
+
+  function printExchangeAct() {
+    if (!exchangeDone || !exchangeRefund) return;
+    printAct(
+      buildActPayload(
+        exchangeDone.refund,
+        exchangeRefund,
+        { name: auth?.store.name ?? '', fiscal: auth?.store.fiscal ?? null },
+        exchangeDone.refund.refund_fiscal?.fiscal_code ?? null
+      )
+    );
+  }
+
+  // The return receipt prints by itself under the same gates as a sale's —
+  // the store's switch, a configured printer, and in a ПРРО store a registered
+  // document — once per refund, after the sale receipt the effect above sent.
+  const returnAutoPrintedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!exchangeDone || !exchangeRefund || !receiptPrinterName) return;
+    if (!(auth?.store.auto_print_receipt ?? false)) return;
+    if ((auth?.store.fiscal?.enabled ?? false) && exchangeDone.refund.refund_fiscal?.status !== 'done') {
+      return;
+    }
+    const key = exchangeRefund.refund_number ?? String(exchangeRefund.id);
+    if (returnAutoPrintedRef.current === key) return;
+    returnAutoPrintedRef.current = key;
+    void printReturnReceipt();
+    // Keyed on the refund; the printer name arrives from Dexie after `success` is set.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exchangeDone, receiptPrinterName]);
+
   if (success) {
     const payText = success.payments
       .map((p) => `${paymentLabel(p.method)} ${formatUah(p.amount_cents)}`)
@@ -652,8 +863,17 @@ export function RegisterPage() {
             </>
           ) : (
             <>
-              <p className="mt-[18px] text-sm font-semibold text-sq-secondary">Оплачено</p>
+              <p className="mt-[18px] text-sm font-semibold text-sq-secondary">
+                {exchangeDone ? 'Обмін оформлено' : 'Оплачено'}
+              </p>
               <h2 className="text-2xl font-bold mt-1 text-sq-heading tabular-nums">{success.receipt_number}</h2>
+              {exchangeDone && (
+                <p className="text-sm text-sq-secondary mt-1 tabular-nums" data-testid="exchange-summary">
+                  Повернення {exchangeRefund?.refund_number ?? '—'} за чеком {exchangeDone.refund.receipt_number}
+                  {' · '}
+                  {exchangeOutcome(exchangeDone.difference_cents)}
+                </p>
+              )}
               {success.staff_name && <p className="text-sm text-sq-muted mt-1">{success.staff_name}</p>}
             </>
           )}
@@ -677,6 +897,24 @@ export function RegisterPage() {
                 : fiscalDoc.status === 'done'
                   ? `Фіскальний чек № ${fiscalDoc.fiscal_code} зареєстровано`
                   : `Фіскальний чек № ${fiscalDoc.fiscal_code} · реєструється`}
+            </div>
+          )}
+          {/* The return receipt's own ПРРО fate — a separate document with a
+              separate outcome, so it gets its own line rather than sharing the
+              sale's pill. Only where the store fiscalises. */}
+          {exchangeDone && (auth?.store.fiscal?.enabled ?? false) && (
+            <div
+              className={`mt-2 inline-flex items-center gap-2 px-3 py-2 rounded-sq text-sm ${
+                exchangeDone.refund.refund_fiscal?.status === 'done'
+                  ? 'bg-sq-success/10 text-sq-success-ink'
+                  : 'bg-amber-50 text-amber-800'
+              }`}
+              data-testid="exchange-refund-fiscal"
+            >
+              <ShieldCheck size={24} />
+              {exchangeDone.refund.refund_fiscal?.status === 'done'
+                ? `Видатковий чек № ${exchangeDone.refund.refund_fiscal.fiscal_code ?? ''} зареєстровано`
+                : 'Видатковий чек не зареєстровано в ПРРО — реєстрація повториться автоматично'}
             </div>
           )}
           {fiscalNotice && (
@@ -733,6 +971,24 @@ export function RegisterPage() {
                 {kitchenPrinting ? 'Друк…' : 'Тікет'}
               </button>
             )}
+            {exchangeDone && exchangeRefund && (
+              <button
+                type="button"
+                className={actionClass}
+                onClick={() => void printReturnReceipt()}
+                disabled={printing}
+                data-testid="print-return-receipt"
+              >
+                <Repeat size={20} />
+                Видатковий чек
+              </button>
+            )}
+            {exchangeDone && exchangeRefund && needsAct(exchangeRefund.total_cents) && (
+              <button type="button" className={actionClass} onClick={printExchangeAct} data-testid="print-exchange-act">
+                <Printer size={20} />
+                Акт
+              </button>
+            )}
           </div>
           {printStatus && <p className="text-sq-secondary text-sm mt-2">{printStatus}</p>}
           {kitchenStatus && (
@@ -746,6 +1002,7 @@ export function RegisterPage() {
             className="pos-btn-primary mt-4 w-full min-h-14 rounded-xl text-[17px]"
             onClick={() => {
               setSuccess(null);
+              setExchangeDone(null);
               setFiscalNotice(null);
               setKitchenStatus(null);
               cancelRung.reset();
@@ -772,6 +1029,7 @@ export function RegisterPage() {
           )}
         </div>
         {printablePortal}
+        {actPortal}
         {cancelRung.node}
       </div>
     );
@@ -794,6 +1052,25 @@ export function RegisterPage() {
         {banner && (
           <div className="mx-3 mt-2 rounded-sq bg-amber-50 text-amber-900 px-3 py-2 text-sm shrink-0">
             {banner}
+          </div>
+        )}
+        {exchange && (
+          <div
+            className="mx-3 mt-2 rounded-sq bg-sq-selected text-sq-text px-3 py-2 text-sm flex items-center gap-3 shrink-0"
+            data-testid="exchange-strip"
+          >
+            <Repeat size={20} />
+            <p className="flex-1 min-w-0 tabular-nums">
+              <span className="font-semibold">Обмін за чеком {exchange.receiptNumber}</span>
+              {' · '}повертається {formatUah(exchange.returnedCents)} — додайте новий товар і натисніть «Оплатити»
+            </p>
+            <button
+              type="button"
+              className="shrink-0 min-h-9 px-2 text-sq-blue font-semibold"
+              onClick={cancelExchange}
+            >
+              Скасувати обмін
+            </button>
           </div>
         )}
 
@@ -828,12 +1105,14 @@ export function RegisterPage() {
                 if (lines.length) setClearAsk(true);
               }}
               onCharge={() => setCheckoutOpen(true)}
-              onSaveBasket={openPark}
-              onOpenParked={() => void openParked()}
+              // An exchange is paid or abandoned — never parked, never turned
+              // into an order, never picked up by another till.
+              onSaveBasket={exchange ? undefined : openPark}
+              onOpenParked={exchange ? undefined : () => void openParked()}
               parkedCount={parkedCarts.length}
               locked={preorderId != null}
               onCancelPreorder={clear}
-              onTakePreorder={openPreorder}
+              onTakePreorder={exchange ? undefined : openPreorder}
             />
           </div>
         </div>
@@ -871,7 +1150,21 @@ export function RegisterPage() {
         />
       )}
 
-      {checkoutOpen && (
+      {checkoutOpen && exchange && (
+        <ExchangeCheckout
+          draft={exchange}
+          newTotalCents={totalCents()}
+          itemCount={lines.length}
+          loading={paying}
+          error={checkoutError}
+          onClose={() => {
+            setCheckoutError(null);
+            setCheckoutOpen(false);
+          }}
+          onConfirm={(payments) => void payExchange(payments)}
+        />
+      )}
+      {checkoutOpen && !exchange && (
         <CheckoutModal
           totalCents={totalCents()}
           itemCount={lines.length}
@@ -938,8 +1231,8 @@ export function RegisterPage() {
             setMobileCartOpen(false);
             setCheckoutOpen(true);
           }}
-          onSaveBasket={openPark}
-          onOpenParked={() => void openParked()}
+          onSaveBasket={exchange ? undefined : openPark}
+          onOpenParked={exchange ? undefined : () => void openParked()}
           parkedCount={parkedCarts.length}
           locked={preorderId != null}
           onCancelPreorder={() => {

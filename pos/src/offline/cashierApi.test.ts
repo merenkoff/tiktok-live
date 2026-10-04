@@ -22,6 +22,7 @@ vi.mock('./repository', () => ({
   listSales: vi.fn(),
   getSale: vi.fn(),
   refundSale: vi.fn(),
+  exchangeSale: vi.fn(),
   discardQueuedSale: vi.fn(),
 }));
 vi.mock('../services/api', () => ({
@@ -35,6 +36,7 @@ vi.mock('../services/api', () => ({
     listSales: vi.fn(),
     getSale: vi.fn(),
     refundSale: vi.fn(),
+    exchangeSale: vi.fn(),
   },
 }));
 
@@ -400,5 +402,59 @@ describe('the tablet: reads from the mirror, writes to the server or nowhere', (
     vi.mocked(api.createCustomer).mockResolvedValue({} as never);
     await cashierApi.createCustomer({ name: 'Аня', phone: '+380' });
     expect(api.createCustomer).toHaveBeenCalled();
+  });
+});
+
+describe('cashierApi.exchangeSale', () => {
+  const draft = {
+    saleId: 7,
+    saleClientUuid: 'u7',
+    receiptNumber: 'R-00042',
+    saleCreatedAt: '2026-10-04T10:00:00Z',
+    refund: {
+      items: [{ sale_item_id: 1, quantity: 1 }],
+      method: 'card' as const,
+      reason_code: null,
+      reason: null,
+      buyer_name: null,
+      buyer_document: null,
+      client_uuid: 'rf-uuid',
+    },
+    returnedCents: 45000,
+    returnedLines: [],
+  };
+  const input = {
+    refund: draft.refund,
+    sale: {
+      items: [{ variant_id: 5, quantity: 1 }],
+      payments: [{ method: 'card' as const, amount_cents: 70000 }],
+      client_uuid: 'sale-uuid',
+    },
+  };
+
+  it('goes straight to the server on the web', async () => {
+    vi.mocked(api.exchangeSale).mockResolvedValue({ ok: true } as never);
+    expect(await cashierApi.exchangeSale(draft, input)).toEqual({ ok: true });
+    expect(api.exchangeSale).toHaveBeenCalledWith(7, input);
+    expect(repo.exchangeSale).not.toHaveBeenCalled();
+  });
+
+  it('goes through the repository on the till, which syncs an unsynced receipt first', async () => {
+    tillMode();
+    vi.mocked(repo.exchangeSale).mockResolvedValue({ ok: true } as never);
+    await cashierApi.exchangeSale({ ...draft, saleId: 0 }, input);
+    expect(repo.exchangeSale).toHaveBeenCalledWith(0, 'u7', input);
+    expect(api.exchangeSale).not.toHaveBeenCalled();
+  });
+
+  it('refuses on the tablet without a connection, before the request leaves', async () => {
+    tabletMode();
+    statusState.online = false;
+    await expect(cashierApi.exchangeSale(draft, input)).rejects.toMatchObject({ name: 'OfflineWriteError' });
+    expect(api.exchangeSale).not.toHaveBeenCalled();
+  });
+
+  it('cannot exchange against a receipt the server has never seen, off the till', async () => {
+    await expect(cashierApi.exchangeSale({ ...draft, saleId: 0 }, input)).rejects.toThrow('Sale has no server id');
   });
 });

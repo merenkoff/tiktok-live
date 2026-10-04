@@ -15,7 +15,12 @@ export {
   offlineMode,
 } from '../offline/enabled';
 export type { OfflineMode } from '../offline/enabled';
-export { OfflineAuthError, OfflineRefundError, OfflineWriteError } from '../offline/errors';
+export {
+  OfflineAuthError,
+  OfflineExchangeError,
+  OfflineRefundError,
+  OfflineWriteError,
+} from '../offline/errors';
 export { getMeta, setMeta } from '../offline/db';
 // Roadmap #12 track 3 — a module with its own offline data reads the till's
 // connectivity from the same store the shell's banner uses, and the shell entry

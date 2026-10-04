@@ -18,6 +18,8 @@ import type {
   ProductComponentInput,
   ProductKind,
   ProductStockMode,
+  ExchangeInput,
+  ExchangeResult,
   RefundLineInput,
   RefundOptions,
   SaleDetail,
@@ -593,6 +595,17 @@ class PosApi {
       buyer_name: opts.buyer_name ?? null,
       buyer_document: opts.buyer_document ?? null,
     });
+    return data;
+  }
+
+  /**
+   * An exchange (clothing R1): the return half and the new receipt in one
+   * server transaction, two fiscal documents. Both `client_uuid`s are the
+   * caller's and fixed for the attempt, so re-sending the same body after a
+   * timeout replays the answer instead of refunding or selling twice.
+   */
+  async exchangeSale(saleId: number, body: ExchangeInput): Promise<ExchangeResult> {
+    const { data } = await this.client.post<ExchangeResult>(`/sales/${saleId}/exchange`, body);
     return data;
   }
 

@@ -15,6 +15,7 @@ import {
   usePrintableReceipt,
 } from '@pos/platform';
 import type {
+  ExchangeDraft,
   FiscalActionResult,
   LocalSaleRow,
   PaymentMethod,
@@ -38,29 +39,10 @@ import {
 import { buildActPayload } from '../lib/actPayload';
 import { usePrintableAct } from '../hooks/usePrintableAct';
 
-/**
- * What the exchange flow takes away from the dialog (clothing R1): the
- * return half as the cashier set it up, with its own idempotency key minted
- * here so a retry after a timeout cannot refund twice. The sale half is the
- * cart the cashier goes on to fill on the sell screen.
- */
-export interface ExchangeDraft {
-  saleId: number;
-  saleClientUuid: string;
-  receiptNumber: string;
-  saleCreatedAt: string;
-  refund: {
-    items: RefundLineInput[];
-    method: PaymentMethod;
-    reason_code: RefundReasonCode | null;
-    reason: string | null;
-    buyer_name: string | null;
-    buyer_document: string | null;
-    client_uuid: string;
-  };
-  returnedCents: number;
-  returnedLines: Array<{ name: string; label: string; quantity: number; amount_cents: number }>;
-}
+// `ExchangeDraft` — what the exchange flow takes away from this dialog — lives
+// in the platform's types: the cart store holds it while the cashier fills
+// the new receipt, and a module may not reach into the host for a type.
+export type { ExchangeDraft };
 
 interface Props {
   sale: LocalSaleRow;
@@ -75,7 +57,12 @@ interface Props {
   mode?: 'refund' | 'exchange';
   onClose: () => void;
   onRefunded: (sale: LocalSaleRow) => void;
-  onExchange?: (draft: ExchangeDraft) => void;
+  /**
+   * Hand the return half on. May answer with a sentence instead of taking
+   * it — the sell screen refuses an exchange over a half-rung sale — which
+   * the dialog then shows where its own errors go.
+   */
+  onExchange?: (draft: ExchangeDraft) => string | null | void;
 }
 
 const ALL_METHODS: PaymentMethod[] = ['cash', 'card', 'qr'];
@@ -169,7 +156,7 @@ export function RefundSaleDialog({
       setError('Оберіть, що повертаємо');
       return;
     }
-    onExchange?.({
+    const refused = onExchange?.({
       saleId: sale.server_id ?? detail?.id ?? 0,
       saleClientUuid: sale.client_uuid,
       receiptNumber: sale.receipt_number,
@@ -191,6 +178,7 @@ export function RefundSaleDialog({
         amount_cents: refundLineAmount(i.line_total_cents, i.quantity, i.refunded_quantity, qty[i.id]),
       })),
     });
+    if (typeof refused === 'string' && refused) setError(refused);
   }
 
   async function confirm() {

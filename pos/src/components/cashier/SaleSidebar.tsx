@@ -333,6 +333,7 @@ export function SaleSidebar({
           ) : (
             <button
               type="button"
+              disabled={!onSaveBasket}
               onClick={onSaveBasket}
               className="min-h-[52px] px-4 rounded-xl bg-white ring-1 ring-sq-divider text-sq-text font-semibold text-[16px] disabled:opacity-40"
               data-testid="park-cart"

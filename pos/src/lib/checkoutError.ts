@@ -20,16 +20,49 @@
 // The Ukrainian text is in `.message`.
 
 import axios from 'axios';
+import type { FiscalActionResult, SaleDetail } from '../types';
+
+/**
+ * What stands after an exchange whose SALE half failed (clothing R1): the
+ * return receipt is registered and the money is back with the customer, so
+ * the cashier must not start the exchange again — the goods are sold on a
+ * separate receipt. Read off the 502 / 409 body the exchange route adds
+ * `refund` to.
+ */
+export interface ExchangeAftermath {
+  refundId: number;
+  /** The original receipt with the refund on it; `refund_fiscal` is the RETURN receipt's document. */
+  refund: SaleDetail & { refund_id?: number; refund_fiscal?: FiscalActionResult | null };
+  differenceCents: number | null;
+}
 
 export type CheckoutFailure =
   /** Pre-flight refused: no sale row, no receipt number burned, no stock moved. */
   | { kind: 'fiscal_unavailable'; message: string; supportCode: string | null }
   /** The sale was created and then voided. Ring it again — a fresh uuid is minted. */
-  | { kind: 'fiscal_failed_voided'; saleId: number; message: string; supportCode: string | null }
+  | {
+      kind: 'fiscal_failed_voided';
+      saleId: number;
+      message: string;
+      supportCode: string | null;
+      /** On an exchange: the refund that stands although the new receipt was voided. */
+      exchange?: ExchangeAftermath;
+    }
   /** The sale stands, un-fiscalised. The customer has paid and gone. */
-  | { kind: 'fiscal_failed_kept'; saleId: number; message: string; supportCode: string | null }
+  | {
+      kind: 'fiscal_failed_kept';
+      saleId: number;
+      message: string;
+      supportCode: string | null;
+      exchange?: ExchangeAftermath;
+    }
   /** A replayed client_uuid whose sale was voided — that receipt is a corpse. */
   | { kind: 'sale_voided_replay'; saleId: number | null; message: string }
+  /**
+   * A replayed exchange whose new receipt was voided by a ПРРО refusal: the
+   * refund stands, the goods go on a separate receipt. Never a retry.
+   */
+  | { kind: 'exchange_sale_voided'; message: string; exchange: ExchangeAftermath }
   /** A fiscalising store with no connection: the sale was refused outright. */
   | { kind: 'offline_blocked'; message: string }
   /**
@@ -40,8 +73,8 @@ export type CheckoutFailure =
   | { kind: 'register_held'; message: string; holderName: string | null }
   /** No response. The sale may or may not exist; probing is idempotent. */
   | { kind: 'unknown_state'; clientUuid: string; message: string }
-  /** Anything else — stock, validation, a plain server error. */
-  | { kind: 'rejected'; message: string };
+  /** Anything else — stock, validation, a plain server error. `code` is the body's `error` when it was a machine word. */
+  | { kind: 'rejected'; message: string; code?: string | null };
 
 interface FiscalFailBody {
   error?: string;
@@ -52,6 +85,22 @@ interface FiscalFailBody {
   sale_voided?: boolean;
   sale_kept?: boolean;
   holder?: { device_id?: string; name?: string | null } | null;
+  /** The exchange route's additions (clothing R1). */
+  refund_id?: number;
+  refund?: ExchangeAftermath['refund'];
+  difference_cents?: number;
+}
+
+/** The refund an exchange body names, when it names one. */
+function aftermathOf(body: FiscalFailBody | undefined): ExchangeAftermath | undefined {
+  if (!body?.refund || typeof body.refund !== 'object') return undefined;
+  const refundId = body.refund_id ?? body.refund.refund_id;
+  if (typeof refundId !== 'number') return undefined;
+  return {
+    refundId,
+    refund: body.refund,
+    differenceCents: typeof body.difference_cents === 'number' ? body.difference_cents : null,
+  };
 }
 
 const GENERIC = 'Не вдалося завершити продаж';
@@ -79,7 +128,7 @@ function errorName(error: unknown): string | null {
 
 export function classifyCheckoutError(error: unknown): CheckoutFailure {
   const name = errorName(error);
-  if (name === 'OfflineFiscalError' || name === 'OfflineWriteError') {
+  if (name === 'OfflineFiscalError' || name === 'OfflineWriteError' || name === 'OfflineExchangeError') {
     return { kind: 'offline_blocked', message: (error as Error).message };
   }
   if (name === 'FiscalSaleUnknownError') {
@@ -119,6 +168,11 @@ export function classifyCheckoutError(error: unknown): CheckoutFailure {
     };
   }
 
+  if (status === 409 && body?.error === 'exchange_sale_voided') {
+    const exchange = aftermathOf(body);
+    if (exchange) return { kind: 'exchange_sale_voided', message, exchange };
+  }
+
   if (status === 502 && body?.error === 'fiscal_failed') {
     // Branch on `sale_voided`, never on `sale_kept`: one server branch omits
     // `sale_kept` entirely, and reading it would silently drop that case into
@@ -126,12 +180,16 @@ export function classifyCheckoutError(error: unknown): CheckoutFailure {
     // sale that already happened.
     const voided = body.sale_voided === true;
     const saleId = body.sale_id ?? 0;
+    const exchange = aftermathOf(body);
     return voided
-      ? { kind: 'fiscal_failed_voided', saleId, message, supportCode }
-      : { kind: 'fiscal_failed_kept', saleId, message, supportCode };
+      ? { kind: 'fiscal_failed_voided', saleId, message, supportCode, ...(exchange ? { exchange } : {}) }
+      : { kind: 'fiscal_failed_kept', saleId, message, supportCode, ...(exchange ? { exchange } : {}) };
   }
 
-  return { kind: 'rejected', message };
+  // A machine word in `error` (`exchange_inconsistent`…) is for the caller to
+  // branch on; the person reads `message`.
+  const code = body?.error && body.message && /^[a-z_]+$/.test(body.error) ? body.error : null;
+  return { kind: 'rejected', message, ...(code ? { code } : {}) };
 }
 
 /** Does this outcome mean the cart should be kept so the cashier can retry? */

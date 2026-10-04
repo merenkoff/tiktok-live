@@ -1145,6 +1145,60 @@ export interface RefundOptions {
   buyer_document?: string | null;
 }
 
+/**
+ * The return half of an exchange, as the refund dialog hands it to the sell
+ * screen (clothing R1, TechDocs/POS_CLOTHING.md «R1/R2/R4»). The refund's own
+ * idempotency key is minted when the draft is made, so a retry after a timeout
+ * cannot refund twice; the sale half is the cart the cashier goes on to fill.
+ */
+export interface ExchangeDraft {
+  /** Server id of the receipt the goods come back from; 0 / negative for a till sale not yet synced. */
+  saleId: number;
+  /** The receipt's local key — how the till finds its server id after a sync. */
+  saleClientUuid: string;
+  receiptNumber: string;
+  saleCreatedAt: string;
+  refund: {
+    items: RefundLineInput[];
+    method: PaymentMethod;
+    reason_code: RefundReasonCode | null;
+    reason: string | null;
+    buyer_name: string | null;
+    buyer_document: string | null;
+    client_uuid: string;
+  };
+  /** What the return receipt will be for — shown to the cashier, never sent. */
+  returnedCents: number;
+  returnedLines: Array<{ name: string; label: string; quantity: number; amount_cents: number }>;
+}
+
+/** The body of `POST /sales/:id/exchange` — both halves, each with its own key. */
+export interface ExchangeInput {
+  refund: ExchangeDraft['refund'];
+  sale: {
+    items: SaleItemInput[];
+    payments: SalePaymentInput[];
+    cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
+    /** Omitted → the server keeps the original receipt's customer. */
+    customer_id?: number | null;
+    note?: string;
+    client_uuid: string;
+  };
+}
+
+/**
+ * What an exchange answers with: the original receipt carrying its new refund
+ * (`refund_fiscal` is the RETURN receipt's document; `fiscal` on that object
+ * is still the original sale's), the new receipt, and the difference the
+ * customer paid (> 0) or was handed back (< 0). Both receipts are for their
+ * full amounts — the difference is only what the till says out loud.
+ */
+export interface ExchangeResult {
+  refund: SaleDetail & { refund_id: number; refund_fiscal?: FiscalActionResult | null };
+  sale: SaleDetail;
+  difference_cents: number;
+}
+
 export interface CustomerChild {
   name: string;
   birthday: string;
