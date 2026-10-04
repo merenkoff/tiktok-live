@@ -104,6 +104,8 @@ export const POS_MIGRATIONS = [
   '061_pos_customer_discount.sql',
   // The clothing demo's purchase prices were a tenth of what they should be; corrected once where 055 is already stamped.
   '062_pos_demo_clothing_costs.sql',
+  // Mass markdown campaigns with a per-variant before/after snapshot (clothing D2).
+  '063_pos_markdowns.sql',
 ] as const;
 
 export function readMigration(file: string): string {

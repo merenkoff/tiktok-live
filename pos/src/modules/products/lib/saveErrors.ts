@@ -35,3 +35,24 @@ export function batchErrorMessage(err: unknown, fallback: string): string {
   }
   return saveErrorMessage(err, fallback);
 }
+
+/**
+ * The server's sentence for a request it refused on purpose — a 400 or 409
+ * whose body says why in the owner's words («Дата завершення вже минула»,
+ * «Немає що уцінювати: обрані товари вже в уцінці — завершіть її спочатку»).
+ * Anything else (a 500, no network) gets the caller's fallback.
+ */
+export function requestErrorMessage(err: unknown, fallback: string): string {
+  const response =
+    typeof err === 'object' && err && 'response' in err
+      ? (err as { response?: { status?: number; data?: { error?: unknown } } }).response
+      : undefined;
+  if (
+    (response?.status === 400 || response?.status === 404 || response?.status === 409) &&
+    typeof response.data?.error === 'string' &&
+    response.data.error
+  ) {
+    return response.data.error;
+  }
+  return fallback;
+}
