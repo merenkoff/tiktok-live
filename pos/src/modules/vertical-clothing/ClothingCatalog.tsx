@@ -26,6 +26,7 @@ import {
   VariantPicker,
   useDragScroll,
 } from '@pos/platform/ui';
+import { tileCompareAt } from './lib/tilePrice';
 
 export function ClothingCatalog({ active, stockEpoch }: SalesCatalogProps) {
   const catalog = useSalesCatalog();
@@ -124,6 +125,7 @@ export function ClothingCatalog({ active, stockEpoch }: SalesCatalogProps) {
                 name={first.product_name}
                 subtitle={first.label}
                 priceCents={minPrice}
+                compareAtCents={tileCompareAt(variants)}
                 imageUrl={first.image_url}
                 stock={stock}
                 disabled={stock <= 0}

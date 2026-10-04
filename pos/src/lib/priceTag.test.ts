@@ -55,11 +55,27 @@ describe('buildPriceTags', () => {
         productName: 'Піжама',
         variantLabel: 'Рожевий · 98/104',
         priceCents: 45000,
+        compareAtCents: null,
         sku: '068-130',
         barcode: '2900000000018',
         copies: 3,
       },
     ]);
+  });
+
+  it('prints the old price only when the item is marked down below it', () => {
+    // «було 590 → 450» on the shelf. The server already refuses a compare-at
+    // that is not above the price; the tag keeps the same belt because it goes
+    // on paper.
+    expect(buildPriceTags('S', [source({ compare_at_cents: 59000 })])[0]!.compareAtCents).toBe(59000);
+    expect(buildPriceTags('S', [source({ compare_at_cents: 45000 })])[0]!.compareAtCents).toBeNull();
+    expect(buildPriceTags('S', [source({ compare_at_cents: null })])[0]!.compareAtCents).toBeNull();
+  });
+
+  it('takes a source that says nothing about a markdown — the florist bench builds one without the field', () => {
+    const { compare_at_cents: _dropped, ...bare } = source().variant;
+    void _dropped;
+    expect(buildPriceTags('S', [{ product: { name: 'Букет №42' }, variant: bare }])[0]!.compareAtCents).toBeNull();
   });
 
   it('drops a barcode it cannot draw rather than printing a mangled one', () => {

@@ -39,6 +39,7 @@ type Row = {
   label: string;
   unit: string;
   priceCents: number;
+  compareAtCents: number | null;
   sku: string | null;
   barcode: string | null;
   copies: number;
@@ -67,6 +68,7 @@ export function PriceTagsDialog({
           label: variantLabel(v),
           unit: v.unit,
           priceCents: v.price_cents,
+          compareAtCents: v.compare_at_cents ?? null,
           sku: v.sku,
           barcode: v.barcode,
           copies: defaultCopies(v.quantity, v.unit),
@@ -141,6 +143,7 @@ export function PriceTagsDialog({
             label: r.label,
             unit: r.unit,
             price_cents: r.priceCents,
+            compare_at_cents: r.compareAtCents,
             sku: r.sku,
             barcode: r.barcode,
             quantity: 0,
@@ -230,7 +233,12 @@ export function PriceTagsDialog({
                         <p className="text-sq-text">{r.productName}</p>
                         {r.label && <p className="text-[13px] text-sq-muted">{r.label}</p>}
                       </td>
-                      <td className="text-right tabular-nums whitespace-nowrap">{formatUah(r.priceCents)}</td>
+                      <td className="text-right tabular-nums whitespace-nowrap">
+                        <p>{formatUah(r.priceCents)}</p>
+                        {r.compareAtCents != null && r.compareAtCents > r.priceCents && (
+                          <p className="text-[13px] text-sq-muted">було {formatUah(r.compareAtCents)}</p>
+                        )}
+                      </td>
                       <td>
                         {isEan13(r.barcode ?? '') ? (
                           <span className="text-[13px] text-sq-secondary tabular-nums">{r.barcode}</span>

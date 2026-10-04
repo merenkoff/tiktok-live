@@ -246,3 +246,58 @@ describe('VariantPicker — «Вік або зріст дитини»', () => {
     expect(onPick.mock.calls[0]![0]).toBe(variants[2]);
   });
 });
+
+describe('VariantPicker — the price before a markdown (D3)', () => {
+  const marked = (color: string, size: string, price: number, old: number | null) => ({
+    ...item(color, size, 1, price),
+    compare_at_cents: old,
+  });
+
+  it('says «було» once in the heading when every size shares the price and the old price', () => {
+    setup([marked('сірий', '86', 45000, 59000), marked('сірий', '92', 45000, 59000)]);
+
+    const olds = screen.getAllByTestId('picker-old-price');
+    expect(olds).toHaveLength(1);
+    expect(olds[0]).toHaveTextContent('590,00 ₴');
+    expect(olds[0]!.closest('button')).toBeNull();
+    expect(chip('86')).not.toHaveTextContent('590');
+  });
+
+  it('puts the old price on the chip that was marked down when the others were not', () => {
+    setup([marked('сірий', '86', 45000, 59000), marked('сірий', '92', 45000, null)]);
+
+    expect(chip('86')).toHaveTextContent('590,00 ₴');
+    expect(chip('86')).toHaveTextContent('450,00 ₴');
+    expect(within(chip('92')).queryByTestId('picker-old-price')).toBeNull();
+  });
+
+  it('shows it on the chip beside its own price when the sizes cost differently', () => {
+    setup([marked('сірий', '86', 40000, 50000), marked('сірий', '98', 45000, null)]);
+
+    expect(within(chip('86')).getByTestId('picker-old-price')).toHaveTextContent('500,00 ₴');
+    expect(chip('86')).toHaveTextContent('400,00 ₴');
+    expect(within(chip('98')).queryByTestId('picker-old-price')).toBeNull();
+  });
+
+  it('shows it above the price in the plain list of a card with no sizes', () => {
+    setup([
+      makeCatalogItem({
+        variant_id: 811,
+        attributes: { color: 'червона', length_cm: 60 },
+        label: 'червона / 60',
+        quantity: 10,
+        price_cents: 9000,
+        compare_at_cents: 12000,
+      }),
+    ]);
+
+    const row = screen.getByRole('button', { name: /червона \/ 60/ });
+    expect(within(row).getByTestId('picker-old-price')).toHaveTextContent('120,00 ₴');
+    expect(row).toHaveTextContent('90,00 ₴');
+  });
+
+  it('never shows an old price that is not above the price', () => {
+    setup([marked('сірий', '86', 45000, 45000)]);
+    expect(screen.queryByTestId('picker-old-price')).toBeNull();
+  });
+});

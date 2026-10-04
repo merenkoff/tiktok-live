@@ -19,6 +19,9 @@ interface Props {
 
 const sizeOf = (item: CatalogItem): string => String(item.attributes?.size ?? '').trim();
 const colourOf = (item: CatalogItem): string => String(item.attributes?.color ?? '').trim();
+/** The price before a markdown, or null — never an old price that is not above the price. */
+const oldPriceOf = (item: Pick<CatalogItem, 'price_cents' | 'compare_at_cents'>): number | null =>
+  item.compare_at_cents != null && item.compare_at_cents > item.price_cents ? item.compare_at_cents : null;
 
 /**
  * Sizes as chips, a colour at a time (TechDocs/POS_CLOTHING.md, C1d). A garment
@@ -54,11 +57,24 @@ function SizeChips({
   // whose sizes cost differently says it on each chip.
   const prices = new Set(variants.map((v) => v.price_cents));
   const uniformPrice = prices.size === 1 ? variants[0]!.price_cents : null;
+  // «Було» goes into the heading only when it is true of EVERY size — one old
+  // price over the whole card. A card where only some sizes are marked down
+  // says it on those chips instead: an old price beside a size that never had
+  // it would be a lie on the shelf.
+  const olds = new Set(variants.map(oldPriceOf));
+  const headingOld = uniformPrice !== null && olds.size === 1 ? [...olds][0]! : null;
 
   return (
     <div className="px-4 pb-3 max-h-[52vh] overflow-auto" data-testid="size-chips">
       {uniformPrice !== null && (
-        <p className="text-[15px] font-semibold text-sq-text tabular-nums pb-1">{formatUah(uniformPrice)}</p>
+        <p className="text-[15px] font-semibold text-sq-text tabular-nums pb-1 flex items-baseline gap-1.5">
+          {headingOld != null && (
+            <s className="text-[13px] font-normal text-sq-muted" data-testid="picker-old-price">
+              {formatUah(headingOld)}
+            </s>
+          )}
+          <span>{formatUah(uniformPrice)}</span>
+        </p>
       )}
       {groups.map(([colour, items]) => (
         <section key={colour || 'none'} className="pt-2">
@@ -71,6 +87,8 @@ function SizeChips({
               const hint = sizeHint(size);
               const oos = item.quantity <= 0;
               const state = fit.has(size) ? 'fit' : room.has(size) ? 'room' : null;
+              // The chip's own «було», unless the heading already said it.
+              const chipOld = headingOld != null ? null : oldPriceOf(item);
               return (
                 <button
                   key={item.variant_id}
@@ -93,9 +111,14 @@ function SizeChips({
                   <span aria-hidden="true" className={`text-[11px] ${oos ? 'text-red-600' : 'text-sq-muted'}`}>
                     {oos ? 'немає' : (hint ?? `${item.quantity} ${item.unit || 'шт'}`)}
                   </span>
-                  {!oos && uniformPrice === null && (
-                    <span aria-hidden="true" className="text-[12px] font-semibold tabular-nums">
-                      {formatUah(item.price_cents)}
+                  {!oos && (uniformPrice === null || chipOld != null) && (
+                    <span aria-hidden="true" className="text-[12px] font-semibold tabular-nums flex items-baseline gap-1">
+                      {chipOld != null && (
+                        <s className="font-normal text-sq-muted" data-testid="picker-old-price">
+                          {formatUah(chipOld)}
+                        </s>
+                      )}
+                      <span>{formatUah(item.price_cents)}</span>
                     </span>
                   )}
                   {state === 'room' && (
@@ -189,6 +212,7 @@ export function VariantPicker({ productName, variants, onPick, onClose }: Props)
             {sorted.map((item) => {
               const label = item.label || 'Стандарт';
               const oos = item.quantity <= 0;
+              const old = oldPriceOf(item);
               return (
                 <li key={item.variant_id}>
                   <button
@@ -205,8 +229,13 @@ export function VariantPicker({ productName, variants, onPick, onClose }: Props)
                         {oos ? 'Немає в наявності' : `${item.quantity} ${item.unit || 'шт'}`}
                       </span>
                     </span>
-                    <span className="text-[17px] font-semibold text-sq-text tabular-nums shrink-0">
-                      {formatUah(item.price_cents)}
+                    <span className="flex flex-col items-end shrink-0 tabular-nums">
+                      {old != null && (
+                        <s className="text-[13px] text-sq-muted" data-testid="picker-old-price">
+                          {formatUah(old)}
+                        </s>
+                      )}
+                      <span className="text-[17px] font-semibold text-sq-text">{formatUah(item.price_cents)}</span>
                     </span>
                     <ChevronRight size={20} className="text-sq-muted shrink-0" />
                   </button>

@@ -198,12 +198,25 @@ body {
     margin-top: 0.5mm;
   }
 
+  /* The price before a markdown: struck through, one solid line — a thermal
+     head has no grey, and a thin dotted strike would print as nothing. A tag
+     without a markdown has no such line at all. */
+  .price-tag-old {
+    font-size: max(7pt, calc(var(--tag-w, 48mm) * 0.0808));
+    text-decoration: line-through;
+    margin-top: 1.5mm;
+  }
+
   /* The one thing read from across the shop. */
   .price-tag-price {
     font-size: calc(var(--tag-w, 48mm) * 0.1617);
     font-weight: 700;
     line-height: 1.1;
     margin: 2mm 0;
+  }
+
+  .price-tag-old + .price-tag-price {
+    margin-top: 0.5mm;
   }
 
   /* Height follows the SVG's own aspect ratio, so the modules stay the width

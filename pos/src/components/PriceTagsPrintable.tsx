@@ -158,6 +158,9 @@ export function PriceTagsPrintable({
           <p className="price-tag-store">{tag.storeName}</p>
           <p className="price-tag-name">{tag.productName}</p>
           {tag.variantLabel && <p className="price-tag-variant">{tag.variantLabel}</p>}
+          {tag.compareAtCents != null && (
+            <p className="price-tag-old">{money(tag.compareAtCents)} ₴</p>
+          )}
           <p className="price-tag-price">{money(tag.priceCents)} ₴</p>
           {tag.barcode ? (
             <Ean13 code={tag.barcode} />
