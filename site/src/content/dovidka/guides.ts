@@ -22,7 +22,7 @@ const GUIDES: Array<{ slug: string; shortTitle: string; title: string; descripti
     description:
       'Усе, що потрібно людині за касою, на десять хвилин читання: вхід за PIN-кодом, пошук товару сканером, чек і знижки, оплата готівкою, карткою і QR, повернення, відкладений чек і робота без інтернету.',
     publishedAt: '2026-09-24',
-    updatedAt: '2026-09-30',
+    updatedAt: '2026-10-04',
   },
   {
     slug: 'restoran-ta-kafe',

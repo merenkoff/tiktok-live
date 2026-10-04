@@ -2,12 +2,13 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatUah, useVertical } from '@pos/platform';
 import type { LocalSaleRow, SaleDetail } from '@pos/platform';
-import { ArrowLeft, Pencil, Receipt, SectionHead, useDragScroll, X } from '@pos/platform/ui';
+import { ArrowLeft, Pencil, Receipt, ScanWedge, SectionHead, Segmented, useDragScroll, X } from '@pos/platform/ui';
 import { returnsApi } from '../data/returnsApi';
+import { PERIOD_OPTIONS, periodFrom, useDebouncedValue, type ReceiptPeriod } from '../lib/receiptFilters';
 import { RefundSaleDialog } from '../components/RefundSaleDialog';
 import { FiscalBadge, FiscalDetailCard } from '../components/FiscalBadge';
 import { SaleStatusChip } from '../components/SaleChips';
@@ -23,13 +24,25 @@ function canRefund(row: LocalSaleRow): boolean {
   return row.status === 'completed' || row.status === 'partially_refunded';
 }
 
+const PAGE = 50;
+
 /**
  * The cashier's own receipts screen — the terminal-side counterpart of the web
  * admin's Продажі page, trimmed to what a till needs: find a receipt, look at
  * it, cancel it. Partial refunds stay in the admin UI.
+ *
+ * Finding one (clothing R3): the box takes a receipt number or its digits, a
+ * product, a scanned barcode, the customer's name or phone; the period cuts
+ * the list to today or the week; «Показати ще» pages. A scan with nothing
+ * focused lands in the box through the wedge, so «which receipt was this
+ * jacket on?» is one beep.
  */
 export function TillReceiptsPage() {
   const [rows, setRows] = useState<LocalSaleRow[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [query, setQuery] = useState('');
+  const [period, setPeriod] = useState<ReceiptPeriod>('all');
   const [selected, setSelected] = useState<LocalSaleRow | null>(null);
   const [detail, setDetail] = useState<SaleDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -37,13 +50,36 @@ export function TillReceiptsPage() {
   const [error, setError] = useState<string | null>(null);
   const listRef = useDragScroll<HTMLDivElement>();
 
+  const debouncedQuery = useDebouncedValue(query, 300);
+  const filter = useMemo(
+    () => ({ q: debouncedQuery.trim() || undefined, from: periodFrom(period) }),
+    [debouncedQuery, period]
+  );
+  const filtered = Boolean(filter.q || filter.from);
+
   async function reload() {
-    setRows(await returnsApi.listSales(50));
+    const next = await returnsApi.listSales({ limit: PAGE, ...filter });
+    setRows(next);
+    setHasMore(next.length >= PAGE);
   }
 
   useEffect(() => {
     void reload().catch(() => setError('Не вдалося завантажити чеки'));
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter]);
+
+  async function loadMore() {
+    setLoadingMore(true);
+    try {
+      const more = await returnsApi.listSales({ limit: PAGE, offset: rows.length, ...filter });
+      setRows((prev) => [...prev, ...more]);
+      setHasMore(more.length >= PAGE);
+    } catch {
+      setError('Не вдалося завантажити чеки');
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   async function openSale(row: LocalSaleRow) {
     setSelected(row);
@@ -93,6 +129,22 @@ export function TillReceiptsPage() {
         </Link>
       </header>
 
+      {/* A scanner with nothing focused types into the box; the wedge steps
+          aside while a receipt or the refund sheet owns the screen. */}
+      <ScanWedge active={!selected && !refunding} onScan={(code) => setQuery(code)} />
+
+      <div className="px-4 md:px-7 pb-3 flex flex-wrap items-center gap-2 shrink-0">
+        <input
+          type="search"
+          className="sq-input flex-1 min-w-[220px]"
+          aria-label="Пошук чеків"
+          placeholder="Номер чека, товар, штрихкод, клієнт"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <Segmented ariaLabel="Період" value={period} options={PERIOD_OPTIONS} onChange={setPeriod} />
+      </div>
+
       {error && (
         <div className="mx-4 md:mx-7 mb-3 rounded-sq bg-red-50 text-red-700 px-4 py-3 text-sm shrink-0">
           {error}
@@ -103,7 +155,7 @@ export function TillReceiptsPage() {
         <section className="flex flex-col min-h-0 rounded-card bg-white shadow-card overflow-hidden">
           <div ref={listRef} className="flex-1 overflow-auto select-none">
             {rows.length === 0 ? (
-              <Empty text="Поки немає чеків." />
+              <Empty text={filtered ? 'Нічого не знайдено.' : 'Поки немає чеків.'} />
             ) : (
               <ul>
                 {rows.map((row) => {
@@ -140,6 +192,18 @@ export function TillReceiptsPage() {
                   );
                 })}
               </ul>
+            )}
+            {hasMore && (
+              <div className="p-3">
+                <button
+                  type="button"
+                  className="sq-btn-quiet w-full"
+                  onClick={() => void loadMore()}
+                  disabled={loadingMore}
+                >
+                  {loadingMore ? 'Завантаження…' : 'Показати ще'}
+                </button>
+              </div>
             )}
           </div>
         </section>

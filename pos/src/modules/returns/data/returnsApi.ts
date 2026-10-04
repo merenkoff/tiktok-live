@@ -4,6 +4,7 @@
 
 import { api, cashierApi } from '@pos/platform';
 import type {
+  ListSalesParams,
   LocalSaleRow,
   PaymentMethod,
   RefundedSaleRow,
@@ -19,7 +20,7 @@ export type { LocalSaleRow };
  * desktop cashier, the live API on the web. Rows are `LocalSaleRow`.
  */
 export const returnsApi = {
-  listSales: (limit = 50): Promise<LocalSaleRow[]> => cashierApi.listSales(limit),
+  listSales: (params: number | ListSalesParams = 50): Promise<LocalSaleRow[]> => cashierApi.listSales(params),
   getSale: (row: LocalSaleRow): Promise<SaleDetail | null> => cashierApi.getSale(row),
   refundSale: (
     row: LocalSaleRow,
@@ -35,7 +36,7 @@ export const returnsApi = {
  * full `SaleDetail` / `SaleListItem` shapes.
  */
 export const adminReturnsApi = {
-  listSales: (limit = 100): Promise<SaleListItem[]> => api.listSales(limit),
+  listSales: (params: number | ListSalesParams = 100): Promise<SaleListItem[]> => api.listSales(params),
   getSale: (id: number): Promise<SaleDetail> => api.getSale(id),
   refundSale: (
     saleId: number,

@@ -951,24 +951,117 @@ export async function getSale(storeId: number, saleId: number) {
   };
 }
 
-export async function listSales(
-  storeId: number,
-  opts: { limit?: number; from?: Date; to?: Date } = {}
-) {
-  const limit = Math.min(opts.limit ?? 50, 200);
+export interface ListSalesOptions {
+  /** Page size, 1..200; default 50. */
+  limit?: number;
+  /** Rows to skip — «Показати ще» on the receipts screens. */
+  offset?: number;
+  /** Store-local `YYYY-MM-DD`, inclusive on both ends; `timezone` says whose day. */
+  from?: string;
+  to?: string;
+  timezone?: string;
+  /** What the cashier typed or scanned — see `saleSearchConditions`. */
+  q?: string;
+}
+
+/** The longest search phrase worth sending to the database. */
+export const SALE_SEARCH_MAX = 80;
+
+/** `%` and `_` typed by a human are characters, not wildcards. */
+function escapeLike(s: string): string {
+  return s.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+/**
+ * The receipt search (clothing R3). One box on the till and in the owner's
+ * «Продажі» takes whatever is at hand about a sale:
+ *
+ *   * a receipt number — whole («R-00042») or just its digits («42», which
+ *     is the TAIL of the number, so «2» does not drag in R-00012 and R-00020);
+ *   * a café's daily order number;
+ *   * a product's barcode (a scan lands here too), article or name, or a
+ *     variant's caption — the sale carries the name and caption it was rung
+ *     with, the barcode/article come from the variant;
+ *   * the customer's name or phone (digits typed match the phone's digits,
+ *     so «067» finds «+38 (067) …»);
+ *   * the fiscal number ПРРО gave the receipt.
+ *
+ * Returns the SQL fragment and pushes its parameters; empty when there is
+ * nothing to search for.
+ */
+function saleSearchConditions(q: string, params: unknown[]): string | null {
+  const needle = q.trim().slice(0, SALE_SEARCH_MAX);
+  if (!needle) return null;
+  const or: string[] = [];
+  params.push(`%${escapeLike(needle)}%`);
+  const like = `$${params.length}`;
+  params.push(needle);
+  const exact = `$${params.length}`;
+
+  const digits = /^\d+$/.test(needle);
+  if (digits) {
+    params.push(`-0*${needle}$`);
+    or.push(`s.receipt_number ~ $${params.length}`);
+    if (needle.length <= 9) {
+      params.push(Number(needle));
+      or.push(`s.order_no = $${params.length}`);
+    }
+  } else {
+    or.push(`s.receipt_number ILIKE ${like} ESCAPE '\\'`);
+    or.push(`c.name ILIKE ${like} ESCAPE '\\'`);
+  }
+  // A phone is matched on its digits, however either side was typed («+38
+  // (067) 123-45-67» finds «380671234567») — but only from four digits up:
+  // «2» is a receipt number's tail, and every phone in the shop contains a 2.
+  const phoneDigits = /^[\d+\-() ]+$/.test(needle) ? needle.replace(/\D/g, '') : '';
+  if (phoneDigits.length >= 4) {
+    params.push(`%${phoneDigits}%`);
+    or.push(`regexp_replace(COALESCE(c.phone, ''), '\\D', '', 'g') LIKE $${params.length}`);
+  }
+  or.push(`EXISTS (
+    SELECT 1 FROM pos_sale_items si
+    LEFT JOIN pos_variants v ON v.id = si.variant_id
+    WHERE si.sale_id = s.id
+      AND (si.product_name ILIKE ${like} ESCAPE '\\'
+        OR si.variant_label ILIKE ${like} ESCAPE '\\'
+        OR v.sku ILIKE ${like} ESCAPE '\\'
+        OR v.barcode = ${exact})
+  )`);
+  or.push(`EXISTS (
+    SELECT 1 FROM pos_fiscal_receipts fr
+    WHERE fr.sale_id = s.id AND fr.doc_type = 'sale'
+      AND (fr.fiscal_code = ${exact} OR fr.provider_doc_id = ${exact})
+  )`);
+  return `(${or.join(' OR ')})`;
+}
+
+export async function listSales(storeId: number, opts: ListSalesOptions = {}) {
+  const limit = Math.max(1, Math.min(opts.limit ?? 50, 200));
+  const offset = Math.max(0, Math.floor(opts.offset ?? 0));
+  const timezone = opts.timezone ?? 'Europe/Kyiv';
   const params: unknown[] = [storeId];
   const conditions = ['s.store_id = $1'];
 
+  // Store-local days, like the analytics window: a receipt rung at 00:30 in
+  // Kyiv belongs to that day, whatever UTC says.
   if (opts.from) {
-    params.push(opts.from);
-    conditions.push(`s.created_at >= $${params.length}`);
+    params.push(opts.from, timezone);
+    conditions.push(
+      `s.created_at >= ($${params.length - 1}::date)::timestamp AT TIME ZONE $${params.length}`
+    );
   }
   if (opts.to) {
-    params.push(opts.to);
-    conditions.push(`s.created_at < $${params.length}`);
+    params.push(opts.to, timezone);
+    conditions.push(
+      `s.created_at < (($${params.length - 1}::date + INTERVAL '1 day'))::timestamp AT TIME ZONE $${params.length}`
+    );
+  }
+  if (opts.q) {
+    const search = saleSearchConditions(opts.q, params);
+    if (search) conditions.push(search);
   }
 
-  params.push(limit);
+  params.push(limit, offset);
   const result = await pool.query(
     `SELECT s.*, st.display_name AS staff_name, c.name AS customer_name,
             EXISTS (
@@ -979,8 +1072,8 @@ export async function listSales(
      JOIN pos_staff st ON st.id = s.staff_id
      LEFT JOIN pos_customers c ON c.id = s.customer_id
      WHERE ${conditions.join(' AND ')}
-     ORDER BY s.created_at DESC
-     LIMIT $${params.length}`,
+     ORDER BY s.created_at DESC, s.id DESC
+     LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params
   );
 
