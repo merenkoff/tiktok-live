@@ -2,7 +2,8 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-// The product card on its own page (TechDocs/POS_CLOTHING.md, phase C1e).
+// The product card on its own page (TechDocs/POS_CLOTHING.md, phase C1e) —
+// `/admin/products/:id` to edit one, `/admin/products/new` to make one.
 //
 // It used to be a form spliced into the list in place of the product's row,
 // with every variant fully expanded — a garment in ten sizes was a screen
@@ -24,8 +25,10 @@ import type { ModifierGroup, PosTag, Product } from '@pos/platform';
 import { Package, PageHeader, SectionHead } from '@pos/platform/ui';
 import { ConfirmSheet } from '../../../components/cashier/ConfirmSheet';
 import { AddVariantsDialog } from '../components/AddVariantsDialog';
+import { NewVariantFields } from '../components/NewVariantFields';
 import { ProductFields } from '../components/ProductFields';
 import { ProductSide } from '../components/ProductSide';
+import { VariantMatrix, type MatrixResult } from '../components/VariantMatrix';
 import { VariantSheet } from '../components/VariantSheet';
 import { VariantsSection } from '../components/VariantsSection';
 import { componentOptions } from '../components/componentOptions';
@@ -33,10 +36,13 @@ import { productFormScope } from '../components/productFormScope';
 import { flattenTags } from '../components/tagLabels';
 import { colourVocabulary, supportsMatrix } from '../components/variantMatrix';
 import { listTechCards, type TechCardRow } from '../data/techCardsApi';
+import { emptyVariant, newVariantInput, singleTyped, type NewVariantValues } from '../lib/newVariant';
 import {
+  createDirty,
   detailsOf,
   diffProduct,
   draftOf,
+  emptyDraft,
   isDirty,
   rowName,
   variantDraftOf,
@@ -70,9 +76,22 @@ class RowFailure extends Error {
   }
 }
 
+/**
+ * Keyed by the address: `/new` and `/:id` are one route element, so after
+ * «Створити» navigates to the fresh card React would otherwise keep the same
+ * instance — with `saving` still true and the new card's fields disabled. A
+ * new key is a new card, state and all.
+ */
 export function ProductPage() {
   const { id } = useParams<{ id: string }>();
-  const productId = Number(id);
+  return <ProductCard key={id ?? 'new'} id={id} />;
+}
+
+function ProductCard({ id }: { id: string | undefined }) {
+  // No `:id` in the address is the create page — one component, so the two
+  // ask the same questions in the same places.
+  const mode: 'create' | 'edit' = id === undefined ? 'create' : 'edit';
+  const productId = mode === 'edit' ? Number(id) : 0;
   const navigate = useNavigate();
   const location = useLocation();
   const vertical = useVertical();
@@ -94,6 +113,13 @@ export function ProductPage() {
   const [sheet, setSheet] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
+  // The variants half of a NEW card: a garment picks them as a matrix, every
+  // other vertical (and a composite) types one — exactly what the dialog does
+  // on an existing card, only inline, because a card is created with its
+  // variants in the one request.
+  const [matrix, setMatrix] = useState<MatrixResult | null>(null);
+  const [matrixReset, setMatrixReset] = useState(0);
+  const [single, setSingle] = useState<NewVariantValues>(() => emptyVariant(vertical.defaultUnit));
 
   const flatTags = useMemo(() => flattenTags(tags), [tags]);
   const colours = useMemo(() => colourVocabulary(products), [products]);
@@ -104,7 +130,12 @@ export function ProductPage() {
   );
 
   const diff = useMemo(() => (snapshot && draft ? diffProduct(snapshot, draft) : null), [snapshot, draft]);
-  const dirty = diff ? isDirty(diff) : false;
+  const useMatrix = draft ? supportsMatrix(vertical.attributes) && draft.shape === '' : false;
+  const variantsTyped = useMatrix
+    ? (matrix?.variants.length ?? 0) > 0
+    : singleTyped(single, vertical.defaultUnit);
+  const dirty =
+    mode === 'create' ? (draft ? createDirty(draft, variantsTyped) : false) : diff ? isDirty(diff) : false;
 
   const reload = useCallback(async (): Promise<Product | undefined> => {
     const [plist, tlist, glist, cards] = await Promise.all([
@@ -127,6 +158,13 @@ export function ProductPage() {
     setSnapshot(null);
     setDraft(null);
     setNotFound(false);
+    if (mode === 'create') {
+      // The catalogue is still read: the colour vocabulary, the recipe parts
+      // and the tags all come from it. The card itself starts blank.
+      setDraft(emptyDraft());
+      reload().catch(() => setError('Не вдалося завантажити'));
+      return;
+    }
     if (!Number.isInteger(productId) || productId <= 0) {
       setNotFound(true);
       return;
@@ -148,7 +186,7 @@ export function ProductPage() {
     return () => {
       alive = false;
     };
-  }, [productId, reload]);
+  }, [mode, productId, reload]);
 
   // «Збережено» lingers long enough to be read, then the bar goes quiet again.
   useEffect(() => {
@@ -237,8 +275,62 @@ export function ProductPage() {
     }
   }
 
+  /**
+   * A new card is one request that carries its variants, then the questions
+   * and the tags — each in its own `catch`, because the product EXISTS the
+   * moment the first call returns. The page then leaves for the card at once:
+   * a filled form that stays on screen after a failed follow-up is how a
+   * second «Створити» used to make a duplicate.
+   */
+  async function createNew() {
+    if (!draft || saving) return;
+    setError(null);
+    if (draft.name.trim() === '') {
+      setError('Вкажіть назву');
+      return;
+    }
+    if (useMatrix) {
+      if (!matrix || matrix.problem || matrix.variants.length === 0) {
+        setError(matrix?.problem ?? 'Оберіть кольори й розміри');
+        return;
+      }
+    } else if (uahInputToCents(single.price) <= 0) {
+      setError('Вкажіть ціну');
+      return;
+    }
+    setSaving(true);
+    try {
+      const created = await api.createProduct({
+        ...detailsOf(draft),
+        ...(draft.shape ? { kind: 'composite' as const, stock_mode: draft.shape } : {}),
+        variants: useMatrix ? matrix!.variants : [newVariantInput(single, draft.shape)],
+      });
+      const undone: string[] = [];
+      if (draft.groupIds.length) {
+        await api.setProductModifierGroups(created.id, draft.groupIds).catch(() => undone.push('модифікатори'));
+      }
+      if (draft.tagIds.length) {
+        await api.setProductTags(created.id, draft.tagIds).catch(() => undone.push('мітки'));
+      }
+      const flashText = undone.length
+        ? `Товар створено, але не збережено: ${undone.join(', ')} — оберіть їх ще раз і натисніть «Зберегти»`
+        : undefined;
+      navigate(`/admin/products/${created.id}`, {
+        replace: true,
+        state: { list: listSearch, ...(flashText ? { flash: flashText } : {}) },
+      });
+    } catch (err) {
+      setError(batchErrorMessage(err, 'Не вдалося створити товар'));
+      setSaving(false);
+    }
+  }
+
   async function save(e: FormEvent) {
     e.preventDefault();
+    if (mode === 'create') {
+      await createNew();
+      return;
+    }
     if (!draft || !snapshot || !diff || saving || !dirty) return;
     setError(null);
     setFlash(null);
@@ -302,7 +394,14 @@ export function ProductPage() {
     setConfirm(null);
     if (c.kind === 'leave') navigate(c.href);
     else if (c.kind === 'discard') {
-      if (snapshot) setDraft(snapshot);
+      if (mode === 'create') {
+        setDraft(emptyDraft());
+        setMatrix(null);
+        setMatrixReset((n) => n + 1);
+        setSingle(emptyVariant(vertical.defaultUnit));
+      } else if (snapshot) {
+        setDraft(snapshot);
+      }
       setRowErrors({});
       setError(null);
     } else void archiveVariant(c.id);
@@ -315,10 +414,10 @@ export function ProductPage() {
   const showShape = scope.canComposite || (snapshot?.shape ?? '') !== '';
   const showDishFacts =
     scope.askDishFacts || !!snapshot?.composition || (snapshot?.allergens.length ?? 0) > 0;
-  const useMatrix = draft ? supportsMatrix(vertical.attributes) && draft.shape === '' : false;
   const backTo = `/admin/products${listSearch}`;
   const titleRef = useRef<string>('');
   if (snapshot) titleRef.current = snapshot.name;
+  const title = mode === 'create' ? 'Новий товар' : titleRef.current || 'Товар';
 
   if (notFound) {
     return (
@@ -338,11 +437,7 @@ export function ProductPage() {
 
   return (
     <div className="animate-fade-up text-sq-text">
-      <PageHeader
-        glyph={Package}
-        title={titleRef.current || 'Товар'}
-        back={{ to: backTo, label: 'Товари' }}
-      />
+      <PageHeader glyph={Package} title={title} back={{ to: backTo, label: 'Товари' }} />
 
       {flash && (
         <div className="mb-5 rounded-sq bg-amber-50 text-amber-800 px-4 py-3 text-sm" role="status">
@@ -358,7 +453,7 @@ export function ProductPage() {
       {!draft ? (
         <p className="text-[15px] text-sq-muted">Завантаження…</p>
       ) : (
-        <form onSubmit={(e) => void save(e)}>
+        <form onSubmit={(e) => void save(e)} aria-label={title}>
           <fieldset disabled={saving} className="min-w-0 p-0 m-0 border-0">
             <div className="grid lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-x-10 gap-y-8 items-start">
               <div className="min-w-0 space-y-8">
@@ -371,16 +466,39 @@ export function ProductPage() {
                     showDishFacts={showDishFacts}
                   />
                 </section>
-                <VariantsSection
-                  variants={draft.variants}
-                  derived={draft.shape === 'derived'}
-                  composite={draft.shape !== ''}
-                  rowErrors={rowErrors}
-                  onPatch={patchVariant}
-                  onOpen={setSheet}
-                  onAdd={() => setAdding(true)}
-                  addLabel={useMatrix ? 'Додати варіанти' : 'Додати варіант'}
-                />
+                {mode === 'create' ? (
+                  <section className="space-y-4">
+                    <SectionHead title="Варіанти" />
+                    {useMatrix ? (
+                      <VariantMatrix
+                        unit={vertical.defaultUnit}
+                        vocabulary={colours}
+                        autoBarcode={vertical.autoBarcode === true}
+                        onChange={setMatrix}
+                        resetKey={matrixReset}
+                      />
+                    ) : (
+                      <NewVariantFields
+                        vertical={vertical}
+                        value={single}
+                        onChange={setSingle}
+                        shape={draft.shape}
+                        partOptions={partOptions}
+                      />
+                    )}
+                  </section>
+                ) : (
+                  <VariantsSection
+                    variants={draft.variants}
+                    derived={draft.shape === 'derived'}
+                    composite={draft.shape !== ''}
+                    rowErrors={rowErrors}
+                    onPatch={patchVariant}
+                    onOpen={setSheet}
+                    onAdd={() => setAdding(true)}
+                    addLabel={useMatrix ? 'Додати варіанти' : 'Додати варіант'}
+                  />
+                )}
               </div>
               <ProductSide
                 value={draft}
@@ -408,7 +526,7 @@ export function ProductPage() {
                 disabled={!dirty || saving}
                 className="pos-btn-primary min-h-11 px-6 rounded-sq text-[15px] disabled:opacity-50"
               >
-                {saving ? 'Збереження…' : 'Зберегти'}
+                {mode === 'create' ? (saving ? 'Створюємо…' : 'Створити') : saving ? 'Збереження…' : 'Зберегти'}
               </button>
             </div>
           </div>
@@ -468,7 +586,7 @@ export function ProductPage() {
           ) : confirm.kind === 'discard' ? (
             <ConfirmSheet
               title="Скасувати зміни?"
-              message="Картка повернеться до збереженого."
+              message={mode === 'create' ? 'Картка очиститься.' : 'Картка повернеться до збереженого.'}
               confirmLabel="Скасувати зміни"
               tone="danger"
               onConfirm={() => runConfirm(confirm)}

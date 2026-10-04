@@ -3,10 +3,11 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 // The card asks what the store sells (TechDocs/POS_CLOTHING.md, phase C0), on
-// its own page now: a boutique is not asked what a composite is nor for a
-// dish's words — and a card that already holds them keeps them on screen.
+// its own page now — new and old alike: a boutique is not asked what a
+// composite is nor for a dish's words, and a card that already holds them
+// keeps them on screen.
 
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -33,6 +34,7 @@ vi.mock('@pos/platform', async () => {
       getTags: () => Promise.resolve([]),
       listModifierGroups: () => Promise.resolve([]),
       posRequest: () => Promise.resolve([]),
+      createProduct: () => Promise.resolve({ id: 1 }),
       updateProduct: () => Promise.resolve({}),
       updateVariant: () => Promise.resolve({}),
       setProductTags: () => Promise.resolve([]),
@@ -77,8 +79,54 @@ async function openCard() {
   await screen.findByRole('button', { name: 'Зберегти' });
 }
 
+async function openCreate() {
+  renderWithProviders(
+    <Routes>
+      <Route path="/admin/products/new" element={<ProductPage />} />
+    </Routes>,
+    { route: '/admin/products/new' }
+  );
+  return within(await screen.findByRole('form', { name: 'Новий товар' }));
+}
+
 const SHAPE = 'Що це за товар';
 const FACTS = /Склад для гостя/;
+
+describe('the create page — by what the store sells', () => {
+  it('asks a boutique for neither, and keeps the description', async () => {
+    setVertical('clothing', { productKinds: ['simple'], dishFacts: false });
+    const form = await openCreate();
+
+    expect(form.queryByText(SHAPE)).toBeNull();
+    expect(form.queryByLabelText(FACTS)).toBeNull();
+    expect(form.queryByTestId('allergen-chip-milk')).toBeNull();
+    expect(form.getByPlaceholderText('Опис')).toBeInTheDocument();
+  });
+
+  it('asks a florist about composites but not allergens', async () => {
+    setVertical('flowers', { productKinds: ['simple', 'composite'], dishFacts: false });
+    const form = await openCreate();
+
+    expect(form.getByText(SHAPE)).toBeInTheDocument();
+    expect(form.queryByLabelText(FACTS)).toBeNull();
+  });
+
+  it('asks a café about both', async () => {
+    setVertical('cafe', { productKinds: ['simple', 'composite'], dishFacts: true });
+    const form = await openCreate();
+
+    expect(form.getByText(SHAPE)).toBeInTheDocument();
+    expect(form.getByLabelText(FACTS)).toBeInTheDocument();
+  });
+
+  it('asks about both when the vertical says nothing — an older cached auth', async () => {
+    setVertical('clothing', {});
+    const form = await openCreate();
+
+    expect(form.getByText(SHAPE)).toBeInTheDocument();
+    expect(form.getByLabelText(FACTS)).toBeInTheDocument();
+  });
+});
 
 describe('the card — by what the store sells, and never hiding what it holds', () => {
   it('shows a boutique\'s simple card neither question', async () => {

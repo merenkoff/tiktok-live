@@ -9,8 +9,10 @@ import { describe, expect, it } from 'vitest';
 import type { Product, ProductVariant } from '@pos/platform';
 import {
   centsToInput,
+  createDirty,
   diffProduct,
   draftOf,
+  emptyDraft,
   isDirty,
   rowName,
   variantChanged,
@@ -169,5 +171,19 @@ describe('diffProduct — what a save has to write', () => {
     expect(diffProduct(snapshot, { ...snapshot, shape: 'own' }).shape).toBe(true);
     expect(diffProduct(snapshot, { ...snapshot, imageUrl: '/pos-uploads/a.jpg' }).details).toBe(true);
     expect(diffProduct(snapshot, { ...snapshot, sellable: false }).details).toBe(true);
+  });
+});
+
+describe('createDirty — a new card with anything on it', () => {
+  it('is clean while blank, and dirty from the first field or the first variant', () => {
+    const blank = emptyDraft();
+    expect(createDirty(blank, false)).toBe(false);
+    expect(createDirty({ ...blank, name: ' ' }, false)).toBe(false);
+    expect(createDirty({ ...blank, name: 'Реглан' }, false)).toBe(true);
+    expect(createDirty({ ...blank, sellable: false }, false)).toBe(true);
+    expect(createDirty({ ...blank, shape: 'own' }, false)).toBe(true);
+    expect(createDirty({ ...blank, tagIds: [1] }, false)).toBe(true);
+    expect(createDirty({ ...blank, imageUrl: '/pos-uploads/a.jpg' }, false)).toBe(true);
+    expect(createDirty(blank, true)).toBe(true);
   });
 });

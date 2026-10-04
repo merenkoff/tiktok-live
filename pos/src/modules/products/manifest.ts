@@ -30,6 +30,7 @@ export const productsModule: ModuleDescriptor = {
     // The card on its own page (C1e): two columns, the variants as a table,
     // one variant's full field set in a sheet. `?edit=<id>` on the list
     // redirects here, so the older links from «Техкарти» keep working.
+    { path: 'products/new', mount: 'admin', element: ProductPage },
     { path: 'products/:id', mount: 'admin', element: ProductPage },
     // The questions a product may ask («Молоко?») and their answers. Host code,
     // not café code: the next vertical that asks a question reuses it.

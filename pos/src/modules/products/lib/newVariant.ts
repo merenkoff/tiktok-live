@@ -22,6 +22,21 @@ export function emptyVariant(unit: string): NewVariantValues {
   return { attributes: {}, unit, price: '', qty: '1', sku: '', barcode: '', pack: { qty: '', label: '' }, components: [] };
 }
 
+/** Whether anything was typed into the one-variant form beyond its blank start. */
+export function singleTyped(v: NewVariantValues, defaultUnit: string): boolean {
+  return (
+    Object.keys(v.attributes).length > 0 ||
+    v.unit !== defaultUnit ||
+    v.price.trim() !== '' ||
+    v.qty.trim() !== '1' ||
+    v.sku.trim() !== '' ||
+    v.barcode.trim() !== '' ||
+    v.pack.qty.trim() !== '' ||
+    v.pack.label.trim() !== '' ||
+    v.components.length > 0
+  );
+}
+
 /** The body `POST /products/:id/variants` and a `createProduct` row take. */
 export function newVariantInput(v: NewVariantValues, shape: ProductShape) {
   return {

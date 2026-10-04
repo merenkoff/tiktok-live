@@ -96,6 +96,43 @@ export function draftOf(product: Product): ProductDraft {
   };
 }
 
+/** A card with nothing on it yet — what `/admin/products/new` starts from. */
+export function emptyDraft(): ProductDraft {
+  return {
+    name: '',
+    description: '',
+    composition: '',
+    allergens: [],
+    imageUrl: null,
+    sellable: true,
+    shape: '',
+    tagIds: [],
+    groupIds: [],
+    variants: [],
+  };
+}
+
+/**
+ * Whether a NEW card has anything typed into it — the leave guard and the
+ * «Створити» button read this, since there is no snapshot to diff against.
+ * `variantsTyped` is what the variants half says (matrix picks, or a filled
+ * one-variant form).
+ */
+export function createDirty(draft: ProductDraft, variantsTyped: boolean): boolean {
+  return (
+    draft.name.trim() !== '' ||
+    draft.description.trim() !== '' ||
+    draft.composition.trim() !== '' ||
+    draft.allergens.length > 0 ||
+    draft.imageUrl != null ||
+    !draft.sellable ||
+    draft.shape !== '' ||
+    draft.tagIds.length > 0 ||
+    draft.groupIds.length > 0 ||
+    variantsTyped
+  );
+}
+
 /** «Рожевий / 86», or «Варіант» for a card whose one variant has no caption. */
 export function rowName(v: Pick<VariantDraft, 'label'>): string {
   return v.label || 'Варіант';
