@@ -197,7 +197,7 @@
 **Не входить (C1c):** згортання рядків матриці під «Змінити в рядках», мінімум залишку на варіант, «Об'єднати дублікати», прихід
 матрицею.
 
-### C1e — картка товару без простині (PR1–PR2 зроблено 2026-10-03; PR3 далі)
+### C1e — картка товару без простині (PR1–PR3 зроблено 2026-10-03/04)
 
 **Звідки.** «Редагувати» підміняло картку в списку інлайн-формою, де **кожен варіант був розгорнутий повністю** (~500 px:
 колір, розмір, ціна, редактор знижки, SKU, штрихкод, фасування), під ними — матриця, і єдине «Зберегти» внизу: десять варіантів —
@@ -219,9 +219,9 @@
 | K5 | PR2 | «Новий товар» на `/admin/products/new`: інлайн-матриця / `NewVariantFields`, create → navigate на картку, flash про невдалі follow-up; список без інлайн-форми (`ProductsPage.tsx` 954 → 667) | `ProductPage.tsx`, `ProductsPage.tsx`, `manifest.ts` | ✔ |
 | K6 | PR2 | `ProductPage.create.test.tsx` (+navigate, +дубль при невдалому follow-up, +409 сервера дослівно, +квіти з залишком), create-половини dishFacts/formScope переїхали на картку, `ProductsPage.matrix` → `ProductsPage.search` | tests | ✔ |
 | K7 | PR2 | гайд `vlasnyk-pochatok.md` (картка з назви, «+ Додати варіанти», «⋯» варіанта, «Знижка товару»), `guides.ts` `updatedAt`, UI_CASHIER «Новий товар» | docs | ✔ |
-| K8 | PR3 | список: `ProductRow` (рядок + шеврон розгортає `VariantsTable`), `productSummary` («4 варіанти · 350–420 ₴ · 12 шт»), `listParams` (`q`/`tag` в URL), винос `TagTree`, `ConfirmSheet` для архіву товару | `ProductsPage.tsx`, `components/{ProductRow,TagTree}.tsx`, `lib/*` | |
-| K9 | PR3 | `ProductsPage.{rows,filters,search}`, `productSummary`, `listParams`; браузер на `demo-clothing` | tests | |
-| K10 | PR3 | UI_CASHIER (список), цей розділ ✔, CLAUDE.md | docs | |
+| K8 | PR3 | список: `ProductRow` (рядок + шеврон розгортає `VariantsTable`), `productSummary` («4 варіанти · 350–420 ₴ · 12 шт»), `listParams` (`q`/`tag` в URL), винос `TagTree`, `ConfirmSheet` для архіву товару (`ProductsPage.tsx` 667 → 375) | `ProductsPage.tsx`, `components/{ProductRow,TagTree}.tsx`, `lib/*` | ✔ |
+| K9 | PR3 | `ProductsPage.{rows,filters,search}`, `productSummary`, `listParams`; браузер на `demo-clothing` | tests | ✔ |
+| K10 | PR3 | UI_CASHIER (список), цей розділ ✔, CLAUDE.md | docs | ✔ |
 
 **Рішення й чому (PR1)**
 
@@ -254,7 +254,12 @@
 `setProductModifierGroups`/`setProductTags` — кожен у своєму `catch`; що не записалось, картка каже один раз (`state.flash`).
 Відмова самого `createProduct` лишає форму з реченням сервера (`batchErrorMessage`).
 
-**Що лишилось у списку до PR3:** картки з повною таблицею варіантів, `window.confirm` на архіві товару.
+**PR3 — список.** Рядок замість картки з таблицею: назва — посилання, підсумок одним рядком, шеврон розгортає `VariantsTable` на
+місці (стан `expanded` — лише на сторінці), «Архів» питає через портальний `ConfirmSheet` (останній `window.confirm` модуля
+зник). Вигляд списку — в адресі (`readListParams`/`writeListParams`): типові значення не пишуться, тож `/admin/products` лишається
+чистим, а картка отримує `state.list` і повертає на той самий вигляд. `stockSummary` для `derived` складеного каже «Можна зібрати:
+до N», а не суму — варіанти ділять ті самі складники. C1e закрито; що далі з одягу — C1c (мінімум залишку на варіант, «Об'єднати
+дублікати», прихід матрицею) і C2+ у таблиці пріоритетів.
 
 ### Знижка клієнта — рішення
 
