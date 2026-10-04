@@ -38,6 +38,20 @@ export class OfflineRefundError extends Error {
 }
 
 /**
+ * An exchange is two documents against a receipt the server holds — the
+ * return receipt and the new sale — committed in one server transaction, so
+ * there is nothing a till could queue and replay later without a second
+ * copy of that transaction. Nothing is written: the cart stays as it is and
+ * the cashier tries again when the connection is back.
+ */
+export class OfflineExchangeError extends Error {
+  constructor() {
+    super('Обмін потребує інтернету — спробуйте, коли зʼявиться звʼязок');
+    this.name = 'OfflineExchangeError';
+  }
+}
+
+/**
  * This till may not print a fiscal receipt without a connection.
  *
  * Before фаза 3 that was every fiscalising store, because a ПРРО receipt is

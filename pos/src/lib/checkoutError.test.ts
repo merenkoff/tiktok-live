@@ -16,7 +16,12 @@ import {
   keepsCart,
   keepsModalOpen,
 } from './checkoutError';
-import { FiscalSaleUnknownError, OfflineFiscalError, OfflineWriteError } from '../offline/errors';
+import {
+  FiscalSaleUnknownError,
+  OfflineExchangeError,
+  OfflineFiscalError,
+  OfflineWriteError,
+} from '../offline/errors';
 
 function httpError(status: number, data: unknown): AxiosError {
   const error = new AxiosError('Request failed', 'ERR_BAD_RESPONSE');
@@ -200,6 +205,103 @@ describe('classifyCheckoutError', () => {
     expect(classifyCheckoutError(foreign('FiscalSaleUnknownError', { clientUuid: 'u-9' }))).toMatchObject({
       kind: 'unknown_state',
       clientUuid: 'u-9',
+    });
+  });
+});
+
+// The exchange route's bodies (clothing R1): whatever happened to the NEW
+// receipt, the refund it names stands — and a cashier told to «ring it again»
+// would refund the same goods twice.
+describe('classifyCheckoutError — an exchange', () => {
+  const refund = {
+    id: 7,
+    receipt_number: 'R-00042',
+    refund_id: 9,
+    refund_fiscal: null,
+    refunds: [{ id: 9, refund_number: 'RF-00007' }],
+  };
+
+  it('refuses an exchange without a connection the way it refuses any offline write', () => {
+    const failure = classifyCheckoutError(new OfflineExchangeError());
+    expect(failure).toEqual({
+      kind: 'offline_blocked',
+      message: 'Обмін потребує інтернету — спробуйте, коли зʼявиться звʼязок',
+    });
+    expect(keepsModalOpen(failure)).toBe(true);
+    expect(keepsCart(failure)).toBe(true);
+  });
+
+  it('carries the refund that stands when the new receipt was voided', () => {
+    const failure = classifyCheckoutError(
+      httpError(502, {
+        error: 'fiscal_failed',
+        code: 'provider_rejected',
+        message: 'ПРРО відхилив чек',
+        support_code: 'FS-REJ',
+        sale_id: 50,
+        sale_voided: true,
+        sale_kept: false,
+        refund_id: 9,
+        refund,
+        difference_cents: 25000,
+      })
+    );
+    expect(failure).toMatchObject({
+      kind: 'fiscal_failed_voided',
+      saleId: 50,
+      exchange: { refundId: 9, differenceCents: 25000, refund: { receipt_number: 'R-00042' } },
+    });
+  });
+
+  it('carries it on a kept sale too, and nothing on a plain sale', () => {
+    const kept = classifyCheckoutError(
+      httpError(502, {
+        error: 'fiscal_failed',
+        message: 'Сервер не відповів',
+        sale_id: 50,
+        sale_voided: false,
+        refund_id: 9,
+        refund,
+      })
+    );
+    expect(kept).toMatchObject({ kind: 'fiscal_failed_kept', exchange: { refundId: 9, differenceCents: null } });
+
+    const plain = classifyCheckoutError(
+      httpError(502, { error: 'fiscal_failed', message: 'x', sale_id: 50, sale_voided: true })
+    );
+    expect(plain).not.toHaveProperty('exchange');
+  });
+
+  it('reads a replayed exchange whose new receipt was voided as its own outcome, never a retry', () => {
+    const failure = classifyCheckoutError(
+      httpError(409, {
+        error: 'exchange_sale_voided',
+        message: 'Новий чек обміну скасовано через відмову ПРРО — повернення вже оформлено',
+        refund_id: 9,
+        refund,
+      })
+    );
+    expect(failure).toMatchObject({ kind: 'exchange_sale_voided', exchange: { refundId: 9 } });
+    expect(keepsModalOpen(failure)).toBe(false);
+    expect(keepsCart(failure)).toBe(true);
+  });
+
+  it('hands a machine word up as `code` beside the sentence, but not a sentence as a code', () => {
+    expect(
+      classifyCheckoutError(
+        httpError(409, {
+          error: 'exchange_inconsistent',
+          message: 'Один із client_uuid уже використано іншою операцією — почніть обмін заново',
+        })
+      )
+    ).toEqual({
+      kind: 'rejected',
+      code: 'exchange_inconsistent',
+      message: 'Один із client_uuid уже використано іншою операцією — почніть обмін заново',
+    });
+    expect(classifyCheckoutError(httpError(400, { error: 'Sale already fully refunded' }))).toEqual({
+      kind: 'rejected',
+      message: 'Sale already fully refunded',
     });
   });
 });

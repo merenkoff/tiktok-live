@@ -10,6 +10,9 @@ import { useOfflineStatus } from './status';
 import type { LocalSaleRow } from './db';
 import type {
   CatalogItem,
+  ExchangeDraft,
+  ExchangeInput,
+  ExchangeResult,
   PosCustomer,
   PosTag,
   RefundLineInput,
@@ -212,6 +215,19 @@ export const cashierApi = {
       fiscal_status: saleShape.fiscal_status ?? row.fiscal_status,
       refund_fiscal: refundFiscal ?? null,
     };
+  },
+
+  /**
+   * An exchange against `draft`'s receipt (clothing R1). Online on every
+   * shell: on the till the repository syncs an unsynced receipt first and
+   * moves the mirror afterwards; elsewhere it is one request. A tablet with
+   * no network is refused before the request leaves, as every write is.
+   */
+  async exchangeSale(draft: ExchangeDraft, input: ExchangeInput): Promise<ExchangeResult> {
+    if (isOfflinePosEnabled()) return repo.exchangeSale(draft.saleId, draft.saleClientUuid, input);
+    if (!(draft.saleId > 0)) throw new Error('Sale has no server id');
+    assertWritable();
+    return api.exchangeSale(draft.saleId, input);
   },
 
   /** Drop a queued sale the server will never accept. Only the till has a queue. */

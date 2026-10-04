@@ -5,6 +5,8 @@
 import { api, isNetworkError } from '../services/api';
 import type {
   CatalogItem,
+  ExchangeInput,
+  ExchangeResult,
   PosCustomer,
   PosTag,
   RefundLineInput,
@@ -15,7 +17,11 @@ import type {
   SalePaymentInput,
   ListSalesParams,
 } from '../types';
-import { FiscalSaleUnknownError, OfflineRefundError } from './errors';
+import {
+  FiscalSaleUnknownError,
+  OfflineExchangeError,
+  OfflineRefundError,
+} from './errors';
 import { takeStamp } from './lease';
 import { buildTaxUrl } from '../lib/taxUrl';
 
@@ -767,6 +773,76 @@ export async function refundSale(
   const saved = await putLocalSale(saleShape as SaleDetail, row.client_uuid, serverId);
   void refreshSnapshot().catch(() => undefined);
   return { ...saved, refund_fiscal: refundFiscal ?? null };
+}
+
+/**
+ * An exchange (clothing R1): the return half and the new receipt, one server
+ * transaction, two fiscal documents. Online only — there is nothing a till
+ * could queue here that would not be a second copy of that transaction, so
+ * without a connection it refuses before anything is written and the cart
+ * stays as it is.
+ *
+ * The mirror then moves the way the server did: the returned units come back
+ * on the shelf unless the ground was «Брак» (the server wrote those off in
+ * the same transaction, and crediting them here would offer a torn coat to
+ * the next customer until the next snapshot), and the new receipt's lines go
+ * out. Both receipts land in the local mirror under their own keys, with the
+ * return receipt's fiscal result kept OFF the original sale's row, as
+ * `refundSale` does.
+ *
+ * A request that went out and got no answer is handed back as
+ * `FiscalSaleUnknownError`: both keys are the caller's and fixed, so sending
+ * the very same body again replays the server's answer rather than refunding
+ * or selling twice — which is the one thing a cashier must not be told to do.
+ */
+export async function exchangeSale(
+  saleId: number,
+  saleClientUuid: string,
+  input: ExchangeInput
+): Promise<ExchangeResult> {
+  if (!(navigator.onLine && api.hasLiveJwt())) throw new OfflineExchangeError();
+
+  // The receipt has to exist server-side first: a till sale still in the
+  // outbox has no id the server knows.
+  let serverId: number | null = saleId > 0 ? saleId : null;
+  if (!serverId) {
+    serverId = (await db.sales.get(saleClientUuid))?.server_id ?? null;
+  }
+  if (!serverId) {
+    const { runSync } = await import('./sync');
+    await runSync();
+    serverId = (await db.sales.get(saleClientUuid))?.server_id ?? null;
+    if (!serverId) throw new Error('Чек ще не синхронізовано — спробуйте ще раз');
+  }
+
+  let result: ExchangeResult;
+  try {
+    result = await api.exchangeSale(serverId, input);
+  } catch (error) {
+    if (isNetworkError(error)) throw new FiscalSaleUnknownError(input.sale.client_uuid);
+    throw error;
+  }
+
+  const { refund_fiscal: refundFiscal, refund_id: refundId, ...originalShape } = result.refund;
+  const original = originalShape as SaleDetail;
+  if (input.refund.reason_code !== 'defect') {
+    await applyLocalStockDelta(
+      input.refund.items.map((line) => ({
+        variant_id: original.items.find((i) => i.id === line.sale_item_id)?.variant_id ?? 0,
+        quantity: line.quantity,
+      })),
+      1
+    );
+  }
+  await applyLocalStockDelta(input.sale.items, -1);
+  await putLocalSale(original, saleClientUuid, serverId);
+  await putLocalSale(result.sale, input.sale.client_uuid, result.sale.id);
+  void refreshSnapshot().catch(() => undefined);
+  return {
+    ...result,
+    refund: { ...original, refund_id: refundId, refund_fiscal: refundFiscal ?? null },
+    sale: { ...result.sale, client_uuid: input.sale.client_uuid },
+  };
 }
 
 /**

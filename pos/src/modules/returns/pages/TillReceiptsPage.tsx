@@ -3,9 +3,9 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { formatUah, useAuthStore, useVertical } from '@pos/platform';
-import type { LocalSaleRow, SaleDetail } from '@pos/platform';
+import { Link, useNavigate } from 'react-router-dom';
+import { formatUah, useAuthStore, useCartStore, useOfflineStatus, useVertical } from '@pos/platform';
+import type { ExchangeDraft, LocalSaleRow, SaleDetail } from '@pos/platform';
 import { ArrowLeft, Pencil, Receipt, ScanWedge, SectionHead, Segmented, useDragScroll, X } from '@pos/platform/ui';
 import { returnsApi } from '../data/returnsApi';
 import { PERIOD_OPTIONS, periodFrom, useDebouncedValue, type ReceiptPeriod } from '../lib/receiptFilters';
@@ -45,9 +45,26 @@ export function TillReceiptsPage() {
   const [detail, setDetail] = useState<SaleDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [refunding, setRefunding] = useState(false);
+  // The same dialog in exchange mode (clothing R1): it drafts the return half
+  // and the sell screen rings the new receipt against it.
+  const [exchanging, setExchanging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const listRef = useDragScroll<HTMLDivElement>();
   const auth = useAuthStore((s) => s.auth);
+  const navigate = useNavigate();
+  const startExchange = useCartStore((s) => s.startExchange);
+  // An exchange is one server transaction against a receipt the server holds,
+  // so the button is off without a connection rather than letting the cashier
+  // pick the new goods and be refused at payment.
+  const online = useOfflineStatus((s) => s.online);
+
+  function onExchange(draft: ExchangeDraft): string | null {
+    const refused = startExchange(draft);
+    if (refused) return refused;
+    setExchanging(false);
+    navigate('/register');
+    return null;
+  }
   const { printAct, actPortal } = usePrintableAct();
   // The «Акт про видачу коштів» for a refund made earlier (clothing R1/R2/R4):
   // the receipt card keeps the refund's lines and buyer, so the act prints
@@ -138,7 +155,7 @@ export function TillReceiptsPage() {
 
       {/* A scanner with nothing focused types into the box; the wedge steps
           aside while a receipt or the refund sheet owns the screen. */}
-      <ScanWedge active={!selected && !refunding} onScan={(code) => setQuery(code)} />
+      <ScanWedge active={!selected && !refunding && !exchanging} onScan={(code) => setQuery(code)} />
 
       <div className="px-4 md:px-7 pb-3 flex flex-wrap items-center gap-2 shrink-0">
         <input
@@ -227,6 +244,7 @@ export function TillReceiptsPage() {
               detail={detail}
               loading={detailLoading}
               onRefund={() => setRefunding(true)}
+              onExchange={online ? () => setExchanging(true) : undefined}
               onDiscard={() => void discard(selected)}
               onPrintAct={onPrintAct}
             />
@@ -253,6 +271,7 @@ export function TillReceiptsPage() {
             detail={detail}
             loading={detailLoading}
             onRefund={() => setRefunding(true)}
+            onExchange={online ? () => setExchanging(true) : undefined}
             onDiscard={() => void discard(selected)}
             onPrintAct={onPrintAct}
           />
@@ -267,6 +286,16 @@ export function TillReceiptsPage() {
           onRefunded={onRefunded}
         />
       )}
+      {exchanging && selected && (
+        <RefundSaleDialog
+          sale={selected}
+          detail={detail}
+          mode="exchange"
+          onClose={() => setExchanging(false)}
+          onRefunded={onRefunded}
+          onExchange={onExchange}
+        />
+      )}
       {actPortal}
     </>
   );
@@ -277,6 +306,7 @@ function SaleDetailPanel({
   detail,
   loading,
   onRefund,
+  onExchange,
   onDiscard,
   onPrintAct,
 }: {
@@ -284,6 +314,8 @@ function SaleDetailPanel({
   detail: SaleDetail | null;
   loading: boolean;
   onRefund: () => void;
+  /** Absent while the till has no connection — an exchange cannot be queued. */
+  onExchange?: () => void;
   onDiscard?: () => void;
   onPrintAct?: (sale: SaleDetail, refund: SaleDetail['refunds'][number]) => void;
 }) {
@@ -390,14 +422,27 @@ function SaleDetailPanel({
       </div>
 
       <div className="px-5 md:px-6 pt-3 pb-4 shrink-0 space-y-3 shadow-[0_-1px_0_rgb(var(--sq-divider-rgb))]">
-        <button
-          type="button"
-          className="w-full min-h-[52px] rounded-xl bg-white ring-1 ring-sq-divider text-[17px] font-semibold text-red-600 hover:bg-sq-sidebar disabled:opacity-40 disabled:cursor-not-allowed"
-          onClick={onRefund}
-          disabled={!canRefund(row)}
-        >
-          Повернення
-        </button>
+        <div className="flex gap-2.5">
+          <button
+            type="button"
+            className="flex-1 min-h-[52px] rounded-xl bg-white ring-1 ring-sq-divider text-[17px] font-semibold text-red-600 hover:bg-sq-sidebar disabled:opacity-40 disabled:cursor-not-allowed"
+            onClick={onRefund}
+            disabled={!canRefund(row)}
+          >
+            Повернення
+          </button>
+          {/* Goods swapped, not given back: the return half is drafted here,
+              the new receipt is rung on the sell screen (clothing R1). */}
+          <button
+            type="button"
+            className="flex-1 min-h-[52px] rounded-xl bg-white ring-1 ring-sq-divider text-[17px] font-semibold text-sq-text hover:bg-sq-sidebar disabled:opacity-40 disabled:cursor-not-allowed"
+            onClick={onExchange}
+            disabled={!canRefund(row) || !onExchange}
+            title={onExchange ? undefined : 'Потрібна мережа'}
+          >
+            Обмін
+          </button>
+        </div>
         {row.sync_state === 'dead' && (
           // A queued sale the server will never accept. Until now the only way
           // to clear one was to take the till offline first.

@@ -6,3 +6,11 @@
 export { returnsModule } from './manifest';
 export { useCancelRungSale } from './hooks/useCancelRungSale';
 export type { CancelRungSale } from './hooks/useCancelRungSale';
+// The «Акт про видачу коштів» for the sell screen's exchange success (clothing
+// R1): the act is this module's, the screen that prints it after an exchange
+// is the host's. Small enough to travel statically — unlike the dialog above,
+// which is lazy because checkout must stay reachable with `returns` disabled.
+export { usePrintableAct } from './hooks/usePrintableAct';
+export { buildActPayload } from './lib/actPayload';
+export type { ActData } from './lib/actPayload';
+export { needsAct } from './lib/refundReasons';

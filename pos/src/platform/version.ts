@@ -110,7 +110,14 @@ export const POS_API_CLIENT_VERSION = 2;
 //     Before 17 shipped it also took `PageHeader` / `SectionHead` / `Segmented`
 //     (the owner screen's frame) and the `Banknote` / `Split` / `ChevronLeft`
 //     glyphs; the modifier sheet hands back a `quantity`.
-export const PLATFORM_VERSION = 17;
+// 18 (2026-10-04): the exchange on the till (clothing R1). `useCartStore`
+//     gains `exchange` / `startExchange` / `cancelExchange` — the cart as the
+//     sale half of an exchange whose return half the refund dialog drafted —
+//     `cashierApi.exchangeSale` sends both halves in one request, and
+//     `OfflineExchangeError` is what a till without a connection throws
+//     instead of queueing a transaction it could only replay as a second
+//     one. `ExchangeDraft` / `ExchangeInput` / `ExchangeResult` are the types.
+export const PLATFORM_VERSION = 18;
 
 /**
  * Build version of this bundle — the host web/cashier build, or a module-remote

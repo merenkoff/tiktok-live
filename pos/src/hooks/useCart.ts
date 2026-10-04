@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { create } from 'zustand';
-import type { CatalogItem, PosCustomer } from '../types';
+import type { CatalogItem, ExchangeDraft, PosCustomer } from '../types';
 import { discountAfterCustomerChange } from '../lib/customerDiscount';
 import {
   cartLineUid,
@@ -86,9 +86,27 @@ interface CartStore {
    * Adding something at the counter is a second sale.
    */
   preorderId: number | null;
+  /**
+   * The return half of an exchange this cart is the sale half of (clothing
+   * R1, TechDocs/POS_CLOTHING.md «R1/R2/R4»). Set, the sell screen fills the
+   * cart as usual but pays through the exchange checkout — one request, two
+   * fiscal documents — and hides what cannot be done with an exchange: parking,
+   * a pre-order, a second till picking the cart up. The refund's own key lives
+   * in the draft, minted once, so a retry cannot refund twice.
+   */
+  exchange: ExchangeDraft | null;
   cartDiscount: CartDiscount | null;
   customer: PosCustomer | null;
   setBanner: (msg: string | null) => void;
+  /**
+   * Begin an exchange: the cart becomes the new receipt. Refused — with the
+   * sentence to show, and nothing changed — while something else is on the
+   * till: a half-rung sale or a pre-order being handed over would be folded
+   * into another customer's exchange. Null means it started.
+   */
+  startExchange: (draft: ExchangeDraft) => string | null;
+  /** Forget the return half; the lines stay and become an ordinary sale. */
+  cancelExchange: () => void;
   setCartDiscount: (discount: CartDiscount | null) => void;
   setCustomer: (customer: PosCustomer | null) => void;
   /**
@@ -179,10 +197,20 @@ export const useCartStore = create<CartStore>((set, get) => ({
   lines: [],
   banner: null,
   preorderId: null,
+  exchange: null,
   cartDiscount: null,
   customer: null,
 
   setBanner: (msg) => set({ banner: msg }),
+  startExchange: (draft) => {
+    const { lines, preorderId, exchange } = get();
+    if (lines.length > 0 || preorderId != null || exchange != null) {
+      return 'Спершу завершіть або очистіть поточний чек — обмін починається з порожнього кошика';
+    }
+    set({ exchange: draft, banner: null });
+    return null;
+  },
+  cancelExchange: () => set({ exchange: null }),
   setCartDiscount: (discount) => set({ cartDiscount: discount }),
   setCustomer: (customer) =>
     set((state) => ({
@@ -315,7 +343,14 @@ export const useCartStore = create<CartStore>((set, get) => ({
   },
 
   clear: () =>
-    set({ lines: [], banner: null, cartDiscount: null, customer: null, preorderId: null }),
+    set({
+      lines: [],
+      banner: null,
+      cartDiscount: null,
+      customer: null,
+      preorderId: null,
+      exchange: null,
+    }),
 
   subtotalCents: () =>
     get().lines.reduce((sum, line) => sum + line.unit_price_cents * line.quantity, 0),
