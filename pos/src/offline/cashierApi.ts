@@ -18,6 +18,7 @@ import type {
   SaleListItem,
   SaleItemInput,
   SalePaymentInput,
+  ListSalesParams,
 } from '../types';
 
 /**
@@ -174,9 +175,9 @@ export const cashierApi = {
     return api.updateCustomer(id, payload);
   },
 
-  async listSales(limit = 50): Promise<LocalSaleRow[]> {
-    if (isOfflineReadsEnabled()) return repo.listSales(limit);
-    return (await api.listSales(limit)).map(rowFromServer);
+  async listSales(params: number | ListSalesParams = 50): Promise<LocalSaleRow[]> {
+    if (isOfflineReadsEnabled()) return repo.listSales(params);
+    return (await api.listSales(params)).map(rowFromServer);
   },
 
   async getSale(row: LocalSaleRow): Promise<SaleDetail | null> {

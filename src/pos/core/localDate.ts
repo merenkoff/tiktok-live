@@ -16,3 +16,15 @@ export function localDateString(timezone: string, at: Date = new Date()): string
   // analytics ranges key on.
   return new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(at);
 }
+
+/**
+ * `YYYY-MM-DD` and a day that exists — `2026-13-40` is not one. Routes check
+ * a typed day with this before it reaches a `::date` cast, which would answer
+ * a 500 instead of a sentence.
+ */
+export function isLocalDateString(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y, m, d] = s.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}

@@ -13,6 +13,7 @@ import type {
   SaleItemInput,
   SaleListItem,
   SalePaymentInput,
+  ListSalesParams,
 } from '../types';
 import { FiscalSaleUnknownError, OfflineRefundError } from './errors';
 import { takeStamp } from './lease';
@@ -42,6 +43,7 @@ import {
   type OutboxCustomerPayload,
   type OutboxSalePayload,
 } from './db';
+import { normalizeSaleParams, saleMatches } from './saleSearch';
 import { cacheCatalogImages, cacheQrImage, withCachedImages } from './photos';
 import { useOfflineStatus } from './status';
 
@@ -600,9 +602,7 @@ function rowFromListItem(item: SaleListItem, prev?: LocalSaleRow): LocalSaleRow 
  * sales screen keeps working offline. Deliberately not part of
  * `refreshSnapshot` — the register hot path does not need receipts.
  */
-export async function refreshSalesCache(limit = 50): Promise<void> {
-  if (!navigator.onLine || !api.hasLiveJwt()) return;
-  const items = await api.listSales(limit);
+async function mergeSaleListItems(items: SaleListItem[]): Promise<void> {
   await db.transaction('rw', db.sales, async () => {
     for (const item of items) {
       const prev = await db.sales.get(saleKey(item));
@@ -611,20 +611,44 @@ export async function refreshSalesCache(limit = 50): Promise<void> {
   });
 }
 
+export async function refreshSalesCache(limit = 50): Promise<void> {
+  if (!navigator.onLine || !api.hasLiveJwt()) return;
+  await mergeSaleListItems(await api.listSales(limit));
+}
+
 function sortByNewest(rows: LocalSaleRow[]): LocalSaleRow[] {
   return rows.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
 }
 
-export async function listSales(limit = 50): Promise<LocalSaleRow[]> {
+/**
+ * The till's receipts, searched (clothing R3). Online the SERVER searches —
+ * it has the barcodes, the phones and the fiscal numbers — and its page is
+ * merged into the mirror as before; receipts still in the outbox exist
+ * nowhere else, so the matching ones ride along on the first page. Offline the
+ * mirror is all there is: `saleMatches` reads what a row carries (number,
+ * customer name, the lines of a receipt that was opened here) on the DEVICE's
+ * calendar day.
+ */
+export async function listSales(params: number | ListSalesParams = 50): Promise<LocalSaleRow[]> {
+  const p = normalizeSaleParams(params);
   if (navigator.onLine && api.hasLiveJwt()) {
     try {
-      await refreshSalesCache(limit);
+      const items = await api.listSales(p);
+      await mergeSaleListItems(items);
+      const keys = new Set(items.map((item) => saleKey(item)));
+      const all = await db.sales.toArray();
+      const page = all.filter((row) => keys.has(row.client_uuid));
+      const queued =
+        p.offset === 0
+          ? all.filter((row) => !row.server_id && !keys.has(row.client_uuid) && saleMatches(row, p))
+          : [];
+      return sortByNewest([...page, ...queued]);
     } catch (error) {
       if (!isNetworkError(error)) throw error;
     }
   }
-  const rows = await db.sales.toArray();
-  return sortByNewest(rows).slice(0, limit);
+  const rows = (await db.sales.toArray()).filter((row) => saleMatches(row, p));
+  return sortByNewest(rows).slice(p.offset, p.offset + p.limit);
 }
 
 /**

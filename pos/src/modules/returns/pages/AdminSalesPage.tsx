@@ -2,12 +2,13 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { formatUah, useVertical } from '@pos/platform';
 import type { SaleDetail, SaleListItem } from '@pos/platform';
 import { adminReturnsApi } from '../data/returnsApi';
 import { FiscalBadge, FiscalDetailCard } from '../components/FiscalBadge';
 import { Chip, SaleStatusChip } from '../components/SaleChips';
+import { useDebouncedValue } from '../lib/receiptFilters';
 import { PageHeader, Pencil, Receipt, SectionHead } from '@pos/platform/ui';
 
 const PAYMENT_LABEL_UK: Record<string, string> = {
@@ -16,19 +17,52 @@ const PAYMENT_LABEL_UK: Record<string, string> = {
   qr: 'QR-код',
 };
 
+const PAGE = 100;
+
 export function AdminSalesPage() {
   const [sales, setSales] = useState<SaleListItem[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [query, setQuery] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
   const [selected, setSelected] = useState<SaleDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refundQty, setRefundQty] = useState<Record<number, number>>({});
 
+  // The search (clothing R3): what was typed, between two of the store's
+  // days. The server does the matching — it has the barcodes, the phones and
+  // the fiscal numbers; this screen only asks.
+  const debouncedQuery = useDebouncedValue(query, 300);
+  const filter = useMemo(
+    () => ({ q: debouncedQuery.trim() || undefined, from: from || undefined, to: to || undefined }),
+    [debouncedQuery, from, to]
+  );
+  const filtered = Boolean(filter.q || filter.from || filter.to);
+
   async function reload() {
-    setSales(await adminReturnsApi.listSales(100));
+    const next = await adminReturnsApi.listSales({ limit: PAGE, ...filter });
+    setSales(next);
+    setHasMore(next.length >= PAGE);
   }
 
   useEffect(() => {
     void reload().catch(() => setError('Не вдалося завантажити продажі'));
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter]);
+
+  async function loadMore() {
+    setLoadingMore(true);
+    try {
+      const more = await adminReturnsApi.listSales({ limit: PAGE, offset: sales.length, ...filter });
+      setSales((prev) => [...prev, ...more]);
+      setHasMore(more.length >= PAGE);
+    } catch {
+      setError('Не вдалося завантажити продажі');
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   async function openSale(id: number) {
     const sale = await adminReturnsApi.getSale(id);
@@ -98,10 +132,45 @@ export function AdminSalesPage() {
 
       {error && <div className="mb-5 rounded-sq bg-red-50 text-red-700 px-4 py-3 text-sm">{error}</div>}
 
+      <div className="mb-5 flex flex-wrap items-end gap-3">
+        <label className="flex flex-col gap-1.5 flex-1 min-w-[240px]">
+          <span className="text-[13px] font-semibold text-sq-secondary">Пошук</span>
+          <input
+            type="search"
+            className="sq-input"
+            aria-label="Пошук продажів"
+            placeholder="Номер чека, товар, штрихкод, артикул, клієнт, телефон"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-[13px] font-semibold text-sq-secondary">З</span>
+          <input type="date" className="sq-input tabular-nums" aria-label="З дати" value={from} onChange={(e) => setFrom(e.target.value)} />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-[13px] font-semibold text-sq-secondary">По</span>
+          <input type="date" className="sq-input tabular-nums" aria-label="По дату" value={to} onChange={(e) => setTo(e.target.value)} />
+        </label>
+        {filtered && (
+          <button
+            type="button"
+            className="sq-btn-quiet"
+            onClick={() => {
+              setQuery('');
+              setFrom('');
+              setTo('');
+            }}
+          >
+            Скинути
+          </button>
+        )}
+      </div>
+
       <div className="grid lg:grid-cols-2 gap-x-8 gap-y-6 items-start">
         <section>
           {sales.length === 0 ? (
-            <Empty text="Поки немає продажів." />
+            <Empty text={filtered ? 'Нічого не знайдено.' : 'Поки немає продажів.'} />
           ) : (
             <ul>
               {sales.map((sale) => {
@@ -147,6 +216,16 @@ export function AdminSalesPage() {
                 );
               })}
             </ul>
+          )}
+          {hasMore && (
+            <button
+              type="button"
+              className="sq-btn-quiet w-full mt-3"
+              onClick={() => void loadMore()}
+              disabled={loadingMore}
+            >
+              {loadingMore ? 'Завантаження…' : 'Показати ще'}
+            </button>
           )}
         </section>
 

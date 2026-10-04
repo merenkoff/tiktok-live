@@ -52,6 +52,7 @@ import type {
   ModifierGroup,
   ModifierGroupInput,
   ModifierInput,
+  ListSalesParams,
 } from '../types';
 import { posApiBase } from '../lib/urls';
 // Direct import (not via '@pos/platform') — that barrel re-exports this module,
@@ -552,8 +553,17 @@ class PosApi {
     await this.client.delete(`/customers/${id}`);
   }
 
-  async listSales(limit = 50): Promise<SaleListItem[]> {
-    const { data } = await this.client.get<SaleListItem[]>('/sales', { params: { limit } });
+  async listSales(params: number | ListSalesParams = 50): Promise<SaleListItem[]> {
+    const p = typeof params === 'number' ? { limit: params } : params;
+    const { data } = await this.client.get<SaleListItem[]>('/sales', {
+      params: {
+        limit: p.limit ?? 50,
+        ...(p.offset ? { offset: p.offset } : {}),
+        ...(p.q?.trim() ? { q: p.q.trim() } : {}),
+        ...(p.from ? { from: p.from } : {}),
+        ...(p.to ? { to: p.to } : {}),
+      },
+    });
     return data;
   }
 

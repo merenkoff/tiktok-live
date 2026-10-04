@@ -976,6 +976,19 @@ export interface SaleListItem {
   fiscal_status?: SaleFiscalStatus;
 }
 
+/**
+ * Filters for `GET /sales` (clothing R3): what was typed or scanned, the
+ * store's days (inclusive, `YYYY-MM-DD`) and a page. A bare number is still
+ * accepted by the clients as «limit», for modules built before the search.
+ */
+export interface ListSalesParams {
+  limit?: number;
+  offset?: number;
+  q?: string;
+  from?: string;
+  to?: string;
+}
+
 export interface SaleDetail {
   id: number;
   receipt_number: string;

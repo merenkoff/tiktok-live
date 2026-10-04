@@ -24,7 +24,7 @@
 
 import type { PoolClient } from 'pg';
 import { pool } from '../db.js';
-import { localDateString } from './core/localDate.js';
+import { isLocalDateString, localDateString } from './core/localDate.js';
 import { invalidatePublicMenu } from './public-menu/menu.service.js';
 
 export type MarkdownRounding = 1 | 100 | 1000;
@@ -95,13 +95,6 @@ export function markdownPrice(baseCents: number, percent: number, rounding: Mark
   return Math.round(raw / rounding) * rounding;
 }
 
-function isRealDate(s: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
-  const [y, m, d] = s.split('-').map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
-}
-
 interface NormalizedInput {
   productIds: number[];
   percent: number;
@@ -130,7 +123,7 @@ export function normalizeMarkdownInput(input: MarkdownInput, today: string): Nor
   let endsOn: string | null = null;
   if (input.ends_on != null && input.ends_on !== '') {
     const s = String(input.ends_on);
-    if (!isRealDate(s)) throw new Error('Дата завершення — у форматі РРРР-ММ-ДД');
+    if (!isLocalDateString(s)) throw new Error('Дата завершення — у форматі РРРР-ММ-ДД');
     if (s < today) throw new Error('Дата завершення вже минула');
     endsOn = s;
   }
