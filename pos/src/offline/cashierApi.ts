@@ -10,10 +10,10 @@ import { useOfflineStatus } from './status';
 import type { LocalSaleRow } from './db';
 import type {
   CatalogItem,
-  PaymentMethod,
   PosCustomer,
   PosTag,
   RefundLineInput,
+  RefundOptions,
   SaleDetail,
   SaleListItem,
   SaleItemInput,
@@ -39,6 +39,9 @@ export function saleRowFromDetail(detail: SaleDetail): LocalSaleRow {
     customer_name: detail.customer_name ?? null,
     created_at: detail.created_at,
     fiscal_status: detail.fiscal_status,
+    exchange_of_receipt_number: detail.exchange_of?.receipt_number ?? null,
+    exchange_sale_number:
+      detail.refunds?.find((r) => r.exchange_sale)?.exchange_sale?.receipt_number ?? null,
     detail,
   };
 }
@@ -55,6 +58,8 @@ function rowFromServer(item: SaleListItem): LocalSaleRow {
     customer_name: item.customer_name ?? null,
     created_at: item.created_at,
     fiscal_status: item.fiscal_status,
+    exchange_of_receipt_number: item.exchange_of_receipt_number ?? null,
+    exchange_sale_number: item.exchange_sale_number ?? null,
   };
 }
 
@@ -188,7 +193,7 @@ export const cashierApi = {
   async refundSale(
     row: LocalSaleRow,
     items: RefundLineInput[],
-    opts: { method?: PaymentMethod | null; reason?: string } = {}
+    opts: RefundOptions = {}
   ): Promise<repo.RefundedSaleRow> {
     if (isOfflinePosEnabled()) return repo.refundSale(row, items, opts);
     if (!row.server_id) throw new Error('Sale has no server id');

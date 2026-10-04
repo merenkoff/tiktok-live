@@ -5,10 +5,10 @@
 import { api, isNetworkError } from '../services/api';
 import type {
   CatalogItem,
-  PaymentMethod,
   PosCustomer,
   PosTag,
   RefundLineInput,
+  RefundOptions,
   SaleDetail,
   SaleItemInput,
   SaleListItem,
@@ -592,6 +592,8 @@ function rowFromListItem(item: SaleListItem, prev?: LocalSaleRow): LocalSaleRow 
     created_at: item.created_at,
     fiscal_status: item.fiscal_status ?? prev?.fiscal_status,
     sync_state: prev?.sync_state,
+    exchange_of_receipt_number: item.exchange_of_receipt_number ?? prev?.exchange_of_receipt_number ?? null,
+    exchange_sale_number: item.exchange_sale_number ?? prev?.exchange_sale_number ?? null,
     // Keep any detail we already hold — the list endpoint carries no line items.
     detail: prev?.detail,
   };
@@ -700,7 +702,7 @@ async function dropUnsyncedSale(clientUuid: string): Promise<boolean> {
 export async function refundSale(
   row: LocalSaleRow,
   items: RefundLineInput[],
-  opts: { method?: PaymentMethod | null; reason?: string } = {}
+  opts: RefundOptions = {}
 ): Promise<RefundedSaleRow> {
   const online = navigator.onLine && api.hasLiveJwt();
 
@@ -750,7 +752,7 @@ export async function refundSale(
   }
 
   const detail = await api.refundSale(serverId, items, {
-    reason: opts.reason,
+    ...opts,
     method: opts.method ?? null,
     client_uuid: crypto.randomUUID(),
   });

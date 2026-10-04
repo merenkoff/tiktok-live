@@ -78,6 +78,8 @@ describe('saleRowFromDetail', () => {
       staff_name: 'Олена',
       customer_name: null,
       created_at: '2026-01-01T12:00:00.000Z',
+      exchange_of_receipt_number: null,
+      exchange_sale_number: null,
       detail,
     });
   });
@@ -146,6 +148,8 @@ describe('cashierApi delegation', () => {
         staff_name: 'Олена',
         customer_name: null,
         created_at: '2026-01-01T12:00:00.000Z',
+        exchange_of_receipt_number: null,
+        exchange_sale_number: null,
       },
     ]);
   });

@@ -11,7 +11,6 @@ import type {
   FiscalSettingsView,
   AuthResponse,
   CatalogItem,
-  PaymentMethod,
   PosCustomer,
   PosTag,
   TagStation,
@@ -20,6 +19,7 @@ import type {
   ProductKind,
   ProductStockMode,
   RefundLineInput,
+  RefundOptions,
   SaleDetail,
   SaleItemInput,
   SalePaymentInput,
@@ -580,13 +580,18 @@ class PosApi {
   async refundSale(
     id: number,
     items: RefundLineInput[],
-    opts: { reason?: string; method?: PaymentMethod | null; client_uuid?: string | null } = {}
+    opts: RefundOptions & { client_uuid?: string | null } = {}
   ): Promise<SaleDetail> {
     const { data } = await this.client.post<SaleDetail>(`/sales/${id}/refunds`, {
       items,
       reason: opts.reason,
       method: opts.method ?? null,
       client_uuid: opts.client_uuid ?? null,
+      // Migration 064: why, and who the act is for. Absent keys are fine for
+      // an older backend, which simply ignores them.
+      reason_code: opts.reason_code ?? null,
+      buyer_name: opts.buyer_name ?? null,
+      buyer_document: opts.buyer_document ?? null,
     });
     return data;
   }

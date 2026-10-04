@@ -6,9 +6,9 @@ import { api, cashierApi } from '@pos/platform';
 import type {
   ListSalesParams,
   LocalSaleRow,
-  PaymentMethod,
   RefundedSaleRow,
   RefundLineInput,
+  RefundOptions,
   SaleDetail,
   SaleListItem,
 } from '@pos/platform';
@@ -25,7 +25,7 @@ export const returnsApi = {
   refundSale: (
     row: LocalSaleRow,
     items: RefundLineInput[],
-    opts: { method?: PaymentMethod | null; reason?: string } = {}
+    opts: RefundOptions = {}
   ): Promise<RefundedSaleRow> => cashierApi.refundSale(row, items, opts),
   discardQueuedSale: (clientUuid: string): Promise<void> =>
     cashierApi.discardQueuedSale(clientUuid),
@@ -41,6 +41,6 @@ export const adminReturnsApi = {
   refundSale: (
     saleId: number,
     items: RefundLineInput[],
-    opts: { reason?: string; method?: PaymentMethod | null; client_uuid?: string | null } = {}
+    opts: RefundOptions & { client_uuid?: string | null } = {}
   ): Promise<SaleDetail> => api.refundSale(saleId, items, opts),
 };

@@ -116,6 +116,11 @@ body {
   display: none;
 }
 
+/* The «Акт про видачу коштів» (returns module): an A4 sheet, same arrangement. */
+.act-print-area {
+  display: none;
+}
+
 @media print {
   body {
     background: #fff;
@@ -131,8 +136,69 @@ body {
      `PriceTagsPrintable` puts itself here so no caller has to know.
      `display` rather than `visibility`, because hidden-but-laid-out content
      would follow the tags out of the printer as blank pages. */
-  body > *:not(.price-tag-print-area):not(.receipt-print-area) {
+  body > *:not(.price-tag-print-area):not(.receipt-print-area):not(.act-print-area) {
     display: none !important;
+  }
+
+  /* The act: a sheet, not a roll. `@page` above has no margin (one tag per
+     page), so the sheet carries its own — 15 mm inside a 210 mm width works
+     on A4 and Letter alike. */
+  .act-print-area {
+    display: block;
+    box-sizing: border-box;
+    width: 210mm;
+    padding: 15mm 18mm;
+    margin: 0 auto;
+    font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+    font-size: 11pt;
+    line-height: 1.45;
+    color: #000;
+  }
+  .act-print-store {
+    font-weight: 700;
+    font-size: 13pt;
+  }
+  .act-print-legal {
+    font-size: 10pt;
+  }
+  .act-print-title {
+    text-align: center;
+    font-size: 15pt;
+    font-weight: 700;
+    margin: 10mm 0 2mm;
+  }
+  .act-print-meta {
+    text-align: center;
+    margin-bottom: 8mm;
+  }
+  .act-print-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 5mm 0;
+  }
+  .act-print-table th,
+  .act-print-table td {
+    border: 1px solid #000;
+    padding: 1.5mm 2.5mm;
+    text-align: left;
+    vertical-align: top;
+  }
+  .act-print-table th:nth-child(2),
+  .act-print-table td:nth-child(2),
+  .act-print-table th:nth-child(3),
+  .act-print-table td:nth-child(3) {
+    text-align: right;
+    white-space: nowrap;
+  }
+  .act-print-total {
+    font-weight: 700;
+    margin-top: 4mm;
+  }
+  .act-print-signatures {
+    margin-top: 14mm;
+    display: flex;
+    justify-content: space-between;
+    gap: 10mm;
   }
 
   /* One tag per page, so a receipt printer cuts between them exactly as it

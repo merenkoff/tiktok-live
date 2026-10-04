@@ -57,7 +57,9 @@ export function ReceiptPrintable({ receipt }: { receipt: ReceiptData | null }) {
       ))}
       {receipt.kind === 'refund' ? (
         <>
-          <p>ЧЕК ПОВЕРНЕННЯ {receipt.receipt_number}</p>
+          {/* Рядок 31 of Положення № 13: the return receipt is captioned
+              «ВИДАТКОВИЙ ЧЕК» — the regulation's name for it, not ours. */}
+          <p>ВИДАТКОВИЙ ЧЕК {receipt.receipt_number}</p>
           {receipt.refund_of_receipt && <p>до чека {receipt.refund_of_receipt}</p>}
         </>
       ) : (
