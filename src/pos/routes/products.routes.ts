@@ -8,6 +8,7 @@ import { pool } from '../../db.js';
 import { listTechCards } from '../composites.service.js';
 import * as productsService from '../products.service.js';
 import { invalidatePublicMenu } from '../public-menu/menu.service.js';
+import * as markdownsService from '../markdowns.service.js';
 import * as tagsService from '../tags.service.js';
 import { saveProductImage } from '../uploads.service.js';
 import { logger } from '../../logger.js';
@@ -273,6 +274,54 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
       );
     } catch (error) {
       return reply.code(400).send({ error: errorMessage(error) });
+    }
+  });
+
+  // ── Markdowns (одяг D2) ───────────────────────────────
+  // Owner-only, like every other price write. The service drops the guest
+  // menu's cache itself (no import cycle on this file, unlike products).
+  fastify.get('/markdowns', async (request, reply) => {
+    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    if (!auth) return;
+    return markdownsService.listMarkdowns(auth.storeId);
+  });
+
+  fastify.post('/markdowns/preview', async (request, reply) => {
+    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    if (!auth) return;
+    try {
+      return await markdownsService.previewMarkdown(
+        auth.storeId,
+        request.body as markdownsService.MarkdownInput
+      );
+    } catch (error) {
+      return reply.code(400).send({ error: errorMessage(error) });
+    }
+  });
+
+  fastify.post('/markdowns', async (request, reply) => {
+    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    if (!auth) return;
+    try {
+      return await markdownsService.createMarkdown(
+        auth.storeId,
+        auth.staffId,
+        request.body as markdownsService.MarkdownInput
+      );
+    } catch (error) {
+      return reply.code(400).send({ error: errorMessage(error) });
+    }
+  });
+
+  fastify.post('/markdowns/:id/end', async (request, reply) => {
+    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    if (!auth) return;
+    const { id } = request.params as { id: string };
+    try {
+      return await markdownsService.endMarkdown(auth.storeId, Number(id), auth.staffId, 'manual');
+    } catch (error) {
+      const status = error instanceof markdownsService.MarkdownNotFound ? 404 : 400;
+      return reply.code(status).send({ error: errorMessage(error) });
     }
   });
 

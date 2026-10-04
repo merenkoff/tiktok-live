@@ -13,8 +13,10 @@ import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { DEFAULT_TAG_COLOR, api, type TagColorKey, useAuthStore, useVertical } from '@pos/platform';
 import type { PosTag, TagStation, Product } from '@pos/platform';
-import { Inbox, LayoutGrid, Package, PageHeader, Plus, Printer } from '@pos/platform/ui';
+import { Inbox, LayoutGrid, Package, PageHeader, Percent, Plus, Printer } from '@pos/platform/ui';
 import { ConfirmSheet } from '../../../components/cashier/ConfirmSheet';
+import { MarkdownDialog } from '../components/MarkdownDialog';
+import { countPhrase } from '../data/markdownsApi';
 import { PriceTagsDialog } from '../components/PriceTagsDialog';
 import { ProductRow } from '../components/ProductRow';
 import { TagColorSwatches } from '../components/TagColorSwatches';
@@ -31,6 +33,8 @@ export function ProductsPage() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [tagsOpen, setTagsOpen] = useState(false);
+  const [markdownOpen, setMarkdownOpen] = useState(false);
+  const [flash, setFlash] = useState<string | null>(null);
   const [archiving, setArchiving] = useState<Product | null>(null);
   const storeName = useAuthStore((s) => s.auth?.store.name ?? '');
   const [searchParams, setSearchParams] = useSearchParams();
@@ -186,16 +190,37 @@ export function ProductsPage() {
         title="Товари"
         subtitle="Мітки, варіанти та залишки."
         actions={
-          <Link
-            to="/admin/products/new"
-            state={cardState}
-            className="pos-btn-primary min-h-11 px-4 rounded-sq text-[15px] gap-1.5"
-          >
-            <Plus size={20} />
-            Додати товар
-          </Link>
+          <>
+            <Link to="/admin/products/markdowns" className="sq-btn-quiet">
+              <Percent size={20} />
+              Уцінки
+            </Link>
+            <Link
+              to="/admin/products/new"
+              state={cardState}
+              className="pos-btn-primary min-h-11 px-4 rounded-sq text-[15px] gap-1.5"
+            >
+              <Plus size={20} />
+              Додати товар
+            </Link>
+          </>
         }
       />
+
+      {flash && (
+        <div
+          className="mb-5 rounded-sq bg-amber-50 text-amber-800 px-4 py-3 text-sm flex flex-wrap items-center gap-x-3 gap-y-1"
+          role="status"
+        >
+          <span>{flash}</span>
+          <Link to="/admin/products/markdowns" className="font-semibold">
+            Переглянути уцінки
+          </Link>
+          <button type="button" className="ml-auto font-semibold" onClick={() => setFlash(null)} aria-label="Сховати">
+            ×
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="mb-5 rounded-sq bg-red-50 text-red-700 px-4 py-3 text-sm" role="alert">
@@ -288,6 +313,25 @@ export function ProductsPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
+          {visible.length > 0 && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[13px]">
+              {selected.size < visible.length && (
+                <button
+                  type="button"
+                  className="font-semibold text-sq-blue"
+                  onClick={() => setSelected(new Set(visible.map((p) => p.id)))}
+                >
+                  Обрати всі показані ({visible.length})
+                </button>
+              )}
+              {selected.size > 0 && (
+                <button type="button" className="font-semibold text-sq-secondary" onClick={() => setSelected(new Set())}>
+                  Зняти вибір
+                </button>
+              )}
+            </div>
+          )}
+
           {selected.size > 0 && (
             <div className="flex flex-wrap items-center gap-2 rounded-xl bg-sq-sidebar px-3 py-2.5">
               <span className="text-[15px] text-sq-secondary tabular-nums mr-1">Обрано: {selected.size}</span>
@@ -317,7 +361,24 @@ export function ProductsPage() {
                 <Printer size={20} />
                 Друк цінників
               </button>
+              <button type="button" onClick={() => setMarkdownOpen(true)} className="sq-btn-quiet">
+                <Percent size={20} />
+                Уцінити
+              </button>
             </div>
+          )}
+
+          {markdownOpen && (
+            <MarkdownDialog
+              products={products.filter((p) => selected.has(p.id))}
+              onClose={() => setMarkdownOpen(false)}
+              onApplied={(result) => {
+                setMarkdownOpen(false);
+                setSelected(new Set());
+                setFlash(`Уцінено ${countPhrase(result.applied, result.markdown.products)}`);
+                void reload();
+              }}
+            />
           )}
 
           {tagsOpen && (

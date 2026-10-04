@@ -17,6 +17,9 @@ const ModifiersPage = lazyWithRetry(() =>
 const TechCardsPage = lazyWithRetry(() =>
   import('./pages/TechCardsPage').then((m) => ({ default: m.TechCardsPage }))
 );
+const MarkdownsPage = lazyWithRetry(() =>
+  import('./pages/MarkdownsPage').then((m) => ({ default: m.MarkdownsPage }))
+);
 
 /** Product / variant / tag catalog management. Owner-only, web build only. */
 export const productsModule: ModuleDescriptor = {
@@ -31,6 +34,9 @@ export const productsModule: ModuleDescriptor = {
     // one variant's full field set in a sheet. `?edit=<id>` on the list
     // redirects here, so the older links from «Техкарти» keep working.
     { path: 'products/new', mount: 'admin', element: ProductPage },
+    // Mass markdowns (clothing D2): what is on sale, until when, and the
+    // button that puts the prices back. Static, so it ranks above `:id`.
+    { path: 'products/markdowns', mount: 'admin', element: MarkdownsPage },
     { path: 'products/:id', mount: 'admin', element: ProductPage },
     // The questions a product may ask («Молоко?») and their answers. Host code,
     // not café code: the next vertical that asks a question reuses it.

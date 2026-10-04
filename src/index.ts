@@ -16,6 +16,7 @@ import { registerSessionRoutes } from './sessions/sessions.controller.js';
 import { registerPosPlugin } from './pos/pos.plugin.js';
 import { reconcileQrPayments } from './pos/qr.service.js';
 import { runGtinEventsRetention } from './pos/gtin/events-retention.js';
+import { endExpiredMarkdowns } from './pos/markdowns.service.js';
 import { closeDueShifts } from './pos/fiscal/shifts.service.js';
 import { retryPendingFiscalDocs } from './pos/fiscal/fiscal.service.js';
 import { refillAllStores } from './pos/fiscal/offline/pool.js';
@@ -157,6 +158,19 @@ async function main(): Promise<void> {
         await reconcileQrPayments();
       } catch (error) {
         logger.error('QR reconcile cron error', { error });
+      }
+    });
+
+    // End mass markdowns whose date has passed (clothing D2). Hourly, because
+    // the date is a store-local calendar day and stores sit in different
+    // zones; ending restores the prices the campaign recorded, so a run that
+    // finds nothing is free.
+    cron.schedule('7 * * * *', async () => {
+      try {
+        const ended = await endExpiredMarkdowns();
+        if (ended > 0) logger.info(`Ended ${ended} expired markdown(s)`);
+      } catch (error) {
+        logger.error('Markdown expiry cron error', { error });
       }
     });
 
