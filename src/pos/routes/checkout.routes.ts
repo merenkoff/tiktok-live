@@ -13,7 +13,12 @@
 // See TechDocs/POS_FISCAL_PRRO.md §8 for the failure matrix.
 
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import type { CompleteSaleItemInput, PaymentMethod } from '../types.js';
+import type {
+  CompleteSaleItemInput,
+  CompleteSalePaymentInput,
+  PaymentMethod,
+  RefundReasonCode,
+} from '../types.js';
 import { ensurePosAuth } from '../core/auth.js';
 import * as salesService from '../sales.service.js';
 import * as parkedCarts from '../parked-carts.service.js';
@@ -253,6 +258,212 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
     }
   });
 
+  /**
+   * An exchange: goods back against receipt `:id`, new goods out, one
+   * transaction (TechDocs/POS_CLOTHING.md R1).
+   *
+   * Under ПРРО it is TWO documents — the return receipt and the sale receipt,
+   * each for its full amount — registered in that order after the commit. One
+   * pre-flight, with the refund's op: it is the stricter of the two (it never
+   * opens an offline session and refuses inside one), and the sale half must
+   * not be able to go where the return half cannot. The return receipt failing
+   * keeps the 200 the refund route has (the refund happened; the cron retries);
+   * the sale receipt failing has the sale's own three outcomes, with the refund
+   * named in the body so the till can say «повернення оформлено, пробийте товар
+   * окремим чеком» rather than start the exchange again.
+   */
+  fastify.post('/sales/:id/exchange', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const { id } = request.params as { id: string };
+    const saleId = Number(id);
+    const body = (request.body ?? {}) as {
+      refund?: {
+        items?: { sale_item_id: number; quantity: number }[];
+        method?: PaymentMethod | null;
+        reason_code?: RefundReasonCode | null;
+        reason?: string | null;
+        buyer_name?: string | null;
+        buyer_document?: string | null;
+        client_uuid?: string | null;
+      };
+      sale?: {
+        items?: CompleteSaleItemInput[];
+        payments?: CompleteSalePaymentInput[];
+        cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
+        customer_id?: number | null;
+        note?: string;
+        client_uuid?: string | null;
+      };
+    };
+    const refundUuid = String(body.refund?.client_uuid ?? '').trim().toLowerCase();
+    const saleUuid = String(body.sale?.client_uuid ?? '').trim().toLowerCase();
+    if (!refundUuid || !saleUuid) {
+      return reply.code(400).send({
+        error: 'client_uuid обовʼязковий для обміну — окремий для повернення і для продажу',
+      });
+    }
+
+    // A replay (the till timed out and asked again): answer from what exists,
+    // with no provider call. Both halves commit together, so seeing exactly
+    // one of them means a different request reused one of the keys.
+    const existingRefund = await salesService.getRefundRowByClientUuid(auth.storeId, refundUuid);
+    const existingSale = await salesService.getSaleByClientUuid(auth.storeId, saleUuid);
+    if (existingRefund && existingSale) {
+      if (existingSale.status === 'voided') {
+        const original = await salesService.getSale(auth.storeId, existingRefund.sale_id);
+        return reply.code(409).send({
+          error: 'exchange_sale_voided',
+          message:
+            'Новий чек обміну скасовано через відмову ПРРО — повернення вже оформлено, пробийте товар окремим чеком',
+          refund_id: existingRefund.id,
+          refund: original,
+        });
+      }
+      const view = await exchangeView(auth.storeId, existingRefund.sale_id, existingRefund.id, existingSale.id);
+      if (!view) return reply.code(404).send({ error: 'Sale not found' });
+      return reply.code(200).send(view);
+    }
+    if (existingRefund || existingSale) {
+      return reply.code(409).send({
+        error: 'exchange_inconsistent',
+        message: 'Один із client_uuid уже використано іншою операцією — почніть обмін заново',
+      });
+    }
+
+    let gate: fiscalService.FiscalGate;
+    try {
+      gate = await fiscalService.preflight(auth.storeId, auth.staffId, readDeviceId(request), 'refund');
+    } catch (error) {
+      return preflightRefusal(reply, error);
+    }
+
+    let ids: { refundId: number; newSaleId: number };
+    try {
+      ids = await salesService.exchangeSale({
+        storeId: auth.storeId,
+        staffId: auth.staffId,
+        saleId,
+        refund: {
+          items: body.refund?.items ?? [],
+          method: body.refund?.method ?? null,
+          reason_code: body.refund?.reason_code ?? null,
+          reason: body.refund?.reason ?? null,
+          buyer_name: body.refund?.buyer_name ?? null,
+          buyer_document: body.refund?.buyer_document ?? null,
+          client_uuid: refundUuid,
+        },
+        sale: {
+          items: body.sale?.items ?? [],
+          payments: body.sale?.payments ?? [],
+          cart_discount: body.sale?.cart_discount ?? null,
+          ...(body.sale && 'customer_id' in body.sale ? { customer_id: body.sale.customer_id } : {}),
+          note: body.sale?.note,
+          client_uuid: saleUuid,
+        },
+        fiscal_status: gate.on ? 'pending' : 'none',
+      });
+    } catch (error) {
+      const message = errorMessage(error);
+      // Two tills (or one impatient one) sent the same exchange at once: the
+      // loser waited on the sale's row lock and then found the receipt already
+      // refunded (or died on the client_uuid index) — either way the winner's
+      // result, found by this request's own keys, is this request's answer.
+      const refundRow = await salesService.getRefundRowByClientUuid(auth.storeId, refundUuid);
+      const saleRow = await salesService.getSaleByClientUuid(auth.storeId, saleUuid);
+      if (refundRow && saleRow) {
+        const view = await exchangeView(auth.storeId, refundRow.sale_id, refundRow.id, saleRow.id);
+        if (view) return reply.code(200).send(view);
+      }
+      if (message === 'Sale not found') return reply.code(404).send({ error: message });
+      logger.warn('Exchange refused', { storeId: auth.storeId, saleId, error: message });
+      return reply.code(400).send({ error: message });
+    }
+
+    if (!gate.on) {
+      const view = await exchangeView(auth.storeId, saleId, ids.refundId, ids.newSaleId);
+      if (!view) return reply.code(500).send({ error: 'sale_not_readable' });
+      return reply.code(201).send(view);
+    }
+
+    const original = await salesService.getSale(auth.storeId, saleId);
+    const fresh = await salesService.getSale(auth.storeId, ids.newSaleId);
+    const refundRow = original?.refunds.find((r) => r.id === ids.refundId);
+    if (!original || !fresh || !refundRow) {
+      logger.error('Exchange committed but not readable', { storeId: auth.storeId, saleId, ids });
+      return reply.code(500).send({ error: 'sale_not_readable' });
+    }
+
+    // 1. The return receipt. Same stance as the refund route: it happened,
+    //    money and stock moved, so a failure is a 200-grade outcome the cron
+    //    retries — never a reason to undo the sale half that follows.
+    let refundFiscal: fiscalService.FiscalView | null;
+    try {
+      refundFiscal = await fiscalService.fiscalizeRefund(
+        gate,
+        {
+          id: refundRow.id,
+          client_uuid: refundRow.client_uuid,
+          refund_number: refundRow.refund_number ?? '',
+          staff_name: refundRow.staff_name,
+          method: refundRow.method,
+          total_cents: refundRow.total_cents,
+          reason: refundRow.reason,
+          lines: refundRow.items.map((line) => ({
+            sale_item_id: line.sale_item_id,
+            quantity: line.quantity,
+            amount_cents: line.line_total_cents,
+          })),
+        },
+        original
+      );
+    } catch (error) {
+      const failed = error instanceof fiscalService.FiscalDocumentFailed;
+      if (!failed) await salesService.markRefundFiscalFailed(auth.storeId, refundRow.id);
+      logger.error('Exchange: refund fiscalisation failed', {
+        storeId: auth.storeId,
+        saleId,
+        refundId: refundRow.id,
+        hadLedgerRow: failed,
+        error: errorMessage(error),
+      });
+      refundFiscal = failed
+        ? fiscalService.failureView(error)
+        : {
+            status: 'failed' as const,
+            mode: 'online' as const,
+            fiscal_code: null,
+            fiscal_date: null,
+            control_number: null,
+            tax_url: null,
+            qr_payload: null,
+            receipt_text: null,
+            error_code: 'unknown',
+            message: errorMessage(error),
+          };
+    }
+
+    // 2. The sale receipt, on a fresh budget — the gate's signal was cut for
+    //    one document and has just paid for the first.
+    try {
+      const fiscal = await fiscalService.fiscalizeSale(fiscalService.renewGate(gate), {
+        ...fresh,
+        customer_phone: fresh.customer_phone,
+      });
+      const view = await exchangeView(auth.storeId, saleId, ids.refundId, ids.newSaleId, {
+        refund: refundFiscal,
+        sale: fiscal,
+      });
+      return reply.code(201).send(view);
+    } catch (error) {
+      return finishFailedSale(reply, auth.storeId, auth.staffId, fresh, error, {
+        refund_id: refundRow.id,
+        refund: { ...original, refund_id: refundRow.id, refund_fiscal: refundFiscal },
+        difference_cents: fresh.total_cents - refundRow.total_cents,
+      });
+    }
+  });
+
   fastify.post('/sales/:id/refunds', async (request, reply) => {
     const auth = await ensurePosAuth(request, reply);
     if (!auth) return;
@@ -263,6 +474,9 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
       reason?: string;
       method?: 'cash' | 'card' | 'qr' | null;
       client_uuid?: string | null;
+      reason_code?: RefundReasonCode | null;
+      buyer_name?: string | null;
+      buyer_document?: string | null;
     };
 
     // Same gate as a sale: most refund failures are caught here, before money
@@ -271,22 +485,7 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
     try {
       gate = await fiscalService.preflight(auth.storeId, auth.staffId, readDeviceId(request), 'refund');
     } catch (error) {
-      const fiscal = asFiscalError(error, 'Немає звʼязку з ПРРО');
-      if (fiscal.kind === 'register_held') {
-        return reply.code(409).send({
-          error: 'register_held',
-          code: fiscal.providerCode,
-          message: cashierMessage(fiscal.kind),
-          holder: holderFromError(fiscal),
-          support_code: supportCode(fiscal),
-        });
-      }
-      return reply.code(503).send({
-        error: 'fiscal_unavailable',
-        code: fiscal.kind,
-        message: cashierMessage(fiscal.kind),
-        support_code: supportCode(fiscal),
-      });
+      return preflightRefusal(reply, error);
     }
 
     let refund: SaleDetail | null;
@@ -300,6 +499,9 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
         method: body.method ?? null,
         client_uuid: body.client_uuid ?? null,
         fiscal_status: gate.on ? 'pending' : 'none',
+        reason_code: body.reason_code ?? null,
+        buyer_name: body.buyer_name ?? null,
+        buyer_document: body.buyer_document ?? null,
       });
     } catch (error) {
       return reply.code(400).send({ error: errorMessage(error) });
@@ -309,7 +511,18 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
     if (!gate.on) return refund;
 
     const sale = refund;
-    const lastRefund = refund.refunds[refund.refunds.length - 1];
+    // The refund THIS request made — found by its idempotency key, never
+    // assumed to be the last one: a replay after a timeout may land after a
+    // second, unrelated refund of the same receipt, and fiscalising that one
+    // with this request's lines would register the wrong document.
+    const lastRefund =
+      (body.client_uuid && refund.refunds.find((r) => r.client_uuid === body.client_uuid)) ||
+      refund.refunds[refund.refunds.length - 1];
+    // Already registered on an earlier attempt: answer from the ledger, no
+    // second return receipt.
+    if (lastRefund.fiscal_status === 'done' && lastRefund.fiscal) {
+      return { ...refund, refund_fiscal: lastRefund.fiscal };
+    }
     try {
       const fiscal = await fiscalService.fiscalizeRefund(
         gate,
@@ -321,7 +534,11 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
           method: lastRefund.method,
           total_cents: lastRefund.total_cents,
           reason: lastRefund.reason,
-          lines: refundLinesOf(body.items, sale),
+          lines: lastRefund.items.map((line) => ({
+            sale_item_id: line.sale_item_id,
+            quantity: line.quantity,
+            amount_cents: line.line_total_cents,
+          })),
         },
         sale
       );
@@ -377,25 +594,54 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
   // ── Analytics & store ─────────────────────────────────
 }
 
-/** Per-line refund amounts, read back from what the refund actually recorded. */
-function refundLinesOf(
-  requested: { sale_item_id: number; quantity: number }[],
-  sale: SaleDetail
-): { sale_item_id: number; quantity: number; amount_cents: number }[] {
-  const itemsById = new Map(sale.items.map((item) => [item.id, item]));
-  return requested.map((line) => {
-    const item = itemsById.get(line.sale_item_id);
-    const quantity = item?.quantity ?? line.quantity;
-    const lineTotal = item?.line_total_cents ?? 0;
-    const before = (item?.refunded_quantity ?? line.quantity) - line.quantity;
-    return {
-      sale_item_id: line.sale_item_id,
-      quantity: line.quantity,
-      // Same cumulative rule the refund itself used, so the fiscal document
-      // states exactly what was charged back.
-      amount_cents: salesService.refundLineAmount(lineTotal, quantity, before, line.quantity),
-    };
+/**
+ * A pre-flight refusal, as the refund and exchange routes answer it. Not "the
+ * provider is down" when another till owns the register: 409 so the till shows
+ * the handover screen instead of the retry one.
+ */
+function preflightRefusal(reply: FastifyReply, error: unknown) {
+  const fiscal = asFiscalError(error, 'Немає звʼязку з ПРРО');
+  if (fiscal.kind === 'register_held') {
+    return reply.code(409).send({
+      error: 'register_held',
+      code: fiscal.providerCode,
+      message: cashierMessage(fiscal.kind),
+      holder: holderFromError(fiscal),
+      support_code: supportCode(fiscal),
+    });
+  }
+  return reply.code(503).send({
+    error: 'fiscal_unavailable',
+    code: fiscal.kind,
+    message: cashierMessage(fiscal.kind),
+    support_code: supportCode(fiscal),
   });
+}
+
+/** The exchange route's answer: the original receipt with its new refund, the new receipt, the difference. */
+async function exchangeView(
+  storeId: number,
+  saleId: number,
+  refundId: number,
+  newSaleId: number,
+  fiscal: { refund?: fiscalService.FiscalView | null; sale?: fiscalService.FiscalView | null } = {}
+) {
+  const original = await salesService.getSale(storeId, saleId);
+  const fresh = await salesService.getSale(storeId, newSaleId);
+  if (!original || !fresh) return null;
+  const refundRow = original.refunds.find((r) => r.id === refundId) ?? null;
+  return {
+    refund: {
+      ...original,
+      refund_id: refundId,
+      // The REFUND's document, under its own key — `fiscal` on this object is
+      // the original sale's receipt (see the refund route).
+      refund_fiscal: fiscal.refund ?? refundRow?.fiscal ?? null,
+    },
+    sale: fiscal.sale ? { ...fresh, fiscal: fiscal.sale } : fresh,
+    // > 0: the customer pays the difference; < 0: the shop returns it; 0: even.
+    difference_cents: fresh.total_cents - (refundRow?.total_cents ?? 0),
+  };
 }
 
 /**
@@ -586,7 +832,9 @@ async function finishFailedSale(
   storeId: number,
   staffId: number,
   sale: SaleDetail,
-  error: unknown
+  error: unknown,
+  /** More for the body — an exchange adds the refund that stands regardless. */
+  extra: Record<string, unknown> = {}
 ) {
   if (!(error instanceof fiscalService.FiscalDocumentFailed)) {
     logger.error('Fiscalisation failed outside the document path', {
@@ -604,6 +852,7 @@ async function finishFailedSale(
       // Present on every `fiscal_failed` body, so a client can read either key.
       // It is still `sale_voided` that decides — this branch never voids.
       sale_kept: true,
+      ...extra,
     });
   }
 
@@ -630,5 +879,6 @@ async function finishFailedSale(
     // False here means the sale stands, un-fiscalised, and will be retried.
     // The till must not tell the customer the purchase did not happen.
     sale_kept: !voided,
+    ...extra,
   });
 }

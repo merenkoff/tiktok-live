@@ -236,6 +236,20 @@ export async function preflight(
 }
 
 /**
+ * The same gate with a fresh budget.
+ *
+ * A gate's `signal` is one `FISCAL_BUDGET_MS` for one document. An exchange
+ * registers two in a row, and the second must not inherit whatever the first
+ * left of the clock — it would time out on a healthy provider and park a
+ * perfectly registrable receipt as `failed`. Everything else about the gate
+ * (the context, the shift, the offline session) is still right.
+ */
+export function renewGate(gate: FiscalGate): FiscalGate {
+  if (!gate.on) return gate;
+  return { ...gate, signal: AbortSignal.timeout(FISCAL_BUDGET_MS) };
+}
+
+/**
  * The gate for a sale the till already stamped itself (case C).
  *
  * Everything a normal pre-flight decides has already happened on the till —
