@@ -16,7 +16,7 @@ import {
   tidy,
   type Cell,
   type ColourUse,
-} from './variantMatrix';
+} from '../lib/variantMatrix';
 
 /** One variant the matrix will create, in the shape the batch endpoint takes. */
 export interface MatrixVariant {

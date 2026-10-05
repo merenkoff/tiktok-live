@@ -9,7 +9,7 @@ import { Dialog } from './Dialog';
 import { NewVariantFields } from './NewVariantFields';
 import { VariantMatrix, type MatrixResult } from './VariantMatrix';
 import type { ComponentOption } from './componentOptions';
-import { supportsMatrix, type ColourUse } from './variantMatrix';
+import { supportsMatrix, type ColourUse } from '../lib/variantMatrix';
 import { emptyVariant, newVariantInput, type NewVariantValues } from '../lib/newVariant';
 import { batchErrorMessage } from '../lib/saveErrors';
 import type { VariantDraft } from '../lib/productDraft';

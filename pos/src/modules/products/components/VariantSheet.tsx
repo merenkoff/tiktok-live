@@ -14,7 +14,7 @@ import { TechCardLine } from './TechCardLine';
 import { VariantDiscountEditor } from './VariantDiscountEditor';
 import type { ComponentOption } from './componentOptions';
 import { captionClass } from './formStyles';
-import { canonicalColour, type ColourUse } from './variantMatrix';
+import { canonicalColour, type ColourUse } from '../lib/variantMatrix';
 import type { TechCardRow } from '../data/techCardsApi';
 import { centsToInput, rowName, type VariantDraft } from '../lib/productDraft';
 import type { ProductShape } from '../lib/productShape';
