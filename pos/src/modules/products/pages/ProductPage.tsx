@@ -34,7 +34,7 @@ import { VariantsSection } from '../components/VariantsSection';
 import { componentOptions } from '../components/componentOptions';
 import { productFormScope } from '../components/productFormScope';
 import { flattenTags } from '../components/tagLabels';
-import { colourVocabulary, supportsMatrix } from '../components/variantMatrix';
+import { colourVocabulary, supportsMatrix } from '../lib/variantMatrix';
 import { listTechCards, type TechCardRow } from '../data/techCardsApi';
 import { emptyVariant, newVariantInput, singleTyped, type NewVariantValues } from '../lib/newVariant';
 import {

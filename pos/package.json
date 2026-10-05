@@ -44,6 +44,7 @@
     "serve:stocktake-remote": "npx --yes serve -l 5006 --cors --no-clipboard dist-remotes/stocktake",
     "check:stocktake-css-coverage": "node scripts/check-module-css-coverage.mjs src/modules/stocktake dist-remotes/stocktake/style.css src/components/ui/Page.tsx",
     "check:fiscal-checkbox-css-coverage": "node scripts/check-module-css-coverage.mjs src/modules/fiscal-core dist-remotes/fiscal-checkbox/style.css && node scripts/check-module-css-coverage.mjs src/modules/fiscal-checkbox dist-remotes/fiscal-checkbox/style.css src/components/ui/Page.tsx",
+    "check:case-collisions": "node scripts/check-case-collisions.mjs src",
     "check:platform-boundary": "node scripts/check-platform-boundary.mjs",
     "check:tauri-capabilities": "node scripts/check-tauri-capabilities.mjs",
     "platform:snapshot": "UPDATE_PLATFORM_SURFACE=1 vitest run src/platform/surface.test.ts",

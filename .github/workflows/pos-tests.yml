@@ -37,6 +37,8 @@ jobs:
         working-directory: .
         run: node scripts/gen-icons.mjs --check
       - run: npm run check:platform-boundary
+      # Linux is case-sensitive, the release runners for macOS/Windows are not.
+      - run: npm run check:case-collisions
       - run: npm run check:tauri-capabilities
       - run: npm run test:coverage
 
