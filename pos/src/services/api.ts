@@ -790,6 +790,8 @@ class PosApi {
       sku?: string | null;
       barcode?: string | null;
       line_note?: string | null;
+      /** An existing card the stub joins when posted (clothing S1); the card's name wins. */
+      product_id?: number | null;
     }
   ): Promise<StockDocumentLine & { similar_products?: { id: number; name: string }[] }> {
     const { data } = await this.client.post<

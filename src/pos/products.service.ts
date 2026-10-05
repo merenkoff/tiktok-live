@@ -410,6 +410,37 @@ export async function createProductInTx(
   return { productId, variantIds };
 }
 
+/**
+ * Variants onto an EXISTING product inside an open transaction — what a
+ * receipt's stubs on a card become when the document is posted (clothing S1,
+ * `stock-documents.service.ts`). Same row, stock row and barcode rules as the
+ * owner's batch (`addVariants`), minus the transaction, which is the caller's.
+ * Ids come back in input order. A composite is refused: its variants carry a
+ * recipe no receipt line can describe.
+ */
+export async function insertVariantsTx(
+  client: DbClient,
+  storeId: number,
+  productId: number,
+  variants: VariantInput[]
+): Promise<number[]> {
+  const product = await client.query(
+    `SELECT id, name, kind, stock_mode FROM pos_products WHERE id = $1 AND store_id = $2`,
+    [productId, storeId]
+  );
+  if (product.rows.length === 0) throw new Error('Product not found');
+  if (product.rows[0].kind !== 'simple') {
+    throw new Error(`«${String(product.rows[0].name)}» — складений товар, варіант з приходу до нього не додати`);
+  }
+  const shape = resolveCompositeShape(product.rows[0].kind, product.rows[0].stock_mode);
+  const vertical = await loadStoreVertical(client, storeId);
+  const ids: number[] = [];
+  for (const variant of variants) {
+    ids.push(await insertVariantTx(client, storeId, productId, shape, vertical, variant));
+  }
+  return ids;
+}
+
 export async function createProduct(storeId: number, input: CreateProductInput) {
   const client = await pool.connect();
   try {

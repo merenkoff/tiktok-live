@@ -393,8 +393,12 @@ export function registerStockRoutes(fastify: FastifyInstance): void {
         sku?: string | null;
         barcode?: string | null;
         line_note?: string | null;
+        /** An existing card the stub joins when posted (clothing S1). */
+        product_id?: number | null;
       };
-      if (!body.name?.trim()) return reply.code(400).send({ error: 'name required' });
+      if (!body.name?.trim() && body.product_id == null) {
+        return reply.code(400).send({ error: 'name required' });
+      }
       if (body.price_cents == null) return reply.code(400).send({ error: 'price_cents required' });
       if (!body.quantity || body.quantity <= 0) {
         return reply.code(400).send({ error: 'quantity must be positive' });
@@ -402,7 +406,7 @@ export function registerStockRoutes(fastify: FastifyInstance): void {
       const line = await stockDocumentsService.addPlaceholderLine({
         storeId: auth.storeId,
         documentId: Number(id),
-        name: body.name,
+        name: body.name ?? '',
         quantity: body.quantity,
         priceCents: body.price_cents,
         unitCostCents: body.unit_cost_cents,
@@ -411,11 +415,13 @@ export function registerStockRoutes(fastify: FastifyInstance): void {
         sku: body.sku,
         barcode: body.barcode,
         lineNote: body.line_note,
+        productId: body.product_id,
       });
-      const suggestions = await stockDocumentsService.suggestSimilarProducts(
-        auth.storeId,
-        body.name
-      );
+      // «Можливо це вже є» is for a NEW name; a stub on a card named the card.
+      const suggestions =
+        body.product_id != null
+          ? []
+          : await stockDocumentsService.suggestSimilarProducts(auth.storeId, body.name ?? '');
       return reply.code(201).send({ ...line, similar_products: suggestions });
     } catch (error) {
       return reply.code(400).send({ error: errorMessage(error) });

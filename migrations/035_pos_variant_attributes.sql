@@ -94,9 +94,26 @@ $guard$;
 -- it. jsonb has a btree opclass, so the normalised attribute bag — canonical by
 -- construction (`normalizeAttributes`) — is the same key, one column over.
 DROP INDEX IF EXISTS idx_pos_stock_doc_lines_placeholder_uniq;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_pos_stock_doc_lines_placeholder_attr_uniq
-  ON pos_stock_document_lines (document_id, lower(placeholder_name), placeholder_attributes)
-  WHERE is_placeholder = TRUE;
+-- Guarded like 007's columns: 065 replaces this index with one keyed on the
+-- card too, and `placeholder_product_id` is its marker for "the successor has
+-- run". Without the guard every boot would create this index here and drop it
+-- again in 065.
+DO $guard$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_attribute
+     WHERE attrelid = 'pos_stock_document_lines'::regclass
+       AND attname = 'placeholder_product_id'
+       AND NOT attisdropped
+  ) THEN
+    EXECUTE $sql$
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_pos_stock_doc_lines_placeholder_attr_uniq
+        ON pos_stock_document_lines (document_id, lower(placeholder_name), placeholder_attributes)
+        WHERE is_placeholder = TRUE
+    $sql$;
+  END IF;
+END
+$guard$;
 
 -- Snapshot next to `variant_label`: a receipt reprinted next year must say what
 -- was sold in the unit it was sold in, whatever the variant looks like by then.

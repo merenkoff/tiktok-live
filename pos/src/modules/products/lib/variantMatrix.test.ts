@@ -5,11 +5,13 @@
 import { describe, expect, it } from 'vitest';
 import { parseSize, sizeHint } from '../../../lib/sizeLadder';
 import {
+  axesOfVariants,
   buildCells,
   canonicalColour,
   cellKey,
   colourVocabulary,
   DEFAULT_SCALE_ID,
+  detectScale,
   existingKeys,
   foldKey,
   scaleById,
@@ -220,5 +222,51 @@ describe('existingKeys and cellKey', () => {
     const have = existingKeys([{ attributes: { size: '86' } }, { attributes: null }]);
     expect(have.has(cellKey({ color: '', size: '86' }))).toBe(true);
     expect(have.has(cellKey({ color: '', size: '' }))).toBe(true);
+  });
+});
+
+describe('detectScale — the scale a card already lives on (clothing S1)', () => {
+  it('picks the scale that knows the most of the sizes', () => {
+    expect(detectScale(['86', '92', '98']).id).toBe('baby-height');
+    expect(detectScale(['110', '116', '122', '128']).id).toBe('kid-height');
+    expect(detectScale(['S', 'M', 'L']).id).toBe('adult');
+    expect(detectScale(['3–6 міс', '6–9 міс']).id).toBe('months');
+  });
+
+  it('reads a pair or a separator however the shop wrote it', () => {
+    expect(detectScale(['98/104', '110–116']).id).toBe('height-pairs');
+  });
+
+  it('breaks a tie towards the earlier, children’s, scale', () => {
+    // 92 is on both height scales; the baby one comes first.
+    expect(detectScale(['92']).id).toBe('baby-height');
+  });
+
+  it('falls back to the default when no scale knows any of them, or there are none', () => {
+    expect(detectScale(['Великий', 'Малий']).id).toBe(DEFAULT_SCALE_ID);
+    expect(detectScale([]).id).toBe(DEFAULT_SCALE_ID);
+  });
+});
+
+describe('axesOfVariants — a card’s own colours and sizes', () => {
+  it('lists each colour and each size once, in the card’s order, tidied', () => {
+    const { colours, sizes } = axesOfVariants([
+      { attributes: { color: 'Синій', size: '86' } },
+      { attributes: { color: 'Синій ', size: '92' } },
+      { attributes: { color: 'рожевий', size: '86' } },
+      { attributes: { color: 'Рожевий', size: '98-104' } },
+    ]);
+    expect(colours).toEqual(['Синій', 'рожевий']);
+    expect(sizes).toEqual(['86', '92', '98-104']);
+  });
+
+  it('skips archived variants and a missing attribute', () => {
+    const { colours, sizes } = axesOfVariants([
+      { is_active: false, attributes: { color: 'Чорний', size: 'XL' } },
+      { attributes: { size: 'M' } },
+      { attributes: {} },
+    ]);
+    expect(colours).toEqual([]);
+    expect(sizes).toEqual(['M']);
   });
 });

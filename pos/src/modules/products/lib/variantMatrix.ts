@@ -186,3 +186,52 @@ export function existingKeys(
 
 /** The smallest a batch can be before it is a batch, and the most the server takes at once. */
 export const MAX_MATRIX_ROWS = 200;
+
+/**
+ * The scale that knows the most of these sizes — ties go to the earlier,
+ * children's, scale — or the default when none knows any. What the receiving
+ * grid opens on for a card the shop already has (clothing S1): its sizes are
+ * the choice, and the scale is only where the next chip comes from.
+ */
+export function detectScale(sizes: readonly string[]): SizeScale {
+  let best: SizeScale | null = null;
+  let bestHits = 0;
+  for (const scale of SIZE_SCALES) {
+    const known = new Set(scale.sizes.map(foldKey));
+    const hits = sizes.filter((size) => known.has(foldKey(size))).length;
+    if (hits > bestHits) {
+      best = scale;
+      bestHits = hits;
+    }
+  }
+  return best ?? scaleById(DEFAULT_SCALE_ID);
+}
+
+/**
+ * The colours and the sizes a card's live variants span — each spelling once,
+ * in the order the card lists them (the server's size order). Archived
+ * variants do not count: a size the shop stopped is not on the grid unless
+ * the owner picks it again.
+ */
+export function axesOfVariants(
+  variants: ReadonlyArray<{ is_active?: boolean; attributes?: Record<string, unknown> | null }>
+): { colours: string[]; sizes: string[] } {
+  const colours: string[] = [];
+  const sizes: string[] = [];
+  const seenColours = new Set<string>();
+  const seenSizes = new Set<string>();
+  for (const v of variants) {
+    if (v.is_active === false) continue;
+    const colour = typeof v.attributes?.color === 'string' ? tidy(v.attributes.color) : '';
+    const size = typeof v.attributes?.size === 'string' ? tidy(v.attributes.size) : '';
+    if (colour && !seenColours.has(foldKey(colour))) {
+      seenColours.add(foldKey(colour));
+      colours.push(colour);
+    }
+    if (size && !seenSizes.has(foldKey(size))) {
+      seenSizes.add(foldKey(size));
+      sizes.push(size);
+    }
+  }
+  return { colours, sizes };
+}

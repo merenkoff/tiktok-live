@@ -5,7 +5,7 @@
 // src/pos/stock-documents.service.ts
 
 import { pool } from '../db.js';
-import { createProductInTx } from './products.service.js';
+import { createProductInTx, insertVariantsTx } from './products.service.js';
 import { loadStoreVertical, normalizeVariant } from './verticals/index.js';
 import type { AttributeValues } from './verticals/types.js';
 import { applyStockDelta } from './stock.service.js';
@@ -31,6 +31,13 @@ export interface StockDocumentLine {
   placeholder_sku: string | null;
   placeholder_barcode: string | null;
   placeholder_price_cents: number | null;
+  /**
+   * The card a stub becomes a variant of when the receipt is posted (clothing
+   * S1 — a new size on a card the shop already has); null → a new product
+   * named `placeholder_name`, shared with every other stub of that name in
+   * the document.
+   */
+  placeholder_product_id: number | null;
   product_name?: string;
   /** Resolved caption: the variant's when there is one, else the placeholder's. */
   label?: string;
@@ -136,6 +143,8 @@ function mapLine(row: Record<string, unknown>): StockDocumentLine {
     placeholder_barcode: row.placeholder_barcode == null ? null : String(row.placeholder_barcode),
     placeholder_price_cents:
       row.placeholder_price_cents == null ? null : Number(row.placeholder_price_cents),
+    placeholder_product_id:
+      row.placeholder_product_id == null ? null : Number(row.placeholder_product_id),
     product_name: row.product_name == null ? undefined : String(row.product_name),
     label: row.label == null ? undefined : String(row.label),
     unit: row.unit == null ? undefined : String(row.unit),
@@ -482,9 +491,11 @@ export async function addPlaceholderLine(params: {
   sku?: string | null;
   barcode?: string | null;
   lineNote?: string | null;
+  /** An existing card this stub joins when posted (clothing S1); its name wins over `name`. */
+  productId?: number | null;
 }): Promise<StockDocumentLine> {
-  const name = params.name.trim();
-  if (!name) throw new Error('placeholder name required');
+  let name = params.name.trim();
+  if (!name && params.productId == null) throw new Error('placeholder name required');
   if (!params.quantity || params.quantity <= 0) throw new Error('quantity must be positive');
   if (params.priceCents == null || params.priceCents < 0) {
     throw new Error('price_cents must be >= 0');
@@ -506,14 +517,36 @@ export async function addPlaceholderLine(params: {
     if (doc.status !== 'draft') throw new Error('Only draft documents can be edited');
     if (doc.type !== 'receipt') throw new Error('Placeholders only allowed on receipt documents');
 
-    // Same key as `idx_pos_stock_doc_lines_placeholder_attr_uniq`: the
-    // normalised bag is canonical, so jsonb equality is the whole comparison.
+    // A stub on an existing card (clothing S1): the card's own name is what
+    // the line carries, whatever the client typed, so the dedup key below and
+    // the grouping at posting time agree. A composite is refused — its
+    // variants carry a recipe no receipt line can describe.
+    let productId: number | null = null;
+    if (params.productId != null) {
+      const card = await client.query(
+        `SELECT id, name, kind FROM pos_products WHERE id = $1 AND store_id = $2`,
+        [params.productId, params.storeId]
+      );
+      if (card.rows.length === 0) throw new Error('Товар не знайдено');
+      if (card.rows[0].kind !== 'simple') {
+        throw new Error(
+          `«${String(card.rows[0].name)}» — складений товар, варіант з приходу до нього не додати`
+        );
+      }
+      productId = Number(card.rows[0].id);
+      name = String(card.rows[0].name);
+    }
+
+    // Same key as `idx_pos_stock_doc_lines_placeholder_key_uniq`: the
+    // normalised bag is canonical, so jsonb equality is the whole comparison;
+    // the card is part of the key because cards share names.
     const dup = await client.query(
       `SELECT id FROM pos_stock_document_lines
        WHERE document_id = $1 AND is_placeholder = TRUE
          AND lower(placeholder_name) = lower($2)
-         AND placeholder_attributes = $3::jsonb`,
-      [params.documentId, name, JSON.stringify(derived.attributes)]
+         AND placeholder_attributes = $3::jsonb
+         AND placeholder_product_id IS NOT DISTINCT FROM $4`,
+      [params.documentId, name, JSON.stringify(derived.attributes), productId]
     );
     if (dup.rows.length > 0) {
       throw new Error('Duplicate placeholder in this document');
@@ -523,8 +556,9 @@ export async function addPlaceholderLine(params: {
       `INSERT INTO pos_stock_document_lines
          (document_id, store_id, variant_id, quantity, unit_cost_cents, line_note,
           is_placeholder, placeholder_name, placeholder_attributes, placeholder_label,
-          placeholder_unit, placeholder_sku, placeholder_barcode, placeholder_price_cents)
-       VALUES ($1, $2, NULL, $3, $4, $5, TRUE, $6, $7::jsonb, $8, $9, $10, $11, $12)
+          placeholder_unit, placeholder_sku, placeholder_barcode, placeholder_price_cents,
+          placeholder_product_id)
+       VALUES ($1, $2, NULL, $3, $4, $5, TRUE, $6, $7::jsonb, $8, $9, $10, $11, $12, $13)
        RETURNING *`,
       [
         params.documentId,
@@ -539,6 +573,7 @@ export async function addPlaceholderLine(params: {
         sku,
         barcode,
         params.priceCents,
+        productId,
       ]
     );
     await client.query(`UPDATE pos_stock_documents SET updated_at = NOW() WHERE id = $1`, [
@@ -916,6 +951,148 @@ function reasonForType(type: Exclude<StockDocumentType, 'production'>): StockRea
   return TYPE_TO_REASON[type];
 }
 
+/**
+ * A receipt's stub lines turned into real variants at posting time (clothing
+ * S1, TechDocs/POS_CLOTHING.md). Grouped, not one by one: the stubs that share
+ * a NAME are one new product with N variants — five sizes of «Боді» are one
+ * card, not five — and a stub carrying `placeholder_product_id` becomes a
+ * variant of that existing card. A cell the card has grown meanwhile (same
+ * attribute bag, active) is reused rather than twinned: the draft may have
+ * waited a week. Every line is pointed at its variant here; the caller moves
+ * the stock. Returns line id → variant id.
+ */
+async function materializePlaceholders(
+  client: DbClient,
+  params: {
+    storeId: number;
+    documentId: number;
+    docNumber: string;
+    type: StockDocumentType;
+    rows: Array<Record<string, unknown>>;
+  }
+): Promise<Map<number, number>> {
+  const out = new Map<number, number>();
+  if (params.rows.length === 0) return out;
+  if (params.type !== 'receipt') {
+    throw new Error('Placeholders only allowed on receipt documents');
+  }
+
+  const stubs = params.rows.map((line) => {
+    const name = String(line.placeholder_name ?? '').trim();
+    const priceCents =
+      line.placeholder_price_cents == null ? null : Number(line.placeholder_price_cents);
+    if (!name) throw new Error('Placeholder line missing name');
+    if (priceCents == null || priceCents < 0) {
+      throw new Error('Placeholder line missing price_cents');
+    }
+    return {
+      lineId: Number(line.id),
+      name,
+      productId:
+        line.placeholder_product_id == null ? null : Number(line.placeholder_product_id),
+      input: {
+        attributes: line.placeholder_attributes,
+        unit: line.placeholder_unit ? String(line.placeholder_unit) : undefined,
+        sku: line.placeholder_sku ? String(line.placeholder_sku).trim() : null,
+        barcode: line.placeholder_barcode ? String(line.placeholder_barcode).trim() : null,
+        price_cents: priceCents,
+        cost_cents: line.unit_cost_cents == null ? 0 : Number(line.unit_cost_cents),
+        quantity: 0,
+      },
+    };
+  });
+
+  for (const stub of stubs) {
+    if (!stub.input.barcode) continue;
+    const collision = await client.query(
+      `SELECT id FROM pos_variants WHERE store_id = $1 AND barcode = $2 LIMIT 1`,
+      [params.storeId, stub.input.barcode]
+    );
+    if (collision.rows.length > 0) {
+      throw new Error(`Штрихкод ${stub.input.barcode} вже існує в каталозі`);
+    }
+  }
+
+  const groups = new Map<string, typeof stubs>();
+  for (const stub of stubs) {
+    const key = stub.productId != null ? `card:${stub.productId}` : `new:${stub.name.toLowerCase()}`;
+    const group = groups.get(key);
+    if (group) group.push(stub);
+    else groups.set(key, [stub]);
+  }
+
+  for (const group of groups.values()) {
+    const ids: number[] = [];
+    try {
+      const productId = group[0].productId;
+      if (productId != null) {
+        const card = await client.query(
+          `SELECT id FROM pos_products WHERE id = $1 AND store_id = $2`,
+          [productId, params.storeId]
+        );
+        if (card.rows.length === 0) {
+          throw new Error(
+            `Картки «${group[0].name}» більше немає — приберіть рядок або зробіть його новим товаром`
+          );
+        }
+        const missing: number[] = [];
+        for (const [i, stub] of group.entries()) {
+          const twin = await client.query(
+            `SELECT id FROM pos_variants
+             WHERE product_id = $1 AND store_id = $2 AND is_active = TRUE
+               AND attributes = $3::jsonb
+             ORDER BY id ASC LIMIT 1`,
+            [productId, params.storeId, JSON.stringify(stub.input.attributes ?? {})]
+          );
+          if (twin.rows.length > 0) ids[i] = Number(twin.rows[0].id);
+          else missing.push(i);
+        }
+        if (missing.length > 0) {
+          const inserted = await insertVariantsTx(
+            client,
+            params.storeId,
+            productId,
+            missing.map((i) => group[i].input)
+          );
+          missing.forEach((i, k) => {
+            ids[i] = inserted[k];
+          });
+        }
+      } else {
+        const created = await createProductInTx(client, params.storeId, {
+          name: group[0].name,
+          description: `Створено з приходу ${params.docNumber}`,
+          needs_review: true,
+          created_from_document_id: params.documentId,
+          variants: group.map((stub) => stub.input),
+        });
+        ids.push(...created.variantIds);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/unique|duplicate|idx_pos_variants_store_barcode/i.test(msg)) {
+        const barcode = group.find((stub) => stub.input.barcode)?.input.barcode;
+        throw new Error(
+          barcode
+            ? `Штрихкод ${barcode} вже існує в каталозі`
+            : 'Не вдалося створити товар (дублікат штрихкоду/SKU)'
+        );
+      }
+      throw err;
+    }
+    for (const [i, stub] of group.entries()) {
+      await client.query(
+        `UPDATE pos_stock_document_lines
+         SET variant_id = $1, is_placeholder = FALSE
+         WHERE id = $2`,
+        [ids[i], stub.lineId]
+      );
+      out.set(stub.lineId, ids[i]);
+    }
+  }
+  return out;
+}
+
 export async function postDocument(params: {
   storeId: number;
   documentId: number;
@@ -964,78 +1141,24 @@ export async function postDocument(params: {
     const occurredAt = docRow.occurred_at as Date;
     const docNumber = String(docRow.doc_number);
 
+    // Stubs first (clothing S1): the stubs of one new product become ONE card
+    // with N variants, and a stub that names an existing card becomes a
+    // variant of it. Each stub then enters the loop below with a variant id,
+    // exactly like a line picked from the catalogue.
+    const stubVariantIds = await materializePlaceholders(client, {
+      storeId: params.storeId,
+      documentId: params.documentId,
+      docNumber,
+      type,
+      rows: linesResult.rows.filter((l) => l.is_placeholder),
+    });
+
     for (const line of linesResult.rows) {
-      let variantId = line.variant_id == null ? null : Number(line.variant_id);
-
-      if (line.is_placeholder) {
-        if (type !== 'receipt') {
-          throw new Error('Placeholders only allowed on receipt documents');
-        }
-        const name = String(line.placeholder_name ?? '').trim();
-        const priceCents =
-          line.placeholder_price_cents == null ? null : Number(line.placeholder_price_cents);
-        if (!name) throw new Error('Placeholder line missing name');
-        if (priceCents == null || priceCents < 0) {
-          throw new Error('Placeholder line missing price_cents');
-        }
-
-        const barcode = line.placeholder_barcode
-          ? String(line.placeholder_barcode).trim()
-          : null;
-        const sku = line.placeholder_sku ? String(line.placeholder_sku).trim() : null;
-        if (barcode) {
-          const collision = await client.query(
-            `SELECT id FROM pos_variants
-             WHERE store_id = $1 AND barcode = $2
-             LIMIT 1`,
-            [params.storeId, barcode]
-          );
-          if (collision.rows.length > 0) {
-            throw new Error(`Штрихкод ${barcode} вже існує в каталозі`);
-          }
-        }
-
-        const unitCost =
-          line.unit_cost_cents == null ? 0 : Number(line.unit_cost_cents);
-        let created;
-        try {
-          created = await createProductInTx(client, params.storeId, {
-            name,
-            description: `Створено з приходу ${docNumber}`,
-            needs_review: true,
-            created_from_document_id: params.documentId,
-            variants: [
-              {
-                attributes: line.placeholder_attributes,
-                unit: line.placeholder_unit || undefined,
-                sku,
-                barcode,
-                price_cents: priceCents,
-                cost_cents: unitCost,
-                quantity: 0,
-              },
-            ],
-          });
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          if (/unique|duplicate|idx_pos_variants_store_barcode/i.test(msg)) {
-            throw new Error(
-              barcode
-                ? `Штрихкод ${barcode} вже існує в каталозі`
-                : 'Не вдалося створити товар (дублікат штрихкоду/SKU)'
-            );
-          }
-          throw err;
-        }
-
-        variantId = created.variantIds[0];
-        await client.query(
-          `UPDATE pos_stock_document_lines
-           SET variant_id = $1, is_placeholder = FALSE
-           WHERE id = $2`,
-          [variantId, line.id]
-        );
-      }
+      const variantId: number | null = line.is_placeholder
+        ? stubVariantIds.get(Number(line.id)) ?? null
+        : line.variant_id == null
+          ? null
+          : Number(line.variant_id);
 
       if (variantId == null) throw new Error('Line missing variant_id');
 

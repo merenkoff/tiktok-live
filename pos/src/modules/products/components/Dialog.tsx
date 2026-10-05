@@ -81,6 +81,11 @@ export function Dialog({
         aria-labelledby={titleId}
         noValidate
         onSubmit={(e) => {
+          // The portal takes the panel out of the page's DOM, not out of its
+          // React tree: a submit here would bubble to a page that is itself a
+          // form (the receiving page, the product card) and submit THAT too —
+          // the receiving grid posted the whole receipt this way.
+          e.stopPropagation();
           if (onSubmit) onSubmit(e);
           else e.preventDefault();
         }}

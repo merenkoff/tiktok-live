@@ -1287,6 +1287,8 @@ export interface StockDocumentLine {
   placeholder_sku?: string | null;
   placeholder_barcode?: string | null;
   placeholder_price_cents?: number | null;
+  /** The card a stub becomes a variant of when posted (clothing S1); null → a new product. */
+  placeholder_product_id?: number | null;
   product_name?: string;
   /** Resolved caption: the variant's, or the placeholder's for a stub line. */
   label?: string;

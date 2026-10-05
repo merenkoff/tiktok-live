@@ -108,6 +108,8 @@ export const POS_MIGRATIONS = [
   '063_pos_markdowns.sql',
   // Exchange link, refund reason/buyer, defect write-off (clothing R1/R2/R4).
   '064_pos_exchange.sql',
+  // A receipt stub on an existing card + stubs grouped into one product (clothing S1).
+  '065_pos_placeholder_product.sql',
 ] as const;
 
 export function readMigration(file: string): string {

@@ -9,6 +9,7 @@ import type { StockDocument } from '@pos/platform';
 import { ArrowLeft, FileText, PageHeader, Printer, SectionHead } from '@pos/platform/ui';
 import { STATUS_LABEL, TYPE_GLYPH, TYPE_LABEL, statusChipClass } from '../lib/documents';
 import { receivedTagSources } from '../lib/receivedTags';
+import { confirmStubsMessage, summarizeStubs } from '../lib/stubs';
 // Rendered from another module on purpose (clothing L4): the one dialog the
 // product list prints with, so a tag from a receipt and a tag from the catalogue
 // are the same tag. The stock remote's own stylesheet must therefore cover it —
@@ -43,13 +44,14 @@ export function StockDocumentDetailPage() {
 
   async function post() {
     if (!doc) return;
-    const stubs = (doc.lines ?? []).filter((l) => l.is_placeholder).length;
-    if (stubs > 0) {
-      const ok = window.confirm(
-        `Буде створено ${stubs} ${stubs === 1 ? 'новий товар' : 'нових товарів'} у каталозі. Продовжити?`
-      );
-      if (!ok) return;
-    }
+    const confirmText = confirmStubsMessage(
+      summarizeStubs(
+        (doc.lines ?? [])
+          .filter((l) => l.is_placeholder)
+          .map((l) => ({ name: l.placeholder_name ?? '', product_id: l.placeholder_product_id }))
+      )
+    );
+    if (confirmText && !window.confirm(confirmText)) return;
     setBusy(true);
     setError(null);
     try {

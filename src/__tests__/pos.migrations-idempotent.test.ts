@@ -154,12 +154,16 @@ describe.skipIf(!hasDb || !canCreate)('POS migrations, applied the way the runne
     expect(before).toBe(2);
   });
 
-  it('keeps the attribute-keyed placeholder index and not the old one', async () => {
+  it('keeps the card-keyed placeholder index (065) and neither of its two predecessors', async () => {
+    // 007 → 035 → 065 each replaced the key; the two older creates are guarded
+    // by their successor's marker column, so a restart does not create an old
+    // index only for the next file to drop it again.
     const idx = await probe.query(
       `SELECT indexname FROM pg_indexes
         WHERE indexname IN ('idx_pos_stock_doc_lines_placeholder_uniq',
-                            'idx_pos_stock_doc_lines_placeholder_attr_uniq')`
+                            'idx_pos_stock_doc_lines_placeholder_attr_uniq',
+                            'idx_pos_stock_doc_lines_placeholder_key_uniq')`
     );
-    expect(idx.rows.map((r) => r.indexname)).toEqual(['idx_pos_stock_doc_lines_placeholder_attr_uniq']);
+    expect(idx.rows.map((r) => r.indexname)).toEqual(['idx_pos_stock_doc_lines_placeholder_key_uniq']);
   });
 });
