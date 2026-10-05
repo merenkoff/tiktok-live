@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api, formatUah } from '@pos/platform';
-import type { Product } from '@pos/platform';
+import type { ProductVariant } from '../../../types';
 import { Printer, PrinterColor, Segmented, X } from '@pos/platform/ui';
 import { buildPriceTags, defaultCopies, variantLabel, type PriceTag } from '../../../lib/priceTag';
 import { hasEan13Shape, isEan13 } from '../../../lib/ean13';
@@ -32,6 +32,32 @@ function loadPaper(): TagPaperWidth {
   }
 }
 
+/**
+ * What the dialog reads of a product — a `Product` as is, or the lines of a
+ * posted receiving document folded into this shape by the stock module
+ * (clothing L4), which has no `Product` to hand.
+ */
+export interface PriceTagsDialogProduct {
+  id: number;
+  name: string;
+  variants: Array<
+    Pick<
+      ProductVariant,
+      'id' | 'label' | 'unit' | 'price_cents' | 'compare_at_cents' | 'sku' | 'barcode' | 'quantity' | 'is_active'
+    >
+  >;
+}
+
+/**
+ * Where the copies come from. Absent — the stock on hand, one tag per unit on
+ * the shelf. Set — a receiving document: only the variants it brought, one tag
+ * per unit RECEIVED, so topping up two sizes does not print the whole rail.
+ */
+export interface PriceTagsReceived {
+  docNumber: string;
+  byVariant: ReadonlyMap<number, number>;
+}
+
 type Row = {
   key: string;
   productName: string;
@@ -48,11 +74,13 @@ type Row = {
 export function PriceTagsDialog({
   products,
   storeName,
+  received,
   onClose,
   onBarcodeGenerated,
 }: {
-  products: Product[];
+  products: PriceTagsDialogProduct[];
   storeName: string;
+  received?: PriceTagsReceived;
   onClose: () => void;
   onBarcodeGenerated: () => void;
 }) {
@@ -60,7 +88,9 @@ export function PriceTagsDialog({
   const [rows, setRows] = useState<Row[]>(() =>
     products.flatMap((p) =>
       p.variants
-        .filter((v) => v.is_active)
+        // A received variant is printed even if the card has since been
+        // archived: the goods are on the rail and need a tag either way.
+        .filter((v) => (received ? received.byVariant.has(v.id) : v.is_active))
         .map((v) => ({
           key: `${p.id}-${v.id}`,
           productName: p.name,
@@ -71,7 +101,7 @@ export function PriceTagsDialog({
           compareAtCents: v.compare_at_cents ?? null,
           sku: v.sku,
           barcode: v.barcode,
-          copies: defaultCopies(v.quantity, v.unit),
+          copies: defaultCopies(received ? received.byVariant.get(v.id) ?? 0 : v.quantity, v.unit),
         }))
     )
   );
@@ -178,8 +208,10 @@ export function PriceTagsDialog({
               <div className="flex-1 min-w-0">
                 <h3 className="text-[19px] font-bold text-sq-heading">Друк цінників</h3>
                 <p className="text-[15px] text-sq-secondary mt-1 leading-relaxed">
-                  Кількість — за залишком на складі; змініть, якщо треба інакше. Кожен цінник
-                  друкується окремою сторінкою, тож принтер ріже їх так само, як чеки.
+                  {received
+                    ? `Кількість — за приходом ${received.docNumber}: по одному цінику на кожну отриману одиницю; змініть, якщо треба інакше.`
+                    : 'Кількість — за залишком на складі; змініть, якщо треба інакше.'}{' '}
+                  Кожен цінник друкується окремою сторінкою, тож принтер ріже їх так само, як чеки.
                 </p>
               </div>
               <button

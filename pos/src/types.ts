@@ -1292,6 +1292,16 @@ export interface StockDocumentLine {
   label?: string;
   unit?: string;
   product_id?: number;
+  /**
+   * The variant's CURRENT price, old price, article and barcode — what a price
+   * tag printed from this document says (clothing L4). Only `getStockDocument`
+   * carries them; null on a stub line, which has no variant yet.
+   */
+  price_cents?: number | null;
+  compare_at_cents?: number | null;
+  sku?: string | null;
+  barcode?: string | null;
+  is_active?: boolean | null;
 }
 
 export interface StockDocument {

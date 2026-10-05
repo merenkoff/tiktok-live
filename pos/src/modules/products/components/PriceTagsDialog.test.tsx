@@ -102,6 +102,67 @@ describe('the roll', () => {
   });
 });
 
+describe('how many copies', () => {
+  function copiesOf(label: RegExp | string): number {
+    return Number((screen.getByRole('spinbutton', { name: label }) as HTMLInputElement).value);
+  }
+
+  it('starts from the stock on hand — one tag per unit on the shelf', () => {
+    open({ quantity: 2 });
+    expect(copiesOf(/Цінників: Піжама/)).toBe(2);
+    expect(screen.getByText(/Кількість — за залишком на складі/)).toBeInTheDocument();
+  });
+
+  it('from a receiving document, starts from what was RECEIVED, and names the document', () => {
+    // The bug this covers (clothing L4): topping up two sizes used to print a
+    // tag for every unit on the rail.
+    render(
+      <PriceTagsDialog
+        products={[product({ quantity: 12 })]}
+        storeName="Demo Boutique"
+        received={{ docNumber: 'ПР-000012', byVariant: new Map([[10, 3]]) }}
+        onClose={vi.fn()}
+        onBarcodeGenerated={vi.fn()}
+      />
+    );
+    expect(copiesOf(/Цінників: Піжама/)).toBe(3);
+    expect(screen.getByText(/за приходом ПР-000012/)).toBeInTheDocument();
+    expect(screen.getByText('Усього цінників: 3')).toBeInTheDocument();
+  });
+
+  it('from a receiving document, prints only the variants it brought — an archived one included, a weighed one once', () => {
+    const p = product();
+    p.variants = [
+      { ...p.variants[0], id: 10, label: 'Рожевий · 98/104', quantity: 12, is_active: true },
+      { ...p.variants[0], id: 11, label: 'Рожевий · 110', quantity: 4, is_active: true },
+      // Archived after it was received: the goods still hang on the rail.
+      { ...p.variants[0], id: 12, label: 'Рожевий · 116', quantity: 0, is_active: false },
+      { ...p.variants[0], id: 13, label: 'Стрічка', unit: 'м', quantity: 50, is_active: true },
+    ];
+    render(
+      <PriceTagsDialog
+        products={[p]}
+        storeName="Demo Boutique"
+        received={{
+          docNumber: 'ПР-000013',
+          byVariant: new Map([
+            [10, 5],
+            [12, 2],
+            [13, 30],
+          ]),
+        }}
+        onClose={vi.fn()}
+        onBarcodeGenerated={vi.fn()}
+      />
+    );
+    expect(copiesOf('Цінників: Піжама · Рожевий · 98/104')).toBe(5);
+    expect(screen.queryByRole('spinbutton', { name: 'Цінників: Піжама · Рожевий · 110' })).toBeNull();
+    expect(copiesOf('Цінників: Піжама · Рожевий · 116')).toBe(2);
+    expect(copiesOf('Цінників: Піжама · Стрічка')).toBe(1);
+    expect(screen.getByText('Усього цінників: 8')).toBeInTheDocument();
+  });
+});
+
 describe('a marked-down item', () => {
   it('says what it used to cost under the price, so the owner knows the tag will carry it', () => {
     open({ compare_at_cents: 59000 });

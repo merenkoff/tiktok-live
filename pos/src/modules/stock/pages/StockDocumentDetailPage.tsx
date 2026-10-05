@@ -2,12 +2,18 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api, formatUah } from '@pos/platform';
+import { api, formatUah, useAuthStore } from '@pos/platform';
 import type { StockDocument } from '@pos/platform';
-import { ArrowLeft, FileText, PageHeader, SectionHead } from '@pos/platform/ui';
+import { ArrowLeft, FileText, PageHeader, Printer, SectionHead } from '@pos/platform/ui';
 import { STATUS_LABEL, TYPE_GLYPH, TYPE_LABEL, statusChipClass } from '../lib/documents';
+import { receivedTagSources } from '../lib/receivedTags';
+// Rendered from another module on purpose (clothing L4): the one dialog the
+// product list prints with, so a tag from a receipt and a tag from the catalogue
+// are the same tag. The stock remote's own stylesheet must therefore cover it —
+// `vite.stock-remote.config.ts` lists the file, `check:stock-css-coverage` keeps it listed.
+import { PriceTagsDialog } from '../../products/components/PriceTagsDialog';
 
 function apiError(err: unknown): string {
   if (err && typeof err === 'object' && 'response' in err) {
@@ -23,6 +29,9 @@ export function StockDocumentDetailPage() {
   const [doc, setDoc] = useState<StockDocument | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [tagsOpen, setTagsOpen] = useState(false);
+  const storeName = useAuthStore((s) => s.auth?.store.name ?? '');
+  const tagSources = useMemo(() => receivedTagSources(doc?.lines ?? []), [doc]);
 
   useEffect(() => {
     if (!id) return;
@@ -85,6 +94,13 @@ export function StockDocumentDetailPage() {
   if (!doc) return <p className="text-sq-secondary text-sm">Завантаження…</p>;
 
   const lines = doc.lines ?? [];
+  // A posted receipt and only that: a draft's stubs have no variant to print,
+  // and a reversal is itself type `receipt` — with `reversal_of_id` set.
+  const canPrintTags =
+    doc.type === 'receipt' &&
+    doc.status === 'posted' &&
+    doc.reversal_of_id == null &&
+    tagSources.byVariant.size > 0;
 
   return (
     <div className="max-w-3xl space-y-6 animate-fade-up text-sq-text">
@@ -141,7 +157,11 @@ export function StockDocumentDetailPage() {
                   {line.unit_cost_cents != null && (
                     <p className="text-[13px] text-sq-muted tabular-nums">
                       Закупка {formatUah(line.unit_cost_cents)}
+                      {!isStub && line.price_cents != null && ` · Ціна ${formatUah(line.price_cents)}`}
                     </p>
+                  )}
+                  {line.unit_cost_cents == null && !isStub && line.price_cents != null && (
+                    <p className="text-[13px] text-sq-muted tabular-nums">Ціна {formatUah(line.price_cents)}</p>
                   )}
                   {isStub && line.placeholder_price_cents != null && (
                     <p className="text-[13px] text-sq-muted tabular-nums">
@@ -167,6 +187,16 @@ export function StockDocumentDetailPage() {
       </section>
 
       <div className="flex flex-wrap gap-2">
+        {canPrintTags && (
+          <button
+            type="button"
+            onClick={() => setTagsOpen(true)}
+            className="pos-btn-primary min-h-11 px-4 rounded-sq text-[15px] gap-1.5"
+          >
+            <Printer size={20} />
+            Друк цінників
+          </button>
+        )}
         {doc.status === 'draft' && (
           <button
             type="button"
@@ -193,6 +223,18 @@ export function StockDocumentDetailPage() {
           </Link>
         )}
       </div>
+
+      {tagsOpen && (
+        <PriceTagsDialog
+          products={tagSources.products}
+          received={{ docNumber: doc.doc_number, byVariant: tagSources.byVariant }}
+          storeName={storeName}
+          onClose={() => setTagsOpen(false)}
+          // A barcode minted from the dialog lands on the variant; re-read the
+          // document so its lines (and the next print) carry it.
+          onBarcodeGenerated={() => void api.getStockDocument(doc.id).then(setDoc).catch(() => undefined)}
+        />
+      )}
     </div>
   );
 }
