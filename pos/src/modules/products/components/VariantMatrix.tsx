@@ -3,20 +3,9 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { sizeHint } from '../../../lib/sizeLadder';
-import {
-  buildCells,
-  canonicalColour,
-  cellKey,
-  existingKeys,
-  foldKey,
-  MAX_MATRIX_ROWS,
-  SIZE_SCALES,
-  scaleById,
-  tidy,
-  type Cell,
-  type ColourUse,
-} from '../lib/variantMatrix';
+import { buildCells, cellKey, existingKeys, MAX_MATRIX_ROWS, type Cell, type ColourUse } from '../lib/variantMatrix';
+import { ColourAxis, SizeAxis } from './MatrixAxes';
+import { matrixCaption as caption, useMatrixAxes } from '../lib/useMatrixAxes';
 
 /** One variant the matrix will create, in the shape the batch endpoint takes. */
 export interface MatrixVariant {
@@ -35,60 +24,6 @@ export interface MatrixResult {
   already: number;
   /** Why this cannot be saved yet, in the owner's words; null when it can. */
   problem: string | null;
-}
-
-const SCALE_KEY = 'pos.variantMatrix.scale';
-
-/** The last scale chosen on this device — a convenience, never state, so every access is guarded. */
-function rememberedScale(): string | null {
-  try {
-    return window.localStorage.getItem(SCALE_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function rememberScale(id: string): void {
-  try {
-    window.localStorage.setItem(SCALE_KEY, id);
-  } catch {
-    /* private window, blocked storage: the choice simply is not remembered */
-  }
-}
-
-const caption = 'text-[13px] font-semibold text-sq-secondary';
-const chipOn =
-  'inline-flex items-center gap-1 min-h-9 px-3 rounded-[10px] text-[15px] transition-colors bg-sq-blue/[0.08] ring-2 ring-inset ring-sq-blue text-sq-blue font-semibold';
-const chipOff =
-  'inline-flex items-center gap-1 min-h-9 px-3 rounded-[10px] text-[15px] transition-colors bg-sq-surface ring-1 ring-inset ring-sq-divider text-sq-text font-medium hover:bg-sq-sidebar';
-
-/**
- * A size chip: the size as saved, and under it the same size in the other
- * system («12–18 міс» under «86», «≈ 104 см» under «3–4 роки») — the main label
- * short, the explanation a quiet second line (TechDocs/POS_CLOTHING.md, C1d).
- * The hint is computed, never saved, and is `aria-hidden`: the button's name
- * stays the size itself, so nothing about choosing one changes for a screen
- * reader or a test.
- */
-function SizeChip({ size, pressed, onClick }: { size: string; pressed: boolean; onClick: () => void }) {
-  const hint = sizeHint(size);
-  return (
-    <button
-      type="button"
-      aria-label={size}
-      aria-pressed={pressed}
-      title={hint ?? undefined}
-      className={`${pressed ? chipOn : chipOff} ${hint ? '!flex-col !gap-0 !py-1 leading-tight' : ''}`}
-      onClick={onClick}
-    >
-      <span>{size}</span>
-      {hint && (
-        <span aria-hidden="true" className={`text-[11px] font-normal ${pressed ? 'text-sq-blue/80' : 'text-sq-muted'}`}>
-          {hint}
-        </span>
-      )}
-    </button>
-  );
 }
 
 /** `12,5` and `12.5` and `1 250` are all prices; nothing else is. `null` for blank or nonsense. */
@@ -140,36 +75,17 @@ export function VariantMatrix({
   /** Change it to clear every pick — the edit form does after a batch has been saved. */
   resetKey?: number;
 }) {
-  const [scaleId, setScaleId] = useState(() => scaleById(rememberedScale()).id);
-  const [colours, setColours] = useState<string[]>([]);
-  const [picked, setPicked] = useState<string[]>([]);
-  const [extraSizes, setExtraSizes] = useState<string[]>([]);
-  const [colourDraft, setColourDraft] = useState('');
-  const [sizeDraft, setSizeDraft] = useState('');
+  const axes = useMatrixAxes({ vocabulary, resetKey });
+  const { colours, sizes } = axes;
   const [price, setPrice] = useState('');
   const [cost, setCost] = useState('');
   const [qty, setQty] = useState('0');
   const [edits, setEdits] = useState<Record<string, RowEdit>>({});
 
-  const scale = scaleById(scaleId);
-
   useEffect(() => {
     if (resetKey === 0) return;
-    setColours([]);
-    setPicked([]);
-    setExtraSizes([]);
-    setColourDraft('');
-    setSizeDraft('');
     setEdits({});
   }, [resetKey]);
-
-  // The scale's own sizes in the scale's order, then the ones typed by hand.
-  const sizes = useMemo(() => {
-    const chosen = new Set(picked.map(foldKey));
-    const fromScale = scale.sizes.filter((s) => chosen.has(foldKey(s)));
-    const typed = extraSizes.filter((s) => chosen.has(foldKey(s)) && !fromScale.some((f) => foldKey(f) === foldKey(s)));
-    return [...fromScale, ...typed];
-  }, [picked, scale, extraSizes]);
 
   const have = useMemo(() => existingKeys(existing ?? []), [existing]);
   const cells = useMemo(() => buildCells(colours, sizes), [colours, sizes]);
@@ -243,150 +159,16 @@ export function VariantMatrix({
     onChange(result);
   }, [result, onChange]);
 
-  function addColour(text: string) {
-    const name = canonicalColour(text, vocabulary);
-    if (!name) return;
-    setColours((prev) => (prev.some((c) => foldKey(c) === foldKey(name)) ? prev : [...prev, name]));
-  }
-
-  function toggleColour(name: string) {
-    setColours((prev) =>
-      prev.some((c) => foldKey(c) === foldKey(name)) ? prev.filter((c) => foldKey(c) !== foldKey(name)) : [...prev, name]
-    );
-  }
-
-  function toggleSize(size: string) {
-    setPicked((prev) => (prev.some((s) => foldKey(s) === foldKey(size)) ? prev.filter((s) => foldKey(s) !== foldKey(size)) : [...prev, size]));
-  }
-
-  function addSize(text: string) {
-    const size = tidy(text);
-    if (!size) return;
-    if (!scale.sizes.some((s) => foldKey(s) === foldKey(size)) && !extraSizes.some((s) => foldKey(s) === foldKey(size))) {
-      setExtraSizes((prev) => [...prev, size]);
-    }
-    setPicked((prev) => (prev.some((s) => foldKey(s) === foldKey(size)) ? prev : [...prev, size]));
-  }
-
-  function changeScale(id: string) {
-    setScaleId(id);
-    rememberScale(id);
-    // A new scheme starts a new choice: a month and a year are not two sizes of one shirt.
-    setPicked([]);
-    setExtraSizes([]);
-  }
-
   function edit(key: string, patch: RowEdit) {
     setEdits((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
   }
 
-  const suggestions = vocabulary.filter((c) => !colours.some((s) => foldKey(s) === foldKey(c.name))).slice(0, 14);
-  const isPicked = (size: string) => picked.some((s) => foldKey(s) === foldKey(size));
-  const shownSizes = [...scale.sizes, ...extraSizes.filter((s) => !scale.sizes.some((f) => foldKey(f) === foldKey(s)))];
   const toCreate = rows.filter((r) => !r.exists && !r.edit.removed).length;
 
   return (
     <div className="sm:col-span-2 space-y-4" data-testid="variant-matrix">
-      <div className="space-y-2">
-        <p className={caption}>Кольори</p>
-        {colours.length > 0 && (
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Обрані кольори">
-            {colours.map((c) => (
-              <button
-                key={c}
-                type="button"
-                className={chipOn}
-                aria-label={`Прибрати колір ${c}`}
-                onClick={() => toggleColour(c)}
-              >
-                {c} <span aria-hidden="true">×</span>
-              </button>
-            ))}
-          </div>
-        )}
-        <div className="flex gap-2">
-          <input
-            className="sq-input min-w-0"
-            aria-label="Новий колір"
-            placeholder="Колір — впишіть і натисніть Enter"
-            value={colourDraft}
-            onChange={(e) => setColourDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ',') {
-                e.preventDefault();
-                addColour(colourDraft);
-                setColourDraft('');
-              }
-            }}
-          />
-          <button
-            type="button"
-            className="sq-btn-quiet shrink-0"
-            onClick={() => {
-              addColour(colourDraft);
-              setColourDraft('');
-            }}
-          >
-            Додати
-          </button>
-        </div>
-        {suggestions.length > 0 && (
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Кольори магазину">
-            {suggestions.map((c) => (
-              <button key={c.name} type="button" className={chipOff} onClick={() => toggleColour(c.name)}>
-                + {c.name}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <label className="flex flex-col gap-1.5">
-            <span className={caption}>Розміри — яка сітка</span>
-            <select
-              className="sq-input"
-              aria-label="Сітка розмірів"
-              value={scaleId}
-              onChange={(e) => changeScale(e.target.value)}
-            >
-              {SIZE_SCALES.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="flex gap-2">
-            <button type="button" className="sq-btn-quiet" onClick={() => setPicked(shownSizes)}>
-              Усі
-            </button>
-            <button type="button" className="sq-btn-quiet" onClick={() => setPicked([])}>
-              Жодного
-            </button>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Розміри">
-          {shownSizes.map((size) => (
-            <SizeChip key={size} size={size} pressed={isPicked(size)} onClick={() => toggleSize(size)} />
-          ))}
-        </div>
-        <input
-          className="sq-input"
-          aria-label="Свій розмір"
-          placeholder="Свій розмір — впишіть і натисніть Enter"
-          value={sizeDraft}
-          onChange={(e) => setSizeDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              addSize(sizeDraft);
-              setSizeDraft('');
-            }
-          }}
-        />
-      </div>
+      <ColourAxis axes={axes} vocabulary={vocabulary} resetKey={resetKey} />
+      <SizeAxis axes={axes} resetKey={resetKey} />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="flex flex-col gap-1.5">

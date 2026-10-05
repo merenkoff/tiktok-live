@@ -331,6 +331,171 @@ describe.skipIf(!hasDb)('POS receipt placeholder products', () => {
     expect(await productCountByName(name)).toBe(1);
   });
 
+  async function existingProductId(): Promise<number> {
+    const r = await pool.query(`SELECT product_id FROM pos_variants WHERE id = $1`, [variantId]);
+    return Number(r.rows[0].product_id);
+  }
+
+  async function variantsOf(productId: number): Promise<Array<{ id: number; attributes: Record<string, string> }>> {
+    const r = await pool.query(
+      `SELECT id, attributes FROM pos_variants WHERE product_id = $1 AND is_active = TRUE ORDER BY id`,
+      [productId]
+    );
+    return r.rows.map((row) => ({ id: Number(row.id), attributes: row.attributes as Record<string, string> }));
+  }
+
+  // Clothing S1 — the receiving grid. What posting makes of a document whose
+  // stubs are a size run rather than one product each.
+
+  it('groups the stubs that share a name into ONE product with a variant per stub', async () => {
+    const name = `Боді групове ${Date.now()}`;
+    const doc = await createDocument({ storeId, staffId, type: 'receipt' });
+    for (const [size, quantity] of [
+      ['86', 3],
+      ['92', 4],
+      ['98', 1],
+    ] as const) {
+      await addPlaceholderLine({
+        storeId,
+        documentId: doc.id,
+        name,
+        quantity,
+        priceCents: 39000,
+        unitCostCents: 15000,
+        attributes: { color: 'Синій', size },
+      });
+    }
+    const posted = await postDocument({ storeId, documentId: doc.id, staffId });
+
+    expect(await productCountByName(name)).toBe(1);
+    const product = await pool.query(
+      `SELECT id, needs_review, created_from_document_id FROM pos_products WHERE store_id = $1 AND name = $2`,
+      [storeId, name]
+    );
+    expect(product.rows[0].needs_review).toBe(true);
+    expect(Number(product.rows[0].created_from_document_id)).toBe(doc.id);
+    const variants = await variantsOf(Number(product.rows[0].id));
+    expect(variants.map((v) => v.attributes.size)).toEqual(['86', '92', '98']);
+
+    // Each line points at its own variant, and the stock landed per size.
+    const resolved = (posted.lines ?? []).map((l) => [l.label, l.variant_id, l.is_placeholder] as const);
+    expect(new Set(resolved.map((r) => r[1])).size).toBe(3);
+    expect(resolved.every((r) => r[2] === false)).toBe(true);
+    expect(await stockQty(variants[1].id)).toBe(4);
+  });
+
+  it('a stub on an existing card becomes a variant of THAT card, under the card’s own name', async () => {
+    const productId = await existingProductId();
+    const before = (await variantsOf(productId)).length;
+    const doc = await createDocument({ storeId, staffId, type: 'receipt' });
+    const line = await addPlaceholderLine({
+      storeId,
+      documentId: doc.id,
+      name: 'whatever the client typed',
+      productId,
+      quantity: 2,
+      priceCents: 11000,
+      unitCostCents: 4500,
+      attributes: { color: 'Black', size: 'L' },
+    });
+    expect(line.placeholder_name).toBe('Existing Tee');
+    expect(line.placeholder_product_id).toBe(productId);
+
+    const posted = await postDocument({ storeId, documentId: doc.id, staffId });
+    const after = await variantsOf(productId);
+    expect(after.length).toBe(before + 1);
+    const grown = after.find((v) => v.attributes.size === 'L')!;
+    expect(Number(posted.lines?.[0].variant_id)).toBe(grown.id);
+    expect(await stockQty(grown.id)).toBe(2);
+    // No second «Existing Tee», and the card is still the owner's — not flagged for review.
+    expect(await productCountByName('Existing Tee')).toBe(1);
+    const card = await pool.query(`SELECT needs_review FROM pos_products WHERE id = $1`, [productId]);
+    expect(card.rows[0].needs_review).toBe(false);
+    // Clothing mints a barcode for a variant that arrives without one.
+    const minted = await pool.query(`SELECT barcode FROM pos_variants WHERE id = $1`, [grown.id]);
+    expect(String(minted.rows[0].barcode)).toMatch(/^\d{13}$/);
+  });
+
+  it('reuses a cell the card already has at posting time instead of twinning it', async () => {
+    const productId = await existingProductId();
+    const before = (await variantsOf(productId)).length;
+    const stockBefore = await stockQty(variantId);
+    const doc = await createDocument({ storeId, staffId, type: 'receipt' });
+    // The same colour × size as the variant seeded in beforeAll.
+    await addPlaceholderLine({
+      storeId,
+      documentId: doc.id,
+      name: '',
+      productId,
+      quantity: 5,
+      priceCents: 10000,
+      attributes: { color: 'Black', size: 'M' },
+    });
+    const posted = await postDocument({ storeId, documentId: doc.id, staffId });
+    expect(Number(posted.lines?.[0].variant_id)).toBe(variantId);
+    expect((await variantsOf(productId)).length).toBe(before);
+    expect(await stockQty(variantId)).toBe(stockBefore + 5);
+  });
+
+  it('two cards that share a name may each take the same new size in one document', async () => {
+    const productId = await existingProductId();
+    const twinCard = await pool.query(
+      `INSERT INTO pos_products (store_id, name) VALUES ($1, 'Existing Tee') RETURNING id`,
+      [storeId]
+    );
+    const twinId = Number(twinCard.rows[0].id);
+    const doc = await createDocument({ storeId, staffId, type: 'receipt' });
+    for (const id of [productId, twinId]) {
+      await addPlaceholderLine({
+        storeId,
+        documentId: doc.id,
+        name: '',
+        productId: id,
+        quantity: 1,
+        priceCents: 10000,
+        attributes: { color: 'Red', size: 'XL' },
+      });
+    }
+    // …but the same cell on the same card is still one line.
+    await expect(
+      addPlaceholderLine({
+        storeId,
+        documentId: doc.id,
+        name: '',
+        productId: twinId,
+        quantity: 1,
+        priceCents: 10000,
+        attributes: { color: 'Red', size: 'XL' },
+      })
+    ).rejects.toThrow(/duplicate/i);
+
+    await postDocument({ storeId, documentId: doc.id, staffId });
+    expect((await variantsOf(twinId)).map((v) => v.attributes.size)).toEqual(['XL']);
+    expect((await variantsOf(productId)).some((v) => v.attributes.size === 'XL' && v.attributes.color === 'Red')).toBe(true);
+    await pool.query(`UPDATE pos_products SET is_active = FALSE WHERE id = $1`, [twinId]).catch(() => undefined);
+  });
+
+  it('refuses a stub on a card the store does not have, and on a composite', async () => {
+    const doc = await createDocument({ storeId, staffId, type: 'receipt' });
+    await expect(
+      addPlaceholderLine({ storeId, documentId: doc.id, name: '', productId: 999999999, quantity: 1, priceCents: 100 })
+    ).rejects.toThrow('Товар не знайдено');
+    const bouquet = await pool.query(
+      `INSERT INTO pos_products (store_id, name, kind, stock_mode) VALUES ($1, 'Букет', 'composite', 'own') RETURNING id`,
+      [storeId]
+    );
+    await expect(
+      addPlaceholderLine({
+        storeId,
+        documentId: doc.id,
+        name: '',
+        productId: Number(bouquet.rows[0].id),
+        quantity: 1,
+        priceCents: 100,
+      })
+    ).rejects.toThrow(/складений товар/);
+  });
+
   it('rejects duplicate placeholder same name/size/color in one doc', async () => {
     const doc = await createDocument({ storeId, staffId, type: 'receipt' });
     await addPlaceholderLine({

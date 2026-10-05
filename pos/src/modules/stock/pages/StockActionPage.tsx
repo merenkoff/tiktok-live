@@ -30,6 +30,9 @@ import type {
 import { AttributeFields, Package, PageHeader, Plus, SectionHead, useDragScroll } from '@pos/platform/ui';
 import { TYPE_GLYPH } from '../lib/documents';
 import { ADJUST_REASONS, defaultReason, writeoffReasonsOf } from '../lib/reasons';
+import { confirmStubsMessage, stubsFooter, summarizeStubs } from '../lib/stubs';
+import { supportsMatrix } from '../../products/lib/variantMatrix';
+import { ReceiveMatrixDialog, type ReceiveMatrixResult } from '../components/ReceiveMatrixDialog';
 
 /**
  * A short read-out of what the operator typed, for the draft row on screen.
@@ -124,6 +127,12 @@ type PlaceholderLine = {
   summary: string;
   sku: string;
   barcode: string;
+  /**
+   * The card this stub joins when the receipt is posted (clothing S1 — a new
+   * size on a card the shop has); absent → a new product named `name`, one
+   * card for every stub of that name in the document.
+   */
+  product_id?: number;
 };
 
 type LineDraft = ExistingLine | PlaceholderLine;
@@ -166,6 +175,7 @@ export function StockActionPage({ type }: Props) {
   const catalogScrollRef = useDragScroll<HTMLDivElement>();
 
   const [stubOpen, setStubOpen] = useState(false);
+  const [matrixOpen, setMatrixOpen] = useState(false);
   const [stubName, setStubName] = useState('');
   const [stubQty, setStubQty] = useState('1');
   const [stubPrice, setStubPrice] = useState('');
@@ -212,8 +222,8 @@ export function StockActionPage({ type }: Props) {
     [lines]
   );
 
-  const placeholderCount = useMemo(
-    () => lines.filter((l) => l.kind === 'placeholder').length,
+  const stubSummary = useMemo(
+    () => summarizeStubs(lines.filter((l): l is PlaceholderLine => l.kind === 'placeholder')),
     [lines]
   );
 
@@ -425,6 +435,75 @@ export function StockActionPage({ type }: Props) {
     setError(null);
   }
 
+  /**
+   * The grid's lines (clothing S1). An existing size the document already
+   * holds gets its count added rather than a second row; a stub that matches
+   * one already here (same card or name, same cell) likewise — the server
+   * would refuse the twin anyway.
+   */
+  function addFromMatrix(result: ReceiveMatrixResult) {
+    const byVariant = new Map(catalog.map((row) => [row.variant_id, row]));
+    setLines((prev) => {
+      const next = [...prev];
+      for (const { variant, quantity, label } of result.existing) {
+        const at = next.findIndex((l) => l.kind === 'existing' && l.variant_id === variant.id);
+        if (at >= 0) {
+          const line = next[at] as ExistingLine;
+          next[at] = { ...line, quantity: line.quantity + quantity };
+          continue;
+        }
+        const row = byVariant.get(variant.id);
+        const pack = packOf(row ?? variant);
+        next.push({
+          kind: 'existing',
+          variant_id: variant.id,
+          label: row ? `${row.product_name} ${row.label}`.trim() : label,
+          quantity,
+          unit_cost_cents: row?.cost_cents ?? variant.cost_cents ?? undefined,
+          on_hand: row?.quantity ?? variant.quantity,
+          unit: row?.unit ?? variant.unit,
+          pack_qty: pack?.qty ?? null,
+          pack_label: pack?.label ?? '',
+          // The grid counts in base units; the box must not re-read them as packs.
+          packMode: 'base',
+        });
+      }
+      for (const stub of result.placeholders) {
+        const attrKey = JSON.stringify(vertical.attributes.map((spec) => stub.attributes[spec.key] ?? null));
+        const at = next.findIndex(
+          (l) =>
+            l.kind === 'placeholder' &&
+            (l.product_id ?? null) === (stub.product_id ?? null) &&
+            l.name.toLowerCase() === stub.name.toLowerCase() &&
+            JSON.stringify(vertical.attributes.map((spec) => l.attributes[spec.key] ?? null)) === attrKey
+        );
+        if (at >= 0) {
+          const line = next[at] as PlaceholderLine;
+          next[at] = { ...line, quantity: line.quantity + stub.quantity };
+          continue;
+        }
+        next.push({
+          kind: 'placeholder',
+          clientKey: `ph-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          name: stub.name,
+          quantity: stub.quantity,
+          price_cents: stub.price_cents,
+          unit_cost_cents: stub.unit_cost_cents,
+          attributes: stub.attributes,
+          unit: stub.unit,
+          summary: attributeSummary(vertical, stub.attributes),
+          sku: '',
+          barcode: '',
+          ...(stub.product_id != null ? { product_id: stub.product_id } : {}),
+        });
+      }
+      return next;
+    });
+    setMatrixOpen(false);
+    setStubOpen(false);
+    setError(null);
+  }
+
   async function ensureSupplier(): Promise<number | null> {
     if (type !== 'receipt') return null;
     if (supplierId) return Number(supplierId);
@@ -478,12 +557,9 @@ export function StockActionPage({ type }: Props) {
       );
       return;
     }
-    if (type === 'receipt' && !asDraft && placeholderCount > 0) {
-      const ok = window.confirm(
-        `Буде створено ${placeholderCount} ${
-          placeholderCount === 1 ? 'новий товар' : 'нових товарів'
-        } у каталозі. Продовжити?`
-      );
+    const confirmText = confirmStubsMessage(stubSummary);
+    if (type === 'receipt' && !asDraft && confirmText) {
+      const ok = window.confirm(confirmText);
       if (!ok) return;
     }
 
@@ -508,6 +584,7 @@ export function StockActionPage({ type }: Props) {
             unit: line.unit,
             sku: line.sku || null,
             barcode: line.barcode || null,
+            product_id: line.product_id ?? null,
           });
           continue;
         }
@@ -635,10 +712,12 @@ export function StockActionPage({ type }: Props) {
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-base font-semibold">{line.name}</p>
                       <span className="h-[22px] px-2 rounded-md inline-flex items-center bg-amber-50 text-amber-800 text-xs font-medium">
-                        Новий
+                        {line.product_id != null ? 'Новий розмір' : 'Новий'}
                       </span>
                     </div>
-                    <p className="text-[13px] text-sq-muted">Створиться при проведенні</p>
+                    <p className="text-[13px] text-sq-muted">
+                      {line.product_id != null ? 'Додасться до картки при проведенні' : 'Створиться при проведенні'}
+                    </p>
                     {(line.summary || line.barcode) && (
                       <p className="text-[13px] text-sq-muted">
                         {line.summary}
@@ -824,13 +903,25 @@ export function StockActionPage({ type }: Props) {
 
       <section>
         <SectionHead title="Каталог — натисніть, щоб додати" />
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Пошук назви, SKU або штрихкоду…"
-          className="sq-input mt-3 mb-1"
-          autoFocus
-        />
+        <div className="flex gap-2 mt-3 mb-1">
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Пошук назви, SKU або штрихкоду…"
+            className="sq-input min-w-0"
+            autoFocus
+          />
+          {type === 'receipt' && supportsMatrix(vertical.attributes) && (
+            <button
+              type="button"
+              onClick={() => setMatrixOpen(true)}
+              title="Одна модель: кольори × розміри, кількість у кожній клітинці"
+              className="sq-btn-quiet shrink-0 whitespace-nowrap"
+            >
+              Матрицею
+            </button>
+          )}
+        </div>
         <div ref={catalogScrollRef} className="max-h-72 overflow-auto select-none">
           {loading && <p className="py-4 text-sm text-sq-muted">Завантаження каталогу…</p>}
           {!loading && searchHits.length === 0 && (
@@ -1024,6 +1115,10 @@ export function StockActionPage({ type }: Props) {
         </div>
       )}
 
+      {matrixOpen && type === 'receipt' && (
+        <ReceiveMatrixDialog vertical={vertical} onAdd={addFromMatrix} onClose={() => setMatrixOpen(false)} />
+      )}
+
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="flex flex-wrap gap-2 sticky bottom-0 z-10 -mx-1 px-1 py-3 bg-sq-surface shadow-[0_-1px_0_rgb(var(--sq-divider-rgb))]">
@@ -1054,7 +1149,7 @@ export function StockActionPage({ type }: Props) {
               return s + (l.unit_cost_cents ?? 0) * l.quantity;
             }, 0)
           )}
-          {placeholderCount > 0 ? ` · нових товарів: ${placeholderCount}` : ''}
+          {stubsFooter(stubSummary)}
         </p>
       )}
     </form>

@@ -70,6 +70,36 @@ describe('closing it', () => {
   });
 });
 
+describe('inside a page that is itself a form', () => {
+  it('keeps its submit to itself: the page form around it is not submitted too', async () => {
+    // The portal takes the panel out of the page's DOM, not out of its React
+    // tree, and React bubbles a submit through portals. The receiving page is
+    // one big form: «Додати в прихід» in the matrix grid used to post the
+    // whole receipt (clothing S1).
+    const user = userEvent.setup();
+    const pageSubmit = vi.fn((e: React.FormEvent) => e.preventDefault());
+    const dialogSubmit = vi.fn();
+    render(
+      <form onSubmit={pageSubmit} aria-label="Сторінка">
+        <Dialog
+          title="Сітка"
+          onClose={vi.fn()}
+          onSubmit={(e) => {
+            e.preventDefault();
+            dialogSubmit();
+          }}
+          footer={<button type="submit">Додати</button>}
+        >
+          <input aria-label="Поле" />
+        </Dialog>
+      </form>
+    );
+    await user.click(screen.getByRole('button', { name: 'Додати' }));
+    expect(dialogSubmit).toHaveBeenCalledTimes(1);
+    expect(pageSubmit).not.toHaveBeenCalled();
+  });
+});
+
 describe('focus', () => {
   it('lands on the first field when it opens and goes back to the opener when it closes', () => {
     const opener = document.createElement('button');
