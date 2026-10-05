@@ -36,6 +36,18 @@ export interface StockDocumentLine {
   label?: string;
   unit?: string;
   product_id?: number;
+  /**
+   * The variant's CURRENT sale price, old price, article and barcode — what a
+   * price tag printed from this document says (clothing L4, `getDocument`
+   * only). Read live from `pos_variants` at every load and never snapshotted:
+   * a tag printed next month must carry next month's price. Null on a stub
+   * line, which has no variant yet.
+   */
+  price_cents?: number | null;
+  compare_at_cents?: number | null;
+  sku?: string | null;
+  barcode?: string | null;
+  is_active?: boolean | null;
 }
 
 export interface StockDocument {
@@ -128,6 +140,15 @@ function mapLine(row: Record<string, unknown>): StockDocumentLine {
     label: row.label == null ? undefined : String(row.label),
     unit: row.unit == null ? undefined : String(row.unit),
     product_id: row.product_id == null ? undefined : Number(row.product_id),
+    // Only `loadLines` joins the variant; a line echoed back from an insert or
+    // an update has no say about the price, so it leaves the fields out.
+    ...('price_cents' in row && {
+      price_cents: row.price_cents == null ? null : Number(row.price_cents),
+      compare_at_cents: row.compare_at_cents == null ? null : Number(row.compare_at_cents),
+      sku: row.sku == null ? null : String(row.sku),
+      barcode: row.barcode == null ? null : String(row.barcode),
+      is_active: row.is_active == null ? null : Boolean(row.is_active),
+    }),
   };
 }
 
@@ -173,7 +194,8 @@ async function loadLines(client: DbClient, documentId: number): Promise<StockDoc
             COALESCE(p.name, l.placeholder_name) AS product_name,
             COALESCE(v.label, l.placeholder_label) AS label,
             COALESCE(v.unit, l.placeholder_unit) AS unit,
-            p.id AS product_id
+            p.id AS product_id,
+            v.price_cents, v.compare_at_cents, v.sku, v.barcode, v.is_active
      FROM pos_stock_document_lines l
      LEFT JOIN pos_variants v ON v.id = l.variant_id
      LEFT JOIN pos_products p ON p.id = v.product_id

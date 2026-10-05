@@ -141,6 +141,34 @@ describe.skipIf(!hasDb)('POS receipt placeholder products', () => {
     expect(reloaded?.lines?.[0].variant_id).toBeNull();
   });
 
+  it('getDocument carries the variant’s current price, old price, article and barcode on a line — nothing on a stub', async () => {
+    const doc = await createDocument({ storeId, staffId, type: 'receipt' });
+    await addLine({ storeId, documentId: doc.id, variantId, quantity: 1, unitCostCents: 4000 });
+    await addPlaceholderLine({
+      storeId,
+      documentId: doc.id,
+      name: 'Stub Priceless',
+      quantity: 1,
+      priceCents: 9900,
+    });
+    const reloaded = await getDocument(storeId, doc.id);
+    const real = reloaded?.lines?.find((l) => l.variant_id === variantId);
+    expect(real).toMatchObject({
+      price_cents: 10000,
+      compare_at_cents: null,
+      sku: expect.stringMatching(/^SKU-/),
+      barcode: existingBarcode,
+      is_active: true,
+    });
+    const stub = reloaded?.lines?.find((l) => l.is_placeholder);
+    expect(stub).toMatchObject({ price_cents: null, sku: null, barcode: null, is_active: null });
+    // A line echoed back from the insert has no say about the price at all
+    // (its own document: a variant sits on one line per document).
+    const other = await createDocument({ storeId, staffId, type: 'receipt' });
+    const echoed = await addLine({ storeId, documentId: other.id, variantId, quantity: 1 });
+    expect(echoed).not.toHaveProperty('price_cents');
+  });
+
   it('postDocument materializes mix of existing + stub with needs_review and receipt movement', async () => {
     const name = `Mix Stub ${Date.now()}`;
     const beforeExisting = await stockQty(variantId);
@@ -179,6 +207,10 @@ describe.skipIf(!hasDb)('POS receipt placeholder products', () => {
     expect(product.rows[0].needs_review).toBe(true);
     expect(Number(product.rows[0].created_from_document_id)).toBe(doc.id);
     expect(String(product.rows[0].description)).toContain(posted.doc_number);
+
+    // The resolved line now reads the variant it became — the price the stub
+    // named is what a price tag printed from this document will say.
+    expect(stubLine).toMatchObject({ price_cents: 12000, compare_at_cents: null, is_active: true });
 
     const newVariantId = Number(stubLine!.variant_id);
     expect(await stockQty(newVariantId)).toBe(4);

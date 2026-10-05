@@ -21,7 +21,7 @@
     "check:returns-css-coverage": "node scripts/check-module-css-coverage.mjs src/modules/returns dist-remotes/returns/style.css src/components/ui/Page.tsx",
     "build:stock-remote": "vite build --config vite.stock-remote.config.ts && node scripts/sign-remote.mjs stock",
     "serve:stock-remote": "npx --yes serve -l 5002 --cors --no-clipboard dist-remotes/stock",
-    "check:stock-css-coverage": "node scripts/check-module-css-coverage.mjs src/modules/stock dist-remotes/stock/style.css src/components/ui/Page.tsx",
+    "check:stock-css-coverage": "node scripts/check-module-css-coverage.mjs src/modules/stock dist-remotes/stock/style.css src/components/ui/Page.tsx src/modules/products/components/PriceTagsDialog.tsx",
     "build:products-remote": "vite build --config vite.products-remote.config.ts && node scripts/sign-remote.mjs products",
     "remote:sign": "node scripts/sign-remote.mjs",
     "serve:products-remote": "npx --yes serve -l 5003 --cors --no-clipboard dist-remotes/products",

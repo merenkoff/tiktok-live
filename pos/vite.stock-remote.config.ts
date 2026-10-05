@@ -23,7 +23,9 @@ export default defineConfig({
   plugins: [react()],
   // `public/` is the tablet PWA's manifest and icons — the web host's, never a remote's.
   publicDir: false,
-  css: moduleCss('stock'),
+  // `PriceTagsDialog` is the products module's dialog that the document page
+  // renders inline (clothing L4) — its classes must be in this sheet too.
+  css: moduleCss('stock', ['./src/modules/products/components/PriceTagsDialog.tsx']),
   define: {
     'process.env.NODE_ENV': '"production"',
     // This remote's own build version — see roadmap #6.
