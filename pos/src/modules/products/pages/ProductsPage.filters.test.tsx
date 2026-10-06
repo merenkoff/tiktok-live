@@ -15,6 +15,7 @@ import type { Product } from '../../../types';
 const CLOTHING = { id: 'clothing', title: 'Одяг', attributes: [], units: ['шт'], defaultUnit: 'шт', maxCompositionDepth: 1 };
 
 const getProducts = vi.fn<[], Promise<Product[]>>();
+const posRequest = vi.fn();
 
 vi.mock('@pos/platform', async () => {
   const real = await vi.importActual<typeof import('@pos/platform')>('@pos/platform');
@@ -24,6 +25,7 @@ vi.mock('@pos/platform', async () => {
     useAuthStore: () => null,
     api: {
       getProducts: () => getProducts(),
+      posRequest: (...a: unknown[]) => posRequest(...a),
       getTags: () =>
         Promise.resolve([
           { id: 1, name: 'Новинки', parent_id: null, color: null, show_in_catalog_bar: false },
@@ -132,5 +134,78 @@ describe('the view in the address', () => {
     await screen.findByRole('list', { name: 'Товари' }).catch(() => null);
     await user.click(screen.getByRole('link', { name: 'Додати товар' }));
     await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/admin/products/new|{"list":"?q=x"}'));
+  });
+});
+
+describe('«Без фото» and «Архів»', () => {
+  beforeEach(() => {
+    getProducts.mockResolvedValue([
+      card(1, 'Костюмчик Зайчик', { image_url: '/pos-uploads/a.png' }),
+      card(2, 'Сукня Свято'),
+      card(3, 'Костюм Polo', {
+        is_active: false,
+        image_url: null,
+        variants: [
+          { id: 30, product_id: 3, attributes: {}, label: 'блакитний · 86', unit: 'шт', sku: null, barcode: null, price_cents: 39000, cost_cents: 0, is_active: false, quantity: 1 },
+        ],
+      } as Partial<Product>),
+    ]);
+  });
+
+  it('«Без фото» lists the live cards with no picture, counted, and keeps the archive out', async () => {
+    const user = userEvent.setup();
+    open('/admin/products');
+    await screen.findByText('Костюмчик Зайчик');
+    const filter = screen.getByRole('button', { name: /^Без фото/ });
+    expect(filter).toHaveTextContent('1');
+    await user.click(filter);
+    expect(screen.getByTestId('where')).toHaveTextContent('/admin/products?tag=no-photo|');
+    expect(screen.getByText('Сукня Свято')).toBeInTheDocument();
+    expect(screen.queryByText('Костюмчик Зайчик')).toBeNull();
+    // Archived and photo-less is still archived: it is not in this view.
+    expect(screen.queryByText('Костюм Polo')).toBeNull();
+  });
+
+  it('«Архів» is the one view that shows archived cards — summed over the variants they had, with «Повернути» and no checkbox', async () => {
+    const user = userEvent.setup();
+    open('/admin/products');
+    await screen.findByText('Костюмчик Зайчик');
+    // Hidden everywhere else.
+    expect(screen.queryByText('Костюм Polo')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: /^Архів 1$/ }));
+    expect(screen.getByTestId('where')).toHaveTextContent('/admin/products?tag=archived|');
+    expect(await screen.findByText('Костюм Polo')).toBeInTheDocument();
+    expect(screen.queryByText('Сукня Свято')).toBeNull();
+    expect(screen.getByText('В архіві')).toBeInTheDocument();
+    expect(screen.getByText('1 варіант · 390 ₴ · 1 шт')).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Обрати «Костюм Polo»' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Обрати всі показані/ })).toBeNull();
+    // The card page opens live cards only, so the name is not a link here.
+    expect(screen.queryByRole('link', { name: 'Костюм Polo' })).toBeNull();
+  });
+
+  it('«Повернути» restores the card through the server and says so', async () => {
+    const user = userEvent.setup();
+    posRequest.mockResolvedValue({});
+    open('/admin/products?tag=archived');
+    await user.click(await screen.findByRole('button', { name: 'Повернути «Костюм Polo» з архіву' }));
+    await waitFor(() => expect(posRequest).toHaveBeenCalledWith('post', '/products/3/restore'));
+    expect(await screen.findByText('«Костюм Polo» повернуто з архіву')).toBeInTheDocument();
+    expect(getProducts).toHaveBeenCalledTimes(2);
+  });
+
+  it('says it in words when the restore is refused', async () => {
+    const user = userEvent.setup();
+    posRequest.mockRejectedValue(new Error('boom'));
+    open('/admin/products?tag=archived');
+    await user.click(await screen.findByRole('button', { name: 'Повернути «Костюм Polo» з архіву' }));
+    expect(await screen.findByText('Не вдалося повернути «Костюм Polo» з архіву')).toBeInTheDocument();
+  });
+
+  it('says what an empty archive and a store with every photo look like', async () => {
+    getProducts.mockResolvedValue([card(1, 'Костюмчик Зайчик', { image_url: '/pos-uploads/a.png' })]);
+    open('/admin/products?tag=archived');
+    expect(await screen.findByText('В архіві нічого немає.')).toBeInTheDocument();
   });
 });

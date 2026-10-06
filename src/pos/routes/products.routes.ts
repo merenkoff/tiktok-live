@@ -164,6 +164,21 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
     }
   });
 
+  // The archive's way back (the list's «Архів» filter → «Повернути»).
+  fastify.post('/products/:id/restore', async (request, reply) => {
+    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    if (!auth) return;
+    const { id } = request.params as { id: string };
+    try {
+      const product = await productsService.restoreProduct(auth.storeId, Number(id));
+      // A restored dish is on the guest menu again at once, like any edit.
+      invalidatePublicMenu(auth.storeId);
+      return product;
+    } catch (error) {
+      return reply.code(400).send({ error: errorMessage(error) });
+    }
+  });
+
   fastify.post('/variants/:id/archive', async (request, reply) => {
     const auth = await ensureModule(request, reply, 'products', { owner: true });
     if (!auth) return;

@@ -12,6 +12,7 @@ import { Plus } from '@pos/platform/ui';
 import { TagColorSwatches } from './TagColorSwatches';
 import { TagDot } from './TagDot';
 import { checkboxClass, panelFieldClass } from './formStyles';
+import type { TagFilter } from '../lib/listParams';
 
 export const MAX_TAG_DEPTH = 3;
 
@@ -68,7 +69,7 @@ export function TagTreeNode({
 }: TagTreeCallbacks & {
   tag: PosTag;
   depth: number;
-  filterTag: number | 'all' | 'needs_review';
+  filterTag: TagFilter;
   savingTagId: number | null;
 }) {
   const [adding, setAdding] = useState(false);

@@ -811,6 +811,40 @@ export async function archiveProduct(storeId: number, productId: number) {
   return getProduct(storeId, productId);
 }
 
+/**
+ * Back from the archive: the card and every variant on it, in one transaction.
+ * The mirror of `archiveProduct`, which takes all the variants down with the
+ * card — so all of them come back, including one archived on its own before;
+ * the owner archives that one again from the card. Stock, prices and barcodes
+ * were never touched by archiving and are not touched here.
+ */
+export async function restoreProduct(storeId: number, productId: number) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      `UPDATE pos_products
+       SET is_active = TRUE, updated_at = NOW()
+       WHERE id = $1 AND store_id = $2
+       RETURNING id`,
+      [productId, storeId]
+    );
+    if (result.rows.length === 0) throw new Error('Product not found');
+    await client.query(
+      `UPDATE pos_variants SET is_active = TRUE, updated_at = NOW()
+       WHERE product_id = $1 AND store_id = $2 AND is_active = FALSE`,
+      [productId, storeId]
+    );
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+  return getProduct(storeId, productId);
+}
+
 export async function archiveVariant(storeId: number, variantId: number) {
   const result = await pool.query(
     `UPDATE pos_variants

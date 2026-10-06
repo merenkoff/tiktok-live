@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { Product } from '@pos/platform';
-import { pluralVariants, priceRange, productSummary, stockSummary } from './productSummary';
+import { pluralVariants, priceRange, productSummary, rowVariants, stockSummary } from './productSummary';
 
 const v = (price_cents: number, quantity: number, extra: Record<string, unknown> = {}) =>
   ({ id: 1, product_id: 1, attributes: {}, label: '', unit: 'шт', sku: null, barcode: null, price_cents, cost_cents: 0, is_active: true, quantity, ...extra }) as Product['variants'][number];
@@ -58,5 +58,17 @@ describe('productSummary', () => {
     expect(productSummary(product([v(65000, 16)], { kind: 'composite', stock_mode: 'derived' }))).toBe(
       '1 варіант · 650 ₴ · Можна зібрати: 16'
     );
+  });
+});
+
+describe('a card in the archive', () => {
+  it('speaks for every variant it had — archiving took them all down with it', () => {
+    const archived = product([v(39000, 1, { is_active: false }), v(39000, 0, { is_active: false })], { is_active: false });
+    expect(productSummary(archived)).toBe('2 варіанти · 390 ₴ · 1 шт');
+    expect(rowVariants(archived)).toHaveLength(2);
+  });
+
+  it('a live card still counts only its live variants', () => {
+    expect(rowVariants(product([v(1, 1), v(1, 1, { is_active: false })]))).toHaveLength(1);
   });
 });

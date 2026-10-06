@@ -239,6 +239,60 @@ describe.skipIf(!hasDb)('POS products & catalog routes', () => {
       expect(res.json().error).toBe('Variant not found');
     });
 
+    it('restores an archived card with all its variants, and puts it back in the catalog', async () => {
+      const seeded = await seedProduct(store.storeId, { name: 'Restorable' });
+      const second = await app.inject({
+        method: 'POST',
+        url: `/api/pos/products/${seeded.productId}/variants`,
+        headers: auth(store.ownerToken),
+        payload: { price_cents: 2500, attributes: { size: 'L' } },
+      });
+      expect(second.statusCode).toBe(201);
+      const archived = await app.inject({
+        method: 'POST',
+        url: `/api/pos/products/${seeded.productId}/archive`,
+        headers: auth(store.ownerToken),
+      });
+      expect(archived.statusCode).toBe(200);
+      expect(archived.json().is_active).toBe(false);
+      expect(archived.json().variants.every((v: { is_active: boolean }) => !v.is_active)).toBe(true);
+
+      const restored = await app.inject({
+        method: 'POST',
+        url: `/api/pos/products/${seeded.productId}/restore`,
+        headers: auth(store.ownerToken),
+      });
+      expect(restored.statusCode).toBe(200);
+      const body = restored.json();
+      expect(body.is_active).toBe(true);
+      expect(body.variants).toHaveLength(2);
+      expect(body.variants.every((v: { is_active: boolean }) => v.is_active)).toBe(true);
+
+      const catalog = await app.inject({
+        method: 'GET',
+        url: '/api/pos/catalog',
+        headers: auth(store.sellerToken),
+      });
+      expect(catalog.json().map((c: { variant_id: number }) => c.variant_id)).toContain(seeded.variantId);
+    });
+
+    it('restores only the owner’s own card: a seller is refused, an unknown id is a 400', async () => {
+      const seeded = await seedProduct(store.storeId, { name: 'Seller cannot restore' });
+      const bySeller = await app.inject({
+        method: 'POST',
+        url: `/api/pos/products/${seeded.productId}/restore`,
+        headers: auth(store.sellerToken),
+      });
+      expect(bySeller.statusCode).toBe(403);
+      const unknown = await app.inject({
+        method: 'POST',
+        url: '/api/pos/products/999999999/restore',
+        headers: auth(store.ownerToken),
+      });
+      expect(unknown.statusCode).toBe(400);
+      expect(unknown.json().error).toBe('Product not found');
+    });
+
     it('archives a variant and drops it out of the catalog', async () => {
       const seeded = await seedProduct(store.storeId, { name: 'Archivable variant' });
       const res = await app.inject({

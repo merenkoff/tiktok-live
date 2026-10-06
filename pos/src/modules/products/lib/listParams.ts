@@ -8,7 +8,12 @@
 // when the list reads its view from the URL rather than from component state.
 // Defaults are left out, so the plain `/admin/products` stays plain.
 
-export type TagFilter = 'all' | 'needs_review' | number;
+/**
+ * What the left panel narrows the list to: everything, a tag, or one of the
+ * named views — cards from a receipt to check, cards with no photo, and the
+ * archive (the one view that shows archived cards rather than hiding them).
+ */
+export type TagFilter = 'all' | 'needs_review' | 'no_photo' | 'archived' | number;
 
 export interface ListParams {
   q: string;
@@ -18,12 +23,16 @@ export interface ListParams {
 const Q = 'q';
 const TAG = 'tag';
 const NEEDS_REVIEW = 'review';
+const NO_PHOTO = 'no-photo';
+const ARCHIVED = 'archived';
 
 export function readListParams(sp: URLSearchParams): ListParams {
   const q = sp.get(Q) ?? '';
   const raw = sp.get(TAG);
   let tag: TagFilter = 'all';
   if (raw === NEEDS_REVIEW) tag = 'needs_review';
+  else if (raw === NO_PHOTO) tag = 'no_photo';
+  else if (raw === ARCHIVED) tag = 'archived';
   else if (raw && /^\d+$/.test(raw)) tag = Number(raw);
   return { q, tag };
 }
@@ -37,7 +46,14 @@ export function writeListParams(prev: URLSearchParams, next: Partial<ListParams>
   }
   if (next.tag !== undefined) {
     if (next.tag === 'all') out.delete(TAG);
-    else out.set(TAG, next.tag === 'needs_review' ? NEEDS_REVIEW : String(next.tag));
+    else out.set(TAG, tagParam(next.tag));
   }
   return out;
+}
+
+function tagParam(tag: Exclude<TagFilter, 'all'>): string {
+  if (tag === 'needs_review') return NEEDS_REVIEW;
+  if (tag === 'no_photo') return NO_PHOTO;
+  if (tag === 'archived') return ARCHIVED;
+  return String(tag);
 }

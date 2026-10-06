@@ -13,10 +13,11 @@ import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { DEFAULT_TAG_COLOR, api, type TagColorKey, useAuthStore, useVertical } from '@pos/platform';
 import type { PosTag, TagStation, Product } from '@pos/platform';
-import { Inbox, LayoutGrid, Package, PageHeader, Percent, Plus, Printer } from '@pos/platform/ui';
+import { Boxes, Camera, Inbox, LayoutGrid, Package, PageHeader, Percent, Plus, Printer } from '@pos/platform/ui';
 import { ConfirmSheet } from '../../../components/cashier/ConfirmSheet';
 import { MarkdownDialog } from '../components/MarkdownDialog';
 import { countPhrase } from '../data/markdownsApi';
+import { restoreProduct } from '../data/productsApi';
 import { PriceTagsDialog } from '../components/PriceTagsDialog';
 import { ProductRow } from '../components/ProductRow';
 import { TagColorSwatches } from '../components/TagColorSwatches';
@@ -36,6 +37,7 @@ export function ProductsPage() {
   const [markdownOpen, setMarkdownOpen] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
   const [archiving, setArchiving] = useState<Product | null>(null);
+  const [restoringId, setRestoringId] = useState<number | null>(null);
   const storeName = useAuthStore((s) => s.auth?.store.name ?? '');
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -91,15 +93,22 @@ export function ProductsPage() {
     );
   }, [searchParams, navigate, setSearchParams]);
 
+  // The archive is the one view that shows archived cards; every other view
+  // hides them, exactly as before.
+  const inArchive = filterTag === 'archived';
   const visible = products.filter((p) => {
+    if (inArchive) return !p.is_active && productMatchesQuery(p, query);
     if (!p.is_active) return false;
     if (!productMatchesQuery(p, query)) return false;
     if (filterTag === 'needs_review') return Boolean(p.needs_review);
+    if (filterTag === 'no_photo') return !p.image_url;
     if (filterTag === 'all') return true;
     return p.tag_ids?.includes(filterTag);
   });
 
   const needsReviewCount = products.filter((p) => p.is_active && p.needs_review).length;
+  const noPhotoCount = products.filter((p) => p.is_active && !p.image_url).length;
+  const archivedCount = products.filter((p) => !p.is_active).length;
 
   async function onCreateTag(e: FormEvent) {
     e.preventDefault();
@@ -171,6 +180,20 @@ export function ProductsPage() {
       await reload();
     } catch {
       setError(`Не вдалося архівувати «${p.name}»`);
+    }
+  }
+
+  async function restore(p: Product) {
+    setRestoringId(p.id);
+    setError(null);
+    try {
+      await restoreProduct(p.id);
+      setFlash(`«${p.name}» повернуто з архіву`);
+      await reload();
+    } catch {
+      setError(`Не вдалося повернути «${p.name}» з архіву`);
+    } finally {
+      setRestoringId(null);
     }
   }
 
@@ -252,6 +275,20 @@ export function ProductsPage() {
               label="З приходу — перевірте"
               count={needsReviewCount}
             />
+            <FilterRow
+              active={filterTag === 'no_photo'}
+              onClick={() => setFilterTag('no_photo')}
+              icon={<Camera size={20} className="text-sq-secondary" />}
+              label="Без фото"
+              count={noPhotoCount}
+            />
+            <FilterRow
+              active={inArchive}
+              onClick={() => setFilterTag('archived')}
+              icon={<Boxes size={20} className="text-sq-secondary" />}
+              label="Архів"
+              count={archivedCount}
+            />
             {tags.map((root) => (
               <TagTreeNode
                 key={root.id}
@@ -313,7 +350,7 @@ export function ProductsPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          {visible.length > 0 && (
+          {visible.length > 0 && !inArchive && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[13px]">
               {selected.size < visible.length && (
                 <button
@@ -406,6 +443,8 @@ export function ProductsPage() {
                   expanded={expanded.has(product.id)}
                   onToggleExpand={() => toggleIn(setExpanded, product.id)}
                   onArchive={() => setArchiving(product)}
+                  onRestore={() => void restore(product)}
+                  restoring={restoringId === product.id}
                   cardState={cardState}
                 />
               ))}
@@ -413,7 +452,13 @@ export function ProductsPage() {
           ) : (
             <div className="py-12 flex flex-col items-center gap-3 text-center">
               <Package size={48} />
-              <p className="text-[15px] text-sq-secondary">Немає товарів у цьому фільтрі.</p>
+              <p className="text-[15px] text-sq-secondary">
+                {inArchive && query.trim() === ''
+                  ? 'В архіві нічого немає.'
+                  : filterTag === 'no_photo' && query.trim() === ''
+                    ? 'У всіх товарів є фото.'
+                    : 'Немає товарів у цьому фільтрі.'}
+              </p>
             </div>
           )}
         </div>
