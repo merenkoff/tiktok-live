@@ -13,7 +13,7 @@ const GUIDES: Array<{ slug: string; shortTitle: string; title: string; descripti
     description:
       'Від першого входу до першого чека: налаштування магазину, співробітники й PIN-коди, товари, склад, знижки, звіти, принтер чеків, ПРРО і вигляд меню. Однаково для магазину одягу, квіткового, кав\'ярні й ресторану.',
     publishedAt: '2026-09-24',
-    updatedAt: '2026-10-05',
+    updatedAt: '2026-10-06',
   },
   {
     slug: 'kasyr',

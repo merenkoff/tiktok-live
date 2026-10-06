@@ -15,6 +15,14 @@ describe('the list view in the address', () => {
     expect(readListParams(new URLSearchParams('tag=review'))).toEqual({ q: '', tag: 'needs_review' });
   });
 
+  it('reads and writes the two named views — no photo and the archive — by name', () => {
+    expect(readListParams(new URLSearchParams('tag=no-photo'))).toEqual({ q: '', tag: 'no_photo' });
+    expect(readListParams(new URLSearchParams('tag=archived&q=зайчик'))).toEqual({ q: 'зайчик', tag: 'archived' });
+    expect(writeListParams(new URLSearchParams(''), { tag: 'no_photo' }).toString()).toBe('tag=no-photo');
+    expect(writeListParams(new URLSearchParams('q=x'), { tag: 'archived' }).toString()).toBe('q=x&tag=archived');
+    expect(readListParams(writeListParams(new URLSearchParams(''), { tag: 'archived' })).tag).toBe('archived');
+  });
+
   it('shrugs at a junk tag', () => {
     expect(readListParams(new URLSearchParams('tag=abc')).tag).toBe('all');
     expect(readListParams(new URLSearchParams('tag=-1')).tag).toBe('all');

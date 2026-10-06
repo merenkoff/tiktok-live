@@ -51,9 +51,20 @@ export function stockSummary(
   return units.size === 1 ? `${total} ${variants[0]!.unit}` : String(total);
 }
 
+/**
+ * The variants a row speaks for: the live ones — or, for a card in the
+ * archive, all of them, because archiving took every variant down with the
+ * card and «Без варіантів» would hide exactly what «Повернути» brings back.
+ */
+export function rowVariants<V extends Pick<ProductVariant, 'is_active'>>(
+  product: { is_active?: boolean; variants: V[] }
+): V[] {
+  return product.is_active === false ? product.variants : product.variants.filter((v) => v.is_active);
+}
+
 /** The whole line, parts joined with « · »; «Без варіантів» for a card with none. */
 export function productSummary(product: Product): string {
-  const variants = product.variants.filter((v) => v.is_active);
+  const variants = rowVariants(product);
   if (variants.length === 0) return 'Без варіантів';
   const parts = [pluralVariants(variants.length), priceRange(variants), stockSummary(product, variants)];
   return parts.filter((p): p is string => Boolean(p)).join(' · ');
