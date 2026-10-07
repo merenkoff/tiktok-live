@@ -301,6 +301,12 @@ export interface Modifier {
   name: string;
   /** Signed: «половина −20 ₴» is a delta too. */
   price_delta_cents: number;
+  /**
+   * What the answer costs instead on variants with this label — the crust
+   * that is dearer on the 50 см pizza (migration 066). Absent from a backend
+   * older than that.
+   */
+  label_deltas?: { label: string; price_delta_cents: number }[];
   component_variant_id: number | null;
   component_quantity: number | null;
   /** The component named, for the list. */
@@ -319,6 +325,8 @@ export interface ModifierGroup {
   sort_order: number;
   is_active: boolean;
   modifiers: Modifier[];
+  /** The labels of the variants this group's products come in — what a size price can match. */
+  labels_in_use?: string[];
 }
 
 export interface ModifierGroupInput {
@@ -332,6 +340,8 @@ export interface ModifierGroupInput {
 export interface ModifierInput {
   name?: string;
   price_delta_cents?: number;
+  /** Replaced wholesale; `[]` clears. */
+  label_deltas?: { label: string; price_delta_cents: number }[];
   component_variant_id?: number | null;
   component_quantity?: number | null;
   is_default?: boolean;

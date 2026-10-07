@@ -23,7 +23,12 @@ import {
   recomputeFlat,
   setComponents,
 } from './composites.service.js';
-import { listProductGroupIds, loadGroupsForProducts, toCatalogGroup } from './modifiers.service.js';
+import {
+  groupsForVariant,
+  listProductGroupIds,
+  loadGroupsForProducts,
+  toCatalogGroup,
+} from './modifiers.service.js';
 import type { ComponentInput } from './composites.service.js';
 
 export interface VariantInput {
@@ -1136,7 +1141,14 @@ export async function getCatalog(
         }
       : {}),
     ...(groupsByProduct.has(Number(row.product_id))
-      ? { modifier_groups: groupsByProduct.get(Number(row.product_id))!.map(toCatalogGroup) }
+      ? {
+          // Per row, because an answer may cost more on the bigger size (066):
+          // each variant's row carries what the answers cost on IT.
+          modifier_groups: groupsForVariant(
+            groupsByProduct.get(Number(row.product_id))!,
+            String(row.label ?? '')
+          ).map(toCatalogGroup),
+        }
       : {}),
     tag_ids: Array.isArray(row.tag_ids) ? row.tag_ids.map((id: string | number) => Number(id)) : [],
   }));

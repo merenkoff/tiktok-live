@@ -66,7 +66,36 @@ function renderSheet(overrides: Partial<Parameters<typeof ModifierSheet>[0]> = {
 const price = () => screen.getByTestId('modifier-price').textContent;
 const addButton = () => screen.getByTestId('modifier-add') as HTMLButtonElement;
 
+/** The same crust on two pizzas' sizes: the server priced each row for its own size. */
+function crustFor(deltaCents: number): CatalogModifierGroup {
+  return {
+    id: 3,
+    name: 'Бортики',
+    min_select: 0,
+    max_select: 1,
+    modifiers: [
+      { id: 31, name: 'Філадельфія', price_delta_cents: deltaCents, is_default: false, component_variant_id: null, component_quantity: null },
+    ],
+  };
+}
+
 describe('ModifierSheet', () => {
+  it('prices an answer for the chosen size, and keeps it chosen when the size changes', () => {
+    const small = makeCatalogItem({ variant_id: 41, product_name: 'Double Meet', label: '30 см', price_cents: 23000, modifier_groups: [crustFor(8000)] });
+    const large = makeCatalogItem({ variant_id: 42, product_name: 'Double Meet', label: '50 см', price_cents: 41000, modifier_groups: [crustFor(15000)] });
+    const { onAdd } = renderSheet({ variants: [small, large], initialVariantId: 41, initialModifierIds: [31] });
+    expect(screen.getByTestId('modifier-chip-31').textContent).toContain('+80');
+    expect(price()).toBe('310,00 ₴');
+
+    fireEvent.click(screen.getByTestId('modifier-variant-42'));
+    expect(screen.getByTestId('modifier-chip-31')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('modifier-chip-31').textContent).toContain('+150');
+    expect(price()).toBe('560,00 ₴');
+
+    fireEvent.click(addButton());
+    expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({ item: large, modifiers: [31] }));
+  });
+
   it('opens with the defaults selected and the card price on the button', () => {
     renderSheet();
     expect(screen.getByTestId('modifier-chip-11')).toHaveAttribute('aria-pressed', 'true');

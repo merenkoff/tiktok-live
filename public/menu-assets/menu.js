@@ -332,6 +332,13 @@
       });
       var qty = 1;
       var noteValue = '';
+      // An answer may cost more on the bigger size (the crust on a 50 см pizza):
+      // the menu then names its price per size, keyed by variant id.
+      function deltaOf(m) {
+        var bySize = m.price_delta_by_variant;
+        var own = bySize ? bySize[String(chosenVariant.id)] : undefined;
+        return typeof own === 'number' ? own : m.price_delta_cents;
+      }
 
       title.textContent = product.name;
       function paint() {
@@ -386,7 +393,7 @@
             });
             row.appendChild(input);
             row.appendChild(node('span', null, m.name));
-            var d = delta(m.price_delta_cents);
+            var d = delta(deltaOf(m));
             if (d) row.appendChild(node('b', null, d));
             body.appendChild(row);
           });
@@ -416,7 +423,7 @@
         product.modifier_groups.forEach(function (g) {
           var chosen = g.modifiers.filter(function (m) { return picked[m.id]; });
           if (chosen.length < g.min_select) ok = false;
-          chosen.forEach(function (m) { unit += m.price_delta_cents; });
+          chosen.forEach(function (m) { unit += deltaOf(m); });
         });
 
         var stepper = node('div', 'qty');

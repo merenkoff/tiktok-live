@@ -192,6 +192,13 @@ const MENU: PublicMenu = {
               modifiers: [
                 { name: 'звичайне', price_delta_cents: 0, is_default: true },
                 { name: 'вівсяне <b>', price_delta_cents: 1500, is_default: false },
+                // Dearer on the bigger size (066), the way a pizza's crust is.
+                {
+                  name: 'подвійне',
+                  price_delta_cents: 1000,
+                  price_delta_by_variant: { '71': 1000, '72': 2500 },
+                  is_default: false,
+                },
               ],
             },
           ],
@@ -230,6 +237,12 @@ describe('the menu page', () => {
     expect(html).toContain('від 50 ₴');
     expect(html).toContain('можна одне');
     expect(html).toContain('<b>+15 ₴</b>');
+  });
+
+  it('names the size where an answer costs differently, escaped like every label', () => {
+    expect(html).toContain('подвійне <b>+10 ₴</b> (M &lt;x&gt; +25 ₴)');
+    // An answer that costs the same on every size names no size.
+    expect(html).toContain('вівсяне &lt;b&gt; <b>+15 ₴</b> ·');
   });
 
   it('carries the poll address and the store day, not any data', () => {

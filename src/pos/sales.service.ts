@@ -507,7 +507,10 @@ export async function completeSaleTx(
   for (const line of plainLines.values()) {
     const variant = variantMap.get(line.variant_id)!;
     const chosen = modifiers.resolveLineModifiers(
-      groupsByProduct.get(Number(variant.product_id)) ?? [],
+      modifiers.groupsForVariant(
+        groupsByProduct.get(Number(variant.product_id)) ?? [],
+        String(variant.label ?? '')
+      ),
       line.modifiers
     );
     // The card price plus the deltas — never a sum of ingredients, which is

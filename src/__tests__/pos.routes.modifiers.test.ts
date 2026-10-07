@@ -118,6 +118,43 @@ describe.skipIf(!hasDb)('POS modifier routes', () => {
     expect(list.json().map((g: { name: string }) => g.name)).toEqual(['Додатки до сендвіча']);
   });
 
+  it('takes and returns a size price, and refuses a bad one in words (066)', async () => {
+    const patched = await app.inject({
+      method: 'PATCH',
+      url: `/api/pos/modifiers/${cheeseModifierId}`,
+      headers: auth(store.ownerToken),
+      payload: { label_deltas: [{ label: ' Велика ', price_delta_cents: 3000 }] },
+    });
+    expect(patched.statusCode).toBe(200);
+    expect(patched.json().modifiers[0].label_deltas).toEqual([{ label: 'Велика', price_delta_cents: 3000 }]);
+
+    const list = await app.inject({
+      method: 'GET',
+      url: '/api/pos/modifier-groups',
+      headers: auth(store.ownerToken),
+    });
+    // What an override can match: the labels of the group's products' variants.
+    const label = await pool.query(`SELECT label FROM pos_variants WHERE id = $1`, [variantId]);
+    expect(list.json()[0].labels_in_use).toEqual([label.rows[0].label]);
+
+    const bad = await app.inject({
+      method: 'PATCH',
+      url: `/api/pos/modifiers/${cheeseModifierId}`,
+      headers: auth(store.ownerToken),
+      payload: { label_deltas: [{ label: 'Велика', price_delta_cents: 1 }, { label: 'велика', price_delta_cents: 2 }] },
+    });
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json().error).toMatch(/двічі/);
+
+    const cleared = await app.inject({
+      method: 'PATCH',
+      url: `/api/pos/modifiers/${cheeseModifierId}`,
+      headers: auth(store.ownerToken),
+      payload: { label_deltas: [] },
+    });
+    expect(cleared.json().modifiers[0].label_deltas).toEqual([]);
+  });
+
   it('shows the question on the catalog and answers it at the checkout route', async () => {
     const catalog = await app.inject({
       method: 'GET',

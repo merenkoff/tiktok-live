@@ -348,7 +348,7 @@ async function previewPrice(
     [variantId, storeId]
   );
   if (variant.rows.length === 0) return null;
-  const delta = await modifiers.liveDeltaCents(client, storeId, snapshot);
+  const delta = await modifiers.liveDeltaCents(client, storeId, snapshot, variantId);
   if (delta == null) return null;
   return Number(variant.rows[0].price_cents) + delta;
 }

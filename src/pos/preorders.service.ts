@@ -356,7 +356,7 @@ export async function getPreorder(storeId: number, preorderId: number): Promise<
       quantity: Number(item.quantity),
       components: components ?? undefined,
     }).catch(() => null);
-    const liveDelta = await modifiers.liveDeltaCents(pool, storeId, snapshot);
+    const liveDelta = await modifiers.liveDeltaCents(pool, storeId, snapshot, Number(item.variant_id));
     const current = base == null || liveDelta == null ? null : base + liveDelta;
     if (current == null) currentTotal = null;
     else if (currentTotal != null) currentTotal += current * Number(item.quantity);

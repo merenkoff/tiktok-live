@@ -12,10 +12,18 @@
 // the snapshot to store, the delta to add to the price and the leaves to take
 // off the shelf — or a refusal that names the group, so the till can say
 // «Оберіть молоко» rather than «400».
+//
+// An answer's price may depend on the variant (migration 066): `label_deltas`
+// overrides `price_delta_cents` for a variant whose label matches — the crust
+// that is +80 ₴ on 30 см and +150 ₴ on 50 см. Every reader goes through
+// `groupsForVariant`, which hands back the groups with that one variant's
+// deltas already in `price_delta_cents`, so `resolveLineModifiers`, the
+// catalog wire and every snapshot keep seeing one number per answer.
 
 import { pool } from '../db.js';
 import type { ComponentInput } from './composites.service.js';
 import type { CatalogModifierGroup } from './types.js';
+import { compareVariantLabels } from './verticals/variantOrder.js';
 
 type DbClient = { query: typeof pool.query };
 
@@ -31,12 +39,22 @@ const MAX_NAME = 80;
 export const MAX_LINE_NOTE = 120;
 /** A delta bigger than this is a typo, not a price. */
 const MAX_DELTA_CENTS = 100_000_00;
+/** Sizes a menu prices separately; more than this is a list of variants, not sizes. */
+const MAX_LABEL_DELTAS = 20;
+
+/** An answer's price for variants with this label (migration 066). */
+export interface LabelDelta {
+  label: string;
+  price_delta_cents: number;
+}
 
 export interface Modifier {
   id: number;
   group_id: number;
   name: string;
   price_delta_cents: number;
+  /** Overrides of `price_delta_cents` by variant label; empty for most answers. */
+  label_deltas: LabelDelta[];
   component_variant_id: number | null;
   component_quantity: number | null;
   /** The component named, for the admin list. */
@@ -54,6 +72,11 @@ export interface ModifierGroup {
   sort_order: number;
   is_active: boolean;
   modifiers: Modifier[];
+  /**
+   * The owner's view only: the labels of the active variants of the products
+   * this group is attached to — what a `label_deltas` entry can match.
+   */
+  labels_in_use?: string[];
 }
 
 export interface ModifierGroupInput {
@@ -67,6 +90,7 @@ export interface ModifierGroupInput {
 export interface ModifierInput {
   name?: unknown;
   price_delta_cents?: unknown;
+  label_deltas?: unknown;
   component_variant_id?: unknown;
   component_quantity?: unknown;
   is_default?: unknown;
@@ -116,6 +140,82 @@ function boolField(raw: unknown, fallback: boolean): boolean {
   return Boolean(raw);
 }
 
+/** How two labels are compared: trimmed, inner spaces collapsed, case-folded. */
+export function labelKey(label: string): string {
+  return label.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+/**
+ * The owner's `label_deltas` as stored: a list of `{label, price_delta_cents}`
+ * with a non-empty label (spaces collapsed as typed), no two entries for the
+ * same label and every delta within the same bounds as the default. Replaces
+ * the list wholesale, like a variant's attributes — «remove this size's
+ * price» is expressible.
+ */
+export function cleanLabelDeltas(raw: unknown): LabelDelta[] {
+  if (raw === null) return [];
+  if (!Array.isArray(raw)) throw new ModifierError('label_deltas має бути списком');
+  if (raw.length > MAX_LABEL_DELTAS) {
+    throw new ModifierError(`Цін для розмірів не може бути більше ${MAX_LABEL_DELTAS}`);
+  }
+  const seen = new Set<string>();
+  return raw.map((entry) => {
+    const row = (entry ?? {}) as Record<string, unknown>;
+    const label = typeof row.label === 'string' ? row.label.trim().replace(/\s+/g, ' ') : '';
+    if (!label) throw new ModifierError('Ціна для розміру: вкажіть розмір');
+    if (label.length > MAX_NAME) {
+      throw new ModifierError(`Ціна для розміру: назва довша за ${MAX_NAME} символів`);
+    }
+    const key = labelKey(label);
+    if (seen.has(key)) throw new ModifierError(`Ціну для «${label}» вказано двічі`);
+    seen.add(key);
+    const delta = intField(
+      row.price_delta_cents,
+      `Ціна для «${label}»`,
+      -MAX_DELTA_CENTS,
+      MAX_DELTA_CENTS
+    );
+    return { label, price_delta_cents: delta };
+  });
+}
+
+/** A stored `label_deltas` back into its typed shape; anything malformed reads as none. */
+function parseStoredLabelDeltas(raw: unknown): LabelDelta[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((entry) => {
+      const row = (entry ?? {}) as Record<string, unknown>;
+      return { label: String(row.label ?? ''), price_delta_cents: Number(row.price_delta_cents ?? 0) };
+    })
+    .filter((d) => d.label !== '' && Number.isInteger(d.price_delta_cents));
+}
+
+/** What an answer costs on a variant with this label: its override, else its default. */
+export function deltaForLabel(
+  modifier: Pick<Modifier, 'price_delta_cents' | 'label_deltas'>,
+  variantLabel: string
+): number {
+  if (modifier.label_deltas.length === 0) return modifier.price_delta_cents;
+  const key = labelKey(variantLabel);
+  const hit = modifier.label_deltas.find((d) => labelKey(d.label) === key);
+  return hit ? hit.price_delta_cents : modifier.price_delta_cents;
+}
+
+/**
+ * The groups as one variant sees them: each answer's `price_delta_cents`
+ * replaced by what it costs on this variant. Everything downstream — the
+ * line's price, the snapshot, the catalog row — reads that one number.
+ */
+export function groupsForVariant(groups: ModifierGroup[], variantLabel: string): ModifierGroup[] {
+  if (!groups.some((g) => g.modifiers.some((m) => m.label_deltas.length > 0))) return groups;
+  return groups.map((group) => ({
+    ...group,
+    modifiers: group.modifiers.map((m) =>
+      m.label_deltas.length === 0 ? m : { ...m, price_delta_cents: deltaForLabel(m, variantLabel) }
+    ),
+  }));
+}
+
 /** The kitchen note as stored: trimmed, bounded, never null. */
 export function cleanLineNote(raw: unknown): string {
   if (raw === undefined || raw === null) return '';
@@ -150,6 +250,7 @@ function rowToModifier(row: Record<string, unknown>): Modifier {
     group_id: Number(row.group_id),
     name: String(row.name),
     price_delta_cents: Number(row.price_delta_cents),
+    label_deltas: parseStoredLabelDeltas(row.label_deltas),
     component_variant_id: componentId,
     component_quantity: row.component_quantity == null ? null : Number(row.component_quantity),
     component:
@@ -167,7 +268,7 @@ function rowToModifier(row: Record<string, unknown>): Modifier {
 }
 
 const MODIFIER_SELECT = `
-  SELECT m.id, m.group_id, m.name, m.price_delta_cents, m.component_variant_id,
+  SELECT m.id, m.group_id, m.name, m.price_delta_cents, m.label_deltas, m.component_variant_id,
          m.component_quantity, m.is_default, m.sort_order, m.is_active,
          cp.name AS component_product_name, cv.label AS component_label, cv.unit AS component_unit
   FROM pos_modifiers m
@@ -207,6 +308,33 @@ function rowToGroup(row: Record<string, unknown>, modifiers: Modifier[]): Modifi
   };
 }
 
+/**
+ * The labels of the active variants each group's products come in, in size
+ * order — what the owner's «ціна для розміру» offers, and how the editor
+ * tells an override that no longer matches anything.
+ */
+async function loadLabelsInUse(
+  client: DbClient,
+  storeId: number,
+  groupIds: number[]
+): Promise<Map<number, string[]>> {
+  const byGroup = new Map<number, string[]>();
+  if (groupIds.length === 0) return byGroup;
+  const result = await client.query(
+    `SELECT DISTINCT l.group_id, v.label
+     FROM pos_product_modifier_groups l
+     JOIN pos_variants v ON v.product_id = l.product_id AND v.is_active = TRUE
+     WHERE l.store_id = $1 AND l.group_id = ANY($2::bigint[]) AND v.label <> ''`,
+    [storeId, groupIds]
+  );
+  for (const row of result.rows) {
+    const groupId = Number(row.group_id);
+    byGroup.set(groupId, [...(byGroup.get(groupId) ?? []), String(row.label)]);
+  }
+  for (const labels of byGroup.values()) labels.sort(compareVariantLabels);
+  return byGroup;
+}
+
 /** Every group of the store with its modifiers, active or not — the owner's list. */
 export async function listGroups(storeId: number, client: DbClient = pool): Promise<ModifierGroup[]> {
   const groups = await client.query(
@@ -215,13 +343,13 @@ export async function listGroups(storeId: number, client: DbClient = pool): Prom
      ORDER BY sort_order, id`,
     [storeId]
   );
-  const modifiers = await loadModifiersByGroup(
-    client,
-    storeId,
-    groups.rows.map((row) => Number(row.id)),
-    false
-  );
-  return groups.rows.map((row) => rowToGroup(row, modifiers.get(Number(row.id)) ?? []));
+  const groupIds = groups.rows.map((row) => Number(row.id));
+  const modifiers = await loadModifiersByGroup(client, storeId, groupIds, false);
+  const labels = await loadLabelsInUse(client, storeId, groupIds);
+  return groups.rows.map((row) => ({
+    ...rowToGroup(row, modifiers.get(Number(row.id)) ?? []),
+    labels_in_use: labels.get(Number(row.id)) ?? [],
+  }));
 }
 
 export async function getGroup(
@@ -236,7 +364,8 @@ export async function getGroup(
   );
   if (groups.rows.length === 0) throw new ModifierError('Групу модифікаторів не знайдено');
   const modifiers = await loadModifiersByGroup(client, storeId, [groupId], false);
-  return rowToGroup(groups.rows[0], modifiers.get(groupId) ?? []);
+  const labels = await loadLabelsInUse(client, storeId, [groupId]);
+  return { ...rowToGroup(groups.rows[0], modifiers.get(groupId) ?? []), labels_in_use: labels.get(groupId) ?? [] };
 }
 
 /**
@@ -270,7 +399,11 @@ export async function loadGroupsForProducts(
   return byProduct;
 }
 
-/** The till's view of a group: no admin fields, no component names. */
+/**
+ * The till's view of a group: no admin fields, no component names, no
+ * `label_deltas` — pass it the groups `groupsForVariant` gave for the row's
+ * variant, and `price_delta_cents` is already that variant's price.
+ */
 export function toCatalogGroup(group: ModifierGroup): CatalogModifierGroup {
   return {
     id: group.id,
@@ -396,6 +529,7 @@ export async function createModifier(
     input.price_delta_cents === undefined
       ? 0
       : intField(input.price_delta_cents, 'price_delta_cents', -MAX_DELTA_CENTS, MAX_DELTA_CENTS);
+  const labelDeltas = input.label_deltas === undefined ? [] : cleanLabelDeltas(input.label_deltas);
   const component = await resolveComponent(
     pool,
     storeId,
@@ -407,14 +541,15 @@ export async function createModifier(
   const sortOrder = input.sort_order === undefined ? 0 : intField(input.sort_order, 'sort_order', 0);
   await pool.query(
     `INSERT INTO pos_modifiers
-       (store_id, group_id, name, price_delta_cents, component_variant_id, component_quantity,
-        is_default, sort_order, is_active)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+       (store_id, group_id, name, price_delta_cents, label_deltas, component_variant_id,
+        component_quantity, is_default, sort_order, is_active)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10)`,
     [
       storeId,
       groupId,
       name,
       delta,
+      JSON.stringify(labelDeltas),
       component.variantId,
       component.quantity,
       isDefault,
@@ -443,6 +578,8 @@ export async function updateModifier(
     input.price_delta_cents === undefined
       ? row.price_delta_cents
       : intField(input.price_delta_cents, 'price_delta_cents', -MAX_DELTA_CENTS, MAX_DELTA_CENTS);
+  const labelDeltas =
+    input.label_deltas === undefined ? row.label_deltas : cleanLabelDeltas(input.label_deltas);
   // The component pair is replaced together: sending one half is an error,
   // sending neither keeps what is there, sending both nulls clears it.
   const touchesComponent =
@@ -460,9 +597,20 @@ export async function updateModifier(
   await pool.query(
     `UPDATE pos_modifiers
      SET name = $1, price_delta_cents = $2, component_variant_id = $3, component_quantity = $4,
-         is_default = $5, sort_order = $6, is_active = $7, updated_at = NOW()
-     WHERE store_id = $8 AND id = $9`,
-    [name, delta, component.variantId, component.quantity, isDefault, sortOrder, isActive, storeId, modifierId]
+         is_default = $5, sort_order = $6, is_active = $7, label_deltas = $8::jsonb, updated_at = NOW()
+     WHERE store_id = $9 AND id = $10`,
+    [
+      name,
+      delta,
+      component.variantId,
+      component.quantity,
+      isDefault,
+      sortOrder,
+      isActive,
+      JSON.stringify(labelDeltas),
+      storeId,
+      modifierId,
+    ]
   );
   return getGroup(storeId, row.group_id);
 }
@@ -677,36 +825,54 @@ export async function resolveForVariant(
   ids: number[]
 ): Promise<ResolvedLineModifiers> {
   const product = await client.query(
-    `SELECT product_id FROM pos_variants WHERE id = $1 AND store_id = $2`,
+    `SELECT product_id, label FROM pos_variants WHERE id = $1 AND store_id = $2`,
     [variantId, storeId]
   );
   if (product.rows.length === 0) throw new ModifierError('Позиція не знайдена');
   const productId = Number(product.rows[0].product_id);
   const groups = await loadGroupsForProducts(client, storeId, [productId], { activeOnly: true });
-  return resolveLineModifiers(groups.get(productId) ?? [], ids);
+  return resolveLineModifiers(
+    groupsForVariant(groups.get(productId) ?? [], String(product.rows[0].label ?? '')),
+    ids
+  );
 }
 
 /**
- * Σ of what a snapshot's answers cost TODAY, or null when one of them no
- * longer exists (deleted or switched off) — the «what would this cost now»
- * read next to a pre-order's quote, which must say nothing rather than a
- * wrong number.
+ * Σ of what a snapshot's answers cost TODAY on this variant, or null when one
+ * of them no longer exists (deleted or switched off) — the «what would this
+ * cost now» read next to a pre-order's quote, which must say nothing rather
+ * than a wrong number. The variant matters since 066: the same crust costs
+ * more on the bigger pizza.
  */
 export async function liveDeltaCents(
   client: DbClient,
   storeId: number,
-  snapshot: LineModifierSnapshot[]
+  snapshot: LineModifierSnapshot[],
+  variantId: number
 ): Promise<number | null> {
   if (snapshot.length === 0) return 0;
   const ids = snapshot.map((m) => m.modifier_id).filter((id): id is number => id != null);
   if (ids.length !== snapshot.length) return null;
   const rows = await client.query(
-    `SELECT id, price_delta_cents FROM pos_modifiers
-     WHERE store_id = $1 AND id = ANY($2::bigint[]) AND is_active = TRUE`,
-    [storeId, ids]
+    `SELECT m.id, m.price_delta_cents, m.label_deltas, v.label AS variant_label
+     FROM pos_modifiers m
+     LEFT JOIN pos_variants v ON v.id = $3 AND v.store_id = m.store_id
+     WHERE m.store_id = $1 AND m.id = ANY($2::bigint[]) AND m.is_active = TRUE`,
+    [storeId, ids, variantId]
   );
   if (rows.rows.length !== new Set(ids).size) return null;
-  const delta = new Map(rows.rows.map((r) => [Number(r.id), Number(r.price_delta_cents)]));
+  const delta = new Map(
+    rows.rows.map((r) => [
+      Number(r.id),
+      deltaForLabel(
+        {
+          price_delta_cents: Number(r.price_delta_cents),
+          label_deltas: parseStoredLabelDeltas(r.label_deltas),
+        },
+        String(r.variant_label ?? '')
+      ),
+    ])
+  );
   return ids.reduce((sum, id) => sum + (delta.get(id) ?? 0), 0);
 }
 

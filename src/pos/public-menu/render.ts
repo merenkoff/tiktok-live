@@ -129,7 +129,16 @@ function renderProduct(product: PublicMenuProduct, ordering = false): string {
           const answers = g.modifiers
             .map((m) => {
               const delta = deltaText(m.price_delta_cents);
-              return escapeHtml(m.name) + (delta ? ` <b>${delta}</b>` : '');
+              // A size where the answer costs differently is named beside it:
+              // «Філадельфія +80 ₴ (50 см +150 ₴)».
+              const bySize = product.variants
+                .filter((v) => (m.price_delta_by_variant?.[String(v.id)] ?? m.price_delta_cents) !== m.price_delta_cents)
+                .map((v) => `${escapeHtml(v.label)} ${deltaText(m.price_delta_by_variant![String(v.id)]!) || '0 ₴'}`);
+              return (
+                escapeHtml(m.name) +
+                (delta ? ` <b>${delta}</b>` : '') +
+                (bySize.length ? ` (${bySize.join(', ')})` : '')
+              );
             })
             .join(' · ');
           return `<div class="group"><h4>${escapeHtml(g.name)} <small>${escapeHtml(groupHint(g))}</small></h4><p>${answers}</p></div>`;
