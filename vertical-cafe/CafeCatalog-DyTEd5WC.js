@@ -1,10 +1,10 @@
-import { C as e, _ as t, b as n, c as r, f as i, g as a, h as o, m as s, n as c, p as l, s as u, t as d, u as f } from "./hostPlatform-D3rxsd42.js";
+import { C as e, _ as t, b as n, c as r, f as i, g as a, h as o, m as s, n as c, p as l, s as u, t as d, u as f } from "./hostPlatform-C_l59Ii7.js";
 import { Suspense as p, lazy as m, useEffect as h, useRef as g, useState as _ } from "react";
 import { Fragment as v, jsx as y, jsxs as b } from "react/jsx-runtime";
-import { assetUrl as x, defaultModifierIds as S, groupsOf as C, needsModifierSheet as w, useCartStore as T, useSalesCatalog as E, useVertical as D } from "@pos/platform";
+import { assetUrl as x, defaultModifierIds as S, groupsOf as C, needsModifierSheet as w, useCartStore as T, usePosShell as E, useSalesCatalog as D, useVertical as O } from "@pos/platform";
 //#region src/hooks/useDragScroll.ts
-var O = 6;
-function k() {
+var k = 6;
+function A() {
 	let e = g(null);
 	return h(() => {
 		let t = e.current;
@@ -22,7 +22,7 @@ function k() {
 		}, i = (e) => {
 			if (!n.active || e.pointerId !== n.pointerId) return;
 			let r = e.clientX - n.startX, i = e.clientY - n.startY;
-			!n.moved && Math.hypot(r, i) > O && (n.moved = !0, t.setPointerCapture(e.pointerId)), n.moved && (t.scrollLeft = n.scrollLeft - r, t.scrollTop = n.scrollTop - i);
+			!n.moved && Math.hypot(r, i) > k && (n.moved = !0, t.setPointerCapture(e.pointerId)), n.moved && (t.scrollLeft = n.scrollLeft - r, t.scrollTop = n.scrollTop - i);
 		}, a = (e) => {
 			e.pointerId === n.pointerId && (n.active = !1);
 		}, o = (e) => {
@@ -35,81 +35,85 @@ function k() {
 }
 //#endregion
 //#region src/lib/money.ts
-var A = "\xA0";
-function j(e) {
-	return e.replace(/\B(?=(\d{3})+(?!\d))/g, A);
-}
+var j = "\xA0";
 function M(e) {
-	let t = e < 0 ? "-" : "", [n, r] = (Math.abs(e) / 100).toFixed(2).split(".");
-	return `${t}${j(n)},${r} ₴`;
+	return e.replace(/\B(?=(\d{3})+(?!\d))/g, j);
 }
 function N(e) {
-	return e % 100 == 0 ? `${e < 0 ? "-" : ""}${j(String(Math.abs(e) / 100))} ₴` : M(e);
+	let t = e < 0 ? "-" : "", [n, r] = (Math.abs(e) / 100).toFixed(2).split(".");
+	return `${t}${M(n)},${r} ₴`;
+}
+function P(e) {
+	return e % 100 == 0 ? `${e < 0 ? "-" : ""}${M(String(Math.abs(e) / 100))} ₴` : N(e);
 }
 //#endregion
 //#region src/components/cashier/ProductTile.tsx
-function P({ name: e, subtitle: t, priceCents: n, imageUrl: r, stock: i, onClick: a, disabled: s, count: c, onMore: l, badge: u, testId: d }) {
-	let [f, p] = _(!1), m = f ? null : x(r), h = s || !!u || i != null && i <= 0, g = /* @__PURE__ */ b("button", {
+function F({ name: e, subtitle: t, priceCents: n, compareAtCents: r, imageUrl: i, stock: a, onClick: s, disabled: c, count: l, onMore: u, badge: d, testId: f }) {
+	let [p, m] = _(!1), h = p ? null : x(i), g = c || !!d || a != null && a <= 0, v = /* @__PURE__ */ b("button", {
 		type: "button",
-		disabled: s,
-		onClick: a,
-		"data-testid": d,
-		className: `w-full ${l ? "h-full" : ""} flex flex-col rounded-[14px] overflow-hidden text-left bg-sq-surface transition-shadow disabled:opacity-50 disabled:cursor-not-allowed ${c ? "ring-2 ring-sq-blue" : "ring-1 ring-sq-divider hover:ring-sq-muted/50"}`,
+		disabled: c,
+		onClick: s,
+		"data-testid": f,
+		className: `w-full ${u ? "h-full" : ""} flex flex-col rounded-[14px] overflow-hidden text-left bg-sq-surface transition-shadow disabled:opacity-50 disabled:cursor-not-allowed ${l ? "ring-2 ring-sq-blue" : "ring-1 ring-sq-divider hover:ring-sq-muted/50"}`,
 		children: [/* @__PURE__ */ b("div", {
 			className: "relative w-full aspect-[4/3] bg-sq-empty shrink-0",
 			children: [
-				m ? /* @__PURE__ */ y("img", {
-					src: m,
+				h ? /* @__PURE__ */ y("img", {
+					src: h,
 					alt: "",
-					className: `absolute inset-0 w-full h-full object-cover pointer-events-none ${h ? "opacity-45" : ""}`,
-					onError: () => p(!0)
+					className: `absolute inset-0 w-full h-full object-cover pointer-events-none ${g ? "opacity-45" : ""}`,
+					onError: () => m(!0)
 				}) : /* @__PURE__ */ y("div", {
 					className: "absolute inset-0 grid place-items-center text-sq-secondary text-xs px-2 font-medium pointer-events-none",
 					children: t || " "
 				}),
-				c != null && c > 0 && /* @__PURE__ */ y("span", {
+				l != null && l > 0 && /* @__PURE__ */ y("span", {
 					className: "absolute top-2 left-2 min-w-7 h-7 px-2 grid place-items-center rounded-full bg-sq-blue text-white text-[13px] font-bold tabular-nums pointer-events-none",
 					"data-testid": "tile-count",
-					children: c
+					children: l
 				}),
-				u ? /* @__PURE__ */ y("span", {
-					className: `absolute ${c ? "top-10" : "top-2"} left-2 text-[12px] font-semibold bg-[#F4386A] text-white px-2 py-0.5 rounded-md pointer-events-none`,
+				d ? /* @__PURE__ */ y("span", {
+					className: `absolute ${l ? "top-10" : "top-2"} left-2 text-[12px] font-semibold bg-[#F4386A] text-white px-2 py-0.5 rounded-md pointer-events-none`,
 					"data-testid": "tile-badge",
-					children: u
-				}) : i != null && i <= 0 && /* @__PURE__ */ y("span", {
-					className: `absolute ${c ? "top-10" : "top-2"} left-2 text-[12px] font-semibold bg-sq-secondary text-white px-2 py-0.5 rounded-md pointer-events-none`,
+					children: d
+				}) : a != null && a <= 0 && /* @__PURE__ */ y("span", {
+					className: `absolute ${l ? "top-10" : "top-2"} left-2 text-[12px] font-semibold bg-sq-secondary text-white px-2 py-0.5 rounded-md pointer-events-none`,
 					children: "немає"
 				})
 			]
 		}), /* @__PURE__ */ b("div", {
 			className: "px-3 pt-2 pb-2.5 flex flex-col gap-0.5 min-w-0 pointer-events-none",
 			children: [/* @__PURE__ */ y("p", {
-				className: `text-[14px] leading-tight font-semibold line-clamp-2 ${h ? "text-sq-muted" : "text-sq-text"}`,
+				className: `text-[14px] leading-tight font-semibold line-clamp-2 ${g ? "text-sq-muted" : "text-sq-text"}`,
 				children: e
-			}), n != null && /* @__PURE__ */ y("p", {
-				className: "text-[14px] text-sq-secondary tabular-nums",
-				children: M(n)
+			}), n != null && /* @__PURE__ */ b("p", {
+				className: "text-[14px] text-sq-secondary tabular-nums flex items-baseline gap-1.5",
+				children: [r != null && r > n && /* @__PURE__ */ y("s", {
+					className: "text-[12px] text-sq-muted",
+					"data-testid": "tile-old-price",
+					children: N(r)
+				}), /* @__PURE__ */ y("span", { children: N(n) })]
 			})]
 		})]
 	});
-	return l ? /* @__PURE__ */ b("div", {
+	return u ? /* @__PURE__ */ b("div", {
 		className: "relative",
-		children: [g, !s && /* @__PURE__ */ y("button", {
+		children: [v, !c && /* @__PURE__ */ y("button", {
 			type: "button",
-			onClick: l,
+			onClick: u,
 			"aria-label": `Змінити: ${e}`,
 			className: "absolute top-0.5 right-0.5 w-11 h-11 grid place-items-center",
-			"data-testid": d ? `${d}-more` : "tile-more",
+			"data-testid": f ? `${f}-more` : "tile-more",
 			children: /* @__PURE__ */ y("span", {
 				className: "w-8 h-8 grid place-items-center rounded-full bg-white/95 text-sq-text shadow-[0_1px_3px_rgba(0,0,0,0.15)]",
 				children: /* @__PURE__ */ y(o, { size: 20 })
 			})
 		})]
-	}) : g;
+	}) : v;
 }
 //#endregion
 //#region src/lib/tagColors.ts
-var F = [
+var I = [
 	"green",
 	"rose",
 	"blue",
@@ -118,7 +122,7 @@ var F = [
 	"purple",
 	"slate",
 	"amber"
-], I = {
+], L = {
 	green: "#2E7D4F",
 	rose: "#C45B6B",
 	blue: "#3B7DD8",
@@ -127,17 +131,17 @@ var F = [
 	purple: "#6B5B95",
 	slate: "#5A6A7A",
 	amber: "#C9922A"
-}, L = "slate";
-function R(e) {
-	return !!e && F.includes(e);
-}
+}, R = "slate";
 function z(e) {
-	return R(e) ? I[e] : I[L];
+	return !!e && I.includes(e);
+}
+function B(e) {
+	return z(e) ? L[e] : L[R];
 }
 //#endregion
 //#region src/components/cashier/TagFolderTile.tsx
-function B({ name: e, color: t, onClick: n }) {
-	let r = z(t);
+function V({ name: e, color: t, onClick: n }) {
+	let r = B(t);
 	return /* @__PURE__ */ b("button", {
 		type: "button",
 		onClick: n,
@@ -160,8 +164,8 @@ function B({ name: e, color: t, onClick: n }) {
 }
 //#endregion
 //#region src/components/cashier/CatalogTagBar.tsx
-function V({ tags: e, activeId: t, showBack: n, backLabel: r, onSelect: i, onBack: a }) {
-	let o = k(), s = (e) => `shrink-0 min-h-9 px-3.5 rounded-[10px] text-[15px] whitespace-nowrap transition-colors ${e ? "bg-sq-selected font-semibold text-sq-text" : "font-medium text-sq-secondary hover:bg-sq-selected/50"}`;
+function H({ tags: e, activeId: t, showBack: n, backLabel: r, onSelect: i, onBack: a }) {
+	let o = A(), s = (e) => `shrink-0 min-h-9 px-3.5 rounded-[10px] text-[15px] whitespace-nowrap transition-colors ${e ? "bg-sq-selected font-semibold text-sq-text" : "font-medium text-sq-secondary hover:bg-sq-selected/50"}`;
 	return /* @__PURE__ */ b("div", {
 		ref: o,
 		className: "flex items-center gap-1 overflow-x-auto -mx-1 px-1 py-1 select-none",
@@ -189,12 +193,12 @@ function V({ tags: e, activeId: t, showBack: n, backLabel: r, onSelect: i, onBac
 }
 //#endregion
 //#region src/components/cashier/ScanWedge.tsx
-function H({ active: e, onScan: t }) {
-	let n = g(null);
+function U({ active: e, onScan: t }) {
+	let n = E(), r = g(null);
 	return h(() => {
-		e ? n.current?.focus() : n.current?.blur();
-	}, [e]), /* @__PURE__ */ y("input", {
-		ref: n,
+		e ? r.current?.focus() : r.current?.blur();
+	}, [e]), n === "tablet" ? null : /* @__PURE__ */ y("input", {
+		ref: r,
 		className: "sr-only",
 		"aria-hidden": !0,
 		tabIndex: -1,
@@ -205,13 +209,13 @@ function H({ active: e, onScan: t }) {
 		}
 	});
 }
-function U(e) {
+function W(e) {
 	return e == null ? "" : e.trim().slice(0, 120);
 }
-function W(e) {
+function G(e) {
 	return [...new Set(e ?? [])].filter((e) => Number.isInteger(e) && e > 0).sort((e, t) => e - t);
 }
-function G(e, t) {
+function K(e, t) {
 	let n = /* @__PURE__ */ new Map();
 	e.forEach((e, t) => {
 		e.modifiers.forEach((r, i) => {
@@ -224,7 +228,7 @@ function G(e, t) {
 		});
 	});
 	let r = null, i = [];
-	for (let e of W(t)) {
+	for (let e of G(t)) {
 		let t = n.get(e);
 		if (!t) {
 			r ?? (r = `Модифікатор ${e} недоступний для цього товару`);
@@ -266,8 +270,8 @@ function te(e) {
 }
 //#endregion
 //#region src/components/cashier/ModifierSheet.tsx
-function K({ productName: n, variants: o, variantLabel: c = "Варіант", initialVariantId: l, initialModifierIds: u, initialNote: d, submitLabel: f = "Додати в чек", withQuantity: p = !0, notePlaceholder: m = "Коментар для кухні", onAdd: g, onClose: S }) {
-	let [C, w] = _(() => l ?? (o.length === 1 ? o[0].variant_id : null)), [T, E] = _(() => u ?? []), [D, O] = _(d ?? ""), [A, j] = _(1), P = k(), F = o.find((e) => e.variant_id === C) ?? null, I = te(o), L = G(I, T), R = F ? F.price_cents + L.deltaCents : null, z = F == null ? `Оберіть «${c}»` : L.error ?? (R != null && R < 0 ? "Ціна не може бути відʼємною" : null), B = z == null && F != null;
+function q({ productName: n, variants: o, variantLabel: c = "Варіант", initialVariantId: l, initialModifierIds: u, initialNote: d, submitLabel: f = "Додати в чек", withQuantity: p = !0, notePlaceholder: m = "Коментар для кухні", onAdd: g, onClose: S }) {
+	let [C, w] = _(() => l ?? (o.length === 1 ? o[0].variant_id : null)), [T, E] = _(() => u ?? []), [D, O] = _(d ?? ""), [k, j] = _(1), M = A(), F = o.find((e) => e.variant_id === C) ?? null, I = F?.modifier_groups?.length ? F.modifier_groups : te(o), L = K(I, T), R = F ? F.price_cents + L.deltaCents : null, z = F == null ? `Оберіть «${c}»` : L.error ?? (R != null && R < 0 ? "Ціна не може бути відʼємною" : null), B = z == null && F != null;
 	h(() => {
 		let e = (e) => {
 			e.key === "Escape" && S();
@@ -280,15 +284,15 @@ function K({ productName: n, variants: o, variantLabel: c = "Варіант", in
 	function H(e, t) {
 		E((n) => n.includes(t.id) ? n.filter((e) => e !== t.id) : e.max_select === 1 ? [...n.filter((t) => !e.modifiers.some((e) => e.id === t)), t.id] : V(e, n) >= e.max_select ? n : [...n, t.id]);
 	}
-	function W() {
+	function U() {
 		B && F && g({
 			item: F,
 			modifiers: L.snapshot.map((e) => e.id),
-			note: U(D),
-			quantity: p ? A : 1
+			note: W(D),
+			quantity: p ? k : 1
 		});
 	}
-	let K = F ? ee(F.label, L.error ? [] : L.names) : "", Z = x((F ?? o[0])?.image_url ?? null), Q = o.length ? Math.min(...o.map((e) => e.price_cents)) : null, $ = [...o].sort((e, t) => e.price_cents - t.price_cents);
+	let G = F ? ee(F.label, L.error ? [] : L.names) : "", q = x((F ?? o[0])?.image_url ?? null), Q = o.length ? Math.min(...o.map((e) => e.price_cents)) : null, $ = [...o].sort((e, t) => e.price_cents - t.price_cents);
 	return /* @__PURE__ */ b("div", {
 		className: "absolute inset-0 z-30",
 		"data-testid": "modifier-sheet",
@@ -309,8 +313,8 @@ function K({ productName: n, variants: o, variantLabel: c = "Варіант", in
 				/* @__PURE__ */ b("div", {
 					className: "px-6 pt-2.5 pb-3.5 flex items-center gap-3.5 shadow-[0_1px_0_#E6E8EC] shrink-0",
 					children: [
-						Z ? /* @__PURE__ */ y("img", {
-							src: Z,
+						q ? /* @__PURE__ */ y("img", {
+							src: q,
 							alt: "",
 							className: "w-14 h-14 rounded-xl object-cover shrink-0"
 						}) : /* @__PURE__ */ y("div", {
@@ -325,7 +329,7 @@ function K({ productName: n, variants: o, variantLabel: c = "Варіант", in
 								children: n
 							}), Q != null && /* @__PURE__ */ y("p", {
 								className: "text-sm text-sq-secondary truncate tabular-nums",
-								children: o.length > 1 ? `від ${M(Q)}` : M(Q)
+								children: o.length > 1 ? `від ${N(Q)}` : N(Q)
 							})]
 						}),
 						/* @__PURE__ */ y("button", {
@@ -339,12 +343,12 @@ function K({ productName: n, variants: o, variantLabel: c = "Варіант", in
 					]
 				}),
 				/* @__PURE__ */ b("div", {
-					ref: P,
+					ref: M,
 					className: "flex-1 overflow-auto select-none px-6 py-[18px] space-y-[18px]",
 					children: [
 						o.length > 1 && /* @__PURE__ */ b("section", {
 							"data-testid": "modifier-variants",
-							children: [/* @__PURE__ */ y(Y, {
+							children: [/* @__PURE__ */ y(X, {
 								name: c,
 								hint: "обовʼязково",
 								required: !0
@@ -357,7 +361,7 @@ function K({ productName: n, variants: o, variantLabel: c = "Варіант", in
 										disabled: n,
 										"aria-pressed": t,
 										onClick: () => w(e.variant_id),
-										className: X(t, n),
+										className: Z(t, n),
 										"data-testid": `modifier-variant-${e.variant_id}`,
 										children: [
 											t && /* @__PURE__ */ y(r, {
@@ -367,7 +371,7 @@ function K({ productName: n, variants: o, variantLabel: c = "Варіант", in
 											e.label || "Стандарт",
 											/* @__PURE__ */ y("span", {
 												className: t ? "font-medium" : "font-medium text-sq-secondary",
-												children: n ? "немає" : N(e.price_cents)
+												children: n ? "немає" : P(e.price_cents)
 											})
 										]
 									}, e.variant_id);
@@ -378,7 +382,7 @@ function K({ productName: n, variants: o, variantLabel: c = "Варіант", in
 							let t = V(e, T), n = e.max_select > 1 && t >= e.max_select;
 							return /* @__PURE__ */ b("section", {
 								"data-testid": `modifier-group-${e.id}`,
-								children: [/* @__PURE__ */ y(Y, {
+								children: [/* @__PURE__ */ y(X, {
 									name: e.name,
 									hint: ne(e, n),
 									required: e.min_select >= 1
@@ -391,7 +395,7 @@ function K({ productName: n, variants: o, variantLabel: c = "Варіант", in
 											"aria-pressed": i,
 											"aria-disabled": a || void 0,
 											onClick: () => H(e, t),
-											className: X(i, a),
+											className: Z(i, a),
 											"data-testid": `modifier-chip-${t.id}`,
 											children: [
 												i && /* @__PURE__ */ y(r, {
@@ -424,7 +428,7 @@ function K({ productName: n, variants: o, variantLabel: c = "Варіант", in
 								enterKeyHint: "done",
 								onChange: (e) => O(e.target.value),
 								onKeyDown: (e) => {
-									e.key === "Enter" && (e.preventDefault(), W());
+									e.key === "Enter" && (e.preventDefault(), U());
 								},
 								"data-testid": "modifier-note"
 							})]
@@ -441,23 +445,23 @@ function K({ productName: n, variants: o, variantLabel: c = "Варіант", in
 								/* @__PURE__ */ y("button", {
 									type: "button",
 									"aria-label": "Менше",
-									disabled: A <= 1,
+									disabled: k <= 1,
 									onClick: () => j((e) => Math.max(1, e - 1)),
-									className: J,
+									className: Y,
 									"data-testid": "modifier-qty-minus",
 									children: /* @__PURE__ */ y(s, { size: 20 })
 								}),
 								/* @__PURE__ */ y("span", {
 									className: "w-11 h-10 grid place-items-center text-[17px] font-semibold text-sq-text tabular-nums",
 									"data-testid": "modifier-qty-value",
-									children: A
+									children: k
 								}),
 								/* @__PURE__ */ y("button", {
 									type: "button",
 									"aria-label": "Більше",
-									disabled: A >= q,
-									onClick: () => j((e) => Math.min(q, e + 1)),
-									className: J,
+									disabled: k >= J,
+									onClick: () => j((e) => Math.min(J, e + 1)),
+									className: Y,
 									"data-testid": "modifier-qty-plus",
 									children: /* @__PURE__ */ y(t, { size: 20 })
 								})
@@ -470,18 +474,18 @@ function K({ productName: n, variants: o, variantLabel: c = "Варіант", in
 						}) : /* @__PURE__ */ y("p", {
 							className: "flex-1 min-w-[10rem] text-sm text-sq-secondary truncate",
 							"data-testid": "modifier-caption",
-							children: K
+							children: G
 						}),
 						/* @__PURE__ */ y("button", {
 							type: "button",
 							className: "pos-btn-primary min-h-[52px] rounded-xl px-[22px] text-[17px] sm:min-w-[300px] max-sm:w-full",
 							disabled: !B,
-							onClick: W,
+							onClick: U,
 							"data-testid": "modifier-add",
 							children: /* @__PURE__ */ b("span", { children: [f, R != null && /* @__PURE__ */ b(v, { children: [" · ", /* @__PURE__ */ y("span", {
 								className: "tabular-nums",
 								"data-testid": "modifier-price",
-								children: M(R * A)
+								children: N(R * k)
 							})] })] })
 						})
 					]
@@ -490,8 +494,8 @@ function K({ productName: n, variants: o, variantLabel: c = "Варіант", in
 		})]
 	});
 }
-var q = 99, J = "w-10 h-10 rounded-sq bg-white ring-1 ring-sq-divider grid place-items-center text-sq-text disabled:opacity-40";
-function Y({ name: e, hint: t, required: n }) {
+var J = 99, Y = "w-10 h-10 rounded-sq bg-white ring-1 ring-sq-divider grid place-items-center text-sq-text disabled:opacity-40";
+function X({ name: e, hint: t, required: n }) {
 	return /* @__PURE__ */ b("div", {
 		className: "flex items-baseline gap-2 mb-2.5",
 		children: [/* @__PURE__ */ y("span", {
@@ -506,7 +510,7 @@ function Y({ name: e, hint: t, required: n }) {
 function ne(e, t) {
 	return e.min_select >= 1 ? e.max_select > 1 ? `обовʼязково · до ${e.max_select}` : "обовʼязково" : e.max_select <= 1 ? "можна одне" : t ? `не більше ${e.max_select}` : e.max_select >= e.modifiers.length ? "скільки завгодно" : `до ${e.max_select}`;
 }
-function X(e, t) {
+function Z(e, t) {
 	return [
 		"min-h-12 px-4 rounded-xl text-base inline-flex items-center gap-2 transition-colors",
 		e ? "bg-sq-blue/[0.08] ring-2 ring-sq-blue text-sq-blue font-semibold" : "bg-white ring-1 ring-sq-divider text-sq-text font-medium",
@@ -514,19 +518,19 @@ function X(e, t) {
 	].join(" ");
 }
 function re(e) {
-	return e > 0 ? `+${N(e)}` : e < 0 ? `−${N(-e)}` : "";
+	return e > 0 ? `+${P(e)}` : e < 0 ? `−${P(-e)}` : "";
 }
 //#endregion
 //#region src/modules/vertical-cafe/lib/stopList.ts
-function Z(e = /* @__PURE__ */ new Date()) {
+function Q(e = /* @__PURE__ */ new Date()) {
 	return new Intl.DateTimeFormat("en-CA").format(e);
 }
-function Q(e, t = Z()) {
+function $(e, t = Q()) {
 	return e.stop_listed_on == null ? e.stop_listed === !0 : e.stop_listed_on === t;
 }
 //#endregion
 //#region src/modules/vertical-cafe/lib/station.ts
-function $(e, t) {
+function ie(e, t) {
 	let n = new Set(e?.tag_ids ?? []);
 	if (n.size === 0) return null;
 	let r = null, i = (e) => {
@@ -536,17 +540,17 @@ function $(e, t) {
 }
 //#endregion
 //#region src/modules/vertical-cafe/CafeCatalog.tsx
-var ie = m(() => import("./BarcodeScanner-DDyd6b-m.js").then((e) => ({ default: e.BarcodeScanner })));
-function ae({ active: e, stockEpoch: t }) {
+var ae = m(() => import("./BarcodeScanner-DDyd6b-m.js").then((e) => ({ default: e.BarcodeScanner })));
+function oe({ active: e, stockEpoch: t }) {
 	let n = c();
 	if (n.length > 0) throw new d(n);
-	return /* @__PURE__ */ y(oe, {
+	return /* @__PURE__ */ y(se, {
 		active: e,
 		stockEpoch: t
 	});
 }
-function oe({ active: e, stockEpoch: t }) {
-	let r = E(), i = D(), a = T((e) => e.addItem), o = T((e) => e.setBanner), s = k(), [c, l] = _(!1), [d, f] = _(null), m = i.attributes.find((e) => e.key === "size")?.label ?? "Розмір";
+function se({ active: e, stockEpoch: t }) {
+	let r = D(), i = O(), a = T((e) => e.addItem), o = T((e) => e.setBanner), s = A(), [c, l] = _(!1), [d, f] = _(null), m = i.attributes.find((e) => e.key === "size")?.label ?? "Розмір";
 	h(() => {
 		t > 0 && r.refresh();
 	}, [t]);
@@ -576,7 +580,7 @@ function oe({ active: e, stockEpoch: t }) {
 		className: "relative flex flex-col min-h-0 bg-white",
 		"data-testid": "cafe-catalog",
 		children: [
-			/* @__PURE__ */ y(H, {
+			/* @__PURE__ */ y(U, {
 				active: e && !c && !d,
 				onScan: (e) => void v(e)
 			}),
@@ -602,7 +606,7 @@ function oe({ active: e, stockEpoch: t }) {
 						"aria-label": "Камера",
 						children: /* @__PURE__ */ y(u, { size: 20 })
 					})]
-				}), !r.query.trim() && /* @__PURE__ */ y(V, {
+				}), !r.query.trim() && /* @__PURE__ */ y(H, {
 					tags: r.catalogBarTags,
 					activeId: r.catalogBarActiveId,
 					showBack: r.showBack,
@@ -621,13 +625,13 @@ function oe({ active: e, stockEpoch: t }) {
 					}),
 					/* @__PURE__ */ b("div", {
 						className: "grid grid-cols-3 sm:grid-cols-4 xl:grid-cols-5 gap-3",
-						children: [r.folderTiles.map((e) => /* @__PURE__ */ y(B, {
+						children: [r.folderTiles.map((e) => /* @__PURE__ */ y(V, {
 							name: e.name,
 							color: e.color,
 							onClick: () => r.enterTag(e)
 						}, e.id)), r.grouped.map(([e, t]) => {
-							let n = t[0], r = C(t), i = Math.min(...t.map((e) => e.price_cents)), a = t.reduce((e, t) => e + t.quantity, 0), o = Q(n), s = t.length > 1 ? t.map((e) => e.label).filter(Boolean).join(" / ") : n.label;
-							return /* @__PURE__ */ y(P, {
+							let n = t[0], r = C(t), i = Math.min(...t.map((e) => e.price_cents)), a = t.reduce((e, t) => e + t.quantity, 0), o = $(n), s = t.length > 1 ? t.map((e) => e.label).filter(Boolean).join(" / ") : n.label;
+							return /* @__PURE__ */ y(F, {
 								name: n.product_name,
 								subtitle: s,
 								priceCents: i,
@@ -648,20 +652,20 @@ function oe({ active: e, stockEpoch: t }) {
 			}),
 			c && /* @__PURE__ */ y(p, {
 				fallback: null,
-				children: /* @__PURE__ */ y(ie, {
+				children: /* @__PURE__ */ y(ae, {
 					onScan: (e) => {
 						l(!1), v(e);
 					},
 					onClose: () => l(!1)
 				})
 			}),
-			d && /* @__PURE__ */ y(K, {
+			d && /* @__PURE__ */ y(q, {
 				productName: d.variants[0]?.product_name ?? "",
 				variants: d.variants,
 				variantLabel: m,
 				initialVariantId: d.initialVariantId,
 				initialModifierIds: S(C(d.variants)),
-				notePlaceholder: $(d.variants[0], r.catalogBarTags) === "bar" ? "Коментар для бару" : "Коментар для кухні",
+				notePlaceholder: ie(d.variants[0], r.catalogBarTags) === "bar" ? "Коментар для бару" : "Коментар для кухні",
 				onAdd: ({ item: e, modifiers: t, note: n, quantity: r }) => {
 					a(e, r, {
 						modifiers: t,
@@ -674,4 +678,4 @@ function oe({ active: e, stockEpoch: t }) {
 	});
 }
 //#endregion
-export { ae as default };
+export { oe as default };

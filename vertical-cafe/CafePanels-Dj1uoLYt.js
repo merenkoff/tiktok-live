@@ -1,5 +1,5 @@
-import { f as e } from "./hostPlatform-D3rxsd42.js";
-import { d as t, l as n, o as r, r as i, s as a, u as o } from "./figures-BHrhvwo4.js";
+import { f as e } from "./hostPlatform-C_l59Ii7.js";
+import { d as t, l as n, o as r, r as i, s as a, u as o } from "./figures-BAUwsFBm.js";
 import { useEffect as s, useState as c } from "react";
 import { jsx as l, jsxs as u } from "react/jsx-runtime";
 import { formatUah as d } from "@pos/platform";

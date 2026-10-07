@@ -1,4 +1,4 @@
-import { r as e } from "./hostPlatform-D3rxsd42.js";
+import { r as e } from "./hostPlatform-C_l59Ii7.js";
 import { jsx as t, jsxs as n } from "react/jsx-runtime";
 //#region src/modules/vertical-cafe/ui/Stat.tsx
 function r({ label: e, value: r, strong: i, hint: a, tone: o, testId: s }) {

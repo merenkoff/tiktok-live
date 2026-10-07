@@ -734,7 +734,7 @@ function C({ size: e = 20, ...n }) {
 	});
 }
 //#endregion
-//#region \0@oxc-project+runtime@0.149.0/helpers/esm/typeof.js
+//#region \0@oxc-project+runtime@0.152.0/helpers/esm/typeof.js
 function w(e) {
 	"@babel/helpers - typeof";
 	return w = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
@@ -744,7 +744,7 @@ function w(e) {
 	}, w(e);
 }
 //#endregion
-//#region \0@oxc-project+runtime@0.149.0/helpers/esm/toPrimitive.js
+//#region \0@oxc-project+runtime@0.152.0/helpers/esm/toPrimitive.js
 function T(e, t) {
 	if (w(e) != "object" || !e) return e;
 	var n = e[Symbol.toPrimitive];
@@ -756,13 +756,13 @@ function T(e, t) {
 	return (t === "string" ? String : Number)(e);
 }
 //#endregion
-//#region \0@oxc-project+runtime@0.149.0/helpers/esm/toPropertyKey.js
+//#region \0@oxc-project+runtime@0.152.0/helpers/esm/toPropertyKey.js
 function E(e) {
 	var t = T(e, "string");
 	return w(t) == "symbol" ? t : t + "";
 }
 //#endregion
-//#region \0@oxc-project+runtime@0.149.0/helpers/esm/defineProperty.js
+//#region \0@oxc-project+runtime@0.152.0/helpers/esm/defineProperty.js
 function D(e, t, n) {
 	return (t = E(t)) in e ? Object.defineProperty(e, t, {
 		value: n,

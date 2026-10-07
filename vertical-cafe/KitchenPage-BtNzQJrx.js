@@ -1,4 +1,4 @@
-import { C as e, S as t, c as n, d as r, i, l as a, n as o, r as s, t as c } from "./hostPlatform-D3rxsd42.js";
+import { C as e, S as t, c as n, d as r, i, l as a, n as o, r as s, t as c } from "./hostPlatform-C_l59Ii7.js";
 import { useCallback as l, useEffect as u, useReducer as d, useRef as f, useState as p } from "react";
 import { jsx as m, jsxs as h } from "react/jsx-runtime";
 import { assetUrl as g, useOfflineStatus as _, useVertical as v } from "@pos/platform";
@@ -100,7 +100,7 @@ function I(e) {
 		if (!e) return;
 		g();
 		let t = setInterval(() => {
-			typeof document < "u" && document.visibilityState !== "visible" || g();
+			(typeof document > "u" || document.visibilityState === "visible") && g();
 		}, F);
 		return () => clearInterval(t);
 	}, [e, g]);
