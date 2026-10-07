@@ -111,14 +111,18 @@ async function registerFlowersModule(): Promise<void> {
  * placeholder while the bundle downloads; once it loads, the descriptor's own
  * empty nav wins and the tile goes away.
  *
+ * Both counter-service café demos get it: `demo-cafe` (048) and `demo-suncity`
+ * (067, Sun City's real menu — TechDocs/POS_DEMO_SUNCITY.md). Never the
+ * tables module: neither has a dining room.
+ *
  *   POS_SEED_VERTICAL_CAFE=1 npm run pos:seed
  */
+const CAFE_DEMOS = [
+  { slug: 'demo-cafe', owner: 'owner@cafe.shop' },
+  { slug: 'demo-suncity', owner: 'owner@suncity.shop' },
+] as const;
+
 async function registerCafeModule(): Promise<void> {
-  const store = await pool.query(`SELECT id FROM pos_stores WHERE slug = 'demo-cafe'`);
-  if (store.rows.length === 0) {
-    console.log('   demo-cafe store not found — run the migrations first');
-    return;
-  }
   const entry = {
     url: process.env.POS_SEED_VERTICAL_CAFE_URL || 'http://localhost:5008/remote-entry.js',
     title: 'Кафе',
@@ -129,19 +133,24 @@ async function registerCafeModule(): Promise<void> {
     icon: 'Coffee',
     nav: [{ label: 'Кухня', location: 'cashier-primary', order: 80, icon: 'ChefHat', match: '/kitchen' }],
   };
-  await pool.query(
-    `UPDATE pos_stores
-     SET module_remotes = COALESCE(module_remotes, '{}'::jsonb)
-                          || jsonb_build_object('vertical-cafe', $2::jsonb)
-     WHERE id = $1`,
-    [Number(store.rows[0].id), JSON.stringify(entry)]
-  );
-
-  console.log('\n✅ Demo café store ready');
-  console.log('   Store slug: demo-cafe');
-  console.log('   Owner: owner@cafe.shop / owner123');
-  console.log('   Seller PIN: 1234');
-  console.log(`   vertical-cafe module registered → ${entry.url}`);
+  for (const demo of CAFE_DEMOS) {
+    const store = await pool.query(`SELECT id FROM pos_stores WHERE slug = $1`, [demo.slug]);
+    if (store.rows.length === 0) {
+      console.log(`   ${demo.slug} store not found — run the migrations first`);
+      continue;
+    }
+    await pool.query(
+      `UPDATE pos_stores
+       SET module_remotes = COALESCE(module_remotes, '{}'::jsonb)
+                            || jsonb_build_object('vertical-cafe', $2::jsonb)
+       WHERE id = $1`,
+      [Number(store.rows[0].id), JSON.stringify(entry)]
+    );
+    console.log(`\n✅ Demo café store ready: ${demo.slug}`);
+    console.log(`   Owner: ${demo.owner} / owner123`);
+    console.log('   Seller PIN: 1234');
+    console.log(`   vertical-cafe module registered → ${entry.url}`);
+  }
 }
 
 /**
