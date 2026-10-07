@@ -141,7 +141,7 @@ export async function fireRound(input: FireRoundInput): Promise<bills.Bill> {
       // names for the caption and — from the LIVE rows — what they write off,
       // so a deleted answer costs what it said and takes nothing off a shelf.
       const promised = await modifiers.promisedLineModifiers(client, input.storeId, snapshot);
-      const liveDelta = await modifiers.liveDeltaCents(client, input.storeId, snapshot);
+      const liveDelta = await modifiers.liveDeltaCents(client, input.storeId, snapshot, variantId);
       const deltaCents =
         liveDelta ?? snapshot.reduce((sum, m) => sum + m.price_delta_cents, 0);
 

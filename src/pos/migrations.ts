@@ -110,6 +110,8 @@ export const POS_MIGRATIONS = [
   '064_pos_exchange.sql',
   // A receipt stub on an existing card + stubs grouped into one product (clothing S1).
   '065_pos_placeholder_product.sql',
+  // A modifier answer priced per variant label — the crust that costs more on a 50 см pizza (demo «Sun City», PR A).
+  '066_pos_modifier_label_deltas.sql',
 ] as const;
 
 export function readMigration(file: string): string {
