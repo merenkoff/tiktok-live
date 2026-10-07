@@ -725,7 +725,7 @@ function M(e) {
 	};
 }
 //#endregion
-//#region \0@oxc-project+runtime@0.149.0/helpers/esm/typeof.js
+//#region \0@oxc-project+runtime@0.152.0/helpers/esm/typeof.js
 function N(e) {
 	"@babel/helpers - typeof";
 	return N = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
@@ -735,7 +735,7 @@ function N(e) {
 	}, N(e);
 }
 //#endregion
-//#region \0@oxc-project+runtime@0.149.0/helpers/esm/toPrimitive.js
+//#region \0@oxc-project+runtime@0.152.0/helpers/esm/toPrimitive.js
 function P(e, t) {
 	if (N(e) != "object" || !e) return e;
 	var n = e[Symbol.toPrimitive];
@@ -747,13 +747,13 @@ function P(e, t) {
 	return (t === "string" ? String : Number)(e);
 }
 //#endregion
-//#region \0@oxc-project+runtime@0.149.0/helpers/esm/toPropertyKey.js
+//#region \0@oxc-project+runtime@0.152.0/helpers/esm/toPropertyKey.js
 function F(e) {
 	var t = P(e, "string");
 	return N(t) == "symbol" ? t : t + "";
 }
 //#endregion
-//#region \0@oxc-project+runtime@0.149.0/helpers/esm/defineProperty.js
+//#region \0@oxc-project+runtime@0.152.0/helpers/esm/defineProperty.js
 function I(e, t, n) {
 	return (t = F(t)) in e ? Object.defineProperty(e, t, {
 		value: n,
@@ -955,7 +955,7 @@ function Se({ online: i, mirrored: a = !1, storeId: o = null }) {
 		if (!i) return;
 		C();
 		let e = setInterval(() => {
-			typeof document < "u" && document.visibilityState !== "visible" || C();
+			(typeof document > "u" || document.visibilityState === "visible") && C();
 		}, xe);
 		return () => clearInterval(e);
 	}, [i, C]), {

@@ -1,4 +1,4 @@
-import { A as e, B as t, D as n, E as r, F as i, G as a, H as o, I as s, J as c, K as l, L as u, M as d, N as f, O as p, P as m, Q as h, R as g, S as _, T as v, U as y, V as b, W as x, X as S, Y as C, _ as w, a as T, b as E, d as D, f as O, g as k, i as A, j, k as M, m as N, n as P, o as F, q as I, r as L, s as ee, t as R, u as te, v as ne, y as re, z } from "./useHallMap-CB4omUJZ.js";
+import { A as e, B as t, D as n, E as r, F as i, G as a, H as o, I as s, J as c, K as l, L as u, M as d, N as f, O as p, P as m, Q as h, R as g, S as _, T as v, U as y, V as b, W as x, X as S, Y as C, _ as w, a as T, b as E, d as D, f as O, g as k, i as A, j, k as M, m as N, n as P, o as F, q as I, r as L, s as ee, t as R, u as te, v as ne, y as re, z } from "./useHallMap-CcjEe5nT.js";
 import { useCallback as B, useEffect as V, useMemo as H, useRef as U, useState as W } from "react";
 import { Fragment as G, jsx as K, jsxs as q } from "react/jsx-runtime";
 import { DEFAULT_RECEIPT_PAPER_WIDTH as ie, assetUrl as J, cartLineUid as Y, defaultModifierIds as X, formatUah as Z, getMeta as ae, groupsOf as Q, needsModifierSheet as oe, printPrecheck as se, resolveLineModifiers as ce, useAuthStore as le, useOfflineStatus as ue, usePosShell as de, useSalesCatalog as fe, useVertical as pe } from "@pos/platform";
@@ -49,64 +49,68 @@ function Ce(e) {
 }
 //#endregion
 //#region src/components/cashier/ProductTile.tsx
-function we({ name: e, subtitle: t, priceCents: n, imageUrl: r, stock: i, onClick: o, disabled: s, count: c, onMore: l, badge: u, testId: d }) {
-	let [f, p] = W(!1), m = f ? null : J(r), h = s || !!u || i != null && i <= 0, g = /* @__PURE__ */ q("button", {
+function we({ name: e, subtitle: t, priceCents: n, compareAtCents: r, imageUrl: i, stock: o, onClick: s, disabled: c, count: l, onMore: u, badge: d, testId: f }) {
+	let [p, m] = W(!1), h = p ? null : J(i), g = c || !!d || o != null && o <= 0, _ = /* @__PURE__ */ q("button", {
 		type: "button",
-		disabled: s,
-		onClick: o,
-		"data-testid": d,
-		className: `w-full ${l ? "h-full" : ""} flex flex-col rounded-[14px] overflow-hidden text-left bg-sq-surface transition-shadow disabled:opacity-50 disabled:cursor-not-allowed ${c ? "ring-2 ring-sq-blue" : "ring-1 ring-sq-divider hover:ring-sq-muted/50"}`,
+		disabled: c,
+		onClick: s,
+		"data-testid": f,
+		className: `w-full ${u ? "h-full" : ""} flex flex-col rounded-[14px] overflow-hidden text-left bg-sq-surface transition-shadow disabled:opacity-50 disabled:cursor-not-allowed ${l ? "ring-2 ring-sq-blue" : "ring-1 ring-sq-divider hover:ring-sq-muted/50"}`,
 		children: [/* @__PURE__ */ q("div", {
 			className: "relative w-full aspect-[4/3] bg-sq-empty shrink-0",
 			children: [
-				m ? /* @__PURE__ */ K("img", {
-					src: m,
+				h ? /* @__PURE__ */ K("img", {
+					src: h,
 					alt: "",
-					className: `absolute inset-0 w-full h-full object-cover pointer-events-none ${h ? "opacity-45" : ""}`,
-					onError: () => p(!0)
+					className: `absolute inset-0 w-full h-full object-cover pointer-events-none ${g ? "opacity-45" : ""}`,
+					onError: () => m(!0)
 				}) : /* @__PURE__ */ K("div", {
 					className: "absolute inset-0 grid place-items-center text-sq-secondary text-xs px-2 font-medium pointer-events-none",
 					children: t || " "
 				}),
-				c != null && c > 0 && /* @__PURE__ */ K("span", {
+				l != null && l > 0 && /* @__PURE__ */ K("span", {
 					className: "absolute top-2 left-2 min-w-7 h-7 px-2 grid place-items-center rounded-full bg-sq-blue text-white text-[13px] font-bold tabular-nums pointer-events-none",
 					"data-testid": "tile-count",
-					children: c
+					children: l
 				}),
-				u ? /* @__PURE__ */ K("span", {
-					className: `absolute ${c ? "top-10" : "top-2"} left-2 text-[12px] font-semibold bg-[#F4386A] text-white px-2 py-0.5 rounded-md pointer-events-none`,
+				d ? /* @__PURE__ */ K("span", {
+					className: `absolute ${l ? "top-10" : "top-2"} left-2 text-[12px] font-semibold bg-[#F4386A] text-white px-2 py-0.5 rounded-md pointer-events-none`,
 					"data-testid": "tile-badge",
-					children: u
-				}) : i != null && i <= 0 && /* @__PURE__ */ K("span", {
-					className: `absolute ${c ? "top-10" : "top-2"} left-2 text-[12px] font-semibold bg-sq-secondary text-white px-2 py-0.5 rounded-md pointer-events-none`,
+					children: d
+				}) : o != null && o <= 0 && /* @__PURE__ */ K("span", {
+					className: `absolute ${l ? "top-10" : "top-2"} left-2 text-[12px] font-semibold bg-sq-secondary text-white px-2 py-0.5 rounded-md pointer-events-none`,
 					children: "немає"
 				})
 			]
 		}), /* @__PURE__ */ q("div", {
 			className: "px-3 pt-2 pb-2.5 flex flex-col gap-0.5 min-w-0 pointer-events-none",
 			children: [/* @__PURE__ */ K("p", {
-				className: `text-[14px] leading-tight font-semibold line-clamp-2 ${h ? "text-sq-muted" : "text-sq-text"}`,
+				className: `text-[14px] leading-tight font-semibold line-clamp-2 ${g ? "text-sq-muted" : "text-sq-text"}`,
 				children: e
-			}), n != null && /* @__PURE__ */ K("p", {
-				className: "text-[14px] text-sq-secondary tabular-nums",
-				children: $(n)
+			}), n != null && /* @__PURE__ */ q("p", {
+				className: "text-[14px] text-sq-secondary tabular-nums flex items-baseline gap-1.5",
+				children: [r != null && r > n && /* @__PURE__ */ K("s", {
+					className: "text-[12px] text-sq-muted",
+					"data-testid": "tile-old-price",
+					children: $(r)
+				}), /* @__PURE__ */ K("span", { children: $(n) })]
 			})]
 		})]
 	});
-	return l ? /* @__PURE__ */ q("div", {
+	return u ? /* @__PURE__ */ q("div", {
 		className: "relative",
-		children: [g, !s && /* @__PURE__ */ K("button", {
+		children: [_, !c && /* @__PURE__ */ K("button", {
 			type: "button",
-			onClick: l,
+			onClick: u,
 			"aria-label": `Змінити: ${e}`,
 			className: "absolute top-0.5 right-0.5 w-11 h-11 grid place-items-center",
-			"data-testid": d ? `${d}-more` : "tile-more",
+			"data-testid": f ? `${f}-more` : "tile-more",
 			children: /* @__PURE__ */ K("span", {
 				className: "w-8 h-8 grid place-items-center rounded-full bg-white/95 text-sq-text shadow-[0_1px_3px_rgba(0,0,0,0.15)]",
 				children: /* @__PURE__ */ K(a, { size: 20 })
 			})
 		})]
-	}) : g;
+	}) : _;
 }
 //#endregion
 //#region src/lib/tagColors.ts
@@ -268,7 +272,7 @@ function Le(e) {
 //#endregion
 //#region src/components/cashier/ModifierSheet.tsx
 function Re({ productName: e, variants: t, variantLabel: n = "Варіант", initialVariantId: r, initialModifierIds: i, initialNote: a, submitLabel: o = "Додати в чек", withQuantity: s = !0, notePlaceholder: c = "Коментар для кухні", onAdd: u, onClose: d }) {
-	let [f, p] = W(() => r ?? (t.length === 1 ? t[0].variant_id : null)), [m, _] = W(() => i ?? []), [v, y] = W(a ?? ""), [S, C] = W(1), w = be(), T = t.find((e) => e.variant_id === f) ?? null, E = Le(t), D = Fe(E, m), O = T ? T.price_cents + D.deltaCents : null, k = T == null ? `Оберіть «${n}»` : D.error ?? (O != null && O < 0 ? "Ціна не може бути відʼємною" : null), A = k == null && T != null;
+	let [f, p] = W(() => r ?? (t.length === 1 ? t[0].variant_id : null)), [m, _] = W(() => i ?? []), [v, y] = W(a ?? ""), [S, C] = W(1), w = be(), T = t.find((e) => e.variant_id === f) ?? null, E = T?.modifier_groups?.length ? T.modifier_groups : Le(t), D = Fe(E, m), O = T ? T.price_cents + D.deltaCents : null, k = T == null ? `Оберіть «${n}»` : D.error ?? (O != null && O < 0 ? "Ціна не може бути відʼємною" : null), A = k == null && T != null;
 	V(() => {
 		let e = (e) => {
 			e.key === "Escape" && d();
@@ -1794,11 +1798,17 @@ function Bt() {
 		})
 	});
 	let me = async (e) => {
-		let t = !1;
+		let t = {
+			settled: !1,
+			warning: null
+		};
 		await x(async () => {
 			let n = await k(o.id, e);
-			return t = St(n.bill), n.bill;
-		}, { stock: !0 }) && (j(!1), t && B("/tables"));
+			return t.settled = St(n.bill), t.warning = n.warning ?? null, n.bill;
+		}, { stock: !0 }) && (j(!1), t.settled ? t.warning ? B("/tables", { state: {
+			note: t.warning,
+			warn: !0
+		} }) : B("/tables") : t.warning && g(t.warning));
 	}, he = async () => {
 		if (L(null), await x(() => N(o.id)) && r === "cashier") try {
 			let [e, t] = await Promise.all([ae("receiptPrinterName"), ae("receiptPaperWidthMm")]);
@@ -2149,14 +2159,24 @@ function Kt() {
 		online: e,
 		mirrored: t !== "web",
 		storeId: n
-	}), { orders: h, refresh: g } = It({ online: e }), [_, v] = W(null), [y, b] = W(!1), [x, S] = W(null), [C, E] = W(null), D = _e(), O = H(() => ot(h), [h]);
+	}), { orders: h, refresh: g } = It({ online: e }), [_, v] = W(null), [y, b] = W(!1), [x, S] = W(null), [C, E] = W(null), D = (e, t = !1) => E(e == null ? null : {
+		text: e,
+		warn: t
+	}), O = _e(), k = ge().state, A = typeof k?.note == "string" ? k.note : null, M = k?.warn === !0;
 	V(() => {
-		if (C == null) return;
+		A && E({
+			text: A,
+			warn: M
+		});
+	}, [A, M]);
+	let N = H(() => ot(h), [h]);
+	V(() => {
+		if (C == null || C.warn) return;
 		let e = setTimeout(() => E(null), 8e3);
 		return () => clearTimeout(e);
 	}, [C]);
-	let k = H(() => m(a, o), [a, o]), A = k.find((e) => e.id === _) ?? k[0] ?? null, M = H(() => A ? j(A, o) : [], [A, o]), N = H(() => r(M), [M]);
-	async function F(t) {
+	let F = H(() => m(a, o), [a, o]), I = F.find((e) => e.id === _) ?? F[0] ?? null, L = H(() => I ? j(I, o) : [], [I, o]), ee = H(() => r(L), [L]);
+	async function te(t) {
 		if (!y) {
 			if (!e) {
 				S("Потрібна мережа, щоб відкрити стіл");
@@ -2165,7 +2185,7 @@ function Kt() {
 			b(!0), S(null);
 			try {
 				let e = await re(t.table.id);
-				D(`/tables/${e.bill.id}`);
+				O(`/tables/${e.bill.id}`);
 			} catch (e) {
 				S(R(e, "Не вдалося відкрити стіл")), p();
 			} finally {
@@ -2173,13 +2193,13 @@ function Kt() {
 			}
 		}
 	}
-	async function I(t, n) {
+	async function ne(t, n) {
 		if (y) return { ok: !1 };
 		if (!e) return S("Потрібна мережа, щоб прийняти запит"), { ok: !1 };
-		b(!0), S(null), E(null);
+		b(!0), S(null), D(null);
 		try {
 			let e = await T(t.id, n);
-			return g(), p(), e.warning ? D(`/tables/${e.bill.id}`, { state: { notice: e.warning } }) : E(e.already ? `Стіл ${t.table_name}: запит уже було прийнято` : `Стіл ${t.table_name}: прийнято — замовлення на кухні`), { ok: !0 };
+			return g(), p(), e.warning ? O(`/tables/${e.bill.id}`, { state: { notice: e.warning } }) : D(e.already ? `Стіл ${t.table_name}: запит уже було прийнято` : `Стіл ${t.table_name}: прийнято — замовлення на кухні`), { ok: !0 };
 		} catch (e) {
 			return S(R(e, "Не вдалося прийняти запит")), g(), {
 				ok: !1,
@@ -2189,12 +2209,12 @@ function Kt() {
 			b(!1);
 		}
 	}
-	async function L(t, n) {
+	async function z(t, n) {
 		if (y) return !1;
 		if (!e) return S("Потрібна мережа, щоб відхилити запит"), !1;
-		b(!0), S(null), E(null);
+		b(!0), S(null), D(null);
 		try {
-			return await w(t.id, n ?? void 0), g(), E(`Стіл ${t.table_name}: запит відхилено`), !0;
+			return await w(t.id, n ?? void 0), g(), D(`Стіл ${t.table_name}: запит відхилено`), !0;
 		} catch (e) {
 			return S(R(e, "Не вдалося відхилити запит")), g(), !1;
 		} finally {
@@ -2225,10 +2245,10 @@ function Kt() {
 						className: "text-2xl font-bold text-sq-heading",
 						children: "Столи"
 					}),
-					k.length > 1 && /* @__PURE__ */ K("div", {
+					F.length > 1 && /* @__PURE__ */ K("div", {
 						className: "flex gap-1 p-[3px] rounded-xl bg-sq-empty overflow-x-auto max-w-full",
-						children: k.map((e) => {
-							let t = A?.id === e.id, n = e.tables.reduce((e, t) => e + (O.get(t.id) ?? 0), 0);
+						children: F.map((e) => {
+							let t = I?.id === e.id, n = e.tables.reduce((e, t) => e + (N.get(t.id) ?? 0), 0);
 							return /* @__PURE__ */ q("button", {
 								type: "button",
 								"aria-pressed": t,
@@ -2247,7 +2267,7 @@ function Kt() {
 						})
 					}),
 					/* @__PURE__ */ K("div", { className: "flex-1" }),
-					A && /* @__PURE__ */ K(Wt, { guest: h.length > 0 })
+					I && /* @__PURE__ */ K(Wt, { guest: h.length > 0 })
 				]
 			}),
 			d && /* @__PURE__ */ q("p", {
@@ -2261,9 +2281,10 @@ function Kt() {
 				children: x
 			}),
 			C && /* @__PURE__ */ K("p", {
-				className: "mx-4 md:mx-7 mb-3 rounded-sq bg-sq-success/10 text-sq-success-ink px-3 py-2 text-sm",
+				className: `mx-4 md:mx-7 mb-3 rounded-sq px-3 py-2 text-sm ${C.warn ? "bg-amber-50 text-amber-900" : "bg-sq-success/10 text-sq-success-ink"}`,
 				"data-testid": "tables-note",
-				children: C
+				"data-tone": C.warn ? "warn" : "ok",
+				children: C.text
 			}),
 			h.length > 0 && /* @__PURE__ */ q("section", {
 				className: "mx-4 md:mx-7 mb-3 max-h-[45vh] overflow-auto",
@@ -2275,11 +2296,11 @@ function Kt() {
 					orders: h,
 					showTable: !0,
 					busy: y,
-					onAccept: I,
-					onReject: L
+					onAccept: ne,
+					onReject: z
 				})]
 			}),
-			c && k.length === 0 && /* @__PURE__ */ K("p", {
+			c && F.length === 0 && /* @__PURE__ */ K("p", {
 				className: "p-6 text-center text-sm text-sq-muted",
 				children: "Завантаження зали…"
 			}),
@@ -2298,7 +2319,7 @@ function Kt() {
 					})]
 				})
 			}),
-			!c && !l && k.length === 0 && /* @__PURE__ */ K("div", {
+			!c && !l && F.length === 0 && /* @__PURE__ */ K("div", {
 				className: "px-4 md:px-7",
 				children: /* @__PURE__ */ q("div", {
 					className: "sq-card p-6 text-center",
@@ -2312,19 +2333,19 @@ function Kt() {
 					})]
 				})
 			}),
-			A && /* @__PURE__ */ K("div", {
+			I && /* @__PURE__ */ K("div", {
 				className: "grid flex-1 content-start gap-3 lg:gap-5 overflow-auto px-4 md:px-7 pt-1 pb-6",
 				style: {
-					gridTemplateColumns: `repeat(${N.cols}, minmax(2.5rem, 1fr))`,
+					gridTemplateColumns: `repeat(${ee.cols}, minmax(2.5rem, 1fr))`,
 					gridAutoRows: "minmax(3.75rem, auto)"
 				},
-				children: M.map((e) => /* @__PURE__ */ K(Ut, {
+				children: L.map((e) => /* @__PURE__ */ K(Ut, {
 					seat: e,
 					now: s,
 					meId: i,
 					disabled: y,
-					guestWaiting: O.get(e.table.id) ?? 0,
-					onOpen: (e) => void F(e)
+					guestWaiting: N.get(e.table.id) ?? 0,
+					onOpen: (e) => void te(e)
 				}, e.table.id))
 			})
 		]
