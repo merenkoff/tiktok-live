@@ -66,7 +66,14 @@ export interface PublicMenuModifier {
   /** What a guest's request names an answer by; the waiter's accept re-resolves it against the live groups. */
   id: number;
   name: string;
+  /** What the answer costs on the dish's first (cheapest) size. */
   price_delta_cents: number;
+  /**
+   * Only when the answer costs differently by size (migration 066 — the crust
+   * that is dearer on the 50 см pizza): what it costs on each size, keyed by
+   * variant id. Absent otherwise, so a menu with no such answer is unchanged.
+   */
+  price_delta_by_variant?: Record<string, number>;
   is_default: boolean;
 }
 
@@ -278,7 +285,17 @@ function projectProduct(rows: CatalogItem[], texts: DishTexts): PublicMenuProduc
     // greys a size chip that is out even while the others sell.
     available: !stopped && row.quantity > 0,
   }));
-  const groups = (first.modifier_groups ?? [])
+  // Each catalog row carries what the answers cost on ITS size (066); the
+  // groups themselves are the product's and the same on every row.
+  const deltaOn = new Map<number, Map<number, number>>();
+  for (const row of sorted) {
+    const byModifier = new Map<number, number>();
+    for (const group of row.modifier_groups ?? []) {
+      for (const m of group.modifiers) byModifier.set(m.id, m.price_delta_cents);
+    }
+    deltaOn.set(row.variant_id, byModifier);
+  }
+  const groups = (sorted[0]!.modifier_groups ?? [])
     .map((group) => ({
       id: group.id,
       name: group.name,
@@ -286,12 +303,19 @@ function projectProduct(rows: CatalogItem[], texts: DishTexts): PublicMenuProduc
       max_select: group.max_select,
       // Written out field by field: the till's group also carries the
       // ingredient each answer writes off, and that stays behind.
-      modifiers: group.modifiers.map((m) => ({
-        id: m.id,
-        name: m.name,
-        price_delta_cents: m.price_delta_cents,
-        is_default: m.is_default,
-      })),
+      modifiers: group.modifiers.map((m) => {
+        const bySize = sorted.map((row) => [row.variant_id, deltaOn.get(row.variant_id)?.get(m.id) ?? m.price_delta_cents] as const);
+        const varies = bySize.some(([, cents]) => cents !== m.price_delta_cents);
+        return {
+          id: m.id,
+          name: m.name,
+          price_delta_cents: m.price_delta_cents,
+          ...(varies
+            ? { price_delta_by_variant: Object.fromEntries(bySize.map(([id, cents]) => [String(id), cents])) }
+            : {}),
+          is_default: m.is_default,
+        };
+      }),
     }))
     .filter((group) => group.modifiers.length > 0);
   return {

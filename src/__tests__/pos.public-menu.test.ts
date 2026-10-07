@@ -368,6 +368,43 @@ describe.skipIf(!hasDb)('POS guest QR menu', () => {
       ]);
     });
 
+    it('names an answer’s price per size only where it differs (066)', async () => {
+      const pizza = await createProduct(cafe.storeId, {
+        name: 'Піца тестова',
+        variants: [
+          { attributes: { size: '30 см' }, price_cents: 23000, quantity: 5 },
+          { attributes: { size: '50 см' }, price_cents: 41000, quantity: 5 },
+        ],
+      });
+      const sizes = new Map(
+        (pizza!.variants as Array<{ id: number; label: string }>).map((v) => [v.label, String(v.id)])
+      );
+      let crust = await modifiers.createGroup(cafe.storeId, { name: 'Бортики', min_select: 0, max_select: 1 });
+      crust = await modifiers.createModifier(cafe.storeId, crust.id, {
+        name: 'Філадельфія',
+        price_delta_cents: 8000,
+        label_deltas: [{ label: '50 см', price_delta_cents: 15000 }],
+      });
+      crust = await modifiers.createModifier(cafe.storeId, crust.id, { name: 'Соус', price_delta_cents: 3000 });
+      await modifiers.setProductGroups(cafe.storeId, pizza!.id, [crust.id]);
+      invalidatePublicMenu(cafe.storeId);
+      try {
+        const answers = find(await menu(), 'Піца тестова')!.modifier_groups[0]!.modifiers;
+        expect(answers[0]).toEqual({
+          id: expect.any(Number),
+          name: 'Філадельфія',
+          price_delta_cents: 8000,
+          price_delta_by_variant: { [sizes.get('30 см')!]: 8000, [sizes.get('50 см')!]: 15000 },
+          is_default: false,
+        });
+        expect(Object.keys(answers[1]!).sort()).toEqual(['id', 'is_default', 'name', 'price_delta_cents']);
+      } finally {
+        await pool.query(`UPDATE pos_products SET is_active = FALSE WHERE id = $1`, [pizza!.id]);
+        await modifiers.deleteGroup(cafe.storeId, crust.id);
+        invalidatePublicMenu(cafe.storeId);
+      }
+    });
+
     it('shows a dish with no stock as «немає» (not stopped), and keeps it on the page', async () => {
       const cheesecake = find(await menu(), 'Сирник')!;
       expect(cheesecake.available).toBe(false);
