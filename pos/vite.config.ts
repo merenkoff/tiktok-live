@@ -80,6 +80,12 @@ export default defineConfig(({ command }) => ({
         target: 'http://localhost:3000',
         changeOrigin: true,
       },
+      // The demo stores' pictures (/demo-cafe/latte.svg, /demo-suncity/*.jpg)
+      // live in the API's public/; production reaches them through apiOrigin().
+      '^/demo-[a-z]+/': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
     },
   },
   build: {
