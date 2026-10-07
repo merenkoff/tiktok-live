@@ -141,6 +141,8 @@ test('the owner asks a question, gives it an answer that takes milk, and attache
   expect(sent[1].body).toEqual({
     name: 'вівсяне',
     price_delta_cents: 1500,
+    // Sent every time, wholesale — no size has a price of its own here (066).
+    label_deltas: [],
     is_default: false,
     component_variant_id: 20,
     component_quantity: 200,

@@ -193,6 +193,7 @@ describe('ModifiersPage', () => {
     expect(createModifier).toHaveBeenCalledWith(1, {
       name: 'без молока',
       price_delta_cents: -2000,
+      label_deltas: [],
       is_default: false,
       component_variant_id: 21,
       component_quantity: 150,
@@ -213,10 +214,71 @@ describe('ModifiersPage', () => {
     expect(createModifier).toHaveBeenCalledWith(1, {
       name: 'гарячіше',
       price_delta_cents: 0,
+      label_deltas: [],
       is_default: true,
       component_variant_id: null,
       component_quantity: null,
     });
+  });
+
+  it('prices an answer per size: offers the sizes in use, sends the list wholesale, flags a stale one', async () => {
+    const user = userEvent.setup();
+    const crust: ModifierGroup = {
+      ...portion,
+      id: 5,
+      name: 'Бортики',
+      labels_in_use: ['30 см', '50 см'],
+      modifiers: [
+        {
+          ...portion.modifiers[0],
+          id: 51,
+          group_id: 5,
+          name: 'Філадельфія',
+          price_delta_cents: 8000,
+          label_deltas: [
+            { label: '50 см', price_delta_cents: 15000 },
+            { label: '40 см', price_delta_cents: 12000 },
+          ],
+        },
+      ],
+    };
+    listModifierGroups.mockResolvedValue([crust]);
+    updateModifier.mockResolvedValue(crust);
+    renderWithProviders(<ModifiersPage />);
+    const card = within(await screen.findByTestId('group-card-5'));
+
+    // The list says what the bigger size costs, and that no pizza is 40 см.
+    const prices = card.getAllByTestId('modifier-size-price');
+    expect(prices[0]).toHaveTextContent('50 см: +150,00 ₴');
+    expect(prices[0]).not.toHaveTextContent('не знайдено');
+    expect(prices[1]).toHaveTextContent('40 см: +120,00 ₴ (не знайдено)');
+
+    await user.click(within(card.getAllByTestId('modifier-row')[0]).getByText('Змінити'));
+    expect(card.getByTestId('modifier-size-label-0')).toHaveValue('50 см');
+    expect(card.getByTestId('modifier-size-delta-0')).toHaveValue('150');
+    // Drop the stale 40 см row and save: the list leaves whole.
+    await user.click(within(card.getByTestId('modifier-form-sizes')).getAllByText('Прибрати')[1]);
+    await user.clear(card.getByTestId('modifier-size-delta-0'));
+    await user.type(card.getByTestId('modifier-size-delta-0'), '155');
+    await user.click(card.getByTestId('modifier-form-submit'));
+    expect(updateModifier).toHaveBeenCalledWith(
+      51,
+      expect.objectContaining({
+        price_delta_cents: 8000,
+        label_deltas: [{ label: '50 см', price_delta_cents: 15500 }],
+      })
+    );
+  });
+
+  it('offers the first size in use that has no price yet', async () => {
+    const user = userEvent.setup();
+    listModifierGroups.mockResolvedValue([{ ...portion, labels_in_use: ['30 см', '50 см'] }]);
+    renderWithProviders(<ModifiersPage />);
+    const card = within(await screen.findByTestId('group-card-2'));
+    await user.click(card.getByTestId('modifier-form-add-size'));
+    await user.click(card.getByTestId('modifier-form-add-size'));
+    expect(card.getByTestId('modifier-size-label-0')).toHaveValue('30 см');
+    expect(card.getByTestId('modifier-size-label-1')).toHaveValue('50 см');
   });
 
   it("surfaces the server's refusal in its own words", async () => {

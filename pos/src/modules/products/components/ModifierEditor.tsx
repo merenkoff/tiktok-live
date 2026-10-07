@@ -18,15 +18,22 @@ function deltaText(cents: number): string {
   return 'без доплати';
 }
 
+/** One «this size costs instead» row, as typed. */
+interface SizeDraft {
+  label: string;
+  delta: string;
+}
+
 interface Draft {
   name: string;
   delta: string;
   isDefault: boolean;
   componentId: number | '';
   componentQty: string;
+  sizes: SizeDraft[];
 }
 
-const EMPTY: Draft = { name: '', delta: '0', isDefault: false, componentId: '', componentQty: '1' };
+const EMPTY: Draft = { name: '', delta: '0', isDefault: false, componentId: '', componentQty: '1', sizes: [] };
 
 function draftOf(m: Modifier): Draft {
   return {
@@ -35,7 +42,13 @@ function draftOf(m: Modifier): Draft {
     isDefault: m.is_default,
     componentId: m.component_variant_id ?? '',
     componentQty: String(m.component_quantity ?? 1),
+    sizes: (m.label_deltas ?? []).map((d) => ({ label: d.label, delta: String(d.price_delta_cents / 100) })),
   };
+}
+
+/** The same reading the server gives a label: spaces collapsed, case folded. */
+function labelKey(label: string): string {
+  return label.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
 /**
@@ -67,12 +80,31 @@ export function ModifierEditor({
     [options]
   );
   const component = draft.componentId === '' ? null : byVariant.get(Number(draft.componentId));
+  // What a size price can match: the labels of the variants this question's
+  // products come in. An override for a label none of them has does nothing.
+  const labelsInUse = group.labels_in_use ?? [];
+  const known = new Set(labelsInUse.map(labelKey));
+  const sizeListId = `modifier-sizes-${group.id}`;
+
+  function setSize(index: number, patch: Partial<SizeDraft>) {
+    setDraft({ ...draft, sizes: draft.sizes.map((size, i) => (i === index ? { ...size, ...patch } : size)) });
+  }
+
+  function addSize() {
+    const taken = new Set(draft.sizes.map((size) => labelKey(size.label)));
+    const next = labelsInUse.find((label) => !taken.has(labelKey(label))) ?? '';
+    setDraft({ ...draft, sizes: [...draft.sizes, { label: next, delta: draft.delta }] });
+  }
 
   function toInput(d: Draft): ModifierInput {
     const withComponent = d.componentId !== '';
     return {
       name: d.name.trim(),
       price_delta_cents: signedUahInputToCents(d.delta),
+      // Sent every time, wholesale: a row the owner removed is gone on the server too.
+      label_deltas: d.sizes
+        .filter((size) => size.label.trim() !== '')
+        .map((size) => ({ label: size.label.trim(), price_delta_cents: signedUahInputToCents(size.delta) })),
       is_default: d.isDefault,
       component_variant_id: withComponent ? Number(d.componentId) : null,
       component_quantity: withComponent ? Number(d.componentQty) || 1 : null,
@@ -144,6 +176,20 @@ export function ModifierEditor({
             >
               <span className="text-base font-medium text-sq-text">{m.name}</span>
               <span className="text-sm text-sq-secondary tabular-nums">{deltaText(m.price_delta_cents)}</span>
+              {(m.label_deltas ?? []).map((d) => {
+                const missing = labelsInUse.length > 0 && !known.has(labelKey(d.label));
+                return (
+                  <span
+                    key={d.label}
+                    className={`text-sm tabular-nums ${missing ? 'text-amber-700' : 'text-sq-secondary'}`}
+                    title={missing ? 'Жоден товар цієї групи не має такого розміру' : undefined}
+                    data-testid="modifier-size-price"
+                  >
+                    {d.label}: {deltaText(d.price_delta_cents)}
+                    {missing ? ' (не знайдено)' : ''}
+                  </span>
+                );
+              })}
               {m.is_default && (
                 <span className="h-[22px] px-2 rounded-md bg-sq-blue/10 text-sq-blue-press text-xs font-medium inline-flex items-center">
                   за умовчанням
@@ -278,6 +324,61 @@ export function ModifierEditor({
               Скасувати
             </button>
           )}
+        </div>
+
+        {/* A price that depends on the size: the crust dearer on the 50 см pizza. */}
+        <div className="sm:col-span-5 space-y-2" data-testid="modifier-form-sizes">
+          {draft.sizes.length > 0 && (
+            <p className={captionClass}>Інша ціна для розміру — замість «До ціни» на цих варіантах</p>
+          )}
+          {draft.sizes.map((size, index) => {
+            const missing = size.label.trim() !== '' && labelsInUse.length > 0 && !known.has(labelKey(size.label));
+            return (
+              <div key={index} className="flex flex-wrap items-center gap-2">
+                <input
+                  className={`${fieldClass} w-40`}
+                  placeholder="50 см"
+                  list={sizeListId}
+                  value={size.label}
+                  onChange={(e) => setSize(index, { label: e.target.value })}
+                  aria-label="Розмір"
+                  data-testid={`modifier-size-label-${index}`}
+                />
+                <input
+                  className={`${fieldClass} w-28 tabular-nums`}
+                  inputMode="decimal"
+                  placeholder="150"
+                  value={size.delta}
+                  onChange={(e) => setSize(index, { delta: e.target.value })}
+                  aria-label="До ціни для цього розміру, ₴"
+                  data-testid={`modifier-size-delta-${index}`}
+                />
+                <button
+                  type="button"
+                  className="min-h-9 px-2 rounded-lg text-[15px] font-semibold text-red-600 hover:bg-red-50"
+                  onClick={() => setDraft({ ...draft, sizes: draft.sizes.filter((_, i) => i !== index) })}
+                >
+                  Прибрати
+                </button>
+                {missing && (
+                  <span className="text-[13px] text-amber-700">Жоден товар цієї групи не має такого розміру</span>
+                )}
+              </div>
+            );
+          })}
+          <datalist id={sizeListId}>
+            {labelsInUse.map((label) => (
+              <option key={label} value={label} />
+            ))}
+          </datalist>
+          <button
+            type="button"
+            className="min-h-9 px-1 text-[15px] font-semibold text-sq-blue"
+            onClick={addSize}
+            data-testid="modifier-form-add-size"
+          >
+            + Інша ціна для розміру
+          </button>
         </div>
       </form>
     </div>

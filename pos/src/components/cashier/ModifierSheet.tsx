@@ -82,7 +82,11 @@ export function ModifierSheet({
   const bodyRef = useDragScroll<HTMLDivElement>();
 
   const current = variants.find((v) => v.variant_id === variantId) ?? null;
-  const groups = groupsOf(variants);
+  // Each variant's row carries what the answers cost on IT — the crust is
+  // dearer on the 50 см pizza (migration 066) — so the chosen size prices the
+  // sheet. The questions are the product's, the same on every row, so the ids
+  // already picked stay picked when the size changes.
+  const groups = current?.modifier_groups?.length ? current.modifier_groups : groupsOf(variants);
   const resolved = resolveLineModifiers(groups, selected);
   const priceCents = current ? current.price_cents + resolved.deltaCents : null;
   const error =
