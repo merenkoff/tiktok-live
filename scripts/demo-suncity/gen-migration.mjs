@@ -67,6 +67,15 @@ const TAG_COLOR = {
 const label = (size) => size ?? '';
 const withRecipe = (product) => Object.prototype.hasOwnProperty.call(recipes, product.name);
 
+// An ingredient named like a dish would be found by every name lookup below
+// twice («Пепероні» the sausage and «Пепероні» the pizza).
+const dishNames = new Set(menu.products.map((p) => p.name.toLowerCase()));
+for (const part of [...ingredients, ...semis]) {
+  if (dishNames.has(part.name.toLowerCase())) {
+    throw new Error(`techcards: інгредієнт «${part.name}» називається як страва`);
+  }
+}
+
 for (const name of Object.keys(recipes)) {
   const product = menu.products.find((p) => p.name === name);
   if (!product) throw new Error(`techcards: «${name}» немає в menu.json`);
@@ -403,7 +412,7 @@ ${values(answerRows)}
   FROM (VALUES
 ${values(linkRows)}
   ) AS x(product, grp, ord)
-  JOIN pos_products p ON p.store_id = v_store AND p.name = x.product
+  JOIN pos_products p ON p.store_id = v_store AND p.name = x.product AND p.sellable
   JOIN pos_modifier_groups g ON g.store_id = v_store AND g.name = x.grp;
   GET DIAGNOSTICS v_rows = ROW_COUNT;
   IF v_rows <> ${linkRows.length} THEN
