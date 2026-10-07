@@ -112,6 +112,8 @@ export const POS_MIGRATIONS = [
   '065_pos_placeholder_product.sql',
   // A modifier answer priced per variant label — the crust that costs more on a 50 см pizza (demo «Sun City», PR A).
   '066_pos_modifier_label_deltas.sql',
+  // The «Sun City» demo café (Malyn, no tables): the real menu, generated from scripts/demo-suncity/menu.json.
+  '067_pos_demo_suncity.sql',
 ] as const;
 
 export function readMigration(file: string): string {
