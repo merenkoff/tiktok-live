@@ -5,14 +5,18 @@
 
 export const SITE_URL = 'https://the-live.shop';
 export const RELEASES_URL = 'https://github.com/merenkoff/tiktok-live/releases/latest';
+// The owner's company site. Its Organization (https://technologies.llc/#organization) is the
+// same legal entity as ORG below: the footer links it and the JSON-LD lists it in sameAs.
+export const COMPANY_URL = 'https://technologies.llc/';
 
 export const ORG = {
   name: 'ТОВ «Технології»',
-  legalName: 'Товариство з обмеженою відповідальністю «Технології»',
+  legalName: 'Товариство з обмеженою відповідальністю «Компанія Технології»', // as in the ЄДР extract
   alternateName: ['The Live Shop', 'LiveShop'],
   taxId: '46288273',
   url: SITE_URL,
-  sameAs: ['https://github.com/merenkoff/tiktok-live'],
+  // GitHub stays first: AboutPage links the repository as sameAs[0].
+  sameAs: ['https://github.com/merenkoff/tiktok-live', COMPANY_URL],
 } as const;
 
 export const PRODUCT = {
