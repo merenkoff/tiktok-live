@@ -56,6 +56,11 @@ export function registerPublicMenuPages(fastify: FastifyInstance): void {
       renderMenuPage(found.menu, token, table, {
         bill: keyed && found.store.billEnabled,
         ordering: keyed && found.store.orderingEnabled,
+        call: keyed && found.store.callEnabled,
+        orderAuto:
+          found.store.autoKitchen === 'off'
+            ? null
+            : { mode: found.store.autoKitchen, limitCents: found.store.autoLimitCents },
       })
     );
   });

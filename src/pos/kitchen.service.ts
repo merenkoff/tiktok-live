@@ -21,6 +21,7 @@ import { readStoreClock } from './core/storeClock.js';
 import type { TagStation } from './tags.service.js';
 import type { PrepStatus } from './types.js';
 import { parseLineModifierSnapshot } from './modifiers.service.js';
+import { authorName } from './guest-author.js';
 import { invalidatePublicMenu } from './public-menu/menu.service.js';
 
 export class KitchenError extends Error {
@@ -241,11 +242,13 @@ export async function listOpenOrders(
 async function openRounds(storeId: number): Promise<KitchenOrder[]> {
   const heads = await pool.query(
     `SELECT r.id, r.seq, r.prep_status, r.fired_at, r.ready_at,
-            b.note, t.name AS table_name, st.display_name AS staff_name
+            b.note, t.name AS table_name, st.display_name AS staff_name, r.fired_by_guest
      FROM pos_bill_rounds r
      JOIN pos_bills b ON b.id = r.bill_id
      JOIN pos_tables t ON t.id = b.table_id
-     JOIN pos_staff st ON st.id = r.fired_by
+     -- LEFT: a guest's order sent straight to the kitchen fires a round with
+     -- no person behind it (QR menu Q9), and the cook must still see it.
+     LEFT JOIN pos_staff st ON st.id = r.fired_by
      WHERE r.store_id = $1
        AND r.prep_status IN ('new', 'ready')
        AND r.cancelled_at IS NULL
@@ -296,7 +299,7 @@ async function openRounds(storeId: number): Promise<KitchenOrder[]> {
     prep_status: row.prep_status === 'ready' ? ('ready' as const) : ('new' as const),
     created_at: new Date(row.fired_at as string).toISOString(),
     ready_at: isoOrNull(row.ready_at),
-    staff_name: String(row.staff_name ?? ''),
+    staff_name: authorName(row.staff_name, row.fired_by_guest),
     note: typeof row.note === 'string' && row.note ? row.note : null,
     items: itemsByRound.get(Number(row.id)) ?? [],
   }));

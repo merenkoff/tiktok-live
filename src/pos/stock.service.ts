@@ -48,7 +48,8 @@ export async function applyStockDelta(
     variantId: number;
     delta: number;
     reason: StockReason;
-    staffId: number;
+    /** Null when nobody on the staff caused the movement — a guest's auto-sent order (QR menu Q9). */
+    staffId: number | null;
     referenceType?: string;
     referenceId?: number;
     note?: string;

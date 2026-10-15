@@ -43,15 +43,29 @@ import {
 } from '../guest-orders.service.js';
 import { loadGuestBill } from '../public-menu/guest-bill.js';
 import {
+  WaiterCallError,
+  WaiterCallTooSoon,
+  cancelOwnCall,
+  createCall,
+  listOwnCalls,
+} from '../waiter-calls.service.js';
+import {
+  AUTO_KITCHEN_MODES,
+  PublicMenuBadRequest,
   PublicMenuError,
+  findMenuStore,
   findMenuTable,
   getPublicMenuSettings,
   getStoreProfile,
   loadPublicMenu,
   rotatePublicMenuToken,
+  setPublicMenuAutoKitchen,
+  setPublicMenuAutoLimit,
   setPublicMenuBill,
+  setPublicMenuCall,
   setPublicMenuEnabled,
   setPublicMenuOrdering,
+  type AutoKitchenMode,
   updateStoreProfile,
   type MenuTable,
 } from '../public-menu/menu.service.js';
@@ -92,6 +106,61 @@ export function registerPublicMenuRoutes(fastify: FastifyInstance): void {
     return { found, table };
   }
 
+  /**
+   * The same three proofs as `guestContext`, for a call (phase Q8): the store,
+   * the table, the key — and the owner's CALL switch rather than the ordering
+   * one, with the same single 404 for every way of failing.
+   */
+  async function callContext(request: FastifyRequest, reply: FastifyReply) {
+    const { token } = request.params as { token: string };
+    reply.header('Cache-Control', 'no-store');
+    reply.header('X-Robots-Tag', MENU_PAGE_HEADERS['X-Robots-Tag']!);
+    const query = (request.query ?? {}) as { t?: unknown; k?: unknown };
+    // The store row is enough — a call needs no dishes, so the menu is not built.
+    const store = await findMenuStore(token);
+    const table: MenuTable | null = store && store.callEnabled ? await findMenuTable(store.id, query.t) : null;
+    if (!store || !table || !(await verifyTableKey(store.id, table.id, query.k))) {
+      reply.code(404).send({ error: 'Виклик недоступний' });
+      return null;
+    }
+    return { storeId: store.id, table };
+  }
+
+  function sendCallError(reply: FastifyReply, error: unknown): unknown {
+    if (error instanceof WaiterCallTooSoon) return reply.code(429).send({ error: error.message });
+    if (error instanceof WaiterCallError) return reply.code(400).send({ error: error.message });
+    throw error;
+  }
+
+  // A guest calls a waiter or asks for the bill (phase Q8). A second tap while
+  // the call is live answers with the same call.
+  fastify.post('/public/menu/:token/calls', { bodyLimit: 1024 }, async (request, reply) => {
+    const ctx = await callContext(request, reply);
+    if (!ctx) return;
+    try {
+      const view = await createCall(ctx.storeId, ctx.table, (request.body as { kind?: unknown } | undefined)?.kind);
+      return reply.code(201).send(view);
+    } catch (error) {
+      return sendCallError(reply, error);
+    }
+  });
+
+  fastify.get('/public/menu/:token/calls', async (request, reply) => {
+    const ctx = await callContext(request, reply);
+    if (!ctx) return;
+    return { calls: await listOwnCalls(ctx.storeId, ctx.table) };
+  });
+
+  fastify.post('/public/menu/:token/calls/:kind/cancel', async (request, reply) => {
+    const ctx = await callContext(request, reply);
+    if (!ctx) return;
+    try {
+      return await cancelOwnCall(ctx.storeId, ctx.table, (request.params as { kind: string }).kind);
+    } catch (error) {
+      return sendCallError(reply, error);
+    }
+  });
+
   fastify.get('/public/menu/:token', async (request, reply) => {
     const { token } = request.params as { token: string };
     reply.header('Cache-Control', 'no-store');
@@ -126,7 +195,14 @@ export function registerPublicMenuRoutes(fastify: FastifyInstance): void {
     const ctx = await guestContext(request, reply);
     if (!ctx) return;
     try {
-      const view = await createGuestOrder(ctx.found.store.id, ctx.table, ctx.found.menu, (request.body ?? {}) as Record<string, unknown>);
+      const view = await createGuestOrder(
+        ctx.found.store.id,
+        ctx.table,
+        ctx.found.menu,
+        (request.body ?? {}) as Record<string, unknown>,
+        // Phase Q9: the owner's auto-send, as the cached store row has it.
+        { mode: ctx.found.store.autoKitchen, limitCents: ctx.found.store.autoLimitCents }
+      );
       return reply.code(201).send(view);
     } catch (error) {
       return sendGuestOrderError(reply, error);
@@ -160,25 +236,55 @@ export function registerPublicMenuRoutes(fastify: FastifyInstance): void {
     const auth = await ensurePosOwner(request, reply);
     if (!auth) return;
     const body = (request.body ?? {}) as Record<string, unknown>;
-    const fields = ['enabled', 'bill_enabled', 'ordering_enabled'] as const;
-    const given = fields.filter((field) => body[field] !== undefined);
-    if (given.length === 0) {
-      return reply.code(400).send({ error: 'Потрібне enabled, bill_enabled або ordering_enabled' });
+    const switches = ['enabled', 'bill_enabled', 'ordering_enabled', 'call_enabled'] as const;
+    const given = switches.filter((field) => body[field] !== undefined);
+    const autoGiven = body.auto_kitchen !== undefined;
+    const limitGiven = body.auto_limit_cents !== undefined;
+    if (given.length === 0 && !autoGiven && !limitGiven) {
+      return reply.code(400).send({
+        error: 'Потрібне enabled, bill_enabled, ordering_enabled, call_enabled, auto_kitchen або auto_limit_cents',
+      });
     }
     if (given.some((field) => typeof body[field] !== 'boolean')) {
-      return reply.code(400).send({ error: 'enabled, bill_enabled і ordering_enabled мають бути true або false' });
+      return reply
+        .code(400)
+        .send({ error: 'enabled, bill_enabled, ordering_enabled і call_enabled мають бути true або false' });
+    }
+    if (autoGiven && !AUTO_KITCHEN_MODES.includes(body.auto_kitchen as AutoKitchenMode)) {
+      return reply.code(400).send({ error: 'auto_kitchen має бути off, reorders або all' });
+    }
+    if (body.auto_kitchen_ack !== undefined && typeof body.auto_kitchen_ack !== 'boolean') {
+      return reply.code(400).send({ error: 'auto_kitchen_ack має бути true або false' });
+    }
+    if (limitGiven && !Number.isInteger(body.auto_limit_cents)) {
+      return reply.code(400).send({ error: 'auto_limit_cents має бути цілим числом копійок' });
     }
     try {
       // One field per call is what the card sends; several at once apply in
-      // order and the answer is the state after the last.
+      // order and the answer is the state after the last. Ordering goes before
+      // auto-sending, so «ordering on + reorders» in one call works, and the
+      // limit before the mode, so a raised mode never runs on the old limit.
       let settings = null;
       if (given.includes('enabled')) settings = await setPublicMenuEnabled(auth.storeId, body.enabled as boolean);
       if (given.includes('bill_enabled')) settings = await setPublicMenuBill(auth.storeId, body.bill_enabled as boolean);
       if (given.includes('ordering_enabled')) {
         settings = await setPublicMenuOrdering(auth.storeId, body.ordering_enabled as boolean);
       }
+      if (given.includes('call_enabled')) settings = await setPublicMenuCall(auth.storeId, body.call_enabled as boolean);
+      if (limitGiven) settings = await setPublicMenuAutoLimit(auth.storeId, body.auto_limit_cents as number);
+      if (autoGiven) {
+        settings = await setPublicMenuAutoKitchen(
+          auth.storeId,
+          auth.staffId,
+          body.auto_kitchen as AutoKitchenMode,
+          body.auto_kitchen_ack === true
+        );
+      }
       return settings;
     } catch (error) {
+      // The owner skipped the risks or typed a limit out of range: something
+      // to fix in the request, not a state the store is in.
+      if (error instanceof PublicMenuBadRequest) return reply.code(400).send({ error: error.message });
       if (error instanceof PublicMenuError) return reply.code(409).send({ error: error.message });
       throw error;
     }

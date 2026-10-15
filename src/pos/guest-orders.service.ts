@@ -12,6 +12,16 @@
 // (`openBillTx`, `addDraftItemTx`, then `fireRound`). Why not simply draft
 // lines with a flag is in the header of migration 058.
 //
+// The one exception is the owner's own (phase Q9, migration 068): with
+// `public_menu_auto_kitchen` on, an order up to the owner's limit goes straight
+// to the kitchen — `reorders` only when a waiter has already opened the table's
+// bill, `all` always. It is the same request row, decided `sent` in the same
+// transaction that inserts it, its lines added as rows of their OWN (never
+// merged into what a waiter is typing) and fired as a round of their own; a
+// waiter then sees a notice and taps «Бачу». If any line cannot go (stopped
+// between the menu and the tap), the whole order falls back to a request
+// that waits for a waiter, exactly as it would have with the switch off.
+//
 // Two audiences, one file, because the state machine is one:
 //
 //   the GUEST (no login; the route has already checked the store token, the
@@ -31,9 +41,10 @@ import type pg from 'pg';
 import { pool } from '../db.js';
 import * as bills from './bills.service.js';
 import * as rounds from './rounds.service.js';
+import { listLiveCalls, type LiveWaiterCall } from './waiter-calls.service.js';
 import * as modifiers from './modifiers.service.js';
 import { readStoreClock } from './core/storeClock.js';
-import type { MenuTable, PublicMenu } from './public-menu/menu.service.js';
+import type { AutoKitchenMode, MenuTable, PublicMenu } from './public-menu/menu.service.js';
 
 export class GuestOrderError extends Error {}
 export class GuestOrderNotFound extends GuestOrderError {}
@@ -109,7 +120,8 @@ export interface GuestOrderLine {
 /** What the guest's own phone is told about a request of theirs. Nothing of a waiter, nothing numeric. */
 export interface GuestOrderView {
   client_uuid: string;
-  status: 'pending' | 'accepted' | 'rejected' | 'expired' | 'cancelled';
+  /** `sent` — went straight to the kitchen under the owner's auto-send (phase Q9). */
+  status: 'pending' | 'accepted' | 'rejected' | 'expired' | 'cancelled' | 'sent';
   created_at: string;
   expires_at: string;
   /** The waiter's reason, when they gave one. */
@@ -223,19 +235,28 @@ async function findByUuid(storeId: number, uuid: string): Promise<Record<string,
   return result.rows[0] ?? null;
 }
 
+/** The owner's auto-send settings, as the store row has them (phase Q9). */
+export interface AutoSendPolicy {
+  mode: AutoKitchenMode;
+  limitCents: number;
+}
+
+const NO_AUTO_SEND: AutoSendPolicy = { mode: 'off', limitCents: 0 };
+
 /**
  * A guest asks for dishes. The route has already established that the store's
  * ordering switch is on and that the table and its key are real.
  *
  * Idempotent on `client_uuid`: the same request twice (a retry on a bad
  * connection) is the same row, and does not spend a slot of the table's
- * allowance a second time.
+ * allowance a second time — nor fires a second round.
  */
 export async function createGuestOrder(
   storeId: number,
   table: MenuTable,
   menu: PublicMenu,
-  input: GuestOrderInput
+  input: GuestOrderInput,
+  policy: AutoSendPolicy = NO_AUTO_SEND
 ): Promise<GuestOrderView> {
   const uuid = typeof input.client_uuid === 'string' ? input.client_uuid.trim().toLowerCase() : '';
   if (!UUID_RE.test(uuid)) throw new GuestOrderError('client_uuid має бути UUID');
@@ -260,6 +281,9 @@ export async function createGuestOrder(
   // groups' own rules — the same ones a waiter's tap meets.
   const index = menuIndex(menu);
   const resolved: Array<{ line: ParsedLine; name: string; caption: string; snapshot: modifiers.LineModifierSnapshot[] }> = [];
+  // What the order comes to at the prices the guest sees — the cart's
+  // «Орієнтовно», and the number the owner's auto-send limit is held against.
+  let totalCents = 0;
   for (const line of lines) {
     const hit = index.get(line.variantId);
     if (!hit) throw new GuestOrderError('Цієї страви немає в меню');
@@ -278,6 +302,7 @@ export async function createGuestOrder(
     const size = product.variants.length > 1 ? variant.label : '';
     const caption = [size, ...chosen.snapshot.map((m) => m.name)].filter((part) => part !== '').join(' · ');
     resolved.push({ line, name: product.name, caption, snapshot: chosen.snapshot });
+    totalCents += (variant.price_cents + chosen.deltaCents) * line.quantity;
   }
 
   takeRateSlot(storeId, table.id);
@@ -286,12 +311,12 @@ export async function createGuestOrder(
   try {
     await client.query('BEGIN');
     const inserted = await client.query(
-      `INSERT INTO pos_guest_orders (store_id, table_id, client_uuid, expires_at)
-       VALUES ($1, $2, $3, NOW() + make_interval(mins => $4))
+      `INSERT INTO pos_guest_orders (store_id, table_id, client_uuid, expires_at, total_cents)
+       VALUES ($1, $2, $3, NOW() + make_interval(mins => $4), $5)
        RETURNING *`,
-      [storeId, table.id, uuid, TTL_MINUTES]
+      [storeId, table.id, uuid, TTL_MINUTES, totalCents]
     );
-    const order = inserted.rows[0];
+    let order = inserted.rows[0];
     let sort = 0;
     for (const item of resolved) {
       await client.query(
@@ -311,6 +336,9 @@ export async function createGuestOrder(
       );
       sort += 1;
     }
+    if (policy.mode !== 'off' && totalCents <= policy.limitCents) {
+      order = (await tryAutoSend(client, storeId, table.id, Number(order.id), policy.mode)) ?? order;
+    }
     await client.query('COMMIT');
     return (await viewsOf([order]))[0]!;
   } catch (error) {
@@ -323,6 +351,87 @@ export async function createGuestOrder(
     throw error;
   } finally {
     client.release();
+  }
+}
+
+/**
+ * Phase Q9: send a just-inserted request straight to the kitchen, inside the
+ * caller's transaction. Returns the request row as `sent`, or null when it
+ * stays a request for a waiter — `reorders` and no waiter has opened the
+ * table's bill, or a line could not go (stopped, taken off the menu, its
+ * answers no longer valid). A refusal rolls back to a savepoint, so the
+ * request itself is kept and nothing of the attempt is: no bill, no line, no
+ * round, no stock.
+ */
+async function tryAutoSend(
+  client: pg.PoolClient,
+  storeId: number,
+  tableId: number,
+  orderId: number,
+  mode: Exclude<AutoKitchenMode, 'off'>
+): Promise<Record<string, unknown> | null> {
+  await client.query('SAVEPOINT guest_auto_send');
+  try {
+    const open = await client.query(
+      `SELECT id FROM pos_bills WHERE store_id = $1 AND table_id = $2 AND status = 'open'`,
+      [storeId, tableId]
+    );
+    let billId: number;
+    if (open.rows.length > 0) {
+      billId = Number(open.rows[0].id);
+    } else if (mode === 'all') {
+      // Nobody seated the table: the bill opens with no waiter behind it, and
+      // the first «Бачу» on this order makes it that waiter's.
+      billId = (await bills.openBillTx(client, { storeId, staffId: null, openedByGuest: true, tableId })).billId;
+    } else {
+      await client.query('RELEASE SAVEPOINT guest_auto_send');
+      return null;
+    }
+
+    const items = await client.query(
+      `SELECT id, variant_id, quantity, modifiers, note
+         FROM pos_guest_order_items WHERE order_id = $1 ORDER BY sort_order ASC, id ASC`,
+      [orderId]
+    );
+    const lineIds: number[] = [];
+    for (const row of items.rows) {
+      const ids = modifiers
+        .parseLineModifierSnapshot(row.modifiers)
+        .map((m) => m.modifier_id)
+        .filter((id): id is number => id != null);
+      lineIds.push(
+        await bills.insertGuestDraftItemTx(client, storeId, billId, orderId, {
+          variant_id: Number(row.variant_id),
+          quantity: Number(row.quantity),
+          modifiers: ids,
+          note: String(row.note ?? ''),
+        })
+      );
+    }
+    const fired = await rounds.fireRoundTx(client, {
+      storeId,
+      staffId: null,
+      billId,
+      clientUuid: roundUuidFor(orderId),
+      itemIds: lineIds,
+      guestOrderId: orderId,
+    });
+    const sent = await client.query(
+      `UPDATE pos_guest_orders
+          SET status = 'sent', bill_id = $2, round_id = $3, decided_at = NOW()
+        WHERE id = $1
+        RETURNING *`,
+      [orderId, billId, fired.roundId]
+    );
+    await client.query('RELEASE SAVEPOINT guest_auto_send');
+    return sent.rows[0];
+  } catch (error) {
+    await client.query('ROLLBACK TO SAVEPOINT guest_auto_send');
+    // A dish that cannot go is the waiter's to sort out, as it always was:
+    // the order waits for them with the problem line marked. Anything else is
+    // a real failure and fails the request.
+    if (error instanceof bills.BillError || error instanceof modifiers.ModifierError) return null;
+    throw error;
   }
 }
 
@@ -366,7 +475,11 @@ export async function cancelOwnGuestOrder(storeId: number, table: MenuTable, raw
   // Cancelling twice is fine; cancelling what a waiter already took is not.
   if (view.status === 'cancelled') return view;
   throw new GuestOrderConflict(
-    view.status === 'accepted' ? 'Запит уже прийнято — скасуйте в офіціанта' : 'Запит уже не чекає'
+    view.status === 'accepted'
+      ? 'Запит уже прийнято — скасуйте в офіціанта'
+      : view.status === 'sent'
+        ? 'Замовлення вже на кухні — скасуйте в офіціанта'
+        : 'Запит уже не чекає'
   );
 }
 
@@ -616,6 +729,7 @@ const STATUS_WORDS: Record<Exclude<OrderStatus, 'pending' | 'accepted'>, string>
   rejected: 'Запит уже відхилено',
   expired: 'Запит застарів — гість має надіслати новий',
   cancelled: 'Гість скасував запит',
+  sent: 'Замовлення вже на кухні — його надіслав гість',
 };
 
 /** The waiter turns a request down, with a reason the guest may read. Idempotent. */
@@ -646,4 +760,122 @@ export async function rejectGuestOrder(input: {
   const status = String(row.rows[0].status) as OrderStatus;
   if (status === 'rejected') return { status: 'rejected' };
   throw new GuestOrderConflict(status === 'accepted' ? 'Запит уже прийнято' : STATUS_WORDS[status as keyof typeof STATUS_WORDS] ?? 'Запит уже не чекає');
+}
+
+// ── the waiter's notices (phase Q9) ─────────────────────────────────
+
+/** An order a guest sent straight to the kitchen that no waiter has looked at yet. */
+export interface SentGuestOrderNotice {
+  id: number;
+  table_id: number;
+  table_name: string;
+  hall_name: string;
+  created_at: string;
+  bill_id: number;
+  /** The round it became — «раунд 3» on the bill and the kitchen board. Null if that round is gone. */
+  round_seq: number | null;
+  /** The bill was opened by this order: nobody has the table yet, and «Бачу» gives it to the waiter. */
+  bill_opened_by_guest: boolean;
+  total_cents: number;
+  lines: GuestOrderLine[];
+}
+
+/**
+ * How long an unseen notice stays on a waiter's screen. Long enough for a slow
+ * evening, short enough that a forgotten one does not greet the morning shift.
+ */
+export const NOTICE_HOURS = 6;
+
+/**
+ * Orders that went straight to the kitchen and that no waiter has said «Бачу»
+ * to — one table's, or the whole store's. Only while the bill they went to is
+ * still open: once it is paid, telling anyone about a round is history.
+ */
+export async function listSentNotices(storeId: number, tableId?: number): Promise<SentGuestOrderNotice[]> {
+  const result = await pool.query(
+    `SELECT o.id, o.table_id, o.created_at, o.bill_id, o.total_cents, r.seq AS round_seq,
+            t.name AS table_name, h.name AS hall_name, b.opened_by IS NULL AS bill_opened_by_guest
+       FROM pos_guest_orders o
+       JOIN pos_bills b ON b.id = o.bill_id
+       JOIN pos_tables t ON t.id = o.table_id
+       JOIN pos_halls h ON h.id = t.hall_id
+       LEFT JOIN pos_bill_rounds r ON r.id = o.round_id
+      WHERE o.store_id = $1 AND o.status = 'sent' AND o.seen_at IS NULL
+        AND b.status = 'open'
+        AND o.created_at > NOW() - make_interval(hours => $3)
+        AND ($2::bigint IS NULL OR o.table_id = $2)
+      ORDER BY o.created_at ASC`,
+    [storeId, tableId ?? null, NOTICE_HOURS]
+  );
+  const lines = await loadLines(result.rows.map((row) => Number(row.id)));
+  return result.rows.map((row) => ({
+    id: Number(row.id),
+    table_id: Number(row.table_id),
+    table_name: String(row.table_name),
+    hall_name: String(row.hall_name),
+    created_at: isoOf(row.created_at),
+    bill_id: Number(row.bill_id),
+    round_seq: row.round_seq == null ? null : Number(row.round_seq),
+    bill_opened_by_guest: row.bill_opened_by_guest === true,
+    total_cents: Number(row.total_cents ?? 0),
+    lines: lines.get(Number(row.id)) ?? [],
+  }));
+}
+
+/** Everything a waiter's screen polls for, in one answer. */
+export interface GuestFeed {
+  /** Requests waiting for a waiter to accept (phase Q6) — what the answer always carried. */
+  orders: WaitingGuestOrder[];
+  /** Orders already on their way to the kitchen, not yet seen (phase Q9). */
+  sent: SentGuestOrderNotice[];
+  /** Guests calling a waiter or asking for the bill (phase Q8). */
+  calls: LiveWaiterCall[];
+}
+
+export async function loadGuestFeed(storeId: number, tableId?: number): Promise<GuestFeed> {
+  const [orders, sent, calls] = await Promise.all([
+    listWaitingGuestOrders(storeId, tableId),
+    listSentNotices(storeId, tableId),
+    listLiveCalls(storeId, tableId),
+  ]);
+  return { orders, sent, calls };
+}
+
+/**
+ * A waiter's «Бачу» on an order a guest sent straight to the kitchen. If that
+ * order opened the bill, the table becomes this waiter's — the hall map's «мій
+ * стіл» and the pre-bill's «Офіціант». Idempotent: a second tap, or a second
+ * waiter, changes nothing.
+ */
+export async function markGuestOrderSeen(input: {
+  storeId: number;
+  staffId: number;
+  orderId: number;
+}): Promise<{ seen: true; bill_id: number | null }> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const locked = await client.query(
+      `SELECT id, status, bill_id, seen_at FROM pos_guest_orders WHERE store_id = $1 AND id = $2 FOR UPDATE`,
+      [input.storeId, input.orderId]
+    );
+    if (locked.rows.length === 0) throw new GuestOrderNotFound('Запит не знайдено');
+    const order = locked.rows[0];
+    if (order.status !== 'sent') throw new GuestOrderConflict('Це запит, а не замовлення на кухні — прийміть або відхиліть його');
+    const billId = order.bill_id == null ? null : Number(order.bill_id);
+    if (order.seen_at == null) {
+      await client.query(`UPDATE pos_guest_orders SET seen_at = NOW(), seen_by = $2 WHERE id = $1`, [
+        order.id,
+        input.staffId,
+      ]);
+      if (billId != null) await bills.claimGuestBillTx(client, input.storeId, billId, input.staffId);
+    }
+    await client.query('COMMIT');
+    return { seen: true, bill_id: billId };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
