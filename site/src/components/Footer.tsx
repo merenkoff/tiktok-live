@@ -1,4 +1,4 @@
-import { VERTICALS } from '../lib/productFacts';
+import { COMPANY_URL, ORG, VERTICALS } from '../lib/productFacts';
 import { AppIcon } from './AppIcon';
 
 const link = (href: string, label: string) => (
@@ -29,7 +29,11 @@ export function Footer() {
           {link('/about', 'Про сервіс')}
         </nav>
         <p className="text-xs text-faint max-w-sm">
-          Власник сайту та сервіс — ТОВ «Технології», код ЄДРПОУ 46288273.
+          {'Власник сайту та сервіс — '}
+          <a href={COMPANY_URL} className="underline underline-offset-2 hover:text-ink transition-colors">
+            {ORG.name}
+          </a>
+          {`, код ЄДРПОУ ${ORG.taxId}.`}
         </p>
       </div>
     </footer>

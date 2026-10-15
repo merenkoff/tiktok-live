@@ -5,6 +5,7 @@ import { ROUTES, type SiteRoute } from './routes';
 import { renderHeadHtml } from './lib/seo';
 import {
   SITE_URL,
+  COMPANY_URL,
   ORG,
   PRODUCT,
   PRICING,
@@ -58,7 +59,7 @@ export function buildLlmsTxt(pages: LlmsPage[]): string {
   return [
     '# The Live Shop',
     '',
-    `> LiveShop — POS-каса для чотирьох бізнесів в Україні (магазин одягу, квіткова крамниця, кав'ярня, ресторан зі столами) з фіскалізацією ПРРО через Checkbox, онлайн і офлайн, та автоматизація TikTok LIVE-продажів. Власник — ${ORG.name} (ЄДРПОУ ${ORG.taxId}).`,
+    `> LiveShop — POS-каса для чотирьох бізнесів в Україні (магазин одягу, квіткова крамниця, кав'ярня, ресторан зі столами) з фіскалізацією ПРРО через Checkbox, онлайн і офлайн, та автоматизація TikTok LIVE-продажів. Власник — ${ORG.name} (ЄДРПОУ ${ORG.taxId}), сайт компанії — ${COMPANY_URL}.`,
     '',
     '## Продукти',
     '',
