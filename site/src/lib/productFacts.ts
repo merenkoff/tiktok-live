@@ -198,6 +198,34 @@ export const COMPETITOR_FACTS = {
     /** Cash-register programs the Ukrainian page names as integrations. */
     posIntegrations: ['Poster', 'Syrve', 'Servio', 'Profit', 'R-Keeper'],
   },
+  /**
+   * RestoApp by Binotel — read on `checkedAt`: the product's own page (its
+   * functions, the one tariff, the setup steps), the card ТОВ «Бінотел» filled
+   * in on the Дія.Бізнес IT-market (the only place the price is printed WITH
+   * its unit — the landing shows a bare «999» under «Тариф за один заклад»)
+   * and the staff app's App Store page. Same rule as above: «not mentioned»
+   * means not mentioned on those pages, never «does not exist». Neither page
+   * prints how long the free trial lasts («Спробувати безкоштовно», «Trial»),
+   * so no length is recorded, whatever an ad says.
+   */
+  restoapp: {
+    name: 'RestoApp',
+    vendor: 'Binotel',
+    checkedAt: '2026-10-15',
+    sources: {
+      site: 'https://restoapp.binotel.ua/',
+      diia: 'https://business.diia.gov.ua/it-market/restoapp',
+      staffApp: 'https://apps.apple.com/ua/app/restoapp-biz/id6743811951',
+    },
+    /** «999 грн\місяць за один заклад» — the Дія.Бізнес card. */
+    priceUah: 999,
+    /** «+3 місяці у подарунок (при підключенні першого)» — the landing. */
+    giftMonths: 3,
+    /** «Знижка -10% за промокодом Diia» — the Дія.Бізнес card. */
+    diiaDiscountPercent: 10,
+    /** The only cash-register program either page names. */
+    posIntegrations: ['Poster POS'],
+  },
 } as const;
 
 export type FeatureStatus = 'available' | 'coming';

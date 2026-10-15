@@ -5,10 +5,12 @@ import { tehkartaIFudkostKavyarni } from './tehkarta-i-fudkost-kavyarni';
 import { kavappChyLiveshopDlyaKavyarni } from './kavapp-chy-liveshop-dlya-kavyarni';
 import { expirenzaChyLiveshopDlyaRestoranu } from './expirenza-chy-liveshop-dlya-restoranu';
 import { choiceqrChyLiveshopDlyaRestoranu } from './choiceqr-chy-liveshop-dlya-restoranu';
+import { restoappChyLiveshopDlyaRestoranu } from './restoapp-chy-liveshop-dlya-restoranu';
 import { GUIDE_ARTICLES } from './guides';
 
 /** Hand-written answers, newest first. */
 const STANDALONE: Article[] = [
+  restoappChyLiveshopDlyaRestoranu,
   expirenzaChyLiveshopDlyaRestoranu,
   choiceqrChyLiveshopDlyaRestoranu,
   kavappChyLiveshopDlyaKavyarni,

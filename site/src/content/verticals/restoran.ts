@@ -1,5 +1,5 @@
 import type { VerticalContent } from './types';
-import { PRODUCT, PRICING } from '../../lib/productFacts';
+import { COMPETITOR_FACTS, PRODUCT, PRICING } from '../../lib/productFacts';
 import restaurantTables from '../../assets/screenshots/restaurant-tables.png';
 import restaurantHallEditor from '../../assets/screenshots/restaurant-hall-editor.png';
 import cafeKitchen from '../../assets/screenshots/cafe-kitchen.png';
@@ -8,6 +8,7 @@ import restaurantQrMenuFacts from '../../assets/screenshots/restaurant-qr-menu-f
 import restaurantGuestOrder from '../../assets/screenshots/restaurant-guest-order.png';
 
 const tables = PRICING.pos.addons[0];
+const restoapp = COMPETITOR_FACTS.restoapp;
 
 export const restoran: VerticalContent = {
   id: 'restaurant',
@@ -161,6 +162,11 @@ export const restoran: VerticalContent = {
   guide: { slug: 'restoran-ta-kafe', label: 'посібник ресторану й кав\'ярні' },
   articles: [
     {
+      slug: 'restoapp-chy-liveshop-dlya-restoranu',
+      title: 'RestoApp чи The Live Shop POS для ресторану й кафе: порівняння за фактами',
+      blurb: `QR-меню за ${restoapp.priceUah} грн/міс поверх ${restoapp.posIntegrations.join(', ')} проти каси, у ціну якої QR-меню, рахунок столу й замовлення гостя вже входять, — і як прибрати цінники поверх паперового меню.`,
+    },
+    {
       slug: 'expirenza-chy-liveshop-dlya-restoranu',
       title: 'monobank Expirenza чи The Live Shop POS для ресторану: порівняння за фактами',
       blurb: 'Меню, рахунок, оплата й чайові за QR проти каси зі столами, кухнею й ПРРО, де гість ще й замовляє з телефону через офіціанта — із джерелами й датою перевірки.',
@@ -171,5 +177,5 @@ export const restoran: VerticalContent = {
       blurb: 'QR-меню із замовленням до столу й інтеграціями проти каси, де меню, рахунок гостя й замовлення з телефону (через офіціанта) вже всередині.',
     },
   ],
-  updatedAt: '2026-09-30',
+  updatedAt: '2026-10-15',
 };
