@@ -186,6 +186,11 @@ export const kafe: VerticalContent = {
       blurb: 'Ціни, що входить у тариф, де сильніший кожен — із джерелами й датою перевірки.',
     },
     {
+      slug: 'poster-qr-chy-liveshop-dlya-restoranu',
+      title: 'Poster QR чи The Live Shop POS для ресторану й кафе: порівняння за фактами',
+      blurb: `Каса Poster із Poster QR за ${COMPETITOR_FACTS.posterqr.priceUah} грн/міс поверх тарифу проти каси, у ціну якої QR-меню, план залу, модифікатори й кухня вже входять, — повна ціна для ресторану на одну касу.`,
+    },
+    {
       slug: 'restoapp-chy-liveshop-dlya-restoranu',
       title: 'RestoApp чи The Live Shop POS для ресторану й кафе: порівняння за фактами',
       blurb: `QR-меню за ${COMPETITOR_FACTS.restoapp.priceUah} грн/міс окремою підпискою проти QR-меню, яке входить у ціну каси, — і як прибрати цінники поверх паперового меню.`,

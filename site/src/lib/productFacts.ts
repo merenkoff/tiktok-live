@@ -226,6 +226,54 @@ export const COMPETITOR_FACTS = {
     /** The only cash-register program either page names. */
     posIntegrations: ['Poster POS'],
   },
+  /**
+   * Poster QR — read on `checkedAt`. It is an add-on of the Poster POS
+   * cash register rather than a service of its own, so the price that matters
+   * is the tariff under it: the Ukrainian pricing page for cafés and
+   * restaurants, read from its markup — its «Оплата за рік» switch only
+   * toggles which of two prices is visible, and its comparison table marks
+   * each row per tariff as included, «Доступно як додатковий модуль» or
+   * absent. The English knowledge-base page is the only one that mentions
+   * allergens. Same rule as above: «not mentioned» means not mentioned on
+   * those pages, never «does not exist».
+   */
+  posterqr: {
+    name: 'Poster QR',
+    vendor: 'Poster',
+    checkedAt: '2026-10-15',
+    sources: {
+      page: 'https://joinposter.com/ua/applications/poster-qr',
+      pageEn: 'https://joinposter.com/en/applications/poster-qr',
+      pricing: 'https://joinposter.com/ua/pricing',
+      kb: 'https://knowledge-base.joinposter.com/en/what-is-poster-qr',
+    },
+    /** «За 280 грн/міс» — the add-on itself, on top of a Poster tariff. */
+    priceUah: 280,
+    /** «Комісія за послуги еквайрингу: 1,3% — від суми рахунка, 1,7% — від суми чайових». */
+    billCommissionPercent: 1.3,
+    tipsCommissionPercent: 1.7,
+    /** «15 днів безкоштовно» on the pricing page, «free for the first 15 days» on the English one. */
+    trialDays: 15,
+    /**
+     * Poster POS tariffs for cafés and restaurants, UAH per month: billed
+     * monthly, and per month when paid for a year. `qrAddon` — Poster QR can be
+     * added (it is absent on Starter); `items` — «К-ть товарів та тех. карток».
+     */
+    posPlans: [
+      { id: 'Starter', monthlyUah: 600, annualUah: 540, qrAddon: false, floorPlan: false, modifiers: false, items: 50 },
+      { id: 'Mini', monthlyUah: 1200, annualUah: 1080, qrAddon: true, floorPlan: true, modifiers: false, items: 100 },
+      { id: 'Business', monthlyUah: 1700, annualUah: 1530, qrAddon: true, floorPlan: true, modifiers: true, items: 300 },
+      { id: 'Pro', monthlyUah: 2400, annualUah: 2160, qrAddon: true, floorPlan: true, modifiers: true, items: 1500 },
+    ],
+    /** «У кожен тариф уже включено одну касу»; «Додаткова каса — 760 ₴» (printed without a period). */
+    extraRegisterUah: 760,
+    /** «Ціна за одну касу з ПРРО — 200 ₴/міс», an add-on on every tariff. */
+    prroUah: 200,
+    /** Kitchen Kit, «за один кухонний екран», an add-on from Business. */
+    kitchenScreenUah: 280,
+    /** Poster Site, «Сайт для замовлень» — delivery and pickup. */
+    siteUah: 760,
+  },
 } as const;
 
 export type FeatureStatus = 'available' | 'coming';
