@@ -14,7 +14,7 @@ export const yakObratyProgramuDlyaKavyarni: Article = {
     description:
       'Що перевірити, вибираючи програму для кав\'ярні: модифікатори, техкарти й собівартість, кухня й бар, ПРРО без інтернету, склад, справжня ціна. Тест на демо за 30 хвилин.',
     publishedAt: '2026-09-29',
-    updatedAt: '2026-09-29',
+    updatedAt: '2026-10-15',
     ogImage: '/og/pos.png',
     readingMinutes: 7,
     faq: [
@@ -146,7 +146,9 @@ function Body() {
         У пошуку по цій темі найчастіше трапляються Poster, Kavapp, Skynum, Торгсофт і {POS}. Це
         різні продукти: одні розраховані на мережі й ресторани, інші — на маленьку кав'ярню з
         мінімумом налаштувань. Порівняння з Kavapp за фактами —{' '}
-        <a href="/dovidka/kavapp-chy-liveshop-dlya-kavyarni">окремою сторінкою</a>. Опис кожного
+        <a href="/dovidka/kavapp-chy-liveshop-dlya-kavyarni">окремою сторінкою</a>, з Poster і його
+        QR-меню —{' '}
+        <a href="/dovidka/poster-qr-chy-liveshop-dlya-restoranu">теж окремою</a>. Опис кожного
         продукту беріть із його сайту й перевіряйте на демо.
       </p>
     </>

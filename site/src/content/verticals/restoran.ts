@@ -9,6 +9,7 @@ import restaurantGuestOrder from '../../assets/screenshots/restaurant-guest-orde
 
 const tables = PRICING.pos.addons[0];
 const restoapp = COMPETITOR_FACTS.restoapp;
+const posterqr = COMPETITOR_FACTS.posterqr;
 
 export const restoran: VerticalContent = {
   id: 'restaurant',
@@ -161,6 +162,11 @@ export const restoran: VerticalContent = {
   demoLink: { href: '/m/demo-restaurant-menu', label: 'Подивитися, як меню бачить гість (демо)' },
   guide: { slug: 'restoran-ta-kafe', label: 'посібник ресторану й кав\'ярні' },
   articles: [
+    {
+      slug: 'poster-qr-chy-liveshop-dlya-restoranu',
+      title: 'Poster QR чи The Live Shop POS для ресторану й кафе: порівняння за фактами',
+      blurb: `Каса Poster із Poster QR за ${posterqr.priceUah} грн/міс поверх тарифу проти каси, у ціну якої QR-меню, план залу, модифікатори й кухня вже входять, — повна ціна для ресторану на одну касу.`,
+    },
     {
       slug: 'restoapp-chy-liveshop-dlya-restoranu',
       title: 'RestoApp чи The Live Shop POS для ресторану й кафе: порівняння за фактами',

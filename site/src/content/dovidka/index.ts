@@ -6,10 +6,12 @@ import { kavappChyLiveshopDlyaKavyarni } from './kavapp-chy-liveshop-dlya-kavyar
 import { expirenzaChyLiveshopDlyaRestoranu } from './expirenza-chy-liveshop-dlya-restoranu';
 import { choiceqrChyLiveshopDlyaRestoranu } from './choiceqr-chy-liveshop-dlya-restoranu';
 import { restoappChyLiveshopDlyaRestoranu } from './restoapp-chy-liveshop-dlya-restoranu';
+import { posterQrChyLiveshopDlyaRestoranu } from './poster-qr-chy-liveshop-dlya-restoranu';
 import { GUIDE_ARTICLES } from './guides';
 
 /** Hand-written answers, newest first. */
 const STANDALONE: Article[] = [
+  posterQrChyLiveshopDlyaRestoranu,
   restoappChyLiveshopDlyaRestoranu,
   expirenzaChyLiveshopDlyaRestoranu,
   choiceqrChyLiveshopDlyaRestoranu,
