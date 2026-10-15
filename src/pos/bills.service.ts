@@ -38,6 +38,7 @@ import type { ComponentInput } from './composites.service.js';
 import { dailyCounterKey, nextCounterValue } from './core/counters.js';
 import { storeClock } from './core/storeClock.js';
 import * as modifiers from './modifiers.service.js';
+import { authorName } from './guest-author.js';
 import type { LineModifierSnapshot } from './modifiers.service.js';
 
 export class BillError extends Error {
@@ -97,7 +98,8 @@ export interface BillLine {
    * first guest pays, the screen has to offer the OTHER lines and no others.
    */
   sale_id: number | null;
-  added_by: number;
+  /** Null when a guest's order sent the line straight to the kitchen (QR menu Q9). */
+  added_by: number | null;
   added_by_name: string;
   sort_order: number;
 }
@@ -106,7 +108,8 @@ export interface BillRound {
   id: number;
   seq: number;
   fired_at: string;
-  fired_by: number;
+  /** Null when a guest's order fired the round straight to the kitchen (QR menu Q9). */
+  fired_by: number | null;
   fired_by_name: string;
   prep_status: 'new' | 'ready' | 'served';
   ready_at: string | null;
@@ -128,7 +131,8 @@ export interface Bill {
   note: string | null;
   customer_id: number | null;
   precheck_printed_at: string | null;
-  opened_by: number;
+  /** Null while a bill a guest's order opened has not been taken by a waiter (QR menu Q9). */
+  opened_by: number | null;
   opened_by_name: string;
   opened_at: string;
   closed_at: string | null;
@@ -148,8 +152,8 @@ export interface OpenBillSummary {
   table_id: number;
   guests: number;
   opened_at: string;
-  /** Who seated the table — the hall map's «мій стіл». */
-  opened_by: number;
+  /** Who seated the table — the hall map's «мій стіл». Null while a guest's order holds it. */
+  opened_by: number | null;
   opened_by_name: string;
   precheck_printed_at: string | null;
   fired_total_cents: number;
@@ -161,7 +165,10 @@ export interface OpenBillSummary {
 
 export interface OpenBillInput {
   storeId: number;
-  staffId: number;
+  /** Null only for a guest's order sent straight to the kitchen; `openedByGuest` must say so. */
+  staffId: number | null;
+  /** The bill is opened by a guest's order (QR menu Q9): no waiter has seated the table. */
+  openedByGuest?: boolean;
   tableId: number;
   guests?: unknown;
   note?: unknown;
@@ -234,8 +241,8 @@ function mapLine(row: Record<string, unknown>, preview: number | null): BillLine
     modifiers: modifiers.parseLineModifierSnapshot(row.modifiers),
     note: String(row.note ?? ''),
     sale_id: row.sale_id == null ? null : Number(row.sale_id),
-    added_by: Number(row.added_by),
-    added_by_name: String(row.added_by_name ?? ''),
+    added_by: row.added_by == null ? null : Number(row.added_by),
+    added_by_name: authorName(row.added_by_name, row.added_by_guest),
     sort_order: Number(row.sort_order),
   };
 }
@@ -308,12 +315,15 @@ export async function openBillTx(
   );
   if (open.rows.length > 0) return { billId: Number(open.rows[0].id), created: false };
 
+  if (input.staffId == null && input.openedByGuest !== true) {
+    throw new BillError('Рахунок відкриває офіціант');
+  }
   const clock = await storeClock(client, input.storeId);
   const billNo = await nextCounterValue(client, input.storeId, dailyCounterKey('bill', clock.today));
   const inserted = await client.query(
     `INSERT INTO pos_bills
-       (store_id, table_id, bill_no, guests, note, customer_id, opened_by, client_uuid)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       (store_id, table_id, bill_no, guests, note, customer_id, opened_by, opened_by_guest, client_uuid)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING id`,
     [
       input.storeId,
@@ -323,6 +333,7 @@ export async function openBillTx(
       note,
       input.customerId ?? null,
       input.staffId,
+      input.staffId == null,
       clientUuid,
     ]
   );
@@ -360,7 +371,7 @@ export async function getBill(storeId: number, billId: number): Promise<Bill> {
        FROM pos_bills b
        JOIN pos_tables t ON t.id = b.table_id
        JOIN pos_halls h ON h.id = t.hall_id
-       JOIN pos_staff s ON s.id = b.opened_by
+       LEFT JOIN pos_staff s ON s.id = b.opened_by
       WHERE b.store_id = $1 AND b.id = $2`,
     [storeId, billId]
   );
@@ -370,7 +381,7 @@ export async function getBill(storeId: number, billId: number): Promise<Bill> {
   const roundRows = await pool.query(
     `SELECT r.*, s.display_name AS fired_by_name
        FROM pos_bill_rounds r
-       JOIN pos_staff s ON s.id = r.fired_by
+       LEFT JOIN pos_staff s ON s.id = r.fired_by
       WHERE r.bill_id = $1
       ORDER BY r.seq ASC`,
     [billId]
@@ -379,7 +390,7 @@ export async function getBill(storeId: number, billId: number): Promise<Bill> {
     `SELECT i.*, s.display_name AS added_by_name,
             p.name AS live_product_name, v.label AS live_label, v.unit AS live_unit
        FROM pos_bill_items i
-       JOIN pos_staff s ON s.id = i.added_by
+       LEFT JOIN pos_staff s ON s.id = i.added_by
        JOIN pos_variants v ON v.id = i.variant_id
        JOIN pos_products p ON p.id = v.product_id
       WHERE i.bill_id = $1
@@ -425,8 +436,8 @@ export async function getBill(storeId: number, billId: number): Promise<Bill> {
       id: Number(r.id),
       seq: Number(r.seq),
       fired_at: new Date(r.fired_at as string).toISOString(),
-      fired_by: Number(r.fired_by),
-      fired_by_name: String(r.fired_by_name ?? ''),
+      fired_by: r.fired_by == null ? null : Number(r.fired_by),
+      fired_by_name: authorName(r.fired_by_name, r.fired_by_guest),
       prep_status: r.prep_status as 'new' | 'ready' | 'served',
       ready_at: r.ready_at == null ? null : new Date(r.ready_at as string).toISOString(),
       served_at: r.served_at == null ? null : new Date(r.served_at as string).toISOString(),
@@ -452,8 +463,8 @@ export async function getBill(storeId: number, billId: number): Promise<Bill> {
       row.precheck_printed_at == null
         ? null
         : new Date(row.precheck_printed_at as string).toISOString(),
-    opened_by: Number(row.opened_by),
-    opened_by_name: String(row.opened_by_name ?? ''),
+    opened_by: row.opened_by == null ? null : Number(row.opened_by),
+    opened_by_name: authorName(row.opened_by_name, row.opened_by_guest),
     opened_at: new Date(row.opened_at as string).toISOString(),
     closed_at: row.closed_at == null ? null : new Date(row.closed_at as string).toISOString(),
     rounds,
@@ -467,12 +478,12 @@ export async function getBill(storeId: number, billId: number): Promise<Bill> {
 export async function listOpenBills(storeId: number): Promise<OpenBillSummary[]> {
   const result = await pool.query(
     `SELECT b.id, b.bill_no, b.table_id, b.guests, b.opened_at, b.precheck_printed_at,
-            b.opened_by, s.display_name AS opened_by_name,
+            b.opened_by, b.opened_by_guest, s.display_name AS opened_by_name,
             COALESCE(fired.total, 0) AS fired_total,
             COALESCE(draft.lines, 0) AS draft_lines,
             waiting.prep_status
        FROM pos_bills b
-       JOIN pos_staff s ON s.id = b.opened_by
+       LEFT JOIN pos_staff s ON s.id = b.opened_by
        LEFT JOIN LATERAL (
          SELECT SUM(i.unit_price_cents * i.quantity) AS total
            FROM pos_bill_items i
@@ -502,8 +513,8 @@ export async function listOpenBills(storeId: number): Promise<OpenBillSummary[]>
     table_id: Number(row.table_id),
     guests: Number(row.guests),
     opened_at: new Date(row.opened_at as string).toISOString(),
-    opened_by: Number(row.opened_by),
-    opened_by_name: String(row.opened_by_name ?? ''),
+    opened_by: row.opened_by == null ? null : Number(row.opened_by),
+    opened_by_name: authorName(row.opened_by_name, row.opened_by_guest),
     precheck_printed_at:
       row.precheck_printed_at == null
         ? null
@@ -527,22 +538,26 @@ async function loadOpenBill(client: DbClient, storeId: number, billId: number): 
   if (status === 'cancelled') throw new BillConflict('Рахунок скасовано');
 }
 
+interface CheckedDraftItem {
+  variantId: number;
+  quantity: number;
+  modifierIds: number[];
+  note: string;
+  snapshot: LineModifierSnapshot[];
+  components: ComponentInput[] | null;
+}
+
 /**
- * Add to the draft, merging into an existing unfired line when the server's
- * own key matches — «ще одну таку саму» is ×2, not a second line.
- *
- * What is validated here is what can be validated before a price exists: the
- * variant is this store's and on the menu, the answers satisfy the product's
- * required groups, and the dish is not on today's stop-list. Price and stock
- * are К4c's, at fire time.
+ * What can be validated before a price exists: the variant is this store's and
+ * on the menu, the answers satisfy the product's required groups, and the dish
+ * is not on today's stop-list. Price and stock are К4c's, at fire time.
  */
-export async function addDraftItemTx(
+async function checkDraftItem(
   client: DbClient,
   storeId: number,
-  staffId: number,
   billId: number,
   input: DraftItemInput
-): Promise<void> {
+): Promise<CheckedDraftItem> {
   const variantId = intField(input.variant_id, 'Позиція', 1, Number.MAX_SAFE_INTEGER);
   const quantity = intField(input.quantity, 'Кількість', 1, 9999);
   const modifierIds = modifiers.normalizeModifierIds(input.modifiers);
@@ -575,32 +590,17 @@ export async function addDraftItemTx(
   const components = input.components?.length
     ? await validateComponents(client, storeId, variantId, input.components)
     : null;
+  return { variantId, quantity, modifierIds, note, snapshot: chosen.snapshot, components };
+}
 
-  // A line carrying its own composition never merges: two plates assembled
-  // at the counter are two plates, and merging would throw one away.
-  if (!components) {
-    const existing = await client.query(
-      `SELECT id, quantity, modifiers, note FROM pos_bill_items
-        WHERE bill_id = $1 AND round_id IS NULL AND variant_id = $2 AND components IS NULL`,
-      [billId, variantId]
-    );
-    const wanted = lineKey(variantId, modifierIds, note);
-    for (const row of existing.rows) {
-      const rowIds = modifiers
-        .parseLineModifierSnapshot(row.modifiers)
-        .map((m) => m.modifier_id)
-        .filter((id): id is number => id != null)
-        .sort((a, b) => a - b);
-      if (lineKey(variantId, rowIds, String(row.note ?? '')) === wanted) {
-        await client.query(`UPDATE pos_bill_items SET quantity = quantity + $2 WHERE id = $1`, [
-          row.id,
-          quantity,
-        ]);
-        return;
-      }
-    }
-  }
-
+/** A new draft row, at the end of the bill. Returns its id. */
+async function insertDraftLine(
+  client: DbClient,
+  storeId: number,
+  billId: number,
+  item: CheckedDraftItem,
+  author: { staffId: number } | { guestOrderId: number }
+): Promise<number> {
   const count = await client.query(`SELECT COUNT(*) AS n FROM pos_bill_items WHERE bill_id = $1`, [
     billId,
   ]);
@@ -610,21 +610,104 @@ export async function addDraftItemTx(
     `SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM pos_bill_items WHERE bill_id = $1`,
     [billId]
   );
-  await client.query(
+  const byGuest = 'guestOrderId' in author;
+  const inserted = await client.query(
     `INSERT INTO pos_bill_items
-       (store_id, bill_id, variant_id, quantity, components, modifiers, note, added_by, sort_order)
-     VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8, $9)`,
+       (store_id, bill_id, variant_id, quantity, components, modifiers, note, added_by,
+        added_by_guest, guest_order_id, sort_order)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8, $9, $10, $11)
+     RETURNING id`,
     [
       storeId,
       billId,
-      variantId,
-      quantity,
-      components?.length ? JSON.stringify(components) : null,
-      chosen.snapshot.length ? JSON.stringify(chosen.snapshot) : null,
-      note,
-      staffId,
+      item.variantId,
+      item.quantity,
+      item.components?.length ? JSON.stringify(item.components) : null,
+      item.snapshot.length ? JSON.stringify(item.snapshot) : null,
+      item.note,
+      byGuest ? null : author.staffId,
+      byGuest,
+      byGuest ? author.guestOrderId : null,
       Number(order.rows[0].next),
     ]
+  );
+  return Number(inserted.rows[0].id);
+}
+
+/**
+ * Add to the draft, merging into an existing unfired line when the server's
+ * own key matches — «ще одну таку саму» is ×2, not a second line.
+ */
+export async function addDraftItemTx(
+  client: DbClient,
+  storeId: number,
+  staffId: number,
+  billId: number,
+  input: DraftItemInput
+): Promise<void> {
+  const item = await checkDraftItem(client, storeId, billId, input);
+
+  // A line carrying its own composition never merges: two plates assembled
+  // at the counter are two plates, and merging would throw one away.
+  if (!item.components) {
+    const existing = await client.query(
+      `SELECT id, quantity, modifiers, note FROM pos_bill_items
+        WHERE bill_id = $1 AND round_id IS NULL AND variant_id = $2 AND components IS NULL`,
+      [billId, item.variantId]
+    );
+    const wanted = lineKey(item.variantId, item.modifierIds, item.note);
+    for (const row of existing.rows) {
+      const rowIds = modifiers
+        .parseLineModifierSnapshot(row.modifiers)
+        .map((m) => m.modifier_id)
+        .filter((id): id is number => id != null)
+        .sort((a, b) => a - b);
+      if (lineKey(item.variantId, rowIds, String(row.note ?? '')) === wanted) {
+        await client.query(`UPDATE pos_bill_items SET quantity = quantity + $2 WHERE id = $1`, [
+          row.id,
+          item.quantity,
+        ]);
+        return;
+      }
+    }
+  }
+
+  await insertDraftLine(client, storeId, billId, item, { staffId });
+}
+
+/**
+ * A guest's line on its way straight to the kitchen (QR menu Q9): the same
+ * checks as a waiter's tap, but ALWAYS a row of its own — never merged into a
+ * line the waiter is still typing, because the round that follows fires only
+ * the guest's rows and merging would send the waiter's quantity with them.
+ * No author: `added_by_guest` and the order it came from say who.
+ */
+export async function insertGuestDraftItemTx(
+  client: DbClient,
+  storeId: number,
+  billId: number,
+  guestOrderId: number,
+  input: DraftItemInput
+): Promise<number> {
+  const item = await checkDraftItem(client, storeId, billId, input);
+  return insertDraftLine(client, storeId, billId, item, { guestOrderId });
+}
+
+/**
+ * A waiter takes a table a guest's order opened (QR menu Q9): from now on the
+ * bill is theirs — the hall map's «мій стіл», the pre-bill's «Офіціант». Only
+ * a bill nobody holds; a waiter's own table is never taken over this way.
+ */
+export async function claimGuestBillTx(
+  client: DbClient,
+  storeId: number,
+  billId: number,
+  staffId: number
+): Promise<void> {
+  await client.query(
+    `UPDATE pos_bills SET opened_by = $3, updated_at = NOW()
+      WHERE store_id = $1 AND id = $2 AND opened_by IS NULL AND status = 'open'`,
+    [storeId, billId, staffId]
   );
 }
 

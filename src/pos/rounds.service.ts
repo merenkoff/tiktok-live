@@ -38,6 +38,7 @@
 // 5. **Firing is idempotent on `client_uuid`.** «На кухню» tapped twice on a
 //    bad connection must not write off dinner twice.
 
+import type { PoolClient } from 'pg';
 import { pool } from '../db.js';
 import {
   consumeStockForLine,
@@ -63,6 +64,22 @@ export interface FireRoundInput {
   clientUuid?: unknown;
 }
 
+export interface FireRoundTxInput {
+  storeId: number;
+  /** Null only for a guest's order sent straight to the kitchen (QR menu Q9). */
+  staffId: number | null;
+  billId: number;
+  clientUuid?: unknown;
+  /**
+   * Fire only these draft lines. A guest's auto-sent order fires its own rows
+   * and nothing the waiter is still typing; a waiter's «На кухню» passes none
+   * and sends the whole draft, as it always has.
+   */
+  itemIds?: number[];
+  /** The guest order this round came from, when a guest fired it. */
+  guestOrderId?: number | null;
+}
+
 /**
  * Send everything in the draft to the kitchen as one round.
  *
@@ -72,142 +89,165 @@ export interface FireRoundInput {
  * have to ignore.
  */
 export async function fireRound(input: FireRoundInput): Promise<bills.Bill> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await fireRoundTx(client, input);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+  return bills.getBill(input.storeId, input.billId);
+}
+
+/**
+ * The body of `fireRound` for a caller that already holds a transaction — a
+ * guest's auto-sent order opens the bill, adds its lines and fires them in
+ * ONE, so a refusal anywhere leaves no bill, no line and no stock moved. The
+ * caller owns BEGIN/COMMIT. Returns the round, or the earlier one when the
+ * same `client_uuid` already fired.
+ */
+export async function fireRoundTx(
+  client: PoolClient,
+  input: FireRoundTxInput
+): Promise<{ roundId: number; replay: boolean }> {
   const clientUuid =
     input.clientUuid == null ? null : String(input.clientUuid).trim().toLowerCase();
   if (clientUuid !== null && !UUID_RE.test(clientUuid)) {
     throw new bills.BillError('client_uuid має бути UUID');
   }
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
-    const bill = await client.query(
-      `SELECT status FROM pos_bills WHERE store_id = $1 AND id = $2 FOR UPDATE`,
-      [input.storeId, input.billId]
-    );
-    if (bill.rows.length === 0) throw new bills.BillNotFound('Рахунок не знайдено');
-    const status = String(bill.rows[0].status);
-    if (status === 'paid') throw new bills.BillConflict('Рахунок уже оплачено');
-    if (status === 'cancelled') throw new bills.BillConflict('Рахунок скасовано');
-
-    // Rule 5: the same tap twice is the same round, never a second one.
-    if (clientUuid) {
-      const replay = await client.query(
-        `SELECT id FROM pos_bill_rounds WHERE store_id = $1 AND client_uuid = $2`,
-        [input.storeId, clientUuid]
-      );
-      if (replay.rows.length > 0) {
-        await client.query('COMMIT');
-        client.release();
-        return await bills.getBill(input.storeId, input.billId);
-      }
-    }
-
-    const draft = await client.query(
-      `SELECT i.id, i.variant_id, i.quantity, i.components, i.modifiers, i.note,
-              v.label, v.unit, v.price_cents, v.compare_at_cents,
-              p.name AS product_name
-         FROM pos_bill_items i
-         JOIN pos_variants v ON v.id = i.variant_id
-         JOIN pos_products p ON p.id = v.product_id
-        WHERE i.bill_id = $1 AND i.round_id IS NULL
-        ORDER BY i.sort_order ASC, i.id ASC`,
-      [input.billId]
-    );
-    if (draft.rows.length === 0) {
-      throw new bills.BillConflict('Немає чого відправляти — додайте позиції');
-    }
-
-    const round = await client.query(
-      `INSERT INTO pos_bill_rounds (store_id, bill_id, seq, fired_by, client_uuid)
-       VALUES ($1, $2,
-               (SELECT COALESCE(MAX(seq), 0) + 1 FROM pos_bill_rounds WHERE bill_id = $2),
-               $3, $4)
-       RETURNING id`,
-      [input.storeId, input.billId, input.staffId, clientUuid]
-    );
-    const roundId = Number(round.rows[0].id);
-
-    for (const row of draft.rows) {
-      const lineId = Number(row.id);
-      const variantId = Number(row.variant_id);
-      const quantity = Number(row.quantity);
-      const components = (row.components as ComponentInput[] | null) ?? null;
-      const snapshot = modifiers.parseLineModifierSnapshot(row.modifiers);
-
-      // Rule 2: re-price the answers now, and fall back to what was promised
-      // for one that no longer exists. `promisedLineModifiers` supplies the
-      // names for the caption and — from the LIVE rows — what they write off,
-      // so a deleted answer costs what it said and takes nothing off a shelf.
-      const promised = await modifiers.promisedLineModifiers(client, input.storeId, snapshot);
-      const liveDelta = await modifiers.liveDeltaCents(client, input.storeId, snapshot, variantId);
-      const deltaCents =
-        liveDelta ?? snapshot.reduce((sum, m) => sum + m.price_delta_cents, 0);
-
-      let unitPrice: number;
-      let caption: string;
-      let compareAt: number | null;
-      if (components?.length) {
-        // Assembled at the counter: priced from its parts, exactly as a sale
-        // prices one, and captioned by what went into it rather than by the
-        // catalogue card every such plate shares.
-        unitPrice = await priceOfComposition(client, input.storeId, components);
-        caption = customBouquetLabel(components);
-        compareAt = null;
-      } else {
-        unitPrice = Number(row.price_cents) + deltaCents;
-        caption = modifiers.lineCaption(String(row.label ?? ''), promised.names);
-        compareAt =
-          row.compare_at_cents == null ? null : Number(row.compare_at_cents) + deltaCents;
-      }
-      if (unitPrice < 0) {
-        throw new bills.BillError(`«${String(row.product_name)}» має відʼємну ціну`);
-      }
-
-      await client.query(
-        `UPDATE pos_bill_items
-            SET round_id = $2, unit_price_cents = $3, compare_at_unit_cents = $4,
-                product_name = $5, variant_label = $6, unit = $7,
-                modifiers = $8::jsonb
-          WHERE id = $1`,
-        [
-          lineId,
-          roundId,
-          unitPrice,
-          compareAt,
-          String(row.product_name),
-          caption,
-          String(row.unit ?? ''),
-          promised.snapshot.length ? JSON.stringify(promised.snapshot) : null,
-        ]
-      );
-
-      // Rule 1 and 3 in one call: the shelf moves and the line remembers what
-      // it took, through the same function `completeSale` uses.
-      await consumeStockForLine(client, {
-        storeId: input.storeId,
-        target: 'bill',
-        lineId,
-        referenceType: ROUND_REFERENCE,
-        referenceId: roundId,
-        variantId,
-        quantity,
-        staffId: input.staffId,
-        components: components ?? undefined,
-        extra: promised.components,
-      });
-    }
-
-    await client.query(`UPDATE pos_bills SET updated_at = NOW() WHERE id = $1`, [input.billId]);
-    await client.query('COMMIT');
-    client.release();
-  } catch (error) {
-    await client.query('ROLLBACK');
-    client.release();
-    throw error;
+  if (input.staffId == null && input.guestOrderId == null) {
+    throw new bills.BillError('Раунд відправляє офіціант');
   }
-  return bills.getBill(input.storeId, input.billId);
+
+  const bill = await client.query(
+    `SELECT status FROM pos_bills WHERE store_id = $1 AND id = $2 FOR UPDATE`,
+    [input.storeId, input.billId]
+  );
+  if (bill.rows.length === 0) throw new bills.BillNotFound('Рахунок не знайдено');
+  const status = String(bill.rows[0].status);
+  if (status === 'paid') throw new bills.BillConflict('Рахунок уже оплачено');
+  if (status === 'cancelled') throw new bills.BillConflict('Рахунок скасовано');
+
+  // Rule 5: the same tap twice is the same round, never a second one.
+  if (clientUuid) {
+    const replay = await client.query(
+      `SELECT id FROM pos_bill_rounds WHERE store_id = $1 AND client_uuid = $2`,
+      [input.storeId, clientUuid]
+    );
+    if (replay.rows.length > 0) return { roundId: Number(replay.rows[0].id), replay: true };
+  }
+
+  const only = input.itemIds ?? null;
+  const draft = await client.query(
+    `SELECT i.id, i.variant_id, i.quantity, i.components, i.modifiers, i.note,
+            v.label, v.unit, v.price_cents, v.compare_at_cents,
+            p.name AS product_name
+       FROM pos_bill_items i
+       JOIN pos_variants v ON v.id = i.variant_id
+       JOIN pos_products p ON p.id = v.product_id
+      WHERE i.bill_id = $1 AND i.round_id IS NULL
+        AND ($2::bigint[] IS NULL OR i.id = ANY($2::bigint[]))
+      ORDER BY i.sort_order ASC, i.id ASC`,
+    [input.billId, only]
+  );
+  if (draft.rows.length === 0) {
+    throw new bills.BillConflict('Немає чого відправляти — додайте позиції');
+  }
+
+  const round = await client.query(
+    `INSERT INTO pos_bill_rounds
+       (store_id, bill_id, seq, fired_by, fired_by_guest, guest_order_id, client_uuid)
+     VALUES ($1, $2,
+             (SELECT COALESCE(MAX(seq), 0) + 1 FROM pos_bill_rounds WHERE bill_id = $2),
+             $3, $4, $5, $6)
+     RETURNING id`,
+    [
+      input.storeId,
+      input.billId,
+      input.staffId,
+      input.staffId == null,
+      input.guestOrderId ?? null,
+      clientUuid,
+    ]
+  );
+  const roundId = Number(round.rows[0].id);
+
+  for (const row of draft.rows) {
+    const lineId = Number(row.id);
+    const variantId = Number(row.variant_id);
+    const quantity = Number(row.quantity);
+    const components = (row.components as ComponentInput[] | null) ?? null;
+    const snapshot = modifiers.parseLineModifierSnapshot(row.modifiers);
+
+    // Rule 2: re-price the answers now, and fall back to what was promised
+    // for one that no longer exists. `promisedLineModifiers` supplies the
+    // names for the caption and — from the LIVE rows — what they write off,
+    // so a deleted answer costs what it said and takes nothing off a shelf.
+    const promised = await modifiers.promisedLineModifiers(client, input.storeId, snapshot);
+    const liveDelta = await modifiers.liveDeltaCents(client, input.storeId, snapshot, variantId);
+    const deltaCents =
+      liveDelta ?? snapshot.reduce((sum, m) => sum + m.price_delta_cents, 0);
+
+    let unitPrice: number;
+    let caption: string;
+    let compareAt: number | null;
+    if (components?.length) {
+      // Assembled at the counter: priced from its parts, exactly as a sale
+      // prices one, and captioned by what went into it rather than by the
+      // catalogue card every such plate shares.
+      unitPrice = await priceOfComposition(client, input.storeId, components);
+      caption = customBouquetLabel(components);
+      compareAt = null;
+    } else {
+      unitPrice = Number(row.price_cents) + deltaCents;
+      caption = modifiers.lineCaption(String(row.label ?? ''), promised.names);
+      compareAt =
+        row.compare_at_cents == null ? null : Number(row.compare_at_cents) + deltaCents;
+    }
+    if (unitPrice < 0) {
+      throw new bills.BillError(`«${String(row.product_name)}» має відʼємну ціну`);
+    }
+
+    await client.query(
+      `UPDATE pos_bill_items
+          SET round_id = $2, unit_price_cents = $3, compare_at_unit_cents = $4,
+              product_name = $5, variant_label = $6, unit = $7,
+              modifiers = $8::jsonb
+        WHERE id = $1`,
+      [
+        lineId,
+        roundId,
+        unitPrice,
+        compareAt,
+        String(row.product_name),
+        caption,
+        String(row.unit ?? ''),
+        promised.snapshot.length ? JSON.stringify(promised.snapshot) : null,
+      ]
+    );
+
+    // Rule 1 and 3 in one call: the shelf moves and the line remembers what
+    // it took, through the same function `completeSale` uses.
+    await consumeStockForLine(client, {
+      storeId: input.storeId,
+      target: 'bill',
+      lineId,
+      referenceType: ROUND_REFERENCE,
+      referenceId: roundId,
+      variantId,
+      quantity,
+      staffId: input.staffId,
+      components: components ?? undefined,
+      extra: promised.components,
+    });
+  }
+
+  await client.query(`UPDATE pos_bills SET updated_at = NOW() WHERE id = $1`, [input.billId]);
+  return { roundId, replay: false };
 }
 
 /**

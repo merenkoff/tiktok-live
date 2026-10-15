@@ -611,7 +611,8 @@ export async function consumeStockForLine(
     referenceId: number;
     variantId: number;
     quantity: number;
-    staffId: number;
+    /** Null when a guest's order fired the line straight to the kitchen (QR menu Q9). */
+    staffId: number | null;
     /**
      * The composition this one line was rung with, for a bouquet the cashier
      * assembled at the counter. When absent the catalogue composition is used.

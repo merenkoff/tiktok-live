@@ -2,9 +2,11 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-// src/pos/routes/guest-orders.routes.ts — the WAITER's side of a guest's
-// request for dishes (TechDocs/POS_QR_MENU.md, phase Q6): what is waiting,
-// accept, reject. The guest's side (create, look, cancel) is in
+// src/pos/routes/guest-orders.routes.ts — the WAITER's side of what guests
+// send from the QR menu (TechDocs/POS_QR_MENU.md): requests for dishes to
+// accept or reject (phase Q6), orders that went straight to the kitchen to
+// acknowledge with «Бачу» (Q9), and calls to answer with «Іду» (Q8) — all three
+// in the one answer the screens poll. The guest's side is in
 // `public-menu.routes.ts`, behind the store token and the table's key.
 //
 // Core, like `tables.routes.ts` and `kitchen.routes.ts`: the `tables` module
@@ -23,9 +25,11 @@ import {
   GuestOrderLineProblem,
   GuestOrderNotFound,
   acceptGuestOrder,
-  listWaitingGuestOrders,
+  loadGuestFeed,
+  markGuestOrderSeen,
   rejectGuestOrder,
 } from '../guest-orders.service.js';
+import { WaiterCallConflict, WaiterCallNotFound, answerCall } from '../waiter-calls.service.js';
 
 function idOf(value: unknown): number | null {
   const id = Number(value);
@@ -51,15 +55,47 @@ function sendError(reply: FastifyReply, error: unknown): unknown {
 }
 
 export function registerGuestOrdersRoutes(fastify: FastifyInstance): void {
-  // Everything waiting for a waiter, or one table's. Requests older than their
-  // time-to-live are dropped here, as they are wherever they are read.
+  // Everything waiting for a waiter, or one table's: `orders` (requests to
+  // accept — the only key an older `tables` remote reads), `sent` (orders a
+  // guest sent straight to the kitchen, not yet seen) and `calls`. Requests
+  // and calls older than their time-to-live are dropped here, as they are
+  // wherever they are read.
   fastify.get('/guest-orders', async (request, reply) => {
     const auth = await ensurePosAuth(request, reply);
     if (!auth) return;
     const raw = (request.query as { table_id?: unknown }).table_id;
     const tableId = raw === undefined ? undefined : idOf(raw);
     if (raw !== undefined && tableId == null) return reply.code(400).send({ error: 'Некоректний стіл' });
-    return { orders: await listWaitingGuestOrders(auth.storeId, tableId ?? undefined) };
+    return loadGuestFeed(auth.storeId, tableId ?? undefined);
+  });
+
+  // «Бачу» on an order a guest sent straight to the kitchen. If that order
+  // opened the bill, the table becomes this waiter's. Idempotent.
+  fastify.post('/guest-orders/:id/seen', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const id = idOf((request.params as { id: string }).id);
+    if (id == null) return reply.code(404).send({ error: 'Запит не знайдено' });
+    try {
+      return await markGuestOrderSeen({ storeId: auth.storeId, staffId: auth.staffId, orderId: id });
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  // «Іду» on a guest's call. Idempotent; a cancelled or expired call is a 409.
+  fastify.post('/waiter-calls/:id/answer', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const id = idOf((request.params as { id: string }).id);
+    if (id == null) return reply.code(404).send({ error: 'Виклик не знайдено' });
+    try {
+      return await answerCall({ storeId: auth.storeId, staffId: auth.staffId, callId: id });
+    } catch (error) {
+      if (error instanceof WaiterCallNotFound) return reply.code(404).send({ error: error.message });
+      if (error instanceof WaiterCallConflict) return reply.code(409).send({ error: error.message });
+      throw error;
+    }
   });
 
   // Accept: the lines go into the table's bill (opened if there is none) under

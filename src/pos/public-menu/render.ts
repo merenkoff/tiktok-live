@@ -215,6 +215,18 @@ export interface MenuPageOptions {
    * list of the guest's own requests. Never true without a table.
    */
   ordering?: boolean;
+  /**
+   * Same proof, and the owner lets guests call a waiter or ask for the bill
+   * (phase Q8): the page learns where to send a call. Never true without a table.
+   */
+  call?: boolean;
+  /**
+   * The owner's auto-send (phase Q9), only so the cart can say honestly what
+   * will happen to an order before it is sent: `reorders` or `all`, and the
+   * limit above which it waits for a waiter anyway. The server decides each
+   * order itself; the page only describes. Ignored without ordering.
+   */
+  orderAuto?: { mode: 'reorders' | 'all'; limitCents: number } | null;
 }
 
 export function renderMenuPage(
@@ -225,6 +237,8 @@ export function renderMenuPage(
 ): string {
   const showBill = Boolean(options.bill && table);
   const ordering = Boolean(options.ordering && table);
+  const call = Boolean(options.call && table);
+  const auto = ordering && options.orderAuto ? options.orderAuto : null;
   const tabs = menu.categories
     .map((c, i) => `<a href="#c-${c.id ?? 'other'}"${i === 0 ? ' class="on"' : ''}>${escapeHtml(c.name)}</a>`)
     .join('');
@@ -264,7 +278,11 @@ ${empty}${sections}
     ` data-menu-url="/api/pos/public/menu/${escapeHtml(token)}" data-store-day="${escapeHtml(menu.store_day)}"` +
       ` data-rev="${escapeHtml(menu.rev)}"` +
       (showBill ? ` data-bill-url="/api/pos/public/menu/${escapeHtml(token)}/bill"` : '') +
-      (ordering ? ` data-order-url="/api/pos/public/menu/${escapeHtml(token)}/orders"` : '')
+      (ordering ? ` data-order-url="/api/pos/public/menu/${escapeHtml(token)}/orders"` : '') +
+      (auto
+        ? ` data-order-auto="${auto.mode === 'all' ? 'all' : 'reorders'}" data-order-limit="${Math.trunc(auto.limitCents)}"`
+        : '') +
+      (call ? ` data-call-url="/api/pos/public/menu/${escapeHtml(token)}/calls"` : '')
   );
 }
 

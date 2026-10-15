@@ -149,6 +149,27 @@ interface MenuStore {
   billEnabled: boolean;
   /** The owner lets a guest send dishes to a waiter for acceptance (phase Q6). */
   orderingEnabled: boolean;
+  /** The owner lets a guest call a waiter or ask for the bill (phase Q8). */
+  callEnabled: boolean;
+  /** Whether a guest order goes straight to the kitchen instead of waiting (phase Q9). */
+  autoKitchen: AutoKitchenMode;
+  /** An order dearer than this waits for a waiter whatever `autoKitchen` says. */
+  autoLimitCents: number;
+}
+
+/**
+ * Q9. `off` — every guest order waits for a waiter (Q6); `reorders` — straight
+ * to the kitchen when a waiter has already opened the table's bill; `all` —
+ * always, the bill opening by itself.
+ */
+export type AutoKitchenMode = 'off' | 'reorders' | 'all';
+export const AUTO_KITCHEN_MODES: readonly AutoKitchenMode[] = ['off', 'reorders', 'all'];
+/** The owner's limit, in kopecks: 1 ₴ … 100 000 ₴ (the CHECK in migration 068). */
+export const AUTO_LIMIT_MIN_CENTS = 100;
+export const AUTO_LIMIT_MAX_CENTS = 10_000_000;
+
+function autoModeOf(value: unknown): AutoKitchenMode {
+  return value === 'reorders' || value === 'all' ? value : 'off';
 }
 
 /** A table, as far as a guest is told: what the QR on it says, and which room it is in. */
@@ -497,6 +518,7 @@ export async function findMenuStore(token: string): Promise<MenuStore | null> {
   if (hit && hit.expires > Date.now()) return hit.value;
   const result = await pool.query(
     `SELECT id, name, vertical, public_menu_enabled, public_menu_bill, public_menu_ordering,
+            public_menu_call, public_menu_auto_kitchen, public_menu_auto_limit_cents,
             public_logo_url, public_address, public_phone, public_hours
      FROM pos_stores
      WHERE public_menu_token = $1`,
@@ -514,6 +536,10 @@ export async function findMenuStore(token: string): Promise<MenuStore | null> {
     hours: readHours(row.public_hours),
     billEnabled: row.public_menu_bill === true,
     orderingEnabled: row.public_menu_ordering === true,
+    callEnabled: row.public_menu_call === true,
+    // Auto-sending is a way of ordering: with ordering off there is nothing to send.
+    autoKitchen: row.public_menu_ordering === true ? autoModeOf(row.public_menu_auto_kitchen) : 'off',
+    autoLimitCents: Number(row.public_menu_auto_limit_cents ?? 0),
   };
   storeByToken.set(token, { value: store, expires: Date.now() + CACHE_TTL_MS });
   return store;
@@ -564,6 +590,14 @@ export interface PublicMenuSettings {
    * once the waiters' screens show the requests; off until the owner says so.
    */
   ordering_enabled: boolean;
+  /** A guest may call a waiter or ask for the bill from their table (phase Q8). */
+  call_enabled: boolean;
+  /** Whether a guest order goes straight to the kitchen (phase Q9); always `off` while ordering is. */
+  auto_kitchen: AutoKitchenMode;
+  /** An order dearer than this, in kopecks, waits for a waiter. */
+  auto_limit_cents: number;
+  /** When the owner last confirmed the risks of auto-sending, or null if never. */
+  auto_ack_at: string | null;
   /**
    * A short-lived signed suffix (`?p=`) for the print pages: without it
    * `/m/<token>/qr` and `/tables` print QR codes with no table key in them,
@@ -583,6 +617,10 @@ function isUniqueViolation(error: unknown): boolean {
   return typeof error === 'object' && error !== null && (error as { code?: string }).code === '23505';
 }
 
+/** Every column the owner's card reads — one list, so a setter cannot forget one in its RETURNING. */
+const SETTINGS_COLUMNS = `vertical, public_menu_enabled, public_menu_token, public_menu_bill, public_menu_ordering,
+  public_menu_call, public_menu_auto_kitchen, public_menu_auto_limit_cents, public_menu_auto_ack_at`;
+
 function toSettings(row: Record<string, unknown> | undefined, tables = 0, print: string | null = null): PublicMenuSettings {
   const token = typeof row?.public_menu_token === 'string' ? row.public_menu_token : null;
   return {
@@ -593,6 +631,11 @@ function toSettings(row: Record<string, unknown> | undefined, tables = 0, print:
     tables,
     bill_enabled: row?.public_menu_bill === true,
     ordering_enabled: row?.public_menu_ordering === true,
+    call_enabled: row?.public_menu_call === true,
+    auto_kitchen: autoModeOf(row?.public_menu_auto_kitchen),
+    auto_limit_cents: Number(row?.public_menu_auto_limit_cents ?? 200000),
+    auto_ack_at:
+      row?.public_menu_auto_ack_at == null ? null : new Date(row.public_menu_auto_ack_at as string).toISOString(),
     print: token ? print : null,
   };
 }
@@ -605,7 +648,7 @@ async function settingsFor(storeId: number, row: Record<string, unknown>): Promi
 
 async function readRow(storeId: number): Promise<Record<string, unknown>> {
   const result = await pool.query(
-    `SELECT vertical, public_menu_enabled, public_menu_token, public_menu_bill, public_menu_ordering FROM pos_stores WHERE id = $1`,
+    `SELECT ${SETTINGS_COLUMNS} FROM pos_stores WHERE id = $1`,
     [storeId]
   );
   const row = result.rows[0];
@@ -634,7 +677,7 @@ export async function setPublicMenuEnabled(storeId: number, enabled: boolean): P
              public_menu_token = COALESCE(public_menu_token, $3),
              updated_at = NOW()
          WHERE id = $1
-         RETURNING vertical, public_menu_enabled, public_menu_token, public_menu_bill, public_menu_ordering`,
+         RETURNING ${SETTINGS_COLUMNS}`,
         [storeId, enabled, enabled && !hasToken ? newToken() : null]
       );
       invalidatePublicMenu(storeId);
@@ -659,7 +702,7 @@ export async function rotatePublicMenuToken(storeId: number): Promise<PublicMenu
         `UPDATE pos_stores
          SET public_menu_token = $2, public_menu_secret = NULL, updated_at = NOW()
          WHERE id = $1
-         RETURNING vertical, public_menu_enabled, public_menu_token, public_menu_bill, public_menu_ordering`,
+         RETURNING ${SETTINGS_COLUMNS}`,
         [storeId, newToken()]
       );
       invalidatePublicMenu(storeId);
@@ -682,7 +725,7 @@ export async function setPublicMenuBill(storeId: number, enabled: boolean): Prom
     `UPDATE pos_stores
      SET public_menu_bill = $2, updated_at = NOW()
      WHERE id = $1
-     RETURNING vertical, public_menu_enabled, public_menu_token, public_menu_bill, public_menu_ordering`,
+     RETURNING ${SETTINGS_COLUMNS}`,
     [storeId, enabled]
   );
   invalidatePublicMenu(storeId);
@@ -699,12 +742,97 @@ export async function setPublicMenuOrdering(storeId: number, enabled: boolean): 
   const row = await readRow(storeId);
   if (enabled && !toSettings(row).available) throw new PublicMenuError(NOT_AVAILABLE);
   const result = await pool.query(
+    // Switching ordering off switches auto-sending off with it: switching
+    // ordering back on later must not quietly revive a mode the owner had
+    // confirmed for a different evening.
     `UPDATE pos_stores
-     SET public_menu_ordering = $2, updated_at = NOW()
+     SET public_menu_ordering = $2,
+         public_menu_auto_kitchen = CASE WHEN $2 THEN public_menu_auto_kitchen ELSE 'off' END,
+         updated_at = NOW()
      WHERE id = $1
-     RETURNING vertical, public_menu_enabled, public_menu_token, public_menu_bill, public_menu_ordering`,
+     RETURNING ${SETTINGS_COLUMNS}`,
     [storeId, enabled]
   );
+  invalidatePublicMenu(storeId);
+  return settingsFor(storeId, result.rows[0]);
+}
+
+/**
+ * Let guests call a waiter or ask for the bill (phase Q8), or stop. Like the
+ * other switches it only has an effect while the menu is published, and only
+ * on a table's QR — a call names a table. Calls already waiting stay waiting.
+ */
+export async function setPublicMenuCall(storeId: number, enabled: boolean): Promise<PublicMenuSettings> {
+  const row = await readRow(storeId);
+  if (enabled && !toSettings(row).available) throw new PublicMenuError(NOT_AVAILABLE);
+  const result = await pool.query(
+    `UPDATE pos_stores
+     SET public_menu_call = $2, updated_at = NOW()
+     WHERE id = $1
+     RETURNING ${SETTINGS_COLUMNS}`,
+    [storeId, enabled]
+  );
+  invalidatePublicMenu(storeId);
+  return settingsFor(storeId, result.rows[0]);
+}
+
+/** A value the owner can fix (400), as opposed to a state the store is in (409). */
+export class PublicMenuBadRequest extends PublicMenuError {}
+/** Raised when an owner raises auto-sending without confirming its risks. */
+export class AutoKitchenAckRequired extends PublicMenuBadRequest {}
+
+const AUTO_RANK: Record<AutoKitchenMode, number> = { off: 0, reorders: 1, all: 2 };
+
+/**
+ * Send guest orders straight to the kitchen (phase Q9), or stop. Raising the
+ * mode — `off` → `reorders`, anything → `all` — needs the owner's explicit
+ * «I understand the risks» (`ack`), which is recorded with who and when;
+ * lowering it never does, because a safer setting must always be one tap away.
+ * Only with ordering on: auto-sending is a way of ordering.
+ */
+export async function setPublicMenuAutoKitchen(
+  storeId: number,
+  staffId: number,
+  mode: AutoKitchenMode,
+  ack: boolean
+): Promise<PublicMenuSettings> {
+  const row = await readRow(storeId);
+  const current = toSettings(row);
+  if (mode !== 'off' && !current.available) throw new PublicMenuError(NOT_AVAILABLE);
+  if (mode !== 'off' && !current.ordering_enabled) {
+    throw new PublicMenuError('Спершу увімкніть замовлення гостей з телефону');
+  }
+  const raising = AUTO_RANK[mode] > AUTO_RANK[current.auto_kitchen];
+  if (raising && !ack) {
+    throw new AutoKitchenAckRequired('Підтвердіть, що ви прочитали ризики автовідправки на кухню');
+  }
+  const result = await pool.query(
+    `UPDATE pos_stores
+     SET public_menu_auto_kitchen = $2,
+         public_menu_auto_ack_at = CASE WHEN $3 THEN NOW() ELSE public_menu_auto_ack_at END,
+         public_menu_auto_ack_by = CASE WHEN $3 THEN $4::bigint ELSE public_menu_auto_ack_by END,
+         updated_at = NOW()
+     WHERE id = $1
+     RETURNING ${SETTINGS_COLUMNS}`,
+    [storeId, mode, raising, staffId]
+  );
+  invalidatePublicMenu(storeId);
+  return settingsFor(storeId, result.rows[0]);
+}
+
+/** The auto-send limit (phase Q9), in kopecks; an order dearer than this waits for a waiter. */
+export async function setPublicMenuAutoLimit(storeId: number, cents: number): Promise<PublicMenuSettings> {
+  if (!Number.isInteger(cents) || cents < AUTO_LIMIT_MIN_CENTS || cents > AUTO_LIMIT_MAX_CENTS) {
+    throw new PublicMenuBadRequest('Ліміт має бути від 1 до 100 000 грн');
+  }
+  const result = await pool.query(
+    `UPDATE pos_stores
+     SET public_menu_auto_limit_cents = $2, updated_at = NOW()
+     WHERE id = $1
+     RETURNING ${SETTINGS_COLUMNS}`,
+    [storeId, cents]
+  );
+  if (result.rows.length === 0) throw new PublicMenuError('Магазин не знайдено');
   invalidatePublicMenu(storeId);
   return settingsFor(storeId, result.rows[0]);
 }
