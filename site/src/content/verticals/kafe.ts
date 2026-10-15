@@ -1,5 +1,5 @@
 import type { VerticalContent } from './types';
-import { PRODUCT, PRICING } from '../../lib/productFacts';
+import { COMPETITOR_FACTS, PRODUCT, PRICING } from '../../lib/productFacts';
 import cafeRegister from '../../assets/screenshots/cafe-register.png';
 import cafeModifiers from '../../assets/screenshots/cafe-modifiers.png';
 import cafeKitchen from '../../assets/screenshots/cafe-kitchen.png';
@@ -185,6 +185,11 @@ export const kafe: VerticalContent = {
       title: 'Kavapp чи The Live Shop POS для кав\'ярні: порівняння за фактами',
       blurb: 'Ціни, що входить у тариф, де сильніший кожен — із джерелами й датою перевірки.',
     },
+    {
+      slug: 'restoapp-chy-liveshop-dlya-restoranu',
+      title: 'RestoApp чи The Live Shop POS для ресторану й кафе: порівняння за фактами',
+      blurb: `QR-меню за ${COMPETITOR_FACTS.restoapp.priceUah} грн/міс окремою підпискою проти QR-меню, яке входить у ціну каси, — і як прибрати цінники поверх паперового меню.`,
+    },
   ],
-  updatedAt: '2026-09-30',
+  updatedAt: '2026-10-15',
 };

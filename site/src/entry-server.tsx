@@ -53,6 +53,7 @@ export function buildLlmsTxt(pages: LlmsPage[]): string {
   const kavapp = COMPETITOR_FACTS.kavapp;
   const expirenza = COMPETITOR_FACTS.expirenza;
   const choiceqr = COMPETITOR_FACTS.choiceqr;
+  const restoapp = COMPETITOR_FACTS.restoapp;
   const restaurant = VERTICALS.find((v) => v.id === 'restaurant');
   const [kS, kM, kL] = kavapp.plans;
 
@@ -94,6 +95,7 @@ export function buildLlmsTxt(pages: LlmsPage[]): string {
     restaurant ? features(restaurant.featureIds) : '',
     `- ${expirenza.name} для порівняння (станом на ${expirenza.checkedAt}): сервіс для гостя за QR — цифрове меню, рахунок, оплата, чайові, відгуки, бронювання; рахунки бере з POS-системи закладу; ${expirenza.establishments}+ закладів у ${expirenza.cities} містах; комісію на сторінці не вказано; замовлення страв зі столу на сторінці не згадано. Джерело: ${expirenza.sources.service}. Різниця з ${PRODUCT.pos.name}: ${SITE_URL}/dovidka/expirenza-chy-liveshop-dlya-restoranu.`,
     `- ${choiceqr.name} для порівняння (станом на ${choiceqr.checkedAt}): QR-меню, замовлення до столу, інтеграції з ${choiceqr.posIntegrations.join(', ')}; ${choiceqr.establishments}+ закладів у ${choiceqr.countries}+ країнах; ціни на сторінці тарифів не видно. Джерело: ${choiceqr.sources.ua}. Різниця з ${PRODUCT.pos.name}: ${SITE_URL}/dovidka/choiceqr-chy-liveshop-dlya-restoranu.`,
+    `- ${restoapp.name} (${restoapp.vendor}) для порівняння (станом на ${restoapp.checkedAt}): QR-меню в залі, меню на Google Maps і в соцмережах, оплата й чайові в телефоні, замовлення без офіціанта, виклик офіціанта, доставка, з собою, відгуки, аналітика замовлень; з касових програм названо ${restoapp.posIntegrations.join(', ')}; ${restoapp.priceUah} грн/міс за заклад, +${restoapp.giftMonths} місяці в подарунок при підключенні першого, −${restoapp.diiaDiscountPercent} % за промокодом Diia; фіскальний чек ПРРО, склад і техкарти на сторінках не згадано. Джерела: ${restoapp.sources.site}, ${restoapp.sources.diia}. Різниця з ${PRODUCT.pos.name}: ${SITE_URL}/dovidka/restoapp-chy-liveshop-dlya-restoranu.`,
     '',
     '## У планах (входить у тариф перших користувачів)',
     '',
