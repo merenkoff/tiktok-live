@@ -54,6 +54,8 @@ ALTER TABLE pos_stores ADD CONSTRAINT pos_stores_public_menu_auto_limit_check
 
 -- ── a guest's order that went straight to the kitchen ──────────────────────
 
+-- 058 carries the same list: it runs first on every boot and would otherwise
+-- re-add a narrower CHECK that the first 'sent' row violates.
 ALTER TABLE pos_guest_orders DROP CONSTRAINT IF EXISTS pos_guest_orders_status_check;
 ALTER TABLE pos_guest_orders ADD CONSTRAINT pos_guest_orders_status_check
   CHECK (status IN ('pending', 'accepted', 'rejected', 'expired', 'cancelled', 'sent'));

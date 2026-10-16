@@ -271,7 +271,7 @@ ${tabs ? `<nav class="tabs" aria-label="Розділи меню">${tabs}</nav>` 
 <main>
 ${empty}${sections}
 </main>
-<footer class="foot">${factsNote}<p>Стоп-лист і ціни оновлюються самі.</p><p><a href="${escapeHtml(publicBaseUrl())}/pos/kafe" rel="noopener">Меню працює на The Live Shop POS</a></p></footer>${showBill || ordering ? dockMarkup(table!, showBill, ordering) : ''}`;
+<footer class="foot">${factsNote}<p>Стоп-лист і ціни оновлюються самі.</p><p><a href="${escapeHtml(publicBaseUrl())}/pos/kafe" rel="noopener">Меню працює на The Live Shop POS</a></p></footer>${showBill || ordering || call ? dockMarkup(table!, showBill, ordering, call) : ''}`;
   return shell(
     `${menu.store.name} — меню`,
     body,
@@ -294,9 +294,20 @@ ${empty}${sections}
  * key is not here at all: the script reads it from the address bar, where the
  * QR put it.
  */
-function dockMarkup(table: MenuTable, bill: boolean, ordering: boolean): string {
+function dockMarkup(table: MenuTable, bill: boolean, ordering: boolean, call: boolean): string {
   const label = escapeHtml(tableLabel(table.name));
+  // The call row (phase Q8) is drawn with its words so it reads without the
+  // script; the script only greys a button while its call is live and puts the
+  // state («Офіціанта покликано» → «Офіціант іде») in the line above it.
+  const calls = call
+    ? '<div class="call-status" data-call-status aria-live="polite" hidden></div>' +
+      '<div class="call-row" data-call-row>' +
+      '<button type="button" class="call-btn" data-call="waiter">Покликати офіціанта</button>' +
+      '<button type="button" class="call-btn" data-call="bill">Попросити рахунок</button>' +
+      '</div>'
+    : '';
   const bars =
+    calls +
     (ordering ? '<button type="button" class="cart-bar" data-cart-open hidden></button>' : '') +
     (bill ? `<button type="button" class="bill-bar" data-bill-open>Рахунок · ${label}</button>` : '');
   const billSheet = bill

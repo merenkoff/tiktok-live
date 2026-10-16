@@ -12,6 +12,7 @@
   --accent: #0a6cff;
   --off: #9aa3ab;
   --badge: #eceff2;
+  --ok: #1e7f3a;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -23,6 +24,7 @@
     --accent: #5aa0ff;
     --off: #6c757d;
     --badge: #2a3036;
+    --ok: #5fd38a;
   }
 }
 
@@ -267,6 +269,30 @@ body.bill-open { overflow: hidden; }
 .req small { display: block; color: var(--muted); }
 .req.pending b { color: var(--accent); }
 .error { margin: 10px 0 0; color: #c0392b; font-size: 14px; }
+
+/* Calling a waiter (phase Q8): two quiet buttons over the bars, and above
+   them what happened to the call. */
+.call-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.call-row[hidden] { display: none; }
+.call-btn {
+  padding: 11px 8px; border: 1px solid var(--line); border-radius: 14px;
+  background: var(--card); color: var(--ink); font: inherit; font-size: 15px; font-weight: 600; line-height: 1.25;
+  cursor: pointer; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+}
+.call-btn.on { border-color: var(--accent); color: var(--accent); }
+.call-btn:disabled { cursor: default; }
+.call-status {
+  display: grid; gap: 4px; padding: 10px 14px; border-radius: 14px;
+  background: var(--card); border: 1px solid var(--line); font-size: 15px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+}
+.call-status[hidden] { display: none; }
+.call-line { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.call-line.pending b { color: var(--accent); }
+.call-line.answered b { color: var(--ok); }
+.call-line.expired b { color: var(--muted); font-weight: 600; }
+.call-error { margin: 0; color: #c0392b; font-size: 14px; }
+/* Same specificity as the dock rule above, and later, so it wins. */
+body:has(.dock .call-row) .foot { padding-bottom: 230px; }
 
 /* A print page opened without the owner's link: visible on screen, never on paper. */
 .notice {
