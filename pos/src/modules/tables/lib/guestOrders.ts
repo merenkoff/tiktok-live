@@ -7,7 +7,7 @@
 // waiter feels — which lines can go in, what the button says, how long the
 // guest has been waiting — are testable without rendering anything.
 
-import type { GuestOrder, GuestOrderLine } from './types';
+import type { GuestOrder, GuestOrderLine, SentGuestOrder, WaiterCall, WaiterCallKind } from './types';
 
 /** The guest has been waiting «3 хв»; never negative, whatever the two clocks say. */
 export function minutesWaiting(createdAt: string, nowMs: number = Date.now()): number {
@@ -21,14 +21,19 @@ export function waitingLabel(createdAt: string, nowMs: number = Date.now()): str
   return minutes < 1 ? 'щойно' : `${minutes} хв тому`;
 }
 
-/** «1 запит», «2 запити», «5 запитів». */
-export function requestsLabel(n: number): string {
+/** The Ukrainian count: `plural(2, 'запит', 'запити', 'запитів')` → «2 запити». */
+export function plural(n: number, one: string, few: string, many: string): string {
   const tens = n % 100;
   const units = n % 10;
-  if (tens >= 11 && tens <= 14) return `${n} запитів`;
-  if (units === 1) return `${n} запит`;
-  if (units >= 2 && units <= 4) return `${n} запити`;
-  return `${n} запитів`;
+  if (tens >= 11 && tens <= 14) return `${n} ${many}`;
+  if (units === 1) return `${n} ${one}`;
+  if (units >= 2 && units <= 4) return `${n} ${few}`;
+  return `${n} ${many}`;
+}
+
+/** «1 запит», «2 запити», «5 запитів». */
+export function requestsLabel(n: number): string {
+  return plural(n, 'запит', 'запити', 'запитів');
 }
 
 /** How many requests wait at each table — what the tile's badge counts. */
@@ -91,3 +96,117 @@ export const REJECT_REASONS: readonly string[] = [
   'Кухня зараз не приймає — підійдіть до офіціанта',
   'Підійде офіціант і прийме замовлення',
 ];
+
+// ── calls and orders that went straight to the kitchen (Q8/Q9) ──────────────
+
+/** What a call asks for, as the card's headline says it. */
+export function callWords(kind: WaiterCallKind): string {
+  return kind === 'bill' ? 'Просить рахунок' : 'Кличе офіціанта';
+}
+
+/** What is going on at one table, for its tile: no words there, only marks. */
+export interface TableAlerts {
+  /** Requests waiting for a waiter to accept (Q6/Q7). */
+  requests: number;
+  /** Somebody pressed «Покликати офіціанта». */
+  waiter: boolean;
+  /** Somebody pressed «Попросити рахунок». */
+  bill: boolean;
+  /** Orders already in the kitchen that nobody has said «Бачу» to. */
+  sent: number;
+}
+
+export const NO_ALERTS: TableAlerts = { requests: 0, waiter: false, bill: false, sent: 0 };
+
+/** Per table, everything the guests' phones are saying. */
+export function alertsByTable(feed: {
+  orders: readonly GuestOrder[];
+  sent: readonly SentGuestOrder[];
+  calls: readonly WaiterCall[];
+}): Map<number, TableAlerts> {
+  const map = new Map<number, TableAlerts>();
+  const at = (tableId: number): TableAlerts => {
+    let entry = map.get(tableId);
+    if (!entry) {
+      entry = { ...NO_ALERTS };
+      map.set(tableId, entry);
+    }
+    return entry;
+  };
+  for (const order of feed.orders) at(order.table_id).requests += 1;
+  for (const order of feed.sent) at(order.table_id).sent += 1;
+  for (const call of feed.calls) at(call.table_id)[call.kind] = true;
+  return map;
+}
+
+/** How many separate things want the waiter at a table — what a hall tab counts. */
+export function alertCount(alerts: TableAlerts | undefined): number {
+  if (!alerts) return 0;
+  return alerts.requests + alerts.sent + (alerts.waiter ? 1 : 0) + (alerts.bill ? 1 : 0);
+}
+
+/**
+ * One key per thing on the screen, so a chime can tell a NEW call from the
+ * same one read again by the next poll. Prefixed by kind: a request and a call
+ * may share an id.
+ */
+export function alertKeys(feed: {
+  orders: readonly GuestOrder[];
+  sent: readonly SentGuestOrder[];
+  calls: readonly WaiterCall[];
+}): Set<string> {
+  return new Set([
+    ...feed.orders.map((o) => `order:${o.id}`),
+    ...feed.sent.map((o) => `sent:${o.id}`),
+    ...feed.calls.map((c) => `call:${c.id}`),
+  ]);
+}
+
+/** «Уже на кухні · замовлення 3» — what the card of an auto-sent order says under its table. */
+export function sentCaption(order: SentGuestOrder): string {
+  return order.round_seq == null ? 'Уже на кухні' : `Уже на кухні · замовлення ${order.round_seq}`;
+}
+
+/** The header over the room's list: «2 виклики · 1 на кухні · 3 запити», only what there is. */
+export function feedHeadline(counts: { requests: number; sent: number; calls: number }): string {
+  const parts: string[] = [];
+  if (counts.calls > 0) parts.push(plural(counts.calls, 'виклик', 'виклики', 'викликів'));
+  if (counts.sent > 0) parts.push(`${counts.sent} на кухні без офіціанта`);
+  if (counts.requests > 0) parts.push(requestsLabel(counts.requests));
+  return parts.join(' · ');
+}
+
+/** One other table that wants the waiter, as the bill screen's strip names it. */
+export interface ElsewhereEntry {
+  table_id: number;
+  table_name: string;
+  /** «кличе офіціанта», «просить рахунок», «замовив сам», «запит» — the most urgent first. */
+  words: string;
+}
+
+/**
+ * What the REST of the room is saying while the waiter is on one bill: a call
+ * at table 5 must not wait until they walk back to the map. Ordered by
+ * urgency — a call first, then an order already cooking, then a request.
+ */
+export function elsewhere(
+  feed: { orders: readonly GuestOrder[]; sent: readonly SentGuestOrder[]; calls: readonly WaiterCall[] },
+  currentTableId: number | null
+): ElsewhereEntry[] {
+  const names = new Map<number, string>();
+  const rank = new Map<number, { score: number; words: string }>();
+  const note = (tableId: number, tableName: string, score: number, words: string): void => {
+    if (tableId === currentTableId) return;
+    names.set(tableId, tableName);
+    const prev = rank.get(tableId);
+    if (!prev || score > prev.score) rank.set(tableId, { score, words });
+  };
+  for (const order of feed.orders) note(order.table_id, order.table_name, 1, 'запит');
+  for (const order of feed.sent) note(order.table_id, order.table_name, 2, 'замовив сам');
+  for (const call of feed.calls) {
+    note(call.table_id, call.table_name, call.kind === 'waiter' ? 4 : 3, call.kind === 'waiter' ? 'кличе офіціанта' : 'просить рахунок');
+  }
+  return [...rank.entries()]
+    .sort((a, b) => b[1].score - a[1].score || a[0] - b[0])
+    .map(([tableId, { words }]) => ({ table_id: tableId, table_name: names.get(tableId) ?? '', words }));
+}

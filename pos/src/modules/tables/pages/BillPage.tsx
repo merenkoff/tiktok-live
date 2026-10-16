@@ -28,6 +28,12 @@
 // the menu, not inside the bill: it is not on the bill yet, and it must not
 // look like it is. Accepting goes through the same serial queue as every other
 // write, so it can never overtake the taps before it.
+//
+// Calls and orders that went straight to the kitchen (Q8/Q9) sit there too,
+// for this table. The poll reads the WHOLE room and filters here, for one
+// reason: a waiter on table 3's bill must still learn that table 5 is calling.
+// The rest of the room is one line under the header («Інші столи…» → «До
+// залу») and the same chime as on the map.
 
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -45,6 +51,7 @@ import { ArrowLeft, ModifierSheet } from '@pos/platform/ui';
 import { BillBar } from '../components/BillBar';
 import { BillPane } from '../components/BillPane';
 import { BillSheet } from '../components/BillSheet';
+import { GuestAlertsPanel } from '../components/GuestAlertsPanel';
 import { GuestOrdersPanel } from '../components/GuestOrdersPanel';
 import type { AcceptOutcome } from '../components/GuestOrdersPanel';
 import { MenuCatalog } from '../components/MenuCatalog';
@@ -57,11 +64,12 @@ import { useBill } from '../lib/useBill';
 import { useGuestOrders } from '../lib/useGuestOrders';
 import { useIsWide } from '../lib/useIsWide';
 import { guestsLabel, seatedFor } from '../lib/hallMap';
-import { refusedLineId } from '../lib/guestOrders';
+import { alertKeys, elsewhere, refusedLineId } from '../lib/guestOrders';
+import { useChimeSetting, useNotifyChime } from '../lib/useNotifyChime';
 import { serverMessage } from '../lib/useHallMap';
 import * as tablesApi from '../lib/tablesApi';
 import type { PayPart } from '../lib/tablesApi';
-import type { GuestOrder } from '../lib/types';
+import type { GuestOrder, SentGuestOrder, WaiterCall } from '../lib/types';
 
 function newUuid(): string {
   const c = globalThis.crypto as { randomUUID?: () => string } | undefined;
@@ -112,12 +120,29 @@ export function BillPage(): JSX.Element {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // This table's requests only, and only once we know which table this is —
-  // without it the hook would read the whole room's.
-  const { orders: requests, refresh: refreshRequests } = useGuestOrders({
-    online: online && bill != null,
-    tableId: bill?.table_id ?? null,
-  });
+  // The whole room's, once there is a bill to stand at: this table's go on
+  // the cards, the rest into the «Інші столи» line and the chime.
+  const {
+    orders: roomRequests,
+    sent: roomSent,
+    calls: roomCalls,
+    loaded: feedLoaded,
+    refresh: refreshRequests,
+  } = useGuestOrders({ online: online && bill != null });
+  const tableId = bill?.table_id ?? null;
+  const requests = useMemo(() => roomRequests.filter((o) => o.table_id === tableId), [roomRequests, tableId]);
+  const tableSent = useMemo(() => roomSent.filter((o) => o.table_id === tableId), [roomSent, tableId]);
+  const tableCalls = useMemo(() => roomCalls.filter((c) => c.table_id === tableId), [roomCalls, tableId]);
+  const others = useMemo(
+    () => elsewhere({ orders: roomRequests, sent: roomSent, calls: roomCalls }, tableId),
+    [roomRequests, roomSent, roomCalls, tableId]
+  );
+  const feedKeys = useMemo(
+    () => alertKeys({ orders: roomRequests, sent: roomSent, calls: roomCalls }),
+    [roomRequests, roomSent, roomCalls]
+  );
+  const [chime] = useChimeSetting();
+  useNotifyChime(feedKeys, feedLoaded, chime);
 
   // The hall map sends the server's warning along when accepting a request
   // left something for this screen to finish («відправте на кухню самі»).
@@ -293,6 +318,41 @@ export function BillPage(): JSX.Element {
     return { ok, refusedLineId: result.refused };
   };
 
+  /** «Іду» to this table's call; it does not touch the bill. */
+  const answerCall = async (call: WaiterCall): Promise<boolean> => {
+    if (!online) {
+      notice('Потрібна мережа');
+      return false;
+    }
+    try {
+      await tablesApi.answerWaiterCall(call.id);
+      return true;
+    } catch (err) {
+      notice(serverMessage(err, 'Не вдалося відповісти на виклик'));
+      return false;
+    } finally {
+      void refreshRequests();
+    }
+  };
+
+  /** «Бачу»: the round is already on this bill; if the guest opened it, the table becomes this waiter's. */
+  const seeSent = async (order: SentGuestOrder): Promise<boolean> => {
+    if (!online) {
+      notice('Потрібна мережа');
+      return false;
+    }
+    try {
+      await tablesApi.markGuestOrderSeen(order.id);
+      if (order.bill_opened_by_guest) void reload();
+      return true;
+    } catch (err) {
+      notice(serverMessage(err, 'Не вдалося позначити'));
+      return false;
+    } finally {
+      void refreshRequests();
+    }
+  };
+
   const rejectRequest = async (order: GuestOrder, reason: string | null): Promise<boolean> => {
     if (!online) {
       notice('Потрібна мережа');
@@ -379,8 +439,35 @@ export function BillPage(): JSX.Element {
         </p>
       )}
 
-      {requests.length > 0 && (
-        <section className="mx-4 md:mx-6 mt-2 max-h-[40vh] shrink-0 overflow-auto" data-testid="bill-requests">
+      {others.length > 0 && (
+        <p
+          className="mx-4 md:mx-6 mt-2 flex items-center gap-3 rounded-sq bg-sq-blue/[0.06] px-3 py-2 text-sm text-sq-text"
+          data-testid="bill-elsewhere"
+        >
+          <span className="min-w-0 flex-1 truncate">
+            Інші столи:{' '}
+            {others
+              .slice(0, 3)
+              .map((o) => `Стіл ${o.table_name} — ${o.words}`)
+              .join(' · ')}
+            {others.length > 3 ? ` · і ще ${others.length - 3}` : ''}
+          </span>
+          <button type="button" className="sq-link shrink-0 font-semibold" onClick={() => navigate('/tables')}>
+            До залу
+          </button>
+        </p>
+      )}
+
+      {(requests.length > 0 || tableCalls.length > 0 || tableSent.length > 0) && (
+        <section className="mx-4 md:mx-6 mt-2 max-h-[40vh] shrink-0 overflow-auto space-y-2.5" data-testid="bill-requests">
+          <GuestAlertsPanel
+            calls={tableCalls}
+            sent={tableSent}
+            showTable={false}
+            busy={busy || answering}
+            onAnswer={answerCall}
+            onSeen={seeSent}
+          />
           <GuestOrdersPanel
             orders={requests}
             showTable={false}

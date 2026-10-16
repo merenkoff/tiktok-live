@@ -37,8 +37,11 @@ export interface OpenBillSummary {
   table_id: number;
   guests: number;
   opened_at: string;
-  /** Who seated it — «мій стіл». Absent in a mirror an older till wrote. */
-  opened_by?: number;
+  /**
+   * Who seated it — «мій стіл». Absent in a mirror an older till wrote; null
+   * when a guest's order opened it (Q9) and no waiter has said «Бачу» yet.
+   */
+  opened_by?: number | null;
   opened_by_name: string;
   /** Set when the pre-bill was printed: the guests asked for the bill. */
   precheck_printed_at: string | null;
@@ -82,7 +85,8 @@ export interface BillLine {
    * lines are still on the table.
    */
   sale_id: number | null;
-  added_by: number;
+  /** Null when a guest's order put it there by itself (Q9); the name then reads «Гість · QR-меню». */
+  added_by: number | null;
   added_by_name: string;
   sort_order: number;
 }
@@ -91,7 +95,8 @@ export interface BillRound {
   id: number;
   seq: number;
   fired_at: string;
-  fired_by: number;
+  /** Null for a round a guest's order sent straight to the kitchen (Q9). */
+  fired_by: number | null;
   fired_by_name: string;
   prep_status: 'new' | 'ready' | 'served';
   ready_at: string | null;
@@ -113,7 +118,8 @@ export interface Bill {
   note: string | null;
   customer_id: number | null;
   precheck_printed_at: string | null;
-  opened_by: number;
+  /** Null while a bill a guest's order opened (Q9) has no waiter yet. */
+  opened_by: number | null;
   opened_by_name: string;
   opened_at: string;
   closed_at: string | null;
@@ -162,4 +168,60 @@ export interface GuestOrderAccepted {
   warning: string | null;
   /** The request had been accepted already; nothing was done a second time. */
   already: boolean;
+}
+
+// ── calls and orders that went straight to the kitchen (Q8/Q9) ──────────────
+
+/** «Покликати офіціанта» or «Попросити рахунок». */
+export type WaiterCallKind = 'waiter' | 'bill';
+
+/** A guest calling from the table, until a waiter answers «Іду» (or 15 minutes pass). */
+export interface WaiterCall {
+  id: number;
+  kind: WaiterCallKind;
+  table_id: number;
+  table_name: string;
+  hall_name: string;
+  created_at: string;
+  expires_at: string;
+  /** The table has an open bill — «Попросити рахунок» has something to bring. */
+  has_open_bill: boolean;
+}
+
+/** One dish of an order that went to the kitchen by itself. */
+export interface SentGuestOrderLine {
+  name: string;
+  caption: string;
+  quantity: number;
+  note: string;
+}
+
+/**
+ * A guest's order the owner's auto-send put straight on the bill and into the
+ * kitchen (Q9). Already cooking — the waiter's part is to know, carry it out,
+ * and say «Бачу».
+ */
+export interface SentGuestOrder {
+  id: number;
+  table_id: number;
+  table_name: string;
+  hall_name: string;
+  created_at: string;
+  bill_id: number;
+  /** The round it became, or null if that round is gone. */
+  round_seq: number | null;
+  /** This order opened the bill: nobody has the table yet, and «Бачу» gives it to the waiter. */
+  bill_opened_by_guest: boolean;
+  total_cents: number;
+  lines: SentGuestOrderLine[];
+}
+
+/**
+ * Everything the waiter's screens poll for. `sent` and `calls` are absent from
+ * a backend older than Q8/Q9, which is the same as none.
+ */
+export interface GuestFeed {
+  orders: GuestOrder[];
+  sent?: SentGuestOrder[];
+  calls?: WaiterCall[];
 }

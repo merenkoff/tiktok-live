@@ -450,3 +450,163 @@ describe('HallMapPage — guest requests (Q7)', () => {
   });
 });
 
+
+describe('HallMapPage — calls and orders straight to the kitchen (Q8/Q9)', () => {
+  const callFrom = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
+    id: 70,
+    kind: 'waiter',
+    table_id: 12,
+    table_name: '6',
+    hall_name: 'Зала',
+    created_at: new Date(Date.now() - 60_000).toISOString(),
+    expires_at: new Date(Date.now() + 14 * 60_000).toISOString(),
+    has_open_bill: false,
+    ...over,
+  });
+  const sentFrom = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
+    id: 80,
+    table_id: 11,
+    table_name: '5',
+    hall_name: 'Зала',
+    created_at: new Date(Date.now() - 30_000).toISOString(),
+    bill_id: 90,
+    round_seq: 2,
+    bill_opened_by_guest: false,
+    total_cents: 28500,
+    lines: [{ name: 'Сирна тарілка', caption: '', quantity: 1, note: '' }],
+    ...over,
+  });
+
+  let calls: Array<Record<string, unknown>> = [];
+  let sent: Array<Record<string, unknown>> = [];
+  let handle: (method: string, path: string) => unknown = () => undefined;
+
+  beforeEach(() => {
+    calls = [callFrom()];
+    sent = [sentFrom()];
+    handle = () => undefined;
+    try {
+      localStorage.removeItem('tables:chime');
+    } catch {
+      /* storage blocked */
+    }
+    posRequest.mockImplementation(async (method: string, path: string) => {
+      if (method === 'get' && path === '/halls') return { halls: HALLS };
+      if (method === 'get' && path === '/bills') return { bills };
+      if (method === 'get' && path === '/guest-orders') return { orders: [], sent, calls };
+      const custom = handle(method, path);
+      if (custom !== undefined) return custom;
+      throw new Error(`unexpected ${method} ${path}`);
+    });
+  });
+
+  const posted = (path: string): unknown[] | undefined =>
+    posRequest.mock.calls.find((c) => c[0] === 'post' && c[1] === path);
+
+  it('marks the calling table and the one whose order is already cooking, and lists both above the room', async () => {
+    renderWithProviders(<HallMapPage />);
+    const free = await screen.findByTestId('table-tile-12');
+    await waitFor(() => expect(free).toHaveAttribute('data-call', 'waiter'));
+    expect(screen.getByTestId('table-call-waiter-12')).toHaveTextContent('Гість кличе офіціанта');
+    expect(screen.getByTestId('table-tile-11')).toHaveAttribute('data-sent', '1');
+    expect(screen.getByTestId('table-sent-11')).toHaveTextContent('Замовлення гостя вже на кухні');
+
+    const list = screen.getByTestId('tables-requests');
+    expect(list).toHaveTextContent('1 виклик · 1 на кухні без офіціанта');
+    expect(within(list).getByTestId('guest-call-70')).toHaveTextContent('Стіл 6 · Кличе офіціанта');
+    expect(within(list).getByTestId('guest-sent-80')).toHaveTextContent('Уже на кухні · замовлення 2');
+    expect(within(list).getByTestId('guest-sent-80')).toHaveTextContent('Сирна тарілка');
+    const legend = screen.getByTestId('tables-legend');
+    expect(legend).toHaveTextContent('Кличе офіціанта');
+    expect(legend).toHaveTextContent('Замовив сам — на кухні');
+    expect(legend).not.toHaveTextContent('Рахунок з телефону');
+  });
+
+  it('counts a call in another hall on that hall’s tab', async () => {
+    calls = [callFrom({ id: 71, kind: 'bill', table_id: 21, table_name: 'T1', hall_name: 'Тераса' })];
+    sent = [];
+    renderWithProviders(<HallMapPage />);
+    expect(await screen.findByTestId('hall-tab-guest-2')).toHaveTextContent('1');
+    expect(screen.queryByTestId('hall-tab-guest-1')).toBeNull();
+  });
+
+  it('answers «Іду» and reads the feed again', async () => {
+    handle = (method, path) => {
+      if (method === 'post' && path === '/waiter-calls/70/answer') {
+        calls = [];
+        return { status: 'answered', already: false };
+      }
+      return undefined;
+    };
+    renderWithProviders(<HallMapPage />);
+    await userEvent.click(await screen.findByTestId('guest-call-answer-70'));
+    expect(posted('/waiter-calls/70/answer')).toBeTruthy();
+    expect(await screen.findByTestId('tables-note')).toHaveTextContent('Стіл 6: гість бачить «Офіціант іде»');
+    await waitFor(() => expect(screen.queryByTestId('guest-call-70')).toBeNull());
+    expect(screen.getByTestId('table-tile-12')).not.toHaveAttribute('data-call');
+  });
+
+  it('says in the server’s words when the guest took the call back', async () => {
+    handle = (method, path) => {
+      if (method === 'post' && path === '/waiter-calls/70/answer') {
+        throw { response: { status: 409, data: { error: 'Гість скасував виклик' } } };
+      }
+      return undefined;
+    };
+    renderWithProviders(<HallMapPage />);
+    await userEvent.click(await screen.findByTestId('guest-call-answer-70'));
+    expect(await screen.findByTestId('tables-banner')).toHaveTextContent('Гість скасував виклик');
+  });
+
+  it('«Бачу» on an order that opened the bill gives the table to the waiter and reads the room again', async () => {
+    sent = [sentFrom({ bill_opened_by_guest: true })];
+    handle = (method, path) => {
+      if (method === 'post' && path === '/guest-orders/80/seen') {
+        sent = [];
+        return { seen: true, bill_id: 90 };
+      }
+      return undefined;
+    };
+    renderWithProviders(<HallMapPage />);
+    const card = await screen.findByTestId('guest-sent-80');
+    expect(card).toHaveTextContent('«Бачу» закріпить його за вами');
+    const billReads = posRequest.mock.calls.filter((c) => c[1] === '/bills').length;
+    await userEvent.click(within(card).getByTestId('guest-sent-seen-80'));
+    expect(posted('/guest-orders/80/seen')).toBeTruthy();
+    expect(await screen.findByTestId('tables-note')).toHaveTextContent('Стіл 5 тепер ваш');
+    await waitFor(() => expect(posRequest.mock.calls.filter((c) => c[1] === '/bills').length).toBeGreaterThan(billReads));
+    await waitFor(() => expect(screen.queryByTestId('guest-sent-80')).toBeNull());
+  });
+
+  it('opens the bill of an auto-sent order', async () => {
+    renderWithProviders(<HallMapPage />);
+    await userEvent.click(await screen.findByTestId('guest-sent-open-80'));
+    expect(navigate).toHaveBeenCalledWith('/tables/90');
+  });
+
+  it('reads an older backend’s answer — orders only — as no calls and nothing sent', async () => {
+    posRequest.mockImplementation(async (method: string, path: string) => {
+      if (method === 'get' && path === '/halls') return { halls: HALLS };
+      if (method === 'get' && path === '/bills') return { bills };
+      if (method === 'get' && path === '/guest-orders') return { orders: [] };
+      throw new Error(`unexpected ${method} ${path}`);
+    });
+    renderWithProviders(<HallMapPage />);
+    await screen.findByTestId('table-tile-12');
+    await waitFor(() => expect(posRequest).toHaveBeenCalledWith('get', '/guest-orders', undefined));
+    expect(screen.queryByTestId('tables-requests')).toBeNull();
+    expect(screen.getByTestId('table-tile-12')).not.toHaveAttribute('data-call');
+  });
+
+  it('remembers the waiter’s sound switch on this device', async () => {
+    const first = renderWithProviders(<HallMapPage />);
+    const button = await screen.findByTestId('tables-chime');
+    expect(button).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(button);
+    expect(button).toHaveAttribute('aria-pressed', 'false');
+    expect(button).toHaveTextContent('Звук вимкнено');
+    first.unmount();
+    renderWithProviders(<HallMapPage />);
+    expect(await screen.findByTestId('tables-chime')).toHaveAttribute('aria-pressed', 'false');
+  });
+});

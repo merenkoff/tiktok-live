@@ -9,7 +9,7 @@
 // and everything else is a line of small text under it. A free table shows its
 // seats and nothing more — there is nothing else true about it.
 
-import { Bell, Pencil } from '@pos/platform/ui';
+import { Bell, ChefHat, Pencil, Receipt, User } from '@pos/platform/ui';
 import type { TableSeat, TableTone } from '../lib/hallMap';
 import { guestsLabel, kitchenState, seatedFor, seatsLabel, tableTone, tileSum } from '../lib/hallMap';
 
@@ -45,9 +45,27 @@ export interface TableTileProps {
    * the table number. The legend says what the bell is.
    */
   guestWaiting?: number;
+  /**
+   * A guest at this table pressed «Покликати офіціанта» / «Попросити рахунок»
+   * and nobody has answered «Іду» yet (Q8). Marks only, like the bell.
+   */
+  calling?: { waiter?: boolean; bill?: boolean };
+  /** Orders that went to the kitchen by themselves and nobody has said «Бачу» to (Q9). */
+  sentUnseen?: number;
 }
 
-export function TableTile({ seat, now, meId, onOpen, disabled, guestWaiting = 0 }: TableTileProps): JSX.Element {
+export function TableTile({
+  seat,
+  now,
+  meId,
+  onOpen,
+  disabled,
+  guestWaiting = 0,
+  calling,
+  sentUnseen = 0,
+}: TableTileProps): JSX.Element {
+  const callsWaiter = calling?.waiter === true;
+  const callsBill = calling?.bill === true;
   const { table, bill } = seat;
   const tone = tableTone(bill, meId);
   const kitchen = kitchenState(bill);
@@ -59,6 +77,8 @@ export function TableTile({ seat, now, meId, onOpen, disabled, guestWaiting = 0 
       data-tone={tone}
       data-kitchen={kitchen ?? undefined}
       data-guest={guestWaiting > 0 ? guestWaiting : undefined}
+      data-call={callsWaiter || callsBill ? [callsWaiter ? 'waiter' : '', callsBill ? 'bill' : ''].filter(Boolean).join(' ') : undefined}
+      data-sent={sentUnseen > 0 ? sentUnseen : undefined}
       disabled={disabled}
       onClick={() => onOpen(seat)}
       style={{
@@ -75,8 +95,45 @@ export function TableTile({ seat, now, meId, onOpen, disabled, guestWaiting = 0 
           className={`absolute top-3 w-2.5 h-2.5 rounded-full ${round ? 'right-[18%]' : 'right-3.5'} ${TONE[tone].dot}`}
         />
       )}
-      {(kitchen || guestWaiting > 0 || (bill && bill.draft_count > 0)) && (
-        <span className={`absolute top-2.5 flex items-center gap-1 ${round ? 'left-[16%]' : 'left-3'}`}>
+      {(kitchen || guestWaiting > 0 || callsWaiter || callsBill || sentUnseen > 0 || (bill && bill.draft_count > 0)) && (
+        // Wraps rather than running over the tone dot on the right: a busy
+        // table at dinner can carry four marks at once.
+        <span
+          className={`absolute top-2.5 flex flex-wrap items-center gap-1 ${
+            round ? 'left-[16%] right-[24%]' : 'left-3 right-8'
+          }`}
+        >
+          {callsWaiter && (
+            <span
+              data-testid={`table-call-waiter-${table.id}`}
+              title="Гість кличе офіціанта"
+              className="h-5 px-1 rounded-md bg-[#8A6CEF]/15 inline-flex items-center animate-pulse"
+            >
+              <User size={14} aria-hidden />
+              <span className="sr-only">Гість кличе офіціанта</span>
+            </span>
+          )}
+          {callsBill && (
+            <span
+              data-testid={`table-call-bill-${table.id}`}
+              title="Гість просить рахунок"
+              className="h-5 px-1 rounded-md bg-[#1B9DF0]/15 inline-flex items-center animate-pulse"
+            >
+              <Receipt size={14} aria-hidden />
+              <span className="sr-only">Гість просить рахунок</span>
+            </span>
+          )}
+          {sentUnseen > 0 && (
+            <span
+              data-testid={`table-sent-${table.id}`}
+              title="Гість замовив сам — уже на кухні"
+              className="h-5 px-1 rounded-md bg-[#F4891F]/15 text-[#B35F0C] text-[11px] font-semibold inline-flex items-center gap-0.5 animate-pulse"
+            >
+              <ChefHat size={14} aria-hidden />
+              {sentUnseen > 1 ? sentUnseen : null}
+              <span className="sr-only">Замовлення гостя вже на кухні</span>
+            </span>
+          )}
           {guestWaiting > 0 && (
             <span
               data-testid={`table-guest-${table.id}`}
@@ -132,9 +189,20 @@ export function TableTile({ seat, now, meId, onOpen, disabled, guestWaiting = 0 
 /**
  * The four states in words, for the header — the same colours as the tiles.
  * `guest` adds the fifth mark, shown only while some guest is waiting: a
- * legend that explains a badge nobody can see is noise.
+ * legend that explains a badge nobody can see is noise. The same rule for the
+ * call and auto-order marks (Q8/Q9).
  */
-export function ToneLegend({ guest = false }: { guest?: boolean }): JSX.Element {
+export function ToneLegend({
+  guest = false,
+  callWaiter = false,
+  callBill = false,
+  sent = false,
+}: {
+  guest?: boolean;
+  callWaiter?: boolean;
+  callBill?: boolean;
+  sent?: boolean;
+}): JSX.Element {
   const dots: Record<TableTone, string> = {
     free: 'bg-sq-divider',
     mine: 'bg-sq-blue',
@@ -153,6 +221,26 @@ export function ToneLegend({ guest = false }: { guest?: boolean }): JSX.Element 
         <span className="flex items-center gap-1.5">
           <Bell size={14} className="text-sq-blue" aria-hidden />
           Запит гостя
+        </span>
+      )}
+      {callWaiter && (
+        <span className="flex items-center gap-1.5">
+          <User size={14} aria-hidden />
+          Кличе офіціанта
+        </span>
+      )}
+      {callBill && (
+        // Not «Просить рахунок»: that is the red ring of a printed pre-bill,
+        // one entry up, and two lines a letter apart would read as one.
+        <span className="flex items-center gap-1.5">
+          <Receipt size={14} aria-hidden />
+          Рахунок з телефону
+        </span>
+      )}
+      {sent && (
+        <span className="flex items-center gap-1.5">
+          <ChefHat size={14} aria-hidden />
+          Замовив сам — на кухні
         </span>
       )}
     </div>

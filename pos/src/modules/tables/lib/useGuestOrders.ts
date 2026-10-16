@@ -14,15 +14,31 @@
 //
 // Nothing here is mirrored. A request is a live thing with a thirty-minute
 // life; a copy on the till would be a list of guests nobody can still answer.
+//
+// The same answer also carries (Q8/Q9) the guests' calls — «покличте
+// офіціанта», «принесіть рахунок» — and the orders that went straight to the
+// kitchen without a waiter, until somebody says «Бачу». A backend older than
+// that sends `orders` alone, which reads as no calls and nothing sent.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as tablesApi from './tablesApi';
 import { useVisiblePoll } from './usePolling';
-import type { GuestOrder } from './types';
+import type { GuestOrder, SentGuestOrder, WaiterCall } from './types';
 
 export interface GuestOrdersState {
   orders: GuestOrder[];
+  /** Orders already in the kitchen that no waiter has said «Бачу» to. */
+  sent: SentGuestOrder[];
+  /** Guests calling a waiter or asking for the bill, not yet answered. */
+  calls: WaiterCall[];
+  /** At least one answer has come back — until then the empty lists are «not known yet», not «nothing». */
+  loaded: boolean;
   refresh: () => Promise<void>;
+}
+
+/** Same list, same object: a poll that found nothing new must not re-render a panel the waiter is tapping. */
+function keep<T>(prev: T[], next: T[]): T[] {
+  return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
 }
 
 export interface GuestOrdersOptions {
@@ -34,6 +50,9 @@ export interface GuestOrdersOptions {
 
 export function useGuestOrders({ online, tableId = null }: GuestOrdersOptions): GuestOrdersState {
   const [orders, setOrders] = useState<GuestOrder[]>([]);
+  const [sent, setSent] = useState<SentGuestOrder[]>([]);
+  const [calls, setCalls] = useState<WaiterCall[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -48,10 +67,13 @@ export function useGuestOrders({ online, tableId = null }: GuestOrdersOptions): 
     try {
       const answer = await tablesApi.listGuestOrders(tableId ?? undefined);
       if (!mountedRef.current) return;
-      const next = Array.isArray(answer?.orders) ? answer.orders : [];
-      // Same list, same object: a poll that found nothing new must not
-      // re-render a panel the waiter is in the middle of tapping.
-      setOrders((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+      const nextOrders = Array.isArray(answer?.orders) ? answer.orders : [];
+      const nextSent = Array.isArray(answer?.sent) ? answer.sent : [];
+      const nextCalls = Array.isArray(answer?.calls) ? answer.calls : [];
+      setOrders((prev) => keep(prev, nextOrders));
+      setSent((prev) => keep(prev, nextSent));
+      setCalls((prev) => keep(prev, nextCalls));
+      setLoaded(true);
     } catch {
       // Silence, on purpose — see the header.
     }
@@ -60,6 +82,9 @@ export function useGuestOrders({ online, tableId = null }: GuestOrdersOptions): 
   useEffect(() => {
     if (!online) {
       setOrders([]);
+      setSent([]);
+      setCalls([]);
+      setLoaded(false);
       return;
     }
     void refresh();
@@ -67,5 +92,5 @@ export function useGuestOrders({ online, tableId = null }: GuestOrdersOptions): 
 
   useVisiblePoll(refresh, online);
 
-  return { orders, refresh };
+  return { orders, sent, calls, loaded, refresh };
 }
