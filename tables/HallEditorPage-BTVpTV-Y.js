@@ -1,4 +1,4 @@
-import { A as e, C as t, F as n, Z as r, c as i, h as a, l as o, p as s, q as c, t as l, w as u, x as d } from "./useHallMap-CcjEe5nT.js";
+import { C as e, E as t, L as n, M as r, T as i, Y as a, _ as o, et as s, l as c, m as l, t as u, u as d } from "./useHallMap-BvQLb8Lp.js";
 import { useCallback as f, useEffect as p, useMemo as m, useRef as h, useState as g } from "react";
 import { Fragment as _, jsx as v, jsxs as y } from "react/jsx-runtime";
 import { Link as b } from "react-router-dom";
@@ -152,7 +152,7 @@ function j(e) {
 }
 async function M() {
 	try {
-		let e = await u("get", "/store/public-menu");
+		let e = await t("get", "/store/public-menu");
 		if (e?.available === !1) return { kind: "none" };
 		if (e?.enabled === !0 && j(e.url)) {
 			let t = typeof e.print == "string" && A.test(e.print) ? e.print : null;
@@ -183,7 +183,7 @@ var P = {
 	shape: "rect"
 };
 function F() {
-	let [n, u] = g([]), [h, b] = g(null), [O, A] = g(!0), [j, F] = g(null), [I, L] = g(!1), [R, z] = g(null), [B, V] = g(P), [H, U] = g(""), [W, G] = g({ kind: "none" });
+	let [t, n] = g([]), [h, b] = g(null), [O, A] = g(!0), [j, F] = g(null), [I, L] = g(!1), [R, z] = g(null), [B, V] = g(P), [H, U] = g(""), [W, G] = g({ kind: "none" });
 	p(() => {
 		let e = !0;
 		return M().then((t) => {
@@ -194,10 +194,10 @@ function F() {
 	}, []);
 	let K = f(async () => {
 		try {
-			let { halls: e } = await s();
-			u(e);
+			let { halls: e } = await l();
+			n(e);
 		} catch (e) {
-			F(l(e, "Не вдалося прочитати зали"));
+			F(u(e, "Не вдалося прочитати зали"));
 		} finally {
 			A(!1);
 		}
@@ -205,27 +205,27 @@ function F() {
 	p(() => {
 		K();
 	}, [K]);
-	let q = n.find((e) => e.id === h) ?? n[0] ?? null, J = m(() => q?.tables ?? [], [q]), Y = m(() => T(J), [J]), X = !!((typeof R == "number" ? J.find((e) => e.id === R) : void 0)?.is_active && q?.is_active), Z = n.some((e) => e.is_active && e.tables.some((e) => e.is_active));
+	let q = t.find((e) => e.id === h) ?? t[0] ?? null, J = m(() => q?.tables ?? [], [q]), Y = m(() => T(J), [J]), X = !!((typeof R == "number" ? J.find((e) => e.id === R) : void 0)?.is_active && q?.is_active), Z = t.some((e) => e.is_active && e.tables.some((e) => e.is_active));
 	async function Q(e) {
 		if (I) return !1;
 		L(!0), F(null);
 		try {
 			return await e(), await K(), !0;
 		} catch (e) {
-			return await K(), F(l(e, "Не вдалося зберегти")), !1;
+			return await K(), F(u(e, "Не вдалося зберегти")), !1;
 		} finally {
 			L(!1);
 		}
 	}
-	let { drag: $, start: te, suppressClick: ne } = k(f((e, t, n) => {
+	let { drag: $, start: te, suppressClick: ne } = k(f((e, t, r) => {
 		if (!q) return;
-		let r = q.tables.find((t) => t.id === e);
-		if (!r) return;
-		let i = w(r, C(t, n)), o = D(q.tables, e, i), s = E(q.tables, o);
-		s.length !== 0 && (u((e) => e.map((e) => e.id === q.id ? {
+		let i = q.tables.find((t) => t.id === e);
+		if (!i) return;
+		let a = w(i, C(t, r)), s = D(q.tables, e, a), c = E(q.tables, s);
+		c.length !== 0 && (n((e) => e.map((e) => e.id === q.id ? {
 			...e,
-			tables: o
-		} : e)), Q(() => a(s)));
+			tables: s
+		} : e)), Q(() => o(c)));
 	}, [q, I]));
 	function re(e) {
 		z(e.id), V({
@@ -237,12 +237,12 @@ function F() {
 		});
 	}
 	async function ie() {
-		q && await Q(() => R === "new" ? o({
+		q && await Q(() => R === "new" ? d({
 			...B,
 			hall_id: q.id,
 			pos_x: 0,
 			pos_y: 0
-		}) : t(R, B)) && z(null);
+		}) : i(R, B)) && z(null);
 	}
 	return O ? /* @__PURE__ */ v("p", {
 		className: "p-6 text-center text-sm text-sq-muted",
@@ -252,7 +252,7 @@ function F() {
 		"data-testid": "hall-editor",
 		children: [
 			/* @__PURE__ */ v(x, {
-				glyph: r,
+				glyph: s,
 				title: "Зали і столи",
 				subtitle: q ? "Перетягніть стіл, щоб поставити його на місце. Тап — щоб змінити." : void 0,
 				actions: q && /* @__PURE__ */ y(_, { children: [W.kind === "on" && Z && /* @__PURE__ */ v("a", {
@@ -270,15 +270,15 @@ function F() {
 					onClick: () => {
 						z("new"), V(P);
 					},
-					children: [/* @__PURE__ */ v(c, { size: 20 }), "Стіл"]
+					children: [/* @__PURE__ */ v(a, { size: 20 }), "Стіл"]
 				})] })
 			}),
 			/* @__PURE__ */ y("div", {
 				className: "mb-4 flex flex-wrap items-center gap-3",
 				children: [
-					n.length > 0 && /* @__PURE__ */ v(S, {
+					t.length > 0 && /* @__PURE__ */ v(S, {
 						value: String(q?.id ?? ""),
-						options: n.map((e) => ({
+						options: t.map((e) => ({
 							value: String(e.id),
 							label: `${e.name}${e.is_active ? "" : " · прибрано"}`,
 							testId: `editor-hall-${e.id}`
@@ -290,7 +290,7 @@ function F() {
 						className: "min-h-11 text-[15px] font-semibold text-sq-blue disabled:opacity-50",
 						"data-testid": "editor-hall-retire",
 						disabled: I,
-						onClick: () => void Q(() => d(q.id, { is_active: !q.is_active })),
+						onClick: () => void Q(() => e(q.id, { is_active: !q.is_active })),
 						children: q.is_active ? "Прибрати залу" : "Повернути залу"
 					}),
 					/* @__PURE__ */ y("div", {
@@ -308,7 +308,7 @@ function F() {
 							disabled: I || H.trim().length === 0,
 							onClick: () => {
 								let e = H.trim();
-								U(""), Q(() => i(e));
+								U(""), Q(() => c(e));
 							},
 							children: "Додати залу"
 						})]
@@ -324,7 +324,7 @@ function F() {
 				className: "py-14 text-center",
 				"data-testid": "editor-empty",
 				children: [
-					/* @__PURE__ */ v(r, {
+					/* @__PURE__ */ v(s, {
 						size: 48,
 						className: "mx-auto"
 					}),
@@ -347,36 +347,36 @@ function F() {
 					gridAutoRows: "72px",
 					gap: "4px"
 				},
-				children: J.map((t) => {
-					let n = $.id === t.id;
+				children: J.map((e) => {
+					let t = $.id === e.id;
 					return /* @__PURE__ */ y("button", {
 						type: "button",
-						"data-testid": `editor-table-${t.id}`,
-						"data-dragging": n ? "yes" : "no",
-						onPointerDown: (e) => te(e, t.id),
-						onClick: (e) => {
+						"data-testid": `editor-table-${e.id}`,
+						"data-dragging": t ? "yes" : "no",
+						onPointerDown: (t) => te(t, e.id),
+						onClick: (t) => {
 							if (ne()) {
-								e.preventDefault();
+								t.preventDefault();
 								return;
 							}
-							re(t);
+							re(e);
 						},
-						className: `flex flex-col items-center justify-center gap-0.5 p-2 text-center transition-shadow ${t.shape === "round" ? "rounded-full" : "rounded-card"} ${t.is_active ? n || R === t.id ? "bg-white ring-2 ring-sq-blue shadow-card-hover" : "bg-white ring-1 ring-sq-divider shadow-card" : "bg-sq-empty opacity-60"}`,
+						className: `flex flex-col items-center justify-center gap-0.5 p-2 text-center transition-shadow ${e.shape === "round" ? "rounded-full" : "rounded-card"} ${e.is_active ? t || R === e.id ? "bg-white ring-2 ring-sq-blue shadow-card-hover" : "bg-white ring-1 ring-sq-divider shadow-card" : "bg-sq-empty opacity-60"}`,
 						style: {
-							gridColumn: `${t.pos_x + 1} / span ${t.width}`,
-							gridRow: `${t.pos_y + 1} / span ${t.height}`,
+							gridColumn: `${e.pos_x + 1} / span ${e.width}`,
+							gridRow: `${e.pos_y + 1} / span ${e.height}`,
 							touchAction: "none",
-							transform: n ? `translate(${$.dx}px, ${$.dy}px)` : void 0,
-							zIndex: n ? 10 : void 0
+							transform: t ? `translate(${$.dx}px, ${$.dy}px)` : void 0,
+							zIndex: t ? 10 : void 0
 						},
 						children: [/* @__PURE__ */ v("span", {
 							className: "text-[26px] font-bold leading-none text-sq-heading tabular-nums",
-							children: t.name
+							children: e.name
 						}), /* @__PURE__ */ v("span", {
 							className: "text-[13px] text-sq-muted",
-							children: e(t.seats)
+							children: r(e.seats)
 						})]
-					}, t.id);
+					}, e.id);
 				})
 			}),
 			R != null && /* @__PURE__ */ y("div", {
@@ -495,7 +495,7 @@ function F() {
 								"data-testid": "editor-form-retire",
 								disabled: I,
 								onClick: async () => {
-									await Q(() => t(R, { is_active: !1 })) && z(null);
+									await Q(() => i(R, { is_active: !1 })) && z(null);
 								},
 								children: "Прибрати із зали"
 							})

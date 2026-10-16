@@ -1,16 +1,16 @@
 {
   "schema": 1,
   "moduleId": "tables",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "minHostPlatform": 18,
   "entry": "remote-entry.js",
   "keyId": "2a73632c13044371",
-  "builtAt": "2026-10-07T20:13:08.726Z",
+  "builtAt": "2026-10-16T20:46:45.943Z",
   "files": {
-    "HallEditorPage-BofMUXxN.js": "sha384-XxNW8NGE3Ks7zgWN4DxFChhWhFYD4HncBuQXPgTjG58/68EiseN8JzP8aQXgA4GV",
-    "TablesRoutes-CFQhRj0s.js": "sha384-luR2kAduFjDl3IisulqZA3adAuS6+72bj5GoxNsMgvxjkcc9Igi/yF7fTKRm1fu8",
-    "remote-entry.js": "sha384-A4KeVC+13TFIBRXRJBgrQ+AYjl5E24p/cvhq5bXx6xe6r8KDtKBDN4Ozt/zGWW8d",
-    "style.css": "sha384-32DQj6SrgrUTHTGEY82BY3wYV159TD55oqFTgXIPP9i9PA9BfWezQQl1vfZTZMe2",
-    "useHallMap-CcjEe5nT.js": "sha384-2wNiYXuZdBPkxvpPI62544pjS/1Gf+ZyMWmId/nkTrB06JwMWtFqMqPSzuIdrnGq"
+    "HallEditorPage-BTVpTV-Y.js": "sha384-mtDgAZjx067x+vDdpoltoPrw4MVQQ4/t/MTonEArMQt1wv3C5gfzVl922yu9oTUA",
+    "TablesRoutes-B_7PTMUG.js": "sha384-L74XE4wdXZKrBdV3GExOwj8p1Lnfce6+oevNN3WH7M68EUqE6Cq/kv1qBFl3/wYF",
+    "remote-entry.js": "sha384-3rJ+iMaoEQ3IxA6wQQkm/NE/s2HpvSCK6tpLOmZG7GaT8QiAnwPV1GE7Vh8kS0s6",
+    "style.css": "sha384-T6Z30d0jRs+FpiGGg5DeLQOjUz88yvned7vSlbvCM5pttp1k/73QLywH14ZCHs7s",
+    "useHallMap-BvQLb8Lp.js": "sha384-ad4CofxHWDujB3d0t/EnGpqsVJBBEfkEwagz2Y8qYzCK9qzs0e6CX1NVeWAeaUOD"
   }
 }
