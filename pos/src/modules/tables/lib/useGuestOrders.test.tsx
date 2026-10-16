@@ -127,4 +127,29 @@ describe('useGuestOrders', () => {
     await tick(POLL_MS * 3);
     expect(listGuestOrders).not.toHaveBeenCalled();
   });
+
+  it('hands over calls and orders that went to the kitchen, and says when it has an answer', async () => {
+    const call = { id: 70, kind: 'waiter', table_id: 11, table_name: '5', hall_name: 'Зала', created_at: '', expires_at: '', has_open_bill: false };
+    const sent = { id: 80, table_id: 11, table_name: '5', hall_name: 'Зала', created_at: '', bill_id: 90, round_seq: 1, bill_opened_by_guest: false, total_cents: 100, lines: [] };
+    let resolve: (v: unknown) => void = () => undefined;
+    listGuestOrders.mockImplementationOnce(() => new Promise((r) => { resolve = r; }));
+    const { result } = renderHook(() => useGuestOrders({ online: true }));
+    expect(result.current.loaded).toBe(false);
+    await act(async () => {
+      resolve({ orders: [], sent: [sent], calls: [call] });
+    });
+    expect(result.current.loaded).toBe(true);
+    expect(result.current.calls.map((c) => c.id)).toEqual([70]);
+    expect(result.current.sent.map((o) => o.id)).toEqual([80]);
+  });
+
+  it('reads an older backend’s answer — orders alone — as no calls and nothing sent', async () => {
+    listGuestOrders.mockResolvedValue({ orders: [order(1)] });
+    const { result } = renderHook(() => useGuestOrders({ online: true }));
+    await tick(0);
+    expect(result.current.orders.map((o) => o.id)).toEqual([1]);
+    expect(result.current.calls).toEqual([]);
+    expect(result.current.sent).toEqual([]);
+    expect(result.current.loaded).toBe(true);
+  });
 });

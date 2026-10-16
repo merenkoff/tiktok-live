@@ -8,7 +8,7 @@
 
 import { posRequest } from './hostPlatform';
 import type { TablePosition } from './layout';
-import type { Bill, GuestOrder, GuestOrderAccepted, OpenBillSummary, PosHall, PosTable, TableShape } from './types';
+import type { Bill, GuestFeed, GuestOrderAccepted, OpenBillSummary, PosHall, PosTable, TableShape } from './types';
 
 /** The room, as the owner laid it out. */
 export function listHalls(): Promise<{ halls: PosHall[] }> {
@@ -160,8 +160,8 @@ export function markPrecheck(billId: number): Promise<Bill> {
  * Older than its time-to-live is already dropped by the server, so what comes
  * back is what can still be accepted right now.
  */
-export function listGuestOrders(tableId?: number): Promise<{ orders: GuestOrder[] }> {
-  return posRequest<{ orders: GuestOrder[] }>(
+export function listGuestOrders(tableId?: number): Promise<GuestFeed> {
+  return posRequest<GuestFeed>(
     'get',
     tableId == null ? '/guest-orders' : `/guest-orders?table_id=${tableId}`
   );
@@ -186,6 +186,19 @@ export function acceptGuestOrder(orderId: number, excludeItemIds: number[] = [])
 /** Turn a request down; the reason, when there is one, is what the guest reads on their phone. */
 export function rejectGuestOrder(orderId: number, reason?: string): Promise<{ status: 'rejected' }> {
   return posRequest<{ status: 'rejected' }>('post', `/guest-orders/${orderId}/reject`, reason ? { reason } : {});
+}
+
+/**
+ * «Бачу» on an order that went straight to the kitchen (Q9). If that order
+ * opened the bill, the table becomes this waiter's. Idempotent.
+ */
+export function markGuestOrderSeen(orderId: number): Promise<{ seen: true; bill_id: number | null }> {
+  return posRequest<{ seen: true; bill_id: number | null }>('post', `/guest-orders/${orderId}/seen`);
+}
+
+/** «Іду» to a guest's call (Q8). Idempotent; a call the guest took back or that ran out is a 409. */
+export function answerWaiterCall(callId: number): Promise<{ status: 'answered'; already: boolean }> {
+  return posRequest<{ status: 'answered'; already: boolean }>('post', `/waiter-calls/${callId}/answer`);
 }
 
 // ── the owner's hall editor (К4i) ──────────────────────────────────────────

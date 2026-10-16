@@ -20,6 +20,11 @@
 // is where its request is answered — and answering it is the one thing here
 // that seats a table for the waiter, because accepting opens the bill.
 //
+// Above the requests, the louder two (Q8/Q9): calls — «Іду» answers them, and
+// the guest's phone reads «Офіціант іде» — and orders the owner let go
+// straight to the kitchen, which are already cooking and want a «Бачу». Each
+// new one rings (`useNotifyChime`), unless the waiter switched the sound off.
+//
 // Writes are online only, and the screen says so rather than pretending: the
 // bill lives on the server (§4.10). Reads are not: К4j gives the till a
 // read-only mirror, so when the Wi-Fi blinks the waiter still sees which
@@ -30,14 +35,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore, useOfflineStatus, usePosShell } from '@pos/platform';
 import { Bell } from '@pos/platform/ui';
+import { GuestAlertsPanel } from '../components/GuestAlertsPanel';
 import { GuestOrdersPanel } from '../components/GuestOrdersPanel';
 import type { AcceptOutcome } from '../components/GuestOrdersPanel';
 import { TableTile, ToneLegend } from '../components/TableTile';
 import { hallExtent, seatsOfHall, visibleHalls } from '../lib/hallMap';
 import type { TableSeat } from '../lib/hallMap';
-import { refusedLineId, requestsLabel, waitingByTable } from '../lib/guestOrders';
-import type { GuestOrder } from '../lib/types';
+import { alertCount, alertKeys, alertsByTable, feedHeadline, refusedLineId } from '../lib/guestOrders';
+import type { GuestOrder, SentGuestOrder, WaiterCall } from '../lib/types';
 import { useGuestOrders } from '../lib/useGuestOrders';
+import { useChimeSetting, useNotifyChime } from '../lib/useNotifyChime';
 import { serverMessage, useHallMap } from '../lib/useHallMap';
 import * as tablesApi from '../lib/tablesApi';
 
@@ -60,7 +67,8 @@ export function HallMapPage(): JSX.Element {
     mirrored: shell !== 'web',
     storeId,
   });
-  const { orders: requests, refresh: refreshRequests } = useGuestOrders({ online });
+  const { orders: requests, sent, calls, loaded, refresh: refreshRequests } = useGuestOrders({ online });
+  const [chime, setChime] = useChimeSetting();
   const [hallId, setHallId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
@@ -82,7 +90,10 @@ export function HallMapPage(): JSX.Element {
     if (arrivalNote) setNoteState({ text: arrivalNote, warn: arrivalWarn });
   }, [arrivalNote, arrivalWarn]);
 
-  const waiting = useMemo(() => waitingByTable(requests), [requests]);
+  const alerts = useMemo(() => alertsByTable({ orders: requests, sent, calls }), [requests, sent, calls]);
+  const keys = useMemo(() => alertKeys({ orders: requests, sent, calls }), [requests, sent, calls]);
+  useNotifyChime(keys, loaded, chime);
+  const anyAlert = requests.length + sent.length + calls.length > 0;
 
   useEffect(() => {
     if (note == null) return;
@@ -165,6 +176,54 @@ export function HallMapPage(): JSX.Element {
     }
   }
 
+  /** «Іду»: the guest's phone reads «Офіціант іде» on its next poll. */
+  async function answerCall(call: WaiterCall): Promise<boolean> {
+    if (!online) {
+      setBanner('Потрібна мережа, щоб відповісти гостю');
+      return false;
+    }
+    setBanner(null);
+    try {
+      await tablesApi.answerWaiterCall(call.id);
+      setNote(`Стіл ${call.table_name}: гість бачить «Офіціант іде»`);
+      return true;
+    } catch (err) {
+      // The guest took it back, or fifteen minutes passed: the server says which.
+      setBanner(serverMessage(err, 'Не вдалося відповісти на виклик'));
+      return false;
+    } finally {
+      void refreshRequests();
+    }
+  }
+
+  /**
+   * «Бачу» on an order that went to the kitchen by itself. When that order
+   * opened the bill the table becomes this waiter's, so the room is read again
+   * to turn its tile «мій».
+   */
+  async function seeSent(order: SentGuestOrder): Promise<boolean> {
+    if (!online) {
+      setBanner('Потрібна мережа');
+      return false;
+    }
+    setBanner(null);
+    try {
+      await tablesApi.markGuestOrderSeen(order.id);
+      setNote(
+        order.bill_opened_by_guest
+          ? `Стіл ${order.table_name} тепер ваш — замовлення вже на кухні`
+          : `Стіл ${order.table_name}: замовлення вже на кухні`
+      );
+      if (order.bill_opened_by_guest) void refresh();
+      return true;
+    } catch (err) {
+      setBanner(serverMessage(err, 'Не вдалося позначити'));
+      return false;
+    } finally {
+      void refreshRequests();
+    }
+  }
+
   async function rejectRequest(order: GuestOrder, reason: string | null): Promise<boolean> {
     if (busy) return false;
     if (!online) {
@@ -213,7 +272,7 @@ export function HallMapPage(): JSX.Element {
               const on = current?.id === hall.id;
               // A request at a table in ANOTHER hall must not be missed by a
               // waiter standing in this one.
-              const asking = hall.tables.reduce((sum, t) => sum + (waiting.get(t.id) ?? 0), 0);
+              const asking = hall.tables.reduce((sum, t) => sum + alertCount(alerts.get(t.id)), 0);
               return (
                 <button
                   key={hall.id}
@@ -243,7 +302,24 @@ export function HallMapPage(): JSX.Element {
           </div>
         )}
         <div className="flex-1" />
-        {current && <ToneLegend guest={requests.length > 0} />}
+        {current && (
+          <ToneLegend
+            guest={requests.length > 0}
+            callWaiter={calls.some((c) => c.kind === 'waiter')}
+            callBill={calls.some((c) => c.kind === 'bill')}
+            sent={sent.length > 0}
+          />
+        )}
+        <button
+          type="button"
+          aria-pressed={chime}
+          data-testid="tables-chime"
+          className="min-h-[34px] rounded-[9px] px-3 text-[13px] font-semibold text-sq-secondary ring-1 ring-sq-divider bg-white"
+          title="Звук і вібрація, коли гість кличе чи замовляє"
+          onClick={() => setChime(!chime)}
+        >
+          {chime ? 'Звук увімкнено' : 'Звук вимкнено'}
+        </button>
       </header>
 
       {stale && (
@@ -274,11 +350,20 @@ export function HallMapPage(): JSX.Element {
         </p>
       )}
 
-      {requests.length > 0 && (
-        <section className="mx-4 md:mx-7 mb-3 max-h-[45vh] overflow-auto" data-testid="tables-requests">
-          <p className="pb-1.5 text-[13px] font-semibold text-sq-secondary">
-            З телефонів гостей · {requestsLabel(requests.length)}
+      {anyAlert && (
+        <section className="mx-4 md:mx-7 mb-3 max-h-[45vh] overflow-auto space-y-2.5" data-testid="tables-requests">
+          <p className="text-[13px] font-semibold text-sq-secondary">
+            З телефонів гостей · {feedHeadline({ requests: requests.length, sent: sent.length, calls: calls.length })}
           </p>
+          <GuestAlertsPanel
+            calls={calls}
+            sent={sent}
+            showTable
+            busy={busy}
+            onAnswer={answerCall}
+            onSeen={seeSent}
+            onOpenBill={(billId) => navigate(`/tables/${billId}`)}
+          />
           <GuestOrdersPanel
             orders={requests}
             showTable
@@ -332,7 +417,9 @@ export function HallMapPage(): JSX.Element {
               now={now}
               meId={meId}
               disabled={busy}
-              guestWaiting={waiting.get(seat.table.id) ?? 0}
+              guestWaiting={alerts.get(seat.table.id)?.requests ?? 0}
+              calling={alerts.get(seat.table.id)}
+              sentUnseen={alerts.get(seat.table.id)?.sent ?? 0}
               onOpen={(s) => void open(s)}
             />
           ))}

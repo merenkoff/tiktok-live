@@ -293,6 +293,13 @@ describe('BillPage', () => {
     expect(screen.getByTestId('bill-owed')).toHaveTextContent('0');
   });
 
+  it('says which round a guest’s order sent by itself, and names nobody for a waiter’s', async () => {
+    bill.rounds = [round({ id: 7 }), round({ id: 8, seq: 2, fired_by: null, fired_by_name: 'Гість · QR-меню' })];
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    expect(await screen.findByTestId('bill-round-guest-8')).toHaveTextContent('Гість · QR-меню');
+    expect(screen.queryByTestId('bill-round-guest-7')).toBeNull();
+  });
+
   it('does not offer to cancel a round the guest already has', async () => {
     bill.rounds = [round({ prep_status: 'served', served_at: 'x' })];
     renderWithProviders(<BillPage />, { route: '/tables/90' });
@@ -780,14 +787,18 @@ describe('BillPage — guest requests (Q7)', () => {
   });
 
   let requests: Array<Record<string, unknown>> = [];
+  let roomSent: Array<Record<string, unknown>> = [];
+  let roomCalls: Array<Record<string, unknown>> = [];
   let handle: (method: string, path: string, body?: unknown) => unknown = () => undefined;
 
   beforeEach(() => {
     requests = [askFor()];
+    roomSent = [];
+    roomCalls = [];
     handle = () => undefined;
     posRequest.mockImplementation(async (method: string, path: string, body?: unknown) => {
       if (method === 'get' && path === '/bills/90') return bill;
-      if (method === 'get' && path === '/guest-orders?table_id=11') return { orders: requests };
+      if (method === 'get' && path === '/guest-orders') return { orders: requests, sent: roomSent, calls: roomCalls };
       const custom = handle(method, path, body);
       if (custom !== undefined) return custom;
       throw new Error(`unexpected ${method} ${path}`);
@@ -797,16 +808,60 @@ describe('BillPage — guest requests (Q7)', () => {
   const posted = (path: string): unknown[] | undefined =>
     posRequest.mock.calls.find((c) => c[0] === 'post' && c[1] === path);
 
-  it('lists this table’s requests above the menu, asking the server for this table only', async () => {
+  it('lists this table’s requests above the menu, and only this table’s on the cards', async () => {
+    // The poll reads the whole room (Q8: a waiter on one bill must still hear
+    // another table calling); the cards are this table's alone.
+    requests = [askFor(), askFor({ id: 6, table_id: 12, table_name: '7', lines: [{ id: 61, name: 'Чай', caption: '', quantity: 1, note: '', problem: null }] })];
     renderWithProviders(<BillPage />, { route: '/tables/90' });
     const list = await screen.findByTestId('bill-requests');
     expect(within(list).getByTestId('guest-order-5')).toHaveTextContent('Гість просить');
     expect(within(list).getByTestId('guest-line-51')).toHaveTextContent('Борщ');
+    expect(within(list).queryByTestId('guest-order-6')).toBeNull();
     // Not on the bill yet — and it must not look like it is.
     expect(within(screen.getByTestId('bill-pane')).queryByText('Борщ')).toBeNull();
-    expect(posRequest).toHaveBeenCalledWith('get', '/guest-orders?table_id=11', undefined);
-    // …and never the whole room's.
-    expect(posRequest).not.toHaveBeenCalledWith('get', '/guest-orders', undefined);
+    expect(posRequest).toHaveBeenCalledWith('get', '/guest-orders', undefined);
+    // The other table is one line under the header, with the way back to the room.
+    expect(screen.getByTestId('bill-elsewhere')).toHaveTextContent('Стіл 7 — запит');
+  });
+
+  it('shows this table’s call and its auto-sent order on cards, answers «Іду» and «Бачу», and reloads a bill a guest opened', async () => {
+    requests = [];
+    roomCalls = [
+      { id: 70, kind: 'bill', table_id: 11, table_name: '5', hall_name: 'Зала', created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 9e5).toISOString(), has_open_bill: true },
+      { id: 71, kind: 'waiter', table_id: 12, table_name: '7', hall_name: 'Зала', created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 9e5).toISOString(), has_open_bill: false },
+    ];
+    roomSent = [
+      { id: 80, table_id: 11, table_name: '5', hall_name: 'Зала', created_at: new Date().toISOString(), bill_id: 90, round_seq: 2, bill_opened_by_guest: true, total_cents: 28500, lines: [{ name: 'Сирна тарілка', caption: '', quantity: 1, note: '' }] },
+    ];
+    handle = (method, path) => {
+      if (method === 'post' && path === '/waiter-calls/70/answer') {
+        roomCalls = roomCalls.filter((c) => c.id !== 70);
+        return { status: 'answered', already: false };
+      }
+      if (method === 'post' && path === '/guest-orders/80/seen') {
+        roomSent = [];
+        return { seen: true, bill_id: 90 };
+      }
+      return undefined;
+    };
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    const list = await screen.findByTestId('bill-requests');
+    expect(within(list).getByTestId('guest-call-70')).toHaveTextContent('Просить рахунок');
+    // Table 7's call is not this bill's card — it is the line under the header.
+    expect(within(list).queryByTestId('guest-call-71')).toBeNull();
+    expect(screen.getByTestId('bill-elsewhere')).toHaveTextContent('Стіл 7 — кличе офіціанта');
+
+    await userEvent.click(within(list).getByTestId('guest-call-answer-70'));
+    expect(posted('/waiter-calls/70/answer')).toBeTruthy();
+    await waitFor(() => expect(screen.queryByTestId('guest-call-70')).toBeNull());
+
+    const billReads = posRequest.mock.calls.filter((c) => c[0] === 'get' && c[1] === '/bills/90').length;
+    await userEvent.click(screen.getByTestId('guest-sent-seen-80'));
+    expect(posted('/guest-orders/80/seen')).toBeTruthy();
+    await waitFor(() =>
+      expect(posRequest.mock.calls.filter((c) => c[0] === 'get' && c[1] === '/bills/90').length).toBeGreaterThan(billReads)
+    );
+    await waitFor(() => expect(screen.queryByTestId('guest-sent-80')).toBeNull());
   });
 
   it('shows nothing extra when nobody at the table is asking', async () => {

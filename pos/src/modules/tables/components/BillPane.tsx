@@ -146,6 +146,16 @@ export function BillPane({
                       {formatUah(round.total_cents)}
                     </span>
                   )}
+                  {round.fired_by == null && round.fired_by_name && (
+                    // A round a guest's order sent by itself (Q9): nobody on
+                    // the staff fired it, and the waiter should see that here.
+                    <span
+                      className="ml-2 rounded-md bg-[#F4891F]/15 px-1.5 py-0.5 text-[12px] font-semibold text-[#B35F0C]"
+                      data-testid={`bill-round-guest-${round.id}`}
+                    >
+                      {round.fired_by_name}
+                    </span>
+                  )}
                 </p>
                 <span className={`text-[13px] font-semibold ${cancelled ? 'text-sq-muted' : ROUND_TONE[round.prep_status]}`}>
                   {cancelled
