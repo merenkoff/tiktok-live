@@ -166,4 +166,50 @@ describe.skipIf(!hasDb || !canCreate)('POS migrations, applied the way the runne
     );
     expect(idx.rows.map((r) => r.indexname)).toEqual(['idx_pos_stock_doc_lines_placeholder_key_uniq']);
   });
+
+  it('comes up again with a guest order the kitchen already took (068 `sent`)', async () => {
+    // 058 runs before 068 on every boot and drops + re-adds the status CHECK.
+    // With 058's original list the second boot after the first auto-sent order
+    // died on `check constraint "pos_guest_orders_status_check" … is violated`.
+    const store = await probe.query(`INSERT INTO pos_stores (name, slug) VALUES ('Probe', 'probe-sent') RETURNING id`);
+    const storeId = store.rows[0].id;
+    const hall = await probe.query(`INSERT INTO pos_halls (store_id, name) VALUES ($1, 'Зал') RETURNING id`, [storeId]);
+    const table = await probe.query(`INSERT INTO pos_tables (store_id, hall_id, name) VALUES ($1, $2, '1') RETURNING id`, [
+      storeId,
+      hall.rows[0].id,
+    ]);
+    await probe.query(
+      `INSERT INTO pos_guest_orders (store_id, table_id, client_uuid, status, expires_at)
+       VALUES ($1, $2, gen_random_uuid(), 'sent', NOW() + INTERVAL '30 minutes')`,
+      [storeId, table.rows[0].id]
+    );
+    await expect(applyAll(probe)).resolves.toBeUndefined();
+  });
+});
+
+/**
+ * A constraint that two files add by the same name is re-added by BOTH on every
+ * boot, the earlier one first. If a later file widens it and the earlier one is
+ * left alone, the earlier one narrows it back — harmless on an empty table, a
+ * boot that never comes up once a row uses the new value (058/068 `sent`). So
+ * every file that adds a constraint by a given name must add the same thing.
+ */
+describe('constraints added by more than one migration', () => {
+  it('are added identically by each of them', () => {
+    const statements = new Map<string, Map<string, string>>();
+    for (const file of POS_MIGRATIONS) {
+      const sql = readMigration(file).replace(/--[^\n]*/g, '');
+      for (const match of sql.matchAll(/ADD\s+CONSTRAINT\s+(\w+)([^;]*);/gi)) {
+        const name = match[1]!;
+        const body = match[2]!.replace(/\s+/g, ' ').trim();
+        if (!statements.has(name)) statements.set(name, new Map());
+        statements.get(name)!.set(file, body);
+      }
+    }
+    const shared = [...statements].filter(([, byFile]) => byFile.size > 1);
+    expect(shared.map(([name]) => name)).toContain('pos_guest_orders_status_check');
+    for (const [name, byFile] of shared) {
+      expect(new Set(byFile.values()).size, `${name} in ${[...byFile.keys()].join(', ')}`).toBe(1);
+    }
+  });
 });

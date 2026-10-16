@@ -313,6 +313,57 @@ describe('a table on the guest’s screen', () => {
   });
 });
 
+describe('the dock at a table (Q5–Q9)', () => {
+  const table = { id: 5, name: '5', hall: 'Зал' };
+
+  it('carries only the call row when calling is the one thing switched on', () => {
+    const html = renderMenuPage(MENU, 'tok_ABCdef12', table, { call: true });
+    expect(html).toContain('data-call-url="/api/pos/public/menu/tok_ABCdef12/calls"');
+    expect(html).toContain('<div class="dock">');
+    expect(html).toContain('<button type="button" class="call-btn" data-call="waiter">Покликати офіціанта</button>');
+    expect(html).toContain('<button type="button" class="call-btn" data-call="bill">Попросити рахунок</button>');
+    expect(html).toContain('data-call-status aria-live="polite" hidden');
+    expect(html).not.toContain('data-cart-open');
+    expect(html).not.toContain('data-bill-open');
+    // Still the one static script, whatever the dock holds.
+    expect(html.match(/<script/g)).toHaveLength(1);
+  });
+
+  it('draws no call row, and no address to call, without a table or without the switch', () => {
+    for (const html of [
+      renderMenuPage(MENU, 'tok_ABCdef12', null, { call: true }),
+      renderMenuPage(MENU, 'tok_ABCdef12', table, { bill: true, ordering: true }),
+    ]) {
+      expect(html).not.toContain('data-call');
+      expect(html).not.toContain('call-row');
+    }
+    expect(renderMenuPage(MENU, 'tok_ABCdef12', table)).not.toContain('class="dock"');
+  });
+
+  it('puts the calls above the cart and the bill when all three are on', () => {
+    const html = renderMenuPage(MENU, 'tok_ABCdef12', table, { bill: true, ordering: true, call: true });
+    const row = html.indexOf('data-call-row');
+    expect(row).toBeGreaterThan(-1);
+    expect(row).toBeLessThan(html.indexOf('data-cart-open'));
+    expect(html.indexOf('data-cart-open')).toBeLessThan(html.indexOf('data-bill-open'));
+  });
+
+  it('tells the cart about auto-sending only where ordering is on, in whole kopiykas', () => {
+    const auto = renderMenuPage(MENU, 'tok_ABCdef12', table, {
+      ordering: true,
+      orderAuto: { mode: 'reorders', limitCents: 150000 },
+    });
+    expect(auto).toContain('data-order-auto="reorders" data-order-limit="150000"');
+    const all = renderMenuPage(MENU, 'tok_ABCdef12', table, { ordering: true, orderAuto: { mode: 'all', limitCents: 99.7 } });
+    expect(all).toContain('data-order-auto="all" data-order-limit="99"');
+    // Without ordering there is no cart to tell; with it switched off, nothing to say.
+    expect(renderMenuPage(MENU, 'tok_ABCdef12', table, { orderAuto: { mode: 'all', limitCents: 1000 } })).not.toContain(
+      'data-order-auto'
+    );
+    expect(renderMenuPage(MENU, 'tok_ABCdef12', table, { ordering: true, orderAuto: null })).not.toContain('data-order-auto');
+  });
+});
+
 describe('the «unavailable» page', () => {
   it('names nothing: no store, no token, no link into the product', () => {
     const html = renderUnavailable();

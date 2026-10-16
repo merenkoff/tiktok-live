@@ -48,9 +48,14 @@ CREATE TABLE IF NOT EXISTS pos_guest_orders (
     reject_reason VARCHAR(120)
 );
 
+-- 'sent' is 068's: an order the owner let go straight to the kitchen. It is
+-- listed HERE too because this file is re-applied on every boot, before 068:
+-- a narrower list would re-add a CHECK the first such row violates, and the
+-- restart after it would never come up. Every file that adds this constraint
+-- must carry the same list (`pos.migrations-idempotent.test.ts`).
 ALTER TABLE pos_guest_orders DROP CONSTRAINT IF EXISTS pos_guest_orders_status_check;
 ALTER TABLE pos_guest_orders ADD CONSTRAINT pos_guest_orders_status_check
-  CHECK (status IN ('pending', 'accepted', 'rejected', 'expired', 'cancelled'));
+  CHECK (status IN ('pending', 'accepted', 'rejected', 'expired', 'cancelled', 'sent'));
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_pos_guest_orders_uuid
   ON pos_guest_orders (store_id, client_uuid);

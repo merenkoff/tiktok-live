@@ -25,7 +25,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@pos/platform';
+import { formatUahCompact } from '../../lib/money';
 import { SectionHead } from '../../components/ui/Page';
+import { GuestAutoKitchen, type AutoKitchenMode } from './GuestAutoKitchen';
 
 interface PublicMenuSettings {
   /** This kind of store can publish a menu at all. */
@@ -48,6 +50,21 @@ interface PublicMenuSettings {
    * from an older backend, which is the same as off.
    */
   ordering_enabled?: boolean;
+  /**
+   * Guests at a keyed table may call a waiter or ask for the bill (phase Q8).
+   * Absent from an older backend — then there is no switch to show.
+   */
+  call_enabled?: boolean;
+  /**
+   * Where a guest's order goes (phase Q9): to a waiter first, or straight to
+   * the kitchen for tables already served / always. Absent from an older
+   * backend, which only knows the waiter.
+   */
+  auto_kitchen?: AutoKitchenMode;
+  /** An order dearer than this waits for a waiter whatever the mode. */
+  auto_limit_cents?: number;
+  /** When the owner last confirmed the risks of raising the mode. */
+  auto_ack_at?: string | null;
   /**
    * A short-lived signed suffix (`?p=`) that makes the print pages write each
    * table's key into its QR. Without it the QR still opens the menu, but not
@@ -124,13 +141,49 @@ export function PublicMenuCard() {
           : 'Рахунок гостям більше не показується.'
     );
 
-  const toggleOrdering = (enabled: boolean) =>
-    run(
+  const toggleOrdering = (enabled: boolean) => {
+    // Switching ordering off resets auto-sending on the server; say so when it was on.
+    const wasAuto = settings?.auto_kitchen === 'reorders' || settings?.auto_kitchen === 'all';
+    return run(
       () => api.posRequest<PublicMenuSettings>('patch', '/store/public-menu', { ordering_enabled: enabled }),
       (view) =>
         view.ordering_enabled
           ? 'Гості зможуть надсилати замовлення — вони з’являться в офіціанта.'
-          : 'Замовлення з телефону вимкнено. Запити, що вже чекають, офіціант ще може прийняти.'
+          : 'Замовлення з телефону вимкнено. Запити, що вже чекають, офіціант ще може прийняти.' +
+            (wasAuto ? ' Автовідправку на кухню теж вимкнено.' : '')
+    );
+  };
+
+  const toggleCall = (enabled: boolean) =>
+    run(
+      () => api.posRequest<PublicMenuSettings>('patch', '/store/public-menu', { call_enabled: enabled }),
+      (view) =>
+        view.call_enabled
+          ? 'Гості за столом зможуть покликати офіціанта й попросити рахунок.'
+          : 'Кнопки виклику з меню гостей прибрано.'
+    );
+
+  const setAutoKitchen = (mode: AutoKitchenMode, ack: boolean) =>
+    run(
+      () =>
+        api.posRequest<PublicMenuSettings>(
+          'patch',
+          '/store/public-menu',
+          ack ? { auto_kitchen: mode, auto_kitchen_ack: true } : { auto_kitchen: mode }
+        ),
+      (view) =>
+        view.auto_kitchen === 'all'
+          ? 'Замовлення гостей тепер ідуть одразу на кухню, а офіціант отримує сповіщення.'
+          : view.auto_kitchen === 'reorders'
+            ? 'Дозамовлення столів, які вже обслуговуються, тепер ідуть одразу на кухню.'
+            : 'Кожне замовлення гостя знову спершу приймає офіціант.'
+    );
+
+  const setAutoLimit = (cents: number) =>
+    run(
+      () => api.posRequest<PublicMenuSettings>('patch', '/store/public-menu', { auto_limit_cents: cents }),
+      (view) =>
+        `Замовлення понад ${formatUahCompact(view.auto_limit_cents ?? cents)} чекатимуть офіціанта.`
     );
 
   const rotate = () =>
@@ -175,6 +228,12 @@ export function PublicMenuCard() {
   // visible once on, so an owner can always turn it off.
   const showBillSwitch = tables > 0 || settings.bill_enabled === true;
   const showOrderingSwitch = tables > 0 || settings.ordering_enabled === true;
+  // Phases Q8/Q9 exist only where the backend reports their fields.
+  const showCallSwitch = typeof settings.call_enabled === 'boolean' && (tables > 0 || settings.call_enabled);
+  const autoMode: AutoKitchenMode | null =
+    settings.auto_kitchen === 'off' || settings.auto_kitchen === 'reorders' || settings.auto_kitchen === 'all'
+      ? settings.auto_kitchen
+      : null;
 
   return (
     <section>
@@ -268,9 +327,42 @@ export function PublicMenuCard() {
               <span>Приймати замовлення гостей з телефону</span>
             </label>
             <p className="pl-8 text-[13px] leading-relaxed text-sq-muted">
-              Гість додає страви з меню свого столу й надсилає запит; на кухню нічого не йде, доки офіціант
-              не прийме його. Вмикайте, коли офіціанти вже мають оновлений модуль «Столи» (запити з’являються
-              на плитці столу) — інакше їх ніхто не побачить.
+              {autoMode === 'reorders' || autoMode === 'all'
+                ? 'Гість додає страви з меню свого столу й надсилає замовлення; куди воно йде далі — обрано нижче.'
+                : 'Гість додає страви з меню свого столу й надсилає запит; на кухню нічого не йде, доки офіціант не прийме його.'}{' '}
+              Вмикайте, коли офіціанти вже мають оновлений модуль «Столи» (запити з’являються на плитці столу) —
+              інакше їх ніхто не побачить.
+            </p>
+            {settings.ordering_enabled === true && autoMode !== null && (
+              <GuestAutoKitchen
+                mode={autoMode}
+                limitCents={settings.auto_limit_cents ?? 200000}
+                ackAt={settings.auto_ack_at ?? null}
+                saving={saving}
+                onMode={setAutoKitchen}
+                onLimit={setAutoLimit}
+              />
+            )}
+          </div>
+        )}
+
+        {showCallSwitch && (
+          <div className="space-y-1.5">
+            <label className="min-h-11 flex items-center gap-3 text-[15px] text-sq-text">
+              <input
+                type="checkbox"
+                className={CHECKBOX}
+                checked={settings.call_enabled === true}
+                disabled={saving}
+                onChange={(e) => void toggleCall(e.target.checked)}
+              />
+              <span>Кнопки «Покликати офіціанта» і «Попросити рахунок»</span>
+            </label>
+            <p className="pl-8 text-[13px] leading-relaxed text-sq-muted">
+              Гість за столом кличе офіціанта або просить рахунок з телефону, а офіціант бачить виклик на плані
+              залу й відповідає «Іду». Працює лише за QR столу з ключем — друкуйте QR кнопкою «QR для всіх
+              столів». Вмикайте, коли офіціанти вже мають модуль «Столи», що показує виклики, — інакше на
+              виклик ніхто не прийде.
             </p>
           </div>
         )}

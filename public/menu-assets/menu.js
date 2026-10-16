@@ -474,8 +474,35 @@
       accepted: 'Прийнято — офіціант передав на кухню',
       rejected: 'Не вдалося прийняти',
       expired: 'Час вийшов — надішліть запит ще раз',
-      cancelled: 'Скасовано'
+      cancelled: 'Скасовано',
+      // Phase Q9: the owner let this order skip the waiter.
+      sent: 'Передано на кухню — офіціант отримав сповіщення'
     };
+
+    /* The owner's auto-send (phase Q9), read only to tell the guest honestly
+       what will happen before they press the button: the server decides each
+       order itself, by the same sum. Absent — every order waits for a waiter. */
+    var autoMode = document.body.getAttribute('data-order-auto');
+    var autoLimit = Number(document.body.getAttribute('data-order-limit') || 0);
+    function sendWords() {
+      var price = 'Остаточну ціну фіксує кухня.';
+      if (autoMode !== 'all' && autoMode !== 'reorders') {
+        return { note: 'Це запит: на кухню він піде, коли офіціант його прийме. ' + price, button: 'Надіслати офіціанту' };
+      }
+      if (total() > autoLimit) {
+        return {
+          note: 'Замовлення понад ' + money(autoLimit) + ' спершу прийме офіціант — на кухню воно піде після нього. ' + price,
+          button: 'Надіслати офіціанту'
+        };
+      }
+      if (autoMode === 'all') {
+        return { note: 'Замовлення піде одразу на кухню, а офіціант отримає сповіщення. ' + price, button: 'Надіслати на кухню' };
+      }
+      return {
+        note: 'Якщо офіціант уже обслуговує ваш стіл, замовлення піде одразу на кухню; якщо ні — спершу його прийме офіціант. ' + price,
+        button: 'Надіслати замовлення'
+      };
+    }
 
     function openCart(message) {
       view = 'cart';
@@ -515,7 +542,7 @@
         sum.appendChild(node('span', null, 'Орієнтовно'));
         sum.appendChild(node('b', null, money(total())));
         body.appendChild(sum);
-        body.appendChild(node('p', 'bill-note', 'Це запит: на кухню він піде, коли офіціант його прийме. Остаточну ціну фіксує кухня.'));
+        body.appendChild(node('p', 'bill-note', sendWords().note));
       } else if (!pendingViews().length && !views.length) {
         body.appendChild(node('p', 'bill-note', 'Кошик порожній. Оберіть страви в меню.'));
       }
@@ -542,7 +569,7 @@
       }
 
       if (cart.length) {
-        var send = node('button', 'primary', 'Надіслати офіціанту');
+        var send = node('button', 'primary', sendWords().button);
         send.type = 'button';
         send.addEventListener('click', function () { sendOrder(send); });
         foot.appendChild(send);
@@ -654,6 +681,169 @@
       .catch(function () { /* the poll will bring it */ });
     refresh().then(paintBar);
     paintBar();
+  }
+
+  /* Calling a waiter, or asking for the bill (phase Q8). Two buttons in the
+     dock, drawn by the server with their words; the script greys the one whose
+     call is live and says above them what happened to it. A call lives fifteen
+     minutes on the server; the phone asks after it every few seconds only while
+     one is live and the page is in front of the guest. */
+  var callUrl = document.body.getAttribute('data-call-url');
+  if (callUrl) initCall(callUrl);
+
+  function initCall(endpoint) {
+    var params = new URLSearchParams(window.location.search);
+    var query = '?t=' + encodeURIComponent(params.get('t') || '') + '&k=' + encodeURIComponent(params.get('k') || '');
+    var row = document.querySelector('[data-call-row]');
+    var status = document.querySelector('[data-call-status]');
+    var buttons = document.querySelectorAll('[data-call]');
+    if (!row || !status || !buttons.length) return;
+
+    var CALL_POLL_MS = 8000;
+    var SHOWN_MS = 5 * 60 * 1000;          // how long «Офіціант іде» stays after the answer
+    var TTL_MS = 15 * 60 * 1000;           // the server's life of a call (CALL_TTL_MINUTES)
+    var WORDS = {
+      waiter: {
+        pending: 'Офіціанта покликано',
+        answered: 'Офіціант іде',
+        expired: 'Офіціант не підійшов — покличте ще раз'
+      },
+      bill: {
+        pending: 'Рахунок попросили',
+        answered: 'Офіціант несе рахунок',
+        expired: 'Рахунок не принесли — попросіть ще раз'
+      }
+    };
+    var calls = {};                        // kind -> what the server last said
+    var busy = {};                         // kind -> a request in flight
+    var message = '';
+
+    function node(tag, className, text) {
+      var el = document.createElement(tag);
+      if (className) el.className = className;
+      if (text != null) el.textContent = text;
+      return el;
+    }
+    function age(iso) {
+      var at = Date.parse(iso || '');
+      return isNaN(at) ? Infinity : Date.now() - at;
+    }
+    /* What is worth saying about a kind now: a live call, a fresh answer, a
+       call that has just run out. An old answer or a cancelled call says nothing. */
+    function shown(view) {
+      if (!view) return null;
+      if (view.status === 'pending') return 'pending';
+      if (view.status === 'answered' && age(view.answered_at) < SHOWN_MS) return 'answered';
+      if (view.status === 'expired' && age(view.created_at) < TTL_MS + SHOWN_MS) return 'expired';
+      return null;
+    }
+    function anyPending() {
+      return Object.keys(calls).some(function (kind) { return calls[kind] && calls[kind].status === 'pending'; });
+    }
+
+    function paint() {
+      status.textContent = '';
+      ['waiter', 'bill'].forEach(function (kind) {
+        var state = shown(calls[kind]);
+        if (!state) return;
+        var line = node('div', 'call-line ' + state);
+        line.appendChild(node('b', null, WORDS[kind][state]));
+        if (state === 'pending') {
+          var cancel = node('button', 'link-btn', 'Скасувати');
+          cancel.type = 'button';
+          cancel.addEventListener('click', function () { cancelCall(kind); });
+          line.appendChild(cancel);
+        }
+        status.appendChild(line);
+      });
+      if (message) status.appendChild(node('p', 'call-error', message));
+      status.hidden = status.childNodes.length === 0;
+      for (var i = 0; i < buttons.length; i += 1) {
+        var kind = buttons[i].getAttribute('data-call');
+        var live = calls[kind] && calls[kind].status === 'pending';
+        buttons[i].classList.toggle('on', !!live);
+        buttons[i].disabled = !!live || !!busy[kind];
+      }
+    }
+
+    function remember(list) {
+      calls = {};
+      list.forEach(function (view) { calls[view.kind] = view; });
+    }
+
+    /* Switched off, or this QR is not the table's: the buttons go, and the
+       guest is told once to wave instead. */
+    function gone() {
+      row.hidden = true;
+      calls = {};
+      message = 'Виклик з телефону зараз недоступний — покличте офіціанта жестом.';
+      paint();
+    }
+
+    function load() {
+      return fetch(endpoint + query, { cache: 'no-store', headers: { Accept: 'application/json' } })
+        .then(function (response) {
+          if (response.status === 404) { gone(); return null; }
+          return response.ok ? response.json() : null;
+        })
+        .then(function (data) { if (data && data.calls) { remember(data.calls); paint(); } })
+        .catch(function () { /* offline: keep what is on screen */ });
+    }
+
+    function call(kind) {
+      if (busy[kind]) return;
+      busy[kind] = true;
+      message = '';
+      paint();
+      fetch(endpoint + query, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ kind: kind })
+      })
+        .then(function (response) {
+          return response.json().then(function (data) { return { status: response.status, data: data }; }, function () { return { status: response.status, data: null }; });
+        })
+        .then(function (result) {
+          busy[kind] = false;
+          if (result.status === 201 || result.status === 200) {
+            calls[kind] = result.data;
+          } else if (result.status === 404) {
+            return gone();
+          } else {
+            message = result.data && result.data.error ? result.data.error : 'Не вдалося покликати. Спробуйте ще раз.';
+          }
+          paint();
+        })
+        .catch(function () {
+          busy[kind] = false;
+          // A second tap is safe: the server keeps one live call per table and kind.
+          message = 'Немає зв’язку. Спробуйте ще раз.';
+          paint();
+        });
+    }
+
+    function cancelCall(kind) {
+      fetch(endpoint + '/' + encodeURIComponent(kind) + '/cancel' + query, { method: 'POST' })
+        .then(function () { return load(); })
+        .catch(function () { /* offline: the call stays as it was */ });
+    }
+
+    for (var i = 0; i < buttons.length; i += 1) {
+      buttons[i].addEventListener('click', function (event) {
+        call(event.currentTarget.getAttribute('data-call'));
+      });
+    }
+    // Every tick repaints, so «Офіціант іде» leaves on its own; only a live
+    // call costs a request.
+    window.setInterval(function () {
+      if (document.hidden) return;
+      if (anyPending()) load(); else paint();
+    }, CALL_POLL_MS);
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden && Object.keys(calls).length) load();
+    });
+    // A guest who reloads the page still sees the call they made.
+    load();
   }
 
   /* The tab that matches the section in view. */

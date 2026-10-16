@@ -21,6 +21,10 @@ type Settings = {
   tables?: number;
   bill_enabled?: boolean;
   ordering_enabled?: boolean;
+  call_enabled?: boolean;
+  auto_kitchen?: 'off' | 'reorders' | 'all';
+  auto_limit_cents?: number;
+  auto_ack_at?: string | null;
   print?: string | null;
 };
 
@@ -251,6 +255,163 @@ describe('PublicMenuCard', () => {
 
     await userEvent.click(screen.getByText('Копіювати посилання'));
     expect(screen.getByRole('status')).toHaveTextContent('скопіюйте його вручну');
+  });
+
+  describe('calling a waiter and auto-sending (Q8/Q9)', () => {
+    // What a backend with migration 068 reports for a café with tables.
+    const Q9: Settings = {
+      ...ON,
+      tables: 6,
+      ordering_enabled: true,
+      call_enabled: false,
+      auto_kitchen: 'off',
+      auto_limit_cents: 200000,
+      auto_ack_at: null,
+    };
+    const CALL = 'Кнопки «Покликати офіціанта» і «Попросити рахунок»';
+    const ALL = 'Усі замовлення — одразу на кухню';
+    const REORDERS = 'Дозамовлення — одразу на кухню';
+    const WAITER = 'Спершу до офіціанта';
+
+    it('shows the call switch only where the backend knows it and there are tables, and switches its own field', async () => {
+      posRequest.mockResolvedValueOnce({ ...ON, tables: 6 });
+      const older = renderWithProviders(<PublicMenuCard />);
+      await screen.findByText('Друкувати QR');
+      expect(screen.queryByLabelText(CALL)).not.toBeInTheDocument();
+      older.unmount();
+
+      posRequest.mockResolvedValueOnce({ ...Q9, tables: 0, ordering_enabled: false });
+      const counter = renderWithProviders(<PublicMenuCard />);
+      await screen.findByText('Друкувати QR');
+      expect(screen.queryByLabelText(CALL)).not.toBeInTheDocument();
+      counter.unmount();
+
+      posRequest.mockResolvedValueOnce(Q9).mockResolvedValueOnce({ ...Q9, call_enabled: true });
+      renderWithProviders(<PublicMenuCard />);
+      const box = await screen.findByLabelText(CALL);
+      expect(box).not.toBeChecked();
+      expect(screen.getByText(/модуль «Столи», що показує виклики/)).toBeInTheDocument();
+      await userEvent.click(box);
+      expect(posRequest).toHaveBeenLastCalledWith('patch', '/store/public-menu', { call_enabled: true });
+      expect(await screen.findByLabelText(CALL)).toBeChecked();
+      expect(screen.getByRole('status')).toHaveTextContent('покликати офіціанта');
+    });
+
+    it('asks where an order goes only while ordering is on, and not of an older backend', async () => {
+      posRequest.mockResolvedValueOnce({ ...Q9, ordering_enabled: false });
+      const off = renderWithProviders(<PublicMenuCard />);
+      await screen.findByLabelText('Приймати замовлення гостей з телефону');
+      expect(screen.queryByText('Куди йде замовлення гостя')).not.toBeInTheDocument();
+      off.unmount();
+
+      posRequest.mockResolvedValueOnce({ ...ON, tables: 6, ordering_enabled: true });
+      const older = renderWithProviders(<PublicMenuCard />);
+      await screen.findByLabelText('Приймати замовлення гостей з телефону');
+      expect(screen.queryByText('Куди йде замовлення гостя')).not.toBeInTheDocument();
+      older.unmount();
+
+      posRequest.mockResolvedValueOnce(Q9);
+      renderWithProviders(<PublicMenuCard />);
+      expect(await screen.findByText('Куди йде замовлення гостя')).toBeInTheDocument();
+      expect(screen.getByLabelText(new RegExp(WAITER))).toBeChecked();
+    });
+
+    it('never raises the mode on one tap: the risks first, a tick, then the request with the acknowledgement', async () => {
+      posRequest.mockResolvedValueOnce(Q9).mockResolvedValueOnce({ ...Q9, auto_kitchen: 'all', auto_ack_at: '2026-10-16T09:00:00.000Z' });
+      renderWithProviders(<PublicMenuCard />);
+      await userEvent.click(await screen.findByLabelText(new RegExp(ALL)));
+
+      expect(posRequest).toHaveBeenCalledTimes(1); // nothing sent yet
+      expect(screen.getByText(/Ще не увімкнено/)).toBeInTheDocument();
+      expect(screen.getByText(/поїсти й піти, не заплативши/)).toBeInTheDocument();
+      expect(screen.getByText(/понад 2\s000 ₴ чекатиме офіціанта/)).toBeInTheDocument();
+      const enable = screen.getByRole('button', { name: 'Увімкнути' });
+      expect(enable).toBeDisabled();
+
+      await userEvent.click(screen.getByLabelText('Я розумію ці ризики'));
+      await userEvent.click(enable);
+      expect(posRequest).toHaveBeenLastCalledWith('patch', '/store/public-menu', { auto_kitchen: 'all', auto_kitchen_ack: true });
+      expect(await screen.findByRole('status')).toHaveTextContent('одразу на кухню');
+      expect(screen.queryByText(/Ще не увімкнено/)).not.toBeInTheDocument();
+      expect(screen.getByLabelText(new RegExp(ALL))).toBeChecked();
+      expect(screen.getByText(/Ризики підтверджено/)).toBeInTheDocument();
+    });
+
+    it('lists no walk-out risk for re-orders, since a waiter has already seated the table', async () => {
+      posRequest.mockResolvedValueOnce(Q9);
+      renderWithProviders(<PublicMenuCard />);
+      await userEvent.click(await screen.findByLabelText(new RegExp(REORDERS)));
+      expect(screen.getByText(/Ще не увімкнено/)).toBeInTheDocument();
+      expect(screen.queryByText(/поїсти й піти/)).not.toBeInTheDocument();
+    });
+
+    it('sends nothing when the owner thinks better of it, and puts the choice back', async () => {
+      posRequest.mockResolvedValueOnce(Q9);
+      renderWithProviders(<PublicMenuCard />);
+      await userEvent.click(await screen.findByLabelText(new RegExp(ALL)));
+      await userEvent.click(screen.getByRole('button', { name: 'Скасувати' }));
+      expect(screen.queryByText(/Ще не увімкнено/)).not.toBeInTheDocument();
+      expect(screen.getByLabelText(new RegExp(WAITER))).toBeChecked();
+      expect(posRequest).toHaveBeenCalledTimes(1);
+    });
+
+    it('lowers the mode on one tap, without asking and without an acknowledgement', async () => {
+      posRequest
+        .mockResolvedValueOnce({ ...Q9, auto_kitchen: 'all' })
+        .mockResolvedValueOnce({ ...Q9, auto_kitchen: 'reorders' })
+        .mockResolvedValueOnce({ ...Q9, auto_kitchen: 'off' });
+      renderWithProviders(<PublicMenuCard />);
+      await userEvent.click(await screen.findByLabelText(new RegExp(REORDERS)));
+      expect(posRequest).toHaveBeenLastCalledWith('patch', '/store/public-menu', { auto_kitchen: 'reorders' });
+      expect(screen.queryByText(/Ще не увімкнено/)).not.toBeInTheDocument();
+      await waitFor(() => expect(screen.getByLabelText(new RegExp(REORDERS))).toBeChecked());
+
+      await userEvent.click(screen.getByLabelText(new RegExp(WAITER)));
+      expect(posRequest).toHaveBeenLastCalledWith('patch', '/store/public-menu', { auto_kitchen: 'off' });
+      expect(await screen.findByRole('status')).toHaveTextContent('знову спершу приймає офіціант');
+    });
+
+    it('saves the limit in kopecks, and will not send one outside 1…100 000 грн', async () => {
+      posRequest.mockResolvedValueOnce(Q9).mockResolvedValueOnce({ ...Q9, auto_limit_cents: 150050 });
+      renderWithProviders(<PublicMenuCard />);
+      const input = await screen.findByLabelText('Ліміт суми, грн');
+      expect(input).toHaveValue('2000');
+      const save = screen.getByRole('button', { name: 'Зберегти ліміт' });
+      expect(save).toBeDisabled(); // unchanged
+
+      await userEvent.clear(input);
+      await userEvent.type(input, '0');
+      expect(save).toBeDisabled();
+      expect(screen.getByText('Від 1 до 100 000 грн.')).toBeInTheDocument();
+
+      await userEvent.clear(input);
+      await userEvent.type(input, '1 500,50');
+      await userEvent.click(save);
+      expect(posRequest).toHaveBeenLastCalledWith('patch', '/store/public-menu', { auto_limit_cents: 150050 });
+      expect(await screen.findByRole('status')).toHaveTextContent(/понад 1\s500,50 ₴/);
+    });
+
+    it('says that switching ordering off also stopped auto-sending', async () => {
+      posRequest
+        .mockResolvedValueOnce({ ...Q9, auto_kitchen: 'reorders' })
+        .mockResolvedValueOnce({ ...Q9, ordering_enabled: false, auto_kitchen: 'off' });
+      renderWithProviders(<PublicMenuCard />);
+      await userEvent.click(await screen.findByLabelText('Приймати замовлення гостей з телефону'));
+      expect(await screen.findByRole('status')).toHaveTextContent('Автовідправку на кухню теж вимкнено.');
+      expect(screen.queryByText('Куди йде замовлення гостя')).not.toBeInTheDocument();
+    });
+
+    it('shows the server’s refusal in its own words', async () => {
+      posRequest
+        .mockResolvedValueOnce(Q9)
+        .mockRejectedValueOnce({ response: { status: 409, data: { error: 'Спершу увімкніть замовлення гостей з телефону' } } });
+      renderWithProviders(<PublicMenuCard />);
+      await userEvent.click(await screen.findByLabelText(new RegExp(REORDERS)));
+      await userEvent.click(screen.getByLabelText('Я розумію ці ризики'));
+      await userEvent.click(screen.getByRole('button', { name: 'Увімкнути' }));
+      expect(await screen.findByRole('status')).toHaveTextContent('Спершу увімкніть замовлення гостей з телефону');
+      expect(screen.getByLabelText(new RegExp(WAITER))).toBeChecked();
+    });
   });
 
   it('offers a retry when the settings cannot be loaded', async () => {
