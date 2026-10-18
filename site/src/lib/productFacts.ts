@@ -152,12 +152,15 @@ export const COMPETITOR_FACTS = {
    * monobank Expirenza — read on `checkedAt`, the service's own page first and
    * two press pieces for what the page does not say. Same rule as above:
    * «not mentioned» means not mentioned on those pages, never «does not
-   * exist». The page prints NO commission, so none is recorded here: figures
-   * in older press differ from each other and are not ours to repeat.
+   * exist». Until 2026-09-30 the page printed no commission; on 2026-10-18 it
+   * carries a tariff table («Які тарифи?») and a FAQ that names the POS
+   * systems, recorded below exactly as printed. Figures in older press still
+   * differ from each other and are still not ours to repeat.
    */
   expirenza: {
     name: 'monobank Expirenza',
-    checkedAt: '2026-09-30',
+    publishedAt: '2026-09-30',
+    checkedAt: '2026-10-18',
     sources: {
       service: 'https://expz.monobank.ua/',
       /** mind.ua, 25.06.2024: guests do not need the monobank app, they scan a QR. */
@@ -165,23 +168,44 @@ export const COMPETITOR_FACTS = {
       /** kosht.media, 15.07.2024: the partnership with ChoiceQR. */
       partnership: 'https://kosht.media/choiceqr-ta-expirenza-vid-mono-ob-iednuiutsia-shcho-zminylos-dlia-kliientiv/',
     },
+    /** A guest calling a waiter from the phone: not mentioned on the page or in its FAQ. */
+    waiterCall: false,
     /** «3 800+ закладів по всій Україні» / «95 міст та містечок» — the service page's own figures. */
     establishments: 3800,
     cities: 95,
     /** What a guest does with the table's QR, as the service page lists it. */
     guestDoes: ['бачить цифрове меню', 'отримує рахунок в один дотик', 'платить', 'залишає чайові', 'залишає відгук', 'бронює стіл'],
-    /** The page: «рахунки — з вашої POS-системи» (no cash-register program is named). */
+    /** The page: «рахунки — з вашої POS-системи». */
     billFrom: 'з POS-системи закладу',
+    /**
+     * The tariff table: «Комісія за оплату — 1,3% за картками українських
+     * емітентів та 2% за картками закордонних емітентів», «Щомісячне
+     * обслуговування — Безкоштовно», «Оренда обладнання — Немає (QR-код) /
+     * Безкоштовно (термінал)», «Чайові — 4%». The table does not say what the
+     * 4 % of tips is taken for, so the article quotes the row as it stands.
+     */
+    commissionUaCardsPercent: 1.3,
+    commissionForeignCardsPercent: 2,
+    tipsRowPercent: 4,
+    /** FAQ «З якими POS-системами працює Expirenza?» — the list as printed. */
+    posIntegrations: ['Syrve', 'r-keeper', 'Poster', 'Servio', 'SmartTouch', 'LunchPOS', 'BarBoss', 'SkyService', 'Profit Solutions', 'Trio POS', 'TurboPos', 'Libro'],
+    /** FAQ: «Наш улюблений кейс — підключення за 2 години». */
+    connectHours: 2,
   },
   /**
    * ChoiceQR — read on `checkedAt`: the Ukrainian page (products and named
-   * integrations), the English page for what only it lists (pay at table with
-   * bill splitting, delivery and pickup) and the tariff page, whose prices did
-   * not render for us — so no price is recorded, and the article says why.
+   * integrations), the English page for what only it lists (bill splitting,
+   * delivery and pickup) and the tariff page. On 2026-09-30 the tariff page's
+   * prices did not render for us; on 2026-10-18 they did, rendered in a
+   * browser and read for each of its three billing periods — the page opens on
+   * the 12-month one, so its first figures are NOT the monthly price. The
+   * 14-day trial the first read recorded is no longer printed anywhere we
+   * read; «Спробувати безкоштовно» and a free Basic tariff are.
    */
   choiceqr: {
     name: 'ChoiceQR',
-    checkedAt: '2026-09-30',
+    publishedAt: '2026-09-30',
+    checkedAt: '2026-10-18',
     sources: {
       ua: 'https://choiceqr.com/uk',
       en: 'https://choiceqr.com/',
@@ -189,12 +213,32 @@ export const COMPETITOR_FACTS = {
       /** kosht.media, 15.07.2024: ChoiceQR ↔ Expirenza. */
       partnership: 'https://kosht.media/choiceqr-ta-expirenza-vid-mono-ob-iednuiutsia-shcho-zminylos-dlia-kliientiv/',
     },
+    /** A guest calling a waiter: not mentioned on the pages or the tariffs («Чайові офіціантам» is marked «незабаром»). */
+    waiterCall: false,
     /** «25 000+ закладів вже з Choice» у «25+ країнах світу». */
     establishments: 25000,
     countries: 25,
-    trialDays: 14,
-    /** Products the Ukrainian page names. */
-    products: ['Онлайн-меню', 'Замовлення до столу'],
+    /** Products the Ukrainian page names (among others: delivery site, marketplaces, CRM, reservations, reviews). */
+    products: ['Онлайн-меню', 'Замовлення до столу', 'Оплата по QR коду'],
+    /**
+     * «Одна локація» tariffs, UAH per month: billed monthly, for 6 months
+     * (−10 %) and for 12 months (−20 %). Basic is free with «Мінімум 100
+     * замовлень/місяць» and a commission on delivery and pickup orders.
+     * `tableOrders` — «QR-замовлення до столу» is in the tariff (from
+     * Standard); on Basic it is an add-on for `tableOrdersAddonUah`.
+     */
+    plans: [
+      { id: 'Basic', monthlyUah: 0, sixMonthUah: 0, annualUah: 0, tableOrders: false },
+      { id: 'Standard', monthlyUah: 1700, sixMonthUah: 1530, annualUah: 1360, tableOrders: true },
+      { id: 'Smart', monthlyUah: 2750, sixMonthUah: 2475, annualUah: 2200, tableOrders: true },
+      { id: 'Pro', monthlyUah: 4200, sixMonthUah: 3780, annualUah: 3360, tableOrders: true },
+    ],
+    /** «QR-замовлення до столу — 500 грн / місяць: самостійне замовлення та дозамовлення через QR-меню без участі офіціанта». */
+    tableOrdersAddonUah: 500,
+    /** «Налаштування функціоналу» — once, from Basic to Pro. */
+    setupUah: [1500, 1500, 2500, 3000],
+    /** «При оплаті на розрахунковий рахунок +20% ПДВ». */
+    vatOnTransferPercent: 20,
     /** Cash-register programs the Ukrainian page names as integrations. */
     posIntegrations: ['Poster', 'Syrve', 'Servio', 'Profit', 'R-Keeper'],
   },
@@ -211,7 +255,8 @@ export const COMPETITOR_FACTS = {
   restoapp: {
     name: 'RestoApp',
     vendor: 'Binotel',
-    checkedAt: '2026-10-15',
+    publishedAt: '2026-10-15',
+    checkedAt: '2026-10-18',
     sources: {
       site: 'https://restoapp.binotel.ua/',
       diia: 'https://business.diia.gov.ua/it-market/restoapp',
@@ -225,6 +270,8 @@ export const COMPETITOR_FACTS = {
     diiaDiscountPercent: 10,
     /** The only cash-register program either page names. */
     posIntegrations: ['Poster POS'],
+    /** «Виклик офіціанта в 1 клік — Ваша кнопка для виклику офіціанта прямо в меню. Один клік — і офіціант знає, який столик потребує уваги.» */
+    waiterCall: true,
   },
   /**
    * Poster QR — read on `checkedAt`. It is an add-on of the Poster POS
@@ -240,7 +287,8 @@ export const COMPETITOR_FACTS = {
   posterqr: {
     name: 'Poster QR',
     vendor: 'Poster',
-    checkedAt: '2026-10-15',
+    publishedAt: '2026-10-15',
+    checkedAt: '2026-10-18',
     sources: {
       page: 'https://joinposter.com/ua/applications/poster-qr',
       pageEn: 'https://joinposter.com/en/applications/poster-qr',
@@ -252,6 +300,8 @@ export const COMPETITOR_FACTS = {
     /** «Комісія за послуги еквайрингу: 1,3% — від суми рахунка, 1,7% — від суми чайових». */
     billCommissionPercent: 1.3,
     tipsCommissionPercent: 1.7,
+    /** A guest calling a waiter: not mentioned on either language page or the knowledge-base article. */
+    waiterCall: false,
     /** «15 днів безкоштовно» on the pricing page, «free for the first 15 days» on the English one. */
     trialDays: 15,
     /**
@@ -297,7 +347,7 @@ export const FEATURES = {
   floristShowcase: { status: 'available', label: 'Букет на вітрину з власним цінником і списанням стебел' },
   floristPreorders: { status: 'available', label: 'Передзамовлення букетів з датою видачі, адресою й листівкою' },
   floristAnalytics: { status: 'available', label: 'Аналітика флориста: списання, частка букетів, реалізована націнка' },
-  cafeModifiers: { status: 'available', label: 'Модифікатори: розмір, молоко, сироп, соус — ціна рахується сама' },
+  cafeModifiers: { status: 'available', label: 'Модифікатори: розмір, молоко, сироп, соус — ціна рахується сама, доплата може залежати від розміру' },
   cafeTechCards: { status: 'available', label: 'Техкарти з фудкостом, рецепт у рецепті' },
   cafeKitchenBoard: { status: 'available', label: 'Дошка кухні та бару: «Готово» → «Видано», стоп-лист на день' },
   cafeKitchenTicket: { status: 'available', label: 'Кухонний тікет на принтер станції (десктоп-каса)' },
@@ -309,12 +359,21 @@ export const FEATURES = {
   guestBill: { status: 'available', label: 'Рахунок столу на телефоні гостя: що вже на кухні й сума до сплати' },
   guestOrder: {
     status: 'available',
-    label: 'Замовлення й дозамовлення гостя з телефону: офіціант приймає одним тапом, до цього нічого не йде на кухню й склад',
+    label: 'Замовлення й дозамовлення гостя з телефону: за замовчуванням офіціант приймає одним тапом, до цього нічого не йде на кухню й склад',
+  },
+  guestAutoKitchen: {
+    status: 'available',
+    label: 'Замовлення гостя одразу на кухню й бар — за вибором власника: лише дозамовлення або всі, до ліміту суми; офіціант отримує сповіщення',
+  },
+  waiterCall: {
+    status: 'available',
+    label: 'Виклик офіціанта й прохання принести рахунок з телефону гостя: офіціант бачить стіл на плані залу, чує сигнал і відповідає «Іду»',
   },
   tablesFloorPlan: { status: 'available', label: 'План залу з відкритими рахунками столів' },
   tablesRounds: { status: 'available', label: 'Раунди на кухню: ціна замикається, склад списується при відправці' },
   tablesPrecheck: { status: 'available', label: 'Передчек на принтері (десктоп-каса)' },
   tablesSplitBill: { status: 'available', label: 'Розділити рахунок: за стравами або порівну' },
+  waiterTablet: { status: 'available', label: 'Планшет офіціанта як застосунок: відкривається без мережі й показує зал, рахунки й меню' },
   ownPrro: { status: 'coming', label: 'Власний ПРРО без стороннього провайдера' },
   tiktokLive: { status: 'available', label: 'TikTok LIVE: коментар → бронь → Telegram → ТТН Нової Пошти' },
   liveAiComments: { status: 'coming', label: 'AI-відповіді в коментарях ефіру' },
@@ -349,10 +408,13 @@ export const POS_FEATURE_IDS: FeatureId[] = [
   'dishAllergens',
   'guestBill',
   'guestOrder',
+  'guestAutoKitchen',
+  'waiterCall',
   'tablesFloorPlan',
   'tablesRounds',
   'tablesPrecheck',
   'tablesSplitBill',
+  'waiterTablet',
   'ownPrro',
 ];
 
@@ -436,7 +498,7 @@ export const VERTICALS: readonly VerticalFact[] = [
     eyebrow: 'Програма для ресторану зі столами',
     tagline: 'План залу, відкриті рахунки, раунди на кухню, передчек і розділення рахунку — з планшета офіціанта.',
     bullets: ['План залу з рахунками столів', 'Раунди на кухню з планшета', 'Розділити рахунок, передчек'],
-    featureIds: ['tablesFloorPlan', 'tablesRounds', 'tablesSplitBill', 'tablesPrecheck', 'cafeKitchenBoard', 'qrMenu', 'qrMenuTables', 'qrMenuProfile', 'dishAllergens', 'guestBill', 'guestOrder'],
+    featureIds: ['tablesFloorPlan', 'tablesRounds', 'tablesSplitBill', 'tablesPrecheck', 'cafeKitchenBoard', 'qrMenu', 'qrMenuTables', 'qrMenuProfile', 'dishAllergens', 'guestBill', 'guestOrder', 'waiterCall', 'guestAutoKitchen', 'waiterTablet'],
     illustrations: ['/demo-restaurant/borscht.svg', '/demo-restaurant/ribeye.svg', '/demo-restaurant/wine-red.svg'],
     tint: 'bg-tint-restaurant',
   },
@@ -595,7 +657,7 @@ export const ROADMAP: readonly RoadmapItem[] = [
     id: 'waiter-pwa',
     vertical: 'restaurant',
     title: 'Планшет офіціанта без мережі',
-    body: 'Прийняти замовлення на терасі, де не ловить Wi-Fi, і відправити на кухню, щойно зв\'язок повернеться.',
+    body: 'Прийняти замовлення на терасі, де не ловить Wi-Fi, і відправити на кухню, щойно зв\'язок повернеться. Відкриватися без мережі й показувати зал, рахунки й меню планшет, доданий на екран, уже вміє; лишилось записувати.',
     progress: 10,
   },
 ];
