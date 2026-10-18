@@ -44,8 +44,9 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
             <div className={`w-24 h-24 rounded-[22px] grid place-items-center shadow-card ${fact.tint}`}>
               <Mark size={48} />
             </div>
-            <p className="eyebrow text-pos mt-8">{fact.eyebrow}</p>
-            <h1 className="h-display mt-3 max-w-4xl">{content.h1}</h1>
+            {/* No eyebrow here: every landing's H1 opens with it, so it read twice.
+                The eyebrow stays in the footer, the «Інший бізнес?» cards, the breadcrumbs and the JSON-LD. */}
+            <h1 className="h-display mt-8 max-w-4xl">{content.h1}</h1>
             <p className="lede mt-6 max-w-2xl">{content.lede}</p>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
               <a href="/pos#download" className="btn-pos">
@@ -66,6 +67,40 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
             <BrowserFrame src={content.hero.src} alt={content.hero.alt} elevated />
           </Reveal>
         </section>
+
+        {/* Who does what: the hero's long version, as two short lists */}
+        {content.sides && (
+          <section className="max-w-5xl mx-auto px-6 pb-20" aria-labelledby="sides-title">
+            <Reveal>
+              <h2 id="sides-title" className="h-section text-center">
+                {content.sides.title}
+              </h2>
+            </Reveal>
+            <StaggerGroup className="mt-10 grid md:grid-cols-2 gap-6">
+              {content.sides.columns.map((col) => (
+                <StaggerItem key={col.title} className="h-full">
+                  <div className="card h-full p-6 sm:p-8">
+                    <div className="flex items-center gap-4">
+                      <col.icon size={48} />
+                      <div>
+                        <h3 className="text-xl font-bold text-ink-strong">{col.title}</h3>
+                        <p className="text-muted text-[15px] mt-0.5">{col.caption}</p>
+                      </div>
+                    </div>
+                    <ul className="mt-6 space-y-4">
+                      {col.items.map((item) => (
+                        <li key={item.text} className="flex gap-3">
+                          <item.icon size={24} className="shrink-0 mt-px" />
+                          <span className="text-body text-[16px] leading-snug">{item.text}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </StaggerItem>
+              ))}
+            </StaggerGroup>
+          </section>
+        )}
 
         {/* Answer-first summary */}
         {content.overview && (

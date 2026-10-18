@@ -1,5 +1,6 @@
 import type { FaqItem } from '../../lib/faqJsonLd';
 import type { VerticalId } from '../../lib/productFacts';
+import type { Glyph } from '../../components/glyphs';
 
 export interface Shot {
   src: string;
@@ -27,6 +28,24 @@ export interface VerticalOverview {
   facts: Array<{ label: string; value: string }>;
 }
 
+/**
+ * Who does what, side by side, right under the hero — for a business where
+ * two people use the till at once (the waiter and the guest). It is where the
+ * hero's long version lives, so the lede itself can stay two sentences: every
+ * claim the lede used to make is an item here, still visible text.
+ */
+export interface VerticalSides {
+  title: string;
+  columns: Array<{
+    title: string;
+    caption: string;
+    /** A colour glyph drawn at 48 px. */
+    icon: Glyph;
+    /** Each with a colour glyph drawn at 24 px. */
+    items: Array<{ icon: Glyph; text: string }>;
+  }>;
+}
+
 /** A Довідка article a landing links to; routes.tsx checks the slug exists. */
 export interface VerticalArticleLink {
   slug: string;
@@ -42,6 +61,7 @@ export interface VerticalContent {
   lede: string;
   hero: Shot;
   overview?: VerticalOverview;
+  sides?: VerticalSides;
   rows: VerticalRow[];
   faq: FaqItem[];
   /** A live page worth opening from the hero — the demo café's guest menu. */
