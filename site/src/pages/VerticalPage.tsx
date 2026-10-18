@@ -67,6 +67,40 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
           </Reveal>
         </section>
 
+        {/* Who does what: the hero's long version, as two short lists */}
+        {content.sides && (
+          <section className="max-w-5xl mx-auto px-6 pb-20" aria-labelledby="sides-title">
+            <Reveal>
+              <h2 id="sides-title" className="h-section text-center">
+                {content.sides.title}
+              </h2>
+            </Reveal>
+            <StaggerGroup className="mt-10 grid md:grid-cols-2 gap-6">
+              {content.sides.columns.map((col) => (
+                <StaggerItem key={col.title} className="h-full">
+                  <div className="card h-full p-6 sm:p-8">
+                    <div className="flex items-center gap-4">
+                      <col.icon size={48} />
+                      <div>
+                        <h3 className="text-xl font-bold text-ink-strong">{col.title}</h3>
+                        <p className="text-muted text-[15px] mt-0.5">{col.caption}</p>
+                      </div>
+                    </div>
+                    <ul className="mt-6 space-y-4">
+                      {col.items.map((item) => (
+                        <li key={item.text} className="flex gap-3">
+                          <item.icon size={24} className="shrink-0 mt-px" />
+                          <span className="text-body text-[16px] leading-snug">{item.text}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </StaggerItem>
+              ))}
+            </StaggerGroup>
+          </section>
+        )}
+
         {/* Answer-first summary */}
         {content.overview && (
           <section className="max-w-4xl mx-auto px-6 pb-20" aria-labelledby="overview-title">

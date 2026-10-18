@@ -1,5 +1,19 @@
 import type { VerticalContent } from './types';
 import { COMPETITOR_FACTS, PRODUCT, PRICING } from '../../lib/productFacts';
+import {
+  Bell,
+  ChefHat,
+  ClipboardList,
+  PrinterColor,
+  QrCode,
+  Receipt,
+  Repeat,
+  ShoppingCart,
+  Split,
+  Table,
+  User,
+  UtensilsCrossed,
+} from '../../components/glyphs';
 import restaurantTables from '../../assets/screenshots/restaurant-tables.png';
 import restaurantHallEditor from '../../assets/screenshots/restaurant-hall-editor.png';
 import cafeKitchen from '../../assets/screenshots/cafe-kitchen.png';
@@ -22,7 +36,36 @@ export const restoran: VerticalContent = {
   },
   h1: 'Програма для ресторану зі столами',
   lede:
-    'Те саме меню, ті самі модифікатори й кухня, що в кав\'ярні, — плюс зала. Офіціант відкриває рахунок на столі з планшета, відправляє раунди на кухню, друкує передчек і ділить рахунок так, як просять гості. А гість за столом сканує QR і бачить меню з живим стоп-листом та, якщо власник дозволив, рахунок свого столу — і може додати страви в замовлення прямо з телефону: воно потрапляє на кухню й у рахунок лише після того, як офіціант прийме його одним тапом, — або, якщо власник так вирішив, дозамовлення до обраної суми йдуть на кухню одразу, а офіціант отримує сповіщення. А покликати офіціанта чи попросити рахунок гість може кнопкою в тому самому меню.',
+    'Те саме меню, ті самі модифікатори й кухня, що в кав\'ярні, — плюс зала. Офіціант веде столи з планшета, а гість за столом сканує QR, замовляє з телефону й кличе офіціанта кнопкою.',
+  sides: {
+    title: 'Офіціант — з планшета, гість — з телефону',
+    columns: [
+      {
+        title: 'Офіціант',
+        caption: 'планшет у браузері або як застосунок',
+        icon: UtensilsCrossed,
+        items: [
+          { icon: Table, text: 'Відкриває рахунок на столі з планшета й бачить усю залу' },
+          { icon: ChefHat, text: 'Відправляє раунди на кухню' },
+          { icon: PrinterColor, text: 'Друкує передчек' },
+          { icon: Split, text: 'Ділить рахунок так, як просять гості: за стравами або порівну' },
+          { icon: Bell, text: 'Чує сигнал, коли гість кличе чи замовив сам' },
+        ],
+      },
+      {
+        title: 'Гість',
+        caption: 'QR на столі, без застосунку',
+        icon: QrCode,
+        items: [
+          { icon: ClipboardList, text: 'Бачить меню з живим стоп-листом' },
+          { icon: Receipt, text: 'Бачить рахунок свого столу, якщо власник дозволив' },
+          { icon: ShoppingCart, text: 'Додає страви в замовлення прямо з телефону — на кухню після одного тапу офіціанта' },
+          { icon: Repeat, text: 'Або одразу на кухню — дозамовлення до суми, яку обрав власник; офіціант отримує сповіщення' },
+          { icon: User, text: 'Кличе офіціанта чи просить рахунок кнопкою в тому самому меню' },
+        ],
+      },
+    ],
+  },
   hero: { src: restaurantTables, alt: 'План залу: столи з відкритими рахунками, сумою і часом' },
   rows: [
     {
