@@ -15,6 +15,10 @@ export interface VerticalRow {
   body: string;
   bullets?: string[];
   shot?: Shot;
+  /** A drawn mockup instead of a screenshot (e.g. the bot's Telegram chat), used when `shot` is absent. */
+  mockup?: () => JSX.Element;
+  /** «Read more» under the bullets. */
+  link?: { href: string; label: string };
 }
 
 /**

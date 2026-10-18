@@ -2,6 +2,7 @@ import type { VerticalContent } from './types';
 import { PRODUCT, PRICING } from '../../lib/productFacts';
 import clothingRegister from '../../assets/screenshots/clothing-register.png';
 import clothingProducts from '../../assets/screenshots/clothing-products.png';
+import { TelegramChatMockup } from '../../components/TelegramChatMockup';
 
 export const odyah: VerticalContent = {
   id: 'clothing',
@@ -43,7 +44,9 @@ export const odyah: VerticalContent = {
       title: 'Продаєте ще й у TikTok LIVE?',
       body:
         'Той самий LiveShop веде продаж в ефірі: бот читає коментарі, тримає товар бронею, збирає дані покупця в Telegram і створює ТТН Нової Пошти. Два продукти, кожен зі своєю базою — підключаються окремо.',
-      bullets: ['Коментар → бронь → Telegram → ТТН', 'Розпізнає код і розмір трьома мовами', 'Дивіться /live'],
+      bullets: ['Коментар → бронь → Telegram → ТТН', 'Розпізнає код і розмір трьома мовами'],
+      mockup: TelegramChatMockup,
+      link: { href: '/live', label: 'Як працює продаж у TikTok LIVE' },
     },
   ],
   faq: [
