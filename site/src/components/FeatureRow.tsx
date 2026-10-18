@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { Reveal } from './Reveal';
-import { Check } from './glyphs';
+import { Check, ChevronRight } from './glyphs';
 
 interface Props {
   eyebrow: string;
@@ -10,9 +10,11 @@ interface Props {
   accentClass: string; // e.g. 'text-live' or 'text-pos'
   visual?: ReactNode;
   reverse?: boolean;
+  /** A «read more» link under the bullets — a real link, not a path typed into a bullet. */
+  link?: { href: string; label: string };
 }
 
-export function FeatureRow({ eyebrow, title, body, bullets, accentClass, visual, reverse }: Props) {
+export function FeatureRow({ eyebrow, title, body, bullets, accentClass, visual, reverse, link }: Props) {
   return (
     <Reveal>
       <div className={`grid md:grid-cols-2 gap-10 md:gap-16 items-center py-14 ${reverse ? 'md:[&>*:first-child]:order-2' : ''}`}>
@@ -29,6 +31,11 @@ export function FeatureRow({ eyebrow, title, body, bullets, accentClass, visual,
                 </li>
               ))}
             </ul>
+          )}
+          {link && (
+            <a href={link.href} className="link-more text-[17px] mt-6">
+              {link.label} <ChevronRight size={20} />
+            </a>
           )}
         </div>
         {visual && <div>{visual}</div>}

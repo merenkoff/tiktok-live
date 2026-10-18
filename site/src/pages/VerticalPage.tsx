@@ -138,6 +138,7 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
               bullets={row.bullets}
               accentClass="text-pos"
               reverse={i % 2 === 1}
+              link={row.link}
               visual={
                 row.shot ? (
                   row.shot.phone ? (
@@ -145,6 +146,10 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
                   ) : (
                     <BrowserFrame src={row.shot.src} alt={row.shot.alt} />
                   )
+                ) : row.mockup ? (
+                  <div className="max-w-md mx-auto">
+                    <row.mockup />
+                  </div>
                 ) : undefined
               }
             />
