@@ -44,8 +44,9 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
             <div className={`w-24 h-24 rounded-[22px] grid place-items-center shadow-card ${fact.tint}`}>
               <Mark size={48} />
             </div>
-            <p className="eyebrow text-pos mt-8">{fact.eyebrow}</p>
-            <h1 className="h-display mt-3 max-w-4xl">{content.h1}</h1>
+            {/* No eyebrow here: every landing's H1 opens with it, so it read twice.
+                The eyebrow stays in the footer, the «Інший бізнес?» cards, the breadcrumbs and the JSON-LD. */}
+            <h1 className="h-display mt-8 max-w-4xl">{content.h1}</h1>
             <p className="lede mt-6 max-w-2xl">{content.lede}</p>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
               <a href="/pos#download" className="btn-pos">
