@@ -2,6 +2,7 @@ import type { VerticalContent } from './types';
 import { PRODUCT, PRICING } from '../../lib/productFacts';
 import clothingRegister from '../../assets/screenshots/clothing-register.png';
 import clothingProducts from '../../assets/screenshots/clothing-products.png';
+import clothingPriceTags from '../../assets/screenshots/clothing-price-tags.png';
 import { TelegramChatMockup } from '../../components/TelegramChatMockup';
 
 export const odyah: VerticalContent = {
@@ -35,9 +36,13 @@ export const odyah: VerticalContent = {
         'Скануєш штрихкод — каса шукає його у своїй базі, а якщо там порожньо, підтягує назву й фото з GTIN-довідників. Підтверджені відповідності запам\'ятовуються, тож наступного разу розпізнавання точніше.',
       bullets: [
         'GTIN-довідники для нового товару',
-        'Внутрішні штрихкоди для товару без фабричного',
+        'Внутрішні штрихкоди для товару без фабричного — і цінник із ним на чековій стрічці чи на наліпці',
         'Інвентаризація сканером просто на касі — навіть без інтернету',
       ],
+      shot: {
+        src: clothingPriceTags,
+        alt: 'Друк цінників зі штрихкодом на самоклейних наліпках: розмір наліпки, поворот тексту й наліпка такою, якою вийде з принтера',
+      },
     },
     {
       eyebrow: 'Другий канал',
@@ -68,5 +73,5 @@ export const odyah: VerticalContent = {
     },
   ],
   guide: { slug: 'vlasnyk-pochatok', label: 'посібник власника' },
-  updatedAt: '2026-09-23',
+  updatedAt: '2026-10-19',
 };
