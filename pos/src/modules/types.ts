@@ -46,6 +46,14 @@ export interface RouteDef {
   index?: boolean;
   /** `root` = top-level route; `admin` = child of the `/admin` layout. Default `root`. */
   mount?: RouteMount;
+  /**
+   * An `admin` page the desktop app mounts too, for the owner — at the same
+   * `/admin/...` path but inside the till's own frame, because the desktop has
+   * no cabinet and has the printers. Only for a page that works online through
+   * `api` and links to nothing but pages flagged the same way: any other
+   * `/admin` link would land on the till.
+   */
+  desktop?: boolean;
   /** Skip the `<Suspense>` wrapper — for landing screens that must not flash. */
   eager?: boolean;
   // Real props travel in `props`; the registry is not the place to re-type every page.

@@ -50,6 +50,14 @@ vi.mock('./registry', () => {
       routes: [{ path: '/hardware', element: page('Обладнання') }],
       nav: [],
     },
+    {
+      id: 'products',
+      title: 'Товари',
+      shells: ['web', 'cashier'],
+      ownerOnly: true,
+      routes: [{ path: 'products', mount: 'admin', element: page('Товари'), desktop: true }],
+      nav: [],
+    },
   ];
   return { MODULES: modules, remoteModules: [], allModules: () => modules };
 });
@@ -70,7 +78,7 @@ vi.mock('../pages/LoginPage', () => ({ LoginPage: () => <div>Вхід</div> }));
 
 const { renderModuleRoutes } = await import('./renderRoutes');
 
-const ALL = new Set<ModuleId>(['catalog-checkout', 'analytics', 'stock', 'hardware']);
+const ALL = new Set<ModuleId>(['catalog-checkout', 'analytics', 'stock', 'hardware', 'products']);
 
 function renderAt(
   route: string,
@@ -131,6 +139,45 @@ describe('the /admin area', () => {
     // No `/admin` route matches, so the catch-all takes over.
     expect(await screen.findByText('Каса')).toBeInTheDocument();
     expect(screen.queryByText('Кабінет')).not.toBeInTheDocument();
+  });
+});
+
+describe('a cabinet page the desktop app mounts too', () => {
+  // The desktop has the printers and no cabinet: an owner prints price tags
+  // from «Товари» inside the program.
+  it('opens at its cabinet path inside the till frame for an owner', async () => {
+    renderAt('/admin/products', { shell: 'cashier' });
+
+    expect(await screen.findByText('Товари')).toBeInTheDocument();
+    expect(screen.queryByText('Кабінет')).not.toBeInTheDocument();
+  });
+
+  it('sends a seller back to the till', async () => {
+    renderAt('/admin/products', { shell: 'cashier', role: 'seller' });
+
+    expect(await screen.findByText('Каса')).toBeInTheDocument();
+    expect(screen.queryByText('Товари')).not.toBeInTheDocument();
+  });
+
+  it('brings no other cabinet page with it', async () => {
+    renderAt('/admin/stock', { shell: 'cashier' });
+
+    expect(await screen.findByText('Каса')).toBeInTheDocument();
+    expect(screen.queryByText('Склад')).not.toBeInTheDocument();
+  });
+
+  it('stays in the cabinet on the web', async () => {
+    renderAt('/admin/products');
+
+    expect(await screen.findByText('Товари')).toBeInTheDocument();
+    expect(screen.getByText('Кабінет')).toBeInTheDocument();
+  });
+
+  it('is not mounted on the waiter tablet', async () => {
+    renderAt('/admin/products', { shell: 'tablet' });
+
+    expect(await screen.findByText('Каса')).toBeInTheDocument();
+    expect(screen.queryByText('Товари')).not.toBeInTheDocument();
   });
 });
 

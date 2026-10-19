@@ -137,7 +137,7 @@ Frontend (`pos/src/`) has **three entry points sharing the same components/pages
 |---|---|---|---|
 | HTML/entry | `index.html` / `main.tsx` | `cashier.html` / `cashier-main.tsx` | `tablet.html` / `tablet-main.tsx` |
 | Router | `BrowserRouter` | `HashRouter` | `BrowserRouter basename="/tablet"` |
-| Routes | full SPA incl. `/admin` | only `/login`, `/register`, `/customers` | the till screens, no `/admin`, no `hardware` |
+| Routes | full SPA incl. `/admin` | the till screens (`/login`, `/register`, `/orders`, `/customers`, `/sales`, `/hardware`) + for the owner the admin pages flagged `desktop` — only «Товари» (`/admin/products…`, `/admin/modifiers`, `/admin/tech-cards`), inside the till's frame, because the printers are there | the till screens, no `/admin`, no `hardware` |
 | Shell context | `PosShellContext = 'web'` | `'cashier'` | `'tablet'` |
 | Offline mode (`offline/enabled.ts`) | `off` | `full` | `reads` |
 

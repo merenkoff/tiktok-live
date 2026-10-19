@@ -147,9 +147,11 @@ describe('collectNavEntries', () => {
   it('reports where a context-limited entry actually shows up', () => {
     const entries = collectNavEntries(MODULES, ALL, 'cashier-primary');
     const catalogShortcut = entries.find((e) => e.key === 'products:cashier-primary:/admin/products');
+    // In the browser and in the desktop app alike (the printers are there),
+    // so no «лише у браузері» hint on «Вигляд меню».
     expect(catalogShortcut?.scope).toEqual({
       ownerOnly: true,
-      shellOnly: 'web',
+      shellOnly: null,
       variantOnly: 'rail',
     });
 

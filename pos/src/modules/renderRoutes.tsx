@@ -40,6 +40,19 @@ function RouteFallback() {
   );
 }
 
+/**
+ * A cabinet page inside the desktop app: the cabinet's padding in a box that
+ * scrolls itself, because `CashierLayout` is a fixed-height column. The page's
+ * sticky save bar sticks to this box the way it does to the cabinet's `<main>`.
+ */
+function DesktopAdminPage({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex-1 min-h-0 overflow-y-auto bg-sq-surface">
+      <div className="p-5 md:px-12 md:py-10 min-w-0">{children}</div>
+    </div>
+  );
+}
+
 function Guard({
   children,
   ownerOnly = false,
@@ -90,7 +103,26 @@ export function renderModuleRoutes(ctx: RouteContext) {
       const mount = r.mount ?? 'root';
 
       if (mount === 'admin') {
-        // The `/admin` area is web-only; the cashier shell never mounts it.
+        // The desktop has no cabinet, but the owner prints price tags there,
+        // on the till's own printer — so a page flagged `desktop` is mounted
+        // at its cabinet path inside the till's frame (owner only).
+        if (ctx.shell === 'cashier' && r.desktop && r.path) {
+          rootRoutes.push(
+            <Route
+              key={`desktop-admin:${m.id}:${r.path}`}
+              path={`/admin/${r.path}`}
+              element={
+                <Guard ownerOnly>
+                  <CashierLayout>
+                    <DesktopAdminPage>{node}</DesktopAdminPage>
+                  </CashierLayout>
+                </Guard>
+              }
+            />
+          );
+          continue;
+        }
+        // The `/admin` area itself is web-only; no other shell mounts it.
         if (ctx.shell !== 'web') continue;
         if (r.index) {
           adminIndex = <Route key={`admin-index:${m.id}`} index element={node} />;
