@@ -21,28 +21,33 @@ const MarkdownsPage = lazyWithRetry(() =>
   import('./pages/MarkdownsPage').then((m) => ({ default: m.MarkdownsPage }))
 );
 
-/** Product / variant / tag catalog management. Owner-only, web build only. */
+/**
+ * Product / variant / tag catalog management. Owner-only: the web cabinet, and
+ * the desktop app too — that is where the printers are, so that is where an
+ * owner prints price tags (`desktop` on every route: the pages link only to
+ * each other). The tablet stays without it — it mounts no `/admin` page.
+ */
 export const productsModule: ModuleDescriptor = {
   id: 'products',
   title: 'Товари',
   defaultEnabled: true,
-  shells: ['web'],
+  shells: ['web', 'cashier'],
   ownerOnly: true,
   routes: [
-    { path: 'products', mount: 'admin', element: ProductsPage },
+    { path: 'products', mount: 'admin', element: ProductsPage, desktop: true },
     // The card on its own page (C1e): two columns, the variants as a table,
     // one variant's full field set in a sheet. `?edit=<id>` on the list
     // redirects here, so the older links from «Техкарти» keep working.
-    { path: 'products/new', mount: 'admin', element: ProductPage },
+    { path: 'products/new', mount: 'admin', element: ProductPage, desktop: true },
     // Mass markdowns (clothing D2): what is on sale, until when, and the
     // button that puts the prices back. Static, so it ranks above `:id`.
-    { path: 'products/markdowns', mount: 'admin', element: MarkdownsPage },
-    { path: 'products/:id', mount: 'admin', element: ProductPage },
+    { path: 'products/markdowns', mount: 'admin', element: MarkdownsPage, desktop: true },
+    { path: 'products/:id', mount: 'admin', element: ProductPage, desktop: true },
     // The questions a product may ask («Молоко?») and their answers. Host code,
     // not café code: the next vertical that asks a question reuses it.
-    { path: 'modifiers', mount: 'admin', element: ModifiersPage },
+    { path: 'modifiers', mount: 'admin', element: ModifiersPage, desktop: true },
     // What a composite costs to assemble, and what share of its price that is.
-    { path: 'tech-cards', mount: 'admin', element: TechCardsPage },
+    { path: 'tech-cards', mount: 'admin', element: TechCardsPage, desktop: true },
   ],
   nav: [
     { to: '/admin/products', label: 'Товари', location: 'admin-sidebar', order: 20 },
@@ -57,8 +62,11 @@ export const productsModule: ModuleDescriptor = {
       icon: 'Package',
       location: 'cashier-primary',
       order: 35,
-      // The web cashier rail gives owners a shortcut into the catalog; the bottom bar does not.
-      visible: (ctx) => ctx.shell === 'web' && ctx.role === 'owner' && ctx.variant === 'rail',
+      // The till's rail gives owners a shortcut into the catalog — in the
+      // browser, and in the desktop app, where the printers are. The bottom
+      // bar does not.
+      visible: (ctx) =>
+        (ctx.shell === 'web' || ctx.shell === 'cashier') && ctx.role === 'owner' && ctx.variant === 'rail',
     },
   ],
 };

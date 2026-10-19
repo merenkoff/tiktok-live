@@ -54,9 +54,13 @@ describe('admin sidebar', () => {
   });
 
   it('keeps only the shell-agnostic sections in the cashier shell', () => {
-    // The cashier build never mounts `/admin`, so this list is unreachable
-    // there; the entries that survive are the ones from web+cashier modules.
+    // The cashier build never draws the cabinet's sidebar, so this list is
+    // unreachable there (the owner reaches «Товари» from the till's rail);
+    // the entries that survive are the ones from web+cashier modules.
     expect(select({ shell: 'cashier', role: 'owner' }, 'admin-sidebar')).toEqual([
+      '/admin/products',
+      '/admin/tech-cards',
+      '/admin/modifiers',
       '/admin/customers',
       '/admin/sales',
     ]);
@@ -105,6 +109,21 @@ describe('cashier rail vs bottom bar', () => {
       const receipts = select(ctx, 'cashier-primary').filter((to) => to.endsWith('sales'));
       expect(receipts, JSON.stringify(ctx)).toHaveLength(1);
     }
+  });
+
+  it('gives the owner «Товари» in the desktop rail too — the printers are there', () => {
+    expect(select({ shell: 'cashier', role: 'owner', variant: 'rail' }, 'cashier-primary')).toContain(
+      '/admin/products'
+    );
+    expect(
+      select({ shell: 'cashier', role: 'seller', variant: 'rail' }, 'cashier-primary')
+    ).not.toContain('/admin/products');
+    expect(
+      select({ shell: 'cashier', role: 'owner', variant: 'bottom' }, 'cashier-primary')
+    ).not.toContain('/admin/products');
+    expect(
+      select({ shell: 'tablet', role: 'owner', variant: 'rail' }, 'cashier-primary')
+    ).not.toContain('/admin/products');
   });
 
   it('shows hardware only in the desktop cashier', () => {

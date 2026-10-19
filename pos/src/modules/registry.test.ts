@@ -95,6 +95,25 @@ describe('MODULES routes', () => {
     }
   });
 
+  it('flags for the desktop only cabinet pages of modules that run there', () => {
+    // A `desktop` page whose module stays off the cashier shell is never
+    // mounted, and the flag would silently promise a screen that is not there.
+    for (const m of MODULES) {
+      for (const r of m.routes.filter((x) => x.desktop)) {
+        expect(r.mount, `${m.id} ${r.path}`).toBe('admin');
+        expect(r.path, `${m.id}`).toBeDefined();
+        expect(m.shells, `${m.id} ${r.path}`).toContain('cashier');
+      }
+    }
+  });
+
+  it('opens the whole of «Товари» in the desktop app, so no link inside it lands on the till', () => {
+    const products = MODULES.find((m) => m.id === 'products')!;
+    const admin = products.routes.filter((r) => r.mount === 'admin');
+    expect(admin.length).toBeGreaterThan(0);
+    expect(admin.every((r) => r.desktop)).toBe(true);
+  });
+
   it('declares at most one /admin index route', () => {
     const indexes = MODULES.flatMap((m) => m.routes.filter((r) => r.index).map(() => m.id));
     expect(indexes.length).toBeLessThanOrEqual(1);

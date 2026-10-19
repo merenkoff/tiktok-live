@@ -35,7 +35,7 @@
 | HTML | [`pos/index.html`](../pos/index.html) | [`pos/cashier.html`](../pos/cashier.html) |
 | Entry | [`pos/src/main.tsx`](../pos/src/main.tsx) | [`pos/src/cashier-main.tsx`](../pos/src/cashier-main.tsx) |
 | Роутер | `BrowserRouter` | `HashRouter` (SPA всередині webview без 404 на `/register`) |
-| Роути | повний SPA, див. `App.tsx` | лише `/login`, `/register`, `/customers` |
+| Роути | повний SPA, див. `App.tsx` | екрани каси (`/login`, `/register`, `/orders`, `/customers`, `/sales`, `/hardware`) + для власника сторінки кабінету з прапорцем `desktop` — лише «Товари» (`/admin/products…`, `/admin/modifiers`, `/admin/tech-cards`) у рамці каси, бо принтери тут (2026-10-19) |
 | Shell | `PosShellContext` = `web` | `cashier` |
 | Owner після логіну | `/admin` | `/register` |
 | Посилання в rail/nav на адмінку | так, для owner | приховані |
