@@ -192,31 +192,142 @@ function Fe({ tags: e, activeId: t, showBack: n, backLabel: r, onSelect: i, onBa
 		]
 	});
 }
+var Ie = 2e3, Le = {
+	Minus: ["-", "_"],
+	NumpadSubtract: ["-", "-"],
+	Equal: ["=", "+"],
+	NumpadAdd: ["+", "+"],
+	Slash: ["/", "?"],
+	NumpadDivide: ["/", "/"],
+	Period: [".", ">"],
+	NumpadDecimal: [".", "."],
+	Comma: [",", "<"],
+	Space: [" ", " "],
+	Semicolon: [";", ":"],
+	Quote: ["'", "\""],
+	BracketLeft: ["[", "{"],
+	BracketRight: ["]", "}"],
+	Backslash: ["\\", "|"],
+	Backquote: ["`", "~"],
+	NumpadMultiply: ["*", "*"]
+};
+function Re(e, t, n, r = !1) {
+	if (/^[\x20-\x7e]$/.test(e)) return e;
+	let i = /^Key([A-Z])$/.exec(t);
+	if (i) return n === r ? i[1].toLowerCase() : i[1];
+	let a = /^(?:Digit|Numpad)([0-9])$/.exec(t);
+	if (a) return a[1];
+	let o = Le[t];
+	return o ? n ? o[1] : o[0] : e;
+}
+function ze(e) {
+	let t = e?.value;
+	return typeof t == "string" ? t : null;
+}
+function Be() {
+	let e = null;
+	function t(t) {
+		if (t.ctrlKey || t.altKey || t.metaKey || t.isComposing || t.key === "Process" || t.repeat) return e = null, { kind: "pass" };
+		if (t.key === "Enter") {
+			let n = e;
+			if (e = null, !n || !n.chars.trim() || n.field !== t.field) return { kind: "pass" };
+			let r = t.time - n.last;
+			if (n.field === null) {
+				if (r > 2e3) return { kind: "pass" };
+			} else if (n.chars.length < 4 || r > 120) return { kind: "pass" };
+			return {
+				kind: "scan",
+				code: n.chars.trim(),
+				field: n.field,
+				restore: n.before
+			};
+		}
+		if (t.key === "Shift" || t.key === "CapsLock") return { kind: "pass" };
+		if (t.key.length !== 1) return e = null, { kind: "pass" };
+		let n = Re(t.key, t.code, t.shiftKey, t.capsLock), r = e ? t.time - e.last : Infinity, i = t.field === null ? Ie : 60;
+		return !e || e.field !== t.field || r > i ? e = {
+			chars: n,
+			last: t.time,
+			field: t.field,
+			before: ze(t.field)
+		} : (e.chars += n, e.last = t.time), { kind: "pass" };
+	}
+	return {
+		feed: t,
+		reset() {
+			e = null;
+		}
+	};
+}
 //#endregion
 //#region src/components/cashier/ScanWedge.tsx
-function Ie({ active: e, onScan: t }) {
-	let n = ge(), r = W(null);
+function Ve({ active: e, onScan: t }) {
+	let n = ge(), r = W(null), i = W(t);
+	H(() => {
+		i.current = t;
+	});
+	let a = W(e);
+	H(() => {
+		a.current = e;
+	});
+	let o = n !== "tablet";
 	return H(() => {
-		e ? r.current?.focus() : r.current?.blur();
-	}, [e]), n === "tablet" ? null : /* @__PURE__ */ q("input", {
+		if (!o) return;
+		let e = Be(), t = !0, n = (n) => {
+			let o = a.current && !We(r.current);
+			o !== t && e.reset(), t = o;
+			let s = Ke(n.target), c = e.feed({
+				key: n.key,
+				code: n.code,
+				shiftKey: n.shiftKey,
+				capsLock: n.getModifierState?.("CapsLock") ?? !1,
+				ctrlKey: n.ctrlKey,
+				altKey: n.altKey,
+				metaKey: n.metaKey,
+				repeat: n.repeat,
+				isComposing: n.isComposing,
+				time: n.timeStamp || performance.now(),
+				field: s ?? (o ? null : Ue)
+			});
+			c.kind === "scan" && (n.preventDefault(), n.stopPropagation(), c.field && c.field !== Ue && c.restore !== null && qe(c.field, c.restore), o && i.current(c.code));
+		};
+		return window.addEventListener("keydown", n, !0), () => window.removeEventListener("keydown", n, !0);
+	}, [o]), n === "tablet" ? null : /* @__PURE__ */ q("span", {
 		ref: r,
-		className: "sr-only",
-		"aria-hidden": !0,
-		tabIndex: -1,
-		onKeyDown: (e) => {
-			if (e.key !== "Enter") return;
-			let n = e.target, r = n.value;
-			n.value = "", r.trim() && t(r);
-		}
+		hidden: !0,
+		"data-scan-wedge": ""
 	});
 }
-function Le(e) {
+var He = "[role=\"dialog\"], [role=\"alertdialog\"], [aria-modal=\"true\"]", Ue = new EventTarget();
+function We(e) {
+	for (let t of document.querySelectorAll(He)) if (!e || !t.contains(e)) return !0;
+	return !1;
+}
+var Ge = /* @__PURE__ */ new Set([
+	"button",
+	"checkbox",
+	"radio",
+	"range",
+	"color",
+	"file",
+	"submit",
+	"reset",
+	"image"
+]);
+function Ke(e) {
+	return e instanceof HTMLTextAreaElement || e instanceof HTMLSelectElement ? e : e instanceof HTMLInputElement ? Ge.has(e.type) ? null : e : e instanceof HTMLElement && e.isContentEditable ? e : null;
+}
+function qe(e, t) {
+	let n = e instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : e instanceof HTMLInputElement ? HTMLInputElement.prototype : null;
+	n && (Object.getOwnPropertyDescriptor(n, "value")?.set?.call(e, t), e.dispatchEvent(new Event("input", { bubbles: !0 })));
+}
+function Je(e) {
 	return e == null ? "" : e.trim().slice(0, 120);
 }
-function Re(e) {
+function Ye(e) {
 	return [...new Set(e ?? [])].filter((e) => Number.isInteger(e) && e > 0).sort((e, t) => e - t);
 }
-function ze(e, t) {
+function Xe(e, t) {
 	let n = /* @__PURE__ */ new Map();
 	e.forEach((e, t) => {
 		e.modifiers.forEach((r, i) => {
@@ -229,7 +340,7 @@ function ze(e, t) {
 		});
 	});
 	let r = null, i = [];
-	for (let e of Re(t)) {
+	for (let e of Ye(t)) {
 		let t = n.get(e);
 		if (!t) {
 			r ?? (r = `Модифікатор ${e} недоступний для цього товару`);
@@ -263,16 +374,16 @@ function ze(e, t) {
 		error: r
 	};
 }
-function Be(e, t) {
+function Ze(e, t) {
 	return [e.trim(), ...t].filter(Boolean).join(" · ").slice(0, 255);
 }
-function Ve(e) {
+function Qe(e) {
 	return e.find((e) => e.modifier_groups?.length)?.modifier_groups ?? [];
 }
 //#endregion
 //#region src/components/cashier/ModifierSheet.tsx
-function He({ productName: e, variants: t, variantLabel: r = "Варіант", initialVariantId: i, initialModifierIds: a, initialNote: o, submitLabel: s = "Додати в чек", withQuantity: u = !0, notePlaceholder: d = "Коментар для кухні", onAdd: f, onClose: p }) {
-	let [m, h] = G(() => i ?? (t.length === 1 ? t[0].variant_id : null)), [g, _] = G(() => a ?? []), [y, b] = G(o ?? ""), [x, C] = G(1), w = we(), T = t.find((e) => e.variant_id === m) ?? null, E = T?.modifier_groups?.length ? T.modifier_groups : Ve(t), D = ze(E, g), O = T ? T.price_cents + D.deltaCents : null, k = T == null ? `Оберіть «${r}»` : D.error ?? (O != null && O < 0 ? "Ціна не може бути відʼємною" : null), A = k == null && T != null;
+function $e({ productName: e, variants: t, variantLabel: r = "Варіант", initialVariantId: i, initialModifierIds: a, initialNote: o, submitLabel: s = "Додати в чек", withQuantity: u = !0, notePlaceholder: d = "Коментар для кухні", onAdd: f, onClose: p }) {
+	let [m, h] = G(() => i ?? (t.length === 1 ? t[0].variant_id : null)), [g, _] = G(() => a ?? []), [y, b] = G(o ?? ""), [x, C] = G(1), w = we(), T = t.find((e) => e.variant_id === m) ?? null, E = T?.modifier_groups?.length ? T.modifier_groups : Qe(t), D = Xe(E, g), O = T ? T.price_cents + D.deltaCents : null, k = T == null ? `Оберіть «${r}»` : D.error ?? (O != null && O < 0 ? "Ціна не може бути відʼємною" : null), A = k == null && T != null;
 	H(() => {
 		let e = (e) => {
 			e.key === "Escape" && p();
@@ -289,11 +400,11 @@ function He({ productName: e, variants: t, variantLabel: r = "Варіант", i
 		A && T && f({
 			item: T,
 			modifiers: D.snapshot.map((e) => e.id),
-			note: Le(y),
+			note: Je(y),
 			quantity: u ? x : 1
 		});
 	}
-	let ee = T ? Be(T.label, D.error ? [] : D.names) : "", F = ce((T ?? t[0])?.image_url ?? null), I = t.length ? Math.min(...t.map((e) => e.price_cents)) : null, L = [...t].sort((e, t) => e.price_cents - t.price_cents);
+	let ee = T ? Ze(T.label, D.error ? [] : D.names) : "", F = ce((T ?? t[0])?.image_url ?? null), I = t.length ? Math.min(...t.map((e) => e.price_cents)) : null, L = [...t].sort((e, t) => e.price_cents - t.price_cents);
 	return /* @__PURE__ */ J("div", {
 		className: "absolute inset-0 z-30",
 		"data-testid": "modifier-sheet",
@@ -349,7 +460,7 @@ function He({ productName: e, variants: t, variantLabel: r = "Варіант", i
 					children: [
 						t.length > 1 && /* @__PURE__ */ J("section", {
 							"data-testid": "modifier-variants",
-							children: [/* @__PURE__ */ q(Ge, {
+							children: [/* @__PURE__ */ q(nt, {
 								name: r,
 								hint: "обовʼязково",
 								required: !0
@@ -362,7 +473,7 @@ function He({ productName: e, variants: t, variantLabel: r = "Варіант", i
 										disabled: r,
 										"aria-pressed": t,
 										onClick: () => h(e.variant_id),
-										className: qe(t, r),
+										className: it(t, r),
 										"data-testid": `modifier-variant-${e.variant_id}`,
 										children: [
 											t && /* @__PURE__ */ q(n, {
@@ -383,9 +494,9 @@ function He({ productName: e, variants: t, variantLabel: r = "Варіант", i
 							let t = j(e, g), r = e.max_select > 1 && t >= e.max_select;
 							return /* @__PURE__ */ J("section", {
 								"data-testid": `modifier-group-${e.id}`,
-								children: [/* @__PURE__ */ q(Ge, {
+								children: [/* @__PURE__ */ q(nt, {
 									name: e.name,
-									hint: Ke(e, r),
+									hint: rt(e, r),
 									required: e.min_select >= 1
 								}), /* @__PURE__ */ q("div", {
 									className: "flex flex-wrap gap-2",
@@ -396,7 +507,7 @@ function He({ productName: e, variants: t, variantLabel: r = "Варіант", i
 											"aria-pressed": i,
 											"aria-disabled": a || void 0,
 											onClick: () => M(e, t),
-											className: qe(i, a),
+											className: it(i, a),
 											"data-testid": `modifier-chip-${t.id}`,
 											children: [
 												i && /* @__PURE__ */ q(n, {
@@ -406,7 +517,7 @@ function He({ productName: e, variants: t, variantLabel: r = "Варіант", i
 												t.name,
 												t.price_delta_cents !== 0 && /* @__PURE__ */ q("span", {
 													className: i ? "font-medium" : "font-medium text-sq-secondary",
-													children: Je(t.price_delta_cents)
+													children: at(t.price_delta_cents)
 												})
 											]
 										}, t.id);
@@ -448,7 +559,7 @@ function He({ productName: e, variants: t, variantLabel: r = "Варіант", i
 									"aria-label": "Менше",
 									disabled: x <= 1,
 									onClick: () => C((e) => Math.max(1, e - 1)),
-									className: We,
+									className: tt,
 									"data-testid": "modifier-qty-minus",
 									children: /* @__PURE__ */ q(l, { size: 20 })
 								}),
@@ -460,9 +571,9 @@ function He({ productName: e, variants: t, variantLabel: r = "Варіант", i
 								/* @__PURE__ */ q("button", {
 									type: "button",
 									"aria-label": "Більше",
-									disabled: x >= Ue,
-									onClick: () => C((e) => Math.min(Ue, e + 1)),
-									className: We,
+									disabled: x >= et,
+									onClick: () => C((e) => Math.min(et, e + 1)),
+									className: tt,
 									"data-testid": "modifier-qty-plus",
 									children: /* @__PURE__ */ q(S, { size: 20 })
 								})
@@ -495,8 +606,8 @@ function He({ productName: e, variants: t, variantLabel: r = "Варіант", i
 		})]
 	});
 }
-var Ue = 99, We = "w-10 h-10 rounded-sq bg-white ring-1 ring-sq-divider grid place-items-center text-sq-text disabled:opacity-40";
-function Ge({ name: e, hint: t, required: n }) {
+var et = 99, tt = "w-10 h-10 rounded-sq bg-white ring-1 ring-sq-divider grid place-items-center text-sq-text disabled:opacity-40";
+function nt({ name: e, hint: t, required: n }) {
 	return /* @__PURE__ */ J("div", {
 		className: "flex items-baseline gap-2 mb-2.5",
 		children: [/* @__PURE__ */ q("span", {
@@ -508,40 +619,40 @@ function Ge({ name: e, hint: t, required: n }) {
 		})]
 	});
 }
-function Ke(e, t) {
+function rt(e, t) {
 	return e.min_select >= 1 ? e.max_select > 1 ? `обовʼязково · до ${e.max_select}` : "обовʼязково" : e.max_select <= 1 ? "можна одне" : t ? `не більше ${e.max_select}` : e.max_select >= e.modifiers.length ? "скільки завгодно" : `до ${e.max_select}`;
 }
-function qe(e, t) {
+function it(e, t) {
 	return [
 		"min-h-12 px-4 rounded-xl text-base inline-flex items-center gap-2 transition-colors",
 		e ? "bg-sq-blue/[0.08] ring-2 ring-sq-blue text-sq-blue font-semibold" : "bg-white ring-1 ring-sq-divider text-sq-text font-medium",
 		t ? "opacity-40" : ""
 	].join(" ");
 }
-function Je(e) {
+function at(e) {
 	return e > 0 ? `+${De(e)}` : e < 0 ? `−${De(-e)}` : "";
 }
 //#endregion
 //#region src/modules/tables/lib/bill.ts
-var Ye = {
+var ot = {
 	new: "готується",
 	ready: "готово",
 	served: "видано"
 };
-function Xe(e) {
+function st(e) {
 	return e.cancelled_at == null && e.prep_status !== "served";
 }
-function Ze(e) {
+function ct(e) {
 	return (e.unit_price_cents ?? 0) * e.quantity;
 }
-function Qe(e, t = !1) {
+function lt(e, t = !1) {
 	let n = e.variant_label ? `${e.product_name} · ${e.variant_label}` : e.product_name;
 	return t || e.modifiers.length === 0 ? n : `${n} · ${e.modifiers.map((e) => e.name).join(" · ")}`;
 }
 //#endregion
 //#region src/modules/tables/components/BillBar.tsx
-var $e = 2;
-function et({ draft: e, rounds: n, summary: r, owedCents: i, hasPending: a, busy: o, online: s, onOpen: l, onFire: u }) {
+var ut = 2;
+function dt({ draft: e, rounds: n, summary: r, owedCents: i, hasPending: a, busy: o, online: s, onOpen: l, onFire: u }) {
 	let d = r.lines > 0, f = [...n].reverse().find((e) => e.cancelled_at == null && e.prep_status !== "served");
 	return /* @__PURE__ */ J("div", {
 		className: "shrink-0 mx-3 mb-2.5 rounded-card bg-white shadow-[0_-2px_24px_rgba(0,20,60,.14),0_0_0_1px_#E6E8EC] px-[18px] pt-2.5 pb-4",
@@ -573,12 +684,12 @@ function et({ draft: e, rounds: n, summary: r, owedCents: i, hasPending: a, busy
 								"Раунд ",
 								f.seq,
 								" ",
-								Ye[f.prep_status]
+								ot[f.prep_status]
 							]
 						})
 					]
 				}),
-				e.slice(0, $e).map((e) => /* @__PURE__ */ J("span", {
+				e.slice(0, ut).map((e) => /* @__PURE__ */ J("span", {
 					className: "flex items-start gap-2.5 py-1",
 					children: [
 						/* @__PURE__ */ J("span", {
@@ -601,11 +712,11 @@ function et({ draft: e, rounds: n, summary: r, owedCents: i, hasPending: a, busy
 						})
 					]
 				}, e.key)),
-				e.length > $e && /* @__PURE__ */ J("span", {
+				e.length > ut && /* @__PURE__ */ J("span", {
 					className: "block py-0.5 text-[13px] text-sq-blue font-semibold",
 					children: [
 						"ще ",
-						e.length - $e,
+						e.length - ut,
 						"…"
 					]
 				})
@@ -638,13 +749,13 @@ function et({ draft: e, rounds: n, summary: r, owedCents: i, hasPending: a, busy
 }
 //#endregion
 //#region src/modules/tables/components/BillPane.tsx
-function tt({ bill: e, draft: t, summary: n, owedCents: r, busy: i, online: a, hasPending: o, canPay: s, canPrecheck: u, printStatus: d, onLess: f, onMore: p, onEdit: m, onCancelRound: h, onFire: g, onPay: _, onPrecheck: v }) {
-	let b = (e) => /* @__PURE__ */ q(at, {
+function ft({ bill: e, draft: t, summary: n, owedCents: r, busy: i, online: a, hasPending: o, canPay: s, canPrecheck: u, printStatus: d, onLess: f, onMore: p, onEdit: m, onCancelRound: h, onFire: g, onPay: _, onPrecheck: v }) {
+	let b = (e) => /* @__PURE__ */ q(gt, {
 		testId: `bill-line-${e.id}`,
 		quantity: e.quantity,
 		title: e.product_name,
 		sub: [e.variant_label, e.note].filter(Boolean).join(" · "),
-		price: Z(Ze(e))
+		price: Z(ct(e))
 	}, e.id);
 	return /* @__PURE__ */ J("div", {
 		className: "flex h-full min-h-0 flex-col",
@@ -679,8 +790,8 @@ function tt({ bill: e, draft: t, summary: n, owedCents: r, busy: i, online: a, h
 									]
 								}),
 								/* @__PURE__ */ q("span", {
-									className: `text-[13px] font-semibold ${t ? "text-sq-muted" : rt[e.prep_status]}`,
-									children: t ? "скасовано" : e.prep_status === "new" ? `${Ye.new} · ${it(e.fired_at)} хв` : Ye[e.prep_status]
+									className: `text-[13px] font-semibold ${t ? "text-sq-muted" : mt[e.prep_status]}`,
+									children: t ? "скасовано" : e.prep_status === "new" ? `${ot.new} · ${ht(e.fired_at)} хв` : ot[e.prep_status]
 								})
 							]
 						}),
@@ -688,7 +799,7 @@ function tt({ bill: e, draft: t, summary: n, owedCents: r, busy: i, online: a, h
 							className: "pt-1",
 							children: e.items.map(b)
 						}),
-						Xe(e) && /* @__PURE__ */ q("button", {
+						st(e) && /* @__PURE__ */ q("button", {
 							type: "button",
 							className: "mt-1 min-h-9 text-[14px] font-semibold text-red-600 disabled:opacity-40",
 							"data-testid": `bill-cancel-round-${e.id}`,
@@ -757,7 +868,7 @@ function tt({ bill: e, draft: t, summary: n, owedCents: r, busy: i, online: a, h
 										children: [/* @__PURE__ */ q("button", {
 											type: "button",
 											"aria-label": "Менше",
-											className: nt,
+											className: pt,
 											"data-testid": `bill-less-${e.id}`,
 											disabled: i || !a || !n,
 											onClick: () => f(e),
@@ -765,7 +876,7 @@ function tt({ bill: e, draft: t, summary: n, owedCents: r, busy: i, online: a, h
 										}), /* @__PURE__ */ q("button", {
 											type: "button",
 											"aria-label": "Більше",
-											className: nt,
+											className: pt,
 											"data-testid": `bill-more-${e.id}`,
 											disabled: i || !a || !n,
 											onClick: () => p(e),
@@ -843,15 +954,15 @@ function tt({ bill: e, draft: t, summary: n, owedCents: r, busy: i, online: a, h
 		})]
 	});
 }
-var nt = "w-8 h-8 rounded-lg bg-white ring-1 ring-sq-divider grid place-items-center text-sq-text disabled:opacity-40", rt = {
+var pt = "w-8 h-8 rounded-lg bg-white ring-1 ring-sq-divider grid place-items-center text-sq-text disabled:opacity-40", mt = {
 	new: "text-[#D9730D]",
 	ready: "text-sq-success",
 	served: "text-sq-muted"
 };
-function it(e) {
+function ht(e) {
 	return Math.max(0, Math.floor((Date.now() - new Date(e).getTime()) / 6e4));
 }
-function at({ testId: e, quantity: t, title: n, sub: r, price: i }) {
+function gt({ testId: e, quantity: t, title: n, sub: r, price: i }) {
 	return /* @__PURE__ */ J("div", {
 		className: "flex items-start gap-2.5 py-1.5",
 		"data-testid": e,
@@ -879,7 +990,7 @@ function at({ testId: e, quantity: t, title: n, sub: r, price: i }) {
 }
 //#endregion
 //#region src/modules/tables/components/BillSheet.tsx
-function ot({ title: e, onClose: t, children: n }) {
+function _t({ title: e, onClose: t, children: n }) {
 	return /* @__PURE__ */ J("div", {
 		className: "fixed inset-0 z-40",
 		"data-testid": "bill-sheet",
@@ -912,74 +1023,74 @@ function ot({ title: e, onClose: t, children: n }) {
 }
 //#endregion
 //#region src/modules/tables/lib/guestOrders.ts
-function st(e, t = Date.now()) {
+function vt(e, t = Date.now()) {
 	let n = Math.floor((t - new Date(e).getTime()) / 6e4);
 	return Number.isFinite(n) ? Math.max(0, n) : 0;
 }
-function ct(e, t = Date.now()) {
-	let n = st(e, t);
+function yt(e, t = Date.now()) {
+	let n = vt(e, t);
 	return n < 1 ? "щойно" : `${n} хв тому`;
 }
-function lt(e, t, n, r) {
+function bt(e, t, n, r) {
 	let i = e % 100, a = e % 10;
 	return i >= 11 && i <= 14 ? `${e} ${r}` : a === 1 ? `${e} ${t}` : a >= 2 && a <= 4 ? `${e} ${n}` : `${e} ${r}`;
 }
-function ut(e) {
-	return lt(e, "запит", "запити", "запитів");
+function xt(e) {
+	return bt(e, "запит", "запити", "запитів");
 }
-function dt(e, t = /* @__PURE__ */ new Set()) {
+function St(e, t = /* @__PURE__ */ new Set()) {
 	return e.lines.filter((e) => e.problem != null || t.has(e.id)).map((e) => e.id);
 }
-function ft(e, t = /* @__PURE__ */ new Set()) {
-	let n = dt(e, t).length;
+function Ct(e, t = /* @__PURE__ */ new Set()) {
+	let n = St(e, t).length;
 	return n === 0 ? "Прийняти" : n >= e.lines.length ? null : n === 1 ? "Прийняти без цієї" : "Прийняти без них";
 }
-function pt(e) {
+function wt(e) {
 	let t = e?.response?.data, n = Number(t?.item_id);
 	return Number.isInteger(n) && n > 0 ? n : null;
 }
-var mt = [
+var Tt = [
 	"Цієї страви вже немає",
 	"Кухня зараз не приймає — підійдіть до офіціанта",
 	"Підійде офіціант і прийме замовлення"
 ];
-function ht(e) {
+function Et(e) {
 	return e === "bill" ? "Просить рахунок" : "Кличе офіціанта";
 }
-var gt = {
+var Dt = {
 	requests: 0,
 	waiter: !1,
 	bill: !1,
 	sent: 0
 };
-function _t(e) {
+function Ot(e) {
 	let t = /* @__PURE__ */ new Map(), n = (e) => {
 		let n = t.get(e);
-		return n || (n = { ...gt }, t.set(e, n)), n;
+		return n || (n = { ...Dt }, t.set(e, n)), n;
 	};
 	for (let t of e.orders) n(t.table_id).requests += 1;
 	for (let t of e.sent) n(t.table_id).sent += 1;
 	for (let t of e.calls) n(t.table_id)[t.kind] = !0;
 	return t;
 }
-function vt(e) {
+function kt(e) {
 	return e ? e.requests + e.sent + +!!e.waiter + +!!e.bill : 0;
 }
-function yt(e) {
+function At(e) {
 	return /* @__PURE__ */ new Set([
 		...e.orders.map((e) => `order:${e.id}`),
 		...e.sent.map((e) => `sent:${e.id}`),
 		...e.calls.map((e) => `call:${e.id}`)
 	]);
 }
-function bt(e) {
+function jt(e) {
 	return e.round_seq == null ? "Уже на кухні" : `Уже на кухні · замовлення ${e.round_seq}`;
 }
-function xt(e) {
+function Mt(e) {
 	let t = [];
-	return e.calls > 0 && t.push(lt(e.calls, "виклик", "виклики", "викликів")), e.sent > 0 && t.push(`${e.sent} на кухні без офіціанта`), e.requests > 0 && t.push(ut(e.requests)), t.join(" · ");
+	return e.calls > 0 && t.push(bt(e.calls, "виклик", "виклики", "викликів")), e.sent > 0 && t.push(`${e.sent} на кухні без офіціанта`), e.requests > 0 && t.push(xt(e.requests)), t.join(" · ");
 }
-function St(e, t) {
+function Nt(e, t) {
 	let n = /* @__PURE__ */ new Map(), r = /* @__PURE__ */ new Map(), i = (e, i, a, o) => {
 		if (e === t) return;
 		n.set(e, i);
@@ -1000,8 +1111,8 @@ function St(e, t) {
 }
 //#endregion
 //#region src/modules/tables/lib/usePolling.ts
-var Ct = 1e4;
-function wt(e, t, n = Ct) {
+var Pt = 1e4;
+function Ft(e, t, n = Pt) {
 	let r = W(e);
 	r.current = e, H(() => {
 		if (!t || typeof document > "u") return;
@@ -1017,13 +1128,13 @@ function wt(e, t, n = Ct) {
 }
 //#endregion
 //#region src/modules/tables/components/GuestAlertsPanel.tsx
-var Tt = {
+var It = {
 	waiter: "ring-[#8A6CEF]",
 	bill: "ring-[#1B9DF0]"
 };
-function Et({ calls: e, sent: t, showTable: n, busy: r, onAnswer: i, onSeen: a, onOpenBill: o }) {
+function Lt({ calls: e, sent: t, showTable: n, busy: r, onAnswer: i, onSeen: a, onOpenBill: o }) {
 	let [s, c] = G(null), [l, u] = G(() => Date.now());
-	if (wt(() => u(Date.now()), e.length + t.length > 0, 15e3), e.length === 0 && t.length === 0) return null;
+	if (Ft(() => u(Date.now()), e.length + t.length > 0, 15e3), e.length === 0 && t.length === 0) return null;
 	async function d(e, t) {
 		if (!s) {
 			c(e);
@@ -1041,7 +1152,7 @@ function Et({ calls: e, sent: t, showTable: n, busy: r, onAnswer: i, onSeen: a, 
 		children: [e.map((e) => {
 			let t = `call:${e.id}`;
 			return /* @__PURE__ */ q("section", {
-				className: `rounded-2xl bg-white ring-2 ${Tt[e.kind]} px-4 py-3`,
+				className: `rounded-2xl bg-white ring-2 ${It[e.kind]} px-4 py-3`,
 				"data-testid": `guest-call-${e.id}`,
 				"data-kind": e.kind,
 				"data-table": e.table_id,
@@ -1053,12 +1164,12 @@ function Et({ calls: e, sent: t, showTable: n, busy: r, onAnswer: i, onSeen: a, 
 							className: "min-w-0 flex-1",
 							children: [/* @__PURE__ */ J("p", {
 								className: "break-words text-[16px] font-bold leading-snug text-sq-heading",
-								children: [n ? `Стіл ${e.table_name} · ` : "", ht(e.kind)]
+								children: [n ? `Стіл ${e.table_name} · ` : "", Et(e.kind)]
 							}), /* @__PURE__ */ q("p", {
 								className: "text-[13px] text-sq-muted tabular-nums",
 								children: [
 									n ? e.hall_name : "",
-									ct(e.created_at, l),
+									yt(e.created_at, l),
 									e.kind === "bill" && !e.has_open_bill ? "рахунку ще немає" : ""
 								].filter(Boolean).join(" · ")
 							})]
@@ -1092,12 +1203,12 @@ function Et({ calls: e, sent: t, showTable: n, busy: r, onAnswer: i, onSeen: a, 
 									children: n ? f(e.table_name, e.hall_name) : "Гість замовив сам"
 								}), /* @__PURE__ */ q("p", {
 									className: "text-[13px] font-semibold text-[#B35F0C]",
-									children: bt(e)
+									children: jt(e)
 								})]
 							}),
 							/* @__PURE__ */ q("span", {
 								className: "shrink-0 text-[13px] text-sq-muted tabular-nums",
-								children: ct(e.created_at, l)
+								children: yt(e.created_at, l)
 							})
 						]
 					}),
@@ -1159,15 +1270,15 @@ function Et({ calls: e, sent: t, showTable: n, busy: r, onAnswer: i, onSeen: a, 
 }
 //#endregion
 //#region src/modules/tables/components/GuestOrdersPanel.tsx
-function Dt({ orders: e, showTable: t, busy: n, onAccept: r, onReject: i }) {
+function Rt({ orders: e, showTable: t, busy: n, onAccept: r, onReject: i }) {
 	let [a, o] = G({}), [s, c] = G(null), [l, u] = G(() => Date.now());
-	wt(() => u(Date.now()), e.length > 0, 15e3);
+	Ft(() => u(Date.now()), e.length > 0, 15e3);
 	let d = W(/* @__PURE__ */ new Map());
 	if (H(() => {
 		s != null && d.current.get(s)?.scrollIntoView?.({ block: "nearest" });
 	}, [s]), e.length === 0) return null;
 	async function f(e) {
-		let t = a[e.id] ?? [], n = await r(e, dt(e, new Set(t)));
+		let t = a[e.id] ?? [], n = await r(e, St(e, new Set(t)));
 		if (!n.ok && n.refusedLineId != null) {
 			let t = n.refusedLineId;
 			o((n) => ({
@@ -1183,7 +1294,7 @@ function Dt({ orders: e, showTable: t, busy: n, onAccept: r, onReject: i }) {
 		className: "space-y-2.5",
 		"data-testid": "guest-orders-panel",
 		children: e.map((e) => {
-			let r = new Set(a[e.id] ?? []), i = ft(e, r);
+			let r = new Set(a[e.id] ?? []), i = Ct(e, r);
 			return /* @__PURE__ */ J("section", {
 				ref: (t) => {
 					t ? d.current.set(e.id, t) : d.current.delete(e.id);
@@ -1205,7 +1316,7 @@ function Dt({ orders: e, showTable: t, busy: n, onAccept: r, onReject: i }) {
 							}),
 							/* @__PURE__ */ q("span", {
 								className: "shrink-0 text-[13px] text-sq-muted tabular-nums",
-								children: ct(e.created_at, l)
+								children: yt(e.created_at, l)
 							})
 						]
 					}),
@@ -1252,9 +1363,9 @@ function Dt({ orders: e, showTable: t, busy: n, onAccept: r, onReject: i }) {
 								className: "text-[13px] font-semibold text-sq-secondary",
 								children: "Що прочитає гість:"
 							}),
-							mt.map((t, r) => /* @__PURE__ */ q("button", {
+							Tt.map((t, r) => /* @__PURE__ */ q("button", {
 								type: "button",
-								className: Ot,
+								className: zt,
 								"data-testid": `guest-order-reason-${e.id}-${r}`,
 								disabled: n,
 								onClick: () => void p(e, t),
@@ -1264,14 +1375,14 @@ function Dt({ orders: e, showTable: t, busy: n, onAccept: r, onReject: i }) {
 								className: "flex gap-2",
 								children: [/* @__PURE__ */ q("button", {
 									type: "button",
-									className: `${Ot} flex-1`,
+									className: `${zt} flex-1`,
 									"data-testid": `guest-order-reason-none-${e.id}`,
 									disabled: n,
 									onClick: () => void p(e, null),
 									children: "Без причини"
 								}), /* @__PURE__ */ q("button", {
 									type: "button",
-									className: `${Ot} flex-1 text-sq-blue`,
+									className: `${zt} flex-1 text-sq-blue`,
 									onClick: () => c(null),
 									children: "Назад"
 								})]
@@ -1305,18 +1416,18 @@ function Dt({ orders: e, showTable: t, busy: n, onAccept: r, onReject: i }) {
 		})
 	});
 }
-var Ot = "w-full min-h-[44px] rounded-xl bg-white ring-1 ring-sq-divider px-3 text-left text-[15px] text-sq-text disabled:opacity-40";
+var zt = "w-full min-h-[44px] rounded-xl bg-white ring-1 ring-sq-divider px-3 text-left text-[15px] text-sq-text disabled:opacity-40";
 //#endregion
 //#region src/modules/tables/lib/menu.ts
-function kt(e = /* @__PURE__ */ new Date()) {
+function Bt(e = /* @__PURE__ */ new Date()) {
 	return new Intl.DateTimeFormat("en-CA").format(e);
 }
-function At(e, t = kt()) {
+function Vt(e, t = Bt()) {
 	return e.stop_listed_on == null ? e.stop_listed === !0 : e.stop_listed_on === t;
 }
 //#endregion
 //#region src/modules/tables/components/MenuCatalog.tsx
-function jt({ counts: e, online: t, active: n, canScan: r, epoch: i, onAdd: a, onRows: o }) {
+function Ht({ counts: e, online: t, active: n, canScan: r, epoch: i, onAdd: a, onRows: o }) {
 	let s = _e(), c = ve(), l = we(), [u, d] = G(null), f = c.attributes.find((e) => e.key === "size")?.label ?? "Розмір";
 	H(() => {
 		i > 0 && s.refresh();
@@ -1347,7 +1458,7 @@ function jt({ counts: e, online: t, active: n, canScan: r, epoch: i, onAdd: a, o
 		className: "relative flex h-full min-h-0 flex-col bg-white",
 		"data-testid": "menu-catalog",
 		children: [
-			r && /* @__PURE__ */ q(Ie, {
+			r && /* @__PURE__ */ q(Ve, {
 				active: n && !u,
 				onScan: (e) => void m(e)
 			}),
@@ -1392,7 +1503,7 @@ function jt({ counts: e, online: t, active: n, canScan: r, epoch: i, onAdd: a, o
 								onClick: () => s.enterTag(e)
 							})
 						}, e.id)), s.grouped.map(([n, r]) => {
-							let i = r[0], a = ue(r), o = Math.min(...r.map((e) => e.price_cents)), s = r.reduce((e, t) => e + t.quantity, 0), c = At(i), l = r.length > 1 ? r.map((e) => e.label).filter(Boolean).join(" / ") : i.label;
+							let i = r[0], a = ue(r), o = Math.min(...r.map((e) => e.price_cents)), s = r.reduce((e, t) => e + t.quantity, 0), c = Vt(i), l = r.length > 1 ? r.map((e) => e.label).filter(Boolean).join(" / ") : i.label;
 							return /* @__PURE__ */ q(Oe, {
 								testId: `menu-tile-${n}`,
 								name: i.product_name,
@@ -1414,7 +1525,7 @@ function jt({ counts: e, online: t, active: n, canScan: r, epoch: i, onAdd: a, o
 					})
 				]
 			}),
-			u && /* @__PURE__ */ q(He, {
+			u && /* @__PURE__ */ q($e, {
 				productName: u.variants[0]?.product_name ?? "",
 				variants: u.variants,
 				variantLabel: f,
@@ -1435,7 +1546,7 @@ function jt({ counts: e, online: t, active: n, canScan: r, epoch: i, onAdd: a, o
 }
 //#endregion
 //#region src/modules/tables/lib/pay.ts
-function Mt(e) {
+function Ut(e) {
 	let t = [];
 	for (let n of e.rounds) if (n.cancelled_at == null) for (let e of n.items) e.sale_id ?? t.push({
 		line: e,
@@ -1443,24 +1554,24 @@ function Mt(e) {
 	});
 	return t;
 }
-function Nt(e) {
+function Wt(e) {
 	return (e.unit_price_cents ?? 0) * e.quantity;
 }
-function Pt(e, t) {
-	return e.reduce((e, { line: n }) => t.has(n.id) ? e + Nt(n) : e, 0);
+function Gt(e, t) {
+	return e.reduce((e, { line: n }) => t.has(n.id) ? e + Wt(n) : e, 0);
 }
-function Ft(e, t) {
+function Kt(e, t) {
 	let n = Math.max(1, Math.floor(t));
 	if (e <= 0) return Array.from({ length: n }, () => 0);
 	let r = Math.floor(e / n), i = Array.from({ length: n }, () => r);
 	return i[0] += e - r * n, i;
 }
-function It(e) {
-	return e.status !== "open" || Mt(e).length === 0;
+function qt(e) {
+	return e.status !== "open" || Ut(e).length === 0;
 }
 //#endregion
 //#region src/modules/tables/components/PaySheet.tsx
-var Lt = [{
+var Jt = [{
 	id: "cash",
 	label: "Готівка",
 	glyph: g
@@ -1469,8 +1580,8 @@ var Lt = [{
 	label: "Картка",
 	glyph: b
 }];
-function Rt({ bill: t, busy: r, onClose: i, onPay: a }) {
-	let o = U(() => Mt(t), [t]), [s, c] = G(() => new Set(o.map(({ line: e }) => e.id))), [d, f] = G(1), [p, m] = G("card"), h = Pt(o, s), g = s.size === o.length, _ = Ft(h, d);
+function Yt({ bill: t, busy: r, onClose: i, onPay: a }) {
+	let o = U(() => Ut(t), [t]), [s, c] = G(() => new Set(o.map(({ line: e }) => e.id))), [d, f] = G(1), [p, m] = G("card"), h = Gt(o, s), g = s.size === o.length, _ = Kt(h, d);
 	function v(e) {
 		c((t) => {
 			let n = new Set(t);
@@ -1546,7 +1657,7 @@ function Rt({ bill: t, busy: r, onClose: i, onPay: a }) {
 										children: [e.quantity > 1 && /* @__PURE__ */ J("span", {
 											className: "tabular-nums",
 											children: [e.quantity, "× "]
-										}), Qe(e, !0)]
+										}), lt(e, !0)]
 									}), /* @__PURE__ */ J("span", {
 										className: "block text-[13px] text-sq-muted",
 										children: ["раунд ", t.seq]
@@ -1554,7 +1665,7 @@ function Rt({ bill: t, busy: r, onClose: i, onPay: a }) {
 								}),
 								/* @__PURE__ */ q("span", {
 									className: `shrink-0 text-base tabular-nums ${i ? "text-sq-text" : "text-sq-muted"}`,
-									children: Z(Nt(e))
+									children: Z(Wt(e))
 								})
 							]
 						}, e.id);
@@ -1589,7 +1700,7 @@ function Rt({ bill: t, busy: r, onClose: i, onPay: a }) {
 										/* @__PURE__ */ q("button", {
 											type: "button",
 											"aria-label": "Менше",
-											className: zt,
+											className: Xt,
 											"data-testid": "pay-ways-less",
 											disabled: r || d <= 1,
 											onClick: () => f((e) => Math.max(1, e - 1)),
@@ -1603,7 +1714,7 @@ function Rt({ bill: t, busy: r, onClose: i, onPay: a }) {
 										/* @__PURE__ */ q("button", {
 											type: "button",
 											"aria-label": "Більше",
-											className: zt,
+											className: Xt,
 											"data-testid": "pay-ways-more",
 											disabled: r || d >= 10,
 											onClick: () => f((e) => Math.min(10, e + 1)),
@@ -1636,7 +1747,7 @@ function Rt({ bill: t, busy: r, onClose: i, onPay: a }) {
 					}),
 					/* @__PURE__ */ q("div", {
 						className: "flex gap-2.5",
-						children: Lt.map((e) => {
+						children: Jt.map((e) => {
 							let t = p === e.id, n = e.glyph;
 							return /* @__PURE__ */ J("button", {
 								type: "button",
@@ -1666,10 +1777,10 @@ function Rt({ bill: t, busy: r, onClose: i, onPay: a }) {
 		})]
 	});
 }
-var zt = "w-10 h-10 rounded-sq bg-white ring-1 ring-sq-divider grid place-items-center text-sq-text disabled:opacity-40";
+var Xt = "w-10 h-10 rounded-sq bg-white ring-1 ring-sq-divider grid place-items-center text-sq-text disabled:opacity-40";
 //#endregion
 //#region src/modules/tables/lib/draft.ts
-function Bt(e, t) {
+function Zt(e, t) {
 	let { item: n, modifiers: r, note: i } = e, a = pe(ue([n]), r);
 	return {
 		token: t,
@@ -1685,15 +1796,15 @@ function Bt(e, t) {
 		preview_cents: a.error ? null : n.price_cents + a.deltaCents
 	};
 }
-function Vt(e) {
+function Qt(e) {
 	let t = e.modifiers.map((e) => e.modifier_id).filter((e) => e != null);
 	return Y(e.variant_id, t, e.note);
 }
-function Ht(e, t) {
+function $t(e, t) {
 	let n = e.map((e) => ({
 		key: `srv:${e.id}`,
 		id: e.id,
-		uid: Vt(e),
+		uid: Qt(e),
 		product_id: null,
 		variant_id: e.variant_id,
 		product_name: e.product_name,
@@ -1730,21 +1841,21 @@ function Ht(e, t) {
 	}
 	return n;
 }
-function Ut(e, t) {
+function en(e, t) {
 	let n = /* @__PURE__ */ new Map();
 	for (let [e, r] of t) for (let t of r) n.set(t.variant_id, e);
 	let r = /* @__PURE__ */ new Map();
 	for (let t of e) {
-		let e = t.product_id ?? Wt(t.uid, n);
+		let e = t.product_id ?? tn(t.uid, n);
 		e != null && r.set(e, (r.get(e) ?? 0) + t.quantity);
 	}
 	return r;
 }
-function Wt(e, t) {
+function tn(e, t) {
 	let n = Number(e.split("|")[0]);
 	return Number.isFinite(n) ? t.get(n) ?? null : null;
 }
-function Gt(e) {
+function nn(e) {
 	let t = 0, n = 0, r = !0;
 	for (let i of e) t += i.quantity, i.preview_unit_cents == null ? r = !1 : n += i.preview_unit_cents * i.quantity;
 	return {
@@ -1756,25 +1867,25 @@ function Gt(e) {
 }
 //#endregion
 //#region src/modules/tables/lib/precheck.ts
-function Kt(e, t = /* @__PURE__ */ new Date()) {
+function rn(e, t = /* @__PURE__ */ new Date()) {
 	let n = e == null ? t : new Date(e);
 	return Number.isNaN(n.getTime()) ? "" : `${String(n.getHours()).padStart(2, "0")}:${String(n.getMinutes()).padStart(2, "0")}`;
 }
-function qt(e, t = /* @__PURE__ */ new Date()) {
-	let n = Mt(e).map(({ line: e }) => ({
+function an(e, t = /* @__PURE__ */ new Date()) {
+	let n = Ut(e).map(({ line: e }) => ({
 		name: e.product_name,
 		variant_label: e.variant_label,
 		quantity: e.quantity,
 		unit_price_cents: e.unit_price_cents ?? 0,
-		line_total_cents: Nt(e)
+		line_total_cents: Wt(e)
 	}));
 	return {
 		table_name: e.table_name,
 		hall_name: e.hall_name,
 		bill_no: e.bill_no,
 		guests: e.guests,
-		opened_at: Kt(e.opened_at, t),
-		printed_at: Kt(null, t),
+		opened_at: rn(e.opened_at, t),
+		printed_at: rn(null, t),
 		waiter_name: e.opened_by_name,
 		items: n,
 		total_cents: n.reduce((e, t) => e + t.line_total_cents, 0)
@@ -1782,11 +1893,11 @@ function qt(e, t = /* @__PURE__ */ new Date()) {
 }
 //#endregion
 //#region src/modules/tables/lib/useBill.ts
-function Jt() {
+function on() {
 	let e = globalThis.crypto;
 	return e?.randomUUID ? e.randomUUID() : `${Date.now()}-${Math.random()}`;
 }
-function Yt(e, { online: t, mirrored: n = !1, storeId: r = null } = { online: !0 }) {
+function sn(e, { online: t, mirrored: n = !1, storeId: r = null } = { online: !0 }) {
 	let [i, a] = G(null), [o, s] = G(!0), [c, l] = G(null), [u, d] = G(null), [f, p] = G(!1), [m, h] = G([]), [g, _] = G(0), [v, y] = G(!1), [b, x] = G(null), S = W(!0), C = W([]), w = W(!1), T = W(!1), E = W(0);
 	H(() => (S.current = !0, () => {
 		S.current = !1;
@@ -1825,7 +1936,7 @@ function Yt(e, { online: t, mirrored: n = !1, storeId: r = null } = { online: !0
 	]);
 	H(() => {
 		k();
-	}, [k]), wt(V(async () => {
+	}, [k]), Ft(V(async () => {
 		let i = () => w.current || C.current.length > 0;
 		if (!t || i()) return;
 		let o = E.current;
@@ -1871,7 +1982,7 @@ function Yt(e, { online: t, mirrored: n = !1, storeId: r = null } = { online: !0
 			return;
 		}
 		d(null);
-		let r = Jt(), i = Bt(n, r);
+		let r = on(), i = Zt(n, r);
 		h((e) => [...e, i]), C.current.push({
 			kind: "add",
 			token: r,
@@ -1913,10 +2024,10 @@ function Yt(e, { online: t, mirrored: n = !1, storeId: r = null } = { online: !0
 }
 //#endregion
 //#region src/modules/tables/lib/useGuestOrders.ts
-function Xt(e, t) {
+function cn(e, t) {
 	return JSON.stringify(e) === JSON.stringify(t) ? e : t;
 }
-function Zt({ online: e, tableId: t = null }) {
+function ln({ online: e, tableId: t = null }) {
 	let [n, r] = G([]), [i, a] = G([]), [o, s] = G([]), [c, l] = G(!1), u = W(!0);
 	H(() => (u.current = !0, () => {
 		u.current = !1;
@@ -1926,7 +2037,7 @@ function Zt({ online: e, tableId: t = null }) {
 			let e = await I(t ?? void 0);
 			if (!u.current) return;
 			let n = Array.isArray(e?.orders) ? e.orders : [], i = Array.isArray(e?.sent) ? e.sent : [], o = Array.isArray(e?.calls) ? e.calls : [];
-			r((e) => Xt(e, n)), a((e) => Xt(e, i)), s((e) => Xt(e, o)), l(!0);
+			r((e) => cn(e, n)), a((e) => cn(e, i)), s((e) => cn(e, o)), l(!0);
 		} catch {}
 	}, [e, t]);
 	return H(() => {
@@ -1935,7 +2046,7 @@ function Zt({ online: e, tableId: t = null }) {
 			return;
 		}
 		d();
-	}, [e, d]), wt(d, e), {
+	}, [e, d]), Ft(d, e), {
 		orders: n,
 		sent: i,
 		calls: o,
@@ -1945,32 +2056,32 @@ function Zt({ online: e, tableId: t = null }) {
 }
 //#endregion
 //#region src/modules/tables/lib/useIsWide.ts
-var Qt = "(min-width: 1024px)";
-function $t() {
-	let [e, t] = G(() => typeof window > "u" || typeof window.matchMedia != "function" || window.matchMedia(Qt).matches);
+var un = "(min-width: 1024px)";
+function dn() {
+	let [e, t] = G(() => typeof window > "u" || typeof window.matchMedia != "function" || window.matchMedia(un).matches);
 	return H(() => {
 		if (typeof window > "u" || typeof window.matchMedia != "function") return;
-		let e = window.matchMedia(Qt), n = () => t(e.matches);
+		let e = window.matchMedia(un), n = () => t(e.matches);
 		return n(), e.addEventListener("change", n), () => e.removeEventListener("change", n);
 	}, []), e;
 }
 //#endregion
 //#region src/modules/tables/lib/useNotifyChime.ts
-var en = "tables:chime", tn = null;
-function nn() {
-	if (tn) return tn;
+var fn = "tables:chime", pn = null;
+function mn() {
+	if (pn) return pn;
 	let e = globalThis, t = e.AudioContext ?? e.webkitAudioContext;
 	if (!t) return null;
 	try {
-		tn = new t();
+		pn = new t();
 	} catch {
-		tn = null;
+		pn = null;
 	}
-	return tn;
+	return pn;
 }
-function rn() {
+function hn() {
 	let e = () => {
-		let e = nn();
+		let e = mn();
 		e && e.state === "suspended" && e.resume().catch(() => void 0);
 	};
 	return document.addEventListener("pointerdown", e, {
@@ -1978,8 +2089,8 @@ function rn() {
 		capture: !0
 	}), () => document.removeEventListener("pointerdown", e, { capture: !0 });
 }
-function an() {
-	let e = nn();
+function gn() {
+	let e = mn();
 	if (e) try {
 		e.state === "suspended" && e.resume().catch(() => void 0);
 		let t = e.currentTime;
@@ -1996,30 +2107,30 @@ function an() {
 		]);
 	} catch {}
 }
-function on() {
+function _n() {
 	try {
-		return localStorage.getItem(en) !== "off";
+		return localStorage.getItem(fn) !== "off";
 	} catch {
 		return !0;
 	}
 }
-function sn() {
-	let [e, t] = G(on);
+function vn() {
+	let [e, t] = G(_n);
 	return [e, V((e) => {
 		t(e);
 		try {
-			localStorage.setItem(en, e ? "on" : "off");
+			localStorage.setItem(fn, e ? "on" : "off");
 		} catch {}
 	}, [])];
 }
-function cn(e, t, n) {
+function yn(e, t, n) {
 	let r = W(null);
-	H(() => rn(), []), H(() => {
+	H(() => hn(), []), H(() => {
 		if (!t) return;
 		let i = r.current;
 		if (r.current = new Set(e), i != null && n) {
 			for (let t of e) if (!i.has(t)) {
-				an();
+				gn();
 				return;
 			}
 		}
@@ -2031,16 +2142,16 @@ function cn(e, t, n) {
 }
 //#endregion
 //#region src/modules/tables/pages/BillPage.tsx
-function ln() {
+function bn() {
 	let e = globalThis.crypto;
 	return e?.randomUUID ? e.randomUUID() : "00000000-0000-4000-8000-" + String(Date.now()).padStart(12, "0").slice(-12);
 }
-function un() {
-	let { billId: e } = Ce(), t = Number(e), n = he((e) => e.online), i = ge(), a = me((e) => e.auth?.store.id ?? null), { bill: o, loading: s, error: c, banner: l, busy: d, pending: f, epoch: p, stale: m, savedAt: h, clearBanner: g, notice: v, reload: y, addLine: b, run: x } = Yt(t, {
+function xn() {
+	let { billId: e } = Ce(), t = Number(e), n = he((e) => e.online), i = ge(), a = me((e) => e.auth?.store.id ?? null), { bill: o, loading: s, error: c, banner: l, busy: d, pending: f, epoch: p, stale: m, savedAt: h, clearBanner: g, notice: v, reload: y, addLine: b, run: x } = sn(t, {
 		online: n,
 		mirrored: i !== "web",
 		storeId: a
-	}), S = $t(), C = ve().attributes.find((e) => e.key === "size")?.label ?? "Розмір", [O, j] = G(!1), [N, ee] = G(!1), [P, F] = G(null), [I, L] = G(null), [te, z] = G(!1), ie = Se(), oe = xe(), { orders: V, sent: W, calls: K, loaded: ce, refresh: Y } = Zt({ online: n && o != null }), X = o?.table_id ?? null, Z = U(() => V.filter((e) => e.table_id === X), [V, X]), ue = U(() => W.filter((e) => e.table_id === X), [W, X]), de = U(() => K.filter((e) => e.table_id === X), [K, X]), pe = U(() => St({
+	}), S = dn(), C = ve().attributes.find((e) => e.key === "size")?.label ?? "Розмір", [O, j] = G(!1), [N, ee] = G(!1), [P, F] = G(null), [I, L] = G(null), [te, z] = G(!1), ie = Se(), oe = xe(), { orders: V, sent: W, calls: K, loaded: ce, refresh: Y } = ln({ online: n && o != null }), X = o?.table_id ?? null, Z = U(() => V.filter((e) => e.table_id === X), [V, X]), ue = U(() => W.filter((e) => e.table_id === X), [W, X]), de = U(() => K.filter((e) => e.table_id === X), [K, X]), pe = U(() => Nt({
 		orders: V,
 		sent: W,
 		calls: K
@@ -2049,7 +2160,7 @@ function un() {
 		W,
 		K,
 		X
-	]), _e = U(() => yt({
+	]), _e = U(() => At({
 		orders: V,
 		sent: W,
 		calls: K
@@ -2057,13 +2168,13 @@ function un() {
 		V,
 		W,
 		K
-	]), [ye] = sn();
-	cn(_e, ce, ye);
+	]), [ye] = vn();
+	yn(_e, ce, ye);
 	let be = oe.state?.notice;
 	H(() => {
 		typeof be == "string" && be && v(be);
 	}, [be, v]);
-	let Q = U(() => o ? Ht(o.draft, f) : [], [o, f]), we = U(() => Gt(Q), [Q]), Te = U(() => o ? Mt(o) : [], [o]), [Ee, $] = G([]), De = U(() => Ut(Q, Ee), [Q, Ee]);
+	let Q = U(() => o ? $t(o.draft, f) : [], [o, f]), we = U(() => nn(Q), [Q]), Te = U(() => o ? Ut(o) : [], [o]), [Ee, $] = G([]), De = U(() => en(Q, Ee), [Q, Ee]);
 	if (!n && !m && !s) return /* @__PURE__ */ q("div", {
 		className: "p-4",
 		"data-testid": "bill-offline",
@@ -2104,7 +2215,7 @@ function un() {
 		};
 		await x(async () => {
 			let n = await B(o.id, e);
-			return t.settled = It(n.bill), t.warning = n.warning ?? null, n.bill;
+			return t.settled = qt(n.bill), t.warning = n.warning ?? null, n.bill;
 		}, { stock: !0 }) && (ee(!1), t.settled ? t.warning ? ie("/tables", { state: {
 			note: t.warning,
 			warn: !0
@@ -2113,12 +2224,12 @@ function un() {
 		if (L(null), await x(() => k(o.id)) && i === "cashier") try {
 			let [e, t] = await Promise.all([le("receiptPrinterName"), le("receiptPaperWidthMm")]);
 			if (!e) return;
-			await fe(e, qt(o), t === 58 || t === 80 ? t : se), L("Передчек надіслано на друк");
+			await fe(e, an(o), t === 58 || t === 80 ? t : se), L("Передчек надіслано на друк");
 		} catch (e) {
 			L(e instanceof Error ? e.message : "Не вдалося надрукувати");
 		}
 	}, Ae = () => {
-		j(!1), x(() => D(o.id, ln()), { stock: !0 });
+		j(!1), x(() => D(o.id, bn()), { stock: !0 });
 	}, je = (e) => {
 		if (e.id == null) return;
 		let t = e.id;
@@ -2154,7 +2265,7 @@ function un() {
 				let r = await w(e.id, t);
 				return n.warning = r.warning, r.bill;
 			} catch (e) {
-				throw n.refused = pt(e), e;
+				throw n.refused = wt(e), e;
 			}
 		}, { stock: !0 });
 		return Y(), r && n.warning && v(n.warning), {
@@ -2189,7 +2300,7 @@ function un() {
 		} finally {
 			z(!1);
 		}
-	}, ze = /* @__PURE__ */ q(tt, {
+	}, ze = /* @__PURE__ */ q(ft, {
 		bill: o,
 		draft: Q,
 		summary: we,
@@ -2284,14 +2395,14 @@ function un() {
 			(Z.length > 0 || de.length > 0 || ue.length > 0) && /* @__PURE__ */ J("section", {
 				className: "mx-4 md:mx-6 mt-2 max-h-[40vh] shrink-0 overflow-auto space-y-2.5",
 				"data-testid": "bill-requests",
-				children: [/* @__PURE__ */ q(Et, {
+				children: [/* @__PURE__ */ q(Lt, {
 					calls: de,
 					sent: ue,
 					showTable: !1,
 					busy: d || te,
 					onAnswer: Ie,
 					onSeen: Le
-				}), /* @__PURE__ */ q(Dt, {
+				}), /* @__PURE__ */ q(Rt, {
 					orders: Z,
 					showTable: !1,
 					busy: d || te,
@@ -2301,7 +2412,7 @@ function un() {
 			}),
 			/* @__PURE__ */ J("div", {
 				className: `min-h-0 flex-1 ${S ? "grid grid-cols-[minmax(0,1fr)_372px]" : "flex flex-col"}`,
-				children: [/* @__PURE__ */ q(jt, {
+				children: [/* @__PURE__ */ q(Ht, {
 					counts: De,
 					online: n,
 					active: n && !N && !O && !P,
@@ -2314,7 +2425,7 @@ function un() {
 					children: ze
 				})]
 			}),
-			!S && /* @__PURE__ */ q(et, {
+			!S && /* @__PURE__ */ q(dt, {
 				draft: Q,
 				rounds: o.rounds,
 				summary: we,
@@ -2325,12 +2436,12 @@ function un() {
 				onOpen: () => j(!0),
 				onFire: Ae
 			}),
-			!S && O && /* @__PURE__ */ q(ot, {
+			!S && O && /* @__PURE__ */ q(_t, {
 				title: `Стіл ${o.table_name} · рахунок ${o.bill_no}`,
 				onClose: () => j(!1),
 				children: ze
 			}),
-			N && /* @__PURE__ */ q(Rt, {
+			N && /* @__PURE__ */ q(Yt, {
 				bill: o,
 				busy: d,
 				onClose: () => ee(!1),
@@ -2338,7 +2449,7 @@ function un() {
 			}),
 			P && /* @__PURE__ */ q("div", {
 				className: "fixed inset-0 z-50",
-				children: /* @__PURE__ */ q(He, {
+				children: /* @__PURE__ */ q($e, {
 					productName: P.row.product_name,
 					variants: P.variants,
 					variantLabel: C,
@@ -2356,7 +2467,7 @@ function un() {
 }
 //#endregion
 //#region src/modules/tables/components/TableTile.tsx
-var dn = {
+var Sn = {
 	free: {
 		tile: "bg-white ring-1 ring-[#E6E8EC]",
 		dot: null
@@ -2373,13 +2484,13 @@ var dn = {
 		tile: "bg-white ring-2 ring-sq-danger",
 		dot: "bg-sq-danger"
 	}
-}, fn = {
+}, Cn = {
 	free: "Вільний",
 	mine: "Мій стіл",
 	busy: "Зайнятий",
 	bill: "Просять рахунок"
 };
-function pn({ seat: e, now: t, meId: n, onOpen: a, disabled: o, guestWaiting: s = 0, calling: l, sentUnseen: u = 0 }) {
+function wn({ seat: e, now: t, meId: n, onOpen: a, disabled: o, guestWaiting: s = 0, calling: l, sentUnseen: u = 0 }) {
 	let f = l?.waiter === !0, p = l?.bill === !0, { table: h, bill: g } = e, _ = m(g, n), v = N(g), b = h.shape === "round";
 	return /* @__PURE__ */ J("button", {
 		type: "button",
@@ -2395,11 +2506,11 @@ function pn({ seat: e, now: t, meId: n, onOpen: a, disabled: o, guestWaiting: s 
 			gridColumn: `${h.pos_x + 1} / span ${h.width}`,
 			gridRow: `${h.pos_y + 1} / span ${h.height}`
 		},
-		className: `relative flex min-h-24 flex-col items-center justify-center gap-0.5 p-3 text-center shadow-card transition active:scale-[0.99] disabled:opacity-60 ${b ? "rounded-full" : "rounded-card"} ${dn[_].tile}`,
+		className: `relative flex min-h-24 flex-col items-center justify-center gap-0.5 p-3 text-center shadow-card transition active:scale-[0.99] disabled:opacity-60 ${b ? "rounded-full" : "rounded-card"} ${Sn[_].tile}`,
 		children: [
-			dn[_].dot && /* @__PURE__ */ q("span", {
+			Sn[_].dot && /* @__PURE__ */ q("span", {
 				"aria-hidden": !0,
-				className: `absolute top-3 w-2.5 h-2.5 rounded-full ${b ? "right-[18%]" : "right-3.5"} ${dn[_].dot}`
+				className: `absolute top-3 w-2.5 h-2.5 rounded-full ${b ? "right-[18%]" : "right-3.5"} ${Sn[_].dot}`
 			}),
 			(v || s > 0 || f || p || u > 0 || g && g.draft_count > 0) && /* @__PURE__ */ J("span", {
 				className: `absolute top-2.5 flex flex-wrap items-center gap-1 ${b ? "left-[16%] right-[24%]" : "left-3 right-8"}`,
@@ -2498,7 +2609,7 @@ function pn({ seat: e, now: t, meId: n, onOpen: a, disabled: o, guestWaiting: s 
 				}),
 				/* @__PURE__ */ q("span", {
 					className: "sr-only",
-					children: fn[_]
+					children: Cn[_]
 				})
 			] }) : /* @__PURE__ */ q("span", {
 				className: "text-[13px] text-sq-muted",
@@ -2507,7 +2618,7 @@ function pn({ seat: e, now: t, meId: n, onOpen: a, disabled: o, guestWaiting: s 
 		]
 	});
 }
-function mn({ guest: e = !1, callWaiter: t = !1, callBill: n = !1, sent: r = !1 }) {
+function Tn({ guest: e = !1, callWaiter: t = !1, callBill: n = !1, sent: r = !1 }) {
 	let i = {
 		free: "bg-sq-divider",
 		mine: "bg-sq-blue",
@@ -2523,7 +2634,7 @@ function mn({ guest: e = !1, callWaiter: t = !1, callBill: n = !1, sent: r = !1 
 				children: [/* @__PURE__ */ q("span", {
 					"aria-hidden": !0,
 					className: `w-2.5 h-2.5 rounded-full ${i[e]}`
-				}), fn[e]]
+				}), Cn[e]]
 			}, e)),
 			e && /* @__PURE__ */ J("span", {
 				className: "flex items-center gap-1.5",
@@ -2559,16 +2670,16 @@ function mn({ guest: e = !1, callWaiter: t = !1, callBill: n = !1, sent: r = !1 
 }
 //#endregion
 //#region src/modules/tables/pages/HallMapPage.tsx
-function hn(e) {
+function En(e) {
 	let t = new Date(e);
 	return `${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}`;
 }
-function gn() {
+function Dn() {
 	let e = he((e) => e.online), t = ge(), n = me((e) => e.auth?.store.id ?? null), r = me((e) => e.auth?.staff.id ?? null), { halls: i, bills: a, now: o, loading: c, error: l, stale: u, savedAt: d, refresh: m } = ee({
 		online: e,
 		mirrored: t !== "web",
 		storeId: n
-	}), { orders: h, sent: g, calls: _, loaded: v, refresh: y } = Zt({ online: e }), [b, x] = sn(), [S, C] = G(null), [T, E] = G(!1), [D, O] = G(null), [k, j] = G(null), M = (e, t = !1) => j(e == null ? null : {
+	}), { orders: h, sent: g, calls: _, loaded: v, refresh: y } = ln({ online: e }), [b, x] = vn(), [S, C] = G(null), [T, E] = G(!1), [D, O] = G(null), [k, j] = G(null), M = (e, t = !1) => j(e == null ? null : {
 		text: e,
 		warn: t
 	}), N = Se(), P = xe().state, F = typeof P?.note == "string" ? P.note : null, I = P?.warn === !0;
@@ -2578,7 +2689,7 @@ function gn() {
 			warn: I
 		});
 	}, [F, I]);
-	let L = U(() => _t({
+	let L = U(() => Ot({
 		orders: h,
 		sent: g,
 		calls: _
@@ -2587,7 +2698,7 @@ function gn() {
 		g,
 		_
 	]);
-	cn(U(() => yt({
+	yn(U(() => At({
 		orders: h,
 		sent: g,
 		calls: _
@@ -2630,7 +2741,7 @@ function gn() {
 		} catch (e) {
 			return O(R(e, "Не вдалося прийняти запит")), y(), {
 				ok: !1,
-				refusedLineId: pt(e)
+				refusedLineId: wt(e)
 			};
 		} finally {
 			E(!1);
@@ -2697,7 +2808,7 @@ function gn() {
 					z.length > 1 && /* @__PURE__ */ q("div", {
 						className: "flex gap-1 p-[3px] rounded-xl bg-sq-empty overflow-x-auto max-w-full",
 						children: z.map((e) => {
-							let t = B?.id === e.id, n = e.tables.reduce((e, t) => e + vt(L.get(t.id)), 0);
+							let t = B?.id === e.id, n = e.tables.reduce((e, t) => e + kt(L.get(t.id)), 0);
 							return /* @__PURE__ */ J("button", {
 								type: "button",
 								"aria-pressed": t,
@@ -2716,7 +2827,7 @@ function gn() {
 						})
 					}),
 					/* @__PURE__ */ q("div", { className: "flex-1" }),
-					B && /* @__PURE__ */ q(mn, {
+					B && /* @__PURE__ */ q(Tn, {
 						guest: h.length > 0,
 						callWaiter: _.some((e) => e.kind === "waiter"),
 						callBill: _.some((e) => e.kind === "bill"),
@@ -2736,7 +2847,7 @@ function gn() {
 			u && /* @__PURE__ */ J("p", {
 				className: "mx-4 md:mx-7 mb-3 rounded-sq bg-amber-50 text-amber-900 px-3 py-2 text-sm",
 				"data-testid": "tables-stale",
-				children: ["Немає звʼязку — зала з памʼяті каси", d == null ? "" : `, станом на ${hn(d)}`]
+				children: ["Немає звʼязку — зала з памʼяті каси", d == null ? "" : `, станом на ${En(d)}`]
 			}),
 			D && /* @__PURE__ */ q("p", {
 				className: "mx-4 md:mx-7 mb-3 rounded-sq bg-red-50 text-red-700 px-3 py-2 text-sm",
@@ -2755,13 +2866,13 @@ function gn() {
 				children: [
 					/* @__PURE__ */ J("p", {
 						className: "text-[13px] font-semibold text-sq-secondary",
-						children: ["З телефонів гостей · ", xt({
+						children: ["З телефонів гостей · ", Mt({
 							requests: h.length,
 							sent: g.length,
 							calls: _.length
 						})]
 					}),
-					/* @__PURE__ */ q(Et, {
+					/* @__PURE__ */ q(Lt, {
 						calls: _,
 						sent: g,
 						showTable: !0,
@@ -2770,7 +2881,7 @@ function gn() {
 						onSeen: ce,
 						onOpenBill: (e) => N(`/tables/${e}`)
 					}),
-					/* @__PURE__ */ q(Dt, {
+					/* @__PURE__ */ q(Rt, {
 						orders: h,
 						showTable: !0,
 						busy: T,
@@ -2818,7 +2929,7 @@ function gn() {
 					gridTemplateColumns: `repeat(${V.cols}, minmax(2.5rem, 1fr))`,
 					gridAutoRows: "minmax(3.75rem, auto)"
 				},
-				children: re.map((e) => /* @__PURE__ */ q(pn, {
+				children: re.map((e) => /* @__PURE__ */ q(wn, {
 					seat: e,
 					now: o,
 					meId: r,
@@ -2834,14 +2945,14 @@ function gn() {
 }
 //#endregion
 //#region src/modules/tables/pages/TablesRoutes.tsx
-function _n() {
+function On() {
 	return /* @__PURE__ */ J(be, { children: [/* @__PURE__ */ q(ye, {
 		index: !0,
-		element: /* @__PURE__ */ q(gn, {})
+		element: /* @__PURE__ */ q(Dn, {})
 	}), /* @__PURE__ */ q(ye, {
 		path: ":billId",
-		element: /* @__PURE__ */ q(un, {})
+		element: /* @__PURE__ */ q(xn, {})
 	})] });
 }
 //#endregion
-export { _n as TablesRoutes };
+export { On as TablesRoutes };
