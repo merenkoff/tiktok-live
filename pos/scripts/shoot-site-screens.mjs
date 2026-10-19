@@ -55,6 +55,18 @@ const STORES = {
       await page.goto('/admin/products');
       await page.waitForTimeout(1500);
       await shoot('clothing-products');
+      // Price tags on stickers: opening the dialog and picking a size writes
+      // nothing (the size is the station's, in localStorage); only its
+      // «Згенерувати» button would, and it is never pressed here.
+      const pick = page.locator('input[type=checkbox][aria-label^="Обрати «"]');
+      for (let i = 0; i < 4; i++) await pick.nth(i).check();
+      await page.getByRole('button', { name: 'Друк цінників' }).click();
+      const tags = page.getByRole('dialog', { name: 'Друк цінників' });
+      await tags.waitFor(WAIT);
+      await tags.getByRole('button', { name: 'Наліпки', exact: true }).click();
+      await tags.getByRole('group', { name: 'Готові розміри' }).getByRole('button', { name: '58×40' }).click();
+      await page.waitForTimeout(800);
+      await shoot('clothing-price-tags');
     },
   },
   flowers: {
