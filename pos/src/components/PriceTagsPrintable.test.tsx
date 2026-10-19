@@ -30,6 +30,8 @@ import {
   moduleWidthMm,
   tagWidthMm,
 } from '../lib/priceTagLayout';
+import { labelLayout } from '../lib/priceLabelLayout';
+import { LABEL_PRESETS, type TagMedia } from '../lib/priceTagMedia';
 import { rasterize, scanEan13, type PrintedBar } from '../test/scannerSim';
 
 /** A thermal receipt head; 300 is what a laser or an office printer does. */
@@ -61,8 +63,8 @@ function tags(barcode: string | null = CODE) {
  * Reading the DOM rather than calling `ean13Bars` is the point: what is
  * asserted is the thing the print engine is handed.
  */
-function printedBars(): { bars: PrintedBar[]; viewWidth: number } {
-  const svg = document.querySelector('svg.price-tag-barcode');
+function printedBars(selector = 'svg.price-tag-barcode'): { bars: PrintedBar[]; viewWidth: number } {
+  const svg = document.querySelector(selector);
   if (!svg) throw new Error('no barcode was drawn');
   const [, , viewWidth] = svg.getAttribute('viewBox')!.split(/\s+/).map(Number) as number[];
   const bars = [...svg.querySelectorAll('rect')]
@@ -288,5 +290,107 @@ describe('the old price', () => {
   it('prints no such line on a tag that is not marked down', () => {
     render(<PriceTagsPrintable tags={marked(null)} paperWidth={58} />);
     expect(document.querySelector('.price-tag-old')).toBeNull();
+  });
+});
+
+describe('labels', () => {
+  const labels: Array<[string, Extract<TagMedia, { kind: 'label' }>]> = [
+    ...LABEL_PRESETS.map(
+      (p) => [`${p.widthMm}×${p.heightMm}`, { kind: 'label' as const, ...p, rotate: 0 as const }] as [
+        string,
+        Extract<TagMedia, { kind: 'label' }>,
+      ]
+    ),
+    // The case the setting exists for: a label fed narrow side first, read wide.
+    ['40×58 turned 90°', { kind: 'label', widthMm: 40, heightMm: 58, rotate: 90 }],
+    ['40×58 turned 270°', { kind: 'label', widthMm: 40, heightMm: 58, rotate: 270 }],
+  ];
+
+  function scanLabel(media: Extract<TagMedia, { kind: 'label' }>, barGrowth = 0): string {
+    cleanup();
+    render(<PriceTagsPrintable tags={tags()} media={media} />);
+    const { bars, viewWidth } = printedBars('svg.price-label-barcode');
+    return scanEan13(
+      rasterize(bars, {
+        totalModules: viewWidth,
+        moduleMm: labelLayout(media).barcode.moduleMm,
+        dpi: THERMAL_DPI,
+        barGrowth,
+      })
+    );
+  }
+
+  it.each(labels)('a %s label scans at 203 dpi, fat print and starved print included', (_, media) => {
+    expect(scanLabel(media)).toBe(CODE);
+    expect(scanLabel(media, 0.3)).toBe(CODE);
+    expect(scanLabel(media, -0.3)).toBe(CODE);
+  });
+
+  it.each(labels)('a %s label keeps both light margins', (_, media) => {
+    render(<PriceTagsPrintable tags={tags()} media={media} />);
+    const { bars, viewWidth } = printedBars('svg.price-label-barcode');
+    expect(bars[0]!.start).toBeGreaterThanOrEqual(EAN13_MIN_QUIET_LEFT);
+    const last = bars[bars.length - 1]!;
+    expect(viewWidth - (last.start + last.width)).toBeGreaterThanOrEqual(EAN13_MIN_QUIET_RIGHT);
+  });
+
+  it('asks the print engine for a page the size of the label, with no margin', () => {
+    render(<PriceTagsPrintable tags={tags()} media={{ kind: 'label', widthMm: 58, heightMm: 40, rotate: 0 }} />);
+    const style = document.querySelector('.price-tag-print-area style');
+    expect(style?.textContent).toBe('@page { size: 58mm 40mm; margin: 0; }');
+  });
+
+  it('prints one label per page — every copy, and no blank page after the last', () => {
+    const three = tags().map((t) => ({ ...t, copies: 3 }));
+    render(<PriceTagsPrintable tags={three} media={{ kind: 'label', widthMm: 43, heightMm: 25, rotate: 0 }} />);
+    const pages = [...document.querySelectorAll<HTMLElement>('.price-label')];
+    expect(pages).toHaveLength(3);
+    expect(pages.map((p) => p.style.breakAfter)).toEqual(['page', 'page', 'auto']);
+    for (const p of pages) {
+      expect(p.style.width).toBe('43mm');
+      expect(p.style.height).toBe('25mm');
+    }
+  });
+
+  it('turns the content, never the page — the driver only knows the paper', () => {
+    render(<PriceTagsPrintable tags={tags()} media={{ kind: 'label', widthMm: 40, heightMm: 58, rotate: 90 }} />);
+    const page = document.querySelector<HTMLElement>('.price-label')!;
+    const body = document.querySelector<HTMLElement>('.price-label-body')!;
+    expect(page.style.width).toBe('40mm');
+    expect(page.style.height).toBe('58mm');
+    expect(body.style.width).toBe('58mm');
+    expect(body.style.height).toBe('40mm');
+    expect(body.style.transform).toBe('translateX(40mm) rotate(90deg)');
+    expect(body.dataset.orientation).toBe('landscape');
+  });
+
+  it('carries the caption, the old price struck through and the price', () => {
+    const marked = tags().map((t) => ({ ...t, compareAtCents: 59000 }));
+    render(<PriceTagsPrintable tags={marked} media={{ kind: 'label', widthMm: 58, heightMm: 40, rotate: 0 }} />);
+    expect(document.querySelector('.price-label-name')?.textContent).toBe('Піжама');
+    expect(document.querySelector('.price-label-variant')?.textContent).toBe('Рожевий · 98/104');
+    const old = document.querySelector<HTMLElement>('.price-label-old')!;
+    expect(old.textContent).toBe('590 ₴');
+    expect(old.style.textDecoration).toBe('line-through');
+    expect(document.querySelector('.price-label-price')?.textContent).toBe('450 ₴');
+    expect(document.querySelector('.price-label-sku')?.textContent).toBe('068-130');
+  });
+
+  it('says so instead of drawing a code that will not scan', () => {
+    render(
+      <PriceTagsPrintable
+        tags={tags('4820270362870')}
+        media={{ kind: 'label', widthMm: 58, heightMm: 40, rotate: 0 }}
+      />
+    );
+    expect(document.querySelector('svg.price-label-barcode')).toBeNull();
+    expect(document.querySelector('.price-tag-print-area')!.textContent).toContain('без штрихкоду');
+  });
+
+  it('still prints on the roll when no media is given — an older caller keeps working', () => {
+    render(<PriceTagsPrintable tags={tags()} paperWidth={80} />);
+    expect(document.querySelector('.price-label')).toBeNull();
+    expect(document.querySelector('.price-tag')).not.toBeNull();
+    expect(document.querySelector('.price-tag-print-area style')).toBeNull();
   });
 });
