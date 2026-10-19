@@ -2,10 +2,16 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PriceTagsDialog } from './PriceTagsDialog';
 import type { Product } from '@pos/platform';
+
+// The OS print dialog is the one thing a test cannot open; what matters is
+// what the print area holds when it would have.
+vi.mock('../../../lib/triggerPrint', () => ({ triggerPrint: vi.fn() }));
+
+afterEach(() => localStorage.clear());
 
 function product(over: Partial<Product['variants'][number]> = {}): Product {
   return {
@@ -172,5 +178,113 @@ describe('a marked-down item', () => {
   it('says nothing of the kind when there is no markdown', () => {
     open();
     expect(screen.queryByText(/^було/)).toBeNull();
+  });
+});
+
+describe('labels', () => {
+  function printed(): HTMLElement[] {
+    return [...document.querySelectorAll<HTMLElement>('.price-tag-print-area .price-label')];
+  }
+
+  function toLabels() {
+    fireEvent.click(screen.getByRole('button', { name: 'Наліпки' }));
+  }
+
+  it('switches from the roll to labels, says which paper to choose and remembers it', () => {
+    open();
+    expect(screen.queryByTestId('label-preview')).toBeNull();
+    toLabels();
+    expect(screen.getByTestId('label-preview')).toBeInTheDocument();
+    expect(screen.getByText(/папір 58 × 40 мм/)).toBeInTheDocument();
+    expect(screen.queryByText(/Ширина цінника/)).toBeNull();
+    expect(JSON.parse(localStorage.getItem('pos.priceTagMedia')!).kind).toBe('label');
+  });
+
+  it('opens on labels at a station that chose them last time', () => {
+    localStorage.setItem(
+      'pos.priceTagMedia',
+      JSON.stringify({ kind: 'label', paper: 58, label: { widthMm: 43, heightMm: 25, rotate: 90 } })
+    );
+    open();
+    expect(screen.getByText(/Наліпка 43 × 25 мм, поворот 90°/)).toBeInTheDocument();
+    // Set once, so folded away: the list is what the dialog was opened for.
+    expect(screen.queryByTestId('label-preview')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Змінити' }));
+    expect(screen.getByTestId('label-preview')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Готово' }));
+    expect(screen.queryByTestId('label-preview')).toBeNull();
+  });
+
+  it('takes a size from the presets, a typed one, or the two swapped', () => {
+    open();
+    toLabels();
+    fireEvent.click(screen.getByRole('button', { name: '40×30' }));
+    expect(screen.getByText('Наліпка 40 × 30 мм')).toBeInTheDocument();
+
+    const width = screen.getByRole('textbox', { name: 'Ширина наліпки, мм' });
+    // On the way to «45» the box holds «4» — which must not snap to the floor.
+    fireEvent.change(width, { target: { value: '4' } });
+    expect(width).toHaveValue('4');
+    fireEvent.change(width, { target: { value: '45' } });
+    expect(screen.getByText('Наліпка 45 × 30 мм')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Поміняти ширину й висоту' }));
+    expect(screen.getByText('Наліпка 30 × 45 мм')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Висота наліпки, мм' })).toHaveValue('45');
+  });
+
+  it('pulls a size typed out of range back in when the box is left', () => {
+    open();
+    toLabels();
+    const height = screen.getByRole('textbox', { name: 'Висота наліпки, мм' });
+    fireEvent.change(height, { target: { value: '5' } });
+    fireEvent.blur(height);
+    expect(height).toHaveValue('15');
+    expect(screen.getByText('Наліпка 58 × 15 мм')).toBeInTheDocument();
+  });
+
+  it('turns the text in the preview exactly as it will be printed', () => {
+    open();
+    toLabels();
+    fireEvent.click(screen.getByRole('button', { name: '90°' }));
+    const body = within(screen.getByTestId('label-preview')).getByText('Піжама').closest<HTMLElement>(
+      '.price-label-body'
+    )!;
+    expect(body.style.transform).toBe('translateX(58mm) rotate(90deg)');
+    expect(screen.getByText(/поворот 90°/)).toBeInTheDocument();
+  });
+
+  it('warns when the label is too narrow for a barcode a scanner will take', () => {
+    open();
+    toLabels();
+    const width = screen.getByRole('textbox', { name: 'Ширина наліпки, мм' });
+    fireEvent.change(width, { target: { value: '25' } });
+    expect(screen.getByText(/Штрихкод на наліпці такої ширини/)).toBeInTheDocument();
+  });
+
+  it('prints one label as a test, and every copy when asked for all', async () => {
+    open({ quantity: 2 });
+    toLabels();
+    fireEvent.click(screen.getByRole('button', { name: /Пробний друк/ }));
+    await act(async () => {});
+    expect(printed()).toHaveLength(1);
+    expect(printed()[0]!.style.width).toBe('58mm');
+
+    act(() => {
+      window.dispatchEvent(new Event('afterprint'));
+    });
+    expect(printed()).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Друкувати 2' }));
+    await act(async () => {});
+    expect(printed()).toHaveLength(2);
+  });
+
+  it('still prints on the roll when the roll is chosen', async () => {
+    open();
+    fireEvent.click(screen.getByRole('button', { name: 'Друкувати 2' }));
+    await act(async () => {});
+    expect(printed()).toHaveLength(0);
+    expect(document.querySelectorAll('.price-tag-print-area .price-tag')).toHaveLength(2);
   });
 });

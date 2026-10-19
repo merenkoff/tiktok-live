@@ -58,6 +58,8 @@ export default defineConfig({
         'src/lib/modifiers.ts',
         'src/lib/money.ts',
         'src/lib/priceTagLayout.ts',
+        'src/lib/priceLabelLayout.ts',
+        'src/lib/priceTagMedia.ts',
         'src/lib/receipt.ts',
         'src/lib/taxUrl.ts',
         'src/lib/urls.ts',

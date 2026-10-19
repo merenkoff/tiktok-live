@@ -29,6 +29,7 @@ export default defineConfig({
   // in this sheet too.
   css: moduleCss('stock', [
     './src/modules/products/components/PriceTagsDialog.tsx',
+    './src/modules/products/components/LabelSettings.tsx',
     './src/modules/products/components/MatrixAxes.tsx',
     './src/modules/products/components/Dialog.tsx',
   ]),
