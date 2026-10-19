@@ -511,7 +511,7 @@ dependencies = [
 
 [[package]]
 name = "cloth-pos"
-version = "2.5.1"
+version = "2.5.2"
 dependencies = [
  "base64 0.22.1",
  "ed25519-dalek",
