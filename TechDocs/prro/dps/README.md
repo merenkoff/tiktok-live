@@ -35,3 +35,13 @@
 
 Что из этого следует для нас — в
 [POS_FISCAL_OFFLINE.md → «Открытые вопросы»](../POS_FISCAL_OFFLINE.md).
+
+## Примеры документов и их разбор (2026-10-21)
+
+[examples/](examples/README.md) — официальные примеры XML ДПС (чек со всеми
+элементами, скидки, два налога, возврат, служебное внесение, Z-отчёт), снятые
+с открытого проекта OpenPRRO, потому что `tax.gov.ua` отвечает 403.
+[document-structures.md](document-structures.md) — что из них следует для
+адаптера в формате ДПС: форматы полей, известные коды (`PAYFORMCD`, `DOCSUBTYPE`,
+`CHECKTAX.TYPE`, `UNITCD`), и главное — `COST` строки до скидки, скидка
+отдельным `DISCOUNTSUM`, налог от `SOURCESUM`.
