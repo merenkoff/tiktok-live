@@ -9,7 +9,7 @@
 //
 // The load-bearing assertions here are the security ones: a secret must never
 // appear in a response body, must be stored as ciphertext, and must not be
-// readable by a seller. See TechDocs/POS_FISCAL_PRRO.md.
+// readable by a seller. See TechDocs/prro/POS_FISCAL_PRRO.md.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
@@ -244,7 +244,7 @@ describe.skipIf(!hasDb)('POS fiscal settings', () => {
     expect(await getFiscalCredentials(store.storeId)).toBeNull();
   });
 
-  // ── Offline mode (TechDocs/POS_FISCAL_OFFLINE.md §2) ──────────────────────
+  // ── Offline mode (TechDocs/prro/POS_FISCAL_OFFLINE.md §2) ──────────────────────
 
   it('defaults offline_mode off and reports offline_capable per provider', async () => {
     await patch({ provider: 'checkbox', enabled: false });

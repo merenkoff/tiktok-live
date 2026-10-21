@@ -4,7 +4,7 @@
 
 // src/__tests__/pos.fiscal.offline.lease.test.ts
 //
-// The till's reserve of tax-office codes (TechDocs/POS_FISCAL_OFFLINE.md,
+// The till's reserve of tax-office codes (TechDocs/prro/POS_FISCAL_OFFLINE.md,
 // план фазы 3, шаг 1) — what a till has to be carrying before the network
 // goes, and how it tells us its queue has drained.
 //

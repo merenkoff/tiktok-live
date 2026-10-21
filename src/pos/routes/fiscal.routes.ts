@@ -4,7 +4,7 @@
 
 // src/pos/routes/fiscal.routes.ts
 //
-// Ukrainian ПРРО settings surface. See TechDocs/POS_FISCAL_PRRO.md.
+// Ukrainian ПРРО settings surface. See TechDocs/prro/POS_FISCAL_PRRO.md.
 //
 // Registered as a CORE route group (`moduleId: null`), same reasoning as
 // `registerLiveRoutes`: the `fiscal-<provider>` UI module opts in through
@@ -194,7 +194,7 @@ export function registerFiscalRoutes(fastify: FastifyInstance): void {
     return { ...status, ...offline };
   });
 
-  // ── Register holder (TechDocs/POS_FISCAL_OFFLINE.md §3а) ──────────────────
+  // ── Register holder (TechDocs/prro/POS_FISCAL_OFFLINE.md §3а) ──────────────────
   // Only meaningful while `offline_mode` is on; the routes still answer
   // otherwise (the lock is simply never enforced), so a till can show the
   // holder state before the owner flips the switch.

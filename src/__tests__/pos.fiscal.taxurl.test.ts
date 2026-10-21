@@ -7,7 +7,7 @@
 // The link a customer scans off an offline receipt. Pure — no DB, no provider.
 //
 // The shape is pinned against two real links: the provider's own example
-// (TechDocs/checkbox-api/receipts-offline.md) and a receipt from a working shop
+// (TechDocs/prro/checkbox/api/receipts-offline.md) and a receipt from a working shop
 // that verifies in the tax cabinet with no `mac` at all. The second is why this
 // file exists: it is what makes the QR ours to build offline.
 

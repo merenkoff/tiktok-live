@@ -160,8 +160,8 @@ async function sendAndPoll(
 }
 
 /**
- * The offline capability (TechDocs/POS_FISCAL_OFFLINE.md §2, wire facts in
- * TechDocs/checkbox-api/). Every call goes through `classifyCheckboxError` so
+ * The offline capability (TechDocs/prro/POS_FISCAL_OFFLINE.md §2, wire facts in
+ * TechDocs/prro/checkbox/api/). Every call goes through `classifyCheckboxError` so
  * the orchestrator sees the same kinds as for online documents; the two
  * offline-specific refusals surface as `rejected` with a synthetic
  * `providerCode` (`offline_not_manual`, `offline_code_used`).

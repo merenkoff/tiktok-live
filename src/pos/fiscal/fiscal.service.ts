@@ -109,7 +109,7 @@ const BACKGROUND_MAX_WAIT_MS = 250;
 const RECEIPT_TEXT_BUDGET_MS = 2_500;
 
 /**
- * Offline-session gates (TechDocs/POS_FISCAL_OFFLINE.md §4, план фазы 2 п. 8).
+ * Offline-session gates (TechDocs/prro/POS_FISCAL_OFFLINE.md §4, план фазы 2 п. 8).
  * The tax office allows 36h of offline selling in a row and a 24h shift; both
  * are checked with a margin so the replay still has time to land inside them.
  */
@@ -1090,7 +1090,7 @@ export async function retryPendingFiscalDocs(opts: { storeId?: number } = {}): P
 
 // ── Offline session replay (cases B and C) ──────────────────────────────────
 //
-// TechDocs/POS_FISCAL_OFFLINE.md §5. One pass per live session — server-held
+// TechDocs/prro/POS_FISCAL_OFFLINE.md §5. One pass per live session — server-held
 // or carrying a till's own receipts, the chain is the same and so is this:
 //   0. is the provider back? (`registerState` — a read, no slot);
 //   1. resync the pool — the provider may have gone offline on its own and

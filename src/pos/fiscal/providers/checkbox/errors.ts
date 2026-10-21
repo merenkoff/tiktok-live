@@ -30,7 +30,7 @@ const AUTH_REJECTED_CODES = new Set([
 
 /**
  * Two offline refusals come back with a human message and no structured code
- * (TechDocs/checkbox-api/{receipts-offline,cash-register}.md). Both mean the
+ * (TechDocs/prro/checkbox/api/{receipts-offline,cash-register}.md). Both mean the
  * document was NOT created, so `rejected` is exact; the synthetic provider
  * code is what the replay orchestrator branches on ("take the next code" vs
  * "go offline first").

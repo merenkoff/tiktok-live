@@ -3,7 +3,7 @@
 Кросс-магазинная админка внутри POS-веба: обзор всех магазинов и правка их
 **модульной конфигурации** — `enabled_modules` и `module_remotes`. Появилась
 вместо «скрипта массового обновления `module_remotes`» из
-[POS_FISCAL_CHECKBOX_SETUP.md](POS_FISCAL_CHECKBOX_SETUP.md): URL релиза
+[POS_FISCAL_CHECKBOX_SETUP.md](prro/checkbox/POS_FISCAL_CHECKBOX_SETUP.md): URL релиза
 модуля пинит версию, и каждый выпуск `tiktok-live` / `fiscal-checkbox` /
 `stocktake` означал бы правку каждого магазина руками.
 

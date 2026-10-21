@@ -3,7 +3,7 @@
 -- Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 -- 026_pos_fiscal_receipt_width.sql
--- Phase 8a of TechDocs/POS_FISCAL_PRRO.md: `receipt_source='provider'` goes
+-- Phase 8a of TechDocs/prro/POS_FISCAL_PRRO.md: `receipt_source='provider'` goes
 -- live. The provider renders its receipt text at a fixed character width, and
 -- that render is fetched once, server-side, at fiscalisation time — where no
 -- till's paper-width setting is in reach (the retry cron has no till at all).

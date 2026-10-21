@@ -155,7 +155,7 @@ function isPrintableFiscalDoc(doc: SaleFiscalDoc | FiscalActionResult): boolean 
  * has not arrived yet is deliberately NOT complete: it is printable on demand
  * (the cashier presses «Друк чека» and knows what they are giving out), but
  * printing it automatically would quietly hand over a receipt missing a
- * required field. See TechDocs/POS_FISCAL_OFFLINE.md.
+ * required field. See TechDocs/prro/POS_FISCAL_OFFLINE.md.
  */
 export function fiscalBlockComplete(
   doc: SaleFiscalDoc | FiscalActionResult | null | undefined

@@ -28,7 +28,7 @@ export interface FiscalStatus {
     auto_close_due_at: string | null;
   } | null;
   error: { code: string; message: string } | null;
-  /** Offline mode (TechDocs/POS_FISCAL_OFFLINE.md). Always present — a store
+  /** Offline mode (TechDocs/prro/POS_FISCAL_OFFLINE.md). Always present — a store
    * that cannot or does not use it reports `capable`/`enabled` false. */
   offline: OfflineStatusBlock;
   /** Which device holds the register. Null while offline mode is off: the lock

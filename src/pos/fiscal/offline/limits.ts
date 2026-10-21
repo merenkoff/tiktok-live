@@ -6,7 +6,7 @@
 //
 // The tax office's second offline limit: **168 hours per calendar month** per
 // ПРРО, alongside the 36 hours in a row that `OFFLINE_SESSION_MAX_MS` already
-// guards (Положення № 13; TechDocs/POS_FISCAL_OFFLINE.md).
+// guards (Положення № 13; TechDocs/prro/POS_FISCAL_OFFLINE.md).
 //
 // The 36h one is a property of a single session and needs no history — the
 // session row knows when it began. The monthly one is a property of the

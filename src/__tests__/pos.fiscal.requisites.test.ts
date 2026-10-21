@@ -5,7 +5,7 @@
 // src/__tests__/pos.fiscal.requisites.test.ts
 //
 // The store's legal requisites, ФН ПРРО and tax letters come from the
-// provider, not from a form (TechDocs/POS_FISCAL_OFFLINE.md, «Фаза 8в»). What
+// provider, not from a form (TechDocs/prro/POS_FISCAL_OFFLINE.md, «Фаза 8в»). What
 // is worth pinning: they are fetched at the online moments and nowhere near
 // checkout, a stale cache is refreshed and a fresh one is not, a failed fetch
 // never fails the job that triggered it, and the till gets them with its login

@@ -10,7 +10,7 @@
 // network calls, driven directly by several test files, and this route is the
 // single choke point the offline outbox replays through.
 //
-// See TechDocs/POS_FISCAL_PRRO.md §8 for the failure matrix.
+// See TechDocs/prro/POS_FISCAL_PRRO.md §8 for the failure matrix.
 
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type {
@@ -667,7 +667,7 @@ interface DeviceStampBody {
  * Read the till's stamp, or say what is wrong with it.
  *
  * The date is taken as given: it is what the customer's receipt says, printed
- * by a clock we cannot check and must not overrule (TechDocs/POS_FISCAL_OFFLINE.md,
+ * by a clock we cannot check and must not overrule (TechDocs/prro/POS_FISCAL_OFFLINE.md,
  * план фазы 3, решение 7). Everything else has a shape we can insist on.
  */
 function readDeviceStamp(raw: unknown): fiscalService.DeviceStampInput | string {

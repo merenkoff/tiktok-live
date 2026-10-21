@@ -18,7 +18,7 @@ interface OfflineStatus {
   modulePending: Record<string, number>;
   /**
    * ПРРО receipts this till could still print with no network at all
-   * (TechDocs/POS_FISCAL_OFFLINE.md, фаза 3). Null in a store that does not
+   * (TechDocs/prro/POS_FISCAL_OFFLINE.md, фаза 3). Null in a store that does not
    * fiscalise — the offline path there has no reserve and needs none.
    */
   fiscalReserve: number | null;

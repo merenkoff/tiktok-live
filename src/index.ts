@@ -224,7 +224,7 @@ async function main(): Promise<void> {
     });
 
     // Keep the pool of tax-office offline codes topped up for stores that run
-    // ПРРО in offline mode (TechDocs/POS_FISCAL_OFFLINE.md §3). Only works
+    // ПРРО in offline mode (TechDocs/prro/POS_FISCAL_OFFLINE.md §3). Only works
     // while the provider is online, which is exactly when nobody needs the
     // codes — hence a cron, not a checkout-time call. A no-op otherwise.
     cron.schedule('*/10 * * * *', async () => {

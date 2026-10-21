@@ -264,7 +264,7 @@ export class VerticalRemoteConflictError extends ModuleRemoteConflictError {
  * Without this, the desktop cache — keyed on moduleId + semver, only
  * downloads strictly newer — would let a second `fiscal-*` entry sit there
  * doing nothing, or two competing entries resolve their route collision
- * silently by array order in `renderRoutes.tsx` (TechDocs/POS_FISCAL_PRRO.md
+ * silently by array order in `renderRoutes.tsx` (TechDocs/prro/POS_FISCAL_PRRO.md
  * §11.4). `configuredProvider` is `pos_fiscal_settings.provider` for this
  * store, or null when fiscalisation has never been configured — a null
  * provider does not conflict with anything, since the owner may add the

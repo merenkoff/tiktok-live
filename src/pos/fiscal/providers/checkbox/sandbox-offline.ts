@@ -5,7 +5,7 @@
 // src/pos/fiscal/providers/checkbox/sandbox-offline.ts
 //
 // Manual dry run of Checkbox's offline API on a TEST register — phase 0 of
-// TechDocs/POS_FISCAL_OFFLINE.md. Not a test: it talks to the real
+// TechDocs/prro/POS_FISCAL_OFFLINE.md. Not a test: it talks to the real
 // api.checkbox.in.ua with the credentials from the environment and writes
 // every response into src/__tests__/fixtures/checkbox/offline_*.json so the
 // shapes the adapter assumes are pinned to what the sandbox actually said.
@@ -49,7 +49,7 @@
 // dates `go-offline` a second before the FIRST receipt, which is minutes in
 // the past by then, and every `sell-offline` carries the time the sale really
 // happened rather than "now". If Checkbox refuses those, фаза 3 changes shape
-// (TechDocs/POS_FISCAL_OFFLINE.md). It also prints whether the codes it spent
+// (TechDocs/prro/POS_FISCAL_OFFLINE.md). It also prints whether the codes it spent
 // were issued before the session it opened — the constraint that makes the
 // whole ordering coherent — and whether `control_number` and `tax_url` come
 // back when the client sends neither.
@@ -347,7 +347,7 @@ async function main(): Promise<void> {
       `\n  *** ANSWER 1: Checkbox REFUSED go-offline dated ${behind} min in the past ` +
         `(HTTP ${goOffline.status} ${goOffline.code ?? ''}).\n` +
         `      Фаза 3 rests on this being accepted — the till only reports an outage once it is over. ` +
-        `See TechDocs/POS_FISCAL_OFFLINE.md. ***`
+        `See TechDocs/prro/POS_FISCAL_OFFLINE.md. ***`
     );
     // The differential: the same call with `now`. Two answers a minute apart
     // separate "the date was the problem" from "the register was".

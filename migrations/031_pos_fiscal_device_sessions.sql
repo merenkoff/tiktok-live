@@ -2,7 +2,7 @@
 -- Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 -- Commercial use requires a separate agreement: mer.sergei@gmail.com
 
--- 031 — the till's own offline stretch (TechDocs/POS_FISCAL_OFFLINE.md, фаза 3).
+-- 031 — the till's own offline stretch (TechDocs/prro/POS_FISCAL_OFFLINE.md, фаза 3).
 --
 -- Phase 2 gave the session table a `holder` of 'server' or 'device'; only the
 -- server ever used it. A till-held stretch needs two more facts:

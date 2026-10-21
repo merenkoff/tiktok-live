@@ -18,7 +18,7 @@
 //     &sm=<total>                   the receipt total, "." separator
 //
 // This is the format Положення № 13 prescribes (розділ II п. 2, рядок 29 —
-// TechDocs/dps-prro-api/polozhennya-13.md), and a real receipt verifies with
+// TechDocs/prro/dps/polozhennya-13.md), and a real receipt verifies with
 // exactly these five. The same line adds `mac=…` "лише для чеків, створених
 // ПРРО в режимі офлайн": for an OFFLINE receipt the regulation's format does
 // include the hash, and that hash is the ПРРО's transaction chain — Checkbox's

@@ -3,7 +3,7 @@
 -- Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 -- 027_pos_fiscal_offline.sql
--- Phase 1 of TechDocs/POS_FISCAL_OFFLINE.md (fiscal phase 8б): the ground the
+-- Phase 1 of TechDocs/prro/POS_FISCAL_OFFLINE.md (fiscal phase 8б): the ground the
 -- ПРРО offline mode stands on. Three things land together because they only
 -- make sense together:
 --   * the store-level switch (`offline_mode`) and the reserve size the refill

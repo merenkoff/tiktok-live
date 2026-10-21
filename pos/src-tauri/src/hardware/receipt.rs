@@ -350,7 +350,7 @@ fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> 
         // Рядок 31: the mode mark goes on every ПРРО receipt. An offline
         // receipt is a different document and has to say so on the paper,
         // above its number — same order Checkbox's own offline receipt uses
-        // (TechDocs/checkbox-api/receipts-offline.md).
+        // (TechDocs/prro/checkbox/api/receipts-offline.md).
         let offline = fiscal.offline || fiscal.mode.as_deref() == Some("offline");
         printer
             .writeln(if offline { "ОФЛАЙН" } else { "ОНЛАЙН" })

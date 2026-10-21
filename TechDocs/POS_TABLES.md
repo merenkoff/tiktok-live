@@ -739,7 +739,7 @@ back to the kitchen» — разом із кейсом, що звичайний 
   замовлення, каса кафе, кухня/бар.
 - [POS_FLORIST_BENCH.md](POS_FLORIST_BENCH.md) — §12 відкладені кошики (і чому
   вони лишаються флористові), §14 передзамовлення (звідки взято замок ціни).
-- [POS_FISCAL_PRRO.md](POS_FISCAL_PRRO.md) — чому один продаж несе один чек.
+- [POS_FISCAL_PRRO.md](prro/POS_FISCAL_PRRO.md) — чому один продаж несе один чек.
 - [POS_MODULE_TAURI_CAPABILITIES.md](POS_MODULE_TAURI_CAPABILITIES.md) — §7
   чек-лист перед новою Rust-командою (передчек).
 - [POS_MODULE_OFFLINE_DATA.md](POS_MODULE_OFFLINE_DATA.md) — власна Dexie

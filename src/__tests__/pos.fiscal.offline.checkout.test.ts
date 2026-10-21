@@ -4,7 +4,7 @@
 
 // src/__tests__/pos.fiscal.offline.checkout.test.ts
 //
-// Case B of TechDocs/POS_FISCAL_OFFLINE.md over HTTP: the provider is
+// Case B of TechDocs/prro/POS_FISCAL_OFFLINE.md over HTTP: the provider is
 // unreachable, the till can reach us, the store runs `offline_mode` — so the
 // sale is stamped from the server's code reserve instead of being refused.
 // Phase 2, step 2.

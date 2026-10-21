@@ -4,7 +4,7 @@
 
 // src/pos/fiscal/types.ts
 //
-// Shared types for Ukrainian ПРРО fiscalisation. See TechDocs/POS_FISCAL_PRRO.md.
+// Shared types for Ukrainian ПРРО fiscalisation. See TechDocs/prro/POS_FISCAL_PRRO.md.
 //
 // Split: per-store settings first, then the provider-facing contract. The
 // contract is designed against all three providers rather than Checkbox — the
@@ -101,7 +101,7 @@ export interface PosFiscalSettings {
   receipt_width: FiscalReceiptWidth;
   /**
    * Sell from a reserve of tax-office offline codes when the provider is
-   * unreachable (TechDocs/POS_FISCAL_OFFLINE.md). Only meaningful — and only
+   * unreachable (TechDocs/prro/POS_FISCAL_OFFLINE.md). Only meaningful — and only
    * accepted — for a provider whose adapter declares `offline`.
    */
   offline_mode: boolean;
@@ -455,7 +455,7 @@ export interface FiscalProvider {
    *
    * Absent ⇒ the store's `offline_mode` cannot be switched on and the whole
    * offline machinery (code pool, register holder, replay) stays dormant for
-   * it. Modelled on Checkbox's API; see TechDocs/POS_FISCAL_OFFLINE.md §2.
+   * it. Modelled on Checkbox's API; see TechDocs/prro/POS_FISCAL_OFFLINE.md §2.
    */
   readonly offline?: FiscalOfflineOps;
 }

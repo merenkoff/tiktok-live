@@ -777,7 +777,7 @@ export interface FiscalPublicConfig {
   provider: FiscalProviderId | null;
   /**
    * The store sells from an offline-code reserve when the provider is down
-   * (TechDocs/POS_FISCAL_OFFLINE.md). Optional: older cached auth lacks it.
+   * (TechDocs/prro/POS_FISCAL_OFFLINE.md). Optional: older cached auth lacks it.
    */
   offline_mode?: boolean;
   /** ФН ПРРО (рядок 34 of the receipt), cached from the provider. Optional: older cached auth lacks it. */

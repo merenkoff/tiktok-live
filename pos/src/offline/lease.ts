@@ -6,7 +6,7 @@
 //
 // The till's own reserve of tax-office codes, and the decision of whether it
 // may print a fiscal receipt with no network at all — case C of
-// TechDocs/POS_FISCAL_OFFLINE.md (фаза 3, шаг 3).
+// TechDocs/prro/POS_FISCAL_OFFLINE.md (фаза 3, шаг 3).
 //
 // Everything here has to work with the server unreachable, so it is a cache
 // with rules rather than a request: the reserve is refreshed on every sync
