@@ -348,6 +348,13 @@ ALTER TABLE pos_products ADD COLUMN fiscal_uktzed VARCHAR(32);  -- зарезе�
 `src/pos/fiscal/types.ts`. Спроектирован против всех трёх провайдеров, не под
 Checkbox.
 
+> **Контракт v2 (трек Cashalot, 2026-10-21).** Что генерический слой на деле
+> требует от адаптера и какие обратно совместимые добавки нужны второму
+> провайдеру (`normalizeConfig`, `FiscalResult.mode = 'provider_offline'`,
+> `FiscalDocLine.unit`, при необходимости `findByRequestId`) — в
+> [cashalot/POS_FISCAL_CASHALOT.md](cashalot/POS_FISCAL_CASHALOT.md) §4.1 и §4.3.
+> Ставится в фазе CA4; до неё код ниже — актуальный.
+
 ```ts
 export interface FiscalProvider {
   readonly id: FiscalProviderId;              // 'checkbox' | 'vchasno' | 'echeck'

@@ -1,7 +1,8 @@
 # ПРРО Cashalot — второй провайдер: дизайн и точка возобновления (трек CA)
 
-Статус: **CA1 (документация и папка `TechDocs/prro/`) — сделано 2026-10-21.**
-Следующая фаза — CA0 (доступ, за владельцем) и CA2 (gap-анализ контракта).
+Статус: **CA1 (документация и папка `TechDocs/prro/`) и CA2 (gap-анализ
+контракта, §4) — сделано 2026-10-21.** Следующая фаза — CA0 (доступ, за
+владельцем), за ней CA3 (пробы §4.5 на живом ПРРО).
 
 **Этот документ — точка возобновления трека.** Если сессия потеряна —
 начинать с таблицы фаз в §0. Правило трека: каждая фаза получает **свой план
@@ -18,9 +19,9 @@
 |---|---|---|---|---|
 | **CA0** Доступ | Владелец: кабинет `my.cashalot.org.ua` (первый месяц бесплатно), ГО + ПРРО, зарегистрированные в ДПС (20-ОПП, 1-ПРРО — как для прод-магазина Checkbox; песочницы у Cashalot нет, тестовые чеки идут на реальный ПРРО с `TESTING=true`), кассир (5-ПРРО) с КЕП, «Налаштування → Інтеграція з WEB API → Управління касирами» → `KeyGuid`/`KeyPin`; вопросы в поддержку (§3) | — | в `.env` (не в git) `CASHALOT_SANDBOX_KEY_GUID`, `CASHALOT_SANDBOX_KEY_PIN`, `CASHALOT_SANDBOX_NUM_FISCAL`; `curl` `ServerState` и `TransactionsRegistrarState` отвечают; ответы поддержки — в `sources/support-answers.md` | ⬜ |
 | **CA1** Документация и папка | `TechDocs/prro/` с подпапками `dps/`, `checkbox/`, `cashalot/`; снимки Cashalot в `sources/`; правка ~70 файлов с путями; индексы | — | `grep` старых путей пуст, ссылки резолвятся, `typecheck`/`lint` зелёные | ✅ 2026-10-21 |
-| **CA2** Gap-анализ и ревизия стандарта | §4 этого документа: карта методов контракта → команды Cashalot, решение по каждой гипотезе §2, список изменений контракта, что проверить в CA3 | CA1 | таблица решений одобрена владельцем; у каждой гипотезы «оставляем / меняем так-то / проверить в CA3» | ⬜ |
-| **CA3** Пробы на живом ПРРО | `src/pos/fiscal/providers/cashalot/sandbox.ts` (по образцу `checkbox/sandbox-offline.ts`, `npm run fiscal:sandbox:cashalot`, только `TESTING=true`, ключи из `.env`), фикстуры `src/__tests__/fixtures/cashalot/` + README находок: коды ошибок, повтор `UID`, `KeyPin` для `RegisterCheck`, ширина текстовой визуализации, `Offline`, ставки | CA0, CA2 | фикстуры в git (ключи — заглушки), открытые вопросы CA2 закрыты | ⬜ |
-| **CA4** Контракт v2 | Изменения из CA2/CA3 в `types.ts`, `errors.ts`, `fiscal.service.ts`, `ledger.ts`, `rateLimit.ts`, `mapping.ts` (налоги), фейк-провайдер, миграция (`mode` CHECK, ставки в настройках) — Checkbox не замечает | CA3 | все `pos.fiscal.*` зелёные без правок Checkbox-тестов; §7 `POS_FISCAL_PRRO.md` обновлён | ⬜ |
+| **CA2** Gap-анализ и ревизия стандарта | §4 этого документа: карта методов контракта → команды Cashalot, решение по каждой гипотезе §2, список изменений контракта, что проверить в CA3 | CA1 | таблица решений одобрена владельцем; у каждой гипотезы «оставляем / меняем так-то / проверить в CA3» | ✅ 2026-10-21 — §4; примеры документов ДПС сняты в `../dps/examples/` |
+| **CA3** Пробы на живом ПРРО | `src/pos/fiscal/providers/cashalot/sandbox.ts` (по образцу `checkbox/sandbox-offline.ts`, `npm run fiscal:sandbox:cashalot`, только `TESTING=true`, ключи из `.env`), фикстуры `src/__tests__/fixtures/cashalot/` + README находок: восемь проб §4.5 (креды, тестовая смена, продажа с ПДВ и скидкой, повтор `UID`, ошибки, возврат и служебные, доставка, лимиты) | CA0, CA2 | фикстуры в git (ключи — заглушки); у каждой пробы §4.5 и вопросов §3 г)–п) есть ответ; по пробе г решено, нужен ли `findByRequestId` | ⬜ |
+| **CA4** Контракт v2 | Список §4.3: `normalizeConfig`, `FiscalResult.mode` + миграция расширения CHECK, `FiscalDocLine.unit`, JSDoc, `findByRequestId` — если проба г его требует; общий модуль `src/pos/fiscal/dps/` (налоги, единицы) — Checkbox не замечает | CA3 | все `pos.fiscal.*` зелёные без правок Checkbox-тестов; §7 `POS_FISCAL_PRRO.md` обновлён | ⬜ |
 | **CA5** Адаптер `providers/cashalot/` | `client.ts` (один endpoint, `Command`, gzip опционально), `payload.ts` (`FiscalDoc` → `CHECK*`/`ZREP*`), `errors.ts`, `index.ts`, `BUILT_IN += cashalotProvider`, `FISCAL_PROVIDER_IDS += 'cashalot'`; тесты `pos.fiscal.cashalot.{client,errors,payload,provider}.test.ts` на фикстурах CA3 | CA4 | сквозной прогон sandbox-скрипта: смена → продажа → возврат → X → Z на тестовых документах | ⬜ |
 | **CA6** UI-бандл `fiscal-cashalot` + хост | `pos/src/modules/fiscal-cashalot/` (manifest, remote-entry, secretSpecs, админ-страница на `SecretsForm` + список внимания, till-страница на `ShiftPanel`; `OfflinePanel`/`HolderPanel` молчат), `vite.fiscal-cashalot-remote.config.ts`, скрипты `build:/serve:/check:…-css-coverage`, `diagnostics.ts` параметризован, `receipt.ts` подпись производителя, `FiscalSettingsCard` PROVIDERS, `navGroups`, `module-release.yml` | CA5 | локальный прогон по рецепту ранбука Checkbox на demo-магазине; платформа не двигается, если баррель не менялся | ⬜ |
 | **CA7** Обкатка и выпуск | ранбук `POS_FISCAL_CASHALOT_SETUP.md`, Module Release `fiscal-cashalot`, репоинт через `/super`; сайт: `productFacts.ts` (фича/тариф «Каса + Cashalot», ROADMAP → available, `SITE_PROMISES.md`), гайд «Крок 9. Фіскалізація» расширить, не заменять; `.github/releases/pos-vX.Y.Z.md` | CA6 | первый магазин на Cashalot пробил фискальный чек; на сайте Cashalot «available» | ⬜ |
@@ -46,7 +47,7 @@
 | Офлайн | **Управляется самим Cashalot**: при недоступности ФСКО его сервер уходит в офлайн сам, документы получают `Offline: true`, досылаются автоматически; состояние — `TransactionsRegistrarState` (`OfflineSupported`, `OfflineSessionId`, `OfflineSeed`, `OfflineNextLocalNum`, `OfflineSessionDuration`, `OfflineSessionsMonthlyDuration`, `OfflineDocumentsPresent`, `OfflineDocumentsAutoRegState`). Команд вида `ask-offline-codes` / `sell-offline` / `go-online` **нет**; первый вызов для ПРРО обязан быть онлайн; `Cleanup` стирает неотправленные офлайн-документы |
 | Доставка | `GetCheck` Type `Availability`: `ResultCode` 0 Ok, 1 OnlineDocumentAbsent, 2 OfflineNumberReserved (ещё не ушёл в ДПС), 3 OfflineNumberNotReserved, 4 TransactionsRegistrarNotRegistered |
 | Тест | Песочницы нет. Тестовые документы — `CHECKHEAD.TESTING=true` на реальном ПРРО (ДПС: «ТЕСТОВИЙ НЕФІСКАЛЬНИЙ ДОКУМЕНТ», смена либо вся тестовая, либо вся фискальная — [../dps/fiscal-server-api.md](../dps/fiscal-server-api.md) «Тестові документи»). Первый месяц в кабинете бесплатный; «Модуль КАСА» 200 грн/мес (2400/год) за кассу |
-| Чего в спеке нет | Таблицы `ErrorCode` (только `ErrorCode` + `ErrorMessage`), таймаутов, rate limit, правила повтора, endpoint'а ставок налогов, ширины текстовой визуализации, значений `OfflineDocumentsAutoRegState` (кроме «null = без ошибок»), констант `PAYFORMCD`/`UNITCD` (справочники ДПС) |
+| Чего в спеке нет | Таблицы `ErrorCode` (только `ErrorCode` + `ErrorMessage`), таймаутов, rate limit, правила повтора, endpoint'а ставок налогов, ширины текстовой визуализации, значений `OfflineDocumentsAutoRegState` (кроме «null = без ошибок»), констант `PAYFORMCD`/`UNITCD` (справочники ДПС; что из них известно по примерам ДПС — [../dps/document-structures.md](../dps/document-structures.md)) |
 | Рядом | API кабинета ([sources/cabinet-api.md](sources/cabinet-api.md)) — чтение чеков/смен/отчётов для сверки, `SendReceipt`; COM/Bridge — Windows-путь через РМК, нам не нужен ([sources/other-specs.md](sources/other-specs.md)) |
 
 Стратегический бонус: JSON Cashalot — это XML ДПС один в один, поэтому
@@ -54,6 +55,9 @@
 «власний ПРРО» (ROADMAP сайта, 35 %).
 
 ## §2. Где золотой стандарт трещит — гипотезы для CA2
+
+Решение по каждой строке — в §4.2; таблица оставлена как запись исходных
+гипотез.
 
 Каждая строка — вопрос, который CA2 закрывает решением, а CA3 проверяет на
 живом ПРРО. Правило ревизии: **любое изменение контракта обратно совместимо
@@ -87,11 +91,97 @@
 офлайн-документов `Url`/`QrCode` отдаются сразу; и) может ли клиент сам подать
 офлайн-документ (`CHECKHEAD.OFFLINE=true` + `ORDERTAXNUM`) — случай C;
 к) allowlist IP / клиентские сертификаты; л) какие форматы ключей
-(.dat/.pfx/.jks, Smart ID). Ответы — в `sources/support-answers.md` с датой.
+(.dat/.pfx/.jks, Smart ID); м) как открыть **тестовую** смену через WEB API —
+`OpenShift` флага `TESTING` не имеет; н) обязательны ли `UNITCD`/`UNITNM`, коды
+единиц для `г`, `кг`, `мл` и какой `PAYFORMCD` ставить за безналичный перевод по
+QR (IBAN); о) формат `NumFiscal` офлайн-документа и есть ли у него `Url` сразу;
+п) `ErrorCode` — строка-имя или число, полный перечень своих кодов сверх ДПС
+(как `InconsistentRegistrarState`). Ответы — в `sources/support-answers.md` с
+датой.
 
-## §4. Gap-анализ и решения (CA2)
+## §4. Gap-анализ и решения (CA2, одобрено 2026-10-21)
 
-⬜ Пишется в фазе CA2.
+Каждая гипотеза §2 получила решение. Правило ревизии прежнее: контракт меняется
+только обратно совместимо — `pos.fiscal.checkbox.*` и фейк
+`src/__tests__/helpers/fake-fiscal-provider.ts` зелёные без правок. Решения
+владельца: креды v1 — только `KeyGuid` + `KeyPin`; среди первых магазинов есть
+плательщики ПДВ, поэтому таблица ставок и `CHECKTAX` нужны с первого релиза.
+Источники: спека ([sources/webapi-2.1.0.8034.md](sources/webapi-2.1.0.8034.md)),
+примеры документов ДПС ([../dps/examples/](../dps/examples/README.md), разбор —
+[../dps/document-structures.md](../dps/document-structures.md)) и код.
+
+### 4.1. Что генерический слой на самом деле требует от адаптера
+
+Это верно для любого следующего провайдера, не только для Cashalot.
+
+- `session.token` и `meta` генерический слой не читает; читается только `expiresAt` (`runtime.ts:74`), `signOut` не вызывается нигде. Ошибка в `signIn` случается до `transmitted = true` (`fiscal.service.ts:500-509`), и чекаут отвечает 503 «ничего не записано»; та же ошибка из `register*`, кроме `rejected`, продажу **оставляет** (`mayExistAtProvider`, `:381-393`).
+- Восстановление после таймаута — это крон `retryOne` (`:1402`), который **переотправляет тот же payload** с тем же `requestId`. Спасает только ответ `duplicate` с `existingProviderDocId` → `resolveDuplicate` → `fetchDocument` (`:607-628`). Поиска по `requestId` нет.
+- `FiscalRequisites.taxes` бэкенд не читает; касса печатает одну строку ПДВ по ставке по умолчанию (`pos/src/lib/receipt.ts:58-80`, `total × rate / (100 + rate)`). `default_tax_code` — только ASCII `/^[A-Za-z0-9_-]{1,16}$/` (`settings.service.ts:41`); `vat_cents` только пишется.
+- `secretKeys` бэкенд не использует (форма в бандле статическая); секрет ≤ 4096 символов, `config` ≤ 8192 байт; ключ регистратора — `config.cashRegisterKey` (`shifts.service.ts:72`).
+- Срок смены наш: 23,5 ч (`shifts.service.ts:283`), крон `closeDueShifts` закрывает сам. «Нет смены» при закрытии обязано приходить как `shift_closed`, иначе крон повторяет закрытие каждые 5 минут (`:324-335`).
+- `renderReceipt` вызывается только с `'text'` и шириной 32/48, best-effort (`:568-597`); QR на бумаге строится из `tax_url`, `qr_payload` не печатается. Без `fiscalCode` касса не печатает фискальный блок вовсе.
+- `pos_fiscal_receipts.mode` — CHECK `('online','offline')` (027:117); `claimDueDocuments` берёт только `mode = 'online'`. `provider_request_id` — UUID (024:100), то есть уже в формате GUID, которого ждёт ДПС.
+- Бандл обязан называться `fiscal-<provider>` (`src/pos/core/modules.ts:273-291`); `module-release.yml` требует `remote-entry.ts`, `build:<id>-remote` и `check:<id>-css-coverage`.
+
+### 4.2. Решения
+
+| # | Элемент | Решение | Где меняется (фаза) | Проверить в CA3 |
+|---|---|---|---|---|
+| 1 | Сессия | **Контракт не меняется.** `signIn` = `TransactionsRegistrarState`: проверяет KeyGuid/PIN/ФН до первой отправки, поэтому неверный PIN даёт 503 без записи, а не запаркованную продажу; заодно выполняет требование спеки «первый запрос по ПРРО — онлайн». Возвращает `{ token: '', expiresAt: null, meta: { numFiscal } }`; `signOut` — пустой | JSDoc у `FiscalSession.token` (CA4) | — |
+| 2 | Креды | `secretKeys` = `keyGuid` (text), `keyPin` (password), `numFiscal` (text) — всё в шифрованном мешке, форма не меняется. Админ-страница бандла тем же PATCH пишет `config: { cashRegisterKey: numFiscal, testing, taxes }`. Файловый КЕП и Smart ID — вне v1 | адаптер, `fiscal-cashalot/secretSpecs.ts` (CA5/CA6) | д) KeyGuid+KeyPin+NumFiscal принимают все команды, включая `RegisterCheck` |
+| 3 | Идемпотентность | Наш `requestId` уходит и в `UID` запроса, и в `CHECKHEAD.UID`. Если проба г покажет, что Cashalot сам отвечает на повтор тем же `NumFiscal` или узнаваемой ошибкой-дублем, адаптер маппит это как Checkbox, и контракт не меняется. Иначе — **опциональный метод `findByRequestId?(ctx, requestId)`**, который `retryOne` вызывает перед повторной отправкой: найдено → `markDone`, не найдено → отправка как сейчас. Живой путь не трогаем: таймаут оставляет продажу `failed`, как у Checkbox. Реализация: `TransactionsRegistrarState` → `DocumentInfoByLocalNum` назад от `NextLocalNum − 1`, не больше 10 документов текущей смены → `GetCheck(OriginalXml)` → `<UID>`. Строки из другой смены `backgroundGate` и так паркует. `providerDocId` = `NumFiscal` документа; `fetchDocument` = `GetCheck` | `types.ts`, `fiscal.service.ts` `retryOne` (CA4, если нужно); адаптер (CA5) | г) что отвечает повторный `RegisterCheck` с тем же UID: тот же `NumFiscal`, ошибка (какая) или второй чек |
+| 4 | Ставки | **Таблица в `config.taxes`**, её вводит владелец на `/admin/fiscal`: `[{ letter: 'А', name: 'ПДВ', type: 0, rate: 20 }]`, буквы кириллицей (так печатает Положення № 13). `fetchRequisites()` отдаёт её как `FiscalRequisites.taxes`: `symbol` = буква, `code` = её латинская транслитерация (`А→A`, `Б→B`, `В→V`, `Г→G`, `Д→D`, `Е→E`, `Є→YE`, `Ж→ZH`, `З→Z`, `И→Y`, `І→I`, `Ї→YI`, `Й→J`, `К→K`) — `default_tax_code` принимает только ASCII. `FiscalDocLine.taxCode` → `LETTERS`. `CHECKTAX` считаем мы по правилу примера ДПС «Знижки»: на букву `TURNOVER = Σ COST` (до скидки), `SOURCESUM = Σ (COST − DISCOUNTSUM)` (база после скидки), `SUM = round(SOURCESUM × PRC / (100 + PRC))` для налога, включённого в цену (`SIGN: false`); `vatCents = Σ SUM` по `TYPE 0`. Одна буква на строку (у Checkbox тоже одна); акциз (`TYPE 1`, меняет базу ПДВ — пример «Два податки») и налог сверх цены — вне v1. Пустая таблица — чек без `CHECKTAX` и `LETTERS` (ФОП без ПДВ). Арифметика — в общем модуле `src/pos/fiscal/dps/taxes.ts`, его же возьмёт «власний ПРРО». Проверка `config` — новый опциональный хук адаптера `normalizeConfig?(config)` | `dps/taxes.ts`, `normalizeConfig` (CA4/CA5); форма таблицы (CA6); разбивка ПДВ по буквам на нашем макете чека (CA6 — сейчас одна строка) | ж) принимает ли ФСКО наш `CHECKTAX` (округление, `TURNOVERDISCOUNT` из структуры Cashalot), сверяет ли буквы с кабинетом, кириллица или латиница |
+| 5 | Офлайн | `offline` **не реализуем**: гейты уже не пускают такого провайдера к пулу, держателю и реплею. Новое: опциональное `FiscalResult.mode?: 'online' \| 'provider_offline'` (Checkbox его не задаёт — значит online) → `ledger.markDone` пишет `mode`; CHECK `pos_fiscal_receipts.mode` расширяется (новая миграция, следующий свободный номер); `FiscalDocMode` на сервере и в `pos/src/types.ts`; касса печатает «ОФЛАЙН» и для `provider_offline`. `controlNumber` — хвост офлайн-номера `<сесія>.<локальний>.<контрольне>` ([../dps/README.md](../dps/README.md), факт 2); `taxUrl` = `Url` ответа. Опрос доставки (`GetCheck Availability`, `ResultCode` 2 → 0) и внимание по `OfflineDocumentsAutoRegState` — CA8 | `types.ts`, `ledger.ts`, миграция, `receipt.ts` (CA4/CA6) | з) есть ли `Url`/`QrCode` у офлайн-документа сразу; формат его `NumFiscal` |
+| 6 | Rate limit | Без изменений: 2 запроса/с на регистратор; пересмотреть по замерам | — | в) лимиты и латентность |
+| 7 | Печать | Контракт не меняется. `renderReceipt(id, 'text')` = `GetCheck{ Type: "Visualization" }`, `Data` — base64 текста UTF-8; `width` игнорируем (`VisWidth` в пикселях). В ранбуке v1 — `receipt_source = 'local'` | адаптер (CA5) | е) ширина текстовой визуализации, годится ли для 32/48 |
+| 8 | Смены | `getShift` = `TransactionsRegistrarState` (`ShiftState = 1` → `{ providerShiftId: String(ShiftId), status: 'open' }`, иначе `null`); `openShift` = `OpenShift`, `openedAt = OrderDateTime`, `autoCloseAt` = наш (крон закрывает сам), `ShiftAlreadyOpened` → перечитать состояние и вернуть его; `closeShift` = `CloseShift{ ZRepAuto: true, Visualization: true }`, `ShiftNotOpened` → `shift_closed`; `xReport` = `LastShiftTotals{ Visualization: true }`. `SetupRegistrar` не трогаем. Тестовый режим (`config.testing`): `OpenShift` флага не имеет, а смена ДПС бывает либо вся тестовая, либо вся фискальная, поэтому `openShift` возвращает виртуальное «открыто», а первый `RegisterCheck` идёт с `AutoOpenShift: true` и `CHECKHEAD.TESTING: true` | адаптер (CA5) | м) открывается ли так тестовая смена; что показывает `Shifts` |
+| 9 | Служебные | `RegisterCheck` с `DOCSUBTYPE` `ServiceDeposit` / `ServiceIssue` и только `CHECKTOTAL.SUM` (пример ДПС «Службове внесення» — то же, без `CHECKBODY`) | адаптер | — |
+| 10 | Возврат | `DOCSUBTYPE: CheckReturn`, `CHECKHEAD.ORDERRETNUM = relatedProviderDocId` (ФН оригинала, пример ДПС «Повернення»); строки и `CHECKTAX` по тем же правилам, `CHECKPAY` по методу возврата | адаптер | возврат по офлайн-номеру оригинала (по описанию ДПС — допустим) |
+| 11 | Ошибки | Новых `FiscalErrorKind` нет. Таблица — по именам перечня ДПС (`../dps/fiscal-server-api.md` «Коди помилок») с числовыми синонимами: `ShiftNotOpened` (5) → `shift_closed`; `ShiftAlreadyOpened` (4) → успех в `openShift`; `DocumentValidationError` (9), `InvalidQueryParameter` (11), `InvalidTin` (3) → `rejected`; `TransactionsRegistrarAbsent` (1), `OperatorAccessToTransactionsRegistrarNotGranted` (2), `CryptographyError` (12), HTTP 401/403/404 → `auth_rejected`; `InconsistentRegistrarState` (своя у Cashalot), `CheckLocalNumberInvalid` (7) → `unknown` с `providerCode` — документа может не быть, а может и быть, владельцу нужен `Cleanup` в кабинете, строка попадёт в список внимания; `NoContent` (13) → `null` у `fetchDocument`; HTTP ≥ 500 и таймауты → `unavailable`; прочее → `unknown`. `providerCode` ≤ 64 символов | `providers/cashalot/errors.ts`, база в `dps/errors.ts` (CA5) | б) реальные значения `ErrorCode` и тело ошибки на неверный PIN, закрытую смену, кривой чек, чужой ФН |
+| 12 | Конкуренция | Без изменений: одна реплика API и `runtime.ts` сериализуют обращения к ПРРО | — | — |
+| 13 | Единицы | Новое опциональное `FiscalDocLine.unit?: string` из `pos_sale_items.unit` (Checkbox игнорирует). `UNITNM` = наш `unit` как есть; `UNITCD` — только для кодов, подтверждённых источником: `шт` → 2009 (пример ДПС «Знижки»), `л` → 138 (пример Cashalot); для остальных `UNITCD` не шлём — пример ДПС «Два податки» содержит строку без него. Старые примеры ДПС с `25 кг` / `87 бут` противоречат классификатору и источником кодов не служат | `types.ts`, `mapping.ts`, `fiscal.service.ts` (CA4); `dps/units.ts` (CA5) | н) обязателен ли `UNITCD`; коды для `г`, `кг`, `мл` |
+| 14 | Деньги | Гривны с двумя знаками (`cents / 100`), `AMOUNT = quantityMilli / 1000` (три знака). `PRICE` — цена до скидки, `COST = PRICE × AMOUNT` **до скидки**, при скидке `DISCOUNTTYPE: 0` (сумова) и `DISCOUNTSUM = COST − lineTotalCents`; `CHECKTOTAL.SUM` = итог документа, `CHECKTOTAL.DISCOUNTSUM` = Σ скидок строк. Так в примере ДПС «Знижки»: строка 100 ₴ со скидкой 50 % несёт `COST 100.00` и `DISCOUNTSUM 50.00`, а `CHECKTOTAL.SUM 210.00` = Σ (COST − DISCOUNTSUM). Та же формула, что у Checkbox (`payload.ts:53-73`); скидку корзины `mapping.ts` уже разнёс по строкам. `CHECKPAY`: `cash` → `PAYFORMCD 0` «ГОТІВКА» (`PROVIDED`/`REMAINS` не шлём — сдачу мы не храним); `card` → `1` «КАРТКА»; `qr` → `1` «БЕЗГОТІВКОВА» до ответа поддержки — перечень ДПС называет 0 готівка, 1 банківська картка, 2 попередня оплата, 3 кредит и обрывается на «…» | `dps/check.ts` (CA5) | валидация ФСКО арифметики скидки; код формы оплаты для `qr` (н) |
+| 15 | Шапка и реквизиты | В `CHECKHEAD` шлём только `DOCTYPE`/`DOCSUBTYPE` (именами — `"SaleGoods"`, `"CheckGoods"`, так в примерах Cashalot и в стороннем клиенте), `UID`, `CASHIER`, `ORDERRETNUM`, `TESTING`; `TIN`, `ORGNM`, `POINTNM`, `ORDERDATE`/`ORDERTIME`, `ORDERNUM`, `CASHREGISTERNUM` Cashalot ставит сам — в его примерах их нет. `fetchRequisites` = `TransactionsRegistrarState{ IncludeTaxObject: true }`: `organization { name: OrgName, edrpou: Tin, tax_number: Ipn ?? Tin, is_vat: Boolean(Ipn) }`, `point { Name, Address }`, `register { fiscal_number: numFiscal, title: из Objects, address: null }`, `taxes` из `config` | адаптер (CA5) | действительно ли шапку заполняет Cashalot; состав `TaxObject` |
+| 16 | Probe | `TransactionsRegistrarState` → `{ ok, cashierName: Name (ПІБ того, кто открыл смену; без смены — null), cashRegister: 'ПРРО <ФН>', shiftOpen: ShiftState === 1, message: срок лицензии из LicenseExpiration }` | адаптер | — |
+| 17 | Клиент | Контракт не меняется. CA6: `pos/src/modules/fiscal-cashalot/` (manifest `id: 'fiscal-cashalot'`, `secretSpecs.ts` с тестом паритета против адаптера, админ-страница = `SecretsForm` + форма `config.taxes`/`testing` + список внимания, till-страница = `ShiftPanel`), `vite.fiscal-cashalot-remote.config.ts`, скрипты `build:`/`serve:` (порт 5010)/`check:`. Хост: `FiscalProviderId` (`pos/src/types.ts`), `PROVIDERS`/`PROVIDER_LABEL` (`FiscalSettingsCard.tsx`), подпись производителя через карту `{ checkbox: 'ПРРО Checkbox', cashalot: 'ПРРО Cashalot' }` (`receipt.ts:93-97`), `navGroups.ts`, id модуля в `fiscal-core/lib/diagnostics.ts:114` — через `define` вайт-конфига бандла | CA5/CA6 | — |
+
+### 4.3. Изменения контракта v2 (ставятся в CA4, все обратно совместимы)
+
+1. `FiscalProvider.findByRequestId?(ctx, requestId): Promise<FiscalResult | null>` и вызов в `retryOne` перед повторной отправкой — **только если проба г покажет, что Cashalot не идемпотентен по `UID`**.
+2. `FiscalProvider.normalizeConfig?(config): Record<string, unknown>` — `updateFiscalSettings` зовёт его после своей проверки размера; ошибка → `FiscalSettingsValidationError`.
+3. `FiscalResult.mode?: 'online' | 'provider_offline'`; `FiscalDocMode` += `'provider_offline'` (`ledger.ts:44`, `pos/src/types.ts`); миграция `0NN_pos_fiscal_receipts_provider_offline.sql` (следующий свободный номер; на 2026-10-21 это 069) (CHECK); `markDone` пишет `mode`; `toView`/`fiscalViewFromRow` отдают; касса печатает «ОФЛАЙН».
+4. `FiscalDocLine.unit?: string` из `pos_sale_items.unit` (`mapping.ts` `SaleItemInput.unit`, `getSale` его уже отдаёт).
+5. JSDoc: `FiscalSession.token` — «пустая строка: провайдер без сессии»; `requestId` — «у ДПС-провайдеров это и UID запроса, и UID документа».
+6. Фейк-провайдер получает `findByRequestId`/`normalizeConfig`/`mode` только в новых тестах; существующие тесты не трогаются.
+
+### 4.4. Дизайн адаптера (кодируется в CA5)
+
+```
+src/pos/fiscal/dps/            провайдер-нейтральная модель документа ДПС (её же возьмёт «власний ПРРО»)
+  check.ts     FiscalSaleDoc/RefundDoc/ServiceDoc + TaxTable + testing → { CHECKHEAD, CHECKTOTAL, CHECKPAY[], CHECKTAX[], CHECKBODY[] }
+  taxes.ts     TaxTable (config.taxes), буква ↔ ASCII-код, расчёт CHECKTAX (§4.2 п. 4), vatCents
+  units.ts     unit → { UNITCD?, UNITNM }
+  errors.ts    перечень ErrorCode ДПС (имена и числа) → FiscalErrorKind
+src/pos/fiscal/providers/cashalot/
+  client.ts    POST https://fsapi.cashalot.org.ua/ { Command, KeyGuid, KeyPin, NumFiscal, … }; signal из ctx; CashalotApiError { httpStatus, errorCode, errorMessage, body }
+  errors.ts    classifyCashalotError = dps/errors + свои (InconsistentRegistrarState, HTTP)
+  payload.ts   FiscalDoc → RegisterCheck через dps/check; ответ → FiscalResult (providerDocId = fiscalCode = NumFiscal, fiscalDate = OrderDateTime, taxUrl = qrPayload = Url, mode, controlNumber из хвоста офлайн-номера)
+  index.ts     cashalotProvider: id 'cashalot', title 'Cashalot', secretKeys, normalizeConfig, probe, signIn, fetchRequisites, getShift/openShift/closeShift, xReport, register*, fetchDocument, renderReceipt (+ findByRequestId, если нужен); offline нет
+  sandbox.ts   npm run fiscal:sandbox:cashalot (CA3): только TESTING=true, ключи из .env, фикстуры в src/__tests__/fixtures/cashalot/runs/<timestamp>/
+```
+
+### 4.5. Пробы CA3 (реальный ПРРО, `TESTING=true`)
+
+1. `ServerState`; `TransactionsRegistrarState` с KeyGuid/PIN/NumFiscal — валидность кредов, состав `TaxObject`, `OfflineSupported`, `LicenseExpiration`.
+2. Тестовая смена: `RegisterCheck` с `AutoOpenShift` + `TESTING` против `OpenShift` (проба м); `Shifts` за день показывает `Testing: true`.
+3. Продажа: одна строка, ПДВ 20 % с нашим `CHECKTAX`, скидка, оплата картой → `NumFiscal`, `Url`, текст `Visualization` (ширина — проба е).
+4. **Повтор того же запроса с тем же UID** (проба г); затем `DocumentInfoByLocalNum` + `GetCheck(OriginalXml)` → `<UID>` — путь `findByRequestId`.
+5. Ошибки: неверный PIN, закрытая смена, сумма ≠ Σ строк, чужой ФН, латинская буква налога (проба б, ж).
+6. Возврат (`CheckReturn` + `ORDERRETNUM`), службове внесення и видача, `LastShiftTotals`, `CloseShift{ ZRepAuto }`.
+7. `GetCheck Availability` по настоящему номеру (`ResultCode 0`) и по выдуманному (`1`).
+8. Пять чеков подряд — латентность и лимиты (проба в).
+
+Каждый прогон кладёт ответы, вывод консоли и `run.json` в `src/__tests__/fixtures/cashalot/runs/<timestamp>/`, как прогоны Checkbox; ключи в фикстурах — заглушки.
 
 ## §5. Что этот трек не делает
 
@@ -106,3 +196,13 @@
   из PDF Cashalot храним только спецификацию WEB API (0,6 МБ), остальные —
   ссылками с датой чтения. Первый источник — Google Doc спеки (на месяц новее
   PDF на сайте). «Cashbox» в постановке = Checkbox.
+- **2026-10-21 (CA2).** Креды v1 — только `KeyGuid` + `KeyPin` (ключ КЕП
+  остаётся у Cashalot, в нашей БД его нет). Среди первых магазинов есть
+  плательщики ПДВ, поэтому таблица ставок в `config.taxes` и расчёт `CHECKTAX`
+  нужны с первого релиза, а не отдельной фазой. `COST` строки — сумма до
+  скидки, скидка — отдельным `DISCOUNTSUM`: так в примере ДПС «Знижки», а не
+  «`COST` = итог строки», как предполагала гипотеза. Поиск документа по `UID`,
+  если понадобится, — только в кроне перед повторной отправкой; живой путь
+  после таймаута остаётся как у Checkbox. Примеры документов ДПС сняты с
+  `github.com/p2p-sys/OpenPRRO` (MIT): `tax.gov.ua` отвечает 403 и браузеру, и
+  `curl`.
