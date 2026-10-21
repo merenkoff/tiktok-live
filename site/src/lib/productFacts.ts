@@ -49,6 +49,17 @@ export interface PosPlan {
   status: PlanStatus;
   /** How long the price is locked for whoever joins during the launch. */
   lock: string;
+  /**
+   * What the locked price stands for, in euros a month: the hryvnia figure is
+   * today's equivalent, recalculated only on a substantial UAH/EUR move.
+   */
+  eurAnchor?: number;
+}
+
+/** The footnote behind the «*» on a locked price: what is actually fixed is its euro equivalent. */
+export function priceLockNote(plan: PosPlan): string | null {
+  if (!plan.eurAnchor) return null;
+  return `* ${plan.price} грн — це ≈ ${plan.eurAnchor} € на місяць, і закріплюємо ми саме їх: гривнева сума перерахується, лише якщо курс гривні до євро суттєво зміниться.`;
 }
 
 /**
@@ -72,6 +83,7 @@ export const PRICING = {
         note: 'Фіскалізація через Checkbox; підписку Checkbox магазин оплачує окремо.',
         status: 'available',
         lock: 'назавжди для тих, хто підключився на період запуску',
+        eurAnchor: 2,
       },
       {
         id: 'own-prro',

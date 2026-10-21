@@ -1,13 +1,14 @@
 import { Reveal, StaggerGroup, StaggerItem } from './Reveal';
 import { SectionHeading } from './SectionHeading';
 import { ArrowRight, ChevronRight, Coins, Lock, MessageCircle, Sparkles } from './glyphs';
-import { PRICING, COMPETITOR_FACTS } from '../lib/productFacts';
+import { PRICING, COMPETITOR_FACTS, priceLockNote } from '../lib/productFacts';
 
 const { pos } = PRICING;
 const cb = COMPETITOR_FACTS.checkbox;
 const BASE = pos.plans[0];
 const OWN = pos.plans[1];
 const TABLES = pos.addons[0];
+const LOCK_NOTE = priceLockNote(BASE);
 
 /** «19.10.2026» from an ISO date, for copy. */
 function uaDate(iso: string): string {
@@ -72,6 +73,11 @@ export function PricingSection() {
               <p className="text-[13px] font-semibold text-muted">Потім</p>
               <p className="mt-1">
                 <span className="text-6xl font-bold tracking-tight tabular-nums text-pos">{BASE.price}</span>
+                {LOCK_NOTE && (
+                  <a href="#price-note" aria-label="Примітка до ціни" className="text-2xl font-bold text-pos align-top ml-0.5">
+                    *
+                  </a>
+                )}
                 <span className="text-muted text-sm ml-2">грн/міс за магазин</span>
               </p>
               <p className="text-body text-sm mt-1 flex items-center gap-1.5">
@@ -154,6 +160,11 @@ export function PricingSection() {
         </Reveal>
         <p className="text-muted text-xs mt-6 text-center">
           Умови раннього доступу діють для магазинів, підключених на період запуску.
+          {LOCK_NOTE && (
+            <span id="price-note" className="block mt-1 scroll-mt-24">
+              {LOCK_NOTE}
+            </span>
+          )}
         </p>
       </div>
     </section>
