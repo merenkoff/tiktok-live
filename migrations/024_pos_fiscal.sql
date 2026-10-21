@@ -4,7 +4,7 @@
 
 -- 024_pos_fiscal.sql
 -- Ukrainian ПРРО fiscalisation: per-store provider settings, the shift
--- lifecycle, and the fiscal-document ledger. See TechDocs/POS_FISCAL_PRRO.md.
+-- lifecycle, and the fiscal-document ledger. See TechDocs/prro/POS_FISCAL_PRRO.md.
 --
 -- Phase 1 of the plan creates the schema and the settings surface only; nothing
 -- writes to `pos_fiscal_shifts` / `pos_fiscal_receipts` until phases 3 and 4.

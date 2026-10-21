@@ -8,7 +8,7 @@
 // the same question: retry, recover-then-retry, give up, or celebrate.
 //
 // Adapters translate provider-specific failures into these kinds; nothing above
-// the adapter layer ever inspects an HTTP status. See TechDocs/POS_FISCAL_PRRO.md §7.
+// the adapter layer ever inspects an HTTP status. See TechDocs/prro/POS_FISCAL_PRRO.md §7.
 
 /**
  * Why a fiscal call failed.
@@ -37,7 +37,7 @@
  *   `unknown`        — unclassified; retried, but counts toward abandonment.
  *
  * Ours, not the provider's — raised by the register-holder gate
- * (TechDocs/POS_FISCAL_OFFLINE.md §3а), never by an adapter:
+ * (TechDocs/prro/POS_FISCAL_OFFLINE.md §3а), never by an adapter:
  *   `register_held`  — another till owns this register; routes answer 409.
  *
  * Ours as well — the offline-session gates (POS_FISCAL_OFFLINE.md, план

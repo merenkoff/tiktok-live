@@ -2,6 +2,10 @@
 
 POS post-MVP / штрихкоди: [[POS_POST_MVP]] · [[POS_GTIN_ENRICHMENT]] · [[POS_GTIN_SETUP]] · [[POS_GTIN_LEARNING_API]] · [[POS_GTIN_TODO]] · [[RAILWAY_POS]] · [[POS_DESKTOP]] · [[POS_PWA]]
 
+## Доки ПРРО переехали в `TechDocs/prro/` (2026-10-21)
+
+Всё фискальное теперь в одной папке интеграций: [[POS_FISCAL_PRRO]], [[POS_FISCAL_OFFLINE]], [[POS_FISCAL_OFFLINE_E2E]] → `TechDocs/prro/`; `POS_FISCAL_CHECKBOX_SETUP.md` + бывший `checkbox-api/` → `prro/checkbox/` (`api/`); бывший `dps-prro-api/` → `prro/dps/`; индекс — `prro/README.md`. Второй провайдер — Cashalot, трек CA, точка возобновления [[POS_FISCAL_CASHALOT]] (`prro/cashalot/`), источники в `prro/cashalot/sources/`. Пути в комментариях кода и миграциях переписаны той же правкой; wikilinks Obsidian переезда не заметили.
+
 ## «Redis в стеке» и «несколько реплик» — неверно (2026-09-30)
 
 Найдено при фазе Q4 QR-меню ([[POS_SINGLE_INSTANCE]]): комментарии в `fiscal/rateLimit.ts`, `core/superAuth.ts`, `fiscal/shifts.service.ts` и доки ПРРО/супер-админки говорили «Redis уже в стеке» и «Railway может запускать больше одной реплики». На деле API-сервис — **одна реплика** (к нему подключён том с фото, а Railway не даёт реплики сервису с томом), Redis в проде нет (`ioredis`/`bullmq` лежат в `package.json` без единого импорта; `docker-compose` — только локально). Доки исправлены, три комментария в коде — нет (код в Q4 не трогали): поправить при ближайшей правке этих файлов.

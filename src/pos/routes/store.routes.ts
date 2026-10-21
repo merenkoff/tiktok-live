@@ -72,7 +72,7 @@ export function registerStoreRoutes(fastify: FastifyInstance): void {
         // Two fiscal-* entries would otherwise sit there silently: the desktop
         // cache only downloads strictly-newer versions of a given id, and a
         // route collision between two bundles resolves by array order with no
-        // error anywhere. See TechDocs/POS_FISCAL_PRRO.md §11.4.
+        // error anywhere. See TechDocs/prro/POS_FISCAL_PRRO.md §11.4.
         const fiscalSettings = await getFiscalSettings(auth.storeId);
         try {
           assertSingleFiscalRemote(sanitized, fiscalSettings?.provider ?? null);

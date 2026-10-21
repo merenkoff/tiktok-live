@@ -2,7 +2,7 @@
 -- Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 -- Commercial use requires a separate agreement: mer.sergei@gmail.com
 
--- 032 — what `serial_id` actually is (TechDocs/POS_FISCAL_OFFLINE.md).
+-- 032 — what `serial_id` actually is (TechDocs/prro/POS_FISCAL_OFFLINE.md).
 --
 -- Migration 027 recorded it as «Provider ordinal of the code; codes are handed
 -- out in serial order», and the pool sorted by it. Two fixtures of the demo

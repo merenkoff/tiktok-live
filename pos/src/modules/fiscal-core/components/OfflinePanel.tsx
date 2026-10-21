@@ -6,7 +6,7 @@
 //
 // The offline state of the ПРРО register: how many tax-office codes are in
 // reserve, and what the current offline session is doing
-// (TechDocs/POS_FISCAL_OFFLINE.md §3, §5).
+// (TechDocs/prro/POS_FISCAL_OFFLINE.md §3, §5).
 //
 // Deliberately NOT merged into `OfflineStatusBanner` in the host shell. That
 // banner is about the TILL being offline — no route to our API, sales queued in

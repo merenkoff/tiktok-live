@@ -84,7 +84,7 @@ class PosApi {
    * The desktop cashier's stable device id (`offline/db.ts getDeviceId`),
    * sent as `X-POS-Device-ID` once the offline runtime has set it. The web
    * shell never sets one — it can never hold the ПРРО register
-   * (TechDocs/POS_FISCAL_OFFLINE.md §3а).
+   * (TechDocs/prro/POS_FISCAL_OFFLINE.md §3а).
    */
   private deviceId: string | null = null;
 

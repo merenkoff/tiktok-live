@@ -95,7 +95,7 @@ async function syncSale(row: OutboxRow): Promise<void> {
     client_uuid: payload.client_uuid,
     // Present only for a receipt this till printed itself: the server files it
     // with the code and date already on the customer's copy rather than
-    // registering a new document (TechDocs/POS_FISCAL_OFFLINE.md, фаза 3).
+    // registering a new document (TechDocs/prro/POS_FISCAL_OFFLINE.md, фаза 3).
     fiscal_offline: payload.fiscal_offline ?? null,
     // A sale replayed from the outbox is already made and handed over: the
     // kitchen worked from the till's own «К17», so the server files it as

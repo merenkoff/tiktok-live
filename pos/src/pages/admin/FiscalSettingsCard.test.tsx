@@ -172,7 +172,7 @@ describe('FiscalSettingsCard', () => {
     expect(await screen.findByText(/зверніться до адміністратора/i)).toBeInTheDocument();
   });
 
-  // ── Offline mode (TechDocs/POS_FISCAL_OFFLINE.md, phase 4) ────────────────
+  // ── Offline mode (TechDocs/prro/POS_FISCAL_OFFLINE.md, phase 4) ────────────────
   //
   // This block is the ONLY way to switch offline mode on or off. It lives in
   // the host, not in the provider's bundle, precisely so that a bundle that

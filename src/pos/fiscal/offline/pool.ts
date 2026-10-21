@@ -5,7 +5,7 @@
 // src/pos/fiscal/offline/pool.ts
 //
 // The server-side pool of tax-office offline codes (`pos_fiscal_offline_codes`).
-// See TechDocs/POS_FISCAL_OFFLINE.md §3.
+// See TechDocs/prro/POS_FISCAL_OFFLINE.md §3.
 //
 // A code is single-use at the tax office and is only "spent" there once a
 // transaction carrying it is delivered. Until then the provider keeps handing

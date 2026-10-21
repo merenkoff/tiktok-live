@@ -8,7 +8,7 @@
 -- point of sale (2, 3), the register's own number (34) and the tax letters and
 -- rates (11, 21). Fetched from the provider while online and cached here, so
 -- the owner types nothing and the till can print without a connection
--- (TechDocs/POS_FISCAL_OFFLINE.md, «Фаза 8в»).
+-- (TechDocs/prro/POS_FISCAL_OFFLINE.md, «Фаза 8в»).
 --
 -- One JSONB block rather than a column per field: it is the provider's view,
 -- replaced whole on every refresh. Owner overrides, when they come, get their

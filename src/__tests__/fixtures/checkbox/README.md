@@ -50,7 +50,7 @@ status/`code` each failure actually returns. Это то, ради чего фа
    мгновенно откажет лишний запрос, нельзя.
 9. **Офлайн-режим (`offline_*.json`)** — снимаются скриптом
    `npm run fiscal:sandbox:offline -- --ask --go` (см.
-   `TechDocs/POS_FISCAL_CHECKBOX_SETUP.md` §6), не вручную. Верхнеуровневые
+   `TechDocs/prro/checkbox/POS_FISCAL_CHECKBOX_SETUP.md` §6), не вручную. Верхнеуровневые
    `offline_*.json` — это **последний** прогон: удачный от 2026-09-12 (три
    офлайн-чека, `fiscal_date` 22:47–22:52Z, отправлены 22:54Z, все с
    `control_number` и `tax_url` с `mac`).

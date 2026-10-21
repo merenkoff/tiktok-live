@@ -14,7 +14,7 @@
 //               (plus parked offline sessions), and the register lock
 //
 // The `enabled`/`provider` toggle is deliberately NOT editable here — see
-// TechDocs/POS_FISCAL_PRRO.md "Тумблер живёт в хосте": if the only editor for
+// TechDocs/prro/POS_FISCAL_PRRO.md "Тумблер живёт в хосте": if the only editor for
 // "is fiscalisation on" lived inside this bundle, a store whose bundle failed
 // to load would have no way to turn it off.
 

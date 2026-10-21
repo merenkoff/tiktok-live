@@ -16,7 +16,7 @@ const DEVICE_ID_RE = /^[A-Za-z0-9-]{1,64}$/;
 /**
  * The till's device id, or null when the caller sent none (web shell, curl)
  * or sent garbage. Only the desktop cashier has one; it is what the register
- * holder (TechDocs/POS_FISCAL_OFFLINE.md §3а) is keyed on.
+ * holder (TechDocs/prro/POS_FISCAL_OFFLINE.md §3а) is keyed on.
  */
 export function readDeviceId(request: FastifyRequest): string | null {
   const raw = request.headers[DEVICE_ID_HEADER];

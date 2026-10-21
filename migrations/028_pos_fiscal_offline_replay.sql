@@ -3,7 +3,7 @@
 -- Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 -- 028_pos_fiscal_offline_replay.sql
--- Phase 2 of TechDocs/POS_FISCAL_OFFLINE.md (server-side offline session).
+-- Phase 2 of TechDocs/prro/POS_FISCAL_OFFLINE.md (server-side offline session).
 -- The replay may call the provider's `go-online` at most once per two minutes
 -- per register; the throttle has to survive a process restart, so the last
 -- call is a column, not memory.

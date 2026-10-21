@@ -6,7 +6,7 @@
 //
 // An offline session (`pos_fiscal_offline_sessions`): one stretch of selling
 // while the provider cannot be reached, replayed to it in order afterwards.
-// TechDocs/POS_FISCAL_OFFLINE.md §5 and the phase-2 plan.
+// TechDocs/prro/POS_FISCAL_OFFLINE.md §5 and the phase-2 plan.
 //
 // Both holders live here. The server opens a session when the provider is
 // unreachable from our side (case B); a till opens one by syncing a sale it
@@ -475,7 +475,7 @@ export async function stampDeviceNext(
 /**
  * The tax-office QR for a stamp, built here rather than after the replay: the
  * link is the register's number plus what the stamp itself decides
- * (TechDocs/POS_FISCAL_OFFLINE.md — a real receipt verifies without `mac`).
+ * (TechDocs/prro/POS_FISCAL_OFFLINE.md — a real receipt verifies without `mac`).
  * The cabinet finds the document only once it is delivered, which is what the
  * «ОФЛАЙН» mark next to the QR is telling the customer.
  */

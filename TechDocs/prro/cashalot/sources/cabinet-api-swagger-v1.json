@@ -1,0 +1,1645 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "API Кабінету користувача",
+    "description": "API Кабінету користувача",
+    "version": "v1"
+  },
+  "paths": {
+    "/api/v{version}/Authorization": {
+      "post": {
+        "tags": [
+          "Авторизація"
+        ],
+        "summary": "Авторизація",
+        "parameters": [
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthorizationRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthorizationRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthorizationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizationResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizationResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizationResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v{version}/GetReceipts": {
+      "post": {
+        "tags": [
+          "Завантаження даних"
+        ],
+        "summary": "Отримати чеки",
+        "parameters": [
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenApiReceiptRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenApiReceiptRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenApiReceiptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptResposeArrayResult"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptResposeArrayResult"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptResposeArrayResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v{version}/GetShifts": {
+      "post": {
+        "tags": [
+          "Завантаження даних"
+        ],
+        "summary": "Отримати зміни",
+        "parameters": [
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenApiReceiptRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenApiReceiptRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenApiReceiptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftResposeArrayResult"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftResposeArrayResult"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftResposeArrayResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v{version}/GetReports": {
+      "post": {
+        "tags": [
+          "Завантаження даних"
+        ],
+        "summary": "Отримати звіти",
+        "parameters": [
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenApiReceiptRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenApiReceiptRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenApiReceiptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportResposeArrayResult"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportResposeArrayResult"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportResposeArrayResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v{version}/GetAllData": {
+      "post": {
+        "tags": [
+          "Завантаження даних"
+        ],
+        "summary": "Отримати всі дані по змінам, чекам та звітам",
+        "description": "",
+        "parameters": [
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenApiReceiptRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenApiReceiptRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenApiReceiptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/FullInfoResposeArrayResult"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FullInfoResposeArrayResult"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FullInfoResposeArrayResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v{version}/GetReceiptUrl": {
+      "post": {
+        "tags": [
+          "Перегляд чека"
+        ],
+        "summary": "Отримати чек на перегляд",
+        "parameters": [
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenApiReceiptUrlRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenApiReceiptUrlRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenApiReceiptUrlRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseGetUrlResult"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseGetUrlResult"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseGetUrlResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v{version}/StartImport": {
+      "post": {
+        "tags": [
+          "Імпорт номенклатур"
+        ],
+        "summary": "Розпочати імпорт номенклатури",
+        "description": "",
+        "parameters": [
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenApiStartImportRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenApiStartImportRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenApiStartImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResposeStartImportResult"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResposeStartImportResult"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResposeStartImportResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v{version}/GetImportStatus": {
+      "post": {
+        "tags": [
+          "Імпорт номенклатур"
+        ],
+        "summary": "Отримати стан виконання задачі імпорту",
+        "description": "",
+        "parameters": [
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenApiImportStatusRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenApiImportStatusRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenApiImportStatusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/IApiImportJobResultResposeArrayResult"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IApiImportJobResultResposeArrayResult"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IApiImportJobResultResposeArrayResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v{version}/SendReceipt": {
+      "post": {
+        "tags": [
+          "Відправка чеків клієнту"
+        ],
+        "summary": "Відправити чеки",
+        "parameters": [
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenApiSendReceiptRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenApiSendReceiptRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenApiSendReceiptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseSendReceipt"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseSendReceipt"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseSendReceipt"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApiImportItem": {
+        "required": [
+          "name",
+          "sellPrice",
+          "unitType",
+          "vendorcode"
+        ],
+        "type": "object",
+        "properties": {
+          "vendorcode": {
+            "minLength": 1,
+            "type": "string",
+            "description": "Артикул",
+            "default": ""
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string",
+            "description": "Найменування",
+            "default": ""
+          },
+          "barcode": {
+            "type": "string",
+            "description": "Штрихкод виробника",
+            "default": "",
+            "nullable": true
+          },
+          "groupName": {
+            "type": "string",
+            "description": "Група",
+            "default": "",
+            "nullable": true
+          },
+          "type": {
+            "type": "string",
+            "description": "Тип (1 - товар, 2 - послуга, 3 - послуга/операція видачі)",
+            "default": "",
+            "nullable": true
+          },
+          "unitType": {
+            "minLength": 1,
+            "type": "string",
+            "description": "Одиниця виміру",
+            "default": ""
+          },
+          "uktzedCode": {
+            "type": "string",
+            "description": "Код УКТЗЕД",
+            "default": "",
+            "nullable": true
+          },
+          "dkppCode": {
+            "type": "string",
+            "description": "Код за ДКПП",
+            "default": "",
+            "nullable": true
+          },
+          "pdvAmount": {
+            "type": "string",
+            "description": "Ставка ПДВ",
+            "default": "",
+            "nullable": true
+          },
+          "pdvLetter": {
+            "type": "string",
+            "description": "Літера ставки ПДВ",
+            "default": "",
+            "nullable": true
+          },
+          "exciseAmount": {
+            "type": "string",
+            "description": "Ставка акцизу",
+            "default": "",
+            "nullable": true
+          },
+          "exciseLetter": {
+            "type": "string",
+            "description": "Літера ставки акцизу",
+            "default": "",
+            "nullable": true
+          },
+          "pfAmount": {
+            "type": "string",
+            "description": "Ставка ПФ",
+            "default": "",
+            "nullable": true
+          },
+          "pfLetter": {
+            "type": "string",
+            "description": "Літера ставки ПФ",
+            "default": "",
+            "nullable": true
+          },
+          "sellPrice": {
+            "minLength": 1,
+            "type": "string",
+            "description": "Ціна продажу",
+            "default": ""
+          },
+          "tradeMargin": {
+            "type": "string",
+            "description": "Націнка",
+            "default": "",
+            "nullable": true
+          },
+          "buyPrice": {
+            "type": "string",
+            "description": "Ціна придбання",
+            "default": "",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ApiImportModelView": {
+        "required": [
+          "edrPou",
+          "mode",
+          "nomenclatures"
+        ],
+        "type": "object",
+        "properties": {
+          "edrPou": {
+            "minLength": 1,
+            "type": "string",
+            "description": "ЄДРПОУ/ІПН організації"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ImportMode"
+          },
+          "nomenclatures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiImportItem"
+            },
+            "description": "Масив даних номенклатури"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AuthorizationRequest": {
+        "required": [
+          "edrpou",
+          "hash"
+        ],
+        "type": "object",
+        "properties": {
+          "edrpou": {
+            "minLength": 1,
+            "type": "string",
+            "description": "ЄДРПОУ організації"
+          },
+          "hash": {
+            "minLength": 1,
+            "type": "string",
+            "description": "Значення хешу обчислюється на основі набору даних \"Дати запиту\" (YYYYMMDD) та унікального значення \"Публічного ключа\", зашифрованого алгоритмом SHA-256 з використанням \"Приватного ключа\".\r\n\r\nЛанцюжок \"Дата запиту\" та \"Публічний ключ\" вказується без пробілів (YYYYMMDDAPIkey). Значення API key публічного та приватного ключів генерується у Кабінеті Cashalot, розділ \"Мій бізнес\" - \"Налаштування\" - \"API KEY облікових систем\""
+          }
+        },
+        "additionalProperties": false,
+        "description": "Запит на авторизацію"
+      },
+      "AuthorizationResponse": {
+        "type": "object",
+        "properties": {
+          "resultCode": {
+            "type": "integer",
+            "description": "0 - запит виконано успішно\r\n\r\n1 - В Кабінеті Cashalot не знайдено організацію по вказаному ЕДРПОУ\r\n\r\n2 - Некоректний Хеш\r\n\r\n3 - Не знайдено користувача з вказаним API key\r\n\r\n99 - Помилка обробки запиту",
+            "format": "int32"
+          },
+          "resultMessage": {
+            "type": "string",
+            "description": "Повідомлення в котрому буде вказано причину невдачі авторизації",
+            "nullable": true
+          },
+          "token": {
+            "type": "string",
+            "description": " У разі успішного запиту у відповідь надсилається токен авторизації, який використовується вподальшому у всіх запитах. \r\n \r\nТокен має термін дії та деактивується через 15 хвилин після останнього запиту\"",
+            "format": "uuid"
+          }
+        },
+        "additionalProperties": false,
+        "description": ""
+      },
+      "EPaymentType": {
+        "enum": [
+          0,
+          1
+        ],
+        "type": "integer",
+        "format": "int32"
+      },
+      "ETaxType": {
+        "enum": [
+          0,
+          1
+        ],
+        "type": "integer",
+        "format": "int32"
+      },
+      "FullInfo": {
+        "type": "object",
+        "properties": {
+          "dfsNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "dateBeg": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-10-21T14:58:29Z"
+          },
+          "dateEnd": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2026-10-21T14:58:29Z"
+          },
+          "firmName": {
+            "type": "string",
+            "nullable": true
+          },
+          "businessunitName": {
+            "type": "string",
+            "nullable": true
+          },
+          "businessUnitAddress": {
+            "type": "string",
+            "nullable": true
+          },
+          "edrpou": {
+            "type": "string",
+            "nullable": true
+          },
+          "inn": {
+            "type": "string",
+            "nullable": true
+          },
+          "fullName": {
+            "type": "string",
+            "nullable": true
+          },
+          "localNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "cashierName": {
+            "type": "string",
+            "nullable": true
+          },
+          "rroFiscalNumber": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "receipt": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Receipt"
+            },
+            "nullable": true
+          },
+          "report": {
+            "$ref": "#/components/schemas/Report"
+          }
+        },
+        "additionalProperties": false
+      },
+      "FullInfoResposeArrayResult": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FullInfo"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "IApiImportJobResult": {
+        "type": "object",
+        "properties": {
+          "isError": {
+            "type": "boolean",
+            "description": "Операція імпорту не виконана"
+          },
+          "isCompleted": {
+            "type": "boolean",
+            "description": "Операція імпорту завершена"
+          },
+          "recordCount": {
+            "type": "integer",
+            "description": "Кількість оброблених записів",
+            "format": "int32"
+          },
+          "create": {
+            "type": "integer",
+            "description": "Кількість створених записів номенклатури",
+            "format": "int32"
+          },
+          "update": {
+            "type": "integer",
+            "description": "Кількість відредагованих записів номенклатури",
+            "format": "int32"
+          },
+          "bad": {
+            "type": "integer",
+            "description": "Кількість записів з помилками валідації",
+            "format": "int32"
+          },
+          "validationMessages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Повідомлення з причиною помилки валідації",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "IApiImportJobResultResposeArrayResult": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IApiImportJobResult"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ImportMode": {
+        "enum": [
+          0,
+          1,
+          2
+        ],
+        "type": "integer",
+        "description": "Параметр налаштування механізму завантаження номенклатури \r\n\r\nДопустимі значення:\r\n\r\n0 - Імпорт до розділу \"Нові\" у довіднику Номенклатури\r\n\r\n1 - Імпорт до розділу \"Еталонні\" у довіднику Номенклатури із заміною існуючих записів за умови співпадіння реквізитів Артикул, Найменування, Од.виміру\r\n\r\n2 - Імпорт до розділу \"Еталонні\" у довіднику Номенклатури із створенням нових записів, існуючі записи залишаються без змін",
+        "format": "int32"
+      },
+      "OpenApiImportStatusRequest": {
+        "required": [
+          "token",
+          "tracker"
+        ],
+        "type": "object",
+        "properties": {
+          "token": {
+            "minLength": 1,
+            "type": "string",
+            "description": "Токен отриманий при авторизації"
+          },
+          "tracker": {
+            "minLength": 1,
+            "type": "string",
+            "description": "Ідентифікатор операції імпорту"
+          }
+        },
+        "additionalProperties": false
+      },
+      "OpenApiReceiptRequest": {
+        "required": [
+          "token"
+        ],
+        "type": "object",
+        "properties": {
+          "token": {
+            "minLength": 1,
+            "type": "string",
+            "description": "Токен отриманий при авторизації"
+          },
+          "filters": {
+            "$ref": "#/components/schemas/RequestFilters"
+          }
+        },
+        "additionalProperties": false
+      },
+      "OpenApiReceiptUrlRequest": {
+        "required": [
+          "receiptFn",
+          "rroFn",
+          "token"
+        ],
+        "type": "object",
+        "properties": {
+          "token": {
+            "minLength": 1,
+            "type": "string",
+            "description": "Токен отриманий при авторизації"
+          },
+          "rroFn": {
+            "minLength": 1,
+            "type": "string",
+            "description": "Фіскальний номер каси"
+          },
+          "receiptFn": {
+            "minLength": 1,
+            "type": "string",
+            "description": "Фіскальний номер чека"
+          }
+        },
+        "additionalProperties": false
+      },
+      "OpenApiSendReceiptRequest": {
+        "required": [
+          "dateTime",
+          "phoneNumber",
+          "prroFn",
+          "receiptFn",
+          "receiptSum",
+          "serviceType",
+          "token"
+        ],
+        "type": "object",
+        "properties": {
+          "token": {
+            "minLength": 1,
+            "type": "string",
+            "description": "Токен отриманий при авторизації"
+          },
+          "serviceType": {
+            "$ref": "#/components/schemas/OpenApiSendServiceType"
+          },
+          "receiptSum": {
+            "type": "number",
+            "description": "Сума по чеку",
+            "format": "double"
+          },
+          "receiptFn": {
+            "minLength": 1,
+            "type": "string",
+            "description": "Фіскальний номер чека"
+          },
+          "prroFn": {
+            "minLength": 1,
+            "type": "string",
+            "description": "Фіскальний номер каси"
+          },
+          "phoneNumber": {
+            "minLength": 1,
+            "type": "string",
+            "description": "Номер отримувача"
+          },
+          "dateTime": {
+            "type": "string",
+            "description": "Дата та час реєстрації чека",
+            "format": "date-time",
+            "example": "2026-10-21T14:58:29Z"
+          }
+        },
+        "additionalProperties": false
+      },
+      "OpenApiSendServiceType": {
+        "enum": [
+          0,
+          1
+        ],
+        "type": "integer",
+        "format": "int32"
+      },
+      "OpenApiStartImportRequest": {
+        "required": [
+          "data",
+          "token"
+        ],
+        "type": "object",
+        "properties": {
+          "token": {
+            "minLength": 1,
+            "type": "string",
+            "description": "Токен отриманий при авторизації"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ApiImportModelView"
+          }
+        },
+        "additionalProperties": false
+      },
+      "PaymentSubType": {
+        "enum": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          101,
+          102
+        ],
+        "type": "integer",
+        "format": "int32"
+      },
+      "PaymentType": {
+        "enum": [
+          0,
+          1,
+          2,
+          3,
+          201,
+          202,
+          203,
+          204,
+          205,
+          300,
+          301,
+          302,
+          303,
+          304,
+          305,
+          306,
+          100000
+        ],
+        "type": "integer",
+        "format": "int32"
+      },
+      "Receipt": {
+        "type": "object",
+        "properties": {
+          "docType": {
+            "type": "integer",
+            "description": " \"Тип документа (числовий):\r\n \r\n0-Чек реалізації товарів/послуг, \r\n\r\n1-Чек переказу коштів,\r\n\r\n2–Чек операції обміну валюти,\r\n\r\n3-Чек видачі готівки,\r\n\r\n4-Чек обслуговування у ломбарді,\r\n\r\n100-Відкриття зміни,\r\n\r\n101-Закриття зміни,\r\n\r\n102-Початок офлайн сесії,\r\n\r\n103-Завершення офлайн сесії\"",
+            "format": "int32"
+          },
+          "docSubType": {
+            "type": "integer",
+            "description": " \"Розширений тип документа (числовий):\r\n \r\n0-Касовий чек(реалізація), \r\n\r\n1-Видатковий чек(повернення), \r\n\r\n2-Чек операції «службове внесення»/«отримання авансу»,\r\n\r\n3-Чек операції «отримання підкріплення»,\r\n\r\n4-Чек операції «службова видача»/«інкасація»,\r\n\r\n5-Чек сторнування попереднього чека\"",
+            "format": "int32"
+          },
+          "uid": {
+            "type": "string",
+            "description": "Унікальний ідентифікатор документа",
+            "format": "uuid",
+            "readOnly": true
+          },
+          "orderDate": {
+            "type": "string",
+            "description": "Дата операції",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2026-10-21T14:58:29Z"
+          },
+          "orderNum": {
+            "type": "integer",
+            "description": "Локальний номер документа",
+            "format": "int32"
+          },
+          "fiscalNumber": {
+            "type": "string",
+            "description": "Фіскальний номер документа",
+            "nullable": true
+          },
+          "commentDps": {
+            "type": "string",
+            "description": "Коментар",
+            "nullable": true
+          },
+          "sum": {
+            "type": "number",
+            "description": "Загальна сума",
+            "format": "double"
+          },
+          "roundSum": {
+            "type": "number",
+            "description": "Заокруглення",
+            "format": "double"
+          },
+          "nonRoundSum": {
+            "type": "number",
+            "description": "Загальна сума без заокруглення",
+            "format": "double"
+          },
+          "taxes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReceiptTaxes"
+            },
+            "nullable": true
+          },
+          "payments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReceiptPayments"
+            },
+            "nullable": true
+          },
+          "sales": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReceiptSales"
+            },
+            "nullable": true
+          },
+          "parentFiscalNumber": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReceiptPayments": {
+        "type": "object",
+        "properties": {
+          "paymentFormID": {
+            "$ref": "#/components/schemas/PaymentType"
+          },
+          "paymentFormName": {
+            "type": "string",
+            "nullable": true,
+            "readOnly": true
+          },
+          "paymentSubType": {
+            "type": "string",
+            "nullable": true,
+            "readOnly": true
+          },
+          "paymentSubTypeId": {
+            "$ref": "#/components/schemas/PaymentSubType"
+          },
+          "providedSum": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "remainderSum": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "totalSum": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReceiptResposeArrayResult": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Receipt"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReceiptSales": {
+        "type": "object",
+        "properties": {
+          "vendorCode": {
+            "type": "string",
+            "description": "Внутрішній код товару (артикул)",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "description": "Найменування товару, послуги або операції",
+            "nullable": true
+          },
+          "typeId": {
+            "type": "integer",
+            "description": "Тип номенклатури: \r\n\r\n1 - Товар, \r\n\r\n2 - Послуга, \r\n\r\n3 - Послуга/операція видачі",
+            "format": "int32"
+          },
+          "quantity": {
+            "type": "number",
+            "description": "Кількість/об’єм товару",
+            "format": "double"
+          },
+          "unitPrice": {
+            "type": "number",
+            "description": "Ціна за одиницю товару",
+            "format": "double"
+          },
+          "discountSum": {
+            "type": "number",
+            "description": "Ціна за одиницю товару",
+            "format": "double"
+          },
+          "priceOut": {
+            "type": "number",
+            "description": "Ціна за одиницю товару",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReceiptTaxes": {
+        "type": "object",
+        "properties": {
+          "turnOver": {
+            "type": "number",
+            "description": "Сума обсягів для розрахування податку/збору",
+            "format": "double"
+          },
+          "removedTaxes": {
+            "type": "number",
+            "format": "double"
+          },
+          "letter": {
+            "type": "string",
+            "description": "Літерні позначення видів і ставок податків/зборів",
+            "nullable": true
+          },
+          "amount": {
+            "type": "number",
+            "description": "Ставка податку",
+            "format": "double"
+          },
+          "typeId": {
+            "type": "integer",
+            "description": "Код виду податку/збору (числовий)",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Report": {
+        "type": "object",
+        "properties": {
+          "orderDate": {
+            "type": "string",
+            "description": "Дата операції",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2026-10-21T14:58:29Z"
+          },
+          "orderTaxNum": {
+            "type": "string",
+            "description": "Фіскальний номер",
+            "nullable": true
+          },
+          "sumReal": {
+            "type": "number",
+            "description": "Продаж",
+            "format": "double"
+          },
+          "sumRet": {
+            "type": "number",
+            "description": "Повернення",
+            "format": "double"
+          },
+          "taxSumRet": {
+            "type": "number",
+            "description": "Сума податку повернення",
+            "format": "double"
+          },
+          "taxSumReal": {
+            "type": "number",
+            "description": "Сума податку продажу",
+            "format": "double"
+          },
+          "serviceInput": {
+            "type": "number",
+            "description": "Службове внесення",
+            "format": "double"
+          },
+          "serviceOutput": {
+            "type": "number",
+            "description": "Службова видача",
+            "format": "double"
+          },
+          "payments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReportPayments"
+            },
+            "description": "Форми оплати",
+            "nullable": true
+          },
+          "taxes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReportTaxes"
+            },
+            "description": "Податки",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReportPayments": {
+        "type": "object",
+        "properties": {
+          "paymentFormId": {
+            "type": "integer",
+            "description": "Ідентифікатор форми оплати",
+            "format": "int32"
+          },
+          "paymentFormCode": {
+            "type": "integer",
+            "description": "Код форми оплати",
+            "format": "int32"
+          },
+          "paymentFormName": {
+            "type": "string",
+            "description": "Найменування форми оплати",
+            "nullable": true,
+            "readOnly": true
+          },
+          "paymentSubTypeId": {
+            "type": "integer",
+            "description": "Ідентифікатор засобу оплати",
+            "format": "int32"
+          },
+          "paymentSubTypeName": {
+            "type": "string",
+            "description": "Найменування засобу оплати",
+            "nullable": true
+          },
+          "totalSum": {
+            "type": "number",
+            "description": "Загальна сума",
+            "format": "double"
+          },
+          "type": {
+            "$ref": "#/components/schemas/EPaymentType"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReportResposeArrayResult": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Report"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReportTaxes": {
+        "type": "object",
+        "properties": {
+          "letter": {
+            "type": "string",
+            "description": "Літерне значення податку",
+            "nullable": true
+          },
+          "amount": {
+            "type": "number",
+            "description": "Ставка податку",
+            "format": "double"
+          },
+          "typeId": {
+            "type": "integer",
+            "description": "Тип податку",
+            "format": "int32"
+          },
+          "sum": {
+            "type": "number",
+            "description": "Сума податку",
+            "format": "double"
+          },
+          "turnOver": {
+            "type": "number",
+            "description": "Сума обсягів для розрахунку податку",
+            "format": "double"
+          },
+          "discountSum": {
+            "type": "number",
+            "description": "Сума обсягів для розрахунку податку з урахуванням знижки",
+            "format": "double"
+          },
+          "removedTaxes": {
+            "type": "number",
+            "description": "Сума податку іншої ставки",
+            "format": "double"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ETaxType"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RequestFilters": {
+        "required": [
+          "pageNumber"
+        ],
+        "type": "object",
+        "properties": {
+          "dateFrom": {
+            "type": "string",
+            "description": "Максимальний період завантаження даних 365 днів",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2026-10-21T14:58:29Z"
+          },
+          "dateTo": {
+            "type": "string",
+            "description": "Максимальний період завантаження даних 365 днів",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2026-10-21T14:58:29Z"
+          },
+          "rros": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "nullable": true
+          },
+          "pageNumber": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ResponseGetUrlResult": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          },
+          "url": {
+            "type": "string",
+            "description": "Посилання на перегляд чеку",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ResponseSendReceipt": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ResposeStartImportResult": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          },
+          "tracker": {
+            "type": "string",
+            "description": "Ідентифікатор операції імпорту",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "Shift": {
+        "type": "object",
+        "properties": {
+          "dfsNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "dateBeg": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-10-21T14:58:29Z"
+          },
+          "dateEnd": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2026-10-21T14:58:29Z"
+          },
+          "firmName": {
+            "type": "string",
+            "nullable": true
+          },
+          "businessunitName": {
+            "type": "string",
+            "nullable": true
+          },
+          "businessUnitAddress": {
+            "type": "string",
+            "nullable": true
+          },
+          "edrpou": {
+            "type": "string",
+            "nullable": true
+          },
+          "inn": {
+            "type": "string",
+            "nullable": true
+          },
+          "fullName": {
+            "type": "string",
+            "nullable": true
+          },
+          "localNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "cashierName": {
+            "type": "string",
+            "nullable": true
+          },
+          "rroFiscalNumber": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShiftResposeArrayResult": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Shift"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}

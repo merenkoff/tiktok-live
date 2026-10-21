@@ -5,7 +5,7 @@
 // pos/src/modules/fiscal-core/components/HolderPanel.tsx
 //
 // Who holds the ПРРО register, and the handover between two tills
-// (TechDocs/POS_FISCAL_OFFLINE.md §3а).
+// (TechDocs/prro/POS_FISCAL_OFFLINE.md §3а).
 //
 // Two rules shape this screen:
 //

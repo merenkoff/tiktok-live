@@ -5,7 +5,7 @@
 // src/pos/fiscal/offline/holder.ts
 //
 // The register holder — which till currently owns the store's provider
-// register. TechDocs/POS_FISCAL_OFFLINE.md §3а.
+// register. TechDocs/prro/POS_FISCAL_OFFLINE.md §3а.
 //
 // Why a lock at all: an offline session replays `go-offline(at)` and the
 // provider requires `at` to be ≥ the last transaction the tax office received

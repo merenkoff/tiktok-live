@@ -5,7 +5,7 @@
 // src/__tests__/pos.fiscal.checkbox.offline.test.ts
 //
 // The Checkbox adapter's offline capability (`checkboxProvider.offline`),
-// against a mocked fetch. Wire shapes follow TechDocs/checkbox-api/
+// against a mocked fetch. Wire shapes follow TechDocs/prro/checkbox/api/
 // {cash-register,receipts-offline}.md; the point here is that every call hits
 // the documented path with the documented headers and that the offline-only
 // answers (control number, textual refusals) reach the orchestrator in the

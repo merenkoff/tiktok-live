@@ -10,7 +10,7 @@ import { useProbe } from './probe';
 
 /**
  * "Re-point module X at URL Y in these stores" — the reason `/super` exists.
- * A release URL pins one version (TechDocs/POS_FISCAL_CHECKBOX_SETUP.md), so
+ * A release URL pins one version (TechDocs/prro/checkbox/POS_FISCAL_CHECKBOX_SETUP.md), so
  * every release used to mean editing every store by hand.
  */
 export function RepointPanel({ stores, onDone }: { stores: SuperStoreRow[]; onDone: () => void }) {

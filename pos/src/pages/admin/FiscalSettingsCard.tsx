@@ -390,7 +390,7 @@ export function FiscalSettingsCard() {
             {/* Offline mode. Rendered only for a provider whose adapter can do it —
                 for the others this is not "off", it does not exist. The switch
                 lives here rather than in the provider's own bundle for the same
-                reason `enabled` does (TechDocs/POS_FISCAL_PRRO.md §"Тумблер живёт
+                reason `enabled` does (TechDocs/prro/POS_FISCAL_PRRO.md §"Тумблер живёт
                 в хосте"): on the web a bundle can fail to load silently, and an
                 owner must always be able to switch offline mode back OFF. */}
             {offlineCapable && (

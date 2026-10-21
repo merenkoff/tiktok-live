@@ -4,7 +4,7 @@
 
 // src/__tests__/pos.fiscal.holder.test.ts
 //
-// The register holder and handover protocol (TechDocs/POS_FISCAL_OFFLINE.md
+// The register holder and handover protocol (TechDocs/prro/POS_FISCAL_OFFLINE.md
 // §3а) over HTTP. Two guarantees above all: the lock changes nothing while
 // `offline_mode` is off, and while it is on, exactly one device id can sell.
 

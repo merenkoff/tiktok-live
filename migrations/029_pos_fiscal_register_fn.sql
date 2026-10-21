@@ -10,7 +10,7 @@
 --   /cashregs/check?id=<receipt fiscal number>&date=&time=&fn=<THIS>&sm=
 -- and every other part of it the till already knows at the moment of sale.
 -- Verified against a real receipt: the cabinet finds the document by these
--- five, no `mac` needed (TechDocs/POS_FISCAL_OFFLINE.md, «Открытые вопросы»).
+-- five, no `mac` needed (TechDocs/prro/POS_FISCAL_OFFLINE.md, «Открытые вопросы»).
 --
 -- A register-level constant, so it is cached rather than asked for per sale:
 -- the provider hands it back on every `registerState()` call, and offline —

@@ -5,7 +5,7 @@
 // pos/src/modules/fiscal-checkbox/secretSpecs.ts
 //
 // Checkbox's two credentials, confirmed against the public OpenAPI spec
-// (api.checkbox.in.ua/api/openapi.json) in TechDocs/POS_FISCAL_PRRO.md §3:
+// (api.checkbox.in.ua/api/openapi.json) in TechDocs/prro/POS_FISCAL_PRRO.md §3:
 // `POST /api/v1/cashier/signinPinCode` takes `pin_code` in the body and
 // `X-License-Key` as a header.
 //

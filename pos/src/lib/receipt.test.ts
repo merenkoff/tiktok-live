@@ -154,7 +154,7 @@ describe('buildReceiptPayload — fiscal', () => {
     expect(pending.fiscal).toBeNull();
   });
 
-  // ── Offline receipts (TechDocs/POS_FISCAL_OFFLINE.md §4) ──────────────────
+  // ── Offline receipts (TechDocs/prro/POS_FISCAL_OFFLINE.md §4) ──────────────────
   //
   // An offline document is `pending` like the one above, and yet the opposite
   // case: its fiscal number is a real tax-office code from the reserve, and the
@@ -208,7 +208,7 @@ describe('buildReceiptPayload — fiscal', () => {
   });
 });
 
-describe('buildReceiptPayload — Положення № 13 layout (TechDocs/POS_FISCAL_OFFLINE.md, «Фаза 8в»)', () => {
+describe('buildReceiptPayload — Положення № 13 layout (TechDocs/prro/POS_FISCAL_OFFLINE.md, «Фаза 8в»)', () => {
   const doneDoc = {
     status: 'done',
     fiscal_code: 'TEST-fKbevQ',

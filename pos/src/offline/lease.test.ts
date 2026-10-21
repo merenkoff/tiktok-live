@@ -2,7 +2,7 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-// The till's reserve of tax-office codes (TechDocs/POS_FISCAL_OFFLINE.md,
+// The till's reserve of tax-office codes (TechDocs/prro/POS_FISCAL_OFFLINE.md,
 // фаза 3): when it may print a fiscal receipt without a connection, and what
 // it hands the receipt when it does.
 //

@@ -5,7 +5,7 @@
 // src/pos/fiscal/offline/lease.ts
 //
 // The till's reserve of tax-office codes — case C of
-// TechDocs/POS_FISCAL_OFFLINE.md (фаза 3, шаг 1).
+// TechDocs/prro/POS_FISCAL_OFFLINE.md (фаза 3, шаг 1).
 //
 // A till that loses the network has to stamp receipts on its own, and a
 // tax-office code cannot be invented: it must have been fetched from the

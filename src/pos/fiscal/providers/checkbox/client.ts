@@ -167,7 +167,7 @@ export interface CheckboxSellOfflinePayload extends CheckboxSellPayload {
   previous_receipt_id?: string;
 }
 
-// ── Offline mode (TechDocs/checkbox-api/cash-register.md) ──────────────────
+// ── Offline mode (TechDocs/prro/checkbox/api/cash-register.md) ──────────────────
 
 /** `GET /cash-registers/info` — the offline fields plus what the receipt header prints. */
 export interface CheckboxCashRegisterInfo {

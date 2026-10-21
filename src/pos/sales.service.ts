@@ -966,7 +966,7 @@ export async function getSale(storeId: number, saleId: number) {
   // The ПРРО result, when this store fiscalises. Plain fields on the sale, not
   // a separate lookup for the client: the ESC/POS ticket is rendered in Rust
   // and the offline receipt mirror is host-owned, so neither could ever reach a
-  // module-provided renderer. See TechDocs/POS_FISCAL_PRRO.md §1.
+  // module-provided renderer. See TechDocs/prro/POS_FISCAL_PRRO.md §1.
   const fiscalRow = await pool.query(
     `SELECT fiscal_code, fiscal_date, tax_url, qr_payload, receipt_text,
             status, mode, control_number, error_code, error_message
@@ -1068,7 +1068,7 @@ export async function getSale(storeId: number, saleId: number) {
  * `mode` and `control_number` matter to the till, not just to the ledger: an
  * offline-stamped receipt already carries a real tax-office number, and the
  * paper it prints is a different document from an online one (see
- * TechDocs/POS_FISCAL_OFFLINE.md §4). Without them a re-opened sale looks like
+ * TechDocs/prro/POS_FISCAL_OFFLINE.md §4). Without them a re-opened sale looks like
  * an ordinary `pending` one.
  */
 function fiscalViewFromRow(fiscal: Record<string, unknown> | null) {

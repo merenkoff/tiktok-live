@@ -9,7 +9,7 @@
 // `/fiscal/settings` (GET/PATCH). Those are the host's own typed methods
 // (`api.fiscalSettings` / `api.updateFiscalSettings`, added in phase 5 for
 // `FiscalSettingsCard`) — a provider module never edits `enabled`/`provider`
-// itself; see TechDocs/POS_FISCAL_PRRO.md §"Тумблер живёт в хосте".
+// itself; see TechDocs/prro/POS_FISCAL_PRRO.md §"Тумблер живёт в хосте".
 
 import { api } from '@pos/platform';
 import { posRequest } from '../lib/hostPlatform';
@@ -94,7 +94,7 @@ export function listFiscalAttention(): Promise<{
   return posRequest('get', '/fiscal/attention');
 }
 
-// ── Register holder (TechDocs/POS_FISCAL_OFFLINE.md §3а) ─────────────────────
+// ── Register holder (TechDocs/prro/POS_FISCAL_OFFLINE.md §3а) ─────────────────────
 //
 // All four of the till-side calls need the `X-POS-Device-ID` header, which only
 // the desktop cashier sends (`api.setDeviceId` from the offline runtime) — on

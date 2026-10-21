@@ -4,7 +4,7 @@
 
 // src/__tests__/pos.fiscal.offline.device.test.ts
 //
-// Case C of TechDocs/POS_FISCAL_OFFLINE.md (фаза 3, шаг 2): the till had no
+// Case C of TechDocs/prro/POS_FISCAL_OFFLINE.md (фаза 3, шаг 2): the till had no
 // network, stamped the receipt from its own lease and printed it; this is what
 // happens when it finally reaches us.
 //

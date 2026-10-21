@@ -509,7 +509,7 @@ export async function completeSale(payload: {
     // store can only queue one if this till is carrying a reserve of
     // tax-office codes and every local gate passes. `takeStamp` throws
     // `OfflineFiscalError` with the reason otherwise, before anything is
-    // written (TechDocs/POS_FISCAL_OFFLINE.md, фаза 3).
+    // written (TechDocs/prro/POS_FISCAL_OFFLINE.md, фаза 3).
     const taken = await takeStamp();
     salePayload.fiscal_offline = taken.stamp;
     registerFiscalNumber = taken.registerFiscalNumber;

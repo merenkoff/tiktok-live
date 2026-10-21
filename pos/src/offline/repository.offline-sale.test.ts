@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 // What the till does with a sale rung while it has no network, in a store that
-// fiscalises (TechDocs/POS_FISCAL_OFFLINE.md, фаза 3, шаг 3).
+// fiscalises (TechDocs/prro/POS_FISCAL_OFFLINE.md, фаза 3, шаг 3).
 //
 // The receipt handed to the customer is the whole point of these: it has to
 // carry a real tax-office number, the till's own date and a scannable QR the

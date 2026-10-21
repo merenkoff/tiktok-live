@@ -6,7 +6,7 @@
 //
 // The tax office's monthly offline allowance: 168 hours per ПРРО per calendar
 // month (Положення № 13), on top of the 36 hours in a row the session gate
-// already holds. TechDocs/POS_FISCAL_OFFLINE.md.
+// already holds. TechDocs/prro/POS_FISCAL_OFFLINE.md.
 //
 // What is pinned: the month is Ukrainian, not UTC (an outage at 00:30 on the
 // 1st belongs to the new month only if Kyiv says so); every stretch of the
