@@ -183,7 +183,16 @@ export function PricingCard({ addon }: { addon?: boolean }) {
         <div>
           <p className="font-bold text-ink-strong flex items-center gap-2">
             <Lock size={24} className="shrink-0" />
-            Потім {BASE.price} грн/міс за магазин — і ця ціна ваша назавжди
+            {/* One span, so the flex gap does not part the «*» from the price. */}
+            <span>
+              Потім {BASE.price}
+              {LOCK_NOTE && (
+                <a href="/pos#price-note" aria-label="Примітка до ціни" className="text-pos align-top">
+                  *
+                </a>
+              )}{' '}
+              грн/міс за магазин — і ця ціна ваша назавжди
+            </span>
           </p>
           <p className="text-muted text-[15px] mt-1 leading-relaxed">
             До {pos.perStoreRegisters} кас{addon ? `, столи — ще ${TABLES.price} грн/міс` : ''}. Помісячно, без
