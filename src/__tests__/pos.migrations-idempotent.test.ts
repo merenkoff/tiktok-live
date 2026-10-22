@@ -26,58 +26,15 @@
  * `vitest.global-setup.ts` exists to avoid.
  */
 
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { POS_MIGRATIONS, readMigration } from '../pos/migrations.js';
 import { hasDb } from './helpers/pos-fixtures.js';
+import { applyAllMigrations as applyAll, canCreateDatabase, poolFor } from './helpers/scratch-db.js';
 
 const PROBE_DB = 'pos_migrations_probe';
 
-function poolFor(database: string): Pool {
-  const url = process.env.DATABASE_URL;
-  if (url) {
-    const parsed = new URL(url);
-    parsed.pathname = `/${database}`;
-    return new Pool({
-      connectionString: parsed.toString(),
-      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
-      max: 1,
-    });
-  }
-  return new Pool({
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '5432', 10),
-    database,
-    user: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD || 'postgres',
-    max: 1,
-  });
-}
-
-/** CI runs as the `postgres` superuser, so this is only ever false locally. */
-async function canCreateDatabase(): Promise<boolean> {
-  const admin = poolFor('postgres');
-  try {
-    const r = await admin.query(`SELECT rolcreatedb OR rolsuper AS ok FROM pg_roles WHERE rolname = current_user`);
-    return Boolean(r.rows[0]?.ok);
-  } catch {
-    return false;
-  } finally {
-    await admin.end();
-  }
-}
-
 const canCreate = hasDb ? await canCreateDatabase() : false;
-
-async function applyAll(probe: Pool): Promise<void> {
-  for (const file of POS_MIGRATIONS) {
-    try {
-      await probe.query(readMigration(file));
-    } catch (error) {
-      throw new Error(`${file}: ${(error as Error).message}`);
-    }
-  }
-}
 
 async function liveColumns(probe: Pool, table: string, names: string[]): Promise<string[]> {
   const r = await probe.query(

@@ -116,6 +116,8 @@ export const POS_MIGRATIONS = [
   '067_pos_demo_suncity.sql',
   // A guest calls a waiter or asks for the bill; a guest order may go straight to the kitchen (QR menu Q8/Q9).
   '068_pos_guest_calls_auto_kitchen.sql',
+  // Four one-time copies of the demos for a reseller to play with (cash-demo-*, owner PIN 3333, seller 4444).
+  '069_pos_cash_demo_stores.sql',
 ] as const;
 
 export function readMigration(file: string): string {
