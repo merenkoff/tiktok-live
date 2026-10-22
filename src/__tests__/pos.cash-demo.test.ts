@@ -2,14 +2,22 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
+import type { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import 'dotenv/config';
 import { pool } from '../db.js';
-import { applyPosMigrations, dropTestStore, hasDb } from './helpers/pos-fixtures.js';
+import { hasDb } from './helpers/pos-fixtures.js';
+import {
+  applyAllMigrations,
+  canCreateDatabase,
+  createScratchDatabase,
+  dropScratchDatabase,
+} from './helpers/scratch-db.js';
 import { readMigration } from '../pos/migrations.js';
 import { loginOwner, loginWithPin } from '../pos/auth.service.js';
 
 const MIGRATION = '069_pos_cash_demo_stores.sql';
+const PROBE_DB = 'pos_cash_demo_probe';
 
 const PAIRS = [
   { src: 'demo-clothing', dst: 'cash-demo-clothing', login: 'clothing@cash-demo.shop' },
@@ -18,15 +26,17 @@ const PAIRS = [
   { src: 'demo-restaurant', dst: 'cash-demo-restaurant', login: 'restaurant@cash-demo.shop' },
 ] as const;
 
-async function storeId(slug: string): Promise<number> {
-  const row = await pool.query(`SELECT id FROM pos_stores WHERE slug = $1`, [slug]);
+const canCreate = hasDb ? await canCreateDatabase() : false;
+
+async function storeId(db: Pool, slug: string): Promise<number> {
+  const row = await db.query(`SELECT id FROM pos_stores WHERE slug = $1`, [slug]);
   expect(row.rows.length, `${slug} does not exist`).toBe(1);
   return Number(row.rows[0].id);
 }
 
 /** Everything a till sells from, keyed by names rather than ids, so two stores compare. */
-async function catalogue(id: number) {
-  const q = async (sql: string) => (await pool.query(sql, [id])).rows.map((r) => r.k as string).sort();
+async function catalogue(db: Pool, id: number) {
+  const q = async (sql: string) => (await db.query(sql, [id])).rows.map((r) => r.k as string).sort();
   return {
     variants: await q(
       `SELECT concat_ws('|', p.name, p.kind, p.stock_mode, p.sellable, v.label, v.unit, v.price_cents,
@@ -84,30 +94,40 @@ async function catalogue(id: number) {
  * (logins, recipes expanded, stock on the shelf), that it is the demo as its
  * migration built it, and that it really is one-time: a later boot neither
  * rebuilds it nor brings back one that was deleted.
+ *
+ * The copies are compared on a database of this file's own, booted once from
+ * nothing: in the shared one the demo suites rebuild their stores with their
+ * own migration alone, and a demo caught mid-test has no expanded recipes or
+ * kitchen stations (see `helpers/scratch-db.ts`).
  */
-describe.skipIf(!hasDb)('cash demo stores (migration 069)', () => {
+describe.skipIf(!hasDb || !canCreate)('cash demo stores (migration 069)', () => {
+  let probe: Pool;
+
   beforeAll(async () => {
-    await applyPosMigrations();
-  }, 60000);
+    probe = await createScratchDatabase(PROBE_DB);
+    await applyAllMigrations(probe);
+  }, 180000);
 
   afterAll(async () => {
+    await dropScratchDatabase(PROBE_DB, probe);
     await pool.end();
   });
 
   it.each(PAIRS)('$dst copies the vertical, catalogue, recipes and floor plan of $src', async ({ src, dst }) => {
-    const [from, to] = [await storeId(src), await storeId(dst)];
-    const verticals = await pool.query(
-      `SELECT slug, vertical, florist_labour_bps FROM pos_stores WHERE id IN ($1, $2) ORDER BY id = $2`,
+    const [from, to] = [await storeId(probe, src), await storeId(probe, dst)];
+    const verticals = await probe.query(
+      `SELECT vertical, florist_labour_bps FROM pos_stores WHERE id IN ($1, $2) ORDER BY id = $2`,
       [from, to]
     );
-    expect(verticals.rows[1].vertical).toBe(verticals.rows[0].vertical);
-    expect(verticals.rows[1].florist_labour_bps).toBe(verticals.rows[0].florist_labour_bps);
+    expect(verticals.rows[1]).toEqual(verticals.rows[0]);
 
-    const [a, b] = [await catalogue(from), await catalogue(to)];
+    const [a, b] = [await catalogue(probe, from), await catalogue(probe, to)];
     expect(b.variants.length).toBeGreaterThan(10);
     expect(b).toEqual(a);
   });
 
+  // Through the real auth service, on the shared database the global setup
+  // migrated: no other suite touches these four stores there.
   it.each(PAIRS)('$dst lets in the owner by PIN 3333 and password, and the seller by PIN 4444', async ({ dst, login }) => {
     const owner = await loginWithPin(dst, '3333');
     expect(owner?.staff.role).toBe('owner');
@@ -125,28 +145,26 @@ describe.skipIf(!hasDb)('cash demo stores (migration 069)', () => {
   });
 
   it.each(PAIRS)('$dst starts with the shelf $src had when its migration built it', async ({ src, dst }) => {
-    const [from, to] = [await storeId(src), await storeId(dst)];
-    const seeded = await pool.query(
-      `SELECT p.name || '|' || v.label AS k, GREATEST(COALESCE(SUM(m.delta), 0), 0)::int AS qty
-       FROM pos_variants v
-       JOIN pos_products p ON p.id = v.product_id
-       JOIN pos_demo_seed d ON d.slug = $2
-       LEFT JOIN pos_stock_movements m ON m.variant_id = v.id AND m.created_at <= d.applied_at
-       WHERE v.store_id = $1 AND v.is_active AND p.is_active
-       GROUP BY 1`,
-      [from, src]
+    const [from, to] = [await storeId(probe, src), await storeId(probe, dst)];
+    const asMap = (rows: { k: string; qty: number }[]) => Object.fromEntries(rows.map((r) => [r.k, r.qty]));
+    // Nothing has been sold here yet, so the source's shelf is still the one its migration left.
+    const source = await probe.query(
+      `SELECT p.name || '|' || v.label AS k, s.quantity AS qty
+       FROM pos_stock s JOIN pos_variants v ON v.id = s.variant_id JOIN pos_products p ON p.id = v.product_id
+       WHERE s.store_id = $1 AND v.is_active AND p.is_active`,
+      [from]
     );
-    const copied = await pool.query(
+    const copied = await probe.query(
       `SELECT p.name || '|' || v.label AS k, s.quantity AS qty
        FROM pos_stock s JOIN pos_variants v ON v.id = s.variant_id JOIN pos_products p ON p.id = v.product_id
        WHERE s.store_id = $1`,
       [to]
     );
-    const asMap = (rows: { k: string; qty: number }[]) => Object.fromEntries(rows.map((r) => [r.k, r.qty]));
-    expect(asMap(copied.rows)).toEqual(asMap(seeded.rows));
+    expect(Object.keys(asMap(copied.rows)).length).toBeGreaterThan(10);
+    expect(asMap(copied.rows)).toEqual(asMap(source.rows));
 
     // The opening balance is a movement, so the stock report adds up.
-    const unbalanced = await pool.query(
+    const unbalanced = await probe.query(
       `SELECT s.variant_id FROM pos_stock s
        LEFT JOIN pos_stock_movements m ON m.variant_id = s.variant_id
        WHERE s.store_id = $1 GROUP BY s.variant_id, s.quantity
@@ -157,7 +175,7 @@ describe.skipIf(!hasDb)('cash demo stores (migration 069)', () => {
   });
 
   it('gives the guest menus their own addresses and copies nobody’s secrets', async () => {
-    const rows = await pool.query(
+    const rows = await probe.query(
       `SELECT slug, public_menu_enabled, public_menu_token, public_menu_secret, gtin_api_key, live_tiktok_username
        FROM pos_stores WHERE slug LIKE 'cash-demo-%' ORDER BY slug`
     );
@@ -171,32 +189,73 @@ describe.skipIf(!hasDb)('cash demo stores (migration 069)', () => {
       expect(row.gtin_api_key).toBeNull();
       expect(row.live_tiktok_username).toBeNull();
     }
-    const keys = await pool.query(
+    const keys = await probe.query(
       `SELECT count(*)::int AS n FROM pos_tables t JOIN pos_stores s ON s.id = t.store_id
        WHERE s.slug LIKE 'cash-demo-%' AND t.qr_key IS NOT NULL`
     );
     expect(keys.rows[0].n).toBe(0);
   });
 
-  it('is one-time: a later boot changes nothing, and a deleted store stays deleted', async () => {
-    const id = await storeId('cash-demo-clothing');
-    await pool.query(`UPDATE pos_variants SET price_cents = price_cents + 100 WHERE store_id = $1`, [id]);
-    const before = await catalogue(id);
+  it('copies the demo as its migration built it, not what a visitor added since', async () => {
+    const from = await storeId(probe, 'demo-clothing');
+    // A public demo with a known password: someone adds a card and sells a jacket.
+    const junk = await probe.query(
+      `INSERT INTO pos_products (store_id, name, created_at) VALUES ($1, 'asdf', NOW() + interval '1 minute')
+       RETURNING id`,
+      [from]
+    );
+    const sold = await probe.query(
+      `SELECT v.id, s.quantity FROM pos_stock s JOIN pos_variants v ON v.id = s.variant_id
+       WHERE s.store_id = $1 AND s.quantity > 1 ORDER BY v.id LIMIT 1`,
+      [from]
+    );
+    const { id: variant, quantity } = sold.rows[0];
+    await probe.query(
+      `INSERT INTO pos_stock_movements (store_id, variant_id, delta, reason, created_at)
+       VALUES ($1, $2, -1, 'sale', NOW() + interval '1 minute')`,
+      [from, variant]
+    );
+    await probe.query(`UPDATE pos_stock SET quantity = quantity - 1 WHERE variant_id = $1`, [variant]);
 
-    await pool.query(readMigration(MIGRATION));
-    expect(await storeId('cash-demo-clothing')).toBe(id);
-    expect(await catalogue(id)).toEqual(before);
+    await probe.query(`DELETE FROM pos_stores WHERE slug = 'cash-demo-clothing'`);
+    await probe.query(`DELETE FROM pos_demo_seed WHERE slug = 'cash-demo-clothing'`);
+    await probe.query(readMigration(MIGRATION));
 
-    await dropTestStore(id);
-    await pool.query(readMigration(MIGRATION));
-    const gone = await pool.query(`SELECT 1 FROM pos_stores WHERE slug = 'cash-demo-clothing'`);
+    const to = await storeId(probe, 'cash-demo-clothing');
+    const names = await probe.query(`SELECT name FROM pos_products WHERE store_id = $1`, [to]);
+    expect(names.rows.map((r) => r.name)).not.toContain('asdf');
+    const shelf = await probe.query(
+      `SELECT s.quantity FROM pos_stock s
+       JOIN pos_variants v ON v.id = s.variant_id
+       JOIN pos_variants o ON o.id = $2 AND o.label = v.label AND o.sku IS NOT DISTINCT FROM v.sku
+       WHERE s.store_id = $1`,
+      [to, variant]
+    );
+    expect(shelf.rows).toEqual([{ quantity }]);
+
+    await probe.query(`DELETE FROM pos_products WHERE id = $1`, [junk.rows[0].id]);
+  });
+
+  it('is one-time: the next boot changes nothing, and a deleted store stays deleted', async () => {
+    const id = await storeId(probe, 'cash-demo-flowers');
+    await probe.query(`UPDATE pos_variants SET price_cents = price_cents + 100 WHERE store_id = $1`, [id]);
+    const before = await catalogue(probe, id);
+
+    await applyAllMigrations(probe);
+    expect(await storeId(probe, 'cash-demo-flowers')).toBe(id);
+    expect(await catalogue(probe, id)).toEqual(before);
+
+    await probe.query(`DELETE FROM pos_product_components WHERE store_id = $1`, [id]);
+    await probe.query(`DELETE FROM pos_stores WHERE id = $1`, [id]);
+    await probe.query(readMigration(MIGRATION));
+    const gone = await probe.query(`SELECT 1 FROM pos_stores WHERE slug = 'cash-demo-flowers'`);
     expect(gone.rows).toEqual([]);
 
-    // Only removing the stamp too asks for it again — and puts the store back as other tests expect it.
-    await pool.query(`DELETE FROM pos_demo_seed WHERE slug = 'cash-demo-clothing'`);
-    await pool.query(readMigration(MIGRATION));
-    const rebuilt = await storeId('cash-demo-clothing');
+    // Only removing the stamp too asks for it again.
+    await probe.query(`DELETE FROM pos_demo_seed WHERE slug = 'cash-demo-flowers'`);
+    await probe.query(readMigration(MIGRATION));
+    const rebuilt = await storeId(probe, 'cash-demo-flowers');
     expect(rebuilt).not.toBe(id);
-    expect(await catalogue(rebuilt)).toEqual(await catalogue(await storeId('demo-clothing')));
-  });
+    expect(await catalogue(probe, rebuilt)).toEqual(await catalogue(probe, await storeId(probe, 'demo-flowers')));
+  }, 120000);
 });
