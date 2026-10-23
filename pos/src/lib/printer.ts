@@ -113,6 +113,13 @@ export interface ReceiptData {
   vat_lines?: ReceiptVatLine[];
   /** Рядок 25: cash handed back. Null when nothing was. */
   change_cents?: number | null;
+  /**
+   * Рядок 23 «Заокруглення» (Положення № 13 розд. II п. 9; НБУ № 25), signed:
+   * what was paid — or handed back — is `total_cents + rounding_cents`. Null
+   * or 0 when nothing was rounded, and an older Rust build that does not know
+   * the field prints the receipt exactly as before.
+   */
+  rounding_cents?: number | null;
 }
 
 export function listPrinters(): Promise<PrinterInfo[]> {

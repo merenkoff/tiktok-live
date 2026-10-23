@@ -14,8 +14,14 @@ import {
   X,
   type Glyph,
 } from '../platform/glyphs';
-import { formatUah, formatUahCompact, uahInputToCents } from '../lib/money';
+import { formatSignedUah, formatUah, formatUahCompact, uahInputToCents } from '../lib/money';
 import { centsToPadText, padInput, quickCashAmounts, type PadKey } from '../lib/cash';
+import {
+  cashRoundingDelta,
+  saleRoundingCents,
+  storeCashRounding,
+  type CashRoundingStep,
+} from '../lib/cashRounding';
 import { positionsText } from '../lib/plural';
 import { useDragScroll } from '../hooks/useDragScroll';
 import { api, useAuthStore } from '@pos/platform';
@@ -38,7 +44,12 @@ interface Props {
    */
   error?: { message: string; supportCode?: string | null; action?: ReactNode } | null;
   onClose: () => void;
-  onConfirm: (payments: SalePaymentInput[]) => void;
+  /**
+   * `cashRounding` is the step the screen rounded the cash part by (НБУ № 25;
+   * TechDocs/POS_CASH_ROUNDING.md) — the caller sends it with the sale so the
+   * server files the sum the customer was shown.
+   */
+  onConfirm: (payments: SalePaymentInput[], opts: { cashRounding: CashRoundingStep }) => void;
 }
 
 type Step = 'methods' | 'cash' | 'card' | 'mixed' | 'qr';
@@ -61,10 +72,14 @@ export function CheckoutModal({
   onClose,
   onConfirm,
 }: Props) {
+  // Cash is rounded when the shop has no small coins (the owner's setting); card
+  // and QR never are. Everything cash-side below works off `cashDue`.
+  const roundingStep = storeCashRounding(useAuthStore((s) => s.auth?.store.cash_rounding));
+  const cashDue = totalCents + cashRoundingDelta(totalCents, roundingStep);
   // A wide till opens straight on cash, the common case, with the list beside
   // it; a phone-width screen shows the list first and one method at a time.
   const [step, setStep] = useState<Step>(() => (isWide() ? 'cash' : 'methods'));
-  const [cash, setCash] = useState(() => centsToPadText(totalCents));
+  const [cash, setCash] = useState(() => centsToPadText(cashDue));
   // The amount on screen was put there by the till, not typed: the first key replaces it.
   const [fresh, setFresh] = useState(true);
   const [card, setCard] = useState('0');
@@ -135,36 +150,47 @@ export function CheckoutModal({
 
   const cashCents = uahInputToCents(cash);
   const cardCents = uahInputToCents(card);
+  const mixedPayments = useMemo(() => {
+    const payments: SalePaymentInput[] = [];
+    if (cashCents > 0) payments.push({ method: 'cash', amount_cents: cashCents });
+    if (cardCents > 0) payments.push({ method: 'card', amount_cents: cardCents });
+    return payments;
+  }, [cashCents, cardCents]);
+  // Mixed: the card is what the terminal took, only the rest is rounded — the
+  // very function the server checks the payment with.
+  const mixedRounding = saleRoundingCents(totalCents, mixedPayments, roundingStep);
+  const mixedDue = totalCents + mixedRounding;
   const change = useMemo(() => {
-    if (step === 'cash') return Math.max(0, cashCents - totalCents);
-    if (step === 'mixed') return Math.max(0, cashCents + cardCents - totalCents);
+    if (step === 'cash') return Math.max(0, cashCents - cashDue);
+    if (step === 'mixed') return Math.max(0, cashCents + cardCents - mixedDue);
     return 0;
-  }, [step, cashCents, cardCents, totalCents]);
-  const quick = useMemo(() => quickCashAmounts(totalCents), [totalCents]);
+  }, [step, cashCents, cardCents, cashDue, mixedDue]);
+  const quick = useMemo(() => quickCashAmounts(cashDue), [cashDue]);
+
+  function confirm(payments: SalePaymentInput[]) {
+    onConfirm(payments, { cashRounding: roundingStep });
+  }
 
   function payCard() {
-    onConfirm([{ method: 'card', amount_cents: totalCents }]);
+    confirm([{ method: 'card', amount_cents: totalCents }]);
   }
 
   function payQr() {
-    onConfirm([
+    confirm([
       { method: 'qr', amount_cents: totalCents, provider_ref: dynamicInvoice?.invoiceId ?? null },
     ]);
   }
 
   function submitCash(e: FormEvent) {
     e.preventDefault();
-    if (cashCents < totalCents) return;
-    onConfirm([{ method: 'cash', amount_cents: cashCents }]);
+    if (cashCents < cashDue) return;
+    confirm([{ method: 'cash', amount_cents: cashCents }]);
   }
 
   function submitMixed(e: FormEvent) {
     e.preventDefault();
-    if (cashCents + cardCents < totalCents) return;
-    const payments: SalePaymentInput[] = [];
-    if (cashCents > 0) payments.push({ method: 'cash', amount_cents: cashCents });
-    if (cardCents > 0) payments.push({ method: 'card', amount_cents: cardCents });
-    onConfirm(payments);
+    if (cashCents + cardCents < mixedDue) return;
+    confirm(mixedPayments);
   }
 
   function press(key: PadKey) {
@@ -196,7 +222,7 @@ export function CheckoutModal({
         ? 'Немає інтернету — статичний код, назвіть суму'
         : null;
 
-  const short = Math.max(0, totalCents - cashCents);
+  const short = Math.max(0, cashDue - cashCents);
   const current = methods.find((m) => m.step === step) ?? null;
 
   return (
@@ -300,6 +326,14 @@ export function CheckoutModal({
 
             {step === 'cash' && (
               <form onSubmit={submitCash} className="flex-1 min-h-0 flex flex-col gap-4">
+                {cashDue !== totalCents && (
+                  // НБУ № 25: the receipt shows both sums, so the screen does too.
+                  <p className="text-[15px] text-sq-secondary tabular-nums" data-testid="checkout-cash-due">
+                    Готівкою до сплати{' '}
+                    <span className="font-semibold text-sq-heading">{formatUah(cashDue)}</span>
+                    <span className="text-sq-muted"> · заокруглення {formatSignedUah(cashDue - totalCents)}</span>
+                  </p>
+                )}
                 <div className="grid grid-cols-2 gap-3.5">
                   <label className="rounded-[14px] ring-2 ring-sq-blue px-4 py-3 flex flex-col cursor-text">
                     <span className="text-[13px] text-sq-secondary">Отримано</span>
@@ -364,7 +398,7 @@ export function CheckoutModal({
 
                 <button
                   type="submit"
-                  disabled={loading || cashCents < totalCents}
+                  disabled={loading || cashCents < cashDue}
                   className="pos-btn-primary w-full min-h-[60px] rounded-xl text-lg"
                   data-testid="checkout-cash-submit"
                 >
@@ -372,7 +406,7 @@ export function CheckoutModal({
                     ? 'Обробка…'
                     : change > 0
                       ? `Прийняти ${formatUah(cashCents)} · решта ${formatUah(change)}`
-                      : `Прийняти ${formatUah(Math.max(cashCents, totalCents))}`}
+                      : `Прийняти ${formatUah(Math.max(cashCents, cashDue))}`}
                 </button>
               </form>
             )}
@@ -437,16 +471,21 @@ export function CheckoutModal({
                 </div>
                 <p className="text-[15px] text-sq-secondary tabular-nums">
                   Разом {formatUah(cashCents + cardCents)}
-                  {cashCents + cardCents < totalCents
-                    ? ` · не вистачає ${formatUah(totalCents - cashCents - cardCents)}`
+                  {cashCents + cardCents < mixedDue
+                    ? ` · не вистачає ${formatUah(mixedDue - cashCents - cardCents)}`
                     : change > 0
                       ? ` · решта ${formatUah(change)}`
                       : ''}
                 </p>
+                {mixedRounding !== 0 && (
+                  <p className="text-[13px] text-sq-muted tabular-nums" data-testid="checkout-mixed-rounding">
+                    Готівкову частину заокруглено на {formatSignedUah(mixedRounding)} — до сплати {formatUah(mixedDue)}
+                  </p>
+                )}
                 <div className="flex-1" />
                 <button
                   type="submit"
-                  disabled={loading || cashCents + cardCents < totalCents}
+                  disabled={loading || cashCents + cardCents < mixedDue}
                   className="pos-btn-primary w-full min-h-[60px] rounded-xl text-lg"
                 >
                   {loading ? 'Обробка…' : change > 0 ? `Прийняти · решта ${formatUah(change)}` : 'Прийняти'}

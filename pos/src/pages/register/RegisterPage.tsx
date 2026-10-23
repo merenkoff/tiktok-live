@@ -5,7 +5,8 @@
 import { ReactNode, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, DownloadLine, Printer, Repeat, ShieldCheck } from '../../platform/glyphs';
 import { api, cashierApi, useAuthStore, useCartStore, useOfflineStatus, usePosShell } from '@pos/platform';
-import { formatUah } from '../../lib/money';
+import { formatSignedUah, formatUah } from '../../lib/money';
+import type { CashRoundingStep } from '../../lib/cashRounding';
 import { exchangeOutcome } from '../../lib/exchange';
 import { localOrderLabel } from '../../lib/localOrderNo';
 import {
@@ -416,7 +417,11 @@ export function RegisterPage() {
     }
   }
 
-  async function pay(payments: SalePaymentInput[], opts: { clientUuid?: string } = {}) {
+  async function pay(
+    payments: SalePaymentInput[],
+    opts: { clientUuid?: string; cashRounding?: CashRoundingStep } = {}
+  ) {
+    const cashRounding = opts.cashRounding ?? 0;
     setPaying(true);
     setCheckoutError(null);
     try {
@@ -448,8 +453,11 @@ export function RegisterPage() {
           customer_id: customer?.id ?? null,
           parked_cart_id: fromParkedId,
           preorder_id: preorderId,
+          // The step the payment screen rounded the cash part by; the server
+          // computes the sum itself and files what the customer was shown.
+          ...(cashRounding ? { cash_rounding: cashRounding } : {}),
         },
-        opts
+        { clientUuid: opts.clientUuid }
       );
       clear();
       setFromParkedId(null);
@@ -460,7 +468,7 @@ export function RegisterPage() {
       setPrintStatus(null);
       setStockEpoch((n) => n + 1);
     } catch (error) {
-      await handleCheckoutFailure(classifyCheckoutError(error), payments);
+      await handleCheckoutFailure(classifyCheckoutError(error), payments, cashRounding);
     } finally {
       setPaying(false);
     }
@@ -472,7 +480,7 @@ export function RegisterPage() {
    * receipt named is kept unless the cashier picked another — the key is
    * omitted, and the server defaults to the original receipt's.
    */
-  async function payExchange(payments: SalePaymentInput[]) {
+  async function payExchange(payments: SalePaymentInput[], cashRounding: CashRoundingStep = 0) {
     if (!exchange) return;
     setPaying(true);
     setCheckoutError(null);
@@ -487,6 +495,8 @@ export function RegisterPage() {
           ...(customer ? { customer_id: customer.id } : {}),
           client_uuid: saleUuid,
         },
+        // Both halves round their own cash by this step (НБУ № 25).
+        ...(cashRounding ? { cash_rounding: cashRounding } : {}),
       });
       exchangeSaleUuidRef.current = null;
       clear();
@@ -499,7 +509,7 @@ export function RegisterPage() {
       setPrintStatus(null);
       setStockEpoch((n) => n + 1);
     } catch (error) {
-      await handleExchangeFailure(classifyCheckoutError(error), payments);
+      await handleExchangeFailure(classifyCheckoutError(error), payments, cashRounding);
     } finally {
       setPaying(false);
     }
@@ -515,7 +525,8 @@ export function RegisterPage() {
    */
   async function handleExchangeFailure(
     failure: CheckoutFailure,
-    payments: SalePaymentInput[]
+    payments: SalePaymentInput[],
+    cashRounding: CashRoundingStep
   ): Promise<void> {
     const draft = exchange;
     if (failure.kind === 'fiscal_failed_kept') {
@@ -563,7 +574,7 @@ export function RegisterPage() {
     }
 
     if (keepsModalOpen(failure)) {
-      showCheckoutRefusal(failure, () => void payExchange(payments));
+      showCheckoutRefusal(failure, () => void payExchange(payments, cashRounding));
       return;
     }
 
@@ -616,7 +627,8 @@ export function RegisterPage() {
    */
   async function handleCheckoutFailure(
     failure: CheckoutFailure,
-    payments: SalePaymentInput[]
+    payments: SalePaymentInput[],
+    cashRounding: CashRoundingStep
   ): Promise<void> {
     if (failure.kind === 'fiscal_failed_kept') {
       // The sale stands, un-fiscalised. The body carries only the id, so pull
@@ -638,7 +650,10 @@ export function RegisterPage() {
 
     if (keepsModalOpen(failure)) {
       showCheckoutRefusal(failure, () =>
-        void pay(payments, failure.kind === 'unknown_state' ? { clientUuid: failure.clientUuid } : {})
+        void pay(payments, {
+          cashRounding,
+          ...(failure.kind === 'unknown_state' ? { clientUuid: failure.clientUuid } : {}),
+        })
       );
       return;
     }
@@ -825,7 +840,10 @@ export function RegisterPage() {
     const showOrderNo = vertical === 'cafe' && orderCaption != null;
 
     const paidCents = success.payments.reduce((sum, p) => sum + p.amount_cents, 0);
-    const changeCents = Math.max(0, paidCents - success.total_cents);
+    // What the customer owed: the cash part may have been rounded (НБУ № 25).
+    const roundingCents = success.rounding_cents ?? 0;
+    const dueCents = success.total_cents + roundingCents;
+    const changeCents = Math.max(0, paidCents - dueCents);
     const payLine = [payText, changeCents > 0 ? `решта ${formatUah(changeCents)}` : '']
       .filter(Boolean)
       .join(' · ');
@@ -878,8 +896,13 @@ export function RegisterPage() {
             </>
           )}
           <p className="mt-[18px] text-[34px] font-bold text-sq-heading tabular-nums leading-tight">
-            {formatUah(success.total_cents)}
+            {formatUah(dueCents)}
           </p>
+          {roundingCents !== 0 && (
+            <p className="text-[13px] text-sq-muted tabular-nums" data-testid="sale-success-rounding">
+              {formatUah(success.total_cents)} · заокруглення {formatSignedUah(roundingCents)}
+            </p>
+          )}
           {payLine && <p className="text-[15px] text-sq-secondary mt-0.5 tabular-nums">{payLine}</p>}
 
           {fiscalDoc?.fiscal_code && !fiscalNotice && (
@@ -1161,7 +1184,7 @@ export function RegisterPage() {
             setCheckoutError(null);
             setCheckoutOpen(false);
           }}
-          onConfirm={(payments) => void payExchange(payments)}
+          onConfirm={(payments, opts) => void payExchange(payments, opts.cashRounding)}
         />
       )}
       {checkoutOpen && !exchange && (
@@ -1175,7 +1198,7 @@ export function RegisterPage() {
             setCheckoutError(null);
             setCheckoutOpen(false);
           }}
-          onConfirm={(payments) => void pay(payments)}
+          onConfirm={(payments, opts) => void pay(payments, { cashRounding: opts.cashRounding })}
         />
       )}
 

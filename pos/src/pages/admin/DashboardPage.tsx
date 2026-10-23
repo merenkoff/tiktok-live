@@ -5,7 +5,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, assetUrl, useAuthStore } from '@pos/platform';
-import { formatUah } from '../../lib/money';
+import { formatSignedUah, formatUah } from '../../lib/money';
 import { toCsv, downloadCsv } from '../../lib/csv';
 import { SlotBoundary } from '../../modules/SlotBoundary';
 import { reportModuleEvent } from '../../modules/telemetry';
@@ -51,6 +51,12 @@ function buildSummaryCsv(data: SalesSummary): string {
     ['Чистий дохід', money(data.net_cents)],
     ['Повернення', money(data.refunded_cents)],
     ['Середній чек', money(data.avg_check_cents)],
+    // НБУ № 25: why the payments come to `gross + rounding` (absent from an
+    // older server, and left out of a store that never rounds).
+    ...(data.rounding_cents ? [['Заокруглення готівки в продажах', money(data.rounding_cents)]] : []),
+    ...(data.refund_rounding_cents
+      ? [['Заокруглення готівкових повернень', money(data.refund_rounding_cents)]]
+      : []),
     [],
     ['Оплата', 'Сума', '% від суми оплат'],
     ...data.payments.map((p) => [
@@ -161,6 +167,11 @@ export function DashboardPage() {
       pct: totalPayCents > 0 ? (p.amount_cents / totalPayCents) * 100 : 0,
       color: PAYMENT_BAR_COLORS[i % PAYMENT_BAR_COLORS.length],
     }));
+  // Cash rounding (TechDocs/POS_CASH_ROUNDING.md): the sales' share is exactly
+  // what the payments below differ from the takings by; a refund's is what the
+  // cash handed back differs from «Повернення». Both absent from an older server.
+  const saleRounding = data.rounding_cents ?? 0;
+  const refundRounding = data.refund_rounding_cents ?? 0;
   const maxDaily = Math.max(...data.daily.map((d) => d.net_cents), 1);
   const invalidRange = from > to;
   const title = PRESETS.find((p) => p.id === preset)?.title ?? 'Сьогодні';
@@ -359,6 +370,17 @@ export function DashboardPage() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+        {(saleRounding !== 0 || refundRounding !== 0) && (
+          <div className="pt-3 space-y-0.5 text-[13px] text-sq-muted tabular-nums" data-testid="dashboard-rounding">
+            {saleRounding !== 0 && (
+              <p>
+                Заокруглення готівки в продажах: {formatSignedUah(saleRounding)} — на стільки оплати разом
+                відрізняються від виторгу.
+              </p>
+            )}
+            {refundRounding !== 0 && <p>Заокруглення готівкових повернень: {formatSignedUah(refundRounding)}.</p>}
           </div>
         )}
       </section>

@@ -470,7 +470,7 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
       return finishFailedSale(reply, auth.storeId, auth.staffId, fresh, error, {
         refund_id: refundRow.id,
         refund: { ...original, refund_id: refundRow.id, refund_fiscal: refundFiscal },
-        difference_cents: fresh.total_cents - refundRow.total_cents,
+        difference_cents: settledDifference(fresh, refundRow),
       });
     }
   });
@@ -656,8 +656,22 @@ async function exchangeView(
     },
     sale: fiscal.sale ? { ...fresh, fiscal: fiscal.sale } : fresh,
     // > 0: the customer pays the difference; < 0: the shop returns it; 0: even.
-    difference_cents: fresh.total_cents - (refundRow?.total_cents ?? 0),
+    difference_cents: settledDifference(fresh, refundRow),
   };
+}
+
+/**
+ * What actually crosses the counter in an exchange: the new receipt's sum
+ * after cash rounding minus the cash or card handed back after its own — each
+ * half is its own document and rounds itself (TechDocs/POS_CASH_ROUNDING.md, Д9).
+ */
+function settledDifference(
+  fresh: { total_cents: number; rounding_cents?: number },
+  refund: { total_cents: number; rounding_cents?: number } | null
+): number {
+  const paid = fresh.total_cents + (fresh.rounding_cents ?? 0);
+  const returned = refund ? refund.total_cents + (refund.rounding_cents ?? 0) : 0;
+  return paid - returned;
 }
 
 /**

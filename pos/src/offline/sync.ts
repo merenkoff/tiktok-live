@@ -103,6 +103,9 @@ async function syncSale(row: OutboxRow): Promise<void> {
     // it for a stop-list it could not have known about (К3a/К3b). Only this
     // path may say so — the flag relaxes the menu rule, never the money.
     offline_replay: true,
+    // As printed: the receipt in the customer's hand was rounded by this
+    // step, whatever the owner's setting has become since.
+    ...(payload.cash_rounding ? { cash_rounding: payload.cash_rounding } : {}),
   });
   // Record client_uuid -> server id so the receipts screen can address this
   // sale on the server once it exists there.

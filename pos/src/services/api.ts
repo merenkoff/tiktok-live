@@ -492,6 +492,8 @@ class PosApi {
     parked_cart_id?: number | null;
     /** The pre-order being handed over. Its lines and prices come from the server. */
     preorder_id?: number | null;
+    /** Cash-rounding step (0, 10, 50 kopecks) the till showed; the server computes the sum. */
+    cash_rounding?: number;
   }): Promise<SaleDetail> {
     const { data } = await this.client.post<SaleDetail>('/sales/complete', payload);
     return data;
@@ -595,6 +597,9 @@ class PosApi {
       reason_code: opts.reason_code ?? null,
       buyer_name: opts.buyer_name ?? null,
       buyer_document: opts.buyer_document ?? null,
+      // НБУ № 25: a cash refund hands back the rounded sum; the server
+      // computes it from this step and ignores it for card and QR.
+      ...(opts.cash_rounding ? { cash_rounding: opts.cash_rounding } : {}),
     });
     return data;
   }

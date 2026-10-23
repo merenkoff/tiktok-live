@@ -10,6 +10,7 @@ import { FiscalBadge, FiscalDetailCard } from '../components/FiscalBadge';
 import { Chip, ExchangeChip, SaleStatusChip } from '../components/SaleChips';
 import { RefundSaleDialog } from '../components/RefundSaleDialog';
 import { RefundRows } from '../components/RefundRows';
+import { SaleRoundingLine } from '../components/SaleRounding';
 import { useDebouncedValue } from '../lib/receiptFilters';
 import { PAYMENT_LABEL_UK } from '../lib/refundReasons';
 import { buildActPayload } from '../lib/actPayload';
@@ -241,6 +242,7 @@ export function AdminSalesPage() {
                 <span className="text-lg font-bold text-sq-heading">Разом</span>
                 <span className="text-[26px] font-bold text-sq-heading tabular-nums">{formatUah(selected.total_cents)}</span>
               </div>
+              <SaleRoundingLine totalCents={selected.total_cents} roundingCents={selected.rounding_cents} />
 
               {selected.payments.length > 0 && (
                 <ul className="space-y-1.5 text-[15px]">

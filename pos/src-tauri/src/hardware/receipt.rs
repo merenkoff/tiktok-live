@@ -132,6 +132,11 @@ pub struct ReceiptData {
     /// Рядок 25: cash handed back. Absent when nothing was.
     #[serde(default)]
     pub change_cents: Option<i64>,
+    /// Рядок 23 «Заокруглення» (Положення № 13 розд. II п. 9; НБУ № 25),
+    /// signed: what was paid — or handed back — is `total_cents` plus this.
+    /// Absent from a host built before cash rounding: nothing changes.
+    #[serde(default)]
+    pub rounding_cents: Option<i64>,
 }
 
 // Characters per line for the two common thermal paper widths (Font A, ~12 dots
@@ -157,6 +162,11 @@ pub(crate) const RECEIPT_PAGE_CODE: PageCode = PageCode::WPC1251;
 
 pub(crate) fn money(cents: i64) -> String {
     format!("{:.2}", cents as f64 / 100.0)
+}
+
+/// Рядок 23: the rounding with its sign — НБУ № 25 rounds both ways.
+fn signed_money(cents: i64) -> String {
+    format!("{}{}", if cents < 0 { '-' } else { '+' }, money(cents.abs()))
 }
 
 pub(crate) fn divider(width: usize) -> String {
@@ -297,15 +307,33 @@ fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> 
         .writeln(&two_col(width, "СУМА", &money(receipt.subtotal_cents)))
         .map_err(|e| e.to_string())?;
 
-    if let Some(discount) = receipt.discount_cents.filter(|d| *d != 0) {
+    let discount = receipt.discount_cents.filter(|d| *d != 0);
+    if let Some(discount) = discount {
         printer
             .writeln(&two_col(width, "Знижка", &format!("-{}", money(discount))))
+            .map_err(|e| e.to_string())?;
+    }
+
+    // НБУ № 25 п. 5 wants the sum before rounding on the paper too. «СУМА»
+    // here is before the discount, so with both a discount and a rounding the
+    // sum between them is printed as «УСЬОГО» (рядок 20's other word).
+    let rounding = receipt.rounding_cents.filter(|r| *r != 0);
+    if rounding.is_some() && discount.is_some() {
+        printer
+            .writeln(&two_col(width, "УСЬОГО", &money(receipt.total_cents)))
             .map_err(|e| e.to_string())?;
     }
 
     for line in &receipt.vat_lines {
         printer
             .writeln(&two_col(width, &vat_label(line), &money(line.amount_cents)))
+            .map_err(|e| e.to_string())?;
+    }
+
+    // Рядок 23, «після рядка 21» (Положення № 13 розд. II п. 9).
+    if let Some(rounding) = rounding {
+        printer
+            .writeln(&two_col(width, "ЗАОКРУГЛЕННЯ", &signed_money(rounding)))
             .map_err(|e| e.to_string())?;
     }
 
@@ -316,7 +344,11 @@ fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> 
         "ДО СПЛАТИ"
     };
     printer
-        .writeln(&two_col(width, total_label, &money(receipt.total_cents)))
+        .writeln(&two_col(
+            width,
+            total_label,
+            &money(receipt.total_cents + rounding.unwrap_or(0)),
+        ))
         .map_err(|e| e.to_string())?;
     printer.bold(false).map_err(|e| e.to_string())?;
     printer.writeln(&divider(width)).map_err(|e| e.to_string())?;
@@ -713,6 +745,51 @@ mod tests {
         assert!(contains(&bytes, &win1251("РЕШТА")));
         assert!(contains(&bytes, b"50.00"));
         assert!(contains(&bytes, &win1251("ДО СПЛАТИ")));
+    }
+
+    #[test]
+    fn cash_rounding_prints_the_row_and_the_rounded_sum() {
+        let mut receipt = base();
+        receipt.items[0].unit_price_cents = 22123;
+        receipt.items[0].line_total_cents = 22123;
+        receipt.subtotal_cents = 22123;
+        receipt.total_cents = 22123;
+        receipt.rounding_cents = Some(-23);
+        receipt.payments = vec![ReceiptPayment { method: "cash".into(), amount_cents: 50000 }];
+        receipt.change_cents = Some(27900);
+        let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
+        assert!(contains(&bytes, &win1251("ЗАОКРУГЛЕННЯ")));
+        // The sign goes through the printer's code page like every other «-»
+        // on the ticket, so the digits are what can be matched byte for byte.
+        assert_eq!(signed_money(-23), "-0.23");
+        assert_eq!(signed_money(20), "+0.20");
+        assert!(contains(&bytes, b"0.23"));
+        assert!(contains(&bytes, b"221.00"));
+        assert!(contains(&bytes, b"279.00"));
+        // No discount: «СУМА» already is the sum before rounding.
+        assert!(!contains(&bytes, &win1251("УСЬОГО")));
+    }
+
+    #[test]
+    fn rounding_after_a_discount_also_prints_the_sum_before_it() {
+        let mut receipt = base();
+        receipt.subtotal_cents = 23400;
+        receipt.discount_cents = Some(1277);
+        receipt.total_cents = 22123;
+        receipt.rounding_cents = Some(-23);
+        let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
+        assert!(contains(&bytes, &win1251("УСЬОГО")));
+        assert!(contains(&bytes, b"221.23"));
+        assert!(contains(&bytes, b"221.00"));
+    }
+
+    #[test]
+    fn no_rounding_row_without_a_rounding() {
+        let mut receipt = base();
+        receipt.rounding_cents = Some(0);
+        let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
+        assert!(!contains(&bytes, &win1251("ЗАОКРУГЛЕННЯ")));
+        assert!(contains(&bytes, b"100.00"));
     }
 
     #[test]

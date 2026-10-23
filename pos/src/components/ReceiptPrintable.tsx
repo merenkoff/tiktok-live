@@ -8,6 +8,11 @@ function money(cents: number) {
   return (cents / 100).toFixed(2);
 }
 
+/** Рядок 23: the rounding with its sign — it goes both ways (НБУ № 25). */
+function signedMoney(cents: number) {
+  return `${cents < 0 ? '-' : '+'}${money(Math.abs(cents))}`;
+}
+
 /** Рядок 18 of Положення № 13: «ГОТІВКА» / «БЕЗГОТІВКОВА» / «ІНШЕ», detail in brackets. */
 function paymentLabel(method: string) {
   if (method === 'cash') return 'ГОТІВКА';
@@ -45,6 +50,7 @@ export function ReceiptPrintable({ receipt }: { receipt: ReceiptData | null }) {
     : [];
   const fiscal = receipt.fiscal;
   const offline = Boolean(fiscal && (fiscal.offline || fiscal.mode === 'offline'));
+  const rounding = receipt.rounding_cents ?? 0;
 
   return (
     <div className="receipt-print-area">
@@ -102,15 +108,31 @@ export function ReceiptPrintable({ receipt }: { receipt: ReceiptData | null }) {
           <span>-{money(receipt.discount_cents)}</span>
         </div>
       ) : null}
+      {/* НБУ № 25 п. 5 wants the sum before rounding on the paper as well. Our
+          «СУМА» is before the discount, so with both a discount and a rounding
+          the sum between them is printed as «УСЬОГО» (рядок 20's other word). */}
+      {rounding && receipt.discount_cents ? (
+        <div className="receipt-print-row">
+          <span>УСЬОГО</span>
+          <span>{money(receipt.total_cents)}</span>
+        </div>
+      ) : null}
       {(receipt.vat_lines ?? []).map((line, i) => (
         <div key={i} className="receipt-print-row">
           <span>{vatLabel(line)}</span>
           <span>{money(line.amount_cents)}</span>
         </div>
       ))}
+      {/* Рядок 23, «після рядка 21» (Положення № 13 розд. II п. 9). */}
+      {rounding ? (
+        <div className="receipt-print-row" data-testid="receipt-rounding">
+          <span>ЗАОКРУГЛЕННЯ</span>
+          <span>{signedMoney(rounding)}</span>
+        </div>
+      ) : null}
       <div className="receipt-print-row receipt-print-total">
         <span>{receipt.kind === 'refund' ? 'ДО ПОВЕРНЕННЯ' : 'ДО СПЛАТИ'}</span>
-        <span>{money(receipt.total_cents)}</span>
+        <span>{money(receipt.total_cents + rounding)}</span>
       </div>
       <hr />
       {receipt.payments.map((p, i) => (

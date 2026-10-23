@@ -40,9 +40,9 @@ export function parseCashRoundingStep(value: unknown): CashRoundingStep {
 }
 
 /**
- * What a sum of `amountCents` is rounded BY — signed: −3 means three kopecks
- * fewer change the other way. Zero for a step of 0, a sum already on the
- * step, or nothing to round.
+ * What a sum of `amountCents` is rounded BY, signed: −23 means the customer
+ * pays 23 kopecks less, +20 that they pay 20 more. Zero for a step of 0, a
+ * sum already on the step, or nothing to round.
  */
 export function cashRoundingDelta(amountCents: number, step: CashRoundingStep): number {
   if (step === 0 || !Number.isFinite(amountCents) || amountCents <= 0) return 0;

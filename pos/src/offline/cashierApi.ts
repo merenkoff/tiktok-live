@@ -141,6 +141,12 @@ export const cashierApi = {
      * nothing to ring — the offline path drops it, as it does `parked_cart_id`.
      */
     preorder_id?: number | null;
+    /**
+     * The step the payment screen rounded the cash part by (0, 10, 50; НБУ
+     * № 25). Kept on the offline path too: a queued sale replays with it, so
+     * the server files the sum the printed receipt shows.
+     */
+    cash_rounding?: number;
   },
   /** `clientUuid` reuses an existing idempotency key — see FiscalSaleUnknownError. */
   opts: { clientUuid?: string } = {}

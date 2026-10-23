@@ -1179,6 +1179,11 @@ export interface RefundOptions {
   /** For the «Акт про видачу коштів» (refunds over 100 ₴); the buyer may decline. */
   buyer_name?: string | null;
   buyer_document?: string | null;
+  /**
+   * The cash-rounding step the dialog showed (0, 10, 50; НБУ № 25 rounds the
+   * money handed back in cash too). Ignored by the server for card and QR.
+   */
+  cash_rounding?: number;
 }
 
 /**
@@ -1220,6 +1225,8 @@ export interface ExchangeInput {
     note?: string;
     client_uuid: string;
   };
+  /** The cash-rounding step for both halves — each is its own document and rounds its own cash. */
+  cash_rounding?: number;
 }
 
 /**

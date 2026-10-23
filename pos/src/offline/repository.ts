@@ -40,6 +40,8 @@ import { orderCatalog } from '../lib/variantOrder';
 import { customBouquetLabel, priceOfComponents } from '../lib/bouquet';
 import { advanceLocalOrderNo, deviceLocalDay, type LocalOrderCounter } from '../lib/localOrderNo';
 import { lineCaption, resolveLineModifiers, shiftCompareAt } from '../lib/modifiers';
+import { saleRoundingCents, storeCashRounding } from '../lib/cashRounding';
+import { computeCartDiscountCents } from '../hooks/useCart';
 import {
   db,
   getMeta,
@@ -363,7 +365,22 @@ function localSaleDetail(
   });
   const auth = api.loadAuth();
   const short = clientUuid.replace(/-/g, '').slice(0, 8).toUpperCase();
-  const total = payload.payments.reduce((s, p) => s + p.amount_cents, 0) || subtotal;
+  // What the goods came to, by the server's own rule — not the sum of the
+  // payments, which for cash is the note handed over: a 250 ₴ sale paid with
+  // 500 ₴ used to print «СУМА 500» and no change (TechDocs/POS_CASH_ROUNDING.md, Д11).
+  const cartDiscountCents = computeCartDiscountCents(
+    items.map((item) => ({
+      compare_at_cents: item.compare_at_unit_cents,
+      unit_price_cents: item.unit_price_cents,
+      quantity: item.quantity,
+    })),
+    payload.cart_discount ?? null
+  );
+  const total = subtotal - cartDiscountCents;
+  // The cash part rounded by the step the payment screen used — the same
+  // function the server runs at sync, so the printed sum is the filed one.
+  const cashRounding = storeCashRounding(payload.cash_rounding);
+  const roundingCents = saleRoundingCents(total, payload.payments, cashRounding);
   return {
     id: -Date.now(),
     receipt_number: `OFF-${short}`,
@@ -388,7 +405,8 @@ function localSaleDetail(
             fiscalCode: payload.fiscal_offline.fiscal_code,
             fiscalDate: new Date(payload.fiscal_offline.fiscal_date),
             registerFiscalNumber,
-            totalCents: total,
+            // The tax office knows a rounded receipt by its sum after rounding.
+            totalCents: total + roundingCents,
           }),
           qr_payload: null,
           receipt_text: null,
@@ -398,6 +416,9 @@ function localSaleDetail(
       : null,
     subtotal_cents: subtotal,
     total_cents: total,
+    cart_discount_cents: cartDiscountCents,
+    cash_rounding: roundingCents !== 0 ? cashRounding : 0,
+    rounding_cents: roundingCents,
     refunded_cents: 0,
     staff_name: auth?.staff.display_name ?? '',
     customer_id: payload.customer_id && payload.customer_id > 0 ? payload.customer_id : null,
@@ -461,6 +482,8 @@ export async function completeSale(payload: {
   note?: string;
   cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
   customer_id?: number | null;
+  /** Cash-rounding step the payment screen used (0, 10, 50; НБУ № 25). */
+  cash_rounding?: number;
 }, opts: { clientUuid?: string } = {}): Promise<SaleDetail> {
   // Reusing a uuid is how the "server did not answer" probe stays idempotent:
   // the server's own pre-check resolves it to the existing sale, a 409, or a
@@ -483,6 +506,7 @@ export async function completeSale(payload: {
     cart_discount: payload.cart_discount ?? null,
     customer_id: payload.customer_id && payload.customer_id > 0 ? payload.customer_id : null,
     customer_client_uuid: customer?.client_uuid ?? null,
+    ...(payload.cash_rounding ? { cash_rounding: payload.cash_rounding } : {}),
   };
 
   if (navigator.onLine && api.hasLiveJwt()) {

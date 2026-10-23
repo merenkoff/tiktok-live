@@ -259,6 +259,32 @@ describe.skipIf(!hasDb)('cash rounding', () => {
       expect(res.json().refunds[0]).toMatchObject({ total_cents: 22_123, rounding_cents: -23 });
     });
 
+    it('answers an exchange with the difference that crosses the counter', async () => {
+      const sale = await sell(down, [{ method: 'cash', amount_cents: 22_100 }], 50);
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/pos/sales/${sale!.id}/exchange`,
+        headers: auth(store.sellerToken),
+        payload: {
+          refund: {
+            items: [{ sale_item_id: sale!.items[0].id, quantity: 1 }],
+            method: 'cash',
+            reason_code: 'size',
+            client_uuid: crypto.randomUUID(),
+          },
+          sale: {
+            items: [{ variant_id: up, quantity: 1 }],
+            payments: [{ method: 'cash', amount_cents: 22_150 }],
+            client_uuid: crypto.randomUUID(),
+          },
+          cash_rounding: 50,
+        },
+      });
+      expect(res.statusCode).toBe(201);
+      // 221,30 + 0,20 taken, 221,23 − 0,23 handed back: 0,50 ₴, not the goods' 0,07 ₴.
+      expect(res.json().difference_cents).toBe(50);
+    });
+
     it("lets the owner set the step and refuses one the law does not know", async () => {
       const bad = await app.inject({
         method: 'PATCH',
