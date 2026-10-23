@@ -11,11 +11,11 @@ import { SectionHeading } from '../components/SectionHeading';
 import { StickyCta } from '../components/StickyCta';
 import { VerticalCards, VERTICAL_GLYPH } from '../components/VerticalCards';
 import { PricingCard } from '../components/PricingSection';
-import { Roadmap } from '../components/Roadmap';
+import { Readiness, Roadmap } from '../components/Roadmap';
 import { useScrollToHash } from '../hooks/useScrollToHash';
 import { PRICING, roadmapFor } from '../lib/productFacts';
-import type { VerticalPageData } from '../content/verticals';
-import { BarChart3, ChevronRight, MessageCircle, Package, QrCode, ShieldCheck, Users, WifiOff } from '../components/glyphs';
+import type { VerticalPageData, VerticalRow } from '../content/verticals';
+import { BarChart3, Check, ChevronRight, MessageCircle, Package, QrCode, ShieldCheck, Users, WifiOff } from '../components/glyphs';
 
 /** The core every vertical shares; short on purpose — /pos tells the long version. */
 const CORE = [
@@ -27,11 +27,63 @@ const CORE = [
   { icon: BarChart3, t: 'Аналітика', d: 'Продажі по днях, середній чек, топ товарів — у кабінеті.', href: '/pos' },
 ];
 
+/**
+ * A row of a «Скоро» landing that is a promise: no ✓ (a tick says it works),
+ * hollow bullets, its readiness from ROADMAP. The first one is the vertical's
+ * headline feature and gets the full width.
+ */
+function PromiseCard({ row, progress, wide }: { row: VerticalRow; progress: number; wide: boolean }) {
+  return (
+    <Reveal className={wide ? 'lg:col-span-2' : ''}>
+      <article className={`card h-full p-6 sm:p-8 ${wide ? 'lg:grid lg:grid-cols-2 lg:gap-12' : 'flex flex-col'}`}>
+        <div>
+          <div className="flex items-center gap-2.5">
+            <p className="eyebrow text-pos">{row.eyebrow}</p>
+            <span className="text-xs font-semibold text-muted bg-side rounded-full px-2.5 py-1">Скоро</span>
+          </div>
+          <h3 className={`${wide ? 'text-2xl sm:text-3xl' : 'text-2xl'} font-bold tracking-[-0.015em] text-ink-strong mt-2`}>
+            {row.title}
+          </h3>
+          <p className="text-body mt-4 leading-relaxed">{row.body}</p>
+        </div>
+        <div className={`mt-6 ${wide ? 'lg:mt-0' : 'flex-1 flex flex-col'}`}>
+          {row.bullets && (
+            <ul className={`space-y-2.5 ${wide ? '' : 'flex-1'}`}>
+              {row.bullets.map((b) => (
+                <li key={b} className="flex items-start gap-2.5 text-[15px] text-body leading-snug">
+                  <span aria-hidden className="mt-[5px] w-2.5 h-2.5 rounded-full border-2 border-pos shrink-0" />
+                  {b}
+                </li>
+              ))}
+            </ul>
+          )}
+          <Readiness title={row.title} progress={progress} className="mt-6 max-w-sm" />
+        </div>
+      </article>
+    </Reveal>
+  );
+}
+
 export function VerticalPage({ page }: { page: VerticalPageData }) {
   const { fact, content } = page;
   const Mark = VERTICAL_GLYPH[fact.id];
   const heroRef = useRef<HTMLElement>(null);
   useScrollToHash();
+
+  // A «Скоро» landing (fact.status === 'coming') shows no screen, sells no
+  // download and asks for a phone number instead; its promises are the rows
+  // that name a ROADMAP item, and what works today is kept apart from them.
+  const coming = fact.status === 'coming';
+  const roadmap = roadmapFor(fact.id);
+  const promises = content.rows.filter((row) => row.roadmap);
+  const today = content.rows.filter((row) => !row.roadmap);
+  const promised = new Set(promises.map((row) => row.roadmap));
+  const progressOf = (id: string | undefined) => roadmap.find((item) => item.id === id)?.progress ?? 0;
+  const cta = content.cta ?? {
+    heading: 'Готові підключити касу?',
+    subheading: "Залиште ім'я і телефон — покажемо на прикладі вашого бізнесу.",
+    button: 'Замовити демо',
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -44,27 +96,59 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
             <div className={`w-24 h-24 rounded-[22px] grid place-items-center shadow-card ${fact.tint}`}>
               <Mark size={48} />
             </div>
+            {coming && (
+              <span className="mt-8 inline-flex items-center h-8 px-3.5 rounded-full bg-paper shadow-card text-[13px] font-semibold text-pos">
+                Скоро
+              </span>
+            )}
             {/* No eyebrow here: every landing's H1 opens with it, so it read twice.
                 The eyebrow stays in the footer, the «Інший бізнес?» cards, the breadcrumbs and the JSON-LD. */}
-            <h1 className="h-display mt-8 max-w-4xl">{content.h1}</h1>
+            <h1 className={`h-display ${coming ? 'mt-5' : 'mt-8'} max-w-4xl`}>{content.h1}</h1>
             <p className="lede mt-6 max-w-2xl">{content.lede}</p>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
-              <a href="/pos#download" className="btn-pos">
-                Завантажити POS
-              </a>
-              <a href="#cta" className="link-more text-[17px]">
-                Замовити демо <ChevronRight size={20} />
-              </a>
+              {coming ? (
+                <>
+                  <a href="#cta" className="btn-pos">
+                    Записатися в перші
+                  </a>
+                  <a href="#today" className="link-more text-[17px]">
+                    Що вже працює <ChevronRight size={20} />
+                  </a>
+                </>
+              ) : (
+                <>
+                  <a href="/pos#download" className="btn-pos">
+                    Завантажити POS
+                  </a>
+                  <a href="#cta" className="link-more text-[17px]">
+                    Замовити демо <ChevronRight size={20} />
+                  </a>
+                </>
+              )}
             </div>
-            <p className="text-sm text-muted mt-5">{PRICING.pos.label}.</p>
+            <p className="text-sm text-muted mt-5">
+              {coming
+                ? `Вертикаль у розробці. Сама каса вже є: ${PRICING.pos.label.toLowerCase()}.`
+                : `${PRICING.pos.label}.`}
+            </p>
             {content.demoLink && (
               <a href={content.demoLink.href} className="link-more text-[15px] mt-3" rel="noopener">
                 {content.demoLink.label} <ChevronRight size={20} />
               </a>
             )}
           </Reveal>
-          <Reveal className="mt-14 max-w-5xl mx-auto">
-            <BrowserFrame src={content.hero.src} alt={content.hero.alt} elevated />
+          <Reveal className={`mt-14 mx-auto ${content.hero.drawing ? 'max-w-4xl' : 'max-w-5xl'}`}>
+            {content.hero.drawing ? (
+              <img
+                src={content.hero.src}
+                alt={content.hero.alt}
+                width={1200}
+                height={760}
+                className="w-full h-auto block rounded-card shadow-ambient"
+              />
+            ) : (
+              <BrowserFrame src={content.hero.src} alt={content.hero.alt} elevated />
+            )}
           </Reveal>
         </section>
 
@@ -124,69 +208,136 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
           </section>
         )}
 
-        {/* Rows */}
-        <section className="max-w-6xl mx-auto px-6 pb-12">
-          <Reveal>
-            <SectionHeading icon={<Mark size={48} />} title="Як це виглядає на касі" />
-          </Reveal>
-          {content.rows.map((row, i) => (
-            <FeatureRow
-              key={row.title}
-              eyebrow={row.eyebrow}
-              title={row.title}
-              body={row.body}
-              bullets={row.bullets}
-              accentClass="text-pos"
-              reverse={i % 2 === 1}
-              link={row.link}
-              visual={
-                row.shot ? (
-                  row.shot.phone ? (
-                    <PhoneFrame src={row.shot.src} alt={row.shot.alt} />
-                  ) : (
-                    <BrowserFrame src={row.shot.src} alt={row.shot.alt} />
-                  )
-                ) : row.mockup ? (
-                  <div className="max-w-md mx-auto">
-                    <row.mockup />
-                  </div>
-                ) : undefined
-              }
-            />
-          ))}
-        </section>
-
-        {/* Shared core */}
-        <section className="band">
-          <div className="max-w-6xl mx-auto px-6 py-24">
+        {/* Promises — what a «Скоро» landing is about, its headline feature first */}
+        {promises.length > 0 && (
+          <section className="max-w-6xl mx-auto px-6 pb-4">
             <Reveal>
               <SectionHeading
-                icon={<Package size={48} />}
-                title="Спільне ядро для всіх"
-                lede="Те, що є в касі незалежно від того, що ви продаєте. Докладно — на сторінці каси."
+                icon={<Mark size={48} />}
+                title="Що ми будуємо"
+                lede="Цього в касі ще немає: над цим ми працюємо зараз, і поруч — наскільки просунулись."
               />
             </Reveal>
-            <StaggerGroup className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {CORE.map((c) => (
-                <StaggerItem key={c.t} className="h-full">
-                  <a href={c.href} className="block h-full card-flat p-6 transition-colors hover:bg-selected">
-                    <c.icon size={24} />
-                    <h3 className="font-bold text-ink-strong mt-3">{c.t}</h3>
-                    <p className="text-muted text-[15px] mt-1.5 leading-relaxed">{c.d}</p>
-                  </a>
-                </StaggerItem>
+            <div className="mt-12 grid lg:grid-cols-2 gap-6">
+              {promises.map((row, i) => (
+                <PromiseCard key={row.title} row={row} progress={progressOf(row.roadmap)} wide={i === 0} />
               ))}
-            </StaggerGroup>
-          </div>
-        </section>
+            </div>
+          </section>
+        )}
 
-        {/* Pricing */}
-        <section className="max-w-4xl mx-auto px-6 py-20">
-          <PricingCard addon={fact.id === 'restaurant'} />
-        </section>
+        {/* The rest of the promises, as «Скоро» cards; on a landing of a working vertical they come after the price */}
+        {coming && (
+          <Roadmap items={roadmap.filter((item) => !promised.has(item.id))} title="Ще в планах" lede={content.roadmapLede} />
+        )}
 
-        {/* Coming soon */}
-        <Roadmap items={roadmapFor(fact.id)} lede="Усе це входить у тариф тих, хто підключився на період запуску." />
+        {/* What works today. On a «Скоро» landing: cards on a band, apart from the promises */}
+        {coming ? (
+          today.length > 0 && (
+            <section id="today" className="band scroll-mt-16">
+              <div className="max-w-6xl mx-auto px-6 py-24">
+                <Reveal>
+                  <SectionHeading
+                    icon={<ShieldCheck size={48} />}
+                    title="Що вже працює сьогодні"
+                    lede="Це в касі є вже зараз — для фасованого товару зі штрихкодом."
+                  />
+                </Reveal>
+                <StaggerGroup className="mt-12 grid md:grid-cols-2 gap-6">
+                  {today.map((row) => (
+                    <StaggerItem key={row.title} className="h-full">
+                      <div className="card-flat h-full p-6 sm:p-8 flex flex-col">
+                        <p className="eyebrow text-pos">{row.eyebrow}</p>
+                        <h3 className="text-2xl font-bold tracking-[-0.015em] text-ink-strong mt-2">{row.title}</h3>
+                        <p className="text-body mt-4 leading-relaxed">{row.body}</p>
+                        {row.bullets && (
+                          <ul className="mt-5 space-y-2.5 flex-1">
+                            {row.bullets.map((b) => (
+                              <li key={b} className="flex items-start gap-2 text-[15px] text-body">
+                                <Check size={20} className="shrink-0 text-pos" />
+                                {b}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {row.link && (
+                          <a href={row.link.href} className="link-more text-[17px] mt-6">
+                            {row.link.label} <ChevronRight size={20} />
+                          </a>
+                        )}
+                      </div>
+                    </StaggerItem>
+                  ))}
+                </StaggerGroup>
+              </div>
+            </section>
+          )
+        ) : (
+          <section className="max-w-6xl mx-auto px-6 pb-12">
+            <Reveal>
+              <SectionHeading icon={<Mark size={48} />} title="Як це виглядає на касі" />
+            </Reveal>
+            {today.map((row, i) => (
+              <FeatureRow
+                key={row.title}
+                eyebrow={row.eyebrow}
+                title={row.title}
+                body={row.body}
+                bullets={row.bullets}
+                accentClass="text-pos"
+                reverse={i % 2 === 1}
+                link={row.link}
+                visual={
+                  row.shot ? (
+                    row.shot.phone ? (
+                      <PhoneFrame src={row.shot.src} alt={row.shot.alt} />
+                    ) : (
+                      <BrowserFrame src={row.shot.src} alt={row.shot.alt} />
+                    )
+                  ) : row.mockup ? (
+                    <div className="max-w-md mx-auto">
+                      <row.mockup />
+                    </div>
+                  ) : undefined
+                }
+              />
+            ))}
+          </section>
+        )}
+
+        {/* Shared core and price — a «Скоро» landing has said both in its own words above */}
+        {!coming && (
+          <>
+            <section className="band">
+              <div className="max-w-6xl mx-auto px-6 py-24">
+                <Reveal>
+                  <SectionHeading
+                    icon={<Package size={48} />}
+                    title="Спільне ядро для всіх"
+                    lede="Те, що є в касі незалежно від того, що ви продаєте. Докладно — на сторінці каси."
+                  />
+                </Reveal>
+                <StaggerGroup className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {CORE.map((c) => (
+                    <StaggerItem key={c.t} className="h-full">
+                      <a href={c.href} className="block h-full card-flat p-6 transition-colors hover:bg-selected">
+                        <c.icon size={24} />
+                        <h3 className="font-bold text-ink-strong mt-3">{c.t}</h3>
+                        <p className="text-muted text-[15px] mt-1.5 leading-relaxed">{c.d}</p>
+                      </a>
+                    </StaggerItem>
+                  ))}
+                </StaggerGroup>
+              </div>
+            </section>
+
+            <section className="max-w-4xl mx-auto px-6 py-20">
+              <PricingCard addon={fact.id === 'restaurant'} />
+            </section>
+
+            <Roadmap items={roadmap} lede={content.roadmapLede ?? 'Усе це входить у тариф тих, хто підключився на період запуску.'} />
+          </>
+        )}
 
         {/* FAQ */}
         <section className="max-w-3xl mx-auto px-6 pb-24">
@@ -240,15 +391,19 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
           <CTAForm
             id="cta"
             accent="pos"
-            heading="Готові підключити касу?"
-            subheading="Залиште ім'я і телефон — покажемо на прикладі вашого бізнесу."
-            buttonLabel="Замовити демо"
+            heading={cta.heading}
+            subheading={cta.subheading}
+            buttonLabel={cta.button}
             showNameField
           />
         </section>
       </main>
 
-      <StickyCta accent="pos" label="Завантажити POS" href="/pos#download" heroRef={heroRef} />
+      {coming ? (
+        <StickyCta accent="pos" label="Записатися в перші" href="#cta" heroRef={heroRef} />
+      ) : (
+        <StickyCta accent="pos" label="Завантажити POS" href="/pos#download" heroRef={heroRef} />
+      )}
       <Footer />
     </div>
   );

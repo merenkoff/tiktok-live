@@ -40,6 +40,7 @@ export default {
           flowers: '#FBE7EF',
           cafe: '#F3E9DC',
           restaurant: '#E6EEF5',
+          grocery: '#E3F2EF', // the teal of its ClipboardList mark — «під запис»
         },
       },
       // Inter (self-hosted, @fontsource-variable/inter) by default; Apple

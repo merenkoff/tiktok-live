@@ -4,6 +4,7 @@ import { odyah } from './odyah';
 import { kvity } from './kvity';
 import { kafe } from './kafe';
 import { restoran } from './restoran';
+import { produkty } from './produkty';
 
 export type { VerticalContent, VerticalRow, VerticalOverview, VerticalArticleLink, Shot } from './types';
 
@@ -12,6 +13,7 @@ const CONTENT: Record<VerticalFact['id'], VerticalContent> = {
   flowers: kvity,
   cafe: kafe,
   restaurant: restoran,
+  grocery: produkty,
 };
 
 export interface VerticalPageData {

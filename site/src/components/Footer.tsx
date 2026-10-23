@@ -17,7 +17,7 @@ export function Footer() {
         </div>
         <nav className="flex flex-col gap-3 text-sm font-medium text-muted">
           <p className="text-[13px] font-semibold text-ink">Для бізнесу</p>
-          {VERTICALS.map((v) => link(v.path, v.eyebrow))}
+          {VERTICALS.map((v) => link(v.path, v.status === 'coming' ? `${v.eyebrow} — скоро` : v.eyebrow))}
         </nav>
         <nav className="flex flex-col gap-3 text-sm font-medium text-muted">
           <p className="text-[13px] font-semibold text-ink">Продукти</p>

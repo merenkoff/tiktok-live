@@ -15,7 +15,7 @@ import { PricingSection, checkboxComparison } from '../components/PricingSection
 import { Roadmap } from '../components/Roadmap';
 import { useOsDetect, type DetectedOs } from '../hooks/useOsDetect';
 import { useScrollToHash } from '../hooks/useScrollToHash';
-import { PRODUCT, PRICING, RELEASES_URL, FEATURES, VERTICALS, isAvailable, ROADMAP } from '../lib/productFacts';
+import { PRODUCT, PRICING, RELEASES_URL, FEATURES, AVAILABLE_VERTICALS, isAvailable, ROADMAP } from '../lib/productFacts';
 import { track } from '../lib/analytics';
 import type { FaqItem } from '../lib/faqJsonLd';
 import {
@@ -253,7 +253,7 @@ export function PosPage() {
               lede={
                 <>
                   Що продає магазин, вирішує, як виглядає екран продажу:{' '}
-                  {VERTICALS.map((v) => v.title.toLowerCase()).join(', ')}. Решта каси — спільна.
+                  {AVAILABLE_VERTICALS.map((v) => v.title.toLowerCase()).join(', ')}. Решта каси — спільна.
                 </>
               }
             />

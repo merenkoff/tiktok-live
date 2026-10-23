@@ -3,6 +3,28 @@ import { SectionHeading } from './SectionHeading';
 import { Sparkles } from './glyphs';
 import type { RoadmapItem } from '../lib/productFacts';
 
+/** How far along a promise is — the bar under a «Скоро» card, and under a «Скоро» landing's rows. */
+export function Readiness({ title, progress, className = '' }: { title: string; progress: number; className?: string }) {
+  return (
+    <div className={className}>
+      <div className="flex items-center justify-between text-[13px] font-semibold text-muted">
+        <span>Готовність</span>
+        <span className="tabular-nums text-pos">{progress} %</span>
+      </div>
+      <div
+        className="mt-1.5 h-1.5 rounded-full bg-side overflow-hidden"
+        role="progressbar"
+        aria-valuenow={progress}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`${title}: готовність ${progress} %`}
+      >
+        <div className="h-full rounded-full bg-pos" style={{ width: `${progress}%` }} />
+      </div>
+    </div>
+  );
+}
+
 /**
  * «Скоро» — what is promised next, the way /live shows its plans: a feature
  * card with a «у планах» badge, plus how far along it is. Promises, not
@@ -33,22 +55,7 @@ export function Roadmap({
               </div>
               <h3 className="font-bold text-ink-strong mt-4">{f.title}</h3>
               <p className="text-muted text-[15px] mt-2 leading-relaxed flex-1">{f.body}</p>
-              <div className="mt-5">
-                <div className="flex items-center justify-between text-[13px] font-semibold text-muted">
-                  <span>Готовність</span>
-                  <span className="tabular-nums text-pos">{f.progress} %</span>
-                </div>
-                <div
-                  className="mt-1.5 h-1.5 rounded-full bg-side overflow-hidden"
-                  role="progressbar"
-                  aria-valuenow={f.progress}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-label={`${f.title}: готовність ${f.progress} %`}
-                >
-                  <div className="h-full rounded-full bg-pos" style={{ width: `${f.progress}%` }} />
-                </div>
-              </div>
+              <Readiness title={f.title} progress={f.progress} className="mt-5" />
             </div>
           </StaggerItem>
         ))}

@@ -387,6 +387,16 @@ export const FEATURES = {
   tablesSplitBill: { status: 'available', label: 'Розділити рахунок: за стравами або порівну' },
   waiterTablet: { status: 'available', label: 'Планшет офіціанта як застосунок: відкривається без мережі й показує зал, рахунки й меню' },
   ownPrro: { status: 'coming', label: 'Власний ПРРО без стороннього провайдера' },
+  // The grocery vertical (TechDocs/grocery/README.md): nothing of it is in the
+  // code yet, so its landing runs in «Скоро» mode and every line here stays
+  // `coming` until its phase ships.
+  groceryCredit: {
+    status: 'coming',
+    label: 'Продаж під запис: борг покупця в журналі каси замість зошита — ліміт, погашення частинами, виписка, фіскальний чек при оплаті',
+  },
+  groceryWeighed: { status: 'coming', label: 'Ваговий товар: ціна за 1 кг або 100 г, вага в чеку й на цінику' },
+  groceryScaleLabels: { status: 'coming', label: 'Ваги з друком етикеток: каса читає вагу й ціну зі штрихкоду наліпки' },
+  groceryPhone: { status: 'coming', label: 'Каса на телефоні для торгівлі на ринку: продаж, борги покупців і залишки з одного екрана' },
   tiktokLive: { status: 'available', label: 'TikTok LIVE: коментар → бронь → Telegram → ТТН Нової Пошти' },
   liveAiComments: { status: 'coming', label: 'AI-відповіді в коментарях ефіру' },
   liveStockOverlay: { status: 'coming', label: 'Оверлей залишків для ефіру' },
@@ -428,6 +438,10 @@ export const POS_FEATURE_IDS: FeatureId[] = [
   'tablesSplitBill',
   'waiterTablet',
   'ownPrro',
+  'groceryCredit',
+  'groceryWeighed',
+  'groceryScaleLabels',
+  'groceryPhone',
 ];
 
 export const LIVE_FEATURE_IDS: FeatureId[] = ['tiktokLive', 'liveAiComments', 'liveStockOverlay', 'liveAnalytics'];
@@ -440,10 +454,16 @@ export function availableFeatureLabels(ids: FeatureId[]): string[] {
   return ids.filter(isAvailable).map((id) => FEATURES[id].label);
 }
 
-export type VerticalId = 'clothing' | 'flowers' | 'cafe' | 'restaurant';
+export type VerticalId = 'clothing' | 'flowers' | 'cafe' | 'restaurant' | 'grocery';
 
 export interface VerticalFact {
   id: VerticalId;
+  /**
+   * `coming` — the vertical is not in the code yet: its landing is a «Скоро»
+   * page that may promise (through `ROADMAP`) but never says it works, and the
+   * menus and cards that list what the POS sells leave it out or mark it.
+   */
+  status: FeatureStatus;
   /** URL slug under /pos/. */
   slug: string;
   path: string;
@@ -461,13 +481,15 @@ export interface VerticalFact {
 }
 
 /**
- * The four businesses the POS is sold to. A restaurant is the café vertical
- * plus the tables module rather than a fourth vertical in code, but for a
- * buyer it is a different shop, so it gets its own page.
+ * The four businesses the POS is sold to, plus the ones it is being built for
+ * (`status: 'coming'`). A restaurant is the café vertical plus the tables
+ * module rather than a fourth vertical in code, but for a buyer it is a
+ * different shop, so it gets its own page.
  */
 export const VERTICALS: readonly VerticalFact[] = [
   {
     id: 'clothing',
+    status: 'available',
     slug: 'odyah',
     path: '/pos/odyah',
     title: 'Одяг',
@@ -480,6 +502,7 @@ export const VERTICALS: readonly VerticalFact[] = [
   },
   {
     id: 'flowers',
+    status: 'available',
     slug: 'kvity',
     path: '/pos/kvity',
     title: 'Квіти',
@@ -492,6 +515,7 @@ export const VERTICALS: readonly VerticalFact[] = [
   },
   {
     id: 'cafe',
+    status: 'available',
     slug: 'kafe',
     path: '/pos/kafe',
     title: 'Кафе',
@@ -504,6 +528,7 @@ export const VERTICALS: readonly VerticalFact[] = [
   },
   {
     id: 'restaurant',
+    status: 'available',
     slug: 'restoran',
     path: '/pos/restoran',
     title: 'Ресторан',
@@ -514,7 +539,37 @@ export const VERTICALS: readonly VerticalFact[] = [
     illustrations: ['/demo-restaurant/borscht.svg', '/demo-restaurant/ribeye.svg', '/demo-restaurant/wine-red.svg'],
     tint: 'bg-tint-restaurant',
   },
+  {
+    // Built around «під запис» by the owner's decision of 2026-10-23; the
+    // resume point for its copy and search terms is TechDocs/GROCERY_SEO_AEO.md.
+    id: 'grocery',
+    status: 'coming',
+    slug: 'produkty',
+    path: '/pos/produkty',
+    title: 'Продукти',
+    eyebrow: 'Каса для продуктового магазину',
+    tagline: 'Продаж під запис замість зошита боргів, ваговий товар із ціною за кілограм і каса на телефоні для ринку — у розробці.',
+    bullets: ['Продаж під запис замість зошита', 'Ваговий товар із ціною за кілограм', 'Каса на телефоні для ринку'],
+    featureIds: [
+      'groceryCredit',
+      'groceryWeighed',
+      'groceryScaleLabels',
+      'groceryPhone',
+      'fiscalOnlineCheckbox',
+      'fiscalOffline',
+      'offlineDesktop',
+      'gtinLookup',
+      'stocktakeOffline',
+      'qrPayment',
+    ],
+    // No demo store yet: the restaurant demo's pantry is drawn in the same style.
+    illustrations: ['/demo-restaurant/bread.svg', '/demo-restaurant/milk.svg', '/demo-restaurant/tomato.svg'],
+    tint: 'bg-tint-grocery',
+  },
 ];
+
+/** What the POS sells today — the menus, the «Для якого бізнесу» copy and anything that says «вже працює». */
+export const AVAILABLE_VERTICALS: readonly VerticalFact[] = VERTICALS.filter((v) => v.status === 'available');
 
 /**
  * What the site promises next, with a readiness figure. These are commitments
@@ -671,6 +726,50 @@ export const ROADMAP: readonly RoadmapItem[] = [
     title: 'Планшет офіціанта без мережі',
     body: 'Прийняти замовлення на терасі, де не ловить Wi-Fi, і відправити на кухню, щойно зв\'язок повернеться. Відкриватися без мережі й показувати зал, рахунки й меню планшет, доданий на екран, уже вміє; лишилось записувати.',
     progress: 10,
+  },
+  // The grocery vertical, «під запис» first (owner's decision 2026-10-23). The
+  // figures are where the work is: research done (TechDocs/grocery/), no code.
+  {
+    id: 'grocery-credit',
+    vertical: 'grocery',
+    title: 'Продаж під запис',
+    body: 'Борг записується на покупця одним тапом при видачі товару — з датою, товарами й цінами. Ліміт і блокування, погашення частинами, виписка для покупця. Фіскальний чек — коли покупець платить; паперова квитанція — лише якщо ви її вмикаєте.',
+    progress: 5,
+  },
+  {
+    id: 'grocery-weighed',
+    vertical: 'grocery',
+    title: 'Ваговий товар із ціною за кілограм',
+    body: 'Ціна за 1 кг або 100 г на картці й цінику, у чеку — «0,350 кг × 189,90 грн/кг». Вага з простих ваг вводиться вручну й так і позначається.',
+    progress: 10,
+  },
+  {
+    id: 'grocery-scale-labels',
+    vertical: 'grocery',
+    title: 'Ваги з друком етикеток',
+    body: 'Зважили на вагах, наклеїли етикетку — каса читає вагу й ціну зі штрихкоду наліпки. Формат коду налаштовується під ваші ваги, список товарів і цін вивантажується для них.',
+    progress: 5,
+  },
+  {
+    id: 'grocery-till-scales',
+    vertical: 'grocery',
+    title: 'Ваги на касі',
+    body: 'Товар на ваги біля каси — і вага сама стає в чек, щойно показ стабільний. Поки ваги підключені, вписати вагу руками не можна.',
+    progress: 5,
+  },
+  {
+    id: 'grocery-phone',
+    vertical: 'grocery',
+    title: 'Каса на телефоні для ринку',
+    body: 'Продати, записати борг і подивитися залишки з телефона — для торгівлі на ринку, з лотка й з виїзду, без окремого комп\'ютера.',
+    progress: 10,
+  },
+  {
+    id: 'grocery-excise',
+    vertical: 'grocery',
+    title: 'Підакцизні товари',
+    body: 'Сканування акцизної марки на кожну пляшку, код УКТ ЗЕД у рядку чека і підтвердження віку покупця один раз на чек.',
+    progress: 5,
   },
 ];
 

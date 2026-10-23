@@ -19,6 +19,7 @@ import { buildFaqJsonLd } from './lib/faqJsonLd';
 import { breadcrumbJsonLd } from './lib/jsonLd/breadcrumb';
 import { techArticleJsonLd } from './lib/jsonLd/article';
 import { verticalPageJsonLd } from './lib/jsonLd/verticalPage';
+import { roadmapFor } from './lib/productFacts';
 
 export interface SiteRoute {
   path: string;
@@ -40,12 +41,20 @@ const POS_CRUMB = { name: 'POS каса', path: '/pos' };
 
 // A landing links its guide by slug (importing the guide there would ship its
 // HTML in the landing's bundle), so a renamed guide must fail the prerender.
-for (const { content } of VERTICAL_PAGES) {
+// A row written as a promise names its ROADMAP item the same way: renaming or
+// shipping that item without touching the row must fail too, or the page
+// would keep promising — or start claiming — something nobody tracks.
+for (const { fact, content } of VERTICAL_PAGES) {
   if (content.guide && !findArticle(content.guide.slug)) {
     throw new Error(`routes: ${content.id} links the unknown guide /dovidka/${content.guide.slug}`);
   }
   for (const a of content.articles ?? []) {
     if (!findArticle(a.slug)) throw new Error(`routes: ${content.id} links the unknown article /dovidka/${a.slug}`);
+  }
+  for (const row of content.rows) {
+    if (row.roadmap && !roadmapFor(fact.id).some((item) => item.id === row.roadmap)) {
+      throw new Error(`routes: ${content.id} row «${row.title}» promises the unknown roadmap item ${row.roadmap}`);
+    }
   }
 }
 

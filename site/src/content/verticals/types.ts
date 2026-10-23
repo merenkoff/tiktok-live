@@ -7,6 +7,8 @@ export interface Shot {
   alt: string;
   /** A phone screen (a guest's view): framed as a phone, not as a browser window. */
   phone?: boolean;
+  /** A drawing, not a screenshot — a «Скоро» landing has no screen to show yet — so no window chrome around it. */
+  drawing?: boolean;
 }
 
 export interface VerticalRow {
@@ -19,6 +21,13 @@ export interface VerticalRow {
   mockup?: () => JSX.Element;
   /** «Read more» under the bullets. */
   link?: { href: string; label: string };
+  /**
+   * The `ROADMAP` item this row describes. Set, the row is a promise rather
+   * than a feature: no ✓ on its bullets (a tick says it works), its readiness
+   * shown beside it, and the «Скоро» cards leave the item out so it is not
+   * promised twice. routes.tsx checks the item exists for this vertical.
+   */
+  roadmap?: string;
 }
 
 /**
@@ -74,5 +83,9 @@ export interface VerticalContent {
   guide?: { slug: string; label: string };
   /** «Читайте також»: the articles that answer this business's search questions. */
   articles?: VerticalArticleLink[];
+  /** The closing form's words, when «Готові підключити касу?» does not fit: a «Скоро» landing collects a waiting list. */
+  cta?: { heading: string; subheading: string; button: string };
+  /** The «Скоро» cards' subtitle, when the default (they come with the launch tariff) is not a promise this page makes. */
+  roadmapLede?: string;
   updatedAt: string;
 }
