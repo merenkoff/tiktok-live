@@ -1,4 +1,4 @@
-import { VERTICALS } from '../lib/productFacts';
+import { AVAILABLE_VERTICALS } from '../lib/productFacts';
 import { AppIcon } from './AppIcon';
 
 type Variant = 'home' | 'live' | 'pos' | 'dovidka';
@@ -18,9 +18,10 @@ const CTA: Record<Variant, { href: string; label: string; className: string }> =
   dovidka: { href: '/pos#download', label: 'Завантажити касу', className: 'bg-pos hover:bg-pos-press' },
 };
 
+// What the POS sells today; a «Скоро» vertical is linked from the cards and the footer instead.
 const LINKS = [
   { href: '/pos', label: 'POS каса' },
-  ...VERTICALS.map((v) => ({ href: v.path, label: v.title })),
+  ...AVAILABLE_VERTICALS.map((v) => ({ href: v.path, label: v.title })),
   { href: '/live', label: 'TikTok LIVE' },
   { href: '/dovidka', label: 'Довідка' },
 ];

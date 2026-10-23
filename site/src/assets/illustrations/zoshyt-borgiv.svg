@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" width="1200" height="760">
+  <!-- The paper «зошит боргів» the grocery landing replaces: a squared school
+       exercise book with a red margin, entries in blue ink, a repaid debt
+       struck out, and a total nobody wrote. Text is decoration; the <img> alt
+       on the page says what it shows. -->
+  <defs>
+    <pattern id="cells" width="30" height="30" patternUnits="userSpaceOnUse">
+      <path d="M30 0H0V30" fill="none" stroke="#D6E4F2" stroke-width="1.5"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="760" fill="#FFFEFA"/>
+  <rect width="1200" height="760" fill="url(#cells)"/>
+  <path d="M168 0V760" stroke="#EE9A9A" stroke-width="3"/>
+  <g font-family="'Helvetica Neue', Arial, sans-serif" font-style="italic" fill="#2F5DB3">
+    <text x="196" y="102" font-size="46" font-weight="700">Борги</text>
+    <path d="M196 118H330" stroke="#2F5DB3" stroke-width="3" stroke-linecap="round"/>
+    <g font-size="28" fill="#6A86C4">
+      <text x="42" y="216">12.10</text>
+      <text x="42" y="291">12.10</text>
+      <text x="42" y="366">13.10</text>
+      <text x="42" y="441">14.10</text>
+      <text x="42" y="516">15.10</text>
+      <text x="42" y="591">16.10</text>
+    </g>
+    <g font-size="38">
+      <text x="196" y="216">Оля, 3 під'їзд</text>
+      <text x="1010" y="216" text-anchor="end">245,50</text>
+      <text x="196" y="291">Петрович</text>
+      <text x="1010" y="291" text-anchor="end">1 180,00</text>
+      <text x="196" y="366">Марина — до пенсії</text>
+      <text x="1010" y="366" text-anchor="end">640,00</text>
+      <text x="196" y="441">Сашко, хліб і молоко</text>
+      <text x="1010" y="441" text-anchor="end">92,40</text>
+      <text x="196" y="516">Ніна Іванівна</text>
+      <text x="1010" y="516" text-anchor="end">318,00</text>
+      <text x="196" y="591">Оля, 3 під'їзд</text>
+      <text x="1010" y="591" text-anchor="end">+86,00</text>
+    </g>
+    <path d="M190 280C420 272 760 286 1018 276" fill="none" stroke="#2F5DB3" stroke-width="4" stroke-linecap="round"/>
+    <text x="1036" y="291" font-size="26" fill="#6A86C4">віддав</text>
+    <g fill="#D24B4B">
+      <text x="640" y="686" font-size="40" font-weight="700">Разом —</text>
+      <text x="1010" y="686" font-size="52" font-weight="700" text-anchor="end">?</text>
+    </g>
+  </g>
+  <g transform="rotate(4 1015 95)">
+    <rect x="890" y="28" width="250" height="138" rx="4" fill="#FFE27A"/>
+    <rect x="890" y="150" width="250" height="16" rx="4" fill="#F2CF5B"/>
+    <g font-family="'Helvetica Neue', Arial, sans-serif" font-style="italic" font-weight="700" fill="#6B5200">
+      <text x="914" y="84" font-size="32">Ліміт —</text>
+      <text x="914" y="130" font-size="36">500 грн!</text>
+    </g>
+  </g>
+</svg>
