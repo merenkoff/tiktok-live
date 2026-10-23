@@ -39,13 +39,28 @@ async function fallbackToLocal(tryLocal: () => Promise<void>, networkError: unkn
 
 const LAST_SLUG_KEY = 'pos_last_store_slug';
 
+/**
+ * The store code this device last signed in to. The login form fills it in and
+ * keeps it locked until someone asks to change it, so after the first login
+ * only the email + password (or the PIN) is typed. It is written on every
+ * shell — the web too — and outlives a logout on purpose.
+ */
 export function loadLastStoreSlug(): string {
-  return localStorage.getItem(LAST_SLUG_KEY) ?? '';
+  try {
+    return localStorage.getItem(LAST_SLUG_KEY) ?? '';
+  } catch {
+    return '';
+  }
 }
 
-function persistStoreSlug(slug: string): void {
-  const value = slug.trim();
-  if (value) localStorage.setItem(LAST_SLUG_KEY, value);
+function persistStoreSlug(slug: string | undefined): void {
+  const value = slug?.trim();
+  if (!value) return;
+  try {
+    localStorage.setItem(LAST_SLUG_KEY, value);
+  } catch {
+    // A browser that refuses storage just asks for the code every time.
+  }
 }
 
 async function afterOnlineLogin(
@@ -54,8 +69,8 @@ async function afterOnlineLogin(
   kind: 'pin' | 'password',
   loginHint?: string | null
 ): Promise<void> {
-  if (!isOfflineReadsEnabled()) return;
   persistStoreSlug(auth.store.slug);
+  if (!isOfflineReadsEnabled()) return;
   const offline = await import('../offline');
   await offline.saveStaffUnlock({ auth, secret, kind, loginHint });
   void offline.cacheQrImage(auth.store.qr_payment?.static_image_url);
@@ -72,7 +87,8 @@ interface AuthStore {
   /** Server's `store.module_remotes` changed since boot — web app should reload (roadmap #9). */
   moduleRemotesStale: boolean;
   dismissModuleRemotesStale: () => void;
-  loginOwner: (login: string, password: string) => Promise<void>;
+  /** `storeSlug` names which store (one email may own several); optional for older callers. */
+  loginOwner: (login: string, password: string, storeSlug?: string) => Promise<void>;
   loginPin: (storeSlug: string, pin: string) => Promise<void>;
   logout: () => Promise<void>;
   bootstrap: () => Promise<void>;
@@ -87,10 +103,10 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
   dismissModuleRemotesStale: () => set({ moduleRemotesStale: false }),
 
-  loginOwner: async (login, password) => {
+  loginOwner: async (login, password, storeSlug) => {
     const tryLocal = async () => {
       const { localOwnerLogin } = await import('../offline');
-      const auth = await localOwnerLogin(login, password, api.loadAuth());
+      const auth = await localOwnerLogin(login, password, api.loadAuth(), storeSlug);
       api.saveAuth(auth);
       persistStoreSlug(auth.store.slug);
       set({ auth, isAuthenticated: true });
@@ -100,7 +116,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     // статус Windows NCSI, а не фактичний зв'язок). Завжди пробуємо мережу,
     // у локальний кеш падаємо лише на реальній мережевій помилці.
     try {
-      const auth = await api.loginOwner(login, password);
+      const auth = await api.loginOwner(login, password, storeSlug);
       await afterOnlineLogin(auth, password, 'password', login);
       set({ auth, isAuthenticated: true, moduleRemotesStale: remotesChanged(auth) });
     } catch (error) {
@@ -162,6 +178,10 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
     try {
       const auth = await api.me();
+      // A device that signed in before the code was remembered on the web
+      // learns it from the session it already has — no new login needed, and
+      // the session itself is left exactly as it was.
+      persistStoreSlug(auth.store.slug);
       set({
         auth,
         isAuthenticated: true,

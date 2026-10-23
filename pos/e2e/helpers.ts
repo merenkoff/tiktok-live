@@ -218,6 +218,9 @@ export async function mockPosApi(
 export async function loginAsOwner(page: Page) {
   await page.goto('/login');
   await page.getByRole('button', { name: 'Власник' }).click();
+  // Locked once this browser has signed in to a store: the remembered code is used.
+  const storeCode = page.getByLabel('Код магазину');
+  if (await storeCode.isEditable()) await storeCode.fill('demo');
   await page.getByLabel('Email / логін').fill('owner@demo.shop');
   await page.getByLabel('Пароль').fill('owner123');
   await page.getByRole('button', { name: 'Увійти' }).click();

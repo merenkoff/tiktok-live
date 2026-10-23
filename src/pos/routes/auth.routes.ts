@@ -8,11 +8,14 @@ import * as authService from '../auth.service.js';
 
 export function registerAuthRoutes(fastify: FastifyInstance): void {
   fastify.post('/auth/owner/login', async (request, reply) => {
-    const body = request.body as { login?: string; password?: string };
+    const body = request.body as { login?: string; password?: string; store_slug?: unknown };
     if (!body.login || !body.password) {
       return reply.code(400).send({ error: 'login and password required' });
     }
-    const result = await authService.loginOwner(body.login, body.password);
+    // Optional: a desktop till released before the form asked for the store
+    // code still signs in without it.
+    const storeSlug = typeof body.store_slug === 'string' ? body.store_slug : null;
+    const result = await authService.loginOwner(body.login, body.password, storeSlug);
     if (!result) return reply.code(401).send({ error: 'Invalid credentials' });
     return result;
   });

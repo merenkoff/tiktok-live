@@ -5,7 +5,8 @@
 // src/__tests__/pos.auth.service.test.ts
 //
 // The two login paths differ in kind: the owner logs in with a login+password
-// scoped to nothing, the cashier with a PIN scoped to a store slug — and the
+// (plus, from the current login form, the store code — one email may own
+// several stores), the cashier with a PIN scoped to a store slug — and the
 // PIN path has to try every active seller's hash because a PIN carries no
 // identity of its own. Both must stay closed to inactive staff, and both must
 // return the store's effective module set (that payload is what the SPA boots
@@ -16,7 +17,7 @@ import { pool } from '../db.js';
 import * as authService from '../pos/auth.service.js';
 import { getAuthByToken } from '../pos/core/auth.js';
 import { DEFAULT_ENABLED_MODULES } from '../pos/core/modules.js';
-import { hashPin } from '../pos/core/crypto.js';
+import { hashPassword, hashPin } from '../pos/core/crypto.js';
 import {
   applyPosMigrations,
   createTestStore,
@@ -109,6 +110,68 @@ describe.skipIf(!hasDb)('POS auth service', () => {
       } finally {
         await dropTestStore(temp.storeId);
       }
+    });
+
+    it('signs in to the store the code names, ignoring case and whitespace', async () => {
+      const result = await authService.loginOwner(
+        store.ownerLogin,
+        store.ownerPassword,
+        `  ${store.slug.toUpperCase()} `
+      );
+      expect(result?.store.id).toBe(store.storeId);
+    });
+
+    it("refuses another store's code even with the right login and password", async () => {
+      expect(
+        await authService.loginOwner(store.ownerLogin, store.ownerPassword, other.slug)
+      ).toBeNull();
+      expect(
+        await authService.loginOwner(store.ownerLogin, store.ownerPassword, 'no-such-store')
+      ).toBeNull();
+    });
+
+    it('treats an empty code as no code', async () => {
+      const result = await authService.loginOwner(store.ownerLogin, store.ownerPassword, '  ');
+      expect(result?.store.id).toBe(store.storeId);
+    });
+
+    it('lands an email that owns two stores in the one its code names', async () => {
+      const a = await createTestStore('authtwoa');
+      const b = await createTestStore('authtwob');
+      try {
+        // Same email in both, a different password in B.
+        await pool.query(`UPDATE pos_staff SET login = $1, password_hash = $2 WHERE id = $3`, [
+          a.ownerLogin,
+          await hashPassword('second-shop-pw'),
+          b.ownerId,
+        ]);
+
+        const intoA = await authService.loginOwner(a.ownerLogin, a.ownerPassword, a.slug);
+        expect(intoA?.store.id).toBe(a.storeId);
+        const intoB = await authService.loginOwner(a.ownerLogin, 'second-shop-pw', b.slug);
+        expect(intoB?.store.id).toBe(b.storeId);
+        // The code decides: A's password does not open B.
+        expect(await authService.loginOwner(a.ownerLogin, a.ownerPassword, b.slug)).toBeNull();
+
+        // Without a code (a till released before the field) the password picks
+        // the row, where the bare first row used to refuse B's password.
+        const legacyA = await authService.loginOwner(a.ownerLogin, a.ownerPassword);
+        expect(legacyA?.store.id).toBe(a.storeId);
+        const legacyB = await authService.loginOwner(a.ownerLogin, 'second-shop-pw');
+        expect(legacyB?.store.id).toBe(b.storeId);
+      } finally {
+        await dropTestStore(a.storeId);
+        await dropTestStore(b.storeId);
+      }
+    });
+
+    it('leaves the sessions the owner already has alone', async () => {
+      const before = await getAuthByToken(store.ownerToken);
+      expect(before?.staffId).toBe(store.ownerId);
+      const fresh = await authService.loginOwner(store.ownerLogin, store.ownerPassword, store.slug);
+      expect(fresh?.token).not.toBe(store.ownerToken);
+      const after = await getAuthByToken(store.ownerToken);
+      expect(after?.staffId).toBe(store.ownerId);
     });
   });
 

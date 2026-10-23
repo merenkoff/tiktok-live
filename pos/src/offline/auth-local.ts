@@ -202,10 +202,15 @@ export async function localPinLogin(
 export async function localOwnerLogin(
   login: string,
   password: string,
-  liveAuth: AuthResponse | null
+  liveAuth: AuthResponse | null,
+  storeSlug?: string
 ): Promise<AuthResponse> {
   const hint = login.trim().toLowerCase();
-  const rows = await db.staffUnlock.filter((r) => r.kind === 'password').toArray();
+  // The same email may own several stores; the code says which one is meant.
+  const slug = storeSlug?.trim().toLowerCase() || null;
+  const rows = await db.staffUnlock
+    .filter((r) => r.kind === 'password' && (slug === null || r.storeSlug === slug))
+    .toArray();
   const matches = rows.filter((r) => r.loginHint === hint);
   const candidates = matches.length > 0 ? matches : rows.filter((r) => r.role === 'owner');
   if (candidates.length === 0) {

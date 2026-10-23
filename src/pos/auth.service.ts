@@ -128,27 +128,44 @@ function toAuthResponse(auth: PosAuthContext, expiresAt: Date): AuthResponse {
   };
 }
 
-export async function loginOwner(login: string, password: string): Promise<AuthResponse | null> {
+/**
+ * A login is unique per store, not across stores (`idx_pos_staff_store_login`),
+ * so one email can own several shops. The store code picks which one; without
+ * it — a till built before the login form asked for the code — every owner row
+ * with that login is tried oldest first, which is the store the bare
+ * `rows[0]` used to land on, except that a wrong guess no longer fails a
+ * password that is right for another of the rows.
+ */
+export async function loginOwner(
+  login: string,
+  password: string,
+  storeSlug?: string | null
+): Promise<AuthResponse | null> {
   const normalized = login.trim().toLowerCase();
+  const slug = storeSlug?.trim().toLowerCase() || null;
   const result = await pool.query(
-    `SELECT st.*, store.name AS store_name, store.slug AS store_slug, store.currency
+    `SELECT st.id, st.store_id, st.password_hash
      FROM pos_staff st
      JOIN pos_stores store ON store.id = st.store_id
      WHERE st.role = 'owner'
        AND st.is_active = TRUE
-       AND lower(st.login) = $1`,
-    [normalized]
+       AND lower(st.login) = $1
+       AND ($2::text IS NULL OR lower(store.slug) = $2)
+     ORDER BY st.id`,
+    [normalized, slug]
   );
 
-  if (result.rows.length === 0) return null;
-  const staff = result.rows[0];
-  if (!staff.password_hash) return null;
-
-  const ok = await verifyPassword(password, staff.password_hash);
-  if (!ok) return null;
-
-  logger.info('POS owner login', { staffId: staff.id, storeId: staff.store_id });
-  return createSession(Number(staff.store_id), Number(staff.id));
+  for (const staff of result.rows) {
+    if (!staff.password_hash) continue;
+    if (!(await verifyPassword(password, staff.password_hash))) continue;
+    logger.info('POS owner login', {
+      staffId: staff.id,
+      storeId: staff.store_id,
+      byStoreCode: slug !== null,
+    });
+    return createSession(Number(staff.store_id), Number(staff.id));
+  }
+  return null;
 }
 
 export async function loginWithPin(storeSlug: string, pin: string): Promise<AuthResponse | null> {
