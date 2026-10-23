@@ -6,6 +6,10 @@
 // (TechDocs/POS_SUPER_ADMIN.md). Core group (`moduleId: null`): it belongs to
 // no store, so neither `ensureModule` nor `ensurePosAuth` apply — the gate is
 // `ensureSuper` and the password in `POS_SUPER_PASSWORD`.
+//
+// Besides the stores, the super admin reads the marketing site's leads
+// (`/super/leads`, TechDocs/CRM_LEADS.md): the one place they can be listed —
+// the old `GET /api/admin/leads`, which any LIVE token could read, is gone.
 
 import type { FastifyInstance } from 'fastify';
 import { logger } from '../../logger.js';
@@ -19,6 +23,7 @@ import {
   verifySuperPassword,
 } from '../core/superAuth.js';
 import * as superService from '../super.service.js';
+import * as leads from '../../crm/leads.service.js';
 import { errorMessage } from './_shared.js';
 
 export function registerSuperRoutes(fastify: FastifyInstance): void {
@@ -99,6 +104,45 @@ export function registerSuperRoutes(fastify: FastifyInstance): void {
       return report;
     } catch (error) {
       if (error instanceof superService.SuperValidationError) {
+        return reply.code(400).send({ error: errorMessage(error) });
+      }
+      throw error;
+    }
+  });
+
+  fastify.get('/super/leads', async (request, reply) => {
+    if (!(await ensureSuper(request, reply))) return;
+    try {
+      return await leads.listLeads((request.query ?? {}) as leads.LeadFilter);
+    } catch (error) {
+      if (error instanceof leads.LeadValidationError) {
+        return reply.code(400).send({ error: errorMessage(error) });
+      }
+      throw error;
+    }
+  });
+
+  fastify.get('/super/leads/:id', async (request, reply) => {
+    if (!(await ensureSuper(request, reply))) return;
+    const id = Number((request.params as { id: string }).id);
+    if (!Number.isInteger(id) || id <= 0) return reply.code(400).send({ error: 'bad lead id' });
+    const lead = await leads.getLead(id);
+    if (!lead) return reply.code(404).send({ error: 'Лід не знайдено' });
+    return lead;
+  });
+
+  fastify.patch('/super/leads/:id', async (request, reply) => {
+    if (!(await ensureSuper(request, reply))) return;
+    const id = Number((request.params as { id: string }).id);
+    if (!Number.isInteger(id) || id <= 0) return reply.code(400).send({ error: 'bad lead id' });
+    const body = (request.body ?? {}) as { status?: unknown; note?: unknown };
+    try {
+      const lead = await leads.updateLead(id, { status: body.status, note: body.note });
+      if (!lead) return reply.code(404).send({ error: 'Лід не знайдено' });
+      logger.info('pos super: lead updated', { ip: request.ip, leadId: id, fields: Object.keys(body) });
+      return lead;
+    } catch (error) {
+      if (error instanceof leads.LeadValidationError) {
         return reply.code(400).send({ error: errorMessage(error) });
       }
       throw error;

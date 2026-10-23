@@ -10,7 +10,8 @@ import { readFile } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { logger } from './logger.js';
-import { createLead, getLeads } from './leads.js';
+import { LeadValidationError, cleanLeadInput, recordLead } from './crm/leads.service.js';
+import { leadAllowed } from './crm/limits.js';
 import {
   getOrder,
   getOrdersByStatus,
@@ -235,43 +236,50 @@ export async function createServer(): Promise<FastifyInstance> {
   });
 
   /**
-   * Capture phone leads for callback
+   * A lead from the marketing site's form (TechDocs/CRM_LEADS.md). Public and
+   * unauthenticated, so the body is capped, a filled honeypot is thanked and
+   * dropped, and the volume is bounded globally and per phone. The journey and
+   * the form's ids are optional: an older page that sends `{phone, name}` still
+   * lands. The phone never reaches the log — only the lead's id does.
+   * The super admin reads leads through `/api/pos/super/leads`; there is no
+   * other way to list them.
    */
-  fastify.post('/api/leads', async (request, reply) => {
+  fastify.post('/api/leads', { bodyLimit: 8192 }, async (request, reply) => {
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    if (typeof body.website === 'string' && body.website.trim() !== '') {
+      // A field no person sees: whatever filled it is a bot. Answer as if it worked.
+      return { success: true };
+    }
+    if (typeof body.phone !== 'string' || !body.phone.trim()) {
+      reply.status(400);
+      return { error: 'Введіть номер телефону' };
+    }
     try {
-      const body = request.body as { phone?: string; name?: string };
-
-      if (!body?.phone?.trim()) {
-        reply.status(400);
-        return { error: 'Введіть номер телефону' };
+      const input = cleanLeadInput({
+        phone: body.phone,
+        name: body.name,
+        form_id: body.form_id,
+        intent: body.intent,
+        product: body.product,
+        business: body.business,
+        page_path: body.page_path,
+        journey: body.journey,
+      });
+      if (!leadAllowed(input.phone)) {
+        reply.status(429);
+        return { error: 'Забагато заявок. Спробуйте за кілька хвилин.' };
       }
-
-      const lead = await createLead(body.phone, body.name);
-      return { success: true, id: lead.id };
+      const { leadId, touchId } = await recordLead(input);
+      logger.info('Lead captured', { leadId, touchId, form: input.formId });
+      return { success: true, id: leadId };
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Internal server error';
-      if (message === 'Invalid phone number') {
+      if (error instanceof LeadValidationError) {
         reply.status(400);
-        return { error: 'Невірний формат номера' };
+        return { error: error.message };
       }
       logger.error('Error saving lead', { error });
       reply.status(500);
       return { error: 'Не вдалося зберегти заявку' };
-    }
-  });
-
-  /**
-   * List leads (admin)
-   */
-  fastify.get('/api/admin/leads', async (request, reply) => {
-    try {
-      if (!(await requireAuth(request, reply))) return;
-      const leads = await getLeads();
-      return leads;
-    } catch (error) {
-      logger.error('Error fetching leads', { error });
-      reply.status(500);
-      return { error: 'Internal server error' };
     }
   });
 
