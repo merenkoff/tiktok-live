@@ -336,6 +336,165 @@ export const COMPETITOR_FACTS = {
     /** Poster Site, «Сайт для замовлень» — delivery and pickup. */
     siteUah: 760,
   },
+  /**
+   * Торгсофт — read on `checkedAt`: the home page (its feature list, where
+   * «Реалізація товару в борг» stands), its page for grocery shops, the
+   * licence and option price lists, the pages of the scales, ПРРО and mobile
+   * app options, and three of its own articles on customer debts — the one
+   * that says which licences carry the debt mode at all («Торгсофт-Старт:
+   * режим продажу в борг відсутній»), the guide to it and the one on
+   * fiscalising a debt through ПРРО. A Windows program bought per workplace;
+   * scales, ПРРО and reminders are options, most of them paid yearly per
+   * device. Same rule as above: «not mentioned» means not mentioned on those
+   * pages, never «does not exist». Торгсофт-Онлайн, the subscription edition,
+   * prints two different starting prices on two of its pages, so none is
+   * recorded.
+   */
+  torgsoft: {
+    name: 'Торгсофт',
+    publishedAt: '2026-10-23',
+    checkedAt: '2026-10-23',
+    sources: {
+      home: 'https://torgsoft.ua/',
+      grocery: 'https://torgsoft.ua/soft/grocery/',
+      licenses: 'https://torgsoft.ua/price/licenses/',
+      options: 'https://torgsoft.ua/price/options/',
+      scales: 'https://torgsoft.ua/options/scales/',
+      prro: 'https://torgsoft.ua/options/prro/',
+      app: 'https://torgsoft.ua/options/app/',
+      debts: 'https://torgsoft.ua/articles/guide/customer-debts/',
+      debtors: 'https://torgsoft.ua/support/crm-marketing/debtors-control/',
+      debtFiscalization: 'https://torgsoft.ua/support/ppo/debt-fiscalization/',
+    },
+    /** «Програма Торгсофт встановлюється на комп'ютер з Windows». */
+    platform: 'Windows',
+    /**
+     * One workplace, UAH: «Безстрокова» (paid once) and «Оренда на 1 рік».
+     * `debts` — the licence carries the debt mode for «VIP-клієнти»; the
+     * debtors article: «Торгсофт-Старт: режим продажу в борг відсутній»,
+     * «Торгсофт-Ультра та Термінальна: функціонал роботи з VIP-клієнтами,
+     * кредитними лімітами та розшифровкою заборгованості включено». The
+     * terminal edition's price includes «+ 3 клієнтських підключення».
+     */
+    licences: [
+      { id: 'Старт', perpetualUah: 8850, yearUah: 4780, debts: false },
+      { id: 'Ультра', perpetualUah: 17990, yearUah: 9720, debts: true },
+      { id: 'Термінал', perpetualUah: 41000, yearUah: 22140, debts: true },
+    ],
+    /** «Програмний РРО», UAH a year, bought «на кожне робоче місце (касу), де відбувається фіскалізація». */
+    prroYearUah: 3990,
+    /** «Торгсофт не працює зі сторонніми ПРРО». */
+    thirdPartyPrro: false,
+    /** «Інтеграція з вагами на касі», UAH a year, bought «на кожен комп’ютер або пристрій». */
+    tillScalesYearUah: 3790,
+    /** The scales page's «Сумісне обладнання», every make in its order (the Ukrainian ones first). */
+    scaleBrands: ['Промприлад', 'AXIS', 'Дніпровес', 'ІКС-Маркет', 'VAGAR', 'BTHE', 'CAS', 'Digi', 'Datalogic', 'Aclas', 'Mettler Toledo', 'Dibal', 'Штрих-принт'],
+    /** «Фасування та маркування вагового товару» («з вагами з чекодруком і друком власних штрихкодів»), UAH a year per device. */
+    labelScalesYearUah: 3870,
+    /** «Масові розсилки клієнтам» — what sends the debt reminders by SMS, Viber and e-mail; UAH a year per workplace of Ультра. */
+    mailingsYearUah: 3990,
+    /** «Мобільний додаток Торгсофт», UAH per device, no period printed; it works with the base through the shop's server over the internet. */
+    mobileAppUah: 4590,
+    /** «Торгсофт-Гібрид: продажі без інтернету для віддаленого сервера», UAH per client connection. */
+    hybridUah: 2480,
+    /** «Демоверсія на 30 днів». */
+    demoDays: 30,
+  },
+  /**
+   * Posbox by Checkbox — read on `checkedAt`: its site (the home page, the
+   * tariffs, the page for grocery shops and minimarkets) and its public
+   * knowledge base, all 159 of whose Ukrainian pages were searched for
+   * debts and for work without the internet; neither is mentioned. The
+   * tariff page prices extras through a calculator whose rules come from the
+   * page's own script (500 goods in the price, +18 ₴ for each thousand begun
+   * above that). The same script carries a second price set the page did not
+   * show on `checkedAt` (Business 798 ₴, Pro 1 200 ₴, with a promotional price
+   * for Checkbox clients until 31.12.2026): re-read the tariffs before
+   * relying on the figures below. Same rule as above: «not mentioned» means
+   * not mentioned on those pages, never «does not exist».
+   */
+  posbox: {
+    name: 'Posbox',
+    vendor: 'Checkbox',
+    publishedAt: '2026-10-23',
+    checkedAt: '2026-10-23',
+    sources: {
+      site: 'https://posbox.ai/',
+      prices: 'https://posbox.ai/prices/',
+      grocery: 'https://posbox.ai/markets/',
+      weighed: 'https://wiki.posbox.ai/uk/goods/by_weight',
+      scales: 'https://wiki.posbox.ai/uk/devices/scale_list',
+      fiscalDown: 'https://wiki.posbox.ai/uk/selling/fiscalization_is_temporarily_unavailable',
+      excise: 'https://wiki.posbox.ai/uk/selling/excise_tax',
+      /** Checkbox's own post: «каса вже включена у вартість рішення». */
+      blog: 'https://checkbox.ua/blog/posbox-zruchna-alternatyva-1c-ta-bas/',
+    },
+    /**
+     * UAH a month, each «(Місяць безкоштовно)»; one outlet and one register are
+     * in the price, with the Checkbox ПРРО. `stock` — «Складський облік»
+     * (receiving, stocktake, write-off) is in the tariff; Start, «Тільки для
+     * клієнтів Checkbox», carries «Товари — до 500 найменувань» and no stock.
+     */
+    plans: [
+      { id: 'Start', monthlyUah: 348, stock: false },
+      { id: 'Business', monthlyUah: 549, stock: true },
+      { id: 'Pro', monthlyUah: 849, stock: true },
+    ],
+    /** Start: «Товари — до 500 найменувань». */
+    startGoodsLimit: 500,
+    /** The calculator of Business and Pro: goods in the price, then a step and its price a month. */
+    goodsIncluded: 500,
+    goodsStep: 1000,
+    goodsStepUah: 18,
+    /** «Додаткова каса (+249₴)», «Торгові точки (+519₴)». */
+    extraRegisterUah: 249,
+    extraOutletUah: 519,
+    /** «Фіскалізація з ПРРО Checkbox уже включена». */
+    prroIncluded: true,
+    /** The grocery page: «Усе в хмарі: працює всюди, де є інтернет». */
+    cloud: true,
+    /** Scales «через протокол METTLER TOLEDO», connected through their POSPort program. */
+    scaleBrands: ['CAS', 'Acom', 'Mettler Toledo', 'Vagar', 'Дніпровес', 'Промприлад'],
+    /** Weight barcodes «у якому вже закодована кількість товару», prefixes as printed. */
+    weightBarcodePrefixes: ['20', '21', '22', '23'],
+  },
+  /**
+   * Poster for shops — read on `checkedAt`: the retail tariff page («Тарифи
+   * Poster для магазинів»), read from its markup the same way as the café one
+   * above (every row of its comparison table is ticked, marked «Доступно як
+   * додатковий модуль» or empty, per tariff), and the «Poster для магазину»
+   * page. That page prints «Ціна за одну касу з ПРРО — 5 ₴/міс» from a price
+   * element without its Ukrainian figure; the tariff page's 200 ₴ is the one
+   * recorded. Neither page mentions selling on credit or weight barcodes from
+   * label scales.
+   */
+  posterretail: {
+    name: 'Poster',
+    publishedAt: '2026-10-23',
+    checkedAt: '2026-10-23',
+    sources: {
+      pricing: 'https://joinposter.com/ua/pricing-retail',
+      shop: 'https://joinposter.com/ua/business/shop',
+    },
+    /**
+     * UAH a month, billed monthly and per month when paid for a year; `items` —
+     * «Кількість товарів»; `stocktake` — «Інвентаризації» is ticked (from Mini).
+     */
+    plans: [
+      { id: 'Starter', monthlyUah: 600, annualUah: 540, items: 500, stocktake: false },
+      { id: 'Mini', monthlyUah: 1200, annualUah: 1080, items: 1000, stocktake: true },
+      { id: 'Business', monthlyUah: 1700, annualUah: 1530, items: 3000, stocktake: true },
+      { id: 'Pro', monthlyUah: 2400, annualUah: 2160, items: 15000, stocktake: true },
+    ],
+    /** «Ціна за одну касу з ПРРО — 200 ₴/міс», an add-on on every tariff. */
+    prroUah: 200,
+    /** «Додаткова каса — 760 ₴» (printed without a period); offered from `extraRegisterFrom`, Starter's cell is empty. */
+    extraRegisterUah: 760,
+    extraRegisterFrom: 'Mini',
+    trialDays: 15,
+    /** The FAQ «Чи можна підключити ваги до Poster?». */
+    recommendedScale: 'ВІС Промприлад BTA-60/15-5D-AC',
+  },
 } as const;
 
 export type FeatureStatus = 'available' | 'coming';
