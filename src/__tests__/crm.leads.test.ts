@@ -141,6 +141,8 @@ describe.skipIf(!hasDb)('site leads (070)', () => {
       name: 'Марія',
       form_id: 'pos-bottom',
       intent: 'demo',
+      // The page says only «pos»; what the person chose is what to call about.
+      product: 'pos',
       business: 'kvity',
       journey: { first: { ref: 'chatgpt.com' }, visits: 2, ctas: [{ id: 'download-mac' }] },
     });

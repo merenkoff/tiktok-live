@@ -179,8 +179,13 @@ test('the «Ліди» tab lists the site leads with where they came from, and k
   expect(patch?.body).toEqual({ status: 'demo' });
   expect(patch?.token).toBe('9999999999999.e2e');
 
-  // A reload lands on the same tab.
+  // The chips move the lead at once, before any re-read.
   await page.keyboard.press('Escape');
+  const chips = page.getByRole('group', { name: 'Статус', exact: true });
+  await expect(chips.getByRole('button', { name: /^Нові/ })).toHaveText('Нові 0');
+  await expect(chips.getByRole('button', { name: /^Демо/ })).toHaveText('Демо 1');
+
+  // A reload lands on the same tab.
   await page.reload();
   await expect(page.getByRole('tab', { name: 'Ліди' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByTestId('lead-row-7')).toContainText('Демо');

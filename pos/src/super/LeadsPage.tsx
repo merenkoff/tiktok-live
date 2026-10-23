@@ -51,9 +51,20 @@ export function LeadsPage() {
   }, [load]);
 
   function replaceRow(row: Pick<SuperLeadRow, 'id' | 'status' | 'note'>) {
-    setList((prev) =>
-      prev ? { ...prev, items: prev.items.map((i) => (i.id === row.id ? { ...i, status: row.status, note: row.note } : i)) } : prev
-    );
+    setList((prev) => {
+      if (!prev) return prev;
+      const was = prev.items.find((i) => i.id === row.id)?.status;
+      // The chips move the lead to its new status at once, not on the next read.
+      const counts =
+        was && was !== row.status
+          ? { ...prev.counts, [was]: prev.counts[was] - 1, [row.status]: prev.counts[row.status] + 1 }
+          : prev.counts;
+      return {
+        ...prev,
+        counts,
+        items: prev.items.map((i) => (i.id === row.id ? { ...i, status: row.status, note: row.note } : i)),
+      };
+    });
   }
 
   const all = list ? STATUS_ORDER.reduce((n, s) => n + list.counts[s], 0) : 0;

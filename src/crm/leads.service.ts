@@ -169,7 +169,11 @@ export interface LeadRow {
   created_at: string;
   last_touch_at: string;
   touches: number;
-  /** The latest product or business any touch named — what to call about. */
+  /**
+   * What to call about: the latest touch that named one, the person's own
+   * «Ваш бізнес» before the page's product — on `/pos` the page says only
+   * «pos», the chip says «kafe».
+   */
   interest: string | null;
   last: LeadTouch | null;
 }
@@ -207,8 +211,8 @@ const LAST_TOUCH = `
     WHERE t.lead_id = l.id ORDER BY t.created_at DESC, t.id DESC LIMIT 1
   ) lt ON TRUE
   LEFT JOIN LATERAL (
-    SELECT COALESCE(t.product, t.business) AS interest FROM crm_lead_touches t
-    WHERE t.lead_id = l.id AND COALESCE(t.product, t.business) IS NOT NULL
+    SELECT COALESCE(t.business, t.product) AS interest FROM crm_lead_touches t
+    WHERE t.lead_id = l.id AND COALESCE(t.business, t.product) IS NOT NULL
     ORDER BY t.created_at DESC, t.id DESC LIMIT 1
   ) li ON TRUE`;
 

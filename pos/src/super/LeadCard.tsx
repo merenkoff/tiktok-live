@@ -52,7 +52,9 @@ export function LeadCard({
     try {
       const card = await superApi.patchLead(id, patch);
       setLead(card);
-      setNote(card.note);
+      // Only a note save answers for the note: a status tap that returns while
+      // the note is being typed must not put the old note back over the draft.
+      if (patch.note !== undefined) setNote(card.note);
       onSaved({ id: card.id, status: card.status, note: card.note });
     } catch (err) {
       setError(superErrorText(err));
@@ -188,8 +190,10 @@ function TouchCard({ touch }: { touch: SuperLeadTouch }) {
       <Row label="Намір">{intentLabel(touch.intent)}</Row>
       {(touch.product || touch.business) && (
         <Row label="Продукт">
-          {interestLabel(touch.product ?? touch.business)}
-          {touch.business && touch.product ? ` (сам обрав: ${interestLabel(touch.business)})` : ''}
+          {interestLabel(touch.business ?? touch.product)}
+          {touch.business && touch.product && touch.business !== touch.product
+            ? ` (сам обрав; сторінка — ${interestLabel(touch.product)})`
+            : ''}
         </Row>
       )}
       {touch.page_path && <Row label="Сторінка">{touch.page_path}</Row>}
