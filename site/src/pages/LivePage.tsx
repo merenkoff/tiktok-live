@@ -16,6 +16,7 @@ import { PRICING, FEATURES } from '../lib/productFacts';
 import type { FaqItem } from '../lib/faqJsonLd';
 import { BarChart3, Bot, Check, ChevronRight, Coins, Lock, MessageCircle, Monitor, Sparkles, Users, Video } from '../components/glyphs';
 import liveScreenshot from '../assets/screenshots/live-session.png';
+import { CTA } from '../lib/ctaIds';
 
 const STATS = [
   { value: '3 мови', label: 'розпізнає коментарі — EN, UK, RU' },
@@ -125,6 +126,9 @@ export function LivePage() {
             <div className="mt-8">
               <CTAForm
                 id="cta"
+                formId="live-hero"
+                intent="live-trial"
+                product="live"
                 accent="live"
                 heading="Спробувати на своєму ефірі"
                 subheading={`${PRICING.live.label} для перших користувачів. Залиште номер — покажемо, як це працює на прикладі вашого магазину.`}
@@ -349,7 +353,7 @@ export function LivePage() {
         {/* Cross-sell */}
         <section className="max-w-4xl mx-auto px-6 pb-20">
           <Reveal>
-            <a href="/pos" className="card-link block p-8 text-center">
+            <a href="/pos" className="card-link block p-8 text-center" data-cta={CTA.crossSellPos}>
               <AppIcon size={64} className="mx-auto" />
               <p className="eyebrow text-pos mt-5">А ще</p>
               <h2 className="text-2xl font-bold text-ink-strong mt-1">Продаєш ще й офлайн?</h2>
@@ -367,6 +371,9 @@ export function LivePage() {
         {/* Closing CTA */}
         <section className="max-w-3xl mx-auto px-6 pb-24">
           <CTAForm
+            formId="live-bottom"
+            intent="live-trial"
+            product="live"
             accent="live"
             heading="Готові спробувати на своєму ефірі?"
             subheading="Залиште ім'я і телефон — зателефонуємо і покажемо, як підключити."
@@ -376,7 +383,7 @@ export function LivePage() {
         </section>
       </main>
 
-      <StickyCta accent="live" label="Спробувати на своєму ефірі" href="#cta" heroRef={heroRef} />
+      <StickyCta accent="live" label="Спробувати на своєму ефірі" href="#cta" cta={CTA.stickyLiveTry} heroRef={heroRef} />
       <Footer />
     </div>
   );

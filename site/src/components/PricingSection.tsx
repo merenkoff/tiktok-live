@@ -2,6 +2,7 @@ import { Reveal, StaggerGroup, StaggerItem } from './Reveal';
 import { SectionHeading } from './SectionHeading';
 import { ArrowRight, ChevronRight, Coins, Lock, MessageCircle, Sparkles } from './glyphs';
 import { PRICING, COMPETITOR_FACTS, priceLockNote } from '../lib/productFacts';
+import { CTA } from '../lib/ctaIds';
 
 const { pos } = PRICING;
 const cb = COMPETITOR_FACTS.checkbox;
@@ -153,7 +154,7 @@ export function PricingSection() {
                 . Підписку {cb.name} магазин оплачує окремо від нашої каси.
               </p>
             </div>
-            <a href="#cta" className="btn-pos">
+            <a href="#cta" className="btn-pos" data-cta={CTA.pricingFixPrice}>
               Зафіксувати ціну
             </a>
           </div>
@@ -199,7 +200,7 @@ export function PricingCard({ addon }: { addon?: boolean }) {
             передплати. Усе, що ми додамо далі, входить у вашу ціну.
           </p>
         </div>
-        <a href="/pos#pricing" className="link-more text-[15px] whitespace-nowrap">
+        <a href="/pos#pricing" className="link-more text-[15px] whitespace-nowrap" data-cta={CTA.pricingCard}>
           Умови для перших <ChevronRight size={20} />
         </a>
       </div>

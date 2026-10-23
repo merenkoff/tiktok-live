@@ -12,11 +12,14 @@ export function StickyCta({
   accent,
   label,
   href,
+  cta,
   heroRef,
 }: {
   accent: Accent;
   label: string;
   href: string;
+  /** The `data-cta` id this button reports (`lib/ctaIds.ts`). */
+  cta: string;
   heroRef: RefObject<HTMLElement>;
 }) {
   const [visible, setVisible] = useState(false);
@@ -38,6 +41,7 @@ export function StickyCta({
       <div className="max-w-6xl mx-auto px-6 pb-4">
         <a
           href={href}
+          data-cta={cta}
           className={`w-full shadow-card-hover ${BUTTON_CLASS[accent]}`}
         >
           {label}

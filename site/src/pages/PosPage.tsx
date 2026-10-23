@@ -44,6 +44,7 @@ import posDevicesReceipt from '../assets/photo/pos-devices-receipt.png';
 import posRegisterMp4 from '../assets/video/pos-register-loop.mp4';
 import posRegisterWebm from '../assets/video/pos-register-loop.webm';
 import posRegisterPoster from '../assets/video/pos-register-poster.png';
+import { CTA } from '../lib/ctaIds';
 
 const HANDOVER_ARTICLE = '/dovidka/zmina-prro-zamina-kasy';
 const ROADMAP_POS = ROADMAP.filter((item) => item.vertical === 'pos');
@@ -214,10 +215,10 @@ export function PosPage() {
               продовжує пробивати чеки, навіть якщо в залі пропав інтернет.
             </p>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
-              <a href="#download" className="btn-pos">
+              <a href="#download" className="btn-pos" data-cta={CTA.heroDownload}>
                 Завантажити POS
               </a>
-              <a href="#cta" className="link-more text-[17px]">
+              <a href="#cta" className="link-more text-[17px]" data-cta={CTA.heroDemo}>
                 Замовити демо <ChevronRight size={20} />
               </a>
             </div>
@@ -408,6 +409,7 @@ export function PosPage() {
                     <p className="text-muted text-sm mt-1">{card.meta}</p>
                     <a
                       href={RELEASES_URL}
+                      data-cta={CTA.download(card.key as 'windows' | 'mac' | 'linux')}
                       onClick={() => track('download_click', { os: card.key })}
                       className="btn-pos mt-6 self-stretch"
                     >
@@ -458,7 +460,7 @@ export function PosPage() {
           <Reveal>
             <SectionHeading align="left" icon={<MessageCircle size={48} />} title="Питання, які запитують найчастіше" className="mb-8" />
             <Faq items={FAQ_ITEMS} />
-            <a href="/yaku-kasu-obraty" className="link-more text-[15px] mt-6">
+            <a href="/yaku-kasu-obraty" className="link-more text-[15px] mt-6" data-cta={CTA.compareLink}>
               Порівнюєте з іншими касами? Дивіться чесне порівняння <ChevronRight size={20} />
             </a>
           </Reveal>
@@ -468,6 +470,10 @@ export function PosPage() {
         <section className="max-w-3xl mx-auto px-6 pb-24">
           <CTAForm
             id="cta"
+            formId="pos-bottom"
+            intent="demo"
+            product="pos"
+            askBusiness
             accent="pos"
             heading="Готові підключити касу?"
             subheading="Залиште ім'я і телефон — допоможемо налаштувати під ваш магазин."
@@ -477,7 +483,7 @@ export function PosPage() {
         </section>
       </main>
 
-      <StickyCta accent="pos" label="Завантажити POS" href="#download" heroRef={heroRef} />
+      <StickyCta accent="pos" label="Завантажити POS" href="#download" cta={CTA.stickyDownload} heroRef={heroRef} />
       <Footer />
     </div>
   );

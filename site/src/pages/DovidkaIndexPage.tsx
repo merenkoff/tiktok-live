@@ -71,6 +71,9 @@ export function DovidkaIndexPage() {
 
         <section className="max-w-3xl mx-auto px-6 pb-24">
           <CTAForm
+            formId="dovidka-index"
+            intent="question"
+            askBusiness
             accent="pos"
             heading="Не знайшли відповіді?"
             subheading="Залиште телефон — відповімо і, якщо питання часте, додамо в довідку."
