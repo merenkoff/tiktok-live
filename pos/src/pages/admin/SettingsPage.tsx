@@ -283,7 +283,7 @@ export function SettingsPage() {
             <div className="grid gap-4 sm:grid-cols-2 items-start">
               <Field
                 label="Код магазину"
-                hint="Вводять при вході і власник, і продавці. Пристрій запамʼятовує його після першого входу."
+                hint="Вводить власник при першому вході на пристрої; далі продавці входять лише PIN-ом."
               >
                 <input className="sq-input" value={slug} disabled />
               </Field>

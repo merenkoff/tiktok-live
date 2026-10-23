@@ -2,10 +2,12 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-// The login form asks for the store code once: a fresh device types it next to
-// the email + password (or the PIN), and from then on the field shows the
-// remembered code, locked, until someone taps «Змінити». One email may own
-// several stores, so the owner's request carries the code too.
+// The login form asks for the store code once, and only the owner types it: a
+// fresh device opens on «Власник», the code goes next to the email + password,
+// and from then on the field shows the remembered code, locked, until the owner
+// taps «Змінити». A seller's PIN always goes with the remembered code — the PIN
+// tab can neither type one nor change it. One email may own several stores, so
+// the owner's request carries the code too.
 
 import { describe, expect, it } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
@@ -37,10 +39,11 @@ function fillOwner(email: string, password: string): void {
 }
 
 describe('LoginPage — store code', () => {
-  it('on a fresh device asks for the code and sends it with the owner login', async () => {
+  it('on a fresh device opens on «Власник» and sends the code with the owner login', async () => {
     const seen = captureOwnerLogin();
     renderWithProviders(<LoginPage />, { route: '/login' });
 
+    expect(screen.getByRole('button', { name: 'Власник' })).toHaveAttribute('aria-pressed', 'true');
     const code = screen.getByLabelText('Код магазину');
     expect(code).toBeEnabled();
     expect(code).toHaveValue('');
@@ -87,10 +90,11 @@ describe('LoginPage — store code', () => {
     expect(seen.body?.store_slug).toBe('boutique');
   });
 
-  it('unlocks the code for editing and focuses it', () => {
+  it('lets the owner unlock the code for editing and focuses it', () => {
     localStorage.setItem(LAST_SLUG_KEY, 'boutique');
     renderWithProviders(<LoginPage />, { route: '/login' });
 
+    fireEvent.click(screen.getByRole('button', { name: 'Власник' }));
     fireEvent.click(screen.getByTestId('store-code-change'));
 
     const code = screen.getByLabelText('Код магазину');
@@ -113,6 +117,66 @@ describe('LoginPage — store code', () => {
     renderWithProviders(<LoginPage />, { route: '/login' });
 
     expect(screen.getByLabelText('Код магазину')).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('PIN'), { target: { value: '1234' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Увійти' }));
+
+    await waitFor(() => expect(sent).toEqual({ store_slug: 'boutique', pin: '1234' }));
+  });
+
+  it('with a remembered code opens on the PIN tab, where the code cannot be changed', () => {
+    localStorage.setItem(LAST_SLUG_KEY, 'boutique');
+    renderWithProviders(<LoginPage />, { route: '/login' });
+
+    expect(screen.getByRole('button', { name: 'Продавець · PIN' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    expect(screen.getByLabelText('Код магазину')).toBeDisabled();
+    expect(screen.queryByTestId('store-code-change')).not.toBeInTheDocument();
+  });
+
+  it('on a device with no code the PIN tab sends the seller to the owner', async () => {
+    let pinCalls = 0;
+    server.use(
+      http.post(url('/auth/staff/pin'), () => {
+        pinCalls += 1;
+        return HttpResponse.json(makeAuthResponse());
+      })
+    );
+    renderWithProviders(<LoginPage />, { route: '/login' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Продавець · PIN' }));
+
+    expect(screen.getByTestId('store-code-missing')).toHaveTextContent('Його вводить власник');
+    expect(screen.queryByLabelText('Код магазину')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('PIN')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Увійти' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Увійти як власник' }));
+    expect(screen.getByRole('button', { name: 'Власник' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Код магазину')).toBeEnabled();
+    expect(pinCalls).toBe(0);
+  });
+
+  it('a code the owner is still typing never reaches a PIN login', async () => {
+    localStorage.setItem(LAST_SLUG_KEY, 'boutique');
+    let sent: unknown = null;
+    server.use(
+      http.post(url('/auth/staff/pin'), async ({ request }) => {
+        sent = await request.json();
+        return HttpResponse.json(
+          makeAuthResponse({ staff: { id: 2, display_name: 'Ігор', role: 'seller' } })
+        );
+      })
+    );
+    renderWithProviders(<LoginPage />, { route: '/login' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Власник' }));
+    fireEvent.click(screen.getByTestId('store-code-change'));
+    fireEvent.change(screen.getByLabelText('Код магазину'), { target: { value: 'other-shop' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Продавець · PIN' }));
+    expect(screen.getByLabelText('Код магазину')).toHaveValue('boutique');
     fireEvent.change(screen.getByLabelText('PIN'), { target: { value: '1234' } });
     fireEvent.click(screen.getByRole('button', { name: 'Увійти' }));
 
