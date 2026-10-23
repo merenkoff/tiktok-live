@@ -39,7 +39,12 @@ jobs:
         run: node scripts/gen-icons.mjs --check
       # tsc + client build + SSR build + scripts/prerender.mjs (its own asserts
       # fail the build when a page ships without <h1>, JSON-LD or an asset).
+      # SITEMAP_STRICT: a page whose content no longer matches its hash in
+      # site/sitemap-lastmod.json fails the build until `npm run sitemap:stamp`
+      # records the day it changed — the sitemap's <lastmod> is never typed by hand.
       - run: npm run build
+        env:
+          SITEMAP_STRICT: '1'
       - name: Prerender output sanity
         run: |
           test -f dist/index.html

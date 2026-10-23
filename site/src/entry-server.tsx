@@ -25,8 +25,13 @@ export function render(route: SiteRoute): { html: string; head: string } {
   return { html, head };
 }
 
-export function buildSitemap(): string {
-  const entries = ROUTES.filter((r) => r.sitemap).map((r) => ({ path: r.path, lastmod: r.updatedAt }));
+/**
+ * `lastmod` per path is what scripts/prerender.mjs read off site/sitemap-lastmod.json:
+ * the day each page's content last changed, kept honest by a content hash. A
+ * path it does not name falls back to the route's own date.
+ */
+export function buildSitemap(lastmod: Record<string, string> = {}): string {
+  const entries = ROUTES.filter((r) => r.sitemap).map((r) => ({ path: r.path, lastmod: lastmod[r.path] ?? r.updatedAt }));
   const urls = entries
     .map((e) => `  <url>\n    <loc>${SITE_URL}${e.path}</loc>\n    <lastmod>${e.lastmod}</lastmod>\n  </url>`)
     .join('\n');
