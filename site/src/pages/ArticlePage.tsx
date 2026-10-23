@@ -58,6 +58,15 @@ export function ArticlePage({ article }: { article: Article }) {
               buttonLabel="Отримати демо"
               showNameField
             />
+          ) : meta.cta ? (
+            <CTAForm
+              id="cta"
+              accent="pos"
+              heading={meta.cta.heading}
+              subheading={meta.cta.subheading}
+              buttonLabel={meta.cta.button}
+              showNameField
+            />
           ) : (
             <CTAForm
               id="cta"
