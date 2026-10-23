@@ -2,9 +2,11 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, type ReactNode, useEffect, useState } from 'react';
+import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { getSuperToken, superApi, superErrorText } from './superApi';
 import { StoresPage } from './StoresPage';
+import { LeadsPage } from './LeadsPage';
 
 /**
  * `/super` — the cross-store admin (TechDocs/POS_SUPER_ADMIN.md). Web shell
@@ -18,12 +20,63 @@ export function SuperAdminApp() {
 
   if (!authed) return <SuperLoginForm onDone={() => setAuthed(true)} />;
   return (
-    <StoresPage
+    <SuperShell
       onLogout={() => {
         superApi.logout();
         setAuthed(false);
       }}
-    />
+    >
+      <Routes>
+        <Route index element={<StoresPage />} />
+        <Route path="leads" element={<LeadsPage />} />
+        <Route path="*" element={<Navigate to="/super" replace />} />
+      </Routes>
+    </SuperShell>
+  );
+}
+
+/**
+ * Two tabs, each its own address so a link or a reload lands on the same one:
+ * «Магазини» (`/super`) and «Ліди» (`/super/leads`, TechDocs/CRM_LEADS.md).
+ */
+const TABS = [
+  { to: '/super', label: 'Магазини' },
+  { to: '/super/leads', label: 'Ліди' },
+] as const;
+
+function SuperShell({ onLogout, children }: { onLogout: () => void; children: ReactNode }) {
+  const { pathname } = useLocation();
+  const current = pathname.replace(/\/+$/, '').startsWith('/super/leads') ? '/super/leads' : '/super';
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-6 space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-4">
+          <h1 className="text-lg font-semibold text-sq-text">Супер-адмін</h1>
+          {/* Tab roles, as on «Вигляд меню»: what the tests and screen readers use. */}
+          <nav role="tablist" aria-label="Розділ" className="inline-flex gap-1 p-[3px] rounded-xl bg-sq-empty">
+            {TABS.map((t) => (
+              <Link
+                key={t.to}
+                to={t.to}
+                role="tab"
+                aria-selected={current === t.to}
+                className={`min-h-[34px] inline-flex items-center px-3.5 rounded-[9px] text-[15px] transition-colors ${
+                  current === t.to
+                    ? 'bg-white shadow-[0_1px_3px_rgba(0,0,0,.12)] font-semibold text-sq-text'
+                    : 'font-medium text-sq-secondary hover:text-sq-text'
+                }`}
+              >
+                {t.label}
+              </Link>
+            ))}
+          </nav>
+        </div>
+        <button type="button" className="rounded-sq border border-sq-divider px-3 py-1.5 text-sm text-sq-secondary" onClick={onLogout}>
+          Вийти
+        </button>
+      </div>
+      {children}
+    </div>
   );
 }
 

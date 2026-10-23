@@ -380,4 +380,75 @@ describe.skipIf(!hasDb)('POS super admin routes', () => {
       expect(bad.statusCode).toBe(400);
     });
   });
+
+  describe('leads (070, TechDocs/CRM_LEADS.md)', () => {
+    const PHONE = `+38098${String(Date.now()).slice(-7)}`;
+    let leadId = 0;
+
+    beforeAll(async () => {
+      const { recordLead, cleanLeadInput } = await import('../crm/leads.service.js');
+      ({ leadId } = await recordLead(
+        cleanLeadInput({ phone: PHONE, name: 'Тест', form_id: 'about', intent: 'callback', business: 'kafe' })
+      ));
+    });
+
+    afterAll(async () => {
+      await pool.query(`DELETE FROM crm_leads WHERE phone = $1`, [PHONE]);
+    });
+
+    it('lets nobody but the super admin read or change a lead', async () => {
+      for (const [method, url] of [
+        ['GET', '/api/pos/super/leads'],
+        ['GET', `/api/pos/super/leads/${leadId}`],
+        ['PATCH', `/api/pos/super/leads/${leadId}`],
+      ] as const) {
+        expect((await app.inject({ method, url, payload: method === 'PATCH' ? { status: 'demo' } : undefined })).statusCode).toBe(401);
+        const asOwner = await app.inject({
+          method,
+          url,
+          headers: { 'x-pos-super-token': a.ownerToken, authorization: `Bearer ${a.ownerToken}` },
+          payload: method === 'PATCH' ? { status: 'demo' } : undefined,
+        });
+        expect(asOwner.statusCode).toBe(401);
+      }
+    });
+
+    it('lists, opens and updates a lead', async () => {
+      const list = await app.inject({
+        method: 'GET',
+        url: `/api/pos/super/leads?q=${PHONE.slice(-7)}`,
+        headers: superHeaders(),
+      });
+      expect(list.statusCode).toBe(200);
+      expect(list.json().items).toEqual([
+        expect.objectContaining({ id: leadId, phone: PHONE, interest: 'kafe', status: 'new' }),
+      ]);
+
+      const card = await app.inject({ method: 'GET', url: `/api/pos/super/leads/${leadId}`, headers: superHeaders() });
+      expect(card.json()).toMatchObject({ id: leadId, history: [expect.objectContaining({ form_id: 'about', intent: 'callback' })] });
+
+      const patched = await app.inject({
+        method: 'PATCH',
+        url: `/api/pos/super/leads/${leadId}`,
+        headers: superHeaders(),
+        payload: { status: 'demo', note: 'показати кухню' },
+      });
+      expect(patched.statusCode).toBe(200);
+      expect(patched.json()).toMatchObject({ status: 'demo', note: 'показати кухню' });
+    });
+
+    it('answers a bad status in words, an unknown lead with 404 and a junk id with 400', async () => {
+      const bad = await app.inject({
+        method: 'PATCH',
+        url: `/api/pos/super/leads/${leadId}`,
+        headers: superHeaders(),
+        payload: { status: 'won' },
+      });
+      expect(bad.statusCode).toBe(400);
+      expect(bad.json().error).toBe('Невідомий статус');
+      expect((await app.inject({ method: 'GET', url: '/api/pos/super/leads?status=won', headers: superHeaders() })).statusCode).toBe(400);
+      expect((await app.inject({ method: 'GET', url: '/api/pos/super/leads/999999999999', headers: superHeaders() })).statusCode).toBe(404);
+      expect((await app.inject({ method: 'GET', url: '/api/pos/super/leads/abc', headers: superHeaders() })).statusCode).toBe(400);
+    });
+  });
 });

@@ -4,7 +4,7 @@
 
 // The owner's «Заокруглення готівки» (TechDocs/POS_CASH_ROUNDING.md): the step
 // arrives with the store, goes back as a number, and a backend older than
-// migration 070 — which sends no field at all — reads as «not rounded».
+// migration 071 — which sends no field at all — reads as «not rounded».
 
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';

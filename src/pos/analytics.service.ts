@@ -20,7 +20,7 @@ export interface SalesSummary {
   net_cents: number;
   avg_check_cents: number;
   /**
-   * Cash rounding of the window's sales (НБУ № 25, migration 070), signed.
+   * Cash rounding of the window's sales (НБУ № 25, migration 071), signed.
    * Not revenue — «Виторг» stays what the goods came to — but the reason the
    * payment split, which counts the window's sales, comes to
    * `gross_cents + rounding_cents`.
@@ -167,7 +167,7 @@ export async function getSalesSummary(
   // and the split no longer adds up to «Виторг». Per sale, because an even
   // split may carry several cash rows and the change must leave only once;
   // change is only ever given in cash, and never more than the cash there was.
-  // The change is counted from the sum AFTER cash rounding (migration 070):
+  // The change is counted from the sum AFTER cash rounding (migration 071):
   // that is what the customer owed, so the split adds up to «Виторг» plus
   // the sales' `rounding_cents`, the line the dashboard shows beside it.
   const paymentsResult = await pool.query(
@@ -299,7 +299,7 @@ function mapStore(store: Record<string, unknown>) {
     gtin_lookup_enabled: Boolean(store.gtin_lookup_enabled),
     auto_print_receipt: Boolean(store.auto_print_receipt),
     florist_labour_bps: Number(store.florist_labour_bps ?? 0),
-    // НБУ № 25: the step cash totals are rounded to, 0 = not rounded (migration 070).
+    // НБУ № 25: the step cash totals are rounded to, 0 = not rounded (migration 071).
     cash_rounding: Number(store.cash_rounding ?? 0),
     enabled_modules: (store.enabled_modules as string[] | null) ?? [],
     module_remotes:
@@ -322,7 +322,7 @@ export type StorePatch = {
   auto_print_receipt?: boolean;
   /** Assembly charge on a composite, in basis points. See migration 040. */
   florist_labour_bps?: number;
-  /** Cash totals rounded to 0 (off), 10 or 50 kopecks. See migration 070. */
+  /** Cash totals rounded to 0 (off), 10 or 50 kopecks. See migration 071. */
   cash_rounding?: number;
   enabled_modules?: string[];
   module_remotes?: Record<string, string | ModuleRemoteEntry>;

@@ -16,6 +16,8 @@ import { useScrollToHash } from '../hooks/useScrollToHash';
 import { PRICING, roadmapFor } from '../lib/productFacts';
 import type { VerticalPageData, VerticalRow } from '../content/verticals';
 import { BarChart3, Check, ChevronRight, MessageCircle, Package, QrCode, ShieldCheck, Users, WifiOff } from '../components/glyphs';
+import { CTA } from '../lib/ctaIds';
+import type { LeadProduct } from '../hooks/useLeadSubmit';
 
 /** The core every vertical shares; short on purpose — /pos tells the long version. */
 const CORE = [
@@ -108,19 +110,19 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
             <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
               {coming ? (
                 <>
-                  <a href="#cta" className="btn-pos">
+                  <a href="#cta" className="btn-pos" data-cta={CTA.heroWaitlist}>
                     Записатися в перші
                   </a>
-                  <a href="#today" className="link-more text-[17px]">
+                  <a href="#today" className="link-more text-[17px]" data-cta={CTA.heroToday}>
                     Що вже працює <ChevronRight size={20} />
                   </a>
                 </>
               ) : (
                 <>
-                  <a href="/pos#download" className="btn-pos">
+                  <a href="/pos#download" className="btn-pos" data-cta={CTA.heroDownload}>
                     Завантажити POS
                   </a>
-                  <a href="#cta" className="link-more text-[17px]">
+                  <a href="#cta" className="link-more text-[17px]" data-cta={CTA.heroDemo}>
                     Замовити демо <ChevronRight size={20} />
                   </a>
                 </>
@@ -132,7 +134,12 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
                 : `${PRICING.pos.label}.`}
             </p>
             {content.demoLink && (
-              <a href={content.demoLink.href} className="link-more text-[15px] mt-3" rel="noopener">
+              <a
+                href={content.demoLink.href}
+                className="link-more text-[15px] mt-3"
+                rel="noopener"
+                data-cta={CTA.demoMenu(fact.slug)}
+              >
                 {content.demoLink.label} <ChevronRight size={20} />
               </a>
             )}
@@ -399,6 +406,9 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
         <section className="max-w-3xl mx-auto px-6 pb-24">
           <CTAForm
             id="cta"
+            formId={`vertical-${fact.slug}`}
+            intent={coming ? 'waitlist' : 'demo'}
+            product={fact.slug as LeadProduct}
             accent="pos"
             heading={cta.heading}
             subheading={cta.subheading}
@@ -409,9 +419,9 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
       </main>
 
       {coming ? (
-        <StickyCta accent="pos" label="Записатися в перші" href="#cta" heroRef={heroRef} />
+        <StickyCta accent="pos" label="Записатися в перші" href="#cta" cta={CTA.stickyWaitlist} heroRef={heroRef} />
       ) : (
-        <StickyCta accent="pos" label="Завантажити POS" href="/pos#download" heroRef={heroRef} />
+        <StickyCta accent="pos" label="Завантажити POS" href="/pos#download" cta={CTA.stickyDownload} heroRef={heroRef} />
       )}
       <Footer />
     </div>

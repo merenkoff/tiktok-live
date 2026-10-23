@@ -49,7 +49,7 @@ export interface SaleInput {
   customer_phone?: string | null;
   items: SaleItemInput[];
   payments: SalePaymentInput[];
-  /** Migration 070: the step the cash part was rounded by, and by how much. */
+  /** Migration 071: the step the cash part was rounded by, and by how much. */
   cash_rounding?: number;
   rounding_cents?: number;
 }
@@ -58,7 +58,7 @@ export interface SaleInput {
  * The document's rounding, or null when there is none — a zero rounding is
  * no rounding, and the provider then gets exactly the payload it got before.
  * A step that is not 10 or 50 with a non-zero amount cannot come out of
- * `sales.service.ts` (the CHECK in migration 070 forbids it); refusing it here
+ * `sales.service.ts` (the CHECK in migration 071 forbids it); refusing it here
  * keeps a hand-edited row from reaching the tax office as ROUND_50.
  */
 export function cashRoundingOf(source: {
@@ -188,7 +188,7 @@ export interface RefundInput {
   method: string | null;
   reason?: string | null;
   lines: RefundLineInput[];
-  /** Migration 070: a cash refund's rounding — the money handed back is `total_cents + rounding_cents`. */
+  /** Migration 071: a cash refund's rounding — the money handed back is `total_cents + rounding_cents`. */
   cash_rounding?: number;
   rounding_cents?: number;
 }

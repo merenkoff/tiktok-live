@@ -103,7 +103,7 @@ export function SettingsPage() {
     setQrPurposeTemplate(store.qr_purpose_template ?? '');
     setGtinLookupEnabled(store.gtin_lookup_enabled);
     setAutoPrintReceipt(store.auto_print_receipt);
-    // A backend older than migration 070 sends nothing: off, as it always was.
+    // A backend older than migration 071 sends nothing: off, as it always was.
     setCashRounding(String(store.cash_rounding ?? 0) as CashRoundingChoice);
     setEnabledModules(new Set(store.enabled_modules));
     setLiveTiktokUsername(store.live_tiktok_username ?? '');

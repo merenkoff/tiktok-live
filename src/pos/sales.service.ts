@@ -1018,7 +1018,7 @@ export async function getSale(storeId: number, saleId: number) {
     cart_discount_value:
       sale.cart_discount_value == null ? null : Number(sale.cart_discount_value),
     cart_discount_cents: Number(sale.cart_discount_cents ?? 0),
-    // Cash rounding (migration 070): the customer paid `total_cents +
+    // Cash rounding (migration 071): the customer paid `total_cents +
     // rounding_cents`; `cash_rounding` is the step, 0 when nothing was rounded.
     cash_rounding: Number(sale.cash_rounding ?? 0),
     rounding_cents: Number(sale.rounding_cents ?? 0),

@@ -60,4 +60,32 @@ describe('SuperApi', () => {
     const api429 = new SuperApi(adapterReplying(() => ({ status: 429, data: {} })));
     await api429.login('x').catch((e) => expect(superErrorText(e)).toMatch(/Забагато спроб/));
   });
+
+  it('lists leads with only the filters that are set, and patches status and note with the token', async () => {
+    setSuperToken('t.0k');
+    const seen: Array<{ method?: string; url?: string; params?: unknown; data?: unknown; header?: string }> = [];
+    const api = new SuperApi(
+      adapterReplying((c) => {
+        seen.push({
+          method: c.method,
+          url: c.url,
+          params: c.params,
+          data: c.data ? JSON.parse(String(c.data)) : undefined,
+          header: AxiosHeaders.from(c.headers).get('X-POS-Super-Token') as string | undefined,
+        });
+        return { status: 200, data: { items: [], total: 0, counts: {} } };
+      })
+    );
+    await api.listLeads({ status: 'new', interest: '', q: 'Олена', offset: 0 });
+    await api.patchLead(7, { status: 'demo', note: 'показати' });
+    expect(seen[0]).toEqual({
+      method: 'get',
+      url: '/leads',
+      params: { status: 'new', q: 'Олена', offset: 0 },
+      data: undefined,
+      header: 't.0k',
+    });
+    expect(seen[1]).toMatchObject({ method: 'patch', url: '/leads/7', data: { status: 'demo', note: 'показати' }, header: 't.0k' });
+  });
 });
+

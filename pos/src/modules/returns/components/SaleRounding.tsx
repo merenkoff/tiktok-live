@@ -9,7 +9,7 @@ import { formatSignedUah, formatUah } from '@pos/platform';
  * its «Разом». «Разом» stays the goods' value — what the paper's «СУМА» says
  * and what a refund counts from — so this line names the kopecks the cash
  * part moved by and what was actually due. Nothing for a receipt that was not
- * rounded, or one read from a server older than migration 070.
+ * rounded, or one read from a server older than migration 071.
  */
 export function SaleRoundingLine({
   totalCents,

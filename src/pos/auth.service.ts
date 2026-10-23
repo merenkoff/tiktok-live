@@ -67,7 +67,7 @@ export interface AuthResponse {
     florist_labour_bps: number;
     /**
      * Cash totals rounded to 0 (off), 10 or 50 kopecks (НБУ № 25, migration
-     * 070). With the login for the same reason as `florist_labour_bps`: the
+     * 071). With the login for the same reason as `florist_labour_bps`: the
      * offline till shows and prints the rounded sum the server will file.
      */
     cash_rounding: number;

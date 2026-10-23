@@ -1,3 +1,4 @@
+import type { LeadIntent } from '../../hooks/useLeadSubmit';
 import type { ComponentType } from 'react';
 import type { FaqItem } from '../../lib/faqJsonLd';
 
@@ -28,7 +29,11 @@ export interface ArticleMeta {
   /** Table of contents; only guides have one. */
   headings?: Heading[];
   /** The closing form's words, when the articles' default does not fit — an article about a «Скоро» feature collects a waiting list. */
-  cta?: { heading: string; subheading: string; button: string };
+  /**
+   * The closing form's own copy. Every override so far is a «Записатися» list,
+   * so the lead it sends is a `waitlist` unless `intent` says otherwise.
+   */
+  cta?: { heading: string; subheading: string; button: string; intent?: LeadIntent };
 }
 
 export interface Article {

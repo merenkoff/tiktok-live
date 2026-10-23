@@ -14,7 +14,7 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleString('uk-UA', { dateStyle: 'short', timeStyle: 'short' });
 }
 
-export function StoresPage({ onLogout }: { onLogout: () => void }) {
+export function StoresPage() {
   const [stores, setStores] = useState<SuperStoreRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<number | null>(null);
@@ -37,10 +37,9 @@ export function StoresPage({ onLogout }: { onLogout: () => void }) {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 space-y-6">
+    <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold text-sq-text">Супер-адмін · магазини</h1>
           <p className="text-sm text-sq-secondary">
             {stores ? `${stores.length} магазин(ів)` : 'Завантаження…'} · зміни модулів підхоплюються
             касами після наступного входу (баннер «Перезавантажити»).
@@ -49,9 +48,6 @@ export function StoresPage({ onLogout }: { onLogout: () => void }) {
         <div className="flex gap-2">
           <button type="button" className="rounded-sq border border-sq-divider px-3 py-1.5 text-sm text-sq-secondary" onClick={() => void reload()}>
             Оновити
-          </button>
-          <button type="button" className="rounded-sq border border-sq-divider px-3 py-1.5 text-sm text-sq-secondary" onClick={onLogout}>
-            Вийти
           </button>
         </div>
       </div>

@@ -700,7 +700,7 @@ async function loadLineCodes(
 
 /**
  * What the document settles: the goods' total plus the cash rounding
- * (migration 070). This — not `total_cents` — is the sum on the tax office's
+ * (migration 071). This — not `total_cents` — is the sum on the tax office's
  * record (`CHECKTOTAL.SUM` is after rounding, `NORNDSUM` before), so it is
  * what the ledger row carries and what the QR link we build for an offline
  * receipt puts in `sm` (`offline/session.ts`).

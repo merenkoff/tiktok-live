@@ -172,7 +172,7 @@ export interface StoreConfig {
   /**
    * Cash totals rounded to this many kopecks — 0 (off), 10 or 50 (Постанова
    * НБУ № 25, пп. 4 / 4-1; TechDocs/POS_CASH_ROUNDING.md). Optional: a backend
-   * older than migration 070 does not send it, which reads as off.
+   * older than migration 071 does not send it, which reads as off.
    */
   cash_rounding?: number;
   /** Toggleable module ids the store has enabled (effective set; core ids not listed). */
@@ -989,7 +989,7 @@ export interface SaleListItem {
   client_uuid?: string | null;
   status: string;
   total_cents: number;
-  /** Cash rounding (migration 070): paid `total_cents + rounding_cents`. Absent from an older server. */
+  /** Cash rounding (migration 071): paid `total_cents + rounding_cents`. Absent from an older server. */
   rounding_cents?: number;
   refunded_cents: number;
   staff_name: string;
@@ -1040,7 +1040,7 @@ export interface SaleDetail {
   /** What the goods came to — the fiscal lines sum to it. */
   total_cents: number;
   /**
-   * The cash part's rounding (НБУ № 25, migration 070), signed: the customer
+   * The cash part's rounding (НБУ № 25, migration 071), signed: the customer
    * paid `total_cents + rounding_cents`. Absent from an older server → 0.
    */
   rounding_cents?: number;
@@ -1274,7 +1274,7 @@ export interface SalesSummary {
   net_cents: number;
   avg_check_cents: number;
   /**
-   * Cash rounding of the window's sales (migration 070), signed — why the
+   * Cash rounding of the window's sales (migration 071), signed — why the
    * payment split comes to `gross_cents + rounding_cents`. Absent from an
    * older server.
    */

@@ -1,4 +1,4 @@
--- migrations/070_pos_cash_rounding.sql
+-- migrations/071_pos_cash_rounding.sql
 -- Cash rounding (Постанова НБУ від 15.03.2018 № 25, пп. 4, 4-1, 5, 6;
 -- TechDocs/POS_CASH_ROUNDING.md).
 --

@@ -9,6 +9,8 @@ import type { Article, Heading } from '../content/dovidka/types';
 
 export function ArticlePage({ article }: { article: Article }) {
   const { meta, Body } = article;
+  // One lead-form id per article, so the CRM says which one a person read last (TechDocs/CRM_LEADS.md).
+  const formId = `dovidka:${meta.slug}`.slice(0, 80);
   useScrollToHash();
 
   return (
@@ -52,6 +54,9 @@ export function ArticlePage({ article }: { article: Article }) {
           {meta.kind === 'guide' ? (
             <CTAForm
               id="cta"
+              formId={formId}
+              intent="demo"
+              askBusiness
               accent="pos"
               heading="Хочете спробувати все це на демо-магазині?"
               subheading="Залиште ім'я і телефон — відкриємо вам демо-касу і допоможемо з першим запуском."
@@ -61,6 +66,9 @@ export function ArticlePage({ article }: { article: Article }) {
           ) : meta.cta ? (
             <CTAForm
               id="cta"
+              formId={formId}
+              intent={meta.cta.intent ?? 'waitlist'}
+              askBusiness
               accent="pos"
               heading={meta.cta.heading}
               subheading={meta.cta.subheading}
@@ -70,6 +78,9 @@ export function ArticlePage({ article }: { article: Article }) {
           ) : (
             <CTAForm
               id="cta"
+              formId={formId}
+              intent="demo"
+              askBusiness
               accent="pos"
               heading="Хочете касу, яка не залежить від одного комп'ютера?"
               subheading="Залиште ім'я і телефон — покажемо, як працює фіскалізація і передача каси."

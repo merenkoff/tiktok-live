@@ -39,6 +39,76 @@ export interface RepointReport {
   failed: Array<{ id: number; slug: string; error: string }>;
 }
 
+/** A lead's place in the CRM (TechDocs/CRM_LEADS.md). */
+export type SuperLeadStatus = 'new' | 'contacted' | 'demo' | 'client' | 'lost';
+
+/** The visitor's path as the server kept it (`src/crm/journey.ts`). */
+export interface SuperLeadJourney {
+  first?: SuperLeadTouchOrigin;
+  last?: SuperLeadTouchOrigin;
+  visits?: number;
+  firstVisitAt?: string;
+  pages?: Array<{ p: string; at?: string }>;
+  ctas?: Array<{ id: string; p?: string; at?: string }>;
+  device?: 'mobile' | 'desktop';
+}
+
+export interface SuperLeadTouchOrigin {
+  at?: string;
+  ref?: string;
+  landing?: string;
+  utm?: Partial<Record<'source' | 'medium' | 'campaign' | 'term' | 'content', string>>;
+  click?: Partial<Record<'gclid' | 'fbclid' | 'ttclid', string>>;
+}
+
+/** One form the person sent, with the server's reading of it. */
+export interface SuperLeadTouch {
+  id: number;
+  created_at: string;
+  form_id: string;
+  intent: string | null;
+  product: string | null;
+  business: string | null;
+  page_path: string | null;
+  name_given: string | null;
+  journey: SuperLeadJourney;
+  source: string;
+  first_source: string;
+  signals: string[];
+  days_to_lead: number | null;
+}
+
+export interface SuperLeadRow {
+  id: number;
+  phone: string;
+  name: string | null;
+  status: SuperLeadStatus;
+  note: string;
+  created_at: string;
+  last_touch_at: string;
+  touches: number;
+  interest: string | null;
+  last: SuperLeadTouch | null;
+}
+
+export interface SuperLeadList {
+  items: SuperLeadRow[];
+  total: number;
+  counts: Record<SuperLeadStatus, number>;
+}
+
+export interface SuperLeadCard extends Omit<SuperLeadRow, 'last'> {
+  history: SuperLeadTouch[];
+}
+
+export interface SuperLeadFilter {
+  status?: SuperLeadStatus;
+  interest?: string;
+  q?: string;
+  limit?: number;
+  offset?: number;
+}
+
 export function getSuperToken(): string | null {
   try {
     return sessionStorage.getItem(SUPER_TOKEN_KEY);
@@ -115,6 +185,24 @@ export class SuperApi {
 
   async repoint(body: { module_id: string; url: string; store_ids?: number[] }): Promise<RepointReport> {
     const { data } = await this.client.post<RepointReport>('/module-remotes/repoint', body);
+    return data;
+  }
+
+  /** The marketing site's leads, newest activity first (TechDocs/CRM_LEADS.md). */
+  async listLeads(filter: SuperLeadFilter = {}): Promise<SuperLeadList> {
+    const params = Object.fromEntries(Object.entries(filter).filter(([, v]) => v !== undefined && v !== ''));
+    const { data } = await this.client.get<SuperLeadList>('/leads', { params });
+    return data;
+  }
+
+  async getLead(id: number): Promise<SuperLeadCard> {
+    const { data } = await this.client.get<SuperLeadCard>(`/leads/${id}`);
+    return data;
+  }
+
+  /** The two things the super admin writes: the status and the note. */
+  async patchLead(id: number, body: { status?: SuperLeadStatus; note?: string }): Promise<SuperLeadCard> {
+    const { data } = await this.client.patch<SuperLeadCard>(`/leads/${id}`, body);
     return data;
   }
 }

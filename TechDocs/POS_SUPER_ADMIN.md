@@ -41,6 +41,7 @@
 | Обзор | `GET /api/pos/super/stores` — id, название, slug, `enabled_modules` (эффективный набор), `module_remotes`, TikTok-ник, ПРРО (вкл/провайдер), активные сотрудники, последняя продажа | таблица; remote-модули показаны как `id версия`, если URL — релиз `module-release.yml`, иначе id + короткий URL |
 | Правка одного магазина | `PATCH /api/pos/super/stores/:id {enabled_modules?, module_remotes?}` | «Редагувати» в строке: чекбоксы модулей, override-URL для вбудованих, онлайн-модули (URL, «Перевірити джерело», добавить/убрать) |
 | Перенацелить модуль | `POST /api/pos/super/module-remotes/repoint {module_id, url, store_ids?}` | панель «Перенацілити модуль»: id, новый URL (версия из URL, проба манифеста), чекбоксы магазинов; отчёт `updated / skipped / failed` |
+| Лиды с сайта | `GET /api/pos/super/leads?status=&interest=&q=&limit=&offset=`, `GET /api/pos/super/leads/:id`, `PATCH /api/pos/super/leads/:id {status?, note?}` | вкладка «Ліди» (`/super/leads`): статус-чипи, фільтр за продуктом, пошук; картка з історією заявок, статусом і нотаткою ([CRM_LEADS.md](CRM_LEADS.md)) |
 
 **Валидация та же, что у владельца** (`sanitizeEnabledModules`,
 `sanitizeModuleRemotes`, `assertSingleFiscalRemote` с провайдером магазина):
@@ -53,6 +54,14 @@
 должно быть) — «Перевірити джерело» делает это в браузере тем же
 `inspectRemoteManifest`, что и Settings владельца, включая предупреждение о
 `minHostPlatform` ([POS_MODULE_PLATFORM_VERSION.md](POS_MODULE_PLATFORM_VERSION.md)).
+
+## Лиды с сайта (CRM_LEADS.md, 2026-10-24)
+
+Супер-админ — **единственное** место, где лиды с `the-live.shop` можно прочитать. Старый
+`GET /api/admin/leads` пускал любой LIVE-токен, а его выпускает `POST /api/pos/live/session-token`
+любому сотруднику магазина с подключённым TikTok — то есть телефоны всех лидов платформы видел
+любой кассир. Маршрут удалён. Это не данные магазина (нет `store_id`), поэтому «любые данные продаж»
+в «Не в v1» к ним не относится. Правила и якоря — в [CRM_LEADS.md](CRM_LEADS.md).
 
 ## Что происходит после изменения
 
@@ -72,13 +81,16 @@
 - Бэкенд: `src/pos/core/superAuth.ts` (пароль, токен, rate limit, `ensureSuper`),
   `src/pos/super.service.ts` (список, patch, repoint), `src/pos/routes/super.routes.ts`
   (core-группа в `pos.routes.ts`).
-- Фронтенд: `pos/src/super/` (`superApi.ts`, `SuperAdminApp`, `StoresPage`,
+- Фронтенд: `pos/src/super/` (`superApi.ts`, `SuperAdminApp` — оболонка з вкладками «Магазини» `/super`
+  і «Ліди» `/super/leads`, `StoresPage`, `LeadsPage`, `LeadCard`, `leadLabels.ts`,
   `StoreEditor`, `RepointPanel`, `probe.ts`), роут `/super/*` в
   `pos/src/modules/renderRoutes.tsx` только для web-шелла, вне guard.
   Общие правила формы записи `module_remotes` — `pos/src/lib/moduleRemoteForm.ts`
   (их же использует Settings).
+- Лиды: `src/crm/` (`leads.service.ts`, `journey.ts`, `sources.ts`, `limits.ts`), три маршрута
+  `/super/leads*` в `super.routes.ts`, миграция `070_crm_leads.sql`.
 - Тесты: `src/__tests__/pos.routes.super.test.ts`, `pos/src/lib/moduleRemoteForm.test.ts`,
-  `pos/src/super/superApi.test.ts`, `pos/e2e/super.spec.ts`.
+  `pos/src/super/superApi.test.ts`, `pos/src/super/leadLabels.test.ts`, `pos/e2e/super.spec.ts`.
 
 ## Тип магазину (вертикаль)
 

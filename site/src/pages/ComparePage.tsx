@@ -13,6 +13,7 @@ import { useScrollToHash } from '../hooks/useScrollToHash';
 import { PRODUCT, PRICING } from '../lib/productFacts';
 import type { FaqItem } from '../lib/faqJsonLd';
 import posProducts from '../assets/screenshots/clothing-products.png';
+import { CTA } from '../lib/ctaIds';
 
 const HANDOVER_ARTICLE = '/dovidka/zmina-prro-zamina-kasy';
 
@@ -75,10 +76,10 @@ export function ComparePage() {
               стоїть {PRODUCT.pos.name}.
             </p>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
-              <a href="#comparison" className="btn-pos">
+              <a href="#comparison" className="btn-pos" data-cta={CTA.compareJump}>
                 Порівняти можливості
               </a>
-              <a href="/pos/odyah" className="link-more text-[17px]">
+              <a href="/pos/odyah" className="link-more text-[17px]" data-cta={CTA.compareToVertical('odyah')}>
                 Детальніше про касу для одягу <ChevronRight size={20} />
               </a>
             </div>
@@ -174,6 +175,9 @@ export function ComparePage() {
         {/* Closing CTA */}
         <section className="max-w-3xl mx-auto px-6 pb-24">
           <CTAForm
+            formId="compare"
+            intent="demo"
+            askBusiness
             accent="pos"
             heading={`Готові спробувати ${PRODUCT.pos.name}?`}
             subheading="Залиште ім'я і телефон — допоможемо порівняти з тим, чим користуєтесь зараз."
@@ -183,7 +187,7 @@ export function ComparePage() {
         </section>
       </main>
 
-      <StickyCta accent="pos" label={`Спробувати ${PRODUCT.pos.name}`} href="/pos" heroRef={heroRef} />
+      <StickyCta accent="pos" label={`Спробувати ${PRODUCT.pos.name}`} href="/pos" cta={CTA.stickyPos} heroRef={heroRef} />
       <Footer />
     </div>
   );
