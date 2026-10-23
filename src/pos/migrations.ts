@@ -118,6 +118,8 @@ export const POS_MIGRATIONS = [
   '068_pos_guest_calls_auto_kitchen.sql',
   // Four one-time copies of the demos for a reseller to play with (cash-demo-*, owner PIN 3333, seller 4444).
   '069_pos_cash_demo_stores.sql',
+  // Leads from the marketing site with their journey, for the super admin's CRM tab; old `leads` carried over once.
+  '070_crm_leads.sql',
 ] as const;
 
 export function readMigration(file: string): string {
