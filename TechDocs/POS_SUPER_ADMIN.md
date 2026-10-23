@@ -41,7 +41,7 @@
 | Обзор | `GET /api/pos/super/stores` — id, название, slug, `enabled_modules` (эффективный набор), `module_remotes`, TikTok-ник, ПРРО (вкл/провайдер), активные сотрудники, последняя продажа | таблица; remote-модули показаны как `id версия`, если URL — релиз `module-release.yml`, иначе id + короткий URL |
 | Правка одного магазина | `PATCH /api/pos/super/stores/:id {enabled_modules?, module_remotes?}` | «Редагувати» в строке: чекбоксы модулей, override-URL для вбудованих, онлайн-модули (URL, «Перевірити джерело», добавить/убрать) |
 | Перенацелить модуль | `POST /api/pos/super/module-remotes/repoint {module_id, url, store_ids?}` | панель «Перенацілити модуль»: id, новый URL (версия из URL, проба манифеста), чекбоксы магазинов; отчёт `updated / skipped / failed` |
-| Лиды с сайта | `GET /api/pos/super/leads?status=&interest=&q=&limit=&offset=`, `GET /api/pos/super/leads/:id`, `PATCH /api/pos/super/leads/:id {status?, note?}` | вкладка «Ліди» (фаза L3, [CRM_LEADS.md](CRM_LEADS.md)) |
+| Лиды с сайта | `GET /api/pos/super/leads?status=&interest=&q=&limit=&offset=`, `GET /api/pos/super/leads/:id`, `PATCH /api/pos/super/leads/:id {status?, note?}` | вкладка «Ліди» (`/super/leads`): статус-чипи, фільтр за продуктом, пошук; картка з історією заявок, статусом і нотаткою ([CRM_LEADS.md](CRM_LEADS.md)) |
 
 **Валидация та же, что у владельца** (`sanitizeEnabledModules`,
 `sanitizeModuleRemotes`, `assertSingleFiscalRemote` с провайдером магазина):
@@ -81,7 +81,8 @@
 - Бэкенд: `src/pos/core/superAuth.ts` (пароль, токен, rate limit, `ensureSuper`),
   `src/pos/super.service.ts` (список, patch, repoint), `src/pos/routes/super.routes.ts`
   (core-группа в `pos.routes.ts`).
-- Фронтенд: `pos/src/super/` (`superApi.ts`, `SuperAdminApp`, `StoresPage`,
+- Фронтенд: `pos/src/super/` (`superApi.ts`, `SuperAdminApp` — оболонка з вкладками «Магазини» `/super`
+  і «Ліди» `/super/leads`, `StoresPage`, `LeadsPage`, `LeadCard`, `leadLabels.ts`,
   `StoreEditor`, `RepointPanel`, `probe.ts`), роут `/super/*` в
   `pos/src/modules/renderRoutes.tsx` только для web-шелла, вне guard.
   Общие правила формы записи `module_remotes` — `pos/src/lib/moduleRemoteForm.ts`
@@ -89,7 +90,7 @@
 - Лиды: `src/crm/` (`leads.service.ts`, `journey.ts`, `sources.ts`, `limits.ts`), три маршрута
   `/super/leads*` в `super.routes.ts`, миграция `070_crm_leads.sql`.
 - Тесты: `src/__tests__/pos.routes.super.test.ts`, `pos/src/lib/moduleRemoteForm.test.ts`,
-  `pos/src/super/superApi.test.ts`, `pos/e2e/super.spec.ts`.
+  `pos/src/super/superApi.test.ts`, `pos/src/super/leadLabels.test.ts`, `pos/e2e/super.spec.ts`.
 
 ## Тип магазину (вертикаль)
 
