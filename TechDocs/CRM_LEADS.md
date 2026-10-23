@@ -71,10 +71,58 @@
 | # | Фаза | Що | Стан |
 |---|---|---|---|
 | L0 | Документ | Цей файл | **зроблено 2026-10-24** |
-| L1 | Бекенд | Міграція `070` (`crm_leads`, `crm_lead_touches`, перенесення старих `leads`), `src/crm/*`, захищений `POST /api/leads`, прибраний `GET /api/admin/leads`, `GET/GET/PATCH /api/pos/super/leads`, тести | не почато |
+| L1 | Бекенд | Міграція `070` (`crm_leads`, `crm_lead_touches`, перенесення старих `leads`), `src/crm/*`, захищений `POST /api/leads`, прибраний `GET /api/admin/leads`, `GET/GET/PATCH /api/pos/super/leads`, тести | **зроблено 2026-10-24** |
 | L2 | Сайт | Збір шляху (`site/src/lib/journey*.ts`), `data-cta`, `formId`/`intent`/чипи/пастка в `CTAForm`, події GA4 | не почато |
 | L3 | `/super` | Вкладки «Магазини / Ліди», список, картка, статус і нотатка, тести | не почато |
 | R | Прод | Деплой — **лише за словом власника** | не почато |
+
+## Бекенд (L1)
+
+**Дані.** Міграція `070_crm_leads.sql` в `POS_MIGRATIONS`:
+- `crm_leads` — одна людина на телефон: статус (`new` / `contacted` / `demo` / `client` / `lost`),
+  нотатка ≤ 2000;
+- `crm_lead_touches` — кожна відправлена форма: `form_id`, `intent`, `product`, `business`,
+  `page_path`, `name_given`, `journey JSONB`.
+
+Стара LIVE-таблиця `leads` переноситься **один раз**: дотик `imported`, під захистом `to_regclass`
+і `ON CONFLICT DO NOTHING`, тож друге завантаження не копіює нічого. Більше в неї ніхто не пише.
+Платформні дані без `store_id`, тому таблиці без префікса `pos_`.
+
+**`src/crm/`**
+- `journey.ts` — `sanitizeJourney`. Білий список ключів, по 20 кроків, рядки ≤ 200, UTM ≤ 100,
+  дата не старша за рік і не з майбутнього. Referrer зберігається як `host/path` **без query**:
+  там їде пошукова фраза чи токен. Сміття читається як `{}`, тобто не коштує нам телефону.
+- `sources.ts` — `sourceOf`: клік-id → UTM → referrer. AI-асистенти йдуть першими, бо Gemini живе
+  на `google.com`. Також `signalsOf` і `daysToLead`. Рахується **при читанні**, тож краще правило
+  завтра перемаркує всі вже збережені ліди.
+- `limits.ts` — ліміти в пам'яті: ≤ 60 за 10 хв **на всіх** (`request.ip` — проксі Railway) і
+  ≤ 5 за годину на телефон.
+- `leads.service.ts`:
+  - `cleanLeadInput` — відмовляє лише телефону, все інше стає `null`;
+  - `recordLead` — upsert людини + новий дотик в одній транзакції; «lost» → «new», якщо людина
+    написала знову, решта статусів не змінюється;
+  - `listLeads` — фільтри статус / інтерес / пошук, лічильники статусів по решті фільтрів;
+  - `getLead`, `updateLead`.
+
+**`POST /api/leads`**:
+- `bodyLimit` 8 КБ;
+- пастка `website`: відповідь 200, нічого не записується;
+- 429 словами;
+- ім'я ≤ 80;
+- старе тіло `{phone, name}` теж приймається (форма `unknown`);
+- у лог іде `leadId`, а **не телефон**.
+
+`src/leads.ts` видалено разом із `GET /api/admin/leads`. Super-маршрути — `/api/pos/super/leads*`
+за `ensureSuper`.
+
+**Тести**
+- `crm.journey.test.ts` — без БД;
+- `crm.leads.test.ts` — справжній маршрут: історія дотиків, lost→new, пастка, 400 / 429 / 413,
+  `/api/admin/leads` → 404, список / картка / оновлення, глобальна стеля;
+- `crm.migration-import.test.ts` — scratch-база: перенос один раз, друге завантаження нічого не додає
+  й не перезаписує статус;
+- `pos.routes.super.test.ts` — 401 без токена й із токеном магазину, список, картка, PATCH,
+  400 / 404.
 
 ## Відкрите (поза цим треком)
 
