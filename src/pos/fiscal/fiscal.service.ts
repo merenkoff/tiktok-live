@@ -47,7 +47,12 @@ import {
   SHIFT_MAX_AGE_MS,
   type FiscalContext,
 } from './shifts.service.js';
-import type { FiscalCallCtx, FiscalResult } from './types.js';
+import type {
+  FiscalCallCtx,
+  FiscalRefundDoc,
+  FiscalResult,
+  FiscalSaleDoc,
+} from './types.js';
 import { assertHolder } from './offline/holder.js';
 import {
   getLiveSession,
@@ -693,6 +698,45 @@ async function loadLineCodes(
   };
 }
 
+/**
+ * What the document settles: the goods' total plus the cash rounding
+ * (migration 070). This — not `total_cents` — is the sum on the tax office's
+ * record (`CHECKTOTAL.SUM` is after rounding, `NORNDSUM` before), so it is
+ * what the ledger row carries and what the QR link we build for an offline
+ * receipt puts in `sm` (`offline/session.ts`).
+ */
+function settledCents(source: { total_cents: number; rounding_cents?: number }): number {
+  return source.total_cents + Number(source.rounding_cents ?? 0);
+}
+
+/**
+ * Our rounding against the provider's own (TechDocs/POS_CASH_ROUNDING.md, Д6).
+ *
+ * Logged, never acted on: the customer has already paid what the till showed,
+ * and a provider that rounds a mixed payment differently from us is a fact to
+ * find in the logs and settle by changing one side — not a reason to fail a
+ * receipt that is registered. Compared by magnitude, because whether Checkbox
+ * signs `round_sum` is not documented (open question 2 there).
+ */
+function noteRoundingMismatch(
+  storeId: number,
+  doc: FiscalSaleDoc | FiscalRefundDoc,
+  result: FiscalResult
+): void {
+  const theirs = result.roundingCents;
+  if (theirs == null) return;
+  const ours = doc.cashRounding?.amountCents ?? 0;
+  if (Math.abs(theirs) === Math.abs(ours)) return;
+  logger.warn('The fiscal provider rounded the cash total differently from the till', {
+    storeId,
+    kind: doc.kind,
+    requestId: doc.requestId,
+    ours,
+    theirs,
+    step: doc.cashRounding?.step ?? null,
+  });
+}
+
 // ── Public entry points ─────────────────────────────────────────────────────
 
 export interface FiscalSaleSource extends SaleInput {
@@ -723,7 +767,7 @@ export async function fiscalizeSale(
     shiftId: gate.shiftRowId,
     provider: ctx.provider.id,
     requestId,
-    totalCents: sale.total_cents,
+    totalCents: settledCents(sale),
     requestPayload: doc,
   });
 
@@ -733,6 +777,7 @@ export async function fiscalizeSale(
     (callCtx) => ctx.provider.registerSale(callCtx, doc),
     'live'
   );
+  noteRoundingMismatch(ctx.storeId, doc, result);
   return toView(done, result);
 }
 
@@ -761,7 +806,7 @@ async function fiscalizeSaleOffline(
     shiftId: gate.shiftRowId,
     provider: ctx.provider.id,
     requestId,
-    totalCents: sale.total_cents,
+    totalCents: settledCents(sale),
     requestPayload: doc,
     mode: 'offline',
   });
@@ -832,7 +877,7 @@ export async function fiscalizeSaleDeviceStamp(
     shiftId: gate.shiftRowId,
     provider: ctx.provider.id,
     requestId,
-    totalCents: sale.total_cents,
+    totalCents: settledCents(sale),
     requestPayload: doc,
     mode: 'offline',
   });
@@ -917,7 +962,7 @@ export async function fiscalizeRefund(
     shiftId: gate.shiftRowId,
     provider: ctx.provider.id,
     requestId,
-    totalCents: refund.total_cents,
+    totalCents: settledCents(refund),
     requestPayload: doc,
   });
 
@@ -927,6 +972,7 @@ export async function fiscalizeRefund(
     (callCtx) => ctx.provider.registerRefund(callCtx, doc),
     'live'
   );
+  noteRoundingMismatch(ctx.storeId, doc, result);
   return toView(done, result);
 }
 
@@ -1306,7 +1352,13 @@ async function replayOneSession(initial: OfflineSessionRow): Promise<SessionOutc
       fiscalDate: new Date(row.fiscal_date),
     };
     try {
-      await runDocument(gate, row, (callCtx) => ops.registerSaleOffline(callCtx, doc, stamp), 'live');
+      const { result } = await runDocument(
+        gate,
+        row,
+        (callCtx) => ops.registerSaleOffline(callCtx, doc, stamp),
+        'live'
+      );
+      noteRoundingMismatch(ctx.storeId, doc, result);
       replayed += 1;
     } catch (error) {
       if (!(error instanceof FiscalDocumentFailed)) throw error;
@@ -1417,7 +1469,10 @@ async function retryOne(gate: FiscalGate, row: ledger.FiscalReceiptRow): Promise
     return ctx.provider.registerService(callCtx, doc);
   };
 
-  await runDocument(gate, row, send, 'background');
+  const { result } = await runDocument(gate, row, send, 'background');
+  if (row.doc_type === 'sale' || row.doc_type === 'refund') {
+    noteRoundingMismatch(ctx.storeId, doc, result);
+  }
 }
 
 /**

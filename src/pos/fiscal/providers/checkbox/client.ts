@@ -103,6 +103,16 @@ export interface CheckboxReceipt {
   is_created_offline?: boolean;
   is_sent_dps?: boolean;
   transaction: { id?: string; response_error_message?: string | null } | null;
+  /**
+   * `ReceiptModel` money fields, kopecks. Typed only as far as we read them:
+   * `round_sum` is compared with our own rounding (its sign is not documented
+   * — TechDocs/POS_CASH_ROUNDING.md, open question 2).
+   */
+  total_sum?: number | null;
+  total_payment?: number | null;
+  total_rest?: number | null;
+  round_sum?: number | null;
+  rounding_mode?: CheckboxRoundingMode | null;
 }
 
 export interface CheckboxReport {
@@ -146,12 +156,20 @@ export interface CheckboxCardPayment {
 
 export type CheckboxPayment = CheckboxCashPayment | CheckboxCardPayment;
 
+/**
+ * `RoundingModeEnum` (OpenAPI 2.106.4): «`ROUND_10` - заокруглення до 10
+ * копійок (як було з полем rounding), `ROUND_50` - заокруглення до 50 копійок
+ * (за правилами з 01.10.2025)». Replaces the deprecated boolean `rounding`.
+ */
+export type CheckboxRoundingMode = 'ROUND_10' | 'ROUND_50';
+
 export interface CheckboxSellPayload {
   id: string;
   cashier_name?: string;
   goods: CheckboxGoodItemPayload[];
   payments: CheckboxPayment[];
   related_receipt_id?: string;
+  rounding_mode?: CheckboxRoundingMode;
 }
 
 export interface CheckboxServicePayload {

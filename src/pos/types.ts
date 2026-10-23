@@ -128,6 +128,8 @@ export interface PosAuthContext {
   autoPrintReceipt: boolean;
   /** Assembly charge on a composite, in basis points. See migration 040. */
   floristLabourBps: number;
+  /** Cash totals rounded to 0 (off), 10 or 50 kopecks — НБУ № 25, migration 070. */
+  cashRounding: number;
   /** Toggleable module ids enabled for this store (core ids not included). */
   enabledModules: string[];
   /** Per-store `{ moduleId: remote-entry.js URL }` map — web build only (roadmap #9). */

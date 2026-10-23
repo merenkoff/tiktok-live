@@ -195,6 +195,74 @@ describe('fiscal document mapping', () => {
     });
   });
 
+  describe('cash rounding (TechDocs/POS_CASH_ROUNDING.md)', () => {
+    it('leaves a sale without rounding exactly as it was', () => {
+      expect(buildSaleDoc({ requestId: 'r', sale: sale(), tax: NO_TAX }).cashRounding).toBeNull();
+      expect(
+        buildSaleDoc({ requestId: 'r', sale: sale({ cash_rounding: 50, rounding_cents: 0 }), tax: NO_TAX })
+          .cashRounding
+      ).toBeNull();
+    });
+
+    it('carries the step and the amount, and keeps the lines and the total', () => {
+      const doc = buildSaleDoc({
+        requestId: 'r',
+        sale: sale({ cash_rounding: 50, rounding_cents: -23, payments: [{ method: 'cash', amount_cents: 50000 }] }),
+        tax: NO_TAX,
+      });
+      expect(doc.cashRounding).toEqual({ step: 50, amountCents: -23 });
+      expect(doc.totalCents).toBe(30000);
+      expect(doc.payments).toEqual([{ method: 'cash', amountCents: 50000, providerRef: null }]);
+    });
+
+    it('refuses a rounding with no known step rather than guess one', () => {
+      expect(() =>
+        buildSaleDoc({ requestId: 'r', sale: sale({ cash_rounding: 0, rounding_cents: -3 }), tax: NO_TAX })
+      ).toThrow(FiscalError);
+    });
+
+    it('pays a cash refund out at the rounded sum', () => {
+      const doc = buildRefundDoc({
+        requestId: 'rr',
+        relatedProviderDocId: 'p',
+        sale: sale(),
+        tax: NO_TAX,
+        refund: {
+          refund_number: 'RF-1',
+          staff_name: 'Оля',
+          method: 'cash',
+          total_cents: 10000,
+          cash_rounding: 50,
+          rounding_cents: -24,
+          lines: [{ sale_item_id: 1, quantity: 1, amount_cents: 10000 }],
+        },
+      });
+      expect(doc.totalCents).toBe(10000);
+      expect(doc.payments).toEqual([{ method: 'cash', amountCents: 9976 }]);
+      expect(doc.cashRounding).toEqual({ step: 50, amountCents: -24 });
+    });
+
+    it('refuses rounding on a refund that goes back to the card', () => {
+      expect(() =>
+        buildRefundDoc({
+          requestId: 'rr',
+          relatedProviderDocId: 'p',
+          sale: sale(),
+          tax: NO_TAX,
+          refund: {
+            refund_number: 'RF-1',
+            staff_name: 'Оля',
+            method: 'card',
+            total_cents: 10000,
+            cash_rounding: 50,
+            rounding_cents: -24,
+            lines: [{ sale_item_id: 1, quantity: 1, amount_cents: 10000 }],
+          },
+        })
+      ).toThrow(FiscalError);
+    });
+  });
+
   describe('buildRefundDoc', () => {
     const original = sale();
 

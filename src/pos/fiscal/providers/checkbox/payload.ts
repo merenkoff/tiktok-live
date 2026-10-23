@@ -11,6 +11,7 @@ import type {
   CheckboxGoodItemPayload,
   CheckboxPayment,
   CheckboxReceipt,
+  CheckboxRoundingMode,
   CheckboxSellOfflinePayload,
   CheckboxSellPayload,
   CheckboxServicePayload,
@@ -78,14 +79,32 @@ function mapPayment(payment: FiscalDocPayment): CheckboxPayment {
     : { type: 'CASHLESS', value: payment.amountCents };
 }
 
+/**
+ * Cash rounding (TechDocs/POS_CASH_ROUNDING.md, Д6). Checkbox's own spec for
+ * the older boolean: «for it to work in the payments block, the amount
+ * already rounded according to the rules of the National Bank of Ukraine must
+ * be specified» — which the documents already carry: a sale's cash row is the
+ * notes and coins handed over, a refund's is the sum after rounding
+ * (`mapping.ts`). So the mode is the whole of the change, and it is sent only
+ * when there is a rounding: a receipt without one is byte-for-byte the
+ * payload it was before.
+ */
+function roundingMode(doc: FiscalSaleDoc | FiscalRefundDoc): CheckboxRoundingMode | null {
+  const rounding = doc.cashRounding;
+  if (!rounding || rounding.amountCents === 0) return null;
+  return rounding.step === 10 ? 'ROUND_10' : 'ROUND_50';
+}
+
 export function mapSellPayload(doc: FiscalSaleDoc | FiscalRefundDoc): CheckboxSellPayload {
   const isReturn = doc.kind === 'refund';
+  const mode = roundingMode(doc);
   return {
     id: doc.requestId,
     cashier_name: doc.cashierName,
     goods: doc.lines.map((line) => mapLine(line, isReturn)),
     payments: doc.payments.map(mapPayment),
     ...(doc.kind === 'refund' ? { related_receipt_id: doc.relatedProviderDocId } : {}),
+    ...(mode ? { rounding_mode: mode } : {}),
   };
 }
 
@@ -149,6 +168,7 @@ export function toFiscalResult(receipt: CheckboxReceipt): FiscalResult {
     vatCents: null,
     receiptText: null,
     controlNumber: receipt.control_number ?? null,
+    roundingCents: typeof receipt.round_sum === 'number' ? receipt.round_sum : null,
     raw: receipt,
   };
 }

@@ -235,6 +235,28 @@ describe.skipIf(!hasDb)('POS fiscal offline checkout (case B — server session)
     expect(detail.json().fiscal.tax_url).toBe(body.fiscal.tax_url);
   });
 
+  it('puts the rounded sum in the QR link of a rounded cash receipt', async () => {
+    // CHECKTOTAL.SUM — what the cabinet looks a receipt up by — is after the
+    // НБУ rounding (TechDocs/POS_CASH_ROUNDING.md, Д6): 100,00 minus nothing,
+    // so a price with kopecks is needed to see the difference.
+    await warm();
+    providerDown();
+    const odd = await seedProduct(store.storeId, { priceCents: 22_123, quantity: 5 });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/pos/sales/complete',
+      headers: headers(),
+      payload: {
+        items: [{ variant_id: odd.variantId, quantity: 1 }],
+        payments: [{ method: 'cash', amount_cents: 50_000 }],
+        cash_rounding: 50,
+      },
+    });
+    const body = res.json();
+    expect(body).toMatchObject({ total_cents: 22_123, rounding_cents: -23 });
+    expect(new URL(body.fiscal.tax_url).searchParams.get('sm')).toBe('221.00');
+  });
+
   it('refuses to stamp before the requisites were ever fetched — the first receipt is online', async () => {
     // The header of an offline receipt comes from the cache; a store that
     // never had an online moment has an empty cache and nothing to print.

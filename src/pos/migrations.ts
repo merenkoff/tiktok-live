@@ -118,6 +118,8 @@ export const POS_MIGRATIONS = [
   '068_pos_guest_calls_auto_kitchen.sql',
   // Four one-time copies of the demos for a reseller to play with (cash-demo-*, owner PIN 3333, seller 4444).
   '069_pos_cash_demo_stores.sql',
+  // Cash totals rounded to 10 or 50 kopecks (НБУ № 25), the owner's setting; sales and refunds keep the rounding.
+  '070_pos_cash_rounding.sql',
 ] as const;
 
 export function readMigration(file: string): string {

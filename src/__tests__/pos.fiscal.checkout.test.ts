@@ -653,6 +653,72 @@ describe.skipIf(!hasDb)('POS fiscal checkout orchestration', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  // ── Cash rounding (TechDocs/POS_CASH_ROUNDING.md, Д6) ──────────────────────
+
+  it('hands the provider the rounding and books the document at the rounded sum', async () => {
+    await enableFiscal();
+    await warmFiscal();
+    const odd = await seedProduct(store.storeId, { priceCents: 22_123, quantity: 5 });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/pos/sales/complete',
+      headers: auth(store.sellerToken),
+      payload: {
+        items: [{ variant_id: odd.variantId, quantity: 1 }],
+        payments: [{ method: 'cash', amount_cents: 50_000 }],
+        cash_rounding: 50,
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ total_cents: 22_123, rounding_cents: -23 });
+
+    const sent = fake.calls.find((call) => call.method === 'registerSale');
+    expect(sent?.doc).toMatchObject({
+      totalCents: 22_123,
+      cashRounding: { step: 50, amountCents: -23 },
+      payments: [expect.objectContaining({ method: 'cash', amountCents: 50_000 })],
+    });
+    const rows = await ledgerRows();
+    expect(rows).toHaveLength(1);
+    // The tax office's SUM is after rounding — and so the QR link's `sm`.
+    expect(Number(rows[0].total_cents)).toBe(22_100);
+  });
+
+  it('pays a cash refund out at the rounded sum', async () => {
+    await enableFiscal();
+    await warmFiscal();
+    const odd = await seedProduct(store.storeId, { priceCents: 22_123, quantity: 5 });
+    const sold = await app.inject({
+      method: 'POST',
+      url: '/api/pos/sales/complete',
+      headers: auth(store.sellerToken),
+      payload: {
+        items: [{ variant_id: odd.variantId, quantity: 1 }],
+        payments: [{ method: 'cash', amount_cents: 22_100 }],
+        cash_rounding: 50,
+      },
+    });
+    expect(sold.statusCode).toBe(201);
+    const sale = sold.json();
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/pos/sales/${sale.id}/refunds`,
+      headers: auth(store.sellerToken),
+      payload: {
+        items: [{ sale_item_id: sale.items[0].id, quantity: 1 }],
+        method: 'cash',
+        cash_rounding: 50,
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const sent = fake.calls.find((call) => call.method === 'registerRefund');
+    expect(sent?.doc).toMatchObject({
+      totalCents: 22_123,
+      cashRounding: { step: 50, amountCents: -23 },
+      payments: [{ method: 'cash', amountCents: 22_100 }],
+    });
+  });
+
   it('maps the projection vocabulary explicitly', () => {
     expect(ledger.projectionFor('abandoned')).toBe('failed');
     expect(ledger.projectionFor('failed')).toBe('failed');

@@ -18,6 +18,7 @@
     "pos:migrate": "tsx src/pos/migrate.ts",
     "pos:seed": "tsx src/pos/seed.ts",
     "fiscal:sandbox:offline": "tsx src/pos/fiscal/providers/checkbox/sandbox-offline.ts",
+    "fiscal:sandbox:rounding": "tsx src/pos/fiscal/providers/checkbox/sandbox-rounding.ts",
     "docker:build": "docker build -t tiktok-live-automation .",
     "docker:run": "docker run -it --env-file .env tiktok-live-automation",
     "docker:deps": "docker compose up -d postgres redis"

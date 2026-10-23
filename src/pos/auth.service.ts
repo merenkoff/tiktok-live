@@ -65,6 +65,12 @@ export interface AuthResponse {
      * would disagree with the server once the sale syncs.
      */
     florist_labour_bps: number;
+    /**
+     * Cash totals rounded to 0 (off), 10 or 50 kopecks (НБУ № 25, migration
+     * 070). With the login for the same reason as `florist_labour_bps`: the
+     * offline till shows and prints the rounded sum the server will file.
+     */
+    cash_rounding: number;
     /** Effective toggleable module ids (empty stored set resolves to the defaults). */
     enabled_modules: string[];
     /**
@@ -121,6 +127,7 @@ function toAuthResponse(auth: PosAuthContext, expiresAt: Date): AuthResponse {
       fiscal: auth.fiscal,
       auto_print_receipt: auth.autoPrintReceipt,
       florist_labour_bps: auth.floristLabourBps,
+      cash_rounding: auth.cashRounding,
       enabled_modules: effectiveEnabledModules(auth.enabledModules),
       module_remotes: auth.moduleRemotes,
       nav_overrides: auth.navOverrides,

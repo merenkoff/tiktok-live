@@ -243,6 +243,21 @@ export interface FiscalDocPayment {
   providerRef?: string | null;
 }
 
+/**
+ * The cash part of the document was rounded (Постанова НБУ № 25, пп. 4 / 4-1;
+ * TechDocs/POS_CASH_ROUNDING.md). Present only when the rounding is non-zero:
+ * a document without it is exactly what it was before rounding existed.
+ *
+ * `totalCents` and the lines stay what the goods came to — the provider adds
+ * the «Заокруглення» row itself; `amountCents` is ours, signed, kept so the
+ * provider's own figure can be checked against it.
+ */
+export interface FiscalCashRounding {
+  /** 10 = п. 4, 50 = п. 4-1. */
+  step: 10 | 50;
+  amountCents: number;
+}
+
 interface FiscalDocBase {
   /**
    * OUR idempotency key. The adapter MUST forward it as the provider's own
@@ -265,16 +280,20 @@ export interface FiscalSaleDoc extends FiscalDocBase {
   note?: string | null;
   /** For a provider-delivered electronic receipt, when the customer has one. */
   customerPhone?: string | null;
+  /** Set when the cash part was rounded; absent on every older stored payload. */
+  cashRounding?: FiscalCashRounding | null;
 }
 
 export interface FiscalRefundDoc extends FiscalDocBase {
   kind: 'refund';
   lines: FiscalDocLine[];
+  /** A cash refund pays out the sum AFTER rounding — `totalCents + cashRounding.amountCents`. */
   payments: FiscalDocPayment[];
   totalCents: number;
   discountCents: number;
   note?: string | null;
   customerPhone?: string | null;
+  cashRounding?: FiscalCashRounding | null;
   /** Provider doc id of the sale being returned (Checkbox `related_receipt_id`). */
   relatedProviderDocId: string;
   relatedOurNumber: string;
@@ -313,6 +332,12 @@ export interface FiscalResult {
    * cannot compute it itself (POS_FISCAL_OFFLINE.md, «Контрольне число»).
    */
   controlNumber: string | null;
+  /**
+   * The rounding the provider itself applied, in kopecks, when it reports one
+   * (Checkbox `round_sum`). Optional: only compared against ours and logged,
+   * never trusted over it — see `noteRoundingMismatch` in fiscal.service.ts.
+   */
+  roundingCents?: number | null;
   /** Stored verbatim in `pos_fiscal_receipts.response_payload` for support. */
   raw: unknown;
 }

@@ -9,6 +9,7 @@ import { localDateString } from './core/localDate.js';
 import type { ModuleRemoteEntry, PaymentMethod, QrPaymentMode } from './types.js';
 import type { NavOverrides } from './core/nav.js';
 import { publicConfigOf, verticalOrDefault } from './verticals/index.js';
+import { parseCashRoundingStep } from './cashRounding.js';
 
 export interface SalesSummary {
   from: string;
@@ -18,6 +19,18 @@ export interface SalesSummary {
   refunded_cents: number;
   net_cents: number;
   avg_check_cents: number;
+  /**
+   * Cash rounding of the window's sales (НБУ № 25, migration 070), signed.
+   * Not revenue — «Виторг» stays what the goods came to — but the reason the
+   * payment split, which counts the window's sales, comes to
+   * `gross_cents + rounding_cents`.
+   */
+  rounding_cents: number;
+  /**
+   * Cash rounding of the refunds MADE in the window — beside `refunded_cents`,
+   * on the same day rule; the cash that went back is the two together.
+   */
+  refund_rounding_cents: number;
   top_items: Array<{
     product_name: string;
     variant_label: string;
@@ -74,7 +87,8 @@ export async function getSalesSummary(
     `${BOUNDS_CTE}
      SELECT
        COUNT(*) FILTER (WHERE s.status <> 'voided')::int AS sales_count,
-       COALESCE(SUM(s.total_cents) FILTER (WHERE s.status <> 'voided'), 0)::int AS gross_cents
+       COALESCE(SUM(s.total_cents) FILTER (WHERE s.status <> 'voided'), 0)::int AS gross_cents,
+       COALESCE(SUM(s.rounding_cents) FILTER (WHERE s.status <> 'voided'), 0)::int AS rounding_cents
      FROM pos_sales s, bounds b
      WHERE s.store_id = $1
        AND s.created_at >= b.range_start
@@ -88,7 +102,8 @@ export async function getSalesSummary(
   // `SUM(s.refunded_cents)` rewrote last month's figures when a coat came back.
   const refundsResult = await pool.query(
     `${BOUNDS_CTE}
-     SELECT COALESCE(SUM(r.total_cents), 0)::int AS refunded_cents
+     SELECT COALESCE(SUM(r.total_cents), 0)::int AS refunded_cents,
+            COALESCE(SUM(r.rounding_cents), 0)::int AS rounding_cents
      FROM pos_refunds r
      JOIN pos_sales s ON s.id = r.sale_id
      CROSS JOIN bounds b
@@ -152,11 +167,14 @@ export async function getSalesSummary(
   // and the split no longer adds up to «Виторг». Per sale, because an even
   // split may carry several cash rows and the change must leave only once;
   // change is only ever given in cash, and never more than the cash there was.
+  // The change is counted from the sum AFTER cash rounding (migration 070):
+  // that is what the customer owed, so the split adds up to «Виторг» plus
+  // the sales' `rounding_cents`, the line the dashboard shows beside it.
   const paymentsResult = await pool.query(
     `${BOUNDS_CTE},
      per_sale AS (
        SELECT s.id AS sale_id,
-              s.total_cents,
+              s.total_cents + s.rounding_cents AS total_cents,
               p.method,
               SUM(p.amount_cents) AS amount_cents,
               SUM(p.amount_cents) FILTER (
@@ -169,7 +187,7 @@ export async function getSalesSummary(
          AND s.status <> 'voided'
          AND s.created_at >= b.range_start
          AND s.created_at < b.range_end
-       GROUP BY s.id, s.total_cents, p.method
+       GROUP BY s.id, s.total_cents, s.rounding_cents, p.method
      ),
      change AS (
        SELECT sale_id, GREATEST(0, SUM(amount_cents) - MAX(total_cents)) AS change_cents
@@ -243,6 +261,8 @@ export async function getSalesSummary(
     refunded_cents: refundedCents,
     net_cents: netCents,
     avg_check_cents: avgCents,
+    rounding_cents: Number(row.rounding_cents),
+    refund_rounding_cents: Number(refundsResult.rows[0].rounding_cents),
     top_items: topResult.rows.map((item) => ({
       product_name: item.product_name,
       variant_label: item.variant_label,
@@ -279,6 +299,8 @@ function mapStore(store: Record<string, unknown>) {
     gtin_lookup_enabled: Boolean(store.gtin_lookup_enabled),
     auto_print_receipt: Boolean(store.auto_print_receipt),
     florist_labour_bps: Number(store.florist_labour_bps ?? 0),
+    // НБУ № 25: the step cash totals are rounded to, 0 = not rounded (migration 070).
+    cash_rounding: Number(store.cash_rounding ?? 0),
     enabled_modules: (store.enabled_modules as string[] | null) ?? [],
     module_remotes:
       (store.module_remotes as Record<string, string | ModuleRemoteEntry> | null) ?? {},
@@ -300,6 +322,8 @@ export type StorePatch = {
   auto_print_receipt?: boolean;
   /** Assembly charge on a composite, in basis points. See migration 040. */
   florist_labour_bps?: number;
+  /** Cash totals rounded to 0 (off), 10 or 50 kopecks. See migration 070. */
+  cash_rounding?: number;
   enabled_modules?: string[];
   module_remotes?: Record<string, string | ModuleRemoteEntry>;
   /** Per-store menu appearance — see `core/nav.ts`. */
@@ -327,6 +351,7 @@ export const STORE_PATCH_COLUMNS: Array<keyof StorePatch> = [
   'gtin_lookup_enabled',
   'auto_print_receipt',
   'florist_labour_bps',
+  'cash_rounding',
   'enabled_modules',
   'module_remotes',
   'nav_overrides',
@@ -359,6 +384,10 @@ export async function updateStore(storeId: number, patch: StorePatch) {
         throw new Error('Націнка за роботу має бути від 0 до 1000%');
       }
       value = bps;
+    }
+    if (col === 'cash_rounding') {
+      // The CHECK would refuse 25 as a 500; this says what the three are.
+      value = parseCashRoundingStep(value);
     }
     if (typeof value === 'string') {
       const trimmed = value.trim();
