@@ -1,8 +1,10 @@
 // What a page SAYS, for the sitemap's <lastmod> (scripts/prerender.mjs): the
 // text, links and images of its <main>, its title and description, and its
-// JSON-LD. Navigation, footer and CSS classes are left out on purpose — a
-// redesign or a new link in the footer of every page is not a change to any
-// one page, and Google keeps reading lastmod only while it stays honest.
+// JSON-LD. Navigation, footer, the fields of the lead form and CSS classes are
+// left out on purpose — a redesign, a new link in the footer or a new field in
+// the form that sits on every page is not a change to any one page, and Google
+// keeps reading lastmod only while it stays honest. The heading above a form
+// is outside the <form> and still counts.
 import { createHash } from 'node:crypto';
 
 const ENTITIES = { '&quot;': '"', '&#x27;': "'", '&#39;': "'", '&lt;': '<', '&gt;': '>', '&nbsp;': ' ', '&amp;': '&' };
@@ -38,7 +40,8 @@ function structuredData(block) {
 
 /** The parts of a prerendered page that count as its content. */
 export function contentSignature(out) {
-  const main = out.match(/<main[\s>][\s\S]*?<\/main>/)?.[0] ?? out;
+  // Forms do not nest in HTML, so the shortest match is the whole form.
+  const main = (out.match(/<main[\s>][\s\S]*?<\/main>/)?.[0] ?? out).replace(/<form[\s>][\s\S]*?<\/form>/g, ' ');
   const refs = [...main.matchAll(/\s(?:href|src)="([^"]*)"/g)].map((m) => m[1]);
   const text = decode(main.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
   const title = decode(out.match(/<title>([^<]*)<\/title>/)?.[1] ?? '');
