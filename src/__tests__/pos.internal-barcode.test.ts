@@ -4,65 +4,64 @@
 
 import { describe, expect, it } from 'vitest';
 import {
-  BarcodeRangeError,
-  ean13CheckDigit,
-  internalBarcodeFor,
+  INTERNAL_BARCODE_MAX_PAYLOAD,
+  buildInternalBarcode,
   isInternalBarcode,
-} from '../pos/core/internalBarcode.js';
+} from '../pos/gtin/internal-code.js';
+import { computeCheckDigit, verifyCheckDigit } from '../pos/gtin/normalize.js';
 
 /**
+ * The one place the store's own EAN-13 is made — a garment's tag, the owner's
+ * «Згенерувати» button and a florist's showcase bouquet all come through it.
+ *
  * A wrong check digit cannot be caught downstream, only reported: the client's
  * `isEan13` verifies it and a price tag then prints no bars at all, which is
  * the right answer for a code someone typed in and no answer at all for one
- * this module minted. So the maths is pinned here against codes whose check
- * digit is publicly known — the same arithmetic the client runs.
+ * we minted. So the maths is pinned against codes whose check digit is
+ * publicly known — the same arithmetic the client runs.
  */
 describe('internal EAN-13', () => {
   it('computes the check digit real barcodes agree on', () => {
-    // Published examples: the check digit is the last character of each.
-    for (const code of [
-      '4820000000017',
-      '5901234123457',
-      '9780306406157',
-      '4006381333931',
-    ]) {
-      expect(ean13CheckDigit(code.slice(0, 12))).toBe(Number(code[12]));
+    for (const code of ['4820000000017', '5901234123457', '9780306406157', '4006381333931']) {
+      expect(computeCheckDigit(code.slice(0, 12))).toBe(code[12]);
     }
   });
 
-  it('issues a code in GS1 restricted circulation, keyed on the variant id', () => {
-    const code = internalBarcodeFor(42);
+  it('issues `29` + a ten-digit counter + check digit', () => {
+    const code = buildInternalBarcode(42);
 
     expect(code).toHaveLength(13);
-    expect(code.startsWith('2')).toBe(true);
-    expect(code.slice(0, 12)).toBe('200000000042');
-    expect(ean13CheckDigit(code.slice(0, 12))).toBe(Number(code[12]));
+    expect(code.slice(0, 12)).toBe('290000000042');
+    expect(verifyCheckDigit(code)).toBe(true);
   });
 
-  it('never issues the same code for two variants', () => {
-    // The point of deriving it from the id rather than a counter: two tills
-    // assembling at the same moment cannot collide without talking.
-    const codes = new Set([1, 2, 99, 100, 123456, 9_999_999].map(internalBarcodeFor));
-    expect(codes.size).toBe(6);
+  it('stays out of the weighed-goods and reserved prefixes for every counter value', () => {
+    // GS1 Ukraine: `20`–`23` are a scale's price/weight codes, read apart by
+    // prefix at the till; `24`–`28` are reserved. The old showcase code was
+    // `2` + the variant id — `20…` for every id a shop will ever reach.
+    for (const n of [0, 1, 7, 99, 123_456, 9_999_999, INTERNAL_BARCODE_MAX_PAYLOAD]) {
+      const prefix = buildInternalBarcode(n).slice(0, 2);
+      expect(prefix).toBe('29');
+    }
   });
 
   it('recognises its own codes and rejects everything else', () => {
-    expect(isInternalBarcode(internalBarcodeFor(7))).toBe(true);
-    // A real manufacturer's code — the prefix is exactly what keeps the two
-    // spaces apart.
+    expect(isInternalBarcode(buildInternalBarcode(7))).toBe(true);
+    // A real manufacturer's code — the prefix keeps the two spaces apart.
     expect(isInternalBarcode('4820000000017')).toBe(false);
+    // The retired `2` + id form: a valid EAN-13, and exactly what a scale's
+    // `20` parse would take apart.
+    const legacy = `200000000042${computeCheckDigit('200000000042')}`;
+    expect(verifyCheckDigit(legacy)).toBe(true);
+    expect(isInternalBarcode(legacy)).toBe(false);
     // Right prefix, wrong check digit: a tag that looks fine and scans as junk.
-    expect(isInternalBarcode('2000000000420')).toBe(false);
-    expect(isInternalBarcode('20000000004')).toBe(false);
+    expect(isInternalBarcode('2900000000420')).toBe(false);
     expect(isInternalBarcode('')).toBe(false);
   });
 
-  it('refuses an id that cannot fit', () => {
-    expect(() => internalBarcodeFor(0)).toThrow(BarcodeRangeError);
-    expect(() => internalBarcodeFor(-1)).toThrow(BarcodeRangeError);
-    expect(() => internalBarcodeFor(1.5)).toThrow(BarcodeRangeError);
-    // Twelve digits: one more than the body can hold, and silently truncating
-    // would hand two bouquets the same tag.
-    expect(() => internalBarcodeFor(100_000_000_000)).toThrow(BarcodeRangeError);
+  it('refuses a counter that cannot fit rather than emit a fourteenth digit', () => {
+    expect(() => buildInternalBarcode(-1)).toThrow();
+    expect(() => buildInternalBarcode(1.5)).toThrow();
+    expect(() => buildInternalBarcode(INTERNAL_BARCODE_MAX_PAYLOAD + 1)).toThrow();
   });
 });

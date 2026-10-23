@@ -27,7 +27,8 @@ import { completeSale } from '../pos/sales.service.js';
 import { createProduct, getCatalog } from '../pos/products.service.js';
 import { reverseDocument } from '../pos/stock-documents.service.js';
 import { listOnHand } from '../pos/stock-reports.service.js';
-import { internalBarcodeFor, isInternalBarcode } from '../pos/core/internalBarcode.js';
+import { isInternalBarcode } from '../pos/gtin/internal-code.js';
+import { verifyCheckDigit } from '../pos/gtin/normalize.js';
 
 /**
  * A bouquet assembled for the window (`TechDocs/POS_FLORIST_BENCH.md` §11).
@@ -197,7 +198,7 @@ describe.skipIf(!hasDb)('POS florist bench — assembling for the showcase', () 
     });
   });
 
-  it('gives it a scannable internal barcode derived from its own id', async () => {
+  it("gives it the store's own `29…` barcode, clear of weighed goods", async () => {
     const made = await assembleForShowcase({
       storeId,
       staffId,
@@ -205,12 +206,17 @@ describe.skipIf(!hasDb)('POS florist bench — assembling for the showcase', () 
       components: bouquet(),
     });
 
-    expect(made.barcode).toBe(internalBarcodeFor(made.variant_id));
-    expect(isInternalBarcode(made.barcode)).toBe(true);
     expect(made.barcode).toHaveLength(13);
-    // GS1 restricted circulation: a code that can never collide with a
-    // manufacturer's article number.
-    expect(made.barcode.startsWith('2')).toBe(true);
+    expect(verifyCheckDigit(made.barcode)).toBe(true);
+    // The same range as a garment's tag: `29`, never `20`–`23` (a scale's
+    // price/weight codes, read apart by prefix) or the reserved `24`–`28`.
+    expect(made.barcode.startsWith('29')).toBe(true);
+    expect(isInternalBarcode(made.barcode)).toBe(true);
+
+    const row = await pool.query(`SELECT barcode FROM pos_variants WHERE id = $1`, [
+      made.variant_id,
+    ]);
+    expect(row.rows[0].barcode).toBe(made.barcode);
   });
 
   it('a retry of the same client_uuid returns the first bouquet, not a second one', async () => {

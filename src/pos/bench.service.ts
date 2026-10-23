@@ -25,14 +25,13 @@
 
 import { pool } from '../db.js';
 import { logger } from '../logger.js';
-import { createProductInTx } from './products.service.js';
+import { createProductInTx, generateInternalBarcode } from './products.service.js';
 import {
   priceOfComposition,
   produceComposite,
   type ComponentInput,
 } from './composites.service.js';
 import { applyStockDelta } from './stock.service.js';
-import { internalBarcodeFor } from './core/internalBarcode.js';
 import type { WriteoffReasonCode } from './types.js';
 
 type DbClient = { query: typeof pool.query };
@@ -223,6 +222,11 @@ export async function assembleForShowcase(input: ShowcaseInput): Promise<Showcas
     const docNumber = await nextProductionNumber(client, input.storeId);
     const name = input.name?.trim() || `Букет №${numberFromDoc(docNumber)}`;
 
+    // The store's own `29…` code, from the same counter as a garment's
+    // (`gtin/internal-code.ts`). Never `20…`–`28…`: under GS1 Ukraine `20`–`23`
+    // are price/weight codes a scale prints, which a till parses by prefix, and
+    // `24`–`28` are reserved.
+    const barcode = await generateInternalBarcode(input.storeId, client);
     const { productId, variantIds } = await createProductInTx(client, input.storeId, {
       name,
       description: `Зібрано на столі флориста, ${docNumber}`,
@@ -238,19 +242,12 @@ export async function assembleForShowcase(input: ShowcaseInput): Promise<Showcas
           // Zero: the production document below is what puts the bouquet on the
           // shelf. Seeding 1 here would be a second, unexplained movement.
           quantity: 0,
+          barcode,
           components,
         },
       ],
     });
     const variantId = variantIds[0];
-
-    // The barcode needs the id, so it lands in a second write. It is derived
-    // from that id, so it cannot collide — see `core/internalBarcode.ts`.
-    const barcode = internalBarcodeFor(variantId);
-    await client.query(`UPDATE pos_variants SET barcode = $1 WHERE id = $2`, [
-      barcode,
-      variantId,
-    ]);
 
     const tagId = await showcaseTagId(client, input.storeId);
     await client.query(
