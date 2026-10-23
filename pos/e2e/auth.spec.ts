@@ -57,10 +57,37 @@ test('after signing out the store code is remembered and locked until «Змін
   expect((await login).postDataJSON()).toMatchObject({ store_slug: 'demo' });
   await page.waitForURL(/\/admin$/);
 
+  // The code is remembered, so the form opens for the seller — who cannot
+  // change it; only the owner's tab offers «Змінити».
   await page.getByRole('button', { name: 'Вийти' }).click();
+  await expect(page.getByRole('button', { name: 'Продавець · PIN' })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  await expect(page.getByLabel('Код магазину')).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Змінити' })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Власник' }).click();
   await page.getByRole('button', { name: 'Змінити' }).click();
   await expect(page.getByLabel('Код магазину')).toBeEditable();
   await expect(page.getByLabel('Код магазину')).toBeFocused();
+});
+
+test('a device with no store code opens on «Власник»; a seller is sent there', async ({
+  page,
+}) => {
+  await page.goto('/login');
+  await expect(page.getByRole('button', { name: 'Власник' })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  await expect(page.getByLabel('Код магазину')).toBeEditable();
+
+  await page.getByRole('button', { name: 'Продавець · PIN' }).click();
+  await expect(page.getByTestId('store-code-missing')).toBeVisible();
+  await expect(page.getByLabel('PIN')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Увійти як власник' }).click();
+  await expect(page.getByLabel('Email / логін')).toBeVisible();
 });
 
 test('a session that predates the remembered code teaches it on reload', async ({ page }) => {

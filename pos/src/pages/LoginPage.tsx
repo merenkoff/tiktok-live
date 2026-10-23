@@ -40,15 +40,23 @@ function loginErrorMessage(error: unknown, mode: 'owner' | 'pin'): string {
   return 'Не вдалося увійти. Перевірте дані.';
 }
 
+const NO_CODE_FOR_PIN =
+  'Код магазину на цьому пристрої ще не задано. Його вводить власник — один раз.';
+
 export function LoginPage() {
-  const [mode, setMode] = useState<'owner' | 'pin'>('pin');
+  // The code this device last signed in to. Only the owner sets or changes it,
+  // on the «Власник» tab; a seller's PIN always goes with the remembered one —
+  // a seller cannot point a till at another store. So a device that has none
+  // yet opens on «Власник».
+  const [savedSlug] = useState(loadLastStoreSlug);
+  const [mode, setMode] = useState<'owner' | 'pin'>(savedSlug ? 'pin' : 'owner');
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
-  // The code this device last signed in to: shown, but locked, so after the
-  // first login only the email + password (or the PIN) is typed. «Змінити»
-  // unlocks it; the next successful login remembers whatever was typed.
-  const [storeSlug, setStoreSlug] = useState(loadLastStoreSlug);
-  const [slugLocked, setSlugLocked] = useState(() => loadLastStoreSlug() !== '');
+  // The owner's copy of the code: shown locked, so after the first login only
+  // the email + password is typed. «Змінити» unlocks it; the next successful
+  // login remembers whatever was typed.
+  const [storeSlug, setStoreSlug] = useState(savedSlug);
+  const [slugLocked, setSlugLocked] = useState(savedSlug !== '');
   const slugRef = useRef<HTMLInputElement>(null);
   const slugUnlocked = useRef(false);
   const [pin, setPin] = useState('');
@@ -73,8 +81,9 @@ export function LoginPage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!storeSlug.trim()) {
-      setError('Введіть код магазину');
+    const code = mode === 'owner' ? storeSlug.trim() : savedSlug;
+    if (!code) {
+      setError(mode === 'owner' ? 'Введіть код магазину' : NO_CODE_FOR_PIN);
       return;
     }
     setLoading(true);
@@ -88,14 +97,14 @@ export function LoginPage() {
           setError('Введіть пароль');
           return;
         }
-        await loginOwner(login, password, storeSlug.trim());
+        await loginOwner(login, password, code);
         navigate(afterLogin);
       } else {
         if (!pin.trim()) {
           setError('Введіть PIN');
           return;
         }
-        await loginPin(storeSlug.trim(), pin);
+        await loginPin(code, pin);
         navigate('/register');
       }
     } catch (err) {
@@ -105,13 +114,17 @@ export function LoginPage() {
     }
   }
 
+  const ownerMode = mode === 'owner';
+  // A seller on a device the owner has not set up yet has nothing to type into.
+  const pinWithoutCode = !ownerMode && !savedSlug;
+
   const storeCodeField = (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline justify-between gap-2">
         <label htmlFor="login-store-code" className={labelClass}>
           Код магазину
         </label>
-        {slugLocked && (
+        {ownerMode && slugLocked && (
           <button
             type="button"
             onClick={() => {
@@ -129,13 +142,27 @@ export function LoginPage() {
         id="login-store-code"
         ref={slugRef}
         className={`${fieldClass} disabled:text-sq-secondary disabled:cursor-default`}
-        value={storeSlug}
+        value={ownerMode ? storeSlug : savedSlug}
         onChange={(e) => setStoreSlug(e.target.value)}
-        disabled={slugLocked}
+        disabled={!ownerMode || slugLocked}
         autoComplete="organization"
         autoCapitalize="none"
         spellCheck={false}
+        autoFocus={ownerMode && !savedSlug}
       />
+    </div>
+  );
+
+  const ownerFirstNotice = (
+    <div className="rounded-xl bg-sq-empty px-4 py-3.5 flex flex-col gap-3" data-testid="store-code-missing">
+      <p className="text-[15px] text-sq-text">{NO_CODE_FOR_PIN}</p>
+      <button
+        type="button"
+        onClick={() => setMode('owner')}
+        className="self-start text-[15px] font-semibold text-sq-blue"
+      >
+        Увійти як власник
+      </button>
     </div>
   );
 
@@ -175,9 +202,9 @@ export function LoginPage() {
             </button>
           </div>
 
-          {storeCodeField}
+          {pinWithoutCode ? ownerFirstNotice : storeCodeField}
 
-          {mode === 'pin' ? (
+          {pinWithoutCode ? null : mode === 'pin' ? (
             <>
               <label className="flex flex-col gap-2">
                 <span className={labelClass}>PIN</span>
@@ -232,9 +259,11 @@ export function LoginPage() {
 
           {error && <div className="rounded-sq bg-red-50 text-red-700 text-sm px-3 py-2">{error}</div>}
 
-          <button type="submit" disabled={loading} className="pos-btn-primary w-full min-h-[52px] rounded-xl text-[17px]">
-            {loading ? 'Вхід…' : 'Увійти'}
-          </button>
+          {!pinWithoutCode && (
+            <button type="submit" disabled={loading} className="pos-btn-primary w-full min-h-[52px] rounded-xl text-[17px]">
+              {loading ? 'Вхід…' : 'Увійти'}
+            </button>
+          )}
         </form>
 
         {installHint && canInstall && (

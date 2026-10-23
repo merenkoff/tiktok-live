@@ -68,11 +68,17 @@ const HALLS = [
  * session and not at boot.
  */
 async function loginWithPin(page: Page) {
+  // Only the owner types the store code; a tablet a waiter signs in to with a
+  // PIN is one the owner has already set up.
+  await page.addInitScript(() => {
+    if (!localStorage.getItem('pos_last_store_slug')) {
+      localStorage.setItem('pos_last_store_slug', 'demo');
+    }
+  });
   await page.goto('/tablet/');
   await expect(page).toHaveURL(/\/tablet\/login$/);
   await expect(page.getByText('Планшет офіціанта')).toBeVisible();
-  const storeCode = page.getByLabel('Код магазину');
-  if (await storeCode.isEditable()) await storeCode.fill('demo');
+  await expect(page.getByLabel('Код магазину')).toHaveValue('demo');
   await page.getByLabel('PIN').fill('1234');
   await page.getByRole('button', { name: 'Увійти' }).click();
   await page.waitForURL(/\/tablet\/register$/);
