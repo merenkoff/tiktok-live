@@ -10,6 +10,7 @@ import { ChevronRight, QrCode, ShieldCheck, WifiOff, type Glyph } from '../compo
 import { PricingCard } from '../components/PricingSection';
 import { useScrollToHash } from '../hooks/useScrollToHash';
 import { PRICING } from '../lib/productFacts';
+import { CTA } from '../lib/ctaIds';
 
 const CORE: { value: string; label: string; icon: Glyph }[] = [
   { value: 'ПРРО', label: 'фіскальний чек через Checkbox — онлайн і офлайн', icon: ShieldCheck },
@@ -41,10 +42,10 @@ export function Home() {
               кухня, столи. І бот для продажу в TikTok LIVE.
             </p>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
-              <a href="#verticals" className="btn-pos">
+              <a href="#verticals" className="btn-pos" data-cta={CTA.heroVerticals}>
                 Обрати свій бізнес
               </a>
-              <a href="/pos#download" className="link-more text-[17px]">
+              <a href="/pos#download" className="link-more text-[17px]" data-cta={CTA.heroDownload}>
                 Завантажити касу <ChevronRight size={20} />
               </a>
             </div>
@@ -76,7 +77,7 @@ export function Home() {
               ))}
             </div>
             <Reveal className="mt-8 text-center">
-              <a href="/pos" className="link-more text-[15px]">
+              <a href="/pos" className="link-more text-[15px]" data-cta={CTA.homeToPos}>
                 Що ще всередині каси <ChevronRight size={20} />
               </a>
             </Reveal>
@@ -100,7 +101,7 @@ export function Home() {
                   сам створює ТТН Нової Пошти — поки ви показуєте наступну модель.
                 </p>
                 <p className="mt-4 text-sm font-semibold text-white/80">{PRICING.live.label}</p>
-                <a href="/live" className="btn mt-6 bg-paper text-live hover:bg-white/90">
+                <a href="/live" className="btn mt-6 bg-paper text-live hover:bg-white/90" data-cta={CTA.homeToLive}>
                   Дивитись, як це працює <ChevronRight size={20} />
                 </a>
               </div>

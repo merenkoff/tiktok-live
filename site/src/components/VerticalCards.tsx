@@ -1,6 +1,7 @@
 import { Reveal, StaggerGroup, StaggerItem } from './Reveal';
 import { VERTICALS, type VerticalFact } from '../lib/productFacts';
 import { Check, ChevronRight, ClipboardList, Coffee, Flower2, Shirt, UtensilsCrossed, type Glyph } from './glyphs';
+import { CTA } from '../lib/ctaIds';
 
 /** Each vertical's glyph — the mark on its landing's hero and section heads. */
 export const VERTICAL_GLYPH: Record<VerticalFact['id'], Glyph> = {
@@ -41,7 +42,7 @@ function Illustrations({ v }: { v: VerticalFact }) {
 function ComingCard({ v }: { v: VerticalFact }) {
   return (
     <Reveal className="mt-6">
-      <a href={v.path} className="group card-link overflow-hidden flex flex-col sm:flex-row">
+      <a href={v.path} className="group card-link overflow-hidden flex flex-col sm:flex-row" data-cta={CTA.verticalCard(v.slug)}>
         <div className={`h-36 sm:h-auto sm:w-72 shrink-0 flex items-center justify-center ${v.tint}`}>
           <Illustrations v={v} />
         </div>
@@ -85,6 +86,7 @@ export function VerticalCards({ current }: { current?: VerticalFact['id'] }) {
             <StaggerItem key={v.id} className="h-full">
               <a
                 href={v.path}
+                data-cta={CTA.verticalCard(v.slug)}
                 aria-current={active ? 'page' : undefined}
                 className={`group card-link h-full overflow-hidden flex flex-col ${active ? 'ring-2 ring-pos' : ''}`}
               >

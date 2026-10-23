@@ -104,6 +104,9 @@ export function AboutPage() {
         <section className="max-w-3xl mx-auto px-6 py-24">
           <CTAForm
             id="cta"
+            formId="about"
+            intent="callback"
+            askBusiness
             accent="pos"
             heading="Зв'язатися"
             subheading="Залиште ім'я і телефон — передзвонимо і покажемо касу на прикладі вашого бізнесу."

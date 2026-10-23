@@ -1,5 +1,6 @@
 import { AVAILABLE_VERTICALS } from '../lib/productFacts';
 import { AppIcon } from './AppIcon';
+import { CTA as CTA_ID } from '../lib/ctaIds';
 
 type Variant = 'home' | 'live' | 'pos' | 'dovidka';
 
@@ -59,6 +60,7 @@ export function Nav({ variant, activePath }: { variant: Variant; activePath?: st
         <div className="flex items-center gap-2">
           <a
             href={cta.href}
+            data-cta={CTA_ID.nav(variant)}
             className={`text-[13px] font-semibold px-3.5 h-8 inline-flex items-center rounded-full text-white ${cta.className} transition-colors whitespace-nowrap`}
           >
             {cta.label}
