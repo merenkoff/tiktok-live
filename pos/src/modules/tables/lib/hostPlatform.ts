@@ -95,3 +95,30 @@ export function posRequest<T>(
     }
   ).posRequest(method, path, body);
 }
+
+/** What the store's cash rounding does to one cash total. */
+export interface CashRoundingOutcome {
+  /** The step to send with the payment; 0 = none, and then nothing is sent. */
+  step: 0 | 10 | 50;
+  /** Signed: −23 means the guest pays 23 kopecks less. */
+  deltaCents: number;
+}
+
+/**
+ * Cash rounding (НБУ № 25, platform 19; TechDocs/POS_CASH_ROUNDING.md): what a
+ * cash total moves by under the store's step, by the host's own arithmetic —
+ * the server and the till use the same table of cases, and a copy here would
+ * drift from both. Optional on purpose, and so read through the namespace
+ * rather than in `REQUIRED_HOST_API`: a host older than 19 has neither
+ * function, and then this module does not round and sends no step, so the
+ * server does not round either and the bill is paid to the kopiyka, as it
+ * always was.
+ */
+export function cashRoundingFor(totalCents: number, storeStep: unknown): CashRoundingOutcome {
+  const parse = (host as Record<string, unknown>).storeCashRounding;
+  const delta = (host as Record<string, unknown>).cashRoundingDelta;
+  if (!hasFn(parse) || !hasFn(delta)) return { step: 0, deltaCents: 0 };
+  const step = (parse as (value: unknown) => 0 | 10 | 50)(storeStep);
+  if (step === 0) return { step: 0, deltaCents: 0 };
+  return { step, deltaCents: (delta as (amount: number, step: 0 | 10 | 50) => number)(totalCents, step) };
+}

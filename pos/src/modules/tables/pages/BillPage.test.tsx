@@ -660,6 +660,78 @@ describe('BillPage', () => {
     expect(part.payments.every((p) => (p as { method: string }).method === 'cash')).toBe(true);
   });
 
+  // ── Заокруглення готівки (НБУ № 25, TechDocs/POS_CASH_ROUNDING.md) ──────
+
+  describe('cash rounding', () => {
+    function roundedStore(step: number): void {
+      useAuthStore.setState({
+        auth: makeAuthResponse({ store: { id: 7, cash_rounding: step } }),
+        isAuthenticated: true,
+        bootstrapped: true,
+      });
+      bill.rounds = [round({ items: [line({ id: 2, quantity: 1, unit_price_cents: 8023 })] })];
+      bill.fired_total_cents = 8023;
+      bill.draft = [];
+    }
+
+    function capture(): Array<Record<string, unknown>> {
+      const posted: Array<Record<string, unknown>> = [];
+      posRequest.mockImplementation(async (method: string, path: string, body?: unknown) => {
+        if (method === 'post' && path === '/bills/90/pay') {
+          posted.push(body as Record<string, unknown>);
+          return { bill: { ...bill, status: 'paid' }, sale_ids: [7] };
+        }
+        return bill;
+      });
+      return posted;
+    }
+
+    it('rounds a cash bill and sends the step with the rounded sum', async () => {
+      roundedStore(50);
+      const posted = capture();
+      renderWithProviders(<BillPage />, { route: '/tables/90' });
+      await userEvent.click(await screen.findByTestId('bill-pay'));
+      await userEvent.click(screen.getByTestId('pay-method-cash'));
+      expect(screen.getByTestId('pay-rounding')).toHaveTextContent('−0,23 ₴');
+      expect(screen.getByTestId('pay-due')).toHaveTextContent('80,00 ₴');
+      await userEvent.click(screen.getByTestId('pay-submit'));
+      await waitFor(() =>
+        expect(posted).toEqual([
+          { parts: [{ payments: [{ method: 'cash', amount_cents: 8000 }] }], cash_rounding: 50 },
+        ])
+      );
+    });
+
+    it('never rounds a card, and then sends no step', async () => {
+      roundedStore(50);
+      const posted = capture();
+      renderWithProviders(<BillPage />, { route: '/tables/90' });
+      await userEvent.click(await screen.findByTestId('bill-pay'));
+      expect(screen.queryByTestId('pay-rounding')).not.toBeInTheDocument();
+      expect(screen.getByTestId('pay-due')).toHaveTextContent('80,23 ₴');
+      await userEvent.click(screen.getByTestId('pay-submit'));
+      await waitFor(() =>
+        expect(posted).toEqual([{ parts: [{ payments: [{ method: 'card', amount_cents: 8023 }] }] }])
+      );
+    });
+
+    it('splits the sum after rounding when the guests pay cash evenly', async () => {
+      roundedStore(10);
+      const posted = capture();
+      renderWithProviders(<BillPage />, { route: '/tables/90' });
+      await userEvent.click(await screen.findByTestId('bill-pay'));
+      await userEvent.click(screen.getByTestId('pay-ways-more'));
+      await userEvent.click(screen.getByTestId('pay-method-cash'));
+      // 80,23 → 80,20 by 10 kopecks: one receipt, so one rounding, split in two.
+      expect(screen.getByTestId('pay-shares')).toHaveTextContent('40,10 ₴ + 40,10 ₴');
+      await userEvent.click(screen.getByTestId('pay-submit'));
+      await waitFor(() => expect(posted).toHaveLength(1));
+      expect(posted[0]).toMatchObject({ cash_rounding: 10 });
+      const payments = (posted[0].parts as Array<{ payments: Array<{ amount_cents: number }> }>)[0].payments;
+      expect(payments.map((p) => p.amount_cents)).toEqual([4010, 4010]);
+    });
+  });
+
   it('will not offer payment while the kitchen has not been told', async () => {
     renderWithProviders(<BillPage />, { route: '/tables/90' });
     // The draft from the fixture is still untyped-but-unsent.

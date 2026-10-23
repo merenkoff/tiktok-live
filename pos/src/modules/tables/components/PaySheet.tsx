@@ -25,6 +25,10 @@
 // QR is deliberately absent: a dynamic QR needs the invoice screen the host
 // owns on `/register`, and a waiter's tablet that starts one and walks away
 // would leave an invoice nobody watches.
+//
+// Cash is rounded when the store rounds (НБУ № 25, TechDocs/POS_CASH_ROUNDING.md):
+// the receipt's cash total, never a card. «Порівну» splits the sum AFTER
+// rounding, because the rounding belongs to the one receipt, not to each guest.
 
 import { useMemo, useState } from 'react';
 import { formatUah } from '@pos/platform';
@@ -32,14 +36,18 @@ import { ArrowLeft, Banknote, Check, CreditCard, Minus, Plus, Split } from '@pos
 import type { Glyph } from '@pos/platform/ui';
 import { evenShares, lineCents, payableLines, selectionCents } from '../lib/pay';
 import { lineTitle } from '../lib/bill';
+import { cashRoundingFor } from '../lib/hostPlatform';
 import type { PayPart } from '../lib/tablesApi';
 import type { Bill } from '../lib/types';
 
 export interface PaySheetProps {
   bill: Bill;
   busy?: boolean;
+  /** The store's cash-rounding step from the login; absent or 0 = none. */
+  cashRoundingStep?: number;
   onClose: () => void;
-  onPay: (parts: PayPart[]) => void;
+  /** `cashRounding` is the step to send — 0 when nothing was rounded. */
+  onPay: (parts: PayPart[], cashRounding: number) => void;
 }
 
 type Method = 'cash' | 'card';
@@ -49,7 +57,12 @@ const METHODS: Array<{ id: Method; label: string; glyph: Glyph }> = [
   { id: 'card', label: 'Картка', glyph: CreditCard },
 ];
 
-export function PaySheet({ bill, busy, onClose, onPay }: PaySheetProps): JSX.Element {
+/** «−0,23 ₴» / «+0,20 ₴» — the host's `formatSignedUah` is platform 19, too new to name. */
+function signedUah(cents: number): string {
+  return `${cents < 0 ? '−' : '+'}${formatUah(Math.abs(cents))}`;
+}
+
+export function PaySheet({ bill, busy, cashRoundingStep, onClose, onPay }: PaySheetProps): JSX.Element {
   const lines = useMemo(() => payableLines(bill), [bill]);
   const [selected, setSelected] = useState<Set<number>>(
     () => new Set(lines.map(({ line }) => line.id))
@@ -59,7 +72,10 @@ export function PaySheet({ bill, busy, onClose, onPay }: PaySheetProps): JSX.Ele
 
   const total = selectionCents(lines, selected);
   const whole = selected.size === lines.length;
-  const shares = evenShares(total, ways);
+  const rounding = method === 'cash' ? cashRoundingFor(total, cashRoundingStep) : { step: 0 as const, deltaCents: 0 };
+  // What the guests hand over: the cash total after rounding, the card total as it is.
+  const due = total + rounding.deltaCents;
+  const shares = evenShares(due, ways);
 
   function toggle(id: number): void {
     setSelected((prev) => {
@@ -71,7 +87,7 @@ export function PaySheet({ bill, busy, onClose, onPay }: PaySheetProps): JSX.Ele
   }
 
   function pay(): void {
-    if (total <= 0) return;
+    if (due <= 0) return;
     // A part without `line_ids` means «everything still owed» — which is not
     // the same as listing today's ids, because between this render and the
     // request another waiter may have fired one more round.
@@ -79,7 +95,7 @@ export function PaySheet({ bill, busy, onClose, onPay }: PaySheetProps): JSX.Ele
       ...(whole ? {} : { line_ids: [...selected] }),
       payments: shares.map((amount_cents) => ({ method, amount_cents })),
     };
-    onPay([part]);
+    onPay([part], rounding.deltaCents !== 0 ? rounding.step : 0);
   }
 
   const chosen = lines.filter(({ line }) => selected.has(line.id)).length;
@@ -198,9 +214,17 @@ export function PaySheet({ bill, busy, onClose, onPay }: PaySheetProps): JSX.Ele
                 {shares.map((c) => formatUah(c)).join(' + ')} — один чек, {ways} оплат
               </p>
             )}
+            {rounding.deltaCents !== 0 && (
+              <div className="flex justify-between text-[15px] text-sq-secondary" data-testid="pay-rounding">
+                <span>Заокруглення готівки</span>
+                <span className="tabular-nums">{signedUah(rounding.deltaCents)}</span>
+              </div>
+            )}
             <div className="flex items-baseline justify-between">
               <span className="text-lg font-bold text-sq-heading">До сплати</span>
-              <span className="text-[30px] font-bold text-sq-heading tabular-nums">{formatUah(total)}</span>
+              <span className="text-[30px] font-bold text-sq-heading tabular-nums" data-testid="pay-due">
+                {formatUah(due)}
+              </span>
             </div>
           </div>
 
@@ -231,10 +255,10 @@ export function PaySheet({ bill, busy, onClose, onPay }: PaySheetProps): JSX.Ele
             type="button"
             className="pos-btn-primary w-full min-h-[60px] rounded-xl text-lg"
             data-testid="pay-submit"
-            disabled={busy || total <= 0}
+            disabled={busy || due <= 0}
             onClick={pay}
           >
-            Оплатити {formatUah(total)}
+            Оплатити {formatUah(due)}
             {whole ? '' : ' (частина)'}
           </button>
         </section>

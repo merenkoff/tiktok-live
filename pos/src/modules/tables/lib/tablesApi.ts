@@ -122,8 +122,13 @@ export interface PayPart {
  * The answer is the bill as it stands afterwards; a part that fails leaves
  * the parts before it paid, so the screen re-reads rather than assumes.
  */
-export function payBill(billId: number, parts: PayPart[]): Promise<PaidBill> {
-  return posRequest<PaidBill>('post', `/bills/${billId}/pay`, { parts });
+export function payBill(billId: number, parts: PayPart[], cashRounding = 0): Promise<PaidBill> {
+  // The cash-rounding step (НБУ № 25) only when the store rounds: the server
+  // computes the amount itself, and a body without it is the one it always was.
+  return posRequest<PaidBill>('post', `/bills/${billId}/pay`, {
+    parts,
+    ...(cashRounding ? { cash_rounding: cashRounding } : {}),
+  });
 }
 
 /**
