@@ -11,10 +11,12 @@ import { prodazhPidZapysOblikBorgiv } from './prodazh-pid-zapys-oblik-borgiv';
 import { chyPotribenPrroNaRynku } from './chy-potriben-prro-na-rynku';
 import { vagovyiTovarCherezPrro } from './vagovyi-tovar-cherez-prro';
 import { torgsoftPosboxPosterDlyaProduktovogoMagazynu } from './torgsoft-posbox-poster-dlya-produktovogo-magazynu';
+import { zaokruglennyaGotivky50Kopiyok } from './zaokruglennya-gotivky-50-kopiyok';
 import { GUIDE_ARTICLES } from './guides';
 
 /** Hand-written answers, newest first. */
 const STANDALONE: Article[] = [
+  zaokruglennyaGotivky50Kopiyok,
   torgsoftPosboxPosterDlyaProduktovogoMagazynu,
   vagovyiTovarCherezPrro,
   chyPotribenPrroNaRynku,
