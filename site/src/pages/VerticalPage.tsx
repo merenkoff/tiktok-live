@@ -362,8 +362,16 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
             <Reveal>
               <SectionHeading title="Читайте також" className="mb-10" />
             </Reveal>
-            {/* A single article is a centred card rather than a third of an empty row. */}
-            <StaggerGroup className={`grid gap-6 ${content.articles.length === 1 ? 'max-w-xl mx-auto' : 'md:grid-cols-3'}`}>
+            {/* One or two articles are centred rather than leaving a row with empty thirds. */}
+            <StaggerGroup
+              className={`grid gap-6 ${
+                content.articles.length === 1
+                  ? 'max-w-xl mx-auto'
+                  : content.articles.length === 2
+                    ? 'md:grid-cols-2 max-w-4xl mx-auto'
+                    : 'md:grid-cols-3'
+              }`}
+            >
               {content.articles.map((a) => (
                 <StaggerItem key={a.slug} className="h-full">
                   <a href={`/dovidka/${a.slug}`} className="block h-full card-flat p-6 transition-colors hover:bg-selected">

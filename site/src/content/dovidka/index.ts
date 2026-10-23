@@ -8,10 +8,12 @@ import { choiceqrChyLiveshopDlyaRestoranu } from './choiceqr-chy-liveshop-dlya-r
 import { restoappChyLiveshopDlyaRestoranu } from './restoapp-chy-liveshop-dlya-restoranu';
 import { posterQrChyLiveshopDlyaRestoranu } from './poster-qr-chy-liveshop-dlya-restoranu';
 import { prodazhPidZapysOblikBorgiv } from './prodazh-pid-zapys-oblik-borgiv';
+import { chyPotribenPrroNaRynku } from './chy-potriben-prro-na-rynku';
 import { GUIDE_ARTICLES } from './guides';
 
 /** Hand-written answers, newest first. */
 const STANDALONE: Article[] = [
+  chyPotribenPrroNaRynku,
   prodazhPidZapysOblikBorgiv,
   posterQrChyLiveshopDlyaRestoranu,
   restoappChyLiveshopDlyaRestoranu,
