@@ -15,6 +15,7 @@
 ## Barcodes
 - buildInternalBarcode (src/pos/gtin/internal-code.ts:17,31-41): '29' + 10-digit counter from global pos_internal_barcode_seq (023); generateInternalBarcode (products.service.ts:877-893); autoBarcode (330). Comment 10-15 deliberately avoids 20–24 because retail scales use them.
 - SECOND generator: internalBarcodeFor(variantId) = '2' + id padded to 11 (src/pos/core/internalBarcode.ts:29,32,62-70), used for showcase bouquets (bench.service.ts:249) → in practice 20… codes = inside the weighed-goods range. Client isInternalBarcode knows only '29' (pos/src/lib/internalBarcode.ts:18-22).
+  - **Update 2026-10-23 (PR #262): gone.** Showcase bouquets now take `generateInternalBarcode` (`29…`) in the card's own INSERT; `core/internalBarcode.ts` is deleted, and the `internal-code.ts` comment now names GS1 Ukraine's 20–23 / 24–28 / 29 split. Only demo stores hold old `20…` bouquets; no migration.
 - Lookup exact match only: server v.barcode = $n (products.service.ts:953-955); offline filterCatalog === (catalog-filter.ts:52-54); lookupBarcode (useSalesCatalog.ts:160-163).
 - Unknown code at till: banner «Штрихкод не знайдено» only (ClothingCatalog.tsx:55, FlowersCatalog.tsx:101, CafeCatalog.tsx:102).
 - GTIN enrichment only in the receiving form for new items (StockActionPage.tsx:300-366, skips internal at 335): cache → Open Food/Products/Beauty Facts (gtin/open-facts.ts, lib/gtinLookup.ts:31) → paid providers. pos_gtin_cache (gtin VARCHAR(14) PK, name, brand, image_url, best_source; 008); per-store gtin_lookup_enabled. Routes /gtin/:code, /gtin/ingest, /gtin/lookup/quota-providers, /gtin/learn/* (routes/gtin.routes.ts).
@@ -78,7 +79,7 @@
 1. INTEGER quantities in ~18 columns + ::int view/casts + Number.isInteger checks; runner re-applies every boot → guarded type change; pos_stock_reserved must be dropped/recreated.
 2. Fiscal ×1000 + derived discount assume whole units (payload.ts:49-56, types.ts:224) → rounding rule must match Checkbox line sum.
 3. Price = integer kopecks per base unit (002:97) → no per-kg/100 g price; per-gram moves in 10 ₴/кг steps.
-4. Barcode lookup exact match, no 2x parsing (products.service.ts:953-955, catalog-filter.ts:52-54); bench '2'+id codes already produce 20… colliding with scale labels (core/internalBarcode.ts:32).
+4. Barcode lookup exact match, no 2x parsing (products.service.ts:953-955, catalog-filter.ts:52-54); bench '2'+id codes already produce 20… colliding with scale labels (core/internalBarcode.ts:32) — bench half fixed 2026-10-23 (PR #262), all minted codes are now 29….
 5. Cart +/− only, refuses zero stock (useCart.ts:221-225,331) while server allows negative stock on sale (stock.service.ts:73-75).
 6. Unit nowhere on receipt/fiscal name/Rust i64 (receipt.rs:18,287).
 7. No scale/serial (no serialport crate, no WebSerial); new Tauri command → EXPECTED_COMMANDS.

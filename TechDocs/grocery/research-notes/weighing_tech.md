@@ -84,6 +84,7 @@ Source for this block: [GS1 General Specifications R26.0 PDF](https://www.gs1.or
 #### This repository's internal codes [R]
 - `buildInternalBarcode` mints `29` + a 10-digit store counter + check digit, e.g. counter 42 → `2900000000421`. It is used when `VerticalDefinition.autoBarcode` is on (clothing). Its comment says scales "print `20`–`24` for price-embedded variable-weight items". — [src/pos/gtin/internal-code.ts](/home/user/tiktok-live/src/pos/gtin/internal-code.ts), [src/pos/products.service.ts](/home/user/tiktok-live/src/pos/products.service.ts)
 - **A second, different scheme exists.** `internalBarcodeFor(variantId)` (used by the florist bench's showcase bouquets) mints a bare `2` + the variant id zero-padded to 11 digits + check digit. Variant 12345 → `2000000123455`, so every such code starts with **`20`** until variant ids reach 10¹⁰. Its `isInternalBarcode` accepts any `2…` code with a valid check digit. — [src/pos/core/internalBarcode.ts](/home/user/tiktok-live/src/pos/core/internalBarcode.ts), [src/pos/bench.service.ts](/home/user/tiktok-live/src/pos/bench.service.ts)
+  - **Update 2026-10-23 (PR #262):** this second scheme is removed. Showcase bouquets now use `generateInternalBarcode` (`29…`), and only demo stores still hold old `20…` bouquets.
 - No RCN or weight-barcode parsing exists yet. The café vertical already sells in `'шт', 'г', 'мл'`, with quantity stored as an integer in the base unit. — [src/pos/verticals/cafe.ts](/home/user/tiktok-live/src/pos/verticals/cafe.ts)
 
 #### Worked examples (computed with the verified algorithms; EAN-13 check digits valid)
@@ -103,8 +104,8 @@ Source for this block: [GS1 General Specifications R26.0 PDF](https://www.gs1.or
 - **Base units:** a 5-digit weight field with 3 decimals is already **integer grams** (max 99 999 g); a 4-digit field caps at 9.999 kg. A 5-digit price field with 2 decimals caps at **999.99 UAH**, which is a real overflow risk for meat or cheese pieces. With a price-embedded label the quantity has to be back-computed (price ÷ unit price) and is lossy. So **weight-embedded labels fit this backend better**: the line price is recomputed as `round(grams × kopecks_per_kg / 1000)`, and the rounding rule must match the scale's (see §4 on OIML 4.14.3).
 - **Collision management:**
   - Keep all POS-minted fixed codes in `29` (GS1 Ukraine's retailer range). Never configure a scale with prefix 29. Pick scale prefixes from 20–28 per store and reject a scale rule whose prefix is 29.
-  - Either move the bench's `2`+11-digit codes into the `29` counter, or make sure exact-match lookup always runs before RCN decoding. Otherwise a scale rule on prefix 20 reads `2000000123455` as "PLU 00000, 12.345 kg".
-  - Also harmonise the two `isInternalBarcode` functions. One accepts `2…`, the other only `29…`.
+  - Either move the bench's `2`+11-digit codes into the `29` counter, or make sure exact-match lookup always runs before RCN decoding. Otherwise a scale rule on prefix 20 reads `2000000123455` as "PLU 00000, 12.345 kg". *(Done 2026-10-23, PR #262: the bench now mints `29…`. Exact match first still applies to demo stores' old `20…` codes and to supplier codes.)*
+  - Also harmonise the two `isInternalBarcode` functions. One accepts `2…`, the other only `29…`. *(Done with the same PR: the `2…` one was deleted.)*
 - **Sunrise 2027 / Digital Link** matters for small shops only on the *reading* side: buy 2D-capable imagers, decode `]Q3`/`]d2`/`]Q1` GS1 data, and use AI (17) expiry to warn about expired goods. *Printing* 2D or DataBar on in-store scale labels requires GTINs (a GS1 company-prefix licence) and is not what small shops do.
 
 ### Gaps
