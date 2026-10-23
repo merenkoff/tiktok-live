@@ -9,10 +9,12 @@ import { restoappChyLiveshopDlyaRestoranu } from './restoapp-chy-liveshop-dlya-r
 import { posterQrChyLiveshopDlyaRestoranu } from './poster-qr-chy-liveshop-dlya-restoranu';
 import { prodazhPidZapysOblikBorgiv } from './prodazh-pid-zapys-oblik-borgiv';
 import { chyPotribenPrroNaRynku } from './chy-potriben-prro-na-rynku';
+import { vagovyiTovarCherezPrro } from './vagovyi-tovar-cherez-prro';
 import { GUIDE_ARTICLES } from './guides';
 
 /** Hand-written answers, newest first. */
 const STANDALONE: Article[] = [
+  vagovyiTovarCherezPrro,
   chyPotribenPrroNaRynku,
   prodazhPidZapysOblikBorgiv,
   posterQrChyLiveshopDlyaRestoranu,
