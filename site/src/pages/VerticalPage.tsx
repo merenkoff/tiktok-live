@@ -362,12 +362,12 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
             <Reveal>
               <SectionHeading title="Читайте також" className="mb-10" />
             </Reveal>
-            {/* One or two articles are centred rather than leaving a row with empty thirds. */}
+            {/* One, two or four articles are centred rather than leaving a row with empty thirds. */}
             <StaggerGroup
               className={`grid gap-6 ${
                 content.articles.length === 1
                   ? 'max-w-xl mx-auto'
-                  : content.articles.length === 2
+                  : content.articles.length === 2 || content.articles.length === 4
                     ? 'md:grid-cols-2 max-w-4xl mx-auto'
                     : 'md:grid-cols-3'
               }`}

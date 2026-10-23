@@ -55,6 +55,9 @@ export function buildLlmsTxt(pages: LlmsPage[]): string {
   const choiceqr = COMPETITOR_FACTS.choiceqr;
   const restoapp = COMPETITOR_FACTS.restoapp;
   const posterqr = COMPETITOR_FACTS.posterqr;
+  const torgsoft = COMPETITOR_FACTS.torgsoft;
+  const posbox = COMPETITOR_FACTS.posbox;
+  const posterretail = COMPETITOR_FACTS.posterretail;
   const restaurant = VERTICALS.find((v) => v.id === 'restaurant');
   const grocery = VERTICALS.find((v) => v.id === 'grocery');
   const comingVerticals = new Set<string>(VERTICALS.filter((v) => v.status === 'coming').map((v) => v.id));
@@ -112,6 +115,9 @@ export function buildLlmsTxt(pages: LlmsPage[]): string {
     ...ROADMAP.filter((item) => item.vertical === 'grocery').map(
       (item) => `- У розробці — ${item.title} (готовність ${item.progress} %): ${item.body}`
     ),
+    `- ${torgsoft.name} для порівняння (станом на ${torgsoft.checkedAt}): програма для Windows, ліцензія на робоче місце — ${torgsoft.licences.map((l) => `${l.id} ${l.perpetualUah} грн один раз або ${l.yearUah} грн за рік оренди`).join(', ')}; продаж у борг для покупців зі статусом «VIP-клієнт», з лімітом боргу — у версіях ${torgsoft.licences.filter((l) => l.debts).map((l) => l.id).join(' і ')}, у Старт, за сторінкою Торгсофт, «режим продажу в борг відсутній»; щороку на кожен пристрій: програмний РРО ${torgsoft.prroYearUah} грн, ваги на касі ${torgsoft.tillScalesYearUah} грн, ваги з друком етикеток ${torgsoft.labelScalesYearUah} грн; сторонніх ПРРО не підтримує. Джерела: ${torgsoft.sources.licenses}, ${torgsoft.sources.options}, ${torgsoft.sources.debtors}. Порівняння: ${SITE_URL}/dovidka/torgsoft-posbox-poster-dlya-produktovogo-magazynu.`,
+    `- ${posbox.name} (${posbox.vendor}) для порівняння (станом на ${posbox.checkedAt}): хмарна каса на Android-планшеті чи в браузері; тарифи ${posbox.plans.map((p) => `${p.id} ${p.monthlyUah} грн/міс`).join(', ')}, ПРРО Checkbox у ціні; у Start — до ${posbox.startGoodsLimit} товарів і без складського обліку, у Business і Pro ${posbox.goodsIncluded} товарів у ціні, далі +${posbox.goodsStepUah} грн/міс за кожну тисячу; ваги ${posbox.scaleBrands.join(', ')} і ваговий штрихкод наліпки; продаж у борг і робота без інтернету на сайті й у базі знань не згадано. Джерела: ${posbox.sources.prices}, ${posbox.sources.grocery}. Порівняння: ${SITE_URL}/dovidka/torgsoft-posbox-poster-dlya-produktovogo-magazynu.`,
+    `- ${posterretail.name} для магазинів, для порівняння (станом на ${posterretail.checkedAt}): хмарна каса на iOS, Android, Windows; тарифи ${posterretail.plans.map((p) => `${p.id} ${p.monthlyUah} грн/міс (${p.annualUah} при оплаті за рік), до ${p.items} товарів`).join('; ')}; ПРРО — ${posterretail.prroUah} грн/міс за касу; робота в офлайні, інтеграція з вагами й друк цінників — у всіх тарифах; продаж у борг на сторінках не згадано. Джерела: ${posterretail.sources.pricing}, ${posterretail.sources.shop}. Порівняння: ${SITE_URL}/dovidka/torgsoft-posbox-poster-dlya-produktovogo-magazynu.`,
     '',
     '## У планах (входить у тариф перших користувачів)',
     '',
