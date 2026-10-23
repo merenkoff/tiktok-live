@@ -8,11 +8,16 @@ import { computeCheckDigit, normalizeGtin } from './normalize.js';
 
 /**
  * GS1 reserves EAN-13 prefixes 20–29 for restricted distribution — codes a shop
- * assigns itself, which no manufacturer will ever be issued. We take `29`
- * rather than a bare `2`: retail scales print `20`–`24` for price-embedded
- * variable-weight items, so staying above that range keeps our codes clear of a
- * convention scanners and other systems already assume, and leaves `20`–`28`
- * free if a second class of internal code is ever needed.
+ * assigns itself, which no manufacturer will ever be issued. Within that range
+ * GS1 Ukraine gives `20`–`23` to variable-measure items (a scale prints the
+ * article and the weight or price into the code, and the till reads them back
+ * by prefix), keeps `24`–`28` in reserve, and leaves `29` for a shop's own
+ * fixed codes. So `29`, and nothing else: a code of ours in `20…` would be
+ * taken apart as a weighed item the day a grocery's parse table is switched on.
+ *
+ * Every code this backend mints goes through here — a garment's
+ * (`VerticalDefinition.autoBarcode`), the owner's «Згенерувати» button and a
+ * florist's showcase bouquet alike — so there is one range to keep clear.
  */
 export const INTERNAL_BARCODE_PREFIX = '29';
 

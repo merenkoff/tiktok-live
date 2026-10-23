@@ -74,6 +74,35 @@ describe.skipIf(!hasDb)('POS auth & staff routes', () => {
       expect(res.json().error).toBe('Invalid credentials');
     });
 
+    it('takes the store code and signs in to that store', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/pos/auth/owner/login',
+        payload: { login: store.ownerLogin, password: store.ownerPassword, store_slug: store.slug },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().store.slug).toBe(store.slug);
+    });
+
+    it('401s for a store code the owner does not own, like any wrong field', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/pos/auth/owner/login',
+        payload: { login: store.ownerLogin, password: store.ownerPassword, store_slug: 'not-mine' },
+      });
+      expect(res.statusCode).toBe(401);
+      expect(res.json().error).toBe('Invalid credentials');
+    });
+
+    it('ignores a store code that is not a string', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/pos/auth/owner/login',
+        payload: { login: store.ownerLogin, password: store.ownerPassword, store_slug: 42 },
+      });
+      expect(res.statusCode).toBe(200);
+    });
+
     it('401s identically for an unknown login', async () => {
       const res = await app.inject({
         method: 'POST',

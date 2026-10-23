@@ -2,14 +2,14 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuthStore, loadLastStoreSlug, usePosShell, OfflineAuthError } from '@pos/platform';
 import { isIos, isStandalone, useInstallPrompt } from '../lib/installPrompt';
 import { AppIcon } from '../components/AppIcon';
 
-function loginErrorMessage(error: unknown): string {
+function loginErrorMessage(error: unknown, mode: 'owner' | 'pin'): string {
   if (error instanceof OfflineAuthError) return error.message;
   if (axios.isAxiosError(error)) {
     if (!error.response) {
@@ -27,9 +27,15 @@ function loginErrorMessage(error: unknown): string {
       }
       return `Немає звʼязку з API${code}. Перевірте інтернет, дату/час і оновлення системи.`;
     }
+    // The server's 401 is one English sentence for every wrong field, on
+    // purpose (it must not say which one was wrong) — so is this one.
+    if (error.response.status === 401) {
+      return mode === 'owner'
+        ? 'Невірний email, пароль або код магазину.'
+        : 'Невірний PIN або код магазину.';
+    }
     const apiError = error.response.data?.error;
     if (typeof apiError === 'string') return apiError;
-    if (error.response.status === 401) return 'Невірний логін, пароль або PIN.';
   }
   return 'Не вдалося увійти. Перевірте дані.';
 }
@@ -38,7 +44,13 @@ export function LoginPage() {
   const [mode, setMode] = useState<'owner' | 'pin'>('pin');
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
-  const [storeSlug, setStoreSlug] = useState(loadLastStoreSlug());
+  // The code this device last signed in to: shown, but locked, so after the
+  // first login only the email + password (or the PIN) is typed. «Змінити»
+  // unlocks it; the next successful login remembers whatever was typed.
+  const [storeSlug, setStoreSlug] = useState(loadLastStoreSlug);
+  const [slugLocked, setSlugLocked] = useState(() => loadLastStoreSlug() !== '');
+  const slugRef = useRef<HTMLInputElement>(null);
+  const slugUnlocked = useRef(false);
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -52,32 +64,80 @@ export function LoginPage() {
   // tab: an installed app asking to be installed is noise.
   const installHint = shell === 'tablet' && !isStandalone();
 
+  // Focus the code once «Змінити» has unlocked it — not on mount, where it
+  // would take the focus from the PIN field.
+  useEffect(() => {
+    if (!slugLocked && slugUnlocked.current) slugRef.current?.focus();
+  }, [slugLocked]);
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    if (!storeSlug.trim()) {
+      setError('Введіть код магазину');
+      return;
+    }
     setLoading(true);
     try {
       if (mode === 'owner') {
+        if (!login.trim()) {
+          setError('Введіть email');
+          return;
+        }
         if (!password.trim()) {
           setError('Введіть пароль');
           return;
         }
-        await loginOwner(login, password);
+        await loginOwner(login, password, storeSlug.trim());
         navigate(afterLogin);
       } else {
         if (!pin.trim()) {
           setError('Введіть PIN');
           return;
         }
-        await loginPin(storeSlug, pin);
+        await loginPin(storeSlug.trim(), pin);
         navigate('/register');
       }
     } catch (err) {
-      setError(loginErrorMessage(err));
+      setError(loginErrorMessage(err, mode));
     } finally {
       setLoading(false);
     }
   }
+
+  const storeCodeField = (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <label htmlFor="login-store-code" className={labelClass}>
+          Код магазину
+        </label>
+        {slugLocked && (
+          <button
+            type="button"
+            onClick={() => {
+              slugUnlocked.current = true;
+              setSlugLocked(false);
+            }}
+            className="text-[13px] font-semibold text-sq-blue"
+            data-testid="store-code-change"
+          >
+            Змінити
+          </button>
+        )}
+      </div>
+      <input
+        id="login-store-code"
+        ref={slugRef}
+        className={`${fieldClass} disabled:text-sq-secondary disabled:cursor-default`}
+        value={storeSlug}
+        onChange={(e) => setStoreSlug(e.target.value)}
+        disabled={slugLocked}
+        autoComplete="organization"
+        autoCapitalize="none"
+        spellCheck={false}
+      />
+    </div>
+  );
 
   const pinDots = Math.max(4, pin.length);
   const segClass = (on: boolean) =>
@@ -115,18 +175,10 @@ export function LoginPage() {
             </button>
           </div>
 
+          {storeCodeField}
+
           {mode === 'pin' ? (
             <>
-              <label className="flex flex-col gap-1.5">
-                <span className={labelClass}>Код магазину</span>
-                <input
-                  className={fieldClass}
-                  value={storeSlug}
-                  onChange={(e) => setStoreSlug(e.target.value)}
-                  autoComplete="organization"
-                  autoCapitalize="none"
-                />
-              </label>
               <label className="flex flex-col gap-2">
                 <span className={labelClass}>PIN</span>
                 <span className="relative flex justify-center gap-2.5 py-1.5" data-testid="pin-dots">
@@ -162,6 +214,7 @@ export function LoginPage() {
                   onChange={(e) => setLogin(e.target.value)}
                   autoComplete="username"
                   autoCapitalize="none"
+                  autoFocus={slugLocked}
                 />
               </label>
               <label className="flex flex-col gap-1.5">

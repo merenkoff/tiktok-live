@@ -147,7 +147,7 @@ describe('isEan13', () => {
   });
 
   it('agrees with the server that mints the store\'s own codes', () => {
-    // Same arithmetic as `ean13CheckDigit` in `src/pos/core/internalBarcode.ts`.
+    // Same arithmetic as `computeCheckDigit` in `src/pos/gtin/normalize.ts`.
     expect(ean13CheckDigit('482027036287')).toBe(7);
     expect(ean13CheckDigit('290000000001')).toBe(8);
     expect(ean13CheckDigit('590123412345')).toBe(7);

@@ -71,7 +71,8 @@ async function loginWithPin(page: Page) {
   await page.goto('/tablet/');
   await expect(page).toHaveURL(/\/tablet\/login$/);
   await expect(page.getByText('Планшет офіціанта')).toBeVisible();
-  await page.getByLabel('Код магазину').fill('demo');
+  const storeCode = page.getByLabel('Код магазину');
+  if (await storeCode.isEditable()) await storeCode.fill('demo');
   await page.getByLabel('PIN').fill('1234');
   await page.getByRole('button', { name: 'Увійти' }).click();
   await page.waitForURL(/\/tablet\/register$/);

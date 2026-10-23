@@ -174,10 +174,11 @@ class PosApi {
 
   // Явний таймаут для входу: досить часу навіть на повільному мобільному
   // інтернеті, але якщо каса справді офлайн — useAuth впаде в локальний вхід.
-  async loginOwner(login: string, password: string): Promise<AuthResponse> {
+  async loginOwner(login: string, password: string, store_slug?: string): Promise<AuthResponse> {
+    const slug = store_slug?.trim();
     const { data } = await this.client.post<AuthResponse>(
       '/auth/owner/login',
-      { login, password },
+      slug ? { login, password, store_slug: slug } : { login, password },
       { timeout: 12000 }
     );
     this.saveAuth(data);

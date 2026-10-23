@@ -281,7 +281,10 @@ export function SettingsPage() {
               <input className="sq-input" value={name} onChange={(e) => setName(e.target.value)} />
             </Field>
             <div className="grid gap-4 sm:grid-cols-2 items-start">
-              <Field label="Код для PIN-входу">
+              <Field
+                label="Код магазину"
+                hint="Вводять при вході і власник, і продавці. Пристрій запамʼятовує його після першого входу."
+              >
                 <input className="sq-input" value={slug} disabled />
               </Field>
               <Field

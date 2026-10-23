@@ -88,8 +88,8 @@ export function hasEan13Shape(code: string): boolean {
 /**
  * The thirteenth digit: weight 1 on the odd positions from the left, 3 on the
  * even ones, then round the sum up to the next ten. Mirrors
- * `ean13CheckDigit` in `src/pos/core/internalBarcode.ts`, which mints the
- * store's own codes; this copy exists because the check has to happen *before*
+ * `computeCheckDigit` in `src/pos/gtin/normalize.ts`, which the server's
+ * `buildInternalBarcode` mints the store's own codes with; this copy exists because the check has to happen *before*
  * anything is drawn, on the client.
  */
 export function ean13CheckDigit(twelve: string): number {
