@@ -1445,6 +1445,11 @@ export interface MovementSummaryRow {
   inventory: number;
   refund: number;
   void: number;
+  /**
+   * Goods given «під запис» and taken back from unpaid lines (migration 073).
+   * Absent from a server older than that.
+   */
+  credit?: number;
   closing: number;
 }
 

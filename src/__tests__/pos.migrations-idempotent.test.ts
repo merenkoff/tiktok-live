@@ -142,6 +142,71 @@ describe.skipIf(!hasDb || !canCreate)('POS migrations, applied the way the runne
     );
     await expect(applyAll(probe)).resolves.toBeUndefined();
   });
+
+  it('comes up again with goods given «під запис» (073), even on a demo store it rebuilds', async () => {
+    // Two ways 073 could kill the next boot. The movement reason `credit` lives
+    // in 006's CHECK, which 006 drops and re-adds on every start — a list there
+    // without `credit` fails once a single handover exists. And a demo
+    // migration that rebuilds its catalogue deletes the variants a debt line
+    // points at, so it must clear the store's debt rows first (behind a guard,
+    // because on a fresh database 073 has not run yet when 039 does).
+    const flowers = await probe.query(`SELECT id FROM pos_stores WHERE slug = 'demo-flowers'`);
+    const storeId = flowers.rows[0].id;
+    const staffId = (await probe.query(`SELECT id FROM pos_staff WHERE store_id = $1 LIMIT 1`, [storeId])).rows[0].id;
+    const variant = (
+      await probe.query(
+        `SELECT v.id FROM pos_variants v JOIN pos_products p ON p.id = v.product_id
+          WHERE v.store_id = $1 AND p.kind = 'simple' ORDER BY v.id LIMIT 1`,
+        [storeId]
+      )
+    ).rows[0].id;
+    const customer = await probe.query(
+      `INSERT INTO pos_customers (store_id, name, phone, credit_limit_cents)
+       VALUES ($1, 'Боржник', '+380670000001', 100000) RETURNING id`,
+      [storeId]
+    );
+    const customerId = customer.rows[0].id;
+    const entry = await probe.query(
+      `INSERT INTO pos_debt_entries (store_id, customer_id, kind, amount_cents, staff_id)
+       VALUES ($1, $2, 'issue', 6000, $3) RETURNING id`,
+      [storeId, customerId, staffId]
+    );
+    const item = await probe.query(
+      `INSERT INTO pos_debt_items
+         (store_id, customer_id, entry_id, variant_id, quantity, unit, product_name, variant_label,
+          unit_price_cents, line_total_cents)
+       VALUES ($1, $2, $3, $4, 1, 'шт', 'Троянда', '', 6000, 6000) RETURNING id`,
+      [storeId, customerId, entry.rows[0].id, variant]
+    );
+    await probe.query(
+      `INSERT INTO pos_debt_item_components (store_id, debt_item_id, component_variant_id, quantity_per_unit)
+       VALUES ($1, $2, $3, 1)`,
+      [storeId, item.rows[0].id, variant]
+    );
+    await probe.query(
+      `INSERT INTO pos_debt_entry_lines (store_id, entry_id, debt_item_id, quantity, amount_cents)
+       VALUES ($1, $2, $3, 1, 6000)`,
+      [storeId, entry.rows[0].id, item.rows[0].id]
+    );
+    await probe.query(
+      `INSERT INTO pos_stock_movements (store_id, variant_id, delta, reason, staff_id, reference_type, reference_id)
+       VALUES ($1, $2, -1, 'credit', $3, 'debt_issue', $4)`,
+      [storeId, variant, staffId, entry.rows[0].id]
+    );
+
+    // A plain restart: the `credit` movement must not trip 006's CHECK.
+    await expect(applyAll(probe)).resolves.toBeUndefined();
+    // A restart that rebuilds the demo: the debt goes with the catalogue, the customer stays.
+    await probe.query(`DELETE FROM pos_demo_seed WHERE slug = 'demo-flowers'`);
+    await expect(applyAll(probe)).resolves.toBeUndefined();
+    const left = await probe.query(
+      `SELECT (SELECT count(*) FROM pos_debt_entries WHERE store_id = $1)::int AS entries,
+              (SELECT count(*) FROM pos_debt_items WHERE store_id = $1)::int AS items,
+              (SELECT count(*) FROM pos_customers WHERE id = $2)::int AS customers`,
+      [storeId, customerId]
+    );
+    expect(left.rows[0]).toEqual({ entries: 0, items: 0, customers: 1 });
+  });
 });
 
 /**

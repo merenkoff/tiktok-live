@@ -21,7 +21,9 @@ export type StockReason =
   | 'seed'
   | 'receipt'
   | 'writeoff'
-  | 'inventory';
+  | 'inventory'
+  /** Goods given «під запис», and taken back from an unpaid line (073). */
+  | 'credit';
 
 export type StockDocumentType =
   | 'receipt'

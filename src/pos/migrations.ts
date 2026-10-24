@@ -124,6 +124,8 @@ export const POS_MIGRATIONS = [
   '071_pos_cash_rounding.sql',
   // A third fiscal ledger mode, `provider_offline`: the provider registered the document in its own offline session (ПРРО contract v2).
   '072_pos_fiscal_receipts_provider_offline.sql',
+  // Goods given «під запис»: the customer's limit, an append-only journal and the lines it owes (grocery Г3).
+  '073_pos_debts.sql',
 ] as const;
 
 export function readMigration(file: string): string {

@@ -29,6 +29,9 @@ export function StockMovementPage() {
   const [rows, setRows] = useState<MovementSummaryRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const tableScrollRef = useDragScroll<HTMLDivElement>();
+  // Goods given «під запис» (073) get their own column only where there are
+  // any: a shop that never gives credit should not read an empty one.
+  const showCredit = rows.some((row) => (row.credit ?? 0) !== 0);
 
   async function load() {
     setError(null);
@@ -93,6 +96,7 @@ export function StockMovementPage() {
               <th className="text-right">Списання</th>
               <th className="text-right">Корекції</th>
               <th className="text-right">Інвент.</th>
+              {showCredit && <th className="text-right">Під запис</th>}
               <th className="text-right">Кінцевий</th>
             </tr>
           </thead>
@@ -111,12 +115,13 @@ export function StockMovementPage() {
                 <td className="text-right tabular-nums">{row.writeoff || '—'}</td>
                 <td className="text-right tabular-nums">{row.adjust || '—'}</td>
                 <td className="text-right tabular-nums">{row.inventory || '—'}</td>
+                {showCredit && <td className="text-right tabular-nums">{row.credit || '—'}</td>}
                 <td className="text-right tabular-nums font-semibold text-sq-heading">{row.closing}</td>
               </tr>
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={8} className="py-10">
+                <td colSpan={showCredit ? 9 : 8} className="py-10">
                   <div className="flex flex-col items-center gap-2">
                     <BarChart3 size={48} />
                     <p className="text-[15px] text-sq-secondary">Немає руху за вибраний період</p>

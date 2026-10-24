@@ -61,6 +61,8 @@ export interface MovementSummaryRow {
   inventory: number;
   refund: number;
   void: number;
+  /** Net of goods given «під запис» and taken back from unpaid lines (073). */
+  credit: number;
   closing: number;
 }
 
@@ -224,6 +226,7 @@ export async function movementReport(
               COALESCE(SUM(delta) FILTER (WHERE reason = 'inventory'), 0) AS inventory,
               COALESCE(SUM(delta) FILTER (WHERE reason = 'refund'), 0) AS refund,
               COALESCE(SUM(delta) FILTER (WHERE reason = 'void'), 0) AS void,
+              COALESCE(SUM(delta) FILTER (WHERE reason = 'credit'), 0) AS credit,
               COALESCE(SUM(delta), 0) AS total
        FROM pos_stock_movements
        WHERE store_id = $1
@@ -240,6 +243,7 @@ export async function movementReport(
             COALESCE(p.inventory, 0) AS inventory,
             COALESCE(p.refund, 0) AS refund,
             COALESCE(p.void, 0) AS void,
+            COALESCE(p.credit, 0) AS credit,
             COALESCE(o.qty, 0) + COALESCE(p.total, 0) AS closing
      FROM variants v
      LEFT JOIN opening o ON o.variant_id = v.variant_id
@@ -266,6 +270,7 @@ export async function movementReport(
     inventory: Number(row.inventory),
     refund: Number(row.refund),
     void: Number(row.void),
+    credit: Number(row.credit),
     closing: Number(row.closing),
   }));
 }
