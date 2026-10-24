@@ -7,7 +7,9 @@
 // before it is pressed.
 
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { useAuthStore } from '@pos/platform';
+import { makeAuthResponse } from '../test/utils';
 import { CheckoutModal } from './CheckoutModal';
 
 function renderModal(totalCents = 22_000) {
@@ -39,7 +41,9 @@ describe('CheckoutModal', () => {
     expect(screen.getByTestId('checkout-change')).toHaveTextContent('Решта280,00 ₴');
     expect(submit()).toHaveTextContent('Прийняти 500,00 ₴ · решта 280,00 ₴');
     fireEvent.click(submit());
-    expect(onConfirm).toHaveBeenCalledWith([{ method: 'cash', amount_cents: 50_000 }]);
+    expect(onConfirm).toHaveBeenCalledWith([{ method: 'cash', amount_cents: 50_000 }], {
+      cashRounding: 0,
+    });
   });
 
   it('types over the suggested sum on the pad and refuses too little', () => {
@@ -64,6 +68,86 @@ describe('CheckoutModal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Картка' }));
     expect(onConfirm).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: /Оплата карткою пройшла/ }));
-    expect(onConfirm).toHaveBeenCalledWith([{ method: 'card', amount_cents: 22_000 }]);
+    expect(onConfirm).toHaveBeenCalledWith([{ method: 'card', amount_cents: 22_000 }], {
+      cashRounding: 0,
+    });
+  });
+});
+
+// НБУ № 25 (TechDocs/POS_CASH_ROUNDING.md): with the store's rounding on, the
+// cash part is due rounded, the change comes off the rounded sum, and the card
+// is never rounded.
+describe('CheckoutModal — cash rounding', () => {
+  afterEach(() => {
+    useAuthStore.setState({ auth: null, isAuthenticated: false });
+  });
+
+  function roundTo(step: number) {
+    useAuthStore.setState({
+      auth: makeAuthResponse({ store: { cash_rounding: step } }),
+      isAuthenticated: true,
+    });
+  }
+
+  it('asks for the rounded sum in cash and says by how much', () => {
+    roundTo(50);
+    const { onConfirm } = renderModal(22_123);
+    fireEvent.click(screen.getByRole('button', { name: 'Готівка' }));
+    expect(screen.getByTestId('checkout-cash-due')).toHaveTextContent(
+      'Готівкою до сплати 221,00 ₴ · заокруглення −0,23 ₴'
+    );
+    // The pad starts on the rounded sum, which is enough on its own.
+    expect(screen.getByTestId('checkout-cash-input')).toHaveValue('221');
+    expect(submit().disabled).toBe(false);
+    fireEvent.click(screen.getByTestId('checkout-quick-50000'));
+    expect(submit()).toHaveTextContent('Прийняти 500,00 ₴ · решта 279,00 ₴');
+    fireEvent.click(submit());
+    expect(onConfirm).toHaveBeenCalledWith([{ method: 'cash', amount_cents: 50_000 }], {
+      cashRounding: 50,
+    });
+  });
+
+  it('rounds up as well, and then wants the rounded-up sum', () => {
+    roundTo(50);
+    renderModal(22_130);
+    fireEvent.click(screen.getByRole('button', { name: 'Готівка' }));
+    expect(screen.getByTestId('checkout-cash-due')).toHaveTextContent('221,50 ₴ · заокруглення +0,20 ₴');
+    expect(screen.getByTestId('checkout-cash-input')).toHaveValue('221,5');
+  });
+
+  it('shows nothing extra when the sum is already round', () => {
+    roundTo(10);
+    renderModal(22_000);
+    fireEvent.click(screen.getByRole('button', { name: 'Готівка' }));
+    expect(screen.queryByTestId('checkout-cash-due')).not.toBeInTheDocument();
+  });
+
+  it('never rounds the card', () => {
+    roundTo(50);
+    const { onConfirm } = renderModal(22_123);
+    fireEvent.click(screen.getByRole('button', { name: 'Картка' }));
+    fireEvent.click(screen.getByRole('button', { name: /Оплата карткою пройшла/ }));
+    expect(onConfirm).toHaveBeenCalledWith([{ method: 'card', amount_cents: 22_123 }], {
+      cashRounding: 50,
+    });
+  });
+
+  it('rounds only the cash part of a mixed payment', () => {
+    roundTo(50);
+    const { onConfirm } = renderModal(22_123);
+    fireEvent.click(screen.getByRole('button', { name: 'Змішана' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Картка' }), { target: { value: '100' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Готівка' }), { target: { value: '121' } });
+    expect(screen.getByTestId('checkout-mixed-rounding')).toHaveTextContent(
+      'Готівкову частину заокруглено на −0,23 ₴ — до сплати 221,00 ₴'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Прийняти' }));
+    expect(onConfirm).toHaveBeenCalledWith(
+      [
+        { method: 'cash', amount_cents: 12_100 },
+        { method: 'card', amount_cents: 10_000 },
+      ],
+      { cashRounding: 50 }
+    );
   });
 });

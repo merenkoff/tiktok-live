@@ -82,6 +82,12 @@ export interface PayBillInput {
   customer_id?: number | null;
   /** Absent = the store does not fiscalise from this call (tests, or the gate is off). */
   fiscal?: PayBillFiscal;
+  /**
+   * The cash-rounding step the waiter's screen used (0, 10, 50; НБУ № 25).
+   * Each part is its own receipt, so each rounds its own cash part — the
+   * same function the till's checkout goes through (TechDocs/POS_CASH_ROUNDING.md, Д10).
+   */
+  cash_rounding?: unknown;
 }
 
 /** One paid part and what its receipt came to. */
@@ -253,6 +259,7 @@ export async function payBill(input: PayBillInput): Promise<PayBillResult> {
       cart_discount: shares[index] > 0 ? { type: 'fixed', value: shares[index] } : null,
       bill_part: { bill_id: input.billId, line_ids: part.line_ids },
       fiscal_status: fiscalises ? 'pending' : 'none',
+      cash_rounding: input.cash_rounding,
     });
     if (!sale) continue;
     // A part's `client_uuid` that names an already-undone sale must not come

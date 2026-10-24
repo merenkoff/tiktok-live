@@ -31,6 +31,11 @@ export interface SiteRoute {
   /** Undefined for the four templates that carry their own title/meta. */
   head?: PageHead;
   jsonLd: object[];
+  /**
+   * The sitemap's fallback only: <lastmod> comes from site/sitemap-lastmod.json,
+   * stamped from a hash of the page's content (scripts/prerender.mjs). An
+   * article's or a landing's own date also feeds its JSON-LD dateModified.
+   */
   updatedAt: string;
   sitemap: boolean;
 }

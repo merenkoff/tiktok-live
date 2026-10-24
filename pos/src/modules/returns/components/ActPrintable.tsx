@@ -69,8 +69,16 @@ export function ActPrintable({ act }: { act: ActData | null }) {
         </table>
       )}
 
+      {/* НБУ № 25 п. 5: the act carries the sum before rounding and after it. */}
+      {act.rounding_cents ? (
+        <p data-testid="act-rounding">
+          Сума до заокруглення: {money(act.total_cents)}, заокруглення:{' '}
+          {act.rounding_cents < 0 ? '-' : '+'}
+          {money(Math.abs(act.rounding_cents))}
+        </p>
+      ) : null}
       <p className="act-print-total">
-        Видано коштів: {money(act.total_cents)}
+        Видано коштів: {money(act.total_cents + act.rounding_cents)}
         {act.returned_by ? ` ${act.returned_by}` : ''}
       </p>
       <p>

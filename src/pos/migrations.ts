@@ -120,6 +120,8 @@ export const POS_MIGRATIONS = [
   '069_pos_cash_demo_stores.sql',
   // Leads from the marketing site with their journey, for the super admin's CRM tab; old `leads` carried over once.
   '070_crm_leads.sql',
+  // Cash totals rounded to 10 or 50 kopecks (НБУ № 25), the owner's setting; sales and refunds keep the rounding.
+  '071_pos_cash_rounding.sql',
 ] as const;
 
 export function readMigration(file: string): string {

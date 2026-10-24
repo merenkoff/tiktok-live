@@ -152,6 +152,48 @@ describe('ReceiptPrintable', () => {
     expect(screen.getByText('БЕЗГОТІВКОВА (QR)')).toBeInTheDocument();
   });
 
+  it('prints «ЗАОКРУГЛЕННЯ» after the VAT line and the rounded «ДО СПЛАТИ» (Положення № 13 розд. II п. 9)', () => {
+    const { container } = render(
+      <ReceiptPrintable
+        receipt={receipt({
+          subtotal_cents: 22123,
+          total_cents: 22123,
+          rounding_cents: -23,
+          payments: [{ method: 'cash', amount_cents: 50000 }],
+          change_cents: 27900,
+          vat_lines: [{ symbol: 'А', rate: 20, amount_cents: 3687 }],
+        })}
+      />
+    );
+    const text = container.textContent ?? '';
+    expect(screen.getByTestId('receipt-rounding')).toHaveTextContent('ЗАОКРУГЛЕННЯ-0.23');
+    expect(text).toContain('ДО СПЛАТИ221.00');
+    expect(text.indexOf('ПДВ А 20%')).toBeLessThan(text.indexOf('ЗАОКРУГЛЕННЯ'));
+    expect(text.indexOf('ЗАОКРУГЛЕННЯ')).toBeLessThan(text.indexOf('ДО СПЛАТИ'));
+    // No discount: «СУМА» already is the sum before rounding.
+    expect(text).not.toContain('УСЬОГО');
+  });
+
+  it('prints the sum before rounding as «УСЬОГО» when a discount came first', () => {
+    const { container } = render(
+      <ReceiptPrintable
+        receipt={receipt({
+          subtotal_cents: 23400,
+          discount_cents: 1277,
+          total_cents: 22123,
+          rounding_cents: -23,
+        })}
+      />
+    );
+    expect(container.textContent).toContain('УСЬОГО221.23');
+    expect(container.textContent).toContain('ДО СПЛАТИ221.00');
+  });
+
+  it('prints no rounding row when nothing was rounded', () => {
+    render(<ReceiptPrintable receipt={receipt({ rounding_cents: null })} />);
+    expect(screen.queryByTestId('receipt-rounding')).not.toBeInTheDocument();
+  });
+
   it('ignores whitespace-only provider text', () => {
     render(<ReceiptPrintable receipt={receipt({ provider_text: '  \n' })} />);
     expect(screen.getByText('Дякуємо за покупку!')).toBeInTheDocument();

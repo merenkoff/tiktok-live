@@ -110,6 +110,11 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
        * `true` from the outbox; the web shell never sends it.
        */
       offline_replay?: unknown;
+      /**
+       * The cash-rounding step the till showed (0, 10, 50 kopecks; НБУ № 25).
+       * The server computes the amount itself — TechDocs/POS_CASH_ROUNDING.md, Д4.
+       */
+      cash_rounding?: unknown;
     };
 
     const headerKey = request.headers['idempotency-key'];
@@ -196,6 +201,7 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
         fiscal_status: gate.on ? 'pending' : 'none',
         preorder_id: body.preorder_id,
         offline_replay: body.offline_replay === true,
+        cash_rounding: body.cash_rounding,
       });
     } catch (error) {
       logger.error('Complete sale failed', { error: errorMessage(error) });
@@ -295,6 +301,8 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
         note?: string;
         client_uuid?: string | null;
       };
+      /** One step for both halves — each rounds its own cash part (Д9). */
+      cash_rounding?: unknown;
     };
     const refundUuid = String(body.refund?.client_uuid ?? '').trim().toLowerCase();
     const saleUuid = String(body.sale?.client_uuid ?? '').trim().toLowerCase();
@@ -362,6 +370,7 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
           client_uuid: saleUuid,
         },
         fiscal_status: gate.on ? 'pending' : 'none',
+        cash_rounding: body.cash_rounding,
       });
     } catch (error) {
       const message = errorMessage(error);
@@ -408,6 +417,8 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
           staff_name: refundRow.staff_name,
           method: refundRow.method,
           total_cents: refundRow.total_cents,
+          cash_rounding: refundRow.cash_rounding,
+          rounding_cents: refundRow.rounding_cents,
           reason: refundRow.reason,
           lines: refundRow.items.map((line) => ({
             sale_item_id: line.sale_item_id,
@@ -459,7 +470,7 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
       return finishFailedSale(reply, auth.storeId, auth.staffId, fresh, error, {
         refund_id: refundRow.id,
         refund: { ...original, refund_id: refundRow.id, refund_fiscal: refundFiscal },
-        difference_cents: fresh.total_cents - refundRow.total_cents,
+        difference_cents: settledDifference(fresh, refundRow),
       });
     }
   });
@@ -477,6 +488,8 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
       reason_code?: RefundReasonCode | null;
       buyer_name?: string | null;
       buyer_document?: string | null;
+      /** Rounds money handed back in cash (НБУ № 25 пп. 4, 4-1); ignored for card and QR. */
+      cash_rounding?: unknown;
     };
 
     // Same gate as a sale: most refund failures are caught here, before money
@@ -502,6 +515,7 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
         reason_code: body.reason_code ?? null,
         buyer_name: body.buyer_name ?? null,
         buyer_document: body.buyer_document ?? null,
+        cash_rounding: body.cash_rounding,
       });
     } catch (error) {
       return reply.code(400).send({ error: errorMessage(error) });
@@ -533,6 +547,8 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
           staff_name: lastRefund.staff_name,
           method: lastRefund.method,
           total_cents: lastRefund.total_cents,
+          cash_rounding: lastRefund.cash_rounding,
+          rounding_cents: lastRefund.rounding_cents,
           reason: lastRefund.reason,
           lines: lastRefund.items.map((line) => ({
             sale_item_id: line.sale_item_id,
@@ -640,8 +656,22 @@ async function exchangeView(
     },
     sale: fiscal.sale ? { ...fresh, fiscal: fiscal.sale } : fresh,
     // > 0: the customer pays the difference; < 0: the shop returns it; 0: even.
-    difference_cents: fresh.total_cents - (refundRow?.total_cents ?? 0),
+    difference_cents: settledDifference(fresh, refundRow),
   };
+}
+
+/**
+ * What actually crosses the counter in an exchange: the new receipt's sum
+ * after cash rounding minus the cash or card handed back after its own — each
+ * half is its own document and rounds itself (TechDocs/POS_CASH_ROUNDING.md, Д9).
+ */
+function settledDifference(
+  fresh: { total_cents: number; rounding_cents?: number },
+  refund: { total_cents: number; rounding_cents?: number } | null
+): number {
+  const paid = fresh.total_cents + (fresh.rounding_cents ?? 0);
+  const returned = refund ? refund.total_cents + (refund.rounding_cents ?? 0) : 0;
+  return paid - returned;
 }
 
 /**
@@ -729,6 +759,7 @@ async function completeDeviceStampedSale(
     customer_id?: number | null;
     fiscal_offline?: unknown;
     offline_replay?: unknown;
+    cash_rounding?: unknown;
   },
   clientUuid: string | null
 ) {
@@ -767,6 +798,9 @@ async function completeDeviceStampedSale(
       // customer left with it long before this request, whatever the outbox
       // says.
       offline_replay: true,
+      // As printed: the till rounded the receipt it handed over, whatever the
+      // store's setting has become since.
+      cash_rounding: body.cash_rounding,
     });
   } catch (error) {
     logger.error('Complete offline-stamped sale failed', { error: errorMessage(error) });

@@ -6,7 +6,7 @@ import { FormEvent, Suspense, useEffect, useMemo, useState, type ReactNode } fro
 import { Link } from 'react-router-dom';
 import { api, useAuthStore, sameRemoteMap, useVertical, PLATFORM_VERSION } from '@pos/platform';
 import { ProductPhotoField } from '../../components/ProductPhotoField';
-import { PageHeader, SectionHead } from '../../components/ui/Page';
+import { PageHeader, SectionHead, Segmented } from '../../components/ui/Page';
 import { Plus, Settings } from '../../platform/glyphs';
 import { FiscalSettingsCard } from './FiscalSettingsCard';
 import { PublicMenuCard } from './PublicMenuCard';
@@ -19,6 +19,8 @@ import type { ModuleRemoteEntry, QrPaymentMode, StoreConfig } from '../../types'
 // Stateless leaf — no singleton to duplicate, so a direct import is fine here.
 import { inspectRemoteManifest, type RemoteManifestInfo } from '../../modules/remoteVerify';
 import { validateRemoteEntryInput } from '../../lib/moduleRemoteForm';
+
+type CashRoundingChoice = '0' | '10' | '50';
 
 export function SettingsPage() {
   const auth = useAuthStore((s) => s.auth);
@@ -39,6 +41,9 @@ export function SettingsPage() {
   // GTIN column default is TRUE — init checked so it doesn't flash "off" before getStore().
   const [gtinLookupEnabled, setGtinLookupEnabled] = useState(true);
   const [autoPrintReceipt, setAutoPrintReceipt] = useState(false);
+  // НБУ № 25: the step a cash total is rounded to (TechDocs/POS_CASH_ROUNDING.md).
+  // A string for the segmented control; a number on the wire.
+  const [cashRounding, setCashRounding] = useState<CashRoundingChoice>('0');
   // Percent in the field, basis points on the wire — the owner thinks in
   // percent and the column is exact.
   const [enabledModules, setEnabledModules] = useState<Set<string>>(new Set());
@@ -98,6 +103,8 @@ export function SettingsPage() {
     setQrPurposeTemplate(store.qr_purpose_template ?? '');
     setGtinLookupEnabled(store.gtin_lookup_enabled);
     setAutoPrintReceipt(store.auto_print_receipt);
+    // A backend older than migration 071 sends nothing: off, as it always was.
+    setCashRounding(String(store.cash_rounding ?? 0) as CashRoundingChoice);
     setEnabledModules(new Set(store.enabled_modules));
     setLiveTiktokUsername(store.live_tiktok_username ?? '');
     const strings: Record<string, string> = {};
@@ -251,6 +258,7 @@ export function SettingsPage() {
         qr_purpose_template: qrPurposeTemplate || null,
         gtin_lookup_enabled: gtinLookupEnabled,
         auto_print_receipt: autoPrintReceipt,
+        cash_rounding: Number(cashRounding),
         enabled_modules: [...enabledModules],
         module_remotes: { ...remoteObjects, ...moduleRemotes },
         live_tiktok_username: liveTiktokUsername.trim() || null,
@@ -416,6 +424,36 @@ export function SettingsPage() {
             <Toggle checked={autoPrintReceipt} onChange={setAutoPrintReceipt}>
               Автоматично друкувати чек після продажу
             </Toggle>
+          </div>
+        </section>
+
+        <section>
+          <SectionHead title="Заокруглення готівки" />
+          <div className="pt-3 space-y-3">
+            <SectionLead>
+              Коли в касі немає дрібних монет, суму до сплати готівкою заокруглюють за постановою НБУ
+              № 25: до 10 копійок, а без монет по 10 копійок — до 50 (з 1 жовтня 2025 року НБУ їх
+              більше не випускає). Картку й QR не заокруглюють ніколи. У чеку з'являються рядки
+              «Заокруглення» і «До сплати»; повернення готівкою заокруглюється так само.
+            </SectionLead>
+            <Segmented<CashRoundingChoice>
+              value={cashRounding}
+              onChange={setCashRounding}
+              ariaLabel="Заокруглення готівки"
+              options={[
+                { value: '0', label: 'Не заокруглювати', testId: 'cash-rounding-0' },
+                { value: '10', label: 'До 10 коп.', testId: 'cash-rounding-10' },
+                { value: '50', label: 'До 50 коп.', testId: 'cash-rounding-50' },
+              ]}
+            />
+            <p className="text-[13px] text-sq-muted">
+              {cashRounding === '50'
+                ? '1–24 коп. — вниз до 00, 25–49 — вгору до 50, 51–74 — вниз до 50, 75–99 — вгору до 00.'
+                : cashRounding === '10'
+                  ? '1–4 коп. — вниз, 5–9 — вгору до найближчих 10 копійок.'
+                  : 'Готівку приймають до копійки — як зараз.'}{' '}
+              На касі зміниться після наступного входу.
+            </p>
           </div>
         </section>
 

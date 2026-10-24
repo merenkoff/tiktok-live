@@ -42,6 +42,7 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
        store.qr_static_image_url,
        store.auto_print_receipt,
        store.florist_labour_bps,
+       store.cash_rounding,
        store.enabled_modules,
        store.module_remotes,
        store.nav_overrides,
@@ -92,6 +93,9 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
     // rule the server would have — cold-offline, the cached `pos_auth` blob
     // is the only place it could read this from.
     floristLabourBps: Number(row.florist_labour_bps ?? 0),
+    // Same reason: a till that starts cold offline rounds the cash total by
+    // what the cached login says, and must agree with the server at sync.
+    cashRounding: Number(row.cash_rounding ?? 0),
     enabledModules: (row.enabled_modules as string[] | null) ?? [],
     moduleRemotes:
       (row.module_remotes as PosAuthContext['moduleRemotes'] | null) ?? {},

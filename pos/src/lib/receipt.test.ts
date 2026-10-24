@@ -337,6 +337,55 @@ describe('buildReceiptPayload — Положення № 13 layout (TechDocs/prr
   });
 });
 
+describe('cash rounding (НБУ № 25; TechDocs/POS_CASH_ROUNDING.md)', () => {
+  it('carries the rounding and gives change from the rounded sum', () => {
+    const sale = makeSaleDetail({
+      total_cents: 22123,
+      rounding_cents: -23,
+      cash_rounding: 50,
+      payments: [{ id: 200, method: 'cash', amount_cents: 50000 }],
+    });
+    const payload = buildReceiptPayload(sale, DEMO);
+    expect(payload.rounding_cents).toBe(-23);
+    // The goods' total stays what it was; the change is from 221,00.
+    expect(payload.total_cents).toBe(22123);
+    expect(payload.change_cents).toBe(27900);
+  });
+
+  it('gives no change when the rounded sum was paid exactly', () => {
+    const sale = makeSaleDetail({
+      total_cents: 22123,
+      rounding_cents: -23,
+      payments: [{ id: 200, method: 'cash', amount_cents: 22100 }],
+    });
+    expect(buildReceiptPayload(sale, DEMO).change_cents).toBeNull();
+  });
+
+  it('leaves a receipt without rounding as it was', () => {
+    expect(buildReceiptPayload(makeSaleDetail(), DEMO).rounding_cents).toBeNull();
+  });
+
+  it('pays a cash refund out at the rounded sum', () => {
+    const payload = buildRefundReceiptPayload(
+      makeSaleDetail({ payments: [{ id: 200, method: 'cash', amount_cents: 45000 }] }),
+      makeRefund({ total_cents: 22500, rounding_cents: -0, method: 'cash' }),
+      [{ sale_item_id: 100, quantity: 1 }],
+      DEMO
+    );
+    expect(payload.rounding_cents).toBeNull();
+
+    const rounded = buildRefundReceiptPayload(
+      makeSaleDetail({ payments: [{ id: 200, method: 'cash', amount_cents: 45000 }] }),
+      makeRefund({ total_cents: 22123, rounding_cents: -23, method: 'cash' }),
+      [{ sale_item_id: 100, quantity: 1 }],
+      DEMO
+    );
+    expect(rounded.rounding_cents).toBe(-23);
+    expect(rounded.payments).toEqual([{ method: 'cash', amount_cents: 22100 }]);
+    expect(rounded.total_cents).toBe(22123);
+  });
+});
+
 describe('taxIdLine', () => {
   it('is «ПН» for a VAT payer and «ІД» otherwise', () => {
     expect(taxIdLine(REQUISITES)).toBe('ПН 123456789012');

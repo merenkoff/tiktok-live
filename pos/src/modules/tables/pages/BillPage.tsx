@@ -85,6 +85,9 @@ export function BillPage(): JSX.Element {
   const online = useOfflineStatus((s) => s.online);
   const shell = usePosShell();
   const storeId = useAuthStore((s) => s.auth?.store.id ?? null);
+  // НБУ № 25: the store's cash-rounding step, from the login (absent from an
+  // older backend — and then nothing rounds).
+  const cashRoundingStep = useAuthStore((s) => s.auth?.store.cash_rounding ?? 0);
   const {
     bill,
     loading,
@@ -197,12 +200,12 @@ export function BillPage(): JSX.Element {
    * rung, and the lines still without a `sale_id` are the only honest answer
    * to «що лишилось».
    */
-  const pay = async (parts: PayPart[]): Promise<void> => {
+  const pay = async (parts: PayPart[], cashRounding = 0): Promise<void> => {
     // An object rather than two `let`s: TypeScript cannot see the closure
     // assign them, and would narrow both to their initial value below.
     const outcome = { settled: false, warning: null as string | null };
     const ok = await run(async () => {
-      const paid = await tablesApi.payBill(bill.id, parts);
+      const paid = await tablesApi.payBill(bill.id, parts, cashRounding);
       outcome.settled = isSettled(paid.bill);
       outcome.warning = paid.warning ?? null;
       return paid.bill;
@@ -514,7 +517,13 @@ export function BillPage(): JSX.Element {
       )}
 
       {paying && (
-        <PaySheet bill={bill} busy={busy} onClose={() => setPaying(false)} onPay={(p) => void pay(p)} />
+        <PaySheet
+          bill={bill}
+          busy={busy}
+          cashRoundingStep={cashRoundingStep}
+          onClose={() => setPaying(false)}
+          onPay={(p, step) => void pay(p, step)}
+        />
       )}
 
       {editing && (

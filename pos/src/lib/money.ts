@@ -23,6 +23,15 @@ export function formatUah(cents: number): string {
 }
 
 /**
+ * An amount that can go either way, with its sign always written — the cash
+ * rounding of a receipt: «−0,23 ₴», «+0,20 ₴» (НБУ № 25 rounds both up and
+ * down, and a bare «0,23 ₴» would not say which).
+ */
+export function formatSignedUah(cents: number): string {
+  return `${cents < 0 ? '−' : '+'}${formatUah(Math.abs(cents))}`;
+}
+
+/**
  * The short form for a chip, a quick-cash button or a table tile: «60 ₴»,
  * «1 240 ₴» when there are no kopiykas, the full form otherwise.
  */

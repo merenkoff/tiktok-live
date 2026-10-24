@@ -174,9 +174,13 @@ export interface RestoredCart {
   preorderId?: number | null;
 }
 
-/** Mirror backend: cart discount only on lines without product discount. */
+/**
+ * Mirror backend: cart discount only on lines without product discount.
+ * Structural on purpose — the offline receipt (`offline/repository.ts`) totals
+ * its own lines with it, and those are sale items, not cart lines.
+ */
 export function computeCartDiscountCents(
-  lines: CartLine[],
+  lines: ReadonlyArray<Pick<CartLine, 'compare_at_cents' | 'unit_price_cents' | 'quantity'>>,
   cartDiscount: CartDiscount | null
 ): number {
   if (!cartDiscount) return 0;

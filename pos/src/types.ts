@@ -169,6 +169,12 @@ export interface StoreConfig {
    * components' retail sum (2500 = 25%). 0 = parts only.
    */
   florist_labour_bps: number;
+  /**
+   * Cash totals rounded to this many kopecks — 0 (off), 10 or 50 (Постанова
+   * НБУ № 25, пп. 4 / 4-1; TechDocs/POS_CASH_ROUNDING.md). Optional: a backend
+   * older than migration 071 does not send it, which reads as off.
+   */
+  cash_rounding?: number;
   /** Toggleable module ids the store has enabled (effective set; core ids not listed). */
   enabled_modules: string[];
   /**
@@ -200,6 +206,7 @@ export type StorePatch = Partial<
     | 'gtin_lookup_enabled'
     | 'auto_print_receipt'
     | 'florist_labour_bps'
+    | 'cash_rounding'
     | 'enabled_modules'
     | 'module_remotes'
     | 'nav_overrides'
@@ -239,6 +246,12 @@ export interface AuthResponse {
      * which is exactly the old behaviour (parts only).
      */
     florist_labour_bps?: number;
+    /**
+     * Cash totals rounded to 0 (off), 10 or 50 kopecks (НБУ № 25). With the
+     * login so a till that starts cold offline rounds what the server will
+     * file; absent on an older cached auth → not rounded, the old behaviour.
+     */
+    cash_rounding?: number;
     /** Toggleable module ids the store has enabled. Absent on older cached auth → treat as "all defaults on". */
     enabled_modules?: string[];
     /** Module-remote map (roadmap #9 string form / #13 Part C object form). Absent on older cached auth. */
@@ -976,6 +989,8 @@ export interface SaleListItem {
   client_uuid?: string | null;
   status: string;
   total_cents: number;
+  /** Cash rounding (migration 071): paid `total_cents + rounding_cents`. Absent from an older server. */
+  rounding_cents?: number;
   refunded_cents: number;
   staff_name: string;
   customer_name?: string | null;
@@ -1022,7 +1037,15 @@ export interface SaleDetail {
   client_uuid?: string | null;
   status: string;
   subtotal_cents: number;
+  /** What the goods came to — the fiscal lines sum to it. */
   total_cents: number;
+  /**
+   * The cash part's rounding (НБУ № 25, migration 071), signed: the customer
+   * paid `total_cents + rounding_cents`. Absent from an older server → 0.
+   */
+  rounding_cents?: number;
+  /** The step it was rounded by — 0, 10 or 50 kopecks. */
+  cash_rounding?: number;
   cart_discount_cents?: number;
   cart_discount_type?: string | null;
   cart_discount_value?: number | null;
@@ -1084,6 +1107,9 @@ export interface SaleDetail {
     /** How the money went back; null on refunds predating the column. */
     method: PaymentMethod | null;
     total_cents: number;
+    /** A cash refund's rounding: the cash handed back is `total_cents + rounding_cents`. */
+    rounding_cents?: number;
+    cash_rounding?: number;
     reason: string | null;
     staff_name: string;
     created_at: string;
@@ -1153,6 +1179,11 @@ export interface RefundOptions {
   /** For the «Акт про видачу коштів» (refunds over 100 ₴); the buyer may decline. */
   buyer_name?: string | null;
   buyer_document?: string | null;
+  /**
+   * The cash-rounding step the dialog showed (0, 10, 50; НБУ № 25 rounds the
+   * money handed back in cash too). Ignored by the server for card and QR.
+   */
+  cash_rounding?: number;
 }
 
 /**
@@ -1194,6 +1225,8 @@ export interface ExchangeInput {
     note?: string;
     client_uuid: string;
   };
+  /** The cash-rounding step for both halves — each is its own document and rounds its own cash. */
+  cash_rounding?: number;
 }
 
 /**
@@ -1240,6 +1273,14 @@ export interface SalesSummary {
   refunded_cents: number;
   net_cents: number;
   avg_check_cents: number;
+  /**
+   * Cash rounding of the window's sales (migration 071), signed — why the
+   * payment split comes to `gross_cents + rounding_cents`. Absent from an
+   * older server.
+   */
+  rounding_cents?: number;
+  /** Cash rounding of the refunds made in the window, signed. */
+  refund_rounding_cents?: number;
   top_items: Array<{
     product_name: string;
     variant_label: string;

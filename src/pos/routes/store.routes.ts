@@ -39,6 +39,7 @@ export function registerStoreRoutes(fastify: FastifyInstance): void {
       gtin_lookup_enabled?: boolean;
       auto_print_receipt?: boolean;
       florist_labour_bps?: unknown;
+      cash_rounding?: unknown;
       enabled_modules?: unknown;
       module_remotes?: unknown;
       nav_overrides?: unknown;
@@ -138,6 +139,11 @@ export function registerStoreRoutes(fastify: FastifyInstance): void {
       // NaN twice and say nothing more.
       if (body.florist_labour_bps !== undefined) {
         patch.florist_labour_bps = body.florist_labour_bps as number;
+      }
+      // Raw for the same reason: `updateStore` refuses a step other than
+      // 0 / 10 / 50 in words (TechDocs/POS_CASH_ROUNDING.md, Д1).
+      if (body.cash_rounding !== undefined) {
+        patch.cash_rounding = body.cash_rounding as number;
       }
       const updated = await analyticsService.updateStore(auth.storeId, patch);
       // The name is the guest menu's heading (and, on the QR-menu's cached store

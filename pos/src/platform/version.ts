@@ -117,7 +117,14 @@ export const POS_API_CLIENT_VERSION = 2;
 //     `OfflineExchangeError` is what a till without a connection throws
 //     instead of queueing a transaction it could only replay as a second
 //     one. `ExchangeDraft` / `ExchangeInput` / `ExchangeResult` are the types.
-export const PLATFORM_VERSION = 18;
+// 19 (2026-10-23): cash rounding (НБУ № 25, TechDocs/POS_CASH_ROUNDING.md).
+//     The arithmetic the server files a receipt by — `cashRoundingDelta`,
+//     `saleRoundingCents`, `refundRoundingCents`, `cashPartCents`,
+//     `storeCashRounding`, `CASH_ROUNDING_STEPS` / `isCashRoundingStep` and the
+//     `CashRoundingStep` / `CashRoundingPayment` types — so a module that takes
+//     or hands back cash shows the sum the server will store. Additive: a
+//     module built against 18 still runs here and simply does not round.
+export const PLATFORM_VERSION = 19;
 
 /**
  * Build version of this bundle — the host web/cashier build, or a module-remote

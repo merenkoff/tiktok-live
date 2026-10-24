@@ -8,7 +8,9 @@
 
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { useAuthStore } from '@pos/platform';
+import { makeAuthResponse } from '../../test/utils';
 import type { ExchangeDraft } from '../../types';
 import { differenceSentence } from '../../lib/exchange';
 import { ExchangeCheckout } from './ExchangeCheckout';
@@ -62,7 +64,9 @@ describe('ExchangeCheckout', () => {
     expect(screen.getByTestId('exchange-difference').textContent).toContain('Клієнт доплачує 250,00 ₴ готівкою');
 
     await user.click(screen.getByRole('button', { name: 'Оформити обмін' }));
-    expect(onConfirm).toHaveBeenCalledWith([{ method: 'cash', amount_cents: 70000 }]);
+    expect(onConfirm).toHaveBeenCalledWith([{ method: 'cash', amount_cents: 70000 }], {
+      cashRounding: 0,
+    });
   });
 
   it('names what goes back when the new goods are cheaper, by the return receipt’s method', () => {
@@ -117,5 +121,68 @@ describe('ExchangeCheckout', () => {
     expect(differenceSentence(-1000, draft({ method: 'qr' }), 'cash')).toBe('Повернути клієнту 10,00 ₴ безготівково');
     expect(differenceSentence(1000, draft(), 'card')).toBe('Клієнт доплачує 10,00 ₴ карткою');
     expect(differenceSentence(0, draft(), 'card')).toBe('Без доплати — суми рівні');
+  });
+});
+
+// НБУ № 25 (TechDocs/POS_CASH_ROUNDING.md, Д9): two documents, each rounding
+// its own cash — what goes back in cash and what the new receipt takes in cash.
+describe('ExchangeCheckout — cash rounding', () => {
+  afterEach(() => {
+    useAuthStore.setState({ auth: null, isAuthenticated: false });
+  });
+
+  it('rounds each cash half and says what crosses the counter after both', async () => {
+    useAuthStore.setState({
+      auth: makeAuthResponse({ store: { cash_rounding: 50 } }),
+      isAuthenticated: true,
+    });
+    const user = userEvent.setup();
+    const onConfirm = vi.fn();
+    const cashDraft = draft({ method: 'cash' });
+    cashDraft.returnedCents = 22123;
+    render(
+      <ExchangeCheckout
+        draft={cashDraft}
+        newTotalCents={30075}
+        itemCount={1}
+        loading={false}
+        onClose={() => {}}
+        onConfirm={onConfirm}
+      />
+    );
+    // 221,23 back in cash → 221,00; 300,75 in cash → 301,00; 80,00 crosses.
+    expect(screen.getByTestId('exchange-return').textContent).toContain('−221,00 ₴');
+    expect(screen.getByTestId('exchange-return-rounding')).toHaveTextContent('221,23 ₴ · заокруглення −0,23 ₴');
+    expect(screen.getByTestId('exchange-new-total').textContent).toBe('301,00 ₴');
+    expect(screen.getByTestId('exchange-new-rounding')).toHaveTextContent('300,75 ₴ · заокруглення +0,25 ₴');
+    expect(screen.getByTestId('exchange-difference').textContent).toContain('Клієнт доплачує 80,00 ₴ готівкою');
+
+    await user.click(screen.getByRole('button', { name: 'Оформити обмін' }));
+    expect(onConfirm).toHaveBeenCalledWith([{ method: 'cash', amount_cents: 30100 }], {
+      cashRounding: 50,
+    });
+  });
+
+  it('leaves the card half unrounded', async () => {
+    useAuthStore.setState({
+      auth: makeAuthResponse({ store: { cash_rounding: 50 } }),
+      isAuthenticated: true,
+    });
+    const cardDraft = draft({ method: 'card' });
+    cardDraft.returnedCents = 22123;
+    render(
+      <ExchangeCheckout
+        draft={cardDraft}
+        newTotalCents={30075}
+        itemCount={1}
+        loading={false}
+        onClose={() => {}}
+        onConfirm={vi.fn()}
+      />
+    );
+    expect(screen.getByTestId('exchange-return').textContent).toContain('−221,23 ₴');
+    expect(screen.queryByTestId('exchange-return-rounding')).not.toBeInTheDocument();
+    // The new receipt starts on card too (how they paid) — no rounding there either.
+    expect(screen.getByTestId('exchange-new-total').textContent).toBe('300,75 ₴');
   });
 });

@@ -14,6 +14,7 @@ import { buildActPayload } from '../lib/actPayload';
 import { usePrintableAct } from '../hooks/usePrintableAct';
 import { RefundSaleDialog } from '../components/RefundSaleDialog';
 import { RefundRows } from '../components/RefundRows';
+import { SaleRoundingLine } from '../components/SaleRounding';
 import { FiscalBadge, FiscalDetailCard } from '../components/FiscalBadge';
 import { ExchangeChip, SaleStatusChip } from '../components/SaleChips';
 
@@ -398,6 +399,7 @@ function SaleDetailPanel({
           <span className="text-lg font-bold text-sq-heading">Разом</span>
           <span className="text-[26px] font-bold text-sq-heading tabular-nums">{formatUah(row.total_cents)}</span>
         </div>
+        <SaleRoundingLine totalCents={row.total_cents} roundingCents={detail?.rounding_cents} />
 
         {detail && detail.payments.length > 0 && (
           <ul className="space-y-1.5 text-[15px]">

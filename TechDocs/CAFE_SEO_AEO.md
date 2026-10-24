@@ -45,7 +45,7 @@ S — без розрахунку собівартості; M — собівар
 | «Читайте також» на лендингу — внутрішні посилання на ці три статті | `VerticalContent.articles`, перевіряється в `routes.tsx` |
 | `llms.txt`: розділ про кав'ярню й рядок про Kavapp з джерелом і датою | `entry-server.tsx` |
 
-Sitemap і `dateModified` — автоматично з `updatedAt`.
+`dateModified` — з `updatedAt` статті; `<lastmod>` у sitemap — з `site/sitemap-lastmod.json`, за хешем змісту сторінки (`npm run sitemap:stamp` у `site/`; CI падає, якщо сторінка змінилась без штампа). `updatedAt` може бути пізнішим за `checkedAt`, коли змінилась наша колонка, а факти конкурента ні (Kavapp, 2026-10-18).
 
 ## Правила, щоб порівняння лишалось чесним
 

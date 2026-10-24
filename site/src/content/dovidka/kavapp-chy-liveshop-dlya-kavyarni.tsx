@@ -19,7 +19,9 @@ export const kavappChyLiveshopDlyaKavyarni: Article = {
     title: 'Kavapp чи The Live Shop POS для кав\'ярні: порівняння за фактами',
     description: `Ціни Kavapp (${usd(planS.priceUsd)}, ${usd(planM.priceUsd)}, ${usd(planL.priceUsd)} за точку на місяць), що входить у кожен тариф і де сильніший кожен із двох. Джерела й дата перевірки — ${CHECKED}.`,
     publishedAt: K.checkedAt,
-    updatedAt: K.checkedAt,
+    // Our column grew on 2026-10-18 (the waiter call row); Kavapp's own facts
+    // are still those read on K.checkedAt, which the text names as such.
+    updatedAt: '2026-10-18',
     ogImage: '/og/pos.png',
     readingMinutes: 6,
     faq: [

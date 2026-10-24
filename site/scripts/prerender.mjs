@@ -5,12 +5,24 @@
 // sitemap.xml and llms.txt. Every check here fails the build on purpose: a
 // page that ships without its content or schema is the bug this exists to
 // prevent.
+//
+// The sitemap's <lastmod> is not typed by hand: site/sitemap-lastmod.json
+// keeps, per page, a hash of what the page says (scripts/content-hash.mjs) and
+// the day that hash last changed. A page whose content no longer matches its
+// hash has changed since the last `npm run sitemap:stamp` (which runs this with
+// --stamp and writes today's date); CI sets SITEMAP_STRICT=1 and fails on it,
+// any other build warns and uses today. Hand-kept dates went stale exactly
+// where it hurt: /dovidka gained a dozen articles under a 2026-09-30 lastmod.
 import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { contentHash, todayKyiv } from './content-hash.mjs';
 
 const dist = fileURLToPath(new URL('../dist/', import.meta.url));
 const distSsr = fileURLToPath(new URL('../dist-ssr/', import.meta.url));
+const manifestPath = fileURLToPath(new URL('../sitemap-lastmod.json', import.meta.url));
+const STAMP = process.argv.includes('--stamp');
+const STRICT = process.env.SITEMAP_STRICT === '1';
 
 const { ROUTES, render, buildSitemap, buildLlmsTxt } = await import(join(distSsr, 'entry-server.js'));
 
@@ -26,6 +38,18 @@ function unescapeHtml(s) {
 }
 
 const pages = [];
+
+/** @type {Record<string, { lastmod: string; hash: string }>} */
+let manifest = {};
+try {
+  manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+} catch {
+  // No manifest yet: every page counts as changed today.
+}
+const today = todayKyiv();
+const lastmod = {};
+const stamped = {};
+const changed = [];
 
 for (const route of ROUTES) {
   const template = await readFile(join(dist, route.template), 'utf8');
@@ -56,13 +80,42 @@ for (const route of ROUTES) {
   await mkdir(dirname(target), { recursive: true });
   await writeFile(target, out);
 
+  if (route.sitemap) {
+    const hash = contentHash(out);
+    const known = manifest[route.path];
+    if (known && known.hash === hash) {
+      stamped[route.path] = known;
+    } else {
+      changed.push(route.path);
+      stamped[route.path] = { lastmod: today, hash };
+    }
+    lastmod[route.path] = stamped[route.path].lastmod;
+  }
+
   const title = unescapeHtml(out.match(/<title>([^<]+)<\/title>/)[1]);
   const description = unescapeHtml(out.match(/<meta\s+name="description"\s+content="([^"]*)"/)?.[1] ?? '');
   pages.push({ path: route.path, title, description });
   console.log(`[prerender] ${route.path} → ${route.out} (${Math.round(out.length / 1024)} KB)`);
 }
 
-await writeFile(join(dist, 'sitemap.xml'), buildSitemap());
+// A page that left the site leaves the manifest too, on the next stamp.
+const gone = Object.keys(manifest).filter((path) => !(path in stamped));
+if (STAMP) {
+  await writeFile(manifestPath, JSON.stringify(stamped, null, 2) + '\n');
+  console.log(
+    changed.length || gone.length
+      ? `[sitemap] stamped ${today}: ${[...changed, ...gone.map((p) => `${p} (removed)`)].join(', ')}`
+      : '[sitemap] every page matches its stamp'
+  );
+} else if (changed.length || gone.length) {
+  const message =
+    `[sitemap] changed since the last stamp: ${[...changed, ...gone.map((p) => `${p} (removed)`)].join(', ')}. ` +
+    'Run `npm run sitemap:stamp` in site/ and commit site/sitemap-lastmod.json, so <lastmod> says when each page really changed.';
+  if (STRICT) throw new Error(message);
+  console.warn(`${message} Using ${today} for now.`);
+}
+
+await writeFile(join(dist, 'sitemap.xml'), buildSitemap(lastmod));
 await writeFile(join(dist, 'llms.txt'), buildLlmsTxt(pages));
 await rm(join(dist, 'dovidka.html'), { force: true });
 await rm(join(dist, 'vertical.html'), { force: true });

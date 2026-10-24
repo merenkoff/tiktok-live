@@ -12,6 +12,7 @@
 
 import { FiscalError } from './errors.js';
 import type {
+  FiscalCashRounding,
   FiscalDocLine,
   FiscalDocPayment,
   FiscalRefundDoc,
@@ -48,6 +49,29 @@ export interface SaleInput {
   customer_phone?: string | null;
   items: SaleItemInput[];
   payments: SalePaymentInput[];
+  /** Migration 071: the step the cash part was rounded by, and by how much. */
+  cash_rounding?: number;
+  rounding_cents?: number;
+}
+
+/**
+ * The document's rounding, or null when there is none — a zero rounding is
+ * no rounding, and the provider then gets exactly the payload it got before.
+ * A step that is not 10 or 50 with a non-zero amount cannot come out of
+ * `sales.service.ts` (the CHECK in migration 071 forbids it); refusing it here
+ * keeps a hand-edited row from reaching the tax office as ROUND_50.
+ */
+export function cashRoundingOf(source: {
+  cash_rounding?: number;
+  rounding_cents?: number;
+}): FiscalCashRounding | null {
+  const amount = Number(source.rounding_cents ?? 0);
+  if (!amount) return null;
+  const step = Number(source.cash_rounding ?? 0);
+  if (step !== 10 && step !== 50) {
+    throw new FiscalError(`Rounding of ${amount} with an unknown step ${step}`, 'rejected');
+  }
+  return { step, amountCents: amount };
 }
 
 export interface TaxCodeResolution {
@@ -137,6 +161,9 @@ export function buildSaleDoc(input: {
     discountCents: sale.cart_discount_cents,
     note: sale.note ?? null,
     customerPhone: sale.customer_phone ?? null,
+    // The cash payment stays what was handed over: the provider rounds the
+    // total and works the change out from that (TechDocs/POS_CASH_ROUNDING.md, Д6).
+    cashRounding: cashRoundingOf(sale),
   };
 }
 
@@ -161,6 +188,9 @@ export interface RefundInput {
   method: string | null;
   reason?: string | null;
   lines: RefundLineInput[];
+  /** Migration 071: a cash refund's rounding — the money handed back is `total_cents + rounding_cents`. */
+  cash_rounding?: number;
+  rounding_cents?: number;
 }
 
 /**
@@ -218,6 +248,12 @@ export function buildRefundDoc(input: {
   if (method !== 'cash' && method !== 'card' && method !== 'qr') {
     throw new FiscalError(`Unsupported refund method "${method}"`, 'rejected');
   }
+  // Only cash handed back is ever rounded (НБУ № 25 п. 6); a non-zero
+  // rounding on a card refund would be a bug upstream, not a document.
+  const cashRounding = cashRoundingOf(refund);
+  if (cashRounding && method !== 'cash') {
+    throw new FiscalError(`A ${method} refund cannot carry cash rounding`, 'rejected');
+  }
 
   return {
     kind: 'refund',
@@ -225,12 +261,15 @@ export function buildRefundDoc(input: {
     ourNumber: refund.refund_number,
     cashierName: refund.staff_name,
     lines,
-    payments: [{ method, amountCents: refund.total_cents }],
+    // What actually leaves the drawer: Checkbox wants the amount «already
+    // rounded according to the rules of the National Bank» in payments.
+    payments: [{ method, amountCents: refund.total_cents + (cashRounding?.amountCents ?? 0) }],
     totalCents: refund.total_cents,
     discountCents: 0,
     note: refund.reason ?? null,
     relatedProviderDocId,
     relatedOurNumber: sale.receipt_number,
+    cashRounding,
   };
 }
 

@@ -450,6 +450,7 @@ export function registerTablesRoutes(fastify: FastifyInstance): void {
         fiscal: {
           gateFor: () => fiscalService.preflight(auth.storeId, auth.staffId, readDeviceId(request)),
         },
+        cash_rounding: body.cash_rounding,
       });
     } catch (error) {
       if (error instanceof billPayment.BillFiscalRefusal) {

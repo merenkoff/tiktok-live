@@ -2,7 +2,7 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { formatUah } from '@pos/platform';
+import { formatSignedUah, formatUah } from '@pos/platform';
 import type { SaleDetail } from '@pos/platform';
 import { Printer } from '@pos/platform/ui';
 import { FiscalBadge } from './FiscalBadge';
@@ -36,6 +36,10 @@ export function RefundRows({
           reason,
           r.reason,
         ].filter((s): s is string => Boolean(s && s.trim()));
+        // A cash refund's rounding (НБУ № 25): the act and the drawer go by
+        // what was handed back, the row's sum stays the goods' value.
+        const rounding = r.rounding_cents ?? 0;
+        const handedBack = r.total_cents + rounding;
         return (
           <li key={r.id} className="sq-row min-h-11 py-2 text-[15px]" data-testid="refund-row">
             <div className="flex justify-between items-start gap-2">
@@ -57,7 +61,12 @@ export function RefundRows({
               </div>
               <div className="shrink-0 flex flex-col items-end gap-1">
                 <span className="text-sq-text tabular-nums">−{formatUah(r.total_cents)}</span>
-                {onPrintAct && needsAct(r.total_cents) && (
+                {rounding !== 0 && (
+                  <span className="text-[13px] text-sq-muted tabular-nums" data-testid="refund-row-rounding">
+                    заокругл. {formatSignedUah(rounding)} · видано {formatUah(handedBack)}
+                  </span>
+                )}
+                {onPrintAct && needsAct(handedBack) && (
                   <button
                     type="button"
                     className="inline-flex items-center gap-1 text-[13px] font-semibold text-sq-blue min-h-8"

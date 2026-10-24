@@ -128,6 +128,59 @@ describe('mapSellPayload — refund', () => {
   });
 });
 
+describe('mapSellPayload — cash rounding (TechDocs/POS_CASH_ROUNDING.md)', () => {
+  it('sends no rounding_mode for a receipt without rounding, as before', () => {
+    expect('rounding_mode' in mapSellPayload(saleDoc())).toBe(false);
+    expect('rounding_mode' in mapSellPayload(saleDoc({ cashRounding: null }))).toBe(false);
+    expect(
+      'rounding_mode' in mapSellPayload(saleDoc({ cashRounding: { step: 50, amountCents: 0 } }))
+    ).toBe(false);
+  });
+
+  it('names the НБУ rule the till rounded by', () => {
+    const fifty = mapSellPayload(
+      saleDoc({
+        totalCents: 22123,
+        lines: [line({ unitPriceCents: 22123, lineTotalCents: 22123, discountCents: 0 })],
+        payments: [{ method: 'cash', amountCents: 50000 }],
+        cashRounding: { step: 50, amountCents: -23 },
+      })
+    );
+    expect(fifty.rounding_mode).toBe('ROUND_50');
+    // The cash row is what was handed over: Checkbox rounds the total and
+    // works the change out itself.
+    expect(fifty.payments).toEqual([{ type: 'CASH', value: 50000 }]);
+    expect(fifty.goods[0].good.price).toBe(22123);
+
+    const ten = mapSellPayload(saleDoc({ cashRounding: { step: 10, amountCents: -3 } }));
+    expect(ten.rounding_mode).toBe('ROUND_10');
+  });
+
+  it('carries the mode on a return receipt too', () => {
+    const payload = mapSellPayload({
+      kind: 'refund',
+      requestId: 'req-r',
+      ourNumber: 'RF-00002',
+      cashierName: 'Оля',
+      lines: [line({ unitPriceCents: 22123, lineTotalCents: 22123, discountCents: 0 })],
+      payments: [{ method: 'cash', amountCents: 22100 }],
+      totalCents: 22123,
+      discountCents: 0,
+      relatedProviderDocId: 'orig',
+      relatedOurNumber: 'R-00001',
+      cashRounding: { step: 50, amountCents: -23 },
+    });
+    expect(payload.rounding_mode).toBe('ROUND_50');
+    expect(payload.payments).toEqual([{ type: 'CASH', value: 22100 }]);
+  });
+
+  it("reads the provider's round_sum back", () => {
+    const base = { id: 'r1', status: 'DONE', fiscal_code: 'F', fiscal_date: null, tax_url: null, transaction: null } as CheckboxReceipt;
+    expect(toFiscalResult({ ...base, round_sum: -23 }).roundingCents).toBe(-23);
+    expect(toFiscalResult(base).roundingCents).toBeNull();
+  });
+});
+
 describe('mapServicePayload', () => {
   function serviceDoc(overrides: Partial<FiscalServiceDoc> = {}): FiscalServiceDoc {
     return {

@@ -29,6 +29,7 @@ import * as preorders from './preorders.service.js';
 import * as bills from './bills.service.js';
 import * as modifiers from './modifiers.service.js';
 import type { LineModifierSnapshot } from './modifiers.service.js';
+import { parseCashRoundingStep, refundRoundingCents, saleRoundingCents } from './cashRounding.js';
 
 /**
  * The caption for a bouquet assembled at the counter: how many stems went in.
@@ -270,6 +271,15 @@ export interface CompleteSaleParams {
    * bill that nobody has paid for yet; naming a subset is a split.
    */
   bill_part?: { bill_id: number; line_ids?: number[] } | null;
+  /**
+   * The cash-rounding step the till showed the customer (0, 10 or 50 kopecks;
+   * НБУ № 25, TechDocs/POS_CASH_ROUNDING.md). The till names the step and
+   * this server computes the amount — and any of the three is accepted, not
+   * only the store's current setting, because a sale rung offline under
+   * yesterday's setting must land the way its receipt was printed. Absent is
+   * 0: a till built before rounding gets exactly what it always got.
+   */
+  cash_rounding?: unknown;
 }
 
 type DbClient = { query: typeof pool.query };
@@ -640,7 +650,14 @@ export async function completeSaleTx(
 
   const total = lineItems.reduce((s, l) => s + l.line_total_cents, 0);
 
-  if (paymentsTotal < total) {
+  // The cash part of the receipt, rounded the way the till rounded it. Not a
+  // discount (НБУ № 25): `total` and every line stay what the goods came to,
+  // and the customer owes `total + roundingCents`.
+  const roundingStep = parseCashRoundingStep(params.cash_rounding);
+  const paysCash = params.payments.some((payment) => payment.method === 'cash');
+  const roundingCents = saleRoundingCents(total, params.payments, roundingStep);
+
+  if (paymentsTotal < total + roundingCents) {
     throw new Error('Insufficient payment');
   }
 
@@ -673,9 +690,11 @@ export async function completeSaleTx(
     `INSERT INTO pos_sales
        (store_id, staff_id, receipt_number, status, subtotal_cents, total_cents, note,
         customer_id, cart_discount_type, cart_discount_value, cart_discount_cents, client_uuid,
-        fiscal_status, order_no, prep_status, served_at, exchange_refund_id)
+        fiscal_status, order_no, prep_status, served_at, exchange_refund_id,
+        cash_rounding, rounding_cents)
      VALUES ($1, $2, $3, 'completed', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-             $14::text, CASE WHEN $14::text = 'new' THEN NULL ELSE NOW() END, $15)
+             $14::text, CASE WHEN $14::text = 'new' THEN NULL ELSE NOW() END, $15,
+             $16, $17)
      RETURNING *`,
     [
       params.storeId,
@@ -700,6 +719,10 @@ export async function completeSaleTx(
       // here, in the one INSERT, so an exchange never exists as two unlinked
       // documents even for the length of a follow-up UPDATE.
       params.exchange_refund_id ?? null,
+      // The step only where there was cash to round: a card receipt was
+      // never subject to the rule, whatever the till had switched on.
+      paysCash ? roundingStep : 0,
+      roundingCents,
     ]
   );
   const sale = saleResult.rows[0];
@@ -995,6 +1018,10 @@ export async function getSale(storeId: number, saleId: number) {
     cart_discount_value:
       sale.cart_discount_value == null ? null : Number(sale.cart_discount_value),
     cart_discount_cents: Number(sale.cart_discount_cents ?? 0),
+    // Cash rounding (migration 071): the customer paid `total_cents +
+    // rounding_cents`; `cash_rounding` is the step, 0 when nothing was rounded.
+    cash_rounding: Number(sale.cash_rounding ?? 0),
+    rounding_cents: Number(sale.rounding_cents ?? 0),
     refunded_cents: Number(sale.refunded_cents),
     note: sale.note,
     created_at: sale.created_at,
@@ -1040,6 +1067,8 @@ export async function getSale(storeId: number, saleId: number) {
       client_uuid: row.client_uuid ?? null,
       method: row.method ?? null,
       total_cents: Number(row.total_cents),
+      cash_rounding: Number(row.cash_rounding ?? 0),
+      rounding_cents: Number(row.rounding_cents ?? 0),
       reason: row.reason,
       reason_code: (row.reason_code as RefundReasonCode | null) ?? null,
       buyer_name: (row.buyer_name as string | null) ?? null,
@@ -1232,6 +1261,7 @@ export async function listSales(storeId: number, opts: ListSalesOptions = {}) {
     status: sale.status,
     ...kitchenFields(sale),
     total_cents: Number(sale.total_cents),
+    rounding_cents: Number(sale.rounding_cents ?? 0),
     refunded_cents: Number(sale.refunded_cents),
     staff_name: sale.staff_name,
     customer_name: sale.customer_name ?? null,
@@ -1439,12 +1469,24 @@ export interface RefundSaleParams {
   /** For the «Акт про видачу коштів» — optional, the buyer may decline. */
   buyer_name?: string | null;
   buyer_document?: string | null;
+  /**
+   * The cash-rounding step for money handed back in cash (НБУ № 25, пп. 4 and
+   * 4-1 round «загальних сум розрахунків в акті про видачу коштів» as well).
+   * Same contract as `CompleteSaleParams.cash_rounding`; ignored unless the
+   * refund goes back in cash.
+   */
+  cash_rounding?: unknown;
 }
 
 export interface RefundSaleTxResult {
   refundId: number;
   refundNumber: string;
+  /** What the goods came to — the fiscal lines sum to it. */
   totalCents: number;
+  /** Signed; the cash handed back is `totalCents + roundingCents`. */
+  roundingCents: number;
+  /** The step it was rounded by (0 when it was not). */
+  cashRounding: number;
   method: RefundMethod | null;
   /** The original sale's customer, so an exchange can keep them by default. */
   saleCustomerId: number | null;
@@ -1613,12 +1655,18 @@ export async function refundSaleTx(
     });
   }
 
+  // Only cash handed back is rounded; the refund's total and its lines stay
+  // what the goods came to, which is what `refunded_cents` below adds up.
+  const roundingStep = parseCashRoundingStep(params.cash_rounding);
+  const roundingCents = refundRoundingCents(refundTotal, method, roundingStep);
+  const appliedStep = method === 'cash' ? roundingStep : 0;
+
   const refundNumber = await nextRefundNumber(client, params.storeId);
   const refundResult = await client.query(
     `INSERT INTO pos_refunds
        (sale_id, store_id, staff_id, total_cents, reason, client_uuid, refund_number, method,
-        fiscal_status, reason_code, buyer_name, buyer_document)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        fiscal_status, reason_code, buyer_name, buyer_document, cash_rounding, rounding_cents)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
      RETURNING id`,
     [
       params.saleId,
@@ -1633,6 +1681,8 @@ export async function refundSaleTx(
       reasonCode,
       buyerName,
       buyerDocument,
+      appliedStep,
+      roundingCents,
     ]
   );
   const refundId = Number(refundResult.rows[0].id);
@@ -1722,6 +1772,8 @@ export async function refundSaleTx(
     refundId,
     refundNumber,
     totalCents: refundTotal,
+    roundingCents,
+    cashRounding: appliedStep,
     method,
     saleCustomerId: sale.customer_id == null ? null : Number(sale.customer_id),
     receiptNumber: String(sale.receipt_number),
@@ -1759,6 +1811,11 @@ export interface ExchangeSaleParams {
   };
   /** `'pending'` when the caller is about to fiscalise both halves. */
   fiscal_status?: 'none' | 'pending';
+  /**
+   * The till's cash-rounding step, for both halves: each is its own document,
+   * so each rounds its own cash part (TechDocs/POS_CASH_ROUNDING.md, Д9).
+   */
+  cash_rounding?: unknown;
 }
 
 /**
@@ -1803,6 +1860,7 @@ export async function exchangeSale(
       buyer_document: params.refund.buyer_document,
       client_uuid: refundUuid,
       fiscal_status: params.fiscal_status,
+      cash_rounding: params.cash_rounding,
     });
     const customerId =
       params.sale.customer_id === undefined ? refund.saleCustomerId : params.sale.customer_id;
@@ -1817,6 +1875,7 @@ export async function exchangeSale(
       client_uuid: saleUuid,
       fiscal_status: params.fiscal_status,
       exchange_refund_id: refund.refundId,
+      cash_rounding: params.cash_rounding,
     });
     await client.query('COMMIT');
     return { refundId: refund.refundId, newSaleId: sale.saleId };

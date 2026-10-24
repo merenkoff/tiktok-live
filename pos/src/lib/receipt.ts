@@ -80,14 +80,17 @@ function vatLines(store: ReceiptStoreInfo, totalCents: number): ReceiptVatLine[]
   return [{ symbol: tax.symbol, rate: tax.rate, amount_cents: amount }];
 }
 
-/** Рядок 25: cash back — only when cash was taken and more than the total came in. */
+/**
+ * Рядок 25: cash back — only when cash was taken and more than was due came
+ * in. «Due» is the sum after cash rounding (рядок 24, «До сплати»).
+ */
 function changeCents(
   payments: Array<{ method: string; amount_cents: number }>,
-  totalCents: number
+  dueCents: number
 ): number | null {
   const paid = payments.reduce((sum, p) => sum + p.amount_cents, 0);
   const hasCash = payments.some((p) => p.method === 'cash');
-  return hasCash && paid > totalCents ? paid - totalCents : null;
+  return hasCash && paid > dueCents ? paid - dueCents : null;
 }
 
 function producerOf(store: ReceiptStoreInfo): string | null {
@@ -171,11 +174,15 @@ export function buildReceiptPayload(
   customerName?: string | null
 ): ReceiptData {
   const tax = defaultTax(store);
+  // НБУ № 25: the cash part may have been rounded. The goods' total — and the
+  // VAT inside it — stay as they are; only what was due moves.
+  const rounding = sale.rounding_cents ?? 0;
   return {
     ...fiscalParts(sale.fiscal, store),
     header: headerOf(store),
     vat_lines: vatLines(store, sale.total_cents),
-    change_cents: changeCents(sale.payments, sale.total_cents),
+    change_cents: changeCents(sale.payments, sale.total_cents + rounding),
+    rounding_cents: rounding || null,
     store_name: store.name,
     kind: 'sale',
     receipt_number: sale.receipt_number,
@@ -244,12 +251,15 @@ export function buildRefundReceiptPayload(
     ];
   });
 
+  // A cash refund hands back the sum after rounding (НБУ № 25, пп. 4, 4-1).
+  const rounding = refund.rounding_cents ?? 0;
   return {
     ...fiscalParts(fiscal, store),
     header: headerOf(store),
     vat_lines: vatLines(store, refund.total_cents),
     // Money goes out, never back to the customer as change.
     change_cents: null,
+    rounding_cents: rounding || null,
     store_name: store.name,
     kind: 'refund',
     receipt_number: refund.refund_number ?? `RF-${refund.id}`,
@@ -261,6 +271,8 @@ export function buildRefundReceiptPayload(
     subtotal_cents: refund.total_cents,
     discount_cents: null,
     total_cents: refund.total_cents,
-    payments: refund.method ? [{ method: refund.method, amount_cents: refund.total_cents }] : [],
+    payments: refund.method
+      ? [{ method: refund.method, amount_cents: refund.total_cents + rounding }]
+      : [],
   };
 }

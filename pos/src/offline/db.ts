@@ -123,6 +123,11 @@ export interface OutboxSalePayload {
   cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
   customer_id: number | null;
   customer_client_uuid: string | null;
+  /**
+   * The cash-rounding step the receipt was printed with (НБУ № 25). Absent on
+   * a row an older build queued — it replays unrounded, exactly as printed.
+   */
+  cash_rounding?: number;
 }
 
 export interface OutboxRow {

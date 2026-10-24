@@ -7,10 +7,13 @@ import { Check, Minus, Plus, Printer, X } from '@pos/platform/ui';
 import {
   buildRefundReceiptPayload,
   DEFAULT_RECEIPT_PAPER_WIDTH,
+  formatSignedUah,
   formatUah,
   getMeta,
   printReceipt,
   refundLineAmount,
+  refundRoundingCents,
+  storeCashRounding,
   useAuthStore,
   usePrintableReceipt,
 } from '@pos/platform';
@@ -128,18 +131,24 @@ export function RefundSaleDialog({
   } | null>(null);
   const [printing, setPrinting] = useState(false);
   const [printStatus, setPrintStatus] = useState<string | null>(null);
-  const auth = useAuthStore((s) => s.auth);
   const { printToPdf, printablePortal } = usePrintableReceipt();
   const { printAct, actPortal } = usePrintableAct();
 
+  const auth = useAuthStore((s) => s.auth);
   const total = items.reduce(
     (sum, i) =>
       sum + refundLineAmount(i.line_total_cents, i.quantity, i.refunded_quantity, qty[i.id] ?? 0),
     0
   );
+  // Cash handed back is rounded like a cash sale (НБУ № 25 пп. 4, 4-1: «в акті
+  // про видачу коштів»); card and QR never are. The server computes the same
+  // sum from the step this sends.
+  const roundingStep = storeCashRounding(auth?.store.cash_rounding);
+  const rounding = refundRoundingCents(total, method, roundingStep);
+  const handedBack = total + rounding;
   const picked = items.filter((i) => (qty[i.id] ?? 0) > 0);
   const everything = items.length > 0 && items.every((i) => (qty[i.id] ?? 0) === available(i));
-  const actWanted = needsAct(total);
+  const actWanted = needsAct(handedBack);
   const days = daysSincePurchase(sale.created_at);
   const storeInfo = { name: auth?.store.name ?? '', fiscal: auth?.store.fiscal ?? null };
 
@@ -196,6 +205,7 @@ export function RefundSaleDialog({
         reason_code: reasonCode,
         buyer_name: buyerName.trim() || null,
         buyer_document: buyerDocument.trim() || null,
+        ...(roundingStep ? { cash_rounding: roundingStep } : {}),
       });
       onRefunded(row);
 
@@ -285,8 +295,14 @@ export function RefundSaleDialog({
           )}
           <p className="mt-[18px] text-sm font-semibold text-sq-secondary">Повернено</p>
           <p className="text-[34px] leading-tight font-bold mt-1 text-sq-heading tabular-nums">
-            {formatUah(done.receipt.total_cents)}
+            {formatUah(done.receipt.total_cents + (done.receipt.rounding_cents ?? 0))}
           </p>
+          {done.receipt.rounding_cents ? (
+            <p className="text-sm text-sq-muted mt-1 tabular-nums" data-testid="refund-done-rounding">
+              {formatUah(done.receipt.total_cents)} · заокруглення{' '}
+              {formatSignedUah(done.receipt.rounding_cents)}
+            </p>
+          ) : null}
           <p className="text-sm text-sq-muted mt-1 tabular-nums">
             {done.receipt.receipt_number} · до чека {sale.receipt_number}
           </p>
@@ -311,7 +327,7 @@ export function RefundSaleDialog({
             <Printer size={20} />
             {printing ? 'Друк…' : 'Друкувати чек повернення'}
           </button>
-          {needsAct(done.receipt.total_cents) && (
+          {needsAct(done.receipt.total_cents + (done.receipt.rounding_cents ?? 0)) && (
             <button
               type="button"
               className="mt-1 w-full min-h-12 inline-flex items-center justify-center gap-2 text-[15px] font-semibold text-sq-blue"
@@ -547,8 +563,14 @@ export function RefundSaleDialog({
         <div className="px-5 pt-3 pb-5 shrink-0 space-y-3 shadow-[0_-1px_0_rgb(var(--sq-divider-rgb))] mt-3">
           <div className="flex justify-between items-baseline">
             <span className="text-[15px] text-sq-secondary">{exchange ? 'Повертається' : 'До повернення'}</span>
-            <span className="text-[26px] font-bold text-sq-heading tabular-nums">{formatUah(total)}</span>
+            <span className="text-[26px] font-bold text-sq-heading tabular-nums">{formatUah(handedBack)}</span>
           </div>
+          {rounding !== 0 && (
+            // НБУ № 25 п. 5: both sums, here as on the paper.
+            <p className="-mt-2 text-right text-[13px] text-sq-muted tabular-nums" data-testid="refund-rounding">
+              {formatUah(total)} · заокруглення готівки {formatSignedUah(rounding)}
+            </p>
+          )}
           <div className="flex gap-2.5">
             <button
               type="button"

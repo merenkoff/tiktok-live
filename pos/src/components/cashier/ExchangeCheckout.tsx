@@ -4,9 +4,16 @@
 
 import { ReactNode, useState } from 'react';
 import { Banknote, CreditCard, Repeat, X, type Glyph } from '../../platform/glyphs';
-import { formatUah } from '../../lib/money';
+import { formatSignedUah, formatUah } from '../../lib/money';
 import { differenceSentence, RETURNED_TO_UK } from '../../lib/exchange';
 import { positionsText } from '../../lib/plural';
+import {
+  refundRoundingCents,
+  saleRoundingCents,
+  storeCashRounding,
+  type CashRoundingStep,
+} from '../../lib/cashRounding';
+import { useAuthStore } from '@pos/platform';
 import type { ExchangeDraft, PaymentMethod, SalePaymentInput } from '../../types';
 
 interface Props {
@@ -18,7 +25,8 @@ interface Props {
   /** Same contract as `CheckoutModal`: an opaque overlay has to carry its own error. */
   error?: { message: string; supportCode?: string | null; action?: ReactNode } | null;
   onClose: () => void;
-  onConfirm: (payments: SalePaymentInput[]) => void;
+  /** `cashRounding` — the step both halves were rounded by on this screen (НБУ № 25). */
+  onConfirm: (payments: SalePaymentInput[], opts: { cashRounding: CashRoundingStep }) => void;
 }
 
 /**
@@ -43,7 +51,19 @@ export function ExchangeCheckout({
   const [method, setMethod] = useState<Exclude<PaymentMethod, 'qr'>>(() =>
     draft.refund.method === 'card' ? 'card' : 'cash'
   );
-  const difference = newTotalCents - draft.returnedCents;
+  // Two documents, each rounding its own cash (TechDocs/POS_CASH_ROUNDING.md,
+  // Д9): what goes back in cash and what the new receipt takes in cash. The
+  // server computes both from the same step.
+  const roundingStep = storeCashRounding(useAuthStore((s) => s.auth?.store.cash_rounding));
+  const returnedRounding = refundRoundingCents(draft.returnedCents, draft.refund.method, roundingStep);
+  const returned = draft.returnedCents + returnedRounding;
+  const newRounding = saleRoundingCents(
+    newTotalCents,
+    [{ method, amount_cents: newTotalCents }],
+    roundingStep
+  );
+  const newDue = newTotalCents + newRounding;
+  const difference = newDue - returned;
   const methods: Array<{ method: Exclude<PaymentMethod, 'qr'>; glyph: Glyph; label: string }> = [
     { method: 'cash', glyph: Banknote, label: 'Готівка' },
     { method: 'card', glyph: CreditCard, label: 'Картка' },
@@ -84,8 +104,13 @@ export function ExchangeCheckout({
           <section className="bg-white rounded-card shadow-card px-6 py-[22px]" data-testid="exchange-return">
             <p className="text-sm text-sq-secondary">Повертається · видатковий чек</p>
             <p className="text-[34px] leading-tight font-bold tracking-[-0.02em] text-sq-heading tabular-nums">
-              −{formatUah(draft.returnedCents)}
+              −{formatUah(returned)}
             </p>
+            {returnedRounding !== 0 && (
+              <p className="text-[13px] text-sq-muted tabular-nums" data-testid="exchange-return-rounding">
+                {formatUah(draft.returnedCents)} · заокруглення {formatSignedUah(returnedRounding)}
+              </p>
+            )}
             <p className="text-[13px] text-sq-muted mt-1">
               {RETURNED_TO_UK[draft.refund.method]} · як платили за чеком {draft.receiptNumber}
             </p>
@@ -111,8 +136,13 @@ export function ExchangeCheckout({
               className="text-[34px] leading-tight font-bold tracking-[-0.02em] text-sq-heading tabular-nums"
               data-testid="exchange-new-total"
             >
-              {formatUah(newTotalCents)}
+              {formatUah(newDue)}
             </p>
+            {newRounding !== 0 && (
+              <p className="text-[13px] text-sq-muted tabular-nums" data-testid="exchange-new-rounding">
+                {formatUah(newTotalCents)} · заокруглення {formatSignedUah(newRounding)}
+              </p>
+            )}
             <p className="text-[13px] text-sq-muted mt-1">Оплата за новий чек</p>
             <div className="mt-3 grid grid-cols-2 gap-2">
               {methods.map((m) => {
@@ -154,8 +184,8 @@ export function ExchangeCheckout({
               {differenceSentence(difference, draft, method)}
             </p>
             <p className="text-[13px] mt-1 opacity-80">
-              Два чеки на повні суми: видатковий на {formatUah(draft.returnedCents)} і новий на{' '}
-              {formatUah(newTotalCents)}. Різниця — лише те, що переходить через касу.
+              Два чеки на повні суми: видатковий на {formatUah(returned)} і новий на{' '}
+              {formatUah(newDue)}. Різниця — лише те, що переходить через касу.
             </p>
           </div>
         </section>
@@ -164,7 +194,9 @@ export function ExchangeCheckout({
         <button
           type="button"
           disabled={loading || itemCount === 0}
-          onClick={() => onConfirm([{ method, amount_cents: newTotalCents }])}
+          onClick={() =>
+            onConfirm([{ method, amount_cents: newDue }], { cashRounding: roundingStep })
+          }
           className="pos-btn-primary w-full min-h-[60px] rounded-xl text-lg"
           data-testid="exchange-confirm"
         >

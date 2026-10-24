@@ -30,7 +30,13 @@ export interface ActData {
   buyer_name: string | null;
   buyer_document: string | null;
   goods: ActGoodsLine[];
+  /** What the goods came to. */
   total_cents: number;
+  /**
+   * A cash refund's rounding (НБУ № 25), signed; the money issued is
+   * `total_cents + rounding_cents`. п. 5 wants both sums on the act.
+   */
+  rounding_cents: number;
   /** «готівкою» / «на платіжну картку» / … ; null on a refund that recorded no method. */
   returned_by: string | null;
   original: {
@@ -95,6 +101,7 @@ export function buildActPayload(
     buyer_document: refund.buyer_document?.trim() || null,
     goods,
     total_cents: refund.total_cents,
+    rounding_cents: refund.rounding_cents ?? 0,
     returned_by: refund.method ? RETURNED_BY_UK[refund.method] : null,
     original: {
       receipt_number: sale.receipt_number,
