@@ -459,6 +459,134 @@ describe.skipIf(!hasDb)('POS «під запис» — the journal', () => {
 
   // ── reading ────────────────────────────────────────────────────────────
 
+  // ── a handover the desktop wrote without a network (rule 6, migration 074) ─
+
+  describe('a handover the desktop wrote without a network', () => {
+    const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
+
+    it('is recorded over the limit, for a locked customer and for one with no limit — and marked', async () => {
+      const over = await customer(5000);
+      const locked = await customer(100000);
+      await pool.query(`UPDATE pos_customers SET credit_locked = TRUE WHERE id = $1`, [locked]);
+      const none = await customer(null);
+      const breadBefore = await stockOf(bread);
+
+      for (const id of [over, locked, none]) {
+        const res = await issue({
+          customer_id: id,
+          client_uuid: randomUUID(),
+          items: [{ variant_id: bread, quantity: 2 }],
+          offline_at: hoursAgo(1),
+        });
+        expect(res.statusCode).toBe(201);
+        expect(res.json().entry).toMatchObject({ kind: 'issue', amount_cents: 6400, offline: true });
+        expect(await expectBalanced(id)).toBe(6400);
+      }
+      // The goods left: the shelf moved for all three.
+      expect(await stockOf(bread)).toBe(breadBefore - 6);
+
+      // Over the limit is what the owner sees, not a refusal.
+      const credit = (await get(`/api/pos/debts/customers/${over}/balance`)).json();
+      expect(credit).toMatchObject({ balance_cents: 6400, limit_cents: 5000, available_cents: 0 });
+      const statement = (await get(`/api/pos/debts/customers/${over}`)).json();
+      expect(statement.entries[0]).toMatchObject({ kind: 'issue', offline: true });
+    });
+
+    it('is not refused by an archived card or the stop-list, but still by another store’s customer', async () => {
+      const id = await customer(100000);
+      const archived = (await seedProduct(store.storeId, { name: 'Знятий з продажу', priceCents: 1500, quantity: 10 })).variantId;
+      await pool.query(`UPDATE pos_variants SET is_active = FALSE WHERE id = $1`, [archived]);
+      const stopped = await seedProduct(store.storeId, { name: 'Стоп сьогодні', priceCents: 2500, quantity: 10 });
+      await pool.query(
+        `UPDATE pos_products SET stop_listed_on = (NOW() AT TIME ZONE 'Europe/Kyiv')::date WHERE id = $1`,
+        [stopped.productId]
+      );
+
+      const res = await issue({
+        customer_id: id,
+        client_uuid: randomUUID(),
+        items: [
+          { variant_id: archived, quantity: 1 },
+          { variant_id: stopped.variantId, quantity: 1 },
+        ],
+        offline_at: hoursAgo(2),
+      });
+      expect(res.statusCode).toBe(201);
+      expect(res.json().entry.amount_cents).toBe(4000);
+      await expectBalanced(id);
+
+      const other = await createTestStore('debts-offline-foreign');
+      try {
+        const foreign = await issue({
+          customer_id: id,
+          client_uuid: randomUUID(),
+          items: [{ variant_id: bread, quantity: 1 }],
+          offline_at: hoursAgo(1),
+        }, other.sellerToken);
+        expect(foreign.statusCode).toBe(404);
+      } finally {
+        await dropTestStore(other.storeId);
+      }
+    });
+
+    it('is dated by the till, so the oldest-first rule and the journal put it where it happened', async () => {
+      const id = await customer(100000);
+      const online = (await issue({ customer_id: id, client_uuid: randomUUID(), items: [{ variant_id: milk, quantity: 1 }] })).json();
+      const offline = (
+        await issue({
+          customer_id: id,
+          client_uuid: randomUUID(),
+          items: [{ variant_id: bread, quantity: 1 }],
+          offline_at: hoursAgo(3),
+        })
+      ).json();
+
+      const statement = (await get(`/api/pos/debts/customers/${id}`)).json();
+      // Given three hours ago, paid first.
+      expect(statement.open_lines.map((l: { id: number }) => l.id)).toEqual([offline.lines[0].id, online.lines[0].id]);
+      // The journal reads newest first by when it happened, not by when it arrived.
+      expect(statement.entries.map((e: { id: number }) => e.id)).toEqual([online.entry.id, offline.entry.id]);
+      expect(Date.parse(offline.entry.created_at)).toBeLessThan(Date.parse(online.entry.created_at) - 2 * 3600_000);
+      expect(statement.entries[0].offline).toBe(false);
+
+      const received = await pool.query(
+        `SELECT offline_received_at FROM pos_debt_entries WHERE id = $1`,
+        [offline.entry.id]
+      );
+      expect(received.rows[0].offline_received_at).not.toBeNull();
+    });
+
+    it('reads a till clock ahead of ours as now, refuses what is not a date, and replays on its key', async () => {
+      const id = await customer(100000);
+      const ahead = (
+        await issue({
+          customer_id: id,
+          client_uuid: randomUUID(),
+          items: [{ variant_id: bread, quantity: 1 }],
+          offline_at: new Date(Date.now() + 86_400_000).toISOString(),
+        })
+      ).json();
+      expect(Date.parse(ahead.entry.created_at)).toBeLessThanOrEqual(Date.now() + 1000);
+
+      const bad = await issue({
+        customer_id: id,
+        client_uuid: randomUUID(),
+        items: [{ variant_id: bread, quantity: 1 }],
+        offline_at: 'вчора',
+      });
+      expect(bad.statusCode).toBe(400);
+
+      const key = randomUUID();
+      const first = await issue({ customer_id: id, client_uuid: key, items: [{ variant_id: milk, quantity: 1 }], offline_at: hoursAgo(1) });
+      const again = await issue({ customer_id: id, client_uuid: key, items: [{ variant_id: milk, quantity: 1 }], offline_at: hoursAgo(1) });
+      expect(first.statusCode).toBe(201);
+      expect(again.statusCode).toBe(200);
+      expect(again.json().entry.id).toBe(first.json().entry.id);
+      expect(again.json().replay).toBe(true);
+      await expectBalanced(id);
+    });
+  });
+
   describe('what the till and the owner read', () => {
     it('lists who owes, the longest-owing first, and with ?all=1 everyone with a limit', async () => {
       const owing = await customer(100000);

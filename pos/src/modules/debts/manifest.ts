@@ -17,21 +17,27 @@
 // notebook — who owes, and one customer's statement — mounted twice, in the
 // till's frame and in the owner's cabinet.
 //
-// Online only in this release (PR2). The desktop's offline handover queue and
-// the paper slip come with PR3, which is where `offline` and
-// `hardware.stations` will appear here.
+// The desktop till also writes handovers without a network (PR3, §6): its
+// own Dexie keeps a mirror of who may take credit and a queue of what was
+// given, and the `offline` hooks below are how the shell's runtime sends that
+// queue and counts it in «Очікує синк». Repayments stay online (decision Д7).
+// The «ПІД ЗАПИС» slip prints only on a desktop whose «Обладнання» names a
+// printer for the station below — not printed by default, the owner's
+// decision.
 
 // Type-only import — erased at build time, so this does NOT pull the bundled
 // registry (and every manifest alongside it) into the remote chunk.
 import type { RemoteModuleDescriptor } from '../registry';
 import { lazyWithRetry } from '../lazyWithRetry';
+import { pendingCount, syncIssues } from './data/sync';
+import { DEBTS_MODULE_ID, DEBTS_SLIP_STATION } from './lib/ids';
 
 const DebtsRoutes = lazyWithRetry(() => import('./pages/DebtsRoutes').then((m) => ({ default: m.DebtsRoutes })));
 const CheckoutAction = lazyWithRetry(() => import('./components/CheckoutAction'));
 const CustomerPanel = lazyWithRetry(() => import('./components/CustomerPanel'));
 const DebtPanels = lazyWithRetry(() => import('./components/DebtPanels'));
 
-export const DEBTS_MODULE_ID = 'debts';
+export { DEBTS_MODULE_ID };
 
 export const debtsModule: RemoteModuleDescriptor = {
   id: DEBTS_MODULE_ID,
@@ -56,4 +62,14 @@ export const debtsModule: RemoteModuleDescriptor = {
   checkout: { Action: CheckoutAction },
   customer: { Panel: CustomerPanel },
   analytics: { Panels: DebtPanels },
+  hardware: {
+    stations: [
+      {
+        id: DEBTS_SLIP_STATION,
+        title: 'Квитанції під запис',
+        hint: 'Квитанція для покупця, коли товар записано під запис. Без принтера квитанція не друкується.',
+      },
+    ],
+  },
+  offline: { pendingCount, sync: syncIssues },
 };

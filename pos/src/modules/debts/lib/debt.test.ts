@@ -15,6 +15,7 @@ import {
   hasAssembledLine,
   issueBlock,
   issueItems,
+  isOverLimit,
   limitInputToCents,
   linesCoveredBy,
   matchesDebtor,
@@ -106,8 +107,30 @@ describe('issueBlock', () => {
     expect(issueBlock({ ...base, customerId: null })?.code).toBe('no_customer');
   });
 
-  it('says it needs the network (the offline queue is a later release)', () => {
+  it('says it needs the network where there is no queue — the web and the tablet', () => {
     expect(issueBlock({ ...base, online: false })?.code).toBe('offline');
+  });
+
+  it('lets the desktop write down without a network, judged by its mirror exactly as online (Д3)', () => {
+    const offline = { ...base, online: false, queue: true };
+    expect(issueBlock(offline)).toBeNull();
+    expect(issueBlock({ ...offline, totalCents: 176001 })?.code).toBe('over_limit');
+    expect(issueBlock({ ...offline, credit: credit({ locked: true }) })?.code).toBe('locked');
+    expect(issueBlock({ ...offline, credit: credit({ limit_cents: null, available_cents: null }) })?.code).toBe(
+      'no_credit'
+    );
+  });
+
+  it('refuses offline when the till never had the list — it cannot vouch for anyone', () => {
+    const block = issueBlock({ ...base, online: false, queue: true, credit: null, noMirror: true });
+    expect(block?.code).toBe('no_mirror');
+    expect(block?.text).toContain('Потрібна мережа');
+    // With a network the server decides; the mirror does not matter.
+    expect(issueBlock({ ...base, queue: true, noMirror: true })).toBeNull();
+  });
+
+  it('refuses a customer the till created offline: no owner has given them a limit yet', () => {
+    expect(issueBlock({ ...base, customerId: -3, credit: null, online: false, queue: true })?.code).toBe('no_credit');
   });
 
   it('refuses a bouquet assembled at the counter, with what to do instead', () => {
@@ -200,6 +223,15 @@ describe('words', () => {
     expect(creditLine(credit({ limit_cents: null, available_cents: null }))).toBe(
       `${owed} · під запис більше не можна`
     );
+  });
+
+  it('says by how much a debt is above the limit — only an offline handover or a lowered limit puts it there', () => {
+    const over = credit({ balance_cents: 320000, available_cents: 0 });
+    expect(creditLine(over)).toBe(`Борг ${formatUah(320000)} · понад ліміт на ${formatUah(20000)}`);
+    expect(creditLine({ ...over, locked: true })).toBe(`Борг ${formatUah(320000)} · записи заблоковано`);
+    expect(isOverLimit({ balance_cents: 320000, limit_cents: 300000 })).toBe(true);
+    expect(isOverLimit({ balance_cents: 300000, limit_cents: 300000 })).toBe(false);
+    expect(isOverLimit({ balance_cents: 5000, limit_cents: null })).toBe(false);
   });
 
   it('says there is no debt rather than a debt of nought', () => {

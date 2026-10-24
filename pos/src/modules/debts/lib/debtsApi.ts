@@ -60,6 +60,12 @@ export const debtsApi = {
     cart_discount: CartDiscount | null;
     client_uuid: string;
     note?: string;
+    /**
+     * When the goods left, for a handover the desktop wrote down without a
+     * network (074): the server dates the entry by it and marks it, and does
+     * not refuse it for the limit — the goods are already gone.
+     */
+    offline_at?: string;
   }): Promise<DebtWriteResult> {
     return request('post', '/debts/issue', body);
   },

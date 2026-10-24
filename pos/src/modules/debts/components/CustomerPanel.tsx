@@ -14,7 +14,10 @@
 //    credit in the first place, because «Борги» lists only those who have it.
 //
 // Any failure draws nothing — a strip that cannot be read must not put an
-// error over the cart.
+// error over the cart. On the desktop without a network the line comes from
+// the till's mirror, with what it wrote down offline on top, and says so.
+// (The amber when nothing more may be given covers a debt above the limit
+// too — only an offline handover or a lowered limit puts one there.)
 
 import { Link, useLocation } from 'react-router-dom';
 import { useAuthStore, usePosShell } from '@pos/platform';
@@ -26,7 +29,7 @@ import { useCredit } from '../lib/useCredit';
 import { LimitEditor } from './LimitEditor';
 
 export default function CustomerPanel({ customerId, place }: CustomerPanelProps) {
-  const { credit, failed } = useCredit(customerId);
+  const { credit, failed, local } = useCredit(customerId);
   const role = useAuthStore((s) => s.auth?.staff.role ?? null);
   const shell = usePosShell();
   const { pathname } = useLocation();
@@ -47,6 +50,7 @@ export default function CustomerPanel({ customerId, place }: CustomerPanelProps)
         data-testid="debts-customer-strip"
       >
         {creditLine(credit)}
+        {local ? ' · без мережі' : ''}
       </Link>
     );
   }
@@ -61,6 +65,7 @@ export default function CustomerPanel({ customerId, place }: CustomerPanelProps)
       />
       <p className="text-[15px] tabular-nums">
         {allowed || owes ? creditLine(credit) : 'Під запис не дозволено'}
+        {local ? ' · без мережі' : ''}
       </p>
       {owner && <LimitEditor credit={credit} touch={shell !== 'web'} />}
     </section>

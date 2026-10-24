@@ -4,8 +4,8 @@
 
 // Builds `src/modules/debts` as a standalone ESM remote (grocery phase Г3,
 // TechDocs/grocery/G3_DEBTS.md §5). react / react-router-dom / react-dom /
-// zustand / @pos/platform are external — the host supplies them via its
-// import map. Output: dist-remotes/debts/remote-entry.js
+// zustand / dexie / @pos/platform are external — the host supplies them via
+// its import map. Output: dist-remotes/debts/remote-entry.js
 //
 //   npm run build:debts-remote
 
@@ -57,6 +57,8 @@ export default defineConfig({
         'react/jsx-runtime',
         'react-router-dom',
         'zustand',
+        // The module's own IndexedDB (PR3) — the host's Dexie, through the import map.
+        'dexie',
         '@pos/platform',
       ],
     },

@@ -126,6 +126,8 @@ export const POS_MIGRATIONS = [
   '072_pos_fiscal_receipts_provider_offline.sql',
   // Goods given «під запис»: the customer's limit, an append-only journal and the lines it owes (grocery Г3).
   '073_pos_debts.sql',
+  // A handover a desktop till wrote without a network: dated by the till, marked by when the server received it (Г3 PR3).
+  '074_pos_debt_offline.sql',
 ] as const;
 
 export function readMigration(file: string): string {
