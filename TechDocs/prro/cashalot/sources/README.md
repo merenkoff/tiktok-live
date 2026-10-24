@@ -15,6 +15,7 @@
 | `integration-facts.md` | Варіанти інтеграції, вимоги, ціни, офлайн, доступ, контакти | https://cashalot.ua/integration, /sale, /cashalot-offline, portfel.ua, dtkt.ua — перелік у файлі | 2026-10-21 |
 | `other-specs.md` | COM API, API Bridge, драйвер BAS, старі версії WEB API — версії, дати, URL; у репозиторій не кладемо | у файлі | 2026-10-21 |
 | `community-clients.md` | `github.com/Gavan4eg/cashalot-laravel` та оголошення інтеграторів — реальні JSON стану ПРРО і чека, назви методів | у файлі | 2026-10-21 |
+| `support-answers.md` | Відповіді розробки Cashalot на наші 14 питань: тестова зміна через `OpenShift{TESTING}`, `KeyGuid`+`KeyPin` для всіх команд, повтор `UID` → `DuplicatedRequestUid`, `UID` у корені запиту, коди одиниць і форм оплати, ширина візуалізації в пікселях, офлайн лише при доступному сервері Cashalot | лист через партнера Cashalot, «Відповідь надана розробкою ПРРО Кашалот» | 2026-10-24 |
 
 Головний висновок для нашого дизайну: WEB API — хмарний RPC
 (`https://fsapi.cashalot.org.ua/`, POST + JSON, поле `Command`) **без сесії**:
