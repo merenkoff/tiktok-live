@@ -576,18 +576,21 @@ function mergeLeaves(a: ComponentInput[], b: ComponentInput[]): ComponentInput[]
  * A sale line writes it to `pos_sale_item_components`; a bill line fired to
  * the kitchen (К4c) writes the very same rows to `pos_bill_item_components`,
  * because a round moves stock at fire time and payment then copies the
- * snapshot across without moving anything again. Two tables, one arithmetic —
- * and a second 60-line copy of it would have drifted at the first edit.
+ * snapshot across without moving anything again. A line given «під запис»
+ * (073, grocery Г3) does exactly what a round does, into
+ * `pos_debt_item_components`. Three tables, one arithmetic — and a second
+ * 60-line copy of it would have drifted at the first edit.
  *
  * The table and column below are interpolated into SQL. They come from this
  * closed record keyed by a union type and never from a caller's string, so
  * there is nothing here for a value to escape into.
  */
-export type LineStockTarget = 'sale' | 'bill';
+export type LineStockTarget = 'sale' | 'bill' | 'debt';
 
 const LINE_SNAPSHOT: Record<LineStockTarget, { table: string; fk: string }> = {
   sale: { table: 'pos_sale_item_components', fk: 'sale_item_id' },
   bill: { table: 'pos_bill_item_components', fk: 'bill_item_id' },
+  debt: { table: 'pos_debt_item_components', fk: 'debt_item_id' },
 };
 
 /**
@@ -604,15 +607,20 @@ export async function consumeStockForLine(
   params: {
     storeId: number;
     target: LineStockTarget;
-    /** `pos_sale_items.id` or `pos_bill_items.id`, per `target`. */
+    /** `pos_sale_items.id`, `pos_bill_items.id` or `pos_debt_items.id`, per `target`. */
     lineId: number;
-    /** What the movement points at: a sale, or the round that fired the line. */
+    /** What the movement points at: a sale, the round that fired the line, or a debt entry. */
     referenceType: string;
     referenceId: number;
     variantId: number;
     quantity: number;
     /** Null when a guest's order fired the line straight to the kitchen (QR menu Q9). */
     staffId: number | null;
+    /**
+     * `sale` unless the goods left «під запис» (`credit`, 073): the movement
+     * report keeps what went out on credit apart from what was sold.
+     */
+    reason?: Extract<StockReason, 'sale' | 'credit'>;
     /**
      * The composition this one line was rung with, for a bouquet the cashier
      * assembled at the counter. When absent the catalogue composition is used.
@@ -624,6 +632,7 @@ export async function consumeStockForLine(
   }
 ): Promise<void> {
   const snapshotTarget = LINE_SNAPSHOT[params.target];
+  const reason = params.reason ?? 'sale';
   const demand = await resolveStockDemand(client, {
     storeId: params.storeId,
     variantId: params.variantId,
@@ -636,7 +645,7 @@ export async function consumeStockForLine(
       storeId: params.storeId,
       variantId: params.variantId,
       delta: -params.quantity,
-      reason: 'sale',
+      reason,
       staffId: params.staffId,
       referenceType: params.referenceType,
       referenceId: params.referenceId,
@@ -664,7 +673,7 @@ export async function consumeStockForLine(
       storeId: params.storeId,
       variantId: row.component_variant_id,
       delta: -row.quantity * params.quantity,
-      reason: 'sale',
+      reason,
       staffId: params.staffId,
       referenceType: params.referenceType,
       referenceId: params.referenceId,
@@ -713,7 +722,8 @@ export async function returnStockForLine(
     lineId: number;
     variantId: number;
     quantity: number;
-    reason: Extract<StockReason, 'void' | 'refund'>;
+    /** `credit` gives back goods returned from an unpaid «під запис» line (073). */
+    reason: Extract<StockReason, 'void' | 'refund' | 'credit'>;
     staffId: number;
     referenceType: string;
     referenceId: number;

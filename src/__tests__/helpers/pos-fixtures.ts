@@ -231,6 +231,12 @@ export async function dropTestStore(storeId: number | undefined): Promise<void> 
     'DELETE FROM pos_fiscal_receipts WHERE store_id = $1',
     'DELETE FROM pos_fiscal_offline_sessions WHERE store_id = $1',
     'DELETE FROM pos_fiscal_shifts WHERE store_id = $1',
+    // «Під запис» (073): its lines point at variants and customers with NO
+    // ACTION, which Postgres checks mid-cascade, so they go explicitly.
+    'DELETE FROM pos_debt_entry_lines WHERE store_id = $1',
+    'DELETE FROM pos_debt_item_components WHERE store_id = $1',
+    'DELETE FROM pos_debt_items WHERE store_id = $1',
+    'DELETE FROM pos_debt_entries WHERE store_id = $1',
     'DELETE FROM pos_refund_items WHERE refund_id IN (SELECT id FROM pos_refunds WHERE store_id = $1)',
     'DELETE FROM pos_refunds WHERE store_id = $1',
     'DELETE FROM pos_sale_item_components WHERE store_id = $1',

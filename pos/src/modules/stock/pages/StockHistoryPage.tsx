@@ -18,6 +18,7 @@ const REASON_UK: Record<string, string> = {
   writeoff: 'Списання',
   inventory: 'Інвентаризація',
   production: 'Виробництво',
+  credit: 'Під запис',
 };
 
 export function StockHistoryPage() {

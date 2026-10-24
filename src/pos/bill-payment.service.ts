@@ -37,7 +37,7 @@
 //        plates stay owed (`BillFiscalRefusal`, stage `preflight`);
 //      · the provider REFUSED the document (it cannot exist) → the part is
 //        undone: its sale voided and its plates back on the bill as unpaid
-//        (`abortSale` → `voidBillPartSale`), and NO stock returned, because
+//        (`abortSale` → `voidSale`, which knows a bill's part), and NO stock returned, because
 //        the round took it and the dish was cooked (`BillFiscalRefusal`,
 //        stage `document`);
 //      · the outcome is AMBIGUOUS (a timeout — the receipt may exist) → the

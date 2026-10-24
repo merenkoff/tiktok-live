@@ -96,6 +96,15 @@ BEGIN
     -- modifier snapshots go before the sale lines, parked carts and pre-orders
     -- hold their variant with a plain FK so they go before the variants, and
     -- the modifiers point at their component variants the same way.
+    -- Goods given «під запис» (073) point at the variants deleted below. Those
+    -- tables are created by a later file, so on a fresh database they do not
+    -- exist yet when this one runs — hence the guard and the EXECUTE.
+    IF to_regclass('pos_debt_items') IS NOT NULL THEN
+      EXECUTE 'DELETE FROM pos_debt_entry_lines WHERE store_id = $1' USING v_store;
+      EXECUTE 'DELETE FROM pos_debt_item_components WHERE store_id = $1' USING v_store;
+      EXECUTE 'DELETE FROM pos_debt_items WHERE store_id = $1' USING v_store;
+      EXECUTE 'DELETE FROM pos_debt_entries WHERE store_id = $1' USING v_store;
+    END IF;
     DELETE FROM pos_fiscal_receipts WHERE store_id = v_store;
     DELETE FROM pos_refund_items
      WHERE refund_id IN (SELECT id FROM pos_refunds WHERE store_id = v_store);

@@ -27,9 +27,11 @@ import { storeClock } from './core/storeClock.js';
 import { dailyCounterKey, nextCounterValue } from './core/counters.js';
 import * as preorders from './preorders.service.js';
 import * as bills from './bills.service.js';
+import * as debtLines from './debt-lines.service.js';
 import * as modifiers from './modifiers.service.js';
-import type { LineModifierSnapshot } from './modifiers.service.js';
+import type { LineModifierSnapshot, ModifierGroup } from './modifiers.service.js';
 import { parseCashRoundingStep, refundRoundingCents, saleRoundingCents } from './cashRounding.js';
+import { refundLineAmount } from './lineMoney.js';
 
 /**
  * The caption for a bouquet assembled at the counter: how many stems went in.
@@ -111,27 +113,9 @@ export function allocateCartDiscount(
   return { lineDiscounts, cartDiscountCents };
 }
 
-/**
- * Money to return for `n` more units of a sale line.
- *
- * Works off `line_total_cents` (post-discount), not `unit_price_cents` — the
- * latter is the pre-discount price, so charging refunds against it hands back
- * more than the customer actually paid on any discounted receipt.
- *
- * Cumulative form on purpose: taking the difference between two rounded
- * running totals (rather than rounding each slice) means the units of a line
- * always sum to exactly `line_total_cents`, in whatever order they come back.
- */
-export function refundLineAmount(
-  lineTotalCents: number,
-  quantity: number,
-  alreadyRefunded: number,
-  n: number
-): number {
-  if (quantity <= 0) return 0;
-  const through = (units: number) => Math.round((lineTotalCents * units) / quantity);
-  return through(alreadyRefunded + n) - through(alreadyRefunded);
-}
+// Lives in `lineMoney.ts` so the «під запис» lines can share it (073); kept
+// exported from here for every caller that always imported it from here.
+export { refundLineAmount };
 
 /**
  * Draw the next per-store document number from `pos_store_counters`.
@@ -272,6 +256,18 @@ export interface CompleteSaleParams {
    */
   bill_part?: { bill_id: number; line_ids?: number[] } | null;
   /**
+   * A repayment of goods taken «під запис» (migration 073, grocery Г3).
+   *
+   * The same locked branch as `bill_part`, for the same reason: the price and
+   * the discount were fixed when the goods were given, and the goods — and
+   * their stock — left then. So each line copies its snapshot across instead
+   * of writing off again, and carries the exact sum the customer's statement
+   * showed (`fixed_total_cents`). `line_ids` absent pays everything still
+   * open; present, it must be the oldest lines (decision Д4). Nothing else
+   * may ride on such a receipt: no walk-in goods, no fresh discount.
+   */
+  debt_part?: { customer_id: number; line_ids?: number[] } | null;
+  /**
    * The cash-rounding step the till showed the customer (0, 10 or 50 kopecks;
    * НБУ № 25, TechDocs/POS_CASH_ROUNDING.md). The till names the step and
    * this server computes the amount — and any of the three is accepted, not
@@ -283,6 +279,93 @@ export interface CompleteSaleParams {
 }
 
 type DbClient = { query: typeof pool.query };
+
+/** A cart line priced, before the cart discount is shared out. */
+export interface SaleDraftLine {
+  variant_id: number;
+  product_name: string;
+  variant_label: string;
+  unit: string;
+  quantity: number;
+  unit_price_cents: number;
+  compare_at_unit_cents: number | null;
+  pre_discount_total: number;
+  has_product_discount: boolean;
+  /** Present only on a bouquet assembled at the counter. */
+  components?: ComponentInput[];
+  /** Kitchen note; '' when none. */
+  note?: string;
+  /** What the line chose, when it chose anything (migration 046). */
+  modifiers?: LineModifierSnapshot[];
+  /** What those choices write off, per one unit, authored. */
+  modifier_components?: ComponentInput[];
+  /**
+   * The bill line behind this one (К4d). Its presence is the signal that
+   * the stock already moved when the round was fired, so this line copies
+   * the snapshot instead of writing off again.
+   */
+  bill_item_id?: number;
+  /** The «під запис» line this one pays (073) — the same signal as `bill_item_id`. */
+  debt_item_id?: number;
+  /** What a repayment line comes to, fixed when the goods were given (073). */
+  fixed_total_cents?: number;
+}
+
+/** The columns of a variant row a walk-in line is priced from. */
+export interface PricedVariantRow {
+  price_cents: unknown;
+  compare_at_cents: unknown;
+  label: unknown;
+  unit: unknown;
+  product_name: unknown;
+}
+
+/**
+ * One walk-in cart line, priced the way a sale prices it.
+ *
+ * Exported because goods given «під запис» (073) must cost exactly what the
+ * same cart would at the till, and a second copy of this arithmetic would
+ * drift at the first edit. `groups` are the product's modifier questions.
+ */
+export function pricePlainLine(
+  variant: PricedVariantRow,
+  groups: ModifierGroup[],
+  line: { variant_id: number; quantity: number; modifiers: number[]; note: string }
+): SaleDraftLine {
+  const chosen = modifiers.resolveLineModifiers(
+    modifiers.groupsForVariant(groups, String(variant.label ?? '')),
+    line.modifiers
+  );
+  // The card price plus the deltas — never a sum of ingredients, which is
+  // the opposite of a bouquet and deliberately so (POS_CAFE.md §4.1). A
+  // delta may be negative; the result may not.
+  const unit = Number(variant.price_cents) + chosen.deltaCents;
+  if (unit < 0) throw new Error('Modifiers cannot take the line price below zero');
+  // Shifted by the same sum, so the receipt's markdown stays what the card
+  // says; a delta that only moved the price would print a bigger or a
+  // negative discount.
+  const compareAt =
+    variant.compare_at_cents == null ? null : Number(variant.compare_at_cents) + chosen.deltaCents;
+  const pre = unit * line.quantity;
+  return {
+    variant_id: line.variant_id,
+    product_name: String(variant.product_name ?? ''),
+    // The caption is whatever the store's vertical already derived onto the
+    // row, plus the modifiers chosen; the sale snapshots it, so a later
+    // variant edit cannot rewrite history on a printed receipt.
+    variant_label: modifiers.lineCaption(String(variant.label ?? ''), chosen.names),
+    unit: String(variant.unit ?? ''),
+    quantity: line.quantity,
+    unit_price_cents: unit,
+    compare_at_unit_cents: compareAt,
+    pre_discount_total: pre,
+    note: line.note,
+    ...(chosen.snapshot.length > 0
+      ? { modifiers: chosen.snapshot, modifier_components: chosen.components }
+      : {}),
+    has_product_discount: compareAt != null,
+  };
+}
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -337,11 +420,26 @@ export async function completeSaleTx(
     exchange_refund_id?: number | null;
   }
 ): Promise<CompleteSaleTxResult> {
-  if (!params.items?.length && !params.preorder_id && !params.bill_part) {
+  if (!params.items?.length && !params.preorder_id && !params.bill_part && !params.debt_part) {
     throw new Error('Cart is empty');
   }
   if (!params.payments?.length) throw new Error('Payment required');
   const clientUuid = params.client_uuid?.trim() || null;
+
+  // A repayment is a receipt for goods the customer already has, at the
+  // prices and discounts fixed when they took them (073). Anything else on
+  // the same receipt would either be charged twice or priced by today.
+  if (params.debt_part) {
+    if (params.items?.length || params.preorder_id || params.bill_part || params.cart_discount) {
+      throw new debtLines.DebtError(
+        'Чек погашення боргу — окремий: без інших товарів, замовлень і знижки'
+      );
+    }
+    if (params.customer_id != null && Number(params.customer_id) !== Number(params.debt_part.customer_id)) {
+      throw new debtLines.DebtError('Борг гасить той самий покупець, за яким його записано');
+    }
+    params = { ...params, customer_id: params.debt_part.customer_id };
+  }
 
   if (params.customer_id) {
     const customer = await client.query(
@@ -412,7 +510,9 @@ export async function completeSaleTx(
   // together. Two tills reaching for the same bouquet is then a row-level
   // race one of them loses, and a checkout that fails afterwards needs no
   // compensating «put it back».
-  const locked: Array<preorders.LockedLine & { bill_item_id?: number }> = params.preorder_id
+  const locked: Array<
+    preorders.LockedLine & { bill_item_id?: number; debt_item_id?: number; fixed_total_cents?: number }
+  > = params.preorder_id
     ? await preorders.lockedLines(client, params.storeId, params.preorder_id)
     : [];
   if (params.preorder_id) {
@@ -437,6 +537,19 @@ export async function completeSaleTx(
     locked.push(...billLines);
   }
 
+  // The customer's debt lines, the same way again. `lockedDebtLines` locks
+  // the customer first, so two tills cannot both pay the same goods, and
+  // refuses anything but the oldest lines still open.
+  if (params.debt_part) {
+    locked.push(
+      ...(await debtLines.lockedDebtLines(client, {
+        storeId: params.storeId,
+        customerId: params.debt_part.customer_id,
+        lineIds: params.debt_part.line_ids,
+      }))
+    );
+  }
+
   const variantIds = [
     ...new Set([
       ...[...plainLines.values()].map((line) => line.variant_id),
@@ -444,13 +557,17 @@ export async function completeSaleTx(
       ...locked.map((line) => line.variant_id),
     ]),
   ];
+  // Archived goods are read too. A line whose price was locked earlier — a
+  // pre-order, a fired round, goods taken «під запис» weeks ago — is owed
+  // whatever the owner has since done to the card; only goods rung from the
+  // shelf now must still be on it.
   const variantsResult = await client.query(
-    `SELECT v.id, v.price_cents, v.compare_at_cents, v.label, v.unit,
+    `SELECT v.id, v.price_cents, v.compare_at_cents, v.label, v.unit, v.is_active,
             p.id AS product_id, p.name AS product_name,
             p.stop_listed_on::text AS stop_listed_on
      FROM pos_variants v
      JOIN pos_products p ON p.id = v.product_id
-     WHERE v.store_id = $1 AND v.id = ANY($2::bigint[]) AND v.is_active = TRUE`,
+     WHERE v.store_id = $1 AND v.id = ANY($2::bigint[])`,
     [params.storeId, variantIds]
   );
 
@@ -459,6 +576,14 @@ export async function completeSaleTx(
   }
 
   const variantMap = new Map(variantsResult.rows.map((row) => [Number(row.id), row]));
+  for (const variantId of [
+    ...[...plainLines.values()].map((line) => line.variant_id),
+    ...customItems.map((item) => item.variant_id),
+  ]) {
+    if (variantMap.get(variantId)!.is_active !== true) {
+      throw new Error('Some variants not found or inactive');
+    }
+  }
 
   // The day's stop-list (migration 050, К3b): a stale second till that still
   // shows the tile is told in so many words. Never a replay — the goods left
@@ -477,31 +602,7 @@ export async function completeSaleTx(
     }
   }
   let subtotal = 0;
-  const draftLines: Array<{
-    variant_id: number;
-    product_name: string;
-    variant_label: string;
-    unit: string;
-    quantity: number;
-    unit_price_cents: number;
-    compare_at_unit_cents: number | null;
-    pre_discount_total: number;
-    has_product_discount: boolean;
-    /** Present only on a bouquet assembled at the counter. */
-    components?: ComponentInput[];
-    /** Kitchen note; '' when none. */
-    note?: string;
-    /** What the line chose, when it chose anything (migration 046). */
-    modifiers?: LineModifierSnapshot[];
-    /** What those choices write off, per one unit, authored. */
-    modifier_components?: ComponentInput[];
-    /**
-     * The bill line behind this one (К4d). Its presence is the signal that
-     * the stock already moved when the round was fired, so this line copies
-     * the snapshot instead of writing off again.
-     */
-    bill_item_id?: number;
-  }> = [];
+  const draftLines: SaleDraftLine[] = [];
 
   // Every product's questions, once. A line naming no modifiers is checked
   // too: a required group is required whichever client is asking, and an
@@ -516,45 +617,9 @@ export async function completeSaleTx(
 
   for (const line of plainLines.values()) {
     const variant = variantMap.get(line.variant_id)!;
-    const chosen = modifiers.resolveLineModifiers(
-      modifiers.groupsForVariant(
-        groupsByProduct.get(Number(variant.product_id)) ?? [],
-        String(variant.label ?? '')
-      ),
-      line.modifiers
-    );
-    // The card price plus the deltas — never a sum of ingredients, which is
-    // the opposite of a bouquet and deliberately so (POS_CAFE.md §4.1). A
-    // delta may be negative; the result may not.
-    const unit = Number(variant.price_cents) + chosen.deltaCents;
-    if (unit < 0) throw new Error('Modifiers cannot take the line price below zero');
-    // Shifted by the same sum, so the receipt's markdown stays what the card
-    // says; a delta that only moved the price would print a bigger or a
-    // negative discount.
-    const compareAt =
-      variant.compare_at_cents == null
-        ? null
-        : Number(variant.compare_at_cents) + chosen.deltaCents;
-    const pre = unit * line.quantity;
-    subtotal += pre;
-    draftLines.push({
-      variant_id: line.variant_id,
-      product_name: variant.product_name,
-      // The caption is whatever the store's vertical already derived onto the
-      // row, plus the modifiers chosen; the sale snapshots it, so a later
-      // variant edit cannot rewrite history on a printed receipt.
-      variant_label: modifiers.lineCaption(variant.label ?? '', chosen.names),
-      unit: variant.unit ?? '',
-      quantity: line.quantity,
-      unit_price_cents: unit,
-      compare_at_unit_cents: compareAt,
-      pre_discount_total: pre,
-      note: line.note,
-      ...(chosen.snapshot.length > 0
-        ? { modifiers: chosen.snapshot, modifier_components: chosen.components }
-        : {}),
-      has_product_discount: compareAt != null,
-    });
+    const draft = pricePlainLine(variant, groupsByProduct.get(Number(variant.product_id)) ?? [], line);
+    subtotal += draft.pre_discount_total;
+    draftLines.push(draft);
   }
 
   for (const line of locked) {
@@ -597,6 +662,9 @@ export async function completeSaleTx(
         ? { modifiers: promised.snapshot, modifier_components: promised.components }
         : {}),
       ...(line.bill_item_id ? { bill_item_id: line.bill_item_id } : {}),
+      ...(line.debt_item_id
+        ? { debt_item_id: line.debt_item_id, fixed_total_cents: line.fixed_total_cents }
+        : {}),
     });
   }
 
@@ -637,10 +705,22 @@ export async function completeSaleTx(
     });
   }
 
-  const { lineDiscounts, cartDiscountCents } = allocateCartDiscount(
+  const { lineDiscounts, cartDiscountCents: sharedDiscountCents } = allocateCartDiscount(
     draftLines,
     params.cart_discount
   );
+  // A repayment line (073) carries the discount it was given at the handover
+  // as a fixed sum, so the receipt's line comes to exactly what the
+  // customer's statement said. Re-sharing a discount here instead would move
+  // money between lines the customer already read.
+  let carriedDiscountCents = 0;
+  draftLines.forEach((line, i) => {
+    if (line.fixed_total_cents != null) {
+      lineDiscounts[i] = line.pre_discount_total - line.fixed_total_cents;
+      carriedDiscountCents += lineDiscounts[i];
+    }
+  });
+  const cartDiscountCents = sharedDiscountCents + carriedDiscountCents;
 
   const lineItems = draftLines.map((line, i) => ({
     ...line,
@@ -661,9 +741,13 @@ export async function completeSaleTx(
     throw new Error('Insufficient payment');
   }
 
-  const discountType = params.cart_discount?.type ?? null;
+  const discountType = params.cart_discount?.type ?? (carriedDiscountCents > 0 ? 'fixed' : null);
   const discountValue =
-    params.cart_discount != null ? params.cart_discount.value : null;
+    params.cart_discount != null
+      ? params.cart_discount.value
+      : carriedDiscountCents > 0
+        ? carriedDiscountCents
+        : null;
 
   const receiptNumber = await nextReceiptNumber(client, params.storeId);
   const orderNo = await nextOrderNo(client, params.storeId, clock.today);
@@ -684,8 +768,10 @@ export async function completeSaleTx(
   //
   // Stamped inside the transaction, like `fiscal_status`, so no follow-up
   // UPDATE can be lost.
+  //   * a repayment of goods taken «під запис» (073): the goods are already
+  //     with the customer, whatever they were.
   const toBoard =
-    clock.vertical.kitchen && !params.offline_replay && !params.bill_part;
+    clock.vertical.kitchen && !params.offline_replay && !params.bill_part && !params.debt_part;
   const saleResult = await client.query(
     `INSERT INTO pos_sales
        (store_id, staff_id, receipt_number, status, subtotal_cents, total_cents, note,
@@ -733,8 +819,8 @@ export async function completeSaleTx(
       `INSERT INTO pos_sale_items
          (sale_id, store_id, variant_id, product_name, variant_label, unit,
           quantity, unit_price_cents, line_total_cents,
-          compare_at_unit_cents, line_discount_cents, note, bill_item_id)
-       VALUES ($1, $2, $3, $4, $5, $11, $6, $7, $8, $9, $10, $12, $13)
+          compare_at_unit_cents, line_discount_cents, note, bill_item_id, debt_item_id)
+       VALUES ($1, $2, $3, $4, $5, $11, $6, $7, $8, $9, $10, $12, $13, $14)
        RETURNING id`,
       [
         saleId,
@@ -750,6 +836,7 @@ export async function completeSaleTx(
         line.unit,
         line.note ?? '',
         line.bill_item_id ?? null,
+        line.debt_item_id ?? null,
       ]
     );
     const saleItemId = Number(itemResult.rows[0].id);
@@ -786,6 +873,18 @@ export async function completeSaleTx(
       continue;
     }
 
+    // Goods paid off «під запис» (073): they left, with their stock, when
+    // they were given. The same copy-across as a table's line.
+    if (line.debt_item_id) {
+      await debtLines.attachPaidDebtLine(client, {
+        storeId: params.storeId,
+        debtItemId: line.debt_item_id,
+        saleId,
+        saleItemId,
+      });
+      continue;
+    }
+
     // Composite-aware: a derived composite (a bouquet assembled when it
     // sells) writes off its components and records what it took on this line,
     // so the refund below can give back exactly that.
@@ -807,6 +906,18 @@ export async function completeSaleTx(
        VALUES ($1, $2, $3, $4, $5)`,
       [saleId, params.storeId, payment.method, payment.amount_cents, payment.provider_ref ?? null]
     );
+  }
+
+  // The journal says the debt went down by what the goods came to — not by
+  // the cash rounding, which is the till's business, not the customer's debt.
+  if (params.debt_part) {
+    await debtLines.recordPaymentEntry(client, {
+      storeId: params.storeId,
+      customerId: params.debt_part.customer_id,
+      saleId,
+      staffId: params.staffId,
+      amountCents: total,
+    });
   }
 
   return { saleId, receiptNumber, totalCents: total };
@@ -1038,6 +1149,9 @@ export async function getSale(storeId: number, saleId: number) {
           receipt_number: String(exchangeOf.rows[0].receipt_number),
         }
       : null,
+    // A receipt that pays off goods taken «під запис» (migration 073): the
+    // goods left earlier, so its lines moved no stock of their own.
+    repays_debt: items.rows.some((row) => row.debt_item_id != null),
     items: items.rows.map((row) => ({
       id: Number(row.id),
       variant_id: Number(row.variant_id),
@@ -1321,6 +1435,21 @@ export async function voidSale(params: {
       throw new Error('Cannot void a sale with refunds');
     }
 
+    // A receipt for goods whose stock moved EARLIER — a table bill's part
+    // (the round took it) or a repayment of goods taken «під запис» (the
+    // handover took it) — is undone by giving its lines back, never its stock:
+    // the dish was cooked and eaten, the bread is in the customer's kitchen.
+    // Crediting it back would invent goods, and the lines would stay «paid»
+    // by a dead receipt. This is the path ПРРО's refusal takes too (`abortSale`).
+    if (await releasePartLines(client, params)) {
+      await client.query(
+        `UPDATE pos_sales SET status = 'voided', voided_at = NOW() WHERE id = $1`,
+        [params.saleId]
+      );
+      await client.query('COMMIT');
+      return getSale(params.storeId, params.saleId);
+    }
+
     const items = await client.query(
       `SELECT * FROM pos_sale_items WHERE sale_id = $1 FOR UPDATE`,
       [params.saleId]
@@ -1357,51 +1486,43 @@ export async function voidSale(params: {
 }
 
 /**
- * Undo ONE part of a table bill's payment — a sale whose receipt could not be
- * registered — without undoing the dinner.
+ * Give a receipt's lines back to whatever they paid, if they paid a table bill
+ * or a «під запис» debt. True when they did — the caller then voids the sale
+ * without touching stock (see `voidSale`).
  *
- * `voidSale` is the wrong tool here and would be quietly harmful: it returns
- * every line's stock, but a bill line took its stock when the ROUND was fired
- * (POS_TABLES.md §4.2), the dish was cooked and put on the table, and
- * crediting it back would invent produce. What the guest did not do is pay, so
- * that is all that is reversed: the sale is voided and its plates go back to
- * the bill as unpaid (`releasePaidLines`), where the waiter can take payment
- * again. One transaction, so a half-undone part cannot exist.
- *
- * Idempotent like `voidSale`, for the same reason: a retry must be a no-op.
+ * The lines' own snapshots of what they took off the shelf stay where they are,
+ * and so does the receipt's copy: that row belongs to a voided receipt now, and
+ * its link is history.
  */
-export async function voidBillPartSale(params: {
-  storeId: number;
-  saleId: number;
-}): Promise<void> {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const saleResult = await client.query(
-      `SELECT status, refunded_cents FROM pos_sales WHERE id = $1 AND store_id = $2 FOR UPDATE`,
-      [params.saleId, params.storeId]
+async function releasePartLines(
+  client: DbClient,
+  params: { storeId: number; saleId: number; staffId: number }
+): Promise<boolean> {
+  const kind = await client.query(
+    `SELECT bool_or(bill_item_id IS NOT NULL) AS bill, bool_or(debt_item_id IS NOT NULL) AS debt
+       FROM pos_sale_items WHERE sale_id = $1`,
+    [params.saleId]
+  );
+  const bill = kind.rows[0]?.bill === true;
+  const debt = kind.rows[0]?.debt === true;
+  if (bill) {
+    // Plates go back to a bill only while it is open. A closed bill has freed
+    // its table — there may be a new one on it — so plates handed back to it
+    // could never be paid, and the money is better given back as a refund.
+    // ПРРО's refusal never meets this: it undoes a part while the bill is
+    // still being paid, and the bill closes only after every part went through.
+    const closed = await client.query(
+      `SELECT 1 FROM pos_bill_items i JOIN pos_bills b ON b.id = i.bill_id
+        WHERE i.store_id = $1 AND i.sale_id = $2 AND b.status <> 'open' LIMIT 1`,
+      [params.storeId, params.saleId]
     );
-    if (saleResult.rows.length === 0) throw new Error('Sale not found');
-    const sale = saleResult.rows[0];
-    if (sale.status === 'voided') {
-      await client.query('ROLLBACK');
-      return;
+    if (closed.rows.length > 0) {
+      throw new Error('Рахунок столу вже закрито — цей чек можна лише повернути');
     }
-    if (sale.status !== 'completed') throw new Error('Only completed sales can be voided');
-    if (Number(sale.refunded_cents) > 0) throw new Error('Cannot void a sale with refunds');
-
-    await client.query(
-      `UPDATE pos_sales SET status = 'voided', voided_at = NOW() WHERE id = $1`,
-      [params.saleId]
-    );
     await bills.releasePaidLines(client, { storeId: params.storeId, saleId: params.saleId });
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK').catch(() => undefined);
-    throw error;
-  } finally {
-    client.release();
   }
+  if (debt) await debtLines.releaseDebtLinesForSale(client, params);
+  return bill || debt;
 }
 
 const REFUND_METHODS: RefundMethod[] = ['cash', 'card', 'qr'];

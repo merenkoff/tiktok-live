@@ -267,6 +267,15 @@ export async function deleteCustomer(storeId: number, id: number): Promise<void>
   if (sales.rows.length > 0) {
     throw new Error('Cannot delete customer with sales history');
   }
+  // The «під запис» journal (073) is the shop's record of what this person
+  // took and paid; it may not lose the person it is about.
+  const journal = await pool.query(
+    `SELECT 1 FROM pos_debt_entries WHERE store_id = $1 AND customer_id = $2 LIMIT 1`,
+    [storeId, id]
+  );
+  if (journal.rows.length > 0) {
+    throw new Error('У покупця є записи під запис — картку видалити не можна');
+  }
   const result = await pool.query(
     `DELETE FROM pos_customers WHERE id = $1 AND store_id = $2 RETURNING id`,
     [id, storeId]

@@ -31,7 +31,7 @@ function isRealDate(value: string): boolean {
  * the same `from`/`to`, and a second inline copy is how the day comes that
  * one of them quietly accepts a decade.
  */
-function badRange(q: { from?: string; to?: string }): string | null {
+export function badRange(q: { from?: string; to?: string }): string | null {
   if (q.from && !isRealDate(q.from)) return 'from must be YYYY-MM-DD';
   if (q.to && !isRealDate(q.to)) return 'to must be YYYY-MM-DD';
   if (q.from && q.to) {

@@ -94,10 +94,13 @@ CREATE TABLE IF NOT EXISTS pos_idempotency_keys (
 -- ============================================
 -- LEDGER: extend reasons + analytics columns
 -- ============================================
+-- The one place this constraint is defined: every boot re-adds it, so a later
+-- file that wants a new reason widens THIS list. `credit` is goods given «під
+-- запис» and taken back from an unpaid line (073, TechDocs/grocery/G3_DEBTS.md).
 ALTER TABLE pos_stock_movements DROP CONSTRAINT IF EXISTS pos_stock_movements_reason_check;
 ALTER TABLE pos_stock_movements
     ADD CONSTRAINT pos_stock_movements_reason_check
-    CHECK (reason IN ('sale', 'refund', 'adjust', 'void', 'seed', 'receipt', 'writeoff', 'inventory'));
+    CHECK (reason IN ('sale', 'refund', 'adjust', 'void', 'seed', 'receipt', 'writeoff', 'inventory', 'credit'));
 
 ALTER TABLE pos_stock_movements
     ADD COLUMN IF NOT EXISTS unit_cost_cents INTEGER
