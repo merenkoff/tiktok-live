@@ -14,10 +14,11 @@
 
 import { FiscalError } from '../errors.js';
 import type { FiscalProvider, FiscalProviderId } from '../types.js';
+import { cashalotProvider } from './cashalot/index.js';
 import { checkboxProvider } from './checkbox/index.js';
 
 /** Adapters compiled into the app. */
-const BUILT_IN: FiscalProvider[] = [checkboxProvider];
+const BUILT_IN: FiscalProvider[] = [checkboxProvider, cashalotProvider];
 
 const providers = new Map<FiscalProviderId, FiscalProvider>();
 
