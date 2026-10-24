@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { describe, expect, it } from 'vitest';
-import { resolveTicketPrinters } from './kitchenPrinters';
+import { moduleStationMetaKeys, resolveModuleStationPrinter, resolveTicketPrinters } from './kitchenPrinters';
 
 function reader(meta: Record<string, unknown>) {
   return async <T,>(key: string) => meta[key] as T | undefined;
@@ -35,5 +35,25 @@ describe('resolveTicketPrinters', () => {
       await resolveTicketPrinters(reader({ kitchenPrinterName: 'K', kitchenPaperWidthMm: 72, barPrinterName: null }))
     ).toEqual({ kitchen: { name: 'K', paperWidth: 58 }, bar: { name: 'K', paperWidth: 58 } });
     expect(await resolveTicketPrinters(reader({ kitchenPrinterName: '   ' }))).toEqual({ kitchen: null, bar: null });
+  });
+});
+
+describe('a feature module station printer (Г2)', () => {
+  it('keys the setting by module and station, apart from the kitchen and the bar', () => {
+    expect(moduleStationMetaKeys('debts', 'slip')).toEqual({
+      printer: 'stationPrinter:debts:slip',
+      paper: 'stationPaper:debts:slip',
+    });
+    expect(moduleStationMetaKeys('scales', 'slip').printer).not.toBe(moduleStationMetaKeys('debts', 'slip').printer);
+  });
+
+  it('resolves the printer set on this device', async () => {
+    const read = reader({ 'stationPrinter:debts:slip': 'Slip-1', 'stationPaper:debts:slip': 80 });
+    expect(await resolveModuleStationPrinter(read, 'debts', 'slip')).toEqual({ name: 'Slip-1', paperWidth: 80 });
+  });
+
+  it('prints nowhere when none is set — never on the receipt or the kitchen printer', async () => {
+    const read = reader({ receiptPrinterName: 'Receipt-1', kitchenPrinterName: 'Kitchen-1' });
+    expect(await resolveModuleStationPrinter(read, 'debts', 'slip')).toBeNull();
   });
 });

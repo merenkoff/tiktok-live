@@ -844,7 +844,9 @@ Tauri-команди не треба). Якщо камери немає або �
 ## 15. Плитки на «Сьогодні» (фаза B8)
 
 `pos/src/modules/types.ts` (`analytics.Panels`), `pos/src/modules/verticals.ts`
-(`resolveAnalyticsPanels`), `pos/src/modules/SlotBoundary.tsx`,
+(`resolveAnalyticsPanels`; з фази Г2 — `resolveModuleSlots` у
+`pos/src/modules/featureSlots.ts`, [POS_MODULE_SLOTS.md](POS_MODULE_SLOTS.md)),
+`pos/src/modules/SlotBoundary.tsx`,
 `pos/src/pages/admin/DashboardPage.tsx`,
 `pos/src/modules/vertical-flowers/panels/FlowerPanels.tsx`.
 
@@ -930,7 +932,8 @@ Tauri-команди не треба). Якщо камери немає або �
 ## 16. Де власник змінює ставку за роботу
 
 `src/pos/routes/store.routes.ts`, `pos/src/modules/types.ts`
-(`settings.Card`), `pos/src/modules/verticals.ts` (`resolveSettingsCard`),
+(`settings.Card`), `pos/src/modules/verticals.ts` (`resolveSettingsCard`; з фази Г2 —
+`resolveModuleSlots` у `pos/src/modules/featureSlots.ts`),
 `pos/src/modules/vertical-flowers/settings/FloristLabourCard.tsx`.
 
 `florist_labour_bps` (міграція `040`) з самого початку був редагований лише на

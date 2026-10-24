@@ -43,6 +43,7 @@ const EXPECTED_COMMANDS = [
   'print_kitchen_ticket',
   'print_precheck',
   'print_receipt',
+  'print_slip',
   'print_webview',
   'prune_module_remotes',
   'sync_module_remote',

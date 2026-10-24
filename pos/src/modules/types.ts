@@ -9,7 +9,8 @@ import type { NavGroupId } from './navGroups';
 // manifests, which import this file; `platform/icons.ts` is a leaf.
 import type { NavIconName } from '../platform/icons';
 import type { PosShell } from '../shell';
-import type { PosRole } from '../types';
+import type { PosCustomer, PosRole } from '../types';
+import type { CartDiscount, CartLine } from '../hooks/useCart';
 import type { ModuleOfflineHooks } from '../offline/moduleHooks';
 
 export type { ModuleOfflineHooks };
@@ -173,6 +174,70 @@ export interface ModuleSettingsSlot {
   Card: ComponentType | LazyExoticComponent<ComponentType>;
 }
 
+/**
+ * What a feature module's action on the till sees of the cart (phase Г2,
+ * TechDocs/grocery/PLAN.md §4). The cart is the host's `useCartStore`; an
+ * action reads it from here and, when it has finished the cart its own way —
+ * the debt journal writing the goods to a customer's tab — says so through
+ * `onCompleted` instead of clearing it itself, so the host can also re-read
+ * stock and close whatever covered the catalog.
+ */
+export interface CheckoutActionProps {
+  lines: CartLine[];
+  customer: PosCustomer | null;
+  cartDiscount: CartDiscount | null;
+  /** What «Оплатити» would charge right now: Σ lines − the cart discount. */
+  totalCents: number;
+  onCompleted: () => void;
+}
+
+/**
+ * A way to finish the cart other than paying for it, drawn beside «Оплатити».
+ *
+ * The module draws its own button and its own sheet and makes its own server
+ * call; the host's payment path (`CheckoutModal`, the three ПРРО outcomes) is
+ * not touched. Several modules may each have one. Like `analytics` there is
+ * no fallback: a module that is missing, `pending` or throwing simply draws no
+ * button, and the till sells exactly as it did.
+ */
+export interface ModuleCheckoutSlot {
+  Action: ComponentType<CheckoutActionProps> | LazyExoticComponent<ComponentType<CheckoutActionProps>>;
+}
+
+export interface CustomerPanelProps {
+  customerId: number;
+  /** Under the chosen customer in the till's cart, or on the customer's card. */
+  place: 'cart' | 'card';
+}
+
+/**
+ * A strip of the module's own about one customer — the debt journal's
+ * «Борг 1 240 ₴ · ліміт 3 000». Fetches its own data; no fallback.
+ */
+export interface ModuleCustomerSlot {
+  Panel: ComponentType<CustomerPanelProps> | LazyExoticComponent<ComponentType<CustomerPanelProps>>;
+}
+
+/**
+ * A printer a module prints its own documents to, set per device on the
+ * desktop till's «Обладнання» exactly like the kitchen's and the bar's
+ * (`lib/kitchenPrinters.ts`). The host draws the picker; the module only
+ * names the station and asks for the printer with
+ * `resolveModuleStationPrinter(moduleId, id)`. No printer set — nothing is
+ * printed, silently, as a kitchen without one gets no tickets.
+ */
+export interface ModuleStation {
+  /** Stable within the module: the device setting is keyed by it. */
+  id: string;
+  title: string;
+  /** The sentence under the title: what is printed there and when. */
+  hint: string;
+}
+
+export interface ModuleHardwareSlot {
+  stations?: ModuleStation[];
+}
+
 export interface ModuleDescriptor {
   id: ModuleId;
   /** Shown in the Settings "Модулі магазину" checklist. */
@@ -208,16 +273,24 @@ export interface ModuleDescriptor {
    */
   sales?: ModuleSalesSlot;
   /**
-   * Set by a `vertical-*` module: extra figures on the owner's «Сьогодні».
+   * Extra figures on the owner's «Сьогодні»: the store's `vertical-*` module
+   * first, then any loaded feature module (phase Г2, `modules/featureSlots.ts`).
    * Unlike `sales`, an absent or broken module simply contributes nothing —
    * see `modules/verticals.ts`.
    */
   analytics?: ModuleAnalyticsSlot;
   /**
-   * Set by a `vertical-*` module: its own card on `/admin/settings`. Absent or
-   * broken module → the page is simply the one it always was.
+   * Its own card on `/admin/settings`: the vertical's first, then any loaded
+   * feature module's. Absent or broken module → the page is simply the one it
+   * always was.
    */
   settings?: ModuleSettingsSlot;
+  /** A feature module's way to finish the cart on the till (Г2). */
+  checkout?: ModuleCheckoutSlot;
+  /** A feature module's strip about one customer, in the cart and on the card (Г2). */
+  customer?: ModuleCustomerSlot;
+  /** A feature module's station printers on the desktop till's «Обладнання» (Г2). */
+  hardware?: ModuleHardwareSlot;
   routes: RouteDef[];
   nav: NavItem[];
 }

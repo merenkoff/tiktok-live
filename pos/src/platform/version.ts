@@ -124,7 +124,22 @@ export const POS_API_CLIENT_VERSION = 2;
 //     `CashRoundingStep` / `CashRoundingPayment` types — so a module that takes
 //     or hands back cash shows the sum the server will store. Additive: a
 //     module built against 18 still runs here and simply does not round.
-export const PLATFORM_VERSION = 19;
+// 20 (2026-10-24): slots for feature modules (TechDocs/grocery/PLAN.md, Г2).
+//     The owner's decision of 2026-10-24 makes features such as the debt
+//     journal and the scales modules of their own, and until now only the
+//     store's vertical could put anything on a host screen. The descriptor
+//     gains `checkout.Action` (a way to finish the cart beside «Оплатити»),
+//     `customer.Panel` (a strip about one customer, in the cart and on the
+//     card) and `hardware.stations` (a printer of the module's own on
+//     «Обладнання»), and `settings.Card` / `analytics.Panels` now come from
+//     any loaded module after the vertical's. That is a change of meaning the
+//     name snapshot cannot see — a module built for these slots on a host 19
+//     would load and draw nothing — hence the bump. With it the barrel exports
+//     `printSlip` / `SlipData` / `SlipItem` / `SlipTotal` (the eleventh Tauri
+//     command, `print_slip`: a non-fiscal slip that says so twice) and
+//     `resolveModuleStationPrinter` / `moduleStationMetaKeys` / `MetaReader` /
+//     `TicketPrinter` (which printer a module's station prints to here).
+export const PLATFORM_VERSION = 20;
 
 /**
  * Build version of this bundle — the host web/cashier build, or a module-remote

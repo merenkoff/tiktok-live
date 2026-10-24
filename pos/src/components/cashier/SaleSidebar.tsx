@@ -2,7 +2,7 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Minus, MoreHorizontal, Pencil, Plus, TagLine, Trash2, User } from '../../platform/glyphs';
 import { formatUah } from '../../lib/money';
 import { positionsText } from '../../lib/plural';
@@ -42,6 +42,13 @@ interface Props {
   onCancelPreorder?: () => void;
   /** Take this cart as an order for a future day (§14). */
   onTakePreorder?: () => void;
+  /**
+   * Feature modules' strips about the chosen customer (phase Г2), drawn by
+   * the register page through `ModuleSlots`; this component only places them.
+   */
+  customerExtra?: ReactNode;
+  /** Feature modules' ways to finish the cart other than paying (Г2), above «Оплатити». */
+  moduleActions?: ReactNode;
 }
 
 export function SaleSidebar({
@@ -61,6 +68,8 @@ export function SaleSidebar({
   locked,
   onCancelPreorder,
   onTakePreorder,
+  customerExtra,
+  moduleActions,
 }: Props) {
   const subtotal = lines.reduce((s, l) => s + l.unit_price_cents * l.quantity, 0);
   const discountCents = computeCartDiscountCents(lines, cartDiscount);
@@ -187,6 +196,7 @@ export function SaleSidebar({
         </button>
         <span className="text-xs text-sq-muted truncate">{staffName || '—'}</span>
       </div>
+      {customer && customerExtra && <div className="px-5 pb-2">{customerExtra}</div>}
 
       <div ref={listRef} className="flex-1 overflow-auto px-3 pb-2 select-none">
         {lines.length === 0 ? (
@@ -305,6 +315,11 @@ export function SaleSidebar({
           <span className="text-[20px] font-bold text-sq-heading">До сплати</span>
           <span className="text-[28px] font-bold text-sq-heading tabular-nums">{formatUah(total)}</span>
         </div>
+        {moduleActions && (
+          <div className="flex flex-col gap-2 pt-1" data-testid="module-checkout-actions">
+            {moduleActions}
+          </div>
+        )}
         <div className="flex gap-2.5 pt-1">
           {/*
             A promise is paid or put back — never parked, never discounted. The
