@@ -189,6 +189,43 @@ async function registerTablesModule(): Promise<void> {
   console.log(`   tables module registered → ${entry.url}`);
 }
 
+/**
+ * Point a demo store at a locally served `debts` bundle (grocery phase Г3,
+ * «під запис» — TechDocs/grocery/G3_DEBTS.md).
+ *
+ * A feature module for every vertical, so the store is a choice rather than
+ * a fixed demo: `demo-clothing` (migration 055) by default because it sells
+ * through the bundled clothing catalog and needs no other module running,
+ * any other slug through `POS_SEED_DEBTS_STORE`. The entry's `routePath` and
+ * nav item are the module's own «Борги» screen, which the desktop's
+ * placeholder tile stands in for until the bundle downloads.
+ *
+ *   POS_SEED_DEBTS=1 npm run pos:seed
+ */
+async function registerDebtsModule(): Promise<void> {
+  const slug = process.env.POS_SEED_DEBTS_STORE || 'demo-clothing';
+  const store = await pool.query(`SELECT id FROM pos_stores WHERE slug = $1`, [slug]);
+  if (store.rows.length === 0) {
+    console.log(`   ${slug} store not found — run the migrations first`);
+    return;
+  }
+  const entry = {
+    url: process.env.POS_SEED_DEBTS_URL || 'http://localhost:5010/remote-entry.js',
+    title: 'Борги',
+    routePath: '/debts',
+    icon: 'Wallet',
+    nav: [{ label: 'Борги', location: 'cashier-primary', order: 55, icon: 'Wallet', match: '/debts' }],
+  };
+  await pool.query(
+    `UPDATE pos_stores
+     SET module_remotes = COALESCE(module_remotes, '{}'::jsonb)
+                          || jsonb_build_object('debts', $2::jsonb)
+     WHERE id = $1`,
+    [Number(store.rows[0].id), JSON.stringify(entry)]
+  );
+  console.log(`   debts module registered on ${slug} → ${entry.url}`);
+}
+
 /** Copies the committed demo product photos into the (gitignored) uploads dir. */
 async function copySeedProductImages(): Promise<void> {
   await ensureUploadsDir();
@@ -367,6 +404,7 @@ async function seed(): Promise<void> {
   if (process.env.POS_SEED_VERTICAL_FLOWERS === '1') await registerFlowersModule();
   if (process.env.POS_SEED_VERTICAL_CAFE === '1') await registerCafeModule();
   if (process.env.POS_SEED_TABLES === '1') await registerTablesModule();
+  if (process.env.POS_SEED_DEBTS === '1') await registerDebtsModule();
   console.log('\n✅ Demo store ready (tags ensured)');
   console.log('   Store slug: demo');
   console.log('   Owner: owner@demo.shop / owner123');
