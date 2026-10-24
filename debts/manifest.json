@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "moduleId": "debts",
+  "version": "2.6.0",
+  "minHostPlatform": 20,
+  "entry": "remote-entry.js",
+  "keyId": "2a73632c13044371",
+  "builtAt": "2026-10-24T22:07:54.324Z",
+  "files": {
+    "CheckoutAction-C6NDcupc.js": "sha384-kOq1fdw1+CVuZ1Dqh4wbqr80SfW/2nWfe0jUyw3EKgv8hNWL2tQtWIingOEwMRDe",
+    "CustomerPanel-CmibiIXQ.js": "sha384-xq8QCKQaTIhYLNFVzzszvM7uFGbfbIaWy+iqbEVUyMgbraEfS7U/bAsz8jsMO6Tc",
+    "DebtPanels-Hn0U9HNP.js": "sha384-YoO8djXOis7HWyyx4XBRBCA742/sV9bHh8GjBRg+Ql+QmZJcUbW3MCrNcEzFee1h",
+    "DebtsRoutes-lFO-QDez.js": "sha384-17r5skCqQPfeL95LfZZ1iwy/WjJ1FOBJPu6MkkoLO0X4Ggu9E14RUofkuMC3k3Zl",
+    "LimitEditor-z_VyzewD.js": "sha384-NhgFP8fQvcvU432CoRDYcYjYj39fIHpUoxloUNFt+tZeond3j6yu48X0TytlElmt",
+    "Sheet-CYHmLyix.js": "sha384-reLN9i2t8u2WNlByBUXJ+nwcfUiGI3oMr/PwIel9sKrJ+YcUR6Ov6tpXQ9SDKdAH",
+    "debt-80Dd-Q-1.js": "sha384-kiWOzXkW0qThRmY5kzQNa4Nc/yBUK5px17lqbaVuI1zNi9en1mGvqBoxTDX+quCZ",
+    "debtsApi-DhkvGjzT.js": "sha384-6+2vzeb17kiS82N4srVaITgjMd6ByQ7zfvSS8SorgV1FRvv0ShPUQXEfbBlfQ+bl",
+    "errors-CLut7Fii.js": "sha384-RERhvFtq0lyOZhjYpwFeQyY+D5cJDPy1ERUw5Ab0N0ArTIZrbK8x4v0bJA1wovuH",
+    "ids-DKpT3dMP.js": "sha384-aEMZ0NAImWyANyg/XUPVO/iIsF306lXtQb7JbPk0tUtbeyFlBmDubukdeL5NG4Ed",
+    "queue-B9HzuKEV.js": "sha384-150i+7RQ/F+p0tnbVhvIreiC47hkytuADpFEh+Wk2Ve1QhZtd72y13fzzJa96fx0",
+    "remote-entry.js": "sha384-L29qJy7A7YFvs8zsO8cLr6+A8/1wR8FfUskUgeL/dPggJ+qoMLGniQRMzHlBjC79",
+    "style.css": "sha384-kPNz0Tmur4L7jVntgEz9+h1QBMSED2agPUIchZtfY+3QLSNK2eoMtQCQPzMWUkl4",
+    "sync-D_cQhPeR.js": "sha384-BjsmiSWDzpVdbH4/dE/c+M7U+rT7aPz5kGCDghZ1Xb81XHXO50fvcrQj3lnRF5qc",
+    "useCredit-D_STDTTT.js": "sha384-X6PjWPXue5YVVuW8g59wK3tOvc8oW33B+HQ/01sN0aDgjysWN0z1dljynFSaNwyl"
+  }
+}
