@@ -353,7 +353,7 @@ export const COMPETITOR_FACTS = {
   torgsoft: {
     name: 'Торгсофт',
     publishedAt: '2026-10-23',
-    checkedAt: '2026-10-23',
+    checkedAt: '2026-10-25',
     sources: {
       home: 'https://torgsoft.ua/',
       grocery: 'https://torgsoft.ua/soft/grocery/',
@@ -417,7 +417,7 @@ export const COMPETITOR_FACTS = {
     name: 'Posbox',
     vendor: 'Checkbox',
     publishedAt: '2026-10-23',
-    checkedAt: '2026-10-23',
+    checkedAt: '2026-10-25',
     sources: {
       site: 'https://posbox.ai/',
       prices: 'https://posbox.ai/prices/',
@@ -471,7 +471,7 @@ export const COMPETITOR_FACTS = {
   posterretail: {
     name: 'Poster',
     publishedAt: '2026-10-23',
-    checkedAt: '2026-10-23',
+    checkedAt: '2026-10-25',
     sources: {
       pricing: 'https://joinposter.com/ua/pricing-retail',
       shop: 'https://joinposter.com/ua/business/shop',
@@ -550,12 +550,17 @@ export const FEATURES = {
   tablesSplitBill: { status: 'available', label: 'Розділити рахунок: за стравами або порівну' },
   waiterTablet: { status: 'available', label: 'Планшет офіціанта як застосунок: відкривається без мережі й показує зал, рахунки й меню' },
   ownPrro: { status: 'coming', label: 'Власний ПРРО без стороннього провайдера' },
-  // The grocery vertical (TechDocs/grocery/README.md): nothing of it is in the
-  // code yet, so its landing runs in «Скоро» mode and every line here stays
-  // `coming` until its phase ships.
+  // The grocery vertical (TechDocs/grocery/README.md). Its landing runs in
+  // «Скоро» mode until weighed goods ship (phase Г4); each line here turns
+  // `available` with its own phase. «Під запис» shipped first, on 2026-10-24
+  // (`pos-v2.6.0` + `module-debts-v2.6.0`), as the `debts` module — for every
+  // vertical by the owner's decision Д1, presented under «Продукти». What it
+  // does not do yet (the customer's own statement, reminders — phase Г7) is the
+  // ROADMAP item `grocery-credit-reminders`.
   groceryCredit: {
-    status: 'coming',
-    label: 'Продаж під запис: борг покупця в журналі каси замість зошита — ліміт, погашення частинами, виписка, фіскальний чек при оплаті',
+    status: 'available',
+    label:
+      'Продаж під запис (модуль «Борги»): борг покупця в журналі каси замість зошита — ліміт від власника, погашення частинами, виписка, фіскальний чек при оплаті; на десктопі записує й без інтернету',
   },
   groceryWeighed: { status: 'coming', label: 'Ваговий товар: ціна за 1 кг або 100 г, вага в чеку й на цінику' },
   groceryScaleLabels: { status: 'coming', label: 'Ваги з друком етикеток: каса читає вагу й ціну зі штрихкоду наліпки' },
@@ -637,6 +642,13 @@ export interface VerticalFact {
   eyebrow: string;
   tagline: string;
   bullets: readonly [string, string, string];
+  /**
+   * A «Скоро» vertical's bullets can start working one at a time: the feature
+   * each bullet names, in the same order, so its card ticks the ones that are
+   * `available` and keeps a hollow bullet on the rest. Without it every bullet
+   * of a «Скоро» card is a promise.
+   */
+  bulletFeatureIds?: readonly [FeatureId, FeatureId, FeatureId];
   featureIds: FeatureId[];
   /** Flat SVGs from the demo stores, served from /public. */
   illustrations: readonly string[];
@@ -706,14 +718,18 @@ export const VERTICALS: readonly VerticalFact[] = [
   {
     // Built around «під запис» by the owner's decision of 2026-10-23; the
     // resume point for its copy and search terms is TechDocs/GROCERY_SEO_AEO.md.
+    // Still `coming` after «під запис» shipped (2026-10-24): the vertical leaves
+    // «Скоро» with weighed goods and its demo store (decision Д14).
     id: 'grocery',
     status: 'coming',
     slug: 'produkty',
     path: '/pos/produkty',
     title: 'Продукти',
     eyebrow: 'Каса для продуктового магазину',
-    tagline: 'Продаж під запис замість зошита боргів, ваговий товар із ціною за кілограм і каса на телефоні для ринку — у розробці.',
+    tagline:
+      'Продаж під запис замість зошита боргів уже працює — для будь-якого магазину; ваговий товар із ціною за кілограм і каса на телефоні для ринку — у розробці.',
     bullets: ['Продаж під запис замість зошита', 'Ваговий товар із ціною за кілограм', 'Каса на телефоні для ринку'],
+    bulletFeatureIds: ['groceryCredit', 'groceryWeighed', 'groceryPhone'],
     featureIds: [
       'groceryCredit',
       'groceryWeighed',
@@ -892,14 +908,18 @@ export const ROADMAP: readonly RoadmapItem[] = [
     body: 'Прийняти замовлення на терасі, де не ловить Wi-Fi, і відправити на кухню, щойно зв\'язок повернеться. Відкриватися без мережі й показувати зал, рахунки й меню планшет, доданий на екран, уже вміє; лишилось записувати.',
     progress: 10,
   },
-  // The grocery vertical, «під запис» first (owner's decision 2026-10-23). The
-  // figures are where the work is: research done (TechDocs/grocery/), no code.
+  // The grocery vertical (owner's decision 2026-10-23: «під запис» first). «Під
+  // запис» itself shipped on 2026-10-24 and left this list (it is
+  // `FEATURES.groceryCredit` now); what it promised and does not do yet — the
+  // customer's own statement and reminders, phase Г7 of TechDocs/grocery/PLAN.md
+  // — stays here as `grocery-credit-reminders`. The other figures are where the
+  // work is: research done (TechDocs/grocery/), no code.
   {
-    id: 'grocery-credit',
+    id: 'grocery-credit-reminders',
     vertical: 'grocery',
-    title: 'Продаж під запис',
-    body: 'Борг записується на покупця одним тапом при видачі товару — з датою, товарами й цінами. Ліміт і блокування, погашення частинами, виписка для покупця. Фіскальний чек — коли покупець платить; паперова квитанція — лише якщо ви її вмикаєте.',
-    progress: 5,
+    title: 'Виписка й нагадування для покупця',
+    body: 'Покупець бачить свій борг у телефоні — що брав, коли, скільки погасив і скільки лишилось — і підтверджує записи, щоб борг можна було довести. Нагадування про борг — лише тим, хто погодився їх отримувати. Сам продаж під запис уже працює: журнал боргу, ліміт, погашення з фіскальним чеком; виписку зараз видно на екрані каси.',
+    progress: 10,
   },
   {
     id: 'grocery-weighed',

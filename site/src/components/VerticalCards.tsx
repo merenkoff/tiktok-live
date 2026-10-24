@@ -1,5 +1,5 @@
 import { Reveal, StaggerGroup, StaggerItem } from './Reveal';
-import { VERTICALS, type VerticalFact } from '../lib/productFacts';
+import { VERTICALS, isAvailable, type VerticalFact } from '../lib/productFacts';
 import { Check, ChevronRight, ClipboardList, Coffee, Flower2, Shirt, UtensilsCrossed, type Glyph } from './glyphs';
 import { CTA } from '../lib/ctaIds';
 
@@ -37,7 +37,8 @@ function Illustrations({ v }: { v: VerticalFact }) {
 /**
  * A vertical that is not sold yet: one wide card under the grid rather than a
  * fifth tile in it, with a «Скоро» pill and hollow bullets — a ✓ would say the
- * thing already works.
+ * thing already works, so only a bullet whose feature (`bulletFeatureIds`) is
+ * `available` gets one.
  */
 function ComingCard({ v }: { v: VerticalFact }) {
   return (
@@ -53,12 +54,19 @@ function ComingCard({ v }: { v: VerticalFact }) {
           </div>
           <p className="text-sm text-muted mt-0.5">{v.eyebrow}</p>
           <ul className="mt-4 grid md:grid-cols-3 gap-x-6 gap-y-2">
-            {v.bullets.map((b) => (
-              <li key={b} className="flex items-start gap-2 text-[15px] leading-snug text-body">
-                <span aria-hidden className="mt-[5px] w-2.5 h-2.5 rounded-full border-2 border-pos shrink-0" />
-                {b}
-              </li>
-            ))}
+            {v.bullets.map((b, i) => {
+              const works = v.bulletFeatureIds ? isAvailable(v.bulletFeatureIds[i]) : false;
+              return (
+                <li key={b} className="flex items-start gap-2 text-[15px] leading-snug text-body">
+                  {works ? (
+                    <Check size={20} className="text-pos shrink-0" />
+                  ) : (
+                    <span aria-hidden className="mt-[5px] w-2.5 h-2.5 rounded-full border-2 border-pos shrink-0" />
+                  )}
+                  {b}
+                </li>
+              );
+            })}
           </ul>
           <p className="link-more mt-5 text-[15px]">
             Що ми будуємо <ChevronRight size={20} className="transition-transform group-hover:translate-x-0.5" />
