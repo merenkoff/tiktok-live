@@ -21,6 +21,7 @@ import { resetRateLimiter } from '../pos/fiscal/rateLimit.js';
 import { updateFiscalSettings } from '../pos/fiscal/settings.service.js';
 import * as fiscalService from '../pos/fiscal/fiscal.service.js';
 import * as ledger from '../pos/fiscal/ledger.js';
+import { getSale } from '../pos/sales.service.js';
 import { FiscalError } from '../pos/fiscal/errors.js';
 import {
   applyPosMigrations,
@@ -383,6 +384,47 @@ describe.skipIf(!hasDb)('POS fiscal ledger and reconciliation', () => {
     expect(after.status).toBe('done');
     expect(after.fiscal_code).toBe('FISCAL-LATE');
     expect((await saleRow(failed.json().sale_id)).fiscal_status).toBe('done');
+  });
+
+  // ── Provider-side offline (contract v2, CA4) ──────────────────────────────
+
+  it('records a document the provider registered in its own offline session', async () => {
+    // Cashalot answers `Offline: true` when the tax office was down: the
+    // number is final, the document reaches the tax office later.
+    await warm();
+    fake.nextMode = 'provider_offline';
+    const res = await sell();
+    expect(res.json().fiscal).toMatchObject({ status: 'done', mode: 'provider_offline' });
+
+    const row = (await rows())[0];
+    expect(row.status).toBe('done');
+    expect(row.mode).toBe('provider_offline');
+
+    // A re-read must not collapse it to `online` — the till would print
+    // «ОНЛАЙН» on a receipt the checkout called offline.
+    const reread = await getSale(store.storeId, Number(row.sale_id));
+    expect(reread?.fiscal?.mode).toBe('provider_offline');
+  });
+
+  it('never moves a row we stamped offline when its replay lands', async () => {
+    await warm();
+    await sell();
+    const row = (await rows())[0] as ledger.FiscalReceiptRow;
+    await pool.query(`UPDATE pos_fiscal_receipts SET mode = 'offline' WHERE id = $1`, [row.id]);
+
+    await ledger.markDone(row, {
+      providerDocId: 'doc-replayed',
+      fiscalCode: 'FISCAL-REPLAYED',
+      fiscalDate: new Date().toISOString(),
+      taxUrl: null,
+      qrPayload: null,
+      vatCents: null,
+      receiptText: null,
+      controlNumber: '1234',
+      mode: 'online',
+      raw: {},
+    });
+    expect((await rows())[0].mode).toBe('offline');
   });
 
   // ── Claim mechanics ───────────────────────────────────────────────────────

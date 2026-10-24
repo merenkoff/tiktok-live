@@ -91,6 +91,19 @@ describe('fiscal document mapping', () => {
       ]);
     });
 
+    it('carries the unit a line is counted in, only when the item names one', () => {
+      const base = sale();
+      const doc = buildSaleDoc({
+        requestId: 'r',
+        sale: { ...base, items: [{ ...base.items[0], unit: 'г' }, base.items[1]] },
+        tax: NO_TAX,
+      });
+      expect(doc.lines[0].unit).toBe('г');
+      // An item without a unit keeps the line exactly what it was before
+      // contract v2 — what lets stored payloads and the Checkbox adapter go on.
+      expect('unit' in doc.lines[1]).toBe(false);
+    });
+
     it('expresses whole units as thousandths', () => {
       const doc = buildSaleDoc({ requestId: 'r', sale: sale(), tax: NO_TAX });
       expect(doc.lines.map((l) => l.quantityMilli)).toEqual([2000, 1000]);
@@ -265,6 +278,24 @@ describe('fiscal document mapping', () => {
 
   describe('buildRefundDoc', () => {
     const original = sale();
+
+    it('takes the unit of a returned line from the sale item', () => {
+      const withUnit = { ...original, items: [{ ...original.items[0], unit: 'мл' }, original.items[1]] };
+      const doc = buildRefundDoc({
+        requestId: 'req-ru',
+        relatedProviderDocId: 'provider-doc-9',
+        sale: withUnit,
+        tax: NO_TAX,
+        refund: {
+          refund_number: 'RF-00002',
+          staff_name: 'Оля',
+          method: 'cash',
+          total_cents: 10000,
+          lines: [{ sale_item_id: 1, quantity: 1, amount_cents: 10000 }],
+        },
+      });
+      expect(doc.lines[0].unit).toBe('мл');
+    });
 
     it('maps a partial refund against the fiscalised sale', () => {
       const doc = buildRefundDoc({

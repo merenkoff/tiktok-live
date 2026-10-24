@@ -32,6 +32,8 @@ export interface SaleItemInput {
   unit_price_cents: number;
   line_total_cents: number;
   line_discount_cents: number;
+  /** `pos_sale_items.unit` — what `quantity` counts in. Optional: older callers and tests omit it. */
+  unit?: string;
 }
 
 export interface SalePaymentInput {
@@ -99,6 +101,16 @@ export function fiscalLineName(productName: string, variantLabel: string): strin
   return label ? `${name} (${label})` : name;
 }
 
+/**
+ * The line's unit, only when the sale item names one — an absent field keeps
+ * the line exactly what it was before contract v2, which is what lets the
+ * stored payloads and the Checkbox adapter go on unchanged.
+ */
+function unitOf(item: SaleItemInput): { unit?: string } {
+  const unit = item.unit?.trim();
+  return unit ? { unit } : {};
+}
+
 function resolveTaxCode(itemId: number, tax: TaxCodeResolution): string | null {
   const own = tax.byItemId[itemId];
   return (own ?? null) || tax.fallback;
@@ -146,6 +158,7 @@ export function buildSaleDoc(input: {
     barcode: codes?.byItemId?.[item.id] ?? null,
     uktzed: codes?.uktzedByItemId?.[item.id] ?? null,
     sourceLineRef: String(item.id),
+    ...unitOf(item),
   }));
 
   assertLinesMatchTotal(lines, sale.total_cents, 'sale');
@@ -237,6 +250,7 @@ export function buildRefundDoc(input: {
       barcode: codes?.byItemId?.[item.id] ?? null,
       uktzed: codes?.uktzedByItemId?.[item.id] ?? null,
       sourceLineRef: String(item.id),
+      ...unitOf(item),
     };
   });
 

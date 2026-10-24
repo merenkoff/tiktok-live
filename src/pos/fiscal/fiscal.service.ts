@@ -140,7 +140,8 @@ export interface FiscalGate {
 export interface FiscalView {
   /** `pending` = stamped offline; the provider confirms it on replay. */
   status: 'done' | 'failed' | 'pending';
-  mode: 'online' | 'offline';
+  /** `provider_offline` comes with `done`: the provider's own offline session, a final number. */
+  mode: ledger.FiscalDocMode;
   fiscal_code: string | null;
   fiscal_date: string | null;
   /** Контрольне число — offline documents get it from the provider on replay. */

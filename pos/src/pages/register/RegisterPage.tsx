@@ -908,14 +908,16 @@ export function RegisterPage() {
           {fiscalDoc?.fiscal_code && !fiscalNotice && (
             <div
               className={`mt-3 inline-flex items-center gap-2 px-3 py-2 rounded-sq text-sm ${
-                fiscalDoc.status === 'done' && fiscalDoc.mode !== 'offline'
+                fiscalDoc.status === 'done' &&
+                fiscalDoc.mode !== 'offline' &&
+                fiscalDoc.mode !== 'provider_offline'
                   ? 'bg-sq-success/10 text-sq-success-ink'
                   : 'bg-amber-50 text-amber-800'
               }`}
               data-testid="sale-fiscal"
             >
               <ShieldCheck size={24} />
-              {fiscalDoc.mode === 'offline'
+              {fiscalDoc.mode === 'offline' || fiscalDoc.mode === 'provider_offline'
                 ? `Фіскальний чек № ${fiscalDoc.fiscal_code} · офлайн`
                 : fiscalDoc.status === 'done'
                   ? `Фіскальний чек № ${fiscalDoc.fiscal_code} зареєстровано`

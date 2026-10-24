@@ -118,6 +118,20 @@ export async function rememberRequisites(
   await rememberRegisterFiscalNumber(storeId, requisites.register.fiscal_number);
 }
 
+/**
+ * Whether any shift of the store is live. Its own query rather than
+ * `getLiveShiftRow`: `shifts.service.ts` imports this file, so importing it
+ * back would be a cycle, and the hook needs only "is there one".
+ */
+async function hasLiveShift(storeId: number): Promise<boolean> {
+  const live = await pool.query(
+    `SELECT 1 FROM pos_fiscal_shifts
+     WHERE store_id = $1 AND status IN ('opening', 'open', 'closing') LIMIT 1`,
+    [storeId]
+  );
+  return live.rows.length > 0;
+}
+
 /** The row, or null when the store has never configured fiscalisation. */
 export async function getFiscalSettings(storeId: number): Promise<PosFiscalSettings | null> {
   const result = await pool.query(`SELECT * FROM pos_fiscal_settings WHERE store_id = $1`, [
@@ -303,7 +317,7 @@ export async function updateFiscalSettings(
     throw new FiscalSettingsValidationError('A provider must be selected before enabling');
   }
 
-  const config = patch.config === undefined ? (existing?.config ?? {}) : validateConfig(patch.config);
+  let config = patch.config === undefined ? (existing?.config ?? {}) : validateConfig(patch.config);
 
   let defaultTaxCode = existing?.default_tax_code ?? null;
   if (patch.default_tax_code !== undefined) {
@@ -369,6 +383,29 @@ export async function updateFiscalSettings(
       throw new FiscalSettingsValidationError(
         'Триває офлайн-сесія — дочекайтесь її завершення перед вимкненням офлайн-режиму'
       );
+    }
+  }
+
+  // The provider's own rules for its `config` (contract v2, phase CA4) — e.g.
+  // Cashalot's tax table, which must not change inside an open shift. Only
+  // when this save carries a config, and only for a provider this build has
+  // an adapter for: an id without one (`vchasno`) is stored exactly as before.
+  if (patch.config !== undefined && provider && hasProvider(provider)) {
+    const adapter = getProvider(provider);
+    if (adapter.normalizeConfig) {
+      const shiftOpen = await hasLiveShift(storeId);
+      try {
+        config = adapter.normalizeConfig(config, {
+          previous: providerChanged ? null : (existing?.config ?? null),
+          shiftOpen,
+        });
+      } catch (error) {
+        throw new FiscalSettingsValidationError(
+          error instanceof Error ? error.message : String(error)
+        );
+      }
+      // The hook may have grown it; the column's own limits still hold.
+      config = validateConfig(config);
     }
   }
 

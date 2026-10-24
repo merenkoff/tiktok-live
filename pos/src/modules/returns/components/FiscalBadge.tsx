@@ -38,7 +38,7 @@ export function FiscalBadge({
   status?: SaleFiscalStatus | string | null;
   mode?: SaleFiscalDoc['mode'];
 }) {
-  if (status === 'pending' && mode === 'offline') {
+  if ((status === 'pending' && mode === 'offline') || (status === 'done' && mode === 'provider_offline')) {
     return <Chip tone="warning">ПРРО: офлайн</Chip>;
   }
   const view = status ? FISCAL_UK[status] : undefined;
@@ -49,6 +49,18 @@ export function FiscalBadge({
 /** The fiscal document itself, on a receipt's detail panel. */
 export function FiscalDetailCard({ doc }: { doc?: SaleFiscalDoc | null }) {
   if (!doc) return null;
+
+  // Registered by the provider in its own offline session: the number is final,
+  // only the tax office has not received it yet — the provider sends it itself.
+  if (doc.status === 'done' && doc.mode === 'provider_offline') {
+    return (
+      <div className="mt-3 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <p className="font-semibold">Фіскальний чек · офлайн</p>
+        {doc.fiscal_code && <p className="mt-1 font-semibold select-all">{doc.fiscal_code}</p>}
+        <p className="mt-1">ПРРО надішле його в ДПС автоматично, щойно ДПС знову буде на звʼязку.</p>
+      </div>
+    );
+  }
 
   if (doc.status === 'done') {
     return (
