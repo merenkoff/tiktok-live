@@ -122,6 +122,8 @@ export const POS_MIGRATIONS = [
   '070_crm_leads.sql',
   // Cash totals rounded to 10 or 50 kopecks (НБУ № 25), the owner's setting; sales and refunds keep the rounding.
   '071_pos_cash_rounding.sql',
+  // A third fiscal ledger mode, `provider_offline`: the provider registered the document in its own offline session (ПРРО contract v2).
+  '072_pos_fiscal_receipts_provider_offline.sql',
 ] as const;
 
 export function readMigration(file: string): string {

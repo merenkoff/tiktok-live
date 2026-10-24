@@ -854,7 +854,13 @@ export interface SaleFiscalDoc {
   error_message: string | null;
 }
 
-export type FiscalDocMode = 'online' | 'offline';
+/**
+ * `offline` — stamped by us from the tax-office code reserve, confirmed on
+ * replay (`pending`); `provider_offline` — registered live, but in the
+ * provider's OWN offline session (Cashalot): `done`, a final number, reaches
+ * the tax office later. Both print «ОФЛАЙН».
+ */
+export type FiscalDocMode = 'online' | 'offline' | 'provider_offline';
 
 /** Owner-facing ПРРО settings. Credentials are reported by presence only. */
 export interface FiscalSettingsView {

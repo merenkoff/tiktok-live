@@ -189,6 +189,21 @@ describe('buildReceiptPayload — fiscal', () => {
     expect(payload.fiscal).toMatchObject({ offline: true, control_number: '9933' });
   });
 
+  it('marks «ОФЛАЙН» on a receipt the provider registered in its own offline session', () => {
+    // Contract v2: `done` with a final number, only the tax office has not
+    // seen it yet (Cashalot answers `Offline: true`) — Положення № 13 рядок 31
+    // wants the mark all the same, and the printer knows only two words.
+    const providerOffline = {
+      ...doneDoc,
+      mode: 'provider_offline' as const,
+      fiscal_code: '82563.25.6127',
+      control_number: '6127',
+    };
+    const payload = buildReceiptPayload(makeSaleDetail({ fiscal: providerOffline }), DEMO);
+    expect(payload.fiscal).toMatchObject({ fiscal_code: '82563.25.6127', offline: true, mode: 'offline' });
+    expect(fiscalBlockComplete(providerOffline)).toBe(true);
+  });
+
   it('does not mark an ordinary online receipt as offline', () => {
     const payload = buildReceiptPayload(makeSaleDetail({ fiscal: doneDoc }), DEMO);
     expect(payload.fiscal?.offline).toBe(false);

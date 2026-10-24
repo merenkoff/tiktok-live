@@ -117,7 +117,10 @@ function fiscalParts(
   if (!doc || !doc.fiscal_code || !isPrintableFiscalDoc(doc)) {
     return { provider_text: null, fiscal: null };
   }
-  const offline = doc.mode === 'offline';
+  // Ours from the reserve, or the provider's own offline session: both are
+  // receipts the tax office has not seen yet, and Положення № 13 рядок 31
+  // wants «ОФЛАЙН» on either. The printer only knows the two words.
+  const offline = doc.mode === 'offline' || doc.mode === 'provider_offline';
   return {
     // An offline document never has provider text — there was no provider call
     // to fetch it from — so this falls back to our layout by construction.

@@ -207,6 +207,12 @@ export interface FiscalCredentials {
  * never looks inside it.
  */
 export interface FiscalSession {
+  /**
+   * An empty string means the provider has no session at all: Cashalot's WEB
+   * API carries the credentials in every request, so its `signIn` only checks
+   * them (TechDocs/prro/cashalot/POS_FISCAL_CASHALOT.md §4.2 п. 1). Nothing in
+   * the generic layer reads `token`, only `expiresAt`.
+   */
   token: string;
   expiresAt: Date | null;
   meta?: Record<string, unknown>;
@@ -235,6 +241,14 @@ export interface FiscalDocLine {
   uktzed: string | null;
   /** Our sale-item id, so a return line can be traced back to what it undoes. */
   sourceLineRef: string | null;
+  /**
+   * The unit `quantityMilli` counts in — `pos_sale_items.unit` (`шт`, `г`,
+   * `мл`). Optional: a document stored before contract v2 has none, and
+   * `retryOne` re-sends such payloads verbatim, so an adapter must cope with
+   * its absence (a ДПС provider then sends no unit fields at all). Checkbox
+   * does not read it.
+   */
+  unit?: string;
 }
 
 export interface FiscalDocPayment {
@@ -264,6 +278,11 @@ interface FiscalDocBase {
    * document id (Checkbox: `ReceiptSellPayload.id`, "Обов'язково вкажіть
    * унікальний UUID чеку"). This is what lets a timed-out retry come back as
    * `duplicate` instead of fiscalising the same sale twice.
+   *
+   * For a ДПС-format provider (Cashalot) it is the `UID` in the ROOT of the
+   * request, by which the provider refuses a repeat (`DuplicatedRequestUid`)
+   * — not `CHECKHEAD.UID`; there the adapter finds the existing document's
+   * number itself for `existingProviderDocId`.
    */
   requestId: string;
   /** Our receipt number, e.g. `R-00042`. Informational for the provider. */
@@ -338,8 +357,27 @@ export interface FiscalResult {
    * never trusted over it — see `noteRoundingMismatch` in fiscal.service.ts.
    */
   roundingCents?: number | null;
+  /**
+   * `provider_offline`: the PROVIDER registered the document in its own
+   * offline session (Cashalot does this by itself when the tax office is
+   * down) — the fiscal number is final, the document reaches the tax office
+   * later, and the paper must say «ОФЛАЙН». Absent means online; Checkbox never
+   * sets it, because its offline documents are ours (`registerSaleOffline`)
+   * and already carry `mode = 'offline'` on the ledger row.
+   */
+  mode?: FiscalResultMode;
   /** Stored verbatim in `pos_fiscal_receipts.response_payload` for support. */
   raw: unknown;
+}
+
+export type FiscalResultMode = 'online' | 'provider_offline';
+
+/** What `normalizeConfig` is told besides the new config. */
+export interface FiscalConfigContext {
+  /** The config stored before this save, or null when the provider changes with it. */
+  previous: Readonly<Record<string, unknown>> | null;
+  /** Whether a shift is live for the store (`pos_fiscal_shifts` opening/open/closing). */
+  shiftOpen: boolean;
 }
 
 export type FiscalShiftStatus = 'open' | 'closed';
@@ -461,6 +499,18 @@ export interface FiscalProvider {
    * `requestId`, so we fetch what it made instead of sending it again.
    */
   fetchDocument(ctx: FiscalCallCtx, providerDocId: string): Promise<FiscalResult | null>;
+
+  /**
+   * Optional: check and normalise the provider's own `config` before the
+   * owner's save is stored — e.g. Cashalot's tax table, which must not change
+   * inside an open shift (TechDocs/prro/cashalot/POS_FISCAL_CASHALOT.md §4.2
+   * п. 4). Called only when the save carries `config`; a throw becomes a 400
+   * with the thrown message, so it must be written for the owner.
+   */
+  normalizeConfig?(
+    next: Readonly<Record<string, unknown>>,
+    ctx: FiscalConfigContext
+  ): Record<string, unknown>;
 
   /**
    * Optional: only some providers render receipts for us.

@@ -1104,7 +1104,13 @@ function fiscalViewFromRow(fiscal: Record<string, unknown> | null) {
   if (!fiscal) return null;
   return {
     status: fiscal.status as string,
-    mode: fiscal.mode === 'offline' ? ('offline' as const) : ('online' as const),
+    // Three values since contract v2 — collapsing `provider_offline` into
+    // `online` would have a re-read sale print «ОНЛАЙН» on a receipt the
+    // checkout answer called offline.
+    mode:
+      fiscal.mode === 'offline' || fiscal.mode === 'provider_offline'
+        ? (fiscal.mode as 'offline' | 'provider_offline')
+        : ('online' as const),
     control_number: (fiscal.control_number as string | null) ?? null,
     fiscal_code: (fiscal.fiscal_code as string | null) ?? null,
     fiscal_date: fiscal.fiscal_date

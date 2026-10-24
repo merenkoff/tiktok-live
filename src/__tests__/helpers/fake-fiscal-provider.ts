@@ -34,6 +34,7 @@ import type {
   FiscalOfflineOps,
   OfflineCode,
   OfflineStamp,
+  FiscalResultMode,
 } from '../../pos/fiscal/types.js';
 
 /** What a demo Checkbox account looks like to the receipt header. */
@@ -224,6 +225,13 @@ export class FakeFiscalProvider implements FiscalProvider {
    * done leaves that document done.
    */
   renderError: FiscalErrorKind | null = null;
+  /**
+   * The next registered document comes back with this `FiscalResult.mode`
+   * (contract v2) — `provider_offline` is what a provider answers when it
+   * registered the document in its own offline session. One-shot; null by
+   * default, so every older test sees exactly the result it always did.
+   */
+  nextMode: FiscalResultMode | null = null;
 
   /** Present only when constructed with `offline: true`. */
   readonly offline?: FakeOfflineOps;
@@ -263,6 +271,7 @@ export class FakeFiscalProvider implements FiscalProvider {
     this.signInCount = 0;
     this.signInError = null;
     this.renderError = null;
+    this.nextMode = null;
     this.seq = 0;
   }
 
@@ -399,6 +408,9 @@ export class FakeFiscalProvider implements FiscalProvider {
       controlNumber: null,
       raw: { fake: true, requestId: doc.requestId },
     };
+    const mode = this.nextMode;
+    this.nextMode = null;
+    if (mode) result.mode = mode;
     this.documents.set(doc.requestId, result);
     return result;
   }

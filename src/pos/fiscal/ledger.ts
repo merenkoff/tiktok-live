@@ -40,8 +40,14 @@ const MAX_BACKOFF_SEC = 900;
 
 export type FiscalDocType = 'sale' | 'refund' | 'service_in' | 'service_out';
 export type FiscalLedgerStatus = 'pending' | 'sent' | 'done' | 'failed' | 'abandoned';
-/** `online` = sent live; `offline` = stamped with a tax-office code, sent on session replay. */
-export type FiscalDocMode = 'online' | 'offline';
+/**
+ * `online` = sent live; `offline` = stamped with a tax-office code by US, sent
+ * on session replay; `provider_offline` = sent live, but the PROVIDER
+ * registered it in its own offline session (Cashalot, when the tax office is
+ * down) — always `done`, never claimed by the retry pass or a session replay.
+ * Migration 072 widened the column and its CHECK for it.
+ */
+export type FiscalDocMode = 'online' | 'offline' | 'provider_offline';
 
 /** The projection's vocabulary — deliberately smaller than the ledger's. */
 export type FiscalProjection = 'none' | 'pending' | 'done' | 'failed';
@@ -322,6 +328,10 @@ export async function markDone(
          vat_cents = $8,
          response_payload = $9::jsonb,
          control_number = COALESCE($10, control_number),
+         -- Only a provider-side offline registration moves the mode; anything
+         -- else leaves it, so a row we stamped offline stays 'offline' after
+         -- its replay lands.
+         mode = CASE WHEN $11::text = 'provider_offline' THEN 'provider_offline' ELSE mode END,
          next_attempt_at = NULL,
          error_code = NULL,
          error_message = NULL,
@@ -339,6 +349,7 @@ export async function markDone(
         result.vatCents,
         JSON.stringify(result.raw ?? null),
         result.controlNumber ?? null,
+        result.mode ?? null,
       ]
     );
     await setProjection(client, row, 'done');

@@ -11,11 +11,14 @@
 // appear in a response body, must be stored as ciphertext, and must not be
 // readable by a seller. See TechDocs/prro/POS_FISCAL_PRRO.md.
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { pool } from '../db.js';
 import { generateSecretsKey } from '../pos/core/secrets.js';
+import { registerProvider, resetProviders } from '../pos/fiscal/providers/index.js';
 import { getFiscalCredentials } from '../pos/fiscal/settings.service.js';
+import type { FiscalConfigContext, FiscalProvider } from '../pos/fiscal/types.js';
+import { FakeFiscalProvider } from './helpers/fake-fiscal-provider.js';
 import {
   applyPosMigrations,
   auth,
@@ -370,5 +373,101 @@ describe.skipIf(!hasDb)('POS fiscal settings', () => {
     } finally {
       await dropTestStore(other.storeId);
     }
+  });
+});
+
+// ── The provider's own config rules (contract v2, phase CA4) ─────────────────
+//
+// `normalizeConfig` is how an adapter refuses a config it cannot work with —
+// Cashalot's tax table must not change inside an open shift — or stores it in
+// a canonical form. Its own store, so the shift row it needs cannot leak into
+// the suite above.
+describe.skipIf(!hasDb)('POS fiscal settings — the provider config hook', () => {
+  let app: FastifyInstance;
+  let store: TestStore;
+  let previousKey: string | undefined;
+  const seen: FiscalConfigContext[] = [];
+
+  beforeAll(async () => {
+    previousKey = process.env.POS_SECRETS_KEY;
+    process.env.POS_SECRETS_KEY = generateSecretsKey();
+    await applyPosMigrations();
+    store = await createTestStore('rfcfghook');
+    app = await buildPosTestApp();
+  }, 120000);
+
+  afterEach(() => {
+    resetProviders();
+    seen.length = 0;
+  });
+
+  afterAll(async () => {
+    await app?.close();
+    await dropTestStore(store?.storeId);
+    if (previousKey === undefined) delete process.env.POS_SECRETS_KEY;
+    else process.env.POS_SECRETS_KEY = previousKey;
+  });
+
+  /** A provider under an id with no built-in adapter, so nothing else answers for it. */
+  const install = (normalize: FiscalProvider['normalizeConfig']) => {
+    const provider: FiscalProvider = Object.assign(new FakeFiscalProvider({ id: 'vchasno' }), {
+      normalizeConfig: (next: Readonly<Record<string, unknown>>, ctx: FiscalConfigContext) => {
+        seen.push(ctx);
+        return normalize!(next, ctx);
+      },
+    });
+    registerProvider(provider);
+  };
+
+  const patch = (payload: unknown) =>
+    app.inject({
+      method: 'PATCH',
+      url: '/api/pos/fiscal/settings',
+      headers: auth(store.ownerToken),
+      payload: payload as Record<string, unknown>,
+    });
+
+  const storedConfig = async () =>
+    (await pool.query(`SELECT config FROM pos_fiscal_settings WHERE store_id = $1`, [store.storeId]))
+      .rows[0]?.config;
+
+  it('stores what the hook returns and tells it the previous config', async () => {
+    install((next) => ({ ...next, normalized: true }));
+
+    expect((await patch({ provider: 'vchasno', config: { a: 1 } })).statusCode).toBe(200);
+    expect(await storedConfig()).toEqual({ a: 1, normalized: true });
+
+    expect((await patch({ config: { a: 2 } })).statusCode).toBe(200);
+    expect(seen[1].previous).toEqual({ a: 1, normalized: true });
+    expect(seen[1].shiftOpen).toBe(false);
+  });
+
+  it('turns the hook refusal into a 400 with its own words', async () => {
+    install(() => {
+      throw new Error('Ставки податку не можна змінювати у відкритій зміні');
+    });
+    const res = await patch({ provider: 'vchasno', config: { taxes: [] } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe('Ставки податку не можна змінювати у відкритій зміні');
+  });
+
+  it('tells the hook when a shift is live', async () => {
+    install((next) => ({ ...next }));
+    await pool.query(
+      `INSERT INTO pos_fiscal_shifts (store_id, provider, status, opened_at) VALUES ($1, 'vchasno', 'open', NOW())`,
+      [store.storeId]
+    );
+    try {
+      expect((await patch({ provider: 'vchasno', config: { b: 1 } })).statusCode).toBe(200);
+      expect(seen.at(-1)?.shiftOpen).toBe(true);
+    } finally {
+      await pool.query(`DELETE FROM pos_fiscal_shifts WHERE store_id = $1`, [store.storeId]);
+    }
+  });
+
+  it('is not called when the save carries no config', async () => {
+    install((next) => ({ ...next }));
+    expect((await patch({ provider: 'vchasno', auto_open_shift: false })).statusCode).toBe(200);
+    expect(seen).toHaveLength(0);
   });
 });

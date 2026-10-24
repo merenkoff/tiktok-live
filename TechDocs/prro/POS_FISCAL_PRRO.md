@@ -349,13 +349,19 @@ ALTER TABLE pos_products ADD COLUMN fiscal_uktzed VARCHAR(32);  -- зарезе�
 `src/pos/fiscal/types.ts`. Спроектирован против всех трёх провайдеров, не под
 Checkbox.
 
-> **Контракт v2 (трек Cashalot, 2026-10-21).** Что генерический слой на деле
-> требует от адаптера и какие обратно совместимые добавки нужны второму
-> провайдеру (`normalizeConfig`, `FiscalResult.mode = 'provider_offline'`,
-> `FiscalDocLine.unit`; `findByRequestId` выпал 2026-10-24 — Cashalot сам
-> отклоняет повтор `UID`) — в
-> [cashalot/POS_FISCAL_CASHALOT.md](cashalot/POS_FISCAL_CASHALOT.md) §4.1 и §4.3.
-> Ставится в фазе CA4; до неё код ниже — актуальный.
+> **Контракт v2 поставлен (трек Cashalot, фаза CA4, 2026-10-24).** Четыре
+> обратно совместимые добавки, Checkbox их не замечает:
+> `FiscalDocLine.unit?` (единица строки из `pos_sale_items.unit`; у документов,
+> сохранённых раньше, её нет); `FiscalResult.mode?: 'online' | 'provider_offline'`
+> (провайдер сам зарегистрировал документ в своей офлайн-сессии — строка
+> журнала становится `done` + `provider_offline`, миграция `072` расширила
+> колонку и CHECK, касса печатает «ОФЛАЙН»); `FiscalProvider.normalizeConfig?(next,
+> { previous, shiftOpen })` (адаптер проверяет свой `config` при сохранении
+> владельцем, отказ — 400 его словами); JSDoc у `FiscalSession.token` и
+> `requestId`. `findByRequestId` выпал 2026-10-24 — Cashalot сам отклоняет
+> повтор `UID`. Что генерический слой требует от адаптера — в
+> [cashalot/POS_FISCAL_CASHALOT.md](cashalot/POS_FISCAL_CASHALOT.md) §4.1;
+> блок кода ниже — исходная форма v1, актуальный контракт — `src/pos/fiscal/types.ts`.
 
 ```ts
 export interface FiscalProvider {

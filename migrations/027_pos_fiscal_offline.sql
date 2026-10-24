@@ -111,10 +111,13 @@ ALTER TABLE pos_fiscal_receipts
     ADD COLUMN IF NOT EXISTS offline_seq INTEGER,
     ADD COLUMN IF NOT EXISTS control_number TEXT;
 
+-- The same three values as 072, which widened the column for the third: this
+-- file runs first on every boot, and a narrower CHECK here would refuse the
+-- first `provider_offline` row on the next restart.
 ALTER TABLE pos_fiscal_receipts
     DROP CONSTRAINT IF EXISTS pos_fiscal_receipts_mode_check;
 ALTER TABLE pos_fiscal_receipts
-    ADD CONSTRAINT pos_fiscal_receipts_mode_check CHECK (mode IN ('online', 'offline'));
+    ADD CONSTRAINT pos_fiscal_receipts_mode_check CHECK (mode IN ('online', 'offline', 'provider_offline'));
 
 CREATE INDEX IF NOT EXISTS idx_pos_fiscal_receipts_offline_session
     ON pos_fiscal_receipts (offline_session_id, offline_seq)

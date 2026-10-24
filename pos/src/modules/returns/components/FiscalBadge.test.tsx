@@ -40,6 +40,31 @@ describe('FiscalBadge', () => {
     ).toMatch(/реєструється/);
   });
 
+  it('calls a receipt the provider registered offline «офлайн», not plain «ПРРО»', () => {
+    // `done` + `provider_offline`: the number is final, the tax office has not
+    // received it yet — the cashier should read the same word as for ours.
+    expect(
+      render(<FiscalBadge status="done" mode="provider_offline" />).container.textContent
+    ).toMatch(/офлайн/);
+    render(
+      <FiscalDetailCard
+        doc={{
+          status: 'done',
+          mode: 'provider_offline',
+          fiscal_code: '82563.25.6127',
+          fiscal_date: null,
+          tax_url: null,
+          qr_payload: null,
+          receipt_text: null,
+          control_number: '6127',
+          error_code: null,
+          error_message: null,
+        }}
+      />
+    );
+    expect(screen.getByText(/надішле його в ДПС автоматично/)).toBeInTheDocument();
+  });
+
   it('marks the three real states', () => {
     expect(render(<FiscalBadge status="done" />).container.textContent).toBe('ПРРО');
     expect(render(<FiscalBadge status="pending" />).container.textContent).toMatch(/реєструється/);
