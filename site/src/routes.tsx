@@ -60,6 +60,13 @@ for (const { fact, content } of VERTICAL_PAGES) {
     if (row.roadmap && !roadmapFor(fact.id).some((item) => item.id === row.roadmap)) {
       throw new Error(`routes: ${content.id} row «${row.title}» promises the unknown roadmap item ${row.roadmap}`);
     }
+    // A headline says the feature works today; a roadmap item says it does not.
+    if (row.headline && row.roadmap) {
+      throw new Error(`routes: ${content.id} row «${row.title}» is both the working headline and a promise`);
+    }
+  }
+  if (content.rows.filter((row) => row.headline).length > 1) {
+    throw new Error(`routes: ${content.id} has more than one headline row`);
   }
 }
 

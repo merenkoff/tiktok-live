@@ -15,7 +15,18 @@ import { Readiness, Roadmap } from '../components/Roadmap';
 import { useScrollToHash } from '../hooks/useScrollToHash';
 import { PRICING, roadmapFor } from '../lib/productFacts';
 import type { VerticalPageData, VerticalRow } from '../content/verticals';
-import { BarChart3, Check, ChevronRight, MessageCircle, Package, QrCode, ShieldCheck, Users, WifiOff } from '../components/glyphs';
+import {
+  BarChart3,
+  Check,
+  ChevronRight,
+  ClipboardCheck,
+  MessageCircle,
+  Package,
+  QrCode,
+  ShieldCheck,
+  Users,
+  WifiOff,
+} from '../components/glyphs';
 import { CTA } from '../lib/ctaIds';
 import type { LeadProduct } from '../hooks/useLeadSubmit';
 
@@ -32,7 +43,9 @@ const CORE = [
 /**
  * A row of a «Скоро» landing that is a promise: no ✓ (a tick says it works),
  * hollow bullets, its readiness from ROADMAP. The first one is the vertical's
- * headline feature and gets the full width.
+ * headline feature and gets the full width — when that leaves the rest in
+ * pairs; an even number of promises (say, two, once the headline itself
+ * works) sit side by side instead of leaving half a row empty.
  */
 function PromiseCard({ row, progress, wide }: { row: VerticalRow; progress: number; wide: boolean }) {
   return (
@@ -66,6 +79,43 @@ function PromiseCard({ row, progress, wide }: { row: VerticalRow; progress: numb
   );
 }
 
+/**
+ * The headline feature of a «Скоро» landing once it works: the same wide card
+ * as the first promise, but with ✓ and «Уже працює» where the promise has
+ * hollow bullets, «Скоро» and a readiness bar.
+ */
+function HeadlineCard({ row }: { row: VerticalRow }) {
+  return (
+    <Reveal>
+      <article className="card p-6 sm:p-8 lg:grid lg:grid-cols-2 lg:gap-12">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <p className="eyebrow text-pos">{row.eyebrow}</p>
+            <span className="text-xs font-semibold text-pos bg-side rounded-full px-2.5 py-1">Уже працює</span>
+          </div>
+          <h3 className="text-2xl sm:text-3xl font-bold tracking-[-0.015em] text-ink-strong mt-2">{row.title}</h3>
+          <p className="text-body mt-4 leading-relaxed">{row.body}</p>
+          {row.link && (
+            <a href={row.link.href} className="link-more text-[17px] mt-6">
+              {row.link.label} <ChevronRight size={20} />
+            </a>
+          )}
+        </div>
+        {row.bullets && (
+          <ul className="mt-6 lg:mt-0 space-y-2.5">
+            {row.bullets.map((b) => (
+              <li key={b} className="flex items-start gap-2 text-[15px] text-body leading-snug">
+                <Check size={20} className="shrink-0 text-pos" />
+                {b}
+              </li>
+            ))}
+          </ul>
+        )}
+      </article>
+    </Reveal>
+  );
+}
+
 export function VerticalPage({ page }: { page: VerticalPageData }) {
   const { fact, content } = page;
   const Mark = VERTICAL_GLYPH[fact.id];
@@ -78,7 +128,10 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
   const coming = fact.status === 'coming';
   const roadmap = roadmapFor(fact.id);
   const promises = content.rows.filter((row) => row.roadmap);
-  const today = content.rows.filter((row) => !row.roadmap);
+  // The headline feature that already works opens a «Скоро» page rather than
+  // joining the band of what works today further down.
+  const headline = coming ? content.rows.find((row) => row.headline && !row.roadmap) : undefined;
+  const today = content.rows.filter((row) => !row.roadmap && row !== headline);
   const promised = new Set(promises.map((row) => row.roadmap));
   const progressOf = (id: string | undefined) => roadmap.find((item) => item.id === id)?.progress ?? 0;
   const cta = content.cta ?? {
@@ -130,7 +183,7 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
             </div>
             <p className="text-sm text-muted mt-5">
               {coming
-                ? `Вертикаль у розробці. Сама каса вже є: ${PRICING.pos.label.toLowerCase()}.`
+                ? (content.comingNote ?? `Вертикаль у розробці. Сама каса вже є: ${PRICING.pos.label.toLowerCase()}.`)
                 : `${PRICING.pos.label}.`}
             </p>
             {content.demoLink && (
@@ -215,7 +268,23 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
           </section>
         )}
 
-        {/* Promises — what a «Скоро» landing is about, its headline feature first */}
+        {/* The headline feature, once it works — a «Скоро» landing is still about it */}
+        {headline?.headline && (
+          <section className="max-w-6xl mx-auto px-6 pb-20">
+            <Reveal>
+              <SectionHeading
+                icon={<ClipboardCheck size={48} />}
+                title={headline.headline.heading}
+                lede={headline.headline.lede}
+              />
+            </Reveal>
+            <div className="mt-12">
+              <HeadlineCard row={headline} />
+            </div>
+          </section>
+        )}
+
+        {/* Promises — what a «Скоро» landing is about, its headline feature first unless that one already works (above) */}
         {promises.length > 0 && (
           <section className="max-w-6xl mx-auto px-6 pb-4">
             <Reveal>
@@ -227,7 +296,12 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
             </Reveal>
             <div className="mt-12 grid lg:grid-cols-2 gap-6">
               {promises.map((row, i) => (
-                <PromiseCard key={row.title} row={row} progress={progressOf(row.roadmap)} wide={i === 0} />
+                <PromiseCard
+                  key={row.title}
+                  row={row}
+                  progress={progressOf(row.roadmap)}
+                  wide={i === 0 && promises.length % 2 === 1}
+                />
               ))}
             </div>
           </section>
@@ -407,7 +481,7 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
           <CTAForm
             id="cta"
             formId={`vertical-${fact.slug}`}
-            intent={coming ? 'waitlist' : 'demo'}
+            intent={content.cta?.intent ?? (coming ? 'waitlist' : 'demo')}
             product={fact.slug as LeadProduct}
             accent="pos"
             heading={cta.heading}

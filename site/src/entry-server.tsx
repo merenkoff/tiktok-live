@@ -109,12 +109,14 @@ export function buildLlmsTxt(pages: LlmsPage[]): string {
     `- ${restoapp.name} (${restoapp.vendor}) для порівняння (станом на ${restoapp.checkedAt}): QR-меню в залі, меню на Google Maps і в соцмережах, оплата й чайові в телефоні, замовлення без офіціанта, виклик офіціанта, доставка, з собою, відгуки, аналітика замовлень; з касових програм названо ${restoapp.posIntegrations.join(', ')}; ${restoapp.priceUah} грн/міс за заклад, +${restoapp.giftMonths} місяці в подарунок при підключенні першого, −${restoapp.diiaDiscountPercent} % за промокодом Diia; фіскальний чек ПРРО, склад і техкарти на сторінках не згадано. Джерела: ${restoapp.sources.site}, ${restoapp.sources.diia}. Різниця з ${PRODUCT.pos.name}: ${SITE_URL}/dovidka/restoapp-chy-liveshop-dlya-restoranu.`,
     `- ${posterqr.name} (${posterqr.vendor}) для порівняння (станом на ${posterqr.checkedAt}): доповнення до каси Poster POS — QR-меню, оплата за столиком, чайові й відгуки; ${posterqr.priceUah} грн/міс, комісія ${String(posterqr.billCommissionPercent).replace('.', ',')} % з рахунку і ${String(posterqr.tipsCommissionPercent).replace('.', ',')} % з чайових; підключається з тарифу ${posterqr.posPlans.find((p) => p.qrAddon)?.id}; тарифи Poster для кафе й ресторанів: ${posterqr.posPlans.map((p) => `${p.id} ${p.monthlyUah} грн/міс (${p.annualUah} при оплаті за рік)`).join(', ')}; ПРРО — ${posterqr.prroUah} грн/міс за касу; замовлення страв зі столу на сторінці Poster QR не згадано, виклик офіціанта — теж. Джерела: ${posterqr.sources.page}, ${posterqr.sources.pricing}. Різниця з ${PRODUCT.pos.name}: ${SITE_URL}/dovidka/poster-qr-chy-liveshop-dlya-restoranu.`,
     '',
-    // Not sold yet: the section says so before anything else, and the list
-    // marks every planned line «у планах», so nothing here reads as a feature.
+    // Not sold yet as a vertical: the section says so before anything else,
+    // and the list marks every planned line «у планах», so nothing here reads
+    // as a feature — except what has shipped ahead of it («під запис», which
+    // works in any store and is listed without the mark).
     '## Каса для продуктового магазину (у розробці)',
     '',
     grocery
-      ? `- ${PRODUCT.pos.name} для продуктового магазину (${SITE_URL}${grocery.path}): ${grocery.tagline} Ще не продається; рядки без позначки «у планах» — те, що каса вміє вже сьогодні.`
+      ? `- ${PRODUCT.pos.name} для продуктового магазину (${SITE_URL}${grocery.path}): ${grocery.tagline} Як окрема вертикаль ще не продається; рядки без позначки «у планах» — те, що каса вміє вже сьогодні.`
       : '',
     grocery ? features(grocery.featureIds) : '',
     ...ROADMAP.filter((item) => item.vertical === 'grocery').map(

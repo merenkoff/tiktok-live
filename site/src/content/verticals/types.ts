@@ -1,6 +1,7 @@
 import type { FaqItem } from '../../lib/faqJsonLd';
 import type { VerticalId } from '../../lib/productFacts';
 import type { Glyph } from '../../components/glyphs';
+import type { LeadIntent } from '../../hooks/useLeadSubmit';
 
 export interface Shot {
   src: string;
@@ -28,6 +29,16 @@ export interface VerticalRow {
    * promised twice. routes.tsx checks the item exists for this vertical.
    */
   roadmap?: string;
+  /**
+   * On a «Скоро» landing: the vertical's headline feature once it works. The
+   * page then opens with it — a heading of its own and one wide card with ✓
+   * right under the answer-first block — instead of moving it down into the
+   * «Що вже працює сьогодні» band, so a page built around one feature stays
+   * built around it after that feature ships. Never together with `roadmap`,
+   * and on one row at most (routes.tsx checks both); a working vertical's
+   * landing ignores it.
+   */
+  headline?: { heading: string; lede: string };
 }
 
 /**
@@ -83,8 +94,14 @@ export interface VerticalContent {
   guide?: { slug: string; label: string };
   /** «Читайте також»: the articles that answer this business's search questions. */
   articles?: VerticalArticleLink[];
-  /** The closing form's words, when «Готові підключити касу?» does not fit: a «Скоро» landing collects a waiting list. */
-  cta?: { heading: string; subheading: string; button: string };
+  /**
+   * The closing form's words, when «Готові підключити касу?» does not fit: a
+   * «Скоро» landing collects a waiting list, so its lead is a `waitlist` unless
+   * `intent` says otherwise — e.g. once its headline feature can be connected.
+   */
+  cta?: { heading: string; subheading: string; button: string; intent?: LeadIntent };
+  /** A «Скоро» landing's small print under the hero buttons, when the default («Вертикаль у розробці…») would leave out what already works. */
+  comingNote?: string;
   /** The «Скоро» cards' subtitle, when the default (they come with the launch tariff) is not a promise this page makes. */
   roadmapLede?: string;
   updatedAt: string;
