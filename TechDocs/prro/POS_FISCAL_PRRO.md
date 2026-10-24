@@ -351,7 +351,8 @@ Checkbox.
 > **Контракт v2 (трек Cashalot, 2026-10-21).** Что генерический слой на деле
 > требует от адаптера и какие обратно совместимые добавки нужны второму
 > провайдеру (`normalizeConfig`, `FiscalResult.mode = 'provider_offline'`,
-> `FiscalDocLine.unit`, при необходимости `findByRequestId`) — в
+> `FiscalDocLine.unit`; `findByRequestId` выпал 2026-10-24 — Cashalot сам
+> отклоняет повтор `UID`) — в
 > [cashalot/POS_FISCAL_CASHALOT.md](cashalot/POS_FISCAL_CASHALOT.md) §4.1 и §4.3.
 > Ставится в фазе CA4; до неё код ниже — актуальный.
 
