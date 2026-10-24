@@ -1,0 +1,64 @@
+// The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+// Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+// Commercial use requires a separate agreement: mer.sergei@gmail.com
+
+// Builds `src/modules/debts` as a standalone ESM remote (grocery phase Г3,
+// TechDocs/grocery/G3_DEBTS.md §5). react / react-router-dom / react-dom /
+// zustand / @pos/platform are external — the host supplies them via its
+// import map. Output: dist-remotes/debts/remote-entry.js
+//
+//   npm run build:debts-remote
+
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { posAppVersion } from './scripts/pkg-version.mjs';
+import { moduleCss } from './scripts/module-tailwind.mjs';
+
+const dir = path.dirname(fileURLToPath(import.meta.url));
+
+export default defineConfig({
+  plugins: [react()],
+  // `public/` is the tablet PWA's manifest and icons — the web host's, never a remote's.
+  publicDir: false,
+  // Only this module's source plus the shared page frame (`components/ui/**`,
+  // added by `moduleCss` itself): the module renders no other host component
+  // inline. `check:debts-css-coverage` names the same files.
+  css: moduleCss('debts'),
+  define: {
+    'process.env.NODE_ENV': '"production"',
+    // This remote's own build version — see roadmap #6.
+    __POS_APP_VERSION__: JSON.stringify(posAppVersion()),
+  },
+  resolve: {
+    alias: {
+      // Bundled locally, like every other remote: `@pos/platform/ui` re-exports
+      // components, not singletons. The stores they read come from the shared,
+      // externalised `@pos/platform` below.
+      '@pos/platform/ui': path.resolve(dir, 'src/platform/ui.ts'),
+    },
+  },
+  build: {
+    outDir: 'dist-remotes/debts',
+    emptyOutDir: true,
+    target: 'es2020',
+    lib: {
+      entry: path.resolve(dir, 'src/modules/debts/remote-entry.ts'),
+      formats: ['es'],
+      fileName: () => 'remote-entry.js',
+    },
+    rollupOptions: {
+      output: { assetFileNames: 'style.css' },
+      external: [
+        'react',
+        'react-dom',
+        'react-dom/client',
+        'react/jsx-runtime',
+        'react-router-dom',
+        'zustand',
+        '@pos/platform',
+      ],
+    },
+  },
+});
