@@ -33,7 +33,14 @@ export function hasAssembledLine(lines: readonly CartLine[]): boolean {
   return lines.some((line) => (line.components?.length ?? 0) > 0);
 }
 
-export type IssueBlockCode = 'no_customer' | 'offline' | 'no_credit' | 'locked' | 'assembled' | 'over_limit';
+export type IssueBlockCode =
+  | 'no_customer'
+  | 'offline'
+  | 'no_mirror'
+  | 'no_credit'
+  | 'locked'
+  | 'assembled'
+  | 'over_limit';
 
 export interface IssueBlock {
   code: IssueBlockCode;
@@ -45,6 +52,11 @@ export interface IssueBlock {
  * null when it can — or when the credit is still loading, because a button
  * that greys and un-greys on every customer change is worse than one refusal
  * from the server.
+ *
+ * Without a network the desktop till (`queue`) still writes a handover down,
+ * and judges it by its mirror exactly as the server would judge it online —
+ * decision Д3 does not lapse because the cable did. What it cannot do is
+ * judge a customer it has never heard about (`noMirror`): then it refuses.
  */
 export function issueBlock(input: {
   customerId: number | null;
@@ -52,17 +64,34 @@ export function issueBlock(input: {
   totalCents: number;
   lines: readonly CartLine[];
   online: boolean;
+  /** This till keeps a queue of handovers written down without a network (the desktop). */
+  queue?: boolean;
+  /** Offline, and the till never had the list of who may take credit. */
+  noMirror?: boolean;
 }): IssueBlock | null {
   if (input.customerId == null) {
     return { code: 'no_customer', text: 'Оберіть покупця — під запис записують на людину' };
   }
-  if (!input.online) {
+  if (!input.online && !input.queue) {
     return { code: 'offline', text: 'Під запис — лише з мережею' };
   }
   if (hasAssembledLine(input.lines)) {
     return {
       code: 'assembled',
       text: 'Букет, зібраний на касі, під запис не записується — продайте його або запишіть готовий букет з каталогу',
+    };
+  }
+  if (!input.online && input.noMirror) {
+    return {
+      code: 'no_mirror',
+      text: 'Без мережі каса не знає, кому можна під запис: вона ще жодного разу не отримала ліміти покупців. Потрібна мережа.',
+    };
+  }
+  // A customer this till created offline is not on the server yet — and no owner has given them a limit.
+  if (input.customerId < 0) {
+    return {
+      code: 'no_credit',
+      text: 'Цьому покупцеві під запис не дозволено. Ліміт ставить власник у картці покупця.',
     };
   }
   const credit = input.credit;
@@ -198,7 +227,16 @@ export function creditLine(credit: DebtCredit): string {
   const owed = credit.balance_cents > 0 ? `Борг ${formatUah(credit.balance_cents)}` : 'Боргу немає';
   if (credit.limit_cents == null) return credit.balance_cents > 0 ? `${owed} · під запис більше не можна` : owed;
   if (credit.locked) return `${owed} · записи заблоковано`;
+  // Only a handover written down without a network — or a limit the owner lowered — gets here.
+  if (credit.balance_cents > credit.limit_cents) {
+    return `${owed} · понад ліміт на ${formatUah(credit.balance_cents - credit.limit_cents)}`;
+  }
   return `${owed} · ще можна ${formatUah(credit.available_cents ?? 0)}`;
+}
+
+/** A debtor whose debt is above the limit the owner set — the list says so beside the sum. */
+export function isOverLimit(row: Pick<Debtor, 'balance_cents' | 'limit_cents'>): boolean {
+  return row.limit_cents != null && row.balance_cents > row.limit_cents;
 }
 
 /** A limit typed by the owner, in hryvnias, to kopecks; null when the field is empty or not a sum. */

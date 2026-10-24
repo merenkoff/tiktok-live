@@ -162,6 +162,7 @@ export function registerDebtsRoutes(fastify: FastifyInstance): void {
         cart_discount: body.cart_discount,
         client_uuid: body.client_uuid,
         note: body.note,
+        offline_at: body.offline_at,
       });
       return reply.code(result.replay ? 200 : 201).send(result);
     } catch (error) {

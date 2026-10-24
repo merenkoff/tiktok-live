@@ -56,6 +56,11 @@ export interface DebtEntry {
   reason: string | null;
   sale_id: number | null;
   receipt_number: string | null;
+  /**
+   * A handover a desktop till wrote down without a network and sent later
+   * (074). Absent from a backend older than that.
+   */
+  offline?: boolean;
 }
 
 export interface DebtStatement {

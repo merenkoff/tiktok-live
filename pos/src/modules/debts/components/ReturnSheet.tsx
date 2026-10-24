@@ -11,7 +11,7 @@
 // No money moves and no receipt is made: nothing was ever paid for these.
 
 import { useMemo, useState } from 'react';
-import { formatUah } from '@pos/platform';
+import { cashierApi, formatUah, isOfflinePosEnabled } from '@pos/platform';
 import { Minus, Plus } from '@pos/platform/ui';
 import { debtsApi } from '../lib/debtsApi';
 import { lineTitle, quantityText, returnAmount } from '../lib/debt';
@@ -64,6 +64,8 @@ export function ReturnSheet({ customerId, openLines, onClose, onChanged }: Props
       });
       writeKey.answered();
       publishCredit(result.credit);
+      // The goods are back on the shelf; the desktop's catalogue reads its own copy of the stock.
+      if (isOfflinePosEnabled()) void cashierApi.refreshCatalog().catch(() => undefined);
       onChanged();
       // A replay answers with the return made the first time, not with what is
       // chosen now: say so and stay, so a different return is still possible.

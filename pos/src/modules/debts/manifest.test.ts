@@ -34,9 +34,15 @@ describe('debts manifest', () => {
     expect(debtsModule.analytics?.Panels).toBeDefined();
     // No catalog: a feature module never draws the sell screen's catalog.
     expect(debtsModule.sales).toBeUndefined();
-    // Online only in this release — the offline queue and the slip printer come later.
-    expect(debtsModule.offline).toBeUndefined();
-    expect(debtsModule.hardware).toBeUndefined();
+  });
+
+  it('hands the desktop’s runtime its queue, and «Обладнання» one station for the slip (PR3)', () => {
+    expect(typeof debtsModule.offline?.pendingCount).toBe('function');
+    expect(typeof debtsModule.offline?.sync).toBe('function');
+    // The host keys the device's printer by this id — renaming it loses every till's setting.
+    expect(debtsModule.hardware?.stations).toEqual([
+      expect.objectContaining({ id: 'slips', title: 'Квитанції під запис' }),
+    ]);
   });
 
   it('mounts the notebook in the till’s frame and in the owner’s cabinet', () => {

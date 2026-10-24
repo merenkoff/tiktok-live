@@ -9,17 +9,23 @@
 // goods back; the owner also writes a debt off and sets the limit. Every write
 // answers with the debt as it now stands, and the page reads the statement
 // again for the journal — the page never adds up a balance of its own.
+//
+// On the desktop (PR3) the handovers of this customer still in the till's
+// queue are shown above the statement — and without a network they are all
+// the page can show: the statement is the server's.
 
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { formatSignedUah, formatUah, useAuthStore, useOfflineStatus } from '@pos/platform';
+import { api, formatSignedUah, formatUah, isOfflinePosEnabled, useAuthStore, useOfflineStatus } from '@pos/platform';
 import { ArrowLeft, SectionHead } from '@pos/platform/ui';
 import { debtsApi } from '../lib/debtsApi';
 import { ENTRY_LABEL, ageText, creditLine, lineTitle, quantityText } from '../lib/debt';
 import { debtFailure } from '../lib/errors';
 import { publishCredit } from '../lib/useCredit';
+import { useQueue, useQueueDrained } from '../lib/useQueue';
 import type { DebtStatement } from '../lib/types';
 import { Frame, type DebtsFrame } from '../components/Frame';
+import { QueuePanel } from '../components/QueuePanel';
 import { LimitEditor } from '../components/LimitEditor';
 import { PaySheet } from '../components/PaySheet';
 import { ReturnSheet } from '../components/ReturnSheet';
@@ -31,8 +37,12 @@ export function StatementPage({ frame }: { frame: DebtsFrame }) {
   const { customerId: raw } = useParams();
   const customerId = Number(raw);
   const online = useOfflineStatus((s) => s.online);
+  const queue = isOfflinePosEnabled();
+  // An offline login holds no token the server would take — as good as no network.
+  const reachable = online && (!queue || api.hasLiveJwt());
   const role = useAuthStore((s) => s.auth?.staff.role ?? null);
   const owner = role === 'owner';
+  const queued = useQueue(Number.isInteger(customerId) ? customerId : undefined);
 
   const [statement, setStatement] = useState<DebtStatement | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,9 +50,11 @@ export function StatementPage({ frame }: { frame: DebtsFrame }) {
   const [open, setOpen] = useState<Open>(null);
 
   const reload = useCallback(() => setEpoch((n) => n + 1), []);
+  // A handover of this customer that has just reached the server is in the journal now.
+  useQueueDrained(queued, reload);
 
   useEffect(() => {
-    if (!online || !Number.isInteger(customerId) || customerId <= 0) return undefined;
+    if (!reachable || !Number.isInteger(customerId) || customerId <= 0) return undefined;
     let live = true;
     debtsApi
       .statement(customerId)
@@ -50,7 +62,7 @@ export function StatementPage({ frame }: { frame: DebtsFrame }) {
         if (!live) return;
         setStatement(next);
         setError(null);
-        publishCredit(next.credit);
+        publishCredit(next.credit, next.customer);
       })
       .catch((e) => {
         if (live) setError(debtFailure(e, 'Не вдалося прочитати виписку').text);
@@ -58,7 +70,7 @@ export function StatementPage({ frame }: { frame: DebtsFrame }) {
     return () => {
       live = false;
     };
-  }, [customerId, online, epoch]);
+  }, [customerId, reachable, epoch]);
 
   const back = (
     <Link to=".." relative="path" className="-ml-1 inline-flex items-center gap-1 min-h-11 pr-1 text-[15px] font-semibold text-sq-blue">
@@ -67,11 +79,14 @@ export function StatementPage({ frame }: { frame: DebtsFrame }) {
     </Link>
   );
 
-  if (!online) {
+  if (!reachable) {
     return (
       <Frame frame={frame}>
         {back}
-        <div className="sq-card p-6 text-center mt-3">
+        <div className="mt-3">
+          <QueuePanel rows={queued} showCustomer={false} />
+        </div>
+        <div className="sq-card p-6 text-center">
           <p className="text-lg font-semibold">Потрібна мережа</p>
           <p className="mt-1 text-sm text-sq-muted">Журнал боргу живе на сервері — без звʼязку його не прочитати.</p>
         </div>
@@ -106,6 +121,8 @@ export function StatementPage({ frame }: { frame: DebtsFrame }) {
       </header>
 
       {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+
+      <QueuePanel rows={queued} showCustomer={false} />
 
       {lines.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-6">
@@ -175,6 +192,7 @@ export function StatementPage({ frame }: { frame: DebtsFrame }) {
                     <span className="block text-[13px] text-sq-muted">
                       {new Date(entry.created_at).toLocaleString('uk-UA')}
                       {entry.staff_name ? ` · ${entry.staff_name}` : ''}
+                      {entry.offline ? ' · без мережі' : ''}
                       {entry.reason ? ` · ${entry.reason}` : ''}
                     </span>
                   </span>

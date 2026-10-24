@@ -29,6 +29,14 @@
 //    after every one of them.
 // 5. **Every write is idempotent on `client_uuid`.** «Під запис» tapped twice
 //    on a bad connection gives the goods once.
+// 6. **A handover the desktop wrote without a network is recorded, not judged**
+//    (`offline_at`, migration 074, G3_DEBTS.md §6). The goods left hours ago:
+//    no limit, lock, stop-list or archived card refuses it, because a refusal
+//    would only lose the record of goods already gone. It is dated by the till
+//    (clamped to the past), so the oldest-first rule puts it where it happened,
+//    and marked, so the owner sees it — and a balance it pushed over the limit
+//    — on the statement. What it still refuses is data that is wrong rather
+//    than late: another store's customer, a variant this store never had.
 
 import type { PoolClient } from 'pg';
 import { pool } from '../db.js';
@@ -55,6 +63,8 @@ export { DebtConflict, DebtError, DebtNotFound } from './debt-lines.service.js';
 type DbClient = { query: typeof pool.query };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** How far back a till's own date of an offline handover is believed (rule 6). */
+const OFFLINE_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
 /** A limit between 1 ₴ and 100 000 ₴ — the CHECK on `pos_customers` (073). */
 const LIMIT_MIN = 100;
 const LIMIT_MAX = 10_000_000;
@@ -112,6 +122,8 @@ export interface DebtEntryView {
   reason: string | null;
   sale_id: number | null;
   receipt_number: string | null;
+  /** Written by a desktop till without a network; `created_at` is the till's time (rule 6). */
+  offline: boolean;
 }
 
 export interface DebtStatement {
@@ -222,12 +234,13 @@ function toEntryView(row: Record<string, unknown>): DebtEntryView {
     reason: row.reason == null ? null : String(row.reason),
     sale_id: row.sale_id == null ? null : Number(row.sale_id),
     receipt_number: row.receipt_number == null ? null : String(row.receipt_number),
+    offline: row.offline_received_at != null,
   };
 }
 
 async function readEntry(client: DbClient, storeId: number, entryId: number): Promise<DebtEntryView> {
   const rows = await client.query(
-    `SELECT e.id, e.kind, e.amount_cents, e.created_at, e.reason, e.sale_id,
+    `SELECT e.id, e.kind, e.amount_cents, e.created_at, e.reason, e.sale_id, e.offline_received_at,
             st.display_name AS staff_name, s.receipt_number
        FROM pos_debt_entries e
        LEFT JOIN pos_staff st ON st.id = e.staff_id
@@ -276,13 +289,13 @@ export async function getStatement(storeId: number, customerId: number): Promise
   const credit = await getCredit(storeId, customerId);
   const open = await readLines(pool, storeId, { customerId, openOnly: true });
   const entries = await pool.query(
-    `SELECT e.id, e.kind, e.amount_cents, e.created_at, e.reason, e.sale_id,
+    `SELECT e.id, e.kind, e.amount_cents, e.created_at, e.reason, e.sale_id, e.offline_received_at,
             st.display_name AS staff_name, s.receipt_number
        FROM pos_debt_entries e
        LEFT JOIN pos_staff st ON st.id = e.staff_id
        LEFT JOIN pos_sales s ON s.id = e.sale_id
       WHERE e.store_id = $1 AND e.customer_id = $2
-      ORDER BY e.id DESC
+      ORDER BY e.created_at DESC, e.id DESC
       LIMIT ${ENTRIES_ON_STATEMENT}`,
     [storeId, customerId]
   );
@@ -477,6 +490,19 @@ function parseReason(raw: unknown, required: boolean): string | null {
   return reason;
 }
 
+/**
+ * When a desktop till gave the goods without a network (rule 6), or null for
+ * an online handover. A till clock ahead of ours is read as «now»; one more
+ * than 90 days behind as 90 days ago — a handover is never refused for its
+ * date, because the goods are gone whatever the clock said.
+ */
+function parseOfflineAt(raw: unknown, now: number): Date | null {
+  if (raw === undefined || raw === null) return null;
+  const at = typeof raw === 'string' ? Date.parse(raw) : NaN;
+  if (!Number.isFinite(at)) throw new DebtError('offline_at — дата й час у форматі ISO');
+  return new Date(Math.min(now, Math.max(at, now - OFFLINE_MAX_AGE_MS)));
+}
+
 function parseCartDiscount(raw: unknown): CartDiscountInput | null {
   if (raw === undefined || raw === null) return null;
   const d = raw as { type?: unknown; value?: unknown };
@@ -592,6 +618,8 @@ async function inTransaction(
  * One transaction: the customer locked and checked (rule 1), the cart priced
  * as a sale would price it (rule 2), the limit checked against the result,
  * then the `issue` entry, its lines, and the stock with its snapshot (rule 3).
+ * A handover the desktop wrote without a network skips the checks and keeps
+ * the till's date (rule 6).
  */
 export async function issueOnCredit(input: {
   storeId: number;
@@ -601,11 +629,15 @@ export async function issueOnCredit(input: {
   cart_discount?: unknown;
   client_uuid: unknown;
   note?: unknown;
+  /** Only from the desktop's queue: when the goods left a till that had no network (rule 6). */
+  offline_at?: unknown;
 }): Promise<DebtWriteResult> {
   const clientUuid = parseClientUuid(input.client_uuid);
   const items = parseIssueItems(input.items);
   const discount = parseCartDiscount(input.cart_discount);
   const note = parseReason(input.note, false);
+  const offlineAt = parseOfflineAt(input.offline_at, Date.now());
+  const offline = offlineAt != null;
 
   const { entryId, replay } = await inTransaction(
     input.storeId,
@@ -613,16 +645,17 @@ export async function issueOnCredit(input: {
     { kind: 'issue', customerId: input.customerId },
     async (client) => {
       const customer = await lockCustomer(client, input.storeId, input.customerId);
-      if (customer.credit_limit_cents == null) {
+      if (!offline && customer.credit_limit_cents == null) {
         throw new DebtConflict(
           'Цьому покупцеві під запис не дозволено. Ліміт ставить власник у картці покупця.',
           'no_credit'
         );
       }
-      if (customer.credit_locked) {
+      if (!offline && customer.credit_locked) {
         throw new DebtConflict('Власник заблокував записи під запис для цього покупця.', 'credit_locked');
       }
 
+      // An offline handover keeps a card archived since: its goods are gone already.
       const variantIds = [...new Set(items.map((item) => item.variant_id))];
       const variants = await client.query(
         `SELECT v.id, v.price_cents, v.compare_at_cents, v.label, v.unit,
@@ -630,20 +663,23 @@ export async function issueOnCredit(input: {
                 p.stop_listed_on::text AS stop_listed_on
            FROM pos_variants v
            JOIN pos_products p ON p.id = v.product_id
-          WHERE v.store_id = $1 AND v.id = ANY($2::bigint[]) AND v.is_active = TRUE`,
-        [input.storeId, variantIds]
+          WHERE v.store_id = $1 AND v.id = ANY($2::bigint[]) AND ($3::boolean OR v.is_active = TRUE)`,
+        [input.storeId, variantIds, offline]
       );
       if (variants.rows.length !== variantIds.length) {
-        throw new DebtError('Частину товарів не знайдено або прибрано в архів');
+        throw new DebtError(offline ? 'Частину товарів не знайдено' : 'Частину товарів не знайдено або прибрано в архів');
       }
       const byId = new Map(variants.rows.map((row) => [Number(row.id), row]));
 
-      // The day's stop-list says no to credit as firmly as to a sale.
-      const clock = await storeClock(client, input.storeId);
-      for (const item of items) {
-        const row = byId.get(item.variant_id)!;
-        if (row.stop_listed_on != null && row.stop_listed_on === clock.today) {
-          throw new DebtConflict(`«${row.product_name}» сьогодні в стоп-листі`, 'stop_listed');
+      // The day's stop-list says no to credit as firmly as to a sale — but not
+      // to goods that left a till with no network, exactly as an offline sale.
+      if (!offline) {
+        const clock = await storeClock(client, input.storeId);
+        for (const item of items) {
+          const row = byId.get(item.variant_id)!;
+          if (row.stop_listed_on != null && row.stop_listed_on === clock.today) {
+            throw new DebtConflict(`«${row.product_name}» сьогодні в стоп-листі`, 'stop_listed');
+          }
         }
       }
 
@@ -651,7 +687,7 @@ export async function issueOnCredit(input: {
         client,
         input.storeId,
         [...new Set(variants.rows.map((row) => Number(row.product_id)))],
-        { activeOnly: true }
+        { activeOnly: !offline }
       );
       const drafts: SaleDraftLine[] = items.map((item) => {
         const row = byId.get(item.variant_id)!;
@@ -663,7 +699,7 @@ export async function issueOnCredit(input: {
       if (total <= 0) throw new DebtError('Нічого записувати: сума нуль');
 
       const balance = await balanceCents(client, input.storeId, input.customerId);
-      if (balance + total > customer.credit_limit_cents) {
+      if (!offline && customer.credit_limit_cents != null && balance + total > customer.credit_limit_cents) {
         const available = Math.max(0, customer.credit_limit_cents - balance);
         throw new DebtConflict(
           `Понад ліміт: борг ${formatUah(balance)} + ${formatUah(total)} = ${formatUah(balance + total)}, ліміт ${formatUah(customer.credit_limit_cents)}. ` +
@@ -678,11 +714,14 @@ export async function issueOnCredit(input: {
         );
       }
 
+      // An offline handover is dated by the till and marked by when it arrived (rule 6).
       const entry = await client.query(
-        `INSERT INTO pos_debt_entries (store_id, customer_id, kind, amount_cents, staff_id, reason, client_uuid)
-         VALUES ($1, $2, 'issue', $3, $4, $5, $6)
+        `INSERT INTO pos_debt_entries
+           (store_id, customer_id, kind, amount_cents, staff_id, reason, client_uuid, created_at, offline_received_at)
+         VALUES ($1, $2, 'issue', $3, $4, $5, $6, COALESCE($7::timestamptz, NOW()),
+                 CASE WHEN $7::timestamptz IS NULL THEN NULL ELSE NOW() END)
          RETURNING id`,
-        [input.storeId, input.customerId, total, input.staffId, note, clientUuid]
+        [input.storeId, input.customerId, total, input.staffId, note, clientUuid, offlineAt]
       );
       const newEntryId = Number(entry.rows[0].id);
 
@@ -691,8 +730,9 @@ export async function issueOnCredit(input: {
           `INSERT INTO pos_debt_items
              (store_id, customer_id, entry_id, variant_id, quantity, unit, product_name,
               variant_label, unit_price_cents, compare_at_unit_cents, line_discount_cents,
-              line_total_cents, modifiers, note, sort_order)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, $15)
+              line_total_cents, modifiers, note, sort_order, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, $15,
+                   COALESCE($16::timestamptz, NOW()))
            RETURNING id`,
           [
             input.storeId,
@@ -710,6 +750,7 @@ export async function issueOnCredit(input: {
             draft.modifiers?.length ? JSON.stringify(draft.modifiers) : null,
             draft.note ?? '',
             index,
+            offlineAt,
           ]
         );
         // Rule 3: the shelf moves now, with the reason `credit`, and the line
