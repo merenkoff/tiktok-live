@@ -2,7 +2,7 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { FormEvent, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { FormEvent, useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { api, useAuthStore, sameRemoteMap, useVertical, PLATFORM_VERSION } from '@pos/platform';
 import { ProductPhotoField } from '../../components/ProductPhotoField';
@@ -12,9 +12,9 @@ import { FiscalSettingsCard } from './FiscalSettingsCard';
 import { PublicMenuCard } from './PublicMenuCard';
 import { StoreProfileCard } from './StoreProfileCard';
 import { MODULES } from '../../modules/registry';
-import { SlotBoundary } from '../../modules/SlotBoundary';
 import { reportModuleEvent } from '../../modules/telemetry';
-import { resolveSettingsCard } from '../../modules/verticals';
+import { useModuleSlots } from '../../modules/featureSlots';
+import { ModuleSlots } from '../../modules/ModuleSlots';
 import type { ModuleRemoteEntry, QrPaymentMode, StoreConfig } from '../../types';
 // Stateless leaf — no singleton to duplicate, so a direct import is fine here.
 import { inspectRemoteManifest, type RemoteManifestInfo } from '../../modules/remoteVerify';
@@ -29,8 +29,9 @@ export function SettingsPage() {
   const vertical = useVertical();
   // Whatever this kind of shop has to configure and the others do not — first
   // of them is the florist's assembly charge, which used to be on this page
-  // for every store (see `modules/verticals.ts`).
-  const settingsCard = useMemo(() => resolveSettingsCard(vertical.id), [vertical.id]);
+  // for every store (see `modules/verticals.ts`) — and, since phase Г2, what a
+  // feature module of the store configures (`modules/featureSlots.ts`).
+  const settingsCards = useModuleSlots('settings.Card');
   const [qrEnabled, setQrEnabled] = useState(false);
   const [qrMode, setQrMode] = useState<QrPaymentMode>('static');
   const [qrImageUrl, setQrImageUrl] = useState<string | null>(null);
@@ -311,23 +312,15 @@ export function SettingsPage() {
             own «Зберегти»: the card is the module's, the form is the host's.
             A module that never loaded adds nothing — this page is the host's
             and a failing CDN must not be able to take it down. */}
-        {settingsCard && (
-          <SlotBoundary
-            fallback={null}
-            onError={(err) =>
-              reportModuleEvent({
-                type: 'settings_card_error',
-                moduleId: settingsCard.moduleId,
-                vertical: vertical.id,
-                error: err,
-              })
-            }
-          >
-            <Suspense fallback={<div className="h-28" />}>
-              <settingsCard.Card />
-            </Suspense>
-          </SlotBoundary>
-        )}
+        <ModuleSlots
+          slots={settingsCards}
+          slot="settings.Card"
+          props={{}}
+          placeholder={<div className="h-28" />}
+          onError={(moduleId, err) =>
+            reportModuleEvent({ type: 'settings_card_error', moduleId, vertical: vertical.id, error: err })
+          }
+        />
 
         <section>
           <SectionHead title="QR-код оплата" />

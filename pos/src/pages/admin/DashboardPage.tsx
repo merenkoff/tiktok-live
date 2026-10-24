@@ -2,14 +2,14 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, assetUrl, useAuthStore } from '@pos/platform';
 import { formatSignedUah, formatUah } from '../../lib/money';
 import { toCsv, downloadCsv } from '../../lib/csv';
-import { SlotBoundary } from '../../modules/SlotBoundary';
 import { reportModuleEvent } from '../../modules/telemetry';
-import { resolveAnalyticsPanels } from '../../modules/verticals';
+import { useModuleSlots } from '../../modules/featureSlots';
+import { ModuleSlots } from '../../modules/ModuleSlots';
 import type { PaymentMethod, SalesSummary } from '../../types';
 import { Check, DownloadLine, Star } from '../../platform/glyphs';
 import { deviceDay, useAttention } from './attention';
@@ -104,7 +104,7 @@ export function DashboardPage() {
   const auth = useAuthStore((s) => s.auth);
   const vertical = auth?.store.vertical?.id ?? 'clothing';
   const fiscalEnabled = Boolean(auth?.store.fiscal?.enabled);
-  const panels = useMemo(() => resolveAnalyticsPanels(vertical), [vertical]);
+  const panels = useModuleSlots('analytics.Panels');
   const attention = useAttention((s) => s.items);
 
   async function load(nextFrom?: string, nextTo?: string) {
@@ -302,23 +302,15 @@ export function DashboardPage() {
       {/* What the store's vertical adds to the owner's morning. Nothing at all
           for a clothing shop, and nothing when the module's CDN is down — the
           dashboard is the host's screen (TechDocs/POS_FLORIST_BENCH.md §15). */}
-      {panels && (
-        <SlotBoundary
-          fallback={null}
-          onError={(err) =>
-            reportModuleEvent({
-              type: 'analytics_panels_error',
-              moduleId: panels.moduleId,
-              vertical,
-              error: err,
-            })
-          }
-        >
-          <Suspense fallback={<div className="h-28" />}>
-            <panels.Panels from={data.from} to={data.to} />
-          </Suspense>
-        </SlotBoundary>
-      )}
+      <ModuleSlots
+        slots={panels}
+        slot="analytics.Panels"
+        props={{ from: data.from, to: data.to }}
+        placeholder={<div className="h-28" />}
+        onError={(moduleId, err) =>
+          reportModuleEvent({ type: 'analytics_panels_error', moduleId, vertical, error: err })
+        }
+      />
 
       {data.daily.length > 1 && (
         <section>

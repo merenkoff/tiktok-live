@@ -40,6 +40,12 @@ export type ModuleEvent =
   | { type: 'analytics_panels_error'; moduleId: string; vertical: string; error: unknown }
   /** Same, for the card a vertical adds to the owner's Settings page. */
   | { type: 'settings_card_error'; moduleId: string; vertical: string; error: unknown }
+  /**
+   * A module threw in one of the slots a feature module may fill (phase Г2):
+   * its button beside «Оплатити», its strip about a customer. Nothing is drawn
+   * in its place, so — as for the panels above — this is the only trace.
+   */
+  | { type: 'module_slot_error'; slot: string; moduleId: string; error: unknown }
   | {
       type: 'session_manifest';
       appVersion: string;
@@ -69,7 +75,8 @@ export function reportModuleEvent(event: ModuleEvent): void {
     event.type === 'remote_verify_error' ||
     event.type === 'route_render_error' ||
     event.type === 'analytics_panels_error' ||
-    event.type === 'settings_card_error'
+    event.type === 'settings_card_error' ||
+    event.type === 'module_slot_error'
   ) {
     console.error(line, 'error' in event ? event.error : undefined);
   } else if (event.type === 'session_manifest') {

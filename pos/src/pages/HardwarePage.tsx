@@ -27,18 +27,23 @@ import {
   listPrinters,
   printKitchenTicket,
   printReceipt,
+  printSlip,
+  type SlipData,
 } from '../lib/printer';
 import {
   BAR_PAPER_META_KEY,
   BAR_PRINTER_META_KEY,
   KITCHEN_PAPER_META_KEY,
   KITCHEN_PRINTER_META_KEY,
+  moduleStationMetaKeys,
 } from '../lib/kitchenPrinters';
 import { STATION_TITLES, type Station } from '../lib/kitchenTicket';
 import { usePrintableReceipt } from '../hooks/usePrintableReceipt';
 import { useUpdateStore } from '../hooks/useUpdateCheck';
 import { getMeta, setMeta } from '../offline/db';
 import { useAuthStore, useVertical } from '@pos/platform';
+import { useModuleSlots } from '../modules/featureSlots';
+import type { ModuleStation } from '../modules/types';
 
 const RECEIPT_PRINTER_META_KEY = 'receiptPrinterName';
 const RECEIPT_PAPER_META_KEY = 'receiptPaperWidthMm';
@@ -65,7 +70,8 @@ function testKitchenTicket(station: Station): KitchenTicketData {
 }
 
 interface StationPrinterSectionProps {
-  station: Station;
+  /** Only names the card for tests: `kitchen`, `bar`, or `<module>-<station>`. */
+  station: string;
   title: string;
   hint: string;
   printers: PrinterInfo[];
@@ -78,6 +84,8 @@ interface StationPrinterSectionProps {
   onTest: () => void;
   testing: boolean;
   testStatus: string | null;
+  /** The test button's words — a kitchen prints a ticket, a module its own paper. */
+  testLabel?: string;
 }
 
 /**
@@ -97,6 +105,7 @@ function StationPrinterSection({
   onTest,
   testing,
   testStatus,
+  testLabel = 'Тестовий тікет',
 }: StationPrinterSectionProps) {
   return (
     <section className={CARD} data-testid={`station-printer-${station}`}>
@@ -111,7 +120,7 @@ function StationPrinterSection({
           <div className="mt-4 flex items-center gap-3 flex-wrap">
             <button type="button" onClick={onTest} disabled={testing} className="sq-btn-quiet">
               <Printer size={20} />
-              {testing ? 'Друк…' : 'Тестовий тікет'}
+              {testing ? 'Друк…' : testLabel}
             </button>
             {onFollowKitchen && (
               <button
@@ -127,6 +136,88 @@ function StationPrinterSection({
         </>
       )}
     </section>
+  );
+}
+
+/** What a module station's test print carries: every part of a slip, nothing real. */
+function testSlip(stationTitle: string, storeName: string): SlipData {
+  return {
+    title: 'ТЕСТ ДРУКУ',
+    store_name: storeName,
+    lines: [stationTitle],
+    items: [{ name: 'Хліб житній', quantity: '2', unit_price_cents: 3200, line_total_cents: 6400 }],
+    totals: [{ label: 'Разом', amount_cents: 6400 }],
+    printed_at: new Date().toLocaleString('uk-UA'),
+  };
+}
+
+/**
+ * A station a feature module declared (phase Г2, `hardware.stations`): the
+ * kitchen's picker, kept in this device's settings under the module's own keys
+ * (`moduleStationMetaKeys`), with a test print of the module's kind of paper —
+ * a non-fiscal slip. The module itself only asks which printer it is.
+ */
+function ModuleStationPrinter({
+  moduleId,
+  station,
+  printers,
+  storeName,
+}: {
+  moduleId: string;
+  station: ModuleStation;
+  printers: PrinterInfo[];
+  storeName: string;
+}) {
+  const keys = moduleStationMetaKeys(moduleId, station.id);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [paper, setPaper] = useState<ReceiptPaperWidth>(DEFAULT_RECEIPT_PAPER_WIDTH);
+  const [testing, setTesting] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    void getMeta<string>(keys.printer).then((name) => setSelected(typeof name === 'string' && name ? name : null));
+    void getMeta<ReceiptPaperWidth>(keys.paper).then((mm) => {
+      if (mm && RECEIPT_PAPER_WIDTHS.includes(mm)) setPaper(mm);
+    });
+  }, [keys.printer, keys.paper]);
+
+  async function test() {
+    if (!selected) return;
+    setTesting(true);
+    setStatus(null);
+    try {
+      await printSlip(selected, testSlip(station.title, storeName), paper);
+      setStatus('Надіслано на друк');
+    } catch (e) {
+      setStatus(`Помилка друку: ${typeof e === 'string' ? e : String(e)}`);
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  return (
+    <StationPrinterSection
+      station={`${moduleId}-${station.id}`}
+      title={station.title}
+      hint={station.hint}
+      printers={printers}
+      selected={selected}
+      paperWidth={paper}
+      onSelect={(name) => {
+        setSelected(name);
+        setStatus(null);
+        void setMeta(keys.printer, name);
+      }}
+      onPaperWidth={(mm) => {
+        setPaper(mm);
+        setStatus(null);
+        void setMeta(keys.paper, mm);
+      }}
+      onTest={() => void test()}
+      testing={testing}
+      testStatus={status}
+      testLabel="Тестова квитанція"
+    />
   );
 }
 
@@ -262,6 +353,9 @@ export function HardwarePage() {
   const storeName = useAuthStore((s) => s.auth?.store.name) ?? '';
   // A café has a kitchen and a bar to send tickets to; nobody else does.
   const cafe = useVertical().id === 'cafe';
+  // Printers a feature module prints its own papers to (phase Г2) — the debt
+  // journal's slip first. Nothing at all when no loaded module declares one.
+  const moduleStations = useModuleSlots('hardware.stations');
   const [devices, setDevices] = useState<HardwareDevice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -586,6 +680,18 @@ export function HardwarePage() {
             testStatus={ticketStatus?.station === 'bar' ? ticketStatus.text : null}
           />
         </>
+      )}
+
+      {moduleStations.flatMap(({ value, moduleId }) =>
+        value.map((station) => (
+          <ModuleStationPrinter
+            key={`${moduleId}:${station.id}`}
+            moduleId={moduleId}
+            station={station}
+            printers={printers}
+            storeName={storeName}
+          />
+        ))
       )}
     </div>
   );

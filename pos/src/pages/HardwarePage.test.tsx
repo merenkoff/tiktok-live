@@ -31,10 +31,12 @@ vi.mock('../lib/printer', async (importOriginal) => ({
   ]),
   printReceipt: vi.fn(async () => undefined),
   printKitchenTicket: vi.fn(async () => undefined),
+  printSlip: vi.fn(async () => undefined),
 }));
 
 const { setMeta } = await import('../offline/db');
-const { printKitchenTicket } = await import('../lib/printer');
+const { printKitchenTicket, printSlip } = await import('../lib/printer');
+const { remoteModules } = await import('../modules/registry');
 const { HardwarePage } = await import('./HardwarePage');
 
 function signIn(vertical: 'clothing' | 'cafe'): void {
@@ -57,6 +59,7 @@ beforeEach(() => {
 
 afterEach(() => {
   useAuthStore.setState({ auth: null, isAuthenticated: false });
+  remoteModules.length = 0;
 });
 
 describe('HardwarePage station printers', () => {
@@ -107,5 +110,48 @@ describe('HardwarePage station printers', () => {
     fireEvent.click(within(bar).getByRole('button', { name: 'Той самий, що кухня' }));
     expect(setMeta).toHaveBeenCalledWith('barPrinterName', null);
     expect(within(bar).queryByRole('button', { name: 'Тестовий тікет' })).toBeNull();
+  });
+});
+
+describe('HardwarePage — a feature module station (Г2)', () => {
+  function installDebts(): void {
+    remoteModules.push({
+      id: 'debts',
+      title: 'Під запис',
+      shells: ['web', 'cashier', 'tablet'],
+      alwaysEnabled: true,
+      routes: [],
+      nav: [],
+      hardware: {
+        stations: [{ id: 'slip', title: 'Принтер квитанцій «під запис»', hint: 'Без нього квитанції не друкуються.' }],
+      },
+    });
+  }
+
+  it('draws the module printer for any store that has the module, under the module keys', async () => {
+    installDebts();
+    signIn('clothing');
+    renderWithProviders(<HardwarePage />, { shell: 'cashier' });
+    const card = await screen.findByTestId('station-printer-debts-slip');
+    expect(within(card).getByText('Принтер квитанцій «під запис»')).toBeInTheDocument();
+
+    fireEvent.click(await within(card).findByText('Kitchen-1'));
+    expect(setMeta).toHaveBeenCalledWith('stationPrinter:debts:slip', 'Kitchen-1');
+
+    fireEvent.click(within(card).getByRole('button', { name: 'Тестова квитанція' }));
+    await waitFor(() => expect(printSlip).toHaveBeenCalledTimes(1));
+    expect(printSlip).toHaveBeenCalledWith(
+      'Kitchen-1',
+      expect.objectContaining({ title: 'ТЕСТ ДРУКУ', lines: ['Принтер квитанцій «під запис»'] }),
+      58
+    );
+    expect(await within(card).findByText('Надіслано на друк')).toBeInTheDocument();
+  });
+
+  it('draws nothing extra for a store without such a module', async () => {
+    signIn('clothing');
+    renderWithProviders(<HardwarePage />, { shell: 'cashier' });
+    expect(await screen.findByText('Принтер чеків')).toBeInTheDocument();
+    expect(screen.queryByTestId('station-printer-debts-slip')).toBeNull();
   });
 });

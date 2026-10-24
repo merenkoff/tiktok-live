@@ -33,6 +33,7 @@ pub fn run() {
             hardware::receipt::print_receipt,
             hardware::kitchen_ticket::print_kitchen_ticket,
             hardware::precheck::print_precheck,
+            hardware::slip::print_slip,
             update::check_for_update,
             update::install_update,
             module_remotes::sync_module_remote,

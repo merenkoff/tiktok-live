@@ -9,8 +9,12 @@ import { describe, expect, it } from 'vitest';
 import { verticalFlowersModule } from './manifest';
 import { NAV_ICONS } from '../../platform/icons';
 import { CORE_MODULE_IDS, DEFAULT_ENABLED_MODULE_IDS } from '../constants';
-import { resolveAnalyticsPanels, resolveSalesCatalog, resolveSettingsCard } from '../verticals';
+import { resolveSalesCatalog } from '../verticals';
+import { resolveModuleSlots, type ModuleSlotContext } from '../featureSlots';
 import { MODULES } from '../registry';
+
+// A florist's owner on the web: the screens where both host slots live.
+const FLORIST: ModuleSlotContext = { vertical: 'flowers', shell: 'web', role: 'owner', enabled: new Set() };
 
 describe('vertical-flowers manifest', () => {
   it('is keyed exactly as the store setting names it', () => {
@@ -41,9 +45,9 @@ describe('vertical-flowers manifest', () => {
     // that actually loaded this module — and the module's own numbers page
     // stays where it is, at /admin/flowers.
     expect(verticalFlowersModule.analytics?.Panels).toBeTruthy();
-    expect(resolveAnalyticsPanels('flowers', [...MODULES, verticalFlowersModule])).toMatchObject({
-      moduleId: 'vertical-flowers',
-    });
+    expect(
+      resolveModuleSlots('analytics.Panels', FLORIST, [...MODULES, verticalFlowersModule]).map((s) => s.moduleId)
+    ).toEqual(['vertical-flowers']);
     expect(verticalFlowersModule.routes.filter((r) => r.mount === 'admin')).toHaveLength(1);
   });
 
@@ -52,9 +56,9 @@ describe('vertical-flowers manifest', () => {
     // shop saw it too. The slot is what makes it exist only where it means
     // something.
     expect(verticalFlowersModule.settings?.Card).toBeTruthy();
-    expect(resolveSettingsCard('flowers', [...MODULES, verticalFlowersModule])).toMatchObject({
-      moduleId: 'vertical-flowers',
-    });
+    expect(
+      resolveModuleSlots('settings.Card', FLORIST, [...MODULES, verticalFlowersModule]).map((s) => s.moduleId)
+    ).toEqual(['vertical-flowers']);
   });
 
   it('runs in every shell and is not owner-only', () => {

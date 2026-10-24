@@ -1,5 +1,5 @@
 {
-  "platformVersion": 19,
+  "platformVersion": 20,
   "exports": {
     "platform": [
       "CASH_ROUNDING_STEPS",
@@ -62,6 +62,7 @@
       "lineCaption",
       "listPrinters",
       "loadLastStoreSlug",
+      "moduleStationMetaKeys",
       "needsModifierSheet",
       "normalizeModifierIds",
       "offlineMode",
@@ -72,12 +73,14 @@
       "priceOfComponents",
       "printPrecheck",
       "printReceipt",
+      "printSlip",
       "quantityToBase",
       "refundLineAmount",
       "refundRoundingCents",
       "refusalText",
       "registerOfflineModules",
       "resolveLineModifiers",
+      "resolveModuleStationPrinter",
       "resolveNavIcon",
       "resolveTagColorHex",
       "saleRoundingCents",

@@ -35,6 +35,8 @@ import { buildActPayload, needsAct, useCancelRungSale, usePrintableAct } from '.
 import { resolveSalesCatalog } from '../../modules/verticals';
 import { ClothingCatalog } from '../../modules/vertical-clothing/ClothingCatalog';
 import { reportModuleEvent } from '../../modules/telemetry';
+import { useModuleSlots } from '../../modules/featureSlots';
+import { ModuleSlots } from '../../modules/ModuleSlots';
 import { CatalogBoundary } from './CatalogBoundary';
 
 function paymentLabel(method: PaymentMethod): string {
@@ -94,6 +96,11 @@ export function RegisterPage() {
   const exchange = useCartStore((s) => s.exchange);
   const cancelExchange = useCartStore((s) => s.cancelExchange);
   const online = useOfflineStatus((s) => s.online);
+  // What feature modules add to the cart (phase Г2, TechDocs/grocery/PLAN.md
+  // §4): a way to finish it other than paying — the debt journal's «Під
+  // запис» — and a strip about the chosen customer.
+  const checkoutActions = useModuleSlots('checkout.Action');
+  const customerPanels = useModuleSlots('customer.Panel');
 
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
@@ -1072,6 +1079,37 @@ export function RegisterPage() {
   // out there.
   const catalogActive = shell !== 'tablet' && !checkoutOpen && !mobileCartOpen && !success;
 
+  // Never on a pre-order or an exchange: the first is a promise that is paid
+  // or put back, the second is paid through its own checkout. A module that
+  // finished the cart its own way gets the same aftermath as a sale — an
+  // empty cart and a catalog that re-reads stock.
+  const moduleActions =
+    checkoutActions.length > 0 && preorderId == null && !exchange ? (
+      <ModuleSlots
+        slots={checkoutActions}
+        slot="checkout.Action"
+        props={{
+          lines,
+          customer,
+          cartDiscount,
+          totalCents: totalCents(),
+          onCompleted: () => {
+            clear();
+            setMobileCartOpen(false);
+            setStockEpoch((n) => n + 1);
+          },
+        }}
+      />
+    ) : null;
+  const customerExtra =
+    customer && customerPanels.length > 0 ? (
+      <ModuleSlots
+        slots={customerPanels}
+        slot="customer.Panel"
+        props={{ customerId: customer.id, place: 'cart' as const }}
+      />
+    ) : null;
+
   return (
     <>
         {banner && (
@@ -1138,6 +1176,8 @@ export function RegisterPage() {
               locked={preorderId != null}
               onCancelPreorder={clear}
               onTakePreorder={exchange ? undefined : openPreorder}
+              customerExtra={customerExtra}
+              moduleActions={moduleActions}
             />
           </div>
         </div>
@@ -1264,6 +1304,8 @@ export function RegisterPage() {
             clear();
             setMobileCartOpen(false);
           }}
+          customerExtra={customerExtra}
+          moduleActions={moduleActions}
         />
       )}
 

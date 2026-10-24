@@ -53,3 +53,33 @@ export async function resolveTicketPrinters(read: MetaReader): Promise<TicketPri
   if (!kitchen) return { kitchen: null, bar: null };
   return { kitchen, bar: printerOf(barName, barPaper) ?? kitchen };
 }
+
+/**
+ * The device settings of a station a feature module declared (phase Г2,
+ * `ModuleDescriptor.hardware.stations`) — the debt journal's slip printer
+ * first. Keyed by module AND station, so two modules, or two stations of one,
+ * never share a setting with each other or with the kitchen and the bar.
+ */
+export function moduleStationMetaKeys(moduleId: string, stationId: string): { printer: string; paper: string } {
+  return {
+    printer: `stationPrinter:${moduleId}:${stationId}`,
+    paper: `stationPaper:${moduleId}:${stationId}`,
+  };
+}
+
+/**
+ * The printer a module's station prints to on this device, or null: print
+ * nothing, silently, as a kitchen with no printer gets no tickets. No fallback
+ * to the receipt printer on purpose — a slip the owner never asked for, on the
+ * roll the customer's receipts come out of, is the one thing scheme A rules
+ * out (TechDocs/grocery/README.md, «Рішення власника продукту» 2).
+ */
+export async function resolveModuleStationPrinter(
+  read: MetaReader,
+  moduleId: string,
+  stationId: string
+): Promise<TicketPrinter | null> {
+  const keys = moduleStationMetaKeys(moduleId, stationId);
+  const [name, paper] = await Promise.all([read<unknown>(keys.printer), read<unknown>(keys.paper)]);
+  return printerOf(name, paper);
+}

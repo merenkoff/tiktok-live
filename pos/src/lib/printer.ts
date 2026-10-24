@@ -221,3 +221,47 @@ export function printPrecheck(
 ): Promise<void> {
   return invoke('print_precheck', { printerName, bill, paperWidthMm });
 }
+
+/** One line of a non-fiscal slip: what, how much, and — when it matters — for how much. */
+export interface SlipItem {
+  name: string;
+  /** Already formatted by the caller: «2», «0,350 кг». */
+  quantity: string;
+  unit_price_cents?: number | null;
+  line_total_cents?: number | null;
+}
+
+export interface SlipTotal {
+  /** «Разом», «Борг після». Never «До сплати» — the Rust side refuses it. */
+  label: string;
+  amount_cents: number;
+}
+
+/**
+ * A non-fiscal slip a feature module prints to its own station printer (phase
+ * Г2, TechDocs/grocery/PLAN.md §4) — the debt journal's «ПІД ЗАПИС» first.
+ * Drawn by Rust `hardware/slip.rs`, which prints «НЕ Є РОЗРАХУНКОВИМ
+ * ДОКУМЕНТОМ» at the top and at the bottom whatever the caller sends and
+ * refuses a title or a total that would pass for a fiscal receipt's.
+ */
+export interface SlipData {
+  title: string;
+  store_name?: string;
+  /** Under the title, one per row: who, when, which document. Already formatted. */
+  lines?: string[];
+  items?: SlipItem[];
+  totals?: SlipTotal[];
+  /** Above the bottom disclaimer: «Підпис покупця ______». */
+  footer?: string[];
+  /** Already formatted — now. */
+  printed_at?: string;
+}
+
+/** Print one non-fiscal slip to a named OS printer — the Rust `print_slip` command. */
+export function printSlip(
+  printerName: string,
+  slip: SlipData,
+  paperWidthMm: ReceiptPaperWidth = DEFAULT_RECEIPT_PAPER_WIDTH
+): Promise<void> {
+  return invoke('print_slip', { printerName, slip, paperWidthMm });
+}

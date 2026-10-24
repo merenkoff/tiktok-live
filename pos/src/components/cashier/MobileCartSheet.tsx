@@ -2,7 +2,7 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Minus, Pencil, Plus, TagLine, Trash2, User, X } from '../../platform/glyphs';
 import { formatUah } from '../../lib/money';
 import type { CartDiscount, CartLine } from '@pos/platform';
@@ -35,6 +35,10 @@ interface Props {
   locked?: boolean;
   /** «Повернути» — the pre-order goes back to waiting; on a phone this sheet is the only cart. */
   onCancelPreorder?: () => void;
+  /** Feature modules' strips about the chosen customer (Г2) — see `SaleSidebar`. */
+  customerExtra?: ReactNode;
+  /** Feature modules' ways to finish the cart other than paying (Г2), above «Оплатити». */
+  moduleActions?: ReactNode;
 }
 
 export function MobileCartSheet({
@@ -52,6 +56,8 @@ export function MobileCartSheet({
   parkedCount = 0,
   locked,
   onCancelPreorder,
+  customerExtra,
+  moduleActions,
 }: Props) {
   const count = lines.reduce((s, l) => s + l.quantity, 0);
   const subtotal = lines.reduce((s, l) => s + l.unit_price_cents * l.quantity, 0);
@@ -98,6 +104,7 @@ export function MobileCartSheet({
             <X size={20} />
           </button>
         </div>
+        {customer && customerExtra && <div className="px-5 pb-2 shrink-0">{customerExtra}</div>}
 
         <div ref={listRef} className="flex-1 overflow-auto px-3 pb-2 select-none">
           {lines.length === 0 ? (
@@ -206,6 +213,11 @@ export function MobileCartSheet({
             <button type="button" className="text-sq-blue text-[13px] font-semibold" onClick={() => setDiscountOpen(true)}>
               {cartDiscount ? 'Змінити знижку на чек' : 'Знижка на чек'}
             </button>
+          )}
+          {moduleActions && (
+            <div className="flex flex-col gap-2" data-testid="module-checkout-actions-mobile">
+              {moduleActions}
+            </div>
           )}
           <div className="flex gap-2.5">
             {/* Same two-jobs rule as the sidebar — see the comment there. A

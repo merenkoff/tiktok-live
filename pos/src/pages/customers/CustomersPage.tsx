@@ -10,6 +10,8 @@ import { useDragScroll } from '../../hooks/useDragScroll';
 import { customerDiscountPercent } from '../../lib/customerDiscount';
 import { PageHeader } from '../../components/ui/Page';
 import { ArrowLeft, Plus, Search, Users, X } from '../../platform/glyphs';
+import { useModuleSlots } from '../../modules/featureSlots';
+import { ModuleSlots } from '../../modules/ModuleSlots';
 
 // One page, two shells: the till's `pos-field` is touch-sized (48 px), the
 // owner's `sq-input` the compact admin well (44 px).
@@ -31,6 +33,7 @@ export function CustomersPage({ cashierShell }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<PosCustomer | null>(null);
   const [creating, setCreating] = useState(false);
+  const customerPanels = useModuleSlots('customer.Panel');
   const bodyRef = useDragScroll<HTMLDivElement>();
 
   async function reload(search = q) {
@@ -129,6 +132,18 @@ export function CustomersPage({ cashierShell }: Props) {
               onError={setError}
               allowDelete={!cashierShell && !!editing}
             />
+            {/* What feature modules know about this customer (phase Г2) — the
+                debt journal's balance and limit. A saved customer only: a
+                new one has nothing to know about yet. */}
+            {editing && customerPanels.length > 0 && (
+              <div className="mt-3 flex flex-col gap-2">
+                <ModuleSlots
+                  slots={customerPanels}
+                  slot="customer.Panel"
+                  props={{ customerId: editing.id, place: 'card' as const }}
+                />
+              </div>
+            )}
           </div>
         )}
 
