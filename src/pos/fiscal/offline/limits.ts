@@ -85,7 +85,7 @@ function kyivParts(at: Date): { year: number; month: number; naive: number } {
 }
 
 /** Kyiv's UTC offset in effect at `at` (+2h or +3h), from the zone database. */
-function kyivOffsetMs(at: Date): number {
+export function kyivOffsetMs(at: Date): number {
   return kyivParts(at).naive - Math.floor(at.getTime() / 1000) * 1000;
 }
 

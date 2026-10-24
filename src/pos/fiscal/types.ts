@@ -11,7 +11,7 @@
 // reasoning for each choice is on the declaration it justifies.
 
 /** Providers we intend to support. `checkbox` is the reference implementation. */
-export const FISCAL_PROVIDER_IDS = ['checkbox', 'vchasno', 'echeck'] as const;
+export const FISCAL_PROVIDER_IDS = ['checkbox', 'cashalot', 'vchasno', 'echeck'] as const;
 
 export type FiscalProviderId = (typeof FISCAL_PROVIDER_IDS)[number];
 
