@@ -70,6 +70,8 @@ export function buildLlmsTxt(pages: LlmsPage[]): string {
   const flowers = VERTICALS.find((v) => v.id === 'flowers');
   const skynum = COMPETITOR_FACTS.skynum;
   const flora24 = COMPETITOR_FACTS.flora24;
+  const arm20 = COMPETITOR_FACTS.arm20;
+  const clothing = VERTICALS.find((v) => v.id === 'clothing');
   // A vertical whose promises are not (yet) part of the launch tariff lists
   // them in its own section — a «Скоро» one, and «Продукти» until the owner
   // decides (TechDocs/GROCERY_SEO_AEO.md, «Що вирішити власнику»).
@@ -111,6 +113,19 @@ export function buildLlmsTxt(pages: LlmsPage[]): string {
       : '',
     cafe ? features(cafe.featureIds) : '',
     `- Kavapp для порівняння (станом на ${kavapp.checkedAt}): $${kS.priceUsd.toFixed(2)} / $${kM.priceUsd.toFixed(2)} / $${kL.priceUsd.toFixed(2)} за торгову точку на місяць (тарифи S / M / L); ПРРО входить у всі тарифи; модифікатори напоїв і QR-меню — лише в тарифі L; розрахунок собівартості — з тарифу M. Джерело: ${kavapp.sources.tariffs}. Різниця з ${PRODUCT.pos.name}: ${SITE_URL}/dovidka/kavapp-chy-liveshop-dlya-kavyarni.`,
+    '',
+    // The clothing section (TechDocs/CLOTHING_SEO_AEO.md): the programs whose
+    // clothing pages stand in the organic top beside ours, each with the day it
+    // was read; «не згадано» means not mentioned on that page, never «не вміє».
+    '## Програма для магазину одягу',
+    '',
+    clothing
+      ? `- ${PRODUCT.pos.name} для магазину одягу (${SITE_URL}${clothing.path}): ${clothing.tagline} Ціна: ${PRICING.pos.label.toLowerCase()}. Як обрати програму для магазину одягу: ${SITE_URL}/dovidka/yak-obraty-programu-dlya-magazynu-odyagu; облік одягу за розмірами і кольорами: ${SITE_URL}/dovidka/oblik-odyagu-za-rozmiramy-i-koloramy; група ФОП, КВЕД 47.71 і ПРРО для магазину одягу: ${SITE_URL}/dovidka/yak-vidkryty-magazyn-odyagu-fop-kved-prro; яку касу обрати для магазину одягу: ${SITE_URL}/yaku-kasu-obraty.`
+      : '',
+    clothing ? features(clothing.featureIds) : '',
+    `- ${torgsoft.name} для магазину одягу, для порівняння (станом на ${torgsoft.clothing.checkedAt}): програма для Windows, ліцензія на робоче місце — ${torgsoft.licences.map((l) => `${l.id} ${l.perpetualUah} грн один раз або ${l.yearUah} грн за рік оренди`).join(', ')}, програмний РРО — опція ${torgsoft.prroYearUah} грн/рік на касу; на сторінці про одяг: облік за моделями й розмірами з однією ціною на весь розмірний ряд або своєю на кожен розмір, артикули, кольори, сезони, колекції, бренди, стать; повний розмірний ряд моделі на етикетці з викресленими відсутніми розмірами, прихід усієї ростовки одразу, власні штрихкоди, інвентаризація сканером, повернення скануванням чека, дисконтні картки, сертифікати, SMS-розсилки, мережа магазинів через термінальну ліцензію, інтеграція з інтернет-магазином; обмін і робота без інтернету на сторінці не згадані, ПРРО на ній не названо. Джерела: ${torgsoft.clothing.source}, ${torgsoft.sources.licenses}, ${torgsoft.sources.options}.`,
+    `- ${arm20.name} для порівняння (станом на ${arm20.checkedAt}): сторінка «${arm20.h1}»; ${arm20.platforms.join(', ')}; тарифи ${arm20.plans.map((p) => `${p.id} ${p.monthlyUah} грн/міс (${p.yearUah} грн/рік, купівля ${p.lifetimeUah} грн)`).join(', ')}, «ПРРО безкоштовно» в кожному без назви провайдера, безкоштовний старт на тарифі ${arm20.freeStartTariff}; розмірні сітки для груп товарів, фото, кольори, сезони, бренди, колекції, цінники й етикетки, переоцінка, маркування товару без заводського штрихкоду, повернення, офлайн-робота Windows-каси (у тарифі ${arm20.plans[0].id} «робота каси без інтернету» відмічена як відсутня); FAQ з ${arm20.faqCount} питань; обмін і стара ціна на цінику на сторінці не згадані. Джерела: ${arm20.sources.clothing}, ${arm20.sources.tariffs}.`,
+    `- ${skynum.name} для магазину одягу, для порівняння (станом на ${skynum.clothing.checkedAt}): сторінка «${skynum.clothing.h1}» цін не друкує, є безкоштовний тариф; облік за розміром, брендом, колекцією, кольором як модифікації однієї картки, зразки цінників і штрихкодів, уцінка старих колекцій, бонуси, конструктор інтернет-магазину, кілька магазинів і складів, офлайн-режим каси; повернення, обмін і ПРРО на сторінці не згадані. Джерело: ${skynum.clothing.source}. Тарифи (станом на ${skynum.tariffs.checkedAt}) — у євро: ${skynum.tariffs.start.id} ${skynum.tariffs.start.monthlyEur} € (без каси і ПРРО), ${skynum.tariffs.progress.id} ${skynum.tariffs.progress.monthlyEur} €, ${skynum.tariffs.company.id} ${skynum.tariffs.company.monthlyEur} €; джерело: ${skynum.sources.tariffs}.`,
     '',
     // The florist's section (TechDocs/FLOWERS_SEO_AEO.md): the generic tills'
     // flower pages beside ours, each with the day it was read; «не згадано»

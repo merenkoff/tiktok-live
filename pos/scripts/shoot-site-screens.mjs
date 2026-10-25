@@ -68,6 +68,46 @@ const STORES = {
       await tags.getByRole('group', { name: 'Готові розміри' }).getByRole('button', { name: '58×40' }).click();
       await page.waitForTimeout(800);
       await shoot('clothing-price-tags');
+      await page.keyboard.press('Escape');
+      // The rows the SEO pass of 2026-10-26 added to /pos/odyah
+      // (TechDocs/CLOTHING_SEO_AEO.md). Each opens a dialog and writes
+      // nothing: the markdown dialog only previews until «Уцінити» is
+      // pressed, the variants dialog until «Додати варіанти», the refund
+      // dialog until «Повернути» — none of which is pressed here.
+      await optional('clothing-markdowns', async () => {
+        await page.goto('/admin/products');
+        await page.getByRole('button', { name: /Обрати всі показані/ }).waitFor(WAIT);
+        await page.getByRole('button', { name: /Обрати всі показані/ }).click();
+        await page.getByRole('button', { name: 'Уцінити', exact: true }).click();
+        const markdown = page.getByRole('dialog', { name: 'Уцінити' });
+        await markdown.waitFor(WAIT);
+        await markdown.getByLabel(/Відсоток/).fill('30');
+        await page.waitForTimeout(1200);
+        await shoot('clothing-markdowns');
+        await page.keyboard.press('Escape');
+      }, page);
+      await optional('clothing-matrix', async () => {
+        await page.goto('/admin/products');
+        // The first product card: the name in a row is the link to it.
+        await page.locator('main a[href^="/admin/products/"]').first().click();
+        await page.getByRole('button', { name: /Додати варіанти/ }).waitFor(WAIT);
+        await page.getByRole('button', { name: /Додати варіанти/ }).click();
+        await page.getByRole('dialog', { name: 'Додати варіанти' }).waitFor(WAIT);
+        await page.waitForTimeout(800);
+        await shoot('clothing-matrix');
+        await page.keyboard.press('Escape');
+      }, page);
+      await optional('clothing-returns', async () => {
+        await page.goto('/admin/sales');
+        await page.getByPlaceholder(/Номер чека/).waitFor(WAIT);
+        // Open the newest receipt and the refund dialog over it.
+        await page.locator('main li button, main tr button').first().click();
+        await page.getByRole('button', { name: 'Повернення', exact: true }).click();
+        await page.getByRole('dialog').first().waitFor(WAIT);
+        await page.waitForTimeout(800);
+        await shoot('clothing-returns');
+        await page.keyboard.press('Escape');
+      }, page);
     },
   },
   flowers: {

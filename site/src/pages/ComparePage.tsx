@@ -16,6 +16,8 @@ import posProducts from '../assets/screenshots/clothing-products.png';
 import { CTA } from '../lib/ctaIds';
 
 const HANDOVER_ARTICLE = '/dovidka/zmina-prro-zamina-kasy';
+const HOW_TO_CHOOSE = '/dovidka/yak-obraty-programu-dlya-magazynu-odyagu';
+const SIZES_ARTICLE = '/dovidka/oblik-odyagu-za-rozmiramy-i-koloramy';
 
 const CRITERIA = [
   'Облік товару за розміром і кольором, а не тільки за назвою',
@@ -23,7 +25,8 @@ const CRITERIA = [
   'Фіскалізація чеків (ПРРО) — вбудована чи підключається окремим сервісом',
   'Що буде зі зміною ПРРО, якщо комп\'ютер із касою зламається посеред дня',
   'Оплата карткою або QR-кодом прямо на касі',
-  'Один каталог товарів для офлайн-точки й онлайн-каналів, наприклад TikTok LIVE',
+  'Один каталог товарів для офлайн-точки й онлайн-каналів, наприклад TikTok LIVE (у нашій касі спільний каталог з ефіром — ще в планах)',
+  'Повернення й обмін за законом: 14 днів, акт понад 100 ₴, два чеки на обмін',
 ];
 
 export const FAQ_ITEMS: FaqItem[] = [
@@ -151,7 +154,16 @@ export function ComparePage() {
                 <strong>ARM20</strong> — рішення з акцентом саме на магазини одягу, із сітками
                 розмірів і фотографіями товару. Кожне з них має свої сильні сторони — це
                 порівняння не про те, яке гірше, а про те, які критерії варто перевірити
-                самостійно перед вибором.
+                самостійно перед вибором. Десять таких критеріїв із тестом на демо за пів години
+                ми зібрали в статті{' '}
+                <a href={HOW_TO_CHOOSE} className="link-more">
+                  «Як обрати програму для магазину одягу» <ChevronRight size={20} />
+                </a>
+                , а те, як влаштовано облік за розмірами й кольорами, — у статті{' '}
+                <a href={SIZES_ARTICLE} className="link-more">
+                  «Облік одягу за розмірами і кольорами» <ChevronRight size={20} />
+                </a>
+                .
               </p>
             </Reveal>
           </div>
