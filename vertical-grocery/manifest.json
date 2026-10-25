@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "moduleId": "vertical-grocery",
+  "version": "2.6.3",
+  "minHostPlatform": 21,
+  "entry": "remote-entry.js",
+  "keyId": "2a73632c13044371",
+  "builtAt": "2026-10-25T10:16:53.411Z",
+  "files": {
+    "BarcodeScanner-CQcblLVh.js": "sha384-fWCuIZHEDIV4cwz9WkK7lqfpFGba2svcZB4t+3tIgtA8WCA7cmD8c+hoX3GsL8ON",
+    "GroceryCatalog-CFGxW7A3.js": "sha384-uryrc5I/iocV8JyuKvaEI/LXkSNzeF9G7OIXsofmwCyKqE0Bl3AnJiWO7PIbghYf",
+    "remote-entry.js": "sha384-fL+hKUhHeRIRiaTHG/C5YOB+fvJDzAffNjL2rJGvwBqa1fJSOq2Q6Ggs3N4eHwmE",
+    "style.css": "sha384-92d25J0n1W9EfuQ5TFwzD5U24uHbm29R9Fj06tWcbnGzq1P3FfNgCLJTS2/IEik9"
+  }
+}
