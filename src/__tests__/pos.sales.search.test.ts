@@ -25,8 +25,13 @@ import {
 } from './helpers/pos-fixtures.js';
 
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Kyiv' }).format(new Date());
-const yesterday = () =>
-  new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Kyiv' }).format(new Date(Date.now() - 86_400_000));
+// The calendar day before today, not «24 hours ago»: on the day the clocks go
+// back Kyiv's day lasts 25 hours, and in its last hour 24 hours ago is still today.
+const yesterday = () => {
+  const day = new Date(`${today()}T00:00:00Z`);
+  day.setUTCDate(day.getUTCDate() - 1);
+  return day.toISOString().slice(0, 10);
+};
 
 describe.skipIf(!hasDb)('receipt search', () => {
   let store: TestStore;
@@ -85,8 +90,16 @@ describe.skipIf(!hasDb)('receipt search', () => {
       payments: [{ method: 'card', amount_cents: 200_000 }],
     });
     oldSale = s3.id;
-    // Rung yesterday, from the store's point of view and anyone else's.
-    await pool.query(`UPDATE pos_sales SET created_at = created_at - INTERVAL '1 day' WHERE id = $1`, [oldSale]);
+    // Rung yesterday, from the store's point of view and anyone else's: the
+    // same wall-clock time one calendar day back on the STORE's clock, which
+    // `- INTERVAL '1 day'` on a UTC session is not on a 25-hour day.
+    await pool.query(
+      `UPDATE pos_sales s
+          SET created_at = ((s.created_at AT TIME ZONE st.timezone) - INTERVAL '1 day') AT TIME ZONE st.timezone
+         FROM pos_stores st
+        WHERE st.id = s.store_id AND s.id = $1`,
+      [oldSale]
+    );
     // The cap's receipt was fiscalised.
     await pool.query(
       `INSERT INTO pos_fiscal_receipts
