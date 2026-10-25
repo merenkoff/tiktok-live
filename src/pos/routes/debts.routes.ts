@@ -24,6 +24,7 @@ import { WeighedLineError } from '../weighed.js';
 import { ModifierError } from '../modifiers.service.js';
 import * as debts from '../debts.service.js';
 import * as debtPayment from '../debt-payment.service.js';
+import * as debtChain from '../debt-chain.service.js';
 import * as fiscalService from '../fiscal/fiscal.service.js';
 import { asFiscalError, cashierMessage, supportCode } from '../fiscal/errors.js';
 import { holderFromError } from '../fiscal/offline/holder.js';
@@ -105,6 +106,31 @@ async function sendFiscalRefusal(
   }
   if (fiscal.kind === 'offline_session_open') return reply.code(409).send({ error, ...common });
   return reply.code(503).send({ error, ...common });
+}
+
+/**
+ * A chain could not be given back because ПРРО could not be asked first —
+ * nothing was written: 503, or 409 when another till holds the register or the
+ * store is inside an offline session (a chain is returned only online).
+ */
+async function sendChainRefusal(
+  reply: FastifyReply,
+  storeId: number,
+  customerId: number,
+  refusal: debtChain.ChainFiscalRefusal
+): Promise<unknown> {
+  const fiscal = asFiscalError(refusal.detail.cause, 'Немає звʼязку з ПРРО');
+  const statement = await debts.getStatement(storeId, customerId);
+  const body = {
+    error: cashierMessage(fiscal.kind),
+    code: fiscal.kind,
+    support_code: supportCode(fiscal),
+    credit: statement.credit,
+    open_lines: statement.open_lines,
+  };
+  if (fiscal.kind === 'register_held') return reply.code(409).send({ ...body, holder: holderFromError(fiscal) });
+  if (fiscal.kind === 'offline_session_open') return reply.code(409).send(body);
+  return reply.code(503).send(body);
 }
 
 export function registerDebtsRoutes(fastify: FastifyInstance): void {
@@ -264,4 +290,37 @@ export function registerDebtsRoutes(fastify: FastifyInstance): void {
       return reply.code(400).send({ error: errorMessage(error) });
     }
   });
+
+  // What went through a line's ПРРО prepayment chain, given back — the whole
+  // chain at once (G3_DEBTS.md §11, 2-Б). `prepayments/cancel`: «Скасувати
+  // внески» of an open line, the sum owed again. `chain-return`: the goods of
+  // a line its chain closed, back on the shelf, and all the money for them.
+  for (const [path, run] of [
+    ['/debts/customers/:id/prepayments/cancel', debtChain.cancelChainPrepayments],
+    ['/debts/customers/:id/chain-return', debtChain.returnChainGoods],
+  ] as const) {
+    fastify.post(path, async (request, reply) => {
+      const auth = await ensurePosAuth(request, reply);
+      if (!auth) return;
+      const id = idOf((request.params as { id: string }).id);
+      if (id == null) return reply.code(404).send({ error: NOT_FOUND });
+      const body = (request.body ?? {}) as Record<string, unknown>;
+      try {
+        return await run({
+          storeId: auth.storeId,
+          staffId: auth.staffId,
+          customerId: id,
+          line_id: body.line_id,
+          client_uuid: body.client_uuid,
+          reason_code: body.reason_code,
+          fiscal: { gate: () => fiscalService.preflight(auth.storeId, auth.staffId, readDeviceId(request), 'refund') },
+        });
+      } catch (error) {
+        if (error instanceof debtChain.ChainFiscalRefusal) return sendChainRefusal(reply, auth.storeId, id, error);
+        if (error instanceof debts.DebtError) return sendError(reply, error);
+        // The refund's own refusals — a method the receipt was not paid by.
+        return reply.code(400).send({ error: errorMessage(error) });
+      }
+    });
+  }
 }

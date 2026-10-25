@@ -1816,6 +1816,12 @@ export interface RefundSaleParams {
    * refund goes back in cash.
    */
   cash_rounding?: unknown;
+  /**
+   * The receipt that closed a «під запис» line through its ПРРО prepayment
+   * chain, refunded with every «внесок» of that chain (G3_DEBTS.md §11,
+   * 2-Б): its line, paid partly by «внески», may come back — whole only.
+   */
+  chain_return?: boolean;
 }
 
 export interface RefundSaleTxResult {
@@ -1943,7 +1949,11 @@ export async function refundSaleTx(
   // Money toward goods taken «під запис» (078), not a sale of goods: it is
   // undone by voiding it, which gives it back to the customer's debt.
   if (sale.debt_prepay_item_id != null) {
-    throw new Error('Внесок за борг не повертають — його скасовують, і сума знову стає боргом');
+    throw new Error(
+      sale.fiscal_chain_id
+        ? 'Внесок за борг не повертають окремо — у «Борги» «Скасувати внески» поверне всі внески за цей товар разом'
+        : 'Внесок за борг не повертають — його скасовують, і сума знову стає боргом'
+    );
   }
 
   const paidResult = await client.query(
@@ -1975,17 +1985,22 @@ export async function refundSaleTx(
     const item = itemMap.get(input.sale_item_id);
     if (!item) throw new Error(`Sale item ${input.sale_item_id} not found`);
     if (input.quantity <= 0) throw new Error('Invalid refund quantity');
-    // Its price came in several payments — «внески» and this receipt (078,
-    // G3_DEBTS.md §11) — and a refund of this receipt alone would hand back
-    // only part of what the customer paid for it.
-    if (Number(item.debt_prepaid_cents ?? 0) > 0) {
-      throw new Error(
-        'Цей товар оплачено частинами — повернути його можна, лише скасувавши чек погашення і внески'
-      );
-    }
-
     const already = Number(item.refunded_quantity);
     const available = Number(item.quantity) - already;
+    // Its price came in several payments — «внески» and this receipt (078,
+    // G3_DEBTS.md §11) — and a refund of this receipt alone would hand back
+    // only part of what the customer paid for it. Through a ПРРО prepayment
+    // chain the whole chain comes back together, the goods whole (2-Б).
+    if (Number(item.debt_prepaid_cents ?? 0) > 0) {
+      if (!params.chain_return) {
+        throw new Error(
+          sale.fiscal_chain_id
+            ? 'Цей товар оплачено частинами через ПРРО — його повертають у «Борги», у виписці покупця: ПРРО поверне всі чеки за нього разом'
+            : 'Цей товар оплачено частинами — повернути його можна, лише скасувавши чек погашення і внески'
+        );
+      }
+      if (input.quantity !== available) throw new Error('Товар, оплачений частинами, повертається лише цілим');
+    }
     if (input.quantity > available) {
       throw new Error(`Cannot refund more than available for item ${input.sale_item_id}`);
     }
@@ -2149,6 +2164,89 @@ export async function refundSaleTx(
       amount_cents: line.line_total_cents,
     })),
     writeoffDocumentId,
+  };
+}
+
+/**
+ * A «внесок» given back as money, inside the caller's transaction
+ * (G3_DEBTS.md §11, 2-Б): a refund with no goods lines, for its whole sum,
+ * by the method it was paid with. Only a «внесок» of a ПРРО prepayment chain
+ * comes back this way — the provider returns a chain whole, so the caller
+ * refunds every «внесок» of it at once; one that never reached ПРРО is voided
+ * instead. What it does to the debt is the caller's.
+ */
+export async function refundPrepaymentTx(
+  client: DbClient,
+  params: {
+    storeId: number;
+    staffId: number;
+    saleId: number;
+    client_uuid: string;
+    reason: string;
+    buyer_name?: string | null;
+    fiscal_status: 'none' | 'pending';
+  }
+): Promise<RefundSaleTxResult> {
+  const saleResult = await client.query(
+    `SELECT * FROM pos_sales WHERE id = $1 AND store_id = $2 FOR UPDATE`,
+    [params.saleId, params.storeId]
+  );
+  const sale = saleResult.rows[0];
+  if (!sale) throw new Error('Sale not found');
+  if (sale.debt_prepay_item_id == null) throw new Error('Це не внесок за борг');
+  if (sale.status !== 'completed') throw new Error(`Внесок ${sale.receipt_number} уже повернуто або скасовано`);
+
+  const paidResult = await client.query(`SELECT DISTINCT method FROM pos_payments WHERE sale_id = $1`, [
+    params.saleId,
+  ]);
+  const paidSet = new Set(paidResult.rows.map((row) => String(row.method)));
+  const method = resolveRefundMethod(
+    null,
+    REFUND_METHODS.filter((m) => paidSet.has(m))
+  );
+  // What was taken is what goes back — the «внесок»'s own cash rounding, if
+  // it had one, with it.
+  const totalCents = Number(sale.total_cents);
+  const roundingCents = Number(sale.rounding_cents ?? 0);
+  const cashRounding = Number(sale.cash_rounding ?? 0);
+
+  const refundNumber = await nextRefundNumber(client, params.storeId);
+  const refundResult = await client.query(
+    `INSERT INTO pos_refunds
+       (sale_id, store_id, staff_id, total_cents, reason, client_uuid, refund_number, method,
+        fiscal_status, buyer_name, cash_rounding, rounding_cents)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+     RETURNING id`,
+    [
+      params.saleId,
+      params.storeId,
+      params.staffId,
+      totalCents,
+      params.reason,
+      params.client_uuid,
+      refundNumber,
+      method,
+      params.fiscal_status,
+      params.buyer_name?.trim() || null,
+      cashRounding,
+      roundingCents,
+    ]
+  );
+  await client.query(
+    `UPDATE pos_sales SET refunded_cents = total_cents, status = 'refunded' WHERE id = $1`,
+    [params.saleId]
+  );
+  return {
+    refundId: Number(refundResult.rows[0].id),
+    refundNumber,
+    totalCents,
+    roundingCents,
+    cashRounding,
+    method,
+    saleCustomerId: sale.customer_id == null ? null : Number(sale.customer_id),
+    receiptNumber: String(sale.receipt_number),
+    lines: [],
+    writeoffDocumentId: null,
   };
 }
 

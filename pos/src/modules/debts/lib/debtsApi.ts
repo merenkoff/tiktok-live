@@ -8,6 +8,7 @@
 import { api } from '@pos/platform';
 import type { CartDiscount } from '@pos/platform';
 import type {
+  ChainReturnResult,
   DebtCredit,
   DebtSale,
   DebtStatement,
@@ -118,6 +119,25 @@ export const debtsApi = {
    */
   voidPrepayment(saleId: number): Promise<unknown> {
     return request('post', `/sales/${saleId}/void`);
+  },
+
+  /**
+   * «Скасувати внески» (2-Б): every «внесок» of an open line's ПРРО chain
+   * back to the customer in one return of the chain; the sum is owed again.
+   */
+  cancelPrepayments(customerId: number, body: { line_id: number; client_uuid: string }): Promise<ChainReturnResult> {
+    return request('post', `/debts/customers/${customerId}/prepayments/cancel`, body);
+  },
+
+  /**
+   * The goods of a line its ПРРО chain closed, back on the shelf — `defect`
+   * writes them off instead — and all the money for them back (2-Б).
+   */
+  returnChain(
+    customerId: number,
+    body: { line_id: number; client_uuid: string; reason_code?: 'defect' }
+  ): Promise<ChainReturnResult> {
+    return request('post', `/debts/customers/${customerId}/chain-return`, body);
   },
 
   /**

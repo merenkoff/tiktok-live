@@ -64,10 +64,16 @@ function credit(balance: number) {
   };
 }
 
-/** `partial`: a backend with 078, whose lines say how much of them is paid. */
-function owedLine(partial = false, prepaid = 0) {
+/**
+ * `partial`: a backend with 078, whose lines say how much of them is paid.
+ * `chained`: its «внески» went to a ПРРО prepayment chain (079) — one of them.
+ */
+function owedLine(partial = false, prepaid = 0, chained = false) {
   return {
     ...(partial ? { paid_quantity: 0, prepaid_cents: prepaid } : {}),
+    ...(chained && prepaid > 0
+      ? { chain: { id: 'ls-1-000001-1', provider: 'checkbox', pending: false, prepayments: 1, prepaid_cents: prepaid } }
+      : {}),
     id: 1,
     entry_id: 1,
     created_at: '2026-10-24T09:00:00.000Z',
@@ -119,7 +125,7 @@ async function mockDebts(page: Page, { balance = 0, partial = false, chains = fa
   const statement = () => ({
     customer: { id: 7, name: CUSTOMER.name, phone: CUSTOMER.phone },
     credit: credit(owed),
-    open_lines: owed > 0 ? [owedLine(partial, prepaid)] : [],
+    open_lines: owed > 0 ? [owedLine(partial, prepaid, chains)] : [],
     entries: [...entries].reverse(),
     oldest_open_at: owed > 0 ? '2026-10-24T09:00:00.000Z' : null,
     ...(chains ? { fiscal: { on: true, provider: 'checkbox', chains: true } } : {}),
@@ -212,7 +218,7 @@ async function mockDebts(page: Page, { balance = 0, partial = false, chains = fa
           fiscal,
           warning: null,
           credit: credit(owed),
-          open_lines: [owedLine(true, prepaid)],
+          open_lines: [owedLine(true, prepaid, chains)],
           ...(chains ? { parts: [{ kind: 'prepayment', sale, fiscal }] } : {}),
         },
       });
@@ -242,6 +248,61 @@ async function mockDebts(page: Page, { balance = 0, partial = false, chains = fa
         warning: null,
         credit: credit(0),
         open_lines: [],
+      },
+    });
+  });
+  // «Скасувати внески» (2-Б): the chain's one «внесок» back, the sum owed again.
+  await page.route('**/api/pos/debts/customers/7/prepayments/cancel', async (route) => {
+    sent.push({ path: '/prepayments/cancel', body: route.request().postDataJSON() });
+    const back = prepaid;
+    owed += back;
+    prepaid = 0;
+    entries.push({ ...entry(entries.length + 1, 'payment_void', back), sale_id: 56, receipt_number: 'R-0000056', prepayment: true, prepay_line_id: 1 } as ReturnType<typeof entry>);
+    const refund = {
+      id: 11,
+      refund_number: 'RF-0000011',
+      client_uuid: null,
+      method: 'cash',
+      total_cents: back,
+      rounding_cents: 0,
+      reason: 'Скасування внеску',
+      staff_name: 'Олена',
+      created_at: new Date().toISOString(),
+      fiscal_status: 'done',
+      fiscal: null,
+      items: [],
+    };
+    await route.fulfill({
+      json: {
+        parts: [
+          {
+            kind: 'prepayment',
+            refund_id: 11,
+            fiscal: { ...registered, qr_payload: null, error_code: null, message: null },
+            sale: {
+              id: 56,
+              receipt_number: 'R-0000056',
+              status: 'refunded',
+              subtotal_cents: back,
+              total_cents: back,
+              rounding_cents: 0,
+              items: [],
+              payments: [{ method: 'cash', amount_cents: back }],
+              refunds: [refund],
+              created_at: new Date().toISOString(),
+              staff_name: 'Олена',
+              fiscal_status: 'done',
+              fiscal: registered,
+              fiscal_chain_id: 'ls-1-000001-1',
+              debt_prepayment: { line_id: 1, product_name: SHIRT.product_name, variant_label: SHIRT.label, amount_cents: back },
+            },
+          },
+        ],
+        back_cents: back,
+        warning: null,
+        credit: credit(owed),
+        open_lines: [owedLine(true, 0, chains)],
+        replay: false,
       },
     });
   });
@@ -362,6 +423,26 @@ test('in a store whose ПРРО keeps chains a «внесок» is a «чек п
   // Registered in its chain: not undone by a tap — the chain is returned only whole.
   await expect(page.getByTestId('debts-journal')).toContainText('Внесок · № R-0000056');
   await expect(page.getByTestId('debts-journal').getByRole('button', { name: 'Скасувати' })).toHaveCount(0);
+});
+
+test('«Скасувати внески» gives a chain’s «внески» back whole, the sum owed again (2-Б)', async ({ page }) => {
+  await signIn(page);
+  const sent = await mockDebts(page, { balance: SHIRT.price_cents, partial: true, chains: true });
+
+  await page.goto('/debts/7');
+  await page.getByRole('button', { name: 'Прийняти оплату' }).click();
+  await page.getByPlaceholder('Наприклад: 500').fill('300');
+  await page.getByRole('button', { name: /^Прийняти 300/ }).click();
+  await page.getByRole('button', { name: 'Готово' }).click();
+
+  await page.getByTestId('debts-cancel-prepayments-1').click();
+  await expect(page.getByTestId('debts-chain-words')).toContainText('1 внесок');
+  await page.getByRole('button', { name: /^Повернути 300/ }).click();
+  await expect(page.getByTestId('debts-chain-done-text')).toContainText('1 чек повернення. Сума знову в борг.');
+  await expect(page.getByTestId('debts-chain-returns')).toContainText('Чек повернення RF-0000011 · внесок № R-0000056');
+  expect(sent.find((s) => s.path === '/prepayments/cancel')?.body).toMatchObject({ line_id: 1 });
+  await page.getByRole('button', { name: 'Готово' }).click();
+  await expect(page.getByTestId('debts-cancel-prepayments-1')).toHaveCount(0);
 });
 
 test('the owner’s «Сьогодні» carries the notebook’s three figures', async ({ page }) => {

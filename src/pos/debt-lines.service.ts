@@ -661,7 +661,8 @@ async function assertNothingBuiltOn(
 ): Promise<void> {
   const touched = await client.query(
     `SELECT d.id, d.product_name, d.variant_label, d.sale_id, d.written_off_entry_id,
-            closer.receipt_number AS closed_by,
+            closer.receipt_number AS closed_by, d.fiscal_chain_id,
+            (SELECT s.fiscal_chain_id FROM pos_sales s WHERE s.id = $2) AS voided_chain,
             EXISTS (SELECT 1 FROM pos_sale_items si WHERE si.sale_id = $2 AND si.debt_item_id = d.id) AS units
        FROM pos_debt_items d
        LEFT JOIN pos_sales closer ON closer.id = d.sale_id
@@ -676,6 +677,15 @@ async function assertNothingBuiltOn(
     const title = line.variant_label ? `${line.product_name} · ${line.variant_label}` : String(line.product_name);
     if (line.written_off_entry_id != null) {
       throw new DebtConflict(`«${title}» уже списано — цей платіж не скасовується`, 'written_off');
+    }
+    // A line paid toward through its ПРРО chain (079): the chain expects
+    // exactly what is owed, so nothing outside it may move that sum — the
+    // chain goes back first (2-Б).
+    if (line.fiscal_chain_id != null && line.voided_chain !== line.fiscal_chain_id) {
+      throw new DebtConflict(
+        `За «${title}» уже є внески в ПРРО — спершу скасуйте їх («Скасувати внески»)`,
+        'chain_open'
+      );
     }
     if (line.sale_id != null && Number(line.sale_id) !== params.saleId) {
       const by = line.closed_by ? `чек ${line.closed_by}` : 'інший чек';

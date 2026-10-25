@@ -65,9 +65,17 @@ export interface DebtLine {
    * The ПРРО prepayment chain the line's «внески» went to (079, G3_DEBTS.md
    * §11 «Крок 2»): in that provider the line closes on a receipt of its own,
    * and `pending` says an earlier document of it is still being registered.
+   * `prepayments` / `prepaid_cents` — its «внески» that stand, what
+   * «Скасувати внески» gives back all at once (2-Б; absent before it).
    * Absent from a backend older than 079.
    */
-  chain?: { id: string; provider: string; pending: boolean } | null;
+  chain?: {
+    id: string;
+    provider: string;
+    pending: boolean;
+    prepayments?: number;
+    prepaid_cents?: number;
+  } | null;
 }
 
 export interface DebtEntry {
@@ -95,6 +103,21 @@ export interface DebtEntry {
    * undone by a void. Absent from a backend older than 2-В.
    */
   fiscal_status?: string | null;
+  /** The ПРРО prepayment chain the entry's sale is a document of (2-Б). */
+  chain_id?: string | null;
+  /**
+   * On the payment of the receipt that closed a line through its chain, while
+   * the goods can still come back (2-Б): the whole chain is returned with
+   * them, `back_cents` to the customer over `documents` return receipts.
+   */
+  chain_return?: {
+    line_id: number;
+    product_name: string;
+    variant_label: string;
+    provider: string;
+    documents: number;
+    back_cents: number;
+  } | null;
 }
 
 /**
@@ -189,6 +212,32 @@ export interface PayDebtResult {
   open_lines: DebtLine[];
   /** Every document of the request, in the order they were made. Absent from a backend older than 079. */
   parts?: PayDebtPart[];
+}
+
+/**
+ * One refund of a chain given back (2-Б): `prepayment` — a «внесок» back as
+ * money; `chain_close` — the receipt that closed the line, its goods back.
+ */
+export interface ChainReturnPart {
+  kind: 'prepayment' | 'chain_close';
+  /** The sale after the refund; its `refunds` carry this one. */
+  sale: DebtSale;
+  refund_id: number;
+  /** The return document registered by this call; null on a repeat or while it is still to be. */
+  fiscal: (Omit<SaleFiscalDoc, 'error_message'> & { message?: string | null }) | null;
+}
+
+/** What `POST …/prepayments/cancel` and `POST …/chain-return` answer (2-Б). */
+export interface ChainReturnResult {
+  parts: ChainReturnPart[];
+  /** What goes back to the customer, every refund with its cash rounding. */
+  back_cents: number;
+  /** Set while a return receipt is still to be registered: the money goes back, nothing is repeated. */
+  warning: string | null;
+  credit: DebtCredit;
+  open_lines: DebtLine[];
+  /** This `client_uuid` had been used already — nothing new happened. */
+  replay: boolean;
 }
 
 /** One line of the cart, as `POST /debts/issue` takes it. */

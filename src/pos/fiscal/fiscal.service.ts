@@ -51,6 +51,7 @@ import {
 } from './shifts.service.js';
 import type {
   FiscalCallCtx,
+  FiscalChainReturn,
   FiscalChainStep,
   FiscalProviderId,
   FiscalRefundDoc,
@@ -1152,6 +1153,120 @@ export async function fiscalizeRefund(
   return toView(done, result);
 }
 
+/** One refund of a prepayment chain being given back, and the chain document it undoes. */
+export interface ChainReturnDocInput {
+  refundId: number;
+  /** The refund's own key — the ledger row's request id. */
+  requestId: string;
+  /** What goes back: the refund with its cash rounding. */
+  totalCents: number;
+  /** The provider's id of the chain document this refund returns. */
+  relatedProviderDocId: string;
+}
+
+/** What a refund of a chain asks the provider for — the retry asks it again from this. */
+interface ChainReturnPayload {
+  kind: 'chain_return';
+  relationId: string;
+  cashierName: string;
+  relatedProviderDocId: string;
+}
+
+function pickChainReturn(answers: FiscalChainReturn[], relatedProviderDocId: string): FiscalResult {
+  const hit = answers.find((answer) => answer.relatedProviderDocId === relatedProviderDocId);
+  if (!hit) {
+    throw new FiscalError('ПРРО не повернуло цей документ ланцюжка', 'unknown', {
+      providerCode: 'chain_return_unlinked',
+    });
+  }
+  return hit.result;
+}
+
+/**
+ * Register the return of a WHOLE prepayment chain (G3_DEBTS.md §11 «Крок 2»,
+ * 2-Б). The provider returns no part of a chain: one call answers with a
+ * return document per document of it, newest first, each matched here to its
+ * refund by the document it undoes.
+ *
+ * A ledger row per refund, as for any refund, opened before the call — so a
+ * timeout leaves rows the retry finds, and the retry asks for the whole chain
+ * again, which the provider answers with the returns it already made. The
+ * first row carries the call; the others share its answer, or its failure.
+ */
+export async function fiscalizeChainReturn(
+  gate: FiscalGate,
+  input: { relationId: string; cashierName: string; docs: ChainReturnDocInput[] }
+): Promise<FiscalView[]> {
+  const ctx = gate.ctx as FiscalContext;
+  const ops = ctx.provider.prepaymentChain;
+  if (!ops) {
+    throw new FiscalError('ПРРО магазину не веде ланцюжків передплати', 'rejected', {
+      providerCode: 'chain_unsupported',
+    });
+  }
+  const rows: ledger.FiscalReceiptRow[] = [];
+  for (const doc of input.docs) {
+    const payload: ChainReturnPayload = {
+      kind: 'chain_return',
+      relationId: input.relationId,
+      cashierName: input.cashierName,
+      relatedProviderDocId: doc.relatedProviderDocId,
+    };
+    rows.push(
+      await ledger.openDocument({
+        storeId: ctx.storeId,
+        docType: 'refund',
+        refundId: doc.refundId,
+        shiftId: gate.shiftRowId,
+        provider: ctx.provider.id,
+        requestId: doc.requestId,
+        totalCents: doc.totalCents,
+        requestPayload: payload,
+      })
+    );
+  }
+
+  let answers: FiscalChainReturn[] = [];
+  let first: { row: ledger.FiscalReceiptRow; result: FiscalResult };
+  try {
+    first = await runDocument(
+      gate,
+      rows[0],
+      async (callCtx) => {
+        answers = await ops.returnChain(callCtx, input.relationId, { cashierName: input.cashierName });
+        return pickChainReturn(answers, input.docs[0].relatedProviderDocId);
+      },
+      'live',
+      { providerText: true }
+    );
+  } catch (error) {
+    if (error instanceof FiscalDocumentFailed) {
+      for (const row of rows.slice(1)) {
+        await ledger.markFailed(row, error.cause, { park: isTerminal(error.cause.kind) });
+      }
+    }
+    throw error;
+  }
+
+  const views = [toView(first.row, first.result)];
+  for (let i = 1; i < rows.length; i++) {
+    try {
+      const result = await attachProviderReceiptText(
+        ctx,
+        gate,
+        rows[i],
+        pickChainReturn(answers, input.docs[i].relatedProviderDocId),
+        true
+      );
+      views.push(toView(await ledger.markDone(rows[i], result), result));
+    } catch (raw) {
+      const err = asFiscalError(raw, 'Помилка ПРРО');
+      views.push(toView(await ledger.markFailed(rows[i], err), null));
+    }
+  }
+  return views;
+}
+
 /** Cash in/out — службове внесення / видача. No parent document. */
 export async function fiscalizeService(
   gate: FiscalGate,
@@ -1632,6 +1747,29 @@ async function retryOne(gate: FiscalGate, row: ledger.FiscalReceiptRow): Promise
   const doc = payload.rows[0]?.request_payload;
   if (!doc) {
     await ledger.markAbandoned(row.id, 'no_payload', 'Документ не містить запиту для повтору');
+    return;
+  }
+
+  // A refund of a prepayment chain: the whole chain is asked for again, and
+  // the provider answers with the returns it already made (2-Б).
+  if (row.doc_type === 'refund' && doc.kind === 'chain_return') {
+    const chain = doc as ChainReturnPayload;
+    const ops = ctx.provider.prepaymentChain;
+    if (!ops) {
+      await ledger.markAbandoned(row.id, 'chain_unsupported', 'ПРРО магазину не веде ланцюжків передплати');
+      return;
+    }
+    await runDocument(
+      gate,
+      row,
+      async (callCtx) =>
+        pickChainReturn(
+          await ops.returnChain(callCtx, chain.relationId, { cashierName: chain.cashierName }),
+          chain.relatedProviderDocId
+        ),
+      'background',
+      { providerText: true }
+    );
     return;
   }
 

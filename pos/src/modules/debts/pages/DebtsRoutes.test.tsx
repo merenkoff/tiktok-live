@@ -291,6 +291,60 @@ describe('one customer’s statement', () => {
     expect(screen.getByTestId('debts-undo-unregistered')).toHaveTextContent('лише якщо в кабінеті Checkbox');
   });
 
+  it('gives a chain back whole: «Скасувати внески (N)» under its line, «Повернути товар» on the payment that closed one', async () => {
+    const chain = { id: 'ls-1-000002-1', provider: 'checkbox', pending: false, prepayments: 2, prepaid_cents: 40000 };
+    statement = {
+      ...statement,
+      fiscal: { on: true, provider: 'checkbox', chains: true },
+      open_lines: [line(2, 'Кепка', 19000, { quantity: 1, remaining_quantity: 1, paid_quantity: 0, prepaid_cents: 40000, chain })],
+      entries: [
+        {
+          id: 9,
+          kind: 'payment',
+          amount_cents: -29000,
+          created_at: '2026-10-25T12:00:00Z',
+          staff_name: 'Олена',
+          reason: null,
+          sale_id: 60,
+          receipt_number: 'R-0000060',
+          prepayment: false,
+          prepay_line_id: null,
+          fiscal_status: 'done',
+          chain_id: 'ls-1-000001-1',
+          chain_return: { line_id: 1, product_name: 'Куртка', variant_label: 'M', provider: 'checkbox', documents: 2, back_cents: 59000 },
+        },
+      ],
+    };
+    const user = userEvent.setup();
+    draw('/debts/7');
+    await screen.findByRole('heading', { name: 'Оксана' });
+    await user.click(screen.getByTestId('debts-cancel-prepayments-2'));
+    expect(screen.getByTestId('debts-cancel-prepayments')).toHaveTextContent('2 внески');
+    await user.click(within(screen.getByTestId('debts-cancel-prepayments')).getByRole('button', { name: 'Ні' }));
+
+    await user.click(screen.getByTestId('debts-chain-return-9'));
+    expect(screen.getByTestId('debts-chain-return')).toHaveTextContent('«Куртка · M» — на полицю');
+  });
+
+  it('offers no chain back where the store’s ПРРО keeps no chains', async () => {
+    statement = {
+      ...statement,
+      fiscal: { on: true, provider: 'checkbox', chains: false },
+      open_lines: [
+        line(2, 'Кепка', 19000, {
+          quantity: 1,
+          remaining_quantity: 1,
+          paid_quantity: 0,
+          prepaid_cents: 40000,
+          chain: { id: 'ls-1-000002-1', provider: 'checkbox', pending: false, prepayments: 2, prepaid_cents: 40000 },
+        }),
+      ],
+    };
+    draw('/debts/7');
+    await screen.findByRole('heading', { name: 'Оксана' });
+    expect(screen.queryByTestId('debts-cancel-prepayments-2')).toBeNull();
+  });
+
   it('keeps the sheet up with the server’s words when the undo is refused', async () => {
     statement = {
       ...statement,

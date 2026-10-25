@@ -47,6 +47,11 @@ export function customerScope(kind: 'pay' | 'return' | 'writeoff', customerId: n
   return `${kind}:${customerId}`;
 }
 
+/** Giving a line's ПРРО chain back (2-Б): the kind, the customer and the line. */
+export function chainScope(kind: 'cancel' | 'goods', customerId: number, lineId: number): string {
+  return `chain-${kind}:${customerId}:${lineId}`;
+}
+
 /** The key of an unanswered write in this scope, while it is still worth replaying. */
 export function unansweredKey(scope: string, now = Date.now()): string | null {
   const hit = unanswered.get(scope);
