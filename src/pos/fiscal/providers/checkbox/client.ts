@@ -113,8 +113,13 @@ export interface CheckboxReceipt {
   total_rest?: number | null;
   round_sum?: number | null;
   rounding_mode?: CheckboxRoundingMode | null;
-  /** Set on every receipt of a prepayment chain — Checkbox's own "order number". */
+  /**
+   * Set on every receipt of a prepayment chain — the chain's number, which is
+   * our own `custom_relation_id` (sandbox run of 2026-10-25, answer 1).
+   */
   pre_payment_relation_id?: string | null;
+  /** On a return receipt: the receipt it returns — how a chain's returns are told apart. */
+  related_receipt_id?: string | null;
 }
 
 export interface CheckboxReport {
@@ -183,9 +188,11 @@ export interface CheckboxServicePayload {
 
 /**
  * `POST /prepayment-receipts` — opens a chain for these goods with a part of
- * their sum. The fiscal receipt carries one line «Передплата за замовленням
- * #N» at the paid sum; the goods appear only in its footer. `payments` must
- * stay below the goods' total (`prepayment.sum_equals_total_sum`).
+ * their sum. On the receipt the goods are the real ones, with their prices
+ * and discounts, and a `PRE_PAYMENT` discount «Залишок до сплати» brings it
+ * down to the paid sum — not the wiki's one line «Передплата за замовленням
+ * #N» (sandbox run of 2026-10-25). `payments` must stay below the goods'
+ * total (`prepayment.sum_equals_total_sum`).
  */
 export interface CheckboxPrepaymentPayload {
   id: string;
@@ -199,9 +206,11 @@ export interface CheckboxPrepaymentPayload {
 
 /**
  * `POST /prepayment-receipts/{relation_id}` — «Створення додаткових чеків
- * передплати та чека післяплати» (OpenAPI 2.106.4): a further prepayment, or
- * the after-payment receipt with the real goods once the rest is paid. Which
- * of the two a sum makes is for the sandbox to confirm (sandbox-prepayment.ts).
+ * передплати та чека післяплати» (OpenAPI 2.106.4). The sum decides which
+ * (sandbox run of 2026-10-25, answers 2–4): below `left_to_pay` it is one
+ * more prepayment; at or above it, the after-payment that closes the chain,
+ * with change for the cash above it — and cash rounded under `rounding_mode`
+ * closes it as a sale's does.
  */
 export interface CheckboxChainPaymentPayload {
   id: string;
@@ -219,7 +228,14 @@ export interface CheckboxChainReturnPayload {
 /** `PrePaymentReceiptStatus`. */
 export type CheckboxPrepaymentStatus = 'PARTIAL_PAID' | 'FULL_PAID' | 'CANCELLED' | 'PARTIAL_CANCELLED';
 
-/** `GET /prepayment-receipts/{relation_id}` — `PrePaymentReceiptInfo`, narrowed. */
+/**
+ * `GET /prepayment-receipts/{relation_id}` — `PrePaymentReceiptInfo`, narrowed.
+ *
+ * `receipt_chain` holds the ids (`receipts_chain`, beside it, the same
+ * receipts in full). After a return `returned_receipts` stays EMPTY and
+ * `paid_sum`/`left_to_pay` do not change; what says which return undid which
+ * receipt is `returned_receipts_mapping` (sandbox run of 2026-10-25, answer 9).
+ */
 export interface CheckboxPrepaymentRelation {
   id: string;
   relation_id: string;
@@ -231,6 +247,8 @@ export interface CheckboxPrepaymentRelation {
     pre_payment_receipts: string[];
     after_payment_receipt?: string | null;
     returned_receipts?: string[] | null;
+    /** The id of each returned receipt → the id of its return receipt. */
+    returned_receipts_mapping?: Record<string, string> | null;
   };
 }
 

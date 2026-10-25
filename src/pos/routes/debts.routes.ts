@@ -29,6 +29,7 @@ import { asFiscalError, cashierMessage, supportCode } from '../fiscal/errors.js'
 import { holderFromError } from '../fiscal/offline/holder.js';
 import { badRange } from './analytics.routes.js';
 import { errorMessage, readDeviceId } from './_shared.js';
+import { formatUah } from '../core/money.js';
 
 function idOf(value: string): number | null {
   const id = Number(value);
@@ -55,10 +56,13 @@ function sendError(reply: FastifyReply, error: unknown): unknown {
 }
 
 /**
- * A repayment that ПРРО stopped. `preflight` — nothing was written: 503, or
- * 409 when another till holds the register. `document` — the provider refused
- * the receipt, it was voided and the goods are owed again: 502. Either way the
- * answer carries the debt as it stands, so the screen redraws the truth.
+ * A repayment that ПРРО stopped. `preflight` — nothing of the document was
+ * written: 503, or 409 when another till holds the register or the store is
+ * inside an offline session (a «внесок» never goes offline). `document` — the
+ * provider refused it, it was voided and the goods are owed again: 502.
+ * Either way the answer carries the debt as it stands, so the screen redraws
+ * the truth — and when it was not the first document of the sum (§11 «Крок
+ * 2»), the sales of the ones that DID go through and what to hand back.
  */
 async function sendFiscalRefusal(
   reply: FastifyReply,
@@ -68,26 +72,39 @@ async function sendFiscalRefusal(
 ): Promise<unknown> {
   const fiscal = asFiscalError(refusal.detail.cause, 'Немає звʼязку з ПРРО');
   const statement = await debts.getStatement(storeId, customerId);
+  const { paidSaleIds, notTakenCents, part } = refusal.detail;
   const common = {
     code: fiscal.kind,
     message: cashierMessage(fiscal.kind),
     support_code: supportCode(fiscal),
     credit: statement.credit,
     open_lines: statement.open_lines,
+    part,
+    sale_ids: paidSaleIds,
+    not_taken_cents: notTakenCents,
   };
+  // After an earlier document went through, the sentence says so: the money
+  // for it stays, the rest goes back.
+  const tail =
+    paidSaleIds.length > 0
+      ? ` Попередні чеки пройшли; решту поверніть покупцеві — ${formatUah(notTakenCents)}.`
+      : '';
   if (refusal.detail.stage === 'document') {
+    const undone = part === 'prepayment' ? 'Внесок скасовано, сума знову в борг.' : 'Чек погашення скасовано, товари знову в борг.';
     return reply.code(502).send({
-      error: `${cashierMessage(fiscal.kind)}. Чек погашення скасовано, товари знову в борг.`,
+      error: `${cashierMessage(fiscal.kind)}. ${undone}${tail}`,
       ...common,
       sale_id: refusal.detail.saleId,
       sale_voided: refusal.detail.voided,
       sale_kept: !refusal.detail.voided,
     });
   }
+  const error = tail ? `${cashierMessage(fiscal.kind)}.${tail}` : cashierMessage(fiscal.kind);
   if (fiscal.kind === 'register_held') {
-    return reply.code(409).send({ error: cashierMessage(fiscal.kind), ...common, holder: holderFromError(fiscal) });
+    return reply.code(409).send({ error, ...common, holder: holderFromError(fiscal) });
   }
-  return reply.code(503).send({ error: cashierMessage(fiscal.kind), ...common });
+  if (fiscal.kind === 'offline_session_open') return reply.code(409).send({ error, ...common });
+  return reply.code(503).send({ error, ...common });
 }
 
 export function registerDebtsRoutes(fastify: FastifyInstance): void {
@@ -233,8 +250,8 @@ export function registerDebtsRoutes(fastify: FastifyInstance): void {
         client_uuid: body.client_uuid,
         cash_rounding: body.cash_rounding,
         fiscal: {
-          gateFor: () => fiscalService.preflight(auth.storeId, auth.staffId, readDeviceId(request)),
-          isOn: () => fiscalService.fiscalisesStore(auth.storeId),
+          gateFor: (op) => fiscalService.preflight(auth.storeId, auth.staffId, readDeviceId(request), op),
+          capability: () => fiscalService.fiscalCapability(auth.storeId),
         },
       });
     } catch (error) {

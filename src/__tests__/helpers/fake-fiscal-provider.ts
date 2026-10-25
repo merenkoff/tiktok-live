@@ -15,7 +15,10 @@ import { FiscalError, type FiscalErrorKind } from '../../pos/fiscal/errors.js';
 import type {
   FiscalRequisites,
   FiscalCallCtx,
+  FiscalChainReturn,
+  FiscalChainState,
   FiscalCredentials,
+  FiscalPrepaymentChainOps,
   FiscalProbe,
   FiscalProvider,
   FiscalProviderId,
@@ -66,6 +69,86 @@ export interface FakeProviderOptions {
   offline?: boolean;
   /** What `fetchRequisites` answers; defaults to `FAKE_REQUISITES`. */
   requisites?: FiscalRequisites;
+  /**
+   * Declare prepayment chains (default: not declared — a provider without
+   * them, so a «внесок» under ПРРО is refused as before step 2).
+   */
+  chains?: boolean;
+}
+
+/** One chain as the fake keeps it — Checkbox's rules from the sandbox run of 2026-10-25. */
+interface FakeChain {
+  relationId: string;
+  totalCents: number;
+  paidCents: number;
+  /** Request ids of its documents: the prepayments, then the after-payment. */
+  documents: string[];
+  status: FiscalChainState['status'];
+  /** Request id of a document → the provider id of its return. */
+  returns: Record<string, string>;
+}
+
+/**
+ * Prepayment chains in memory: `registerSale` with a `chain` lands here
+ * (through {@link FakeFiscalProvider.registerChain}), and these are the reads
+ * and the return beside it. A document's provider id is the fake's own
+ * (`fake-doc-N`), so `returns` is keyed by it, as Checkbox's mapping is.
+ */
+export class FakeChainOps implements FiscalPrepaymentChainOps {
+  readonly calls: string[] = [];
+  readonly chains = new Map<string, FakeChain>();
+  /** Make the next `returnChain` fail with this kind. */
+  returnError: FiscalErrorKind | null = null;
+
+  constructor(private readonly owner: FakeFiscalProvider) {}
+
+  state(chain: FakeChain): FiscalChainState {
+    const docIds = chain.documents.map((id) => this.owner.documents.get(id)?.providerDocId ?? id);
+    return {
+      relationId: chain.relationId,
+      status: chain.status,
+      totalCents: chain.totalCents,
+      paidCents: chain.paidCents,
+      leftCents: chain.status === 'open' ? chain.totalCents - chain.paidCents : 0,
+      documents: docIds,
+      returns: { ...chain.returns },
+      raw: { fake: true },
+    };
+  }
+
+  async getChain(_ctx: FiscalCallCtx, relationId: string): Promise<FiscalChainState | null> {
+    this.calls.push(`getChain:${relationId}`);
+    const chain = this.chains.get(relationId);
+    return chain ? this.state(chain) : null;
+  }
+
+  async returnChain(
+    _ctx: FiscalCallCtx,
+    relationId: string,
+    _opts: { cashierName: string }
+  ): Promise<FiscalChainReturn[]> {
+    this.calls.push(`returnChain:${relationId}`);
+    if (this.returnError) {
+      const kind = this.returnError;
+      this.returnError = null;
+      throw new FiscalError(`fake chain return ${kind}`, kind);
+    }
+    const chain = this.chains.get(relationId);
+    if (!chain) throw new FiscalError('no such chain', 'rejected', { providerCode: 'chain_missing' });
+    if (chain.status !== 'returned') {
+      for (const requestId of chain.documents) {
+        const original = this.owner.documents.get(requestId)!;
+        chain.returns[original.providerDocId] = this.owner.mintReturnFor(original).providerDocId;
+      }
+      chain.status = 'returned';
+    }
+    // Newest first, as Checkbox answers (answer 9).
+    return [...chain.documents].reverse().map((requestId) => {
+      const original = this.owner.documents.get(requestId)!;
+      const returnId = chain.returns[original.providerDocId];
+      return { relatedProviderDocId: original.providerDocId, result: this.owner.returnDocument(returnId)! };
+    });
+  }
 }
 
 /**
@@ -235,6 +318,10 @@ export class FakeFiscalProvider implements FiscalProvider {
 
   /** Present only when constructed with `offline: true`. */
   readonly offline?: FakeOfflineOps;
+  /** Present only when constructed with `chains: true`. */
+  readonly prepaymentChain?: FakeChainOps;
+  /** Return documents of returned chains, by their provider id. */
+  private readonly returnDocs = new Map<string, FiscalResult>();
   requisites: FiscalRequisites;
   /** Make `fetchRequisites` fail with this kind — separately from the shared error queue. */
   requisitesError: FiscalErrorKind | null = null;
@@ -248,6 +335,7 @@ export class FakeFiscalProvider implements FiscalProvider {
     this.requireOpenShift = opts.requireOpenShift ?? true;
     this.requisites = opts.requisites ?? FAKE_REQUISITES;
     if (opts.offline) this.offline = new FakeOfflineOps(this);
+    if (opts.chains) this.prepaymentChain = new FakeChainOps(this);
     if (opts.shiftOpen) {
       this.shift = {
         providerShiftId: 'fake-shift-0',
@@ -273,6 +361,8 @@ export class FakeFiscalProvider implements FiscalProvider {
     this.renderError = null;
     this.nextMode = null;
     this.seq = 0;
+    this.prepaymentChain?.chains.clear();
+    this.returnDocs.clear();
   }
 
   private take(): void {
@@ -361,7 +451,73 @@ export class FakeFiscalProvider implements FiscalProvider {
   // ── Documents ─────────────────────────────────────────────────────────────
 
   async registerSale(_ctx: FiscalCallCtx, doc: FiscalSaleDoc): Promise<FiscalResult> {
+    if (doc.chain) return this.registerChain(doc);
     return this.register('registerSale', doc, doc.totalCents);
+  }
+
+  /**
+   * A document of a prepayment chain, by Checkbox's rules (sandbox run of
+   * 2026-10-25): an opening below its goods' sum, then prepayments below what
+   * is left, and the after-payment of exactly that. A provider without chains
+   * refuses one outright, as the orchestrator must never send it.
+   */
+  private registerChain(doc: FiscalSaleDoc): FiscalResult {
+    const ops = this.prepaymentChain;
+    const step = doc.chain!;
+    const owed = doc.lines.reduce((sum, line) => sum + line.lineTotalCents, 0);
+    return this.register('registerSale', doc, doc.totalCents, () => {
+      if (!ops) throw new FiscalError('fake: no chains here', 'rejected', { providerCode: 'chain_unsupported' });
+      const chain = ops.chains.get(step.relationId);
+      if (step.op === 'open') {
+        if (chain) throw new FiscalError('relation id taken', 'rejected', { providerCode: 'chain_id_taken' });
+        if (doc.totalCents >= owed) throw new FiscalError('sum equals total', 'rejected', { providerCode: 'chain_sum' });
+        return () =>
+          ops.chains.set(step.relationId, {
+            relationId: step.relationId,
+            totalCents: owed,
+            paidCents: doc.totalCents,
+            documents: [doc.requestId],
+            status: 'open',
+            returns: {},
+          });
+      }
+      if (!chain) throw new FiscalError('no such chain', 'rejected', { providerCode: 'chain_missing' });
+      if (chain.status !== 'open') throw new FiscalError('chain closed', 'rejected', { providerCode: 'chain_closed' });
+      const left = chain.totalCents - chain.paidCents;
+      if (owed !== left) {
+        throw new FiscalError(`fake: ${left} left, document says ${owed}`, 'rejected', {
+          providerCode: 'chain_left_mismatch',
+        });
+      }
+      if (doc.totalCents > left) throw new FiscalError('pays more than left', 'rejected', { providerCode: 'chain_sum' });
+      return () => {
+        chain.documents.push(doc.requestId);
+        chain.paidCents += doc.totalCents;
+        if (chain.paidCents === chain.totalCents) chain.status = 'paid';
+      };
+    });
+  }
+
+  /** A return document for a chain document — `returnChain`'s own receipts. */
+  mintReturnFor(original: FiscalResult): FiscalResult {
+    const n = ++this.seq;
+    const result: FiscalResult = {
+      providerDocId: `fake-doc-${n}`,
+      fiscalCode: `FAKE${String(n).padStart(6, '0')}`,
+      fiscalDate: new Date().toISOString(),
+      taxUrl: `https://cabinet.tax.gov.test/check/fake-doc-${n}`,
+      qrPayload: `fake-qr-${n}`,
+      vatCents: null,
+      receiptText: `FAKE RETURN OF ${original.providerDocId}`,
+      controlNumber: null,
+      raw: { fake: true, returns: original.providerDocId },
+    };
+    this.returnDocs.set(result.providerDocId, result);
+    return result;
+  }
+
+  returnDocument(providerDocId: string): FiscalResult | null {
+    return this.returnDocs.get(providerDocId) ?? null;
   }
 
   async registerRefund(_ctx: FiscalCallCtx, doc: FiscalRefundDoc): Promise<FiscalResult> {
@@ -375,7 +531,9 @@ export class FakeFiscalProvider implements FiscalProvider {
   private register(
     method: string,
     doc: FiscalSaleDoc | FiscalRefundDoc | FiscalServiceDoc,
-    totalCents: number
+    totalCents: number,
+    /** Checks a document must pass (a chain's rules); returns what to do once it is created. */
+    validate?: () => () => void
   ): FiscalResult {
     this.record(method, doc);
 
@@ -395,6 +553,7 @@ export class FakeFiscalProvider implements FiscalProvider {
     if (this.requireOpenShift && this.shift?.status !== 'open') {
       throw new FiscalError('shift is closed', 'shift_closed');
     }
+    const created = validate?.();
 
     const n = ++this.seq;
     const result: FiscalResult = {
@@ -412,6 +571,7 @@ export class FakeFiscalProvider implements FiscalProvider {
     this.nextMode = null;
     if (mode) result.mode = mode;
     this.documents.set(doc.requestId, result);
+    created?.();
     return result;
   }
 

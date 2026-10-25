@@ -47,6 +47,7 @@ import * as modifiers from './modifiers.service.js';
 import { allocateCartDiscount, mergePlainLines, pricePlainLine } from './sales.service.js';
 import type { SaleDraftLine } from './sales.service.js';
 import { refundLineAmount } from './lineMoney.js';
+import { fiscalCapability } from './fiscal/fiscal.service.js';
 import { formatQuantity, isWeighed, type WeightSource } from './weighed.js';
 import {
   DebtConflict,
@@ -120,6 +121,14 @@ export interface DebtLineView {
   price_per: number;
   /** How the weight was taken; null for goods counted by the piece. */
   weight_source: WeightSource | null;
+  /**
+   * The ПРРО prepayment chain the line's «внески» went to (079, G3_DEBTS.md
+   * §11 «Крок 2»): in that provider the line closes with its own «чек
+   * післяплати», never on one receipt with other lines, and `pending` says
+   * an earlier document of it is still being registered — no «внесок» and no
+   * closing until it is.
+   */
+  chain: { id: string; provider: string; pending: boolean } | null;
 }
 
 export interface DebtEntryView {
@@ -142,6 +151,13 @@ export interface DebtEntryView {
 export interface DebtStatement {
   customer: { id: number; name: string; phone: string };
   credit: DebtCreditView;
+  /**
+   * What the store's ПРРО can do with this debt: `chains` false where it
+   * fiscalises — no «внесок» can be registered there (step 1's
+   * `prepay_needs_chain`) — and a line whose `chain` is of `provider` closes
+   * through it (§11 «Крок 2»).
+   */
+  fiscal: { on: boolean; provider: string | null; chains: boolean };
   open_lines: DebtLineView[];
   /** The latest entries of the journal, newest first. */
   entries: DebtEntryView[];
@@ -214,6 +230,14 @@ function toLineView(row: Record<string, unknown>): DebtLineView {
     note: String(row.note ?? ''),
     price_per: Number(row.price_per ?? 1),
     weight_source: (row.weight_source as WeightSource | null) ?? null,
+    chain:
+      row.fiscal_chain_id == null
+        ? null
+        : {
+            id: String(row.fiscal_chain_id),
+            provider: String(row.fiscal_chain_provider ?? ''),
+            pending: row.chain_pending === true,
+          },
   };
 }
 
@@ -223,6 +247,13 @@ const LINE_COLUMNS = `
   i.unit_price_cents, i.line_discount_cents,
   i.line_total_cents, i.sale_id, i.written_off_entry_id, i.note,
   i.price_per, i.weight_source,
+  i.fiscal_chain_id, i.fiscal_chain_provider,
+  (i.fiscal_chain_id IS NOT NULL AND EXISTS (
+     SELECT 1 FROM pos_sales cs
+       LEFT JOIN pos_fiscal_receipts cr ON cr.sale_id = cs.id AND cr.doc_type = 'sale'
+      WHERE cs.store_id = i.store_id AND cs.fiscal_chain_id = i.fiscal_chain_id
+        AND cs.status = 'completed' AND cr.status IS DISTINCT FROM 'done'
+  )) AS chain_pending,
   s.receipt_number`;
 
 async function readLines(
@@ -334,9 +365,13 @@ export async function getStatement(storeId: number, customerId: number): Promise
     [storeId, customerId]
   );
   const c = customer.rows[0];
+  // Never fails the statement: a store whose ПРРО cannot be read now is told
+  // it fiscalises without chains — the till then offers no «внесок» there.
+  const fiscal = await fiscalCapability(storeId).catch(() => ({ on: true, provider: null, chains: false }));
   return {
     customer: { id: Number(c.id), name: String(c.name ?? ''), phone: String(c.phone ?? '') },
     credit,
+    fiscal,
     open_lines: open,
     entries: entries.rows.map(toEntryView),
     oldest_open_at: open[0]?.created_at ?? null,

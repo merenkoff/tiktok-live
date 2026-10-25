@@ -8,8 +8,11 @@
 
 import type {
   CheckboxCashPayment,
+  CheckboxChainPaymentPayload,
   CheckboxGoodItemPayload,
   CheckboxPayment,
+  CheckboxPrepaymentPayload,
+  CheckboxPrepaymentRelation,
   CheckboxReceipt,
   CheckboxRoundingMode,
   CheckboxSellOfflinePayload,
@@ -17,6 +20,7 @@ import type {
   CheckboxServicePayload,
 } from './client.js';
 import type {
+  FiscalChainState,
   FiscalDocLine,
   FiscalDocPayment,
   FiscalRefundDoc,
@@ -150,6 +154,75 @@ export function mapSellOfflinePayload(
     ...mapSellPayload(doc),
     fiscal_code: stamp.fiscalCode,
     fiscal_date: stamp.fiscalDate.toISOString(),
+  };
+}
+
+/**
+ * The first «внесок» toward a line: a chain for the line's goods — `goods`
+ * built by `mapLine`, the very mapping a sale's lines go through, so a line
+ * discount or a share of the cart discount reaches Checkbox as its `DISCOUNT
+ * VALUE` and a weighed line as grams at a price per kilogram (sandbox run of
+ * 2026-10-25, answers 5 and 6) — and our number for it, which Checkbox takes
+ * as the chain's own (answer 1). A «внесок» is never rounded: the till takes
+ * it as a sum it can be paid in, so `rounding_mode` stays absent.
+ */
+export function mapPrepaymentPayload(doc: FiscalSaleDoc): CheckboxPrepaymentPayload {
+  if (!doc.chain) throw new FiscalError('Not a chain document', 'rejected');
+  const mode = roundingMode(doc);
+  return {
+    id: doc.requestId,
+    cashier_name: doc.cashierName,
+    goods: doc.lines.map((line) => mapLine(line, false)),
+    payments: doc.payments.map(mapPayment),
+    ...(mode ? { rounding_mode: mode } : {}),
+    custom_relation_id: doc.chain.relationId,
+  };
+}
+
+/**
+ * A further document of an open chain — one more prepayment, or the
+ * after-payment that closes it: only the money leaves, Checkbox takes the
+ * goods from the chain. The after-payment's cash is what was handed over and
+ * its rounding is the sale's (answer 4: our rounded cash with
+ * `rounding_mode` closes the chain exactly as it settles a sale).
+ */
+export function mapChainPaymentPayload(doc: FiscalSaleDoc): CheckboxChainPaymentPayload {
+  const mode = roundingMode(doc);
+  return {
+    id: doc.requestId,
+    cashier_name: doc.cashierName,
+    payments: doc.payments.map(mapPayment),
+    ...(mode ? { rounding_mode: mode } : {}),
+  };
+}
+
+/**
+ * Checkbox's view of a chain, in the contract's words. `PARTIAL_CANCELLED`
+ * was never seen in the sandbox; it is read as returned, which is what it
+ * means for us — no further document may go into it.
+ */
+export function toChainState(relation: CheckboxPrepaymentRelation): FiscalChainState {
+  const chain = relation.receipt_chain ?? { pre_payment_receipts: [] };
+  const total = Number(relation.total_sum) || 0;
+  const paid = Number(relation.paid_sum) || 0;
+  const status =
+    relation.pre_payment_status === 'PARTIAL_PAID'
+      ? 'open'
+      : relation.pre_payment_status === 'FULL_PAID'
+        ? 'paid'
+        : 'returned';
+  return {
+    relationId: relation.relation_id,
+    status,
+    totalCents: total,
+    paidCents: paid,
+    leftCents: typeof relation.left_to_pay === 'number' ? relation.left_to_pay : Math.max(0, total - paid),
+    documents: [
+      ...(chain.pre_payment_receipts ?? []),
+      ...(chain.after_payment_receipt ? [chain.after_payment_receipt] : []),
+    ],
+    returns: { ...(chain.returned_receipts_mapping ?? {}) },
+    raw: relation,
   };
 }
 
