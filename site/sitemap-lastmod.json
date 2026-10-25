@@ -16,8 +16,8 @@
     "hash": "0849894676854b94"
   },
   "/pos/kvity": {
-    "lastmod": "2026-10-25",
-    "hash": "c1159400fe67e102"
+    "lastmod": "2026-10-26",
+    "hash": "07ba7a6e89e6f167"
   },
   "/pos/kafe": {
     "lastmod": "2026-10-25",
@@ -37,7 +37,7 @@
   },
   "/dovidka": {
     "lastmod": "2026-10-26",
-    "hash": "f5a63f0624b2d36f"
+    "hash": "404945b36a3c2a65"
   },
   "/about": {
     "lastmod": "2026-10-25",
@@ -58,6 +58,14 @@
   "/dovidka/kvitkovyi-magazyn": {
     "lastmod": "2026-10-25",
     "hash": "00ede98a793aba77"
+  },
+  "/dovidka/oblik-pakuvannya-u-kvitkovomu-magazyni": {
+    "lastmod": "2026-10-26",
+    "hash": "ffbb0c9c9610a6ca"
+  },
+  "/dovidka/oblik-heliyu-i-kulok-u-kvitkovomu-magazyni": {
+    "lastmod": "2026-10-26",
+    "hash": "37c459e16de01418"
   },
   "/dovidka/yak-obraty-programu-dlya-magazynu-odyagu": {
     "lastmod": "2026-10-26",
