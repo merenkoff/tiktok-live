@@ -25,6 +25,11 @@ export { ScanWedge } from '../components/cashier/ScanWedge';
 // the next vertical that asks a question does not write a second one.
 export { ModifierSheet } from '../components/cashier/ModifierSheet';
 export type { ModifierSheetChoice } from '../components/cashier/ModifierSheet';
+// The weight pad (platform 21, TechDocs/grocery/G4_WEIGHED.md): a weighed
+// variant is rung by typing what the scale shows, and the cart opens it again
+// to change a weight. Host UI so the fallback catalog and a grocery vertical
+// ask the same way and price with the server's own sum.
+export { WeightPad } from '../components/cashier/WeightPad';
 // The price tag, rendered off-screen and made visible only to the print engine
 // by the `@media print` rules in `styles/tokens.css`. Those rules ship with the
 // HOST page, not with a module's `style.css` (which is Tailwind utilities

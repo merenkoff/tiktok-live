@@ -34,6 +34,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   api,
+  cartLineCents,
   cashierApi,
   computeCartDiscountCents,
   formatUah,
@@ -183,7 +184,9 @@ export default function CheckoutAction({ lines, customer, cartDiscount, totalCen
       quantity: line.quantity,
       unit: line.unit,
       unitPriceCents: line.unit_price_cents,
-      totalCents: line.unit_price_cents * line.quantity,
+      // The server's own sum: grams × price per kilogram on a weighed line.
+      totalCents: cartLineCents(line),
+      pricePer: line.price_per ?? 1,
     }));
     let row: IssueRow;
     try {

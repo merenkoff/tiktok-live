@@ -44,6 +44,14 @@ export interface DebtLine {
   sale_id: number | null;
   receipt_number: string | null;
   note: string;
+  /**
+   * 1000 on weighed goods (migration 075): `quantity` grams at a price per
+   * kilogram, owed and returned only whole. Absent from a backend older than
+   * 075 → 1.
+   */
+  price_per?: number;
+  /** How the weight was taken; null for goods counted by the piece. */
+  weight_source?: string | null;
 }
 
 export interface DebtEntry {
@@ -122,4 +130,6 @@ export interface IssueItem {
   quantity: number;
   modifiers?: number[];
   note?: string;
+  /** How a weighed line was weighed — the server refuses a weighed line without it (Г4). */
+  weight_source?: string;
 }

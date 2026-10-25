@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { api, formatUah } from '@pos/platform';
+import { api, formatUah, unitPriceLabel } from '@pos/platform';
 import type { ProductVariant } from '../../../types';
 import { Printer, PrinterColor, Segmented, X } from '@pos/platform/ui';
 import { buildPriceTags, defaultCopies, variantLabel, type PriceTag } from '../../../lib/priceTag';
@@ -55,7 +55,16 @@ export interface PriceTagsDialogProduct {
   variants: Array<
     Pick<
       ProductVariant,
-      'id' | 'label' | 'unit' | 'price_cents' | 'compare_at_cents' | 'sku' | 'barcode' | 'quantity' | 'is_active'
+      | 'id'
+      | 'label'
+      | 'unit'
+      | 'price_cents'
+      | 'compare_at_cents'
+      | 'sku'
+      | 'barcode'
+      | 'quantity'
+      | 'is_active'
+      | 'price_per'
     >
   >;
 }
@@ -78,6 +87,8 @@ type Row = {
   unit: string;
   priceCents: number;
   compareAtCents: number | null;
+  /** 1000 on a weighed variant: the tag says «/кг» and the price per 100 g. */
+  pricePer: number;
   sku: string | null;
   barcode: string | null;
   copies: number;
@@ -117,6 +128,7 @@ export function PriceTagsDialog({
           unit: v.unit,
           priceCents: v.price_cents,
           compareAtCents: v.compare_at_cents ?? null,
+          pricePer: v.price_per ?? 1,
           sku: v.sku,
           barcode: v.barcode,
           copies: defaultCopies(received ? received.byVariant.get(v.id) ?? 0 : v.quantity, v.unit),
@@ -187,6 +199,7 @@ export function PriceTagsDialog({
           unit: r.unit,
           price_cents: r.priceCents,
           compare_at_cents: r.compareAtCents,
+          price_per: r.pricePer,
           sku: r.sku,
           barcode: r.barcode,
           quantity: 0,
@@ -341,7 +354,7 @@ export function PriceTagsDialog({
                           {r.label && <p className="text-[13px] text-sq-muted">{r.label}</p>}
                         </td>
                         <td className="text-right tabular-nums whitespace-nowrap">
-                          <p>{formatUah(r.priceCents)}</p>
+                          <p>{unitPriceLabel(r.priceCents, r.unit, r.pricePer)}</p>
                           {r.compareAtCents != null && r.compareAtCents > r.priceCents && (
                             <p className="text-[13px] text-sq-muted">було {formatUah(r.compareAtCents)}</p>
                           )}

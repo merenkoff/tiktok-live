@@ -5,11 +5,15 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Minus, Pencil, Plus, TagLine, Trash2, User, X } from '../../platform/glyphs';
 import { formatUah } from '../../lib/money';
+import { ukPlural } from '../../lib/plural';
 import type { CartDiscount, CartLine } from '@pos/platform';
-import { computeCartDiscountCents } from '@pos/platform';
+import { cartItemCount, cartLineCents, computeCartDiscountCents } from '@pos/platform';
 import type { PosCustomer } from '../../types';
+import { MANUAL_WEIGHT_NOTE } from '../../lib/weighed';
 import { CustomerPicker } from './CustomerPicker';
 import { CartDiscountSheet } from './CartDiscountSheet';
+import { cartLineView } from './cartLineView';
+import { WeightPad } from './WeightPad';
 import { cartDiscountLabel, isCustomerDiscount } from '../../lib/customerDiscount';
 import { useDragScroll } from '../../hooks/useDragScroll';
 
@@ -59,13 +63,16 @@ export function MobileCartSheet({
   customerExtra,
   moduleActions,
 }: Props) {
-  const count = lines.reduce((s, l) => s + l.quantity, 0);
-  const subtotal = lines.reduce((s, l) => s + l.unit_price_cents * l.quantity, 0);
+  // A weighing is one item, whatever it weighs — 350 g of cheese is not 350 goods.
+  const count = cartItemCount(lines);
+  const subtotal = lines.reduce((s, l) => s + cartLineCents(l), 0);
   const discountCents = computeCartDiscountCents(lines, cartDiscount);
   const total = Math.max(0, subtotal - discountCents);
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [discountOpen, setDiscountOpen] = useState(false);
+  /** The weighed line whose weight is being retyped — a weighing has no «+1 г». */
+  const [weighing, setWeighing] = useState<CartLine | null>(null);
   const listRef = useDragScroll<HTMLDivElement>();
 
   useEffect(() => {
@@ -91,7 +98,7 @@ export function MobileCartSheet({
                 {customer?.name ?? 'Клієнт не вибраний'}
               </span>
               <span className="block text-[13px] text-sq-muted tabular-nums">
-                {count} {count === 1 ? 'товар' : 'товарів'}
+                {count} {ukPlural(count, 'товар', 'товари', 'товарів')}
               </span>
             </span>
           </button>
@@ -113,15 +120,7 @@ export function MobileCartSheet({
             <ul>
               {lines.map((line) => {
                 const selected = selectedUid === line.uid;
-                const lineTotal = line.unit_price_cents * line.quantity;
-                const compareTotal =
-                  line.compare_at_cents != null ? line.compare_at_cents * line.quantity : null;
-                const caption = [
-                  line.variant_label,
-                  line.quantity > 1 ? `${line.quantity} × ${formatUah(line.unit_price_cents)}` : null,
-                ]
-                  .filter(Boolean)
-                  .join(' · ');
+                const { total: lineTotal, compareTotal, caption, weighed, manual } = cartLineView(line);
                 return (
                   <li key={line.uid} className={`rounded-xl ${selected ? 'bg-sq-sidebar' : ''}`}>
                     <button
@@ -137,6 +136,11 @@ export function MobileCartSheet({
                         <p className="text-base font-medium text-sq-text truncate">{line.product_name}</p>
                         {caption && (
                           <p className="text-[13px] text-sq-muted mt-0.5 truncate tabular-nums">{caption}</p>
+                        )}
+                        {manual && (
+                          <p className="text-[12px] text-sq-muted mt-0.5" data-testid="cart-line-manual">
+                            {MANUAL_WEIGHT_NOTE}
+                          </p>
                         )}
                         {line.note && (
                           <p
@@ -164,23 +168,37 @@ export function MobileCartSheet({
                     </button>
                     {selected && !locked && (
                       <div className="flex items-center gap-2 px-2 pb-2.5">
-                        <button
-                          type="button"
-                          aria-label="Менше"
-                          className="h-10 w-10 grid place-items-center rounded-[10px] bg-white ring-1 ring-sq-divider"
-                          onClick={() => onSetQty(line.uid, line.quantity - 1)}
-                        >
-                          <Minus size={20} />
-                        </button>
-                        <span className="text-[17px] font-semibold w-8 text-center tabular-nums">{line.quantity}</span>
-                        <button
-                          type="button"
-                          aria-label="Більше"
-                          className="h-10 w-10 grid place-items-center rounded-[10px] bg-white ring-1 ring-sq-divider"
-                          onClick={() => onSetQty(line.uid, line.quantity + 1)}
-                        >
-                          <Plus size={20} />
-                        </button>
+                        {weighed ? (
+                          <button
+                            type="button"
+                            className="min-h-10 px-3 inline-flex items-center gap-1.5 rounded-[10px] bg-white ring-1 ring-sq-divider text-[15px] font-medium"
+                            onClick={() => setWeighing(line)}
+                            data-testid="cart-line-reweigh"
+                          >
+                            <Pencil size={16} />
+                            Змінити вагу
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              aria-label="Менше"
+                              className="h-10 w-10 grid place-items-center rounded-[10px] bg-white ring-1 ring-sq-divider"
+                              onClick={() => onSetQty(line.uid, line.quantity - 1)}
+                            >
+                              <Minus size={20} />
+                            </button>
+                            <span className="text-[17px] font-semibold w-8 text-center tabular-nums">{line.quantity}</span>
+                            <button
+                              type="button"
+                              aria-label="Більше"
+                              className="h-10 w-10 grid place-items-center rounded-[10px] bg-white ring-1 ring-sq-divider"
+                              onClick={() => onSetQty(line.uid, line.quantity + 1)}
+                            >
+                              <Plus size={20} />
+                            </button>
+                          </>
+                        )}
                         <button
                           type="button"
                           className="ml-auto min-h-10 px-2 inline-flex items-center gap-1 text-[15px] text-red-600 font-medium"
@@ -277,6 +295,22 @@ export function MobileCartSheet({
           current={cartDiscount}
           onClose={() => setDiscountOpen(false)}
           onApply={onSetCartDiscount}
+        />
+      )}
+      {weighing && (
+        <WeightPad
+          productName={weighing.product_name}
+          variantLabel={weighing.variant_label}
+          unit={weighing.unit}
+          pricePer={weighing.price_per ?? 1}
+          priceCents={weighing.unit_price_cents}
+          initialQuantity={weighing.quantity}
+          confirmLabel="Зберегти"
+          onConfirm={(quantity) => {
+            onSetQty(weighing.uid, quantity);
+            setWeighing(null);
+          }}
+          onClose={() => setWeighing(null)}
         />
       )}
     </div>

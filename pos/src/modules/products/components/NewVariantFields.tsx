@@ -11,6 +11,7 @@ import { PackFields } from './PackFields';
 import { captionClass } from './formStyles';
 import { compositionHint, type ProductShape } from '../lib/productShape';
 import type { NewVariantValues } from '../lib/newVariant';
+import { isWeighedUnit, priceCaption, unitLabels } from '../lib/weighedUnit';
 
 /**
  * The one-variant field set — a florist's stem, a café's cup, anything the
@@ -35,6 +36,8 @@ export function NewVariantFields({
 }) {
   const grid = compact ? 'grid gap-3' : 'grid gap-3 sm:grid-cols-2';
   const set = (patch: Partial<NewVariantValues>) => onChange({ ...value, ...patch });
+  // Sold by weight here: the price is per kilogram and the stock is typed in kilograms.
+  const weighed = isWeighedUnit(vertical, value.unit);
 
   return (
     <div className={`${grid} sm:col-span-2`}>
@@ -43,13 +46,13 @@ export function NewVariantFields({
         schema={vertical.attributes}
         value={value.attributes}
         onChange={(attributes) => set({ attributes })}
-        unit={{ value: value.unit, options: vertical.units, onChange: (unit) => set({ unit }) }}
+        unit={{ value: value.unit, options: vertical.units, onChange: (unit) => set({ unit }), labels: unitLabels(vertical) }}
       />
       <label className="flex flex-col gap-1.5">
-        <span className={captionClass}>Ціна, грн</span>
+        <span className={captionClass}>{priceCaption(weighed, value.unit)}</span>
         <input
           className="sq-input tabular-nums"
-          placeholder="Ціна, грн"
+          placeholder={priceCaption(weighed, value.unit)}
           inputMode="decimal"
           value={value.price}
           onChange={(e) => set({ price: e.target.value })}
@@ -60,11 +63,11 @@ export function NewVariantFields({
         <p className="text-[13px] text-sq-muted self-end pb-3">Залишок рахується зі складників.</p>
       ) : (
         <label className="flex flex-col gap-1.5">
-          <span className={captionClass}>Залишок</span>
+          <span className={captionClass}>{weighed ? 'Залишок, кг' : 'Залишок'}</span>
           <input
             className="sq-input tabular-nums"
-            placeholder="Залишок"
-            inputMode="numeric"
+            placeholder={weighed ? '0,000' : 'Залишок'}
+            inputMode={weighed ? 'decimal' : 'numeric'}
             value={value.qty}
             onChange={(e) => set({ qty: e.target.value })}
           />

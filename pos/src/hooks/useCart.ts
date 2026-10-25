@@ -5,6 +5,8 @@
 import { create } from 'zustand';
 import type { CatalogItem, ExchangeDraft, PosCustomer } from '../types';
 import { discountAfterCustomerChange } from '../lib/customerDiscount';
+import { lineAmountCents } from '../lib/lineMoney';
+import { isWeighed, MAX_WEIGHED_QUANTITY, weightProblem, type WeightSource } from '../lib/weighed';
 import {
   cartLineUid,
   cleanLineNote,
@@ -60,6 +62,20 @@ export interface CartLine {
   modifiers?: CartLineModifier[];
   /** Kitchen note. Never part of any label, and never on the fiscal line. */
   note?: string;
+  /**
+   * What `unit_price_cents` (and `compare_at_cents`) is the price of
+   * (migration 075): 1000 on a weighed line — `quantity` grams or millilitres
+   * at a price per kilogram or litre. Absent reads as 1, which is every line
+   * before weighed goods. Read off the catalog, never sent: the server
+   * derives it from the variant.
+   */
+  price_per?: number;
+  /**
+   * How a weighed line's weight was taken (`manual`: typed from a plain
+   * scale's display). Sent with the line — the server refuses a weighed line
+   * without it, which is how it tells a till that does not know weights.
+   */
+  weight_source?: WeightSource;
 }
 
 /** One stem in a bouquet being rung, per one unit of it. */
@@ -116,6 +132,17 @@ interface CartStore {
    * clothing and flowers catalogs still make.
    */
   addItem: (item: CatalogItem, qty?: number, choice?: CartLineChoice) => void;
+  /**
+   * One weighing of a weighed variant (TechDocs/grocery/G4_WEIGHED.md):
+   * `quantity` grams or millilitres, always its own line — two weighings are
+   * two receipt lines, because R(350) + R(200) is not always R(550) — never
+   * capped by stock and never refused at zero (the server lets a weighed sale
+   * take the shelf below nothing; the scale, not the counter, is the truth).
+   * Null when it went in; otherwise the sentence, which is also the banner.
+   * `addItem` refuses a weighed variant, so a catalog that predates weights
+   * cannot ring one as «1» of something priced per kilogram.
+   */
+  addWeighed: (item: CatalogItem, quantity: number, source?: WeightSource) => string | null;
   /** A bouquet assembled at the counter — always its own line. */
   addAssembled: (input: AssembledLineInput) => void;
   /**
@@ -127,6 +154,7 @@ interface CartStore {
    * non-empty cart; this is what happens once it has been cleared.
    */
   restore: (cart: RestoredCart) => void;
+  /** A new count — or, on a weighed line, a new weight in base units. */
   setQty: (uid: string, quantity: number) => void;
   remove: (uid: string) => void;
   clear: () => void;
@@ -175,20 +203,32 @@ export interface RestoredCart {
 }
 
 /**
+ * What one line comes to before the cart discount — the server's own sum
+ * (`lineAmountCents`): count × price, or grams × price per kilogram rounded
+ * half a kopeck up. Structural, like the discount below, so the offline
+ * receipt's sale items go through it too.
+ */
+export function cartLineCents(line: Pick<CartLine, 'quantity' | 'unit_price_cents' | 'price_per'>): number {
+  return lineAmountCents(line.quantity, line.unit_price_cents, line.price_per ?? 1);
+}
+
+/** How many goods the lines hold: a weighing is one, whatever it weighs. */
+export function cartItemCount(lines: ReadonlyArray<Pick<CartLine, 'quantity' | 'price_per'>>): number {
+  return lines.reduce((sum, line) => sum + (isWeighed(line.price_per) ? 1 : line.quantity), 0);
+}
+
+/**
  * Mirror backend: cart discount only on lines without product discount.
  * Structural on purpose — the offline receipt (`offline/repository.ts`) totals
  * its own lines with it, and those are sale items, not cart lines.
  */
 export function computeCartDiscountCents(
-  lines: ReadonlyArray<Pick<CartLine, 'compare_at_cents' | 'unit_price_cents' | 'quantity'>>,
+  lines: ReadonlyArray<Pick<CartLine, 'compare_at_cents' | 'unit_price_cents' | 'quantity' | 'price_per'>>,
   cartDiscount: CartDiscount | null
 ): number {
   if (!cartDiscount) return 0;
   const eligible = lines.filter((l) => !l.compare_at_cents);
-  const eligibleSum = eligible.reduce(
-    (s, l) => s + l.unit_price_cents * l.quantity,
-    0
-  );
+  const eligibleSum = eligible.reduce((s, l) => s + cartLineCents(l), 0);
   if (eligibleSum <= 0) return 0;
   if (cartDiscount.type === 'percent') {
     const pct = Math.min(100, Math.max(0, cartDiscount.value));
@@ -223,6 +263,13 @@ export const useCartStore = create<CartStore>((set, get) => ({
     })),
 
   addItem: (item, qty = 1, choice) => {
+    // A price per kilogram rung as «1» would be a gram at the price of a
+    // kilogram on the screen and a refusal at the server: weighing is
+    // `addWeighed`, which every catalog that knows weights calls instead.
+    if (isWeighed(item.price_per)) {
+      set({ banner: `«${item.product_name}» продається на вагу — введіть вагу` });
+      return;
+    }
     if (item.quantity <= 0) {
       set({ banner: 'Немає в наявності' });
       return;
@@ -289,6 +336,42 @@ export const useCartStore = create<CartStore>((set, get) => ({
     set({ lines, banner: null });
   },
 
+  addWeighed: (item, quantity, source = 'manual') => {
+    const refuse = (text: string) => {
+      set({ banner: text });
+      return text;
+    };
+    if (!isWeighed(item.price_per)) return refuse(`«${item.product_name}» продається поштучно, не на вагу`);
+    if (!Number.isInteger(quantity)) return refuse('Вага — до грама');
+    const problem = weightProblem(quantity, item.price_cents, item.price_per);
+    if (problem) return refuse(problem);
+    const meta = discountMeta(item);
+    set({
+      lines: [
+        ...get().lines,
+        {
+          // A fresh uid every time: this weighing is not the last one.
+          uid: `weighed:${crypto.randomUUID()}`,
+          variant_id: item.variant_id,
+          product_name: item.product_name,
+          variant_label: item.label,
+          unit: item.unit,
+          unit_price_cents: item.price_cents,
+          price_per: item.price_per,
+          quantity,
+          // The scale is the truth, not the shelf: only the server's ceiling caps a weight.
+          max_quantity: MAX_WEIGHED_QUANTITY,
+          image_url: item.image_url,
+          compare_at_cents: meta.compare_at_cents,
+          discount_label: meta.discount_label,
+          weight_source: source,
+        },
+      ],
+      banner: null,
+    });
+    return null;
+  },
+
   restore: ({ lines, cartDiscount, customer, preorderId }) => {
     set({
       lines,
@@ -332,6 +415,17 @@ export const useCartStore = create<CartStore>((set, get) => ({
     const lines = get()
       .lines.map((line) => {
         if (line.uid !== uid) return line;
+        if (isWeighed(line.price_per) && quantity > 0) {
+          // A new weight from the pad: the same checks as a first weighing.
+          const problem = Number.isInteger(quantity)
+            ? weightProblem(quantity, line.unit_price_cents, line.price_per)
+            : 'Вага — до грама';
+          if (problem) {
+            set({ banner: problem });
+            return line;
+          }
+          return { ...line, quantity };
+        }
         if (quantity > line.max_quantity) {
           set({ banner: 'Недостатньо залишку' });
           return { ...line, quantity: line.max_quantity };
@@ -356,12 +450,11 @@ export const useCartStore = create<CartStore>((set, get) => ({
       exchange: null,
     }),
 
-  subtotalCents: () =>
-    get().lines.reduce((sum, line) => sum + line.unit_price_cents * line.quantity, 0),
+  subtotalCents: () => get().lines.reduce((sum, line) => sum + cartLineCents(line), 0),
 
   cartDiscountCents: () => computeCartDiscountCents(get().lines, get().cartDiscount),
 
   totalCents: () => Math.max(0, get().subtotalCents() - get().cartDiscountCents()),
 
-  itemCount: () => get().lines.reduce((sum, line) => sum + line.quantity, 0),
+  itemCount: () => cartItemCount(get().lines),
 }));

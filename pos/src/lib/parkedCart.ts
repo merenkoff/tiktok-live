@@ -14,6 +14,7 @@
 import type { CartLine, CartLineComponent } from '../hooks/useCart';
 import type { LineModifierSnapshot } from '../types';
 import { cartLineUid, lineCaption } from './modifiers';
+import { isWeighed, MAX_WEIGHED_QUANTITY } from './weighed';
 
 /**
  * The answers a line can be rung with again: the ones that still exist. A
@@ -56,11 +57,32 @@ export function cartLinesFromParked(cart: {
     components: CartLineComponent[] | null;
     modifiers?: LineModifierSnapshot[] | null;
     note?: string | null;
+    /** 1000 on a weighed line (migration 075); absent on an older server → 1. */
+    price_per?: number;
   }>;
 }): CartLine[] {
   return cart.items.map((item) => {
     const modifiers = liveModifiers(item.modifiers);
     const note = item.note?.trim() ?? '';
+    // A weighing comes back as the weighing it was — its own line, its grams,
+    // retypable on the pad. The parked cart keeps no `weight_source`; in Г4
+    // the only weight a till can take is a typed one, so it is `manual` again
+    // (G4_WEIGHED.md — a scale's label, Г6, will need the cart to keep it).
+    if (isWeighed(item.price_per)) {
+      return {
+        uid: `weighed:parked-${item.id}`,
+        variant_id: item.variant_id,
+        product_name: item.product_name,
+        variant_label: item.label,
+        unit: item.unit,
+        unit_price_cents: item.line_price_cents,
+        price_per: item.price_per,
+        quantity: item.quantity,
+        max_quantity: MAX_WEIGHED_QUANTITY,
+        image_url: item.image_url,
+        weight_source: 'manual',
+      };
+    }
     return {
       // A parked bouquet keeps a line of its own for the same reason it did at
       // the counter: two custom bouquets are two bouquets. A café line takes

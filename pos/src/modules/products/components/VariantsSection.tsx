@@ -6,6 +6,7 @@ import { formatUahCompact } from '@pos/platform';
 import { MoreHorizontal, Plus, SectionHead } from '@pos/platform/ui';
 import { GenerateBarcodeButton } from './GenerateBarcodeButton';
 import { rowName, type VariantDraft } from '../lib/productDraft';
+import { stockText } from '../lib/weighedUnit';
 
 const cell = 'sq-input !min-h-10 !h-10 !py-0 text-[15px] min-w-0';
 
@@ -18,6 +19,7 @@ const cell = 'sq-input !min-h-10 !h-10 !py-0 text-[15px] min-w-0';
  */
 export function VariantsSection({
   variants,
+  weighedUnits = [],
   derived,
   composite,
   rowErrors,
@@ -27,6 +29,11 @@ export function VariantsSection({
   addLabel,
 }: {
   variants: VariantDraft[];
+  /**
+   * The units this store sells by weight (TechDocs/grocery/G4_WEIGHED.md): a
+   * row in one of them is priced per kilogram and shows its stock in them.
+   */
+  weighedUnits?: readonly string[];
   /** A derived composite: the stock column is what the components allow. */
   derived: boolean;
   composite: boolean;
@@ -74,6 +81,7 @@ export function VariantsSection({
                   <VariantRow
                     key={v.id}
                     v={v}
+                    weighed={weighedUnits.includes(v.unit)}
                     name={name}
                     error={error}
                     marked={marked}
@@ -94,6 +102,7 @@ export function VariantsSection({
 
 function VariantRow({
   v,
+  weighed,
   name,
   error,
   marked,
@@ -103,6 +112,8 @@ function VariantRow({
   onOpen,
 }: {
   v: VariantDraft;
+  /** Priced per kilogram, its stock counted in grams. */
+  weighed: boolean;
   name: string;
   error: string | undefined;
   marked: boolean;
@@ -134,6 +145,7 @@ function VariantRow({
             value={v.price}
             onChange={(e) => onPatch(v.id, { price: e.target.value })}
           />
+          {weighed && <span className="block text-[11px] text-sq-muted mt-0.5">за 1 кг</span>}
           {marked && (
             <span className="block text-[11px] text-sq-muted tabular-nums mt-0.5">
               було {formatUahCompact(v.compareAtCents!)}
@@ -142,8 +154,14 @@ function VariantRow({
         </td>
         <td className="align-middle text-right tabular-nums whitespace-nowrap">
           {derived ? 'до ' : ''}
-          {v.quantity}
-          {v.unit ? <span className="text-[13px] text-sq-muted"> {v.unit}</span> : null}
+          {weighed ? (
+            stockText(v.quantity, v.unit, true)
+          ) : (
+            <>
+              {v.quantity}
+              {v.unit ? <span className="text-[13px] text-sq-muted"> {v.unit}</span> : null}
+            </>
+          )}
         </td>
         <td className="align-middle">
           <input

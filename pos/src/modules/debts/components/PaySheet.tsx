@@ -197,7 +197,7 @@ export function PaySheet({ customerId, customerName, openLines, onClose, onChang
                     <span className="block text-[15px] truncate">{lineTitle(line)}</span>
                     <span className="block text-[13px] text-sq-muted">
                       {new Date(line.created_at).toLocaleDateString('uk-UA')} ·{' '}
-                      {quantityText(line.remaining_quantity, line.unit)}
+                      {quantityText(line.remaining_quantity, line.unit, line.price_per)}
                     </span>
                   </span>
                   <span className="text-[15px] font-semibold tabular-nums shrink-0">{formatUah(line.owed_cents)}</span>

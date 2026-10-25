@@ -92,7 +92,27 @@ describe('buildIssueSlip', () => {
     const lines = slipLinesFromServer([
       { product_name: 'Хліб', variant_label: '500 г', quantity: 2, unit: 'шт', unit_price_cents: 3200, line_total_cents: 5760 } as never,
     ]);
-    expect(lines).toEqual([{ title: 'Хліб · 500 г', quantity: 2, unit: 'шт', unitPriceCents: 3200, totalCents: 5760 }]);
+    expect(lines).toEqual([
+      { title: 'Хліб · 500 г', quantity: 2, unit: 'шт', unitPriceCents: 3200, totalCents: 5760, pricePer: 1 },
+    ]);
+  });
+
+  it('prints a weighed line in kilograms at its price per kilogram (Г4)', () => {
+    const lines = slipLinesFromServer([
+      {
+        product_name: 'Сир',
+        variant_label: 'Гауда',
+        quantity: 350,
+        unit: 'г',
+        unit_price_cents: 18990,
+        line_total_cents: 6647,
+        price_per: 1000,
+      } as never,
+    ]);
+    const slip = buildIssueSlip({ ...base, entryId: 7, lines, totalCents: 6647 });
+    expect(slip.items).toEqual([
+      { name: 'Сир · Гауда', quantity: '0,350 кг', unit_price_cents: 18990, line_total_cents: 6647 },
+    ]);
   });
 });
 

@@ -8,7 +8,7 @@
 // rows; the row now says the three things the owner scans for and opens the
 // rest on a tap.
 
-import { formatUahCompact } from '@pos/platform';
+import { displayUnit, formatQuantity, formatUahCompact, isWeighed } from '@pos/platform';
 import type { Product, ProductVariant } from '@pos/platform';
 import { ukPlural } from '../../../lib/plural';
 
@@ -16,9 +16,23 @@ export function pluralVariants(n: number): string {
   return `${n} ${ukPlural(n, 'варіант', 'варіанти', 'варіантів')}`;
 }
 
-/** «420 ₴», or «350–420 ₴» when the variants are not all one price. */
-export function priceRange(variants: ReadonlyArray<Pick<ProductVariant, 'price_cents'>>): string | null {
+/**
+ * «420 ₴», or «350–420 ₴» when the variants are not all one price; a card
+ * sold all by weight says what its prices are for — «189,90 ₴/кг».
+ */
+export function priceRange(
+  variants: ReadonlyArray<Pick<ProductVariant, 'price_cents'> & Partial<Pick<ProductVariant, 'price_per' | 'unit'>>>
+): string | null {
   if (variants.length === 0) return null;
+  const first = variants[0]!;
+  const perUnit =
+    variants.every((v) => isWeighed(v.price_per) && v.unit === first.unit)
+      ? `/${displayUnit(first.unit ?? '', first.price_per)}`
+      : '';
+  return priceSpan(variants) + perUnit;
+}
+
+function priceSpan(variants: ReadonlyArray<Pick<ProductVariant, 'price_cents'>>): string {
   let min = Infinity;
   let max = -Infinity;
   for (const v of variants) {
@@ -38,7 +52,7 @@ export function priceRange(variants: ReadonlyArray<Pick<ProductVariant, 'price_c
  */
 export function stockSummary(
   product: Pick<Product, 'kind' | 'stock_mode'>,
-  variants: ReadonlyArray<Pick<ProductVariant, 'quantity' | 'unit'>>
+  variants: ReadonlyArray<Pick<ProductVariant, 'quantity' | 'unit'> & Partial<Pick<ProductVariant, 'price_per'>>>
 ): string | null {
   if (variants.length === 0) return null;
   const derived = product.kind === 'composite' && product.stock_mode === 'derived';
@@ -48,7 +62,12 @@ export function stockSummary(
   }
   const total = variants.reduce((sum, v) => sum + (v.quantity ?? 0), 0);
   const units = new Set(variants.map((v) => v.unit));
-  return units.size === 1 ? `${total} ${variants[0]!.unit}` : String(total);
+  // Grams sold by weight read as kilograms, like everywhere else on the till.
+  const first = variants[0]!;
+  if (units.size === 1 && variants.every((v) => isWeighed(v.price_per))) {
+    return formatQuantity(Math.max(0, total), first.unit, first.price_per);
+  }
+  return units.size === 1 ? `${total} ${first.unit}` : String(total);
 }
 
 /**

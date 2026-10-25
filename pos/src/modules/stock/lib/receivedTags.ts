@@ -40,6 +40,7 @@ export function receivedTagSources(lines: ReadonlyArray<StockDocumentLine>): Rec
         unit: line.unit ?? 'шт',
         price_cents: line.price_cents,
         compare_at_cents: line.compare_at_cents ?? null,
+        price_per: line.price_per ?? 1,
         sku: line.sku ?? null,
         barcode: line.barcode ?? null,
         quantity: 0,

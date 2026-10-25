@@ -139,7 +139,25 @@ export const POS_API_CLIENT_VERSION = 2;
 //     command, `print_slip`: a non-fiscal slip that says so twice) and
 //     `resolveModuleStationPrinter` / `moduleStationMetaKeys` / `MetaReader` /
 //     `TicketPrinter` (which printer a module's station prints to here).
-export const PLATFORM_VERSION = 20;
+// 21 (2026-10-25): weighed goods (TechDocs/grocery/G4_WEIGHED.md, Г4). A
+//     variant may be priced per kilogram or litre (`price_per` 1000) while it
+//     still counts whole grams, and the barrel hands out the server's own sum
+//     of a line, `lineAmountCents` (grams × price per kg, half a kopeck up),
+//     with `cartLineCents` / `cartItemCount` for a cart and the words around a
+//     weight — `formatQuantity` («0,350 кг»), `displayUnit`, `unitPriceLabel`
+//     («189,90 ₴/кг»), `weighedLineCaption`, `MANUAL_WEIGHT_NOTE` — plus the
+//     weight pad's arithmetic (`weightPadInput`, `parseWeightInput`,
+//     `weightToPadText`, `weightProblem`, `WEIGHED_PRICE_PER`,
+//     `MAX_WEIGHED_QUANTITY`, `WeightSource` / `WeightPadKey`).
+//     `@pos/platform/ui` gains `WeightPad`. The change of meaning the name
+//     snapshot cannot see: `useCartStore.addItem` now refuses a weighed
+//     variant and `addWeighed` rings one, always its own line and never capped
+//     by stock — a module built for 20 that totals the cart as price ×
+//     quantity would show 350 g of cheese as 350 kilograms, and one that
+//     writes a weighed line without `weight_source` is refused by the server.
+//     Hence the bump: the debts module is rebuilt for 21 (its Module Release
+//     follows the app's).
+export const PLATFORM_VERSION = 21;
 
 /**
  * Build version of this bundle — the host web/cashier build, or a module-remote

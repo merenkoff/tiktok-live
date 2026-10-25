@@ -153,8 +153,10 @@ export function StatementPage({ frame }: { frame: DebtsFrame }) {
                     <span className="block text-[15px] truncate">{lineTitle(line)}</span>
                     <span className="block text-[13px] text-sq-muted">
                       {new Date(line.created_at).toLocaleDateString('uk-UA')} ·{' '}
-                      {quantityText(line.remaining_quantity, line.unit)}
-                      {line.returned_quantity > 0 ? ` (повернуто ${quantityText(line.returned_quantity, line.unit)})` : ''}
+                      {quantityText(line.remaining_quantity, line.unit, line.price_per)}
+                      {line.returned_quantity > 0
+                        ? ` (повернуто ${quantityText(line.returned_quantity, line.unit, line.price_per)})`
+                        : ''}
                       {line.note ? ` · ${line.note}` : ''}
                     </span>
                   </span>

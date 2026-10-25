@@ -211,7 +211,14 @@ export function PriceTagsPrintable({
           {tag.compareAtCents != null && (
             <p className="price-tag-old">{money(tag.compareAtCents)} ₴</p>
           )}
-          <p className="price-tag-price">{money(tag.priceCents)} ₴</p>
+          <p className="price-tag-price">
+            {money(tag.priceCents)} ₴{tag.priceUnit ? `/${tag.priceUnit}` : ''}
+          </p>
+          {tag.perHundred && (
+            <p className="price-tag-per">
+              {money(tag.perHundred.cents)} ₴ {tag.perHundred.label}
+            </p>
+          )}
           {tag.barcode ? (
             <Ean13 code={tag.barcode} />
           ) : (
@@ -264,8 +271,13 @@ export function PriceLabel({
 }) {
   const { fonts, barcode } = layout;
   const landscape = layout.orientation === 'landscape';
-  const price = `${money(tag.priceCents)} ₴`;
+  const price = `${money(tag.priceCents)} ₴${tag.priceUnit ? `/${tag.priceUnit}` : ''}`;
   const old = tag.compareAtCents != null ? `${money(tag.compareAtCents)} ₴` : null;
+  // A label has no line to spare: a weighed good's price per 100 g shares the
+  // caption's line, which is cut short rather than wrapped like it.
+  const caption = tag.perHundred
+    ? [tag.variantLabel, `${money(tag.perHundred.cents)} ₴ ${tag.perHundred.label}`].filter(Boolean).join(' · ')
+    : tag.variantLabel;
   const row = priceRowFonts(layout, price, old, tag.sku);
   const gap = mm(LABEL_GAP_MM);
   const lh = LABEL_LINE_HEIGHT;
@@ -351,7 +363,7 @@ export function PriceLabel({
               minHeight: mm(fonts.variant * lh.text),
             }}
           >
-            {tag.variantLabel}
+            {caption}
           </p>
         </div>
 

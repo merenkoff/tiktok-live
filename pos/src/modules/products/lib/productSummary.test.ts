@@ -72,3 +72,18 @@ describe('a card in the archive', () => {
     expect(rowVariants(product([v(1, 1), v(1, 1, { is_active: false })]))).toHaveLength(1);
   });
 });
+
+describe('a card sold by weight (TechDocs/grocery/G4_WEIGHED.md)', () => {
+  const kg = (price_cents: number, quantity: number) => v(price_cents, quantity, { unit: 'г', price_per: 1000 });
+
+  it('says what its prices are for and shows the shelf in kilograms', () => {
+    expect(priceRange([kg(18990, 0)])).toBe('189,90 ₴/кг');
+    expect(priceRange([kg(15000, 0), kg(18990, 0)])).toBe('150–189,90 ₴/кг');
+    expect(stockSummary(product([]), [kg(18990, 2350), kg(18990, 1000)])).toBe('3,350 кг');
+    expect(productSummary(product([kg(18990, 2350)]))).toBe('1 варіант · 189,90 ₴/кг · 2,350 кг');
+  });
+
+  it('names no unit for a card that mixes a weighed variant with a pack', () => {
+    expect(priceRange([kg(18990, 0), v(4590, 3)])).toBe('45,90–189,90 ₴');
+  });
+});

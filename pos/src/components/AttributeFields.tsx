@@ -28,8 +28,12 @@ export function AttributeFields({
   schema: AttributeSpec[];
   value: AttributeValues;
   onChange: (next: AttributeValues) => void;
-  /** Rendered only when the vertical actually offers a choice of units. */
-  unit?: { value: string; options: string[]; onChange: (next: string) => void };
+  /**
+   * Rendered only when the vertical actually offers a choice of units.
+   * `labels` captions an option without changing what is stored — a grocery
+   * store keeps `г` and reads «кг — на вагу» (platform 21).
+   */
+  unit?: { value: string; options: string[]; onChange: (next: string) => void; labels?: Record<string, string> };
   disabled?: boolean;
   className?: string;
 }) {
@@ -97,7 +101,7 @@ export function AttributeFields({
           >
             {unit.options.map((option) => (
               <option key={option} value={option}>
-                {option}
+                {unit.labels?.[option] ?? option}
               </option>
             ))}
           </select>

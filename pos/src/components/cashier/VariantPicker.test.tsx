@@ -301,3 +301,36 @@ describe('VariantPicker — the price before a markdown (D3)', () => {
     expect(screen.queryByTestId('picker-old-price')).toBeNull();
   });
 });
+
+describe('VariantPicker — a weighed variant (TechDocs/grocery/G4_WEIGHED.md)', () => {
+  it('prices per kilogram and offers it even when the books say none is left', async () => {
+    const onPick = vi.fn();
+    const user = userEvent.setup();
+    const cheese = makeCatalogItem({
+      variant_id: 900,
+      product_name: 'Сир',
+      attributes: {},
+      label: 'Гауда',
+      unit: 'г',
+      price_cents: 18990,
+      price_per: 1000,
+      quantity: 0,
+    });
+    const packed = makeCatalogItem({
+      variant_id: 901,
+      product_name: 'Сир',
+      attributes: {},
+      label: 'Пачка 200 г',
+      unit: 'шт',
+      price_cents: 4590,
+      quantity: 0,
+    });
+    render(<VariantPicker productName="Сир" variants={[packed, cheese]} onPick={onPick} onClose={vi.fn()} />);
+    expect(screen.getByText('189,90 ₴/кг')).toBeInTheDocument();
+    expect(screen.getByText('на вагу · за обліком 0,000 кг')).toBeInTheDocument();
+    // The pack at zero is sold out and sinks; the weighed one is not.
+    expect(screen.getByRole('button', { name: /Пачка 200 г/ })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: /Гауда/ }));
+    expect(onPick).toHaveBeenCalledWith(cheese);
+  });
+});

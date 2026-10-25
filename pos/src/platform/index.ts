@@ -38,3 +38,4 @@ export * from './tag-colors';
 export * from './types';
 export * from './urls';
 export * from './version';
+export * from './weighed';

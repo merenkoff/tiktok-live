@@ -232,3 +232,60 @@ describe('RefundSaleDialog', () => {
     expect(draft.refund.client_uuid).toMatch(/^[0-9a-f-]{36}$/);
   });
 });
+
+describe('RefundSaleDialog — weighed goods (TechDocs/grocery/G4_WEIGHED.md)', () => {
+  const cheese = () =>
+    detail({
+      subtotal_cents: 6647 + 9180,
+      total_cents: 6647 + 9180,
+      items: [
+        {
+          id: 3,
+          variant_id: 70,
+          product_name: 'Сир твердий',
+          variant_label: 'Гауда',
+          unit: 'г',
+          quantity: 350,
+          unit_price_cents: 18990,
+          line_total_cents: 6647,
+          refunded_quantity: 0,
+          price_per: 1000,
+          weight_source: 'manual',
+        },
+        {
+          id: 4,
+          variant_id: 71,
+          product_name: 'Хліб',
+          variant_label: '',
+          unit: 'шт',
+          quantity: 2,
+          unit_price_cents: 4590,
+          line_total_cents: 9180,
+          refunded_quantity: 0,
+        },
+      ],
+      payments: [{ id: 1, method: 'card', amount_cents: 6647 + 9180 }],
+    });
+
+  it('offers a weighing whole or not at all, in kilograms, and sends all its grams', async () => {
+    const user = userEvent.setup();
+    const d = cheese();
+    refundSale.mockImplementation(async () => refunded(d));
+    renderWithProviders(<RefundSaleDialog sale={row(d)} detail={d} onClose={() => {}} onRefunded={() => {}} />);
+
+    expect(screen.getByText(/Гауда · 0,350 кг\s+· повертається цілим рядком/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Більше Сир твердий' })).toBeNull();
+    // The loaf next to it still counts in pieces, with its unit.
+    expect(screen.getByText('· доступно 2 шт')).toBeInTheDocument();
+
+    const whole = screen.getByTestId('refund-whole-line');
+    expect(whole).toHaveAttribute('aria-pressed', 'false');
+    await user.click(whole);
+    expect(whole).toHaveAttribute('aria-pressed', 'true');
+    expect(whole).toHaveTextContent('Повертається');
+
+    await user.click(screen.getByRole('button', { name: 'Повернути' }));
+    await waitFor(() => expect(refundSale).toHaveBeenCalledTimes(1));
+    expect(refundSale.mock.calls[0][1]).toEqual([{ sale_item_id: 3, quantity: 350 }]);
+  });
+});

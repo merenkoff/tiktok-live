@@ -373,3 +373,59 @@ describe('RegisterPage — clearing the cart', () => {
     expect(useCartStore.getState().lines).toHaveLength(1);
   });
 });
+
+describe('RegisterPage — a weighed line at checkout (TechDocs/grocery/G4_WEIGHED.md)', () => {
+  function ringCheese(): void {
+    useCartStore.getState().restore({
+      lines: [
+        {
+          uid: 'weighed:1',
+          variant_id: 70,
+          product_name: 'Сир твердий',
+          variant_label: 'Гауда',
+          unit: 'г',
+          unit_price_cents: 18990,
+          price_per: 1000,
+          quantity: 350,
+          max_quantity: 999_999,
+          weight_source: 'manual',
+        },
+      ],
+    });
+  }
+
+  it('sends the grams with how they were weighed, and charges the server’s sum', async () => {
+    signIn('clothing');
+    ringCheese();
+    const completeSale = vi.spyOn(cashierApi, 'completeSale').mockResolvedValue(makeSaleDetail());
+    renderWithProviders(<RegisterPage />, { shell: 'cashier' });
+    expect(await screen.findByPlaceholderText(/^Пошук/)).toBeInTheDocument();
+
+    // 0,350 кг × 189,90 = 66,47 — the button says the same sum the server files.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Оплатити 66,47 ₴' })[0]);
+    const dialog = await screen.findByRole('dialog', { name: 'Оплата' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Готівка' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Прийняти/ }));
+
+    await waitFor(() => expect(completeSale).toHaveBeenCalledTimes(1));
+    expect(completeSale.mock.calls[0][0].items).toEqual([{ variant_id: 70, quantity: 350, weight_source: 'manual' }]);
+    expect(completeSale.mock.calls[0][0].payments).toEqual([{ method: 'cash', amount_cents: 6647 }]);
+  });
+
+  it('parks a weighing with its weight source, which the server drops and the restore puts back', async () => {
+    signIn('clothing');
+    ringCheese();
+    const parkCart = vi.spyOn(api, 'parkCart').mockResolvedValue({ id: 1, label: 'Оксана', items: [] } as never);
+    vi.spyOn(api, 'listParkedCarts').mockResolvedValue([]);
+    renderWithProviders(<RegisterPage />, { shell: 'cashier' });
+    expect(await screen.findByPlaceholderText(/^Пошук/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByTestId('park-cart')[0]);
+    const sheet = await screen.findByTestId('park-cart-sheet');
+    fireEvent.change(within(sheet).getByTestId('park-label'), { target: { value: 'Оксана' } });
+    fireEvent.click(within(sheet).getByTestId('park-submit'));
+
+    await waitFor(() => expect(parkCart).toHaveBeenCalledTimes(1));
+    expect(parkCart.mock.calls[0][0].items).toEqual([{ variant_id: 70, quantity: 350, weight_source: 'manual' }]);
+  });
+});

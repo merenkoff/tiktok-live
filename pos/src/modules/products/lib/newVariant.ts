@@ -5,6 +5,7 @@
 import { uahInputToCents } from '@pos/platform';
 import type { AttributeValues, ProductComponentInput } from '@pos/platform';
 import type { ProductShape } from './productShape';
+import { openingStockOf } from './weighedUnit';
 
 /** Everything one NEW variant is typed as — text, parsed once when it is sent. */
 export interface NewVariantValues {
@@ -37,8 +38,12 @@ export function singleTyped(v: NewVariantValues, defaultUnit: string): boolean {
   );
 }
 
-/** The body `POST /products/:id/variants` and a `createProduct` row take. */
-export function newVariantInput(v: NewVariantValues, shape: ProductShape) {
+/**
+ * The body `POST /products/:id/variants` and a `createProduct` row take.
+ * `weighed`: the unit is sold by weight here, so the opening stock was typed
+ * in kilograms («12,5») and goes out in grams (TechDocs/grocery/G4_WEIGHED.md).
+ */
+export function newVariantInput(v: NewVariantValues, shape: ProductShape, weighed = false) {
   return {
     attributes: v.attributes,
     unit: v.unit,
@@ -47,7 +52,7 @@ export function newVariantInput(v: NewVariantValues, shape: ProductShape) {
     price_cents: uahInputToCents(v.price),
     // A derived composite keeps no stock of its own; the server refuses an
     // opening quantity on one rather than silently dropping it.
-    quantity: shape === 'derived' ? 0 : Number(v.qty) || 0,
+    quantity: shape === 'derived' ? 0 : openingStockOf(v.qty, weighed),
     pack_qty: v.pack.qty.trim() === '' ? null : Number(v.pack.qty),
     pack_label: v.pack.label.trim() === '' ? null : v.pack.label,
     ...(shape ? { components: v.components } : {}),

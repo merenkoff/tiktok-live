@@ -18,6 +18,7 @@ import { canonicalColour, type ColourUse } from '../lib/variantMatrix';
 import type { TechCardRow } from '../data/techCardsApi';
 import { centsToInput, rowName, type VariantDraft } from '../lib/productDraft';
 import type { ProductShape } from '../lib/productShape';
+import { costBaseText, costPerKgText, isWeighedUnit, priceCaption, stockText, unitLabels } from '../lib/weighedUnit';
 
 /**
  * One variant, every field, in a sheet: the table on the card keeps the daily
@@ -52,6 +53,11 @@ export function VariantSheet({
   const [local, setLocal] = useState<VariantDraft>(variant);
   const [error, setError] = useState<string | null>(null);
   const set = (patch: Partial<VariantDraft>) => setLocal((prev) => ({ ...prev, ...patch }));
+  // Sold by weight here (G4_WEIGHED.md): the price is per kilogram already,
+  // while the purchase price is stored per gram — typed per kilogram, kept
+  // as typed on screen and stored with the per-gram step.
+  const weighed = isWeighedUnit(vertical, local.unit);
+  const [costKg, setCostKg] = useState(() => costPerKgText(variant.cost));
 
   const composite = shape !== '';
   const colourSpec = vertical.attributes.find((a) => a.key === 'color' && a.type === 'text');
@@ -139,17 +145,26 @@ export function VariantSheet({
             schema={otherSchema}
             value={local.attributes}
             onChange={(attributes) => set({ attributes })}
-            unit={{ value: local.unit, options: vertical.units, onChange: (unit) => set({ unit }) }}
+            unit={{
+              value: local.unit,
+              options: vertical.units,
+              onChange: (unit) => {
+                set({ unit });
+                // The purchase price box follows what the unit means from here on.
+                setCostKg(costPerKgText(local.cost));
+              },
+              labels: unitLabels(vertical),
+            }}
           />
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1.5">
-            <span className={captionClass}>Ціна, грн</span>
+            <span className={captionClass}>{priceCaption(weighed, local.unit)}</span>
             <input
               className="sq-input tabular-nums"
               inputMode="decimal"
-              placeholder="Ціна, грн"
+              placeholder={priceCaption(weighed, local.unit)}
               value={local.price}
               onChange={(e) => {
                 setError(null);
@@ -158,16 +173,38 @@ export function VariantSheet({
             />
             {error && <span className="text-sm text-red-600">{error}</span>}
           </label>
-          <label className="flex flex-col gap-1.5">
-            <span className={captionClass}>Закупівельна ціна, грн</span>
-            <input
-              className="sq-input tabular-nums"
-              inputMode="decimal"
-              placeholder="Не вказано"
-              value={local.cost}
-              onChange={(e) => set({ cost: e.target.value })}
-            />
-          </label>
+          {weighed ? (
+            <label className="flex flex-col gap-1.5">
+              <span className={captionClass}>Закупівельна ціна за 1 кг, грн</span>
+              <input
+                className="sq-input tabular-nums"
+                inputMode="decimal"
+                placeholder="Не вказано"
+                value={costKg}
+                onChange={(e) => {
+                  setCostKg(e.target.value);
+                  set({ cost: costBaseText(e.target.value) });
+                }}
+              />
+              <span className="text-[12px] text-sq-muted" data-testid="variant-cost-step">
+                Зберігається за 1 г з кроком 1 коп (10 ₴ за 1 кг)
+                {local.cost !== '' && costPerKgText(local.cost) !== centsToInput(uahInputToCents(costKg))
+                  ? ` — запишеться як ${costPerKgText(local.cost)} ₴ за 1 кг`
+                  : ''}
+              </span>
+            </label>
+          ) : (
+            <label className="flex flex-col gap-1.5">
+              <span className={captionClass}>Закупівельна ціна, грн</span>
+              <input
+                className="sq-input tabular-nums"
+                inputMode="decimal"
+                placeholder="Не вказано"
+                value={local.cost}
+                onChange={(e) => set({ cost: e.target.value })}
+              />
+            </label>
+          )}
         </div>
 
         <VariantDiscountEditor
@@ -199,9 +236,7 @@ export function VariantSheet({
 
         <p className="text-[13px] text-sq-muted">
           {shape === 'derived' ? 'Можна зібрати' : 'Залишок'}:{' '}
-          <span className="tabular-nums text-sq-secondary">
-            {local.quantity} {local.unit}
-          </span>
+          <span className="tabular-nums text-sq-secondary">{stockText(local.quantity, local.unit, weighed)}</span>
           {shape === 'derived' ? ' — рахується зі складників' : ' — змінюється документами складу'}
         </p>
       </div>

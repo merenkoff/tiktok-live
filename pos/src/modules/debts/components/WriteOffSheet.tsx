@@ -116,7 +116,7 @@ export function WriteOffSheet({ customerId, openLines, onClose, onChanged }: Pro
                   <span className="min-w-0 flex-1">
                     <span className="block text-[15px] truncate">{lineTitle(line)}</span>
                     <span className="block text-[13px] text-sq-muted">
-                      {quantityText(line.remaining_quantity, line.unit)}
+                      {quantityText(line.remaining_quantity, line.unit, line.price_per)}
                     </span>
                   </span>
                   <span className="text-[15px] font-semibold tabular-nums shrink-0">{formatUah(line.owed_cents)}</span>

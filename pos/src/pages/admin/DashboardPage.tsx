@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, assetUrl, useAuthStore } from '@pos/platform';
 import { formatSignedUah, formatUah } from '../../lib/money';
+import { displayUnit, formatQuantity, isWeighed } from '../../lib/weighed';
 import { toCsv, downloadCsv } from '../../lib/csv';
 import { reportModuleEvent } from '../../modules/telemetry';
 import { useModuleSlots } from '../../modules/featureSlots';
@@ -68,10 +69,28 @@ function buildSummaryCsv(data: SalesSummary): string {
     ['Дата', 'Загальний продаж', 'Чистий дохід', 'Продажі'],
     ...data.daily.map((d) => [d.date, money(d.gross_cents), money(d.net_cents), d.sales_count]),
     [],
-    ['Товар', 'Варіант', 'К-сть', 'Виручка'],
-    ...data.top_items.map((i) => [i.product_name, i.variant_label || '—', i.qty_sold, money(i.revenue_cents)]),
+    ['Товар', 'Варіант', 'К-сть', 'Од.', 'Виручка'],
+    // A weighed line's grams go out as kilograms, like the screen shows them.
+    ...data.top_items.map((i) => [
+      i.product_name,
+      i.variant_label || '—',
+      isWeighed(i.price_per) ? (i.qty_sold / (i.price_per ?? 1)).toFixed(3) : i.qty_sold,
+      isWeighed(i.price_per) ? displayUnit(i.unit ?? '', i.price_per) : i.unit || 'шт',
+      money(i.revenue_cents),
+    ]),
   ];
   return toCsv(rows);
+}
+
+/**
+ * How much of a top item was sold: «12 шт.», «250 г», and a weighed line's
+ * grams as kilograms — «3,500 кг» (TechDocs/grocery/G4_WEIGHED.md). An older
+ * server sends no unit, which reads as pieces, as it always did.
+ */
+function topQuantityText(item: SalesSummary['top_items'][number]): string {
+  if (isWeighed(item.price_per)) return formatQuantity(item.qty_sold, item.unit ?? '', item.price_per);
+  const unit = item.unit || 'шт';
+  return unit === 'шт' ? `${item.qty_sold} шт.` : `${item.qty_sold} ${unit}`;
 }
 
 type Preset = 'today' | '7d' | '30d' | 'month' | 'custom';
@@ -396,8 +415,8 @@ export function DashboardPage() {
                   )}
                 </span>
                 <span className="text-sm text-sq-muted tabular-nums shrink-0">{formatUah(item.revenue_cents)}</span>
-                <span className="w-16 text-right text-sm font-semibold text-sq-text tabular-nums shrink-0">
-                  {item.qty_sold} шт.
+                <span className="min-w-16 text-right text-sm font-semibold text-sq-text tabular-nums shrink-0">
+                  {topQuantityText(item)}
                 </span>
               </li>
             ))}

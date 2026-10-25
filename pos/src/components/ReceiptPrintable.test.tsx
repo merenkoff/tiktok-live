@@ -199,3 +199,30 @@ describe('ReceiptPrintable', () => {
     expect(screen.getByText('Дякуємо за покупку!')).toBeInTheDocument();
   });
 });
+
+describe('ReceiptPrintable — a weighed line (TechDocs/grocery/G4_WEIGHED.md)', () => {
+  it('prints the row the payload brought and the hand-typed mark under it', () => {
+    render(
+      <ReceiptPrintable
+        receipt={receipt({
+          items: [
+            {
+              name: 'Сир твердий',
+              variant_label: 'Гауда',
+              quantity: 350,
+              unit_price_cents: 18990,
+              line_total_cents: 6647,
+              quantity_text: '0.350 кг x 189.90',
+              note: 'вагу введено вручну',
+            },
+          ],
+          subtotal_cents: 6647,
+          total_cents: 6647,
+        })}
+      />
+    );
+    expect(screen.getByText('0.350 кг x 189.90')).toBeInTheDocument();
+    expect(screen.queryByText('350 x 189.90')).toBeNull();
+    expect(screen.getByText('вагу введено вручну')).toHaveClass('receipt-print-note');
+  });
+});

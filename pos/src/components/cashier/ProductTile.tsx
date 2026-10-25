@@ -25,6 +25,12 @@ interface Props {
    * catalog decides that with `tileCompareAt`; here it is only drawn).
    */
   compareAtCents?: number | null;
+  /**
+   * What the price is for, after a slash: «кг» on a weighed product priced per
+   * kilogram (platform 21) — «189,90 ₴/кг», never a bare «189,90 ₴» that reads
+   * as the price of the piece. Absent, the price stands alone as it always did.
+   */
+  priceUnit?: string;
   imageUrl?: string | null;
   stock?: number;
   onClick: () => void;
@@ -59,6 +65,7 @@ export function ProductTile({
   subtitle,
   priceCents,
   compareAtCents,
+  priceUnit,
   imageUrl,
   stock,
   onClick,
@@ -133,7 +140,10 @@ export function ProductTile({
                 {formatUah(compareAtCents)}
               </s>
             )}
-            <span>{formatUah(priceCents)}</span>
+            <span>
+              {formatUah(priceCents)}
+              {priceUnit ? `/${priceUnit}` : ''}
+            </span>
           </p>
         )}
       </div>

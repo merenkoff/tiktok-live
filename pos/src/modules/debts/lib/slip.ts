@@ -29,6 +29,8 @@ export interface SlipLine {
   unit: string;
   unitPriceCents: number;
   totalCents: number;
+  /** 1000 on a weighed line — the quantity prints in kilograms (Г4). */
+  pricePer?: number;
 }
 
 export interface IssueSlipInput {
@@ -65,6 +67,7 @@ export function slipLinesFromServer(lines: readonly DebtLine[]): SlipLine[] {
     unit: line.unit,
     unitPriceCents: line.unit_price_cents,
     totalCents: line.line_total_cents,
+    pricePer: line.price_per ?? 1,
   }));
 }
 
@@ -83,7 +86,7 @@ export function buildIssueSlip(input: IssueSlipInput): SlipData {
     ],
     items: input.lines.map((line) => ({
       name: line.title,
-      quantity: quantityText(line.quantity, line.unit),
+      quantity: quantityText(line.quantity, line.unit, line.pricePer),
       unit_price_cents: line.unitPriceCents,
       line_total_cents: line.totalCents,
     })),
