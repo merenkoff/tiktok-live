@@ -16,11 +16,14 @@ import { RefundSaleDialog } from '../components/RefundSaleDialog';
 import { RefundRows } from '../components/RefundRows';
 import { SaleRoundingLine } from '../components/SaleRounding';
 import { FiscalBadge, FiscalDetailCard } from '../components/FiscalBadge';
-import { ExchangeChip, SaleStatusChip } from '../components/SaleChips';
+import { DebtPrepaymentChip, DebtPrepaymentLine, ExchangeChip, SaleStatusChip } from '../components/SaleChips';
 
-/** Anything still holding unreturned units can be refunded further. */
+/**
+ * Anything still holding unreturned units can be refunded further — but not
+ * a «внесок» (078): it has no goods, and is undone in «Борги».
+ */
 function canRefund(row: LocalSaleRow): boolean {
-  return row.status === 'completed' || row.status === 'partially_refunded';
+  return (row.status === 'completed' || row.status === 'partially_refunded') && !row.debt_prepayment;
 }
 
 const PAGE = 50;
@@ -210,6 +213,7 @@ export function TillReceiptsPage() {
                           <span className="flex flex-wrap justify-end gap-1">
                             <SaleStatusChip status={row.status} />
                             <ExchangeChip of={row.exchange_of_receipt_number} to={row.exchange_sale_number} />
+                            <DebtPrepaymentChip on={row.debt_prepayment} />
                             <FiscalBadge status={row.fiscal_status} />
                           </span>
                         </span>
@@ -371,7 +375,9 @@ function SaleDetailPanel({
           <FiscalDetailCard doc={detail?.fiscal} />
         </div>
 
-        {detail ? (
+        {detail?.debt_prepayment ? (
+          <DebtPrepaymentLine prepayment={detail.debt_prepayment} />
+        ) : detail ? (
           <ul>
             {detail.items.map((item) => (
               <li key={item.id} className="sq-row min-h-12 py-2 flex justify-between items-center gap-3">

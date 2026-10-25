@@ -64,3 +64,34 @@ export function ExchangeChip({
   if (to) return <Chip>Обмін → {to}</Chip>;
   return null;
 }
+
+/**
+ * A «внесок» toward goods taken «під запис» (migration 078): money with no
+ * goods lines, so the list says what it is rather than show an empty receipt.
+ * Undone from the customer's statement in «Борги», never refunded here.
+ */
+export function DebtPrepaymentChip({ on }: { on?: boolean | null }) {
+  if (!on) return null;
+  return <Chip>Внесок за борг</Chip>;
+}
+
+/**
+ * In a receipt's details, in place of its (absent) goods lines: which
+ * «під запис» goods a «внесок» went to.
+ */
+export function DebtPrepaymentLine({
+  prepayment,
+}: {
+  prepayment?: { product_name: string; variant_label: string; amount_cents: number } | null;
+}) {
+  if (!prepayment) return null;
+  const title = prepayment.variant_label
+    ? `${prepayment.product_name} · ${prepayment.variant_label}`
+    : prepayment.product_name;
+  return (
+    <p className="sq-row min-h-12 py-2 text-[15px] text-sq-secondary" data-testid="sale-debt-prepayment">
+      Внесок за борг: «{title}». Товар лишається під запис, доки його не оплачено повністю; скасовують внесок у
+      виписці покупця в «Боргах».
+    </p>
+  );
+}

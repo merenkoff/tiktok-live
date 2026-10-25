@@ -208,6 +208,110 @@ describe('one customer’s statement', () => {
     );
   });
 
+  it('says what was paid of a line and what was brought toward it, and names a «внесок» in the journal (078)', async () => {
+    statement = {
+      ...statement,
+      open_lines: [
+        line(1, 'Хліб', 3200, { quantity: 5, remaining_quantity: 3, paid_quantity: 2, prepaid_cents: 0, unit_price_cents: 1600 }),
+        line(2, 'Кепка', 29000, { quantity: 1, remaining_quantity: 1, paid_quantity: 0, prepaid_cents: 30000, unit_price_cents: 59000 }),
+      ],
+      entries: [
+        { id: 4, kind: 'payment', amount_cents: -30000, created_at: '2026-10-25T10:00:00Z', staff_name: 'Олена', reason: null, sale_id: 56, receipt_number: 'R-0000056', prepayment: true },
+        { id: 3, kind: 'payment', amount_cents: -3200, created_at: '2026-10-24T10:00:00Z', staff_name: 'Олена', reason: null, sale_id: 55, receipt_number: 'R-0000055', prepayment: false },
+      ],
+    };
+    draw('/debts/7');
+    await screen.findByRole('heading', { name: 'Оксана' });
+    const lines = within(screen.getByTestId('debts-open-lines')).getAllByRole('listitem');
+    expect(lines[0]).toHaveTextContent('3 шт (оплачено 2 шт)');
+    expect(lines[1]).toHaveTextContent(`1 шт (внесено ${uah(30000)})`);
+    const journal = within(screen.getByTestId('debts-journal')).getAllByRole('listitem');
+    expect(journal[0]).toHaveTextContent('Внесок · № R-0000056');
+    expect(journal[1]).toHaveTextContent('Погашено · чек R-0000055');
+  });
+
+  it('undoes a «внесок» toward goods still open, and offers nothing for one already undone or closed', async () => {
+    statement = {
+      ...statement,
+      open_lines: [line(2, 'Кепка', 29000, { quantity: 1, remaining_quantity: 1, paid_quantity: 0, prepaid_cents: 30000 })],
+      entries: [
+        { id: 7, kind: 'payment', amount_cents: -30000, created_at: '2026-10-25T10:00:00Z', staff_name: 'Олена', reason: null, sale_id: 56, receipt_number: 'R-0000056', prepayment: true, prepay_line_id: 2 },
+        { id: 6, kind: 'payment_void', amount_cents: 5000, created_at: '2026-10-24T12:00:00Z', staff_name: 'Олена', reason: null, sale_id: 50, receipt_number: 'R-0000050', prepayment: true, prepay_line_id: 2 },
+        { id: 5, kind: 'payment', amount_cents: -5000, created_at: '2026-10-24T11:00:00Z', staff_name: 'Олена', reason: null, sale_id: 50, receipt_number: 'R-0000050', prepayment: true, prepay_line_id: 2 },
+        { id: 4, kind: 'payment', amount_cents: -2000, created_at: '2026-10-24T10:00:00Z', staff_name: 'Олена', reason: null, sale_id: 49, receipt_number: 'R-0000049', prepayment: true, prepay_line_id: 1 },
+      ],
+    };
+    const voided = vi.fn(() => ({ id: 56, status: 'voided' }));
+    const base = posRequest.getMockImplementation()!;
+    posRequest.mockImplementation(async (method: string, path: string, body?: Record<string, unknown>) =>
+      method === 'post' && path === '/sales/56/void' ? voided() : base(method, path, body)
+    );
+    const user = userEvent.setup();
+    draw('/debts/7');
+    await screen.findByRole('heading', { name: 'Оксана' });
+    const journal = within(screen.getByTestId('debts-journal')).getAllByRole('listitem');
+    expect(within(journal[0]).getByRole('button', { name: 'Скасувати' })).toBeInTheDocument();
+    // Undone already, and toward goods that are no longer open.
+    expect(within(journal[2]).queryByRole('button', { name: 'Скасувати' })).toBeNull();
+    expect(within(journal[3]).queryByRole('button', { name: 'Скасувати' })).toBeNull();
+
+    await user.click(within(journal[0]).getByRole('button', { name: 'Скасувати' }));
+    const sheet = screen.getByTestId('debts-undo-prepay');
+    expect(sheet).toHaveTextContent(`Поверніть покупцеві ${uah(30000)} (внесок № R-0000056)`);
+    expect(sheet).toHaveTextContent('знову стане боргом за «Кепка»');
+    await user.click(within(sheet).getByRole('button', { name: 'Скасувати внесок' }));
+    await waitFor(() => expect(voided).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByTestId('debts-undo-prepay')).toBeNull());
+  });
+
+  it('keeps the sheet up with the server’s words when the undo is refused', async () => {
+    statement = {
+      ...statement,
+      open_lines: [line(2, 'Кепка', 29000, { quantity: 1, remaining_quantity: 1, paid_quantity: 0, prepaid_cents: 30000 })],
+      entries: [
+        { id: 7, kind: 'payment', amount_cents: -30000, created_at: '2026-10-25T10:00:00Z', staff_name: 'Олена', reason: null, sale_id: 56, receipt_number: 'R-0000056', prepayment: true, prepay_line_id: 2 },
+      ],
+    };
+    const base = posRequest.getMockImplementation()!;
+    posRequest.mockImplementation(async (method: string, path: string, body?: Record<string, unknown>) => {
+      if (method === 'post' && path === '/sales/56/void') {
+        // Another till closed the cap meanwhile: the statement now has no open line for it.
+        statement = { ...statement, open_lines: [] };
+        throw { response: { status: 400, data: { error: '«Кепка» уже закрив чек R-0000057 — спершу скасуйте його' } } };
+      }
+      return base(method, path, body);
+    });
+    const user = userEvent.setup();
+    draw('/debts/7');
+    await screen.findByRole('heading', { name: 'Оксана' });
+    await user.click(within(screen.getByTestId('debts-journal')).getByRole('button', { name: 'Скасувати' }));
+    const sheet = screen.getByTestId('debts-undo-prepay');
+    await user.click(within(sheet).getByRole('button', { name: 'Скасувати внесок' }));
+    expect(await within(sheet).findByRole('alert')).toHaveTextContent('уже закрив чек R-0000057');
+    expect(await screen.findByText('Нічого не винно.')).toBeInTheDocument();
+    expect(screen.getByTestId('debts-undo-prepay')).toBeInTheDocument();
+  });
+
+  it('does not take back goods money was brought toward — the «внески» go first', async () => {
+    statement = {
+      ...statement,
+      open_lines: [
+        line(1, 'Кепка', 29000, { quantity: 1, remaining_quantity: 1, paid_quantity: 0, prepaid_cents: 30000 }),
+        line(2, 'Молоко', 7300),
+      ],
+    };
+    const user = userEvent.setup();
+    draw('/debts/7');
+    await screen.findByRole('heading', { name: 'Оксана' });
+    await user.click(screen.getByRole('button', { name: 'Повернути товар' }));
+    const sheet = screen.getByTestId('debts-return-sheet');
+    const capRow = within(sheet).getByText('Кепка').closest('li')!;
+    expect(within(capRow).getByTestId('debts-return-prepaid')).toHaveTextContent(`уже внесено ${uah(30000)}`);
+    expect(within(capRow).queryByRole('button', { name: 'Усе' })).toBeNull();
+    const milkRow = within(sheet).getByText('Молоко').closest('li')!;
+    expect(within(milkRow).getByRole('button', { name: 'Усе' })).toBeInTheDocument();
+  });
+
   it('opens nothing to pay when nothing is owed', async () => {
     statement = { ...statement, open_lines: [], credit: { ...CREDIT, balance_cents: 0 } };
     draw('/debts/7');

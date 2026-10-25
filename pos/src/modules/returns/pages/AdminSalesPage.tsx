@@ -7,7 +7,7 @@ import { formatUah, saleRowFromDetail, useAuthStore, useVertical } from '@pos/pl
 import type { LocalSaleRow, SaleDetail, SaleListItem } from '@pos/platform';
 import { adminReturnsApi } from '../data/returnsApi';
 import { FiscalBadge, FiscalDetailCard } from '../components/FiscalBadge';
-import { Chip, ExchangeChip, SaleStatusChip } from '../components/SaleChips';
+import { Chip, DebtPrepaymentChip, DebtPrepaymentLine, ExchangeChip, SaleStatusChip } from '../components/SaleChips';
 import { RefundSaleDialog } from '../components/RefundSaleDialog';
 import { RefundRows } from '../components/RefundRows';
 import { SaleRoundingLine } from '../components/SaleRounding';
@@ -90,7 +90,10 @@ export function AdminSalesPage() {
   const cafe = useVertical().id === 'cafe';
   const storeInfo = { name: auth?.store.name ?? '', fiscal: auth?.store.fiscal ?? null };
   const refundable =
-    selected != null && (selected.status === 'completed' || selected.status === 'partially_refunded');
+    selected != null &&
+    (selected.status === 'completed' || selected.status === 'partially_refunded') &&
+    // A «внесок» has no goods to give back; it is undone in «Борги» (078).
+    selected.debt_prepayment == null;
 
   return (
     <div className="animate-fade-up text-sq-text">
@@ -174,6 +177,7 @@ export function AdminSalesPage() {
                         <span className="flex flex-wrap justify-end gap-1">
                           <SaleStatusChip status={sale.status} />
                           <ExchangeChip of={sale.exchange_of_receipt_number} to={sale.exchange_sale_number} />
+                          <DebtPrepaymentChip on={sale.debt_prepayment} />
                           {sale.qr_pending && <Chip tone="warning">QR не підтверджено</Chip>}
                           <FiscalBadge status={sale.fiscal_status} />
                         </span>
@@ -221,6 +225,7 @@ export function AdminSalesPage() {
                 </div>
                 <FiscalDetailCard doc={selected.fiscal} />
               </div>
+              <DebtPrepaymentLine prepayment={selected.debt_prepayment} />
               <ul>
                 {selected.items.map((item) => (
                   <li key={item.id} className="sq-row min-h-12 py-2 flex justify-between gap-3 items-center">

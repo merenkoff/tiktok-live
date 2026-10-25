@@ -102,6 +102,10 @@ export interface DebtLineView {
   unit: string;
   quantity: number;
   returned_quantity: number;
+  /** Units paid by receipts so far (078) — part of the line while it is open. */
+  paid_quantity: number;
+  /** Money taken toward the line as «внески» (078). */
+  prepaid_cents: number;
   remaining_quantity: number;
   unit_price_cents: number;
   line_discount_cents: number;
@@ -129,6 +133,10 @@ export interface DebtEntryView {
   receipt_number: string | null;
   /** Written by a desktop till without a network; `created_at` is the till's time (rule 6). */
   offline: boolean;
+  /** A `payment` that was a «внесок» — money toward a line, not its receipt (078). */
+  prepayment: boolean;
+  /** The line that «внесок» went to, so the till can tell whether it can still be undone. */
+  prepay_line_id: number | null;
 }
 
 export interface DebtStatement {
@@ -158,16 +166,23 @@ function iso(value: unknown): string {
 function toLineView(row: Record<string, unknown>): DebtLineView {
   const quantity = Number(row.quantity);
   const returned = Number(row.returned_quantity);
+  const paidUnits = Number(row.paid_quantity ?? 0);
+  const prepaid = Number(row.prepaid_cents ?? 0);
   const lineTotal = Number(row.line_total_cents);
-  const paid = row.sale_id != null;
   const writtenOff = row.written_off_entry_id != null;
-  const status: DebtLineStatus = paid
-    ? 'paid'
-    : writtenOff
-      ? 'written_off'
-      : returned >= quantity
-        ? 'returned'
-        : 'open';
+  // Closed by its receipt — or by a return of the last units after some were
+  // paid (078), which is still a line the customer paid for.
+  const closed = returned + paidUnits >= quantity;
+  const status: DebtLineStatus =
+    row.sale_id != null
+      ? 'paid'
+      : writtenOff
+        ? 'written_off'
+        : closed
+          ? paidUnits > 0
+            ? 'paid'
+            : 'returned'
+          : 'open';
   return {
     id: Number(row.id),
     entry_id: Number(row.entry_id),
@@ -177,13 +192,21 @@ function toLineView(row: Record<string, unknown>): DebtLineView {
     unit: String(row.unit ?? ''),
     quantity,
     returned_quantity: returned,
-    remaining_quantity: quantity - returned,
+    paid_quantity: paidUnits,
+    prepaid_cents: prepaid,
+    remaining_quantity: Math.max(0, quantity - returned - paidUnits),
     unit_price_cents: Number(row.unit_price_cents),
     line_discount_cents: Number(row.line_discount_cents),
     line_total_cents: lineTotal,
     owed_cents:
       status === 'open'
-        ? owedCents({ line_total_cents: lineTotal, quantity, returned_quantity: returned })
+        ? owedCents({
+            line_total_cents: lineTotal,
+            quantity,
+            returned_quantity: returned,
+            paid_quantity: paidUnits,
+            prepaid_cents: prepaid,
+          })
         : 0,
     status,
     sale_id: row.sale_id == null ? null : Number(row.sale_id),
@@ -196,7 +219,8 @@ function toLineView(row: Record<string, unknown>): DebtLineView {
 
 const LINE_COLUMNS = `
   i.id, i.entry_id, i.created_at, i.product_name, i.variant_label, i.unit,
-  i.quantity, i.returned_quantity, i.unit_price_cents, i.line_discount_cents,
+  i.quantity, i.returned_quantity, i.paid_quantity, i.prepaid_cents,
+  i.unit_price_cents, i.line_discount_cents,
   i.line_total_cents, i.sale_id, i.written_off_entry_id, i.note,
   i.price_per, i.weight_source,
   s.receipt_number`;
@@ -218,7 +242,7 @@ async function readLines(
   }
   if (where.openOnly) {
     filters.push(
-      'i.sale_id IS NULL AND i.written_off_entry_id IS NULL AND i.returned_quantity < i.quantity'
+      'i.sale_id IS NULL AND i.written_off_entry_id IS NULL AND i.returned_quantity + i.paid_quantity < i.quantity'
     );
   }
   const rows = await client.query(
@@ -243,13 +267,15 @@ function toEntryView(row: Record<string, unknown>): DebtEntryView {
     sale_id: row.sale_id == null ? null : Number(row.sale_id),
     receipt_number: row.receipt_number == null ? null : String(row.receipt_number),
     offline: row.offline_received_at != null,
+    prepayment: row.debt_prepay_item_id != null,
+    prepay_line_id: row.debt_prepay_item_id == null ? null : Number(row.debt_prepay_item_id),
   };
 }
 
 async function readEntry(client: DbClient, storeId: number, entryId: number): Promise<DebtEntryView> {
   const rows = await client.query(
     `SELECT e.id, e.kind, e.amount_cents, e.created_at, e.reason, e.sale_id, e.offline_received_at,
-            st.display_name AS staff_name, s.receipt_number
+            st.display_name AS staff_name, s.receipt_number, s.debt_prepay_item_id
        FROM pos_debt_entries e
        LEFT JOIN pos_staff st ON st.id = e.staff_id
        LEFT JOIN pos_sales s ON s.id = e.sale_id
@@ -298,7 +324,7 @@ export async function getStatement(storeId: number, customerId: number): Promise
   const open = await readLines(pool, storeId, { customerId, openOnly: true });
   const entries = await pool.query(
     `SELECT e.id, e.kind, e.amount_cents, e.created_at, e.reason, e.sale_id, e.offline_received_at,
-            st.display_name AS staff_name, s.receipt_number
+            st.display_name AS staff_name, s.receipt_number, s.debt_prepay_item_id
        FROM pos_debt_entries e
        LEFT JOIN pos_staff st ON st.id = e.staff_id
        LEFT JOIN pos_sales s ON s.id = e.sale_id
@@ -343,7 +369,7 @@ export async function listDebtors(storeId: number, opts: { all?: boolean } = {})
        SELECT customer_id, MIN(created_at) AS oldest, COUNT(*)::int AS lines
          FROM pos_debt_items
         WHERE store_id = $1 AND sale_id IS NULL AND written_off_entry_id IS NULL
-          AND returned_quantity < quantity
+          AND returned_quantity + paid_quantity < quantity
         GROUP BY customer_id
      )
      SELECT c.id, c.name, c.phone, c.credit_limit_cents, c.credit_locked,
@@ -837,8 +863,8 @@ export async function returnFromDebt(input: {
     async (client) => {
       await lockCustomer(client, input.storeId, input.customerId);
       const rows = await client.query(
-        `SELECT id, variant_id, quantity, returned_quantity, line_total_cents,
-                sale_id, written_off_entry_id, price_per, unit
+        `SELECT id, variant_id, quantity, returned_quantity, paid_quantity, prepaid_cents,
+                line_total_cents, sale_id, written_off_entry_id, price_per, unit
            FROM pos_debt_items
           WHERE store_id = $1 AND customer_id = $2 AND id = ANY($3::bigint[])
           FOR UPDATE`,
@@ -849,25 +875,36 @@ export async function returnFromDebt(input: {
       const plan = rows.rows.map((row) => {
         const quantity = Number(row.quantity);
         const returned = Number(row.returned_quantity);
+        // Units already paid (078) left the line as surely as returned ones:
+        // what can come back, and what it is worth, counts after both.
+        const left = returned + Number(row.paid_quantity ?? 0);
+        const remaining = quantity - left;
         const take = wanted.get(Number(row.id))!;
-        if (row.sale_id != null || row.written_off_entry_id != null || returned >= quantity) {
+        if (row.sale_id != null || row.written_off_entry_id != null || remaining <= 0) {
           throw new DebtConflict(
             'Цей товар уже оплачено, списано або повернуто — оновіть виписку',
             'stale_statement'
           );
         }
-        if (take > quantity - returned) {
+        // Money was taken toward these goods (078, G3_DEBTS.md §11): giving
+        // them back would leave it nowhere. Voiding the «внески» first hands
+        // it back and makes this an ordinary return.
+        const prepaid = Number(row.prepaid_cents ?? 0);
+        if (prepaid > 0) {
           throw new DebtConflict(
-            `Повернути можна не більше, ніж ще винно: ${quantity - returned}`,
-            'too_many'
+            `На цей товар уже внесено ${formatUah(prepaid)} — спершу скасуйте внески (гроші — покупцеві) або прийміть решту`,
+            'has_prepayment'
           );
+        }
+        if (take > remaining) {
+          throw new DebtConflict(`Повернути можна не більше, ніж ще винно: ${remaining}`, 'too_many');
         }
         // Weighed goods come back whole, as from a receipt (075, G4_WEIGHED.md
         // decision 8): the line is paid or returned as it was weighed.
-        if (isWeighed(row.price_per) && take !== quantity - returned) {
+        if (isWeighed(row.price_per) && take !== remaining) {
           throw new DebtConflict(
             `Ваговий товар повертається лише цілим рядком — ${formatQuantity(
-              quantity - returned,
+              remaining,
               String(row.unit ?? ''),
               Number(row.price_per)
             )}`,
@@ -879,7 +916,7 @@ export async function returnFromDebt(input: {
           variantId: Number(row.variant_id),
           take,
           returned,
-          amount: refundLineAmount(Number(row.line_total_cents), quantity, returned, take),
+          amount: refundLineAmount(Number(row.line_total_cents), quantity, left, take),
         };
       });
       const total = plan.reduce((sum, p) => sum + p.amount, 0);

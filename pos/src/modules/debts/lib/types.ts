@@ -34,11 +34,20 @@ export interface DebtLine {
   unit: string;
   quantity: number;
   returned_quantity: number;
+  /**
+   * Units already paid by receipts while the line stays open (078,
+   * G3_DEBTS.md §11). Absent from a backend older than that — which also
+   * means it takes no partial payment at all.
+   */
+  paid_quantity?: number;
+  /** Money taken toward the line as «внески» (078). */
+  prepaid_cents?: number;
+  /** What nobody has returned or paid for yet. */
   remaining_quantity: number;
   unit_price_cents: number;
   line_discount_cents: number;
   line_total_cents: number;
-  /** What is still owed — 0 once the line is paid, written off or returned. */
+  /** What is still owed — 0 once the line is paid, written off or returned; after the «внески». */
   owed_cents: number;
   status: DebtLineStatus;
   sale_id: number | null;
@@ -69,6 +78,10 @@ export interface DebtEntry {
    * (074). Absent from a backend older than that.
    */
   offline?: boolean;
+  /** A `payment` (or its `payment_void`) that was a «внесок», not a receipt (078). */
+  prepayment?: boolean;
+  /** The line that «внесок» went to. */
+  prepay_line_id?: number | null;
 }
 
 export interface DebtStatement {
@@ -113,9 +126,23 @@ export interface DebtSummary {
   debtors_end: number;
 }
 
+/** A sale as `GET /sales/:id` gives it, with what the host's type does not know yet (078). */
+export type DebtSale = Omit<SaleDetail, 'items'> & {
+  /** Set on a «внесок»: the line the money went to. */
+  debt_prepayment?: {
+    line_id: number;
+    product_name: string;
+    variant_label: string;
+    amount_cents: number;
+  } | null;
+  items: Array<SaleDetail['items'][number] & { debt_prepaid_cents?: number }>;
+};
+
 export interface PayDebtResult {
-  /** The repayment receipt — an ordinary sale. */
-  sale: SaleDetail;
+  /** The repayment receipt — an ordinary sale; when the request was only a «внесок», the «внесок». */
+  sale: DebtSale;
+  /** The «внесок» this request made (078); absent from an older backend. */
+  prepayment?: DebtSale | null;
   /** The receipt registered by this call; null without ПРРО or while it is still to be. */
   fiscal: SaleFiscalDoc | null;
   /** Set when the money is taken but the receipt is still to be registered. */

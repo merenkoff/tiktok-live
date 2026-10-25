@@ -19,16 +19,17 @@ import { Link, useParams } from 'react-router-dom';
 import { api, formatSignedUah, formatUah, isOfflinePosEnabled, useAuthStore, useOfflineStatus } from '@pos/platform';
 import { ArrowLeft, SectionHead } from '@pos/platform/ui';
 import { debtsApi } from '../lib/debtsApi';
-import { ENTRY_LABEL, ageText, creditLine, lineTitle, quantityText } from '../lib/debt';
+import { ageText, creditLine, entryLabel, lineProgress, lineTitle, quantityText, undoablePrepayments } from '../lib/debt';
 import { debtFailure } from '../lib/errors';
 import { publishCredit } from '../lib/useCredit';
 import { useQueue, useQueueDrained } from '../lib/useQueue';
-import type { DebtStatement } from '../lib/types';
+import type { DebtEntry, DebtLine, DebtStatement } from '../lib/types';
 import { Frame, type DebtsFrame } from '../components/Frame';
 import { QueuePanel } from '../components/QueuePanel';
 import { LimitEditor } from '../components/LimitEditor';
 import { PaySheet } from '../components/PaySheet';
 import { ReturnSheet } from '../components/ReturnSheet';
+import { UndoPrepaySheet } from '../components/UndoPrepaySheet';
 import { WriteOffSheet } from '../components/WriteOffSheet';
 
 type Open = 'pay' | 'return' | 'writeoff' | null;
@@ -48,6 +49,9 @@ export function StatementPage({ frame }: { frame: DebtsFrame }) {
   const [error, setError] = useState<string | null>(null);
   const [epoch, setEpoch] = useState(0);
   const [open, setOpen] = useState<Open>(null);
+  // The line is taken when the sheet opens: a refusal re-reads the statement,
+  // and the sheet must stay to say why even if those goods closed meanwhile.
+  const [undo, setUndo] = useState<{ entry: DebtEntry; line: DebtLine } | null>(null);
 
   const reload = useCallback(() => setEpoch((n) => n + 1), []);
   // A handover of this customer that has just reached the server is in the journal now.
@@ -105,6 +109,7 @@ export function StatementPage({ frame }: { frame: DebtsFrame }) {
 
   const { customer, credit, open_lines: lines, entries } = statement;
   const owed = lines.reduce((sum, line) => sum + line.owed_cents, 0);
+  const undoable = undoablePrepayments(entries, lines);
 
   return (
     <Frame frame={frame}>
@@ -154,9 +159,7 @@ export function StatementPage({ frame }: { frame: DebtsFrame }) {
                     <span className="block text-[13px] text-sq-muted">
                       {new Date(line.created_at).toLocaleDateString('uk-UA')} ·{' '}
                       {quantityText(line.remaining_quantity, line.unit, line.price_per)}
-                      {line.returned_quantity > 0
-                        ? ` (повернуто ${quantityText(line.returned_quantity, line.unit, line.price_per)})`
-                        : ''}
+                      {lineProgress(line) ? ` (${lineProgress(line)})` : ''}
                       {line.note ? ` · ${line.note}` : ''}
                     </span>
                   </span>
@@ -188,8 +191,9 @@ export function StatementPage({ frame }: { frame: DebtsFrame }) {
                 <div className="flex items-center gap-3 w-full min-h-[52px] py-2">
                   <span className="min-w-0 flex-1">
                     <span className="block text-[15px]">
-                      {ENTRY_LABEL[entry.kind]}
-                      {entry.receipt_number ? ` · чек ${entry.receipt_number}` : ''}
+                      {entryLabel(entry)}
+                      {/* A «внесок» has a number from the receipt counter but is no receipt. */}
+                      {entry.receipt_number ? ` · ${entry.prepayment ? '№' : 'чек'} ${entry.receipt_number}` : ''}
                     </span>
                     <span className="block text-[13px] text-sq-muted">
                       {new Date(entry.created_at).toLocaleString('uk-UA')}
@@ -203,6 +207,18 @@ export function StatementPage({ frame }: { frame: DebtsFrame }) {
                   >
                     {formatSignedUah(entry.amount_cents)}
                   </span>
+                  {undoable.has(entry.id) && (
+                    <button
+                      type="button"
+                      className="shrink-0 min-h-11 px-2 text-[15px] font-semibold text-sq-blue"
+                      onClick={() => {
+                        const line = lines.find((l) => l.id === entry.prepay_line_id);
+                        if (line) setUndo({ entry, line });
+                      }}
+                    >
+                      Скасувати
+                    </button>
+                  )}
                 </div>
               </li>
             ))}
@@ -214,6 +230,7 @@ export function StatementPage({ frame }: { frame: DebtsFrame }) {
         <PaySheet
           customerId={customer.id}
           customerName={customer.name}
+          customerPhone={customer.phone}
           openLines={lines}
           onClose={() => setOpen(null)}
           onChanged={reload}
@@ -221,6 +238,9 @@ export function StatementPage({ frame }: { frame: DebtsFrame }) {
       )}
       {open === 'return' && (
         <ReturnSheet customerId={customer.id} openLines={lines} onClose={() => setOpen(null)} onChanged={reload} />
+      )}
+      {undo && (
+        <UndoPrepaySheet entry={undo.entry} line={undo.line} onClose={() => setUndo(null)} onChanged={reload} />
       )}
       {open === 'writeoff' && owner && (
         <WriteOffSheet customerId={customer.id} openLines={lines} onClose={() => setOpen(null)} onChanged={reload} />

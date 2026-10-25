@@ -6,6 +6,10 @@
 // prints (`buildReceiptPayload` + `printReceipt`), because a repayment IS a
 // sale: the same lines, the same fiscal block, the same paper. The till's
 // receipt printer when one is set, the browser's print dialog otherwise.
+//
+// One thing the host's layout cannot know: a line that closes goods money was
+// taken toward earlier as «внески» (078) prints its unit price over a smaller
+// sum — «1 x 590.00 … 290.00». The line says why under it.
 
 import { useCallback, useState } from 'react';
 import {
@@ -16,7 +20,23 @@ import {
   useAuthStore,
   usePrintableReceipt,
 } from '@pos/platform';
-import type { ReceiptPaperWidth, SaleDetail } from '@pos/platform';
+import type { ReceiptData, ReceiptPaperWidth, SaleDetail } from '@pos/platform';
+import type { DebtSale } from './types';
+
+/** «Внесено раніше: 300.00» under each line the earlier «внески» went to, in the receipt's own number style. */
+export function withPrepaidNotes(receipt: ReceiptData, sale: SaleDetail): ReceiptData {
+  const items = (sale as DebtSale).items;
+  if (!items.some((item) => (item.debt_prepaid_cents ?? 0) > 0)) return receipt;
+  return {
+    ...receipt,
+    items: receipt.items.map((row, index) => {
+      const prepaid = items[index]?.debt_prepaid_cents ?? 0;
+      if (prepaid <= 0) return row;
+      const said = `Внесено раніше: ${(prepaid / 100).toFixed(2)}`;
+      return { ...row, note: row.note ? `${row.note} · ${said}` : said };
+    }),
+  };
+}
 
 export function useReceiptPrint() {
   const auth = useAuthStore((s) => s.auth);
@@ -26,11 +46,14 @@ export function useReceiptPrint() {
 
   const print = useCallback(
     async (sale: SaleDetail) => {
-      const receipt = buildReceiptPayload(sale, {
-        name: auth?.store.name ?? '',
-        fiscal: auth?.store.fiscal ?? null,
-        vertical: auth?.store.vertical?.id ?? null,
-      });
+      const receipt = withPrepaidNotes(
+        buildReceiptPayload(sale, {
+          name: auth?.store.name ?? '',
+          fiscal: auth?.store.fiscal ?? null,
+          vertical: auth?.store.vertical?.id ?? null,
+        }),
+        sale
+      );
       const [name, mm] = await Promise.all([
         getMeta<string>('receiptPrinterName'),
         getMeta<ReceiptPaperWidth>('receiptPaperWidthMm'),

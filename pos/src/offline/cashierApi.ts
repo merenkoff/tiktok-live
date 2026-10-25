@@ -45,6 +45,7 @@ export function saleRowFromDetail(detail: SaleDetail): LocalSaleRow {
     exchange_of_receipt_number: detail.exchange_of?.receipt_number ?? null,
     exchange_sale_number:
       detail.refunds?.find((r) => r.exchange_sale)?.exchange_sale?.receipt_number ?? null,
+    ...(detail.debt_prepayment != null ? { debt_prepayment: true } : {}),
     detail,
   };
 }
@@ -63,6 +64,7 @@ function rowFromServer(item: SaleListItem): LocalSaleRow {
     fiscal_status: item.fiscal_status,
     exchange_of_receipt_number: item.exchange_of_receipt_number ?? null,
     exchange_sale_number: item.exchange_sale_number ?? null,
+    ...(item.debt_prepayment ? { debt_prepayment: true } : {}),
   };
 }
 
