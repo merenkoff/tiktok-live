@@ -1,5 +1,5 @@
 import { n as e, t } from "./ids-DKpT3dMP.js";
-import { I as n, d as r, x as i } from "./debt-DM5F1FYd.js";
+import { P as n, Y as r, g as i } from "./debt-B208o_Xv.js";
 import { useEffect as a } from "react";
 import { getMeta as o, printSlip as s, resolveModuleStationPrinter as c } from "@pos/platform";
 import { jsx as l, jsxs as u } from "react/jsx-runtime";
@@ -11,21 +11,28 @@ function p(e, t, n) {
 function m(e, t) {
 	return `${e}:${t}`;
 }
-function h(e, t = Date.now()) {
+function h(e, t, n) {
+	return `chain-${e}:${t}:${n}`;
+}
+function g(e, t = Date.now()) {
 	let n = f.get(e);
 	return n ? t - n.at > 18e5 ? (f.delete(e), null) : n.key : null;
 }
-function g(e, t, n = Date.now()) {
+function _(e, t = Date.now()) {
+	return g(e, t) == null ? void 0 : f.get(e)?.body;
+}
+function v(e, t, n = Date.now(), r) {
 	f.set(e, {
 		key: t,
-		at: n
+		at: n,
+		...r === void 0 ? {} : { body: r }
 	});
 }
-function _(e) {
+function y(e) {
 	f.delete(e);
 }
 // src/modules/debts/lib/slip.ts
-function v(e) {
+function b(e) {
 	return e.toLocaleString("uk-UA", {
 		day: "2-digit",
 		month: "2-digit",
@@ -34,9 +41,9 @@ function v(e) {
 		minute: "2-digit"
 	});
 }
-function y(e) {
+function x(e) {
 	return e.map((e) => ({
-		title: r(e),
+		title: i(e),
 		quantity: e.quantity,
 		unit: e.unit,
 		unitPriceCents: e.unit_price_cents,
@@ -44,7 +51,7 @@ function y(e) {
 		pricePer: e.price_per ?? 1
 	}));
 }
-function b(e) {
+function S(e) {
 	let t = e.entryId == null;
 	return {
 		title: "ПІД ЗАПИС",
@@ -54,12 +61,12 @@ function b(e) {
 			...e.customer.phone ? [`Телефон: ${e.customer.phone}`] : [],
 			`Касир: ${e.staffName}`,
 			t ? "Записано на касі без мережі" : `Запис № ${e.entryId}`,
-			v(e.at),
+			b(e.at),
 			...e.note ? [`Примітка: ${e.note}`] : []
 		],
 		items: e.lines.map((e) => ({
 			name: e.title,
-			quantity: i(e.quantity, e.unit, e.pricePer),
+			quantity: n(e.quantity, e.unit, e.pricePer),
 			unit_price_cents: e.unitPriceCents,
 			line_total_cents: e.totalCents
 		})),
@@ -78,10 +85,10 @@ function b(e) {
 			}]
 		],
 		footer: ["Фіскальний чек — коли борг буде оплачено.", "Підпис покупця ________________"],
-		printed_at: v(/* @__PURE__ */ new Date())
+		printed_at: b(/* @__PURE__ */ new Date())
 	};
 }
-function x(e) {
+function C(e) {
 	return {
 		title: "ВНЕСОК",
 		store_name: e.storeName,
@@ -90,11 +97,11 @@ function x(e) {
 			...e.customer.phone ? [`Телефон: ${e.customer.phone}`] : [],
 			`Касир: ${e.staffName}`,
 			...e.number ? [`Внесок № ${e.number}`] : [],
-			v(e.at)
+			b(e.at)
 		],
 		items: [{
-			name: r(e.line),
-			quantity: i(e.line.remaining_quantity, e.line.unit, e.line.price_per)
+			name: i(e.line),
+			quantity: n(e.line.remaining_quantity, e.line.unit, e.line.price_per)
 		}],
 		totals: [
 			{
@@ -111,13 +118,13 @@ function x(e) {
 			}]
 		],
 		footer: ["Товар лишається під запис, доки його не оплачено повністю.", "Підпис покупця ________________"],
-		printed_at: v(/* @__PURE__ */ new Date())
+		printed_at: b(/* @__PURE__ */ new Date())
 	};
 }
-function S(e) {
+function w(e) {
 	return !e || e.kind === "none" ? null : e.kind === "printed" ? `Квитанцію надруковано (${e.printer})` : `Квитанцію не надруковано: ${e.error}`;
 }
-async function C(n) {
+async function T(n) {
 	let r = null;
 	try {
 		r = await c(o, t, e);
@@ -139,7 +146,7 @@ async function C(n) {
 	}
 }
 // src/modules/debts/components/Sheet.tsx
-function w({ title: e, onClose: t, children: r, wide: i, testId: o }) {
+function E({ title: e, onClose: t, children: n, wide: i, testId: o }) {
 	return a(() => {
 		let e = (e) => {
 			e.key === "Escape" && t();
@@ -168,10 +175,10 @@ function w({ title: e, onClose: t, children: r, wide: i, testId: o }) {
 					className: "-mr-1 -mt-1 h-10 w-10 grid place-items-center rounded-full hover:bg-sq-bg",
 					onClick: t,
 					"aria-label": "Закрити",
-					children: /* @__PURE__ */ l(n, { size: 20 })
+					children: /* @__PURE__ */ l(r, { size: 20 })
 				})]
-			}), r]
+			}), n]
 		})]
 	}), document.body);
 }
-export { y as a, p as c, h as d, C as i, g as l, b as n, S as o, x as r, m as s, w as t, _ as u };
+export { x as a, m as c, y as d, _ as f, T as i, p as l, S as n, w as o, g as p, C as r, h as s, E as t, v as u };

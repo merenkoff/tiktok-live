@@ -31,6 +31,15 @@ var n = {
 	voidPrepayment(e) {
 		return t("post", `/sales/${e}/void`);
 	},
+	cancelPrepayments(e, n) {
+		return t("post", `/debts/customers/${e}/prepayments/cancel`, n);
+	},
+	returnChain(e, n) {
+		return t("post", `/debts/customers/${e}/chain-return`, n);
+	},
+	sale(e) {
+		return t("get", `/sales/${e}`);
+	},
 	summary(e, n) {
 		return t("get", `/debts/summary?${new URLSearchParams({
 			from: e,

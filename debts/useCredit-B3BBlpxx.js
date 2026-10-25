@@ -1,4 +1,4 @@
-import { t as e } from "./debtsApi-BOZMyvlE.js";
+import { t as e } from "./debtsApi-Dr25ayLn.js";
 import { _ as t, d as n, f as r, i, o as a, p as o, u as s, v as c } from "./queue-B9HzuKEV.js";
 import { useCallback as l, useEffect as u, useState as d } from "react";
 import { api as f, isOfflinePosEnabled as p, useAuthStore as m, useOfflineStatus as h } from "@pos/platform";

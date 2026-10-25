@@ -410,45 +410,82 @@ function C(e, t) {
 function w(e) {
 	return !r(e.price_per) && (e.prepaid_cents ?? 0) === 0 && e.remaining_quantity > 1;
 }
-function T(t, n, r) {
-	let i = r.method === "cash" ? r.step : 0, a = (t) => t + e(t, i), o = Math.max(0, Math.round(n)), s = 0, c = 0;
-	for (; s < t.length && a(c + t[s].owed_cents) <= o;) c += t[s].owed_cents, s += 1;
-	let l = r.partial ? t[s] : void 0, u = null;
+function T(e, t) {
+	return e ? !e.on || e.chains : !t;
+}
+function E(e) {
+	return !e?.on || !e.chains ? () => !1 : (t) => t.chain != null && t.chain.provider === e.provider;
+}
+function D(e, t, n = () => !1) {
+	let r = [], i = null;
+	for (let t of e) n(t) ? (i = null, r.push({
+		kind: "chain_close",
+		lines: [t],
+		units: null,
+		goodsCents: t.owed_cents
+	})) : (i || (i = {
+		kind: "receipt",
+		lines: [],
+		units: null,
+		goodsCents: 0
+	}, r.push(i)), i.lines.push(t), i.goodsCents += t.owed_cents);
+	return t && (i || (i = {
+		kind: "receipt",
+		lines: [],
+		units: null,
+		goodsCents: 0
+	}, r.push(i)), i.units = t, i.goodsCents += t.cents), r;
+}
+function O(t, n) {
+	return t.reduce((t, r) => t + e(r.goodsCents, n), 0);
+}
+function k(e, t, n) {
+	let r = n.method === "cash" ? n.step : 0, i = n.closesAlone ?? (() => !1), a = (t, n) => {
+		let a = D(e.slice(0, t), n, i);
+		return a.reduce((e, t) => e + t.goodsCents, 0) + O(a, r);
+	}, o = Math.max(0, Math.round(t)), s = 0, c = 0;
+	for (; s < e.length && a(s + 1, null) <= o;) c += e[s].owed_cents, s += 1;
+	let l = n.partial ? e[s] : void 0, u = null;
 	if (l && w(l)) {
 		let e = 0;
-		for (; e + 1 < l.remaining_quantity && a(c + C(l, e + 1)) <= o;) e += 1;
+		for (; e + 1 < l.remaining_quantity && a(s, {
+			line: l,
+			quantity: e + 1,
+			cents: C(l, e + 1)
+		}) <= o;) e += 1;
 		e > 0 && (u = {
 			line: l,
 			quantity: e,
 			cents: C(l, e)
 		});
 	}
-	let d = c + (u?.cents ?? 0), f = a(d) - d, p = o - d - f, m = null, h = !1;
-	if (l && p > 0) {
-		let e = l.owed_cents - (u?.cents ?? 0), t = Math.min(p, e - 1);
-		i > 0 && (t -= t % i), t > 0 && (r.prepayAllowed ? (m = {
+	let d = D(e.slice(0, s), u, i), f = c + (u?.cents ?? 0), p = O(d, r), m = o - f - p, h = null, g = !1;
+	if (l && m > 0) {
+		let e = l.owed_cents - (u?.cents ?? 0), t = Math.min(m, e - 1);
+		r > 0 && (t -= t % r), t > 0 && (n.prepayAllowed ? (h = {
 			line: l,
 			cents: t
-		}, p -= t) : h = !0);
+		}, m -= t) : g = !0);
 	}
 	return {
 		wholeCount: s,
 		wholeCents: c,
 		units: u,
-		receiptCents: d,
-		roundingCents: f,
-		prepay: m,
-		changeCents: p,
-		prepayRefused: h
+		receiptCents: f,
+		roundingCents: p,
+		prepay: h,
+		changeCents: m,
+		prepayRefused: g,
+		documents: d
 	};
 }
-function E(e) {
+function ee(e) {
 	return e.receiptCents + e.roundingCents + (e.prepay?.cents ?? 0);
 }
-function D(e) {
+function A(e) {
 	return e.receiptCents > 0 || e.prepay != null;
 }
-function O(e, t, n) {
+function j(e, t, n) {
 	let r = t.units?.line ?? t.prepay?.line ?? null;
 	return {
 		...t.wholeCount > 0 ? { line_ids: e.slice(0, t.wholeCount).map((e) => e.id) } : {},
@@ -464,81 +501,134 @@ function O(e, t, n) {
 		}] : []
 	};
 }
-function k(e, t) {
-	return `${e} з ${V(t.remaining_quantity, t.unit, t.price_per)}`;
+function M(e) {
+	if (e.parts && e.parts.length > 0) return e.parts;
+	let t = e.prepayment ?? null, n = t != null && t.id === e.sale.id, r = [];
+	return n || r.push({
+		kind: "receipt",
+		sale: e.sale,
+		fiscal: e.fiscal
+	}), t && r.push({
+		kind: "prepayment",
+		sale: t,
+		fiscal: n ? e.fiscal : null
+	}), r;
 }
-function A(e, t) {
-	let r = [];
-	if (e.wholeCount > 0 && r.push(`Закриває ${z(e.wholeCount)} на ${n(e.wholeCents)}`), e.units && r.push(`${k(e.units.quantity, e.units.line)} «${B(e.units.line)}» на ${n(e.units.cents)}`), e.prepay) {
-		let t = e.prepay.line.owed_cents - (e.units?.cents ?? 0) - e.prepay.cents;
-		r.push(`Внесок ${n(e.prepay.cents)} на «${B(e.prepay.line)}» — лишиться винно ${n(t)}`);
+function N(e) {
+	return (e.fiscal ?? e.sale.fiscal)?.status === "done";
+}
+function P(e) {
+	return e.kind !== "prepayment" || N(e);
+}
+function F(e) {
+	return e.sale.total_cents + (e.kind === "prepayment" ? 0 : e.sale.rounding_cents ?? 0);
+}
+function I(e) {
+	let t = e.sale, n = t.receipt_number ?? null;
+	if (e.kind === "prepayment") {
+		let r = P(e) ? `Чек передплати${n ? ` ${n}` : ""}` : `Внесок${n ? ` № ${n}` : ""}`;
+		return t.debt_prepayment ? `${r} · «${Q(t.debt_prepayment)}»` : r;
 	}
-	return D(e) || r.push(`Не вистачає навіть на найстаріший товар (${n(t[0]?.owed_cents ?? 0)})`), e.prepayRefused ? r.push(D(e) ? `Решту ${n(e.changeCents)} поверніть покупцеві: у магазині з ПРРО внесок за частину товару поки не приймається` : "У магазині з ПРРО внесок за частину товару поки не приймається — гроші поверніть покупцеві") : e.changeCents > 0 && D(e) && r.push(`Решта ${n(e.changeCents)}`), r;
+	let r = `Чек${n ? ` ${n}` : ""}`;
+	return e.kind === "chain_close" ? t.items[0] ? `${r} · закриває «${Q(t.items[0])}»` : r : t.items.length > 0 ? `${r} · ${Z(t.items.length)}` : r;
 }
-function j(e) {
+function L(e, t) {
+	return `${e} з ${$(t.remaining_quantity, t.unit, t.price_per)}`;
+}
+function R(e, t, r) {
+	let i = [];
+	e.wholeCount > 0 && i.push(`Закриває ${Z(e.wholeCount)} на ${n(e.wholeCents)}`);
+	for (let t of e.documents ?? []) t.kind === "chain_close" && i.push(`«${Q(t.lines[0])}» — окремим чеком: внески за цей товар уже в ПРРО`);
+	if (e.units && i.push(`${L(e.units.quantity, e.units.line)} «${Q(e.units.line)}» на ${n(e.units.cents)}`), e.prepay) {
+		let t = e.prepay.line.owed_cents - (e.units?.cents ?? 0) - e.prepay.cents, a = r?.on && r.chains ? " (чек передплати)" : "";
+		i.push(`Внесок ${n(e.prepay.cents)} на «${Q(e.prepay.line)}»${a} — лишиться винно ${n(t)}`);
+	}
+	return A(e) || i.push(`Не вистачає навіть на найстаріший товар (${n(t[0]?.owed_cents ?? 0)})`), e.prepayRefused ? i.push(A(e) ? `Решту ${n(e.changeCents)} поверніть покупцеві: у магазині з ПРРО внесок за частину товару поки не приймається` : "У магазині з ПРРО внесок за частину товару поки не приймається — гроші поверніть покупцеві") : e.changeCents > 0 && A(e) && i.push(`Решта ${n(e.changeCents)}`), i;
+}
+function z(e) {
 	let t = [];
-	e.returned_quantity > 0 && t.push(`повернуто ${V(e.returned_quantity, e.unit, e.price_per)}`), (e.paid_quantity ?? 0) > 0 && t.push(`оплачено ${V(e.paid_quantity ?? 0, e.unit, e.price_per)}`);
+	e.returned_quantity > 0 && t.push(`повернуто ${$(e.returned_quantity, e.unit, e.price_per)}`), (e.paid_quantity ?? 0) > 0 && t.push(`оплачено ${$(e.paid_quantity ?? 0, e.unit, e.price_per)}`);
 	let r = [];
 	return t.length > 0 && r.push(t.join(", ")), (e.prepaid_cents ?? 0) > 0 && r.push(`внесено ${n(e.prepaid_cents ?? 0)}`), r.length > 0 ? r.join(" · ") : null;
 }
-function M(e, t) {
+function B(e) {
+	return e.chain?.pending ? "внесок ще реєструється в ПРРО" : null;
+}
+function V(e, t) {
+	return !!(e?.on && e.chains && e.provider === t);
+}
+function H(e, t) {
+	let n = e.chain;
+	return !n || n.pending || !n.prepayments || !V(t, n.provider) ? null : {
+		count: n.prepayments,
+		cents: n.prepaid_cents ?? 0
+	};
+}
+function U(e, t) {
+	let n = e.chain_return;
+	return n && V(t, n.provider) ? n : null;
+}
+function W(e, t) {
+	return `${e} ${Y(e, "внесок", "внески", "внесків")} на ${n(t)}`;
+}
+function te(e, t) {
 	return C(e, t);
 }
-function N(e) {
+function G(e) {
 	return (e.prepaid_cents ?? 0) > 0;
 }
-function P(e, t) {
+function K(e, t) {
 	let n = t.trim().toLowerCase();
 	if (!n || e.name.toLowerCase().includes(n)) return !0;
 	let r = n.replace(/\D/g, "");
 	return r.length >= 2 && e.phone.replace(/\D/g, "").includes(r);
 }
-var F = 864e5;
-function I(e, t = /* @__PURE__ */ new Date()) {
+var q = 864e5;
+function J(e, t = /* @__PURE__ */ new Date()) {
 	let n = new Date(e), r = Date.UTC(n.getFullYear(), n.getMonth(), n.getDate()), i = Date.UTC(t.getFullYear(), t.getMonth(), t.getDate());
-	return Math.max(0, Math.round((i - r) / F));
+	return Math.max(0, Math.round((i - r) / q));
 }
-function L(e, t, n, r) {
+function Y(e, t, n, r) {
 	let i = e % 10, a = e % 100;
 	return i === 1 && a !== 11 ? t : i >= 2 && i <= 4 && (a < 12 || a > 14) ? n : r;
 }
-function R(e, t = /* @__PURE__ */ new Date()) {
-	let n = I(e, t);
-	return n === 0 ? "сьогодні" : n === 1 ? "вчора" : `${n} ${L(n, "день", "дні", "днів")}`;
+function X(e, t = /* @__PURE__ */ new Date()) {
+	let n = J(e, t);
+	return n === 0 ? "сьогодні" : n === 1 ? "вчора" : `${n} ${Y(n, "день", "дні", "днів")}`;
 }
-function z(e) {
-	return `${e} ${L(e, "товар", "товари", "товарів")}`;
+function Z(e) {
+	return `${e} ${Y(e, "товар", "товари", "товарів")}`;
 }
-function B(e) {
+function Q(e) {
 	return e.variant_label ? `${e.product_name} · ${e.variant_label}` : e.product_name;
 }
-function V(e, n, i = 1) {
+function $(e, n, i = 1) {
 	return r(i) ? t(e, n, i) : `${e} ${n || "шт"}`;
 }
-var H = {
+var ne = {
 	issue: "Під запис",
 	return: "Повернуто товар",
 	payment: "Погашено",
 	payment_void: "Погашення скасовано",
 	writeoff: "Списано"
 };
-function U(e, t) {
-	let n = new Set(e.filter((e) => e.kind === "payment_void" && e.sale_id != null).map((e) => e.sale_id)), r = new Set(t.map((e) => e.id));
-	return new Set(e.filter((e) => e.kind === "payment" && e.prepayment === !0 && e.sale_id != null && !n.has(e.sale_id) && e.prepay_line_id != null && r.has(e.prepay_line_id)).map((e) => e.id));
+function re(e, t, n = {}) {
+	let r = new Set(e.filter((e) => e.kind === "payment_void" && e.sale_id != null).map((e) => e.sale_id)), i = new Set(t.map((e) => e.id));
+	return new Set(e.filter((e) => e.kind === "payment" && e.prepayment === !0 && e.sale_id != null && !r.has(e.sale_id) && e.prepay_line_id != null && i.has(e.prepay_line_id) && e.fiscal_status !== "done" && e.fiscal_status !== "pending" && (e.fiscal_status !== "failed" || n.owner === !0)).map((e) => e.id));
 }
-function W(e) {
-	return e.prepayment && e.kind === "payment" ? "Внесок" : e.prepayment && e.kind === "payment_void" ? "Внесок скасовано" : H[e.kind];
+function ie(e) {
+	return e.prepayment && e.kind === "payment" ? "Внесок" : e.prepayment && e.kind === "payment_void" ? "Внесок скасовано" : ne[e.kind];
 }
-function G(e) {
+function ae(e) {
 	let t = e.balance_cents > 0 ? `Борг ${n(e.balance_cents)}` : "Боргу немає";
 	return e.limit_cents == null ? e.balance_cents > 0 ? `${t} · під запис більше не можна` : t : e.locked ? `${t} · записи заблоковано` : e.balance_cents > e.limit_cents ? `${t} · понад ліміт на ${n(e.balance_cents - e.limit_cents)}` : `${t} · ще можна ${n(e.available_cents ?? 0)}`;
 }
-function K(e) {
+function oe(e) {
 	return e.limit_cents != null && e.balance_cents > e.limit_cents;
 }
-function q(e) {
+function se(e) {
 	let t = e.replace(/\s/g, "").replace(",", ".");
 	return t === "" || !/^\d+(\.\d{1,2})?$/.test(t) ? null : Math.round(Number(t) * 100);
 }
-var J = 1e7;
-export { d as A, N as C, k as D, U as E, l as F, h as I, f as M, p as N, u as O, m as P, M as S, S as T, E as _, z as a, b, g as c, B as d, P as f, D as g, O as h, W as i, c as j, s as k, q as l, T as m, R as n, K as o, x as p, G as r, y as s, J as t, j as u, A as v, _ as w, V as x, L as y };
+var ce = 1e7;
+export { b as A, L as B, M as C, ee as D, A as E, te as F, f as G, s as H, G as I, l as J, p as K, _ as L, W as M, P as N, R as O, $ as P, S as R, D as S, j as T, d as U, u as V, c as W, h as Y, K as _, U as a, F as b, O as c, oe as d, y as f, Q as g, z as h, B as i, T as j, Y as k, ie as l, se as m, X as n, E as o, g as p, m as q, H as r, ae as s, ce as t, Z as u, x as v, k as w, I as x, N as y, re as z };

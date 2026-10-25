@@ -1,5 +1,5 @@
-import { t as e } from "./debtsApi-BOZMyvlE.js";
-import { F as t, y as n } from "./debt-DM5F1FYd.js";
+import { t as e } from "./debtsApi-Dr25ayLn.js";
+import { J as t, k as n } from "./debt-B208o_Xv.js";
 import { useEffect as r, useState as i } from "react";
 import { formatUah as a } from "@pos/platform";
 import { jsx as o, jsxs as s } from "react/jsx-runtime";

@@ -1,4 +1,4 @@
-import { t as e } from "./debtsApi-BOZMyvlE.js";
+import { t as e } from "./debtsApi-Dr25ayLn.js";
 import { b as t, l as n, m as r, r as i, x as a, y as o } from "./queue-B9HzuKEV.js";
 import { api as s, isNetworkError as c, isUnauthorized as l } from "@pos/platform";
 // src/modules/debts/data/policy.ts

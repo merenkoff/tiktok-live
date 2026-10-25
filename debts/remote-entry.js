@@ -1,8 +1,8 @@
-import { n as e, t } from "./sync-5Qhu5xAA.js";
+import { n as e, t } from "./sync-CWOssSK3.js";
 import { n, t as r } from "./ids-DKpT3dMP.js";
 import { lazy as i } from "react";
 // src/platform/version.ts
-var a = "2.6.4";
+var a = "2.6.5";
 // src/modules/lazyWithRetry.ts
 async function o(e, { retries: t = 2, backoffMs: n = 400 } = {}) {
 	let r;
@@ -18,7 +18,7 @@ function s(e, t) {
 	return i(() => o(e, t));
 }
 // src/modules/debts/manifest.ts
-var c = s(() => import("./DebtsRoutes-DuwaHFRQ.js").then((e) => ({ default: e.DebtsRoutes }))), l = s(() => import("./CheckoutAction-DVRnzjG7.js")), u = s(() => import("./CustomerPanel-gUzTQFB4.js")), d = s(() => import("./DebtPanels-DEyKDrcq.js")), f = {
+var c = s(() => import("./DebtsRoutes-BA87vRWs.js").then((e) => ({ default: e.DebtsRoutes }))), l = s(() => import("./CheckoutAction-5Oj_N3SS.js")), u = s(() => import("./CustomerPanel-p1mQmYPM.js")), d = s(() => import("./DebtPanels-BzYexFlZ.js")), f = {
 	id: r,
 	title: "Борги",
 	shells: [
