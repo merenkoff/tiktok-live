@@ -173,7 +173,13 @@ export function PricingSection() {
 }
 
 /** One-line pricing card for the home page and the vertical landings; links to the full block. */
-export function PricingCard({ addon }: { addon?: boolean }) {
+/**
+ * `futureIncluded={false}` leaves out «Усе, що ми додамо далі, входить у вашу
+ * ціну» — for a vertical whose promises the launch tariff does not (yet)
+ * cover (`VerticalFact.roadmapInLaunchTariff`): the card then says what the
+ * till costs and nothing about what comes next.
+ */
+export function PricingCard({ addon, futureIncluded = true }: { addon?: boolean; futureIncluded?: boolean }) {
   return (
     <Reveal>
       <div className="card p-6 sm:p-8 grid sm:grid-cols-[auto_1fr_auto] gap-6 items-center">
@@ -197,7 +203,7 @@ export function PricingCard({ addon }: { addon?: boolean }) {
           </p>
           <p className="text-muted text-[15px] mt-1 leading-relaxed">
             До {pos.perStoreRegisters} кас{addon ? `, столи — ще ${TABLES.price} грн/міс` : ''}. Помісячно, без
-            передплати. Усе, що ми додамо далі, входить у вашу ціну.
+            передплати.{futureIncluded && ' Усе, що ми додамо далі, входить у вашу ціну.'}
           </p>
         </div>
         <a href="/pos#pricing" className="link-more text-[15px] whitespace-nowrap" data-cta={CTA.pricingCard}>

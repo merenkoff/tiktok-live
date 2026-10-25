@@ -68,6 +68,13 @@ for (const { fact, content } of VERTICAL_PAGES) {
   if (content.rows.filter((row) => row.headline).length > 1) {
     throw new Error(`routes: ${content.id} has more than one headline row`);
   }
+  // HeroStack lays a screen on a drawing; a «Скоро» landing has no screen to lay.
+  if (content.heroOverlay && !content.hero.drawing) {
+    throw new Error(`routes: ${content.id} lays its hero screen on a hero that is not a drawing`);
+  }
+  if (content.heroOverlay && fact.status === 'coming') {
+    throw new Error(`routes: ${content.id} is «Скоро» but its hero shows a screen`);
+  }
 }
 
 export const ROUTES: SiteRoute[] = [
@@ -157,9 +164,9 @@ export const ROUTES: SiteRoute[] = [
     out: 'about/index.html',
     Component: AboutPage,
     head: {
-      title: 'Про сервіс — LiveShop: каса для магазину, квітів, кафе і ресторану',
+      title: 'Про сервіс — LiveShop: каса для магазину, продуктів, квітів, кафе і ресторану',
       description:
-        'Хто робить LiveShop: ТОВ «Технології», код ЄДРПОУ 46288273. Каса з ПРРО для чотирьох бізнесів і бот для продажу в TikTok LIVE — реквізити, умови, зв\'язок.',
+        'Хто робить LiveShop: ТОВ «Технології», код ЄДРПОУ 46288273. Каса з ПРРО для п\'яти бізнесів і бот для продажу в TikTok LIVE — реквізити, умови, зв\'язок.',
       path: '/about',
       ogImage: '/og/home.png',
     },

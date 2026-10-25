@@ -3,7 +3,7 @@ import { PRODUCT, VERTICALS } from '../../lib/productFacts';
 
 const POS = PRODUCT.pos.name;
 const GROCERY = VERTICALS.find((v) => v.id === 'grocery');
-/** The landing this article feeds; it is a «Скоро» page, so everything said about the phone till is a promise. */
+/** The landing this article feeds; the phone till is still a promise there, so everything said about it is one here too. */
 const LANDING = GROCERY?.path ?? '/pos/produkty';
 
 // Every legal statement below was read in the primary source on this date
@@ -306,7 +306,10 @@ function Body() {
         </li>
         <li>
           продаж під запис: борг на покупця з лімітом від власника, погашення частинами з фіскальним
-          чеком — на касі в браузері й на комп'ютері, а десктопна записує під запис і без інтернету.
+          чеком — на касі в браузері й на комп'ютері, а десктопна записує під запис і без інтернету;
+        </li>
+        <li>
+          ваговий товар: ціна за кілограм, вага з дисплея ваг на клавіатурі каси, у чеку — до грама.
         </li>
       </ul>
       <p>

@@ -4,9 +4,9 @@ import { PRODUCT, VERTICALS } from '../../lib/productFacts';
 const POS = PRODUCT.pos.name;
 const GROCERY = VERTICALS.find((v) => v.id === 'grocery');
 /**
- * The landing this article feeds. It is a «Скоро» page, but «під запис» itself
- * works since 2026-10-24 (the `debts` module), so the till section speaks in
- * the present tense; what it does not do yet is said as «у планах».
+ * The landing this article feeds. «Під запис» works since 2026-10-24 (the
+ * `debts` module), so the till section speaks in the present tense; what it
+ * does not do yet is said as «у планах».
  */
 const LANDING = GROCERY?.path ?? '/pos/produkty';
 
@@ -338,8 +338,9 @@ function Body() {
       <p>
         Як дозволити покупцеві брати під запис і поставити ліміт — у{' '}
         <a href="/dovidka/vlasnyk-pochatok#pid-zapys-tovar-u-borh">посібнику власника</a>; як записувати
-        борг і приймати оплату на касі — у <a href="/dovidka/kasyr#pid-zapys">посібнику касира</a>. Що ще
-        ми будуємо для продуктового магазину — ваговий товар, касу на телефоні для ринку — на сторінці{' '}
+        борг і приймати оплату на касі — у <a href="/dovidka/kasyr#pid-zapys">посібнику касира</a>. Ваговий
+        товар із ціною за кілограм у касі теж уже є, а що ще ми будуємо для продуктового магазину — касу на
+        телефоні для ринку, ваги з друком етикеток — на сторінці{' '}
         <a href={LANDING}>каси для продуктового магазину</a>.
       </p>
 

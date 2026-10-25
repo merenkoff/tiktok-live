@@ -30,16 +30,17 @@ export function Home() {
         <section className="max-w-6xl mx-auto px-6 pt-16 sm:pt-20 pb-20 text-center">
           <Reveal className="flex flex-col items-center">
             <AppIcon size={144} className="drop-shadow-[0_14px_24px_rgba(0,30,80,0.22)]" />
-            <p className="eyebrow text-pos mt-8">POS для чотирьох бізнесів</p>
+            <p className="eyebrow text-pos mt-8">POS для п'яти бізнесів</p>
             <h1 className="h-display mt-3">
               Одна каса для магазину,
               <br />
               квітів і кухні
             </h1>
             <p className="lede mt-6 max-w-2xl">
-              LiveShop — каса з фіскалізацією ПРРО і режимом без інтернету для магазину одягу, квіткової
-              крамниці, кав'ярні та ресторану. Кожна знає свою справу: стіл флориста, модифікатори,
-              кухня, столи. І бот для продажу в TikTok LIVE.
+              LiveShop — каса з фіскалізацією ПРРО і режимом без інтернету для магазину одягу,
+              продуктового магазину, квіткової крамниці, кав'ярні та ресторану. Кожна знає свою справу:
+              ваговий товар і продаж під запис, стіл флориста, модифікатори, кухня, столи. І бот для
+              продажу в TikTok LIVE.
             </p>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
               <a href="#verticals" className="btn-pos" data-cta={CTA.heroVerticals}>

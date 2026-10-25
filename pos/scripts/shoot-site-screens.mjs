@@ -41,9 +41,10 @@ const TILL = { width: 1366, height: 768 };
 const TABLET = { width: 1024, height: 768 };
 const WAIT = { timeout: 30_000 };
 
-/** @type {Record<string, { login: string, shots: (page: import('@playwright/test').Page, shoot: Function) => Promise<void> }>} */
+/** @type {Record<string, { store: string, login: string, shots: (page: import('@playwright/test').Page, shoot: Function) => Promise<void> }>} */
 const STORES = {
   clothing: {
+    store: 'demo-clothing',
     login: 'owner@clothing.shop',
     async shots(page, shoot) {
       await page.goto('/register');
@@ -70,6 +71,7 @@ const STORES = {
     },
   },
   flowers: {
+    store: 'demo-flowers',
     login: 'owner@flowers.shop',
     async shots(page, shoot) {
       await page.goto('/register');
@@ -119,6 +121,7 @@ const STORES = {
     },
   },
   cafe: {
+    store: 'demo-cafe',
     login: 'owner@cafe.shop',
     async shots(page, shoot) {
       await page.goto('/register');
@@ -154,7 +157,50 @@ const STORES = {
       }, page);
     },
   },
+  grocery: {
+    store: 'demo-grocery',
+    login: 'owner@grocery.shop',
+    async shots(page, shoot) {
+      await page.goto('/register');
+      await expectCatalog(page, 'grocery-catalog');
+      // The receipt a corner shop rings all day: potatoes and cheese by
+      // weight, a loaf and a carton by the piece. The cart is the till's own
+      // state — nothing reaches the server before «Оплатити», never pressed.
+      const catalog = page.getByTestId('grocery-catalog');
+      await catalog.getByRole('button', { name: /Картопля/ }).click();
+      await weigh(page, '1,5');
+      await catalog.getByRole('button', { name: /Сир твердий/ }).click();
+      await page.getByRole('button', { name: /Гауда/ }).first().click();
+      await weigh(page, '0,35');
+      await catalog.getByRole('button', { name: /Батон нарізний/ }).click();
+      await catalog.getByRole('button', { name: /Молоко «Ферма»/ }).click();
+      await page.getByRole('button', { name: /2,5 %/ }).first().click();
+      await page.waitForTimeout(800);
+      await shoot('grocery-register');
+      // The weight pad over that receipt: the weight typed, its sum on the button.
+      await catalog.getByRole('button', { name: /Яблука/ }).click();
+      await page.getByRole('button', { name: /Гала/ }).first().click();
+      await weigh(page, '1,2', { confirm: false });
+      await page.waitForTimeout(400);
+      await shoot('grocery-weight-pad');
+      await page.getByTestId('weight-pad').getByRole('button', { name: 'Закрити' }).click();
+      // Price tags of weighed goods, per kilogram and per 100 g. As in the
+      // clothing shot, opening the dialog and picking a size writes nothing.
+      await page.goto('/admin/products');
+      for (const name of ['Сир твердий', 'Картопля', 'Яблука', 'Ковбаса варена «Лікарська»']) {
+        await page.getByRole('checkbox', { name: `Обрати «${name}»`, exact: true }).check();
+      }
+      await page.getByRole('button', { name: 'Друк цінників' }).click();
+      const tags = page.getByRole('dialog', { name: 'Друк цінників' });
+      await tags.waitFor(WAIT);
+      await tags.getByRole('button', { name: 'Наліпки', exact: true }).click();
+      await tags.getByRole('group', { name: 'Готові розміри' }).getByRole('button', { name: '58×40' }).click();
+      await page.waitForTimeout(800);
+      await shoot('grocery-price-tags');
+    },
+  },
   restaurant: {
+    store: 'demo-restaurant',
     login: 'owner@restaurant.shop',
     viewport: TABLET,
     async shots(page, shoot) {
@@ -206,14 +252,27 @@ async function pickRange(page, label = '30 днів') {
   }
 }
 
+/** Types a weight («1,5» kg) on the weight pad, key by key as a cashier does, and adds the line. */
+async function weigh(page, kg, { confirm = true } = {}) {
+  const pad = page.getByTestId('weight-pad');
+  await pad.waitFor(WAIT);
+  for (const ch of kg) await pad.getByTestId(`weight-pad-key-${ch === ',' ? 'comma' : ch}`).click();
+  if (confirm) {
+    await pad.getByTestId('weight-pad-confirm').click();
+    await pad.waitFor({ state: 'hidden', ...WAIT });
+  }
+}
+
 async function expectCatalog(page, testId) {
   await page.getByTestId(testId).waitFor(WAIT);
   await page.waitForTimeout(1200);
 }
 
-async function login(page, email) {
+async function login(page, store, email) {
   await page.goto('/login');
   await page.getByRole('button', { name: 'Власник' }).click();
+  // The login form asks the owner for the store's code as well.
+  await page.getByLabel('Код магазину').fill(store);
   await page.getByLabel('Email / логін').fill(email);
   await page.getByLabel('Пароль').fill('owner123');
   await page.getByRole('button', { name: 'Увійти' }).click();
@@ -238,7 +297,7 @@ for (const [key, store] of Object.entries(STORES)) {
     console.log(`${name.padEnd(28)} ${(statSync(file).size / 1024).toFixed(0).padStart(5)} KB`);
   };
   try {
-    await login(page, store.login);
+    await login(page, store.store, store.login);
     await store.shots(page, shoot);
   } catch (error) {
     failed = true;

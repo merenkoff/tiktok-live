@@ -13,10 +13,13 @@ interface Props {
   accentClass?: string; // border/glow accent, e.g. 'border-pos/30'
   elevated?: boolean; // heavier "resting on a surface" shadow — opt-in, hero visuals only
   video?: VideoSources; // when set, renders a looping muted video instead of the static <img>
+  // The screenshot's own size: the window keeps its height before the pixels arrive.
+  width?: number;
+  height?: number;
 }
 
 /** Wraps a real product screenshot (or a real screen-recording) in a quiet window chrome, the way Things frames its app. */
-export function BrowserFrame({ src, alt, dark, accentClass = 'border-line', elevated, video }: Props) {
+export function BrowserFrame({ src, alt, dark, accentClass = 'border-line', elevated, video, width, height }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // React sets `muted` as a property, not an attribute, so the prerendered
@@ -44,7 +47,7 @@ export function BrowserFrame({ src, alt, dark, accentClass = 'border-line', elev
           <img src={video.poster} alt={alt} className="w-full h-auto block" loading="lazy" />
         </video>
       ) : (
-        <img src={src ?? ''} alt={alt} className="w-full h-auto block" loading="lazy" />
+        <img src={src ?? ''} alt={alt} width={width} height={height} className="w-full h-auto block" loading="lazy" />
       )}
     </div>
   );
