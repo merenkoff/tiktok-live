@@ -433,12 +433,13 @@ export async function releaseDebtLinesForSale(
   params: { storeId: number; saleId: number; staffId: number }
 ): Promise<number> {
   const payment = await client.query(
-    `SELECT customer_id, amount_cents FROM pos_debt_entries
+    `SELECT id, customer_id, amount_cents FROM pos_debt_entries
       WHERE store_id = $1 AND sale_id = $2 AND kind = 'payment'`,
     [params.storeId, params.saleId]
   );
   if (payment.rows.length > 0) {
     await lockCustomer(client, params.storeId, Number(payment.rows[0].customer_id));
+    await assertNothingBuiltOn(client, { ...params, entryId: Number(payment.rows[0].id) });
   }
   // The units each receipt line paid, whether or not it was the one that
   // closed the line; a «внесок» has no lines, only its money.
@@ -472,6 +473,63 @@ export async function releaseDebtLinesForSale(
     );
   }
   return (released.rowCount ?? 0) + (unprepaid.rowCount ?? 0);
+}
+
+/**
+ * A void gives back exactly what its payment took only while nothing was
+ * built on it since (078). The goods it paid toward must still be open — not
+ * written off, not closed by another receipt; a «внесок» whose line a later
+ * receipt closed is already inside that receipt's sum. And units on a receipt
+ * must be the last to have left their line: after a later return or receipt
+ * the cumulative share of what left the line would no longer come back to
+ * this receipt's sum, and the journal would drift from the lines by a kopeck.
+ * The cashier undoes the later one first.
+ */
+async function assertNothingBuiltOn(
+  client: DbClient,
+  params: { storeId: number; saleId: number; entryId: number }
+): Promise<void> {
+  const touched = await client.query(
+    `SELECT d.id, d.product_name, d.variant_label, d.sale_id, d.written_off_entry_id,
+            closer.receipt_number AS closed_by,
+            EXISTS (SELECT 1 FROM pos_sale_items si WHERE si.sale_id = $2 AND si.debt_item_id = d.id) AS units
+       FROM pos_debt_items d
+       LEFT JOIN pos_sales closer ON closer.id = d.sale_id
+      WHERE d.store_id = $1
+        AND (d.id IN (SELECT si.debt_item_id FROM pos_sale_items si WHERE si.sale_id = $2)
+             OR d.id = (SELECT s.debt_prepay_item_id FROM pos_sales s WHERE s.id = $2))
+      ORDER BY d.id
+      FOR UPDATE OF d`,
+    [params.storeId, params.saleId]
+  );
+  for (const line of touched.rows) {
+    const title = line.variant_label ? `${line.product_name} · ${line.variant_label}` : String(line.product_name);
+    if (line.written_off_entry_id != null) {
+      throw new DebtConflict(`«${title}» уже списано — цей платіж не скасовується`, 'written_off');
+    }
+    if (line.sale_id != null && Number(line.sale_id) !== params.saleId) {
+      const by = line.closed_by ? `чек ${line.closed_by}` : 'інший чек';
+      throw new DebtConflict(`«${title}» уже закрив ${by} — спершу скасуйте його`, 'closed_later');
+    }
+    if (!line.units) continue;
+    const later = await client.query(
+      `SELECT 1 FROM pos_debt_entries e
+         JOIN pos_debt_entry_lines el ON el.entry_id = e.id
+        WHERE e.store_id = $1 AND e.kind = 'return' AND el.debt_item_id = $2 AND e.id > $3
+       UNION ALL
+       SELECT 1 FROM pos_sale_items si
+         JOIN pos_sales s ON s.id = si.sale_id
+        WHERE si.debt_item_id = $2 AND s.status = 'completed' AND s.id > $4
+       LIMIT 1`,
+      [params.storeId, Number(line.id), params.entryId, params.saleId]
+    );
+    if (later.rows.length > 0) {
+      throw new DebtConflict(
+        `Після цього чека «${title}» ще гасили або повертали — спершу скасуйте пізніші записи`,
+        'later_entries'
+      );
+    }
+  }
 }
 
 /**

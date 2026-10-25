@@ -135,6 +135,8 @@ export interface DebtEntryView {
   offline: boolean;
   /** A `payment` that was a «внесок» — money toward a line, not its receipt (078). */
   prepayment: boolean;
+  /** The line that «внесок» went to, so the till can tell whether it can still be undone. */
+  prepay_line_id: number | null;
 }
 
 export interface DebtStatement {
@@ -266,6 +268,7 @@ function toEntryView(row: Record<string, unknown>): DebtEntryView {
     receipt_number: row.receipt_number == null ? null : String(row.receipt_number),
     offline: row.offline_received_at != null,
     prepayment: row.debt_prepay_item_id != null,
+    prepay_line_id: row.debt_prepay_item_id == null ? null : Number(row.debt_prepay_item_id),
   };
 }
 

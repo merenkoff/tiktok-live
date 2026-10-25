@@ -31,6 +31,14 @@ export interface PaymentRow {
   amount_cents: number;
 }
 
+/** The next line after the whole ones, taken partly: some of its units, a «внесок», or both. */
+export interface DebtPart {
+  line_id: number;
+  quantity?: number;
+  amount_cents?: number;
+  method: 'cash' | 'card';
+}
+
 export const debtsApi = {
   /** Who owes the shop; `all` adds the customers with a limit and no debt. */
   debtors(all = false): Promise<{ debtors: Debtor[] }> {
@@ -84,11 +92,31 @@ export const debtsApi = {
     return request('post', `/debts/customers/${customerId}/writeoff`, body);
   },
 
+  /**
+   * A repayment: the oldest lines whole (`line_ids`), and — on a backend with
+   * 078 — some units of the next one and a «внесок» toward it (`part`,
+   * G3_DEBTS.md §11). `payments` pays the receipt and is empty when the
+   * request is only a «внесок».
+   */
   pay(
     customerId: number,
-    body: { line_ids?: number[]; payments: PaymentRow[]; client_uuid: string; cash_rounding: number }
+    body: {
+      line_ids?: number[];
+      part?: DebtPart;
+      payments: PaymentRow[];
+      client_uuid: string;
+      cash_rounding: number;
+    }
   ): Promise<PayDebtResult> {
     return request('post', `/debts/customers/${customerId}/pay`, body);
+  },
+
+  /**
+   * Undo a «внесок» (078): the server voids it, the money goes back and the
+   * sum is owed again. Refused once its goods were closed or written off.
+   */
+  voidPrepayment(saleId: number): Promise<unknown> {
+    return request('post', `/sales/${saleId}/void`);
   },
 
   /** The owner's figures for the window «Сьогодні» is showing. */

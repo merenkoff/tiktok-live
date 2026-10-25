@@ -1,0 +1,64 @@
+// The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+// Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+// Commercial use requires a separate agreement: mer.sergei@gmail.com
+
+// A receipt that closes goods money was taken toward earlier as «внески»
+// (078) prints the unit price over a smaller sum; the line says why.
+
+import { describe, expect, it } from 'vitest';
+import { buildReceiptPayload } from '@pos/platform';
+import type { SaleDetail } from '@pos/platform';
+import { withPrepaidNotes } from './useReceiptPrint';
+
+function sale(items: Array<Partial<SaleDetail['items'][number]> & { debt_prepaid_cents?: number }>): SaleDetail {
+  return {
+    id: 55,
+    receipt_number: 'R-0000055',
+    status: 'completed',
+    subtotal_cents: 29000,
+    total_cents: 29000,
+    rounding_cents: 0,
+    payments: [{ id: 1, method: 'cash', amount_cents: 29000 }],
+    refunds: [],
+    created_at: '2026-10-25T10:00:00Z',
+    staff_name: 'Олена',
+    fiscal_status: 'none',
+    fiscal: null,
+    items: items.map((item, index) => ({
+      id: index + 1,
+      variant_id: 10 + index,
+      product_name: 'Кепка',
+      variant_label: '',
+      quantity: 1,
+      unit_price_cents: 59000,
+      line_total_cents: 29000,
+      refunded_quantity: 0,
+      ...item,
+    })),
+  } as unknown as SaleDetail;
+}
+
+const store = { name: 'Крамниця', fiscal: null, vertical: null };
+
+describe('withPrepaidNotes', () => {
+  it('says under a line how much was paid toward it earlier, in the receipt’s own figures', () => {
+    const detail = sale([{ debt_prepaid_cents: 30000 }, { product_name: 'Хліб', unit_price_cents: 3200, line_total_cents: 3200 }]);
+    const receipt = withPrepaidNotes(buildReceiptPayload(detail, store), detail);
+    expect(receipt.items[0].note).toBe('Внесено раніше: 300.00');
+    expect(receipt.items[1].note).toBeUndefined();
+  });
+
+  it('keeps a note the line already had — a hand-typed weight', () => {
+    const detail = sale([
+      { debt_prepaid_cents: 5000, quantity: 350, unit: 'г', price_per: 1000, weight_source: 'manual' },
+    ]);
+    const receipt = withPrepaidNotes(buildReceiptPayload(detail, store), detail);
+    expect(receipt.items[0].note).toBe('вагу введено вручну · Внесено раніше: 50.00');
+  });
+
+  it('leaves an ordinary receipt exactly as the host built it', () => {
+    const detail = sale([{ line_total_cents: 59000 }]);
+    const built = buildReceiptPayload(detail, store);
+    expect(withPrepaidNotes(built, detail)).toBe(built);
+  });
+});

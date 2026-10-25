@@ -632,6 +632,7 @@ function rowFromListItem(item: SaleListItem, prev?: LocalSaleRow): LocalSaleRow 
     sync_state: prev?.sync_state,
     exchange_of_receipt_number: item.exchange_of_receipt_number ?? prev?.exchange_of_receipt_number ?? null,
     exchange_sale_number: item.exchange_sale_number ?? prev?.exchange_sale_number ?? null,
+    debt_prepayment: item.debt_prepayment ?? prev?.debt_prepayment,
     // Keep any detail we already hold — the list endpoint carries no line items.
     detail: prev?.detail,
   };

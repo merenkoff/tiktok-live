@@ -1043,6 +1043,8 @@ export interface SaleListItem {
   exchange_of_receipt_number?: string | null;
   /** A refund of this sale became an exchange: the new receipt's number. */
   exchange_sale_number?: string | null;
+  /** A «внесок» toward goods taken «під запис» (migration 078): money with no goods lines. */
+  debt_prepayment?: boolean;
 }
 
 /**
@@ -1095,6 +1097,15 @@ export interface SaleDetail {
   customer_name?: string | null;
   customer_phone?: string | null;
   created_at: string;
+  /** Pays off goods taken «під запис» (073): a receipt for debt lines, or a «внесок» (078). */
+  repays_debt?: boolean;
+  /** Set on a «внесок» (078): which «під запис» goods the money went to. No goods lines of its own. */
+  debt_prepayment?: {
+    line_id: number;
+    product_name: string;
+    variant_label: string;
+    amount_cents: number;
+  } | null;
   items: Array<{
     id: number;
     variant_id: number;

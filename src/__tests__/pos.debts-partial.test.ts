@@ -133,7 +133,13 @@ describe.skipIf(!hasDb)('POS «під запис» — paying in parts', () => {
     return res.json() as {
       credit: { balance_cents: number };
       open_lines: Line[];
-      entries: Array<{ kind: string; amount_cents: number; sale_id: number | null; prepayment: boolean }>;
+      entries: Array<{
+        kind: string;
+        amount_cents: number;
+        sale_id: number | null;
+        prepayment: boolean;
+        prepay_line_id: number | null;
+      }>;
     };
   };
 
@@ -247,6 +253,9 @@ describe.skipIf(!hasDb)('POS «під запис» — paying in parts', () => {
       expect(await owed(id)).toBe(29000);
       const s = await statement(id);
       expect(s.entries[0]).toMatchObject({ kind: 'payment', amount_cents: -30000, sale_id: prepayment.id, prepayment: true });
+      // The receipts list names it rather than show an empty receipt.
+      const listed = (await get('/sales?limit=5')).json() as Array<{ id: number; debt_prepayment: boolean }>;
+      expect(listed.find((row) => row.id === prepayment.id)?.debt_prepayment).toBe(true);
 
       const second = await pay(id, { part: { line_id: line.id, amount_cents: 10000, method: 'card' }, payments: [] });
       expect(second.statusCode, second.body).toBe(200);
@@ -379,6 +388,59 @@ describe.skipIf(!hasDb)('POS «під запис» — paying in parts', () => {
       expect(await owed(id)).toBe(18000);
       const kinds = (await statement(id)).entries.map((e) => e.kind);
       expect(kinds.filter((k) => k === 'payment_void')).toHaveLength(2);
+    });
+
+    it('undoes only what nothing was built on since — the later record first', async () => {
+      // A «внесок» inside a receipt that closed its line, or on a line written off.
+      const id = await customer();
+      const [capLine] = await give(id, [{ variant_id: cap, quantity: 1 }]);
+      const money = await pay(id, { part: { line_id: capLine.id, amount_cents: 30000, method: 'cash' }, payments: [] });
+      const closing = await pay(id, { line_ids: [capLine.id], payments: cash(29000) });
+      expect(closing.statusCode, closing.body).toBe(200);
+      const early = await post(`/sales/${money.json().prepayment.id}/void`, {}, store.ownerToken);
+      expect(early.statusCode).toBe(400);
+      expect(early.json().error).toContain(`уже закрив чек ${closing.json().sale.receipt_number}`);
+      expect(await owed(id)).toBe(0);
+      // In the order they were made backwards, both go.
+      expect((await post(`/sales/${closing.json().sale.id}/void`, {}, store.ownerToken)).statusCode).toBe(200);
+      expect(await owed(id)).toBe(29000);
+      expect((await post(`/sales/${money.json().prepayment.id}/void`, {}, store.ownerToken)).statusCode).toBe(200);
+      expect(await owed(id)).toBe(59000);
+      expect((await statement(id)).entries.find((e) => e.prepayment && e.kind === 'payment')).toMatchObject({
+        prepay_line_id: capLine.id,
+      });
+
+      const id2 = await customer();
+      const [capLine2] = await give(id2, [{ variant_id: cap, quantity: 1 }]);
+      const money2 = await pay(id2, { part: { line_id: capLine2.id, amount_cents: 10000, method: 'cash' }, payments: [] });
+      const off = await post(
+        `/debts/customers/${id2}/writeoff`,
+        { client_uuid: randomUUID(), line_ids: [capLine2.id], reason: 'виїхала' },
+        store.ownerToken
+      );
+      expect(off.statusCode, off.body).toBe(200);
+      const late = await post(`/sales/${money2.json().prepayment.id}/void`, {}, store.ownerToken);
+      expect(late.statusCode).toBe(400);
+      expect(late.json().error).toContain('уже списано');
+      expect(await owed(id2)).toBe(0);
+
+      // Units on a receipt, then a return of the same line: the receipt waits
+      // until the return is undone, or the shares of what left would reorder.
+      const id3 = await customer();
+      const [line] = await give(id3, [{ variant_id: milk, quantity: 7 }], { cart_discount: { type: 'percent', value: 3 } });
+      const units = await pay(id3, { part: { line_id: line.id, quantity: 3 }, payments: cash(10000) });
+      expect(units.statusCode, units.body).toBe(200);
+      const back = await post(`/debts/customers/${id3}/return`, {
+        client_uuid: randomUUID(),
+        lines: [{ line_id: line.id, quantity: 2 }],
+      });
+      expect(back.statusCode, back.body).toBe(200);
+      const before = await owed(id3);
+      const refused = await post(`/sales/${units.json().sale.id}/void`, {}, store.ownerToken);
+      expect(refused.statusCode).toBe(400);
+      expect(refused.json().error).toContain('спершу скасуйте пізніші записи');
+      expect(await owed(id3)).toBe(before);
+      expect(Number((await lineRow(line.id)).paid_quantity)).toBe(3);
     });
 
     it('returns the unpaid units of a part-paid line, and refuses a line with a «внесок»', async () => {

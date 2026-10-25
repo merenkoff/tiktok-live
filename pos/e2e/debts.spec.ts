@@ -64,8 +64,10 @@ function credit(balance: number) {
   };
 }
 
-function owedLine() {
+/** `partial`: a backend with 078, whose lines say how much of them is paid. */
+function owedLine(partial = false, prepaid = 0) {
   return {
+    ...(partial ? { paid_quantity: 0, prepaid_cents: prepaid } : {}),
     id: 1,
     entry_id: 1,
     created_at: '2026-10-24T09:00:00.000Z',
@@ -78,7 +80,7 @@ function owedLine() {
     unit_price_cents: SHIRT.price_cents,
     line_discount_cents: 0,
     line_total_cents: SHIRT.price_cents,
-    owed_cents: SHIRT.price_cents,
+    owed_cents: SHIRT.price_cents - prepaid,
     status: 'open',
     sale_id: null,
     receipt_number: null,
@@ -106,15 +108,16 @@ function entry(id: number, kind: string, amount: number) {
  * registration order, so its catch-all would otherwise answer every one of
  * these with an empty array.
  */
-async function mockDebts(page: Page, { balance = 0 } = {}) {
+async function mockDebts(page: Page, { balance = 0, partial = false } = {}) {
   const sent: Array<{ path: string; body: unknown }> = [];
   let owed = balance;
+  let prepaid = 0;
   const entries: ReturnType<typeof entry>[] = balance > 0 ? [entry(1, 'issue', balance)] : [];
 
   const statement = () => ({
     customer: { id: 7, name: CUSTOMER.name, phone: CUSTOMER.phone },
     credit: credit(owed),
-    open_lines: owed > 0 ? [owedLine()] : [],
+    open_lines: owed > 0 ? [owedLine(partial, prepaid)] : [],
     entries: [...entries].reverse(),
     oldest_open_at: owed > 0 ? '2026-10-24T09:00:00.000Z' : null,
   });
@@ -167,7 +170,41 @@ async function mockDebts(page: Page, { balance = 0 } = {}) {
     });
   });
   await page.route('**/api/pos/debts/customers/7/pay', async (route) => {
-    sent.push({ path: '/pay', body: route.request().postDataJSON() });
+    const body = route.request().postDataJSON();
+    sent.push({ path: '/pay', body });
+    // Only a «внесок» (078): money toward the line, no receipt, the line still owed.
+    if (body.part?.amount_cents && body.payments.length === 0) {
+      prepaid += body.part.amount_cents;
+      owed -= body.part.amount_cents;
+      entries.push({
+        ...entry(entries.length + 1, 'payment', -body.part.amount_cents),
+        sale_id: 56,
+        receipt_number: 'R-0000056',
+        prepayment: true,
+        prepay_line_id: 1,
+      } as ReturnType<typeof entry>);
+      const sale = {
+        id: 56,
+        receipt_number: 'R-0000056',
+        status: 'completed',
+        subtotal_cents: body.part.amount_cents,
+        total_cents: body.part.amount_cents,
+        rounding_cents: 0,
+        items: [],
+        payments: [{ method: 'cash', amount_cents: body.part.amount_cents }],
+        refunds: [],
+        created_at: new Date().toISOString(),
+        staff_name: 'Олена',
+        fiscal_status: 'none',
+        fiscal: null,
+        repays_debt: true,
+        debt_prepayment: { line_id: 1, product_name: SHIRT.product_name, variant_label: SHIRT.label, amount_cents: body.part.amount_cents },
+      };
+      await route.fulfill({
+        json: { sale, prepayment: sale, fiscal: null, warning: null, credit: credit(owed), open_lines: [owedLine(true, prepaid)] },
+      });
+      return;
+    }
     owed = 0;
     entries.push(entry(entries.length + 1, 'payment', -SHIRT.price_cents));
     await route.fulfill({
@@ -269,6 +306,30 @@ test('the notebook: who owes, the statement, and a repayment that names its line
     payments: [{ method: 'cash', amount_cents: SHIRT.price_cents }],
     cash_rounding: 0,
   });
+});
+
+test('a sum short of the oldest goods goes toward them as a «внесок» (Д4 revised)', async ({ page }) => {
+  await signIn(page);
+  const sent = await mockDebts(page, { balance: SHIRT.price_cents, partial: true });
+
+  await page.goto('/debts/7');
+  await page.getByRole('button', { name: 'Прийняти оплату' }).click();
+  await page.getByPlaceholder('Наприклад: 500').fill('300');
+  await expect(page.getByTestId('debts-pay-offer')).toContainText(/Внесок 300,00\s₴ на «Футболка базова/);
+  await expect(page.getByTestId('debts-pay-due')).toContainText(/300,00/);
+  if (process.env.E2E_SHOTS) await page.screenshot({ path: `${process.env.E2E_SHOTS}/debts-pay-prepay.png` });
+  await page.getByRole('button', { name: /^Прийняти 300/ }).click();
+
+  await expect(page.getByTestId('debts-pay-done-text')).toContainText('як внесок на «Футболка базова');
+  expect(sent.find((s) => s.path === '/pay')?.body).toMatchObject({
+    part: { line_id: 1, amount_cents: 30000, method: 'cash' },
+    payments: [],
+  });
+  await page.getByRole('button', { name: 'Готово' }).click();
+  // The statement says what was brought toward the shirt, and the journal names it.
+  await expect(page.getByTestId('debts-open-lines')).toContainText(/внесено 300,00/);
+  await expect(page.getByTestId('debts-journal')).toContainText('Внесок · № R-0000056');
+  await expect(page.getByTestId('debts-journal').getByRole('button', { name: 'Скасувати' })).toBeVisible();
 });
 
 test('the owner’s «Сьогодні» carries the notebook’s three figures', async ({ page }) => {

@@ -19,7 +19,7 @@ vi.mock('@pos/platform', async () => {
   };
 });
 
-const { buildIssueSlip, printIssueSlip, slipLinesFromServer } = await import('./slip');
+const { buildIssueSlip, buildPrepaySlip, printIssueSlip, slipLinesFromServer, slipOutcomeText } = await import('./slip');
 
 const base = {
   storeName: 'Крамниця «Колосок»',
@@ -40,6 +40,50 @@ const TOTAL_FORBIDDEN = ['ДО СПЛАТИ', 'ПДВ', 'РЕШТА', 'ФІСК�
 beforeEach(() => {
   printSlip.mockReset();
   resolveModuleStationPrinter.mockReset();
+});
+
+const prepayBase = {
+  storeName: 'Крамниця «Колосок»',
+  customer: { name: 'Оксана', phone: '+380671234567' },
+  staffName: 'Олена',
+  number: 'R-0000056',
+  at: new Date('2026-10-25T09:15:00.000Z'),
+  line: { product_name: 'Кепка', variant_label: 'L', remaining_quantity: 1, unit: 'шт', price_per: 1 },
+  amountCents: 30000,
+  leftCents: 29000,
+  balanceAfterCents: 29000,
+};
+
+describe('buildPrepaySlip', () => {
+  it('names the «внесок», the goods it went to, what is left on them and the debt after (G3_DEBTS.md §11)', () => {
+    const slip = buildPrepaySlip(prepayBase);
+    expect(slip.title).toBe('ВНЕСОК');
+    expect(slip.lines).toEqual(
+      expect.arrayContaining(['Покупець: Оксана', 'Телефон: +380671234567', 'Касир: Олена', 'Внесок № R-0000056'])
+    );
+    expect(slip.items).toEqual([{ name: 'Кепка · L', quantity: '1 шт' }]);
+    expect(slip.totals).toEqual([
+      { label: 'Внесок', amount_cents: 30000 },
+      { label: 'Лишилося за товаром', amount_cents: 29000 },
+      { label: 'Борг після', amount_cents: 29000 },
+    ]);
+    expect(slip.footer?.[0]).toContain('доки його не оплачено повністю');
+  });
+
+  it('leaves out what it does not know', () => {
+    const slip = buildPrepaySlip({ ...prepayBase, customer: { name: 'Оксана' }, number: null, balanceAfterCents: null });
+    expect(slip.lines?.some((line) => line.startsWith('Телефон') || line.startsWith('Внесок №'))).toBe(false);
+    expect(slip.totals?.map((total) => total.label)).toEqual(['Внесок', 'Лишилося за товаром']);
+  });
+
+  it('says what happened to a slip, and nothing when the device has no printer for it', () => {
+    expect(slipOutcomeText({ kind: 'none' })).toBeNull();
+    expect(slipOutcomeText(null)).toBeNull();
+    expect(slipOutcomeText({ kind: 'printed', printer: 'XP-58' })).toBe('Квитанцію надруковано (XP-58)');
+    expect(slipOutcomeText({ kind: 'failed', printer: 'XP-58', error: 'немає паперу' })).toBe(
+      'Квитанцію не надруковано: немає паперу'
+    );
+  });
 });
 
 describe('buildIssueSlip', () => {
@@ -79,6 +123,7 @@ describe('buildIssueSlip', () => {
     for (const slip of [
       buildIssueSlip({ ...base, entryId: 1 }),
       buildIssueSlip({ ...base, entryId: null, discountCents: 100 }),
+      buildPrepaySlip(prepayBase),
     ]) {
       const title = slip.title.toUpperCase();
       expect(TITLE_FORBIDDEN.some((word) => title.includes(word))).toBe(false);

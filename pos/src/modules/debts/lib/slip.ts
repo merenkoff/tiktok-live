@@ -102,6 +102,62 @@ export function buildIssueSlip(input: IssueSlipInput): SlipData {
   };
 }
 
+export interface PrepaySlipInput {
+  storeName: string;
+  customer: { name: string; phone?: string | null };
+  staffName: string;
+  /** The «внесок»'s own number from the store's counter. */
+  number: string | null;
+  at: Date;
+  /** The line the money went to. */
+  line: Pick<DebtLine, 'product_name' | 'variant_label' | 'remaining_quantity' | 'unit' | 'price_per'>;
+  amountCents: number;
+  /** Still owed on that line after this «внесок». */
+  leftCents: number;
+  /** The whole debt after it, when the server said. */
+  balanceAfterCents: number | null;
+}
+
+/**
+ * The «ВНЕСОК» slip (G3_DEBTS.md §11): money toward goods taken «під запис»
+ * that does not pay them off yet. Printed where the handover slip is — a
+ * desktop with a printer for the station — and, like it, no settlement
+ * document: there is no receipt for a «внесок» until the prepayment chain.
+ */
+export function buildPrepaySlip(input: PrepaySlipInput): SlipData {
+  return {
+    title: 'ВНЕСОК',
+    store_name: input.storeName,
+    lines: [
+      `Покупець: ${input.customer.name}`,
+      ...(input.customer.phone ? [`Телефон: ${input.customer.phone}`] : []),
+      `Касир: ${input.staffName}`,
+      ...(input.number ? [`Внесок № ${input.number}`] : []),
+      stamp(input.at),
+    ],
+    items: [
+      {
+        name: lineTitle(input.line),
+        quantity: quantityText(input.line.remaining_quantity, input.line.unit, input.line.price_per),
+      },
+    ],
+    totals: [
+      { label: 'Внесок', amount_cents: input.amountCents },
+      { label: 'Лишилося за товаром', amount_cents: input.leftCents },
+      ...(input.balanceAfterCents != null ? [{ label: 'Борг після', amount_cents: input.balanceAfterCents }] : []),
+    ],
+    footer: ['Товар лишається під запис, доки його не оплачено повністю.', 'Підпис покупця ________________'],
+    printed_at: stamp(new Date()),
+  };
+}
+
+/** What the sheet says about a slip it tried to print; nothing when the device has no printer for it. */
+export function slipOutcomeText(slip: SlipOutcome | null): string | null {
+  if (!slip || slip.kind === 'none') return null;
+  if (slip.kind === 'printed') return `Квитанцію надруковано (${slip.printer})`;
+  return `Квитанцію не надруковано: ${slip.error}`;
+}
+
 export type SlipOutcome =
   /** No printer for the station on this device: nothing printed, nothing to say. */
   | { kind: 'none' }
@@ -109,8 +165,9 @@ export type SlipOutcome =
   | { kind: 'failed'; printer: string; error: string };
 
 /**
- * Print the slip if this device has a printer for the station; never throws —
- * a jammed printer must not undo a handover that already happened.
+ * Print a slip — the handover's or a «внесок»'s — if this device has a
+ * printer for the station; never throws: a jammed printer must not undo what
+ * already happened.
  */
 export async function printIssueSlip(slip: SlipData): Promise<SlipOutcome> {
   let printer: TicketPrinter | null = null;

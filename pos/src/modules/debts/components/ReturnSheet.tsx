@@ -12,12 +12,14 @@
 //
 // A weighed line goes back only whole (G4_WEIGHED.md, decision 8): the server
 // refuses a part of a weighing, so the sheet offers «усе» or nothing for it.
+// A line money was taken toward as a «внесок» (078) does not go back at all
+// until those are voided — the money would be left with nothing to stand for.
 
 import { useMemo, useState } from 'react';
 import { cashierApi, formatUah, isOfflinePosEnabled } from '@pos/platform';
 import { Minus, Plus } from '@pos/platform/ui';
 import { debtsApi } from '../lib/debtsApi';
-import { lineTitle, quantityText, returnAmount, returnsWhole } from '../lib/debt';
+import { lineProgress, lineTitle, quantityText, returnAmount, returnBlockedByPrepay, returnsWhole } from '../lib/debt';
 import { debtFailure } from '../lib/errors';
 import { customerScope } from '../lib/pendingKeys';
 import { publishCredit } from '../lib/useCredit';
@@ -44,7 +46,7 @@ export function ReturnSheet({ customerId, openLines, onClose, onChanged }: Props
   const writeKey = useWriteKey(customerScope('return', customerId));
   const [error, setError] = useState<string | null>(() => (writeKey.replaying ? EARLIER_NO_ANSWER : null));
 
-  const chosen = openLines.filter((line) => (take[line.id] ?? 0) > 0);
+  const chosen = openLines.filter((line) => (take[line.id] ?? 0) > 0 && !returnBlockedByPrepay(line));
   const total = useMemo(
     () => openLines.reduce((sum, line) => sum + returnAmount(line, take[line.id] ?? 0), 0),
     [openLines, take]
@@ -110,55 +112,63 @@ export function ReturnSheet({ customerId, openLines, onClose, onChanged }: Props
                     <span className="block text-[15px]">{lineTitle(line)}</span>
                     <span className="block text-[13px] text-sq-muted">
                       винно за {quantityText(line.remaining_quantity, line.unit, line.price_per)} · {formatUah(line.owed_cents)}
+                      {lineProgress(line) ? ` (${lineProgress(line)})` : ''}
                     </span>
                   </span>
                   {n > 0 && (
                     <span className="text-[15px] font-semibold tabular-nums shrink-0">−{formatUah(returnAmount(line, n))}</span>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
-                  {returnsWhole(line) ? (
-                    <span className="text-[13px] text-sq-muted" data-testid="debts-return-whole">
-                      Ваговий товар повертається цілим рядком
-                    </span>
-                  ) : piece ? (
-                    <>
-                      <button
-                        type="button"
-                        aria-label="Менше"
-                        className="h-10 w-10 grid place-items-center rounded-[10px] bg-white ring-1 ring-sq-divider"
-                        onClick={() => set(line, n - 1)}
-                      >
-                        <Minus size={20} />
-                      </button>
-                      <span className="w-10 text-center text-[17px] font-semibold tabular-nums">{n}</span>
-                      <button
-                        type="button"
-                        aria-label="Більше"
-                        className="h-10 w-10 grid place-items-center rounded-[10px] bg-white ring-1 ring-sq-divider"
-                        onClick={() => set(line, n + 1)}
-                      >
-                        <Plus size={20} />
-                      </button>
-                    </>
-                  ) : (
-                    <input
-                      className="pos-field w-32"
-                      inputMode="numeric"
-                      aria-label={`Скільки повернути, ${line.unit}`}
-                      value={n === 0 ? '' : String(n)}
-                      placeholder={`0 ${line.unit}`}
-                      onChange={(e) => set(line, Number(e.target.value.replace(/\D/g, '')) || 0)}
-                    />
-                  )}
-                  <button
-                    type="button"
-                    className="ml-auto text-[15px] font-semibold text-sq-blue"
-                    onClick={() => set(line, n === line.remaining_quantity ? 0 : line.remaining_quantity)}
-                  >
-                    {n === line.remaining_quantity ? 'Скинути' : 'Усе'}
-                  </button>
-                </div>
+                {returnBlockedByPrepay(line) ? (
+                  <p className="text-[13px] text-sq-muted" data-testid="debts-return-prepaid">
+                    На цей товар уже внесено {formatUah(line.prepaid_cents ?? 0)} — щоб його повернути, спершу
+                    скасуйте внески в журналі виписки (гроші — покупцеві) або прийміть решту оплати
+                  </p>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    {returnsWhole(line) ? (
+                      <span className="text-[13px] text-sq-muted" data-testid="debts-return-whole">
+                        Ваговий товар повертається цілим рядком
+                      </span>
+                    ) : piece ? (
+                      <>
+                        <button
+                          type="button"
+                          aria-label="Менше"
+                          className="h-10 w-10 grid place-items-center rounded-[10px] bg-white ring-1 ring-sq-divider"
+                          onClick={() => set(line, n - 1)}
+                        >
+                          <Minus size={20} />
+                        </button>
+                        <span className="w-10 text-center text-[17px] font-semibold tabular-nums">{n}</span>
+                        <button
+                          type="button"
+                          aria-label="Більше"
+                          className="h-10 w-10 grid place-items-center rounded-[10px] bg-white ring-1 ring-sq-divider"
+                          onClick={() => set(line, n + 1)}
+                        >
+                          <Plus size={20} />
+                        </button>
+                      </>
+                    ) : (
+                      <input
+                        className="pos-field w-32"
+                        inputMode="numeric"
+                        aria-label={`Скільки повернути, ${line.unit}`}
+                        value={n === 0 ? '' : String(n)}
+                        placeholder={`0 ${line.unit}`}
+                        onChange={(e) => set(line, Number(e.target.value.replace(/\D/g, '')) || 0)}
+                      />
+                    )}
+                    <button
+                      type="button"
+                      className="ml-auto text-[15px] font-semibold text-sq-blue"
+                      onClick={() => set(line, n === line.remaining_quantity ? 0 : line.remaining_quantity)}
+                    >
+                      {n === line.remaining_quantity ? 'Скинути' : 'Усе'}
+                    </button>
+                  </div>
+                )}
               </li>
             );
           })}

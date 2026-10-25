@@ -55,6 +55,7 @@ import {
   buildIssueSlip,
   printIssueSlip,
   slipLinesFromServer,
+  slipOutcomeText,
   type IssueSlipInput,
   type SlipLine,
   type SlipOutcome,
@@ -79,12 +80,6 @@ type Done =
 
 function timeOf(iso: string): string {
   return new Date(iso).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
-}
-
-function slipText(slip: SlipOutcome | null): string | null {
-  if (!slip || slip.kind === 'none') return null;
-  if (slip.kind === 'printed') return `Квитанцію надруковано (${slip.printer})`;
-  return `Квитанцію не надруковано: ${slip.error}`;
 }
 
 export default function CheckoutAction({ lines, customer, cartDiscount, totalCents, onCompleted }: CheckoutActionProps) {
@@ -346,13 +341,13 @@ export default function CheckoutAction({ lines, customer, cartDiscount, totalCen
                 </p>
               )}
               <p className="text-[13px] text-sq-muted">Фіскальний чек буде, коли покупець погасить борг.</p>
-              {slipText(slip) && (
+              {slipOutcomeText(slip) && (
                 <div className="flex items-center gap-3">
                   <p
                     className={`flex-1 text-[13px] ${slip?.kind === 'failed' ? 'text-amber-800' : 'text-sq-muted'}`}
                     data-testid="debts-issue-slip"
                   >
-                    {slipText(slip)}
+                    {slipOutcomeText(slip)}
                   </p>
                   <button type="button" className="sq-btn-quiet min-h-[40px] shrink-0" onClick={() => void reprint()}>
                     Ще раз

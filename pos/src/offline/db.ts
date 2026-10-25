@@ -176,6 +176,8 @@ export interface LocalSaleRow {
   /** Exchange badges mirrored from the server row (migration 064); absent on old rows. */
   exchange_of_receipt_number?: string | null;
   exchange_sale_number?: string | null;
+  /** A «внесок» toward a «під запис» debt (migration 078), mirrored from the server row. */
+  debt_prepayment?: boolean;
 }
 
 class PosOfflineDB extends Dexie {

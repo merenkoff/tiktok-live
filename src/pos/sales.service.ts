@@ -1579,6 +1579,9 @@ export async function listSales(storeId: number, opts: ListSalesOptions = {}) {
     fiscal_status: sale.fiscal_status ?? 'none',
     exchange_of_receipt_number: (sale.exchange_of_receipt_number as string | null) ?? null,
     exchange_sale_number: (sale.exchange_sale_number as string | null) ?? null,
+    // A «внесок» toward goods taken «під запис» (078): no goods lines, so the
+    // receipts list says what it is rather than show an empty receipt.
+    debt_prepayment: sale.debt_prepay_item_id != null,
   }));
 }
 
