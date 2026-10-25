@@ -1,6 +1,6 @@
 import { t as e } from "./debtsApi-DhkvGjzT.js";
 import { f as t } from "./queue-B9HzuKEV.js";
-import { l as n, n as r, v as i } from "./debt-80Dd-Q-1.js";
+import { l as n, n as r, y as i } from "./debt-GvG7YbfE.js";
 import { t as a } from "./errors-CLut7Fii.js";
 import { useEffect as o, useState as s } from "react";
 import { formatUah as c } from "@pos/platform";
