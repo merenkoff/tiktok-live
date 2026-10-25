@@ -200,9 +200,15 @@ describe.skipIf(!hasDb)('POS kitchen board', () => {
     await voidSale({ storeId: cafe.storeId, saleId: cancelled.id, staffId: cafe.sellerId });
 
     const stale = await sell(cafe, [{ variant_id: croissant, quantity: 1 }]);
-    await pool.query(`UPDATE pos_sales SET created_at = NOW() - INTERVAL '1 day' WHERE id = $1`, [
-      stale.id,
-    ]);
+    // Yesterday on the store's calendar — not 24 hours ago, which in the last
+    // hour of a 25-hour day (the clocks going back) is still today.
+    await pool.query(
+      `UPDATE pos_sales s
+          SET created_at = ((NOW() AT TIME ZONE st.timezone) - INTERVAL '1 day') AT TIME ZONE st.timezone
+         FROM pos_stores st
+        WHERE st.id = s.store_id AND s.id = $1`,
+      [stale.id]
+    );
 
     const { orders } = await listOpenOrders(cafe.storeId);
     const ids = orders.map((o) => o.id);
