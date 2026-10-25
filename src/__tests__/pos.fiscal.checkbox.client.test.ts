@@ -12,8 +12,12 @@ import {
   getReceipt,
   getReceiptRendering,
   getReportText,
+  getPrepaymentRelation,
   getShiftShort,
   openShiftRequest,
+  prepaymentChainReceipt,
+  prepaymentReceipt,
+  returnPrepaymentChain,
   sellReceipt,
   serviceReceipt,
   signInPinCode,
@@ -164,6 +168,88 @@ describe('sellReceipt / serviceReceipt', () => {
       status: 400,
       code: 'receipt.already_exists',
     });
+  });
+});
+
+describe('prepayment chains', () => {
+  const created = {
+    id: 'p1',
+    status: 'CREATED',
+    fiscal_code: null,
+    fiscal_date: null,
+    tax_url: null,
+    transaction: null,
+    pre_payment_relation_id: '1717502471',
+  };
+
+  it('POSTs a chain opening to /prepayment-receipts and returns its relation id', async () => {
+    const fetchMock = stubFetch(jsonResponse(201, created));
+    const payload = {
+      id: 'p1',
+      goods: [{ good: { code: '7', name: 'Кепка', price: 59000 }, quantity: 1000 }],
+      payments: [{ type: 'CASH' as const, value: 30000 }],
+      custom_relation_id: 'debt-1-42-0001',
+    };
+    const result = await prepaymentReceipt(authed, payload);
+    expect(result.pre_payment_relation_id).toBe('1717502471');
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://api.checkbox.in.ua/api/v1/prepayment-receipts');
+    expect(opts.method).toBe('POST');
+    expect(opts.headers.authorization).toBe('Bearer tok');
+    expect(JSON.parse(opts.body)).toEqual(payload);
+  });
+
+  it('POSTs a further payment to the chain under its relation id', async () => {
+    const fetchMock = stubFetch(jsonResponse(201, { ...created, id: 'p2' }));
+    const payload = { id: 'p2', payments: [{ type: 'CASHLESS' as const, value: 29000 }], rounding_mode: 'ROUND_50' as const };
+    await prepaymentChainReceipt(authed, '1717502471', payload);
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://api.checkbox.in.ua/api/v1/prepayment-receipts/1717502471');
+    expect(JSON.parse(opts.body)).toEqual(payload);
+  });
+
+  it('escapes a relation id that is not a bare number', async () => {
+    const fetchMock = stubFetch(jsonResponse(201, created));
+    await prepaymentChainReceipt(authed, 'debt/1 42', { id: 'p3', payments: [] });
+    expect(fetchMock.mock.calls[0][0]).toBe('https://api.checkbox.in.ua/api/v1/prepayment-receipts/debt%2F1%2042');
+  });
+
+  it('reads the chain, and a 404 is no chain rather than an error', async () => {
+    const relation = {
+      id: 'rel-uuid',
+      relation_id: '1717502471',
+      paid_sum: 30000,
+      total_sum: 59000,
+      left_to_pay: 29000,
+      pre_payment_status: 'PARTIAL_PAID',
+      receipt_chain: { pre_payment_receipts: ['p1'], after_payment_receipt: null, returned_receipts: [] },
+    };
+    const fetchMock = stubFetch(jsonResponse(200, relation), jsonResponse(404, { message: 'Not Found' }));
+    expect(await getPrepaymentRelation(authed, '1717502471')).toEqual(relation);
+    expect(fetchMock.mock.calls[0][0]).toBe('https://api.checkbox.in.ua/api/v1/prepayment-receipts/1717502471');
+    expect(fetchMock.mock.calls[0][1].method).toBe('GET');
+    expect(await getPrepaymentRelation(authed, 'missing')).toBeNull();
+  });
+
+  it('returns the whole chain as one return receipt per receipt', async () => {
+    const fetchMock = stubFetch(
+      jsonResponse(201, [
+        { ...created, id: 'ret-after' },
+        { ...created, id: 'ret-pre' },
+      ])
+    );
+    const receipts = await returnPrepaymentChain(authed, '1717502471', { cashier_name: 'Оля' });
+    expect(receipts.map((r) => r.id)).toEqual(['ret-after', 'ret-pre']);
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://api.checkbox.in.ua/api/v1/prepayment-receipts/1717502471/return');
+    expect(JSON.parse(opts.body)).toEqual({ cashier_name: 'Оля' });
+  });
+
+  it('passes a chain refusal through with its code', async () => {
+    stubFetch(jsonResponse(400, { code: 'prepayment.already_paid', message: 'Ланцюжок уже сплачено' }));
+    await expect(
+      prepaymentChainReceipt(authed, '1717502471', { id: 'p4', payments: [{ type: 'CASH', value: 100 }] })
+    ).rejects.toMatchObject({ status: 400, code: 'prepayment.already_paid' });
   });
 });
 
