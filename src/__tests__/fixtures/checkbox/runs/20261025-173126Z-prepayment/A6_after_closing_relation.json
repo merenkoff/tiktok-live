@@ -1,0 +1,223 @@
+{
+  "id": "a01f2db0-a226-4b88-ad10-a0f5ab605ba5",
+  "relation_id": "ls-sbx-20261025-173126Z-a",
+  "paid_sum": 59000,
+  "total_sum": 59000,
+  "left_to_pay": 0,
+  "paid_by_cash_sum": 59000,
+  "last_returned_receipt_at": null,
+  "receipt_chain_count": 3,
+  "is_debt_receipt": null,
+  "pre_payment_status": "FULL_PAID",
+  "created_at": "2026-10-25T17:31:28.218853+00:00",
+  "updated_at": "2026-10-25T17:31:36.995308+00:00",
+  "receipt_chain": {
+    "returned_receipts": [],
+    "after_payment_receipt": "38281027-d774-48af-8a36-71146111d6d3",
+    "pre_payment_receipts": [
+      "272ee41d-e82e-46ce-8c1f-0fe3bada1112",
+      "99b89885-0e5b-4b25-bb71-c973fb848a91"
+    ],
+    "returned_receipts_mapping": {}
+  },
+  "receipts_chain": {
+    "pre_payment_receipts": [
+      {
+        "id": "272ee41d-e82e-46ce-8c1f-0fe3bada1112",
+        "serial": 38,
+        "status": "DONE",
+        "goods": [
+          {
+            "good": {
+              "code": "pieces-1-59000",
+              "barcode": null,
+              "name": "Кепка",
+              "excise_barcodes": null,
+              "e_excise_barcodes": null,
+              "header": null,
+              "footer": null,
+              "uktzed": null,
+              "price": 59000,
+              "original_price": null
+            },
+            "good_id": null,
+            "sum": 59000,
+            "quantity": 1000,
+            "is_return": false,
+            "taxes": [],
+            "discounts": []
+          }
+        ],
+        "payments": [
+          {
+            "type": "CASH",
+            "pawnshop_is_return": null,
+            "operation_type": null,
+            "value": 30000,
+            "label": "Готівка"
+          }
+        ],
+        "total_sum": 30000,
+        "total_payment": 30000,
+        "total_rest": 0,
+        "round_sum": 0,
+        "fiscal_code": "TEST-J6SR2h",
+        "fiscal_date": "2026-10-25T17:31:28.204011+00:00",
+        "delivered_at": null,
+        "taxes": [],
+        "discounts": [
+          {
+            "type": "PRE_PAYMENT",
+            "mode": "VALUE",
+            "value": 29000,
+            "tax_code": null,
+            "tax_codes": [],
+            "name": "Залишок до сплати",
+            "privilege": null,
+            "sum": -29000
+          }
+        ],
+        "created_at": "2026-10-25T17:31:28.204043+00:00",
+        "updated_at": "2026-10-25T17:31:28.531478+00:00",
+        "is_created_offline": false,
+        "is_sent_dps": false,
+        "fiscal_api_type": null,
+        "delivery": null
+      },
+      {
+        "id": "99b89885-0e5b-4b25-bb71-c973fb848a91",
+        "serial": 39,
+        "status": "DONE",
+        "goods": [
+          {
+            "good": {
+              "code": "pieces-1-59000",
+              "barcode": null,
+              "name": "Кепка",
+              "excise_barcodes": null,
+              "e_excise_barcodes": null,
+              "header": null,
+              "footer": null,
+              "uktzed": null,
+              "price": 59000,
+              "original_price": null
+            },
+            "good_id": null,
+            "sum": 59000,
+            "quantity": 1000,
+            "is_return": false,
+            "taxes": [],
+            "discounts": []
+          }
+        ],
+        "payments": [
+          {
+            "type": "CASH",
+            "pawnshop_is_return": null,
+            "operation_type": null,
+            "value": 10000,
+            "label": "Готівка"
+          }
+        ],
+        "total_sum": 10000,
+        "total_payment": 10000,
+        "total_rest": 0,
+        "round_sum": 0,
+        "fiscal_code": "TEST-fVx6ia",
+        "fiscal_date": "2026-10-25T17:31:34.598225+00:00",
+        "delivered_at": null,
+        "taxes": [],
+        "discounts": [
+          {
+            "type": "PRE_PAYMENT",
+            "mode": "VALUE",
+            "value": 19000,
+            "tax_code": null,
+            "tax_codes": [],
+            "name": "Залишок до сплати",
+            "privilege": null,
+            "sum": -19000
+          },
+          {
+            "type": "PRE_PAYMENT",
+            "mode": "VALUE",
+            "value": 30000,
+            "tax_code": null,
+            "tax_codes": [],
+            "name": "Попередня передплата",
+            "privilege": null,
+            "sum": -30000
+          }
+        ],
+        "created_at": "2026-10-25T17:31:34.598241+00:00",
+        "updated_at": "2026-10-25T17:31:34.993937+00:00",
+        "is_created_offline": false,
+        "is_sent_dps": false,
+        "fiscal_api_type": null,
+        "delivery": null
+      }
+    ],
+    "after_payment_receipt": {
+      "id": "38281027-d774-48af-8a36-71146111d6d3",
+      "serial": 40,
+      "status": "DONE",
+      "goods": [
+        {
+          "good": {
+            "code": "pieces-1-59000",
+            "barcode": null,
+            "name": "Кепка",
+            "excise_barcodes": null,
+            "e_excise_barcodes": null,
+            "header": null,
+            "footer": null,
+            "uktzed": null,
+            "price": 59000,
+            "original_price": null
+          },
+          "good_id": null,
+          "sum": 59000,
+          "quantity": 1000,
+          "is_return": false,
+          "taxes": [],
+          "discounts": []
+        }
+      ],
+      "payments": [
+        {
+          "type": "CASH",
+          "pawnshop_is_return": null,
+          "operation_type": null,
+          "value": 20000,
+          "label": "Готівка"
+        }
+      ],
+      "total_sum": 19000,
+      "total_payment": 20000,
+      "total_rest": 1000,
+      "round_sum": 0,
+      "fiscal_code": "TEST-6i6afv",
+      "fiscal_date": "2026-10-25T17:31:36.984241+00:00",
+      "delivered_at": null,
+      "taxes": [],
+      "discounts": [
+        {
+          "type": "PRE_PAYMENT",
+          "mode": "VALUE",
+          "value": 40000,
+          "tax_code": null,
+          "tax_codes": [],
+          "name": "Передплата за замовлення",
+          "privilege": null,
+          "sum": -40000
+        }
+      ],
+      "created_at": "2026-10-25T17:31:36.984254+00:00",
+      "updated_at": "2026-10-25T17:31:37.066604+00:00",
+      "is_created_offline": false,
+      "is_sent_dps": false,
+      "fiscal_api_type": null,
+      "delivery": null
+    }
+  }
+}

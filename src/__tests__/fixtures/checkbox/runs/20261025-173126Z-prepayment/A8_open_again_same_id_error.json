@@ -1,0 +1,8 @@
+{
+  "status": 400,
+  "code": "prepayment.relation_id_not_unique",
+  "body": {
+    "code": "prepayment.relation_id_not_unique",
+    "message": "Значення custom_relation_id має бути унікальним"
+  }
+}

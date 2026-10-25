@@ -1,0 +1,167 @@
+{
+  "id": "a4ee2096-fded-4fc0-bd8e-7c16e0c8b6d7",
+  "relation_id": "ls-sbx-20261025-173126Z-d",
+  "paid_sum": 6647,
+  "total_sum": 6647,
+  "left_to_pay": 0,
+  "paid_by_cash_sum": 3000,
+  "last_returned_receipt_at": null,
+  "receipt_chain_count": 2,
+  "is_debt_receipt": null,
+  "pre_payment_status": "FULL_PAID",
+  "created_at": "2026-10-25T17:32:10.739407+00:00",
+  "updated_at": "2026-10-25T17:32:13.077959+00:00",
+  "receipt_chain": {
+    "returned_receipts": [],
+    "after_payment_receipt": "f5a3480b-9d5a-4688-8763-72d98693e072",
+    "pre_payment_receipts": [
+      "5e70bde2-ad41-4478-82e4-129b4ab87849"
+    ],
+    "returned_receipts_mapping": {}
+  },
+  "receipts_chain": {
+    "pre_payment_receipts": [
+      {
+        "id": "5e70bde2-ad41-4478-82e4-129b4ab87849",
+        "serial": 54,
+        "status": "DONE",
+        "goods": [
+          {
+            "good": {
+              "code": "weighed-350-18990",
+              "barcode": null,
+              "name": "Сир твердий",
+              "excise_barcodes": null,
+              "e_excise_barcodes": null,
+              "header": null,
+              "footer": null,
+              "uktzed": null,
+              "price": 18990,
+              "original_price": null
+            },
+            "good_id": null,
+            "sum": 6647,
+            "quantity": 350,
+            "is_return": false,
+            "taxes": [],
+            "discounts": []
+          }
+        ],
+        "payments": [
+          {
+            "type": "CASH",
+            "pawnshop_is_return": null,
+            "operation_type": null,
+            "value": 3000,
+            "label": "Готівка"
+          }
+        ],
+        "total_sum": 3000,
+        "total_payment": 3000,
+        "total_rest": 0,
+        "round_sum": 0,
+        "fiscal_code": "TEST-RRMqw3",
+        "fiscal_date": "2026-10-25T17:32:10.725294+00:00",
+        "delivered_at": null,
+        "taxes": [],
+        "discounts": [
+          {
+            "type": "PRE_PAYMENT",
+            "mode": "VALUE",
+            "value": 3647,
+            "tax_code": null,
+            "tax_codes": [],
+            "name": "Залишок до сплати",
+            "privilege": null,
+            "sum": -3647
+          }
+        ],
+        "created_at": "2026-10-25T17:32:10.725307+00:00",
+        "updated_at": "2026-10-25T17:32:11.061696+00:00",
+        "is_created_offline": false,
+        "is_sent_dps": false,
+        "fiscal_api_type": null,
+        "delivery": null
+      }
+    ],
+    "after_payment_receipt": {
+      "id": "f5a3480b-9d5a-4688-8763-72d98693e072",
+      "serial": 55,
+      "status": "DONE",
+      "goods": [
+        {
+          "good": {
+            "code": "weighed-350-18990",
+            "barcode": null,
+            "name": "Сир твердий",
+            "excise_barcodes": null,
+            "e_excise_barcodes": null,
+            "header": null,
+            "footer": null,
+            "uktzed": null,
+            "price": 18990,
+            "original_price": null
+          },
+          "good_id": null,
+          "sum": 6647,
+          "quantity": 350,
+          "is_return": false,
+          "taxes": [],
+          "discounts": []
+        }
+      ],
+      "payments": [
+        {
+          "type": "CASHLESS",
+          "pawnshop_is_return": null,
+          "operation_type": null,
+          "provider_type": null,
+          "code": 1,
+          "value": 3647,
+          "commission": null,
+          "label": "Картка",
+          "card_mask": null,
+          "bank_name": null,
+          "auth_code": null,
+          "rrn": null,
+          "payment_system": null,
+          "owner_name": null,
+          "terminal": null,
+          "acquiring": null,
+          "acquirer_and_seller": null,
+          "receipt_no": null,
+          "signature_required": null,
+          "tapxphone_terminal": null,
+          "transaction_id": null,
+          "ereceipt_data": null
+        }
+      ],
+      "total_sum": 3647,
+      "total_payment": 3647,
+      "total_rest": 0,
+      "round_sum": 0,
+      "fiscal_code": "TEST-og46bN",
+      "fiscal_date": "2026-10-25T17:32:13.065664+00:00",
+      "delivered_at": null,
+      "taxes": [],
+      "discounts": [
+        {
+          "type": "PRE_PAYMENT",
+          "mode": "VALUE",
+          "value": 3000,
+          "tax_code": null,
+          "tax_codes": [],
+          "name": "Передплата за замовлення",
+          "privilege": null,
+          "sum": -3000
+        }
+      ],
+      "created_at": "2026-10-25T17:32:13.065683+00:00",
+      "updated_at": "2026-10-25T17:32:13.252015+00:00",
+      "is_created_offline": false,
+      "is_sent_dps": false,
+      "fiscal_api_type": null,
+      "delivery": null
+    }
+  }
+}

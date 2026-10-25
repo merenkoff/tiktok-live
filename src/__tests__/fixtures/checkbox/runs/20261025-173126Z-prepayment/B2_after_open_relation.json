@@ -1,0 +1,117 @@
+{
+  "id": "6ad5d164-3ba0-4949-962b-e77bc5573b80",
+  "relation_id": "ls-sbx-20261025-173126Z-b",
+  "paid_sum": 5000,
+  "total_sum": 8262,
+  "left_to_pay": 3262,
+  "paid_by_cash_sum": 0,
+  "last_returned_receipt_at": null,
+  "receipt_chain_count": 1,
+  "is_debt_receipt": null,
+  "pre_payment_status": "PARTIAL_PAID",
+  "created_at": "2026-10-25T17:31:46.976086+00:00",
+  "updated_at": null,
+  "receipt_chain": {
+    "returned_receipts": [],
+    "after_payment_receipt": null,
+    "pre_payment_receipts": [
+      "b1dc618e-f807-42f3-b7db-8fd6024dd08a"
+    ],
+    "returned_receipts_mapping": {}
+  },
+  "receipts_chain": {
+    "pre_payment_receipts": [
+      {
+        "id": "b1dc618e-f807-42f3-b7db-8fd6024dd08a",
+        "serial": 44,
+        "status": "DONE",
+        "goods": [
+          {
+            "good": {
+              "code": "pieces-2-4590",
+              "barcode": null,
+              "name": "Хліб",
+              "excise_barcodes": null,
+              "e_excise_barcodes": null,
+              "header": null,
+              "footer": null,
+              "uktzed": null,
+              "price": 4590,
+              "original_price": null
+            },
+            "good_id": null,
+            "sum": 9180,
+            "quantity": 2000,
+            "is_return": false,
+            "taxes": [],
+            "discounts": [
+              {
+                "type": "DISCOUNT",
+                "mode": "VALUE",
+                "value": 918,
+                "tax_code": null,
+                "tax_codes": null,
+                "name": "Знижка",
+                "privilege": null,
+                "sum": -918
+              }
+            ]
+          }
+        ],
+        "payments": [
+          {
+            "type": "CASHLESS",
+            "pawnshop_is_return": null,
+            "operation_type": null,
+            "provider_type": null,
+            "code": 1,
+            "value": 5000,
+            "commission": null,
+            "label": "Картка",
+            "card_mask": null,
+            "bank_name": null,
+            "auth_code": null,
+            "rrn": null,
+            "payment_system": null,
+            "owner_name": null,
+            "terminal": null,
+            "acquiring": null,
+            "acquirer_and_seller": null,
+            "receipt_no": null,
+            "signature_required": null,
+            "tapxphone_terminal": null,
+            "transaction_id": null,
+            "ereceipt_data": null
+          }
+        ],
+        "total_sum": 5000,
+        "total_payment": 5000,
+        "total_rest": 0,
+        "round_sum": 0,
+        "fiscal_code": "TEST-h4CEoI",
+        "fiscal_date": "2026-10-25T17:31:46.963695+00:00",
+        "delivered_at": null,
+        "taxes": [],
+        "discounts": [
+          {
+            "type": "PRE_PAYMENT",
+            "mode": "VALUE",
+            "value": 3262,
+            "tax_code": null,
+            "tax_codes": [],
+            "name": "Залишок до сплати",
+            "privilege": null,
+            "sum": -3262
+          }
+        ],
+        "created_at": "2026-10-25T17:31:46.963714+00:00",
+        "updated_at": "2026-10-25T17:31:47.383709+00:00",
+        "is_created_offline": false,
+        "is_sent_dps": false,
+        "fiscal_api_type": null,
+        "delivery": null
+      }
+    ],
+    "after_payment_receipt": null
+  }
+}

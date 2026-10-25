@@ -1,0 +1,10 @@
+{
+  "id": "774fef57-f858-44ae-8248-fe77e1961e8a",
+  "cashier_name": "Перевірка передплати",
+  "payments": [
+    {
+      "type": "CASH",
+      "value": 1000
+    }
+  ]
+}

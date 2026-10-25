@@ -1,0 +1,21 @@
+{
+  "id": "d3df3a2a-b42c-4089-b3a3-0ab1e0c99f3a",
+  "cashier_name": "Перевірка передплати",
+  "goods": [
+    {
+      "good": {
+        "code": "pieces-1-22123",
+        "name": "Перевірка заокруглення",
+        "price": 22123
+      },
+      "quantity": 1000
+    }
+  ],
+  "payments": [
+    {
+      "type": "CASH",
+      "value": 10000
+    }
+  ],
+  "custom_relation_id": "ls-sbx-20261025-173126Z-e"
+}
