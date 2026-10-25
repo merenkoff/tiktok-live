@@ -6,11 +6,24 @@
 #
 # Two decisions worth knowing before editing:
 #
-#  * Majors are ignored everywhere. The three SPAs (admin/, pos/, site/) sit on
-#    one deliberately aligned stack — React 18, Vite 5, Tailwind 3, eslint 8 with
-#    the legacy .eslintrc.* setup, @typescript-eslint 8 — so React 19, Tailwind 4
-#    or eslint 9 is a coordinated migration across three package.json files, not
-#    something to merge from a bot PR. Do those by hand, all apps at once.
+#  * Majors are ignored everywhere — for VERSION updates. The three SPAs
+#    (admin/, pos/, site/) sit on one deliberately aligned stack — React 18,
+#    Vite 8, eslint 8 with the legacy .eslintrc.* setup, @typescript-eslint 8,
+#    and Tailwind 3 in pos/ and site/ — so React 19, Tailwind 4 or eslint 9 is
+#    a coordinated migration across three package.json files, not something
+#    to merge from a bot PR. Do those by hand, all apps at once.
+#
+#    A SECURITY update does not read `update-types` (the options reference:
+#    it "only affects version updates, not security updates"), so when the
+#    only non-vulnerable release of a dependency sits behind a major of its
+#    parent, the bot proposes that major anyway. That is how the build-time
+#    postcss-selector-parser alert arrived as Tailwind 3 → 4: #221 for admin/
+#    (merged into the retired app, where nothing signs in and CI checks no
+#    styling) and #230 for pos/ (closed: the build fails, because the module
+#    remotes compile their CSS through Tailwind's PostCSS plugin, which v4
+#    moved to another package). What a security update DOES honour is
+#    `dependency-name` + `versions`, so a major that must not arrive this way
+#    gets an explicit `versions` ignore in its block — `tailwindcss` below.
 #
 #  * Nothing here auto-merges. module-release.yml signs module bundles with the
 #    production Ed25519 key, so a compromised release of any dependency that
@@ -92,6 +105,18 @@ updates:
       # together with the eslint 9 migration.
       - dependency-name: eslint-plugin-react-refresh
         versions: ['>=0.5.0']
+      # Tailwind 4 is the by-hand migration from the header, but a security
+      # update ignores `update-types`, and the only non-vulnerable release of
+      # postcss-selector-parser (GHSA-rj75-hqrm-r3gf, build-time only) sits
+      # behind it, so the bot proposed the major anyway: #221 for admin/, #230
+      # for pos/. A `versions` condition is what security updates do honour.
+      # It also stops 4.x updates for admin/, which took #221 — the retired
+      # app, so nothing is lost. Drop this with the Tailwind 4 migration; until
+      # then the alert is dismissed by hand in Security → Dependabot
+      # ("vulnerable code is not actually used": Tailwind 3 runs only at build
+      # time, over this repository's own CSS and content globs).
+      - dependency-name: tailwindcss
+        versions: ['>=4']
 
   # ── Tauri desktop shell (Rust) ───────────────────────────────────────────
   # tauri-check.yml compiles the crate on any change under pos/src-tauri/, so
