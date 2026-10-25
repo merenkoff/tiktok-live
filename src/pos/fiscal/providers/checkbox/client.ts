@@ -113,6 +113,8 @@ export interface CheckboxReceipt {
   total_rest?: number | null;
   round_sum?: number | null;
   rounding_mode?: CheckboxRoundingMode | null;
+  /** Set on every receipt of a prepayment chain — Checkbox's own "order number". */
+  pre_payment_relation_id?: string | null;
 }
 
 export interface CheckboxReport {
@@ -175,6 +177,61 @@ export interface CheckboxSellPayload {
 export interface CheckboxServicePayload {
   id: string;
   payment: CheckboxCashPayment;
+}
+
+// ── Prepayment chains (TechDocs/prro/checkbox/api/prepayment.md) ────────────
+
+/**
+ * `POST /prepayment-receipts` — opens a chain for these goods with a part of
+ * their sum. The fiscal receipt carries one line «Передплата за замовленням
+ * #N» at the paid sum; the goods appear only in its footer. `payments` must
+ * stay below the goods' total (`prepayment.sum_equals_total_sum`).
+ */
+export interface CheckboxPrepaymentPayload {
+  id: string;
+  cashier_name?: string;
+  goods: CheckboxGoodItemPayload[];
+  payments: CheckboxPayment[];
+  rounding_mode?: CheckboxRoundingMode;
+  /** 10..256 characters; a repeat is refused with `prepayment.relation_id_not_unique`. */
+  custom_relation_id?: string;
+}
+
+/**
+ * `POST /prepayment-receipts/{relation_id}` — «Створення додаткових чеків
+ * передплати та чека післяплати» (OpenAPI 2.106.4): a further prepayment, or
+ * the after-payment receipt with the real goods once the rest is paid. Which
+ * of the two a sum makes is for the sandbox to confirm (sandbox-prepayment.ts).
+ */
+export interface CheckboxChainPaymentPayload {
+  id: string;
+  cashier_name?: string;
+  payments: CheckboxPayment[];
+  rounding_mode?: CheckboxRoundingMode;
+}
+
+/** `POST /prepayment-receipts/{relation_id}/return` — always the WHOLE chain. */
+export interface CheckboxChainReturnPayload {
+  cashier_name?: string;
+  rounding_mode?: CheckboxRoundingMode;
+}
+
+/** `PrePaymentReceiptStatus`. */
+export type CheckboxPrepaymentStatus = 'PARTIAL_PAID' | 'FULL_PAID' | 'CANCELLED' | 'PARTIAL_CANCELLED';
+
+/** `GET /prepayment-receipts/{relation_id}` — `PrePaymentReceiptInfo`, narrowed. */
+export interface CheckboxPrepaymentRelation {
+  id: string;
+  relation_id: string;
+  paid_sum: number;
+  total_sum: number;
+  left_to_pay?: number | null;
+  pre_payment_status: CheckboxPrepaymentStatus;
+  receipt_chain: {
+    pre_payment_receipts: string[];
+    after_payment_receipt?: string | null;
+    returned_receipts?: string[] | null;
+  };
 }
 
 /** `POST /receipts/sell-offline` = `sell` + the two stamp fields (+ chain control). */
@@ -365,6 +422,66 @@ export async function sellReceiptOffline(
   });
   if (!result) throw new CheckboxApiError(502, null, result);
   return result;
+}
+
+export async function prepaymentReceipt(
+  opts: AuthedOpts,
+  payload: CheckboxPrepaymentPayload
+): Promise<CheckboxReceipt> {
+  const result = await request<CheckboxReceipt>({
+    method: 'POST',
+    path: '/prepayment-receipts',
+    ...opts,
+    body: payload,
+  });
+  if (!result) throw new CheckboxApiError(502, null, result);
+  return result;
+}
+
+export async function prepaymentChainReceipt(
+  opts: AuthedOpts,
+  relationId: string,
+  payload: CheckboxChainPaymentPayload
+): Promise<CheckboxReceipt> {
+  const result = await request<CheckboxReceipt>({
+    method: 'POST',
+    path: `/prepayment-receipts/${encodeURIComponent(relationId)}`,
+    ...opts,
+    body: payload,
+  });
+  if (!result) throw new CheckboxApiError(502, null, result);
+  return result;
+}
+
+export async function getPrepaymentRelation(
+  opts: AuthedOpts,
+  relationId: string
+): Promise<CheckboxPrepaymentRelation | null> {
+  try {
+    return await request<CheckboxPrepaymentRelation>({
+      method: 'GET',
+      path: `/prepayment-receipts/${encodeURIComponent(relationId)}`,
+      ...opts,
+    });
+  } catch (error) {
+    if (error instanceof CheckboxApiError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+/** One return receipt per receipt of the chain — never a part of it. */
+export async function returnPrepaymentChain(
+  opts: AuthedOpts,
+  relationId: string,
+  payload: CheckboxChainReturnPayload = {}
+): Promise<CheckboxReceipt[]> {
+  const result = await request<CheckboxReceipt[]>({
+    method: 'POST',
+    path: `/prepayment-receipts/${encodeURIComponent(relationId)}/return`,
+    ...opts,
+    body: payload,
+  });
+  return Array.isArray(result) ? result : [];
 }
 
 export async function getCashRegisterInfo(opts: AuthedOpts): Promise<CheckboxCashRegisterInfo> {
