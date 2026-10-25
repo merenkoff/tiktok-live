@@ -69,7 +69,8 @@ export const produkty: VerticalContent = {
         'Для будь-якого магазину — продуктового, одягу, квіткового: це модуль «Борги»',
       ],
       link: { href: '/dovidka/vlasnyk-pochatok#pid-zapys-tovar-u-borh', label: 'Як це налаштувати — посібник власника' },
-      // What it replaces, drawn: «під запис» is not connected in the demo store the screenshots come from.
+      // The paper notebook «під запис» replaces — the «Скоро» page's hero. It stays here by the owner's
+      // decision of 2026-10-25, even once the demo store can show the debts screen: never swap it for one.
       shot: {
         src: zoshytBorgiv,
         alt: 'Паперовий зошит боргів у клітинку: дати, імена покупців і суми, погашений борг закреслено, на наліпці — «Ліміт 500 грн!», а внизу «Разом — ?»',

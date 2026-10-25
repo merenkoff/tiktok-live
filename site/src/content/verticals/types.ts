@@ -11,7 +11,7 @@ export interface Shot {
   /**
    * A drawing, not a screenshot, so no window chrome around it: a «Скоро»
    * landing's hero (it has no screen to show yet), or the paper a working
-   * row replaces when its own screen is not in the demo store.
+   * row replaces — the debt notebook on «Під запис», kept by the owner.
    */
   drawing?: boolean;
 }
