@@ -28,6 +28,9 @@ var n = {
 	pay(e, n) {
 		return t("post", `/debts/customers/${e}/pay`, n);
 	},
+	voidPrepayment(e) {
+		return t("post", `/sales/${e}/void`);
+	},
 	summary(e, n) {
 		return t("get", `/debts/summary?${new URLSearchParams({
 			from: e,

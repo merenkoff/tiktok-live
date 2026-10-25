@@ -1,13 +1,13 @@
-import { t as e } from "./debtsApi-DhkvGjzT.js";
+import { t as e } from "./debtsApi-BOZMyvlE.js";
 import { f as t } from "./queue-B9HzuKEV.js";
-import { l as n, n as r, y as i } from "./debt-GvG7YbfE.js";
+import { O as n, l as r, t as i } from "./debt-DM5F1FYd.js";
 import { t as a } from "./errors-CLut7Fii.js";
 import { useEffect as o, useState as s } from "react";
 import { formatUah as c } from "@pos/platform";
 import { jsx as l, jsxs as u } from "react/jsx-runtime";
 import { Link as d } from "react-router-dom";
 // src/components/ui/Page.tsx
-function f({ title: e, glyph: t, subtitle: n, actions: r, back: a }) {
+function f({ title: e, glyph: t, subtitle: r, actions: i, back: a }) {
 	return /* @__PURE__ */ u("header", {
 		className: "mb-7 space-y-1.5",
 		"data-testid": "page-header",
@@ -15,7 +15,7 @@ function f({ title: e, glyph: t, subtitle: n, actions: r, back: a }) {
 			a && /* @__PURE__ */ u(d, {
 				to: a.to,
 				className: "inline-flex items-center gap-1 min-h-9 text-[15px] font-semibold text-sq-blue",
-				children: [/* @__PURE__ */ l(i, { size: 20 }), a.label]
+				children: [/* @__PURE__ */ l(n, { size: 20 }), a.label]
 			}),
 			/* @__PURE__ */ u("div", {
 				className: "flex flex-wrap items-center gap-x-3 gap-y-2",
@@ -28,15 +28,15 @@ function f({ title: e, glyph: t, subtitle: n, actions: r, back: a }) {
 						className: "text-[30px] font-bold text-sq-heading leading-tight",
 						children: e
 					}),
-					r && /* @__PURE__ */ l("div", {
+					i && /* @__PURE__ */ l("div", {
 						className: "ml-auto flex flex-wrap items-center gap-2",
-						children: r
+						children: i
 					})
 				]
 			}),
-			n && /* @__PURE__ */ l("div", {
+			r && /* @__PURE__ */ l("div", {
 				className: "text-[15px] text-sq-secondary max-w-3xl leading-relaxed",
-				children: n
+				children: r
 			})
 		]
 	});
@@ -79,13 +79,13 @@ function m({ value: e, options: t, onChange: n, ariaLabel: r, className: i = "" 
 function h(e) {
 	return e == null ? "" : String(e / 100).replace(".", ",");
 }
-function g({ credit: i, touch: d }) {
-	let [f, p] = s(() => h(i.limit_cents)), [m, g] = s(!1), [_, v] = s(null), [y, b] = s(null);
-	o(() => p(h(i.limit_cents)), [i.limit_cents]);
-	async function x(n, r) {
+function g({ credit: n, touch: d }) {
+	let [f, p] = s(() => h(n.limit_cents)), [m, g] = s(!1), [_, v] = s(null), [y, b] = s(null);
+	o(() => p(h(n.limit_cents)), [n.limit_cents]);
+	async function x(r, i) {
 		g(!0), v(null), b(null);
 		try {
-			t(await e.setCredit(i.customer_id, n)), b(r);
+			t(await e.setCredit(n.customer_id, r)), b(i);
 		} catch (e) {
 			v(a(e, "Не вдалося зберегти").text);
 		} finally {
@@ -93,10 +93,10 @@ function g({ credit: i, touch: d }) {
 		}
 	}
 	function S() {
-		let e = n(f);
-		e == null || e < 100 || e > 1e7 ? v(`Ліміт — від ${c(100)} до ${c(r)}`) : x({ credit_limit_cents: e }, "Ліміт збережено");
+		let e = r(f);
+		e == null || e < 100 || e > 1e7 ? v(`Ліміт — від ${c(100)} до ${c(i)}`) : x({ credit_limit_cents: e }, "Ліміт збережено");
 	}
-	let C = d ? "pos-field" : "sq-input", w = i.limit_cents != null;
+	let C = d ? "pos-field" : "sq-input", w = n.limit_cents != null;
 	return /* @__PURE__ */ u("div", {
 		className: "space-y-2",
 		"data-testid": "debts-limit-editor",
@@ -132,8 +132,8 @@ function g({ credit: i, touch: d }) {
 					type: "button",
 					className: "sq-btn-quiet",
 					disabled: m,
-					onClick: () => void x({ credit_locked: !i.locked }, i.locked ? "Записи знову дозволено" : "Нові записи заблоковано"),
-					children: i.locked ? "Розблокувати записи" : "Заблокувати нові записи"
+					onClick: () => void x({ credit_locked: !n.locked }, n.locked ? "Записи знову дозволено" : "Нові записи заблоковано"),
+					children: n.locked ? "Розблокувати записи" : "Заблокувати нові записи"
 				}), /* @__PURE__ */ l("button", {
 					type: "button",
 					className: "sq-btn-quiet",
@@ -150,13 +150,13 @@ function g({ credit: i, touch: d }) {
 				className: "text-sm text-sq-success-ink",
 				children: y
 			}),
-			i.set_by_name && i.set_at && /* @__PURE__ */ u("p", {
+			n.set_by_name && n.set_at && /* @__PURE__ */ u("p", {
 				className: "text-[13px] text-sq-muted",
 				children: [
 					"Востаннє змінив(ла) ",
-					i.set_by_name,
+					n.set_by_name,
 					", ",
-					new Date(i.set_at).toLocaleDateString("uk-UA")
+					new Date(n.set_at).toLocaleDateString("uk-UA")
 				]
 			})
 		]
