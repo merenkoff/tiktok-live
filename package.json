@@ -19,6 +19,7 @@
     "pos:seed": "tsx src/pos/seed.ts",
     "fiscal:sandbox:offline": "tsx src/pos/fiscal/providers/checkbox/sandbox-offline.ts",
     "fiscal:sandbox:rounding": "tsx src/pos/fiscal/providers/checkbox/sandbox-rounding.ts",
+    "fiscal:sandbox:weighed": "tsx src/pos/fiscal/providers/checkbox/sandbox-weighed.ts",
     "fiscal:sandbox:cashalot": "tsx src/pos/fiscal/providers/cashalot/sandbox.ts",
     "docker:build": "docker build -t tiktok-live-automation .",
     "docker:run": "docker run -it --env-file .env tiktok-live-automation",

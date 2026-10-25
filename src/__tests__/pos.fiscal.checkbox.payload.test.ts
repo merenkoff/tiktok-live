@@ -100,6 +100,41 @@ describe('mapSellPayload — sale', () => {
   });
 });
 
+describe('mapSellPayload — weighed lines (TechDocs/grocery/G4_WEIGHED.md)', () => {
+  const cheese = (overrides: Partial<FiscalDocLine> = {}) =>
+    line({
+      name: 'Сир твердий',
+      quantityMilli: 350,
+      unitPriceCents: 18990,
+      lineTotalCents: 6647,
+      discountCents: 0,
+      unit: 'кг',
+      ...overrides,
+    });
+
+  it('sends the grams as the quantity and the price per kilogram, with no discount for the half kopeck', () => {
+    // 350 × 189,90 / 1000 = 66,465 → 66,47 by the same `lineAmountCents` the
+    // sale used, so the line needs no discount to come to its own sum.
+    const payload = mapSellPayload(saleDoc({ lines: [cheese()], totalCents: 6647, discountCents: 0 }));
+    expect(payload.goods[0].quantity).toBe(350);
+    expect(payload.goods[0].good.price).toBe(18990);
+    expect(payload.goods[0]).not.toHaveProperty('discounts');
+  });
+
+  it('derives a weighed line\'s discount from the rounded price × quantity', () => {
+    const payload = mapSellPayload(
+      saleDoc({ lines: [cheese({ lineTotalCents: 5982, discountCents: 665 })], totalCents: 5982 })
+    );
+    expect(payload.goods[0].discounts).toEqual([{ type: 'DISCOUNT', mode: 'VALUE', value: 665 }]);
+  });
+
+  it('refuses a line that comes to more than its price × quantity rather than send an unverified extra charge', () => {
+    expect(() =>
+      mapSellPayload(saleDoc({ lines: [cheese({ lineTotalCents: 6648 })], totalCents: 6648 }))
+    ).toThrow(/more than its price × quantity 6647/);
+  });
+});
+
 describe('mapSellPayload — refund', () => {
   function refundDoc(overrides: Partial<FiscalRefundDoc> = {}): FiscalRefundDoc {
     return {

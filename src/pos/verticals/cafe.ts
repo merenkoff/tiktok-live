@@ -31,6 +31,9 @@ export const cafeVertical: VerticalDefinition = {
     },
   ],
   units: ['шт', 'г', 'мл'],
+  // Grams and millilitres here are INGREDIENTS, priced per gram as they
+  // always were — nothing on a café's menu is sold by weight (G4_WEIGHED.md).
+  weighedUnits: [],
   // A kitchen throws food away for reasons a boutique has no word for, and
   // each one is its own line in the expense report — which is precisely why
   // they are not «Інше» with a comment. `spoiled` is what the shop bought and

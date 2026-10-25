@@ -277,10 +277,16 @@ async function quoteUnit(
     return priceOfComposition(client, storeId, item.components);
   }
   const row = await client.query(
-    `SELECT price_cents FROM pos_variants WHERE id = $1 AND store_id = $2`,
+    `SELECT price_cents, price_per FROM pos_variants WHERE id = $1 AND store_id = $2`,
     [item.variant_id, storeId]
   );
   if (row.rows.length === 0) throw new PreorderError(`Позиція ${item.variant_id} не знайдена`);
+  // A pre-order promises a price before anything is weighed, and the promise
+  // is per line — so weighed goods (migration 075) are rung when they are
+  // weighed, at the till (TechDocs/grocery/G4_WEIGHED.md, decision 10).
+  if (Number(row.rows[0].price_per ?? 1) > 1) {
+    throw new PreorderError('Ваговий товар не береться в передзамовлення: його вагу знають лише при зважуванні');
+  }
   return Number(row.rows[0].price_cents);
 }
 

@@ -34,7 +34,12 @@ export interface SalesSummary {
   top_items: Array<{
     product_name: string;
     variant_label: string;
+    /** Base units sold: pieces, or grams/millilitres of a weighed line. */
     qty_sold: number;
+    /** What `qty_sold` counts in (`pos_sale_items.unit`). */
+    unit: string;
+    /** 1000 on a weighed line — show `qty_sold` as kg/l (migration 075). */
+    price_per: number;
     revenue_cents: number;
     /** The product's picture, for the owner's «Популярні товари» row; null for a placeholder line. */
     image_url: string | null;
@@ -127,7 +132,16 @@ export async function getSalesSummary(
      SELECT
        si.product_name,
        si.variant_label,
+       si.unit,
+       si.price_per,
        SUM(si.quantity - si.refunded_quantity)::int AS qty_sold,
+       -- Purchases, not base units (migration 075): 3 500 g of cheese is one
+       -- weighing and must not outrank twelve loaves. A weighed line only
+       -- ever comes back whole, so it counts while it is not refunded.
+       SUM(
+         CASE WHEN si.price_per > 1 THEN (si.quantity > si.refunded_quantity)::int
+              ELSE si.quantity - si.refunded_quantity END
+       )::int AS purchases,
        -- What the line actually brought in, not its list price: the product's
        -- own markdown is already inside unit_price_cents, the line's share of
        -- the cart discount is line_discount_cents (already taken off
@@ -154,9 +168,10 @@ export async function getSalesSummary(
        AND s.status <> 'voided'
        AND s.created_at >= b.range_start
        AND s.created_at < b.range_end
-     GROUP BY si.product_name, si.variant_label
+     -- By unit and basis too: 3 pieces and 3 000 g of one caption never add up.
+     GROUP BY si.product_name, si.variant_label, si.unit, si.price_per
      HAVING SUM(si.quantity - si.refunded_quantity) > 0
-     ORDER BY qty_sold DESC, revenue_cents DESC
+     ORDER BY purchases DESC, revenue_cents DESC
      LIMIT 5`,
     params
   );
@@ -266,7 +281,11 @@ export async function getSalesSummary(
     top_items: topResult.rows.map((item) => ({
       product_name: item.product_name,
       variant_label: item.variant_label,
+      // In base units — grams for a weighed line (`price_per` 1000), which the
+      // till shows as kilograms.
       qty_sold: Number(item.qty_sold),
+      unit: String(item.unit ?? ''),
+      price_per: Number(item.price_per ?? 1),
       revenue_cents: Number(item.revenue_cents),
       image_url: (item.image_url as string | null) ?? null,
     })),

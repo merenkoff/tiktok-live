@@ -37,6 +37,7 @@ import {
   type ComponentInput,
 } from './composites.service.js';
 import type { CartDiscountInput } from './types.js';
+import { lineAmountCents } from './lineMoney.js';
 import * as modifiers from './modifiers.service.js';
 import type { LineModifierSnapshot } from './modifiers.service.js';
 
@@ -128,6 +129,12 @@ export interface ParkedCartItem {
    * it is the card's price plus the answers' deltas, as checkout prices it.
    */
   line_price_cents: number;
+  /**
+   * What `price_cents` and `line_price_cents` are for (migration 075): 1000 on
+   * a weighed line — `quantity` grams at a price per kilogram. The restored
+   * line keeps its own weighing; it is never merged into another.
+   */
+  price_per: number;
   image_url: string | null;
 }
 
@@ -316,7 +323,7 @@ export async function getCart(storeId: number, cartId: number): Promise<ParkedCa
   const items = await pool.query(
     `SELECT i.id, i.variant_id, i.quantity, i.components, i.modifiers, i.note,
             p.name AS product_name, p.image_url,
-            v.label, v.unit, v.price_cents,
+            v.label, v.unit, v.price_cents, v.price_per,
             -- The stems, named. Keyed off the stored composition rather than
             -- the card's, because a bouquet assembled at the bench is not its
             -- catalogue card's recipe.
@@ -376,6 +383,7 @@ export async function getCart(storeId: number, cartId: number): Promise<ParkedCa
       modifiers
         .parseLineModifierSnapshot(item.modifiers)
         .reduce((sum, m) => sum + m.price_delta_cents, 0),
+    price_per: Number(item.price_per ?? 1),
     image_url: item.image_url ?? null,
   })));
 
@@ -396,7 +404,11 @@ export async function getCart(storeId: number, cartId: number): Promise<ParkedCa
     // tell two waiting carts apart. Still not a promise — the sale re-prices
     // from the components when it is rung, and a stem that changed price in
     // between changes this too.
-    total_cents: mapped.reduce((sum, item) => sum + item.line_price_cents * item.quantity, 0),
+    // A weighed line through the same sum a sale makes (075): grams at a price per kg.
+    total_cents: mapped.reduce(
+      (sum, item) => sum + lineAmountCents(item.quantity, item.line_price_cents, item.price_per),
+      0
+    ),
   };
 }
 

@@ -72,7 +72,11 @@ export async function applyStockDelta(
   const next = current + params.delta;
   // Offline cashiers may race another till; sales still complete (qty can go negative).
   // Goods given «під запис» are in the customer's hands just the same (073).
-  if (next < 0 && params.reason !== 'sale' && params.reason !== 'credit') {
+  // Only a movement that TAKES stock can be short of it: a refund, a receipt or
+  // a correction that brings a shelf back up towards zero is never refused —
+  // which a weighed line (075), sold past an approximate count, leaves behind
+  // more often than any other.
+  if (next < 0 && params.delta < 0 && params.reason !== 'sale' && params.reason !== 'credit') {
     throw new Error(`Insufficient stock for variant ${params.variantId}`);
   }
 

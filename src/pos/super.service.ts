@@ -24,6 +24,7 @@ import {
 import { getFiscalSettings } from './fiscal/settings.service.js';
 import { isFiscalProviderId } from './fiscal/types.js';
 import { getVertical, hasVertical, verticalOrDefault } from './verticals/index.js';
+import { WEIGHABLE_UNITS, WEIGHED_PRICE_PER } from './weighed.js';
 import type { AttributeValues, VerticalDefinition, VerticalId } from './verticals/types.js';
 
 export interface SuperStoreRow {
@@ -134,6 +135,7 @@ async function setStoreVertical(storeId: number, vertical: VerticalId): Promise<
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    await assertPricesKeepMeaning(client, storeId, def);
     await client.query(`UPDATE pos_stores SET vertical = $1, updated_at = NOW() WHERE id = $2`, [
       vertical,
       storeId,
@@ -151,6 +153,37 @@ async function setStoreVertical(storeId: number, vertical: VerticalId): Promise<
 
 interface Queryable {
   query(text: string, values?: unknown[]): Promise<{ rows: Array<Record<string, unknown>> }>;
+}
+
+/**
+ * Refuse a vertical under which some variant's price would mean something else
+ * (migration 075). `price_per` is derived from the unit under the store's
+ * vertical on every write, so a variant whose stored basis the new vertical
+ * would derive differently — a weighed cheese in a store moved to the café,
+ * a café's per-gram ingredient in one moved to groceries — would change its
+ * price a thousandfold the first time anybody saved it. Among clothing,
+ * flowers and the café this never fires: none of them sells by weight.
+ */
+async function assertPricesKeepMeaning(
+  client: Queryable,
+  storeId: number,
+  def: VerticalDefinition
+): Promise<void> {
+  const weighable = def.weighedUnits.filter((unit) => WEIGHABLE_UNITS.includes(unit));
+  const result = await client.query(
+    `SELECT COUNT(*)::int AS n
+       FROM pos_variants
+      WHERE store_id = $1
+        AND price_per <> CASE WHEN unit = ANY($2::text[]) THEN $3::int ELSE 1 END`,
+    [storeId, weighable, WEIGHED_PRICE_PER]
+  );
+  const n = Number(result.rows[0]?.n ?? 0);
+  if (n > 0) {
+    throw new SuperValidationError(
+      `Варіантів, чия ціна в типі «${def.title}» означала б інше (за 1 кг замість 1 г чи навпаки): ${n}. ` +
+        'Ціна змінилася б у 1000 разів — спершу переведіть ці варіанти в іншу одиницю або залиште тип магазину.'
+    );
+  }
 }
 
 /**

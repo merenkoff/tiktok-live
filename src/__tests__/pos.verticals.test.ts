@@ -18,6 +18,7 @@ import {
   normalizeAttributes,
   normalizeUnit,
   normalizeVariant,
+  pricePerFor,
   publicConfigOf,
   registerVertical,
   resetVerticals,
@@ -70,6 +71,7 @@ describe('vertical registry', () => {
       attributes: flowersVertical.attributes,
       units: ['шт'],
       defaultUnit: 'шт',
+      weighedUnits: [],
       maxCompositionDepth: 1,
       writeoffReasons: [
         { code: 'damaged', label: 'Брак' },
@@ -114,6 +116,7 @@ describe('vertical registry', () => {
       title: 'Тест',
       attributes: [],
       units: ['шт'],
+      weighedUnits: [],
       writeoffReasons: [{ code: 'other', label: 'Інше' }],
       labelOf: () => 'x',
       productKinds: ['simple'],
@@ -256,7 +259,23 @@ describe('normalizeVariant', () => {
       attributes: { color: 'Синій', size: 'M' },
       label: 'Синій / M',
       unit: 'шт',
+      price_per: 1,
     });
+  });
+
+  it('prices a unit the vertical weighs per 1000 of it — never anything else (075)', () => {
+    // TechDocs/grocery/G4_WEIGHED.md, decision 3: derived like the label, never sent.
+    const grocer: VerticalDefinition = {
+      ...cafeVertical,
+      weighedUnits: ['г', 'мл'],
+    };
+    expect(normalizeVariant(grocer, { unit: 'г', attributes: {} }).price_per).toBe(1000);
+    expect(normalizeVariant(grocer, { unit: 'мл', attributes: {} }).price_per).toBe(1000);
+    expect(normalizeVariant(grocer, { unit: 'шт', attributes: {} }).price_per).toBe(1);
+    // The café's grams are ingredients priced per gram, as they always were.
+    expect(normalizeVariant(cafeVertical, { unit: 'г', attributes: {} }).price_per).toBe(1);
+    // Only г/мл may be weighed (the CHECK in 075), whatever a definition lists.
+    expect(pricePerFor({ ...cafeVertical, weighedUnits: ['шт'] }, 'шт')).toBe(1);
   });
 
   it('never takes a label from the client', () => {

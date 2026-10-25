@@ -570,7 +570,7 @@ async function checkDraftItem(
 
   const clock = await storeClock(client, storeId);
   const variant = await client.query(
-    `SELECT v.id, p.is_active, p.name, p.stop_listed_on::text AS stop_listed_on
+    `SELECT v.id, v.price_per, p.is_active, p.name, p.stop_listed_on::text AS stop_listed_on
        FROM pos_variants v
        JOIN pos_products p ON p.id = v.product_id
       WHERE v.id = $1 AND v.store_id = $2`,
@@ -579,6 +579,12 @@ async function checkDraftItem(
   if (variant.rows.length === 0) throw new BillNotFound('Позицію не знайдено');
   const dish = variant.rows[0];
   if (!dish.is_active) throw new BillConflict(`«${String(dish.name)}» знято з меню`);
+  // A round locks a price per line and counts plates; weighed goods (075) are
+  // grams at a price per kilogram and belong at a till, never on a table's bill
+  // (TechDocs/grocery/G4_WEIGHED.md, decision 10).
+  if (Number(dish.price_per ?? 1) > 1) {
+    throw new BillError(`«${String(dish.name)}» — ваговий товар, на рахунок столу він не додається`);
+  }
   // The stop-list refuses here, where the waiter is still standing at the
   // table and can offer something else — never at payment, which would
   // refuse a dish the guest has already eaten (§9).
@@ -792,12 +798,16 @@ export async function updateDraftItem(
     const variantId = wantedVariant ?? Number(line.variant_id);
     if (variantId !== Number(line.variant_id)) {
       const sibling = await client.query(
-        `SELECT v.id FROM pos_variants v
+        `SELECT v.id, v.price_per FROM pos_variants v
           WHERE v.id = $1 AND v.store_id = $2 AND v.product_id = $3 AND v.is_active`,
         [variantId, storeId, Number(line.product_id)]
       );
       if (sibling.rows.length === 0) {
         throw new BillError('Змінити можна лише варіант тієї ж страви — іншу страву додайте окремо');
+      }
+      // The same rule `checkDraftItem` keeps for a new line (075).
+      if (Number(sibling.rows[0].price_per ?? 1) > 1) {
+        throw new BillError('Ваговий варіант на рахунок столу не додається');
       }
     }
     const modifierIds =

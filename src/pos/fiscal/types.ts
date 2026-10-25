@@ -222,15 +222,17 @@ export interface FiscalSession {
 export interface FiscalDocLine {
   name: string;
   /**
-   * Thousandths of a unit — 1 pc = 1000.
+   * Thousandths of the unit the price is for — 1 pc = 1000.
    *
    * Thousandths is the common ПРРО convention (Checkbox happens to want exactly
    * this), so the contract carries it rather than baking one provider's ×1000
-   * into every adapter. `pos_sale_items.quantity` is an INTEGER count of whole
-   * units today; weighted goods would need a schema change, not a change here.
+   * into every adapter. `pos_sale_items.quantity` stays an INTEGER count of
+   * base units: a weighed line (migration 075) is grams at a price per
+   * kilogram, so 350 g is `quantityMilli` 350 — no schema change was needed
+   * here, only `price_per` on the line (TechDocs/grocery/G4_WEIGHED.md).
    */
   quantityMilli: number;
-  /** Pre-discount unit price, for display on the fiscal receipt. */
+  /** Pre-discount price of one unit — per piece, or per kg/l on a weighed line. */
   unitPriceCents: number;
   /** Post-discount line total — what the customer actually pays for this line. */
   lineTotalCents: number;

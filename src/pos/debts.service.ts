@@ -44,9 +44,10 @@ import { consumeStockForLine, returnStockForLine } from './composites.service.js
 import { formatUah } from './core/money.js';
 import { storeClock } from './core/storeClock.js';
 import * as modifiers from './modifiers.service.js';
-import { allocateCartDiscount, pricePlainLine } from './sales.service.js';
+import { allocateCartDiscount, mergePlainLines, pricePlainLine } from './sales.service.js';
 import type { SaleDraftLine } from './sales.service.js';
 import { refundLineAmount } from './lineMoney.js';
+import { formatQuantity, isWeighed, type WeightSource } from './weighed.js';
 import {
   DebtConflict,
   DebtError,
@@ -111,6 +112,10 @@ export interface DebtLineView {
   sale_id: number | null;
   receipt_number: string | null;
   note: string;
+  /** 1000: weighed goods — `quantity` in g/ml, `unit_price_cents` per kg/l (075). */
+  price_per: number;
+  /** How the weight was taken; null for goods counted by the piece. */
+  weight_source: WeightSource | null;
 }
 
 export interface DebtEntryView {
@@ -184,6 +189,8 @@ function toLineView(row: Record<string, unknown>): DebtLineView {
     sale_id: row.sale_id == null ? null : Number(row.sale_id),
     receipt_number: row.receipt_number == null ? null : String(row.receipt_number),
     note: String(row.note ?? ''),
+    price_per: Number(row.price_per ?? 1),
+    weight_source: (row.weight_source as WeightSource | null) ?? null,
   };
 }
 
@@ -191,6 +198,7 @@ const LINE_COLUMNS = `
   i.id, i.entry_id, i.created_at, i.product_name, i.variant_label, i.unit,
   i.quantity, i.returned_quantity, i.unit_price_cents, i.line_discount_cents,
   i.line_total_cents, i.sale_id, i.written_off_entry_id, i.note,
+  i.price_per, i.weight_source,
   s.receipt_number`;
 
 async function readLines(
@@ -520,13 +528,19 @@ interface IssueItem {
   quantity: number;
   modifiers: number[];
   note: string;
+  /** Raw from the request; `pricePlainLine` checks it on a weighed line (075). */
+  weight_source?: unknown;
 }
 
-/** The cart, as plain lines merged the way checkout merges them. */
+/**
+ * The cart's plain lines as the till sent them. Merged the way checkout merges
+ * them only once the variants are read, because a weighed line never merges
+ * (`mergePlainLines`, TechDocs/grocery/G4_WEIGHED.md).
+ */
 function parseIssueItems(raw: unknown): IssueItem[] {
   if (!Array.isArray(raw) || raw.length === 0) throw new DebtError('Немає товарів для запису');
   if (raw.length > MAX_LINES) throw new DebtError(`Не більше ${MAX_LINES} позицій за один запис`);
-  const merged = new Map<string, IssueItem>();
+  const items: IssueItem[] = [];
   for (const entry of raw) {
     const item = (entry ?? {}) as Record<string, unknown>;
     const variantId = Number(item.variant_id);
@@ -539,14 +553,15 @@ function parseIssueItems(raw: unknown): IssueItem[] {
     if (Array.isArray(item.components) && item.components.length > 0) {
       throw new DebtError('Букет, зібраний на касі, під запис не записується — продайте його або запишіть готовий букет з каталогу');
     }
-    const ids = modifiers.normalizeModifierIds(item.modifiers);
-    const note = modifiers.cleanLineNote(item.note);
-    const key = `${variantId}|${ids.join(',')}|${note}`;
-    const existing = merged.get(key);
-    if (existing) existing.quantity += quantity;
-    else merged.set(key, { variant_id: variantId, quantity, modifiers: ids, note });
+    items.push({
+      variant_id: variantId,
+      quantity,
+      modifiers: modifiers.normalizeModifierIds(item.modifiers),
+      note: modifiers.cleanLineNote(item.note),
+      weight_source: item.weight_source,
+    });
   }
-  return [...merged.values()];
+  return items;
 }
 
 /** A write already made under this `client_uuid`, or null. */
@@ -658,7 +673,7 @@ export async function issueOnCredit(input: {
       // An offline handover keeps a card archived since: its goods are gone already.
       const variantIds = [...new Set(items.map((item) => item.variant_id))];
       const variants = await client.query(
-        `SELECT v.id, v.price_cents, v.compare_at_cents, v.label, v.unit,
+        `SELECT v.id, v.price_cents, v.compare_at_cents, v.label, v.unit, v.price_per,
                 p.id AS product_id, p.name AS product_name,
                 p.stop_listed_on::text AS stop_listed_on
            FROM pos_variants v
@@ -670,12 +685,14 @@ export async function issueOnCredit(input: {
         throw new DebtError(offline ? 'Частину товарів не знайдено' : 'Частину товарів не знайдено або прибрано в архів');
       }
       const byId = new Map(variants.rows.map((row) => [Number(row.id), row]));
+      // Merged as checkout merges — every weighing stays its own line (075).
+      const lines = mergePlainLines(items, (variantId) => isWeighed(byId.get(variantId)?.price_per));
 
       // The day's stop-list says no to credit as firmly as to a sale — but not
       // to goods that left a till with no network, exactly as an offline sale.
       if (!offline) {
         const clock = await storeClock(client, input.storeId);
-        for (const item of items) {
+        for (const item of lines) {
           const row = byId.get(item.variant_id)!;
           if (row.stop_listed_on != null && row.stop_listed_on === clock.today) {
             throw new DebtConflict(`«${row.product_name}» сьогодні в стоп-листі`, 'stop_listed');
@@ -689,7 +706,7 @@ export async function issueOnCredit(input: {
         [...new Set(variants.rows.map((row) => Number(row.product_id)))],
         { activeOnly: !offline }
       );
-      const drafts: SaleDraftLine[] = items.map((item) => {
+      const drafts: SaleDraftLine[] = lines.map((item) => {
         const row = byId.get(item.variant_id)!;
         return pricePlainLine(row, groups.get(Number(row.product_id)) ?? [], item);
       });
@@ -730,9 +747,9 @@ export async function issueOnCredit(input: {
           `INSERT INTO pos_debt_items
              (store_id, customer_id, entry_id, variant_id, quantity, unit, product_name,
               variant_label, unit_price_cents, compare_at_unit_cents, line_discount_cents,
-              line_total_cents, modifiers, note, sort_order, created_at)
+              line_total_cents, modifiers, note, sort_order, created_at, price_per, weight_source)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, $15,
-                   COALESCE($16::timestamptz, NOW()))
+                   COALESCE($16::timestamptz, NOW()), $17, $18)
            RETURNING id`,
           [
             input.storeId,
@@ -751,6 +768,10 @@ export async function issueOnCredit(input: {
             draft.note ?? '',
             index,
             offlineAt,
+            // Per kilogram for weighed goods, and how they were weighed (075):
+            // the repayment receipt prices and marks the line from these.
+            draft.price_per ?? 1,
+            draft.weight_source ?? null,
           ]
         );
         // Rule 3: the shelf moves now, with the reason `credit`, and the line
@@ -817,7 +838,7 @@ export async function returnFromDebt(input: {
       await lockCustomer(client, input.storeId, input.customerId);
       const rows = await client.query(
         `SELECT id, variant_id, quantity, returned_quantity, line_total_cents,
-                sale_id, written_off_entry_id
+                sale_id, written_off_entry_id, price_per, unit
            FROM pos_debt_items
           WHERE store_id = $1 AND customer_id = $2 AND id = ANY($3::bigint[])
           FOR UPDATE`,
@@ -839,6 +860,18 @@ export async function returnFromDebt(input: {
           throw new DebtConflict(
             `Повернути можна не більше, ніж ще винно: ${quantity - returned}`,
             'too_many'
+          );
+        }
+        // Weighed goods come back whole, as from a receipt (075, G4_WEIGHED.md
+        // decision 8): the line is paid or returned as it was weighed.
+        if (isWeighed(row.price_per) && take !== quantity - returned) {
+          throw new DebtConflict(
+            `Ваговий товар повертається лише цілим рядком — ${formatQuantity(
+              quantity - returned,
+              String(row.unit ?? ''),
+              Number(row.price_per)
+            )}`,
+            'weighed_whole_line'
           );
         }
         return {

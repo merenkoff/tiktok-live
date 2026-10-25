@@ -52,6 +52,8 @@ export interface StockDocumentLine {
    */
   price_cents?: number | null;
   compare_at_cents?: number | null;
+  /** 1000: the price is per kg/l — a weighed variant's tag says so (migration 075). */
+  price_per?: number | null;
   sku?: string | null;
   barcode?: string | null;
   is_active?: boolean | null;
@@ -154,6 +156,7 @@ function mapLine(row: Record<string, unknown>): StockDocumentLine {
     ...('price_cents' in row && {
       price_cents: row.price_cents == null ? null : Number(row.price_cents),
       compare_at_cents: row.compare_at_cents == null ? null : Number(row.compare_at_cents),
+      price_per: row.price_per == null ? null : Number(row.price_per),
       sku: row.sku == null ? null : String(row.sku),
       barcode: row.barcode == null ? null : String(row.barcode),
       is_active: row.is_active == null ? null : Boolean(row.is_active),
@@ -204,7 +207,7 @@ async function loadLines(client: DbClient, documentId: number): Promise<StockDoc
             COALESCE(v.label, l.placeholder_label) AS label,
             COALESCE(v.unit, l.placeholder_unit) AS unit,
             p.id AS product_id,
-            v.price_cents, v.compare_at_cents, v.sku, v.barcode, v.is_active
+            v.price_cents, v.compare_at_cents, v.price_per, v.sku, v.barcode, v.is_active
      FROM pos_stock_document_lines l
      LEFT JOIN pos_variants v ON v.id = l.variant_id
      LEFT JOIN pos_products p ON p.id = v.product_id

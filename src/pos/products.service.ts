@@ -130,8 +130,15 @@ function resolveCompositeShape(
 function assertVariantShape(
   shape: { kind: ProductKind; stock_mode: ProductStockMode },
   components: ComponentInput[] | undefined,
-  quantity: number
+  quantity: number,
+  pricePer = 1
 ): void {
+  // A bouquet of weighed stems or a tech card priced by the kilo would need a
+  // second arithmetic for the composite's price and its cost — so a weighed
+  // variant is a simple product, full stop (TechDocs/grocery/G4_WEIGHED.md).
+  if (pricePer > 1 && shape.kind !== 'simple') {
+    throw new CompositeError('Складений товар не продається на вагу — зробіть його простим або в штуках');
+  }
   if (shape.kind === 'simple') {
     if (components?.length) {
       throw new CompositeError('Only a composite product can have components');
@@ -261,6 +268,8 @@ export async function listProducts(storeId: number) {
       // How it arrives, not how it is counted (migration 054).
       pack_qty: row.pack_qty == null ? null : Number(row.pack_qty),
       pack_label: String(row.pack_label ?? ''),
+      // What the price is for: 1000 = per kg/l, a weighed variant (migration 075).
+      price_per: Number(row.price_per ?? 1),
     });
     byProduct.set(productId, list);
   }
@@ -320,10 +329,10 @@ async function insertVariantTx(
   }
   const quantity = variant.quantity ?? 0;
   if (quantity < 0) throw new Error('Quantity must be >= 0');
-  assertVariantShape(shape, variant.components, quantity);
+  const derived = normalizeVariant(vertical, variant);
+  assertVariantShape(shape, variant.components, quantity, derived.price_per);
 
   const compareAt = normalizeCompareAt(variant.price_cents, variant.compare_at_cents);
-  const derived = normalizeVariant(vertical, variant);
   const pack = normalizePack(variant);
   const barcode =
     emptyToNull(variant.barcode) ??
@@ -331,8 +340,8 @@ async function insertVariantTx(
   const variantResult = await client.query(
     `INSERT INTO pos_variants
        (store_id, product_id, attributes, label, unit, sku, barcode, price_cents, cost_cents, compare_at_cents,
-        pack_qty, pack_label)
-     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        pack_qty, pack_label, price_per)
+     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
      RETURNING id`,
     [
       storeId,
@@ -347,6 +356,8 @@ async function insertVariantTx(
       compareAt,
       pack.pack_qty,
       pack.pack_label,
+      // Per kilogram or litre for a unit the vertical weighs (migration 075).
+      derived.price_per,
     ]
   );
   const variantId = Number(variantResult.rows[0].id);
@@ -487,7 +498,9 @@ async function resolveProductShapeChange(
             (SELECT COUNT(DISTINCT c.variant_id)::int
                FROM pos_product_components c
                JOIN pos_variants v ON v.id = c.variant_id
-              WHERE v.product_id = p.id AND v.is_active = TRUE) AS composed_variants
+              WHERE v.product_id = p.id AND v.is_active = TRUE) AS composed_variants,
+            (SELECT COUNT(*)::int FROM pos_variants v
+              WHERE v.product_id = p.id AND v.is_active = TRUE AND v.price_per > 1) AS weighed_variants
      FROM pos_products p
      WHERE p.id = $1 AND p.store_id = $2`,
     [productId, storeId]
@@ -499,6 +512,9 @@ async function resolveProductShapeChange(
     stock_mode: row.stock_mode === 'derived' ? 'derived' : 'own',
   });
 
+  if (shape.kind === 'composite' && Number(row.weighed_variants) > 0) {
+    throw new CompositeError('Складений товар не продається на вагу — спершу переведіть варіанти в штуки');
+  }
   if (shape.stock_mode === 'derived' && Number(row.on_hand) !== 0) {
     throw new CompositeError(
       'Sell or write off the remaining stock before switching to derived stock'
@@ -743,6 +759,9 @@ export async function updateVariant(
     attributes: input.attributes === undefined ? (row.attributes ?? {}) : input.attributes,
     unit: input.unit === undefined ? row.unit : input.unit,
   });
+  if (derived.price_per > 1 && shape.kind !== 'simple') {
+    throw new CompositeError('Складений товар не продається на вагу — зробіть його простим або в штуках');
+  }
 
   // Resolve every column against the row we already read, then write them all.
   // The previous COALESCE form could not express "clear this field": an empty
@@ -766,6 +785,7 @@ export async function updateVariant(
          compare_at_cents = $9,
          pack_qty = $10,
          pack_label = $11,
+         price_per = $14,
          updated_at = NOW()
        WHERE id = $12 AND store_id = $13
        RETURNING product_id`,
@@ -783,6 +803,9 @@ export async function updateVariant(
         pack.pack_label,
         variantId,
         storeId,
+        // Re-derived with the unit: the price means per kg exactly while the
+        // variant is in a unit the vertical weighs (migration 075).
+        derived.price_per,
       ]
     );
     productId = Number(result.rows[0].product_id);
@@ -1012,6 +1035,10 @@ export async function getCatalog(
        v.barcode,
        v.price_cents,
        v.compare_at_cents,
+       -- 1000 for a weighed variant: the price is per kg/l over whole grams
+       -- (migration 075). The till prices the line from it and never merges
+       -- two weighings, so it rides into the offline snapshot like the price.
+       v.price_per,
        -- What the till may offer, which is not the same as what is on the
        -- shelf: a parked cart holds its stems (migration 042), and a bouquet
        -- waiting on the counter has already taken its roses out of the fridge
@@ -1120,6 +1147,7 @@ export async function getCatalog(
     sellable: row.sellable !== false,
     pack_qty: row.pack_qty == null ? null : Number(row.pack_qty),
     pack_label: String(row.pack_label ?? ''),
+    price_per: Number(row.price_per ?? 1),
     // The day's stop-list (migration 050): the row stays in the answer so the
     // tile greys with a caption instead of vanishing (§3 «видно, а не
     // зникло»); the raw day travels too, so an offline till can un-grey it at

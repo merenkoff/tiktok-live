@@ -28,6 +28,7 @@ import { pool } from '../db.js';
 import * as modifiers from './modifiers.service.js';
 import type { LineModifierSnapshot } from './modifiers.service.js';
 import { refundLineAmount } from './lineMoney.js';
+import type { WeightSource } from './weighed.js';
 
 type DbClient = { query: typeof pool.query };
 
@@ -80,6 +81,11 @@ export interface OpenDebtLine {
   line_total_cents: number;
   modifiers: LineModifierSnapshot[];
   note: string;
+  /** 1000 for goods weighed when they were given — grams at a price per kg (075). */
+  price_per: number;
+  weight_source: WeightSource | null;
+  /** What `quantity` counted in when the goods were given — the line's own snapshot. */
+  unit: string;
 }
 
 /** What is still owed on a line once `returned_quantity` units came back (rule 2). */
@@ -145,7 +151,7 @@ export async function openLines(
 ): Promise<OpenDebtLine[]> {
   const rows = await client.query(
     `SELECT id, variant_id, quantity, returned_quantity, unit_price_cents,
-            line_total_cents, modifiers, note
+            line_total_cents, modifiers, note, price_per, weight_source, unit
        FROM pos_debt_items
       WHERE store_id = $1 AND customer_id = $2
         AND sale_id IS NULL AND written_off_entry_id IS NULL
@@ -163,6 +169,9 @@ export async function openLines(
     line_total_cents: Number(row.line_total_cents),
     modifiers: modifiers.parseLineModifierSnapshot(row.modifiers),
     note: String(row.note ?? ''),
+    price_per: Number(row.price_per ?? 1),
+    weight_source: (row.weight_source as WeightSource | null) ?? null,
+    unit: String(row.unit ?? ''),
   }));
 }
 
@@ -215,6 +224,9 @@ export async function lockedDebtLines(
     note: string;
     debt_item_id: number;
     fixed_total_cents: number;
+    price_per: number;
+    weight_source: WeightSource | null;
+    unit: string;
   }>
 > {
   await lockCustomer(client, params.storeId, params.customerId);
@@ -227,6 +239,13 @@ export async function lockedDebtLines(
     note: line.note,
     debt_item_id: line.id,
     fixed_total_cents: owedCents(line),
+    // The receipt line keeps the basis the price was locked at and the mark
+    // of a hand-typed weight (075) — a weighed line is only ever paid whole.
+    price_per: line.price_per,
+    weight_source: line.weight_source,
+    // The unit the line was given in, not the card's today: a gram line stays
+    // a gram line on its receipt whatever the owner did to the card since.
+    unit: line.unit,
   }));
 }
 

@@ -11,6 +11,7 @@
 // what lets `pos_stock_document_lines.placeholder_attributes` be a jsonb
 // equality key in the duplicate rule and its unique index.
 
+import { WEIGHABLE_UNITS, WEIGHED_PRICE_PER } from '../weighed.js';
 import type { AttributeSpec, AttributeValues, VerticalDefinition } from './types.js';
 
 /** A bad attribute bag / unit from a client. Routes map it to 400. */
@@ -96,18 +97,30 @@ export function normalizeUnit(def: VerticalDefinition, input: unknown): string {
 }
 
 /**
- * The three derived columns of a variant row. `label` is recomputed on every
- * write — it is a projection of `attributes`, never something a client sends.
+ * What a variant's price is for in this vertical (migration 075): 1000 base
+ * units — a kilogram, a litre — for a unit the vertical sells by weight, one
+ * otherwise. Never something a client sends.
+ */
+export function pricePerFor(def: VerticalDefinition, unit: string): number {
+  return def.weighedUnits.includes(unit) && WEIGHABLE_UNITS.includes(unit) ? WEIGHED_PRICE_PER : 1;
+}
+
+/**
+ * The four derived columns of a variant row. `label` is recomputed on every
+ * write — it is a projection of `attributes`, never something a client sends —
+ * and so is `price_per`, a projection of the unit under this vertical.
  */
 export function normalizeVariant(
   def: VerticalDefinition,
   input: { attributes?: unknown; unit?: unknown }
-): { attributes: AttributeValues; label: string; unit: string } {
+): { attributes: AttributeValues; label: string; unit: string; price_per: number } {
   const attributes = normalizeAttributes(def, input.attributes);
+  const unit = normalizeUnit(def, input.unit);
   return {
     attributes,
     label: def.labelOf(attributes),
-    unit: normalizeUnit(def, input.unit),
+    unit,
+    price_per: pricePerFor(def, unit),
   };
 }
 

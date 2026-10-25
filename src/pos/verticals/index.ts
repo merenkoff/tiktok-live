@@ -63,6 +63,7 @@ export function publicConfigOf(def: VerticalDefinition): VerticalPublicConfig {
     attributes: def.attributes,
     units: [...def.units],
     defaultUnit: def.units[0],
+    weighedUnits: [...def.weighedUnits],
     maxCompositionDepth: def.maxCompositionDepth,
     writeoffReasons: [...def.writeoffReasons],
     productKinds: [...def.productKinds],
@@ -114,6 +115,7 @@ export {
   normalizeAttributes,
   normalizeUnit,
   normalizeVariant,
+  pricePerFor,
   searchableAttributeKeys,
   VerticalValidationError,
 } from './attributes.js';

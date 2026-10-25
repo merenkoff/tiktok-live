@@ -37,6 +37,8 @@ export const clothingVertical: VerticalDefinition = {
     },
   ],
   units: ['шт'],
+  // A garment is sold by the piece.
+  weighedUnits: [],
   writeoffReasons: GENERIC_WRITEOFF_REASONS,
   labelOf: (attrs) =>
     [attrs.color, attrs.size]

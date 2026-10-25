@@ -219,7 +219,7 @@ export async function validateComponents(
   if (rows.length > 0) {
     const ids = rows.map((row) => row.component_variant_id);
     const check = await client.query(
-      `SELECT v.id, p.kind
+      `SELECT v.id, p.kind, v.price_per
        FROM pos_variants v
        JOIN pos_products p ON p.id = v.product_id
        WHERE v.store_id = $1 AND v.id = ANY($2::bigint[]) AND v.is_active = TRUE`,
@@ -230,6 +230,13 @@ export async function validateComponents(
     );
     for (const id of ids) {
       if (!found.has(id)) throw new CompositeError(`Component variant ${id} not found`);
+    }
+    // A weighed variant's price is per kilogram (migration 075), and a bouquet
+    // or a tech card prices and costs its parts per unit — so a weighed one is
+    // never a part (TechDocs/grocery/G4_WEIGHED.md, decision 3).
+    const weighed = check.rows.find((row: { price_per: unknown }) => Number(row.price_per ?? 1) > 1);
+    if (weighed) {
+      throw new CompositeError(`Ваговий товар не може бути складником (варіант ${Number(weighed.id)})`);
     }
     const compositeIds = ids.filter((id) => found.get(id) === 'composite');
     if (compositeIds.length > 0) {
