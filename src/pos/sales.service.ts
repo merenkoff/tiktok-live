@@ -321,11 +321,20 @@ export interface CompleteSaleParams {
    *
    * `part` adds some units of the NEXT line, counted in pieces (078,
    * G3_DEBTS.md §11) — with it and no `line_ids`, nothing is paid whole.
+   *
+   * `chain_id` makes the receipt the «чек післяплати» of that line's ПРРО
+   * prepayment chain (079, §11 «Крок 2»): one line alone, its chain's earlier
+   * documents all registered, and the sale carries the chain's number.
+   * `chain_provider` on an ordinary receipt is the provider whose chains close
+   * on a receipt of their own: a line that took a «внесок» through it since
+   * the till read the statement is refused rather than closed here.
    */
   debt_part?: {
     customer_id: number;
     line_ids?: number[];
     part?: { line_id: number; quantity: number } | null;
+    chain_id?: string | null;
+    chain_provider?: string | null;
   } | null;
   /**
    * The cash-rounding step the till showed the customer (0, 10 or 50 kopecks;
@@ -657,6 +666,8 @@ export async function completeSaleTx(
         customerId: params.debt_part.customer_id,
         lineIds: params.debt_part.line_ids,
         part: params.debt_part.part ?? null,
+        chainId: params.debt_part.chain_id ?? null,
+        chainProvider: params.debt_part.chain_provider ?? null,
       }))
     );
   }
@@ -910,10 +921,10 @@ export async function completeSaleTx(
        (store_id, staff_id, receipt_number, status, subtotal_cents, total_cents, note,
         customer_id, cart_discount_type, cart_discount_value, cart_discount_cents, client_uuid,
         fiscal_status, order_no, prep_status, served_at, exchange_refund_id,
-        cash_rounding, rounding_cents)
+        cash_rounding, rounding_cents, fiscal_chain_id)
      VALUES ($1, $2, $3, 'completed', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
              $14::text, CASE WHEN $14::text = 'new' THEN NULL ELSE NOW() END, $15,
-             $16, $17)
+             $16, $17, $18)
      RETURNING *`,
     [
       params.storeId,
@@ -942,6 +953,8 @@ export async function completeSaleTx(
       // never subject to the rule, whatever the till had switched on.
       paysCash ? roundingStep : 0,
       roundingCents,
+      // The «чек післяплати» of a «під запис» line's ПРРО chain (079).
+      params.debt_part?.chain_id ?? null,
     ]
   );
   const sale = saleResult.rows[0];
@@ -1079,8 +1092,10 @@ export async function recordDebtPrepaymentTx(
     amountCents: number;
     method: 'cash' | 'card';
     clientUuid: string;
+    /** The store registers it through its provider's prepayment chain (079). */
+    chain?: { provider: string } | null;
   }
-): Promise<number> {
+): Promise<debtLines.RecordedPrepayment> {
   const receiptNumber = await nextReceiptNumber(client, params.storeId);
   return debtLines.recordPrepaymentTx(client, { ...params, receiptNumber });
 }
@@ -1324,6 +1339,9 @@ export async function getSale(storeId: number, saleId: number) {
     // goods left earlier, so its lines moved no stock of their own. A
     // «внесок» (078) is one too, with no lines at all — money toward one.
     repays_debt: items.rows.some((row) => row.debt_item_id != null) || sale.debt_prepay_item_id != null,
+    // A document of a «під запис» line's ПРРО prepayment chain (079): the
+    // number the provider prints in the receipt's header and footer.
+    fiscal_chain_id: (sale.fiscal_chain_id as string | null) ?? null,
     debt_prepayment: prepaidLine
       ? {
           line_id: Number(prepaidLine.id),

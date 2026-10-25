@@ -360,3 +360,26 @@ https://wiki.checkbox.ua/uk/api.
 - Платник ПДВ, `departament`, `X-Device-ID` на ланцюжку,
   `prepayment.sum_too_large`, денний ліміт повернення готівкою
   (`prepayment.daily_limit_return`), за яких дій виникає `PARTIAL_CANCELLED`.
+
+## Як це використовує адаптер (2-А, 2026-10-25)
+
+`src/pos/fiscal/providers/checkbox/index.ts`, `registerChainDocument`; що
+робить решта сервера — `G3_DEBTS.md` §11 «Що зроблено в 2-А».
+
+- Документ із `chain.op = 'open'` → `POST /prepayment-receipts` з нашим
+  `custom_relation_id`. На `prepayment.relation_id_not_unique` адаптер читає
+  ланцюжок: перший чек передплати — наш `id` → `duplicate`, інакше —
+  `rejected` (`chain_id_taken`).
+- `chain.op = 'pay'` → спершу `GET /prepayment-receipts/{номер}`: наш `id`
+  уже в ланцюжку → `duplicate`; ланцюжка немає, він `FULL_PAID`/`CANCELLED`
+  або `left_to_pay` не дорівнює сумі товарів документа → `rejected`, нічого
+  не відправлено. Потім `POST /prepayment-receipts/{номер}`; на
+  `already_paid`/`already_returned`/`already_processed` —
+  `GET /receipts/{наш id}`: є → `duplicate`, нема → `rejected`.
+- Відмови перевірки запиту з таблиці кодів (`sum_equals_total_sum`,
+  `daily_limit`, `has_goods_to_return`, `need_to_remove_ettn`,
+  `receipt.return_prepayment` …) класифікуються як `rejected`
+  (`providers/checkbox/errors.ts`).
+- Повернення — `returnChain`: один `POST …/return`, чеки розкладаються за
+  `related_receipt_id`; на `already_returned` — за
+  `returned_receipts_mapping` зі стану ланцюжка.

@@ -136,6 +136,8 @@ export const POS_MIGRATIONS = [
   '077_pos_demo_grocery_credit.sql',
   // Paying a «під запис» debt in parts: units of a line, and «внески» toward the oldest one (Д4 revised).
   '078_pos_debt_partial.sql',
+  // A «внесок» under ПРРО: the line's Checkbox prepayment chain, our number for it, and the sales that are its documents.
+  '079_pos_debt_chain.sql',
 ] as const;
 
 export function readMigration(file: string): string {

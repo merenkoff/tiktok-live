@@ -12,8 +12,10 @@
 
 import { FiscalError } from './errors.js';
 import { displayUnit } from '../weighed.js';
+import { lineAmountCents } from '../lineMoney.js';
 import type {
   FiscalCashRounding,
+  FiscalChainStep,
   FiscalDocLine,
   FiscalDocPayment,
   FiscalRefundDoc,
@@ -207,6 +209,105 @@ export function buildSaleDoc(input: {
     // The cash payment stays what was handed over: the provider rounds the
     // total and works the change out from that (TechDocs/POS_CASH_ROUNDING.md, Д6).
     cashRounding: cashRoundingOf(sale),
+  };
+}
+
+/** The goods of a prepayment chain — a «під запис» line, at what is still owed for it. */
+export interface ChainGoodsInput {
+  /** Traces the fiscal line back to its debt line, e.g. `debt-42`. */
+  ref: string;
+  product_name: string;
+  variant_label: string;
+  /** The units still owed for, in the line's base unit (grams of a weighed line). */
+  quantity: number;
+  unit_price_cents: number;
+  /** What is still owed for them before this document — their line total in the chain. */
+  owed_cents: number;
+  price_per?: number;
+  unit?: string;
+  tax_code: string | null;
+  barcode: string | null;
+  uktzed: string | null;
+}
+
+/**
+ * A «внесок» as a document of its line's prepayment chain
+ * (TechDocs/grocery/G3_DEBTS.md §11 «Крок 2»).
+ *
+ * A «внесок» is a sale with no goods lines of its own — money toward goods the
+ * customer already has — so its lines are the debt line's: the units still
+ * owed for, at what is still owed for them, its discount being everything
+ * that came off since (the line and cart discounts, units returned or paid,
+ * earlier «внески»). That is the contract's meaning of a chain document's
+ * lines (`FiscalChainStep`), and the money is the «внесок» alone, always below
+ * them: the sum that closes a line is the receipt that closes it, not a
+ * «внесок». Never rounded — the till takes a «внесок» as a sum it can be paid
+ * in, so the cash is exactly it.
+ */
+export function buildChainPrepaymentDoc(input: {
+  requestId: string;
+  sale: {
+    receipt_number: string;
+    staff_name: string;
+    total_cents: number;
+    payments: SalePaymentInput[];
+    customer_phone?: string | null;
+  };
+  goods: ChainGoodsInput[];
+  chain: FiscalChainStep;
+}): FiscalSaleDoc {
+  const { requestId, sale, goods, chain } = input;
+  if (goods.length === 0) throw new FiscalError('A chain document needs the goods it is for', 'rejected');
+
+  const lines: FiscalDocLine[] = goods.map((item, index) => {
+    const quantityMilli = quantityMilliOf(item.quantity, item.price_per, index);
+    const undiscounted = lineAmountCents(quantityMilli, item.unit_price_cents, MILLI_PER_UNIT);
+    if (item.owed_cents <= 0 || item.owed_cents > undiscounted) {
+      throw new FiscalError(
+        `Chain goods «${item.product_name}» owe ${item.owed_cents} of their ${undiscounted}`,
+        'rejected'
+      );
+    }
+    return {
+      name: fiscalLineName(item.product_name, item.variant_label),
+      quantityMilli,
+      unitPriceCents: item.unit_price_cents,
+      lineTotalCents: item.owed_cents,
+      discountCents: undiscounted - item.owed_cents,
+      taxCode: item.tax_code,
+      barcode: item.barcode,
+      uktzed: item.uktzed,
+      sourceLineRef: item.ref,
+      ...(item.unit?.trim() ? { unit: displayUnit(item.unit.trim(), item.price_per ?? 1) } : {}),
+    };
+  });
+
+  const owed = lines.reduce((sum, line) => sum + line.lineTotalCents, 0);
+  if (sale.total_cents <= 0 || sale.total_cents >= owed) {
+    throw new FiscalError(
+      `A «внесок» of ${sale.total_cents} must be above zero and below the ${owed} still owed`,
+      'rejected'
+    );
+  }
+  const payments = mapPayments(sale.payments);
+  const paid = payments.reduce((sum, payment) => sum + payment.amountCents, 0);
+  if (paid !== sale.total_cents) {
+    throw new FiscalError(`A «внесок» of ${sale.total_cents} is paid ${paid}`, 'rejected');
+  }
+
+  return {
+    kind: 'sale',
+    requestId,
+    ourNumber: sale.receipt_number,
+    cashierName: sale.staff_name,
+    lines,
+    payments,
+    totalCents: sale.total_cents,
+    discountCents: 0,
+    note: null,
+    customerPhone: sale.customer_phone ?? null,
+    cashRounding: null,
+    chain,
   };
 }
 

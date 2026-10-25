@@ -29,6 +29,30 @@ const AUTH_REJECTED_CODES = new Set([
 ]);
 
 /**
+ * Prepayment-chain refusals that are checks of the request itself, made
+ * before anything is created (TechDocs/prro/checkbox/api/prepayment.md «Коди
+ * помилок») — so `rejected`, which promises no document exists.
+ *
+ * Deliberately NOT here: `prepayment.relation_id_not_unique` and
+ * `prepayment.already_paid` / `already_returned` / `already_processed`. Each
+ * of those is also what a repeat of a document that DID go through gets back,
+ * so they stay `unknown` until the adapter has asked Checkbox whether it is
+ * ours (`providers/checkbox/index.ts`, sandbox run of 2026-10-25, answers 7–8).
+ */
+const CHAIN_REFUSED_CODES = new Set([
+  'prepayment.sum_equals_total_sum',
+  'prepayment.sum_equals_zero',
+  'prepayment.sum_too_large',
+  'prepayment.daily_limit',
+  'prepayment.daily_limit_return',
+  'prepayment.has_goods_to_return',
+  'prepayment.need_to_remove_ettn',
+  'receipt.cash_register_identity',
+  'receipt.return_prepayment',
+  'reject_last_receipt.prepayment',
+]);
+
+/**
  * Two offline refusals come back with a human message and no structured code
  * (TechDocs/prro/checkbox/api/{receipts-offline,cash-register}.md). Both mean the
  * document was NOT created, so `rejected` is exact; the synthetic provider
@@ -76,6 +100,9 @@ export function classifyCheckboxError(error: unknown): FiscalError {
   }
   if (code === 'shift.not_opened') {
     return new FiscalError(error.message, 'shift_closed', opts);
+  }
+  if (code && CHAIN_REFUSED_CODES.has(code) && status < 500) {
+    return new FiscalError(message ?? error.message, 'rejected', opts);
   }
   if (code === 'validation.custom') {
     // The one code with no further structure at the top level — field-level

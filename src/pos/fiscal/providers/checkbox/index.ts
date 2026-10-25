@@ -13,7 +13,9 @@ import { FiscalError } from '../../errors.js';
 import { POS_API_VERSION } from '../../../version.js';
 import type {
   FiscalCallCtx,
+  FiscalChainReturn,
   FiscalCredentials,
+  FiscalPrepaymentChainOps,
   FiscalProbe,
   FiscalProvider,
   FiscalRefundDoc,
@@ -39,6 +41,7 @@ import {
   getMe,
   getOfflineCodesCountRequest,
   getOfflineCodesRequest,
+  getPrepaymentRelation,
   getReceipt,
   getReceiptRendering,
   getReportText,
@@ -46,14 +49,26 @@ import {
   goOfflineRequest,
   goOnlineRequest,
   openShiftRequest,
+  prepaymentChainReceipt,
+  prepaymentReceipt,
+  returnPrepaymentChain,
   sellReceipt,
   sellReceiptOffline,
   serviceReceipt,
   signInPinCode,
   signOutRequest,
+  type CheckboxReceipt,
 } from './client.js';
 import { classifyCheckboxError } from './errors.js';
-import { mapSellOfflinePayload, mapSellPayload, mapServicePayload, toFiscalResult } from './payload.js';
+import {
+  mapChainPaymentPayload,
+  mapPrepaymentPayload,
+  mapSellOfflinePayload,
+  mapSellPayload,
+  mapServicePayload,
+  toChainState,
+  toFiscalResult,
+} from './payload.js';
 import { pollUntil } from './poll.js';
 
 /**
@@ -106,29 +121,42 @@ async function signAndFetchProbe(
   };
 }
 
+type AuthedOpts = ReturnType<typeof authedOpts>;
+
+/** `duplicate` for a document Checkbox holds under our own id. */
+function duplicateOf(requestId: string, err: FiscalError): FiscalError {
+  // Checkbox uses our own requestId as the receipt's id, byte for byte
+  // (confirmed live: a `sell` response's `id` echoed exactly what we posted,
+  // and so did every receipt of the prepayment run of 2026-10-25) — so on a
+  // duplicate conflict, that IS the provider's doc id, no need to parse one
+  // out of the error body.
+  return new FiscalError(err.message, 'duplicate', {
+    providerCode: err.providerCode,
+    httpStatus: err.httpStatus,
+    raw: err.raw,
+    existingProviderDocId: requestId,
+  });
+}
+
 async function sendAndPoll(
   ctx: FiscalCallCtx,
   requestId: string,
-  send: (opts: ReturnType<typeof authedOpts>) => ReturnType<typeof sellReceipt>
+  send: (opts: AuthedOpts) => Promise<CheckboxReceipt>,
+  /**
+   * A second look at a refusal that may be our own document coming back
+   * (a chain's `relation_id_not_unique`, `already_paid`): resolves to the
+   * error to throw — `duplicate` when it IS ours.
+   */
+  reclassify?: (err: FiscalError, opts: AuthedOpts) => Promise<FiscalError>
 ): Promise<FiscalResult> {
   const opts = authedOpts(ctx);
   let created;
   try {
     created = await send(opts);
   } catch (rawError) {
-    const err = classifyCheckboxError(rawError);
-    if (err.kind === 'duplicate') {
-      // Checkbox uses our own requestId as the receipt's id, byte for byte
-      // (confirmed live: a `sell` response's `id` echoed exactly what we
-      // posted) — so on a duplicate conflict, that IS the provider's doc id,
-      // no need to parse one out of the error body.
-      throw new FiscalError(err.message, 'duplicate', {
-        providerCode: err.providerCode,
-        httpStatus: err.httpStatus,
-        raw: err.raw,
-        existingProviderDocId: requestId,
-      });
-    }
+    let err = classifyCheckboxError(rawError);
+    if (err.kind !== 'duplicate' && reclassify) err = await reclassify(err, opts);
+    if (err.kind === 'duplicate') throw duplicateOf(requestId, err);
     throw err;
   }
 
@@ -158,6 +186,194 @@ async function sendAndPoll(
   }
   return toFiscalResult(final);
 }
+
+// ── Prepayment chains (TechDocs/prro/checkbox/api/prepayment.md) ────────────
+//
+// A «внесок» toward goods taken «під запис» is a «чек передплати»; the
+// receipt that closes the line is the chain's «чек післяплати»
+// (TechDocs/grocery/G3_DEBTS.md §11 «Крок 2»). Both are ordinary documents
+// to everything above this file — `registerSale` with `chain`, the same
+// ledger row, retry and `duplicate` — and what differs is what Checkbox is
+// asked around them. Every rule below is an answer of the sandbox run of
+// 2026-10-25 (`src/__tests__/fixtures/checkbox/runs/20261025-173126Z-prepayment/`).
+
+/** Codes a repeat of a further chain document that DID go through may also get (answer 8). */
+const SETTLED_CHAIN_CODES = new Set([
+  'prepayment.already_paid',
+  'prepayment.already_returned',
+  'prepayment.already_processed',
+]);
+
+/** Nothing was created — the contract's `rejected`. */
+function chainRefusal(message: string, providerCode: string, raw?: unknown): FiscalError {
+  return new FiscalError(message, 'rejected', { providerCode, raw });
+}
+
+async function readChain(opts: AuthedOpts, relationId: string) {
+  try {
+    const relation = await getPrepaymentRelation(opts, relationId);
+    return relation ? toChainState(relation) : null;
+  } catch (error) {
+    throw classifyCheckboxError(error);
+  }
+}
+
+async function registerChainDocument(ctx: FiscalCallCtx, doc: FiscalSaleDoc): Promise<FiscalResult> {
+  const chain = doc.chain!;
+  // What the chain is still owed before this document (the contract's
+  // meaning of `lines`), and what this document pays.
+  const owed = doc.lines.reduce((sum, line) => sum + line.lineTotalCents, 0);
+  if (doc.totalCents <= 0 || doc.totalCents > owed) {
+    throw chainRefusal(`A chain document pays ${doc.totalCents} of the ${owed} still owed`, 'chain_sum');
+  }
+
+  if (chain.op === 'open') {
+    // The whole sum at once is a sale, and Checkbox refuses it as one
+    // (`prepayment.sum_equals_total_sum`).
+    if (doc.totalCents === owed) {
+      throw chainRefusal(`A chain opens with less than its goods come to (${owed})`, 'chain_sum');
+    }
+    const payload = mapPrepaymentPayload(doc);
+    return sendAndPoll(
+      ctx,
+      doc.requestId,
+      (opts) => prepaymentReceipt(opts, payload),
+      async (err, opts) => {
+        // Answer 7: an opening that went through and is sent again comes
+        // back as the chain's number being taken, never `already_exists` —
+        // the number is checked first. Ours when its first receipt is ours.
+        if (err.providerCode !== 'prepayment.relation_id_not_unique') return err;
+        const state = await readChain(opts, chain.relationId);
+        if (state?.documents[0] === doc.requestId) {
+          return new FiscalError(err.message, 'duplicate', { providerCode: err.providerCode, raw: err.raw });
+        }
+        return chainRefusal(
+          `Номер ланцюжка ${chain.relationId} уже зайнятий іншим документом`,
+          'chain_id_taken',
+          err.raw
+        );
+      }
+    );
+  }
+
+  // A further document: look before sending. The one read is what makes a
+  // retry safe (our receipt may already be in the chain) and what keeps a
+  // receipt meant to close the line from becoming one more prepayment.
+  const opts = authedOpts(ctx);
+  const state = await readChain(opts, chain.relationId);
+  if (!state) throw chainRefusal(`Ланцюжка ${chain.relationId} у Checkbox немає`, 'chain_missing');
+  if (state.documents.includes(doc.requestId)) {
+    throw new FiscalError('Документ уже є в ланцюжку', 'duplicate', {
+      providerCode: 'chain_has_document',
+      existingProviderDocId: doc.requestId,
+    });
+  }
+  if (state.status !== 'open') {
+    throw chainRefusal(
+      state.status === 'paid' ? 'Ланцюжок у Checkbox уже сплачено' : 'Ланцюжок у Checkbox повернуто',
+      'chain_closed',
+      state.raw
+    );
+  }
+  // Checkbox decides by the sum which document this is (answer 2): below
+  // `left_to_pay` a prepayment, at it the after-payment. Ours must agree with
+  // its, or the receipt that closes the line in our books would stay one
+  // more prepayment in the tax office's.
+  if (state.leftCents !== owed) {
+    throw chainRefusal(
+      `Checkbox чекає за ланцюжком ${state.leftCents}, а за нашими даними винно ${owed}`,
+      'chain_left_mismatch',
+      state.raw
+    );
+  }
+  const payload = mapChainPaymentPayload(doc);
+  return sendAndPoll(
+    ctx,
+    doc.requestId,
+    (o) => prepaymentChainReceipt(o, chain.relationId, payload),
+    async (err, o) => {
+      // Answer 8: a paid or returned chain refuses with a code and no
+      // receipt — which a repeat of our own after-payment would get too.
+      // Whether it is ours, the receipt under our id says.
+      if (!err.providerCode || !SETTLED_CHAIN_CODES.has(err.providerCode)) return err;
+      let receipt: CheckboxReceipt | null;
+      try {
+        receipt = await getReceipt(o, doc.requestId);
+      } catch (error) {
+        throw classifyCheckboxError(error);
+      }
+      if (receipt) return new FiscalError(err.message, 'duplicate', { providerCode: err.providerCode, raw: err.raw });
+      return chainRefusal(err.message, err.providerCode, err.raw);
+    }
+  );
+}
+
+/**
+ * Return the whole chain (answer 9): one call, one `RETURN` receipt per
+ * receipt of the chain, newest first, each naming the one it returns in
+ * `related_receipt_id`. A chain an earlier call already returned — its answer
+ * lost — is refused `prepayment.already_returned`, and then the chain's
+ * `returned_receipts_mapping` (not `returned_receipts`, which stays empty)
+ * says which return undid which receipt.
+ */
+async function returnWholeChain(
+  ctx: FiscalCallCtx,
+  relationId: string,
+  cashierName: string
+): Promise<FiscalChainReturn[]> {
+  const opts = authedOpts(ctx);
+  let pairs: Array<{ related: string; receiptId: string }>;
+  try {
+    const created = await returnPrepaymentChain(opts, relationId, { cashier_name: cashierName });
+    pairs = created.map((receipt) => ({ related: receipt.related_receipt_id ?? '', receiptId: receipt.id }));
+  } catch (raw) {
+    const err = classifyCheckboxError(raw);
+    if (err.providerCode !== 'prepayment.already_returned') throw err;
+    const state = await readChain(opts, relationId);
+    const mapped = Object.entries(state?.returns ?? {});
+    if (mapped.length === 0) throw err;
+    pairs = mapped.map(([related, receiptId]) => ({ related, receiptId }));
+  }
+  if (pairs.length === 0 || pairs.some((pair) => !pair.related)) {
+    throw new FiscalError('Checkbox не назвав, які чеки ланцюжка повернуто', 'unknown', {
+      providerCode: 'chain_return_unlinked',
+    });
+  }
+
+  const results: FiscalChainReturn[] = [];
+  for (const pair of pairs) {
+    const final = await pollUntil(
+      ctx.signal,
+      () => getReceipt(opts, pair.receiptId),
+      (r) => r !== null && (r.status === 'DONE' || r.status === 'ERROR')
+    );
+    if (!final) {
+      throw new FiscalError('Чек повернення зник після створення', 'unknown', { providerCode: 'receipt_vanished' });
+    }
+    if (final.status === 'ERROR') {
+      throw new FiscalError(
+        final.transaction?.response_error_message ?? 'ПРРО відхилило чек повернення після створення',
+        'unknown',
+        { providerCode: 'receipt_error_status', raw: final }
+      );
+    }
+    results.push({ relatedProviderDocId: pair.related, result: toFiscalResult(final) });
+  }
+  return results;
+}
+
+const checkboxChains: FiscalPrepaymentChainOps = {
+  async getChain(ctx, relationId) {
+    return readChain(authedOpts(ctx), relationId);
+  },
+  async returnChain(ctx, relationId, opts) {
+    try {
+      return await returnWholeChain(ctx, relationId, opts.cashierName);
+    } catch (error) {
+      throw classifyCheckboxError(error);
+    }
+  },
+};
 
 /**
  * The offline capability (TechDocs/prro/POS_FISCAL_OFFLINE.md §2, wire facts in
@@ -258,6 +474,7 @@ export const checkboxProvider: FiscalProvider = {
   id: 'checkbox',
   title: 'Checkbox',
   offline: checkboxOffline,
+  prepaymentChain: checkboxChains,
 
   secretKeys: [
     {
@@ -468,6 +685,7 @@ export const checkboxProvider: FiscalProvider = {
   },
 
   async registerSale(ctx, doc: FiscalSaleDoc) {
+    if (doc.chain) return registerChainDocument(ctx, doc);
     const payload = mapSellPayload(doc);
     return sendAndPoll(ctx, doc.requestId, (opts) => sellReceipt(opts, payload));
   },

@@ -27,10 +27,12 @@ import {
 } from './errors.js';
 import * as ledger from './ledger.js';
 import {
+  buildChainPrepaymentDoc,
   buildRefundDoc,
   buildSaleDoc,
   buildServiceDoc,
   type BarcodeResolution,
+  type ChainGoodsInput,
   type RefundInput,
   type SaleInput,
   type TaxCodeResolution,
@@ -49,6 +51,8 @@ import {
 } from './shifts.service.js';
 import type {
   FiscalCallCtx,
+  FiscalChainStep,
+  FiscalProviderId,
   FiscalRefundDoc,
   FiscalResult,
   FiscalSaleDoc,
@@ -121,8 +125,14 @@ const RECEIPT_TEXT_BUDGET_MS = 2_500;
 export const OFFLINE_SESSION_MAX_MS = 36 * 60 * 60 * 1000 - 30 * 60 * 1000;
 export const SHIFT_DEADLINE_MS = 24 * 60 * 60 * 1000 - 15 * 60 * 1000;
 
-/** What the caller is about to register — decides what an offline session admits. */
-export type FiscalOp = 'sale' | 'refund' | 'service';
+/**
+ * What the caller is about to register — decides what an offline session
+ * admits. `chain` is a document of a prepayment chain (a «внесок», or the
+ * receipt that closes a line paid by them): the provider's offline mode has
+ * no prepayment, so like a refund it never opens an offline session and
+ * waits out a live one.
+ */
+export type FiscalOp = 'sale' | 'refund' | 'service' | 'chain';
 
 export interface FiscalGate {
   /** False = this store does not fiscalise; the caller proceeds unchanged. */
@@ -179,6 +189,21 @@ const OFF: FiscalGate = {
 /** Whether the store fiscalises at all — no shift opened, nothing asked of the provider. */
 export async function fiscalisesStore(storeId: number): Promise<boolean> {
   return (await resolveContext(storeId)) != null;
+}
+
+/** What the store's ПРРО can do — asked without opening a shift or calling the provider. */
+export interface FiscalCapability {
+  /** The store fiscalises. */
+  on: boolean;
+  provider: FiscalProviderId | null;
+  /** Its provider keeps prepayment chains, so a «внесок» can be registered (G3_DEBTS.md §11 «Крок 2»). */
+  chains: boolean;
+}
+
+export async function fiscalCapability(storeId: number): Promise<FiscalCapability> {
+  const ctx = await resolveContext(storeId);
+  if (!ctx) return { on: false, provider: null, chains: false };
+  return { on: true, provider: ctx.provider.id, chains: Boolean(ctx.provider.prepaymentChain) };
 }
 
 export async function preflight(
@@ -500,7 +525,9 @@ async function runDocument(
   gate: FiscalGate,
   row: ledger.FiscalReceiptRow,
   send: Send,
-  priority: FiscalCallPriority
+  priority: FiscalCallPriority,
+  /** Fetch the provider's receipt text whatever `receipt_source` says — a chain document's. */
+  opts: { providerText?: boolean } = {}
 ): Promise<{ row: ledger.FiscalReceiptRow; result: FiscalResult }> {
   const ctx = gate.ctx as FiscalContext;
   let transmitted = false;
@@ -549,7 +576,7 @@ async function runDocument(
       }
     }
     runtime.markProviderOk(ctx.storeId);
-    const final = await attachProviderReceiptText(ctx, gate, row, result as FiscalResult);
+    const final = await attachProviderReceiptText(ctx, gate, row, result as FiscalResult, opts.providerText === true);
     return { row: await ledger.markDone(row, final), result: final };
   } catch (raw) {
     const err = asFiscalError(raw, 'Помилка ПРРО');
@@ -575,14 +602,21 @@ async function runDocument(
  * Runs after the document is final and before `markDone`, so it covers the
  * live path, the retry cron and duplicate recovery alike, and never touches
  * the rate limiter — it is a read, like `fetchDocument`.
+ *
+ * `force` — a document of a prepayment chain — fetches the text whatever the
+ * setting: the header and footer of such a receipt («Передплата за
+ * замовлення №…», «Попередньо отримано за чеками передплати: …») are the
+ * provider's, and our layout could only approximate them (G3_DEBTS.md §11
+ * «Крок 2», «Друк»). It still never fails the document.
  */
 async function attachProviderReceiptText(
   ctx: FiscalContext,
   gate: FiscalGate,
   row: ledger.FiscalReceiptRow,
-  result: FiscalResult
+  result: FiscalResult,
+  force = false
 ): Promise<FiscalResult> {
-  if (ctx.settings.receipt_source !== 'provider') {
+  if (ctx.settings.receipt_source !== 'provider' && !force) {
     return result.receiptText === null ? result : { ...result, receiptText: null };
   }
   if (!ctx.provider.renderReceipt) return result;
@@ -750,10 +784,34 @@ export interface FiscalSaleSource extends SaleInput {
   client_uuid: string | null;
 }
 
-/** Fiscalise a freshly committed sale. Throws {@link FiscalDocumentFailed}. */
+/**
+ * A chain document goes only to a provider that keeps chains — the guard
+ * here rather than in each adapter, so an adapter without the capability
+ * (Cashalot) can never register a «внесок» as an ordinary sale of goods
+ * worth more than was paid. Used by the live path and the retry alike.
+ */
+function sendSale(ctx: FiscalContext, callCtx: FiscalCallCtx, doc: FiscalSaleDoc): Promise<FiscalResult> {
+  if (doc.chain && !ctx.provider.prepaymentChain) {
+    return Promise.reject(
+      new FiscalError('ПРРО магазину не веде ланцюжків передплати', 'rejected', {
+        providerCode: 'chain_unsupported',
+      })
+    );
+  }
+  return ctx.provider.registerSale(callCtx, doc);
+}
+
+/**
+ * Fiscalise a freshly committed sale. Throws {@link FiscalDocumentFailed}.
+ *
+ * `opts.chain` — the receipt that closes a «під запис» line paid by «внески»
+ * through a prepayment chain: the same sale document, registered as the
+ * chain's after-payment (G3_DEBTS.md §11 «Крок 2»).
+ */
 export async function fiscalizeSale(
   gate: FiscalGate,
-  sale: FiscalSaleSource
+  sale: FiscalSaleSource,
+  opts: { chain?: FiscalChainStep | null } = {}
 ): Promise<FiscalView> {
   const ctx = gate.ctx as FiscalContext;
   const requestId = sale.client_uuid ?? randomRequestId();
@@ -762,7 +820,11 @@ export async function fiscalizeSale(
     sale.id,
     ctx.settings.default_tax_code
   );
-  const doc = buildSaleDoc({ requestId, sale, tax, codes });
+  const doc: FiscalSaleDoc = {
+    ...buildSaleDoc({ requestId, sale, tax, codes }),
+    ...(opts.chain ? { chain: opts.chain } : {}),
+  };
+  if (doc.chain) return fiscalizeChainDocument(gate, sale.id, settledCents(sale), doc);
 
   if (gate.mode === 'offline') return fiscalizeSaleOffline(gate, sale, requestId, doc);
 
@@ -780,8 +842,116 @@ export async function fiscalizeSale(
   const { row: done, result } = await runDocument(
     gate,
     row,
-    (callCtx) => ctx.provider.registerSale(callCtx, doc),
+    (callCtx) => sendSale(ctx, callCtx, doc),
     'live'
+  );
+  noteRoundingMismatch(ctx.storeId, doc, result);
+  return toView(done, result);
+}
+
+/** A «внесок» as its fiscal document needs it: the money, and the goods it is toward. */
+export interface FiscalPrepaymentSource {
+  id: number;
+  client_uuid: string | null;
+  receipt_number: string;
+  staff_name: string;
+  /** The «внесок» — what this document pays. */
+  total_cents: number;
+  payments: Array<{ method: string; amount_cents: number; provider_ref?: string | null }>;
+  customer_phone?: string | null;
+}
+
+/** A chain's goods before their tax codes are looked up — what the debt line knows. */
+export type ChainPrepaymentGoods = Omit<ChainGoodsInput, 'tax_code' | 'barcode' | 'uktzed'> & {
+  variant_id: number;
+};
+
+/**
+ * Fiscalise a «внесок» as a document of its line's prepayment chain — the
+ * opening «чек передплати», or one more (G3_DEBTS.md §11 «Крок 2»). `goods`
+ * are the line's, each at what was still owed for it before this «внесок»;
+ * a sale with no goods lines of its own has nothing else to build them from.
+ * Throws {@link FiscalDocumentFailed}, exactly like a sale.
+ */
+export async function fiscalizeChainPrepayment(
+  gate: FiscalGate,
+  prepayment: FiscalPrepaymentSource,
+  goods: ChainPrepaymentGoods[],
+  chain: FiscalChainStep
+): Promise<FiscalView> {
+  const ctx = gate.ctx as FiscalContext;
+  const requestId = prepayment.client_uuid ?? randomRequestId();
+  const codes = await loadVariantCodes(ctx.storeId, goods.map((item) => item.variant_id));
+  const resolved: ChainGoodsInput[] = goods.map(({ variant_id, ...item }) => {
+    const own = codes.get(variant_id);
+    return {
+      ...item,
+      // The same resolution as a sale's line (`resolveTaxCode` in mapping.ts).
+      tax_code: own?.tax || ctx.settings.default_tax_code,
+      barcode: own?.barcode ?? null,
+      uktzed: own?.uktzed ?? null,
+    };
+  });
+  const doc = buildChainPrepaymentDoc({ requestId, sale: prepayment, goods: resolved, chain });
+  return fiscalizeChainDocument(gate, prepayment.id, prepayment.total_cents, doc);
+}
+
+/** `loadLineCodes` for goods that are not lines of a sale — a chain's, by variant. */
+async function loadVariantCodes(
+  storeId: number,
+  variantIds: number[]
+): Promise<Map<number, { tax: string | null; barcode: string | null; uktzed: string | null }>> {
+  const result = await pool.query(
+    `SELECT v.id, v.barcode, p.fiscal_tax_code, p.fiscal_uktzed
+       FROM pos_variants v
+       JOIN pos_products p ON p.id = v.product_id
+      WHERE v.store_id = $1 AND v.id = ANY($2::bigint[])`,
+    [storeId, variantIds]
+  );
+  return new Map(
+    result.rows.map((row) => [
+      Number(row.id),
+      {
+        tax: (row.fiscal_tax_code as string | null) ?? null,
+        barcode: (row.barcode as string | null) ?? null,
+        uktzed: (row.fiscal_uktzed as string | null) ?? null,
+      },
+    ])
+  );
+}
+
+/**
+ * One document of a chain through the ordinary ledger: its own `sale` row,
+ * `runDocument`'s recovery rules, the retry cron. Never offline — the
+ * provider's offline mode has no prepayment, and the `chain` gate refuses to
+ * open or join an offline session — and always with the provider's text.
+ */
+async function fiscalizeChainDocument(
+  gate: FiscalGate,
+  saleId: number,
+  totalCents: number,
+  doc: FiscalSaleDoc
+): Promise<FiscalView> {
+  const ctx = gate.ctx as FiscalContext;
+  if (gate.mode !== 'online') {
+    throw new FiscalError('Ланцюжок передплати не реєструється офлайн', 'offline_session_open');
+  }
+  const row = await ledger.openDocument({
+    storeId: ctx.storeId,
+    docType: 'sale',
+    saleId,
+    shiftId: gate.shiftRowId,
+    provider: ctx.provider.id,
+    requestId: doc.requestId,
+    totalCents,
+    requestPayload: doc,
+  });
+  const { row: done, result } = await runDocument(
+    gate,
+    row,
+    (callCtx) => sendSale(ctx, callCtx, doc),
+    'live',
+    { providerText: true }
   );
   noteRoundingMismatch(ctx.storeId, doc, result);
   return toView(done, result);
@@ -1466,12 +1636,14 @@ async function retryOne(gate: FiscalGate, row: ledger.FiscalReceiptRow): Promise
   }
 
   const send: Send = (callCtx) => {
-    if (row.doc_type === 'sale') return ctx.provider.registerSale(callCtx, doc);
+    if (row.doc_type === 'sale') return sendSale(ctx, callCtx, doc);
     if (row.doc_type === 'refund') return ctx.provider.registerRefund(callCtx, doc);
     return ctx.provider.registerService(callCtx, doc);
   };
 
-  const { result } = await runDocument(gate, row, send, 'background');
+  const { result } = await runDocument(gate, row, send, 'background', {
+    providerText: row.doc_type === 'sale' && Boolean(doc.chain),
+  });
   if (row.doc_type === 'sale' || row.doc_type === 'refund') {
     noteRoundingMismatch(ctx.storeId, doc, result);
   }

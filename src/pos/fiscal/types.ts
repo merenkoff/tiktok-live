@@ -303,6 +303,41 @@ export interface FiscalSaleDoc extends FiscalDocBase {
   customerPhone?: string | null;
   /** Set when the cash part was rounded; absent on every older stored payload. */
   cashRounding?: FiscalCashRounding | null;
+  /**
+   * Set when the document belongs to a prepayment chain (a «внесок» toward
+   * goods taken «під запис», TechDocs/grocery/G3_DEBTS.md §11 «Крок 2»). Only
+   * a provider with `prepaymentChain` takes one; absent on every other
+   * document, which is then exactly what it always was.
+   */
+  chain?: FiscalChainStep | null;
+}
+
+/**
+ * One document of a prepayment chain: money toward goods, registered as
+ * «чеки передплати» until the rest is paid by a «чек післяплати».
+ *
+ * The meaning of `lines` and `totalCents` is the same for both steps, and it
+ * is what lets the adapter tell one document from the other:
+ *   · `lines` are the chain's goods, each at what is still to be paid for it
+ *     BEFORE this document — so their sum is what the chain is still owed;
+ *   · `totalCents` is what this document pays: below that sum it is one more
+ *     prepayment, equal to it it is the after-payment that closes the chain.
+ * `payments` are what was handed over, exactly as for a sale (cash with its
+ * rounding, `cashRounding`).
+ */
+export interface FiscalChainStep {
+  /**
+   * OUR number for the chain. The provider takes it as the chain's own
+   * (Checkbox's `custom_relation_id` becomes `pre_payment_relation_id` —
+   * sandbox run of 2026-10-25, answer 1), so it is known before any answer.
+   */
+  relationId: string;
+  /**
+   * `open` — the first prepayment: the chain is created for `lines`.
+   * `pay` — a further document of an open chain: the provider takes the goods
+   * from the chain, and must find exactly the sum of `lines` left to pay.
+   */
+  op: 'open' | 'pay';
 }
 
 export interface FiscalRefundDoc extends FiscalDocBase {
@@ -535,6 +570,56 @@ export interface FiscalProvider {
    * it. Modelled on Checkbox's API; see TechDocs/prro/POS_FISCAL_OFFLINE.md §2.
    */
   readonly offline?: FiscalOfflineOps;
+
+  /**
+   * Optional: the provider keeps prepayment chains (Checkbox's
+   * `/prepayment-receipts`, TechDocs/prro/checkbox/api/prepayment.md).
+   *
+   * Present ⇒ `registerSale` takes a document with `chain` and registers it as
+   * a chain document; these are the reads and the return around it. Absent ⇒
+   * a «внесок» in a store with this provider is refused before anything is
+   * written (`prepay_needs_chain`), as it was before step 2.
+   */
+  readonly prepaymentChain?: FiscalPrepaymentChainOps;
+}
+
+// ── Prepayment chains ───────────────────────────────────────────────────────
+
+/** A chain as the provider sees it. */
+export interface FiscalChainState {
+  relationId: string;
+  /** `open` = partly paid; `paid` = the after-payment is in; `returned` = given back. */
+  status: 'open' | 'paid' | 'returned';
+  totalCents: number;
+  paidCents: number;
+  /** What the provider still expects — the sum an after-payment must bring. */
+  leftCents: number;
+  /** Provider ids of the chain's documents in order: the prepayments, then the after-payment. */
+  documents: string[];
+  /** Once returned: the provider id of each document → its return document. */
+  returns: Record<string, string>;
+  raw: unknown;
+}
+
+/** One return document of a returned chain and the chain document it undoes. */
+export interface FiscalChainReturn {
+  relatedProviderDocId: string;
+  result: FiscalResult;
+}
+
+export interface FiscalPrepaymentChainOps {
+  /** The chain under OUR number, or null when the provider has none. A read. */
+  getChain(ctx: FiscalCallCtx, relationId: string): Promise<FiscalChainState | null>;
+  /**
+   * Return the WHOLE chain — the provider returns no part of one: one return
+   * document per document of the chain, newest first. A chain that is
+   * already returned answers with the returns it has.
+   */
+  returnChain(
+    ctx: FiscalCallCtx,
+    relationId: string,
+    opts: { cashierName: string }
+  ): Promise<FiscalChainReturn[]>;
 }
 
 export interface FiscalRenderOptions {

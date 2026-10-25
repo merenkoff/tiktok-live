@@ -94,6 +94,59 @@ export interface OpenDebtLine {
   weight_source: WeightSource | null;
   /** What `quantity` counted in when the goods were given — the line's own snapshot. */
   unit: string;
+  product_name: string;
+  variant_label: string;
+  /** The ПРРО prepayment chain its «внески» went to (079), and whose it is. */
+  fiscal_chain_id: string | null;
+  fiscal_chain_provider: string | null;
+}
+
+/**
+ * Our number for a line's prepayment chain (079, G3_DEBTS.md §11 «Крок 2») —
+ * the provider takes it as the chain's own. `attempt` counts the chains
+ * opened on the line, because a used number stays taken at the provider even
+ * after its chain is returned. Checkbox wants 10 to 256 characters, so the
+ * line is padded; it is printed on the customer's receipt, so nothing more.
+ */
+export function chainIdFor(storeId: number, lineId: number, attempt: number): string {
+  return `ls-${storeId}-${String(lineId).padStart(6, '0')}-${attempt}`;
+}
+
+/**
+ * The previous documents of a chain must be registered before the next one
+ * goes: until the opening receipt is `done` there is no chain at the provider
+ * to pay into, and a further receipt still in flight would leave what the
+ * provider expects unknown. A sale of the chain with no ledger row yet is in
+ * flight too — between its commit and its document.
+ *
+ * One the retry has given up on (`abandoned`, or `failed` with no next
+ * attempt — what the owner's «Потребують уваги» lists) is not «a minute»
+ * away: the owner settles it with the provider, and voids the «внесок» if the
+ * provider has no such receipt.
+ */
+export async function assertChainSettled(client: DbClient, storeId: number, chainId: string): Promise<void> {
+  const unsettled = await client.query(
+    `SELECT r.status, r.next_attempt_at
+       FROM pos_sales s
+       LEFT JOIN pos_fiscal_receipts r ON r.sale_id = s.id AND r.doc_type = 'sale'
+      WHERE s.store_id = $1 AND s.fiscal_chain_id = $2 AND s.status = 'completed'
+        AND r.status IS DISTINCT FROM 'done'`,
+    [storeId, chainId]
+  );
+  if (unsettled.rows.length === 0) return;
+  const parked = unsettled.rows.some(
+    (row) => row.status === 'abandoned' || (row.status === 'failed' && row.next_attempt_at == null)
+  );
+  if (parked) {
+    throw new DebtConflict(
+      'Попередній внесок за цей товар не вдалося зареєструвати в ПРРО — власник розбирається з ним на сторінці «ПРРО»',
+      'chain_parked'
+    );
+  }
+  throw new DebtConflict(
+    'Попередній внесок за цей товар ще реєструється в ПРРО — спробуйте за хвилину',
+    'chain_pending'
+  );
 }
 
 /** The units of a line nobody has returned or paid for yet. */
@@ -188,8 +241,7 @@ export async function openLines(
   opts: { forUpdate?: boolean } = {}
 ): Promise<OpenDebtLine[]> {
   const rows = await client.query(
-    `SELECT id, variant_id, quantity, returned_quantity, paid_quantity, prepaid_cents,
-            unit_price_cents, line_total_cents, modifiers, note, price_per, weight_source, unit
+    `SELECT ${LINE_SELECT}
        FROM pos_debt_items
       WHERE store_id = $1 AND customer_id = $2
         AND sale_id IS NULL AND written_off_entry_id IS NULL
@@ -198,7 +250,15 @@ export async function openLines(
       ${opts.forUpdate ? 'FOR UPDATE' : ''}`,
     [storeId, customerId]
   );
-  return rows.rows.map((row) => ({
+  return rows.rows.map(toOpenLine);
+}
+
+const LINE_SELECT = `id, variant_id, quantity, returned_quantity, paid_quantity, prepaid_cents,
+            unit_price_cents, line_total_cents, modifiers, note, price_per, weight_source, unit,
+            product_name, variant_label, fiscal_chain_id, fiscal_chain_provider`;
+
+function toOpenLine(row: Record<string, unknown>): OpenDebtLine {
+  return {
     id: Number(row.id),
     variant_id: Number(row.variant_id),
     quantity: Number(row.quantity),
@@ -212,7 +272,33 @@ export async function openLines(
     price_per: Number(row.price_per ?? 1),
     weight_source: (row.weight_source as WeightSource | null) ?? null,
     unit: String(row.unit ?? ''),
-  }));
+    product_name: String(row.product_name ?? ''),
+    variant_label: String(row.variant_label ?? ''),
+    fiscal_chain_id: row.fiscal_chain_id == null ? null : String(row.fiscal_chain_id),
+    fiscal_chain_provider: row.fiscal_chain_provider == null ? null : String(row.fiscal_chain_provider),
+  };
+}
+
+/**
+ * Lines of one customer by id, whatever has happened to them since — a
+ * repayment repeated after a lost answer names lines that its own first
+ * attempt may already have closed. Oldest first, as a repayment takes them.
+ */
+export async function linesById(
+  client: DbClient,
+  storeId: number,
+  customerId: number,
+  ids: number[]
+): Promise<OpenDebtLine[]> {
+  if (ids.length === 0) return [];
+  const rows = await client.query(
+    `SELECT ${LINE_SELECT}
+       FROM pos_debt_items
+      WHERE store_id = $1 AND customer_id = $2 AND id = ANY($3::bigint[])
+      ORDER BY created_at ASC, id ASC`,
+    [storeId, customerId, ids]
+  );
+  return rows.rows.map(toOpenLine);
 }
 
 /**
@@ -358,12 +444,42 @@ export async function lockedDebtLines(
     customerId: number;
     lineIds?: number[];
     part?: { line_id: number; quantity: number } | null;
+    /**
+     * The receipt closes a line paid by «внески» through its ПРРО chain — its
+     * «чек післяплати» (079, G3_DEBTS.md §11 «Крок 2»): that one line alone,
+     * and only once every earlier document of the chain is registered.
+     */
+    chainId?: string | null;
+    /**
+     * On an ordinary receipt: the provider whose chains close on a receipt of
+     * their own. A line that opened one since the till read the statement
+     * (another till took a «внесок») is not closed here behind its chain.
+     */
+    chainProvider?: string | null;
   }
 ): Promise<LockedDebtLine[]> {
   await lockCustomer(client, params.storeId, params.customerId);
   const open = await openLines(client, params.storeId, params.customerId, { forUpdate: true });
   // With a part and no lines named, nothing is taken whole — not «everything».
   const whole = params.part && !params.lineIds?.length ? [] : chooseOldest(open, params.lineIds);
+  if (!params.chainId && params.chainProvider && whole.some((line) => line.fiscal_chain_provider === params.chainProvider)) {
+    throw new DebtConflict(
+      'Виписка змінилася — за цей товар щойно прийняли внесок. Оновіть її.',
+      'stale_statement'
+    );
+  }
+  if (params.chainId) {
+    if (whole.length !== 1 || params.part) {
+      throw new DebtError('Товар, за який вносили через ПРРО, закривається окремим чеком');
+    }
+    if (whole[0].fiscal_chain_id !== params.chainId) {
+      throw new DebtConflict(
+        'Виписка змінилася — частину цих товарів уже оплачено, повернуто або списано. Оновіть її.',
+        'stale_statement'
+      );
+    }
+    await assertChainSettled(client, params.storeId, params.chainId);
+  }
   const lines = whole.map((line) => receiptLine(line, remainingUnits(line), owedCents(line)));
   if (params.part) {
     const line = choosePart(open, whole.length, { line_id: params.part.line_id, quantity: params.part.quantity });
@@ -458,6 +574,22 @@ export async function releaseDebtLinesForSale(
       WHERE s.id = $2 AND s.store_id = $1 AND s.debt_prepay_item_id = d.id AND s.status = 'completed'`,
     [params.storeId, params.saleId]
   );
+  // The only sale of a chain going (079): its document — the opening one —
+  // was refused, so there is no chain at the provider. The line leaves it,
+  // and its next «внесок» opens a new chain under the next number.
+  await client.query(
+    `UPDATE pos_debt_items d
+        SET fiscal_chain_id = NULL, fiscal_chain_provider = NULL
+       FROM pos_sales s
+      WHERE s.id = $2 AND s.store_id = $1 AND s.debt_prepay_item_id = d.id
+        AND s.fiscal_chain_id IS NOT NULL AND d.fiscal_chain_id = s.fiscal_chain_id
+        AND NOT EXISTS (
+          SELECT 1 FROM pos_sales other
+           WHERE other.store_id = $1 AND other.fiscal_chain_id = s.fiscal_chain_id
+             AND other.status = 'completed' AND other.id <> s.id
+        )`,
+    [params.storeId, params.saleId]
+  );
   if (payment.rows.length > 0) {
     await client.query(
       `INSERT INTO pos_debt_entries (store_id, customer_id, kind, amount_cents, staff_id, sale_id, reason)
@@ -532,6 +664,16 @@ async function assertNothingBuiltOn(
   }
 }
 
+/** A «внесок» as written — and, under ПРРО, the chain document it is. */
+export interface RecordedPrepayment {
+  saleId: number;
+  /** Null where nothing is fiscalised. */
+  chain: { relationId: string; op: 'open' | 'pay' } | null;
+  /** The line as it stood before the «внесок»: the goods of its chain. */
+  line: OpenDebtLine;
+  owedBeforeCents: number;
+}
+
 /**
  * A «внесок» (078, G3_DEBTS.md §11): money toward the oldest open line that
  * does not close it. A row in `pos_sales` with no goods lines — takings and
@@ -541,6 +683,14 @@ async function assertNothingBuiltOn(
  *
  * Checked again here, under the customer's lock: the line must still be the
  * oldest one open and still owe more than the «внесок».
+ *
+ * `chain` — the store registers it with ПРРО through the provider's
+ * prepayment chain (079, §11 «Крок 2»). The line's first «внесок» opens the
+ * chain under our next number for it; a further one joins it, once every
+ * earlier document of the chain is registered. Without `chain` nothing is
+ * fiscalised now, so a line still carrying a chain leaves it: a «внесок» the
+ * provider never saw would leave it expecting more than is owed, and the
+ * chain could never be closed — the line closes with an ordinary receipt.
  */
 export async function recordPrepaymentTx(
   client: DbClient,
@@ -553,17 +703,54 @@ export async function recordPrepaymentTx(
     method: 'cash' | 'card';
     clientUuid: string;
     receiptNumber: string;
+    chain?: { provider: string } | null;
   }
-): Promise<number> {
+): Promise<RecordedPrepayment> {
   await lockCustomer(client, params.storeId, params.customerId);
   const open = await openLines(client, params.storeId, params.customerId, { forUpdate: true });
-  choosePart(open, 0, { line_id: params.lineId, amount_cents: params.amountCents });
+  const line = choosePart(open, 0, { line_id: params.lineId, amount_cents: params.amountCents });
+  const owedBeforeCents = owedCents(line);
+
+  let chain: RecordedPrepayment['chain'] = null;
+  if (params.chain) {
+    if (line.fiscal_chain_id) {
+      if (line.fiscal_chain_provider !== params.chain.provider) {
+        throw new DebtConflict(
+          'Внески за цей товар приймали через інший ПРРО — його закривають цілим чеком',
+          'chain_other_provider'
+        );
+      }
+      await assertChainSettled(client, params.storeId, line.fiscal_chain_id);
+      chain = { relationId: line.fiscal_chain_id, op: 'pay' };
+    } else {
+      const counted = await client.query(
+        `UPDATE pos_debt_items SET fiscal_chain_attempts = fiscal_chain_attempts + 1
+          WHERE store_id = $1 AND id = $2
+          RETURNING fiscal_chain_attempts`,
+        [params.storeId, line.id]
+      );
+      const relationId = chainIdFor(params.storeId, line.id, Number(counted.rows[0].fiscal_chain_attempts));
+      await client.query(
+        `UPDATE pos_debt_items SET fiscal_chain_id = $3, fiscal_chain_provider = $4
+          WHERE store_id = $1 AND id = $2`,
+        [params.storeId, line.id, relationId, params.chain.provider]
+      );
+      chain = { relationId, op: 'open' };
+    }
+  } else if (line.fiscal_chain_id) {
+    await client.query(
+      `UPDATE pos_debt_items SET fiscal_chain_id = NULL, fiscal_chain_provider = NULL
+        WHERE store_id = $1 AND id = $2`,
+      [params.storeId, line.id]
+    );
+  }
+
   const sale = await client.query(
     `INSERT INTO pos_sales
        (store_id, staff_id, receipt_number, status, subtotal_cents, total_cents, customer_id,
         cart_discount_cents, client_uuid, fiscal_status, prep_status, served_at,
-        cash_rounding, rounding_cents, debt_prepay_item_id)
-     VALUES ($1, $2, $3, 'completed', $4, $4, $5, 0, $6, 'none', 'served', NOW(), 0, 0, $7)
+        cash_rounding, rounding_cents, debt_prepay_item_id, fiscal_chain_id)
+     VALUES ($1, $2, $3, 'completed', $4, $4, $5, 0, $6, $8, 'served', NOW(), 0, 0, $7, $9)
      RETURNING id`,
     [
       params.storeId,
@@ -573,6 +760,10 @@ export async function recordPrepaymentTx(
       params.customerId,
       params.clientUuid,
       params.lineId,
+      // Stamped inside the transaction, like a sale's: a crash before the
+      // document must not leave a fiscalisable «внесок» looking like 'none'.
+      chain ? 'pending' : 'none',
+      chain?.relationId ?? null,
     ]
   );
   const saleId = Number(sale.rows[0].id);
@@ -591,5 +782,5 @@ export async function recordPrepaymentTx(
     staffId: params.staffId,
     amountCents: params.amountCents,
   });
-  return saleId;
+  return { saleId, chain, line, owedBeforeCents };
 }
