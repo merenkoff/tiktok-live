@@ -1,0 +1,21 @@
+{
+  "id": "5e70bde2-ad41-4478-82e4-129b4ab87849",
+  "cashier_name": "Перевірка передплати",
+  "goods": [
+    {
+      "good": {
+        "code": "weighed-350-18990",
+        "name": "Сир твердий",
+        "price": 18990
+      },
+      "quantity": 350
+    }
+  ],
+  "payments": [
+    {
+      "type": "CASH",
+      "value": 3000
+    }
+  ],
+  "custom_relation_id": "ls-sbx-20261025-173126Z-d"
+}

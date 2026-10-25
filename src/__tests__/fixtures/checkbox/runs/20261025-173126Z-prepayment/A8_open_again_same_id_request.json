@@ -1,0 +1,21 @@
+{
+  "id": "272ee41d-e82e-46ce-8c1f-0fe3bada1112",
+  "cashier_name": "Перевірка передплати",
+  "goods": [
+    {
+      "good": {
+        "code": "pieces-1-59000",
+        "name": "Кепка",
+        "price": 59000
+      },
+      "quantity": 1000
+    }
+  ],
+  "payments": [
+    {
+      "type": "CASH",
+      "value": 30000
+    }
+  ],
+  "custom_relation_id": "ls-sbx-20261025-173126Z-a"
+}

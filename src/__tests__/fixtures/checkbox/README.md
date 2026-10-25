@@ -68,3 +68,17 @@ status/`code` each failure actually returns. Это то, ради чего фа
    false`, поэтому единственный код — `8` («Без ПДВ»). Реальный магазин-
    плательщик НДС увидит больше кодов (20%, 7%, 0% и т.д.) — форма настроек
    обязана подтягивать список, а не захардкоживать один код.
+
+10. **Цепочки предоплаты (`runs/<метка времени>-prepayment/`)** — снимаются
+    скриптом `npm run fiscal:sandbox:prepayment -- --go --across-shifts`
+    (`TechDocs/grocery/G3_DEBTS.md` §11 «Крок 2»), не вручную. Первый прогон —
+    `runs/20261025-173126Z-prepayment/`: пять цепочек (A–E), на каждый шаг
+    `*_request.json`, ответ (`*_receipt.json` / `*_relation.json` /
+    `*_error.json`) и `*_text.txt` — текст чека, который сложил сам Checkbox,
+    плюс `console.log` и `run.json`. Выводы — в G3_DEBTS.md «Відповіді прогону»
+    и в `TechDocs/prro/checkbox/api/prepayment.md` «Що показала пісочниця».
+    Главное, чем песочница расходится с вики: `custom_relation_id`
+    **становится** номером цепочки (поэтому повтор открытия отвечает
+    `prepayment.relation_id_not_unique`, а не `receipt.already_exists`), а чек
+    предоплаты несёт настоящие товары со скидкой `PRE_PAYMENT`
+    «Залишок до сплати», не одну позицию «Передплата за замовленням».

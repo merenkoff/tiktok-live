@@ -1,0 +1,8 @@
+{
+  "status": 400,
+  "code": "prepayment.already_paid",
+  "body": {
+    "code": "prepayment.already_paid",
+    "message": "Чек передплати вже повністю сплачено"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "id": "c10bc976-74d5-4878-b451-c37ee7eaab48",
+  "cashier_name": "Перевірка передплати",
+  "payments": [
+    {
+      "type": "CASHLESS",
+      "value": 3262
+    }
+  ]
+}

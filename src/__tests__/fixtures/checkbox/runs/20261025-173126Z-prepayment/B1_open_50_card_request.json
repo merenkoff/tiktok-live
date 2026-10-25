@@ -1,0 +1,28 @@
+{
+  "id": "b1dc618e-f807-42f3-b7db-8fd6024dd08a",
+  "cashier_name": "Перевірка передплати",
+  "goods": [
+    {
+      "good": {
+        "code": "pieces-2-4590",
+        "name": "Хліб",
+        "price": 4590
+      },
+      "quantity": 2000,
+      "discounts": [
+        {
+          "type": "DISCOUNT",
+          "mode": "VALUE",
+          "value": 918
+        }
+      ]
+    }
+  ],
+  "payments": [
+    {
+      "type": "CASHLESS",
+      "value": 5000
+    }
+  ],
+  "custom_relation_id": "ls-sbx-20261025-173126Z-b"
+}

@@ -1,0 +1,11 @@
+{
+  "id": "7d4ec3e0-9d97-4ed0-9b32-e4106b0f2b31",
+  "cashier_name": "Перевірка передплати",
+  "payments": [
+    {
+      "type": "CASH",
+      "value": 12123
+    }
+  ],
+  "rounding_mode": "ROUND_50"
+}
