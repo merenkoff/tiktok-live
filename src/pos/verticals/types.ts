@@ -17,7 +17,7 @@
 // into four different separators. See TechDocs/POS_VERTICALS.md.
 
 /** Verticals this build knows. Adding one is a code change, never a migration. */
-export type VerticalId = 'clothing' | 'flowers' | 'cafe';
+export type VerticalId = 'clothing' | 'flowers' | 'cafe' | 'grocery';
 
 export type AttributeType = 'text' | 'number' | 'select';
 

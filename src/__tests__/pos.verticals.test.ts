@@ -13,6 +13,7 @@ import {
   DEFAULT_VERTICAL_ID,
   flowersVertical,
   getVertical,
+  groceryVertical,
   hasVertical,
   listVerticals,
   normalizeAttributes,
@@ -33,13 +34,14 @@ afterEach(() => {
 });
 
 describe('vertical registry', () => {
-  it('ships clothing, flowers and café, with clothing as the default', () => {
+  it('ships clothing, flowers, café and groceries, with clothing as the default', () => {
     expect(hasVertical('clothing')).toBe(true);
     expect(hasVertical('flowers')).toBe(true);
     expect(hasVertical('cafe')).toBe(true);
+    expect(hasVertical('grocery')).toBe(true);
     expect(hasVertical('bakery')).toBe(false);
     expect(DEFAULT_VERTICAL_ID).toBe('clothing');
-    expect(listVerticals().map((v) => v.id)).toEqual(['clothing', 'flowers', 'cafe']);
+    expect(listVerticals().map((v) => v.id)).toEqual(['clothing', 'flowers', 'cafe', 'grocery']);
   });
 
   it('falls back to clothing for a column this build does not know', () => {
@@ -60,6 +62,7 @@ describe('vertical registry', () => {
     expect(cafeVertical.kitchen).toBe(true);
     expect(clothingVertical.kitchen).toBe(false);
     expect(flowersVertical.kitchen).toBe(false);
+    expect(groceryVertical.kitchen).toBe(false);
     expect('kitchen' in publicConfigOf(cafeVertical)).toBe(false);
   });
 
@@ -102,6 +105,8 @@ describe('vertical registry', () => {
     expect(publicConfigOf(clothingVertical).autoBarcode).toBe(true);
     expect(publicConfigOf(flowersVertical).autoBarcode).toBe(false);
     expect(publicConfigOf(cafeVertical).autoBarcode).toBe(false);
+    // A grocery's weighed cheese has no maker's code, and its price tag needs one.
+    expect(publicConfigOf(groceryVertical).autoBarcode).toBe(true);
   });
 
   it('sends a copy of the shapes, not the definition\'s own array', () => {
@@ -179,6 +184,54 @@ describe('café vertical', () => {
   it('puts the depth on the wire, so the composition editor can offer a recipe as a component', () => {
     expect(publicConfigOf(cafeVertical).maxCompositionDepth).toBe(3);
     expect(publicConfigOf(clothingVertical).maxCompositionDepth).toBe(1);
+  });
+});
+
+describe('grocery vertical', () => {
+  // TechDocs/grocery/G4_WEIGHED.md §6: packed goods by the piece, weighed goods
+  // in grams or millilitres priced per kilogram or litre.
+  it('sells grams and millilitres by the kilogram and the litre, pieces by default', () => {
+    expect([...groceryVertical.units]).toEqual(['шт', 'г', 'мл']);
+    expect([...groceryVertical.weighedUnits]).toEqual(['г', 'мл']);
+    expect(normalizeUnit(groceryVertical, undefined)).toBe('шт');
+    expect(normalizeVariant(groceryVertical, { unit: 'г', attributes: {} }).price_per).toBe(1000);
+    expect(normalizeVariant(groceryVertical, { unit: 'мл', attributes: {} }).price_per).toBe(1000);
+    expect(normalizeVariant(groceryVertical, { unit: 'шт', attributes: {} }).price_per).toBe(1);
+    expect(() => normalizeUnit(groceryVertical, 'кг')).toThrow(VerticalValidationError);
+  });
+
+  it('labels a good by its variety and what its pack holds, and searches both', () => {
+    expect(groceryVertical.labelOf({ variety: 'Гауда' })).toBe('Гауда');
+    expect(groceryVertical.labelOf({ packaging: '900 г' })).toBe('900 г');
+    expect(groceryVertical.labelOf({ variety: '2,5 %', packaging: '900 г' })).toBe('2,5 % · 900 г');
+    expect(groceryVertical.labelOf({})).toBe('');
+    expect(searchableAttributeKeys(groceryVertical)).toEqual(['variety', 'packaging']);
+    expect(
+      normalizeVariant(groceryVertical, { unit: 'шт', attributes: { packaging: ' 1,5 л ' } }).label
+    ).toBe('1,5 л');
+  });
+
+  it('writes off «Прострочено» first and keeps «Інше» last', () => {
+    const codes = groceryVertical.writeoffReasons.map((r) => r.code);
+    expect(groceryVertical.writeoffReasons[0]).toEqual({ code: 'expired', label: 'Прострочено' });
+    expect(codes.at(-1)).toBe('other');
+    expect(new Set(codes).size).toBe(codes.length);
+    expect(codes).toEqual(expect.arrayContaining(['spoiled', 'damaged', 'shrinkage', 'lost', 'gift']));
+  });
+
+  it('allows a case of single bottles as a composite, never a case of cases', () => {
+    expect(groceryVertical.productKinds).toEqual(['simple', 'composite']);
+    expect(groceryVertical.maxCompositionDepth).toBe(1);
+    expect(publicConfigOf(groceryVertical)).toMatchObject({
+      id: 'grocery',
+      title: 'Продукти',
+      units: ['шт', 'г', 'мл'],
+      defaultUnit: 'шт',
+      weighedUnits: ['г', 'мл'],
+      productKinds: ['simple', 'composite'],
+      dishFacts: false,
+      autoBarcode: true,
+    });
   });
 });
 

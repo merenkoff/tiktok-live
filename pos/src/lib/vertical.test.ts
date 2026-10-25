@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { clothingVertical } from '../../../src/pos/verticals/clothing';
 import { cafeVertical } from '../../../src/pos/verticals/cafe';
 import { flowersVertical } from '../../../src/pos/verticals/flowers';
+import { groceryVertical } from '../../../src/pos/verticals/grocery';
 import { DEFAULT_VERTICAL, VERTICAL_OPTIONS, verticalTitle } from './vertical';
 
 describe('DEFAULT_VERTICAL', () => {
@@ -35,6 +36,7 @@ describe('VERTICAL_OPTIONS', () => {
       { id: clothingVertical.id, title: clothingVertical.title },
       { id: flowersVertical.id, title: flowersVertical.title },
       { id: cafeVertical.id, title: cafeVertical.title },
+      { id: groceryVertical.id, title: groceryVertical.title },
     ]);
   });
 

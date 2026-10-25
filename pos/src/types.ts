@@ -68,7 +68,7 @@ export interface QrPaymentConfig {
  * attribute schema, its units and which module renders the sell screen's
  * catalog (`vertical-<id>`).
  */
-export type VerticalId = 'clothing' | 'flowers' | 'cafe';
+export type VerticalId = 'clothing' | 'flowers' | 'cafe' | 'grocery';
 
 /** Normalised attribute values of one variant: only keys the schema declares. */
 export type AttributeValues = Record<string, string | number>;

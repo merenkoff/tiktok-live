@@ -130,6 +130,8 @@ export const POS_MIGRATIONS = [
   '074_pos_debt_offline.sql',
   // Weighed goods: a price per kg/l (`price_per` 1000) over whole grams, and how the weight was taken (grocery Г4).
   '075_pos_weighed.sql',
+  // The «Demo Grocery» store (grocery vertical): packed goods by EAN-13 and weighed ones by the kilogram; credentials in the header.
+  '076_pos_demo_grocery_store.sql',
 ] as const;
 
 export function readMigration(file: string): string {

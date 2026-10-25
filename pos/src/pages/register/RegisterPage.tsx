@@ -1147,8 +1147,11 @@ export function RegisterPage() {
 
         {/* `minmax(0,1fr)`, not `1fr`: a bare `1fr` never shrinks below its
             content, and a store with nine tags in the category row pushed the
-            receipt off the right edge at 1366–1440 px. The row scrolls instead. */}
-        <div className="flex-1 grid lg:grid-cols-[minmax(0,1fr)_360px] min-h-0">
+            receipt off the right edge at 1366–1440 px. The row scrolls instead.
+            Below `lg` too: the implicit column there is `auto`, which the same
+            row widened to ~900 px on a 390 px phone, so three tiles a row came
+            out ~300 px each and the grid ran off the screen. */}
+        <div className="flex-1 grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_360px] min-h-0">
           <CatalogBoundary
             key={moduleId}
             moduleId={moduleId}

@@ -60,6 +60,7 @@ export default defineConfig({
         'src/modules/debts/data/policy.ts',
         'src/modules/debts/data/queue.ts',
         'src/modules/debts/data/sync.ts',
+        'src/modules/vertical-grocery/lib/tile.ts',
         'src/lib/bouquet.ts',
         'src/lib/pack.ts',
         'src/lib/kitchenPrinters.ts',
