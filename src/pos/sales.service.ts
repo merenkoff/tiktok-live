@@ -318,8 +318,15 @@ export interface CompleteSaleParams {
    * showed (`fixed_total_cents`). `line_ids` absent pays everything still
    * open; present, it must be the oldest lines (decision Д4). Nothing else
    * may ride on such a receipt: no walk-in goods, no fresh discount.
+   *
+   * `part` adds some units of the NEXT line, counted in pieces (078,
+   * G3_DEBTS.md §11) — with it and no `line_ids`, nothing is paid whole.
    */
-  debt_part?: { customer_id: number; line_ids?: number[] } | null;
+  debt_part?: {
+    customer_id: number;
+    line_ids?: number[];
+    part?: { line_id: number; quantity: number } | null;
+  } | null;
   /**
    * The cash-rounding step the till showed the customer (0, 10 or 50 kopecks;
    * НБУ № 25, TechDocs/POS_CASH_ROUNDING.md). The till names the step and
@@ -362,6 +369,8 @@ export interface SaleDraftLine {
   debt_item_id?: number;
   /** What a repayment line comes to, fixed when the goods were given (073). */
   fixed_total_cents?: number;
+  /** On the receipt that closes a «під запис» line: what came earlier as «внески» (078). */
+  debt_prepaid_cents?: number;
   /**
    * What `unit_price_cents` is for (migration 075): 1, or 1000 for a weighed
    * line — grams at a price per kilogram. Absent means 1.
@@ -607,6 +616,7 @@ export async function completeSaleTx(
       bill_item_id?: number;
       debt_item_id?: number;
       fixed_total_cents?: number;
+      debt_prepaid_cents?: number;
       price_per?: number;
       weight_source?: WeightSource | null;
       /** The unit the line was locked in — a «під запис» line's own snapshot. */
@@ -646,6 +656,7 @@ export async function completeSaleTx(
         storeId: params.storeId,
         customerId: params.debt_part.customer_id,
         lineIds: params.debt_part.line_ids,
+        part: params.debt_part.part ?? null,
       }))
     );
   }
@@ -774,7 +785,11 @@ export async function completeSaleTx(
         : {}),
       ...(line.bill_item_id ? { bill_item_id: line.bill_item_id } : {}),
       ...(line.debt_item_id
-        ? { debt_item_id: line.debt_item_id, fixed_total_cents: line.fixed_total_cents }
+        ? {
+            debt_item_id: line.debt_item_id,
+            fixed_total_cents: line.fixed_total_cents,
+            debt_prepaid_cents: line.debt_prepaid_cents ?? 0,
+          }
         : {}),
       price_per: lockedPricePer,
       ...(line.weight_source ? { weight_source: line.weight_source } : {}),
@@ -938,8 +953,8 @@ export async function completeSaleTx(
          (sale_id, store_id, variant_id, product_name, variant_label, unit,
           quantity, unit_price_cents, line_total_cents,
           compare_at_unit_cents, line_discount_cents, note, bill_item_id, debt_item_id,
-          price_per, weight_source)
-       VALUES ($1, $2, $3, $4, $5, $11, $6, $7, $8, $9, $10, $12, $13, $14, $15, $16)
+          price_per, weight_source, debt_prepaid_cents)
+       VALUES ($1, $2, $3, $4, $5, $11, $6, $7, $8, $9, $10, $12, $13, $14, $15, $16, $17)
        RETURNING id`,
       [
         saleId,
@@ -960,6 +975,7 @@ export async function completeSaleTx(
         // (075): a receipt from last year must not change meaning.
         line.price_per ?? 1,
         line.weight_source ?? null,
+        line.debt_prepaid_cents ?? 0,
       ]
     );
     const saleItemId = Number(itemResult.rows[0].id);
@@ -1004,6 +1020,7 @@ export async function completeSaleTx(
         debtItemId: line.debt_item_id,
         saleId,
         saleItemId,
+        quantity: line.quantity,
       });
       continue;
     }
@@ -1044,6 +1061,28 @@ export async function completeSaleTx(
   }
 
   return { saleId, receiptNumber, totalCents: total };
+}
+
+/**
+ * A «внесок» toward a «під запис» line (078, G3_DEBTS.md §11), inside a
+ * transaction the caller owns — after the receipt the same request rang, if
+ * it rang one. Numbered from the store's receipt counter like any receipt,
+ * so the till's «Чеки» list it in order.
+ */
+export async function recordDebtPrepaymentTx(
+  client: DbClient,
+  params: {
+    storeId: number;
+    staffId: number;
+    customerId: number;
+    lineId: number;
+    amountCents: number;
+    method: 'cash' | 'card';
+    clientUuid: string;
+  }
+): Promise<number> {
+  const receiptNumber = await nextReceiptNumber(client, params.storeId);
+  return debtLines.recordPrepaymentTx(client, { ...params, receiptNumber });
 }
 
 /**
@@ -1233,6 +1272,15 @@ export async function getSale(storeId: number, saleId: number) {
   );
   const fiscal = fiscalRow.rows[0] ?? null;
 
+  // A «внесок» (078): which «під запис» line the money went to.
+  const debtPrepayment = sale.debt_prepay_item_id
+    ? await pool.query(
+        `SELECT id, product_name, variant_label FROM pos_debt_items WHERE id = $1 AND store_id = $2`,
+        [sale.debt_prepay_item_id, storeId]
+      )
+    : null;
+  const prepaidLine = debtPrepayment?.rows[0];
+
   return {
     id: Number(sale.id),
     store_id: Number(sale.store_id),
@@ -1273,8 +1321,17 @@ export async function getSale(storeId: number, saleId: number) {
         }
       : null,
     // A receipt that pays off goods taken «під запис» (migration 073): the
-    // goods left earlier, so its lines moved no stock of their own.
-    repays_debt: items.rows.some((row) => row.debt_item_id != null),
+    // goods left earlier, so its lines moved no stock of their own. A
+    // «внесок» (078) is one too, with no lines at all — money toward one.
+    repays_debt: items.rows.some((row) => row.debt_item_id != null) || sale.debt_prepay_item_id != null,
+    debt_prepayment: prepaidLine
+      ? {
+          line_id: Number(prepaidLine.id),
+          product_name: String(prepaidLine.product_name ?? ''),
+          variant_label: String(prepaidLine.variant_label ?? ''),
+          amount_cents: Number(sale.total_cents),
+        }
+      : null,
     items: items.rows.map((row) => ({
       id: Number(row.id),
       variant_id: Number(row.variant_id),
@@ -1295,6 +1352,9 @@ export async function getSale(storeId: number, saleId: number) {
       components: componentsByItem.get(Number(row.id)) ?? [],
       modifiers: modifiersByItem.get(Number(row.id)) ?? [],
       note: typeof row.note === 'string' ? row.note : '',
+      // Paid toward this «під запис» line earlier as «внески» (078): part of
+      // the goods' price that is not in this receipt's sum.
+      debt_prepaid_cents: Number(row.debt_prepaid_cents ?? 0),
     })),
     payments: payments.rows.map((row) => ({
       id: Number(row.id),
@@ -1630,8 +1690,13 @@ async function releasePartLines(
        FROM pos_sale_items WHERE sale_id = $1`,
     [params.saleId]
   );
+  // A «внесок» (078) has no lines of its own — only the sale row says what it paid.
+  const prepay = await client.query(
+    `SELECT 1 FROM pos_sales WHERE id = $1 AND debt_prepay_item_id IS NOT NULL`,
+    [params.saleId]
+  );
   const bill = kind.rows[0]?.bill === true;
-  const debt = kind.rows[0]?.debt === true;
+  const debt = kind.rows[0]?.debt === true || prepay.rows.length > 0;
   if (bill) {
     // Plates go back to a bill only while it is open. A closed bill has freed
     // its table — there may be a new one on it — so plates handed back to it
@@ -1854,6 +1919,11 @@ export async function refundSaleTx(
   const sale = saleResult.rows[0];
   if (sale.status === 'voided') throw new Error('Cannot refund a voided sale');
   if (sale.status === 'refunded') throw new Error('Sale already fully refunded');
+  // Money toward goods taken «під запис» (078), not a sale of goods: it is
+  // undone by voiding it, which gives it back to the customer's debt.
+  if (sale.debt_prepay_item_id != null) {
+    throw new Error('Внесок за борг не повертають — його скасовують, і сума знову стає боргом');
+  }
 
   const paidResult = await client.query(
     `SELECT DISTINCT method FROM pos_payments WHERE sale_id = $1`,
@@ -1884,6 +1954,14 @@ export async function refundSaleTx(
     const item = itemMap.get(input.sale_item_id);
     if (!item) throw new Error(`Sale item ${input.sale_item_id} not found`);
     if (input.quantity <= 0) throw new Error('Invalid refund quantity');
+    // Its price came in several payments — «внески» and this receipt (078,
+    // G3_DEBTS.md §11) — and a refund of this receipt alone would hand back
+    // only part of what the customer paid for it.
+    if (Number(item.debt_prepaid_cents ?? 0) > 0) {
+      throw new Error(
+        'Цей товар оплачено частинами — повернути його можна, лише скасувавши чек погашення і внески'
+      );
+    }
 
     const already = Number(item.refunded_quantity);
     const available = Number(item.quantity) - already;

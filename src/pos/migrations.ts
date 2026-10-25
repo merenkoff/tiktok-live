@@ -134,6 +134,8 @@ export const POS_MIGRATIONS = [
   '076_pos_demo_grocery_store.sql',
   // Five customers with a credit limit in demo-grocery, off the landing page's debt notebook — once, like 069.
   '077_pos_demo_grocery_credit.sql',
+  // Paying a «під запис» debt in parts: units of a line, and «внески» toward the oldest one (Д4 revised).
+  '078_pos_debt_partial.sql',
 ] as const;
 
 export function readMigration(file: string): string {

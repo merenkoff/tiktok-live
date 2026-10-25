@@ -228,11 +228,13 @@ export function registerDebtsRoutes(fastify: FastifyInstance): void {
         staffId: auth.staffId,
         customerId: id,
         line_ids: body.line_ids,
+        part: body.part,
         payments: (Array.isArray(body.payments) ? body.payments : []) as never[],
         client_uuid: body.client_uuid,
         cash_rounding: body.cash_rounding,
         fiscal: {
           gateFor: () => fiscalService.preflight(auth.storeId, auth.staffId, readDeviceId(request)),
+          isOn: () => fiscalService.fiscalisesStore(auth.storeId),
         },
       });
     } catch (error) {

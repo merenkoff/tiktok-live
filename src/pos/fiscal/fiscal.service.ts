@@ -176,6 +176,11 @@ const OFF: FiscalGate = {
  * back — because an online receipt inside the session would break the
  * `go-offline` date ordering; only the replay ends a session.
  */
+/** Whether the store fiscalises at all — no shift opened, nothing asked of the provider. */
+export async function fiscalisesStore(storeId: number): Promise<boolean> {
+  return (await resolveContext(storeId)) != null;
+}
+
 export async function preflight(
   storeId: number,
   staffId: number,
