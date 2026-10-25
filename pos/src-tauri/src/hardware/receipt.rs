@@ -22,6 +22,17 @@ pub struct ReceiptItem {
     /// Absent in a store that does not fiscalise.
     #[serde(default)]
     pub tax_symbol: Option<String>,
+    /// The quantity row ready to print, when «quantity x price» would lie: a
+    /// weighed line is grams at a price per kilogram, so it prints «0.350 кг x
+    /// 189.90», not «350 x 189.90» (рядок 6: weighed goods in kilograms to
+    /// the gram). The host formats it (`lib/receipt.ts`) because only the host
+    /// knows the line's `price_per` (TechDocs/grocery/G4_WEIGHED.md). Absent
+    /// on every other line and from a host built before weighed goods.
+    #[serde(default)]
+    pub quantity_text: Option<String>,
+    /// A line under the row — «вагу введено вручну» for a hand-typed weight.
+    #[serde(default)]
+    pub note: Option<String>,
 }
 
 #[derive(Deserialize, Default)]
@@ -189,6 +200,15 @@ fn payment_label(method: &str) -> String {
     }
 }
 
+/// The row under an item's name, without its amount: «2 x 45.90», or the
+/// host's own text for a weighed line — «0.350 кг x 189.90».
+fn quantity_row(item: &ReceiptItem) -> String {
+    match item.quantity_text.as_deref().filter(|t| !t.trim().is_empty()) {
+        Some(text) => text.to_string(),
+        None => format!("{} x {}", item.quantity, money(item.unit_price_cents)),
+    }
+}
+
 /// Рядок 21: «ПДВ А 20%» — a whole-number rate prints without decimals.
 fn vat_label(line: &ReceiptVatLine) -> String {
     if line.rate.fract() == 0.0 {
@@ -292,12 +312,13 @@ fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> 
             Some(symbol) => format!("{} {symbol}", money(item.line_total_cents)),
             None => money(item.line_total_cents),
         };
-        let qty_line = two_col(
-            width,
-            &format!("  {} x {}", item.quantity, money(item.unit_price_cents)),
-            &amount,
-        );
+        let qty_line = two_col(width, &format!("  {}", quantity_row(item)), &amount);
         printer.writeln(&qty_line).map_err(|e| e.to_string())?;
+        if let Some(note) = item.note.as_deref().filter(|n| !n.trim().is_empty()) {
+            printer
+                .writeln(&format!("  {note}"))
+                .map_err(|e| e.to_string())?;
+        }
     }
 
     printer.writeln(&divider(width)).map_err(|e| e.to_string())?;
@@ -544,7 +565,7 @@ mod tests {
                 quantity: 1,
                 unit_price_cents: 10000,
                 line_total_cents: 10000,
-                tax_symbol: None,
+                ..Default::default()
             }],
             subtotal_cents: 10000,
             discount_cents: None,
@@ -790,6 +811,105 @@ mod tests {
         let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
         assert!(!contains(&bytes, &win1251("ЗАОКРУГЛЕННЯ")));
         assert!(contains(&bytes, b"100.00"));
+    }
+
+    /// 0,350 кг of cheese at 189,90 ₴/кг, as `lib/receipt.ts` sends it: the
+    /// quantity stays grams, the row and the mark come ready to print.
+    fn cheese() -> ReceiptItem {
+        ReceiptItem {
+            name: "Сир твердий".into(),
+            variant_label: "Гауда".into(),
+            quantity: 350,
+            unit_price_cents: 18990,
+            line_total_cents: 6647,
+            quantity_text: Some("0.350 кг x 189.90".into()),
+            note: Some("вагу введено вручну".into()),
+            ..Default::default()
+        }
+    }
+
+    fn position(haystack: &[u8], text: &str) -> usize {
+        let needle = win1251(text);
+        haystack
+            .windows(needle.len())
+            .position(|w| w == needle.as_slice())
+            .unwrap_or_else(|| panic!("«{text}» is not on the ticket"))
+    }
+
+    #[test]
+    fn a_weighed_line_prints_kilograms_and_the_hand_typed_mark_under_it() {
+        let mut receipt = base();
+        receipt.items = vec![cheese()];
+        receipt.subtotal_cents = 6647;
+        receipt.total_cents = 6647;
+        let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
+        // One row on a 58 mm roll: the weight at its price, the sum on the right.
+        let row = two_col(CHARS_58MM, "  0.350 кг x 189.90", "66.47");
+        assert!(contains(&bytes, &win1251(&row)));
+        // The mark sits under its own line, before the totals.
+        let at_row = position(&bytes, &row);
+        let at_note = position(&bytes, "  вагу введено вручну");
+        let at_sum = position(&bytes, "СУМА");
+        assert!(at_row < at_note && at_note < at_sum);
+        // Never the grams read as pieces.
+        assert!(!contains(&bytes, b"350 x 189.90"));
+    }
+
+    #[test]
+    fn a_weighed_line_keeps_its_rate_letter_and_comes_back_on_a_refund() {
+        let mut receipt = base();
+        receipt.kind = ReceiptKind::Refund;
+        receipt.refund_of_receipt = Some("R-00001".into());
+        receipt.items = vec![ReceiptItem { tax_symbol: Some("А".into()), ..cheese() }];
+        receipt.subtotal_cents = 6647;
+        receipt.total_cents = 6647;
+        let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
+        assert!(contains(&bytes, &win1251("ВИДАТКОВИЙ ЧЕК")));
+        let row = two_col(CHARS_58MM, "  0.350 кг x 189.90", "66.47 А");
+        assert!(contains(&bytes, &win1251(&row)));
+        assert!(contains(&bytes, &win1251("вагу введено вручну")));
+    }
+
+    #[test]
+    fn the_host_payload_for_a_weighed_line_parses() {
+        // Exactly what `buildReceiptPayload` puts on the wire for one weighing.
+        let json = serde_json::json!({
+            "name": "Сир твердий",
+            "variant_label": "Гауда",
+            "quantity": 350,
+            "unit_price_cents": 18990,
+            "line_total_cents": 6647,
+            "tax_symbol": null,
+            "quantity_text": "0.350 кг x 189.90",
+            "note": "вагу введено вручну"
+        });
+        let item: ReceiptItem = serde_json::from_value(json).unwrap();
+        assert_eq!(quantity_row(&item), "0.350 кг x 189.90");
+        assert_eq!(item.note.as_deref(), Some("вагу введено вручну"));
+    }
+
+    #[test]
+    fn a_line_without_the_weighed_fields_prints_as_it_always_did() {
+        // A piece, or any line from a host built before weighed goods.
+        let json = serde_json::json!({
+            "name": "Футболка",
+            "variant_label": "M",
+            "quantity": 2,
+            "unit_price_cents": 10000,
+            "line_total_cents": 20000
+        });
+        let item: ReceiptItem = serde_json::from_value(json).unwrap();
+        assert_eq!(quantity_row(&item), "2 x 100.00");
+        assert_eq!(item.note, None);
+        // A blank text is no text: the row falls back rather than print nothing.
+        let blank = ReceiptItem { quantity_text: Some("  ".into()), ..item };
+        assert_eq!(quantity_row(&blank), "2 x 100.00");
+
+        let mut receipt = base();
+        receipt.items[0].note = Some(" ".into());
+        let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
+        assert!(contains(&bytes, b"1 x 100.00"));
+        assert!(!contains(&bytes, &win1251("вагу введено вручну")));
     }
 
     #[test]
