@@ -1,5 +1,6 @@
 import type { VerticalContent } from './types';
-import { COMPETITOR_FACTS, PRODUCT, PRICING } from '../../lib/productFacts';
+import { COMPETITOR_FACTS, PRODUCT, PRICING, TABLES_ADDON } from '../../lib/productFacts';
+import { latestDay } from '../../lib/formatDate';
 import {
   Bell,
   ChefHat,
@@ -23,7 +24,7 @@ import restaurantGuestOrder from '../../assets/screenshots/restaurant-guest-orde
 import restaurantWaiterCall from '../../assets/screenshots/restaurant-waiter-call.png';
 import restaurantGuestAlerts from '../../assets/screenshots/restaurant-guest-alerts.png';
 
-const tables = PRICING.pos.addons[0];
+const tables = TABLES_ADDON;
 const restoapp = COMPETITOR_FACTS.restoapp;
 const posterqr = COMPETITOR_FACTS.posterqr;
 
@@ -287,5 +288,5 @@ export const restoran: VerticalContent = {
       blurb: 'QR-меню із замовленням до столу, тарифами й інтеграціями проти каси, де меню, рахунок гостя, виклик офіціанта й замовлення з телефону (через офіціанта) вже всередині.',
     },
   ],
-  updatedAt: '2026-10-18',
+  updatedAt: latestDay('2026-10-18', PRICING.pos.changedAt),
 };

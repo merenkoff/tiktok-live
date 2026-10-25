@@ -1,12 +1,12 @@
 import type { Article } from './types';
-import { COMPETITOR_FACTS, PRICING, PRODUCT, isAvailable } from '../../lib/productFacts';
-import { formatDateUk } from '../../lib/formatDate';
+import { COMPETITOR_FACTS, PRICING, PRODUCT, TABLES_ADDON, isAvailable } from '../../lib/productFacts';
+import { formatDateUk, latestDay } from '../../lib/formatDate';
 
 const POS = PRODUCT.pos.name;
 const P = COMPETITOR_FACTS.posterqr;
 const CB = COMPETITOR_FACTS.checkbox;
 const PLAN = PRICING.pos.plans[0];
-const TABLES = PRICING.pos.addons[0];
+const TABLES = TABLES_ADDON;
 
 const CHECKED = formatDateUk(P.checkedAt);
 /** «1 700»: grouped by hand, because a locale's separator differs between Node and a browser and would break hydration. */
@@ -36,7 +36,8 @@ export const posterQrChyLiveshopDlyaRestoranu: Article = {
     title: 'Poster QR чи The Live Shop POS для ресторану й кафе: QR-меню, каса й повна ціна — порівняння за фактами',
     description: `Poster QR — доповнення до каси Poster за ${P.priceUah} грн/міс (меню, оплата, чайові й відгуки за QR, комісія ${pct(P.billCommissionPercent)} % з рахунку), яке підключається з тарифу ${QR_FROM.id}; ${POS} — каса ресторану й кафе, у ціну якої QR-меню, рахунок столу, виклик офіціанта й замовлення гостя (через офіціанта або, за вибором власника, одразу на кухню) вже входять. Повна ціна для ресторану на одну касу, що є в кожного й де сильніший кожен. Джерела й дата перевірки — ${CHECKED}.`,
     publishedAt: P.publishedAt,
-    updatedAt: P.checkedAt,
+    // The competitor's facts were read on `checkedAt`; ours may have changed since.
+    updatedAt: latestDay(P.checkedAt, PRICING.pos.changedAt),
     ogImage: '/og/pos.png',
     readingMinutes: 8,
     faq: [

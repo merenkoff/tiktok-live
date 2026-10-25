@@ -1,11 +1,11 @@
 import type { Article } from './types';
-import { COMPETITOR_FACTS, PRICING, PRODUCT, isAvailable } from '../../lib/productFacts';
-import { formatDateUk } from '../../lib/formatDate';
+import { COMPETITOR_FACTS, PRICING, PRODUCT, TABLES_ADDON, isAvailable } from '../../lib/productFacts';
+import { formatDateUk, latestDay } from '../../lib/formatDate';
 
 const POS = PRODUCT.pos.name;
 const R = COMPETITOR_FACTS.restoapp;
 const PLAN = PRICING.pos.plans[0];
-const TABLES = PRICING.pos.addons[0];
+const TABLES = TABLES_ADDON;
 
 const CHECKED = formatDateUk(R.checkedAt);
 const POS_LIST = R.posIntegrations.join(', ');
@@ -20,7 +20,8 @@ export const restoappChyLiveshopDlyaRestoranu: Article = {
     title: 'RestoApp чи The Live Shop POS для ресторану й кафе: QR-меню, ціна, каса — порівняння за фактами',
     description: `RestoApp від ${R.vendor} — QR-меню, оплата й чайові в телефоні, виклик офіціанта, доставка й відгуки за ${R.priceUah} грн/міс за заклад, у парі з ${POS_LIST}; ${POS} — сама каса ресторану й кафе, у якій QR-меню, рахунок столу, виклик офіціанта й замовлення гостя (через офіціанта або, за вибором власника, одразу на кухню) вже є. Що є в кожного, де сильніший кожен і як прибрати цінники поверх паперового меню. Джерела й дата перевірки — ${CHECKED}.`,
     publishedAt: R.publishedAt,
-    updatedAt: R.checkedAt,
+    // The competitor's facts were read on `checkedAt`; ours may have changed since.
+    updatedAt: latestDay(R.checkedAt, PRICING.pos.changedAt),
     ogImage: '/og/pos.png',
     readingMinutes: 7,
     faq: [

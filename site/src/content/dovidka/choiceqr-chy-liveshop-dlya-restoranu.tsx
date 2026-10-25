@@ -1,10 +1,10 @@
 import type { Article } from './types';
-import { COMPETITOR_FACTS, PRICING, PRODUCT, isAvailable } from '../../lib/productFacts';
-import { formatDateUk } from '../../lib/formatDate';
+import { COMPETITOR_FACTS, PRICING, PRODUCT, TABLES_ADDON, isAvailable } from '../../lib/productFacts';
+import { formatDateUk, latestDay } from '../../lib/formatDate';
 
 const POS = PRODUCT.pos.name;
 const C = COMPETITOR_FACTS.choiceqr;
-const TABLES = PRICING.pos.addons[0];
+const TABLES = TABLES_ADDON;
 
 const CHECKED = formatDateUk(C.checkedAt);
 const POS_LIST = C.posIntegrations.join(', ');
@@ -23,7 +23,8 @@ export const choiceqrChyLiveshopDlyaRestoranu: Article = {
     title: 'ChoiceQR чи The Live Shop POS для ресторану: порівняння за фактами',
     description: `ChoiceQR — QR-меню, замовлення до столу (з тарифу ${TABLE_PLAN.id}, ${TABLE_PLAN.monthlyUah} грн/міс) й інтеграції з касами (${POS_LIST}); The Live Shop POS — сама каса ресторану з меню, рахунком столу, викликом офіціанта й замовленням гостя (через офіціанта або, за вибором власника, одразу на кухню). Що є в кожного, де сильніший кожен із двох і чого ми не знайшли на сторінках ChoiceQR. Джерела й дата перевірки — ${CHECKED}.`,
     publishedAt: C.publishedAt,
-    updatedAt: C.checkedAt,
+    // The competitor's facts were read on `checkedAt`; ours may have changed since.
+    updatedAt: latestDay(C.checkedAt, PRICING.pos.changedAt),
     ogImage: '/og/pos.png',
     readingMinutes: 6,
     faq: [

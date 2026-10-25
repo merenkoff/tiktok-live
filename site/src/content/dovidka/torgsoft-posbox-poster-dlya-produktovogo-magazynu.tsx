@@ -10,7 +10,7 @@ import {
   DEBTS_ADDON,
   addonPriceText,
 } from '../../lib/productFacts';
-import { formatDateUk } from '../../lib/formatDate';
+import { formatDateUk, latestDay } from '../../lib/formatDate';
 
 const POS = PRODUCT.pos.name;
 const T = COMPETITOR_FACTS.torgsoft;
@@ -78,7 +78,8 @@ export const torgsoftPosboxPosterDlyaProduktovogoMagazynu: Article = {
     title: 'Програма для продуктового магазину: Торгсофт, Posbox чи Poster — продаж у борг, ваги й ціна',
     description: `Що вміють Торгсофт, Posbox і Poster для продуктового магазину: продаж у борг і облік боргів покупців, ваги на касі й ваги з друком етикеток, робота без інтернету, ПРРО — і скільки коштує каса на одну точку за рік і за три роки. За сторінками виробників, прочитаними ${CHECKED}.`,
     publishedAt: T.publishedAt,
-    updatedAt: T.checkedAt,
+    // The competitors' facts were read on `checkedAt`; ours may have changed since.
+    updatedAt: latestDay(T.checkedAt, PRICING.pos.changedAt),
     ogImage: '/og/pos.png',
     readingMinutes: 8,
     cta: {
