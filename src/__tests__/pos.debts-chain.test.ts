@@ -363,6 +363,18 @@ describe.skipIf(!hasDb)('POS «під запис» — a «внесок» under 
     );
     expect(chainDocs()).toEqual([]);
     expect(await owed(id)).toBe(2500);
+
+    // The same key with other lines is not that request: refused, nothing written.
+    const other = await pay(id, { line_ids: [milkLine.id], payments: cash(2500) }, uuid);
+    expect(other.statusCode).toBe(409);
+    expect(other.json()).toMatchObject({ code: 'stale_statement', sale_ids: [close.id] });
+    expect(chainDocs()).toEqual([]);
+    expect(await owed(id)).toBe(2500);
+
+    // The journal says where ПРРО stands with each payment: the «внесок» is in its chain.
+    const entries = (await statement(id)) as unknown as { entries: Array<{ prepayment: boolean; fiscal_status: string | null; kind: string }> };
+    expect(entries.entries.find((e) => e.prepayment && e.kind === 'payment')?.fiscal_status).toBe('done');
+    expect(entries.entries.find((e) => e.kind === 'issue')?.fiscal_status).toBeNull();
   });
 
   it('stops at the first document the provider refuses, says what went through and what to hand back', async () => {
@@ -496,6 +508,12 @@ describe.skipIf(!hasDb)('POS «під запис» — a «внесок» under 
     const close = await pay(id, { line_ids: [line.id], payments: cash(29000) });
     expect(close.statusCode).toBe(409);
     expect(close.json().code).toBe('chain_pending');
+    // Nor is it voided while the retry still means to send it — not even by the owner.
+    for (const token of [store.sellerToken, store.ownerToken]) {
+      const voided = await post(`/sales/${saleId}/void`, {}, token);
+      expect(voided.statusCode).toBe(409);
+      expect(voided.json()).toMatchObject({ error: 'chain_pending', message: expect.stringContaining('ще реєструється') });
+    }
 
     await pool.query(
       `UPDATE pos_fiscal_receipts SET next_attempt_at = NOW() - interval '1 minute' WHERE store_id = $1`,
@@ -528,6 +546,10 @@ describe.skipIf(!hasDb)('POS «під запис» — a «внесок» under 
     expect(next.json().code).toBe('chain_parked');
     expect(next.json().error).toContain('власник розбирається');
 
+    // Only the owner, who can look in the provider's cabinet, voids it.
+    const byCashier = await post(`/sales/${saleId}/void`, {}, store.sellerToken);
+    expect(byCashier.statusCode).toBe(403);
+    expect(byCashier.json()).toMatchObject({ error: 'chain_parked', message: expect.stringContaining('лише власник') });
     // The provider has no such receipt (the fake never registered it): void it.
     expect(fake.prepaymentChain!.chains.size).toBe(0);
     const voided = await post(`/sales/${saleId}/void`, {}, store.ownerToken);

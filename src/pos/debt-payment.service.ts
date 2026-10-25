@@ -636,6 +636,15 @@ async function payInParts(
         sale_ids: [...written.values()].map((done) => done.id),
       });
     }
+    // The same key with other lines is not the same request: going on from
+    // it would report one document as another and pay what was never asked.
+    if (!(await sameDocument(storeId, segment, sale))) {
+      throw new DebtConflict(
+        'Цю оплату вже проведено з іншими товарами — оновіть виписку й прийміть оплату спочатку',
+        'stale_statement',
+        { sale_ids: [...written.values(), sale].map((done) => done.id) }
+      );
+    }
     written.set(segment, sale);
   }
   const todo = segments.filter((segment) => !written.has(segment));
@@ -826,6 +835,24 @@ async function payInParts(
   }
 
   return finishParts(input, parts, warning);
+}
+
+/**
+ * Whether a document an earlier attempt of this request wrote is the one this
+ * segment plans: a «внесок» toward the same line, or a receipt for exactly the
+ * same lines and units.
+ */
+async function sameDocument(storeId: number, segment: Segment, sale: SaleDetail): Promise<boolean> {
+  if (segment.kind === 'prepayment') return sale.debt_prepayment?.line_id === segment.prepay?.line_id;
+  if (sale.debt_prepayment) return false;
+  const rows = await pool.query(
+    `SELECT debt_item_id FROM pos_sale_items
+      WHERE store_id = $1 AND sale_id = $2 AND debt_item_id IS NOT NULL`,
+    [storeId, sale.id]
+  );
+  const paid = new Set(rows.rows.map((row) => Number(row.debt_item_id)));
+  const planned = new Set([...segment.lineIds, ...(segment.units ? [segment.units.line_id] : [])]);
+  return paid.size === planned.size && [...planned].every((id) => paid.has(id));
 }
 
 /** A «внесок» of the request, in its own transaction — under ПРРО, a document of the line's chain. */

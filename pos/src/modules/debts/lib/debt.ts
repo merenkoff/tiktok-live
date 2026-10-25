@@ -12,7 +12,18 @@
 
 import { cashRoundingDelta, formatQuantity, formatUah, isWeighed, refundLineAmount } from '@pos/platform';
 import type { CartLine, CashRoundingStep } from '@pos/platform';
-import type { DebtCredit, DebtEntry, DebtEntryKind, DebtLine, Debtor, IssueItem } from './types';
+import type {
+  DebtCredit,
+  DebtEntry,
+  DebtEntryKind,
+  DebtFiscal,
+  DebtLine,
+  DebtSale,
+  Debtor,
+  IssueItem,
+  PayDebtPart,
+  PayDebtResult,
+} from './types';
 
 /**
  * The cart as `POST /debts/issue` takes it — the checkout's own wire shape
@@ -190,6 +201,78 @@ export function takesUnits(line: Pick<DebtLine, 'price_per' | 'prepaid_cents' | 
   return !isWeighed(line.price_per) && (line.prepaid_cents ?? 0) === 0 && line.remaining_quantity > 1;
 }
 
+/**
+ * Whether this store takes a «внесок» (G3_DEBTS.md §11): without ПРРО always,
+ * with it only where the provider keeps prepayment chains (step 2). A backend
+ * older than 079 says nothing about chains — the login's ПРРО switch decides
+ * then, as in step 1.
+ */
+export function prepayAllowed(fiscal: DebtFiscal | undefined, fiscalOn: boolean): boolean {
+  if (fiscal) return !fiscal.on || fiscal.chains;
+  return !fiscalOn;
+}
+
+/**
+ * Which lines close on a receipt of their own: those whose «внески» went to a
+ * prepayment chain of the store's provider — the chain's after-payment is
+ * never mixed with other goods (§11 «Крок 2»).
+ */
+export function chainedLines(fiscal: DebtFiscal | undefined): (line: Pick<DebtLine, 'chain'>) => boolean {
+  if (!fiscal?.on || !fiscal.chains) return () => false;
+  return (line) => line.chain != null && line.chain.provider === fiscal.provider;
+}
+
+/** One receipt of a repayment, as the server lays them out (§11 «Крок 2»). */
+export interface PayDocument {
+  /** `chain_close` — the receipt that closes a line paid by «внески» through its chain. */
+  kind: 'receipt' | 'chain_close';
+  lines: DebtLine[];
+  units: { line: DebtLine; quantity: number; cents: number } | null;
+  /** What its goods come to, before cash rounding. */
+  goodsCents: number;
+}
+
+/**
+ * The receipts whole lines and units become — the server's own layout: a line
+ * closing through its chain alone, the lines between such lines together, the
+ * units on the last ordinary receipt. One receipt wherever nothing is chained.
+ */
+export function payDocuments(
+  whole: readonly DebtLine[],
+  units: PayDocument['units'],
+  closesAlone: (line: DebtLine) => boolean = () => false
+): PayDocument[] {
+  const documents: PayDocument[] = [];
+  let current: PayDocument | null = null;
+  for (const line of whole) {
+    if (closesAlone(line)) {
+      current = null;
+      documents.push({ kind: 'chain_close', lines: [line], units: null, goodsCents: line.owed_cents });
+      continue;
+    }
+    if (!current) {
+      current = { kind: 'receipt', lines: [], units: null, goodsCents: 0 };
+      documents.push(current);
+    }
+    current.lines.push(line);
+    current.goodsCents += line.owed_cents;
+  }
+  if (units) {
+    if (!current) {
+      current = { kind: 'receipt', lines: [], units: null, goodsCents: 0 };
+      documents.push(current);
+    }
+    current.units = units;
+    current.goodsCents += units.cents;
+  }
+  return documents;
+}
+
+/** The cash rounding of a repayment's receipts: each rounded on its own (НБУ № 25), as the server shares the money out. */
+export function documentsRounding(documents: readonly PayDocument[], step: CashRoundingStep): number {
+  return documents.reduce((sum, document) => sum + cashRoundingDelta(document.goodsCents, step), 0);
+}
+
 /** What a sum the customer hands over does to the debt (G3_DEBTS.md §11). */
 export interface PayPlan {
   /** The oldest lines it closes whole. */
@@ -207,6 +290,8 @@ export interface PayPlan {
   changeCents: number;
   /** Some of that change would have been a «внесок», but the store fiscalises (step 1 has no chain). */
   prepayRefused: boolean;
+  /** The receipts it is — more than one when a line closes through its ПРРО chain. */
+  documents: PayDocument[];
 }
 
 /**
@@ -225,15 +310,28 @@ export interface PayPlan {
 export function planPayment(
   open: readonly DebtLine[],
   offerCents: number,
-  opts: { method: 'cash' | 'card'; step: CashRoundingStep; partial: boolean; prepayAllowed: boolean }
+  opts: {
+    method: 'cash' | 'card';
+    step: CashRoundingStep;
+    partial: boolean;
+    prepayAllowed: boolean;
+    /** Lines that close on a receipt of their own ({@link chainedLines}). */
+    closesAlone?: (line: DebtLine) => boolean;
+  }
 ): PayPlan {
   const step = opts.method === 'cash' ? opts.step : 0;
-  const due = (cents: number) => cents + cashRoundingDelta(cents, step);
+  const closesAlone = opts.closesAlone ?? (() => false);
+  // What the oldest `count` lines and `units` come to in money: every receipt
+  // they make, each rounded on its own.
+  const due = (count: number, units: PayPlan['units']) => {
+    const documents = payDocuments(open.slice(0, count), units, closesAlone);
+    return documents.reduce((sum, document) => sum + document.goodsCents, 0) + documentsRounding(documents, step);
+  };
   const offer = Math.max(0, Math.round(offerCents));
 
   let wholeCount = 0;
   let wholeCents = 0;
-  while (wholeCount < open.length && due(wholeCents + open[wholeCount].owed_cents) <= offer) {
+  while (wholeCount < open.length && due(wholeCount + 1, null) <= offer) {
     wholeCents += open[wholeCount].owed_cents;
     wholeCount += 1;
   }
@@ -242,12 +340,18 @@ export function planPayment(
   let units: PayPlan['units'] = null;
   if (next && takesUnits(next)) {
     let k = 0;
-    while (k + 1 < next.remaining_quantity && due(wholeCents + unitsCents(next, k + 1)) <= offer) k += 1;
+    while (
+      k + 1 < next.remaining_quantity &&
+      due(wholeCount, { line: next, quantity: k + 1, cents: unitsCents(next, k + 1) }) <= offer
+    ) {
+      k += 1;
+    }
     if (k > 0) units = { line: next, quantity: k, cents: unitsCents(next, k) };
   }
 
+  const documents = payDocuments(open.slice(0, wholeCount), units, closesAlone);
   const receiptCents = wholeCents + (units?.cents ?? 0);
-  const roundingCents = due(receiptCents) - receiptCents;
+  const roundingCents = documentsRounding(documents, step);
   let changeCents = offer - receiptCents - roundingCents;
 
   let prepay: PayPlan['prepay'] = null;
@@ -268,7 +372,7 @@ export function planPayment(
     }
   }
 
-  return { wholeCount, wholeCents, units, receiptCents, roundingCents, prepay, changeCents, prepayRefused };
+  return { wholeCount, wholeCents, units, receiptCents, roundingCents, prepay, changeCents, prepayRefused, documents };
 }
 
 /** What the plan takes now: the receipt with its rounding, and the «внесок». */
@@ -312,6 +416,60 @@ export function planRequest(
   };
 }
 
+/**
+ * Every document a repayment made, in order — the server's `parts`, or, from
+ * a backend older than 079, the receipt and the «внесок» it answers with.
+ */
+export function paymentParts(result: PayDebtResult): PayDebtPart[] {
+  if (result.parts && result.parts.length > 0) return result.parts;
+  const prepayment = result.prepayment ?? null;
+  const onlyPrepayment = prepayment != null && prepayment.id === result.sale.id;
+  const parts: PayDebtPart[] = [];
+  if (!onlyPrepayment) parts.push({ kind: 'receipt', sale: result.sale, fiscal: result.fiscal });
+  if (prepayment) parts.push({ kind: 'prepayment', sale: prepayment, fiscal: onlyPrepayment ? result.fiscal : null });
+  return parts;
+}
+
+/** ПРРО registered the document: it has its fiscal number. */
+export function partRegistered(part: Pick<PayDebtPart, 'sale' | 'fiscal'>): boolean {
+  return (part.fiscal ?? part.sale.fiscal)?.status === 'done';
+}
+
+/**
+ * Whether a document of a repayment is a receipt to hand over: goods always;
+ * a «внесок» only once ПРРО registered it in its chain — then it is a «чек
+ * передплати». Without ПРРО a «внесок» is no receipt at all (its paper is the
+ * desktop's «ВНЕСОК» slip).
+ */
+export function printablePart(part: Pick<PayDebtPart, 'kind' | 'sale' | 'fiscal'>): boolean {
+  return part.kind !== 'prepayment' || partRegistered(part);
+}
+
+/** What a document took from the customer: a receipt with its cash rounding, a «внесок» as it is. */
+export function partTakenCents(part: Pick<PayDebtPart, 'kind' | 'sale'>): number {
+  return part.sale.total_cents + (part.kind === 'prepayment' ? 0 : part.sale.rounding_cents ?? 0);
+}
+
+/**
+ * «Чек R-55 · закриває «Кепка»», «Чек передплати R-57 · «Молоко»», «Внесок
+ * № R-57 · «Молоко»» — one document of a repayment, as the done screen lists it.
+ */
+export function partTitle(part: Pick<PayDebtPart, 'kind' | 'sale' | 'fiscal'>): string {
+  const sale = part.sale as DebtSale;
+  const number = sale.receipt_number ?? null;
+  if (part.kind === 'prepayment') {
+    const head = printablePart(part)
+      ? `Чек передплати${number ? ` ${number}` : ''}`
+      : `Внесок${number ? ` № ${number}` : ''}`;
+    return sale.debt_prepayment ? `${head} · «${lineTitle(sale.debt_prepayment)}»` : head;
+  }
+  const head = `Чек${number ? ` ${number}` : ''}`;
+  if (part.kind === 'chain_close') {
+    return sale.items[0] ? `${head} · закриває «${lineTitle(sale.items[0])}»` : head;
+  }
+  return sale.items.length > 0 ? `${head} · ${goodsText(sale.items.length)}` : head;
+}
+
 /** «3 з 5 шт» — the units a receipt takes of a line, out of what it still has. */
 export function unitsOfText(units: number, line: Pick<DebtLine, 'remaining_quantity' | 'unit' | 'price_per'>): string {
   return `${units} з ${quantityText(line.remaining_quantity, line.unit, line.price_per)}`;
@@ -320,17 +478,26 @@ export function unitsOfText(units: number, line: Pick<DebtLine, 'remaining_quant
 /**
  * The plan in the cashier's words, a sentence per step — what the receipt
  * closes, the units, the «внесок» and what stays owed on that line, the change.
+ * `fiscal` (the store registers a «внесок» in a ПРРО chain) adds what will be
+ * printed: a line closing through its chain on a receipt of its own, and the
+ * «внесок» as a receipt too.
  */
-export function planWords(plan: PayPlan, open: readonly DebtLine[]): string[] {
+export function planWords(plan: PayPlan, open: readonly DebtLine[], fiscal?: DebtFiscal): string[] {
   const words: string[] = [];
   if (plan.wholeCount > 0) words.push(`Закриває ${goodsText(plan.wholeCount)} на ${formatUah(plan.wholeCents)}`);
+  for (const document of plan.documents ?? []) {
+    if (document.kind === 'chain_close') {
+      words.push(`«${lineTitle(document.lines[0])}» — окремим чеком: внески за цей товар уже в ПРРО`);
+    }
+  }
   if (plan.units) {
     words.push(`${unitsOfText(plan.units.quantity, plan.units.line)} «${lineTitle(plan.units.line)}» на ${formatUah(plan.units.cents)}`);
   }
   if (plan.prepay) {
     const left = plan.prepay.line.owed_cents - (plan.units?.cents ?? 0) - plan.prepay.cents;
+    const receipt = fiscal?.on && fiscal.chains ? ' (чек передплати)' : '';
     words.push(
-      `Внесок ${formatUah(plan.prepay.cents)} на «${lineTitle(plan.prepay.line)}» — лишиться винно ${formatUah(left)}`
+      `Внесок ${formatUah(plan.prepay.cents)} на «${lineTitle(plan.prepay.line)}»${receipt} — лишиться винно ${formatUah(left)}`
     );
   }
   if (!planTakes(plan)) {
@@ -362,6 +529,14 @@ export function lineProgress(
   if (left.length > 0) parts.push(left.join(', '));
   if ((line.prepaid_cents ?? 0) > 0) parts.push(`внесено ${formatUah(line.prepaid_cents ?? 0)}`);
   return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+/**
+ * What the till must know about a line's ПРРО chain beside its figures: an
+ * earlier document of it still being registered holds the next one back.
+ */
+export function chainNote(line: Pick<DebtLine, 'chain'>): string | null {
+  return line.chain?.pending ? 'внесок ще реєструється в ПРРО' : null;
 }
 
 /**
@@ -449,10 +624,16 @@ export const ENTRY_LABEL: Record<DebtEntryKind, string> = {
  * The «внесок» entries a cashier can still undo (078): not voided yet, and
  * toward goods still open — once a receipt closed them or the owner wrote
  * them off, the server refuses, so the till offers nothing.
+ *
+ * Under ПРРО (§11 «Крок 2») a «внесок» registered in its prepayment chain, or
+ * on its way there, is not undone by a void — the provider returns a chain
+ * only whole. One ПРРО gave up on (`failed`) is the owner's to undo, once the
+ * provider is known not to have it.
  */
 export function undoablePrepayments(
   entries: readonly DebtEntry[],
-  open: readonly Pick<DebtLine, 'id'>[]
+  open: readonly Pick<DebtLine, 'id'>[],
+  opts: { owner?: boolean } = {}
 ): Set<number> {
   const voided = new Set(entries.filter((e) => e.kind === 'payment_void' && e.sale_id != null).map((e) => e.sale_id));
   const openIds = new Set(open.map((line) => line.id));
@@ -465,7 +646,10 @@ export function undoablePrepayments(
           e.sale_id != null &&
           !voided.has(e.sale_id) &&
           e.prepay_line_id != null &&
-          openIds.has(e.prepay_line_id)
+          openIds.has(e.prepay_line_id) &&
+          e.fiscal_status !== 'done' &&
+          e.fiscal_status !== 'pending' &&
+          (e.fiscal_status !== 'failed' || opts.owner === true)
       )
       .map((e) => e.id)
   );

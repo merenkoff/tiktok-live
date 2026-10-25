@@ -21,6 +21,7 @@ import type {
 } from '../types.js';
 import { ensurePosAuth } from '../core/auth.js';
 import * as salesService from '../sales.service.js';
+import { chainVoidRefusal } from '../debt-lines.service.js';
 import * as parkedCarts from '../parked-carts.service.js';
 import * as preorders from '../preorders.service.js';
 import { PreorderClosedError } from '../preorders.service.js';
@@ -255,6 +256,11 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
         message: 'Чек уже зареєстровано в ПРРО — оформіть повернення',
         fiscal_code: doc.fiscal_code,
       });
+    }
+    // Nor, while ПРРО is still on it, a document of a debt's prepayment chain.
+    const chainRefusal = doc ? await chainVoidRefusal(auth.storeId, saleId, auth.role) : null;
+    if (chainRefusal) {
+      return reply.code(chainRefusal.status).send({ error: chainRefusal.code, message: chainRefusal.message });
     }
 
     try {

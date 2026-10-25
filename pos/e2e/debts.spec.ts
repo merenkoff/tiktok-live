@@ -108,7 +108,9 @@ function entry(id: number, kind: string, amount: number) {
  * registration order, so its catch-all would otherwise answer every one of
  * these with an empty array.
  */
-async function mockDebts(page: Page, { balance = 0, partial = false } = {}) {
+async function mockDebts(page: Page, { balance = 0, partial = false, chains = false } = {}) {
+  // A store whose ПРРО keeps prepayment chains (079): a «внесок» is a receipt of one.
+  const registered = { status: 'done', fiscal_code: 'FC-56', fiscal_date: new Date().toISOString(), tax_url: null, receipt_text: null };
   const sent: Array<{ path: string; body: unknown }> = [];
   let owed = balance;
   let prepaid = 0;
@@ -120,6 +122,7 @@ async function mockDebts(page: Page, { balance = 0, partial = false } = {}) {
     open_lines: owed > 0 ? [owedLine(partial, prepaid)] : [],
     entries: [...entries].reverse(),
     oldest_open_at: owed > 0 ? '2026-10-24T09:00:00.000Z' : null,
+    ...(chains ? { fiscal: { on: true, provider: 'checkbox', chains: true } } : {}),
   });
 
   await page.route(/\/api\/pos\/customers(\?.*)?$/, async (route) => route.fulfill({ json: [CUSTOMER] }));
@@ -182,6 +185,7 @@ async function mockDebts(page: Page, { balance = 0, partial = false } = {}) {
         receipt_number: 'R-0000056',
         prepayment: true,
         prepay_line_id: 1,
+        fiscal_status: chains ? 'done' : 'none',
       } as ReturnType<typeof entry>);
       const sale = {
         id: 56,
@@ -195,13 +199,22 @@ async function mockDebts(page: Page, { balance = 0, partial = false } = {}) {
         refunds: [],
         created_at: new Date().toISOString(),
         staff_name: 'Олена',
-        fiscal_status: 'none',
-        fiscal: null,
+        fiscal_status: chains ? 'done' : 'none',
+        fiscal: chains ? registered : null,
         repays_debt: true,
         debt_prepayment: { line_id: 1, product_name: SHIRT.product_name, variant_label: SHIRT.label, amount_cents: body.part.amount_cents },
       };
+      const fiscal = chains ? registered : null;
       await route.fulfill({
-        json: { sale, prepayment: sale, fiscal: null, warning: null, credit: credit(owed), open_lines: [owedLine(true, prepaid)] },
+        json: {
+          sale,
+          prepayment: sale,
+          fiscal,
+          warning: null,
+          credit: credit(owed),
+          open_lines: [owedLine(true, prepaid)],
+          ...(chains ? { parts: [{ kind: 'prepayment', sale, fiscal }] } : {}),
+        },
       });
       return;
     }
@@ -330,6 +343,25 @@ test('a sum short of the oldest goods goes toward them as a «внесок» (Д
   await expect(page.getByTestId('debts-open-lines')).toContainText(/внесено 300,00/);
   await expect(page.getByTestId('debts-journal')).toContainText('Внесок · № R-0000056');
   await expect(page.getByTestId('debts-journal').getByRole('button', { name: 'Скасувати' })).toBeVisible();
+});
+
+test('in a store whose ПРРО keeps chains a «внесок» is a «чек передплати» to print (§11 «Крок 2»)', async ({ page }) => {
+  await signIn(page);
+  const sent = await mockDebts(page, { balance: SHIRT.price_cents, partial: true, chains: true });
+
+  await page.goto('/debts/7');
+  await page.getByRole('button', { name: 'Прийняти оплату' }).click();
+  await page.getByPlaceholder('Наприклад: 500').fill('300');
+  await expect(page.getByTestId('debts-pay-offer')).toContainText('(чек передплати)');
+  await page.getByRole('button', { name: /^Прийняти 300/ }).click();
+
+  await expect(page.getByTestId('debts-pay-done-text')).toContainText('як внесок на «Футболка базова');
+  await expect(page.getByTestId('debts-pay-done').getByRole('button', { name: /Друкувати чек/ })).toBeVisible();
+  expect(sent.find((s) => s.path === '/pay')?.body).toMatchObject({ part: { line_id: 1, amount_cents: 30000 }, payments: [] });
+  await page.getByRole('button', { name: 'Готово' }).click();
+  // Registered in its chain: not undone by a tap — the chain is returned only whole.
+  await expect(page.getByTestId('debts-journal')).toContainText('Внесок · № R-0000056');
+  await expect(page.getByTestId('debts-journal').getByRole('button', { name: 'Скасувати' })).toHaveCount(0);
 });
 
 test('the owner’s «Сьогодні» carries the notebook’s three figures', async ({ page }) => {

@@ -19,6 +19,12 @@
 //    statement behind them is read again after the replay either way, and the
 //    server refuses a key spent on another kind or customer (`uuid_taken`).
 //
+// A repayment also keeps what it asked (`body`): one sum may be several
+// documents (G3_DEBTS.md §11 «Крок 2»), and the server goes on from the first
+// one not written only for the SAME request — a sheet opened again builds its
+// plan from a statement the first attempt may have changed, so it sends the
+// remembered request instead.
+//
 // Module-level, because on a phone the cart's slots are mounted twice (the
 // hidden sidebar and the sheet). And for half an hour only: a timeout older
 // than that says nothing about the cart in front of the cashier now — a
@@ -29,7 +35,7 @@ import type { IssueItem } from './types';
 
 export const UNANSWERED_TTL_MS = 30 * 60_000;
 
-const unanswered = new Map<string, { key: string; at: number }>();
+const unanswered = new Map<string, { key: string; at: number; body?: unknown }>();
 
 /** A handover's scope: who, what, and the discount shared over it. */
 export function issueScope(customerId: number, items: IssueItem[], cartDiscount: CartDiscount | null): string {
@@ -52,9 +58,14 @@ export function unansweredKey(scope: string, now = Date.now()): string | null {
   return hit.key;
 }
 
-/** No answer came: the next attempt in this scope must send the same key. */
-export function rememberUnanswered(scope: string, key: string, now = Date.now()): void {
-  unanswered.set(scope, { key, at: now });
+/** The request an unanswered write sent, when it remembered one — the same moment as {@link unansweredKey}. */
+export function unansweredBody(scope: string, now = Date.now()): unknown {
+  return unansweredKey(scope, now) == null ? undefined : unanswered.get(scope)?.body;
+}
+
+/** No answer came: the next attempt in this scope must send the same key — and, given one, the same request. */
+export function rememberUnanswered(scope: string, key: string, now = Date.now(), body?: unknown): void {
+  unanswered.set(scope, { key, at: now, ...(body === undefined ? {} : { body }) });
 }
 
 /** The server answered — with a result or a refusal: nothing is left to replay here. */

@@ -146,6 +146,13 @@ export interface DebtEntryView {
   prepayment: boolean;
   /** The line that «внесок» went to, so the till can tell whether it can still be undone. */
   prepay_line_id: number | null;
+  /**
+   * Where ПРРО stands with the entry's sale (`pos_sales.fiscal_status`), null
+   * without one. A «внесок» registered in its prepayment chain (`done`) or on
+   * its way there (`pending`) is not undone by a void: the provider returns a
+   * chain only whole (§11 «Крок 2»).
+   */
+  fiscal_status: string | null;
 }
 
 export interface DebtStatement {
@@ -300,13 +307,14 @@ function toEntryView(row: Record<string, unknown>): DebtEntryView {
     offline: row.offline_received_at != null,
     prepayment: row.debt_prepay_item_id != null,
     prepay_line_id: row.debt_prepay_item_id == null ? null : Number(row.debt_prepay_item_id),
+    fiscal_status: row.fiscal_status == null ? null : String(row.fiscal_status),
   };
 }
 
 async function readEntry(client: DbClient, storeId: number, entryId: number): Promise<DebtEntryView> {
   const rows = await client.query(
     `SELECT e.id, e.kind, e.amount_cents, e.created_at, e.reason, e.sale_id, e.offline_received_at,
-            st.display_name AS staff_name, s.receipt_number, s.debt_prepay_item_id
+            st.display_name AS staff_name, s.receipt_number, s.debt_prepay_item_id, s.fiscal_status
        FROM pos_debt_entries e
        LEFT JOIN pos_staff st ON st.id = e.staff_id
        LEFT JOIN pos_sales s ON s.id = e.sale_id
@@ -355,7 +363,7 @@ export async function getStatement(storeId: number, customerId: number): Promise
   const open = await readLines(pool, storeId, { customerId, openOnly: true });
   const entries = await pool.query(
     `SELECT e.id, e.kind, e.amount_cents, e.created_at, e.reason, e.sale_id, e.offline_received_at,
-            st.display_name AS staff_name, s.receipt_number, s.debt_prepay_item_id
+            st.display_name AS staff_name, s.receipt_number, s.debt_prepay_item_id, s.fiscal_status
        FROM pos_debt_entries e
        LEFT JOIN pos_staff st ON st.id = e.staff_id
        LEFT JOIN pos_sales s ON s.id = e.sale_id

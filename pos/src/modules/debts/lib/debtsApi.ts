@@ -9,6 +9,7 @@ import { api } from '@pos/platform';
 import type { CartDiscount } from '@pos/platform';
 import type {
   DebtCredit,
+  DebtSale,
   DebtStatement,
   DebtSummary,
   DebtWriteResult,
@@ -37,6 +38,15 @@ export interface DebtPart {
   quantity?: number;
   amount_cents?: number;
   method: 'cash' | 'card';
+}
+
+/** What `POST /debts/customers/:id/pay` takes. */
+export interface PayBody {
+  line_ids?: number[];
+  part?: DebtPart;
+  payments: PaymentRow[];
+  client_uuid: string;
+  cash_rounding: number;
 }
 
 export const debtsApi = {
@@ -98,16 +108,7 @@ export const debtsApi = {
    * G3_DEBTS.md §11). `payments` pays the receipt and is empty when the
    * request is only a «внесок».
    */
-  pay(
-    customerId: number,
-    body: {
-      line_ids?: number[];
-      part?: DebtPart;
-      payments: PaymentRow[];
-      client_uuid: string;
-      cash_rounding: number;
-    }
-  ): Promise<PayDebtResult> {
+  pay(customerId: number, body: PayBody): Promise<PayDebtResult> {
     return request('post', `/debts/customers/${customerId}/pay`, body);
   },
 
@@ -117,6 +118,15 @@ export const debtsApi = {
    */
   voidPrepayment(saleId: number): Promise<unknown> {
     return request('post', `/sales/${saleId}/void`);
+  },
+
+  /**
+   * One sale as the host reads it — a document of a repayment that went
+   * through before a later one of the same sum did not (§11 «Крок 2»), to
+   * print it.
+   */
+  sale(saleId: number): Promise<DebtSale> {
+    return request('get', `/sales/${saleId}`);
   },
 
   /** The owner's figures for the window «Сьогодні» is showing. */

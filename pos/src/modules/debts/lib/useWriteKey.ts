@@ -8,15 +8,17 @@
 // the sheet is opened anew after a write of its scope got no answer.
 
 import { useRef, useState } from 'react';
-import { rememberUnanswered, settle, unansweredKey } from './pendingKeys';
+import { rememberUnanswered, settle, unansweredBody, unansweredKey } from './pendingKeys';
 
 export interface WriteKey {
   /** The key to send now. */
   current: () => string;
   /** This sheet opened on an earlier write of its scope that got no answer. */
   replaying: boolean;
-  /** No answer came: keep the key, here and for the next sheet of this scope. */
-  unanswered: () => void;
+  /** What that earlier write sent, when it remembered it — the request to send again. */
+  replayBody: unknown;
+  /** No answer came: keep the key (and what was sent), here and for the next sheet of this scope. */
+  unanswered: (body?: unknown) => void;
   /** The server answered — a result or a refusal: the next write is a new one. */
   answered: () => void;
 }
@@ -24,13 +26,14 @@ export interface WriteKey {
 export function useWriteKey(scope: string): WriteKey {
   const [initial] = useState(() => {
     const replay = unansweredKey(scope);
-    return { key: replay ?? crypto.randomUUID(), replaying: replay != null };
+    return { key: replay ?? crypto.randomUUID(), replaying: replay != null, body: unansweredBody(scope) };
   });
   const key = useRef(initial.key);
   return {
     current: () => key.current,
     replaying: initial.replaying,
-    unanswered: () => rememberUnanswered(scope, key.current),
+    replayBody: initial.body,
+    unanswered: (body?: unknown) => rememberUnanswered(scope, key.current, Date.now(), body),
     answered: () => {
       settle(scope);
       key.current = crypto.randomUUID();

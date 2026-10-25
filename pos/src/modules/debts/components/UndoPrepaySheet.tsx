@@ -11,6 +11,10 @@
 // `payment_void`; it refuses once the goods were closed by a receipt or
 // written off — that receipt holds the money now — and the sheet says so in
 // its words.
+//
+// Under ПРРО a «внесок» registered in its prepayment chain is not offered
+// here at all (§11 «Крок 2»). One ПРРО gave up on reaches this sheet only for
+// the owner, who must first see that the provider has no such receipt.
 
 import { useState } from 'react';
 import { formatUah } from '@pos/platform';
@@ -56,6 +60,12 @@ export function UndoPrepaySheet({ entry, line, onClose, onChanged }: Props) {
           {entry.receipt_number ? ` (внесок № ${entry.receipt_number})` : ''}. Ця сума знову стане боргом за «
           {lineTitle(line)}».
         </p>
+        {entry.fiscal_status === 'failed' && (
+          <p className="rounded-xl bg-amber-50 text-amber-900 px-4 py-3 text-sm" data-testid="debts-undo-unregistered">
+            Цей внесок не вдалося зареєструвати в ПРРО. Скасовуйте його, лише якщо в кабінеті Checkbox такого чека
+            передплати немає — інакше чек залишиться в податковій, а гроші підуть покупцеві.
+          </p>
+        )}
         {error && (
           <p role="alert" className="rounded-xl bg-amber-50 text-amber-900 px-4 py-3 text-sm">
             {error}

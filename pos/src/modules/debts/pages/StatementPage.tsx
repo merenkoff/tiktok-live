@@ -19,7 +19,16 @@ import { Link, useParams } from 'react-router-dom';
 import { api, formatSignedUah, formatUah, isOfflinePosEnabled, useAuthStore, useOfflineStatus } from '@pos/platform';
 import { ArrowLeft, SectionHead } from '@pos/platform/ui';
 import { debtsApi } from '../lib/debtsApi';
-import { ageText, creditLine, entryLabel, lineProgress, lineTitle, quantityText, undoablePrepayments } from '../lib/debt';
+import {
+  ageText,
+  chainNote,
+  creditLine,
+  entryLabel,
+  lineProgress,
+  lineTitle,
+  quantityText,
+  undoablePrepayments,
+} from '../lib/debt';
 import { debtFailure } from '../lib/errors';
 import { publishCredit } from '../lib/useCredit';
 import { useQueue, useQueueDrained } from '../lib/useQueue';
@@ -109,7 +118,7 @@ export function StatementPage({ frame }: { frame: DebtsFrame }) {
 
   const { customer, credit, open_lines: lines, entries } = statement;
   const owed = lines.reduce((sum, line) => sum + line.owed_cents, 0);
-  const undoable = undoablePrepayments(entries, lines);
+  const undoable = undoablePrepayments(entries, lines, { owner });
 
   return (
     <Frame frame={frame}>
@@ -162,6 +171,7 @@ export function StatementPage({ frame }: { frame: DebtsFrame }) {
                       {lineProgress(line) ? ` (${lineProgress(line)})` : ''}
                       {line.note ? ` · ${line.note}` : ''}
                     </span>
+                    {chainNote(line) && <span className="block text-[13px] text-amber-800">{chainNote(line)}</span>}
                   </span>
                   <span className="text-[15px] font-semibold tabular-nums shrink-0">{formatUah(line.owed_cents)}</span>
                 </div>
@@ -232,6 +242,7 @@ export function StatementPage({ frame }: { frame: DebtsFrame }) {
           customerName={customer.name}
           customerPhone={customer.phone}
           openLines={lines}
+          fiscal={statement.fiscal}
           onClose={() => setOpen(null)}
           onChanged={reload}
         />

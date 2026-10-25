@@ -61,6 +61,13 @@ export interface DebtLine {
   price_per?: number;
   /** How the weight was taken; null for goods counted by the piece. */
   weight_source?: string | null;
+  /**
+   * The ПРРО prepayment chain the line's «внески» went to (079, G3_DEBTS.md
+   * §11 «Крок 2»): in that provider the line closes on a receipt of its own,
+   * and `pending` says an earlier document of it is still being registered.
+   * Absent from a backend older than 079.
+   */
+  chain?: { id: string; provider: string; pending: boolean } | null;
 }
 
 export interface DebtEntry {
@@ -82,6 +89,22 @@ export interface DebtEntry {
   prepayment?: boolean;
   /** The line that «внесок» went to. */
   prepay_line_id?: number | null;
+  /**
+   * Where ПРРО stands with the entry's sale: `none`, `pending`, `done`,
+   * `failed`; null without a sale. A «внесок» registered in its chain is not
+   * undone by a void. Absent from a backend older than 2-В.
+   */
+  fiscal_status?: string | null;
+}
+
+/**
+ * What the store's ПРРО can do with a debt (079): `chains` — its provider
+ * keeps prepayment chains, so a «внесок» is registered as a receipt of one.
+ */
+export interface DebtFiscal {
+  on: boolean;
+  provider: string | null;
+  chains: boolean;
 }
 
 export interface DebtStatement {
@@ -92,6 +115,8 @@ export interface DebtStatement {
   /** The latest entries of the journal, newest first. */
   entries: DebtEntry[];
   oldest_open_at: string | null;
+  /** Absent from a backend older than 079 — the login's ПРРО switch decides then. */
+  fiscal?: DebtFiscal;
 }
 
 export interface DebtWriteResult {
@@ -136,7 +161,20 @@ export type DebtSale = Omit<SaleDetail, 'items'> & {
     amount_cents: number;
   } | null;
   items: Array<SaleDetail['items'][number] & { debt_prepaid_cents?: number }>;
+  /** A document of a line's ПРРО prepayment chain (079): its number, which the provider prints. */
+  fiscal_chain_id?: string | null;
 };
+
+/**
+ * One document of a repayment (§11 «Крок 2»): `receipt` — goods on an
+ * ordinary receipt; `chain_close` — the receipt that closes a line paid by
+ * «внески» through its chain; `prepayment` — a «внесок».
+ */
+export interface PayDebtPart {
+  kind: 'receipt' | 'chain_close' | 'prepayment';
+  sale: DebtSale;
+  fiscal: SaleFiscalDoc | null;
+}
 
 export interface PayDebtResult {
   /** The repayment receipt — an ordinary sale; when the request was only a «внесок», the «внесок». */
@@ -149,6 +187,8 @@ export interface PayDebtResult {
   warning: string | null;
   credit: DebtCredit;
   open_lines: DebtLine[];
+  /** Every document of the request, in the order they were made. Absent from a backend older than 079. */
+  parts?: PayDebtPart[];
 }
 
 /** One line of the cart, as `POST /debts/issue` takes it. */

@@ -9,7 +9,10 @@ import { formatUah } from '@pos/platform';
 import type { CartLine } from '@pos/platform';
 import {
   ageText,
+  chainNote,
+  chainedLines,
   creditLine,
+  documentsRounding,
   daysSince,
   entryLabel,
   goodsText,
@@ -22,21 +25,29 @@ import {
   linesCoveredBy,
   matchesDebtor,
   nextCount,
+  partRegistered,
+  partTakenCents,
+  partTitle,
+  payDocuments,
+  paymentParts,
   planPayment,
   planRequest,
   planTakes,
   planTotal,
   planWords,
   prefixTotals,
+  prepayAllowed,
+  printablePart,
   quantityText,
   returnAmount,
   returnBlockedByPrepay,
   returnsWhole,
   takesParts,
   takesUnits,
+  undoablePrepayments,
   unitsCents,
 } from './debt';
-import type { DebtCredit, DebtLine } from './types';
+import type { DebtCredit, DebtEntry, DebtLine, DebtSale, PayDebtResult } from './types';
 
 function cartLine(over: Partial<CartLine> = {}): CartLine {
   return {
@@ -447,5 +458,157 @@ describe('paying in parts (Д4 revised, G3_DEBTS.md §11)', () => {
     expect(entryLabel({ kind: 'payment', prepayment: true })).toBe('Внесок');
     expect(entryLabel({ kind: 'payment_void', prepayment: true })).toBe('Внесок скасовано');
     expect(entryLabel({ kind: 'payment' })).toBe('Погашено');
+  });
+});
+
+describe('a «внесок» under ПРРО: the prepayment chain (G3_DEBTS.md §11 «Крок 2»)', () => {
+  const p = (over: Partial<DebtLine>) => line({ paid_quantity: 0, prepaid_cents: 0, ...over });
+  const checkbox = { on: true, provider: 'checkbox', chains: true };
+  const chain = (id: string, pending = false) => ({ id, provider: 'checkbox', pending });
+  // A cap 30 ₴ was paid toward through its chain: 290,23 ₴ left.
+  const cap = p({ id: 3, product_name: 'Кепка', owed_cents: 29023, line_total_cents: 59023, prepaid_cents: 30000, chain: chain('ls-1-000003-1') });
+  const bread = p({ id: 1, product_name: 'Хліб', owed_cents: 10010, line_total_cents: 10010, unit_price_cents: 10010 });
+  const milk = p({ id: 2, product_name: 'Молоко', owed_cents: 4500, line_total_cents: 4500, unit_price_cents: 4500 });
+  const step50 = { method: 'cash' as const, step: 50 as const, partial: true, prepayAllowed: true };
+
+  it('takes a «внесок» where ПРРО keeps chains, and only there', () => {
+    expect(prepayAllowed(checkbox, true)).toBe(true);
+    expect(prepayAllowed({ on: true, provider: 'cashalot', chains: false }, true)).toBe(false);
+    expect(prepayAllowed({ on: false, provider: null, chains: false }, true)).toBe(true);
+    // A backend older than 079 says nothing: the login's ПРРО switch decides, as in step 1.
+    expect(prepayAllowed(undefined, true)).toBe(false);
+    expect(prepayAllowed(undefined, false)).toBe(true);
+  });
+
+  it('closes a line alone only through a chain of the store’s own provider', () => {
+    const alone = chainedLines(checkbox);
+    expect(alone(cap)).toBe(true);
+    expect(alone(bread)).toBe(false);
+    expect(alone({ chain: { id: 'x', provider: 'cashalot', pending: false } })).toBe(false);
+    // ПРРО off, or no chains: one ordinary receipt for everything.
+    expect(chainedLines({ on: false, provider: null, chains: false })(cap)).toBe(false);
+    expect(chainedLines(undefined)(cap)).toBe(false);
+  });
+
+  it('lays receipts out as the server does: the chained line alone, the units on the last ordinary one', () => {
+    const alone = chainedLines(checkbox);
+    const docs = payDocuments([cap, bread, milk], null, alone);
+    expect(docs.map((d) => [d.kind, d.lines.map((l) => l.id), d.goodsCents])).toEqual([
+      ['chain_close', [3], 29023],
+      ['receipt', [1, 2], 14510],
+    ]);
+    const units = { line: p({ id: 4 }), quantity: 2, cents: 5000 };
+    expect(payDocuments([cap], units, alone).map((d) => d.kind)).toEqual(['chain_close', 'receipt']);
+    expect(payDocuments([bread, cap], units, alone).map((d) => [d.kind, d.units?.quantity ?? 0])).toEqual([
+      ['receipt', 0],
+      ['chain_close', 0],
+      ['receipt', 2],
+    ]);
+    // Nothing chained: one receipt, as before step 2.
+    expect(payDocuments([cap, bread], null)).toHaveLength(1);
+  });
+
+  it('rounds each receipt’s cash on its own — 390,00 ₴ for the two, not 390,50 ₴ for their sum', () => {
+    const alone = chainedLines(checkbox);
+    const docs = payDocuments([cap, bread], null, alone);
+    expect(documentsRounding(docs, 50)).toBe(-23 + -10);
+    const plan = planPayment([cap, bread], 39000, { ...step50, closesAlone: alone });
+    expect(plan).toMatchObject({ wholeCount: 2, receiptCents: 39033, roundingCents: -33, changeCents: 0 });
+    expect(planTotal(plan)).toBe(39000);
+    // Without the chain, one receipt rounds the sum.
+    expect(planPayment([cap, bread], 39050, step50)).toMatchObject({ wholeCount: 2, roundingCents: 17 });
+  });
+
+  it('says which goods close on a receipt of their own, and that a «внесок» is a receipt too', () => {
+    const plan = planPayment([cap, bread, milk], 39000 + 2000, { ...step50, closesAlone: chainedLines(checkbox) });
+    expect(plan.prepay).toMatchObject({ cents: 2000 });
+    expect(planWords(plan, [cap, bread, milk], checkbox)).toEqual([
+      `Закриває 2 товари на ${formatUah(39033)}`,
+      '«Кепка» — окремим чеком: внески за цей товар уже в ПРРО',
+      `Внесок ${formatUah(2000)} на «Молоко» (чек передплати) — лишиться винно ${formatUah(2500)}`,
+    ]);
+  });
+
+  it('warns while an earlier document of the chain is still being registered', () => {
+    expect(chainNote({ chain: chain('x', true) })).toBe('внесок ще реєструється в ПРРО');
+    expect(chainNote({ chain: chain('x') })).toBeNull();
+    expect(chainNote({})).toBeNull();
+  });
+
+  it('never offers to undo a «внесок» ПРРО has, and leaves one it gave up on to the owner', () => {
+    const entry = (id: number, fiscal_status: string | null): DebtEntry => ({
+      id,
+      kind: 'payment',
+      amount_cents: -30000,
+      created_at: '2026-10-25T10:00:00Z',
+      staff_name: null,
+      reason: null,
+      sale_id: 100 + id,
+      receipt_number: null,
+      prepayment: true,
+      prepay_line_id: 3,
+      fiscal_status,
+    });
+    const entries = [entry(1, 'none'), entry(2, 'done'), entry(3, 'pending'), entry(4, 'failed'), entry(5, null)];
+    expect([...undoablePrepayments(entries, [cap])]).toEqual([1, 5]);
+    expect([...undoablePrepayments(entries, [cap], { owner: true })]).toEqual([1, 4, 5]);
+  });
+});
+
+describe('the documents of a repayment', () => {
+  const sale = (over: Partial<DebtSale>): DebtSale =>
+    ({
+      id: 55,
+      receipt_number: 'R-0000055',
+      status: 'completed',
+      subtotal_cents: 29000,
+      total_cents: 29000,
+      rounding_cents: 0,
+      items: [{ id: 1, variant_id: 10, product_name: 'Кепка', variant_label: 'L', quantity: 1, unit_price_cents: 59000, line_total_cents: 29000, refunded_quantity: 0 }],
+      payments: [],
+      refunds: [],
+      created_at: '2026-10-25T10:00:00Z',
+      staff_name: 'Олена',
+      fiscal_status: 'done',
+      fiscal: { status: 'done' },
+      ...over,
+    }) as unknown as DebtSale;
+  const prepayment = sale({
+    id: 57,
+    receipt_number: 'R-0000057',
+    total_cents: 2000,
+    items: [],
+    debt_prepayment: { line_id: 2, product_name: 'Молоко', variant_label: '', amount_cents: 2000 },
+  });
+  const result = (over: Partial<PayDebtResult>): PayDebtResult =>
+    ({ sale: sale({}), prepayment: null, fiscal: null, warning: null, credit: {}, open_lines: [], ...over }) as PayDebtResult;
+
+  it('reads them off the server’s parts, or makes them up from an older answer', () => {
+    const parts = [
+      { kind: 'chain_close' as const, sale: sale({}), fiscal: null },
+      { kind: 'prepayment' as const, sale: prepayment, fiscal: null },
+    ];
+    expect(paymentParts(result({ parts }))).toBe(parts);
+    expect(paymentParts(result({ prepayment })).map((part) => part.kind)).toEqual(['receipt', 'prepayment']);
+    expect(paymentParts(result({ sale: prepayment, prepayment })).map((part) => part.kind)).toEqual(['prepayment']);
+  });
+
+  it('prints a «внесок» only once ПРРО registered it — then it is a «чек передплати»', () => {
+    const registered = { kind: 'prepayment' as const, sale: prepayment, fiscal: null };
+    const plain = { kind: 'prepayment' as const, sale: { ...prepayment, fiscal_status: 'none', fiscal: null }, fiscal: null };
+    expect(partRegistered(registered)).toBe(true);
+    expect(printablePart(registered)).toBe(true);
+    expect(printablePart(plain)).toBe(false);
+    expect(printablePart({ kind: 'receipt', sale: { ...sale({}), fiscal: null }, fiscal: null })).toBe(true);
+    expect(partTitle(registered)).toBe('Чек передплати R-0000057 · «Молоко»');
+    expect(partTitle(plain)).toBe('Внесок № R-0000057 · «Молоко»');
+  });
+
+  it('names a receipt by what it closes and counts its cash with the rounding', () => {
+    expect(partTitle({ kind: 'chain_close', sale: sale({}), fiscal: null })).toBe('Чек R-0000055 · закриває «Кепка · L»');
+    const receipt = sale({ id: 56, receipt_number: 'R-0000056', total_cents: 6433, rounding_cents: 17, items: [sale({}).items[0], sale({}).items[0]] });
+    expect(partTitle({ kind: 'receipt', sale: receipt, fiscal: null })).toBe('Чек R-0000056 · 2 товари');
+    expect(partTakenCents({ kind: 'receipt', sale: receipt })).toBe(6450);
+    expect(partTakenCents({ kind: 'prepayment', sale: prepayment })).toBe(2000);
   });
 });

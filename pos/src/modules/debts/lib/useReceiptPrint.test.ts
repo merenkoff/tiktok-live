@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildReceiptPayload } from '@pos/platform';
 import type { SaleDetail } from '@pos/platform';
-import { withPrepaidNotes } from './useReceiptPrint';
+import { withPrepaidNotes, withPrepaymentLine } from './useReceiptPrint';
 
 function sale(items: Array<Partial<SaleDetail['items'][number]> & { debt_prepaid_cents?: number }>): SaleDetail {
   return {
@@ -60,5 +60,40 @@ describe('withPrepaidNotes', () => {
     const detail = sale([{ line_total_cents: 59000 }]);
     const built = buildReceiptPayload(detail, store);
     expect(withPrepaidNotes(built, detail)).toBe(built);
+  });
+});
+
+describe('withPrepaymentLine', () => {
+  const prepayment = {
+    ...sale([]),
+    id: 57,
+    receipt_number: 'R-0000057',
+    subtotal_cents: 30000,
+    total_cents: 30000,
+    items: [],
+    fiscal_chain_id: 'ls-1-000003-1',
+    debt_prepayment: { line_id: 3, product_name: 'Кепка', variant_label: 'L', amount_cents: 30000 },
+  } as unknown as SaleDetail;
+
+  it('gives a «внесок» our layout prints one line for the money, the goods and the chain', () => {
+    const receipt = withPrepaymentLine(buildReceiptPayload(prepayment, store), prepayment);
+    expect(receipt.items).toEqual([
+      {
+        name: 'Передплата за «Кепка · L»',
+        variant_label: '',
+        quantity: 1,
+        unit_price_cents: 30000,
+        line_total_cents: 30000,
+        note: 'Замовлення № ls-1-000003-1',
+      },
+    ]);
+  });
+
+  it('leaves the provider’s own text alone, and every receipt with goods', () => {
+    const withText = { ...buildReceiptPayload(prepayment, store), provider_text: 'ЧЕК ПЕРЕДПЛАТИ' };
+    expect(withPrepaymentLine(withText, prepayment).items).toEqual([]);
+    const detail = sale([{ line_total_cents: 59000 }]);
+    const receipt = buildReceiptPayload(detail, store);
+    expect(withPrepaymentLine(receipt, detail)).toBe(receipt);
   });
 });
