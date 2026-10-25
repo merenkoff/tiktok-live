@@ -1462,6 +1462,12 @@ export interface OnHandRow {
    */
   pack_qty?: number | null;
   pack_label?: string;
+  /**
+   * 1000 when the price is per kilogram or litre (migration 075): the stock
+   * screens show and take such a row in kilograms while `quantity` and
+   * `cost_cents` stay per gram. Absent from a server older than that → 1.
+   */
+  price_per?: number | null;
 }
 
 export interface StockMovementRow {
@@ -1470,6 +1476,8 @@ export interface StockMovementRow {
   product_name: string;
   label: string;
   unit: string;
+  /** 1000 for a weighed variant, whose grams the history reads as kilograms; absent → 1. */
+  price_per?: number | null;
   delta: number;
   reason: string;
   reference_type: string | null;
@@ -1485,6 +1493,8 @@ export interface MovementSummaryRow {
   product_name: string;
   label: string;
   unit: string;
+  /** 1000 for a weighed variant, whose grams the report reads as kilograms; absent → 1. */
+  price_per?: number | null;
   opening: number;
   receipt: number;
   sale: number;
@@ -1506,6 +1516,11 @@ export interface LowStockRow {
   product_name: string;
   label: string;
   unit: string;
+  /**
+   * 1000 for a weighed variant: it is «low» at 3 kg rather than 3 g, and its
+   * grams read as kilograms. Absent from a server older than that → 1.
+   */
+  price_per?: number | null;
   quantity: number;
 }
 

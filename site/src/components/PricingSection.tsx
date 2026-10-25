@@ -1,14 +1,14 @@
 import { Reveal, StaggerGroup, StaggerItem } from './Reveal';
 import { SectionHeading } from './SectionHeading';
 import { ArrowRight, ChevronRight, Coins, Lock, MessageCircle, Sparkles } from './glyphs';
-import { PRICING, COMPETITOR_FACTS, priceLockNote } from '../lib/productFacts';
+import { PRICING, COMPETITOR_FACTS, DEBTS_ADDON, addonPriceText, posAddon, priceLockNote, type PosAddon } from '../lib/productFacts';
 import { CTA } from '../lib/ctaIds';
 
 const { pos } = PRICING;
 const cb = COMPETITOR_FACTS.checkbox;
 const BASE = pos.plans[0];
 const OWN = pos.plans[1];
-const TABLES = pos.addons[0];
+const TABLES = posAddon('tables');
 const LOCK_NOTE = priceLockNote(BASE);
 
 /** «19.10.2026» from an ISO date, for copy. */
@@ -35,7 +35,7 @@ const PERKS = [
   {
     icon: Sparkles,
     t: 'Усі нові функції — у вашому тарифі',
-    d: 'Те, що ми додамо до каси далі — лояльність, доставка, чайові, власний ПРРО, — входить у вашу ціну без доплат. Для тих, хто прийде пізніше, частина функцій буде у старших тарифах.',
+    d: 'Те, що ми додамо до каси далі — лояльність, доставка, чайові, власний ПРРО, — входить у вашу ціну без доплат. Окремо оплачуються лише доповнення нижче: столи для ресторану й продаж під запис. Для тих, хто прийде пізніше, частина функцій буде у старших тарифах.',
   },
   {
     icon: MessageCircle,
@@ -105,7 +105,8 @@ export function PricingSection() {
         <Reveal className="mt-16">
           <h3 className="text-2xl font-bold text-ink-strong text-center">Тарифи після запуску</h3>
         </Reveal>
-        <div className="mt-8 grid md:grid-cols-3 gap-6">
+        {/* Two plans and the add-ons — four cards, two by two on a tablet. */}
+        <div className="mt-8 grid md:grid-cols-2 lg:grid-cols-4 gap-6">
           {pos.plans.map((plan) => (
             <Reveal key={plan.id}>
               <div className={`h-full p-6 flex flex-col ${plan.status === 'available' ? 'card ring-2 ring-pos' : 'card-flat'}`}>
@@ -124,20 +125,23 @@ export function PricingSection() {
               </div>
             </Reveal>
           ))}
-          <Reveal>
-            <div className="h-full card-flat p-6 flex flex-col">
-              <p className="font-bold text-ink-strong">{TABLES.name}</p>
-              <p className="mt-3">
-                <span className="text-4xl font-bold tracking-tight tabular-nums text-ink-strong">+{TABLES.price}</span>
-                <span className="text-muted text-sm ml-1.5">грн/міс</span>
-              </p>
-              <p className="text-muted text-[15px] mt-3 leading-relaxed flex-1">
-                План залу, рахунки столів, раунди на кухню, передчек і розділення рахунку. Доповнення до
-                будь-якого тарифу.
-              </p>
-              <p className="text-muted text-xs mt-4 pt-3 border-t border-line">Для ресторану з офіціантами.</p>
-            </div>
-          </Reveal>
+          {pos.addons.map((addon) => (
+            <Reveal key={addon.id}>
+              <div className="h-full card-flat p-6 flex flex-col">
+                <p className="font-bold text-ink-strong">{addon.name}</p>
+                <p className="mt-3">
+                  <span className="text-4xl font-bold tracking-tight tabular-nums text-ink-strong">
+                    {addon.period === 'month' ? `+${addon.price}` : addon.price}
+                  </span>
+                  <span className="text-muted text-sm ml-1.5">{addon.period === 'month' ? 'грн/міс' : 'грн один раз'}</span>
+                </p>
+                <p className="text-muted text-[15px] mt-3 leading-relaxed flex-1">
+                  {addon.note} Доповнення до будь-якого тарифу.
+                </p>
+                <p className="text-muted text-xs mt-4 pt-3 border-t border-line">{addon.forWhom}</p>
+              </div>
+            </Reveal>
+          ))}
         </div>
 
         {/* Why monthly */}
@@ -179,7 +183,14 @@ export function PricingSection() {
  * cover (`VerticalFact.roadmapInLaunchTariff`): the card then says what the
  * till costs and nothing about what comes next.
  */
-export function PricingCard({ addon, futureIncluded = true }: { addon?: boolean; futureIncluded?: boolean }) {
+export function PricingCard({
+  addon,
+  futureIncluded = true,
+}: {
+  /** The add-on this landing names next to the price: the restaurant's tables, the grocery's «Борги». */
+  addon?: PosAddon['id'];
+  futureIncluded?: boolean;
+}) {
   return (
     <Reveal>
       <div className="card p-6 sm:p-8 grid sm:grid-cols-[auto_1fr_auto] gap-6 items-center">
@@ -202,8 +213,10 @@ export function PricingCard({ addon, futureIncluded = true }: { addon?: boolean;
             </span>
           </p>
           <p className="text-muted text-[15px] mt-1 leading-relaxed">
-            До {pos.perStoreRegisters} кас{addon ? `, столи — ще ${TABLES.price} грн/міс` : ''}. Помісячно, без
-            передплати.{futureIncluded && ' Усе, що ми додамо далі, входить у вашу ціну.'}
+            До {pos.perStoreRegisters} кас{addon === 'tables' ? `, столи — ще ${TABLES.price} грн/міс` : ''}. Помісячно, без
+            передплати.
+            {addon === 'debts' && ` Продаж під запис (модуль «Борги») — ${addonPriceText(DEBTS_ADDON)}.`}
+            {futureIncluded && ' Усе, що ми додамо далі, входить у вашу ціну.'}
           </p>
         </div>
         <a href="/pos#pricing" className="link-more text-[15px] whitespace-nowrap" data-cta={CTA.pricingCard}>

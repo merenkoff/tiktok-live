@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, formatUah } from '@pos/platform';
+import { api, unitPriceLabel } from '@pos/platform';
 import type { LowStockRow, OnHandRow, StockDocument } from '@pos/platform';
 import {
   AlertTriangle,
@@ -17,6 +17,7 @@ import {
 } from '@pos/platform/ui';
 import { ManageStockModal } from '../components/ManageStockModal';
 import { STATUS_LABEL, TYPE_GLYPH, TYPE_LABEL, statusChipClass } from '../lib/documents';
+import { stockCell, stockText } from '../lib/stockUnits';
 
 /** The five documents the owner starts from here, in the order a day uses them. */
 const ACTIONS = [
@@ -108,7 +109,7 @@ export function StockHubPage() {
                   {item.product_name} <span className="text-sq-muted">{item.label}</span>
                 </span>
                 <span className="text-sm tabular-nums text-sq-danger font-semibold shrink-0">
-                  {item.quantity} шт
+                  {stockText(item.quantity, item)}
                 </span>
               </li>
             ))}
@@ -148,10 +149,12 @@ export function StockHubPage() {
                       onClick={() => setManage(row)}
                       className="min-h-9 px-1 font-semibold text-sq-blue hover:underline tabular-nums"
                     >
-                      {row.quantity}
+                      {stockCell(row.quantity, row)}
                     </button>
                   </td>
-                  <td className="text-right tabular-nums">{formatUah(row.price_cents)}</td>
+                  <td className="text-right tabular-nums">
+                    {unitPriceLabel(row.price_cents, row.unit, row.price_per ?? 1)}
+                  </td>
                 </tr>
               ))}
               {filtered.length === 0 && (

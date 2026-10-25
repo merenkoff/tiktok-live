@@ -213,17 +213,25 @@ export async function writeOffPostedTx(
   return { documentId, docNumber };
 }
 
+/**
+ * What is running out: stock at or under `threshold` of the unit the variant
+ * is SOLD in — three pieces, or three kilograms of something priced per
+ * kilogram (`price_per`, migration 075). Counted in base units alone, a
+ * weighed variant only showed up at 3 g, which is to say after it had gone.
+ * Ordered by that same measure, so 2,5 кг of cheese does not sort below
+ * 4 loaves just because 2500 > 4. A per-variant minimum is phase Г10.
+ */
 export async function listLowStock(storeId: number, threshold = 3) {
   const result = await pool.query(
-    `SELECT v.id AS variant_id, p.name AS product_name, v.label, v.unit, s.quantity
+    `SELECT v.id AS variant_id, p.name AS product_name, v.label, v.unit, v.price_per, s.quantity
      FROM pos_stock s
      JOIN pos_variants v ON v.id = s.variant_id
      JOIN pos_products p ON p.id = v.product_id
-     WHERE s.store_id = $1 AND s.quantity <= $2 AND v.is_active = TRUE
+     WHERE s.store_id = $1 AND s.quantity <= $2 * v.price_per AND v.is_active = TRUE
        -- Without this every derived composite would sit at 0 and permanently
        -- top the low-stock list, drowning the components that actually ran out.
        AND NOT (p.kind = 'composite' AND p.stock_mode = 'derived')
-     ORDER BY s.quantity ASC, p.name ASC`,
+     ORDER BY s.quantity::numeric / v.price_per ASC, p.name ASC`,
     [storeId, threshold]
   );
   return result.rows.map((row) => ({
@@ -231,6 +239,7 @@ export async function listLowStock(storeId: number, threshold = 3) {
     product_name: row.product_name,
     label: row.label ?? '',
     unit: row.unit ?? '',
+    price_per: Number(row.price_per ?? 1),
     quantity: Number(row.quantity),
   }));
 }

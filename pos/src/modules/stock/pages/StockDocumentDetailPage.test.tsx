@@ -122,6 +122,89 @@ describe('StockDocumentDetailPage — «Друк цінників»', () => {
   });
 });
 
+// Groceries (migration 075): a weighed line is grams on the server and
+// kilograms on the screen, its cost per gram read back per kilogram.
+describe('StockDocumentDetailPage — goods sold by weight', () => {
+  const potatoes = line({
+    id: 5,
+    variant_id: 30,
+    product_name: 'Картопля',
+    label: '',
+    unit: 'г',
+    quantity: 20500,
+    unit_cost_cents: 1,
+    price_cents: 2490,
+    price_per: 1000,
+    sku: null,
+    barcode: '2900000000302',
+  });
+
+  it('reads a receipt line in kilograms, its purchase price and price per kilogram', async () => {
+    getStockDocument.mockResolvedValue(document({ lines: [potatoes] }));
+    renderPage();
+    expect(await screen.findByText('+20,500 кг')).toBeInTheDocument();
+    expect(screen.getByText(/Закупка 10,00 ₴\/кг · Ціна 24,90 ₴\/кг/)).toBeInTheDocument();
+  });
+
+  it('reads a write-off and a count the same way', async () => {
+    getStockDocument.mockResolvedValue(document({ type: 'writeoff', lines: [{ ...potatoes, quantity: 350, unit_cost_cents: null }] }));
+    const { unmount } = renderPage();
+    expect(await screen.findByText('−0,350 кг')).toBeInTheDocument();
+    unmount();
+
+    getStockDocument.mockResolvedValue(
+      document({ type: 'inventory', lines: [{ ...potatoes, quantity: 0, unit_cost_cents: null, system_qty: 12500, counted_qty: 11750 }] })
+    );
+    renderPage();
+    expect(await screen.findByText(/Облік 12,500 кг → пораховано 11,750 кг/)).toBeInTheDocument();
+  });
+
+  it('reads a stub for a new weighed product in kilograms too, before it has a variant', async () => {
+    useAuthStore.setState({
+      auth: makeAuthResponse({
+        store: {
+          name: 'Evelin',
+          vertical: {
+            id: 'grocery',
+            title: 'Продукти',
+            attributes: [],
+            units: ['шт', 'г', 'мл'],
+            weighedUnits: ['г', 'мл'],
+            defaultUnit: 'шт',
+          },
+        },
+      }),
+      isAuthenticated: true,
+    });
+    getStockDocument.mockResolvedValue(
+      document({
+        status: 'draft',
+        lines: [
+          line({
+            id: 6,
+            variant_id: null,
+            is_placeholder: true,
+            placeholder_name: 'Цибуля',
+            placeholder_unit: 'г',
+            product_name: 'Цибуля',
+            label: '',
+            unit: 'г',
+            quantity: 15000,
+            unit_cost_cents: 2,
+            placeholder_price_cents: 2990,
+            price_cents: null,
+            price_per: null,
+          }),
+        ],
+      })
+    );
+    renderPage();
+    expect(await screen.findByText('+15,000 кг')).toBeInTheDocument();
+    expect(screen.getByText(/Закупка 20,00 ₴\/кг/)).toBeInTheDocument();
+    expect(screen.getByText(/Ціна продажу 29,90 ₴\/кг/)).toBeInTheDocument();
+  });
+});
+
 describe('receivedTagSources', () => {
   it('folds lines into products and counts what arrived per variant, skipping stubs', () => {
     const out = receivedTagSources([

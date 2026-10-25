@@ -1,6 +1,16 @@
 import type { Article } from './types';
-import { COMPETITOR_FACTS, FEATURES, PRICING, PRODUCT, VERTICALS, isAvailable, roadmapFor } from '../../lib/productFacts';
-import { formatDateUk } from '../../lib/formatDate';
+import {
+  COMPETITOR_FACTS,
+  FEATURES,
+  PRICING,
+  PRODUCT,
+  VERTICALS,
+  isAvailable,
+  roadmapFor,
+  DEBTS_ADDON,
+  addonPriceText,
+} from '../../lib/productFacts';
+import { formatDateUk, latestDay } from '../../lib/formatDate';
 
 const POS = PRODUCT.pos.name;
 const T = COMPETITOR_FACTS.torgsoft;
@@ -68,7 +78,8 @@ export const torgsoftPosboxPosterDlyaProduktovogoMagazynu: Article = {
     title: 'Програма для продуктового магазину: Торгсофт, Posbox чи Poster — продаж у борг, ваги й ціна',
     description: `Що вміють Торгсофт, Posbox і Poster для продуктового магазину: продаж у борг і облік боргів покупців, ваги на касі й ваги з друком етикеток, робота без інтернету, ПРРО — і скільки коштує каса на одну точку за рік і за три роки. За сторінками виробників, прочитаними ${CHECKED}.`,
     publishedAt: T.publishedAt,
-    updatedAt: T.checkedAt,
+    // The competitors' facts were read on `checkedAt`; ours may have changed since.
+    updatedAt: latestDay(T.checkedAt, PRICING.pos.changedAt),
     ogImage: '/og/pos.png',
     readingMinutes: 8,
     cta: {
@@ -483,8 +494,9 @@ function Body() {
         ))}
       </ul>
       <p>
-        Ціна самої каси: {PRICING.pos.label.toLowerCase()}; підписку Checkbox магазин оплачує окремо —{' '}
-        {CB.priceFrom} грн/міс за касу. Для підакцизних товарів каса поки не підходить. Якщо ви торгуєте на
+        Ціна самої каси: {PRICING.pos.label.toLowerCase()}; продаж під запис — модуль «Борги»,{' '}
+        {addonPriceText(DEBTS_ADDON)}; підписку Checkbox магазин оплачує окремо — {CB.priceFrom} грн/міс за
+        касу. Для підакцизних товарів каса поки не підходить. Якщо ви торгуєте на
         ринку, спершу перевірте, чи потрібен вам ПРРО взагалі, — у статті{' '}
         <a href="/dovidka/chy-potriben-prro-na-rynku">«Чи потрібен ПРРО для торгівлі на ринку»</a>. Усе
         про нашу касу для продуктів — на сторінці <a href={LANDING}>каси для продуктового магазину</a>.

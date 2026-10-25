@@ -57,13 +57,18 @@ export function posSoftwareJsonLd() {
         description: `${plan.note} За магазин до ${pos.perStoreRegisters} кас. ${pos.billing} Ціна закріплюється ${plan.lock}.`,
         availability: plan.status === 'available' ? IN_STOCK : PRE_ORDER,
       })),
+      // A monthly add-on carries the plans' billing spec; a one-off one is a
+      // plain price — a billing duration on it would claim a subscription.
       ...pos.addons.map((addon) => ({
         '@type': 'Offer',
         name: addon.name,
         price: String(addon.price),
         priceCurrency: pos.currency,
-        priceSpecification: monthly(addon.price, pos.currency),
-        description: `Доповнення до будь-якого тарифу. ${pos.billing}`,
+        ...(addon.period === 'month' && { priceSpecification: monthly(addon.price, pos.currency) }),
+        description:
+          addon.period === 'month'
+            ? `${addon.note} Доповнення до будь-якого тарифу. ${pos.billing}`
+            : `${addon.note} Доповнення до будь-якого тарифу; оплата один раз, без щомісячної плати.`,
         availability: IN_STOCK,
       })),
     ],

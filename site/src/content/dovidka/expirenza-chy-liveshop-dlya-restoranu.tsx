@@ -1,10 +1,10 @@
 import type { Article } from './types';
-import { COMPETITOR_FACTS, PRICING, PRODUCT, isAvailable } from '../../lib/productFacts';
-import { formatDateUk } from '../../lib/formatDate';
+import { COMPETITOR_FACTS, PRICING, PRODUCT, TABLES_ADDON, isAvailable } from '../../lib/productFacts';
+import { formatDateUk, latestDay } from '../../lib/formatDate';
 
 const POS = PRODUCT.pos.name;
 const E = COMPETITOR_FACTS.expirenza;
-const TABLES = PRICING.pos.addons[0];
+const TABLES = TABLES_ADDON;
 
 const CHECKED = formatDateUk(E.checkedAt);
 /** «3 800+»: grouped by hand, because a locale's separator differs between Node and a browser and would break hydration. */
@@ -22,7 +22,8 @@ export const expirenzaChyLiveshopDlyaRestoranu: Article = {
     title: 'monobank Expirenza чи The Live Shop POS для ресторану: порівняння за фактами',
     description: `Що гість робить за QR на столі в Expirenza (меню, рахунок, оплата, чайові; комісія ${FEE}) і що — у The Live Shop POS (меню, рахунок столу, виклик офіціанта, замовлення з телефону, каса, кухня, ПРРО); де сильніший кожен із двох і чого ми не знайшли на їхніх сторінках. Джерела й дата перевірки — ${CHECKED}.`,
     publishedAt: E.publishedAt,
-    updatedAt: E.checkedAt,
+    // The competitor's facts were read on `checkedAt`; ours may have changed since.
+    updatedAt: latestDay(E.checkedAt, PRICING.pos.changedAt),
     ogImage: '/og/pos.png',
     readingMinutes: 6,
     faq: [

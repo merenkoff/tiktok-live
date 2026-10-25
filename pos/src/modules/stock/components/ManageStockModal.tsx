@@ -5,19 +5,31 @@
 import { FormEvent, useState } from 'react';
 import {
   api,
-  baseCostToPack,
   defaultPackMode,
   formatUah,
-  packCostToBase,
   packOf,
   QuantityUnitToggle,
-  quantityToBase,
   uahInputToCents,
+  unitPriceLabel,
   useVertical,
 } from '@pos/platform';
 import type { OnHandRow, PackMode } from '@pos/platform';
 import { Segmented, Warehouse, X } from '@pos/platform/ui';
 import { ADJUST_REASONS, defaultReason, writeoffReasonsOf } from '../lib/reasons';
+import {
+  costStepNote,
+  costUnit,
+  countPack,
+  countUnit,
+  formatDecimal,
+  isWeighedRow,
+  parseDecimal,
+  shownCost,
+  shownQty,
+  stockText,
+  typedCostToBase,
+  typedToBase,
+} from '../lib/stockUnits';
 
 type Mode = 'receive' | 'writeoff' | 'set';
 
@@ -41,8 +53,12 @@ export function ManageStockModal({ row, onClose, onSaved }: Props) {
   // bottles); «має бути» and a write-off open in base units, because what is
   // written off is 200 ml, not 0.2 of a bottle.
   const [packMode, setPackMode] = useState<PackMode>(defaultPackMode('count', pack));
-  const [qty, setQty] = useState(String(row.quantity));
-  const [cost, setCost] = useState(String((row.cost_cents / 100).toFixed(2)));
+  // Typed in whatever the box counts: kilograms for a weighed variant
+  // (`lib/stockUnits.ts`), written «12,5» as its text box reads it; packs or
+  // base units otherwise. Base units are what leaves.
+  const qtyText = (n: number) => (isWeighedRow(row) ? formatDecimal(n) : String(n));
+  const [qty, setQty] = useState(() => qtyText(shownQty(row, 'base', row.quantity)));
+  const [cost, setCost] = useState(String((shownCost(row, 'base', row.cost_cents) / 100).toFixed(2)));
   const [reason, setReason] = useState('data_fix');
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
@@ -55,10 +71,8 @@ export function ManageStockModal({ row, onClose, onSaved }: Props) {
    */
   function switchPackMode(next: PackMode): void {
     if (!pack || next === packMode) return;
-    const cents = uahInputToCents(cost);
-    const rescaled =
-      next === 'pack' ? baseCostToPack(cents, pack.qty) : packCostToBase(cents, pack.qty);
-    setCost((rescaled / 100).toFixed(2));
+    const perBase = typedCostToBase(row, packMode, uahInputToCents(cost));
+    setCost((Math.round(shownCost(row, next, perBase)) / 100).toFixed(2));
     setPackMode(next);
   }
 
@@ -67,12 +81,17 @@ export function ManageStockModal({ row, onClose, onSaved }: Props) {
     setSaving(true);
     setError(null);
     try {
-      const typed = Number(qty);
+      // «20,5» for a weighed variant: its box is text, so the comma survives.
+      const typed = isWeighedRow(row) ? parseDecimal(qty) ?? Number.NaN : Number(qty);
       if (!Number.isFinite(typed) || typed < 0) throw new Error('Некоректна кількість');
       // Whatever the box counted in, base units are what leaves the screen.
-      const n = quantityToBase(typed, packMode, pack);
+      const n = typedToBase(row, packMode, typed);
       if (!Number.isInteger(n)) {
-        throw new Error(`Вийде ${n} ${row.unit} — склад рахується цілими`);
+        throw new Error(
+          isWeighedRow(row)
+            ? 'Вага — з точністю до грама, не більше трьох знаків після коми'
+            : `Вийде ${n} ${row.unit} — склад рахується цілими`
+        );
       }
 
       if (mode === 'receive') {
@@ -81,12 +100,9 @@ export function ManageStockModal({ row, onClose, onSaved }: Props) {
         await api.addStockDocumentLine(doc.id, {
           variant_id: row.variant_id,
           quantity: n,
-          // Typed per pack when the box counts packs — `unit_cost_cents` has
-          // only ever meant cents per BASE unit.
-          unit_cost_cents:
-            packMode === 'pack' && pack
-              ? packCostToBase(uahInputToCents(cost), pack.qty)
-              : uahInputToCents(cost),
+          // Typed per pack or per kilogram — `unit_cost_cents` has only ever
+          // meant whole cents per BASE unit.
+          unit_cost_cents: Math.round(typedCostToBase(row, packMode, uahInputToCents(cost))),
         });
         await api.postStockDocument(doc.id, crypto.randomUUID());
       } else if (mode === 'writeoff') {
@@ -138,9 +154,9 @@ export function ManageStockModal({ row, onClose, onSaved }: Props) {
   function chooseMode(m: Mode): void {
     setMode(m);
     switchPackMode(defaultPackMode(m === 'receive' ? 'receive' : 'count', pack));
-    // «1» means one pack when the box opens in packs — the number
-    // and the caption above it always agree.
-    setQty(m === 'set' ? String(row.quantity) : '1');
+    // «1» means one pack when the box opens in packs, one kilogram for a
+    // weighed variant — the number and the caption above it always agree.
+    setQty(m === 'set' ? qtyText(shownQty(row, 'base', row.quantity)) : '1');
     setReason(m === 'writeoff' ? defaultReason(writeoffReasons) : 'data_fix');
   }
 
@@ -179,8 +195,8 @@ export function ManageStockModal({ row, onClose, onSaved }: Props) {
               </span>
             </p>
             <p className="text-sm text-sq-secondary mt-0.5 tabular-nums">
-              Зараз: <strong className="text-sq-text">{row.quantity}</strong> {row.unit} ·{' '}
-              {formatUah(row.price_cents)}
+              Зараз: <strong className="text-sq-text">{stockText(row.quantity, row)}</strong> ·{' '}
+              {isWeighedRow(row) ? unitPriceLabel(row.price_cents, row.unit, row.price_per ?? 1) : formatUah(row.price_cents)}
             </p>
           </div>
 
@@ -196,9 +212,16 @@ export function ManageStockModal({ row, onClose, onSaved }: Props) {
 
           <div className="space-y-1.5">
             <label className="flex flex-col gap-1.5">
-              <span className="text-[13px] font-semibold text-sq-secondary">{label}</span>
+              <span className="text-[13px] font-semibold text-sq-secondary">
+                {/* A weighed variant with no pack has no toggle to say the box counts kilograms. */}
+                {isWeighedRow(row) && !pack ? `${label}, ${countUnit(row)}` : label}
+              </span>
               <input
-                type="number"
+                // A weighed variant's box is text with a decimal keyboard: a
+                // number box drops the comma of «20,5» in a browser whose
+                // language is not Ukrainian, and 205 kg is not what arrived.
+                type={isWeighedRow(row) ? 'text' : 'number'}
+                inputMode={isWeighedRow(row) ? 'decimal' : undefined}
                 min={0}
                 // A number box defaults to step=1, and native validation would
                 // then block «1,5 ящика» with a browser tooltip instead of the
@@ -212,10 +235,10 @@ export function ManageStockModal({ row, onClose, onSaved }: Props) {
               />
             </label>
             <QuantityUnitToggle
-              pack={pack}
-              unit={row.unit}
+              pack={countPack(row)}
+              unit={countUnit(row)}
               mode={packMode}
-              value={Number(qty)}
+              value={isWeighedRow(row) ? parseDecimal(qty) ?? 0 : Number(qty)}
               onModeChange={switchPackMode}
             />
           </div>
@@ -223,15 +246,21 @@ export function ManageStockModal({ row, onClose, onSaved }: Props) {
           {mode === 'receive' && (
             <label className="flex flex-col gap-1.5">
               <span className="text-[13px] font-semibold text-sq-secondary">
-                {packMode === 'pack' && pack
-                  ? `Ціна закупки за ${pack.label} (₴)`
-                  : `Ціна закупки за ${row.unit} (₴)`}
+                {`Ціна закупки за ${costUnit(row, packMode)} (₴)`}
               </span>
               <input
                 value={cost}
                 onChange={(e) => setCost(e.target.value)}
                 className="sq-input"
               />
+              {(() => {
+                const note = costStepNote(row, packMode, typedCostToBase(row, packMode, uahInputToCents(cost)));
+                return note ? (
+                  <span className="text-[12px] text-sq-muted" data-testid="stock-cost-step">
+                    {note}
+                  </span>
+                ) : null;
+              })()}
             </label>
           )}
 

@@ -132,6 +132,8 @@ export const POS_MIGRATIONS = [
   '075_pos_weighed.sql',
   // The «Demo Grocery» store (grocery vertical): packed goods by EAN-13 and weighed ones by the kilogram; credentials in the header.
   '076_pos_demo_grocery_store.sql',
+  // Five customers with a credit limit in demo-grocery, off the landing page's debt notebook — once, like 069.
+  '077_pos_demo_grocery_credit.sql',
 ] as const;
 
 export function readMigration(file: string): string {

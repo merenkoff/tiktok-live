@@ -6,17 +6,16 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   api,
-  baseToPack,
   defaultPackMode,
   formatUah,
   packOf,
   QuantityUnitToggle,
-  quantityToBase,
   uahInputToCents,
   enrichGtinFromSources,
   gtinSourceLabel,
   isInternalBarcode,
   useVertical,
+  WEIGHED_PRICE_PER,
 } from '@pos/platform';
 import type {
   AttributeValues,
@@ -31,8 +30,25 @@ import { AttributeFields, Package, PageHeader, Plus, SectionHead, useDragScroll 
 import { TYPE_GLYPH } from '../lib/documents';
 import { ADJUST_REASONS, defaultReason, writeoffReasonsOf } from '../lib/reasons';
 import { confirmStubsMessage, stubsFooter, summarizeStubs } from '../lib/stubs';
+import {
+  costStepNote,
+  costUnit,
+  countPack,
+  countScale,
+  countUnit,
+  isWeighedRow,
+  parseDecimal,
+  shownCost,
+  shownQty,
+  signedStockCell,
+  stockText,
+  typedCostToBase,
+  typedToBase,
+} from '../lib/stockUnits';
 import { supportsMatrix } from '../../products/lib/variantMatrix';
+import { isWeighedUnit, unitLabels } from '../../products/lib/weighedUnit';
 import { ReceiveMatrixDialog, type ReceiveMatrixResult } from '../components/ReceiveMatrixDialog';
+import { QuantityBox } from '../components/DecimalInput';
 
 /**
  * A short read-out of what the operator typed, for the draft row on screen.
@@ -53,6 +69,16 @@ function attributeSummary(vertical: VerticalPublicConfig, attributes: AttributeV
     .join(' · ');
 }
 
+/** The line under a price box when the document will hold a different figure than was typed. */
+function CostStepNote({ note }: { note: string | null }) {
+  if (!note) return null;
+  return (
+    <span className="max-w-[16rem] text-[12px] leading-snug text-sq-muted" data-testid="stock-cost-step">
+      {note}
+    </span>
+  );
+}
+
 type ExistingLine = {
   kind: 'existing';
   variant_id: number;
@@ -69,6 +95,12 @@ type ExistingLine = {
   on_hand: number;
   /** The variant's own unit, so the row stops saying «шт» about millilitres. */
   unit: string;
+  /**
+   * 1000 when the variant is sold per kilogram or litre (migration 075): the
+   * row shows and takes kilograms, `quantity` and `unit_cost_cents` stay per
+   * gram (`lib/stockUnits.ts`).
+   */
+  price_per: number;
   /** The purchase pack, if this variant has one (migration 054). */
   pack_qty: number | null;
   pack_label: string;
@@ -76,53 +108,29 @@ type ExistingLine = {
   packMode: PackMode;
 };
 
-/**
- * The four conversions the rows on this screen need. `quantity`,
- * `target_qty` and `unit_cost_cents` are ALWAYS base units in state — what a
- * pack changes is only what the box shows and what a keystroke means.
- */
-function shownQty(line: ExistingLine, base: number): number {
-  const pack = packOf(line);
-  if (line.packMode !== 'pack' || !pack) return base;
-  // Four decimals so a round-trip through the box is lossless for anything a
-  // person would actually type.
-  return Math.round(baseToPack(base, pack.qty) * 10000) / 10000;
-}
-
-function typedToBase(line: ExistingLine, raw: string): number {
-  return quantityToBase(Number(raw), line.packMode, packOf(line));
-}
-
-function shownCost(line: ExistingLine, centsPerBase: number): number {
-  const pack = packOf(line);
-  if (line.packMode !== 'pack' || !pack) return centsPerBase;
-  return centsPerBase * pack.qty;
-}
-
-/**
- * Kept UNROUNDED in state on purpose. 15 ₴ for a 1000 ml bottle is 1.5 cents
- * per millilitre; rounding that to 2 on every keystroke would redraw the box
- * as «20,00 ₴» while the person is still typing «15». The single rounding
- * happens once, on the way out — the integer `unit_cost_cents` column is what
- * loses the half-kopiyka, and it lost it before packs existed too.
- */
-function typedCostToBase(line: ExistingLine, raw: string): number {
-  const cents = uahInputToCents(raw);
-  const pack = packOf(line);
-  if (line.packMode !== 'pack' || !pack) return cents;
-  return cents / pack.qty;
-}
+// `quantity`, `target_qty` and `unit_cost_cents` are ALWAYS base units in
+// state — what a pack or a weighed variant changes is only what the box shows
+// and what a keystroke means. The cost is kept UNROUNDED on purpose: 15 ₴ for
+// a 1000 ml bottle is 1.5 cents per millilitre, 14,50 ₴ a kilogram is 1.45 a
+// gram, and rounding on every keystroke would redraw the box mid-typing. The
+// single rounding happens on the way out, where the integer column needs it —
+// and the box says so when it changes the figure (`costStepNote`).
 
 type PlaceholderLine = {
   kind: 'placeholder';
   clientKey: string;
   name: string;
+  /** Base units, like an existing line's — grams for a product sold by weight. */
   quantity: number;
+  /** Per kilogram for a weighed unit: the new variant's price is, from the first save. */
   price_cents: number;
+  /** Per BASE unit, unrounded until it leaves the screen. */
   unit_cost_cents?: number;
   /** Vertical-defined attributes of the product this line will create. */
   attributes: AttributeValues;
   unit: string;
+  /** 1000 when `unit` is one the store's vertical sells by weight — what the server will derive. */
+  price_per: number;
   /** What the operator typed, shown on the draft row until the server saves it. */
   summary: string;
   sku: string;
@@ -182,6 +190,12 @@ export function StockActionPage({ type }: Props) {
   const [stubCost, setStubCost] = useState('');
   const [stubAttributes, setStubAttributes] = useState<AttributeValues>({});
   const [stubUnit, setStubUnit] = useState(vertical.defaultUnit);
+  // A new product in a unit the store sells by weight is priced per kilogram
+  // from its first save (the server derives `price_per`), so the stub form asks
+  // for kilograms and prices per kilogram too.
+  const stubPricePer = isWeighedUnit(vertical, stubUnit) ? WEIGHED_PRICE_PER : 1;
+  const stubWeighed = stubPricePer > 1;
+  const stubCountUnit = countUnit({ unit: stubUnit, price_per: stubPricePer });
   const [stubSku, setStubSku] = useState('');
   const [stubBarcodeBusy, setStubBarcodeBusy] = useState(false);
   const [stubBarcode, setStubBarcode] = useState('');
@@ -248,6 +262,7 @@ export function StockActionPage({ type }: Props) {
     const packMode = defaultPackMode(type === 'receipt' ? 'receive' : 'count', pack);
     const packFields = {
       unit: row.unit,
+      price_per: row.price_per ?? 1,
       pack_qty: pack?.qty ?? null,
       pack_label: pack?.label ?? '',
       packMode,
@@ -272,9 +287,9 @@ export function StockActionPage({ type }: Props) {
           kind: 'existing',
           variant_id: row.variant_id,
           label,
-          // One pack when the box counts packs: the number and the caption
-          // above it always agree.
-          quantity: packMode === 'pack' && pack ? pack.qty : 1,
+          // One of whatever the box counts — a pack, a kilogram, a piece —
+          // so the number and the caption above it always agree.
+          quantity: packMode === 'pack' && pack ? pack.qty : countScale(packFields),
           unit_cost_cents: row.cost_cents,
           on_hand: row.quantity,
           ...packFields,
@@ -385,9 +400,20 @@ export function StockActionPage({ type }: Props) {
       setError('Вкажіть назву нового товару');
       return;
     }
-    const quantity = Number(stubQty);
+    // Typed in kilograms when the new product is sold by weight, like an
+    // existing weighed line; grams are what the line holds.
+    const stubRow = { unit: stubUnit, price_per: stubPricePer };
+    const quantity = typedToBase(stubRow, 'base', stubWeighed ? parseDecimal(stubQty) ?? Number.NaN : Number(stubQty));
     if (!quantity || quantity <= 0) {
       setError('Кількість має бути більше 0');
+      return;
+    }
+    if (!Number.isInteger(quantity)) {
+      setError(
+        isWeighedRow(stubRow)
+          ? 'Вага — з точністю до грама: не більше трьох знаків після коми'
+          : 'Кількість має бути цілою'
+      );
       return;
     }
     const priceCents = uahInputToCents(stubPrice);
@@ -396,7 +422,8 @@ export function StockActionPage({ type }: Props) {
       return;
     }
     const costRaw = stubCost.trim();
-    const unitCostCents = costRaw === '' ? undefined : uahInputToCents(costRaw);
+    const unitCostCents =
+      costRaw === '' ? undefined : typedCostToBase(stubRow, 'base', uahInputToCents(costRaw));
     // Same key the server de-duplicates on (`placeholder_attributes` jsonb
     // equality) — catching it here just saves a round trip.
     const attributes = stubAttributes;
@@ -425,6 +452,7 @@ export function StockActionPage({ type }: Props) {
         unit_cost_cents: unitCostCents,
         attributes,
         unit: stubUnit,
+        price_per: stubPricePer,
         summary: attributeSummary(vertical, attributes),
         sku: stubSku.trim(),
         barcode: stubBarcode.trim(),
@@ -462,6 +490,8 @@ export function StockActionPage({ type }: Props) {
           unit_cost_cents: row?.cost_cents ?? variant.cost_cents ?? undefined,
           on_hand: row?.quantity ?? variant.quantity,
           unit: row?.unit ?? variant.unit,
+          // The grid is clothing's (colours × sizes), never weighed.
+          price_per: row?.price_per ?? 1,
           pack_qty: pack?.qty ?? null,
           pack_label: pack?.label ?? '',
           // The grid counts in base units; the box must not re-read them as packs.
@@ -491,6 +521,7 @@ export function StockActionPage({ type }: Props) {
           unit_cost_cents: stub.unit_cost_cents,
           attributes: stub.attributes,
           unit: stub.unit,
+          price_per: isWeighedUnit(vertical, stub.unit) ? WEIGHED_PRICE_PER : 1,
           summary: attributeSummary(vertical, stub.attributes),
           sku: '',
           barcode: '',
@@ -540,20 +571,26 @@ export function StockActionPage({ type }: Props) {
         (l): l is ExistingLine => l.kind === 'existing' && l.quantity > l.on_hand
       );
       if (over) {
-        setError(`На складі лише ${over.on_hand} ${over.unit}: ${over.label}`);
+        setError(`На складі лише ${stockText(over.on_hand, over)}: ${over.label}`);
         return;
       }
     }
     const fractional = lines.find(
-      (l): l is ExistingLine =>
-        l.kind === 'existing' &&
-        !Number.isInteger(type === 'adjustment' ? (l.target_qty ?? l.on_hand) : l.quantity)
+      (l) =>
+        !Number.isInteger(
+          l.kind === 'existing' && type === 'adjustment' ? (l.target_qty ?? l.on_hand) : l.quantity
+        )
     );
     if (fractional) {
+      const label = fractional.kind === 'existing' ? fractional.label : fractional.name;
       const value =
-        type === 'adjustment' ? fractional.target_qty ?? fractional.on_hand : fractional.quantity;
+        fractional.kind === 'existing' && type === 'adjustment'
+          ? fractional.target_qty ?? fractional.on_hand
+          : fractional.quantity;
       setError(
-        `Вийде ${value} ${fractional.unit} — склад рахується цілими: ${fractional.label}`
+        isWeighedRow(fractional)
+          ? `Вага — з точністю до грама, не більше трьох знаків після коми: ${label}`
+          : `Вийде ${value} ${fractional.unit} — склад рахується цілими: ${label}`
       );
       return;
     }
@@ -579,7 +616,7 @@ export function StockActionPage({ type }: Props) {
             name: line.name,
             quantity: line.quantity,
             price_cents: line.price_cents,
-            unit_cost_cents: line.unit_cost_cents ?? null,
+            unit_cost_cents: line.unit_cost_cents == null ? null : Math.round(line.unit_cost_cents),
             attributes: line.attributes,
             unit: line.unit,
             sku: line.sku || null,
@@ -618,6 +655,13 @@ export function StockActionPage({ type }: Props) {
   }
 
   const showCreateCta = type === 'receipt' && !loading && searchHits.length === 0 && q.trim().length > 0;
+  // The purchase sum as typed, and as the integer `unit_cost_cents` column will
+  // hold it — a price per kilogram keeps a 10 ₴ step (`costStepNote`).
+  const typedTotal = lines.reduce((s, l) => s + (l.unit_cost_cents ?? 0) * l.quantity, 0);
+  const storedTotal = lines.reduce(
+    (s, l) => s + (l.unit_cost_cents == null ? 0 : Math.round(l.unit_cost_cents)) * l.quantity,
+    0
+  );
 
   return (
     <form
@@ -726,13 +770,15 @@ export function StockActionPage({ type }: Props) {
                     )}
                   </div>
                   <label className="flex flex-col gap-1">
-                    <span className="text-[13px] font-semibold text-sq-secondary">К-сть</span>
-                    <input
-                      type="number"
+                    <span className="text-[13px] font-semibold text-sq-secondary">
+                      {isWeighedRow(line) ? `К-сть, ${countUnit(line)}` : 'К-сть'}
+                    </span>
+                    <QuantityBox
+                      weighed={isWeighedRow(line)}
                       min={1}
-                      value={line.quantity}
-                      onChange={(e) => {
-                        const v = Number(e.target.value);
+                      value={shownQty(line, 'base', line.quantity)}
+                      onValue={(n) => {
+                        const v = typedToBase(line, 'base', n);
                         setLines((prev) =>
                           prev.map((l, i) =>
                             i === idx && l.kind === 'placeholder' ? { ...l, quantity: v } : l
@@ -743,7 +789,9 @@ export function StockActionPage({ type }: Props) {
                     />
                   </label>
                   <label className="flex flex-col gap-1">
-                    <span className="text-[13px] font-semibold text-sq-secondary">Ціна ₴</span>
+                    <span className="text-[13px] font-semibold text-sq-secondary">
+                      {isWeighedRow(line) ? `Ціна за ${countUnit(line)} ₴` : 'Ціна ₴'}
+                    </span>
                     <input
                       value={(line.price_cents / 100).toFixed(2)}
                       onChange={(e) => {
@@ -758,11 +806,13 @@ export function StockActionPage({ type }: Props) {
                     />
                   </label>
                   <label className="flex flex-col gap-1">
-                    <span className="text-[13px] font-semibold text-sq-secondary">Закупка ₴</span>
+                    <span className="text-[13px] font-semibold text-sq-secondary">
+                      {isWeighedRow(line) ? `Закупка за ${countUnit(line)} ₴` : 'Закупка ₴'}
+                    </span>
                     <input
-                      value={((line.unit_cost_cents ?? 0) / 100).toFixed(2)}
+                      value={(shownCost(line, 'base', line.unit_cost_cents ?? 0) / 100).toFixed(2)}
                       onChange={(e) => {
-                        const cents = uahInputToCents(e.target.value);
+                        const cents = typedCostToBase(line, 'base', uahInputToCents(e.target.value));
                         setLines((prev) =>
                           prev.map((l, i) =>
                             i === idx && l.kind === 'placeholder'
@@ -773,6 +823,7 @@ export function StockActionPage({ type }: Props) {
                       }}
                       className="sq-input max-w-[7rem]"
                     />
+                    <CostStepNote note={costStepNote(line, 'base', line.unit_cost_cents)} />
                   </label>
                   <button
                     type="button"
@@ -786,27 +837,31 @@ export function StockActionPage({ type }: Props) {
             }
 
             const delta = (line.target_qty ?? line.on_hand) - line.on_hand;
+            // «Має бути, кг» on a weighed row without a pack: nothing else on
+            // the row would say the box counts kilograms. With a pack the
+            // toggle under it says which side is on.
+            const boxUnit = isWeighedRow(line) && !packOf(line) ? `, ${countUnit(line)}` : '';
             return (
               <div key={line.variant_id} className="sq-row py-3 flex flex-wrap gap-3 items-end">
                 <div className="flex-1 min-w-[140px] self-center">
                   <p className="text-base font-semibold">{line.label}</p>
                   <p className="text-[13px] text-sq-muted tabular-nums">
-                    Зараз на складі: {line.on_hand} {line.unit}
+                    Зараз на складі: {stockText(line.on_hand, line)}
                   </p>
                 </div>
                 {type === 'adjustment' ? (
                   <div className="flex items-end gap-3">
                     <label className="flex flex-col gap-1 whitespace-nowrap">
-                      <span className="text-[13px] font-semibold text-sq-secondary">Має бути</span>
-                      <input
-                        type="number"
+                      <span className="text-[13px] font-semibold text-sq-secondary">Має бути{boxUnit}</span>
+                      <QuantityBox
+                        weighed={isWeighedRow(line)}
                         min={0}
                         // See ManageStockModal: a default step=1 would let the
                         // browser block half a pack before our own message.
                         step="any"
-                        value={shownQty(line, line.target_qty ?? 0)}
-                        onChange={(e) => {
-                          const v = typedToBase(line, e.target.value);
+                        value={shownQty(line, line.packMode, line.target_qty ?? 0)}
+                        onValue={(n) => {
+                          const v = typedToBase(line, line.packMode, n);
                           setLines((prev) =>
                             prev.map((l, i) =>
                               i === idx && l.kind === 'existing' ? { ...l, target_qty: v } : l
@@ -825,20 +880,20 @@ export function StockActionPage({ type }: Props) {
                             : 'text-sq-danger'
                       }`}
                     >
-                      {delta === 0 ? 'без змін' : delta > 0 ? `+${delta}` : delta}
+                      {delta === 0 ? 'без змін' : signedStockCell(delta, line)}
                     </span>
                   </div>
                 ) : (
                   <>
                     <label className="flex flex-col gap-1">
-                      <span className="text-[13px] font-semibold text-sq-secondary">К-сть</span>
-                      <input
-                        type="number"
+                      <span className="text-[13px] font-semibold text-sq-secondary">К-сть{boxUnit}</span>
+                      <QuantityBox
+                        weighed={isWeighedRow(line)}
                         min={0}
                         step="any"
-                        value={shownQty(line, line.quantity)}
-                        onChange={(e) => {
-                          const v = typedToBase(line, e.target.value);
+                        value={shownQty(line, line.packMode, line.quantity)}
+                        onValue={(n) => {
+                          const v = typedToBase(line, line.packMode, n);
                           setLines((prev) =>
                             prev.map((l, i) =>
                               i === idx && l.kind === 'existing' ? { ...l, quantity: v } : l
@@ -851,12 +906,12 @@ export function StockActionPage({ type }: Props) {
                     {type === 'receipt' && (
                       <label className="flex flex-col gap-1">
                         <span className="text-[13px] font-semibold text-sq-secondary">
-                          Закупка за {line.packMode === 'pack' ? line.pack_label : line.unit} ₴
+                          Закупка за {costUnit(line, line.packMode)} ₴
                         </span>
                         <input
-                          value={(shownCost(line, line.unit_cost_cents ?? 0) / 100).toFixed(2)}
+                          value={(shownCost(line, line.packMode, line.unit_cost_cents ?? 0) / 100).toFixed(2)}
                           onChange={(e) => {
-                            const cents = typedCostToBase(line, e.target.value);
+                            const cents = typedCostToBase(line, line.packMode, uahInputToCents(e.target.value));
                             setLines((prev) =>
                               prev.map((l, i) =>
                                 i === idx && l.kind === 'existing'
@@ -867,17 +922,19 @@ export function StockActionPage({ type }: Props) {
                           }}
                           className="sq-input max-w-[7rem]"
                         />
+                        <CostStepNote note={costStepNote(line, line.packMode, line.unit_cost_cents)} />
                       </label>
                     )}
                   </>
                 )}
                 <QuantityUnitToggle
                   className="w-32"
-                  pack={packOf(line)}
-                  unit={line.unit}
+                  pack={countPack(line)}
+                  unit={countUnit(line)}
                   mode={line.packMode}
                   value={shownQty(
                     line,
+                    line.packMode,
                     type === 'adjustment' ? line.target_qty ?? line.on_hand : line.quantity
                   )}
                   onModeChange={(next) =>
@@ -960,7 +1017,7 @@ export function StockActionPage({ type }: Props) {
                   </span>
                 </span>
                 <span className="text-sm tabular-nums whitespace-nowrap text-sq-muted">
-                  {added ? 'додано' : `${row.quantity} шт`}
+                  {added ? 'додано' : stockText(row.quantity, row)}
                 </span>
               </button>
             );
@@ -1030,17 +1087,23 @@ export function StockActionPage({ type }: Props) {
               />
             </label>
             <label className="flex flex-col gap-1.5">
-              <span className="text-[13px] font-semibold text-sq-secondary">Кількість *</span>
+              <span className="text-[13px] font-semibold text-sq-secondary">
+                {stubWeighed ? `Кількість, ${stubCountUnit} *` : 'Кількість *'}
+              </span>
+              {/* «15,5» for a weighed product — a number box would drop the comma (`DecimalInput`). */}
               <input
-                type="number"
-                min={1}
+                type={stubWeighed ? 'text' : 'number'}
+                inputMode={stubWeighed ? 'decimal' : undefined}
+                min={stubWeighed ? undefined : 1}
                 value={stubQty}
                 onChange={(e) => setStubQty(e.target.value)}
                 className="sq-input"
               />
             </label>
             <label className="flex flex-col gap-1.5">
-              <span className="text-[13px] font-semibold text-sq-secondary">Ціна продажу *</span>
+              <span className="text-[13px] font-semibold text-sq-secondary">
+                {stubWeighed ? `Ціна продажу за 1 ${stubCountUnit} *` : 'Ціна продажу *'}
+              </span>
               <input
                 value={stubPrice}
                 onChange={(e) => setStubPrice(e.target.value)}
@@ -1049,7 +1112,9 @@ export function StockActionPage({ type }: Props) {
               />
             </label>
             <label className="flex flex-col gap-1.5">
-              <span className="text-[13px] font-semibold text-sq-secondary">Закупка</span>
+              <span className="text-[13px] font-semibold text-sq-secondary">
+                {stubWeighed ? `Закупка за 1 ${stubCountUnit}` : 'Закупка'}
+              </span>
               <input
                 value={stubCost}
                 onChange={(e) => {
@@ -1066,7 +1131,7 @@ export function StockActionPage({ type }: Props) {
               schema={vertical.attributes}
               value={stubAttributes}
               onChange={setStubAttributes}
-              unit={{ value: stubUnit, options: vertical.units, onChange: setStubUnit }}
+              unit={{ value: stubUnit, options: vertical.units, onChange: setStubUnit, labels: unitLabels(vertical) }}
             />
             <label className="flex flex-col gap-1.5">
               <span className="text-[13px] font-semibold text-sq-secondary">Артикул (SKU)</span>
@@ -1140,15 +1205,10 @@ export function StockActionPage({ type }: Props) {
       </div>
       {type === 'receipt' && lines.length > 0 && (
         <p className="text-[13px] text-sq-muted tabular-nums">
-          Сума закупки:{' '}
-          {formatUah(
-            lines.reduce((s, l) => {
-              if (l.kind === 'placeholder') {
-                return s + (l.unit_cost_cents ?? 0) * l.quantity;
-              }
-              return s + (l.unit_cost_cents ?? 0) * l.quantity;
-            }, 0)
-          )}
+          Сума закупки: {formatUah(typedTotal)}
+          {/* What the delivery note says, and — when whole kopecks per gram
+              or millilitre move it — what the document will actually hold. */}
+          {Math.abs(storedTotal - typedTotal) >= 0.5 && ` · запишеться ${formatUah(storedTotal)}`}
           {stubsFooter(stubSummary)}
         </p>
       )}

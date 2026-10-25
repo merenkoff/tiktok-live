@@ -4,12 +4,14 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api, formatUah, useAuthStore } from '@pos/platform';
-import type { StockDocument } from '@pos/platform';
+import { api, unitPriceLabel, useAuthStore, useVertical, WEIGHED_PRICE_PER } from '@pos/platform';
+import type { StockDocument, StockDocumentLine } from '@pos/platform';
 import { ArrowLeft, FileText, PageHeader, Printer, SectionHead } from '@pos/platform/ui';
 import { STATUS_LABEL, TYPE_GLYPH, TYPE_LABEL, statusChipClass } from '../lib/documents';
 import { receivedTagSources } from '../lib/receivedTags';
 import { confirmStubsMessage, summarizeStubs } from '../lib/stubs';
+import { countScale, signedStockCell, stockCell, type StockUnitRow } from '../lib/stockUnits';
+import { isWeighedUnit } from '../../products/lib/weighedUnit';
 // Rendered from another module on purpose (clothing L4): the one dialog the
 // product list prints with, so a tag from a receipt and a tag from the catalogue
 // are the same tag. The stock remote's own stylesheet must therefore cover it —
@@ -27,6 +29,18 @@ function apiError(err: unknown): string {
 
 export function StockDocumentDetailPage() {
   const { id } = useParams();
+  const vertical = useVertical();
+  /**
+   * What a line counts in. A line with a variant brings its `price_per` from
+   * the join; a stub has no variant yet, but the product it becomes is sold by
+   * weight exactly when its unit is one the store's vertical weighs.
+   */
+  const unitsOf = (line: StockDocumentLine): StockUnitRow => {
+    const unit = line.unit ?? line.placeholder_unit ?? '';
+    const pricePer =
+      line.price_per ?? (line.is_placeholder && isWeighedUnit(vertical, unit) ? WEIGHED_PRICE_PER : 1);
+    return { unit, price_per: pricePer };
+  };
   const [doc, setDoc] = useState<StockDocument | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -130,6 +144,9 @@ export function StockDocumentDetailPage() {
           {lines.map((line) => {
             const isStub = Boolean(line.is_placeholder);
             const fromStub = Boolean(line.placeholder_name) && !isStub;
+            const units = unitsOf(line);
+            // Prices per kilogram for a weighed line: the cost is stored per gram.
+            const price = (cents: number) => unitPriceLabel(cents, units.unit ?? '', units.price_per ?? 1);
             return (
               <li key={line.id} className="sq-row min-h-12 py-2 flex justify-between gap-3">
                 <div className="min-w-0">
@@ -153,34 +170,33 @@ export function StockDocumentDetailPage() {
                   )}
                   {doc.type === 'inventory' && (
                     <p className="text-[13px] text-sq-muted tabular-nums">
-                      Облік {line.system_qty} → пораховано {line.counted_qty}
+                      Облік {line.system_qty == null ? '—' : stockCell(line.system_qty, units)} → пораховано{' '}
+                      {line.counted_qty == null ? '—' : stockCell(line.counted_qty, units)}
                     </p>
                   )}
                   {line.unit_cost_cents != null && (
                     <p className="text-[13px] text-sq-muted tabular-nums">
-                      Закупка {formatUah(line.unit_cost_cents)}
-                      {!isStub && line.price_cents != null && ` · Ціна ${formatUah(line.price_cents)}`}
+                      Закупка {price(line.unit_cost_cents * countScale(units))}
+                      {!isStub && line.price_cents != null && ` · Ціна ${price(line.price_cents)}`}
                     </p>
                   )}
                   {line.unit_cost_cents == null && !isStub && line.price_cents != null && (
-                    <p className="text-[13px] text-sq-muted tabular-nums">Ціна {formatUah(line.price_cents)}</p>
+                    <p className="text-[13px] text-sq-muted tabular-nums">Ціна {price(line.price_cents)}</p>
                   )}
                   {isStub && line.placeholder_price_cents != null && (
                     <p className="text-[13px] text-sq-muted tabular-nums">
-                      Ціна продажу {formatUah(line.placeholder_price_cents)}
+                      Ціна продажу {price(line.placeholder_price_cents)}
                     </p>
                   )}
                 </div>
                 <p className="text-base font-semibold tabular-nums shrink-0">
                   {doc.type === 'inventory'
-                    ? line.quantity
+                    ? stockCell(line.quantity, units)
                     : doc.type === 'writeoff'
-                      ? `−${line.quantity}`
+                      ? `−${stockCell(line.quantity, units)}`
                       : doc.type === 'adjustment'
-                        ? line.quantity > 0
-                          ? `+${line.quantity}`
-                          : line.quantity
-                        : `+${line.quantity}`}
+                        ? signedStockCell(line.quantity, units)
+                        : `+${stockCell(line.quantity, units)}`}
                 </p>
               </li>
             );

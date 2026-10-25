@@ -1,5 +1,5 @@
 import type { Article } from './types';
-import { PRODUCT, VERTICALS } from '../../lib/productFacts';
+import { PRODUCT, VERTICALS, DEBTS_ADDON, addonPriceText } from '../../lib/productFacts';
 
 const POS = PRODUCT.pos.name;
 const GROCERY = VERTICALS.find((v) => v.id === 'grocery');
@@ -297,7 +297,8 @@ function Body() {
       <p>
         Продаж під запис — головна функція нашої каси для продуктового магазину, і з 24 жовтня 2026
         року вона <strong>працює</strong>. Не лише в продуктовому: модуль «Борги» підключається до
-        будь-якого магазину, зокрема одягу чи квіткового. Як вона влаштована:
+        будь-якого магазину, зокрема одягу чи квіткового, і коштує {addonPriceText(DEBTS_ADDON)}, без
+        щомісячної плати. Як вона влаштована:
       </p>
       <ul>
         <li>

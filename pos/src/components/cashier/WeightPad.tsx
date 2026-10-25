@@ -171,7 +171,10 @@ export function WeightPad({
               </p>
             )}
           </div>
-          <p className="text-[13px] text-sq-muted">Як на дисплеї ваг, у кілограмах. У чеку буде «{MANUAL_WEIGHT_NOTE}».</p>
+          <p className="text-[13px] text-sq-muted">
+            {/* Kvass on tap is counted in litres, not read off a scale in kilograms. */}
+            {displayUnit(unit, pricePer) === 'л' ? 'У літрах.' : 'Як на дисплеї ваг, у кілограмах.'} У чеку буде «{MANUAL_WEIGHT_NOTE}».
+          </p>
         </div>
 
         <div className="px-5 pt-3 grid grid-cols-3 gap-2 auto-rows-fr">

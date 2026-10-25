@@ -103,6 +103,13 @@ describe('lowStockItems / fiscalItems', () => {
     expect(many[0]).toMatchObject({ text: '3 товари закінчуються', meta: '3', to: '/admin/stock' });
   });
 
+  it('says what is left of a weighed item in kilograms, not grams', () => {
+    const [item] = lowStockItems([
+      { variant_id: 4, product_name: 'Сир твердий', label: '', unit: 'г', price_per: 1000, quantity: 800 },
+    ]);
+    expect(item.text).toBe('Сир твердий закінчується — 0,800 кг');
+  });
+
   it('turns ПРРО trouble into red rows', () => {
     const rows = fiscalItems({ documents: [{}, {}], sessions: [] });
     expect(rows).toHaveLength(1);

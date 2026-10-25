@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@pos/platform';
 import type { MovementSummaryRow } from '@pos/platform';
 import { BarChart3, PageHeader, useDragScroll } from '@pos/platform/ui';
+import { stockCell } from '../lib/stockUnits';
 
 function startOfDayIso(d: Date): string {
   const x = new Date(d);
@@ -109,14 +110,17 @@ export function StockMovementPage() {
                     {row.label}
                   </span>
                 </td>
-                <td className="text-right tabular-nums">{row.opening}</td>
-                <td className="text-right tabular-nums">{row.receipt || '—'}</td>
-                <td className="text-right tabular-nums">{row.sale || '—'}</td>
-                <td className="text-right tabular-nums">{row.writeoff || '—'}</td>
-                <td className="text-right tabular-nums">{row.adjust || '—'}</td>
-                <td className="text-right tabular-nums">{row.inventory || '—'}</td>
-                {showCredit && <td className="text-right tabular-nums">{row.credit || '—'}</td>}
-                <td className="text-right tabular-nums font-semibold text-sq-heading">{row.closing}</td>
+                {/* A weighed variant's grams read as kilograms, with the unit, cell by cell. */}
+                <td className="text-right tabular-nums">{stockCell(row.opening, row)}</td>
+                <td className="text-right tabular-nums">{row.receipt ? stockCell(row.receipt, row) : '—'}</td>
+                <td className="text-right tabular-nums">{row.sale ? stockCell(row.sale, row) : '—'}</td>
+                <td className="text-right tabular-nums">{row.writeoff ? stockCell(row.writeoff, row) : '—'}</td>
+                <td className="text-right tabular-nums">{row.adjust ? stockCell(row.adjust, row) : '—'}</td>
+                <td className="text-right tabular-nums">{row.inventory ? stockCell(row.inventory, row) : '—'}</td>
+                {showCredit && (
+                  <td className="text-right tabular-nums">{row.credit ? stockCell(row.credit, row) : '—'}</td>
+                )}
+                <td className="text-right tabular-nums font-semibold text-sq-heading">{stockCell(row.closing, row)}</td>
               </tr>
             ))}
             {rows.length === 0 && (

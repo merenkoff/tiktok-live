@@ -181,6 +181,74 @@ describe('a variant that arrives in bottles', () => {
   });
 });
 
+// Groceries (migration 075, TechDocs/grocery/G4_WEIGHED.md): grams on the
+// shelf, kilograms on the screen — and still grams and a cost per gram on the
+// wire, so the server never learns the box spoke kilograms.
+describe('a variant sold by weight', () => {
+  const cheese = () =>
+    row({
+      product_name: 'Сир твердий',
+      label: '',
+      unit: 'г',
+      quantity: 12500,
+      cost_cents: 12,
+      price_cents: 18990,
+      price_per: 1000,
+      pack_qty: null,
+      pack_label: '',
+    });
+
+  it('shows the shelf, the price and the box in kilograms', () => {
+    open(cheese());
+    expect(screen.getByText(/Зараз:/)).toHaveTextContent(/Зараз: 12,500 кг · 189,90 ₴\/кг/);
+    // A text box with a decimal keyboard: a number box would drop the comma of «12,5».
+    expect(screen.getByRole('textbox', { name: 'Має бути, кг' })).toHaveValue('12,5');
+  });
+
+  it('receives kilograms as grams and a price per kilogram as a price per gram', async () => {
+    open(cheese());
+    await userEvent.click(screen.getByRole('button', { name: 'Прихід' }));
+    const qty = screen.getByRole('textbox', { name: 'Скільки надійшло, кг' });
+    await userEvent.clear(qty);
+    // Typed with the comma a Ukrainian types — it must come out 20,5 kg, not 205.
+    await userEvent.type(qty, '20,5');
+    const cost = screen.getByRole('textbox', { name: /Ціна закупки за кг/ });
+    // 12 kopecks a gram on the row is 120 ₴ a kilogram.
+    expect(cost).toHaveValue('120.00');
+    await userEvent.clear(cost);
+    await userEvent.type(cost, '145');
+    // 145 ₴ a kilogram is 14.5 kopecks a gram, kept as 15: said before the tap.
+    expect(screen.getByTestId('stock-cost-step')).toHaveTextContent(/запишеться 150,00 ₴ за кг/);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Провести' }));
+    await waitFor(() => expect(addStockDocumentLine).toHaveBeenCalled());
+    expect(addStockDocumentLine.mock.calls[0][1]).toMatchObject({
+      variant_id: 7,
+      quantity: 20500,
+      unit_cost_cents: 15,
+    });
+  });
+
+  it('corrects the shelf to a weight in grams', async () => {
+    open(cheese());
+    fireEvent.change(screen.getByRole('textbox', { name: 'Має бути, кг' }), { target: { value: '11.75' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Провести' }));
+    await waitFor(() => expect(addStockDocumentLine).toHaveBeenCalled());
+    expect(addStockDocumentLine.mock.calls[0][1]).toMatchObject({ variant_id: 7, target_qty: 11750 });
+  });
+
+  it('refuses a weight finer than a gram, in words', async () => {
+    open(cheese());
+    await userEvent.click(screen.getByRole('button', { name: 'Списання' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Скільки списати, кг' }), {
+      target: { value: '1,2345' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Провести' }));
+    expect(await screen.findByText(/з точністю до грама/)).toBeInTheDocument();
+    expect(addStockDocumentLine).not.toHaveBeenCalled();
+  });
+});
+
 // К5e. The write-off vocabulary belongs to the store's VERTICAL: a kitchen
 // throws food away for reasons a boutique has no word for, and each is its own
 // line in the expense report — which is exactly why they are not «Інше» with a

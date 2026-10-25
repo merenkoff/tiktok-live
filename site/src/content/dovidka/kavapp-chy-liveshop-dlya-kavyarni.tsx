@@ -1,6 +1,6 @@
 import type { Article } from './types';
-import { COMPETITOR_FACTS, PRICING, PRODUCT, isAvailable } from '../../lib/productFacts';
-import { formatDateUk } from '../../lib/formatDate';
+import { COMPETITOR_FACTS, PRICING, PRODUCT, TABLES_ADDON, isAvailable } from '../../lib/productFacts';
+import { formatDateUk, latestDay } from '../../lib/formatDate';
 
 const POS = PRODUCT.pos.name;
 const K = COMPETITOR_FACTS.kavapp;
@@ -21,7 +21,7 @@ export const kavappChyLiveshopDlyaKavyarni: Article = {
     publishedAt: K.checkedAt,
     // Our column grew on 2026-10-18 (the waiter call row); Kavapp's own facts
     // are still those read on K.checkedAt, which the text names as such.
-    updatedAt: '2026-10-18',
+    updatedAt: latestDay('2026-10-18', PRICING.pos.changedAt),
     ogImage: '/og/pos.png',
     readingMinutes: 6,
     faq: [
@@ -245,7 +245,7 @@ function Body() {
         </li>
         <li>
           <strong>Ресторан на тому ж продукті.</strong> Столи, раунди, передчек і розділення
-          рахунку — додаток {PRICING.pos.addons[0].price} грн/міс.
+          рахунку — додаток {TABLES_ADDON.price} грн/міс.
         </li>
       </ul>
 
