@@ -394,3 +394,35 @@ describe('labels', () => {
     expect(document.querySelector('.price-tag-print-area style')).toBeNull();
   });
 });
+
+describe('a weighed good’s tag', () => {
+  const weighed = () =>
+    buildPriceTags('Колосок', [
+      {
+        product: { name: 'Сир твердий' },
+        variant: {
+          id: 70,
+          label: 'Гауда',
+          unit: 'г',
+          price_cents: 18990,
+          price_per: 1000,
+          sku: null,
+          barcode: CODE,
+          quantity: 2350,
+        },
+        copies: 1,
+      },
+    ]);
+
+  it('prints the price per kilogram and per 100 g on the roll', () => {
+    render(<PriceTagsPrintable tags={weighed()} paperWidth={58} />);
+    expect(document.querySelector('.price-tag-price')?.textContent).toBe('189.90 ₴/кг');
+    expect(document.querySelector('.price-tag-per')?.textContent).toBe('18.99 ₴ за 100 г');
+  });
+
+  it('puts the price per 100 g on the caption’s line of a label, which has no line to spare', () => {
+    render(<PriceTagsPrintable tags={weighed()} media={{ kind: 'label', widthMm: 58, heightMm: 40, rotate: 0 }} />);
+    expect(document.querySelector('.price-label-price')?.textContent).toBe('189.90 ₴/кг');
+    expect(document.querySelector('.price-label-variant')?.textContent).toBe('Гауда · 18.99 ₴ за 100 г');
+  });
+});

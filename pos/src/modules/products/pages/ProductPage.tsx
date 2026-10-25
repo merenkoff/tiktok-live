@@ -37,6 +37,7 @@ import { flattenTags } from '../components/tagLabels';
 import { colourVocabulary, supportsMatrix } from '../lib/variantMatrix';
 import { listTechCards, type TechCardRow } from '../data/techCardsApi';
 import { emptyVariant, newVariantInput, singleTyped, type NewVariantValues } from '../lib/newVariant';
+import { isWeighedUnit } from '../lib/weighedUnit';
 import {
   createDirty,
   detailsOf,
@@ -303,7 +304,9 @@ function ProductCard({ id }: { id: string | undefined }) {
       const created = await api.createProduct({
         ...detailsOf(draft),
         ...(draft.shape ? { kind: 'composite' as const, stock_mode: draft.shape } : {}),
-        variants: useMatrix ? matrix!.variants : [newVariantInput(single, draft.shape)],
+        variants: useMatrix
+          ? matrix!.variants
+          : [newVariantInput(single, draft.shape, isWeighedUnit(vertical, single.unit))],
       });
       const undone: string[] = [];
       if (draft.groupIds.length) {
@@ -490,6 +493,7 @@ function ProductCard({ id }: { id: string | undefined }) {
                 ) : (
                   <VariantsSection
                     variants={draft.variants}
+                    weighedUnits={vertical.weighedUnits ?? []}
                     derived={draft.shape === 'derived'}
                     composite={draft.shape !== ''}
                     rowErrors={rowErrors}

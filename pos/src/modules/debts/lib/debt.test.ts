@@ -21,7 +21,9 @@ import {
   matchesDebtor,
   nextCount,
   prefixTotals,
+  quantityText,
   returnAmount,
+  returnsWhole,
 } from './debt';
 import type { DebtCredit, DebtLine } from './types';
 
@@ -264,5 +266,27 @@ describe('matchesDebtor', () => {
     expect(matchesDebtor(row, 'Марія')).toBe(false);
     // One digit is not a search.
     expect(matchesDebtor(row, '7')).toBe(false);
+  });
+});
+
+describe('weighed goods «під запис» (TechDocs/grocery/G4_WEIGHED.md)', () => {
+  it('sends how a weighed line was weighed — the server refuses one without it', () => {
+    expect(
+      issueItems([
+        cartLine({ uid: 'weighed:1', variant_id: 70, quantity: 350, unit: 'г', price_per: 1000, weight_source: 'manual' }),
+      ])
+    ).toEqual([{ variant_id: 70, quantity: 350, weight_source: 'manual' }]);
+  });
+
+  it('reads a weighed quantity in kilograms and a piece as before', () => {
+    expect(quantityText(350, 'г', 1000)).toBe('0,350 кг');
+    expect(quantityText(250, 'г')).toBe('250 г');
+    expect(quantityText(2, '')).toBe('2 шт');
+  });
+
+  it('gives weighed goods back only whole', () => {
+    expect(returnsWhole({ price_per: 1000 })).toBe(true);
+    expect(returnsWhole({ price_per: 1 })).toBe(false);
+    expect(returnsWhole({})).toBe(false);
   });
 });

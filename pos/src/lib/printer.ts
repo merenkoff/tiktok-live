@@ -17,6 +17,15 @@ export interface ReceiptItem {
   line_total_cents: number;
   /** Letter of the VAT rate (рядок 11 of Положення № 13); absent in a non-fiscal store. */
   tax_symbol?: string | null;
+  /**
+   * The quantity row ready to print, when «quantity x price» would lie — a
+   * weighed line is «0.350 кг x 189.90», not «350 x 189.90» (Положення № 13,
+   * рядок 6: the quantity of weighed goods in kilograms to the gram). Absent
+   * on every other line; a Rust build older than G4 PR3 ignores it.
+   */
+  quantity_text?: string | null;
+  /** A line under the row — «вагу введено вручну» for a hand-typed weight. */
+  note?: string | null;
 }
 
 /**

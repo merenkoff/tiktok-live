@@ -86,15 +86,15 @@ export function ReceiptPrintable({ receipt }: { receipt: ReceiptData | null }) {
             {item.name} {item.variant_label}
           </p>
           <div className="receipt-print-row">
-            <span>
-              {item.quantity} x {money(item.unit_price_cents)}
-            </span>
+            {/* A weighed line brings its own row: kilograms to the gram, not grams as pieces. */}
+            <span>{item.quantity_text ?? `${item.quantity} x ${money(item.unit_price_cents)}`}</span>
             {/* Рядок 11: the rate letter closes the line. */}
             <span>
               {money(item.line_total_cents)}
               {item.tax_symbol ? ` ${item.tax_symbol}` : ''}
             </span>
           </div>
+          {item.note && <p className="receipt-print-note">{item.note}</p>}
         </div>
       ))}
       <hr />

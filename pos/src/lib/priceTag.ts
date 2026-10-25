@@ -15,6 +15,8 @@
  */
 
 import { isEan13 } from './ean13';
+import { lineAmountCents } from './lineMoney';
+import { displayUnit, isWeighed } from './weighed';
 import type { Product, ProductVariant } from '../types';
 
 export type PriceTag = {
@@ -28,6 +30,18 @@ export type PriceTag = {
    * null when the item is not marked down. Only ever larger than `priceCents`.
    */
   compareAtCents: number | null;
+  /**
+   * What the price is for, on goods sold by weight (migration 075): «кг» or
+   * «л», printed after the price — «189,90 ₴/кг». Absent on a piece's tag.
+   */
+  priceUnit?: string | null;
+  /**
+   * The same price per 100 g (or 100 ml) — Інструкція № 2, п. 7 lets a
+   * weighed good's tag name the price per kilogram or per hundred grams, and
+   * the smaller figure is the one a customer weighs a handful against.
+   * Absent on a piece's tag.
+   */
+  perHundred?: { cents: number; label: string } | null;
   sku: string | null;
   /** Only ever a printable EAN-13; anything else is reported as missing. */
   barcode: string | null;
@@ -39,7 +53,7 @@ export type PriceTagSource = {
   product: Pick<Product, 'name'>;
   variant: Pick<
     ProductVariant,
-    'id' | 'label' | 'unit' | 'price_cents' | 'compare_at_cents' | 'sku' | 'barcode' | 'quantity'
+    'id' | 'label' | 'unit' | 'price_cents' | 'compare_at_cents' | 'sku' | 'barcode' | 'quantity' | 'price_per'
   >;
   /** Overrides the stock-derived default. */
   copies?: number;
@@ -76,6 +90,7 @@ export function buildPriceTags(storeName: string, items: PriceTagSource[]): Pric
     productName: product.name.trim(),
     variantLabel: variantLabel(variant),
     priceCents: variant.price_cents,
+    ...weighedPrice(variant),
     // The server already refuses a compare-at that is not above the price,
     // but a tag is printed on paper: the belt costs nothing here.
     compareAtCents:
@@ -91,6 +106,22 @@ export function buildPriceTags(storeName: string, items: PriceTagSource[]): Pric
         ? defaultCopies(variant.quantity, variant.unit)
         : Math.max(0, Math.floor(copies)),
   }));
+}
+
+/**
+ * A weighed variant's tag names what its price is for and adds the price per
+ * 100 g, through the same sum a sale makes (`lineAmountCents`, half a kopeck
+ * up) — 189,90 ₴/кг is 18,99 ₴ for 100 g on the tag and at the till alike.
+ */
+function weighedPrice(
+  variant: Pick<ProductVariant, 'unit' | 'price_cents' | 'price_per'>
+): Pick<PriceTag, 'priceUnit' | 'perHundred'> {
+  const per = variant.price_per ?? 1;
+  if (!isWeighed(per)) return {};
+  return {
+    priceUnit: displayUnit(variant.unit, per),
+    perHundred: { cents: lineAmountCents(100, variant.price_cents, per), label: `за 100 ${variant.unit}` },
+  };
 }
 
 /** Flatten to one entry per physical tag, ready to map into pages. */

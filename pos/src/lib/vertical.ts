@@ -22,6 +22,7 @@ export const DEFAULT_VERTICAL: VerticalPublicConfig = {
   ],
   units: ['шт'],
   defaultUnit: 'шт',
+  weighedUnits: [],
   maxCompositionDepth: 1,
   writeoffReasons: [
     { code: 'damaged', label: 'Брак' },

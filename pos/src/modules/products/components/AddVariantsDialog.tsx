@@ -11,6 +11,7 @@ import { VariantMatrix, type MatrixResult } from './VariantMatrix';
 import type { ComponentOption } from './componentOptions';
 import { supportsMatrix, type ColourUse } from '../lib/variantMatrix';
 import { emptyVariant, newVariantInput, type NewVariantValues } from '../lib/newVariant';
+import { isWeighedUnit } from '../lib/weighedUnit';
 import { batchErrorMessage } from '../lib/saveErrors';
 import type { VariantDraft } from '../lib/productDraft';
 import type { ProductShape } from '../lib/productShape';
@@ -71,7 +72,7 @@ export function AddVariantsDialog({
     try {
       const updated = useMatrix
         ? await api.addVariants(productId, matrix!.variants)
-        : await api.addVariant(productId, newVariantInput(single, shape));
+        : await api.addVariant(productId, newVariantInput(single, shape, isWeighedUnit(vertical, single.unit)));
       onAdded(updated);
     } catch (err) {
       setError(batchErrorMessage(err, useMatrix ? 'Не вдалося додати варіанти' : 'Не вдалося додати варіант'));

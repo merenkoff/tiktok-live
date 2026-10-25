@@ -7,9 +7,11 @@ import { Check, Minus, Plus, Printer, X } from '@pos/platform/ui';
 import {
   buildRefundReceiptPayload,
   DEFAULT_RECEIPT_PAPER_WIDTH,
+  formatQuantity,
   formatSignedUah,
   formatUah,
   getMeta,
+  isWeighed,
   printReceipt,
   refundLineAmount,
   refundRoundingCents,
@@ -72,6 +74,15 @@ const ALL_METHODS: PaymentMethod[] = ['cash', 'card', 'qr'];
 
 function available(item: SaleDetail['items'][number]): number {
   return item.quantity - item.refunded_quantity;
+}
+
+/**
+ * Weighed goods come back only whole (TechDocs/grocery/G4_WEIGHED.md, decision
+ * 8): a part of a weighing could miss the fiscal document's own sum by a
+ * kopeck, so the server refuses it and the dialog offers the line or nothing.
+ */
+function wholeOnly(item: SaleDetail['items'][number]): boolean {
+  return isWeighed(item.price_per);
 }
 
 /**
@@ -409,12 +420,41 @@ export function RefundSaleDialog({
               {items.map((item) => {
                 const max = available(item);
                 const n = qty[item.id] ?? 0;
+                if (wholeOnly(item)) {
+                  const on = n === max;
+                  return (
+                    <li key={item.id} className="sq-row min-h-[60px] py-2 flex items-center gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-base text-sq-text truncate">{item.product_name}</p>
+                        <p className="text-[13px] text-sq-muted truncate">
+                          {[item.variant_label, formatQuantity(max, item.unit ?? '', item.price_per)]
+                            .filter(Boolean)
+                            .join(' · ')}{' '}
+                          · повертається цілим рядком
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        aria-pressed={on}
+                        className={`min-h-11 px-3.5 rounded-xl text-[15px] shrink-0 ${
+                          on
+                            ? 'bg-sq-blue/[0.08] ring-2 ring-sq-blue text-sq-blue font-semibold'
+                            : 'bg-white ring-1 ring-sq-divider text-sq-text font-medium'
+                        }`}
+                        onClick={() => setLine(item.id, on ? 0 : max, max)}
+                        data-testid="refund-whole-line"
+                      >
+                        {on ? 'Повертається' : 'Повернути'}
+                      </button>
+                    </li>
+                  );
+                }
                 return (
                   <li key={item.id} className="sq-row min-h-[60px] py-2 flex items-center gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="text-base text-sq-text truncate">{item.product_name}</p>
                       <p className="text-[13px] text-sq-muted truncate">
-                        {item.variant_label} · доступно {max} шт
+                        {item.variant_label} · доступно {max} {item.unit || 'шт'}
                       </p>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">

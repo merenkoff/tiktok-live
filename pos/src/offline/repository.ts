@@ -42,6 +42,8 @@ import { advanceLocalOrderNo, deviceLocalDay, type LocalOrderCounter } from '../
 import { lineCaption, resolveLineModifiers, shiftCompareAt } from '../lib/modifiers';
 import { saleRoundingCents, storeCashRounding } from '../lib/cashRounding';
 import { computeCartDiscountCents } from '../hooks/useCart';
+import { lineAmountCents } from '../lib/lineMoney';
+import { isWeighed } from '../lib/weighed';
 import {
   db,
   getMeta,
@@ -325,7 +327,11 @@ function localSaleDetail(
     const unit = line.components
       ? priceOfComponents(line.components, byId, labourBps)
       : (cat?.price_cents ?? 0) + deltaCents;
-    const total = unit * line.quantity;
+    // A weighed line is grams at a price per kilogram, summed by the server's
+    // own function — the `OFF-` receipt and the tax office's `sm` must say
+    // what the server files at sync (TechDocs/grocery/G4_WEIGHED.md).
+    const per = line.components ? 1 : (cat?.price_per ?? 1);
+    const total = lineAmountCents(line.quantity, unit, per);
     subtotal += total;
     return {
       id: -(i + 1),
@@ -350,6 +356,7 @@ function localSaleDetail(
       line_discount_cents: 0,
       line_total_cents: total,
       refunded_quantity: 0,
+      ...(isWeighed(per) ? { price_per: per, weight_source: line.weight_source ?? null } : {}),
       ...(chosen
         ? {
             modifiers: chosen.snapshot.map((m) => ({
@@ -373,6 +380,7 @@ function localSaleDetail(
       compare_at_cents: item.compare_at_unit_cents,
       unit_price_cents: item.unit_price_cents,
       quantity: item.quantity,
+      price_per: item.price_per,
     })),
     payload.cart_discount ?? null
   );

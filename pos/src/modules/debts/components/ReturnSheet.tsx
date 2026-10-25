@@ -9,12 +9,15 @@
 // a discounted line always add up to its total whatever order they come back in.
 //
 // No money moves and no receipt is made: nothing was ever paid for these.
+//
+// A weighed line goes back only whole (G4_WEIGHED.md, decision 8): the server
+// refuses a part of a weighing, so the sheet offers «усе» or nothing for it.
 
 import { useMemo, useState } from 'react';
 import { cashierApi, formatUah, isOfflinePosEnabled } from '@pos/platform';
 import { Minus, Plus } from '@pos/platform/ui';
 import { debtsApi } from '../lib/debtsApi';
-import { lineTitle, quantityText, returnAmount } from '../lib/debt';
+import { lineTitle, quantityText, returnAmount, returnsWhole } from '../lib/debt';
 import { debtFailure } from '../lib/errors';
 import { customerScope } from '../lib/pendingKeys';
 import { publishCredit } from '../lib/useCredit';
@@ -106,7 +109,7 @@ export function ReturnSheet({ customerId, openLines, onClose, onChanged }: Props
                   <span className="min-w-0">
                     <span className="block text-[15px]">{lineTitle(line)}</span>
                     <span className="block text-[13px] text-sq-muted">
-                      винно за {quantityText(line.remaining_quantity, line.unit)} · {formatUah(line.owed_cents)}
+                      винно за {quantityText(line.remaining_quantity, line.unit, line.price_per)} · {formatUah(line.owed_cents)}
                     </span>
                   </span>
                   {n > 0 && (
@@ -114,7 +117,11 @@ export function ReturnSheet({ customerId, openLines, onClose, onChanged }: Props
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  {piece ? (
+                  {returnsWhole(line) ? (
+                    <span className="text-[13px] text-sq-muted" data-testid="debts-return-whole">
+                      Ваговий товар повертається цілим рядком
+                    </span>
+                  ) : piece ? (
                     <>
                       <button
                         type="button"

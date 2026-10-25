@@ -4,6 +4,7 @@
 
 import { useMemo, useState } from 'react';
 import { formatUah } from '../../lib/money';
+import { formatQuantity, isWeighed, unitPriceLabel } from '../../lib/weighed';
 import { parseChildQuery, suggestSizes } from '../../lib/sizeFinder';
 import { parseSize, sizeHint } from '../../lib/sizeLadder';
 import type { CatalogItem } from '../../types';
@@ -18,6 +19,12 @@ interface Props {
 }
 
 const sizeOf = (item: CatalogItem): string => String(item.attributes?.size ?? '').trim();
+/**
+ * Out of stock in the sense that stops a sale. A weighed variant never is: the
+ * scale, not the books, says what is on the counter, and the server sells a
+ * weighed line below nothing (TechDocs/grocery/G4_WEIGHED.md, decision 6).
+ */
+const soldOut = (item: CatalogItem): boolean => item.quantity <= 0 && !isWeighed(item.price_per);
 const colourOf = (item: CatalogItem): string => String(item.attributes?.color ?? '').trim();
 /** The price before a markdown, or null — never an old price that is not above the price. */
 const oldPriceOf = (item: Pick<CatalogItem, 'price_cents' | 'compare_at_cents'>): number | null =>
@@ -139,8 +146,8 @@ function SizeChips({
 export function VariantPicker({ productName, variants, onPick, onClose }: Props) {
   const listRef = useDragScroll<HTMLUListElement>();
   const sorted = [...variants].sort((a, b) => {
-    if (a.quantity <= 0 && b.quantity > 0) return 1;
-    if (a.quantity > 0 && b.quantity <= 0) return -1;
+    if (soldOut(a) && !soldOut(b)) return 1;
+    if (!soldOut(a) && soldOut(b)) return -1;
     return 0;
   });
 
@@ -211,7 +218,8 @@ export function VariantPicker({ productName, variants, onPick, onClose }: Props)
           <ul ref={listRef} className="px-2 pb-2 max-h-[60vh] overflow-auto select-none">
             {sorted.map((item) => {
               const label = item.label || 'Стандарт';
-              const oos = item.quantity <= 0;
+              const oos = soldOut(item);
+              const weighed = isWeighed(item.price_per);
               const old = oldPriceOf(item);
               return (
                 <li key={item.variant_id}>
@@ -226,7 +234,11 @@ export function VariantPicker({ productName, variants, onPick, onClose }: Props)
                         {label}
                       </span>
                       <span className={`block text-[13px] ${oos ? 'text-red-600' : 'text-sq-muted'}`}>
-                        {oos ? 'Немає в наявності' : `${item.quantity} ${item.unit || 'шт'}`}
+                        {oos
+                          ? 'Немає в наявності'
+                          : weighed
+                            ? `на вагу · за обліком ${formatQuantity(Math.max(0, item.quantity), item.unit, item.price_per)}`
+                            : `${item.quantity} ${item.unit || 'шт'}`}
                       </span>
                     </span>
                     <span className="flex flex-col items-end shrink-0 tabular-nums">
@@ -235,7 +247,9 @@ export function VariantPicker({ productName, variants, onPick, onClose }: Props)
                           {formatUah(old)}
                         </s>
                       )}
-                      <span className="text-[17px] font-semibold text-sq-text">{formatUah(item.price_cents)}</span>
+                      <span className="text-[17px] font-semibold text-sq-text">
+                        {unitPriceLabel(item.price_cents, item.unit, item.price_per)}
+                      </span>
                     </span>
                     <ChevronRight size={20} className="text-sq-muted shrink-0" />
                   </button>

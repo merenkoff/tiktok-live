@@ -4,7 +4,7 @@
 
 import { ReactNode, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, DownloadLine, Printer, Repeat, ShieldCheck } from '../../platform/glyphs';
-import { api, cashierApi, useAuthStore, useCartStore, useOfflineStatus, usePosShell } from '@pos/platform';
+import { api, cashierApi, cartItemCount, useAuthStore, useCartStore, useOfflineStatus, usePosShell } from '@pos/platform';
 import { formatSignedUah, formatUah } from '../../lib/money';
 import type { CashRoundingStep } from '../../lib/cashRounding';
 import { exchangeOutcome } from '../../lib/exchange';
@@ -302,6 +302,10 @@ export function RegisterPage() {
         ? { modifiers: line.modifiers.map((m) => m.id).sort((a, b) => a - b) }
         : {}),
       ...(line.note ? { note: line.note } : {}),
+      // How a weighed line's weight was taken (G4_WEIGHED.md, decision 7):
+      // the server refuses a weighed line without it. A parked cart does not
+      // keep it — the restored line is `manual` again, the only kind in Г4.
+      ...(line.weight_source ? { weight_source: line.weight_source } : {}),
     };
   }
 
@@ -454,6 +458,9 @@ export function RegisterPage() {
               ? { modifiers: line.modifiers.map((m) => m.id).sort((a, b) => a - b) }
               : {}),
             ...(line.note ? { note: line.note } : {}),
+            // A weighed line says how it was weighed, or the server refuses it
+            // as coming from a till that does not know weights.
+            ...(line.weight_source ? { weight_source: line.weight_source } : {}),
           })),
           payments,
           cart_discount: cartDiscount,
@@ -1067,7 +1074,8 @@ export function RegisterPage() {
     );
   }
 
-  const lineCount = lines.reduce((s, l) => s + l.quantity, 0);
+  // A weighing is one item on the counter, whatever it weighs.
+  const lineCount = cartItemCount(lines);
   // Anything opaque on top of the catalog takes the scanner with it: a wedge
   // scan landing behind the payment modal would ring up an invisible item.
   // `active` is what arms the catalog's scanner wedge (that is its only use

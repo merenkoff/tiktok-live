@@ -111,3 +111,40 @@ describe('expandCopies', () => {
     expect(expandCopies(buildPriceTags('S', [{ ...source(), copies: 0 }]))).toEqual([]);
   });
 });
+
+describe('a weighed good’s tag (TechDocs/grocery/G4_WEIGHED.md)', () => {
+  const cheese = () =>
+    buildPriceTags('Колосок', [
+      {
+        product: { name: 'Сир твердий' },
+        variant: {
+          id: 70,
+          label: 'Гауда',
+          unit: 'г',
+          price_cents: 18990,
+          price_per: 1000,
+          sku: null,
+          barcode: null,
+          quantity: 2350,
+        },
+      },
+    ])[0]!;
+
+  it('names the kilogram its price is for and adds the price per 100 g (Інструкція № 2, п. 7)', () => {
+    const tag = cheese();
+    expect(tag.priceCents).toBe(18990);
+    expect(tag.priceUnit).toBe('кг');
+    // 100 g through the sale's own sum: 18,99 ₴, half a kopeck up where it falls.
+    expect(tag.perHundred).toEqual({ cents: 1899, label: 'за 100 г' });
+  });
+
+  it('prints one tag by default, whatever the shelf weighs', () => {
+    expect(cheese().copies).toBe(1);
+  });
+
+  it('adds nothing to a piece’s tag', () => {
+    const [tag] = buildPriceTags('Demo', [source()]);
+    expect(tag).not.toHaveProperty('priceUnit');
+    expect(tag).not.toHaveProperty('perHundred');
+  });
+});

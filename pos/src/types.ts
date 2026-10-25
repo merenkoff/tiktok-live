@@ -101,6 +101,14 @@ export interface VerticalPublicConfig {
   units: string[];
   defaultUnit: string;
   /**
+   * The units this store sells by weight, priced per kilogram or litre
+   * (migration 075, TechDocs/grocery/G4_WEIGHED.md): a variant in one of them
+   * gets `price_per` 1000 from the server, and the product card shows `г` as
+   * «кг» and its price as «за 1 кг». Optional: a backend older than 075 sends
+   * none, and none means nothing is weighed.
+   */
+  weighedUnits?: string[];
+  /**
    * How deep a recipe may nest: 1 when a composite holds only simple products
    * (clothing, flowers), 3 in a café where a dish holds a sauce that is itself
    * a recipe. Optional because an auth cached before the field was on the
@@ -293,6 +301,13 @@ export interface SaleItemInput {
   modifiers?: number[];
   /** Kitchen note, ≤ 120 characters. Never on the fiscal receipt. */
   note?: string;
+  /**
+   * How a weighed line's weight was taken (migration 075): `'manual'`, typed
+   * from a plain scale's display. Required on a weighed line — the server
+   * refuses one without it, in words that tell the cashier to update the
+   * till — and never sent on any other line.
+   */
+  weight_source?: string;
 }
 
 /** One answer the till may pick for a product. */
@@ -398,6 +413,14 @@ export interface CatalogItem {
   barcode: string | null;
   price_cents: number;
   compare_at_cents?: number | null;
+  /**
+   * What `price_cents` and `compare_at_cents` are for (migration 075): 1000
+   * on a weighed variant — the price of a kilogram or litre while `quantity`
+   * counts grams or millilitres. Such a variant is rung through the weight
+   * pad (`useCartStore.addWeighed`), never merged and never capped by stock.
+   * Absent on an older snapshot → 1, which is every variant before 075.
+   */
+  price_per?: number;
   quantity: number;
   image_url: string | null;
   /**
@@ -631,6 +654,11 @@ export interface ParkedCartItem {
    * otherwise. Computed server-side by the same function checkout prices with.
    */
   line_price_cents: number;
+  /**
+   * 1000 on a weighed line (migration 075): `quantity` grams at a price per
+   * kilogram. The restored line keeps its own weighing. Absent → 1.
+   */
+  price_per?: number;
   image_url: string | null;
 }
 
@@ -716,6 +744,12 @@ export interface ProductVariant {
    */
   pack_qty?: number | null;
   pack_label?: string;
+  /**
+   * 1000 when the price is per kilogram or litre (migration 075) — derived by
+   * the server from the unit under the store's vertical, never sent. Absent
+   * on an older payload → 1.
+   */
+  price_per?: number;
 }
 
 export interface Product {
@@ -1097,6 +1131,13 @@ export interface SaleDetail {
     }>;
     /** Kitchen note. */
     note?: string;
+    /**
+     * 1000 on a weighed line (migration 075): `quantity` grams or millilitres
+     * at `unit_price_cents` per kilogram or litre. Absent on an older sale → 1.
+     */
+    price_per?: number;
+    /** How a weighed line's weight was taken — `manual` prints «вагу введено вручну». */
+    weight_source?: string | null;
   }>;
   payments: Array<{
     id: number;
@@ -1290,7 +1331,12 @@ export interface SalesSummary {
   top_items: Array<{
     product_name: string;
     variant_label: string;
+    /** In base units — grams of a weighed line. */
     qty_sold: number;
+    /** What `qty_sold` counts in; absent from an older server. */
+    unit?: string;
+    /** 1000 on a weighed line, shown as kilograms (migration 075); absent → 1. */
+    price_per?: number;
     revenue_cents: number;
     /** Absent from an older server. */
     image_url?: string | null;
@@ -1358,6 +1404,8 @@ export interface StockDocumentLine {
    */
   price_cents?: number | null;
   compare_at_cents?: number | null;
+  /** 1000 when that price is per kilogram or litre (migration 075); absent → 1. */
+  price_per?: number | null;
   sku?: string | null;
   barcode?: string | null;
   is_active?: boolean | null;

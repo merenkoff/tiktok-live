@@ -573,3 +573,60 @@ describe("buildReceiptPayload — the till's own order number (К3d)", () => {
     expect(payload.order_label).toBeNull();
   });
 });
+
+describe('a weighed line on the receipt (TechDocs/grocery/G4_WEIGHED.md)', () => {
+  const cheeseLine = {
+    id: 300,
+    variant_id: 70,
+    product_name: 'Сир твердий',
+    variant_label: 'Гауда',
+    unit: 'г',
+    quantity: 350,
+    unit_price_cents: 18990,
+    line_total_cents: 6647,
+    refunded_quantity: 0,
+    price_per: 1000,
+    weight_source: 'manual',
+  };
+
+  it('prints the weight in kilograms at the price per kilogram, and that it was typed by hand', () => {
+    const sale = makeSaleDetail({ items: [cheeseLine], subtotal_cents: 6647, total_cents: 6647 });
+    const [item] = buildReceiptPayload(sale, DEMO).items;
+    expect(item).toMatchObject({
+      quantity: 350,
+      unit_price_cents: 18990,
+      line_total_cents: 6647,
+      // Положення № 13, рядок 6: kilograms to the gram — never «350 x 189.90».
+      quantity_text: '0.350 кг x 189.90',
+      note: 'вагу введено вручну',
+    });
+  });
+
+  it('leaves a line counted by the piece without either', () => {
+    const [item] = buildReceiptPayload(makeSaleDetail(), DEMO).items;
+    expect(item).not.toHaveProperty('quantity_text');
+    expect(item).not.toHaveProperty('note');
+  });
+
+  it('keeps the sale line’s price per kilogram on the return receipt — sum / grams would be a price per gram', () => {
+    const sale = makeSaleDetail({
+      items: [{ ...cheeseLine, refunded_quantity: 350 }],
+      subtotal_cents: 6647,
+      total_cents: 6647,
+    });
+    const payload = buildRefundReceiptPayload(
+      sale,
+      makeRefund({ total_cents: 6647 }),
+      [{ sale_item_id: 300, quantity: 350 }],
+      DEMO
+    );
+    expect(payload.items).toEqual([
+      expect.objectContaining({
+        quantity: 350,
+        unit_price_cents: 18990,
+        line_total_cents: 6647,
+        quantity_text: '0.350 кг x 189.90',
+      }),
+    ]);
+  });
+});

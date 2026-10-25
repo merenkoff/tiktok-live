@@ -85,4 +85,29 @@ describe('liveModifiers', () => {
     expect(liveModifiers(undefined)).toBeUndefined();
     expect(liveModifiers([{ modifier_id: null, group_name: 'g', name: 'n', price_delta_cents: 0 }])).toBeUndefined();
   });
+  it('brings a weighing back as its own line, its grams at the price per kilogram, typed by hand (Г4)', () => {
+    const cheese = {
+      ...base,
+      id: 9,
+      variant_id: 70,
+      quantity: 350,
+      product_name: 'Сир твердий',
+      label: 'Гауда',
+      unit: 'г',
+      line_price_cents: 18990,
+      price_per: 1000,
+    };
+    const [a, b] = cartLinesFromParked({ items: [cheese, { ...cheese, id: 10, quantity: 200 }] });
+    expect(a).toMatchObject({
+      uid: 'weighed:parked-9',
+      quantity: 350,
+      unit: 'г',
+      unit_price_cents: 18990,
+      price_per: 1000,
+      weight_source: 'manual',
+      max_quantity: 999_999,
+    });
+    // Two weighings of one cheese stay two lines.
+    expect(b!.uid).toBe('weighed:parked-10');
+  });
 });

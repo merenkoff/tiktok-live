@@ -285,6 +285,13 @@ body {
     margin-top: 0.5mm;
   }
 
+  /* A weighed good's price per 100 g under its price per kilogram
+     (Інструкція № 2, п. 7) — read close up, so the caption's size. */
+  .price-tag-per {
+    font-size: max(7pt, calc(var(--tag-w, 48mm) * 0.0661));
+    margin: -1mm 0 1.5mm;
+  }
+
   /* Height follows the SVG's own aspect ratio, so the modules stay the width
      `moduleWidthMm` computed; see `priceTagLayout.ts`. */
   .price-tag-barcode {
@@ -343,6 +350,12 @@ body {
     display: flex;
     justify-content: space-between;
     gap: 8px;
+  }
+
+  /* «вагу введено вручну» under a weighed line (TechDocs/grocery/G4_WEIGHED.md). */
+  .receipt-print-note {
+    margin: 0;
+    font-size: 10px;
   }
 
   .receipt-print-total {

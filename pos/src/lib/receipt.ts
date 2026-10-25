@@ -13,6 +13,7 @@ import type {
 import type { ReceiptData, ReceiptFiscal, ReceiptHeader, ReceiptVatLine } from './printer';
 import { localOrderLabel } from './localOrderNo';
 import { refundLineAmount } from './money';
+import { formatQuantity, isWeighed, MANUAL_WEIGHT_NOTE } from './weighed';
 
 /**
  * What the builders need to know about the store: the trade name that tops
@@ -91,6 +92,27 @@ function changeCents(
   const paid = payments.reduce((sum, p) => sum + p.amount_cents, 0);
   const hasCash = payments.some((p) => p.method === 'cash');
   return hasCash && paid > dueCents ? paid - dueCents : null;
+}
+
+/**
+ * The row a weighed line prints instead of «quantity x price» — «0.350 кг x
+ * 189.90», with the receipt's own decimal point (`receipt.rs` `money`), and
+ * the hand-typed weight said under it (TechDocs/grocery/G4_WEIGHED.md). Empty
+ * for a line counted by the piece, which prints as it always did.
+ */
+function weighedRow(item: {
+  quantity: number;
+  unit?: string;
+  unit_price_cents: number;
+  price_per?: number;
+  weight_source?: string | null;
+}): { quantity_text?: string; note?: string } {
+  if (!isWeighed(item.price_per)) return {};
+  const weight = formatQuantity(item.quantity, item.unit ?? '', item.price_per).replace(',', '.');
+  return {
+    quantity_text: `${weight} x ${(item.unit_price_cents / 100).toFixed(2)}`,
+    ...(item.weight_source === 'manual' ? { note: MANUAL_WEIGHT_NOTE } : {}),
+  };
 }
 
 function producerOf(store: ReceiptStoreInfo): string | null {
@@ -207,6 +229,7 @@ export function buildReceiptPayload(
       unit_price_cents: item.unit_price_cents,
       line_total_cents: item.line_total_cents,
       tax_symbol: tax?.symbol ?? null,
+      ...weighedRow(item),
     })),
     subtotal_cents: sale.subtotal_cents,
     discount_cents: sale.cart_discount_cents ?? null,
@@ -242,14 +265,18 @@ export function buildRefundReceiptPayload(
       Math.max(0, before),
       line.quantity
     );
+    // A weighed line comes back whole and keeps the sale line's price per
+    // kilogram: «sum / quantity» would be a price per GRAM.
+    const weighed = isWeighed(item.price_per);
     return [
       {
         name: item.product_name,
         variant_label: item.variant_label,
         quantity: line.quantity,
-        unit_price_cents: Math.round(amount / line.quantity),
+        unit_price_cents: weighed ? item.unit_price_cents : Math.round(amount / line.quantity),
         line_total_cents: amount,
         tax_symbol: tax?.symbol ?? null,
+        ...(weighed ? weighedRow({ ...item, quantity: line.quantity }) : {}),
       },
     ];
   });

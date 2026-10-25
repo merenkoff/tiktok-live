@@ -69,6 +69,21 @@ const catalog = [
     tag_ids: [],
     sellable: false,
   },
+  // Cheese sold by weight: 189,90 ₴ a kilogram, counted in grams (Г4).
+  {
+    variant_id: 70,
+    product_id: 4,
+    product_name: 'Сир твердий',
+    label: 'Гауда',
+    unit: 'г',
+    price_cents: 18990,
+    price_per: 1000,
+    compare_at_cents: null,
+    quantity: 2350,
+    barcode: null,
+    photo_url: null,
+    tag_ids: [],
+  },
 ];
 
 vi.mock('./db', () => ({
@@ -316,5 +331,39 @@ describe("completeSale — the till's own order number, offline (К3d)", () => {
     expect(sale.local_order_no).toBeUndefined();
     expect(counter).toBeUndefined();
     expect(outbox).toHaveLength(0);
+  });
+});
+
+describe('completeSale — a weighed line, offline (TechDocs/grocery/G4_WEIGHED.md)', () => {
+  const weighing = {
+    items: [{ variant_id: 70, quantity: 350, weight_source: 'manual' }],
+    payments: [{ method: 'card' as const, amount_cents: 6647 }],
+  };
+
+  it('prices the grams at the price per kilogram by the server’s own sum, on the receipt and in the QR', async () => {
+    const sale = await completeSale(weighing);
+    // 0,350 кг × 189,90 = 66,465 → 66,47, never 350 × 189,90.
+    expect(sale.total_cents).toBe(6647);
+    expect(sale.items[0]).toMatchObject({
+      quantity: 350,
+      unit: 'г',
+      unit_price_cents: 18990,
+      line_total_cents: 6647,
+      price_per: 1000,
+      weight_source: 'manual',
+    });
+    expect(sale.fiscal?.tax_url).toContain('sm=66.47');
+  });
+
+  it('queues the line with how it was weighed, so the server takes it at sync', async () => {
+    await completeSale(weighing);
+    expect((outbox[0].payload as OutboxSalePayload).items).toEqual([
+      { variant_id: 70, quantity: 350, weight_source: 'manual' },
+    ]);
+  });
+
+  it('takes the grams off the mirror’s shelf', async () => {
+    await completeSale(weighing);
+    expect(db.catalog.put).toHaveBeenCalledWith(expect.objectContaining({ variant_id: 70, quantity: 2000 }));
   });
 });

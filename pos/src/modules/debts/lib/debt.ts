@@ -10,7 +10,7 @@
 // button is grey, what paying the oldest three lines comes to, how old a debt
 // is. Each of those is re-checked by the server on the write.
 
-import { formatUah, refundLineAmount } from '@pos/platform';
+import { formatQuantity, formatUah, isWeighed, refundLineAmount } from '@pos/platform';
 import type { CartLine } from '@pos/platform';
 import type { DebtCredit, DebtEntryKind, DebtLine, Debtor, IssueItem } from './types';
 
@@ -25,7 +25,19 @@ export function issueItems(lines: readonly CartLine[]): IssueItem[] {
     quantity: line.quantity,
     ...(line.modifiers?.length ? { modifiers: line.modifiers.map((m) => m.id).sort((a, b) => a - b) } : {}),
     ...(line.note ? { note: line.note } : {}),
+    // A weighed line says how it was weighed, as checkout does — without it
+    // the server takes the till for one that does not know weights (Г4).
+    ...(line.weight_source ? { weight_source: line.weight_source } : {}),
   }));
+}
+
+/**
+ * Weighed goods go back only whole (G4_WEIGHED.md, decision 8): a part of a
+ * weighing could miss its own rounding by a kopeck, so the server refuses it
+ * and the till offers «усе» or nothing.
+ */
+export function returnsWhole(line: Pick<DebtLine, 'price_per'>): boolean {
+  return isWeighed(line.price_per);
 }
 
 /** A bouquet assembled at the counter has no catalogue price to lock (G3_DEBTS.md, decision 10). */
@@ -206,8 +218,9 @@ export function lineTitle(line: Pick<DebtLine, 'product_name' | 'variant_label'>
   return line.variant_label ? `${line.product_name} · ${line.variant_label}` : line.product_name;
 }
 
-/** «2 шт», «250 г». */
-export function quantityText(quantity: number, unit: string): string {
+/** «2 шт», «250 г», and a weighed line in kilograms — «0,350 кг». */
+export function quantityText(quantity: number, unit: string, pricePer = 1): string {
+  if (isWeighed(pricePer)) return formatQuantity(quantity, unit, pricePer);
   return `${quantity} ${unit || 'шт'}`;
 }
 
