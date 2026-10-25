@@ -10,8 +10,10 @@ export interface Shot {
   phone?: boolean;
   /**
    * A drawing, not a screenshot, so no window chrome around it: a «Скоро»
-   * landing's hero (it has no screen to show yet), or the paper a working
-   * row replaces — the debt notebook on «Під запис», kept by the owner.
+   * landing's hero (it has no screen to show yet), the debt notebook the
+   * grocery landing opens with (the till lands on it — `heroOverlay`), or the
+   * paper a working row replaces — that same notebook on «Під запис», kept by
+   * the owner.
    */
   drawing?: boolean;
 }
@@ -88,6 +90,13 @@ export interface VerticalContent {
   h1: string;
   lede: string;
   hero: Shot;
+  /**
+   * A screen that flies onto a drawn `hero` and stays lying on it, the two
+   * overlapping (HeroStack): the grocery landing opens with the debt notebook
+   * and the till lands on it — the owner's request of 2026-10-25. Only beside
+   * `hero.drawing`; routes.tsx checks.
+   */
+  heroOverlay?: Shot;
   overview?: VerticalOverview;
   sides?: VerticalSides;
   rows: VerticalRow[];

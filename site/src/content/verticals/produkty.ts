@@ -26,7 +26,14 @@ export const produkty: VerticalContent = {
   h1: 'Каса для продуктового магазину з продажем під запис',
   lede:
     'Зошит боргів під прилавком, ваги окремо від каси і черга, коли пропало світло, — будні магазину біля дому й торгівлі на ринку. У нашій касі борг покупця записується одним тапом, ваговий товар продається за ціною за кілограм, а продаж не зупиняється без інтернету: десктопна каса продає й тоді.',
+  // The page opens with the paper notebook «під запис» replaces, and the till lands on it and stays
+  // (HeroStack) — the owner's request of 2026-10-25: the notebook is the main picture.
   hero: {
+    src: zoshytBorgiv,
+    alt: 'Паперовий зошит боргів у клітинку: дати, імена покупців і суми, погашений борг закреслено, на наліпці — «Ліміт 500 грн!», а внизу «Разом — ?»',
+    drawing: true,
+  },
+  heroOverlay: {
     src: groceryRegister,
     alt: 'Екран продажу продуктового магазину: плитки товарів із ціною за кілограм і чек, де картопля й сир на вагу стоять поруч із батоном і молоком',
   },
@@ -69,8 +76,8 @@ export const produkty: VerticalContent = {
         'Для будь-якого магазину — продуктового, одягу, квіткового: це модуль «Борги»',
       ],
       link: { href: '/dovidka/vlasnyk-pochatok#pid-zapys-tovar-u-borh', label: 'Як це налаштувати — посібник власника' },
-      // The paper notebook «під запис» replaces — the «Скоро» page's hero. It stays here by the owner's
-      // decision of 2026-10-25, even once the demo store can show the debts screen: never swap it for one.
+      // The same notebook as the hero, kept here too: the owner's decision of 2026-10-25 is that it stays,
+      // even once the demo store can show the debts screen — never swap it for one.
       shot: {
         src: zoshytBorgiv,
         alt: 'Паперовий зошит боргів у клітинку: дати, імена покупців і суми, погашений борг закреслено, на наліпці — «Ліміт 500 грн!», а внизу «Разом — ?»',

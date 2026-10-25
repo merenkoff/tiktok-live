@@ -68,6 +68,13 @@ for (const { fact, content } of VERTICAL_PAGES) {
   if (content.rows.filter((row) => row.headline).length > 1) {
     throw new Error(`routes: ${content.id} has more than one headline row`);
   }
+  // HeroStack lays a screen on a drawing; a «Скоро» landing has no screen to lay.
+  if (content.heroOverlay && !content.hero.drawing) {
+    throw new Error(`routes: ${content.id} lays its hero screen on a hero that is not a drawing`);
+  }
+  if (content.heroOverlay && fact.status === 'coming') {
+    throw new Error(`routes: ${content.id} is «Скоро» but its hero shows a screen`);
+  }
 }
 
 export const ROUTES: SiteRoute[] = [

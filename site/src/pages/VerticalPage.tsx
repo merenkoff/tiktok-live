@@ -6,6 +6,7 @@ import { Faq } from '../components/Faq';
 import { BrowserFrame } from '../components/BrowserFrame';
 import { PhoneFrame } from '../components/PhoneFrame';
 import { FeatureRow } from '../components/FeatureRow';
+import { HeroStack } from '../components/HeroStack';
 import { Reveal, StaggerGroup, StaggerItem } from '../components/Reveal';
 import { SectionHeading } from '../components/SectionHeading';
 import { StickyCta } from '../components/StickyCta';
@@ -169,7 +170,8 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
   );
 
   return (
-    <div className="min-h-screen flex flex-col">
+    // overflow-x-clip, as on Home: the hero screen flies in from past the right edge.
+    <div className="min-h-screen flex flex-col overflow-x-clip">
       <Nav variant="pos" activePath={fact.path} />
 
       <main className="flex-1">
@@ -225,8 +227,10 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
               </a>
             )}
           </Reveal>
-          <Reveal className={`mt-14 mx-auto ${content.hero.drawing ? 'max-w-4xl' : 'max-w-5xl'}`}>
-            {content.hero.drawing ? (
+          <Reveal className={`mt-14 mx-auto ${content.hero.drawing && !content.heroOverlay ? 'max-w-4xl' : 'max-w-5xl'}`}>
+            {content.heroOverlay ? (
+              <HeroStack base={content.hero} overlay={content.heroOverlay} />
+            ) : content.hero.drawing ? (
               <img
                 src={content.hero.src}
                 alt={content.hero.alt}
