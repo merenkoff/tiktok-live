@@ -78,6 +78,19 @@ function ComingCard({ v }: { v: VerticalFact }) {
 }
 
 /**
+ * Five cards sit three over two at `lg` — a six-column grid, the last two
+ * wider — rather than four and an orphan; at `sm` an odd last card takes the
+ * whole row. Any other count keeps the four-column grid.
+ */
+function gridOf(count: number): { grid: string; span: (i: number) => string } {
+  if (count !== 5) return { grid: 'sm:grid-cols-2 lg:grid-cols-4', span: () => '' };
+  return {
+    grid: 'sm:grid-cols-2 lg:grid-cols-6',
+    span: (i) => (i < 3 ? 'lg:col-span-2' : i === 4 ? 'sm:col-span-2 lg:col-span-3' : 'lg:col-span-3'),
+  };
+}
+
+/**
  * The businesses the POS is sold to, as cards linking to their landings, and
  * under them the ones it is being built for. Shared by the home page and /pos
  * so the two never disagree on what a vertical is called or promises.
@@ -85,13 +98,14 @@ function ComingCard({ v }: { v: VerticalFact }) {
 export function VerticalCards({ current }: { current?: VerticalFact['id'] }) {
   const available = VERTICALS.filter((v) => v.status === 'available');
   const coming = VERTICALS.filter((v) => v.status === 'coming' && v.id !== current);
+  const { grid, span } = gridOf(available.length);
   return (
     <>
-      <StaggerGroup className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {available.map((v) => {
+      <StaggerGroup className={`grid ${grid} gap-6`}>
+        {available.map((v, i) => {
           const active = v.id === current;
           return (
-            <StaggerItem key={v.id} className="h-full">
+            <StaggerItem key={v.id} className={`h-full ${span(i)}`}>
               <a
                 href={v.path}
                 data-cta={CTA.verticalCard(v.slug)}
@@ -105,9 +119,14 @@ export function VerticalCards({ current }: { current?: VerticalFact['id'] }) {
                   <h3 className="text-[22px] font-bold text-ink-strong">{v.title}</h3>
                   <p className="text-sm text-muted mt-0.5">{v.eyebrow}</p>
                   <ul className="mt-4 space-y-2 flex-1">
-                    {v.bullets.map((b) => (
+                    {v.bullets.map((b, k) => (
                       <li key={b} className="flex items-start gap-2 text-[15px] leading-snug text-body">
-                        <Check size={20} className="text-pos shrink-0" />
+                        {/* A working vertical may still name a promise; only what works gets a tick. */}
+                        {!v.bulletFeatureIds || isAvailable(v.bulletFeatureIds[k]) ? (
+                          <Check size={20} className="text-pos shrink-0" />
+                        ) : (
+                          <span aria-hidden className="mt-[5px] w-2.5 h-2.5 rounded-full border-2 border-pos shrink-0" />
+                        )}
                         {b}
                       </li>
                     ))}

@@ -139,6 +139,34 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
     subheading: "Залиште ім'я і телефон — покажемо на прикладі вашого бізнесу.",
     button: 'Замовити демо',
   };
+  // A working vertical whose promises the launch tariff does not (yet) cover
+  // says nothing about the tariff over its «Скоро» cards.
+  const ownRoadmap = fact.roadmapInLaunchTariff === false;
+
+  // Promises — what a «Скоро» landing is about, its headline feature first
+  // unless that one already works; on a working vertical's landing they come
+  // after what works and its price, beside the rest of its plans.
+  const promiseSection = promises.length > 0 && (
+    <section className={`max-w-6xl mx-auto px-6 ${coming ? 'pb-4' : 'pt-4'}`}>
+      <Reveal>
+        <SectionHeading
+          icon={<Mark size={48} />}
+          title="Що ми будуємо"
+          lede="Цього в касі ще немає: над цим ми працюємо зараз, і поруч — наскільки просунулись."
+        />
+      </Reveal>
+      <div className="mt-12 grid lg:grid-cols-2 gap-6">
+        {promises.map((row, i) => (
+          <PromiseCard
+            key={row.title}
+            row={row}
+            progress={progressOf(row.roadmap)}
+            wide={i === 0 && promises.length % 2 === 1}
+          />
+        ))}
+      </div>
+    </section>
+  );
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -284,28 +312,7 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
           </section>
         )}
 
-        {/* Promises — what a «Скоро» landing is about, its headline feature first unless that one already works (above) */}
-        {promises.length > 0 && (
-          <section className="max-w-6xl mx-auto px-6 pb-4">
-            <Reveal>
-              <SectionHeading
-                icon={<Mark size={48} />}
-                title="Що ми будуємо"
-                lede="Цього в касі ще немає: над цим ми працюємо зараз, і поруч — наскільки просунулись."
-              />
-            </Reveal>
-            <div className="mt-12 grid lg:grid-cols-2 gap-6">
-              {promises.map((row, i) => (
-                <PromiseCard
-                  key={row.title}
-                  row={row}
-                  progress={progressOf(row.roadmap)}
-                  wide={i === 0 && promises.length % 2 === 1}
-                />
-              ))}
-            </div>
-          </section>
-        )}
+        {coming && promiseSection}
 
         {/* The rest of the promises, as «Скоро» cards; on a landing of a working vertical they come after the price */}
         {coming && (
@@ -370,7 +377,16 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
                 link={row.link}
                 visual={
                   row.shot ? (
-                    row.shot.phone ? (
+                    row.shot.drawing ? (
+                      <img
+                        src={row.shot.src}
+                        alt={row.shot.alt}
+                        width={1200}
+                        height={760}
+                        loading="lazy"
+                        className="w-full h-auto block rounded-card shadow-ambient"
+                      />
+                    ) : row.shot.phone ? (
                       <PhoneFrame src={row.shot.src} alt={row.shot.alt} />
                     ) : (
                       <BrowserFrame src={row.shot.src} alt={row.shot.alt} />
@@ -413,10 +429,16 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
             </section>
 
             <section className="max-w-4xl mx-auto px-6 py-20">
-              <PricingCard addon={fact.id === 'restaurant'} />
+              <PricingCard addon={fact.id === 'restaurant'} futureIncluded={!ownRoadmap} />
             </section>
 
-            <Roadmap items={roadmap} lede={content.roadmapLede ?? 'Усе це входить у тариф тих, хто підключився на період запуску.'} />
+            {promiseSection}
+
+            <Roadmap
+              items={roadmap.filter((item) => !promised.has(item.id))}
+              title={ownRoadmap ? (promises.length > 0 ? 'Ще в планах' : 'Що ми робимо далі') : undefined}
+              lede={content.roadmapLede ?? 'Усе це входить у тариф тих, хто підключився на період запуску.'}
+            />
           </>
         )}
 

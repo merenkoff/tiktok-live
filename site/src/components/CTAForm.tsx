@@ -93,6 +93,7 @@ export function CTAForm({
             </div>
           </fieldset>
         )}
+        {/* `min-w-0`: an input's intrinsic width would otherwise push the button out of a 700 px card. */}
         <div className="flex flex-col sm:flex-row gap-3">
           {showNameField && (
             <input
@@ -101,7 +102,7 @@ export function CTAForm({
               placeholder="Ім'я"
               aria-label="Ім'я"
               maxLength={80}
-              className="flex-1 h-12 rounded-xl bg-side px-4 text-[15px] outline-none placeholder:text-faint focus:bg-paper focus:ring-2 focus:ring-pos/40 transition"
+              className="flex-1 min-w-0 h-12 rounded-xl bg-side px-4 text-[15px] outline-none placeholder:text-faint focus:bg-paper focus:ring-2 focus:ring-pos/40 transition"
             />
           )}
           <input
@@ -110,7 +111,7 @@ export function CTAForm({
             placeholder="+380 XX XXX XX XX"
             inputMode="tel"
             aria-label="Телефон"
-            className="flex-1 h-12 rounded-xl bg-side px-4 text-[15px] outline-none placeholder:text-faint focus:bg-paper focus:ring-2 focus:ring-pos/40 transition"
+            className="flex-1 min-w-0 h-12 rounded-xl bg-side px-4 text-[15px] outline-none placeholder:text-faint focus:bg-paper focus:ring-2 focus:ring-pos/40 transition"
           />
           {/* Out of sight and out of the tab order: only a bot fills it, and the server drops what it sends. */}
           <input

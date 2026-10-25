@@ -26,7 +26,7 @@ export const PRODUCT = {
     url: `${SITE_URL}/pos`,
     operatingSystem: 'Windows, macOS, Linux',
     description:
-      'Каса для магазину одягу, квіткової крамниці, кав\'ярні й ресторану — товари, штрихкоди, склад, знижки, QR-оплата, фіскалізація ПРРО через Checkbox і десктопний термінал з офлайн-режимом.',
+      'Каса для магазину одягу, продуктового магазину, квіткової крамниці, кав\'ярні й ресторану — товари, штрихкоди, ваговий товар, склад, знижки, продаж під запис, QR-оплата, фіскалізація ПРРО через Checkbox і десктопний термінал з офлайн-режимом.',
   },
   live: {
     name: 'The Live Shop — TikTok LIVE',
@@ -550,19 +550,26 @@ export const FEATURES = {
   tablesSplitBill: { status: 'available', label: 'Розділити рахунок: за стравами або порівну' },
   waiterTablet: { status: 'available', label: 'Планшет офіціанта як застосунок: відкривається без мережі й показує зал, рахунки й меню' },
   ownPrro: { status: 'coming', label: 'Власний ПРРО без стороннього провайдера' },
-  // The grocery vertical (TechDocs/grocery/README.md). Its landing runs in
-  // «Скоро» mode until weighed goods ship (phase Г4); each line here turns
+  // The grocery vertical (TechDocs/grocery/README.md); each line here turns
   // `available` with its own phase. «Під запис» shipped first, on 2026-10-24
   // (`pos-v2.6.0` + `module-debts-v2.6.0`), as the `debts` module — for every
   // vertical by the owner's decision Д1, presented under «Продукти». What it
   // does not do yet (the customer's own statement, reminders — phase Г7) is the
-  // ROADMAP item `grocery-credit-reminders`.
+  // ROADMAP item `grocery-credit-reminders`. Weighed goods followed with phase
+  // Г4 (`pos-v2.6.3` + `module-vertical-grocery-v2.6.3`), and with them the
+  // landing left «Скоро» (decision Д14). The weight is typed by hand: label
+  // scales and a scale at the till are their own phases (Г6, Г9) and stay
+  // `coming` — `groceryScaleLabels` and the ROADMAP items.
   groceryCredit: {
     status: 'available',
     label:
       'Продаж під запис (модуль «Борги»): борг покупця в журналі каси замість зошита — ліміт від власника, погашення частинами, виписка, фіскальний чек при оплаті; на десктопі записує й без інтернету',
   },
-  groceryWeighed: { status: 'coming', label: 'Ваговий товар: ціна за 1 кг або 100 г, вага в чеку й на цінику' },
+  groceryWeighed: {
+    status: 'available',
+    label:
+      'Ваговий товар: ціна за 1 кг (на розлив — за 1 л), вага в чеку до грама з позначкою «вагу введено вручну», на цінику — ціна за 1 кг і за 100 г',
+  },
   groceryScaleLabels: { status: 'coming', label: 'Ваги з друком етикеток: каса читає вагу й ціну зі штрихкоду наліпки' },
   groceryPhone: { status: 'coming', label: 'Каса на телефоні для торгівлі на ринку: продаж, борги покупців і залишки з одного екрана' },
   tiktokLive: { status: 'available', label: 'TikTok LIVE: коментар → бронь → Telegram → ТТН Нової Пошти' },
@@ -643,10 +650,11 @@ export interface VerticalFact {
   tagline: string;
   bullets: readonly [string, string, string];
   /**
-   * A «Скоро» vertical's bullets can start working one at a time: the feature
-   * each bullet names, in the same order, so its card ticks the ones that are
-   * `available` and keeps a hollow bullet on the rest. Without it every bullet
-   * of a «Скоро» card is a promise.
+   * The feature each bullet names, in the same order, so a card ticks only the
+   * bullets whose feature is `available` and keeps a hollow bullet on the rest
+   * — a «Скоро» vertical's bullets start working one at a time, and a working
+   * vertical's card must never tick a promise. Without it every bullet of a
+   * «Скоро» card is a promise, and every bullet of a working one works.
    */
   bulletFeatureIds?: readonly [FeatureId, FeatureId, FeatureId];
   featureIds: FeatureId[];
@@ -654,12 +662,21 @@ export interface VerticalFact {
   illustrations: readonly string[];
   /** Tailwind colour token for the card background. */
   tint: string;
+  /**
+   * `false` while the owner has not decided whether this vertical's ROADMAP
+   * comes with the launch tariff («Усі нові функції — у тарифі перших»). Its
+   * promises are then listed in its own section of llms.txt rather than under
+   * «входить у тариф перших користувачів», and its landing's «Скоро» cards get
+   * a heading that promises no price (TechDocs/GROCERY_SEO_AEO.md, «Що вирішити
+   * власнику»). A «Скоро» vertical is treated the same way regardless.
+   */
+  roadmapInLaunchTariff?: false;
 }
 
 /**
- * The four businesses the POS is sold to, plus the ones it is being built for
+ * The five businesses the POS is sold to, plus any it is being built for
  * (`status: 'coming'`). A restaurant is the café vertical plus the tables
- * module rather than a fourth vertical in code, but for a buyer it is a
+ * module rather than a vertical of its own in code, but for a buyer it is a
  * different shop, so it gets its own page.
  */
 export const VERTICALS: readonly VerticalFact[] = [
@@ -718,18 +735,19 @@ export const VERTICALS: readonly VerticalFact[] = [
   {
     // Built around «під запис» by the owner's decision of 2026-10-23; the
     // resume point for its copy and search terms is TechDocs/GROCERY_SEO_AEO.md.
-    // Still `coming` after «під запис» shipped (2026-10-24): the vertical leaves
-    // «Скоро» with weighed goods and its demo store (decision Д14).
+    // `available` since weighed goods shipped with their demo store (decision
+    // Д14, phase Г4); the phone till stays a promise, so the card's bullets
+    // name only what works — an available card ticks every one it shows.
     id: 'grocery',
-    status: 'coming',
+    status: 'available',
     slug: 'produkty',
     path: '/pos/produkty',
     title: 'Продукти',
     eyebrow: 'Каса для продуктового магазину',
     tagline:
-      'Продаж під запис замість зошита боргів уже працює — для будь-якого магазину; ваговий товар із ціною за кілограм і каса на телефоні для ринку — у розробці.',
-    bullets: ['Продаж під запис замість зошита', 'Ваговий товар із ціною за кілограм', 'Каса на телефоні для ринку'],
-    bulletFeatureIds: ['groceryCredit', 'groceryWeighed', 'groceryPhone'],
+      'Продаж під запис замість зошита боргів — для будь-якого магазину — і ваговий товар із ціною за кілограм уже працюють; каса на телефоні для ринку — у розробці.',
+    bullets: ['Продаж під запис замість зошита', 'Ваговий товар із ціною за кілограм', 'Продає без світла й інтернету'],
+    bulletFeatureIds: ['groceryCredit', 'groceryWeighed', 'offlineDesktop'],
     featureIds: [
       'groceryCredit',
       'groceryWeighed',
@@ -743,9 +761,9 @@ export const VERTICALS: readonly VerticalFact[] = [
       'stocktakeOffline',
       'qrPayment',
     ],
-    // No demo store yet: the restaurant demo's pantry is drawn in the same style.
-    illustrations: ['/demo-restaurant/bread.svg', '/demo-restaurant/milk.svg', '/demo-restaurant/tomato.svg'],
+    illustrations: ['/demo-grocery/cheese.svg', '/demo-grocery/potato.svg', '/demo-grocery/milk.svg'],
     tint: 'bg-tint-grocery',
+    roadmapInLaunchTariff: false,
   },
 ];
 
@@ -860,10 +878,13 @@ export const ROADMAP: readonly RoadmapItem[] = [
     progress: 20,
   },
   {
+    // Phase Г4 sells by weight in the grocery vertical only (`weighedUnits`); a
+    // café's grams stay ingredients priced per gram, and no scale is connected
+    // anywhere yet (Г6, Г9) — so the promise stands, widened, never deleted.
     id: 'scales',
     vertical: 'cafe',
     title: 'Вагові товари з ваг',
-    body: 'Салат-бар і випічка на вагу: підключені ваги, дробова кількість, ціна за 100 г.',
+    body: 'Салат-бар і випічка на вагу: підключені ваги, дробова кількість, ціна за 100 г. У продуктовому магазині ваговий товар уже продається — ціна за кілограм, вага до грама в чеку, набрана на касі вручну; для кав\'ярні й для ваг, підключених до каси, — у роботі.',
     progress: 10,
   },
   {
@@ -912,20 +933,16 @@ export const ROADMAP: readonly RoadmapItem[] = [
   // запис» itself shipped on 2026-10-24 and left this list (it is
   // `FEATURES.groceryCredit` now); what it promised and does not do yet — the
   // customer's own statement and reminders, phase Г7 of TechDocs/grocery/PLAN.md
-  // — stays here as `grocery-credit-reminders`. The other figures are where the
+  // — stays here as `grocery-credit-reminders`. Weighed goods left it the same
+  // way with phase Г4 (`FEATURES.groceryWeighed`); what that promise said and Г4
+  // does not do — a scale's label read at the till, a scale at the till itself —
+  // was already promised on its own below. The other figures are where the
   // work is: research done (TechDocs/grocery/), no code.
   {
     id: 'grocery-credit-reminders',
     vertical: 'grocery',
     title: 'Виписка й нагадування для покупця',
     body: 'Покупець бачить свій борг у телефоні — що брав, коли, скільки погасив і скільки лишилось — і підтверджує записи, щоб борг можна було довести. Нагадування про борг — лише тим, хто погодився їх отримувати. Сам продаж під запис уже працює: журнал боргу, ліміт, погашення з фіскальним чеком; виписку зараз видно на екрані каси.',
-    progress: 10,
-  },
-  {
-    id: 'grocery-weighed',
-    vertical: 'grocery',
-    title: 'Ваговий товар із ціною за кілограм',
-    body: 'Ціна за 1 кг або 100 г на картці й цінику, у чеку — «0,350 кг × 189,90 грн/кг». Вага з простих ваг вводиться вручну й так і позначається.',
     progress: 10,
   },
   {

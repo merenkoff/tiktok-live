@@ -29,9 +29,10 @@ const LINKS = [
 
 /**
  * Sticky header. `activePath` highlights the current page (pages are
- * prerendered, so the path comes from the route, not the browser). Below `md`
+ * prerendered, so the path comes from the route, not the browser). Below `lg`
  * the links fold into a <details> menu — no JS, so it works in the
- * prerendered HTML before hydration.
+ * prerendered HTML before hydration. (`lg`, not `md`: with five businesses in
+ * the row the links no longer fit a 768 px tablet beside the logo and button.)
  */
 export function Nav({ variant, activePath }: { variant: Variant; activePath?: string }) {
   const cta = CTA[variant];
@@ -45,7 +46,7 @@ export function Nav({ variant, activePath }: { variant: Variant; activePath?: st
           <AppIcon size={24} />
           LiveShop
         </a>
-        <nav className="hidden md:flex items-center gap-6 text-[13px] font-semibold text-ink">
+        <nav className="hidden lg:flex items-center gap-6 text-[13px] font-semibold text-ink">
           {LINKS.map((l) => (
             <a
               key={l.href}
@@ -65,7 +66,7 @@ export function Nav({ variant, activePath }: { variant: Variant; activePath?: st
           >
             {cta.label}
           </a>
-          <details className="md:hidden relative group">
+          <details className="lg:hidden relative group">
             <summary
               className="list-none cursor-pointer w-9 h-9 rounded-full bg-paper shadow-card grid place-items-center [&::-webkit-details-marker]:hidden"
               aria-label="Меню"

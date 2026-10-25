@@ -8,7 +8,11 @@ export interface Shot {
   alt: string;
   /** A phone screen (a guest's view): framed as a phone, not as a browser window. */
   phone?: boolean;
-  /** A drawing, not a screenshot — a «Скоро» landing has no screen to show yet — so no window chrome around it. */
+  /**
+   * A drawing, not a screenshot, so no window chrome around it: a «Скоро»
+   * landing's hero (it has no screen to show yet), or the paper a working
+   * row replaces when its own screen is not in the demo store.
+   */
   drawing?: boolean;
 }
 
