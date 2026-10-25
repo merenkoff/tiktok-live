@@ -21,7 +21,9 @@ import { ArrowLeft, SectionHead } from '@pos/platform/ui';
 import { debtsApi } from '../lib/debtsApi';
 import {
   ageText,
+  chainCancelOffer,
   chainNote,
+  chainReturnOffer,
   creditLine,
   entryLabel,
   lineProgress,
@@ -33,6 +35,7 @@ import { debtFailure } from '../lib/errors';
 import { publishCredit } from '../lib/useCredit';
 import { useQueue, useQueueDrained } from '../lib/useQueue';
 import type { DebtEntry, DebtLine, DebtStatement } from '../lib/types';
+import { ChainReturnSheet } from '../components/ChainReturnSheet';
 import { Frame, type DebtsFrame } from '../components/Frame';
 import { QueuePanel } from '../components/QueuePanel';
 import { LimitEditor } from '../components/LimitEditor';
@@ -61,6 +64,14 @@ export function StatementPage({ frame }: { frame: DebtsFrame }) {
   // The line is taken when the sheet opens: a refusal re-reads the statement,
   // and the sheet must stay to say why even if those goods closed meanwhile.
   const [undo, setUndo] = useState<{ entry: DebtEntry; line: DebtLine } | null>(null);
+  // A line's ПРРО chain given back (2-Б) — taken when the sheet opens, for the same reason.
+  const [chain, setChain] = useState<{
+    mode: 'cancel' | 'goods';
+    lineId: number;
+    title: string;
+    count: number;
+    cents: number;
+  } | null>(null);
 
   const reload = useCallback(() => setEpoch((n) => n + 1), []);
   // A handover of this customer that has just reached the server is in the journal now.
@@ -175,6 +186,21 @@ export function StatementPage({ frame }: { frame: DebtsFrame }) {
                   </span>
                   <span className="text-[15px] font-semibold tabular-nums shrink-0">{formatUah(line.owed_cents)}</span>
                 </div>
+                {(() => {
+                  const offer = chainCancelOffer(line, statement.fiscal);
+                  return offer ? (
+                    <button
+                      type="button"
+                      className="-mt-1 mb-1 min-h-11 text-[15px] font-semibold text-sq-blue"
+                      data-testid={`debts-cancel-prepayments-${line.id}`}
+                      onClick={() =>
+                        setChain({ mode: 'cancel', lineId: line.id, title: lineTitle(line), count: offer.count, cents: offer.cents })
+                      }
+                    >
+                      Скасувати внески ({offer.count})
+                    </button>
+                  ) : null;
+                })()}
               </li>
             ))}
           </ul>
@@ -217,6 +243,27 @@ export function StatementPage({ frame }: { frame: DebtsFrame }) {
                   >
                     {formatSignedUah(entry.amount_cents)}
                   </span>
+                  {chainReturnOffer(entry, statement.fiscal) && (
+                    <button
+                      type="button"
+                      className="shrink-0 min-h-11 px-2 text-[15px] font-semibold text-sq-blue"
+                      data-testid={`debts-chain-return-${entry.id}`}
+                      onClick={() => {
+                        const offer = chainReturnOffer(entry, statement.fiscal);
+                        if (offer) {
+                          setChain({
+                            mode: 'goods',
+                            lineId: offer.line_id,
+                            title: lineTitle(offer),
+                            count: offer.documents,
+                            cents: offer.back_cents,
+                          });
+                        }
+                      }}
+                    >
+                      Повернути товар
+                    </button>
+                  )}
                   {undoable.has(entry.id) && (
                     <button
                       type="button"
@@ -252,6 +299,18 @@ export function StatementPage({ frame }: { frame: DebtsFrame }) {
       )}
       {undo && (
         <UndoPrepaySheet entry={undo.entry} line={undo.line} onClose={() => setUndo(null)} onChanged={reload} />
+      )}
+      {chain && (
+        <ChainReturnSheet
+          mode={chain.mode}
+          customerId={customer.id}
+          lineId={chain.lineId}
+          title={chain.title}
+          count={chain.count}
+          cents={chain.cents}
+          onClose={() => setChain(null)}
+          onChanged={reload}
+        />
       )}
       {open === 'writeoff' && owner && (
         <WriteOffSheet customerId={customer.id} openLines={lines} onClose={() => setOpen(null)} onChanged={reload} />

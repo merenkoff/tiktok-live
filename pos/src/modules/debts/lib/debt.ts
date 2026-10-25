@@ -539,6 +539,40 @@ export function chainNote(line: Pick<DebtLine, 'chain'>): string | null {
   return line.chain?.pending ? 'внесок ще реєструється в ПРРО' : null;
 }
 
+/** The store's ПРРО keeps chains and is the one this chain went through — only it can give the chain back. */
+function chainActionable(fiscal: DebtFiscal | undefined, provider: string): boolean {
+  return Boolean(fiscal?.on && fiscal.chains && fiscal.provider === provider);
+}
+
+/**
+ * «Скасувати внески (N)» under an open line (2-Б): its «внески» registered in
+ * its ПРРО chain — all of them at once, the provider returning a chain only
+ * whole. None while a document of the chain is still being registered, or
+ * where this store's ПРРО cannot return it.
+ */
+export function chainCancelOffer(
+  line: Pick<DebtLine, 'chain'>,
+  fiscal?: DebtFiscal
+): { count: number; cents: number } | null {
+  const chain = line.chain;
+  if (!chain || chain.pending || !chain.prepayments || !chainActionable(fiscal, chain.provider)) return null;
+  return { count: chain.prepayments, cents: chain.prepaid_cents ?? 0 };
+}
+
+/** «Повернути товар» on the payment of the receipt that closed a line through its chain (2-Б). */
+export function chainReturnOffer(
+  entry: Pick<DebtEntry, 'chain_return'>,
+  fiscal?: DebtFiscal
+): NonNullable<DebtEntry['chain_return']> | null {
+  const offer = entry.chain_return;
+  return offer && chainActionable(fiscal, offer.provider) ? offer : null;
+}
+
+/** «2 внески на 400,00 ₴». */
+export function prepaymentsText(count: number, cents: number): string {
+  return `${count} ${plural(count, 'внесок', 'внески', 'внесків')} на ${formatUah(cents)}`;
+}
+
 /**
  * What giving back `take` units of an unpaid line takes off the debt — the
  * refund's own cumulative rounding, counted after the units that already

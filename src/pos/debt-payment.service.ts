@@ -182,7 +182,7 @@ function parsePart(raw: unknown): PartRequest | null {
 }
 
 /** A UUID fixed by a label — the same request gives the same keys. */
-function derivedUuid(label: string): string {
+export function derivedUuid(label: string): string {
   const bytes = crypto.createHash('sha256').update(label).digest().subarray(0, 16);
   bytes[6] = (bytes[6]! & 0x0f) | 0x50;
   bytes[8] = (bytes[8]! & 0x3f) | 0x80;

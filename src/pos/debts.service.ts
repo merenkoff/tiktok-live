@@ -126,9 +126,10 @@ export interface DebtLineView {
    * §11 «Крок 2»): in that provider the line closes with its own «чек
    * післяплати», never on one receipt with other lines, and `pending` says
    * an earlier document of it is still being registered — no «внесок» and no
-   * closing until it is.
+   * closing until it is. `prepayments` / `prepaid_cents`: its «внески» that
+   * stand — what «Скасувати внески» gives back, all at once (2-Б).
    */
-  chain: { id: string; provider: string; pending: boolean } | null;
+  chain: { id: string; provider: string; pending: boolean; prepayments: number; prepaid_cents: number } | null;
 }
 
 export interface DebtEntryView {
@@ -153,6 +154,21 @@ export interface DebtEntryView {
    * chain only whole (§11 «Крок 2»).
    */
   fiscal_status: string | null;
+  /** The ПРРО prepayment chain the entry's sale is a document of (079). */
+  chain_id: string | null;
+  /**
+   * On the payment of the receipt that closed a line through its chain, while
+   * the goods can still come back: the whole chain is returned with them —
+   * that receipt and every «внесок» of it, `back_cents` to the customer (2-Б).
+   */
+  chain_return: {
+    line_id: number;
+    product_name: string;
+    variant_label: string;
+    provider: string;
+    documents: number;
+    back_cents: number;
+  } | null;
 }
 
 export interface DebtStatement {
@@ -244,6 +260,8 @@ function toLineView(row: Record<string, unknown>): DebtLineView {
             id: String(row.fiscal_chain_id),
             provider: String(row.fiscal_chain_provider ?? ''),
             pending: row.chain_pending === true,
+            prepayments: Number(row.chain_prepayments ?? 0),
+            prepaid_cents: Number(row.chain_prepaid_cents ?? 0),
           },
   };
 }
@@ -261,6 +279,12 @@ const LINE_COLUMNS = `
       WHERE cs.store_id = i.store_id AND cs.fiscal_chain_id = i.fiscal_chain_id
         AND cs.status = 'completed' AND cr.status IS DISTINCT FROM 'done'
   )) AS chain_pending,
+  (SELECT COUNT(*)::int FROM pos_sales ps
+    WHERE ps.store_id = i.store_id AND ps.fiscal_chain_id = i.fiscal_chain_id
+      AND ps.debt_prepay_item_id = i.id AND ps.status = 'completed') AS chain_prepayments,
+  (SELECT COALESCE(SUM(ps.total_cents), 0)::int FROM pos_sales ps
+    WHERE ps.store_id = i.store_id AND ps.fiscal_chain_id = i.fiscal_chain_id
+      AND ps.debt_prepay_item_id = i.id AND ps.status = 'completed') AS chain_prepaid_cents,
   s.receipt_number`;
 
 async function readLines(
@@ -308,13 +332,16 @@ function toEntryView(row: Record<string, unknown>): DebtEntryView {
     prepayment: row.debt_prepay_item_id != null,
     prepay_line_id: row.debt_prepay_item_id == null ? null : Number(row.debt_prepay_item_id),
     fiscal_status: row.fiscal_status == null ? null : String(row.fiscal_status),
+    chain_id: row.fiscal_chain_id == null ? null : String(row.fiscal_chain_id),
+    chain_return: null,
   };
 }
 
 async function readEntry(client: DbClient, storeId: number, entryId: number): Promise<DebtEntryView> {
   const rows = await client.query(
     `SELECT e.id, e.kind, e.amount_cents, e.created_at, e.reason, e.sale_id, e.offline_received_at,
-            st.display_name AS staff_name, s.receipt_number, s.debt_prepay_item_id, s.fiscal_status
+            st.display_name AS staff_name, s.receipt_number, s.debt_prepay_item_id, s.fiscal_status,
+            s.fiscal_chain_id
        FROM pos_debt_entries e
        LEFT JOIN pos_staff st ON st.id = e.staff_id
        LEFT JOIN pos_sales s ON s.id = e.sale_id
@@ -352,6 +379,40 @@ export async function getCredit(
   };
 }
 
+/**
+ * The payments on the statement that closed a line through its ПРРО chain
+ * while its goods can still come back (2-Б): the line still paid by that
+ * receipt, nothing of the chain given back, every document of it registered.
+ */
+async function attachChainReturns(storeId: number, entries: DebtEntryView[]): Promise<void> {
+  for (const entry of entries) {
+    if (entry.kind !== 'payment' || entry.prepayment || entry.chain_id == null || entry.sale_id == null) continue;
+    const row = await pool.query(
+      `SELECT i.id, i.product_name, i.variant_label, i.fiscal_chain_provider,
+              COUNT(cs.id)::int AS documents,
+              COALESCE(SUM(cs.total_cents + COALESCE(cs.rounding_cents, 0)), 0)::int AS back_cents,
+              BOOL_AND(cs.status = 'completed' AND COALESCE(cr.status, '') = 'done') AS returnable
+         FROM pos_debt_items i
+         JOIN pos_sales cs
+           ON cs.store_id = i.store_id AND cs.fiscal_chain_id = i.fiscal_chain_id AND cs.status <> 'voided'
+         LEFT JOIN pos_fiscal_receipts cr ON cr.sale_id = cs.id AND cr.doc_type = 'sale'
+        WHERE i.store_id = $1 AND i.sale_id = $2 AND i.fiscal_chain_id = $3
+        GROUP BY i.id`,
+      [storeId, entry.sale_id, entry.chain_id]
+    );
+    const r = row.rows[0];
+    if (!r || r.returnable !== true || Number(r.documents) < 2) continue;
+    entry.chain_return = {
+      line_id: Number(r.id),
+      product_name: String(r.product_name ?? ''),
+      variant_label: String(r.variant_label ?? ''),
+      provider: String(r.fiscal_chain_provider ?? ''),
+      documents: Number(r.documents),
+      back_cents: Number(r.back_cents),
+    };
+  }
+}
+
 /** The customer's statement: credit, what is still owed line by line, and the latest of the journal. */
 export async function getStatement(storeId: number, customerId: number): Promise<DebtStatement> {
   const customer = await pool.query(
@@ -363,7 +424,8 @@ export async function getStatement(storeId: number, customerId: number): Promise
   const open = await readLines(pool, storeId, { customerId, openOnly: true });
   const entries = await pool.query(
     `SELECT e.id, e.kind, e.amount_cents, e.created_at, e.reason, e.sale_id, e.offline_received_at,
-            st.display_name AS staff_name, s.receipt_number, s.debt_prepay_item_id, s.fiscal_status
+            st.display_name AS staff_name, s.receipt_number, s.debt_prepay_item_id, s.fiscal_status,
+            s.fiscal_chain_id
        FROM pos_debt_entries e
        LEFT JOIN pos_staff st ON st.id = e.staff_id
        LEFT JOIN pos_sales s ON s.id = e.sale_id
@@ -372,6 +434,8 @@ export async function getStatement(storeId: number, customerId: number): Promise
       LIMIT ${ENTRIES_ON_STATEMENT}`,
     [storeId, customerId]
   );
+  const journal = entries.rows.map(toEntryView);
+  await attachChainReturns(storeId, journal);
   const c = customer.rows[0];
   // Never fails the statement: a store whose ПРРО cannot be read now is told
   // it fiscalises without chains — the till then offers no «внесок» there.
@@ -381,7 +445,7 @@ export async function getStatement(storeId: number, customerId: number): Promise
     credit,
     fiscal,
     open_lines: open,
-    entries: entries.rows.map(toEntryView),
+    entries: journal,
     oldest_open_at: open[0]?.created_at ?? null,
   };
 }

@@ -15,17 +15,20 @@
 // chain (§11 «Крок 2») — and prints the provider's own text. When that text
 // did not arrive, our layout would print a receipt with no goods at all; it
 // gets one line instead, «Передплата за «Кепка»», with the chain's number.
+// Its return when the chain is given back (2-Б) is printed the same way: the
+// host's return receipt, «ВИДАТКОВИЙ ЧЕК», with that one line.
 
 import { useCallback, useState } from 'react';
 import {
   buildReceiptPayload,
+  buildRefundReceiptPayload,
   DEFAULT_RECEIPT_PAPER_WIDTH,
   getMeta,
   printReceipt,
   useAuthStore,
   usePrintableReceipt,
 } from '@pos/platform';
-import type { ReceiptData, ReceiptPaperWidth, SaleDetail } from '@pos/platform';
+import type { ReceiptData, ReceiptPaperWidth, SaleDetail, SaleFiscalDoc } from '@pos/platform';
 import type { DebtSale } from './types';
 
 /** «Внесено раніше: 300.00» under each line the earlier «внески» went to, in the receipt's own number style. */
@@ -64,25 +67,79 @@ export function withPrepaymentLine(receipt: ReceiptData, sale: SaleDetail): Rece
   };
 }
 
+/** What the host's layout knows of the store — its own type stays inside the host. */
+type StoreInfo = Parameters<typeof buildReceiptPayload>[1];
+
+/** A return document as this call or `GET /sales/:id` gives it — the one shape the host's layout reads. */
+type ReturnFiscal = {
+  status: string;
+  mode?: SaleFiscalDoc['mode'];
+  fiscal_code: string | null;
+  fiscal_date: string | null;
+  control_number?: string | null;
+  tax_url: string | null;
+  qr_payload: string | null;
+  receipt_text: string | null;
+  error_code: string | null;
+  message?: string | null;
+  error_message?: string | null;
+};
+
+/**
+ * The return receipt of one refund of a sale — a chain given back (2-Б):
+ * the goods that came back, or, for a «внесок», the one line for its money.
+ * `fiscal` is the return document of this call, else the refund's own.
+ */
+export function chainRefundReceipt(
+  sale: SaleDetail,
+  refundId: number,
+  store: StoreInfo,
+  fiscal?: ReturnFiscal | null
+): ReceiptData | null {
+  const refund = sale.refunds.find((r) => r.id === refundId);
+  if (!refund) return null;
+  const doc: ReturnFiscal | null = fiscal ?? refund.fiscal ?? null;
+  const receipt = buildRefundReceiptPayload(
+    sale,
+    refund,
+    (refund.items ?? []).map((item) => ({ sale_item_id: item.sale_item_id, quantity: item.quantity })),
+    store,
+    doc
+      ? {
+          status: doc.status === 'done' || doc.status === 'pending' ? doc.status : 'failed',
+          mode: doc.mode,
+          fiscal_code: doc.fiscal_code,
+          fiscal_date: doc.fiscal_date,
+          control_number: doc.control_number ?? null,
+          tax_url: doc.tax_url,
+          qr_payload: doc.qr_payload,
+          receipt_text: doc.receipt_text,
+          error_code: doc.error_code,
+          message: doc.message ?? doc.error_message ?? null,
+        }
+      : null
+  );
+  return withPrepaymentLine({ ...receipt, total_cents: refund.total_cents }, { ...sale, total_cents: refund.total_cents });
+}
+
 export function useReceiptPrint() {
   const auth = useAuthStore((s) => s.auth);
   const { printToPdf, printablePortal } = usePrintableReceipt();
   const [printing, setPrinting] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
-  const print = useCallback(
-    async (sale: SaleDetail) => {
-      const receipt = withPrepaymentLine(
-        withPrepaidNotes(
-          buildReceiptPayload(sale, {
-            name: auth?.store.name ?? '',
-            fiscal: auth?.store.fiscal ?? null,
-            vertical: auth?.store.vertical?.id ?? null,
-          }),
-          sale
-        ),
-        sale
-      );
+  const store = useCallback(
+    (): StoreInfo => ({
+      name: auth?.store.name ?? '',
+      fiscal: auth?.store.fiscal ?? null,
+      vertical: auth?.store.vertical?.id ?? null,
+    }),
+    [auth]
+  );
+
+  /** One receipt to the till's receipt printer, or to the browser's print dialog without one. */
+  const send = useCallback(
+    async (receipt: ReceiptData) => {
       const [name, mm] = await Promise.all([
         getMeta<string>('receiptPrinterName'),
         getMeta<ReceiptPaperWidth>('receiptPaperWidthMm'),
@@ -102,26 +159,46 @@ export function useReceiptPrint() {
         setPrinting(false);
       }
     },
-    [auth, printToPdf]
+    [printToPdf]
+  );
+
+  const print = useCallback(
+    (sale: SaleDetail) =>
+      send(withPrepaymentLine(withPrepaidNotes(buildReceiptPayload(sale, store()), sale), sale)),
+    [send, store]
   );
 
   /**
-   * Several receipts of one repayment, in order. The browser's print dialog
-   * shows one document at a time, so without a receipt printer only the first
-   * goes out by itself and the rest wait for their buttons.
+   * Several receipts in order. The browser's print dialog shows one document
+   * at a time, so without a receipt printer only the first goes out by itself
+   * and the rest wait for their buttons.
    */
-  const printMany = useCallback(
-    async (sales: SaleDetail[]) => {
-      if (sales.length === 0) return;
+  const sendAll = useCallback(
+    async (receipts: ReceiptData[]) => {
+      if (receipts.length === 0) return;
       const name = await getMeta<string>('receiptPrinterName');
-      if (!name) {
-        await print(sales[0]);
-        return;
-      }
-      for (const sale of sales) await print(sale);
+      for (const receipt of name ? receipts : receipts.slice(0, 1)) await send(receipt);
     },
-    [print]
+    [send]
   );
 
-  return { print, printMany, printing, status, printablePortal };
+  /** The receipts of one repayment. */
+  const printMany = useCallback(
+    (sales: SaleDetail[]) =>
+      sendAll(sales.map((sale) => withPrepaymentLine(withPrepaidNotes(buildReceiptPayload(sale, store()), sale), sale))),
+    [sendAll, store]
+  );
+
+  /** The return receipts of a chain given back (2-Б), in order. */
+  const printRefunds = useCallback(
+    (refunds: Array<{ sale: SaleDetail; refundId: number; fiscal?: ReturnFiscal | null }>) =>
+      sendAll(
+        refunds
+          .map(({ sale, refundId, fiscal }) => chainRefundReceipt(sale, refundId, store(), fiscal))
+          .filter((receipt): receipt is ReceiptData => receipt != null)
+      ),
+    [sendAll, store]
+  );
+
+  return { print, printMany, printRefunds, printing, status, printablePortal };
 }

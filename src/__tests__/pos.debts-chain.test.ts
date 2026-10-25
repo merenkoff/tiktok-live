@@ -56,7 +56,7 @@ interface Line {
   prepaid_cents: number;
   remaining_quantity: number;
   status: string;
-  chain: { id: string; provider: string; pending: boolean } | null;
+  chain: { id: string; provider: string; pending: boolean; prepayments?: number; prepaid_cents?: number } | null;
 }
 
 describe.skipIf(!hasDb)('POS «під запис» — a «внесок» under ПРРО (prepayment chain)', () => {
@@ -256,7 +256,13 @@ describe.skipIf(!hasDb)('POS «під запис» — a «внесок» under 
 
     const s = await statement(id);
     expect(s.fiscal).toEqual({ on: true, provider: 'checkbox', chains: true });
-    expect(s.open_lines[0].chain).toEqual({ id: chainId, provider: 'checkbox', pending: false });
+    expect(s.open_lines[0].chain).toEqual({
+      id: chainId,
+      provider: 'checkbox',
+      pending: false,
+      prepayments: 1,
+      prepaid_cents: 30000,
+    });
     expect(await owed(id)).toBe(29000);
   });
 
@@ -697,5 +703,209 @@ describe.skipIf(!hasDb)('POS «під запис» — a «внесок» under 
     expect(voided.statusCode).toBe(409);
     expect(voided.json().error).toBe('sale_fiscalised');
     expect(await owed(id)).toBe(29000);
+  });
+
+  // ── Giving a chain back (2-Б): the whole chain, in one return ─────────────
+
+  const cancelPrepayments = (customerId: number, lineId: number, clientUuid = randomUUID()) =>
+    post(`/debts/customers/${customerId}/prepayments/cancel`, { line_id: lineId, client_uuid: clientUuid });
+  const returnGoods = (customerId: number, lineId: number, clientUuid = randomUUID(), extra: Record<string, unknown> = {}) =>
+    post(`/debts/customers/${customerId}/chain-return`, { line_id: lineId, client_uuid: clientUuid, ...extra });
+  const refundsOf = async (saleId: number) =>
+    (
+      await pool.query(
+        `SELECT r.id, r.method, r.total_cents, r.rounding_cents, r.fiscal_status, f.status AS doc_status
+           FROM pos_refunds r
+           LEFT JOIN pos_fiscal_receipts f ON f.refund_id = r.id AND f.doc_type = 'refund'
+          WHERE r.sale_id = $1 ORDER BY r.id`,
+        [saleId]
+      )
+    ).rows as Array<{ id: string; method: string; total_cents: number; rounding_cents: number; fiscal_status: string; doc_status: string | null }>;
+  const stockOf = async (variantId: number) =>
+    Number((await pool.query(`SELECT quantity FROM pos_stock WHERE variant_id = $1`, [variantId])).rows[0].quantity);
+  const returns = () => fake.prepaymentChain!.calls.filter((call) => call.startsWith('returnChain:'));
+
+  it('«Скасувати внески» gives every «внесок» back in one return of the chain; the sum is owed again and the next one opens a new chain', async () => {
+    const id = await customer();
+    const [line] = await give(id, [{ variant_id: cap, quantity: 1 }]);
+    const first = (await pay(id, prepay(line.id, 30000))).json().prepayment;
+    const second = (await pay(id, prepay(line.id, 10000, 'card'))).json().prepayment;
+    expect((await statement(id)).open_lines[0].chain).toMatchObject({ prepayments: 2, prepaid_cents: 40000 });
+    expect(await owed(id)).toBe(19000);
+    fake.prepaymentChain!.calls.length = 0;
+
+    const uuid = randomUUID();
+    const res = await cancelPrepayments(id, line.id, uuid);
+    expect(res.statusCode, res.body).toBe(200);
+    const body = res.json();
+    expect(body).toMatchObject({ back_cents: 40000, warning: null, replay: false });
+    expect(body.parts.map((p: { kind: string; sale: { id: number } }) => [p.kind, p.sale.id])).toEqual([
+      ['prepayment', second.id],
+      ['prepayment', first.id],
+    ]);
+    expect(body.parts.every((p: { fiscal: { status: string } }) => p.fiscal.status === 'done')).toBe(true);
+    expect(returns()).toEqual([`returnChain:${chainIdFor(store.storeId, line.id, 1)}`]);
+
+    // Each «внесок» back by the way it was paid, registered as its own return.
+    expect(await refundsOf(first.id)).toMatchObject([{ method: 'cash', total_cents: 30000, fiscal_status: 'done', doc_status: 'done' }]);
+    expect(await refundsOf(second.id)).toMatchObject([{ method: 'card', total_cents: 10000, fiscal_status: 'done', doc_status: 'done' }]);
+    expect(await owed(id)).toBe(59000);
+    expect(await lineRow(line.id)).toMatchObject({ prepaid_cents: 0, fiscal_chain_id: null, fiscal_chain_attempts: 1 });
+    const voids = await pool.query(
+      `SELECT sale_id, amount_cents, reason FROM pos_debt_entries WHERE customer_id = $1 AND kind = 'payment_void' ORDER BY sale_id`,
+      [id]
+    );
+    expect(voids.rows.map((r) => [Number(r.sale_id), Number(r.amount_cents), r.reason])).toEqual([
+      [first.id, 30000, 'Внесок повернуто через ПРРО'],
+      [second.id, 10000, 'Внесок повернуто через ПРРО'],
+    ]);
+
+    // The same tap again finds what it wrote and returns nothing twice.
+    const again = await cancelPrepayments(id, line.id, uuid);
+    expect(again.statusCode).toBe(200);
+    expect(again.json()).toMatchObject({ replay: true, back_cents: 40000 });
+    expect(again.json().parts.map((p: { refund_id: number }) => p.refund_id)).toEqual(
+      body.parts.map((p: { refund_id: number }) => p.refund_id)
+    );
+    expect(returns()).toHaveLength(1);
+
+    // The line is out of the chain: its next «внесок» opens another one.
+    const next = await pay(id, prepay(line.id, 5000));
+    expect(next.statusCode, next.body).toBe(200);
+    expect(next.json().prepayment.fiscal_chain_id).toBe(chainIdFor(store.storeId, line.id, 2));
+    expect(await owed(id)).toBe(54000);
+  });
+
+  it('refuses before anything is written: no chain, a document still on its way, ПРРО unreachable', async () => {
+    const id = await customer();
+    const [plain, line] = await give(id, [
+      { variant_id: bread, quantity: 1 },
+      { variant_id: cap, quantity: 1 },
+    ]);
+    const noChain = await cancelPrepayments(id, plain.id);
+    expect(noChain.statusCode).toBe(409);
+    expect(noChain.json().code).toBe('no_chain');
+
+    expect((await pay(id, { line_ids: [plain.id], payments: cash(3200) })).statusCode).toBe(200);
+    fake.queueError('unavailable', 'gateway timeout');
+    expect((await pay(id, prepay(line.id, 30000))).statusCode).toBe(200);
+    const pending = await cancelPrepayments(id, line.id);
+    expect(pending.statusCode).toBe(409);
+    expect(pending.json().code).toBe('chain_pending');
+
+    await pool.query(
+      `UPDATE pos_fiscal_receipts SET next_attempt_at = NOW() - interval '1 minute' WHERE store_id = $1`,
+      [store.storeId]
+    );
+    resetRateLimiter();
+    expect((await fiscalService.retryPendingFiscalDocs({ storeId: store.storeId })).done).toBe(1);
+
+    resetRuntime();
+    fake.queueError('unavailable');
+    const down = await cancelPrepayments(id, line.id);
+    expect(down.statusCode).toBe(503);
+    expect(down.json()).toMatchObject({ code: 'unavailable', credit: { balance_cents: 29000 } });
+    const prepayment = (await salesOf(id)).find((s) => s.debt_prepay_item_id != null)!;
+    expect(await refundsOf(Number(prepayment.id))).toEqual([]);
+    expect(await owed(id)).toBe(29000);
+  });
+
+  it('a return ПРРO does not answer stands: the money goes back, the retry asks for the chain again', async () => {
+    const id = await customer();
+    const [line] = await give(id, [{ variant_id: cap, quantity: 1 }]);
+    const first = (await pay(id, prepay(line.id, 30000))).json().prepayment;
+    const second = (await pay(id, prepay(line.id, 10000))).json().prepayment;
+    fake.prepaymentChain!.calls.length = 0;
+    fake.prepaymentChain!.returnError = 'unavailable';
+
+    const res = await cancelPrepayments(id, line.id);
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json().warning).toContain('гроші покупцеві віддайте');
+    expect(await refundsOf(first.id)).toMatchObject([{ fiscal_status: 'failed', doc_status: 'failed' }]);
+    expect(await refundsOf(second.id)).toMatchObject([{ fiscal_status: 'failed', doc_status: 'failed' }]);
+    expect(await owed(id)).toBe(59000);
+
+    await pool.query(
+      `UPDATE pos_fiscal_receipts SET next_attempt_at = NOW() - interval '1 minute' WHERE store_id = $1`,
+      [store.storeId]
+    );
+    resetRateLimiter();
+    expect((await fiscalService.retryPendingFiscalDocs({ storeId: store.storeId })).done).toBe(2);
+    expect(await refundsOf(first.id)).toMatchObject([{ fiscal_status: 'done', doc_status: 'done' }]);
+    expect(await refundsOf(second.id)).toMatchObject([{ fiscal_status: 'done', doc_status: 'done' }]);
+    expect(returns().length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('a line its chain closed comes back whole: the goods to the shelf, the receipt and every «внесок» refunded, the debt not reopened', async () => {
+    const id = await customer();
+    const [line] = await give(id, [{ variant_id: cap, quantity: 1 }]);
+    const prepayment = (await pay(id, prepay(line.id, 30000))).json().prepayment;
+    const closed = await pay(id, { line_ids: [line.id], payments: cash(29000) });
+    expect(closed.statusCode, closed.body).toBe(200);
+    const close = closed.json().sale;
+    expect(await owed(id)).toBe(0);
+
+    // The host's refund of the closing receipt points here instead.
+    const item = close.items[0];
+    const host = await post(`/sales/${close.id}/refunds`, { items: [{ sale_item_id: item.id, quantity: 1 }] });
+    expect(host.statusCode).toBe(400);
+    expect(host.json().error).toContain('«Борги»');
+
+    const entry = (await get(`/debts/customers/${id}`)).json().entries.find(
+      (e: { sale_id: number | null; kind: string }) => e.sale_id === close.id && e.kind === 'payment'
+    );
+    expect(entry.chain_return).toMatchObject({ line_id: line.id, documents: 2, back_cents: 59000 });
+
+    const shelf = await stockOf(cap);
+    fake.prepaymentChain!.calls.length = 0;
+    const uuid = randomUUID();
+    const res = await returnGoods(id, line.id, uuid);
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json()).toMatchObject({ back_cents: 59000, warning: null });
+    expect(res.json().parts.map((p: { kind: string }) => p.kind)).toEqual(['chain_close', 'prepayment']);
+    expect(returns()).toHaveLength(1);
+    expect(await stockOf(cap)).toBe(shelf + 1);
+    expect(await refundsOf(close.id)).toMatchObject([{ total_cents: 29000, fiscal_status: 'done' }]);
+    expect(await refundsOf(prepayment.id)).toMatchObject([{ total_cents: 30000, fiscal_status: 'done' }]);
+    // Paid goods brought back: the journal is as it was, the line stays paid.
+    expect(await owed(id)).toBe(0);
+    expect((await lineRow(line.id)).sale_id).toBe(String(close.id));
+    const after = (await get(`/debts/customers/${id}`)).json().entries.find(
+      (e: { sale_id: number | null; kind: string }) => e.sale_id === close.id && e.kind === 'payment'
+    );
+    expect(after.chain_return).toBeNull();
+
+    const again = await returnGoods(id, line.id, uuid);
+    expect(again.json()).toMatchObject({ replay: true });
+    const twice = await returnGoods(id, line.id);
+    expect(twice.statusCode).toBe(409);
+    expect(twice.json().code).toBe('already_returned');
+    expect(await stockOf(cap)).toBe(shelf + 1);
+  });
+
+  it('a «внесок» taken without ПРРО is not voided while the line has a chain — the chain goes back first', async () => {
+    const id = await customer();
+    const [line] = await give(id, [{ variant_id: cap, quantity: 1 }]);
+    await updateFiscalSettings(store.storeId, { enabled: false });
+    resetRuntime();
+    const plain = (await pay(id, prepay(line.id, 10000))).json().prepayment;
+    expect(plain.fiscal_chain_id).toBeNull();
+    await updateFiscalSettings(store.storeId, { enabled: true });
+    resetRuntime();
+    await fiscalService.preflight(store.storeId, store.sellerId);
+    const chained = (await pay(id, prepay(line.id, 20000))).json().prepayment;
+    expect(chained.fiscal_chain_id).toBe(chainIdFor(store.storeId, line.id, 1));
+
+    const refused = await post(`/sales/${plain.id}/void`, {}, store.ownerToken);
+    expect(refused.statusCode).toBe(400);
+    expect(refused.json().error).toContain('спершу скасуйте їх');
+    expect(await owed(id)).toBe(29000);
+
+    const cancelled = await cancelPrepayments(id, line.id);
+    expect(cancelled.statusCode, cancelled.body).toBe(200);
+    expect(cancelled.json().back_cents).toBe(20000);
+    expect(await owed(id)).toBe(49000);
+    expect((await post(`/sales/${plain.id}/void`, {}, store.ownerToken)).statusCode).toBe(200);
+    expect(await owed(id)).toBe(59000);
   });
 });

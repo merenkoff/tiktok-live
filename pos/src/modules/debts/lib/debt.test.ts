@@ -9,7 +9,9 @@ import { formatUah } from '@pos/platform';
 import type { CartLine } from '@pos/platform';
 import {
   ageText,
+  chainCancelOffer,
   chainNote,
+  chainReturnOffer,
   chainedLines,
   creditLine,
   documentsRounding,
@@ -37,6 +39,7 @@ import {
   planWords,
   prefixTotals,
   prepayAllowed,
+  prepaymentsText,
   printablePart,
   quantityText,
   returnAmount,
@@ -610,5 +613,39 @@ describe('the documents of a repayment', () => {
     expect(partTitle({ kind: 'receipt', sale: receipt, fiscal: null })).toBe('Чек R-0000056 · 2 товари');
     expect(partTakenCents({ kind: 'receipt', sale: receipt })).toBe(6450);
     expect(partTakenCents({ kind: 'prepayment', sale: prepayment })).toBe(2000);
+  });
+});
+
+describe('giving a chain back (2-Б)', () => {
+  const fiscal = { on: true, provider: 'checkbox', chains: true };
+  const chain = { id: 'ls-1-000003-1', provider: 'checkbox', pending: false, prepayments: 2, prepaid_cents: 40000 };
+
+  it('offers «Скасувати внески» for every «внесок» of a settled chain this store can return', () => {
+    expect(chainCancelOffer({ chain }, fiscal)).toEqual({ count: 2, cents: 40000 });
+    // Nothing while a document is on its way, without «внески», or through another ПРРО.
+    expect(chainCancelOffer({ chain: { ...chain, pending: true } }, fiscal)).toBeNull();
+    expect(chainCancelOffer({ chain: { ...chain, prepayments: 0 } }, fiscal)).toBeNull();
+    expect(chainCancelOffer({ chain: { ...chain, provider: 'cashalot' } }, fiscal)).toBeNull();
+    expect(chainCancelOffer({ chain }, { ...fiscal, on: false })).toBeNull();
+    expect(chainCancelOffer({ chain }, { ...fiscal, chains: false })).toBeNull();
+    expect(chainCancelOffer({ chain }, undefined)).toBeNull();
+    expect(chainCancelOffer({ chain: null }, fiscal)).toBeNull();
+    // A backend before 2-Б says nothing of the «внески» — no button then.
+    expect(chainCancelOffer({ chain: { id: 'x', provider: 'checkbox', pending: false } }, fiscal)).toBeNull();
+  });
+
+  it('offers the goods back on the payment that closed a line through its chain', () => {
+    const offer = { line_id: 3, product_name: 'Кепка', variant_label: 'L', provider: 'checkbox', documents: 3, back_cents: 59000 };
+    expect(chainReturnOffer({ chain_return: offer }, fiscal)).toBe(offer);
+    expect(chainReturnOffer({ chain_return: offer }, { ...fiscal, chains: false })).toBeNull();
+    expect(chainReturnOffer({ chain_return: { ...offer, provider: 'cashalot' } }, fiscal)).toBeNull();
+    expect(chainReturnOffer({ chain_return: null }, fiscal)).toBeNull();
+    expect(chainReturnOffer({}, fiscal)).toBeNull();
+  });
+
+  it('says how many «внески» and for how much', () => {
+    expect(prepaymentsText(1, 30000).replace(/\s/g, ' ')).toBe(`1 внесок на ${formatUah(30000).replace(/\s/g, ' ')}`);
+    expect(prepaymentsText(2, 40000)).toContain('2 внески на');
+    expect(prepaymentsText(5, 50000)).toContain('5 внесків на');
   });
 });
