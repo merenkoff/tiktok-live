@@ -546,7 +546,10 @@ export const COMPETITOR_FACTS = {
    * page. That page prints «Ціна за одну касу з ПРРО — 5 ₴/міс» from a price
    * element without its Ukrainian figure; the tariff page's 200 ₴ is the one
    * recorded. Neither page mentions selling on credit or weight barcodes from
-   * label scales.
+   * label scales. All three pages were read again on 2026-10-25 for the
+   * florist comparison article (every figure below unchanged); the tariff
+   * page's comparison table is also where `loyaltyFrom`, `siteFrom` and
+   * `deliveryManagementFrom` come from.
    */
   posterretail: {
     name: 'Poster',
@@ -574,6 +577,12 @@ export const COMPETITOR_FACTS = {
     trialDays: 15,
     /** The FAQ «Чи можна підключити ваги до Poster?». */
     recommendedScale: 'ВІС Промприлад BTA-60/15-5D-AC',
+    /** «Робота в офлайні» is ticked in every tariff of the comparison table. */
+    offlineAllPlans: true,
+    /** «Програми лояльності» and «Сайт для онлайн-замовлень» are in Mini's «плюс» list; «Управління доставкою» in Business's. */
+    loyaltyFrom: 'Mini',
+    siteFrom: 'Mini',
+    deliveryManagementFrom: 'Business',
     /**
      * The «Програма для квіткового магазину» page, read on its own
      * `checkedAt` (the tariff facts above keep theirs). «від 1 080 ₴ на
@@ -599,15 +608,26 @@ export const COMPETITOR_FACTS = {
       stemAssemblyMentioned: false,
       wiltedWriteoffMentioned: false,
       faqCount: 8,
+      /** The FAQ «Чи підходить Poster як CRM для магазину квітів?»: customer cards, purchase history and bonuses, so yes. */
+      crmFaq: true,
+      /** Bonuses and discounts for regular customers, in the features section. */
+      loyaltyMentioned: true,
+      /** «Приєднатися до 27 000+ закладів, які вже працюють з Poster» — the page's own figure. */
+      establishmentsPrinted: 27000,
     },
   },
   /**
-   * Skynum — the «Автоматизація магазину квітів» page, read on `checkedAt`.
-   * It prints no prices (the tariff page is separate and not recorded here
-   * yet) and names no ПРРО provider; what it does describe is the one thing
-   * the generic tills' flower pages leave out — assembling a bouquet at the
-   * register with the price updating per flower. «Not mentioned» below means
-   * not mentioned on that page, never «does not exist».
+   * Skynum — the «Автоматизація магазину квітів» page and, for the florist
+   * comparison article, the tariff page, both read on `checkedAt`. The flower
+   * page prints no prices and names no ПРРО provider; what it does describe
+   * is the one thing the generic tills' flower pages leave out — assembling a
+   * bouquet at the register with the price updating per flower. The tariff
+   * page prints every price in EURO a month, as the value of a read-only
+   * input beside «€ / місяць» (its FAQ: «Вартість вказана в євро, списання
+   * відбувається за актуальним курсом платіжної системи»), so `tariffs`
+   * records euros and nothing on the site converts them to hryvnia. «Not
+   * mentioned» below means not mentioned on those pages, never «does not
+   * exist».
    */
   skynum: {
     name: 'Skynum',
@@ -615,11 +635,12 @@ export const COMPETITOR_FACTS = {
     checkedAt: '2026-10-25',
     sources: {
       flowers: 'https://skynum.ua/programs/flowers-store-automation',
+      tariffs: 'https://skynum.ua/tariffs',
     },
     h1: 'Автоматизація магазину квітів',
-    /** No figure anywhere on the flower page; a «Тарифи» page exists and is read for the comparison article. */
+    /** No figure anywhere on the flower page; the prices are on `sources.tariffs`, in euros — `tariffs` below. */
     pricesPrinted: false,
-    /** «Безкоштовна версія» — the page's own words, no term or limits stated. */
+    /** «Безкоштовна версія» / «Безкоштовний тариф» — the flower page's own words, no term or limits stated; the tariff page has no free tariff, only `tariffs.trialDays` on each paid one. */
     freeTier: true,
     /** The cashier builds a bouquet from different flowers and the price updates as each is added. */
     bouquetAssemblyAtRegister: true,
@@ -633,6 +654,105 @@ export const COMPETITOR_FACTS = {
     offline: true,
     prroNamedOnPage: false,
     preordersMentioned: false,
+    /**
+     * The tariff page as the browser shows it with every counter at one: a
+     * card's price is its base with one user, one «Скайнум.Каса» and one
+     * integration, and each further one adds its own price (checked by
+     * clicking «+»: Прогрес 37 → 52 with a second till → 59 with a second
+     * user). `till` — «Скайнум.Каса», «окремий застосунок для роздрібних
+     * продажів», is crossed out on Старт, so the register that assembles a
+     * bouquet starts at Прогрес; `prro` — «Інтеграція з ПРРО» is listed from
+     * Прогрес too, with «Інтернет-вітрина», «SMS-розсилки та сповіщення»,
+     * «Інтеграція з Instagram» and «Програма лояльності». Enterprise:
+     * «Вартість визначається індивідуально та суттєво перевищує стандартні
+     * тарифи».
+     */
+    tariffs: {
+      checkedAt: '2026-10-25',
+      currency: 'EUR',
+      /** «30 днів безкоштовно» under every paid card. */
+      trialDays: 30,
+      start: { id: 'Старт', monthlyEur: 20, till: false, prro: false, users: 1, warehouses: 1 },
+      progress: {
+        id: 'Прогрес',
+        monthlyEur: 37,
+        till: true,
+        prro: true,
+        extraUserEur: 7,
+        extraTillEur: 15,
+        extraIntegrationEur: 7,
+        maxUsers: 25,
+        maxTills: 10,
+        maxIntegrations: 5,
+      },
+      company: { id: 'Компанія', monthlyEur: 80, till: true, prro: true, extraUserEur: 9, extraTillEur: 20, extraIntegrationEur: 9, extraBranchEur: 20 },
+      enterpriseIndividual: true,
+    },
+  },
+  /**
+   * Flora24 — read on `checkedAt`: its one page, flora24.online (the «Ціни»
+   * link is an anchor on the same page; there is no separate tariff page).
+   * The page's own <title> calls it «CRM для флористів». Prices are in
+   * hryvnia a month, as printed: «₴1200 /місяць» for one shop, «від ₴2050
+   * /місяць» for two to five, a network «Індивідуально». Not mentioned
+   * anywhere on the page: work without the internet (the desktop app «працює
+   * без браузера», which is not the same thing), assembling a bouquet from
+   * stems at the till with the price counted («Формуйте букети у програмі»
+   * is said of the online showcase), barcodes. «Not mentioned» means not
+   * mentioned on that page, never «does not exist».
+   */
+  flora24: {
+    name: 'Flora24',
+    publishedAt: '2026-10-25',
+    checkedAt: '2026-10-25',
+    sources: {
+      site: 'https://flora24.online/',
+      pricing: 'https://flora24.online/#pricing',
+    },
+    h1: 'Керуйте квітковим бізнесом легко та ефективно',
+    /** The page's <title>: «Flora24 - Автоматизація квіткового бізнесу | CRM для флористів». */
+    titleSaysCrm: true,
+    /** UAH a month, as printed; `fromPrinted` — the card says «від». */
+    plans: [
+      { id: 'Базовий', monthlyUah: 1200, fromPrinted: false, forWhom: 'Для одного магазину' },
+      { id: 'Професійний', monthlyUah: 2050, fromPrinted: true, forWhom: 'Від двох до п\'яти магазинів' },
+    ],
+    /** «Ентерпрайз — для Мережі магазинів — Індивідуально». */
+    enterpriseIndividual: true,
+    /** What the Базовий card lists, in its order. */
+    basicIncludes: [
+      'Необмежена кількість товарів',
+      'Уся аналітика',
+      'Telegram підтримка',
+      'Необмежена кількість користувачів',
+      'Інтеграції з ПРРО Checkbox, Платіжними системами і сервісом Uklon Delivery',
+    ],
+    /** «Почати 30-денний тест». */
+    trialDays: 30,
+    /** «Фіскалізація — Інтеграція з ПРРО Checkbox та Вчасно.Каса»; whether a ПРРО subscription is inside the plan price, the page does not say. */
+    fiscalProviders: ['Checkbox', 'Вчасно.Каса'],
+    deliveryPartners: ['Uklon Delivery'],
+    paymentSystems: ['LiqPay', 'Plata by mono', 'WayForPay', 'Hutko', 'PayPal', 'Stripe'],
+    /** «Календар замовлень — відстежуйте, плануйте і контролюйте усі замовлення та бронювання в одному місці». */
+    orderCalendar: true,
+    /** «Онлайн вітрина — додавайте товари, налаштовуйте ціну й вигляд вітрини — приймайте оплату онлайн». */
+    onlineShowcase: true,
+    /** «Штучний інтелект NEW — автоматичне розпізнавання композицій за фото, генерація назв та описів букетів за допомогою AI». */
+    aiPhotoRecognition: true,
+    /** «SMS розсилки — акції, масові розсилки та автоматизована комунікація». */
+    sms: true,
+    /** Analytics: «Топ продажів та Топ Списання», «Звіти по залишках та рух товару»; the quick-start service teaches «уцінку й списання». */
+    writeoffReport: 'Топ Списання',
+    /** A loyalty programme is named only inside the paid quick-start service («допоможемо створити та використовувати програму лояльності»). */
+    loyaltyMentioned: true,
+    /** Web, iPhone/iPad/Android apps, desktop apps for macOS, Windows and Linux («працює без браузера»). */
+    platforms: ['браузер', 'iPhone, iPad і Android', 'macOS, Windows і Linux'],
+    /** Paid one-off services, UAH: «Швидкий старт із менеджером Flora24», «Підключення та налаштування ПРРО у Flora24» (a Checkbox account «під ключ») and the two together. */
+    services: { quickStartUah: 2500, prroSetupUah: 1700, bundleUah: 3400 },
+    offlineMentioned: false,
+    stemAssemblyMentioned: false,
+    barcodesMentioned: false,
+    preordersMentioned: true,
   },
 } as const;
 

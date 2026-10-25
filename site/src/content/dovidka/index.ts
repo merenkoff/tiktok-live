@@ -13,12 +13,14 @@ import { vagovyiTovarCherezPrro } from './vagovyi-tovar-cherez-prro';
 import { torgsoftPosboxPosterDlyaProduktovogoMagazynu } from './torgsoft-posbox-poster-dlya-produktovogo-magazynu';
 import { zaokruglennyaGotivky50Kopiyok } from './zaokruglennya-gotivky-50-kopiyok';
 import { programaDlyaKvitkovogoMagazynuChyKasaDlyaKafe } from './programa-dlya-kvitkovogo-magazynu-chy-kasa-dlya-kafe';
+import { posterSkynumFlora24DlyaKvitkovogoMagazynu } from './poster-skynum-flora24-dlya-kvitkovogo-magazynu';
 import { yakObratyProgramuDlyaKvitkovogoMagazynu } from './yak-obraty-programu-dlya-kvitkovogo-magazynu';
 import { yakVidkrytyKvitkovyiMagazynFopKvedPrro } from './yak-vidkryty-kvitkovyi-magazyn-fop-kved-prro';
 import { GUIDE_ARTICLES } from './guides';
 
 /** Hand-written answers, newest first. */
 const STANDALONE: Article[] = [
+  posterSkynumFlora24DlyaKvitkovogoMagazynu,
   programaDlyaKvitkovogoMagazynuChyKasaDlyaKafe,
   yakObratyProgramuDlyaKvitkovogoMagazynu,
   yakVidkrytyKvitkovyiMagazynFopKvedPrro,
