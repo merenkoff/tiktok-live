@@ -228,6 +228,14 @@ export interface CatalogItem {
   barcode: string | null;
   price_cents: number;
   compare_at_cents: number | null;
+  /**
+   * What `price_cents` and `compare_at_cents` are for (migration 075): 1 —
+   * one base unit, as always; 1000 — a weighed variant, priced per kg or l
+   * while `quantity` and the sale count whole grams or millilitres. The till
+   * prices such a line with `lineAmountCents`, never merges two weighings and
+   * never caps one by stock (TechDocs/grocery/G4_WEIGHED.md).
+   */
+  price_per: number;
   quantity: number;
   image_url: string | null;
   kind: ProductKind;
@@ -307,6 +315,14 @@ export interface CompleteSaleItemInput {
    * the same variant, because two custom bouquets are two different things.
    */
   components?: Array<{ component_variant_id: number; quantity: number }>;
+  /**
+   * How a weighed line's weight was taken (migration 075): `'manual'`, typed
+   * from a plain scale's display — the only one this server accepts in phase Г4.
+   * Required on a weighed line and ignored on any other: a till that does not
+   * send it does not know weighed goods, and its line is refused rather than
+   * priced as 350 pieces (TechDocs/grocery/G4_WEIGHED.md, decision 7).
+   */
+  weight_source?: string;
 }
 
 export interface CompleteSalePaymentInput {

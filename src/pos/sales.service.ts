@@ -31,7 +31,18 @@ import * as debtLines from './debt-lines.service.js';
 import * as modifiers from './modifiers.service.js';
 import type { LineModifierSnapshot, ModifierGroup } from './modifiers.service.js';
 import { parseCashRoundingStep, refundRoundingCents, saleRoundingCents } from './cashRounding.js';
-import { refundLineAmount } from './lineMoney.js';
+import { lineAmountCents, refundLineAmount } from './lineMoney.js';
+import {
+  assertWeighedLine,
+  formatQuantity,
+  isWeighed,
+  requireWeightSource,
+  WeighedLineError,
+  type WeightSource,
+} from './weighed.js';
+
+/** The biggest sum an INTEGER money column holds — a line past it is refused in words. */
+const MAX_LINE_CENTS = 2_147_483_647;
 
 /**
  * The caption for a bouquet assembled at the counter: how many stems went in.
@@ -116,6 +127,48 @@ export function allocateCartDiscount(
 // Lives in `lineMoney.ts` so the «під запис» lines can share it (073); kept
 // exported from here for every caller that always imported it from here.
 export { refundLineAmount };
+
+/** An ordinary cart line as a till sends it, before it is priced. */
+export interface PlainLineInput {
+  variant_id: number;
+  quantity: number;
+  modifiers: number[];
+  note: string;
+  /** Raw from the request; checked by `pricePlainLine` for a weighed line only. */
+  weight_source?: unknown;
+}
+
+/**
+ * Merge ordinary cart lines the way a sale always has — by variant, by the
+ * modifiers they carry and by the kitchen note — EXCEPT a weighed one
+ * (migration 075): every weighing is its own line, because R(350 г) + R(200 г)
+ * is not always R(550 г) and the receipt must say what the till showed
+ * (TechDocs/grocery/G4_WEIGHED.md, decision 5). `weighed` answers for a variant,
+ * so the caller merges only once it has read them. First-seen order is kept.
+ */
+export function mergePlainLines<T extends PlainLineInput>(
+  lines: readonly T[],
+  weighed: (variantId: number) => boolean
+): T[] {
+  const merged = new Map<string, T>();
+  const out: T[] = [];
+  for (const line of lines) {
+    if (weighed(line.variant_id)) {
+      out.push({ ...line });
+      continue;
+    }
+    const key = `${line.variant_id}|${line.modifiers.join(',')}|${line.note}`;
+    const existing = merged.get(key);
+    if (existing) {
+      existing.quantity += line.quantity;
+    } else {
+      const copy = { ...line };
+      merged.set(key, copy);
+      out.push(copy);
+    }
+  }
+  return out;
+}
 
 /**
  * Draw the next per-store document number from `pos_store_counters`.
@@ -309,6 +362,13 @@ export interface SaleDraftLine {
   debt_item_id?: number;
   /** What a repayment line comes to, fixed when the goods were given (073). */
   fixed_total_cents?: number;
+  /**
+   * What `unit_price_cents` is for (migration 075): 1, or 1000 for a weighed
+   * line — grams at a price per kilogram. Absent means 1.
+   */
+  price_per?: number;
+  /** How a weighed line's weight was taken; present exactly when it is weighed. */
+  weight_source?: WeightSource;
 }
 
 /** The columns of a variant row a walk-in line is priced from. */
@@ -318,6 +378,8 @@ export interface PricedVariantRow {
   label: unknown;
   unit: unknown;
   product_name: unknown;
+  /** 1000 for a weighed variant (migration 075); absent reads as 1. */
+  price_per?: unknown;
 }
 
 /**
@@ -330,12 +392,27 @@ export interface PricedVariantRow {
 export function pricePlainLine(
   variant: PricedVariantRow,
   groups: ModifierGroup[],
-  line: { variant_id: number; quantity: number; modifiers: number[]; note: string }
+  line: PlainLineInput
 ): SaleDraftLine {
-  const chosen = modifiers.resolveLineModifiers(
-    modifiers.groupsForVariant(groups, String(variant.label ?? '')),
-    line.modifiers
-  );
+  const pricePer = Number(variant.price_per ?? 1);
+  const weighed = isWeighed(pricePer);
+  // A till that sends no weight source does not know weighed goods: it priced
+  // this line as `quantity` pieces and showed the customer that sum. Said first,
+  // before anything it could not have got right anyway (G4_WEIGHED.md, decision 7).
+  const weightSource = weighed ? requireWeightSource(line.weight_source) : undefined;
+  if (weighed && line.modifiers.length > 0) {
+    throw new WeighedLineError(
+      `«${String(variant.product_name ?? '')}» — ваговий товар, він продається без модифікаторів`
+    );
+  }
+  // A weighed line asks no questions: its product is priced by the kilo, and a
+  // group the owner hung on it would otherwise refuse every weighing.
+  const chosen = weighed
+    ? modifiers.resolveLineModifiers([], [])
+    : modifiers.resolveLineModifiers(
+        modifiers.groupsForVariant(groups, String(variant.label ?? '')),
+        line.modifiers
+      );
   // The card price plus the deltas — never a sum of ingredients, which is
   // the opposite of a bouquet and deliberately so (POS_CAFE.md §4.1). A
   // delta may be negative; the result may not.
@@ -346,7 +423,16 @@ export function pricePlainLine(
   // negative discount.
   const compareAt =
     variant.compare_at_cents == null ? null : Number(variant.compare_at_cents) + chosen.deltaCents;
-  const pre = unit * line.quantity;
+  // The one sum (lineMoney.ts): exact for pieces, half a kopeck up for grams at
+  // a price per kilogram.
+  const pre = lineAmountCents(line.quantity, unit, pricePer);
+  if (weighed) {
+    assertWeighedLine({
+      productName: String(variant.product_name ?? ''),
+      quantity: line.quantity,
+      amountCents: pre,
+    });
+  }
   return {
     variant_id: line.variant_id,
     product_name: String(variant.product_name ?? ''),
@@ -364,6 +450,8 @@ export function pricePlainLine(
       ? { modifiers: chosen.snapshot, modifier_components: chosen.components }
       : {}),
     has_product_discount: compareAt != null,
+    price_per: pricePer,
+    ...(weightSource ? { weight_source: weightSource } : {}),
   };
 }
 
@@ -456,15 +544,16 @@ export async function completeSaleTx(
   // carrying its own composition — a bouquet the cashier put together at the
   // counter — stays its own line: two custom bouquets off the same catalogue
   // card are two different bouquets, and merging them would lose one of the
-  // two recipes.
-  const plainLines = new Map<
-    string,
-    { variant_id: number; quantity: number; modifiers: number[]; note: string }
-  >();
+  // two recipes. So does a weighed line (migration 075), which is why the
+  // ordinary ones are only collected here and merged once the variants are
+  // read (`mergePlainLines`).
+  const rawPlain: PlainLineInput[] = [];
   const customItems: Array<{ variant_id: number; quantity: number; components: ComponentInput[] }> =
     [];
   for (const item of params.items ?? []) {
-    if (!item.variant_id || item.quantity <= 0) {
+    // Whole base units, always — 350 g is quantity 350. A fraction used to reach
+    // the INTEGER column and come back as a database error with no words.
+    if (!item.variant_id || !Number.isInteger(item.quantity) || item.quantity <= 0) {
       throw new Error('Invalid cart item');
     }
     const modifierIds = modifiers.normalizeModifierIds(item.modifiers);
@@ -481,10 +570,13 @@ export async function completeSaleTx(
       });
       continue;
     }
-    const key = `${item.variant_id}|${modifierIds.join(',')}|${note}`;
-    const existing = plainLines.get(key);
-    if (existing) existing.quantity += item.quantity;
-    else plainLines.set(key, { variant_id: item.variant_id, quantity: item.quantity, modifiers: modifierIds, note });
+    rawPlain.push({
+      variant_id: item.variant_id,
+      quantity: item.quantity,
+      modifiers: modifierIds,
+      note,
+      weight_source: item.weight_source,
+    });
   }
 
   let paymentsTotal = 0;
@@ -511,7 +603,15 @@ export async function completeSaleTx(
   // race one of them loses, and a checkout that fails afterwards needs no
   // compensating «put it back».
   const locked: Array<
-    preorders.LockedLine & { bill_item_id?: number; debt_item_id?: number; fixed_total_cents?: number }
+    preorders.LockedLine & {
+      bill_item_id?: number;
+      debt_item_id?: number;
+      fixed_total_cents?: number;
+      price_per?: number;
+      weight_source?: WeightSource | null;
+      /** The unit the line was locked in — a «під запис» line's own snapshot. */
+      unit?: string;
+    }
   > = params.preorder_id
     ? await preorders.lockedLines(client, params.storeId, params.preorder_id)
     : [];
@@ -552,7 +652,7 @@ export async function completeSaleTx(
 
   const variantIds = [
     ...new Set([
-      ...[...plainLines.values()].map((line) => line.variant_id),
+      ...rawPlain.map((line) => line.variant_id),
       ...customItems.map((item) => item.variant_id),
       ...locked.map((line) => line.variant_id),
     ]),
@@ -562,7 +662,7 @@ export async function completeSaleTx(
   // whatever the owner has since done to the card; only goods rung from the
   // shelf now must still be on it.
   const variantsResult = await client.query(
-    `SELECT v.id, v.price_cents, v.compare_at_cents, v.label, v.unit, v.is_active,
+    `SELECT v.id, v.price_cents, v.compare_at_cents, v.label, v.unit, v.is_active, v.price_per,
             p.id AS product_id, p.name AS product_name,
             p.stop_listed_on::text AS stop_listed_on
      FROM pos_variants v
@@ -576,8 +676,12 @@ export async function completeSaleTx(
   }
 
   const variantMap = new Map(variantsResult.rows.map((row) => [Number(row.id), row]));
+  // Now that the variants say which lines are weighed, the ordinary ones merge.
+  const plainLines = mergePlainLines(rawPlain, (variantId) =>
+    isWeighed(variantMap.get(variantId)?.price_per)
+  );
   for (const variantId of [
-    ...[...plainLines.values()].map((line) => line.variant_id),
+    ...plainLines.map((line) => line.variant_id),
     ...customItems.map((item) => item.variant_id),
   ]) {
     if (variantMap.get(variantId)!.is_active !== true) {
@@ -591,7 +695,7 @@ export async function completeSaleTx(
   // was promised before the dish was pulled.
   if (!params.offline_replay) {
     const rung = [
-      ...[...plainLines.values()].map((line) => line.variant_id),
+      ...plainLines.map((line) => line.variant_id),
       ...customItems.map((item) => item.variant_id),
     ];
     for (const variantId of rung) {
@@ -611,11 +715,11 @@ export async function completeSaleTx(
   const groupsByProduct = await modifiers.loadGroupsForProducts(
     client,
     params.storeId,
-    [...new Set([...plainLines.values()].map((line) => Number(variantMap.get(line.variant_id)!.product_id)))],
+    [...new Set(plainLines.map((line) => Number(variantMap.get(line.variant_id)!.product_id)))],
     { activeOnly: true }
   );
 
-  for (const line of plainLines.values()) {
+  for (const line of plainLines) {
     const variant = variantMap.get(line.variant_id)!;
     const draft = pricePlainLine(variant, groupsByProduct.get(Number(variant.product_id)) ?? [], line);
     subtotal += draft.pre_discount_total;
@@ -627,7 +731,11 @@ export async function completeSaleTx(
     // Never merged with a walk-in line of the same variant: the promised
     // price applies to the order's roses and today's to the ones the
     // customer picked up at the counter, and merging would silently pick one.
-    const pre = line.unit_price_cents * line.quantity;
+    // At the basis the price was locked at — per kilogram for goods weighed
+    // when they were taken «під запис» (075); a pre-order or a bill never
+    // takes a weighed line, so theirs is always 1.
+    const lockedPricePer = line.price_per ?? 1;
+    const pre = lineAmountCents(line.quantity, line.unit_price_cents, lockedPricePer);
     subtotal += pre;
     const components = line.components?.length
       ? await validateComponents(client, params.storeId, line.variant_id, line.components)
@@ -648,7 +756,10 @@ export async function completeSaleTx(
         components ? customBouquetLabel(components) : (variant.label ?? ''),
         promised.names
       ),
-      unit: variant.unit ?? '',
+      // The line's own unit where it kept one (a «під запис» line, 075): its
+      // price was locked per that unit, and a card edited since must not make
+      // a gram line read as pieces.
+      unit: line.unit || (variant.unit ?? ''),
       quantity: line.quantity,
       unit_price_cents: line.unit_price_cents,
       // A promised price is not a markdown off today's card, and showing one
@@ -665,6 +776,8 @@ export async function completeSaleTx(
       ...(line.debt_item_id
         ? { debt_item_id: line.debt_item_id, fixed_total_cents: line.fixed_total_cents }
         : {}),
+      price_per: lockedPricePer,
+      ...(line.weight_source ? { weight_source: line.weight_source } : {}),
     });
   }
 
@@ -727,6 +840,11 @@ export async function completeSaleTx(
     line_discount_cents: lineDiscounts[i],
     line_total_cents: line.pre_discount_total - lineDiscounts[i],
   }));
+  // A line, or the receipt, past what an INTEGER column holds — 999 kg of
+  // something dear, or a typo — is refused in words rather than by the INSERT.
+  if (subtotal > MAX_LINE_CENTS || lineItems.some((line) => line.pre_discount_total > MAX_LINE_CENTS)) {
+    throw new Error('Сума чека завелика — перевірте кількість і вагу');
+  }
 
   const total = lineItems.reduce((s, l) => s + l.line_total_cents, 0);
 
@@ -819,8 +937,9 @@ export async function completeSaleTx(
       `INSERT INTO pos_sale_items
          (sale_id, store_id, variant_id, product_name, variant_label, unit,
           quantity, unit_price_cents, line_total_cents,
-          compare_at_unit_cents, line_discount_cents, note, bill_item_id, debt_item_id)
-       VALUES ($1, $2, $3, $4, $5, $11, $6, $7, $8, $9, $10, $12, $13, $14)
+          compare_at_unit_cents, line_discount_cents, note, bill_item_id, debt_item_id,
+          price_per, weight_source)
+       VALUES ($1, $2, $3, $4, $5, $11, $6, $7, $8, $9, $10, $12, $13, $14, $15, $16)
        RETURNING id`,
       [
         saleId,
@@ -837,6 +956,10 @@ export async function completeSaleTx(
         line.note ?? '',
         line.bill_item_id ?? null,
         line.debt_item_id ?? null,
+        // The basis the price was locked at and how the weight was taken
+        // (075): a receipt from last year must not change meaning.
+        line.price_per ?? 1,
+        line.weight_source ?? null,
       ]
     );
     const saleItemId = Number(itemResult.rows[0].id);
@@ -1165,6 +1288,10 @@ export async function getSale(storeId: number, saleId: number) {
       line_discount_cents: Number(row.line_discount_cents ?? 0),
       line_total_cents: Number(row.line_total_cents),
       refunded_quantity: Number(row.refunded_quantity),
+      // 1000 for a weighed line: `quantity` in g/ml, `unit_price_cents` per
+      // kg/l, and how the weight was taken (migration 075).
+      price_per: Number(row.price_per ?? 1),
+      weight_source: (row.weight_source as WeightSource | null) ?? null,
       components: componentsByItem.get(Number(row.id)) ?? [],
       modifiers: modifiersByItem.get(Number(row.id)) ?? [],
       note: typeof row.note === 'string' ? row.note : '',
@@ -1762,6 +1889,19 @@ export async function refundSaleTx(
     const available = Number(item.quantity) - already;
     if (input.quantity > available) {
       throw new Error(`Cannot refund more than available for item ${input.sale_item_id}`);
+    }
+    // A weighed line comes back whole (075, TechDocs/grocery/G4_WEIGHED.md,
+    // decision 8). The return receipt must come to exactly what the provider
+    // makes of price × quantity, and only the sale line's own weight is sure
+    // to; part of it can miss by a kopeck nothing on a return line may absorb.
+    if (isWeighed(item.price_per) && input.quantity !== available) {
+      throw new Error(
+        `Ваговий товар повертається лише цілим рядком — ${formatQuantity(
+          available,
+          String(item.unit ?? ''),
+          Number(item.price_per)
+        )}`
+      );
     }
 
     // Refund against the discounted line total, and cumulatively, so the

@@ -25,8 +25,10 @@ import type {
   FiscalServiceDoc,
   OfflineStamp,
 } from '../../types.js';
+import { FiscalError } from '../../errors.js';
+import { lineAmountCents } from '../../../lineMoney.js';
 
-/** `pos_sale_items.quantity` is an INTEGER count of whole units — 1 pc = 1000, mapping.ts:23. */
+/** Checkbox's quantity is thousandths of the unit the price is for — 1 pc = 1000, 350 g of a per-kg price = 350. */
 const MILLI_PER_UNIT = 1000;
 
 /**
@@ -47,14 +49,25 @@ const MILLI_PER_UNIT = 1000;
  * undiscounted `price × quantity` to Checkbox on any refund of a line that
  * was originally discounted — a mismatch against our own `lineTotalCents`
  * that `assertLinesMatchTotal` already guarantees is the correct total.
- * Since `quantityMilli` is always an exact multiple of 1000 today (whole
- * units only), `unitPriceCents * (quantityMilli / 1000)` is always an exact
- * integer — no rounding to reconcile.
+ *
+ * `price × quantity` is `lineAmountCents` — the very function the sale priced
+ * the line with (migration 075). For pieces it is exact; for a weighed line
+ * (grams at a price per kilogram) it rounds half a kopeck up, which is what
+ * Checkbox is assumed to do until the sandbox run says otherwise
+ * (TechDocs/grocery/G4_WEIGHED.md §8). A line that comes to MORE than that
+ * would need an `EXTRA_CHARGE`, which nothing has verified — so it is refused
+ * before it leaves rather than sent to differ from Checkbox's own sum by a
+ * kopeck. No line our arithmetic makes can get there.
  */
 function mapLine(line: FiscalDocLine, isReturn: boolean): CheckboxGoodItemPayload {
-  const units = line.quantityMilli / MILLI_PER_UNIT;
-  const undiscountedTotal = line.unitPriceCents * units;
+  const undiscountedTotal = lineAmountCents(line.quantityMilli, line.unitPriceCents, MILLI_PER_UNIT);
   const discount = undiscountedTotal - line.lineTotalCents;
+  if (discount < 0) {
+    throw new FiscalError(
+      `Line «${line.name}» comes to ${line.lineTotalCents}, more than its price × quantity ${undiscountedTotal}`,
+      'rejected'
+    );
+  }
   return {
     good: {
       code: line.barcode ?? line.sourceLineRef ?? line.name.slice(0, 256),

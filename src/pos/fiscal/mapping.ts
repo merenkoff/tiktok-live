@@ -11,6 +11,7 @@
 // free of any dependency on `sales.service.ts`.
 
 import { FiscalError } from './errors.js';
+import { displayUnit } from '../weighed.js';
 import type {
   FiscalCashRounding,
   FiscalDocLine,
@@ -20,7 +21,12 @@ import type {
   FiscalServiceDoc,
 } from './types.js';
 
-/** Units are whole today (`pos_sale_items.quantity INTEGER`); 1 pc = 1000. */
+/**
+ * A fiscal quantity is in thousandths of the unit the price is for. A line's
+ * `quantity` is a whole number of base units (`pos_sale_items.quantity
+ * INTEGER`), so a piece is 1000 and a weighed line — grams at a price per
+ * kilogram, `price_per` 1000 (migration 075) — is its grams as they are.
+ */
 const MILLI_PER_UNIT = 1000;
 
 /** The subset of a `getSale` item this mapping needs. */
@@ -34,6 +40,11 @@ export interface SaleItemInput {
   line_discount_cents: number;
   /** `pos_sale_items.unit` — what `quantity` counts in. Optional: older callers and tests omit it. */
   unit?: string;
+  /**
+   * What `unit_price_cents` is for (migration 075): 1000 on a weighed line —
+   * grams at a price per kilogram. Optional: absent is 1, every line before it.
+   */
+  price_per?: number;
 }
 
 export interface SalePaymentInput {
@@ -104,11 +115,30 @@ export function fiscalLineName(productName: string, variantLabel: string): strin
 /**
  * The line's unit, only when the sale item names one — an absent field keeps
  * the line exactly what it was before contract v2, which is what lets the
- * stored payloads and the Checkbox adapter go on unchanged.
+ * stored payloads and the Checkbox adapter go on unchanged. A weighed line
+ * reads in the unit its price is for: «кг», «л» (075).
  */
 function unitOf(item: SaleItemInput): { unit?: string } {
   const unit = item.unit?.trim();
-  return unit ? { unit } : {};
+  return unit ? { unit: displayUnit(unit, item.price_per ?? 1) } : {};
+}
+
+/**
+ * `quantity` base units as thousandths of the unit the price is for: a piece
+ * is 1000, 350 g at a price per kilogram is 350. Anything else — a basis that
+ * does not divide, a fraction — would reach the provider as a quantity it
+ * cannot represent, so it is refused before anything leaves.
+ */
+function quantityMilliOf(quantity: number, pricePer: number | undefined, itemId: number): number {
+  const per = pricePer ?? 1;
+  const milli = (quantity * MILLI_PER_UNIT) / per;
+  if (!Number.isInteger(milli) || milli <= 0) {
+    throw new FiscalError(
+      `Line ${itemId}: quantity ${quantity} at price_per ${per} is not a whole number of thousandths`,
+      'rejected'
+    );
+  }
+  return milli;
 }
 
 function resolveTaxCode(itemId: number, tax: TaxCodeResolution): string | null {
@@ -150,7 +180,7 @@ export function buildSaleDoc(input: {
 
   const lines: FiscalDocLine[] = sale.items.map((item) => ({
     name: fiscalLineName(item.product_name, item.variant_label),
-    quantityMilli: item.quantity * MILLI_PER_UNIT,
+    quantityMilli: quantityMilliOf(item.quantity, item.price_per, item.id),
     unitPriceCents: item.unit_price_cents,
     lineTotalCents: item.line_total_cents,
     discountCents: item.line_discount_cents,
@@ -240,7 +270,9 @@ export function buildRefundDoc(input: {
     }
     return {
       name: fiscalLineName(item.product_name, item.variant_label),
-      quantityMilli: line.quantity * MILLI_PER_UNIT,
+      // A weighed line only ever comes back whole (sales.service.ts), so its
+      // price × quantity is the sale line's own and the sums agree.
+      quantityMilli: quantityMilliOf(line.quantity, item.price_per, item.id),
       unitPriceCents: item.unit_price_cents,
       lineTotalCents: line.amount_cents,
       // The line discount already lives inside `amount_cents`; restating it

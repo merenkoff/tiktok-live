@@ -440,6 +440,99 @@ describe('fiscal document mapping', () => {
     });
   });
 
+  describe('weighed lines (migration 075, TechDocs/grocery/G4_WEIGHED.md)', () => {
+    // 0,350 кг сиру за 189,90 грн/кг: the sale stores 350 g at a price per
+    // kilogram and the line comes to 66,47.
+    const cheese: SaleInput = sale({
+      total_cents: 6647,
+      items: [
+        {
+          id: 7,
+          product_name: 'Сир твердий',
+          variant_label: '',
+          quantity: 350,
+          unit_price_cents: 18990,
+          line_total_cents: 6647,
+          line_discount_cents: 0,
+          unit: 'г',
+          price_per: 1000,
+        },
+      ],
+      payments: [{ method: 'cash', amount_cents: 10000 }],
+    });
+
+    it('sends the grams as thousandths of the kilogram the price is for, in «кг»', () => {
+      const doc = buildSaleDoc({ requestId: 'w-1', sale: cheese, tax: NO_TAX });
+      expect(doc.lines[0]).toMatchObject({
+        quantityMilli: 350,
+        unitPriceCents: 18990,
+        lineTotalCents: 6647,
+        unit: 'кг',
+      });
+    });
+
+    it('keeps a piece a thousand thousandths, in its own unit', () => {
+      const doc = buildSaleDoc({
+        requestId: 'w-2',
+        sale: sale({
+          total_cents: 9180,
+          items: [
+            {
+              id: 8,
+              product_name: 'Хліб',
+              variant_label: '',
+              quantity: 2,
+              unit_price_cents: 4590,
+              line_total_cents: 9180,
+              line_discount_cents: 0,
+              unit: 'шт',
+              price_per: 1,
+            },
+          ],
+        }),
+        tax: NO_TAX,
+      });
+      expect(doc.lines[0]).toMatchObject({ quantityMilli: 2000, unit: 'шт' });
+    });
+
+    it('returns a weighed line whole, with the sale line\'s own quantity and price', () => {
+      const doc = buildRefundDoc({
+        requestId: 'w-3',
+        relatedProviderDocId: 'prov-1',
+        sale: cheese,
+        tax: NO_TAX,
+        refund: {
+          refund_number: 'RF-7',
+          staff_name: 'Оля',
+          method: 'cash',
+          total_cents: 6647,
+          lines: [{ sale_item_id: 7, quantity: 350, amount_cents: 6647 }],
+        },
+      });
+      expect(doc.lines[0]).toMatchObject({ quantityMilli: 350, unitPriceCents: 18990, lineTotalCents: 6647, unit: 'кг' });
+    });
+
+    it('refuses a quantity that is not a whole number of thousandths of the price\'s unit', () => {
+      const odd = sale({
+        total_cents: 100,
+        items: [
+          {
+            id: 9,
+            product_name: 'Дивний',
+            variant_label: '',
+            quantity: 1,
+            unit_price_cents: 100,
+            line_total_cents: 100,
+            line_discount_cents: 0,
+            unit: 'г',
+            price_per: 3,
+          },
+        ],
+      });
+      expect(() => buildSaleDoc({ requestId: 'w-4', sale: odd, tax: NO_TAX })).toThrow(FiscalError);
+    });
+  });
+
   describe('buildServiceDoc', () => {
     it('picks the direction from the sign of the amount', () => {
       const base = { requestId: 'r', ourNumber: 'SV-1', cashierName: 'Оля' };

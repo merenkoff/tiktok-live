@@ -20,6 +20,7 @@ import { ensurePosAuth, ensurePosOwner } from '../core/auth.js';
 import { localDateString } from '../core/localDate.js';
 import { readStoreClock } from '../core/storeClock.js';
 import { CompositeError } from '../composites.service.js';
+import { WeighedLineError } from '../weighed.js';
 import { ModifierError } from '../modifiers.service.js';
 import * as debts from '../debts.service.js';
 import * as debtPayment from '../debt-payment.service.js';
@@ -42,7 +43,12 @@ function sendError(reply: FastifyReply, error: unknown): unknown {
   if (error instanceof debts.DebtConflict) {
     return reply.code(409).send({ error: errorMessage(error), code: error.code, ...error.detail });
   }
-  if (error instanceof debts.DebtError || error instanceof ModifierError || error instanceof CompositeError) {
+  if (
+    error instanceof debts.DebtError ||
+    error instanceof ModifierError ||
+    error instanceof CompositeError ||
+    error instanceof WeighedLineError
+  ) {
     return reply.code(400).send({ error: errorMessage(error) });
   }
   throw error;

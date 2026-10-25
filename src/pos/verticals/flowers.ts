@@ -43,6 +43,8 @@ export const flowersVertical: VerticalDefinition = {
     },
   ],
   units: ['шт'],
+  // A stem is counted, never weighed.
+  weighedUnits: [],
   // A wilted rose is «Брак» here: the shop throws away the thing it bought,
   // not an ingredient it prepared. The café's three extra codes would be
   // noise on a florist's screen — and the bench's own «Вітрина» write-off is

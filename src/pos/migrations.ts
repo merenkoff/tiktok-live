@@ -128,6 +128,8 @@ export const POS_MIGRATIONS = [
   '073_pos_debts.sql',
   // A handover a desktop till wrote without a network: dated by the till, marked by when the server received it (Г3 PR3).
   '074_pos_debt_offline.sql',
+  // Weighed goods: a price per kg/l (`price_per` 1000) over whole grams, and how the weight was taken (grocery Г4).
+  '075_pos_weighed.sql',
 ] as const;
 
 export function readMigration(file: string): string {

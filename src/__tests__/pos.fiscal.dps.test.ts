@@ -250,6 +250,28 @@ describe('ДПС check — payments, head and units', () => {
   });
 });
 
+describe('ДПС check — a weighed line (migration 075)', () => {
+  it('prints the grams as kilograms with the unit code, and COST rounded half a kopeck up', () => {
+    // 0,350 кг × 189,90 = 66,465 → 66,47, the sum the sale was priced with.
+    const { check } = buildSaleCheck(
+      sale({
+        lines: [line({ name: 'Сир', quantityMilli: 350, unitPriceCents: 18990, lineTotalCents: 6647, unit: 'кг' })],
+        payments: [{ method: 'cash', amountCents: 6647 }],
+        totalCents: 6647,
+      }),
+      { taxes: [] }
+    );
+    expect(check.CHECKBODY[0]).toMatchObject({
+      AMOUNT: 0.35,
+      PRICE: 189.9,
+      COST: 66.47,
+      UNITCD: 301,
+      UNITNM: 'кг',
+    });
+    expect(check.CHECKBODY[0]).not.toHaveProperty('DISCOUNTSUM');
+  });
+});
+
 describe('ДПС check — the tax table', () => {
   it('leaves CHECKTAX and LETTERS out for a seller with no table', () => {
     const { check, vatCents } = buildSaleCheck(sale(), { taxes: [] });

@@ -79,6 +79,16 @@ export interface VerticalDefinition {
   /** Allowed `pos_variants.unit` values; `units[0]` is the default. */
   units: readonly string[];
   /**
+   * The units this vertical sells BY WEIGHT (migration 075,
+   * TechDocs/grocery/G4_WEIGHED.md): a variant in one of them is priced per
+   * 1000 of them — per kilogram or litre — and its quantity stays whole grams
+   * or millilitres. `normalizeVariant` derives `price_per` from this on every
+   * write; a client never sends it. Only `г` and `мл` may be listed (the CHECK
+   * in 075). Empty for every vertical that sells by the piece — and for the
+   * café, whose grams are ingredients priced per gram, as they always were.
+   */
+  weighedUnits: readonly string[];
+  /**
    * Why stock may be written off or corrected here, in the order the owner
    * sees them. The same mechanism as `units` and `attributes`: the vertical
    * owns the vocabulary, the screen only renders it.
@@ -148,6 +158,13 @@ export interface VerticalPublicConfig {
   attributes: AttributeSpec[];
   units: string[];
   defaultUnit: string;
+  /**
+   * Units sold by weight, priced per kg/l — see
+   * `VerticalDefinition.weighedUnits`. The product form shows such a unit as
+   * «кг»/«л» and its price as «за 1 кг». Optional on the client: a backend older
+   * than migration 075 sends none, and none means nothing is weighed.
+   */
+  weighedUnits: string[];
   /** How deep a recipe may nest — see `VerticalDefinition.maxCompositionDepth`. */
   maxCompositionDepth: number;
   /**

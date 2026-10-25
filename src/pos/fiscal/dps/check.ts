@@ -43,6 +43,7 @@ import type {
   DpsPayRow,
 } from './types.js';
 import { unitFields } from './units.js';
+import { lineAmountCents } from '../../lineMoney.js';
 
 const MAX_NAME = 128;
 const MAX_CODE = 64;
@@ -65,9 +66,13 @@ function head(subType: DpsDocSubType, cashierName: string, opts: DpsCheckOptions
   };
 }
 
-/** A line's cost before its discount, in kopecks — integer today (whole units), rounded to be safe. */
+/**
+ * A line's cost before its discount, in kopecks: `lineAmountCents`, the sum the
+ * sale itself was priced by — exact for pieces, half a kopeck up for grams at
+ * a price per kilogram (migration 075).
+ */
 function costOf(line: FiscalDocLine): number {
-  return Math.round((line.unitPriceCents * line.quantityMilli) / 1000);
+  return lineAmountCents(line.quantityMilli, line.unitPriceCents, 1000);
 }
 
 function body(
