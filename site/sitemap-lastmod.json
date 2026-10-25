@@ -1,39 +1,39 @@
 {
   "/": {
     "lastmod": "2026-10-25",
-    "hash": "d3bbcdec11f53aff"
+    "hash": "f91f9ecd5fb8e6b7"
   },
   "/live": {
-    "lastmod": "2026-09-25",
-    "hash": "437bb7d71bb86940"
+    "lastmod": "2026-10-25",
+    "hash": "1a6e321391d688ae"
   },
   "/pos": {
     "lastmod": "2026-10-25",
-    "hash": "9727bef01eb2fd11"
+    "hash": "0b8e0cc2b586234d"
   },
   "/pos/odyah": {
     "lastmod": "2026-10-25",
-    "hash": "567518d885bc7ffc"
+    "hash": "d0f95a807fd08e86"
   },
   "/pos/kvity": {
     "lastmod": "2026-10-25",
-    "hash": "8f2ddb373cf88e99"
+    "hash": "c1159400fe67e102"
   },
   "/pos/kafe": {
     "lastmod": "2026-10-25",
-    "hash": "9861cd56ae0c4923"
+    "hash": "5ed59b4ecd39035e"
   },
   "/pos/restoran": {
     "lastmod": "2026-10-25",
-    "hash": "4f0b4014b0ed4f7a"
+    "hash": "95dddd27b4715a84"
   },
   "/pos/produkty": {
     "lastmod": "2026-10-25",
-    "hash": "21c6a88922ea5ca0"
+    "hash": "9e7052f5b3cb7ba0"
   },
   "/yaku-kasu-obraty": {
     "lastmod": "2026-10-25",
-    "hash": "76d1fa1a54a9abff"
+    "hash": "848d13f119c5c0aa"
   },
   "/dovidka": {
     "lastmod": "2026-10-25",
@@ -61,7 +61,7 @@
   },
   "/dovidka/poster-skynum-flora24-dlya-kvitkovogo-magazynu": {
     "lastmod": "2026-10-25",
-    "hash": "b30a0e9a8e5a6a18"
+    "hash": "61ce0635ae5a479d"
   },
   "/dovidka/programa-dlya-kvitkovogo-magazynu-chy-kasa-dlya-kafe": {
     "lastmod": "2026-10-25",
@@ -69,7 +69,7 @@
   },
   "/dovidka/yak-obraty-programu-dlya-kvitkovogo-magazynu": {
     "lastmod": "2026-10-25",
-    "hash": "f55459f9e0bb0aec"
+    "hash": "a09c41604adc1f71"
   },
   "/dovidka/yak-vidkryty-kvitkovyi-magazyn-fop-kved-prro": {
     "lastmod": "2026-10-25",
@@ -81,7 +81,7 @@
   },
   "/dovidka/torgsoft-posbox-poster-dlya-produktovogo-magazynu": {
     "lastmod": "2026-10-25",
-    "hash": "b7f71756dd7ff0bd"
+    "hash": "bf1d10c1b5e48717"
   },
   "/dovidka/vagovyi-tovar-cherez-prro": {
     "lastmod": "2026-10-25",
@@ -97,27 +97,27 @@
   },
   "/dovidka/poster-qr-chy-liveshop-dlya-restoranu": {
     "lastmod": "2026-10-25",
-    "hash": "f9a99fe792d9122e"
+    "hash": "d46e2c7d97ed88d1"
   },
   "/dovidka/restoapp-chy-liveshop-dlya-restoranu": {
     "lastmod": "2026-10-25",
-    "hash": "14f821d63eb2bb63"
+    "hash": "80215551660a3b98"
   },
   "/dovidka/expirenza-chy-liveshop-dlya-restoranu": {
     "lastmod": "2026-10-25",
-    "hash": "d85831cad08a8468"
+    "hash": "30f823f8039c57fe"
   },
   "/dovidka/choiceqr-chy-liveshop-dlya-restoranu": {
     "lastmod": "2026-10-25",
-    "hash": "d3a3462701a13033"
+    "hash": "ec63fb29f8f058cb"
   },
   "/dovidka/kavapp-chy-liveshop-dlya-kavyarni": {
     "lastmod": "2026-10-25",
-    "hash": "190a87fc02d68a89"
+    "hash": "c1e1b14e2e4f66e3"
   },
   "/dovidka/yak-obraty-programu-dlya-kavyarni": {
-    "lastmod": "2026-10-16",
-    "hash": "7eef89a7b0c2c310"
+    "lastmod": "2026-10-25",
+    "hash": "dc637ad8b792f746"
   },
   "/dovidka/tehkarta-i-fudkost-kavyarni": {
     "lastmod": "2026-09-30",

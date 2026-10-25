@@ -121,8 +121,17 @@ export function priceLockNote(plan: PosPlan): string | null {
 }
 
 /**
- * POS pricing, decided 2026-09-23. Free during the launch, then a monthly fee
- * per STORE (up to `perStoreRegisters` registers) that depends on who does the
+ * The two plan prices, UAH a month per store: the owner's decision of
+ * 2026-10-25 raised them from 100 (≈ 2 €) and 200 to 200 (≈ 4 €) and 300.
+ * Every sentence that prints them reads `PRICING`, so they are typed here once.
+ */
+const BASE_PLAN_PRICE = 200;
+const OWN_PRRO_PLAN_PRICE = 300;
+
+/**
+ * POS pricing, decided 2026-09-23 and raised 2026-10-25 (`BASE_PLAN_PRICE`,
+ * `OWN_PRRO_PLAN_PRICE`). Free during the launch, then a monthly fee per STORE
+ * (up to `perStoreRegisters` registers) that depends on who does the
  * fiscalisation: an external ПРРО provider the store pays separately, or our
  * own ПРРО — which is not built yet (`FEATURES.ownPrro` says so), so its plan
  * is `coming` and its JSON-LD offer is a PreOrder. Tables are an add-on by the
@@ -139,16 +148,16 @@ export const PRICING = {
       {
         id: 'external-prro',
         name: 'Каса + Checkbox',
-        price: 100,
+        price: BASE_PLAN_PRICE,
         note: 'Фіскалізація через Checkbox; підписку Checkbox магазин оплачує окремо.',
         status: 'available',
         lock: 'назавжди для тих, хто підключився на період запуску',
-        eurAnchor: 2,
+        eurAnchor: 4,
       },
       {
         id: 'own-prro',
         name: 'Каса + власний ПРРО',
-        price: 200,
+        price: OWN_PRRO_PLAN_PRICE,
         note: 'Фіскалізація вбудована — без окремої підписки на ПРРО. У розробці.',
         status: 'coming',
         lock: 'на 2 роки для тих, хто підключився на період запуску',
@@ -161,8 +170,8 @@ export const PRICING = {
      */
     changedAt: '2026-10-25',
     billing: 'Помісячно, без передплати за рік.',
-    label: 'Безкоштовно на період запуску, далі від 100 грн/міс за магазин',
-    detail: `Зараз каса безкоштовна — на період запуску, без обмежень за кількістю продажів. Далі — 100 грн/міс за магазин (до 4 кас) з фіскалізацією через Checkbox або 200 грн/міс із власним ПРРО, коли він вийде; столи для ресторану — ще ${TABLES_ADDON.price} грн/міс, а продаж під запис (модуль «Борги») — ${addonPriceText(DEBTS_ADDON)}. Оплата помісячно, без передплати за рік, і ціна закріплюється за тими, хто підключився на період запуску.`,
+    label: `Безкоштовно на період запуску, далі від ${BASE_PLAN_PRICE} грн/міс за магазин`,
+    detail: `Зараз каса безкоштовна — на період запуску, без обмежень за кількістю продажів. Далі — ${BASE_PLAN_PRICE} грн/міс за магазин (до 4 кас) з фіскалізацією через Checkbox або ${OWN_PRRO_PLAN_PRICE} грн/міс із власним ПРРО, коли він вийде; столи для ресторану — ще ${TABLES_ADDON.price} грн/міс, а продаж під запис (модуль «Борги») — ${addonPriceText(DEBTS_ADDON)}. Оплата помісячно, без передплати за рік, і ціна закріплюється за тими, хто підключився на період запуску.`,
   },
   live: {
     trialMonths: 6,
@@ -1070,7 +1079,7 @@ export const ROADMAP: readonly RoadmapItem[] = [
     id: 'own-prro',
     vertical: 'pos',
     title: 'Власний ПРРО без стороннього провайдера',
-    body: 'Фіскальний реєстратор усередині каси: чек іде в ДПС напряму, без окремої підписки й без окремої програми. 200 грн/міс за магазин — і жодних доплат за касу.',
+    body: `Фіскальний реєстратор усередині каси: чек іде в ДПС напряму, без окремої підписки й без окремої програми. ${OWN_PRRO_PLAN_PRICE} грн/міс за магазин — і жодних доплат за касу.`,
     progress: 35,
   },
   {
