@@ -488,6 +488,45 @@ export const COMPETITOR_FACTS = {
       goodsModel: 'облік штучного товару з маркуванням штрихкодом та без нього, товару в рулонах, вагового товару, продаж комплектів та розукомплектацію',
       stemAssemblyMentioned: false,
     },
+    /**
+     * The «Програма для магазину одягу та аксесуарів» page, read in the
+     * browser on its own `checkedAt` (the licence and option facts above keep
+     * theirs). Goods are kept «за моделями та розмірами: можна вводити одну
+     * ціну на весь розмірний ряд або різну ціну на кожен розмір», with
+     * articles, colours, seasons, collections, brands, manufacturers and
+     * gender; a label can show «повний розмірний ряд моделі», the missing
+     * sizes crossed out; a whole size run is received at once. A return is
+     * made by scanning the receipt. Not mentioned on that page: an exchange,
+     * work without the internet, the ПРРО (an option priced above) — «not
+     * mentioned», never «cannot».
+     */
+    clothing: {
+      source: 'https://torgsoft.ua/soft/magazyn-odjagu/',
+      checkedAt: '2026-10-26',
+      h1: 'Програма для магазину одягу та аксесуарів',
+      attributes: ['модель', 'розмір', 'артикул', 'колір', 'сезон', 'колекція', 'бренд', 'виробник', 'стать'],
+      /** «одну ціну на весь розмірний ряд або різну ціну на кожен розмір». */
+      pricePerSizeRunOrSize: true,
+      /** «На етикетці можна зобразити повний розмірний ряд моделі. Відсутні розміри викреслюються». */
+      sizeRunOnLabel: true,
+      /** «оприбуткувати можна одразу всю ростовку», or load the supplier's invoice electronically. */
+      receiveWholeSizeRun: true,
+      /** «Кожен артикул отримує унікальний штрихкод»; «Готові цінники зі штрихкодами друкуються на принтері етикеток». */
+      ownBarcodes: true,
+      /** «Інвентаризація проводиться скануванням штрихкодів». */
+      stocktakeByScanner: true,
+      /** «Продавець сканує чек, товар автоматично повертається на склад … друкується чек повернення». */
+      returnsByReceiptScan: true,
+      exchangeMentioned: false,
+      /** Discount cards (накопичувальні, фіксовані, разові), gift certificates and coupons, SMS and e-mail mailings, bonuses on the card. */
+      loyalty: ['дисконтні картки', 'подарункові сертифікати', 'купони', 'SMS- і e-mail-розсилки', 'бонуси'],
+      /** «Автоматизований облік товару у мережі магазинів одягу» — through the terminal licence and a server. */
+      networkViaTerminalLicence: true,
+      onlineShopIntegration: true,
+      offlineMentioned: false,
+      prroNamedOnPage: false,
+      faqCount: 0,
+    },
   },
   /**
    * Posbox by Checkbox — read on `checkedAt`: its site (the home page, the
@@ -697,6 +736,39 @@ export const COMPETITOR_FACTS = {
       company: { id: 'Компанія', monthlyEur: 80, till: true, prro: true, extraUserEur: 9, extraTillEur: 20, extraIntegrationEur: 9, extraBranchEur: 20 },
       enterpriseIndividual: true,
     },
+    /**
+     * The «Автоматизація магазину одягу» page, read in the browser on its own
+     * `checkedAt`. No price on it either («Безкоштовний тариф» — the free
+     * version, no term or limits stated); goods are kept «за розміром,
+     * брендом, колекцією, кольором» as «модифікації» of one card, so the
+     * seller sees «розмірну сітку, кольорову гаму та наявність»; «Зразки
+     * цінників і штрих-кодів для маркування одягу»; discounts and markdowns
+     * of old collections, «накопичувальна система бонусів», the online-shop
+     * builder, several shops and warehouses in one account. Not mentioned on
+     * that page: returns or an exchange, the ПРРО, a mobile app — «not
+     * mentioned», never «cannot».
+     */
+    clothing: {
+      source: 'https://skynum.ua/programs/clothing-store-automation',
+      checkedAt: '2026-10-26',
+      h1: 'Автоматизація магазину одягу',
+      pricesPrinted: false,
+      freeTier: true,
+      /** «Річ певної моделі може бути в різних модифікаціях - розмірі або кольорі»; «розмірну сітку, кольорову гаму та наявність одягу». */
+      variantsAsModifications: true,
+      attributes: ['розмір', 'бренд', 'колекція', 'колір', 'сезон', 'модель'],
+      priceTagSamples: true,
+      /** «уцінку старих колекцій» among the promotions. */
+      markdownsMentioned: true,
+      bonuses: true,
+      onlineShopBuilder: true,
+      /** «каса працює в офлайн-режимі» — on the page, when the connection is slow. */
+      offline: true,
+      returnsMentioned: false,
+      exchangeMentioned: false,
+      prroNamedOnPage: false,
+      faqCount: 0,
+    },
   },
   /**
    * Flora24 — read on `checkedAt`: its one page, flora24.online (the «Ціни»
@@ -763,6 +835,59 @@ export const COMPETITOR_FACTS = {
     barcodesMentioned: false,
     preordersMentioned: true,
   },
+  /**
+   * ARM20 (АРМ «Роздрібна торгівля») — read in the browser on `checkedAt`:
+   * the «Програма для магазину одягу» page and the tariff page in both of
+   * its modes («Оренда» and «Купівля», `?term=lifetime`). A Windows program
+   * with an Android till and a SaaS cabinet; every tariff says «ПРРО
+   * безкоштовно» and names no provider. The clothing page describes size
+   * grids per product group, photos, colours, seasons, brands and
+   * collections, price tags and labels, returns and «офлайн-робота
+   * Windows-каси» — while the tariff table marks «Робота каси без
+   * інтернету» as absent on Старт. Not mentioned on those pages: an exchange,
+   * a markdown with the old price kept — «not mentioned», never «cannot».
+   */
+  arm20: {
+    name: 'ARM20',
+    publishedAt: '2026-10-26',
+    checkedAt: '2026-10-26',
+    sources: {
+      clothing: 'https://arm20.com/for-clothing-store/',
+      tariffs: 'https://arm20.com/tariffs/',
+      tariffsLifetime: 'https://arm20.com/tariffs/?term=lifetime',
+    },
+    h1: 'Програма для магазину одягу: розмірна сітка, каса, склад і ПРРО',
+    /** «Windows-робочому місці, Android-пристрої або в браузері через SaaS»; the tariff page also links an App Store till. */
+    platforms: ['Windows', 'Android', 'браузер (SaaS)', 'iPhone, iPad і MacBook'],
+    /**
+     * UAH: rent a month and a year («Оренда на рік»), and a one-off purchase
+     * («Купівля»). `tills` — «Касові місця»; `offlineTill` — «Робота каси без
+     * зв'язку з Internet»; `fiscalHardware` — «Підтримка фіскальної техніки».
+     */
+    plans: [
+      { id: 'Старт', monthlyUah: 450, yearUah: 1800, lifetimeUah: 2400, tills: '1', offlineTill: false, fiscalHardware: false, giftCertificates: false, onlineShop: false },
+      { id: 'Магазин', monthlyUah: 750, yearUah: 7200, lifetimeUah: 10900, tills: '1–2', offlineTill: true, fiscalHardware: true, giftCertificates: true, onlineShop: true },
+      { id: 'Маркет', monthlyUah: 1900, yearUah: 9500, lifetimeUah: 15900, tills: 'без обмежень', offlineTill: true, fiscalHardware: true, giftCertificates: true, onlineShop: true },
+    ],
+    /** «ПРРО безкоштовно» under every tariff; «Програмне РРО (ПРРО) — Безкоштовно» in the comparison table. No provider named. */
+    prroFree: true,
+    prroProviderNamed: false,
+    /** «Безкоштовний старт включає робочу версію програми, тариф «Магазин» і хмарне зберігання бази даних» — no term printed. */
+    freeStartTariff: 'Магазин',
+    /** «Створюйте сітки для футболок, штанів, взуття або інших груп товарів»; «розміри, кольори, фото, характеристики і штрихкоди». */
+    sizeGrids: true,
+    attributes: ['розмір', 'колір', 'фото', 'сезон', 'бренд', 'колекція'],
+    /** «друкуйте цінники й етикетки, проводьте переоцінку, акції та маркування товару без заводського штрихкоду». */
+    priceTagsAndLabels: true,
+    repricingMentioned: true,
+    returnsMentioned: true,
+    exchangeMentioned: false,
+    oldPriceOnTagMentioned: false,
+    /** «знижки, дисконтні картки»; a loyalty programme is not named on the clothing page («Android модуль лояльності» is a tariff row). */
+    discountCards: true,
+    /** «Питання про програму для магазину одягу» — eight questions. */
+    faqCount: 8,
+  },
 } as const;
 
 export type FeatureStatus = 'available' | 'coming';
@@ -790,6 +915,32 @@ export const FEATURES = {
   },
   gtinLookup: { status: 'available', label: 'Розпізнавання товару по штрихкоду через GTIN-довідники' },
   clothingVariants: { status: 'available', label: 'Облік одягу за розміром і кольором на рівні варіантів' },
+  // The clothing track's features that the landing did not name until the
+  // SEO/AEO pass of 2026-10-26 (TechDocs/CLOTHING_SEO_AEO.md) — each records
+  // code that ships: TechDocs/POS_CLOTHING.md C1-B/S1/C1d, D2/D3, R1/R2/R4,
+  // L4/L2a, R3.
+  clothingSizeMatrix: {
+    status: 'available',
+    label:
+      'Матриця «кольори × розміри» у картці товару й на приході; дитячі розміри зростом і віком із підказкою під кожним, пошук розміру дитини на касі',
+  },
+  markdowns: {
+    status: 'available',
+    label: 'Масова уцінка за міткою з датою завершення й поверненням цін; стара ціна на плитці, у виборі розміру й на цінику',
+  },
+  returnsExchange: {
+    status: 'available',
+    label:
+      'Повернення з причиною («Брак» списує товар), тим самим способом, яким платили, з актом понад 100 ₴; обмін — два фіскальні чеки за одну операцію',
+  },
+  priceTagsLabels: {
+    status: 'available',
+    label: 'Цінники на чековій стрічці й на наліпках будь-якого розміру з поворотом; з приходу — лише на те, що приїхало',
+  },
+  receiptSearch: {
+    status: 'available',
+    label: 'Пошук чека за номером, телефоном покупця, назвою товару чи штрихкодом — на касі й без інтернету',
+  },
   floristBench: { status: 'available', label: 'Стіл флориста: «Зібрати букет» зі стебел із підрахунком ціни й роботи' },
   floristShowcase: { status: 'available', label: 'Букет на вітрину з власним цінником і списанням стебел' },
   floristPreorders: { status: 'available', label: 'Передзамовлення букетів з датою видачі, адресою й листівкою' },
@@ -864,6 +1015,11 @@ export const POS_FEATURE_IDS: FeatureId[] = [
   'customersDiscounts',
   'gtinLookup',
   'clothingVariants',
+  'clothingSizeMatrix',
+  'markdowns',
+  'returnsExchange',
+  'priceTagsLabels',
+  'receiptSearch',
   'floristBench',
   'floristShowcase',
   'floristPreorders',
@@ -960,9 +1116,32 @@ export const VERTICALS: readonly VerticalFact[] = [
     path: '/pos/odyah',
     title: 'Одяг',
     eyebrow: 'Каса для магазину одягу',
-    tagline: 'Розміри й кольори, сканер штрихкодів, склад документами — і TikTok LIVE як другий канал.',
+    // Widened 2026-10-26 for the words a shop owner types into Google
+    // («програма для магазину одягу», «облік», «CRM») — the old sentence is
+    // still inside it (TechDocs/CLOTHING_SEO_AEO.md).
+    tagline:
+      'Програма для магазину одягу з обліком за розмірами й кольорами, уцінкою, поверненням і обміном за законом, базою покупців і ПРРО: розміри й кольори, сканер штрихкодів, склад документами — і TikTok LIVE як другий канал.',
     bullets: ['Варіанти за розміром і кольором', 'Штрихкоди й GTIN-довідники', 'Інвентаризація сканером офлайн'],
-    featureIds: ['clothingVariants', 'gtinLookup', 'stocktakeOffline', 'tiktokLive'],
+    // The clothing features first, then the shared ones a shop asks about
+    // («CRM», ПРРО, «без інтернету») — the JSON-LD featureList and llms.txt
+    // read this list (TechDocs/CLOTHING_SEO_AEO.md).
+    featureIds: [
+      'clothingVariants',
+      'clothingSizeMatrix',
+      'markdowns',
+      'returnsExchange',
+      'priceTagsLabels',
+      'receiptSearch',
+      'gtinLookup',
+      'stocktakeOffline',
+      'customersDiscounts',
+      'fiscalOnlineCheckbox',
+      'fiscalOffline',
+      'offlineDesktop',
+      'qrPayment',
+      'cashRounding',
+      'tiktokLive',
+    ],
     illustrations: ['/demo-clothing/tee-basic.svg', '/demo-clothing/sneakers.svg', '/demo-clothing/dress-midi.svg'],
     tint: 'bg-tint-clothing',
   },
