@@ -1,5 +1,6 @@
 import type { Article } from './types';
 import { PRODUCT, VERTICALS } from '../../lib/productFacts';
+import { wagesLimit } from '../../lib/taxFacts';
 
 const POS = PRODUCT.pos.name;
 const GROCERY = VERTICALS.find((v) => v.id === 'grocery');
@@ -11,10 +12,8 @@ const LANDING = GROCERY?.path ?? '/pos/produkty';
 const CHECKED = '23 жовтня 2026 року';
 
 // The income limits are multiples of the minimum wage set on 1 January, so they go stale every
-// year: on 1 January 2027 recompute them from the new budget law and bump `updatedAt`.
-const MIN_WAGE_2026 = 8647;
-/** «1 444 049» — grouped by hand with no-break spaces, so the prerender and the browser agree whatever their ICU. */
-const LIMIT = (wages: number) => String(wages * MIN_WAGE_2026).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+// year: on 1 January 2027 recompute `MIN_WAGE_2026` in lib/taxFacts.ts and bump `updatedAt`.
+const LIMIT = wagesLimit;
 
 const SOURCES = {
   taxCode: 'https://zakon.rada.gov.ua/laws/show/2755-17',

@@ -67,6 +67,8 @@ export function buildLlmsTxt(pages: LlmsPage[]): string {
   const posterretail = COMPETITOR_FACTS.posterretail;
   const restaurant = VERTICALS.find((v) => v.id === 'restaurant');
   const grocery = VERTICALS.find((v) => v.id === 'grocery');
+  const flowers = VERTICALS.find((v) => v.id === 'flowers');
+  const skynum = COMPETITOR_FACTS.skynum;
   // A vertical whose promises are not (yet) part of the launch tariff lists
   // them in its own section — a «Скоро» one, and «Продукти» until the owner
   // decides (TechDocs/GROCERY_SEO_AEO.md, «Що вирішити власнику»).
@@ -108,6 +110,18 @@ export function buildLlmsTxt(pages: LlmsPage[]): string {
       : '',
     cafe ? features(cafe.featureIds) : '',
     `- Kavapp для порівняння (станом на ${kavapp.checkedAt}): $${kS.priceUsd.toFixed(2)} / $${kM.priceUsd.toFixed(2)} / $${kL.priceUsd.toFixed(2)} за торгову точку на місяць (тарифи S / M / L); ПРРО входить у всі тарифи; модифікатори напоїв і QR-меню — лише в тарифі L; розрахунок собівартості — з тарифу M. Джерело: ${kavapp.sources.tariffs}. Різниця з ${PRODUCT.pos.name}: ${SITE_URL}/dovidka/kavapp-chy-liveshop-dlya-kavyarni.`,
+    '',
+    // The florist's section (TechDocs/FLOWERS_SEO_AEO.md): the generic tills'
+    // flower pages beside ours, each with the day it was read; «не згадано»
+    // means not mentioned on that page, never «не вміє».
+    '## Програма для квіткового магазину',
+    '',
+    flowers
+      ? `- ${PRODUCT.pos.name} для квіткового магазину (${SITE_URL}${flowers.path}): ${flowers.tagline} Ціна: ${PRICING.pos.label.toLowerCase()}. Чому це не каса для кафе з квітами на плитках: ${SITE_URL}/dovidka/programa-dlya-kvitkovogo-magazynu-chy-kasa-dlya-kafe; як обрати програму для квіткового магазину: ${SITE_URL}/dovidka/yak-obraty-programu-dlya-kvitkovogo-magazynu; група ФОП, КВЕД 47.76 і ПРРО для квіткового магазину: ${SITE_URL}/dovidka/yak-vidkryty-kvitkovyi-magazyn-fop-kved-prro.`
+      : '',
+    flowers ? features(flowers.featureIds) : '',
+    `- ${posterretail.name} для квіткового магазину, для порівняння (станом на ${posterretail.flowers.checkedAt}): «від ${posterretail.flowers.fromUahPrinted} ₴ на місяць» (тариф Mini при оплаті за рік), ПРРО — ${posterretail.prroUah} грн/міс за касу, перші ${posterretail.trialDays} днів безкоштовно; екран замовлень на різні дати, продаж без інтернету, доставка через ${posterretail.flowers.deliveryPartners.join(', ')}, ШІ-асистент ${posterretail.flowers.aiAssistant}, упаковка як окремий товар; збирання букета зі стебел на касі й списання зів'ялого на сторінці не згадано. Джерело: ${posterretail.flowers.source}.`,
+    `- ${skynum.name} для порівняння (станом на ${skynum.checkedAt}): сторінка «${skynum.h1}» цін не друкує, є безкоштовна версія; описано збирання букета на касі з ціною, що оновлюється з кожною квіткою, набори, штрихкоди готових букетів, упаковку в собівартості, списання зіпсованих квітів через інвентаризацію, бонусні картки, конструктор інтернет-магазину й офлайн-режим; ПРРО на сторінці не названо, передзамовлення не згадано. Джерело: ${skynum.sources.flowers}.`,
     '',
     '## Програма для ресторану',
     '',
