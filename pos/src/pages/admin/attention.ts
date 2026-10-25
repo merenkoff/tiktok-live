@@ -17,6 +17,7 @@ import { api } from '@pos/platform';
 import type { CatalogItem, LowStockRow, Preorder } from '../../types';
 import { CalendarClock, ChefHat, ShieldCheck, Warehouse, type Glyph } from '../../platform/glyphs';
 import { ukPlural } from '../../lib/plural';
+import { formatQuantity, isWeighed } from '../../lib/weighed';
 
 export interface AttentionItem {
   key: string;
@@ -115,7 +116,12 @@ export function lowStockItems(rows: readonly LowStockRow[]): AttentionItem[] {
       glyph: Warehouse,
       text:
         rows.length === 1
-          ? `${name} закінчується — ${first.quantity} ${first.unit || 'шт'}`
+          ? `${name} закінчується — ${
+              // Grams sold by weight read as kilograms here too: «0,800 кг», not «800 г».
+              isWeighed(first.price_per)
+                ? formatQuantity(first.quantity, first.unit, first.price_per ?? 1)
+                : `${first.quantity} ${first.unit || 'шт'}`
+            }`
           : `${rows.length} ${ukPlural(rows.length, 'товар закінчується', 'товари закінчуються', 'товарів закінчуються')}`,
       tag: 'Склад',
       meta: rows.length === 1 ? undefined : String(rows.length),

@@ -15,6 +15,8 @@ import {
   VERTICALS,
   COMPETITOR_FACTS,
   ROADMAP,
+  DEBTS_ADDON,
+  addonPriceText,
 } from './lib/productFacts';
 
 export { ROUTES };
@@ -92,7 +94,11 @@ export function buildLlmsTxt(pages: LlmsPage[]): string {
       (plan) =>
         `- ${plan.name}: ${plan.price} ${PRICING.pos.currency}/міс за магазин до ${PRICING.pos.perStoreRegisters} кас. ${plan.note} Ціна закріплюється ${plan.lock}.${plan.status === 'coming' ? ' — у планах' : ''}`
     ),
-    ...PRICING.pos.addons.map((addon) => `- ${addon.name}: +${addon.price} ${PRICING.pos.currency}/міс.`),
+    ...PRICING.pos.addons.map((addon) =>
+      addon.period === 'once'
+        ? `- ${addon.name}: ${addon.price} ${PRICING.pos.currency} один раз, без щомісячної плати. ${addon.note}`
+        : `- ${addon.name}: +${addon.price} ${PRICING.pos.currency}/міс. ${addon.note}`
+    ),
     `- ${PRICING.pos.billing} Для порівняння: ${COMPETITOR_FACTS.checkbox.name} з ${COMPETITOR_FACTS.checkbox.priceFromDate} піднімає ціну з ${COMPETITOR_FACTS.checkbox.priceNow} до ${COMPETITOR_FACTS.checkbox.priceFrom} грн/міс за касу і фіксує стару лише передплатою до ${COMPETITOR_FACTS.checkbox.lockBy} (максимум ${COMPETITOR_FACTS.checkbox.lockMaxMonths} місяців, не далі ${COMPETITOR_FACTS.checkbox.lockUntil}); джерело: ${COMPETITOR_FACTS.checkbox.source}, станом на ${COMPETITOR_FACTS.checkbox.checkedAt}.`,
     '',
     "## Програма для кав'ярні",
@@ -121,7 +127,7 @@ export function buildLlmsTxt(pages: LlmsPage[]): string {
     '## Каса для продуктового магазину',
     '',
     grocery
-      ? `- ${PRODUCT.pos.name} для продуктового магазину (${SITE_URL}${grocery.path}): ${grocery.tagline} Ціна: ${PRICING.pos.label.toLowerCase()}. Рядки без позначки «у планах» — те, що каса вміє вже сьогодні.`
+      ? `- ${PRODUCT.pos.name} для продуктового магазину (${SITE_URL}${grocery.path}): ${grocery.tagline} Ціна: ${PRICING.pos.label.toLowerCase()}; продаж під запис — модуль «Борги», ${addonPriceText(DEBTS_ADDON)}. Рядки без позначки «у планах» — те, що каса вміє вже сьогодні.`
       : '',
     grocery ? features(grocery.featureIds) : '',
     ...ROADMAP.filter((item) => item.vertical === 'grocery').map(

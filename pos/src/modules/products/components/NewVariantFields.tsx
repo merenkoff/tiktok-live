@@ -2,6 +2,7 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
+import { displayUnit, WEIGHED_PRICE_PER } from '@pos/platform';
 import type { VerticalPublicConfig } from '@pos/platform';
 import { AttributeFields } from '@pos/platform/ui';
 import { CompositionEditor } from './CompositionEditor';
@@ -63,7 +64,9 @@ export function NewVariantFields({
         <p className="text-[13px] text-sq-muted self-end pb-3">Залишок рахується зі складників.</p>
       ) : (
         <label className="flex flex-col gap-1.5">
-          <span className={captionClass}>{weighed ? 'Залишок, кг' : 'Залишок'}</span>
+          <span className={captionClass}>
+            {weighed ? `Залишок, ${displayUnit(value.unit, WEIGHED_PRICE_PER)}` : 'Залишок'}
+          </span>
           <input
             className="sq-input tabular-nums"
             placeholder={weighed ? '0,000' : 'Залишок'}

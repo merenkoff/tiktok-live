@@ -8,6 +8,8 @@ import { api } from '@pos/platform';
 import type { StockDocument, StockDocumentLine } from '@pos/platform';
 import { ClipboardCheck, PageHeader } from '@pos/platform/ui';
 import { STATUS_LABEL } from '../lib/documents';
+import { countUnit, isWeighedRow, shownQty, signedStockCell, stockCell, typedToBase } from '../lib/stockUnits';
+import { QuantityBox } from '../components/DecimalInput';
 
 export function StockInventoryPage() {
   const { id } = useParams();
@@ -178,18 +180,27 @@ export function StockInventoryPage() {
                     {line.label}
                   </span>
                 </td>
-                <td className="text-right tabular-nums">{system}</td>
+                <td className="text-right tabular-nums">{stockCell(system, line)}</td>
                 <td className="text-right">
                   {doc?.status === 'draft' ? (
-                    <input
-                      type="number"
-                      min={0}
-                      value={counted}
-                      onChange={(e) => void setCounted(line, Number(e.target.value))}
-                      className="sq-input max-w-[6rem] text-right"
-                    />
+                    <span className="inline-flex items-center justify-end gap-1.5">
+                      <QuantityBox
+                        weighed={isWeighedRow(line)}
+                        min={0}
+                        // Kilograms for a weighed variant, saved as whole grams.
+                        value={shownQty(line, 'base', counted)}
+                        onValue={(typed) => {
+                          void setCounted(
+                            line,
+                            isWeighedRow(line) ? Math.round(typedToBase(line, 'base', typed)) : typed
+                          );
+                        }}
+                        className="sq-input max-w-[6rem] text-right"
+                      />
+                      {isWeighedRow(line) && <span className="text-sq-muted">{countUnit(line)}</span>}
+                    </span>
                   ) : (
-                    <span className="tabular-nums">{counted}</span>
+                    <span className="tabular-nums">{stockCell(counted, line)}</span>
                   )}
                 </td>
                 <td
@@ -197,7 +208,7 @@ export function StockInventoryPage() {
                     diff === 0 ? 'text-sq-muted' : diff < 0 ? 'text-sq-danger' : 'text-sq-success-ink'
                   }`}
                 >
-                  {diff === 0 ? '—' : diff > 0 ? `+${diff}` : diff}
+                  {diff === 0 ? '—' : signedStockCell(diff, line)}
                 </td>
               </tr>
             );

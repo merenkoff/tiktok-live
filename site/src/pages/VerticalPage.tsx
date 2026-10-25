@@ -433,7 +433,10 @@ export function VerticalPage({ page }: { page: VerticalPageData }) {
             </section>
 
             <section className="max-w-4xl mx-auto px-6 py-20">
-              <PricingCard addon={fact.id === 'restaurant'} futureIncluded={!ownRoadmap} />
+              <PricingCard
+                addon={fact.id === 'restaurant' ? 'tables' : fact.id === 'grocery' ? 'debts' : undefined}
+                futureIncluded={!ownRoadmap}
+              />
             </section>
 
             {promiseSection}

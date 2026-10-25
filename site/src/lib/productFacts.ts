@@ -57,6 +57,27 @@ export interface PosPlan {
 }
 
 /** The footnote behind the «*» on a locked price: what is actually fixed is its euro equivalent. */
+/**
+ * A paid extra on top of a plan. `month` is billed like the plans; `once` is a
+ * single payment (decision Д6, 2026-10-25: «Борги» — 400 грн один раз).
+ */
+export interface PosAddon {
+  id: 'tables' | 'debts';
+  name: string;
+  /** UAH — a month for `month`, the whole price for `once`. */
+  price: number;
+  period: 'month' | 'once';
+  /** What the add-on gives, in one line: the card and the JSON-LD offer read it. */
+  note: string;
+  /** Who it is for, under the card. */
+  forWhom: string;
+}
+
+/** «+50 грн/міс» or «400 грн один раз» — an add-on's price in a sentence. */
+export function addonPriceText(addon: Pick<PosAddon, 'price' | 'period'>): string {
+  return addon.period === 'once' ? `${addon.price} грн один раз` : `+${addon.price} грн/міс`;
+}
+
 export function priceLockNote(plan: PosPlan): string | null {
   if (!plan.eurAnchor) return null;
   return `* ${plan.price} грн — це ≈ ${plan.eurAnchor} € на місяць, і закріплюємо ми саме їх: гривнева сума перерахується, лише якщо курс гривні до євро суттєво зміниться.`;
@@ -67,8 +88,10 @@ export function priceLockNote(plan: PosPlan): string | null {
  * per STORE (up to `perStoreRegisters` registers) that depends on who does the
  * fiscalisation: an external ПРРО provider the store pays separately, or our
  * own ПРРО — which is not built yet (`FEATURES.ownPrro` says so), so its plan
- * is `coming` and its JSON-LD offer is a PreOrder. Tables are an add-on.
- * Whoever joins now keeps the price; nothing is prepaid.
+ * is `coming` and its JSON-LD offer is a PreOrder. Tables are an add-on by the
+ * month; «Борги» (sales «під запис», any vertical) one paid once — the owner's
+ * decision Д6 of 2026-10-25. Whoever joins now keeps the price; nothing is
+ * prepaid.
  */
 export const PRICING = {
   pos: {
@@ -94,11 +117,28 @@ export const PRICING = {
         lock: 'на 2 роки для тих, хто підключився на період запуску',
       },
     ] satisfies PosPlan[],
-    addons: [{ id: 'tables', name: 'Столи й офіціанти (ресторан)', price: 50 }],
+    addons: [
+      {
+        id: 'tables',
+        name: 'Столи й офіціанти (ресторан)',
+        price: 50,
+        period: 'month',
+        note: 'План залу, рахунки столів, раунди на кухню, передчек і розділення рахунку.',
+        forWhom: 'Для ресторану з офіціантами.',
+      },
+      {
+        id: 'debts',
+        name: 'Продаж під запис («Борги»)',
+        price: 400,
+        period: 'once',
+        note: 'Борги покупців у журналі каси замість зошита: ліміт від власника, погашення частинами з фіскальним чеком.',
+        forWhom: 'Для будь-якого магазину, де беруть «до зарплати».',
+      },
+    ] satisfies PosAddon[],
     billing: 'Помісячно, без передплати за рік.',
     label: 'Безкоштовно на період запуску, далі від 100 грн/міс за магазин',
     detail:
-      'Зараз каса безкоштовна — на період запуску, без обмежень за кількістю продажів. Далі — 100 грн/міс за магазин (до 4 кас) з фіскалізацією через Checkbox або 200 грн/міс із власним ПРРО, коли він вийде; столи для ресторану — ще 50 грн/міс. Оплата помісячно, без передплати за рік, і ціна закріплюється за тими, хто підключився на період запуску.',
+      'Зараз каса безкоштовна — на період запуску, без обмежень за кількістю продажів. Далі — 100 грн/міс за магазин (до 4 кас) з фіскалізацією через Checkbox або 200 грн/міс із власним ПРРО, коли він вийде; столи для ресторану — ще 50 грн/міс, а продаж під запис (модуль «Борги») — 400 грн один раз. Оплата помісячно, без передплати за рік, і ціна закріплюється за тими, хто підключився на період запуску.',
   },
   live: {
     trialMonths: 6,
@@ -109,6 +149,16 @@ export const PRICING = {
       'Для перших користувачів: 6 місяців безкоштовно, далі 500 грн на місяць — і ця ціна закріплюється за вами, поки ви з нами. Усі нові функції LIVE-модуля входять у ваш тариф без доплат.',
   },
 } as const;
+
+/** One add-on by id — the copy that names an add-on's price reads it from here, never a typed figure. */
+export function posAddon(id: PosAddon['id']): PosAddon {
+  const addon = PRICING.pos.addons.find((a) => a.id === id);
+  if (!addon) throw new Error(`No POS add-on «${id}»`);
+  return addon;
+}
+
+/** «Борги» — sales «під запис» for any vertical, paid once (decision Д6). */
+export const DEBTS_ADDON = posAddon('debts');
 
 /**
  * The only place a competitor's numbers live, with the date they were read

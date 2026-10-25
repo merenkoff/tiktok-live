@@ -26,6 +26,12 @@ export interface OnHandRow {
    */
   pack_qty: number | null;
   pack_label: string;
+  /**
+   * 1000 when the price (and so the way a person counts it) is per kilogram
+   * or litre (migration 075): the stock screens show and take such a row in
+   * kilograms while `quantity` stays grams.
+   */
+  price_per: number;
 }
 
 export interface MovementRow {
@@ -35,6 +41,8 @@ export interface MovementRow {
   /** Variant caption, built by the store's vertical. */
   label: string;
   unit: string;
+  /** 1000 for a weighed variant — the history reads its grams as kilograms. */
+  price_per: number;
   delta: number;
   reason: StockReason;
   reference_type: string | null;
@@ -53,6 +61,8 @@ export interface MovementSummaryRow {
   /** Variant caption, built by the store's vertical. */
   label: string;
   unit: string;
+  /** 1000 for a weighed variant — the report reads its grams as kilograms. */
+  price_per: number;
   opening: number;
   receipt: number;
   sale: number;
@@ -70,7 +80,7 @@ export async function listOnHand(storeId: number): Promise<OnHandRow[]> {
   const result = await pool.query(
     `SELECT v.id AS variant_id, v.product_id, p.name AS product_name, v.label, v.unit,
             v.sku, v.barcode, s.quantity, v.cost_cents, v.price_cents,
-            v.pack_qty, v.pack_label
+            v.pack_qty, v.pack_label, v.price_per
      FROM pos_stock s
      JOIN pos_variants v ON v.id = s.variant_id
      JOIN pos_products p ON p.id = v.product_id
@@ -102,6 +112,7 @@ export async function listOnHand(storeId: number): Promise<OnHandRow[]> {
     price_cents: Number(row.price_cents),
     pack_qty: row.pack_qty == null ? null : Number(row.pack_qty),
     pack_label: String(row.pack_label ?? ''),
+    price_per: Number(row.price_per ?? 1),
   }));
 }
 
@@ -138,7 +149,7 @@ export async function listMovements(
   params.push(limit);
 
   const result = await pool.query(
-    `SELECT m.*, p.name AS product_name, v.label, v.unit, st.display_name AS staff_name
+    `SELECT m.*, p.name AS product_name, v.label, v.unit, v.price_per, st.display_name AS staff_name
      FROM pos_stock_movements m
      JOIN pos_variants v ON v.id = m.variant_id
      JOIN pos_products p ON p.id = v.product_id
@@ -155,6 +166,7 @@ export async function listMovements(
     product_name: row.product_name,
     label: row.label ?? '',
     unit: row.unit ?? '',
+    price_per: Number(row.price_per ?? 1),
     delta: Number(row.delta),
     reason: row.reason as StockReason,
     reference_type: row.reference_type,
@@ -206,7 +218,8 @@ export async function movementReport(
 ): Promise<MovementSummaryRow[]> {
   const result = await pool.query(
     `WITH variants AS (
-       SELECT v.id AS variant_id, p.id AS product_id, p.name AS product_name, v.label, v.unit
+       SELECT v.id AS variant_id, p.id AS product_id, p.name AS product_name, v.label, v.unit,
+              v.price_per
        FROM pos_variants v
        JOIN pos_products p ON p.id = v.product_id
        WHERE v.store_id = $1 AND v.is_active = TRUE
@@ -234,7 +247,7 @@ export async function movementReport(
          AND occurred_at <= $3::timestamptz
        GROUP BY variant_id
      )
-     SELECT v.variant_id, v.product_id, v.product_name, v.label, v.unit,
+     SELECT v.variant_id, v.product_id, v.product_name, v.label, v.unit, v.price_per,
             COALESCE(o.qty, 0) AS opening,
             COALESCE(p.receipt, 0) AS receipt,
             COALESCE(p.sale, 0) AS sale,
@@ -262,6 +275,7 @@ export async function movementReport(
     product_name: row.product_name,
     label: row.label ?? '',
     unit: row.unit ?? '',
+    price_per: Number(row.price_per ?? 1),
     opening: Number(row.opening),
     receipt: Number(row.receipt),
     sale: Number(row.sale),

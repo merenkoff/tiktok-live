@@ -1,5 +1,15 @@
 import type { Article } from './types';
-import { COMPETITOR_FACTS, FEATURES, PRICING, PRODUCT, VERTICALS, isAvailable, roadmapFor } from '../../lib/productFacts';
+import {
+  COMPETITOR_FACTS,
+  FEATURES,
+  PRICING,
+  PRODUCT,
+  VERTICALS,
+  isAvailable,
+  roadmapFor,
+  DEBTS_ADDON,
+  addonPriceText,
+} from '../../lib/productFacts';
 import { formatDateUk } from '../../lib/formatDate';
 
 const POS = PRODUCT.pos.name;
@@ -483,8 +493,9 @@ function Body() {
         ))}
       </ul>
       <p>
-        Ціна самої каси: {PRICING.pos.label.toLowerCase()}; підписку Checkbox магазин оплачує окремо —{' '}
-        {CB.priceFrom} грн/міс за касу. Для підакцизних товарів каса поки не підходить. Якщо ви торгуєте на
+        Ціна самої каси: {PRICING.pos.label.toLowerCase()}; продаж під запис — модуль «Борги»,{' '}
+        {addonPriceText(DEBTS_ADDON)}; підписку Checkbox магазин оплачує окремо — {CB.priceFrom} грн/міс за
+        касу. Для підакцизних товарів каса поки не підходить. Якщо ви торгуєте на
         ринку, спершу перевірте, чи потрібен вам ПРРО взагалі, — у статті{' '}
         <a href="/dovidka/chy-potriben-prro-na-rynku">«Чи потрібен ПРРО для торгівлі на ринку»</a>. Усе
         про нашу касу для продуктів — на сторінці <a href={LANDING}>каси для продуктового магазину</a>.

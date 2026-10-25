@@ -15,7 +15,17 @@ import { PricingSection, checkboxComparison } from '../components/PricingSection
 import { Roadmap } from '../components/Roadmap';
 import { useOsDetect, type DetectedOs } from '../hooks/useOsDetect';
 import { useScrollToHash } from '../hooks/useScrollToHash';
-import { PRODUCT, PRICING, RELEASES_URL, FEATURES, AVAILABLE_VERTICALS, isAvailable, ROADMAP } from '../lib/productFacts';
+import {
+  PRODUCT,
+  PRICING,
+  RELEASES_URL,
+  FEATURES,
+  AVAILABLE_VERTICALS,
+  isAvailable,
+  ROADMAP,
+  DEBTS_ADDON,
+  addonPriceText,
+} from '../lib/productFacts';
 import { track } from '../lib/analytics';
 import type { FaqItem } from '../lib/faqJsonLd';
 import {
@@ -142,7 +152,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   },
   {
     q: 'Чи можна продавати в борг — під запис?',
-    a: 'Так, у будь-якому магазині, де підключено модуль «Борги»: продуктовому, одягу, квітковому. Власник дозволяє покупцеві брати під запис і ставить ліміт, продавець натискає «Під запис» поруч з «Оплатити» — товар іде в борг, а фіскальний чек каса пробиває, коли покупець платить: частинами, від найстаріших товарів. Десктопна каса записує під запис і без інтернету. Докладно — на сторінці /pos/produkty.',
+    a: `Так, у будь-якому магазині, де підключено модуль «Борги» (${addonPriceText(DEBTS_ADDON)}, без щомісячної плати): продуктовому, одягу, квітковому. Власник дозволяє покупцеві брати під запис і ставить ліміт, продавець натискає «Під запис» поруч з «Оплатити» — товар іде в борг, а фіскальний чек каса пробиває, коли покупець платить: частинами, від найстаріших товарів. Десктопна каса записує під запис і без інтернету. Докладно — на сторінці /pos/produkty.`,
   },
   {
     q: 'Чи можна продавати товар на вагу — з ціною за кілограм?',

@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import { api } from '@pos/platform';
 import type { StockMovementRow } from '@pos/platform';
 import { ListOrdered, PageHeader } from '@pos/platform/ui';
+import { signedStockCell } from '../lib/stockUnits';
 
 const REASON_UK: Record<string, string> = {
   sale: 'Продаж',
@@ -103,7 +104,7 @@ export function StockHistoryPage() {
                   row.delta >= 0 ? 'text-sq-success-ink' : 'text-sq-danger'
                 }`}
               >
-                {row.delta >= 0 ? `+${row.delta}` : row.delta}
+                {signedStockCell(row.delta, row)}
               </p>
               {row.reference_type === 'stock_document' && row.reference_id && (
                 <Link

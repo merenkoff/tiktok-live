@@ -16,6 +16,8 @@ import { normalizeVariant } from '../pos/verticals/attributes.js';
 import { verifyPassword, verifyPin } from '../pos/core/crypto.js';
 import { verifyCheckDigit } from '../pos/gtin/normalize.js';
 import { completeSale } from '../pos/sales.service.js';
+import { issueOnCredit, listDebtors } from '../pos/debts.service.js';
+import { DebtConflict } from '../pos/debt-lines.service.js';
 
 const PUBLIC_DIR = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -25,6 +27,16 @@ const PUBLIC_DIR = path.join(
 );
 
 const MIGRATION = '076_pos_demo_grocery_store.sql';
+const CREDIT_MIGRATION = '077_pos_demo_grocery_credit.sql';
+
+/** The notebook on the landing page, as 077 writes it: name → limit in kopecks. */
+const NOTEBOOK: Record<string, number> = {
+  "Оля, 3 під'їзд": 50000,
+  'Петрович': 200000,
+  'Марина — до пенсії': 100000,
+  'Сашко, хліб і молоко': 30000,
+  'Ніна Іванівна': 100000,
+};
 
 /**
  * Migration `076` ships the «Demo Grocery» store as data, with the risks 055
@@ -34,7 +46,7 @@ const MIGRATION = '076_pos_demo_grocery_store.sql';
  * cost per gram, a quantity in grams), and a slip in any of them is a demo
  * that sells 350 g of cheese for 66 000 ₴ or buys it for nothing.
  */
-describe.skipIf(!hasDb)('demo grocery store (migration 076)', () => {
+describe.skipIf(!hasDb)('demo grocery store (migrations 076 and 077)', () => {
   let storeId = 0;
 
   beforeAll(async () => {
@@ -352,5 +364,112 @@ describe.skipIf(!hasDb)('demo grocery store (migration 076)', () => {
         WHERE store_id = $1 AND sku = 'MLK-25'`,
       [storeId]
     );
+  });
+
+  // 077: without a customer the owner gave a limit, «Під запис» in the demo
+  // could write nothing down. Kept in this file because the handover below
+  // moves stock, and the rebuild above must not run beside it.
+  describe('customers on credit (077)', () => {
+    it('has the notebook\'s five, each with the limit the owner set, on phones no operator has', async () => {
+      const rows = await pool.query(
+        `SELECT c.name, c.phone, c.credit_limit_cents, c.credit_locked, st.role AS set_by_role
+           FROM pos_customers c
+           LEFT JOIN pos_staff st ON st.id = c.credit_set_by
+          WHERE c.store_id = $1 AND c.phone LIKE '38000%'
+          ORDER BY c.phone`,
+        [storeId]
+      );
+      expect(Object.fromEntries(rows.rows.map((r) => [r.name, Number(r.credit_limit_cents)]))).toEqual(NOTEBOOK);
+      for (const row of rows.rows) {
+        // Digits only, as `normalizePhone` stores them — the till's phone search compares digits.
+        expect(row.phone).toMatch(/^38000\d{7}$/);
+        expect(row.credit_locked).toBe(false);
+        expect(row.set_by_role).toBe('owner');
+      }
+      const stamp = await pool.query(`SELECT version FROM pos_demo_seed WHERE slug = 'demo-grocery-credit'`);
+      expect(Number(stamp.rows[0]?.version)).toBe(1);
+    });
+
+    it('is written once: a visitor\'s changes survive the next boot', async () => {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          `UPDATE pos_customers SET credit_limit_cents = 70000 WHERE store_id = $1 AND phone = '380000000101'`,
+          [storeId]
+        );
+        await client.query(`DELETE FROM pos_customers WHERE store_id = $1 AND phone = '380000000104'`, [storeId]);
+        await client.query(readMigration(CREDIT_MIGRATION));
+        const after = await client.query(
+          `SELECT phone, credit_limit_cents FROM pos_customers
+            WHERE store_id = $1 AND phone LIKE '38000%' ORDER BY phone`,
+          [storeId]
+        );
+        expect(after.rows.map((r) => [r.phone, Number(r.credit_limit_cents)])).toEqual([
+          ['380000000101', 70000],
+          ['380000000102', 200000],
+          ['380000000103', 100000],
+          ['380000000105', 100000],
+        ]);
+
+        // Dropping the stamp brings the deleted one back and leaves the edited one alone.
+        await client.query(`DELETE FROM pos_demo_seed WHERE slug = 'demo-grocery-credit'`);
+        await client.query(readMigration(CREDIT_MIGRATION));
+        const back = await client.query(
+          `SELECT phone, credit_limit_cents FROM pos_customers
+            WHERE store_id = $1 AND phone IN ('380000000101', '380000000104') ORDER BY phone`,
+          [storeId]
+        );
+        expect(back.rows.map((r) => [r.phone, Number(r.credit_limit_cents)])).toEqual([
+          ['380000000101', 70000],
+          ['380000000104', 30000],
+        ]);
+      } finally {
+        await client.query('ROLLBACK');
+        client.release();
+      }
+    });
+
+    it('lets a visitor give Оля 1,5 kg of potatoes on credit, and stops at the notebook\'s 500 ₴', async () => {
+      const [olya] = (
+        await pool.query(`SELECT id FROM pos_customers WHERE store_id = $1 AND phone = '380000000101'`, [storeId])
+      ).rows;
+      const [potatoes] = (
+        await pool.query(
+          `SELECT v.id, v.price_cents FROM pos_variants v JOIN pos_products p ON p.id = v.product_id
+            WHERE v.store_id = $1 AND p.name = 'Картопля' AND v.price_per = 1000 ORDER BY v.id LIMIT 1`,
+          [storeId]
+        )
+      ).rows;
+      const [seller] = (
+        await pool.query(`SELECT id FROM pos_staff WHERE store_id = $1 AND role = 'seller' ORDER BY id LIMIT 1`, [
+          storeId,
+        ])
+      ).rows;
+      expect(potatoes, 'the demo sells potatoes by weight').toBeDefined();
+
+      const result = await issueOnCredit({
+        storeId,
+        staffId: Number(seller.id),
+        customerId: Number(olya.id),
+        items: [{ variant_id: Number(potatoes.id), quantity: 1500, weight_source: 'manual' }],
+        client_uuid: randomUUID(),
+      });
+      expect(result.replay).toBe(false);
+      const owed = Math.round((1500 * Number(potatoes.price_cents)) / 1000);
+      const debtors = await listDebtors(storeId);
+      expect(debtors.find((d) => d.customer_id === Number(olya.id))?.balance_cents).toBe(owed);
+
+      // More than the rest of her 500 ₴ is refused, with the figures.
+      await expect(
+        issueOnCredit({
+          storeId,
+          staffId: Number(seller.id),
+          customerId: Number(olya.id),
+          items: [{ variant_id: Number(potatoes.id), quantity: 50000, weight_source: 'manual' }],
+          client_uuid: randomUUID(),
+        })
+      ).rejects.toBeInstanceOf(DebtConflict);
+    });
   });
 });
