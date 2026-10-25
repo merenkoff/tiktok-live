@@ -13,7 +13,7 @@ import 'fake-indexeddb/auto';
 import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DebtLine } from '../lib/types';
+import type { DebtFiscal, DebtLine } from '../lib/types';
 
 const posRequest = vi.fn();
 const printSlip = vi.fn();
@@ -94,7 +94,7 @@ function paid(over: Record<string, unknown> = {}) {
 
 let pay: (body: Record<string, unknown>) => unknown;
 
-function draw(lines = LINES) {
+function draw(lines = LINES, fiscal?: DebtFiscal) {
   const onChanged = vi.fn();
   const onClose = vi.fn();
   const { unmount } = renderWithProviders(
@@ -103,6 +103,7 @@ function draw(lines = LINES) {
       customerName="Оксана"
       customerPhone="+380671234567"
       openLines={lines}
+      fiscal={fiscal}
       onClose={onClose}
       onChanged={onChanged}
     />
@@ -440,5 +441,202 @@ describe('PaySheet', () => {
     const keys = posRequest.mock.calls.map((c) => c[2].client_uuid);
     expect(keys).toHaveLength(2);
     expect(keys[1]).toBe(keys[0]);
+  });
+});
+
+describe('PaySheet in a store whose ПРРО keeps prepayment chains (G3_DEBTS.md §11 «Крок 2»)', () => {
+  const CHAINS: DebtFiscal = { on: true, provider: 'checkbox', chains: true };
+  const registered = { status: 'done', fiscal_code: 'FC-1', receipt_text: 'ЧЕК ПЕРЕДПЛАТИ' };
+  // 300 ₴ already paid toward the cap through its chain: 290,23 ₴ left.
+  const CHAINED_CAP = partLine(3, 'Кепка', 1, 59023, {
+    prepaid_cents: 30000,
+    owed_cents: 29023,
+    chain: { id: 'ls-1-000003-1', provider: 'checkbox', pending: false },
+  });
+  const BREAD_ODD = partLine(1, 'Хліб', 1, 10010);
+
+  beforeEach(() => {
+    useAuthStore.setState({
+      auth: makeAuthResponse({ store: { cash_rounding: 50, fiscal: { enabled: true, provider: 'checkbox' } } }),
+      isAuthenticated: true,
+      bootstrapped: true,
+    });
+  });
+
+  it('takes a «внесок» as a «чек передплати» and offers it for print', async () => {
+    pay = () => {
+      const sale = { ...prepaymentSale(56, 30000, 3, 'Кепка'), fiscal_status: 'done', fiscal: registered };
+      return paid({
+        sale,
+        prepayment: sale,
+        fiscal: registered,
+        parts: [{ kind: 'prepayment', sale, fiscal: registered }],
+        open_lines: [{ ...CAP, prepaid_cents: 30000, owed_cents: 29000 }],
+      });
+    };
+    const user = userEvent.setup();
+    draw([CAP], CHAINS);
+    await user.type(screen.getByPlaceholderText('Наприклад: 500'), '300');
+    expect(screen.getByTestId('debts-pay-offer')).toHaveTextContent(
+      `Внесок ${uah(30000)} на «Кепка» (чек передплати) — лишиться винно ${uah(29000)}`
+    );
+    await user.click(screen.getByRole('button', { name: /Прийняти/ }));
+
+    const done = await screen.findByTestId('debts-pay-done');
+    expect(posRequest.mock.calls[0][2]).toMatchObject({ part: { line_id: 3, amount_cents: 30000 }, payments: [] });
+    expect(screen.getByTestId('debts-pay-done-text')).toHaveTextContent(`прийнято ${uah(30000)} як внесок на «Кепка».`);
+    expect(within(done).getByRole('button', { name: /Друкувати чек/ })).toBeInTheDocument();
+  });
+
+  it('closes a chained line on its own receipt, rounds each receipt by itself and lists both when done', async () => {
+    pay = () =>
+      paid({
+        parts: [
+          {
+            kind: 'chain_close',
+            sale: {
+              ...paid().sale,
+              total_cents: 29023,
+              rounding_cents: -23,
+              fiscal_chain_id: 'ls-1-000003-1',
+              items: [{ id: 1, variant_id: 3, product_name: 'Кепка', variant_label: '', quantity: 1, unit_price_cents: 59023, line_total_cents: 29023, refunded_quantity: 0 }],
+            },
+            fiscal: registered,
+          },
+          {
+            kind: 'receipt',
+            sale: {
+              ...paid().sale,
+              id: 56,
+              receipt_number: 'R-0000056',
+              total_cents: 10010,
+              rounding_cents: -10,
+              items: [{ id: 2, variant_id: 1, product_name: 'Хліб', variant_label: '', quantity: 1, unit_price_cents: 10010, line_total_cents: 10010, refunded_quantity: 0 }],
+            },
+            fiscal: registered,
+          },
+        ],
+      });
+    const user = userEvent.setup();
+    draw([CHAINED_CAP, BREAD_ODD], CHAINS);
+    expect(lineButton('Кепка')).toHaveTextContent('окремим чеком');
+    // 290,00 + 100,00 — not 390,50 for the sum rounded at once.
+    expect(due()).toHaveTextContent(uah(39000));
+    await user.click(screen.getByRole('button', { name: /Прийняти/ }));
+
+    await screen.findByTestId('debts-pay-done');
+    expect(posRequest.mock.calls[0][2]).toMatchObject({
+      line_ids: [3, 1],
+      payments: [{ method: 'cash', amount_cents: 39000 }],
+      cash_rounding: 50,
+    });
+    expect(screen.getByTestId('debts-pay-done-text')).toHaveTextContent(`прийнято ${uah(39000)}: 2 документи.`);
+    const rows = within(screen.getByTestId('debts-pay-parts')).getAllByRole('listitem');
+    expect(rows[0]).toHaveTextContent('Чек R-0000055 · закриває «Кепка»');
+    expect(rows[0]).toHaveTextContent(uah(29000));
+    expect(rows[1]).toHaveTextContent('Чек R-0000056 · 1 товар');
+    expect(within(rows[1]).getByRole('button', { name: /Друкувати/ })).toBeInTheDocument();
+  });
+
+  it('when one document of the sum stops, says what to hand back and offers the receipts that went through', async () => {
+    let calls = 0;
+    pay = () => {
+      calls += 1;
+      if (calls === 1) {
+        throw {
+          response: {
+            status: 502,
+            data: {
+              error:
+                'ПРРО відхилило чек. Внесок скасовано, сума знову в борг. Попередні чеки пройшли; решту поверніть покупцеві — 20,00 ₴.',
+              code: 'rejected',
+              part: 'prepayment',
+              sale_ids: [55],
+              not_taken_cents: 2000,
+              sale_voided: true,
+              credit: paid().credit,
+              open_lines: [BREAD_ODD],
+            },
+          },
+        };
+      }
+      return paid();
+    };
+    posRequest.mockImplementation(async (method: string, path: string, body?: Record<string, unknown>) => {
+      if (method === 'post' && path === '/debts/customers/7/pay') return pay(body ?? {});
+      if (method === 'get' && path === '/sales/55') {
+        return { ...paid().sale, total_cents: 29023, rounding_cents: -23, fiscal_chain_id: 'ls-1-000003-1', fiscal: registered, items: [{ id: 1, variant_id: 3, product_name: 'Кепка', variant_label: '', quantity: 1, unit_price_cents: 59023, line_total_cents: 29023, refunded_quantity: 0 }] };
+      }
+      throw new Error(`unexpected ${method} ${path}`);
+    });
+    const user = userEvent.setup();
+    const { onChanged } = draw([CHAINED_CAP, BREAD_ODD, BUNS], CHAINS);
+    await user.type(screen.getByPlaceholderText('Наприклад: 500'), '410');
+    await user.click(screen.getByRole('button', { name: /Прийняти/ }));
+
+    const error = await screen.findByTestId('debts-pay-error');
+    expect(error).toHaveTextContent('решту поверніть покупцеві — 20,00 ₴');
+    const through = await screen.findByTestId('debts-pay-through');
+    expect(through).toHaveTextContent('Чек R-0000055 · закриває «Кепка»');
+    expect(within(through).getByRole('button', { name: /Друкувати/ })).toBeInTheDocument();
+    // What is left is a new payment from a sum typed again.
+    expect(screen.getByPlaceholderText('Наприклад: 500')).toHaveValue('');
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it('after no answer sends the same request again, whatever was typed since', async () => {
+    let calls = 0;
+    pay = () => {
+      calls += 1;
+      if (calls === 1) throw new Error('timeout of 15000ms exceeded');
+      return paid();
+    };
+    const user = userEvent.setup();
+    draw([CHAINED_CAP, BREAD_ODD], CHAINS);
+    await user.click(screen.getByRole('button', { name: /Прийняти/ }));
+    await screen.findByRole('button', { name: 'Перевірити ще раз' });
+    await user.type(screen.getByPlaceholderText('Наприклад: 500'), '100');
+    await user.click(screen.getByRole('button', { name: 'Перевірити ще раз' }));
+    await screen.findByTestId('debts-pay-done');
+
+    const [first, second] = posRequest.mock.calls.map((c) => c[2]);
+    expect(second).toEqual(first);
+  });
+
+  it('opened again after a payment that got no answer, sends what that payment sent', async () => {
+    let calls = 0;
+    pay = () => {
+      calls += 1;
+      if (calls === 1) throw new Error('timeout of 15000ms exceeded');
+      return paid();
+    };
+    const user = userEvent.setup();
+    const first = draw([CHAINED_CAP, BREAD_ODD], CHAINS);
+    await user.type(screen.getByPlaceholderText('Наприклад: 500'), '300');
+    await user.click(screen.getByRole('button', { name: /Прийняти/ }));
+    expect(await screen.findByTestId('debts-pay-error')).toHaveTextContent('оплата могла пройти');
+    first.unmount();
+
+    // The statement read again: the cap is closed, only the bread is left.
+    draw([BREAD_ODD], CHAINS);
+    await user.click(screen.getByRole('button', { name: 'Перевірити ще раз' }));
+    await screen.findByTestId('debts-pay-done');
+    const [sent, again] = posRequest.mock.calls.map((c) => c[2]);
+    expect(again).toEqual(sent);
+    expect(again).toMatchObject({ line_ids: [3] });
+  });
+
+  it('takes no «внесок» where ПРРО keeps no chains — the statement says so, whatever the login', async () => {
+    useAuthStore.setState({ auth: makeAuthResponse(), isAuthenticated: true, bootstrapped: true });
+    const user = userEvent.setup();
+    draw([CAP], { on: true, provider: 'cashalot', chains: false });
+    await user.type(screen.getByPlaceholderText('Наприклад: 500'), '300');
+    expect(screen.getByTestId('debts-pay-offer')).toHaveTextContent('внесок за частину товару поки не приймається');
+    expect(screen.getByRole('button', { name: /Прийняти/ })).toBeDisabled();
+  });
+
+  it('warns while an earlier document of the chain is still being registered', () => {
+    draw([{ ...CHAINED_CAP, chain: { id: 'ls-1-000003-1', provider: 'checkbox', pending: true } }], CHAINS);
+    expect(screen.getByTestId('debts-pay-chain-note')).toHaveTextContent('внесок ще реєструється в ПРРО');
   });
 });

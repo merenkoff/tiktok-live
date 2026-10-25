@@ -10,6 +10,11 @@
 // One thing the host's layout cannot know: a line that closes goods money was
 // taken toward earlier as «внески» (078) prints its unit price over a smaller
 // sum — «1 x 590.00 … 290.00». The line says why under it.
+//
+// Under ПРРО a «внесок» is a receipt too — a «чек передплати» of the line's
+// chain (§11 «Крок 2») — and prints the provider's own text. When that text
+// did not arrive, our layout would print a receipt with no goods at all; it
+// gets one line instead, «Передплата за «Кепка»», with the chain's number.
 
 import { useCallback, useState } from 'react';
 import {
@@ -38,6 +43,27 @@ export function withPrepaidNotes(receipt: ReceiptData, sale: SaleDetail): Receip
   };
 }
 
+/** A «внесок» printed by our layout: one line for the money, naming the goods it is toward and the chain. */
+export function withPrepaymentLine(receipt: ReceiptData, sale: SaleDetail): ReceiptData {
+  const debt = sale as DebtSale;
+  const line = debt.debt_prepayment;
+  if (!line || receipt.provider_text || receipt.items.length > 0) return receipt;
+  const title = line.variant_label ? `${line.product_name} · ${line.variant_label}` : line.product_name;
+  return {
+    ...receipt,
+    items: [
+      {
+        name: `Передплата за «${title}»`,
+        variant_label: '',
+        quantity: 1,
+        unit_price_cents: sale.total_cents,
+        line_total_cents: sale.total_cents,
+        ...(debt.fiscal_chain_id ? { note: `Замовлення № ${debt.fiscal_chain_id}` } : {}),
+      },
+    ],
+  };
+}
+
 export function useReceiptPrint() {
   const auth = useAuthStore((s) => s.auth);
   const { printToPdf, printablePortal } = usePrintableReceipt();
@@ -46,12 +72,15 @@ export function useReceiptPrint() {
 
   const print = useCallback(
     async (sale: SaleDetail) => {
-      const receipt = withPrepaidNotes(
-        buildReceiptPayload(sale, {
-          name: auth?.store.name ?? '',
-          fiscal: auth?.store.fiscal ?? null,
-          vertical: auth?.store.vertical?.id ?? null,
-        }),
+      const receipt = withPrepaymentLine(
+        withPrepaidNotes(
+          buildReceiptPayload(sale, {
+            name: auth?.store.name ?? '',
+            fiscal: auth?.store.fiscal ?? null,
+            vertical: auth?.store.vertical?.id ?? null,
+          }),
+          sale
+        ),
         sale
       );
       const [name, mm] = await Promise.all([
@@ -76,5 +105,23 @@ export function useReceiptPrint() {
     [auth, printToPdf]
   );
 
-  return { print, printing, status, printablePortal };
+  /**
+   * Several receipts of one repayment, in order. The browser's print dialog
+   * shows one document at a time, so without a receipt printer only the first
+   * goes out by itself and the rest wait for their buttons.
+   */
+  const printMany = useCallback(
+    async (sales: SaleDetail[]) => {
+      if (sales.length === 0) return;
+      const name = await getMeta<string>('receiptPrinterName');
+      if (!name) {
+        await print(sales[0]);
+        return;
+      }
+      for (const sale of sales) await print(sale);
+    },
+    [print]
+  );
+
+  return { print, printMany, printing, status, printablePortal };
 }

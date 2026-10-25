@@ -30,6 +30,13 @@ export interface DebtFailure {
   saleVoided: boolean;
   /** Figures beside `over_limit`. */
   limit: { balance: number; attempt: number; limit: number; available: number } | null;
+  /**
+   * When one sum was several documents (§11 «Крок 2») and one of them did not
+   * go through: the documents before it that did — their sales — and what was
+   * handed over for that one and the ones after it, to give back.
+   */
+  saleIds: number[];
+  notTakenCents: number | null;
 }
 
 interface ErrorBody {
@@ -39,6 +46,8 @@ interface ErrorBody {
   credit?: unknown;
   open_lines?: unknown;
   sale_voided?: unknown;
+  sale_ids?: unknown;
+  not_taken_cents?: unknown;
   balance_cents?: unknown;
   attempt_cents?: unknown;
   limit_cents?: unknown;
@@ -54,7 +63,18 @@ function num(value: unknown): number | null {
  * happened, and that the next tap will not do it twice (it sends the same key).
  */
 export function unansweredFailure(text: string): DebtFailure {
-  return { text, code: null, status: null, unknown: true, credit: null, openLines: null, saleVoided: false, limit: null };
+  return {
+    text,
+    code: null,
+    status: null,
+    unknown: true,
+    credit: null,
+    openLines: null,
+    saleVoided: false,
+    limit: null,
+    saleIds: [],
+    notTakenCents: null,
+  };
 }
 
 export function debtFailure(e: unknown, fallback: string): DebtFailure {
@@ -62,9 +82,14 @@ export function debtFailure(e: unknown, fallback: string): DebtFailure {
   const status = num(response?.status);
   const body = (response?.data ?? null) as ErrorBody | null;
 
+  // The debt routes put the sentence in `error`; the sale routes put a machine
+  // word there («sale_fiscalised», «chain_pending») and the sentence in `message`.
+  const error = typeof body?.error === 'string' ? body.error.trim() : '';
+  const message = typeof body?.message === 'string' ? body.message.trim() : '';
+  const word = /^[a-z][a-z_]*$/.test(error);
   let text = fallback;
-  if (typeof body?.error === 'string' && body.error.trim()) text = body.error;
-  else if (typeof body?.message === 'string' && body.message.trim()) text = body.message;
+  if (error && !(word && message)) text = error;
+  else if (message) text = message;
   else if (!response) text = 'Немає звʼязку з сервером — перевірте мережу і спробуйте ще раз';
 
   const balance = num(body?.balance_cents);
@@ -74,7 +99,7 @@ export function debtFailure(e: unknown, fallback: string): DebtFailure {
 
   return {
     text,
-    code: typeof body?.code === 'string' ? body.code : null,
+    code: typeof body?.code === 'string' ? body.code : word ? error : null,
     status,
     unknown: !response,
     credit: body?.credit && typeof body.credit === 'object' ? (body.credit as DebtCredit) : null,
@@ -84,5 +109,9 @@ export function debtFailure(e: unknown, fallback: string): DebtFailure {
       balance != null && attempt != null && limit != null && available != null
         ? { balance, attempt, limit, available }
         : null,
+    saleIds: Array.isArray(body?.sale_ids)
+      ? body.sale_ids.filter((id): id is number => typeof id === 'number' && Number.isInteger(id))
+      : [],
+    notTakenCents: num(body?.not_taken_cents),
   };
 }

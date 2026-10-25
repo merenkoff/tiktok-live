@@ -149,6 +149,44 @@ export async function assertChainSettled(client: DbClient, storeId: number, chai
   );
 }
 
+/**
+ * Why a void of this sale must wait, or be the owner's (079, §11 «Крок 2»):
+ * it is a document of a ПРРО prepayment chain that ПРРО has not registered.
+ * While the retry still means to send it, a void races the provider — the
+ * retry never sends a voided sale's document, but its first attempt may
+ * already be there. Once the retry gave up, only the owner undoes it, after
+ * looking in the provider's cabinet. Null: nothing stands in the way here (a
+ * registered one is the caller's `sale_fiscalised`).
+ */
+export async function chainVoidRefusal(
+  storeId: number,
+  saleId: number,
+  role: string
+): Promise<{ status: 403 | 409; code: string; message: string } | null> {
+  const result = await pool.query(
+    `SELECT r.status, r.next_attempt_at
+       FROM pos_sales s
+       JOIN pos_fiscal_receipts r ON r.sale_id = s.id AND r.doc_type = 'sale'
+      WHERE s.store_id = $1 AND s.id = $2 AND s.status = 'completed' AND s.fiscal_chain_id IS NOT NULL`,
+    [storeId, saleId]
+  );
+  const row = result.rows[0];
+  if (!row || row.status === 'done') return null;
+  if (row.status !== 'abandoned' && !(row.status === 'failed' && row.next_attempt_at == null)) {
+    return {
+      status: 409,
+      code: 'chain_pending',
+      message: 'Цей документ ще реєструється в ПРРО — спробуйте за хвилину',
+    };
+  }
+  if (role === 'owner') return null;
+  return {
+    status: 403,
+    code: 'chain_parked',
+    message: 'ПРРО не зареєстрував цей документ — скасувати його може лише власник, перевіривши кабінет ПРРО',
+  };
+}
+
 /** The units of a line nobody has returned or paid for yet. */
 export function remainingUnits(line: {
   quantity: number;

@@ -12,6 +12,7 @@ import {
   rememberUnanswered,
   resetUnanswered,
   settle,
+  unansweredBody,
   unansweredKey,
 } from './pendingKeys';
 
@@ -51,5 +52,20 @@ describe('pendingKeys', () => {
     expect(unansweredKey(customerScope('return', 7))).toBeNull();
     expect(unansweredKey(customerScope('writeoff', 7))).toBeNull();
     expect(unansweredKey(customerScope('pay', 8))).toBeNull();
+  });
+
+  it('keeps what a repayment sent with its key, so a sheet opened again sends the same request', () => {
+    const scope = customerScope('pay', 7);
+    const body = { line_ids: [3, 1], payments: [{ method: 'cash', amount_cents: 39000 }], cash_rounding: 50 };
+    rememberUnanswered(scope, 'k-1', 1000, body);
+    expect(unansweredBody(scope, 2000)).toEqual(body);
+    // Gone with the key — too old, or settled.
+    expect(unansweredBody(scope, 1000 + UNANSWERED_TTL_MS + 1)).toBeUndefined();
+    rememberUnanswered(scope, 'k-2', 3000, body);
+    settle(scope);
+    expect(unansweredBody(scope, 4000)).toBeUndefined();
+    // A write that remembers no request leaves none.
+    rememberUnanswered(scope, 'k-3', 5000);
+    expect(unansweredBody(scope, 6000)).toBeUndefined();
   });
 });

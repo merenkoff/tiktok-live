@@ -264,6 +264,33 @@ describe('one customer’s statement', () => {
     await waitFor(() => expect(screen.queryByTestId('debts-undo-prepay')).toBeNull());
   });
 
+  it('under ПРРО offers no undo of a «внесок» in its chain, and one ПРРО gave up on only to the owner, with a warning', async () => {
+    const chain = { id: 'ls-1-000002-1', provider: 'checkbox', pending: true };
+    statement = {
+      ...statement,
+      fiscal: { on: true, provider: 'checkbox', chains: true },
+      open_lines: [line(2, 'Кепка', 19000, { quantity: 1, remaining_quantity: 1, paid_quantity: 0, prepaid_cents: 40000, chain })],
+      entries: [
+        { id: 8, kind: 'payment', amount_cents: -10000, created_at: '2026-10-25T11:00:00Z', staff_name: 'Олена', reason: null, sale_id: 57, receipt_number: 'R-0000057', prepayment: true, prepay_line_id: 2, fiscal_status: 'failed' },
+        { id: 7, kind: 'payment', amount_cents: -30000, created_at: '2026-10-25T10:00:00Z', staff_name: 'Олена', reason: null, sale_id: 56, receipt_number: 'R-0000056', prepayment: true, prepay_line_id: 2, fiscal_status: 'done' },
+      ],
+    };
+    const user = userEvent.setup();
+    const seller = draw('/debts/7');
+    await screen.findByRole('heading', { name: 'Оксана' });
+    expect(within(screen.getByTestId('debts-open-lines')).getByText('внесок ще реєструється в ПРРО')).toBeInTheDocument();
+    expect(within(screen.getByTestId('debts-journal')).queryByRole('button', { name: 'Скасувати' })).toBeNull();
+    seller.unmount();
+
+    signIn('owner');
+    draw('/debts/7');
+    await screen.findByRole('heading', { name: 'Оксана' });
+    const journal = within(screen.getByTestId('debts-journal')).getAllByRole('listitem');
+    expect(within(journal[1]).queryByRole('button', { name: 'Скасувати' })).toBeNull();
+    await user.click(within(journal[0]).getByRole('button', { name: 'Скасувати' }));
+    expect(screen.getByTestId('debts-undo-unregistered')).toHaveTextContent('лише якщо в кабінеті Checkbox');
+  });
+
   it('keeps the sheet up with the server’s words when the undo is refused', async () => {
     statement = {
       ...statement,
