@@ -4,9 +4,9 @@ import { catalog, loginAsOwner, mockPosApi } from './helpers';
 // Weighed goods at the till (TechDocs/grocery/G4_WEIGHED.md): a variant priced
 // per kilogram is rung through the weight pad, reads «0,350 кг × 189,90 ₴/кг»
 // in the cart at the server's own sum, and goes to checkout with its grams and
-// how they were weighed. No vertical weighs yet (groceries come in PR4), so
-// the fallback catalog is what rings it here — which is also the case it has
-// to survive: a grocery store whose own catalog module failed.
+// how they were weighed. The fallback catalog rings it here — the case it has
+// to survive: a grocery store whose own catalog module failed. The grocery's
+// own catalog is driven by `vertical-grocery.spec.ts`.
 
 const cheese = {
   variant_id: 3,

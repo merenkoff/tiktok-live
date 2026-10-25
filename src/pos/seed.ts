@@ -226,6 +226,47 @@ async function registerDebtsModule(): Promise<void> {
   console.log(`   debts module registered on ${slug} → ${entry.url}`);
 }
 
+/**
+ * Point `demo-grocery` (migration 076) at a locally served `vertical-grocery`
+ * bundle (grocery phase Г4 — TechDocs/grocery/G4_WEIGHED.md §6). Same shape
+ * and the same reasons as the café entry above: opt-in, dev URL by default,
+ * never written by the migration.
+ *
+ * The module owns no route — the sell screen is a slot, not a page — so, as
+ * the café's in К2, the entry's `routePath` and nav item only shape the
+ * desktop's `pending` placeholder while the bundle downloads; once it loads,
+ * the descriptor's own empty nav wins and the tile goes away.
+ *
+ *   POS_SEED_VERTICAL_GROCERY=1 npm run pos:seed
+ *   cd pos && npm run build:vertical-grocery-remote && npm run serve:vertical-grocery-remote
+ */
+async function registerGroceryModule(): Promise<void> {
+  const store = await pool.query(`SELECT id FROM pos_stores WHERE slug = 'demo-grocery'`);
+  if (store.rows.length === 0) {
+    console.log('   demo-grocery store not found — run the migrations first');
+    return;
+  }
+  const entry = {
+    url: process.env.POS_SEED_VERTICAL_GROCERY_URL || 'http://localhost:5011/remote-entry.js',
+    title: 'Продукти',
+    routePath: '/grocery',
+    icon: 'ShoppingCart',
+    nav: [{ label: 'Продукти', location: 'cashier-primary', order: 85, icon: 'ShoppingCart', match: '/grocery' }],
+  };
+  await pool.query(
+    `UPDATE pos_stores
+     SET module_remotes = COALESCE(module_remotes, '{}'::jsonb)
+                          || jsonb_build_object('vertical-grocery', $2::jsonb)
+     WHERE id = $1`,
+    [Number(store.rows[0].id), JSON.stringify(entry)]
+  );
+  console.log('\n✅ Demo grocery store ready');
+  console.log('   Store slug: demo-grocery');
+  console.log('   Owner: owner@grocery.shop / owner123');
+  console.log('   Seller PIN: 1234');
+  console.log(`   vertical-grocery module registered → ${entry.url}`);
+}
+
 /** Copies the committed demo product photos into the (gitignored) uploads dir. */
 async function copySeedProductImages(): Promise<void> {
   await ensureUploadsDir();
@@ -405,6 +446,7 @@ async function seed(): Promise<void> {
   if (process.env.POS_SEED_VERTICAL_CAFE === '1') await registerCafeModule();
   if (process.env.POS_SEED_TABLES === '1') await registerTablesModule();
   if (process.env.POS_SEED_DEBTS === '1') await registerDebtsModule();
+  if (process.env.POS_SEED_VERTICAL_GROCERY === '1') await registerGroceryModule();
   console.log('\n✅ Demo store ready (tags ensured)');
   console.log('   Store slug: demo');
   console.log('   Owner: owner@demo.shop / owner123');

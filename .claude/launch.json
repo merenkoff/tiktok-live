@@ -22,6 +22,17 @@
       "port": 5008
     },
     {
+      "name": "grocery-remote",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "pos",
+        "run",
+        "serve:vertical-grocery-remote"
+      ],
+      "port": 5011
+    },
+    {
       "name": "pos-web",
       "runtimeExecutable": "npm",
       "runtimeArgs": [

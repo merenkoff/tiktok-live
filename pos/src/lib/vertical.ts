@@ -44,6 +44,7 @@ export const VERTICAL_OPTIONS: ReadonlyArray<{ id: VerticalId; title: string }> 
   { id: 'clothing', title: 'Одяг' },
   { id: 'flowers', title: 'Квіти' },
   { id: 'cafe', title: 'Кафе' },
+  { id: 'grocery', title: 'Продукти' },
 ];
 
 /** Title for a vertical id, falling back to the raw id for an unknown one. */

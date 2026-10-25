@@ -13,10 +13,11 @@ import { logger } from '../../logger.js';
 import { cafeVertical } from './cafe.js';
 import { clothingVertical } from './clothing.js';
 import { flowersVertical } from './flowers.js';
+import { groceryVertical } from './grocery.js';
 import type { VerticalDefinition, VerticalId, VerticalPublicConfig } from './types.js';
 
 /** Verticals compiled into this build. */
-const BUILT_IN: VerticalDefinition[] = [clothingVertical, flowersVertical, cafeVertical];
+const BUILT_IN: VerticalDefinition[] = [clothingVertical, flowersVertical, cafeVertical, groceryVertical];
 
 /** What a store gets when nothing says otherwise — and the sell-screen fallback. */
 export const DEFAULT_VERTICAL_ID: VerticalId = 'clothing';
@@ -111,6 +112,7 @@ export async function loadStoreVertical(
 export { cafeVertical } from './cafe.js';
 export { clothingVertical } from './clothing.js';
 export { flowersVertical } from './flowers.js';
+export { groceryVertical } from './grocery.js';
 export {
   normalizeAttributes,
   normalizeUnit,
