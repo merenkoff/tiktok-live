@@ -463,6 +463,22 @@ export const COMPETITOR_FACTS = {
     hybridUah: 2480,
     /** «Демоверсія на 30 днів». */
     demoDays: 30,
+    /**
+     * The «Програма для квіткового магазину» page, read on its own
+     * `checkedAt` (the licence and option facts above keep theirs). It
+     * describes flowers as goods: «облік штучного товару з маркуванням
+     * штрихкодом та без нього, товару в рулонах, вагового товару, продаж
+     * комплектів та розукомплектацію». Assembling a bouquet at the till with
+     * the price counted stem by stem is not described there — «not
+     * mentioned», never «cannot».
+     */
+    flowers: {
+      source: 'https://torgsoft.ua/soft/kvitkovyj-magazyn/',
+      checkedAt: '2026-10-25',
+      h1: 'Програма для квіткового магазину',
+      goodsModel: 'облік штучного товару з маркуванням штрихкодом та без нього, товару в рулонах, вагового товару, продаж комплектів та розукомплектацію',
+      stemAssemblyMentioned: false,
+    },
   },
   /**
    * Posbox by Checkbox — read on `checkedAt`: its site (the home page, the
@@ -558,6 +574,65 @@ export const COMPETITOR_FACTS = {
     trialDays: 15,
     /** The FAQ «Чи можна підключити ваги до Poster?». */
     recommendedScale: 'ВІС Промприлад BTA-60/15-5D-AC',
+    /**
+     * The «Програма для квіткового магазину» page, read on its own
+     * `checkedAt` (the tariff facts above keep theirs). «від 1 080 ₴ на
+     * місяць» is Mini paid for a year, the same figure as `plans`; its ПРРО
+     * price comes from the element without a figure (see above), so
+     * `prroUah` stands. Not mentioned on that page: assembling a bouquet from
+     * stems at the till, writing off wilted flowers — «not mentioned» ≠
+     * «does not exist».
+     */
+    flowers: {
+      source: 'https://joinposter.com/ua/business/shop/kvitkovyi-magazyn',
+      checkedAt: '2026-10-25',
+      h1: 'Програма для квіткового магазину',
+      fromUahPrinted: 1080,
+      /** «Замовлення на різні дати — і жодне не загубиться», tagged with where the order came from (Instagram, site, phone). */
+      preordersScreen: true,
+      /** The page's FAQ: the online till takes sales without the internet and syncs afterwards. */
+      offlineSales: true,
+      aiAssistant: 'Postie',
+      deliveryPartners: ['Glovo', 'Uklon Delivery', 'Dots'],
+      /** The FAQ «Як враховувати упаковку для квітів?»: as a separate item. */
+      packagingAsItem: true,
+      stemAssemblyMentioned: false,
+      wiltedWriteoffMentioned: false,
+      faqCount: 8,
+    },
+  },
+  /**
+   * Skynum — the «Автоматизація магазину квітів» page, read on `checkedAt`.
+   * It prints no prices (the tariff page is separate and not recorded here
+   * yet) and names no ПРРО provider; what it does describe is the one thing
+   * the generic tills' flower pages leave out — assembling a bouquet at the
+   * register with the price updating per flower. «Not mentioned» below means
+   * not mentioned on that page, never «does not exist».
+   */
+  skynum: {
+    name: 'Skynum',
+    publishedAt: '2026-10-25',
+    checkedAt: '2026-10-25',
+    sources: {
+      flowers: 'https://skynum.ua/programs/flowers-store-automation',
+    },
+    h1: 'Автоматизація магазину квітів',
+    /** No figure anywhere on the flower page; a «Тарифи» page exists and is read for the comparison article. */
+    pricesPrinted: false,
+    /** «Безкоштовна версія» — the page's own words, no term or limits stated. */
+    freeTier: true,
+    /** The cashier builds a bouquet from different flowers and the price updates as each is added. */
+    bouquetAssemblyAtRegister: true,
+    sets: true,
+    readyBouquetBarcodes: true,
+    packagingInCost: true,
+    /** Flowers that lost their look are written off through an inventory count. */
+    wiltedWriteoffViaStocktake: true,
+    loyaltyCards: true,
+    onlineShopBuilder: true,
+    offline: true,
+    prroNamedOnPage: false,
+    preordersMentioned: false,
   },
 } as const;
 
@@ -580,6 +655,10 @@ export const FEATURES = {
   offlineDesktop: { status: 'available', label: 'Десктопна каса, що продає без інтернету' },
   stocktakeOffline: { status: 'available', label: 'Інвентаризація на касі сканером, навіть офлайн' },
   qrPayment: { status: 'available', label: 'QR-оплата на касі з автоматичним підтвердженням' },
+  customersDiscounts: {
+    status: 'available',
+    label: 'Довідник покупців із персональною знижкою, що підставляється в чек, і знижки на чек чи окремий товар — без стороннього CRM',
+  },
   gtinLookup: { status: 'available', label: 'Розпізнавання товару по штрихкоду через GTIN-довідники' },
   clothingVariants: { status: 'available', label: 'Облік одягу за розміром і кольором на рівні варіантів' },
   floristBench: { status: 'available', label: 'Стіл флориста: «Зібрати букет» зі стебел із підрахунком ціни й роботи' },
@@ -653,6 +732,7 @@ export const POS_FEATURE_IDS: FeatureId[] = [
   'offlineDesktop',
   'stocktakeOffline',
   'qrPayment',
+  'customersDiscounts',
   'gtinLookup',
   'clothingVariants',
   'floristBench',
@@ -764,9 +844,25 @@ export const VERTICALS: readonly VerticalFact[] = [
     path: '/pos/kvity',
     title: 'Квіти',
     eyebrow: 'Каса для квіткової крамниці',
-    tagline: 'Стіл флориста рахує букет по стеблах, вітрина знає свій цінник, передзамовлення — з датою й адресою.',
+    tagline:
+      'Програма для квіткового магазину з обліком квітів, базою покупців і ПРРО: стіл флориста рахує букет по стеблах, вітрина знає свій цінник, передзамовлення — з датою й адресою.',
     bullets: ['«Зібрати букет» на касі', 'Букет на вітрину з цінником', 'Передзамовлення на дату'],
-    featureIds: ['floristBench', 'floristShowcase', 'floristPreorders', 'floristAnalytics'],
+    // The florist's own features first, then the shared ones a flower shop
+    // asks about («облік», «CRM», «без інтернету», ПРРО) — the JSON-LD
+    // featureList and llms.txt read this list (TechDocs/FLOWERS_SEO_AEO.md).
+    featureIds: [
+      'floristBench',
+      'floristShowcase',
+      'floristPreorders',
+      'floristAnalytics',
+      'customersDiscounts',
+      'fiscalOnlineCheckbox',
+      'fiscalOffline',
+      'offlineDesktop',
+      'stocktakeOffline',
+      'qrPayment',
+      'cashRounding',
+    ],
     illustrations: ['/demo-flowers/rose-freedom.svg', '/demo-flowers/bouquet-compliment.svg', '/demo-flowers/tulip-pink.svg'],
     tint: 'bg-tint-flowers',
   },
