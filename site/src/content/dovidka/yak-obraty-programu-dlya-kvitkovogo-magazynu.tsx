@@ -8,6 +8,7 @@ const FLOWERS = VERTICALS.find((v) => v.id === 'flowers');
 /** The landing this article feeds; everything said about our till below is what that page says. */
 const LANDING = FLOWERS?.path ?? '/pos/kvity';
 const WHY = '/dovidka/programa-dlya-kvitkovogo-magazynu-chy-kasa-dlya-kafe';
+const COMPARISON = '/dovidka/poster-skynum-flora24-dlya-kvitkovogo-magazynu';
 const LAW = '/dovidka/yak-vidkryty-kvitkovyi-magazyn-fop-kved-prro';
 
 export const yakObratyProgramuDlyaKvitkovogoMagazynu: Article = {
@@ -172,7 +173,10 @@ function Body() {
         замовлень із месенджерів і доставки, програма для садових центрів — і каса, зроблена від букета.
         Чому універсальна каса бачить квіти інакше й що це означає на практиці, ми розібрали окремо:{' '}
         <a href={WHY}>«Програма для квіткового магазину чи каса для кафе з квітами на плитках»</a>. Опис
-        кожного продукту беріть із його сайту й перевіряйте на демо — за тестом вище.
+        кожного продукту беріть із його сайту й перевіряйте на демо — за тестом вище. Як чотири з них —
+        Poster, Skynum, Flora24 і {POS} — виглядають поруч за фактами з їхніх сторінок, з цінами за рік і
+        розділом про те, де хто сильніший, ми зібрали в порівнянні{' '}
+        <a href={COMPARISON}>«Програма для квіткового магазину: Poster, Skynum, Flora24 чи {POS}»</a>.
       </p>
       <p>
         Що з цього списку вміє {POS} і скільки коштує — на сторінці{' '}
