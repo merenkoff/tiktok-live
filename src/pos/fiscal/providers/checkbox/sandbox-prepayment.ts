@@ -16,7 +16,7 @@
 //     npm run fiscal:sandbox:prepayment -- --go [--across-shifts]
 //
 //   (no flags)  read-only: the cashier and whether a shift is open
-//   --go        on an OPEN shift, five chains:
+//   --go        five chains (a closed shift is opened first — a test register only):
 //     A «Кепка» 1 × 590,00 — the case that started step 1: 300,00 in cash,
 //       then 100,00 more on the same chain (a second prepayment?), then a
 //       round note for what is left (does an after-payment give change?), a
@@ -226,8 +226,19 @@ async function main(): Promise<void> {
     return;
   }
   if (!shift || shift.status !== 'OPENED') {
-    console.error('--go needs an OPEN shift on the test register (open one from the кабінет first)');
-    process.exit(3);
+    // A test register only (checked above), so opening a shift costs nothing —
+    // and spares whoever runs this a trip to the кабінет.
+    await openShiftRequest(opts());
+    let current = await getCurrentShift(opts());
+    for (let i = 0; i < 60 && current?.status !== 'OPENED'; i++) {
+      await sleep(3000);
+      current = await getCurrentShift(opts());
+    }
+    if (current?.status !== 'OPENED') {
+      console.error(`Could not open a shift on the test register (status: ${current?.status ?? 'none'})`);
+      process.exit(3);
+    }
+    note('shift opened', { status: current.status });
   }
 
   /** Wait until a receipt leaves CREATED, keep it and its text, note what it says. */
