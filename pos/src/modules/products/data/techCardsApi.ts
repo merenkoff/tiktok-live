@@ -44,3 +44,36 @@ export interface TechCardRow {
 export function listTechCards(): Promise<TechCardRow[]> {
   return api.posRequest<TechCardRow[]>('get', '/products/tech-cards');
 }
+
+/** «Імпорт техкарт» (TechDocs/POS_ONBOARDING.md, O3) — mirrors `src/pos/techcards-import.service.ts`. */
+export interface TechCardImportDish {
+  dish: string;
+  variant: string | null;
+  components: Array<{ ingredient: string; quantity: number; unit: string; is_new: boolean }>;
+  cost_cents: number | null;
+  price_cents: number | null;
+  food_cost_bps: number | null;
+  becomes: 'derived' | 'replaced' | null;
+  error: string | null;
+}
+
+export interface TechCardImportResult {
+  ok: boolean;
+  applied: boolean;
+  errors: string[];
+  warnings: string[];
+  dishes: TechCardImportDish[];
+  ingredients: Array<{ name: string; unit: string; cost_cents: number | null; is_new: boolean; price_changed: boolean }>;
+  totals: { dishes: number; becomes_derived: number; replaced: number; ingredients_new: number; prices_set: number };
+}
+
+/**
+ * The plan for the owner's table (`apply: false`), or its write (`apply:
+ * true`, all or nothing — a plan with errors comes back `applied: false`).
+ */
+export function importTechCards(
+  rows: Array<{ line: number; dish: string; variant: string; ingredient: string; quantity: string; unit: string; price: string }>,
+  apply: boolean
+): Promise<TechCardImportResult> {
+  return api.posRequest<TechCardImportResult>('post', '/products/tech-cards/import', { rows, apply }, { timeout: 120_000 });
+}

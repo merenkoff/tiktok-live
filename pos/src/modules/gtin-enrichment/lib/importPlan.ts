@@ -15,7 +15,7 @@
  * cell, or one with no digits in it at all.
  */
 
-import type { DelimitedTable } from './parseDelimited';
+import type { DelimitedTable } from '../../../lib/parseDelimited';
 
 export type ColumnMapping = {
   /** Column index, or -1 when unmapped. */

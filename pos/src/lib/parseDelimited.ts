@@ -59,8 +59,12 @@ export function detectDelimiter(text: string): string {
   return best;
 }
 
-/** RFC-4180-ish: quoted fields, `""` escapes, newlines allowed inside quotes. */
-export function parseRows(text: string, delimiter: string): string[][] {
+/**
+ * RFC-4180-ish: quoted fields, `""` escapes, newlines allowed inside quotes.
+ * Empty rows are dropped unless `keepEmpty` — a table whose errors name rows
+ * by number keeps them, so «рядок 7» is the seventh row the owner sees.
+ */
+export function parseRows(text: string, delimiter: string, keepEmpty = false): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = '';
@@ -72,7 +76,7 @@ export function parseRows(text: string, delimiter: string): string[][] {
   };
   const endRow = () => {
     endField();
-    if (row.some((c) => c !== '')) rows.push(row);
+    if (keepEmpty || row.some((c) => c !== '')) rows.push(row);
     row = [];
   };
 
@@ -98,11 +102,11 @@ export function parseRows(text: string, delimiter: string): string[][] {
 
 export function parseDelimited(
   buffer: ArrayBuffer,
-  opts: { hasHeader?: boolean } = {}
+  opts: { hasHeader?: boolean; keepEmptyRows?: boolean } = {}
 ): DelimitedTable {
   const { text, encoding } = decodeBytes(buffer);
   const delimiter = detectDelimiter(text);
-  const rows = parseRows(text, delimiter);
+  const rows = parseRows(text.replace(/(\r?\n)+$/, ''), delimiter, opts.keepEmptyRows ?? false);
   if (rows.length === 0) return { headers: [], rows: [], delimiter, encoding };
 
   const hasHeader = opts.hasHeader ?? true;
@@ -118,4 +122,18 @@ export function parseDelimited(
     delimiter,
     encoding,
   };
+}
+
+/**
+ * A picked file's bytes. `Blob.arrayBuffer` where the platform has it (every
+ * browser the till runs in), `FileReader` where it does not (jsdom).
+ */
+export function readFileBytes(file: Blob): Promise<ArrayBuffer> {
+  if (typeof file.arrayBuffer === 'function') return file.arrayBuffer();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as ArrayBuffer);
+    reader.onerror = () => reject(reader.error ?? new Error('Не вдалося прочитати файл'));
+    reader.readAsArrayBuffer(file);
+  });
 }

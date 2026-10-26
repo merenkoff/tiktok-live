@@ -6,7 +6,7 @@ import { useRef, useState } from 'react';
 import { api } from '@pos/platform';
 import type { GtinLearnResult } from '@pos/platform';
 import { SectionHead } from '@pos/platform/ui';
-import { parseDelimited, type DelimitedTable } from '../lib/parseDelimited';
+import { parseDelimited, type DelimitedTable } from '../../../lib/parseDelimited';
 import {
   buildPlan,
   chunk,

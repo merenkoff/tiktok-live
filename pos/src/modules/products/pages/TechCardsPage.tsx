@@ -8,6 +8,7 @@ import { formatUah } from '@pos/platform';
 import { FileText, PageHeader } from '@pos/platform/ui';
 import { listTechCards, type TechCardRow } from '../data/techCardsApi';
 import { foodCostPercent, missingReason, sortTechCards } from '../data/techCards';
+import { TechCardsImportDialog } from '../components/TechCardsImportDialog';
 
 /**
  * How alarming a food cost is. Deliberately coarse and deliberately silent
@@ -34,12 +35,14 @@ function toneOf(bps: number): string {
 export function TechCardsPage() {
   const [rows, setRows] = useState<TechCardRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [epoch, setEpoch] = useState(0);
 
   useEffect(() => {
     void listTechCards()
       .then((list) => setRows(sortTechCards(list)))
       .catch(() => setError('Не вдалося завантажити техкарти'));
-  }, []);
+  }, [epoch]);
 
   return (
     <div className="animate-fade-up text-sq-text max-w-5xl">
@@ -54,7 +57,16 @@ export function TechCardsPage() {
             складників, а не за середньою по партіях. Зверху — ті, що лишають найменше.
           </>
         }
+        actions={
+          <button type="button" className="sq-btn-quiet" onClick={() => setImporting(true)}>
+            Імпорт з таблиці
+          </button>
+        }
       />
+
+      {importing && (
+        <TechCardsImportDialog onClose={() => setImporting(false)} onApplied={() => setEpoch((n) => n + 1)} />
+      )}
 
       {error && (
         <div className="rounded-sq bg-red-50 text-red-700 px-4 py-3 text-sm" data-testid="tech-cards-error">
