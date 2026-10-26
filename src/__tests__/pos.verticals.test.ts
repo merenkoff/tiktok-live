@@ -72,7 +72,7 @@ describe('vertical registry', () => {
       id: 'flowers',
       title: 'Квіти',
       attributes: flowersVertical.attributes,
-      units: ['шт'],
+      units: ['шт', 'см', 'мл', 'л'],
       defaultUnit: 'шт',
       weighedUnits: [],
       maxCompositionDepth: 1,
@@ -169,6 +169,23 @@ describe('café vertical', () => {
     expect(() => normalizeUnit(cafeVertical, 'л')).toThrow(VerticalValidationError);
     // A florist still cannot sell by the gram.
     expect(() => normalizeUnit(flowersVertical, 'г')).toThrow(VerticalValidationError);
+  });
+});
+
+describe('flowers vertical', () => {
+  it('counts stems by the piece and consumables in centimetres, millilitres and litres, none weighed', () => {
+    // Ribbon in centimetres, Hi-Float in millilitres, helium in litres — whole
+    // numbers in the small unit, as the café counts grams; a litre of helium
+    // is priced per litre (price_per 1), never per thousand litres.
+    expect([...flowersVertical.units]).toEqual(['шт', 'см', 'мл', 'л']);
+    expect([...flowersVertical.weighedUnits]).toEqual([]);
+    expect(normalizeUnit(flowersVertical, undefined)).toBe('шт');
+    expect(normalizeUnit(flowersVertical, 'л')).toBe('л');
+    expect(normalizeVariant(flowersVertical, { unit: 'л', attributes: {} }).price_per).toBe(1);
+    expect(normalizeVariant(flowersVertical, { unit: 'см', attributes: {} }).price_per).toBe(1);
+    expect(() => normalizeUnit(flowersVertical, 'г')).toThrow(VerticalValidationError);
+    expect(() => normalizeUnit(flowersVertical, 'м')).toThrow(VerticalValidationError);
+    expect(publicConfigOf(flowersVertical).units).toEqual(['шт', 'см', 'мл', 'л']);
   });
 
   it('is the only vertical that allows a recipe inside a recipe', () => {

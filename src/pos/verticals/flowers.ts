@@ -42,8 +42,17 @@ export const flowersVertical: VerticalDefinition = {
       placeholder: 'Еквадор',
     },
   ],
-  units: ['шт'],
-  // A stem is counted, never weighed.
+  // A stem is a piece. The consumables a florist also sells and writes off
+  // are not: ribbon goes by the centimetre, Hi-Float by the millilitre and
+  // helium by the litre — whole numbers in the small unit, the café's «grams,
+  // never fractional kilograms» rule (TechDocs/POS_VERTICALS.md §4; the owner's
+  // decision of 2026-10-26, with the two Довідка articles on helium and
+  // packaging). None of them is weighed: `weighedUnits` stays empty, so a
+  // litre of helium is priced per litre and its quantity is litres. The ДПС
+  // check (`fiscal/dps/units.ts`) knows «мл» and «л» and sends no unit code
+  // for «см» — a code from ДК 011-96 is added there once it is verified.
+  units: ['шт', 'см', 'мл', 'л'],
+  // A stem is counted, never weighed — and so are the consumables above.
   weighedUnits: [],
   // A wilted rose is «Брак» here: the shop throws away the thing it bought,
   // not an ingredient it prepared. The café's three extra codes would be
