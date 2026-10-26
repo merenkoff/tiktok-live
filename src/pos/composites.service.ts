@@ -401,7 +401,8 @@ export async function setComponents(
   client: DbClient,
   storeId: number,
   variantId: number,
-  components: ComponentInput[]
+  components: ComponentInput[],
+  options: { recompute?: boolean } = {}
 ): Promise<void> {
   await lockRecipes(client, storeId);
   const rows = await validateComponents(client, storeId, variantId, components);
@@ -418,7 +419,8 @@ export async function setComponents(
       [storeId, variantId, row.component_variant_id, row.quantity, index]
     );
   }
-  await recomputeFlat(client, storeId);
+  // A batch of recipes (the tech-card import) rebuilds once, after the last.
+  if (options.recompute !== false) await recomputeFlat(client, storeId);
 }
 
 /**

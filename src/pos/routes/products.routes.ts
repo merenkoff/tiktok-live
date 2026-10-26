@@ -13,6 +13,7 @@ import * as tagsService from '../tags.service.js';
 import { saveProductImage } from '../uploads.service.js';
 import { logger } from '../../logger.js';
 import { errorMessage, isUniqueViolation } from './_shared.js';
+import * as techCardsImport from '../techcards-import.service.js';
 
 export function registerProductsRoutes(fastify: FastifyInstance): void {
   fastify.get('/products', async (request, reply) => {
@@ -30,6 +31,25 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
     const auth = await ensureModule(request, reply, 'products', { owner: true });
     if (!auth) return;
     return listTechCards(pool, auth.storeId);
+  });
+
+  // «Імпорт техкарт» (TechDocs/POS_ONBOARDING.md, O3): the client parses the
+  // owner's table and sends its rows; without `apply` the plan, with it the
+  // write — all or nothing, and a plan with errors writes nothing (200 with
+  // `applied: false`, the errors in it).
+  fastify.post('/products/tech-cards/import', async (request, reply) => {
+    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    if (!auth) return;
+    const body = (request.body ?? {}) as { rows?: unknown; apply?: unknown };
+    if (!Array.isArray(body.rows)) return reply.code(400).send({ error: 'rows required' });
+    try {
+      const rows = body.rows as techCardsImport.TechCardRowInput[];
+      if (body.apply === true) return await techCardsImport.applyTechCardImport(auth.storeId, rows);
+      return { ...(await techCardsImport.planTechCardImport(auth.storeId, rows)), applied: false };
+    } catch (error) {
+      if (error instanceof techCardsImport.TechCardImportError) return reply.code(400).send({ error: errorMessage(error) });
+      throw error;
+    }
   });
 
   fastify.get('/products/:id', async (request, reply) => {

@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { BATCH_SIZE, buildPlan, chunk, guessMapping } from './importPlan';
-import type { DelimitedTable } from './parseDelimited';
+import type { DelimitedTable } from '../../../lib/parseDelimited';
 
 function table(headers: string[], rows: string[][]): DelimitedTable {
   return { headers, rows, delimiter: ';', encoding: 'utf-8' };
