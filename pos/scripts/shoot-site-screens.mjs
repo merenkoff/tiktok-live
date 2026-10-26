@@ -268,6 +268,18 @@ const STORES = {
         await analyticsReady(page);
         await shoot('restaurant-analytics');
       }, page);
+      // The owner's dashboard at the till's width, like the café's, with the
+      // «per table» tile only a store with paid bills gets — a row taller than
+      // the café's, so the window is too, or «Дохід за днями» is cut off. Last,
+      // because it resizes the window for whatever would come after it.
+      await optional('restaurant-dashboard', async () => {
+        await page.setViewportSize({ width: TILL.width, height: 900 });
+        await page.goto('/admin');
+        await page.getByTestId('cafe-panels').waitFor(WAIT);
+        await pickRange(page);
+        await page.waitForLoadState('networkidle');
+        await shoot('restaurant-dashboard');
+      }, page);
     },
   },
 };

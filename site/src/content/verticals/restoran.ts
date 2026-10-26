@@ -18,6 +18,7 @@ import {
 import restaurantTables from '../../assets/screenshots/restaurant-tables.png';
 import restaurantHallEditor from '../../assets/screenshots/restaurant-hall-editor.png';
 import cafeKitchen from '../../assets/screenshots/cafe-kitchen.png';
+import restaurantDashboard from '../../assets/screenshots/restaurant-dashboard.png';
 import restaurantQrMenu from '../../assets/screenshots/restaurant-qr-menu.png';
 import restaurantQrMenuFacts from '../../assets/screenshots/restaurant-qr-menu-facts.png';
 import restaurantGuestOrder from '../../assets/screenshots/restaurant-guest-order.png';
@@ -97,6 +98,21 @@ export const restoran: VerticalContent = {
       body:
         'Передчек друкується на десктопній касі і чесно каже «не є розрахунковим документом»: за законом лише фіскальний чек є розрахунковим. Рахунок можна сплатити весь, за стравами (кожному свій чек) або порівну на N (один чек, кілька оплат). Знижка на рахунок рахується раз і ділиться між частинами.',
       bullets: ['За стравами — N фіскальних чеків', 'Порівну — один чек, N оплат', 'Рахунок можна перенести на інший стіл'],
+    },
+    {
+      eyebrow: 'Власник',
+      title: 'Скільки заробив зал і скільки сидять за столом',
+      body:
+        'Кабінет власника відкривається сторінкою «Сьогодні»: виторг, кількість чеків, середній чек і повернення, під ними — дохід за днями. Для ресторану там є ще середній чек на стіл: скільки рахунків закрито і скільки хвилин у середньому сидять гості. Поруч кухонні цифри — фудкост за останніми цінами закупівлі, година пік і відповідь модифікатора, яку обирають найчастіше.',
+      bullets: [
+        'Середній чек на стіл і час за столом — за будь-який період',
+        '«Меню й кухня»: матриця меню і списання кухні за причинами',
+        'Вивантаження в CSV — для бухгалтера чи власної таблиці',
+      ],
+      shot: {
+        src: restaurantDashboard,
+        alt: 'Сторінка «Сьогодні» ресторану за 30 днів: виторг, середній чек на стіл і час за столом, фудкост, година пік і дохід за днями',
+      },
     },
     {
       eyebrow: 'QR-меню',

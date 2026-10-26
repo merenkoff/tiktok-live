@@ -5,6 +5,7 @@ import cafeModifiers from '../../assets/screenshots/cafe-modifiers.png';
 import cafeKitchen from '../../assets/screenshots/cafe-kitchen.png';
 import cafeTechCards from '../../assets/screenshots/cafe-tech-cards.png';
 import cafeAnalytics from '../../assets/screenshots/cafe-analytics.png';
+import cafeDashboard from '../../assets/screenshots/cafe-dashboard.png';
 import cafeQrMenu from '../../assets/screenshots/cafe-qr-menu.png';
 import cafeQrMenuFacts from '../../assets/screenshots/cafe-qr-menu-facts.png';
 
@@ -67,6 +68,21 @@ export const kafe: VerticalContent = {
         'Матриця меню: зірки, конячки, загадки, собаки — з порадою до кожної',
       ],
       shot: { src: cafeTechCards, alt: 'Сторінка «Техкарти»: страви, собівартість і фудкост у відсотках' },
+    },
+    {
+      eyebrow: 'Сьогодні',
+      title: 'Виторг, чеки й кухня — на першому екрані кабінету',
+      body:
+        'Кабінет власника відкривається сторінкою «Сьогодні»: виторг, кількість чеків, середній чек і повернення, під ними — дохід за днями. Поруч кухонні цифри: фудкост, година пік і відповідь модифікатора, яку обирають найчастіше. «Потребують уваги» нагадує, що закінчується на складі, а якщо все гаразд — так і пише.',
+      bullets: [
+        'Період одним тапом: сьогодні, 7 днів, 30 днів, місяць або свій',
+        'Вивантаження в CSV — для бухгалтера чи власної таблиці',
+        '«Докладніше» веде до матриці меню й списань кухні',
+      ],
+      shot: {
+        src: cafeDashboard,
+        alt: 'Сторінка «Сьогодні» за 30 днів: виторг, чеки, середній чек, фудкост, година пік і дохід за днями',
+      },
     },
     {
       eyebrow: 'Аналітика',
