@@ -9,6 +9,7 @@ import { TelegramChatMockup } from '../../components/TelegramChatMockup';
 const SIZES_ARTICLE = '/dovidka/oblik-odyagu-za-rozmiramy-i-koloramy';
 const HOW_TO_CHOOSE = '/dovidka/yak-obraty-programu-dlya-magazynu-odyagu';
 const OPEN_SHOP = '/dovidka/yak-vidkryty-magazyn-odyagu-fop-kved-prro';
+const RETURNS_ARTICLE = '/dovidka/povernennya-i-obmin-odyagu-14-dniv';
 
 // Rewritten 2026-10-26 for the words a shop owner actually types into Google
 // («програма для магазину одягу», «облік», «автоматизація», «CRM», «уцінка»,
@@ -126,6 +127,7 @@ export const odyah: VerticalContent = {
         'Акт про видачу коштів понад 100 ₴ друкується з каси',
         'Обмін M → L: два фіскальні чеки, одна операція, доплата лише різниці',
       ],
+      link: { href: RETURNS_ARTICLE, label: 'Що каже закон про повернення й обмін одягу' },
     },
     {
       eyebrow: 'Облік магазину одягу',
@@ -234,6 +236,18 @@ export const odyah: VerticalContent = {
       slug: 'yak-vidkryty-magazyn-odyagu-fop-kved-prro',
       title: 'Як відкрити магазин одягу: ФОП, КВЕД 47.71, ПРРО і каса',
       blurb: 'Яка група ФОП, який КВЕД для одягу й взуття, чи потрібен ПРРО, що каже закон про повернення за 14 днів — з посиланнями на Податковий кодекс, закон про РРО і Постанову № 172.',
+    },
+    {
+      slug: 'torgsoft-arm20-skynum-dlya-magazynu-odyagu',
+      title: 'Програма для магазину одягу: Торгсофт, ARM20, Skynum чи The Live Shop POS — порівняння за фактами',
+      blurb:
+        'Чотири програми в одній таблиці за їхніми ж сторінками: розміри й кольори, матриця, цінники, уцінка, повернення й обмін, CRM, без інтернету, ПРРО, інтернет-магазин — і ціна за рік на одну касу.',
+    },
+    {
+      slug: 'povernennya-i-obmin-odyagu-14-dniv',
+      title: 'Повернення та обмін одягу за законом: 14 днів, акт понад 100 ₴, два чеки',
+      blurb:
+        'Що має право покупець і що мусить зробити магазин із ПРРО: строк, умови, перелік того, що не повертають, видатковий чек, акт про видачу коштів і чому обмін — це два чеки.',
     },
   ],
   updatedAt: '2026-10-26',
