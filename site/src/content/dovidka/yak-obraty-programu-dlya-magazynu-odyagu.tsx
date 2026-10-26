@@ -10,6 +10,8 @@ const LANDING = CLOTHING?.path ?? '/pos/odyah';
 const SIZES = '/dovidka/oblik-odyagu-za-rozmiramy-i-koloramy';
 const LAW = '/dovidka/yak-vidkryty-magazyn-odyagu-fop-kved-prro';
 const HANDOVER = '/dovidka/zmina-prro-zamina-kasy';
+const COMPARISON = '/dovidka/torgsoft-arm20-skynum-dlya-magazynu-odyagu';
+const RETURNS = '/dovidka/povernennya-i-obmin-odyagu-14-dniv';
 
 // The clothing counterpart of «Як обрати програму для квіткового магазину»
 // (TechDocs/CLOTHING_SEO_AEO.md): ten questions a shop owner can ask any
@@ -186,7 +188,12 @@ function Body() {
         онлайн-бухгалтерія з обліком товару, комплекти обладнання з програмою — і каса, зроблена від
         розміру й кольору. Опис кожного продукту беріть із його сайту й перевіряйте на демо за тестом
         вище: сторінки про одяг часто перелічують можливості без цін, а ціни лежать на окремій сторінці
-        тарифів, іноді в євро.
+        тарифів, іноді в євро. Як троє з них — Торгсофт, ARM20 і Skynum — виглядають поруч із {POS} за
+        фактами з їхніх сторінок, з цінами за рік і розділом про те, де хто сильніший, ми зібрали в
+        порівнянні{' '}
+        <a href={COMPARISON}>«Програма для магазину одягу: Торгсофт, ARM20, Skynum чи {POS}»</a>; що каже
+        закон про повернення й обмін, які каса має оформляти, — у статті{' '}
+        <a href={RETURNS}>«Повернення та обмін одягу за законом»</a>.
       </p>
       <p>
         Що з цього списку вміє {POS} і скільки коштує — на сторінці{' '}
