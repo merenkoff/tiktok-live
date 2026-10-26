@@ -87,5 +87,33 @@ describe('SuperApi', () => {
     });
     expect(seen[1]).toMatchObject({ method: 'patch', url: '/leads/7', data: { status: 'demo', note: 'показати' }, header: 't.0k' });
   });
+
+  it('opens a store with a POST carrying the token, and reads a taken code as text', async () => {
+    setSuperToken('t.0k');
+    const seen: Array<{ method?: string; url?: string; data?: unknown; header?: string }> = [];
+    const api = new SuperApi(
+      adapterReplying((c) => {
+        seen.push({
+          method: c.method,
+          url: c.url,
+          data: JSON.parse(String(c.data)),
+          header: AxiosHeaders.from(c.headers).get('X-POS-Super-Token') as string | undefined,
+        });
+        return seen.length === 1
+          ? { status: 201, data: { id: 9, slug: 'shablya' } }
+          : { status: 409, data: { error: 'Код «shablya» уже зайнятий' } };
+      })
+    );
+    const body = {
+      name: 'Шабля',
+      slug: 'shablya',
+      template_store_id: 5,
+      owner_login: 'o@shablya.test',
+      owner_password: 'typed-by-super',
+    };
+    await expect(api.createStore(body)).resolves.toMatchObject({ id: 9 });
+    expect(seen[0]).toEqual({ method: 'post', url: '/stores', data: body, header: 't.0k' });
+    await api.createStore(body).catch((e) => expect(superErrorText(e)).toBe('Код «shablya» уже зайнятий'));
+  });
 });
 

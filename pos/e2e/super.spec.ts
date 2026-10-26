@@ -79,6 +79,22 @@ async function mockSuperApi(page: Page) {
       await route.fulfill({ status: 401, json: { error: 'Super access required' } });
       return;
     }
+    if (path === '/stores' && req.method() === 'POST') {
+      const b = body as { name: string; slug: string; template_store_id: number | null };
+      if (b.slug === 'demo') {
+        await route.fulfill({ status: 409, json: { error: 'Код «demo» уже зайнятий' } });
+        return;
+      }
+      await route.fulfill({
+        status: 201,
+        json: {
+          id: 3, name: b.name, slug: b.slug, currency: 'UAH', created_at: '2026-10-26T10:00:00Z', vertical: 'cafe',
+          enabled_modules: ['returns'], module_remotes: {}, live_tiktok_username: null,
+          fiscal: { enabled: false, provider: null }, staff_count: 1, last_sale_at: null,
+        },
+      });
+      return;
+    }
     if (path === '/stores') {
       await route.fulfill({ json: stores() });
       return;
@@ -191,3 +207,52 @@ test('the «Ліди» tab lists the site leads with where they came from, and k
   await expect(page.getByTestId('lead-row-7')).toContainText('Демо');
 });
 
+
+test('«Новий магазин» opens a store from a template and never shows the password back', async ({ page }) => {
+  const calls = await mockSuperApi(page);
+  await page.goto('/super');
+  await page.getByLabel('Пароль').fill(PASSWORD);
+  await page.getByRole('button', { name: 'Увійти' }).click();
+  await expect(page.getByText('Demo Store').first()).toBeVisible();
+
+  await page.getByRole('button', { name: 'Новий магазин' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Новий магазин' });
+  await dialog.getByLabel('Назва').fill('Шабля');
+  // The code is suggested from the name until it is typed over.
+  await expect(dialog.getByLabel('Код магазину')).toHaveValue('shablia');
+  await dialog.getByLabel('Код магазину').fill('demo');
+  await dialog.getByLabel('Шаблон').selectOption('1');
+  await dialog.getByLabel('Логін власника').fill('owner@shablya.test');
+  await dialog.getByLabel('Пароль власника').fill('short');
+  await expect(dialog.getByRole('button', { name: 'Створити магазин' })).toBeDisabled();
+  await dialog.getByLabel('Пароль власника').fill('typed-by-the-super-admin');
+
+  // A taken code comes back in the server's words and keeps the form.
+  await dialog.getByRole('button', { name: 'Створити магазин' }).click();
+  await expect(dialog.getByText('Код «demo» уже зайнятий')).toBeVisible();
+
+  await dialog.getByLabel('Код магазину').fill('Shablya');
+  await expect(dialog.getByLabel('Код магазину')).toHaveValue('shablya');
+  await dialog.getByRole('button', { name: 'Створити магазин' }).click();
+
+  await expect(dialog).toBeHidden();
+  const status = page.getByRole('status');
+  await expect(status).toContainText('Магазин «Шабля» відкрито.');
+  await expect(status).toContainText('shablya');
+  await expect(status).toContainText('owner@shablya.test');
+  await expect(page.locator('body')).not.toContainText('typed-by-the-super-admin');
+  await expect(page.getByText('shablya · #3')).toBeVisible();
+
+  const posts = calls.filter((c) => c.path === '/stores' && c.body);
+  expect(posts.at(-1)).toEqual({
+    path: '/stores',
+    token: '9999999999999.e2e',
+    body: {
+      name: 'Шабля',
+      slug: 'shablya',
+      template_store_id: 1,
+      owner_login: 'owner@shablya.test',
+      owner_password: 'typed-by-the-super-admin',
+    },
+  });
+});

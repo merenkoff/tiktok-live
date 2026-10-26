@@ -6,7 +6,8 @@
 // every store (TechDocs/POS_SUPER_ADMIN.md). Deliberately narrow: the two
 // module-configuration columns, nothing else. Validation is the exact path the
 // owner's `PATCH /store` takes, so the super admin cannot store anything an
-// owner could not.
+// owner could not. Plus the one thing only it can do: open a store for a new
+// client (`createStore`, TechDocs/POS_ONBOARDING.md).
 
 import { pool } from '../db.js';
 import { logger } from '../logger.js';
@@ -21,6 +22,7 @@ import {
   sanitizeModuleRemotes,
   type ModuleRemoteEntry,
 } from './core/modules.js';
+import { hashPassword } from './core/crypto.js';
 import { getFiscalSettings } from './fiscal/settings.service.js';
 import { isFiscalProviderId } from './fiscal/types.js';
 import { getVertical, hasVertical, verticalOrDefault } from './verticals/index.js';
@@ -49,6 +51,14 @@ export class SuperValidationError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'SuperValidationError';
+  }
+}
+
+/** A request that collides with a row already there (a taken store code) → 409. */
+export class SuperConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SuperConflictError';
   }
 }
 
@@ -288,6 +298,124 @@ export async function patchStoreModules(
   }
   await updateStore(storeId, patch);
   return getStore(storeId);
+}
+
+/**
+ * The store code a till types at login. Lower case only: `loginWithPin`
+ * lower-cases what the cashier typed and then compares it exactly, so a code
+ * with a capital letter could never be entered with a PIN.
+ */
+const STORE_SLUG_RE = /^[a-z0-9][a-z0-9-]{2,40}$/;
+const MIN_OWNER_PASSWORD = 10;
+
+export interface CreateStoreInput {
+  name?: unknown;
+  slug?: unknown;
+  /** A store whose configuration — vertical, modules, module remotes, menu look — the new one starts from. */
+  template_store_id?: unknown;
+  owner_login?: unknown;
+  owner_password?: unknown;
+  owner_name?: unknown;
+}
+
+function text(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+/**
+ * A real store for a new client (TechDocs/POS_ONBOARDING.md, O1): the store
+ * row, its owner and — when the template seats guests — an empty hall the
+ * owner draws tables into. From a template it copies only configuration
+ * (vertical, enabled modules, module remotes, menu overrides, currency and
+ * time zone): never a catalogue, staff, the QR-menu token, ПРРО or the
+ * public profile — those are the client's own.
+ *
+ * The password is typed by the super admin and only ever leaves here hashed:
+ * it is not logged and not returned.
+ */
+export async function createStore(input: CreateStoreInput): Promise<SuperStoreRow> {
+  const name = text(input.name);
+  if (name.length < 1 || name.length > 120) {
+    throw new SuperValidationError('Назва магазину — від 1 до 120 символів');
+  }
+  const slug = text(input.slug).toLowerCase();
+  if (!STORE_SLUG_RE.test(slug)) {
+    throw new SuperValidationError(
+      'Код магазину — від 3 до 41 символу: латинські малі літери, цифри й дефіс, на початку літера чи цифра'
+    );
+  }
+  const login = text(input.owner_login);
+  if (login.length < 3 || login.length > 120 || /\s/.test(login)) {
+    throw new SuperValidationError('Логін власника — email або слово без пробілів, від 3 до 120 символів');
+  }
+  const password = typeof input.owner_password === 'string' ? input.owner_password : '';
+  if (password.length < MIN_OWNER_PASSWORD || password.length > 200) {
+    throw new SuperValidationError(`Пароль власника — щонайменше ${MIN_OWNER_PASSWORD} символів`);
+  }
+  const ownerName = text(input.owner_name).slice(0, 80) || 'Власник';
+  let templateId: number | null = null;
+  if (input.template_store_id != null && input.template_store_id !== '') {
+    templateId = Number(input.template_store_id);
+    if (!Number.isInteger(templateId) || templateId <= 0) {
+      throw new SuperValidationError('Шаблон — це id магазину');
+    }
+  }
+  const passwordHash = await hashPassword(password);
+
+  const client = await pool.connect();
+  let storeId: number;
+  try {
+    await client.query('BEGIN');
+    const taken = await client.query(`SELECT 1 FROM pos_stores WHERE lower(slug) = $1`, [slug]);
+    if (taken.rows.length) throw new SuperConflictError(`Код «${slug}» уже зайнятий`);
+
+    let inserted;
+    if (templateId != null) {
+      inserted = await client.query(
+        `INSERT INTO pos_stores (name, slug, currency, timezone, vertical, enabled_modules, module_remotes, nav_overrides)
+         SELECT $1, $2, t.currency, t.timezone, t.vertical, t.enabled_modules, t.module_remotes, t.nav_overrides
+           FROM pos_stores t WHERE t.id = $3
+         RETURNING id, module_remotes`,
+        [name, slug, templateId]
+      );
+      if (!inserted.rows.length) throw new SuperValidationError('Шаблон не знайдено');
+    } else {
+      inserted = await client.query(
+        `INSERT INTO pos_stores (name, slug) VALUES ($1, $2) RETURNING id, module_remotes`,
+        [name, slug]
+      );
+    }
+    storeId = Number(inserted.rows[0].id);
+
+    await client.query(
+      `INSERT INTO pos_staff (store_id, role, display_name, login, password_hash)
+       VALUES ($1, 'owner', $2, $3, $4)`,
+      [storeId, ownerName, login, passwordHash]
+    );
+
+    // The restaurant switch is the `tables` module's presence (POS_TABLES.md):
+    // give it the one hall the floor-plan editor needs, with no tables in it —
+    // only the owner knows how many there are.
+    const remotes = (inserted.rows[0].module_remotes ?? {}) as Record<string, unknown>;
+    if ('tables' in remotes) {
+      await client.query(`INSERT INTO pos_halls (store_id, name, sort_order, is_active) VALUES ($1, 'Зала', 0, TRUE)`, [
+        storeId,
+      ]);
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    // Two super admins racing for one code: the UNIQUE index answers.
+    if ((error as { code?: string }).code === '23505') throw new SuperConflictError(`Код «${slug}» уже зайнятий`);
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  logger.info('pos super: store created', { storeId, slug, templateId });
+  const row = await getStore(storeId);
+  if (!row) throw new Error(`store ${storeId} vanished after creation`);
+  return row;
 }
 
 export interface RepointReport {
