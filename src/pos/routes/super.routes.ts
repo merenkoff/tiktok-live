@@ -23,6 +23,8 @@ import {
   verifySuperPassword,
 } from '../core/superAuth.js';
 import * as superService from '../super.service.js';
+import * as menuImport from '../import/menu-import.service.js';
+import { MenuImportError } from '../import/choiceqr.js';
 import * as leads from '../../crm/leads.service.js';
 import { errorMessage } from './_shared.js';
 
@@ -98,6 +100,30 @@ export function registerSuperRoutes(fastify: FastifyInstance): void {
       if (error instanceof superService.SuperValidationError) {
         return reply.code(400).send({ error: errorMessage(error) });
       }
+      throw error;
+    }
+  });
+
+  // «Імпорт з ChoiceQR» (TechDocs/POS_ONBOARDING.md, O2): without `apply` the
+  // plan, with it one chunk of `limit` cards from `offset` — the client walks
+  // the chunks, so no single request outlives a proxy timeout.
+  fastify.post('/super/stores/:id/import/choiceqr', async (request, reply) => {
+    if (!(await ensureSuper(request, reply))) return;
+    const storeId = Number((request.params as { id: string }).id);
+    if (!Number.isInteger(storeId) || storeId <= 0) {
+      return reply.code(400).send({ error: 'bad store id' });
+    }
+    const body = (request.body ?? {}) as { url?: unknown; apply?: unknown; offset?: unknown; limit?: unknown };
+    if (typeof body.url !== 'string' || !body.url.trim()) {
+      return reply.code(400).send({ error: 'Вставте посилання на меню ChoiceQR' });
+    }
+    try {
+      if (body.apply !== true) return await menuImport.previewChoiceQrImport(storeId, body.url);
+      const chunk = await menuImport.applyChoiceQrImport(storeId, body.url, { offset: body.offset, limit: body.limit });
+      logger.info('pos super: menu import chunk', { ip: request.ip, storeId, next: chunk.next_offset, done: chunk.done });
+      return chunk;
+    } catch (error) {
+      if (error instanceof MenuImportError) return reply.code(400).send({ error: errorMessage(error) });
       throw error;
     }
   });

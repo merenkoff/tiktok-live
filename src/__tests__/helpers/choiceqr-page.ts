@@ -1,0 +1,88 @@
+// The Live Shop — Copyright (c) 2026 Serhii Merenkov / Technologies LLC
+// Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
+// Commercial use requires a separate agreement: mer.sergei@gmail.com
+
+// A synthetic ChoiceQR menu page in the shape the real one has (Next.js
+// `__NEXT_DATA__` → `props.app`): a made-up café, so no client's menu ever
+// lives in the repository (TechDocs/POS_ONBOARDING.md, O2).
+
+export const MEDIA = 'https://cdn-media.choiceqr.com/prod-eat-test/menu';
+
+export interface FakeItem {
+  id: string;
+  category: string;
+  name: string;
+  price: number;
+  weight?: string;
+  weightType?: string;
+  description?: string;
+  photo?: string | null;
+  available?: boolean;
+}
+
+export const FAKE_CATEGORIES = [
+  { _id: 'c-soup', name: 'Перші страви' },
+  { _id: 'c-drinks', name: 'Холодні напої' },
+  { _id: 'c-vodka', name: 'Горілка' },
+  { _id: 'c-side', name: 'Гарнір' },
+  { _id: 'c-empty', name: 'Порожня' },
+];
+
+export const FAKE_ITEMS: FakeItem[] = [
+  { id: 'i1', category: 'c-soup', name: 'Борщ', price: 15500, weight: '300', weightType: 'g', description: 'з пампушкою', photo: `${MEDIA}/borshch.jpeg` },
+  { id: 'i2', category: 'c-soup', name: 'Бульйон', price: 12000, weight: '300', weightType: 'g', photo: null },
+  { id: 'i3', category: 'c-drinks', name: 'Взвар', price: 11000, weight: '1', weightType: 'l', photo: `${MEDIA}/vzvar.jpeg` },
+  { id: 'i4', category: 'c-drinks', name: 'Взвар ', price: 4000, weight: '300', weightType: 'ml' },
+  { id: 'i5', category: 'c-drinks', name: 'Лимонад', price: 8500, weight: '300', weightType: 'ml', available: false },
+  { id: 'i6', category: 'c-vodka', name: 'Гетьман', price: 5000, weight: '50', weightType: 'ml', photo: 'https://evil.example.com/x.jpeg' },
+  { id: 'i7', category: 'c-vodka', name: 'Гетьман', price: 35000, weight: '500', weightType: 'ml' },
+  { id: 'i8', category: 'c-side', name: 'Печена картопля', price: 11500, weight: '300', weightType: 'g' },
+  { id: 'i9', category: 'c-side', name: 'Печена картопля', price: 15500, weight: '300', weightType: 'g' },
+  { id: 'i10', category: 'c-side', name: 'Печена картопля', price: 11500, weight: '300', weightType: 'g' },
+  { id: 'i11', category: 'c-side', name: 'Хліб', price: 0, weight: '', weightType: 'g' },
+  { id: 'i12', category: 'c-drinks', name: 'Кола', price: 6000, weight: '0,33', weightType: 'ml' },
+];
+
+export function choiceQrPage(items: FakeItem[] = FAKE_ITEMS): string {
+  const data = {
+    props: {
+      pageProps: {},
+      app: {
+        place: {
+          name: 'Тестова корчма',
+          contactInfo: { phone: '+380 67 123 45 67', address: { prediction: 'м. Тест, вул. Вигадана, 1' } },
+          companyImages: { logo: `${MEDIA}/../logo/thumbnail_logo.jpeg` },
+          // JS weekdays: 0 is Sunday. Saturday off.
+          workTimeAll: [
+            { dayOfWeek: 0, active: true, from: '12:00:00.000', till: '20:00:00.000' },
+            { dayOfWeek: 1, active: true, from: '11:00:00.000', till: '22:00:00.000' },
+            { dayOfWeek: 2, active: true, from: '11:00:00.000', till: '22:00:00.000' },
+            { dayOfWeek: 3, active: true, from: '11:00:00.000', till: '22:00:00.000' },
+            { dayOfWeek: 4, active: true, from: '11:00:00.000', till: '22:00:00.000' },
+            { dayOfWeek: 5, active: true, from: '11:00:00.000', till: '23:30:00.000' },
+            { dayOfWeek: 6, active: false, from: '11:00:00.000', till: '22:00:00.000' },
+          ],
+        },
+        categories: FAKE_CATEGORIES,
+        menu: items.map((i) => ({
+          _id: i.id,
+          category: i.category,
+          name: i.name,
+          price: i.price,
+          weight: i.weight ?? '',
+          weightType: i.weightType ?? 'g',
+          description: i.description ?? '',
+          media: i.photo ? [{ url: i.photo, medium: i.photo, big: i.photo }] : [],
+          available: i.available !== false,
+        })),
+      },
+    },
+  };
+  return `<!DOCTYPE html><html><head><title>Меню</title></head><body><div id="__next"></div><script id="__NEXT_DATA__" type="application/json" crossorigin="anonymous">${JSON.stringify(data)}</script></body></html>`;
+}
+
+/** The smallest valid PNG (1×1), what the fake media host answers with. */
+export const TINY_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+  'base64'
+);

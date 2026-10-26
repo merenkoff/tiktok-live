@@ -199,6 +199,21 @@ export class SuperApi {
     return data;
   }
 
+  async previewChoiceQr(storeId: number, url: string): Promise<ChoiceQrPlan> {
+    const { data } = await this.client.post<ChoiceQrPlan>(`/stores/${storeId}/import/choiceqr`, { url }, { timeout: 60_000 });
+    return data;
+  }
+
+  /** One chunk of the import; each downloads its cards' photos, hence the longer timeout. */
+  async importChoiceQrChunk(storeId: number, url: string, offset: number, limit: number): Promise<ChoiceQrChunk> {
+    const { data } = await this.client.post<ChoiceQrChunk>(
+      `/stores/${storeId}/import/choiceqr`,
+      { url, apply: true, offset, limit },
+      { timeout: 180_000 }
+    );
+    return data;
+  }
+
   async repoint(body: { module_id: string; url: string; store_ids?: number[] }): Promise<RepointReport> {
     const { data } = await this.client.post<RepointReport>('/module-remotes/repoint', body);
     return data;
@@ -221,6 +236,26 @@ export class SuperApi {
     const { data } = await this.client.patch<SuperLeadCard>(`/leads/${id}`, body);
     return data;
   }
+}
+
+
+/** «Імпорт з ChoiceQR»: what the page would become (TechDocs/POS_ONBOARDING.md, O2). */
+export interface ChoiceQrPlan {
+  place: { name: string; address: string | null; phone: string | null; hours: Record<string, { open: string; close: string }> | null; logo: boolean };
+  tags: Array<{ name: string; station: 'kitchen' | 'bar'; exists: boolean; products: number }>;
+  products: Array<{ name: string; tag: string; variants: Array<{ size: string | null; price_cents: number }>; photo_url: string | null; exists: boolean }>;
+  warnings: string[];
+  totals: { tags_new: number; products_new: number; products_existing: number; variants_new: number; photos: number };
+}
+
+export interface ChoiceQrChunk {
+  total: number;
+  next_offset: number;
+  done: boolean;
+  created: string[];
+  skipped_existing: number;
+  photos_failed: string[];
+  profile?: string[];
 }
 
 export const superApi = new SuperApi();

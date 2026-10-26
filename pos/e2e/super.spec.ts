@@ -79,6 +79,39 @@ async function mockSuperApi(page: Page) {
       await route.fulfill({ status: 401, json: { error: 'Super access required' } });
       return;
     }
+    if (path === '/stores/1/import/choiceqr') {
+      const b = body as { url: string; apply?: boolean; offset?: number; limit?: number };
+      if (!b.url.includes('.choiceqr.com')) {
+        await route.fulfill({ status: 400, json: { error: 'Посилання має вести на меню ChoiceQR: https://<заклад>.choiceqr.com/menu' } });
+        return;
+      }
+      if (!b.apply) {
+        await route.fulfill({
+          json: {
+            place: { name: 'Корчма', address: 'вул. Тестова, 1', phone: null, hours: { '1': { open: '11:00', close: '22:00' } }, logo: true },
+            tags: [
+              { name: 'Перші страви', station: 'kitchen', exists: false, products: 2 },
+              { name: 'Холодні напої', station: 'bar', exists: false, products: 1 },
+            ],
+            products: [
+              { name: 'Борщ', tag: 'Перші страви', variants: [{ size: '300 г', price_cents: 15500 }], photo_url: 'x', exists: false },
+              { name: 'Бульйон', tag: 'Перші страви', variants: [{ size: '300 г', price_cents: 12000 }], photo_url: null, exists: false },
+              { name: 'Взвар', tag: 'Холодні напої', variants: [{ size: '1 л', price_cents: 11000 }, { size: '300 мл', price_cents: 4000 }], photo_url: 'y', exists: false },
+            ],
+            warnings: ['Ціна 0 ₴: Хліб — перевірте.'],
+            totals: { tags_new: 2, products_new: 3, products_existing: 0, variants_new: 4, photos: 2 },
+          },
+        });
+        return;
+      }
+      const first = (b.offset ?? 0) === 0;
+      await route.fulfill({
+        json: first
+          ? { total: 3, next_offset: 2, done: false, created: ['Борщ', 'Бульйон'], skipped_existing: 0, photos_failed: [], profile: ['адреса', 'логотип'] }
+          : { total: 3, next_offset: 3, done: true, created: ['Взвар'], skipped_existing: 0, photos_failed: ['Взвар'] },
+      });
+      return;
+    }
     if (path === '/stores' && req.method() === 'POST') {
       const b = body as { name: string; slug: string; template_store_id: number | null };
       if (b.slug === 'demo') {
@@ -207,6 +240,31 @@ test('the «Ліди» tab lists the site leads with where they came from, and k
   await expect(page.getByTestId('lead-row-7')).toContainText('Демо');
 });
 
+
+test('«Імпорт меню з ChoiceQR» previews the plan, then walks the chunks', async ({ page }) => {
+  const calls = await mockSuperApi(page);
+  await page.goto('/super');
+  await page.getByLabel('Пароль').fill(PASSWORD);
+  await page.getByRole('button', { name: 'Увійти' }).click();
+  await page.getByRole('button', { name: 'Редагувати' }).first().click();
+
+  const box = page.getByRole('region', { name: 'Імпорт меню з ChoiceQR' });
+  await box.getByLabel('Посилання на меню ChoiceQR').fill('https://evil.example/menu');
+  await box.getByRole('button', { name: 'Переглянути' }).click();
+  await expect(box.getByText(/меню ChoiceQR: https:/)).toBeVisible();
+
+  await box.getByLabel('Посилання на меню ChoiceQR').fill('https://korchma.choiceqr.com/menu');
+  await box.getByRole('button', { name: 'Переглянути' }).click();
+  await expect(box.getByTestId('choiceqr-totals')).toContainText('карток нових: 3 (4 варіантів)');
+  await expect(box.getByText('Холодні напої · бар · 1')).toBeVisible();
+  await expect(box.getByText('Ціна 0 ₴: Хліб — перевірте.')).toBeVisible();
+
+  await box.getByRole('button', { name: 'Імпортувати 3' }).click();
+  await expect(box.getByRole('status')).toContainText('Імпортовано карток: 3. Профіль: адреса, логотип. Без фото: Взвар.');
+
+  const chunks = calls.filter((c) => c.path === '/stores/1/import/choiceqr' && (c.body as { apply?: boolean }).apply);
+  expect(chunks.map((c) => (c.body as { offset: number }).offset)).toEqual([0, 2]);
+});
 
 test('«Новий магазин» opens a store from a template and never shows the password back', async ({ page }) => {
   const calls = await mockSuperApi(page);
