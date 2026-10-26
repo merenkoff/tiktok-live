@@ -179,14 +179,14 @@ const STORES = {
       // Owner screens that a store's pinned module release may not carry yet.
       await optional('cafe-analytics', async () => {
         await page.goto('/admin/cafe');
-        await page.getByTestId('cafe-analytics').waitFor(WAIT);
-        await pickRange(page);
+        await analyticsReady(page);
         await shoot('cafe-analytics');
       }, page);
       await optional('cafe-dashboard', async () => {
         await page.goto('/admin');
         await page.getByTestId('cafe-panels').waitFor(WAIT);
         await pickRange(page);
+        await page.waitForLoadState('networkidle');
         await shoot('cafe-dashboard');
       }, page);
       await optional('cafe-tech-cards', async () => {
@@ -265,9 +265,20 @@ const STORES = {
       // carry the café analytics before the café demo's does.
       await optional('restaurant-analytics', async () => {
         await page.goto('/admin/cafe');
-        await page.getByTestId('cafe-analytics').waitFor(WAIT);
-        await pickRange(page);
+        await analyticsReady(page);
         await shoot('restaurant-analytics');
+      }, page);
+      // The owner's dashboard at the till's width, like the café's, with the
+      // «per table» tile only a store with paid bills gets — a row taller than
+      // the café's, so the window is too, or «Дохід за днями» is cut off. Last,
+      // because it resizes the window for whatever would come after it.
+      await optional('restaurant-dashboard', async () => {
+        await page.setViewportSize({ width: TILL.width, height: 900 });
+        await page.goto('/admin');
+        await page.getByTestId('cafe-panels').waitFor(WAIT);
+        await pickRange(page);
+        await page.waitForLoadState('networkidle');
+        await shoot('restaurant-dashboard');
       }, page);
     },
   },
@@ -290,6 +301,17 @@ async function pickRange(page, label = '30 днів') {
     await btn.first().click();
     await page.waitForTimeout(1200);
   }
+}
+
+/**
+ * «Меню й кухня» on its month, once the figures are in: the page says
+ * «Рахуємо…» until its one request answers, and a shot taken then is a blank page.
+ */
+async function analyticsReady(page) {
+  await page.getByTestId('cafe-analytics').waitFor(WAIT);
+  await pickRange(page, 'Місяць');
+  await page.getByTestId('cafe-food-cost').waitFor(WAIT);
+  await page.waitForTimeout(600);
 }
 
 /** Types a weight («1,5» kg) on the weight pad, key by key as a cashier does, and adds the line. */
