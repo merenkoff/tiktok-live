@@ -4,6 +4,7 @@ import cafeRegister from '../../assets/screenshots/cafe-register.png';
 import cafeModifiers from '../../assets/screenshots/cafe-modifiers.png';
 import cafeKitchen from '../../assets/screenshots/cafe-kitchen.png';
 import cafeTechCards from '../../assets/screenshots/cafe-tech-cards.png';
+import cafeAnalytics from '../../assets/screenshots/cafe-analytics.png';
 import cafeQrMenu from '../../assets/screenshots/cafe-qr-menu.png';
 import cafeQrMenuFacts from '../../assets/screenshots/cafe-qr-menu-facts.png';
 
@@ -66,6 +67,21 @@ export const kafe: VerticalContent = {
         'Матриця меню: зірки, конячки, загадки, собаки — з порадою до кожної',
       ],
       shot: { src: cafeTechCards, alt: 'Сторінка «Техкарти»: страви, собівартість і фудкост у відсотках' },
+    },
+    {
+      eyebrow: 'Аналітика',
+      title: 'Що тримати в меню, що переписати цінником і що прибрати',
+      body:
+        'Сторінка «Меню й кухня» за тиждень, місяць чи квартал: фудкост проданого, середній чек, замовлення за годинами доби і матриця меню. Кожна позиція потрапляє в зірки, робочі конячки, загадки чи собаки — за тим, як часто її беруть і скільки лишається з одиниці, — і до кожної групи є порада. Поки продажів замало для висновку, цифри видно, а на групи меню не ділиться.',
+      bullets: [
+        'Пік замовлень за годинами — скільки людей ставити на зміну',
+        'Списання кухні за причинами: зіпсувалося, проба, харчування персоналу',
+        'Найчастіші відповіді модифікаторів — що варто зробити типовим',
+      ],
+      shot: {
+        src: cafeAnalytics,
+        alt: 'Сторінка «Меню й кухня»: фудкост, виторг, середній чек, замовлення за годинами доби і матриця меню із зірками та робочими конячками',
+      },
     },
     {
       eyebrow: 'QR-меню',
