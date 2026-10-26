@@ -171,6 +171,22 @@ export class SuperApi {
     return data;
   }
 
+  /**
+   * «Новий магазин» (TechDocs/POS_ONBOARDING.md, O1). The owner's password goes
+   * out once, in this body, and the answer never carries it back.
+   */
+  async createStore(body: {
+    name: string;
+    slug: string;
+    template_store_id: number | null;
+    owner_login: string;
+    owner_password: string;
+    owner_name?: string;
+  }): Promise<SuperStoreRow> {
+    const { data } = await this.client.post<SuperStoreRow>('/stores', body);
+    return data;
+  }
+
   async patchStore(
     id: number,
     body: {
