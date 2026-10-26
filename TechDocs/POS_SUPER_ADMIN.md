@@ -41,6 +41,7 @@
 | Обзор | `GET /api/pos/super/stores` — id, название, slug, `enabled_modules` (эффективный набор), `module_remotes`, TikTok-ник, ПРРО (вкл/провайдер), активные сотрудники, последняя продажа | таблица; remote-модули показаны как `id версия`, если URL — релиз `module-release.yml`, иначе id + короткий URL |
 | Правка одного магазина | `PATCH /api/pos/super/stores/:id {enabled_modules?, module_remotes?}` | «Редагувати» в строке: чекбоксы модулей, override-URL для вбудованих, онлайн-модули (URL, «Перевірити джерело», добавить/убрать) |
 | Перенацелить модуль | `POST /api/pos/super/module-remotes/repoint {module_id, url, store_ids?}` | панель «Перенацілити модуль»: id, новый URL (версия из URL, проба манифеста), чекбоксы магазинов; отчёт `updated / skipped / failed` |
+| Новый магазин | `POST /api/pos/super/stores {name, slug, template_store_id, owner_login, owner_password, owner_name?}` → 201 / 400 / 409 | кнопка «Новий магазин»: назва, код (підказка з назви), шаблон, власник, пароль; після — плашка «Передайте власнику» без пароля ([POS_ONBOARDING.md](POS_ONBOARDING.md)) |
 | Лиды с сайта | `GET /api/pos/super/leads?status=&interest=&q=&limit=&offset=`, `GET /api/pos/super/leads/:id`, `PATCH /api/pos/super/leads/:id {status?, note?}` | вкладка «Ліди» (`/super/leads`): статус-чипи, фільтр за продуктом, пошук; картка з історією заявок, статусом і нотаткою ([CRM_LEADS.md](CRM_LEADS.md)) |
 
 **Валидация та же, что у владельца** (`sanitizeEnabledModules`,
@@ -71,25 +72,36 @@
 (roadmap #12 трек 1). Кассы, которые сейчас оффлайн, — при следующем выходе
 в сеть.
 
+## Новый магазин (POS_ONBOARDING.md, O1, 2026-10-26)
+
+До этого реальный магазин нельзя было завести инструментом — только демо, миграциями.
+`createStore` (одна транзакция) копирует из шаблона **только настройку** — `vertical`,
+`enabled_modules`, `module_remotes`, `nav_overrides`, валюту и часовой пояс; каталог, персонал,
+токен QR-меню, ПРРО и профиль заведения у клиента свои. Владелец — `role='owner'` с логином и
+паролем, который вводит супер-админ (≥ 10 символов, только bcrypt-хэш, не логируется и не
+возвращается); PIN владелец добавит сам. Код магазина — `^[a-z0-9][a-z0-9-]{2,40}$`, в нижнем
+регистре, потому что `loginWithPin` сравнивает введённое в нижнем регистре; занятый (в любом
+регистре) — 409. Если в шаблоне есть модуль `tables`, создаётся один пустой зал «Зала».
+
 ## Не в v1
 
-Создание магазинов, сброс пароля владельца, фискальные креды, любые данные
+Сброс пароля владельца, фискальные креды, любые данные
 продаж, аудит в БД. Каждое — отдельная задача.
 
 ## Код
 
 - Бэкенд: `src/pos/core/superAuth.ts` (пароль, токен, rate limit, `ensureSuper`),
-  `src/pos/super.service.ts` (список, patch, repoint), `src/pos/routes/super.routes.ts`
+  `src/pos/super.service.ts` (список, patch, repoint, `createStore`), `src/pos/routes/super.routes.ts`
   (core-группа в `pos.routes.ts`).
 - Фронтенд: `pos/src/super/` (`superApi.ts`, `SuperAdminApp` — оболонка з вкладками «Магазини» `/super`
   і «Ліди» `/super/leads`, `StoresPage`, `LeadsPage`, `LeadCard`, `leadLabels.ts`,
-  `StoreEditor`, `RepointPanel`, `probe.ts`), роут `/super/*` в
+  `StoreEditor`, `RepointPanel`, `NewStoreDialog` + `storeCode.ts`, `probe.ts`), роут `/super/*` в
   `pos/src/modules/renderRoutes.tsx` только для web-шелла, вне guard.
   Общие правила формы записи `module_remotes` — `pos/src/lib/moduleRemoteForm.ts`
   (их же использует Settings).
 - Лиды: `src/crm/` (`leads.service.ts`, `journey.ts`, `sources.ts`, `limits.ts`), три маршрута
   `/super/leads*` в `super.routes.ts`, миграция `070_crm_leads.sql`.
-- Тесты: `src/__tests__/pos.routes.super.test.ts`, `pos/src/lib/moduleRemoteForm.test.ts`,
+- Тесты: `src/__tests__/pos.routes.super.test.ts`, `src/__tests__/pos.super.create-store.test.ts`, `pos/src/super/storeCode.test.ts`, `pos/src/lib/moduleRemoteForm.test.ts`,
   `pos/src/super/superApi.test.ts`, `pos/src/super/leadLabels.test.ts`, `pos/e2e/super.spec.ts`.
 
 ## Тип магазину (вертикаль)

@@ -19,7 +19,6 @@ import 'dotenv/config';
 import type { FastifyInstance } from 'fastify';
 import { pool } from '../db.js';
 import { generateSecretsKey } from '../pos/core/secrets.js';
-import { readMigration } from '../pos/migrations.js';
 import { registerProvider, resetProviders } from '../pos/fiscal/providers/index.js';
 import { resetRuntime } from '../pos/fiscal/runtime.js';
 import { resetRateLimiter } from '../pos/fiscal/rateLimit.js';
@@ -36,6 +35,7 @@ import {
   createTestStore,
   dropTestStore,
   hasDb,
+  reapplyMigration,
   type TestStore,
 } from './helpers/pos-fixtures.js';
 import { FakeFiscalProvider } from './helpers/fake-fiscal-provider.js';
@@ -561,10 +561,10 @@ describe.skipIf(!hasDb)('POS «під запис» — paying in parts', () => {
       // As a line paid by a build before 078 left it.
       await pool.query(`UPDATE pos_debt_items SET paid_quantity = 0 WHERE id = $1`, [line.id]);
 
-      await pool.query(readMigration('078_pos_debt_partial.sql'));
+      await reapplyMigration('078_pos_debt_partial.sql');
       expect(Number((await lineRow(line.id)).paid_quantity)).toBe(2);
       // And again: nothing left to backfill.
-      await pool.query(readMigration('078_pos_debt_partial.sql'));
+      await reapplyMigration('078_pos_debt_partial.sql');
       expect(Number((await lineRow(line.id)).paid_quantity)).toBe(2);
 
       const voided = await post(`/sales/${paid.json().sale.id}/void`, {}, store.ownerToken);

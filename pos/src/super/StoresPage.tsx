@@ -8,6 +8,7 @@ import { verticalTitle } from '../lib/vertical';
 import { superApi, superErrorText, type SuperStoreRow } from './superApi';
 import { StoreEditor } from './StoreEditor';
 import { RepointPanel } from './RepointPanel';
+import { NewStoreDialog } from './NewStoreDialog';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
@@ -18,6 +19,9 @@ export function StoresPage() {
   const [stores, setStores] = useState<SuperStoreRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<number | null>(null);
+  const [creating, setCreating] = useState(false);
+  // What to hand the new owner: never the password, which only the super admin typed.
+  const [handover, setHandover] = useState<{ store: SuperStoreRow; login: string } | null>(null);
 
   const reload = useCallback(async () => {
     setError(null);
@@ -49,8 +53,29 @@ export function StoresPage() {
           <button type="button" className="rounded-sq border border-sq-divider px-3 py-1.5 text-sm text-sq-secondary" onClick={() => void reload()}>
             Оновити
           </button>
+          <button type="button" className="sq-btn-primary px-3 py-1.5 text-sm" disabled={!stores} onClick={() => setCreating(true)}>
+            Новий магазин
+          </button>
         </div>
       </div>
+
+      {handover && (
+        <div role="status" className="rounded-sq border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <p className="font-medium">Магазин «{handover.store.name}» відкрито.</p>
+              <p>
+                Передайте власнику: адреса <span className="font-mono">{window.location.host}</span>, код магазину{' '}
+                <span className="font-mono">{handover.store.slug}</span>, логін <span className="font-mono">{handover.login}</span>.
+                Пароль — той, що ви ввели: тут він не показується.
+              </p>
+            </div>
+            <button type="button" className="text-emerald-800 underline" onClick={() => setHandover(null)}>
+              Закрити
+            </button>
+          </div>
+        </div>
+      )}
 
       {error && <p className="text-sm text-rose-600">{error}</p>}
 
@@ -133,6 +158,18 @@ export function StoresPage() {
           </tbody>
         </table>
       </div>
+
+      {creating && stores && (
+        <NewStoreDialog
+          stores={stores}
+          onClose={() => setCreating(false)}
+          onCreated={(store, login) => {
+            setStores((prev) => (prev ? [...prev, store] : [store]));
+            setCreating(false);
+            setHandover({ store, login });
+          }}
+        />
+      )}
     </div>
   );
 }

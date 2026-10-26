@@ -57,6 +57,25 @@ export function registerSuperRoutes(fastify: FastifyInstance): void {
     return superService.listStores();
   });
 
+  // A store for a new client (TechDocs/POS_ONBOARDING.md, O1). The body carries
+  // the owner's password, so nothing of the body is logged but the store code.
+  fastify.post('/super/stores', async (request, reply) => {
+    if (!(await ensureSuper(request, reply))) return;
+    try {
+      const created = await superService.createStore((request.body ?? {}) as superService.CreateStoreInput);
+      logger.info('pos super: new store', { ip: request.ip, storeId: created.id, slug: created.slug });
+      return reply.code(201).send(created);
+    } catch (error) {
+      if (error instanceof superService.SuperValidationError) {
+        return reply.code(400).send({ error: errorMessage(error) });
+      }
+      if (error instanceof superService.SuperConflictError) {
+        return reply.code(409).send({ error: errorMessage(error) });
+      }
+      throw error;
+    }
+  });
+
   fastify.patch('/super/stores/:id', async (request, reply) => {
     if (!(await ensureSuper(request, reply))) return;
     const storeId = Number((request.params as { id: string }).id);

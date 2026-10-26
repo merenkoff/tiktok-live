@@ -45,6 +45,28 @@ export async function applyPosMigrations(): Promise<void> {
 }
 
 /**
+ * Re-apply one POS migration from inside a test — the way every container boot
+ * does — on the database the other test files are using at the same moment.
+ * Its `ALTER TABLE`s take ACCESS EXCLUSIVE locks while a parallel file's sale
+ * holds row locks on the very tables the migration alters, so Postgres may pick
+ * the re-run as the victim of a deadlock (40P01, seen in CI on 078). The
+ * victim's whole statement batch is rolled back and every migration is
+ * idempotent, so running it again is exactly right; anything else is thrown.
+ */
+export async function reapplyMigration(file: string, attempts = 5): Promise<void> {
+  const sql = readMigration(file);
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await pool.query(sql);
+      return;
+    } catch (error) {
+      if ((error as { code?: string }).code !== '40P01' || attempt >= attempts) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 50 * attempt));
+    }
+  }
+}
+
+/**
  * Apply `001_create_schema.sql` — the LIVE-automation tables.
  *
  * POS tests never need this; the one exception is the POS→LIVE auth bridge
