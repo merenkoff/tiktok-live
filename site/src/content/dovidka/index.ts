@@ -21,12 +21,16 @@ import { yakVidkrytyKvitkovyiMagazynFopKvedPrro } from './yak-vidkryty-kvitkovyi
 import { yakObratyProgramuDlyaMagazynuOdyagu } from './yak-obraty-programu-dlya-magazynu-odyagu';
 import { oblikOdyaguZaRozmiramyIKoloramy } from './oblik-odyagu-za-rozmiramy-i-koloramy';
 import { yakVidkrytyMagazynOdyaguFopKvedPrro } from './yak-vidkryty-magazyn-odyagu-fop-kved-prro';
+import { torgsoftArm20SkynumDlyaMagazynuOdyagu } from './torgsoft-arm20-skynum-dlya-magazynu-odyagu';
+import { povernennyaIObminOdyagu14Dniv } from './povernennya-i-obmin-odyagu-14-dniv';
 import { GUIDE_ARTICLES } from './guides';
 
 /** Hand-written answers, newest first. */
 const STANDALONE: Article[] = [
   oblikPakuvannyaUKvitkovomuMagazyni,
   oblikHeliyuIKulokUKvitkovomuMagazyni,
+  torgsoftArm20SkynumDlyaMagazynuOdyagu,
+  povernennyaIObminOdyagu14Dniv,
   yakObratyProgramuDlyaMagazynuOdyagu,
   oblikOdyaguZaRozmiramyIKoloramy,
   yakVidkrytyMagazynOdyaguFopKvedPrro,
