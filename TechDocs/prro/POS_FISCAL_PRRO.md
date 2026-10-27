@@ -77,7 +77,7 @@ sandbox-кредов, CI-выпуск бандла `fiscal-checkbox`, ранбу
 
 ### Отдельный id модуля на каждого провайдера
 
-`fiscal-checkbox`, `fiscal-vchasno`, `fiscal-echeck` — а **не** один `fiscal`
+`fiscal-checkbox`, `fiscal-cashalot` (есть с 2026-10-27, трек CA фаза CA6), `fiscal-vchasno`, `fiscal-echeck` — а **не** один `fiscal`
 с тремя разными URL.
 
 - Кэш модулей на десктопе ключуется на `moduleId` + semver и качает только
@@ -356,8 +356,10 @@ Checkbox.
 > (провайдер сам зарегистрировал документ в своей офлайн-сессии — строка
 > журнала становится `done` + `provider_offline`, миграция `072` расширила
 > колонку и CHECK, касса печатает «ОФЛАЙН»); `FiscalProvider.normalizeConfig?(next,
-> { previous, shiftOpen })` (адаптер проверяет свой `config` при сохранении
-> владельцем, отказ — 400 его словами); JSDoc у `FiscalSession.token` и
+> { previous, shiftOpen, pendingDocuments })` (адаптер проверяет свой `config` при сохранении
+> владельцем, отказ — 400 его словами; `pendingDocuments` — с 2026-10-27, CA6:
+> сколько документов магазина ещё ждёт повторной отправки, потому что повтор
+> шлёт сохранённый документ под текущим `config`); JSDoc у `FiscalSession.token` и
 > `requestId`. `findByRequestId` выпал 2026-10-24 — Cashalot сам отклоняет
 > повтор `UID`. Что генерический слой требует от адаптера — в
 > [cashalot/POS_FISCAL_CASHALOT.md](cashalot/POS_FISCAL_CASHALOT.md) §4.1;
@@ -933,6 +935,7 @@ DB_HOST=localhost DB_PORT=5434 DB_NAME=tiktok_live DB_USER=postgres DB_PASSWORD=
 | `pos/src/modules/fiscal-core/` | Общий код, НЕ модуль (нет `manifest.ts`/`remote-entry.ts`): `types.ts` (зеркало wire-типов), `lib/hostPlatform.ts` (`REQUIRED_HOST_API=['api.posRequest']`, `HostTooOldError`), `lib/diagnostics.ts` (коды поддержки `FC-…`), `data/fiscalApi.ts`, `components/{SecretsForm,ShiftPanel,FiscalErrorCard}.tsx`, `hooks/useFiscalStatus.ts` |
 | `pos/src/modules/fiscal-checkbox/` | Тонкий бандл: `manifest.ts` (`id:'fiscal-checkbox'`, `alwaysEnabled:true`, роуты `/fiscal/*` и admin `fiscal`), `remote-entry.ts`, `secretSpecs.ts` (`CHECKBOX_SECRET_SPECS`: `licenceKey`, `cashierPin` — статично, контрактным тестом закреплено под будущий адаптер), `pages/{CheckboxAdminPage,CheckboxTillPage}.tsx` |
 | `pos/vite.fiscal-checkbox-remote.config.ts` | Копия `vite.tiktok-live-remote.config.ts`, `outDir: dist-remotes/fiscal-checkbox` |
+| `pos/src/modules/fiscal-cashalot/` + `pos/vite.fiscal-cashalot-remote.config.ts` | Второй бандл (трек CA, фаза CA6, 2026-10-27, порт 5012): `secretSpecs.ts` (`keyGuid`, `keyPin`, `numFiscal`), `lib/taxTable.ts` (таблица ставок ↔ `config.taxes`, буква → ASCII-код `default_tax_code`; паритет с `dps/taxes.ts` закреплён корневым тестом), `components/TaxTableForm.tsx`, `pages/{CashalotAdminPage,CashalotTillPage}.tsx`. Общее для двух бандлов — в `fiscal-core/components/` (`AttentionList`, `ProbeSection`, `ServiceReceiptForm`), id модуля для диагностики — `define` `__POS_FISCAL_MODULE__` в каждом вайт-конфиге |
 | `pos/scripts/module-tailwind.mjs` | `moduleCss(moduleId, extraContent=[])` — второй, обратно совместимый параметр, чтобы Tailwind-классы `fiscal-core` попали в `style.css` бандла, который его импортирует |
 | `pos/package.json` | `build:fiscal-checkbox-remote`, `serve:fiscal-checkbox-remote` (порт 5005), `check:fiscal-checkbox-css-coverage`; версия `1.1.0` |
 

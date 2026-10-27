@@ -32,6 +32,14 @@ import { isFiscalErrorBody, type FiscalErrorBody } from '../types';
 const MODULE_VERSION: string =
   typeof __POS_APP_VERSION__ === 'string' ? __POS_APP_VERSION__ : '0.0.0-dev';
 
+/**
+ * Which provider bundle this shared code is running inside — a `define` in
+ * each bundle's Vite config (`fiscal-checkbox`, `fiscal-cashalot`), for the
+ * same reason as above: nothing here may import a bundle's own module.
+ */
+const MODULE_ID: string =
+  typeof __POS_FISCAL_MODULE__ === 'string' ? __POS_FISCAL_MODULE__ : 'fiscal';
+
 export type FiscalFailureReason = 'host_too_old' | 'server' | 'network' | 'unknown';
 
 export interface FiscalDiagnostic {
@@ -111,7 +119,7 @@ export function diagnosticMessage(error: unknown, diagnostic: FiscalDiagnostic):
 
 /** JSON block behind "показати деталі" — what the copy button puts on the clipboard. */
 export function diagnosticText(d: FiscalDiagnostic): string {
-  return JSON.stringify({ module: 'fiscal-checkbox', ...d }, null, 2);
+  return JSON.stringify({ module: MODULE_ID, ...d }, null, 2);
 }
 
 const reported = new Set<string>();

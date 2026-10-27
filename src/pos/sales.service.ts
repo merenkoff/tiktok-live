@@ -1251,7 +1251,7 @@ export async function getSale(storeId: number, saleId: number) {
   }
   const refundFiscalRows = refundIds.length
     ? await pool.query(
-        `SELECT refund_id, fiscal_code, fiscal_date, tax_url, qr_payload, receipt_text,
+        `SELECT refund_id, fiscal_code, fiscal_date, tax_url, qr_payload, receipt_text, vat_cents,
                 status, mode, control_number, error_code, error_message
          FROM pos_fiscal_receipts
          WHERE refund_id = ANY($1::bigint[]) AND doc_type = 'refund'`,
@@ -1279,7 +1279,7 @@ export async function getSale(storeId: number, saleId: number) {
   // and the offline receipt mirror is host-owned, so neither could ever reach a
   // module-provided renderer. See TechDocs/prro/POS_FISCAL_PRRO.md §1.
   const fiscalRow = await pool.query(
-    `SELECT fiscal_code, fiscal_date, tax_url, qr_payload, receipt_text,
+    `SELECT fiscal_code, fiscal_date, tax_url, qr_payload, receipt_text, vat_cents,
             status, mode, control_number, error_code, error_message
      FROM pos_fiscal_receipts
      WHERE sale_id = $1 AND doc_type = 'sale'`,
@@ -1438,6 +1438,9 @@ function fiscalViewFromRow(fiscal: Record<string, unknown> | null) {
     tax_url: (fiscal.tax_url as string | null) ?? null,
     qr_payload: (fiscal.qr_payload as string | null) ?? null,
     receipt_text: (fiscal.receipt_text as string | null) ?? null,
+    // What the provider registered as VAT (Cashalot); the till prints it over
+    // its own arithmetic. Null where the adapter computes none (Checkbox).
+    vat_cents: fiscal.vat_cents === null || fiscal.vat_cents === undefined ? null : Number(fiscal.vat_cents),
     error_code: (fiscal.error_code as string | null) ?? null,
     error_message: (fiscal.error_message as string | null) ?? null,
   };

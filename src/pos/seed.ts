@@ -227,6 +227,41 @@ async function registerDebtsModule(): Promise<void> {
 }
 
 /**
+ * Point a demo store at a locally served `fiscal-cashalot` bundle (ПРРО
+ * track CA, phase CA6). Opt-in for the same reasons as the others, and the
+ * store is a choice (`demo-clothing` by default, any slug through
+ * `POS_SEED_FISCAL_CASHALOT_STORE`) because every vertical fiscalises alike.
+ * The entry is only the module's way in: the provider itself is chosen by
+ * the owner on /admin/settings, and the store's `PATCH /store` would refuse
+ * this entry under a different provider (`assertSingleFiscalRemote`).
+ *
+ *   POS_SEED_FISCAL_CASHALOT=1 npm run pos:seed
+ */
+async function registerFiscalCashalotModule(): Promise<void> {
+  const slug = process.env.POS_SEED_FISCAL_CASHALOT_STORE || 'demo-clothing';
+  const store = await pool.query(`SELECT id FROM pos_stores WHERE slug = $1`, [slug]);
+  if (store.rows.length === 0) {
+    console.log(`   ${slug} store not found — run the migrations first`);
+    return;
+  }
+  const entry = {
+    url: process.env.POS_SEED_FISCAL_CASHALOT_URL || 'http://localhost:5012/remote-entry.js',
+    title: 'Фіскалізація (Cashalot)',
+    routePath: '/fiscal',
+    icon: 'ShieldCheck',
+    nav: [{ label: 'Зміна', location: 'cashier-primary', order: 90, icon: 'ShieldCheck', match: '/fiscal' }],
+  };
+  await pool.query(
+    `UPDATE pos_stores
+     SET module_remotes = COALESCE(module_remotes, '{}'::jsonb)
+                          || jsonb_build_object('fiscal-cashalot', $2::jsonb)
+     WHERE id = $1`,
+    [Number(store.rows[0].id), JSON.stringify(entry)]
+  );
+  console.log(`   fiscal-cashalot module registered on ${slug} → ${entry.url}`);
+}
+
+/**
  * Point `demo-grocery` (migration 076) at a locally served `vertical-grocery`
  * bundle (grocery phase Г4 — TechDocs/grocery/G4_WEIGHED.md §6). Same shape
  * and the same reasons as the café entry above: opt-in, dev URL by default,
@@ -447,6 +482,7 @@ async function seed(): Promise<void> {
   if (process.env.POS_SEED_TABLES === '1') await registerTablesModule();
   if (process.env.POS_SEED_DEBTS === '1') await registerDebtsModule();
   if (process.env.POS_SEED_VERTICAL_GROCERY === '1') await registerGroceryModule();
+  if (process.env.POS_SEED_FISCAL_CASHALOT === '1') await registerFiscalCashalotModule();
   console.log('\n✅ Demo store ready (tags ensured)');
   console.log('   Store slug: demo');
   console.log('   Owner: owner@demo.shop / owner123');

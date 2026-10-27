@@ -17,106 +17,22 @@
 // TechDocs/prro/POS_FISCAL_PRRO.md "Тумблер живёт в хосте": if the only editor for
 // "is fiscalisation on" lived inside this bundle, a store whose bundle failed
 // to load would have no way to turn it off.
+//
+// The probe, the attention list and the service form are `fiscal-core`
+// components since CA6 — the second bundle (`fiscal-cashalot`) draws the same.
 
 import { useCallback, useEffect, useState } from 'react';
-import { Check, PageHeader, SectionHead, ShieldCheck } from '@pos/platform/ui';
-import {
-  forceHandover,
-  getFiscalSettingsView,
-  listFiscalAttention,
-  saveFiscalSecrets,
-  testFiscalConnection,
-} from '../../fiscal-core/data/fiscalApi';
+import { PageHeader, SectionHead, ShieldCheck } from '@pos/platform/ui';
+import { forceHandover, getFiscalSettingsView, saveFiscalSecrets } from '../../fiscal-core/data/fiscalApi';
 import { SecretsForm } from '../../fiscal-core/components/SecretsForm';
 import { FiscalErrorCard } from '../../fiscal-core/components/FiscalErrorCard';
+import { AttentionList } from '../../fiscal-core/components/AttentionList';
+import { ProbeSection } from '../../fiscal-core/components/ProbeSection';
 import { deviceLabel } from '../../fiscal-core/lib/deviceLabel';
 import { useFiscalStatus } from '../../fiscal-core/hooks/useFiscalStatus';
 import { CHECKBOX_SECRET_SPECS } from '../secretSpecs';
-import type {
-  AttentionDoc,
-  FiscalProbe,
-  FiscalStatus,
-  OfflineSessionView,
-} from '../../fiscal-core/types';
+import type { FiscalStatus } from '../../fiscal-core/types';
 import type { FiscalSettingsView } from '../../../types';
-
-function formatCents(cents: number): string {
-  return (cents / 100).toFixed(2) + ' ₴';
-}
-
-function AttentionList() {
-  const [docs, setDocs] = useState<AttentionDoc[] | null>(null);
-  const [sessions, setSessions] = useState<OfflineSessionView[]>([]);
-  const [error, setError] = useState<unknown>(null);
-
-  useEffect(() => {
-    listFiscalAttention()
-      .then((res) => {
-        setDocs(res.documents);
-        // Phase 2 added parked offline sessions to the same response. Their
-        // documents may never have been sent at all, so they belong at the TOP
-        // of this list: a stuck session is a bigger hole than one rejected
-        // receipt, and only the owner can settle it with the provider.
-        setSessions(res.sessions ?? []);
-      })
-      .catch(setError);
-  }, []);
-
-  if (error) return <FiscalErrorCard error={error} />;
-  if (!docs) return <p className="py-3 text-[15px] text-sq-muted">Завантаження…</p>;
-  if (docs.length === 0 && sessions.length === 0) {
-    return (
-      <p className="py-3 flex items-center gap-2 text-[15px] text-sq-secondary">
-        <Check size={20} className="shrink-0 text-sq-success" />
-        Немає документів, що потребують уваги.
-      </p>
-    );
-  }
-
-  return (
-    <div className="space-y-3 pt-2">
-      {sessions.map((session) => (
-        <div
-          key={`session-${session.id}`}
-          role="alert"
-          className="rounded-xl bg-red-50 px-4 py-3 text-[15px] text-red-700"
-        >
-          <p className="font-semibold">Офлайн-сесія #{session.id} зупинена</p>
-          <p className="mt-1">{session.error_message ?? session.error_code ?? 'Причина невідома'}</p>
-          <p className="mt-1 text-[13px] tabular-nums">
-            Чеків: {session.documents.pending + session.documents.done + session.documents.abandoned}
-            {' · не надіслано: '}
-            {session.documents.pending} · з {new Date(session.started_at).toLocaleString('uk-UA')}
-          </p>
-          <p className="mt-1 text-[13px]">
-            Ці чеки треба звірити в кабінеті провайдера — автоматично вони вже не підуть.
-          </p>
-        </div>
-      ))}
-
-      {docs.length > 0 && (
-        <ul>
-          {docs.map((doc) => (
-            <li key={doc.id} className="sq-row py-2.5">
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="text-base font-medium text-sq-text tabular-nums">
-                  {doc.receipt_number ?? `#${doc.id}`}
-                </span>
-                <span className="text-[15px] text-sq-text tabular-nums">{formatCents(doc.total_cents)}</span>
-              </div>
-              <p className="mt-0.5 text-[13px] text-red-600">
-                {doc.error_message ?? doc.error_code ?? 'Помилка ПРРО'}
-              </p>
-              <p className="mt-0.5 text-[13px] text-sq-muted tabular-nums">
-                Спроб: {doc.attempts} · {new Date(doc.created_at).toLocaleString('uk-UA')}
-              </p>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
 
 /**
  * The owner's view of the register lock, and the only way out of a dead holder:
@@ -214,9 +130,6 @@ export function CheckboxAdminPage() {
   const [loadError, setLoadError] = useState<unknown>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<unknown>(null);
-  const [probe, setProbe] = useState<FiscalProbe | null>(null);
-  const [probing, setProbing] = useState(false);
-  const [probeError, setProbeError] = useState<unknown>(null);
 
   const load = useCallback(() => {
     getFiscalSettingsView().then(setSettings).catch(setLoadError);
@@ -234,19 +147,6 @@ export function CheckboxAdminPage() {
       setSaveError(e);
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function runProbe() {
-    setProbing(true);
-    setProbeError(null);
-    setProbe(null);
-    try {
-      setProbe(await testFiscalConnection());
-    } catch (e) {
-      setProbeError(e);
-    } finally {
-      setProbing(false);
     }
   }
 
@@ -271,37 +171,7 @@ export function CheckboxAdminPage() {
             </div>
           </section>
 
-          <section>
-            <SectionHead title="Зʼєднання" />
-            <div className="pt-4 space-y-3">
-              <button
-                type="button"
-                className="sq-btn-quiet"
-                disabled={probing}
-                onClick={() => void runProbe()}
-              >
-                {probing ? 'Перевірка…' : "Перевірити з'єднання"}
-              </button>
-              {Boolean(probeError) && <FiscalErrorCard error={probeError} />}
-              {probe && (
-                <div
-                  className={`rounded-xl px-4 py-3 text-[15px] ${
-                    probe.ok ? 'bg-sq-success/10 text-sq-success-ink' : 'bg-amber-50 text-amber-800'
-                  }`}
-                >
-                  {probe.ok ? (
-                    <>
-                      <p className="font-semibold">З'єднання успішне</p>
-                      {probe.cashierName && <p>Касир: {probe.cashierName}</p>}
-                      {probe.cashRegister && <p>Каса: {probe.cashRegister}</p>}
-                    </>
-                  ) : (
-                    <p>{probe.message ?? 'Перевірка не пройдена'}</p>
-                  )}
-                </div>
-              )}
-            </div>
-          </section>
+          <ProbeSection />
 
           {fiscalStatus && (
             <RegisterCard status={fiscalStatus} onChanged={() => void refreshStatus()} />

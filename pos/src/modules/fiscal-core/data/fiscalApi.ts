@@ -61,6 +61,23 @@ export function saveFiscalSecrets(
   return posRequest('patch', '/fiscal/settings', { secrets });
 }
 
+/**
+ * Save the provider's own non-secret settings (`config`) — the part of the
+ * row only its bundle understands (Cashalot's tax table and test mode) — and,
+ * with it, the default tax code, because for such a provider that code is a
+ * row of that table. The backend runs the adapter's `normalizeConfig` and
+ * answers its refusal as a 400 in the owner's words.
+ */
+export function saveFiscalConfig(
+  config: Record<string, unknown>,
+  defaultTaxCode?: string | null
+): Promise<FiscalSettingsView> {
+  return posRequest('patch', '/fiscal/settings', {
+    config,
+    ...(defaultTaxCode !== undefined ? { default_tax_code: defaultTaxCode } : {}),
+  });
+}
+
 export function getFiscalStatus(): Promise<FiscalStatus> {
   return posRequest('get', '/fiscal/status');
 }

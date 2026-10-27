@@ -812,7 +812,7 @@ export type TagStation = 'kitchen' | 'bar';
 // offline receipt, and every non-fiscalising store must all still typecheck.
 
 /** Mirrors `FISCAL_PROVIDER_IDS` in the backend. Types-only here by design. */
-export type FiscalProviderId = 'checkbox' | 'vchasno' | 'echeck';
+export type FiscalProviderId = 'checkbox' | 'cashalot' | 'vchasno' | 'echeck';
 
 /** Projection on a sale/refund. `'none'` = this store does not fiscalise. */
 export type SaleFiscalStatus = 'none' | 'pending' | 'done' | 'failed';
@@ -884,6 +884,9 @@ export interface SaleFiscalDoc {
   tax_url: string | null;
   qr_payload: string | null;
   receipt_text: string | null;
+  /** The VAT the provider registered (Cashalot's own CHECKTAX); the receipt
+   * prints it over the till's arithmetic. Null or absent where none (Checkbox). */
+  vat_cents?: number | null;
   error_code: string | null;
   error_message: string | null;
 }
@@ -920,6 +923,10 @@ export interface FiscalSettingsView {
    * False ⇒ `offline_mode` cannot be switched on at all, so the owner is not
    * shown a switch that only ever errors. */
   offline_capable: boolean;
+  /** The adapter renders the provider's own receipt text. False ⇒ «Джерело
+   * чека» is not offered: `provider` would silently print our layout anyway.
+   * Optional — a backend older than CA6 does not say, and then the choice stays. */
+  receipt_text_capable?: boolean;
   /** As last fetched from the provider; null until the first online contact. */
   requisites: FiscalRequisites | null;
   requisites_fetched_at: string | null;
@@ -1016,6 +1023,8 @@ export interface FiscalActionResult {
   tax_url: string | null;
   qr_payload: string | null;
   receipt_text: string | null;
+  /** See `SaleFiscalDoc.vat_cents`. */
+  vat_cents?: number | null;
   error_code: string | null;
   message: string | null;
 }

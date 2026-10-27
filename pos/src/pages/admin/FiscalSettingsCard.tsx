@@ -32,6 +32,7 @@ import type {
 // Order is the rollout order; the labels are what an owner recognises.
 const PROVIDERS: ReadonlyArray<{ id: FiscalProviderId; label: string }> = [
   { id: 'checkbox', label: 'Checkbox' },
+  { id: 'cashalot', label: 'Cashalot' },
   { id: 'vchasno', label: 'Вчасно.Каса' },
   { id: 'echeck', label: 'Є-Чек' },
 ];
@@ -45,6 +46,7 @@ const CODES_TARGET_MAX = 2000;
 
 const PROVIDER_LABEL: Record<FiscalProviderId, string> = {
   checkbox: 'Checkbox',
+  cashalot: 'Cashalot',
   vchasno: 'Вчасно.Каса',
   echeck: 'Є-Чек',
 };
@@ -161,6 +163,10 @@ export function FiscalSettingsCard() {
   const [enabled, setEnabled] = useState(false);
   const [provider, setProvider] = useState<FiscalProviderId | ''>('');
   const [taxCode, setTaxCode] = useState('');
+  // Sent only once the owner has typed here: a provider bundle may own this
+  // code (Cashalot picks it from its tax table on /admin/fiscal), and a save
+  // of an unrelated switch on this card must not put the old value back.
+  const [taxCodeDirty, setTaxCodeDirty] = useState(false);
   const [autoOpenShift, setAutoOpenShift] = useState(true);
   const [receiptSource, setReceiptSource] = useState<FiscalReceiptSource>('local');
   const [receiptWidth, setReceiptWidth] = useState<FiscalReceiptWidth>(32);
@@ -177,6 +183,7 @@ export function FiscalSettingsCard() {
     setEnabled(view.enabled);
     setProvider(view.provider ?? '');
     setTaxCode(view.default_tax_code ?? '');
+    setTaxCodeDirty(false);
     setAutoOpenShift(view.auto_open_shift);
     setReceiptSource(view.receipt_source === 'provider' ? 'provider' : 'local');
     setReceiptWidth(view.receipt_width === 48 ? 48 : 32);
@@ -209,6 +216,10 @@ export function FiscalSettingsCard() {
   // the dropdown: switching provider drops it server-side anyway, and showing
   // the switch for an unsaved pick would promise something the save undoes.
   const offlineCapable = settings?.offline_capable ?? false;
+  // Same rule for the print source: it is the SAVED provider that can or
+  // cannot render receipt text. A backend that does not say (older than CA6)
+  // keeps the choice on screen.
+  const receiptTextCapable = settings?.receipt_text_capable !== false;
   const month = settings?.offline_month ?? null;
   const monthLow = month ? month.limit_ms - month.used_ms <= 12 * 3_600_000 : false;
   const canGoOffline = offlineCapable && canEnable && enabled;
@@ -238,13 +249,26 @@ export function FiscalSettingsCard() {
       setMessage(`Запас кодів — ціле число від ${CODES_TARGET_MIN} до ${CODES_TARGET_MAX}.`);
       return;
     }
+    // The backend drops the stored credentials with the provider (a Checkbox
+    // licence key is no use to Cashalot); the owner should hear that before
+    // the save, not find the ПРРО screen empty after it.
+    if (
+      settings?.provider &&
+      provider !== settings.provider &&
+      settings.secrets_set.length > 0 &&
+      !window.confirm(
+        `Збережені дані доступу до «${PROVIDER_LABEL[settings.provider]}» буде видалено. Змінити провайдера?`
+      )
+    ) {
+      return;
+    }
     setSaving(true);
     setMessage(null);
     try {
       const saved = await api.updateFiscalSettings({
         enabled: canEnable ? enabled : false,
         provider: provider || null,
-        default_tax_code: taxCode.trim() || null,
+        ...(taxCodeDirty ? { default_tax_code: taxCode.trim() || null } : {}),
         auto_open_shift: autoOpenShift,
         receipt_source: receiptSource,
         receipt_width: receiptWidth,
@@ -256,9 +280,18 @@ export function FiscalSettingsCard() {
       });
       // Merge, never replace: the PATCH response does not carry
       // `adapter_available`, so overwriting would make the warning vanish on
-      // save and reappear on the next reload.
-      setSettings((prev) => ({ ...(prev ?? saved), ...saved }));
+      // save and reappear on the next reload. But the flag describes the
+      // provider the GET saw: after a provider change it is nobody's answer
+      // (the first pick of any provider used to show «немає модуля» until a
+      // reload), so it is dropped until the next read.
+      setSettings((prev) => ({
+        ...(prev ?? saved),
+        ...saved,
+        adapter_available: prev?.provider === saved.provider ? prev?.adapter_available : undefined,
+      }));
       setEnabled(saved.enabled);
+      setTaxCode(saved.default_tax_code ?? '');
+      setTaxCodeDirty(false);
       // The backend silently drops offline mode when the provider changes or
       // fiscalisation goes off; echo what it actually stored.
       setOfflineMode(saved.offline_mode);
@@ -352,40 +385,56 @@ export function FiscalSettingsCard() {
               <input
                 className="sq-input"
                 value={taxCode}
-                onChange={(e) => setTaxCode(e.target.value)}
+                onChange={(e) => {
+                  setTaxCode(e.target.value);
+                  setTaxCodeDirty(true);
+                }}
                 placeholder="напр. A"
               />
+              {settings.provider === 'cashalot' && (
+                <span className="text-[13px] text-sq-muted">
+                  Для Cashalot обирається з таблиці ставок на екрані «Фіскалізація».
+                </span>
+              )}
             </label>
 
-            <div className="grid gap-4 sm:grid-cols-2 items-start">
-              <label className="flex flex-col gap-1.5">
-                <span className={LABEL}>Джерело чека</span>
-                <select
-                  className="sq-input"
-                  value={receiptSource}
-                  onChange={(e) => setReceiptSource(e.target.value as FiscalReceiptSource)}
-                >
-                  <option value="local">Наш макет + фіскальний блок</option>
-                  <option value="provider">Чек від провайдера, як є</option>
-                </select>
-              </label>
+            {/* The print source and roll width matter only where the provider
+                renders a receipt of its own; for one that does not (Cashalot)
+                `provider` would print our layout anyway, so the choice is not
+                shown rather than shown doing nothing. */}
+            {receiptTextCapable && (
+              <>
+                <div className="grid gap-4 sm:grid-cols-2 items-start">
+                  <label className="flex flex-col gap-1.5">
+                    <span className={LABEL}>Джерело чека</span>
+                    <select
+                      className="sq-input"
+                      value={receiptSource}
+                      onChange={(e) => setReceiptSource(e.target.value as FiscalReceiptSource)}
+                    >
+                      <option value="local">Наш макет + фіскальний блок</option>
+                      <option value="provider">Чек від провайдера, як є</option>
+                    </select>
+                  </label>
 
-              <label className="flex flex-col gap-1.5">
-                <span className={LABEL}>Ширина чекової стрічки</span>
-                <select
-                  className="sq-input"
-                  value={receiptWidth}
-                  onChange={(e) => setReceiptWidth(Number(e.target.value) === 48 ? 48 : 32)}
-                >
-                  <option value={32}>58 мм</option>
-                  <option value={48}>80 мм</option>
-                </select>
-              </label>
-            </div>
-            <p className="-mt-2 text-[13px] text-sq-muted">
-              Під неї провайдер верстає свій чек. Принтер кожної каси обирається окремо на екрані
-              «Обладнання».
-            </p>
+                  <label className="flex flex-col gap-1.5">
+                    <span className={LABEL}>Ширина чекової стрічки</span>
+                    <select
+                      className="sq-input"
+                      value={receiptWidth}
+                      onChange={(e) => setReceiptWidth(Number(e.target.value) === 48 ? 48 : 32)}
+                    >
+                      <option value={32}>58 мм</option>
+                      <option value={48}>80 мм</option>
+                    </select>
+                  </label>
+                </div>
+                <p className="-mt-2 text-[13px] text-sq-muted">
+                  Під неї провайдер верстає свій чек. Принтер кожної каси обирається окремо на
+                  екрані «Обладнання».
+                </p>
+              </>
+            )}
 
             {/* Offline mode. Rendered only for a provider whose adapter can do it —
                 for the others this is not "off", it does not exist. The switch

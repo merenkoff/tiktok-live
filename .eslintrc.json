@@ -22,7 +22,8 @@
         "src/pos/gtin/seed-from-dump.ts",
         "src/pos/fiscal/providers/checkbox/sandbox-offline.ts",
         "src/pos/fiscal/providers/checkbox/sandbox-rounding.ts",
-        "src/pos/fiscal/providers/cashalot/sandbox.ts"
+        "src/pos/fiscal/providers/cashalot/sandbox.ts",
+        "src/__tests__/helpers/fake-cashalot-server.ts"
       ],
       "rules": {
         "no-console": "off"

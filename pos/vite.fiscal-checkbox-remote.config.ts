@@ -34,6 +34,8 @@ export default defineConfig({
     'process.env.NODE_ENV': '"production"',
     // This remote's own build version — see roadmap #6.
     __POS_APP_VERSION__: JSON.stringify(posAppVersion()),
+    // Which bundle `fiscal-core`'s diagnostics are speaking for.
+    __POS_FISCAL_MODULE__: JSON.stringify('fiscal-checkbox'),
   },
   build: {
     outDir: 'dist-remotes/fiscal-checkbox',

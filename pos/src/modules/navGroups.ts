@@ -39,6 +39,7 @@ const MODULE_GROUP: Record<string, NavGroupId> = {
   staff: 'system',
   hardware: 'system',
   'fiscal-checkbox': 'system',
+  'fiscal-cashalot': 'system',
   settings: 'system',
 };
 

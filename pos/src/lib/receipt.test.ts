@@ -630,3 +630,50 @@ describe('a weighed line on the receipt (TechDocs/grocery/G4_WEIGHED.md)', () =>
     ]);
   });
 });
+
+describe('buildReceiptPayload — a second provider (Cashalot, CA6)', () => {
+  const doneDoc = {
+    status: 'done',
+    fiscal_code: '100002',
+    fiscal_date: '2026-10-27T11:59:03.000Z',
+    tax_url: 'https://cabinet.tax.gov.ua/cashregs/check?id=100002&fn=4000000004',
+    qr_payload: null,
+    receipt_text: null,
+    error_code: null,
+    error_message: null,
+  };
+
+  it('names the producer the way Cashalot spells it (рядок 35)', () => {
+    const payload = buildReceiptPayload(
+      makeSaleDetail({ fiscal: doneDoc }),
+      fiscalStore({ provider: 'cashalot' })
+    );
+    expect(payload.fiscal?.producer).toBe('ПРРО Cashalot');
+  });
+
+  it('prints the VAT the provider registered over its own arithmetic', () => {
+    // 45 000 at 20 % is 7 500 by the direct formula; the registered figure
+    // wins whatever it is, because it is what the tax office was told.
+    const sale = makeSaleDetail({ total_cents: 45000, fiscal: { ...doneDoc, vat_cents: 7499 } });
+    expect(buildReceiptPayload(sale, fiscalStore({ provider: 'cashalot' })).vat_lines).toEqual([
+      { symbol: 'А', rate: 20, amount_cents: 7499 },
+    ]);
+    // Null (Checkbox) and absent (an older backend) both fall back to the arithmetic.
+    const unknown = makeSaleDetail({ total_cents: 45000, fiscal: { ...doneDoc, vat_cents: null } });
+    expect(buildReceiptPayload(unknown, fiscalStore()).vat_lines).toEqual([
+      { symbol: 'А', rate: 20, amount_cents: 7500 },
+    ]);
+  });
+
+  it('does the same on a refund', () => {
+    const payload = buildRefundReceiptPayload(
+      makeSaleDetail({ payments: [{ id: 200, method: 'cash', amount_cents: 45000 }] }),
+      makeRefund({ total_cents: 22500 }),
+      [{ sale_item_id: 100, quantity: 1 }],
+      fiscalStore({ provider: 'cashalot' }),
+      { ...doneDoc, status: 'done', message: null, vat_cents: 3749 }
+    );
+    expect(payload.vat_lines).toEqual([{ symbol: 'А', rate: 20, amount_cents: 3749 }]);
+    expect(payload.fiscal?.producer).toBe('ПРРО Cashalot');
+  });
+});
