@@ -23,7 +23,7 @@ export default defineConfig({
     // `build:debts-remote` / `build:vertical-grocery-remote`: those specs serve
     // the real, signed bundles from a fake CDN and drive them inside the web shell.
     command:
-      'VITE_REMOTE_ALLOW_DEV_KEY=1 npm run build && npm run build:stocktake-remote && npm run build:vertical-flowers-remote && npm run build:vertical-cafe-remote && npm run build:tables-remote && npm run build:debts-remote && npm run build:vertical-grocery-remote && npm run preview -- --host localhost --port 4173',
+      'VITE_REMOTE_ALLOW_DEV_KEY=1 npm run build && npm run build:stocktake-remote && npm run build:vertical-flowers-remote && npm run build:vertical-cafe-remote && npm run build:tables-remote && npm run build:debts-remote && npm run build:fiscal-cashalot-remote &&npm run build:vertical-grocery-remote && npm run preview -- --host localhost --port 4173',
     url: 'http://localhost:4173',
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
