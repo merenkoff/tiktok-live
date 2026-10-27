@@ -82,7 +82,7 @@ URL бандла после успеха:
 ```
 https://cdn.jsdelivr.net/gh/merenkoff/tiktok-live@module-fiscal-checkbox-v<версия>/fiscal-checkbox/remote-entry.js
 ```
-(версию подставить из `pos/package.json`, на момент написания — `1.1.0`).
+(версию подставить из `pos/package.json`).
 
 **Этот шаг ничего не меняет ни для одного магазина** — просто кладёт файл
 на CDN. Подключение — шаги 3–4.
