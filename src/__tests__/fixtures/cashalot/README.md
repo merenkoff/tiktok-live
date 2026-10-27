@@ -82,6 +82,6 @@ node -e "fetch('https://fsapi.cashalot.org.ua/',{method:'POST',headers:{'content
      впускає ФСКО довільні адреси, лишається відкритим: повторити пробу,
      коли `ServerState` поверне `Available: true`. Висновок — у
      `TechDocs/prro/POS_FISCAL_OFFLINE.md`.
-   - `Available: false` два дні поспіль — той самий збій ДПС, не стан нашої
+   - `Available: false` в обох пробах (12:15 і 21:24 UTC того ж дня) — той самий збій ДПС, не стан нашої
      сесії; документи в цей час реєструються в офлайн-сесії Cashalot, якщо
      ПРРО дозволено офлайн формою 1-ПРРО.
