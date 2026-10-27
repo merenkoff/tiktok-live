@@ -73,11 +73,24 @@ function defaultTax(store: ReceiptStoreInfo) {
  * Рядок 21. Prices are VAT-inclusive, so the tax inside `total` is
  * `total × rate / (100 + rate)`; one line, because every position carries the
  * store's default letter today. Empty for a non-VAT rate.
+ *
+ * When the document carries the figure the provider REGISTERED (`vat_cents`,
+ * Cashalot's own `CHECKTAX`), that figure is printed instead: the ДПС
+ * arithmetic is «base minus the rounded net», which differs from the direct
+ * formula by a kopeck on a tie, and the paper must say what the tax office
+ * was told.
  */
-function vatLines(store: ReceiptStoreInfo, totalCents: number): ReceiptVatLine[] {
+function vatLines(
+  store: ReceiptStoreInfo,
+  totalCents: number,
+  registered?: number | null
+): ReceiptVatLine[] {
   const tax = defaultTax(store);
   if (!tax || tax.no_vat || tax.rate <= 0) return [];
-  const amount = Math.round((Math.abs(totalCents) * tax.rate) / (100 + tax.rate));
+  const amount =
+    typeof registered === 'number'
+      ? Math.abs(registered)
+      : Math.round((Math.abs(totalCents) * tax.rate) / (100 + tax.rate));
   return [{ symbol: tax.symbol, rate: tax.rate, amount_cents: amount }];
 }
 
@@ -115,10 +128,16 @@ function weighedRow(item: {
   };
 }
 
+/** Рядок 35: the ПРРО's name as its producer spells it; the raw id for one this build does not know. */
+const PRODUCER: Readonly<Record<string, string>> = {
+  checkbox: 'ПРРО Checkbox',
+  cashalot: 'ПРРО Cashalot',
+};
+
 function producerOf(store: ReceiptStoreInfo): string | null {
   const provider = store.fiscal?.provider;
   if (!provider) return null;
-  return provider === 'checkbox' ? 'ПРРО Checkbox' : `ПРРО ${provider}`;
+  return PRODUCER[provider] ?? `ПРРО ${provider}`;
 }
 
 /**
@@ -205,7 +224,7 @@ export function buildReceiptPayload(
   return {
     ...fiscalParts(sale.fiscal, store),
     header: headerOf(store),
-    vat_lines: vatLines(store, sale.total_cents),
+    vat_lines: vatLines(store, sale.total_cents, sale.fiscal?.vat_cents),
     change_cents: changeCents(sale.payments, sale.total_cents + rounding),
     rounding_cents: rounding || null,
     store_name: store.name,
@@ -286,7 +305,7 @@ export function buildRefundReceiptPayload(
   return {
     ...fiscalParts(fiscal, store),
     header: headerOf(store),
-    vat_lines: vatLines(store, refund.total_cents),
+    vat_lines: vatLines(store, refund.total_cents, fiscal?.vat_cents),
     // Money goes out, never back to the customer as change.
     change_cents: null,
     rounding_cents: rounding || null,

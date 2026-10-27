@@ -160,6 +160,12 @@ export interface FiscalView {
   tax_url: string | null;
   qr_payload: string | null;
   receipt_text: string | null;
+  /**
+   * The VAT the provider registered, when its adapter computes one (Cashalot's
+   * own `CHECKTAX`). The till prints this figure rather than its own
+   * arithmetic, which differs by a kopeck on a tie. Null for Checkbox.
+   */
+  vat_cents: number | null;
   error_code: string | null;
   message: string | null;
 }
@@ -461,6 +467,7 @@ function toView(row: ledger.FiscalReceiptRow, result: FiscalResult | null): Fisc
       tax_url: result.taxUrl,
       qr_payload: result.qrPayload,
       receipt_text: result.receiptText,
+      vat_cents: result.vatCents ?? null,
       error_code: null,
       message: null,
     };
@@ -474,6 +481,7 @@ function toView(row: ledger.FiscalReceiptRow, result: FiscalResult | null): Fisc
     tax_url: null,
     qr_payload: null,
     receipt_text: null,
+    vat_cents: null,
     error_code: row.error_code,
     message: row.error_message,
   };
@@ -495,6 +503,7 @@ function offlineView(row: ledger.FiscalReceiptRow): FiscalView {
     tax_url: row.tax_url ?? null,
     qr_payload: null,
     receipt_text: null,
+    vat_cents: null,
     error_code: null,
     message: null,
   };

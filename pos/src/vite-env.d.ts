@@ -20,3 +20,10 @@ interface ImportMeta {
  * through `POS_APP_VERSION` in `src/platform/version.ts`, which falls back.
  */
 declare const __POS_APP_VERSION__: string | undefined;
+
+/**
+ * The provider bundle `fiscal-core` is compiled into (`'fiscal-checkbox'`,
+ * `'fiscal-cashalot'`), stamped by that bundle's Vite config. Absent in the
+ * host build and under tests.
+ */
+declare const __POS_FISCAL_MODULE__: string | undefined;

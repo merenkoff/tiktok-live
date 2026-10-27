@@ -24,6 +24,7 @@ import {
   OFFLINE_CODES_TARGET_MIN,
   isFiscalProviderId,
   type FiscalCredentials,
+  type FiscalProviderId,
   type FiscalReceiptWidth,
   type FiscalSettingsPatch,
   type FiscalSettingsView,
@@ -132,6 +133,21 @@ async function hasLiveShift(storeId: number): Promise<boolean> {
   return live.rows.length > 0;
 }
 
+/**
+ * Documents the retry cron still owes the provider: the same rows
+ * `retryPendingFiscalDocs` would claim — not yet delivered and not parked
+ * for a human (a parked row has no `next_attempt_at`).
+ */
+async function countPendingDocuments(storeId: number): Promise<number> {
+  const result = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM pos_fiscal_receipts
+     WHERE store_id = $1 AND status IN ('pending', 'sent', 'failed')
+       AND (status <> 'failed' OR next_attempt_at IS NOT NULL)`,
+    [storeId]
+  );
+  return Number(result.rows[0]?.n ?? 0);
+}
+
 /** The row, or null when the store has never configured fiscalisation. */
 export async function getFiscalSettings(storeId: number): Promise<PosFiscalSettings | null> {
   const result = await pool.query(`SELECT * FROM pos_fiscal_settings WHERE store_id = $1`, [
@@ -189,6 +205,7 @@ export function toFiscalSettingsView(
       offline_mode: false,
       offline_codes_target: OFFLINE_CODES_TARGET_DEFAULT,
       offline_capable: false,
+      receipt_text_capable: false,
       requisites: null,
       requisites_fetched_at: null,
       updated_at: null,
@@ -226,8 +243,14 @@ export function toFiscalSettingsView(
       ? new Date(settings.requisites_fetched_at).toISOString()
       : null,
     offline_capable: isOfflineCapable(settings.provider),
+    receipt_text_capable: isReceiptTextCapable(settings.provider),
     updated_at: settings.updated_at ? new Date(settings.updated_at).toISOString() : null,
   };
+}
+
+function isReceiptTextCapable(provider: FiscalProviderId | null): boolean {
+  if (!provider || !hasProvider(provider)) return false;
+  return typeof getProvider(provider).renderReceipt === 'function';
 }
 
 function validateConfig(input: unknown): Record<string, unknown> {
@@ -325,7 +348,9 @@ export async function updateFiscalSettings(
     if (raw === null || raw === '') {
       defaultTaxCode = null;
     } else if (typeof raw !== 'string' || !TAX_CODE_RE.test(raw.trim())) {
-      throw new FiscalSettingsValidationError('default_tax_code must be 1-16 of [A-Za-z0-9_-]');
+      throw new FiscalSettingsValidationError(
+        'Код ставки — від 1 до 16 латинських літер, цифр, «_» або «-»'
+      );
     } else {
       defaultTaxCode = raw.trim();
     }
@@ -393,11 +418,15 @@ export async function updateFiscalSettings(
   if (patch.config !== undefined && provider && hasProvider(provider)) {
     const adapter = getProvider(provider);
     if (adapter.normalizeConfig) {
-      const shiftOpen = await hasLiveShift(storeId);
+      const [shiftOpen, pendingDocuments] = await Promise.all([
+        hasLiveShift(storeId),
+        countPendingDocuments(storeId),
+      ]);
       try {
         config = adapter.normalizeConfig(config, {
           previous: providerChanged ? null : (existing?.config ?? null),
           shiftOpen,
+          pendingDocuments,
         });
       } catch (error) {
         throw new FiscalSettingsValidationError(
@@ -408,6 +437,9 @@ export async function updateFiscalSettings(
       config = validateConfig(config);
     }
   }
+
+  const configChanged =
+    patch.config !== undefined && JSON.stringify(config) !== JSON.stringify(existing?.config ?? {});
 
   let offlineCodesTarget = existing?.offline_codes_target ?? OFFLINE_CODES_TARGET_DEFAULT;
   if (patch.offline_codes_target !== undefined) {
@@ -469,6 +501,8 @@ export async function updateFiscalSettings(
        receipt_width = EXCLUDED.receipt_width,
        offline_mode = EXCLUDED.offline_mode,
        offline_codes_target = EXCLUDED.offline_codes_target,
+       requisites_fetched_at = CASE WHEN $13::boolean THEN NULL
+                                    ELSE pos_fiscal_settings.requisites_fetched_at END,
        updated_at = NOW()
      RETURNING *`,
     [
@@ -484,6 +518,11 @@ export async function updateFiscalSettings(
       receiptWidth,
       offlineMode,
       offlineCodesTarget,
+      // The cached requisites may be built FROM the config (Cashalot's tax
+      // table is what `fetchRequisites` answers with), and the till prints
+      // from that cache for up to a day. A changed config ages it out, so the
+      // next shift open — or the owner's connection test — reads it afresh.
+      configChanged,
     ]
   );
 

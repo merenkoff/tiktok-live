@@ -20,7 +20,18 @@
 //
 // `signal` is always the caller's: one deadline per fiscal phase.
 
-export const CASHALOT_BASE_URL = 'https://fsapi.cashalot.org.ua/';
+const CASHALOT_CLOUD_URL = 'https://fsapi.cashalot.org.ua/';
+
+/**
+ * Where the adapter talks to. The cloud, except that a local run may point
+ * it at a stub (`src/__tests__/helpers/fake-cashalot-server.ts`) through
+ * `CASHALOT_BASE_URL` — never in production, where a stray variable must not
+ * be able to send a store's receipts anywhere but Cashalot.
+ */
+export const CASHALOT_BASE_URL =
+  process.env.NODE_ENV !== 'production' && process.env.CASHALOT_BASE_URL?.trim()
+    ? process.env.CASHALOT_BASE_URL.trim()
+    : CASHALOT_CLOUD_URL;
 
 export class CashalotApiError extends Error {
   constructor(

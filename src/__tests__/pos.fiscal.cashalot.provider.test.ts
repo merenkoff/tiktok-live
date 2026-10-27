@@ -247,3 +247,32 @@ describe('cashalotProvider — documents', () => {
     expect(await cashalotProvider.fetchDocument(ctx(), '999')).toBeNull();
   });
 });
+
+describe('cashalotProvider — the config hook', () => {
+  const taxes = [{ letter: 'А', name: 'ПДВ', rate: 20 }];
+  const normalize = (next: Record<string, unknown>, ctx: Partial<Parameters<NonNullable<typeof cashalotProvider.normalizeConfig>>[1]>) =>
+    cashalotProvider.normalizeConfig!(next, { previous: null, shiftOpen: false, ...ctx });
+
+  it('canonises the table and the mode, keeps the register key, drops the rest', () => {
+    expect(normalize({ taxes, testing: true, cashRegisterKey: ' 42 ', stray: 1 }, {})).toEqual({
+      taxes: [{ letter: 'А', name: 'ПДВ', type: 0, rate: 20 }],
+      testing: true,
+      cashRegisterKey: '42',
+    });
+  });
+
+  it('refuses a table or mode change inside an open shift', () => {
+    const previous = { taxes, testing: false };
+    expect(() => normalize({ taxes, testing: true }, { previous, shiftOpen: true })).toThrow(/закритій зміні/);
+    expect(() => normalize({ taxes: [], testing: false }, { previous, shiftOpen: true })).toThrow(/закритій зміні/);
+    expect(normalize({ taxes, testing: false }, { previous, shiftOpen: true })).toMatchObject({ testing: false });
+  });
+
+  it('refuses a mode change while documents are still to be delivered — shift open or not', () => {
+    const previous = { taxes, testing: false };
+    expect(() => normalize({ taxes, testing: true }, { previous, pendingDocuments: 1 })).toThrow(/ще реєструються/);
+    // The table may change: a retry carries its letters in the stored check.
+    expect(normalize({ taxes: [], testing: false }, { previous, pendingDocuments: 1 })).toMatchObject({ taxes: [] });
+    expect(normalize({ taxes, testing: true }, { previous, pendingDocuments: 0 })).toMatchObject({ testing: true });
+  });
+});

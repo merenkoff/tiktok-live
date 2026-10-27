@@ -28,6 +28,11 @@ export interface FiscalStatus {
     auto_close_due_at: string | null;
   } | null;
   error: { code: string; message: string } | null;
+  /**
+   * The register runs in TEST mode (Cashalot `config.testing`): documents
+   * without fiscal force. Optional — a backend older than CA6 does not say.
+   */
+  testing?: boolean;
   /** Offline mode (TechDocs/prro/POS_FISCAL_OFFLINE.md). Always present — a store
    * that cannot or does not use it reports `capable`/`enabled` false. */
   offline: OfflineStatusBlock;

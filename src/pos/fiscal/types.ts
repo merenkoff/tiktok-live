@@ -160,6 +160,12 @@ export interface FiscalSettingsView {
   offline_codes_target: number;
   /** Whether the chosen provider's adapter can work offline at all. */
   offline_capable: boolean;
+  /**
+   * Whether the adapter renders the provider's own receipt text
+   * (`renderReceipt`). Without it `receipt_source = 'provider'` changes
+   * nothing — the till falls back to our layout — so the host hides the choice.
+   */
+  receipt_text_capable: boolean;
   /** The provider's view of the store, as last fetched; null until the first online contact. */
   requisites: FiscalRequisites | null;
   requisites_fetched_at: string | null;
@@ -415,6 +421,13 @@ export interface FiscalConfigContext {
   previous: Readonly<Record<string, unknown>> | null;
   /** Whether a shift is live for the store (`pos_fiscal_shifts` opening/open/closing). */
   shiftOpen: boolean;
+  /**
+   * Documents of the store still to be delivered — `pending`/`failed` rows
+   * the retry cron will send again. A retry re-sends the STORED payload under
+   * the CURRENT config, so a provider whose config decides what a document is
+   * (Cashalot's `testing`) refuses that change while this is above zero.
+   */
+  pendingDocuments?: number;
 }
 
 export type FiscalShiftStatus = 'open' | 'closed';

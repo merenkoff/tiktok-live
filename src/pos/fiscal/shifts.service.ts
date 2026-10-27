@@ -497,6 +497,12 @@ export interface FiscalStatus {
     opened_at: string | null;
     auto_close_due_at: string | null;
   } | null;
+  /**
+   * The store registers TEST documents (Cashalot `config.testing`): no fiscal
+   * force, the till says so on its shift screen. Here rather than in the
+   * settings view because the cashier cannot read that one.
+   */
+  testing: boolean;
   /** Set when the status could not be read; the UI shows it verbatim. */
   error: { code: string; message: string } | null;
 }
@@ -516,6 +522,7 @@ export async function getStatus(storeId: number, signal: AbortSignal): Promise<F
     configured: false,
     auto_open_shift: settings?.auto_open_shift ?? true,
     shift: null,
+    testing: settings?.config?.testing === true,
     error: null,
   };
   if (!base.enabled) return base;

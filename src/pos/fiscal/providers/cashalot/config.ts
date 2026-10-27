@@ -45,13 +45,19 @@ export function normalizeCashalotConfig(
   const taxes = normalizeTaxTable(next.taxes);
   const testing = next.testing === true;
 
-  if (ctx.shiftOpen) {
-    const before = readConfigSafe(ctx.previous);
-    if (!sameTaxes(before.taxes, taxes) || before.testing !== testing) {
-      throw new DpsTaxTableError(
-        'Ставки податку й тестовий режим змінюються лише при закритій зміні — закрийте зміну й збережіть знову'
-      );
-    }
+  const before = readConfigSafe(ctx.previous);
+  if (ctx.shiftOpen && (!sameTaxes(before.taxes, taxes) || before.testing !== testing)) {
+    throw new DpsTaxTableError(
+      'Ставки податку й тестовий режим змінюються лише при закритій зміні — закрийте зміну й збережіть знову'
+    );
+  }
+  // A retry re-sends the stored check under the CURRENT `testing`: a sale rung
+  // as a test would reach the tax office as a fiscal one, or the other way
+  // round. So the mode waits for the queue to drain, shift open or not.
+  if (before.testing !== testing && (ctx.pendingDocuments ?? 0) > 0) {
+    throw new DpsTaxTableError(
+      'Є чеки, що ще реєструються в ПРРО, — дочекайтеся їх, перш ніж міняти тестовий режим'
+    );
   }
 
   return {

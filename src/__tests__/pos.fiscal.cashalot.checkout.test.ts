@@ -109,6 +109,27 @@ describe.skipIf(!hasDb)('POS fiscal — Cashalot through the orchestration', () 
       CHECKBODY: [{ LETTERS: 'А', UNITCD: 2009, UNITNM: 'шт' }],
     });
     expect(row).toMatchObject({ status: 'done', fiscal_code: '100002', provider_doc_id: '100002', vat_cents: 1000 });
+    // The till prints the VAT Cashalot registered, not its own arithmetic.
+    expect(res.json().fiscal.vat_cents).toBe(1000);
+    const sale = await app.inject({
+      method: 'GET',
+      url: `/api/pos/sales/${res.json().id}`,
+      headers: auth(store.ownerToken),
+    });
+    expect(sale.json().fiscal.vat_cents).toBe(1000);
+  });
+
+  it('tells the till whether the register runs in test mode', async () => {
+    const status = () =>
+      app.inject({ method: 'GET', url: '/api/pos/fiscal/status', headers: auth(store.sellerToken) });
+    expect((await status()).json().testing).toBe(false);
+    await updateFiscalSettings(store.storeId, {
+      config: { taxes: [{ letter: 'А', name: 'ПДВ', rate: 20 }], testing: true },
+    });
+    expect((await status()).json().testing).toBe(true);
+    await updateFiscalSettings(store.storeId, {
+      config: { taxes: [{ letter: 'А', name: 'ПДВ', rate: 20 }], testing: false },
+    });
   });
 
   it('fiscalises a refund against the sale’s fiscal number', async () => {

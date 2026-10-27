@@ -470,4 +470,57 @@ describe.skipIf(!hasDb)('POS fiscal settings — the provider config hook', () =
     expect((await patch({ provider: 'vchasno', auto_open_shift: false })).statusCode).toBe(200);
     expect(seen).toHaveLength(0);
   });
+
+  it('tells the hook how many documents the retry cron still owes the provider', async () => {
+    install((next) => ({ ...next }));
+    const insert = (status: string, nextAttempt: string | null) =>
+      pool.query(
+        `INSERT INTO pos_fiscal_receipts
+           (store_id, doc_type, provider, status, provider_request_id, next_attempt_at)
+         VALUES ($1, 'service_in', 'vchasno', $2, gen_random_uuid(), $3)`,
+        [store.storeId, status, nextAttempt]
+      );
+    try {
+      await insert('pending', null);
+      await insert('failed', '2099-01-01');
+      // Parked for a human — nothing will re-send it, so it does not count.
+      await insert('failed', null);
+      await insert('done', null);
+      expect((await patch({ provider: 'vchasno', config: { c: 1 } })).statusCode).toBe(200);
+      expect(seen.at(-1)?.pendingDocuments).toBe(2);
+    } finally {
+      await pool.query(`DELETE FROM pos_fiscal_receipts WHERE store_id = $1`, [store.storeId]);
+    }
+  });
+
+  it('ages the cached requisites out when the config changes, and only then', async () => {
+    install((next) => ({ ...next }));
+    expect((await patch({ provider: 'vchasno', config: { d: 1 } })).statusCode).toBe(200);
+    await pool.query(
+      `UPDATE pos_fiscal_settings SET requisites = '{}'::jsonb, requisites_fetched_at = NOW() WHERE store_id = $1`,
+      [store.storeId]
+    );
+    const fetchedAt = async () =>
+      (await pool.query(`SELECT requisites_fetched_at FROM pos_fiscal_settings WHERE store_id = $1`, [store.storeId]))
+        .rows[0].requisites_fetched_at;
+
+    expect((await patch({ config: { d: 1 } })).statusCode).toBe(200);
+    expect(await fetchedAt()).not.toBeNull();
+    expect((await patch({ auto_open_shift: false })).statusCode).toBe(200);
+    expect(await fetchedAt()).not.toBeNull();
+
+    expect((await patch({ config: { d: 2 } })).statusCode).toBe(200);
+    expect(await fetchedAt()).toBeNull();
+  });
+
+  it('says which providers render their own receipt text', async () => {
+    const view = async () =>
+      (await app.inject({ method: 'GET', url: '/api/pos/fiscal/settings', headers: auth(store.ownerToken) })).json();
+    expect((await patch({ provider: 'checkbox' })).statusCode).toBe(200);
+    expect((await view()).receipt_text_capable).toBe(true);
+    expect((await patch({ provider: 'cashalot' })).statusCode).toBe(200);
+    expect((await view()).receipt_text_capable).toBe(false);
+    expect((await patch({ provider: null })).statusCode).toBe(200);
+    expect((await view()).receipt_text_capable).toBe(false);
+  });
 });

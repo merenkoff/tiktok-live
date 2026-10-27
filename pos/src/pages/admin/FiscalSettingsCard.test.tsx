@@ -346,3 +346,91 @@ describe('FiscalSettingsCard', () => {
     expect(await screen.findByRole('button', { name: 'Спробувати ще раз' })).toBeInTheDocument();
   });
 });
+
+describe('FiscalSettingsCard — a second provider (Cashalot, CA6)', () => {
+  it('offers Cashalot and hides the print source for a provider that renders no receipt text', async () => {
+    fiscalSettings.mockResolvedValue(view({ provider: 'cashalot', receipt_text_capable: false }));
+    renderWithProviders(<FiscalSettingsCard />);
+    const select = await screen.findByLabelText('Провайдер');
+    expect(select).toHaveValue('cashalot');
+    expect(screen.getByRole('option', { name: 'Cashalot' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Джерело чека')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Ширина чекової стрічки')).not.toBeInTheDocument();
+    expect(screen.getByText(/обирається з таблиці ставок/)).toBeInTheDocument();
+  });
+
+  it('keeps the print source on screen when the backend does not say (older than CA6)', async () => {
+    fiscalSettings.mockResolvedValue(view({ provider: 'checkbox' }));
+    renderWithProviders(<FiscalSettingsCard />);
+    expect(await screen.findByLabelText('Джерело чека')).toBeInTheDocument();
+  });
+
+  it('sends the default tax code only once the owner has typed it', async () => {
+    fiscalSettings.mockResolvedValue(view({ provider: 'cashalot', default_tax_code: 'YE' }));
+    updateFiscalSettings.mockResolvedValue(view({ provider: 'cashalot', default_tax_code: 'YE' }));
+    renderWithProviders(<FiscalSettingsCard />);
+    await screen.findByLabelText('Провайдер');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Зберегти ПРРО' }));
+    await waitFor(() => expect(updateFiscalSettings).toHaveBeenCalledTimes(1));
+    expect(updateFiscalSettings.mock.calls[0][0]).not.toHaveProperty('default_tax_code');
+
+    const field = screen.getByLabelText(/Код ставки за замовчуванням/);
+    await userEvent.clear(field);
+    await userEvent.type(field, 'A');
+    await userEvent.click(screen.getByRole('button', { name: 'Зберегти ПРРО' }));
+    await waitFor(() => expect(updateFiscalSettings).toHaveBeenCalledTimes(2));
+    expect(updateFiscalSettings.mock.calls[1][0]).toMatchObject({ default_tax_code: 'A' });
+  });
+
+  it('asks before a provider change throws the saved credentials away', async () => {
+    fiscalSettings.mockResolvedValue(view({ provider: 'checkbox', secrets_set: ['licenceKey', 'cashierPin'] }));
+    updateFiscalSettings.mockResolvedValue(view({ provider: 'cashalot' }));
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    try {
+      renderWithProviders(<FiscalSettingsCard />);
+      await userEvent.selectOptions(await screen.findByLabelText('Провайдер'), 'cashalot');
+      await userEvent.click(screen.getByRole('button', { name: 'Зберегти ПРРО' }));
+      expect(confirm).toHaveBeenCalledWith(expect.stringContaining('«Checkbox» буде видалено'));
+      expect(updateFiscalSettings).not.toHaveBeenCalled();
+
+      confirm.mockReturnValue(true);
+      await userEvent.click(screen.getByRole('button', { name: 'Зберегти ПРРО' }));
+      await waitFor(() =>
+        expect(updateFiscalSettings).toHaveBeenCalledWith(expect.objectContaining({ provider: 'cashalot' }))
+      );
+    } finally {
+      confirm.mockRestore();
+    }
+  });
+
+  it('does not ask when no credentials are stored yet', async () => {
+    fiscalSettings.mockResolvedValue(view({ provider: 'checkbox', secrets_set: [] }));
+    updateFiscalSettings.mockResolvedValue(view({ provider: 'cashalot' }));
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    try {
+      renderWithProviders(<FiscalSettingsCard />);
+      await userEvent.selectOptions(await screen.findByLabelText('Провайдер'), 'cashalot');
+      await userEvent.click(screen.getByRole('button', { name: 'Зберегти ПРРО' }));
+      await waitFor(() => expect(updateFiscalSettings).toHaveBeenCalledTimes(1));
+      expect(confirm).not.toHaveBeenCalled();
+    } finally {
+      confirm.mockRestore();
+    }
+  });
+});
+
+describe('FiscalSettingsCard — adapter_available after a provider change', () => {
+  it('does not carry the no-provider answer over to the provider just saved', async () => {
+    // The GET with no provider says `adapter_available: false` (there is no
+    // adapter for «nothing»); the PATCH answer says nothing about it.
+    fiscalSettings.mockResolvedValue(view({ provider: null, adapter_available: false }));
+    updateFiscalSettings.mockResolvedValue(view({ provider: 'cashalot' }));
+    renderWithProviders(<FiscalSettingsCard />);
+    await userEvent.selectOptions(await screen.findByLabelText('Провайдер'), 'cashalot');
+    await userEvent.click(screen.getByRole('button', { name: 'Зберегти ПРРО' }));
+    expect(await screen.findByText('Збережено')).toBeInTheDocument();
+    expect(screen.queryByText(/немає модуля/)).not.toBeInTheDocument();
+    expect(toggle()).not.toBeDisabled();
+  });
+});
