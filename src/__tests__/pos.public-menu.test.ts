@@ -187,6 +187,8 @@ describe.skipIf(!hasDb)('POS guest QR menu', () => {
         auto_kitchen: 'off',
         auto_limit_cents: 200000,
         auto_ack_at: null,
+        slug_enabled: false,
+        slug_url: expect.stringMatching(new RegExp(`/m/${cafe.slug}$`)),
         print: null,
       });
       expect((await page('never_issued_1')).statusCode).toBe(404);
@@ -279,7 +281,7 @@ describe.skipIf(!hasDb)('POS guest QR menu', () => {
       expect(offJson.body).toBe(unknownJson.body);
     });
 
-    it('never treats the slug as a key', async () => {
+    it('never treats the slug as a key unless the owner asked for the short address', async () => {
       expect((await page(cafe.slug)).statusCode).toBe(404);
       expect((await json(cafe.slug)).statusCode).toBe(404);
     });
@@ -291,6 +293,110 @@ describe.skipIf(!hasDb)('POS guest QR menu', () => {
       await pool.query(`UPDATE pos_stores SET vertical = 'cafe' WHERE id = $1`, [other.storeId]);
       invalidatePublicMenu(other.storeId);
       expect((await page(otherToken)).statusCode).toBe(200);
+    });
+  });
+
+  describe('the short address (080)', () => {
+    const short = (store: TestStore, enabled: boolean, bearer = store.ownerToken) =>
+      app.inject({
+        method: 'PATCH',
+        url: '/api/pos/store/public-menu',
+        headers: auth(bearer),
+        payload: { slug_enabled: enabled },
+      });
+
+    afterEach(async () => {
+      await pool.query(`UPDATE pos_stores SET public_menu_slug_enabled = FALSE WHERE id = ANY($1::bigint[])`, [
+        [cafe.storeId, other.storeId],
+      ]);
+      invalidatePublicMenu(cafe.storeId);
+      invalidatePublicMenu(other.storeId);
+    });
+
+    it('opens the menu at /m/<slug> once the owner ticks it, beside the token, and stops when unticked', async () => {
+      expect((await page(cafe.slug)).statusCode).toBe(404);
+      const on = await short(cafe, true);
+      expect(on.statusCode).toBe(200);
+      expect(on.json()).toMatchObject({
+        slug_enabled: true,
+        slug_url: expect.stringMatching(new RegExp(`/m/${cafe.slug}$`)),
+        token,
+        enabled: true,
+      });
+
+      const viaSlug = await page(cafe.slug);
+      expect(viaSlug.statusCode).toBe(200);
+      // The page's own calls go to the address it was opened by, so the poll works there too.
+      expect(viaSlug.body).toContain(`data-menu-url="/api/pos/public/menu/${cafe.slug}"`);
+      expect((await json(cafe.slug)).json()).toEqual(await menu(token));
+      expect((await page(token)).statusCode).toBe(200);
+      // Typed by hand into a bio: the till's login is case-blind, so is this.
+      expect((await page(cafe.slug.toUpperCase())).statusCode).toBe(200);
+      expect((await page(cafe.slug, '/qr')).statusCode).toBe(200);
+
+      const off = await short(cafe, false);
+      expect(off.json().slug_enabled).toBe(false);
+      const gone = await page(cafe.slug);
+      expect(gone.statusCode).toBe(404);
+      expect(gone.body).toBe((await page('a_token_nobody_has')).body);
+      expect((await page(token)).statusCode).toBe(200);
+    });
+
+    it('answers only while the menu itself is published, like the token', async () => {
+      await short(cafe, true);
+      await enable(cafe, false);
+      expect((await page(cafe.slug)).statusCode).toBe(404);
+      expect((await json(cafe.slug)).statusCode).toBe(404);
+      await enable(cafe, true);
+      expect((await page(cafe.slug)).statusCode).toBe(200);
+    });
+
+    it('survives a rotation: only the token address changes', async () => {
+      await short(cafe, true);
+      const oldToken = token;
+      token = (await rotate(cafe)).json().token;
+      expect((await page(oldToken)).statusCode).toBe(404);
+      expect((await page(cafe.slug)).statusCode).toBe(200);
+    });
+
+    it('never opens another store: one store’s short address is not another’s', async () => {
+      await short(other, true);
+      const theirs = await json(other.slug);
+      expect(theirs.statusCode).toBe(200);
+      expect(JSON.stringify(theirs.json())).toContain('Чужа ');
+      expect((await page(cafe.slug)).statusCode).toBe(404);
+    });
+
+    it('refuses a slug that some store’s token already spells, so the link cannot open their menu', async () => {
+      await pool.query(`UPDATE pos_stores SET public_menu_token = $2 WHERE id = $1`, [other.storeId, cafe.slug]);
+      try {
+        const res = await short(cafe, true);
+        expect(res.statusCode).toBe(409);
+        expect(res.json().error).toMatch(/зайнята/);
+        const row = await pool.query(`SELECT public_menu_slug_enabled FROM pos_stores WHERE id = $1`, [cafe.storeId]);
+        expect(row.rows[0].public_menu_slug_enabled).toBe(false);
+      } finally {
+        await pool.query(`UPDATE pos_stores SET public_menu_token = $2 WHERE id = $1`, [other.storeId, otherToken]);
+        invalidatePublicMenu(other.storeId);
+      }
+    });
+
+    it('is the owner’s call, a café’s feature, and a boolean', async () => {
+      expect((await short(cafe, true, cafe.sellerToken)).statusCode).toBe(403);
+      const notCafe = await short(boutique, true);
+      expect(notCafe.statusCode).toBe(409);
+      expect(notCafe.json().error).toMatch(/кав’ярні/);
+      const junk = await app.inject({
+        method: 'PATCH',
+        url: '/api/pos/store/public-menu',
+        headers: auth(cafe.ownerToken),
+        payload: { slug_enabled: 'yes' },
+      });
+      expect(junk.statusCode).toBe(400);
+      const row = await pool.query(`SELECT public_menu_slug_enabled FROM pos_stores WHERE id = ANY($1::bigint[])`, [
+        [cafe.storeId, boutique.storeId],
+      ]);
+      expect(row.rows.every((r) => r.public_menu_slug_enabled === false)).toBe(true);
     });
   });
 

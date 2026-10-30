@@ -207,6 +207,31 @@ describe.skipIf(!hasDb || !canCreate)('POS migrations, applied the way the runne
     );
     expect(left.rows[0]).toEqual({ entries: 0, items: 0, customers: 1 });
   });
+
+  it('switches «Шабля»’s short menu address on once (080), and an owner’s «off» survives the next boot', async () => {
+    // The boot before 080: no column yet, and the store has never published its menu.
+    await probe.query(`ALTER TABLE pos_stores DROP COLUMN public_menu_slug_enabled`);
+    await probe.query(`INSERT INTO pos_stores (name, slug, vertical) VALUES ('Шабля', 'shablya', 'cafe')`);
+    const read = async () =>
+      (
+        await probe.query(
+          `SELECT public_menu_slug_enabled AS short, public_menu_enabled AS menu, public_menu_token AS token
+             FROM pos_stores WHERE slug = 'shablya'`
+        )
+      ).rows[0];
+
+    await expect(applyAll(probe)).resolves.toBeUndefined();
+    const first = await read();
+    expect(first).toMatchObject({ short: true, menu: true });
+    expect(first.token).toMatch(/^[0-9a-f]{32}$/);
+    // Nobody else was touched.
+    const others = await probe.query(`SELECT count(*)::int AS n FROM pos_stores WHERE public_menu_slug_enabled`);
+    expect(others.rows[0].n).toBe(1);
+
+    await probe.query(`UPDATE pos_stores SET public_menu_slug_enabled = FALSE WHERE slug = 'shablya'`);
+    await expect(applyAll(probe)).resolves.toBeUndefined();
+    expect(await read()).toEqual({ short: false, menu: true, token: first.token });
+  });
 });
 
 /**

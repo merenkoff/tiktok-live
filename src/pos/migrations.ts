@@ -138,6 +138,8 @@ export const POS_MIGRATIONS = [
   '078_pos_debt_partial.sql',
   // A «внесок» under ПРРО: the line's Checkbox prepayment chain, our number for it, and the sales that are its documents.
   '079_pos_debt_chain.sql',
+  // «Коротка адреса»: the guest menu may also answer at /m/<slug>, the owner's opt-in; «Шабля» gets it once.
+  '080_pos_public_menu_slug.sql',
 ] as const;
 
 export function readMigration(file: string): string {
