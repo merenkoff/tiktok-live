@@ -5,6 +5,7 @@
 import type { FastifyInstance } from 'fastify';
 import { ensureModule } from '../core/auth.js';
 import * as authService from '../auth.service.js';
+import { clearPinMisses, getPinLockStatus } from '../pin-attempts.js';
 import { errorMessage } from './_shared.js';
 
 export function registerStaffRoutes(fastify: FastifyInstance): void {
@@ -41,6 +42,21 @@ export function registerStaffRoutes(fastify: FastifyInstance): void {
     } catch (error) {
       return reply.code(400).send({ error: errorMessage(error) });
     }
+  });
+
+  // Wrong PINs at the till (`pin-attempts.ts`): how many, and whether PIN
+  // login is closed. «Розблокувати» reopens it; a new PIN for anyone does too.
+  fastify.get('/staff/pin-lock', async (request, reply) => {
+    const auth = await ensureModule(request, reply, 'staff', { owner: true });
+    if (!auth) return;
+    return getPinLockStatus(auth.storeId);
+  });
+
+  fastify.post('/staff/pin-lock/reset', async (request, reply) => {
+    const auth = await ensureModule(request, reply, 'staff', { owner: true });
+    if (!auth) return;
+    await clearPinMisses(auth.storeId);
+    return getPinLockStatus(auth.storeId);
   });
 
   fastify.patch('/staff/:id', async (request, reply) => {
