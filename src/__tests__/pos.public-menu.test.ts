@@ -187,6 +187,7 @@ describe.skipIf(!hasDb)('POS guest QR menu', () => {
         bill_enabled: false,
         ordering_enabled: false,
         call_enabled: false,
+        feedback_enabled: false,
         auto_kitchen: 'off',
         auto_limit_cents: 200000,
         auto_ack_at: null,

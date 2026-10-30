@@ -57,6 +57,11 @@ interface PublicMenuSettings {
    */
   call_enabled?: boolean;
   /**
+   * Guests may leave feedback from any QR (phase F3). Absent from an older
+   * backend — then there is no switch to show.
+   */
+  feedback_enabled?: boolean;
+  /**
    * Where a guest's order goes (phase Q9): to a waiter first, or straight to
    * the kitchen for tables already served / always. Absent from an older
    * backend, which only knows the waiter.
@@ -181,6 +186,15 @@ export function PublicMenuCard() {
           : 'Кнопки виклику з меню гостей прибрано.'
     );
 
+  const toggleFeedback = (enabled: boolean) =>
+    run(
+      () => api.posRequest<PublicMenuSettings>('patch', '/store/public-menu', { feedback_enabled: enabled }),
+      (view) =>
+        view.feedback_enabled
+          ? 'Гості можуть залишити відгук з меню — з будь-якого QR.'
+          : 'Відгуки з меню гостей вимкнено.'
+    );
+
   const setAutoKitchen = (mode: AutoKitchenMode, ack: boolean) =>
     run(
       () =>
@@ -253,6 +267,9 @@ export function PublicMenuCard() {
   const showOrderingSwitch = tables > 0 || settings.ordering_enabled === true;
   // Phases Q8/Q9 exist only where the backend reports their fields.
   const showCallSwitch = typeof settings.call_enabled === 'boolean' && (tables > 0 || settings.call_enabled);
+  // Feedback needs no tables (it works from the venue's QR), so it sits with
+  // the published menu — and stays once on, so an owner can always turn it off.
+  const showFeedbackSwitch = typeof settings.feedback_enabled === 'boolean' && (Boolean(live) || settings.feedback_enabled);
   const autoMode: AutoKitchenMode | null =
     settings.auto_kitchen === 'off' || settings.auto_kitchen === 'reorders' || settings.auto_kitchen === 'all'
       ? settings.auto_kitchen
@@ -429,6 +446,28 @@ export function PublicMenuCard() {
               залу й відповідає «Іду». Працює лише за QR столу з ключем — друкуйте QR кнопкою «QR для всіх
               столів». Вмикайте, коли офіціанти вже мають модуль «Столи», що показує виклики, — інакше на
               виклик ніхто не прийде.
+            </p>
+          </div>
+        )}
+
+        {showFeedbackSwitch && (
+          <div className="space-y-1.5">
+            <label className="min-h-11 flex items-center gap-3 text-[15px] text-sq-text">
+              <input
+                type="checkbox"
+                className={CHECKBOX}
+                checked={settings.feedback_enabled === true}
+                disabled={saving}
+                onChange={(e) => void toggleFeedback(e.target.checked)}
+              />
+              <span>Приймати відгуки гостей</span>
+            </label>
+            <p className="pl-8 text-[13px] leading-relaxed text-sq-muted">
+              Гість оцінює візит одним дотиком — п’ять облич — і може додати, що сподобалось чи пішло не так, кілька
+              слів і телефон, якщо хоче, щоб ви зателефонували. Працює з будь-якого QR, і зі столу, і з входу. Після
+              відгуку гість бачить посилання на вашу картку Google, якщо ви вказали її в «Про заклад у меню», — усім,
+              а не лише задоволеним: так вимагають правила Google. Розділ «Відгуки» для читання з’явиться наступним
+              оновленням; до того відгуки накопичуються.
             </p>
           </div>
         )}

@@ -146,6 +146,8 @@ export const POS_MIGRATIONS = [
   '082_pos_store_public_socials.sql',
   // The cork fee on the guest menu («Шабля» filled once) and `pos_products.menu_hidden`: sold at the till, never listed to guests.
   '083_pos_corkage_menu_hidden.sql',
+  // A guest's feedback from the QR menu (one face, chips, words, a phone) and the owner's switch.
+  '084_pos_guest_feedback.sql',
 ] as const;
 
 export function readMigration(file: string): string {

@@ -138,6 +138,8 @@ export interface PublicMenuStore {
   google_url: string | null;
   /** Phase F2: the place's own-alcohol terms, or null when it shows none. */
   corkage: Corkage | null;
+  /** Phase F3: the owner takes feedback from guests — the page draws the sheet and the buttons. */
+  feedback_enabled: boolean;
 }
 
 export interface PublicMenu {
@@ -169,6 +171,8 @@ interface MenuStore {
   tiktok: string | null;
   googleUrl: string | null;
   corkage: Corkage | null;
+  /** The owner takes feedback from guests (phase F3), from any QR. */
+  feedbackEnabled: boolean;
   /** The owner lets a guest read their own table's bill (phase Q5). */
   billEnabled: boolean;
   /** The owner lets a guest send dishes to a waiter for acceptance (phase Q6). */
@@ -481,6 +485,7 @@ async function buildPublicMenu(store: MenuStore): Promise<PublicMenu> {
     // on the page.
     google_url: readGoogleUrl(store.googleUrl),
     corkage: store.corkage,
+    feedback_enabled: store.feedbackEnabled,
   };
   return {
     store: publicStore,
@@ -578,7 +583,7 @@ export async function findMenuStore(token: string): Promise<MenuStore | null> {
   if (hit && hit.expires > Date.now()) return hit.value;
   const result = await pool.query(
     `SELECT id, name, vertical, public_menu_enabled, public_menu_bill, public_menu_ordering,
-            public_menu_call, public_menu_auto_kitchen, public_menu_auto_limit_cents,
+            public_menu_call, public_menu_auto_kitchen, public_menu_auto_limit_cents, public_menu_feedback,
             public_logo_url, public_address, public_phone, public_hours,
             public_email, public_instagram, public_facebook, public_tiktok, public_google_url, public_corkage
      FROM pos_stores
@@ -604,6 +609,7 @@ export async function findMenuStore(token: string): Promise<MenuStore | null> {
     tiktok: textOrNull(row.public_tiktok),
     googleUrl: textOrNull(row.public_google_url),
     corkage: readCorkage(row.public_corkage),
+    feedbackEnabled: row.public_menu_feedback === true,
     billEnabled: row.public_menu_bill === true,
     orderingEnabled: row.public_menu_ordering === true,
     callEnabled: row.public_menu_call === true,
@@ -662,6 +668,8 @@ export interface PublicMenuSettings {
   ordering_enabled: boolean;
   /** A guest may call a waiter or ask for the bill from their table (phase Q8). */
   call_enabled: boolean;
+  /** Guests may leave feedback from any QR (phase F3). */
+  feedback_enabled: boolean;
   /** Whether a guest order goes straight to the kitchen (phase Q9); always `off` while ordering is. */
   auto_kitchen: AutoKitchenMode;
   /** An order dearer than this, in kopecks, waits for a waiter. */
@@ -701,7 +709,7 @@ function isUniqueViolation(error: unknown): boolean {
 /** Every column the owner's card reads — one list, so a setter cannot forget one in its RETURNING. */
 const SETTINGS_COLUMNS = `vertical, slug, public_menu_enabled, public_menu_token, public_menu_bill, public_menu_ordering,
   public_menu_call, public_menu_auto_kitchen, public_menu_auto_limit_cents, public_menu_auto_ack_at,
-  public_menu_slug_enabled`;
+  public_menu_slug_enabled, public_menu_feedback`;
 
 /** The slug as it would stand in `/m/<slug>`, or null when it cannot (an old seed's odd code). */
 function slugKey(row: Record<string, unknown> | undefined): string | null {
@@ -720,6 +728,7 @@ function toSettings(row: Record<string, unknown> | undefined, tables = 0, print:
     bill_enabled: row?.public_menu_bill === true,
     ordering_enabled: row?.public_menu_ordering === true,
     call_enabled: row?.public_menu_call === true,
+    feedback_enabled: row?.public_menu_feedback === true,
     auto_kitchen: autoModeOf(row?.public_menu_auto_kitchen),
     auto_limit_cents: Number(row?.public_menu_auto_limit_cents ?? 200000),
     auto_ack_at:
@@ -892,6 +901,21 @@ export async function setPublicMenuCall(storeId: number, enabled: boolean): Prom
   const result = await pool.query(
     `UPDATE pos_stores
      SET public_menu_call = $2, updated_at = NOW()
+     WHERE id = $1
+     RETURNING ${SETTINGS_COLUMNS}`,
+    [storeId, enabled]
+  );
+  invalidatePublicMenu(storeId);
+  return settingsFor(storeId, result.rows[0]);
+}
+
+/** Take feedback from guests, or stop (phase F3). Needs no tables: it works from the venue's QR. */
+export async function setPublicMenuFeedback(storeId: number, enabled: boolean): Promise<PublicMenuSettings> {
+  const row = await readRow(storeId);
+  if (enabled && !toSettings(row).available) throw new PublicMenuError(NOT_AVAILABLE);
+  const result = await pool.query(
+    `UPDATE pos_stores
+     SET public_menu_feedback = $2, updated_at = NOW()
      WHERE id = $1
      RETURNING ${SETTINGS_COLUMNS}`,
     [storeId, enabled]

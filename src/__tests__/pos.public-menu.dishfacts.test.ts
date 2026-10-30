@@ -116,7 +116,7 @@ describe('the guest page', () => {
     ...over,
   });
   const menuOf = (...products: PublicMenuProduct[]): PublicMenu => ({
-    store: { name: 'Кав’ярня', logo_url: null, address: null, phone: null, hours_today: null, hours: [], email: null, instagram: null, facebook: null, tiktok: null, google_url: null , corkage: null },
+    store: { name: 'Кав’ярня', logo_url: null, address: null, phone: null, hours_today: null, hours: [], email: null, instagram: null, facebook: null, tiktok: null, google_url: null, corkage: null, feedback_enabled: false },
     rev: 'a1b2c3d4e5f6',
     store_day: '2026-09-30',
     generated_at: '2026-09-30T08:00:00.000Z',

@@ -17,6 +17,7 @@ import { registerPosPlugin } from './pos/pos.plugin.js';
 import { reconcileQrPayments } from './pos/qr.service.js';
 import { runGtinEventsRetention } from './pos/gtin/events-retention.js';
 import { endExpiredMarkdowns } from './pos/markdowns.service.js';
+import { wipeGuestFeedbackPhones } from './pos/guest-feedback.service.js';
 import { closeDueShifts } from './pos/fiscal/shifts.service.js';
 import { retryPendingFiscalDocs } from './pos/fiscal/fiscal.service.js';
 import { refillAllStores } from './pos/fiscal/offline/pool.js';
@@ -149,6 +150,17 @@ async function main(): Promise<void> {
         logger.info('✅ Daily cleanup completed');
       } catch (error) {
         logger.error('Daily cleanup error', { error });
+      }
+    });
+
+    // A guest's call-back phone from the QR menu is kept 90 days, then
+    // cleared; the feedback itself stays (guest-feedback.service.ts).
+    cron.schedule('45 3 * * *', async () => {
+      try {
+        const wiped = await wipeGuestFeedbackPhones();
+        if (wiped > 0) logger.info('Guest feedback phones wiped', { wiped });
+      } catch (error) {
+        logger.error('Guest feedback phone wipe error', { error });
       }
     });
 

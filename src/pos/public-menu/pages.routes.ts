@@ -58,6 +58,7 @@ export function registerPublicMenuPages(fastify: FastifyInstance): void {
         bill: keyed && found.store.billEnabled,
         ordering: keyed && found.store.orderingEnabled,
         call: keyed && found.store.callEnabled,
+        feedback: found.store.feedbackEnabled,
         orderAuto:
           found.store.autoKitchen === 'off'
             ? null
