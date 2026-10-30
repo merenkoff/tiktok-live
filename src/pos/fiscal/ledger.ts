@@ -590,12 +590,11 @@ export async function abandonVoidedSaleDocs(storeId?: number): Promise<number> {
  * re-leases, so an overlapping cron tick sees nothing to do.
  */
 export async function claimDueDocuments(limit: number, storeId?: number): Promise<FiscalReceiptRow[]> {
+  // A MATERIALIZED CTE rather than `WHERE id IN (… LIMIT $1)`, which a
+  // nested-loop plan re-runs per row and so claims past the limit (see
+  // `takeFreeCodes` in offline/pool.ts).
   const result = await pool.query(
-    `UPDATE pos_fiscal_receipts SET
-       attempts = attempts + 1,
-       next_attempt_at = NOW() + ($2 || ' milliseconds')::interval,
-       updated_at = NOW()
-     WHERE id IN (
+    `WITH due AS MATERIALIZED (
        SELECT r.id FROM pos_fiscal_receipts r
        LEFT JOIN pos_sales s ON s.id = r.sale_id
        WHERE r.status IN ('pending', 'failed')
@@ -619,7 +618,13 @@ export async function claimDueDocuments(limit: number, storeId?: number): Promis
        FOR UPDATE OF r SKIP LOCKED
        LIMIT $1
      )
-     RETURNING *`,
+     UPDATE pos_fiscal_receipts fr SET
+       attempts = fr.attempts + 1,
+       next_attempt_at = NOW() + ($2 || ' milliseconds')::interval,
+       updated_at = NOW()
+     FROM due
+     WHERE fr.id = due.id
+     RETURNING fr.*`,
     [limit, String(LEASE_MS), MAX_ATTEMPTS, storeId ?? null]
   );
   return result.rows as FiscalReceiptRow[];

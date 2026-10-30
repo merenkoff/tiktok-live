@@ -7,12 +7,15 @@ import { api } from '@pos/platform';
 import type { StaffMember } from '../../types';
 import { PageHeader } from '../../components/ui/Page';
 import { Plus, User } from '../../platform/glyphs';
+import { PinLockNotice } from './PinLockNotice';
 
 export function StaffPage() {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [name, setName] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // Bumped after a PIN change, which also reopens a closed PIN login.
+  const [pinVersion, setPinVersion] = useState(0);
 
   async function reload() {
     setStaff(await api.listStaff());
@@ -39,6 +42,7 @@ export function StaffPage() {
     if (!next) return;
     try {
       await api.setStaffPin(id, next);
+      setPinVersion((v) => v + 1);
       await reload();
     } catch {
       setError('Не вдалося оновити PIN');
@@ -50,6 +54,8 @@ export function StaffPage() {
       <PageHeader glyph={User} title="Співробітники" subtitle="Продавці заходять у касу за PIN." />
 
       {error && <div className="rounded-xl bg-red-50 text-red-700 px-4 py-3 text-[15px]">{error}</div>}
+
+      <PinLockNotice version={pinVersion} />
 
       <form onSubmit={onCreate} className="flex flex-col sm:flex-row gap-3">
         <input

@@ -140,6 +140,8 @@ export const POS_MIGRATIONS = [
   '079_pos_debt_chain.sql',
   // «Коротка адреса»: the guest menu may also answer at /m/<slug>, the owner's opt-in; «Шабля» gets it once.
   '080_pos_public_menu_slug.sql',
+  // Wrong PINs at the till, counted per store: waits after the 5th, an hour's block after the 10th.
+  '081_pos_pin_attempts.sql',
   // The guest menu's header: email, Instagram/Facebook/TikTok handles and the Google card link; «Шабля» filled once.
   '082_pos_store_public_socials.sql',
 ] as const;

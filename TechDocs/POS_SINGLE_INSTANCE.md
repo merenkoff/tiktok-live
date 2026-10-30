@@ -121,8 +121,9 @@
 
 ## Інше, що знайдено дорогою
 
-- `POST /api/pos/auth/staff/pin` і `/auth/owner/login` не мають жодного throttle: 4–6 цифр PIN
-  перебираються. Це відсутній контроль, не питання реплік; винести окремою задачею.
+- `POST /api/pos/auth/staff/pin` з 2026-10-30 рахує промахи (міграція `081`,
+  `TechDocs/POS_PIN_ATTEMPTS.md`) — у базі, на `pos_stores`, тож друга репліка його не ламає.
+  `/auth/owner/login` досі без throttle.
 - Зміна вертикалі магазина супер-адміном (`PATCH /api/pos/super/stores/:id` → `setStoreVertical`,
   `super.service.ts:132,254`) не викликає `invalidatePublicMenu`, хоча коментар біля `findMenuStore`
   (`menu.service.ts:466-468`) каже, що магазин без кухні перестає публікуватись: меню може жити ще до

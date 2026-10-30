@@ -404,9 +404,11 @@ export async function closeDueShifts(
   const limit = opts.limit ?? 20;
   // `storeId` narrows the sweep to one store — for tests, which share a
   // database across workers; the cron sweeps every store.
+  // A MATERIALIZED CTE rather than `WHERE id IN (… LIMIT $1)`, which a
+  // nested-loop plan re-runs per row and so claims past the limit (see
+  // `takeFreeCodes` in offline/pool.ts).
   const claimed = await pool.query(
-    `UPDATE pos_fiscal_shifts SET status = 'closing', updated_at = NOW()
-     WHERE id IN (
+    `WITH due AS MATERIALIZED (
        SELECT f.id FROM pos_fiscal_shifts f
        WHERE f.status = 'open' AND f.auto_close_due_at IS NOT NULL AND f.auto_close_due_at < NOW()
          AND ($2::bigint IS NULL OR f.store_id = $2::bigint)
@@ -423,7 +425,10 @@ export async function closeDueShifts(
        FOR UPDATE SKIP LOCKED
        LIMIT $1
      )
-     RETURNING *`,
+     UPDATE pos_fiscal_shifts sh SET status = 'closing', updated_at = NOW()
+     FROM due
+     WHERE sh.id = due.id
+     RETURNING sh.*`,
     [limit, opts.storeId ?? null]
   );
 
