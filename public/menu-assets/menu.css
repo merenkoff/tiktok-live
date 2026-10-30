@@ -55,6 +55,14 @@ a { color: var(--accent); }
 .week { list-style: none; margin: 6px 0 0; padding: 8px 12px; display: grid; gap: 2px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
 .week li { display: flex; justify-content: space-between; gap: 16px; }
 .week b { font-weight: 600; color: var(--ink); white-space: nowrap; }
+/* The links row (phase F1): the map, the networks, the mailbox — pills, one tap each. */
+.links { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.links a {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--card);
+  color: var(--ink); text-decoration: none; font-size: 14px; font-weight: 600;
+}
+.links svg { width: 16px; height: 16px; flex: none; }
 
 .tabs {
   position: sticky; top: 0; z-index: 5;

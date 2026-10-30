@@ -31,11 +31,15 @@ import {
   groupHours,
   hoursTodayText,
   normalizeAddress,
+  normalizeEmail,
+  normalizeGoogleUrl,
+  normalizeHandle,
   normalizeHours,
   normalizeLogoUrl,
   normalizePhone,
   normalizeProfilePatch,
   phoneHref,
+  socialUrl,
   type WeekHours,
 } from '../pos/public-menu/profile.js';
 import { renderMenuPage } from '../pos/public-menu/render.js';
@@ -196,6 +200,93 @@ describe('profile validation', () => {
     });
   });
 
+  describe('email', () => {
+    it('keeps an address as typed, trimmed, and reads blank as «none»', () => {
+      expect(normalizeEmail('  Privit@Zaklad.UA ')).toBe('Privit@Zaklad.UA');
+      expect(normalizeEmail('   ')).toBeNull();
+      expect(normalizeEmail(null)).toBeNull();
+    });
+
+    it.each(['privit', 'privit@', '@zaklad.ua', 'privit@zaklad', 'a b@zaklad.ua', 'x@'.padEnd(121, 'a') + '.ua', 7])(
+      'refuses %s',
+      (value) => {
+        expect(() => normalizeEmail(value)).toThrow(ProfileError);
+      }
+    );
+  });
+
+  describe('social handles', () => {
+    it('reads «@нік», «нік» and the profile’s own address all as the handle', () => {
+      expect(normalizeHandle('shablya.cafe', 'instagram')).toBe('shablya.cafe');
+      expect(normalizeHandle('@shablya.cafe', 'instagram')).toBe('shablya.cafe');
+      expect(normalizeHandle('https://www.instagram.com/shablya.cafe/', 'instagram')).toBe('shablya.cafe');
+      expect(normalizeHandle('https://instagram.com/shablya.cafe?igsh=abc', 'instagram')).toBe('shablya.cafe');
+      expect(normalizeHandle('https://www.facebook.com/shablya.cafe/', 'facebook')).toBe('shablya.cafe');
+      expect(normalizeHandle('https://m.facebook.com/Shablya-Cafe', 'facebook')).toBe('Shablya-Cafe');
+      expect(normalizeHandle('https://www.tiktok.com/@shablya.cafe', 'tiktok')).toBe('shablya.cafe');
+      expect(normalizeHandle('@shablya.cafe', 'tiktok')).toBe('shablya.cafe');
+      expect(normalizeHandle('  ', 'instagram')).toBeNull();
+      expect(normalizeHandle('@', 'instagram')).toBeNull();
+      expect(normalizeHandle(null, 'tiktok')).toBeNull();
+    });
+
+    it.each([
+      ['instagram', 'нік'],
+      ['instagram', 'a'.repeat(31)],
+      ['instagram', 'has space'],
+      ['instagram', 'https://evil.example/instagram.com/x'],
+      ['instagram', 'javascript:alert(1)'],
+      ['facebook', 'profile.php?id=123'],
+      ['facebook', 'a'.repeat(81)],
+      ['tiktok', 'a'.repeat(25)],
+      ['tiktok', 'x/y'],
+      ['instagram', 5],
+    ] as const)('refuses %s %s', (network, value) => {
+      expect(() => normalizeHandle(value, network)).toThrow(ProfileError);
+    });
+
+    it('builds the profile address from the handle, never the other way round', () => {
+      expect(socialUrl('instagram', 'shablya.cafe')).toBe('https://www.instagram.com/shablya.cafe/');
+      expect(socialUrl('facebook', 'Shablya-Cafe')).toBe('https://www.facebook.com/Shablya-Cafe');
+      expect(socialUrl('tiktok', 'shablya.cafe')).toBe('https://www.tiktok.com/@shablya.cafe');
+    });
+  });
+
+  describe('the Google card link', () => {
+    it.each([
+      'https://share.google/49kQb5FHbjSlkT7q6',
+      'https://maps.app.goo.gl/AbCdEf123',
+      'https://www.google.com/maps/place/Шабля/@50.5,29.2,17z/data=!3m1',
+      'https://google.com/maps?cid=123',
+      'https://search.google.com/local/writereview?placeid=ChIJ123',
+      'https://g.page/shablya/review',
+      'https://goo.gl/maps/abc',
+      'https://www.google.com.ua/maps/place/x',
+    ])('takes %s', (url) => {
+      expect(normalizeGoogleUrl(` ${url} `)).toBe(url);
+    });
+
+    it.each([
+      'http://maps.app.goo.gl/AbCdEf123',
+      'https://google.com.evil/maps',
+      'https://evilgoogle.com/maps',
+      'https://notgoogle.com/maps',
+      'https://google.evil/maps',
+      'https://user:pw@google.com/maps',
+      'javascript:alert(1)',
+      'maps.app.goo.gl/AbCdEf123',
+      'https://google.com/' + 'a'.repeat(300),
+      9,
+    ])('refuses %s', (value) => {
+      expect(() => normalizeGoogleUrl(value)).toThrow(ProfileError);
+    });
+
+    it('reads blank as «none»', () => {
+      expect(normalizeGoogleUrl('')).toBeNull();
+      expect(normalizeGoogleUrl(null)).toBeNull();
+    });
+  });
+
   describe('the patch', () => {
     it('carries only the fields that were sent: absent = leave, null = clear', () => {
       expect(normalizeProfilePatch({})).toEqual({});
@@ -206,10 +297,16 @@ describe('profile validation', () => {
         logo_url: null,
         phone: null,
       });
+      expect(
+        normalizeProfilePatch({ email: null, instagram: '@x', facebook: null, tiktok: null, google_url: null })
+      ).toEqual({ email: null, instagram: 'x', facebook: null, tiktok: null, google_url: null });
     });
 
     it('refuses the whole patch when one field is bad', () => {
       expect(() => normalizeProfilePatch({ address: 'ok', phone: 'nope' })).toThrow(ProfileError);
+      expect(() => normalizeProfilePatch({ email: 'ok@zaklad.ua', google_url: 'https://evil.example' })).toThrow(
+        ProfileError
+      );
     });
   });
 });
@@ -225,6 +322,11 @@ describe('the guest page header', () => {
       { days: 'Пн–Пт', text: '08:00–22:00' },
       { days: 'Сб–Нд', text: '09:00–23:00' },
     ],
+    email: null,
+    instagram: null,
+    facebook: null,
+    tiktok: null,
+    google_url: null,
   };
   const menuOf = (over: Partial<PublicMenu['store']> = {}): PublicMenu => ({
     store: { ...store, ...over },
@@ -287,6 +389,48 @@ describe('the guest page header', () => {
     );
     expect(html).toContain('<li class="c-hours">Щодня 10:00–20:00</li>');
     expect(html).not.toContain('<details><summary>Сьогодні');
+  });
+
+  it('draws the links row from handles and the mailbox, and «На карті» from the address when there is no Google card', () => {
+    const html = renderMenuPage(
+      menuOf({ email: 'privit@zaklad.ua', instagram: 'shablya.cafe', facebook: 'Shablya-Cafe', tiktok: 'shablya' }),
+      'tok_12345678'
+    );
+    expect(html).toContain('<ul class="links" aria-label="Посилання закладу">');
+    // The map chip and the address link point at the same place.
+    expect(html).toContain(
+      '<li class="l-map"><a href="https://www.google.com/maps/search/?api=1&amp;query=%D0%B2%D1%83%D0%BB.%20'
+    );
+    expect(html).toContain('<li class="l-instagram"><a href="https://www.instagram.com/shablya.cafe/" target="_blank" rel="noopener noreferrer">');
+    expect(html).toContain('<li class="l-facebook"><a href="https://www.facebook.com/Shablya-Cafe" target="_blank" rel="noopener noreferrer">');
+    expect(html).toContain('<li class="l-tiktok"><a href="https://www.tiktok.com/@shablya" target="_blank" rel="noopener noreferrer">');
+    // The mailbox opens the mail app in place, so no new tab.
+    expect(html).toContain('<li class="l-mail"><a href="mailto:privit@zaklad.ua"><svg');
+    expect(html).toContain('<span>На карті</span>');
+    expect(html).toContain('<span>Пошта</span>');
+    expect(html.match(/<script/g)).toHaveLength(1);
+  });
+
+  it('points «На карті» and the address at the Google card when the owner gave one', () => {
+    const html = renderMenuPage(menuOf({ google_url: 'https://maps.app.goo.gl/AbC123' }), 'tok_12345678');
+    expect(html).toContain('<li class="c-addr"><a href="https://maps.app.goo.gl/AbC123" target="_blank"');
+    expect(html).toContain('<li class="l-map"><a href="https://maps.app.goo.gl/AbC123" target="_blank"');
+    expect(html).not.toContain('maps/search/?api=1');
+    // A card and no address still gives the map chip.
+    const bare = renderMenuPage(
+      menuOf({ address: null, phone: null, hours_today: null, hours: [], logo_url: null, google_url: 'https://g.page/x' }),
+      'tok_12345678'
+    );
+    expect(bare).not.toContain('class="contacts"');
+    expect(bare).toContain('<li class="l-map"><a href="https://g.page/x"');
+  });
+
+  it('draws «На карті» alone for a store with only an address, and no row at all without one', () => {
+    const withAddress = renderMenuPage(menuOf(), 'tok_12345678');
+    expect(withAddress).toContain('<ul class="links" aria-label="Посилання закладу"><li class="l-map">');
+    expect(withAddress.match(/<li class="l-/g)).toHaveLength(1);
+    const html = renderMenuPage(menuOf({ address: null }), 'tok_12345678');
+    expect(html).not.toContain('class="links"');
   });
 });
 
@@ -362,6 +506,11 @@ describe.skipIf(!hasDb)('POS store profile through the API', () => {
         address: null,
         phone: null,
         hours: null,
+        email: null,
+        instagram: null,
+        facebook: null,
+        tiktok: null,
+        google_url: null,
       });
       expect((await profile(boutique.ownerToken)).json().available).toBe(false);
     });
@@ -409,6 +558,11 @@ describe.skipIf(!hasDb)('POS store profile through the API', () => {
         address: 'м. Київ, вул. Прикладна, 1',
         phone: '+380 44 123-45-67',
         hours: WEEK,
+        email: null,
+        instagram: null,
+        facebook: null,
+        tiktok: null,
+        google_url: null,
       });
 
       // A card that only changed the phone must not wipe the rest by not mentioning it.
@@ -425,6 +579,55 @@ describe.skipIf(!hasDb)('POS store profile through the API', () => {
 
       await patch({ phone: null });
       expect((await profile(cafe.ownerToken)).json()).toMatchObject({ phone: null });
+    });
+
+    it('round-trips the mailbox, the handles (read down from pasted addresses) and the Google card', async () => {
+      const saved = await patch({
+        email: ' privit@zaklad.ua ',
+        instagram: 'https://www.instagram.com/shablya.cafe/',
+        facebook: '@Shablya-Cafe',
+        tiktok: 'https://www.tiktok.com/@shablya',
+        google_url: 'https://share.google/49kQb5FHbjSlkT7q6',
+      });
+      expect(saved.statusCode).toBe(200);
+      expect(saved.json()).toMatchObject({
+        email: 'privit@zaklad.ua',
+        instagram: 'shablya.cafe',
+        facebook: 'Shablya-Cafe',
+        tiktok: 'shablya',
+        google_url: 'https://share.google/49kQb5FHbjSlkT7q6',
+      });
+      const guest = (await menu()).store;
+      expect(guest).toMatchObject({
+        email: 'privit@zaklad.ua',
+        instagram: 'shablya.cafe',
+        facebook: 'Shablya-Cafe',
+        tiktok: 'shablya',
+        google_url: 'https://share.google/49kQb5FHbjSlkT7q6',
+      });
+      const html = (await page()).body;
+      expect(html).toContain('<li class="l-map"><a href="https://share.google/49kQb5FHbjSlkT7q6"');
+      expect(html).toContain('href="https://www.instagram.com/shablya.cafe/"');
+      expect(html).toContain('href="mailto:privit@zaklad.ua"');
+
+      // One bad value refuses the whole patch, in the card's words.
+      const bad = await patch({ email: 'ok@zaklad.ua', google_url: 'https://evil.example/maps' });
+      expect(bad.statusCode).toBe(400);
+      expect(bad.json().error).toContain('Google');
+      expect((await profile(cafe.ownerToken)).json().email).toBe('privit@zaklad.ua');
+
+      const cleared = await patch({ email: null, instagram: null, facebook: null, tiktok: null, google_url: null });
+      expect(cleared.json()).toMatchObject({ email: null, instagram: null, facebook: null, tiktok: null, google_url: null });
+      expect((await page()).body).not.toContain('class="links"');
+    });
+
+    it('never puts a hand-written row’s bad Google link on the page', async () => {
+      await pool.query(`UPDATE pos_stores SET public_google_url = 'javascript:alert(1)' WHERE id = $1`, [cafe.storeId]);
+      invalidatePublicMenu(cafe.storeId);
+      expect((await menu()).store.google_url).toBeNull();
+      expect((await page()).body).not.toContain('javascript:');
+      await pool.query(`UPDATE pos_stores SET public_google_url = NULL WHERE id = $1`, [cafe.storeId]);
+      invalidatePublicMenu(cafe.storeId);
     });
   });
 
@@ -470,9 +673,15 @@ describe.skipIf(!hasDb)('POS store profile through the API', () => {
         phone: null,
         hours_today: null,
         hours: [],
+        email: null,
+        instagram: null,
+        facebook: null,
+        tiktok: null,
+        google_url: null,
       });
       const html = (await page()).body;
       expect(html).not.toContain('class="contacts"');
+      expect(html).not.toContain('class="links"');
       expect(html).not.toContain('class="logo"');
     });
 
@@ -480,7 +689,19 @@ describe.skipIf(!hasDb)('POS store profile through the API', () => {
       await patch({ address: 'вул. Ключова, 1', phone: '+380 44 123 45 67', hours: WEEK });
       const res = await app.inject({ method: 'GET', url: `/api/pos/public/menu/${token}` });
       const body = res.json() as PublicMenu;
-      expect(Object.keys(body.store).sort()).toEqual(['address', 'hours', 'hours_today', 'logo_url', 'name', 'phone']);
+      expect(Object.keys(body.store).sort()).toEqual([
+        'address',
+        'email',
+        'facebook',
+        'google_url',
+        'hours',
+        'hours_today',
+        'instagram',
+        'logo_url',
+        'name',
+        'phone',
+        'tiktok',
+      ]);
       expect(res.body).not.toContain('public_');
       expect(res.body).not.toContain('secret');
       expect(res.body).not.toContain('timezone');
@@ -575,6 +796,56 @@ describe.skipIf(!hasDb)('POS store profile through the API', () => {
           `UPDATE pos_stores SET public_logo_url = $2, public_address = $3, public_phone = $4, public_hours = $5 WHERE id = $1`,
           [original.id, original.public_logo_url, original.public_address, original.public_phone, original.public_hours]
         );
+        invalidatePublicMenu(Number(original.id));
+      }
+    });
+  });
+
+  describe('migration 082', () => {
+    it('is safe to apply again and leaves what an owner wrote alone', async () => {
+      await patch({ instagram: 'vlasnyk' });
+      await pool.query(readMigration('082_pos_store_public_socials.sql'));
+      await pool.query(readMigration('082_pos_store_public_socials.sql'));
+      expect((await profile(cafe.ownerToken)).json().instagram).toBe('vlasnyk');
+      await patch({ instagram: null });
+    });
+
+    it('gives a demo café that has said nothing an email and a handle — and never over its owner’s words', async () => {
+      const demo = await pool.query(
+        `SELECT id, public_email, public_instagram, public_facebook, public_tiktok, public_google_url
+           FROM pos_stores WHERE slug = 'demo-cafe'`
+      );
+      if (demo.rows.length === 0) return;
+      const original = demo.rows[0];
+      const restore = () =>
+        pool.query(
+          `UPDATE pos_stores SET public_email = $2, public_instagram = $3, public_facebook = $4, public_tiktok = $5,
+                  public_google_url = $6 WHERE id = $1`,
+          [
+            original.id,
+            original.public_email,
+            original.public_instagram,
+            original.public_facebook,
+            original.public_tiktok,
+            original.public_google_url,
+          ]
+        );
+      try {
+        await pool.query(
+          `UPDATE pos_stores SET public_email = NULL, public_instagram = NULL, public_facebook = NULL,
+                  public_tiktok = NULL, public_google_url = NULL WHERE id = $1`,
+          [original.id]
+        );
+        await pool.query(readMigration('082_pos_store_public_socials.sql'));
+        const filled = await pool.query(`SELECT public_email, public_instagram FROM pos_stores WHERE id = $1`, [original.id]);
+        expect(filled.rows[0]).toEqual({ public_email: 'demo-cafe@the-live.shop', public_instagram: 'demo_cafe_the_live_shop' });
+
+        await pool.query(`UPDATE pos_stores SET public_instagram = NULL, public_tiktok = 'vlasnyk' WHERE id = $1`, [original.id]);
+        await pool.query(readMigration('082_pos_store_public_socials.sql'));
+        const kept = await pool.query(`SELECT public_instagram, public_tiktok FROM pos_stores WHERE id = $1`, [original.id]);
+        expect(kept.rows[0]).toEqual({ public_instagram: null, public_tiktok: 'vlasnyk' });
+      } finally {
+        await restore();
         invalidatePublicMenu(Number(original.id));
       }
     });

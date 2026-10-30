@@ -17,7 +17,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import qrcode from 'qrcode-generator';
 import { deltaText, formatUahGuestCompact, groupHint, tableLabel } from './format.js';
-import { phoneHref } from './profile.js';
+import { phoneHref, socialUrl } from './profile.js';
 
 export { tableLabel };
 import {
@@ -174,10 +174,62 @@ function renderProduct(product: PublicMenuProduct, ordering = false): string {
  * under them. Each line is there only if the owner filled it in; a bare menu
  * with none of them is exactly the header it always was.
  */
+/**
+ * Where «На карті» (and the address itself) points: the place's own Google
+ * card when the owner gave one — it opens the right pin, with the photos and
+ * the reviews — else a Maps search for the address text. Never an owner-typed
+ * URL other than the checked Google one.
+ */
+function mapUrl(store: PublicMenuStore): string | null {
+  if (store.google_url) return store.google_url;
+  if (store.address) return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(store.address)}`;
+  return null;
+}
+
+/**
+ * The 16 px glyphs of the links row, inline so the page needs no icon font
+ * and no third-party file: the CSP allows images from https but scripts and
+ * styles only from here, and an SVG in the markup is neither.
+ */
+const GLYPH = {
+  map:
+    '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 14s5-4 5-8a5 5 0 0 0-10 0c0 4 5 8 5 8Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8" cy="6" r="1.5" fill="currentColor"/></svg>',
+  instagram:
+    '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="3.5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="8" cy="8" r="2.6" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="11.4" cy="4.6" r="1" fill="currentColor"/></svg>',
+  facebook:
+    '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.6 15V9.4h1.9l.3-2.4H9.6V5.6c0-.7.2-1.2 1.2-1.2H12V2.2c-.3 0-1-.2-1.9-.2-1.9 0-3.1 1.2-3.1 3.3V7H5v2.4h2V15Z" fill="currentColor"/></svg>',
+  tiktok:
+    '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M9 1.5h2.3c.2 1.6 1.2 2.6 2.7 2.8v2.3a5 5 0 0 1-2.7-.9v4.5a4 4 0 1 1-4-4h.6v2.4h-.6a1.6 1.6 0 1 0 1.7 1.6Z" fill="currentColor"/></svg>',
+  mail:
+    '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3.5" width="12" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="m2.5 5.5 5.5 3.8 5.5-3.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
+} as const;
+
+function chip(glyph: keyof typeof GLYPH, href: string, label: string, newTab = true): string {
+  const target = newTab ? ' target="_blank" rel="noopener noreferrer"' : '';
+  return `<li class="l-${glyph}"><a href="${escapeHtml(href)}"${target}>${GLYPH[glyph]}<span>${escapeHtml(label)}</span></a></li>`;
+}
+
+/**
+ * The row of buttons under the contacts (phase F1): the map, the networks the
+ * owner named, the mailbox. Every address here is built from a checked HANDLE
+ * (`socialUrl`) or is the checked Google link — an owner never types a URL
+ * that lands in an `<a>` as typed. Nothing filled in, no row.
+ */
+function renderLinks(store: PublicMenuStore): string {
+  const items: string[] = [];
+  const map = mapUrl(store);
+  if (map) items.push(chip('map', map, 'На карті'));
+  if (store.instagram) items.push(chip('instagram', socialUrl('instagram', store.instagram), 'Instagram'));
+  if (store.facebook) items.push(chip('facebook', socialUrl('facebook', store.facebook), 'Facebook'));
+  if (store.tiktok) items.push(chip('tiktok', socialUrl('tiktok', store.tiktok), 'TikTok'));
+  if (store.email) items.push(chip('mail', `mailto:${store.email}`, 'Пошта', false));
+  return items.length ? `<ul class="links" aria-label="Посилання закладу">${items.join('')}</ul>` : '';
+}
+
 function renderContacts(store: PublicMenuStore): string {
   const items: string[] = [];
   if (store.address) {
-    const map = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(store.address)}`;
+    const map = mapUrl(store)!;
     items.push(
       `<li class="c-addr"><a href="${escapeHtml(map)}" target="_blank" rel="noopener noreferrer">${escapeHtml(store.address)}</a></li>`
     );
@@ -199,7 +251,7 @@ function renderContacts(store: PublicMenuStore): string {
       items.push(`<li class="c-hours">${escapeHtml(only ? `${only.days} ${only.text}` : `Сьогодні ${store.hours_today}`)}</li>`);
     }
   }
-  return items.length ? `<ul class="contacts">${items.join('')}</ul>` : '';
+  return (items.length ? `<ul class="contacts">${items.join('')}</ul>` : '') + renderLinks(store);
 }
 
 export interface MenuPageOptions {
