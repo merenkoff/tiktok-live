@@ -4,7 +4,7 @@
 
 import { lazy } from 'react';
 import type { ModuleDescriptor } from '../types';
-import { useAuthStore } from '../../hooks/useAuth';
+import { useAuthStore } from '@pos/platform';
 
 const DashboardPage = lazy(() =>
   import('../../pages/admin/DashboardPage').then((m) => ({ default: m.DashboardPage }))
