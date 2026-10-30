@@ -331,8 +331,7 @@ export function PublicMenuCard() {
             </label>
             <p className="pl-8 text-[13px] leading-relaxed text-sq-muted">
               Зручно для Instagram, Facebook чи Google Maps: меню відкривається за кодом магазину. Звичайне
-              посилання й роздруковані QR працюють і далі. Цей самий код касири вводять при вході, тому без
-              PIN-коду він нічого, крім меню, не відкриває — але давайте працівникам PIN, який не вгадати.
+              посилання й роздруковані QR працюють і далі.
             </p>
             {settings.slug_enabled === true && live && (
               <div className="pl-8 space-y-2.5">
