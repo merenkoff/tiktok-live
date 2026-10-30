@@ -270,6 +270,31 @@ describe.skipIf(!hasDb || !canCreate)('POS migrations, applied the way the runne
     await expect(applyAll(probe)).resolves.toBeUndefined();
     expect((await read()).instagram).toBeNull();
   });
+
+  it('fills «Шабля»’s cork fee once (083), and an owner’s «off» survives the next boot', async () => {
+    await probe.query(`ALTER TABLE pos_stores DROP COLUMN public_corkage`);
+    await probe.query(
+      `INSERT INTO pos_stores (name, slug, vertical) VALUES ('Шабля', 'shablya', 'cafe') ON CONFLICT (slug) DO NOTHING`
+    );
+    const read = async () =>
+      (await probe.query(`SELECT public_corkage AS corkage FROM pos_stores WHERE slug = 'shablya'`)).rows[0].corkage;
+
+    await expect(applyAll(probe)).resolves.toBeUndefined();
+    const first = await read();
+    expect(first).toMatchObject({ fee_cents: 10000, min_food_cents: 70000 });
+    expect(first.note).toContain('корковий збір рахується автоматично');
+    expect(first.note.split('\n')).toHaveLength(3);
+    const others = await probe.query(`SELECT count(*)::int AS n FROM pos_stores WHERE public_corkage IS NOT NULL`);
+    expect(others.rows[0].n).toBe(1);
+    const column = await probe.query(
+      `SELECT column_default FROM information_schema.columns WHERE table_name = 'pos_products' AND column_name = 'menu_hidden'`
+    );
+    expect(column.rows[0].column_default).toBe('false');
+
+    await probe.query(`UPDATE pos_stores SET public_corkage = NULL WHERE slug = 'shablya'`);
+    await expect(applyAll(probe)).resolves.toBeUndefined();
+    expect(await read()).toBeNull();
+  });
 });
 
 /**

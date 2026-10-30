@@ -144,6 +144,8 @@ export const POS_MIGRATIONS = [
   '081_pos_pin_attempts.sql',
   // The guest menu's header: email, Instagram/Facebook/TikTok handles and the Google card link; «Шабля» filled once.
   '082_pos_store_public_socials.sql',
+  // The cork fee on the guest menu («Шабля» filled once) and `pos_products.menu_hidden`: sold at the till, never listed to guests.
+  '083_pos_corkage_menu_hidden.sql',
 ] as const;
 
 export function readMigration(file: string): string {

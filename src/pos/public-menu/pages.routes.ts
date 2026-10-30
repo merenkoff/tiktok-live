@@ -26,6 +26,7 @@
 // hands table keys out.
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { corkageCardLine } from './format.js';
 import { findMenuTable, listMenuTables, loadPublicMenu } from './menu.service.js';
 import { getTableKeys, verifyPrintLink, verifyTableKey } from './table-keys.js';
 import {
@@ -75,7 +76,11 @@ export function registerPublicMenuPages(fastify: FastifyInstance): void {
     return sendPage(
       reply,
       200,
-      renderQrCard(found.store.name, token, table, { key, missingKey: found.store.billEnabled && !keyed })
+      renderQrCard(found.store.name, token, table, {
+        key,
+        missingKey: found.store.billEnabled && !keyed,
+        corkage: corkageCardLine(found.store.corkage),
+      })
     );
   });
 
@@ -89,7 +94,11 @@ export function registerPublicMenuPages(fastify: FastifyInstance): void {
     return sendPage(
       reply,
       200,
-      renderTablesSheet(found.store.name, token, tables, { keys, missingKey: found.store.billEnabled && !keyed })
+      renderTablesSheet(found.store.name, token, tables, {
+        keys,
+        missingKey: found.store.billEnabled && !keyed,
+        corkage: corkageCardLine(found.store.corkage),
+      })
     );
   });
 }

@@ -94,6 +94,12 @@ export interface CreateProductInput {
    * Defaults to `true` — every product a clothing or flower shop has is sold.
    */
   sellable?: boolean;
+  /**
+   * Sold at the till but never listed in the guest's QR menu (migration 083):
+   * the cork fee the waiter rings, a bag, a deposit, a service charge. Read
+   * by the guest menu only; the till, the shelf and the documents see it.
+   */
+  menu_hidden?: boolean;
 }
 
 /**
@@ -294,6 +300,7 @@ export async function listProducts(storeId: number) {
     kind: (p.kind === 'composite' ? 'composite' : 'simple') as ProductKind,
     stock_mode: (p.stock_mode === 'derived' ? 'derived' : 'own') as ProductStockMode,
     sellable: p.sellable !== false,
+    menu_hidden: p.menu_hidden === true,
     stop_listed_on: dateOnly(p.stop_listed_on),
     tag_ids: tagMap.get(Number(p.id)) ?? [],
     modifier_group_ids: groupMap.get(Number(p.id)) ?? [],
@@ -397,8 +404,8 @@ export async function createProductInTx(
   const productResult = await client.query(
     `INSERT INTO pos_products
        (store_id, name, description, image_url, needs_review, created_from_document_id,
-        kind, stock_mode, one_off, sellable, composition, allergens)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::text[])
+        kind, stock_mode, one_off, sellable, composition, allergens, menu_hidden)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::text[], $13)
      RETURNING id`,
     [
       storeId,
@@ -413,6 +420,7 @@ export async function createProductInTx(
       input.sellable ?? true,
       normalizeComposition(input.composition),
       normalizeAllergens(input.allergens),
+      input.menu_hidden === true,
     ]
   );
   const productId = Number(productResult.rows[0].id);
@@ -539,7 +547,15 @@ export async function updateProduct(
   input: Partial<
     Pick<
       CreateProductInput,
-      'name' | 'description' | 'composition' | 'allergens' | 'image_url' | 'kind' | 'stock_mode' | 'sellable'
+      | 'name'
+      | 'description'
+      | 'composition'
+      | 'allergens'
+      | 'image_url'
+      | 'kind'
+      | 'stock_mode'
+      | 'sellable'
+      | 'menu_hidden'
     >
   > & {
     is_active?: boolean;
@@ -594,6 +610,10 @@ export async function updateProduct(
     if (input.sellable !== undefined) {
       sets.push(`sellable = $${i++}`);
       values.push(Boolean(input.sellable));
+    }
+    if (input.menu_hidden !== undefined) {
+      sets.push(`menu_hidden = $${i++}`);
+      values.push(Boolean(input.menu_hidden));
     }
     if (input.needs_review !== undefined) {
       sets.push(`needs_review = $${i++}`);

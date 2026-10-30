@@ -36,7 +36,17 @@ import { storeClock } from '../core/storeClock.js';
 import { verticalOrDefault } from '../verticals/index.js';
 import { issuePrintLink } from './table-keys.js';
 import { COMPOSITION_MAX, allergenLabels, type Allergen } from '../allergens.js';
-import { groupHours, hoursTodayText, normalizeGoogleUrl, readHours, type HoursRow, type ProfilePatch, type WeekHours } from './profile.js';
+import {
+  groupHours,
+  hoursTodayText,
+  normalizeGoogleUrl,
+  readCorkage,
+  readHours,
+  type Corkage,
+  type HoursRow,
+  type ProfilePatch,
+  type WeekHours,
+} from './profile.js';
 import type { CatalogItem } from '../types.js';
 
 /**
@@ -126,6 +136,8 @@ export interface PublicMenuStore {
   facebook: string | null;
   tiktok: string | null;
   google_url: string | null;
+  /** Phase F2: the place's own-alcohol terms, or null when it shows none. */
+  corkage: Corkage | null;
 }
 
 export interface PublicMenu {
@@ -156,6 +168,7 @@ interface MenuStore {
   facebook: string | null;
   tiktok: string | null;
   googleUrl: string | null;
+  corkage: Corkage | null;
   /** The owner lets a guest read their own table's bill (phase Q5). */
   billEnabled: boolean;
   /** The owner lets a guest send dishes to a waiter for acceptance (phase Q6). */
@@ -411,13 +424,20 @@ async function buildPublicMenu(store: MenuStore): Promise<PublicMenu> {
   }
   const ids = [...byProduct.keys()];
   const texts = new Map<number, DishTexts>();
+  // Sold at the till, never listed to a guest (migration 083): the cork fee
+  // the waiter rings, a bag, a deposit. Left out here and nowhere else.
+  const hidden = new Set<number>();
   if (ids.length > 0) {
     const result = await pool.query(
-      `SELECT id, description, composition, allergens, needs_review
+      `SELECT id, description, composition, allergens, needs_review, menu_hidden
        FROM pos_products WHERE store_id = $1 AND id = ANY($2::bigint[])`,
       [store.id, ids]
     );
     for (const row of result.rows) {
+      if (row.menu_hidden === true) {
+        hidden.add(Number(row.id));
+        continue;
+      }
       // A card nobody has reviewed yet (made from a receiving document or at the
       // bench) carries INTERNAL text — «Створено з приходу ПР-12» — in the very
       // field the guest reads. It stays off the page until the owner edits the
@@ -435,7 +455,9 @@ async function buildPublicMenu(store: MenuStore): Promise<PublicMenu> {
       });
     }
   }
-  const products = [...byProduct.entries()].map(([id, group]) => ({
+  const products = [...byProduct.entries()]
+    .filter(([id]) => !hidden.has(id))
+    .map(([id, group]) => ({
     product: projectProduct(group, texts.get(id) ?? NO_TEXTS),
     tagIds: group[0]!.tag_ids ?? [],
   }));
@@ -458,6 +480,7 @@ async function buildPublicMenu(store: MenuStore): Promise<PublicMenu> {
     // same check, so a row written by hand can never put a `javascript:` link
     // on the page.
     google_url: readGoogleUrl(store.googleUrl),
+    corkage: store.corkage,
   };
   return {
     store: publicStore,
@@ -557,7 +580,7 @@ export async function findMenuStore(token: string): Promise<MenuStore | null> {
     `SELECT id, name, vertical, public_menu_enabled, public_menu_bill, public_menu_ordering,
             public_menu_call, public_menu_auto_kitchen, public_menu_auto_limit_cents,
             public_logo_url, public_address, public_phone, public_hours,
-            public_email, public_instagram, public_facebook, public_tiktok, public_google_url
+            public_email, public_instagram, public_facebook, public_tiktok, public_google_url, public_corkage
      FROM pos_stores
      WHERE public_menu_token = $1
         OR (public_menu_slug_enabled AND slug = lower($1))
@@ -580,6 +603,7 @@ export async function findMenuStore(token: string): Promise<MenuStore | null> {
     facebook: textOrNull(row.public_facebook),
     tiktok: textOrNull(row.public_tiktok),
     googleUrl: textOrNull(row.public_google_url),
+    corkage: readCorkage(row.public_corkage),
     billEnabled: row.public_menu_bill === true,
     orderingEnabled: row.public_menu_ordering === true,
     callEnabled: row.public_menu_call === true,
@@ -954,12 +978,13 @@ export interface StoreProfile {
   facebook: string | null;
   tiktok: string | null;
   google_url: string | null;
+  corkage: Corkage | null;
 }
 
 async function readProfile(storeId: number): Promise<StoreProfile> {
   const result = await pool.query(
     `SELECT vertical, public_logo_url, public_address, public_phone, public_hours,
-            public_email, public_instagram, public_facebook, public_tiktok, public_google_url
+            public_email, public_instagram, public_facebook, public_tiktok, public_google_url, public_corkage
        FROM pos_stores WHERE id = $1`,
     [storeId]
   );
@@ -976,6 +1001,7 @@ async function readProfile(storeId: number): Promise<StoreProfile> {
     facebook: textOrNull(row.public_facebook),
     tiktok: textOrNull(row.public_tiktok),
     google_url: textOrNull(row.public_google_url),
+    corkage: readCorkage(row.public_corkage),
   };
 }
 
@@ -1007,6 +1033,9 @@ export async function updateStoreProfile(storeId: number, patch: ProfilePatch): 
   if (patch.facebook !== undefined) set('public_facebook', patch.facebook);
   if (patch.tiktok !== undefined) set('public_tiktok', patch.tiktok);
   if (patch.google_url !== undefined) set('public_google_url', patch.google_url);
+  if (patch.corkage !== undefined) {
+    set('public_corkage', patch.corkage === null ? null : JSON.stringify(patch.corkage), '::jsonb');
+  }
   if (sets.length > 0) {
     await pool.query(`UPDATE pos_stores SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $1`, values);
     invalidatePublicMenu(storeId);

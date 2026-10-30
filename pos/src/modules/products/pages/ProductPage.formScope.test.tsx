@@ -91,6 +91,7 @@ async function openCreate() {
 
 const SHAPE = 'Що це за товар';
 const FACTS = /Склад для гостя/;
+const MENU_HIDDEN = /Не показувати в QR-меню/;
 
 describe('the create page — by what the store sells', () => {
   it('asks a boutique for neither, and keeps the description', async () => {
@@ -101,6 +102,8 @@ describe('the create page — by what the store sells', () => {
     expect(form.queryByLabelText(FACTS)).toBeNull();
     expect(form.queryByTestId('allergen-chip-milk')).toBeNull();
     expect(form.getByPlaceholderText('Опис')).toBeInTheDocument();
+    // No guest menu, nothing to hide from it.
+    expect(form.queryByLabelText(MENU_HIDDEN)).toBeNull();
   });
 
   it('asks a florist about composites but not allergens', async () => {
@@ -117,6 +120,8 @@ describe('the create page — by what the store sells', () => {
 
     expect(form.getByText(SHAPE)).toBeInTheDocument();
     expect(form.getByLabelText(FACTS)).toBeInTheDocument();
+    // The one kind of store with a guest menu is asked what to keep off it (083).
+    expect(form.getByLabelText(MENU_HIDDEN)).not.toBeChecked();
   });
 
   it('asks about both when the vertical says nothing — an older cached auth', async () => {

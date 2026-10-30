@@ -779,6 +779,8 @@ export interface Product {
    * cached payload → true.
    */
   sellable?: boolean;
+  /** Sold at the till but never listed in the guest QR menu (migration 083): a cork fee, a bag. Absent on an older payload → false. */
+  menu_hidden?: boolean;
   /** The store-local day the barista pulled it, or null (migration 050). */
   stop_listed_on?: string | null;
   tag_ids: number[];

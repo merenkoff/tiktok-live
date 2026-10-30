@@ -16,7 +16,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import qrcode from 'qrcode-generator';
-import { deltaText, formatUahGuestCompact, groupHint, tableLabel } from './format.js';
+import { corkageFeeText, corkageMinText, deltaText, formatUahGuestCompact, groupHint, tableLabel } from './format.js';
 import { phoneHref, socialUrl } from './profile.js';
 
 export { tableLabel };
@@ -200,6 +200,8 @@ const GLYPH = {
     '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.6 15V9.4h1.9l.3-2.4H9.6V5.6c0-.7.2-1.2 1.2-1.2H12V2.2c-.3 0-1-.2-1.9-.2-1.9 0-3.1 1.2-3.1 3.3V7H5v2.4h2V15Z" fill="currentColor"/></svg>',
   tiktok:
     '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M9 1.5h2.3c.2 1.6 1.2 2.6 2.7 2.8v2.3a5 5 0 0 1-2.7-.9v4.5a4 4 0 1 1-4-4h.6v2.4h-.6a1.6 1.6 0 1 0 1.7 1.6Z" fill="currentColor"/></svg>',
+  wine:
+    '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 1.5h8l-.6 5.3a3.4 3.4 0 0 1-6.8 0Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 10.4V14M5.5 14h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
   mail:
     '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3.5" width="12" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="m2.5 5.5 5.5 3.8 5.5-3.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
 } as const;
@@ -224,6 +226,27 @@ function renderLinks(store: PublicMenuStore): string {
   if (store.tiktok) items.push(chip('tiktok', socialUrl('tiktok', store.tiktok), 'TikTok'));
   if (store.email) items.push(chip('mail', `mailto:${store.email}`, 'Пошта', false));
   return items.length ? `<ul class="links" aria-label="Посилання закладу">${items.join('')}</ul>` : '';
+}
+
+/**
+ * The place's own-alcohol terms (phase F2), between the header and the first
+ * category — so a guest sees them before the first dish, from the venue's QR
+ * and a table's alike. The two figures are formatted here from kopecks; the
+ * owner's note, several lines, sits behind «Умови» (`<details>`, no script)
+ * and keeps its line breaks through `white-space: pre-line`, never `<br>`.
+ */
+function renderCorkage(store: PublicMenuStore): string {
+  const c = store.corkage;
+  if (!c) return '';
+  const min = corkageMinText(c);
+  const head =
+    `${GLYPH.wine}<span class="corkage-text"><b>Свій алкоголь:</b> ${escapeHtml(corkageFeeText(c))}` +
+    `${min ? ` · ${escapeHtml(min)}` : ''}</span>`;
+  const body = c.note
+    ? `<details class="corkage"><summary>${head}<span class="corkage-more">Умови</span></summary>` +
+      `<p class="corkage-note">${escapeHtml(c.note)}</p></details>`
+    : `<p class="corkage">${head}</p>`;
+  return `<section class="rules" aria-label="Правила закладу">${body}</section>`;
 }
 
 function renderContacts(store: PublicMenuStore): string {
@@ -318,12 +341,17 @@ export function renderMenuPage(
   const logo = menu.store.logo_url
     ? `<img class="logo" src="${escapeHtml(menu.store.logo_url)}" width="56" height="56" alt="">`
     : '';
+  // A cork fee is on the bill the guest reads (Q5) too — said there once, above the lines.
+  const billCorkage =
+    menu.store.corkage && menu.store.corkage.fee_cents > 0
+      ? `Свій алкоголь: ${corkageFeeText(menu.store.corkage)} — додається до рахунку`
+      : null;
   const body = `<header class="top"><div class="brand">${logo}<div><h1>${escapeHtml(menu.store.name)}</h1><p class="sub">Меню</p></div></div>${seat}${renderContacts(menu.store)}</header>
-${tabs ? `<nav class="tabs" aria-label="Розділи меню">${tabs}</nav>` : ''}
+${renderCorkage(menu.store)}${tabs ? `<nav class="tabs" aria-label="Розділи меню">${tabs}</nav>` : ''}
 <main>
 ${empty}${sections}
 </main>
-<footer class="foot">${factsNote}<p>Стоп-лист і ціни оновлюються самі.</p><p><a href="${escapeHtml(publicBaseUrl())}/pos/kafe" rel="noopener">Меню працює на The Live Shop POS</a></p></footer>${showBill || ordering || call ? dockMarkup(table!, showBill, ordering, call) : ''}`;
+<footer class="foot">${factsNote}<p>Стоп-лист і ціни оновлюються самі.</p><p><a href="${escapeHtml(publicBaseUrl())}/pos/kafe" rel="noopener">Меню працює на The Live Shop POS</a></p></footer>${showBill || ordering || call ? dockMarkup(table!, showBill, ordering, call, billCorkage) : ''}`;
   return shell(
     `${menu.store.name} — меню`,
     body,
@@ -346,7 +374,13 @@ ${empty}${sections}
  * key is not here at all: the script reads it from the address bar, where the
  * QR put it.
  */
-function dockMarkup(table: MenuTable, bill: boolean, ordering: boolean, call: boolean): string {
+function dockMarkup(
+  table: MenuTable,
+  bill: boolean,
+  ordering: boolean,
+  call: boolean,
+  corkage: string | null = null
+): string {
   const label = escapeHtml(tableLabel(table.name));
   // The call row (phase Q8) is drawn with its words so it reads without the
   // script; the script only greys a button while its call is live and puts the
@@ -367,7 +401,7 @@ function dockMarkup(table: MenuTable, bill: boolean, ordering: boolean, call: bo
 <div class="bill-sheet" data-bill-sheet hidden role="dialog" aria-modal="true" aria-labelledby="bill-title">
 <div class="bill-panel">
 <header class="bill-head"><h2 id="bill-title">Рахунок · ${label}</h2><button type="button" class="bill-close" data-bill-close aria-label="Закрити">×</button></header>
-<div class="bill-body" data-bill-body aria-live="polite"></div>
+${corkage ? `<p class="bill-corkage">${GLYPH.wine}<span>${escapeHtml(corkage)}</span></p>\n` : ''}<div class="bill-body" data-bill-body aria-live="polite"></div>
 </div>
 </div>`
     : '';
@@ -403,6 +437,12 @@ export interface PrintOptions {
   key?: string;
   /** The owner lets guests read the bill, yet this page was opened without a print link. */
   missingKey?: boolean;
+  /** One small line about the cork fee (`corkageCardLine`), when the owner shows one — on the next print. */
+  corkage?: string | null;
+}
+
+function ruleLine(options: PrintOptions): string {
+  return options.corkage ? `<p class="rule">${escapeHtml(options.corkage)}</p>` : '';
 }
 
 const MISSING_KEY_NOTICE =
@@ -428,7 +468,7 @@ ${seat}<p class="lead">Скануйте — меню на телефоні</p>
 <div class="qr">${qrSvg(url)}</div>
 <p class="url">${escapeHtml(url.replace(/^https?:\/\//, ''))}</p>
 <p class="hint">Ціни, розміри й те, що сьогодні закінчилось, — актуальні.</p>
-<button type="button" class="print" data-print>Друкувати</button>
+${ruleLine(options)}<button type="button" class="print" data-print>Друкувати</button>
 </main>`;
   return shell(`QR-меню — ${storeName}`, body, ' class="qr-page"');
 }
@@ -453,7 +493,7 @@ export function renderTablesSheet(
 <p class="seat"><b>${escapeHtml(tableLabel(table.name))}</b><span>${escapeHtml(table.hall)}</span></p>
 <div class="qr">${qrSvg(tableMenuUrl(token, table.id, options.keys?.get(table.id)))}</div>
 <p class="hint">Скануйте — меню на телефоні</p>
-</article>`
+${ruleLine(options)}</article>`
     )
     .join('\n');
   const body = `<header class="sheet-head">

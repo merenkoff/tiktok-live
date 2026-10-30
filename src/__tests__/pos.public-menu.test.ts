@@ -21,7 +21,7 @@ import {
   hasDb,
   type TestStore,
 } from './helpers/pos-fixtures.js';
-import { createProduct } from '../pos/products.service.js';
+import { createProduct, getCatalog } from '../pos/products.service.js';
 import * as modifiers from '../pos/modifiers.service.js';
 import { createTag } from '../pos/tags.service.js';
 import { createHall, createTable } from '../pos/tables.service.js';
@@ -74,7 +74,7 @@ describe.skipIf(!hasDb)('POS guest QR menu', () => {
     const add = async (
       name: string,
       variants: Array<{ size?: string; price: number; qty: number }>,
-      extra: { description?: string; image_url?: string; sellable?: boolean } = {}
+      extra: { description?: string; image_url?: string; sellable?: boolean; menu_hidden?: boolean } = {}
     ) => {
       const card = await createProduct(store.storeId, {
         name: `${prefix}${name}`,
@@ -124,6 +124,9 @@ describe.skipIf(!hasDb)('POS guest QR menu', () => {
     await tagIt(croissant.id, bakery.id);
     const cheesecake = await add('Сирник', [{ price: 6500, qty: 0 }]);
     await tagIt(cheesecake.id, bakery.id);
+    // Sold at the till, never listed to a guest (migration 083).
+    const corkFee = await add('Корковий збір', [{ price: 10000, qty: 0 }], { menu_hidden: true });
+    await tagIt(corkFee.id, bakery.id);
     await add('Вода', [{ price: 3000, qty: 5 }]);
     const evil = await add('<script>alert(1)</script>', [{ price: 1000, qty: 5 }]);
     await tagIt(evil.id, coffee.id);
@@ -455,6 +458,13 @@ describe.skipIf(!hasDb)('POS guest QR menu', () => {
       const names = body.categories.flatMap((c) => c.products.map((p) => p.name));
       expect(names).not.toContain('Молоко вівсяне');
       expect(body.categories.map((c) => c.name)).not.toContain('Інгредієнти');
+    });
+
+    it('keeps a product hidden from the menu off the page while the till still sells it (083)', async () => {
+      const names = (await menu()).categories.flatMap((c) => c.products.map((p) => p.name));
+      expect(names.some((n) => n.includes('Корковий збір'))).toBe(false);
+      const till = await getCatalog(cafe.storeId, { snapshot: true });
+      expect(till.some((c) => c.product_name.includes('Корковий збір'))).toBe(true);
     });
 
     it('prices by size, cheapest first, and marks the size that is out', async () => {

@@ -25,12 +25,20 @@ import {
 import { createProduct } from '../pos/products.service.js';
 import { readMigration } from '../pos/migrations.js';
 import { POS_UPLOADS_DIR } from '../pos/uploads.service.js';
-import { invalidatePublicMenu, resetPublicMenuCache, type PublicMenu } from '../pos/public-menu/menu.service.js';
+import {
+  invalidatePublicMenu,
+  resetPublicMenuCache,
+  type MenuTable,
+  type PublicMenu,
+} from '../pos/public-menu/menu.service.js';
+import { corkageCardLine } from '../pos/public-menu/format.js';
 import {
   ProfileError,
   groupHours,
   hoursTodayText,
+  multiLine,
   normalizeAddress,
+  normalizeCorkage,
   normalizeEmail,
   normalizeGoogleUrl,
   normalizeHandle,
@@ -42,7 +50,7 @@ import {
   socialUrl,
   type WeekHours,
 } from '../pos/public-menu/profile.js';
-import { renderMenuPage } from '../pos/public-menu/render.js';
+import { renderMenuPage, renderQrCard } from '../pos/public-menu/render.js';
 
 const WEEK: WeekHours = {
   '1': { open: '08:00', close: '22:00' },
@@ -287,6 +295,46 @@ describe('profile validation', () => {
     });
   });
 
+  describe('the cork fee', () => {
+    it('keeps the two figures as kopecks, reads a zero minimum as none, and tidies the note line by line', () => {
+      expect(
+        normalizeCorkage({ fee_cents: 10000, min_food_cents: 70000, note: '  Келихи  наші. \r\n\n\n Поважайте\tкоманду ❤️ \n ' })
+      ).toEqual({ fee_cents: 10000, min_food_cents: 70000, note: 'Келихи наші.\nПоважайте команду ❤️' });
+      expect(normalizeCorkage({ fee_cents: 0, min_food_cents: 0, note: '   ' })).toEqual({
+        fee_cents: 0,
+        min_food_cents: null,
+        note: null,
+      });
+      expect(normalizeCorkage({ fee_cents: 5000 })).toEqual({ fee_cents: 5000, min_food_cents: null, note: null });
+      expect(normalizeCorkage(null)).toBeNull();
+      expect(multiLine('a\n\n\nb\r\n  c  ')).toBe('a\nb\nc');
+    });
+
+    it.each([
+      [{ fee_cents: '100' }, 'a fee as text'],
+      [{ fee_cents: 100.5 }, 'a fee with a fraction'],
+      [{ fee_cents: -1 }, 'a negative fee'],
+      [{ fee_cents: 1_000_001 }, 'a fee over 10 000 ₴'],
+      [{ fee_cents: 100, min_food_cents: 'x' }, 'a minimum as text'],
+      [{ fee_cents: 100, min_food_cents: 10_000_001 }, 'a minimum over 100 000 ₴'],
+      [{ fee_cents: 100, note: 7 }, 'a note that is not text'],
+      [{ fee_cents: 100, note: 'а'.repeat(601) }, 'a note over 600'],
+      [{}, 'no fee at all'],
+      ['100', 'a bare string'],
+      [[100], 'a list'],
+    ])('refuses %o (%s)', (value) => {
+      expect(() => normalizeCorkage(value)).toThrow(ProfileError);
+    });
+
+    it('words the figures for the page and the printed card', () => {
+      expect(corkageCardLine({ fee_cents: 10000, min_food_cents: 70000, note: null })).toBe(
+        'Свій алкоголь — корковий збір 100 ₴ за пляшку, страви від 700 ₴ на гостя'
+      );
+      expect(corkageCardLine({ fee_cents: 0, min_food_cents: null, note: null })).toBe('Свій алкоголь — без коркового збору');
+      expect(corkageCardLine(null)).toBeNull();
+    });
+  });
+
   describe('the patch', () => {
     it('carries only the fields that were sent: absent = leave, null = clear', () => {
       expect(normalizeProfilePatch({})).toEqual({});
@@ -327,6 +375,7 @@ describe('the guest page header', () => {
     facebook: null,
     tiktok: null,
     google_url: null,
+    corkage: null,
   };
   const menuOf = (over: Partial<PublicMenu['store']> = {}): PublicMenu => ({
     store: { ...store, ...over },
@@ -425,6 +474,56 @@ describe('the guest page header', () => {
     expect(bare).toContain('<li class="l-map"><a href="https://g.page/x"');
   });
 
+  it('puts the cork fee between the header and the first category, with the note behind «Умови»', () => {
+    const corkage = { fee_cents: 10000, min_food_cents: 70000, note: 'Келихи <наші>.\nПоважайте команду ❤️' };
+    const html = renderMenuPage(menuOf({ corkage }), 'tok_12345678');
+    const rules = html.indexOf('<section class="rules" aria-label="Правила закладу">');
+    expect(rules).toBeGreaterThan(html.indexOf('</header>'));
+    expect(rules).toBeLessThan(html.indexOf('<main>'));
+    expect(html).toContain(
+      '<span class="corkage-text"><b>Свій алкоголь:</b> +100 ₴ за пляшку · страви від 700 ₴ на гостя</span><span class="corkage-more">Умови</span></summary>'
+    );
+    // The note keeps its line break as text (pre-line), never as markup; what the owner typed is escaped.
+    expect(html).toContain('<p class="corkage-note">Келихи &lt;наші&gt;.\nПоважайте команду ❤️</p>');
+    expect(html).not.toContain('<br');
+  });
+
+  it('draws the fee without a fold-out when there is no note, says «без збору» for a free one, and nothing when there is none', () => {
+    const plain = renderMenuPage(menuOf({ corkage: { fee_cents: 5000, min_food_cents: null, note: null } }), 'tok_12345678');
+    expect(plain).toContain('<p class="corkage"><svg');
+    expect(plain).toContain('<b>Свій алкоголь:</b> +50 ₴ за пляшку</span></p>');
+    expect(plain).not.toContain('<details class="corkage">');
+    const free = renderMenuPage(menuOf({ corkage: { fee_cents: 0, min_food_cents: 50000, note: null } }), 'tok_12345678');
+    expect(free).toContain('<b>Свій алкоголь:</b> без збору · страви від 500 ₴ на гостя</span>');
+    expect(renderMenuPage(menuOf(), 'tok_12345678')).not.toContain('class="rules"');
+  });
+
+  it('says once in the table’s bill that the fee is added, and only when there is a fee', () => {
+    const table: MenuTable = { id: 5, name: '5', hall: 'Зал' };
+    const paid = renderMenuPage(
+      menuOf({ corkage: { fee_cents: 10000, min_food_cents: null, note: null } }),
+      'tok_12345678',
+      table,
+      { bill: true }
+    );
+    expect(paid).toContain('<p class="bill-corkage"><svg');
+    expect(paid).toContain('<span>Свій алкоголь: +100 ₴ за пляшку — додається до рахунку</span></p>');
+    const free = renderMenuPage(
+      menuOf({ corkage: { fee_cents: 0, min_food_cents: null, note: null } }),
+      'tok_12345678',
+      table,
+      { bill: true }
+    );
+    expect(free).not.toContain('bill-corkage');
+    expect(renderMenuPage(menuOf(), 'tok_12345678', table, { bill: true })).not.toContain('bill-corkage');
+  });
+
+  it('prints one small line about the fee on the QR card when asked to, escaped', () => {
+    const card = renderQrCard('Кафе', 'tok_12345678', null, { corkage: 'Свій алкоголь — корковий збір 100 ₴ за пляшку <b>' });
+    expect(card).toContain('<p class="rule">Свій алкоголь — корковий збір 100 ₴ за пляшку &lt;b&gt;</p>');
+    expect(renderQrCard('Кафе', 'tok_12345678')).not.toContain('class="rule"');
+  });
+
   it('draws «На карті» alone for a store with only an address, and no row at all without one', () => {
     const withAddress = renderMenuPage(menuOf(), 'tok_12345678');
     expect(withAddress).toContain('<ul class="links" aria-label="Посилання закладу"><li class="l-map">');
@@ -511,6 +610,7 @@ describe.skipIf(!hasDb)('POS store profile through the API', () => {
         facebook: null,
         tiktok: null,
         google_url: null,
+        corkage: null,
       });
       expect((await profile(boutique.ownerToken)).json().available).toBe(false);
     });
@@ -563,6 +663,7 @@ describe.skipIf(!hasDb)('POS store profile through the API', () => {
         facebook: null,
         tiktok: null,
         google_url: null,
+        corkage: null,
       });
 
       // A card that only changed the phone must not wipe the rest by not mentioning it.
@@ -619,6 +720,44 @@ describe.skipIf(!hasDb)('POS store profile through the API', () => {
       const cleared = await patch({ email: null, instagram: null, facebook: null, tiktok: null, google_url: null });
       expect(cleared.json()).toMatchObject({ email: null, instagram: null, facebook: null, tiktok: null, google_url: null });
       expect((await page()).body).not.toContain('class="links"');
+    });
+
+    it('round-trips the cork fee, shows it to the guest at once, refuses a bad one whole and clears on null', async () => {
+      const saved = await patch({
+        corkage: { fee_cents: 10000, min_food_cents: 70000, note: ' Келихи наші. \n\n Поважайте команду ❤️ ' },
+      });
+      expect(saved.statusCode).toBe(200);
+      expect(saved.json().corkage).toEqual({
+        fee_cents: 10000,
+        min_food_cents: 70000,
+        note: 'Келихи наші.\nПоважайте команду ❤️',
+      });
+      expect((await menu()).store.corkage).toEqual(saved.json().corkage);
+      const html = (await page()).body;
+      expect(html).toContain('<b>Свій алкоголь:</b> +100 ₴ за пляшку · страви від 700 ₴ на гостя</span>');
+      expect(html).toContain('<p class="corkage-note">Келихи наші.\nПоважайте команду ❤️</p>');
+      // The printed cards carry it on their next print.
+      const card = await app.inject({ method: 'GET', url: `/m/${token}/qr` });
+      expect(card.body).toContain('<p class="rule">Свій алкоголь — корковий збір 100 ₴ за пляшку, страви від 700 ₴ на гостя</p>');
+
+      const bad = await patch({ email: 'ok@zaklad.ua', corkage: { fee_cents: -5 } });
+      expect(bad.statusCode).toBe(400);
+      expect(bad.json().error).toContain('Корковий збір');
+      expect((await profile(cafe.ownerToken)).json().corkage?.fee_cents).toBe(10000);
+
+      const off = await patch({ corkage: null });
+      expect(off.json().corkage).toBeNull();
+      expect((await page()).body).not.toContain('class="rules"');
+      expect((await app.inject({ method: 'GET', url: `/m/${token}/qr` })).body).not.toContain('class="rule"');
+    });
+
+    it('reads a hand-written row that no longer passes as «not shown»', async () => {
+      await pool.query(`UPDATE pos_stores SET public_corkage = '{"fee_cents":"a lot"}'::jsonb WHERE id = $1`, [cafe.storeId]);
+      invalidatePublicMenu(cafe.storeId);
+      expect((await menu()).store.corkage).toBeNull();
+      expect((await profile(cafe.ownerToken)).json().corkage).toBeNull();
+      await pool.query(`UPDATE pos_stores SET public_corkage = NULL WHERE id = $1`, [cafe.storeId]);
+      invalidatePublicMenu(cafe.storeId);
     });
 
     it('never puts a hand-written row’s bad Google link on the page', async () => {
@@ -678,6 +817,7 @@ describe.skipIf(!hasDb)('POS store profile through the API', () => {
         facebook: null,
         tiktok: null,
         google_url: null,
+        corkage: null,
       });
       const html = (await page()).body;
       expect(html).not.toContain('class="contacts"');
@@ -691,6 +831,7 @@ describe.skipIf(!hasDb)('POS store profile through the API', () => {
       const body = res.json() as PublicMenu;
       expect(Object.keys(body.store).sort()).toEqual([
         'address',
+        'corkage',
         'email',
         'facebook',
         'google_url',
@@ -848,6 +989,16 @@ describe.skipIf(!hasDb)('POS store profile through the API', () => {
         await restore();
         invalidatePublicMenu(Number(original.id));
       }
+    });
+  });
+
+  describe('migration 083', () => {
+    it('is safe to apply again and leaves what an owner wrote alone', async () => {
+      await patch({ corkage: { fee_cents: 2500 } });
+      await pool.query(readMigration('083_pos_corkage_menu_hidden.sql'));
+      await pool.query(readMigration('083_pos_corkage_menu_hidden.sql'));
+      expect((await profile(cafe.ownerToken)).json().corkage).toEqual({ fee_cents: 2500, min_food_cents: null, note: null });
+      await patch({ corkage: null });
     });
   });
 });

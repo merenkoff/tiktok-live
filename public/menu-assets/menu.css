@@ -64,6 +64,28 @@ a { color: var(--accent); }
 }
 .links svg { width: 16px; height: 16px; flex: none; }
 
+/* House rules (phase F2): the cork fee, before the first dish, from any QR. */
+.rules { max-width: 720px; margin: 12px auto 0; padding: 0 16px; }
+.corkage {
+  margin: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px;
+  background: var(--card); font-size: 15px; line-height: 1.35;
+}
+.corkage summary { display: flex; align-items: center; gap: 10px; cursor: pointer; list-style: none; }
+.corkage summary::-webkit-details-marker { display: none; }
+p.corkage { display: flex; align-items: center; gap: 10px; }
+.corkage svg { width: 20px; height: 20px; flex: none; color: var(--accent); }
+.corkage-text { flex: 1; min-width: 0; }
+.corkage-text b { font-weight: 700; }
+.corkage-more { color: var(--accent); font-weight: 600; white-space: nowrap; }
+.corkage[open] .corkage-more { display: none; }
+.corkage-note { margin: 10px 0 0 30px; color: var(--muted); white-space: pre-line; }
+.bill-corkage {
+  display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px 16px;
+  font-size: 14px; color: var(--muted); border-bottom: 1px solid var(--line);
+}
+.bill-corkage svg { width: 16px; height: 16px; flex: none; color: var(--accent); }
+.card .rule { margin: 10px 0 0; font-size: 13px; color: var(--muted); }
+
 .tabs {
   position: sticky; top: 0; z-index: 5;
   display: flex; gap: 8px; overflow-x: auto;

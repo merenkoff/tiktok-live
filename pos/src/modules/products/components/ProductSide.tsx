@@ -12,7 +12,7 @@ import { tagPathLabel } from './tagLabels';
 import type { TechCardRow } from '../data/techCardsApi';
 import { rowName, type ProductDraft } from '../lib/productDraft';
 
-type Fields = Pick<ProductDraft, 'sellable' | 'tagIds' | 'groupIds'>;
+type Fields = Pick<ProductDraft, 'sellable' | 'menuHidden' | 'tagIds' | 'groupIds'>;
 
 /** «Продається на касі» — the same switch on every card. */
 export function SellableField({ checked, onChange }: { checked: boolean; onChange: (next: boolean) => void }) {
@@ -35,6 +35,30 @@ export function SellableField({ checked, onChange }: { checked: boolean; onChang
 }
 
 /**
+ * «Не показувати в QR-меню» — for a kitchen vertical only, the one kind of
+ * store with a guest menu: the cork fee the waiter rings, a bag, a deposit.
+ * The till still sells it; the guest never reads it (migration 083).
+ */
+export function MenuHiddenField({ checked, onChange }: { checked: boolean; onChange: (next: boolean) => void }) {
+  return (
+    <label className="flex items-start gap-2.5 text-[15px] text-sq-text cursor-pointer sm:col-span-2">
+      <input
+        type="checkbox"
+        className={`${checkboxClass} mt-1`}
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span>
+        Не показувати в QR-меню
+        <span className="block text-[13px] text-sq-muted">
+          Для коркового збору, пакета чи депозиту: касир і офіціант додають його в чек, а гість у меню не бачить
+        </span>
+      </span>
+    </label>
+  );
+}
+
+/**
  * The card's side column: how the product shows at the till — on the sell
  * screen or not, under which tags, asking which questions — and, for a
  * composite, what each variant costs to assemble.
@@ -46,9 +70,12 @@ export function ProductSide({
   groups,
   techCards,
   variants,
+  askMenuHidden = false,
 }: {
   value: Fields;
   onPatch: (patch: Partial<Fields>) => void;
+  /** Offer «Не показувати в QR-меню» — only where the store has a guest menu. */
+  askMenuHidden?: boolean;
   flatTags: PosTag[];
   groups: ModifierGroup[];
   /** What each composite variant costs to assemble, by variant id. */
@@ -68,6 +95,9 @@ export function ProductSide({
       <section className="space-y-3">
         <SectionHead title="На касі" />
         <SellableField checked={value.sellable} onChange={(sellable) => onPatch({ sellable })} />
+        {askMenuHidden && (
+          <MenuHiddenField checked={value.menuHidden} onChange={(menuHidden) => onPatch({ menuHidden })} />
+        )}
       </section>
 
       <section className="space-y-3">
