@@ -992,13 +992,10 @@ describe.skipIf(!hasDb)('POS store profile through the API', () => {
     });
   });
 
-  describe('migration 083', () => {
-    it('is safe to apply again and leaves what an owner wrote alone', async () => {
-      await patch({ corkage: { fee_cents: 2500 } });
-      await pool.query(readMigration('083_pos_corkage_menu_hidden.sql'));
-      await pool.query(readMigration('083_pos_corkage_menu_hidden.sql'));
-      expect((await profile(cafe.ownerToken)).json().corkage).toEqual({ fee_cents: 2500, min_food_cents: null, note: null });
-      await patch({ corkage: null });
-    });
-  });
+  // No «apply 083 again» case HERE: that file alters two tables in one
+  // statement (pos_products, then pos_stores), and re-applying it on the
+  // shared database while another file's sale holds a row lock on both is a
+  // deadlock, not a wait (CI, 2026-10-30). Re-application and the one-time
+  // «Шабля» fill are proven on the scratch database by
+  // pos.migrations-idempotent.test.ts.
 });
