@@ -17,6 +17,7 @@ import {
 import { getAuthByToken, sessionExpiresAt } from './core/auth.js';
 import { effectiveEnabledModules } from './core/modules.js';
 import { getVertical, publicConfigOf } from './verticals/index.js';
+import { clearPinMisses, reservePinAttempt, type PinLock } from './pin-attempts.js';
 import type { VerticalPublicConfig } from './verticals/types.js';
 import type {
   FiscalPublicConfig,
@@ -175,14 +176,30 @@ export async function loginOwner(
   return null;
 }
 
-export async function loginWithPin(storeSlug: string, pin: string): Promise<AuthResponse | null> {
+/**
+ * One PIN login, as the route answers it: a session, a wrong PIN (with the
+ * lock that miss earned, if any — misses 5 and on close PIN login for a while,
+ * `pin-attempts.ts`), or a refusal because PIN login is closed right now.
+ *
+ * An unknown store and a malformed PIN are `invalid` with no lock and count
+ * nothing: there is no store to count against, and no PIN was compared.
+ */
+export type PinLoginOutcome =
+  | { kind: 'ok'; auth: AuthResponse }
+  | { kind: 'invalid'; lock: PinLock | null }
+  | { kind: 'locked'; lock: PinLock };
+
+export async function attemptPinLogin(storeSlug: string, pin: string): Promise<PinLoginOutcome> {
   const slug = storeSlug.trim().toLowerCase();
   const normalizedPin = normalizePin(pin);
-  if (!isValidPin(normalizedPin)) return null;
+  if (!isValidPin(normalizedPin)) return { kind: 'invalid', lock: null };
 
   const storeResult = await pool.query(`SELECT id FROM pos_stores WHERE slug = $1`, [slug]);
-  if (storeResult.rows.length === 0) return null;
+  if (storeResult.rows.length === 0) return { kind: 'invalid', lock: null };
   const storeId = Number(storeResult.rows[0].id);
+
+  const reservation = await reservePinAttempt(storeId);
+  if (!reservation.ok) return { kind: 'locked', lock: reservation.lock };
 
   const staffResult = await pool.query(
     `SELECT * FROM pos_staff
@@ -193,12 +210,36 @@ export async function loginWithPin(storeSlug: string, pin: string): Promise<Auth
   for (const staff of staffResult.rows) {
     const ok = await verifyPin(normalizedPin, staff.pin_hash);
     if (ok) {
+      await clearPinMisses(storeId);
       logger.info('POS PIN login', { staffId: staff.id, storeId });
-      return createSession(storeId, Number(staff.id));
+      return { kind: 'ok', auth: await createSession(storeId, Number(staff.id)) };
     }
   }
 
-  return null;
+  if (reservation.lockIfMissed) {
+    logger.warn('POS PIN login: wrong PIN, PIN login closed for a while', {
+      storeId,
+      miss: reservation.miss,
+      until: reservation.lockIfMissed.until.toISOString(),
+    });
+  }
+  return { kind: 'invalid', lock: reservation.lockIfMissed };
+}
+
+export class PinLoginLocked extends Error {
+  constructor(readonly lock: PinLock) {
+    super('PIN login is closed for this store');
+  }
+}
+
+/**
+ * The session for a store code and PIN, or null for a wrong one. Throws
+ * `PinLoginLocked` while PIN login is closed (see `attemptPinLogin`).
+ */
+export async function loginWithPin(storeSlug: string, pin: string): Promise<AuthResponse | null> {
+  const outcome = await attemptPinLogin(storeSlug, pin);
+  if (outcome.kind === 'locked') throw new PinLoginLocked(outcome.lock);
+  return outcome.kind === 'ok' ? outcome.auth : null;
 }
 
 export async function logout(token: string): Promise<void> {
@@ -271,6 +312,8 @@ export async function setStaffPin(storeId: number, staffId: number, pin: string)
   if (result.rows.length === 0) {
     throw new Error('Staff not found');
   }
+  // The owner's rule: a new PIN for anyone reopens PIN login, like «Розблокувати».
+  await clearPinMisses(storeId);
 }
 
 export async function setStaffActive(

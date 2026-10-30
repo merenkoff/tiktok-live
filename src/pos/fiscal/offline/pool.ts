@@ -212,22 +212,29 @@ export async function takeFreeCodes(
   db: Queryable = pool
 ): Promise<OfflineCodeRow[]> {
   if (n <= 0) return [];
+  // The pick is a MATERIALIZED CTE, not `WHERE id IN (… LIMIT $3)`: under a
+  // nested-loop semi join Postgres re-runs that subquery for every row it
+  // scans, `SKIP LOCKED` then skips the rows this statement already took, and
+  // each re-run hands over the next $3 — a take of 3 marked all 60 codes of a
+  // store in CI on 2026-10-30. A CTE is evaluated once.
   const result = await db.query(
-    `UPDATE pos_fiscal_offline_codes c SET
-       status = $4::varchar,
-       lease_device_id = $5::text,
-       leased_at = CASE WHEN $4::varchar = 'leased' THEN NOW() ELSE leased_at END,
-       used_by_receipt_id = $6::bigint,
-       used_at = CASE WHEN $4::varchar = 'used' THEN NOW() ELSE used_at END,
-       updated_at = NOW()
-     WHERE c.id IN (
+    `WITH picked AS MATERIALIZED (
        SELECT id FROM pos_fiscal_offline_codes
        WHERE store_id = $1 AND cash_register_key = $2 AND status = 'free'
        ORDER BY id ASC
        FOR UPDATE SKIP LOCKED
        LIMIT $3
      )
-     RETURNING *`,
+     UPDATE pos_fiscal_offline_codes c SET
+       status = $4::varchar,
+       lease_device_id = $5::text,
+       leased_at = CASE WHEN $4::varchar = 'leased' THEN NOW() ELSE c.leased_at END,
+       used_by_receipt_id = $6::bigint,
+       used_at = CASE WHEN $4::varchar = 'used' THEN NOW() ELSE c.used_at END,
+       updated_at = NOW()
+     FROM picked
+     WHERE c.id = picked.id
+     RETURNING c.*`,
     [
       storeId,
       registerKey,
