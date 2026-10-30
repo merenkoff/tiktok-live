@@ -309,6 +309,12 @@ export interface MenuPageOptions {
    * Not tied to a table — a letter to the owner needs no key.
    */
   feedback?: boolean;
+  /**
+   * The QR proved the table (phase F5): the sheet also lists the dishes of
+   * the table's bill with 👍/👎, fetched by the script from `/feedback/dishes`.
+   * Never true without a table and without `feedback`.
+   */
+  feedbackDishes?: boolean;
 }
 
 export function renderMenuPage(
@@ -324,6 +330,7 @@ export function renderMenuPage(
   const feedback = options.feedback
     ? { storeName: menu.store.name, googleUrl: menu.store.google_url }
     : null;
+  const feedbackDishes = Boolean(feedback && table && options.feedbackDishes);
   const tabs = menu.categories
     .map((c, i) => `<a href="#c-${c.id ?? 'other'}"${i === 0 ? ' class="on"' : ''}>${escapeHtml(c.name)}</a>`)
     .join('');
@@ -383,7 +390,8 @@ ${empty}${sections}${ask}
       // `href` property, never in markup.
       (feedback
         ? ` data-feedback-url="/api/pos/public/menu/${escapeHtml(token)}/feedback"` +
-          (feedback.googleUrl ? ` data-feedback-google="${escapeHtml(feedback.googleUrl)}"` : '')
+          (feedback.googleUrl ? ` data-feedback-google="${escapeHtml(feedback.googleUrl)}"` : '') +
+          (feedbackDishes ? ` data-feedback-dishes-url="/api/pos/public/menu/${escapeHtml(token)}/feedback/dishes"` : '')
         : '')
   );
 }
@@ -468,6 +476,11 @@ export function faceSvg(score: number): string {
   );
 }
 
+const THUMB_UP =
+  '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v11H3V10h4Zm2 11V10l4-7a2 2 0 0 1 2 2v4h5a2 2 0 0 1 2 2.3l-1.3 7A2 2 0 0 1 18.7 21H9Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>';
+const THUMB_DOWN =
+  '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 14V3h4v11h-4ZM15 3v11l-4 7a2 2 0 0 1-2-2v-4H4a2 2 0 0 1-2-2.3l1.3-7A2 2 0 0 1 5.3 3H15Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>';
+
 function tagChips(tags: readonly FeedbackTag[], set: 'good' | 'bad'): string {
   return (
     `<div class="fb-tags" data-fb-tags="${set}" hidden>` +
@@ -501,6 +514,8 @@ function feedbackSheetMarkup(feedback: FeedbackSheet): string {
 <div class="fb-more" data-fb-more hidden>
 <p class="fb-q" data-fb-q></p>
 ${tagChips(GOOD_TAGS, 'good')}${tagChips(BAD_TAGS, 'bad')}
+<div class="fb-dishes" data-fb-dishes hidden><p class="fb-q">Як страви? <small>необов’язково</small></p><ul class="fb-dish-list" data-fb-dish-list></ul></div>
+<template data-fb-thumb="up">${THUMB_UP}</template><template data-fb-thumb="down">${THUMB_DOWN}</template>
 <label class="fb-label"><span>Розкажіть більше <small>необов’язково</small></span><textarea name="comment" maxlength="600" rows="3" data-fb-comment></textarea></label>
 <button type="button" class="link-btn fb-phone-toggle" data-fb-phone-toggle>Залишити телефон для дзвінка</button>
 <label class="fb-label" data-fb-phone hidden><span>Телефон <small>власник зателефонує</small></span><input name="phone" type="tel" inputmode="tel" maxlength="32" autocomplete="tel" data-fb-phone-input></label>

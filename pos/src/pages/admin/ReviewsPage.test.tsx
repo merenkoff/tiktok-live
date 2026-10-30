@@ -33,6 +33,10 @@ const SUMMARY = {
   tags: [{ code: 'food', label: 'Страви', count: 2 }],
   unhandled_low: 1,
   latest: [],
+  dishes: [
+    { name: 'Деруни', up: 0, down: 2 },
+    { name: 'Борщ', up: 3, down: 0 },
+  ],
 };
 const ROWS = [
   {
@@ -48,6 +52,10 @@ const ROWS = [
     bill_no: 17,
     handled_at: null,
     handled_by: null,
+    items: [
+      { name: 'Борщ', verdict: 'up' },
+      { name: 'Деруни · з грибами', verdict: 'down' },
+    ],
   },
   {
     id: 11,
@@ -96,6 +104,15 @@ describe('ReviewsPage', () => {
     expect(rows[0]).toHaveTextContent('Довго чекали');
     expect(rows[0]).toHaveTextContent('Чекали суп');
     expect(within(rows[0]!).getByRole('link', { name: '+380 50 123 45 67' })).toHaveAttribute('href', 'tel:+380501234567');
+    // The dishes the guest rated (F5), in the bill's words, each with its thumb.
+    const dishes = within(rows[0]!).getByRole('list', { name: 'Оцінені страви' });
+    expect(dishes).toHaveTextContent('👍 Борщ');
+    expect(dishes).toHaveTextContent('👎 Деруни · з грибами');
+    expect(within(rows[1]!).queryByRole('list', { name: 'Оцінені страви' })).not.toBeInTheDocument();
+    const dishCard = screen.getByTestId('reviews-dishes');
+    expect(dishCard).toHaveTextContent('Деруни');
+    expect(dishCard).toHaveTextContent('👎 2');
+    expect(dishCard).toHaveTextContent('Борщ');
     expect(rows[1]).toHaveTextContent('Чудово');
     expect(rows[1]).toHaveTextContent('з QR закладу');
     expect(rows[1]).toHaveTextContent('Опрацьовано · Олена');
@@ -159,7 +176,7 @@ describe('ReviewsPage', () => {
     posRequest.mockImplementation((method, path) =>
       Promise.resolve(
         String(path).startsWith('/feedback/summary')
-          ? { ...SUMMARY, count: 0, average: null, tags: [], unhandled_low: 0 }
+          ? { ...SUMMARY, count: 0, average: null, tags: [], unhandled_low: 0, dishes: [] }
           : { rows: [], total: 0, from: '', to: '' }
       )
     );

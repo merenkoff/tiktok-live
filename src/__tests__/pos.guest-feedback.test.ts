@@ -24,7 +24,10 @@ import {
   type TestStore,
 } from './helpers/pos-fixtures.js';
 import { createHall, createTable } from '../pos/tables.service.js';
-import { openBill } from '../pos/bills.service.js';
+import { addDraftItem, openBill } from '../pos/bills.service.js';
+import { fireRound } from '../pos/rounds.service.js';
+import { payBill } from '../pos/bill-payment.service.js';
+import { createProduct } from '../pos/products.service.js';
 import { resetPublicMenuCache, type PublicMenu } from '../pos/public-menu/menu.service.js';
 import { getTableKeys } from '../pos/public-menu/table-keys.js';
 import {
@@ -59,6 +62,7 @@ describe('normalizeFeedback', () => {
       comment: 'Довго\nчекали',
       phone: '+380 44 123-45-67',
       source: 'bill',
+      items: [],
       bot: false,
     });
     expect(normalizeFeedback({ client_uuid: id, score: 5 })).toEqual({
@@ -68,6 +72,7 @@ describe('normalizeFeedback', () => {
       comment: null,
       phone: null,
       source: 'menu',
+      items: [],
       bot: false,
     });
     expect(normalizeFeedback({ client_uuid: id, score: 5, website: 'http://spam' }).bot).toBe(true);
@@ -354,6 +359,7 @@ describe.skipIf(!hasDb)('POS guest feedback (F3)', () => {
         'handled_at',
         'handled_by',
         'id',
+        'items',
         'phone',
         'score',
         'source',
@@ -450,6 +456,150 @@ describe.skipIf(!hasDb)('POS guest feedback (F3)', () => {
       expect((await handled(row.id, { handled: 'yes' })).statusCode).toBe(400);
       expect((await handled(999999999)).statusCode).toBe(404);
       expect((await handled(row.id, {}, other.ownerToken)).statusCode).toBe(404);
+    });
+  });
+
+  describe('the dishes of the bill (F5)', () => {
+    let borschVariant = 0;
+    let derunyVariant = 0;
+    const dishes = async (query?: string, t = token) =>
+      app.inject({ method: 'GET', url: `/api/pos/public/menu/${t}/feedback/dishes${query ?? (await keyed(table5))}` });
+    const items = async () =>
+      (
+        await pool.query(
+          `SELECT it.product_name, it.verdict, it.bill_item_id FROM pos_guest_feedback_items it
+             JOIN pos_guest_feedback f ON f.id = it.feedback_id WHERE f.store_id = $1 ORDER BY it.id`,
+          [cafe.storeId]
+        )
+      ).rows;
+    const dinner = async (tableId: number) => {
+      const { bill } = await openBill({ storeId: cafe.storeId, staffId: cafe.sellerId, tableId, guests: 2 });
+      await addDraftItem(cafe.storeId, cafe.sellerId, bill.id, { variant_id: borschVariant, quantity: 2 });
+      await addDraftItem(cafe.storeId, cafe.sellerId, bill.id, { variant_id: derunyVariant, quantity: 1 });
+      const fired = await fireRound({ storeId: cafe.storeId, staffId: cafe.sellerId, billId: bill.id });
+      return fired;
+    };
+
+    beforeAll(async () => {
+      expect((await patch(cafe, { feedback_enabled: true })).statusCode).toBe(200);
+      const borsch = (await createProduct(cafe.storeId, {
+        name: 'Борщ',
+        variants: [{ attributes: {}, price_cents: 19000, quantity: 100 }],
+      }))!;
+      borschVariant = (borsch.variants[0] as { id: number }).id;
+      const deruny = (await createProduct(cafe.storeId, {
+        name: 'Деруни',
+        variants: [{ attributes: { size: 'з грибами' }, price_cents: 18000, quantity: 100 }],
+      }))!;
+      derunyVariant = (deruny.variants[0] as { id: number }).id;
+    });
+
+    beforeEach(async () => {
+      await pool.query(`DELETE FROM pos_bills WHERE store_id = $1`, [cafe.storeId]);
+    });
+
+    it('lists nothing without a bill, and the same 404 without the key, with a wrong token or the switch off', async () => {
+      expect((await dishes()).json()).toEqual({ bill: false, dishes: [] });
+      for (const query of ['', `?t=${table5}`, `?t=${table5}&k=nope`]) {
+        expect((await dishes(query)).statusCode, query).toBe(404);
+      }
+      expect((await dishes(undefined, 'no_such_token')).statusCode).toBe(404);
+    });
+
+    it('lists the fired lines of the table’s bill — names and captions, never prices — and takes a thumb per line', async () => {
+      const bill = await dinner(table5);
+      // A draft line is not a dish yet.
+      await addDraftItem(cafe.storeId, cafe.sellerId, bill.id, { variant_id: borschVariant, quantity: 1 });
+      const res = await dishes();
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.bill).toBe(true);
+      expect(body.dishes).toHaveLength(2);
+      expect(Object.keys(body.dishes[0]).sort()).toEqual(['bill_item_id', 'caption', 'name']);
+      expect(body.dishes.map((d: { name: string; caption: string }) => [d.name, d.caption])).toEqual([
+        ['Борщ', ''],
+        ['Деруни', 'з грибами'],
+      ]);
+      expect(res.body).not.toContain('price');
+      const [borschLine, derunyLine] = body.dishes as Array<{ bill_item_id: number }>;
+
+      const id = UUID();
+      const sent = await send(
+        {
+          client_uuid: id,
+          score: 4,
+          // Said twice about the same dish: the last word wins.
+          items: [
+            { bill_item_id: borschLine!.bill_item_id, verdict: 'down' },
+            { bill_item_id: borschLine!.bill_item_id, verdict: 'up' },
+            { bill_item_id: derunyLine!.bill_item_id, verdict: 'down' },
+          ],
+        },
+        await keyed(table5)
+      );
+      expect(sent.statusCode).toBe(201);
+      expect(await items()).toEqual([
+        { product_name: 'Борщ', verdict: 'up', bill_item_id: String(borschLine!.bill_item_id) },
+        { product_name: 'Деруни · з грибами', verdict: 'down', bill_item_id: String(derunyLine!.bill_item_id) },
+      ]);
+      expect((await rows())[0]).toMatchObject({ bill_id: String(bill.id), table_id: String(table5) });
+
+      // The owner reads them on the row and in the window's sum.
+      const list = (await app.inject({ method: 'GET', url: '/api/pos/feedback', headers: auth(cafe.ownerToken) })).json();
+      expect(list.rows[0].items).toEqual([
+        { name: 'Борщ', verdict: 'up' },
+        { name: 'Деруни · з грибами', verdict: 'down' },
+      ]);
+      const summary = (await app.inject({ method: 'GET', url: '/api/pos/feedback/summary', headers: auth(cafe.ownerToken) })).json();
+      expect(summary.dishes).toEqual([
+        { name: 'Деруни · з грибами', up: 0, down: 1 },
+        { name: 'Борщ', up: 1, down: 0 },
+      ]);
+    });
+
+    it('refuses a dish that is not this bill’s, a dish without a bill, and a bad verdict — and writes nothing', async () => {
+      const bill = await dinner(table5);
+      const line = (await dishes()).json().dishes[0].bill_item_id as number;
+      const elsewhere = await dinner(table6);
+      const foreign = (await dishes(await keyed(table6))).json().dishes[0].bill_item_id as number;
+      expect(elsewhere.id).not.toBe(bill.id);
+
+      const wrong = await send({ client_uuid: UUID(), score: 5, items: [{ bill_item_id: foreign, verdict: 'up' }] }, await keyed(table5));
+      expect(wrong.statusCode).toBe(400);
+      expect(wrong.json().error).toContain('рахунку вашого столу');
+      const noBill = await send({ client_uuid: UUID(), score: 5, items: [{ bill_item_id: line, verdict: 'up' }] });
+      expect(noBill.statusCode).toBe(400);
+      expect((await send({ client_uuid: UUID(), score: 5, items: [{ bill_item_id: line, verdict: 'meh' }] }, await keyed(table5))).statusCode).toBe(400);
+      expect((await send({ client_uuid: UUID(), score: 5, items: 'all' }, await keyed(table5))).statusCode).toBe(400);
+      expect(await rows()).toHaveLength(0);
+      expect(await items()).toHaveLength(0);
+    });
+
+    it('still knows the dinner for three hours after the bill was paid, and then no longer', async () => {
+      const bill = await dinner(table5);
+      await payBill({
+        storeId: cafe.storeId,
+        staffId: cafe.sellerId,
+        billId: bill.id,
+        parts: [{ payments: [{ method: 'cash', amount_cents: 2 * 19000 + 18000 }] }],
+      });
+      const paid = await pool.query(`SELECT status, closed_at FROM pos_bills WHERE id = $1`, [bill.id]);
+      expect(paid.rows[0].status).toBe('paid');
+      const after = (await dishes()).json();
+      expect(after.bill).toBe(true);
+      expect(after.dishes).toHaveLength(2);
+      const sent = await send(
+        { client_uuid: UUID(), score: 5, items: [{ bill_item_id: after.dishes[0].bill_item_id, verdict: 'up' }] },
+        await keyed(table5)
+      );
+      expect(sent.statusCode).toBe(201);
+      expect((await rows())[0]).toMatchObject({ bill_id: String(bill.id) });
+
+      await pool.query(`UPDATE pos_bills SET closed_at = NOW() - INTERVAL '4 hours' WHERE id = $1`, [bill.id]);
+      expect((await dishes()).json()).toEqual({ bill: false, dishes: [] });
+      const late = await send({ client_uuid: UUID(), score: 5 }, await keyed(table5));
+      expect(late.statusCode).toBe(201);
+      expect((await rows())[1]).toMatchObject({ bill_id: null, table_id: String(table5) });
     });
   });
 

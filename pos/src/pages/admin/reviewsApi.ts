@@ -23,6 +23,8 @@ export interface FeedbackRow {
   bill_no: number | null;
   handled_at: string | null;
   handled_by: string | null;
+  /** The dishes of the bill the guest rated (F5); absent on an older server. */
+  items?: Array<{ name: string; verdict: 'up' | 'down' }>;
 }
 
 export interface FeedbackList {
@@ -41,6 +43,8 @@ export interface FeedbackSummary {
   tags: Array<{ code: string; label: string; count: number }>;
   unhandled_low: number;
   latest: Array<{ id: number; score: number; comment: string | null; created_at: string }>;
+  /** Dishes rated in the window, most disliked first (F5); absent on an older server. */
+  dishes?: Array<{ name: string; up: number; down: number }>;
 }
 
 export interface FeedbackQuery {
