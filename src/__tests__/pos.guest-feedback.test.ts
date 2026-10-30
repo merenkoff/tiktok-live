@@ -314,6 +314,145 @@ describe.skipIf(!hasDb)('POS guest feedback (F3)', () => {
     });
   });
 
+  describe('the owner reads it (F4)', () => {
+    const list = (query = '', bearer = cafe.ownerToken) =>
+      app.inject({ method: 'GET', url: `/api/pos/feedback${query}`, headers: auth(bearer) });
+    const summary = (query = '', bearer = cafe.ownerToken) =>
+      app.inject({ method: 'GET', url: `/api/pos/feedback/summary${query}`, headers: auth(bearer) });
+    const handled = (id: number, payload: Record<string, unknown> = {}, bearer = cafe.ownerToken) =>
+      app.inject({ method: 'POST', url: `/api/pos/feedback/${id}/handled`, headers: auth(bearer), payload });
+
+    beforeAll(async () => {
+      expect((await patch(cafe, { feedback_enabled: true })).statusCode).toBe(200);
+    });
+
+    it('is the owner’s alone: a waiter reads nothing, a guest without a session nothing', async () => {
+      expect((await list('', cafe.sellerToken)).statusCode).toBe(403);
+      expect((await summary('', cafe.sellerToken)).statusCode).toBe(403);
+      expect((await handled(1, {}, cafe.sellerToken)).statusCode).toBe(403);
+      expect((await app.inject({ method: 'GET', url: '/api/pos/feedback' })).statusCode).toBe(401);
+    });
+
+    it('lists the guests’ words newest first, with the table, the bill, the phone and the chips in words', async () => {
+      const { bill } = await openBill({ storeId: cafe.storeId, staffId: cafe.sellerId, tableId: table6, guests: 1 });
+      const first = UUID();
+      await send({ client_uuid: first, score: 5, tags: ['food', 'speed'], comment: 'Смачно' });
+      const second = UUID();
+      await send(
+        { client_uuid: second, score: 2, tags: ['wait'], comment: 'Довго', phone: '+380 50 123 45 67', source: 'bill' },
+        await keyed(table6)
+      );
+      const res = await list();
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.total).toBe(2);
+      expect(body.rows.map((r: { score: number }) => r.score)).toEqual([2, 5]);
+      expect(Object.keys(body.rows[0]).sort()).toEqual([
+        'bill_no',
+        'comment',
+        'created_at',
+        'handled_at',
+        'handled_by',
+        'id',
+        'phone',
+        'score',
+        'source',
+        'table',
+        'tag_labels',
+        'tags',
+      ]);
+      expect(body.rows[0]).toMatchObject({
+        score: 2,
+        tags: ['wait'],
+        tag_labels: ['Довго чекали'],
+        comment: 'Довго',
+        phone: '+380 50 123 45 67',
+        source: 'bill',
+        table: { id: table6, name: '6', hall: 'Зал' },
+        bill_no: bill.bill_no,
+        handled_at: null,
+        handled_by: null,
+      });
+      expect(body.rows[1]).toMatchObject({ score: 5, tag_labels: ['Страви', 'Швидкість'], table: null, bill_no: null, phone: null });
+      // Nothing of the guest's uuid leaves to the owner's screen either.
+      expect(res.body).not.toContain(first);
+    });
+
+    it('filters by score and by what is still waiting, pages with a total, and refuses a bad window in words', async () => {
+      const ids: string[] = [];
+      for (const score of [5, 4, 3, 2, 1, 5]) {
+        const id = UUID();
+        ids.push(id);
+        await send({ client_uuid: id, score });
+      }
+      expect((await list('?score=5')).json().rows).toHaveLength(2);
+      expect((await list('?score=9')).statusCode).toBe(400);
+      const page1 = (await list('?limit=4')).json();
+      expect(page1.rows).toHaveLength(4);
+      expect(page1.total).toBe(6);
+      const page2 = (await list('?limit=4&offset=4')).json();
+      expect(page2.rows).toHaveLength(2);
+      expect((await list('?limit=0')).statusCode).toBe(400);
+      expect((await list('?offset=-1')).statusCode).toBe(400);
+      expect((await list('?from=2026-13-40')).statusCode).toBe(400);
+      expect((await list('?handled=maybe')).statusCode).toBe(400);
+
+      const low = (await list('?score=1')).json().rows[0];
+      expect((await handled(low.id)).json()).toMatchObject({ handled_at: expect.any(String), handled_by: expect.any(String) });
+      expect((await list('?handled=false')).json().total).toBe(5);
+      expect((await list('?handled=true')).json().total).toBe(1);
+      // A window that ends before today holds none of them.
+      expect((await list('?from=2020-01-01&to=2020-01-31')).json()).toMatchObject({ total: 0, from: '2020-01-01', to: '2020-01-31' });
+    });
+
+    it('sums the window: the mean to one decimal, the spread, the chips ticked most, the low ones waiting', async () => {
+      for (const [score, tags] of [
+        [5, ['food', 'service']],
+        [4, ['food']],
+        [2, ['wait', 'food_wrong']],
+        [1, ['wait']],
+      ] as const) {
+        await send({ client_uuid: UUID(), score, tags: [...tags], comment: score <= 2 ? 'Погано було' : null });
+      }
+      const body = (await summary()).json();
+      expect(body).toMatchObject({
+        count: 4,
+        average: 3,
+        distribution: { '1': 1, '2': 1, '3': 0, '4': 1, '5': 1 },
+        unhandled_low: 2,
+      });
+      expect(body.tags.slice(0, 2)).toEqual([
+        { code: 'food', label: 'Страви', count: 2 },
+        { code: 'wait', label: 'Довго чекали', count: 2 },
+      ]);
+      expect(body.latest).toHaveLength(2);
+      expect(body.latest.every((row: { comment: string | null }) => row.comment === 'Погано було')).toBe(true);
+      expect(typeof body.from).toBe('string');
+      expect(typeof body.to).toBe('string');
+
+      const low = (await list('?score=1')).json().rows[0];
+      await handled(low.id);
+      expect((await summary()).json().unhandled_low).toBe(1);
+      // An empty window is zeroes and a null mean, never a crash.
+      expect((await summary('?from=2020-01-01&to=2020-01-02')).json()).toMatchObject({ count: 0, average: null, tags: [], latest: [] });
+      expect((await summary('?from=2020-13-01')).statusCode).toBe(400);
+    });
+
+    it('marks handled once, keeps who did it first, un-marks on request and answers 404 for another store’s row', async () => {
+      await send({ client_uuid: UUID(), score: 3 });
+      const row = (await list()).json().rows[0];
+      const first = (await handled(row.id)).json();
+      expect(first.handled_by).toBeTruthy();
+      const again = (await handled(row.id, { handled: true })).json();
+      expect(again.handled_at).toBe(first.handled_at);
+      const back = (await handled(row.id, { handled: false })).json();
+      expect(back).toMatchObject({ handled_at: null, handled_by: null });
+      expect((await handled(row.id, { handled: 'yes' })).statusCode).toBe(400);
+      expect((await handled(999999999)).statusCode).toBe(404);
+      expect((await handled(row.id, {}, other.ownerToken)).statusCode).toBe(404);
+    });
+  });
+
   describe('housekeeping', () => {
     it('wipes the phone after ninety days and keeps the feedback', async () => {
       const old = UUID();

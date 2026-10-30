@@ -22,6 +22,10 @@ vi.mock('@pos/platform', async () => {
       salesSummary: (p: unknown) => salesSummary(p),
       lowStock: async () => [],
       listPreorders: async () => [],
+      // The feedback tile (F4) asks and, told «older server», draws nothing.
+      posRequest: async () => {
+        throw Object.assign(new Error('older'), { response: { status: 404 } });
+      },
     },
   };
 });

@@ -252,3 +252,212 @@ export async function wipeGuestFeedbackPhones(days = PHONE_RETENTION_DAYS): Prom
   );
   return result.rowCount ?? 0;
 }
+
+// ── the owner (phase F4) ────────────────────────────────────────────
+
+export const FACE_WORDS: Record<1 | 2 | 3 | 4 | 5, string> = {
+  1: 'Погано',
+  2: 'Так собі',
+  3: 'Нормально',
+  4: 'Добре',
+  5: 'Чудово',
+};
+
+/** One feedback as the owner's screen reads it: the guest's words, the table, the bill, who handled it. */
+export interface FeedbackRow {
+  id: number;
+  score: number;
+  tags: FeedbackTag[];
+  tag_labels: string[];
+  comment: string | null;
+  /** The guest's call-back phone, owner-only; null once wiped (PHONE_RETENTION_DAYS). */
+  phone: string | null;
+  source: FeedbackSource;
+  created_at: string;
+  table: { id: number; name: string; hall: string } | null;
+  bill_no: number | null;
+  handled_at: string | null;
+  handled_by: string | null;
+}
+
+export interface FeedbackListQuery {
+  /** Store-local days, inclusive; default the last 30 days up to today. */
+  from?: string;
+  to?: string;
+  score?: number;
+  /** true = handled only, false = waiting only, undefined = all. */
+  handled?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+export const LIST_LIMIT_DEFAULT = 30;
+export const LIST_LIMIT_MAX = 100;
+export const SUMMARY_DAYS_DEFAULT = 30;
+
+function toRow(row: Record<string, unknown>): FeedbackRow {
+  const tags = (Array.isArray(row.tags) ? (row.tags as string[]) : []).filter(
+    (tag): tag is FeedbackTag => tag in FEEDBACK_TAGS
+  );
+  return {
+    id: Number(row.id),
+    score: Number(row.score),
+    tags,
+    tag_labels: tags.map((tag) => FEEDBACK_TAGS[tag]),
+    comment: typeof row.comment === 'string' ? row.comment : null,
+    phone: typeof row.phone === 'string' ? row.phone : null,
+    source: row.source === 'bill' ? 'bill' : 'menu',
+    created_at: new Date(row.created_at as string).toISOString(),
+    table:
+      row.table_id == null
+        ? null
+        : { id: Number(row.table_id), name: String(row.table_name ?? ''), hall: String(row.hall_name ?? '') },
+    bill_no: row.bill_no == null ? null : Number(row.bill_no),
+    handled_at: row.handled_at == null ? null : new Date(row.handled_at as string).toISOString(),
+    handled_by: typeof row.handled_by_name === 'string' ? row.handled_by_name : null,
+  };
+}
+
+const ROW_SELECT = `
+  SELECT f.id, f.score, f.tags, f.comment, f.phone, f.source, f.created_at, f.handled_at,
+         f.table_id, t.name AS table_name, h.name AS hall_name,
+         b.bill_no, s.display_name AS handled_by_name
+    FROM pos_guest_feedback f
+    LEFT JOIN pos_tables t ON t.id = f.table_id
+    LEFT JOIN pos_halls h ON h.id = t.hall_id
+    LEFT JOIN pos_bills b ON b.id = f.bill_id
+    LEFT JOIN pos_staff s ON s.id = f.handled_by`;
+
+/** The store's calendar, so «last 30 days» ends on the owner's today, not the server's. */
+async function storeZone(storeId: number): Promise<string> {
+  const result = await pool.query(`SELECT timezone FROM pos_stores WHERE id = $1`, [storeId]);
+  return typeof result.rows[0]?.timezone === 'string' ? result.rows[0].timezone : 'Europe/Kyiv';
+}
+
+/**
+ * The window in the store's days: explicit bounds, or the last SUMMARY_DAYS_DEFAULT
+ * days up to today. Computed in Postgres with the store's zone, the way the
+ * analytics windows are.
+ */
+async function windowOf(storeId: number, from?: string, to?: string): Promise<{ from: string; to: string; zone: string }> {
+  const zone = await storeZone(storeId);
+  const result = await pool.query(
+    `SELECT COALESCE($2::date, COALESCE($3::date, (NOW() AT TIME ZONE $1)::date) - ($4::int - 1))::text AS from_day,
+            COALESCE($3::date, (NOW() AT TIME ZONE $1)::date)::text AS to_day`,
+    [zone, from ?? null, to ?? null, SUMMARY_DAYS_DEFAULT]
+  );
+  return { from: String(result.rows[0].from_day), to: String(result.rows[0].to_day), zone };
+}
+
+/** The owner's list, newest first, with the total behind it for «Показати ще». */
+export async function listFeedback(
+  storeId: number,
+  query: FeedbackListQuery = {}
+): Promise<{ rows: FeedbackRow[]; total: number; from: string; to: string }> {
+  const { from, to, zone } = await windowOf(storeId, query.from, query.to);
+  const limit = Math.min(Math.max(1, Math.trunc(query.limit ?? LIST_LIMIT_DEFAULT)), LIST_LIMIT_MAX);
+  const offset = Math.max(0, Math.trunc(query.offset ?? 0));
+  const where = [`f.store_id = $1`, `(f.created_at AT TIME ZONE $2)::date BETWEEN $3::date AND $4::date`];
+  const values: unknown[] = [storeId, zone, from, to];
+  if (query.score !== undefined) {
+    values.push(query.score);
+    where.push(`f.score = $${values.length}`);
+  }
+  if (query.handled === true) where.push(`f.handled_at IS NOT NULL`);
+  if (query.handled === false) where.push(`f.handled_at IS NULL`);
+  const total = await pool.query(`SELECT count(*)::int AS n FROM pos_guest_feedback f WHERE ${where.join(' AND ')}`, values);
+  values.push(limit, offset);
+  const result = await pool.query(
+    `${ROW_SELECT} WHERE ${where.join(' AND ')} ORDER BY f.created_at DESC, f.id DESC LIMIT $${values.length - 1} OFFSET $${values.length}`,
+    values
+  );
+  return { rows: result.rows.map(toRow), total: Number(total.rows[0].n), from, to };
+}
+
+/** «Опрацьовано» — or back to waiting. Null for a feedback that is not this store's. */
+export async function setFeedbackHandled(
+  storeId: number,
+  id: number,
+  staffId: number,
+  handled: boolean
+): Promise<FeedbackRow | null> {
+  const updated = await pool.query(
+    `UPDATE pos_guest_feedback
+        SET handled_at = CASE WHEN $3 THEN COALESCE(handled_at, NOW()) ELSE NULL END,
+            handled_by = CASE WHEN $3 THEN COALESCE(handled_by, $4::bigint) ELSE NULL END
+      WHERE store_id = $1 AND id = $2
+      RETURNING id`,
+    [storeId, id, handled, staffId]
+  );
+  if (!updated.rows[0]) return null;
+  const result = await pool.query(`${ROW_SELECT} WHERE f.store_id = $1 AND f.id = $2`, [storeId, id]);
+  return result.rows[0] ? toRow(result.rows[0]) : null;
+}
+
+export interface FeedbackSummary {
+  from: string;
+  to: string;
+  count: number;
+  /** Mean score with one decimal, or null with no feedback. */
+  average: number | null;
+  distribution: Record<'1' | '2' | '3' | '4' | '5', number>;
+  /** The chips ticked most, with their counts, most first. */
+  tags: Array<{ code: FeedbackTag; label: string; count: number }>;
+  /** Low scores (1–3) nobody has marked handled yet — the ones to act on. */
+  unhandled_low: number;
+  /** The newest few with words, for the dashboard tile. */
+  latest: Array<{ id: number; score: number; comment: string | null; created_at: string }>;
+}
+
+/** The figures the dashboard tile and the page's head read. Arithmetic, not a recommendation. */
+export async function feedbackSummary(
+  storeId: number,
+  query: { from?: string; to?: string } = {}
+): Promise<FeedbackSummary> {
+  const { from, to, zone } = await windowOf(storeId, query.from, query.to);
+  const scope = `f.store_id = $1 AND (f.created_at AT TIME ZONE $2)::date BETWEEN $3::date AND $4::date`;
+  const values = [storeId, zone, from, to];
+  const totals = await pool.query(
+    `SELECT count(*)::int AS n,
+            ROUND(AVG(f.score)::numeric, 1)::float AS average,
+            count(*) FILTER (WHERE f.score = 1)::int AS s1,
+            count(*) FILTER (WHERE f.score = 2)::int AS s2,
+            count(*) FILTER (WHERE f.score = 3)::int AS s3,
+            count(*) FILTER (WHERE f.score = 4)::int AS s4,
+            count(*) FILTER (WHERE f.score = 5)::int AS s5,
+            count(*) FILTER (WHERE f.score <= 3 AND f.handled_at IS NULL)::int AS unhandled_low
+       FROM pos_guest_feedback f WHERE ${scope}`,
+    values
+  );
+  const t = totals.rows[0];
+  const tags = await pool.query(
+    `SELECT tag, count(*)::int AS n
+       FROM pos_guest_feedback f, unnest(f.tags) AS tag
+      WHERE ${scope}
+      GROUP BY tag ORDER BY n DESC, tag LIMIT 6`,
+    values
+  );
+  const latest = await pool.query(
+    `SELECT f.id, f.score, f.comment, f.created_at FROM pos_guest_feedback f
+      WHERE ${scope} AND f.comment IS NOT NULL
+      ORDER BY f.created_at DESC, f.id DESC LIMIT 3`,
+    values
+  );
+  return {
+    from,
+    to,
+    count: Number(t.n),
+    average: t.average == null ? null : Number(t.average),
+    distribution: { '1': Number(t.s1), '2': Number(t.s2), '3': Number(t.s3), '4': Number(t.s4), '5': Number(t.s5) },
+    tags: tags.rows
+      .filter((row) => row.tag in FEEDBACK_TAGS)
+      .map((row) => ({ code: row.tag as FeedbackTag, label: FEEDBACK_TAGS[row.tag as FeedbackTag], count: Number(row.n) })),
+    unhandled_low: Number(t.unhandled_low),
+    latest: latest.rows.map((row) => ({
+      id: Number(row.id),
+      score: Number(row.score),
+      comment: typeof row.comment === 'string' ? row.comment : null,
+      created_at: new Date(row.created_at as string).toISOString(),
+    })),
+  };
+}

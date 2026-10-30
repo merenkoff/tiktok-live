@@ -25,6 +25,7 @@ import { registerTablesRoutes } from './routes/tables.routes.js';
 import { registerFiscalRoutes } from './routes/fiscal.routes.js';
 import { registerSuperRoutes } from './routes/super.routes.js';
 import { registerPublicMenuRoutes } from './routes/public-menu.routes.js';
+import { registerGuestFeedbackRoutes } from './routes/guest-feedback.routes.js';
 import { registerGuestOrdersRoutes } from './routes/guest-orders.routes.js';
 import { registerDebtsRoutes } from './routes/debts.routes.js';
 
@@ -77,6 +78,8 @@ export const POS_ROUTE_GROUPS: PosRouteGroup[] = [
   { moduleId: null, register: registerPublicMenuRoutes },
   // The waiter's side of a guest's request for dishes (Q6); the guest's side is in the group above.
   { moduleId: null, register: registerGuestOrdersRoutes },
+  // The owner's side of what guests wrote from the QR menu (F4); the guest's side is in the menu group.
+  { moduleId: null, register: registerGuestFeedbackRoutes },
   // Goods given «під запис» (073, TechDocs/grocery/G3_DEBTS.md). Core for the
   // same reason as `registerTablesRoutes`: the `debts` module opts in through
   // `module_remotes`. The gate is per customer — no limit from the owner, no

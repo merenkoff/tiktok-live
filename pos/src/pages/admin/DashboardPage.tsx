@@ -14,6 +14,7 @@ import { ModuleSlots } from '../../modules/ModuleSlots';
 import type { PaymentMethod, SalesSummary } from '../../types';
 import { Check, DownloadLine, Star } from '../../platform/glyphs';
 import { deviceDay, useAttention } from './attention';
+import { GuestFeedbackTile } from './GuestFeedbackTile';
 
 function addDays(dateStr: string, delta: number): string {
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -122,6 +123,8 @@ export function DashboardPage() {
 
   const auth = useAuthStore((s) => s.auth);
   const vertical = auth?.store.vertical?.id ?? 'clothing';
+  // Guests write from the QR menu, which only a kitchen vertical has (`dishFacts` is its mark on the wire).
+  const hasGuestMenu = auth?.store.vertical?.dishFacts !== false;
   const fiscalEnabled = Boolean(auth?.store.fiscal?.enabled);
   const panels = useModuleSlots('analytics.Panels');
   const attention = useAttention((s) => s.items);
@@ -330,6 +333,9 @@ export function DashboardPage() {
           reportModuleEvent({ type: 'analytics_panels_error', moduleId, vertical, error: err })
         }
       />
+
+      {/* What guests wrote from the QR menu (F4). Draws nothing for a boutique, on an older server or with no feedback in the window. */}
+      {hasGuestMenu && <GuestFeedbackTile from={data.from} to={data.to} />}
 
       {data.daily.length > 1 && (
         <section>
