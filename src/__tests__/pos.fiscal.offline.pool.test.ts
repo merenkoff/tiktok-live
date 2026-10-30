@@ -128,6 +128,29 @@ describe.skipIf(!hasDb)('POS fiscal offline code pool', () => {
     expect(fake.offline?.calls).toEqual([]);
   });
 
+  it('takes exactly n codes whatever plan Postgres picks (CI, 2026-10-30)', async () => {
+    // Under a nested-loop semi join Postgres re-ran `WHERE id IN (… SKIP
+    // LOCKED LIMIT n)` once per scanned row, each run skipping what the
+    // statement had already taken — a take of 3 marked all 60. Force that plan.
+    await refill();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const knob of ['enable_hashjoin', 'enable_mergejoin', 'enable_material', 'enable_hashagg', 'enable_sort']) {
+        await client.query(`SET LOCAL ${knob} = off`);
+      }
+      const taken = await offlinePool.takeFreeCodes(store.storeId, '', 3, { status: 'used', receiptId: null }, client);
+      expect(taken.map((c) => c.fiscal_code)).toEqual(['OFF-0001', 'OFF-0002', 'OFF-0003']);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+    expect(await counts()).toEqual({ free: 57, leased: 0, used: 3, burned: 0 });
+  });
+
   it('never duplicates a code the provider lists again', async () => {
     await refill();
     // Take some out so the pool is below target; the provider still lists
