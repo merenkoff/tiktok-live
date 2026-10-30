@@ -33,6 +33,7 @@ describe('Nav — admin sidebar', () => {
       '/admin',
       '/admin/customers',
       '/admin/sales',
+      '/admin/reviews',
       '/admin/products',
       '/admin/tech-cards',
       '/admin/modifiers',

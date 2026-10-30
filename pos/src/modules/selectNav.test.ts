@@ -3,6 +3,8 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { describe, expect, it } from 'vitest';
+import { useAuthStore } from '../hooks/useAuth';
+import { makeAuthResponse } from '../test/utils';
 import { CORE_MODULE_IDS, DEFAULT_ENABLED_MODULE_IDS } from './constants';
 import { MODULES } from './registry';
 import { selectNavItems } from './selectNav';
@@ -35,11 +37,26 @@ describe('admin sidebar', () => {
       '/admin/stock',
       '/admin/customers',
       '/admin/sales',
+      '/admin/reviews',
       '/admin/staff',
       '/admin/gtin',
       '/admin/settings',
       '/admin/appearance',
     ]);
+  });
+
+  it('offers «Відгуки» only to a store with a guest menu — a kitchen vertical, or an auth that does not say', () => {
+    // Guests write from the QR menu, which only a café or a restaurant has;
+    // the product form reads the same `dishFacts` mark and defaults to «yes».
+    const boutique = makeAuthResponse({ store: { vertical: { id: 'clothing', dishFacts: false } } as never });
+    useAuthStore.setState({ auth: boutique } as never);
+    try {
+      expect(select({ shell: 'web', role: 'owner' }, 'admin-sidebar')).not.toContain('/admin/reviews');
+      useAuthStore.setState({ auth: makeAuthResponse({ store: { vertical: { id: 'cafe', dishFacts: true } } as never }) } as never);
+      expect(select({ shell: 'web', role: 'owner' }, 'admin-sidebar')).toContain('/admin/reviews');
+    } finally {
+      useAuthStore.setState({ auth: null } as never);
+    }
   });
 
   it('drops every owner-only section for a seller', () => {
