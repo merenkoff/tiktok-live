@@ -584,6 +584,27 @@ describe.skipIf(!hasDb)('POS products service', () => {
       expect(await products.getCatalog(catalogStore.storeId, { q: 'red' })).toHaveLength(1);
     });
 
+    it('keeps a product hidden from the guest menu on the till (migration 083)', async () => {
+      const bag = (await products.createProduct(catalogStore.storeId, {
+        name: 'Cork fee (hidden)',
+        menu_hidden: true,
+        variants: [{ price_cents: 10000, quantity: 0 }],
+      }))!;
+      expect(bag.menu_hidden).toBe(true);
+      expect(
+        (await products.getCatalog(catalogStore.storeId)).find((c) => c.product_id === bag.id)
+      ).toBeDefined();
+      const listed = (await products.listProducts(catalogStore.storeId)).find((p) => p.id === bag.id);
+      expect(listed?.menu_hidden).toBe(true);
+      const shown = await products.updateProduct(catalogStore.storeId, bag.id, { menu_hidden: false });
+      expect(shown?.menu_hidden).toBe(false);
+      // Not sent = left alone.
+      const renamed = await products.updateProduct(catalogStore.storeId, bag.id, { name: 'Bag' });
+      expect(renamed?.menu_hidden).toBe(false);
+      // Off the catalog again: the snapshot case below counts its rows.
+      await products.updateProduct(catalogStore.storeId, bag.id, { is_active: false });
+    });
+
     it('keeps an ingredient off the till but on the shelf', async () => {
       // Migration 044: `sellable = FALSE` is read by the catalog query and by
       // nothing else. The product list, and so the recipe editor and every

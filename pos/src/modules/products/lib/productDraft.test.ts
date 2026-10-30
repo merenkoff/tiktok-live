@@ -68,6 +68,7 @@ describe('draftOf — the one place that reads a raw product', () => {
         allergens: undefined,
         modifier_group_ids: undefined,
         sellable: undefined,
+        menu_hidden: undefined,
         variants: [variant(), variant({ id: 99, is_active: false })],
       })
     );
@@ -76,6 +77,7 @@ describe('draftOf — the one place that reads a raw product', () => {
     expect(d.allergens).toEqual([]);
     expect(d.groupIds).toEqual([]);
     expect(d.sellable).toBe(true);
+    expect(d.menuHidden).toBe(false);
     expect(d.shape).toBe('');
     expect(d.variants.map((v) => v.id)).toEqual([70]);
   });
@@ -171,6 +173,7 @@ describe('diffProduct — what a save has to write', () => {
     expect(diffProduct(snapshot, { ...snapshot, shape: 'own' }).shape).toBe(true);
     expect(diffProduct(snapshot, { ...snapshot, imageUrl: '/pos-uploads/a.jpg' }).details).toBe(true);
     expect(diffProduct(snapshot, { ...snapshot, sellable: false }).details).toBe(true);
+    expect(diffProduct(snapshot, { ...snapshot, menuHidden: true }).details).toBe(true);
   });
 });
 
@@ -181,6 +184,7 @@ describe('createDirty — a new card with anything on it', () => {
     expect(createDirty({ ...blank, name: ' ' }, false)).toBe(false);
     expect(createDirty({ ...blank, name: 'Реглан' }, false)).toBe(true);
     expect(createDirty({ ...blank, sellable: false }, false)).toBe(true);
+    expect(createDirty({ ...blank, menuHidden: true }, false)).toBe(true);
     expect(createDirty({ ...blank, shape: 'own' }, false)).toBe(true);
     expect(createDirty({ ...blank, tagIds: [1] }, false)).toBe(true);
     expect(createDirty({ ...blank, imageUrl: '/pos-uploads/a.jpg' }, false)).toBe(true);

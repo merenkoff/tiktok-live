@@ -21,7 +21,7 @@
 // kitchen (no menu to put it on) sees nothing either.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, assetUrl } from '@pos/platform';
+import { api, assetUrl, formatUahCompact, uahInputToCents } from '@pos/platform';
 import { ImagePlus, Trash2 } from '../../platform/glyphs';
 import { SectionHead } from '../../components/ui/Page';
 
@@ -41,6 +41,14 @@ interface StoreProfile {
   facebook: string | null;
   tiktok: string | null;
   google_url: string | null;
+  /** Phase F2: the own-alcohol terms the menu shows under the name, or null for none. */
+  corkage: Corkage | null;
+}
+
+interface Corkage {
+  fee_cents: number;
+  min_food_cents: number | null;
+  note: string | null;
 }
 
 interface DayDraft {
@@ -70,6 +78,24 @@ const LOGO_MAX_BYTES = 5 * 1024 * 1024;
 const LOGO_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
 const CHECKBOX = 'w-5 h-5 shrink-0 accent-[rgb(var(--sq-blue-rgb))]';
+
+/** A sum in hryvnias as typed: digits, at most two decimals, a comma or a dot. */
+const UAH_RE = /^\d{1,7}([.,]\d{1,2})?$/;
+
+/** Kopecks as the input shows them: «100», «99.5». */
+function uahText(cents: number | null): string {
+  if (cents == null) return '';
+  return cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2);
+}
+
+/** The line the guest will read, built here only to show the owner what the figures come to. */
+function corkagePreview(fee: string, min: string): string {
+  const feeCents = UAH_RE.test(fee.trim()) ? uahInputToCents(fee) : null;
+  const minCents = min.trim() === '' ? null : UAH_RE.test(min.trim()) ? uahInputToCents(min) : null;
+  const feeText = feeCents == null ? '…' : feeCents > 0 ? `+${formatUahCompact(feeCents)} за пляшку` : 'без збору';
+  const minText = minCents ? ` · страви від ${formatUahCompact(minCents)} на гостя` : '';
+  return `Свій алкоголь: ${feeText}${minText}`;
+}
 
 type Week = Record<DayKey, DayDraft>;
 
@@ -120,6 +146,10 @@ export function StoreProfileCard() {
   const [facebook, setFacebook] = useState('');
   const [tiktok, setTiktok] = useState('');
   const [googleUrl, setGoogleUrl] = useState('');
+  const [corkageOn, setCorkageOn] = useState(false);
+  const [corkageFee, setCorkageFee] = useState('');
+  const [corkageMin, setCorkageMin] = useState('');
+  const [corkageNote, setCorkageNote] = useState('');
   const [week, setWeek] = useState<Week>(() => toDraft(null));
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -136,6 +166,10 @@ export function StoreProfileCard() {
     setFacebook(view.facebook ?? '');
     setTiktok(view.tiktok ?? '');
     setGoogleUrl(view.google_url ?? '');
+    setCorkageOn(view.corkage != null);
+    setCorkageFee(view.corkage ? uahText(view.corkage.fee_cents) : '');
+    setCorkageMin(view.corkage ? uahText(view.corkage.min_food_cents) : '');
+    setCorkageNote(view.corkage?.note ?? '');
     setWeek(toDraft(view.hours));
   }, []);
 
@@ -205,6 +239,23 @@ export function StoreProfileCard() {
       setMessage(problem);
       return;
     }
+    let corkage: Corkage | null = null;
+    if (corkageOn) {
+      // Checked here only to save the round trip; the server checks the same in kopecks.
+      if (!UAH_RE.test(corkageFee.trim())) {
+        setMessage('Корковий збір: вкажіть суму за пляшку в гривнях (0 — якщо свій алкоголь без збору).');
+        return;
+      }
+      if (corkageMin.trim() !== '' && !UAH_RE.test(corkageMin.trim())) {
+        setMessage('Мінімальне замовлення страв: вкажіть суму в гривнях або залиште порожнім.');
+        return;
+      }
+      corkage = {
+        fee_cents: uahInputToCents(corkageFee),
+        min_food_cents: corkageMin.trim() === '' ? null : uahInputToCents(corkageMin),
+        note: corkageNote.trim() || null,
+      };
+    }
     setSaving(true);
     setMessage(null);
     try {
@@ -217,6 +268,7 @@ export function StoreProfileCard() {
         facebook: facebook.trim() || null,
         tiktok: tiktok.trim() || null,
         google_url: googleUrl.trim() || null,
+        corkage,
       };
       // The logo goes along only when it changed, so saving a phone number can
       // never re-send (or re-validate) a picture the owner did not touch.
@@ -438,6 +490,65 @@ export function StoreProfileCard() {
             картка закладу → «Поділитися» → «Копіювати посилання» — тоді кнопка «На карті» відкриває саме вашу
             картку з фото й відгуками, а не пошук за адресою.
           </p>
+        </fieldset>
+
+        <fieldset className="space-y-3">
+          <legend className="text-[13px] font-semibold text-sq-secondary">Свій алкоголь (корковий збір)</legend>
+          <label className="min-h-11 flex items-center gap-3 text-[15px] text-sq-text">
+            <input
+              type="checkbox"
+              className={CHECKBOX}
+              checked={corkageOn}
+              onChange={(e) => setCorkageOn(e.target.checked)}
+            />
+            <span>Показувати умови свого алкоголю в меню</span>
+          </label>
+          {corkageOn && (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[13px] font-semibold text-sq-secondary">Збір за пляшку, ₴</span>
+                  <input
+                    className="sq-input"
+                    inputMode="decimal"
+                    value={corkageFee}
+                    maxLength={10}
+                    placeholder="100"
+                    onChange={(e) => setCorkageFee(e.target.value)}
+                  />
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[13px] font-semibold text-sq-secondary">
+                    Мінімальне замовлення страв на гостя, ₴
+                  </span>
+                  <input
+                    className="sq-input"
+                    inputMode="decimal"
+                    value={corkageMin}
+                    maxLength={10}
+                    placeholder="необов’язково"
+                    onChange={(e) => setCorkageMin(e.target.value)}
+                  />
+                </label>
+              </div>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[13px] font-semibold text-sq-secondary">Умови своїми словами</span>
+                <textarea
+                  className="sq-input min-h-24"
+                  value={corkageNote}
+                  maxLength={600}
+                  placeholder="Сюди входять келихи й робота офіціанта…"
+                  onChange={(e) => setCorkageNote(e.target.value)}
+                />
+              </label>
+              <p className="text-xs text-sq-muted">
+                Гість побачить «{corkagePreview(corkageFee, corkageMin)}» одразу під назвою закладу — з QR столу і з
+                QR закладу, — а умови за дотиком «Умови». Та сама позначка буде в рахунку столу й на нових
+                роздрукованих QR-картках. 0 — якщо свій алкоголь без збору. Сам збір у чек додає офіціант: заведіть
+                товар «Корковий збір» і відмітьте в ньому «Не показувати в QR-меню».
+              </p>
+            </>
+          )}
         </fieldset>
 
         <div className="flex flex-wrap items-center gap-3">

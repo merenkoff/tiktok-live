@@ -42,6 +42,8 @@ export interface ProductDraft {
   allergens: string[];
   imageUrl: string | null;
   sellable: boolean;
+  /** Sold at the till, never listed to a guest (the cork fee, a bag). */
+  menuHidden: boolean;
   shape: ProductShape;
   tagIds: number[];
   groupIds: number[];
@@ -89,6 +91,7 @@ export function draftOf(product: Product): ProductDraft {
     allergens: [...(product.allergens ?? [])],
     imageUrl: product.image_url ?? null,
     sellable: product.sellable !== false,
+    menuHidden: product.menu_hidden === true,
     shape: shapeOf(product),
     tagIds: [...(product.tag_ids ?? [])],
     groupIds: [...(product.modifier_group_ids ?? [])],
@@ -105,6 +108,7 @@ export function emptyDraft(): ProductDraft {
     allergens: [],
     imageUrl: null,
     sellable: true,
+    menuHidden: false,
     shape: '',
     tagIds: [],
     groupIds: [],
@@ -126,6 +130,7 @@ export function createDirty(draft: ProductDraft, variantsTyped: boolean): boolea
     draft.allergens.length > 0 ||
     draft.imageUrl != null ||
     !draft.sellable ||
+    draft.menuHidden ||
     draft.shape !== '' ||
     draft.tagIds.length > 0 ||
     draft.groupIds.length > 0 ||
@@ -232,6 +237,7 @@ export function detailsOf(d: ProductDraft) {
     allergens: d.allergens,
     image_url: d.imageUrl,
     sellable: d.sellable,
+    menu_hidden: d.menuHidden,
   };
 }
 
@@ -247,7 +253,7 @@ function sameSet(a: readonly number[], b: readonly number[]): boolean {
 }
 
 export interface ProductDiff {
-  /** Name, description, composition, allergens, photo, sellable. */
+  /** Name, description, composition, allergens, photo, sellable, hidden from the guest menu. */
   details: boolean;
   shape: boolean;
   tags: boolean;
@@ -266,7 +272,8 @@ export function diffProduct(snapshot: ProductDraft, draft: ProductDraft): Produc
       snapshot.composition !== draft.composition ||
       !sameStrings(snapshot.allergens, draft.allergens) ||
       (snapshot.imageUrl ?? null) !== (draft.imageUrl ?? null) ||
-      snapshot.sellable !== draft.sellable,
+      snapshot.sellable !== draft.sellable ||
+      snapshot.menuHidden !== draft.menuHidden,
     shape: snapshot.shape !== draft.shape,
     tags: !sameSet(snapshot.tagIds, draft.tagIds),
     groups: !sameStrings(snapshot.groupIds.map(String), draft.groupIds.map(String)),

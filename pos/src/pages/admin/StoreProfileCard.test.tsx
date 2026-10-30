@@ -26,6 +26,7 @@ type Profile = {
   facebook: string | null;
   tiktok: string | null;
   google_url: string | null;
+  corkage: { fee_cents: number; min_food_cents: number | null; note: string | null } | null;
 };
 
 const posRequest = vi.fn<[string, string, unknown?, unknown?], Promise<unknown>>();
@@ -40,7 +41,7 @@ vi.mock('@pos/platform', async () => {
 
 const { StoreProfileCard } = await import('./StoreProfileCard');
 
-const NO_LINKS = { email: null, instagram: null, facebook: null, tiktok: null, google_url: null };
+const NO_LINKS = { email: null, instagram: null, facebook: null, tiktok: null, google_url: null, corkage: null };
 const EMPTY: Profile = { available: true, logo_url: null, address: null, phone: null, hours: null, ...NO_LINKS };
 const FILLED: Profile = {
   available: true,
@@ -167,6 +168,49 @@ describe('StoreProfileCard', () => {
       facebook: null,
       tiktok: 'https://www.tiktok.com/@shablya',
       google_url: null,
+      corkage: null,
+    });
+  });
+
+  describe('the cork fee', () => {
+    const toggle = () => screen.getByLabelText('Показувати умови свого алкоголю в меню');
+
+    it('sends the figures as kopecks and the note, and previews the line the guest will read', async () => {
+      await open();
+      expect(screen.queryByLabelText('Збір за пляшку, ₴')).not.toBeInTheDocument();
+      await userEvent.click(toggle());
+      await userEvent.type(screen.getByLabelText('Збір за пляшку, ₴'), '100');
+      await userEvent.type(screen.getByLabelText('Мінімальне замовлення страв на гостя, ₴'), '700');
+      await userEvent.type(screen.getByLabelText('Умови своїми словами'), 'Келихи наші.');
+      expect(screen.getByText(/Свій алкоголь: \+100 ₴ за пляшку · страви від 700 ₴ на гостя/)).toBeInTheDocument();
+      posRequest.mockResolvedValueOnce({ ...EMPTY, corkage: { fee_cents: 10000, min_food_cents: 70000, note: 'Келихи наші.' } });
+      await userEvent.click(save());
+
+      await waitFor(() => expect(lastPatch()).toBeDefined());
+      expect((lastPatch()![2] as { corkage: unknown }).corkage).toEqual({
+        fee_cents: 10000,
+        min_food_cents: 70000,
+        note: 'Келихи наші.',
+      });
+    });
+
+    it('opens with what is stored, sends null when switched off, and refuses a missing fee without asking the server', async () => {
+      await open({ ...EMPTY, corkage: { fee_cents: 9950, min_food_cents: null, note: 'Текст' } });
+      expect(toggle()).toBeChecked();
+      expect(screen.getByLabelText('Збір за пляшку, ₴')).toHaveValue('99.50');
+      expect(screen.getByLabelText('Мінімальне замовлення страв на гостя, ₴')).toHaveValue('');
+      expect(screen.getByLabelText('Умови своїми словами')).toHaveValue('Текст');
+
+      await userEvent.clear(screen.getByLabelText('Збір за пляшку, ₴'));
+      await userEvent.click(save());
+      expect(await screen.findByRole('status')).toHaveTextContent('Корковий збір: вкажіть суму');
+      expect(posRequest.mock.calls.filter(([method]) => method === 'patch')).toHaveLength(0);
+
+      await userEvent.click(toggle());
+      posRequest.mockResolvedValueOnce(EMPTY);
+      await userEvent.click(save());
+      await waitFor(() => expect(lastPatch()).toBeDefined());
+      expect((lastPatch()![2] as { corkage: unknown }).corkage).toBeNull();
     });
   });
 

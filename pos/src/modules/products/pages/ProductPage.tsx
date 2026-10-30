@@ -511,6 +511,7 @@ function ProductCard({ id }: { id: string | undefined }) {
                 groups={groups}
                 techCards={techCards}
                 variants={draft.variants}
+                askMenuHidden={scope.askDishFacts}
               />
             </div>
           </fieldset>

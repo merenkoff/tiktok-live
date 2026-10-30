@@ -287,6 +287,74 @@ export function normalizeGoogleUrl(raw: unknown): string | null {
   return text;
 }
 
+// ── house rules: the cork fee (phase F2) ────────────────────────────
+
+/**
+ * The place's own-alcohol terms, as the page prints them under its name from
+ * any QR. Two figures the page formats itself, and the owner's own words.
+ */
+export interface Corkage {
+  /** Per bottle, in kopecks; 0 means «свій алкоголь без збору» — a rule too. */
+  fee_cents: number;
+  /** The least a guest must order in food, per person, in kopecks — or null. */
+  min_food_cents: number | null;
+  /** Several lines in the owner's words under the figures, or null. */
+  note: string | null;
+}
+
+/** 10 000 ₴ a bottle and 100 000 ₴ a guest: wide enough for any real rule, narrow enough to catch a sum typed in kopecks twice. */
+export const CORKAGE_FEE_MAX_CENTS = 1_000_000;
+export const CORKAGE_MIN_FOOD_MAX_CENTS = 10_000_000;
+export const CORKAGE_NOTE_MAX = 600;
+
+function wholeKopecks(value: unknown, what: string, max: number): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > max) {
+    throw new ProfileError(`${what}: ціле число копійок від 0 до ${max}`);
+  }
+  return value;
+}
+
+/** Several lines: each made one line, blank ones dropped — a note is sentences, not layout. */
+export function multiLine(text: string): string {
+  return text
+    .split(/\r?\n/)
+    .map(oneLine)
+    .filter((line) => line !== '')
+    .join('\n');
+}
+
+export function normalizeCorkage(raw: unknown): Corkage | null {
+  if (raw === null) return null;
+  if (!isPlainObject(raw)) {
+    throw new ProfileError('Корковий збір: очікується збір за пляшку, мінімальне замовлення й умови');
+  }
+  const fee = wholeKopecks(raw.fee_cents, 'Корковий збір за пляшку', CORKAGE_FEE_MAX_CENTS);
+  const min =
+    raw.min_food_cents == null
+      ? null
+      : wholeKopecks(raw.min_food_cents, 'Мінімальне замовлення страв', CORKAGE_MIN_FOOD_MAX_CENTS);
+  let note: string | null = null;
+  if (raw.note != null) {
+    if (typeof raw.note !== 'string') throw new ProfileError('Умови свого алкоголю мають бути текстом');
+    const text = multiLine(raw.note);
+    if (text.length > CORKAGE_NOTE_MAX) {
+      throw new ProfileError(`Умови свого алкоголю задовгі: не більше ${CORKAGE_NOTE_MAX} символів`);
+    }
+    note = text || null;
+  }
+  // A zero minimum is no minimum.
+  return { fee_cents: fee, min_food_cents: min ? min : null, note };
+}
+
+/** The terms as the database hands them back; anything that no longer passes reads as «not shown». */
+export function readCorkage(raw: unknown): Corkage | null {
+  try {
+    return normalizeCorkage(raw ?? null);
+  } catch {
+    return null;
+  }
+}
+
 // ── the patch ───────────────────────────────────────────────────────
 
 export interface ProfilePatch {
@@ -299,6 +367,7 @@ export interface ProfilePatch {
   facebook?: string | null;
   tiktok?: string | null;
   google_url?: string | null;
+  corkage?: Corkage | null;
 }
 
 export const PROFILE_FIELDS = [
@@ -311,6 +380,7 @@ export const PROFILE_FIELDS = [
   'facebook',
   'tiktok',
   'google_url',
+  'corkage',
 ] as const;
 
 /**
@@ -329,5 +399,6 @@ export function normalizeProfilePatch(body: Record<string, unknown>): ProfilePat
   if (body.facebook !== undefined) patch.facebook = normalizeHandle(body.facebook, 'facebook');
   if (body.tiktok !== undefined) patch.tiktok = normalizeHandle(body.tiktok, 'tiktok');
   if (body.google_url !== undefined) patch.google_url = normalizeGoogleUrl(body.google_url);
+  if (body.corkage !== undefined) patch.corkage = normalizeCorkage(body.corkage);
   return patch;
 }

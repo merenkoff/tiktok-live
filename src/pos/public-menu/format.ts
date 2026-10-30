@@ -2,6 +2,8 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
+import type { Corkage } from './profile.js';
+
 // src/pos/public-menu/format.ts — how the guest's menu writes money and hints.
 //
 // A copy of the till's wording, on purpose: the backend's `rootDir` is `src/`,
@@ -54,4 +56,25 @@ export function groupHint(group: { min_select: number; max_select: number; modif
 /** «Стіл 5»; an owner who already named it «Стіл 5» does not get «Стіл Стіл 5». */
 export function tableLabel(name: string): string {
   return /^стіл/i.test(name.trim()) ? name.trim() : `Стіл ${name.trim()}`;
+}
+
+// ── the cork fee's words (phase F2) ─────────────────────────────────
+
+
+/** «+100 ₴ за пляшку», or «без збору» for a place that lets guests bring their own for nothing. */
+export function corkageFeeText(c: Corkage): string {
+  return c.fee_cents > 0 ? `+${formatUahGuestCompact(c.fee_cents)} за пляшку` : 'без збору';
+}
+
+/** «страви від 700 ₴ на гостя», or null when the owner set no minimum. */
+export function corkageMinText(c: Corkage): string | null {
+  return c.min_food_cents ? `страви від ${formatUahGuestCompact(c.min_food_cents)} на гостя` : null;
+}
+
+/** One small line for a printed QR card: «Свій алкоголь — корковий збір 100 ₴ за пляшку, страви від 700 ₴ на гостя». */
+export function corkageCardLine(c: Corkage | null): string | null {
+  if (!c) return null;
+  const fee = c.fee_cents > 0 ? `корковий збір ${formatUahGuestCompact(c.fee_cents)} за пляшку` : 'без коркового збору';
+  const min = corkageMinText(c);
+  return `Свій алкоголь — ${fee}${min ? `, ${min}` : ''}`;
 }
