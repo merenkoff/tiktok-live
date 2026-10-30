@@ -36,14 +36,7 @@ import { storeClock } from '../core/storeClock.js';
 import { verticalOrDefault } from '../verticals/index.js';
 import { issuePrintLink } from './table-keys.js';
 import { COMPOSITION_MAX, allergenLabels, type Allergen } from '../allergens.js';
-import {
-  groupHours,
-  hoursTodayText,
-  readHours,
-  type HoursRow,
-  type ProfilePatch,
-  type WeekHours,
-} from './profile.js';
+import { groupHours, hoursTodayText, normalizeGoogleUrl, readHours, type HoursRow, type ProfilePatch, type WeekHours } from './profile.js';
 import type { CatalogItem } from '../types.js';
 
 /**
@@ -127,6 +120,12 @@ export interface PublicMenuStore {
   hours_today: string | null;
   /** The week, neighbouring days with the same hours folded into one row; empty when no hours. */
   hours: HoursRow[];
+  /** Phase F1: a contact email, the HANDLES of three networks (the page builds the links) and the place's Google card. */
+  email: string | null;
+  instagram: string | null;
+  facebook: string | null;
+  tiktok: string | null;
+  google_url: string | null;
 }
 
 export interface PublicMenu {
@@ -152,6 +151,11 @@ interface MenuStore {
   address: string | null;
   phone: string | null;
   hours: WeekHours | null;
+  email: string | null;
+  instagram: string | null;
+  facebook: string | null;
+  tiktok: string | null;
+  googleUrl: string | null;
   /** The owner lets a guest read their own table's bill (phase Q5). */
   billEnabled: boolean;
   /** The owner lets a guest send dishes to a waiter for acceptance (phase Q6). */
@@ -446,6 +450,14 @@ async function buildPublicMenu(store: MenuStore): Promise<PublicMenu> {
     phone: store.phone,
     hours_today: hoursTodayText(store.hours, new Date(), clock.timezone),
     hours: groupHours(store.hours),
+    email: store.email,
+    instagram: store.instagram,
+    facebook: store.facebook,
+    tiktok: store.tiktok,
+    // Checked on the way in (https, a Google host); read back through the
+    // same check, so a row written by hand can never put a `javascript:` link
+    // on the page.
+    google_url: readGoogleUrl(store.googleUrl),
   };
   return {
     store: publicStore,
@@ -526,6 +538,17 @@ export function resetPublicMenuCache(): void {
  * cases it too, and a bio link gets typed by hand); a token wins over a slug
  * if the two ever spell the same, which `setPublicMenuSlug` refuses to create.
  */
+const textOrNull = (value: unknown): string | null => (typeof value === 'string' && value !== '' ? value : null);
+
+/** A stored Google link that no longer passes the check reads as none, never as a link. */
+function readGoogleUrl(value: string | null): string | null {
+  try {
+    return normalizeGoogleUrl(value);
+  } catch {
+    return null;
+  }
+}
+
 export async function findMenuStore(token: string): Promise<MenuStore | null> {
   if (!MENU_KEY_RE.test(token)) return null;
   const hit = storeByToken.get(token);
@@ -533,7 +556,8 @@ export async function findMenuStore(token: string): Promise<MenuStore | null> {
   const result = await pool.query(
     `SELECT id, name, vertical, public_menu_enabled, public_menu_bill, public_menu_ordering,
             public_menu_call, public_menu_auto_kitchen, public_menu_auto_limit_cents,
-            public_logo_url, public_address, public_phone, public_hours
+            public_logo_url, public_address, public_phone, public_hours,
+            public_email, public_instagram, public_facebook, public_tiktok, public_google_url
      FROM pos_stores
      WHERE public_menu_token = $1
         OR (public_menu_slug_enabled AND slug = lower($1))
@@ -551,6 +575,11 @@ export async function findMenuStore(token: string): Promise<MenuStore | null> {
     address: typeof row.public_address === 'string' ? row.public_address : null,
     phone: typeof row.public_phone === 'string' ? row.public_phone : null,
     hours: readHours(row.public_hours),
+    email: textOrNull(row.public_email),
+    instagram: textOrNull(row.public_instagram),
+    facebook: textOrNull(row.public_facebook),
+    tiktok: textOrNull(row.public_tiktok),
+    googleUrl: textOrNull(row.public_google_url),
     billEnabled: row.public_menu_bill === true,
     orderingEnabled: row.public_menu_ordering === true,
     callEnabled: row.public_menu_call === true,
@@ -919,11 +948,19 @@ export interface StoreProfile {
   phone: string | null;
   /** Raw week for the editor: a missing day is closed; null = never said. */
   hours: WeekHours | null;
+  email: string | null;
+  /** Handles, as stored (no «@», no address). */
+  instagram: string | null;
+  facebook: string | null;
+  tiktok: string | null;
+  google_url: string | null;
 }
 
 async function readProfile(storeId: number): Promise<StoreProfile> {
   const result = await pool.query(
-    `SELECT vertical, public_logo_url, public_address, public_phone, public_hours FROM pos_stores WHERE id = $1`,
+    `SELECT vertical, public_logo_url, public_address, public_phone, public_hours,
+            public_email, public_instagram, public_facebook, public_tiktok, public_google_url
+       FROM pos_stores WHERE id = $1`,
     [storeId]
   );
   const row = result.rows[0];
@@ -934,6 +971,11 @@ async function readProfile(storeId: number): Promise<StoreProfile> {
     address: typeof row.public_address === 'string' ? row.public_address : null,
     phone: typeof row.public_phone === 'string' ? row.public_phone : null,
     hours: readHours(row.public_hours),
+    email: textOrNull(row.public_email),
+    instagram: textOrNull(row.public_instagram),
+    facebook: textOrNull(row.public_facebook),
+    tiktok: textOrNull(row.public_tiktok),
+    google_url: textOrNull(row.public_google_url),
   };
 }
 
@@ -960,6 +1002,11 @@ export async function updateStoreProfile(storeId: number, patch: ProfilePatch): 
   if (patch.address !== undefined) set('public_address', patch.address);
   if (patch.phone !== undefined) set('public_phone', patch.phone);
   if (patch.hours !== undefined) set('public_hours', patch.hours === null ? null : JSON.stringify(patch.hours), '::jsonb');
+  if (patch.email !== undefined) set('public_email', patch.email);
+  if (patch.instagram !== undefined) set('public_instagram', patch.instagram);
+  if (patch.facebook !== undefined) set('public_facebook', patch.facebook);
+  if (patch.tiktok !== undefined) set('public_tiktok', patch.tiktok);
+  if (patch.google_url !== undefined) set('public_google_url', patch.google_url);
   if (sets.length > 0) {
     await pool.query(`UPDATE pos_stores SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $1`, values);
     invalidatePublicMenu(storeId);

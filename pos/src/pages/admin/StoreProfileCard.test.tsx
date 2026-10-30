@@ -21,6 +21,11 @@ type Profile = {
   address: string | null;
   phone: string | null;
   hours: Week | null;
+  email: string | null;
+  instagram: string | null;
+  facebook: string | null;
+  tiktok: string | null;
+  google_url: string | null;
 };
 
 const posRequest = vi.fn<[string, string, unknown?, unknown?], Promise<unknown>>();
@@ -35,7 +40,8 @@ vi.mock('@pos/platform', async () => {
 
 const { StoreProfileCard } = await import('./StoreProfileCard');
 
-const EMPTY: Profile = { available: true, logo_url: null, address: null, phone: null, hours: null };
+const NO_LINKS = { email: null, instagram: null, facebook: null, tiktok: null, google_url: null };
+const EMPTY: Profile = { available: true, logo_url: null, address: null, phone: null, hours: null, ...NO_LINKS };
 const FILLED: Profile = {
   available: true,
   logo_url: '/pos-uploads/logo-1.png',
@@ -46,6 +52,7 @@ const FILLED: Profile = {
     '2': { open: '08:00', close: '22:00' },
     '6': { open: '09:00', close: '23:00' },
   },
+  ...NO_LINKS,
 };
 
 const address = () => screen.getByLabelText('Адреса');
@@ -122,6 +129,7 @@ describe('StoreProfileCard', () => {
       address: FILLED.address,
       phone: '+380 44 999 99 99',
       hours: FILLED.hours,
+      ...NO_LINKS,
     });
     expect(body).not.toHaveProperty('logo_url');
     expect(await screen.findByRole('status')).toHaveTextContent('Збережено');
@@ -136,7 +144,30 @@ describe('StoreProfileCard', () => {
     await userEvent.click(save());
 
     await waitFor(() => expect(lastPatch()).toBeDefined());
-    expect(lastPatch()![2]).toEqual({ address: null, phone: null, hours: null });
+    expect(lastPatch()![2]).toEqual({ address: null, phone: null, hours: null, ...NO_LINKS });
+  });
+
+  it('fills and sends the mailbox, the handles and the Google card as typed — the server reads them down', async () => {
+    await open({ ...FILLED, email: 'privit@zaklad.ua', instagram: 'shablya.cafe', google_url: 'https://g.page/x' });
+    expect(screen.getByLabelText('Email')).toHaveValue('privit@zaklad.ua');
+    expect(screen.getByLabelText('Instagram')).toHaveValue('shablya.cafe');
+    expect(screen.getByLabelText('Посилання на картку закладу в Google')).toHaveValue('https://g.page/x');
+    posRequest.mockResolvedValueOnce({ ...FILLED, email: 'privit@zaklad.ua', instagram: 'shablya.cafe' });
+    await userEvent.type(screen.getByLabelText('TikTok'), 'https://www.tiktok.com/@shablya');
+    await userEvent.clear(screen.getByLabelText('Посилання на картку закладу в Google'));
+    await userEvent.click(save());
+
+    await waitFor(() => expect(lastPatch()).toBeDefined());
+    expect(lastPatch()![2]).toEqual({
+      address: FILLED.address,
+      phone: FILLED.phone,
+      hours: FILLED.hours,
+      email: 'privit@zaklad.ua',
+      instagram: 'shablya.cafe',
+      facebook: null,
+      tiktok: 'https://www.tiktok.com/@shablya',
+      google_url: null,
+    });
   });
 
   it('turns a day on with a sensible default and sends the times as typed', async () => {

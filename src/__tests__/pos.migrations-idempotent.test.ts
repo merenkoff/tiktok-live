@@ -232,6 +232,44 @@ describe.skipIf(!hasDb || !canCreate)('POS migrations, applied the way the runne
     await expect(applyAll(probe)).resolves.toBeUndefined();
     expect(await read()).toEqual({ short: false, menu: true, token: first.token });
   });
+
+  it('fills «Шабля»’s email, Instagram and Google card once (082), and a field the owner cleared stays cleared', async () => {
+    // The boot before 082: none of the five columns yet. The store row is the
+    // one the 080 case inserted, or a fresh one on a run of this test alone.
+    await probe.query(
+      `ALTER TABLE pos_stores DROP COLUMN public_email, DROP COLUMN public_instagram, DROP COLUMN public_facebook,
+                              DROP COLUMN public_tiktok, DROP COLUMN public_google_url`
+    );
+    await probe.query(
+      `INSERT INTO pos_stores (name, slug, vertical) VALUES ('Шабля', 'shablya', 'cafe') ON CONFLICT (slug) DO NOTHING`
+    );
+    const read = async () =>
+      (
+        await probe.query(
+          `SELECT public_email AS email, public_instagram AS instagram, public_facebook AS facebook,
+                  public_tiktok AS tiktok, public_google_url AS google
+             FROM pos_stores WHERE slug = 'shablya'`
+        )
+      ).rows[0];
+
+    await expect(applyAll(probe)).resolves.toBeUndefined();
+    expect(await read()).toEqual({
+      email: 'shablya.ads@gmail.com',
+      instagram: 'shablya.cafe',
+      facebook: null,
+      tiktok: null,
+      google: 'https://share.google/49kQb5FHbjSlkT7q6',
+    });
+    // Nobody else was touched (the demo cafés are not in this scratch database's seed of stores).
+    const others = await probe.query(
+      `SELECT count(*)::int AS n FROM pos_stores WHERE public_google_url IS NOT NULL AND slug <> 'shablya'`
+    );
+    expect(others.rows[0].n).toBe(0);
+
+    await probe.query(`UPDATE pos_stores SET public_instagram = NULL WHERE slug = 'shablya'`);
+    await expect(applyAll(probe)).resolves.toBeUndefined();
+    expect((await read()).instagram).toBeNull();
+  });
 });
 
 /**

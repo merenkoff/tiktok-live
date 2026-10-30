@@ -35,6 +35,12 @@ interface StoreProfile {
   address: string | null;
   phone: string | null;
   hours: WeekHours | null;
+  /** Phase F1: the mailbox, three HANDLES (the server reads a pasted address down to one) and the place's Google card. */
+  email: string | null;
+  instagram: string | null;
+  facebook: string | null;
+  tiktok: string | null;
+  google_url: string | null;
 }
 
 interface DayDraft {
@@ -109,6 +115,11 @@ export function StoreProfileCard() {
   const [logo, setLogo] = useState<string | null>(null);
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [instagram, setInstagram] = useState('');
+  const [facebook, setFacebook] = useState('');
+  const [tiktok, setTiktok] = useState('');
+  const [googleUrl, setGoogleUrl] = useState('');
   const [week, setWeek] = useState<Week>(() => toDraft(null));
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -120,6 +131,11 @@ export function StoreProfileCard() {
     setLogo(view.logo_url);
     setAddress(view.address ?? '');
     setPhone(view.phone ?? '');
+    setEmail(view.email ?? '');
+    setInstagram(view.instagram ?? '');
+    setFacebook(view.facebook ?? '');
+    setTiktok(view.tiktok ?? '');
+    setGoogleUrl(view.google_url ?? '');
     setWeek(toDraft(view.hours));
   }, []);
 
@@ -196,6 +212,11 @@ export function StoreProfileCard() {
         address: address.trim() || null,
         phone: phone.trim() || null,
         hours: toHours(week),
+        email: email.trim() || null,
+        instagram: instagram.trim() || null,
+        facebook: facebook.trim() || null,
+        tiktok: tiktok.trim() || null,
+        google_url: googleUrl.trim() || null,
       };
       // The logo goes along only when it changed, so saving a phone number can
       // never re-send (or re-validate) a picture the owner did not touch.
@@ -233,8 +254,8 @@ export function StoreProfileCard() {
       <SectionHead title="Про заклад у меню" />
       <div className="pt-3 space-y-5">
         <p className="text-[15px] leading-relaxed text-sq-secondary">
-          Логотип, адреса, телефон і години роботи стоять під назвою на сторінці, яку гість відкриває за QR. Усе
-          необов’язкове: що не заповнено, того на сторінці немає.
+          Логотип, адреса, телефон, години роботи, пошта й соцмережі стоять під назвою на сторінці, яку гість
+          відкриває за QR. Усе необов’язкове: що не заповнено, того на сторінці немає.
         </p>
 
         <div className="space-y-2">
@@ -354,6 +375,69 @@ export function StoreProfileCard() {
               сторінці не буде.
             </p>
           </div>
+        </fieldset>
+
+        <fieldset className="space-y-3">
+          <legend className="text-[13px] font-semibold text-sq-secondary">Пошта, соцмережі й карта</legend>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-semibold text-sq-secondary">Email</span>
+              <input
+                className="sq-input"
+                type="email"
+                value={email}
+                maxLength={120}
+                placeholder="privit@zaklad.ua"
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-semibold text-sq-secondary">Instagram</span>
+              <input
+                className="sq-input"
+                value={instagram}
+                maxLength={120}
+                placeholder="нік без @, або вставте адресу профілю"
+                onChange={(e) => setInstagram(e.target.value)}
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-semibold text-sq-secondary">Facebook</span>
+              <input
+                className="sq-input"
+                value={facebook}
+                maxLength={160}
+                placeholder="назва сторінки, або вставте адресу"
+                onChange={(e) => setFacebook(e.target.value)}
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[13px] font-semibold text-sq-secondary">TikTok</span>
+              <input
+                className="sq-input"
+                value={tiktok}
+                maxLength={120}
+                placeholder="нік без @, або вставте адресу профілю"
+                onChange={(e) => setTiktok(e.target.value)}
+              />
+            </label>
+            <label className="flex flex-col gap-1.5 sm:col-span-2">
+              <span className="text-[13px] font-semibold text-sq-secondary">Посилання на картку закладу в Google</span>
+              <input
+                className="sq-input"
+                type="url"
+                value={googleUrl}
+                maxLength={300}
+                placeholder="https://maps.app.goo.gl/…"
+                onChange={(e) => setGoogleUrl(e.target.value)}
+              />
+            </label>
+          </div>
+          <p className="text-xs text-sq-muted">
+            Пошта й соцмережі стають кнопками під годинами роботи. Посилання на Google скопіюйте в Google Maps:
+            картка закладу → «Поділитися» → «Копіювати посилання» — тоді кнопка «На карті» відкриває саме вашу
+            картку з фото й відгуками, а не пошук за адресою.
+          </p>
         </fieldset>
 
         <div className="flex flex-wrap items-center gap-3">

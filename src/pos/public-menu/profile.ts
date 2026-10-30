@@ -178,6 +178,115 @@ export function normalizeLogoUrl(raw: unknown): string | null {
   return raw;
 }
 
+// ── email, social networks, the Google card (phase F1) ──────────────
+
+const EMAIL_MAX = 120;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+/** One address, as typed but trimmed; checked loosely — a mailto: link, not a mailbox probe. */
+export function normalizeEmail(raw: unknown): string | null {
+  if (raw === null) return null;
+  if (typeof raw !== 'string') throw new ProfileError('Email має бути текстом');
+  const text = raw.trim();
+  if (!text) return null;
+  if (text.length > EMAIL_MAX || !EMAIL_RE.test(text)) {
+    throw new ProfileError('Email: вкажіть адресу виду name@example.com');
+  }
+  return text;
+}
+
+export type SocialNetwork = 'instagram' | 'facebook' | 'tiktok';
+
+/**
+ * What a handle may be, per network — Instagram's own rule (letters, digits,
+ * dots and underscores, up to 30), TikTok's (24), a Facebook page name (dots
+ * and hyphens too). An owner usually pastes the whole address from the
+ * browser, so a URL on the network's own host is read down to its handle.
+ */
+const SOCIAL: Record<SocialNetwork, { label: string; hostRe: RegExp; handleRe: RegExp; max: number }> = {
+  instagram: {
+    label: 'Instagram',
+    hostRe: /^https?:\/\/(?:www\.)?instagram\.com\/@?([^/?#]+)/i,
+    handleRe: /^[A-Za-z0-9._]{1,30}$/,
+    max: 30,
+  },
+  facebook: {
+    label: 'Facebook',
+    hostRe: /^https?:\/\/(?:www\.|m\.)?facebook\.com\/([^/?#]+)/i,
+    handleRe: /^[A-Za-z0-9.-]{1,80}$/,
+    max: 80,
+  },
+  tiktok: {
+    label: 'TikTok',
+    hostRe: /^https?:\/\/(?:www\.)?tiktok\.com\/@?([^/?#]+)/i,
+    handleRe: /^[A-Za-z0-9._]{1,24}$/,
+    max: 24,
+  },
+};
+
+/** A handle for `network`: «@нік», «нік» or the profile's address all read as «нік». */
+export function normalizeHandle(raw: unknown, network: SocialNetwork): string | null {
+  const spec = SOCIAL[network];
+  if (raw === null) return null;
+  if (typeof raw !== 'string') throw new ProfileError(`${spec.label} має бути текстом`);
+  let text = raw.trim();
+  if (!text) return null;
+  const fromUrl = spec.hostRe.exec(text);
+  if (fromUrl) text = fromUrl[1]!;
+  text = text.replace(/^@/, '').replace(/\/+$/, '');
+  if (!text) return null;
+  if (!spec.handleRe.test(text)) {
+    throw new ProfileError(
+      `${spec.label}: вкажіть нік без «@» — те, що стоїть в адресі після ${
+        network === 'instagram' ? 'instagram.com/' : network === 'facebook' ? 'facebook.com/' : 'tiktok.com/@'
+      } (до ${spec.max} символів)`
+    );
+  }
+  return text;
+}
+
+/** The profile's address for a stored handle. Handles are checked on the way in, so nothing here needs escaping beyond the page's own. */
+export function socialUrl(network: SocialNetwork, handle: string): string {
+  const safe = encodeURIComponent(handle);
+  if (network === 'instagram') return `https://www.instagram.com/${safe}/`;
+  if (network === 'facebook') return `https://www.facebook.com/${safe}`;
+  return `https://www.tiktok.com/@${safe}`;
+}
+
+const GOOGLE_URL_MAX = 300;
+/** Google's own hosts for a place's card, a Maps link or a «write a review» link — and nothing that merely contains the word. */
+const GOOGLE_HOSTS = new Set(['google.com', 'google.com.ua', 'share.google', 'maps.app.goo.gl', 'goo.gl', 'g.page', 'g.co']);
+
+function isGoogleHost(host: string): boolean {
+  return GOOGLE_HOSTS.has(host) || host.endsWith('.google.com') || host.endsWith('.google.com.ua');
+}
+
+/**
+ * The one address we take from an owner: the place's Google card. `https`
+ * only, on a Google host only, with no credentials in it — the page prints it
+ * escaped and the guest follows it in a new tab.
+ */
+export function normalizeGoogleUrl(raw: unknown): string | null {
+  if (raw === null) return null;
+  if (typeof raw !== 'string') throw new ProfileError('Посилання на Google має бути текстом');
+  const text = raw.trim();
+  if (!text) return null;
+  const refuse = (): never => {
+    throw new ProfileError(
+      'Посилання на Google: скопіюйте його з Google Maps («Поділитися» → «Копіювати посилання»); приймаються лише адреси https на google.com, maps.app.goo.gl, share.google, g.page'
+    );
+  };
+  if (text.length > GOOGLE_URL_MAX) refuse();
+  let url: URL;
+  try {
+    url = new URL(text);
+  } catch {
+    return refuse();
+  }
+  if (url.protocol !== 'https:' || url.username || url.password || !isGoogleHost(url.hostname.toLowerCase())) refuse();
+  return text;
+}
+
 // ── the patch ───────────────────────────────────────────────────────
 
 export interface ProfilePatch {
@@ -185,9 +294,24 @@ export interface ProfilePatch {
   address?: string | null;
   phone?: string | null;
   hours?: WeekHours | null;
+  email?: string | null;
+  instagram?: string | null;
+  facebook?: string | null;
+  tiktok?: string | null;
+  google_url?: string | null;
 }
 
-export const PROFILE_FIELDS = ['logo_url', 'address', 'phone', 'hours'] as const;
+export const PROFILE_FIELDS = [
+  'logo_url',
+  'address',
+  'phone',
+  'hours',
+  'email',
+  'instagram',
+  'facebook',
+  'tiktok',
+  'google_url',
+] as const;
 
 /**
  * The fields the owner sent, each checked. An absent field means «leave it», a
@@ -200,5 +324,10 @@ export function normalizeProfilePatch(body: Record<string, unknown>): ProfilePat
   if (body.address !== undefined) patch.address = normalizeAddress(body.address);
   if (body.phone !== undefined) patch.phone = normalizePhone(body.phone);
   if (body.hours !== undefined) patch.hours = normalizeHours(body.hours);
+  if (body.email !== undefined) patch.email = normalizeEmail(body.email);
+  if (body.instagram !== undefined) patch.instagram = normalizeHandle(body.instagram, 'instagram');
+  if (body.facebook !== undefined) patch.facebook = normalizeHandle(body.facebook, 'facebook');
+  if (body.tiktok !== undefined) patch.tiktok = normalizeHandle(body.tiktok, 'tiktok');
+  if (body.google_url !== undefined) patch.google_url = normalizeGoogleUrl(body.google_url);
   return patch;
 }
