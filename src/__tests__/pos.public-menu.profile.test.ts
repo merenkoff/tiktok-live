@@ -376,6 +376,7 @@ describe('the guest page header', () => {
     tiktok: null,
     google_url: null,
     corkage: null,
+    feedback_enabled: false,
   };
   const menuOf = (over: Partial<PublicMenu['store']> = {}): PublicMenu => ({
     store: { ...store, ...over },
@@ -818,6 +819,7 @@ describe.skipIf(!hasDb)('POS store profile through the API', () => {
         tiktok: null,
         google_url: null,
         corkage: null,
+        feedback_enabled: false,
       });
       const html = (await page()).body;
       expect(html).not.toContain('class="contacts"');
@@ -834,6 +836,7 @@ describe.skipIf(!hasDb)('POS store profile through the API', () => {
         'corkage',
         'email',
         'facebook',
+        'feedback_enabled',
         'google_url',
         'hours',
         'hours_today',

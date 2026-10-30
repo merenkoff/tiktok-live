@@ -86,6 +86,67 @@ p.corkage { display: flex; align-items: center; gap: 10px; }
 .bill-corkage svg { width: 16px; height: 16px; flex: none; color: var(--accent); }
 .card .rule { margin: 10px 0 0; font-size: 13px; color: var(--muted); }
 
+/* Feedback (phase F3): the quiet bar in the dock, the card after the last
+   dish, and the sheet — one face is enough, the rest unfolds under it. */
+.fb-bar {
+  background: var(--card); color: var(--ink); border: 1px solid var(--line);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+}
+.fb-bar[hidden] { display: none; }
+.fb-bar.done { color: var(--muted); font-weight: 600; cursor: default; }
+.ask {
+  margin: 28px 0 8px; padding: 20px 16px; border: 1px solid var(--line); border-radius: 16px;
+  background: var(--card); text-align: center;
+}
+.ask h2 { margin: 0; font-size: 20px; }
+.ask p { margin: 6px 0 0; color: var(--muted); font-size: 15px; }
+.ask-btn {
+  margin-top: 14px; padding: 12px 28px; border: 0; border-radius: 999px;
+  background: var(--ink); color: var(--bg); font: inherit; font-size: 16px; font-weight: 700; cursor: pointer;
+}
+.ask.done .ask-btn { display: none; }
+.bill-ask { margin: 16px 0 0; text-align: center; font-size: 15px; }
+.fb { padding-top: 14px; }
+.fb-sub { margin: 0 0 14px; color: var(--muted); font-size: 15px; text-align: center; }
+.fb-faces { display: flex; justify-content: space-between; gap: 6px; }
+.fb-face {
+  flex: 1; min-width: 0; aspect-ratio: 1; max-width: 72px; padding: 6px; border: 0; border-radius: 999px;
+  background: none; color: var(--muted); cursor: pointer;
+  transition: transform 0.12s ease, color 0.12s ease;
+}
+.fb-face svg { width: 100%; height: 100%; display: block; }
+.fb-face.on { color: var(--accent); transform: scale(1.12); }
+.fb-face.dim { opacity: 0.45; }
+.fb-ends { display: flex; justify-content: space-between; margin: 6px 4px 0; color: var(--muted); font-size: 13px; }
+.fb-more { margin-top: 18px; padding-bottom: 6px; }
+.fb-more[hidden] { display: none; }
+.fb-q { margin: 0 0 8px; font-weight: 700; }
+.fb-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.fb-tags[hidden] { display: none; }
+.fb-tag {
+  padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--card); color: var(--ink); font: inherit; font-size: 15px; cursor: pointer;
+}
+.fb-tag.on { border-color: var(--accent); background: var(--accent); color: #fff; }
+.fb-label { display: block; margin-top: 14px; font-size: 15px; }
+.fb-label[hidden] { display: none; }
+.fb-label > span { display: block; margin-bottom: 6px; font-weight: 600; }
+.fb-label small { color: var(--muted); font-weight: 400; }
+.fb-label textarea, .fb-label input {
+  width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--bg); color: var(--ink); font: inherit; font-size: 16px;
+}
+.fb-phone-toggle { display: block; margin-top: 14px; font-size: 15px; }
+.fb-phone-toggle[hidden] { display: none; }
+/* The trap: off-screen for a person, a field like any other for a script that fills every input. */
+.fb-hp { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+.fb .error[hidden] { display: none; }
+.fb-done { padding: 24px 0 8px; text-align: center; }
+.fb-done[hidden] { display: none; }
+.fb-done h3 { margin: 0; font-size: 24px; }
+.fb-done p { margin: 10px 0 0; color: var(--muted); font-size: 15px; }
+.fb-done .primary { display: block; margin-top: 18px; text-decoration: none; text-align: center; box-sizing: border-box; }
+
 .tabs {
   position: sticky; top: 0; z-index: 5;
   display: flex; gap: 8px; overflow-x: auto;
@@ -340,7 +401,7 @@ body:has(.dock .call-row) .foot { padding-bottom: 230px; }
 
 @media print {
   body { background: #fff; color: #000; }
-  .print, .notice, .dock, .bill-sheet, .add { display: none; }
+  .print, .notice, .dock, .bill-sheet, .add, .ask { display: none; }
   /* The heading and the button are for the screen; on paper the cards get
      the whole page — three rows of two fit an A4, ten tables take two sheets. */
   .sheet-head { display: none; }

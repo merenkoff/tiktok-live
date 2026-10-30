@@ -691,6 +691,217 @@
   var callUrl = document.body.getAttribute('data-call-url');
   if (callUrl) initCall(callUrl);
 
+  /* Feedback (phase F3). One tap on a face is already feedback; the chips, the
+     words and the phone unfold under it on the same sheet. Sent once per
+     sheet (`client_uuid` made when it opens), remembered in sessionStorage so
+     a reopened page shows «Дякуємо» instead of asking twice. The Google link
+     after sending goes to EVERYONE, whatever the score — Google's policy for
+     asking reviews, and honest. Nothing here is owner text except the link,
+     which goes into an href property, never into markup. */
+  var feedbackUrl = document.body.getAttribute('data-feedback-url');
+  if (feedbackUrl) initFeedback(feedbackUrl, document.body.getAttribute('data-feedback-google'));
+
+  function initFeedback(endpoint, googleUrl) {
+    var sheet = document.querySelector('[data-feedback-sheet]');
+    var form = document.querySelector('[data-feedback-form]');
+    var closer = document.querySelector('[data-feedback-close]');
+    var more = document.querySelector('[data-fb-more]');
+    var question = document.querySelector('[data-fb-q]');
+    var comment = document.querySelector('[data-fb-comment]');
+    var phoneToggle = document.querySelector('[data-fb-phone-toggle]');
+    var phoneLabel = document.querySelector('[data-fb-phone]');
+    var phoneInput = document.querySelector('[data-fb-phone-input]');
+    var honeypot = document.querySelector('[data-fb-hp]');
+    var errorBox = document.querySelector('[data-fb-error]');
+    var send = document.querySelector('[data-fb-send]');
+    var done = document.querySelector('[data-fb-done]');
+    var faces = Array.prototype.slice.call(document.querySelectorAll('[data-feedback-sheet] .fb-face'));
+    var tagSets = { good: document.querySelector('[data-fb-tags="good"]'), bad: document.querySelector('[data-fb-tags="bad"]') };
+    var openers = Array.prototype.slice.call(document.querySelectorAll('[data-feedback-open]'));
+    if (!sheet || !form || !closer || !more || !question || !send || !done || !faces.length || !tagSets.good || !tagSets.bad) return;
+
+    var REMEMBER_MS = 2 * 60 * 60 * 1000;   // a second visit the same evening is still the same visit
+    var STORE_KEY = 'menu-feedback';
+    var params = new URLSearchParams(window.location.search);
+    var query = '?t=' + encodeURIComponent(params.get('t') || '') + '&k=' + encodeURIComponent(params.get('k') || '');
+    var uuid = null;
+    var score = 0;
+    var source = 'menu';
+    var busy = false;
+
+    function node(tag, className, text) {
+      var el = document.createElement(tag);
+      if (className) el.className = className;
+      if (text != null) el.textContent = text;
+      return el;
+    }
+    function newUuid() {
+      if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+      var bytes = new Uint8Array(16);
+      if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(bytes);
+      else for (var i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
+      bytes[6] = (bytes[6] & 0x0f) | 0x40;
+      bytes[8] = (bytes[8] & 0x3f) | 0x80;
+      var hex = Array.prototype.map.call(bytes, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+      return hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16) + '-' + hex.slice(16, 20) + '-' + hex.slice(20);
+    }
+    function remembered() {
+      try {
+        var saved = JSON.parse(sessionStorage.getItem(STORE_KEY) || 'null');
+        if (saved && saved.uuid && Date.now() - Number(saved.at || 0) < REMEMBER_MS) return saved;
+      } catch (e) { /* storage blocked: ask again */ }
+      return null;
+    }
+    function remember(view) {
+      try { sessionStorage.setItem(STORE_KEY, JSON.stringify({ uuid: view.uuid, score: view.score, at: Date.now() })); } catch (e) { /* fine */ }
+    }
+    function showError(message) {
+      if (!errorBox) return;
+      errorBox.textContent = message || '';
+      errorBox.hidden = !message;
+    }
+
+    function chosenTags() {
+      var set = score >= 4 ? tagSets.good : tagSets.bad;
+      return Array.prototype.slice.call(set.querySelectorAll('.fb-tag.on')).map(function (b) { return b.getAttribute('data-tag'); });
+    }
+
+    function pick(next) {
+      score = next;
+      faces.forEach(function (face) {
+        var mine = Number(face.getAttribute('data-score')) === next;
+        face.classList.toggle('on', mine);
+        face.classList.toggle('dim', !mine);
+        face.setAttribute('aria-checked', mine ? 'true' : 'false');
+      });
+      var good = next >= 4;
+      question.textContent = good ? 'Що сподобалось?' : 'Що пішло не так?';
+      tagSets.good.hidden = !good;
+      tagSets.bad.hidden = good;
+      // A chip ticked for the other mood is not an answer to this question.
+      Array.prototype.forEach.call((good ? tagSets.bad : tagSets.good).querySelectorAll('.fb-tag.on'), function (b) { b.classList.remove('on'); });
+      more.hidden = false;
+      send.disabled = false;
+      showError('');
+    }
+
+    /* «Дякуємо» in place of the form: the Google link for everyone (when the
+       owner gave one), and for a low score the promise that the owner reads it. */
+    function finish(view, phoneGiven) {
+      form.hidden = true;
+      done.textContent = '';
+      done.appendChild(node('h3', null, 'Дякуємо!'));
+      if (view.score <= 3) {
+        done.appendChild(node('p', null, phoneGiven ? 'Власник прочитає це сьогодні — і зателефонує.' : 'Власник прочитає це сьогодні.'));
+      } else {
+        done.appendChild(node('p', null, 'Нам приємно. Гарного дня!'));
+      }
+      if (googleUrl && /^https:\/\//.test(googleUrl)) {
+        var link = node('a', 'primary', 'Поділитись у Google');
+        link.href = googleUrl;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        done.appendChild(link);
+        done.appendChild(node('p', null, 'Відгук у Google бачать усі — лишіть його, якщо хочете.'));
+      }
+      done.hidden = false;
+      openers.forEach(function (button) {
+        if (button.classList.contains('fb-bar')) { button.textContent = 'Дякуємо за відгук!'; button.classList.add('done'); button.disabled = true; }
+      });
+      var ask = document.querySelector('[data-ask]');
+      if (ask) {
+        ask.classList.add('done');
+        var heading = ask.querySelector('h2');
+        if (heading) heading.textContent = 'Дякуємо за відгук!';
+        var line = ask.querySelector('p');
+        if (line) line.textContent = 'Власник його прочитає.';
+      }
+    }
+
+    function submit(event) {
+      if (event) event.preventDefault();
+      if (busy || !score) return;
+      busy = true;
+      send.disabled = true;
+      showError('');
+      var phone = phoneInput && !phoneLabel.hidden ? phoneInput.value.trim() : '';
+      var body = {
+        client_uuid: uuid,
+        score: score,
+        tags: chosenTags(),
+        comment: comment ? comment.value : '',
+        phone: phone || null,
+        source: source,
+        website: honeypot ? honeypot.value : ''
+      };
+      fetch(endpoint + query, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(body)
+      })
+        .then(function (response) {
+          return response.json().catch(function () { return {}; }).then(function (data) { return { status: response.status, data: data }; });
+        })
+        .then(function (answer) {
+          busy = false;
+          if (answer.status === 200 || answer.status === 201) {
+            remember(answer.data);
+            finish(answer.data, Boolean(phone));
+            return;
+          }
+          send.disabled = false;
+          if (answer.status === 429 || answer.status === 400) showError(answer.data.error || 'Не вдалося надіслати.');
+          else if (answer.status === 404) showError('Відгуки зараз не приймаються.');
+          else showError('Не вдалося надіслати. Спробуйте ще раз.');
+        })
+        .catch(function () {
+          busy = false;
+          send.disabled = false;
+          showError('Немає зв’язку. Спробуйте ще раз.');
+        });
+    }
+
+    function open(event) {
+      var from = event && event.target && event.target.closest ? event.target.closest('[data-feedback-open]') : null;
+      source = from && from.getAttribute('data-feedback-source') === 'bill' ? 'bill' : 'menu';
+      if (!uuid) uuid = newUuid();
+      sheet.hidden = false;
+      document.body.classList.add('bill-open');
+      var saved = remembered();
+      if (saved && done.hidden) {
+        // Already sent this visit: confirm with the server, then say thanks again.
+        fetch(endpoint + '/' + encodeURIComponent(saved.uuid), { cache: 'no-store', headers: { Accept: 'application/json' } })
+          .then(function (response) { return response.ok ? response.json() : null; })
+          .then(function (view) { if (view) finish(view, false); })
+          .catch(function () { /* offline: the form stays usable */ });
+      }
+      closer.focus();
+    }
+    function close() {
+      sheet.hidden = true;
+      document.body.classList.remove('bill-open');
+    }
+
+    faces.forEach(function (face) {
+      face.addEventListener('click', function () { pick(Number(face.getAttribute('data-score'))); });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-feedback-sheet] .fb-tag'), function (chip) {
+      chip.addEventListener('click', function () { chip.classList.toggle('on'); });
+    });
+    if (phoneToggle && phoneLabel) {
+      phoneToggle.addEventListener('click', function () {
+        phoneLabel.hidden = false;
+        phoneToggle.hidden = true;
+        if (phoneInput) phoneInput.focus();
+      });
+    }
+    form.addEventListener('submit', submit);
+    openers.forEach(function (button) { button.addEventListener('click', open); });
+    closer.addEventListener('click', close);
+    sheet.addEventListener('click', function (event) { if (event.target === sheet) close(); });
+    document.addEventListener('keydown', function (event) { if (event.key === 'Escape' && !sheet.hidden) close(); });
+  }
+
   function initCall(endpoint) {
     var params = new URLSearchParams(window.location.search);
     var query = '?t=' + encodeURIComponent(params.get('t') || '') + '&k=' + encodeURIComponent(params.get('k') || '');

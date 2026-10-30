@@ -43,6 +43,12 @@ import {
 } from '../guest-orders.service.js';
 import { loadGuestBill } from '../public-menu/guest-bill.js';
 import {
+  GuestFeedbackError,
+  GuestFeedbackTooMany,
+  createFeedback,
+  getOwnFeedback,
+} from '../guest-feedback.service.js';
+import {
   WaiterCallError,
   WaiterCallTooSoon,
   cancelOwnCall,
@@ -64,6 +70,7 @@ import {
   setPublicMenuBill,
   setPublicMenuCall,
   setPublicMenuEnabled,
+  setPublicMenuFeedback,
   setPublicMenuOrdering,
   setPublicMenuSlug,
   type AutoKitchenMode,
@@ -162,6 +169,41 @@ export function registerPublicMenuRoutes(fastify: FastifyInstance): void {
     }
   });
 
+  // A guest's feedback (phase F3). No key needed — it acts on nothing — but a
+  // table proven by its key is attached, with its open bill. The owner's
+  // switch off is the same 404 as a wrong token.
+  fastify.post('/public/menu/:token/feedback', { bodyLimit: 4096 }, async (request, reply) => {
+    const { token } = request.params as { token: string };
+    reply.header('Cache-Control', 'no-store');
+    reply.header('X-Robots-Tag', MENU_PAGE_HEADERS['X-Robots-Tag']!);
+    const store = await findMenuStore(token);
+    if (!store || !store.feedbackEnabled) return reply.code(404).send({ error: 'Відгуки недоступні' });
+    const query = (request.query ?? {}) as { t?: unknown; k?: unknown };
+    let table: MenuTable | null = null;
+    if (query.t !== undefined) {
+      const found = await findMenuTable(store.id, query.t);
+      if (found && (await verifyTableKey(store.id, found.id, query.k))) table = found;
+    }
+    try {
+      const { view, created } = await createFeedback(store.id, table, request.body ?? {});
+      return reply.code(created ? 201 : 200).send(view);
+    } catch (error) {
+      if (error instanceof GuestFeedbackTooMany) return reply.code(429).send({ error: error.message });
+      if (error instanceof GuestFeedbackError) return reply.code(400).send({ error: error.message });
+      throw error;
+    }
+  });
+
+  fastify.get('/public/menu/:token/feedback/:uuid', async (request, reply) => {
+    const { token, uuid } = request.params as { token: string; uuid: string };
+    reply.header('Cache-Control', 'no-store');
+    reply.header('X-Robots-Tag', MENU_PAGE_HEADERS['X-Robots-Tag']!);
+    const store = await findMenuStore(token);
+    const view = store && store.feedbackEnabled ? await getOwnFeedback(store.id, uuid) : null;
+    if (!view) return reply.code(404).send({ error: 'Відгук не знайдено' });
+    return view;
+  });
+
   fastify.get('/public/menu/:token', async (request, reply) => {
     const { token } = request.params as { token: string };
     reply.header('Cache-Control', 'no-store');
@@ -237,20 +279,22 @@ export function registerPublicMenuRoutes(fastify: FastifyInstance): void {
     const auth = await ensurePosOwner(request, reply);
     if (!auth) return;
     const body = (request.body ?? {}) as Record<string, unknown>;
-    const switches = ['enabled', 'slug_enabled', 'bill_enabled', 'ordering_enabled', 'call_enabled'] as const;
+    const switches = ['enabled', 'slug_enabled', 'bill_enabled', 'ordering_enabled', 'call_enabled', 'feedback_enabled'] as const;
     const given = switches.filter((field) => body[field] !== undefined);
     const autoGiven = body.auto_kitchen !== undefined;
     const limitGiven = body.auto_limit_cents !== undefined;
     if (given.length === 0 && !autoGiven && !limitGiven) {
       return reply.code(400).send({
         error:
-          'Потрібне enabled, slug_enabled, bill_enabled, ordering_enabled, call_enabled, auto_kitchen або auto_limit_cents',
+          'Потрібне enabled, slug_enabled, bill_enabled, ordering_enabled, call_enabled, feedback_enabled, auto_kitchen або auto_limit_cents',
       });
     }
     if (given.some((field) => typeof body[field] !== 'boolean')) {
       return reply
         .code(400)
-        .send({ error: 'enabled, slug_enabled, bill_enabled, ordering_enabled і call_enabled мають бути true або false' });
+        .send({
+          error: 'enabled, slug_enabled, bill_enabled, ordering_enabled, call_enabled і feedback_enabled мають бути true або false',
+        });
     }
     if (autoGiven && !AUTO_KITCHEN_MODES.includes(body.auto_kitchen as AutoKitchenMode)) {
       return reply.code(400).send({ error: 'auto_kitchen має бути off, reorders або all' });
@@ -274,6 +318,9 @@ export function registerPublicMenuRoutes(fastify: FastifyInstance): void {
         settings = await setPublicMenuOrdering(auth.storeId, body.ordering_enabled as boolean);
       }
       if (given.includes('call_enabled')) settings = await setPublicMenuCall(auth.storeId, body.call_enabled as boolean);
+      if (given.includes('feedback_enabled')) {
+        settings = await setPublicMenuFeedback(auth.storeId, body.feedback_enabled as boolean);
+      }
       if (limitGiven) settings = await setPublicMenuAutoLimit(auth.storeId, body.auto_limit_cents as number);
       if (autoGiven) {
         settings = await setPublicMenuAutoKitchen(

@@ -22,6 +22,7 @@ type Settings = {
   bill_enabled?: boolean;
   ordering_enabled?: boolean;
   call_enabled?: boolean;
+  feedback_enabled?: boolean;
   auto_kitchen?: 'off' | 'reorders' | 'all';
   auto_limit_cents?: number;
   auto_ack_at?: string | null;
@@ -460,6 +461,39 @@ describe('PublicMenuCard', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Увімкнути' }));
       expect(await screen.findByRole('status')).toHaveTextContent('Спершу увімкніть замовлення гостей з телефону');
       expect(screen.getByLabelText(new RegExp(WAITER))).toBeChecked();
+    });
+  });
+
+  describe('feedback (F3)', () => {
+    const FEEDBACK = 'Приймати відгуки гостей';
+
+    it('shows the switch only where the backend knows it and the menu is published, keeps it once on, and switches its own field', async () => {
+      posRequest.mockResolvedValueOnce(ON);
+      const older = renderWithProviders(<PublicMenuCard />);
+      await screen.findByText('Друкувати QR');
+      expect(screen.queryByLabelText(FEEDBACK)).not.toBeInTheDocument();
+      older.unmount();
+
+      posRequest.mockResolvedValueOnce({ ...OFF, feedback_enabled: false });
+      const unpublished = renderWithProviders(<PublicMenuCard />);
+      await screen.findByLabelText('Показувати меню гостям');
+      expect(screen.queryByLabelText(FEEDBACK)).not.toBeInTheDocument();
+      unpublished.unmount();
+
+      posRequest.mockResolvedValueOnce({ ...OFF, feedback_enabled: true });
+      const stuck = renderWithProviders(<PublicMenuCard />);
+      expect(await screen.findByLabelText(FEEDBACK)).toBeChecked();
+      stuck.unmount();
+
+      posRequest.mockResolvedValueOnce({ ...ON, feedback_enabled: false }).mockResolvedValueOnce({ ...ON, feedback_enabled: true });
+      renderWithProviders(<PublicMenuCard />);
+      const box = await screen.findByLabelText(FEEDBACK);
+      expect(box).not.toBeChecked();
+      expect(screen.getByText(/усім, а не лише задоволеним/)).toBeInTheDocument();
+      await userEvent.click(box);
+      expect(posRequest).toHaveBeenLastCalledWith('patch', '/store/public-menu', { feedback_enabled: true });
+      expect(await screen.findByLabelText(FEEDBACK)).toBeChecked();
+      expect(screen.getByRole('status')).toHaveTextContent('залишити відгук');
     });
   });
 

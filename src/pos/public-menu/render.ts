@@ -18,6 +18,7 @@ import { fileURLToPath } from 'url';
 import qrcode from 'qrcode-generator';
 import { corkageFeeText, corkageMinText, deltaText, formatUahGuestCompact, groupHint, tableLabel } from './format.js';
 import { phoneHref, socialUrl } from './profile.js';
+import { BAD_TAGS, FEEDBACK_TAGS, GOOD_TAGS, type FeedbackTag } from '../guest-feedback.service.js';
 
 export { tableLabel };
 import {
@@ -302,6 +303,12 @@ export interface MenuPageOptions {
    * order itself; the page only describes. Ignored without ordering.
    */
   orderAuto?: { mode: 'reorders' | 'all'; limitCents: number } | null;
+  /**
+   * The owner takes feedback (phase F3): the page gets a «Як вам сьогодні?»
+   * button in the dock, a card after the last category and the sheet itself.
+   * Not tied to a table — a letter to the owner needs no key.
+   */
+  feedback?: boolean;
 }
 
 export function renderMenuPage(
@@ -314,6 +321,9 @@ export function renderMenuPage(
   const ordering = Boolean(options.ordering && table);
   const call = Boolean(options.call && table);
   const auto = ordering && options.orderAuto ? options.orderAuto : null;
+  const feedback = options.feedback
+    ? { storeName: menu.store.name, googleUrl: menu.store.google_url }
+    : null;
   const tabs = menu.categories
     .map((c, i) => `<a href="#c-${c.id ?? 'other'}"${i === 0 ? ' class="on"' : ''}>${escapeHtml(c.name)}</a>`)
     .join('');
@@ -325,6 +335,11 @@ export function renderMenuPage(
     )
     .join('\n');
   const empty = menu.categories.length === 0 ? '<p class="empty">Меню поки порожнє.</p>' : '';
+  // After the last dish: the quiet ask. The same sheet the dock button opens.
+  const ask = feedback
+    ? '<section class="ask" data-ask><h2>Як вам сьогодні?</h2><p>Оцініть одним дотиком — власник прочитає.</p>' +
+      '<button type="button" class="ask-btn" data-feedback-open>Оцінити</button></section>'
+    : '';
   // Said once, and only where there is something to be careful about: the
   // owner writes the composition and ticks the allergens, and a modifier's
   // answer (a different milk) is not part of either.
@@ -349,9 +364,9 @@ export function renderMenuPage(
   const body = `<header class="top"><div class="brand">${logo}<div><h1>${escapeHtml(menu.store.name)}</h1><p class="sub">Меню</p></div></div>${seat}${renderContacts(menu.store)}</header>
 ${renderCorkage(menu.store)}${tabs ? `<nav class="tabs" aria-label="Розділи меню">${tabs}</nav>` : ''}
 <main>
-${empty}${sections}
+${empty}${sections}${ask}
 </main>
-<footer class="foot">${factsNote}<p>Стоп-лист і ціни оновлюються самі.</p><p><a href="${escapeHtml(publicBaseUrl())}/pos/kafe" rel="noopener">Меню працює на The Live Shop POS</a></p></footer>${showBill || ordering || call ? dockMarkup(table!, showBill, ordering, call, billCorkage) : ''}`;
+<footer class="foot">${factsNote}<p>Стоп-лист і ціни оновлюються самі.</p><p><a href="${escapeHtml(publicBaseUrl())}/pos/kafe" rel="noopener">Меню працює на The Live Shop POS</a></p></footer>${showBill || ordering || call || feedback ? dockMarkup(table, showBill, ordering, call, billCorkage, feedback) : ''}`;
   return shell(
     `${menu.store.name} — меню`,
     body,
@@ -362,7 +377,14 @@ ${empty}${sections}
       (auto
         ? ` data-order-auto="${auto.mode === 'all' ? 'all' : 'reorders'}" data-order-limit="${Math.trunc(auto.limitCents)}"`
         : '') +
-      (call ? ` data-call-url="/api/pos/public/menu/${escapeHtml(token)}/calls"` : '')
+      (call ? ` data-call-url="/api/pos/public/menu/${escapeHtml(token)}/calls"` : '') +
+      // The Google card is the one owner-typed URL here, checked on the way in
+      // and read back through the same check; the script puts it in an
+      // `href` property, never in markup.
+      (feedback
+        ? ` data-feedback-url="/api/pos/public/menu/${escapeHtml(token)}/feedback"` +
+          (feedback.googleUrl ? ` data-feedback-google="${escapeHtml(feedback.googleUrl)}"` : '')
+        : '')
   );
 }
 
@@ -374,14 +396,21 @@ ${empty}${sections}
  * key is not here at all: the script reads it from the address bar, where the
  * QR put it.
  */
+interface FeedbackSheet {
+  storeName: string;
+  googleUrl: string | null;
+}
+
 function dockMarkup(
-  table: MenuTable,
+  table: MenuTable | null,
   bill: boolean,
   ordering: boolean,
   call: boolean,
-  corkage: string | null = null
+  corkage: string | null = null,
+  feedback: FeedbackSheet | null = null
 ): string {
-  const label = escapeHtml(tableLabel(table.name));
+  // The bill, the cart and the calls are a table's; feedback is anyone's.
+  const label = table ? escapeHtml(tableLabel(table.name)) : '';
   // The call row (phase Q8) is drawn with its words so it reads without the
   // script; the script only greys a button while its call is live and puts the
   // state («Офіціанта покликано» → «Офіціант іде») in the line above it.
@@ -395,14 +424,15 @@ function dockMarkup(
   const bars =
     calls +
     (ordering ? '<button type="button" class="cart-bar" data-cart-open hidden></button>' : '') +
-    (bill ? `<button type="button" class="bill-bar" data-bill-open>Рахунок · ${label}</button>` : '');
+    (bill ? `<button type="button" class="bill-bar" data-bill-open>Рахунок · ${label}</button>` : '') +
+    (feedback ? '<button type="button" class="fb-bar" data-feedback-open>Як вам сьогодні?</button>' : '');
   const billSheet = bill
     ? `
 <div class="bill-sheet" data-bill-sheet hidden role="dialog" aria-modal="true" aria-labelledby="bill-title">
 <div class="bill-panel">
 <header class="bill-head"><h2 id="bill-title">Рахунок · ${label}</h2><button type="button" class="bill-close" data-bill-close aria-label="Закрити">×</button></header>
 ${corkage ? `<p class="bill-corkage">${GLYPH.wine}<span>${escapeHtml(corkage)}</span></p>\n` : ''}<div class="bill-body" data-bill-body aria-live="polite"></div>
-</div>
+${feedback ? '<p class="bill-ask"><button type="button" class="link-btn" data-feedback-open data-feedback-source="bill">Як вам сьогодні? Оцініть</button></p>\n' : ''}</div>
 </div>`
     : '';
   const orderSheet = ordering
@@ -415,7 +445,73 @@ ${corkage ? `<p class="bill-corkage">${GLYPH.wine}<span>${escapeHtml(corkage)}</
 </div>
 </div>`
     : '';
-  return `\n<div class="dock">${bars}</div>${billSheet}${orderSheet}`;
+  return `\n<div class="dock">${bars}</div>${billSheet}${orderSheet}${feedback ? feedbackSheetMarkup(feedback) : ''}`;
+}
+
+// ── the feedback sheet (phase F3) ───────────────────────────────────
+
+/** Five faces, 1 «Погано» … 5 «Чудово»: a circle, two eyes and a mouth that bends with the score. */
+const MOUTH: Record<number, string> = {
+  1: 'M15 35q9-10 18 0',
+  2: 'M16 33q8-6 16 0',
+  3: 'M16 31h16',
+  4: 'M16 29q8 7 16 0',
+  5: 'M14 27q10 12 20 0',
+};
+const FACE_WORDS: Record<number, string> = { 1: 'Погано', 2: 'Так собі', 3: 'Нормально', 4: 'Добре', 5: 'Чудово' };
+
+export function faceSvg(score: number): string {
+  return (
+    '<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="20" fill="none" stroke="currentColor" stroke-width="3"/>' +
+    '<circle cx="17" cy="19" r="2.5" fill="currentColor"/><circle cx="31" cy="19" r="2.5" fill="currentColor"/>' +
+    `<path d="${MOUTH[score]}" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>`
+  );
+}
+
+function tagChips(tags: readonly FeedbackTag[], set: 'good' | 'bad'): string {
+  return (
+    `<div class="fb-tags" data-fb-tags="${set}" hidden>` +
+    tags.map((tag) => `<button type="button" class="fb-tag" data-tag="${tag}">${escapeHtml(FEEDBACK_TAGS[tag])}</button>`).join('') +
+    '</div>'
+  );
+}
+
+/**
+ * The one sheet every «Як вам сьогодні?» opens. Only the frame and the fixed
+ * words are here; the script fills in what the guest does. The store's name is
+ * the only owner text on it, escaped. The chips of both moods are drawn and
+ * the script shows the set the score asks for. The `website` field is a trap
+ * no person sees (`.fb-hp`): filled in, the server says yes and writes nothing.
+ */
+function feedbackSheetMarkup(feedback: FeedbackSheet): string {
+  const faces = [1, 2, 3, 4, 5]
+    .map(
+      (score) =>
+        `<button type="button" class="fb-face" data-score="${score}" role="radio" aria-checked="false" aria-label="${FACE_WORDS[score]}">${faceSvg(score)}</button>`
+    )
+    .join('');
+  return `
+<div class="bill-sheet" data-feedback-sheet hidden role="dialog" aria-modal="true" aria-labelledby="fb-title">
+<div class="bill-panel">
+<header class="bill-head"><h2 id="fb-title">Як вам сьогодні?</h2><button type="button" class="bill-close" data-feedback-close aria-label="Закрити">×</button></header>
+<form class="fb" data-feedback-form novalidate>
+<p class="fb-sub">${escapeHtml(feedback.storeName)}</p>
+<div class="fb-faces" role="radiogroup" aria-label="Оцінка">${faces}</div>
+<div class="fb-ends" aria-hidden="true"><span>Погано</span><span>Чудово</span></div>
+<div class="fb-more" data-fb-more hidden>
+<p class="fb-q" data-fb-q></p>
+${tagChips(GOOD_TAGS, 'good')}${tagChips(BAD_TAGS, 'bad')}
+<label class="fb-label"><span>Розкажіть більше <small>необов’язково</small></span><textarea name="comment" maxlength="600" rows="3" data-fb-comment></textarea></label>
+<button type="button" class="link-btn fb-phone-toggle" data-fb-phone-toggle>Залишити телефон для дзвінка</button>
+<label class="fb-label" data-fb-phone hidden><span>Телефон <small>власник зателефонує</small></span><input name="phone" type="tel" inputmode="tel" maxlength="32" autocomplete="tel" data-fb-phone-input></label>
+<label class="fb-hp" aria-hidden="true">Сайт<input name="website" tabindex="-1" autocomplete="off" data-fb-hp></label>
+</div>
+<p class="error" data-fb-error hidden></p>
+<div class="order-foot"><button type="submit" class="primary" data-fb-send disabled>Надіслати</button></div>
+</form>
+<div class="fb-done" data-fb-done hidden aria-live="polite"></div>
+</div>
+</div>`;
 }
 
 // ── the QR card ─────────────────────────────────────────────────────
