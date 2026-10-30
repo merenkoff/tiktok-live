@@ -4,8 +4,9 @@
 
 // pos/src/pages/admin/PublicMenuCard.tsx
 //
-// The owner's «QR-меню»: a switch, the address, and the QR card to print.
-// TechDocs/POS_QR_MENU.md.
+// The owner's «QR-меню»: a switch, the address, and the QR card to print —
+// and, since migration 080, a short address by the store code for a social-
+// network bio («Коротка адреса»). TechDocs/POS_QR_MENU.md.
 //
 // Its own card with its own calls, outside `SettingsPage`'s single form, for
 // the reason `FiscalSettingsCard` gives: a different endpoint (`/store/
@@ -66,6 +67,13 @@ interface PublicMenuSettings {
   /** When the owner last confirmed the risks of raising the mode. */
   auto_ack_at?: string | null;
   /**
+   * The menu also answers at `/m/<store code>` — a short link for a social-
+   * network bio (migration 080). Absent from an older backend: no box then.
+   */
+  slug_enabled?: boolean;
+  /** That short address, shown before the box is ticked; null if the code cannot be one. */
+  slug_url?: string | null;
+  /**
    * A short-lived signed suffix (`?p=`) that makes the print pages write each
    * table's key into its QR. Without it the QR still opens the menu, but not
    * the bill.
@@ -93,6 +101,7 @@ export function PublicMenuCard() {
   const [confirmRotate, setConfirmRotate] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const urlInput = useRef<HTMLInputElement>(null);
+  const slugInput = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     setState('loading');
@@ -130,6 +139,15 @@ export function PublicMenuCard() {
     run(
       () => api.posRequest<PublicMenuSettings>('patch', '/store/public-menu', { enabled }),
       (view) => (view.enabled ? 'Меню відкрито для гостей.' : 'Меню вимкнено: за QR тепер нічого не відкриється.')
+    );
+
+  const toggleSlug = (enabled: boolean) =>
+    run(
+      () => api.posRequest<PublicMenuSettings>('patch', '/store/public-menu', { slug_enabled: enabled }),
+      (view) =>
+        view.slug_enabled
+          ? 'Коротка адреса працює — її можна ставити в соцмережі.'
+          : 'Коротку адресу вимкнено. Звичайне посилання й QR працюють як і раніше.'
     );
 
   const toggleBill = (enabled: boolean) =>
@@ -192,15 +210,15 @@ export function PublicMenuCard() {
       () => 'Створено нове посилання. Старі QR більше не працюють — роздрукуйте новий.'
     );
 
-  async function copy() {
-    if (!settings?.url) return;
+  async function copy(url: string | null | undefined, input: HTMLInputElement | null) {
+    if (!url) return;
     try {
-      await navigator.clipboard.writeText(settings.url);
+      await navigator.clipboard.writeText(url);
       setMessage('Посилання скопійовано.');
     } catch {
       // No clipboard permission (an insecure origin, an embedded webview):
       // select the text, so the owner's own Ctrl+C finishes the job.
-      urlInput.current?.select();
+      input?.select();
       setMessage('Виділено посилання — скопіюйте його вручну.');
     }
   }
@@ -222,6 +240,11 @@ export function PublicMenuCard() {
   }
 
   const live = settings.enabled && settings.url;
+  // The short address only works while the menu is published, so the box sits
+  // with it — and stays once ticked, so an owner can always untick it.
+  const slugUrl = typeof settings.slug_url === 'string' ? settings.slug_url : null;
+  const showSlugSwitch =
+    typeof settings.slug_enabled === 'boolean' && slugUrl !== null && (Boolean(live) || settings.slug_enabled);
   const tables = settings.tables ?? 0;
   const print = typeof settings.print === 'string' && PRINT_LINK.test(settings.print) ? settings.print : null;
   // The switch is about tables, so it shows where there are some — and stays
@@ -287,10 +310,54 @@ export function PublicMenuCard() {
               <a className="sq-btn-quiet" href={settings.url ?? undefined} target="_blank" rel="noopener noreferrer">
                 Відкрити меню
               </a>
-              <button type="button" className="sq-btn-quiet" onClick={() => void copy()}>
+              <button type="button" className="sq-btn-quiet" onClick={() => void copy(settings.url, urlInput.current)}>
                 Копіювати посилання
               </button>
             </div>
+          </div>
+        )}
+
+        {showSlugSwitch && (
+          <div className="space-y-1.5">
+            <label className="min-h-11 flex items-center gap-3 text-[15px] text-sq-text">
+              <input
+                type="checkbox"
+                className={CHECKBOX}
+                checked={settings.slug_enabled === true}
+                disabled={saving}
+                onChange={(e) => void toggleSlug(e.target.checked)}
+              />
+              <span>Коротка адреса для соцмереж: {slugUrl?.replace(/^https?:\/\//, '')}</span>
+            </label>
+            <p className="pl-8 text-[13px] leading-relaxed text-sq-muted">
+              Зручно для Instagram, Facebook чи Google Maps: меню відкривається за кодом магазину. Звичайне
+              посилання й роздруковані QR працюють і далі. Цей самий код касири вводять при вході, тому без
+              PIN-коду він нічого, крім меню, не відкриває — але давайте працівникам PIN, який не вгадати.
+            </p>
+            {settings.slug_enabled === true && live && (
+              <div className="pl-8 space-y-2.5">
+                <input
+                  ref={slugInput}
+                  className="sq-input"
+                  aria-label="Коротка адреса меню"
+                  value={slugUrl ?? ''}
+                  readOnly
+                  onFocus={(e) => e.currentTarget.select()}
+                />
+                <div className="flex flex-wrap gap-2.5">
+                  <button
+                    type="button"
+                    className="sq-btn-quiet"
+                    onClick={() => void copy(slugUrl, slugInput.current)}
+                  >
+                    Копіювати коротку адресу
+                  </button>
+                  <a className="sq-btn-quiet" href={slugUrl ?? undefined} target="_blank" rel="noopener noreferrer">
+                    Відкрити за короткою адресою
+                  </a>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -371,6 +438,7 @@ export function PublicMenuCard() {
           <div className="rounded-xl bg-sq-sidebar px-[18px] py-4 space-y-3">
             <p className="text-[15px] text-sq-text">
               Потрапило посилання не тим людям? Створіть нове: старі QR перестануть працювати.
+              {settings.slug_enabled === true && ' Коротка адреса не зміниться — щоб її прибрати, зніміть галочку вище.'}
             </p>
             {confirmRotate ? (
               <div className="flex flex-wrap items-center gap-2.5">

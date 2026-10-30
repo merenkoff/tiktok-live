@@ -25,6 +25,8 @@ type Settings = {
   auto_kitchen?: 'off' | 'reorders' | 'all';
   auto_limit_cents?: number;
   auto_ack_at?: string | null;
+  slug_enabled?: boolean;
+  slug_url?: string | null;
   print?: string | null;
 };
 
@@ -93,6 +95,53 @@ describe('PublicMenuCard', () => {
     expect(screen.getByText('Друкувати QR')).toHaveAttribute('rel', 'noopener noreferrer');
     expect(screen.getByText('Відкрити меню')).toHaveAttribute('href', ON.url);
     expect(screen.getByRole('status')).toHaveTextContent('Меню відкрито для гостей.');
+  });
+
+  it('offers the short address by the store code, names it before the tick, and hands it out after', async () => {
+    const SHORT = 'https://the-live.shop/m/shablya';
+    posRequest
+      .mockResolvedValueOnce({ ...ON, slug_enabled: false, slug_url: SHORT })
+      .mockResolvedValueOnce({ ...ON, slug_enabled: true, slug_url: SHORT });
+    renderWithProviders(<PublicMenuCard />);
+
+    const box = await screen.findByLabelText('Коротка адреса для соцмереж: the-live.shop/m/shablya');
+    expect(box).not.toBeChecked();
+    expect(screen.queryByLabelText('Коротка адреса меню')).not.toBeInTheDocument();
+
+    await userEvent.click(box);
+
+    expect(posRequest).toHaveBeenLastCalledWith('patch', '/store/public-menu', { slug_enabled: true });
+    expect(await screen.findByLabelText('Коротка адреса меню')).toHaveValue(SHORT);
+    expect(screen.getByText('Відкрити за короткою адресою')).toHaveAttribute('href', SHORT);
+    expect(screen.getByRole('status')).toHaveTextContent('Коротка адреса працює');
+    // The token's own address is still the one the QR prints.
+    expect(screen.getByText('Друкувати QR')).toHaveAttribute('href', `${ON.url}/qr`);
+    expect(screen.getByText(/Коротка адреса не зміниться/)).toBeInTheDocument();
+  });
+
+  it('shows no short-address box to an older backend, nor while the menu is off and the box unticked', async () => {
+    posRequest.mockResolvedValueOnce(ON);
+    const older = renderWithProviders(<PublicMenuCard />);
+    await screen.findByText('Друкувати QR');
+    expect(screen.queryByText(/Коротка адреса/)).not.toBeInTheDocument();
+    older.unmount();
+
+    posRequest.mockResolvedValueOnce({ ...OFF, slug_enabled: false, slug_url: 'https://the-live.shop/m/shablya' });
+    const off = renderWithProviders(<PublicMenuCard />);
+    await screen.findByText('QR-меню для гостей');
+    expect(screen.queryByText(/Коротка адреса/)).not.toBeInTheDocument();
+    off.unmount();
+
+    // Ticked while the menu is off: the box stays, so the owner can untick it.
+    posRequest.mockResolvedValueOnce({
+      ...OFF,
+      token: ON.token,
+      slug_enabled: true,
+      slug_url: 'https://the-live.shop/m/shablya',
+    });
+    renderWithProviders(<PublicMenuCard />);
+    expect(await screen.findByLabelText(/Коротка адреса для соцмереж/)).toBeChecked();
+    expect(screen.queryByLabelText('Коротка адреса меню')).not.toBeInTheDocument();
   });
 
   it('offers one sheet with a QR for every table, only when the store has tables', async () => {

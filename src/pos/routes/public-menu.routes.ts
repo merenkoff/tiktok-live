@@ -65,6 +65,7 @@ import {
   setPublicMenuCall,
   setPublicMenuEnabled,
   setPublicMenuOrdering,
+  setPublicMenuSlug,
   type AutoKitchenMode,
   updateStoreProfile,
   type MenuTable,
@@ -236,19 +237,20 @@ export function registerPublicMenuRoutes(fastify: FastifyInstance): void {
     const auth = await ensurePosOwner(request, reply);
     if (!auth) return;
     const body = (request.body ?? {}) as Record<string, unknown>;
-    const switches = ['enabled', 'bill_enabled', 'ordering_enabled', 'call_enabled'] as const;
+    const switches = ['enabled', 'slug_enabled', 'bill_enabled', 'ordering_enabled', 'call_enabled'] as const;
     const given = switches.filter((field) => body[field] !== undefined);
     const autoGiven = body.auto_kitchen !== undefined;
     const limitGiven = body.auto_limit_cents !== undefined;
     if (given.length === 0 && !autoGiven && !limitGiven) {
       return reply.code(400).send({
-        error: 'Потрібне enabled, bill_enabled, ordering_enabled, call_enabled, auto_kitchen або auto_limit_cents',
+        error:
+          'Потрібне enabled, slug_enabled, bill_enabled, ordering_enabled, call_enabled, auto_kitchen або auto_limit_cents',
       });
     }
     if (given.some((field) => typeof body[field] !== 'boolean')) {
       return reply
         .code(400)
-        .send({ error: 'enabled, bill_enabled, ordering_enabled і call_enabled мають бути true або false' });
+        .send({ error: 'enabled, slug_enabled, bill_enabled, ordering_enabled і call_enabled мають бути true або false' });
     }
     if (autoGiven && !AUTO_KITCHEN_MODES.includes(body.auto_kitchen as AutoKitchenMode)) {
       return reply.code(400).send({ error: 'auto_kitchen має бути off, reorders або all' });
@@ -266,6 +268,7 @@ export function registerPublicMenuRoutes(fastify: FastifyInstance): void {
       // limit before the mode, so a raised mode never runs on the old limit.
       let settings = null;
       if (given.includes('enabled')) settings = await setPublicMenuEnabled(auth.storeId, body.enabled as boolean);
+      if (given.includes('slug_enabled')) settings = await setPublicMenuSlug(auth.storeId, body.slug_enabled as boolean);
       if (given.includes('bill_enabled')) settings = await setPublicMenuBill(auth.storeId, body.bill_enabled as boolean);
       if (given.includes('ordering_enabled')) {
         settings = await setPublicMenuOrdering(auth.storeId, body.ordering_enabled as boolean);

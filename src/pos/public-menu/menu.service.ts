@@ -15,8 +15,10 @@
 //    stays behind by default. `getCatalog` is still the one place that knows
 //    what «available» means — it is reused, then narrowed.
 //
-// 2. Keyed on a TOKEN, never the slug. The slug is the store half of the
-//    till's PIN login, so it must not be printed on a table.
+// 2. Keyed on a TOKEN, not the slug. The slug is the store half of the
+//    till's PIN login, so it is never printed on a table — unless the owner
+//    asks for exactly that: «Коротка адреса» (migration 080) makes the menu
+//    answer at `/m/<slug>` too, for a link in a social-network bio.
 //
 // 3. Cheap under a crowd. Every scan is an unauthenticated read that would
 //    otherwise walk stock arithmetic over the store's whole menu, and the
@@ -44,8 +46,13 @@ import {
 } from './profile.js';
 import type { CatalogItem } from '../types.js';
 
-/** What a URL token looks like. Checked before any query, so junk never reaches the database. */
-export const TOKEN_RE = /^[A-Za-z0-9_-]{8,64}$/;
+/**
+ * What `/m/<key>` may carry: a token, or — where the owner ticked «Коротка
+ * адреса» (migration 080) — the store's slug, which can be as short as three
+ * characters (`shablya` is seven, under a token's eight). Checked before any
+ * query, so junk never reaches the database.
+ */
+export const MENU_KEY_RE = /^[A-Za-z0-9_-]{3,64}$/;
 
 /** How long a built menu is reused. The stop-list bypasses it (see `invalidatePublicMenu`). */
 const CACHE_TTL_MS = 15_000;
@@ -511,9 +518,16 @@ export function resetPublicMenuCache(): void {
  * with the same page, so the response never says which slugs or tokens exist.
  * A store whose vertical has no kitchen (the owner changed it, or the super
  * admin did) stops publishing too: the menu is a café's.
+ *
+ * The key may also be the store's slug, but only for a store whose owner
+ * switched the short address on (`public_menu_slug_enabled`, migration 080):
+ * the slug is the store half of the till's PIN login, so it is never an
+ * address by default. A slug is matched case-blind (the till's login lower-
+ * cases it too, and a bio link gets typed by hand); a token wins over a slug
+ * if the two ever spell the same, which `setPublicMenuSlug` refuses to create.
  */
 export async function findMenuStore(token: string): Promise<MenuStore | null> {
-  if (!TOKEN_RE.test(token)) return null;
+  if (!MENU_KEY_RE.test(token)) return null;
   const hit = storeByToken.get(token);
   if (hit && hit.expires > Date.now()) return hit.value;
   const result = await pool.query(
@@ -521,7 +535,10 @@ export async function findMenuStore(token: string): Promise<MenuStore | null> {
             public_menu_call, public_menu_auto_kitchen, public_menu_auto_limit_cents,
             public_logo_url, public_address, public_phone, public_hours
      FROM pos_stores
-     WHERE public_menu_token = $1`,
+     WHERE public_menu_token = $1
+        OR (public_menu_slug_enabled AND slug = lower($1))
+     ORDER BY (public_menu_token IS NOT DISTINCT FROM $1) DESC
+     LIMIT 1`,
     [token]
   );
   const row = result.rows[0];
@@ -599,6 +616,17 @@ export interface PublicMenuSettings {
   /** When the owner last confirmed the risks of auto-sending, or null if never. */
   auto_ack_at: string | null;
   /**
+   * The menu also answers at `/m/<slug>` — the store code the till logs in
+   * with — for a link in a social-network bio (migration 080). Off by
+   * default: it hands out half of the till's login.
+   */
+  slug_enabled: boolean;
+  /**
+   * What that short address is (or would be once switched on), so the owner
+   * sees it before ticking the box. Null for a slug that cannot be a URL.
+   */
+  slug_url: string | null;
+  /**
    * A short-lived signed suffix (`?p=`) for the print pages: without it
    * `/m/<token>/qr` and `/tables` print QR codes with no table key in them,
    * because the store token is visible to every guest. Null until there is a
@@ -618,8 +646,15 @@ function isUniqueViolation(error: unknown): boolean {
 }
 
 /** Every column the owner's card reads — one list, so a setter cannot forget one in its RETURNING. */
-const SETTINGS_COLUMNS = `vertical, public_menu_enabled, public_menu_token, public_menu_bill, public_menu_ordering,
-  public_menu_call, public_menu_auto_kitchen, public_menu_auto_limit_cents, public_menu_auto_ack_at`;
+const SETTINGS_COLUMNS = `vertical, slug, public_menu_enabled, public_menu_token, public_menu_bill, public_menu_ordering,
+  public_menu_call, public_menu_auto_kitchen, public_menu_auto_limit_cents, public_menu_auto_ack_at,
+  public_menu_slug_enabled`;
+
+/** The slug as it would stand in `/m/<slug>`, or null when it cannot (an old seed's odd code). */
+function slugKey(row: Record<string, unknown> | undefined): string | null {
+  const slug = typeof row?.slug === 'string' ? row.slug : null;
+  return slug !== null && slug === slug.toLowerCase() && MENU_KEY_RE.test(slug) ? slug : null;
+}
 
 function toSettings(row: Record<string, unknown> | undefined, tables = 0, print: string | null = null): PublicMenuSettings {
   const token = typeof row?.public_menu_token === 'string' ? row.public_menu_token : null;
@@ -636,6 +671,8 @@ function toSettings(row: Record<string, unknown> | undefined, tables = 0, print:
     auto_limit_cents: Number(row?.public_menu_auto_limit_cents ?? 200000),
     auto_ack_at:
       row?.public_menu_auto_ack_at == null ? null : new Date(row.public_menu_auto_ack_at as string).toISOString(),
+    slug_enabled: row?.public_menu_slug_enabled === true,
+    slug_url: slugKey(row) ? menuUrl(slugKey(row) as string) : null,
     print: token ? print : null,
   };
 }
@@ -711,6 +748,40 @@ export async function rotatePublicMenuToken(storeId: number): Promise<PublicMenu
       if (!isUniqueViolation(error) || attempt >= 2) throw error;
     }
   }
+}
+
+/**
+ * Let the menu answer at `/m/<slug>` too, or stop. For a link in a social-
+ * network bio, where `the-live.shop/m/shablya` reads and `…/m/tbJbbIZX…` does
+ * not. The token address and every printed QR keep working either way, and
+ * rotating the token does not touch this address — switching it off does.
+ * Like the bill switch it only has an effect while the menu is published.
+ *
+ * Refused for a slug some store's token already spells (the demo menus carry
+ * readable tokens such as `demo-cafe-menu`): the token would win, and the
+ * owner's short link would open someone else's menu.
+ */
+export async function setPublicMenuSlug(storeId: number, enabled: boolean): Promise<PublicMenuSettings> {
+  const row = await readRow(storeId);
+  if (enabled) {
+    if (!toSettings(row).available) throw new PublicMenuError(NOT_AVAILABLE);
+    const slug = slugKey(row);
+    if (!slug) throw new PublicMenuError('Код цього магазину не годиться для адреси меню');
+    const taken = await pool.query(`SELECT 1 FROM pos_stores WHERE public_menu_token = $1 AND id <> $2`, [
+      slug,
+      storeId,
+    ]);
+    if (taken.rows.length > 0) throw new PublicMenuError('Ця коротка адреса вже зайнята іншим меню');
+  }
+  const result = await pool.query(
+    `UPDATE pos_stores
+     SET public_menu_slug_enabled = $2, updated_at = NOW()
+     WHERE id = $1
+     RETURNING ${SETTINGS_COLUMNS}`,
+    [storeId, enabled]
+  );
+  invalidatePublicMenu(storeId);
+  return settingsFor(storeId, result.rows[0]);
 }
 
 /**
