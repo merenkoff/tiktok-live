@@ -36,6 +36,7 @@ export const analyticsModule: ModuleDescriptor = {
   ],
   nav: [
     { to: '/admin', end: true, label: 'Сьогодні', location: 'admin-sidebar', order: 10 },
-    { to: '/admin/reviews', label: 'Відгуки', location: 'admin-sidebar', order: 12, visible: hasGuestMenu },
+    // In the «Продажі» group after «Продажі» (50): the guests' words belong with the sales, not on top beside «Сьогодні».
+    { to: '/admin/reviews', label: 'Відгуки', location: 'admin-sidebar', order: 55, group: 'sales', visible: hasGuestMenu },
   ],
 };
