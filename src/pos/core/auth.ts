@@ -10,6 +10,20 @@ import type { FiscalPublicConfig, PosAuthContext, PosRole } from '../types.js';
 import { isFiscalProviderId } from '../fiscal/types.js';
 import { isModuleEnabled } from './modules.js';
 import { verticalOrDefault } from '../verticals/index.js';
+import { feedbackMenuKey, feedbackUrl } from '../public-menu/urls.js';
+
+/** The feedback QR's address for the session's store, or null (see `urls.ts`). */
+function feedbackUrlOf(row: Record<string, unknown>): string | null {
+  const key = feedbackMenuKey({
+    slug: row.store_slug,
+    vertical: row.vertical,
+    public_menu_enabled: row.public_menu_enabled,
+    public_menu_token: row.public_menu_token,
+    public_menu_slug_enabled: row.public_menu_slug_enabled,
+    public_menu_feedback: row.public_menu_feedback,
+  });
+  return key ? feedbackUrl(key) : null;
+}
 
 const SESSION_TTL_HOURS = 24 * 14;
 
@@ -43,6 +57,10 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
        store.auto_print_receipt,
        store.florist_labour_bps,
        store.cash_rounding,
+       store.public_menu_enabled,
+       store.public_menu_token,
+       store.public_menu_slug_enabled,
+       store.public_menu_feedback,
        store.enabled_modules,
        store.module_remotes,
        store.nav_overrides,
@@ -96,6 +114,10 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
     // Same reason: a till that starts cold offline rounds the cash total by
     // what the cached login says, and must agree with the server at sync.
     cashRounding: Number(row.cash_rounding ?? 0),
+    // The QR «Оцініть нас» the till prints on a receipt (F7). With the login
+    // for the same reason again: a counter café's desktop prints its receipts
+    // without a network, and the cached login is where it reads the address.
+    feedbackUrl: feedbackUrlOf(row),
     enabledModules: (row.enabled_modules as string[] | null) ?? [],
     moduleRemotes:
       (row.module_remotes as PosAuthContext['moduleRemotes'] | null) ?? {},

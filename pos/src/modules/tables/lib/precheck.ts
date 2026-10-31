@@ -53,5 +53,8 @@ export function buildPrecheck(bill: Bill, now: Date = new Date()): PrecheckData 
     waiter_name: bill.opened_by_name,
     items,
     total_cents: items.reduce((sum, i) => sum + i.line_total_cents, 0),
+    // The QR «Оцініть нас» (F7): the server's keyed address for this table,
+    // or nothing — the paper never invents one.
+    feedback_url: bill.feedback_url ?? null,
   };
 }

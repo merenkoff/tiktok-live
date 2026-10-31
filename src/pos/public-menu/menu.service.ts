@@ -53,9 +53,13 @@ import type { CatalogItem } from '../types.js';
  * What `/m/<key>` may carry: a token, or — where the owner ticked «Коротка
  * адреса» (migration 080) — the store's slug, which can be as short as three
  * characters (`shablya` is seven, under a token's eight). Checked before any
- * query, so junk never reaches the database.
+ * query, so junk never reaches the database. The addresses themselves live in
+ * `urls.ts` (pure), because the login and the bill print one of them too
+ * (phase F7) and must not pull this module along; re-exported here for the
+ * routes and the renderer that always read them from this file.
  */
-export const MENU_KEY_RE = /^[A-Za-z0-9_-]{3,64}$/;
+export { MENU_KEY_RE, menuUrl, publicBaseUrl, tableMenuUrl } from './urls.js';
+import { MENU_KEY_RE, menuUrl, slugKey } from './urls.js';
 
 /** How long a built menu is reused. The stop-list bypasses it (see `invalidatePublicMenu`). */
 const CACHE_TTL_MS = 15_000;
@@ -208,23 +212,6 @@ export interface MenuTable {
 }
 
 export class PublicMenuError extends Error {}
-
-export function publicBaseUrl(): string {
-  return (process.env.PUBLIC_BASE_URL || 'https://the-live.shop').replace(/\/+$/, '');
-}
-
-export function menuUrl(token: string): string {
-  return `${publicBaseUrl()}/m/${token}`;
-}
-
-/**
- * The address a table's QR carries: the menu, plus which table asked. Without
- * a key it only captions the page; with the table's key (`?k=`) the guest may
- * also read that table's bill.
- */
-export function tableMenuUrl(token: string, tableId: number, key?: string): string {
-  return `${menuUrl(token)}?t=${tableId}${key ? `&k=${key}` : ''}`;
-}
 
 // ── tables ──────────────────────────────────────────────────────────
 
@@ -710,12 +697,6 @@ function isUniqueViolation(error: unknown): boolean {
 const SETTINGS_COLUMNS = `vertical, slug, public_menu_enabled, public_menu_token, public_menu_bill, public_menu_ordering,
   public_menu_call, public_menu_auto_kitchen, public_menu_auto_limit_cents, public_menu_auto_ack_at,
   public_menu_slug_enabled, public_menu_feedback`;
-
-/** The slug as it would stand in `/m/<slug>`, or null when it cannot (an old seed's odd code). */
-function slugKey(row: Record<string, unknown> | undefined): string | null {
-  const slug = typeof row?.slug === 'string' ? row.slug : null;
-  return slug !== null && slug === slug.toLowerCase() && MENU_KEY_RE.test(slug) ? slug : null;
-}
 
 function toSettings(row: Record<string, unknown> | undefined, tables = 0, print: string | null = null): PublicMenuSettings {
   const token = typeof row?.public_menu_token === 'string' ? row.public_menu_token : null;

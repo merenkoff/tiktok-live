@@ -961,6 +961,11 @@
     closer.addEventListener('click', close);
     sheet.addEventListener('click', function (event) { if (event.target === sheet) close(); });
     document.addEventListener('keydown', function (event) { if (event.key === 'Escape' && !sheet.hidden) close(); });
+    // The QR «Оцініть нас» on the pre-bill and the receipt (phase F7) lands
+    // here with «#feedback»: the guest scanned it to rate, so the sheet opens
+    // at once rather than making them find the button. A remembered visit
+    // still shows «Дякуємо» — `open` checks that itself.
+    if (window.location.hash === '#feedback') open(null);
   }
 
   function initCall(endpoint) {

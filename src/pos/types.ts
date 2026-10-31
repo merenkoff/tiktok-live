@@ -132,6 +132,12 @@ export interface PosAuthContext {
   floristLabourBps: number;
   /** Cash totals rounded to 0 (off), 10 or 50 kopecks — НБУ № 25, migration 071. */
   cashRounding: number;
+  /**
+   * The guest menu's feedback sheet, as the till prints it — the QR «Оцініть
+   * нас» on a receipt (phase F7, `public-menu/urls.ts`). Null unless the menu
+   * is published, the owner takes feedback and the vertical has a kitchen.
+   */
+  feedbackUrl: string | null;
   /** Toggleable module ids enabled for this store (core ids not included). */
   enabledModules: string[];
   /** Per-store `{ moduleId: remote-entry.js URL }` map — web build only (roadmap #9). */

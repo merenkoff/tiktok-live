@@ -130,6 +130,12 @@ export interface Bill {
   fired_total_cents: number;
   /** Σ of the draft at today's prices. Indicative; it is not owed yet. */
   draft_preview_cents: number;
+  /**
+   * The feedback sheet keyed to this table, printed as the QR «Оцініть нас» on
+   * the pre-bill (phase F7). Null where the owner takes no feedback; absent
+   * from a backend older than F7, which reads the same.
+   */
+  feedback_url?: string | null;
 }
 
 // ── a guest's request (Q6/Q7, `src/pos/guest-orders.service.ts`) ────────────

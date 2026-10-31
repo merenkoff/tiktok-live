@@ -39,6 +39,8 @@ import { dailyCounterKey, nextCounterValue } from './core/counters.js';
 import { storeClock } from './core/storeClock.js';
 import * as modifiers from './modifiers.service.js';
 import { authorName } from './guest-author.js';
+import { feedbackMenuKey, feedbackUrl } from './public-menu/urls.js';
+import { getTableKeys } from './public-menu/table-keys.js';
 import type { LineModifierSnapshot } from './modifiers.service.js';
 
 export class BillError extends Error {
@@ -143,6 +145,27 @@ export interface Bill {
   fired_total_cents: number;
   /** Σ of the draft at today's prices. Indicative; it is not owed yet. */
   draft_preview_cents: number;
+  /**
+   * The address the pre-bill prints as the QR «Оцініть нас» (phase F7): the
+   * guest menu's feedback sheet keyed to this table, so the guest rates the
+   * dishes of this bill and a low score reaches the hall map while they are
+   * still seated. Null unless the menu is published and the owner takes
+   * feedback; then the paper carries exactly the key the table's own QR card
+   * does, and nothing more.
+   */
+  feedback_url: string | null;
+}
+
+/** See `Bill.feedback_url`. */
+async function tableFeedbackUrl(storeId: number, tableId: number): Promise<string | null> {
+  const store = await pool.query(
+    `SELECT slug, vertical, public_menu_enabled, public_menu_token, public_menu_slug_enabled, public_menu_feedback
+       FROM pos_stores WHERE id = $1`,
+    [storeId]
+  );
+  const key = store.rows[0] ? feedbackMenuKey(store.rows[0]) : null;
+  if (!key) return null;
+  return feedbackUrl(key, { id: tableId, key: (await getTableKeys(storeId)).get(tableId) });
 }
 
 /** A tile on the hall map. */
@@ -471,6 +494,7 @@ export async function getBill(storeId: number, billId: number): Promise<Bill> {
     draft,
     fired_total_cents: firedTotal,
     draft_preview_cents: draftPreview,
+    feedback_url: await tableFeedbackUrl(storeId, Number(row.table_id)),
   };
 }
 

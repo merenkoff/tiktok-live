@@ -183,6 +183,13 @@ export interface StoreConfig {
    * older than migration 071 does not send it, which reads as off.
    */
   cash_rounding?: number;
+  /**
+   * The guest menu's feedback sheet — printed as the QR «Оцініть нас» on a
+   * sale receipt (phase F7). Null unless the menu is published, the owner
+   * takes feedback and the store has a kitchen. Optional: a backend older
+   * than F7 does not send it, and a cached login from before it reads as none.
+   */
+  feedback_url?: string | null;
   /** Toggleable module ids the store has enabled (effective set; core ids not listed). */
   enabled_modules: string[];
   /**
@@ -260,6 +267,13 @@ export interface AuthResponse {
      * file; absent on an older cached auth → not rounded, the old behaviour.
      */
     cash_rounding?: number;
+    /**
+     * The guest menu's feedback sheet, printed as the QR «Оцініть нас» on a
+     * sale receipt (phase F7). Null unless the menu is published, the owner
+     * takes feedback and the store has a kitchen; absent on an older cached
+     * auth or backend → no QR, the old paper.
+     */
+    feedback_url?: string | null;
     /** Toggleable module ids the store has enabled. Absent on older cached auth → treat as "all defaults on". */
     enabled_modules?: string[];
     /** Module-remote map (roadmap #9 string form / #13 Part C object form). Absent on older cached auth. */

@@ -72,6 +72,14 @@ export interface AuthResponse {
      * offline till shows and prints the rounded sum the server will file.
      */
     cash_rounding: number;
+    /**
+     * The guest menu's feedback sheet — what the till prints as the QR
+     * «Оцініть нас» at the bottom of a receipt (phase F7). Null unless the
+     * menu is published, the owner takes feedback and the store has a kitchen.
+     * With the login because the receipt is printed offline too; the owner's
+     * switch reaches a till at its next login.
+     */
+    feedback_url: string | null;
     /** Effective toggleable module ids (empty stored set resolves to the defaults). */
     enabled_modules: string[];
     /**
@@ -129,6 +137,7 @@ function toAuthResponse(auth: PosAuthContext, expiresAt: Date): AuthResponse {
       auto_print_receipt: auth.autoPrintReceipt,
       florist_labour_bps: auth.floristLabourBps,
       cash_rounding: auth.cashRounding,
+      feedback_url: auth.feedbackUrl,
       enabled_modules: effectiveEnabledModules(auth.enabledModules),
       module_remotes: auth.moduleRemotes,
       nav_overrides: auth.navOverrides,

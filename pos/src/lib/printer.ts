@@ -129,6 +129,13 @@ export interface ReceiptData {
    * the field prints the receipt exactly as before.
    */
   rounding_cents?: number | null;
+  /**
+   * The guest menu's feedback sheet, printed as the QR «Оцініть нас» after
+   * «Дякуємо за покупку!» (phase F7, `auth.store.feedback_url`). Set only on
+   * a sale and only where the owner takes feedback; a Rust build older than
+   * it ignores the field, and the web renderer prints it as a link.
+   */
+  feedback_url?: string | null;
 }
 
 export function listPrinters(): Promise<PrinterInfo[]> {
@@ -220,6 +227,13 @@ export interface PrecheckData {
   waiter_name: string;
   items: PrecheckItem[];
   total_cents: number;
+  /**
+   * The feedback sheet keyed to this table (`Bill.feedback_url`), printed as
+   * the QR «Оцініть нас» between the total and the closing line (phase F7).
+   * Null where the owner takes no feedback; absent from a module built before
+   * it, and ignored by a Rust build older than it.
+   */
+  feedback_url?: string | null;
 }
 
 /** Print one pre-bill to a named OS printer — the Rust `print_precheck` command. */

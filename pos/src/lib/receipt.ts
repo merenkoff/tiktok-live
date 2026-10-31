@@ -29,6 +29,12 @@ export interface ReceiptStoreInfo {
    * paper: a café's counter calls it out, a clothing store has no counter.
    */
   vertical?: VerticalId | null;
+  /**
+   * The guest menu's feedback sheet (`auth.store.feedback_url`), printed as
+   * the QR «Оцініть нас» at the bottom of a sale receipt (phase F7). Null or
+   * absent where the owner takes no feedback — the paper stays as it was.
+   */
+  feedback_url?: string | null;
 }
 
 /** Рядок 4/5: «ПН <ІПН>» for a VAT payer, «ІД <податковий номер>» otherwise. */
@@ -254,6 +260,8 @@ export function buildReceiptPayload(
     discount_cents: sale.cart_discount_cents ?? null,
     total_cents: sale.total_cents,
     payments: sale.payments.map((p) => ({ method: p.method, amount_cents: p.amount_cents })),
+    // A sale asks to be rated; a refund (below) never does.
+    feedback_url: store.feedback_url ?? null,
   };
 }
 

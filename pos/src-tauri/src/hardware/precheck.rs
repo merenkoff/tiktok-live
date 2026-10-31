@@ -30,7 +30,8 @@ use escpos::utils::{JustifyMode, Protocol};
 use serde::Deserialize;
 
 use crate::hardware::receipt::{
-    chars_per_line, divider, money, now_nanos, send_raw, two_col, RECEIPT_PAGE_CODE,
+    chars_per_line, divider, feedback_block, money, now_nanos, send_raw, two_col,
+    RECEIPT_PAGE_CODE,
 };
 
 #[derive(Deserialize, Default)]
@@ -63,6 +64,13 @@ pub struct PrecheckData {
     pub waiter_name: String,
     pub items: Vec<PrecheckItem>,
     pub total_cents: i64,
+    /// The guest menu's feedback sheet keyed to this table, printed as the QR
+    /// «Оцініть нас» between the total and the closing line (phase F7). The
+    /// host sends it only where the owner takes feedback; absent from an
+    /// older host. It names no money and nothing fiscal, so the paper is no
+    /// more a receipt with it than without.
+    #[serde(default)]
+    pub feedback_url: Option<String>,
 }
 
 const TITLE: &str = "ПЕРЕДЧЕК";
@@ -157,6 +165,13 @@ fn build_precheck(bill: &PrecheckData, width: usize) -> Result<Vec<u8>, String> 
     printer.reset_size().map_err(|e| e.to_string())?;
     printer.bold(false).map_err(|e| e.to_string())?;
 
+    // Under the total, above the closing line: the guest has the paper in
+    // hand at exactly the moment Toast's «while they are still in the room»
+    // means, and the disclaimer still closes the sheet.
+    if let Some(url) = bill.feedback_url.as_deref().map(str::trim).filter(|u| !u.is_empty()) {
+        feedback_block(&mut printer, width, url)?;
+    }
+
     printer.writeln(&divider(width)).map_err(|e| e.to_string())?;
     printer.justify(JustifyMode::CENTER).map_err(|e| e.to_string())?;
     // Said twice on purpose: the guest reads the bottom of the paper, and
@@ -224,6 +239,7 @@ mod tests {
                 },
             ],
             total_cents: 23500,
+            feedback_url: None,
         }
     }
 
@@ -280,6 +296,33 @@ mod tests {
         assert!(latte < qty && qty < cheesecake && cheesecake < total);
         assert!(contains(&bytes[total..], &win1251("235.00")));
         assert!(contains(&bytes, &win1251("20:41")));
+    }
+
+    #[test]
+    fn the_feedback_qr_sits_between_the_total_and_the_closing_line() {
+        use crate::hardware::receipt::{FEEDBACK_CAPTION, FEEDBACK_TITLE};
+        let url = "https://the-live.shop/m/shablya?t=5&k=abcdefgh#feedback";
+        let mut bill = base();
+        bill.feedback_url = Some(url.into());
+        let bytes = build_precheck(&bill, CHARS_58MM).unwrap();
+        let total = position(&bytes, &win1251("РАЗОМ"));
+        let title = position(&bytes, &win1251(FEEDBACK_TITLE));
+        let qr = position(&bytes, &[0x1D, 0x28, 0x6B]);
+        let caption = position(&bytes, &win1251(FEEDBACK_CAPTION));
+        let disclaimer = win1251(DISCLAIMER);
+        let closing = bytes.windows(disclaimer.len()).rposition(|w| w == disclaimer.as_slice()).unwrap();
+        assert!(total < title && title < qr && qr < caption && caption < closing);
+        assert!(contains(&bytes, url.as_bytes()));
+        // The block adds nothing the law would read as a receipt.
+        assert_eq!(count(&bytes, &win1251(DISCLAIMER)), 2);
+        assert_eq!(count(&bytes, &win1251("ЧЕК")), count(&bytes, &win1251("ПЕРЕДЧЕК")));
+    }
+
+    #[test]
+    fn no_qr_at_all_without_a_feedback_address() {
+        let bytes = build_precheck(&base(), CHARS_58MM).unwrap();
+        assert!(!contains(&bytes, &[0x1D, 0x28, 0x6B]));
+        assert!(!contains(&bytes, &win1251("Оцініть нас")));
     }
 
     #[test]

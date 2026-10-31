@@ -30,6 +30,7 @@ import { payBill } from '../pos/bill-payment.service.js';
 import { createProduct } from '../pos/products.service.js';
 import { resetPublicMenuCache, type PublicMenu } from '../pos/public-menu/menu.service.js';
 import { getTableKeys } from '../pos/public-menu/table-keys.js';
+import { feedbackMenuKey, feedbackUrl, menuKeyOf, menuUrl } from '../pos/public-menu/urls.js';
 import {
   BAD_TAGS,
   FEEDBACK_TAGS,
@@ -100,6 +101,41 @@ describe('normalizeFeedback', () => {
     for (const tag of [...GOOD_TAGS, ...BAD_TAGS]) expect(FEEDBACK_TAGS[tag]).toBeTruthy();
     expect(GOOD_TAGS).toContain('food');
     expect(BAD_TAGS).toContain('wait');
+  });
+});
+
+describe('the address printed as the QR «Оцініть нас» (F7, public-menu/urls.ts)', () => {
+  const row = {
+    slug: 'shablya',
+    vertical: 'cafe',
+    public_menu_enabled: true,
+    public_menu_token: 'tok_abcdefghijkl',
+    public_menu_slug_enabled: false,
+    public_menu_feedback: true,
+  };
+
+  it('is the menu’s token — or its slug where the short address is on — plus «#feedback»', () => {
+    expect(feedbackMenuKey(row)).toBe('tok_abcdefghijkl');
+    expect(feedbackUrl(feedbackMenuKey(row) as string)).toBe(`${menuUrl('tok_abcdefghijkl')}#feedback`);
+    expect(feedbackMenuKey({ ...row, public_menu_slug_enabled: true })).toBe('shablya');
+    // A slug the page would not answer at (an old seed's odd code) falls back to the token.
+    expect(feedbackMenuKey({ ...row, public_menu_slug_enabled: true, slug: 'Old Code' })).toBe('tok_abcdefghijkl');
+  });
+
+  it('is nothing while the menu or the switch is off, the store has no kitchen, or there is no token', () => {
+    expect(feedbackMenuKey({ ...row, public_menu_feedback: false })).toBeNull();
+    expect(feedbackMenuKey({ ...row, public_menu_enabled: false })).toBeNull();
+    expect(feedbackMenuKey({ ...row, vertical: 'clothing' })).toBeNull();
+    expect(feedbackMenuKey({ ...row, public_menu_token: null })).toBeNull();
+    expect(feedbackMenuKey({ ...row, public_menu_token: 'no spaces here' })).toBeNull();
+    // The menu itself is published regardless of the switch.
+    expect(menuKeyOf({ ...row, public_menu_feedback: false })).toBe('tok_abcdefghijkl');
+  });
+
+  it('keys the pre-bill’s address to the table, with the table’s own key when it has one', () => {
+    expect(feedbackUrl('shablya', { id: 5, key: 'k1k1k1k1' })).toBe(`${menuUrl('shablya')}?t=5&k=k1k1k1k1#feedback`);
+    expect(feedbackUrl('shablya', { id: 5, key: null })).toBe(`${menuUrl('shablya')}?t=5#feedback`);
+    expect(feedbackUrl('shablya')).toBe(`${menuUrl('shablya')}#feedback`);
   });
 });
 
@@ -693,6 +729,62 @@ describe.skipIf(!hasDb)('POS guest feedback (F3)', () => {
       expect(list.find((r) => r.client_uuid === old)).toMatchObject({ phone: null, score: 2 });
       expect(list.find((r) => r.client_uuid === fresh)).toMatchObject({ phone: '+380 50 000 00 02' });
       expect(await wipeGuestFeedbackPhones()).toBe(0);
+    });
+  });
+
+  describe('the address on paper (F7)', () => {
+    const me = async (bearer: string) =>
+      ((await app.inject({ method: 'GET', url: '/api/pos/me', headers: auth(bearer) })).json() as { store: { feedback_url: string | null } })
+        .store.feedback_url;
+    const billView = async (id: number) =>
+      ((await app.inject({ method: 'GET', url: `/api/pos/bills/${id}`, headers: auth(cafe.sellerToken) })).json() as { feedback_url: string | null })
+        .feedback_url;
+
+    it('travels with the login only while the switch is on — the menu’s key plus «#feedback», the slug where the short address is on', async () => {
+      expect((await patch(cafe, { feedback_enabled: false })).statusCode).toBe(200);
+      expect(await me(cafe.sellerToken)).toBeNull();
+      expect((await patch(cafe, { feedback_enabled: true })).statusCode).toBe(200);
+      expect(await me(cafe.sellerToken)).toBe(`${menuUrl(token)}#feedback`);
+      expect(await me(cafe.ownerToken)).toBe(`${menuUrl(token)}#feedback`);
+      expect((await patch(cafe, { slug_enabled: true })).statusCode).toBe(200);
+      expect(await me(cafe.sellerToken)).toBe(`${menuUrl(cafe.slug)}#feedback`);
+      expect((await patch(cafe, { slug_enabled: false })).statusCode).toBe(200);
+      // A café whose menu is off, and a boutique with no kitchen, print none whatever the row says.
+      const off = await createTestStore('fb_paper_off');
+      const boutique = await createTestStore('fb_paper');
+      try {
+        await pool.query(
+          `UPDATE pos_stores SET vertical = 'cafe', public_menu_enabled = FALSE, public_menu_feedback = TRUE,
+                  public_menu_token = 'tok_paper_off_cafe1' WHERE id = $1`,
+          [off.storeId]
+        );
+        await pool.query(
+          `UPDATE pos_stores SET public_menu_enabled = TRUE, public_menu_feedback = TRUE, public_menu_token = 'tok_paper_boutique1'
+            WHERE id = $1`,
+          [boutique.storeId]
+        );
+        expect(await me(off.ownerToken)).toBeNull();
+        expect(await me(boutique.ownerToken)).toBeNull();
+      } finally {
+        await dropTestStore(off.storeId);
+        await dropTestStore(boutique.storeId);
+      }
+    });
+
+    it('keys the pre-bill’s QR to the table, and prints none while the switch is off', async () => {
+      await pool.query(`DELETE FROM pos_bills WHERE store_id = $1`, [cafe.storeId]);
+      const { bill } = await openBill({ storeId: cafe.storeId, staffId: cafe.sellerId, tableId: table5, guests: 2 });
+      expect((await patch(cafe, { feedback_enabled: true })).statusCode).toBe(200);
+      const key = (await getTableKeys(cafe.storeId)).get(table5);
+      expect(key).toBeTruthy();
+      const expected = `${menuUrl(token)}?t=${table5}&k=${key}#feedback`;
+      expect(await billView(bill.id)).toBe(expected);
+      // The pre-bill's own answer carries it too — it is what the till prints from.
+      const marked = await app.inject({ method: 'POST', url: `/api/pos/bills/${bill.id}/precheck`, headers: auth(cafe.sellerToken) });
+      expect(marked.statusCode).toBe(200);
+      expect(marked.json().feedback_url).toBe(expected);
+      expect((await patch(cafe, { feedback_enabled: false })).statusCode).toBe(200);
+      expect(await billView(bill.id)).toBeNull();
     });
   });
 });
