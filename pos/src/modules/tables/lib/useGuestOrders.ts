@@ -23,7 +23,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as tablesApi from './tablesApi';
 import { useVisiblePoll } from './usePolling';
-import type { GuestOrder, SentGuestOrder, WaiterCall } from './types';
+import type { GuestOrder, LowFeedback, SentGuestOrder, WaiterCall } from './types';
 
 export interface GuestOrdersState {
   orders: GuestOrder[];
@@ -31,6 +31,8 @@ export interface GuestOrdersState {
   sent: SentGuestOrder[];
   /** Guests calling a waiter or asking for the bill, not yet answered. */
   calls: WaiterCall[];
+  /** Low scores from tables in the last half hour nobody has walked over to (F6). */
+  feedback: LowFeedback[];
   /** At least one answer has come back — until then the empty lists are «not known yet», not «nothing». */
   loaded: boolean;
   refresh: () => Promise<void>;
@@ -52,6 +54,7 @@ export function useGuestOrders({ online, tableId = null }: GuestOrdersOptions): 
   const [orders, setOrders] = useState<GuestOrder[]>([]);
   const [sent, setSent] = useState<SentGuestOrder[]>([]);
   const [calls, setCalls] = useState<WaiterCall[]>([]);
+  const [feedback, setFeedback] = useState<LowFeedback[]>([]);
   const [loaded, setLoaded] = useState(false);
   const mountedRef = useRef(true);
 
@@ -70,9 +73,11 @@ export function useGuestOrders({ online, tableId = null }: GuestOrdersOptions): 
       const nextOrders = Array.isArray(answer?.orders) ? answer.orders : [];
       const nextSent = Array.isArray(answer?.sent) ? answer.sent : [];
       const nextCalls = Array.isArray(answer?.calls) ? answer.calls : [];
+      const nextFeedback = Array.isArray(answer?.feedback) ? answer.feedback : [];
       setOrders((prev) => keep(prev, nextOrders));
       setSent((prev) => keep(prev, nextSent));
       setCalls((prev) => keep(prev, nextCalls));
+      setFeedback((prev) => keep(prev, nextFeedback));
       setLoaded(true);
     } catch {
       // Silence, on purpose — see the header.
@@ -92,5 +97,5 @@ export function useGuestOrders({ online, tableId = null }: GuestOrdersOptions): 
 
   useVisiblePoll(refresh, online);
 
-  return { orders, sent, calls, loaded, refresh };
+  return { orders, sent, calls, feedback, loaded, refresh };
 }

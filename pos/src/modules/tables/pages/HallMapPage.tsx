@@ -42,7 +42,7 @@ import { TableTile, ToneLegend } from '../components/TableTile';
 import { hallExtent, seatsOfHall, visibleHalls } from '../lib/hallMap';
 import type { TableSeat } from '../lib/hallMap';
 import { alertCount, alertKeys, alertsByTable, feedHeadline, refusedLineId } from '../lib/guestOrders';
-import type { GuestOrder, SentGuestOrder, WaiterCall } from '../lib/types';
+import type { GuestOrder, LowFeedback, SentGuestOrder, WaiterCall } from '../lib/types';
 import { useGuestOrders } from '../lib/useGuestOrders';
 import { useChimeSetting, useNotifyChime } from '../lib/useNotifyChime';
 import { serverMessage, useHallMap } from '../lib/useHallMap';
@@ -67,7 +67,7 @@ export function HallMapPage(): JSX.Element {
     mirrored: shell !== 'web',
     storeId,
   });
-  const { orders: requests, sent, calls, loaded, refresh: refreshRequests } = useGuestOrders({ online });
+  const { orders: requests, sent, calls, feedback, loaded, refresh: refreshRequests } = useGuestOrders({ online });
   const [chime, setChime] = useChimeSetting();
   const [hallId, setHallId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -90,10 +90,10 @@ export function HallMapPage(): JSX.Element {
     if (arrivalNote) setNoteState({ text: arrivalNote, warn: arrivalWarn });
   }, [arrivalNote, arrivalWarn]);
 
-  const alerts = useMemo(() => alertsByTable({ orders: requests, sent, calls }), [requests, sent, calls]);
-  const keys = useMemo(() => alertKeys({ orders: requests, sent, calls }), [requests, sent, calls]);
+  const alerts = useMemo(() => alertsByTable({ orders: requests, sent, calls, feedback }), [requests, sent, calls, feedback]);
+  const keys = useMemo(() => alertKeys({ orders: requests, sent, calls, feedback }), [requests, sent, calls, feedback]);
   useNotifyChime(keys, loaded, chime);
-  const anyAlert = requests.length + sent.length + calls.length > 0;
+  const anyAlert = requests.length + sent.length + calls.length + feedback.length > 0;
 
   useEffect(() => {
     if (note == null) return;
@@ -190,6 +190,25 @@ export function HallMapPage(): JSX.Element {
     } catch (err) {
       // The guest took it back, or fifteen minutes passed: the server says which.
       setBanner(serverMessage(err, 'Не вдалося відповісти на виклик'));
+      return false;
+    } finally {
+      void refreshRequests();
+    }
+  }
+
+  /** «Бачу» on a low score: the waiter went over to the table; the owner sees it handled under their name. */
+  async function seeFeedback(low: LowFeedback): Promise<boolean> {
+    if (!online) {
+      setBanner('Потрібна мережа');
+      return false;
+    }
+    setBanner(null);
+    try {
+      await tablesApi.markFeedbackSeen(low.id);
+      setNote(`Стіл ${low.table_name}: оцінку позначено як опрацьовану`);
+      return true;
+    } catch (err) {
+      setBanner(serverMessage(err, 'Не вдалося позначити'));
       return false;
     } finally {
       void refreshRequests();
@@ -308,6 +327,7 @@ export function HallMapPage(): JSX.Element {
             callWaiter={calls.some((c) => c.kind === 'waiter')}
             callBill={calls.some((c) => c.kind === 'bill')}
             sent={sent.length > 0}
+            low={feedback.length > 0}
           />
         )}
         <button
@@ -353,15 +373,18 @@ export function HallMapPage(): JSX.Element {
       {anyAlert && (
         <section className="mx-4 md:mx-7 mb-3 max-h-[45vh] overflow-auto space-y-2.5" data-testid="tables-requests">
           <p className="text-[13px] font-semibold text-sq-secondary">
-            З телефонів гостей · {feedHeadline({ requests: requests.length, sent: sent.length, calls: calls.length })}
+            З телефонів гостей ·{' '}
+            {feedHeadline({ requests: requests.length, sent: sent.length, calls: calls.length, feedback: feedback.length })}
           </p>
           <GuestAlertsPanel
             calls={calls}
             sent={sent}
+            feedback={feedback}
             showTable
             busy={busy}
             onAnswer={answerCall}
             onSeen={seeSent}
+            onSeenFeedback={seeFeedback}
             onOpenBill={(billId) => navigate(`/tables/${billId}`)}
           />
           <GuestOrdersPanel
@@ -420,6 +443,7 @@ export function HallMapPage(): JSX.Element {
               guestWaiting={alerts.get(seat.table.id)?.requests ?? 0}
               calling={alerts.get(seat.table.id)}
               sentUnseen={alerts.get(seat.table.id)?.sent ?? 0}
+              lowScore={alerts.get(seat.table.id)?.low ?? null}
               onOpen={(s) => void open(s)}
             />
           ))}

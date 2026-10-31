@@ -3,24 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { describe, expect, it } from 'vitest';
-import {
-  acceptableLines,
-  acceptLabel,
-  alertCount,
-  alertKeys,
-  alertsByTable,
-  blockedLineIds,
-  callWords,
-  elsewhere,
-  feedHeadline,
-  minutesWaiting,
-  plural,
-  refusedLineId,
-  requestsLabel,
-  sentCaption,
-  waitingByTable,
-  waitingLabel,
-} from './guestOrders';
+import { acceptLabel, acceptableLines, alertCount, alertKeys, alertsByTable, blockedLineIds, callWords, elsewhere, feedHeadline, minutesWaiting, plural, refusedLineId, requestsLabel, sentCaption, waitingByTable, waitingLabel } from './guestOrders';
 import type { GuestOrder, GuestOrderLine, SentGuestOrder, WaiterCall } from './types';
 
 const line = (over: Partial<GuestOrderLine> = {}): GuestOrderLine => ({
@@ -182,9 +165,9 @@ describe('alerts per table', () => {
 
   it('gathers requests, calls and auto-sent orders under their table', () => {
     const map = alertsByTable(feed);
-    expect(map.get(11)).toEqual({ requests: 2, waiter: true, bill: true, sent: 0 });
-    expect(map.get(12)).toEqual({ requests: 0, waiter: false, bill: false, sent: 2 });
-    expect(map.get(13)).toEqual({ requests: 0, waiter: false, bill: true, sent: 0 });
+    expect(map.get(11)).toEqual({ requests: 2, waiter: true, bill: true, sent: 0, low: null });
+    expect(map.get(12)).toEqual({ requests: 0, waiter: false, bill: false, sent: 2, low: null });
+    expect(map.get(13)).toEqual({ requests: 0, waiter: false, bill: true, sent: 0, low: null });
     expect(map.has(14)).toBe(false);
   });
 
@@ -242,5 +225,28 @@ describe('the rest of the room, from one bill', () => {
       null
     );
     expect(list).toEqual([{ table_id: 12, table_name: '6', words: 'кличе офіціанта' }]);
+  });
+});
+
+describe('a low score from a table (F6)', () => {
+  const low = (id: number, table_id: number, score: number) =>
+    ({ id, table_id, score, score_word: '', tag_labels: [], comment: null, table_name: String(table_id), hall_name: '', created_at: '', has_open_bill: false }) as never;
+
+  it('marks the table with its lowest score, counts as one more thing to walk over for, and has its own chime key', () => {
+    const feed = { orders: [], sent: [], calls: [], feedback: [low(1, 11, 3), low(2, 11, 1), low(3, 12, 2)] };
+    const alerts = alertsByTable(feed);
+    expect(alerts.get(11)?.low).toBe(1);
+    expect(alerts.get(12)?.low).toBe(2);
+    expect(alerts.get(13)).toBeUndefined();
+    expect(alertCount(alerts.get(11))).toBe(1);
+    expect(alertKeys(feed)).toEqual(new Set(['feedback:1', 'feedback:2', 'feedback:3']));
+    expect(feedHeadline({ requests: 0, sent: 0, calls: 1, feedback: 2 })).toBe('1 виклик · 2 низькі оцінки');
+  });
+
+  it('reads an older backend — no feedback at all — as no low scores', () => {
+    const alerts = alertsByTable({ orders: [], sent: [], calls: [] });
+    expect(alerts.size).toBe(0);
+    expect(alertKeys({ orders: [], sent: [], calls: [] }).size).toBe(0);
+    expect(feedHeadline({ requests: 1, sent: 0, calls: 0 })).toBe('1 запит');
   });
 });

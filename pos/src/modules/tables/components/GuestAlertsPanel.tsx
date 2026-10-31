@@ -18,20 +18,24 @@
 
 import { useState } from 'react';
 import { formatUah } from '@pos/platform';
-import { ChefHat, Receipt, User } from '@pos/platform/ui';
+import { ChefHat, Receipt, Star, User } from '@pos/platform/ui';
 import { callWords, sentCaption, waitingLabel } from '../lib/guestOrders';
-import type { SentGuestOrder, WaiterCall } from '../lib/types';
+import type { LowFeedback, SentGuestOrder, WaiterCall } from '../lib/types';
 import { useVisiblePoll } from '../lib/usePolling';
 
 export interface GuestAlertsPanelProps {
   calls: readonly WaiterCall[];
   sent: readonly SentGuestOrder[];
+  /** Low scores from tables nobody has walked over to (F6). Absent on an older host. */
+  feedback?: readonly LowFeedback[];
   /** Name the table on each card — the map lists the whole room's, the bill screen is already at one. */
   showTable: boolean;
   /** A write is in flight somewhere: nothing here may start another. */
   busy: boolean;
   onAnswer: (call: WaiterCall) => Promise<boolean>;
   onSeen: (order: SentGuestOrder) => Promise<boolean>;
+  /** «Бачу» on a low score: the waiter went over. */
+  onSeenFeedback?: (feedback: LowFeedback) => Promise<boolean>;
   /** Open that table's bill. Absent on the bill screen, which is already there. */
   onOpenBill?: (billId: number) => void;
 }
@@ -44,19 +48,21 @@ const CALL_TONE: Record<WaiterCall['kind'], string> = {
 export function GuestAlertsPanel({
   calls,
   sent,
+  feedback = [],
   showTable,
   busy,
   onAnswer,
   onSeen,
+  onSeenFeedback,
   onOpenBill,
 }: GuestAlertsPanelProps): JSX.Element | null {
   // A card stays disabled while its own tap is on the way, so a second tap
   // does not send a second «Іду».
   const [pending, setPending] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
-  useVisiblePoll(() => setNowMs(Date.now()), calls.length + sent.length > 0, 15000);
+  useVisiblePoll(() => setNowMs(Date.now()), calls.length + sent.length + feedback.length > 0, 15000);
 
-  if (calls.length === 0 && sent.length === 0) return null;
+  if (calls.length === 0 && sent.length === 0 && feedback.length === 0) return null;
 
   async function tap(key: string, act: () => Promise<boolean>): Promise<void> {
     if (pending) return;
@@ -106,6 +112,45 @@ export function GuestAlertsPanel({
               >
                 Іду
               </button>
+            </div>
+          </section>
+        );
+      })}
+
+      {feedback.map((low) => {
+        const key = `feedback:${low.id}`;
+        return (
+          <section
+            key={key}
+            className="rounded-2xl bg-white ring-2 ring-sq-danger px-4 py-3"
+            data-testid={`guest-feedback-${low.id}`}
+            data-table={low.table_id}
+          >
+            <div className="flex items-start gap-2.5">
+              <Star size={26} className="shrink-0 text-sq-danger" />
+              <div className="min-w-0 flex-1">
+                <p className="break-words text-[16px] font-bold leading-snug text-sq-heading">
+                  {showTable ? `Стіл ${low.table_name} · ` : ''}
+                  оцінив на {low.score} — підійдіть
+                </p>
+                <p className="text-[13px] text-sq-muted tabular-nums">
+                  {[showTable ? low.hall_name : '', low.score_word, waitingLabel(low.created_at, nowMs), ...low.tag_labels]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </p>
+                {low.comment && <p className="mt-1 whitespace-pre-line text-[14px] text-sq-text">{low.comment}</p>}
+              </div>
+              <div className="flex shrink-0 flex-col items-end gap-1.5">
+                <button
+                  type="button"
+                  className="pos-btn-primary min-h-[48px] rounded-xl px-5 text-[16px]"
+                  data-testid={`guest-feedback-seen-${low.id}`}
+                  disabled={busy || pending != null || !onSeenFeedback}
+                  onClick={() => onSeenFeedback && void tap(key, () => onSeenFeedback(low))}
+                >
+                  Бачу
+                </button>
+              </div>
             </div>
           </section>
         );

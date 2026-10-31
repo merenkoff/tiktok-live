@@ -220,8 +220,28 @@ export interface SentGuestOrder {
  * Everything the waiter's screens poll for. `sent` and `calls` are absent from
  * a backend older than Q8/Q9, which is the same as none.
  */
+/**
+ * A low score (1–3) a guest gave from a table's QR in the last half hour that
+ * nobody has walked over to (F6). The owner's page has the phone; the waiter
+ * gets the table, the score and the words — enough to go and ask.
+ */
+export interface LowFeedback {
+  id: number;
+  score: number;
+  score_word: string;
+  tag_labels: string[];
+  comment: string | null;
+  table_id: number;
+  table_name: string;
+  hall_name: string;
+  created_at: string;
+  has_open_bill: boolean;
+}
+
 export interface GuestFeed {
   orders: GuestOrder[];
   sent?: SentGuestOrder[];
   calls?: WaiterCall[];
+  /** Absent from a backend older than F6. */
+  feedback?: LowFeedback[];
 }

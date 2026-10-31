@@ -13,7 +13,7 @@
 // simply reads an empty list; the page says how to switch it on.
 
 import type { FastifyInstance } from 'fastify';
-import { ensurePosOwner } from '../core/auth.js';
+import { ensurePosAuth, ensurePosOwner } from '../core/auth.js';
 import {
   LIST_LIMIT_MAX,
   feedbackSummary,
@@ -24,6 +24,19 @@ import {
 import { badRange } from './analytics.routes.js';
 
 export function registerGuestFeedbackRoutes(fastify: FastifyInstance): void {
+  // A WAITER's «Бачу» on a low score from a table (phase F6): the card leaves
+  // the hall map, and the owner sees the feedback handled under that waiter's
+  // name — walking over to the table is handling it. Idempotent.
+  fastify.post('/feedback/:id/seen', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const id = Number((request.params as { id: string }).id);
+    if (!Number.isInteger(id) || id <= 0) return reply.code(404).send({ error: 'Відгук не знайдено' });
+    const row = await setFeedbackHandled(auth.storeId, id, auth.staffId, true);
+    if (!row) return reply.code(404).send({ error: 'Відгук не знайдено' });
+    return { seen: true, handled_at: row.handled_at };
+  });
+
   fastify.get('/feedback', async (request, reply) => {
     const auth = await ensurePosOwner(request, reply);
     if (!auth) return;

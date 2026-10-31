@@ -208,6 +208,11 @@ export function answerWaiterCall(callId: number): Promise<{ status: 'answered'; 
 
 // ── the owner's hall editor (К4i) ──────────────────────────────────────────
 
+/** A waiter's «Бачу» on a low score from a table (F6): the card leaves the map, the owner sees it handled. */
+export function markFeedbackSeen(feedbackId: number): Promise<{ seen: true; handled_at: string | null }> {
+  return posRequest<{ seen: true; handled_at: string | null }>('post', `/feedback/${feedbackId}/seen`);
+}
+
 export function createHall(name: string): Promise<PosHall> {
   return posRequest<PosHall>('post', '/halls', { name });
 }

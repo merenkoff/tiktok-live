@@ -351,6 +351,66 @@ export async function getOwnFeedback(storeId: number, uuid: unknown): Promise<Gu
   return result.rows[0] ? toView(result.rows[0]) : null;
 }
 
+// ── the waiter (phase F6) ───────────────────────────────────────────
+
+/** How long a low score from a table is worth a waiter's walk: the guest is likely still sitting there. */
+export const LOW_SCORE_WINDOW_MINUTES = 30;
+export const LOW_SCORE_MAX = 3;
+
+/**
+ * A low score from a keyed table, as the hall map shows it beside the calls
+ * (Toast's idea: fix it while the guest is still in the room). No phone here —
+ * that is the owner's — and no uuid.
+ */
+export interface LowFeedbackNotice {
+  id: number;
+  score: number;
+  score_word: string;
+  tag_labels: string[];
+  comment: string | null;
+  table_id: number;
+  table_name: string;
+  hall_name: string;
+  created_at: string;
+  has_open_bill: boolean;
+}
+
+/**
+ * Scores of LOW_SCORE_MAX or less from a table, within LOW_SCORE_WINDOW_MINUTES
+ * and not yet marked handled — by the owner or by a waiter's «Бачу». Oldest
+ * first, like the calls. One table's when `tableId` is given.
+ */
+export async function listLowFeedback(storeId: number, tableId?: number): Promise<LowFeedbackNotice[]> {
+  const result = await pool.query(
+    `SELECT f.id, f.score, f.tags, f.comment, f.table_id, f.created_at, t.name AS table_name, h.name AS hall_name,
+            EXISTS (SELECT 1 FROM pos_bills b WHERE b.store_id = f.store_id AND b.table_id = f.table_id AND b.status = 'open') AS has_open_bill
+       FROM pos_guest_feedback f
+       JOIN pos_tables t ON t.id = f.table_id
+       JOIN pos_halls h ON h.id = t.hall_id
+      WHERE f.store_id = $1 AND f.score <= $2 AND f.handled_at IS NULL
+        AND f.created_at > NOW() - ($3::int * INTERVAL '1 minute')
+        AND ($4::bigint IS NULL OR f.table_id = $4)
+      ORDER BY f.created_at ASC, f.id ASC`,
+    [storeId, LOW_SCORE_MAX, LOW_SCORE_WINDOW_MINUTES, tableId ?? null]
+  );
+  return result.rows.map((row) => {
+    const tags = (Array.isArray(row.tags) ? (row.tags as string[]) : []).filter((tag): tag is FeedbackTag => tag in FEEDBACK_TAGS);
+    const score = Number(row.score);
+    return {
+      id: Number(row.id),
+      score,
+      score_word: FACE_WORDS[score as 1 | 2 | 3 | 4 | 5] ?? '',
+      tag_labels: tags.map((tag) => FEEDBACK_TAGS[tag]),
+      comment: typeof row.comment === 'string' ? row.comment : null,
+      table_id: Number(row.table_id),
+      table_name: String(row.table_name),
+      hall_name: String(row.hall_name),
+      created_at: new Date(row.created_at as string).toISOString(),
+      has_open_bill: row.has_open_bill === true,
+    };
+  });
+}
+
 // ── housekeeping ────────────────────────────────────────────────────
 
 /** Clear the phones guests left more than `days` ago; the feedback stays. Returns how many rows changed. */
