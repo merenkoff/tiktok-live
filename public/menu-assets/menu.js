@@ -17,8 +17,55 @@
   var POLL_MS = 30000;
   var BADGE = { ok: '', stop: 'стоп', out: 'немає' };
   var timer = null;
-  /* The last menu JSON the poll fetched: the ordering sheet asks its questions from it. */
+  /* The last menu JSON the poll fetched: the dish sheet and the cart read it. */
   var latestMenu = null;
+
+  /* ── shared by the dish sheet and the cart: nodes, money, the groups' words ── */
+  function node(tag, className, text) {
+    var el = document.createElement(tag);
+    if (className) el.className = className;
+    if (text != null) el.textContent = text;
+    return el;
+  }
+  function money(cents) {
+    var abs = Math.abs(cents);
+    var whole = Math.floor(abs / 100);
+    var frac = abs % 100;
+    var text = String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    return (cents < 0 ? '-' : '') + text + (frac ? ',' + (frac < 10 ? '0' : '') + frac : '') + ' ₴';
+  }
+  function delta(cents) {
+    if (cents > 0) return '+' + money(cents);
+    if (cents < 0) return '−' + money(-cents);
+    return '';
+  }
+  function hint(group) {
+    if (group.min_select >= 1) return group.max_select > 1 ? 'обовʼязково · до ' + group.max_select : 'обовʼязково';
+    if (group.max_select <= 1) return 'можна одне';
+    if (group.max_select >= group.modifiers.length) return 'скільки завгодно';
+    return 'до ' + group.max_select;
+  }
+  function findProduct(id) {
+    if (!latestMenu) return null;
+    for (var i = 0; i < latestMenu.categories.length; i += 1) {
+      var products = latestMenu.categories[i].products;
+      for (var j = 0; j < products.length; j += 1) if (String(products[j].id) === String(id)) return products[j];
+    }
+    return null;
+  }
+  /* The menu JSON once, before the poll's first turn: a tap on a dish, or on
+     «Додати», should not have to wait for it. One request in flight at a time. */
+  var priming = null;
+  function menuJson() {
+    if (latestMenu) return Promise.resolve(latestMenu);
+    if (!priming) {
+      priming = fetch(url, { cache: 'no-store', headers: { Accept: 'application/json' } })
+        .then(function (response) { return response.ok ? response.json() : null; })
+        .then(function (menu) { if (menu) latestMenu = menu; priming = null; return latestMenu; })
+        .catch(function () { priming = null; return null; });
+    }
+    return priming;
+  }
 
   /* A page whose shape no longer matches the menu (a dish added, removed or
      re-priced) is reloaded rather than patched — but at most once a minute, so
@@ -70,6 +117,8 @@
         rows[j].classList.toggle('off', !variant.available);
       }
     }
+    // The dish on the open sheet follows the same patch: a stop reaches it too.
+    if (dishOpen && wanted[dishOpen]) refreshDish(wanted[dishOpen]);
   }
 
   function tick() {
@@ -105,6 +154,185 @@
      the sheet arrives from /bill and goes in with textContent, so nothing an
      owner typed is ever parsed as markup here. The table's key is read from the
      address bar, where the QR put it. */
+  /* The dish's own sheet (phase F8). The server draws the frame; everything
+     in it comes from the menu JSON through textContent — the photo at its
+     real size (the file the card shows at 88 px, so nothing new is loaded),
+     the name with its state, the price or the sizes, the weight, the
+     description, the composition, the allergens, the modifiers. Where
+     ordering is on, `initOrder` hangs its half under them: the questions,
+     the count and «Додати». A tap anywhere on a card opens it, the name is
+     the button a keyboard reaches; «назад» on the phone closes it, not the
+     page, because opening puts `#d-<id>` into the history. */
+  var dishSheet = document.querySelector('[data-dish-sheet]');
+  var dishOpen = null;          // the id of the dish on the sheet while it is open
+  var dishOrderHalf = null;     // set by initOrder: draws the questions, the count and «Додати»
+  var dishRefresh = null;       // set by that half: repaint with a fresh product, keeping the guest's picks
+  var dishPushed = false;       // this opening put `#d-<id>` into the history
+  var openDishById = function () {};
+  var closeDish = function () {};
+  var refreshDish = function () {};
+
+  function initDish() {
+    var panel = dishSheet.querySelector('[data-dish-panel]');
+    var photo = dishSheet.querySelector('[data-dish-photo]');
+    var img = dishSheet.querySelector('[data-dish-img]');
+    var title = dishSheet.querySelector('[data-dish-title]');
+    var badge = dishSheet.querySelector('[data-dish-badge]');
+    var body = dishSheet.querySelector('[data-dish-body]');
+    var foot = dishSheet.querySelector('[data-dish-foot]');
+    var closer = dishSheet.querySelector('[data-dish-close]');
+    if (!panel || !photo || !img || !title || !badge || !body || !foot || !closer) return;
+
+    function priceOf(product) {
+      var many = product.variants.length > 1;
+      body.appendChild(node('p', 'price', (many ? 'від ' : '') + money(product.from_price_cents)));
+      if (many) {
+        var sizes = node('ul', 'sizes');
+        product.variants.forEach(function (v) {
+          var row = node('li', v.available ? null : 'off');
+          row.appendChild(node('span', null, v.label));
+          row.appendChild(document.createTextNode(' '));
+          row.appendChild(node('b', null, money(v.price_cents)));
+          sizes.appendChild(row);
+        });
+        body.appendChild(sizes);
+      } else if (product.variants[0] && product.variants[0].label.trim()) {
+        body.appendChild(node('p', 'size', product.variants[0].label.trim()));
+      }
+    }
+    function modifiersOf(product) {
+      product.modifier_groups.forEach(function (g) {
+        var head = node('h3', 'opt-head', g.name);
+        head.appendChild(node('small', null, hint(g)));
+        body.appendChild(head);
+        var words = g.modifiers.map(function (m) {
+          var base = delta(m.price_delta_cents);
+          // A size where the answer costs differently is named beside it, as on the card.
+          var bySize = product.variants.filter(function (v) {
+            var own = m.price_delta_by_variant ? m.price_delta_by_variant[String(v.id)] : undefined;
+            return typeof own === 'number' && own !== m.price_delta_cents;
+          }).map(function (v) { return v.label + ' ' + (delta(m.price_delta_by_variant[String(v.id)]) || '0 ₴'); });
+          return m.name + (base ? ' ' + base : '') + (bySize.length ? ' (' + bySize.join(', ') + ')' : '');
+        });
+        body.appendChild(node('p', 'dish-mods', words.join(' · ')));
+      });
+    }
+
+    /* Draw the dish; idempotent, so the poll can redraw a stopped one in place. */
+    function show(product) {
+      var state = stateOf(product);
+      var fresh = dishOpen !== String(product.id);
+      dishOpen = String(product.id);
+      dishRefresh = null;
+      dishSheet.setAttribute('data-state', state);
+      if (product.image_url) {
+        if (img.getAttribute('src') !== product.image_url) img.src = product.image_url;
+        photo.hidden = false;
+      } else {
+        img.removeAttribute('src');
+        photo.hidden = true;
+      }
+      title.textContent = product.name;
+      badge.textContent = BADGE[state];
+      body.textContent = '';
+      foot.textContent = '';
+      foot.hidden = true;
+      if (product.description) body.appendChild(node('p', 'dish-desc', product.description));
+      if (product.composition) {
+        var comp = node('p', 'dish-comp');
+        comp.appendChild(node('b', null, 'Склад: '));
+        comp.appendChild(document.createTextNode(product.composition));
+        body.appendChild(comp);
+      }
+      if (product.allergens && product.allergens.length) {
+        var list = node('ul', 'allergens');
+        list.setAttribute('aria-label', 'Містить алергени');
+        product.allergens.forEach(function (a) { list.appendChild(node('li', null, a.label)); });
+        body.appendChild(list);
+      }
+      if (dishOrderHalf && state === 'ok') {
+        dishOrderHalf(product, body, foot);
+        foot.hidden = false;
+      } else {
+        priceOf(product);
+        modifiersOf(product);
+      }
+      if (dishSheet.hidden) {
+        dishSheet.hidden = false;
+        document.body.classList.add('bill-open');
+      }
+      if (fresh) {
+        panel.scrollTop = 0;
+        closer.focus();
+      }
+    }
+    function hide() {
+      if (dishSheet.hidden) return;
+      dishSheet.hidden = true;
+      document.body.classList.remove('bill-open');
+      var id = dishOpen;
+      dishOpen = null;
+      dishRefresh = null;
+      var back = id && document.querySelector('.item[data-product="' + id + '"] [data-open]');
+      if (back && back.focus) back.focus();
+    }
+    function open(product) {
+      show(product);
+      if (!/^#d-/.test(window.location.hash)) {
+        history.pushState({ dish: product.id }, '', '#d-' + product.id);
+        dishPushed = true;
+      }
+    }
+    /* The guest's own closing takes the hash with it: back out of the entry
+       this opening made, or drop a hash the page was opened with. */
+    function close() {
+      if (dishPushed) { dishPushed = false; history.back(); return; } // popstate hides
+      hide();
+      if (/^#d-/.test(window.location.hash)) history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+
+    openDishById = function (id) {
+      var now = findProduct(id);
+      if (now) { open(now); return; }
+      menuJson().then(function () {
+        var later = findProduct(id);
+        if (later) open(later);
+      });
+    };
+    closeDish = close;
+    refreshDish = function (product) {
+      if (dishRefresh && stateOf(product) === 'ok') {
+        badge.textContent = '';
+        dishSheet.setAttribute('data-state', 'ok');
+        dishRefresh(product);
+      } else {
+        show(product);
+      }
+    };
+
+    // A tap anywhere on a card, except on its own controls — «Додатки», a
+    // size, «Додати» — opens the dish; the name is the button that always does.
+    document.addEventListener('click', function (event) {
+      var target = event.target;
+      if (!target || !target.closest) return;
+      var opener = target.closest('[data-open]');
+      if (opener) { openDishById(opener.getAttribute('data-open')); return; }
+      if (target.closest('button, a, details, summary, label, input, select, textarea')) return;
+      var item = target.closest('.item[data-product]');
+      if (item) openDishById(item.getAttribute('data-product'));
+    });
+    closer.addEventListener('click', close);
+    dishSheet.addEventListener('click', function (event) { if (event.target === dishSheet) close(); });
+    document.addEventListener('keydown', function (event) { if (event.key === 'Escape' && !dishSheet.hidden) close(); });
+    window.addEventListener('popstate', function () { dishPushed = false; hide(); });
+
+    // Opened with `#d-<id>` — a link, or the page a guest came back to.
+    var wanted = /^#d-(\d+)$/.exec(window.location.hash);
+    if (wanted) menuJson().then(function () { var product = findProduct(wanted[1]); if (product) show(product); });
+  }
+  if (dishSheet) initDish();
+  menuJson();
+
   var billUrl = document.body.getAttribute('data-bill-url');
   if (billUrl) initBill(billUrl);
 
@@ -257,30 +485,6 @@
     function save(name, value) {
       try { sessionStorage.setItem(name, JSON.stringify(value)); } catch (e) { /* storage blocked: the cart lives for this page only */ }
     }
-    function node(tag, className, text) {
-      var el = document.createElement(tag);
-      if (className) el.className = className;
-      if (text != null) el.textContent = text;
-      return el;
-    }
-    function money(cents) {
-      var abs = Math.abs(cents);
-      var whole = Math.floor(abs / 100);
-      var frac = abs % 100;
-      var text = String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0');
-      return (cents < 0 ? '-' : '') + text + (frac ? ',' + (frac < 10 ? '0' : '') + frac : '') + '\u00a0\u20b4';
-    }
-    function delta(cents) {
-      if (cents > 0) return '+' + money(cents);
-      if (cents < 0) return '\u2212' + money(-cents);
-      return '';
-    }
-    function hint(group) {
-      if (group.min_select >= 1) return group.max_select > 1 ? 'обовʼязково · до ' + group.max_select : 'обовʼязково';
-      if (group.max_select <= 1) return 'можна одне';
-      if (group.max_select >= group.modifiers.length) return 'скільки завгодно';
-      return 'до ' + group.max_select;
-    }
     function uuid() {
       if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
       var s = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
@@ -288,14 +492,6 @@
         return (c === 'x' ? r : (r & 3) | 8).toString(16);
       });
       return s;
-    }
-    function findProduct(id) {
-      if (!latestMenu) return null;
-      for (var i = 0; i < latestMenu.categories.length; i += 1) {
-        var products = latestMenu.categories[i].products;
-        for (var j = 0; j < products.length; j += 1) if (String(products[j].id) === String(id)) return products[j];
-      }
-      return null;
     }
     function total() {
       return cart.reduce(function (sum, line) { return sum + line.unit * line.qty; }, 0);
@@ -321,9 +517,12 @@
       }
     }
 
-    /* ── the dish sheet ── */
-    function openDish(product) {
-      view = 'dish';
+    /* ── the ordering half of the dish sheet (F8): the questions, the count
+       and «Додати», drawn under the dish's photo and texts by the sheet
+       itself. This owns only what it adds: its box in the body, the foot. ── */
+    dishOrderHalf = function (product, host, foot) {
+      var body = node('div', 'dish-order');
+      host.appendChild(body);
       var sizes = product.variants;
       var chosenVariant = sizes.filter(function (v) { return v.available; })[0] || sizes[0];
       var picked = {};                     // modifier id -> true
@@ -340,15 +539,9 @@
         return typeof own === 'number' ? own : m.price_delta_cents;
       }
 
-      title.textContent = product.name;
       function paint() {
         body.textContent = '';
         foot.textContent = '';
-        if (product.description) body.appendChild(node('p', 'bill-note', product.description));
-        if (product.composition) body.appendChild(node('p', 'bill-note', 'Склад: ' + product.composition));
-        if (product.allergens && product.allergens.length) {
-          body.appendChild(node('p', 'bill-note allergen-line', 'Містить: ' + product.allergens.map(function (a) { return a.label; }).join(', ')));
-        }
 
         if (sizes.length > 1) {
           body.appendChild(node('h3', 'opt-head', 'Розмір'));
@@ -460,13 +653,21 @@
           else cart.push({ variantId: chosenVariant.id, name: product.name, caption: caption, qty: qty, mods: mods, note: noteValue.trim(), unit: unit });
           saveCart();
           paintBar();
-          closeSheet();
+          closeDish();
         });
         foot.appendChild(add);
       }
       paint();
-      openSheet();
-    }
+      // The poll brought a fresh copy of the dish (a size ran out): repaint
+      // with it, keeping what the guest already picked.
+      dishRefresh = function (fresh) {
+        product = fresh;
+        sizes = product.variants;
+        var kept = sizes.filter(function (v) { return v.id === chosenVariant.id; })[0];
+        chosenVariant = kept || sizes.filter(function (v) { return v.available; })[0] || sizes[0];
+        paint();
+      };
+    };
 
     /* ── the cart and the guest's own requests ── */
     var STATUS = {
@@ -650,35 +851,17 @@
     }
     pollTimer = window.setInterval(poll, 6000);
 
+    // «Додати» on a card opens the dish's sheet with its questions (F8).
     document.addEventListener('click', function (event) {
       var target = event.target;
       var add = target && target.closest && target.closest('[data-add]');
-      if (!add) return;
-      var id = add.getAttribute('data-add');
-      var product = findProduct(id);
-      if (product) { openDish(product); return; }
-      // The menu JSON has not arrived yet: ask for it, then open.
-      fetch(url, { cache: 'no-store', headers: { Accept: 'application/json' } })
-        .then(function (response) { return response.ok ? response.json() : null; })
-        .then(function (menu) {
-          if (!menu) return;
-          latestMenu = menu;
-          var found = findProduct(id);
-          if (found) openDish(found);
-        })
-        .catch(function () { /* offline: the button does nothing, the menu still reads */ });
+      if (add) openDishById(add.getAttribute('data-add'));
     });
     cartBar.addEventListener('click', function () { refresh().then(function () { openCart(); }); });
     closer.addEventListener('click', closeSheet);
     sheet.addEventListener('click', function (event) { if (event.target === sheet) closeSheet(); });
     document.addEventListener('keydown', function (event) { if (event.key === 'Escape' && !sheet.hidden) closeSheet(); });
 
-    // The dishes' questions come from the menu JSON; fetch it once now so the
-    // first tap on «Додати» does not have to wait for the poll.
-    fetch(url, { cache: 'no-store', headers: { Accept: 'application/json' } })
-      .then(function (response) { return response.ok ? response.json() : null; })
-      .then(function (menu) { if (menu) latestMenu = menu; })
-      .catch(function () { /* the poll will bring it */ });
     refresh().then(paintBar);
     paintBar();
   }

@@ -431,3 +431,38 @@ body:has(.dock .call-row) .foot { padding-bottom: 230px; }
   .table-card .qr { width: 44mm; margin-top: 3mm; }
   .table-card .hint { margin-top: 2mm; }
 }
+
+/* The dish's own sheet (phase F8): the whole card opens it and the name is
+   the button a keyboard reaches; on the sheet the photo at its real size,
+   then what the card says, and — where ordering is on — the questions and
+   «Додати». A single size («245 г») is a line under the card's price too. */
+.item { cursor: pointer; }
+.open {
+  border: 0; background: none; padding: 0; margin: 0;
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+}
+.open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.size { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+.item[data-state="stop"] .size, .item[data-state="out"] .size { color: var(--off); }
+.dish-panel { padding-top: 0; }
+.dish-close {
+  position: sticky; top: 12px; float: right; z-index: 2; margin: 12px -8px -52px 0;
+  background: var(--card); box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+}
+.dish-photo { margin: 0 -20px; aspect-ratio: 4 / 3; max-height: 48vh; background: var(--badge); overflow: hidden; }
+.dish-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dish-photo[hidden] { display: none; }
+.dish-head { display: flex; align-items: center; gap: 8px; padding: 16px 0 0; }
+.dish-head h2 { margin: 0; font-size: 22px; line-height: 1.2; }
+.dish-head .badge { margin-left: 0; }
+.dish-body .price { margin-top: 10px; font-size: 18px; }
+.dish-body .size { font-size: 15px; }
+.dish-desc { margin: 10px 0 0; font-size: 15px; }
+.dish-comp { margin: 8px 0 0; color: var(--muted); font-size: 15px; }
+.dish-comp b { color: var(--ink); font-weight: 600; }
+.dish-body .allergens { margin-top: 8px; }
+.dish-mods { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+.dish-foot[hidden] { display: none; }
+.dish-sheet[data-state="stop"] .dish-photo, .dish-sheet[data-state="out"] .dish-photo { opacity: 0.45; }
+.dish-sheet[data-state="stop"] .dish-head h2, .dish-sheet[data-state="out"] .dish-head h2,
+.dish-sheet[data-state="stop"] .dish-body .price, .dish-sheet[data-state="out"] .dish-body .price { color: var(--off); }
