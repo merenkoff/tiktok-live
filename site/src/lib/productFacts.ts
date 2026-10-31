@@ -997,7 +997,10 @@ export const FEATURES = {
   cafeKitchenBoard: { status: 'available', label: 'Дошка кухні та бару: «Готово» → «Видано», стоп-лист на день' },
   cafeKitchenTicket: { status: 'available', label: 'Кухонний тікет на принтер станції (десктоп-каса)' },
   cafeMenuMatrix: { status: 'available', label: 'Матриця меню, середній чек, замовлення за годинами' },
-  qrMenu: { status: 'available', label: 'QR-меню для гостей зі стоп-листом наживо' },
+  qrMenu: {
+    status: 'available',
+    label: 'QR-меню для гостей зі стоп-листом наживо й карткою страви за дотиком: велике фото, вага, опис, склад, алергени й додатки',
+  },
   qrMenuTables: { status: 'available', label: 'QR на кожен стіл із номером столу й лист QR для друку' },
   qrMenuProfile: { status: 'available', label: 'Профіль закладу в QR-меню: логотип, адреса, телефон і години роботи' },
   dishAllergens: { status: 'available', label: 'Склад і алергени страв у QR-меню: 14 позицій за переліком ЄС, які вказує власник' },
