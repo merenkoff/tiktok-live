@@ -37,6 +37,7 @@
 // table is).
 
 import crypto from 'crypto';
+import { listLowFeedback, type LowFeedbackNotice } from './guest-feedback.service.js';
 import type pg from 'pg';
 import { pool } from '../db.js';
 import * as bills from './bills.service.js';
@@ -830,15 +831,18 @@ export interface GuestFeed {
   sent: SentGuestOrderNotice[];
   /** Guests calling a waiter or asking for the bill (phase Q8). */
   calls: LiveWaiterCall[];
+  /** Low scores from tables in the last half hour that nobody has walked over to (phase F6). */
+  feedback: LowFeedbackNotice[];
 }
 
 export async function loadGuestFeed(storeId: number, tableId?: number): Promise<GuestFeed> {
-  const [orders, sent, calls] = await Promise.all([
+  const [orders, sent, calls, feedback] = await Promise.all([
     listWaitingGuestOrders(storeId, tableId),
     listSentNotices(storeId, tableId),
     listLiveCalls(storeId, tableId),
+    listLowFeedback(storeId, tableId),
   ]);
-  return { orders, sent, calls };
+  return { orders, sent, calls, feedback };
 }
 
 /**

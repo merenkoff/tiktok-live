@@ -6,7 +6,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { GuestAlertsPanel } from './GuestAlertsPanel';
-import type { SentGuestOrder, WaiterCall } from '../lib/types';
+import type { LowFeedback, SentGuestOrder, WaiterCall } from '../lib/types';
 
 const call = (over: Partial<WaiterCall> = {}): WaiterCall => ({
   id: 70,
@@ -31,6 +31,20 @@ const sent = (over: Partial<SentGuestOrder> = {}): SentGuestOrder => ({
   bill_opened_by_guest: false,
   total_cents: 28500,
   lines: [{ name: 'Борщ', caption: 'зі сметаною', quantity: 2, note: 'гарячий' }],
+  ...over,
+});
+
+const low = (over: Partial<LowFeedback> = {}): LowFeedback => ({
+  id: 95,
+  score: 2,
+  score_word: 'Так собі',
+  tag_labels: ['Довго чекали'],
+  comment: 'Чекали суп 40 хвилин',
+  table_id: 11,
+  table_name: '5',
+  hall_name: 'Тераса',
+  created_at: new Date(Date.now() - 2 * 60_000).toISOString(),
+  has_open_bill: true,
   ...over,
 });
 
@@ -89,6 +103,33 @@ describe('GuestAlertsPanel', () => {
     expect(onSeen).toHaveBeenCalledWith(expect.objectContaining({ id: 80 }));
     await userEvent.click(within(card).getByTestId('guest-sent-open-80'));
     expect(onOpenBill).toHaveBeenCalledWith(90);
+  });
+
+  it('tells the waiter which table scored low, with the guest’s words, and sends one «Бачу» for it', async () => {
+    // A «Бачу» that has not answered yet: the second tap must find the card already disabled.
+    const onSeenFeedback = vi.fn(() => new Promise<boolean>(() => undefined));
+    const item = low();
+    render(
+      <GuestAlertsPanel calls={[]} sent={[]} feedback={[item]} showTable busy={false} onAnswer={noop} onSeen={noop} onSeenFeedback={onSeenFeedback} />
+    );
+    const card = screen.getByTestId('guest-feedback-95');
+    expect(card).toHaveTextContent('Стіл 5 · оцінив на 2 — підійдіть');
+    expect(card).toHaveTextContent('Тераса · Так собі · 2 хв тому · Довго чекали');
+    expect(card).toHaveTextContent('Чекали суп 40 хвилин');
+    const button = within(card).getByTestId('guest-feedback-seen-95');
+    await userEvent.click(button);
+    await userEvent.click(button);
+    expect(onSeenFeedback).toHaveBeenCalledTimes(1);
+    expect(onSeenFeedback).toHaveBeenCalledWith(item);
+    expect(button).toBeDisabled();
+  });
+
+  it('names no table on the bill screen, and offers no «Бачу» without a handler', () => {
+    render(<GuestAlertsPanel calls={[]} sent={[]} feedback={[low()]} showTable={false} busy={false} onAnswer={noop} onSeen={noop} />);
+    const card = screen.getByTestId('guest-feedback-95');
+    expect(card).not.toHaveTextContent('Стіл 5');
+    expect(card).toHaveTextContent('оцінив на 2 — підійдіть');
+    expect(within(card).getByTestId('guest-feedback-seen-95')).toBeDisabled();
   });
 
   it('says before the tap that «Бачу» takes a table a guest opened', () => {

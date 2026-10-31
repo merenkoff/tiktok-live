@@ -69,7 +69,7 @@ import { useChimeSetting, useNotifyChime } from '../lib/useNotifyChime';
 import { serverMessage } from '../lib/useHallMap';
 import * as tablesApi from '../lib/tablesApi';
 import type { PayPart } from '../lib/tablesApi';
-import type { GuestOrder, SentGuestOrder, WaiterCall } from '../lib/types';
+import type { GuestOrder, LowFeedback, SentGuestOrder, WaiterCall } from '../lib/types';
 
 function newUuid(): string {
   const c = globalThis.crypto as { randomUUID?: () => string } | undefined;
@@ -129,6 +129,7 @@ export function BillPage(): JSX.Element {
     orders: roomRequests,
     sent: roomSent,
     calls: roomCalls,
+    feedback: roomFeedback,
     loaded: feedLoaded,
     refresh: refreshRequests,
   } = useGuestOrders({ online: online && bill != null });
@@ -136,6 +137,7 @@ export function BillPage(): JSX.Element {
   const requests = useMemo(() => roomRequests.filter((o) => o.table_id === tableId), [roomRequests, tableId]);
   const tableSent = useMemo(() => roomSent.filter((o) => o.table_id === tableId), [roomSent, tableId]);
   const tableCalls = useMemo(() => roomCalls.filter((c) => c.table_id === tableId), [roomCalls, tableId]);
+  const tableFeedback = useMemo(() => roomFeedback.filter((f) => f.table_id === tableId), [roomFeedback, tableId]);
   const others = useMemo(
     () => elsewhere({ orders: roomRequests, sent: roomSent, calls: roomCalls }, tableId),
     [roomRequests, roomSent, roomCalls, tableId]
@@ -338,6 +340,23 @@ export function BillPage(): JSX.Element {
     }
   };
 
+  /** «Бачу» on a low score from this table: the waiter went over. */
+  const seeFeedback = async (low: LowFeedback): Promise<boolean> => {
+    if (!online) {
+      notice('Потрібна мережа');
+      return false;
+    }
+    try {
+      await tablesApi.markFeedbackSeen(low.id);
+      return true;
+    } catch (err) {
+      notice(serverMessage(err, 'Не вдалося позначити'));
+      return false;
+    } finally {
+      void refreshRequests();
+    }
+  };
+
   /** «Бачу»: the round is already on this bill; if the guest opened it, the table becomes this waiter's. */
   const seeSent = async (order: SentGuestOrder): Promise<boolean> => {
     if (!online) {
@@ -461,15 +480,17 @@ export function BillPage(): JSX.Element {
         </p>
       )}
 
-      {(requests.length > 0 || tableCalls.length > 0 || tableSent.length > 0) && (
+      {(requests.length > 0 || tableCalls.length > 0 || tableSent.length > 0 || tableFeedback.length > 0) && (
         <section className="mx-4 md:mx-6 mt-2 max-h-[40vh] shrink-0 overflow-auto space-y-2.5" data-testid="bill-requests">
           <GuestAlertsPanel
             calls={tableCalls}
             sent={tableSent}
+            feedback={tableFeedback}
             showTable={false}
             busy={busy || answering}
             onAnswer={answerCall}
             onSeen={seeSent}
+            onSeenFeedback={seeFeedback}
           />
           <GuestOrdersPanel
             orders={requests}

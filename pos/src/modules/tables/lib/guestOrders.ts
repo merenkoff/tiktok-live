@@ -7,7 +7,7 @@
 // waiter feels — which lines can go in, what the button says, how long the
 // guest has been waiting — are testable without rendering anything.
 
-import type { GuestOrder, GuestOrderLine, SentGuestOrder, WaiterCall, WaiterCallKind } from './types';
+import type { GuestOrder, GuestOrderLine, LowFeedback, SentGuestOrder, WaiterCall, WaiterCallKind } from './types';
 
 /** The guest has been waiting «3 хв»; never negative, whatever the two clocks say. */
 export function minutesWaiting(createdAt: string, nowMs: number = Date.now()): number {
@@ -114,15 +114,18 @@ export interface TableAlerts {
   bill: boolean;
   /** Orders already in the kitchen that nobody has said «Бачу» to. */
   sent: number;
+  /** The lowest score a guest gave from this table lately, or null (F6). */
+  low: number | null;
 }
 
-export const NO_ALERTS: TableAlerts = { requests: 0, waiter: false, bill: false, sent: 0 };
+export const NO_ALERTS: TableAlerts = { requests: 0, waiter: false, bill: false, sent: 0, low: null };
 
 /** Per table, everything the guests' phones are saying. */
 export function alertsByTable(feed: {
   orders: readonly GuestOrder[];
   sent: readonly SentGuestOrder[];
   calls: readonly WaiterCall[];
+  feedback?: readonly LowFeedback[];
 }): Map<number, TableAlerts> {
   const map = new Map<number, TableAlerts>();
   const at = (tableId: number): TableAlerts => {
@@ -136,13 +139,17 @@ export function alertsByTable(feed: {
   for (const order of feed.orders) at(order.table_id).requests += 1;
   for (const order of feed.sent) at(order.table_id).sent += 1;
   for (const call of feed.calls) at(call.table_id)[call.kind] = true;
+  for (const low of feed.feedback ?? []) {
+    const entry = at(low.table_id);
+    entry.low = entry.low == null ? low.score : Math.min(entry.low, low.score);
+  }
   return map;
 }
 
 /** How many separate things want the waiter at a table — what a hall tab counts. */
 export function alertCount(alerts: TableAlerts | undefined): number {
   if (!alerts) return 0;
-  return alerts.requests + alerts.sent + (alerts.waiter ? 1 : 0) + (alerts.bill ? 1 : 0);
+  return alerts.requests + alerts.sent + (alerts.waiter ? 1 : 0) + (alerts.bill ? 1 : 0) + (alerts.low != null ? 1 : 0);
 }
 
 /**
@@ -154,11 +161,13 @@ export function alertKeys(feed: {
   orders: readonly GuestOrder[];
   sent: readonly SentGuestOrder[];
   calls: readonly WaiterCall[];
+  feedback?: readonly LowFeedback[];
 }): Set<string> {
   return new Set([
     ...feed.orders.map((o) => `order:${o.id}`),
     ...feed.sent.map((o) => `sent:${o.id}`),
     ...feed.calls.map((c) => `call:${c.id}`),
+    ...(feed.feedback ?? []).map((f) => `feedback:${f.id}`),
   ]);
 }
 
@@ -168,9 +177,10 @@ export function sentCaption(order: SentGuestOrder): string {
 }
 
 /** The header over the room's list: «2 виклики · 1 на кухні · 3 запити», only what there is. */
-export function feedHeadline(counts: { requests: number; sent: number; calls: number }): string {
+export function feedHeadline(counts: { requests: number; sent: number; calls: number; feedback?: number }): string {
   const parts: string[] = [];
   if (counts.calls > 0) parts.push(plural(counts.calls, 'виклик', 'виклики', 'викликів'));
+  if ((counts.feedback ?? 0) > 0) parts.push(plural(counts.feedback!, 'низька оцінка', 'низькі оцінки', 'низьких оцінок'));
   if (counts.sent > 0) parts.push(`${counts.sent} на кухні без офіціанта`);
   if (counts.requests > 0) parts.push(requestsLabel(counts.requests));
   return parts.join(' · ');

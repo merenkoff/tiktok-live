@@ -603,6 +603,77 @@ describe.skipIf(!hasDb)('POS guest feedback (F3)', () => {
     });
   });
 
+  describe('the waiter’s side (F6)', () => {
+    const feed = (query = '', bearer = cafe.sellerToken) =>
+      app.inject({ method: 'GET', url: `/api/pos/guest-orders${query}`, headers: auth(bearer) });
+    const seen = (id: number, bearer = cafe.sellerToken) =>
+      app.inject({ method: 'POST', url: `/api/pos/feedback/${id}/seen`, headers: auth(bearer) });
+
+    beforeAll(async () => {
+      expect((await patch(cafe, { feedback_enabled: true })).statusCode).toBe(200);
+    });
+
+    it('puts a low score from a keyed table into the waiter’s feed — table, words, no phone — and not a good one or the counter’s', async () => {
+      const low = UUID();
+      await send({ client_uuid: low, score: 2, tags: ['wait'], comment: 'Довго', phone: '+380 50 000 00 03' }, await keyed(table5));
+      await send({ client_uuid: UUID(), score: 5 }, await keyed(table6));
+      await send({ client_uuid: UUID(), score: 1 });
+      const body = (await feed()).json();
+      expect(body.feedback).toHaveLength(1);
+      expect(Object.keys(body.feedback[0]).sort()).toEqual([
+        'comment',
+        'created_at',
+        'hall_name',
+        'has_open_bill',
+        'id',
+        'score',
+        'score_word',
+        'table_id',
+        'table_name',
+        'tag_labels',
+      ]);
+      expect(body.feedback[0]).toMatchObject({
+        score: 2,
+        score_word: 'Так собі',
+        tag_labels: ['Довго чекали'],
+        comment: 'Довго',
+        table_id: table5,
+        table_name: '5',
+        hall_name: 'Зал',
+        has_open_bill: false,
+      });
+      expect(JSON.stringify(body)).not.toContain('+380 50 000 00 03');
+      expect(JSON.stringify(body)).not.toContain(low);
+      // One table's only, when asked.
+      expect((await feed(`?table_id=${table6}`)).json().feedback).toEqual([]);
+      expect((await feed(`?table_id=${table5}`)).json().feedback).toHaveLength(1);
+    });
+
+    it('drops it after the waiter’s «Бачу», which the owner reads as handled under that waiter, and after half an hour', async () => {
+      await send({ client_uuid: UUID(), score: 3 }, await keyed(table5));
+      const [low] = (await feed()).json().feedback;
+      const res = await seen(low.id);
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ seen: true, handled_at: expect.any(String) });
+      expect((await feed()).json().feedback).toEqual([]);
+      const owner = (await app.inject({ method: 'GET', url: '/api/pos/feedback', headers: auth(cafe.ownerToken) })).json();
+      expect(owner.rows[0]).toMatchObject({ id: low.id, handled_by: expect.any(String) });
+      // Idempotent; a stranger's or a made-up id is 404; no session is 401.
+      expect((await seen(low.id)).statusCode).toBe(200);
+      expect((await seen(999999999)).statusCode).toBe(404);
+      expect((await seen(low.id, other.ownerToken)).statusCode).toBe(404);
+      expect((await app.inject({ method: 'POST', url: `/api/pos/feedback/${low.id}/seen` })).statusCode).toBe(401);
+
+      const stale = UUID();
+      await send({ client_uuid: stale, score: 1 }, await keyed(table6));
+      await pool.query(
+        `UPDATE pos_guest_feedback SET created_at = NOW() - INTERVAL '31 minutes' WHERE store_id = $1 AND client_uuid = $2`,
+        [cafe.storeId, stale]
+      );
+      expect((await feed()).json().feedback).toEqual([]);
+    });
+  });
+
   describe('housekeeping', () => {
     it('wipes the phone after ninety days and keeps the feedback', async () => {
       const old = UUID();

@@ -143,6 +143,19 @@ describe('useGuestOrders', () => {
     expect(result.current.sent.map((o) => o.id)).toEqual([80]);
   });
 
+  it('hands over low scores too, and an answer without them as none', async () => {
+    const low = { id: 95, score: 2, score_word: 'Так собі', tag_labels: [], comment: null, table_id: 11, table_name: '5', hall_name: 'Зала', created_at: '', has_open_bill: false };
+    listGuestOrders.mockResolvedValue({ orders: [], sent: [], calls: [], feedback: [low] });
+    const { result } = renderHook(() => useGuestOrders({ online: true }));
+    await tick(0);
+    expect(result.current.feedback.map((f) => f.id)).toEqual([95]);
+    listGuestOrders.mockResolvedValue({ orders: [] });
+    await act(async () => {
+      await result.current.refresh();
+    });
+    expect(result.current.feedback).toEqual([]);
+  });
+
   it('reads an older backend’s answer — orders alone — as no calls and nothing sent', async () => {
     listGuestOrders.mockResolvedValue({ orders: [order(1)] });
     const { result } = renderHook(() => useGuestOrders({ online: true }));

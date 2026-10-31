@@ -9,7 +9,7 @@
 // and everything else is a line of small text under it. A free table shows its
 // seats and nothing more — there is nothing else true about it.
 
-import { Bell, ChefHat, Pencil, Receipt, User } from '@pos/platform/ui';
+import { Bell, ChefHat, Pencil, Receipt, Star, User } from '@pos/platform/ui';
 import type { TableSeat, TableTone } from '../lib/hallMap';
 import { guestsLabel, kitchenState, seatedFor, seatsLabel, tableTone, tileSum } from '../lib/hallMap';
 
@@ -52,6 +52,8 @@ export interface TableTileProps {
   calling?: { waiter?: boolean; bill?: boolean };
   /** Orders that went to the kitchen by themselves and nobody has said «Бачу» to (Q9). */
   sentUnseen?: number;
+  /** The lowest score a guest gave from this table lately, nobody having walked over (F6). */
+  lowScore?: number | null;
 }
 
 export function TableTile({
@@ -63,6 +65,7 @@ export function TableTile({
   guestWaiting = 0,
   calling,
   sentUnseen = 0,
+  lowScore = null,
 }: TableTileProps): JSX.Element {
   const callsWaiter = calling?.waiter === true;
   const callsBill = calling?.bill === true;
@@ -79,6 +82,7 @@ export function TableTile({
       data-guest={guestWaiting > 0 ? guestWaiting : undefined}
       data-call={callsWaiter || callsBill ? [callsWaiter ? 'waiter' : '', callsBill ? 'bill' : ''].filter(Boolean).join(' ') : undefined}
       data-sent={sentUnseen > 0 ? sentUnseen : undefined}
+      data-low-score={lowScore ?? undefined}
       disabled={disabled}
       onClick={() => onOpen(seat)}
       style={{
@@ -95,7 +99,7 @@ export function TableTile({
           className={`absolute top-3 w-2.5 h-2.5 rounded-full ${round ? 'right-[18%]' : 'right-3.5'} ${TONE[tone].dot}`}
         />
       )}
-      {(kitchen || guestWaiting > 0 || callsWaiter || callsBill || sentUnseen > 0 || (bill && bill.draft_count > 0)) && (
+      {(kitchen || guestWaiting > 0 || callsWaiter || callsBill || sentUnseen > 0 || lowScore != null || (bill && bill.draft_count > 0)) && (
         // Wraps rather than running over the tone dot on the right: a busy
         // table at dinner can carry four marks at once.
         <span
@@ -121,6 +125,17 @@ export function TableTile({
             >
               <Receipt size={14} aria-hidden />
               <span className="sr-only">Гість просить рахунок</span>
+            </span>
+          )}
+          {lowScore != null && (
+            <span
+              data-testid={`table-low-${table.id}`}
+              title="Гість поставив низьку оцінку з телефону"
+              className="h-5 px-1 rounded-md bg-sq-danger/15 text-sq-danger text-[11px] font-semibold inline-flex items-center gap-0.5 animate-pulse"
+            >
+              <Star size={14} aria-hidden />
+              {lowScore}
+              <span className="sr-only">Низька оцінка з телефону</span>
             </span>
           )}
           {sentUnseen > 0 && (
@@ -197,11 +212,13 @@ export function ToneLegend({
   callWaiter = false,
   callBill = false,
   sent = false,
+  low = false,
 }: {
   guest?: boolean;
   callWaiter?: boolean;
   callBill?: boolean;
   sent?: boolean;
+  low?: boolean;
 }): JSX.Element {
   const dots: Record<TableTone, string> = {
     free: 'bg-sq-divider',
@@ -241,6 +258,12 @@ export function ToneLegend({
         <span className="flex items-center gap-1.5">
           <ChefHat size={14} aria-hidden />
           Замовив сам — на кухні
+        </span>
+      )}
+      {low && (
+        <span className="flex items-center gap-1.5">
+          <Star size={14} className="text-sq-danger" aria-hidden />
+          Низька оцінка з телефону
         </span>
       )}
     </div>
