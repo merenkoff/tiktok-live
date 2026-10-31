@@ -65,6 +65,10 @@ export type FeedbackSource = 'menu' | 'bill';
 
 export const COMMENT_MAX = 600;
 export const MAX_TAGS = 8;
+/** Dishes one feedback may rate; a bill longer than this is a banquet. */
+export const MAX_ITEMS = 30;
+/** After paying, how long the table's last bill still counts as «this dinner» (phase F5). */
+export const PAID_BILL_GRACE_HOURS = 3;
 export const RATE_WINDOW_MS = 60 * 60 * 1000;
 export const PHONE_RETENTION_DAYS = 90;
 
@@ -114,6 +118,13 @@ function takeRateSlots(storeId: number, tableId: number | null, now = Date.now()
 
 // ── shapes ──────────────────────────────────────────────────────────
 
+export type DishVerdict = 'up' | 'down';
+
+export interface FeedbackItemInput {
+  bill_item_id: number;
+  verdict: DishVerdict;
+}
+
 export interface FeedbackInput {
   client_uuid: string;
   score: number;
@@ -121,6 +132,8 @@ export interface FeedbackInput {
   comment: string | null;
   phone: string | null;
   source: FeedbackSource;
+  /** The dishes of the bill the guest rated (phase F5); empty when none offered or ticked. */
+  items: FeedbackItemInput[];
   /** The honeypot was filled in: answer yes, write nothing. */
   bot: boolean;
 }
@@ -168,8 +181,21 @@ export function normalizeFeedback(body: unknown): FeedbackInput {
     }
   }
   const source: FeedbackSource = body.source === 'bill' ? 'bill' : 'menu';
+  const rawItems = body.items === undefined ? [] : body.items;
+  if (!Array.isArray(rawItems) || rawItems.length > MAX_ITEMS) throw new GuestFeedbackError('Забагато страв');
+  const items: FeedbackItemInput[] = [];
+  for (const item of rawItems) {
+    if (!isPlainObject(item)) throw new GuestFeedbackError('Страва не читається');
+    const id = item.bill_item_id;
+    if (typeof id !== 'number' || !Number.isInteger(id) || id <= 0) throw new GuestFeedbackError('Страва не читається');
+    if (item.verdict !== 'up' && item.verdict !== 'down') throw new GuestFeedbackError('Оцінка страви — 👍 або 👎');
+    // The last word on a dish wins: a changed mind is not two rows.
+    const existing = items.find((it) => it.bill_item_id === id);
+    if (existing) existing.verdict = item.verdict;
+    else items.push({ bill_item_id: id, verdict: item.verdict });
+  }
   const bot = typeof body.website === 'string' && body.website.trim() !== '';
-  return { client_uuid: uuid, score, tags, comment, phone, source, bot };
+  return { client_uuid: uuid, score, tags, comment, phone, source, items, bot };
 }
 
 function toView(row: Record<string, unknown>): GuestFeedbackView {
@@ -181,6 +207,64 @@ function toView(row: Record<string, unknown>): GuestFeedbackView {
 }
 
 // ── the guest ───────────────────────────────────────────────────────
+
+/**
+ * The bill this feedback is about: the table's open one, or the one paid in
+ * the last PAID_BILL_GRACE_HOURS — a guest rates the dinner after paying for
+ * it, and by then the bill is `paid`. Null when the table has neither.
+ */
+export async function billForFeedback(storeId: number, tableId: number): Promise<number | null> {
+  const result = await pool.query(
+    `SELECT id FROM pos_bills
+      WHERE store_id = $1 AND table_id = $2
+        AND (status = 'open' OR (status = 'paid' AND closed_at > NOW() - ($3::int * INTERVAL '1 hour')))
+      ORDER BY (status = 'open') DESC, closed_at DESC NULLS FIRST, id DESC
+      LIMIT 1`,
+    [storeId, tableId, PAID_BILL_GRACE_HOURS]
+  );
+  return result.rows[0] ? Number(result.rows[0].id) : null;
+}
+
+/** A dish as the feedback sheet lists it: the name and its size/answers, nothing of the price. */
+export interface FeedbackDish {
+  bill_item_id: number;
+  name: string;
+  /** «M · вівсяне», or empty. */
+  caption: string;
+}
+
+/**
+ * The dishes a guest at `table` may rate: the fired lines of the bill this
+ * feedback would attach (`billForFeedback`), in the bill's order. Names only
+ * — the bill's prices stay behind the owner's bill switch (phase Q5).
+ */
+export async function listFeedbackDishes(storeId: number, table: MenuTable): Promise<{ bill: boolean; dishes: FeedbackDish[] }> {
+  const billId = await billForFeedback(storeId, table.id);
+  if (billId === null) return { bill: false, dishes: [] };
+  const result = await pool.query(
+    `SELECT i.id, i.product_name, i.variant_label
+       FROM pos_bill_items i
+       JOIN pos_bill_rounds r ON r.id = i.round_id AND r.cancelled_at IS NULL
+      WHERE i.bill_id = $1
+      ORDER BY i.sort_order ASC, i.id ASC`,
+    [billId]
+  );
+  return {
+    bill: true,
+    dishes: result.rows.map((row) => ({
+      bill_item_id: Number(row.id),
+      name: String(row.product_name ?? ''),
+      caption: String(row.variant_label ?? ''),
+    })),
+  };
+}
+
+/** The snapshot an item row keeps: «Латте · M». */
+function dishText(name: unknown, caption: unknown): string {
+  const n = String(name ?? '').trim();
+  const c = String(caption ?? '').trim();
+  return c ? `${n} · ${c}` : n;
+}
 
 /**
  * Write the feedback, or hand back the one this uuid already wrote. The
@@ -204,31 +288,57 @@ export async function createFeedback(
   );
   if (existing.rows[0]) return { view: toView(existing.rows[0]), created: false };
   const commit = takeRateSlots(storeId, table?.id ?? null);
-  let billId: number | null = null;
-  if (table) {
-    const bill = await pool.query(
-      `SELECT id FROM pos_bills WHERE store_id = $1 AND table_id = $2 AND status = 'open' ORDER BY id DESC LIMIT 1`,
-      [storeId, table.id]
+  const billId = table ? await billForFeedback(storeId, table.id) : null;
+  // A dish may be rated only off THIS bill: the page offered the list, so a
+  // foreign id is a forged request, not a slip — refused in words, nothing written.
+  const dishes = new Map<number, string>();
+  if (input.items.length > 0) {
+    if (billId === null) throw new GuestFeedbackError('Страви можна оцінити лише з рахунку вашого столу');
+    const lines = await pool.query(
+      `SELECT i.id, i.product_name, i.variant_label FROM pos_bill_items i
+        WHERE i.bill_id = $1 AND i.round_id IS NOT NULL AND i.id = ANY($2::bigint[])`,
+      [billId, input.items.map((it) => it.bill_item_id)]
     );
-    billId = bill.rows[0] ? Number(bill.rows[0].id) : null;
+    for (const row of lines.rows) dishes.set(Number(row.id), dishText(row.product_name, row.variant_label));
+    if (input.items.some((it) => !dishes.has(it.bill_item_id))) {
+      throw new GuestFeedbackError('Страви можна оцінити лише з рахунку вашого столу');
+    }
   }
-  const inserted = await pool.query(
-    `INSERT INTO pos_guest_feedback (store_id, table_id, bill_id, client_uuid, score, tags, comment, phone, source)
-     VALUES ($1, $2, $3, $4, $5, $6::text[], $7, $8, $9)
-     ON CONFLICT (store_id, client_uuid) DO NOTHING
-     RETURNING client_uuid, score, created_at`,
-    [storeId, table?.id ?? null, billId, input.client_uuid, input.score, input.tags, input.comment, input.phone, input.source]
-  );
-  if (!inserted.rows[0]) {
-    // Lost a race with the same phone's retry: theirs is the row.
-    const again = await pool.query(
-      `SELECT client_uuid, score, created_at FROM pos_guest_feedback WHERE store_id = $1 AND client_uuid = $2`,
-      [storeId, input.client_uuid]
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const inserted = await client.query(
+      `INSERT INTO pos_guest_feedback (store_id, table_id, bill_id, client_uuid, score, tags, comment, phone, source)
+       VALUES ($1, $2, $3, $4, $5, $6::text[], $7, $8, $9)
+       ON CONFLICT (store_id, client_uuid) DO NOTHING
+       RETURNING id, client_uuid, score, created_at`,
+      [storeId, table?.id ?? null, billId, input.client_uuid, input.score, input.tags, input.comment, input.phone, input.source]
     );
-    return { view: toView(again.rows[0]), created: false };
+    if (!inserted.rows[0]) {
+      await client.query('ROLLBACK');
+      // Lost a race with the same phone's retry: theirs is the row.
+      const again = await pool.query(
+        `SELECT client_uuid, score, created_at FROM pos_guest_feedback WHERE store_id = $1 AND client_uuid = $2`,
+        [storeId, input.client_uuid]
+      );
+      return { view: toView(again.rows[0]), created: false };
+    }
+    const feedbackId = Number(inserted.rows[0].id);
+    for (const item of input.items) {
+      await client.query(
+        `INSERT INTO pos_guest_feedback_items (feedback_id, bill_item_id, product_name, verdict) VALUES ($1, $2, $3, $4)`,
+        [feedbackId, item.bill_item_id, dishes.get(item.bill_item_id), item.verdict]
+      );
+    }
+    await client.query('COMMIT');
+    commit();
+    return { view: toView(inserted.rows[0]), created: true };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
   }
-  commit();
-  return { view: toView(inserted.rows[0]), created: true };
 }
 
 /** The guest's own feedback, by the uuid their phone kept — or null. */
@@ -278,6 +388,8 @@ export interface FeedbackRow {
   bill_no: number | null;
   handled_at: string | null;
   handled_by: string | null;
+  /** The dishes of the bill the guest rated (F5), in the bill's order. */
+  items: Array<{ name: string; verdict: DishVerdict }>;
 }
 
 export interface FeedbackListQuery {
@@ -315,7 +427,27 @@ function toRow(row: Record<string, unknown>): FeedbackRow {
     bill_no: row.bill_no == null ? null : Number(row.bill_no),
     handled_at: row.handled_at == null ? null : new Date(row.handled_at as string).toISOString(),
     handled_by: typeof row.handled_by_name === 'string' ? row.handled_by_name : null,
+    items: [],
   };
+}
+
+/** The rated dishes of these feedbacks, put onto their rows. */
+async function attachItems(rows: FeedbackRow[]): Promise<FeedbackRow[]> {
+  if (rows.length === 0) return rows;
+  const result = await pool.query(
+    `SELECT feedback_id, product_name, verdict FROM pos_guest_feedback_items
+      WHERE feedback_id = ANY($1::bigint[]) ORDER BY id ASC`,
+    [rows.map((row) => row.id)]
+  );
+  const byFeedback = new Map<number, FeedbackRow['items']>();
+  for (const row of result.rows) {
+    const id = Number(row.feedback_id);
+    byFeedback.set(id, [
+      ...(byFeedback.get(id) ?? []),
+      { name: String(row.product_name), verdict: row.verdict === 'down' ? 'down' : 'up' },
+    ]);
+  }
+  return rows.map((row) => ({ ...row, items: byFeedback.get(row.id) ?? [] }));
 }
 
 const ROW_SELECT = `
@@ -371,7 +503,7 @@ export async function listFeedback(
     `${ROW_SELECT} WHERE ${where.join(' AND ')} ORDER BY f.created_at DESC, f.id DESC LIMIT $${values.length - 1} OFFSET $${values.length}`,
     values
   );
-  return { rows: result.rows.map(toRow), total: Number(total.rows[0].n), from, to };
+  return { rows: await attachItems(result.rows.map(toRow)), total: Number(total.rows[0].n), from, to };
 }
 
 /** «Опрацьовано» — or back to waiting. Null for a feedback that is not this store's. */
@@ -391,7 +523,7 @@ export async function setFeedbackHandled(
   );
   if (!updated.rows[0]) return null;
   const result = await pool.query(`${ROW_SELECT} WHERE f.store_id = $1 AND f.id = $2`, [storeId, id]);
-  return result.rows[0] ? toRow(result.rows[0]) : null;
+  return result.rows[0] ? (await attachItems([toRow(result.rows[0])]))[0]! : null;
 }
 
 export interface FeedbackSummary {
@@ -407,6 +539,8 @@ export interface FeedbackSummary {
   unhandled_low: number;
   /** The newest few with words, for the dashboard tile. */
   latest: Array<{ id: number; score: number; comment: string | null; created_at: string }>;
+  /** Dishes rated in the window, the most disliked first (F5); empty when none was rated. */
+  dishes: Array<{ name: string; up: number; down: number }>;
 }
 
 /** The figures the dashboard tile and the page's head read. Arithmetic, not a recommendation. */
@@ -443,6 +577,18 @@ export async function feedbackSummary(
       ORDER BY f.created_at DESC, f.id DESC LIMIT 3`,
     values
   );
+  const dishes = await pool.query(
+    `SELECT it.product_name AS name,
+            count(*) FILTER (WHERE it.verdict = 'up')::int AS up,
+            count(*) FILTER (WHERE it.verdict = 'down')::int AS down
+       FROM pos_guest_feedback_items it
+       JOIN pos_guest_feedback f ON f.id = it.feedback_id
+      WHERE ${scope}
+      GROUP BY it.product_name
+      ORDER BY down DESC, up DESC, name ASC
+      LIMIT 8`,
+    values
+  );
   return {
     from,
     to,
@@ -459,5 +605,6 @@ export async function feedbackSummary(
       comment: typeof row.comment === 'string' ? row.comment : null,
       created_at: new Date(row.created_at as string).toISOString(),
     })),
+    dishes: dishes.rows.map((row) => ({ name: String(row.name), up: Number(row.up), down: Number(row.down) })),
   };
 }

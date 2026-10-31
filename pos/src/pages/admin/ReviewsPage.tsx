@@ -220,6 +220,22 @@ export function ReviewsPage() {
                 </p>
               )}
             </div>
+            {summary.dishes && summary.dishes.length > 0 && (
+              <div className="rounded-2xl bg-sq-sidebar p-4 sm:col-span-3" data-testid="reviews-dishes">
+                <p className="text-[13px] font-semibold text-sq-secondary">Страви, які оцінювали</p>
+                <ul className="mt-2 grid gap-x-6 gap-y-1 sm:grid-cols-2">
+                  {summary.dishes.map((dish) => (
+                    <li key={dish.name} className="flex items-baseline justify-between gap-3 text-[14px]">
+                      <span className="min-w-0 truncate text-sq-text">{dish.name}</span>
+                      <span className="shrink-0 text-sq-muted">
+                        <span className="text-sq-success">👍 {dish.up}</span>
+                        <span className="ml-2 text-red-600">👎 {dish.down}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -292,6 +308,20 @@ export function ReviewsPage() {
                     {row.tag_labels.map((label) => (
                       <li key={label} className="rounded-full bg-sq-bg px-2.5 py-1 text-[13px] text-sq-text ring-1 ring-inset ring-sq-divider">
                         {label}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {row.items && row.items.length > 0 && (
+                  <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Оцінені страви">
+                    {row.items.map((item, i) => (
+                      <li
+                        key={`${item.name}-${i}`}
+                        className={`rounded-full px-2.5 py-1 text-[13px] ring-1 ring-inset ${
+                          item.verdict === 'up' ? 'bg-sq-bg text-sq-success ring-sq-divider' : 'bg-sq-bg text-red-600 ring-sq-divider'
+                        }`}
+                      >
+                        {item.verdict === 'up' ? '👍' : '👎'} {item.name}
                       </li>
                     ))}
                   </ul>

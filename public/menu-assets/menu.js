@@ -699,9 +699,11 @@
      asking reviews, and honest. Nothing here is owner text except the link,
      which goes into an href property, never into markup. */
   var feedbackUrl = document.body.getAttribute('data-feedback-url');
-  if (feedbackUrl) initFeedback(feedbackUrl, document.body.getAttribute('data-feedback-google'));
+  if (feedbackUrl) {
+    initFeedback(feedbackUrl, document.body.getAttribute('data-feedback-google'), document.body.getAttribute('data-feedback-dishes-url'));
+  }
 
-  function initFeedback(endpoint, googleUrl) {
+  function initFeedback(endpoint, googleUrl, dishesUrl) {
     var sheet = document.querySelector('[data-feedback-sheet]');
     var form = document.querySelector('[data-feedback-form]');
     var closer = document.querySelector('[data-feedback-close]');
@@ -718,6 +720,13 @@
     var faces = Array.prototype.slice.call(document.querySelectorAll('[data-feedback-sheet] .fb-face'));
     var tagSets = { good: document.querySelector('[data-fb-tags="good"]'), bad: document.querySelector('[data-fb-tags="bad"]') };
     var openers = Array.prototype.slice.call(document.querySelectorAll('[data-feedback-open]'));
+    var dishesBox = document.querySelector('[data-fb-dishes]');
+    var dishList = document.querySelector('[data-fb-dish-list]');
+    var thumbTemplates = {
+      up: document.querySelector('template[data-fb-thumb="up"]'),
+      down: document.querySelector('template[data-fb-thumb="down"]')
+    };
+    var dishesLoaded = false;
     if (!sheet || !form || !closer || !more || !question || !send || !done || !faces.length || !tagSets.good || !tagSets.bad) return;
 
     var REMEMBER_MS = 2 * 60 * 60 * 1000;   // a second visit the same evening is still the same visit
@@ -759,6 +768,56 @@
       if (!errorBox) return;
       errorBox.textContent = message || '';
       errorBox.hidden = !message;
+    }
+
+    /* The dishes of the bill (phase F5): fetched once the sheet opens, a row
+       each with 👍/👎 — names put in with textContent, the thumbs cloned from
+       the page's own templates. Nothing shown without a keyed table or a bill. */
+    function loadDishes() {
+      if (!dishesUrl || dishesLoaded || !dishesBox || !dishList) return;
+      dishesLoaded = true;
+      fetch(dishesUrl + query, { cache: 'no-store', headers: { Accept: 'application/json' } })
+        .then(function (response) { return response.ok ? response.json() : null; })
+        .then(function (data) {
+          if (!data || !data.dishes || !data.dishes.length) return;
+          dishList.textContent = '';
+          data.dishes.forEach(function (dish) {
+            var row = node('li', 'fb-dish');
+            row.setAttribute('data-bill-item', String(dish.bill_item_id));
+            var name = node('span', 'fb-dish-name', dish.name);
+            if (dish.caption) name.appendChild(node('small', null, dish.caption));
+            row.appendChild(name);
+            ['up', 'down'].forEach(function (verdict) {
+              var button = node('button', 'fb-thumb');
+              button.type = 'button';
+              button.setAttribute('data-verdict', verdict);
+              button.setAttribute('aria-pressed', 'false');
+              button.setAttribute('aria-label', (verdict === 'up' ? 'Сподобалось: ' : 'Не сподобалось: ') + dish.name);
+              var template = thumbTemplates[verdict];
+              if (template && template.content) button.appendChild(template.content.cloneNode(true));
+              else button.textContent = verdict === 'up' ? '+' : '−';
+              button.addEventListener('click', function () {
+                var on = !button.classList.contains('on');
+                Array.prototype.forEach.call(row.querySelectorAll('.fb-thumb'), function (other) {
+                  other.classList.remove('on');
+                  other.setAttribute('aria-pressed', 'false');
+                });
+                button.classList.toggle('on', on);
+                button.setAttribute('aria-pressed', on ? 'true' : 'false');
+              });
+              row.appendChild(button);
+            });
+            dishList.appendChild(row);
+          });
+          dishesBox.hidden = false;
+        })
+        .catch(function () { /* offline or no bill: the sheet works without the list */ });
+    }
+    function chosenItems() {
+      if (!dishList) return [];
+      return Array.prototype.slice.call(dishList.querySelectorAll('.fb-thumb.on')).map(function (button) {
+        return { bill_item_id: Number(button.parentNode.getAttribute('data-bill-item')), verdict: button.getAttribute('data-verdict') };
+      });
     }
 
     function chosenTags() {
@@ -832,6 +891,7 @@
         comment: comment ? comment.value : '',
         phone: phone || null,
         source: source,
+        items: chosenItems(),
         website: honeypot ? honeypot.value : ''
       };
       fetch(endpoint + query, {
@@ -867,6 +927,7 @@
       if (!uuid) uuid = newUuid();
       sheet.hidden = false;
       document.body.classList.add('bill-open');
+      loadDishes();
       var saved = remembered();
       if (saved && done.hidden) {
         // Already sent this visit: confirm with the server, then say thanks again.

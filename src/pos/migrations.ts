@@ -148,6 +148,8 @@ export const POS_MIGRATIONS = [
   '083_pos_corkage_menu_hidden.sql',
   // A guest's feedback from the QR menu (one face, chips, words, a phone) and the owner's switch.
   '084_pos_guest_feedback.sql',
+  // The dishes of the table's bill rated 👍/👎 inside a feedback (F5).
+  '085_pos_guest_feedback_items.sql',
 ] as const;
 
 export function readMigration(file: string): string {

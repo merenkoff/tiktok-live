@@ -47,6 +47,7 @@ import {
   GuestFeedbackTooMany,
   createFeedback,
   getOwnFeedback,
+  listFeedbackDishes,
 } from '../guest-feedback.service.js';
 import {
   WaiterCallError,
@@ -192,6 +193,21 @@ export function registerPublicMenuRoutes(fastify: FastifyInstance): void {
       if (error instanceof GuestFeedbackError) return reply.code(400).send({ error: error.message });
       throw error;
     }
+  });
+
+  // The dishes a guest may rate (F5): the fired lines of their table's bill,
+  // open or just paid — names only. Needs the table's key, like the bill.
+  fastify.get('/public/menu/:token/feedback/dishes', async (request, reply) => {
+    const { token } = request.params as { token: string };
+    reply.header('Cache-Control', 'no-store');
+    reply.header('X-Robots-Tag', MENU_PAGE_HEADERS['X-Robots-Tag']!);
+    const query = (request.query ?? {}) as { t?: unknown; k?: unknown };
+    const store = await findMenuStore(token);
+    const table: MenuTable | null = store && store.feedbackEnabled ? await findMenuTable(store.id, query.t) : null;
+    if (!store || !table || !(await verifyTableKey(store.id, table.id, query.k))) {
+      return reply.code(404).send({ error: 'Страви недоступні' });
+    }
+    return listFeedbackDishes(store.id, table);
   });
 
   fastify.get('/public/menu/:token/feedback/:uuid', async (request, reply) => {
