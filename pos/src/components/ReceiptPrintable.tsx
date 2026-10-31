@@ -193,6 +193,13 @@ export function ReceiptPrintable({ receipt }: { receipt: ReceiptData | null }) {
       <p className="receipt-print-thanks">
         {receipt.kind === 'refund' ? 'Кошти повернуто' : 'Дякуємо за покупку!'}
       </p>
+      {receipt.kind !== 'refund' && receipt.feedback_url ? (
+        // The thermal layout draws this as a QR; a PDF has no QR engine, so
+        // the link itself is the invitation, clickable where it is read.
+        <p className="receipt-print-feedback">
+          Оцініть нас: <a href={receipt.feedback_url}>{receipt.feedback_url}</a>
+        </p>
+      ) : null}
     </div>
   );
 }

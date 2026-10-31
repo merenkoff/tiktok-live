@@ -391,6 +391,14 @@ body {
     font-size: 9px;
     word-break: break-all;
   }
+
+  /* «Оцініть нас» under the thanks (F7) — a link where the thermal roll has a QR. */
+  .receipt-print-feedback {
+    text-align: center;
+    font-size: 9px;
+    word-break: break-all;
+    margin-top: 6px;
+  }
 }
 
 input::placeholder,

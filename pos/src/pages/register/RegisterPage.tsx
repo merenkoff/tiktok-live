@@ -231,6 +231,7 @@ export function RegisterPage() {
             name: auth?.store.name ?? '',
             fiscal: auth?.store.fiscal ?? null,
             vertical: auth?.store.vertical?.id ?? null,
+            feedback_url: auth?.store.feedback_url ?? null,
           }),
           paper
         );
@@ -252,6 +253,7 @@ export function RegisterPage() {
     auth?.store.name,
     auth?.store.vertical?.id,
     auth?.store.fiscal,
+    auth?.store.feedback_url,
   ]);
 
   // A cancel/partial-refund against the just-rung receipt: keep the shown
@@ -740,6 +742,7 @@ export function RegisterPage() {
     name: auth?.store.name ?? '',
     fiscal: auth?.store.fiscal ?? null,
     vertical: auth?.store.vertical?.id ?? null,
+    feedback_url: auth?.store.feedback_url ?? null,
   });
 
   async function printSuccessReceipt() {

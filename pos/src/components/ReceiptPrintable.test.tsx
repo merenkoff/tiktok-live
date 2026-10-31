@@ -56,6 +56,24 @@ describe('ReceiptPrintable', () => {
     expect(screen.getByText('Дякуємо за покупку!')).toBeInTheDocument();
   });
 
+  it('invites a rating under the thanks as a link, and never on a refund (F7)', () => {
+    const url = 'https://the-live.shop/m/shablya#feedback';
+    const { unmount } = render(<ReceiptPrintable receipt={receipt({ feedback_url: url })} />);
+    expect(screen.getByText(/Оцініть нас/)).toBeInTheDocument();
+    expect(screen.getByRole('link')).toHaveAttribute('href', url);
+    unmount();
+    render(
+      <ReceiptPrintable receipt={receipt({ kind: 'refund', refund_of_receipt: 'R-00001', feedback_url: url })} />
+    );
+    expect(screen.queryByText(/Оцініть нас/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+
+  it('prints no invitation without an address', () => {
+    render(<ReceiptPrintable receipt={receipt()} />);
+    expect(screen.queryByText(/Оцініть нас/)).not.toBeInTheDocument();
+  });
+
   it('captions a return receipt «ВИДАТКОВИЙ ЧЕК», as Положення № 13 names it', () => {
     render(
       <ReceiptPrintable

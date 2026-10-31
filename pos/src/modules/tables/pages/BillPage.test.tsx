@@ -225,6 +225,7 @@ beforeEach(async () => {
     ],
     fired_total_cents: 8000,
     draft_preview_cents: 11000,
+    feedback_url: 'https://the-live.shop/m/demo?t=11&k=abcdefgh#feedback',
   };
   posRequest.mockReset();
   posRequest.mockImplementation(async (method: string, path: string) => {
@@ -765,7 +766,14 @@ describe('BillPage', () => {
     const [printerName, doc, width] = printPrecheck.mock.calls[0];
     expect(printerName).toBe('XP-58');
     expect(width).toBe(58);
-    expect(doc).toMatchObject({ table_name: '5', bill_no: 12, guests: 4, total_cents: 8000 });
+    expect(doc).toMatchObject({
+      table_name: '5',
+      bill_no: 12,
+      guests: 4,
+      total_cents: 8000,
+      // The QR «Оцініть нас» (F7): the server's keyed address, passed through.
+      feedback_url: 'https://the-live.shop/m/demo?t=11&k=abcdefgh#feedback',
+    });
     // The draft is on the screen but never on the paper.
     expect(doc.items).toHaveLength(1);
     expect(await screen.findByTestId('bill-print-status')).toHaveTextContent('на друк');

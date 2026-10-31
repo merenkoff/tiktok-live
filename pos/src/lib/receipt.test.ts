@@ -352,6 +352,30 @@ describe('buildReceiptPayload — Положення № 13 layout (TechDocs/prr
   });
 });
 
+describe('the QR «Оцініть нас» (phase F7, TechDocs/POS_QR_MENU_FEEDBACK.md)', () => {
+  const FEEDBACK = 'https://the-live.shop/m/shablya#feedback';
+
+  it('puts the store’s feedback address on a sale receipt', () => {
+    const payload = buildReceiptPayload(makeSaleDetail(), { name: 'Demo', feedback_url: FEEDBACK });
+    expect(payload.feedback_url).toBe(FEEDBACK);
+  });
+
+  it('prints none where the owner takes no feedback, or the login predates it', () => {
+    expect(buildReceiptPayload(makeSaleDetail(), { name: 'Demo', feedback_url: null }).feedback_url).toBeNull();
+    expect(buildReceiptPayload(makeSaleDetail(), DEMO).feedback_url).toBeNull();
+  });
+
+  it('never asks to be rated on a refund', () => {
+    const payload = buildRefundReceiptPayload(
+      makeSaleDetail({ payments: [{ id: 200, method: 'cash', amount_cents: 45000 }] }),
+      makeRefund({ total_cents: 22500 }),
+      [{ sale_item_id: 100, quantity: 1 }],
+      { name: 'Demo', feedback_url: FEEDBACK }
+    );
+    expect(payload.feedback_url).toBeUndefined();
+  });
+});
+
 describe('cash rounding (НБУ № 25; TechDocs/POS_CASH_ROUNDING.md)', () => {
   it('carries the rounding and gives change from the rounded sum', () => {
     const sale = makeSaleDetail({

@@ -148,6 +148,46 @@ pub struct ReceiptData {
     /// Absent from a host built before cash rounding: nothing changes.
     #[serde(default)]
     pub rounding_cents: Option<i64>,
+    /// The guest menu's feedback sheet, printed as the QR «Оцініть нас» at the
+    /// very bottom (phase F7, TechDocs/POS_QR_MENU_FEEDBACK.md). The host
+    /// sends it only where the owner takes feedback; absent from an older
+    /// host, ignored on a refund — nobody is asked to rate a return.
+    #[serde(default)]
+    pub feedback_url: Option<String>,
+}
+
+/// Title and caption of the feedback QR — the same words the guest page's
+/// own button uses, so the paper and the phone ask one question.
+pub(crate) const FEEDBACK_TITLE: &str = "Оцініть нас";
+pub(crate) const FEEDBACK_CAPTION: &str = "Як вам сьогодні? Відскануйте";
+
+/// The feedback QR block (F7): a divider, «Оцініть нас», the QR the printer
+/// renders itself and one line under it. Shared by the receipt and the
+/// pre-bill. It says nothing fiscal and names no money, so it is as welcome
+/// on the pre-bill — which must not look like a receipt — as on the receipt.
+/// Leaves the printer left-justified.
+pub(crate) fn feedback_block(
+    printer: &mut Printer<FileDriver>,
+    width: usize,
+    url: &str,
+) -> Result<(), String> {
+    printer.writeln(&divider(width)).map_err(|e| e.to_string())?;
+    printer.justify(JustifyMode::CENTER).map_err(|e| e.to_string())?;
+    printer.bold(true).map_err(|e| e.to_string())?;
+    printer.writeln(FEEDBACK_TITLE).map_err(|e| e.to_string())?;
+    printer.bold(false).map_err(|e| e.to_string())?;
+    printer.qrcode(url).map_err(|e| e.to_string())?;
+    printer.writeln(FEEDBACK_CAPTION).map_err(|e| e.to_string())?;
+    printer.justify(JustifyMode::LEFT).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// The address to print, if any: a sale's, never a refund's, never blank.
+fn feedback_url_of(receipt: &ReceiptData) -> Option<&str> {
+    if receipt.kind == ReceiptKind::Refund {
+        return None;
+    }
+    receipt.feedback_url.as_deref().map(str::trim).filter(|u| !u.is_empty())
 }
 
 // Characters per line for the two common thermal paper widths (Font A, ~12 dots
@@ -240,6 +280,12 @@ fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> 
         printer.justify(JustifyMode::LEFT).map_err(|e| e.to_string())?;
         for line in text.lines() {
             printer.writeln(line.trim_end_matches('\r')).map_err(|e| e.to_string())?;
+        }
+        // Ours goes under the provider's text, never inside it: the fiscal
+        // receipt is theirs line for line, and «Оцініть нас» is not part of
+        // any receipt.
+        if let Some(url) = feedback_url_of(receipt) {
+            feedback_block(&mut printer, width, url)?;
         }
         printer.feed().map_err(|e| e.to_string())?;
         printer.print_cut().map_err(|e| e.to_string())?;
@@ -463,6 +509,12 @@ fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> 
         "Дякуємо за покупку!"
     };
     printer.writeln(footer).map_err(|e| e.to_string())?;
+    // After the thanks, as the last thing on the paper: the guest who turns
+    // the receipt over in their hand finds the QR, and the fiscal block above
+    // stays exactly where the regulation reads it.
+    if let Some(url) = feedback_url_of(receipt) {
+        feedback_block(&mut printer, width, url)?;
+    }
     printer.print_cut().map_err(|e| e.to_string())?;
 
     let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
@@ -470,12 +522,22 @@ fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> 
     Ok(bytes)
 }
 
+/// A number no two jobs of this process share, for the temp file each one is
+/// built in. The clock alone is not that: `SystemTime` ticks in microseconds
+/// on macOS, so two jobs built in the same tick — which the test threads do —
+/// got one name and truncated each other's bytes. The counter keeps them
+/// apart; the clock keeps the names apart across restarts.
 pub(crate) fn now_nanos() -> u128 {
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_nanos())
-        .unwrap_or(0)
+        .unwrap_or(0);
+    // The last three digits are always zero on a microsecond clock, so the
+    // sequence fits in them without colliding with a later tick.
+    nanos.saturating_add(u128::from(SEQ.fetch_add(1, Ordering::Relaxed) % 1000))
 }
 
 // `document-format` is handled very differently per platform by the `printers`
@@ -616,6 +678,73 @@ mod tests {
         assert!(contains(&bytes, &[0x1D, 0x28, 0x6B]));
         // And still our own footer — this is the local layout, not the provider's.
         assert!(contains(&bytes, &win1251("Дякуємо за покупку!")));
+    }
+
+    const FEEDBACK: &str = "https://the-live.shop/m/shablya#feedback";
+
+    fn after(bytes: &[u8], text: &str) -> usize {
+        let needle = win1251(text);
+        bytes.windows(needle.len()).position(|w| w == needle.as_slice()).unwrap()
+    }
+
+    #[test]
+    fn a_sale_ends_with_the_feedback_qr_after_the_thanks() {
+        let mut receipt = base();
+        receipt.feedback_url = Some(FEEDBACK.into());
+        let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
+        assert!(contains(&bytes, &win1251(FEEDBACK_TITLE)));
+        assert!(contains(&bytes, &win1251(FEEDBACK_CAPTION)));
+        // The address goes to the printer's own QR engine (GS ( k), as bytes.
+        assert!(contains(&bytes, &[0x1D, 0x28, 0x6B]));
+        assert!(contains(&bytes, FEEDBACK.as_bytes()));
+        // Last on the paper: after «Дякуємо», which is after the cashier.
+        assert!(after(&bytes, "Касир") < after(&bytes, "Дякуємо за покупку!"));
+        assert!(after(&bytes, "Дякуємо за покупку!") < after(&bytes, FEEDBACK_TITLE));
+    }
+
+    #[test]
+    fn the_feedback_qr_follows_the_fiscal_block_rather_than_breaking_it() {
+        let mut receipt = base();
+        receipt.fiscal = Some(fiscal());
+        receipt.feedback_url = Some(FEEDBACK.into());
+        let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
+        assert!(after(&bytes, "ФІСКАЛЬНИЙ ЧЕК") < after(&bytes, "cabinet.tax.gov.ua"));
+        assert!(after(&bytes, "cabinet.tax.gov.ua") < after(&bytes, FEEDBACK_TITLE));
+    }
+
+    #[test]
+    fn the_feedback_qr_goes_under_the_providers_own_text_too() {
+        let mut receipt = base();
+        receipt.provider_text = Some("=== ТЕСТОВИЙ ЧЕК ===\nСУМА 100.00 ГРН\n".into());
+        receipt.feedback_url = Some(FEEDBACK.into());
+        let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
+        assert!(after(&bytes, "СУМА 100.00 ГРН") < after(&bytes, FEEDBACK_TITLE));
+        assert!(contains(&bytes, FEEDBACK.as_bytes()));
+        // Still nothing of our layout but the QR block.
+        assert!(!contains(&bytes, &win1251("Дякуємо за покупку!")));
+    }
+
+    #[test]
+    fn a_refund_never_asks_to_be_rated() {
+        let mut receipt = base();
+        receipt.kind = ReceiptKind::Refund;
+        receipt.refund_of_receipt = Some("R-00001".into());
+        receipt.feedback_url = Some(FEEDBACK.into());
+        let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
+        assert!(!contains(&bytes, &win1251(FEEDBACK_TITLE)));
+        assert!(!contains(&bytes, &[0x1D, 0x28, 0x6B]));
+        assert!(contains(&bytes, &win1251("Кошти повернуто")));
+    }
+
+    #[test]
+    fn no_feedback_block_without_an_address_or_with_a_blank_one() {
+        let bytes = build_ticket(&base(), CHARS_58MM).unwrap();
+        assert!(!contains(&bytes, &win1251(FEEDBACK_TITLE)));
+        assert!(!contains(&bytes, &[0x1D, 0x28, 0x6B]));
+        let mut blank = base();
+        blank.feedback_url = Some("   ".into());
+        let bytes = build_ticket(&blank, CHARS_58MM).unwrap();
+        assert!(!contains(&bytes, &win1251(FEEDBACK_TITLE)));
     }
 
     #[test]

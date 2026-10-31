@@ -114,6 +114,14 @@ describe('buildPrecheck', () => {
     expect(doc.items[0].variant_label).toBe('');
     expect(doc.items[0].name).toBe('Латте');
   });
+
+  it('carries the server’s keyed feedback address for the QR «Оцініть нас», or none (F7)', () => {
+    const url = 'https://the-live.shop/m/shablya?t=11&k=abcdefgh#feedback';
+    expect(buildPrecheck(bill({ feedback_url: url })).feedback_url).toBe(url);
+    expect(buildPrecheck(bill({ feedback_url: null })).feedback_url).toBeNull();
+    // A backend older than F7 sends no field at all: the paper invents none.
+    expect(buildPrecheck(bill()).feedback_url).toBeNull();
+  });
 });
 
 describe('clockTime', () => {
