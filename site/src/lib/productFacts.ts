@@ -240,12 +240,14 @@ export const COMPETITOR_FACTS = {
    * exist». Until 2026-09-30 the page printed no commission; on 2026-10-18 it
    * carries a tariff table («Які тарифи?») and a FAQ that names the POS
    * systems, recorded below exactly as printed. Figures in older press still
-   * differ from each other and are still not ours to repeat.
+   * differ from each other and are still not ours to repeat. Re-read
+   * 2026-10-31: the table, the POS list and the figures unchanged; the guest's
+   * feedback recorded (`guestFeedback`).
    */
   expirenza: {
     name: 'monobank Expirenza',
     publishedAt: '2026-09-30',
-    checkedAt: '2026-10-18',
+    checkedAt: '2026-10-31',
     sources: {
       service: 'https://expz.monobank.ua/',
       /** mind.ua, 25.06.2024: guests do not need the monobank app, they scan a QR. */
@@ -255,6 +257,13 @@ export const COMPETITOR_FACTS = {
     },
     /** A guest calling a waiter from the phone: not mentioned on the page or in its FAQ. */
     waiterCall: false,
+    /**
+     * A guest's feedback: «CRM і відгуки — … отримуйте чесні відгуки зразу
+     * після оплати» and «миттєві push-сповіщення про кожну оплату та відгуки
+     * гостей» in the business app (the service page, 2026-10-31).
+     */
+    guestFeedback: true,
+    guestFeedbackNote: 'одразу після оплати; сповіщення в бізнес-застосунку',
     /** «3 800+ закладів по всій Україні» / «95 міст та містечок» — the service page's own figures. */
     establishments: 3800,
     cities: 95,
@@ -285,21 +294,40 @@ export const COMPETITOR_FACTS = {
    * browser and read for each of its three billing periods — the page opens on
    * the 12-month one, so its first figures are NOT the monthly price. The
    * 14-day trial the first read recorded is no longer printed anywhere we
-   * read; «Спробувати безкоштовно» and a free Basic tariff are.
+   * read; «Спробувати безкоштовно» and a free Basic tariff are. Re-read
+   * 2026-10-31 (every billing period again, prices unchanged): the «Відгуки»
+   * product page added as a source, and the «Онлайн-меню» card on the UA page
+   * now names «склад, калорії, алергени» (`dishFacts`).
    */
   choiceqr: {
     name: 'ChoiceQR',
     publishedAt: '2026-09-30',
-    checkedAt: '2026-10-18',
+    checkedAt: '2026-10-31',
     sources: {
       ua: 'https://choiceqr.com/uk',
       en: 'https://choiceqr.com/',
       tariffs: 'https://choiceqr.com/uk/pricing/',
+      /** «“Відгуки” від Choice для HoReCa» — the product's own page. */
+      reviews: 'https://choiceqr.com/uk/products/vidguky/',
       /** kosht.media, 15.07.2024: ChoiceQR ↔ Expirenza. */
       partnership: 'https://kosht.media/choiceqr-ta-expirenza-vid-mono-ob-iednuiutsia-shcho-zminylos-dlia-kliientiv/',
     },
     /** A guest calling a waiter: not mentioned on the pages or the tariffs («Чайові офіціантам» is marked «незабаром»). */
     waiterCall: false,
+    /**
+     * «Відгуки» is a product of its own (`sources.reviews`, 2026-10-31): after
+     * an order, a delivery «або відсканувавши QR у вбиральні, на столі чи
+     * чеку» the guest rates the staff and the kitchen separately, the owner
+     * gets it in a Telegram bot, and its FAQ says the system «пропонує
+     * залишити позитивні в Google maps і Tripadvisor» — the positive ones. The
+     * tariff page lists «Збір відгуків (інтеграція з Google Maps)» from Basic.
+     */
+    guestFeedback: true,
+    guestFeedbackNote: 'окремий продукт «Відгуки», з тарифу Basic: оцінка персоналу й кухні окремо, сповіщення в Telegram',
+    /** Quoted as printed in the product page's FAQ — the sentence our «Google for everyone» row answers. */
+    reviewsGatingQuote: 'пропонує залишити позитивні в Google maps і Tripadvisor',
+    /** «Онлайн-меню»: «детальні описи страв (склад, калорії, алергени)» — the UA page, 2026-10-31. */
+    dishFacts: true,
     /** «25 000+ закладів вже з Choice» у «25+ країнах світу». */
     establishments: 25000,
     countries: 25,
@@ -335,13 +363,16 @@ export const COMPETITOR_FACTS = {
    * and the staff app's App Store page. Same rule as above: «not mentioned»
    * means not mentioned on those pages, never «does not exist». Neither page
    * prints how long the free trial lasts («Спробувати безкоштовно», «Trial»),
-   * so no length is recorded, whatever an ad says.
+   * so no length is recorded, whatever an ad says. Re-read 2026-10-31: the
+   * price and the gift unchanged; «Виклик офіціанта в 1 клік» and
+   * «Замовлення без офіціанта» sit in the landing's «Додаткові переваги»
+   * slides, in the page's text though not on the first screen.
    */
   restoapp: {
     name: 'RestoApp',
     vendor: 'Binotel',
     publishedAt: '2026-10-15',
-    checkedAt: '2026-10-18',
+    checkedAt: '2026-10-31',
     sources: {
       site: 'https://restoapp.binotel.ua/',
       diia: 'https://business.diia.gov.ua/it-market/restoapp',
@@ -357,6 +388,9 @@ export const COMPETITOR_FACTS = {
     posIntegrations: ['Poster POS'],
     /** «Виклик офіціанта в 1 клік — Ваша кнопка для виклику офіціанта прямо в меню. Один клік — і офіціант знає, який столик потребує уваги.» */
     waiterCall: true,
+    /** «Відгуки гостей — Відгуки допоможуть тримати якість сервісу та страв на висоті. Підвищуйте рейтинг на Google та миттєво реагуйте на негатив.» */
+    guestFeedback: true,
+    guestFeedbackNote: 'з прицілом на рейтинг у Google',
   },
   /**
    * Poster QR — read on `checkedAt`. It is an add-on of the Poster POS
@@ -367,13 +401,17 @@ export const COMPETITOR_FACTS = {
    * each row per tariff as included, «Доступно як додатковий модуль» or
    * absent. The English knowledge-base page is the only one that mentions
    * allergens. Same rule as above: «not mentioned» means not mentioned on
-   * those pages, never «does not exist».
+   * those pages, never «does not exist». Re-read 2026-10-31: the add-on's
+   * price, the commissions and every Poster tariff unchanged (the pricing
+   * page's hidden annual figures read from the markup again); the guest's
+   * feedback recorded, and the marketplace page beside the add-on lists a
+   * free app «QR-код на чек» («Додавайте посилання як QR-код прямо у чек»).
    */
   posterqr: {
     name: 'Poster QR',
     vendor: 'Poster',
     publishedAt: '2026-10-15',
-    checkedAt: '2026-10-18',
+    checkedAt: '2026-10-31',
     sources: {
       page: 'https://joinposter.com/ua/applications/poster-qr',
       pageEn: 'https://joinposter.com/en/applications/poster-qr',
@@ -387,6 +425,15 @@ export const COMPETITOR_FACTS = {
     tipsCommissionPercent: 1.7,
     /** A guest calling a waiter: not mentioned on either language page or the knowledge-base article. */
     waiterCall: false,
+    /**
+     * «Отримуйте відгуки після оплати замовлення й одразу реагуйте на негатив
+     * … Оцінка обслуговування миттєво надходитиме в Telegram» (the UA page);
+     * «Collect feedback right after payment» (the knowledge base).
+     */
+    guestFeedback: true,
+    guestFeedbackNote: 'після оплати; оцінка приходить у Telegram',
+    /** A free marketplace app beside the add-on: «QR-код на чек — Додавайте посилання як QR-код прямо у чек». */
+    receiptQrApp: 'QR-код на чек',
     /** «15 днів безкоштовно» on the pricing page, «free for the first 15 days» on the English one. */
     trialDays: 15,
     /**
@@ -954,6 +1001,24 @@ export const FEATURES = {
   qrMenuTables: { status: 'available', label: 'QR на кожен стіл із номером столу й лист QR для друку' },
   qrMenuProfile: { status: 'available', label: 'Профіль закладу в QR-меню: логотип, адреса, телефон і години роботи' },
   dishAllergens: { status: 'available', label: 'Склад і алергени страв у QR-меню: 14 позицій за переліком ЄС, які вказує власник' },
+  // The guest-feedback track (TechDocs/POS_QR_MENU_FEEDBACK.md, phases F1–F7,
+  // deployed 2026-10-31): the place's contacts, its own-alcohol terms and the
+  // guest's feedback — all on the same QR-menu page, nothing of it a separate
+  // service or tariff.
+  qrMenuSocials: {
+    status: 'available',
+    label: 'Контакти закладу в QR-меню: «На карті» за посиланням на картку Google, Instagram, Facebook, TikTok і email — рядком під годинами роботи',
+  },
+  menuHouseRules: {
+    status: 'available',
+    label:
+      'Умови свого алкоголю (корковий збір) у QR-меню: збір за пляшку, мінімальне замовлення страв на гостя й умови закладу — під назвою закладу з будь-якого QR, у рахунку столу й на QR-картках',
+  },
+  guestFeedback: {
+    status: 'available',
+    label:
+      'Відгук гостя з QR-меню одним дотиком: оцінка з п\'яти облич, що сподобалось чи пішло не так, кілька слів, телефон за бажанням і страви рахунку з 👍/👎; після відгуку — посилання на картку Google кожному гостю; власник читає відгуки на сторінці «Відгуки» й на «Сьогодні»',
+  },
   guestBill: { status: 'available', label: 'Рахунок столу на телефоні гостя: що вже на кухні й сума до сплати' },
   guestOrder: {
     status: 'available',
@@ -1033,6 +1098,9 @@ export const POS_FEATURE_IDS: FeatureId[] = [
   'qrMenuTables',
   'qrMenuProfile',
   'dishAllergens',
+  'qrMenuSocials',
+  'menuHouseRules',
+  'guestFeedback',
   'guestBill',
   'guestOrder',
   'guestAutoKitchen',
@@ -1183,7 +1251,7 @@ export const VERTICALS: readonly VerticalFact[] = [
     eyebrow: 'Програма для кав\'ярні за стійкою',
     tagline: 'Тап — і «як завжди»; модифікатори, дошка кухні, стоп-лист, техкарти з фудкостом і матриця меню.',
     bullets: ['Модифікатори з ціною на кнопці', 'Дошка кухні й бару, стоп-лист', 'Техкарти й фудкост'],
-    featureIds: ['cafeModifiers', 'cafeKitchenBoard', 'cafeTechCards', 'cafeMenuMatrix', 'cafeKitchenTicket', 'qrMenu', 'qrMenuProfile', 'dishAllergens'],
+    featureIds: ['cafeModifiers', 'cafeKitchenBoard', 'cafeTechCards', 'cafeMenuMatrix', 'cafeKitchenTicket', 'qrMenu', 'qrMenuProfile', 'dishAllergens', 'qrMenuSocials', 'guestFeedback'],
     illustrations: ['/demo-cafe/latte.svg', '/demo-cafe/croissant.svg', '/demo-cafe/espresso.svg'],
     tint: 'bg-tint-cafe',
   },
@@ -1196,7 +1264,7 @@ export const VERTICALS: readonly VerticalFact[] = [
     eyebrow: 'Програма для ресторану зі столами',
     tagline: 'План залу, відкриті рахунки, раунди на кухню, передчек і розділення рахунку — з планшета офіціанта.',
     bullets: ['План залу з рахунками столів', 'Раунди на кухню з планшета', 'Розділити рахунок, передчек'],
-    featureIds: ['tablesFloorPlan', 'tablesRounds', 'tablesSplitBill', 'tablesPrecheck', 'cafeKitchenBoard', 'qrMenu', 'qrMenuTables', 'qrMenuProfile', 'dishAllergens', 'guestBill', 'guestOrder', 'waiterCall', 'guestAutoKitchen', 'waiterTablet'],
+    featureIds: ['tablesFloorPlan', 'tablesRounds', 'tablesSplitBill', 'tablesPrecheck', 'cafeKitchenBoard', 'qrMenu', 'qrMenuTables', 'qrMenuProfile', 'dishAllergens', 'qrMenuSocials', 'menuHouseRules', 'guestFeedback', 'guestBill', 'guestOrder', 'waiterCall', 'guestAutoKitchen', 'waiterTablet'],
     illustrations: ['/demo-restaurant/borscht.svg', '/demo-restaurant/ribeye.svg', '/demo-restaurant/wine-red.svg'],
     tint: 'bg-tint-restaurant',
   },
