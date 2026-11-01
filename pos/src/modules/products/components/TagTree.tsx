@@ -23,16 +23,20 @@ export function FilterRow({
   icon,
   label,
   count,
+  testId,
 }: {
   active: boolean;
   onClick: () => void;
   icon: ReactNode;
   label: string;
   count?: number;
+  /** For a test to tell the row from a tag of the same name («Новинки» is a likely tag). */
+  testId?: string;
 }) {
   return (
     <button
       type="button"
+      data-testid={testId}
       onClick={onClick}
       className={`w-full flex items-center gap-2.5 min-h-[38px] px-2.5 rounded-lg text-left text-[15px] text-sq-text transition-colors ${
         active ? 'bg-sq-selected font-semibold' : 'font-medium hover:bg-sq-selected/50'

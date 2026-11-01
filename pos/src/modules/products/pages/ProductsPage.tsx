@@ -13,7 +13,7 @@ import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { DEFAULT_TAG_COLOR, api, type TagColorKey, useAuthStore, useVertical } from '@pos/platform';
 import type { PosTag, TagStation, Product } from '@pos/platform';
-import { Boxes, Camera, Inbox, LayoutGrid, Package, PageHeader, Percent, Plus, Printer } from '@pos/platform/ui';
+import { Boxes, Camera, Inbox, LayoutGrid, Package, PageHeader, Percent, Plus, Printer, Sparkles, Star } from '@pos/platform/ui';
 import { ConfirmSheet } from '../../../components/cashier/ConfirmSheet';
 import { MarkdownDialog } from '../components/MarkdownDialog';
 import { countPhrase } from '../data/markdownsApi';
@@ -26,6 +26,11 @@ import { captionClass, checkboxClass, panelFieldClass } from '../components/form
 import { productMatchesQuery } from '../components/productSearch';
 import { flattenTags, tagPathLabel } from '../components/tagLabels';
 import { readListParams, writeListParams, type TagFilter } from '../lib/listParams';
+
+/** Whether a card carries a guest-menu label (an older payload has none). */
+function hasLabel(p: Product, code: string): boolean {
+  return (p.menu_labels ?? []).includes(code);
+}
 
 export function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -102,6 +107,10 @@ export function ProductsPage() {
     if (!productMatchesQuery(p, query)) return false;
     if (filterTag === 'needs_review') return Boolean(p.needs_review);
     if (filterTag === 'no_photo') return !p.image_url;
+    // The two guest-menu labels the owner takes off by hand (F13): a card
+    // labelled «Новинка» or «Хіт» stays so until someone opens it.
+    if (filterTag === 'label_new') return hasLabel(p, 'new');
+    if (filterTag === 'label_hit') return hasLabel(p, 'hit');
     if (filterTag === 'all') return true;
     return p.tag_ids?.includes(filterTag);
   });
@@ -109,6 +118,10 @@ export function ProductsPage() {
   const needsReviewCount = products.filter((p) => p.is_active && p.needs_review).length;
   const noPhotoCount = products.filter((p) => p.is_active && !p.image_url).length;
   const archivedCount = products.filter((p) => !p.is_active).length;
+  const newCount = products.filter((p) => p.is_active && hasLabel(p, 'new')).length;
+  const hitCount = products.filter((p) => p.is_active && hasLabel(p, 'hit')).length;
+  // Only a kitchen has a guest menu to label dishes on; a boutique's list keeps its four rows.
+  const showLabelRows = vertical.dishFacts !== false;
 
   async function onCreateTag(e: FormEvent) {
     e.preventDefault();
@@ -282,6 +295,26 @@ export function ProductsPage() {
               label="Без фото"
               count={noPhotoCount}
             />
+            {showLabelRows && (
+              <>
+                <FilterRow
+                  active={filterTag === 'label_new'}
+                  onClick={() => setFilterTag('label_new')}
+                  icon={<Sparkles size={20} className="text-sq-secondary" />}
+                  label="Новинки"
+                  count={newCount}
+                  testId="filter-label-new"
+                />
+                <FilterRow
+                  active={filterTag === 'label_hit'}
+                  onClick={() => setFilterTag('label_hit')}
+                  icon={<Star size={20} className="text-sq-secondary" />}
+                  label="Хіти"
+                  count={hitCount}
+                  testId="filter-label-hit"
+                />
+              </>
+            )}
             <FilterRow
               active={inArchive}
               onClick={() => setFilterTag('archived')}

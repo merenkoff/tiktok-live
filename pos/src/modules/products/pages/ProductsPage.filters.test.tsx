@@ -12,7 +12,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '../../../test/utils';
 import type { Product } from '../../../types';
 
-const CLOTHING = { id: 'clothing', title: 'Одяг', attributes: [], units: ['шт'], defaultUnit: 'шт', maxCompositionDepth: 1 };
+/** As the server sends a boutique's vertical: no kitchen, so no dish facts and no label rows (F13). */
+const CLOTHING = { id: 'clothing', title: 'Одяг', attributes: [], units: ['шт'], defaultUnit: 'шт', maxCompositionDepth: 1, dishFacts: false };
+/** A kitchen: the product form asks for dish facts, and the list offers the «Новинки» / «Хіти» views (F13). */
+const CAFE = { id: 'cafe', title: 'Кав’ярня', attributes: [], units: ['шт', 'г', 'мл'], defaultUnit: 'шт', maxCompositionDepth: 3, dishFacts: true };
+let vertical: typeof CLOTHING | typeof CAFE = CLOTHING;
 
 const getProducts = vi.fn<[], Promise<Product[]>>();
 const posRequest = vi.fn();
@@ -21,7 +25,7 @@ vi.mock('@pos/platform', async () => {
   const real = await vi.importActual<typeof import('@pos/platform')>('@pos/platform');
   return {
     ...real,
-    useVertical: () => CLOTHING,
+    useVertical: () => vertical,
     useAuthStore: () => null,
     api: {
       getProducts: () => getProducts(),
@@ -76,6 +80,7 @@ function open(route: string) {
 }
 
 beforeEach(() => {
+  vertical = CLOTHING;
   vi.clearAllMocks();
   getProducts.mockResolvedValue([
     card(1, 'Костюмчик Зайчик', { tag_ids: [1] }),
@@ -164,6 +169,48 @@ describe('«Без фото» and «Архів»', () => {
     expect(screen.queryByText('Костюмчик Зайчик')).toBeNull();
     // Archived and photo-less is still archived: it is not in this view.
     expect(screen.queryByText('Костюм Polo')).toBeNull();
+  });
+
+  it('offers «Новинки» and «Хіти» only to a kitchen, counted, and each lists the live cards with that label (F13)', async () => {
+    const user = userEvent.setup();
+    vertical = CAFE;
+    getProducts.mockResolvedValue([
+      card(1, 'Борщ', { menu_labels: ['spicy', 'hit'] }),
+      card(2, 'Лимонад', { menu_labels: ['new'] }),
+      card(3, 'Деруни', { menu_labels: ['new', 'hit'] }),
+      card(4, 'Старий хіт', { menu_labels: ['hit'], is_active: false }),
+      card(5, 'Вода'),
+    ]);
+    open('/admin/products');
+    await screen.findByText('Борщ');
+    // By test id: the fixture has a TAG named «Новинки» too, and the row is not it.
+    const newRow = screen.getByTestId('filter-label-new');
+    const hitRow = screen.getByTestId('filter-label-hit');
+    expect(newRow).toHaveTextContent('2');
+    expect(hitRow).toHaveTextContent('2'); // the archived hit is not counted
+    await user.click(newRow);
+    expect(screen.getByTestId('where')).toHaveTextContent('/admin/products?tag=label%3Anew|');
+    expect(screen.getByText('Лимонад')).toBeInTheDocument();
+    expect(screen.getByText('Деруни')).toBeInTheDocument();
+    expect(screen.queryByText('Борщ')).toBeNull();
+    expect(screen.queryByText('Вода')).toBeNull();
+    await user.click(hitRow);
+    expect(screen.getByTestId('where')).toHaveTextContent('/admin/products?tag=label%3Ahit|');
+    expect(screen.getByText('Борщ')).toBeInTheDocument();
+    expect(screen.getByText('Деруни')).toBeInTheDocument();
+    expect(screen.queryByText('Лимонад')).toBeNull();
+    expect(screen.queryByText('Старий хіт')).toBeNull();
+  });
+
+  it('shows no label rows to a boutique: a clothing card has no guest menu', async () => {
+    getProducts.mockResolvedValue([card(1, 'Костюмчик Зайчик', { menu_labels: ['new'] })]);
+    open('/admin/products');
+    await screen.findByText('Костюмчик Зайчик');
+    expect(screen.queryByTestId('filter-label-new')).toBeNull();
+    expect(screen.queryByTestId('filter-label-hit')).toBeNull();
+    // The address still reads, so a pasted link does not break the page: it simply lists what matches.
+    open('/admin/products?tag=label:new');
+    expect(await screen.findByText('Костюмчик Зайчик')).toBeInTheDocument();
   });
 
   it('«Архів» is the one view that shows archived cards — summed over the variants they had, with «Повернути» and no checkbox', async () => {
