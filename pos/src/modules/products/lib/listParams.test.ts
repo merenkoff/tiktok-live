@@ -23,6 +23,15 @@ describe('the list view in the address', () => {
     expect(readListParams(writeListParams(new URLSearchParams(''), { tag: 'archived' })).tag).toBe('archived');
   });
 
+  it('reads and writes the two label views — «Новинки» and «Хіти» — by name (F13)', () => {
+    expect(readListParams(new URLSearchParams('tag=label%3Anew'))).toEqual({ q: '', tag: 'label_new' });
+    expect(readListParams(new URLSearchParams('tag=label:hit&q=борщ'))).toEqual({ q: 'борщ', tag: 'label_hit' });
+    expect(writeListParams(new URLSearchParams(''), { tag: 'label_new' }).toString()).toBe('tag=label%3Anew');
+    expect(readListParams(writeListParams(new URLSearchParams(''), { tag: 'label_hit' })).tag).toBe('label_hit');
+    // Only the two labels the owner takes off by hand have a view; the others are not a maintenance chore.
+    expect(readListParams(new URLSearchParams('tag=label:spicy')).tag).toBe('all');
+  });
+
   it('shrugs at a junk tag', () => {
     expect(readListParams(new URLSearchParams('tag=abc')).tag).toBe('all');
     expect(readListParams(new URLSearchParams('tag=-1')).tag).toBe('all');
