@@ -29,7 +29,7 @@ import { localDateString } from '../pos/core/localDate.js';
 import { readMigration } from '../pos/migrations.js';
 import { resetPublicMenuCache, invalidatePublicMenu } from '../pos/public-menu/menu.service.js';
 import { tableMenuUrl, type PublicMenu } from '../pos/public-menu/menu.service.js';
-import { qrSvg } from '../pos/public-menu/render.js';
+import { escapeHtml, qrSvg } from '../pos/public-menu/render.js';
 
 describe.skipIf(!hasDb)('POS guest QR menu', () => {
   let app: FastifyInstance;
@@ -659,6 +659,55 @@ describe.skipIf(!hasDb)('POS guest QR menu', () => {
 
     it('is not a route under the till’s prefix: the JSON stays where the API is', async () => {
       expect((await app.inject({ method: 'GET', url: `/api/pos/m/${token}` })).statusCode).toBe(404);
+    });
+
+    describe('a dish’s own address (F11)', () => {
+      it('opens the menu on that dish with an Open Graph head, and names where «Поділитись» points', async () => {
+        const now = await menu();
+        const latte = find(now, 'Латте')!;
+        const res = await page(token, `/d/${latte.id}`);
+        expect(res.statusCode).toBe(200);
+        expect(res.headers['x-robots-tag']).toBe('noindex, nofollow');
+        const html = res.body;
+        expect(html).toContain(`<title>Латте — ${escapeHtml(now.store.name)}</title>`);
+        expect(html).toContain(`<meta property="og:title" content="Латте — ${escapeHtml(now.store.name)}">`);
+        expect(html).toContain(`<meta property="og:url" content="https://the-live.shop/m/${token}/d/${latte.id}">`);
+        expect(html).toMatch(/<meta property="og:description" content="[^"]+">/);
+        expect(html).toContain('<meta name="twitter:card" content="');
+        expect(html).toContain(` data-open-dish="${latte.id}"`);
+        expect(html).toContain(` data-share-base="https://the-live.shop/m/${token}/d"`);
+        expect(html).toContain('data-dish-share');
+        expect(html.match(/<script/g)).toHaveLength(1);
+        // The plain menu has the share base too (the sheet opens on every page) and no Open Graph.
+        const plain = (await page(token)).body;
+        expect(plain).toContain(` data-share-base="https://the-live.shop/m/${token}/d"`);
+        expect(plain).not.toContain('og:title');
+        expect(plain).not.toContain('data-open-dish');
+      });
+
+      it('never puts a table’s key into the share base, whatever the address carried', async () => {
+        const latte = find(await menu(), 'Латте')!;
+        const html = (await page(token, `/d/${latte.id}?t=1&k=secret-table-key`)).body;
+        expect(html).toContain(` data-share-base="https://the-live.shop/m/${token}/d"`);
+        expect(html).not.toContain('secret-table-key');
+        expect(html).toContain(`<meta property="og:url" content="https://the-live.shop/m/${token}/d/${latte.id}">`);
+      });
+
+      it('shows the plain menu for a dish it does not have — gone, hidden or junk — and the same 404 for a bad token', async () => {
+        for (const id of ['999999999', 'abc', '-1', '1.5']) {
+          const res = await page(token, `/d/${id}`);
+          expect(res.statusCode, id).toBe(200);
+          expect(res.body).not.toContain('og:title');
+          expect(res.body).not.toContain('data-open-dish');
+          expect(res.body).toContain(` data-share-base="https://the-live.shop/m/${token}/d"`);
+        }
+        expect((await page('a_token_nobody_has', '/d/1')).statusCode).toBe(404);
+        expect((await page(token, `/d/${teaProduct}`)).body).toContain(` data-open-dish="${teaProduct}"`);
+        // Another store's dish: that store's menu does not list it, so the plain menu.
+        const foreign = (await menu(otherToken)).categories[0]!.products[0]!;
+        expect((await page(token, `/d/${foreign.id}`)).body).not.toContain('data-open-dish');
+        expect((await page(otherToken, `/d/${foreign.id}`)).body).toContain(` data-open-dish="${foreign.id}"`);
+      });
     });
   });
 

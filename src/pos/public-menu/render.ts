@@ -22,6 +22,8 @@ import { BAD_TAGS, FEEDBACK_TAGS, GOOD_TAGS, type FeedbackTag } from '../guest-f
 
 export { tableLabel };
 import {
+  dishUrl,
+  dishUrlBase,
   menuUrl,
   publicBaseUrl,
   tableMenuUrl,
@@ -80,7 +82,7 @@ function assetVersion(): string {
   return cachedVersion;
 }
 
-function shell(title: string, body: string, attrs = ''): string {
+function shell(title: string, body: string, attrs = '', head = ''): string {
   const v = assetVersion();
   return `<!doctype html>
 <html lang="uk">
@@ -89,7 +91,7 @@ function shell(title: string, body: string, attrs = ''): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>${escapeHtml(title)}</title>
-<link rel="stylesheet" href="/menu-assets/menu.css?v=${v}">
+${head}<link rel="stylesheet" href="/menu-assets/menu.css?v=${v}">
 </head>
 <body${attrs}>
 ${body}
@@ -372,6 +374,43 @@ export interface MenuPageOptions {
    * Never true without a table and without `feedback`.
    */
   feedbackDishes?: boolean;
+  /**
+   * The dish's own address (phase F11): the page was asked for at
+   * `/m/<key>/d/<id>`, so it opens that dish's sheet at once and its head
+   * carries the Open Graph tags a messenger draws its card from — the only
+   * page of the menu with any, because a dish's link is what gets pasted
+   * into a chat, the menu's QR is not.
+   */
+  openDish?: PublicMenuProduct | null;
+}
+
+const OG_DESCRIPTION_MAX = 200;
+
+/**
+ * The Open Graph head of a dish's page (F11): the title «Бограч — Шабля»,
+ * the description (the owner's, else the price and the facts line), the
+ * FULL photo as an absolute address — a messenger's card wants more than the
+ * card's thumbnail — and the address itself. `noindex` stays: this is an
+ * address for pasting, not for a search engine.
+ */
+function openGraphHead(menu: PublicMenu, token: string, dish: PublicMenuProduct): string {
+  const title = `${dish.name} — ${menu.store.name}`;
+  const price = `${dish.variants.length > 1 ? 'від ' : ''}${formatUahGuestCompact(dish.from_price_cents)}`;
+  const description = (dish.description || [price, ...dishFactsParts(dish)].join(' · ')).slice(0, OG_DESCRIPTION_MAX);
+  const image = dish.image_url
+    ? /^https:\/\//i.test(dish.image_url)
+      ? dish.image_url
+      : `${publicBaseUrl()}${dish.image_url}`
+    : null;
+  return (
+    `<meta property="og:type" content="website">\n` +
+    `<meta property="og:site_name" content="${escapeHtml(menu.store.name)}">\n` +
+    `<meta property="og:title" content="${escapeHtml(title)}">\n` +
+    `<meta property="og:description" content="${escapeHtml(description)}">\n` +
+    (image ? `<meta property="og:image" content="${escapeHtml(image)}">\n` : '') +
+    `<meta property="og:url" content="${escapeHtml(dishUrl(token, dish.id))}">\n` +
+    `<meta name="twitter:card" content="${image ? 'summary_large_image' : 'summary'}">\n`
+  );
 }
 
 export function renderMenuPage(
@@ -388,6 +427,7 @@ export function renderMenuPage(
     ? { storeName: menu.store.name, googleUrl: menu.store.google_url }
     : null;
   const feedbackDishes = Boolean(feedback && table && options.feedbackDishes);
+  const openDish = options.openDish ?? null;
   const tabs = menu.categories
     .map((c, i) => `<a href="#c-${c.id ?? 'other'}"${i === 0 ? ' class="on"' : ''}>${escapeHtml(c.name)}</a>`)
     .join('');
@@ -435,10 +475,15 @@ ${empty}${sections}${ask}
 </main>${dishSheet}
 <footer class="foot">${factsNote}<p>Стоп-лист і ціни оновлюються самі.</p><p><a href="${escapeHtml(publicBaseUrl())}/pos/kafe" rel="noopener">Меню працює на The Live Shop POS</a></p></footer>${showBill || ordering || call || feedback ? dockMarkup(table, showBill, ordering, call, billCorkage, feedback) : ''}`;
   return shell(
-    `${menu.store.name} — меню`,
+    openDish ? `${openDish.name} — ${menu.store.name}` : `${menu.store.name} — меню`,
     body,
     ` data-menu-url="/api/pos/public/menu/${escapeHtml(token)}" data-store-day="${escapeHtml(menu.store_day)}"` +
       ` data-rev="${escapeHtml(menu.rev)}"` +
+      // Where «Поділитись» points (F11): the dish's own address, built from
+      // the menu's key alone — never from `?t`/`?k`, a table's key being that
+      // table's secret, which must not land in someone's chat.
+      ` data-share-base="${escapeHtml(dishUrlBase(token))}"` +
+      (openDish ? ` data-open-dish="${openDish.id}"` : '') +
       (showBill ? ` data-bill-url="/api/pos/public/menu/${escapeHtml(token)}/bill"` : '') +
       (ordering ? ` data-order-url="/api/pos/public/menu/${escapeHtml(token)}/orders"` : '') +
       (auto
@@ -452,7 +497,8 @@ ${empty}${sections}${ask}
         ? ` data-feedback-url="/api/pos/public/menu/${escapeHtml(token)}/feedback"` +
           (feedback.googleUrl ? ` data-feedback-google="${escapeHtml(feedback.googleUrl)}"` : '') +
           (feedbackDishes ? ` data-feedback-dishes-url="/api/pos/public/menu/${escapeHtml(token)}/feedback/dishes"` : '')
-        : '')
+        : ''),
+    openDish ? openGraphHead(menu, token, openDish) : ''
   );
 }
 
@@ -485,7 +531,7 @@ function dishSheetMarkup(): string {
 <div class="bill-panel dish-panel" data-dish-panel>
 <button type="button" class="bill-close dish-close" data-dish-close aria-label="Закрити">×</button>
 <div class="dish-photo" data-dish-photo hidden><img alt="" decoding="async" data-dish-img></div>
-<div class="dish-head"><h2 id="dish-title" data-dish-title></h2><span class="badge" data-dish-badge></span></div>
+<div class="dish-head"><h2 id="dish-title" data-dish-title></h2><span class="badge" data-dish-badge></span><button type="button" class="link-btn dish-share" data-dish-share hidden>Поділитись</button></div>
 <ul class="labels dish-labels" data-dish-labels aria-label="Позначки страви" hidden></ul>
 <div class="dish-body" data-dish-body></div>
 <div class="order-foot dish-foot" data-dish-foot hidden></div>

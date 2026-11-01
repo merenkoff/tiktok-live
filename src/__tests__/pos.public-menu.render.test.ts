@@ -169,6 +169,65 @@ describe('categories the way the till’s bar has them', () => {
   });
 });
 
+describe('a dish’s own page (F11)', () => {
+  const store = { name: 'Шабля <Вінниця>', logo_url: null, address: null, phone: null, hours_today: null, hours: [], email: null, instagram: null, facebook: null, tiktok: null, google_url: null, corkage: null, feedback_enabled: false };
+  const menuWith = (...products: PublicMenuProduct[]): PublicMenu => ({
+    store,
+    rev: 'a1b2c3d4e5f6',
+    store_day: '2026-11-01',
+    generated_at: '2026-11-01T08:00:00.000Z',
+    categories: [{ id: 1, name: 'Супи', products }],
+  });
+  const bograch = product({
+    id: 143,
+    name: 'Бограч "гострий" & <смачний>',
+    description: 'Густий, на яловичині',
+    image_url: '/pos-uploads/ab12.jpg',
+    thumb_url: '/pos-uploads/ab12.t.webp',
+    from_price_cents: 16500,
+    kcal: 320,
+    prep_minutes: 15,
+  });
+
+  it('puts the Open Graph tags in the head — the title, the owner’s description, the FULL photo as an absolute address, the address — escaped', () => {
+    const html = renderMenuPage(menuWith(bograch), 'shablya', null, { openDish: bograch });
+    const head = html.slice(0, html.indexOf('</head>'));
+    expect(head).toContain('<title>Бограч &quot;гострий&quot; &amp; &lt;смачний&gt; — Шабля &lt;Вінниця&gt;</title>');
+    expect(head).toContain('<meta property="og:site_name" content="Шабля &lt;Вінниця&gt;">');
+    expect(head).toContain('<meta property="og:title" content="Бограч &quot;гострий&quot; &amp; &lt;смачний&gt; — Шабля &lt;Вінниця&gt;">');
+    expect(head).toContain('<meta property="og:description" content="Густий, на яловичині">');
+    expect(head).toContain('<meta property="og:image" content="https://the-live.shop/pos-uploads/ab12.jpg">');
+    expect(head).not.toContain('ab12.t.webp');
+    expect(head).toContain('<meta property="og:url" content="https://the-live.shop/m/shablya/d/143">');
+    expect(head).toContain('<meta name="twitter:card" content="summary_large_image">');
+    expect(head).toContain('<meta name="robots" content="noindex, nofollow">');
+    expect(html).toContain(' data-open-dish="143"');
+    expect(html).toContain(' data-share-base="https://the-live.shop/m/shablya/d"');
+    expect(html.match(/<script/g)).toHaveLength(1);
+  });
+
+  it('falls back to the price and the facts line without a description, keeps an https photo as it is, and says «summary» without one', () => {
+    const plain = product({ ...bograch, id: 7, description: '', image_url: 'https://cdn.example.com/b.jpg', thumb_url: null });
+    const head = renderMenuPage(menuWith(plain), 'shablya', null, { openDish: plain }).split('</head>')[0];
+    expect(head).toContain('<meta property="og:description" content="165 ₴ · 320 ккал · готується ≈ 15 хв">');
+    expect(head).toContain('<meta property="og:image" content="https://cdn.example.com/b.jpg">');
+    const bare = product({ id: 8, name: 'Вода', image_url: null, description: 'а'.repeat(300) });
+    const bareHead = renderMenuPage(menuWith(bare), 'shablya', null, { openDish: bare }).split('</head>')[0];
+    expect(bareHead).not.toContain('og:image');
+    expect(bareHead).toContain('<meta name="twitter:card" content="summary">');
+    expect(bareHead).toContain(`<meta property="og:description" content="${'а'.repeat(200)}">`);
+  });
+
+  it('draws no Open Graph and no opening on the plain menu, which still carries the share base and the sheet’s button', () => {
+    const html = renderMenuPage(menuWith(bograch), 'shablya');
+    expect(html).toContain('<title>Шабля &lt;Вінниця&gt; — меню</title>');
+    expect(html).not.toContain('og:');
+    expect(html).not.toContain('data-open-dish');
+    expect(html).toContain(' data-share-base="https://the-live.shop/m/shablya/d"');
+    expect(html).toContain('<button type="button" class="link-btn dish-share" data-dish-share hidden>Поділитись</button>');
+  });
+});
+
 const MENU: PublicMenu = {
   store: { name: 'Кав\'ярня "<Зерно>"', logo_url: null, address: null, phone: null, hours_today: null, hours: [], email: null, instagram: null, facebook: null, tiktok: null, google_url: null, corkage: null, feedback_enabled: false },
   rev: 'a1b2c3d4e5f6',

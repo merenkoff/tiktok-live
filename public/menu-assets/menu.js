@@ -185,6 +185,12 @@
   var dishOrderHalf = null;     // set by initOrder: draws the questions, the count and «Додати»
   var dishRefresh = null;       // set by that half: repaint with a fresh product, keeping the guest's picks
   var dishPushed = false;       // this opening put `#d-<id>` into the history
+  /* The dish's own address (F11): the page was asked for at `/m/<key>/d/<id>`
+     and opens on that dish; the first closing puts the plain menu's path back,
+     keeping `?t`/`?k`. `shareBase` is where «Поділитись» points — the server
+     builds it from the menu's key alone, never from the table's key. */
+  var DISH_PATH = /\/d\/\d+$/;
+  var shareBase = document.body.getAttribute('data-share-base');
   var openDishById = function () {};
   var closeDish = function () {};
   var refreshDish = function () {};
@@ -199,7 +205,32 @@
     var body = dishSheet.querySelector('[data-dish-body]');
     var foot = dishSheet.querySelector('[data-dish-foot]');
     var closer = dishSheet.querySelector('[data-dish-close]');
+    var share = dishSheet.querySelector('[data-dish-share]');
     if (!panel || !photo || !img || !title || !badge || !labelsRow || !body || !foot || !closer) return;
+    var canShare = !!(navigator.share || (navigator.clipboard && navigator.clipboard.writeText));
+    if (share && shareBase && canShare) share.hidden = false;
+    var shareTimer = null;
+    function shareDish() {
+      if (!dishOpen || !shareBase) return;
+      var product = findProduct(dishOpen);
+      var url = shareBase + '/' + dishOpen;
+      var place = document.querySelector('.brand h1');
+      var text = (product ? product.name : '') + (place ? ' — ' + place.textContent : '');
+      if (navigator.share) {
+        navigator.share({ title: text, text: text, url: url }).catch(function () {});
+        return;
+      }
+      navigator.clipboard.writeText(url).then(function () {
+        share.textContent = 'Скопійовано';
+        clearTimeout(shareTimer);
+        shareTimer = setTimeout(function () { share.textContent = 'Поділитись'; }, 2000);
+      }).catch(function () {
+        // A browser that refuses the clipboard (an embedded view, a denied
+        // permission) still shows the address, so the guest copies it by hand.
+        window.prompt('Адреса страви — скопіюйте:', url);
+      });
+    }
+    if (share) share.addEventListener('click', shareDish);
     /* The labels' glyphs (F9) come from the frame's own templates, never from
        a string: the F5 rule, so the script holds no markup. */
     var glyphs = {};
@@ -329,11 +360,14 @@
       }
     }
     /* The guest's own closing takes the hash with it: back out of the entry
-       this opening made, or drop a hash the page was opened with. */
+       this opening made, or drop a hash the page was opened with — or, on
+       the dish's own address, put the plain menu's path back (F11). */
     function close() {
       if (dishPushed) { dishPushed = false; history.back(); return; } // popstate hides
       hide();
-      if (/^#d-/.test(window.location.hash)) history.replaceState(null, '', window.location.pathname + window.location.search);
+      var path = window.location.pathname;
+      if (/^#d-/.test(window.location.hash)) history.replaceState(null, '', path + window.location.search);
+      else if (DISH_PATH.test(path)) history.replaceState(null, '', path.replace(DISH_PATH, '') + window.location.search);
     }
 
     openDishById = function (id) {
@@ -371,9 +405,11 @@
     document.addEventListener('keydown', function (event) { if (event.key === 'Escape' && !dishSheet.hidden) close(); });
     window.addEventListener('popstate', function () { dishPushed = false; hide(); });
 
-    // Opened with `#d-<id>` — a link, or the page a guest came back to.
+    // Opened with `#d-<id>` — a link, or the page a guest came back to — or
+    // at the dish's own address, which the server names in `data-open-dish`.
     var wanted = /^#d-(\d+)$/.exec(window.location.hash);
-    if (wanted) menuJson().then(function () { var product = findProduct(wanted[1]); if (product) show(product); });
+    var wantedId = wanted ? wanted[1] : document.body.getAttribute('data-open-dish');
+    if (wantedId) menuJson().then(function () { var product = findProduct(wantedId); if (product) show(product); });
   }
   if (dishSheet) initDish();
   menuJson();

@@ -68,6 +68,39 @@ export function registerPublicMenuPages(fastify: FastifyInstance): void {
     );
   });
 
+  // A dish's own address (phase F11): the same page, opened on that dish, with
+  // the Open Graph head a messenger draws its card from. A dish the published
+  // menu does not have — hidden, gone, another store's — gets the plain menu
+  // (200), so a stale link still opens the place; a bad token the same 404.
+  fastify.get('/m/:token/d/:id', async (request, reply) => {
+    const { token, id } = request.params as { token: string; id: string };
+    const found = await loadPublicMenu(token);
+    if (!found) return sendPage(reply, 404, renderUnavailable());
+    const productId = /^\d{1,12}$/.test(id) ? Number(id) : null;
+    const dish =
+      productId === null
+        ? null
+        : found.menu.categories.flatMap((c) => c.products).find((p) => p.id === productId) ?? null;
+    const table = await findMenuTable(found.store.id, queryParam(request, 't'));
+    const keyed = table !== null && (await verifyTableKey(found.store.id, table.id, queryParam(request, 'k')));
+    return sendPage(
+      reply,
+      200,
+      renderMenuPage(found.menu, token, table, {
+        bill: keyed && found.store.billEnabled,
+        ordering: keyed && found.store.orderingEnabled,
+        call: keyed && found.store.callEnabled,
+        feedback: found.store.feedbackEnabled,
+        feedbackDishes: keyed && found.store.feedbackEnabled,
+        orderAuto:
+          found.store.autoKitchen === 'off'
+            ? null
+            : { mode: found.store.autoKitchen, limitCents: found.store.autoLimitCents },
+        openDish: dish,
+      })
+    );
+  });
+
   fastify.get('/m/:token/qr', async (request, reply) => {
     const { token } = request.params as { token: string };
     const found = await loadPublicMenu(token);

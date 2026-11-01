@@ -489,6 +489,10 @@ body:has(.dock .call-row) .foot { padding-bottom: 230px; }
 .dish-head { display: flex; align-items: center; gap: 8px; padding: 16px 0 0; }
 .dish-head h2 { margin: 0; font-size: 22px; line-height: 1.2; }
 .dish-head .badge { margin-left: 0; }
+/* «Поділитись» (F11): a quiet link at the head's right edge; shown by the
+   script only where the phone can share or copy. */
+.dish-share { margin-left: auto; flex: none; font-size: 14px; font-weight: 600; white-space: nowrap; }
+.dish-share[hidden] { display: none; }
 .dish-body .price { margin-top: 10px; font-size: 18px; }
 .dish-body .size, .dish-body .facts { font-size: 15px; }
 .dish-sheet[data-state="stop"] .facts, .dish-sheet[data-state="out"] .facts { color: var(--off); }
