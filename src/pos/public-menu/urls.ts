@@ -26,6 +26,16 @@ export function menuUrl(key: string): string {
   return `${publicBaseUrl()}/m/${key}`;
 }
 
+/** Where a dish's own addresses hang (phase F11): `<menu>/d`; the id follows. */
+export function dishUrlBase(key: string): string {
+  return `${menuUrl(key)}/d`;
+}
+
+/** A dish's own address for pasting into a chat (F11) — the menu's key only, never a table's. */
+export function dishUrl(key: string, productId: number): string {
+  return `${dishUrlBase(key)}/${productId}`;
+}
+
 /**
  * The address a table's QR carries: the menu, plus which table asked. Without
  * a key it only captions the page; with the table's key (`?k=`) the guest may
