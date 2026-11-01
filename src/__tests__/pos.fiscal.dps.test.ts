@@ -331,6 +331,7 @@ describe('ДПС error names', () => {
     expect(dpsErrorKind('DocumentValidationError')).toBe('rejected');
     expect(dpsErrorKind('ShiftNotOpened')).toBe('shift_closed');
     expect(dpsErrorKind('CryptographyError')).toBe('auth_rejected');
+    expect(dpsErrorKind('LicenseViolation')).toBe('auth_rejected');
     expect(dpsErrorKind('InconsistentRegistrarState')).toBe('unknown');
     expect(dpsErrorKind('13')).toBe('unknown');
     expect(dpsErrorKind('SomethingNew')).toBe('unknown');

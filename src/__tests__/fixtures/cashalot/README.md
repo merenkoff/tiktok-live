@@ -80,8 +80,22 @@ node -e "fetch('https://fsapi.cashalot.org.ua/',{method:'POST',headers:{'content
      у ДПС **загальний збій ФСКО** (`TechDocs/prro/cashalot/sources/
      support-answers.md`, 15–16) — тож тайм-аути ним і пояснюються, а чи
      впускає ФСКО довільні адреси, лишається відкритим: повторити пробу,
-     коли `ServerState` поверне `Available: true`. Висновок — у
-     `TechDocs/prro/POS_FISCAL_OFFLINE.md`.
+     коли `ServerState` поверне `Available: true`. **Повторено 1.11.2026 при
+     `Available: true`**: `8643` і `8609` відповідають `200
+     {"UID":null,"Timestamp":…}` за 49–85 мс і з Railway, і звідси — allowlist
+     немає, питання закрите. Висновок — у `TechDocs/prro/POS_FISCAL_OFFLINE.md`.
    - `Available: false` в обох пробах (12:15 і 21:24 UTC того ж дня) — той самий збій ДПС, не стан нашої
      сесії; документи в цей час реєструються в офлайн-сесії Cashalot, якщо
      ПРРО дозволено офлайн формою 1-ПРРО.
+
+2. **`LicenseViolation` — ліцензію на ПРРО треба завантажити в кабінеті**
+   (проба 1, 2026-11-01, перший виклик із ключами). `ServerState` → `Available:
+   true`, а `TransactionsRegistrarState` → HTTP 200, `ErrorCode:
+   LicenseViolation`, «Неліцензійне використання програмного забезпечення -
+   Відсутня ліцензія на ПРРО з фіскальним номером '<ФН>' для платника податків
+   '<код>'». Ключі й ФН Cashalot прийняв (інакше була б
+   `OperatorAccessToTransactionsRegistrarNotGranted`); не вистачає кроку зі
+   спеки «в списку кас завантажити та зберегти ліцензії для ПРРО». Адаптер
+   відповідав на це ім'я `unknown` — тепер `auth_rejected` (`dps/errors.ts`),
+   бо документа немає й чинить це власник у кабінеті. Тека прогону в git не
+   покладена: текст помилки містить РНОКПП власника.
