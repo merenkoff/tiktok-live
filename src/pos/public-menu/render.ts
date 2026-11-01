@@ -146,8 +146,11 @@ function renderProduct(product: PublicMenuProduct, ordering = false): string {
         })
         .join('')}</details>`
     : '';
+  // The card's 88 px picture loads the thumbnail where there is one (F10) and
+  // the photo itself otherwise; the sheet always loads the photo. The size
+  // attributes keep the list from jumping while pictures arrive.
   const picture = product.image_url
-    ? `<div class="pic"><img src="${escapeHtml(product.image_url)}" alt="" loading="lazy" decoding="async"></div>`
+    ? `<div class="pic"><img src="${escapeHtml(product.thumb_url ?? product.image_url)}" width="88" height="88" alt="" loading="lazy" decoding="async"></div>`
     : '';
   // The facts line under the price: one size (a dish by weight, «245 г» —
   // the sizes list is drawn only from two up, and a guest should still see

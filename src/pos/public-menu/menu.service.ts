@@ -61,6 +61,7 @@ import type { CatalogItem } from '../types.js';
  */
 export { MENU_KEY_RE, menuUrl, publicBaseUrl, tableMenuUrl } from './urls.js';
 import { MENU_KEY_RE, menuUrl, slugKey } from './urls.js';
+import { thumbUrlOf } from '../uploads.service.js';
 
 /** How long a built menu is reused. The stop-list bypasses it (see `invalidatePublicMenu`). */
 const CACHE_TTL_MS = 15_000;
@@ -120,6 +121,8 @@ export interface PublicMenuProduct {
   strength_tenths: number | null;
   prep_minutes: number | null;
   image_url: string | null;
+  /** The 264×264 WebP the card loads instead of the photo (F10), or null — then the card loads `image_url`. The sheet always loads `image_url`. */
+  thumb_url: string | null;
   /** On the day's stop-list. Wins over «немає» in what the guest reads. */
   stopped: boolean;
   /** At least one size can be had today. */
@@ -391,6 +394,7 @@ function projectProduct(rows: CatalogItem[], texts: DishTexts): PublicMenuProduc
     strength_tenths: texts.strength_tenths,
     prep_minutes: texts.prep_minutes,
     image_url: safeImageUrl(first.image_url),
+    thumb_url: thumbUrlOf(first.image_url),
     stopped,
     available: variants.some((v) => v.available),
     from_price_cents: Math.min(...variants.map((v) => v.price_cents)),

@@ -11,11 +11,19 @@ import type { FastifyInstance } from 'fastify';
 import { registerPosRoutes } from './pos.controller.js';
 import { registerPosVersioning } from './pos.versioning.js';
 import { registerPublicMenuPages } from './public-menu/pages.routes.js';
-import { ensureUploadsDir, POS_UPLOADS_DIR, POS_UPLOADS_PREFIX } from './uploads.service.js';
+import { backfillThumbs, ensureUploadsDir, POS_UPLOADS_DIR, POS_UPLOADS_PREFIX } from './uploads.service.js';
 import { logger } from '../logger.js';
 
 export async function registerPosPlugin(fastify: FastifyInstance): Promise<void> {
   await ensureUploadsDir();
+  // The cards' thumbnails for photos uploaded before F10, in the background:
+  // the API comes up at once, the guest menu picks them up within its 15 s
+  // cache. Not under vitest, which builds this plugin for every test file.
+  if (!process.env.VITEST) {
+    void backfillThumbs()
+      .then((r) => logger.info('Upload thumbnails ready', r))
+      .catch((error) => logger.error('Upload thumbnails backfill failed', { error }));
+  }
 
   await fastify.register(multipart, {
     limits: {

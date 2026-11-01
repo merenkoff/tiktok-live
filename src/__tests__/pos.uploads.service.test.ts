@@ -8,18 +8,27 @@
 // onto the Railway volume. Worth pinning: the MIME allowlist, the extension it
 // picks (the stored name must not inherit whatever the client sent), the 5 MB
 // cap, and that every accepted upload lands under POS_UPLOADS_DIR with a
-// non-guessable name.
+// non-guessable name. Since F10 (TechDocs/POS_QR_MENU_FEEDBACK.md §11.2) also
+// the thumbnail made beside every raster photo, and the boot-time backfill.
 
 import { afterAll, describe, expect, it } from 'vitest';
-import { readdir, readFile, rm, stat } from 'fs/promises';
+import { readdir, readFile, rm, stat, writeFile } from 'fs/promises';
 import path from 'path';
 import { Readable } from 'stream';
+import sharp from 'sharp';
 import type { MultipartFile } from '@fastify/multipart';
 import {
   POS_UPLOADS_DIR,
   POS_UPLOADS_PREFIX,
+  THUMB_SIZE,
+  THUMB_SUFFIX,
+  backfillThumbs,
   ensureUploadsDir,
+  resetKnownThumbs,
+  saveImageBuffer,
   saveProductImage,
+  thumbNameOf,
+  thumbUrlOf,
 } from '../pos/uploads.service.js';
 
 const written: string[] = [];
@@ -45,9 +54,13 @@ async function save(opts: Parameters<typeof fakeFile>[0]) {
 
 afterAll(async () => {
   await Promise.all(
-    written.map((f) => rm(path.join(POS_UPLOADS_DIR, f), { force: true }))
+    written.flatMap((f) => [f, thumbNameOf(f)]).map((f) => rm(path.join(POS_UPLOADS_DIR, f), { force: true }))
   );
 });
+
+/** A real picture, so `sharp` has something to shrink: a flat 600×400. */
+const realPng = () =>
+  sharp({ create: { width: 600, height: 400, channels: 3, background: { r: 200, g: 40, b: 40 } } }).png().toBuffer();
 
 describe('POS uploads service', () => {
   it('creates the uploads directory idempotently', async () => {
@@ -130,5 +143,62 @@ describe('POS uploads service', () => {
     ).rejects.toThrow();
 
     expect((await readdir(POS_UPLOADS_DIR)).sort()).toEqual(before.sort());
+  });
+});
+
+describe('the cards’ thumbnails (F10)', () => {
+  it('names a thumbnail after its photo, and answers a URL only for an upload whose thumbnail it has seen', () => {
+    expect(thumbNameOf('ab12.jpg')).toBe(`ab12${THUMB_SUFFIX}`);
+    expect(thumbNameOf('ab12.PNG')).toBe(`ab12${THUMB_SUFFIX}`);
+    expect(thumbNameOf(`ab12${THUMB_SUFFIX}`)).toBe(`ab12${THUMB_SUFFIX}`);
+    expect(thumbUrlOf(null)).toBeNull();
+    expect(thumbUrlOf('/demo-cafe/latte.svg')).toBeNull();
+    expect(thumbUrlOf('https://cdn.example.com/photo.jpg')).toBeNull();
+    expect(thumbUrlOf(`${POS_UPLOADS_PREFIX}/never-seen.jpg`)).toBeNull();
+    expect(thumbUrlOf(`${POS_UPLOADS_PREFIX}/../etc/passwd`)).toBeNull();
+    expect(thumbUrlOf(`${POS_UPLOADS_PREFIX}/x${THUMB_SUFFIX}`)).toBeNull();
+  });
+
+  it('makes a 264×264 WebP beside a photo the server fetched itself, and says so through thumbUrlOf', async () => {
+    const saved = await saveImageBuffer(await realPng());
+    written.push(saved.filename);
+    const thumb = thumbNameOf(saved.filename);
+    const meta = await sharp(path.join(POS_UPLOADS_DIR, thumb)).metadata();
+    expect([meta.format, meta.width, meta.height]).toEqual(['webp', THUMB_SIZE, THUMB_SIZE]);
+    expect(thumbUrlOf(saved.url)).toBe(`${POS_UPLOADS_PREFIX}/${thumb}`);
+  });
+
+  it('makes one for a browser upload too — a GIF from its first frame — and never fails the upload over it', async () => {
+    const gif = await sharp({ create: { width: 300, height: 300, channels: 3, background: { r: 10, g: 120, b: 10 } } }).gif().toBuffer();
+    const animated = await save({ mimetype: 'image/gif', body: gif });
+    const meta = await sharp(path.join(POS_UPLOADS_DIR, thumbNameOf(animated.filename))).metadata();
+    expect([meta.format, meta.width, meta.height, meta.pages ?? 1]).toEqual(['webp', THUMB_SIZE, THUMB_SIZE, 1]);
+    expect(thumbUrlOf(animated.url)).toMatch(new RegExp(`${THUMB_SUFFIX.replace('.', '\\.')}$`));
+
+    // Bytes that are not a picture at all: the upload lands as before, the card loads the file itself.
+    const garbage = await save({ mimetype: 'image/jpeg', body: Buffer.from('not a jpeg at all') });
+    expect((await readFile(path.join(POS_UPLOADS_DIR, garbage.filename))).toString()).toBe('not a jpeg at all');
+    await expect(stat(path.join(POS_UPLOADS_DIR, thumbNameOf(garbage.filename)))).rejects.toThrow();
+    expect(thumbUrlOf(garbage.url)).toBeNull();
+  });
+
+  it('backfills the photos that predate it at boot, remembers the ones there, and makes nothing on a second pass', async () => {
+    await ensureUploadsDir();
+    const name = `backfill-${Date.now()}.png`;
+    written.push(name);
+    await writeFile(path.join(POS_UPLOADS_DIR, name), await realPng());
+    resetKnownThumbs();
+    expect(thumbUrlOf(`${POS_UPLOADS_PREFIX}/${name}`)).toBeNull();
+
+    const first = await backfillThumbs();
+    expect(first.made).toBeGreaterThanOrEqual(1);
+    expect(thumbUrlOf(`${POS_UPLOADS_PREFIX}/${name}`)).toBe(`${POS_UPLOADS_PREFIX}/${thumbNameOf(name)}`);
+
+    resetKnownThumbs();
+    const again = await backfillThumbs();
+    expect(again.made).toBe(0);
+    expect(again.had).toBeGreaterThanOrEqual(first.had + first.made);
+    // Re-read from disk, so a thumbnail made by an earlier boot is known without being remade.
+    expect(thumbUrlOf(`${POS_UPLOADS_PREFIX}/${name}`)).toBe(`${POS_UPLOADS_PREFIX}/${thumbNameOf(name)}`);
   });
 });

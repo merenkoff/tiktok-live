@@ -14,7 +14,7 @@ import type { FastifyInstance } from 'fastify';
 import { pool } from '../db.js';
 import { issueSuperToken } from '../pos/core/superAuth.js';
 import { resetMenuImportCache } from '../pos/import/menu-import.service.js';
-import { POS_UPLOADS_DIR } from '../pos/uploads.service.js';
+import { POS_UPLOADS_DIR, thumbNameOf } from '../pos/uploads.service.js';
 import {
   applyPosMigrations,
   buildPosTestApp,
@@ -67,7 +67,11 @@ describe.skipIf(!hasDb)('POST /api/pos/super/stores/:id/import/choiceqr', () => 
        UNION ALL SELECT public_logo_url FROM pos_stores WHERE id = $1 AND public_logo_url IS NOT NULL`,
       [cafe.storeId]
     );
-    for (const { u } of files.rows) await unlink(path.join(POS_UPLOADS_DIR, path.basename(String(u)))).catch(() => undefined);
+    for (const { u } of files.rows) {
+      const name = path.basename(String(u));
+      await unlink(path.join(POS_UPLOADS_DIR, name)).catch(() => undefined);
+      await unlink(path.join(POS_UPLOADS_DIR, thumbNameOf(name))).catch(() => undefined);
+    }
     await app?.close();
     await dropTestStore(cafe?.storeId);
     await dropTestStore(shop?.storeId);

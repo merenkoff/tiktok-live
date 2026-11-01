@@ -48,6 +48,10 @@ import {
   strengthPercentText,
 } from '../pos/dish-facts.js';
 import { dishFactsParts } from '../pos/public-menu/format.js';
+import { POS_UPLOADS_DIR, saveImageBuffer, thumbNameOf, thumbUrlOf } from '../pos/uploads.service.js';
+import { TINY_PNG } from './helpers/choiceqr-page.js';
+import { unlink } from 'fs/promises';
+import path from 'path';
 
 describe('the allergen list', () => {
   it('is the fourteen of Regulation (EU) 1169/2011 Annex II, each once, each with a label', () => {
@@ -210,6 +214,7 @@ describe('the guest page', () => {
     strength_tenths: null,
     prep_minutes: null,
     image_url: null,
+    thumb_url: null,
     stopped: false,
     available: true,
     from_price_cents: 5000,
@@ -302,6 +307,19 @@ describe('the guest page', () => {
     expect(renderMenuPage(menuOf(dish()), 'tok_12345678')).not.toContain('class="facts"');
   });
 
+  it('loads the thumbnail on the card where there is one and the photo otherwise, at the card’s own size (F10)', () => {
+    const html = renderMenuPage(
+      menuOf(
+        dish({ image_url: '/pos-uploads/a.jpg', thumb_url: '/pos-uploads/a.t.webp' }),
+        dish({ id: 8, name: 'Чай', image_url: '/demo-cafe/tea.svg' })
+      ),
+      'tok_12345678'
+    );
+    expect(html).toContain('<div class="pic"><img src="/pos-uploads/a.t.webp" width="88" height="88" alt="" loading="lazy" decoding="async"></div>');
+    expect(html).toContain('<div class="pic"><img src="/demo-cafe/tea.svg" width="88" height="88" alt="" loading="lazy" decoding="async"></div>');
+    expect(html).not.toContain('a.jpg');
+  });
+
   it('escapes a label’s word and skips a code it has no glyph for', () => {
     const html = renderMenuPage(
       menuOf(dish({ labels: [{ code: 'spicy', label: '<b>Гостре</b>' }, { code: 'halal', label: 'Халяль' }] })),
@@ -365,9 +383,35 @@ describe.skipIf(!hasDb)('dish facts through the API', () => {
     token = on.json().token;
   }, 60000);
 
+  const uploaded: string[] = [];
+
   afterAll(async () => {
     await app?.close();
     if (cafe) await dropTestStore(cafe.storeId);
+    for (const f of uploaded) {
+      await unlink(path.join(POS_UPLOADS_DIR, f)).catch(() => undefined);
+      await unlink(path.join(POS_UPLOADS_DIR, thumbNameOf(f))).catch(() => undefined);
+    }
+  });
+
+  describe('the card’s thumbnail (F10)', () => {
+    it('reaches the guest for an uploaded photo and stays null for a demo picture', async () => {
+      const saved = await saveImageBuffer(TINY_PNG);
+      uploaded.push(saved.filename);
+      const photo = (await post({ name: 'З фото', image_url: saved.url, variants })).json();
+      const drawing = (await post({ name: 'З малюнком', image_url: '/demo-cafe/latte.svg', variants })).json();
+      invalidatePublicMenu(cafe.storeId);
+      const now = await menu();
+      const withPhoto = dishOf(now, 'З фото')!;
+      expect(withPhoto.image_url).toBe(saved.url);
+      expect(withPhoto.thumb_url).toBe(thumbUrlOf(saved.url));
+      expect(withPhoto.thumb_url).toMatch(/^\/pos-uploads\/[0-9a-f-]+\.t\.webp$/);
+      expect(dishOf(now, 'З малюнком')!.thumb_url).toBeNull();
+      const html = (await app.inject({ method: 'GET', url: `/m/${token}` })).body;
+      expect(html).toContain(`<img src="${withPhoto.thumb_url}" width="88" height="88"`);
+      await patch(photo.id, { is_active: false });
+      await patch(drawing.id, { is_active: false });
+    });
   });
 
   describe('writing them', () => {
