@@ -31,6 +31,11 @@ export function dishUrlBase(key: string): string {
   return `${menuUrl(key)}/d`;
 }
 
+/** The menu's Open Graph picture (F15): the version in the address, so a new logo is a new picture to a messenger's cache. */
+export function menuOgImageUrl(key: string, version: string): string {
+  return `${menuUrl(key)}/og.png?v=${version}`;
+}
+
 /** A dish's own address for pasting into a chat (F11) — the menu's key only, never a table's. */
 export function dishUrl(key: string, productId: number): string {
   return `${dishUrlBase(key)}/${productId}`;

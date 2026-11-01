@@ -30,6 +30,10 @@ import { readMigration } from '../pos/migrations.js';
 import { resetPublicMenuCache, invalidatePublicMenu } from '../pos/public-menu/menu.service.js';
 import { tableMenuUrl, type PublicMenu } from '../pos/public-menu/menu.service.js';
 import { escapeHtml, qrSvg } from '../pos/public-menu/render.js';
+import sharp from 'sharp';
+import { readdir, rm } from 'fs/promises';
+import path from 'path';
+import { OG_DIR } from '../pos/public-menu/og-image.js';
 
 describe.skipIf(!hasDb)('POS guest QR menu', () => {
   let app: FastifyInstance;
@@ -161,6 +165,11 @@ describe.skipIf(!hasDb)('POS guest QR menu', () => {
   }, 60000);
 
   afterAll(async () => {
+    // The Open Graph pictures the pages made for the test stores (F15).
+    const ids = [cafe, other, boutique].filter(Boolean).map((s) => String(s.storeId));
+    for (const f of await readdir(OG_DIR).catch(() => [] as string[])) {
+      if (ids.some((id) => f.startsWith(`${id}-`))) await rm(path.join(OG_DIR, f), { force: true });
+    }
     await app?.close();
     for (const store of [cafe, other, boutique]) if (store) await dropTestStore(store.storeId);
   });
@@ -661,6 +670,41 @@ describe.skipIf(!hasDb)('POS guest QR menu', () => {
       expect((await app.inject({ method: 'GET', url: `/api/pos/m/${token}` })).statusCode).toBe(404);
     });
 
+    describe('the menu’s Open Graph picture (F15)', () => {
+      it('gives the menu page an Open Graph head with the picture’s versioned address, and never a table’s key in it', async () => {
+        const now = await menu();
+        const html = (await page(token, '?t=1&k=secret-table-key')).body;
+        const head = html.slice(0, html.indexOf('</head>'));
+        expect(head).toContain(`<meta property="og:title" content="${escapeHtml(now.store.name)} — меню">`);
+        expect(head).toMatch(new RegExp(`<meta property="og:image" content="https://the-live.shop/m/${token}/og.png\\?v=[0-9a-f]{12}">`));
+        expect(head).toContain('<meta property="og:image:width" content="1200">');
+        expect(head).toContain(`<meta property="og:url" content="https://the-live.shop/m/${token}">`);
+        expect(head).toContain('<meta name="twitter:card" content="summary_large_image">');
+        expect(head).toContain('<meta name="robots" content="noindex, nofollow">');
+        expect(head).not.toContain('secret-table-key');
+        expect(html.match(/<script/g)).toHaveLength(1);
+      });
+
+      it('serves the picture itself as a cacheable 1200×630 PNG, the same bytes twice, and the menu’s 404 for a key nobody has', async () => {
+        const res = await page(token, '/og.png?v=whatever');
+        expect(res.statusCode).toBe(200);
+        expect(res.headers['content-type']).toBe('image/png');
+        expect(res.headers['cache-control']).toBe('public, max-age=86400');
+        const meta = await sharp(res.rawPayload).metadata();
+        expect([meta.width, meta.height]).toEqual([1200, 630]);
+        expect((await page(token, '/og.png')).rawPayload.equals(res.rawPayload)).toBe(true);
+        expect((await page('a_token_nobody_has', '/og.png')).statusCode).toBe(404);
+      });
+
+      it('lends the picture to a dish with no photo of its own (Д41)', async () => {
+        const now = await menu();
+        const bare = now.categories.flatMap((c) => c.products).find((p) => !p.image_url)!;
+        const html = (await page(token, `/d/${bare.id}`)).body;
+        expect(html).toMatch(new RegExp(`<meta property="og:image" content="https://the-live.shop/m/${token}/og.png\\?v=[0-9a-f]{12}">`));
+        expect(html).toContain('<meta name="twitter:card" content="summary_large_image">');
+      });
+    });
+
     describe('a dish’s own address (F11)', () => {
       it('opens the menu on that dish with an Open Graph head, and names where «Поділитись» points', async () => {
         const now = await menu();
@@ -678,10 +722,11 @@ describe.skipIf(!hasDb)('POS guest QR menu', () => {
         expect(html).toContain(` data-share-base="https://the-live.shop/m/${token}/d"`);
         expect(html).toContain('data-dish-share');
         expect(html.match(/<script/g)).toHaveLength(1);
-        // The plain menu has the share base too (the sheet opens on every page) and no Open Graph.
+        // The plain menu has the share base too (the sheet opens on every page) and the MENU's Open Graph (F15), not a dish's.
         const plain = (await page(token)).body;
         expect(plain).toContain(` data-share-base="https://the-live.shop/m/${token}/d"`);
-        expect(plain).not.toContain('og:title');
+        expect(plain).toContain(`<meta property="og:title" content="${escapeHtml(now.store.name)} — меню">`);
+        expect(plain).not.toContain('og:title" content="Латте');
         expect(plain).not.toContain('data-open-dish');
       });
 
@@ -694,10 +739,12 @@ describe.skipIf(!hasDb)('POS guest QR menu', () => {
       });
 
       it('shows the plain menu for a dish it does not have — gone, hidden or junk — and the same 404 for a bad token', async () => {
+        const name = (await menu()).store.name;
         for (const id of ['999999999', 'abc', '-1', '1.5']) {
           const res = await page(token, `/d/${id}`);
           expect(res.statusCode, id).toBe(200);
-          expect(res.body).not.toContain('og:title');
+          // The menu's own Open Graph (F15), not a dish's.
+          expect(res.body).toContain(`<meta property="og:title" content="${escapeHtml(name)} — меню">`);
           expect(res.body).not.toContain('data-open-dish');
           expect(res.body).toContain(` data-share-base="https://the-live.shop/m/${token}/d"`);
         }

@@ -19,6 +19,7 @@ import qrcode from 'qrcode-generator';
 import { corkageFeeText, corkageMinText, deltaText, dishFactsParts, formatUahGuestCompact, groupHint, tableLabel } from './format.js';
 import { phoneHref, socialUrl } from './profile.js';
 import { BAD_TAGS, FEEDBACK_TAGS, GOOD_TAGS, type FeedbackTag } from '../guest-feedback.service.js';
+import { OG_HEIGHT, OG_WIDTH } from './og-image.js';
 
 export { tableLabel };
 import {
@@ -393,9 +394,38 @@ export interface MenuPageOptions {
    * into a chat, the menu's QR is not.
    */
   openDish?: PublicMenuProduct | null;
+  /**
+   * The menu's own Open Graph picture (phase F15): the absolute address of
+   * `/m/<key>/og.png?v=…` — the brand frame with the place's logo. With it
+   * the menu page gets an Open Graph head of its own, and a dish without a
+   * photo borrows the picture (Д41). Null where this checkout has no frame.
+   */
+  ogImage?: string | null;
 }
 
 const OG_DESCRIPTION_MAX = 200;
+
+/**
+ * The Open Graph head of the menu page itself (F15): «Шабля — меню», the
+ * address and what the page is, the brand-and-logo picture, the menu's
+ * address from the request's key alone — never `?t`/`?k`. `noindex` stays:
+ * a messenger's card is not a search result.
+ */
+function menuOpenGraphHead(menu: PublicMenu, token: string, image: string): string {
+  const title = `${menu.store.name} — меню`;
+  const description = [menu.store.address, 'Меню, ціни й стоп-лист наживо'].filter(Boolean).join(' · ');
+  return (
+    `<meta property="og:type" content="website">\n` +
+    `<meta property="og:site_name" content="${escapeHtml(menu.store.name)}">\n` +
+    `<meta property="og:title" content="${escapeHtml(title)}">\n` +
+    `<meta property="og:description" content="${escapeHtml(description.slice(0, OG_DESCRIPTION_MAX))}">\n` +
+    `<meta property="og:image" content="${escapeHtml(image)}">\n` +
+    `<meta property="og:image:width" content="${OG_WIDTH}">\n` +
+    `<meta property="og:image:height" content="${OG_HEIGHT}">\n` +
+    `<meta property="og:url" content="${escapeHtml(menuUrl(token))}">\n` +
+    `<meta name="twitter:card" content="summary_large_image">\n`
+  );
+}
 
 /**
  * The Open Graph head of a dish's page (F11): the title «Бограч — Шабля»,
@@ -404,15 +434,16 @@ const OG_DESCRIPTION_MAX = 200;
  * card's thumbnail — and the address itself. `noindex` stays: this is an
  * address for pasting, not for a search engine.
  */
-function openGraphHead(menu: PublicMenu, token: string, dish: PublicMenuProduct): string {
+function openGraphHead(menu: PublicMenu, token: string, dish: PublicMenuProduct, fallbackImage: string | null): string {
   const title = `${dish.name} — ${menu.store.name}`;
   const price = `${dish.variants.length > 1 ? 'від ' : ''}${formatUahGuestCompact(dish.from_price_cents)}`;
   const description = (dish.description || [price, ...dishFactsParts(dish)].join(' · ')).slice(0, OG_DESCRIPTION_MAX);
+  // The dish's full photo; without one, the menu's brand-and-logo picture (Д41).
   const image = dish.image_url
     ? /^https:\/\//i.test(dish.image_url)
       ? dish.image_url
       : `${publicBaseUrl()}${dish.image_url}`
-    : null;
+    : fallbackImage;
   return (
     `<meta property="og:type" content="website">\n` +
     `<meta property="og:site_name" content="${escapeHtml(menu.store.name)}">\n` +
@@ -439,6 +470,7 @@ export function renderMenuPage(
     : null;
   const feedbackDishes = Boolean(feedback && table && options.feedbackDishes);
   const openDish = options.openDish ?? null;
+  const ogImage = options.ogImage ?? null;
   // «Обрані» leads the row (F12), hidden until the script finds anything chosen on this phone.
   const favTab = menu.categories.length ? '<a href="#fav" class="fav-tab" data-fav-tab hidden>Обрані</a>' : '';
   const tabs =
@@ -513,7 +545,7 @@ ${empty}${sections}${ask}
           (feedback.googleUrl ? ` data-feedback-google="${escapeHtml(feedback.googleUrl)}"` : '') +
           (feedbackDishes ? ` data-feedback-dishes-url="/api/pos/public/menu/${escapeHtml(token)}/feedback/dishes"` : '')
         : ''),
-    openDish ? openGraphHead(menu, token, openDish) : ''
+    openDish ? openGraphHead(menu, token, openDish, ogImage) : ogImage ? menuOpenGraphHead(menu, token, ogImage) : ''
   );
 }
 
