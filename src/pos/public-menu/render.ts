@@ -111,6 +111,16 @@ function stateOf(product: PublicMenuProduct): 'ok' | 'stop' | 'out' {
 
 const BADGE_TEXT = { ok: '', stop: 'стоп', out: 'немає' } as const;
 
+/**
+ * The heart of «Обрані» (phase F12): an outline the stylesheet fills when
+ * pressed. On every card and in the sheet; the set lives in the phone's
+ * `localStorage` under the menu's key — no server, no counter (Д16, Д28).
+ */
+const HEART = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.3 4.6 13.1a4.6 4.6 0 0 1 6.5-6.5l.9.9.9-.9a4.6 4.6 0 0 1 6.5 6.5Z"/></svg>';
+function favButton(productId: number, extraClass = ''): string {
+  return `<button type="button" class="fav${extraClass ? ` ${extraClass}` : ''}" data-fav="${productId}" aria-pressed="false" aria-label="В обрані">${HEART}</button>`;
+}
+
 function renderProduct(product: PublicMenuProduct, ordering = false): string {
   const state = stateOf(product);
   const multi = product.variants.length > 1;
@@ -164,6 +174,7 @@ function renderProduct(product: PublicMenuProduct, ordering = false): string {
   const sizeLine = facts.length ? `<p class="facts">${facts.map(escapeHtml).join(' · ')}</p>` : '';
   return (
     `<li class="item" data-product="${product.id}" data-state="${state}">` +
+    favButton(product.id) +
     picture +
     // The name is a real button (F8): a tap anywhere on the card opens the
     // dish's sheet, and this is what the keyboard and a screen reader reach.
@@ -428,9 +439,13 @@ export function renderMenuPage(
     : null;
   const feedbackDishes = Boolean(feedback && table && options.feedbackDishes);
   const openDish = options.openDish ?? null;
-  const tabs = menu.categories
-    .map((c, i) => `<a href="#c-${c.id ?? 'other'}"${i === 0 ? ' class="on"' : ''}>${escapeHtml(c.name)}</a>`)
-    .join('');
+  // «Обрані» leads the row (F12), hidden until the script finds anything chosen on this phone.
+  const favTab = menu.categories.length ? '<a href="#fav" class="fav-tab" data-fav-tab hidden>Обрані</a>' : '';
+  const tabs =
+    favTab +
+    menu.categories
+      .map((c, i) => `<a href="#c-${c.id ?? 'other'}"${i === 0 ? ' class="on"' : ''}>${escapeHtml(c.name)}</a>`)
+      .join('');
   const sections = menu.categories
     .map(
       (c) =>
@@ -478,7 +493,7 @@ ${empty}${sections}${ask}
     openDish ? `${openDish.name} — ${menu.store.name}` : `${menu.store.name} — меню`,
     body,
     ` data-menu-url="/api/pos/public/menu/${escapeHtml(token)}" data-store-day="${escapeHtml(menu.store_day)}"` +
-      ` data-rev="${escapeHtml(menu.rev)}"` +
+      ` data-rev="${escapeHtml(menu.rev)}" data-menu-key="${escapeHtml(token)}"` +
       // Where «Поділитись» points (F11): the dish's own address, built from
       // the menu's key alone — never from `?t`/`?k`, a table's key being that
       // table's secret, which must not land in someone's chat.
@@ -531,7 +546,7 @@ function dishSheetMarkup(): string {
 <div class="bill-panel dish-panel" data-dish-panel>
 <button type="button" class="bill-close dish-close" data-dish-close aria-label="Закрити">×</button>
 <div class="dish-photo" data-dish-photo hidden><img alt="" decoding="async" data-dish-img></div>
-<div class="dish-head"><h2 id="dish-title" data-dish-title></h2><span class="badge" data-dish-badge></span><button type="button" class="link-btn dish-share" data-dish-share hidden>Поділитись</button></div>
+<div class="dish-head"><h2 id="dish-title" data-dish-title></h2><span class="badge" data-dish-badge></span><button type="button" class="link-btn dish-share" data-dish-share hidden>Поділитись</button><button type="button" class="fav dish-fav" data-dish-fav aria-pressed="false" aria-label="В обрані">${HEART}</button></div>
 <ul class="labels dish-labels" data-dish-labels aria-label="Позначки страви" hidden></ul>
 <div class="dish-body" data-dish-body></div>
 <div class="order-foot dish-foot" data-dish-foot hidden></div>

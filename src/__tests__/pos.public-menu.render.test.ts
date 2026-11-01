@@ -228,6 +228,35 @@ describe('a dish’s own page (F11)', () => {
   });
 });
 
+describe('«Обрані» on the guest’s phone (F12)', () => {
+  const store = { name: 'Кав’ярня', logo_url: null, address: null, phone: null, hours_today: null, hours: [], email: null, instagram: null, facebook: null, tiktok: null, google_url: null, corkage: null, feedback_enabled: false };
+  const menuWith = (...products: PublicMenuProduct[]): PublicMenu => ({
+    store,
+    rev: 'a1b2c3d4e5f6',
+    store_day: '2026-11-01',
+    generated_at: '2026-11-01T08:00:00.000Z',
+    categories: [{ id: 1, name: 'Кава', products }],
+  });
+
+  it('puts a heart on every card, a hidden «Обрані» tab at the head of the row, a heart in the sheet and the menu’s key on the page', () => {
+    const html = renderMenuPage(menuWith(product({ id: 7, name: 'Латте' }), product({ id: 8, name: 'Чай' })), 'shablya');
+    expect(html).toContain('<li class="item" data-product="7" data-state="ok"><button type="button" class="fav" data-fav="7" aria-pressed="false" aria-label="В обрані"><svg ');
+    expect(html).toContain('<button type="button" class="fav" data-fav="8" aria-pressed="false" aria-label="В обрані">');
+    expect(html).toContain('<nav class="tabs" aria-label="Розділи меню"><a href="#fav" class="fav-tab" data-fav-tab hidden>Обрані</a><a href="#c-1" class="on">Кава</a></nav>');
+    expect(html).toContain('<button type="button" class="fav dish-fav" data-dish-fav aria-pressed="false" aria-label="В обрані"><svg ');
+    expect(html).toContain(' data-menu-key="shablya"');
+    // No server, no counter: nothing of it reaches the DTO, and the page keeps its single script.
+    expect(html.match(/<script/g)).toHaveLength(1);
+    expect(html).not.toContain('data-fav-count');
+  });
+
+  it('draws no «Обрані» tab for a menu with nothing to choose from', () => {
+    const html = renderMenuPage({ ...menuWith(), categories: [] }, 'shablya');
+    expect(html).not.toContain('data-fav-tab');
+    expect(html).not.toContain('data-fav=');
+  });
+});
+
 const MENU: PublicMenu = {
   store: { name: 'Кав\'ярня "<Зерно>"', logo_url: null, address: null, phone: null, hours_today: null, hours: [], email: null, instagram: null, facebook: null, tiktok: null, google_url: null, corkage: null, feedback_enabled: false },
   rev: 'a1b2c3d4e5f6',

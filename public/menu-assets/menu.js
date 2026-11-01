@@ -191,6 +191,7 @@
      builds it from the menu's key alone, never from the table's key. */
   var DISH_PATH = /\/d\/\d+$/;
   var shareBase = document.body.getAttribute('data-share-base');
+  var syncDishFav = function () {};  // set by initFav: paints the sheet's heart for the open dish
   var openDishById = function () {};
   var closeDish = function () {};
   var refreshDish = function () {};
@@ -305,6 +306,7 @@
       }
       title.textContent = product.name;
       badge.textContent = BADGE[state];
+      syncDishFav();
       labelsOf(product);
       body.textContent = '';
       foot.textContent = '';
@@ -412,6 +414,92 @@
     if (wantedId) menuJson().then(function () { var product = findProduct(wantedId); if (product) show(product); });
   }
   if (dishSheet) initDish();
+
+  /* «Обрані» (F12): a heart on every card and in the sheet, the set kept on
+     THIS phone in localStorage under the menu's key — no server and no
+     counter (Д16, Д28). The tab «Обрані · N» leads the row only while the
+     set has anything; tapping it shows the chosen cards alone, and the
+     poll's patches reach them like any other card. An id the menu no longer
+     lists is dropped the first time the set is read. */
+  var favKey = 'menu:fav:' + (document.body.getAttribute('data-menu-key') || url);
+  var favMemory = []; // what the page remembers when storage is blocked
+  function readFav() {
+    try {
+      var raw = localStorage.getItem(favKey);
+      var list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list.map(String) : [];
+    } catch (e) { return favMemory.slice(); }
+  }
+  function writeFav(list) {
+    favMemory = list.slice();
+    try { localStorage.setItem(favKey, JSON.stringify(list)); } catch (e) { /* private mode: kept for this page */ }
+  }
+  function initFav() {
+    var cards = document.querySelectorAll('.item[data-product]');
+    var tab = document.querySelector('[data-fav-tab]');
+    if (!cards.length || !tab) return;
+    var known = {};
+    for (var i = 0; i < cards.length; i += 1) known[cards[i].getAttribute('data-product')] = true;
+    var set = readFav().filter(function (id) { return known[id]; });
+    function has(id) { return set.indexOf(String(id)) !== -1; }
+    function leaveView() {
+      if (document.body.getAttribute('data-view') !== 'fav') return;
+      document.body.removeAttribute('data-view');
+      tab.classList.remove('on');
+      var first = document.querySelector('.tabs a:not([data-fav-tab])');
+      if (first) first.classList.add('on');
+    }
+    function paint() {
+      for (var c = 0; c < cards.length; c += 1) {
+        var card = cards[c];
+        var on = has(card.getAttribute('data-product'));
+        card.setAttribute('data-chosen', on ? '1' : '0');
+        var button = card.querySelector('[data-fav]');
+        if (button) button.setAttribute('aria-pressed', on ? 'true' : 'false');
+      }
+      document.querySelectorAll('.cat').forEach(function (section) {
+        section.setAttribute('data-has-chosen', section.querySelector('.item[data-chosen="1"]') ? '1' : '0');
+      });
+      if (set.length) {
+        tab.textContent = 'Обрані · ' + set.length;
+        tab.hidden = false;
+      } else {
+        tab.hidden = true;
+        leaveView();
+      }
+      syncDishFav();
+    }
+    function toggle(id) {
+      id = String(id);
+      var at = set.indexOf(id);
+      if (at === -1) set.push(id); else set.splice(at, 1);
+      writeFav(set);
+      paint();
+    }
+    syncDishFav = function () {
+      var button = dishSheet && dishSheet.querySelector('[data-dish-fav]');
+      if (button) button.setAttribute('aria-pressed', dishOpen && has(dishOpen) ? 'true' : 'false');
+    };
+    document.addEventListener('click', function (event) {
+      var target = event.target;
+      if (!target || !target.closest) return;
+      var heart = target.closest('[data-fav]');
+      if (heart) { event.preventDefault(); toggle(heart.getAttribute('data-fav')); return; }
+      if (target.closest('[data-dish-fav]')) { if (dishOpen) toggle(dishOpen); return; }
+      var link = target.closest('.tabs a');
+      if (!link) return;
+      if (link === tab) {
+        event.preventDefault();
+        document.body.setAttribute('data-view', 'fav');
+        document.querySelectorAll('.tabs a').forEach(function (a) { a.classList.toggle('on', a === tab); });
+        window.scrollTo({ top: 0 });
+      } else {
+        leaveView();
+      }
+    });
+    paint();
+  }
+  initFav();
   menuJson();
 
   var billUrl = document.body.getAttribute('data-bill-url');
@@ -1393,6 +1481,7 @@
     var observer = new IntersectionObserver(function (entries) {
       entries.forEach(function (entry) {
         if (!entry.isIntersecting) return;
+        if (document.body.getAttribute('data-view') === 'fav') return; // the «Обрані» tab stays lit
         for (var k = 0; k < links.length; k += 1) {
           links[k].classList.toggle('on', links[k].getAttribute('href') === '#' + entry.target.id);
         }
