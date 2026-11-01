@@ -242,6 +242,14 @@ class PosApi {
     allergens?: string[];
     /** The chips under the dish on the guest menu («spicy», «hit»…, migration 086); empty = none. */
     menu_labels?: string[];
+    /**
+     * The facts line's numbers (migration 087), as typed: the server parses
+     * the text and refuses a bad one in words. The strength is sent as a
+     * PERCENT («4,5»); null clears.
+     */
+    kcal?: string | number | null;
+    strength_percent?: string | number | null;
+    prep_minutes?: string | number | null;
     image_url?: string | null;
     kind?: ProductKind;
     stock_mode?: ProductStockMode;
@@ -274,6 +282,10 @@ class PosApi {
       allergens: string[];
       /** Replaces the set wholesale, like `allergens`. */
       menu_labels: string[];
+      /** As typed; the strength as a percent («4,5»); null clears (migration 087). */
+      kcal: string | number | null;
+      strength_percent: string | number | null;
+      prep_minutes: string | number | null;
       image_url: string | null;
       is_active: boolean;
       kind: ProductKind;

@@ -12,9 +12,14 @@
 // `__NEXT_DATA__` JSON under `props.app` — `categories`, `menu` (the dishes:
 // price in kopecks, `weight` + `weightType`, `media[]`, `description`) and
 // `place` (name, address, logo, `workTimeAll` with JS weekdays, 0 = Sunday).
+//
+// Every dish also carries `kcal`, `alcohol` (percent) and `preparationTime`
+// (minutes) as integers, 0 where the place said nothing — ChoiceQR has no
+// «not said» of its own (read 2026-11-01 on a client's page: 0 on all 177).
 
 import type { WeekHours } from '../public-menu/profile.js';
 import { normalizeMenuLabels } from '../menu-labels.js';
+import { KCAL_MAX, PREP_MINUTES_MAX, STRENGTH_TENTHS_MAX } from '../dish-facts.js';
 
 export const CHOICEQR_HOST_RE = /^[a-z0-9-]+\.choiceqr\.com$/;
 export const CHOICEQR_MEDIA_HOST = 'cdn-media.choiceqr.com';
@@ -49,6 +54,24 @@ export interface ChoiceQrItem {
   labels: string[];
   /** The labels we do not carry — «Не містить глютену», a custom one by its name — for one warning. */
   labelsSkipped: string[];
+  /** ChoiceQR's `kcal`, `alcohol` (as tenths of a percent) and `preparationTime`; its 0 is our null (F14). */
+  kcal: number | null;
+  strengthTenths: number | null;
+  prepMinutes: number | null;
+}
+
+/** A positive whole number within range, else null: ChoiceQR writes 0 for «not said». */
+function countOf(raw: unknown, max: number): number | null {
+  const value = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : Number.NaN;
+  return Number.isInteger(value) && value > 0 && value <= max ? value : null;
+}
+
+/** ChoiceQR's `alcohol` is a percent (a fraction not excluded); ours are tenths, 0 meaning «not said» there. */
+function strengthOf(raw: unknown): number | null {
+  const value = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : Number.NaN;
+  if (!Number.isFinite(value) || value <= 0) return null;
+  const tenths = Math.round(value * 10);
+  return tenths <= STRENGTH_TENTHS_MAX ? tenths : null;
 }
 
 /**
@@ -202,6 +225,9 @@ export function parseChoiceQr(html: string): ChoiceQrMenu {
       photoUrl: photoOf(raw.media),
       available: raw.available !== false,
       ...labelsOf(raw.menu_labels),
+      kcal: countOf(raw.kcal, KCAL_MAX),
+      strengthTenths: strengthOf(raw.alcohol),
+      prepMinutes: countOf(raw.preparationTime, PREP_MINUTES_MAX),
     });
   }
 
@@ -256,6 +282,10 @@ export interface PlannedProduct {
   photo_url: string | null;
   /** The card's labels (F9): the union over its sizes, canonical. */
   labels: string[];
+  /** The facts line's numbers (F14): the first size's that says one — a portion's figure (Д33). */
+  kcal: number | null;
+  strengthTenths: number | null;
+  prepMinutes: number | null;
   variants: PlannedVariant[];
   /** Already in the store under this tag — the import leaves it alone. */
   exists: boolean;
@@ -340,6 +370,10 @@ export function planMenuImport(menu: ChoiceQrMenu, existing: ExistingCatalog): M
             card.product.description ??= item.description;
             // A label is the dish's, not a size's: the card takes every size's.
             card.product.labels = normalizeMenuLabels([...card.product.labels, ...item.labels]);
+            // A number is a portion's: the card keeps the first size that says one.
+            card.product.kcal ??= item.kcal;
+            card.product.strengthTenths ??= item.strengthTenths;
+            card.product.prepMinutes ??= item.prepMinutes;
             placed = true;
             break;
           }
@@ -362,6 +396,9 @@ export function planMenuImport(menu: ChoiceQrMenu, existing: ExistingCatalog): M
           description: item.description,
           photo_url: item.photoUrl,
           labels: item.labels,
+          kcal: item.kcal,
+          strengthTenths: item.strengthTenths,
+          prepMinutes: item.prepMinutes,
           variants: [{ size: item.size, price_cents: item.priceCents }],
           exists: existing.products.has(productKey(category.name, name)),
         };

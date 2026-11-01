@@ -45,6 +45,23 @@
     if (group.max_select >= group.modifiers.length) return 'скільки завгодно';
     return 'до ' + group.max_select;
   }
+  /* The facts a dish says under its price (F8 the size, F14 the numbers), in
+     the words the server prints on the card — a second copy of
+     `dishFactsParts`, as `money` is of the server's; `long` adds «на порцію»
+     to the calories, which the sheet says and the list does not (Д33). */
+  function factsOf(product, long) {
+    var parts = [];
+    var single = product.variants.length === 1 ? product.variants[0].label.trim() : '';
+    if (single) parts.push(single);
+    if (typeof product.kcal === 'number') parts.push(product.kcal + ' ккал' + (long ? ' на порцію' : ''));
+    if (typeof product.strength_tenths === 'number') {
+      var whole = Math.floor(product.strength_tenths / 10);
+      var frac = product.strength_tenths % 10;
+      parts.push('міцність ' + whole + (frac ? ',' + frac : '') + ' %');
+    }
+    if (typeof product.prep_minutes === 'number') parts.push('готується ≈ ' + product.prep_minutes + ' хв');
+    return parts;
+  }
   function findProduct(id) {
     if (!latestMenu) return null;
     for (var i = 0; i < latestMenu.categories.length; i += 1) {
@@ -219,9 +236,9 @@
           sizes.appendChild(row);
         });
         body.appendChild(sizes);
-      } else if (product.variants[0] && product.variants[0].label.trim()) {
-        body.appendChild(node('p', 'size', product.variants[0].label.trim()));
       }
+      var facts = factsOf(product, true);
+      if (facts.length) body.appendChild(node('p', 'facts', facts.join(' · ')));
     }
     function modifiersOf(product) {
       product.modifier_groups.forEach(function (g) {
@@ -275,6 +292,10 @@
         body.appendChild(list);
       }
       if (dishOrderHalf && state === 'ok') {
+        // The order half draws the sizes and the price itself; the facts
+        // (the weight, the numbers) still go above it.
+        var facts = factsOf(product, true);
+        if (facts.length) body.appendChild(node('p', 'facts', facts.join(' · ')));
         dishOrderHalf(product, body, foot);
         foot.hidden = false;
       } else {

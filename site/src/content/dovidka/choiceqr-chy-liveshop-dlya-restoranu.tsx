@@ -70,6 +70,7 @@ function Body() {
   const feedback = isAvailable('guestFeedback');
   const allergens = isAvailable('dishAllergens');
   const labels = isAvailable('dishLabels');
+  const nutrition = isAvailable('dishNutrition');
   const board = isAvailable('cafeKitchenBoard');
   const floor = isAvailable('tablesFloorPlan');
   return (
@@ -160,7 +161,11 @@ function Body() {
             <tr>
               <td>Склад і алергени страв</td>
               <td>{C.dishFacts ? 'Є: «детальні описи страв (склад, калорії, алергени)» в «Онлайн-меню»' : 'На сторінках не згадано'}</td>
-              <td>{allergens ? 'Склад, який вписує власник, і 14 алергенів за переліком ЄС' : 'У планах'}</td>
+              <td>
+                {allergens
+                  ? `Склад, який вписує власник, і 14 алергенів за переліком ЄС${nutrition ? '; калорійність порції, міцність напою і час приготування одним рядком під ціною' : ''}`
+                  : 'У планах'}
+              </td>
             </tr>
             <tr>
               <td>Позначки страв</td>
