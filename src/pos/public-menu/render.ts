@@ -16,7 +16,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import qrcode from 'qrcode-generator';
-import { corkageFeeText, corkageMinText, deltaText, formatUahGuestCompact, groupHint, tableLabel } from './format.js';
+import { corkageFeeText, corkageMinText, deltaText, dishFactsParts, formatUahGuestCompact, groupHint, tableLabel } from './format.js';
 import { phoneHref, socialUrl } from './profile.js';
 import { BAD_TAGS, FEEDBACK_TAGS, GOOD_TAGS, type FeedbackTag } from '../guest-feedback.service.js';
 
@@ -149,12 +149,14 @@ function renderProduct(product: PublicMenuProduct, ordering = false): string {
   const picture = product.image_url
     ? `<div class="pic"><img src="${escapeHtml(product.image_url)}" alt="" loading="lazy" decoding="async"></div>`
     : '';
-  // One size (a dish by weight, «245 г») is a line under the price: the sizes
-  // list is drawn only from two up, and a guest should still see the weight
-  // ChoiceQR prints on every dish (F8, decision Д14). A blank label — a dish
-  // with no size at all — prints nothing.
+  // The facts line under the price: one size (a dish by weight, «245 г» —
+  // the sizes list is drawn only from two up, and a guest should still see
+  // the weight ChoiceQR prints on every dish; F8, decision Д14), then the
+  // owner's numbers (F14, Д34): «245 г · 420 ккал · готується ≈ 25 хв». A
+  // dish with none of it prints nothing.
   const single = product.variants.length === 1 ? product.variants[0]!.label.trim() : '';
-  const sizeLine = single ? `<p class="size">${escapeHtml(single)}</p>` : '';
+  const facts = [single, ...dishFactsParts(product)].filter((part) => part !== '');
+  const sizeLine = facts.length ? `<p class="facts">${facts.map(escapeHtml).join(' · ')}</p>` : '';
   return (
     `<li class="item" data-product="${product.id}" data-state="${state}">` +
     picture +

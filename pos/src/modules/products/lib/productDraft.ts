@@ -15,6 +15,7 @@
 import { uahInputToCents } from '@pos/platform';
 import type { AttributeValues, Product, ProductComponentInput, ProductVariant } from '@pos/platform';
 import { shapeOf, type ProductShape } from './productShape';
+import { countToInput, numberInputToWire, strengthInputToWire, tenthsToInput } from './dishNumbers';
 
 export interface VariantDraft {
   id: number;
@@ -42,6 +43,14 @@ export interface ProductDraft {
   allergens: string[];
   /** The chips under the dish on the guest menu («Гостре», «Хіт»…, F9), canonical order. */
   menuLabels: string[];
+  /**
+   * The facts line's numbers (F14) as text, so they are typed digit by digit
+   * like a price: calories of the portion, the strength as a PERCENT («4,5»;
+   * the server stores tenths), minutes to prepare. '' = not said.
+   */
+  kcal: string;
+  strength: string;
+  prepMinutes: string;
   imageUrl: string | null;
   sellable: boolean;
   /** Sold at the till, never listed to a guest (the cork fee, a bag). */
@@ -93,6 +102,9 @@ export function draftOf(product: Product): ProductDraft {
     composition: product.composition ?? '',
     allergens: [...(product.allergens ?? [])],
     menuLabels: [...(product.menu_labels ?? [])],
+    kcal: countToInput(product.kcal),
+    strength: tenthsToInput(product.strength_tenths),
+    prepMinutes: countToInput(product.prep_minutes),
     imageUrl: product.image_url ?? null,
     sellable: product.sellable !== false,
     menuHidden: product.menu_hidden === true,
@@ -111,6 +123,9 @@ export function emptyDraft(): ProductDraft {
     composition: '',
     allergens: [],
     menuLabels: [],
+    kcal: '',
+    strength: '',
+    prepMinutes: '',
     imageUrl: null,
     sellable: true,
     menuHidden: false,
@@ -134,6 +149,9 @@ export function createDirty(draft: ProductDraft, variantsTyped: boolean): boolea
     draft.composition.trim() !== '' ||
     draft.allergens.length > 0 ||
     draft.menuLabels.length > 0 ||
+    draft.kcal.trim() !== '' ||
+    draft.strength.trim() !== '' ||
+    draft.prepMinutes.trim() !== '' ||
     draft.imageUrl != null ||
     !draft.sellable ||
     draft.menuHidden ||
@@ -242,6 +260,10 @@ export function detailsOf(d: ProductDraft) {
     composition: d.composition,
     allergens: d.allergens,
     menu_labels: d.menuLabels,
+    // As typed: the server parses the text and names a bad value in words.
+    kcal: numberInputToWire(d.kcal),
+    strength_percent: strengthInputToWire(d.strength),
+    prep_minutes: numberInputToWire(d.prepMinutes),
     image_url: d.imageUrl,
     sellable: d.sellable,
     menu_hidden: d.menuHidden,
@@ -260,7 +282,7 @@ function sameSet(a: readonly number[], b: readonly number[]): boolean {
 }
 
 export interface ProductDiff {
-  /** Name, description, composition, allergens, labels, photo, sellable, hidden from the guest menu. */
+  /** Name, description, composition, allergens, labels, the facts line's numbers, photo, sellable, hidden from the guest menu. */
   details: boolean;
   shape: boolean;
   tags: boolean;
@@ -279,6 +301,9 @@ export function diffProduct(snapshot: ProductDraft, draft: ProductDraft): Produc
       snapshot.composition !== draft.composition ||
       !sameStrings(snapshot.allergens, draft.allergens) ||
       !sameStrings(snapshot.menuLabels, draft.menuLabels) ||
+      snapshot.kcal.trim() !== draft.kcal.trim() ||
+      snapshot.strength.trim() !== draft.strength.trim() ||
+      snapshot.prepMinutes.trim() !== draft.prepMinutes.trim() ||
       (snapshot.imageUrl ?? null) !== (draft.imageUrl ?? null) ||
       snapshot.sellable !== draft.sellable ||
       snapshot.menuHidden !== draft.menuHidden,

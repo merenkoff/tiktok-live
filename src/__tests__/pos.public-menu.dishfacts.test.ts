@@ -4,8 +4,9 @@
 
 // src/__tests__/pos.public-menu.dishfacts.test.ts — what a dish says about what
 // is in it: the owner's line of composition and the allergens they ticked
-// (migration 060, TechDocs/POS_QR_MENU.md phase Q3b). The first half is pure;
-// the second drives the real POS plugin.
+// (migration 060, TechDocs/POS_QR_MENU.md phase Q3b), the labels (086, F9) and
+// the facts line's numbers — calories, strength, minutes (087, F14). The first
+// half is pure; the second drives the real POS plugin.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import 'dotenv/config';
@@ -38,6 +39,15 @@ import {
 } from '../../pos/src/modules/products/components/allergens.js';
 import { MENU_LABELS, MenuLabelError, menuLabelItems, normalizeMenuLabels } from '../pos/menu-labels.js';
 import { MENU_LABELS as CLIENT_MENU_LABELS } from '../../pos/src/modules/products/components/menuLabels.js';
+import {
+  DishFactsError,
+  KCAL_MAX,
+  normalizeKcal,
+  normalizePrepMinutes,
+  normalizeStrengthTenths,
+  strengthPercentText,
+} from '../pos/dish-facts.js';
+import { dishFactsParts } from '../pos/public-menu/format.js';
 
 describe('the allergen list', () => {
   it('is the fourteen of Regulation (EU) 1169/2011 Annex II, each once, each with a label', () => {
@@ -125,6 +135,54 @@ describe('the dish labels (F9)', () => {
   });
 });
 
+describe('the facts line’s numbers (F14)', () => {
+  it('reads a count as a whole number in range, blank and null as «not said», and refuses the rest in words', () => {
+    expect(normalizeKcal(420)).toBe(420);
+    expect(normalizeKcal('420')).toBe(420);
+    expect(normalizeKcal(' 0 ')).toBe(0);
+    expect(normalizeKcal('')).toBeNull();
+    expect(normalizeKcal(null)).toBeNull();
+    expect(normalizeKcal(undefined)).toBeNull();
+    for (const bad of [-1, KCAL_MAX + 1, 1.5, '12a', 'abc', '4,5', true, {}]) {
+      expect(() => normalizeKcal(bad), String(bad)).toThrow(DishFactsError);
+    }
+    expect(() => normalizeKcal(99999)).toThrow(`Калорійність: ціле число від 0 до ${KCAL_MAX}`);
+    expect(normalizePrepMinutes('25')).toBe(25);
+    expect(normalizePrepMinutes(600)).toBe(600);
+    for (const bad of [0, 601, 2.5, '-1', 'пів години']) {
+      expect(() => normalizePrepMinutes(bad), String(bad)).toThrow('Час приготування: ціле число хвилин від 1 до 600');
+    }
+  });
+
+  it('keeps the strength in tenths: the importer sends tenths, the form a percent with a comma', () => {
+    expect(normalizeStrengthTenths(45)).toBe(45);
+    expect(normalizeStrengthTenths('400')).toBe(400);
+    expect(normalizeStrengthTenths(0)).toBe(0);
+    expect(normalizeStrengthTenths(null)).toBeNull();
+    expect(normalizeStrengthTenths('4,5', { percent: true })).toBe(45);
+    expect(normalizeStrengthTenths('4.5', { percent: true })).toBe(45);
+    expect(normalizeStrengthTenths('40', { percent: true })).toBe(400);
+    expect(normalizeStrengthTenths(13, { percent: true })).toBe(130);
+    expect(normalizeStrengthTenths('', { percent: true })).toBeNull();
+    for (const bad of [1001, 4.5, '-1']) expect(() => normalizeStrengthTenths(bad), String(bad)).toThrow(DishFactsError);
+    for (const bad of ['101', '4,55', '-4', 'міцне']) {
+      expect(() => normalizeStrengthTenths(bad, { percent: true }), bad).toThrow(
+        'Міцність: число від 0 до 100 %, не більше однієї цифри після коми'
+      );
+    }
+    expect(strengthPercentText(45)).toBe('4,5 %');
+    expect(strengthPercentText(400)).toBe('40 %');
+    expect(strengthPercentText(0)).toBe('0 %');
+  });
+
+  it('prints them as whole words in the guest’s order, «на порцію» only where the sheet asks for it', () => {
+    expect(dishFactsParts({ kcal: 420, strength_tenths: null, prep_minutes: 25 })).toEqual(['420 ккал', 'готується ≈ 25 хв']);
+    expect(dishFactsParts({ kcal: 125, strength_tenths: 130, prep_minutes: null }, true)).toEqual(['125 ккал на порцію', 'міцність 13 %']);
+    expect(dishFactsParts({ kcal: null, strength_tenths: 0, prep_minutes: null })).toEqual(['міцність 0 %']);
+    expect(dishFactsParts({ kcal: null, strength_tenths: null, prep_minutes: null })).toEqual([]);
+  });
+});
+
 describe('the composition line', () => {
   it('is one trimmed line: breaks and control characters become spaces', () => {
     expect(normalizeComposition('  Еспресо,\n молоко\t\u0000 ')).toBe('Еспресо, молоко');
@@ -148,6 +206,9 @@ describe('the guest page', () => {
     composition: '',
     allergens: [],
     labels: [],
+    kcal: null,
+    strength_tenths: null,
+    prep_minutes: null,
     image_url: null,
     stopped: false,
     available: true,
@@ -212,6 +273,33 @@ describe('the guest page', () => {
       expect(html.match(new RegExp(`<template data-label-glyph="${code}"><svg `, 'g'))).toHaveLength(1);
     }
     expect(html).toContain('<ul class="labels dish-labels" data-dish-labels aria-label="Позначки страви" hidden></ul>');
+  });
+
+  it('prints the facts line under the price — the size first, then the numbers — and nothing when there is none (F14)', () => {
+    const html = renderMenuPage(
+      menuOf(
+        dish({ kcal: 420, prep_minutes: 25, variants: [{ id: 70, label: ' 245 г ', price_cents: 5000, available: true }] }),
+        dish({ id: 8, name: 'Пиво', kcal: 150, strength_tenths: 45, variants: [{ id: 80, label: '0,5 л', price_cents: 7000, available: true }] }),
+        dish({ id: 9, name: 'Вода', strength_tenths: 0 }),
+        dish({
+          id: 10,
+          name: 'Піца',
+          prep_minutes: 20,
+          from_price_cents: 20000,
+          variants: [
+            { id: 100, label: '30 см', price_cents: 20000, available: true },
+            { id: 101, label: '50 см', price_cents: 30000, available: true },
+          ],
+        })
+      ),
+      'tok_12345678'
+    );
+    expect(html).toContain('<p class="price">50 ₴</p><p class="facts">245 г · 420 ккал · готується ≈ 25 хв</p>');
+    expect(html).toContain('<p class="facts">0,5 л · 150 ккал · міцність 4,5 %</p>');
+    expect(html).toContain('<p class="facts">міцність 0 %</p>');
+    // Two sizes: no size on the line (the sizes list follows), the number still there.
+    expect(html).toContain('<p class="price">від 200 ₴</p><p class="facts">готується ≈ 20 хв</p><ul class="sizes">');
+    expect(renderMenuPage(menuOf(dish()), 'tok_12345678')).not.toContain('class="facts"');
   });
 
   it('escapes a label’s word and skips a code it has no glyph for', () => {
@@ -374,6 +462,85 @@ describe.skipIf(!hasDb)('dish facts through the API', () => {
     });
   });
 
+  describe('the facts line’s numbers through the API (F14)', () => {
+    it('stores them from the form’s text — the strength as a percent — and the owner’s list carries them back', async () => {
+      const res = await post({ name: 'Сидр', kcal: '150', strength_percent: '4,5', prep_minutes: '', variants });
+      expect(res.statusCode).toBe(201);
+      expect(res.json()).toMatchObject({ kcal: 150, strength_tenths: 45, prep_minutes: null });
+      const list = await app.inject({ method: 'GET', url: '/api/pos/products', headers: auth(cafe.ownerToken) });
+      expect(list.json().find((p: { name: string }) => p.name === 'Сидр')).toMatchObject({ kcal: 150, strength_tenths: 45, prep_minutes: null });
+      // The importer sends tenths; a number works as well as text.
+      const vodka = await post({ name: 'Горілка', strength_tenths: 400, kcal: 1100, variants });
+      expect(vodka.json()).toMatchObject({ kcal: 1100, strength_tenths: 400 });
+    });
+
+    it('defaults to «not said» for a product that mentions none', async () => {
+      const res = await post({ name: 'Вода', variants });
+      expect(res.json()).toMatchObject({ kcal: null, strength_tenths: null, prep_minutes: null });
+    });
+
+    it('refuses a bad number with a 400 in the owner’s words, writing nothing', async () => {
+      const kcal = await post({ name: 'Забагато', kcal: '99999', variants });
+      expect(kcal.statusCode).toBe(400);
+      expect(kcal.json().error).toBe('Калорійність: ціле число від 0 до 9999');
+      const strength = await post({ name: 'Заміцне', strength_percent: '101', variants });
+      expect(strength.statusCode).toBe(400);
+      expect(strength.json().error).toBe('Міцність: число від 0 до 100 %, не більше однієї цифри після коми');
+      const minutes = await post({ name: 'Задовго', prep_minutes: 'пів години', variants });
+      expect(minutes.statusCode).toBe(400);
+      expect(minutes.json().error).toBe('Час приготування: ціле число хвилин від 1 до 600');
+      const rows = await pool.query(`SELECT 1 FROM pos_products WHERE store_id = $1 AND name IN ('Забагато', 'Заміцне', 'Задовго')`, [
+        cafe.storeId,
+      ]);
+      expect(rows.rows).toHaveLength(0);
+    });
+
+    it('updates them, leaves them alone when a patch does not mention them, and clears on null and an emptied box', async () => {
+      const made = (await post({ name: 'Деруни', kcal: 380, prep_minutes: 15, variants })).json();
+      const renamed = await patch(made.id, { name: 'Деруни зі сметаною' });
+      expect(renamed.json()).toMatchObject({ kcal: 380, strength_tenths: null, prep_minutes: 15 });
+      const changed = await patch(made.id, { kcal: '400', strength_percent: '0', prep_minutes: '20' });
+      expect(changed.json()).toMatchObject({ kcal: 400, strength_tenths: 0, prep_minutes: 20 });
+      const cleared = await patch(made.id, { kcal: null, strength_percent: '', prep_minutes: '  ' });
+      expect(cleared.json()).toMatchObject({ kcal: null, strength_tenths: null, prep_minutes: null });
+      expect((await patch(made.id, { kcal: -5 })).statusCode).toBe(400);
+      expect((await patch(made.id, { strength_percent: '4,55' })).statusCode).toBe(400);
+      expect((await patch(made.id, { prep_minutes: 0 })).statusCode).toBe(400);
+      // A seller may not write them either; an edit counts as the review.
+      expect((await patch(made.id, { kcal: 1 }, cafe.sellerToken)).statusCode).toBe(403);
+      const card = await createProduct(cafe.storeId, { name: 'З приходу з числом', needs_review: true, variants });
+      await patch(card!.id, { prep_minutes: 5 });
+      const row = await pool.query(`SELECT needs_review, prep_minutes FROM pos_products WHERE id = $1`, [card!.id]);
+      expect(row.rows[0]).toEqual({ needs_review: false, prep_minutes: 5 });
+    });
+
+    it('reaches the guest as three nullable numbers, drawn on the page, kept on a card nobody reviewed, and moving the fingerprint', async () => {
+      const made = (await post({ name: 'Бограч ситний', kcal: 520, prep_minutes: 25, variants: [{ attributes: { size: '350 г' }, price_cents: 9000, quantity: 10 }] })).json();
+      const unreviewed = await createProduct(cafe.storeId, {
+        name: 'Неперевірений сидр',
+        description: 'Створено з приходу ПР-14',
+        strength_tenths: 45,
+        needs_review: true,
+        variants,
+      });
+      invalidatePublicMenu(cafe.storeId);
+      const now = await menu();
+      expect(dishOf(now, 'Бограч ситний')).toMatchObject({ kcal: 520, strength_tenths: null, prep_minutes: 25 });
+      const cider = dishOf(now, 'Неперевірений сидр')!;
+      expect(cider.description).toBe('');
+      expect(cider).toMatchObject({ kcal: null, strength_tenths: 45, prep_minutes: null });
+
+      const html = (await app.inject({ method: 'GET', url: `/m/${token}` })).body;
+      expect(html).toContain('<p class="facts">350 г · 520 ккал · готується ≈ 25 хв</p>');
+      expect(html).toContain('<p class="facts">міцність 4,5 %</p>');
+
+      const before = now.rev;
+      await patch(made.id, { kcal: 500 });
+      expect((await menu()).rev).not.toBe(before);
+      await patch(unreviewed!.id, { is_active: false });
+    });
+  });
+
   describe('what the guest gets', () => {
     it('carries the composition and the labels of the ticked allergens, and nothing else about them', async () => {
       const res = await app.inject({ method: 'GET', url: `/api/pos/public/menu/${token}` });
@@ -513,6 +680,46 @@ describe.skipIf(!hasDb)('dish facts through the API', () => {
       const stopped = await menu();
       expect(dishOf(stopped, 'Стоп-тест')!.stopped).toBe(true);
       expect(stopped.rev).toBe(before);
+    });
+  });
+
+  describe('migration 087', () => {
+    it('is safe to apply again, keeps the owner’s numbers, and its CHECKs refuse what the application refuses', async () => {
+      const made = (await post({ name: 'Власні числа', kcal: 300, strength_percent: '5', prep_minutes: 10, variants })).json();
+      await pool.query(readMigration('087_pos_product_dish_numbers.sql'));
+      await pool.query(readMigration('087_pos_product_dish_numbers.sql'));
+      const row = await pool.query(`SELECT kcal, strength_tenths, prep_minutes FROM pos_products WHERE id = $1`, [made.id]);
+      expect(row.rows[0]).toEqual({ kcal: 300, strength_tenths: 50, prep_minutes: 10 });
+      for (const [column, value] of [['kcal', 10000], ['strength_tenths', 1001], ['prep_minutes', 0]] as const) {
+        await expect(pool.query(`UPDATE pos_products SET ${column} = $2 WHERE id = $1`, [made.id, value])).rejects.toThrow(/check/);
+      }
+    });
+
+    it('fills a demo dish nobody has touched — once — and never over its owner’s numbers', async () => {
+      const demo = await pool.query(
+        `SELECT p.id, p.kcal, p.strength_tenths, p.prep_minutes
+         FROM pos_products p JOIN pos_stores s ON s.id = p.store_id
+         WHERE s.slug = 'demo-restaurant' AND p.name = 'Вино червоне, келих'`
+      );
+      if (demo.rows.length === 0) return;
+      const original = demo.rows[0];
+      try {
+        await pool.query(`UPDATE pos_products SET kcal = NULL, strength_tenths = NULL, prep_minutes = NULL WHERE id = $1`, [original.id]);
+        await pool.query(readMigration('087_pos_product_dish_numbers.sql'));
+        const filled = await pool.query(`SELECT kcal, strength_tenths, prep_minutes FROM pos_products WHERE id = $1`, [original.id]);
+        expect(filled.rows[0]).toEqual({ kcal: 125, strength_tenths: 130, prep_minutes: null });
+        await pool.query(`UPDATE pos_products SET kcal = 99, strength_tenths = NULL, prep_minutes = NULL WHERE id = $1`, [original.id]);
+        await pool.query(readMigration('087_pos_product_dish_numbers.sql'));
+        const kept = await pool.query(`SELECT kcal, strength_tenths FROM pos_products WHERE id = $1`, [original.id]);
+        expect(kept.rows[0]).toEqual({ kcal: 99, strength_tenths: null });
+      } finally {
+        await pool.query(`UPDATE pos_products SET kcal = $2, strength_tenths = $3, prep_minutes = $4 WHERE id = $1`, [
+          original.id,
+          original.kcal,
+          original.strength_tenths,
+          original.prep_minutes,
+        ]);
+      }
     });
   });
 

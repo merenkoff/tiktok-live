@@ -420,10 +420,13 @@ describe.skipIf(!hasDb)('POS guest QR menu', () => {
         'from_price_cents',
         'id',
         'image_url',
+        'kcal',
         'labels',
         'modifier_groups',
         'name',
+        'prep_minutes',
         'stopped',
+        'strength_tenths',
         'variants',
       ]);
       expect(Object.keys(latte.variants[0]!).sort()).toEqual(['available', 'id', 'label', 'price_cents']);

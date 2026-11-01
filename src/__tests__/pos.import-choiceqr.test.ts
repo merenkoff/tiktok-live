@@ -119,7 +119,7 @@ describe.skipIf(!hasDb)('POST /api/pos/super/stores/:id/import/choiceqr', () => 
     ]);
 
     const rows = await pool.query(
-      `SELECT p.name, p.kind, p.description, p.image_url, p.menu_labels, t.name AS tag,
+      `SELECT p.name, p.kind, p.description, p.image_url, p.menu_labels, p.kcal, p.strength_tenths, p.prep_minutes, t.name AS tag,
               v.label, v.unit, v.price_cents, s.quantity
          FROM pos_products p
          JOIN pos_product_tags pt ON pt.product_id = p.id JOIN pos_tags t ON t.id = pt.tag_id
@@ -134,7 +134,10 @@ describe.skipIf(!hasDb)('POST /api/pos/super/stores/:id/import/choiceqr', () => 
     ]);
     expect(vzvar[0]).toMatchObject({ kind: 'simple', unit: 'шт', tag: 'Холодні напої' });
     expect(vzvar[0].image_url).toMatch(/^\/pos-uploads\/[0-9a-f-]+\.png$/);
-    expect(rows.rows.find((r) => r.name === 'Борщ')).toMatchObject({ description: 'з пампушкою', label: '300 г', menu_labels: ['spicy'] });
+    expect(rows.rows.find((r) => r.name === 'Борщ')).toMatchObject({ description: 'з пампушкою', label: '300 г', menu_labels: ['spicy'], kcal: 320, strength_tenths: null, prep_minutes: 15 });
+    // The facts line's numbers (F14): the strength both sizes say, the calories only the big one does; 0 on the page is «not said».
+    expect(rows.rows.find((r) => r.name === 'Гетьман')).toMatchObject({ kcal: 1100, strength_tenths: 400, prep_minutes: null });
+    expect(rows.rows.find((r) => r.name === 'Бульйон')).toMatchObject({ kcal: null, strength_tenths: null, prep_minutes: null });
     expect(rows.rows.find((r) => r.name === 'Гетьман')?.image_url).toBeNull();
     // The card's labels are the union over its sizes (F9); «Не містить глютену» stays behind.
     expect(rows.rows.find((r) => r.name === 'Гетьман')?.menu_labels).toEqual(['vegan', 'recommended']);

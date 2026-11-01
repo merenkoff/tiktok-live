@@ -1020,6 +1020,13 @@ export const FEATURES = {
     label:
       'Позначки страв у QR-меню: «Гостре», «Вегетаріанське», «Веганське», «Новинка», «Хіт», «Рекомендуємо» — кольорові чіпи з іконкою під назвою страви, які відмічає власник',
   },
+  // F14 (TechDocs/POS_QR_MENU_FEEDBACK.md §11.7, 2026-11-01): the three
+  // numbers under the price, typed by the owner in the product card.
+  dishNutrition: {
+    status: 'available',
+    label:
+      'Калорійність порції, міцність напою і час приготування в QR-меню — одним рядком під ціною страви («420 ккал · готується ≈ 25 хв»), які вписує власник',
+  },
   // The guest-feedback track (TechDocs/POS_QR_MENU_FEEDBACK.md, phases F1–F7,
   // deployed 2026-10-31): the place's contacts, its own-alcohol terms and the
   // guest's feedback — all on the same QR-menu page, nothing of it a separate
@@ -1118,6 +1125,7 @@ export const POS_FEATURE_IDS: FeatureId[] = [
   'qrMenuProfile',
   'dishAllergens',
   'dishLabels',
+  'dishNutrition',
   'qrMenuSocials',
   'menuHouseRules',
   'guestFeedback',
@@ -1271,7 +1279,7 @@ export const VERTICALS: readonly VerticalFact[] = [
     eyebrow: 'Програма для кав\'ярні за стійкою',
     tagline: 'Тап — і «як завжди»; модифікатори, дошка кухні, стоп-лист, техкарти з фудкостом і матриця меню.',
     bullets: ['Модифікатори з ціною на кнопці', 'Дошка кухні й бару, стоп-лист', 'Техкарти й фудкост'],
-    featureIds: ['cafeModifiers', 'cafeKitchenBoard', 'cafeTechCards', 'cafeMenuMatrix', 'cafeKitchenTicket', 'qrMenu', 'qrMenuProfile', 'dishAllergens', 'dishLabels', 'qrMenuSocials', 'guestFeedback'],
+    featureIds: ['cafeModifiers', 'cafeKitchenBoard', 'cafeTechCards', 'cafeMenuMatrix', 'cafeKitchenTicket', 'qrMenu', 'qrMenuProfile', 'dishAllergens', 'dishLabels', 'dishNutrition', 'qrMenuSocials', 'guestFeedback'],
     illustrations: ['/demo-cafe/latte.svg', '/demo-cafe/croissant.svg', '/demo-cafe/espresso.svg'],
     tint: 'bg-tint-cafe',
   },
@@ -1284,7 +1292,7 @@ export const VERTICALS: readonly VerticalFact[] = [
     eyebrow: 'Програма для ресторану зі столами',
     tagline: 'План залу, відкриті рахунки, раунди на кухню, передчек і розділення рахунку — з планшета офіціанта.',
     bullets: ['План залу з рахунками столів', 'Раунди на кухню з планшета', 'Розділити рахунок, передчек'],
-    featureIds: ['tablesFloorPlan', 'tablesRounds', 'tablesSplitBill', 'tablesPrecheck', 'cafeKitchenBoard', 'qrMenu', 'qrMenuTables', 'qrMenuProfile', 'dishAllergens', 'dishLabels', 'qrMenuSocials', 'menuHouseRules', 'guestFeedback', 'guestBill', 'guestOrder', 'waiterCall', 'guestAutoKitchen', 'waiterTablet'],
+    featureIds: ['tablesFloorPlan', 'tablesRounds', 'tablesSplitBill', 'tablesPrecheck', 'cafeKitchenBoard', 'qrMenu', 'qrMenuTables', 'qrMenuProfile', 'dishAllergens', 'dishLabels', 'dishNutrition', 'qrMenuSocials', 'menuHouseRules', 'guestFeedback', 'guestBill', 'guestOrder', 'waiterCall', 'guestAutoKitchen', 'waiterTablet'],
     illustrations: ['/demo-restaurant/borscht.svg', '/demo-restaurant/ribeye.svg', '/demo-restaurant/wine-red.svg'],
     tint: 'bg-tint-restaurant',
   },

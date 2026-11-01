@@ -88,6 +88,9 @@ function product(over: Partial<PublicMenuProduct> & { id: number; name: string }
     composition: '',
     allergens: [],
     labels: [],
+    kcal: null,
+    strength_tenths: null,
+    prep_minutes: null,
     image_url: null,
     stopped: false,
     available: true,
@@ -417,9 +420,9 @@ describe('the dish sheet (phase F8)', () => {
       },
       'tok_ABCdef12'
     );
-    expect(weighed).toMatch(/<p class="price">175.₴<\/p><p class="size">245 г &lt;x&gt;<\/p>/);
+    expect(weighed).toMatch(/<p class="price">175.₴<\/p><p class="facts">245 г &lt;x&gt;<\/p>/);
     // Product 7 has two sizes (a list), 8 and 9 a blank label: no size line anywhere.
-    expect(html).not.toContain('class="size"');
+    expect(html).not.toContain('class="facts"');
     expect(html).toContain('<ul class="sizes">');
   });
 });

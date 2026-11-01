@@ -20,6 +20,10 @@ export interface FakeItem {
   available?: boolean;
   /** ChoiceQR's `menu_labels`: a fixed `type`, or `custom: true` with its own `name`. */
   labels?: Array<{ type?: string; custom?: boolean; name?: string }>;
+  /** ChoiceQR's `kcal`, `alcohol` (percent) and `preparationTime` (minutes): integers, 0 = not said (F14). */
+  kcal?: number;
+  alcohol?: number;
+  preparationTime?: number;
 }
 
 export const FAKE_CATEGORIES = [
@@ -32,14 +36,15 @@ export const FAKE_CATEGORIES = [
 
 export const FAKE_ITEMS: FakeItem[] = [
   // Both spiciness grades fold into one «Гостре»; the custom label is reported, not carried.
-  { id: 'i1', category: 'c-soup', name: 'Борщ', price: 15500, weight: '300', weightType: 'g', description: 'з пампушкою', photo: `${MEDIA}/borshch.jpeg`, labels: [{ type: 'spicy', custom: false }, { type: 'middle-spicy', custom: false }, { type: 'custom', custom: true, name: 'Хіт сезону' }] },
+  { id: 'i1', category: 'c-soup', name: 'Борщ', price: 15500, weight: '300', weightType: 'g', description: 'з пампушкою', photo: `${MEDIA}/borshch.jpeg`, labels: [{ type: 'spicy', custom: false }, { type: 'middle-spicy', custom: false }, { type: 'custom', custom: true, name: 'Хіт сезону' }], kcal: 320, preparationTime: 15 },
   { id: 'i2', category: 'c-soup', name: 'Бульйон', price: 12000, weight: '300', weightType: 'g', photo: null },
   { id: 'i3', category: 'c-drinks', name: 'Взвар', price: 11000, weight: '1', weightType: 'l', photo: `${MEDIA}/vzvar.jpeg` },
   { id: 'i4', category: 'c-drinks', name: 'Взвар ', price: 4000, weight: '300', weightType: 'ml' },
   { id: 'i5', category: 'c-drinks', name: 'Лимонад', price: 8500, weight: '300', weightType: 'ml', available: false },
   // «Не містить глютену» is a claim the till never makes; the card takes the labels of BOTH sizes.
-  { id: 'i6', category: 'c-vodka', name: 'Гетьман', price: 5000, weight: '50', weightType: 'ml', photo: 'https://evil.example.com/x.jpeg', labels: [{ type: 'gluten', custom: false }, { type: 'recommended', custom: false }] },
-  { id: 'i7', category: 'c-vodka', name: 'Гетьман', price: 35000, weight: '500', weightType: 'ml', labels: [{ type: 'vegan', custom: false }] },
+  // The strength is the drink's: the card takes the first size's (both say 40 here); kcal only the big bottle says.
+  { id: 'i6', category: 'c-vodka', name: 'Гетьман', price: 5000, weight: '50', weightType: 'ml', photo: 'https://evil.example.com/x.jpeg', labels: [{ type: 'gluten', custom: false }, { type: 'recommended', custom: false }], alcohol: 40 },
+  { id: 'i7', category: 'c-vodka', name: 'Гетьман', price: 35000, weight: '500', weightType: 'ml', labels: [{ type: 'vegan', custom: false }], alcohol: 40, kcal: 1100 },
   { id: 'i8', category: 'c-side', name: 'Печена картопля', price: 11500, weight: '300', weightType: 'g' },
   { id: 'i9', category: 'c-side', name: 'Печена картопля', price: 15500, weight: '300', weightType: 'g' },
   { id: 'i10', category: 'c-side', name: 'Печена картопля', price: 11500, weight: '300', weightType: 'g' },
@@ -79,6 +84,11 @@ export function choiceQrPage(items: FakeItem[] = FAKE_ITEMS): string {
           media: i.photo ? [{ url: i.photo, medium: i.photo, big: i.photo }] : [],
           available: i.available !== false,
           menu_labels: (i.labels ?? []).map((l, n) => ({ _id: `${i.id}-l${n}`, ...l })),
+          // As on the real page: present on every dish, 0 where nothing was said.
+          kcal: i.kcal ?? 0,
+          alcohol: i.alcohol ?? 0,
+          preparationTime: i.preparationTime ?? 0,
+          externalMedia: [],
         })),
       },
     },

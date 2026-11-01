@@ -110,6 +110,15 @@ export interface PublicMenuProduct {
   allergens: Allergen[];
   /** The chips under the name — «Гостре», «Хіт», … (phase F9), in canonical order; empty = none. */
   labels: MenuLabel[];
+  /**
+   * The facts line's numbers (phase F14, migration 087), each null for «not
+   * said»: the calories of the portion as served, the strength in tenths of
+   * a percent (45 = 4,5 %), the time in minutes. The page prints them as
+   * words («420 ккал · міцність 4,5 % · готується ≈ 25 хв»).
+   */
+  kcal: number | null;
+  strength_tenths: number | null;
+  prep_minutes: number | null;
   image_url: string | null;
   /** On the day's stop-list. Wins over «немає» in what the guest reads. */
   stopped: boolean;
@@ -309,9 +318,21 @@ interface DishTexts {
   allergens: Allergen[];
   /** The owner's own ticks, so a card nobody has reviewed keeps them (unlike its texts). */
   labels: MenuLabel[];
+  /** The owner's own numbers (F14) — kept on an unreviewed card for the same reason as the labels. */
+  kcal: number | null;
+  strength_tenths: number | null;
+  prep_minutes: number | null;
 }
 
-const NO_TEXTS: DishTexts = { description: '', composition: '', allergens: [], labels: [] };
+const NO_TEXTS: DishTexts = {
+  description: '',
+  composition: '',
+  allergens: [],
+  labels: [],
+  kcal: null,
+  strength_tenths: null,
+  prep_minutes: null,
+};
 
 function projectProduct(rows: CatalogItem[], texts: DishTexts): PublicMenuProduct {
   const first = rows[0]!;
@@ -366,6 +387,9 @@ function projectProduct(rows: CatalogItem[], texts: DishTexts): PublicMenuProduc
     composition: texts.composition,
     allergens: texts.allergens,
     labels: texts.labels,
+    kcal: texts.kcal,
+    strength_tenths: texts.strength_tenths,
+    prep_minutes: texts.prep_minutes,
     image_url: safeImageUrl(first.image_url),
     stopped,
     available: variants.some((v) => v.available),
@@ -426,7 +450,8 @@ async function buildPublicMenu(store: MenuStore): Promise<PublicMenu> {
   const hidden = new Set<number>();
   if (ids.length > 0) {
     const result = await pool.query(
-      `SELECT id, description, composition, allergens, menu_labels, needs_review, menu_hidden
+      `SELECT id, description, composition, allergens, menu_labels, kcal, strength_tenths, prep_minutes,
+              needs_review, menu_hidden
        FROM pos_products WHERE store_id = $1 AND id = ANY($2::bigint[])`,
       [store.id, ids]
     );
@@ -438,12 +463,19 @@ async function buildPublicMenu(store: MenuStore): Promise<PublicMenu> {
       // The chips (F9) are the owner's own ticks, so they stay on a card
       // nobody has reviewed — unlike its texts, below.
       const labels = menuLabelItems(Array.isArray(row.menu_labels) ? (row.menu_labels as string[]) : []);
+      // The numbers (F14) are the owner's own too; the CHECKs in 087 keep
+      // them in range, so a stored value is printed as it is.
+      const numbers = {
+        kcal: row.kcal == null ? null : Number(row.kcal),
+        strength_tenths: row.strength_tenths == null ? null : Number(row.strength_tenths),
+        prep_minutes: row.prep_minutes == null ? null : Number(row.prep_minutes),
+      };
       // A card nobody has reviewed yet (made from a receiving document or at the
       // bench) carries INTERNAL text — «Створено з приходу ПР-12» — in the very
       // field the guest reads. It stays off the page until the owner edits the
       // card, which clears the flag; the dish itself is still listed.
       if (row.needs_review === true) {
-        texts.set(Number(row.id), { ...NO_TEXTS, labels });
+        texts.set(Number(row.id), { ...NO_TEXTS, labels, ...numbers });
         continue;
       }
       const description = typeof row.description === 'string' ? row.description.trim() : '';
@@ -453,6 +485,7 @@ async function buildPublicMenu(store: MenuStore): Promise<PublicMenu> {
         composition: composition.slice(0, COMPOSITION_MAX),
         allergens: allergenLabels(Array.isArray(row.allergens) ? (row.allergens as string[]) : []),
         labels,
+        ...numbers,
       });
     }
   }
