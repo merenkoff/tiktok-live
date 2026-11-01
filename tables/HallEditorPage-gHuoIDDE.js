@@ -1,17 +1,17 @@
-import { C as e, E as t, L as n, M as r, T as i, Y as a, _ as o, et as s, l as c, m as l, t as u, u as d } from "./useHallMap-BvQLb8Lp.js";
+import { E as e, O as t, P as n, Z as r, l as i, m as a, rt as o, t as s, u as c, v as l, w as u, z as d } from "./useHallMap-D3r3NK5N.js";
 import { useCallback as f, useEffect as p, useMemo as m, useRef as h, useState as g } from "react";
 import { Fragment as _, jsx as v, jsxs as y } from "react/jsx-runtime";
 import { Link as b } from "react-router-dom";
-//#region src/components/ui/Page.tsx
-function x({ title: e, glyph: t, subtitle: r, actions: i, back: a }) {
+// src/components/ui/Page.tsx
+function x({ title: e, glyph: t, subtitle: n, actions: r, back: i }) {
 	return /* @__PURE__ */ y("header", {
 		className: "mb-7 space-y-1.5",
 		"data-testid": "page-header",
 		children: [
-			a && /* @__PURE__ */ y(b, {
-				to: a.to,
+			i && /* @__PURE__ */ y(b, {
+				to: i.to,
 				className: "inline-flex items-center gap-1 min-h-9 text-[15px] font-semibold text-sq-blue",
-				children: [/* @__PURE__ */ v(n, { size: 20 }), a.label]
+				children: [/* @__PURE__ */ v(d, { size: 20 }), i.label]
 			}),
 			/* @__PURE__ */ y("div", {
 				className: "flex flex-wrap items-center gap-x-3 gap-y-2",
@@ -24,15 +24,15 @@ function x({ title: e, glyph: t, subtitle: r, actions: i, back: a }) {
 						className: "text-[30px] font-bold text-sq-heading leading-tight",
 						children: e
 					}),
-					i && /* @__PURE__ */ v("div", {
+					r && /* @__PURE__ */ v("div", {
 						className: "ml-auto flex flex-wrap items-center gap-2",
-						children: i
+						children: r
 					})
 				]
 			}),
-			r && /* @__PURE__ */ v("div", {
+			n && /* @__PURE__ */ v("div", {
 				className: "text-[15px] text-sq-secondary max-w-3xl leading-relaxed",
-				children: r
+				children: n
 			})
 		]
 	});
@@ -96,8 +96,7 @@ function D(e, t, n) {
 		...n
 	} : e);
 }
-//#endregion
-//#region src/modules/tables/lib/useTableDrag.ts
+// src/modules/tables/lib/useTableDrag.ts
 var O = 6;
 function k(e) {
 	let [t, n] = g({
@@ -144,8 +143,7 @@ function k(e) {
 		suppressClick: f(() => r.current ? (r.current = !1, !0) : !1, [])
 	};
 }
-//#endregion
-//#region src/modules/tables/lib/publicMenu.ts
+// src/modules/tables/lib/publicMenu.ts
 var A = /^\d{9,12}\.[A-Za-z0-9_-]{43}$/;
 function j(e) {
 	return typeof e == "string" && /^https?:\/\//i.test(e);
@@ -167,68 +165,67 @@ async function M() {
 		return { kind: "none" };
 	}
 }
-function ee(e, t, n = null) {
+function N(e, t, n = null) {
 	return `${e}/qr?t=${t}${n ? `&p=${n}` : ""}`;
 }
-function N(e, t = null) {
+function P(e, t = null) {
 	return `${e}/tables${t ? `?p=${t}` : ""}`;
 }
-//#endregion
-//#region src/modules/tables/pages/HallEditorPage.tsx
-var P = {
+// src/modules/tables/pages/HallEditorPage.tsx
+var F = {
 	name: "",
 	seats: 2,
 	width: 2,
 	height: 2,
 	shape: "rect"
 };
-function F() {
-	let [t, n] = g([]), [h, b] = g(null), [O, A] = g(!0), [j, F] = g(null), [I, L] = g(!1), [R, z] = g(null), [B, V] = g(P), [H, U] = g(""), [W, G] = g({ kind: "none" });
+function I() {
+	let [t, d] = g([]), [h, b] = g(null), [O, A] = g(!0), [j, I] = g(null), [L, R] = g(!1), [z, B] = g(null), [V, H] = g(F), [U, W] = g(""), [G, K] = g({ kind: "none" });
 	p(() => {
 		let e = !0;
 		return M().then((t) => {
-			e && G(t);
+			e && K(t);
 		}), () => {
 			e = !1;
 		};
 	}, []);
-	let K = f(async () => {
+	let q = f(async () => {
 		try {
-			let { halls: e } = await l();
-			n(e);
+			let { halls: e } = await a();
+			d(e);
 		} catch (e) {
-			F(u(e, "Не вдалося прочитати зали"));
+			I(s(e, "Не вдалося прочитати зали"));
 		} finally {
 			A(!1);
 		}
 	}, []);
 	p(() => {
-		K();
-	}, [K]);
-	let q = t.find((e) => e.id === h) ?? t[0] ?? null, J = m(() => q?.tables ?? [], [q]), Y = m(() => T(J), [J]), X = !!((typeof R == "number" ? J.find((e) => e.id === R) : void 0)?.is_active && q?.is_active), Z = t.some((e) => e.is_active && e.tables.some((e) => e.is_active));
+		q();
+	}, [q]);
+	let J = t.find((e) => e.id === h) ?? t[0] ?? null, Y = m(() => J?.tables ?? [], [J]), X = m(() => T(Y), [Y]), Z = !!((typeof z == "number" ? Y.find((e) => e.id === z) : void 0)?.is_active && J?.is_active), ee = t.some((e) => e.is_active && e.tables.some((e) => e.is_active));
 	async function Q(e) {
-		if (I) return !1;
-		L(!0), F(null);
+		if (L) return !1;
+		R(!0), I(null);
 		try {
-			return await e(), await K(), !0;
+			return await e(), await q(), !0;
 		} catch (e) {
-			return await K(), F(u(e, "Не вдалося зберегти")), !1;
+			return await q(), I(s(e, "Не вдалося зберегти")), !1;
 		} finally {
-			L(!1);
+			R(!1);
 		}
 	}
-	let { drag: $, start: te, suppressClick: ne } = k(f((e, t, r) => {
-		if (!q) return;
-		let i = q.tables.find((t) => t.id === e);
-		if (!i) return;
-		let a = w(i, C(t, r)), s = D(q.tables, e, a), c = E(q.tables, s);
-		c.length !== 0 && (n((e) => e.map((e) => e.id === q.id ? {
+	let { drag: $, start: te, suppressClick: ne } = k(f((e, t, n) => {
+		if (!J) return;
+		let r = J.tables.find((t) => t.id === e);
+		if (!r) return;
+		let i = w(r, C(t, n)), a = D(J.tables, e, i), o = E(J.tables, a);
+		o.length !== 0 && (d((e) => e.map((e) => e.id === J.id ? {
 			...e,
-			tables: s
-		} : e)), Q(() => o(c)));
-	}, [q, I]));
+			tables: a
+		} : e)), Q(() => l(o)));
+	}, [J, L]));
 	function re(e) {
-		z(e.id), V({
+		B(e.id), H({
 			name: e.name,
 			seats: e.seats,
 			width: e.width,
@@ -237,12 +234,12 @@ function F() {
 		});
 	}
 	async function ie() {
-		q && await Q(() => R === "new" ? d({
-			...B,
-			hall_id: q.id,
+		J && await Q(() => z === "new" ? c({
+			...V,
+			hall_id: J.id,
 			pos_x: 0,
 			pos_y: 0
-		}) : i(R, B)) && z(null);
+		}) : e(z, V)) && B(null);
 	}
 	return O ? /* @__PURE__ */ v("p", {
 		className: "p-6 text-center text-sm text-sq-muted",
@@ -252,13 +249,13 @@ function F() {
 		"data-testid": "hall-editor",
 		children: [
 			/* @__PURE__ */ v(x, {
-				glyph: s,
+				glyph: o,
 				title: "Зали і столи",
-				subtitle: q ? "Перетягніть стіл, щоб поставити його на місце. Тап — щоб змінити." : void 0,
-				actions: q && /* @__PURE__ */ y(_, { children: [W.kind === "on" && Z && /* @__PURE__ */ v("a", {
+				subtitle: J ? "Перетягніть стіл, щоб поставити його на місце. Тап — щоб змінити." : void 0,
+				actions: J && /* @__PURE__ */ y(_, { children: [G.kind === "on" && ee && /* @__PURE__ */ v("a", {
 					className: "sq-btn-quiet whitespace-nowrap",
 					"data-testid": "editor-qr-sheet",
-					href: N(W.url, W.print),
+					href: P(G.url, G.print),
 					target: "_blank",
 					rel: "noopener noreferrer",
 					children: "QR для всіх столів"
@@ -266,18 +263,18 @@ function F() {
 					type: "button",
 					className: "pos-btn-primary min-h-11 px-4 rounded-sq text-[15px] gap-1.5",
 					"data-testid": "editor-table-add",
-					disabled: I,
+					disabled: L,
 					onClick: () => {
-						z("new"), V(P);
+						B("new"), H(F);
 					},
-					children: [/* @__PURE__ */ v(a, { size: 20 }), "Стіл"]
+					children: [/* @__PURE__ */ v(r, { size: 20 }), "Стіл"]
 				})] })
 			}),
 			/* @__PURE__ */ y("div", {
 				className: "mb-4 flex flex-wrap items-center gap-3",
 				children: [
 					t.length > 0 && /* @__PURE__ */ v(S, {
-						value: String(q?.id ?? ""),
+						value: String(J?.id ?? ""),
 						options: t.map((e) => ({
 							value: String(e.id),
 							label: `${e.name}${e.is_active ? "" : " · прибрано"}`,
@@ -285,13 +282,13 @@ function F() {
 						})),
 						onChange: (e) => b(Number(e))
 					}),
-					q && /* @__PURE__ */ v("button", {
+					J && /* @__PURE__ */ v("button", {
 						type: "button",
 						className: "min-h-11 text-[15px] font-semibold text-sq-blue disabled:opacity-50",
 						"data-testid": "editor-hall-retire",
-						disabled: I,
-						onClick: () => void Q(() => e(q.id, { is_active: !q.is_active })),
-						children: q.is_active ? "Прибрати залу" : "Повернути залу"
+						disabled: L,
+						onClick: () => void Q(() => u(J.id, { is_active: !J.is_active })),
+						children: J.is_active ? "Прибрати залу" : "Повернути залу"
 					}),
 					/* @__PURE__ */ y("div", {
 						className: "ml-auto flex items-center gap-2",
@@ -299,16 +296,16 @@ function F() {
 							className: "sq-input w-44",
 							"data-testid": "editor-hall-name",
 							placeholder: "Нова зала",
-							value: H,
-							onChange: (e) => U(e.target.value)
+							value: U,
+							onChange: (e) => W(e.target.value)
 						}), /* @__PURE__ */ v("button", {
 							type: "button",
 							className: "sq-btn-quiet whitespace-nowrap",
 							"data-testid": "editor-hall-add",
-							disabled: I || H.trim().length === 0,
+							disabled: L || U.trim().length === 0,
 							onClick: () => {
-								let e = H.trim();
-								U(""), Q(() => c(e));
+								let e = U.trim();
+								W(""), Q(() => i(e));
 							},
 							children: "Додати залу"
 						})]
@@ -320,11 +317,11 @@ function F() {
 				"data-testid": "editor-banner",
 				children: j
 			}),
-			!q && /* @__PURE__ */ y("div", {
+			!J && /* @__PURE__ */ y("div", {
 				className: "py-14 text-center",
 				"data-testid": "editor-empty",
 				children: [
-					/* @__PURE__ */ v(s, {
+					/* @__PURE__ */ v(o, {
 						size: 48,
 						className: "mx-auto"
 					}),
@@ -338,16 +335,16 @@ function F() {
 					})
 				]
 			}),
-			q && /* @__PURE__ */ v("div", {
+			J && /* @__PURE__ */ v("div", {
 				className: "relative overflow-auto rounded-card bg-sq-sidebar p-3",
 				"data-testid": "editor-grid",
 				style: {
 					display: "grid",
-					gridTemplateColumns: `repeat(${Y.cols}, 72px)`,
+					gridTemplateColumns: `repeat(${X.cols}, 72px)`,
 					gridAutoRows: "72px",
 					gap: "4px"
 				},
-				children: J.map((e) => {
+				children: Y.map((e) => {
 					let t = $.id === e.id;
 					return /* @__PURE__ */ y("button", {
 						type: "button",
@@ -355,13 +352,9 @@ function F() {
 						"data-dragging": t ? "yes" : "no",
 						onPointerDown: (t) => te(t, e.id),
 						onClick: (t) => {
-							if (ne()) {
-								t.preventDefault();
-								return;
-							}
-							re(e);
+							ne() ? t.preventDefault() : re(e);
 						},
-						className: `flex flex-col items-center justify-center gap-0.5 p-2 text-center transition-shadow ${e.shape === "round" ? "rounded-full" : "rounded-card"} ${e.is_active ? t || R === e.id ? "bg-white ring-2 ring-sq-blue shadow-card-hover" : "bg-white ring-1 ring-sq-divider shadow-card" : "bg-sq-empty opacity-60"}`,
+						className: `flex flex-col items-center justify-center gap-0.5 p-2 text-center transition-shadow ${e.shape === "round" ? "rounded-full" : "rounded-card"} ${e.is_active ? t || z === e.id ? "bg-white ring-2 ring-sq-blue shadow-card-hover" : "bg-white ring-1 ring-sq-divider shadow-card" : "bg-sq-empty opacity-60"}`,
 						style: {
 							gridColumn: `${e.pos_x + 1} / span ${e.width}`,
 							gridRow: `${e.pos_y + 1} / span ${e.height}`,
@@ -374,12 +367,12 @@ function F() {
 							children: e.name
 						}), /* @__PURE__ */ v("span", {
 							className: "text-[13px] text-sq-muted",
-							children: r(e.seats)
+							children: n(e.seats)
 						})]
 					}, e.id);
 				})
 			}),
-			R != null && /* @__PURE__ */ y("div", {
+			z != null && /* @__PURE__ */ y("div", {
 				className: "sq-card mt-5 p-5",
 				"data-testid": "editor-form",
 				children: [
@@ -394,9 +387,9 @@ function F() {
 								}), /* @__PURE__ */ v("input", {
 									className: "sq-input w-28",
 									"data-testid": "editor-form-name",
-									value: B.name,
-									onChange: (e) => V({
-										...B,
+									value: V.name,
+									onChange: (e) => H({
+										...V,
 										name: e.target.value
 									})
 								})]
@@ -411,9 +404,9 @@ function F() {
 									type: "number",
 									min: 1,
 									"data-testid": "editor-form-seats",
-									value: B.seats,
-									onChange: (e) => V({
-										...B,
+									value: V.seats,
+									onChange: (e) => H({
+										...V,
 										seats: Number(e.target.value)
 									})
 								})]
@@ -428,9 +421,9 @@ function F() {
 									type: "number",
 									min: 1,
 									"data-testid": "editor-form-width",
-									value: B.width,
-									onChange: (e) => V({
-										...B,
+									value: V.width,
+									onChange: (e) => H({
+										...V,
 										width: Number(e.target.value)
 									})
 								})]
@@ -445,9 +438,9 @@ function F() {
 									type: "number",
 									min: 1,
 									"data-testid": "editor-form-height",
-									value: B.height,
-									onChange: (e) => V({
-										...B,
+									value: V.height,
+									onChange: (e) => H({
+										...V,
 										height: Number(e.target.value)
 									})
 								})]
@@ -456,11 +449,11 @@ function F() {
 								type: "button",
 								"data-testid": "editor-form-shape",
 								className: "sq-btn-quiet",
-								onClick: () => V({
-									...B,
-									shape: B.shape === "rect" ? "round" : "rect"
+								onClick: () => H({
+									...V,
+									shape: V.shape === "rect" ? "round" : "rect"
 								}),
-								children: B.shape === "rect" ? "Прямокутний" : "Круглий"
+								children: V.shape === "rect" ? "Прямокутний" : "Круглий"
 							})
 						]
 					}),
@@ -471,37 +464,37 @@ function F() {
 								type: "button",
 								className: "pos-btn-primary min-h-11 px-4 rounded-sq text-[15px]",
 								"data-testid": "editor-form-save",
-								disabled: I || B.name.trim().length === 0,
+								disabled: L || V.name.trim().length === 0,
 								onClick: () => void ie(),
 								children: "Зберегти"
 							}),
 							/* @__PURE__ */ v("button", {
 								type: "button",
 								className: "sq-btn-quiet",
-								onClick: () => z(null),
+								onClick: () => B(null),
 								children: "Скасувати"
 							}),
-							X && W.kind === "on" && /* @__PURE__ */ v("a", {
+							Z && G.kind === "on" && /* @__PURE__ */ v("a", {
 								className: "sq-btn-quiet whitespace-nowrap",
 								"data-testid": "editor-form-qr",
-								href: ee(W.url, R, W.print),
+								href: N(G.url, z, G.print),
 								target: "_blank",
 								rel: "noopener noreferrer",
 								children: "QR цього столу"
 							}),
-							R !== "new" && /* @__PURE__ */ v("button", {
+							z !== "new" && /* @__PURE__ */ v("button", {
 								type: "button",
 								className: "ml-auto min-h-11 text-[15px] text-red-600 font-semibold disabled:opacity-50",
 								"data-testid": "editor-form-retire",
-								disabled: I,
+								disabled: L,
 								onClick: async () => {
-									await Q(() => i(R, { is_active: !1 })) && z(null);
+									await Q(() => e(z, { is_active: !1 })) && B(null);
 								},
 								children: "Прибрати із зали"
 							})
 						]
 					}),
-					X && W.kind === "off" && /* @__PURE__ */ v("p", {
+					Z && G.kind === "off" && /* @__PURE__ */ v("p", {
 						className: "mt-3 text-[13px] text-sq-muted",
 						"data-testid": "editor-form-qr-hint",
 						children: "QR для столу з’явиться, коли ви ввімкнете меню для гостей у «Налаштуваннях»."
@@ -511,5 +504,4 @@ function F() {
 		]
 	});
 }
-//#endregion
-export { F as HallEditorPage };
+export { I as HallEditorPage };

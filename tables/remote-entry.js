@@ -1,8 +1,7 @@
 import { lazy as e } from "react";
-//#region src/platform/version.ts
-var t = "2.5.3";
-//#endregion
-//#region src/modules/lazyWithRetry.ts
+// src/platform/version.ts
+var t = "2.6.6";
+// src/modules/lazyWithRetry.ts
 async function n(e, { retries: t = 2, backoffMs: n = 400 } = {}) {
 	let r;
 	for (let i = 0; i <= t; i += 1) try {
@@ -16,9 +15,8 @@ async function n(e, { retries: t = 2, backoffMs: n = 400 } = {}) {
 function r(t, r) {
 	return e(() => n(t, r));
 }
-//#endregion
-//#region src/modules/tables/manifest.ts
-var i = r(() => import("./TablesRoutes-QAsTMj1V.js").then((e) => ({ default: e.TablesRoutes }))), a = r(() => import("./HallEditorPage-BTVpTV-Y.js").then((e) => ({ default: e.HallEditorPage }))), o = {
+// src/modules/tables/manifest.ts
+var i = r(() => import("./TablesRoutes-B-AW_Sms.js").then((e) => ({ default: e.TablesRoutes }))), a = r(() => import("./HallEditorPage-gHuoIDDE.js").then((e) => ({ default: e.HallEditorPage }))), o = {
 	id: "tables",
 	title: "Столи",
 	shells: [
@@ -50,5 +48,4 @@ var i = r(() => import("./TablesRoutes-QAsTMj1V.js").then((e) => ({ default: e.T
 	}],
 	version: t
 };
-//#endregion
 export { o as manifest };

@@ -3,7 +3,7 @@ import { jsx as i, jsxs as a } from "react/jsx-runtime";
 import * as o from "@pos/platform";
 import { formatUahCompact as s } from "@pos/platform";
 import c from "dexie";
-//#region src/platform/glyphs.tsx
+// src/platform/glyphs.tsx
 function l({ size: e = 24, ...t }) {
 	return /* @__PURE__ */ a("svg", {
 		width: e,
@@ -262,6 +262,25 @@ function h({ size: e = 24, ...t }) {
 	});
 }
 function g({ size: e = 24, ...t }) {
+	return /* @__PURE__ */ i("svg", {
+		width: e,
+		height: e,
+		viewBox: "0 0 24 24",
+		fill: "none",
+		"aria-hidden": "true",
+		focusable: "false",
+		"data-glyph": "Star",
+		...t,
+		children: /* @__PURE__ */ i("path", {
+			d: "M12 3.5 14.5 9 20.5 9.5 16.5 14 17.5 20 12 17 6.5 20 7.5 14 3.5 9.5 9.5 9Z",
+			fill: "#F8C00F",
+			stroke: "#F8C00F",
+			strokeWidth: "2",
+			strokeLinejoin: "round"
+		})
+	});
+}
+function _({ size: e = 24, ...t }) {
 	return /* @__PURE__ */ a("svg", {
 		width: e,
 		height: e,
@@ -314,7 +333,7 @@ function g({ size: e = 24, ...t }) {
 		})]
 	});
 }
-function _({ size: e = 24, ...t }) {
+function v({ size: e = 24, ...t }) {
 	return /* @__PURE__ */ a("svg", {
 		width: e,
 		height: e,
@@ -335,7 +354,7 @@ function _({ size: e = 24, ...t }) {
 		})]
 	});
 }
-function v({ size: e = 20, ...t }) {
+function y({ size: e = 20, ...t }) {
 	return /* @__PURE__ */ i("svg", {
 		width: e,
 		height: e,
@@ -355,7 +374,7 @@ function v({ size: e = 20, ...t }) {
 		})
 	});
 }
-function y({ size: e = 20, ...t }) {
+function b({ size: e = 20, ...t }) {
 	return e <= 16 ? /* @__PURE__ */ i("svg", {
 		width: e,
 		height: e,
@@ -392,7 +411,7 @@ function y({ size: e = 20, ...t }) {
 		})
 	});
 }
-function b({ size: e = 20, ...t }) {
+function x({ size: e = 20, ...t }) {
 	return e <= 16 ? /* @__PURE__ */ i("svg", {
 		width: e,
 		height: e,
@@ -429,7 +448,7 @@ function b({ size: e = 20, ...t }) {
 		})
 	});
 }
-function x({ size: e = 20, ...t }) {
+function S({ size: e = 20, ...t }) {
 	return /* @__PURE__ */ i("svg", {
 		width: e,
 		height: e,
@@ -449,7 +468,7 @@ function x({ size: e = 20, ...t }) {
 		})
 	});
 }
-function S({ size: e = 20, ...t }) {
+function C({ size: e = 20, ...t }) {
 	return e <= 16 ? /* @__PURE__ */ i("svg", {
 		width: e,
 		height: e,
@@ -486,7 +505,7 @@ function S({ size: e = 20, ...t }) {
 		})
 	});
 }
-function C({ size: e = 20, ...t }) {
+function ee({ size: e = 20, ...t }) {
 	return /* @__PURE__ */ i("svg", {
 		width: e,
 		height: e,
@@ -518,7 +537,7 @@ function C({ size: e = 20, ...t }) {
 		})
 	});
 }
-function ee({ size: e = 20, ...t }) {
+function w({ size: e = 20, ...t }) {
 	return e <= 16 ? /* @__PURE__ */ i("svg", {
 		width: e,
 		height: e,
@@ -555,7 +574,7 @@ function ee({ size: e = 20, ...t }) {
 		})
 	});
 }
-function w({ size: e = 20, ...t }) {
+function T({ size: e = 20, ...t }) {
 	return e <= 16 ? /* @__PURE__ */ i("svg", {
 		width: e,
 		height: e,
@@ -592,7 +611,7 @@ function w({ size: e = 20, ...t }) {
 		})
 	});
 }
-function T({ size: e = 20, ...t }) {
+function E({ size: e = 20, ...t }) {
 	return /* @__PURE__ */ a("svg", {
 		width: e,
 		height: e,
@@ -634,7 +653,7 @@ function T({ size: e = 20, ...t }) {
 		]
 	});
 }
-function E({ size: e = 20, ...t }) {
+function D({ size: e = 20, ...t }) {
 	return e <= 16 ? /* @__PURE__ */ a("svg", {
 		width: e,
 		height: e,
@@ -689,7 +708,7 @@ function E({ size: e = 20, ...t }) {
 		})]
 	});
 }
-function D({ size: e = 20, ...t }) {
+function O({ size: e = 20, ...t }) {
 	return e <= 16 ? /* @__PURE__ */ i("svg", {
 		width: e,
 		height: e,
@@ -726,9 +745,8 @@ function D({ size: e = 20, ...t }) {
 		})
 	});
 }
-//#endregion
-//#region src/modules/tables/lib/hallMap.ts
-function O(e, t) {
+// src/modules/tables/lib/hallMap.ts
+function k(e, t) {
 	let n = /* @__PURE__ */ new Map();
 	for (let e of t) n.set(e.table_id, e);
 	return e.tables.map((e) => ({
@@ -750,21 +768,21 @@ function ie(e) {
 	let t = e % 100, n = e % 10;
 	return t >= 11 && t <= 14 ? `${e} гостей` : n === 1 ? `${e} гість` : n >= 2 && n <= 4 ? `${e} гості` : `${e} гостей`;
 }
-function k(e) {
+function A(e) {
 	let t = e % 100, n = e % 10;
 	return t >= 11 && t <= 14 ? `${e} позицій` : n === 1 ? `${e} позиція` : n >= 2 && n <= 4 ? `${e} позиції` : `${e} позицій`;
 }
-function A(e) {
+function j(e) {
 	return s(Math.round(e / 100) * 100);
 }
-function j(e, t) {
+function M(e, t) {
 	let n = Math.max(0, Math.floor((new Date(t).getTime() - new Date(e).getTime()) / 6e4));
 	return Number.isFinite(n) ? n < 60 ? `${n} хв` : `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}` : "";
 }
-function M(e, t) {
-	return e.filter((e) => e.is_active || O(e, t).some((e) => e.bill));
+function N(e, t) {
+	return e.filter((e) => e.is_active || k(e, t).some((e) => e.bill));
 }
-function N(e) {
+function P(e) {
 	let t = 1, n = 1;
 	for (let { table: r } of e) t = Math.max(t, r.pos_x + r.width), n = Math.max(n, r.pos_y + r.height);
 	return {
@@ -772,47 +790,42 @@ function N(e) {
 		rows: n
 	};
 }
-//#endregion
-//#region \0@oxc-project+runtime@0.152.0/helpers/esm/typeof.js
-function P(e) {
+// \0@oxc-project+runtime@0.155.0/helpers/esm/typeof.js
+function F(e) {
 	"@babel/helpers - typeof";
-	return P = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
+	return F = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
 		return typeof e;
 	} : function(e) {
 		return e && typeof Symbol == "function" && e.constructor === Symbol && e !== Symbol.prototype ? "symbol" : typeof e;
-	}, P(e);
+	}, F(e);
 }
-//#endregion
-//#region \0@oxc-project+runtime@0.152.0/helpers/esm/toPrimitive.js
-function F(e, t) {
-	if (P(e) != "object" || !e) return e;
+// \0@oxc-project+runtime@0.155.0/helpers/esm/toPrimitive.js
+function I(e, t) {
+	if (F(e) != "object" || !e) return e;
 	var n = e[Symbol.toPrimitive];
 	if (n !== void 0) {
 		var r = n.call(e, t || "default");
-		if (P(r) != "object") return r;
+		if (F(r) != "object") return r;
 		throw TypeError("@@toPrimitive must return a primitive value.");
 	}
 	return (t === "string" ? String : Number)(e);
 }
-//#endregion
-//#region \0@oxc-project+runtime@0.152.0/helpers/esm/toPropertyKey.js
-function I(e) {
-	var t = F(e, "string");
-	return P(t) == "symbol" ? t : t + "";
+// \0@oxc-project+runtime@0.155.0/helpers/esm/toPropertyKey.js
+function L(e) {
+	var t = I(e, "string");
+	return F(t) == "symbol" ? t : t + "";
 }
-//#endregion
-//#region \0@oxc-project+runtime@0.152.0/helpers/esm/defineProperty.js
-function L(e, t, n) {
-	return (t = I(t)) in e ? Object.defineProperty(e, t, {
+// \0@oxc-project+runtime@0.155.0/helpers/esm/defineProperty.js
+function R(e, t, n) {
+	return (t = L(t)) in e ? Object.defineProperty(e, t, {
 		value: n,
 		enumerable: !0,
 		configurable: !0,
 		writable: !0
 	}) : e[t] = n, e;
 }
-//#endregion
-//#region src/modules/tables/lib/hostPlatform.ts
-var R = [
+// src/modules/tables/lib/hostPlatform.ts
+var z = [
 	"api.posRequest",
 	"useOfflineStatus",
 	"formatUah",
@@ -825,98 +838,118 @@ var R = [
 	"printPrecheck",
 	"getMeta",
 	"usePosShell"
-], z = class extends Error {
+], B = class extends Error {
 	constructor(e) {
-		super(`host is missing: ${e.join(", ")}`), L(this, "missing", void 0), this.missing = e, this.name = "HostTooOldError";
+		super(`host is missing: ${e.join(", ")}`), R(this, "missing", void 0), this.missing = e, this.name = "HostTooOldError";
 	}
 };
-function B(e) {
+function V(e) {
 	return typeof e == "function";
 }
-function V(e) {
+function H(e) {
 	return e.split(".").reduce((e, t) => e?.[t], o);
 }
-function H() {
-	return R.filter((e) => !B(V(e)));
+function U() {
+	return z.filter((e) => !V(H(e)));
 }
-function U(e, t, n) {
-	let r = H();
-	return r.length > 0 ? Promise.reject(new z(r)) : o.api.posRequest(e, t, n);
+function W(e, t, n) {
+	let r = U();
+	return r.length > 0 ? Promise.reject(new B(r)) : o.api.posRequest(e, t, n);
 }
-//#endregion
-//#region src/modules/tables/lib/tablesApi.ts
-function W() {
-	return U("get", "/halls");
+function G(e, t) {
+	let n = o.storeCashRounding, r = o.cashRoundingDelta;
+	if (!V(n) || !V(r)) return {
+		step: 0,
+		deltaCents: 0
+	};
+	let i = n(t);
+	return i === 0 ? {
+		step: 0,
+		deltaCents: 0
+	} : {
+		step: i,
+		deltaCents: r(e, i)
+	};
 }
-function G() {
-	return U("get", "/bills");
+// src/modules/tables/lib/tablesApi.ts
+function K() {
+	return W("get", "/halls");
 }
-function K(e, t) {
-	return U("post", "/bills", {
+function q() {
+	return W("get", "/bills");
+}
+function J(e, t) {
+	return W("post", "/bills", {
 		table_id: e,
 		...t ? { guests: t } : {}
 	});
 }
-function q(e) {
-	return U("get", `/bills/${e}`);
+function Y(e) {
+	return W("get", `/bills/${e}`);
 }
-function J(e, t) {
-	return U("post", `/bills/${e}/items`, t);
+function ae(e, t) {
+	return W("post", `/bills/${e}/items`, t);
 }
-function Y(e, t, n) {
-	return U("patch", `/bills/${e}/items/${t}`, { quantity: n });
+function oe(e, t, n) {
+	return W("patch", `/bills/${e}/items/${t}`, { quantity: n });
 }
-function ae(e, t, n) {
-	return U("patch", `/bills/${e}/items/${t}`, n);
-}
-function oe(e, t) {
-	return U("delete", `/bills/${e}/items/${t}`);
-}
-function se(e, t) {
-	return U("post", `/bills/${e}/fire`, { client_uuid: t });
+function se(e, t, n) {
+	return W("patch", `/bills/${e}/items/${t}`, n);
 }
 function ce(e, t) {
-	return U("post", `/bills/${e}/rounds/${t}/cancel`);
+	return W("delete", `/bills/${e}/items/${t}`);
 }
 function le(e, t) {
-	return U("post", `/bills/${e}/pay`, { parts: t });
+	return W("post", `/bills/${e}/fire`, { client_uuid: t });
 }
-function ue(e) {
-	return U("post", `/bills/${e}/precheck`);
+function ue(e, t) {
+	return W("post", `/bills/${e}/rounds/${t}/cancel`);
 }
-function de(e) {
-	return U("get", e == null ? "/guest-orders" : `/guest-orders?table_id=${e}`);
+function de(e, t, n = 0) {
+	return W("post", `/bills/${e}/pay`, {
+		parts: t,
+		...n ? { cash_rounding: n } : {}
+	});
 }
-function fe(e, t = []) {
-	return U("post", `/guest-orders/${e}/accept`, t.length > 0 ? { exclude_item_ids: t } : {});
+function fe(e) {
+	return W("post", `/bills/${e}/precheck`);
 }
-function pe(e, t) {
-	return U("post", `/guest-orders/${e}/reject`, t ? { reason: t } : {});
+function pe(e) {
+	return W("get", e == null ? "/guest-orders" : `/guest-orders?table_id=${e}`);
 }
-function me(e) {
-	return U("post", `/guest-orders/${e}/seen`);
+function me(e, t = []) {
+	return W("post", `/guest-orders/${e}/accept`, t.length > 0 ? { exclude_item_ids: t } : {});
 }
-function he(e) {
-	return U("post", `/waiter-calls/${e}/answer`);
+function he(e, t) {
+	return W("post", `/guest-orders/${e}/reject`, t ? { reason: t } : {});
 }
 function ge(e) {
-	return U("post", "/halls", { name: e });
+	return W("post", `/guest-orders/${e}/seen`);
 }
-function _e(e, t) {
-	return U("patch", `/halls/${e}`, t);
+function _e(e) {
+	return W("post", `/waiter-calls/${e}/answer`);
 }
 function ve(e) {
-	return U("post", "/tables", e);
+	return W("post", `/feedback/${e}/seen`);
 }
-function ye(e, t) {
-	return U("patch", `/tables/${e}`, t);
+function ye(e) {
+	return W("post", "/halls", { name: e });
 }
-function be(e) {
-	return U("patch", "/tables/positions", { positions: e });
+function be(e, t) {
+	return W("patch", `/halls/${e}`, t);
+}
+function xe(e) {
+	return W("post", "/tables", e);
+}
+function Se(e, t) {
+	return W("patch", `/tables/${e}`, t);
+}
+function Ce(e) {
+	return W("patch", "/tables/positions", { positions: e });
 }
 var X = new class extends c {
 	constructor() {
-		super("cloth-pos-module-tables"), L(this, "room", void 0), L(this, "bills", void 0), this.version(1).stores({
+		super("cloth-pos-module-tables"), R(this, "room", void 0), R(this, "bills", void 0), this.version(1).stores({
 			room: "id",
 			bills: "id, storeId"
 		});
@@ -929,7 +962,7 @@ async function Z(e, t) {
 		return t;
 	}
 }
-async function xe(e, t) {
+async function we(e, t) {
 	await Z(() => X.room.put({
 		id: 1,
 		storeId: e,
@@ -943,7 +976,7 @@ async function Q(e) {
 		return t && t.storeId === e ? t : null;
 	}, null);
 }
-async function Se(e, t) {
+async function Te(e, t) {
 	await Z(() => X.bills.put({
 		id: t.id,
 		storeId: e,
@@ -951,26 +984,25 @@ async function Se(e, t) {
 		savedAt: Date.now()
 	}), void 0);
 }
-async function Ce(e, t) {
+async function Ee(e, t) {
 	return Z(async () => {
 		let n = await X.bills.get(t);
 		return n && n.storeId === e ? n : null;
 	}, null);
 }
-async function we(e, t) {
+async function De(e, t) {
 	await Z(async () => {
 		let n = new Set(t), r = (await X.bills.where("storeId").equals(e).toArray()).filter((e) => !n.has(e.id)).map((e) => e.id);
 		r.length > 0 && await X.bills.bulkDelete(r);
 	}, void 0);
 }
-//#endregion
-//#region src/modules/tables/lib/useHallMap.ts
-var Te = 1e4;
+// src/modules/tables/lib/useHallMap.ts
+var Oe = 1e4;
 function $(e, t) {
 	let n = e?.response?.data;
 	return n && typeof n.error == "string" ? n.error : t;
 }
-function Ee({ online: i, mirrored: a = !1, storeId: o = null }) {
+function ke({ online: i, mirrored: a = !1, storeId: o = null }) {
 	let [s, c] = r([]), [l, u] = r([]), [d, f] = r(() => (/* @__PURE__ */ new Date()).toISOString()), [p, m] = r(!0), [h, g] = r(null), [_, v] = r(!1), [y, b] = r(null), x = n(!0);
 	t(() => (x.current = !0, () => {
 		x.current = !1;
@@ -981,13 +1013,13 @@ function Ee({ online: i, mirrored: a = !1, storeId: o = null }) {
 		return !e || !x.current ? !1 : (c(e.halls), u(e.bills), f(e.now), v(!0), b(e.savedAt), m(!1), !0);
 	}, [a, o]), C = e(async () => {
 		try {
-			let [e, t] = await Promise.all([W(), G()]);
+			let [e, t] = await Promise.all([K(), q()]);
 			if (!x.current) return;
-			c(e.halls), u(t.bills), f((/* @__PURE__ */ new Date()).toISOString()), g(null), v(!1), b(null), a && o != null && (xe(o, {
+			c(e.halls), u(t.bills), f((/* @__PURE__ */ new Date()).toISOString()), g(null), v(!1), b(null), a && o != null && (we(o, {
 				halls: e.halls,
 				bills: t.bills,
 				now: (/* @__PURE__ */ new Date()).toISOString()
-			}), we(o, t.bills.map((e) => e.id)));
+			}), De(o, t.bills.map((e) => e.id)));
 		} catch (e) {
 			if (!x.current) return;
 			let t = await S();
@@ -1010,7 +1042,7 @@ function Ee({ online: i, mirrored: a = !1, storeId: o = null }) {
 		C();
 		let e = setInterval(() => {
 			(typeof document > "u" || document.visibilityState === "visible") && C();
-		}, Te);
+		}, Oe);
 		return () => clearInterval(e);
 	}, [i, C]), {
 		halls: s,
@@ -1023,5 +1055,4 @@ function Ee({ online: i, mirrored: a = !1, storeId: o = null }) {
 		refresh: C
 	};
 }
-//#endregion
-export { h as $, k as A, y as B, _e as C, ie as D, U as E, A as F, x as G, b as H, M as I, ee as J, S as K, v as L, re as M, O as N, N as O, te as P, E as Q, l as R, Y as S, ye as T, f as U, d as V, p as W, T as X, w as Y, m as Z, be as _, fe as a, oe as b, ce as c, se as d, g as et, q as f, ue as g, me as h, Se as i, j, ne as k, ge as l, W as m, Ee as n, D as nt, J as o, de as p, C as q, Ce as r, he as s, $ as t, _ as tt, ve as u, le as v, ae as w, K as x, pe as y, u as z };
+export { m as $, P as A, l as B, oe as C, G as D, Se as E, k as F, f as G, b as H, te as I, C as J, p as K, j as L, A as M, M as N, W as O, re as P, E as Q, N as R, J as S, se as T, d as U, u as V, x as W, w as X, ee as Y, T as Z, fe as _, me as a, O as at, he as b, ue as c, le as d, D as et, Y as f, ge as g, ve as h, Te as i, v as it, ne as j, ie as k, ye as l, K as m, ke as n, g as nt, ae as o, pe as p, S as q, Ee as r, _ as rt, _e as s, $ as t, h as tt, xe as u, Ce as v, be as w, ce as x, de as y, y as z };
