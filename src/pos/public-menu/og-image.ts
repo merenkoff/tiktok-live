@@ -115,7 +115,8 @@ export async function menuOgImage(store: { id: number; logoUrl: string | null })
     // not made yet
   }
 
-  const layers: sharp.OverlayOptions[] = [];
+  // Structural, not sharp's own type: 0.35 dropped the `sharp` namespace the 0.34 types had.
+  const layers: Array<{ input: Buffer; left: number; top: number }> = [];
   const logoFile = logoFileOf(store.logoUrl);
   if (logoFile) {
     try {
