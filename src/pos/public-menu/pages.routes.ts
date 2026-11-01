@@ -25,9 +25,12 @@
 // the store token in the path is visible to every guest, so it cannot be what
 // hands table keys out.
 
+import { readFile } from 'fs/promises';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { corkageCardLine } from './format.js';
-import { findMenuTable, listMenuTables, loadPublicMenu } from './menu.service.js';
+import { findMenuStore, findMenuTable, listMenuTables, loadPublicMenu, menuOgImageUrl } from './menu.service.js';
+import { menuOgImage } from './og-image.js';
+import { logger } from '../../logger.js';
 import { getTableKeys, verifyPrintLink, verifyTableKey } from './table-keys.js';
 import {
   MENU_PAGE_HEADERS,
@@ -43,6 +46,21 @@ function sendPage(reply: FastifyReply, status: number, html: string) {
 
 const queryParam = (request: FastifyRequest, name: 't' | 'k' | 'p'): unknown =>
   (request.query as Record<string, unknown> | undefined)?.[name];
+
+/**
+ * The absolute address of the store's Open Graph picture (F15), made on the
+ * first ask and read from disk after that — or null, and the page simply has
+ * no `og:image`: the picture is never a reason for the menu to fail.
+ */
+async function ogImageFor(store: { id: number; logoUrl: string | null }, token: string): Promise<string | null> {
+  try {
+    const made = await menuOgImage(store);
+    return made ? menuOgImageUrl(token, made.version) : null;
+  } catch (error) {
+    logger.warn('Menu OG picture not made', { storeId: store.id, error: error instanceof Error ? error.message : String(error) });
+    return null;
+  }
+}
 
 export function registerPublicMenuPages(fastify: FastifyInstance): void {
   fastify.get('/m/:token', async (request, reply) => {
@@ -64,8 +82,24 @@ export function registerPublicMenuPages(fastify: FastifyInstance): void {
           found.store.autoKitchen === 'off'
             ? null
             : { mode: found.store.autoKitchen, limitCents: found.store.autoLimitCents },
+        ogImage: await ogImageFor(found.store, token),
       })
     );
+  });
+
+  // The menu's Open Graph picture (F15): the brand frame with the place's
+  // logo, 1200×630 PNG, made once per logo. The same 404 as the menu for a
+  // key nobody has; `?v=` is for the messenger's cache and is not read.
+  fastify.get('/m/:token/og.png', async (request, reply) => {
+    const { token } = request.params as { token: string };
+    const store = await findMenuStore(token);
+    if (!store) return reply.code(404).send();
+    const made = await menuOgImage(store);
+    if (!made) return reply.code(404).send();
+    return reply
+      .code(200)
+      .headers({ 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400', 'X-Robots-Tag': 'noindex' })
+      .send(await readFile(made.file));
   });
 
   // A dish's own address (phase F11): the same page, opened on that dish, with
@@ -97,6 +131,7 @@ export function registerPublicMenuPages(fastify: FastifyInstance): void {
             ? null
             : { mode: found.store.autoKitchen, limitCents: found.store.autoLimitCents },
         openDish: dish,
+        ogImage: await ogImageFor(found.store, token),
       })
     );
   });

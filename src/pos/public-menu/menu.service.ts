@@ -59,7 +59,7 @@ import type { CatalogItem } from '../types.js';
  * (phase F7) and must not pull this module along; re-exported here for the
  * routes and the renderer that always read them from this file.
  */
-export { MENU_KEY_RE, dishUrl, dishUrlBase, menuUrl, publicBaseUrl, tableMenuUrl } from './urls.js';
+export { MENU_KEY_RE, dishUrl, dishUrlBase, menuOgImageUrl, menuUrl, publicBaseUrl, tableMenuUrl } from './urls.js';
 import { MENU_KEY_RE, menuUrl, slugKey } from './urls.js';
 import { thumbUrlOf } from '../uploads.service.js';
 

@@ -218,6 +218,31 @@ describe('a dish’s own page (F11)', () => {
     expect(bareHead).toContain(`<meta property="og:description" content="${'а'.repeat(200)}">`);
   });
 
+  it('gives the menu page its own Open Graph head when a picture is offered (F15), and lends it to a dish without a photo', () => {
+    const image = 'https://the-live.shop/m/shablya/og.png?v=abcdef123456';
+    const html = renderMenuPage(menuWith(bograch), 'shablya', null, { ogImage: image });
+    const head = html.slice(0, html.indexOf('</head>'));
+    expect(head).toContain('<meta property="og:title" content="Шабля &lt;Вінниця&gt; — меню">');
+    expect(head).toContain('<meta property="og:description" content="Меню, ціни й стоп-лист наживо">');
+    expect(head).toContain(`<meta property="og:image" content="${image}">`);
+    expect(head).toContain('<meta property="og:image:width" content="1200">');
+    expect(head).toContain('<meta property="og:image:height" content="630">');
+    expect(head).toContain('<meta property="og:url" content="https://the-live.shop/m/shablya">');
+    expect(head).toContain('<meta name="twitter:card" content="summary_large_image">');
+    expect(html).not.toContain('data-open-dish');
+    // With an address the description leads with it.
+    const withAddress = renderMenuPage({ ...menuWith(bograch), store: { ...store, address: 'вул. Соборна, 1 <b>' } }, 'shablya', null, { ogImage: image });
+    expect(withAddress).toContain('<meta property="og:description" content="вул. Соборна, 1 &lt;b&gt; · Меню, ціни й стоп-лист наживо">');
+    // A dish with no photo borrows the menu's picture; one with a photo keeps it.
+    const bare = product({ id: 9, name: 'Вода', image_url: null });
+    const bareHead = renderMenuPage(menuWith(bare), 'shablya', null, { openDish: bare, ogImage: image }).split('</head>')[0];
+    expect(bareHead).toContain(`<meta property="og:image" content="${image}">`);
+    expect(bareHead).toContain('<meta name="twitter:card" content="summary_large_image">');
+    const photoHead = renderMenuPage(menuWith(bograch), 'shablya', null, { openDish: bograch, ogImage: image }).split('</head>')[0];
+    expect(photoHead).toContain('<meta property="og:image" content="https://the-live.shop/pos-uploads/ab12.jpg">');
+    expect(photoHead).not.toContain('og.png');
+  });
+
   it('draws no Open Graph and no opening on the plain menu, which still carries the share base and the sheet’s button', () => {
     const html = renderMenuPage(menuWith(bograch), 'shablya');
     expect(html).toContain('<title>Шабля &lt;Вінниця&gt; — меню</title>');
