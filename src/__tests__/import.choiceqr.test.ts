@@ -64,9 +64,28 @@ describe('parseChoiceQr', () => {
       available: true,
       labels: ['spicy'],
       labelsSkipped: ['«Хіт сезону»'],
+      kcal: 320,
+      strengthTenths: null,
+      prepMinutes: 15,
     });
     expect(menu.items.find((i) => i.id === 'i3')?.size).toBe('1 л');
     expect(menu.items.find((i) => i.id === 'i11')?.size).toBeNull();
+  });
+
+  it('reads the calories, the strength as tenths of a percent and the minutes — and ChoiceQR’s 0 as «not said» (F14)', () => {
+    const by = (id: string) => menu.items.find((i) => i.id === id)!;
+    expect(by('i6')).toMatchObject({ kcal: null, strengthTenths: 400, prepMinutes: null });
+    expect(by('i7')).toMatchObject({ kcal: 1100, strengthTenths: 400, prepMinutes: null });
+    expect(by('i2')).toMatchObject({ kcal: null, strengthTenths: null, prepMinutes: null });
+    const odd = parseChoiceQr(
+      choiceQrPage([
+        { id: 'x', category: 'c-soup', name: 'Дивна', price: 100, kcal: 20000, alcohol: 4.5, preparationTime: -3 },
+        { id: 'y', category: 'c-soup', name: 'Дивніша', price: 100, kcal: 450.5, alcohol: 101, preparationTime: 900 },
+      ])
+    ).items;
+    // A fraction of a percent is kept; a figure outside our range is «not said» rather than refused.
+    expect(odd[0]).toMatchObject({ kcal: null, strengthTenths: 45, prepMinutes: null });
+    expect(odd[1]).toMatchObject({ kcal: null, strengthTenths: null, prepMinutes: null });
   });
 
   it('reads the labels as our codes — both spiciness grades as «Гостре» — and names what it does not carry', () => {
@@ -107,6 +126,13 @@ describe('planMenuImport', () => {
     expect(card('Печена картопля (2)')?.variants).toEqual([{ size: '300 г', price_cents: 15500 }]);
     expect(plan.warnings.join('\n')).toMatch(/«Печена картопля» 300 г у «Гарнір» двічі з різною ціною .* друга стане «Печена картопля \(2\)»/);
     expect(plan.warnings.join('\n')).toMatch(/«Печена картопля» 300 г у «Гарнір» двічі з тією ж ціною — друга пропущена/);
+  });
+
+  it('gives a card the first size’s numbers (a portion’s), and nothing where every size says nothing', () => {
+    expect(card('Борщ')).toMatchObject({ kcal: 320, strengthTenths: null, prepMinutes: 15 });
+    // The 50 мл says the strength and no calories; the 500 мл says both: the card takes each from the first that says it.
+    expect(card('Гетьман')).toMatchObject({ kcal: 1100, strengthTenths: 400, prepMinutes: null });
+    expect(card('Бульйон')).toMatchObject({ kcal: null, strengthTenths: null, prepMinutes: null });
   });
 
   it('gives a card the labels of every size, and warns once about the labels it leaves behind', () => {

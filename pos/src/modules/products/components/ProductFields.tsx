@@ -8,7 +8,10 @@ import { captionClass } from './formStyles';
 import { compositionHint, SHAPE_OPTIONS, type ProductShape } from '../lib/productShape';
 import type { ProductDraft } from '../lib/productDraft';
 
-type Fields = Pick<ProductDraft, 'name' | 'description' | 'composition' | 'allergens' | 'menuLabels' | 'imageUrl' | 'shape'>;
+type Fields = Pick<
+  ProductDraft,
+  'name' | 'description' | 'composition' | 'allergens' | 'menuLabels' | 'kcal' | 'strength' | 'prepMinutes' | 'imageUrl' | 'shape'
+>;
 
 /**
  * The card's main column: what the product IS — photo, name, description, its
@@ -25,7 +28,7 @@ export function ProductFields({
   onPatch: (patch: Partial<Fields>) => void;
   /** Offer «Що це за товар» — a florist or a café, or a card that already is composite. */
   showShape: boolean;
-  /** Ask for a dish's composition, allergens and labels — a café, or a card that already holds them. */
+  /** Ask for a dish's composition, allergens, labels and the facts line's numbers — a café, or a card that already holds them. */
   showDishFacts: boolean;
 }) {
   return (
@@ -84,6 +87,12 @@ export function ProductFields({
           onAllergens={(allergens) => onPatch({ allergens })}
           menuLabels={value.menuLabels}
           onMenuLabels={(menuLabels) => onPatch({ menuLabels })}
+          kcal={value.kcal}
+          onKcal={(kcal) => onPatch({ kcal })}
+          strength={value.strength}
+          onStrength={(strength) => onPatch({ strength })}
+          prepMinutes={value.prepMinutes}
+          onPrepMinutes={(prepMinutes) => onPatch({ prepMinutes })}
         />
       )}
     </div>

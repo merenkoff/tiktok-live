@@ -776,6 +776,14 @@ export interface Product {
   allergens?: string[];
   /** Label codes for the guest menu («spicy», «hit»…, migration 086); empty = none. Absent on an older backend. */
   menu_labels?: string[];
+  /**
+   * The facts line's numbers on the guest menu (migration 087): calories of
+   * the portion, the strength in tenths of a percent (45 = 4,5 %), minutes to
+   * prepare. Each null = not said; absent on an older backend.
+   */
+  kcal?: number | null;
+  strength_tenths?: number | null;
+  prep_minutes?: number | null;
   image_url: string | null;
   is_active: boolean;
   needs_review?: boolean;

@@ -17,6 +17,7 @@ import { escapeLike, searchTokens } from './searchTokens.js';
 import { storeClock } from './core/storeClock.js';
 import { normalizeAllergens, normalizeComposition } from './allergens.js';
 import { normalizeMenuLabels } from './menu-labels.js';
+import { normalizeKcal, normalizePrepMinutes, normalizeStrengthTenths } from './dish-facts.js';
 import {
   CompositeError,
   listComponentsForStore,
@@ -64,6 +65,13 @@ export interface VariantInput {
   pack_label?: string | null;
 }
 
+/** The stored tenths from whichever the client sent: the form's percent («4,5») or the importer's tenths. */
+function strengthTenthsOf(input: Pick<CreateProductInput, 'strength_tenths' | 'strength_percent'>): number | null {
+  return input.strength_percent !== undefined
+    ? normalizeStrengthTenths(input.strength_percent, { percent: true })
+    : normalizeStrengthTenths(input.strength_tenths);
+}
+
 export interface CreateProductInput {
   name: string;
   description?: string | null;
@@ -79,6 +87,17 @@ export interface CreateProductInput {
    * from the fixed set in `menu-labels.ts` (migration 086); empty = none.
    */
   menu_labels?: string[];
+  /**
+   * The three numbers the guest reads on the dish's facts line (migration
+   * 087, F14): the calories of the portion as served, the strength in tenths
+   * of a percent (45 = 4,5 %; the form may send the percent as text) and the
+   * time in minutes. Each `null` or absent = «not said». See `dish-facts.ts`.
+   */
+  kcal?: number | string | null;
+  strength_tenths?: number | string | null;
+  /** The owner's form sends the PERCENT as typed («4,5»); it wins over `strength_tenths` when both are sent. */
+  strength_percent?: number | string | null;
+  prep_minutes?: number | string | null;
   image_url?: string | null;
   variants: VariantInput[];
   needs_review?: boolean;
@@ -297,6 +316,9 @@ export async function listProducts(storeId: number) {
     composition: p.composition ?? null,
     allergens: Array.isArray(p.allergens) ? (p.allergens as string[]) : [],
     menu_labels: Array.isArray(p.menu_labels) ? (p.menu_labels as string[]) : [],
+    kcal: p.kcal == null ? null : Number(p.kcal),
+    strength_tenths: p.strength_tenths == null ? null : Number(p.strength_tenths),
+    prep_minutes: p.prep_minutes == null ? null : Number(p.prep_minutes),
     image_url: p.image_url,
     is_active: p.is_active,
     needs_review: Boolean(p.needs_review),
@@ -411,8 +433,9 @@ export async function createProductInTx(
   const productResult = await client.query(
     `INSERT INTO pos_products
        (store_id, name, description, image_url, needs_review, created_from_document_id,
-        kind, stock_mode, one_off, sellable, composition, allergens, menu_hidden, menu_labels)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::text[], $13, $14::text[])
+        kind, stock_mode, one_off, sellable, composition, allergens, menu_hidden, menu_labels,
+        kcal, strength_tenths, prep_minutes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::text[], $13, $14::text[], $15, $16, $17)
      RETURNING id`,
     [
       storeId,
@@ -429,6 +452,9 @@ export async function createProductInTx(
       normalizeAllergens(input.allergens),
       input.menu_hidden === true,
       normalizeMenuLabels(input.menu_labels),
+      normalizeKcal(input.kcal),
+      strengthTenthsOf(input),
+      normalizePrepMinutes(input.prep_minutes),
     ]
   );
   const productId = Number(productResult.rows[0].id);
@@ -560,6 +586,10 @@ export async function updateProduct(
       | 'composition'
       | 'allergens'
       | 'menu_labels'
+      | 'kcal'
+      | 'strength_tenths'
+      | 'strength_percent'
+      | 'prep_minutes'
       | 'image_url'
       | 'kind'
       | 'stock_mode'
@@ -613,6 +643,19 @@ export async function updateProduct(
       sets.push(`menu_labels = $${i++}::text[]`);
       values.push(normalizeMenuLabels(input.menu_labels));
     }
+    // The facts line's numbers (F14): absent = leave, null or '' = clear.
+    if (input.kcal !== undefined) {
+      sets.push(`kcal = $${i++}`);
+      values.push(normalizeKcal(input.kcal));
+    }
+    if (input.strength_tenths !== undefined || input.strength_percent !== undefined) {
+      sets.push(`strength_tenths = $${i++}`);
+      values.push(strengthTenthsOf(input));
+    }
+    if (input.prep_minutes !== undefined) {
+      sets.push(`prep_minutes = $${i++}`);
+      values.push(normalizePrepMinutes(input.prep_minutes));
+    }
     if (input.image_url !== undefined) {
       sets.push(`image_url = $${i++}`);
       values.push(emptyToNull(input.image_url));
@@ -638,6 +681,10 @@ export async function updateProduct(
       input.composition !== undefined ||
       input.allergens !== undefined ||
       input.menu_labels !== undefined ||
+      input.kcal !== undefined ||
+      input.strength_tenths !== undefined ||
+      input.strength_percent !== undefined ||
+      input.prep_minutes !== undefined ||
       input.image_url !== undefined
     ) {
       // First meaningful edit clears review flag

@@ -152,6 +152,8 @@ export const POS_MIGRATIONS = [
   '085_pos_guest_feedback_items.sql',
   // Dish labels («Гостре», «Хіт», …) on the guest menu; «Шабля»'s «Бограч» filled once (F9).
   '086_pos_product_menu_labels.sql',
+  // Calories of the portion, a drink's strength and the preparation time on the guest menu (F14).
+  '087_pos_product_dish_numbers.sql',
 ] as const;
 
 export function readMigration(file: string): string {

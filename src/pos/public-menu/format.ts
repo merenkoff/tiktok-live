@@ -3,6 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import type { Corkage } from './profile.js';
+import { strengthPercentText } from '../dish-facts.js';
 
 // src/pos/public-menu/format.ts — how the guest's menu writes money and hints.
 //
@@ -62,6 +63,26 @@ export function tableLabel(name: string): string {
 
 
 /** «+100 ₴ за пляшку», or «без збору» for a place that lets guests bring their own for nothing. */
+/**
+ * The facts a dish's card prints under its price (F14), in the order the
+ * guest reads them: «420 ккал», «міцність 4,5 %», «готується ≈ 25 хв».
+ * Whole words on purpose — «25 хв» beside a weight reads two ways — and «≈»
+ * because the kitchen promises no minutes. `long` adds «на порцію» to the
+ * calories, which the dish's sheet says and the list does not (Д33). The
+ * guest script keeps a copy of these words (`menu.js` `factsOf`), as it does
+ * of `money`.
+ */
+export function dishFactsParts(
+  dish: { kcal: number | null; strength_tenths: number | null; prep_minutes: number | null },
+  long = false
+): string[] {
+  const parts: string[] = [];
+  if (dish.kcal != null) parts.push(`${dish.kcal} ккал${long ? ' на порцію' : ''}`);
+  if (dish.strength_tenths != null) parts.push(`міцність ${strengthPercentText(dish.strength_tenths)}`);
+  if (dish.prep_minutes != null) parts.push(`готується ≈ ${dish.prep_minutes} хв`);
+  return parts;
+}
+
 export function corkageFeeText(c: Corkage): string {
   return c.fee_cents > 0 ? `+${formatUahGuestCompact(c.fee_cents)} за пляшку` : 'без збору';
 }

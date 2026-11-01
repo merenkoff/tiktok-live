@@ -473,8 +473,11 @@ body:has(.dock .call-row) .foot { padding-bottom: 230px; }
   font: inherit; color: inherit; text-align: left; cursor: pointer;
 }
 .open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
-.size { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
-.item[data-state="stop"] .size, .item[data-state="out"] .size { color: var(--off); }
+/* The facts line under the price (F8 the size, F14 the numbers): «245 г ·
+   420 ккал · готується ≈ 25 хв», one muted line in the list and in the sheet. */
+.size, .facts { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+.item[data-state="stop"] .size, .item[data-state="out"] .size,
+.item[data-state="stop"] .facts, .item[data-state="out"] .facts { color: var(--off); }
 .dish-panel { padding-top: 0; }
 .dish-close {
   position: sticky; top: 12px; float: right; z-index: 2; margin: 12px -8px -52px 0;
@@ -487,7 +490,8 @@ body:has(.dock .call-row) .foot { padding-bottom: 230px; }
 .dish-head h2 { margin: 0; font-size: 22px; line-height: 1.2; }
 .dish-head .badge { margin-left: 0; }
 .dish-body .price { margin-top: 10px; font-size: 18px; }
-.dish-body .size { font-size: 15px; }
+.dish-body .size, .dish-body .facts { font-size: 15px; }
+.dish-sheet[data-state="stop"] .facts, .dish-sheet[data-state="out"] .facts { color: var(--off); }
 .dish-desc { margin: 10px 0 0; font-size: 15px; }
 .dish-comp { margin: 8px 0 0; color: var(--muted); font-size: 15px; }
 .dish-comp b { color: var(--ink); font-weight: 600; }

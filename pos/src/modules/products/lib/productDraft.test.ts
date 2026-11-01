@@ -78,11 +78,18 @@ describe('draftOf — the one place that reads a raw product', () => {
     expect(d.composition).toBe('');
     expect(d.allergens).toEqual([]);
     expect(d.menuLabels).toEqual([]);
+    expect(d).toMatchObject({ kcal: '', strength: '', prepMinutes: '' });
     expect(d.groupIds).toEqual([]);
     expect(d.sellable).toBe(true);
     expect(d.menuHidden).toBe(false);
     expect(d.shape).toBe('');
     expect(d.variants.map((v) => v.id)).toEqual([70]);
+  });
+
+  it('reads the facts line’s numbers as text — the strength as a percent with a comma (F14)', () => {
+    const d = draftOf(product({ kcal: 420, strength_tenths: 45, prep_minutes: 25 }));
+    expect(d).toMatchObject({ kcal: '420', strength: '4,5', prepMinutes: '25' });
+    expect(draftOf(product({ kcal: 0, strength_tenths: 400, prep_minutes: null }))).toMatchObject({ kcal: '0', strength: '40', prepMinutes: '' });
   });
 
   it('reads a variant as text the owner can type over, and «not said» cost as empty', () => {
@@ -177,6 +184,16 @@ describe('diffProduct — what a save has to write', () => {
     expect(diffProduct(snapshot, { ...snapshot, imageUrl: '/pos-uploads/a.jpg' }).details).toBe(true);
     expect(diffProduct(snapshot, { ...snapshot, sellable: false }).details).toBe(true);
     expect(diffProduct(snapshot, { ...snapshot, menuHidden: true }).details).toBe(true);
+  });
+
+  it('sees a number typed or emptied, and sends it as typed — null for an emptied box (F14)', () => {
+    expect(diffProduct(snapshot, { ...snapshot, kcal: '420' }).details).toBe(true);
+    expect(diffProduct(snapshot, { ...snapshot, strength: ' ' }).details).toBe(false);
+    const numbered = { ...snapshot, kcal: '420', strength: '4,5', prepMinutes: '25' };
+    expect(diffProduct(numbered, { ...numbered, prepMinutes: '' }).details).toBe(true);
+    expect(detailsOf(numbered)).toMatchObject({ kcal: '420', strength_percent: '4,5', prep_minutes: '25' });
+    expect(detailsOf(snapshot)).toMatchObject({ kcal: null, strength_percent: null, prep_minutes: null });
+    expect(createDirty({ ...emptyDraft(), strength: '0' }, false)).toBe(true);
   });
 
   it('sees a label ticked or taken off, and sends the set with the details', () => {
