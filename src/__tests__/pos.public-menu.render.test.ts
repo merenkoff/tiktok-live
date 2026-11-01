@@ -364,6 +364,65 @@ describe('the dock at a table (Q5–Q9)', () => {
   });
 });
 
+describe('the dish sheet (phase F8)', () => {
+  const html = renderMenuPage(MENU, 'tok_ABCdef12');
+
+  it('draws one frame for the page, with nothing of the dishes in it', () => {
+    expect(html.match(/data-dish-sheet/g)).toHaveLength(1);
+    expect(html).toContain(
+      '<div class="bill-sheet dish-sheet" data-dish-sheet hidden role="dialog" aria-modal="true" aria-labelledby="dish-title">'
+    );
+    expect(html).toContain('data-dish-close');
+    expect(html).toContain('<img alt="" decoding="async" data-dish-img>');
+    expect(html).toContain('<h2 id="dish-title" data-dish-title></h2>');
+    // Still one script: the frame is filled by the static file.
+    expect(html.match(/<script/g)).toHaveLength(1);
+  });
+
+  it('is absent from a menu with nothing to open', () => {
+    expect(renderMenuPage({ ...MENU, categories: [] }, 'tok_ABCdef12')).not.toContain('data-dish-sheet');
+    const bare = { ...MENU, categories: [{ id: 1, name: 'Порожня', products: [] }] };
+    expect(renderMenuPage(bare, 'tok_ABCdef12')).not.toContain('data-dish-sheet');
+  });
+
+  it('makes the name a button that names the dish, escaped, and promises a dialog', () => {
+    expect(html).toContain(
+      '<button type="button" class="open" data-open="7" aria-haspopup="dialog">&lt;script&gt;alert(1)&lt;/script&gt;</button>'
+    );
+    expect(html).toContain('data-open="8"');
+    expect(html).toContain('data-open="9"');
+    // The sheet is the page's own: no link leaves the page for a dish.
+    expect(html).not.toMatch(/<a [^>]*href="[^"]*\/products?\//);
+  });
+
+  it('prints a single size under the price, none for a dish without one, and keeps two sizes a list', () => {
+    const weighed = renderMenuPage(
+      {
+        ...MENU,
+        categories: [
+          {
+            id: 1,
+            name: 'Салати',
+            products: [
+              product({
+                id: 11,
+                name: 'Кума',
+                from_price_cents: 17500,
+                variants: [{ id: 110, label: ' 245 г <x> ', price_cents: 17500, available: true }],
+              }),
+            ],
+          },
+        ],
+      },
+      'tok_ABCdef12'
+    );
+    expect(weighed).toMatch(/<p class="price">175.₴<\/p><p class="size">245 г &lt;x&gt;<\/p>/);
+    // Product 7 has two sizes (a list), 8 and 9 a blank label: no size line anywhere.
+    expect(html).not.toContain('class="size"');
+    expect(html).toContain('<ul class="sizes">');
+  });
+});
+
 describe('the «unavailable» page', () => {
   it('names nothing: no store, no token, no link into the product', () => {
     const html = renderUnavailable();

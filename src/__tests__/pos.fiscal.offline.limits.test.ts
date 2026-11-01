@@ -237,6 +237,10 @@ describe.skipIf(!hasDb)('POS fiscal offline monthly limit (168 h per register)',
 
   // ── What it refuses ───────────────────────────────────────────────────────
 
+  /** Minutes since the Kyiv month began: the real-clock fixtures below must fit inside it. */
+  const monthMinutes = () => (Date.now() - kyivMonthStart().getTime()) / 60_000;
+  const youngMonth = monthMinutes() < 31;
+
   /**
    * Spend the month's allowance without waiting a week.
    *
@@ -249,8 +253,14 @@ describe.skipIf(!hasDb)('POS fiscal offline monthly limit (168 h per register)',
    */
   const spendTheMonth = async () => {
     const elapsedMs = Date.now() - kyivMonthStart().getTime();
-    const span = Math.max(60_000, elapsedMs - 60_000);
-    const copies = Math.ceil(OFFLINE_MONTH_MAX_MS / span) + 1;
+    // Each stretch runs from `span` ago to a minute ago, so it is a minute
+    // SHORTER than `span`; the copies are counted from that length, or the
+    // first hour of a Kyiv month comes up short — 15-minute stretches cut to
+    // 14 lost 7 % each, 669 rows summed to 156 h of the 167, and CI on the
+    // night of 1 November got 201 instead of 503.
+    const span = Math.max(120_000, elapsedMs - 60_000);
+    const length = span - 60_000;
+    const copies = Math.ceil(OFFLINE_MONTH_MAX_MS / length) + 1;
     await pool.query(
       `INSERT INTO pos_fiscal_offline_sessions
          (store_id, cash_register_key, holder, started_at, ended_at, status)
@@ -261,7 +271,7 @@ describe.skipIf(!hasDb)('POS fiscal offline monthly limit (168 h per register)',
     );
   };
 
-  it('refuses to open another offline session once the month is spent', async () => {
+  it.skipIf(monthMinutes() < 3)('refuses to open another offline session once the month is spent', async () => {
     await warm();
     await spendTheMonth();
     providerDown();
@@ -273,7 +283,7 @@ describe.skipIf(!hasDb)('POS fiscal offline monthly limit (168 h per register)',
     expect(await live()).toBeNull();
   });
 
-  it('stops selling inside a live session but leaves the session alone', async () => {
+  it.skipIf(monthMinutes() < 3)('stops selling inside a live session but leaves the session alone', async () => {
     await warm();
     providerDown();
     expect((await sell()).statusCode).toBe(201);
@@ -292,8 +302,10 @@ describe.skipIf(!hasDb)('POS fiscal offline monthly limit (168 h per register)',
 
   /**
    * A short stretch that just ended, for the endpoints that measure against
-   * the real clock. Twenty minutes rather than hours so it still lies inside
-   * the month when the suite runs shortly after midnight on the 1st.
+   * the real clock: 30 → 10 minutes ago, twenty minutes long. The two tests
+   * that read it run only once the Kyiv month is older than that — in its
+   * first half hour the stretch is cut by the month's start and no minute
+   * count is right, so they skip rather than fail on the night of the 1st.
    */
   const recentStretch = async () => {
     await pool.query(
@@ -304,7 +316,7 @@ describe.skipIf(!hasDb)('POS fiscal offline monthly limit (168 h per register)',
     );
   };
 
-  it('sends the count to the till with its lease', async () => {
+  it.skipIf(youngMonth)('sends the count to the till with its lease', async () => {
     await recentStretch();
     const res = await app.inject({
       method: 'POST',
@@ -319,7 +331,7 @@ describe.skipIf(!hasDb)('POS fiscal offline monthly limit (168 h per register)',
     expect(Date.parse(month.measured_at)).toBeGreaterThan(Date.parse(month.month_start));
   });
 
-  it('shows the owner the same count on the settings screen', async () => {
+  it.skipIf(youngMonth)('shows the owner the same count on the settings screen', async () => {
     await recentStretch();
     const res = await app.inject({
       method: 'GET',

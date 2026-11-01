@@ -149,10 +149,18 @@ function renderProduct(product: PublicMenuProduct, ordering = false): string {
   const picture = product.image_url
     ? `<div class="pic"><img src="${escapeHtml(product.image_url)}" alt="" loading="lazy" decoding="async"></div>`
     : '';
+  // One size (a dish by weight, «245 г») is a line under the price: the sizes
+  // list is drawn only from two up, and a guest should still see the weight
+  // ChoiceQR prints on every dish (F8, decision Д14). A blank label — a dish
+  // with no size at all — prints nothing.
+  const single = product.variants.length === 1 ? product.variants[0]!.label.trim() : '';
+  const sizeLine = single ? `<p class="size">${escapeHtml(single)}</p>` : '';
   return (
     `<li class="item" data-product="${product.id}" data-state="${state}">` +
     picture +
-    `<div class="body"><h3>${escapeHtml(product.name)} <span class="badge">${BADGE_TEXT[state]}</span></h3>` +
+    // The name is a real button (F8): a tap anywhere on the card opens the
+    // dish's sheet, and this is what the keyboard and a screen reader reach.
+    `<div class="body"><h3><button type="button" class="open" data-open="${product.id}" aria-haspopup="dialog">${escapeHtml(product.name)}</button> <span class="badge">${BADGE_TEXT[state]}</span></h3>` +
     (product.description ? `<p class="desc">${escapeHtml(product.description)}</p>` : '') +
     // What is in it, in the owner's own words — and only the allergens they
     // ticked; a dish with none ticked prints nothing, which says «not said».
@@ -162,7 +170,7 @@ function renderProduct(product: PublicMenuProduct, ordering = false): string {
           .map((a) => `<li>${escapeHtml(a.label)}</li>`)
           .join('')}</ul>`
       : '') +
-    `<p class="price">${price}</p>${sizes}${groups}` +
+    `<p class="price">${price}</p>${sizeLine}${sizes}${groups}` +
     (ordering ? `<button type="button" class="add" data-add="${product.id}">Додати</button>` : '') +
     `</div></li>`
   );
@@ -342,6 +350,9 @@ export function renderMenuPage(
     )
     .join('\n');
   const empty = menu.categories.length === 0 ? '<p class="empty">Меню поки порожнє.</p>' : '';
+  // The dish's own sheet (F8) is one frame for the whole page, filled by the
+  // script from the menu JSON; a page with no dish to open has none.
+  const dishSheet = menu.categories.some((c) => c.products.length > 0) ? dishSheetMarkup() : '';
   // After the last dish: the quiet ask. The same sheet the dock button opens.
   const ask = feedback
     ? '<section class="ask" data-ask><h2>Як вам сьогодні?</h2><p>Оцініть одним дотиком — власник прочитає.</p>' +
@@ -372,7 +383,7 @@ export function renderMenuPage(
 ${renderCorkage(menu.store)}${tabs ? `<nav class="tabs" aria-label="Розділи меню">${tabs}</nav>` : ''}
 <main>
 ${empty}${sections}${ask}
-</main>
+</main>${dishSheet}
 <footer class="foot">${factsNote}<p>Стоп-лист і ціни оновлюються самі.</p><p><a href="${escapeHtml(publicBaseUrl())}/pos/kafe" rel="noopener">Меню працює на The Live Shop POS</a></p></footer>${showBill || ordering || call || feedback ? dockMarkup(table, showBill, ordering, call, billCorkage, feedback) : ''}`;
   return shell(
     `${menu.store.name} — меню`,
@@ -407,6 +418,27 @@ ${empty}${sections}${ask}
 interface FeedbackSheet {
   storeName: string;
   googleUrl: string | null;
+}
+
+/**
+ * The dish's own sheet (phase F8): the frame only. The script fills it from
+ * the menu JSON with `textContent` — the photo at its real size (the same
+ * file the card shows at 88 px), the name with its state, the price or the
+ * sizes, the weight, the description, the composition, the allergens, the
+ * modifiers — and, where ordering is on, the questions and «Додати» under
+ * them. The whole card opens it; the name is the button a keyboard reaches.
+ */
+function dishSheetMarkup(): string {
+  return `
+<div class="bill-sheet dish-sheet" data-dish-sheet hidden role="dialog" aria-modal="true" aria-labelledby="dish-title">
+<div class="bill-panel dish-panel" data-dish-panel>
+<button type="button" class="bill-close dish-close" data-dish-close aria-label="Закрити">×</button>
+<div class="dish-photo" data-dish-photo hidden><img alt="" decoding="async" data-dish-img></div>
+<div class="dish-head"><h2 id="dish-title" data-dish-title></h2><span class="badge" data-dish-badge></span></div>
+<div class="dish-body" data-dish-body></div>
+<div class="order-foot dish-foot" data-dish-foot hidden></div>
+</div>
+</div>`;
 }
 
 function dockMarkup(
