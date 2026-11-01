@@ -84,6 +84,8 @@ describe.skipIf(!hasDb)('POST /api/pos/super/stores/:id/import/choiceqr', () => 
     expect(res.statusCode).toBe(200);
     expect(res.json().totals).toEqual({ tags_new: 4, products_new: 9, products_existing: 0, variants_new: 11, photos: 3 });
     expect(res.json().place).toMatchObject({ name: 'Тестова корчма', logo: true });
+    // The labels it will not carry are named in the preview, so the super admin reads them before applying.
+    expect(res.json().warnings.join('\n')).toMatch(/Позначки, яких у касі немає, не перенесено .*«Хіт сезону».*«Не містить глютену»/);
     const count = await pool.query(`SELECT count(*)::int AS n FROM pos_products WHERE store_id = $1`, [cafe.storeId]);
     expect(count.rows[0].n).toBe(0);
     expect(fetched).toEqual([MENU]);
@@ -117,7 +119,7 @@ describe.skipIf(!hasDb)('POST /api/pos/super/stores/:id/import/choiceqr', () => 
     ]);
 
     const rows = await pool.query(
-      `SELECT p.name, p.kind, p.description, p.image_url, t.name AS tag,
+      `SELECT p.name, p.kind, p.description, p.image_url, p.menu_labels, t.name AS tag,
               v.label, v.unit, v.price_cents, s.quantity
          FROM pos_products p
          JOIN pos_product_tags pt ON pt.product_id = p.id JOIN pos_tags t ON t.id = pt.tag_id
@@ -132,8 +134,11 @@ describe.skipIf(!hasDb)('POST /api/pos/super/stores/:id/import/choiceqr', () => 
     ]);
     expect(vzvar[0]).toMatchObject({ kind: 'simple', unit: 'шт', tag: 'Холодні напої' });
     expect(vzvar[0].image_url).toMatch(/^\/pos-uploads\/[0-9a-f-]+\.png$/);
-    expect(rows.rows.find((r) => r.name === 'Борщ')).toMatchObject({ description: 'з пампушкою', label: '300 г' });
+    expect(rows.rows.find((r) => r.name === 'Борщ')).toMatchObject({ description: 'з пампушкою', label: '300 г', menu_labels: ['spicy'] });
     expect(rows.rows.find((r) => r.name === 'Гетьман')?.image_url).toBeNull();
+    // The card's labels are the union over its sizes (F9); «Не містить глютену» stays behind.
+    expect(rows.rows.find((r) => r.name === 'Гетьман')?.menu_labels).toEqual(['vegan', 'recommended']);
+    expect(rows.rows.find((r) => r.name === 'Бульйон')?.menu_labels).toEqual([]);
     expect(rows.rows.filter((r) => r.name.startsWith('Печена картопля')).map((r) => [r.name, r.price_cents])).toEqual([
       ['Печена картопля', 11500],
       ['Печена картопля (2)', 15500],

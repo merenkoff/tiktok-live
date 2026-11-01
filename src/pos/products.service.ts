@@ -16,6 +16,7 @@ import { sortVariantRuns } from './verticals/variantOrder.js';
 import { escapeLike, searchTokens } from './searchTokens.js';
 import { storeClock } from './core/storeClock.js';
 import { normalizeAllergens, normalizeComposition } from './allergens.js';
+import { normalizeMenuLabels } from './menu-labels.js';
 import {
   CompositeError,
   listComponentsForStore,
@@ -73,6 +74,11 @@ export interface CreateProductInput {
   composition?: string | null;
   /** Codes of the allergens the owner ticked; empty means «not said», not «none». */
   allergens?: string[];
+  /**
+   * The chips under the dish's name on the guest menu — «Гостре», «Хіт», … —
+   * from the fixed set in `menu-labels.ts` (migration 086); empty = none.
+   */
+  menu_labels?: string[];
   image_url?: string | null;
   variants: VariantInput[];
   needs_review?: boolean;
@@ -290,6 +296,7 @@ export async function listProducts(storeId: number) {
     description: p.description,
     composition: p.composition ?? null,
     allergens: Array.isArray(p.allergens) ? (p.allergens as string[]) : [],
+    menu_labels: Array.isArray(p.menu_labels) ? (p.menu_labels as string[]) : [],
     image_url: p.image_url,
     is_active: p.is_active,
     needs_review: Boolean(p.needs_review),
@@ -404,8 +411,8 @@ export async function createProductInTx(
   const productResult = await client.query(
     `INSERT INTO pos_products
        (store_id, name, description, image_url, needs_review, created_from_document_id,
-        kind, stock_mode, one_off, sellable, composition, allergens, menu_hidden)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::text[], $13)
+        kind, stock_mode, one_off, sellable, composition, allergens, menu_hidden, menu_labels)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::text[], $13, $14::text[])
      RETURNING id`,
     [
       storeId,
@@ -421,6 +428,7 @@ export async function createProductInTx(
       normalizeComposition(input.composition),
       normalizeAllergens(input.allergens),
       input.menu_hidden === true,
+      normalizeMenuLabels(input.menu_labels),
     ]
   );
   const productId = Number(productResult.rows[0].id);
@@ -551,6 +559,7 @@ export async function updateProduct(
       | 'description'
       | 'composition'
       | 'allergens'
+      | 'menu_labels'
       | 'image_url'
       | 'kind'
       | 'stock_mode'
@@ -599,6 +608,11 @@ export async function updateProduct(
       sets.push(`allergens = $${i++}::text[]`);
       values.push(normalizeAllergens(input.allergens));
     }
+    if (input.menu_labels !== undefined) {
+      // Replaced wholesale, like `allergens`: «take this label off» is `[]`.
+      sets.push(`menu_labels = $${i++}::text[]`);
+      values.push(normalizeMenuLabels(input.menu_labels));
+    }
     if (input.image_url !== undefined) {
       sets.push(`image_url = $${i++}`);
       values.push(emptyToNull(input.image_url));
@@ -623,6 +637,7 @@ export async function updateProduct(
       input.description !== undefined ||
       input.composition !== undefined ||
       input.allergens !== undefined ||
+      input.menu_labels !== undefined ||
       input.image_url !== undefined
     ) {
       // First meaningful edit clears review flag

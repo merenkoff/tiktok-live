@@ -36,6 +36,8 @@ import {
   ALLERGENS as CLIENT_ALLERGENS,
   COMPOSITION_MAX as CLIENT_COMPOSITION_MAX,
 } from '../../pos/src/modules/products/components/allergens.js';
+import { MENU_LABELS, MenuLabelError, menuLabelItems, normalizeMenuLabels } from '../pos/menu-labels.js';
+import { MENU_LABELS as CLIENT_MENU_LABELS } from '../../pos/src/modules/products/components/menuLabels.js';
 
 describe('the allergen list', () => {
   it('is the fourteen of Regulation (EU) 1169/2011 Annex II, each once, each with a label', () => {
@@ -85,6 +87,44 @@ describe('the client’s copy of the list', () => {
   });
 });
 
+describe('the dish labels (F9)', () => {
+  it('are the six, each once, in the order the guest reads them — and none claims an allergen is absent', () => {
+    expect(MENU_LABELS.map((l) => l.code)).toEqual(['spicy', 'vegetarian', 'vegan', 'new', 'hit', 'recommended']);
+    expect(MENU_LABELS.every((l) => /^[a-z]+$/.test(l.code) && l.label.length > 0)).toBe(true);
+    expect(MENU_LABELS.some((l) => /глютен/i.test(l.label))).toBe(false);
+  });
+
+  it('puts a chosen set in canonical order without repeats, and reads nothing as the empty set', () => {
+    expect(normalizeMenuLabels(['hit', 'spicy', 'hit', 'new'])).toEqual(['spicy', 'new', 'hit']);
+    expect(normalizeMenuLabels([])).toEqual([]);
+    expect(normalizeMenuLabels(null)).toEqual([]);
+    expect(normalizeMenuLabels(undefined)).toEqual([]);
+  });
+
+  it.each([
+    ['a code that is not on the list', ['spicy', 'gluten-free']],
+    ['ChoiceQR’s own code', ['middle-spicy']],
+    ['a capitalised code', ['Spicy']],
+    ['a label instead of a code', ['Гостре']],
+    ['a non-string entry', ['spicy', 7]],
+    ['a string instead of a list', 'spicy'],
+  ])('refuses %s', (_label, value) => {
+    expect(() => normalizeMenuLabels(value)).toThrow(MenuLabelError);
+  });
+
+  it('turns a stored set into code + word in canonical order and drops codes it does not know', () => {
+    expect(menuLabelItems(['hit', 'spicy', 'retired_code'])).toEqual([
+      { code: 'spicy', label: 'Гостре' },
+      { code: 'hit', label: 'Хіт' },
+    ]);
+    expect(menuLabelItems(null)).toEqual([]);
+  });
+
+  it('is the same list on the owner’s form: the client’s copy says what the server says', () => {
+    expect(CLIENT_MENU_LABELS.map((l) => ({ ...l }))).toEqual(MENU_LABELS.map((l) => ({ ...l })));
+  });
+});
+
 describe('the composition line', () => {
   it('is one trimmed line: breaks and control characters become spaces', () => {
     expect(normalizeComposition('  Еспресо,\n молоко\t\u0000 ')).toBe('Еспресо, молоко');
@@ -107,6 +147,7 @@ describe('the guest page', () => {
     description: '',
     composition: '',
     allergens: [],
+    labels: [],
     image_url: null,
     stopped: false,
     available: true,
@@ -145,7 +186,42 @@ describe('the guest page', () => {
     const html = renderMenuPage(menuOf(dish()), 'tok_12345678');
     expect(html).not.toContain('class="comp"');
     expect(html).not.toContain('class="allergens"');
+    expect(html).not.toContain('class="labels"');
     expect(html).not.toContain('Склад і алергени вказує заклад');
+  });
+
+  it('draws the labels as chips between the name and the description — a glyph and the word, one class per code', () => {
+    const html = renderMenuPage(
+      menuOf(
+        dish({
+          description: 'Наш борщ',
+          labels: [
+            { code: 'spicy', label: 'Гостре' },
+            { code: 'hit', label: 'Хіт' },
+          ],
+        })
+      ),
+      'tok_12345678'
+    );
+    const chips = html.match(/<ul class="labels" aria-label="Позначки страви">.*?<\/ul>/)![0];
+    expect(chips).toMatch(/^<ul class="labels" aria-label="Позначки страви"><li class="label label-spicy"><svg [^>]*aria-hidden="true">.*?<\/svg><span>Гостре<\/span><\/li><li class="label label-hit"><svg .*?<\/svg><span>Хіт<\/span><\/li><\/ul>$/);
+    expect(html.indexOf('</h3>')).toBeLessThan(html.indexOf(chips));
+    expect(html.indexOf(chips)).toBeLessThan(html.indexOf('<p class="desc">Наш борщ</p>'));
+    // The sheet's frame carries one glyph template per code, for the script to clone.
+    for (const code of ['spicy', 'vegetarian', 'vegan', 'new', 'hit', 'recommended']) {
+      expect(html.match(new RegExp(`<template data-label-glyph="${code}"><svg `, 'g'))).toHaveLength(1);
+    }
+    expect(html).toContain('<ul class="labels dish-labels" data-dish-labels aria-label="Позначки страви" hidden></ul>');
+  });
+
+  it('escapes a label’s word and skips a code it has no glyph for', () => {
+    const html = renderMenuPage(
+      menuOf(dish({ labels: [{ code: 'spicy', label: '<b>Гостре</b>' }, { code: 'halal', label: 'Халяль' }] })),
+      'tok_12345678'
+    );
+    expect(html).toContain('<span>&lt;b&gt;Гостре&lt;/b&gt;</span>');
+    expect(html).not.toContain('label-halal');
+    expect(html).not.toContain('Халяль');
   });
 
   it('prints the note once, however many dishes carry facts', () => {
@@ -259,6 +335,30 @@ describe.skipIf(!hasDb)('dish facts through the API', () => {
       expect((await patch(made.id, { composition: 'а'.repeat(COMPOSITION_MAX + 1) })).statusCode).toBe(400);
     });
 
+    it('stores a canonical set of labels, replaces it wholesale, and refuses a code it does not know with a 400 in words', async () => {
+      const res = await post({ name: 'Бограч', menu_labels: ['hit', 'spicy', 'hit'], variants });
+      expect(res.statusCode).toBe(201);
+      expect(res.json()).toMatchObject({ menu_labels: ['spicy', 'hit'] });
+      const list = await app.inject({ method: 'GET', url: '/api/pos/products', headers: auth(cafe.ownerToken) });
+      expect(list.json().find((p: { name: string }) => p.name === 'Бограч')).toMatchObject({ menu_labels: ['spicy', 'hit'] });
+
+      const kept = await patch(res.json().id, { name: 'Бограч по-закарпатськи' });
+      expect(kept.json()).toMatchObject({ menu_labels: ['spicy', 'hit'] });
+      const replaced = await patch(res.json().id, { menu_labels: ['recommended'] });
+      expect(replaced.json()).toMatchObject({ menu_labels: ['recommended'] });
+      const cleared = await patch(res.json().id, { menu_labels: [] });
+      expect(cleared.json()).toMatchObject({ menu_labels: [] });
+
+      const unknown = await post({ name: 'Погана позначка', menu_labels: ['spicy', 'gluten-free'], variants });
+      expect(unknown.statusCode).toBe(400);
+      expect(unknown.json().error).toContain('gluten-free');
+      expect((await patch(res.json().id, { menu_labels: ['middle-spicy'] })).statusCode).toBe(400);
+      const rows = await pool.query(`SELECT menu_labels FROM pos_products WHERE store_id = $1 AND name IN ('Погана позначка', 'Бограч по-закарпатськи')`, [
+        cafe.storeId,
+      ]);
+      expect(rows.rows).toEqual([{ menu_labels: [] }]);
+    });
+
     it('is the owner’s to write: a seller gets 403 and nothing changes', async () => {
       const made = (await post({ name: 'Капучино', composition: 'Еспресо, молоко', variants })).json();
       expect((await patch(made.id, { composition: 'Зламано' }, cafe.sellerToken)).statusCode).toBe(403);
@@ -287,6 +387,43 @@ describe.skipIf(!hasDb)('dish facts through the API', () => {
       const tea = dishOf(res.json() as PublicMenu, 'Чай')!;
       expect(tea.composition).toBe('');
       expect(tea.allergens).toEqual([]);
+      expect(tea.labels).toEqual([]);
+    });
+
+    it('carries the labels as code + word in canonical order, draws them on the page, and keeps them on a card nobody reviewed', async () => {
+      const made = (await post({ name: 'Гострий суп', menu_labels: ['recommended', 'spicy'], variants })).json();
+      const unreviewed = await createProduct(cafe.storeId, {
+        name: 'Неперевірений хіт',
+        description: 'Створено з приходу ПР-13',
+        menu_labels: ['hit'],
+        needs_review: true,
+        variants,
+      });
+      invalidatePublicMenu(cafe.storeId);
+      const now = await menu();
+      expect(dishOf(now, 'Гострий суп')!.labels).toEqual([
+        { code: 'spicy', label: 'Гостре' },
+        { code: 'recommended', label: 'Рекомендуємо' },
+      ]);
+      expect(Object.keys(dishOf(now, 'Гострий суп')!.labels[0]!).sort()).toEqual(['code', 'label']);
+      // The owner's ticks, not internal text: they show while the description does not.
+      const hit = dishOf(now, 'Неперевірений хіт')!;
+      expect(hit.description).toBe('');
+      expect(hit.labels).toEqual([{ code: 'hit', label: 'Хіт' }]);
+
+      const html = (await app.inject({ method: 'GET', url: `/m/${token}` })).body;
+      expect(html).toContain('<li class="label label-spicy">');
+      expect(html).toContain('<span>Рекомендуємо</span>');
+      expect(html).toContain('<li class="label label-hit">');
+      expect(html).not.toContain('Створено з приходу');
+
+      // A label moves the fingerprint, so an open phone reloads with it.
+      const before = now.rev;
+      await patch(made.id, { menu_labels: ['spicy'] });
+      expect((await menu()).rev).not.toBe(before);
+      // Retire the unreviewed card without editing it (an edit would clear the
+      // flag and put its internal text on the page for the tests below).
+      await patch(unreviewed!.id, { is_active: false });
     });
 
     it('shows a change at once — the menu’s 15 s cache is dropped by the save, on create and on update', async () => {

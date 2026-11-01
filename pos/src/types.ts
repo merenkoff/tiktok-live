@@ -774,6 +774,8 @@ export interface Product {
   composition?: string | null;
   /** Allergen codes the owner ticked; empty = not said. Absent on an older backend. */
   allergens?: string[];
+  /** Label codes for the guest menu («spicy», «hit»…, migration 086); empty = none. Absent on an older backend. */
+  menu_labels?: string[];
   image_url: string | null;
   is_active: boolean;
   needs_review?: boolean;

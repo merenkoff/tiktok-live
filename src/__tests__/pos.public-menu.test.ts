@@ -420,6 +420,7 @@ describe.skipIf(!hasDb)('POS guest QR menu', () => {
         'from_price_cents',
         'id',
         'image_url',
+        'labels',
         'modifier_groups',
         'name',
         'stopped',

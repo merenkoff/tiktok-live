@@ -200,6 +200,37 @@ main { max-width: 720px; margin: 0 auto; padding: 0 16px 24px; }
   background: var(--badge); color: var(--ink); border: 1px solid var(--line);
 }
 .allergen-line { font-weight: 600; }
+
+/* The dish's labels (phase F9): «Гостре», «Вегетаріанське», «Веганське»,
+   «Новинка», «Хіт», «Рекомендуємо» — a glyph and a word, one colour per
+   label, between the name and the description. The sheet draws the same row
+   under its head. A stopped or sold-out dish greys them with the card. */
+.labels { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.labels[hidden] { display: none; }
+.label {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px 2px 6px; border-radius: 999px;
+  font-size: 12px; font-weight: 600; line-height: 16px; white-space: nowrap;
+  color: var(--label-ink, var(--ink)); background: var(--label-bg, var(--badge));
+}
+.label svg { width: 14px; height: 14px; flex: none; }
+.label-spicy { --label-ink: #b3261e; --label-bg: #fde8e6; }
+.label-vegetarian, .label-vegan { --label-ink: #1e7f3a; --label-bg: #e3f5e8; }
+.label-new { --label-ink: #6a3fcf; --label-bg: #efe9fb; }
+.label-hit { --label-ink: #b2600a; --label-bg: #fdf0dc; }
+.label-recommended { --label-ink: #0a6cff; --label-bg: #e3edfc; }
+@media (prefers-color-scheme: dark) {
+  .label-spicy { --label-ink: #ff8a80; --label-bg: #3a1f1d; }
+  .label-vegetarian, .label-vegan { --label-ink: #7ddc9a; --label-bg: #1b3324; }
+  .label-new { --label-ink: #c0aaff; --label-bg: #2a2340; }
+  .label-hit { --label-ink: #ffc078; --label-bg: #3a2a14; }
+  .label-recommended { --label-ink: #8ab8ff; --label-bg: #1c2a44; }
+}
+.item[data-state="stop"] .label, .item[data-state="out"] .label,
+.dish-sheet[data-state="stop"] .label, .dish-sheet[data-state="out"] .label {
+  color: var(--off); background: var(--badge);
+}
+.dish-labels { margin-top: 8px; }
 .foot .foot-note { margin: 0 0 8px; color: var(--ink); }
 .price { margin: 6px 0 0; font-weight: 700; }
 

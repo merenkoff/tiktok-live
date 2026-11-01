@@ -240,6 +240,8 @@ class PosApi {
     composition?: string;
     /** Codes of the allergens the owner ticked; empty means «not said», not «none». */
     allergens?: string[];
+    /** The chips under the dish on the guest menu («spicy», «hit»…, migration 086); empty = none. */
+    menu_labels?: string[];
     image_url?: string | null;
     kind?: ProductKind;
     stock_mode?: ProductStockMode;
@@ -270,6 +272,8 @@ class PosApi {
       description: string;
       composition: string | null;
       allergens: string[];
+      /** Replaces the set wholesale, like `allergens`. */
+      menu_labels: string[];
       image_url: string | null;
       is_active: boolean;
       kind: ProductKind;

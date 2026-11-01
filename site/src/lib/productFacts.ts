@@ -328,6 +328,17 @@ export const COMPETITOR_FACTS = {
     reviewsGatingQuote: 'пропонує залишити позитивні в Google maps і Tripadvisor',
     /** «Онлайн-меню»: «детальні описи страв (склад, калорії, алергени)» — the UA page, 2026-10-31. */
     dishFacts: true,
+    /**
+     * Dish labels, read 2026-11-01 from a client's public menu page and the
+     * menu client's own code (`menu_labels[].type`): «Гостре» and
+     * «Середньо-гострий», «Вегетаріанська», «Веганське», «Не містить
+     * глютену», «Рекомендовано», «Новинка», plus a place's own custom
+     * labels with their own names. Wider than ours by the gluten-free one and
+     * the custom ones — said as is.
+     */
+    dishLabels: true,
+    dishLabelsNote:
+      'гостре (двох ступенів), вегетаріанське, веганське, «не містить глютену», рекомендовано, новинка — і власні позначки закладу своїми словами',
     /** «25 000+ закладів вже з Choice» у «25+ країнах світу». */
     establishments: 25000,
     countries: 25,
@@ -1004,6 +1015,11 @@ export const FEATURES = {
   qrMenuTables: { status: 'available', label: 'QR на кожен стіл із номером столу й лист QR для друку' },
   qrMenuProfile: { status: 'available', label: 'Профіль закладу в QR-меню: логотип, адреса, телефон і години роботи' },
   dishAllergens: { status: 'available', label: 'Склад і алергени страв у QR-меню: 14 позицій за переліком ЄС, які вказує власник' },
+  dishLabels: {
+    status: 'available',
+    label:
+      'Позначки страв у QR-меню: «Гостре», «Вегетаріанське», «Веганське», «Новинка», «Хіт», «Рекомендуємо» — кольорові чіпи з іконкою під назвою страви, які відмічає власник',
+  },
   // The guest-feedback track (TechDocs/POS_QR_MENU_FEEDBACK.md, phases F1–F7,
   // deployed 2026-10-31): the place's contacts, its own-alcohol terms and the
   // guest's feedback — all on the same QR-menu page, nothing of it a separate
@@ -1101,6 +1117,7 @@ export const POS_FEATURE_IDS: FeatureId[] = [
   'qrMenuTables',
   'qrMenuProfile',
   'dishAllergens',
+  'dishLabels',
   'qrMenuSocials',
   'menuHouseRules',
   'guestFeedback',
@@ -1254,7 +1271,7 @@ export const VERTICALS: readonly VerticalFact[] = [
     eyebrow: 'Програма для кав\'ярні за стійкою',
     tagline: 'Тап — і «як завжди»; модифікатори, дошка кухні, стоп-лист, техкарти з фудкостом і матриця меню.',
     bullets: ['Модифікатори з ціною на кнопці', 'Дошка кухні й бару, стоп-лист', 'Техкарти й фудкост'],
-    featureIds: ['cafeModifiers', 'cafeKitchenBoard', 'cafeTechCards', 'cafeMenuMatrix', 'cafeKitchenTicket', 'qrMenu', 'qrMenuProfile', 'dishAllergens', 'qrMenuSocials', 'guestFeedback'],
+    featureIds: ['cafeModifiers', 'cafeKitchenBoard', 'cafeTechCards', 'cafeMenuMatrix', 'cafeKitchenTicket', 'qrMenu', 'qrMenuProfile', 'dishAllergens', 'dishLabels', 'qrMenuSocials', 'guestFeedback'],
     illustrations: ['/demo-cafe/latte.svg', '/demo-cafe/croissant.svg', '/demo-cafe/espresso.svg'],
     tint: 'bg-tint-cafe',
   },
@@ -1267,7 +1284,7 @@ export const VERTICALS: readonly VerticalFact[] = [
     eyebrow: 'Програма для ресторану зі столами',
     tagline: 'План залу, відкриті рахунки, раунди на кухню, передчек і розділення рахунку — з планшета офіціанта.',
     bullets: ['План залу з рахунками столів', 'Раунди на кухню з планшета', 'Розділити рахунок, передчек'],
-    featureIds: ['tablesFloorPlan', 'tablesRounds', 'tablesSplitBill', 'tablesPrecheck', 'cafeKitchenBoard', 'qrMenu', 'qrMenuTables', 'qrMenuProfile', 'dishAllergens', 'qrMenuSocials', 'menuHouseRules', 'guestFeedback', 'guestBill', 'guestOrder', 'waiterCall', 'guestAutoKitchen', 'waiterTablet'],
+    featureIds: ['tablesFloorPlan', 'tablesRounds', 'tablesSplitBill', 'tablesPrecheck', 'cafeKitchenBoard', 'qrMenu', 'qrMenuTables', 'qrMenuProfile', 'dishAllergens', 'dishLabels', 'qrMenuSocials', 'menuHouseRules', 'guestFeedback', 'guestBill', 'guestOrder', 'waiterCall', 'guestAutoKitchen', 'waiterTablet'],
     illustrations: ['/demo-restaurant/borscht.svg', '/demo-restaurant/ribeye.svg', '/demo-restaurant/wine-red.svg'],
     tint: 'bg-tint-restaurant',
   },

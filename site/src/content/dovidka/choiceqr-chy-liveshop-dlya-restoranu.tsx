@@ -69,6 +69,7 @@ function Body() {
   const call = isAvailable('waiterCall');
   const feedback = isAvailable('guestFeedback');
   const allergens = isAvailable('dishAllergens');
+  const labels = isAvailable('dishLabels');
   const board = isAvailable('cafeKitchenBoard');
   const floor = isAvailable('tablesFloorPlan');
   return (
@@ -160,6 +161,15 @@ function Body() {
               <td>Склад і алергени страв</td>
               <td>{C.dishFacts ? 'Є: «детальні описи страв (склад, калорії, алергени)» в «Онлайн-меню»' : 'На сторінках не згадано'}</td>
               <td>{allergens ? 'Склад, який вписує власник, і 14 алергенів за переліком ЄС' : 'У планах'}</td>
+            </tr>
+            <tr>
+              <td>Позначки страв</td>
+              <td>{C.dishLabels ? `Є, ширший набір: ${C.dishLabelsNote}` : 'На сторінках не згадано'}</td>
+              <td>
+                {labels
+                  ? 'Шість сталих: «Гостре», «Вегетаріанське», «Веганське», «Новинка», «Хіт», «Рекомендуємо» — кольорові чіпи з іконкою; без «не містить глютену» свідомо (каса каже лише, що в страві є) і без власних; при імпорті з ChoiceQR переносяться самі'
+                  : 'У планах'}
+              </td>
             </tr>
             <tr>
               <td>Рахунок столу для гостя</td>

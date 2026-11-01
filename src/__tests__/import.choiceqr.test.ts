@@ -62,9 +62,26 @@ describe('parseChoiceQr', () => {
       size: '300 г',
       photoUrl: 'https://cdn-media.choiceqr.com/prod-eat-test/menu/borshch.jpeg',
       available: true,
+      labels: ['spicy'],
+      labelsSkipped: ['«Хіт сезону»'],
     });
     expect(menu.items.find((i) => i.id === 'i3')?.size).toBe('1 л');
     expect(menu.items.find((i) => i.id === 'i11')?.size).toBeNull();
+  });
+
+  it('reads the labels as our codes — both spiciness grades as «Гостре» — and names what it does not carry', () => {
+    const by = (id: string) => menu.items.find((i) => i.id === id)!;
+    expect(by('i6')).toMatchObject({ labels: ['recommended'], labelsSkipped: ['«Не містить глютену»'] });
+    expect(by('i7')).toMatchObject({ labels: ['vegan'], labelsSkipped: [] });
+    expect(by('i2')).toMatchObject({ labels: [], labelsSkipped: [] });
+    // Junk in the list is ignored, an unknown fixed type is named, a nameless custom one too.
+    const odd = parseChoiceQr(
+      choiceQrPage([
+        { id: 'x', category: 'c-soup', name: 'Дивна', price: 100, labels: [{ type: 'halal', custom: false }, { custom: true }, { type: 'new', custom: false }] },
+      ])
+    ).items[0]!;
+    expect(odd.labels).toEqual(['new']);
+    expect(odd.labelsSkipped).toEqual(['«halal»', 'своя позначка']);
   });
 
   it('refuses a page without a ChoiceQR menu', () => {
@@ -90,6 +107,17 @@ describe('planMenuImport', () => {
     expect(card('Печена картопля (2)')?.variants).toEqual([{ size: '300 г', price_cents: 15500 }]);
     expect(plan.warnings.join('\n')).toMatch(/«Печена картопля» 300 г у «Гарнір» двічі з різною ціною .* друга стане «Печена картопля \(2\)»/);
     expect(plan.warnings.join('\n')).toMatch(/«Печена картопля» 300 г у «Гарнір» двічі з тією ж ціною — друга пропущена/);
+  });
+
+  it('gives a card the labels of every size, and warns once about the labels it leaves behind', () => {
+    expect(card('Борщ')?.labels).toEqual(['spicy']);
+    expect(card('Гетьман')?.labels).toEqual(['vegan', 'recommended']);
+    expect(card('Бульйон')?.labels).toEqual([]);
+    const about = plan.warnings.filter((w) => w.startsWith('Позначки, яких у касі немає'));
+    expect(about).toHaveLength(1);
+    expect(about[0]).toBe(
+      'Позначки, яких у касі немає, не перенесено (своє слово допишіть в опис страви): Борщ 300 г: «Хіт сезону»; Гетьман 50 мл: «Не містить глютену».'
+    );
   });
 
   it('names what the guest could not order there and what costs nothing', () => {

@@ -40,6 +40,8 @@ export interface ProductDraft {
   description: string;
   composition: string;
   allergens: string[];
+  /** The chips under the dish on the guest menu («Гостре», «Хіт»…, F9), canonical order. */
+  menuLabels: string[];
   imageUrl: string | null;
   sellable: boolean;
   /** Sold at the till, never listed to a guest (the cork fee, a bag). */
@@ -80,8 +82,9 @@ export function variantDraftOf(v: ProductVariant): VariantDraft {
 
 /**
  * The ONE place that reads a raw `Product`: every optional field an older
- * payload may lack (`composition`, `allergens`, `modifier_group_ids`,
- * `tag_ids`, `sellable`) is normalised here and nowhere else.
+ * payload may lack (`composition`, `allergens`, `menu_labels`,
+ * `modifier_group_ids`, `tag_ids`, `sellable`) is normalised here and nowhere
+ * else.
  */
 export function draftOf(product: Product): ProductDraft {
   return {
@@ -89,6 +92,7 @@ export function draftOf(product: Product): ProductDraft {
     description: product.description ?? '',
     composition: product.composition ?? '',
     allergens: [...(product.allergens ?? [])],
+    menuLabels: [...(product.menu_labels ?? [])],
     imageUrl: product.image_url ?? null,
     sellable: product.sellable !== false,
     menuHidden: product.menu_hidden === true,
@@ -106,6 +110,7 @@ export function emptyDraft(): ProductDraft {
     description: '',
     composition: '',
     allergens: [],
+    menuLabels: [],
     imageUrl: null,
     sellable: true,
     menuHidden: false,
@@ -128,6 +133,7 @@ export function createDirty(draft: ProductDraft, variantsTyped: boolean): boolea
     draft.description.trim() !== '' ||
     draft.composition.trim() !== '' ||
     draft.allergens.length > 0 ||
+    draft.menuLabels.length > 0 ||
     draft.imageUrl != null ||
     !draft.sellable ||
     draft.menuHidden ||
@@ -235,6 +241,7 @@ export function detailsOf(d: ProductDraft) {
     description: d.description,
     composition: d.composition,
     allergens: d.allergens,
+    menu_labels: d.menuLabels,
     image_url: d.imageUrl,
     sellable: d.sellable,
     menu_hidden: d.menuHidden,
@@ -253,7 +260,7 @@ function sameSet(a: readonly number[], b: readonly number[]): boolean {
 }
 
 export interface ProductDiff {
-  /** Name, description, composition, allergens, photo, sellable, hidden from the guest menu. */
+  /** Name, description, composition, allergens, labels, photo, sellable, hidden from the guest menu. */
   details: boolean;
   shape: boolean;
   tags: boolean;
@@ -271,6 +278,7 @@ export function diffProduct(snapshot: ProductDraft, draft: ProductDraft): Produc
       snapshot.description !== draft.description ||
       snapshot.composition !== draft.composition ||
       !sameStrings(snapshot.allergens, draft.allergens) ||
+      !sameStrings(snapshot.menuLabels, draft.menuLabels) ||
       (snapshot.imageUrl ?? null) !== (draft.imageUrl ?? null) ||
       snapshot.sellable !== draft.sellable ||
       snapshot.menuHidden !== draft.menuHidden,
