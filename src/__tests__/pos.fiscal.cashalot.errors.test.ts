@@ -29,6 +29,7 @@ describe('classifyCashalotError', () => {
     ['OperatorAccessToTransactionsRegistrarNotGranted', 200, 'auth_rejected'],
     ['TransactionsRegistrarAbsent', 200, 'auth_rejected'],
     ['CryptographyError', 200, 'auth_rejected'],
+    ['LicenseViolation', 200, 'auth_rejected'],
     ['InconsistentRegistrarState', 200, 'unknown'],
     ['ShiftAlreadyOpened', 200, 'unknown'],
   ])('%s → %s', (code, status, kind) => {
