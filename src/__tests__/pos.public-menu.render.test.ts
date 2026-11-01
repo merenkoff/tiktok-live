@@ -92,6 +92,7 @@ function product(over: Partial<PublicMenuProduct> & { id: number; name: string }
     strength_tenths: null,
     prep_minutes: null,
     image_url: null,
+    thumb_url: null,
     stopped: false,
     available: true,
     from_price_cents: 5000,

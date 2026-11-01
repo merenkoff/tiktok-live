@@ -427,6 +427,7 @@ describe.skipIf(!hasDb)('POS guest QR menu', () => {
         'prep_minutes',
         'stopped',
         'strength_tenths',
+        'thumb_url',
         'variants',
       ]);
       expect(Object.keys(latte.variants[0]!).sort()).toEqual(['available', 'id', 'label', 'price_cents']);
