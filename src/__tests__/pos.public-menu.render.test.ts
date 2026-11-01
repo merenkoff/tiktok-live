@@ -87,6 +87,7 @@ function product(over: Partial<PublicMenuProduct> & { id: number; name: string }
     description: '',
     composition: '',
     allergens: [],
+    labels: [],
     image_url: null,
     stopped: false,
     available: true,

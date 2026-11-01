@@ -10,6 +10,7 @@ import type { Product, ProductVariant } from '@pos/platform';
 import {
   centsToInput,
   createDirty,
+  detailsOf,
   diffProduct,
   draftOf,
   emptyDraft,
@@ -66,6 +67,7 @@ describe('draftOf — the one place that reads a raw product', () => {
       product({
         composition: undefined,
         allergens: undefined,
+        menu_labels: undefined,
         modifier_group_ids: undefined,
         sellable: undefined,
         menu_hidden: undefined,
@@ -75,6 +77,7 @@ describe('draftOf — the one place that reads a raw product', () => {
     expect(d.description).toBe('');
     expect(d.composition).toBe('');
     expect(d.allergens).toEqual([]);
+    expect(d.menuLabels).toEqual([]);
     expect(d.groupIds).toEqual([]);
     expect(d.sellable).toBe(true);
     expect(d.menuHidden).toBe(false);
@@ -175,6 +178,15 @@ describe('diffProduct — what a save has to write', () => {
     expect(diffProduct(snapshot, { ...snapshot, sellable: false }).details).toBe(true);
     expect(diffProduct(snapshot, { ...snapshot, menuHidden: true }).details).toBe(true);
   });
+
+  it('sees a label ticked or taken off, and sends the set with the details', () => {
+    expect(diffProduct(snapshot, { ...snapshot, menuLabels: ['spicy'] }).details).toBe(true);
+    const labelled = { ...snapshot, menuLabels: ['spicy', 'hit'] };
+    expect(diffProduct(labelled, { ...labelled, menuLabels: ['spicy', 'hit'] }).details).toBe(false);
+    expect(diffProduct(labelled, { ...labelled, menuLabels: ['hit'] }).details).toBe(true);
+    expect(detailsOf(labelled).menu_labels).toEqual(['spicy', 'hit']);
+    expect(detailsOf(snapshot).menu_labels).toEqual([]);
+  });
 });
 
 describe('createDirty — a new card with anything on it', () => {
@@ -185,6 +197,7 @@ describe('createDirty — a new card with anything on it', () => {
     expect(createDirty({ ...blank, name: 'Реглан' }, false)).toBe(true);
     expect(createDirty({ ...blank, sellable: false }, false)).toBe(true);
     expect(createDirty({ ...blank, menuHidden: true }, false)).toBe(true);
+    expect(createDirty({ ...blank, menuLabels: ['new'] }, false)).toBe(true);
     expect(createDirty({ ...blank, shape: 'own' }, false)).toBe(true);
     expect(createDirty({ ...blank, tagIds: [1] }, false)).toBe(true);
     expect(createDirty({ ...blank, imageUrl: '/pos-uploads/a.jpg' }, false)).toBe(true);

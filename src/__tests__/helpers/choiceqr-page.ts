@@ -18,6 +18,8 @@ export interface FakeItem {
   description?: string;
   photo?: string | null;
   available?: boolean;
+  /** ChoiceQR's `menu_labels`: a fixed `type`, or `custom: true` with its own `name`. */
+  labels?: Array<{ type?: string; custom?: boolean; name?: string }>;
 }
 
 export const FAKE_CATEGORIES = [
@@ -29,13 +31,15 @@ export const FAKE_CATEGORIES = [
 ];
 
 export const FAKE_ITEMS: FakeItem[] = [
-  { id: 'i1', category: 'c-soup', name: 'Борщ', price: 15500, weight: '300', weightType: 'g', description: 'з пампушкою', photo: `${MEDIA}/borshch.jpeg` },
+  // Both spiciness grades fold into one «Гостре»; the custom label is reported, not carried.
+  { id: 'i1', category: 'c-soup', name: 'Борщ', price: 15500, weight: '300', weightType: 'g', description: 'з пампушкою', photo: `${MEDIA}/borshch.jpeg`, labels: [{ type: 'spicy', custom: false }, { type: 'middle-spicy', custom: false }, { type: 'custom', custom: true, name: 'Хіт сезону' }] },
   { id: 'i2', category: 'c-soup', name: 'Бульйон', price: 12000, weight: '300', weightType: 'g', photo: null },
   { id: 'i3', category: 'c-drinks', name: 'Взвар', price: 11000, weight: '1', weightType: 'l', photo: `${MEDIA}/vzvar.jpeg` },
   { id: 'i4', category: 'c-drinks', name: 'Взвар ', price: 4000, weight: '300', weightType: 'ml' },
   { id: 'i5', category: 'c-drinks', name: 'Лимонад', price: 8500, weight: '300', weightType: 'ml', available: false },
-  { id: 'i6', category: 'c-vodka', name: 'Гетьман', price: 5000, weight: '50', weightType: 'ml', photo: 'https://evil.example.com/x.jpeg' },
-  { id: 'i7', category: 'c-vodka', name: 'Гетьман', price: 35000, weight: '500', weightType: 'ml' },
+  // «Не містить глютену» is a claim the till never makes; the card takes the labels of BOTH sizes.
+  { id: 'i6', category: 'c-vodka', name: 'Гетьман', price: 5000, weight: '50', weightType: 'ml', photo: 'https://evil.example.com/x.jpeg', labels: [{ type: 'gluten', custom: false }, { type: 'recommended', custom: false }] },
+  { id: 'i7', category: 'c-vodka', name: 'Гетьман', price: 35000, weight: '500', weightType: 'ml', labels: [{ type: 'vegan', custom: false }] },
   { id: 'i8', category: 'c-side', name: 'Печена картопля', price: 11500, weight: '300', weightType: 'g' },
   { id: 'i9', category: 'c-side', name: 'Печена картопля', price: 15500, weight: '300', weightType: 'g' },
   { id: 'i10', category: 'c-side', name: 'Печена картопля', price: 11500, weight: '300', weightType: 'g' },
@@ -74,6 +78,7 @@ export function choiceQrPage(items: FakeItem[] = FAKE_ITEMS): string {
           description: i.description ?? '',
           media: i.photo ? [{ url: i.photo, medium: i.photo, big: i.photo }] : [],
           available: i.available !== false,
+          menu_labels: (i.labels ?? []).map((l, n) => ({ _id: `${i.id}-l${n}`, ...l })),
         })),
       },
     },

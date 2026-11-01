@@ -14,6 +14,7 @@
 // `place` (name, address, logo, `workTimeAll` with JS weekdays, 0 = Sunday).
 
 import type { WeekHours } from '../public-menu/profile.js';
+import { normalizeMenuLabels } from '../menu-labels.js';
 
 export const CHOICEQR_HOST_RE = /^[a-z0-9-]+\.choiceqr\.com$/;
 export const CHOICEQR_MEDIA_HOST = 'cdn-media.choiceqr.com';
@@ -44,6 +45,45 @@ export interface ChoiceQrItem {
   size: string | null;
   photoUrl: string | null;
   available: boolean;
+  /** ChoiceQR's `menu_labels[].type` as OUR codes (`menu-labels.ts`), canonical; F9. */
+  labels: string[];
+  /** The labels we do not carry — «Не містить глютену», a custom one by its name — for one warning. */
+  labelsSkipped: string[];
+}
+
+/**
+ * ChoiceQR's fixed label types → ours. Both of its spiciness grades fold into
+ * «Гостре»; `gluten` («Не містить глютену») is a claim an allergen is absent,
+ * which this till never makes (Д17), and a `custom` label is a word of the
+ * place's own, which the owner may put in the dish's description (Д20).
+ */
+const CHOICEQR_LABELS: Record<string, string> = {
+  spicy: 'spicy',
+  'middle-spicy': 'spicy',
+  vegetarian: 'vegetarian',
+  vegan: 'vegan',
+  new: 'new',
+  recommended: 'recommended',
+};
+
+function labelsOf(raw: unknown): { labels: string[]; labelsSkipped: string[] } {
+  const codes: string[] = [];
+  const labelsSkipped: string[] = [];
+  for (const entry of Array.isArray(raw) ? (raw as unknown[]) : []) {
+    if (!entry || typeof entry !== 'object') continue;
+    const label = entry as Record<string, unknown>;
+    const type = typeof label.type === 'string' ? label.type : '';
+    if (label.custom === true) {
+      const name = clean(label.name, 60);
+      labelsSkipped.push(name ? `«${name}»` : 'своя позначка');
+      continue;
+    }
+    const code = CHOICEQR_LABELS[type];
+    if (code) codes.push(code);
+    else if (type === 'gluten') labelsSkipped.push('«Не містить глютену»');
+    else if (type) labelsSkipped.push(`«${type}»`);
+  }
+  return { labels: normalizeMenuLabels(codes), labelsSkipped };
 }
 
 export interface ChoiceQrPlace {
@@ -161,6 +201,7 @@ export function parseChoiceQr(html: string): ChoiceQrMenu {
       size: sizeOf(raw.weight, raw.weightType),
       photoUrl: photoOf(raw.media),
       available: raw.available !== false,
+      ...labelsOf(raw.menu_labels),
     });
   }
 
@@ -213,6 +254,8 @@ export interface PlannedProduct {
   tag: string;
   description: string | null;
   photo_url: string | null;
+  /** The card's labels (F9): the union over its sizes, canonical. */
+  labels: string[];
   variants: PlannedVariant[];
   /** Already in the store under this tag — the import leaves it alone. */
   exists: boolean;
@@ -268,6 +311,7 @@ export function planMenuImport(menu: ChoiceQrMenu, existing: ExistingCatalog): M
   const unavailable: string[] = [];
   const free: string[] = [];
   const oddSizes: string[] = [];
+  const labelsSkipped: string[] = [];
 
   for (const category of menu.categories) {
     const inCategory = menu.items.filter((i) => i.categoryId === category.id);
@@ -284,6 +328,7 @@ export function planMenuImport(menu: ChoiceQrMenu, existing: ExistingCatalog): M
         if (!item.available) unavailable.push(item.name);
         if (item.priceCents === 0) free.push(item.name);
         if (item.size && isOddSize(item.size)) oddSizes.push(`${item.name} ${item.size}`);
+        if (item.labelsSkipped.length) labelsSkipped.push(`${item.name}${item.size ? ` ${item.size}` : ''}: ${item.labelsSkipped.join(', ')}`);
         const size = item.size ?? '';
         let placed = false;
         for (const card of cards) {
@@ -293,6 +338,8 @@ export function planMenuImport(menu: ChoiceQrMenu, existing: ExistingCatalog): M
             card.product.variants.push({ size: item.size, price_cents: item.priceCents });
             card.product.photo_url ??= item.photoUrl;
             card.product.description ??= item.description;
+            // A label is the dish's, not a size's: the card takes every size's.
+            card.product.labels = normalizeMenuLabels([...card.product.labels, ...item.labels]);
             placed = true;
             break;
           }
@@ -314,6 +361,7 @@ export function planMenuImport(menu: ChoiceQrMenu, existing: ExistingCatalog): M
           tag: category.name,
           description: item.description,
           photo_url: item.photoUrl,
+          labels: item.labels,
           variants: [{ size: item.size, price_cents: item.priceCents }],
           exists: existing.products.has(productKey(category.name, name)),
         };
@@ -333,6 +381,11 @@ export function planMenuImport(menu: ChoiceQrMenu, existing: ExistingCatalog): M
   if (unavailable.length) warnings.push(`Недоступні на ChoiceQR, імпортуються як звичайні: ${unavailable.join(', ')}.`);
   if (free.length) warnings.push(`Ціна 0 ₴: ${free.join(', ')} — перевірте.`);
   if (oddSizes.length) warnings.push(`Схоже на описку в одиниці: ${oddSizes.join(', ')} — імпортуються як є, виправте в картці.`);
+  if (labelsSkipped.length) {
+    warnings.push(
+      `Позначки, яких у касі немає, не перенесено (своє слово допишіть в опис страви): ${labelsSkipped.join('; ')}.`
+    );
+  }
 
   const fresh = products.filter((p) => !p.exists);
   return {

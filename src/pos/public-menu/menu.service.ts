@@ -36,6 +36,7 @@ import { storeClock } from '../core/storeClock.js';
 import { verticalOrDefault } from '../verticals/index.js';
 import { issuePrintLink } from './table-keys.js';
 import { COMPOSITION_MAX, allergenLabels, type Allergen } from '../allergens.js';
+import { menuLabelItems, type MenuLabel } from '../menu-labels.js';
 import {
   groupHours,
   hoursTodayText,
@@ -107,6 +108,8 @@ export interface PublicMenuProduct {
   composition: string;
   /** The allergens the owner ticked, in canonical order; empty means «not said», never «none». */
   allergens: Allergen[];
+  /** The chips under the name — «Гостре», «Хіт», … (phase F9), in canonical order; empty = none. */
+  labels: MenuLabel[];
   image_url: string | null;
   /** On the day's stop-list. Wins over «немає» in what the guest reads. */
   stopped: boolean;
@@ -304,9 +307,11 @@ interface DishTexts {
   description: string;
   composition: string;
   allergens: Allergen[];
+  /** The owner's own ticks, so a card nobody has reviewed keeps them (unlike its texts). */
+  labels: MenuLabel[];
 }
 
-const NO_TEXTS: DishTexts = { description: '', composition: '', allergens: [] };
+const NO_TEXTS: DishTexts = { description: '', composition: '', allergens: [], labels: [] };
 
 function projectProduct(rows: CatalogItem[], texts: DishTexts): PublicMenuProduct {
   const first = rows[0]!;
@@ -360,6 +365,7 @@ function projectProduct(rows: CatalogItem[], texts: DishTexts): PublicMenuProduc
     description: texts.description,
     composition: texts.composition,
     allergens: texts.allergens,
+    labels: texts.labels,
     image_url: safeImageUrl(first.image_url),
     stopped,
     available: variants.some((v) => v.available),
@@ -420,7 +426,7 @@ async function buildPublicMenu(store: MenuStore): Promise<PublicMenu> {
   const hidden = new Set<number>();
   if (ids.length > 0) {
     const result = await pool.query(
-      `SELECT id, description, composition, allergens, needs_review, menu_hidden
+      `SELECT id, description, composition, allergens, menu_labels, needs_review, menu_hidden
        FROM pos_products WHERE store_id = $1 AND id = ANY($2::bigint[])`,
       [store.id, ids]
     );
@@ -429,12 +435,15 @@ async function buildPublicMenu(store: MenuStore): Promise<PublicMenu> {
         hidden.add(Number(row.id));
         continue;
       }
+      // The chips (F9) are the owner's own ticks, so they stay on a card
+      // nobody has reviewed — unlike its texts, below.
+      const labels = menuLabelItems(Array.isArray(row.menu_labels) ? (row.menu_labels as string[]) : []);
       // A card nobody has reviewed yet (made from a receiving document or at the
       // bench) carries INTERNAL text — «Створено з приходу ПР-12» — in the very
       // field the guest reads. It stays off the page until the owner edits the
       // card, which clears the flag; the dish itself is still listed.
       if (row.needs_review === true) {
-        texts.set(Number(row.id), NO_TEXTS);
+        texts.set(Number(row.id), { ...NO_TEXTS, labels });
         continue;
       }
       const description = typeof row.description === 'string' ? row.description.trim() : '';
@@ -443,6 +452,7 @@ async function buildPublicMenu(store: MenuStore): Promise<PublicMenu> {
         description: description.slice(0, DESCRIPTION_MAX),
         composition: composition.slice(0, COMPOSITION_MAX),
         allergens: allergenLabels(Array.isArray(row.allergens) ? (row.allergens as string[]) : []),
+        labels,
       });
     }
   }

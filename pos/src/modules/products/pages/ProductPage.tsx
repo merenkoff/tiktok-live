@@ -416,7 +416,10 @@ function ProductCard({ id }: { id: string | undefined }) {
   const scope = productFormScope(vertical);
   const showShape = scope.canComposite || (snapshot?.shape ?? '') !== '';
   const showDishFacts =
-    scope.askDishFacts || !!snapshot?.composition || (snapshot?.allergens.length ?? 0) > 0;
+    scope.askDishFacts ||
+    !!snapshot?.composition ||
+    (snapshot?.allergens.length ?? 0) > 0 ||
+    (snapshot?.menuLabels.length ?? 0) > 0;
   const backTo = `/admin/products${listSearch}`;
   const titleRef = useRef<string>('');
   if (snapshot) titleRef.current = snapshot.name;

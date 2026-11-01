@@ -100,6 +100,8 @@ describe('the create page', () => {
     await userEvent.type(form.getByLabelText(/Склад для гостя/), 'Борошно, масло, яйця');
     await userEvent.click(form.getByTestId('allergen-chip-milk'));
     await userEvent.click(form.getByTestId('allergen-chip-gluten'));
+    await userEvent.click(form.getByTestId('menu-label-chip-hit'));
+    await userEvent.click(form.getByTestId('menu-label-chip-new'));
     await userEvent.click(form.getByRole('button', { name: 'Створити' }));
 
     await waitFor(() => expect(createProduct).toHaveBeenCalledTimes(1));
@@ -109,17 +111,18 @@ describe('the create page', () => {
       composition: 'Борошно, масло, яйця',
       // In the list's own order, however the chips were tapped.
       allergens: ['gluten', 'milk'],
+      menu_labels: ['new', 'hit'],
     });
   });
 
-  it('sends «not said» for what was left alone: an empty composition and no allergens', async () => {
+  it('sends «not said» for what was left alone: an empty composition, no allergens, no labels', async () => {
     const form = await openCreate();
     await userEvent.type(form.getByPlaceholderText('Назва'), 'Чай');
     await userEvent.type(form.getByPlaceholderText('Ціна, грн'), '40');
     await userEvent.click(form.getByRole('button', { name: 'Створити' }));
 
     await waitFor(() => expect(createProduct).toHaveBeenCalledTimes(1));
-    expect(createProduct.mock.calls[0]![0]).toMatchObject({ composition: '', allergens: [] });
+    expect(createProduct.mock.calls[0]![0]).toMatchObject({ composition: '', allergens: [], menu_labels: [] });
   });
 });
 
@@ -148,9 +151,23 @@ describe('the card', () => {
   });
 
   it('takes a card from an older backend — no such fields — as «not said»', async () => {
-    getProducts.mockResolvedValue([latte({ composition: undefined, allergens: undefined })]);
+    getProducts.mockResolvedValue([latte({ composition: undefined, allergens: undefined, menu_labels: undefined })]);
     expect(await openCard()).toHaveValue('');
     expect(screen.getByTestId('allergen-chip-milk')).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByTestId('menu-label-chip-hit')).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('opens with the stored labels, and a tapped-off one is sent as the rest of the set', async () => {
+    getProducts.mockResolvedValue([latte({ menu_labels: ['spicy', 'hit'] })]);
+    await openCard();
+    expect(screen.getByTestId('menu-label-chip-spicy')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('menu-label-chip-hit')).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(screen.getByTestId('menu-label-chip-spicy'));
+    await userEvent.click(screen.getByRole('button', { name: 'Зберегти' }));
+
+    await waitFor(() => expect(updateProduct).toHaveBeenCalled());
+    expect(updateProduct.mock.calls[0]![1]).toMatchObject({ menu_labels: ['hit'] });
+    expect(updateVariant).not.toHaveBeenCalled();
   });
 
   it('can take every allergen away: an empty set is sent, not left out', async () => {

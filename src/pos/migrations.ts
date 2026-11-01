@@ -150,6 +150,8 @@ export const POS_MIGRATIONS = [
   '084_pos_guest_feedback.sql',
   // The dishes of the table's bill rated 👍/👎 inside a feedback (F5).
   '085_pos_guest_feedback_items.sql',
+  // Dish labels («Гостре», «Хіт», …) on the guest menu; «Шабля»'s «Бограч» filled once (F9).
+  '086_pos_product_menu_labels.sql',
 ] as const;
 
 export function readMigration(file: string): string {

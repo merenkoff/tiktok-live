@@ -4,24 +4,29 @@
 
 import { AllergenPicker } from './AllergenPicker';
 import { COMPOSITION_MAX } from './allergens';
+import { MenuLabelPicker } from './MenuLabelPicker';
 
 /**
  * What the guest reads about a dish on the QR menu beyond its name and price:
- * a line of composition and the allergens — the same two fields in the create
- * and the edit form. The composition is what the OWNER writes, not the recipe:
- * a recipe lists stock (a cup, a lid), leaves out what a modifier adds, and
- * never leaves the server.
+ * a line of composition, the allergens and the labels («Гостре», «Хіт»…, F9)
+ * — the same fields in the create and the edit form. The composition is what
+ * the OWNER writes, not the recipe: a recipe lists stock (a cup, a lid),
+ * leaves out what a modifier adds, and never leaves the server.
  */
 export function DishFactsFields({
   composition,
   onComposition,
   allergens,
   onAllergens,
+  menuLabels,
+  onMenuLabels,
 }: {
   composition: string;
   onComposition: (next: string) => void;
   allergens: string[];
   onAllergens: (next: string[]) => void;
+  menuLabels: string[];
+  onMenuLabels: (next: string[]) => void;
 }) {
   return (
     <>
@@ -41,6 +46,7 @@ export function DishFactsFields({
         </span>
       </label>
       <AllergenPicker value={allergens} onChange={onAllergens} />
+      <MenuLabelPicker value={menuLabels} onChange={onMenuLabels} />
     </>
   );
 }

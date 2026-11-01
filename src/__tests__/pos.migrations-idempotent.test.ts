@@ -295,6 +295,39 @@ describe.skipIf(!hasDb || !canCreate)('POS migrations, applied the way the runne
     await expect(applyAll(probe)).resolves.toBeUndefined();
     expect(await read()).toBeNull();
   });
+
+  it('marks «Шабля»’s «Бограч» as spicy once (086), and a label the owner took off stays off', async () => {
+    await probe.query(`ALTER TABLE pos_products DROP COLUMN menu_labels`);
+    await probe.query(
+      `INSERT INTO pos_stores (name, slug, vertical) VALUES ('Шабля', 'shablya', 'cafe') ON CONFLICT (slug) DO NOTHING`
+    );
+    await probe.query(
+      `INSERT INTO pos_products (store_id, name)
+       SELECT id, d.name FROM pos_stores, (VALUES ('Бограч'), ('Борщ')) AS d(name) WHERE slug = 'shablya'`
+    );
+    const read = async () =>
+      (
+        await probe.query(
+          `SELECT p.name, p.menu_labels AS labels FROM pos_products p JOIN pos_stores s ON s.id = p.store_id
+            WHERE s.slug = 'shablya' ORDER BY p.name`
+        )
+      ).rows;
+
+    await expect(applyAll(probe)).resolves.toBeUndefined();
+    expect(await read()).toEqual([
+      { name: 'Бограч', labels: ['spicy'] },
+      { name: 'Борщ', labels: [] },
+    ]);
+    const column = await probe.query(
+      `SELECT column_default, is_nullable FROM information_schema.columns
+        WHERE table_name = 'pos_products' AND column_name = 'menu_labels'`
+    );
+    expect(column.rows[0]).toEqual({ column_default: "'{}'::text[]", is_nullable: 'NO' });
+
+    await probe.query(`UPDATE pos_products SET menu_labels = '{}' WHERE name = 'Бограч'`);
+    await expect(applyAll(probe)).resolves.toBeUndefined();
+    expect((await read()).find((r) => r.name === 'Бограч')!.labels).toEqual([]);
+  });
 });
 
 /**

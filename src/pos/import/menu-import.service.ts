@@ -186,6 +186,7 @@ export async function applyChoiceQrImport(
         name: product.name,
         description: product.description,
         image_url: imageUrl,
+        menu_labels: product.labels,
         variants: product.variants.map((v) => ({
           attributes: v.size ? { size: v.size } : {},
           unit: 'шт',

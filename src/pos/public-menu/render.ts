@@ -161,6 +161,9 @@ function renderProduct(product: PublicMenuProduct, ordering = false): string {
     // The name is a real button (F8): a tap anywhere on the card opens the
     // dish's sheet, and this is what the keyboard and a screen reader reach.
     `<div class="body"><h3><button type="button" class="open" data-open="${product.id}" aria-haspopup="dialog">${escapeHtml(product.name)}</button> <span class="badge">${BADGE_TEXT[state]}</span></h3>` +
+    // The owner's labels (F9) sit between the name and the description — on a
+    // card nobody has reviewed too, since they are ticks, not internal text.
+    renderLabels(product) +
     (product.description ? `<p class="desc">${escapeHtml(product.description)}</p>` : '') +
     // What is in it, in the owner's own words — and only the allergens they
     // ticked; a dish with none ticked prints nothing, which says «not said».
@@ -214,6 +217,47 @@ const GLYPH = {
   mail:
     '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3.5" width="12" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="m2.5 5.5 5.5 3.8 5.5-3.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
 } as const;
+
+/**
+ * The 14 px glyphs of a dish's labels (phase F9), one per code of
+ * `menu-labels.ts`: a chili, a leaf, a sprout, a sparkle, a flame, a star.
+ * Inline for the same reason as `GLYPH`; the dish's sheet clones them from
+ * `<template>`s the server puts in its frame, never from an HTML string.
+ */
+const LABEL_GLYPH: Record<string, string> = {
+  spicy:
+    '<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M12.6 3.2c1 2.6.2 5.6-2.1 7.9-2.1 2.1-5.2 3-7.6 2.6 1.7-1.1 3-2.9 3.9-5.1 1-2.3 2.9-4.3 5.8-5.4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12.6 3.2c-.2-1 .3-1.8 1.2-2.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  vegetarian:
+    '<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.6 2.4C8.1 2.4 3.6 5.4 3.1 11c-.1 1.1.2 1.9.6 2.5C4.9 9.7 7.8 6.7 11.3 5.1 8.4 7.3 6 10.4 5 13.6c5.6.5 8.6-4.1 8.6-11.2Z" fill="currentColor"/></svg>',
+  vegan:
+    '<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 14.5V8.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M8 8.2C8 5.3 6 3.6 2.8 3.6c0 3 2.1 4.6 5.2 4.6Z" fill="currentColor"/><path d="M8 8.2c0-2.9 2-4.6 5.2-4.6 0 3-2.1 4.6-5.2 4.6Z" fill="currentColor"/></svg>',
+  new:
+    '<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5 9.7 6.3 14.5 8l-4.8 1.7L8 14.5 6.3 9.7 1.5 8l4.8-1.7Z" fill="currentColor"/></svg>',
+  hit:
+    '<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8.6 1.5c.3 2.8 3 4.3 3 7.3a3.6 3.6 0 0 1-7.2 0c0-1.3.5-2.4 1.3-3.2.1 1.1.7 1.8 1.5 1.9C6.5 5.7 6.8 3.4 8.6 1.5Z" fill="currentColor"/></svg>',
+  recommended:
+    '<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="m8 1.6 1.9 4 4.4.6-3.2 3 .8 4.3L8 11.4l-3.9 2.1.8-4.3-3.2-3 4.4-.6Z" fill="currentColor"/></svg>',
+};
+
+/**
+ * The chips under a dish's name — «Гостре», «Хіт»… — in the DTO's order;
+ * nothing when there are none. The word comes from the DTO (escaped, as
+ * everything is), the glyph and the colour from the code. A code this build
+ * has no glyph for is skipped rather than drawn without one.
+ */
+function renderLabels(product: PublicMenuProduct): string {
+  const chips = product.labels
+    .filter((l) => LABEL_GLYPH[l.code])
+    .map((l) => `<li class="label label-${l.code}">${LABEL_GLYPH[l.code]}<span>${escapeHtml(l.label)}</span></li>`);
+  return chips.length ? `<ul class="labels" aria-label="Позначки страви">${chips.join('')}</ul>` : '';
+}
+
+/** The glyphs as `<template>`s for the dish's sheet to clone (F9; the F5 rule — no HTML strings in the script). */
+function labelGlyphTemplates(): string {
+  return Object.entries(LABEL_GLYPH)
+    .map(([code, svg]) => `<template data-label-glyph="${code}">${svg}</template>`)
+    .join('');
+}
 
 function chip(glyph: keyof typeof GLYPH, href: string, label: string, newTab = true): string {
   const target = newTab ? ' target="_blank" rel="noopener noreferrer"' : '';
@@ -427,6 +471,8 @@ interface FeedbackSheet {
  * sizes, the weight, the description, the composition, the allergens, the
  * modifiers — and, where ordering is on, the questions and «Додати» under
  * them. The whole card opens it; the name is the button a keyboard reaches.
+ * The labels' row under the head (F9) is filled the same way, its glyphs
+ * cloned from the `<template>`s at the end of the frame.
  */
 function dishSheetMarkup(): string {
   return `
@@ -435,9 +481,11 @@ function dishSheetMarkup(): string {
 <button type="button" class="bill-close dish-close" data-dish-close aria-label="Закрити">×</button>
 <div class="dish-photo" data-dish-photo hidden><img alt="" decoding="async" data-dish-img></div>
 <div class="dish-head"><h2 id="dish-title" data-dish-title></h2><span class="badge" data-dish-badge></span></div>
+<ul class="labels dish-labels" data-dish-labels aria-label="Позначки страви" hidden></ul>
 <div class="dish-body" data-dish-body></div>
 <div class="order-foot dish-foot" data-dish-foot hidden></div>
 </div>
+${labelGlyphTemplates()}
 </div>`;
 }
 

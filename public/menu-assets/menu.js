@@ -178,10 +178,33 @@
     var img = dishSheet.querySelector('[data-dish-img]');
     var title = dishSheet.querySelector('[data-dish-title]');
     var badge = dishSheet.querySelector('[data-dish-badge]');
+    var labelsRow = dishSheet.querySelector('[data-dish-labels]');
     var body = dishSheet.querySelector('[data-dish-body]');
     var foot = dishSheet.querySelector('[data-dish-foot]');
     var closer = dishSheet.querySelector('[data-dish-close]');
-    if (!panel || !photo || !img || !title || !badge || !body || !foot || !closer) return;
+    if (!panel || !photo || !img || !title || !badge || !labelsRow || !body || !foot || !closer) return;
+    /* The labels' glyphs (F9) come from the frame's own templates, never from
+       a string: the F5 rule, so the script holds no markup. */
+    var glyphs = {};
+    Array.prototype.forEach.call(dishSheet.querySelectorAll('template[data-label-glyph]'), function (t) {
+      glyphs[t.getAttribute('data-label-glyph')] = t;
+    });
+
+    /* «Гостре», «Хіт»… under the name: the code picks the glyph and the colour,
+       the word comes from the JSON. None — the row stays hidden. */
+    function labelsOf(product) {
+      labelsRow.textContent = '';
+      var labels = product.labels || [];
+      labels.forEach(function (l) {
+        var glyph = glyphs[l.code];
+        if (!glyph || !glyph.content) return;
+        var chip = node('li', 'label label-' + l.code);
+        chip.appendChild(glyph.content.cloneNode(true));
+        chip.appendChild(node('span', null, l.label));
+        labelsRow.appendChild(chip);
+      });
+      labelsRow.hidden = !labelsRow.firstChild;
+    }
 
     function priceOf(product) {
       var many = product.variants.length > 1;
@@ -234,6 +257,7 @@
       }
       title.textContent = product.name;
       badge.textContent = BADGE[state];
+      labelsOf(product);
       body.textContent = '';
       foot.textContent = '';
       foot.hidden = true;
