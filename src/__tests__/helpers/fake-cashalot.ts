@@ -145,9 +145,10 @@ export class FakeCashalot {
 
       case 'GetCheck': {
         const found = [...this.docs.values()].find((d) => d.numFiscal === String(body.NumFiscal));
-        if (!found) return json(200, { ResultCode: 1, ResultText: 'OnlineDocumentAbsent' });
+        // The live server answers the enum NAME, not its number (probe 7a, 2026-11-02).
+        if (!found) return json(200, { Data: null, QrCode: null, Url: null, ResultCode: 'OnlineDocumentAbsent', ResultText: `Документ з фіскальним номером '${body.NumFiscal}', що відповідає режиму онлайн, не зареєстрований на ПРРО`, ErrorCode: 'Ok', ErrorMessage: null });
         const xml = `<?xml version="1.0" encoding="UTF-8"?><CHECK><CHECKHEAD><DOCTYPE>0</DOCTYPE><UID>${found.uid}</UID><ORDERDATE>24102026</ORDERDATE><ORDERTIME>120500</ORDERTIME>${found.offline ? '<OFFLINE>true</OFFLINE>' : ''}</CHECKHEAD><CHECKTOTAL><SUM>${found.sum.toFixed(2)}</SUM></CHECKTOTAL></CHECK>`;
-        return json(200, { Data: b64(xml), ResultCode: found.offline ? 2 : 0, ...(this.omitUrl ? {} : { Url: `https://cabinet.tax.gov.ua/cashregs/check?id=${found.numFiscal}` }) });
+        return json(200, { Data: b64(xml), ResultCode: found.offline ? 'OfflineNumberReserved' : 'Ok', ...(this.omitUrl ? {} : { Url: `https://cabinet.tax.gov.ua/cashregs/check?id=${found.numFiscal}` }) });
       }
 
       case 'CloseShift':

@@ -99,3 +99,19 @@ node -e "fetch('https://fsapi.cashalot.org.ua/',{method:'POST',headers:{'content
    відповідав на це ім'я `unknown` — тепер `auth_rejected` (`dps/errors.ts`),
    бо документа немає й чинить це власник у кабінеті. Тека прогону в git не
    покладена: текст помилки містить РНОКПП власника.
+
+3. **Проба 1 пройшла (2026-11-02, після завантаження ліцензії); `ResultCode` —
+   ім'я, не число.** `TransactionsRegistrarState` при закритій зміні: `ShiftState:
+   0`, `Testing: false`, `Name: null` (ПІБ касира лише в відкритій зміні — як
+   і передбачалося), `NextLocalNum: 4`, `OfflineSupported: true`, `ChiefCashier:
+   true`, `LicenseExpiration: "2026-12-03T00:00:00"` (без зсуву — читається як
+   дата), `OfflineSessionsMonthlyDuration: 0`, `OfflineDocumentsAutoRegState:
+   null`. `TaxObject`: `Tin` — РНОКПП ФОП, `Ipn: null` → `organization.is_vat
+   = false`, `OrgName` — ПІБ, `Name`/`Address` — точка, `TransactionsRegistrars[]`
+   з `NumFiscal` **числом** і `Name` каси. `GetCheck Availability` невідомого
+   номера — HTTP 200 без `ErrorCode`, але `ResultCode: "OnlineDocumentAbsent"`
+   (рядок-ім'я з `DocumentRequestResultCode`, а не `1`, як у спеці) і текст у
+   `ResultText`. Адаптер порівнює і з числом, і з ім'ям (`index.ts`
+   `fetchDocument`), тому нічого не змінилося; фейк тепер відповідає іменами,
+   як живий сервер. Тека прогону в git не покладена: `TaxObject` містить ПІБ,
+   адресу й РНОКПП власника.
