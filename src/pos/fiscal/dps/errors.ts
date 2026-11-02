@@ -30,6 +30,10 @@ const KIND_BY_NAME: Readonly<Record<string, FiscalErrorKind>> = {
   TransactionsRegistrarAbsent: 'auth_rejected',
   OperatorAccessToTransactionsRegistrarNotGranted: 'auth_rejected',
   CryptographyError: 'auth_rejected',
+  // Seen live 2026-11-01 (CA3, probe 1): the register has no licence loaded
+  // in the cabinet — «Відсутня ліцензія на ПРРО з фіскальним номером …».
+  // Nothing was registered; the owner fixes it in the cabinet, like a key.
+  LicenseViolation: 'auth_rejected',
   // The provider's view of the register drifted (needs `Cleanup` in its
   // cabinet); a document may or may not exist — when in doubt, `unknown`.
   InconsistentRegistrarState: 'unknown',
