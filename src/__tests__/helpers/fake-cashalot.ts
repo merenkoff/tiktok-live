@@ -61,11 +61,13 @@ export class FakeCashalot {
     this.calls.push({ Command: command, body });
 
     const needsAuth = !['ServerState', 'GetCheck'].includes(command);
-    if (needsAuth && (body.KeyGuid !== this.keyGuid || body.KeyPin !== this.keyPin)) {
-      return json(200, {
-        ErrorCode: 'OperatorAccessToTransactionsRegistrarNotGranted',
-        ErrorMessage: 'Відсутній доступ до ПРРО для користувача',
-      });
+    // As the live register answers a wrong credential (CA3, 2026-11-02): not
+    // «доступ не надано» but a malformed-parameter error naming the field.
+    if (needsAuth && body.KeyPin !== this.keyPin) {
+      return json(200, { ErrorCode: 'InvalidQueryParameter', ErrorMessage: "Некоректне значення параметру 'KeyPin'" });
+    }
+    if (needsAuth && body.KeyGuid !== this.keyGuid) {
+      return json(200, { ErrorCode: 'InvalidQueryParameter', ErrorMessage: "Некоректне значення параметру 'KeyGuid'" });
     }
 
     switch (command) {
@@ -145,9 +147,10 @@ export class FakeCashalot {
 
       case 'GetCheck': {
         const found = [...this.docs.values()].find((d) => d.numFiscal === String(body.NumFiscal));
-        if (!found) return json(200, { ResultCode: 1, ResultText: 'OnlineDocumentAbsent' });
+        // The live server answers the enum NAME, not its number (probe 7a, 2026-11-02).
+        if (!found) return json(200, { Data: null, QrCode: null, Url: null, ResultCode: 'OnlineDocumentAbsent', ResultText: `Документ з фіскальним номером '${body.NumFiscal}', що відповідає режиму онлайн, не зареєстрований на ПРРО`, ErrorCode: 'Ok', ErrorMessage: null });
         const xml = `<?xml version="1.0" encoding="UTF-8"?><CHECK><CHECKHEAD><DOCTYPE>0</DOCTYPE><UID>${found.uid}</UID><ORDERDATE>24102026</ORDERDATE><ORDERTIME>120500</ORDERTIME>${found.offline ? '<OFFLINE>true</OFFLINE>' : ''}</CHECKHEAD><CHECKTOTAL><SUM>${found.sum.toFixed(2)}</SUM></CHECKTOTAL></CHECK>`;
-        return json(200, { Data: b64(xml), ResultCode: found.offline ? 2 : 0, ...(this.omitUrl ? {} : { Url: `https://cabinet.tax.gov.ua/cashregs/check?id=${found.numFiscal}` }) });
+        return json(200, { Data: b64(xml), ResultCode: found.offline ? 'OfflineNumberReserved' : 'Ok', ...(this.omitUrl ? {} : { Url: `https://cabinet.tax.gov.ua/cashregs/check?id=${found.numFiscal}` }) });
       }
 
       case 'CloseShift':
