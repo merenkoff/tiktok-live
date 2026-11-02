@@ -23,9 +23,29 @@ function kindByStatus(status: number): FiscalErrorKind {
   return 'unknown';
 }
 
+/**
+ * Seen live (CA3, 2026-11-02): a wrong PIN or a foreign ФН is not
+ * `OperatorAccess…NotGranted` but `InvalidQueryParameter` «Некоректне значення
+ * параметру 'KeyPin'» — the same name the ДПС list gives a malformed request,
+ * which would read as `rejected` and void the sale. When the parameter it
+ * names is one of the credentials, it is the credentials that are wrong.
+ */
+const CREDENTIAL_PARAMS = /'(KeyPin|KeyGuid|NumFiscal)'/;
+
+function credentialRefusal(error: CashalotApiError): boolean {
+  return error.errorCode === 'InvalidQueryParameter' && CREDENTIAL_PARAMS.test(error.errorMessage ?? '');
+}
+
 export function classifyCashalotError(error: unknown): FiscalError {
   if (!(error instanceof CashalotApiError)) {
     return asFiscalError(error, 'Помилка ПРРО Cashalot');
+  }
+  if (credentialRefusal(error)) {
+    return new FiscalError(error.errorMessage ?? error.message, 'auth_rejected', {
+      providerCode: error.errorCode ?? undefined,
+      httpStatus: error.httpStatus,
+      raw: error.body,
+    });
   }
   const named = error.errorCode ? dpsErrorKind(error.errorCode) : 'unknown';
   const kind = named !== 'unknown' ? named : kindByStatus(error.httpStatus);

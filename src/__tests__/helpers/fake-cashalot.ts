@@ -61,11 +61,13 @@ export class FakeCashalot {
     this.calls.push({ Command: command, body });
 
     const needsAuth = !['ServerState', 'GetCheck'].includes(command);
-    if (needsAuth && (body.KeyGuid !== this.keyGuid || body.KeyPin !== this.keyPin)) {
-      return json(200, {
-        ErrorCode: 'OperatorAccessToTransactionsRegistrarNotGranted',
-        ErrorMessage: 'Відсутній доступ до ПРРО для користувача',
-      });
+    // As the live register answers a wrong credential (CA3, 2026-11-02): not
+    // «доступ не надано» but a malformed-parameter error naming the field.
+    if (needsAuth && body.KeyPin !== this.keyPin) {
+      return json(200, { ErrorCode: 'InvalidQueryParameter', ErrorMessage: "Некоректне значення параметру 'KeyPin'" });
+    }
+    if (needsAuth && body.KeyGuid !== this.keyGuid) {
+      return json(200, { ErrorCode: 'InvalidQueryParameter', ErrorMessage: "Некоректне значення параметру 'KeyGuid'" });
     }
 
     switch (command) {

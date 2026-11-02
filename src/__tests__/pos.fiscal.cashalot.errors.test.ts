@@ -36,6 +36,14 @@ describe('classifyCashalotError', () => {
     expect(classifyCashalotError(api(status, code)).kind).toBe(kind);
   });
 
+  it('reads a refused credential out of InvalidQueryParameter, as the live register answers it', () => {
+    // CA3, 2026-11-02: wrong PIN and a foreign ФН both come back this way, HTTP 200.
+    expect(classifyCashalotError(api(200, 'InvalidQueryParameter', "Некоректне значення параметру 'KeyPin'")).kind).toBe('auth_rejected');
+    expect(classifyCashalotError(api(200, 'InvalidQueryParameter', "Некоректне значення параметру 'NumFiscal'")).kind).toBe('auth_rejected');
+    // The same name for a malformed request stays a rejection — no document can exist.
+    expect(classifyCashalotError(api(200, 'InvalidQueryParameter', "Некоректне значення параметру 'Check'")).kind).toBe('rejected');
+  });
+
   it('falls back to the HTTP status only when the name says nothing', () => {
     expect(classifyCashalotError(api(401, null)).kind).toBe('auth_rejected');
     expect(classifyCashalotError(api(404, 'SomethingNew')).kind).toBe('auth_rejected');
