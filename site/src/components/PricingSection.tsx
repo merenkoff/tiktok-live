@@ -105,8 +105,8 @@ export function PricingSection() {
         <Reveal className="mt-16">
           <h3 className="text-2xl font-bold text-ink-strong text-center">Тарифи після запуску</h3>
         </Reveal>
-        {/* Two plans and the add-ons — four cards, two by two on a tablet. */}
-        <div className="mt-8 grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Three plans and the two add-ons — five cards: two by two on a tablet, three and two on a desktop. */}
+        <div className="mt-8 grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {pos.plans.map((plan) => (
             <Reveal key={plan.id}>
               <div className={`h-full p-6 flex flex-col ${plan.status === 'available' ? 'card ring-2 ring-pos' : 'card-flat'}`}>

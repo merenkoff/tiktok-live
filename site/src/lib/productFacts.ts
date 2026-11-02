@@ -41,7 +41,7 @@ export const PRODUCT = {
 export type PlanStatus = 'available' | 'coming';
 
 export interface PosPlan {
-  id: 'external-prro' | 'own-prro';
+  id: 'external-prro' | 'cashalot-prro' | 'own-prro';
   name: string;
   /** UAH per month, per store. */
   price: number;
@@ -162,6 +162,20 @@ export const PRICING = {
         status: 'coming',
         lock: 'на 2 роки для тих, хто підключився на період запуску',
       },
+      // The second external provider (ПРРО track CA). `coming` until a real
+      // store registers a real receipt through it — the adapter, the bundle
+      // and nine live probes exist, the first fiscal receipt does not yet.
+      // Third in the array on purpose: `PricingSection` and the articles read
+      // `plans[0]`/`plans[1]` by index.
+      {
+        id: 'cashalot-prro',
+        name: 'Каса + Cashalot',
+        price: BASE_PLAN_PRICE,
+        note: 'Фіскалізація через Cashalot; підписку Cashalot магазин оплачує окремо. У розробці.',
+        status: 'coming',
+        lock: 'назавжди для тих, хто підключився на період запуску',
+        eurAnchor: 4,
+      },
     ] satisfies PosPlan[],
     addons: POS_ADDONS,
     /**
@@ -204,6 +218,22 @@ export const COMPETITOR_FACTS = {
     lockMaxMonths: 12,
     /** …and never past this date. */
     lockUntil: '2027-10-19',
+  },
+  /**
+   * Read from cashalot.ua/sale on `checkedAt`: the «КАСА» module is priced
+   * «200 грн/місяць за умови оплати річної ліцензії — 2400 грн», «за
+   * користування однією касою», and new clients get «перший місяць
+   * безкоштовно». The page shows no monthly-only price.
+   */
+  cashalot: {
+    name: 'Cashalot',
+    source: 'https://cashalot.ua/sale',
+    checkedAt: '2026-11-02',
+    /** UAH per register per month, only with the annual licence paid. */
+    priceMonthlyAnnual: 200,
+    /** UAH per register per year. */
+    priceYear: 2400,
+    firstMonthFree: true,
   },
   /**
    * Read from kavapp.com on `checkedAt`, page by page — the tariff page's own
@@ -959,6 +989,7 @@ export const FEATURES = {
   fiscalOnlineCheckbox: { status: 'available', label: 'Фіскалізація ПРРО через Checkbox: зміни, Z-звіт, фіскальний чек' },
   fiscalReceiptPrint: { status: 'available', label: 'Фіскальний чек із QR-кодом на чековому принтері' },
   fiscalOffline: { status: 'available', label: 'Офлайн-фіскальні чеки з резерву кодів і подальшою відправкою в ДПС' },
+  fiscalOnlineCashalot: { status: 'coming', label: 'Фіскалізація ПРРО через Cashalot: зміни, Z-звіт, фіскальний чек' },
   tillHandover: { status: 'available', label: 'Передача каси на інший комп\'ютер без закриття зміни' },
   cashRounding: {
     status: 'available',
@@ -1098,6 +1129,7 @@ export const POS_FEATURE_IDS: FeatureId[] = [
   'fiscalOnlineCheckbox',
   'fiscalReceiptPrint',
   'fiscalOffline',
+  'fiscalOnlineCashalot',
   'tillHandover',
   'cashRounding',
   'offlineDesktop',
@@ -1363,6 +1395,13 @@ export const ROADMAP: readonly RoadmapItem[] = [
     title: 'Програма лояльності з балами',
     body: 'Бали за покупку і знижка за бали просто на касі — без стороннього CRM. Клієнта впізнає номер телефону, як зараз для знижок.',
     progress: 20,
+  },
+  {
+    id: 'cashalot-provider',
+    vertical: 'pos',
+    title: 'Cashalot як провайдер ПРРО',
+    body: `Другий провайдер поряд із Checkbox: ті самі зміни, Z-звіт і фіскальний чек з QR, без окремої програми. Підписка Cashalot — ${COMPETITOR_FACTS.cashalot.priceMonthlyAnnual} грн/міс за касу при річній оплаті проти ${COMPETITOR_FACTS.checkbox.priceFrom} у Checkbox. Офлайн-режиму каси з Cashalot немає: чеки без інтернету — це Checkbox.`,
+    progress: 85,
   },
   {
     id: 'fiscal-providers',
