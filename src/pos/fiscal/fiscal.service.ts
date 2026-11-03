@@ -1813,6 +1813,27 @@ async function retryOne(gate: FiscalGate, row: ledger.FiscalReceiptRow): Promise
 }
 
 /**
+ * The register a sale is fiscalised through — what a refund or an exchange of
+ * it must open its gate on (ДК1/ДК2). Fixed on the sale when it is written
+ * (`pos_sales.fiscal_register`, migration 089), so it is known before the
+ * ledger has a document too; 1 in every store with one register.
+ */
+export async function registerOfSale(saleId: number): Promise<number> {
+  const result = await pool.query(`SELECT fiscal_register FROM pos_sales WHERE id = $1`, [saleId]);
+  return Number(result.rows[0]?.fiscal_register ?? 1);
+}
+
+function assertSameRegister(ctx: FiscalContext, saleDoc: ledger.FiscalReceiptRow): void {
+  const saleRegister = Number(saleDoc.register_no ?? 1);
+  if (ctx.registerNo !== saleRegister) {
+    throw new FiscalError(
+      `Чек продано через касу ${saleRegister} — повернення лише через неї`,
+      'not_configured'
+    );
+  }
+}
+
+/**
  * Adopt sales left `pending` with no ledger row at all.
  *
  * `completeSale` commits `fiscal_status='pending'` and the ledger INSERT is a
@@ -1827,29 +1848,9 @@ async function retryOne(gate: FiscalGate, row: ledger.FiscalReceiptRow): Promise
  * when the caller named a store. The cron names none and still sweeps
  * everything, exactly as before.
  */
-/**
- * The register a sale's fiscal document went through — what a refund or an
- * exchange of it must open its gate on (ДК1). 1 for a sale with no document,
- * which is every sale of a store with one register.
- */
-export async function registerOfSale(saleId: number): Promise<number> {
-  const doc = await ledger.getSaleDocument(saleId);
-  return doc ? Number(doc.register_no ?? 1) : 1;
-}
-
-function assertSameRegister(ctx: FiscalContext, saleDoc: ledger.FiscalReceiptRow): void {
-  const saleRegister = Number(saleDoc.register_no ?? 1);
-  if (ctx.registerNo !== saleRegister) {
-    throw new FiscalError(
-      `Чек продано через касу ${saleRegister} — повернення лише через неї`,
-      'not_configured'
-    );
-  }
-}
-
 async function adoptOrphanedSales(storeId?: number, limit = 20): Promise<number> {
   const orphans = await pool.query(
-    `SELECT s.id, s.store_id, s.created_at
+    `SELECT s.id, s.store_id, s.created_at, s.fiscal_register
      FROM pos_sales s
      LEFT JOIN pos_fiscal_receipts r ON r.sale_id = s.id AND r.doc_type = 'sale'
      WHERE s.fiscal_status IN ('pending', 'failed')
@@ -1867,7 +1868,10 @@ async function adoptOrphanedSales(storeId?: number, limit = 20): Promise<number>
   let adopted = 0;
   for (const orphan of orphans.rows) {
     const storeId = Number(orphan.store_id);
-    const ctx = await resolveContext(storeId).catch(() => null);
+    // Through the register the sale was written for (ДК2), never "the store's".
+    const ctx = await resolveContext(storeId, Number(orphan.fiscal_register ?? 1)).catch(
+      () => null
+    );
     const live = ctx ? await getLiveShiftRow(storeId, ctx.registerKey) : null;
     const inShift =
       live?.opened_at != null &&

@@ -45,6 +45,12 @@ export interface SalesSummary {
     image_url: string | null;
   }>;
   payments: Array<{ method: PaymentMethod; amount_cents: number; unconfirmed_cents: number }>;
+  /**
+   * The same figures per register (ДК2, POS_DUAL_REGISTER.md §4.2) — two ФОП
+   * in one store, each with its own takings. Only for a store that has a
+   * second register at all; absent everywhere else.
+   */
+  registers?: RegisterTakings[];
   daily: Array<{
     date: string;
     gross_cents: number;
@@ -53,6 +59,19 @@ export interface SalesSummary {
     net_cents: number;
     sales_count: number;
   }>;
+}
+
+/** One register's share of the window: its sales, its refunds, its money by method. */
+export interface RegisterTakings {
+  register_no: number;
+  /** The owner's name for a register 2..; null for register 1. */
+  label: string | null;
+  sales_count: number;
+  gross_cents: number;
+  refunded_cents: number;
+  net_cents: number;
+  rounding_cents: number;
+  payments: Array<{ method: PaymentMethod; amount_cents: number }>;
 }
 
 function todayDateString(timezone: string): string {
@@ -294,7 +313,109 @@ export async function getSalesSummary(
       amount_cents: Number(p.amount_cents),
       unconfirmed_cents: Number(p.unconfirmed_cents ?? 0),
     })),
+    ...(await registerTakings(BOUNDS_CTE, params)),
     daily,
+  };
+}
+
+/**
+ * The window split by register — only for a store that has a register 2..
+ * The same three readings as the totals above (sales by the day they were
+ * rung, refunds by the day they were made, cash net of change), grouped by
+ * `pos_sales.fiscal_register`, so the registers add up to the totals.
+ */
+async function registerTakings(
+  boundsCte: string,
+  params: unknown[]
+): Promise<{ registers?: RegisterTakings[] }> {
+  const extra = await pool.query(
+    `SELECT register_no, label FROM pos_fiscal_registers WHERE store_id = $1 ORDER BY register_no`,
+    [params[0]]
+  );
+  if (extra.rows.length === 0) return {};
+
+  const [sales, refunds, payments] = await Promise.all([
+    pool.query(
+      `${boundsCte}
+       SELECT s.fiscal_register AS register_no,
+              COUNT(*)::int AS sales_count,
+              COALESCE(SUM(s.total_cents), 0)::int AS gross_cents,
+              COALESCE(SUM(s.rounding_cents), 0)::int AS rounding_cents
+       FROM pos_sales s, bounds b
+       WHERE s.store_id = $1 AND s.status <> 'voided'
+         AND s.created_at >= b.range_start AND s.created_at < b.range_end
+       GROUP BY s.fiscal_register`,
+      params
+    ),
+    pool.query(
+      `${boundsCte}
+       SELECT s.fiscal_register AS register_no, COALESCE(SUM(r.total_cents), 0)::int AS refunded_cents
+       FROM pos_refunds r
+       JOIN pos_sales s ON s.id = r.sale_id
+       CROSS JOIN bounds b
+       WHERE r.store_id = $1 AND s.status <> 'voided'
+         AND r.created_at >= b.range_start AND r.created_at < b.range_end
+       GROUP BY s.fiscal_register`,
+      params
+    ),
+    pool.query(
+      `${boundsCte},
+       per_sale AS (
+         SELECT s.id AS sale_id, s.fiscal_register,
+                s.total_cents + s.rounding_cents AS total_cents,
+                p.method, SUM(p.amount_cents) AS amount_cents
+         FROM pos_payments p
+         JOIN pos_sales s ON s.id = p.sale_id
+         CROSS JOIN bounds b
+         WHERE s.store_id = $1 AND s.status <> 'voided'
+           AND s.created_at >= b.range_start AND s.created_at < b.range_end
+         GROUP BY s.id, s.fiscal_register, s.total_cents, s.rounding_cents, p.method
+       ),
+       change AS (
+         SELECT sale_id, GREATEST(0, SUM(amount_cents) - MAX(total_cents)) AS change_cents
+         FROM per_sale GROUP BY sale_id
+       )
+       SELECT ps.fiscal_register AS register_no, ps.method,
+              COALESCE(SUM(
+                ps.amount_cents
+                - CASE WHEN ps.method = 'cash' THEN LEAST(ps.amount_cents, c.change_cents) ELSE 0 END
+              ), 0)::int AS amount_cents
+       FROM per_sale ps
+       JOIN change c ON c.sale_id = ps.sale_id
+       GROUP BY ps.fiscal_register, ps.method`,
+      params
+    ),
+  ]);
+
+  const registers = [
+    { register_no: 1, label: null as string | null },
+    ...extra.rows.map((row) => ({
+      register_no: Number(row.register_no),
+      label: (row.label as string | null) ?? null,
+    })),
+  ];
+  return {
+    registers: registers.map(({ register_no, label }) => {
+      const sold = sales.rows.find((row) => Number(row.register_no) === register_no);
+      const back = refunds.rows.find((row) => Number(row.register_no) === register_no);
+      const gross = Number(sold?.gross_cents ?? 0);
+      const refunded = Number(back?.refunded_cents ?? 0);
+      return {
+        register_no,
+        label,
+        sales_count: Number(sold?.sales_count ?? 0),
+        gross_cents: gross,
+        refunded_cents: refunded,
+        net_cents: gross - refunded,
+        rounding_cents: Number(sold?.rounding_cents ?? 0),
+        payments: payments.rows
+          .filter((row) => Number(row.register_no) === register_no)
+          .map((row) => ({
+            method: row.method as PaymentMethod,
+            amount_cents: Number(row.amount_cents),
+          })),
+      };
+    }),
   };
 }
 

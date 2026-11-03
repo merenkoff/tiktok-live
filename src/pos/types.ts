@@ -274,6 +274,12 @@ export interface CatalogItem {
    */
   sellable: boolean;
   /**
+   * The store register this line is fiscalised through (migration 089, ДК2):
+   * 1, or 2 for a product the owner marked for the second ФОП's register while
+   * that register is switched on. What a till splits a cart into receipts by.
+   */
+  fiscal_register?: number;
+  /**
    * The purchase pack (migration 054): `pack_qty` base units per pack,
    * `pack_label` what it is called. Here because the till's stock count is the
    * one screen there that types a quantity in, and «5 пляшок» is what the

@@ -46,10 +46,21 @@
 //    Before this the route never asked ПРРО anything and every table sale in a
 //    ПРРО store stayed `fiscal_status='none'` forever — no receipt, and a
 //    refund that had nothing to return against.
+// 5. **A part goes through the register its dishes belong to** (ДК2,
+//    TechDocs/POS_DUAL_REGISTER.md §4.2). In a store with a second register
+//    switched on, a part holding food and alcohol is two receipts — two
+//    ФОП — one per register, register 1 first. The guest still pays once
+//    (Д2): every receipt but the last takes exactly what it owes, after its
+//    own cash rounding, and the last takes the rest, change included (Д8).
+//    One payment row per part, then: splitting the SUM («порівну») and
+//    mixing methods are refused while the second register works (Д6, Д8).
 
 import * as bills from './bills.service.js';
+import { parseCashRoundingStep, saleRoundingCents } from './cashRounding.js';
+import { registerPartUuidFor } from './core/derivedUuid.js';
 import { completeSale } from './sales.service.js';
 import * as fiscalService from './fiscal/fiscal.service.js';
+import { activeRegisters, registersOfVariants } from './fiscal/routing.js';
 import { pool } from '../db.js';
 import { logger } from '../logger.js';
 import type { CartDiscountInput, CompleteSalePaymentInput } from './types.js';
@@ -69,7 +80,7 @@ export interface PayBillFiscal {
    * provider calls of one document, and between two guests of a split a shift
    * can close or the register change hands. Throws what `preflight` throws.
    */
-  gateFor: () => Promise<fiscalService.FiscalGate>;
+  gateFor: (registerNo: number) => Promise<fiscalService.FiscalGate>;
 }
 
 export interface PayBillInput {
@@ -135,6 +146,21 @@ export class BillFiscalRefusal extends Error {
 }
 
 const MAX_PARTS = 20;
+
+/** What a waiter reads when a part tries «порівну» or two methods while a second register works. */
+export const SPLIT_EVEN_DUAL_REGISTER =
+  'Поки працює друга каса, рахунок не ділиться порівну і оплачується одним способом — оплатіть по стравах';
+
+/** One receipt as it will be rung: a part's dishes of ONE register. */
+interface Receipt {
+  part: BillPaymentPart;
+  register: number;
+  /** Undefined = whatever the part named (all the bill's open lines when it named none). */
+  lineIds: number[] | undefined;
+  total: number;
+  clientUuid: string | null;
+  payments: CompleteSalePaymentInput[];
+}
 
 /**
  * Share a whole-bill discount out across the parts in proportion to what each
@@ -213,31 +239,68 @@ export async function payBill(input: PayBillInput): Promise<PayBillResult> {
     );
   }
 
-  // What each part owes, at the prices their rounds locked. Read before any
-  // part is rung, so the discount is shared out over the whole bill (rule 2)
-  // rather than over whatever is left when each part's turn comes.
-  const partTotals: number[] = [];
+  // What each part owes, at the prices their rounds locked — and, in a store
+  // with a second register switched on, which register each dish goes
+  // through (rule 5). Read before any part is rung, so the discount is shared
+  // out over the whole bill (rule 2) rather than over whatever is left when
+  // each part's turn comes.
+  const extra = await activeRegisters(pool, input.storeId);
+  const receipts: Receipt[] = [];
   for (const part of input.parts) {
+    if (extra.size > 0 && part.payments?.length !== 1) {
+      throw new bills.BillConflict(SPLIT_EVEN_DUAL_REGISTER);
+    }
     const lines = await bills.lockedBillLines(pool, {
       storeId: input.storeId,
       billId: input.billId,
       lineIds: part.line_ids,
     });
-    partTotals.push(lines.reduce((sum, l) => sum + l.unit_price_cents * l.quantity, 0));
+    const byRegister =
+      extra.size > 0
+        ? await registersOfVariants(pool, input.storeId, lines.map((l) => l.variant_id))
+        : null;
+    const groups = new Map<number, typeof lines>();
+    for (const line of lines) {
+      const register = byRegister?.get(line.variant_id) ?? 1;
+      groups.set(register, [...(groups.get(register) ?? []), line]);
+    }
+    const registers = [...groups.keys()].sort((a, b) => a - b);
+    if (registers.length === 0) registers.push(1);
+    registers.forEach((register, index) => {
+      const own = groups.get(register) ?? [];
+      receipts.push({
+        part,
+        register,
+        // One register: the part as the waiter named it. Two: each receipt
+        // names its own dishes.
+        lineIds: registers.length === 1 ? part.line_ids : own.map((l) => l.bill_item_id),
+        total: own.reduce((sum, l) => sum + l.unit_price_cents * l.quantity, 0),
+        clientUuid:
+          part.client_uuid && index > 0
+            ? registerPartUuidFor(part.client_uuid, register)
+            : (part.client_uuid ?? null),
+        payments: part.payments,
+      });
+    });
   }
-  const shares = shareDiscount(partTotals, wholeDiscount(balance.openCents, input.cart_discount));
+  const shares = shareDiscount(
+    receipts.map((r) => r.total),
+    wholeDiscount(balance.openCents, input.cart_discount)
+  );
+  shareSplitPayments(receipts, shares, parseCashRoundingStep(input.cash_rounding));
 
   const saleIds: number[] = [];
   const registered: PaidPartFiscal[] = [];
   let warning: string | null = null;
-  for (const [index, part] of input.parts.entries()) {
+  for (const [index, receipt] of receipts.entries()) {
+    const part = receipt.part;
     // Asked BEFORE anything of this part is written: no sale row, no burned
     // receipt number, no stock movement — the whole «block the sale when ПРРО
     // is unreachable» stance of the till's checkout.
     let gate: fiscalService.FiscalGate | null = null;
     if (input.fiscal) {
       try {
-        gate = await input.fiscal.gateFor();
+        gate = await input.fiscal.gateFor(receipt.register);
       } catch (cause) {
         throw new BillFiscalRefusal(
           cause instanceof Error ? cause.message : 'ПРРО недоступне',
@@ -251,15 +314,16 @@ export async function payBill(input: PayBillInput): Promise<PayBillResult> {
       storeId: input.storeId,
       staffId: input.staffId,
       items: [],
-      payments: part.payments,
+      payments: receipt.payments,
       note: part.note,
       customer_id: input.customer_id ?? null,
-      client_uuid: part.client_uuid ?? null,
+      client_uuid: receipt.clientUuid,
       // A fixed amount, never the bill's percentage: see rule 2.
       cart_discount: shares[index] > 0 ? { type: 'fixed', value: shares[index] } : null,
-      bill_part: { bill_id: input.billId, line_ids: part.line_ids },
+      bill_part: { bill_id: input.billId, line_ids: receipt.lineIds },
       fiscal_status: fiscalises ? 'pending' : 'none',
       cash_rounding: input.cash_rounding,
+      fiscal_register: receipt.register,
     });
     if (!sale) continue;
     // A part's `client_uuid` that names an already-undone sale must not come
@@ -312,4 +376,42 @@ export async function payBill(input: PayBillInput): Promise<PayBillResult> {
     fiscal: registered,
     warning,
   };
+}
+
+/**
+ * The guest pays a part once; a part that became two receipts shares that one
+ * payment between them (rule 5, decision Д8): each receipt but the last takes
+ * exactly what it owes — its total after its discount share, plus its own
+ * cash rounding — and the last takes the rest, so the change is on it.
+ * Refused before anything is written when the money does not cover both.
+ */
+function shareSplitPayments(
+  receipts: Receipt[],
+  shares: number[],
+  step: ReturnType<typeof parseCashRoundingStep>
+): void {
+  const owed = (index: number, method: string) => {
+    const total = receipts[index].total - shares[index];
+    return total + saleRoundingCents(total, [{ method, amount_cents: total }], step);
+  };
+  let index = 0;
+  while (index < receipts.length) {
+    let end = index;
+    while (end + 1 < receipts.length && receipts[end + 1].part === receipts[index].part) end += 1;
+    if (end > index) {
+      const [paid] = receipts[index].part.payments;
+      let taken = 0;
+      for (let k = index; k < end; k += 1) {
+        const due = owed(k, paid.method);
+        receipts[k].payments = [{ ...paid, amount_cents: due }];
+        taken += due;
+      }
+      const rest = paid.amount_cents - taken;
+      if (rest < owed(end, paid.method)) {
+        throw new bills.BillError('Оплати не вистачає на обидва чеки');
+      }
+      receipts[end].payments = [{ ...paid, amount_cents: rest }];
+    }
+    index = end + 1;
+  }
 }

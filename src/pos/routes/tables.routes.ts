@@ -39,6 +39,7 @@ import * as fiscalService from '../fiscal/fiscal.service.js';
 import { asFiscalError, cashierMessage, supportCode } from '../fiscal/errors.js';
 import { holderFromError } from '../fiscal/offline/holder.js';
 import { errorMessage, readDeviceId } from './_shared.js';
+import { FiscalRegisterMismatchError } from '../fiscal/routing.js';
 
 function idOf(value: string): number | null {
   const id = Number(value);
@@ -52,6 +53,10 @@ function sendError(reply: { code: (n: number) => { send: (b: unknown) => unknown
   }
   if (error instanceof bills.BillConflict) {
     return reply.code(409).send({ error: errorMessage(error) });
+  }
+  // The owner moved a dish between registers while the bill was being paid.
+  if (error instanceof FiscalRegisterMismatchError) {
+    return reply.code(409).send({ error: errorMessage(error), code: error.code });
   }
   if (error instanceof bills.BillError) {
     return reply.code(400).send({ error: errorMessage(error) });
@@ -448,7 +453,15 @@ export function registerTablesRoutes(fastify: FastifyInstance): void {
         cart_discount: (body.cart_discount ?? null) as never,
         customer_id: body.customer_id == null ? null : Number(body.customer_id),
         fiscal: {
-          gateFor: () => fiscalService.preflight(auth.storeId, auth.staffId, readDeviceId(request)),
+          // Each receipt through its own register (ДК2) — 1 in a store with one.
+          gateFor: (registerNo) =>
+            fiscalService.preflight(
+              auth.storeId,
+              auth.staffId,
+              readDeviceId(request),
+              'sale',
+              registerNo
+            ),
         },
         cash_rounding: body.cash_rounding,
       });

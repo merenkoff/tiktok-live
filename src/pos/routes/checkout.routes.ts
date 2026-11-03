@@ -29,6 +29,8 @@ import * as fiscalService from '../fiscal/fiscal.service.js';
 import { getSaleDocument } from '../fiscal/ledger.js';
 import { asFiscalError, cashierMessage, supportCode } from '../fiscal/errors.js';
 import { holderFromError } from '../fiscal/offline/holder.js';
+import { FiscalRegisterMismatchError, registersOfVariants } from '../fiscal/routing.js';
+import { pool } from '../../db.js';
 import { logger } from '../../logger.js';
 import { errorMessage, readDeviceId } from './_shared.js';
 
@@ -156,12 +158,32 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
       return completeDeviceStampedSale(request, reply, auth, body, clientUuid);
     }
 
+    // Which register this cart is fiscalised through (ДК2): register 1 unless
+    // the store has a second one switched on and every line is marked for it.
+    // A cart that spans both is two receipts, which only a till that knows
+    // how to show two receipts may ask for.
+    const registers = await cartRegisters(auth.storeId, body.items, body.preorder_id);
+    if (registers.size > 1) {
+      return reply.code(409).send({
+        error: 'split_needs_update',
+        message:
+          'Це замовлення пробивається двома касами (їжа й алкоголь — різні ФОП). Оновіть касу, щоб оформити його двома чеками',
+      });
+    }
+    const registerNo = registers.size === 1 ? [...registers][0] : 1;
+
     // Pre-flight BEFORE anything is written: no sale row, no burned receipt
     // number, no stock movement. This is the whole "block the sale when ПРРО is
     // unreachable" stance.
     let gate: fiscalService.FiscalGate;
     try {
-      gate = await fiscalService.preflight(auth.storeId, auth.staffId, readDeviceId(request));
+      gate = await fiscalService.preflight(
+        auth.storeId,
+        auth.staffId,
+        readDeviceId(request),
+        'sale',
+        registerNo
+      );
     } catch (error) {
       const fiscal = asFiscalError(error, 'Немає звʼязку з ПРРО');
       logger.warn('Fiscal pre-flight refused a sale', {
@@ -203,9 +225,14 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
         preorder_id: body.preorder_id,
         offline_replay: body.offline_replay === true,
         cash_rounding: body.cash_rounding,
+        fiscal_register: registerNo,
       });
     } catch (error) {
       logger.error('Complete sale failed', { error: errorMessage(error) });
+      // The owner moved a product between registers while this cart was open.
+      if (error instanceof FiscalRegisterMismatchError) {
+        return reply.code(409).send({ error: error.code, message: error.message });
+      }
       // Another till handed this order over first. A conflict, not a bad ask —
       // and the sale rolled back with the claim, so nothing needs undoing.
       if (error instanceof PreorderClosedError) {
@@ -387,6 +414,14 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
       });
     } catch (error) {
       const message = errorMessage(error);
+      // The new goods belong to another register than the receipt being
+      // exchanged — another ФОП's sale (ДК2). Nothing was written.
+      if (error instanceof FiscalRegisterMismatchError) {
+        return reply.code(409).send({
+          error: 'exchange_cross_register',
+          message: `Обмін — лише в межах однієї каси: поверніть товар і продайте новий окремим чеком. ${message}`,
+        });
+      }
       // Two tills (or one impatient one) sent the same exchange at once: the
       // loser waited on the sale's row lock and then found the receipt already
       // refunded (or died on the client_uuid index) — either way the winner's
@@ -936,4 +971,28 @@ async function finishFailedSale(
     sale_kept: !voided,
     ...extra,
   });
+}
+
+/**
+ * The registers a cart's lines go to (ДК2): its own lines, or a pre-order's,
+ * whose lines the server holds. Empty for an empty cart; one element in every
+ * store with a single register.
+ */
+async function cartRegisters(
+  storeId: number,
+  items: CompleteSaleItemInput[] | undefined,
+  preorderId: number | null | undefined
+): Promise<Set<number>> {
+  const variantIds = (items ?? [])
+    .map((item) => Number(item?.variant_id))
+    .filter((id) => Number.isInteger(id) && id > 0);
+  if (preorderId) {
+    const lines = await pool.query(
+      `SELECT variant_id FROM pos_preorder_items WHERE preorder_id = $1 AND store_id = $2`,
+      [preorderId, storeId]
+    );
+    variantIds.push(...lines.rows.map((row) => Number(row.variant_id)));
+  }
+  const byVariant = await registersOfVariants(pool, storeId, variantIds);
+  return new Set(byVariant.values());
 }

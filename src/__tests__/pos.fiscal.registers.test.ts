@@ -35,11 +35,6 @@ import {
   updateRegisterSettings,
 } from '../pos/fiscal/settings.service.js';
 import * as shifts from '../pos/fiscal/shifts.service.js';
-import type {
-  FiscalCallCtx,
-  FiscalCredentials,
-  FiscalProvider,
-} from '../pos/fiscal/types.js';
 import {
   applyPosMigrations,
   auth,
@@ -51,33 +46,12 @@ import {
   type TestStore,
 } from './helpers/pos-fixtures.js';
 import { FakeFiscalProvider } from './helpers/fake-fiscal-provider.js';
+import { BAR_LICENCE, FOOD_LICENCE, splitProvider } from './helpers/split-fiscal-provider.js';
 
 const signal = () => AbortSignal.timeout(10_000);
 
-const FOOD = 'licence-food';
-const BAR = 'licence-bar';
-
-/**
- * One `cashalot` adapter in front of two fakes, chosen by the licence in the
- * credentials — what two Cashalot accounts look like to our code.
- */
-function splitProvider(food: FakeFiscalProvider, bar: FakeFiscalProvider): FiscalProvider {
-  const pick = (arg: unknown): FakeFiscalProvider => {
-    const creds =
-      (arg as FiscalCallCtx | undefined)?.creds ?? (arg as FiscalCredentials | undefined);
-    return creds?.secrets?.licenceKey === BAR ? bar : food;
-  };
-  return new Proxy(food, {
-    get(target, prop, receiver) {
-      const value = Reflect.get(target, prop, receiver);
-      if (typeof value !== 'function') return value;
-      return (...args: unknown[]) => {
-        const fake = pick(args[0]);
-        return (Reflect.get(fake, prop) as (...a: unknown[]) => unknown).apply(fake, args);
-      };
-    },
-  }) as unknown as FiscalProvider;
-}
+const FOOD = FOOD_LICENCE;
+const BAR = BAR_LICENCE;
 
 describe.skipIf(!hasDb)('POS fiscal: a second register (ДК1)', () => {
   let app: FastifyInstance;
