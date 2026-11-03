@@ -15,10 +15,12 @@ import type {
   SaleItemInput,
   SaleListItem,
   SalePaymentInput,
+  SplitSaleResult,
   ListSalesParams,
 } from '../types';
 import {
   FiscalSaleUnknownError,
+  OfflineFiscalError,
   OfflineExchangeError,
   OfflineRefundError,
 } from './errors';
@@ -570,6 +572,51 @@ export async function completeSale(payload: {
   const detail = localSaleDetail(clientUuid, salePayload, catalog, registerFiscalNumber, localOrderNo);
   await putLocalSale(detail, clientUuid, null);
   return detail;
+}
+
+/**
+ * A cart for two registers (track ДК, ДК2-Б): one receipt per register, under
+ * one request. Online only — a register 2 exists only beside a Cashalot
+ * register 1 without offline mode, so there is no reserve to stamp from and
+ * nothing to queue; refused before anything is written. A timeout is the same
+ * unknown as a single ПРРО sale: the till re-sends the same key, and the
+ * server answers with the receipts it already has and rings only the rest.
+ */
+export async function completeSplitSale(
+  payload: {
+    items: SaleItemInput[];
+    payments: SalePaymentInput[];
+    note?: string;
+    cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
+    customer_id?: number | null;
+    parked_cart_id?: number | null;
+    cash_rounding?: number;
+  },
+  opts: { clientUuid?: string } = {}
+): Promise<SplitSaleResult> {
+  if (!navigator.onLine || !api.hasLiveJwt()) {
+    throw new OfflineFiscalError('split_offline', 'Замовлення на дві каси пробивається лише з мережею — чек не проведено');
+  }
+  const clientUuid = opts.clientUuid ?? crypto.randomUUID();
+  let result: SplitSaleResult;
+  try {
+    result = await api.completeSplitSale({
+      ...payload,
+      customer_id: payload.customer_id && payload.customer_id > 0 ? payload.customer_id : null,
+      client_uuid: clientUuid,
+    });
+  } catch (error) {
+    if (isNetworkError(error)) throw new FiscalSaleUnknownError(clientUuid);
+    throw error;
+  }
+  // Stock moves once for the whole cart; each receipt is its own mirror row
+  // under its own key (register 1's is the request's).
+  await applyLocalStockDelta(payload.items);
+  for (const part of result.parts) {
+    await putLocalSale(part.sale, part.sale.client_uuid ?? null, part.sale.id);
+  }
+  void refreshSnapshot().catch(() => undefined);
+  return result;
 }
 
 export async function replaceLocalCustomer(localId: number, server: PosCustomer): Promise<void> {

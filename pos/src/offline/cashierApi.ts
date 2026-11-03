@@ -21,6 +21,8 @@ import type {
   SaleListItem,
   SaleItemInput,
   SalePaymentInput,
+  SplitQuote,
+  SplitSaleResult,
   ListSalesParams,
 } from '../types';
 
@@ -156,6 +158,40 @@ export const cashierApi = {
     if (isOfflinePosEnabled()) return repo.completeSale(payload, opts);
     assertWritable();
     return api.completeSale({ ...payload, client_uuid: opts.clientUuid });
+  },
+
+  /**
+   * A cart whose goods go through two registers (track ДК): one receipt per
+   * register under one request. Online only on every shell — the desktop's
+   * repository refuses it without a connection rather than queueing it.
+   */
+  async completeSplitSale(
+    payload: {
+      items: SaleItemInput[];
+      payments: SalePaymentInput[];
+      note?: string;
+      cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
+      customer_id?: number | null;
+      parked_cart_id?: number | null;
+      cash_rounding?: number;
+    },
+    opts: { clientUuid?: string } = {}
+  ): Promise<SplitSaleResult> {
+    if (isOfflinePosEnabled()) return repo.completeSplitSale(payload, opts);
+    assertWritable();
+    return api.completeSplitSale({ ...payload, client_uuid: opts.clientUuid ?? crypto.randomUUID() });
+  },
+
+  /** What each receipt of a two-register cart will come to (the card amount per terminal). */
+  splitQuote(payload: {
+    items: SaleItemInput[];
+    payments: SalePaymentInput[];
+    cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
+    customer_id?: number | null;
+    cash_rounding?: number;
+  }): Promise<SplitQuote> {
+    assertWritable();
+    return api.splitQuote(payload);
   },
 
   listCustomers(q?: string): Promise<PosCustomer[]> {

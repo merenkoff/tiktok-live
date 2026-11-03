@@ -23,6 +23,8 @@ import type {
   RefundLineInput,
   RefundOptions,
   SaleDetail,
+  SplitQuote,
+  SplitSaleResult,
   SaleItemInput,
   SalePaymentInput,
   StoreConfig,
@@ -516,6 +518,41 @@ class PosApi {
     cash_rounding?: number;
   }): Promise<SaleDetail> {
     const { data } = await this.client.post<SaleDetail>('/sales/complete', payload);
+    return data;
+  }
+
+  /**
+   * A cart whose goods go through two registers — two ФОП (track ДК): one
+   * receipt per register, register 1's first, under one request. Online only;
+   * `client_uuid` is required, and re-sending the same one continues where it
+   * stopped rather than ringing anything twice.
+   */
+  async completeSplitSale(payload: {
+    items: SaleItemInput[];
+    payments: SalePaymentInput[];
+    note?: string;
+    cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
+    customer_id?: number | null;
+    client_uuid: string;
+    parked_cart_id?: number | null;
+    cash_rounding?: number;
+  }): Promise<SplitSaleResult> {
+    const { data } = await this.client.post<SplitSaleResult>('/sales/complete', {
+      ...payload,
+      split_registers: true,
+    });
+    return data;
+  }
+
+  /** What each receipt of a two-register cart will come to; writes nothing. */
+  async splitQuote(payload: {
+    items: SaleItemInput[];
+    payments: SalePaymentInput[];
+    cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
+    customer_id?: number | null;
+    cash_rounding?: number;
+  }): Promise<SplitQuote> {
+    const { data } = await this.client.post<SplitQuote>('/sales/split-quote', payload);
     return data;
   }
 

@@ -20,7 +20,7 @@
 // The Ukrainian text is in `.message`.
 
 import axios from 'axios';
-import type { FiscalActionResult, SaleDetail } from '../types';
+import type { FiscalActionResult, SaleDetail, SplitSalePart } from '../types';
 
 /**
  * What stands after an exchange whose SALE half failed (clothing R1): the
@@ -73,6 +73,26 @@ export type CheckoutFailure =
   | { kind: 'register_held'; message: string; holderName: string | null }
   /** No response. The sale may or may not exist; probing is idempotent. */
   | { kind: 'unknown_state'; clientUuid: string; message: string }
+  /**
+   * A cart for two registers (track ДК) where an earlier receipt went through
+   * and a later one did not. NOT «ring it again»: `parts` are paid and printed,
+   * only the lines in `notTakenItems` (indexes into the request) stay in the
+   * cart, and the customer gets `notTakenCents` back. `message` says all that.
+   */
+  | {
+      kind: 'split_partial';
+      message: string;
+      supportCode: string | null;
+      parts: SplitSalePart[];
+      notTakenItems: number[];
+      notTakenCents: number;
+    }
+  /**
+   * The till rang a cart as one receipt and the server found goods of two
+   * registers in it — a line restored without its register (a parked cart).
+   * Nothing was written; the payment screen asks again for two receipts.
+   */
+  | { kind: 'split_needed'; message: string }
   /** Anything else — stock, validation, a plain server error. `code` is the body's `error` when it was a machine word. */
   | { kind: 'rejected'; message: string; code?: string | null };
 
@@ -85,6 +105,10 @@ interface FiscalFailBody {
   sale_voided?: boolean;
   sale_kept?: boolean;
   holder?: { device_id?: string; name?: string | null } | null;
+  /** A split cart's later receipt failed (`split_part_failed`, track ДК). */
+  parts?: SplitSalePart[];
+  not_taken_items?: number[];
+  not_taken_cents?: number;
   /** The exchange route's additions (clothing R1). */
   refund_id?: number;
   refund?: ExchangeAftermath['refund'];
@@ -160,6 +184,27 @@ export function classifyCheckoutError(error: unknown): CheckoutFailure {
     };
   }
 
+  if (status === 409 && body?.error === 'split_needs_update') {
+    return {
+      kind: 'split_needed',
+      message: 'У кошику товари двох кас — оплата двома чеками',
+    };
+  }
+
+  if (body?.error === 'split_part_failed') {
+    const parts = Array.isArray(body.parts) ? body.parts : [];
+    // Nothing went through yet: an ordinary refusal, the cart intact.
+    if (parts.length === 0) return { kind: 'rejected', message, code: 'split_part_failed' };
+    return {
+      kind: 'split_partial',
+      message,
+      supportCode,
+      parts,
+      notTakenItems: Array.isArray(body.not_taken_items) ? body.not_taken_items : [],
+      notTakenCents: typeof body.not_taken_cents === 'number' ? body.not_taken_cents : 0,
+    };
+  }
+
   if (status === 409 && body?.error === 'sale_voided_not_fiscalised') {
     return {
       kind: 'sale_voided_replay',
@@ -194,6 +239,7 @@ export function classifyCheckoutError(error: unknown): CheckoutFailure {
 
 /** Does this outcome mean the cart should be kept so the cashier can retry? */
 export function keepsCart(failure: CheckoutFailure): boolean {
+  // A partly rung split keeps only the lines that were not taken — the caller trims it.
   return failure.kind !== 'fiscal_failed_kept';
 }
 
@@ -212,6 +258,8 @@ export function keepsModalOpen(failure: CheckoutFailure): boolean {
     failure.kind === 'unknown_state' ||
     // The handover happens on another screen, but the cashier has to read this
     // first — behind the opaque overlay it would simply vanish.
-    failure.kind === 'register_held'
+    failure.kind === 'register_held' ||
+    // Nothing written; the same screen now asks for two receipts.
+    failure.kind === 'split_needed'
   );
 }

@@ -1454,6 +1454,42 @@ export interface SalesSummary {
   registers?: RegisterTakings[];
 }
 
+/**
+ * A till cart for two registers rung as one receipt per register (track ДК,
+ * ДК2-Б: `POST /sales/complete` with `split_registers: true`). Register 1's
+ * receipt first; the change, if any, is on the last.
+ */
+export interface SplitSaleResult {
+  split: true;
+  parts: SplitSalePart[];
+  /** Set when a receipt is paid but its ПРРО document is still to be registered. */
+  warning: string | null;
+}
+
+export interface SplitSalePart {
+  register_no: number;
+  sale: SaleDetail;
+}
+
+/** `POST /sales/split-quote` — what each receipt will come to, written nowhere. */
+export interface SplitQuote {
+  parts: SplitQuotePart[];
+  /** Everything together, after each receipt's own cash rounding. */
+  due_cents: number;
+}
+
+export interface SplitQuotePart {
+  register_no: number;
+  /** The owner's name for a register 2..; null for register 1. */
+  label: string | null;
+  /** Which lines of the request this receipt carries. */
+  item_indexes: number[];
+  total_cents: number;
+  rounding_cents: number;
+  /** What the customer hands over for this receipt: total + its cash rounding. */
+  due_cents: number;
+}
+
 /** One register's share of the window: its sales, its refunds, its money by method. */
 export interface RegisterTakings {
   register_no: number;
