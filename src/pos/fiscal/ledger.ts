@@ -660,10 +660,15 @@ export interface AttentionDoc {
   register_no: number;
 }
 
-/** Documents that will never resolve themselves — the owner's worklist. */
+/**
+ * Documents that will never resolve themselves — the owner's worklist. With
+ * `registerNo`, one register's only (ДК3, the provider screen's tab); without,
+ * every register's, as a client from before the second register reads it.
+ */
 export async function listAttentionDocs(
   storeId: number,
-  limit = 100
+  limit = 100,
+  registerNo?: number
 ): Promise<AttentionDoc[]> {
   const result = await pool.query(
     `SELECT r.id, r.doc_type, r.sale_id, r.refund_id, r.total_cents,
@@ -674,9 +679,10 @@ export async function listAttentionDocs(
      LEFT JOIN pos_refunds rf ON rf.id = r.refund_id
      WHERE r.store_id = $1
        AND (r.status = 'abandoned' OR (r.status = 'failed' AND r.next_attempt_at IS NULL))
+       AND ($3::smallint IS NULL OR r.register_no = $3)
      ORDER BY r.created_at DESC
      LIMIT $2`,
-    [storeId, limit]
+    [storeId, limit, registerNo ?? null]
   );
   return result.rows as AttentionDoc[];
 }

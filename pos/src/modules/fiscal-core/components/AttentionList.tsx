@@ -19,13 +19,17 @@ function formatCents(cents: number): string {
   return (cents / 100).toFixed(2) + ' ₴';
 }
 
-export function AttentionList() {
+/**
+ * `registerNo` narrows the list to one register (a tab of a store with two —
+ * track ДК); absent lists every register's documents, as before.
+ */
+export function AttentionList({ registerNo }: { registerNo?: number } = {}) {
   const [docs, setDocs] = useState<AttentionDoc[] | null>(null);
   const [sessions, setSessions] = useState<OfflineSessionView[]>([]);
   const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
-    listFiscalAttention()
+    listFiscalAttention(registerNo)
       .then((res) => {
         setDocs(res.documents);
         // Phase 2 added parked offline sessions to the same response. Their
@@ -35,7 +39,7 @@ export function AttentionList() {
         setSessions(res.sessions ?? []);
       })
       .catch(setError);
-  }, []);
+  }, [registerNo]);
 
   if (error) return <FiscalErrorCard error={error} />;
   if (!docs) return <p className="py-3 text-[15px] text-sq-muted">Завантаження…</p>;

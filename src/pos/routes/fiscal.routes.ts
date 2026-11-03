@@ -525,9 +525,14 @@ export function registerFiscalRoutes(fastify: FastifyInstance): void {
   fastify.get('/fiscal/attention', async (request, reply) => {
     const auth = await ensurePosOwner(request, reply);
     if (!auth) return;
+    // `register` narrows the list to one register's documents (ДК3); without
+    // it, every register's, as before. Offline sessions are register 1's only.
+    const asked = (request.query as { register?: unknown } | undefined)?.register;
+    const registerNo = asked === undefined ? undefined : readRegister(request, reply);
+    if (registerNo === null) return;
     const [documents, stuck] = await Promise.all([
-      fiscalService.listAttentionDocs(auth.storeId),
-      listStuckSessions(auth.storeId),
+      fiscalService.listAttentionDocs(auth.storeId, 100, registerNo),
+      registerNo !== undefined && registerNo !== 1 ? Promise.resolve([]) : listStuckSessions(auth.storeId),
     ]);
     // Parked offline sessions: their documents may still be `pending` (never
     // sent) — the owner settles them with the provider by hand.

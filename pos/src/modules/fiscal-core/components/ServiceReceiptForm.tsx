@@ -13,7 +13,8 @@ import { Banknote, Check } from '@pos/platform/ui';
 import { fiscalServiceReceipt } from '../data/fiscalApi';
 import { FiscalErrorCard } from './FiscalErrorCard';
 
-export function ServiceReceiptForm() {
+/** `registerNo` — which of the store's registers the cash goes in or out of (track ДК). */
+export function ServiceReceiptForm({ registerNo = 1 }: { registerNo?: number } = {}) {
   const [amount, setAmount] = useState('');
   const [direction, setDirection] = useState<'in' | 'out'>('in');
   const [busy, setBusy] = useState(false);
@@ -28,7 +29,7 @@ export function ServiceReceiptForm() {
     setError(null);
     setDone(false);
     try {
-      await fiscalServiceReceipt(cents);
+      await fiscalServiceReceipt(cents, registerNo);
       setDone(true);
       setAmount('');
     } catch (e) {

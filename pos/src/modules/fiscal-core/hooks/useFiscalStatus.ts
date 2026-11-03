@@ -22,7 +22,8 @@ import type { FiscalStatus } from '../types';
 
 const POLL_MS = 5000;
 
-export function useFiscalStatus() {
+/** `registerNo` — which of the store's registers (track ДК); 1 unless a tab says otherwise. */
+export function useFiscalStatus(registerNo = 1) {
   const [status, setStatus] = useState<FiscalStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [diagnostic, setDiagnostic] = useState<FiscalDiagnostic | null>(null);
@@ -41,7 +42,7 @@ export function useFiscalStatus() {
 
   const refresh = useCallback(async () => {
     try {
-      const next = await getFiscalStatus();
+      const next = await getFiscalStatus(registerNo);
       if (!mountedRef.current) return;
       setStatus(next);
       setDiagnostic(null);
@@ -56,7 +57,7 @@ export function useFiscalStatus() {
     } finally {
       if (mountedRef.current) setIsLoading(false);
     }
-  }, []);
+  }, [registerNo]);
 
   useEffect(() => {
     void refresh();
