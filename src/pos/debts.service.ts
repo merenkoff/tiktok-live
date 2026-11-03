@@ -48,6 +48,7 @@ import { allocateCartDiscount, mergePlainLines, pricePlainLine } from './sales.s
 import type { SaleDraftLine } from './sales.service.js';
 import { refundLineAmount } from './lineMoney.js';
 import { fiscalCapability } from './fiscal/fiscal.service.js';
+import { activeRegisters, effectiveRegister } from './fiscal/routing.js';
 import { formatQuantity, isWeighed, type WeightSource } from './weighed.js';
 import {
   DebtConflict,
@@ -808,7 +809,7 @@ export async function issueOnCredit(input: {
       const variants = await client.query(
         `SELECT v.id, v.price_cents, v.compare_at_cents, v.label, v.unit, v.price_per,
                 p.id AS product_id, p.name AS product_name,
-                p.stop_listed_on::text AS stop_listed_on
+                p.stop_listed_on::text AS stop_listed_on, p.fiscal_register
            FROM pos_variants v
            JOIN pos_products p ON p.id = v.product_id
           WHERE v.store_id = $1 AND v.id = ANY($2::bigint[]) AND ($3::boolean OR v.is_active = TRUE)`,
@@ -818,6 +819,22 @@ export async function issueOnCredit(input: {
         throw new DebtError(offline ? 'Частину товарів не знайдено' : 'Частину товарів не знайдено або прибрано в архів');
       }
       const byId = new Map(variants.rows.map((row) => [Number(row.id), row]));
+
+      // Goods of a second register are another ФОП's — in «Шабля», its
+      // alcohol — and excise goods are never sold on credit (G3_DEBTS.md,
+      // POS_DUAL_REGISTER.md §4.2). A repayment is a register-1 receipt, so
+      // nothing of register 2 may become a debt line, online or not.
+      const extra = await activeRegisters(client, input.storeId);
+      if (extra.size > 0) {
+        for (const row of variants.rows) {
+          if (effectiveRegister(row.fiscal_register, extra) !== 1) {
+            throw new DebtConflict(
+              `«${row.product_name}» пробивається другою касою — під запис його не продають`,
+              'register_two'
+            );
+          }
+        }
+      }
       // Merged as checkout merges — every weighing stays its own line (075).
       const lines = mergePlainLines(items, (variantId) => isWeighed(byId.get(variantId)?.price_per));
 

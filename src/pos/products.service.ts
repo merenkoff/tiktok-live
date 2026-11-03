@@ -32,6 +32,7 @@ import {
   toCatalogGroup,
 } from './modifiers.service.js';
 import type { ComponentInput } from './composites.service.js';
+import { activeRegisters, effectiveRegister } from './fiscal/routing.js';
 
 export interface VariantInput {
   /**
@@ -125,6 +126,12 @@ export interface CreateProductInput {
    * by the guest menu only; the till, the shelf and the documents see it.
    */
   menu_hidden?: boolean;
+  /**
+   * The store register this product is sold through (migration 089, ДК2):
+   * null or 1 = register 1, 2 = the second ФОП's register. Honoured only
+   * while that register is switched on (`fiscal/routing.ts`).
+   */
+  fiscal_register?: number | null;
 }
 
 /**
@@ -330,6 +337,7 @@ export async function listProducts(storeId: number) {
     stock_mode: (p.stock_mode === 'derived' ? 'derived' : 'own') as ProductStockMode,
     sellable: p.sellable !== false,
     menu_hidden: p.menu_hidden === true,
+    fiscal_register: p.fiscal_register == null ? null : Number(p.fiscal_register),
     stop_listed_on: dateOnly(p.stop_listed_on),
     tag_ids: tagMap.get(Number(p.id)) ?? [],
     modifier_group_ids: groupMap.get(Number(p.id)) ?? [],
@@ -434,8 +442,9 @@ export async function createProductInTx(
     `INSERT INTO pos_products
        (store_id, name, description, image_url, needs_review, created_from_document_id,
         kind, stock_mode, one_off, sellable, composition, allergens, menu_hidden, menu_labels,
-        kcal, strength_tenths, prep_minutes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::text[], $13, $14::text[], $15, $16, $17)
+        kcal, strength_tenths, prep_minutes, fiscal_register)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::text[], $13, $14::text[], $15, $16, $17,
+             $18)
      RETURNING id`,
     [
       storeId,
@@ -455,6 +464,7 @@ export async function createProductInTx(
       normalizeKcal(input.kcal),
       strengthTenthsOf(input),
       normalizePrepMinutes(input.prep_minutes),
+      normalizeFiscalRegister(input.fiscal_register),
     ]
   );
   const productId = Number(productResult.rows[0].id);
@@ -595,6 +605,7 @@ export async function updateProduct(
       | 'stock_mode'
       | 'sellable'
       | 'menu_hidden'
+      | 'fiscal_register'
     >
   > & {
     is_active?: boolean;
@@ -671,6 +682,10 @@ export async function updateProduct(
     if (input.menu_hidden !== undefined) {
       sets.push(`menu_hidden = $${i++}`);
       values.push(Boolean(input.menu_hidden));
+    }
+    if (input.fiscal_register !== undefined) {
+      sets.push(`fiscal_register = $${i++}`);
+      values.push(normalizeFiscalRegister(input.fiscal_register));
     }
     if (input.needs_review !== undefined) {
       sets.push(`needs_review = $${i++}`);
@@ -1155,6 +1170,7 @@ export async function getCatalog(
        -- are composite+own, and only the one-off may be written off from here.
        p.one_off,
        p.sellable,
+       p.fiscal_register,
        -- As text: node-postgres would parse a DATE into a local-midnight
        -- Date, and the store's day is a string everywhere else.
        p.stop_listed_on::text AS stop_listed_on,
@@ -1204,6 +1220,7 @@ export async function getCatalog(
     [...new Set(result.rows.map((row) => Number(row.product_id)))],
     { activeOnly: true }
   );
+  const activeExtra = await activeRegisters(pool, storeId);
 
   return sortVariantRuns(
     result.rows,
@@ -1227,6 +1244,8 @@ export async function getCatalog(
     stock_mode: (row.stock_mode === 'derived' ? 'derived' : 'own') as ProductStockMode,
     one_off: Boolean(row.one_off),
     sellable: row.sellable !== false,
+    // Which register the line goes to (ДК2) — what a till splits a cart by.
+    fiscal_register: effectiveRegister(row.fiscal_register, activeExtra),
     pack_qty: row.pack_qty == null ? null : Number(row.pack_qty),
     pack_label: String(row.pack_label ?? ''),
     price_per: Number(row.price_per ?? 1),
@@ -1262,4 +1281,12 @@ export async function getCatalog(
       : {}),
     tag_ids: Array.isArray(row.tag_ids) ? row.tag_ids.map((id: string | number) => Number(id)) : [],
   }));
+}
+
+/** `fiscal_register` as the owner sent it: null (register 1), 1 or 2 — nothing else is stored. */
+function normalizeFiscalRegister(raw: unknown): number | null {
+  if (raw === undefined || raw === null || raw === '') return null;
+  const n = Number(raw);
+  if (n === 1 || n === 2) return n;
+  throw new Error('Каса товару — 1 або 2');
 }

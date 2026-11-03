@@ -156,6 +156,8 @@ export const POS_MIGRATIONS = [
   '087_pos_product_dish_numbers.sql',
   // A second ПРРО in one store — food and alcohol on two ФОП (ДК1, POS_DUAL_REGISTER.md).
   '088_pos_fiscal_registers.sql',
+  // The register a product is sold through and a sale went to (ДК2).
+  '089_pos_fiscal_register_routing.sql',
 ] as const;
 
 export function readMigration(file: string): string {

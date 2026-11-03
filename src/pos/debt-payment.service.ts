@@ -38,7 +38,6 @@
 // hand back. Each document's key comes from the request's, so the same
 // request again goes on from the document it stopped at.
 
-import crypto from 'crypto';
 import {
   getSale,
   getSaleByClientUuid,
@@ -70,6 +69,7 @@ import {
 import { getCredit, getStatement } from './debts.service.js';
 import type { DebtCreditView, DebtLineView } from './debts.service.js';
 import type { CompleteSalePaymentInput } from './types.js';
+import { derivedUuid } from './core/derivedUuid.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -181,14 +181,7 @@ function parsePart(raw: unknown): PartRequest | null {
   return { line_id: lineId, quantity, amount_cents: amount, method };
 }
 
-/** A UUID fixed by a label — the same request gives the same keys. */
-export function derivedUuid(label: string): string {
-  const bytes = crypto.createHash('sha256').update(label).digest().subarray(0, 16);
-  bytes[6] = (bytes[6]! & 0x0f) | 0x50;
-  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
-  const hex = bytes.toString('hex');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
-}
+export { derivedUuid };
 
 /**
  * The key of a «внесок» rung with a receipt in one request: fixed by the

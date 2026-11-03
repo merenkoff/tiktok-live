@@ -40,6 +40,11 @@ import {
   WeighedLineError,
   type WeightSource,
 } from './weighed.js';
+import {
+  activeRegisters,
+  effectiveRegister,
+  FiscalRegisterMismatchError,
+} from './fiscal/routing.js';
 
 /** The biggest sum an INTEGER money column holds — a line past it is refused in words. */
 const MAX_LINE_CENTS = 2_147_483_647;
@@ -345,6 +350,13 @@ export interface CompleteSaleParams {
    * 0: a till built before rounding gets exactly what it always got.
    */
   cash_rounding?: unknown;
+  /**
+   * The store register this sale is fiscalised through (ДК2,
+   * POS_DUAL_REGISTER.md §4.2) — 1 when absent. Every line must belong to
+   * it: a register-2 product is another ФОП's goods and may not ride on
+   * register 1's receipt, whichever path wrote the sale.
+   */
+  fiscal_register?: number;
 }
 
 type DbClient = { query: typeof pool.query };
@@ -686,7 +698,7 @@ export async function completeSaleTx(
   const variantsResult = await client.query(
     `SELECT v.id, v.price_cents, v.compare_at_cents, v.label, v.unit, v.is_active, v.price_per,
             p.id AS product_id, p.name AS product_name,
-            p.stop_listed_on::text AS stop_listed_on
+            p.stop_listed_on::text AS stop_listed_on, p.fiscal_register
      FROM pos_variants v
      JOIN pos_products p ON p.id = v.product_id
      WHERE v.store_id = $1 AND v.id = ANY($2::bigint[])`,
@@ -695,6 +707,24 @@ export async function completeSaleTx(
 
   if (variantsResult.rows.length !== variantIds.length) {
     throw new Error('Some variants not found or inactive');
+  }
+
+  // Every line on this receipt belongs to the register it is fiscalised
+  // through (ДК2). Checked only where a second register is switched on —
+  // every other store reads one extra row and moves on.
+  const fiscalRegister = params.fiscal_register ?? 1;
+  const activeExtra = await activeRegisters(client, params.storeId);
+  if (activeExtra.size > 0 || fiscalRegister !== 1) {
+    for (const row of variantsResult.rows) {
+      const found = effectiveRegister(row.fiscal_register, activeExtra);
+      if (found !== fiscalRegister) {
+        throw new FiscalRegisterMismatchError(
+          `«${row.product_name}» пробивається через касу ${found}, а цей чек — касою ${fiscalRegister}`,
+          fiscalRegister,
+          found
+        );
+      }
+    }
   }
 
   const variantMap = new Map(variantsResult.rows.map((row) => [Number(row.id), row]));
@@ -921,10 +951,10 @@ export async function completeSaleTx(
        (store_id, staff_id, receipt_number, status, subtotal_cents, total_cents, note,
         customer_id, cart_discount_type, cart_discount_value, cart_discount_cents, client_uuid,
         fiscal_status, order_no, prep_status, served_at, exchange_refund_id,
-        cash_rounding, rounding_cents, fiscal_chain_id)
+        cash_rounding, rounding_cents, fiscal_chain_id, fiscal_register)
      VALUES ($1, $2, $3, 'completed', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
              $14::text, CASE WHEN $14::text = 'new' THEN NULL ELSE NOW() END, $15,
-             $16, $17, $18)
+             $16, $17, $18, $19)
      RETURNING *`,
     [
       params.storeId,
@@ -955,6 +985,7 @@ export async function completeSaleTx(
       roundingCents,
       // The «чек післяплати» of a «під запис» line's ПРРО chain (079).
       params.debt_part?.chain_id ?? null,
+      fiscalRegister,
     ]
   );
   const sale = saleResult.rows[0];
@@ -2285,6 +2316,15 @@ export interface ExchangeSaleParams {
   cash_rounding?: unknown;
 }
 
+/** The register a sale was fiscalised through (migration 089), read in the caller's transaction. */
+async function saleRegisterTx(client: DbClient, storeId: number, saleId: number): Promise<number> {
+  const result = await client.query(
+    `SELECT fiscal_register FROM pos_sales WHERE id = $1 AND store_id = $2`,
+    [saleId, storeId]
+  );
+  return Number(result.rows[0]?.fiscal_register ?? 1);
+}
+
 /**
  * An exchange: a refund of what came back and a sale of what left, in ONE
  * transaction (TechDocs/POS_CLOTHING.md R1).
@@ -2343,6 +2383,10 @@ export async function exchangeSale(
       fiscal_status: params.fiscal_status,
       exchange_refund_id: refund.refundId,
       cash_rounding: params.cash_rounding,
+      // Both documents go through the register that sold the original (the
+      // route opened its gate there), so the new goods must belong to it
+      // too — another register's goods are another ФОП's sale (ДК2).
+      fiscal_register: await saleRegisterTx(client, params.storeId, params.saleId),
     });
     await client.query('COMMIT');
     return { refundId: refund.refundId, newSaleId: sale.saleId };
