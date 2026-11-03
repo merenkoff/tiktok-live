@@ -100,6 +100,17 @@ describe('HardwarePage station printers', () => {
     expect(await within(kitchen).findByText('Надіслано на друк')).toBeInTheDocument();
   });
 
+  it('remembers the «Чеки столів» printer and prints a test receipt to it (track ДК, Д13)', async () => {
+    signIn('cafe');
+    renderWithProviders(<HardwarePage />, { shell: 'cashier' });
+    const tables = screen.getByTestId('station-printer-table-receipts');
+    expect(tables).toHaveTextContent('Чеки столів');
+    fireEvent.click(await within(tables).findByText('Kitchen-1'));
+    expect(setMeta).toHaveBeenCalledWith('tableReceiptPrinterName', 'Kitchen-1');
+    fireEvent.click(within(tables).getByRole('button', { name: 'Тестовий чек' }));
+    expect(await within(tables).findByText('Надіслано на друк')).toBeInTheDocument();
+  });
+
   it('lets the bar follow the kitchen again by forgetting its own printer', async () => {
     signIn('cafe');
     renderWithProviders(<HardwarePage />, { shell: 'cashier' });

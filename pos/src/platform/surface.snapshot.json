@@ -1,5 +1,5 @@
 {
-  "platformVersion": 21,
+  "platformVersion": 22,
   "exports": {
     "platform": [
       "CASH_ROUNDING_STEPS",
@@ -85,6 +85,7 @@
       "printReceipt",
       "printSlip",
       "quantityToBase",
+      "quickCashAmounts",
       "refundLineAmount",
       "refundRoundingCents",
       "refusalText",

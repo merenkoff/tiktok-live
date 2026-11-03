@@ -158,6 +158,9 @@ export const POS_MIGRATIONS = [
   '088_pos_fiscal_registers.sql',
   // The register a product is sold through and a sale went to (ДК2).
   '089_pos_fiscal_register_routing.sql',
+  // Table receipts printed on the bar's printer, whoever paid (ДК3-Г, Д13):
+  // pos_sales.print_requested_at / print_claimed_* / printed_at.
+  '090_pos_receipt_print_queue.sql',
 ] as const;
 
 export function readMigration(file: string): string {

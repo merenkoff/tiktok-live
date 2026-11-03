@@ -29,15 +29,26 @@
 // Cash is rounded when the store rounds (НБУ № 25, TechDocs/POS_CASH_ROUNDING.md):
 // the receipt's cash total, never a card. «Порівну» splits the sum AFTER
 // rounding, because the rounding belongs to the one receipt, not to each guest.
+//
+// Cash is taken like at the till (track ДК, Д15): «Отримано» with the till's
+// quick amounts, «Решта» / «Не вистачає» beside it, and what the guest handed
+// over is what is sent — the server keeps the change off the money, exactly
+// as for a till's sale. Only for one payer: «порівну на N» stays N exact shares.
+//
+// A store with a second register — another ФОП's (track ДК, ДК3-Г): a part of
+// food and alcohol is two receipts. «Порівну» is gone (Д6), the sums come from
+// the server's quote (the same plan the payment follows), cash is one
+// «Отримано» for both, and a card goes through each ФОП's terminal in turn
+// before the one request (Д14).
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { formatUah } from '@pos/platform';
 import { ArrowLeft, Banknote, Check, CreditCard, Minus, Plus, Split } from '@pos/platform/ui';
 import type { Glyph } from '@pos/platform/ui';
 import { evenShares, lineCents, payableLines, selectionCents } from '../lib/pay';
 import { lineTitle } from '../lib/bill';
-import { cashRoundingFor } from '../lib/hostPlatform';
-import type { PayPart } from '../lib/tablesApi';
+import { cashRoundingFor, quickCashAmountsFor } from '../lib/hostPlatform';
+import type { BillReceiptQuote, PayPart } from '../lib/tablesApi';
 import type { Bill } from '../lib/types';
 
 export interface PaySheetProps {
@@ -48,6 +59,28 @@ export interface PaySheetProps {
   onClose: () => void;
   /** `cashRounding` is the step to send — 0 when nothing was rounded. */
   onPay: (parts: PayPart[], cashRounding: number) => void;
+  /**
+   * Set in a store with a second register (track ДК): what each receipt of
+   * this payment would come to, from the server. Its presence is the switch —
+   * no «порівну», sums from the quote, a card terminal by terminal.
+   */
+  quote?: ((parts: PayPart[], cashRounding: number) => Promise<{ receipts: BillReceiptQuote[]; due_cents: number }>) | null;
+}
+
+/** «Каса 2 · Бар» — whose terminal and whose receipt. */
+function registerTitle(receipt: BillReceiptQuote): string {
+  const name = receipt.label?.trim();
+  return name ? `Каса ${receipt.register_no} · ${name}` : `Каса ${receipt.register_no}`;
+}
+
+/** «820» / «819,50» — typed amounts as the waiter reads them back. */
+function centsToText(cents: number): string {
+  return cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2).replace('.', ',');
+}
+
+function textToCents(text: string): number {
+  const n = Number(text.replace(/\s/g, '').replace(',', '.'));
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 100) : 0;
 }
 
 type Method = 'cash' | 'card';
@@ -62,20 +95,69 @@ function signedUah(cents: number): string {
   return `${cents < 0 ? '−' : '+'}${formatUah(Math.abs(cents))}`;
 }
 
-export function PaySheet({ bill, busy, cashRoundingStep, onClose, onPay }: PaySheetProps): JSX.Element {
+export function PaySheet({ bill, busy, cashRoundingStep, onClose, onPay, quote = null }: PaySheetProps): JSX.Element {
   const lines = useMemo(() => payableLines(bill), [bill]);
   const [selected, setSelected] = useState<Set<number>>(
     () => new Set(lines.map(({ line }) => line.id))
   );
   const [ways, setWays] = useState(1);
   const [method, setMethod] = useState<Method>('card');
+  const dual = quote != null;
 
   const total = selectionCents(lines, selected);
   const whole = selected.size === lines.length;
   const rounding = method === 'cash' ? cashRoundingFor(total, cashRoundingStep) : { step: 0 as const, deltaCents: 0 };
-  // What the guests hand over: the cash total after rounding, the card total as it is.
-  const due = total + rounding.deltaCents;
-  const shares = evenShares(due, ways);
+
+  // Two registers: the receipts this payment would ring, re-read whenever
+  // the dishes or the method change.
+  const [receipts, setReceipts] = useState<{ list: BillReceiptQuote[]; due: number } | null>(null);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [cardTaken, setCardTaken] = useState(0);
+  const selectedKey = [...selected].sort((a, b) => a - b).join(',');
+  useEffect(() => {
+    if (!quote) return;
+    setReceipts(null);
+    setQuoteError(null);
+    setCardTaken(0);
+    if (selected.size === 0) return;
+    let cancelled = false;
+    const part: PayPart = {
+      ...(whole ? {} : { line_ids: [...selected] }),
+      payments: [{ method, amount_cents: 0 }],
+    };
+    quote([part], method === 'cash' ? Number(cashRoundingStep ?? 0) : 0)
+      .then((answer) => {
+        if (!cancelled) setReceipts({ list: answer.receipts, due: answer.due_cents });
+      })
+      .catch((error: unknown) => {
+        const data = (error as { response?: { data?: { error?: unknown } } })?.response?.data;
+        if (!cancelled) setQuoteError(typeof data?.error === 'string' ? data.error : 'Не вдалося порахувати чеки');
+      });
+    return () => {
+      cancelled = true;
+    };
+    // `selectedKey` stands for `selected`; `whole` follows from it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quote, selectedKey, method, cashRoundingStep]);
+
+  // What the guests hand over: the cash total after rounding, the card total
+  // as it is — and with two registers, the sum of the quoted receipts.
+  const due = dual ? (receipts?.due ?? 0) : total + rounding.deltaCents;
+  const dualRounding = dual ? (receipts?.list ?? []).reduce((sum, r) => sum + r.rounding_cents, 0) : 0;
+  const shares = evenShares(due, dual ? 1 : ways);
+
+  // «Отримано» (Д15): one payer by cash. The amount on screen is the till's
+  // guess until the waiter types — then it is theirs.
+  const takesCash = method === 'cash' && (dual || ways === 1);
+  const [received, setReceived] = useState('');
+  const [typed, setTyped] = useState(false);
+  useEffect(() => {
+    if (!typed) setReceived(due > 0 ? centsToText(due) : '');
+  }, [due, typed]);
+  const receivedCents = textToCents(received);
+  const short = takesCash ? Math.max(0, due - receivedCents) : 0;
+  const change = takesCash ? Math.max(0, receivedCents - due) : 0;
+  const quick = takesCash && due > 0 ? quickCashAmountsFor(due) : [];
 
   function toggle(id: number): void {
     setSelected((prev) => {
@@ -87,16 +169,39 @@ export function PaySheet({ bill, busy, cashRoundingStep, onClose, onPay }: PaySh
   }
 
   function pay(): void {
-    if (due <= 0) return;
+    if (due <= 0 || short > 0) return;
+    // Two registers by card: each ФОП's terminal in turn, then the one request (Д14).
+    if (dual && method === 'card' && receipts && cardTaken + 1 < receipts.list.length) {
+      setCardTaken(cardTaken + 1);
+      return;
+    }
     // A part without `line_ids` means «everything still owed» — which is not
     // the same as listing today's ids, because between this render and the
     // request another waiter may have fired one more round.
     const part: PayPart = {
       ...(whole ? {} : { line_ids: [...selected] }),
-      payments: shares.map((amount_cents) => ({ method, amount_cents })),
+      payments: takesCash
+        ? [{ method, amount_cents: receivedCents }]
+        : shares.map((amount_cents) => ({ method, amount_cents })),
     };
-    onPay([part], rounding.deltaCents !== 0 ? rounding.step : 0);
+    const step = dual
+      ? dualRounding !== 0
+        ? Number(cashRoundingStep ?? 0)
+        : 0
+      : rounding.deltaCents !== 0
+        ? rounding.step
+        : 0;
+    onPay([part], step);
   }
+
+  const terminal = dual && method === 'card' && receipts ? receipts.list[cardTaken] : null;
+  const takenText =
+    dual && method === 'card' && receipts && cardTaken > 0
+      ? receipts.list
+          .slice(0, cardTaken)
+          .map((r) => `${formatUah(r.due_cents)} на терміналі «${registerTitle(r)}»`)
+          .join(', ')
+      : null;
 
   const chosen = lines.filter(({ line }) => selected.has(line.id)).length;
 
@@ -178,6 +283,7 @@ export function PaySheet({ bill, busy, cashRoundingStep, onClose, onPay }: PaySh
               </span>
               <span className="tabular-nums">{formatUah(total)}</span>
             </div>
+            {!dual && (
             <div className="flex items-center justify-between py-2 shadow-[0_-1px_0_#E6E8EC,0_1px_0_#E6E8EC]">
               <span className="flex items-center gap-2.5 text-base text-sq-text">
                 <Split size={24} />
@@ -209,15 +315,44 @@ export function PaySheet({ bill, busy, cashRoundingStep, onClose, onPay }: PaySh
                 </button>
               </div>
             </div>
-            {ways > 1 && (
+            )}
+            {dual && (
+              <div className="py-2 space-y-1 shadow-[0_-1px_0_#E6E8EC,0_1px_0_#E6E8EC]" data-testid="pay-receipts">
+                <p className="text-[13px] text-sq-muted">Два ФОП — кожен свій чек, один спосіб оплати</p>
+                {receipts?.list.map((r, i) => (
+                  <div
+                    key={r.register_no}
+                    className={`flex justify-between text-[15px] tabular-nums ${
+                      terminal && i === cardTaken ? 'font-semibold text-sq-text' : 'text-sq-secondary'
+                    }`}
+                    data-testid={`pay-receipt-${r.register_no}`}
+                  >
+                    <span>
+                      {method === 'card' && i < cardTaken ? '✓ ' : ''}
+                      {registerTitle(r)}
+                    </span>
+                    <span>{formatUah(r.due_cents)}</span>
+                  </div>
+                ))}
+                {!receipts && !quoteError && selected.size > 0 && (
+                  <p className="text-[15px] text-sq-muted">Рахуємо чеки…</p>
+                )}
+                {quoteError && (
+                  <p role="alert" className="text-[15px] text-sq-danger" data-testid="pay-quote-error">
+                    {quoteError}
+                  </p>
+                )}
+              </div>
+            )}
+            {!dual && ways > 1 && (
               <p className="text-[13px] text-sq-muted tabular-nums" data-testid="pay-shares">
                 {shares.map((c) => formatUah(c)).join(' + ')} — один чек, {ways} оплат
               </p>
             )}
-            {rounding.deltaCents !== 0 && (
+            {(dual ? dualRounding : rounding.deltaCents) !== 0 && (
               <div className="flex justify-between text-[15px] text-sq-secondary" data-testid="pay-rounding">
                 <span>Заокруглення готівки</span>
-                <span className="tabular-nums">{signedUah(rounding.deltaCents)}</span>
+                <span className="tabular-nums">{signedUah(dual ? dualRounding : rounding.deltaCents)}</span>
               </div>
             )}
             <div className="flex items-baseline justify-between">
@@ -238,7 +373,10 @@ export function PaySheet({ bill, busy, cashRoundingStep, onClose, onPay }: PaySh
                   type="button"
                   data-testid={`pay-method-${m.id}`}
                   aria-pressed={on}
-                  onClick={() => setMethod(m.id)}
+                  onClick={() => {
+                    setMethod(m.id);
+                    setTyped(false);
+                  }}
                   className={`flex-1 min-h-16 rounded-[14px] bg-white inline-flex items-center justify-center gap-2.5 text-base font-semibold text-sq-text ${
                     on ? 'ring-2 ring-sq-blue' : 'ring-1 ring-sq-divider'
                   }`}
@@ -250,16 +388,79 @@ export function PaySheet({ bill, busy, cashRoundingStep, onClose, onPay }: PaySh
             })}
           </div>
 
+          {takesCash && due > 0 && (
+            <div className="rounded-card bg-white shadow-card px-5 py-4 flex flex-col gap-3" data-testid="pay-cash">
+              <div className="grid grid-cols-2 gap-3">
+                <label className="rounded-[14px] ring-2 ring-sq-blue px-3.5 py-2.5 flex flex-col cursor-text">
+                  <span className="text-[13px] text-sq-secondary">Отримано</span>
+                  <span className="flex items-baseline gap-1 text-[24px] font-bold text-sq-heading tabular-nums">
+                    <input
+                      aria-label="Отримано готівкою"
+                      className="min-w-0 w-full bg-transparent outline-none border-0 p-0"
+                      inputMode="decimal"
+                      value={received}
+                      onFocus={(e) => e.currentTarget.select()}
+                      onChange={(e) => {
+                        setReceived(e.target.value.replace(/[^\d,.]/g, '').replace('.', ','));
+                        setTyped(true);
+                      }}
+                      data-testid="pay-received"
+                    />
+                    <span className="shrink-0">₴</span>
+                  </span>
+                </label>
+                <div className="rounded-[14px] bg-sq-sidebar px-3.5 py-2.5 flex flex-col" data-testid="pay-change">
+                  <span className="text-[13px] text-sq-secondary">{short > 0 ? 'Не вистачає' : 'Решта'}</span>
+                  <span
+                    className={`text-[24px] font-bold tabular-nums truncate ${
+                      short > 0 ? 'text-sq-danger' : 'text-sq-success'
+                    }`}
+                  >
+                    {formatUah(short > 0 ? short : change)}
+                  </span>
+                </div>
+              </div>
+              {quick.length > 0 && (
+                <div className="flex gap-2">
+                  {quick.map((cents) => (
+                    <button
+                      key={cents}
+                      type="button"
+                      onClick={() => {
+                        setReceived(centsToText(cents));
+                        setTyped(true);
+                      }}
+                      className="flex-1 min-w-0 h-11 rounded-sq bg-sq-empty hover:bg-sq-selected text-base font-semibold tabular-nums truncate px-1"
+                      data-testid={`pay-quick-${cents}`}
+                    >
+                      {formatUah(cents)}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {takenText && (
+            <p className="text-[13px] text-amber-800" data-testid="pay-card-taken">
+              Уже проведено {takenText}. Якщо наступний термінал відмовить — поверніть їх на терміналі; оплату ще не
+              записано.
+            </p>
+          )}
+
           <div className="flex-1" />
           <button
             type="button"
             className="pos-btn-primary w-full min-h-[60px] rounded-xl text-lg"
             data-testid="pay-submit"
-            disabled={busy || due <= 0}
+            disabled={busy || due <= 0 || short > 0 || (dual && !receipts)}
             onClick={pay}
           >
-            Оплатити {formatUah(due)}
-            {whole ? '' : ' (частина)'}
+            {terminal
+              ? `Пройшла на терміналі «${registerTitle(terminal)}» · ${formatUah(terminal.due_cents)}`
+              : change > 0
+                ? `Прийняти ${formatUah(receivedCents)} · решта ${formatUah(change)}`
+                : `Оплатити ${formatUah(due)}${whole ? '' : ' (частина)'}`}
           </button>
         </section>
       </div>

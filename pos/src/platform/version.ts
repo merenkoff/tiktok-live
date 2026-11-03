@@ -157,7 +157,14 @@ export const POS_API_CLIENT_VERSION = 2;
 //     writes a weighed line without `weight_source` is refused by the server.
 //     Hence the bump: the debts module is rebuilt for 21 (its Module Release
 //     follows the app's).
-export const PLATFORM_VERSION = 21;
+// 22 (2026-11-03): the waiter takes cash like the till (track ДК, decision
+//     Д15, TechDocs/POS_DUAL_REGISTER.md): the barrel exports `quickCashAmounts`
+//     — the exact sum and the three notes a guest is likely to pay with — so
+//     the `tables` bill sheet shows «Отримано / Решта» with the till's own row
+//     of quick amounts. Additive; a module built for 21 loads unchanged, and
+//     the `tables` remote reads the new name through the namespace import, so
+//     on a host still at 21 it simply draws no quick amounts.
+export const PLATFORM_VERSION = 22;
 
 /**
  * Build version of this bundle — the host web/cashier build, or a module-remote

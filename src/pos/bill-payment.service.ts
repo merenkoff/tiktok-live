@@ -215,6 +215,154 @@ function wholeDiscount(
  * its own (rule 3), and a part that throws leaves the ones before it paid.
  */
 export async function payBill(input: PayBillInput): Promise<PayBillResult> {
+  const { receipts, shares } = await planBillReceipts(input);
+
+  const saleIds: number[] = [];
+  const registered: PaidPartFiscal[] = [];
+  let warning: string | null = null;
+  for (const [index, receipt] of receipts.entries()) {
+    const part = receipt.part;
+    // Asked BEFORE anything of this part is written: no sale row, no burned
+    // receipt number, no stock movement — the whole «block the sale when ПРРО
+    // is unreachable» stance of the till's checkout.
+    let gate: fiscalService.FiscalGate | null = null;
+    if (input.fiscal) {
+      try {
+        gate = await input.fiscal.gateFor(receipt.register);
+      } catch (cause) {
+        throw new BillFiscalRefusal(
+          cause instanceof Error ? cause.message : 'ПРРО недоступне',
+          { stage: 'preflight', cause, paidSaleIds: [...saleIds], saleId: null, voided: false }
+        );
+      }
+    }
+    const fiscalises = gate?.on === true;
+
+    const sale = await completeSale({
+      storeId: input.storeId,
+      staffId: input.staffId,
+      items: [],
+      payments: receipt.payments,
+      note: part.note,
+      customer_id: input.customer_id ?? null,
+      client_uuid: receipt.clientUuid,
+      // A fixed amount, never the bill's percentage: see rule 2.
+      cart_discount: shares[index] > 0 ? { type: 'fixed', value: shares[index] } : null,
+      bill_part: { bill_id: input.billId, line_ids: receipt.lineIds },
+      fiscal_status: fiscalises ? 'pending' : 'none',
+      cash_rounding: input.cash_rounding,
+      fiscal_register: receipt.register,
+    });
+    if (!sale) continue;
+    // A part's `client_uuid` that names an already-undone sale must not come
+    // back as a success: the checkout answers the same replay with a 409.
+    if (sale.status !== 'completed') {
+      throw new bills.BillConflict('Цей чек скасовано — почніть оплату спочатку');
+    }
+    saleIds.push(sale.id);
+    // A table's receipt prints on the bar's printer, whoever took the money
+    // (Д13, ДК3-Г): the desktop holding «Чеки столів» picks it up from the
+    // queue once its document is registered. A replayed part is already in it.
+    await pool.query(
+      `UPDATE pos_sales SET print_requested_at = NOW()
+       WHERE id = $1 AND store_id = $2 AND print_requested_at IS NULL`,
+      [sale.id, input.storeId]
+    );
+    if (!gate || !fiscalises || sale.fiscal_status === 'done') continue;
+
+    try {
+      const view = await fiscalService.fiscalizeSale(gate, {
+        ...sale,
+        customer_phone: sale.customer_phone,
+      });
+      registered.push({ sale_id: sale.id, fiscal: view });
+    } catch (error) {
+      if (error instanceof fiscalService.FiscalDocumentFailed && !error.mayExist) {
+        // The document cannot exist at the provider, so this part was never
+        // paid in law: undo it and put its plates back on the bill.
+        const voided = await fiscalService.abortSale(input.storeId, sale.id, input.staffId, error.row);
+        if (voided) {
+          saleIds.pop();
+          throw new BillFiscalRefusal(error.message, {
+            stage: 'document',
+            cause: error.cause,
+            paidSaleIds: [...saleIds],
+            saleId: sale.id,
+            voided: true,
+          });
+        }
+      }
+      // Ambiguous (the receipt may exist), or the undo itself could not run:
+      // the sale STANDS. The retry cron settles it; the waiter is told.
+      logger.error('Table bill part paid, receipt not registered', {
+        storeId: input.storeId,
+        billId: input.billId,
+        saleId: sale.id,
+        mayExistAtProvider: error instanceof fiscalService.FiscalDocumentFailed ? error.mayExist : null,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      warning = RECEIPT_PENDING_WARNING;
+    }
+  }
+
+  await bills.closeIfSettled(input.storeId, input.staffId, input.billId);
+  return {
+    bill: await bills.getBill(input.storeId, input.billId),
+    sale_ids: saleIds,
+    fiscal: registered,
+    warning,
+  };
+}
+
+/** One receipt of a bill payment as the waiter's screen shows it before the tap (ДК3-Г). */
+export interface BillReceiptQuote {
+  register_no: number;
+  /** What the receipt's goods come to after its share of the bill's discount. */
+  total_cents: number;
+  /** Its own cash rounding (НБУ № 25); 0 for a card. */
+  rounding_cents: number;
+  /** What the guest hands over for it: total + rounding. */
+  due_cents: number;
+}
+
+/**
+ * What paying these parts would ring, receipt by receipt, without writing
+ * anything: the same plan `payBill` follows — dishes grouped by register, the
+ * bill's discount shared once, each receipt's cash rounded by itself — so the
+ * waiter reads «Кухня 820 ₴ · Бар 360 ₴» before the guest pays, and the card
+ * goes through each ФОП's terminal for exactly that (Д14). The parts' payment
+ * amounts are not checked here; only their method matters.
+ */
+export async function quoteBillPayment(
+  input: Omit<PayBillInput, 'fiscal'>
+): Promise<{ receipts: BillReceiptQuote[]; due_cents: number }> {
+  const step = parseCashRoundingStep(input.cash_rounding);
+  const parts = (input.parts ?? []).map((part) => ({
+    ...part,
+    // Only the method decides the rounding; an amount large enough that the
+    // money check of the real payment never trips on a quote.
+    payments: (part.payments ?? []).map((p) => ({ ...p, amount_cents: 1_000_000_000 })),
+  }));
+  const { receipts, shares } = await planBillReceipts({ ...input, parts });
+  const quoted = receipts.map((receipt, index) => {
+    const total = receipt.total - shares[index];
+    const method = receipt.part.payments?.[0]?.method ?? 'card';
+    const rounding = saleRoundingCents(total, [{ method, amount_cents: total }], step);
+    return { register_no: receipt.register, total_cents: total, rounding_cents: rounding, due_cents: total + rounding };
+  });
+  return { receipts: quoted, due_cents: quoted.reduce((sum, r) => sum + r.due_cents, 0) };
+}
+
+/**
+ * Everything `payBill` decides before it writes: the bill can be paid, what
+ * each receipt owes and through which register (rule 5), the discount shared
+ * once over all of them (rule 2), and the one payment of a two-register part
+ * shared between its receipts (Д8). Shared with `quoteBillPayment`, so the
+ * quote can never disagree with the payment.
+ */
+async function planBillReceipts(
+  input: Omit<PayBillInput, 'fiscal'>
+): Promise<{ receipts: Receipt[]; shares: number[] }> {
   if (!input.parts?.length) throw new bills.BillError('Немає чим платити');
   if (input.parts.length > MAX_PARTS) {
     throw new bills.BillError(`Рахунок ділиться щонайбільше на ${MAX_PARTS} частин`);
@@ -288,94 +436,7 @@ export async function payBill(input: PayBillInput): Promise<PayBillResult> {
     wholeDiscount(balance.openCents, input.cart_discount)
   );
   shareSplitPayments(receipts, shares, parseCashRoundingStep(input.cash_rounding));
-
-  const saleIds: number[] = [];
-  const registered: PaidPartFiscal[] = [];
-  let warning: string | null = null;
-  for (const [index, receipt] of receipts.entries()) {
-    const part = receipt.part;
-    // Asked BEFORE anything of this part is written: no sale row, no burned
-    // receipt number, no stock movement — the whole «block the sale when ПРРО
-    // is unreachable» stance of the till's checkout.
-    let gate: fiscalService.FiscalGate | null = null;
-    if (input.fiscal) {
-      try {
-        gate = await input.fiscal.gateFor(receipt.register);
-      } catch (cause) {
-        throw new BillFiscalRefusal(
-          cause instanceof Error ? cause.message : 'ПРРО недоступне',
-          { stage: 'preflight', cause, paidSaleIds: [...saleIds], saleId: null, voided: false }
-        );
-      }
-    }
-    const fiscalises = gate?.on === true;
-
-    const sale = await completeSale({
-      storeId: input.storeId,
-      staffId: input.staffId,
-      items: [],
-      payments: receipt.payments,
-      note: part.note,
-      customer_id: input.customer_id ?? null,
-      client_uuid: receipt.clientUuid,
-      // A fixed amount, never the bill's percentage: see rule 2.
-      cart_discount: shares[index] > 0 ? { type: 'fixed', value: shares[index] } : null,
-      bill_part: { bill_id: input.billId, line_ids: receipt.lineIds },
-      fiscal_status: fiscalises ? 'pending' : 'none',
-      cash_rounding: input.cash_rounding,
-      fiscal_register: receipt.register,
-    });
-    if (!sale) continue;
-    // A part's `client_uuid` that names an already-undone sale must not come
-    // back as a success: the checkout answers the same replay with a 409.
-    if (sale.status !== 'completed') {
-      throw new bills.BillConflict('Цей чек скасовано — почніть оплату спочатку');
-    }
-    saleIds.push(sale.id);
-    if (!gate || !fiscalises || sale.fiscal_status === 'done') continue;
-
-    try {
-      const view = await fiscalService.fiscalizeSale(gate, {
-        ...sale,
-        customer_phone: sale.customer_phone,
-      });
-      registered.push({ sale_id: sale.id, fiscal: view });
-    } catch (error) {
-      if (error instanceof fiscalService.FiscalDocumentFailed && !error.mayExist) {
-        // The document cannot exist at the provider, so this part was never
-        // paid in law: undo it and put its plates back on the bill.
-        const voided = await fiscalService.abortSale(input.storeId, sale.id, input.staffId, error.row);
-        if (voided) {
-          saleIds.pop();
-          throw new BillFiscalRefusal(error.message, {
-            stage: 'document',
-            cause: error.cause,
-            paidSaleIds: [...saleIds],
-            saleId: sale.id,
-            voided: true,
-          });
-        }
-      }
-      // Ambiguous (the receipt may exist), or the undo itself could not run:
-      // the sale STANDS. The retry cron settles it; the waiter is told.
-      logger.error('Table bill part paid, receipt not registered', {
-        storeId: input.storeId,
-        billId: input.billId,
-        saleId: sale.id,
-        mayExistAtProvider: error instanceof fiscalService.FiscalDocumentFailed ? error.mayExist : null,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      warning = RECEIPT_PENDING_WARNING;
-    }
-  }
-
-  await bills.closeIfSettled(input.storeId, input.staffId, input.billId);
-  return {
-    bill: await bills.getBill(input.storeId, input.billId),
-    sale_ids: saleIds,
-    fiscal: registered,
-    warning,
-  };
+  return { receipts, shares };
 }
 
 /**

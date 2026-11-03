@@ -33,6 +33,8 @@ import {
 import {
   BAR_PAPER_META_KEY,
   BAR_PRINTER_META_KEY,
+  TABLE_RECEIPT_PAPER_META_KEY,
+  TABLE_RECEIPT_PRINTER_META_KEY,
   KITCHEN_PAPER_META_KEY,
   KITCHEN_PRINTER_META_KEY,
   moduleStationMetaKeys,
@@ -136,6 +138,66 @@ function StationPrinterSection({
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * «Чеки столів» (track ДК, Д13): the printer a table's paid receipts come out
+ * of, whoever took the money — a waiter's tablet has none. This desktop then
+ * takes them from the server's queue and prints each with its own ФОП.
+ */
+function TableReceiptPrinter({ printers, storeName }: { printers: PrinterInfo[]; storeName: string }) {
+  const [selected, setSelected] = useState<string | null>(null);
+  const [paper, setPaper] = useState<ReceiptPaperWidth>(DEFAULT_RECEIPT_PAPER_WIDTH);
+  const [testing, setTesting] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    void getMeta<string>(TABLE_RECEIPT_PRINTER_META_KEY).then((name) =>
+      setSelected(typeof name === 'string' && name ? name : null)
+    );
+    void getMeta<ReceiptPaperWidth>(TABLE_RECEIPT_PAPER_META_KEY).then((mm) => {
+      if (mm && RECEIPT_PAPER_WIDTHS.includes(mm)) setPaper(mm);
+    });
+  }, []);
+
+  async function test() {
+    if (!selected) return;
+    setTesting(true);
+    setStatus(null);
+    try {
+      await printReceipt(selected, testReceipt(storeName), paper);
+      setStatus('Надіслано на друк');
+    } catch (e) {
+      setStatus(`Помилка друку: ${typeof e === 'string' ? e : String(e)}`);
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  return (
+    <StationPrinterSection
+      station="table-receipts"
+      title="Чеки столів"
+      hint="Фіскальні чеки оплачених рахунків столів друкуються тут, хто б не прийняв оплату — офіціант із планшета теж. Не обрано — не друкуються ніде."
+      printers={printers}
+      selected={selected}
+      paperWidth={paper}
+      onSelect={(name) => {
+        setSelected(name);
+        setStatus(null);
+        void setMeta(TABLE_RECEIPT_PRINTER_META_KEY, name);
+      }}
+      onPaperWidth={(mm) => {
+        setPaper(mm);
+        setStatus(null);
+        void setMeta(TABLE_RECEIPT_PAPER_META_KEY, mm);
+      }}
+      onTest={() => void test()}
+      testing={testing}
+      testStatus={status}
+      testLabel="Тестовий чек"
+    />
   );
 }
 
@@ -679,6 +741,7 @@ export function HardwarePage() {
             testing={ticketTesting === 'bar'}
             testStatus={ticketStatus?.station === 'bar' ? ticketStatus.text : null}
           />
+          <TableReceiptPrinter printers={printers} storeName={storeName} />
         </>
       )}
 

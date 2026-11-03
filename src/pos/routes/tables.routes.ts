@@ -39,7 +39,8 @@ import * as fiscalService from '../fiscal/fiscal.service.js';
 import { asFiscalError, cashierMessage, supportCode } from '../fiscal/errors.js';
 import { holderFromError } from '../fiscal/offline/holder.js';
 import { errorMessage, readDeviceId } from './_shared.js';
-import { FiscalRegisterMismatchError } from '../fiscal/routing.js';
+import { FiscalRegisterMismatchError, registerLabels } from '../fiscal/routing.js';
+import { pool } from '../../db.js';
 
 function idOf(value: string): number | null {
   const id = Number(value);
@@ -100,6 +101,12 @@ async function sendFiscalRefusal(
 ): Promise<unknown> {
   const fiscal = asFiscalError(refusal.detail.cause, 'Немає звʼязку з ПРРО');
   const bill = await bills.getBill(storeId, billId);
+  // A payment that went through some receipts and stopped at another (two
+  // registers, ДК3-Г; or a later part): the receipts before stand and are
+  // paid, so the waiter takes back only what the dishes now owed again cost.
+  const earlier = refusal.detail.paidSaleIds.length > 0
+    ? ' Чеки, що пройшли раніше, оплачено — поверніть гостю лише за страви, які знову в рахунку.'
+    : '';
   const common = {
     code: fiscal.kind,
     message: cashierMessage(fiscal.kind),
@@ -110,7 +117,7 @@ async function sendFiscalRefusal(
   if (refusal.detail.stage === 'document') {
     return reply.code(502).send({
       // The waiter's sentence — and what happened to the money, in words.
-      error: `${cashierMessage(fiscal.kind)}. Оплату цієї частини скасовано, страви знову в рахунку.`,
+      error: `${cashierMessage(fiscal.kind)}. Оплату цієї частини скасовано, страви знову в рахунку.${earlier}`,
       ...common,
       sale_id: refusal.detail.saleId,
       sale_voided: refusal.detail.voided,
@@ -119,12 +126,12 @@ async function sendFiscalRefusal(
   }
   if (fiscal.kind === 'register_held') {
     return reply.code(409).send({
-      error: cashierMessage(fiscal.kind),
+      error: `${cashierMessage(fiscal.kind)}${earlier}`,
       ...common,
       holder: holderFromError(fiscal),
     });
   }
-  return reply.code(503).send({ error: cashierMessage(fiscal.kind), ...common });
+  return reply.code(503).send({ error: `${cashierMessage(fiscal.kind)}${earlier}`, ...common });
 }
 
 function readPositions(body: unknown): tables.TablePosition[] {
@@ -469,6 +476,38 @@ export function registerTablesRoutes(fastify: FastifyInstance): void {
       if (error instanceof billPayment.BillFiscalRefusal) {
         return sendFiscalRefusal(reply, auth.storeId, id, error);
       }
+      return sendError(reply, error);
+    }
+  });
+
+  // What paying these parts would ring, receipt by receipt, written nowhere
+  // (ДК3-Г): in a store with a second register a part of food and alcohol is
+  // two receipts, and the waiter reads each sum — and puts each through its
+  // own ФОП's card terminal — before the guest pays.
+  fastify.post('/bills/:id/pay-quote', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const id = idOf((request.params as { id: string }).id);
+    if (id == null) return reply.code(404).send({ error: 'Рахунок не знайдено' });
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const parts = Array.isArray(body.parts)
+      ? (body.parts as billPayment.BillPaymentPart[])
+      : [{ payments: (body.payments ?? []) as never[] }];
+    try {
+      const quote = await billPayment.quoteBillPayment({
+        storeId: auth.storeId,
+        staffId: auth.staffId,
+        billId: id,
+        parts,
+        cart_discount: (body.cart_discount ?? null) as never,
+        cash_rounding: body.cash_rounding,
+      });
+      const labels = await registerLabels(pool, auth.storeId);
+      return {
+        receipts: quote.receipts.map((r) => ({ ...r, label: labels.get(r.register_no) ?? null })),
+        due_cents: quote.due_cents,
+      };
+    } catch (error) {
       return sendError(reply, error);
     }
   });

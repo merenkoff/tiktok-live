@@ -21,6 +21,7 @@ import { registerQrRoutes } from './routes/qr.routes.js';
 import { registerTelemetryRoutes } from './routes/telemetry.routes.js';
 import { registerLiveRoutes } from './routes/live.routes.js';
 import { registerKitchenRoutes } from './routes/kitchen.routes.js';
+import { registerReceiptPrintRoutes } from './routes/receipt-print.routes.js';
 import { registerTablesRoutes } from './routes/tables.routes.js';
 import { registerFiscalRoutes } from './routes/fiscal.routes.js';
 import { registerSuperRoutes } from './routes/super.routes.js';
@@ -67,6 +68,9 @@ export const POS_ROUTE_GROUPS: PosRouteGroup[] = [
   // (TechDocs/POS_TABLES.md §4.11). Reading the map is `ensurePosAuth`,
   // changing the furniture is `ensurePosOwner`.
   { moduleId: null, register: registerTablesRoutes },
+  // Table receipts on the bar's printer (ДК3-Г, Д13): a core group, polled by
+  // the desktop that holds the «Чеки столів» printer.
+  { moduleId: null, register: registerReceiptPrintRoutes },
   // Core for the same reason as `registerLiveRoutes` above: the
   // `fiscal-<provider>` UI module opts in through `module_remotes`, not
   // `enabled_modules`. The gate is `ensurePosOwner`.

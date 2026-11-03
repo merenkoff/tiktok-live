@@ -74,3 +74,15 @@ export class FiscalRegisterMismatchError extends Error {
     this.name = 'FiscalRegisterMismatchError';
   }
 }
+
+/** The owner's names for registers 2.. — what a receipt of a split order is captioned with. */
+export async function registerLabels(
+  client: Queryable,
+  storeId: number
+): Promise<Map<number, string | null>> {
+  const rows = await client.query(
+    `SELECT register_no, label FROM pos_fiscal_registers WHERE store_id = $1`,
+    [storeId]
+  );
+  return new Map(rows.rows.map((row) => [Number(row.register_no), row.label as string | null]));
+}

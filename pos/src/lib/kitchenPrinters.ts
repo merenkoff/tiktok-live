@@ -16,6 +16,13 @@ export const KITCHEN_PRINTER_META_KEY = 'kitchenPrinterName';
 export const KITCHEN_PAPER_META_KEY = 'kitchenPaperWidthMm';
 export const BAR_PRINTER_META_KEY = 'barPrinterName';
 export const BAR_PAPER_META_KEY = 'barPaperWidthMm';
+/**
+ * The printer a table's paid receipts come out of, whoever took the money
+ * (track ДК, Д13): the desktop with this set takes them from the server's
+ * queue (`offline/receiptQueue.ts`). Not a station — receipts, not tickets.
+ */
+export const TABLE_RECEIPT_PRINTER_META_KEY = 'tableReceiptPrinterName';
+export const TABLE_RECEIPT_PAPER_META_KEY = 'tableReceiptPaperWidthMm';
 
 export interface TicketPrinter {
   name: string;

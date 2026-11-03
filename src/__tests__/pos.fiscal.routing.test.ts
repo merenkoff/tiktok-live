@@ -249,6 +249,108 @@ describe.skipIf(!hasDb)('POS fiscal: products go through their own register (Д�
     expect(await billStatus(bill.id)).toBe('paid');
   });
 
+  it('quotes each receipt of a bill exactly as the payment then rings it (ДК3-Г)', async () => {
+    await enableBar();
+    const bill = await firedBill([
+      { variant_id: borscht, quantity: 1 },
+      { variant_id: vodka, quantity: 2 },
+    ]);
+    const body = {
+      parts: [{ payments: [{ method: 'cash', amount_cents: 0 }] }],
+      cart_discount: { type: 'percent', value: 10 },
+      cash_rounding: 10,
+    };
+    const quote = await app.inject({
+      method: 'POST',
+      url: `/api/pos/bills/${bill.id}/pay-quote`,
+      headers: auth(store.sellerToken),
+      payload: body,
+    });
+    expect(quote.statusCode).toBe(200);
+    const receipts = quote.json().receipts as Array<{ register_no: number; label: string | null; due_cents: number }>;
+    expect(receipts.map((r) => [r.register_no, r.label])).toEqual([
+      [1, null],
+      [2, 'Бар'],
+    ]);
+    expect(registered(food)).toHaveLength(0);
+    expect(await billStatus(bill.id)).toBe('open');
+
+    const paid = await payBill(bill.id, {
+      ...body,
+      parts: [{ payments: [{ method: 'cash', amount_cents: quote.json().due_cents }], client_uuid: randomUUID() }],
+    });
+    expect(paid.statusCode).toBe(200);
+    const sales = (
+      await pool.query(
+        `SELECT total_cents + rounding_cents AS due FROM pos_sales WHERE id = ANY($1::bigint[]) ORDER BY id`,
+        [paid.json().sale_ids]
+      )
+    ).rows.map((r) => Number(r.due));
+    expect(sales).toEqual(receipts.map((r) => r.due_cents));
+  });
+
+  it('queues a paid bill’s receipts for the bar printer, one device at a time (ДК3-Г, Д13)', async () => {
+    await enableBar();
+    // Bills paid by earlier tests of this store are in the queue too.
+    await pool.query(
+      `UPDATE pos_sales SET printed_at = NOW() WHERE store_id = $1 AND print_requested_at IS NOT NULL`,
+      [store.storeId]
+    );
+    const bill = await firedBill([
+      { variant_id: borscht, quantity: 1 },
+      { variant_id: vodka, quantity: 1 },
+    ]);
+    const paid = await payBill(bill.id, {
+      parts: [{ payments: [{ method: 'card', amount_cents: 18_345 }], client_uuid: randomUUID() }],
+    });
+    expect(paid.statusCode).toBe(200);
+    const saleIds = paid.json().sale_ids as number[];
+
+    const take = (device?: string) =>
+      app.inject({
+        method: 'GET',
+        url: '/api/pos/sales/print-queue',
+        headers: { ...auth(store.sellerToken), ...(device ? { 'x-pos-device-id': device } : {}) },
+      });
+    expect((await take()).statusCode).toBe(400);
+
+    const first = await take('bar-desktop');
+    expect(first.statusCode).toBe(200);
+    const jobs = first.json().jobs as Array<{ id: number; fiscal_register: number; fiscal: { fiscal_code: string } | null }>;
+    expect(jobs.map((j) => j.id)).toEqual(saleIds);
+    expect(jobs.map((j) => j.fiscal_register)).toEqual([1, 2]);
+    expect(jobs.every((j) => Boolean(j.fiscal?.fiscal_code))).toBe(true);
+
+    // Another desktop gets nothing while the lease holds.
+    expect((await take('other-desktop')).json().jobs).toEqual([]);
+
+    const done = await app.inject({
+      method: 'POST',
+      url: `/api/pos/sales/${saleIds[0]}/printed`,
+      headers: auth(store.sellerToken),
+    });
+    expect(done.statusCode).toBe(200);
+    const again = await app.inject({
+      method: 'POST',
+      url: `/api/pos/sales/${saleIds[0]}/printed`,
+      headers: auth(store.sellerToken),
+    });
+    expect(again.statusCode).toBe(200);
+
+    // The lease runs out: the unprinted one goes to whoever asks next.
+    await pool.query(
+      `UPDATE pos_sales SET print_claimed_at = NOW() - INTERVAL '3 minutes' WHERE id = ANY($1::bigint[])`,
+      [saleIds]
+    );
+    expect((await take('other-desktop')).json().jobs.map((j: { id: number }) => j.id)).toEqual([saleIds[1]]);
+
+    // A sale rung at the counter is never queued.
+    const counter = await sell([{ variant_id: borscht, quantity: 1 }], 12_345);
+    expect(counter.statusCode).toBe(201);
+    const queued = await pool.query(`SELECT print_requested_at FROM pos_sales WHERE id = $1`, [counter.json().id]);
+    expect(queued.rows[0].print_requested_at).toBeNull();
+  });
+
   it('refuses «порівну» and mixed payment while register 2 works', async () => {
     await enableBar();
     const bill = await firedBill([{ variant_id: borscht, quantity: 2 }]);
@@ -280,6 +382,7 @@ describe.skipIf(!hasDb)('POS fiscal: products go through their own register (Д�
     });
     expect(res.statusCode).toBe(502);
     expect(res.json().sale_ids).toHaveLength(1);
+    expect(res.json().error).toContain('поверніть гостю лише за страви, які знову в рахунку');
     const lines = (
       await pool.query(
         `SELECT b.variant_id, b.sale_id FROM pos_bill_items b WHERE b.bill_id = $1 ORDER BY b.id`,

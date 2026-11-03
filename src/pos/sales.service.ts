@@ -1356,6 +1356,11 @@ export async function getSale(storeId: number, saleId: number) {
     voided_at: sale.voided_at,
     fiscal_status: sale.fiscal_status ?? 'none',
     fiscal: fiscalViewFromRow(fiscal),
+    // The register the sale went through (migration 089, track ДК): its
+    // receipt — reprinted, refunded, printed on the bar's printer — carries
+    // that register's ФОП. Listed by hand like every field here; without it
+    // a register-2 receipt printed register 1's requisites.
+    fiscal_register: Number(sale.fiscal_register ?? 1),
     // Set on the sale half of an exchange (migration 064).
     exchange_of: exchangeOf.rows[0]
       ? {

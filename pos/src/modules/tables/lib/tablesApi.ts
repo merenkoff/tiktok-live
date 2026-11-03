@@ -131,6 +131,34 @@ export function payBill(billId: number, parts: PayPart[], cashRounding = 0): Pro
   });
 }
 
+/** One receipt of a bill payment as the server will ring it (track ДК, ДК3-Г). */
+export interface BillReceiptQuote {
+  register_no: number;
+  /** The owner's name for a register 2..; null for register 1. */
+  label: string | null;
+  total_cents: number;
+  rounding_cents: number;
+  /** What the guest hands over for it. */
+  due_cents: number;
+}
+
+/**
+ * What paying these parts would ring, receipt by receipt — nothing written. In
+ * a store with a second register a part of food and alcohol is two receipts of
+ * two ФОП, and the waiter puts each through its own terminal (Д14); the sums
+ * are the server's, the same plan `pay` follows.
+ */
+export function payQuote(
+  billId: number,
+  parts: PayPart[],
+  cashRounding = 0
+): Promise<{ receipts: BillReceiptQuote[]; due_cents: number }> {
+  return posRequest('post', `/bills/${billId}/pay-quote`, {
+    parts,
+    ...(cashRounding ? { cash_rounding: cashRounding } : {}),
+  });
+}
+
 /**
  * What paying answers with.
  *
