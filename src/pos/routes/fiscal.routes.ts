@@ -27,6 +27,7 @@ import * as holder from '../fiscal/offline/holder.js';
 import { getOfflineStatus, registerKeyOf } from '../fiscal/offline/status.js';
 import { getProvider, hasProvider } from '../fiscal/providers/index.js';
 import { refreshRequisites } from '../fiscal/requisites.js';
+import { parseRegisterNo } from '../fiscal/registers.js';
 import * as fiscalSettings from '../fiscal/settings.service.js';
 import * as shifts from '../fiscal/shifts.service.js';
 import type { FiscalSettingsPatch } from '../fiscal/types.js';
@@ -78,14 +79,50 @@ function requireDeviceId(request: Parameters<typeof readDeviceId>[0], reply: Fas
   return deviceId;
 }
 
+/**
+ * Which of the store's registers a request means (ДК1, POS_DUAL_REGISTER.md):
+ * `register` in the query, or in a JSON body. Absent is register 1 — every
+ * client from before the second register. Anything else answers 400 and null.
+ */
+function readRegister(
+  request: { query?: unknown; body?: unknown },
+  reply: FastifyReply
+): number | null {
+  const query = (request.query ?? {}) as { register?: unknown };
+  const body = (request.body && typeof request.body === 'object' ? request.body : {}) as {
+    register?: unknown;
+  };
+  const registerNo = parseRegisterNo(query.register ?? body.register);
+  if (registerNo === null) {
+    void reply.code(400).send({ error: 'register must be 1 or 2' });
+  }
+  return registerNo;
+}
+
 export function registerFiscalRoutes(fastify: FastifyInstance): void {
   fastify.get('/fiscal/settings', async (request, reply) => {
     const auth = await ensurePosOwner(request, reply);
     if (!auth) return;
+    const registerNo = readRegister(request, reply);
+    if (registerNo === null) return;
 
-    const settings = await fiscalSettings.getFiscalSettings(auth.storeId);
+    if (registerNo >= 2) {
+      const settings = await fiscalSettings.getFiscalSettings(auth.storeId, registerNo);
+      return {
+        ...fiscalSettings.toFiscalSettingsView(auth.storeId, settings),
+        register_no: registerNo,
+        secrets_key_configured: isSecretsKeyConfigured(),
+        adapter_available: hasProvider('cashalot'),
+        offline_month: null,
+      };
+    }
+
+    const [settings, extra] = await Promise.all([
+      fiscalSettings.getFiscalSettings(auth.storeId),
+      fiscalSettings.listExtraRegisters(auth.storeId),
+    ]);
     return {
-      ...fiscalSettings.toFiscalSettingsView(auth.storeId, settings),
+      ...fiscalSettings.toFiscalSettingsView(auth.storeId, settings, extra),
       // The owner needs to know that credentials cannot be saved before they
       // fill in a form that will 503 on submit.
       secrets_key_configured: isSecretsKeyConfigured(),
@@ -107,10 +144,13 @@ export function registerFiscalRoutes(fastify: FastifyInstance): void {
     const auth = await ensurePosOwner(request, reply);
     if (!auth) return;
 
-    const body = (request.body ?? {}) as FiscalSettingsPatch;
-    if (typeof body !== 'object' || Array.isArray(body)) {
+    const raw = (request.body ?? {}) as FiscalSettingsPatch & { register?: unknown };
+    if (typeof raw !== 'object' || Array.isArray(raw)) {
       return reply.code(400).send({ error: 'body must be an object' });
     }
+    const registerNo = readRegister(request, reply);
+    if (registerNo === null) return;
+    const { register: _register, ...body } = raw;
 
     // Refuse before touching the row: storing a provider licence key in
     // plaintext is not an acceptable degraded mode.
@@ -121,9 +161,20 @@ export function registerFiscalRoutes(fastify: FastifyInstance): void {
     }
 
     try {
+      if (registerNo >= 2) {
+        const saved = await fiscalSettings.updateRegisterSettings(auth.storeId, registerNo, body);
+        return {
+          ...fiscalSettings.toFiscalSettingsView(auth.storeId, saved),
+          secrets_key_configured: isSecretsKeyConfigured(),
+        };
+      }
       const saved = await fiscalSettings.updateFiscalSettings(auth.storeId, body);
       return {
-        ...fiscalSettings.toFiscalSettingsView(auth.storeId, saved),
+        ...fiscalSettings.toFiscalSettingsView(
+          auth.storeId,
+          saved,
+          await fiscalSettings.listExtraRegisters(auth.storeId)
+        ),
         secrets_key_configured: isSecretsKeyConfigured(),
       };
     } catch (error) {
@@ -148,8 +199,11 @@ export function registerFiscalRoutes(fastify: FastifyInstance): void {
     const auth = await ensurePosOwner(request, reply);
     if (!auth) return;
 
+    const registerNo = readRegister(request, reply);
+    if (registerNo === null) return;
     const creds = await fiscalSettings.getFiscalCredentials(auth.storeId, {
       requireEnabled: false,
+      registerNo,
     });
     if (!creds) {
       return reply.code(409).send({
@@ -167,7 +221,7 @@ export function registerFiscalRoutes(fastify: FastifyInstance): void {
       // requisites. Only for an enabled store — `resolveContext` is null
       // otherwise, and a store that is not fiscalising has nothing to print.
       if (probe.ok) {
-        const ctx = await shifts.resolveContext(auth.storeId);
+        const ctx = await shifts.resolveContext(auth.storeId, registerNo);
         if (ctx) await refreshRequisites(ctx, AbortSignal.timeout(SHIFT_TIMEOUT_MS), { force: true });
       }
       return probe;
@@ -186,7 +240,13 @@ export function registerFiscalRoutes(fastify: FastifyInstance): void {
     if (!auth) return;
     // Never throws — an unreachable provider is a state to display, not a
     // failed request. The offline/holder blocks are DB-only and cheap.
+    const registerNo = readRegister(request, reply);
+    if (registerNo === null) return;
     const deviceId = readDeviceId(request);
+    if (registerNo >= 2) {
+      // Offline mode and the holder exist on register 1 only.
+      return shifts.getStatus(auth.storeId, AbortSignal.timeout(SHIFT_TIMEOUT_MS), registerNo);
+    }
     const [status, offline] = await Promise.all([
       shifts.getStatus(auth.storeId, AbortSignal.timeout(SHIFT_TIMEOUT_MS)),
       getOfflineStatus(auth.storeId, deviceId),
@@ -386,8 +446,10 @@ export function registerFiscalRoutes(fastify: FastifyInstance): void {
   fastify.post('/fiscal/shift/open', async (request, reply) => {
     const auth = await ensurePosAuth(request, reply);
     if (!auth) return;
+    const registerNo = readRegister(request, reply);
+    if (registerNo === null) return;
     try {
-      const ctx = await shifts.resolveContext(auth.storeId);
+      const ctx = await shifts.resolveContext(auth.storeId, registerNo);
       if (!ctx) return notConfigured(reply);
       const state = await shifts.openShift(
         ctx,
@@ -403,8 +465,10 @@ export function registerFiscalRoutes(fastify: FastifyInstance): void {
   fastify.post('/fiscal/shift/close', async (request, reply) => {
     const auth = await ensurePosAuth(request, reply);
     if (!auth) return;
+    const registerNo = readRegister(request, reply);
+    if (registerNo === null) return;
     try {
-      const ctx = await shifts.resolveContext(auth.storeId);
+      const ctx = await shifts.resolveContext(auth.storeId, registerNo);
       if (!ctx) return notConfigured(reply);
       // A Z-report sent before the session's receipts are replayed would turn
       // them into "receipts after Z" (POS_FISCAL_OFFLINE.md §6). The auto-close
@@ -431,6 +495,8 @@ export function registerFiscalRoutes(fastify: FastifyInstance): void {
     const auth = await ensurePosAuth(request, reply);
     if (!auth) return;
     const body = request.body as { amount_cents?: number };
+    const registerNo = readRegister(request, reply);
+    if (registerNo === null) return;
     const amount = Number(body?.amount_cents);
     if (!Number.isInteger(amount) || amount === 0) {
       return reply.code(400).send({ error: 'amount_cents must be a non-zero integer' });
@@ -442,7 +508,8 @@ export function registerFiscalRoutes(fastify: FastifyInstance): void {
         auth.storeId,
         auth.staffId,
         readDeviceId(request),
-        'service'
+        'service',
+        registerNo
       );
       if (!gate.on) return notConfigured(reply);
       return await fiscalService.fiscalizeService(gate, {
@@ -470,8 +537,10 @@ export function registerFiscalRoutes(fastify: FastifyInstance): void {
   fastify.post('/fiscal/x-report', async (request, reply) => {
     const auth = await ensurePosAuth(request, reply);
     if (!auth) return;
+    const registerNo = readRegister(request, reply);
+    if (registerNo === null) return;
     try {
-      const ctx = await shifts.resolveContext(auth.storeId);
+      const ctx = await shifts.resolveContext(auth.storeId, registerNo);
       if (!ctx) return notConfigured(reply);
       return await shifts.xReport(ctx, AbortSignal.timeout(SHIFT_TIMEOUT_MS));
     } catch (error) {

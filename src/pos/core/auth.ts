@@ -6,7 +6,12 @@
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { pool } from '../../db.js';
-import type { FiscalPublicConfig, PosAuthContext, PosRole } from '../types.js';
+import type {
+  FiscalPublicConfig,
+  FiscalPublicRegister,
+  PosAuthContext,
+  PosRole,
+} from '../types.js';
 import { isFiscalProviderId } from '../fiscal/types.js';
 import { isModuleEnabled } from './modules.js';
 import { verticalOrDefault } from '../verticals/index.js';
@@ -69,7 +74,16 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
        fs.offline_mode AS fiscal_offline_mode,
        fs.register_fiscal_number AS fiscal_register_number,
        fs.default_tax_code AS fiscal_default_tax_code,
-       fs.requisites AS fiscal_requisites
+       fs.requisites AS fiscal_requisites,
+       (SELECT json_agg(json_build_object(
+                  'register_no', r.register_no,
+                  'label', r.label,
+                  'register_fiscal_number', r.register_fiscal_number,
+                  'default_tax_code', r.default_tax_code,
+                  'requisites', r.requisites
+                ) ORDER BY r.register_no)
+          FROM pos_fiscal_registers r
+          WHERE r.store_id = store.id AND r.enabled) AS fiscal_registers
      FROM pos_sessions s
      JOIN pos_staff st ON st.id = s.staff_id
      JOIN pos_stores store ON store.id = s.store_id
@@ -105,6 +119,11 @@ export async function getAuthByToken(token: string): Promise<PosAuthContext | nu
       register_fiscal_number: (row.fiscal_register_number as string | null) ?? null,
       default_tax_code: (row.fiscal_default_tax_code as string | null) ?? null,
       requisites: (row.fiscal_requisites as FiscalPublicConfig['requisites']) ?? null,
+      // Only when there is one: every store with a single register keeps the
+      // exact shape it had before ДК1.
+      ...(Array.isArray(row.fiscal_registers) && row.fiscal_registers.length > 0
+        ? { registers: row.fiscal_registers as FiscalPublicRegister[] }
+        : {}),
     },
     autoPrintReceipt: row.auto_print_receipt ?? false,
     // Rides with the login so the offline till prices a bouquet by the same

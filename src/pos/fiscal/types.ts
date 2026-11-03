@@ -86,9 +86,17 @@ export interface FiscalRequisites {
   taxes: FiscalTaxRate[];
 }
 
-/** A `pos_fiscal_settings` row, secrets still encrypted. */
+/**
+ * A `pos_fiscal_settings` row, secrets still encrypted — or, for register 2..
+ * (`register_no`), a `pos_fiscal_registers` row read into the same shape, with
+ * offline mode off and no holder (POS_DUAL_REGISTER.md §4.1).
+ */
 export interface PosFiscalSettings {
   store_id: number;
+  /** 1 = `pos_fiscal_settings`; N ≥ 2 = `pos_fiscal_registers`. */
+  register_no: number;
+  /** The owner's name for a register 2.. («Бар · ФОП Петренко»); null for register 1. */
+  label: string | null;
   enabled: boolean;
   provider: FiscalProviderId | null;
   config: Record<string, unknown>;
@@ -170,6 +178,25 @@ export interface FiscalSettingsView {
   requisites: FiscalRequisites | null;
   requisites_fetched_at: string | null;
   updated_at: string | null;
+  /** Which register this view is (1 unless a register 2.. was asked for). */
+  register_no?: number;
+  /** The owner's name for a register 2... */
+  label?: string | null;
+  /**
+   * On register 1's view only: the store's further registers (ДК1), so one
+   * read tells the owner's screen whether there is a «Каса 2» tab to draw.
+   */
+  extra_registers?: FiscalRegisterSummary[];
+}
+
+/** One further register of a store, as register 1's settings view lists it. */
+export interface FiscalRegisterSummary {
+  register_no: number;
+  label: string | null;
+  enabled: boolean;
+  provider: FiscalProviderId;
+  /** Credentials stored (some key set). */
+  configured: boolean;
 }
 
 /**
@@ -191,6 +218,8 @@ export interface FiscalSettingsPatch {
   receipt_width?: FiscalReceiptWidth;
   offline_mode?: boolean;
   offline_codes_target?: number;
+  /** Register 2.. only: the owner's name for it. */
+  label?: string | null;
 }
 
 /** Everything an adapter needs to talk to a provider on a store's behalf. */

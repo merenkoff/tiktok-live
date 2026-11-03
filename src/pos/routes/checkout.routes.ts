@@ -347,7 +347,14 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
 
     let gate: fiscalService.FiscalGate;
     try {
-      gate = await fiscalService.preflight(auth.storeId, auth.staffId, readDeviceId(request), 'refund');
+      // Through the register that sold it (ДК1) — 1 in a store with one.
+      gate = await fiscalService.preflight(
+        auth.storeId,
+        auth.staffId,
+        readDeviceId(request),
+        'refund',
+        await fiscalService.registerOfSale(saleId)
+      );
     } catch (error) {
       return preflightRefusal(reply, error);
     }
@@ -503,7 +510,14 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
     // and stock have moved.
     let gate: fiscalService.FiscalGate;
     try {
-      gate = await fiscalService.preflight(auth.storeId, auth.staffId, readDeviceId(request), 'refund');
+      // Through the register that sold it (ДК1) — 1 in a store with one.
+      gate = await fiscalService.preflight(
+        auth.storeId,
+        auth.staffId,
+        readDeviceId(request),
+        'refund',
+        await fiscalService.registerOfSale(saleId)
+      );
     } catch (error) {
       return preflightRefusal(reply, error);
     }

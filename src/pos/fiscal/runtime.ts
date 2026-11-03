@@ -4,7 +4,9 @@
 
 // src/pos/fiscal/runtime.ts
 //
-// Per-store in-memory cache of the provider session and the shift state.
+// Per-register in-memory cache of the provider session and the shift state —
+// per store, and since ДК1 per register of the store (POS_DUAL_REGISTER.md): two
+// Cashalot registers of one store have two shifts and two licences.
 //
 // Why this exists: the checkout pre-flight runs on every sale. Asking the
 // provider "is a shift open?" each time would add a network round trip to the
@@ -38,7 +40,17 @@ interface RuntimeEntry {
   lastOkAtMs: number | null;
 }
 
-const runtimes = new Map<number, RuntimeEntry>();
+const runtimes = new Map<string, RuntimeEntry>();
+
+/**
+ * Which register's entry: a bare store id is its register 1 (every caller
+ * from before ДК1), a `FiscalContext` names its own.
+ */
+export type RuntimeRef = number | { storeId: number; registerNo?: number };
+
+function keyOf(ref: RuntimeRef): string {
+  return typeof ref === 'number' ? `${ref}:1` : `${ref.storeId}:${ref.registerNo ?? 1}`;
+}
 
 /** Last time the register holder's `last_seen_at` was written, per store. */
 const holderTouchedAt = new Map<number, number>();
@@ -58,25 +70,26 @@ export function shouldTouchHolder(storeId: number, now = Date.now()): boolean {
   return true;
 }
 
-function entryFor(storeId: number): RuntimeEntry {
-  let entry = runtimes.get(storeId);
+function entryFor(ref: RuntimeRef): RuntimeEntry {
+  const key = keyOf(ref);
+  let entry = runtimes.get(key);
   if (!entry) {
     entry = { session: null, shift: null, shiftCheckedAtMs: 0, lastOkAtMs: null };
-    runtimes.set(storeId, entry);
+    runtimes.set(key, entry);
   }
   return entry;
 }
 
 /** The cached session, or null when absent or too close to expiry. */
-export function getCachedSession(storeId: number, now = Date.now()): FiscalSession | null {
-  const { session } = entryFor(storeId);
+export function getCachedSession(ref: RuntimeRef, now = Date.now()): FiscalSession | null {
+  const { session } = entryFor(ref);
   if (!session) return null;
   if (session.expiresAt && session.expiresAt.getTime() - SESSION_SKEW_MS <= now) return null;
   return session;
 }
 
-export function setCachedSession(storeId: number, session: FiscalSession | null): void {
-  entryFor(storeId).session = session;
+export function setCachedSession(ref: RuntimeRef, session: FiscalSession | null): void {
+  entryFor(ref).session = session;
 }
 
 /**
@@ -88,42 +101,42 @@ export function setCachedSession(storeId: number, session: FiscalSession | null)
  * branch nobody uses.
  */
 export function getCachedShift(
-  storeId: number,
+  ref: RuntimeRef,
   maxAgeMs = SHIFT_TTL_MS,
   now = Date.now()
 ): FiscalShiftState | null {
-  const entry = entryFor(storeId);
+  const entry = entryFor(ref);
   if (!entry.shift) return null;
   if (now - entry.shiftCheckedAtMs > maxAgeMs) return null;
   return entry.shift;
 }
 
 export function setCachedShift(
-  storeId: number,
+  ref: RuntimeRef,
   shift: FiscalShiftState | null,
   now = Date.now()
 ): void {
-  const entry = entryFor(storeId);
+  const entry = entryFor(ref);
   entry.shift = shift;
   entry.shiftCheckedAtMs = now;
 }
 
-export function markProviderOk(storeId: number, now = Date.now()): void {
-  entryFor(storeId).lastOkAtMs = now;
+export function markProviderOk(ref: RuntimeRef, now = Date.now()): void {
+  entryFor(ref).lastOkAtMs = now;
 }
 
-export function lastProviderOkAt(storeId: number): number | null {
-  return entryFor(storeId).lastOkAtMs;
+export function lastProviderOkAt(ref: RuntimeRef): number | null {
+  return entryFor(ref).lastOkAtMs;
 }
 
 /** Drop the session — after `auth_expired`, or when credentials change. */
-export function invalidateSession(storeId: number): void {
-  entryFor(storeId).session = null;
+export function invalidateSession(ref: RuntimeRef): void {
+  entryFor(ref).session = null;
 }
 
 /** Drop the shift reading — after any `shift_*` error, or on close. */
-export function invalidateShift(storeId: number): void {
-  const entry = entryFor(storeId);
+export function invalidateShift(ref: RuntimeRef): void {
+  const entry = entryFor(ref);
   entry.shift = null;
   entry.shiftCheckedAtMs = 0;
 }
@@ -136,7 +149,10 @@ export function invalidateShift(storeId: number): void {
  * owner switched providers would send a Checkbox token to Вчасно.
  */
 export function invalidateStore(storeId: number): void {
-  runtimes.delete(storeId);
+  const prefix = `${storeId}:`;
+  for (const key of [...runtimes.keys()]) {
+    if (key.startsWith(prefix)) runtimes.delete(key);
+  }
   holderTouchedAt.delete(storeId);
 }
 

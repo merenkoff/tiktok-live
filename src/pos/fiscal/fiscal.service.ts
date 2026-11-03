@@ -217,9 +217,10 @@ export async function preflight(
   storeId: number,
   staffId: number,
   deviceId: string | null = null,
-  op: FiscalOp = 'sale'
+  op: FiscalOp = 'sale',
+  registerNo = 1
 ): Promise<FiscalGate> {
-  const ctx = await resolveContext(storeId);
+  const ctx = await resolveContext(storeId, registerNo);
   if (!ctx) return OFF;
 
   // Before the shift: a till that does not own the register must not open
@@ -447,13 +448,13 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-function invalidateRuntimeFor(storeId: number, kind: FiscalErrorKind): void {
-  if (kind === 'auth_expired') runtime.invalidateSession(storeId);
-  if (kind === 'shift_closed' || kind === 'shift_expired') runtime.invalidateShift(storeId);
+function invalidateRuntimeFor(ref: runtime.RuntimeRef, kind: FiscalErrorKind): void {
+  if (kind === 'auth_expired') runtime.invalidateSession(ref);
+  if (kind === 'shift_closed' || kind === 'shift_expired') runtime.invalidateShift(ref);
   // The cached shift is what lets pre-flight skip the provider; after an
   // outage answered a live call, the next pre-flight must probe again —
   // that probe is how an offline-mode store notices it has to open a session.
-  if (kind === 'unavailable') runtime.invalidateShift(storeId);
+  if (kind === 'unavailable') runtime.invalidateShift(ref);
 }
 
 function toView(row: ledger.FiscalReceiptRow, result: FiscalResult | null): FiscalView {
@@ -585,12 +586,12 @@ async function runDocument(
         throw err;
       }
     }
-    runtime.markProviderOk(ctx.storeId);
+    runtime.markProviderOk(ctx);
     const final = await attachProviderReceiptText(ctx, gate, row, result as FiscalResult, opts.providerText === true);
     return { row: await ledger.markDone(row, final), result: final };
   } catch (raw) {
     const err = asFiscalError(raw, 'Помилка ПРРО');
-    invalidateRuntimeFor(ctx.storeId, err.kind);
+    invalidateRuntimeFor(ctx, err.kind);
     const failed = await ledger.markFailed(row, err, {
       providerDocId: err.existingProviderDocId ?? null,
       park: isTerminal(err.kind),
@@ -689,11 +690,11 @@ async function recover(
   err: FiscalError
 ): Promise<void> {
   if (err.kind === 'auth_expired') {
-    runtime.invalidateSession(ctx.storeId); // the next buildCallCtx signs in
+    runtime.invalidateSession(ctx); // the next buildCallCtx signs in
     return;
   }
 
-  runtime.invalidateShift(ctx.storeId);
+  runtime.invalidateShift(ctx);
   if (err.kind === 'shift_expired') {
     await closeShift(ctx, gate.signal);
   }
@@ -844,6 +845,7 @@ export async function fiscalizeSale(
     saleId: sale.id,
     shiftId: gate.shiftRowId,
     provider: ctx.provider.id,
+    registerNo: ctx.registerNo,
     requestId,
     totalCents: settledCents(sale),
     requestPayload: doc,
@@ -952,6 +954,7 @@ async function fiscalizeChainDocument(
     saleId,
     shiftId: gate.shiftRowId,
     provider: ctx.provider.id,
+    registerNo: ctx.registerNo,
     requestId: doc.requestId,
     totalCents,
     requestPayload: doc,
@@ -991,6 +994,7 @@ async function fiscalizeSaleOffline(
     saleId: sale.id,
     shiftId: gate.shiftRowId,
     provider: ctx.provider.id,
+    registerNo: ctx.registerNo,
     requestId,
     totalCents: settledCents(sale),
     requestPayload: doc,
@@ -1062,6 +1066,7 @@ export async function fiscalizeSaleDeviceStamp(
     saleId: sale.id,
     shiftId: gate.shiftRowId,
     provider: ctx.provider.id,
+    registerNo: ctx.registerNo,
     requestId,
     totalCents: settledCents(sale),
     requestPayload: doc,
@@ -1125,6 +1130,10 @@ export async function fiscalizeRefund(
       'not_configured'
     );
   }
+  // The return goes through the register that sold, and the route opened the
+  // gate on it (`registerOfSale`). A gate on another register would file one
+  // ФОП's return against the other's receipt — refuse rather than send.
+  assertSameRegister(ctx, saleDoc);
 
   const requestId = refund.client_uuid ?? randomRequestId();
   const { tax, codes } = await loadLineCodes(
@@ -1147,6 +1156,7 @@ export async function fiscalizeRefund(
     refundId: refund.id,
     shiftId: gate.shiftRowId,
     provider: ctx.provider.id,
+    registerNo: ctx.registerNo,
     requestId,
     totalCents: settledCents(refund),
     requestPayload: doc,
@@ -1228,6 +1238,7 @@ export async function fiscalizeChainReturn(
         refundId: doc.refundId,
         shiftId: gate.shiftRowId,
         provider: ctx.provider.id,
+        registerNo: ctx.registerNo,
         requestId: doc.requestId,
         totalCents: doc.totalCents,
         requestPayload: payload,
@@ -1290,6 +1301,7 @@ export async function fiscalizeService(
     docType: doc.kind,
     shiftId: gate.shiftRowId,
     provider: ctx.provider.id,
+    registerNo: ctx.registerNo,
     requestId,
     totalCents: doc.amountCents,
     requestPayload: doc,
@@ -1556,7 +1568,7 @@ async function replayOneSession(initial: OfflineSessionRow): Promise<SessionOutc
 
   // The probe is the cheapest place to learn the register's own number: we
   // need it offline (for the tax-office link) and can only ask online.
-  void rememberRegisterFiscalNumber(ctx.storeId, state.fiscalNumber).catch((error) =>
+  void rememberRegisterFiscalNumber(ctx.storeId, state.fiscalNumber, ctx.registerNo).catch((error) =>
     logger.warn('Could not cache ФН ПРРО', { ...log, error: String(error) })
   );
 
@@ -1710,7 +1722,7 @@ async function replayOneSession(initial: OfflineSessionRow): Promise<SessionOutc
   }
 
   await markClosed(session.id);
-  runtime.invalidateShift(ctx.storeId);
+  runtime.invalidateShift(ctx);
   logger.info('Offline session closed — register online again', { ...log, replayed, abandoned });
   try {
     await refillOfflineCodes(ctx, signal);
@@ -1728,7 +1740,11 @@ async function replayOneSession(initial: OfflineSessionRow): Promise<SessionOutc
  * receipt in the wrong Z-report.
  */
 async function backgroundGate(row: ledger.FiscalReceiptRow): Promise<FiscalGate | null> {
-  const ctx = await resolveContext(Number(row.store_id)).catch(() => null);
+  // The register the document went through, never "the store's" — a retry
+  // through the other ФОП's register would be that ФОП's receipt (ДК1).
+  const ctx = await resolveContext(Number(row.store_id), Number(row.register_no ?? 1)).catch(
+    () => null
+  );
   if (!ctx) return null;
 
   const live = await getLiveShiftRow(Number(row.store_id), ctx.registerKey);
@@ -1811,6 +1827,26 @@ async function retryOne(gate: FiscalGate, row: ledger.FiscalReceiptRow): Promise
  * when the caller named a store. The cron names none and still sweeps
  * everything, exactly as before.
  */
+/**
+ * The register a sale's fiscal document went through — what a refund or an
+ * exchange of it must open its gate on (ДК1). 1 for a sale with no document,
+ * which is every sale of a store with one register.
+ */
+export async function registerOfSale(saleId: number): Promise<number> {
+  const doc = await ledger.getSaleDocument(saleId);
+  return doc ? Number(doc.register_no ?? 1) : 1;
+}
+
+function assertSameRegister(ctx: FiscalContext, saleDoc: ledger.FiscalReceiptRow): void {
+  const saleRegister = Number(saleDoc.register_no ?? 1);
+  if (ctx.registerNo !== saleRegister) {
+    throw new FiscalError(
+      `Чек продано через касу ${saleRegister} — повернення лише через неї`,
+      'not_configured'
+    );
+  }
+}
+
 async function adoptOrphanedSales(storeId?: number, limit = 20): Promise<number> {
   const orphans = await pool.query(
     `SELECT s.id, s.store_id, s.created_at
@@ -1852,6 +1888,7 @@ async function adoptOrphanedSales(storeId?: number, limit = 20): Promise<number>
       saleId: Number(orphan.id),
       shiftId: Number(live.id),
       provider: ctx.provider.id,
+      registerNo: ctx.registerNo,
       requestId: crypto.randomUUID(),
       totalCents: 0,
     });

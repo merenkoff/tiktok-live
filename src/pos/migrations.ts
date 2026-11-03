@@ -154,6 +154,8 @@ export const POS_MIGRATIONS = [
   '086_pos_product_menu_labels.sql',
   // Calories of the portion, a drink's strength and the preparation time on the guest menu (F14).
   '087_pos_product_dish_numbers.sql',
+  // A second ПРРО in one store — food and alcohol on two ФОП (ДК1, POS_DUAL_REGISTER.md).
+  '088_pos_fiscal_registers.sql',
 ] as const;
 
 export function readMigration(file: string): string {

@@ -106,6 +106,21 @@ export interface FiscalPublicConfig {
    * Travels with the login so the desktop till prints it without a connection.
    */
   requisites: FiscalRequisites | null;
+  /**
+   * The store's further ПРРО registers that are switched on (ДК1,
+   * POS_DUAL_REGISTER.md) — another ФОП's, so another receipt header. Absent
+   * for a store with one register, which is every store but a dual one.
+   */
+  registers?: FiscalPublicRegister[];
+}
+
+/** A register 2.. as the till needs it to print that register's receipt. */
+export interface FiscalPublicRegister {
+  register_no: number;
+  label: string | null;
+  register_fiscal_number: string | null;
+  default_tax_code: string | null;
+  requisites: FiscalRequisites | null;
 }
 
 export interface PosAuthContext {
