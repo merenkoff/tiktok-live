@@ -69,8 +69,9 @@ export function letterCode(letter: string): string | null {
  * Refuses rather than repairs: a Latin «A» that looks Cyrillic, a letter used
  * twice (Cashalot's developers warn against one letter for two taxes inside a
  * shift), a rate outside 0…100 or with more than two decimals, a nameless
- * row, any tax kind but ПДВ. Whether the table may change at all right now
- * (not inside an open shift) is the caller's business — it knows the shift.
+ * row, a kind other than ПДВ (0) or the excise (1), a second excise row.
+ * Whether the table may change at all right now (not inside an open shift) is
+ * the caller's business — it knows the shift.
  */
 export function normalizeTaxTable(raw: unknown): DpsTaxRate[] {
   if (raw === undefined || raw === null) return [];
@@ -79,6 +80,7 @@ export function normalizeTaxTable(raw: unknown): DpsTaxRate[] {
     throw new DpsTaxTableError(`Ставок податку може бути не більше ${MAX_RATES}`);
   }
   const seen = new Set<string>();
+  let excise = 0;
   return raw.map((row, index) => {
     const where = `Ставка ${index + 1}`;
     if (!row || typeof row !== 'object') throw new DpsTaxTableError(`${where}: порожній рядок`);
@@ -108,16 +110,31 @@ export function normalizeTaxTable(raw: unknown): DpsTaxRate[] {
     ) {
       throw new DpsTaxTableError(`${where}: відсоток від 0 до 100, не більше двох знаків після коми`);
     }
-    if (type !== undefined && type !== 0) {
-      throw new DpsTaxTableError(`${where}: підтримується лише ПДВ (вид 0)`);
+    if (type !== undefined && type !== 0 && type !== 1) {
+      throw new DpsTaxTableError(`${where}: вид податку — ПДВ (0) або акциз (1)`);
     }
-    return { letter: canonical, name: label, type: 0, rate };
+    if (type === 1 && ++excise > 1) {
+      throw new DpsTaxTableError(`${where}: рядок акцизу в таблиці може бути лише один`);
+    }
+    return { letter: canonical, name: label, type: type === 1 ? 1 : 0, rate };
   });
 }
 
+/** The table's VAT rows — what a line's own tax code may name. */
+export function vatRates(table: readonly DpsTaxRate[]): DpsTaxRate[] {
+  return table.filter((t) => t.type === 0);
+}
+
+/** The table's excise row, added to an excise line's letters; null where there is none. */
+export function exciseRate(table: readonly DpsTaxRate[]): DpsTaxRate | null {
+  return table.find((t) => t.type === 1) ?? null;
+}
+
 /**
- * The table row a line's tax code points at — by ASCII code (what
- * `default_tax_code` holds) or by the letter itself.
+ * The VAT row a line's tax code points at — by ASCII code (what
+ * `default_tax_code` holds) or by the letter itself. Never the excise row: a
+ * line's own code names its VAT, and the excise letter is added to an excise
+ * line on top of it.
  */
 export function resolveLetter(
   taxCode: string | null,
@@ -125,9 +142,10 @@ export function resolveLetter(
 ): DpsTaxRate | null {
   const code = taxCode?.trim();
   if (!code) return null;
+  const vat = vatRates(table);
   return (
-    table.find((t) => letterCode(t.letter) === code.toUpperCase()) ??
-    table.find((t) => t.letter === code.toUpperCase()) ??
+    vat.find((t) => letterCode(t.letter) === code.toUpperCase()) ??
+    vat.find((t) => t.letter === code.toUpperCase()) ??
     null
   );
 }
@@ -147,9 +165,14 @@ export function includedTaxCents(baseCents: number, rate: number): number {
   return baseCents - net;
 }
 
-/** One line as `CHECKTAX` sees it: its letter, its cost before discounts, its discount. */
+/**
+ * One line as `CHECKTAX` sees it: its VAT letter (null for a seller who is
+ * not a VAT payer), its excise letter on an excise line, its cost before
+ * discounts, its discount.
+ */
 export interface DpsTaxedLine {
-  letter: string;
+  letter: string | null;
+  exciseLetter?: string | null;
   costCents: number;
   discountCents: number;
 }
@@ -158,6 +181,15 @@ export interface DpsTaxedLine {
  * `CHECKTAX` of a check: one row per letter used, in the table's order —
  * `TURNOVER` the letter's cost before discounts, `SOURCESUM` the base after
  * them, `SUM` the tax inside the base. Integer kopecks until the very end.
+ *
+ * The price carries both taxes (ДПС example «Два податки», 259.90): the
+ * excise is inside the whole price (ПКУ 214.1.4 — its base is the value WITH
+ * VAT and WITHOUT the excise, i.e. price / 1.05), 12.38; the VAT is inside
+ * what is left, 247.52, so its `SOURCESUM` is the price less the excise —
+ * 41.25 — while its `TURNOVER` stays the price. The excise of the lines a VAT
+ * letter shares with the excise is taken off that letter's base; computed on
+ * that group's own sum, so it equals the excise row whenever the excise
+ * lines carry one VAT letter, which is every real store.
  */
 export function computeCheckTax(
   lines: readonly DpsTaxedLine[],
@@ -165,12 +197,17 @@ export function computeCheckTax(
 ): { rows: DpsTaxRow[]; vatCents: number } {
   const rows: DpsTaxRow[] = [];
   let vatCents = 0;
+  const source = (own: readonly DpsTaxedLine[]) => own.reduce((sum, l) => sum + l.costCents - l.discountCents, 0);
+  const excise = exciseRate(table);
   for (const rate of table) {
-    const own = lines.filter((l) => l.letter === rate.letter);
+    const own = lines.filter((l) => (rate.type === 1 ? l.exciseLetter === rate.letter : l.letter === rate.letter));
     if (own.length === 0) continue;
     const turnover = own.reduce((sum, l) => sum + l.costCents, 0);
-    const source = own.reduce((sum, l) => sum + l.costCents - l.discountCents, 0);
-    const tax = includedTaxCents(source, rate.rate);
+    let base = source(own);
+    if (rate.type === 0 && excise) {
+      base -= includedTaxCents(source(own.filter((l) => l.exciseLetter === excise.letter)), excise.rate);
+    }
+    const tax = includedTaxCents(base, rate.rate);
     if (rate.type === 0) vatCents += tax;
     rows.push({
       TYPE: rate.type,
@@ -179,7 +216,7 @@ export function computeCheckTax(
       PRC: rate.rate,
       SIGN: false,
       TURNOVER: toUah(turnover),
-      SOURCESUM: toUah(source),
+      SOURCESUM: toUah(base),
       SUM: toUah(tax),
     });
   }

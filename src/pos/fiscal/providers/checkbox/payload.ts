@@ -83,6 +83,10 @@ function mapLine(line: FiscalDocLine, isReturn: boolean): CheckboxGoodItemPayloa
       // for a good that is not a taxable object, rather than sending a
       // fabricated code.
       ...(line.taxCode ? { tax: [Number(line.taxCode)] } : {}),
+      // The stamps of the goods (track ДК, ДК4). Checkbox's excise TAX is a
+      // code configured in its cabinet, which we have no column for — and the
+      // dual register is Cashalot only (Д5) — so only the stamps go.
+      ...(line.exciseLabels?.length ? { excise_barcodes: line.exciseLabels } : {}),
     },
     quantity: line.quantityMilli,
     ...(discount > 0 ? { discounts: [{ type: 'DISCOUNT', mode: 'VALUE', value: discount }] } : {}),

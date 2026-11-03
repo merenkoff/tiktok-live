@@ -19,6 +19,8 @@ export {
   letterCode,
   normalizeTaxTable,
   resolveLetter,
+  exciseRate,
+  vatRates,
   type DpsTaxedLine,
 } from './taxes.js';
 export { buildRefundCheck, buildSaleCheck, buildServiceCheck, type DpsBuiltCheck } from './check.js';

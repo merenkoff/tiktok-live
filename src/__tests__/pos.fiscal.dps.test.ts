@@ -33,6 +33,7 @@ import type {
 
 const VAT20: DpsTaxRate = { letter: 'А', name: 'ПДВ', type: 0, rate: 20 };
 const VAT7: DpsTaxRate = { letter: 'Б', name: 'ПДВ', type: 0, rate: 7 };
+const EXCISE5: DpsTaxRate = { letter: 'Г', name: 'Акциз', type: 1, rate: 5 };
 
 function line(overrides: Partial<FiscalDocLine> = {}): FiscalDocLine {
   return {
@@ -317,7 +318,16 @@ describe('ДПС check — the tax table', () => {
     refuse([{ letter: 'А', name: 'ПДВ', rate: 120 }], /від 0 до 100/);
     refuse([{ letter: 'А', name: 'ПДВ', rate: 7.155 }], /двох знаків/);
     refuse([{ letter: 'А', name: '  ', rate: 20 }], /назва/);
-    refuse([{ letter: 'Г', name: 'Акциз', rate: 5, type: 1 }], /лише ПДВ/);
+    refuse([{ letter: 'Г', name: 'Податок', rate: 5, type: 2 }], /ПДВ \(0\) або акциз \(1\)/);
+    refuse(
+      [
+        { letter: 'Г', name: 'Акциз', rate: 5, type: 1 },
+        { letter: 'Д', name: 'Акциз', rate: 5, type: 1 },
+      ],
+      /лише один/
+    );
+    // One excise row is a table (track ДК, ДК4).
+    expect(normalizeTaxTable([{ letter: 'г', name: 'Акциз', rate: 5, type: 1 }])).toEqual([EXCISE5]);
     refuse({ letter: 'А' }, /списком/);
     refuse(Array.from({ length: 11 }, (_, i) => ({ letter: 'А', name: `n${i}`, rate: 0 })), /не більше 10/);
     expect(() => normalizeTaxTable([{ letter: 'A', name: 'x', rate: 1 }])).toThrow(DpsTaxTableError);
@@ -336,5 +346,97 @@ describe('ДПС error names', () => {
     expect(dpsErrorKind('13')).toBe('unknown');
     expect(dpsErrorKind('SomethingNew')).toBe('unknown');
     expect(dpsErrorKind(null)).toBe('unknown');
+  });
+});
+
+describe('ДПС check — the retail excise and the stamps (track ДК, ДК4)', () => {
+  // Example «Два податки» (check01-two-taxes.xml): 10 l of draught wine at
+  // 25.99, «АГ», one stamp, paid by card 259.90.
+  const wine = line({
+    name: 'Вино розливне',
+    quantityMilli: 10_000,
+    unitPriceCents: 2599,
+    lineTotalCents: 25_990,
+    excise: true,
+    exciseLabels: [' AATE508932 0000412168 '],
+    uktzed: '2710124512',
+  });
+
+  it('reproduces «Два податки» to the kopeck: the excise inside the price, the VAT inside what is left', () => {
+    const { check, vatCents } = buildSaleCheck(
+      sale({ lines: [wine], payments: [{ method: 'card', amountCents: 25_990 }], totalCents: 25_990 }),
+      { taxes: [VAT20, EXCISE5] }
+    );
+    expect(check.CHECKBODY).toEqual([
+      expect.objectContaining({
+        UKTZED: '2710124512',
+        AMOUNT: 10,
+        PRICE: 25.99,
+        LETTERS: 'АГ',
+        COST: 259.9,
+        EXCISELABELS: [{ EXCISELABEL: 'AATE508932 0000412168' }],
+      }),
+    ]);
+    expect(check.CHECKTAX).toEqual([
+      { TYPE: 0, NAME: 'ПДВ', LETTER: 'А', PRC: 20, SIGN: false, TURNOVER: 259.9, SOURCESUM: 247.52, SUM: 41.25 },
+      { TYPE: 1, NAME: 'Акциз', LETTER: 'Г', PRC: 5, SIGN: false, TURNOVER: 259.9, SOURCESUM: 259.9, SUM: 12.38 },
+    ]);
+    // Only the VAT is `vatCents`: the receipt's «ПДВ» line, never the excise.
+    expect(vatCents).toBe(4125);
+  });
+
+  it('gives a seller who is not a VAT payer the excise row alone, and letters only to the excise line', () => {
+    const { check, vatCents } = buildSaleCheck(
+      sale({
+        lines: [wine, line({ name: 'Хліб', taxCode: null, sourceLineRef: '2' })],
+        payments: [{ method: 'card', amountCents: 35_990 }],
+        totalCents: 35_990,
+      }),
+      { taxes: [EXCISE5] }
+    );
+    expect(check.CHECKBODY?.[0].LETTERS).toBe('Г');
+    expect(check.CHECKBODY?.[1].LETTERS).toBeUndefined();
+    expect(check.CHECKTAX).toEqual([
+      { TYPE: 1, NAME: 'Акциз', LETTER: 'Г', PRC: 5, SIGN: false, TURNOVER: 259.9, SOURCESUM: 259.9, SUM: 12.38 },
+    ]);
+    expect(vatCents).toBe(0);
+  });
+
+  it('takes the excise off the VAT base only for the lines that carry it', () => {
+    const { check } = buildSaleCheck(
+      sale({
+        lines: [wine, line({ name: 'Сік', unitPriceCents: 10_000, lineTotalCents: 10_000, sourceLineRef: '2' })],
+        payments: [{ method: 'card', amountCents: 35_990 }],
+        totalCents: 35_990,
+      }),
+      { taxes: [VAT20, EXCISE5] }
+    );
+    expect(check.CHECKBODY?.map((row) => row.LETTERS)).toEqual(['АГ', 'А']);
+    // 359.90 under «А», less the wine's 12.38 of excise = 347.52; VAT 57.92.
+    expect(check.CHECKTAX?.[0]).toMatchObject({ LETTER: 'А', TURNOVER: 359.9, SOURCESUM: 347.52, SUM: 57.92 });
+    expect(check.CHECKTAX?.[1]).toMatchObject({ LETTER: 'Г', TURNOVER: 259.9, SUM: 12.38 });
+  });
+
+  it('refuses an excise line where the register has no excise rate, before anything is sent', () => {
+    expect(() =>
+      buildSaleCheck(
+        sale({ lines: [wine], payments: [{ method: 'card', amountCents: 25_990 }], totalCents: 25_990 }),
+        { taxes: [VAT20] }
+      )
+    ).toThrow(/немає акцизу/);
+  });
+
+  it('never takes the excise row for a line’s own rate', () => {
+    expect(resolveLetter('G', [VAT20, EXCISE5])).toBeNull();
+    expect(resolveLetter('A', [VAT20, EXCISE5])).toBe(VAT20);
+  });
+
+  it('carries the stamps on a return as on the sale', () => {
+    const { check } = buildRefundCheck(
+      refund({ lines: [wine], payments: [{ method: 'card', amountCents: 25_990 }], totalCents: 25_990 }),
+      { taxes: [VAT20, EXCISE5] }
+    );
+    expect(check.CHECKBODY?.[0].EXCISELABELS).toEqual([{ EXCISELABEL: 'AATE508932 0000412168' }]);
+    expect(check.CHECKTAX?.map((row) => row.TYPE)).toEqual([0, 1]);
   });
 });

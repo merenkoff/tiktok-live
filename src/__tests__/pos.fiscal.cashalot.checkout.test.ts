@@ -117,6 +117,9 @@ describe.skipIf(!hasDb)('POS fiscal — Cashalot through the orchestration', () 
       headers: auth(store.ownerToken),
     });
     expect(sale.json().fiscal.vat_cents).toBe(1000);
+    // Every tax row as registered (ДК4, migration 091) — the paper prints these.
+    expect(res.json().fiscal.tax_rows).toEqual([{ kind: 'vat', name: 'ПДВ', letter: 'А', rate: 20, amount_cents: 1000 }]);
+    expect(sale.json().fiscal.tax_rows).toEqual([{ kind: 'vat', name: 'ПДВ', letter: 'А', rate: 20, amount_cents: 1000 }]);
   });
 
   it('tells the till whether the register runs in test mode', async () => {
