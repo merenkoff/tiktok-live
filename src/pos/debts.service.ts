@@ -809,7 +809,7 @@ export async function issueOnCredit(input: {
       const variants = await client.query(
         `SELECT v.id, v.price_cents, v.compare_at_cents, v.label, v.unit, v.price_per,
                 p.id AS product_id, p.name AS product_name,
-                p.stop_listed_on::text AS stop_listed_on, p.fiscal_register
+                p.stop_listed_on::text AS stop_listed_on, p.fiscal_register, p.fiscal_excise
            FROM pos_variants v
            JOIN pos_products p ON p.id = v.product_id
           WHERE v.store_id = $1 AND v.id = ANY($2::bigint[]) AND ($3::boolean OR v.is_active = TRUE)`,
@@ -824,6 +824,13 @@ export async function issueOnCredit(input: {
       // alcohol — and excise goods are never sold on credit (G3_DEBTS.md,
       // POS_DUAL_REGISTER.md §4.2). A repayment is a register-1 receipt, so
       // nothing of register 2 may become a debt line, online or not.
+      // Excise goods (ДК4-Б) on either register: a stamp sold on credit
+      // would leave on a debt line no receipt carries.
+      for (const row of variants.rows) {
+        if (row.fiscal_excise) {
+          throw new DebtConflict(`«${row.product_name}» підакцизний — під запис його не продають`, 'excise_goods');
+        }
+      }
       const extra = await activeRegisters(client, input.storeId);
       if (extra.size > 0) {
         for (const row of variants.rows) {

@@ -32,6 +32,7 @@
 //    bill disagree. It is refused in words, and К4c's «скасувати раунд» is
 //    the way back.
 
+import { claimExciseLabels, ExciseError, readExciseLabels } from './excise.js';
 import { pool } from '../db.js';
 import { validateComponents } from './composites.service.js';
 import type { ComponentInput } from './composites.service.js';
@@ -75,6 +76,14 @@ const MAX_LINES = 300;
 type DbClient = { query: typeof pool.query };
 
 export interface BillLine {
+  /**
+   * The stamps scanned for this line's bottles (ДК4-Б): on a draft line of
+   * goods sold with a stamp per unit, before its round may fire. Absent where
+   * there are none.
+   */
+  excise_labels?: string[];
+  /** Goods sold with a stamp per unit (ДК4-Б) — the bill screen asks for them before firing. */
+  excise_per_unit?: boolean;
   id: number;
   variant_id: number;
   quantity: number;
@@ -267,6 +276,10 @@ function mapLine(row: Record<string, unknown>, preview: number | null): BillLine
     added_by: row.added_by == null ? null : Number(row.added_by),
     added_by_name: authorName(row.added_by_name, row.added_by_guest),
     sort_order: Number(row.sort_order),
+    ...(Array.isArray(row.excise_labels) && row.excise_labels.length > 0
+      ? { excise_labels: (row.excise_labels as unknown[]).map(String) }
+      : {}),
+    ...(row.excise_per_unit ? { excise_per_unit: true } : {}),
   };
 }
 
@@ -411,7 +424,10 @@ export async function getBill(storeId: number, billId: number): Promise<Bill> {
   );
   const itemRows = await pool.query(
     `SELECT i.*, s.display_name AS added_by_name,
-            p.name AS live_product_name, v.label AS live_label, v.unit AS live_unit
+            p.name AS live_product_name, v.label AS live_label, v.unit AS live_unit,
+            p.excise_per_unit,
+            (SELECT array_agg(l.label ORDER BY l.id) FROM pos_excise_labels l
+              WHERE l.bill_item_id = i.id AND l.released_at IS NULL) AS excise_labels
        FROM pos_bill_items i
        LEFT JOIN pos_staff s ON s.id = i.added_by
        JOIN pos_variants v ON v.id = i.variant_id
@@ -868,6 +884,12 @@ export async function updateDraftItem(
             row.id,
             count,
           ]);
+          // The stamps scanned for these bottles go with them (ДК4-Б).
+          await client.query(
+            `UPDATE pos_excise_labels SET bill_item_id = $1
+             WHERE bill_item_id = $2 AND sale_item_id IS NULL AND released_at IS NULL`,
+            [row.id, itemId]
+          );
           await client.query(`DELETE FROM pos_bill_items WHERE id = $1`, [itemId]);
           await client.query('COMMIT');
           return await getBill(storeId, billId);
@@ -875,6 +897,9 @@ export async function updateDraftItem(
       }
     }
 
+    // Another variant is another bottle: the stamps scanned for this one
+    // are not its (ДК4-Б), and are free again.
+    if (variantId !== Number(line.variant_id)) await dropDraftLabels(client, itemId);
     await client.query(
       `UPDATE pos_bill_items
           SET variant_id = $2, quantity = $3, modifiers = $4::jsonb, note = $5
@@ -900,6 +925,12 @@ export async function removeDraftItem(
   try {
     await client.query('BEGIN');
     await loadOpenBill(client, storeId, billId);
+    await client.query(
+      `DELETE FROM pos_excise_labels l USING pos_bill_items i
+        WHERE l.bill_item_id = i.id AND i.store_id = $1 AND i.bill_id = $2 AND i.id = $3
+          AND i.round_id IS NULL AND l.sale_item_id IS NULL`,
+      [storeId, billId, itemId]
+    );
     const result = await client.query(
       `DELETE FROM pos_bill_items
         WHERE store_id = $1 AND bill_id = $2 AND id = $3 AND round_id IS NULL
@@ -907,6 +938,66 @@ export async function removeDraftItem(
       [storeId, billId, itemId]
     );
     if (result.rowCount === 0) await refuseFiredLine(client, storeId, billId, itemId);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+  return getBill(storeId, billId);
+}
+
+/** Forget the stamps scanned for a draft line that will not sell as it was (never sold, so simply gone). */
+async function dropDraftLabels(client: DbClient, itemId: number): Promise<void> {
+  await client.query(
+    `DELETE FROM pos_excise_labels WHERE bill_item_id = $1 AND sale_item_id IS NULL`,
+    [itemId]
+  );
+}
+
+/**
+ * The stamps of a draft line's bottles (ДК4-Б, Д4): scanned on the waiter's
+ * tablet or the till before the round fires, replacing whatever the line
+ * had. Only goods sold with a stamp per unit take them, never more than the
+ * line's count, and a stamp already sold in this store is refused by name.
+ */
+export async function setDraftExciseLabels(
+  storeId: number,
+  staffId: number,
+  billId: number,
+  itemId: number,
+  raw: unknown
+): Promise<Bill> {
+  const labels = readExciseLabels(raw, 'Позиція');
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await loadOpenBill(client, storeId, billId);
+    const current = await client.query(
+      `SELECT i.id, i.quantity, p.name, p.excise_per_unit
+         FROM pos_bill_items i
+         JOIN pos_variants v ON v.id = i.variant_id
+         JOIN pos_products p ON p.id = v.product_id
+        WHERE i.store_id = $1 AND i.bill_id = $2 AND i.id = $3 AND i.round_id IS NULL
+        FOR UPDATE OF i`,
+      [storeId, billId, itemId]
+    );
+    if (current.rows.length === 0) await refuseFiredLine(client, storeId, billId, itemId);
+    const line = current.rows[0];
+    if (!line.excise_per_unit) {
+      throw new ExciseError(`«${line.name}» продається без акцизної марки на кожну одиницю`, 'excise_label_not_needed', 400);
+    }
+    if (labels.length > Number(line.quantity)) {
+      throw new ExciseError(
+        `«${line.name}»: марок ${labels.length}, а пляшок ${line.quantity} — зніміть зайву`,
+        'excise_labels_too_many',
+        400,
+        { item_id: itemId, needed: Number(line.quantity), have: labels.length }
+      );
+    }
+    await dropDraftLabels(client, itemId);
+    await claimExciseLabels(client, { storeId, labels, billItemId: itemId, staffId });
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
@@ -1038,6 +1129,11 @@ export async function cancelBill(
     if (fired.rows.length > 0) {
       throw new BillConflict('Раунди вже на кухні — спершу скасуйте їх');
     }
+    await client.query(
+      `DELETE FROM pos_excise_labels l USING pos_bill_items i
+        WHERE l.bill_item_id = i.id AND i.bill_id = $1 AND i.round_id IS NULL AND l.sale_item_id IS NULL`,
+      [billId]
+    );
     await client.query(`DELETE FROM pos_bill_items WHERE bill_id = $1 AND round_id IS NULL`, [
       billId,
     ]);

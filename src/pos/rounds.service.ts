@@ -38,6 +38,7 @@
 // 5. **Firing is idempotent on `client_uuid`.** «На кухню» tapped twice on a
 //    bad connection must not write off dinner twice.
 
+import { ExciseError } from './excise.js';
 import type { PoolClient } from 'pg';
 import { pool } from '../db.js';
 import {
@@ -145,7 +146,9 @@ export async function fireRoundTx(
   const draft = await client.query(
     `SELECT i.id, i.variant_id, i.quantity, i.components, i.modifiers, i.note,
             v.label, v.unit, v.price_cents, v.compare_at_cents,
-            p.name AS product_name
+            p.name AS product_name, p.excise_per_unit,
+            (SELECT COUNT(*) FROM pos_excise_labels l
+              WHERE l.bill_item_id = i.id AND l.released_at IS NULL AND l.sale_item_id IS NULL)::int AS stamps
        FROM pos_bill_items i
        JOIN pos_variants v ON v.id = i.variant_id
        JOIN pos_products p ON p.id = v.product_id
@@ -156,6 +159,18 @@ export async function fireRoundTx(
   );
   if (draft.rows.length === 0) {
     throw new bills.BillConflict('Немає чого відправляти — додайте позиції');
+  }
+  // A bottle sold whole goes to the table only with its stamp scanned (ДК4-Б,
+  // Д4): the receipt that pays it later must carry it.
+  for (const row of draft.rows) {
+    if (row.excise_per_unit && Number(row.stamps) !== Number(row.quantity)) {
+      throw new ExciseError(
+        `«${row.product_name}»: скануйте акцизну марку кожної пляшки — потрібно ${row.quantity}, є ${row.stamps}`,
+        'excise_labels_needed',
+        409,
+        { item_id: Number(row.id), needed: Number(row.quantity), have: Number(row.stamps) }
+      );
+    }
   }
 
   const round = await client.query(
@@ -302,6 +317,13 @@ export async function cancelRound(params: {
     await client.query(
       `UPDATE pos_bill_rounds SET cancelled_at = NOW(), cancelled_by = $2 WHERE id = $1`,
       [params.roundId, params.staffId]
+    );
+    // Bottles that never reached the table are not sold: their stamps are free (ДК4-Б).
+    await client.query(
+      `UPDATE pos_excise_labels SET released_at = NOW()
+        WHERE bill_item_id IN (SELECT id FROM pos_bill_items WHERE round_id = $1)
+          AND sale_item_id IS NULL AND released_at IS NULL`,
+      [params.roundId]
     );
     await client.query('COMMIT');
     client.release();

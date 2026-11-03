@@ -100,6 +100,22 @@ export interface BarcodeResolution {
   /** Variant barcode per sale-item id, when known. */
   byItemId?: Readonly<Record<number, string | null>>;
   uktzedByItemId?: Readonly<Record<number, string | null>>;
+  /** Excise goods per sale-item id (ДК4-Б): the register's excise rate is added. */
+  exciseByItemId?: Readonly<Record<number, boolean>>;
+  /**
+   * The stamps that go on the document per sale-item id: every stamp the line
+   * sold for a sale, the stamps THIS refund gives back for a return.
+   */
+  labelsByItemId?: Readonly<Record<number, string[]>>;
+}
+
+/** A line's excise fields, only where it has them — older documents stay byte for byte. */
+function exciseOf(itemId: number, codes?: BarcodeResolution): Pick<FiscalDocLine, 'excise' | 'exciseLabels'> {
+  const labels = codes?.labelsByItemId?.[itemId] ?? [];
+  return {
+    ...(codes?.exciseByItemId?.[itemId] ? { excise: true } : {}),
+    ...(labels.length > 0 ? { exciseLabels: labels } : {}),
+  };
 }
 
 /**
@@ -191,6 +207,7 @@ export function buildSaleDoc(input: {
     uktzed: codes?.uktzedByItemId?.[item.id] ?? null,
     sourceLineRef: String(item.id),
     ...unitOf(item),
+    ...exciseOf(item.id, codes),
   }));
 
   assertLinesMatchTotal(lines, sale.total_cents, 'sale');
@@ -384,6 +401,7 @@ export function buildRefundDoc(input: {
       uktzed: codes?.uktzedByItemId?.[item.id] ?? null,
       sourceLineRef: String(item.id),
       ...unitOf(item),
+      ...exciseOf(item.id, codes),
     };
   });
 
