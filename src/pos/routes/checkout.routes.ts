@@ -27,8 +27,10 @@ import * as preorders from '../preorders.service.js';
 import { PreorderClosedError } from '../preorders.service.js';
 import * as fiscalService from '../fiscal/fiscal.service.js';
 import { getSaleDocument } from '../fiscal/ledger.js';
-import { asFiscalError, cashierMessage, supportCode } from '../fiscal/errors.js';
+import { asFiscalError, cashierMessage, FiscalError, supportCode } from '../fiscal/errors.js';
 import { holderFromError } from '../fiscal/offline/holder.js';
+import * as splitSale from '../split-sale.service.js';
+import { formatUah } from '../core/money.js';
 import { FiscalRegisterMismatchError, registersOfVariants } from '../fiscal/routing.js';
 import { pool } from '../../db.js';
 import { logger } from '../../logger.js';
@@ -82,6 +84,53 @@ async function noteParkedCart(
 }
 
 export function registerCheckoutRoutes(fastify: FastifyInstance): void {
+  /**
+   * What a cart comes to, receipt by receipt (ДК2-Б): the till shows the
+   * cashier «Термінал ФОП …: 820 ₴» from this before the card is touched.
+   * Prices by a dry run of the real sale write and writes nothing; a cart for
+   * one register answers one receipt.
+   */
+  fastify.post('/sales/split-quote', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const body = (request.body ?? {}) as {
+      items?: CompleteSaleItemInput[];
+      payments?: { method: PaymentMethod; amount_cents: number }[];
+      cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
+      customer_id?: number | null;
+      cash_rounding?: unknown;
+    };
+    try {
+      const plan = await splitSale.planSplit({
+        storeId: auth.storeId,
+        staffId: auth.staffId,
+        deviceId: null,
+        items: body.items ?? [],
+        payments: body.payments ?? [],
+        cart_discount: body.cart_discount ?? null,
+        customer_id: body.customer_id ?? null,
+        cash_rounding: body.cash_rounding,
+      });
+      const labels = await registerLabels(auth.storeId);
+      return {
+        parts: plan.map((receipt) => ({
+          register_no: receipt.register_no,
+          label: labels.get(receipt.register_no) ?? null,
+          item_indexes: receipt.item_indexes,
+          total_cents: receipt.total_cents,
+          rounding_cents: receipt.rounding_cents,
+          due_cents: receipt.due_cents,
+        })),
+        due_cents: plan.reduce((sum, receipt) => sum + receipt.due_cents, 0),
+      };
+    } catch (error) {
+      if (error instanceof splitSale.SplitSaleError) {
+        return reply.code(error.status).send({ error: error.code, message: error.message });
+      }
+      return reply.code(400).send({ error: errorMessage(error) });
+    }
+  });
+
   fastify.post('/sales/complete', async (request, reply) => {
     const auth = await ensurePosAuth(request, reply);
     if (!auth) return;
@@ -118,6 +167,11 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
        * The server computes the amount itself — TechDocs/POS_CASH_ROUNDING.md, Д4.
        */
       cash_rounding?: unknown;
+      /**
+       * The till can show two receipts (ДК2-Б): a cart whose lines go to two
+       * registers is rung as one receipt per register instead of refused.
+       */
+      split_registers?: unknown;
     };
 
     const headerKey = request.headers['idempotency-key'];
@@ -127,6 +181,15 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
         ? headerKey
         : null;
     const clientUuid = body.client_uuid?.trim() || headerUuid;
+
+    // Which registers this cart goes to (ДК2): register 1 unless the store has
+    // a second one switched on and lines are marked for it. Asked before the
+    // replay check, because register 1's receipt of a split cart carries the
+    // request's own key and must not answer a repeat on behalf of both.
+    const registers = await cartRegisters(auth.storeId, body.items, body.preorder_id);
+    if (registers.size > 1 && body.split_registers === true) {
+      return completeSplit(request, reply, auth, body, clientUuid);
+    }
 
     if (clientUuid) {
       const existing = await salesService.getSaleByClientUuid(auth.storeId, clientUuid);
@@ -158,11 +221,8 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
       return completeDeviceStampedSale(request, reply, auth, body, clientUuid);
     }
 
-    // Which register this cart is fiscalised through (ДК2): register 1 unless
-    // the store has a second one switched on and every line is marked for it.
-    // A cart that spans both is two receipts, which only a till that knows
-    // how to show two receipts may ask for.
-    const registers = await cartRegisters(auth.storeId, body.items, body.preorder_id);
+    // A cart that spans both registers is two receipts, which only a till
+    // that knows how to show two receipts may ask for (`split_registers`).
     if (registers.size > 1) {
       return reply.code(409).send({
         error: 'split_needs_update',
@@ -995,4 +1055,141 @@ async function cartRegisters(
   }
   const byVariant = await registersOfVariants(pool, storeId, variantIds);
   return new Set(byVariant.values());
+}
+
+/** The owner's names for registers 2.. — what a split receipt is captioned with. */
+async function registerLabels(storeId: number): Promise<Map<number, string | null>> {
+  const rows = await pool.query(
+    `SELECT register_no, label FROM pos_fiscal_registers WHERE store_id = $1`,
+    [storeId]
+  );
+  return new Map(rows.rows.map((row) => [Number(row.register_no), row.label as string | null]));
+}
+
+/**
+ * A cart whose lines go to two registers, from a till that can show two
+ * receipts (ДК2-Б, `split-sale.service.ts`): one sale and one ПРРО document
+ * per register. Refusals before anything is written answer as a single
+ * checkout's would; once a receipt stands, the answer names it, the lines
+ * still to ring and the money not taken.
+ */
+async function completeSplit(
+  request: Parameters<typeof readDeviceId>[0],
+  reply: FastifyReply,
+  auth: { storeId: number; staffId: number },
+  body: {
+    items: CompleteSaleItemInput[];
+    payments: { method: PaymentMethod; amount_cents: number; provider_ref?: string | null }[];
+    note?: string;
+    cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
+    customer_id?: number | null;
+    parked_cart_id?: number | null;
+    preorder_id?: number | null;
+    fiscal_offline?: unknown;
+    offline_replay?: unknown;
+    cash_rounding?: unknown;
+  },
+  clientUuid: string | null
+) {
+  // A pre-order's lines are the server's, and a till offline never saw a
+  // second register: neither is a cart this path is for.
+  if (body.preorder_id) {
+    return reply.code(409).send({
+      error: 'split_preorder',
+      message: 'Попереднє замовлення з їжею й алкоголем не ділиться на два чеки — оформіть їх окремо',
+    });
+  }
+  if (body.offline_replay === true || (body.fiscal_offline !== undefined && body.fiscal_offline !== null)) {
+    return reply.code(409).send({
+      error: 'split_offline',
+      message: 'Замовлення на дві каси пробивається лише онлайн',
+    });
+  }
+  if (!clientUuid) {
+    return reply.code(400).send({ error: 'client_uuid обовʼязковий для замовлення на дві каси' });
+  }
+
+  let result: splitSale.SplitSaleResult;
+  try {
+    result = await splitSale.completeSplitSale({
+      storeId: auth.storeId,
+      staffId: auth.staffId,
+      deviceId: readDeviceId(request),
+      items: body.items,
+      payments: body.payments,
+      note: body.note,
+      cart_discount: body.cart_discount ?? null,
+      customer_id: body.customer_id ?? null,
+      client_uuid: clientUuid,
+      cash_rounding: body.cash_rounding,
+    });
+  } catch (error) {
+    if (error instanceof splitSale.SplitSaleError) {
+      return reply.code(error.status).send({ error: error.code, message: error.message });
+    }
+    if (error instanceof splitSale.SplitSaleRefusal) {
+      return sendSplitRefusal(reply, error);
+    }
+    if (error instanceof FiscalError) {
+      // The first receipt's pre-flight: nothing was written, as a single checkout.
+      if (error.kind === 'register_held') {
+        return reply.code(409).send({
+          error: 'register_held',
+          code: error.providerCode,
+          message: cashierMessage(error.kind),
+          holder: holderFromError(error),
+          support_code: supportCode(error),
+        });
+      }
+      return reply.code(503).send({
+        error: 'fiscal_unavailable',
+        code: error.kind,
+        message: cashierMessage(error.kind),
+        support_code: supportCode(error),
+      });
+    }
+    if (error instanceof FiscalRegisterMismatchError) {
+      return reply.code(409).send({ error: error.code, message: error.message });
+    }
+    logger.error('Split sale failed', { error: errorMessage(error) });
+    return reply.code(400).send({ error: errorMessage(error) });
+  }
+
+  if (result.parts[0]) {
+    await noteParkedCart(auth.storeId, body.parked_cart_id, result.parts[0].sale.id);
+  }
+  return reply.code(201).send({ split: true, parts: result.parts, warning: result.warning });
+}
+
+/**
+ * A receipt of a split cart did not go through after an earlier one did. The
+ * till prints `parts`, keeps the lines in `not_taken_items` in the cart and
+ * hands back `not_taken_cents` — never «the sale failed», because part of it
+ * did not.
+ */
+function sendSplitRefusal(reply: FastifyReply, error: splitSale.SplitSaleRefusal) {
+  const { detail } = error;
+  const fiscal = detail.cause instanceof FiscalError ? detail.cause : null;
+  const status =
+    detail.stage === 'document'
+      ? 502
+      : fiscal?.kind === 'register_held'
+        ? 409
+        : detail.stage === 'preflight'
+          ? 503
+          : 409;
+  return reply.code(status).send({
+    error: 'split_part_failed',
+    stage: detail.stage,
+    code: fiscal?.kind ?? 'unknown',
+    message: `${fiscal ? cashierMessage(fiscal.kind) : errorMessage(detail.cause)} Чек каси ${detail.registerNo} не пробито — поверніть гостю ${formatUah(detail.notTakenCents)}.`,
+    support_code: fiscal ? supportCode(fiscal) : 'FS-INTERNAL',
+    register_no: detail.registerNo,
+    sale_id: detail.saleId,
+    sale_voided: detail.voided,
+    parts: detail.done,
+    sale_ids: detail.done.map((part) => part.sale.id),
+    not_taken_cents: detail.notTakenCents,
+    not_taken_items: detail.notTakenItems,
+  });
 }
