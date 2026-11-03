@@ -45,7 +45,7 @@ export async function refreshRequisites(
   }
   try {
     const requisites = await ctx.provider.fetchRequisites(await buildCallCtx(ctx, signal));
-    await rememberRequisites(ctx.storeId, requisites);
+    await rememberRequisites(ctx.storeId, requisites, ctx.registerNo);
     // Keep the in-memory context truthful for whoever holds it after us.
     ctx.settings.requisites = requisites;
     ctx.settings.requisites_fetched_at = new Date();

@@ -60,6 +60,8 @@ export interface FiscalReceiptRow {
   refund_id: number | null;
   shift_id: number | null;
   provider: string;
+  /** The store's register it went through (088): retries and returns go back to it. */
+  register_no: number;
   status: FiscalLedgerStatus;
   provider_request_id: string;
   provider_doc_id: string | null;
@@ -130,6 +132,8 @@ export interface OpenDocumentInput {
   refundId?: number | null;
   shiftId?: number | null;
   provider: string;
+  /** The store's register (ДК1); 1 when absent. */
+  registerNo?: number;
   requestId: string;
   totalCents: number;
   requestPayload?: unknown;
@@ -152,9 +156,10 @@ export async function openDocument(input: OpenDocumentInput): Promise<FiscalRece
   const result = await pool.query(
     `INSERT INTO pos_fiscal_receipts
        (store_id, doc_type, sale_id, refund_id, shift_id, provider, status,
-        provider_request_id, total_cents, attempts, next_attempt_at, request_payload, mode)
+        provider_request_id, total_cents, attempts, next_attempt_at, request_payload, mode,
+        register_no)
      VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8, 1,
-             NOW() + ($9 || ' milliseconds')::interval, $10::jsonb, $11)
+             NOW() + ($9 || ' milliseconds')::interval, $10::jsonb, $11, $12)
      ON CONFLICT (store_id, provider_request_id) DO UPDATE SET
        attempts = pos_fiscal_receipts.attempts + 1,
        next_attempt_at = NOW() + ($9 || ' milliseconds')::interval,
@@ -172,6 +177,7 @@ export async function openDocument(input: OpenDocumentInput): Promise<FiscalRece
       String(LEASE_MS),
       input.requestPayload === undefined ? null : JSON.stringify(input.requestPayload),
       input.mode ?? 'online',
+      input.registerNo ?? 1,
     ]
   );
   return result.rows[0] as FiscalReceiptRow;
@@ -650,6 +656,8 @@ export interface AttentionDoc {
   error_message: string | null;
   attempts: number;
   created_at: Date;
+  /** Which of the store's registers (ДК1). */
+  register_no: number;
 }
 
 /** Documents that will never resolve themselves — the owner's worklist. */
@@ -659,7 +667,7 @@ export async function listAttentionDocs(
 ): Promise<AttentionDoc[]> {
   const result = await pool.query(
     `SELECT r.id, r.doc_type, r.sale_id, r.refund_id, r.total_cents,
-            r.error_code, r.error_message, r.attempts, r.created_at,
+            r.error_code, r.error_message, r.attempts, r.created_at, r.register_no,
             COALESCE(s.receipt_number, rf.refund_number) AS receipt_number
      FROM pos_fiscal_receipts r
      LEFT JOIN pos_sales s ON s.id = r.sale_id

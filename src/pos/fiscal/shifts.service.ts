@@ -23,9 +23,14 @@ import { asFiscalError, FiscalError } from './errors.js';
 // its own file.
 import { abandonShiftDocs } from './ledger.js';
 import { getProvider } from './providers/index.js';
+import { registerKeyOf, registerNoOfKey } from './registers.js';
 import * as runtime from './runtime.js';
 import { refreshRequisites } from './requisites.js';
-import { getFiscalCredentials, getFiscalSettings } from './settings.service.js';
+import {
+  getFiscalCredentials,
+  getFiscalSettings,
+  listExtraRegisters,
+} from './settings.service.js';
 import type {
   FiscalCallCtx,
   FiscalCredentials,
@@ -52,7 +57,12 @@ export interface FiscalContext {
   settings: PosFiscalSettings;
   creds: FiscalCredentials;
   provider: FiscalProvider;
-  /** Which cash register — `pos_fiscal_settings.config.cashRegisterKey`, or ''. */
+  /** The store's register: 1 = `pos_fiscal_settings`, N ≥ 2 = `pos_fiscal_registers` (ДК1). */
+  registerNo: number;
+  /**
+   * Its `cash_register_key`: register 1's `config.cashRegisterKey` or '',
+   * register N's `r<N>` (`registers.ts`).
+   */
   registerKey: string;
 }
 
@@ -69,46 +79,45 @@ export interface PosFiscalShiftRow {
   z_report_text: string | null;
 }
 
-function readRegisterKey(config: Readonly<Record<string, unknown>>): string {
-  const value = config.cashRegisterKey;
-  return typeof value === 'string' ? value.trim().slice(0, 128) : '';
-}
-
 /**
  * Resolve a store's fiscal context, or null when it does not fiscalise.
  *
  * Null is the normal answer for most stores, not an error — the caller treats
  * it as "skip fiscalisation entirely".
  */
-export async function resolveContext(storeId: number): Promise<FiscalContext | null> {
-  const settings = await getFiscalSettings(storeId);
+export async function resolveContext(
+  storeId: number,
+  registerNo = 1
+): Promise<FiscalContext | null> {
+  const settings = await getFiscalSettings(storeId, registerNo);
   if (!settings?.enabled || !settings.provider) return null;
 
-  const creds = await getFiscalCredentials(storeId);
+  const creds = await getFiscalCredentials(storeId, { registerNo });
   if (!creds) return null;
 
   return {
     storeId,
+    registerNo,
     settings,
     creds,
     // Throws `not_configured` when no adapter is compiled in for the chosen
     // provider — loud, rather than falling through to an un-fiscalised sale.
     provider: getProvider(settings.provider),
-    registerKey: readRegisterKey(creds.config),
+    registerKey: registerKeyOf(registerNo, creds.config),
   };
 }
 
 /** A live session, signing in only when the cached one is missing or stale. */
 export async function getSession(ctx: FiscalContext, signal: AbortSignal) {
-  const cached = runtime.getCachedSession(ctx.storeId);
+  const cached = runtime.getCachedSession(ctx);
   if (cached) return cached;
   try {
     const session = await ctx.provider.signIn(ctx.creds, signal);
-    runtime.setCachedSession(ctx.storeId, session);
-    runtime.markProviderOk(ctx.storeId);
+    runtime.setCachedSession(ctx, session);
+    runtime.markProviderOk(ctx);
     return session;
   } catch (error) {
-    runtime.invalidateSession(ctx.storeId);
+    runtime.invalidateSession(ctx);
     throw asFiscalError(error, 'Не вдалося увійти в ПРРО');
   }
 }
@@ -139,20 +148,20 @@ export async function getShiftState(
   opts: { force?: boolean } = {}
 ): Promise<FiscalShiftState | null> {
   if (!opts.force) {
-    const cached = runtime.getCachedShift(ctx.storeId);
+    const cached = runtime.getCachedShift(ctx);
     if (cached) return cached;
   }
   const callCtx = await buildCallCtx(ctx, signal);
   try {
     const state = await ctx.provider.getShift(callCtx);
-    runtime.setCachedShift(ctx.storeId, state);
-    runtime.markProviderOk(ctx.storeId);
+    runtime.setCachedShift(ctx, state);
+    runtime.markProviderOk(ctx);
     if (state) await mirrorOpenShift(ctx, state, null);
     return state;
   } catch (error) {
     const fiscal = asFiscalError(error, 'Не вдалося отримати стан зміни ПРРО');
-    if (fiscal.kind === 'auth_expired') runtime.invalidateSession(ctx.storeId);
-    runtime.invalidateShift(ctx.storeId);
+    if (fiscal.kind === 'auth_expired') runtime.invalidateSession(ctx);
+    runtime.invalidateShift(ctx);
     throw fiscal;
   }
 }
@@ -283,8 +292,8 @@ export async function openShift(
   const autoCloseAt = new Date(Date.now() + SHIFT_MAX_AGE_MS);
   try {
     const state = await ctx.provider.openShift(callCtx, { autoCloseAt });
-    runtime.setCachedShift(ctx.storeId, state);
-    runtime.markProviderOk(ctx.storeId);
+    runtime.setCachedShift(ctx, state);
+    runtime.markProviderOk(ctx);
     await mirrorOpenShift(ctx, state, staffId);
     // The receipt header's requisites, kept fresh where we are online anyway.
     // Awaited, not fire-and-forget: the first receipt of the day must find
@@ -293,8 +302,8 @@ export async function openShift(
     return state;
   } catch (error) {
     const fiscal = asFiscalError(error, 'Не вдалося відкрити зміну ПРРО');
-    if (fiscal.kind === 'auth_expired') runtime.invalidateSession(ctx.storeId);
-    runtime.invalidateShift(ctx.storeId);
+    if (fiscal.kind === 'auth_expired') runtime.invalidateSession(ctx);
+    runtime.invalidateShift(ctx);
     throw fiscal;
   }
 }
@@ -309,15 +318,15 @@ export async function closeShift(
   const liveRow = await getLiveShiftRow(ctx.storeId, ctx.registerKey);
   try {
     const closed = await ctx.provider.closeShift(callCtx);
-    runtime.setCachedShift(ctx.storeId, null);
-    runtime.markProviderOk(ctx.storeId);
+    runtime.setCachedShift(ctx, null);
+    runtime.markProviderOk(ctx);
     await mirrorClosedShift(ctx.storeId, ctx.registerKey, closed);
     await sweepShiftDocuments(liveRow);
     return closed;
   } catch (error) {
     const fiscal = asFiscalError(error, 'Не вдалося закрити зміну ПРРО');
-    if (fiscal.kind === 'auth_expired') runtime.invalidateSession(ctx.storeId);
-    runtime.invalidateShift(ctx.storeId);
+    if (fiscal.kind === 'auth_expired') runtime.invalidateSession(ctx);
+    runtime.invalidateShift(ctx);
     // The provider saying "there is no open shift" means our mirror is the
     // thing that is wrong. Reconcile it rather than leaving a ghost row the
     // cron will retry forever.
@@ -372,11 +381,11 @@ export async function xReport(
   const callCtx = await buildCallCtx(ctx, signal);
   try {
     const report = await ctx.provider.xReport(callCtx);
-    runtime.markProviderOk(ctx.storeId);
+    runtime.markProviderOk(ctx);
     return report;
   } catch (error) {
     const fiscal = asFiscalError(error, 'Не вдалося отримати X-звіт');
-    if (fiscal.kind === 'auth_expired') runtime.invalidateSession(ctx.storeId);
+    if (fiscal.kind === 'auth_expired') runtime.invalidateSession(ctx);
     throw fiscal;
   }
 }
@@ -439,7 +448,8 @@ export async function closeDueShifts(
     const storeId = Number(row.store_id);
     const signal = opts.signal ?? AbortSignal.timeout(20_000);
     try {
-      const ctx = await resolveContext(storeId);
+      // The shift row knows only its key; `r<N>` is register N's (ДК1).
+      const ctx = await resolveContext(storeId, registerNoOfKey(row.cash_register_key));
       if (!ctx) {
         // Fiscalisation was turned off while a shift was still open. Nothing
         // can close it at the provider any more; stop scanning it.
@@ -510,6 +520,16 @@ export interface FiscalStatus {
   testing: boolean;
   /** Set when the status could not be read; the UI shows it verbatim. */
   error: { code: string; message: string } | null;
+  /** Which register this is (ДК1); 1 for every store with one. */
+  register_no?: number;
+  /** The owner's name for a register 2... */
+  label?: string | null;
+  /**
+   * On register 1's status only, and only when the store has more: each
+   * further register that is switched on, read the same way — so the till's
+   * shift screen shows both shifts from one request.
+   */
+  registers?: FiscalStatus[];
 }
 
 /**
@@ -519,8 +539,27 @@ export interface FiscalStatus {
  * request. The one caller that must not proceed on a bad state is the checkout
  * pre-flight, and that one calls `ensureOpenShift` directly.
  */
-export async function getStatus(storeId: number, signal: AbortSignal): Promise<FiscalStatus> {
-  const settings = await getFiscalSettings(storeId);
+export async function getStatus(
+  storeId: number,
+  signal: AbortSignal,
+  registerNo = 1
+): Promise<FiscalStatus> {
+  const own = await registerStatus(storeId, signal, registerNo);
+  if (registerNo !== 1) return own;
+  const extra = (await listExtraRegisters(storeId)).filter((r) => r.enabled);
+  if (extra.length === 0) return own;
+  const registers = await Promise.all(
+    extra.map((r) => registerStatus(storeId, signal, r.register_no))
+  );
+  return { ...own, registers };
+}
+
+async function registerStatus(
+  storeId: number,
+  signal: AbortSignal,
+  registerNo: number
+): Promise<FiscalStatus> {
+  const settings = await getFiscalSettings(storeId, registerNo);
   const base: FiscalStatus = {
     enabled: Boolean(settings?.enabled),
     provider: settings?.provider ?? null,
@@ -529,12 +568,13 @@ export async function getStatus(storeId: number, signal: AbortSignal): Promise<F
     shift: null,
     testing: settings?.config?.testing === true,
     error: null,
+    ...(registerNo >= 2 ? { register_no: registerNo, label: settings?.label ?? null } : {}),
   };
   if (!base.enabled) return base;
 
   let ctx: FiscalContext | null = null;
   try {
-    ctx = await resolveContext(storeId);
+    ctx = await resolveContext(storeId, registerNo);
   } catch (error) {
     const fiscal = asFiscalError(error, 'ПРРО не налаштовано');
     return { ...base, error: { code: fiscal.kind, message: fiscal.message } };

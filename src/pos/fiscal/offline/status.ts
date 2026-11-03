@@ -10,6 +10,7 @@
 
 import { pool } from '../../../db.js';
 import { countSessionDocuments, type SessionDocumentCounts } from '../ledger.js';
+import { registerKeyOf as registerKeyFor } from '../registers.js';
 import { getFiscalSettings, isOfflineCapable } from '../settings.service.js';
 import { getHolder, touchHolder, type HolderView } from './holder.js';
 import { offlineMonthUsage, type OfflineMonthUsage } from './limits.js';
@@ -67,10 +68,13 @@ export interface OfflineStatus {
   holder: HolderStatusBlock | null;
 }
 
-/** The register key inside the provider config — shared with the routes. */
+/**
+ * Register 1's key inside the provider config — shared with the routes.
+ * Offline mode exists only on register 1 (a store with a register 2 runs
+ * online, POS_DUAL_REGISTER.md Д5), so this never needs another number.
+ */
 export function registerKeyOf(config: Record<string, unknown>): string {
-  const value = config.cashRegisterKey;
-  return typeof value === 'string' ? value.trim().slice(0, 128) : '';
+  return registerKeyFor(1, config);
 }
 
 /**
