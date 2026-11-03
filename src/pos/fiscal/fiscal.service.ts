@@ -57,7 +57,6 @@ import type {
   FiscalRefundDoc,
   FiscalResult,
   FiscalSaleDoc,
-  FiscalTaxLine,
 } from './types.js';
 import { assertHolder } from './offline/holder.js';
 import {
@@ -167,8 +166,6 @@ export interface FiscalView {
    * arithmetic, which differs by a kopeck on a tie. Null for Checkbox.
    */
   vat_cents: number | null;
-  /** Every tax row registered (VAT, the excise — ДК4); null where the adapter has none. */
-  tax_rows: FiscalTaxLine[] | null;
   error_code: string | null;
   message: string | null;
 }
@@ -472,7 +469,6 @@ function toView(row: ledger.FiscalReceiptRow, result: FiscalResult | null): Fisc
       qr_payload: result.qrPayload,
       receipt_text: result.receiptText,
       vat_cents: result.vatCents ?? null,
-      tax_rows: result.taxRows?.length ? result.taxRows : null,
       error_code: null,
       message: null,
     };
@@ -487,7 +483,6 @@ function toView(row: ledger.FiscalReceiptRow, result: FiscalResult | null): Fisc
     qr_payload: null,
     receipt_text: null,
     vat_cents: null,
-    tax_rows: null,
     error_code: row.error_code,
     message: row.error_message,
   };
@@ -510,7 +505,6 @@ function offlineView(row: ledger.FiscalReceiptRow): FiscalView {
     qr_payload: null,
     receipt_text: null,
     vat_cents: null,
-    tax_rows: null,
     error_code: null,
     message: null,
   };

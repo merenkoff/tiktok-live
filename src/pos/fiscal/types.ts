@@ -54,12 +54,6 @@ export interface FiscalTaxRate {
   /** Percent, e.g. 20. */
   rate: number;
   no_vat: boolean;
-  /**
-   * The retail excise row (track ДК, ДК4): printed next to an excise line's
-   * VAT letter and in the tax summary, never a line's own letter. Absent on
-   * every VAT row and from a provider without one.
-   */
-  excise?: boolean;
   is_default: boolean;
 }
 
@@ -285,18 +279,6 @@ export interface FiscalDocLine {
   /** Our sale-item id, so a return line can be traced back to what it undoes. */
   sourceLineRef: string | null;
   /**
-   * An excise line (track ДК, ДК4): beer, alcohol — the store's excise rate is
-   * added to its letters. Optional: a document stored before ДК4 has none,
-   * and `retryOne` re-sends such payloads verbatim.
-   */
-  excise?: boolean;
-  /**
-   * The excise stamps of the goods on this line — one per bottle sold whole,
-   * or the stamp of the bottle a first pour opened (ДК5). Optional, like
-   * `excise`; an adapter that cannot carry them sends none.
-   */
-  exciseLabels?: string[];
-  /**
    * The unit `quantityMilli` counts in — `pos_sale_items.unit` (`шт`, `г`,
    * `мл`). Optional: a document stored before contract v2 has none, and
    * `retryOne` re-sends such payloads verbatim, so an adapter must cope with
@@ -417,20 +399,6 @@ export interface FiscalServiceDoc extends FiscalDocBase {
 export type FiscalDoc = FiscalSaleDoc | FiscalRefundDoc | FiscalServiceDoc;
 
 /** The normalised result every provider must produce. */
-/**
- * One tax row of a registered document (`CHECKTAX`), as the paper prints it:
- * «ПДВ А 20 %» / «Акциз Г 5 %» and the sum (track ДК, ДК4). What the tax
- * office was told — the receipt prints it rather than its own arithmetic.
- */
-export interface FiscalTaxLine {
-  kind: 'vat' | 'excise';
-  name: string;
-  letter: string;
-  /** Percent. */
-  rate: number;
-  amount_cents: number;
-}
-
 export interface FiscalResult {
   providerDocId: string;
   /** Фіскальний номер. */
@@ -442,12 +410,6 @@ export interface FiscalResult {
   /** The string to encode as a QR — NOT an image. */
   qrPayload: string | null;
   vatCents: number | null;
-  /**
-   * Every tax row the document registered, where the adapter builds or reads
-   * them (Cashalot); absent elsewhere (Checkbox), and then the paper falls
-   * back to `vatCents` and its own letters.
-   */
-  taxRows?: FiscalTaxLine[];
   /**
    * The provider's own pre-rendered plain-text receipt, or null.
    *

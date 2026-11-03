@@ -32,7 +32,7 @@ import type {
 } from '../types.js';
 import { toAmount, toUah } from './money.js';
 import { payForm } from './payments.js';
-import { computeCheckTax, exciseRate, resolveLetter, vatRates, type DpsTaxedLine } from './taxes.js';
+import { computeCheckTax, resolveLetter, type DpsTaxedLine } from './taxes.js';
 import type {
   DpsBodyRow,
   DpsCheck,
@@ -94,10 +94,8 @@ function body(
       );
     }
 
-    // The line's VAT letter where the seller pays VAT (the table has a VAT
-    // row), then the excise letter on an excise line — «АГ» (track ДК, ДК4).
-    let vatLetter: string | null = null;
-    if (vatRates(opts.taxes).length > 0) {
+    let letters: string | undefined;
+    if (opts.taxes.length > 0) {
       const rate = resolveLetter(line.taxCode, opts.taxes);
       if (!rate) {
         throw new FiscalError(
@@ -107,22 +105,9 @@ function body(
           'rejected'
         );
       }
-      vatLetter = rate.letter;
+      letters = rate.letter;
+      taxed.push({ letter: rate.letter, costCents: cost, discountCents: discount });
     }
-    let exciseLetter: string | null = null;
-    if (line.excise) {
-      const rate = exciseRate(opts.taxes);
-      if (!rate) {
-        throw new FiscalError(
-          `Рядок «${name}» підакцизний, а в таблиці ставок цієї каси немає акцизу — додайте рядок «Акциз 5 %»`,
-          'rejected'
-        );
-      }
-      exciseLetter = rate.letter;
-    }
-    const letters = `${vatLetter ?? ''}${exciseLetter ?? ''}` || undefined;
-    if (letters) taxed.push({ letter: vatLetter, exciseLetter, costCents: cost, discountCents: discount });
-    const labels = (line.exciseLabels ?? []).map((label) => label.trim()).filter(Boolean);
 
     discountCents += discount;
     const code = (line.barcode ?? line.sourceLineRef ?? name).trim().slice(0, MAX_CODE);
@@ -137,7 +122,6 @@ function body(
       ...(letters ? { LETTERS: letters } : {}),
       COST: toUah(cost),
       ...(discount > 0 ? { DISCOUNTTYPE: 0 as const, DISCOUNTSUM: toUah(discount) } : {}),
-      ...(labels.length > 0 ? { EXCISELABELS: labels.map((label) => ({ EXCISELABEL: label })) } : {}),
     });
   }
   return { rows, taxed, discountCents };

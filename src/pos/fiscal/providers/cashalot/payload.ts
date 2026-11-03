@@ -19,7 +19,7 @@
 // its date and its sum.
 
 import { buildTaxUrl } from '../../taxUrl.js';
-import type { FiscalResult, FiscalTaxLine } from '../../types.js';
+import type { FiscalResult } from '../../types.js';
 import type { CashalotDocument } from './client.js';
 import { parseCashalotDate, parseDpsDateTime } from './dates.js';
 
@@ -58,20 +58,7 @@ export interface SentDocument {
   totalCents: number;
   /** The VAT our check carried, or null for a seller with no tax table. */
   vatCents: number | null;
-  /** The check's `CHECKTAX`, as sent (track ДК, ДК4). */
-  taxRows?: FiscalTaxLine[];
   registerFiscalNumber: string;
-}
-
-/** `CHECKTAX` rows as the paper prints them: kind by `TYPE`, money in kopecks. */
-export function taxLinesOf(rows: ReadonlyArray<{ TYPE: number; NAME: string; LETTER: string; PRC: number; SUM: number }>): FiscalTaxLine[] {
-  return rows.map((row) => ({
-    kind: row.TYPE === 1 ? 'excise' : 'vat',
-    name: row.NAME,
-    letter: row.LETTER,
-    rate: row.PRC,
-    amount_cents: Math.round(row.SUM * 100),
-  }));
 }
 
 export function toFiscalResult(doc: CashalotDocument, sent: SentDocument): FiscalResult {
@@ -86,7 +73,6 @@ export function toFiscalResult(doc: CashalotDocument, sent: SentDocument): Fisca
     taxUrl: link,
     qrPayload: link,
     vatCents: sent.vatCents,
-    ...(sent.taxRows?.length ? { taxRows: sent.taxRows } : {}),
     receiptText: null,
     controlNumber: offline ? controlNumberOf(fiscalCode) : null,
     ...(offline ? { mode: 'provider_offline' as const } : {}),
@@ -119,24 +105,9 @@ export function fromOriginalXml(
   const totalCents = Number.isFinite(sum) ? Math.round(sum * 100) : 0;
 
   let vatCents: number | null = null;
-  const taxRows: FiscalTaxLine[] = [];
   for (const row of section(xml, 'CHECKTAX').match(/<ROW[\s\S]*?<\/ROW>/gi) ?? []) {
+    if ((tag(row, 'TYPE') ?? '0') !== '0') continue;
     const value = Number(tag(row, 'SUM') ?? NaN);
-    const type = Number(tag(row, 'TYPE') ?? '0');
-    if (Number.isFinite(value)) {
-      taxRows.push(
-        ...taxLinesOf([
-          {
-            TYPE: type,
-            NAME: tag(row, 'NAME') ?? '',
-            LETTER: tag(row, 'LETTER') ?? '',
-            PRC: Number(tag(row, 'PRC') ?? 0),
-            SUM: value,
-          },
-        ])
-      );
-    }
-    if (type !== 0) continue;
     if (Number.isFinite(value)) vatCents = (vatCents ?? 0) + Math.round(value * 100);
   }
 
@@ -148,7 +119,6 @@ export function fromOriginalXml(
     taxUrl: link,
     qrPayload: link,
     vatCents,
-    ...(taxRows.length ? { taxRows } : {}),
     receiptText: null,
     controlNumber: offline ? controlNumberOf(fiscalCode) : null,
     ...(offline ? { mode: 'provider_offline' as const } : {}),

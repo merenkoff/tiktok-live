@@ -13,7 +13,6 @@
 //   npm run fiscal:sandbox:cashalot -- --shift     + probe 2: open a TEST shift
 //   npm run fiscal:sandbox:cashalot -- --sell      + probes 3, 4, 5, 8 (needs an open test shift)
 //   npm run fiscal:sandbox:cashalot -- --return    + probe 6: return, service in/out, X, Z, close twice
-//   npm run fiscal:sandbox:cashalot -- --excise    + probe 10: the retail excise and a stamp (ДК4; needs an open test shift)
 //   npm run fiscal:sandbox:cashalot -- --all       everything, in that order
 //
 // Credentials from `.env` (never the repository): CASHALOT_SANDBOX_KEY_GUID,
@@ -92,7 +91,6 @@ const all = args.has('--all');
 const doShift = all || args.has('--shift');
 const doSell = all || args.has('--sell');
 const doReturn = all || args.has('--return');
-const doExcise = all || args.has('--excise');
 
 let savedAny = false;
 let stepNo = 0;
@@ -227,20 +225,6 @@ async function sell(
   return { uid, result };
 }
 
-/** `sell` under another tax table — probe 10's excise rows. */
-async function sellWith(
-  creds: CashalotCreds,
-  name: string,
-  doc: FiscalSaleDoc,
-  taxes: DpsTaxRate[]
-): Promise<{ uid: string; result: CashalotDocument | CashalotApiError }> {
-  const uid = doc.requestId;
-  const { check } = buildSaleCheck(doc, { taxes, testing: true, uid });
-  const request = { Command: 'RegisterCheck', UID: uid, ...credentialFields(creds), Check: check, GetQrCode: true };
-  const result = await trystep(name, request, () => registerCheck(creds, check, { uid, getQrCode: true, ...call() }));
-  return { uid, result };
-}
-
 async function main(): Promise<void> {
   const keyGuid = process.env.CASHALOT_SANDBOX_KEY_GUID?.trim();
   const keyPin = process.env.CASHALOT_SANDBOX_KEY_PIN?.trim();
@@ -273,7 +257,7 @@ async function main(): Promise<void> {
   );
   finding(`ANSWER 7a: GetCheck Availability of an unknown number → ${absent instanceof CashalotApiError ? describeError(absent) : `ResultCode ${absent.ResultCode} «${absent.ResultText ?? ''}»`}`);
 
-  const wantsWrites = doShift || doSell || doReturn || doExcise;
+  const wantsWrites = doShift || doSell || doReturn;
   if (!wantsWrites) return;
 
   if (state.ShiftState === 1 && state.Testing === false) {
@@ -423,37 +407,6 @@ async function main(): Promise<void> {
       );
       finding(`ANSWER 7b: GetCheck Availability of a real number → ${present instanceof CashalotApiError ? describeError(present) : `ResultCode ${present.ResultCode}`}`);
     }
-  }
-
-  // ── Probe 10: the retail excise and a stamp (track ДК, ДК4) ────────────────
-  // A bottle at 259.90 with «АГ», CHECKTAX VAT 41.25 on 247.52 and excise
-  // 12.38, and the ДПС example's stamp; then the same without VAT (a ФОП that
-  // is not a VAT payer: «Г» alone). Do test documents check the stamp against
-  // the tax office's register? The answers say.
-  if (doExcise) {
-    const now = await registrarState(creds, call());
-    if (now.ShiftState !== 1 || now.Testing !== true) {
-      console.error('\n--excise needs an open TEST shift — run with --shift first.');
-      process.exit(3);
-    }
-    const EXCISE: DpsTaxRate = { letter: 'Г', name: 'Акциз', type: 1, rate: 5 };
-    const bottle = line({
-      name: 'Тест горілка 0,5 л',
-      unitPriceCents: 25_990,
-      lineTotalCents: 25_990,
-      uktzed: '2208601100',
-      excise: true,
-      exciseLabels: ['AATE508932 0000412168'],
-    });
-    const withVat = await sellWith(creds, 'sell_excise_vat_stamp_card', saleDoc([bottle], [{ method: 'card', amountCents: 25_990 }]), [...TAXES, EXCISE]);
-    finding(`ANSWER 10a (ПДВ + акциз, «АГ», one stamp): ${withVat.result instanceof CashalotApiError ? describeError(withVat.result) : `NumFiscal ${withVat.result.NumFiscal}`}`);
-    const noVat = await sellWith(
-      creds,
-      'sell_excise_only_stamp_cash',
-      saleDoc([{ ...bottle, taxCode: null }], [{ method: 'cash', amountCents: 30_000 }]),
-      [EXCISE]
-    );
-    finding(`ANSWER 10b (акциз без ПДВ, «Г»): ${noVat.result instanceof CashalotApiError ? describeError(noVat.result) : `NumFiscal ${noVat.result.NumFiscal}`}`);
   }
 
   // ── Probe 6: return, service documents, X and Z ───────────────────────────

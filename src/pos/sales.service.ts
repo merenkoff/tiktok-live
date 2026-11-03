@@ -22,7 +22,6 @@ import type {
   RefundReasonCode,
   PrepStatus,
 } from './types.js';
-import type { FiscalTaxLine } from './fiscal/types.js';
 import { writeOffPostedTx } from './stock.service.js';
 import { storeClock } from './core/storeClock.js';
 import { dailyCounterKey, nextCounterValue } from './core/counters.js';
@@ -1284,7 +1283,7 @@ export async function getSale(storeId: number, saleId: number) {
   const refundFiscalRows = refundIds.length
     ? await pool.query(
         `SELECT refund_id, fiscal_code, fiscal_date, tax_url, qr_payload, receipt_text, vat_cents,
-                tax_rows, status, mode, control_number, error_code, error_message
+                status, mode, control_number, error_code, error_message
          FROM pos_fiscal_receipts
          WHERE refund_id = ANY($1::bigint[]) AND doc_type = 'refund'`,
         [refundIds]
@@ -1312,7 +1311,7 @@ export async function getSale(storeId: number, saleId: number) {
   // module-provided renderer. See TechDocs/prro/POS_FISCAL_PRRO.md §1.
   const fiscalRow = await pool.query(
     `SELECT fiscal_code, fiscal_date, tax_url, qr_payload, receipt_text, vat_cents,
-            tax_rows, status, mode, control_number, error_code, error_message
+            status, mode, control_number, error_code, error_message
      FROM pos_fiscal_receipts
      WHERE sale_id = $1 AND doc_type = 'sale'`,
     [saleId]
@@ -1478,9 +1477,6 @@ function fiscalViewFromRow(fiscal: Record<string, unknown> | null) {
     // What the provider registered as VAT (Cashalot); the till prints it over
     // its own arithmetic. Null where the adapter computes none (Checkbox).
     vat_cents: fiscal.vat_cents === null || fiscal.vat_cents === undefined ? null : Number(fiscal.vat_cents),
-    // Every tax row registered — VAT and the retail excise (ДК4); null for a
-    // document from before, and for a provider that reports none.
-    tax_rows: Array.isArray(fiscal.tax_rows) ? (fiscal.tax_rows as FiscalTaxLine[]) : null,
     error_code: (fiscal.error_code as string | null) ?? null,
     error_message: (fiscal.error_message as string | null) ?? null,
   };

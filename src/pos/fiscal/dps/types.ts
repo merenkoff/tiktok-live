@@ -24,14 +24,10 @@ export type DpsDocSubType = 'CheckGoods' | 'CheckReturn' | 'ServiceDeposit' | 'S
 export interface DpsTaxRate {
   /** Cyrillic, one letter: «А», «Б», … — what Положення № 13 prints. */
   letter: string;
-  /** «ПДВ», «Акциз». */
+  /** «ПДВ». */
   name: string;
-  /**
-   * `CHECKTAX.TYPE`: 0 = ПДВ, 1 = акцизний податок (the 5 % retail excise on
-   * beer and alcohol, ПКУ 215.3.10 — track ДК, ДК4). At most one excise row;
-   * it is never a line's main letter, only added to an excise line's.
-   */
-  type: 0 | 1;
+  /** `CHECKTAX.TYPE`: 0 = ПДВ. The only kind v1 knows (no excise, no tax on top). */
+  type: 0;
   /** Percent, e.g. 20 or 7. */
   rate: number;
 }
@@ -91,19 +87,12 @@ export interface DpsBodyRow {
   UNITNM?: string;
   AMOUNT: number;
   PRICE: number;
-  /** The line's tax letters: its VAT letter, then the excise letter on an excise line («АГ»). */
   LETTERS?: string;
   /** `PRICE × AMOUNT` — before the discount, which is its own field. */
   COST: number;
   /** 0 = a sum discount. */
   DISCOUNTTYPE?: 0;
   DISCOUNTSUM?: number;
-  /**
-   * The excise stamps of the goods on this line — «цифрове значення штрихового
-   * коду марки» (Закон № 265/95-ВР ст. 3 п. 11), several per line (example
-   * «Два податки»; Cashalot `CExciseLabelsRow[]`).
-   */
-  EXCISELABELS?: Array<{ EXCISELABEL: string }>;
 }
 
 export interface DpsCheck {
@@ -115,11 +104,7 @@ export interface DpsCheck {
 }
 
 export interface DpsCheckOptions {
-  /**
-   * The store's tax table; empty = a seller who is not a VAT payer and sells
-   * nothing excised (no `CHECKTAX`, no `LETTERS`). A non-VAT seller of alcohol
-   * has the excise row alone.
-   */
+  /** The store's tax table; empty = a seller who is not a VAT payer (no `CHECKTAX`, no `LETTERS`). */
   taxes: readonly DpsTaxRate[];
   /** Mark the document `TESTING` — a test shift accepts nothing else, a fiscal one refuses it. */
   testing?: boolean;

@@ -334,7 +334,6 @@ export async function markDone(
          vat_cents = $8,
          response_payload = $9::jsonb,
          control_number = COALESCE($10, control_number),
-         tax_rows = COALESCE($12::jsonb, tax_rows),
          -- Only a provider-side offline registration moves the mode; anything
          -- else leaves it, so a row we stamped offline stays 'offline' after
          -- its replay lands.
@@ -357,7 +356,6 @@ export async function markDone(
         JSON.stringify(result.raw ?? null),
         result.controlNumber ?? null,
         result.mode ?? null,
-        result.taxRows?.length ? JSON.stringify(result.taxRows) : null,
       ]
     );
     await setProjection(client, row, 'done');

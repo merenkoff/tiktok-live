@@ -53,7 +53,7 @@ import { normalizeCashalotConfig, readConfig, type CashalotConfig } from './conf
 import { parseCashalotDate } from './dates.js';
 import { classifyCashalotError, isCashalotError } from './errors.js';
 import { findDocumentByUid } from './lookup.js';
-import { fromOriginalXml, taxLinesOf, toFiscalResult } from './payload.js';
+import { fromOriginalXml, toFiscalResult } from './payload.js';
 
 const HINT = 'Кабінет Cashalot → Налаштування → Інтеграція з WEB API → Управління касирами';
 
@@ -139,7 +139,6 @@ async function register(
     return toFiscalResult(doc, {
       totalCents,
       vatCents: config.taxes.length > 0 ? vatCents : null,
-      taxRows: taxLinesOf(check.CHECKTAX ?? []),
       registerFiscalNumber: creds.numFiscal,
     });
   } catch (rawError) {
@@ -202,16 +201,13 @@ export const cashalotProvider: FiscalProvider = {
         },
         point: { name: text(tax?.Name), address: text(tax?.Address) },
         register: { fiscal_number: c.numFiscal, title: null, address: null },
-        // The excise row is listed too — the receipt prints its letter — but it
-        // is never the default: a line's main letter is always a VAT one.
-        taxes: config.taxes.map((rate) => ({
+        taxes: config.taxes.map((rate, index) => ({
           code: letterCode(rate.letter) ?? rate.letter,
           symbol: rate.letter,
           label: `${rate.name} ${rate.rate} %`,
           rate: rate.rate,
-          no_vat: rate.type === 1 || rate.rate === 0,
-          is_default: rate === config.taxes.find((t) => t.type === 0),
-          ...(rate.type === 1 ? { excise: true } : {}),
+          no_vat: rate.rate === 0,
+          is_default: index === 0,
         })),
       };
     });
