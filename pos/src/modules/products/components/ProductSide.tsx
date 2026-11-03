@@ -13,7 +13,10 @@ import type { TechCardRow } from '../data/techCardsApi';
 import { rowName, type ProductDraft } from '../lib/productDraft';
 import type { RegisterChoice } from '../lib/registerChoices';
 
-type Fields = Pick<ProductDraft, 'sellable' | 'menuHidden' | 'fiscalRegister' | 'tagIds' | 'groupIds'>;
+type Fields = Pick<
+  ProductDraft,
+  'sellable' | 'menuHidden' | 'fiscalRegister' | 'fiscalExcise' | 'excisePerUnit' | 'uktzed' | 'tagIds' | 'groupIds'
+>;
 
 /** «Продається на касі» — the same switch on every card. */
 export function SellableField({ checked, onChange }: { checked: boolean; onChange: (next: boolean) => void }) {
@@ -98,6 +101,70 @@ export function RegisterField({
 }
 
 /**
+ * Excise goods (track ДК, ДК4, decision Д17 — every store with ПРРО): beer
+ * and alcohol carry the 5 % retail excise on their receipt line, with the
+ * УКТ ЗЕД; a bottle sold whole also carries its stamp, scanned at the sale.
+ */
+export function ExciseFields({
+  value,
+  onPatch,
+}: {
+  value: Pick<ProductDraft, 'fiscalExcise' | 'excisePerUnit' | 'uktzed'>;
+  onPatch: (patch: Partial<Pick<ProductDraft, 'fiscalExcise' | 'excisePerUnit' | 'uktzed'>>) => void;
+}) {
+  return (
+    <div className="space-y-3" data-testid="product-excise">
+      <label className="flex items-start gap-2.5 text-[15px] text-sq-text cursor-pointer">
+        <input
+          type="checkbox"
+          className={`${checkboxClass} mt-1`}
+          checked={value.fiscalExcise}
+          onChange={(e) => onPatch({ fiscalExcise: e.target.checked })}
+          data-testid="product-excise-flag"
+        />
+        <span>
+          Підакцизний (алкоголь, пиво, тютюн)
+          <span className="block text-[13px] text-sq-muted">
+            У чеку — рядок акцизу 5 %. Підакцизне пробивається касою ФОП, що має ліцензію
+          </span>
+        </span>
+      </label>
+      {value.fiscalExcise && (
+        <>
+          <label className="block">
+            <span className={captionClass}>УКТ ЗЕД</span>
+            <input
+              className="mt-1 w-full min-h-11 rounded-[10px] bg-sq-surface ring-1 ring-inset ring-sq-divider px-3 text-[15px] tabular-nums"
+              inputMode="numeric"
+              placeholder="2208601100"
+              value={value.uktzed}
+              onChange={(e) => onPatch({ uktzed: e.target.value.replace(/[^\d\s]/g, '') })}
+              data-testid="product-uktzed"
+            />
+            <span className="block mt-1 text-[13px] text-sq-muted">Від 4 до 10 цифр, з накладної постачальника</span>
+          </label>
+          <label className="flex items-start gap-2.5 text-[15px] text-sq-text cursor-pointer">
+            <input
+              type="checkbox"
+              className={`${checkboxClass} mt-1`}
+              checked={value.excisePerUnit}
+              onChange={(e) => onPatch({ excisePerUnit: e.target.checked })}
+              data-testid="product-excise-per-unit"
+            />
+            <span>
+              Марка на кожну одиницю (ціла пляшка)
+              <span className="block text-[13px] text-sq-muted">
+                Касир чи офіціант сканує акцизну марку кожної пляшки — її номер іде в чек. Для розливу не ставте
+              </span>
+            </span>
+          </label>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
  * The card's side column: how the product shows at the till — on the sell
  * screen or not, under which tags, asking which questions — and, for a
  * composite, what each variant costs to assemble.
@@ -111,6 +178,7 @@ export function ProductSide({
   variants,
   askMenuHidden = false,
   registers = [],
+  askExcise = false,
 }: {
   value: Fields;
   onPatch: (patch: Partial<Fields>) => void;
@@ -118,6 +186,8 @@ export function ProductSide({
   askMenuHidden?: boolean;
   /** The store's registers; empty (one register) asks nothing. */
   registers?: RegisterChoice[];
+  /** Ask the excise questions — in a store that fiscalises (Д17). */
+  askExcise?: boolean;
   flatTags: PosTag[];
   groups: ModifierGroup[];
   /** What each composite variant costs to assemble, by variant id. */
@@ -147,6 +217,7 @@ export function ProductSide({
             onChange={(fiscalRegister) => onPatch({ fiscalRegister })}
           />
         )}
+        {askExcise && <ExciseFields value={value} onPatch={onPatch} />}
       </section>
 
       <section className="space-y-3">

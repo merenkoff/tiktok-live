@@ -8,8 +8,10 @@ import {
   configFromDraft,
   defaultLetterFor,
   draftFromConfig,
+  emptyRow,
   freeLetters,
   letterCode,
+  vatRows,
 } from './taxTable';
 
 describe('taxTable', () => {
@@ -71,5 +73,32 @@ describe('taxTable', () => {
     expect(freeLetters(taxes, 0)).toContain('А');
     expect(freeLetters(taxes, 0)).not.toContain('Б');
     expect(freeLetters(taxes, 2)).toHaveLength(12);
+  });
+});
+
+describe('the excise row (track ДК, ДК4)', () => {
+  it('reads and sends the excise row with its kind, a VAT row as it always went', () => {
+    const draft = draftFromConfig({
+      taxes: [
+        { letter: 'А', name: 'ПДВ', rate: 20 },
+        { letter: 'Г', name: 'Акциз', rate: 5, type: 1 },
+      ],
+    });
+    expect(draft.taxes[1].type).toBe(1);
+    expect(configFromDraft(draft).taxes).toEqual([
+      { letter: 'А', name: 'ПДВ', rate: 20 },
+      { letter: 'Г', name: 'Акциз', rate: 5, type: 1 },
+    ]);
+    expect(emptyRow('Г', 1)).toEqual({ letter: 'Г', name: 'Акциз', rate: '5', type: 1 });
+  });
+
+  it('never makes the excise row the default rate', () => {
+    const taxes = [
+      { letter: 'А', name: 'ПДВ', rate: '20' },
+      { letter: 'Г', name: 'Акциз', rate: '5', type: 1 as const },
+    ];
+    expect(defaultLetterFor('G', taxes)).toBeNull();
+    expect(defaultLetterFor('A', taxes)).toBe('А');
+    expect(vatRows(taxes).map((t) => t.letter)).toEqual(['А']);
   });
 });

@@ -83,6 +83,13 @@ export interface CartLine {
    * server re-reads it from the product and checks every line.
    */
   fiscal_register?: number;
+  /**
+   * Goods sold with a stamp per unit (track ДК, ДК4 — a bottle sold whole):
+   * the till asks for `quantity` stamps before payment. From the catalog.
+   */
+  excise_per_unit?: boolean;
+  /** The stamps scanned for this line's units, normalised (`lib/excise.ts`). */
+  excise_labels?: string[];
 }
 
 /** One stem in a bouquet being rung, per one unit of it. */
@@ -164,6 +171,8 @@ interface CartStore {
   /** A new count — or, on a weighed line, a new weight in base units. */
   setQty: (uid: string, quantity: number) => void;
   remove: (uid: string) => void;
+  /** The stamps of a line's bottles (ДК4), replacing what it had. */
+  setExciseLabels: (uid: string, labels: string[]) => void;
   clear: () => void;
   subtotalCents: () => number;
   cartDiscountCents: () => number;
@@ -340,6 +349,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
       ...(resolved && resolved.snapshot.length ? { modifiers: resolved.snapshot } : {}),
       ...(note ? { note } : {}),
       ...((item.fiscal_register ?? 1) > 1 ? { fiscal_register: item.fiscal_register } : {}),
+      ...(item.excise_per_unit ? { excise_per_unit: true } : {}),
     });
     set({ lines, banner: null });
   },
@@ -447,6 +457,14 @@ export const useCartStore = create<CartStore>((set, get) => ({
 
   remove: (uid) => {
     set({ lines: get().lines.filter((l) => l.uid !== uid) });
+  },
+
+  setExciseLabels: (uid, labels) => {
+    set({
+      lines: get().lines.map((line) =>
+        line.uid === uid ? { ...line, excise_labels: labels.length > 0 ? labels : undefined } : line
+      ),
+    });
   },
 
   clear: () =>

@@ -322,6 +322,11 @@ export interface SaleItemInput {
    * till — and never sent on any other line.
    */
   weight_source?: string;
+  /**
+   * The excise stamps of this line's units (ДК4-Б): exactly `quantity` of them
+   * for goods sold with a stamp per unit (a bottle sold whole), none otherwise.
+   */
+  excise_labels?: string[];
 }
 
 /** One answer the till may pick for a product. */
@@ -454,6 +459,10 @@ export interface CatalogItem {
    * off reads 1. Absent from an older payload or snapshot → 1.
    */
   fiscal_register?: number;
+  /** Excise goods (ДК4-Б): beer, alcohol. Absent = not excise. */
+  fiscal_excise?: boolean;
+  /** Each unit sold needs its own stamp scanned (a bottle sold whole). */
+  excise_per_unit?: boolean;
   /**
    * A card made at the bench for one physical bouquet. The window and a
    * catalogue bouquet are both `composite` + `own`; only this one may be
@@ -817,6 +826,12 @@ export interface Product {
    * is off. Absent on an older payload → null.
    */
   fiscal_register?: number | null;
+  /** Excise goods (ДК4-Б); needs `fiscal_uktzed`. Absent on an older payload → false. */
+  fiscal_excise?: boolean;
+  /** A stamp per unit sold (a bottle sold whole); only on excise goods. */
+  excise_per_unit?: boolean;
+  /** УКТ ЗЕД, 4–10 digits — printed on the receipt line. */
+  fiscal_uktzed?: string | null;
   /** The store-local day the barista pulled it, or null (migration 050). */
   stop_listed_on?: string | null;
   tag_ids: number[];
@@ -901,6 +916,23 @@ export interface FiscalTaxRate {
   rate: number;
   no_vat: boolean;
   is_default: boolean;
+  /**
+   * The retail excise row (track ДК, ДК4): added to an excise line's letters,
+   * never a line's own. Absent on VAT rows and from an older backend.
+   */
+  excise?: boolean;
+}
+
+/**
+ * One tax row a fiscal document registered (ДК4-А, migration 091): what the
+ * receipt prints — «ПДВ А 20 %», «Акциз Г 5 %» — instead of its own arithmetic.
+ */
+export interface FiscalTaxLine {
+  kind: 'vat' | 'excise';
+  name: string;
+  letter: string;
+  rate: number;
+  amount_cents: number;
 }
 
 /**
@@ -940,6 +972,8 @@ export interface SaleFiscalDoc {
   /** The VAT the provider registered (Cashalot's own CHECKTAX); the receipt
    * prints it over the till's arithmetic. Null or absent where none (Checkbox). */
   vat_cents?: number | null;
+  /** Every tax row registered — VAT and the retail excise (ДК4); null or absent where unknown. */
+  tax_rows?: FiscalTaxLine[] | null;
   error_code: string | null;
   error_message: string | null;
 }
@@ -1094,6 +1128,8 @@ export interface FiscalActionResult {
   receipt_text: string | null;
   /** See `SaleFiscalDoc.vat_cents`. */
   vat_cents?: number | null;
+  /** See `SaleFiscalDoc.tax_rows`. */
+  tax_rows?: FiscalTaxLine[] | null;
   error_code: string | null;
   message: string | null;
 }
@@ -1232,6 +1268,12 @@ export interface SaleDetail {
     price_per?: number;
     /** How a weighed line's weight was taken — `manual` prints «вагу введено вручну». */
     weight_source?: string | null;
+    /** Excise goods (ДК4): the receipt adds the excise letter to the line's («АГ»). */
+    excise?: boolean;
+    /** The excise stamps this line still holds (ДК4-Б) — printed under it, offered to a return. */
+    excise_labels?: string[];
+    /** The stamps a return already gave back. */
+    excise_labels_returned?: string[];
   }>;
   payments: Array<{
     id: number;
@@ -1301,6 +1343,8 @@ export interface SaleDetail {
 export interface RefundLineInput {
   sale_item_id: number;
   quantity: number;
+  /** The stamps of the bottles coming back, picked from the line's own (ДК4-Б, Д16). */
+  excise_labels?: string[];
 }
 
 /**

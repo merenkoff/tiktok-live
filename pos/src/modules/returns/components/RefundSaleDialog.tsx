@@ -114,6 +114,17 @@ export function RefundSaleDialog({
   const [qty, setQty] = useState<Record<number, number>>(() =>
     Object.fromEntries(items.map((i) => [i.id, selectAll ? available(i) : 0]))
   );
+  // A line sold with stamps (ДК4, decision Д16): the bottles coming back are
+  // named by their stamps, picked from the line's own — the count follows.
+  const [stamps, setStamps] = useState<Record<number, string[]>>(() =>
+    Object.fromEntries(items.map((i) => [i.id, selectAll ? [...(i.excise_labels ?? [])] : []]))
+  );
+  function toggleStamp(id: number, label: string) {
+    const current = stamps[id] ?? [];
+    const next = current.includes(label) ? current.filter((l) => l !== label) : [...current, label];
+    setStamps((prev) => ({ ...prev, [id]: next }));
+    setQty((prev) => ({ ...prev, [id]: next.length }));
+  }
   // Default to how they paid: the only lawful method when there is one.
   const paid = useMemo(() => paidMethods(detail), [detail]);
   const [method, setMethod] = useState<PaymentMethod>(() => defaultRefundMethod(detail));
@@ -168,7 +179,11 @@ export function RefundSaleDialog({
   }
 
   function lines(): RefundLineInput[] {
-    return picked.map((i) => ({ sale_item_id: i.id, quantity: qty[i.id] }));
+    return picked.map((i) => ({
+      sale_item_id: i.id,
+      quantity: qty[i.id],
+      ...(i.excise_labels?.length ? { excise_labels: stamps[i.id] ?? [] } : {}),
+    }));
   }
 
   function startExchange() {
@@ -420,6 +435,35 @@ export function RefundSaleDialog({
               {items.map((item) => {
                 const max = available(item);
                 const n = qty[item.id] ?? 0;
+                if (item.excise_labels?.length) {
+                  const chosen = stamps[item.id] ?? [];
+                  return (
+                    <li key={item.id} className="sq-row py-2" data-testid={`refund-stamps-${item.id}`}>
+                      <p className="text-base text-sq-text truncate">{item.product_name}</p>
+                      <p className="text-[13px] text-sq-muted">Оберіть марки пляшок, що повертаються</p>
+                      <div className="mt-1.5 flex flex-wrap gap-2">
+                        {item.excise_labels.map((label) => {
+                          const on = chosen.includes(label);
+                          return (
+                            <button
+                              key={label}
+                              type="button"
+                              aria-pressed={on}
+                              className={`min-h-11 px-3 rounded-xl text-[13px] tabular-nums ${
+                                on
+                                  ? 'bg-sq-blue/[0.08] ring-2 ring-sq-blue text-sq-blue font-semibold'
+                                  : 'bg-white ring-1 ring-sq-divider text-sq-text'
+                              }`}
+                              onClick={() => toggleStamp(item.id, label)}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </li>
+                  );
+                }
                 if (wholeOnly(item)) {
                   const on = n === max;
                   return (
@@ -489,9 +533,12 @@ export function RefundSaleDialog({
               <button
                 type="button"
                 className="text-[15px] font-semibold text-sq-blue min-h-11 -mt-2"
-                onClick={() =>
-                  setQty(Object.fromEntries(items.map((i) => [i.id, everything ? 0 : available(i)])))
-                }
+                onClick={() => {
+                  setQty(Object.fromEntries(items.map((i) => [i.id, everything ? 0 : available(i)])));
+                  setStamps(
+                    Object.fromEntries(items.map((i) => [i.id, everything ? [] : [...(i.excise_labels ?? [])]]))
+                  );
+                }}
               >
                 {everything ? 'Зняти все' : 'Повернути все'}
               </button>

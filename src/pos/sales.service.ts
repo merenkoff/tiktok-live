@@ -1238,8 +1238,15 @@ export async function getSale(storeId: number, saleId: number) {
   if (saleResult.rows.length === 0) return null;
   const sale = saleResult.rows[0];
 
+  // With the product's excise flag (ДК4): the receipt adds the excise letter
+  // to an excise line's, and beer — excise without a stamp — says so only here.
   const items = await pool.query(
-    `SELECT * FROM pos_sale_items WHERE sale_id = $1 ORDER BY id`,
+    `SELECT si.*, p.fiscal_excise
+       FROM pos_sale_items si
+       LEFT JOIN pos_variants v ON v.id = si.variant_id
+       LEFT JOIN pos_products p ON p.id = v.product_id
+      WHERE si.sale_id = $1
+      ORDER BY si.id`,
     [saleId]
   );
   // The stamps each line sold with (ДК4-Б): those it still holds, and those a
@@ -1488,6 +1495,7 @@ export async function getSale(storeId: number, saleId: number) {
       // Paid toward this «під запис» line earlier as «внески» (078): part of
       // the goods' price that is not in this receipt's sum.
       debt_prepaid_cents: Number(row.debt_prepaid_cents ?? 0),
+      ...(row.fiscal_excise ? { excise: true } : {}),
       ...(stampsByItem.has(Number(row.id))
         ? {
             excise_labels: stampsByItem.get(Number(row.id))!.held,

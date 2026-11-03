@@ -218,3 +218,56 @@ test.describe('a cart for two registers', () => {
     await expect(page.getByRole('button', { name: /^Оплатити 1 890,00/ }).first()).toBeVisible();
   });
 });
+
+// Track ДК, ДК4 (TechDocs/POS_DUAL_REGISTER.md §4.3, Д4): a bottle sold whole
+// goes out only with its excise stamp — «Оплатити» asks for it first, and the
+// sale carries it.
+test('a bottle sold whole asks for its stamp before payment, and the sale carries it', async ({ page }) => {
+  const BOTTLE = { ...catalog[0], product_name: 'Горілка 0,5 л', fiscal_excise: true, excise_per_unit: true };
+  const sent: Array<Record<string, unknown>> = [];
+  await mockPosApi(page);
+  await page.route('**/api/pos/catalog**', (route) => route.fulfill({ json: [BOTTLE, catalog[1]] }));
+  await page.route('**/api/pos/sales/complete', async (route) => {
+    sent.push(route.request().postDataJSON());
+    await route.fulfill({
+      status: 201,
+      json: {
+        id: 301,
+        receipt_number: 'R-301',
+        status: 'completed',
+        subtotal_cents: BOTTLE.price_cents,
+        total_cents: BOTTLE.price_cents,
+        rounding_cents: 0,
+        cart_discount_cents: 0,
+        created_at: '2026-11-03T20:00:00.000Z',
+        staff_name: 'Олена',
+        items: [],
+        payments: [{ id: 1, method: 'card', amount_cents: BOTTLE.price_cents }],
+        refunds: [],
+        fiscal: null,
+      },
+    });
+  });
+  await loginAsOwner(page);
+  await page.goto('/register');
+
+  await page.getByText(BOTTLE.product_name).first().click();
+  await page.getByRole('button', { name: /^Оплатити/ }).first().click();
+
+  const sheet = page.getByTestId('excise-sheet');
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByTestId('excise-current')).toContainText('Скануйте марку 1 з 1');
+  await expect(sheet.getByTestId('excise-done')).toBeDisabled();
+  await sheet.getByTestId('excise-input').fill('aate508932 0000412168');
+  await sheet.getByRole('button', { name: 'Додати' }).click();
+  await expect(sheet.getByText('Усі марки відскановано')).toBeVisible();
+  await sheet.getByTestId('excise-done').click();
+
+  const dialog = page.getByRole('dialog', { name: 'Оплата' });
+  await dialog.getByRole('button', { name: 'Картка' }).click();
+  await dialog.getByRole('button', { name: /Оплата карткою пройшла/ }).click();
+  await expect(page.getByTestId('sale-success')).toBeVisible();
+  expect((sent[0].items as Array<Record<string, unknown>>)[0]).toMatchObject({
+    excise_labels: ['AATE508932 0000412168'],
+  });
+});

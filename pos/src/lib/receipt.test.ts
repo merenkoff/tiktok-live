@@ -772,3 +772,79 @@ describe('a receipt of register 2 (track ДК, TechDocs/POS_DUAL_REGISTER.md)', 
     expect(fiscalForRegister(null, 2)).toBeNull();
   });
 });
+
+describe('the retail excise and the stamps on the paper (track ДК, ДК4)', () => {
+  const vatAndExcise = fiscalStore({
+    provider: 'cashalot',
+    default_tax_code: '1',
+    requisites: {
+      ...REQUISITES,
+      taxes: [
+        { code: '1', symbol: 'А', label: 'ПДВ 20%', rate: 20, no_vat: false, is_default: true },
+        { code: 'G', symbol: 'Г', label: 'Акциз 5 %', rate: 5, no_vat: true, is_default: false, excise: true },
+      ],
+    },
+  });
+  const doneDoc = {
+    status: 'done',
+    fiscal_code: '300001',
+    fiscal_date: '2026-11-03T20:00:00.000Z',
+    tax_url: null,
+    qr_payload: null,
+    receipt_text: null,
+    error_code: null,
+    error_message: null,
+  };
+
+  it('gives an excise line both letters and its stamp, and prints the tax rows as registered', () => {
+    const sale = makeSaleDetail({
+      total_cents: 25_990,
+      fiscal: {
+        ...doneDoc,
+        tax_rows: [
+          { kind: 'vat', name: 'ПДВ', letter: 'А', rate: 20, amount_cents: 4125 },
+          { kind: 'excise', name: 'Акциз', letter: 'Г', rate: 5, amount_cents: 1238 },
+        ],
+      },
+    });
+    sale.items = [{ ...sale.items[0], excise: true, excise_labels: ['AATE508932 0000412168'] }];
+    const payload = buildReceiptPayload(sale, vatAndExcise);
+    expect(payload.items[0].tax_symbol).toBe('АГ');
+    expect(payload.items[0].excise_labels).toEqual(['AATE508932 0000412168']);
+    expect(payload.vat_lines).toEqual([
+      { symbol: 'А', rate: 20, amount_cents: 4125 },
+      { symbol: 'Г', rate: 5, amount_cents: 1238, name: 'Акциз' },
+    ]);
+  });
+
+  it('never takes the excise row for a line’s own letter, and gives a non-VAT seller «Г» alone', () => {
+    const plain = makeSaleDetail({ fiscal: doneDoc });
+    expect(buildReceiptPayload(plain, vatAndExcise).items[0].tax_symbol).toBe('А');
+
+    const exciseOnly = fiscalStore({
+      provider: 'cashalot',
+      default_tax_code: null,
+      requisites: {
+        ...REQUISITES,
+        taxes: [{ code: 'G', symbol: 'Г', label: 'Акциз 5 %', rate: 5, no_vat: true, is_default: false, excise: true }],
+      },
+    });
+    const beer = makeSaleDetail({ fiscal: doneDoc });
+    beer.items = [{ ...beer.items[0], excise: true }];
+    expect(buildReceiptPayload(beer, exciseOnly).items[0].tax_symbol).toBe('Г');
+    expect(buildReceiptPayload(plain, exciseOnly).items[0].tax_symbol).toBeNull();
+  });
+
+  it('prints the returned bottle’s stamp on the return receipt', () => {
+    const sale = makeSaleDetail({ payments: [{ id: 200, method: 'cash', amount_cents: 45000 }] });
+    sale.items = [{ ...sale.items[0], excise: true }];
+    const payload = buildRefundReceiptPayload(
+      sale,
+      makeRefund({ total_cents: 22500 }),
+      [{ sale_item_id: 100, quantity: 1, excise_labels: ['AATE508932 0000412169'] }],
+      vatAndExcise,
+      { ...doneDoc, message: null }
+    );
+    expect(payload.items[0]).toMatchObject({ tax_symbol: 'АГ', excise_labels: ['AATE508932 0000412169'] });
+  });
+});

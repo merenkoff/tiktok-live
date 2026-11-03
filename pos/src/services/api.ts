@@ -258,6 +258,10 @@ class PosApi {
     sellable?: boolean;
     /** The register it sells through (track ДК): 1, 2, or null = register 1. */
     fiscal_register?: number | null;
+    /** Excise goods and a stamp per unit (ДК4); УКТ ЗЕД, null to clear. */
+    fiscal_excise?: boolean;
+    excise_per_unit?: boolean;
+    fiscal_uktzed?: string | null;
     variants: Array<{
       attributes?: AttributeValues;
       unit?: string;
@@ -297,6 +301,10 @@ class PosApi {
       sellable: boolean;
       /** The register it sells through (track ДК): 1, 2, or null = register 1. */
       fiscal_register: number | null;
+      /** Excise goods and a stamp per unit (ДК4); УКТ ЗЕД, null to clear. */
+      fiscal_excise: boolean;
+      excise_per_unit: boolean;
+      fiscal_uktzed: string | null;
     }>
   ): Promise<Product> {
     const { data } = await this.client.patch<Product>(`/products/${id}`, payload);

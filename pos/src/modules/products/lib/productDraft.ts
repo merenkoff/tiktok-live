@@ -61,6 +61,15 @@ export interface ProductDraft {
    * is off, when the field is not shown and the server sells it through 1.
    */
   fiscalRegister: number;
+  /**
+   * Excise goods (track ДК, ДК4): beer, alcohol — the register's excise rate
+   * goes on the receipt line, which also carries the УКТ ЗЕД below.
+   */
+  fiscalExcise: boolean;
+  /** Each unit sold needs its own stamp scanned (a bottle sold whole). */
+  excisePerUnit: boolean;
+  /** УКТ ЗЕД as typed; '' = none. */
+  uktzed: string;
   shape: ProductShape;
   tagIds: number[];
   groupIds: number[];
@@ -115,6 +124,9 @@ export function draftOf(product: Product): ProductDraft {
     sellable: product.sellable !== false,
     menuHidden: product.menu_hidden === true,
     fiscalRegister: product.fiscal_register ?? 1,
+    fiscalExcise: product.fiscal_excise === true,
+    excisePerUnit: product.excise_per_unit === true,
+    uktzed: product.fiscal_uktzed ?? '',
     shape: shapeOf(product),
     tagIds: [...(product.tag_ids ?? [])],
     groupIds: [...(product.modifier_group_ids ?? [])],
@@ -137,6 +149,9 @@ export function emptyDraft(): ProductDraft {
     sellable: true,
     menuHidden: false,
     fiscalRegister: 1,
+    fiscalExcise: false,
+    excisePerUnit: false,
+    uktzed: '',
     shape: '',
     tagIds: [],
     groupIds: [],
@@ -164,6 +179,8 @@ export function createDirty(draft: ProductDraft, variantsTyped: boolean): boolea
     !draft.sellable ||
     draft.menuHidden ||
     draft.fiscalRegister !== 1 ||
+    draft.fiscalExcise ||
+    draft.uktzed.trim() !== '' ||
     draft.shape !== '' ||
     draft.tagIds.length > 0 ||
     draft.groupIds.length > 0 ||
@@ -277,6 +294,11 @@ export function detailsOf(d: ProductDraft) {
     sellable: d.sellable,
     menu_hidden: d.menuHidden,
     fiscal_register: d.fiscalRegister,
+    // Excise goods (ДК4): a stamp per unit only on excise goods — the server
+    // says so too; sent together so a product un-marked loses both at once.
+    fiscal_excise: d.fiscalExcise,
+    excise_per_unit: d.fiscalExcise && d.excisePerUnit,
+    fiscal_uktzed: d.uktzed.trim() || null,
   };
 }
 
@@ -317,7 +339,10 @@ export function diffProduct(snapshot: ProductDraft, draft: ProductDraft): Produc
       (snapshot.imageUrl ?? null) !== (draft.imageUrl ?? null) ||
       snapshot.sellable !== draft.sellable ||
       snapshot.menuHidden !== draft.menuHidden ||
-      snapshot.fiscalRegister !== draft.fiscalRegister,
+      snapshot.fiscalRegister !== draft.fiscalRegister ||
+      snapshot.fiscalExcise !== draft.fiscalExcise ||
+      snapshot.excisePerUnit !== draft.excisePerUnit ||
+      snapshot.uktzed.trim() !== draft.uktzed.trim(),
     shape: snapshot.shape !== draft.shape,
     tags: !sameSet(snapshot.tagIds, draft.tagIds),
     groups: !sameStrings(snapshot.groupIds.map(String), draft.groupIds.map(String)),

@@ -519,6 +519,7 @@ function ProductCard({ id }: { id: string | undefined }) {
                 variants={draft.variants}
                 askMenuHidden={scope.askDishFacts}
                 registers={registers}
+                askExcise={fiscal?.enabled === true}
               />
             </div>
           </fieldset>
