@@ -40,6 +40,7 @@ import { asFiscalError, cashierMessage, supportCode } from '../fiscal/errors.js'
 import { holderFromError } from '../fiscal/offline/holder.js';
 import { errorMessage, readDeviceId } from './_shared.js';
 import { FiscalRegisterMismatchError, registerLabels } from '../fiscal/routing.js';
+import { ExciseError } from '../excise.js';
 import { pool } from '../../db.js';
 
 function idOf(value: string): number | null {
@@ -58,6 +59,11 @@ function sendError(reply: { code: (n: number) => { send: (b: unknown) => unknown
   // The owner moved a dish between registers while the bill was being paid.
   if (error instanceof FiscalRegisterMismatchError) {
     return reply.code(409).send({ error: errorMessage(error), code: error.code });
+  }
+  // A bottle's stamp missing, not a stamp, or already sold (ДК4-Б). `error`
+  // is the waiter's sentence, as everywhere on this screen.
+  if (error instanceof ExciseError) {
+    return reply.code(error.status).send({ error: errorMessage(error), code: error.code, ...error.detail });
   }
   if (error instanceof bills.BillError) {
     return reply.code(400).send({ error: errorMessage(error) });
@@ -340,6 +346,29 @@ export function registerTablesRoutes(fastify: FastifyInstance): void {
         id,
         itemId,
         (request.body ?? {}) as bills.DraftItemPatch
+      );
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  // The stamps of a draft line's bottles (ДК4-Б): replaced wholesale.
+  fastify.put('/bills/:id/items/:itemId/excise', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const params = request.params as { id: string; itemId: string };
+    const id = idOf(params.id);
+    const itemId = idOf(params.itemId);
+    if (id == null || itemId == null) {
+      return reply.code(404).send({ error: 'Позицію не знайдено' });
+    }
+    try {
+      return await bills.setDraftExciseLabels(
+        auth.storeId,
+        auth.staffId,
+        id,
+        itemId,
+        (request.body as { excise_labels?: unknown } | null)?.excise_labels
       );
     } catch (error) {
       return sendError(reply, error);

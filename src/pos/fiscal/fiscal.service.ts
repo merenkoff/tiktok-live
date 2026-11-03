@@ -728,10 +728,12 @@ async function recover(
 async function loadLineCodes(
   storeId: number,
   saleId: number,
-  defaultTaxCode: string | null
+  defaultTaxCode: string | null,
+  /** A return: only the stamps this refund gives back go on its document. */
+  refundId?: number
 ): Promise<{ tax: TaxCodeResolution; codes: BarcodeResolution }> {
   const result = await pool.query(
-    `SELECT si.id AS sale_item_id, v.barcode, p.fiscal_tax_code, p.fiscal_uktzed
+    `SELECT si.id AS sale_item_id, v.barcode, p.fiscal_tax_code, p.fiscal_uktzed, p.fiscal_excise
      FROM pos_sale_items si
      JOIN pos_variants v ON v.id = si.variant_id
      JOIN pos_products p ON p.id = v.product_id
@@ -742,16 +744,34 @@ async function loadLineCodes(
   const byItemId: Record<number, string | null> = {};
   const barcodeByItemId: Record<number, string | null> = {};
   const uktzedByItemId: Record<number, string | null> = {};
+  const exciseByItemId: Record<number, boolean> = {};
   for (const row of result.rows) {
     const id = Number(row.sale_item_id);
     byItemId[id] = row.fiscal_tax_code ?? null;
     barcodeByItemId[id] = row.barcode ?? null;
     uktzedByItemId[id] = row.fiscal_uktzed ?? null;
+    if (row.fiscal_excise) exciseByItemId[id] = true;
+  }
+
+  // The stamps (ДК4-Б): every one the line sold, or those this refund returns.
+  const labels = await pool.query(
+    `SELECT l.sale_item_id, l.label
+     FROM pos_excise_labels l
+     JOIN pos_sale_items si ON si.id = l.sale_item_id
+     WHERE si.sale_id = $1 AND l.store_id = $2
+       AND ($3::bigint IS NULL OR l.refund_id = $3)
+     ORDER BY l.id`,
+    [saleId, storeId, refundId ?? null]
+  );
+  const labelsByItemId: Record<number, string[]> = {};
+  for (const row of labels.rows) {
+    const id = Number(row.sale_item_id);
+    (labelsByItemId[id] ??= []).push(String(row.label));
   }
 
   return {
     tax: { byItemId, fallback: defaultTaxCode },
-    codes: { byItemId: barcodeByItemId, uktzedByItemId },
+    codes: { byItemId: barcodeByItemId, uktzedByItemId, exciseByItemId, labelsByItemId },
   };
 }
 
@@ -1145,7 +1165,8 @@ export async function fiscalizeRefund(
   const { tax, codes } = await loadLineCodes(
     ctx.storeId,
     sale.id,
-    ctx.settings.default_tax_code
+    ctx.settings.default_tax_code,
+    refund.id
   );
   const doc = buildRefundDoc({
     requestId,

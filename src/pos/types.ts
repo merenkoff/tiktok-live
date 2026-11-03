@@ -279,6 +279,10 @@ export interface CatalogItem {
    * that register is switched on. What a till splits a cart into receipts by.
    */
   fiscal_register?: number;
+  /** Excise goods (ДК4-Б, migration 092); absent = not excise. */
+  fiscal_excise?: boolean;
+  /** Each unit sold needs its own stamp scanned (a bottle sold whole); absent = no. */
+  excise_per_unit?: boolean;
   /**
    * The purchase pack (migration 054): `pack_qty` base units per pack,
    * `pack_label` what it is called. Here because the till's stock count is the
@@ -350,6 +354,12 @@ export interface CompleteSaleItemInput {
    * priced as 350 pieces (TechDocs/grocery/G4_WEIGHED.md, decision 7).
    */
   weight_source?: string;
+  /**
+   * The excise stamps of this line's units (ДК4-Б): exactly `quantity` of
+   * them for goods marked «марка на кожну одиницю» (a bottle sold whole), none
+   * otherwise. Normalised and checked unique per store; never merged.
+   */
+  excise_labels?: string[];
 }
 
 export interface CompleteSalePaymentInput {
@@ -367,6 +377,12 @@ export interface CartDiscountInput {
 export interface RefundItemInput {
   sale_item_id: number;
   quantity: number;
+  /**
+   * The stamps of the bottles coming back (ДК4-Б, decision Д16): picked from
+   * the line's own stamps, exactly `quantity` of them, on a line that sold
+   * with stamps. They go on the return receipt and are free again.
+   */
+  excise_labels?: string[];
 }
 
 /** How refunded money goes back to the customer — same set as PaymentMethod. */

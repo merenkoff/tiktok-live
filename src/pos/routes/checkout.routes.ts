@@ -32,6 +32,7 @@ import { holderFromError } from '../fiscal/offline/holder.js';
 import * as splitSale from '../split-sale.service.js';
 import { formatUah } from '../core/money.js';
 import { FiscalRegisterMismatchError, registerLabels, registersOfVariants } from '../fiscal/routing.js';
+import { ExciseError } from '../excise.js';
 import { pool } from '../../db.js';
 import { logger } from '../../logger.js';
 import { errorMessage, readDeviceId } from './_shared.js';
@@ -126,6 +127,11 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
     } catch (error) {
       if (error instanceof splitSale.SplitSaleError) {
         return reply.code(error.status).send({ error: error.code, message: error.message });
+      }
+      // A stamp missing, not a stamp, or already sold (ДК4-Б): the till's
+      // sheet reads `error` as the code and the details to point at the line.
+      if (error instanceof ExciseError) {
+        return reply.code(error.status).send({ error: error.code, message: error.message, ...error.detail });
       }
       return reply.code(400).send({ error: errorMessage(error) });
     }
@@ -289,6 +295,11 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
       });
     } catch (error) {
       logger.error('Complete sale failed', { error: errorMessage(error) });
+      // A stamp missing, not a stamp, or already sold (ДК4-Б): the till's
+      // sheet reads `error` as the code and the details to point at the line.
+      if (error instanceof ExciseError) {
+        return reply.code(error.status).send({ error: error.code, message: error.message, ...error.detail });
+      }
       // The owner moved a product between registers while this cart was open.
       if (error instanceof FiscalRegisterMismatchError) {
         return reply.code(409).send({ error: error.code, message: error.message });
@@ -474,6 +485,11 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
       });
     } catch (error) {
       const message = errorMessage(error);
+      // A stamp missing, not a stamp, or already sold (ДК4-Б): the till's
+      // sheet reads `error` as the code and the details to point at the line.
+      if (error instanceof ExciseError) {
+        return reply.code(error.status).send({ error: error.code, message: error.message, ...error.detail });
+      }
       // The new goods belong to another register than the receipt being
       // exchanged — another ФОП's sale (ДК2). Nothing was written.
       if (error instanceof FiscalRegisterMismatchError) {
@@ -635,6 +651,11 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
         cash_rounding: body.cash_rounding,
       });
     } catch (error) {
+      // The stamps of the bottles coming back (ДК4-Б, Д16): `choices` lists
+      // the line's own, for the dialog to offer.
+      if (error instanceof ExciseError) {
+        return reply.code(error.status).send({ error: error.code, message: error.message, ...error.detail });
+      }
       return reply.code(400).send({ error: errorMessage(error) });
     }
     if (!refund) return reply.code(404).send({ error: 'Sale not found' });
@@ -1142,6 +1163,9 @@ async function completeSplit(
     }
     if (error instanceof FiscalRegisterMismatchError) {
       return reply.code(409).send({ error: error.code, message: error.message });
+    }
+    if (error instanceof ExciseError) {
+      return reply.code(error.status).send({ error: error.code, message: error.message, ...error.detail });
     }
     logger.error('Split sale failed', { error: errorMessage(error) });
     return reply.code(400).send({ error: errorMessage(error) });

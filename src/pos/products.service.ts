@@ -33,6 +33,7 @@ import {
 } from './modifiers.service.js';
 import type { ComponentInput } from './composites.service.js';
 import { activeRegisters, effectiveRegister } from './fiscal/routing.js';
+import { normalizeUktzed } from './excise.js';
 
 export interface VariantInput {
   /**
@@ -132,6 +133,36 @@ export interface CreateProductInput {
    * while that register is switched on (`fiscal/routing.ts`).
    */
   fiscal_register?: number | null;
+  /**
+   * Excise goods (track ДК, ДК4-Б, migration 092): beer, alcohol — the
+   * register's excise rate is added to the receipt line. Requires a УКТ ЗЕД.
+   */
+  fiscal_excise?: boolean;
+  /** Every unit sold carries its own stamp (a bottle sold whole); only on an excise product. */
+  excise_per_unit?: boolean;
+  /** УКТ ЗЕД (migration 024 reserved it; ДК4-Б makes it editable): 4–10 digits, or null. */
+  fiscal_uktzed?: string | null;
+}
+
+/**
+ * Excise goods need their УКТ ЗЕД (the receipt line carries it), and a stamp
+ * per unit means nothing on goods that are not excise. Checked on the row as
+ * it stands after a write, so a create and a partial update are judged alike.
+ */
+async function assertExciseShape(client: Pick<typeof pool, 'query'>, storeId: number, productId: number) {
+  const row = (
+    await client.query(
+      `SELECT fiscal_excise, excise_per_unit, fiscal_uktzed FROM pos_products WHERE id = $1 AND store_id = $2`,
+      [productId, storeId]
+    )
+  ).rows[0];
+  if (!row) return;
+  if (row.excise_per_unit && !row.fiscal_excise) {
+    throw new Error('Марка на кожну одиницю — лише для підакцизного товару');
+  }
+  if (row.fiscal_excise && !row.fiscal_uktzed) {
+    throw new Error('Підакцизному товару потрібен код УКТ ЗЕД — він друкується в чеку');
+  }
 }
 
 /**
@@ -338,6 +369,9 @@ export async function listProducts(storeId: number) {
     sellable: p.sellable !== false,
     menu_hidden: p.menu_hidden === true,
     fiscal_register: p.fiscal_register == null ? null : Number(p.fiscal_register),
+    fiscal_excise: p.fiscal_excise === true,
+    excise_per_unit: p.excise_per_unit === true,
+    fiscal_uktzed: (p.fiscal_uktzed as string | null) ?? null,
     stop_listed_on: dateOnly(p.stop_listed_on),
     tag_ids: tagMap.get(Number(p.id)) ?? [],
     modifier_group_ids: groupMap.get(Number(p.id)) ?? [],
@@ -437,14 +471,18 @@ export async function createProductInTx(
   if (!input.variants?.length) throw new Error('At least one variant is required');
 
   const shape = resolveCompositeShape(input.kind, input.stock_mode);
+  // Said in words before the row's CHECK would say it in SQL (ДК4-Б).
+  if (input.excise_per_unit === true && input.fiscal_excise !== true) {
+    throw new Error('Марка на кожну одиницю — лише для підакцизного товару');
+  }
 
   const productResult = await client.query(
     `INSERT INTO pos_products
        (store_id, name, description, image_url, needs_review, created_from_document_id,
         kind, stock_mode, one_off, sellable, composition, allergens, menu_hidden, menu_labels,
-        kcal, strength_tenths, prep_minutes, fiscal_register)
+        kcal, strength_tenths, prep_minutes, fiscal_register, fiscal_excise, excise_per_unit, fiscal_uktzed)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::text[], $13, $14::text[], $15, $16, $17,
-             $18)
+             $18, $19, $20, $21)
      RETURNING id`,
     [
       storeId,
@@ -465,9 +503,13 @@ export async function createProductInTx(
       strengthTenthsOf(input),
       normalizePrepMinutes(input.prep_minutes),
       normalizeFiscalRegister(input.fiscal_register),
+      input.fiscal_excise === true,
+      input.excise_per_unit === true,
+      normalizeUktzed(input.fiscal_uktzed),
     ]
   );
   const productId = Number(productResult.rows[0].id);
+  await assertExciseShape(client, storeId, productId);
   const variantIds: number[] = [];
   const vertical = await loadStoreVertical(client, storeId);
 
@@ -606,6 +648,9 @@ export async function updateProduct(
       | 'sellable'
       | 'menu_hidden'
       | 'fiscal_register'
+      | 'fiscal_excise'
+      | 'excise_per_unit'
+      | 'fiscal_uktzed'
     >
   > & {
     is_active?: boolean;
@@ -687,6 +732,26 @@ export async function updateProduct(
       sets.push(`fiscal_register = $${i++}`);
       values.push(normalizeFiscalRegister(input.fiscal_register));
     }
+    // Excise goods (ДК4-Б). Switching excise off takes the per-unit stamp
+    // with it, so the CHECK never trips on a product the owner un-marks.
+    if (input.fiscal_excise !== undefined) {
+      sets.push(`fiscal_excise = $${i++}`);
+      values.push(Boolean(input.fiscal_excise));
+      if (input.fiscal_excise === false && input.excise_per_unit === undefined) {
+        sets.push(`excise_per_unit = FALSE`);
+      }
+    }
+    if (input.excise_per_unit !== undefined) {
+      if (input.excise_per_unit === true && input.fiscal_excise === false) {
+        throw new Error('Марка на кожну одиницю — лише для підакцизного товару');
+      }
+      sets.push(`excise_per_unit = $${i++}`);
+      values.push(Boolean(input.excise_per_unit));
+    }
+    if (input.fiscal_uktzed !== undefined) {
+      sets.push(`fiscal_uktzed = $${i++}`);
+      values.push(normalizeUktzed(input.fiscal_uktzed));
+    }
     if (input.needs_review !== undefined) {
       sets.push(`needs_review = $${i++}`);
       values.push(input.needs_review);
@@ -715,6 +780,7 @@ export async function updateProduct(
       values
     );
     if (result.rows.length === 0) throw new Error('Product not found');
+    await assertExciseShape(client, storeId, productId);
     if (reshaping) await recomputeFlat(client, storeId);
     await client.query('COMMIT');
   } catch (error) {
@@ -1171,6 +1237,8 @@ export async function getCatalog(
        p.one_off,
        p.sellable,
        p.fiscal_register,
+       p.fiscal_excise,
+       p.excise_per_unit,
        -- As text: node-postgres would parse a DATE into a local-midnight
        -- Date, and the store's day is a string everywhere else.
        p.stop_listed_on::text AS stop_listed_on,
@@ -1246,6 +1314,9 @@ export async function getCatalog(
     sellable: row.sellable !== false,
     // Which register the line goes to (ДК2) — what a till splits a cart by.
     fiscal_register: effectiveRegister(row.fiscal_register, activeExtra),
+    // Excise goods (ДК4-Б): a till asks for a stamp per unit before payment.
+    ...(row.fiscal_excise ? { fiscal_excise: true } : {}),
+    ...(row.excise_per_unit ? { excise_per_unit: true } : {}),
     pack_qty: row.pack_qty == null ? null : Number(row.pack_qty),
     pack_label: String(row.pack_label ?? ''),
     price_per: Number(row.price_per ?? 1),

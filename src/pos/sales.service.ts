@@ -23,6 +23,7 @@ import type {
   PrepStatus,
 } from './types.js';
 import type { FiscalTaxLine } from './fiscal/types.js';
+import { claimExciseLabels, ExciseError, moveBillLabelsToSale, readExciseLabels } from './excise.js';
 import { writeOffPostedTx } from './stock.service.js';
 import { storeClock } from './core/storeClock.js';
 import { dailyCounterKey, nextCounterValue } from './core/counters.js';
@@ -142,6 +143,8 @@ export interface PlainLineInput {
   note: string;
   /** Raw from the request; checked by `pricePlainLine` for a weighed line only. */
   weight_source?: unknown;
+  /** The stamps scanned for this line's units (ДК4-Б), normalised. */
+  excise_labels?: string[];
 }
 
 /**
@@ -159,7 +162,9 @@ export function mergePlainLines<T extends PlainLineInput>(
   const merged = new Map<string, T>();
   const out: T[] = [];
   for (const line of lines) {
-    if (weighed(line.variant_id)) {
+    // A line with its own stamps is its own line too (ДК4-Б): the stamps are
+    // the bottles, and the request named them for exactly these units.
+    if (weighed(line.variant_id) || (line.excise_labels?.length ?? 0) > 0) {
       out.push({ ...line });
       continue;
     }
@@ -389,6 +394,8 @@ export interface SaleDraftLine {
   bill_item_id?: number;
   /** The «під запис» line this one pays (073) — the same signal as `bill_item_id`. */
   debt_item_id?: number;
+  /** The stamps of this line's units, scanned at the till (ДК4-Б). */
+  excise_labels?: string[];
   /** What a repayment line comes to, fixed when the goods were given (073). */
   fixed_total_cents?: number;
   /** On the receipt that closes a «під запис» line: what came earlier as «внески» (078). */
@@ -581,7 +588,7 @@ export async function completeSaleTx(
   const rawPlain: PlainLineInput[] = [];
   const customItems: Array<{ variant_id: number; quantity: number; components: ComponentInput[] }> =
     [];
-  for (const item of params.items ?? []) {
+  for (const [index, item] of (params.items ?? []).entries()) {
     // Whole base units, always — 350 g is quantity 350. A fraction used to reach
     // the INTEGER column and come back as a database error with no words.
     if (!item.variant_id || !Number.isInteger(item.quantity) || item.quantity <= 0) {
@@ -601,12 +608,14 @@ export async function completeSaleTx(
       });
       continue;
     }
+    const exciseLabels = readExciseLabels(item.excise_labels, `Рядок ${index + 1}`);
     rawPlain.push({
       variant_id: item.variant_id,
       quantity: item.quantity,
       modifiers: modifierIds,
       note,
       weight_source: item.weight_source,
+      ...(exciseLabels.length > 0 ? { excise_labels: exciseLabels } : {}),
     });
   }
 
@@ -699,7 +708,8 @@ export async function completeSaleTx(
   const variantsResult = await client.query(
     `SELECT v.id, v.price_cents, v.compare_at_cents, v.label, v.unit, v.is_active, v.price_per,
             p.id AS product_id, p.name AS product_name,
-            p.stop_listed_on::text AS stop_listed_on, p.fiscal_register
+            p.stop_listed_on::text AS stop_listed_on, p.fiscal_register,
+            p.fiscal_excise, p.excise_per_unit
      FROM pos_variants v
      JOIN pos_products p ON p.id = v.product_id
      WHERE v.store_id = $1 AND v.id = ANY($2::bigint[])`,
@@ -742,6 +752,43 @@ export async function completeSaleTx(
     }
   }
 
+  // A bottle sold whole carries its own stamp (ДК4-Б, Д4): one per unit,
+  // scanned where it is sold — a till line names them, a table's line had
+  // them scanned before its round fired. Nothing that cannot carry them
+  // (a pre-order, a bouquet) sells such goods.
+  for (const line of plainLines) {
+    const row = variantMap.get(line.variant_id)!;
+    const labels = line.excise_labels ?? [];
+    if (row.excise_per_unit) {
+      if (labels.length !== line.quantity) {
+        throw new ExciseError(
+          `«${row.product_name}»: скануйте акцизну марку кожної пляшки — потрібно ${line.quantity}, є ${labels.length}`,
+          'excise_labels_needed',
+          409,
+          { variant_id: line.variant_id, needed: line.quantity, have: labels.length }
+        );
+      }
+    } else if (labels.length > 0) {
+      throw new ExciseError(
+        `«${row.product_name}» продається без акцизної марки на кожну одиницю`,
+        'excise_label_not_needed',
+        400,
+        { variant_id: line.variant_id }
+      );
+    }
+  }
+  for (const line of [...customItems, ...locked.filter((l) => !l.bill_item_id)]) {
+    const row = variantMap.get(line.variant_id)!;
+    if (row.excise_per_unit) {
+      throw new ExciseError(
+        `«${row.product_name}» продається лише з каси зі скануванням марки`,
+        'excise_labels_needed',
+        409,
+        { variant_id: line.variant_id, needed: line.quantity, have: 0 }
+      );
+    }
+  }
+
   // The day's stop-list (migration 050, К3b): a stale second till that still
   // shows the tile is told in so many words. Never a replay — the goods left
   // while the till was offline — and never a pre-order's locked line, which
@@ -776,7 +823,7 @@ export async function completeSaleTx(
     const variant = variantMap.get(line.variant_id)!;
     const draft = pricePlainLine(variant, groupsByProduct.get(Number(variant.product_id)) ?? [], line);
     subtotal += draft.pre_discount_total;
-    draftLines.push(draft);
+    draftLines.push(line.excise_labels?.length ? { ...draft, excise_labels: line.excise_labels } : draft);
   }
 
   for (const line of locked) {
@@ -1025,6 +1072,20 @@ export async function completeSaleTx(
     );
     const saleItemId = Number(itemResult.rows[0].id);
 
+    // The stamps (ДК4-Б): scanned at the till onto this line, or carried over
+    // from the table's line this receipt pays.
+    if (line.excise_labels?.length) {
+      await claimExciseLabels(client, {
+        storeId: params.storeId,
+        labels: line.excise_labels,
+        saleItemId,
+        staffId: params.staffId,
+      });
+    }
+    if (line.bill_item_id) {
+      await moveBillLabelsToSale(client, params.storeId, line.bill_item_id, saleItemId);
+    }
+
     // What the line chose, by name and delta: a group renamed next week
     // must not rewrite a printed receipt.
     for (const chosen of line.modifiers ?? []) {
@@ -1181,6 +1242,23 @@ export async function getSale(storeId: number, saleId: number) {
     `SELECT * FROM pos_sale_items WHERE sale_id = $1 ORDER BY id`,
     [saleId]
   );
+  // The stamps each line sold with (ДК4-Б): those it still holds, and those a
+  // return gave back — the till prints the first and offers them to a return.
+  const stampRows = await pool.query(
+    `SELECT l.sale_item_id, l.label, l.refund_id IS NOT NULL AS returned
+       FROM pos_excise_labels l
+       JOIN pos_sale_items si ON si.id = l.sale_item_id
+      WHERE si.sale_id = $1 AND (l.released_at IS NULL OR l.refund_id IS NOT NULL)
+      ORDER BY l.id`,
+    [saleId]
+  );
+  const stampsByItem = new Map<number, { held: string[]; returned: string[] }>();
+  for (const row of stampRows.rows) {
+    const id = Number(row.sale_item_id);
+    const entry = stampsByItem.get(id) ?? { held: [], returned: [] };
+    (row.returned ? entry.returned : entry.held).push(String(row.label));
+    stampsByItem.set(id, entry);
+  }
   // What each line actually took off the shelf. Present only for composites —
   // and for a bouquet assembled at the counter this is the ONLY place its
   // recipe exists, so the receipt and the refund screen read it from here.
@@ -1410,6 +1488,12 @@ export async function getSale(storeId: number, saleId: number) {
       // Paid toward this «під запис» line earlier as «внески» (078): part of
       // the goods' price that is not in this receipt's sum.
       debt_prepaid_cents: Number(row.debt_prepaid_cents ?? 0),
+      ...(stampsByItem.has(Number(row.id))
+        ? {
+            excise_labels: stampsByItem.get(Number(row.id))!.held,
+            excise_labels_returned: stampsByItem.get(Number(row.id))!.returned,
+          }
+        : {}),
     })),
     payments: payments.rows.map((row) => ({
       id: Number(row.id),
@@ -1725,6 +1809,12 @@ export async function voidSale(params: {
        WHERE id = $1`,
       [params.saleId]
     );
+    // A voided receipt sold nothing: its bottles' stamps may sell again (ДК4-Б).
+    await client.query(
+      `UPDATE pos_excise_labels SET released_at = NOW()
+        WHERE sale_item_id IN (SELECT id FROM pos_sale_items WHERE sale_id = $1) AND released_at IS NULL`,
+      [params.saleId]
+    );
 
     await client.query('COMMIT');
     return getSale(params.storeId, params.saleId);
@@ -1776,6 +1866,13 @@ async function releasePartLines(
       throw new Error('Рахунок столу вже закрито — цей чек можна лише повернути');
     }
     await bills.releasePaidLines(client, { storeId: params.storeId, saleId: params.saleId });
+    // The bottles are owed for again on the bill: their stamps stay with its lines (ДК4-Б).
+    await client.query(
+      `UPDATE pos_excise_labels SET sale_item_id = NULL
+        WHERE sale_item_id IN (SELECT id FROM pos_sale_items WHERE sale_id = $1)
+          AND bill_item_id IS NOT NULL AND released_at IS NULL`,
+      [params.saleId]
+    );
   }
   if (debt) await debtLines.releaseDebtLinesForSale(client, params);
   return bill || debt;
@@ -2014,6 +2111,18 @@ export async function refundSaleTx(
     [params.saleId]
   );
   const itemMap = new Map(itemsResult.rows.map((row) => [Number(row.id), row]));
+  // The stamps each line still holds (ДК4-Б): a bottle that comes back names its own.
+  const stampRows = await client.query(
+    `SELECT l.sale_item_id, l.label FROM pos_excise_labels l
+      JOIN pos_sale_items si ON si.id = l.sale_item_id
+     WHERE si.sale_id = $1 AND l.released_at IS NULL`,
+    [params.saleId]
+  );
+  const stampsOf = new Map<number, string[]>();
+  for (const row of stampRows.rows) {
+    const id = Number(row.sale_item_id);
+    stampsOf.set(id, [...(stampsOf.get(id) ?? []), String(row.label)]);
+  }
 
   let refundTotal = 0;
   const refundLines: Array<{
@@ -2022,6 +2131,7 @@ export async function refundSaleTx(
     quantity: number;
     unit_price_cents: number;
     line_total_cents: number;
+    excise_labels: string[];
   }> = [];
 
   for (const input of params.items) {
@@ -2061,6 +2171,29 @@ export async function refundSaleTx(
       );
     }
 
+    // A line sold with stamps gives back the stamps of the bottles that came
+    // back (Д16): picked from its own, one per unit. They go on the return
+    // receipt and may be sold again.
+    const held = stampsOf.get(Number(item.id)) ?? [];
+    const returning = readExciseLabels(input.excise_labels, `«${item.product_name}»`);
+    if (held.length > 0) {
+      if (returning.length !== input.quantity || returning.some((label) => !held.includes(label))) {
+        throw new ExciseError(
+          `«${item.product_name}»: оберіть марки пляшок, що повертаються — ${input.quantity} з ${held.join(', ')}`,
+          'excise_labels_needed',
+          409,
+          { sale_item_id: Number(item.id), needed: input.quantity, choices: held }
+        );
+      }
+    } else if (returning.length > 0) {
+      throw new ExciseError(
+        `«${item.product_name}» продано без акцизних марок`,
+        'excise_label_not_needed',
+        400,
+        { sale_item_id: Number(item.id) }
+      );
+    }
+
     // Refund against the discounted line total, and cumulatively, so the
     // units of a line always add back up to exactly what was charged.
     const lineTotal = refundLineAmount(
@@ -2076,6 +2209,7 @@ export async function refundSaleTx(
       quantity: input.quantity,
       unit_price_cents: Number(item.unit_price_cents),
       line_total_cents: lineTotal,
+      excise_labels: returning,
     });
   }
 
@@ -2132,6 +2266,13 @@ export async function refundSaleTx(
        WHERE id = $2`,
       [line.quantity, line.sale_item_id]
     );
+    if (line.excise_labels.length > 0) {
+      await client.query(
+        `UPDATE pos_excise_labels SET released_at = NOW(), refund_id = $1
+          WHERE sale_item_id = $2 AND label = ANY($3::text[]) AND released_at IS NULL`,
+        [refundId, line.sale_item_id, line.excise_labels]
+      );
+    }
 
     await returnStockForSaleItem(client, {
       storeId: params.storeId,
