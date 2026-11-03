@@ -21,7 +21,7 @@ export const restoappChyLiveshopDlyaRestoranu: Article = {
     description: `RestoApp від ${R.vendor} — QR-меню, оплата й чайові в телефоні, виклик офіціанта, доставка й відгуки за ${R.priceUah} грн/міс за заклад, у парі з ${POS_LIST}; ${POS} — сама каса ресторану й кафе, у якій QR-меню, рахунок столу, виклик офіціанта й замовлення гостя (через офіціанта або, за вибором власника, одразу на кухню) вже є. Що є в кожного, де сильніший кожен і як прибрати цінники поверх паперового меню. Джерела й дата перевірки — ${CHECKED}.`,
     publishedAt: R.publishedAt,
     // The competitor's facts were read on `checkedAt`; ours may have changed since.
-    updatedAt: latestDay(R.checkedAt, PRICING.pos.changedAt),
+    updatedAt: latestDay(COMPETITOR_FACTS.cashalot.checkedAt, R.checkedAt, PRICING.pos.changedAt),
     ogImage: '/og/pos.png',
     readingMinutes: 7,
     faq: [
@@ -31,7 +31,7 @@ export const restoappChyLiveshopDlyaRestoranu: Article = {
       },
       {
         q: 'Скільки коштує RestoApp і скільки The Live Shop POS?',
-        a: `RestoApp: ${R.priceUah} грн на місяць за один заклад (картка ТОВ «Бінотел» у каталозі Дія.Бізнес, ${CHECKED}), +${R.giftMonths} місяці в подарунок при підключенні першого закладу, −${R.diiaDiscountPercent} % за промокодом Diia; каса, з якою він працює, оплачується окремо. ${POS}: зараз безкоштовно на період запуску, далі ${PLAN.price} грн/міс за магазин (до ${PRICING.pos.perStoreRegisters} кас) — і QR-меню вже в цій ціні; модуль «${TABLES.name}» — ще ${TABLES.price} грн/міс. Підписку Checkbox для ПРРО магазин оплачує окремо.`,
+        a: `RestoApp: ${R.priceUah} грн на місяць за один заклад (картка ТОВ «Бінотел» у каталозі Дія.Бізнес, ${CHECKED}), +${R.giftMonths} місяці в подарунок при підключенні першого закладу, −${R.diiaDiscountPercent} % за промокодом Diia; каса, з якою він працює, оплачується окремо. ${POS}: зараз безкоштовно на період запуску, далі ${PLAN.price} грн/міс за магазин (до ${PRICING.pos.perStoreRegisters} кас) — і QR-меню вже в цій ціні; модуль «${TABLES.name}» — ще ${TABLES.price} грн/міс. Підписку Checkbox чи Cashalot для ПРРО магазин оплачує окремо.`,
       },
       {
         q: 'Чи працює RestoApp без Poster POS і чи працює він із The Live Shop POS?',
@@ -209,7 +209,7 @@ function Body() {
             <tr>
               <td>ПРРО</td>
               <td>Не згадано</td>
-              <td>Через Checkbox: зміни, Z-звіт, фіскальний чек, онлайн і офлайн</td>
+              <td>Через Checkbox або Cashalot: зміни, Z-звіт, фіскальний чек, онлайн і офлайн (офлайн — з Checkbox)</td>
             </tr>
             <tr>
               <td>Аналітика</td>
@@ -235,7 +235,7 @@ function Body() {
               </td>
               <td>
                 {PRICING.pos.launch.label.toLowerCase()}; далі {PLAN.price} грн/міс за магазин разом із
-                QR-меню, модуль «{TABLES.name}» — ще {TABLES.price} грн/міс; Checkbox — окремо
+                QR-меню, модуль «{TABLES.name}» — ще {TABLES.price} грн/міс; Checkbox чи Cashalot — окремо
               </td>
             </tr>
           </tbody>
@@ -259,7 +259,7 @@ function Body() {
         У {POS} каса й меню — одна ціна: зараз безкоштовно на період запуску, далі {PLAN.price} грн/міс
         за магазин (до {PRICING.pos.perStoreRegisters} кас) — QR-меню, рахунок і замовлення гостя
         входять; для ресторану зі столами додається модуль «{TABLES.name}» за {TABLES.price} грн/міс,
-        разом — {OURS_WITH_TABLES} грн/міс. Підписку Checkbox для ПРРО магазин оплачує окремо.
+        разом — {OURS_WITH_TABLES} грн/міс. Підписку Checkbox чи Cashalot для ПРРО магазин оплачує окремо.
       </p>
       <div className="callout">
         Порівнюйте не {R.priceUah} з {OURS_WITH_TABLES}, а повний набір: каса + меню + ПРРО з

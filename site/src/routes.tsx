@@ -84,7 +84,7 @@ export const ROUTES: SiteRoute[] = [
     out: 'index.html',
     Component: Home,
     jsonLd: [org],
-    updatedAt: '2026-09-23',
+    updatedAt: '2026-11-03',
     sitemap: true,
   },
   {
@@ -102,7 +102,7 @@ export const ROUTES: SiteRoute[] = [
     out: 'pos.html',
     Component: PosPage,
     jsonLd: [org, posSoftwareJsonLd(), buildFaqJsonLd(POS_FAQ)],
-    updatedAt: '2026-09-30',
+    updatedAt: '2026-11-03',
     sitemap: true,
   },
   // One landing per vertical, prerendered from the shared template the way
@@ -139,7 +139,7 @@ export const ROUTES: SiteRoute[] = [
       buildFaqJsonLd(COMPARE_FAQ),
       breadcrumbJsonLd([POS_CRUMB, { name: 'Яку касу обрати', path: '/yaku-kasu-obraty' }]),
     ],
-    updatedAt: '2026-09-23',
+    updatedAt: '2026-11-03',
     sitemap: true,
   },
   {

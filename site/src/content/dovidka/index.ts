@@ -1,4 +1,5 @@
 import type { Article } from './types';
+import { checkboxChyCashalotPrroDlyaKasy } from './checkbox-chy-cashalot-prro-dlya-kasy';
 import { zminaPrroZaminaKasy } from './zmina-prro-zamina-kasy';
 import { yakObratyProgramuDlyaKavyarni } from './yak-obraty-programu-dlya-kavyarni';
 import { tehkartaIFudkostKavyarni } from './tehkarta-i-fudkost-kavyarni';
@@ -27,6 +28,7 @@ import { GUIDE_ARTICLES } from './guides';
 
 /** Hand-written answers, newest first. */
 const STANDALONE: Article[] = [
+  checkboxChyCashalotPrroDlyaKasy,
   oblikPakuvannyaUKvitkovomuMagazyni,
   oblikHeliyuIKulokUKvitkovomuMagazyni,
   torgsoftArm20SkynumDlyaMagazynuOdyagu,

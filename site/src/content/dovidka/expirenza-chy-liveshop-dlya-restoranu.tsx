@@ -23,7 +23,7 @@ export const expirenzaChyLiveshopDlyaRestoranu: Article = {
     description: `Що гість робить за QR на столі в Expirenza (меню, рахунок, оплата, чайові; комісія ${FEE}) і що — у The Live Shop POS (меню, рахунок столу, виклик офіціанта, замовлення з телефону, каса, кухня, ПРРО); де сильніший кожен із двох і чого ми не знайшли на їхніх сторінках. Джерела й дата перевірки — ${CHECKED}.`,
     publishedAt: E.publishedAt,
     // The competitor's facts were read on `checkedAt`; ours may have changed since.
-    updatedAt: latestDay(E.checkedAt, PRICING.pos.changedAt),
+    updatedAt: latestDay(COMPETITOR_FACTS.cashalot.checkedAt, E.checkedAt, PRICING.pos.changedAt),
     ogImage: '/og/pos.png',
     readingMinutes: 6,
     faq: [
@@ -178,8 +178,8 @@ function Body() {
               <td>Це не каса: беруться з вашої POS-системи</td>
               <td>
                 {board
-                  ? 'Дошка кухні й бару, стоп-лист, склад із техкартами, фіскальний чек через Checkbox'
-                  : 'Склад із техкартами, фіскальний чек через Checkbox'}
+                  ? 'Дошка кухні й бару, стоп-лист, склад із техкартами, фіскальний чек через Checkbox або Cashalot'
+                  : 'Склад із техкартами, фіскальний чек через Checkbox або Cashalot'}
                 {floor ? '; план залу, раунди, передчек, розділення рахунку' : ''}
               </td>
             </tr>
@@ -219,7 +219,7 @@ function Body() {
       </p>
       <p>
         У {POS} ціна — за магазин, а не за оплату: каса зараз безкоштовна на період запуску, далі{' '}
-        {PRICING.pos.plans[0].price} грн/міс із Checkbox; модуль «{TABLES.name}» (столи, рахунки,
+        {PRICING.pos.plans[0].price} грн/міс із Checkbox чи Cashalot; модуль «{TABLES.name}» (столи, рахунки,
         рахунок гостя) — ще {TABLES.price} грн/міс. Меню й рахунок гостя комісії не мають, бо ми
         поки не приймаємо оплату.
       </p>

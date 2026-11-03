@@ -24,7 +24,7 @@ export const choiceqrChyLiveshopDlyaRestoranu: Article = {
     description: `ChoiceQR — QR-меню, замовлення до столу (з тарифу ${TABLE_PLAN.id}, ${TABLE_PLAN.monthlyUah} грн/міс) й інтеграції з касами (${POS_LIST}); The Live Shop POS — сама каса ресторану з меню, рахунком столу, викликом офіціанта й замовленням гостя (через офіціанта або, за вибором власника, одразу на кухню). Що є в кожного, де сильніший кожен із двох і чого ми не знайшли на сторінках ChoiceQR. Джерела й дата перевірки — ${CHECKED}.`,
     publishedAt: C.publishedAt,
     // The competitor's facts were read on `checkedAt`; ours may have changed since.
-    updatedAt: latestDay(C.checkedAt, PRICING.pos.changedAt),
+    updatedAt: latestDay(COMPETITOR_FACTS.cashalot.checkedAt, C.checkedAt, PRICING.pos.changedAt),
     ogImage: '/og/pos.png',
     readingMinutes: 6,
     faq: [
@@ -213,7 +213,7 @@ function Body() {
             <tr>
               <td>ПРРО</td>
               <td>Серед інтеграцій на сторінці названо Checkbox</td>
-              <td>Через Checkbox: зміни, Z-звіт, фіскальний чек, онлайн і офлайн</td>
+              <td>Через Checkbox або Cashalot: зміни, Z-звіт, фіскальний чек, онлайн і офлайн (офлайн — з Checkbox)</td>
             </tr>
             <tr>
               <td>Масштаб</td>
@@ -271,7 +271,7 @@ function Body() {
       </p>
       <p>
         У {POS} каса й меню — одна ціна: каса зараз безкоштовна на період запуску, далі{' '}
-        {PRICING.pos.plans[0].price} грн/міс за магазин із Checkbox; модуль «{TABLES.name}» (столи,
+        {PRICING.pos.plans[0].price} грн/міс за магазин із Checkbox чи Cashalot; модуль «{TABLES.name}» (столи,
         рахунки, рахунок гостя) — ще {TABLES.price} грн/міс.
       </p>
       <div className="callout">
