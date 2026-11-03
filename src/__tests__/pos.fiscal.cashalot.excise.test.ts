@@ -12,6 +12,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cashalotProvider } from '../pos/fiscal/providers/cashalot/index.js';
+import { decodeBase64Text } from '../pos/fiscal/providers/cashalot/client.js';
 import { fromOriginalXml } from '../pos/fiscal/providers/cashalot/payload.js';
 import { mapSellPayload } from '../pos/fiscal/providers/checkbox/payload.js';
 import type { FiscalCallCtx, FiscalDocLine, FiscalSaleDoc } from '../pos/fiscal/types.js';
@@ -144,5 +145,26 @@ describe('Checkbox — the stamps of the goods', () => {
     const payload = mapSellPayload(sale([bottle, { ...bottle, excise: false, exciseLabels: undefined, sourceLineRef: '2' }]));
     expect(payload.goods[0].good.excise_barcodes).toEqual(['AATE508932 0000412168']);
     expect(payload.goods[1].good).not.toHaveProperty('excise_barcodes');
+  });
+});
+
+describe('Cashalot — the original XML is windows-1251', () => {
+  // As the live register returned it (probe 10, 2026-11-03): a UTF-8 decode
+  // garbled every Cyrillic letter the tax rows are read by.
+  it('decodes by the declared encoding, and UTF-8 where none is declared', () => {
+    const xml = '<?xml version="1.0" encoding="windows-1251"?><CHECK><LETTERS>АГ</LETTERS><NAME>Акциз</NAME></CHECK>';
+    const cp1251 = Buffer.from(
+      [...xml].map((ch) => {
+        const code = ch.charCodeAt(0);
+        if (code < 0x80) return code;
+        if (code >= 0x410 && code <= 0x44f) return code - 0x410 + 0xc0;
+        throw new Error(`no cp1251 byte for ${ch}`);
+      })
+    ).toString('base64');
+    expect(decodeBase64Text(cp1251)).toContain('<LETTERS>АГ</LETTERS><NAME>Акциз</NAME>');
+    expect(decodeBase64Text(Buffer.from('<CHECK><NAME>ПДВ</NAME></CHECK>', 'utf-8').toString('base64'))).toBe(
+      '<CHECK><NAME>ПДВ</NAME></CHECK>'
+    );
+    expect(decodeBase64Text(null)).toBeNull();
   });
 });

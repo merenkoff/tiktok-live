@@ -363,7 +363,24 @@ export function shifts(
   return command('Shifts', { ...credentialFields(creds), From: from.toISOString(), To: to.toISOString() }, opts);
 }
 
-/** Base64 → UTF-8 text, for `Visualization` and `GetCheck.Data`. */
+/**
+ * Base64 → text, for `Visualization` and `GetCheck.Data`. An XML document says
+ * its own encoding, and Cashalot's `OriginalXml` says `windows-1251` (seen on
+ * the live register, 2026-11-03, probe 10): decoded as UTF-8 every Cyrillic
+ * letter — «АГ», «ПДВ», «Акциз» — came out garbled, which mattered the moment
+ * the tax rows of a document found again were read from it (ДК4-А). Anything
+ * that declares no encoding is UTF-8, as before.
+ */
 export function decodeBase64Text(value: string | null | undefined): string | null {
-  return value ? Buffer.from(value, 'base64').toString('utf-8') : null;
+  if (!value) return null;
+  const bytes = Buffer.from(value, 'base64');
+  const declared = /^\s*<\?xml[^>]*encoding=["']([\w-]+)["']/i.exec(bytes.subarray(0, 200).toString('latin1'))?.[1];
+  if (declared && !/^utf-?8$/i.test(declared)) {
+    try {
+      return new TextDecoder(declared.toLowerCase()).decode(bytes);
+    } catch {
+      // An encoding this runtime does not know: fall through to UTF-8.
+    }
+  }
+  return bytes.toString('utf-8');
 }
