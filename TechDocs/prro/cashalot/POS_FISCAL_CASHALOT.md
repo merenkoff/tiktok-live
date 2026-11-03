@@ -219,6 +219,7 @@ src/pos/fiscal/providers/cashalot/
 7. `GetCheck Availability` без кредов — по настоящему номеру (`ResultCode 0`) и по выдуманному (`1`).
 8. Пять чеков подряд — латентность (разработка называет 400–800 мс).
 9. Один `ServerState` из прода (`railway ssh`, регион сервиса) — не режет ли запрос гео-ограничение (ответ к). **Сделано 2026-10-27 без ключей:** не режет; `Available: false` — README фикстур, находка 1.
+10. **Розничный акциз и акцизная марка** (трек «Подвійна каса», ДК4-А, `TechDocs/POS_DUAL_REGISTER.md` §7.8): бутылка 259,90 с `LETTERS` «АГ», `CHECKTAX` ПДВ 20 % (41,25 на 247,52) и акциз 5 % (12,38), одна `EXCISELABEL` из примера ДПС; затем то же без ПДВ («Г», только строка акциза). **Сделано 2026-11-03 на живой кассе в тестовой смене** (прогон `20261103-212519Z`): оба приняты онлайн (тестовые № 8155735534 и 8155735535); `GetCheck OriginalXml` вернул наш `CHECKTAX` обеими строками до копейки, `LETTERS` «АГ» / «Г» и марку как есть — **марку в тестовом документе против реестра ДПС не проверяют** (выдуманная из примера прошла). Находка: `OriginalXml` приходит в **windows-1251** (`<?xml … encoding="windows-1251"?>`), а `decodeBase64Text` читал UTF-8 и ломал кириллицу; теперь он следует объявленной кодировке. Тестовая смена закрыта Z-отчётом.
 
 Каждый прогон кладёт ответы, вывод консоли и `run.json` в `src/__tests__/fixtures/cashalot/runs/<timestamp>/`, как прогоны Checkbox; ключи в фикстурах — заглушки.
 
@@ -229,6 +230,7 @@ npm run fiscal:sandbox:cashalot                 # пробы 1, 7 — тольк
 npm run fiscal:sandbox:cashalot -- --shift      # + 2: тестовая смена
 npm run fiscal:sandbox:cashalot -- --sell       # + 3, 4, 5, 8
 npm run fiscal:sandbox:cashalot -- --return     # + 6
+npm run fiscal:sandbox:cashalot -- --excise     # + 10: акциз и марка (нужна тестовая смена)
 npm run fiscal:sandbox:cashalot -- --all
 ```
 
