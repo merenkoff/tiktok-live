@@ -39,6 +39,16 @@ export interface FiscalStatus {
   /** Which device holds the register. Null while offline mode is off: the lock
    * is only enforced then, so there is nothing to report. */
   holder: HolderStatusBlock | null;
+  /** Which of the store's registers this is (track ДК); absent from an older backend = 1. */
+  register_no?: number;
+  /** The owner's name for a register 2..; null for register 1. */
+  label?: string | null;
+  /**
+   * On register 1's status only, in a store with more: each further register
+   * that is switched on, read the same way — the till's shift screen shows
+   * every shift from one request.
+   */
+  registers?: FiscalStatus[];
 }
 
 /** Mirrors `OfflineStatusBlock` in `src/pos/fiscal/offline/status.ts`. */
@@ -205,6 +215,8 @@ export interface AttentionDoc {
 /** `POST /fiscal/service` — cash in (positive) / out (negative). */
 export interface ServiceReceiptRequest {
   amount_cents: number;
+  /** Which of the store's registers (track ДК); absent = 1. */
+  register?: number;
 }
 
 /** Declares one credential field, so the form needs no per-provider UI code. */

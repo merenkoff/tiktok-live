@@ -324,3 +324,128 @@ test('with the module CDN down there is no ПРРО screen, and the till still s
   await dialog.getByRole('button', { name: /^Прийняти/ }).click();
   await expect(page.getByText('Фіскальний чек № 100002 зареєстровано')).toBeVisible();
 });
+
+// Track ДК (TechDocs/POS_DUAL_REGISTER.md): a second register — another ФОП's
+// Cashalot. Its tab reads and writes register 2 only (`?register=2` / body
+// `register: 2`), and the till's shift screen runs one shift per register.
+test('a second register: its own tab on /admin/fiscal and its own shift on the till', async ({ page }) => {
+  const sent = await signIn(page, { withTable: true });
+  const bar = { enabled: false, label: 'Бар', secretsSet: [] as string[], shiftOpen: false };
+  const barView = () => ({
+    enabled: bar.enabled,
+    provider: 'cashalot',
+    register_no: 2,
+    label: bar.label,
+    config: { ...TABLE, testing: true },
+    secrets_set: [...bar.secretsSet],
+    default_tax_code: 'A',
+    auto_open_shift: true,
+    fail_mode: 'block',
+    receipt_source: 'local',
+    receipt_width: 32,
+    offline_mode: false,
+    offline_codes_target: 200,
+    offline_capable: false,
+    receipt_text_capable: false,
+    requisites: null,
+    requisites_fetched_at: null,
+    updated_at: null,
+    secrets_key_configured: true,
+    adapter_available: true,
+  });
+  const statusOf = (open: boolean, extra: Record<string, unknown> = {}) => ({
+    enabled: true,
+    provider: 'cashalot',
+    configured: true,
+    auto_open_shift: false,
+    shift: open
+      ? { status: 'open', provider_shift_id: '7', opened_at: '2026-11-03T09:00:00.000Z', auto_close_due_at: null }
+      : { status: 'closed', provider_shift_id: null, opened_at: null, auto_close_due_at: null },
+    testing: false,
+    error: null,
+    holder: null,
+    offline: { capable: false, enabled: false, codes_target: 200, codes: null, session: null },
+    ...extra,
+  });
+
+  // Register 1's view lists register 2; register 2's own reads and writes.
+  await page.route(
+    (url) => url.pathname.endsWith('/api/pos/fiscal/settings'),
+    async (route) => {
+      const url = new URL(route.request().url());
+      const body = route.request().method() === 'PATCH' ? (route.request().postDataJSON() as Record<string, unknown>) : {};
+      const registerNo = Number(url.searchParams.get('register') ?? body.register ?? 1);
+      if (route.request().method() === 'PATCH') sent.push({ path: '/fiscal/settings', body });
+      if (registerNo === 2) {
+        if (typeof body.enabled === 'boolean') bar.enabled = body.enabled;
+        if (body.secrets && typeof body.secrets === 'object') bar.secretsSet = Object.keys(body.secrets as object);
+        return route.fulfill({ json: barView() });
+      }
+      if (route.request().method() !== 'GET') return route.fallback();
+      return route.fulfill({
+        json: {
+          ...barView(),
+          register_no: 1,
+          label: null,
+          enabled: true,
+          config: { ...TABLE, testing: false },
+          requisites: REQUISITES,
+          extra_registers: [
+            { register_no: 2, label: bar.label, enabled: bar.enabled, provider: 'cashalot', configured: bar.secretsSet.length > 0 },
+          ],
+        },
+      });
+    }
+  );
+  await page.route(
+    (url) => url.pathname.endsWith('/api/pos/fiscal/attention'),
+    (route) => route.fulfill({ json: { documents: [], sessions: [] } })
+  );
+
+  await page.goto('/admin/fiscal');
+  await page.getByRole('tab', { name: 'Каса 2 · Бар' }).click();
+  await expect(page.getByTestId('register-basics')).toBeVisible();
+  await page.getByLabel(/Ідентифікатор ключа \(KeyGuid\)/).fill('guid-bar');
+  await page.getByLabel(/PIN касира/).fill('2222');
+  await page.getByLabel(/Фіскальний номер ПРРО/).fill('4000000099');
+  await page.getByRole('button', { name: 'Зберегти дані доступу' }).click();
+  await page.getByTestId('register-enabled').check();
+  await page.getByTestId('register-basics-save').click();
+  await expect(page.getByTestId('register-basics')).toContainText('Збережено');
+
+  const patches = sent.filter((s) => s.path === '/fiscal/settings').map((s) => s.body);
+  expect(patches).toContainEqual({
+    secrets: { keyGuid: 'guid-bar', keyPin: '2222', numFiscal: '4000000099' },
+    register: 2,
+  });
+  expect(patches).toContainEqual({ label: 'Бар', enabled: true, register: 2 });
+
+  // The till: one block per register; register 2's shift opens through register 2.
+  const opened: unknown[] = [];
+  await page.route(
+    (url) => url.pathname.endsWith('/api/pos/fiscal/status'),
+    (route) =>
+      route.fulfill({
+        json: statusOf(false, {
+          registers: [statusOf(bar.shiftOpen, { register_no: 2, label: 'Бар', testing: true })],
+        }),
+      })
+  );
+  await page.route('**/api/pos/fiscal/shift/open', (route) => {
+    const body = route.request().postData() ? route.request().postDataJSON() : null;
+    opened.push(body);
+    if ((body as { register?: number } | null)?.register === 2) bar.shiftOpen = true;
+    return route.fulfill({
+      json: { shift: { providerShiftId: '8', status: 'open', openedAt: '2026-11-03T09:00:00.000Z', autoCloseAt: null } },
+    });
+  });
+
+  await page.goto('/fiscal');
+  await expect(page.getByRole('heading', { name: 'Зміни ПРРО' })).toBeVisible();
+  const barBlock = page.getByTestId('fiscal-register-2');
+  await expect(barBlock).toContainText('Каса 2 · Бар');
+  await expect(barBlock).toContainText('Тестова зміна');
+  await barBlock.getByRole('button', { name: 'Відкрити зміну' }).click();
+  await expect(barBlock.getByText('Відкрита', { exact: true })).toBeVisible();
+  expect(opened).toEqual([{ register: 2 }]);
+});

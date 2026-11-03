@@ -301,6 +301,37 @@ describe.skipIf(!hasDb)('POS fiscal: a second register (ДК1)', () => {
     expect(rows).toEqual([{ register_no: 2, status: 'done' }]);
   });
 
+  it('lists one register’s stuck documents when asked, and every register’s otherwise (ДК3)', async () => {
+    await enableBar();
+    for (const registerNo of [1, 2]) {
+      await pool.query(
+        `INSERT INTO pos_fiscal_receipts
+           (store_id, doc_type, provider, status, provider_request_id, total_cents, register_no)
+         VALUES ($1, 'service_in', 'cashalot', 'abandoned', gen_random_uuid(), $2, $3)`,
+        [store.storeId, registerNo * 100, registerNo]
+      );
+    }
+    const list = async (query: string) => {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/pos/fiscal/attention${query}`,
+        headers: auth(store.ownerToken),
+      });
+      expect(res.statusCode).toBe(200);
+      return res.json() as { documents: Array<{ register_no: number }>; sessions: unknown[] };
+    };
+    expect((await list('')).documents.map((d) => d.register_no).sort()).toEqual([1, 2]);
+    expect((await list('?register=2')).documents.map((d) => d.register_no)).toEqual([2]);
+    expect((await list('?register=2')).sessions).toEqual([]);
+    expect((await list('?register=1')).documents.map((d) => d.register_no)).toEqual([1]);
+    const bad = await app.inject({
+      method: 'GET',
+      url: '/api/pos/fiscal/attention?register=7',
+      headers: auth(store.ownerToken),
+    });
+    expect(bad.statusCode).toBe(400);
+  });
+
   it('retries a register 2 document through register 2', async () => {
     await enableBar();
     // Open the shift first, so the queued failure hits the document itself.
