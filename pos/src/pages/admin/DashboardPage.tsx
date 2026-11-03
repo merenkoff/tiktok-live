@@ -11,7 +11,8 @@ import { toCsv, downloadCsv } from '../../lib/csv';
 import { reportModuleEvent } from '../../modules/telemetry';
 import { useModuleSlots } from '../../modules/featureSlots';
 import { ModuleSlots } from '../../modules/ModuleSlots';
-import type { PaymentMethod, SalesSummary } from '../../types';
+import type { PaymentMethod, RegisterTakings, SalesSummary } from '../../types';
+import { ukPlural } from '../../lib/plural';
 import { Check, DownloadLine, Star } from '../../platform/glyphs';
 import { deviceDay, useAttention } from './attention';
 import { GuestFeedbackTile } from './GuestFeedbackTile';
@@ -40,6 +41,12 @@ function paymentLabel(method: string): string {
   return PAYMENT_LABEL_UK[method as PaymentMethod] ?? method;
 }
 
+/** «Каса 1», «Каса 2 · Бар» — what the owner calls a register in the takings. */
+function registerName(r: RegisterTakings): string {
+  const label = r.label?.trim();
+  return label ? `Каса ${r.register_no} · ${label}` : `Каса ${r.register_no}`;
+}
+
 function buildSummaryCsv(data: SalesSummary): string {
   const money = (c: number) => (c / 100).toFixed(2);
   const totalPay = data.payments.reduce((s, p) => s + p.amount_cents, 0);
@@ -66,6 +73,20 @@ function buildSummaryCsv(data: SalesSummary): string {
       money(p.amount_cents),
       totalPay > 0 ? ((p.amount_cents / totalPay) * 100).toFixed(1) : '0',
     ]),
+    // Two registers are two ФОП (track ДК): whose money is whose.
+    ...(data.registers?.length
+      ? [
+          [],
+          ['Каса', 'Продажі', 'Загальний продаж', 'Повернення', 'Чистий дохід'],
+          ...data.registers.map((r) => [
+            registerName(r),
+            r.sales_count,
+            money(r.gross_cents),
+            money(r.refunded_cents),
+            money(r.net_cents),
+          ]),
+        ]
+      : []),
     [],
     ['Дата', 'Загальний продаж', 'Чистий дохід', 'Продажі'],
     ...data.daily.map((d) => [d.date, money(d.gross_cents), money(d.net_cents), d.sales_count]),
@@ -401,6 +422,34 @@ export function DashboardPage() {
           </div>
         )}
       </section>
+
+      {(data.registers?.length ?? 0) > 0 && (
+        <section data-testid="dashboard-registers">
+          <SectionHead title="По касах" />
+          <ul className="pt-1">
+            {data.registers!.map((r) => (
+              <li key={r.register_no} className="sq-row py-3" data-testid={`dashboard-register-${r.register_no}`}>
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                  <p className="text-[15px] font-semibold text-sq-text">{registerName(r)}</p>
+                  <p className="text-[22px] font-bold text-sq-heading tabular-nums">{formatUah(r.net_cents)}</p>
+                </div>
+                <p className="text-[13px] text-sq-secondary tabular-nums mt-0.5">
+                  {r.sales_count} {ukPlural(r.sales_count, 'чек', 'чеки', 'чеків')} · виторг {formatUah(r.gross_cents)}
+                  {r.refunded_cents > 0 && <> · повернення {formatUah(r.refunded_cents)}</>}
+                  {r.payments
+                    .filter((p) => p.amount_cents !== 0)
+                    .map((p) => (
+                      <span key={p.method}>
+                        {' · '}
+                        {paymentLabel(p.method).toLowerCase()} {formatUah(p.amount_cents)}
+                      </span>
+                    ))}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section>
         <SectionHead title="Популярні товари" />

@@ -254,6 +254,8 @@ class PosApi {
     kind?: ProductKind;
     stock_mode?: ProductStockMode;
     sellable?: boolean;
+    /** The register it sells through (track ДК): 1, 2, or null = register 1. */
+    fiscal_register?: number | null;
     variants: Array<{
       attributes?: AttributeValues;
       unit?: string;
@@ -291,6 +293,8 @@ class PosApi {
       kind: ProductKind;
       stock_mode: ProductStockMode;
       sellable: boolean;
+      /** The register it sells through (track ДК): 1, 2, or null = register 1. */
+      fiscal_register: number | null;
     }>
   ): Promise<Product> {
     const { data } = await this.client.patch<Product>(`/products/${id}`, payload);

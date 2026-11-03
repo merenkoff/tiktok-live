@@ -93,3 +93,39 @@ describe('buildActPayload', () => {
     expect(buildActPayload(sale, { ...refund, refund_number: null }, store).act_number).toBe('RF-9');
   });
 });
+
+describe('buildActPayload — register 2 (track ДК)', () => {
+  const dual = {
+    ...store,
+    fiscal: {
+      ...store.fiscal,
+      registers: [
+        {
+          register_no: 2,
+          label: 'Бар',
+          register_fiscal_number: '4000000099',
+          default_tax_code: null,
+          requisites: {
+            organization: { name: 'ФОП Петренко П. П.', edrpou: null, tax_number: '3012345678', is_vat: false },
+            point: { name: 'Бар', address: 'м. Київ, вул. Лютеранська, 2' },
+            register: { fiscal_number: '4000000099', title: null, address: null },
+            taxes: [],
+          },
+        },
+      ],
+    },
+  };
+
+  it('names the ФОП whose register the sale went through', () => {
+    const act = buildActPayload({ ...sale, fiscal_register: 2 }, refund, dual);
+    expect(act.org_name).toBe('ФОП Петренко П. П.');
+    expect(act.tax_id_line).toBe('ІД 3012345678');
+    expect(act.address).toBe('м. Київ, вул. Лютеранська, 2');
+  });
+
+  it('names nobody for a register the login no longer lists', () => {
+    const act = buildActPayload({ ...sale, fiscal_register: 2 }, refund, store);
+    expect(act.org_name).toBeNull();
+    expect(act.tax_id_line).toBeNull();
+  });
+});

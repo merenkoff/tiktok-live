@@ -11,8 +11,9 @@ import { captionClass, checkboxClass } from './formStyles';
 import { tagPathLabel } from './tagLabels';
 import type { TechCardRow } from '../data/techCardsApi';
 import { rowName, type ProductDraft } from '../lib/productDraft';
+import type { RegisterChoice } from '../lib/registerChoices';
 
-type Fields = Pick<ProductDraft, 'sellable' | 'menuHidden' | 'tagIds' | 'groupIds'>;
+type Fields = Pick<ProductDraft, 'sellable' | 'menuHidden' | 'fiscalRegister' | 'tagIds' | 'groupIds'>;
 
 /** «Продається на касі» — the same switch on every card. */
 export function SellableField({ checked, onChange }: { checked: boolean; onChange: (next: boolean) => void }) {
@@ -59,6 +60,44 @@ export function MenuHiddenField({ checked, onChange }: { checked: boolean; onCha
 }
 
 /**
+ * «Каса» — which register (which ФОП) the product is sold through (track ДК,
+ * TechDocs/POS_DUAL_REGISTER.md §4.2). Only in a store with a register 2.
+ */
+export function RegisterField({
+  value,
+  choices,
+  onChange,
+}: {
+  value: number;
+  choices: RegisterChoice[];
+  onChange: (next: number) => void;
+}) {
+  // A product put on a register that has since been switched off still says so.
+  const known = choices.some((c) => c.registerNo === value);
+  return (
+    <label className="block sm:col-span-2">
+      <span className={captionClass}>Каса</span>
+      <select
+        className="mt-1 w-full min-h-11 rounded-[10px] bg-sq-surface ring-1 ring-inset ring-sq-divider px-3 text-[15px] text-sq-text"
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        data-testid="product-fiscal-register"
+      >
+        {choices.map((c) => (
+          <option key={c.registerNo} value={c.registerNo}>
+            {c.label}
+          </option>
+        ))}
+        {!known && <option value={value}>Каса {value} (вимкнена — продається через касу 1)</option>}
+      </select>
+      <span className="block mt-1 text-[13px] text-sq-muted">
+        Через яку касу пробивається: усе підакцизне (алкоголь, пиво) — на касу ФОП, що має ліцензію
+      </span>
+    </label>
+  );
+}
+
+/**
  * The card's side column: how the product shows at the till — on the sell
  * screen or not, under which tags, asking which questions — and, for a
  * composite, what each variant costs to assemble.
@@ -71,11 +110,14 @@ export function ProductSide({
   techCards,
   variants,
   askMenuHidden = false,
+  registers = [],
 }: {
   value: Fields;
   onPatch: (patch: Partial<Fields>) => void;
   /** Offer «Не показувати в QR-меню» — only where the store has a guest menu. */
   askMenuHidden?: boolean;
+  /** The store's registers; empty (one register) asks nothing. */
+  registers?: RegisterChoice[];
   flatTags: PosTag[];
   groups: ModifierGroup[];
   /** What each composite variant costs to assemble, by variant id. */
@@ -97,6 +139,13 @@ export function ProductSide({
         <SellableField checked={value.sellable} onChange={(sellable) => onPatch({ sellable })} />
         {askMenuHidden && (
           <MenuHiddenField checked={value.menuHidden} onChange={(menuHidden) => onPatch({ menuHidden })} />
+        )}
+        {registers.length > 1 && (
+          <RegisterField
+            value={value.fiscalRegister}
+            choices={registers}
+            onChange={(fiscalRegister) => onPatch({ fiscalRegister })}
+          />
         )}
       </section>
 

@@ -449,6 +449,12 @@ export interface CatalogItem {
   kind?: ProductKind;
   stock_mode?: ProductStockMode;
   /**
+   * The register this item sells through (track ДК, migration 089) — already
+   * resolved by the server: a product marked for a register that is switched
+   * off reads 1. Absent from an older payload or snapshot → 1.
+   */
+  fiscal_register?: number;
+  /**
    * A card made at the bench for one physical bouquet. The window and a
    * catalogue bouquet are both `composite` + `own`; only this one may be
    * written off from the till. Absent on an older cached snapshot → false.
@@ -805,6 +811,12 @@ export interface Product {
   sellable?: boolean;
   /** Sold at the till but never listed in the guest QR menu (migration 083): a cork fee, a bag. Absent on an older payload → false. */
   menu_hidden?: boolean;
+  /**
+   * The register the owner put this product on (track ДК, migration 089): null
+   * or 1 = register 1, 2 = register 2. Stored as set, even while register 2
+   * is off. Absent on an older payload → null.
+   */
+  fiscal_register?: number | null;
   /** The store-local day the barista pulled it, or null (migration 050). */
   stop_listed_on?: string | null;
   tag_ids: number[];
@@ -862,6 +874,21 @@ export interface FiscalPublicConfig {
    * reported it. Travels with the login so the desktop till prints it offline.
    */
   requisites?: FiscalRequisites | null;
+  /**
+   * The store's further ПРРО registers that are switched on (track ДК,
+   * TechDocs/POS_DUAL_REGISTER.md) — another ФОП's, so another receipt
+   * header. Absent for a store with one register. Mirrors the backend.
+   */
+  registers?: FiscalPublicRegister[];
+}
+
+/** A register 2.. as the till needs it to print that register's receipt. */
+export interface FiscalPublicRegister {
+  register_no: number;
+  label: string | null;
+  register_fiscal_number: string | null;
+  default_tax_code: string | null;
+  requisites: FiscalRequisites | null;
 }
 
 /** One tax rate as the provider lists it — the letter printed next to a receipt line. */
@@ -963,6 +990,22 @@ export interface FiscalSettingsView {
   secrets_key_configured: boolean;
   /** False when this build ships no adapter for `provider` — every sale would 503. */
   adapter_available?: boolean;
+  /** Which register this view describes (track ДК); absent from an older backend = 1. */
+  register_no?: number;
+  /** The owner's name for a register 2..; null for register 1. */
+  label?: string | null;
+  /** Register 1's view lists the store's further registers; absent where there are none. */
+  extra_registers?: FiscalRegisterSummary[];
+}
+
+/** One further register of a store, as register 1's settings view lists it. */
+export interface FiscalRegisterSummary {
+  register_no: number;
+  label: string | null;
+  enabled: boolean;
+  provider: FiscalProviderId;
+  /** Credentials stored (some key set). */
+  configured: boolean;
 }
 
 export type FiscalReceiptSource = 'local' | 'provider';
@@ -1112,6 +1155,11 @@ export interface SaleDetail {
   local_order_no?: number | null;
   /** Client-generated UUID (offline idempotency key) — links a server sale to its local row. */
   client_uuid?: string | null;
+  /**
+   * The register this sale was fiscalised through (track ДК, migration 089):
+   * picks the ФОП whose requisites its receipt prints. Absent → 1.
+   */
+  fiscal_register?: number;
   status: string;
   subtotal_cents: number;
   /** What the goods came to — the fiscal lines sum to it. */
@@ -1398,6 +1446,25 @@ export interface SalesSummary {
     net_cents: number;
     sales_count: number;
   }>;
+  /**
+   * The same window by register (track ДК) — two registers are two ФОП, and
+   * the owner needs to see whose money is whose. Present only in a store
+   * that has a register 2.
+   */
+  registers?: RegisterTakings[];
+}
+
+/** One register's share of the window: its sales, its refunds, its money by method. */
+export interface RegisterTakings {
+  register_no: number;
+  /** The owner's name for a register 2..; null for register 1. */
+  label: string | null;
+  sales_count: number;
+  gross_cents: number;
+  refunded_cents: number;
+  net_cents: number;
+  rounding_cents: number;
+  payments: Array<{ method: PaymentMethod; amount_cents: number }>;
 }
 
 export interface StaffMember {

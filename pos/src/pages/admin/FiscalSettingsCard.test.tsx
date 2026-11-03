@@ -334,6 +334,29 @@ describe('FiscalSettingsCard', () => {
     expect(screen.queryByText('Реквізити ПРРО')).not.toBeInTheDocument();
   });
 
+  it('lists a second register by name and state (track ДК)', async () => {
+    fiscalSettings.mockResolvedValue(
+      view({
+        provider: 'cashalot',
+        enabled: true,
+        requisites: REQUISITES,
+        extra_registers: [{ register_no: 2, label: 'Бар', enabled: true, provider: 'cashalot', configured: false }],
+      })
+    );
+    renderWithProviders(<FiscalSettingsCard />);
+
+    const block = await screen.findByTestId('fiscal-registers');
+    expect(block).toHaveTextContent('Каса 2 · Бар');
+    expect(block).toHaveTextContent('працює · ключі не збережено');
+  });
+
+  it('says nothing about registers in a store with one', async () => {
+    fiscalSettings.mockResolvedValue(view({ provider: 'cashalot', enabled: true, requisites: REQUISITES }));
+    renderWithProviders(<FiscalSettingsCard />);
+    await screen.findByText('ТОВ «Тестова організація»');
+    expect(screen.queryByTestId('fiscal-registers')).not.toBeInTheDocument();
+  });
+
   it('renders nothing for a seller', async () => {
     fiscalSettings.mockRejectedValue({ response: { status: 403 } });
     const { container } = renderWithProviders(<FiscalSettingsCard />);

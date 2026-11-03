@@ -24,6 +24,7 @@ import type {
   FiscalProviderId,
   FiscalReceiptSource,
   FiscalReceiptWidth,
+  FiscalRegisterSummary,
   FiscalRequisites,
   FiscalSettingsView,
 } from '@pos/platform';
@@ -57,6 +58,42 @@ type LoadState = 'loading' | 'ready' | 'forbidden' | 'error';
 // control, native checkboxes in the accent colour.
 const LABEL = 'text-[13px] font-semibold text-sq-secondary';
 const CHECKBOX = 'w-5 h-5 shrink-0 accent-[rgb(var(--sq-blue-rgb))]';
+
+/**
+ * The store's registers (track ДК, TechDocs/POS_DUAL_REGISTER.md): register 1
+ * is this card, every further one — another ФОП's — is listed by name and
+ * state. Read-only: a register 2 is set up on the provider's own screen,
+ * where its keys and tax table are.
+ */
+function RegistersSection({ registers }: { registers: FiscalRegisterSummary[] }) {
+  return (
+    <section className="space-y-2" data-testid="fiscal-registers">
+      <SectionHead title="Каси магазину" />
+      <ul className="text-[15px] text-sq-text">
+        <li className="sq-row py-2 flex items-center justify-between gap-3">
+          <span>Каса 1</span>
+          <span className="text-[13px] text-sq-secondary">ця картка</span>
+        </li>
+        {registers.map((r) => (
+          <li key={r.register_no} className="sq-row py-2 flex items-center justify-between gap-3">
+            <span>
+              Каса {r.register_no}
+              {r.label?.trim() ? ` · ${r.label.trim()}` : ''}
+            </span>
+            <span className={`text-[13px] ${r.enabled ? 'text-sq-success' : 'text-sq-secondary'}`}>
+              {r.enabled ? 'працює' : 'вимкнена'}
+              {r.configured ? '' : ' · ключі не збережено'}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="text-[13px] text-sq-muted">
+        Кожна каса — свій ФОП і свої ключі; налаштовується на екрані ПРРО. Товар іде на касу, вибрану в його
+        картці.
+      </p>
+    </section>
+  );
+}
 
 /**
  * What the provider knows about the store — read-only for now. Editing comes
@@ -484,6 +521,10 @@ export function FiscalSettingsCard() {
                 refreshing={refreshing}
                 onRefresh={() => void refreshRequisites()}
               />
+            )}
+
+            {(settings.extra_registers?.length ?? 0) > 0 && (
+              <RegistersSection registers={settings.extra_registers!} />
             )}
 
             <div className="text-[13px] text-sq-secondary space-y-1">

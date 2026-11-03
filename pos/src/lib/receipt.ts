@@ -37,6 +37,34 @@ export interface ReceiptStoreInfo {
   feedback_url?: string | null;
 }
 
+/**
+ * The store's fiscal config as register `registerNo` prints it (track ДК,
+ * TechDocs/POS_DUAL_REGISTER.md): register 2 is another ФОП, so its receipt
+ * carries that ФОП's requisites, ФН ПРРО and tax letter from
+ * `fiscal.registers[]`. Register 1 is the config as it is. A register the
+ * login no longer lists (switched off since) prints NO requisites rather than
+ * register 1's — a header naming the other ФОП would be a wrong document.
+ */
+export function fiscalForRegister(
+  fiscal: FiscalPublicConfig | null | undefined,
+  registerNo: number | null | undefined
+): FiscalPublicConfig | null | undefined {
+  if (!fiscal || !registerNo || registerNo === 1) return fiscal;
+  const extra = fiscal.registers?.find((r) => r.register_no === registerNo);
+  return {
+    ...fiscal,
+    register_fiscal_number: extra?.register_fiscal_number ?? null,
+    default_tax_code: extra?.default_tax_code ?? null,
+    requisites: extra?.requisites ?? null,
+  };
+}
+
+/** The store info a sale's own receipt is printed with: its register's ФОП. */
+function storeForSale(store: ReceiptStoreInfo, sale: Pick<SaleDetail, 'fiscal_register'>): ReceiptStoreInfo {
+  const fiscal = fiscalForRegister(store.fiscal, sale.fiscal_register);
+  return fiscal === store.fiscal ? store : { ...store, fiscal };
+}
+
 /** Рядок 4/5: «ПН <ІПН>» for a VAT payer, «ІД <податковий номер>» otherwise. */
 export function taxIdLine(req: FiscalRequisites): string | null {
   const org = req.organization;
@@ -220,9 +248,10 @@ export function fiscalBlockComplete(
 
 export function buildReceiptPayload(
   sale: SaleDetail,
-  store: ReceiptStoreInfo,
+  storeInfo: ReceiptStoreInfo,
   customerName?: string | null
 ): ReceiptData {
+  const store = storeForSale(storeInfo, sale);
   const tax = defaultTax(store);
   // НБУ № 25: the cash part may have been rounded. The goods' total — and the
   // VAT inside it — stay as they are; only what was due moves.
@@ -274,10 +303,12 @@ export function buildRefundReceiptPayload(
   sale: SaleDetail,
   refund: SaleDetail['refunds'][number],
   lines: Array<{ sale_item_id: number; quantity: number }>,
-  store: ReceiptStoreInfo,
+  storeInfo: ReceiptStoreInfo,
   /** The REFUND's own fiscal document, from the refund response — never the sale's. */
   fiscal?: FiscalActionResult | null
 ): ReceiptData {
+  // A refund is registered on the sale's own register (ДК1), so it prints that ФОП.
+  const store = storeForSale(storeInfo, sale);
   const tax = defaultTax(store);
   const byId = new Map(sale.items.map((item) => [item.id, item]));
   const items = lines.flatMap((line) => {
