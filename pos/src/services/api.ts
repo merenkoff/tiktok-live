@@ -544,6 +544,21 @@ class PosApi {
     return data;
   }
 
+  /**
+   * The receipts waiting for this device's «Чеки столів» printer (track ДК,
+   * Д13) — taken on a two-minute lease. Needs `X-POS-Device-ID`, which only
+   * the desktop sends.
+   */
+  async receiptPrintQueue(): Promise<{ jobs: SaleDetail[] }> {
+    const { data } = await this.client.get<{ jobs: SaleDetail[] }>('/sales/print-queue');
+    return data;
+  }
+
+  /** This device printed it; idempotent. */
+  async markReceiptPrinted(saleId: number): Promise<void> {
+    await this.client.post(`/sales/${saleId}/printed`);
+  }
+
   /** What each receipt of a two-register cart will come to; writes nothing. */
   async splitQuote(payload: {
     items: SaleItemInput[];

@@ -31,7 +31,7 @@ import { asFiscalError, cashierMessage, FiscalError, supportCode } from '../fisc
 import { holderFromError } from '../fiscal/offline/holder.js';
 import * as splitSale from '../split-sale.service.js';
 import { formatUah } from '../core/money.js';
-import { FiscalRegisterMismatchError, registersOfVariants } from '../fiscal/routing.js';
+import { FiscalRegisterMismatchError, registerLabels, registersOfVariants } from '../fiscal/routing.js';
 import { pool } from '../../db.js';
 import { logger } from '../../logger.js';
 import { errorMessage, readDeviceId } from './_shared.js';
@@ -111,7 +111,7 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
         customer_id: body.customer_id ?? null,
         cash_rounding: body.cash_rounding,
       });
-      const labels = await registerLabels(auth.storeId);
+      const labels = await registerLabels(pool, auth.storeId);
       return {
         parts: plan.map((receipt) => ({
           register_no: receipt.register_no,
@@ -1055,15 +1055,6 @@ async function cartRegisters(
   }
   const byVariant = await registersOfVariants(pool, storeId, variantIds);
   return new Set(byVariant.values());
-}
-
-/** The owner's names for registers 2.. — what a split receipt is captioned with. */
-async function registerLabels(storeId: number): Promise<Map<number, string | null>> {
-  const rows = await pool.query(
-    `SELECT register_no, label FROM pos_fiscal_registers WHERE store_id = $1`,
-    [storeId]
-  );
-  return new Map(rows.rows.map((row) => [Number(row.register_no), row.label as string | null]));
 }
 
 /**

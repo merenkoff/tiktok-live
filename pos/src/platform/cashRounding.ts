@@ -18,3 +18,7 @@ export {
   type CashRoundingPayment,
   type CashRoundingStep,
 } from '../lib/cashRounding';
+
+// The notes a guest is likely to hand over, under «Отримано» — the till's own
+// row, for the waiter's bill (platform 22, track ДК, Д15).
+export { quickCashAmounts } from '../lib/cash';

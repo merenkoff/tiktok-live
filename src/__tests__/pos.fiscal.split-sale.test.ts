@@ -139,6 +139,8 @@ describe.skipIf(!hasDb)('POS fiscal: a cart split between registers (ДК2-Б)',
     const body = res.json();
     expect(body.split).toBe(true);
     expect(body.parts.map((p: { register_no: number }) => p.register_no)).toEqual([1, 2]);
+    // Each receipt says its register, so the till prints it with that ФОП's requisites.
+    expect(body.parts.map((p: { sale: { fiscal_register: number } }) => p.sale.fiscal_register)).toEqual([1, 2]);
     expect(registered(food)).toHaveLength(1);
     expect(registered(bar)).toHaveLength(1);
 

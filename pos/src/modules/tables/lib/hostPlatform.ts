@@ -114,6 +114,17 @@ export interface CashRoundingOutcome {
  * server does not round either and the bill is paid to the kopiyka, as it
  * always was.
  */
+/**
+ * The till's row of quick amounts under «Отримано» (platform 22, track ДК,
+ * Д15): the exact sum and the notes a guest is likely to hand over. Optional,
+ * read through the namespace: a host older than 22 has none, and the sheet
+ * then draws the field and the change without the row.
+ */
+export function quickCashAmountsFor(dueCents: number): number[] {
+  const quick = (host as Record<string, unknown>).quickCashAmounts;
+  return hasFn(quick) ? (quick as (cents: number) => number[])(dueCents) : [];
+}
+
 export function cashRoundingFor(totalCents: number, storeStep: unknown): CashRoundingOutcome {
   const parse = (host as Record<string, unknown>).storeCashRounding;
   const delta = (host as Record<string, unknown>).cashRoundingDelta;

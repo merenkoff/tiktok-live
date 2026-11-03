@@ -88,6 +88,9 @@ export function BillPage(): JSX.Element {
   // НБУ № 25: the store's cash-rounding step, from the login (absent from an
   // older backend — and then nothing rounds).
   const cashRoundingStep = useAuthStore((s) => s.auth?.store.cash_rounding ?? 0);
+  // A second register — another ФОП's (track ДК): the pay sheet asks the server
+  // how a part splits into receipts, and offers no «порівну» (Д6).
+  const dualRegister = useAuthStore((s) => (s.auth?.store.fiscal?.registers?.length ?? 0) > 0);
   const {
     bill,
     loading,
@@ -544,6 +547,7 @@ export function BillPage(): JSX.Element {
           cashRoundingStep={cashRoundingStep}
           onClose={() => setPaying(false)}
           onPay={(p, step) => void pay(p, step)}
+          quote={dualRegister ? (p, step) => tablesApi.payQuote(bill.id, p, step) : null}
         />
       )}
 
