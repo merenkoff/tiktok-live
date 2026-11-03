@@ -30,6 +30,7 @@ export function ProductRow({
   onRestore,
   restoring = false,
   cardState,
+  registerLabel = null,
 }: {
   product: Product;
   flatTags: PosTag[];
@@ -43,6 +44,8 @@ export function ProductRow({
   restoring?: boolean;
   /** What the card gets so «← Товари» lands on this same view. */
   cardState: { list: string };
+  /** «Каса 2 · Бар» for a product on a further register (track ДК); null on register 1. */
+  registerLabel?: string | null;
 }) {
   const archived = product.is_active === false;
   const active = rowVariants(product);
@@ -93,6 +96,11 @@ export function ProductRow({
             {product.kind === 'composite' && (
               <span className={`${chipClass} bg-sq-blue/10 text-sq-blue-press`}>
                 {derived ? 'Складений · при продажу' : 'Складений · збираємо'}
+              </span>
+            )}
+            {registerLabel && (
+              <span className={`${chipClass} bg-violet-50 text-violet-800`} data-testid="product-register-chip">
+                {registerLabel}
               </span>
             )}
             {product.sellable === false && (

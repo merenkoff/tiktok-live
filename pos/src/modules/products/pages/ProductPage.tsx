@@ -20,7 +20,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { api, uahInputToCents, useVertical } from '@pos/platform';
+import { api, uahInputToCents, useAuthStore, useVertical } from '@pos/platform';
 import type { ModifierGroup, PosTag, Product } from '@pos/platform';
 import { Package, PageHeader, SectionHead } from '@pos/platform/ui';
 import { ConfirmSheet } from '../../../components/cashier/ConfirmSheet';
@@ -52,6 +52,7 @@ import {
   type ProductDraft,
   type VariantDraft,
 } from '../lib/productDraft';
+import { registerChoices } from '../lib/registerChoices';
 import { batchErrorMessage, saveErrorMessage } from '../lib/saveErrors';
 import { useLeaveGuard } from '../lib/useLeaveGuard';
 
@@ -96,6 +97,8 @@ function ProductCard({ id }: { id: string | undefined }) {
   const navigate = useNavigate();
   const location = useLocation();
   const vertical = useVertical();
+  const fiscal = useAuthStore((s) => s.auth?.store.fiscal);
+  const registers = useMemo(() => registerChoices(fiscal), [fiscal]);
   const state = (location.state ?? null) as CardLocationState | null;
   const listSearch = state?.list ?? '';
 
@@ -515,6 +518,7 @@ function ProductCard({ id }: { id: string | undefined }) {
                 techCards={techCards}
                 variants={draft.variants}
                 askMenuHidden={scope.askDishFacts}
+                registers={registers}
               />
             </div>
           </fieldset>

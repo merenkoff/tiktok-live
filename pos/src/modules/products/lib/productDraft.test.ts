@@ -82,6 +82,7 @@ describe('draftOf — the one place that reads a raw product', () => {
     expect(d.groupIds).toEqual([]);
     expect(d.sellable).toBe(true);
     expect(d.menuHidden).toBe(false);
+    expect(d.fiscalRegister).toBe(1);
     expect(d.shape).toBe('');
     expect(d.variants.map((v) => v.id)).toEqual([70]);
   });
@@ -184,6 +185,14 @@ describe('diffProduct — what a save has to write', () => {
     expect(diffProduct(snapshot, { ...snapshot, imageUrl: '/pos-uploads/a.jpg' }).details).toBe(true);
     expect(diffProduct(snapshot, { ...snapshot, sellable: false }).details).toBe(true);
     expect(diffProduct(snapshot, { ...snapshot, menuHidden: true }).details).toBe(true);
+    expect(diffProduct(snapshot, { ...snapshot, fiscalRegister: 2 }).details).toBe(true);
+  });
+
+  it('keeps a register 2 as stored and sends it back (track ДК)', () => {
+    const d = draftOf(product({ fiscal_register: 2 }));
+    expect(d.fiscalRegister).toBe(2);
+    expect(detailsOf(d).fiscal_register).toBe(2);
+    expect(detailsOf(draftOf(product({ fiscal_register: null }))).fiscal_register).toBe(1);
   });
 
   it('sees a number typed or emptied, and sends it as typed — null for an emptied box (F14)', () => {
@@ -214,6 +223,7 @@ describe('createDirty — a new card with anything on it', () => {
     expect(createDirty({ ...blank, name: 'Реглан' }, false)).toBe(true);
     expect(createDirty({ ...blank, sellable: false }, false)).toBe(true);
     expect(createDirty({ ...blank, menuHidden: true }, false)).toBe(true);
+    expect(createDirty({ ...blank, fiscalRegister: 2 }, false)).toBe(true);
     expect(createDirty({ ...blank, menuLabels: ['new'] }, false)).toBe(true);
     expect(createDirty({ ...blank, shape: 'own' }, false)).toBe(true);
     expect(createDirty({ ...blank, tagIds: [1] }, false)).toBe(true);

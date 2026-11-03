@@ -26,6 +26,8 @@ import { captionClass, checkboxClass, panelFieldClass } from '../components/form
 import { productMatchesQuery } from '../components/productSearch';
 import { flattenTags, tagPathLabel } from '../components/tagLabels';
 import { readListParams, writeListParams, type TagFilter } from '../lib/listParams';
+import { assignRegister, registerChoices } from '../lib/registerChoices';
+import { ukPlural } from '../../../lib/plural';
 
 /** Whether a card carries a guest-menu label (an older payload has none). */
 function hasLabel(p: Product, code: string): boolean {
@@ -51,6 +53,10 @@ export function ProductsPage() {
   const [newTagColor, setNewTagColor] = useState<TagColorKey>(DEFAULT_TAG_COLOR);
   const [newTagCatalogBar, setNewTagCatalogBar] = useState(false);
   const [bulkTagId, setBulkTagId] = useState<number | ''>('');
+  const [bulkRegister, setBulkRegister] = useState<number | ''>('');
+  const [assigningRegister, setAssigningRegister] = useState(false);
+  const fiscal = useAuthStore((s) => s.auth?.store.fiscal);
+  const registers = useMemo(() => registerChoices(fiscal), [fiscal]);
   const [savingTagId, setSavingTagId] = useState<number | null>(null);
 
   const vertical = useVertical();
@@ -176,6 +182,22 @@ export function ProductsPage() {
     } catch {
       setError('Не вдалося призначити мітку');
     }
+  }
+
+  async function onBulkRegister() {
+    if (bulkRegister === '' || selected.size === 0) return;
+    setAssigningRegister(true);
+    setError(null);
+    const label = registers.find((r) => r.registerNo === bulkRegister)?.label ?? `Каса ${bulkRegister}`;
+    const { done, failed } = await assignRegister([...selected], bulkRegister, (id, registerNo) =>
+      api.updateProduct(id, { fiscal_register: registerNo })
+    );
+    setAssigningRegister(false);
+    setSelected(new Set());
+    setBulkRegister('');
+    if (done > 0) setFlash(`${label} — для ${done} ${ukPlural(done, 'товару', 'товарів', 'товарів')}`);
+    if (failed > 0) setError(`Не вдалося змінити касу ${failed} ${ukPlural(failed, 'товару', 'товарам', 'товарам')}`);
+    await reload();
   }
 
   // Asked through the till's own sheet, never `window.confirm`: the desktop
@@ -427,6 +449,35 @@ export function ProductsPage() {
               >
                 Додати мітку
               </button>
+              {registers.length > 1 && (
+                <>
+                  <div className="w-56 max-w-full">
+                    <select
+                      className={panelFieldClass}
+                      aria-label="Каса для обраних"
+                      value={bulkRegister}
+                      onChange={(e) => setBulkRegister(e.target.value === '' ? '' : Number(e.target.value))}
+                      data-testid="bulk-register"
+                    >
+                      <option value="">Каса…</option>
+                      {registers.map((r) => (
+                        <option key={r.registerNo} value={r.registerNo}>
+                          {r.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void onBulkRegister()}
+                    disabled={bulkRegister === '' || assigningRegister}
+                    className="pos-btn-primary min-h-11 px-4 rounded-sq text-[15px] disabled:opacity-50"
+                    data-testid="bulk-register-apply"
+                  >
+                    {assigningRegister ? 'Змінюю…' : 'Змінити касу'}
+                  </button>
+                </>
+              )}
               <button type="button" onClick={() => setTagsOpen(true)} className="sq-btn-quiet">
                 <Printer size={20} />
                 Друк цінників
@@ -479,6 +530,11 @@ export function ProductsPage() {
                   onRestore={() => void restore(product)}
                   restoring={restoringId === product.id}
                   cardState={cardState}
+                  registerLabel={
+                    (product.fiscal_register ?? 1) > 1
+                      ? (registers.find((r) => r.registerNo === product.fiscal_register)?.label ?? null)
+                      : null
+                  }
                 />
               ))}
             </div>

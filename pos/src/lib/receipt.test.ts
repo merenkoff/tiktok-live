@@ -8,6 +8,7 @@ import {
   buildReceiptPayload,
   buildRefundReceiptPayload,
   fiscalBlockComplete,
+  fiscalForRegister,
   taxIdLine,
   type ReceiptStoreInfo,
 } from './receipt';
@@ -699,5 +700,75 @@ describe('buildReceiptPayload — a second provider (Cashalot, CA6)', () => {
     );
     expect(payload.vat_lines).toEqual([{ symbol: 'А', rate: 20, amount_cents: 3749 }]);
     expect(payload.fiscal?.producer).toBe('ПРРО Cashalot');
+  });
+});
+
+describe('a receipt of register 2 (track ДК, TechDocs/POS_DUAL_REGISTER.md)', () => {
+  const BAR: FiscalRequisites = {
+    organization: { name: 'ФОП Петренко П. П.', edrpou: null, tax_number: '3012345678', is_vat: false },
+    point: { name: 'Бар', address: 'м. Київ, вул. Хрещатик, 1' },
+    register: { fiscal_number: '4000000099', title: null, address: null },
+    taxes: [{ code: '5', symbol: 'Г', label: 'Без ПДВ', rate: 0, no_vat: true, is_default: true }],
+  };
+  const doneDoc = {
+    status: 'done',
+    fiscal_code: '200001',
+    fiscal_date: '2026-11-03T18:00:00.000Z',
+    tax_url: null,
+    qr_payload: null,
+    receipt_text: null,
+    error_code: null,
+    error_message: null,
+  };
+  const store = fiscalStore({
+    provider: 'cashalot',
+    default_tax_code: '1',
+    registers: [
+      { register_no: 2, label: 'Бар', register_fiscal_number: '4000000099', default_tax_code: '5', requisites: BAR },
+    ],
+  });
+
+  it('prints the other ФОП: header, ФН ПРРО and tax letter of its own register', () => {
+    const payload = buildReceiptPayload(makeSaleDetail({ fiscal_register: 2, fiscal: doneDoc }), store);
+    expect(payload.header?.org_name).toBe('ФОП Петренко П. П.');
+    expect(payload.header?.tax_id_line).toBe('ІД 3012345678');
+    expect(payload.fiscal?.register_fiscal_number).toBe('4000000099');
+    expect(payload.items.every((item) => item.tax_symbol === 'Г')).toBe(true);
+  });
+
+  it('leaves register 1 exactly as it was', () => {
+    const one = buildReceiptPayload(makeSaleDetail({ fiscal_register: 1, fiscal: doneDoc }), store);
+    const absent = buildReceiptPayload(makeSaleDetail({ fiscal: doneDoc }), store);
+    for (const payload of [one, absent]) {
+      expect(payload.header?.org_name).toBe('ТОВ «Тест»');
+      expect(payload.fiscal?.register_fiscal_number).toBe('4001118166');
+    }
+  });
+
+  it('prints no requisites at all for a register the login no longer lists', () => {
+    const payload = buildReceiptPayload(
+      makeSaleDetail({ fiscal_register: 2, fiscal: doneDoc }),
+      fiscalStore({ provider: 'cashalot' })
+    );
+    expect(payload.header).toBeNull();
+    expect(payload.fiscal?.register_fiscal_number).toBeNull();
+  });
+
+  it('prints a refund of a register-2 sale as that register', () => {
+    const payload = buildRefundReceiptPayload(
+      makeSaleDetail({ fiscal_register: 2, payments: [{ id: 200, method: 'cash', amount_cents: 45000 }] }),
+      makeRefund({ total_cents: 22500 }),
+      [{ sale_item_id: 100, quantity: 1 }],
+      store,
+      { ...doneDoc, message: null }
+    );
+    expect(payload.header?.org_name).toBe('ФОП Петренко П. П.');
+    expect(payload.fiscal?.register_fiscal_number).toBe('4000000099');
+  });
+
+  it('fiscalForRegister hands register 1 back untouched', () => {
+    expect(fiscalForRegister(store.fiscal, 1)).toBe(store.fiscal);
+    expect(fiscalForRegister(store.fiscal, undefined)).toBe(store.fiscal);
+    expect(fiscalForRegister(null, 2)).toBeNull();
   });
 });

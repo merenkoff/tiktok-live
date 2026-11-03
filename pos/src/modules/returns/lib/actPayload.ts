@@ -8,7 +8,7 @@
 // time of the receipt it was bought on. Pure: the dialog, the receipt card
 // and the tests build the same sheet from the same facts.
 
-import type { FiscalPublicConfig, SaleDetail } from '@pos/platform';
+import type { FiscalPublicConfig, FiscalRequisites, SaleDetail } from '@pos/platform';
 import { RETURNED_BY_UK } from './refundReasons';
 
 export interface ActGoodsLine {
@@ -58,9 +58,23 @@ export interface ActStoreInfo {
 
 type Refund = SaleDetail['refunds'][number];
 
+/**
+ * The requisites of the ФОП whose register the sale went through (track ДК):
+ * register 2's from `fiscal.registers[]`, none for a register the login no
+ * longer lists. Same rule as the host's `fiscalForRegister` (lib/receipt.ts),
+ * kept here because that one is not on the platform surface this module
+ * builds against.
+ */
+function requisitesOf(store: ActStoreInfo, sale: Pick<SaleDetail, 'fiscal_register'>): FiscalRequisites | null {
+  const fiscal = store.fiscal?.enabled ? store.fiscal : null;
+  if (!fiscal) return null;
+  const registerNo = sale.fiscal_register ?? 1;
+  if (registerNo === 1) return fiscal.requisites ?? null;
+  return fiscal.registers?.find((r) => r.register_no === registerNo)?.requisites ?? null;
+}
+
 /** Рядок 4/5 of a receipt, reused on the act: «ПН <ІПН>» for a VAT payer, «ІД <номер>» otherwise. */
-function taxIdLine(store: ActStoreInfo): string | null {
-  const req = store.fiscal?.enabled ? store.fiscal.requisites : null;
+function taxIdLine(req: FiscalRequisites | null): string | null {
   if (!req) return null;
   const org = req.organization;
   if (org.is_vat && org.tax_number) return `ПН ${org.tax_number}`;
@@ -75,7 +89,7 @@ export function buildActPayload(
   /** The refund's fiscal number when it is known from the immediate response rather than the re-read refund. */
   refundFiscalCode?: string | null
 ): ActData {
-  const req = store.fiscal?.enabled ? store.fiscal.requisites : null;
+  const req = requisitesOf(store, sale);
   const byId = new Map(sale.items.map((item) => [item.id, item]));
   const goods: ActGoodsLine[] = (refund.items ?? []).flatMap((line) => {
     const item = byId.get(line.sale_item_id);
@@ -94,7 +108,7 @@ export function buildActPayload(
     store_name: store.name,
     org_name: req?.organization.name ?? null,
     address: req?.point.address ?? req?.register.address ?? null,
-    tax_id_line: taxIdLine(store),
+    tax_id_line: taxIdLine(req),
     act_number: refund.refund_number ?? `RF-${refund.id}`,
     act_date: new Date(refund.created_at).toLocaleDateString('uk-UA'),
     buyer_name: refund.buyer_name?.trim() || null,
