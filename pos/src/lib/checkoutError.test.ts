@@ -305,3 +305,51 @@ describe('classifyCheckoutError — an exchange', () => {
     });
   });
 });
+
+describe('classifyCheckoutError — a cart for two registers (track ДК)', () => {
+  const part = { register_no: 1, sale: { id: 7, receipt_number: 'R-7' } };
+
+  it('reads a later receipt that failed as «one stands, give the rest back», never a retry', () => {
+    const failure = classifyCheckoutError(
+      httpError(502, {
+        error: 'split_part_failed',
+        stage: 'document',
+        code: 'rejected',
+        message: 'ПРРО відхилило чек. Чек каси 2 не пробито — поверніть гостю 120,00 ₴.',
+        support_code: 'FS-REJECTED',
+        register_no: 2,
+        sale_id: 8,
+        sale_voided: true,
+        parts: [part],
+        sale_ids: [7],
+        not_taken_cents: 12000,
+        not_taken_items: [1, 3],
+      })
+    );
+    expect(failure).toMatchObject({
+      kind: 'split_partial',
+      notTakenItems: [1, 3],
+      notTakenCents: 12000,
+      supportCode: 'FS-REJECTED',
+    });
+    expect(failure.kind === 'split_partial' && failure.parts).toHaveLength(1);
+    expect(failure.message).toContain('поверніть гостю 120,00 ₴');
+    expect(keepsModalOpen(failure)).toBe(false);
+  });
+
+  it('reads a split refusal before any receipt as an ordinary refusal', () => {
+    const failure = classifyCheckoutError(
+      httpError(409, { error: 'split_part_failed', stage: 'sale', message: 'Немає на складі', parts: [] })
+    );
+    expect(failure).toMatchObject({ kind: 'rejected', message: 'Немає на складі', code: 'split_part_failed' });
+  });
+
+  it('asks again for two receipts when the server found two registers in a one-receipt cart', () => {
+    const failure = classifyCheckoutError(
+      httpError(409, { error: 'split_needs_update', message: 'Оновіть касу' })
+    );
+    expect(failure.kind).toBe('split_needed');
+    expect(keepsModalOpen(failure)).toBe(true);
+    expect(keepsCart(failure)).toBe(true);
+  });
+});

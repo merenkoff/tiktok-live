@@ -5,8 +5,10 @@
 import { ReactNode, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, DownloadLine, Printer, Repeat, ShieldCheck } from '../../platform/glyphs';
 import { api, cashierApi, cartItemCount, useAuthStore, useCartStore, useOfflineStatus, usePosShell } from '@pos/platform';
+import type { CartLine } from '@pos/platform';
 import { formatSignedUah, formatUah } from '../../lib/money';
-import type { CashRoundingStep } from '../../lib/cashRounding';
+import { storeCashRounding, type CashRoundingStep } from '../../lib/cashRounding';
+import { cartNeedsSplit, registerCaption } from '../../lib/cartRegisters';
 import { exchangeOutcome } from '../../lib/exchange';
 import { localOrderLabel } from '../../lib/localOrderNo';
 import {
@@ -20,7 +22,7 @@ import { usePrintableReceipt } from '../../hooks/usePrintableReceipt';
 import { getMeta } from '../../offline/db';
 import { printKitchenTickets } from '../../offline/kitchenTickets';
 import type { ExchangeResult, PaymentMethod, SaleDetail, SalePaymentInput } from '../../types';
-import { CheckoutModal } from '../../components/CheckoutModal';
+import { CheckoutModal, type CheckoutSplit } from '../../components/CheckoutModal';
 import { ExchangeCheckout } from '../../components/cashier/ExchangeCheckout';
 import { ConfirmSheet } from '../../components/cashier/ConfirmSheet';
 import { positionsText } from '../../lib/plural';
@@ -38,9 +40,49 @@ import { reportModuleEvent } from '../../modules/telemetry';
 import { useModuleSlots } from '../../modules/featureSlots';
 import { ModuleSlots } from '../../modules/ModuleSlots';
 import { CatalogBoundary } from './CatalogBoundary';
+import { SplitReceiptRow } from './SplitReceiptRow';
 
 function paymentLabel(method: PaymentMethod): string {
   return method === 'cash' ? 'Готівка' : method === 'card' ? 'Картка' : 'QR-код';
+}
+
+/**
+ * A cart line as the server takes it — checkout, a parked cart and a pre-order
+ * alike: the recipe of a counter-built bouquet, and a café line's answers as
+ * sorted ids with its kitchen note. Since К3 the server keeps both on the
+ * parked and the pre-ordered line, so nothing the customer asked for is
+ * dropped on the way to the shelf. Only ids and counts: the server re-prices
+ * from them, because a line price the till can set freely is a hole no
+ * receipt shows.
+ */
+function wireLine(line: CartLine) {
+  return {
+    variant_id: line.variant_id,
+    quantity: line.quantity,
+    ...(line.components
+      ? {
+          components: line.components.map((c) => ({
+            component_variant_id: c.component_variant_id,
+            quantity: c.quantity,
+          })),
+        }
+      : {}),
+    ...(line.modifiers?.length ? { modifiers: line.modifiers.map((m) => m.id).sort((a, b) => a - b) } : {}),
+    ...(line.note ? { note: line.note } : {}),
+    // How a weighed line's weight was taken (G4_WEIGHED.md, decision 7): the
+    // server refuses a weighed line without it. A parked cart does not keep
+    // it — the restored line is `manual` again, the only kind in Г4.
+    ...(line.weight_source ? { weight_source: line.weight_source } : {}),
+  };
+}
+
+/**
+ * One kitchen ticket for a cart rung as two receipts (track ДК): the kitchen
+ * cooks the order, not the ФОП, so the lines of every receipt go together
+ * under the first receipt's number and key.
+ */
+function kitchenSaleOf(parts: SaleDetail[]): SaleDetail {
+  return { ...parts[0], items: parts.flatMap((part) => part.items) };
 }
 
 
@@ -122,6 +164,43 @@ export function RegisterPage() {
   const [preorderError, setPreorderError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
   const [success, setSuccess] = useState<SaleDetail | null>(null);
+  /**
+   * Every receipt of a cart rung for two registers (track ДК), register 1's
+   * first — `success` is the first of them. Null for an ordinary one-receipt sale.
+   */
+  const [splitParts, setSplitParts] = useState<SaleDetail[] | null>(null);
+  /** Set over a split cart that went only partly through: what the cashier gives back. */
+  const [splitNotice, setSplitNotice] = useState<{ message: string; supportCode: string | null } | null>(null);
+  /**
+   * The server found goods of two registers in a cart the till took for one
+   * (a line restored from a parked cart carries no register): the payment
+   * screen asks again, for two receipts.
+   */
+  const [forceSplit, setForceSplit] = useState(false);
+  // Food and alcohol of two ФОП in one cart (track ДК): two receipts. A
+  // pre-order is the server's lines and is never split (it answers 409).
+  const splitMode = preorderId == null && (forceSplit || cartNeedsSplit(lines, auth?.store.fiscal));
+  const roundingStep = storeCashRounding(auth?.store.cash_rounding);
+  const checkoutSplit = useMemo<CheckoutSplit | null>(
+    () =>
+      splitMode
+        ? {
+            quote: (method) =>
+              cashierApi.splitQuote({
+                items: lines.map(wireLine),
+                payments: [{ method, amount_cents: totalCents() }],
+                cart_discount: cartDiscount,
+                customer_id: customer?.id ?? null,
+                ...(method === 'cash' && roundingStep ? { cash_rounding: roundingStep } : {}),
+              }),
+          }
+        : null,
+    [splitMode, lines, cartDiscount, customer, roundingStep, totalCents]
+  );
+  // A cart emptied or rung leaves no reason to insist on two receipts.
+  useEffect(() => {
+    if (lines.length === 0) setForceSplit(false);
+  }, [lines.length]);
   /** Set beside `success` when the sale on screen is the sale half of an exchange. */
   const [exchangeDone, setExchangeDone] = useState<ExchangeResult | null>(null);
   /**
@@ -181,7 +260,7 @@ export function RegisterPage() {
   const [receiptPaperWidth, setReceiptPaperWidth] =
     useState<ReceiptPaperWidth>(DEFAULT_RECEIPT_PAPER_WIDTH);
   // Guards auto-print against StrictMode / effect re-runs — keyed by receipt.
-  const autoPrintedRef = useRef<string | null>(null);
+  const autoPrintedRef = useRef<Set<string>>(new Set());
   const { printToPdf, printablePortal } = usePrintableReceipt();
   // Fresh draft id per checkout session — used as the QR payment reference.
   const [saleDraftId, setSaleDraftId] = useState('');
@@ -215,27 +294,31 @@ export function RegisterPage() {
       // automatically once its контрольне число is there too — the completeness
       // rule lives in `fiscalBlockComplete`, next to the layout it governs. The
       // manual button below stays for everything else, clearly labelled.
-      if ((auth?.store.fiscal?.enabled ?? false) && !fiscalBlockComplete(success.fiscal)) {
-        return;
-      }
-      const key = success.receipt_number || String(success.id);
-      if (autoPrintedRef.current === key) return;
-      autoPrintedRef.current = key;
+      // A cart rung for two registers prints each receipt, each under its own
+      // gate and its own ФОП's requisites (track ДК).
+      const due = (splitParts ?? [success]).filter((sale) => {
+        if ((auth?.store.fiscal?.enabled ?? false) && !fiscalBlockComplete(sale.fiscal)) return false;
+        return !autoPrintedRef.current.has(sale.receipt_number || String(sale.id));
+      });
+      if (due.length === 0) return;
+      for (const sale of due) autoPrintedRef.current.add(sale.receipt_number || String(sale.id));
 
       setPrinting(true);
       setPrintStatus(null);
       try {
-        await printReceipt(
-          printerName,
-          buildReceiptPayload(success, {
-            name: auth?.store.name ?? '',
-            fiscal: auth?.store.fiscal ?? null,
-            vertical: auth?.store.vertical?.id ?? null,
-            feedback_url: auth?.store.feedback_url ?? null,
-          }),
-          paper
-        );
-        if (!cancelled) setPrintStatus('Чек надіслано на друк');
+        for (const sale of due) {
+          await printReceipt(
+            printerName,
+            buildReceiptPayload(sale, {
+              name: auth?.store.name ?? '',
+              fiscal: auth?.store.fiscal ?? null,
+              vertical: auth?.store.vertical?.id ?? null,
+              feedback_url: auth?.store.feedback_url ?? null,
+            }),
+            paper
+          );
+        }
+        if (!cancelled) setPrintStatus(due.length > 1 ? 'Чеки надіслано на друк' : 'Чек надіслано на друк');
       } catch (e) {
         if (!cancelled) {
           setPrintStatus(`Не вдалося надрукувати чек: ${typeof e === 'string' ? e : String(e)}`);
@@ -249,6 +332,7 @@ export function RegisterPage() {
     };
   }, [
     success,
+    splitParts,
     auth?.store.auto_print_receipt,
     auth?.store.name,
     auth?.store.vertical?.id,
@@ -280,36 +364,6 @@ export function RegisterPage() {
     );
   }
 
-  /**
-   * A cart line as the server takes it back — for a parked cart and a
-   * pre-order alike, in the same shape checkout sends (`pay` below): the
-   * recipe of a counter-built bouquet, and a café line's answers as sorted
-   * ids with its kitchen note. Since К3 the server keeps both on the parked
-   * and the pre-ordered line, so nothing the customer asked for is dropped
-   * on the way to the shelf.
-   */
-  function wireLine(line: (typeof lines)[number]) {
-    return {
-      variant_id: line.variant_id,
-      quantity: line.quantity,
-      ...(line.components
-        ? {
-            components: line.components.map((c) => ({
-              component_variant_id: c.component_variant_id,
-              quantity: c.quantity,
-            })),
-          }
-        : {}),
-      ...(line.modifiers?.length
-        ? { modifiers: line.modifiers.map((m) => m.id).sort((a, b) => a - b) }
-        : {}),
-      ...(line.note ? { note: line.note } : {}),
-      // How a weighed line's weight was taken (G4_WEIGHED.md, decision 7):
-      // the server refuses a weighed line without it. A parked cart does not
-      // keep it — the restored line is `manual` again, the only kind in Г4.
-      ...(line.weight_source ? { weight_source: line.weight_source } : {}),
-    };
-  }
 
   async function park(label: string, note: string | null) {
     setParking(true);
@@ -438,32 +492,13 @@ export function RegisterPage() {
     setPaying(true);
     setCheckoutError(null);
     try {
+      if (splitMode) {
+        await paySplit(payments, cashRounding, opts.clientUuid);
+        return;
+      }
       const sale = await cashierApi.completeSale(
         {
-          items: lines.map((line) => ({
-            variant_id: line.variant_id,
-            quantity: line.quantity,
-            // A bouquet assembled at the counter carries its own recipe. Only
-            // the ids and counts go: the server re-prices from them, because a
-            // line price the till can set freely is a hole no receipt shows.
-            ...(line.components
-              ? {
-                  components: line.components.map((c) => ({
-                    component_variant_id: c.component_variant_id,
-                    quantity: c.quantity,
-                  })),
-                }
-              : {}),
-            // The answers a café line chose and its kitchen note. Ids only,
-            // sorted: the server prices from them and keys its merge on them.
-            ...(line.modifiers?.length
-              ? { modifiers: line.modifiers.map((m) => m.id).sort((a, b) => a - b) }
-              : {}),
-            ...(line.note ? { note: line.note } : {}),
-            // A weighed line says how it was weighed, or the server refuses it
-            // as coming from a till that does not know weights.
-            ...(line.weight_source ? { weight_source: line.weight_source } : {}),
-          })),
+          items: lines.map(wireLine),
           payments,
           cart_discount: cartDiscount,
           customer_id: customer?.id ?? null,
@@ -488,6 +523,39 @@ export function RegisterPage() {
     } finally {
       setPaying(false);
     }
+  }
+
+  /**
+   * A cart for two registers — two ФОП (track ДК, TechDocs/POS_DUAL_REGISTER.md):
+   * one request, one receipt per register, register 1's first. Online only;
+   * the same key after a timeout continues where the server stopped. Failures
+   * go to `pay`'s own handler, which knows a partly rung split.
+   */
+  async function paySplit(payments: SalePaymentInput[], cashRounding: CashRoundingStep, clientUuid?: string) {
+    const result = await cashierApi.completeSplitSale(
+      {
+        items: lines.map(wireLine),
+        payments,
+        cart_discount: cartDiscount,
+        customer_id: customer?.id ?? null,
+        parked_cart_id: fromParkedId,
+        ...(cashRounding ? { cash_rounding: cashRounding } : {}),
+      },
+      { clientUuid }
+    );
+    const parts = result.parts.map((part) => part.sale);
+    clear();
+    setFromParkedId(null);
+    setForceSplit(false);
+    setCheckoutOpen(false);
+    setMobileCartOpen(false);
+    setSplitParts(parts);
+    setSplitNotice(null);
+    setSuccess(parts[0] ?? null);
+    // A receipt paid but not yet registered: the retry finishes it, the cashier is told.
+    setFiscalNotice(result.warning ? { message: result.warning, supportCode: null } : null);
+    setPrintStatus(null);
+    setStockEpoch((n) => n + 1);
   }
 
   /**
@@ -664,6 +732,45 @@ export function RegisterPage() {
       return;
     }
 
+    if (failure.kind === 'split_partial') {
+      // Some receipts stand — paid, and printed below like any receipt. Only
+      // the lines no receipt took stay in the cart, and the cashier is told
+      // what to give back. Never «ring it again»: that would charge twice.
+      const parts = failure.parts.map((part) => part.sale);
+      const left = new Set(failure.notTakenItems);
+      // A percentage stays as it was; a fixed amount keeps only the share the
+      // receipts that went through did not use up.
+      const usedCents = parts.reduce((sum, part) => sum + (part.cart_discount_cents ?? 0), 0);
+      const leftDiscount =
+        cartDiscount?.type === 'fixed'
+          ? cartDiscount.value - usedCents > 0
+            ? { type: 'fixed' as const, value: cartDiscount.value - usedCents }
+            : null
+          : cartDiscount;
+      restore({
+        lines: lines.filter((_, index) => left.has(index)),
+        cartDiscount: leftDiscount,
+        customer,
+      });
+      setFromParkedId(null);
+      setForceSplit(false);
+      setCheckoutOpen(false);
+      setMobileCartOpen(false);
+      setSplitParts(parts);
+      setSuccess(parts[0] ?? null);
+      setFiscalNotice(null);
+      setSplitNotice({ message: failure.message, supportCode: failure.supportCode });
+      setPrintStatus(null);
+      setStockEpoch((n) => n + 1);
+      return;
+    }
+
+    if (failure.kind === 'split_needed') {
+      setForceSplit(true);
+      setCheckoutError({ message: `${failure.message}. Оберіть спосіб оплати ще раз.` });
+      return;
+    }
+
     if (keepsModalOpen(failure)) {
       showCheckoutRefusal(failure, () =>
         void pay(payments, {
@@ -706,13 +813,18 @@ export function RegisterPage() {
   // purpose — a paid order is made while the fiscal retry is still running,
   // and the ticket is not a receipt. Keyed on the sale, so a re-render or
   // StrictMode's second pass never sends the kitchen the same order twice.
+  // A cart rung as two receipts is still one order: one ticket with every line.
+  const kitchenSale = useMemo(
+    () => (splitParts && splitParts.length > 1 ? kitchenSaleOf(splitParts) : success),
+    [splitParts, success]
+  );
   useEffect(() => {
-    if (!success || vertical !== 'cafe') return;
-    const key = success.client_uuid ?? success.receipt_number ?? String(success.id);
+    if (!kitchenSale || vertical !== 'cafe') return;
+    const key = kitchenSale.client_uuid ?? kitchenSale.receipt_number ?? String(kitchenSale.id);
     if (kitchenPrintedRef.current === key) return;
     kitchenPrintedRef.current = key;
     setKitchenStatus(null);
-    void printKitchenTickets(success)
+    void printKitchenTickets(kitchenSale)
       .then((outcome) => {
         setKitchenPrinter(outcome !== 'no-printer');
         if (outcome === 'printed') setKitchenStatus('Тікет надіслано на кухню');
@@ -721,14 +833,14 @@ export function RegisterPage() {
         setKitchenPrinter(true);
         setKitchenStatus(`Не вдалося надрукувати тікет: ${typeof e === 'string' ? e : String(e)}`);
       });
-  }, [success, vertical]);
+  }, [kitchenSale, vertical]);
 
   async function printKitchenTicketAgain() {
-    if (!success) return;
+    if (!kitchenSale) return;
     setKitchenPrinting(true);
     setKitchenStatus(null);
     try {
-      const outcome = await printKitchenTickets(success);
+      const outcome = await printKitchenTickets(kitchenSale);
       setKitchenStatus(outcome === 'printed' ? 'Тікет надіслано на кухню' : 'Принтер кухні не обрано');
     } catch (e) {
       setKitchenStatus(`Не вдалося надрукувати тікет: ${typeof e === 'string' ? e : String(e)}`);
@@ -745,14 +857,15 @@ export function RegisterPage() {
     feedback_url: auth?.store.feedback_url ?? null,
   });
 
-  async function printSuccessReceipt() {
-    if (!success || !receiptPrinterName) return;
+  /** The receipt on screen — or, of a cart rung as two receipts, the one the cashier pressed. */
+  async function printSuccessReceipt(sale: SaleDetail | null = success) {
+    if (!sale || !receiptPrinterName) return;
     setPrinting(true);
     setPrintStatus(null);
     try {
       await printReceipt(
         receiptPrinterName,
-        buildReceiptPayload(success, receiptStore()),
+        buildReceiptPayload(sale, receiptStore()),
         receiptPaperWidth,
       );
       setPrintStatus('Чек надіслано на друк');
@@ -763,10 +876,10 @@ export function RegisterPage() {
     }
   }
 
-  function printSuccessReceiptAsPdf() {
-    if (!success) return;
+  function printSuccessReceiptAsPdf(sale: SaleDetail | null = success) {
+    if (!sale) return;
     setPrintStatus(null);
-    printToPdf(buildReceiptPayload(success, receiptStore()));
+    printToPdf(buildReceiptPayload(sale, receiptStore()));
   }
 
   // ── The exchange's return half on the success screen (clothing R1) ──────
@@ -840,8 +953,16 @@ export function RegisterPage() {
   }, [exchangeDone, receiptPrinterName]);
 
   if (success) {
-    const payText = success.payments
-      .map((p) => `${paymentLabel(p.method)} ${formatUah(p.amount_cents)}`)
+    // Two receipts (track ДК) are one payment on screen: their sums and their
+    // money together, each receipt listed under it with its own ПРРО fate.
+    const shownParts = splitParts && splitParts.length > 1 ? splitParts : null;
+    const allSales = shownParts ?? [success];
+    const paidByMethod = new Map<PaymentMethod, number>();
+    for (const sale of allSales) {
+      for (const p of sale.payments) paidByMethod.set(p.method, (paidByMethod.get(p.method) ?? 0) + p.amount_cents);
+    }
+    const payText = [...paidByMethod]
+      .map(([method, cents]) => `${paymentLabel(method)} ${formatUah(cents)}`)
       .join(' · ');
     // The number the counter calls out — «сорок два», not «R-2026-000317».
     // Shown per vertical: a clothing store has no counter to call it at. An
@@ -856,10 +977,11 @@ export function RegisterPage() {
           : null;
     const showOrderNo = vertical === 'cafe' && orderCaption != null;
 
-    const paidCents = success.payments.reduce((sum, p) => sum + p.amount_cents, 0);
+    const paidCents = [...paidByMethod.values()].reduce((sum, cents) => sum + cents, 0);
     // What the customer owed: the cash part may have been rounded (НБУ № 25).
-    const roundingCents = success.rounding_cents ?? 0;
-    const dueCents = success.total_cents + roundingCents;
+    const roundingCents = allSales.reduce((sum, sale) => sum + (sale.rounding_cents ?? 0), 0);
+    const goodsCents = allSales.reduce((sum, sale) => sum + sale.total_cents, 0);
+    const dueCents = goodsCents + roundingCents;
     const changeCents = Math.max(0, paidCents - dueCents);
     const payLine = [payText, changeCents > 0 ? `решта ${formatUah(changeCents)}` : '']
       .filter(Boolean)
@@ -892,7 +1014,7 @@ export function RegisterPage() {
                 </p>
               )}
               <p className="text-sm text-sq-muted mt-1.5">
-                Чек {success.receipt_number}
+                {shownParts ? `Чеків: ${shownParts.length}` : `Чек ${success.receipt_number}`}
                 {success.staff_name ? ` · ${success.staff_name}` : ''}
               </p>
             </>
@@ -901,7 +1023,9 @@ export function RegisterPage() {
               <p className="mt-[18px] text-sm font-semibold text-sq-secondary">
                 {exchangeDone ? 'Обмін оформлено' : 'Оплачено'}
               </p>
-              <h2 className="text-2xl font-bold mt-1 text-sq-heading tabular-nums">{success.receipt_number}</h2>
+              <h2 className="text-2xl font-bold mt-1 text-sq-heading tabular-nums">
+                {shownParts ? `Чеків: ${shownParts.length}` : success.receipt_number}
+              </h2>
               {exchangeDone && (
                 <p className="text-sm text-sq-secondary mt-1 tabular-nums" data-testid="exchange-summary">
                   Повернення {exchangeRefund?.refund_number ?? '—'} за чеком {exchangeDone.refund.receipt_number}
@@ -917,12 +1041,39 @@ export function RegisterPage() {
           </p>
           {roundingCents !== 0 && (
             <p className="text-[13px] text-sq-muted tabular-nums" data-testid="sale-success-rounding">
-              {formatUah(success.total_cents)} · заокруглення {formatSignedUah(roundingCents)}
+              {formatUah(goodsCents)} · заокруглення {formatSignedUah(roundingCents)}
             </p>
           )}
           {payLine && <p className="text-[15px] text-sq-secondary mt-0.5 tabular-nums">{payLine}</p>}
 
-          {fiscalDoc?.fiscal_code && !fiscalNotice && (
+          {shownParts && (
+            <ul className="mt-4 w-full space-y-2 text-left" data-testid="sale-split-receipts">
+              {shownParts.map((sale) => (
+                <SplitReceiptRow
+                  key={sale.id}
+                  sale={sale}
+                  caption={registerCaption(auth?.store.fiscal, sale.fiscal_register ?? 1)}
+                  canPrint={Boolean(receiptPrinterName)}
+                  printing={printing}
+                  onPrint={() => void printSuccessReceipt(sale)}
+                  onPdf={() => printSuccessReceiptAsPdf(sale)}
+                />
+              ))}
+            </ul>
+          )}
+          {splitNotice && (
+            <div
+              role="alert"
+              className="mt-4 w-full rounded-sq bg-red-50 text-red-800 px-3 py-2 text-sm text-left"
+              data-testid="sale-split-notice"
+            >
+              <p className="font-semibold">Не всі чеки пробито</p>
+              <p className="mt-1">{splitNotice.message}</p>
+              <p className="mt-1">Решта товарів лишилась у кошику.</p>
+              {splitNotice.supportCode && <p className="mt-1 text-xs">Код: {splitNotice.supportCode}</p>}
+            </div>
+          )}
+          {!shownParts && fiscalDoc?.fiscal_code && !fiscalNotice && (
             <div
               className={`mt-3 inline-flex items-center gap-2 px-3 py-2 rounded-sq text-sm ${
                 fiscalDoc.status === 'done' &&
@@ -981,7 +1132,8 @@ export function RegisterPage() {
           )}
 
           <div className="mt-[22px] flex flex-wrap justify-center gap-2.5">
-            {receiptPrinterName && (
+            {/* Two receipts print from their own rows above. */}
+            {receiptPrinterName && !shownParts && (
               <button
                 type="button"
                 className={actionClass}
@@ -992,15 +1144,17 @@ export function RegisterPage() {
                 {printing ? 'Друк…' : 'Друкувати'}
               </button>
             )}
-            <button
-              type="button"
-              className={actionClass}
-              onClick={printSuccessReceiptAsPdf}
-              title={receiptPrinterName ? undefined : 'Принтер не обрано'}
-            >
-              <DownloadLine size={20} />
-              PDF
-            </button>
+            {!shownParts && (
+              <button
+                type="button"
+                className={actionClass}
+                onClick={() => printSuccessReceiptAsPdf()}
+                title={receiptPrinterName ? undefined : 'Принтер не обрано'}
+              >
+                <DownloadLine size={20} />
+                PDF
+              </button>
+            )}
             {vertical === 'cafe' && kitchenPrinter && (
               <button
                 type="button"
@@ -1044,6 +1198,8 @@ export function RegisterPage() {
             className="pos-btn-primary mt-4 w-full min-h-14 rounded-xl text-[17px]"
             onClick={() => {
               setSuccess(null);
+              setSplitParts(null);
+              setSplitNotice(null);
               setExchangeDone(null);
               setFiscalNotice(null);
               setKitchenStatus(null);
@@ -1060,7 +1216,8 @@ export function RegisterPage() {
               Повернення буде доступне після реєстрації чека в ПРРО.
             </p>
           )}
-          {!fiscalNotice && cancelRung.result !== 'refunded' && cancelRung.result !== 'voided' && (
+          {/* Two receipts are two documents of two ФОП: each goes back on its own from «Чеки». */}
+          {!fiscalNotice && !shownParts && cancelRung.result !== 'refunded' && cancelRung.result !== 'voided' && (
             <button
               type="button"
               className="mt-2 min-h-11 px-4 text-[15px] font-semibold text-red-600 hover:text-red-700"
@@ -1255,6 +1412,7 @@ export function RegisterPage() {
             setCheckoutOpen(false);
           }}
           onConfirm={(payments, opts) => void pay(payments, { cashRounding: opts.cashRounding })}
+          split={checkoutSplit}
         />
       )}
 

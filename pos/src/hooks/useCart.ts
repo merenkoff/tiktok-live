@@ -76,6 +76,13 @@ export interface CartLine {
    * without it, which is how it tells a till that does not know weights.
    */
   weight_source?: WeightSource;
+  /**
+   * The register this line sells through, as the catalog said (track ДК):
+   * set only when it is not register 1, so every cart of a store with one
+   * register stays exactly as it was. Read off the catalog, never sent — the
+   * server re-reads it from the product and checks every line.
+   */
+  fiscal_register?: number;
 }
 
 /** One stem in a bouquet being rung, per one unit of it. */
@@ -332,6 +339,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
       discount_label: meta.discount_label,
       ...(resolved && resolved.snapshot.length ? { modifiers: resolved.snapshot } : {}),
       ...(note ? { note } : {}),
+      ...((item.fiscal_register ?? 1) > 1 ? { fiscal_register: item.fiscal_register } : {}),
     });
     set({ lines, banner: null });
   },
@@ -365,6 +373,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
           compare_at_cents: meta.compare_at_cents,
           discount_label: meta.discount_label,
           weight_source: source,
+          ...((item.fiscal_register ?? 1) > 1 ? { fiscal_register: item.fiscal_register } : {}),
         },
       ],
       banner: null,
