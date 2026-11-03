@@ -40,8 +40,32 @@ import type { FiscalActionResult, FiscalSettingsView } from '@pos/platform';
  * already has it) rather than `posRequest`, so it needs no `REQUIRED_HOST_API`
  * entry of its own.
  */
-export function getFiscalSettingsView(): Promise<FiscalSettingsView> {
-  return api.fiscalSettings();
+export function getFiscalSettingsView(registerNo = 1): Promise<FiscalSettingsView> {
+  return registerNo === 1 ? api.fiscalSettings() : posRequest('get', `/fiscal/settings${registerQuery(registerNo)}`);
+}
+
+// ── Which register (track ДК, TechDocs/POS_DUAL_REGISTER.md) ─────────────────
+//
+// A store may run a second register — another ФОП's. Every call below takes
+// its number, default 1, and says it only when it is not 1: a GET in the query,
+// a POST/PATCH in the body. Register 1's requests are byte for byte what they
+// were, so a provider bundle that never asks about a register (Checkbox)
+// changes nothing.
+
+function registerQuery(registerNo: number): string {
+  return registerNo === 1 ? '' : `?register=${registerNo}`;
+}
+
+function registerBody(registerNo: number): { register?: number } {
+  return registerNo === 1 ? {} : { register: registerNo };
+}
+
+/** A further register's own fields: its name and whether it works (register 1 has neither). */
+export function saveRegisterBasics(
+  registerNo: number,
+  patch: { label?: string | null; enabled?: boolean }
+): Promise<FiscalSettingsView> {
+  return posRequest('patch', '/fiscal/settings', { ...patch, register: registerNo });
 }
 
 /**
@@ -56,9 +80,10 @@ export function getFiscalSettingsView(): Promise<FiscalSettingsView> {
  * `FiscalSettingsPatch.secrets`.
  */
 export function saveFiscalSecrets(
-  secrets: Record<string, string | null>
+  secrets: Record<string, string | null>,
+  registerNo = 1
 ): Promise<FiscalSettingsView> {
-  return posRequest('patch', '/fiscal/settings', { secrets });
+  return posRequest('patch', '/fiscal/settings', { secrets, ...registerBody(registerNo) });
 }
 
 /**
@@ -70,45 +95,54 @@ export function saveFiscalSecrets(
  */
 export function saveFiscalConfig(
   config: Record<string, unknown>,
-  defaultTaxCode?: string | null
+  defaultTaxCode?: string | null,
+  registerNo = 1
 ): Promise<FiscalSettingsView> {
   return posRequest('patch', '/fiscal/settings', {
     config,
     ...(defaultTaxCode !== undefined ? { default_tax_code: defaultTaxCode } : {}),
+    ...registerBody(registerNo),
   });
 }
 
-export function getFiscalStatus(): Promise<FiscalStatus> {
-  return posRequest('get', '/fiscal/status');
+export function getFiscalStatus(registerNo = 1): Promise<FiscalStatus> {
+  return posRequest('get', `/fiscal/status${registerQuery(registerNo)}`);
 }
 
-export function testFiscalConnection(): Promise<FiscalProbe> {
-  return posRequest('post', '/fiscal/test-connection');
+// Register 1 keeps its exact old call (no body): a POST without one is what
+// every server before the second register expects.
+function postFor<T>(path: string, registerNo: number): Promise<T> {
+  return registerNo === 1 ? posRequest('post', path) : posRequest('post', path, registerBody(registerNo));
 }
 
-export function openFiscalShift(): Promise<ShiftOpenResponse> {
-  return posRequest('post', '/fiscal/shift/open');
+export function testFiscalConnection(registerNo = 1): Promise<FiscalProbe> {
+  return postFor('/fiscal/test-connection', registerNo);
 }
 
-export function closeFiscalShift(): Promise<ShiftCloseResponse> {
-  return posRequest('post', '/fiscal/shift/close');
+export function openFiscalShift(registerNo = 1): Promise<ShiftOpenResponse> {
+  return postFor('/fiscal/shift/open', registerNo);
 }
 
-export function fiscalXReport(): Promise<FiscalReport> {
-  return posRequest('post', '/fiscal/x-report');
+export function closeFiscalShift(registerNo = 1): Promise<ShiftCloseResponse> {
+  return postFor('/fiscal/shift/close', registerNo);
+}
+
+export function fiscalXReport(registerNo = 1): Promise<FiscalReport> {
+  return postFor('/fiscal/x-report', registerNo);
 }
 
 /** Positive = internal cash in, negative = cash out. */
-export function fiscalServiceReceipt(amountCents: number): Promise<FiscalActionResult> {
-  const body: ServiceReceiptRequest = { amount_cents: amountCents };
+export function fiscalServiceReceipt(amountCents: number, registerNo = 1): Promise<FiscalActionResult> {
+  const body: ServiceReceiptRequest = { amount_cents: amountCents, ...registerBody(registerNo) };
   return posRequest('post', '/fiscal/service', body);
 }
 
-export function listFiscalAttention(): Promise<{
+export function listFiscalAttention(registerNo?: number): Promise<{
   documents: AttentionDoc[];
   sessions: OfflineSessionView[];
 }> {
-  return posRequest('get', '/fiscal/attention');
+  // Without a number: every register's, as before. A tab asks for its own.
+  return posRequest('get', `/fiscal/attention${registerNo ? `?register=${registerNo}` : ''}`);
 }
 
 // ── Register holder (TechDocs/prro/POS_FISCAL_OFFLINE.md §3а) ─────────────────────

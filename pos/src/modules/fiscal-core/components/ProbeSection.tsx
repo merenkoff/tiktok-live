@@ -15,7 +15,10 @@ import { testFiscalConnection } from '../data/fiscalApi';
 import { FiscalErrorCard } from './FiscalErrorCard';
 import type { FiscalProbe } from '../types';
 
-export function ProbeSection({ onProbed }: { onProbed?: (probe: FiscalProbe) => void } = {}) {
+export function ProbeSection({
+  onProbed,
+  registerNo = 1,
+}: { onProbed?: (probe: FiscalProbe) => void; registerNo?: number } = {}) {
   const [probe, setProbe] = useState<FiscalProbe | null>(null);
   const [probing, setProbing] = useState(false);
   const [probeError, setProbeError] = useState<unknown>(null);
@@ -25,7 +28,7 @@ export function ProbeSection({ onProbed }: { onProbed?: (probe: FiscalProbe) => 
     setProbeError(null);
     setProbe(null);
     try {
-      const result = await testFiscalConnection();
+      const result = await testFiscalConnection(registerNo);
       setProbe(result);
       onProbed?.(result);
     } catch (e) {

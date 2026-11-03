@@ -17,9 +17,11 @@ import type { FiscalStatus } from '../types';
 export interface ShiftPanelProps {
   status: FiscalStatus;
   onChanged: () => void;
+  /** Which of the store's registers this panel drives (track ДК); 1 by default. */
+  registerNo?: number;
 }
 
-export function ShiftPanel({ status, onChanged }: ShiftPanelProps) {
+export function ShiftPanel({ status, onChanged, registerNo = 1 }: ShiftPanelProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [zReportText, setZReportText] = useState<string | null>(null);
@@ -39,20 +41,20 @@ export function ShiftPanel({ status, onChanged }: ShiftPanelProps) {
 
   const open = () =>
     run(async () => {
-      await openFiscalShift();
+      await openFiscalShift(registerNo);
       onChanged();
     });
 
   const close = () =>
     run(async () => {
-      const res = await closeFiscalShift();
+      const res = await closeFiscalShift(registerNo);
       setZReportText(res.z_report_text);
       onChanged();
     });
 
   const xReport = () =>
     run(async () => {
-      const res = await fiscalXReport();
+      const res = await fiscalXReport(registerNo);
       setXReportText(res.text);
     });
 
