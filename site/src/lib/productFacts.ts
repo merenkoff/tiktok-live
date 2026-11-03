@@ -26,7 +26,7 @@ export const PRODUCT = {
     url: `${SITE_URL}/pos`,
     operatingSystem: 'Windows, macOS, Linux',
     description:
-      'Каса для магазину одягу, продуктового магазину, квіткової крамниці, кав\'ярні й ресторану — товари, штрихкоди, ваговий товар, склад, знижки, продаж під запис, QR-оплата, фіскалізація ПРРО через Checkbox і десктопний термінал з офлайн-режимом.',
+      'Каса для магазину одягу, продуктового магазину, квіткової крамниці, кав\'ярні й ресторану — товари, штрихкоди, ваговий товар, склад, знижки, продаж під запис, QR-оплата, фіскалізація ПРРО через Checkbox або Cashalot і десктопний термінал з офлайн-режимом.',
   },
   live: {
     name: 'The Live Shop — TikTok LIVE',
@@ -162,17 +162,17 @@ export const PRICING = {
         status: 'coming',
         lock: 'на 2 роки для тих, хто підключився на період запуску',
       },
-      // The second external provider (ПРРО track CA). `coming` until a real
-      // store registers a real receipt through it — the adapter, the bundle
-      // and nine live probes exist, the first fiscal receipt does not yet.
+      // The second external provider (ПРРО track CA): available since
+      // 2026-11-03 — the owner's decision after a store ran it end to end in
+      // test mode on a live register (TechDocs/prro/cashalot/POS_FISCAL_CASHALOT.md).
       // Third in the array on purpose: `PricingSection` and the articles read
       // `plans[0]`/`plans[1]` by index.
       {
         id: 'cashalot-prro',
         name: 'Каса + Cashalot',
         price: BASE_PLAN_PRICE,
-        note: 'Фіскалізація через Cashalot; підписку Cashalot магазин оплачує окремо. У розробці.',
-        status: 'coming',
+        note: 'Фіскалізація через Cashalot; підписку Cashalot магазин оплачує окремо.',
+        status: 'available',
         lock: 'назавжди для тих, хто підключився на період запуску',
         eurAnchor: 4,
       },
@@ -185,7 +185,7 @@ export const PRICING = {
     changedAt: '2026-10-25',
     billing: 'Помісячно, без передплати за рік.',
     label: `Безкоштовно на період запуску, далі від ${BASE_PLAN_PRICE} грн/міс за магазин`,
-    detail: `Зараз каса безкоштовна — на період запуску, без обмежень за кількістю продажів. Далі — ${BASE_PLAN_PRICE} грн/міс за магазин (до 4 кас) з фіскалізацією через Checkbox або ${OWN_PRRO_PLAN_PRICE} грн/міс із власним ПРРО, коли він вийде; столи для ресторану — ще ${TABLES_ADDON.price} грн/міс, а продаж під запис (модуль «Борги») — ${addonPriceText(DEBTS_ADDON)}. Оплата помісячно, без передплати за рік, і ціна закріплюється за тими, хто підключився на період запуску.`,
+    detail: `Зараз каса безкоштовна — на період запуску, без обмежень за кількістю продажів. Далі — ${BASE_PLAN_PRICE} грн/міс за магазин (до 4 кас) з фіскалізацією через Checkbox або Cashalot чи ${OWN_PRRO_PLAN_PRICE} грн/міс із власним ПРРО, коли він вийде; столи для ресторану — ще ${TABLES_ADDON.price} грн/міс, а продаж під запис (модуль «Борги») — ${addonPriceText(DEBTS_ADDON)}. Оплата помісячно, без передплати за рік, і ціна закріплюється за тими, хто підключився на період запуску.`,
   },
   live: {
     trialMonths: 6,
@@ -218,6 +218,12 @@ export const COMPETITOR_FACTS = {
     lockMaxMonths: 12,
     /** …and never past this date. */
     lockUntil: '2027-10-19',
+    /**
+     * The price as the tariff page shows it today (checkbox.ua/pricing/, read
+     * on `checkedAt` here): 348 per register per month with VAT, no annual
+     * price, the first 30 days free. Separate from the blog's dated facts above.
+     */
+    pricing: { source: 'https://checkbox.ua/pricing/', checkedAt: '2026-11-03', priceMonthly: 348, freeDays: 30 },
   },
   /**
    * Read from cashalot.ua/sale on `checkedAt`: the «КАСА» module is priced
@@ -228,7 +234,7 @@ export const COMPETITOR_FACTS = {
   cashalot: {
     name: 'Cashalot',
     source: 'https://cashalot.ua/sale',
-    checkedAt: '2026-11-02',
+    checkedAt: '2026-11-03',
     /** UAH per register per month, only with the annual licence paid. */
     priceMonthlyAnnual: 200,
     /** UAH per register per year. */
@@ -989,7 +995,7 @@ export const FEATURES = {
   fiscalOnlineCheckbox: { status: 'available', label: 'Фіскалізація ПРРО через Checkbox: зміни, Z-звіт, фіскальний чек' },
   fiscalReceiptPrint: { status: 'available', label: 'Фіскальний чек із QR-кодом на чековому принтері' },
   fiscalOffline: { status: 'available', label: 'Офлайн-фіскальні чеки з резерву кодів і подальшою відправкою в ДПС' },
-  fiscalOnlineCashalot: { status: 'coming', label: 'Фіскалізація ПРРО через Cashalot: зміни, Z-звіт, фіскальний чек' },
+  fiscalOnlineCashalot: { status: 'available', label: 'Фіскалізація ПРРО через Cashalot: зміни, Z-звіт, фіскальний чек' },
   tillHandover: { status: 'available', label: 'Передача каси на інший комп\'ютер без закриття зміни' },
   cashRounding: {
     status: 'available',
@@ -1264,6 +1270,7 @@ export const VERTICALS: readonly VerticalFact[] = [
       'stocktakeOffline',
       'customersDiscounts',
       'fiscalOnlineCheckbox',
+      'fiscalOnlineCashalot',
       'fiscalOffline',
       'offlineDesktop',
       'qrPayment',
@@ -1293,6 +1300,7 @@ export const VERTICALS: readonly VerticalFact[] = [
       'floristAnalytics',
       'customersDiscounts',
       'fiscalOnlineCheckbox',
+      'fiscalOnlineCashalot',
       'fiscalOffline',
       'offlineDesktop',
       'stocktakeOffline',
@@ -1350,6 +1358,7 @@ export const VERTICALS: readonly VerticalFact[] = [
       'groceryScaleLabels',
       'groceryPhone',
       'fiscalOnlineCheckbox',
+      'fiscalOnlineCashalot',
       'fiscalOffline',
       'cashRounding',
       'offlineDesktop',
@@ -1397,17 +1406,10 @@ export const ROADMAP: readonly RoadmapItem[] = [
     progress: 20,
   },
   {
-    id: 'cashalot-provider',
-    vertical: 'pos',
-    title: 'Cashalot як провайдер ПРРО',
-    body: `Другий провайдер поряд із Checkbox: ті самі зміни, Z-звіт і фіскальний чек з QR, без окремої програми. Підписка Cashalot — ${COMPETITOR_FACTS.cashalot.priceMonthlyAnnual} грн/міс за касу при річній оплаті проти ${COMPETITOR_FACTS.checkbox.priceFrom} у Checkbox. Офлайн-режиму каси з Cashalot немає: чеки без інтернету — це Checkbox.`,
-    progress: 85,
-  },
-  {
     id: 'fiscal-providers',
     vertical: 'pos',
     title: 'Вчасно.Каса та Є-Чек як провайдери',
-    body: 'Якщо у вас уже є ключ іншого ПРРО — каса підключиться до нього так само, як зараз до Checkbox.',
+    body: 'Якщо у вас уже є ключ іншого ПРРО — каса підключиться до нього так само, як зараз до Checkbox і Cashalot.',
     progress: 15,
   },
   {

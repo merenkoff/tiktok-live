@@ -13,7 +13,7 @@ import { PRICING } from '../lib/productFacts';
 import { CTA } from '../lib/ctaIds';
 
 const CORE: { value: string; label: string; icon: Glyph }[] = [
-  { value: 'ПРРО', label: 'фіскальний чек через Checkbox — онлайн і офлайн', icon: ShieldCheck },
+  { value: 'ПРРО', label: 'фіскальний чек через Checkbox або Cashalot — онлайн, а з Checkbox і офлайн', icon: ShieldCheck },
   { value: '0 мс', label: 'затримки офлайн — десктопна каса не чекає на сервер', icon: WifiOff },
   { value: 'QR', label: 'оплата на касі з автоматичним підтвердженням', icon: QrCode },
 ];

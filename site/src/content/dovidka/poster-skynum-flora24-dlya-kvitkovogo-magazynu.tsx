@@ -17,6 +17,7 @@ const P = COMPETITOR_FACTS.posterretail;
 const S = COMPETITOR_FACTS.skynum;
 const F = COMPETITOR_FACTS.flora24;
 const CB = COMPETITOR_FACTS.checkbox;
+const CA = COMPETITOR_FACTS.cashalot;
 const P_CHECKED = formatDateUk(P.flowers.checkedAt);
 const S_CHECKED = formatDateUk(S.checkedAt);
 const S_TARIFFS_CHECKED = formatDateUk(S.tariffs.checkedAt);
@@ -82,7 +83,7 @@ export const posterSkynumFlora24DlyaKvitkovogoMagazynu: Article = {
     description:
       'Чотири програми для квіткового магазину поруч: Poster, Skynum, Flora24 і The Live Shop POS. Де працює, як платите, ПРРО, збирання букета по стеблах на касі, вітрина, передзамовлення, доставка, списання зів\'ялого, CRM, без інтернету, інтернет-вітрина, аналітика і справжня ціна за рік — лише за сторінками виробників, з датою прочитання.',
     publishedAt: '2026-10-25',
-    updatedAt: '2026-10-25',
+    updatedAt: '2026-11-03',
     ogImage: '/og/pos.png',
     readingMinutes: 12,
     faq: [
@@ -229,7 +230,7 @@ function Body() {
               <td>Інтеграція з ПРРО {F.fiscalProviders.join(' та ')}</td>
               <td>
                 {OURS.prro
-                  ? `Через Checkbox: зміни, Z-звіт, фіскальний чек із QR; підписку Checkbox магазин оплачує окремо`
+                  ? `Через Checkbox або Cashalot: зміни, Z-звіт, фіскальний чек із QR; підписку Checkbox чи Cashalot магазин оплачує окремо`
                   : NOT_YET}
               </td>
             </tr>
@@ -443,7 +444,8 @@ function Body() {
         рік) каси як застосунку не містить, тож для магазину з касою він не підходить; у{' '}
         {S_PROGRESS.id} друга каса — ще {S_PROGRESS.extraTillEur} € на місяць, другий користувач —{' '}
         {S_PROGRESS.extraUserEur} €. У {POS} до {PRICING.pos.perStoreRegisters} кас — в одній ціні за магазин,
-        а Checkbox бере свої {CB.priceFrom} грн за кожну; столи для ресторану чи модуль «Борги» квітковому
+        а Checkbox бере свої {CB.priceFrom} грн за кожну (Cashalot — {CA.priceMonthlyAnnual} грн/міс за
+        касу за умови річної оплати); столи для ресторану чи модуль «Борги» квітковому
         магазину не потрібні. Курс євро для Skynum ми не підставляємо: його візьме платіжна система в день
         списання.
       </p>

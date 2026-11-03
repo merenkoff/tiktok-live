@@ -33,7 +33,7 @@ import type { LeadProduct } from '../hooks/useLeadSubmit';
 
 /** The core every vertical shares; short on purpose — /pos tells the long version. */
 const CORE = [
-  { icon: ShieldCheck, t: 'ПРРО через Checkbox', d: 'Зміни, Z-звіт, фіскальний чек із QR — онлайн і офлайн.', href: '/pos#prro' },
+  { icon: ShieldCheck, t: 'ПРРО через Checkbox або Cashalot', d: 'Зміни, Z-звіт, фіскальний чек із QR — онлайн і офлайн (без інтернету — з Checkbox).', href: '/pos#prro' },
   { icon: WifiOff, t: 'Каса без інтернету', d: 'Десктопна каса продає з локальної копії й синхронізується потім.', href: '/pos#download' },
   { icon: Package, t: 'Склад документами', d: 'Прихід, списання, інвентаризація — з проведенням і сторно.', href: '/pos' },
   { icon: QrCode, t: 'QR-оплата', d: 'Динамічний QR, оплата підтверджується сама.', href: '/pos' },

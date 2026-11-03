@@ -405,5 +405,5 @@ export const restoran: VerticalContent = {
       blurb: 'QR-меню із замовленням до столу, тарифами й інтеграціями проти каси, де меню, рахунок гостя, виклик офіціанта й замовлення з телефону (через офіціанта) вже всередині.',
     },
   ],
-  updatedAt: latestDay('2026-11-01', PRICING.pos.changedAt),
+  updatedAt: latestDay('2026-11-03', PRICING.pos.changedAt),
 };

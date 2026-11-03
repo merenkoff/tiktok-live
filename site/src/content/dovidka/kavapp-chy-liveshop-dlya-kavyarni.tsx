@@ -5,6 +5,7 @@ import { formatDateUk, latestDay } from '../../lib/formatDate';
 const POS = PRODUCT.pos.name;
 const K = COMPETITOR_FACTS.kavapp;
 const CB = COMPETITOR_FACTS.checkbox;
+const CA = COMPETITOR_FACTS.cashalot;
 
 const usd = (n: number) => `$${n.toFixed(2)}`;
 const [planS, planM, planL] = K.plans;
@@ -21,7 +22,7 @@ export const kavappChyLiveshopDlyaKavyarni: Article = {
     publishedAt: K.checkedAt,
     // Our column grew on 2026-10-18 (the waiter call row); Kavapp's own facts
     // are still those read on K.checkedAt, which the text names as such.
-    updatedAt: latestDay('2026-10-18', PRICING.pos.changedAt),
+    updatedAt: latestDay(COMPETITOR_FACTS.cashalot.checkedAt, '2026-10-18', PRICING.pos.changedAt),
     ogImage: '/og/pos.png',
     readingMinutes: 6,
     faq: [
@@ -102,8 +103,9 @@ function Body() {
             <td>ПРРО</td>
             <td>Входить у всі тарифи без доплати</td>
             <td>
-              Через Checkbox, підписку якого магазин оплачує окремо ({CB.priceNow} грн/міс за касу,
-              з {formatDateUk(CB.priceFromDate)} — {CB.priceFrom}); власний ПРРО — у планах
+              Через Checkbox або Cashalot, підписку якого магазин оплачує окремо (Checkbox — {CB.priceNow} грн/міс за касу,
+              з {formatDateUk(CB.priceFromDate)} — {CB.priceFrom}; Cashalot — {CA.priceMonthlyAnnual} грн/міс за касу за умови річної
+              оплати); власний ПРРО — у планах
             </td>
           </tr>
           <tr>
@@ -193,13 +195,13 @@ function Body() {
       </p>
       <p>
         У {POS} тарифи розділені не за функціями, а за способом фіскалізації: зараз каса безкоштовна
-        на період запуску, далі — {PRICING.pos.plans[0].price} грн/міс за магазин із Checkbox або{' '}
+        на період запуску, далі — {PRICING.pos.plans[0].price} грн/міс за магазин із Checkbox чи Cashalot або{' '}
         {PRICING.pos.plans[1].price} грн/міс із власним ПРРО, коли він вийде. Ціна закріплюється за
         тими, хто підключився на період запуску.
       </p>
       <div className="callout">
         Якщо вам треба лише продажі й ПРРО в одній точці, Kavapp дешевший: ПРРО в ньому вже в
-        тарифі, а в нашому випадку підписку Checkbox ви платите окремо. Ціни різняться і за валютою
+        тарифі, а в нашому випадку підписку Checkbox чи Cashalot ви платите окремо. Ціни різняться і за валютою
         (долар проти гривні), тож порівнюйте за поточним курсом і за тим тарифом, у якому є потрібні
         вам функції: модифікатори в Kavapp — це L.
       </div>

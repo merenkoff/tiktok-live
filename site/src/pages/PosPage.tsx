@@ -25,6 +25,7 @@ import {
   ROADMAP,
   DEBTS_ADDON,
   addonPriceText,
+  COMPETITOR_FACTS,
 } from '../lib/productFacts';
 import { track } from '../lib/analytics';
 import type { FaqItem } from '../lib/faqJsonLd';
@@ -61,14 +62,14 @@ const ROADMAP_POS = ROADMAP.filter((item) => item.vertical === 'pos');
 
 const STATS = [
   { value: '0 мс', label: 'затримки офлайн — каса не чекає на сервер' },
-  { value: 'ПРРО', label: 'фіскальний чек через Checkbox, онлайн і офлайн' },
+  { value: 'ПРРО', label: 'фіскальний чек через Checkbox або Cashalot, онлайн і офлайн' },
   { value: 'GTIN', label: 'розпізнавання товару по штрихкоду' },
 ];
 
 const FEATURE_CARDS = [
   {
     t: 'Фіскалізація (ПРРО)',
-    d: 'Фіскальний чек через Checkbox — зміни, Z-звіт і QR-код для перевірки друкуються на чековому принтері. Без інтернету каса пробиває офлайн-чеки з резерву фіскальних кодів і відправляє їх у ДПС, щойно з\'явиться мережа.',
+    d: 'Фіскальний чек через Checkbox або Cashalot — зміни, Z-звіт і QR-код для перевірки друкуються на чековому принтері. Без інтернету каса пробиває офлайн-чеки з резерву фіскальних кодів і відправляє їх у ДПС, щойно з\'явиться мережа.',
     icon: ShieldCheck,
   },
   {
@@ -113,8 +114,14 @@ const FEATURE_CARDS = [
   },
 ];
 
+/** The article that answers «який ПРРО обрати» for this till. */
+const PRRO_COMPARE_ARTICLE = '/dovidka/checkbox-chy-cashalot-prro-dlya-kasy';
+const CB = COMPETITOR_FACTS.checkbox;
+const CA = COMPETITOR_FACTS.cashalot;
+
 const FISCAL_POINTS = [
   FEATURES.fiscalOnlineCheckbox.label,
+  FEATURES.fiscalOnlineCashalot.label,
   FEATURES.fiscalReceiptPrint.label,
   FEATURES.fiscalOffline.label,
   FEATURES.tillHandover.label,
@@ -144,7 +151,15 @@ const GETTING_STARTED = [
 export const FAQ_ITEMS: FaqItem[] = [
   {
     q: `Чи є в ${PRODUCT.pos.name} фіскалізація чеків (ПРРО)?`,
-    a: 'Так. Фіскалізація працює через Checkbox: каса відкриває і закриває зміни, формує Z-звіт, а фіскальний чек із QR-кодом для перевірки друкується на чековому принтері. Без інтернету каса пробиває офлайн-чеки з резерву фіскальних кодів і відправляє їх у ДПС, щойно мережа повернеться.',
+    a: 'Так. Фіскалізація працює через Checkbox або Cashalot — на вибір магазину: каса відкриває і закриває зміни, формує Z-звіт, а фіскальний чек із QR-кодом для перевірки друкується на чековому принтері. З Checkbox без інтернету каса пробиває офлайн-чеки з резерву фіскальних кодів і відправляє їх у ДПС, щойно мережа повернеться.',
+  },
+  {
+    q: 'Які ПРРО підтримує каса?',
+    a: `Два провайдери на вибір: Checkbox і Cashalot. З обома каса відкриває й закриває зміни, формує X- і Z-звіт, друкує фіскальний чек із QR-кодом, видатковий чек на повернення і службові чеки. Без інтернету продає лише з Checkbox — з резерву офлайн-кодів; чек передплати за борг у модулі «Борги» теж лише з Checkbox. Підписку провайдера магазин оплачує окремо: Checkbox — ${CB.pricing.priceMonthly} грн/міс за касу, Cashalot — ${CA.priceMonthlyAnnual} грн/міс за касу за умови річної оплати. Порівняння — ${PRRO_COMPARE_ARTICLE}. Вчасно.Каса та Є-Чек — у планах.`,
+  },
+  {
+    q: 'Чи працює каса з Cashalot?',
+    a: `Так. Потрібні три значення з кабінету Cashalot — ідентифікатор ключа (KeyGuid), PIN касира і фіскальний номер ПРРО: їх вводять на екрані «Фіскалізація», ключ КЕП лишається в Cashalot. Там же вносять таблицю ставок податку так, як вона заведена в кабінеті Cashalot, і за бажання вмикають тестовий режим: перші чеки йдуть на ваш ПРРО без фіскальної сили, щоб перевірити налаштування. Каса продає з Cashalot, поки є інтернет; офлайн-режиму каси з Cashalot немає. Ліцензія Cashalot — ${CA.priceMonthlyAnnual} грн/міс за касу за умови річної оплати (${CA.priceYear} грн на рік).`,
   },
   {
     q: 'Чи заокруглює каса готівку до 50 копійок?',
@@ -346,7 +361,7 @@ export function PosPage() {
               icon={<ShieldCheck size={48} />}
               eyebrow="Фіскалізація"
               title="ПРРО без окремої програми"
-              lede="Фіскальний чек формується прямо з каси через Checkbox — окремий застосунок для ПРРО не потрібен. Зміна належить фіскальному реєстратору, а не комп'ютеру: якщо каса зламалась посеред дня, її передають на інший пристрій без другого Z-звіту."
+              lede="Фіскальний чек формується прямо з каси через Checkbox або Cashalot — окремий застосунок для ПРРО не потрібен. Зміна належить фіскальному реєстратору, а не комп'ютеру: якщо каса зламалась посеред дня, її передають на інший пристрій без другого Z-звіту."
             />
             <a href={HANDOVER_ARTICLE} className="link-more text-[15px] mt-6">
               Як саме це працює — у довідці про зміну ПРРО і заміну каси <ChevronRight size={20} />
@@ -364,6 +379,12 @@ export function PosPage() {
             {!isAvailable('fiscalOffline') && (
               <p className="text-xs text-muted mt-3">Офлайн-режим ПРРО — у розробці.</p>
             )}
+            <p className="text-xs text-muted mt-3">
+              Без інтернету каса продає з Checkbox; з Cashalot — поки є зв'язок.{' '}
+              <a href={PRRO_COMPARE_ARTICLE} className="text-pos font-semibold">
+                Checkbox чи Cashalot — що обрати
+              </a>
+            </p>
           </Reveal>
         </section>
 

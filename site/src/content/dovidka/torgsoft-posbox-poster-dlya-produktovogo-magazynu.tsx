@@ -17,6 +17,7 @@ const T = COMPETITOR_FACTS.torgsoft;
 const PB = COMPETITOR_FACTS.posbox;
 const P = COMPETITOR_FACTS.posterretail;
 const CB = COMPETITOR_FACTS.checkbox;
+const CA = COMPETITOR_FACTS.cashalot;
 const GROCERY = VERTICALS.find((v) => v.id === 'grocery');
 /**
  * The landing this article feeds. «Під запис» works since 2026-10-24 (the
@@ -79,7 +80,7 @@ export const torgsoftPosboxPosterDlyaProduktovogoMagazynu: Article = {
     description: `Що вміють Торгсофт, Posbox і Poster для продуктового магазину: продаж у борг і облік боргів покупців, ваги на касі й ваги з друком етикеток, робота без інтернету, ПРРО — і скільки коштує каса на одну точку за рік і за три роки. За сторінками виробників, прочитаними ${CHECKED}.`,
     publishedAt: T.publishedAt,
     // The competitors' facts were read on `checkedAt`; ours may have changed since.
-    updatedAt: latestDay(T.checkedAt, PRICING.pos.changedAt),
+    updatedAt: latestDay(COMPETITOR_FACTS.cashalot.checkedAt, T.checkedAt, PRICING.pos.changedAt),
     ogImage: '/og/pos.png',
     readingMinutes: 8,
     cta: {
@@ -121,7 +122,7 @@ export const torgsoftPosboxPosterDlyaProduktovogoMagazynu: Article = {
       },
       {
         q: 'Чи треба окремо платити за ПРРО?',
-        a: `Залежить від програми. У Торгсофт програмний РРО — опція за ${uah(T.prroYearUah)} грн на рік за кожну касу, а сторонніх ПРРО Торгсофт не підтримує. У Poster ПРРО — ще ${P.prroUah} ₴/міс за касу. У Posbox ПРРО Checkbox уже входить у ціну тарифу. У ${POS} фіскалізація — через Checkbox, і підписку Checkbox магазин оплачує окремо: ${CB.priceFrom} грн/міс за касу.`,
+        a: `Залежить від програми. У Торгсофт програмний РРО — опція за ${uah(T.prroYearUah)} грн на рік за кожну касу, а сторонніх ПРРО Торгсофт не підтримує. У Poster ПРРО — ще ${P.prroUah} ₴/міс за касу. У Posbox ПРРО Checkbox уже входить у ціну тарифу. У ${POS} фіскалізація — через Checkbox або Cashalot, і підписку Checkbox магазин оплачує окремо: ${CB.priceFrom} грн/міс за касу (Cashalot — ${CA.priceMonthlyAnnual} грн/міс за касу за умови річної оплати).`,
       },
       {
         q: 'Торгсофт чи Poster: що обрати для продуктового магазину?',
@@ -496,7 +497,7 @@ function Body() {
       <p>
         Ціна самої каси: {PRICING.pos.label.toLowerCase()}; продаж під запис — модуль «Борги»,{' '}
         {addonPriceText(DEBTS_ADDON)}; підписку Checkbox магазин оплачує окремо — {CB.priceFrom} грн/міс за
-        касу. Для підакцизних товарів каса поки не підходить. Якщо ви торгуєте на
+        касу (або Cashalot — {CA.priceMonthlyAnnual} грн/міс за касу за умови річної оплати). Для підакцизних товарів каса поки не підходить. Якщо ви торгуєте на
         ринку, спершу перевірте, чи потрібен вам ПРРО взагалі, — у статті{' '}
         <a href="/dovidka/chy-potriben-prro-na-rynku">«Чи потрібен ПРРО для торгівлі на ринку»</a>. Усе
         про нашу касу для продуктів — на сторінці <a href={LANDING}>каси для продуктового магазину</a>.

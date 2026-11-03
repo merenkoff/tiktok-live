@@ -19,6 +19,7 @@ const T = COMPETITOR_FACTS.torgsoft;
 const A = COMPETITOR_FACTS.arm20;
 const S = COMPETITOR_FACTS.skynum;
 const CB = COMPETITOR_FACTS.checkbox;
+const CA = COMPETITOR_FACTS.cashalot;
 const T_CHECKED = formatDateUk(T.clothing.checkedAt);
 const T_PRICES_CHECKED = formatDateUk(T.checkedAt);
 const A_CHECKED = formatDateUk(A.checkedAt);
@@ -82,7 +83,7 @@ export const torgsoftArm20SkynumDlyaMagazynuOdyagu: Article = {
     description:
       'Чотири програми для магазину одягу поруч: Торгсофт, ARM20, Skynum і The Live Shop POS. Де працює, як платите, ПРРО, облік за розмірами й кольорами, матриця й ростовка, дитячі розміри, цінники й етикетки, уцінка зі старою ціною, повернення, обмін, CRM, без інтернету, інтернет-магазин, мережа — і справжня ціна за рік на одну касу з фіскальним чеком, лише за сторінками виробників, з датою прочитання.',
     publishedAt: '2026-10-26',
-    updatedAt: '2026-10-26',
+    updatedAt: '2026-11-03',
     ogImage: '/og/pos.png',
     readingMinutes: 12,
     faq: [
@@ -207,7 +208,7 @@ function Body() {
               <td>Власний програмний РРО — опція {uah(T.prroYearUah)} грн на рік на кожну касу; зі сторонніми ПРРО не працює; на сторінці про одяг не названо</td>
               <td>«ПРРО безкоштовно» в кожному тарифі, провайдера не названо; «Підтримка фіскальної техніки» — з {A_SHOP.id}</td>
               <td>На сторінці про одяг не названо; «Інтеграція з ПРРО» на сторінці тарифів — з {S_PROGRESS.id}</td>
-              <td>{OURS.prro ? 'Через Checkbox: зміни, Z-звіт, фіскальний чек із QR, видатковий чек; підписку Checkbox магазин оплачує окремо' : NOT_YET}</td>
+              <td>{OURS.prro ? 'Через Checkbox або Cashalot: зміни, Z-звіт, фіскальний чек із QR, видатковий чек; підписку Checkbox чи Cashalot магазин оплачує окремо' : NOT_YET}</td>
             </tr>
             <tr>
               <td>Розмір і колір</td>
@@ -416,7 +417,8 @@ function Body() {
         техніки й без зв'язку з інтернет-магазином. У Skynum {S_START.id} за {S_START.monthlyEur} € ({S_START_YEAR} € на рік)
         каси як застосунку не містить, тож для магазину з касою він не підходить; у {S_PROGRESS.id} друга каса — ще{' '}
         {S_PROGRESS.extraTillEur} € на місяць, другий користувач — {S_PROGRESS.extraUserEur} €. У {POS} до{' '}
-        {PRICING.pos.perStoreRegisters} кас — в одній ціні за магазин, а Checkbox бере свої {CB.priceFrom} грн за кожну; столи
+        {PRICING.pos.perStoreRegisters} кас — в одній ціні за магазин, а Checkbox бере свої {CB.priceFrom} грн за кожну (Cashalot —{' '}
+        {CA.priceMonthlyAnnual} грн/міс за касу за умови річної оплати); столи
         для ресторану чи модуль «Борги» магазину одягу не потрібні. Курс євро для Skynum ми не підставляємо: його візьме
         платіжна система в день списання.
       </p>
