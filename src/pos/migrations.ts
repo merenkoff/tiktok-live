@@ -161,6 +161,8 @@ export const POS_MIGRATIONS = [
   // Table receipts printed on the bar's printer, whoever paid (ДК3-Г, Д13):
   // pos_sales.print_requested_at / print_claimed_* / printed_at.
   '090_pos_receipt_print_queue.sql',
+  // Every tax row a fiscal document registered — VAT and the retail excise (ДК4).
+  '091_pos_fiscal_tax_rows.sql',
 ] as const;
 
 export function readMigration(file: string): string {

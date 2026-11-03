@@ -135,6 +135,8 @@ export interface CheckboxGoodPayload {
   barcode?: string;
   uktzed?: string;
   tax?: number[];
+  /** «Цифрове значення штрихового коду акцизної марки», one per stamp (ДК4). */
+  excise_barcodes?: string[];
 }
 
 export interface CheckboxDiscountPayload {

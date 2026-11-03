@@ -552,6 +552,7 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
             status: 'failed' as const,
             mode: 'online' as const,
             vat_cents: null,
+            tax_rows: null,
             fiscal_code: null,
             fiscal_date: null,
             control_number: null,
