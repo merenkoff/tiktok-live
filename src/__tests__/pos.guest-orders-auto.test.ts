@@ -375,6 +375,25 @@ describe.skipIf(!hasDb)('POS guest orders sent straight to the kitchen (Q9)', ()
       const tile = (map.json().bills ?? map.json()) as Array<{ table_id: number; opened_by: number | null; opened_by_name: string }>;
       expect(tile.find((b) => b.table_id === table5)).toMatchObject({ opened_by: null, opened_by_name: GUEST_AUTHOR_NAME });
     });
+
+    it('leaves a bottle sold whole to the waiter, whose tablet scans its stamp (ДК5-0)', async () => {
+      const bottle = await seedProduct(cafe.storeId, { name: 'Вино 0,75', priceCents: 60000, quantity: 10 });
+      await pool.query(
+        `UPDATE pos_products SET fiscal_excise = TRUE, excise_per_unit = TRUE, fiscal_uktzed = '2204219800' WHERE id = $1`,
+        [bottle.productId]
+      );
+      resetPublicMenuCache();
+      await mode('all');
+      const before = await stockOf(bottle.variantId);
+      const res = await send([line(tea.variantId), line(bottle.variantId)]);
+      expect(res.statusCode).toBe(201);
+      expect(res.json().status).toBe('pending');
+      // Nothing of the attempt is kept: no bill, no round, the bottle still on the shelf.
+      expect(await billsOf(table5)).toHaveLength(0);
+      expect(await stockOf(bottle.variantId)).toBe(before);
+      const waiting = (await feed()).json() as { orders: unknown[] };
+      expect(waiting.orders).toHaveLength(1);
+    });
   });
 
   describe('the waiter’s notice and «Бачу»', () => {

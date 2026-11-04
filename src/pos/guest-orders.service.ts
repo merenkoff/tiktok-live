@@ -44,6 +44,7 @@ import * as bills from './bills.service.js';
 import * as rounds from './rounds.service.js';
 import { listLiveCalls, type LiveWaiterCall } from './waiter-calls.service.js';
 import * as modifiers from './modifiers.service.js';
+import { ExciseError } from './excise.js';
 import { readStoreClock } from './core/storeClock.js';
 import type { AutoKitchenMode, MenuTable, PublicMenu } from './public-menu/menu.service.js';
 
@@ -429,9 +430,18 @@ async function tryAutoSend(
   } catch (error) {
     await client.query('ROLLBACK TO SAVEPOINT guest_auto_send');
     // A dish that cannot go is the waiter's to sort out, as it always was:
-    // the order waits for them with the problem line marked. Anything else is
-    // a real failure and fails the request.
-    if (error instanceof bills.BillError || error instanceof modifiers.ModifierError) return null;
+    // the order waits for them with the problem line marked. A bottle sold
+    // whole is one too (track ДК, ДК5-0): its round waits for the stamp the
+    // waiter scans (Д4), which a guest's phone cannot — the refusal used to
+    // escape and throw the guest's whole order away with a 409 in the waiter's
+    // words. Anything else is a real failure and fails the request.
+    if (
+      error instanceof bills.BillError ||
+      error instanceof modifiers.ModifierError ||
+      error instanceof ExciseError
+    ) {
+      return null;
+    }
     throw error;
   }
 }
