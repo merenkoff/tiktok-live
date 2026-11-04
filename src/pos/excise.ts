@@ -7,9 +7,25 @@
 // Excise stamps and УКТ ЗЕД codes as the till and the owner type or scan them
 // (track ДК, ДК4-Б, TechDocs/POS_DUAL_REGISTER.md §4.3). The format is checked
 // loosely on purpose (decision Д9): the ДПС example's «AATE508932 0000412168»
-// passes, and so must whatever a real scanner types — letters (Latin or
-// Cyrillic), digits and spaces — until real scans say more. Normalised so the
-// same stamp typed twice is the same row: upper case, one space between parts.
+// passes, and so does what the bar's scanner types («ANFC015604» — four
+// Latin letters and six digits). Normalised so the same stamp typed twice is
+// the same row: upper case, one space between parts, Latin letters.
+//
+// A wedge scanner presses the KEYS a stamp's Latin letters sit on, so under
+// a Ukrainian or Russian keyboard layout «ANFC015604» arrives as «ФТАС015604»
+// (the real scans of 2026-11-04, `TechDocs/POS_DUAL_REGISTER.md` §7.11). The
+// till's own scan detector already reads keys by position (`scannedChar`), so
+// this catches what reaches us another way — a stamp typed or pasted under
+// that layout, a tablet's Bluetooth scanner, another client. The series of a
+// paper stamp is Latin, so a Cyrillic letter is read back as the Latin letter
+// on the same key; one with no letter on its key (Х, Ж, Є…) leaves the scan
+// unreadable. And a cashier scanning the bottle's own
+// barcode instead of its stamp is told so rather than selling the EAN-13.
+//
+// `pos/src/lib/excise.ts` is the till's copy; both test files carry the same
+// cases.
+
+import { verifyCheckDigit } from './gtin/normalize.js';
 
 export class ExciseError extends Error {
   constructor(
@@ -23,13 +39,34 @@ export class ExciseError extends Error {
   }
 }
 
-const LABEL_RE = /^[\p{L}\p{N} ]{8,40}$/u;
+const LAYOUT: Record<string, string> = {
+  Й: 'Q', Ц: 'W', У: 'E', К: 'R', Е: 'T', Н: 'Y', Г: 'U', Ш: 'I', Щ: 'O', З: 'P',
+  Ф: 'A', І: 'S', Ы: 'S', В: 'D', А: 'F', П: 'G', Р: 'H', О: 'J', Л: 'K', Д: 'L',
+  Я: 'Z', Ч: 'X', С: 'C', М: 'V', И: 'B', Т: 'N', Ь: 'M',
+};
+
+const LABEL_RE = /^[A-Z0-9 ]{8,40}$/;
+
+function latin(raw: string): string {
+  return raw
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase()
+    .replace(/[\u0400-\u04FF]/g, (c) => LAYOUT[c] ?? c);
+}
+
+/** True when what was scanned is a goods barcode (EAN-8/UPC/EAN-13/GTIN-14), not a stamp. */
+export function isGoodsBarcode(raw: unknown): boolean {
+  if (typeof raw !== 'string') return false;
+  const digits = raw.replace(/\s+/g, '');
+  return /^(\d{8}|\d{12,14})$/.test(digits) && verifyCheckDigit(digits);
+}
 
 /** A stamp as stored, or null when it cannot be one. */
 export function normalizeExciseLabel(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
-  const label = raw.replace(/\s+/g, ' ').trim().toUpperCase();
-  if (!LABEL_RE.test(label) || !/\d/.test(label)) return null;
+  const label = latin(raw);
+  if (!LABEL_RE.test(label) || !/\d/.test(label) || isGoodsBarcode(label)) return null;
   return label;
 }
 
@@ -45,6 +82,14 @@ export function readExciseLabels(raw: unknown, where: string): string[] {
   for (const item of raw) {
     const label = normalizeExciseLabel(item);
     if (!label) {
+      if (isGoodsBarcode(item)) {
+        throw new ExciseError(
+          `${where}: ${String(item).trim()} — штрихкод самого товару, а не марки. Скануйте акцизну марку на пляшці`,
+          'excise_label_invalid',
+          400,
+          { label: String(item).slice(0, 64) }
+        );
+      }
       throw new ExciseError(
         `${where}: «${String(item).slice(0, 40)}» не схоже на акцизну марку — скануйте ще раз або введіть серію й номер`,
         'excise_label_invalid',
