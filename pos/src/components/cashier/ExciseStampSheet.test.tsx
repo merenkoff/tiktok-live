@@ -59,6 +59,15 @@ describe('ExciseStampSheet', () => {
     expect(onSetLabels).not.toHaveBeenCalled();
   });
 
+  it('says so when the bottle’s barcode is scanned instead of its stamp, and reads a Ukrainian-layout scan as Latin', () => {
+    const { onSetLabels } = setup([bottle()]);
+    type('4820080720577');
+    expect(screen.getByTestId('excise-note')).toHaveTextContent('штрихкод пляшки, а не марки');
+    expect(onSetLabels).not.toHaveBeenCalled();
+    type('ФТАС015604');
+    expect(onSetLabels).toHaveBeenCalledWith(expect.anything(), ['ANFC015604']);
+  });
+
   it('goes on to payment once every bottle has its stamp, and lets one be taken off', () => {
     const { onSetLabels, onDone } = setup([bottle({ quantity: 1, excise_labels: ['AATE508932 0000412168'] })]);
     expect(screen.getByText('Усі марки відскановано')).toBeInTheDocument();

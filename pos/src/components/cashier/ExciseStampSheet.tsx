@@ -13,7 +13,7 @@
 import { FormEvent, useMemo, useState } from 'react';
 import type { CartLine } from '@pos/platform';
 import { ScanWedge } from './ScanWedge';
-import { linesNeedingStamps, normalizeExciseLabel } from '../../lib/excise';
+import { isGoodsBarcode, linesNeedingStamps, normalizeExciseLabel } from '../../lib/excise';
 import { X } from '../../platform/glyphs';
 
 export interface ExciseStampSheetProps {
@@ -38,7 +38,11 @@ export function ExciseStampSheet({ lines, error = null, onSetLabels, onDone, onC
     setNote(null);
     const label = normalizeExciseLabel(raw);
     if (!label) {
-      setNote(`«${raw.trim().slice(0, 40)}» не схоже на акцизну марку — скануйте ще раз`);
+      setNote(
+        isGoodsBarcode(raw)
+          ? `${raw.trim()} — штрихкод пляшки, а не марки. Скануйте акцизну марку`
+          : `«${raw.trim().slice(0, 40)}» не схоже на акцизну марку — скануйте ще раз`
+      );
       return;
     }
     if (stamped.some((line) => line.excise_labels?.includes(label))) {

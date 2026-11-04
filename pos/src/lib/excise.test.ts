@@ -3,19 +3,39 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { describe, expect, it } from 'vitest';
-import { linesNeedingStamps, normalizeExciseLabel, stampsMissing } from './excise';
+import { isGoodsBarcode, linesNeedingStamps, normalizeExciseLabel, stampsMissing } from './excise';
 
-describe('normalizeExciseLabel — the server’s loose rule (ДК4, Д9)', () => {
-  it('upper-cases and folds spaces, as the server stores it', () => {
-    expect(normalizeExciseLabel(' aate508932   0000412168 ')).toBe('AATE508932 0000412168');
-    expect(normalizeExciseLabel('АБВГ508932 0000412168')).toBe('АБВГ508932 0000412168');
+// The same cases in `src/__tests__/pos.excise.test.ts` and
+// `pos/src/lib/excise.test.ts`: the bar's scanner typed the first rows on
+// 2026-11-04 — «Хлібний дар» (EAN 4820080720577, stamp ANFC015604) and
+// «Кагор» (4820236720017, AICY275034), each under the English and the
+// Ukrainian keyboard layout.
+const STAMP_CASES: Array<[string, string | null]> = [
+  ['ANFC015604', 'ANFC015604'],
+  ['ФТАС015604', 'ANFC015604'],
+  ['AICY275034', 'AICY275034'],
+  ['ФШСН275034', 'AICY275034'],
+  ['фшсн275034', 'AICY275034'],
+  [' aate508932   0000412168 ', 'AATE508932 0000412168'],
+  ['ФФЕУ508932 0000412168', 'AATE508932 0000412168'],
+  ['4820080720577', null],
+  ['4820236720017', null],
+  ['1234567', null],
+  ['ABCDEFGHIJ', null],
+  ['AATE-508932', null],
+  ['ХЖЄЮ015604', null],
+  ['', null],
+];
+
+describe('normalizeExciseLabel — the server’s rule (ДК4, Д9, real scans)', () => {
+  it.each(STAMP_CASES)('%j → %j', (raw, stored) => {
+    expect(normalizeExciseLabel(raw)).toBe(stored);
   });
 
-  it('refuses what cannot be a stamp', () => {
-    expect(normalizeExciseLabel('1234567')).toBeNull();
-    expect(normalizeExciseLabel('ABCDEFGHIJ')).toBeNull();
-    expect(normalizeExciseLabel('AATE-508932')).toBeNull();
-    expect(normalizeExciseLabel('')).toBeNull();
+  it('tells a bottle’s own barcode from a misread', () => {
+    expect(isGoodsBarcode('4820080720577')).toBe(true);
+    expect(isGoodsBarcode('4820080720578')).toBe(false);
+    expect(isGoodsBarcode('ANFC015604')).toBe(false);
   });
 });
 

@@ -26,6 +26,7 @@ import { resetRuntime } from '../pos/fiscal/runtime.js';
 import { updateFiscalSettings, updateRegisterSettings } from '../pos/fiscal/settings.service.js';
 import type { FiscalSaleDoc } from '../pos/fiscal/types.js';
 import { voidSale } from '../pos/sales.service.js';
+import { isGoodsBarcode, normalizeExciseLabel } from '../pos/excise.js';
 import {
   applyPosMigrations,
   auth,
@@ -41,6 +42,40 @@ import { BAR_LICENCE, FOOD_LICENCE, splitProvider } from './helpers/split-fiscal
 
 const STAMP_A = 'AATE508932 0000412168';
 const STAMP_B = 'AATE508932 0000412169';
+
+// The same cases in `src/__tests__/pos.excise.test.ts` and
+// `pos/src/lib/excise.test.ts`: the bar's scanner typed the first rows on
+// 2026-11-04 — «Хлібний дар» (EAN 4820080720577, stamp ANFC015604) and
+// «Кагор» (4820236720017, AICY275034), each under the English and the
+// Ukrainian keyboard layout.
+const STAMP_CASES: Array<[string, string | null]> = [
+  ['ANFC015604', 'ANFC015604'],
+  ['ФТАС015604', 'ANFC015604'],
+  ['AICY275034', 'AICY275034'],
+  ['ФШСН275034', 'AICY275034'],
+  ['фшсн275034', 'AICY275034'],
+  [' aate508932   0000412168 ', 'AATE508932 0000412168'],
+  ['ФФЕУ508932 0000412168', 'AATE508932 0000412168'],
+  ['4820080720577', null],
+  ['4820236720017', null],
+  ['1234567', null],
+  ['ABCDEFGHIJ', null],
+  ['AATE-508932', null],
+  ['ХЖЄЮ015604', null],
+  ['', null],
+];
+
+describe('normalizeExciseLabel — what the bar’s scanner types (ДК4, Д9)', () => {
+  it.each(STAMP_CASES)('%j → %j', (raw, stored) => {
+    expect(normalizeExciseLabel(raw)).toBe(stored);
+  });
+
+  it('tells a bottle’s own barcode from a misread', () => {
+    expect(isGoodsBarcode('4820080720577')).toBe(true);
+    expect(isGoodsBarcode('4820080720578')).toBe(false);
+    expect(isGoodsBarcode('ANFC015604')).toBe(false);
+  });
+});
 
 describe.skipIf(!hasDb)('POS excise goods and stamps (ДК4-Б)', () => {
   let app: FastifyInstance;
@@ -175,6 +210,10 @@ describe.skipIf(!hasDb)('POS excise goods and stamps (ДК4-Б)', () => {
     const junk = await sell([{ variant_id: bottle, quantity: 1, excise_labels: ['???'] }], 30_000);
     expect(junk.statusCode).toBe(400);
     expect(junk.json().error).toBe('excise_label_invalid');
+
+    const ean = await sell([{ variant_id: bottle, quantity: 1, excise_labels: ['4820080720577'] }], 30_000);
+    expect(ean.statusCode).toBe(400);
+    expect(ean.json().message).toContain('штрихкод самого товару');
 
     const sold = await sell([{ variant_id: bottle, quantity: 1, excise_labels: [' aate508932   0000412168 '] }], 30_000);
     expect(sold.statusCode).toBe(201);
