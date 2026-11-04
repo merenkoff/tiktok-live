@@ -61,6 +61,7 @@ import { registerPartUuidFor } from './core/derivedUuid.js';
 import { completeSale } from './sales.service.js';
 import * as fiscalService from './fiscal/fiscal.service.js';
 import { activeRegisters, registersOfLines } from './fiscal/routing.js';
+import { assertNoWaitingPours } from './bottles.service.js';
 import { pool } from '../db.js';
 import { logger } from '../logger.js';
 import type { CartDiscountInput, CompleteSalePaymentInput } from './types.js';
@@ -403,6 +404,13 @@ async function planBillReceipts(
       billId: input.billId,
       lineIds: part.line_ids,
     });
+    // Before any part is rung (ДК5-Б, Д18): a pour still waiting for the bar's
+    // scan would make this receipt the first sale from a bottle without its stamp.
+    await assertNoWaitingPours(
+      pool,
+      input.storeId,
+      lines.map((l) => l.bill_item_id)
+    );
     // By what each dish's round poured (ДК5, Д20): a coffee with a cognac
     // answer goes on the cognac's register's receipt.
     const byLine =

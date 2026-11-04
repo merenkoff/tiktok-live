@@ -32,6 +32,7 @@
 
 import { pool } from '../db.js';
 import { ExciseError, readExciseLabels } from './excise.js';
+import { writeOffPostedTx } from './stock.service.js';
 
 type DbClient = { query: typeof pool.query };
 
@@ -627,4 +628,416 @@ export async function pourFactsOfSale(
     out.set(id, facts);
   }
   return out;
+}
+
+// ── A table's bill (ДК5-Б, Д18) ─────────────────────────────────────────────
+
+/**
+ * A cancelled round poured nothing: its millilitres go back into their
+ * bottles while they are open, a stamp one of its pours carried goes to the
+ * next pour, and its pours still waiting for the bar stop waiting.
+ */
+export async function undoRoundPours(client: DbClient, storeId: number, roundId: number): Promise<void> {
+  const pours = await client.query(
+    `UPDATE pos_bottle_pours bp SET undone_at = NOW()
+       FROM pos_bill_items bi
+      WHERE bi.id = bp.bill_item_id AND bi.round_id = $2 AND bp.store_id = $1
+        AND bp.undone_at IS NULL AND bp.sale_item_id IS NULL
+      RETURNING bp.bottle_id, bp.ml, bp.carries_label`,
+    [storeId, roundId]
+  );
+  await giveBack(client, pours.rows, { ml: true });
+}
+
+/** A table's line is paid: what it poured now belongs to the receipt line that paid it. */
+export async function movePoursToSale(
+  client: DbClient,
+  storeId: number,
+  billItemId: number,
+  saleItemId: number
+): Promise<void> {
+  await client.query(
+    `UPDATE pos_bottle_pours SET sale_item_id = $3
+      WHERE store_id = $1 AND bill_item_id = $2 AND sale_item_id IS NULL AND undone_at IS NULL`,
+    [storeId, billItemId, saleItemId]
+  );
+}
+
+/** A table's receipt is voided: its lines are owed for again, and so are their pours. */
+export async function detachPoursFromSale(client: DbClient, storeId: number, saleId: number): Promise<void> {
+  await client.query(
+    `UPDATE pos_bottle_pours SET sale_item_id = NULL
+      WHERE store_id = $1 AND bill_item_id IS NOT NULL
+        AND sale_item_id IN (SELECT id FROM pos_sale_items WHERE sale_id = $2)`,
+    [storeId, saleId]
+  );
+}
+
+/**
+ * A table's dish whose pour still waits for the bar to scan the next
+ * bottle's stamp cannot be paid yet (Д18): the receipt that pays it would be
+ * the first sale from that bottle, and must carry the stamp.
+ */
+export async function assertNoWaitingPours(
+  client: DbClient,
+  storeId: number,
+  billItemIds: readonly number[]
+): Promise<void> {
+  if (billItemIds.length === 0) return;
+  const waiting = await client.query(
+    `SELECT bp.bill_item_id, p.name AS bottle_name
+       FROM pos_bottle_pours bp
+       JOIN pos_variants v ON v.id = bp.variant_id
+       JOIN pos_products p ON p.id = v.product_id
+      WHERE bp.store_id = $1 AND bp.bill_item_id = ANY($2::bigint[])
+        AND bp.bottle_id IS NULL AND bp.undone_at IS NULL
+      ORDER BY bp.id
+      LIMIT 1`,
+    [storeId, [...billItemIds]]
+  );
+  const row = waiting.rows[0];
+  if (!row) return;
+  throw new ExciseError(
+    `Бар ще не відсканував марку нової пляшки «${row.bottle_name}» — оплатити можна, щойно її відкриють`,
+    'bottle_pending',
+    409,
+    { item_id: Number(row.bill_item_id) }
+  );
+}
+
+// ── The bar (ДК5-Б) ─────────────────────────────────────────────────────────
+
+export interface OpenBottleView {
+  id: number;
+  variant_id: number;
+  product_name: string;
+  label: string;
+  capacity_ml: number;
+  poured_ml: number;
+  opened_at: string;
+}
+
+export interface WaitingBottleView {
+  variant_id: number;
+  product_name: string;
+  /** What waits to be poured from the next bottle. */
+  ml: number;
+  bottle_ml: number;
+  /** The tables whose dishes wait for it. */
+  tables: string[];
+}
+
+export interface ClosedBottleView extends OpenBottleView {
+  closed_at: string;
+  close_reason: 'empty' | 'replaced' | 'broken';
+  /** Positive: less was in it than counted (written off); negative: more was left than counted. */
+  discrepancy_ml: number | null;
+  note: string | null;
+}
+
+function bottleView(row: Record<string, unknown>): OpenBottleView {
+  return {
+    id: Number(row.id),
+    variant_id: Number(row.variant_id),
+    product_name: String(row.product_name),
+    label: String(row.label),
+    capacity_ml: Number(row.capacity_ml),
+    poured_ml: Number(row.poured_ml),
+    opened_at: new Date(row.opened_at as string).toISOString(),
+  };
+}
+
+function closedView(row: Record<string, unknown>): ClosedBottleView {
+  return {
+    ...bottleView(row),
+    closed_at: new Date(row.closed_at as string).toISOString(),
+    close_reason: row.close_reason as ClosedBottleView['close_reason'],
+    discrepancy_ml: row.discrepancy_ml == null ? null : Number(row.discrepancy_ml),
+    note: (row.note as string | null) ?? null,
+  };
+}
+
+const BOTTLE_COLUMNS = `b.id, b.variant_id, b.label, b.capacity_ml, b.poured_ml, b.opened_at,
+       b.closed_at, b.close_reason, b.discrepancy_ml, b.note,
+       p.name || CASE WHEN COALESCE(v.label, '') <> '' THEN ' · ' || v.label ELSE '' END AS product_name`;
+
+/**
+ * What the bar sees: the open bottles, the pours waiting for a stamp (and
+ * whose tables), and what closed since `since` (default: the last day).
+ */
+export async function listBottles(
+  storeId: number,
+  since?: Date
+): Promise<{ open: OpenBottleView[]; waiting: WaitingBottleView[]; closed: ClosedBottleView[] }> {
+  const open = await pool.query(
+    `SELECT ${BOTTLE_COLUMNS}
+       FROM pos_open_bottles b
+       JOIN pos_variants v ON v.id = b.variant_id
+       JOIN pos_products p ON p.id = v.product_id
+      WHERE b.store_id = $1 AND b.closed_at IS NULL
+      ORDER BY p.name, b.id`,
+    [storeId]
+  );
+  const waiting = await pool.query(
+    `SELECT bp.variant_id, v.bottle_ml,
+            p.name || CASE WHEN COALESCE(v.label, '') <> '' THEN ' · ' || v.label ELSE '' END AS product_name,
+            SUM(bp.ml)::int AS ml,
+            array_remove(array_agg(DISTINCT t.name), NULL) AS tables
+       FROM pos_bottle_pours bp
+       JOIN pos_variants v ON v.id = bp.variant_id
+       JOIN pos_products p ON p.id = v.product_id
+       LEFT JOIN pos_bill_items bi ON bi.id = bp.bill_item_id
+       LEFT JOIN pos_bills bl ON bl.id = bi.bill_id
+       LEFT JOIN pos_tables t ON t.id = bl.table_id
+      WHERE bp.store_id = $1 AND bp.bottle_id IS NULL AND bp.undone_at IS NULL
+      GROUP BY bp.variant_id, v.bottle_ml, p.name, v.label
+      ORDER BY MIN(bp.id)`,
+    [storeId]
+  );
+  const closed = await pool.query(
+    `SELECT ${BOTTLE_COLUMNS}
+       FROM pos_open_bottles b
+       JOIN pos_variants v ON v.id = b.variant_id
+       JOIN pos_products p ON p.id = v.product_id
+      WHERE b.store_id = $1 AND b.closed_at IS NOT NULL AND b.closed_at >= $2
+      ORDER BY b.closed_at DESC
+      LIMIT 200`,
+    [storeId, since ?? new Date(Date.now() - 86_400_000)]
+  );
+  return {
+    open: open.rows.map(bottleView),
+    waiting: waiting.rows.map((row) => ({
+      variant_id: Number(row.variant_id),
+      product_name: String(row.product_name),
+      ml: Number(row.ml),
+      bottle_ml: Number(row.bottle_ml),
+      tables: ((row.tables as unknown[] | null) ?? []).map(String).sort(),
+    })),
+    closed: closed.rows.map(closedView),
+  };
+}
+
+/** The owner's report: closed bottles in a window and what the discrepancies came to, per drink. */
+export async function bottleReport(
+  storeId: number,
+  from: Date,
+  to: Date
+): Promise<{
+  closed: ClosedBottleView[];
+  totals: Array<{ variant_id: number; product_name: string; bottles: number; missing_ml: number; left_ml: number }>;
+}> {
+  const closed = await pool.query(
+    `SELECT ${BOTTLE_COLUMNS}
+       FROM pos_open_bottles b
+       JOIN pos_variants v ON v.id = b.variant_id
+       JOIN pos_products p ON p.id = v.product_id
+      WHERE b.store_id = $1 AND b.closed_at >= $2 AND b.closed_at < $3
+      ORDER BY b.closed_at DESC
+      LIMIT 1000`,
+    [storeId, from, to]
+  );
+  const views = closed.rows.map(closedView);
+  const totals = new Map<number, { variant_id: number; product_name: string; bottles: number; missing_ml: number; left_ml: number }>();
+  for (const bottle of views) {
+    const row = totals.get(bottle.variant_id) ?? {
+      variant_id: bottle.variant_id,
+      product_name: bottle.product_name,
+      bottles: 0,
+      missing_ml: 0,
+      left_ml: 0,
+    };
+    row.bottles += 1;
+    const d = bottle.discrepancy_ml ?? 0;
+    if (d > 0) row.missing_ml += d;
+    if (d < 0) row.left_ml += -d;
+    totals.set(bottle.variant_id, row);
+  }
+  return { closed: views, totals: [...totals.values()] };
+}
+
+export class BottleError extends Error {
+  constructor(
+    message: string,
+    readonly status: 400 | 404 | 409 = 400
+  ) {
+    super(message);
+    this.name = 'BottleError';
+  }
+}
+
+async function bottleVariant(client: DbClient, storeId: number, variantId: number): Promise<number> {
+  const row = await client.query(`SELECT bottle_ml FROM pos_variants WHERE store_id = $1 AND id = $2`, [
+    storeId,
+    variantId,
+  ]);
+  if (row.rows.length === 0) throw new BottleError('Товар не знайдено', 404);
+  if (row.rows[0].bottle_ml == null) {
+    throw new BottleError('Цей товар не відкривають за маркою — у картці не вказано «Пляшка за маркою, мл»');
+  }
+  return Number(row.rows[0].bottle_ml);
+}
+
+/**
+ * Close the open bottle of a variant before its count is up, writing off what
+ * the count says was still in it — it is not on the shelf (a bottle that ran
+ * out early, a broken one).
+ */
+async function closeEarlyTx(
+  client: DbClient,
+  params: {
+    storeId: number;
+    staffId: number;
+    bottleId: number;
+    reason: 'replaced' | 'broken';
+    note: string | null;
+  }
+): Promise<void> {
+  const found = await client.query(
+    `SELECT b.id, b.variant_id, b.label, b.capacity_ml, b.poured_ml, b.closed_at, p.name
+       FROM pos_open_bottles b
+       JOIN pos_variants v ON v.id = b.variant_id
+       JOIN pos_products p ON p.id = v.product_id
+      WHERE b.store_id = $1 AND b.id = $2
+      FOR UPDATE OF b`,
+    [params.storeId, params.bottleId]
+  );
+  const bottle = found.rows[0];
+  if (!bottle) throw new BottleError('Пляшку не знайдено', 404);
+  if (bottle.closed_at != null) throw new BottleError('Цю пляшку вже закрито', 409);
+  const rest = Number(bottle.capacity_ml) - Number(bottle.poured_ml);
+  await client.query(
+    `UPDATE pos_open_bottles
+        SET closed_at = NOW(), closed_by = $2, close_reason = $3, discrepancy_ml = $4, note = $5
+      WHERE id = $1`,
+    [params.bottleId, params.staffId, params.reason, rest, params.note]
+  );
+  if (rest > 0) {
+    await writeOffPostedTx(client, {
+      storeId: params.storeId,
+      staffId: params.staffId,
+      reasonCode: params.reason === 'broken' ? 'damaged' : 'lost',
+      note: `${params.reason === 'broken' ? 'Розбилась пляшка' : 'Розбіжність розливу'}: ${bottle.name}, марка ${bottle.label}${
+        params.note ? ` — ${params.note}` : ''
+      }`,
+      clientUuid: null,
+      lines: [{ variantId: Number(bottle.variant_id), quantity: rest }],
+    });
+  }
+}
+
+/**
+ * The bar scans a new bottle's stamp. With no bottle of that drink open it
+ * simply opens, filling the pours that waited for it (Д18). With one still
+ * open the bar must say why it is starting another — `replace` (the old one
+ * ran out before the count) closes the old one with the difference written
+ * off. Scanning the stamp of the bottle already open again is a no-op.
+ */
+export async function openAtBar(params: {
+  storeId: number;
+  staffId: number;
+  variantId: number;
+  label: unknown;
+  replace?: boolean;
+  note?: string | null;
+}): Promise<{ bottle_id: number; replayed: boolean }> {
+  const [label] = readExciseLabels([params.label], 'Марка пляшки');
+  if (!label) throw new BottleError('Скануйте акцизну марку пляшки');
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const capacity = await bottleVariant(client, params.storeId, params.variantId);
+    const same = await client.query(
+      `SELECT b.id FROM pos_open_bottles b
+        WHERE b.store_id = $1 AND b.variant_id = $2 AND b.label = $3
+        ORDER BY b.id DESC LIMIT 1`,
+      [params.storeId, params.variantId, label]
+    );
+    if (same.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return { bottle_id: Number(same.rows[0].id), replayed: true };
+    }
+    const open = await client.query(
+      `SELECT id FROM pos_open_bottles WHERE store_id = $1 AND variant_id = $2 AND closed_at IS NULL FOR UPDATE`,
+      [params.storeId, params.variantId]
+    );
+    if (open.rows.length > 0) {
+      if (!params.replace) {
+        throw new BottleError(
+          'Попередня пляшка ще відкрита — якщо в ній порожньо, натисніть «Замінити»: різницю буде списано',
+          409
+        );
+      }
+      await closeEarlyTx(client, {
+        storeId: params.storeId,
+        staffId: params.staffId,
+        bottleId: Number(open.rows[0].id),
+        reason: 'replaced',
+        note: params.note?.trim() || null,
+      });
+    }
+    const bottleId = await openBottleTx(client, {
+      storeId: params.storeId,
+      staffId: params.staffId,
+      variantId: params.variantId,
+      label,
+      capacity,
+    });
+    await client.query('COMMIT');
+    return { bottle_id: bottleId, replayed: false };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/** A bottle broke: closed, and what the count says was in it written off as damaged. */
+export async function closeBroken(params: {
+  storeId: number;
+  staffId: number;
+  bottleId: number;
+  note?: string | null;
+}): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await closeEarlyTx(client, {
+      storeId: params.storeId,
+      staffId: params.staffId,
+      bottleId: params.bottleId,
+      reason: 'broken',
+      note: params.note?.trim() || null,
+    });
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Something was still in a bottle the count closed as empty (Д19): written
+ * down as a discrepancy for the owner, stock untouched — the count already
+ * took it, and the new bottle is the one being poured.
+ */
+export async function recordLeftover(params: {
+  storeId: number;
+  staffId: number;
+  bottleId: number;
+  ml: unknown;
+}): Promise<void> {
+  const ml = Number(params.ml);
+  if (!Number.isInteger(ml) || ml <= 0 || ml > 100000) throw new BottleError('Залишок — ціле число мл');
+  const updated = await pool.query(
+    `UPDATE pos_open_bottles SET discrepancy_ml = $3
+      WHERE store_id = $1 AND id = $2 AND close_reason = 'empty' AND $3 <= capacity_ml
+      RETURNING id`,
+    [params.storeId, params.bottleId, -ml]
+  );
+  if ((updated.rowCount ?? 0) === 0) {
+    throw new BottleError('Залишок записують лише для пляшки, яку лічильник закрив як порожню', 409);
+  }
 }

@@ -21,6 +21,7 @@ import { registerQrRoutes } from './routes/qr.routes.js';
 import { registerTelemetryRoutes } from './routes/telemetry.routes.js';
 import { registerLiveRoutes } from './routes/live.routes.js';
 import { registerKitchenRoutes } from './routes/kitchen.routes.js';
+import { registerBottleRoutes } from './routes/bottles.routes.js';
 import { registerReceiptPrintRoutes } from './routes/receipt-print.routes.js';
 import { registerTablesRoutes } from './routes/tables.routes.js';
 import { registerFiscalRoutes } from './routes/fiscal.routes.js';
@@ -62,6 +63,9 @@ export const POS_ROUTE_GROUPS: PosRouteGroup[] = [
   // module that draws the kitchen board opts in through `module_remotes`.
   // The gate is `ensurePosAuth` plus a 409 for a store with no kitchen.
   { moduleId: null, register: registerKitchenRoutes },
+  // The bar's open bottles (ДК5-Б): core like the kitchen board — whether a
+  // store has any is its catalogue's business (`bottle_ml`), not a module.
+  { moduleId: null, register: registerBottleRoutes },
   // Core for the same reason again: the `tables` module that draws the hall
   // map opts in through `module_remotes` — its presence IS the «restaurant»
   // switch, which is why there is no `pos_stores.service_mode` column
