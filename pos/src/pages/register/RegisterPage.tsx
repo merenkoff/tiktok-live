@@ -9,6 +9,8 @@ import type { CartLine } from '@pos/platform';
 import { formatSignedUah, formatUah } from '../../lib/money';
 import { storeCashRounding, type CashRoundingStep } from '../../lib/cashRounding';
 import { cartNeedsSplit, registerCaption } from '../../lib/cartRegisters';
+import { linesNeedingStamps } from '../../lib/excise';
+import { ExciseStampSheet } from '../../components/cashier/ExciseStampSheet';
 import { exchangeOutcome } from '../../lib/exchange';
 import { localOrderLabel } from '../../lib/localOrderNo';
 import {
@@ -73,6 +75,8 @@ function wireLine(line: CartLine) {
     // server refuses a weighed line without it. A parked cart does not keep
     // it — the restored line is `manual` again, the only kind in Г4.
     ...(line.weight_source ? { weight_source: line.weight_source } : {}),
+    // The stamps of a bottle sold whole (ДК4): exactly one per unit.
+    ...(line.excise_labels?.length ? { excise_labels: line.excise_labels } : {}),
   };
 }
 
@@ -177,6 +181,17 @@ export function RegisterPage() {
    * screen asks again, for two receipts.
    */
   const [forceSplit, setForceSplit] = useState(false);
+  /**
+   * The excise stamps sheet (ДК4, Д4): open while a bottle sold whole is
+   * short of its stamp, before payment — or after the server refused one.
+   */
+  const [stampSheet, setStampSheet] = useState<{ error: string | null } | null>(null);
+  const setExciseLabels = useCartStore((s) => s.setExciseLabels);
+  /** «Оплатити»: the stamps first, where a bottle needs one, then the payment screen. */
+  const openCheckout = () => {
+    if (linesNeedingStamps(lines).length > 0) setStampSheet({ error: null });
+    else setCheckoutOpen(true);
+  };
   // Food and alcohol of two ФОП in one cart (track ДК): two receipts. A
   // pre-order is the server's lines and is never split (it answers 409).
   const splitMode = preorderId == null && (forceSplit || cartNeedsSplit(lines, auth?.store.fiscal));
@@ -765,6 +780,14 @@ export function RegisterPage() {
       return;
     }
 
+    // A stamp missing, misread or already sold (ДК4): back to the stamps,
+    // with the server's sentence naming which.
+    if (failure.kind === 'rejected' && failure.code?.startsWith('excise_')) {
+      setCheckoutOpen(false);
+      setStampSheet({ error: failure.message });
+      return;
+    }
+
     if (failure.kind === 'split_needed') {
       setForceSplit(true);
       setCheckoutError({ message: `${failure.message}. Оберіть спосіб оплати ще раз.` });
@@ -1245,7 +1268,7 @@ export function RegisterPage() {
   // each remote bundle and reaches a store only when the vertical is
   // republished — this gate on the host is what fixes the bundles already
   // out there.
-  const catalogActive = shell !== 'tablet' && !checkoutOpen && !mobileCartOpen && !success;
+  const catalogActive = shell !== 'tablet' && !checkoutOpen && !mobileCartOpen && !success && !stampSheet;
 
   // Never on a pre-order or an exchange: the first is a promise that is paid
   // or put back, the second is paid through its own checkout. A module that
@@ -1338,7 +1361,7 @@ export function RegisterPage() {
               onClear={() => {
                 if (lines.length) setClearAsk(true);
               }}
-              onCharge={() => setCheckoutOpen(true)}
+              onCharge={openCheckout}
               // An exchange is paid or abandoned — never parked, never turned
               // into an order, never picked up by another till.
               onSaveBasket={exchange ? undefined : openPark}
@@ -1365,7 +1388,7 @@ export function RegisterPage() {
           <button
             type="button"
             disabled={lines.length === 0}
-            onClick={() => setCheckoutOpen(true)}
+            onClick={openCheckout}
             className="pos-btn-primary px-4 py-2.5"
           >
             Сплатити
@@ -1413,6 +1436,19 @@ export function RegisterPage() {
           }}
           onConfirm={(payments, opts) => void pay(payments, { cashRounding: opts.cashRounding })}
           split={checkoutSplit}
+        />
+      )}
+
+      {stampSheet && (
+        <ExciseStampSheet
+          lines={lines}
+          error={stampSheet.error}
+          onSetLabels={setExciseLabels}
+          onClose={() => setStampSheet(null)}
+          onDone={() => {
+            setStampSheet(null);
+            setCheckoutOpen(true);
+          }}
         />
       )}
 
@@ -1466,7 +1502,7 @@ export function RegisterPage() {
           onClose={() => setMobileCartOpen(false)}
           onCharge={() => {
             setMobileCartOpen(false);
-            setCheckoutOpen(true);
+            openCheckout();
           }}
           onSaveBasket={exchange ? undefined : openPark}
           onOpenParked={exchange ? undefined : () => void openParked()}

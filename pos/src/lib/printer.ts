@@ -26,6 +26,12 @@ export interface ReceiptItem {
   quantity_text?: string | null;
   /** A line under the row — «вагу введено вручну» for a hand-typed weight. */
   note?: string | null;
+  /**
+   * The excise stamps of the line's bottles (рядок 9: «цифрове значення
+   * штрихового коду марки акцизного податку»), one row each under it (ДК4).
+   * A Rust build older than ДК4 ignores them.
+   */
+  excise_labels?: string[];
 }
 
 /**
@@ -45,6 +51,11 @@ export interface ReceiptVatLine {
   symbol: string;
   rate: number;
   amount_cents: number;
+  /**
+   * The tax's name at the head of the row (рядок 22): «Акциз» for the retail
+   * excise (ДК4). Absent = «ПДВ», as every row was before.
+   */
+  name?: string | null;
 }
 
 export interface ReceiptPayment {

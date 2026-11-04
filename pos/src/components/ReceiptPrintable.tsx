@@ -21,9 +21,9 @@ function paymentLabel(method: string) {
   return `ІНШЕ (${method})`;
 }
 
-/** Рядок 21: «ПДВ А 20%». */
+/** Рядки 21–22: «ПДВ А 20%», «Акциз Г 5%» — the tax's own name, «ПДВ» when none. */
 function vatLabel(line: ReceiptVatLine) {
-  return `ПДВ ${line.symbol} ${line.rate}%`;
+  return `${line.name?.trim() || 'ПДВ'} ${line.symbol} ${line.rate}%`;
 }
 
 // Rendered off-screen at all times; only visible to the browser's print engine
@@ -95,6 +95,12 @@ export function ReceiptPrintable({ receipt }: { receipt: ReceiptData | null }) {
             </span>
           </div>
           {item.note && <p className="receipt-print-note">{item.note}</p>}
+          {/* Рядок 9: the stamp of each bottle sold whole (ДК4). */}
+          {(item.excise_labels ?? []).map((label) => (
+            <p key={label} className="receipt-print-note">
+              Марка {label}
+            </p>
+          ))}
         </div>
       ))}
       <hr />

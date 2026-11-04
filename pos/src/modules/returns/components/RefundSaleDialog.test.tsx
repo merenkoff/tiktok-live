@@ -109,6 +109,42 @@ beforeEach(() => {
   window.print = vi.fn();
 });
 
+describe('RefundSaleDialog — bottles sold with stamps (ДК4, Д16)', () => {
+  it('names the bottles coming back by their stamps, and sends exactly those', async () => {
+    const user = userEvent.setup();
+    const d = detail({
+      items: [
+        {
+          id: 1,
+          variant_id: 11,
+          product_name: 'Горілка 0,5 л',
+          variant_label: '',
+          quantity: 2,
+          unit_price_cents: 30000,
+          line_total_cents: 60000,
+          refunded_quantity: 0,
+          excise: true,
+          excise_labels: ['AATE508932 0000412168', 'AATE508932 0000412169'],
+        },
+      ],
+      total_cents: 60000,
+      subtotal_cents: 60000,
+      payments: [{ id: 1, method: 'card', amount_cents: 60000 }],
+    });
+    refundSale.mockImplementation(async () => refunded(d));
+    renderWithProviders(<RefundSaleDialog sale={row(d)} detail={d} onClose={() => {}} onRefunded={() => {}} />);
+
+    const stamps = screen.getByTestId('refund-stamps-1');
+    await user.click(within(stamps).getByRole('button', { name: 'AATE508932 0000412169' }));
+    await user.click(screen.getByRole('button', { name: 'Повернути' }));
+
+    await waitFor(() => expect(refundSale).toHaveBeenCalledTimes(1));
+    expect(refundSale.mock.calls[0][1]).toEqual([
+      { sale_item_id: 1, quantity: 1, excise_labels: ['AATE508932 0000412169'] },
+    ]);
+  });
+});
+
 describe('RefundSaleDialog', () => {
   it('sends the ground and the buyer, and offers only the method the receipt was paid with', async () => {
     const user = userEvent.setup();
@@ -169,7 +205,11 @@ describe('RefundSaleDialog', () => {
   });
 
   it('hints, and only hints, when the receipt is older than fourteen days', () => {
-    const old = detail({ created_at: new Date(Date.now() - 20 * 86_400_000).toISOString() });
+    // Twenty CALENDAR days back, at noon: 20 × 24 h crosses a clock change
+    // (25.10) and lands on the next day for the last hour of the evening.
+    const now = new Date();
+    const twentyDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 20, 12);
+    const old = detail({ created_at: twentyDaysAgo.toISOString() });
     const { unmount } = renderWithProviders(
       <RefundSaleDialog sale={row(old)} detail={old} onClose={() => {}} onRefunded={() => {}} />
     );

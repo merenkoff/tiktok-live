@@ -33,6 +33,11 @@ pub struct ReceiptItem {
     /// A line under the row — «вагу введено вручну» for a hand-typed weight.
     #[serde(default)]
     pub note: Option<String>,
+    /// The excise stamps of the line's bottles (рядок 9: «цифрове значення
+    /// штрихового коду марки акцизного податку»), one row each (track ДК,
+    /// ДК4). Absent on every other line and from a host built before ДК4.
+    #[serde(default)]
+    pub excise_labels: Vec<String>,
 }
 
 #[derive(Deserialize, Default)]
@@ -66,12 +71,16 @@ pub struct ReceiptHeader {
     pub tax_id_line: Option<String>,
 }
 
-/// Рядок 21: one «ПДВ» line per rate letter.
+/// Рядки 21–22: one line per tax letter — «ПДВ А 20%», «Акциз Г 5%».
 #[derive(Deserialize, Default)]
 pub struct ReceiptVatLine {
     pub symbol: String,
     pub rate: f64,
     pub amount_cents: i64,
+    /// The tax's name at the head of the row (рядок 22): «Акциз» for the
+    /// retail excise (ДК4). Absent — «ПДВ», as every row was before.
+    #[serde(default)]
+    pub name: Option<String>,
 }
 
 /// The ПРРО result our own layout prints as a fiscal block.
@@ -249,12 +258,14 @@ fn quantity_row(item: &ReceiptItem) -> String {
     }
 }
 
-/// Рядок 21: «ПДВ А 20%» — a whole-number rate prints without decimals.
+/// Рядки 21–22: «ПДВ А 20%», «Акциз Г 5%» — a whole-number rate prints
+/// without decimals; the name is the tax's own, «ПДВ» when none is given.
 fn vat_label(line: &ReceiptVatLine) -> String {
+    let name = line.name.as_deref().filter(|n| !n.trim().is_empty()).unwrap_or("ПДВ");
     if line.rate.fract() == 0.0 {
-        format!("ПДВ {} {}%", line.symbol, line.rate as i64)
+        format!("{name} {} {}%", line.symbol, line.rate as i64)
     } else {
-        format!("ПДВ {} {}%", line.symbol, line.rate)
+        format!("{name} {} {}%", line.symbol, line.rate)
     }
 }
 
@@ -363,6 +374,12 @@ fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> 
         if let Some(note) = item.note.as_deref().filter(|n| !n.trim().is_empty()) {
             printer
                 .writeln(&format!("  {note}"))
+                .map_err(|e| e.to_string())?;
+        }
+        // Рядок 9: the stamp of each bottle, under its line (ДК4).
+        for label in item.excise_labels.iter().filter(|l| !l.trim().is_empty()) {
+            printer
+                .writeln(&format!("  Марка {label}"))
                 .map_err(|e| e.to_string())?;
         }
     }
@@ -881,10 +898,26 @@ mod tests {
     }
 
     #[test]
+    fn excise_prints_the_stamp_under_its_line_and_its_own_tax_row() {
+        let mut receipt = base();
+        receipt.items[0].tax_symbol = Some("АГ".into());
+        receipt.items[0].excise_labels = vec!["AATE508932 0000412168".into()];
+        receipt.vat_lines = vec![
+            ReceiptVatLine { symbol: "А".into(), rate: 20.0, amount_cents: 4125, name: None },
+            ReceiptVatLine { symbol: "Г".into(), rate: 5.0, amount_cents: 1238, name: Some("Акциз".into()) },
+        ];
+        let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();
+        assert!(contains(&bytes, &win1251("Марка AATE508932 0000412168")));
+        assert!(contains(&bytes, &win1251("ПДВ А 20%")));
+        assert!(contains(&bytes, &win1251("Акциз Г 5%")));
+        assert!(contains(&bytes, &win1251("100.00 АГ")));
+    }
+
+    #[test]
     fn vat_letters_lines_and_change_follow_the_regulation() {
         let mut receipt = base();
         receipt.items[0].tax_symbol = Some("А".into());
-        receipt.vat_lines = vec![ReceiptVatLine { symbol: "А".into(), rate: 20.0, amount_cents: 1667 }];
+        receipt.vat_lines = vec![ReceiptVatLine { symbol: "А".into(), rate: 20.0, amount_cents: 1667, name: None }];
         receipt.payments = vec![ReceiptPayment { method: "cash".into(), amount_cents: 15000 }];
         receipt.change_cents = Some(5000);
         let bytes = build_ticket(&receipt, CHARS_58MM).unwrap();

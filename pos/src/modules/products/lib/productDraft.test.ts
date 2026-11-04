@@ -188,6 +188,15 @@ describe('diffProduct — what a save has to write', () => {
     expect(diffProduct(snapshot, { ...snapshot, fiscalRegister: 2 }).details).toBe(true);
   });
 
+  it('reads and sends the excise questions, a stamp per unit only with excise (ДК4)', () => {
+    const d = draftOf(product({ fiscal_excise: true, excise_per_unit: true, fiscal_uktzed: '2208601100' }));
+    expect(d).toMatchObject({ fiscalExcise: true, excisePerUnit: true, uktzed: '2208601100' });
+    expect(detailsOf(d)).toMatchObject({ fiscal_excise: true, excise_per_unit: true, fiscal_uktzed: '2208601100' });
+    expect(detailsOf({ ...d, fiscalExcise: false })).toMatchObject({ fiscal_excise: false, excise_per_unit: false });
+    expect(detailsOf({ ...d, uktzed: '  ' }).fiscal_uktzed).toBeNull();
+    expect(diffProduct(d, { ...d, uktzed: '2203000100' }).details).toBe(true);
+  });
+
   it('keeps a register 2 as stored and sends it back (track ДК)', () => {
     const d = draftOf(product({ fiscal_register: 2 }));
     expect(d.fiscalRegister).toBe(2);

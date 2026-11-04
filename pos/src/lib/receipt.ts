@@ -5,6 +5,7 @@
 import type {
   FiscalActionResult,
   FiscalPublicConfig,
+  FiscalTaxLine,
   FiscalRequisites,
   SaleDetail,
   SaleFiscalDoc,
@@ -94,13 +95,47 @@ function headerOf(store: ReceiptStoreInfo): ReceiptHeader | null {
 function defaultTax(store: ReceiptStoreInfo) {
   const req = store.fiscal?.enabled ? store.fiscal.requisites : null;
   if (!req) return null;
+  // The excise row is never a line's own rate (ДК4) — a seller who is not a
+  // VAT payer has only that row, and then no line letter but the excise's.
+  const vat = req.taxes.filter((t) => !t.excise);
   const code = store.fiscal?.default_tax_code?.trim();
   return (
-    (code ? req.taxes.find((t) => t.code === code) : undefined) ??
-    req.taxes.find((t) => t.is_default) ??
-    req.taxes[0] ??
+    (code ? vat.find((t) => t.code === code) : undefined) ??
+    vat.find((t) => t.is_default) ??
+    vat[0] ??
     null
   );
+}
+
+/**
+ * The excise letter an excise line adds to its rate (ДК4): from what the
+ * document registered when it says, else from the register's tax table.
+ */
+function exciseSymbol(store: ReceiptStoreInfo, rows?: readonly FiscalTaxLine[] | null): string | null {
+  const registered = rows?.find((r) => r.kind === 'excise')?.letter;
+  if (registered) return registered;
+  const req = store.fiscal?.enabled ? store.fiscal.requisites : null;
+  return req?.taxes.find((t) => t.excise)?.symbol ?? null;
+}
+
+/** «А», «АГ», «Г» — a line's letters (рядок 11): its VAT letter, then the excise's on an excise line. */
+function lineLetters(vat: string | null | undefined, excise: string | null, isExcise: boolean): string | null {
+  const letters = `${vat ?? ''}${isExcise && excise ? excise : ''}`;
+  return letters || null;
+}
+
+/**
+ * Рядки 21–22 as the document registered them — «ПДВ А 20%», «Акциз Г 5%» —
+ * where it says (ДК4, `tax_rows`); null to fall back to the arithmetic.
+ */
+function registeredTaxLines(rows: readonly FiscalTaxLine[] | null | undefined): ReceiptVatLine[] | null {
+  if (!rows?.length) return null;
+  return rows.map((row) => ({
+    symbol: row.letter,
+    rate: row.rate,
+    amount_cents: Math.abs(row.amount_cents),
+    ...(row.kind === 'excise' ? { name: row.name || 'Акциз' } : {}),
+  }));
 }
 
 /**
@@ -253,13 +288,15 @@ export function buildReceiptPayload(
 ): ReceiptData {
   const store = storeForSale(storeInfo, sale);
   const tax = defaultTax(store);
+  const excise = exciseSymbol(store, sale.fiscal?.tax_rows);
   // НБУ № 25: the cash part may have been rounded. The goods' total — and the
   // VAT inside it — stay as they are; only what was due moves.
   const rounding = sale.rounding_cents ?? 0;
   return {
     ...fiscalParts(sale.fiscal, store),
     header: headerOf(store),
-    vat_lines: vatLines(store, sale.total_cents, sale.fiscal?.vat_cents),
+    vat_lines:
+      registeredTaxLines(sale.fiscal?.tax_rows) ?? vatLines(store, sale.total_cents, sale.fiscal?.vat_cents),
     change_cents: changeCents(sale.payments, sale.total_cents + rounding),
     rounding_cents: rounding || null,
     store_name: store.name,
@@ -282,8 +319,9 @@ export function buildReceiptPayload(
       quantity: item.quantity,
       unit_price_cents: item.unit_price_cents,
       line_total_cents: item.line_total_cents,
-      tax_symbol: tax?.symbol ?? null,
+      tax_symbol: lineLetters(tax?.symbol, excise, item.excise === true),
       ...weighedRow(item),
+      ...(item.excise_labels?.length ? { excise_labels: item.excise_labels } : {}),
     })),
     subtotal_cents: sale.subtotal_cents,
     discount_cents: sale.cart_discount_cents ?? null,
@@ -302,7 +340,8 @@ export function buildReceiptPayload(
 export function buildRefundReceiptPayload(
   sale: SaleDetail,
   refund: SaleDetail['refunds'][number],
-  lines: Array<{ sale_item_id: number; quantity: number }>,
+  /** `excise_labels`: the stamps of the bottles that came back, when the caller knows them (ДК4). */
+  lines: Array<{ sale_item_id: number; quantity: number; excise_labels?: string[] }>,
   storeInfo: ReceiptStoreInfo,
   /** The REFUND's own fiscal document, from the refund response — never the sale's. */
   fiscal?: FiscalActionResult | null
@@ -310,6 +349,7 @@ export function buildRefundReceiptPayload(
   // A refund is registered on the sale's own register (ДК1), so it prints that ФОП.
   const store = storeForSale(storeInfo, sale);
   const tax = defaultTax(store);
+  const excise = exciseSymbol(store, fiscal?.tax_rows);
   const byId = new Map(sale.items.map((item) => [item.id, item]));
   const items = lines.flatMap((line) => {
     const item = byId.get(line.sale_item_id);
@@ -333,8 +373,9 @@ export function buildRefundReceiptPayload(
         quantity: line.quantity,
         unit_price_cents: weighed ? item.unit_price_cents : Math.round(amount / line.quantity),
         line_total_cents: amount,
-        tax_symbol: tax?.symbol ?? null,
+        tax_symbol: lineLetters(tax?.symbol, excise, item.excise === true),
         ...(weighed ? weighedRow({ ...item, quantity: line.quantity }) : {}),
+        ...(line.excise_labels?.length ? { excise_labels: line.excise_labels } : {}),
       },
     ];
   });
@@ -344,7 +385,7 @@ export function buildRefundReceiptPayload(
   return {
     ...fiscalParts(fiscal, store),
     header: headerOf(store),
-    vat_lines: vatLines(store, refund.total_cents, fiscal?.vat_cents),
+    vat_lines: registeredTaxLines(fiscal?.tax_rows) ?? vatLines(store, refund.total_cents, fiscal?.vat_cents),
     // Money goes out, never back to the customer as change.
     change_cents: null,
     rounding_cents: rounding || null,

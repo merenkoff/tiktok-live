@@ -41,6 +41,12 @@ export interface TaxRateDraft {
   name: string;
   /** Text while typing («20», «7,5»); parsed only on save. */
   rate: string;
+  /**
+   * 0 = ПДВ, 1 = the retail excise (track ДК, ДК4): at most one excise row,
+   * added to an excise line's letters and never a line's own rate. Absent
+   * from a row typed before ДК4 → ПДВ.
+   */
+  type?: 0 | 1;
 }
 
 export interface CashalotConfigDraft {
@@ -48,8 +54,13 @@ export interface CashalotConfigDraft {
   testing: boolean;
 }
 
-export function emptyRow(letter = ''): TaxRateDraft {
-  return { letter, name: '', rate: '' };
+export function emptyRow(letter = '', type: 0 | 1 = 0): TaxRateDraft {
+  return type === 1 ? { letter, name: 'Акциз', rate: '5', type: 1 } : { letter, name: '', rate: '' };
+}
+
+/** The table's VAT rows — the ones a default rate may be. */
+export function vatRows(taxes: readonly TaxRateDraft[]): TaxRateDraft[] {
+  return taxes.filter((t) => t.type !== 1);
 }
 
 /** The stored config as the form shows it; a malformed row is shown as typed, never dropped. */
@@ -62,6 +73,7 @@ export function draftFromConfig(config: Readonly<Record<string, unknown>> | null
         letter: typeof r.letter === 'string' ? r.letter : '',
         name: typeof r.name === 'string' ? r.name : '',
         rate: r.rate === undefined || r.rate === null ? '' : String(r.rate),
+        ...(r.type === 1 ? { type: 1 as const } : {}),
       };
     }),
     testing: config?.testing === true,
@@ -79,6 +91,8 @@ export function configFromDraft(draft: CashalotConfigDraft): Record<string, unkn
       letter: row.letter.trim(),
       name: row.name.trim(),
       rate: parseRate(row.rate),
+      // A VAT row goes as it always did; only the excise row names its kind.
+      ...(row.type === 1 ? { type: 1 } : {}),
     })),
     testing: draft.testing,
   };
@@ -108,7 +122,7 @@ export function defaultLetterFor(
 ): string | null {
   const wanted = code?.trim().toUpperCase();
   if (!wanted) return null;
-  const row = taxes.find((t) => {
+  const row = vatRows(taxes).find((t) => {
     const letter = t.letter.trim().toUpperCase();
     return letter === wanted || letterCode(letter) === wanted;
   });

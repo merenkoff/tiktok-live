@@ -24,6 +24,7 @@ import {
   freeLetters,
   letterCode,
   MAX_TAX_ROWS,
+  vatRows,
   type CashalotConfigDraft,
 } from '../lib/taxTable';
 
@@ -63,20 +64,21 @@ export function TaxTableForm({ settings, saving, onSave }: TaxTableFormProps) {
       taxes: prev.taxes.map((row, i) => (i === index ? { ...row, ...patch } : row)),
     }));
 
-  const addRow = () =>
+  const addRow = (type: 0 | 1 = 0) =>
     setDraft((prev) => ({
       ...prev,
-      taxes: [...prev.taxes, emptyRow(freeLetters(prev.taxes, prev.taxes.length)[0] ?? '')],
+      taxes: [...prev.taxes, emptyRow(freeLetters(prev.taxes, prev.taxes.length)[0] ?? '', type)],
     }));
+  const hasExcise = draft.taxes.some((t) => t.type === 1);
 
   const removeRow = (index: number) =>
     setDraft((prev) => ({ ...prev, taxes: prev.taxes.filter((_, i) => i !== index) }));
 
   function submit() {
-    const letters = draft.taxes.map((t) => t.letter.trim().toUpperCase());
-    // The default must be a row that is still there; with none chosen (or the
-    // chosen one removed) the first row is the default, as the adapter's own
-    // requisites say (`is_default: index === 0`). No rows — no code at all.
+    // Only a VAT row may be the default (the excise is added on top of a line's
+    // own rate, never instead of it). With none chosen, the first VAT row; a
+    // table of the excise alone — a ФОП who is not a VAT payer — has no code.
+    const letters = vatRows(draft.taxes).map((t) => t.letter.trim().toUpperCase());
     const chosen = defaultLetter && letters.includes(defaultLetter) ? defaultLetter : letters[0];
     onSave(configFromDraft(draft), chosen ? letterCode(chosen) : null);
   }
@@ -102,8 +104,9 @@ export function TaxTableForm({ settings, saving, onSave }: TaxTableFormProps) {
         </p>
       ) : (
         <div className="space-y-2">
-          <div className="hidden sm:grid grid-cols-[4rem_1fr_6rem_6.5rem_2.5rem] gap-2 px-1">
+          <div className="hidden sm:grid grid-cols-[4rem_5.5rem_1fr_5rem_5.5rem_2.5rem] gap-2 px-1">
             <span className={LABEL}>Літера</span>
+            <span className={LABEL}>Вид</span>
             <span className={LABEL}>Назва</span>
             <span className={LABEL}>%</span>
             <span className={LABEL}>За замовч.</span>
@@ -114,7 +117,8 @@ export function TaxTableForm({ settings, saving, onSave }: TaxTableFormProps) {
             return (
               <div
                 key={index}
-                className="grid grid-cols-[4rem_1fr_6rem_6.5rem_2.5rem] gap-2 items-center"
+                className="grid grid-cols-[4rem_5.5rem_1fr_5rem_5.5rem_2.5rem] gap-2 items-center"
+                data-testid={`tax-row-${index}`}
               >
                 <select
                   aria-label={`Літера ставки ${index + 1}`}
@@ -128,6 +132,17 @@ export function TaxTableForm({ settings, saving, onSave }: TaxTableFormProps) {
                       {l}
                     </option>
                   ))}
+                </select>
+                <select
+                  aria-label={`Вид ставки ${index + 1}`}
+                  className="sq-input"
+                  value={row.type === 1 ? '1' : '0'}
+                  onChange={(e) => setRow(index, { type: e.target.value === '1' ? 1 : 0 })}
+                >
+                  <option value="0">ПДВ</option>
+                  <option value="1" disabled={hasExcise && row.type !== 1}>
+                    Акциз
+                  </option>
                 </select>
                 <input
                   aria-label={`Назва ставки ${index + 1}`}
@@ -150,8 +165,8 @@ export function TaxTableForm({ settings, saving, onSave }: TaxTableFormProps) {
                     name="cashalot-default-tax"
                     aria-label={`Ставка ${index + 1} за замовчуванням`}
                     className={CHECKBOX}
-                    checked={letter !== '' && defaultLetter === letter}
-                    disabled={letter === ''}
+                    checked={letter !== '' && row.type !== 1 && defaultLetter === letter}
+                    disabled={letter === '' || row.type === 1}
                     onChange={() => setDefaultLetter(letter)}
                   />
                 </label>
@@ -170,13 +185,24 @@ export function TaxTableForm({ settings, saving, onSave }: TaxTableFormProps) {
       )}
 
       {draft.taxes.length < MAX_TAX_ROWS && (
-        <button type="button" className="sq-btn-quiet" onClick={addRow}>
-          + Додати ставку
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="sq-btn-quiet" onClick={() => addRow(0)}>
+            + Додати ставку
+          </button>
+          {!hasExcise && (
+            <button type="button" className="sq-btn-quiet" onClick={() => addRow(1)} data-testid="tax-add-excise">
+              + Акциз 5 %
+            </button>
+          )}
+        </div>
       )}
       <p className="text-[13px] text-sq-muted">
         Літери й назви — як у кабінеті Cashalot (Налаштування → Податки). Ставка за замовчуванням
         друкується на кожному рядку чека. Змінюються лише при закритій зміні.
+      </p>
+      <p className="text-[13px] text-sq-muted">
+        Акциз — для пива й алкоголю: його літера додається до ставки ПДВ підакцизного товару («АГ»).
+        ФОП без ПДВ, що продає алкоголь, лишає в таблиці тільки рядок акцизу.
       </p>
 
       <label className="min-h-11 flex items-center gap-3 text-[15px] text-sq-text">
