@@ -271,6 +271,83 @@ describe('BillPage', () => {
     expect(fired?.[2]).toEqual({ client_uuid: expect.stringMatching(/^[0-9a-f-]{36}$/) });
   });
 
+  describe('a bottle sold whole (ДК4-Г)', () => {
+    const bottle = (over: Partial<BillLine> = {}): BillLine =>
+      line({
+        id: 8,
+        variant_id: 40,
+        quantity: 1,
+        product_name: 'Хлібний дар 0,5',
+        variant_label: '',
+        preview_unit_price_cents: 25990,
+        excise_per_unit: true,
+        ...over,
+      });
+
+    it('asks for its stamp before the round goes, writes the stamp, then fires', async () => {
+      bill.draft = [bottle()];
+      posRequest.mockImplementation(async (method: string, path: string, body?: unknown) => {
+        if (method === 'get' && path === '/bills/90') return bill;
+        if (method === 'put' && path === '/bills/90/items/8/excise') {
+          bill = { ...bill, draft: [bottle({ excise_labels: (body as { excise_labels: string[] }).excise_labels })] };
+          return bill;
+        }
+        if (method === 'post' && path === '/bills/90/fire') return { ...bill, draft: [] };
+        throw new Error(`unexpected ${method} ${path}`);
+      });
+      renderWithProviders(<BillPage />, { route: '/tables/90' });
+      expect(await screen.findByTestId('bill-stamps-8')).toHaveTextContent('Марок 0 з 1');
+
+      await userEvent.click(screen.getByTestId('bill-fire'));
+      expect(await screen.findByTestId('excise-sheet')).toBeInTheDocument();
+      expect(posRequest.mock.calls.some((c) => c[1] === '/bills/90/fire')).toBe(false);
+
+      // The Ukrainian layout's spelling of the same stamp (#382).
+      await userEvent.type(screen.getByTestId('excise-input'), 'ФТАС015604{Enter}');
+      await waitFor(() => expect(screen.getByTestId('excise-done')).toHaveTextContent('На кухню'));
+      const put = posRequest.mock.calls.find((c) => c[1] === '/bills/90/items/8/excise');
+      expect(put?.[2]).toEqual({ excise_labels: ['ANFC015604'] });
+
+      await userEvent.click(screen.getByTestId('excise-done'));
+      await waitFor(() => expect(posRequest.mock.calls.some((c) => c[1] === '/bills/90/fire')).toBe(true));
+      expect(screen.queryByTestId('excise-sheet')).toBeNull();
+    });
+
+    it('puts the server’s refusal of a stamp on the sheet, in its words', async () => {
+      bill.draft = [bottle()];
+      posRequest.mockImplementation(async (method: string, path: string) => {
+        if (method === 'get' && path === '/bills/90') return bill;
+        if (method === 'put') {
+          throw { response: { status: 409, data: { error: 'Марку ANFC015604 уже продано', code: 'excise_label_taken' } } };
+        }
+        throw new Error(`unexpected ${method} ${path}`);
+      });
+      renderWithProviders(<BillPage />, { route: '/tables/90' });
+      await userEvent.click(await screen.findByTestId('bill-stamps-8'));
+      await userEvent.type(screen.getByTestId('excise-input'), 'ANFC015604{Enter}');
+      expect(await screen.findByTestId('excise-error')).toHaveTextContent('Марку ANFC015604 уже продано');
+    });
+
+    it('opens the stamps when the server refuses the round for one', async () => {
+      bill.draft = [bottle({ excise_labels: ['ANFC015604'] })];
+      posRequest.mockImplementation(async (method: string, path: string) => {
+        if (method === 'get' && path === '/bills/90') return bill;
+        if (method === 'post' && path === '/bills/90/fire') {
+          throw {
+            response: {
+              status: 409,
+              data: { error: '«Хлібний дар 0,5»: скануйте акцизну марку кожної пляшки', code: 'excise_labels_needed' },
+            },
+          };
+        }
+        throw new Error(`unexpected ${method} ${path}`);
+      });
+      renderWithProviders(<BillPage />, { route: '/tables/90' });
+      await userEvent.click(await screen.findByTestId('bill-fire'));
+      expect(await screen.findByTestId('excise-error')).toHaveTextContent('скануйте акцизну марку кожної пляшки');
+    });
+  });
+
   it('has nothing to send when the draft is empty', async () => {
     bill.draft = [];
     bill.draft_preview_cents = 0;

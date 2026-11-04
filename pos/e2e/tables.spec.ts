@@ -450,6 +450,53 @@ function counter(page: Page) {
   };
 }
 
+test('a bottle sold whole goes to the table only with its stamp scanned (ДК4-Г)', async ({ page }) => {
+  await signInAsWaiter(page);
+  const sent = await mockTables(page);
+  const BOTTLE = { ...MENU[MENU.length - 1], variant_id: 40, product_id: 50, product_name: 'Хлібний дар 0,5', price_cents: 25990, excise_per_unit: true };
+  await page.route('**/api/pos/catalog**', async (route) => route.fulfill({ json: [...MENU, BOTTLE] }));
+  let labels: string[] = [];
+  const bottleBill = () =>
+    bill({
+      draft: [line({ id: 31, variant_id: 40, product_name: 'Хлібний дар 0,5', preview_unit_price_cents: 25990, excise_per_unit: true, excise_labels: labels })],
+      draft_preview_cents: 25990,
+    });
+  await page.route('**/api/pos/bills/90', async (route) => route.fulfill({ json: labels.length ? bottleBill() : bill() }));
+  await page.route('**/api/pos/bills/90/items', async (route) => {
+    sent.push({ path: '/items', body: route.request().postDataJSON() });
+    await route.fulfill({ json: bottleBill() });
+  });
+  await page.route('**/api/pos/bills/90/items/31/excise', async (route) => {
+    const body = route.request().postDataJSON() as { excise_labels: string[] };
+    sent.push({ path: '/excise', body });
+    labels = body.excise_labels;
+    await route.fulfill({ json: bottleBill() });
+  });
+
+  await page.goto('/tables');
+  await page.getByTestId('table-tile-11').click();
+  await page.getByTestId('menu-tile-50').click();
+  await expect(page.getByTestId('bill-stamps-31')).toContainText('Марок 0 з 1');
+
+  // «На кухню» opens the stamps rather than sending a round the server refuses.
+  await page.getByTestId('bill-fire').click();
+  await expect(page.getByTestId('excise-sheet')).toBeVisible();
+  expect(sent.filter((s) => s.path === '/fire')).toHaveLength(0);
+
+  // The bottle's own barcode is not its stamp; the stamp is.
+  await page.getByTestId('excise-input').fill('4820080720577');
+  await page.getByTestId('excise-input').press('Enter');
+  await expect(page.getByTestId('excise-note')).toContainText('штрихкод пляшки');
+  await page.getByTestId('excise-input').fill('ANFC015604');
+  await page.getByTestId('excise-input').press('Enter');
+  await expect(page.getByTestId('excise-done')).toContainText('На кухню');
+  expect(sent.find((s) => s.path === '/excise')?.body).toEqual({ excise_labels: ['ANFC015604'] });
+
+  await page.getByTestId('excise-done').click();
+  await expect(page.getByTestId('excise-sheet')).toHaveCount(0);
+  await expect.poll(() => sent.filter((s) => s.path === '/fire').length).toBe(1);
+});
+
 test('five taps: open the table and ring three simple dishes', async ({ page }) => {
   await signInAsWaiter(page);
   const sent = await mockTables(page);

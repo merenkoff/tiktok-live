@@ -26,6 +26,7 @@ export const TABLES_HOST_UI = [
   'TagFolderTile',
   'CatalogTagBar',
   'ScanWedge',
+  'ExciseStampSheet',
 ].map((name) => `./src/components/cashier/${name}.tsx`);
 
 export default defineConfig({

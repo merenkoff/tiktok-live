@@ -31,6 +31,8 @@ export interface BillPaneProps {
   onMore: (line: DraftLineView) => void;
   /** The row itself is the way into the sheet — answers, note, size (К4m). */
   onEdit: (line: DraftLineView) => void;
+  /** A bottle's «Марок k з N»: the stamps sheet (ДК4-Г). */
+  onStamps: (line: DraftLineView) => void;
   onCancelRound: (roundId: number) => void;
   onFire: () => void;
   onPay: () => void;
@@ -51,6 +53,7 @@ export function BillPane({
   onLess,
   onMore,
   onEdit,
+  onStamps,
   onCancelRound,
   onFire,
   onPay,
@@ -94,7 +97,7 @@ export function BillPane({
             {sub && <span className="block text-[13px] text-sq-muted truncate">{sub}</span>}
           </button>
           {row.id != null && (
-            <div className="mt-1.5 flex items-center gap-1.5">
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               <button
                 type="button"
                 aria-label="Менше"
@@ -115,6 +118,21 @@ export function BillPane({
               >
                 <Plus size={16} />
               </button>
+              {row.excisePerUnit && (
+                <button
+                  type="button"
+                  className={`h-8 px-2.5 rounded-lg text-[13px] font-semibold tabular-nums disabled:opacity-40 ${
+                    row.exciseLabels.length === row.quantity
+                      ? 'bg-white ring-1 ring-sq-divider text-sq-success-ink'
+                      : 'bg-amber-50 ring-1 ring-amber-300 text-amber-800'
+                  }`}
+                  data-testid={`bill-stamps-${row.id}`}
+                  disabled={busy || !online || !editable}
+                  onClick={() => onStamps(row)}
+                >
+                  Марок {row.exciseLabels.length} з {row.quantity}
+                </button>
+              )}
             </div>
           )}
         </div>

@@ -89,6 +89,14 @@ export interface BillLine {
   added_by: number | null;
   added_by_name: string;
   sort_order: number;
+  /**
+   * A bottle sold whole (track ДК, ДК4): one excise stamp per unit, scanned
+   * before the round goes to the kitchen. Absent on every other line and
+   * from a backend older than ДК4-Б.
+   */
+  excise_per_unit?: boolean;
+  /** The stamps scanned onto this line so far. */
+  excise_labels?: string[];
 }
 
 export interface BillRound {

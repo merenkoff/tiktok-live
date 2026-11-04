@@ -30,6 +30,11 @@ export type { ModifierSheetChoice } from '../components/cashier/ModifierSheet';
 // to change a weight. Host UI so the fallback catalog and a grocery vertical
 // ask the same way and price with the server's own sum.
 export { WeightPad } from '../components/cashier/WeightPad';
+// The excise stamps sheet (platform 23, track ДК, ДК4-Г): the till asks for a
+// bottle's stamp before payment, the waiter's bill before the round goes to
+// the kitchen — one sheet, so both read a scan the same way.
+export { ExciseStampSheet } from '../components/cashier/ExciseStampSheet';
+export type { ExciseStampLine } from '../components/cashier/ExciseStampSheet';
 // The price tag, rendered off-screen and made visible only to the print engine
 // by the `@media print` rules in `styles/tokens.css`. Those rules ship with the
 // HOST page, not with a module's `style.css` (which is Tailwind utilities

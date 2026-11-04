@@ -774,7 +774,7 @@ class PosApi {
    * `X-POS-API-Version` are inherited from the interceptors above for free.
    */
   async posRequest<T>(
-    method: 'get' | 'post' | 'patch' | 'delete',
+    method: 'get' | 'post' | 'put' | 'patch' | 'delete',
     path: string,
     body?: unknown,
     // A file upload outlasts the client's 15 s default on a slow line; nothing

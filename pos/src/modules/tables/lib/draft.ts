@@ -46,6 +46,8 @@ export interface PendingLine {
   note: string;
   /** Today's card price plus today's deltas, or null when they do not resolve. */
   preview_cents: number | null;
+  /** A bottle sold whole: it will need a stamp per unit (ДК4-Г). */
+  excise_per_unit: boolean;
 }
 
 /** A draft row as drawn: the server's line, a pending tap, or both merged. */
@@ -68,6 +70,10 @@ export interface DraftLineView {
   preview_unit_cents: number | null;
   /** Some or all of `quantity` is still waiting for the server. */
   pending: boolean;
+  /** A bottle sold whole: one excise stamp per unit before it fires (ДК4-Г). */
+  excisePerUnit: boolean;
+  /** The stamps the server holds for this line. */
+  exciseLabels: string[];
 }
 
 export interface DraftSummary {
@@ -101,6 +107,7 @@ export function pendingLine(choice: DishChoice, token: string): PendingLine {
     modifierNames: resolved.error ? [] : resolved.names,
     note,
     preview_cents: resolved.error ? null : item.price_cents + resolved.deltaCents,
+    excise_per_unit: item.excise_per_unit === true,
   };
 }
 
@@ -134,6 +141,8 @@ export function draftView(serverDraft: readonly BillLine[], pending: readonly Pe
     quantity: line.quantity,
     preview_unit_cents: line.preview_unit_price_cents,
     pending: false,
+    excisePerUnit: line.excise_per_unit === true,
+    exciseLabels: line.excise_labels ?? [],
   }));
   const byUid = new Map(rows.map((r) => [r.uid, r]));
   for (const tap of pending) {
@@ -158,6 +167,8 @@ export function draftView(serverDraft: readonly BillLine[], pending: readonly Pe
       quantity: tap.quantity,
       preview_unit_cents: tap.preview_cents,
       pending: true,
+      excisePerUnit: tap.excise_per_unit,
+      exciseLabels: [],
     };
     rows.push(fresh);
     byUid.set(fresh.uid, fresh);
@@ -197,6 +208,15 @@ function productOfVariantByUid(uid: string, productOfVariant: Map<number, number
 }
 
 /** The figures the bar and the footer read out. */
+/**
+ * The draft rows a round cannot take yet (ДК4-Г, decision Д4): a bottle sold
+ * whole whose stamps do not match its count — short of one, or holding one
+ * more than its bottles after a «−». The server refuses the same rows.
+ */
+export function rowsNeedingStamps(view: readonly DraftLineView[]): DraftLineView[] {
+  return view.filter((row) => row.excisePerUnit && row.exciseLabels.length !== row.quantity);
+}
+
 export function draftSummary(view: readonly DraftLineView[]): DraftSummary {
   let units = 0;
   let cents = 0;
