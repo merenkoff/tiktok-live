@@ -33,6 +33,7 @@ import { pool } from '../db.js';
 import { applyStockDelta } from './stock.service.js';
 import type { StockReason } from './types.js';
 import { loadStoreVertical } from './verticals/index.js';
+import { pourLine, type PourContext } from './bottles.service.js';
 
 type DbClient = { query: typeof pool.query };
 
@@ -638,6 +639,12 @@ export async function consumeStockForLine(
     components?: ComponentInput[];
     /** What the line's modifiers write off, per one unit (see `resolveStockDemand`). */
     extra?: ComponentInput[];
+    /**
+     * The sale's (or round's) open bottles (ДК5, `bottles.service.ts`): what
+     * this line takes from a stamped bottle is counted against the bottle the
+     * bar has open. Absent where nothing may pour — goods «під запис».
+     */
+    pour?: PourContext;
   }
 ): Promise<void> {
   const snapshotTarget = LINE_SNAPSHOT[params.target];
@@ -658,6 +665,15 @@ export async function consumeStockForLine(
       staffId: params.staffId,
       referenceType: params.referenceType,
       referenceId: params.referenceId,
+    });
+  }
+  if (params.pour && params.target !== 'debt') {
+    await pourLine(client, params.pour, {
+      target: params.target === 'sale' ? { saleItemId: params.lineId } : { billItemId: params.lineId },
+      variantId: params.variantId,
+      quantity: params.quantity,
+      self: demand.self,
+      leaves: demand.leaves,
     });
   }
   if (demand.leaves.length === 0) return;
@@ -703,6 +719,7 @@ export function consumeStockForSaleItem(
     staffId: number;
     components?: ComponentInput[];
     extra?: ComponentInput[];
+    pour?: PourContext;
   }
 ): Promise<void> {
   return consumeStockForLine(client, {

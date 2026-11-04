@@ -36,7 +36,8 @@ import { logger } from '../logger.js';
 import { shareDiscount } from './bill-payment.service.js';
 import { registerPartUuidFor } from './core/derivedUuid.js';
 import * as fiscalService from './fiscal/fiscal.service.js';
-import { registersOfVariants } from './fiscal/routing.js';
+import { registersOfLines } from './fiscal/routing.js';
+import { normalizeModifierIds } from './modifiers.service.js';
 import { completeSale, completeSaleTx, getSale, getSaleByClientUuid } from './sales.service.js';
 import type {
   CartDiscountInput,
@@ -58,6 +59,12 @@ export interface SplitSaleInput {
   customer_id?: number | null;
   client_uuid: string;
   cash_rounding?: unknown;
+  /**
+   * The bottles the order opens, by their stamps (ДК5). Every receipt gets
+   * the whole list; each opens only the bottles its own lines pour from, and
+   * a line pouring from a bottle is on that bottle's register (Д20).
+   */
+  open_bottles?: unknown;
 }
 
 /** One receipt of the cart, as planned. */
@@ -129,14 +136,19 @@ export async function groupByRegister(
   storeId: number,
   items: CompleteSaleItemInput[]
 ): Promise<Map<number, number[]>> {
-  const byVariant = await registersOfVariants(
+  // By line, not by product (ДК5, Д20): a coffee with a cognac answer goes
+  // where the cognac goes.
+  const byLine = await registersOfLines(
     pool,
     storeId,
-    items.map((item) => Number(item.variant_id))
+    items.map((item) => ({
+      variant_id: Number(item.variant_id),
+      modifiers: item.components?.length ? [] : normalizeModifierIds(item.modifiers),
+    }))
   );
   const groups = new Map<number, number[]>();
-  items.forEach((item, index) => {
-    const register = byVariant.get(Number(item.variant_id)) ?? 1;
+  items.forEach((_item, index) => {
+    const register = byLine[index] ?? 1;
     groups.set(register, [...(groups.get(register) ?? []), index]);
   });
   return new Map([...groups.entries()].sort(([a], [b]) => a - b));
@@ -182,6 +194,7 @@ async function dryRun(
       fiscal_status: 'none',
       cash_rounding: input.cash_rounding,
       fiscal_register: registerNo,
+      open_bottles: input.open_bottles,
     });
     const row = await client.query(
       `SELECT total_cents, rounding_cents FROM pos_sales WHERE id = $1`,
@@ -352,6 +365,7 @@ export async function completeSplitSale(input: SplitSaleInput): Promise<SplitSal
         fiscal_status: gate.on ? 'pending' : 'none',
         cash_rounding: input.cash_rounding,
         fiscal_register: receipt.register_no,
+        open_bottles: input.open_bottles,
       });
     } catch (cause) {
       if (done.length === 0) throw cause;

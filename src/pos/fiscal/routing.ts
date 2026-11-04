@@ -12,6 +12,7 @@
 // turning register 2 off can never strand a sale.
 
 import { pool } from '../../db.js';
+import { bottlesOfLines, type PouringLine } from '../bottles.service.js';
 
 type Queryable = Pick<typeof pool, 'query'>;
 
@@ -56,6 +57,39 @@ export async function registersOfVariants(
     out.set(Number(row.id), effectiveRegister(row.fiscal_register, active));
   }
   return out;
+}
+
+/**
+ * Each line's register (ДК5, decision Д20): the register of the stamped
+ * bottles it pours from, when it pours from any — a coffee with a cognac
+ * answer is the cognac's register's goods — and its product's otherwise. A
+ * line pouring from bottles of two registers belongs to neither, and is
+ * refused in words. Same order as `lines`; all 1 in a store with one register.
+ */
+export async function registersOfLines(
+  client: Queryable,
+  storeId: number,
+  lines: readonly PouringLine[],
+  names?: (line: PouringLine) => string
+): Promise<number[]> {
+  if (lines.length === 0) return [];
+  const active = await activeRegisters(client, storeId);
+  if (active.size === 0) return lines.map(() => 1);
+  const byVariant = await registersOfVariants(client, storeId, lines.map((line) => line.variant_id));
+  const bottles = await bottlesOfLines(client, storeId, lines);
+  return lines.map((line, index) => {
+    const found = [...new Set(bottles[index].map((b) => effectiveRegister(b.fiscal_register, active)))];
+    if (found.length > 1) {
+      throw new FiscalRegisterMismatchError(
+        `${names ? `«${names(line)}»` : 'Позиція'} наливає з пляшок різних кас (${bottles[index]
+          .map((b) => b.product_name)
+          .join(', ')}) — такий рядок не пробити жодним чеком`,
+        found[0],
+        found[1]
+      );
+    }
+    return found.length === 1 ? found[0] : (byVariant.get(line.variant_id) ?? 1);
+  });
 }
 
 /**

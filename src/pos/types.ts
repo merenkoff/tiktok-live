@@ -292,6 +292,8 @@ export interface CatalogItem {
    */
   pack_qty: number | null;
   pack_label: string;
+  /** Poured by the ml from a bottle opened by its excise stamp (ДК5): the bottle's size. Absent otherwise. */
+  bottle_ml?: number;
   /**
    * On the day's manual stop-list («сьогодні не робимо», migration 050). The
    * row stays in the answer so the tile greys with a caption instead of

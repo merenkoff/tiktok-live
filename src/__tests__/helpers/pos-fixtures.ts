@@ -259,6 +259,8 @@ export async function dropTestStore(storeId: number | undefined): Promise<void> 
     'DELETE FROM pos_debt_item_components WHERE store_id = $1',
     'DELETE FROM pos_debt_items WHERE store_id = $1',
     'DELETE FROM pos_debt_entries WHERE store_id = $1',
+    // Open bottles (093): pours point at sale lines, refunds and bills.
+    'DELETE FROM pos_bottle_pours WHERE store_id = $1',
     'DELETE FROM pos_refund_items WHERE refund_id IN (SELECT id FROM pos_refunds WHERE store_id = $1)',
     'DELETE FROM pos_refunds WHERE store_id = $1',
     'DELETE FROM pos_sale_item_components WHERE store_id = $1',
