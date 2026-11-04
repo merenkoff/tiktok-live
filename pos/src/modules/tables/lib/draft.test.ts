@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { CatalogItem } from '@pos/platform';
-import { countsByProduct, draftSummary, draftView, pendingLine, previewCents } from './draft';
+import { countsByProduct, draftSummary, draftView, pendingLine, previewCents, rowsNeedingStamps } from './draft';
 import type { BillLine } from './types';
 
 const MILK = {
@@ -156,6 +156,31 @@ describe('countsByProduct', () => {
   it('counts nothing for a line whose dish is not on the menu any more', () => {
     const view = draftView([serverLine({ variant_id: 77 })], []);
     expect(countsByProduct(view, grouped).size).toBe(0);
+  });
+});
+
+describe('rowsNeedingStamps (ДК4-Г)', () => {
+  const bottle = (over: Partial<BillLine> = {}): BillLine =>
+    serverLine({ id: 8, variant_id: 40, product_name: 'Хлібний дар 0,5', excise_per_unit: true, ...over });
+
+  it('carries a bottle’s stamps onto its row, and a tap of one as needing them', () => {
+    const [row] = draftView([bottle({ quantity: 1, excise_labels: ['ANFC015604'] })], []);
+    expect(row).toMatchObject({ excisePerUnit: true, exciseLabels: ['ANFC015604'] });
+    const tap = pendingLine({ item: item({ variant_id: 41, excise_per_unit: true, modifier_groups: [] }), modifiers: [], note: '' }, 't1');
+    expect(draftView([], [tap])[0]).toMatchObject({ excisePerUnit: true, exciseLabels: [] });
+  });
+
+  it('holds back a bottle short of a stamp, or holding one more than its count, and nothing else', () => {
+    const rows = draftView(
+      [
+        serverLine(),
+        bottle({ id: 8, quantity: 2, excise_labels: ['ANFC015604'] }),
+        bottle({ id: 9, quantity: 1, excise_labels: ['AICY275034'] }),
+        bottle({ id: 10, quantity: 1, excise_labels: ['AATE508932', 'AATE508933'] }),
+      ],
+      []
+    );
+    expect(rowsNeedingStamps(rows).map((r) => r.id)).toEqual([8, 10]);
   });
 });
 

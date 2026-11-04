@@ -73,6 +73,15 @@ export function updateLine(
   return posRequest<Bill>('patch', `/bills/${billId}/items/${itemId}`, patch);
 }
 
+/**
+ * The stamps of a draft line's bottles (ДК4-Г), replaced wholesale. The
+ * server refuses a stamp already sold, one too many, or one that is not a
+ * stamp — each in a sentence the sheet shows.
+ */
+export function setExciseLabels(billId: number, itemId: number, labels: string[]): Promise<Bill> {
+  return posRequest<Bill>('put', `/bills/${billId}/items/${itemId}/excise`, { excise_labels: labels });
+}
+
 export function removeLine(billId: number, itemId: number): Promise<Bill> {
   return posRequest<Bill>('delete', `/bills/${billId}/items/${itemId}`);
 }

@@ -164,7 +164,12 @@ export const POS_API_CLIENT_VERSION = 2;
 //     of quick amounts. Additive; a module built for 21 loads unchanged, and
 //     the `tables` remote reads the new name through the namespace import, so
 //     on a host still at 21 it simply draws no quick amounts.
-export const PLATFORM_VERSION = 22;
+// 23 (2026-11-04): the waiter scans a bottle's excise stamp before the round
+//     goes to the kitchen (track ДК, ДК4-Г): `@pos/platform/ui` exports the
+//     till's `ExciseStampSheet` (and its `ExciseStampLine`), with a
+//     `doneLabel` and `busy` of its own. Additive; 22 has not shipped, so both
+//     reach stores in the same POS Release.
+export const PLATFORM_VERSION = 23;
 
 /**
  * Build version of this bundle — the host web/cashier build, or a module-remote

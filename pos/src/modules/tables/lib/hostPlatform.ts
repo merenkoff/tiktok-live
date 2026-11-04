@@ -83,7 +83,9 @@ export function missingHostApi(): string[] {
  * kitchen board lost an afternoon to exactly that (К3c).
  */
 export function posRequest<T>(
-  method: 'get' | 'post' | 'patch' | 'delete',
+  // `put` since ДК4-Г (a draft line's stamps): every host hands the method to
+  // axios as it is, so an older host's narrower type costs nothing at runtime.
+  method: 'get' | 'post' | 'put' | 'patch' | 'delete',
   path: string,
   body?: unknown
 ): Promise<T> {

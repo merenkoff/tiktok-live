@@ -1,5 +1,5 @@
 {
-  "platformVersion": 22,
+  "platformVersion": 23,
   "exports": {
     "platform": [
       "CASH_ROUNDING_STEPS",
@@ -157,6 +157,7 @@
       "Delete",
       "Download",
       "DownloadLine",
+      "ExciseStampSheet",
       "FileText",
       "Flower2",
       "Folder",

@@ -9,24 +9,49 @@
 // sheet: it carries its own `ScanWedge`, so the catalog's (covered by this
 // dialog) only guards, and a scan landing anywhere — the field or not —
 // becomes the next stamp. A stamp can be typed too: series and number, Enter.
+//
+// The waiter's bill uses it too (ДК4-Г, platform 23): there a draft line's
+// stamps go to the server one line at a time, and «На кухню» stands where
+// «До оплати» does. Its lines are anything with these five fields, a cart
+// line or a bill's draft row.
 
 import { FormEvent, useMemo, useState } from 'react';
-import type { CartLine } from '@pos/platform';
 import { ScanWedge } from './ScanWedge';
 import { isGoodsBarcode, linesNeedingStamps, normalizeExciseLabel } from '../../lib/excise';
 import { X } from '../../platform/glyphs';
 
+/** A line the sheet can stamp — a cart line, or a bill's draft row. */
+export interface ExciseStampLine {
+  uid: string;
+  product_name: string;
+  quantity: number;
+  excise_per_unit?: boolean;
+  excise_labels?: string[];
+}
+
 export interface ExciseStampSheetProps {
-  lines: readonly CartLine[];
+  lines: readonly ExciseStampLine[];
   /** A refusal from the server to read first («марку … уже продано»). */
   error?: string | null;
   onSetLabels: (uid: string, labels: string[]) => void;
-  /** Every line has its stamps: go on to payment. */
+  /** Every line has its stamps: go on to payment (or to the kitchen). */
   onDone: () => void;
   onClose: () => void;
+  /** The button once every bottle has its stamp: «До оплати» at the till, «На кухню» at a table. */
+  doneLabel?: string;
+  /** A write is on its way (the bill's stamps go to the server): nothing more until it answers. */
+  busy?: boolean;
 }
 
-export function ExciseStampSheet({ lines, error = null, onSetLabels, onDone, onClose }: ExciseStampSheetProps) {
+export function ExciseStampSheet({
+  lines,
+  error = null,
+  onSetLabels,
+  onDone,
+  onClose,
+  doneLabel = 'До оплати',
+  busy = false,
+}: ExciseStampSheetProps) {
   const stamped = useMemo(() => lines.filter((line) => line.excise_per_unit), [lines]);
   const pending = linesNeedingStamps(stamped);
   // The line being scanned: the first still short, else the first stamped one.
@@ -154,11 +179,11 @@ export function ExciseStampSheet({ lines, error = null, onSetLabels, onDone, onC
         <button
           type="button"
           className="pos-btn-primary w-full min-h-[56px] rounded-xl text-lg"
-          disabled={pending.length > 0}
+          disabled={pending.length > 0 || busy}
           onClick={onDone}
           data-testid="excise-done"
         >
-          {pending.length > 0 ? 'Відскануйте всі марки' : 'До оплати'}
+          {pending.length > 0 ? 'Відскануйте всі марки' : doneLabel}
         </button>
       </div>
     </div>

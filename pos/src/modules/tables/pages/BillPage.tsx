@@ -47,7 +47,8 @@ import {
   useVertical,
 } from '@pos/platform';
 import type { CatalogItem, ReceiptPaperWidth } from '@pos/platform';
-import { ArrowLeft, ModifierSheet } from '@pos/platform/ui';
+import { ArrowLeft, ExciseStampSheet, ModifierSheet } from '@pos/platform/ui';
+import type { ExciseStampLine } from '@pos/platform/ui';
 import { BillBar } from '../components/BillBar';
 import { BillPane } from '../components/BillPane';
 import { BillSheet } from '../components/BillSheet';
@@ -56,7 +57,7 @@ import { GuestOrdersPanel } from '../components/GuestOrdersPanel';
 import type { AcceptOutcome } from '../components/GuestOrdersPanel';
 import { MenuCatalog } from '../components/MenuCatalog';
 import { PaySheet } from '../components/PaySheet';
-import { countsByProduct, draftSummary, draftView } from '../lib/draft';
+import { countsByProduct, draftSummary, draftView, rowsNeedingStamps } from '../lib/draft';
 import type { DraftLineView } from '../lib/draft';
 import { isSettled, payableLines } from '../lib/pay';
 import { buildPrecheck } from '../lib/precheck';
@@ -122,6 +123,10 @@ export function BillPage(): JSX.Element {
   // looked up in the menu's own rows (К4m).
   const [editing, setEditing] = useState<{ row: DraftLineView; variants: CatalogItem[] } | null>(null);
   const [printStatus, setPrintStatus] = useState<string | null>(null);
+  // The excise stamps sheet (ДК4-Г, Д4): open while a bottle in the draft is
+  // short of its stamp — from «На кухню», a row's «Марок k з N», or the
+  // server's refusal to fire, whose sentence it shows first.
+  const [stampSheet, setStampSheet] = useState<{ error: string | null } | null>(null);
   const [answering, setAnswering] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -166,6 +171,21 @@ export function BillPage(): JSX.Element {
   // the menu; the menu hands its rows up through this and reads the counts back.
   const [grouped, setGrouped] = useState<ReadonlyArray<readonly [number, readonly CatalogItem[]]>>([]);
   const counts = useMemo(() => countsByProduct(draft, grouped), [draft, grouped]);
+  // The sheet stamps only rows the server already holds: a stamp is written to
+  // a line id, and «На кухню» waits for every tap to be answered anyway.
+  const stampLines = useMemo<ExciseStampLine[]>(
+    () =>
+      draft
+        .filter((row) => row.excisePerUnit && row.id != null)
+        .map((row) => ({
+          uid: row.key,
+          product_name: row.product_name,
+          quantity: row.quantity,
+          excise_per_unit: true,
+          excise_labels: row.exciseLabels,
+        })),
+    [draft]
+  );
 
   // Offline with nothing remembered. With a mirror the bill is drawn below
   // instead — readable, marked as a memory, and with every write refused.
@@ -260,7 +280,42 @@ export function BillPage(): JSX.Element {
 
   const fire = (): void => {
     setSheetOpen(false);
-    void run(() => tablesApi.fireRound(bill.id, newUuid()), { stock: true });
+    if (rowsNeedingStamps(draft).length > 0) {
+      setStampSheet({ error: null });
+      return;
+    }
+    void run(
+      async () => {
+        try {
+          return await tablesApi.fireRound(bill.id, newUuid());
+        } catch (err) {
+          // A stamp the server counts differently (another tablet scanned or
+          // took one off meanwhile): back to the stamps, in its words.
+          const code = (err as { response?: { data?: { code?: unknown } } })?.response?.data?.code;
+          if (typeof code === 'string' && code.startsWith('excise_')) {
+            setStampSheet({ error: serverMessage(err, 'Скануйте акцизні марки') });
+          }
+          throw err;
+        }
+      },
+      { stock: true }
+    );
+  };
+
+  /** One line's stamps, as the sheet now has them — written through the bill's one queue. */
+  const setStamps = (uid: string, labels: string[]): void => {
+    const row = draft.find((r) => r.key === uid);
+    if (row?.id == null) return;
+    const lineId = row.id;
+    setStampSheet({ error: null });
+    void run(async () => {
+      try {
+        return await tablesApi.setExciseLabels(bill.id, lineId, labels);
+      } catch (err) {
+        setStampSheet({ error: serverMessage(err, 'Не вдалося зберегти марку') });
+        throw err;
+      }
+    });
   };
 
   const less = (row: DraftLineView): void => {
@@ -413,6 +468,10 @@ export function BillPage(): JSX.Element {
       onLess={less}
       onMore={more}
       onEdit={edit}
+      onStamps={() => {
+        setSheetOpen(false);
+        setStampSheet({ error: null });
+      }}
       onCancelRound={(roundId) => void run(() => tablesApi.cancelRound(bill.id, roundId), { stock: true })}
       onFire={fire}
       onPay={() => {
@@ -548,6 +607,21 @@ export function BillPage(): JSX.Element {
           onClose={() => setPaying(false)}
           onPay={(p, step) => void pay(p, step)}
           quote={dualRegister ? (p, step) => tablesApi.payQuote(bill.id, p, step) : null}
+        />
+      )}
+
+      {stampSheet && (
+        <ExciseStampSheet
+          lines={stampLines}
+          error={stampSheet.error}
+          busy={busy}
+          doneLabel="На кухню"
+          onSetLabels={setStamps}
+          onClose={() => setStampSheet(null)}
+          onDone={() => {
+            setStampSheet(null);
+            fire();
+          }}
         />
       )}
 

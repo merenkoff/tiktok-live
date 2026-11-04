@@ -38,7 +38,7 @@
     "check:debts-css-coverage": "node scripts/check-module-css-coverage.mjs src/modules/debts dist-remotes/debts/style.css src/components/ui/Page.tsx",
     "build:tables-remote": "vite build --config vite.tables-remote.config.ts && node scripts/sign-remote.mjs tables",
     "serve:tables-remote": "npx --yes serve -l 5009 --cors --no-clipboard dist-remotes/tables",
-    "check:tables-css-coverage": "node scripts/check-module-css-coverage.mjs src/modules/tables dist-remotes/tables/style.css src/components/cashier/ModifierSheet.tsx src/components/cashier/ProductTile.tsx src/components/cashier/TagFolderTile.tsx src/components/cashier/CatalogTagBar.tsx src/components/cashier/ScanWedge.tsx src/components/ui/Page.tsx",
+    "check:tables-css-coverage": "node scripts/check-module-css-coverage.mjs src/modules/tables dist-remotes/tables/style.css src/components/cashier/ModifierSheet.tsx src/components/cashier/ProductTile.tsx src/components/cashier/TagFolderTile.tsx src/components/cashier/CatalogTagBar.tsx src/components/cashier/ScanWedge.tsx src/components/cashier/ExciseStampSheet.tsx src/components/ui/Page.tsx",
     "serve:vertical-cafe-remote": "npx --yes serve -l 5008 --cors --no-clipboard dist-remotes/vertical-cafe",
     "check:vertical-cafe-css-coverage": "node scripts/check-module-css-coverage.mjs src/modules/vertical-cafe dist-remotes/vertical-cafe/style.css src/components/ui/Page.tsx",
     "build:vertical-grocery-remote": "vite build --config vite.vertical-grocery-remote.config.ts && node scripts/sign-remote.mjs vertical-grocery",
