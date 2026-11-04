@@ -33,6 +33,7 @@ import {
 } from './modifiers.service.js';
 import type { ComponentInput } from './composites.service.js';
 import { activeRegisters, effectiveRegister } from './fiscal/routing.js';
+import { bottleSourcesOf, type BottleSource } from './bottles.service.js';
 import { normalizeUktzed } from './excise.js';
 
 export interface VariantInput {
@@ -65,6 +66,12 @@ export interface VariantInput {
    */
   pack_qty?: number | null;
   pack_label?: string | null;
+  /**
+   * Poured by the millilitre from a bottle opened by its excise stamp (ДК5,
+   * migration 093): the bottle's size in ml. Null — not poured that way.
+   * Its own field (Д10): a receiving pack may be a case of six bottles.
+   */
+  bottle_ml?: number | null;
 }
 
 /** The stored tenths from whichever the client sent: the form's percent («4,5») or the importer's tenths. */
@@ -163,6 +170,36 @@ async function assertExciseShape(client: Pick<typeof pool, 'query'>, storeId: nu
   if (row.fiscal_excise && !row.fiscal_uktzed) {
     throw new Error('Підакцизному товару потрібен код УКТ ЗЕД — він друкується в чеку');
   }
+  // A bottle poured by the millilitre (ДК5) is excise goods whose stamp goes on
+  // the first pour from it — never one sold whole with a stamp per unit (Д7).
+  const bottles = await client.query(
+    `SELECT 1 FROM pos_variants WHERE product_id = $1 AND store_id = $2 AND bottle_ml IS NOT NULL LIMIT 1`,
+    [productId, storeId]
+  );
+  if (bottles.rows.length > 0) {
+    if (!row.fiscal_excise) {
+      throw new Error('Пляшка за маркою — лише для підакцизного товару з кодом УКТ ЗЕД');
+    }
+    if (row.excise_per_unit) {
+      throw new Error(
+        'Пляшка, яку відкривають за маркою, не продається з маркою на кожну одиницю — для цілої пляшки заведіть окремий товар'
+      );
+    }
+  }
+}
+
+/**
+ * A bottle's size in ml (ДК5, migration 093), or null: only for a variant
+ * counted in millilitres, whole, and within a sane size.
+ */
+function normalizeBottleMl(raw: unknown, current: number | null, unit: string): number | null {
+  const value = raw === undefined ? current : raw === null || raw === '' || raw === 0 ? null : Number(raw);
+  if (value == null) return null;
+  if (!Number.isInteger(value) || value <= 0 || value > 100000) {
+    throw new Error('Об\'єм пляшки — ціле число мл, від 1 до 100000');
+  }
+  if (unit !== 'мл') throw new Error('Пляшка за маркою — лише для товару, який рахують у мл');
+  return value;
 }
 
 /**
@@ -337,6 +374,8 @@ export async function listProducts(storeId: number) {
       // How it arrives, not how it is counted (migration 054).
       pack_qty: row.pack_qty == null ? null : Number(row.pack_qty),
       pack_label: String(row.pack_label ?? ''),
+      // Poured from a bottle opened by its stamp (ДК5, migration 093).
+      bottle_ml: row.bottle_ml == null ? null : Number(row.bottle_ml),
       // What the price is for: 1000 = per kg/l, a weighed variant (migration 075).
       price_per: Number(row.price_per ?? 1),
     });
@@ -412,14 +451,15 @@ async function insertVariantTx(
 
   const compareAt = normalizeCompareAt(variant.price_cents, variant.compare_at_cents);
   const pack = normalizePack(variant);
+  const bottleMl = normalizeBottleMl(variant.bottle_ml, null, derived.unit);
   const barcode =
     emptyToNull(variant.barcode) ??
     (vertical.autoBarcode ? await generateInternalBarcode(storeId, client) : null);
   const variantResult = await client.query(
     `INSERT INTO pos_variants
        (store_id, product_id, attributes, label, unit, sku, barcode, price_cents, cost_cents, compare_at_cents,
-        pack_qty, pack_label, price_per)
-     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        pack_qty, pack_label, price_per, bottle_ml)
+     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
      RETURNING id`,
     [
       storeId,
@@ -436,9 +476,12 @@ async function insertVariantTx(
       pack.pack_label,
       // Per kilogram or litre for a unit the vertical weighs (migration 075).
       derived.price_per,
+      bottleMl,
     ]
   );
   const variantId = Number(variantResult.rows[0].id);
+  // A bottle poured by the ml only on excise goods (ДК5) — judged now that the row is there.
+  if (bottleMl != null) await assertExciseShape(client, storeId, productId);
 
   await client.query(
     `INSERT INTO pos_stock (variant_id, store_id, quantity)
@@ -925,6 +968,11 @@ export async function updateVariant(
   if (derived.price_per > 1 && shape.kind !== 'simple') {
     throw new CompositeError('Складений товар не продається на вагу — зробіть його простим або в штуках');
   }
+  const bottleMl = normalizeBottleMl(
+    input.bottle_ml,
+    row.bottle_ml == null ? null : Number(row.bottle_ml),
+    derived.unit
+  );
 
   // Resolve every column against the row we already read, then write them all.
   // The previous COALESCE form could not express "clear this field": an empty
@@ -949,6 +997,7 @@ export async function updateVariant(
          pack_qty = $10,
          pack_label = $11,
          price_per = $14,
+         bottle_ml = $15,
          updated_at = NOW()
        WHERE id = $12 AND store_id = $13
        RETURNING product_id`,
@@ -969,12 +1018,14 @@ export async function updateVariant(
         // Re-derived with the unit: the price means per kg exactly while the
         // variant is in a unit the vertical weighs (migration 075).
         derived.price_per,
+        bottleMl,
       ]
     );
     productId = Number(result.rows[0].product_id);
     if (input.components !== undefined) {
       await setComponents(client, storeId, variantId, input.components);
     }
+    await assertExciseShape(client, storeId, productId);
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
@@ -1194,6 +1245,7 @@ export async function getCatalog(
        -- quantity in, and it rides into the offline snapshot for free.
        v.pack_qty,
        v.pack_label,
+       v.bottle_ml,
        v.sku,
        v.barcode,
        v.price_cents,
@@ -1289,6 +1341,16 @@ export async function getCatalog(
     { activeOnly: true }
   );
   const activeExtra = await activeRegisters(pool, storeId);
+  // A pour goes where its bottle goes (ДК5, Д20) — what the till splits by.
+  const pours =
+    activeExtra.size > 0
+      ? await bottleSourcesOf(pool, storeId, result.rows.map((row) => Number(row.variant_id)))
+      : new Map<number, BottleSource[]>();
+  const registerOf = (row: Record<string, unknown>): number => {
+    const bottles = pours.get(Number(row.variant_id)) ?? [];
+    const found = [...new Set(bottles.map((b) => effectiveRegister(b.fiscal_register, activeExtra)))];
+    return found.length === 1 ? found[0] : effectiveRegister(row.fiscal_register as number | null, activeExtra);
+  };
 
   return sortVariantRuns(
     result.rows,
@@ -1313,12 +1375,14 @@ export async function getCatalog(
     one_off: Boolean(row.one_off),
     sellable: row.sellable !== false,
     // Which register the line goes to (ДК2) — what a till splits a cart by.
-    fiscal_register: effectiveRegister(row.fiscal_register, activeExtra),
+    fiscal_register: registerOf(row),
     // Excise goods (ДК4-Б): a till asks for a stamp per unit before payment.
     ...(row.fiscal_excise ? { fiscal_excise: true } : {}),
     ...(row.excise_per_unit ? { excise_per_unit: true } : {}),
     pack_qty: row.pack_qty == null ? null : Number(row.pack_qty),
     pack_label: String(row.pack_label ?? ''),
+    // Poured from a bottle opened by its stamp (ДК5); absent otherwise.
+    ...(row.bottle_ml != null ? { bottle_ml: Number(row.bottle_ml) } : {}),
     price_per: Number(row.price_per ?? 1),
     // The day's stop-list (migration 050): the row stays in the answer so the
     // tile greys with a caption instead of vanishing (§3 «видно, а не

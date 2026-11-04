@@ -49,6 +49,7 @@ import type { SaleDraftLine } from './sales.service.js';
 import { refundLineAmount } from './lineMoney.js';
 import { fiscalCapability } from './fiscal/fiscal.service.js';
 import { activeRegisters, effectiveRegister } from './fiscal/routing.js';
+import { bottlesOfLines } from './bottles.service.js';
 import { formatQuantity, isWeighed, type WeightSource } from './weighed.js';
 import {
   DebtConflict,
@@ -831,6 +832,22 @@ export async function issueOnCredit(input: {
           throw new DebtConflict(`«${row.product_name}» підакцизний — під запис його не продають`, 'excise_goods');
         }
       }
+      // Nor what pours from a stamped bottle (ДК5, Д20): it is excise goods by
+      // what it pours, and the bottle's stamp would ride on a debt line.
+      const pours = await bottlesOfLines(
+        client,
+        input.storeId,
+        items.map((item) => ({ variant_id: item.variant_id, modifiers: item.modifiers }))
+      );
+      pours.forEach((bottles, index) => {
+        if (bottles.length > 0) {
+          const name = byId.get(items[index].variant_id)?.product_name ?? '';
+          throw new DebtConflict(
+            `«${name}» наливають з пляшки за акцизною маркою — під запис його не продають`,
+            'excise_goods'
+          );
+        }
+      });
       const extra = await activeRegisters(client, input.storeId);
       if (extra.size > 0) {
         for (const row of variants.rows) {

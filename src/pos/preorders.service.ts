@@ -31,6 +31,7 @@ import { pool } from '../db.js';
 import { logger } from '../logger.js';
 import { priceOfComposition, type ComponentInput } from './composites.service.js';
 import * as modifiers from './modifiers.service.js';
+import { bottlesOfLines } from './bottles.service.js';
 import type { LineModifierSnapshot } from './modifiers.service.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -198,6 +199,19 @@ export async function createPreorder(
         throw new PreorderError('Ціна позиції з модифікаторами не може бути відʼємною');
       }
       priced.push({ item, unitPriceCents, chosen, note: modifiers.cleanLineNote(item.note) });
+    }
+    // A pour from a stamped bottle (ДК5) is poured where it is sold, with the
+    // bottle's stamp on that receipt — not promised days ahead.
+    const pours = await bottlesOfLines(
+      client,
+      input.storeId,
+      input.items.map((item) => ({
+        variant_id: item.variant_id,
+        modifiers: modifiers.normalizeModifierIds(item.modifiers),
+      }))
+    );
+    if (pours.some((bottles) => bottles.length > 0)) {
+      throw new PreorderError('Напій із пляшки за акцизною маркою наливають на місці — у попереднє замовлення його не беруть');
     }
     const total = priced.reduce((sum, row) => sum + row.unitPriceCents * row.item.quantity, 0);
 

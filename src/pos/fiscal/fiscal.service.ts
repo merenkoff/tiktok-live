@@ -77,6 +77,7 @@ import {
 } from './offline/session.js';
 import { isCodeLeasedTo, refillOfflineCodes } from './offline/pool.js';
 import { offlineMonthExhausted } from './offline/limits.js';
+import { pourFactsOfSale } from '../bottles.service.js';
 
 /**
  * Budget for the entire fiscal phase of one request.
@@ -767,6 +768,17 @@ async function loadLineCodes(
   for (const row of labels.rows) {
     const id = Number(row.sale_item_id);
     (labelsByItemId[id] ??= []).push(String(row.label));
+  }
+
+  // Pours from the bar's open bottles (ДК5): a line that pours from a stamped
+  // bottle is excise goods even when its own card is not (Д20) — with the
+  // bottle's УКТ ЗЕД when it has none of its own — and the first pour from a
+  // bottle carries that bottle's stamp (З2).
+  const pours = await pourFactsOfSale(pool, storeId, saleId, refundId);
+  for (const [id, facts] of pours) {
+    exciseByItemId[id] = true;
+    if (!uktzedByItemId[id] && facts.uktzed) uktzedByItemId[id] = facts.uktzed;
+    for (const label of facts.labels) (labelsByItemId[id] ??= []).push(label);
   }
 
   return {

@@ -165,6 +165,7 @@ export const POS_MIGRATIONS = [
   '091_pos_fiscal_tax_rows.sql',
   // Excise goods and their stamps — product flags and pos_excise_labels (ДК4-Б).
   '092_pos_excise.sql',
+  '093_pos_open_bottles.sql',
 ] as const;
 
 export function readMigration(file: string): string {

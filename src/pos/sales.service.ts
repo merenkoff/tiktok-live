@@ -44,9 +44,17 @@ import {
 } from './weighed.js';
 import {
   activeRegisters,
-  effectiveRegister,
   FiscalRegisterMismatchError,
+  registersOfLines,
 } from './fiscal/routing.js';
+import {
+  assertNoShortfall,
+  newPourContext,
+  pourFactsOfSale,
+  readOpenBottles,
+  returnLinePours,
+  undoSalePours,
+} from './bottles.service.js';
 
 /** The biggest sum an INTEGER money column holds — a line past it is refused in words. */
 const MAX_LINE_CENTS = 2_147_483_647;
@@ -363,6 +371,12 @@ export interface CompleteSaleParams {
    * register 1's receipt, whichever path wrote the sale.
    */
   fiscal_register?: number;
+  /**
+   * The bottles this sale opens, by their stamps (ДК5, Д4):
+   * `[{ variant_id, excise_label }]`, scanned after a `bottle_needed` refusal.
+   * A stamp the sale turns out not to need opens nothing.
+   */
+  open_bottles?: unknown;
 }
 
 type DbClient = { query: typeof pool.query };
@@ -720,25 +734,54 @@ export async function completeSaleTx(
     throw new Error('Some variants not found or inactive');
   }
 
+  const variantMap = new Map(variantsResult.rows.map((row) => [Number(row.id), row]));
+
   // Every line on this receipt belongs to the register it is fiscalised
-  // through (ДК2). Checked only where a second register is switched on —
-  // every other store reads one extra row and moves on.
+  // through (ДК2) — and a line that pours from a stamped bottle belongs to
+  // that bottle's register, whatever its own card says (ДК5, Д20). Checked
+  // only where a second register is switched on — every other store reads
+  // one extra row and moves on.
   const fiscalRegister = params.fiscal_register ?? 1;
   const activeExtra = await activeRegisters(client, params.storeId);
   if (activeExtra.size > 0 || fiscalRegister !== 1) {
-    for (const row of variantsResult.rows) {
-      const found = effectiveRegister(row.fiscal_register, activeExtra);
-      if (found !== fiscalRegister) {
+    const routed = [
+      ...rawPlain.map((line) => ({ variant_id: line.variant_id, modifiers: line.modifiers })),
+      ...customItems.map((item) => ({ variant_id: item.variant_id })),
+      ...locked.map((line) =>
+        line.bill_item_id
+          ? { variant_id: line.variant_id, bill_item_id: line.bill_item_id }
+          : {
+              variant_id: line.variant_id,
+              modifiers: (line.modifiers ?? [])
+                .map((m) => m.modifier_id)
+                .filter((id): id is number => id != null),
+            }
+      ),
+    ];
+    const nameOf = (line: { variant_id: number }) => String(variantMap.get(line.variant_id)?.product_name ?? '');
+    const found = await registersOfLines(client, params.storeId, routed, nameOf);
+    routed.forEach((line, index) => {
+      if (found[index] !== fiscalRegister) {
         throw new FiscalRegisterMismatchError(
-          `«${row.product_name}» пробивається через касу ${found}, а цей чек — касою ${fiscalRegister}`,
+          `«${nameOf(line)}» пробивається через касу ${found[index]}, а цей чек — касою ${fiscalRegister}`,
           fiscalRegister,
-          found
+          found[index]
         );
       }
-    }
+    });
   }
 
-  const variantMap = new Map(variantsResult.rows.map((row) => [Number(row.id), row]));
+  // What this sale pours from the bar's open bottles (ДК5): the till names
+  // the stamps of any it opens, and a bottle it would open without one
+  // refuses the whole sale below (Д4). A replay of a sale the desktop rang
+  // offline is never refused — the goods left — so its pours wait for the
+  // bar's scan like a table's round (Д18).
+  const pour = newPourContext({
+    storeId: params.storeId,
+    staffId: params.staffId,
+    mode: params.offline_replay ? 'queue' : 'strict',
+    labels: readOpenBottles(params.open_bottles),
+  });
   // Now that the variants say which lines are weighed, the ordinary ones merge.
   const plainLines = mergePlainLines(rawPlain, (variantId) =>
     isWeighed(variantMap.get(variantId)?.price_per)
@@ -1143,8 +1186,11 @@ export async function completeSaleTx(
       staffId: params.staffId,
       components: line.components,
       extra: line.modifier_components,
+      pour,
     });
   }
+  // A bottle this sale would open without its stamp: every one named at once (Д4).
+  await assertNoShortfall(client, pour);
 
   for (const payment of params.payments) {
     await client.query(
@@ -1266,6 +1312,11 @@ export async function getSale(storeId: number, saleId: number) {
     (row.returned ? entry.returned : entry.held).push(String(row.label));
     stampsByItem.set(id, entry);
   }
+  // The stamps of the bar's bottles this sale's pours opened (ДК5): printed
+  // under the line like a whole bottle's, never offered for a return to pick
+  // (`excise_labels` is that list), and whether the line pours at all — such
+  // a line is excise goods (Д20).
+  const bottleFacts = await pourFactsOfSale(pool, storeId, saleId);
   // What each line actually took off the shelf. Present only for composites —
   // and for a bouquet assembled at the counter this is the ONLY place its
   // recipe exists, so the receipt and the refund screen read it from here.
@@ -1495,7 +1546,10 @@ export async function getSale(storeId: number, saleId: number) {
       // Paid toward this «під запис» line earlier as «внески» (078): part of
       // the goods' price that is not in this receipt's sum.
       debt_prepaid_cents: Number(row.debt_prepaid_cents ?? 0),
-      ...(row.fiscal_excise ? { excise: true } : {}),
+      ...(row.fiscal_excise || bottleFacts.has(Number(row.id)) ? { excise: true } : {}),
+      ...(bottleFacts.get(Number(row.id))?.labels.length
+        ? { bottle_labels: bottleFacts.get(Number(row.id))!.labels }
+        : {}),
       ...(stampsByItem.has(Number(row.id))
         ? {
             excise_labels: stampsByItem.get(Number(row.id))!.held,
@@ -1817,6 +1871,9 @@ export async function voidSale(params: {
        WHERE id = $1`,
       [params.saleId]
     );
+    // Nor did it pour (ДК5): its millilitres go back into the bottles still
+    // open, and a stamp it carried goes to the next pour.
+    await undoSalePours(client, params.storeId, params.saleId);
     // A voided receipt sold nothing: its bottles' stamps may sell again (ДК4-Б).
     await client.query(
       `UPDATE pos_excise_labels SET released_at = NOW()
@@ -2140,6 +2197,8 @@ export async function refundSaleTx(
     unit_price_cents: number;
     line_total_cents: number;
     excise_labels: string[];
+    /** Every unit still standing comes back: the line no longer stands. */
+    whole: boolean;
   }> = [];
 
   for (const input of params.items) {
@@ -2218,6 +2277,7 @@ export async function refundSaleTx(
       unit_price_cents: Number(item.unit_price_cents),
       line_total_cents: lineTotal,
       excise_labels: returning,
+      whole: input.quantity === available,
     });
   }
 
@@ -2292,6 +2352,15 @@ export async function refundSaleTx(
       referenceType: 'refund',
       referenceId: refundId,
     });
+    // A pour returned whole no longer stands (ДК5): the bottle's stamp it
+    // carried goes on this return and to the next pour from that bottle.
+    if (line.whole) {
+      await returnLinePours(client, {
+        storeId: params.storeId,
+        saleItemId: line.sale_item_id,
+        refundId,
+      });
+    }
   }
 
   // Defective goods do not go back on the shelf. The return above already

@@ -60,7 +60,7 @@ import { parseCashRoundingStep, saleRoundingCents } from './cashRounding.js';
 import { registerPartUuidFor } from './core/derivedUuid.js';
 import { completeSale } from './sales.service.js';
 import * as fiscalService from './fiscal/fiscal.service.js';
-import { activeRegisters, registersOfVariants } from './fiscal/routing.js';
+import { activeRegisters, registersOfLines } from './fiscal/routing.js';
 import { pool } from '../db.js';
 import { logger } from '../logger.js';
 import type { CartDiscountInput, CompleteSalePaymentInput } from './types.js';
@@ -403,15 +403,21 @@ async function planBillReceipts(
       billId: input.billId,
       lineIds: part.line_ids,
     });
-    const byRegister =
+    // By what each dish's round poured (ДК5, Д20): a coffee with a cognac
+    // answer goes on the cognac's register's receipt.
+    const byLine =
       extra.size > 0
-        ? await registersOfVariants(pool, input.storeId, lines.map((l) => l.variant_id))
+        ? await registersOfLines(
+            pool,
+            input.storeId,
+            lines.map((l) => ({ variant_id: l.variant_id, bill_item_id: l.bill_item_id }))
+          )
         : null;
     const groups = new Map<number, typeof lines>();
-    for (const line of lines) {
-      const register = byRegister?.get(line.variant_id) ?? 1;
+    lines.forEach((line, index) => {
+      const register = byLine?.[index] ?? 1;
       groups.set(register, [...(groups.get(register) ?? []), line]);
-    }
+    });
     const registers = [...groups.keys()].sort((a, b) => a - b);
     if (registers.length === 0) registers.push(1);
     registers.forEach((register, index) => {

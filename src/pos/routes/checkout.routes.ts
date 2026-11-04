@@ -31,7 +31,8 @@ import { asFiscalError, cashierMessage, FiscalError, supportCode } from '../fisc
 import { holderFromError } from '../fiscal/offline/holder.js';
 import * as splitSale from '../split-sale.service.js';
 import { formatUah } from '../core/money.js';
-import { FiscalRegisterMismatchError, registerLabels, registersOfVariants } from '../fiscal/routing.js';
+import { FiscalRegisterMismatchError, registerLabels, registersOfLines } from '../fiscal/routing.js';
+import { normalizeModifierIds } from '../modifiers.service.js';
 import { ExciseError } from '../excise.js';
 import { pool } from '../../db.js';
 import { logger } from '../../logger.js';
@@ -39,6 +40,15 @@ import { errorMessage, readDeviceId } from './_shared.js';
 
 /** `getSale`'s row, non-null. `completeSale` / `refundSale` return the same shape. */
 type SaleDetail = NonNullable<Awaited<ReturnType<typeof salesService.getSale>>>;
+
+/** A line's answers as ids, or none when the request names them badly — the sale itself refuses that in words. */
+function safeModifierIds(raw: unknown): number[] {
+  try {
+    return normalizeModifierIds(raw);
+  } catch {
+    return [];
+  }
+}
 
 /**
  * Record which sale a parked cart became.
@@ -100,6 +110,8 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
       cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
       customer_id?: number | null;
       cash_rounding?: unknown;
+      /** The bottles this sale opens, by their stamps (ДК5, Д4). */
+      open_bottles?: unknown;
     };
     try {
       const plan = await splitSale.planSplit({
@@ -111,6 +123,7 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
         cart_discount: body.cart_discount ?? null,
         customer_id: body.customer_id ?? null,
         cash_rounding: body.cash_rounding,
+        open_bottles: body.open_bottles,
       });
       const labels = await registerLabels(pool, auth.storeId);
       return {
@@ -173,6 +186,8 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
        * The server computes the amount itself — TechDocs/POS_CASH_ROUNDING.md, Д4.
        */
       cash_rounding?: unknown;
+      /** The bottles this sale opens, by their stamps (ДК5, Д4). */
+      open_bottles?: unknown;
       /**
        * The till can show two receipts (ДК2-Б): a cart whose lines go to two
        * registers is rung as one receipt per register instead of refused.
@@ -291,6 +306,7 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
         preorder_id: body.preorder_id,
         offline_replay: body.offline_replay === true,
         cash_rounding: body.cash_rounding,
+        open_bottles: body.open_bottles,
         fiscal_register: registerNo,
       });
     } catch (error) {
@@ -898,6 +914,8 @@ async function completeDeviceStampedSale(
     fiscal_offline?: unknown;
     offline_replay?: unknown;
     cash_rounding?: unknown;
+    /** The bottles this sale opens, by their stamps (ДК5, Д4). */
+    open_bottles?: unknown;
   },
   clientUuid: string | null
 ) {
@@ -939,6 +957,7 @@ async function completeDeviceStampedSale(
       // As printed: the till rounded the receipt it handed over, whatever the
       // store's setting has become since.
       cash_rounding: body.cash_rounding,
+      open_bottles: body.open_bottles,
     });
   } catch (error) {
     logger.error('Complete offline-stamped sale failed', { error: errorMessage(error) });
@@ -1065,18 +1084,22 @@ async function cartRegisters(
   items: CompleteSaleItemInput[] | undefined,
   preorderId: number | null | undefined
 ): Promise<Set<number>> {
-  const variantIds = (items ?? [])
-    .map((item) => Number(item?.variant_id))
-    .filter((id) => Number.isInteger(id) && id > 0);
+  // By line (ДК5, Д20): a line that pours from a stamped bottle is that
+  // bottle's register's goods, whatever its own card says.
+  const lines: Array<{ variant_id: number; modifiers?: number[] }> = (items ?? [])
+    .filter((item) => Number.isInteger(Number(item?.variant_id)) && Number(item?.variant_id) > 0)
+    .map((item) => ({
+      variant_id: Number(item.variant_id),
+      modifiers: item.components?.length ? [] : safeModifierIds(item.modifiers),
+    }));
   if (preorderId) {
-    const lines = await pool.query(
+    const rows = await pool.query(
       `SELECT variant_id FROM pos_preorder_items WHERE preorder_id = $1 AND store_id = $2`,
       [preorderId, storeId]
     );
-    variantIds.push(...lines.rows.map((row) => Number(row.variant_id)));
+    lines.push(...rows.rows.map((row) => ({ variant_id: Number(row.variant_id) })));
   }
-  const byVariant = await registersOfVariants(pool, storeId, variantIds);
-  return new Set(byVariant.values());
+  return new Set(await registersOfLines(pool, storeId, lines));
 }
 
 /**
@@ -1101,6 +1124,8 @@ async function completeSplit(
     fiscal_offline?: unknown;
     offline_replay?: unknown;
     cash_rounding?: unknown;
+    /** The bottles this sale opens, by their stamps (ДК5, Д4). */
+    open_bottles?: unknown;
   },
   clientUuid: string | null
 ) {
@@ -1135,6 +1160,7 @@ async function completeSplit(
       customer_id: body.customer_id ?? null,
       client_uuid: clientUuid,
       cash_rounding: body.cash_rounding,
+      open_bottles: body.open_bottles,
     });
   } catch (error) {
     if (error instanceof splitSale.SplitSaleError) {
