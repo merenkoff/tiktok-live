@@ -497,6 +497,50 @@ test('a bottle sold whole goes to the table only with its stamp scanned (ДК4-�
   await expect.poll(() => sent.filter((s) => s.path === '/fire').length).toBe(1);
 });
 
+test('a pour waiting for the bar’s stamp is marked, and the rest of the bill pays without it (ДК5-Г)', async ({ page }) => {
+  await signInAsWaiter(page);
+  const sent = await mockTables(page);
+  const waiting = bill({
+    rounds: [
+      {
+        id: 7,
+        seq: 1,
+        fired_at: new Date(Date.now() - 300_000).toISOString(),
+        fired_by: 1,
+        fired_by_name: 'Олена',
+        prep_status: 'served',
+        ready_at: null,
+        served_at: null,
+        cancelled_at: null,
+        items: [
+          line({ id: 21, unit_price_cents: 5500, preview_unit_price_cents: null }),
+          line({ id: 22, variant_id: 41, product_name: 'Горілка 50', unit_price_cents: 9000, preview_unit_price_cents: null, bottle_pending: true }),
+        ],
+        total_cents: 14500,
+      },
+    ],
+    fired_total_cents: 14500,
+  });
+  await page.route('**/api/pos/bills/90', async (route) => route.fulfill({ json: waiting }));
+  await page.route('**/api/pos/bills/90/pay', async (route) => {
+    sent.push({ path: '/pay', body: route.request().postDataJSON() });
+    await route.fulfill({ json: { bill: waiting, sale_ids: [301] } });
+  });
+
+  await page.goto('/tables/90');
+  await expect(page.getByTestId('bill-line-22-waiting')).toContainText('Чекає марку з бару');
+  await page.getByTestId('bill-pay').click();
+  await expect(page.getByTestId('pay-waiting-bar')).toContainText('«Горілка 50»');
+  await expect(page.getByTestId('pay-submit')).toBeDisabled();
+
+  // The croissant is paid now; the shot waits for the bar.
+  await page.getByTestId('pay-line-22').click();
+  await page.getByTestId('pay-submit').click();
+  await expect.poll(() => sent.filter((s) => s.path === '/pay').length).toBe(1);
+  const paid = sent.find((s) => s.path === '/pay')?.body as { parts: Array<{ line_ids?: number[] }> };
+  expect(paid.parts[0].line_ids).toEqual([21]);
+});
+
 test('five taps: open the table and ring three simple dishes', async ({ page }) => {
   await signInAsWaiter(page);
   const sent = await mockTables(page);

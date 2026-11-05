@@ -147,3 +147,36 @@ describe('PaySheet — two registers (ДК3-Г)', () => {
     expect(onPay).toHaveBeenCalledWith([{ payments: [{ method: 'cash', amount_cents: 200_000 }] }], 0);
   });
 });
+
+// ДК5-Г (Д18): a pour whose bottle the bar has not opened cannot be paid —
+// the sheet says which, offers the rest, and shows the server's own refusal
+// where the waiter can read it (the sheet covers the bill's banner).
+describe('PaySheet — a pour waiting for the bar', () => {
+  const borshch = line({ id: 1, product_name: 'Борщ', unit_price_cents: 20_000 });
+  const shot = line({ id: 2, product_name: 'Горілка 50', unit_price_cents: 9_000, bottle_pending: true });
+
+  it('marks the line, refuses to pay it, and pays the rest once it is taken off', () => {
+    const onPay = vi.fn();
+    render(<PaySheet bill={bill([borshch, shot])} onClose={() => {}} onPay={onPay} />);
+    expect(screen.getByTestId('pay-line-waiting-2')).toHaveTextContent('чекає марку з бару');
+    expect(screen.getByTestId('pay-waiting-bar')).toHaveTextContent('«Горілка 50»');
+    expect(screen.getByTestId('pay-submit')).toBeDisabled();
+
+    fireEvent.click(screen.getByTestId('pay-line-2'));
+    expect(screen.queryByTestId('pay-waiting-bar')).toBeNull();
+    fireEvent.click(screen.getByTestId('pay-submit'));
+    expect(onPay).toHaveBeenCalledWith([{ line_ids: [1], payments: [{ method: 'card', amount_cents: 20_000 }] }], 0);
+  });
+
+  it('shows the server’s refusal on the sheet itself', () => {
+    render(
+      <PaySheet
+        bill={bill([borshch])}
+        onClose={() => {}}
+        onPay={() => {}}
+        error="Бар ще не відсканував марку нової пляшки «Горілка» — оплатити можна, щойно її відкриють"
+      />
+    );
+    expect(screen.getByTestId('pay-error')).toHaveTextContent('Бар ще не відсканував марку');
+  });
+});

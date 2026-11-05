@@ -41,6 +41,14 @@ export function payableLines(bill: Bill): PayableLine[] {
   return out;
 }
 
+/**
+ * The selected lines that wait for the bar's stamp (ДК5, Д18): the server
+ * refuses to pay them (409 `bottle_pending`), so the sheet says so first.
+ */
+export function waitingForBar(lines: readonly PayableLine[], selected: ReadonlySet<number>): PayableLine[] {
+  return lines.filter(({ line }) => selected.has(line.id) && line.bottle_pending === true);
+}
+
 /** What one line locked, which is money owed. */
 export function lineCents(line: BillLine): number {
   return (line.unit_price_cents ?? 0) * line.quantity;

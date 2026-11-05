@@ -45,7 +45,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { formatUah } from '@pos/platform';
 import { ArrowLeft, Banknote, Check, CreditCard, Minus, Plus, Split } from '@pos/platform/ui';
 import type { Glyph } from '@pos/platform/ui';
-import { evenShares, lineCents, payableLines, selectionCents } from '../lib/pay';
+import { evenShares, lineCents, payableLines, selectionCents, waitingForBar } from '../lib/pay';
 import { lineTitle } from '../lib/bill';
 import { cashRoundingFor, quickCashAmountsFor } from '../lib/hostPlatform';
 import type { BillReceiptQuote, PayPart } from '../lib/tablesApi';
@@ -65,6 +65,11 @@ export interface PaySheetProps {
    * no «порівну», sums from the quote, a card terminal by terminal.
    */
   quote?: ((parts: PayPart[], cashRounding: number) => Promise<{ receipts: BillReceiptQuote[]; due_cents: number }>) | null;
+  /**
+   * The server's refusal of the last payment, in its words — this sheet is
+   * opaque and covers the bill's own banner, so the sentence is drawn here.
+   */
+  error?: string | null;
 }
 
 /** «Каса 2 · Бар» — whose terminal and whose receipt. */
@@ -95,7 +100,7 @@ function signedUah(cents: number): string {
   return `${cents < 0 ? '−' : '+'}${formatUah(Math.abs(cents))}`;
 }
 
-export function PaySheet({ bill, busy, cashRoundingStep, onClose, onPay, quote = null }: PaySheetProps): JSX.Element {
+export function PaySheet({ bill, busy, cashRoundingStep, onClose, onPay, quote = null, error = null }: PaySheetProps): JSX.Element {
   const lines = useMemo(() => payableLines(bill), [bill]);
   const [selected, setSelected] = useState<Set<number>>(
     () => new Set(lines.map(({ line }) => line.id))
@@ -168,8 +173,12 @@ export function PaySheet({ bill, busy, cashRoundingStep, onClose, onPay, quote =
     });
   }
 
+  // A pour whose bottle the bar has not opened yet (ДК5, Д18): its part
+  // cannot be paid, so the sheet says which and offers the rest.
+  const waiting = waitingForBar(lines, selected);
+
   function pay(): void {
-    if (due <= 0 || short > 0) return;
+    if (due <= 0 || short > 0 || waiting.length > 0) return;
     // Two registers by card: each ФОП's terminal in turn, then the one request (Д14).
     if (dual && method === 'card' && receipts && cardTaken + 1 < receipts.list.length) {
       setCardTaken(cardTaken + 1);
@@ -264,7 +273,15 @@ export function PaySheet({ bill, busy, cashRoundingStep, onClose, onPay, quote =
                       {line.quantity > 1 && <span className="tabular-nums">{line.quantity}× </span>}
                       {lineTitle(line, true)}
                     </span>
-                    <span className="block text-[13px] text-sq-muted">раунд {round.seq}</span>
+                    <span className="block text-[13px] text-sq-muted">
+                      раунд {round.seq}
+                      {line.bottle_pending && (
+                        <span className="font-semibold text-amber-800" data-testid={`pay-line-waiting-${line.id}`}>
+                          {' '}
+                          · чекає марку з бару
+                        </span>
+                      )}
+                    </span>
                   </span>
                   <span className={`shrink-0 text-base tabular-nums ${on ? 'text-sq-text' : 'text-sq-muted'}`}>
                     {formatUah(lineCents(line))}
@@ -448,12 +465,25 @@ export function PaySheet({ bill, busy, cashRoundingStep, onClose, onPay, quote =
             </p>
           )}
 
+          {waiting.length > 0 && (
+            <p className="text-[15px] text-amber-800" data-testid="pay-waiting-bar">
+              Бар ще не відсканував марку нової пляшки для{' '}
+              {waiting.map(({ line }) => `«${lineTitle(line, true)}»`).join(', ')}. Зніміть цю страву, щоб оплатити
+              решту, або зачекайте на бар.
+            </p>
+          )}
+          {error && (
+            <p role="alert" className="text-[15px] text-sq-danger" data-testid="pay-error">
+              {error}
+            </p>
+          )}
+
           <div className="flex-1" />
           <button
             type="button"
             className="pos-btn-primary w-full min-h-[60px] rounded-xl text-lg"
             data-testid="pay-submit"
-            disabled={busy || due <= 0 || short > 0 || (dual && !receipts)}
+            disabled={busy || due <= 0 || short > 0 || waiting.length > 0 || (dual && !receipts)}
             onClick={pay}
           >
             {terminal
