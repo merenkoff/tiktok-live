@@ -321,7 +321,12 @@ export function buildReceiptPayload(
       line_total_cents: item.line_total_cents,
       tax_symbol: lineLetters(tax?.symbol, excise, item.excise === true),
       ...weighedRow(item),
-      ...(item.excise_labels?.length ? { excise_labels: item.excise_labels } : {}),
+      // A bottle sold whole carries its own stamps, a pour the stamp of the
+      // bottle it was the first pour from (ДК5) — on paper both are the
+      // line's stamps, as they are in the ДПС document.
+      ...(item.excise_labels?.length || item.bottle_labels?.length
+        ? { excise_labels: [...(item.excise_labels ?? []), ...(item.bottle_labels ?? [])] }
+        : {}),
     })),
     subtotal_cents: sale.subtotal_cents,
     discount_cents: sale.cart_discount_cents ?? null,

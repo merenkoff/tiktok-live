@@ -259,8 +259,17 @@ function ProductCard({ id }: { id: string | undefined }) {
     const changed = d.variants;
 
     if (!d.shape) {
+      // A bottle's size (ДК5) needs excise goods with a УКТ ЗЕД, so a size
+      // being cleared goes BEFORE the product stops being excise, and a new
+      // one after it becomes excise — the other rows keep their order.
+      const hadBottle = new Set(before.variants.filter((v) => (v.bottleMl ?? '').trim() !== '').map((v) => v.id));
+      const clearing = changed.filter((v) => hadBottle.has(v.id) && (v.bottleMl ?? '').trim() === '');
+      await writeVariants(clearing, current.shape ? 'keep' : 'omit');
       if (d.details) await api.updateProduct(productId, details);
-      await writeVariants(changed, current.shape ? 'keep' : 'omit');
+      await writeVariants(
+        changed.filter((v) => !clearing.includes(v)),
+        current.shape ? 'keep' : 'omit'
+      );
       return;
     }
 
@@ -555,6 +564,11 @@ function ProductCard({ id }: { id: string | undefined }) {
           colours={colours}
           partOptions={partOptions}
           techCard={techCards.get(sheetVariant.id)}
+          bottle={
+            fiscal?.enabled === true
+              ? { excise: { on: draft.fiscalExcise, perUnit: draft.excisePerUnit, uktzed: draft.uktzed } }
+              : undefined
+          }
           onApply={(next) => {
             patchVariant(next.id, next);
             setSheet(null);

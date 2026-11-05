@@ -727,6 +727,13 @@ export interface WaitingBottleView {
   tables: string[];
 }
 
+/** A drink the bar opens by its stamp — what «Відкрити пляшку» offers. */
+export interface DrinkView {
+  variant_id: number;
+  product_name: string;
+  bottle_ml: number;
+}
+
 export interface ClosedBottleView extends OpenBottleView {
   closed_at: string;
   close_reason: 'empty' | 'replaced' | 'broken';
@@ -768,7 +775,12 @@ const BOTTLE_COLUMNS = `b.id, b.variant_id, b.label, b.capacity_ml, b.poured_ml,
 export async function listBottles(
   storeId: number,
   since?: Date
-): Promise<{ open: OpenBottleView[]; waiting: WaitingBottleView[]; closed: ClosedBottleView[] }> {
+): Promise<{
+  open: OpenBottleView[];
+  waiting: WaitingBottleView[];
+  closed: ClosedBottleView[];
+  drinks: DrinkView[];
+}> {
   const open = await pool.query(
     `SELECT ${BOTTLE_COLUMNS}
        FROM pos_open_bottles b
@@ -814,6 +826,21 @@ export async function listBottles(
       tables: ((row.tables as unknown[] | null) ?? []).map(String).sort(),
     })),
     closed: closed.rows.map(closedView),
+    drinks: (
+      await pool.query(
+        `SELECT v.id AS variant_id, v.bottle_ml,
+                p.name || CASE WHEN COALESCE(v.label, '') <> '' THEN ' · ' || v.label ELSE '' END AS product_name
+           FROM pos_variants v
+           JOIN pos_products p ON p.id = v.product_id
+          WHERE v.store_id = $1 AND v.bottle_ml IS NOT NULL AND v.is_active
+          ORDER BY p.name, v.id`,
+        [storeId]
+      )
+    ).rows.map((row) => ({
+      variant_id: Number(row.variant_id),
+      product_name: String(row.product_name),
+      bottle_ml: Number(row.bottle_ml),
+    })),
   };
 }
 
@@ -858,7 +885,9 @@ export async function bottleReport(
 export class BottleError extends Error {
   constructor(
     message: string,
-    readonly status: 400 | 404 | 409 = 400
+    readonly status: 400 | 404 | 409 = 400,
+    /** A machine word the bar's screen branches on (`bottle_still_open`). */
+    readonly code: string | null = null
   ) {
     super(message);
     this.name = 'BottleError';
@@ -964,7 +993,8 @@ export async function openAtBar(params: {
       if (!params.replace) {
         throw new BottleError(
           'Попередня пляшка ще відкрита — якщо в ній порожньо, натисніть «Замінити»: різницю буде списано',
-          409
+          409,
+          'bottle_still_open'
         );
       }
       await closeEarlyTx(client, {

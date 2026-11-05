@@ -420,6 +420,8 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
         customer_id?: number | null;
         note?: string;
         client_uuid?: string | null;
+        /** Stamps of bottles the new goods open (ДК5), after `bottle_needed`. */
+        open_bottles?: unknown;
       };
       /** One step for both halves — each rounds its own cash part (Д9). */
       cash_rounding?: unknown;
@@ -495,6 +497,7 @@ export function registerCheckoutRoutes(fastify: FastifyInstance): void {
           ...(body.sale && 'customer_id' in body.sale ? { customer_id: body.sale.customer_id } : {}),
           note: body.sale?.note,
           client_uuid: saleUuid,
+          open_bottles: body.sale?.open_bottles,
         },
         fiscal_status: gate.on ? 'pending' : 'none',
         cash_rounding: body.cash_rounding,

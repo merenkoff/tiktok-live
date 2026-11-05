@@ -352,4 +352,25 @@ describe('classifyCheckoutError — a cart for two registers (track ДК)', () =
     expect(keepsModalOpen(failure)).toBe(true);
     expect(keepsCart(failure)).toBe(true);
   });
+
+  it('names the new bottles a pour needs a stamp for (ДК5), and keeps the cart', () => {
+    const failure = classifyCheckoutError(
+      httpError(409, {
+        error: 'bottle_needed',
+        message: 'Відкрийте нову пляшку: «Горілка · 500 мл» — скануйте її акцизну марку',
+        bottles: [{ variant_id: 7, product_name: 'Горілка · 500 мл', count: 1 }, { variant_id: 'x' }],
+      })
+    );
+    expect(failure).toEqual({
+      kind: 'bottle_needed',
+      message: 'Відкрийте нову пляшку: «Горілка · 500 мл» — скануйте її акцизну марку',
+      bottles: [{ variant_id: 7, product_name: 'Горілка · 500 мл', count: 1 }],
+    });
+    expect(keepsCart(failure)).toBe(true);
+  });
+
+  it('reads a bottle refusal without a list as an ordinary refusal with its code', () => {
+    const failure = classifyCheckoutError(httpError(409, { error: 'bottle_needed', message: 'Відкрийте нову пляшку' }));
+    expect(failure).toMatchObject({ kind: 'rejected', code: 'bottle_needed' });
+  });
 });

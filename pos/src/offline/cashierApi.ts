@@ -24,6 +24,7 @@ import type {
   SplitQuote,
   SplitSaleResult,
   ListSalesParams,
+  OpenBottleStamp,
 } from '../types';
 
 /**
@@ -151,6 +152,8 @@ export const cashierApi = {
      * the server files the sum the printed receipt shows.
      */
     cash_rounding?: number;
+    /** Stamps of new bottles a pour opens (ДК5), after a `bottle_needed` refusal. */
+    open_bottles?: OpenBottleStamp[];
   },
   /** `clientUuid` reuses an existing idempotency key — see FiscalSaleUnknownError. */
   opts: { clientUuid?: string } = {}
@@ -174,6 +177,8 @@ export const cashierApi = {
       customer_id?: number | null;
       parked_cart_id?: number | null;
       cash_rounding?: number;
+      /** Stamps of new bottles a pour opens (ДК5), after a `bottle_needed` refusal. */
+      open_bottles?: OpenBottleStamp[];
     },
     opts: { clientUuid?: string } = {}
   ): Promise<SplitSaleResult> {
@@ -189,6 +194,8 @@ export const cashierApi = {
     cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
     customer_id?: number | null;
     cash_rounding?: number;
+    /** Stamps of new bottles a pour opens (ДК5), after a `bottle_needed` refusal. */
+    open_bottles?: OpenBottleStamp[];
   }): Promise<SplitQuote> {
     assertWritable();
     return api.splitQuote(payload);

@@ -17,6 +17,7 @@ import type {
   SalePaymentInput,
   SplitSaleResult,
   ListSalesParams,
+  OpenBottleStamp,
 } from '../types';
 import {
   FiscalSaleUnknownError,
@@ -494,6 +495,8 @@ export async function completeSale(payload: {
   customer_id?: number | null;
   /** Cash-rounding step the payment screen used (0, 10, 50; НБУ № 25). */
   cash_rounding?: number;
+  /** Stamps of new bottles a pour opens (ДК5); queued with the sale, so a replay opens them too. */
+  open_bottles?: OpenBottleStamp[];
 }, opts: { clientUuid?: string } = {}): Promise<SaleDetail> {
   // Reusing a uuid is how the "server did not answer" probe stays idempotent:
   // the server's own pre-check resolves it to the existing sale, a 409, or a
@@ -517,6 +520,7 @@ export async function completeSale(payload: {
     customer_id: payload.customer_id && payload.customer_id > 0 ? payload.customer_id : null,
     customer_client_uuid: customer?.client_uuid ?? null,
     ...(payload.cash_rounding ? { cash_rounding: payload.cash_rounding } : {}),
+    ...(payload.open_bottles?.length ? { open_bottles: payload.open_bottles } : {}),
   };
 
   if (navigator.onLine && api.hasLiveJwt()) {
@@ -591,6 +595,7 @@ export async function completeSplitSale(
     customer_id?: number | null;
     parked_cart_id?: number | null;
     cash_rounding?: number;
+    open_bottles?: OpenBottleStamp[];
   },
   opts: { clientUuid?: string } = {}
 ): Promise<SplitSaleResult> {

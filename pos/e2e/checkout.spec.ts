@@ -271,3 +271,72 @@ test('a bottle sold whole asks for its stamp before payment, and the sale carrie
     excise_labels: ['AATE508932 0000412168'],
   });
 });
+
+// Track ДК, ДК5 (TechDocs/POS_DUAL_REGISTER.md §4.4, Д4): a pour that would
+// open a bottle the till sent no stamp for is refused with the bottle named;
+// the till asks for the new bottle's stamp on the same sheet and pays again
+// with `open_bottles`.
+test('a pour that opens a new bottle asks for its stamp, then pays with it', async ({ page }) => {
+  const SHOT = { ...catalog[0], product_name: 'Горілка 50', fiscal_excise: false };
+  const sent: Array<Record<string, unknown>> = [];
+  await mockPosApi(page);
+  await page.route('**/api/pos/catalog**', (route) => route.fulfill({ json: [SHOT, catalog[1]] }));
+  await page.route('**/api/pos/sales/complete', async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    sent.push(body);
+    if (!body.open_bottles) {
+      await route.fulfill({
+        status: 409,
+        json: {
+          error: 'bottle_needed',
+          message: 'Відкрийте нову пляшку: «Горілка Хортиця · 500 мл» — скануйте її акцизну марку',
+          bottles: [{ variant_id: 77, product_name: 'Горілка Хортиця · 500 мл', count: 1 }],
+        },
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 201,
+      json: {
+        id: 302,
+        receipt_number: 'R-302',
+        status: 'completed',
+        subtotal_cents: SHOT.price_cents,
+        total_cents: SHOT.price_cents,
+        rounding_cents: 0,
+        cart_discount_cents: 0,
+        created_at: '2026-11-05T20:00:00.000Z',
+        staff_name: 'Олена',
+        items: [],
+        payments: [{ id: 1, method: 'card', amount_cents: SHOT.price_cents }],
+        refunds: [],
+        fiscal: null,
+      },
+    });
+  });
+  await loginAsOwner(page);
+  await page.goto('/register');
+
+  await page.getByText(SHOT.product_name).first().click();
+  await page.getByRole('button', { name: /^Оплатити/ }).first().click();
+  let dialog = page.getByRole('dialog', { name: 'Оплата' });
+  await dialog.getByRole('button', { name: 'Картка' }).click();
+  await dialog.getByRole('button', { name: /Оплата карткою пройшла/ }).click();
+
+  const sheet = page.getByTestId('excise-sheet');
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByTestId('excise-error')).toContainText('Відкрийте нову пляшку');
+  await expect(sheet.getByTestId('excise-current')).toContainText('Нова пляшка: Горілка Хортиця · 500 мл');
+  await sheet.getByTestId('excise-input').fill('ANFC015604');
+  await sheet.getByRole('button', { name: 'Додати' }).click();
+  await sheet.getByTestId('excise-done').click();
+
+  dialog = page.getByRole('dialog', { name: 'Оплата' });
+  await dialog.getByRole('button', { name: 'Картка' }).click();
+  await dialog.getByRole('button', { name: /Оплата карткою пройшла/ }).click();
+  await expect(page.getByTestId('sale-success')).toBeVisible();
+  expect(sent).toHaveLength(2);
+  expect(sent[1].open_bottles).toEqual([{ variant_id: 77, excise_label: 'ANFC015604' }]);
+  // The stamp belongs to the bottle, not to the line.
+  expect((sent[1].items as Array<Record<string, unknown>>)[0].excise_labels).toBeUndefined();
+});

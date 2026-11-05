@@ -590,6 +590,62 @@ describe.skipIf(!hasDb)('POS open bottles at the till (ДК5-А)', () => {
     ]);
   });
 
+  it('tells the bar a bottle is still open in a word it can branch on, and lists the drinks it opens', async () => {
+    await openWith(vodka, STAMP_A, 500, 400);
+    const refused = await barOpen(vodka, STAMP_B);
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json()).toMatchObject({ code: 'bottle_still_open' });
+
+    const list = await app.inject({ method: 'GET', url: '/api/pos/bottles', headers: auth(store.sellerToken) });
+    const drinks = list.json().drinks as Array<{ variant_id: number; bottle_ml: number; product_name: string }>;
+    expect(drinks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ variant_id: vodka, bottle_ml: 500 }),
+        expect.objectContaining({ variant_id: cognac, bottle_ml: 500 }),
+      ])
+    );
+    expect(drinks.some((d) => d.variant_id === shot)).toBe(false);
+  });
+
+  it('says at login that the store pours from stamped bottles, so the till draws «Пляшки»', async () => {
+    const me = await app.inject({ method: 'GET', url: '/api/pos/me', headers: auth(store.sellerToken) });
+    expect(me.statusCode).toBe(200);
+    expect(me.json().store.bottles).toBe(true);
+  });
+
+  it('opens a new bottle for the new goods of an exchange when the till sends its stamp', async () => {
+    await openWith(vodka, STAMP_A, 500, 60);
+    const sold = await sell([{ variant_id: shot, quantity: 1 }], 9_000);
+    expect(sold.statusCode).toBe(201);
+    const exchange = (openBottles?: Array<{ variant_id: number; excise_label: string }>) =>
+      app.inject({
+        method: 'POST',
+        url: `/api/pos/sales/${sold.json().id}/exchange`,
+        headers: auth(store.sellerToken),
+        payload: {
+          refund: {
+            items: [{ sale_item_id: sold.json().items[0].id, quantity: 1 }],
+            method: 'cash',
+            reason_code: 'other',
+            client_uuid: randomUUID(),
+          },
+          sale: {
+            items: [{ variant_id: shot, quantity: 1 }],
+            payments: [{ method: 'cash', amount_cents: 9_000 }],
+            client_uuid: randomUUID(),
+            ...(openBottles ? { open_bottles: openBottles } : {}),
+          },
+        },
+      });
+    // 10 ml left in the bottle: the new shot opens the next one.
+    const asked = await exchange();
+    expect(asked.statusCode).toBe(409);
+    expect(asked.json()).toMatchObject({ error: 'bottle_needed', bottles: [{ variant_id: vodka, count: 1 }] });
+    const done = await exchange([{ variant_id: vodka, excise_label: STAMP_B }]);
+    expect(done.statusCode).toBe(201);
+    expect(done.json().sale.items[0].bottle_labels).toEqual([STAMP_B]);
+  });
+
   it('never pours on credit or into a pre-order', async () => {
     const customer = await pool.query(
       `INSERT INTO pos_customers (store_id, name, phone, credit_limit_cents)

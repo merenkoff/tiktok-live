@@ -57,6 +57,7 @@ import type {
   ModifierGroupInput,
   ModifierInput,
   ListSalesParams,
+  OpenBottleStamp,
 } from '../types';
 import { posApiBase } from '../lib/urls';
 // Direct import (not via '@pos/platform') — that barrel re-exports this module,
@@ -524,6 +525,8 @@ class PosApi {
     preorder_id?: number | null;
     /** Cash-rounding step (0, 10, 50 kopecks) the till showed; the server computes the sum. */
     cash_rounding?: number;
+    /** Stamps of new bottles a pour opens (ДК5), after a `bottle_needed` refusal. */
+    open_bottles?: OpenBottleStamp[];
   }): Promise<SaleDetail> {
     const { data } = await this.client.post<SaleDetail>('/sales/complete', payload);
     return data;
@@ -544,6 +547,8 @@ class PosApi {
     client_uuid: string;
     parked_cart_id?: number | null;
     cash_rounding?: number;
+    /** Stamps of new bottles a pour opens (ДК5), after a `bottle_needed` refusal. */
+    open_bottles?: OpenBottleStamp[];
   }): Promise<SplitSaleResult> {
     const { data } = await this.client.post<SplitSaleResult>('/sales/complete', {
       ...payload,
@@ -574,6 +579,8 @@ class PosApi {
     cart_discount?: { type: 'percent' | 'fixed'; value: number } | null;
     customer_id?: number | null;
     cash_rounding?: number;
+    /** Stamps of new bottles a pour opens (ДК5), after a `bottle_needed` refusal. */
+    open_bottles?: OpenBottleStamp[];
   }): Promise<SplitQuote> {
     const { data } = await this.client.post<SplitQuote>('/sales/split-quote', payload);
     return data;

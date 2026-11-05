@@ -17,6 +17,7 @@ import type {
   SaleItemInput,
   SalePaymentInput,
   VerticalPublicConfig,
+  OpenBottleStamp,
 } from '../types';
 
 export interface MetaRow {
@@ -128,6 +129,11 @@ export interface OutboxSalePayload {
    * a row an older build queued — it replays unrounded, exactly as printed.
    */
   cash_rounding?: number;
+  /**
+   * Stamps of new bottles this sale's pours open (track ДК, ДК5): the replay
+   * opens them; without them its pours wait for the bar's scan.
+   */
+  open_bottles?: OpenBottleStamp[];
 }
 
 export interface OutboxRow {
