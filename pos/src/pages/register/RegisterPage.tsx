@@ -12,11 +12,13 @@ import { cartNeedsSplit, registerCaption } from '../../lib/cartRegisters';
 import { linesNeedingStamps } from '../../lib/excise';
 import { ExciseStampSheet } from '../../components/cashier/ExciseStampSheet';
 import {
+  bottleNeededText,
   bottleOfUid,
   bottleStampLines,
   bottlesMissingStamps,
   mergeNeeded,
   openBottlesField,
+  readNeededBottles,
   setBottleStamps as withBottleStamps,
   type NeededBottle,
   type OpenBottleStamp,
@@ -219,8 +221,42 @@ export function RegisterPage() {
   const openCheckout = () => {
     if (linesNeedingStamps(lines).length > 0 || bottlesMissingStamps(bottleNeed, bottleStamps) > 0) {
       setStampSheet({ error: null });
-    } else setCheckoutOpen(true);
+    } else void toPayment();
   };
+  /** Where something is poured from a stamped bottle (ДК5) — read at login. */
+  const pours = auth?.store.bottles === true;
+  const checkingBottles = useRef(false);
+  /**
+   * Ask the server which new bottles this cart opens BEFORE the payment
+   * screen (Д4): asked after, the cashier may already have run the card on
+   * the terminal. A dry run that writes nothing. Without a network, from an
+   * older API or on a pre-order (the server's lines, which never pour) the
+   * payment screen opens as before, and the sale's own refusal still asks.
+   */
+  async function toPayment(): Promise<void> {
+    if (!pours || !online || preorderId != null || lines.length === 0) {
+      setCheckoutOpen(true);
+      return;
+    }
+    if (checkingBottles.current) return;
+    checkingBottles.current = true;
+    try {
+      const answer = await api.posRequest<{ bottles?: unknown }>('post', '/bottles/check', {
+        items: lines.map(wireLine),
+        ...openBottlesField(bottleStamps),
+      });
+      const needed = readNeededBottles(answer?.bottles);
+      if (needed.length > 0) {
+        askBottleStamps({ message: bottleNeededText(needed), bottles: needed });
+        return;
+      }
+    } catch {
+      // No answer: the payment asks, as it did before this check existed.
+    } finally {
+      checkingBottles.current = false;
+    }
+    setCheckoutOpen(true);
+  }
   // Food and alcohol of two ФОП in one cart (track ДК): two receipts. A
   // pre-order is the server's lines and is never split (it answers 409).
   const splitMode = preorderId == null && (forceSplit || cartNeedsSplit(lines, auth?.store.fiscal));
@@ -1525,7 +1561,9 @@ export function RegisterPage() {
           onClose={() => setStampSheet(null)}
           onDone={() => {
             setStampSheet(null);
-            setCheckoutOpen(true);
+            // Through the same check: the stamps just scanned may not be all
+            // the bottles the cart opens.
+            openCheckout();
           }}
         />
       )}
