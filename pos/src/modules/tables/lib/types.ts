@@ -97,6 +97,13 @@ export interface BillLine {
   excise_per_unit?: boolean;
   /** The stamps scanned onto this line so far. */
   excise_labels?: string[];
+  /**
+   * A fired line that pours from a bottle the bar has not opened yet (track
+   * ДК, ДК5, Д18): it went to the kitchen, but its part of the bill cannot be
+   * paid until the bar scans the new bottle's stamp. Absent otherwise and
+   * from a backend older than ДК5-Б.
+   */
+  bottle_pending?: boolean;
 }
 
 export interface BillRound {

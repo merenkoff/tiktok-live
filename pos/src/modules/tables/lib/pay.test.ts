@@ -10,6 +10,7 @@ import {
   lineCents,
   payableLines,
   selectionCents,
+  waitingForBar,
 } from './pay';
 import type { Bill, BillLine, BillRound } from './types';
 
@@ -104,6 +105,17 @@ describe('selection arithmetic', () => {
     expect(selectionCents(lines, new Set([1]))).toBe(13000);
     expect(selectionCents(lines, new Set([1, 2]))).toBe(19500);
     expect(selectionCents(lines, new Set())).toBe(0);
+  });
+});
+
+describe('waitingForBar (ДК5, Д18)', () => {
+  it('names only the ticked lines whose bottle the bar has not opened', () => {
+    const b = bill({
+      rounds: [round({ items: [line({ id: 1 }), line({ id: 2, bottle_pending: true }), line({ id: 3, bottle_pending: true })] })],
+    });
+    const lines = payableLines(b);
+    expect(waitingForBar(lines, new Set([1, 2])).map(({ line: l }) => l.id)).toEqual([2]);
+    expect(waitingForBar(lines, new Set([1]))).toEqual([]);
   });
 });
 

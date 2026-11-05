@@ -713,6 +713,41 @@ describe('BillPage', () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
+  it('marks a pour waiting for the bar’s stamp, and the pay sheet will not pay it (ДК5-Г)', async () => {
+    bill.draft = [];
+    bill.rounds = [round({ items: [line({ id: 2, variant_label: 'M · вівсяне', unit_price_cents: 8000, bottle_pending: true })] })];
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    expect(await screen.findByTestId('bill-line-2-waiting')).toHaveTextContent('Чекає марку з бару');
+    await userEvent.click(await screen.findByTestId('bill-pay'));
+    expect(screen.getByTestId('pay-waiting-bar')).toHaveTextContent('Бар ще не відсканував марку');
+    expect(screen.getByTestId('pay-submit')).toBeDisabled();
+  });
+
+  it('shows the server’s refusal of a payment on the pay sheet itself', async () => {
+    bill.draft = [];
+    posRequest.mockImplementation(async (method: string, path: string) => {
+      if (method === 'post' && path === '/bills/90/pay') {
+        throw {
+          response: {
+            status: 409,
+            data: {
+              error: 'Бар ще не відсканував марку нової пляшки «Горілка» — оплатити можна, щойно її відкриють',
+              code: 'bottle_pending',
+              item_id: 2,
+            },
+          },
+        };
+      }
+      return bill;
+    });
+    renderWithProviders(<BillPage />, { route: '/tables/90' });
+    await userEvent.click(await screen.findByTestId('bill-pay'));
+    await userEvent.click(await screen.findByTestId('pay-submit'));
+    expect(await screen.findByTestId('pay-error')).toHaveTextContent('Бар ще не відсканував марку');
+    expect(screen.getByTestId('pay-sheet')).toBeInTheDocument();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
   it('splits evenly: one receipt, several payment rows that add up', async () => {
     bill.draft = [];
     const posted: Array<{ parts: Array<{ payments: Array<{ amount_cents: number }> }> }> = [];

@@ -67,6 +67,9 @@ export function BillPane({
       title={l.product_name}
       sub={[l.variant_label, l.note].filter(Boolean).join(' · ')}
       price={formatUah(firedLineCents(l))}
+      // Went to the kitchen, but the bar has not opened the bottle it pours
+      // from (ДК5, Д18): its part cannot be paid until then.
+      waiting={l.sale_id == null && l.bottle_pending === true ? 'Чекає марку з бару' : null}
     />
   );
 
@@ -296,12 +299,15 @@ function LineRow({
   title,
   sub,
   price,
+  waiting = null,
 }: {
   testId: string;
   quantity: number;
   title: string;
   sub: string;
   price: string;
+  /** A mark under the line — «Чекає марку з бару». */
+  waiting?: string | null;
 }): JSX.Element {
   return (
     <div className="flex items-start gap-2.5 py-1.5" data-testid={testId}>
@@ -309,6 +315,14 @@ function LineRow({
       <div className="min-w-0 flex-1">
         <p className="text-[15px] text-sq-text truncate">{title}</p>
         {sub && <p className="text-[13px] text-sq-muted truncate">{sub}</p>}
+        {waiting && (
+          <span
+            className="mt-1 inline-block rounded-lg bg-amber-50 ring-1 ring-amber-300 px-2 py-0.5 text-[13px] font-semibold text-amber-800"
+            data-testid={`${testId}-waiting`}
+          >
+            {waiting}
+          </span>
+        )}
       </div>
       <span className="shrink-0 text-[15px] text-sq-text tabular-nums">{price}</span>
     </div>

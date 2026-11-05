@@ -476,6 +476,8 @@ export function BillPage(): JSX.Element {
       onFire={fire}
       onPay={() => {
         setSheetOpen(false);
+        // The sheet shows the banner as its own refusal line: start it clean.
+        clearBanner();
         setPaying(true);
       }}
       onPrecheck={() => void precheck()}
@@ -607,6 +609,8 @@ export function BillPage(): JSX.Element {
           onClose={() => setPaying(false)}
           onPay={(p, step) => void pay(p, step)}
           quote={dualRegister ? (p, step) => tablesApi.payQuote(bill.id, p, step) : null}
+          // The opaque sheet covers the bill's banner: a refusal is read here.
+          error={banner}
         />
       )}
 
