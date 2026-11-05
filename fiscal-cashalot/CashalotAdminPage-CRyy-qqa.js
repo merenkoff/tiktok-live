@@ -243,41 +243,63 @@ function w(e, t, n) {
 	return r.length > 0 ? Promise.reject(new y(r)) : o.api.posRequest(e, t, n);
 }
 // src/modules/fiscal-core/data/fiscalApi.ts
-function T() {
-	return s.fiscalSettings();
+function T(e = 1) {
+	return e === 1 ? s.fiscalSettings() : w("get", `/fiscal/settings${E(e)}`);
 }
-function ee(e) {
-	return w("patch", "/fiscal/settings", { secrets: e });
+function E(e) {
+	return e === 1 ? "" : `?register=${e}`;
 }
-function te(e, t) {
+function D(e) {
+	return e === 1 ? {} : { register: e };
+}
+function ee(e, t) {
 	return w("patch", "/fiscal/settings", {
-		config: e,
-		...t === void 0 ? {} : { default_tax_code: t }
+		...t,
+		register: e
 	});
 }
-function E() {
-	return w("get", "/fiscal/status");
+function O(e, t = 1) {
+	return w("patch", "/fiscal/settings", {
+		secrets: e,
+		...D(t)
+	});
 }
-function D() {
-	return w("post", "/fiscal/test-connection");
+function te(e, t, n = 1) {
+	return w("patch", "/fiscal/settings", {
+		config: e,
+		...t === void 0 ? {} : { default_tax_code: t },
+		...D(n)
+	});
 }
-function ne() {
-	return w("post", "/fiscal/shift/open");
+function ne(e = 1) {
+	return w("get", `/fiscal/status${E(e)}`);
 }
-function O() {
-	return w("post", "/fiscal/shift/close");
+function k(e, t) {
+	return t === 1 ? w("post", e) : w("post", e, D(t));
 }
-function k() {
-	return w("post", "/fiscal/x-report");
+function A(e = 1) {
+	return k("/fiscal/test-connection", e);
 }
-function A(e) {
-	return w("post", "/fiscal/service", { amount_cents: e });
+function j(e = 1) {
+	return k("/fiscal/shift/open", e);
 }
-function re() {
-	return w("get", "/fiscal/attention");
+function re(e = 1) {
+	return k("/fiscal/shift/close", e);
+}
+function ie(e = 1) {
+	return k("/fiscal/x-report", e);
+}
+function M(e, t = 1) {
+	return w("post", "/fiscal/service", {
+		amount_cents: e,
+		...D(t)
+	});
+}
+function ae(e) {
+	return w("get", `/fiscal/attention${e ? `?register=${e}` : ""}`);
 }
 // src/modules/fiscal-core/components/SecretsForm.tsx
-function ie({ specs: e, secretsSet: t, saving: r, onSave: o }) {
+function oe({ specs: e, secretsSet: t, saving: r, onSave: o }) {
 	let [s, c] = n({}), l = (e, t) => c((n) => ({
 		...n,
 		[e]: t
@@ -342,45 +364,45 @@ function ie({ specs: e, secretsSet: t, saving: r, onSave: o }) {
 	});
 }
 // src/modules/fiscal-core/types.ts
-function ae(e) {
+function se(e) {
 	return !!e && typeof e == "object" && typeof e.error == "string";
 }
 // src/modules/fiscal-core/lib/diagnostics.ts
-var oe = "2.6.6", se = "fiscal-cashalot", j = {
+var N = "2.7.0", ce = "fiscal-cashalot", P = {
 	host_too_old: "HOST",
 	server: "SRV",
 	network: "NET",
 	unknown: "UNK"
 };
-function M(e) {
+function F(e) {
 	let t = e?.response?.data;
-	return ae(t) ? t : null;
+	return se(t) ? t : null;
 }
-function ce(e) {
+function le(e) {
 	let t = e?.response?.status;
 	return typeof t == "number" ? t : null;
 }
-function le(e, t) {
+function ue(e, t) {
 	return e instanceof y ? "host_too_old" : t === null ? e instanceof Error ? "network" : "unknown" : "server";
 }
-function N(e) {
-	let t = ce(e), n = M(e), r = {
-		reason: le(e, t),
+function I(e) {
+	let t = le(e), n = F(e), r = {
+		reason: ue(e, t),
 		status: t,
 		serverError: n?.error ?? null,
 		missingHostApi: x(),
-		moduleVersion: oe,
+		moduleVersion: N,
 		hostVersion: S(),
 		apiBase: C(),
 		at: (/* @__PURE__ */ new Date()).toISOString()
-	}, i = n?.support_code ?? `FC-${r.reason === "server" && t !== null ? `${j.server}${t}` : j[r.reason]}-${r.moduleVersion}-${r.hostVersion}`;
+	}, i = n?.support_code ?? `FC-${r.reason === "server" && t !== null ? `${P.server}${t}` : P[r.reason]}-${r.moduleVersion}-${r.hostVersion}`;
 	return {
 		...r,
 		code: i
 	};
 }
-function P(e, t) {
-	let n = M(e);
+function de(e, t) {
+	let n = F(e);
 	if (n?.message) return n.message;
 	switch (t.reason) {
 		case "host_too_old": return "Оновіть застосунок каси, щоб продовжити";
@@ -388,22 +410,22 @@ function P(e, t) {
 		default: return "Помилка ПРРО";
 	}
 }
-function F(e) {
+function L(e) {
 	return JSON.stringify({
-		module: se,
+		module: ce,
 		...e
 	}, null, 2);
 }
-var I = /* @__PURE__ */ new Set();
-function L(e) {
-	typeof window < "u" && (window.__POS_FISCAL_DIAG__ = e), !I.has(e.code) && (I.add(e.code), console.error(`[fiscal] ${e.code}`, e));
+var R = /* @__PURE__ */ new Set();
+function z(e) {
+	typeof window < "u" && (window.__POS_FISCAL_DIAG__ = e), !R.has(e.code) && (R.add(e.code), console.error(`[fiscal] ${e.code}`, e));
 }
 // src/modules/fiscal-core/components/FiscalErrorCard.tsx
-function R({ error: e }) {
-	let [t, r] = n(!1), o = N(e), s = P(e, o);
+function B({ error: e }) {
+	let [t, r] = n(!1), o = I(e), s = de(e, o);
 	async function c() {
 		try {
-			await navigator.clipboard.writeText(F(o)), r(!0), setTimeout(() => r(!1), 2e3);
+			await navigator.clipboard.writeText(L(o)), r(!0), setTimeout(() => r(!1), 2e3);
 		} catch {
 			r(!1);
 		}
@@ -430,16 +452,16 @@ function R({ error: e }) {
 	});
 }
 // src/modules/fiscal-core/components/AttentionList.tsx
-function z(e) {
+function V(e) {
 	return (e / 100).toFixed(2) + " ₴";
 }
-function B() {
-	let [e, r] = n(null), [o, s] = n([]), [c, l] = n(null);
+function fe({ registerNo: e } = {}) {
+	let [r, o] = n(null), [s, c] = n([]), [l, u] = n(null);
 	return t(() => {
-		re().then((e) => {
-			r(e.documents), s(e.sessions ?? []);
-		}).catch(l);
-	}, []), c ? /* @__PURE__ */ i(R, { error: c }) : e ? e.length === 0 && o.length === 0 ? /* @__PURE__ */ a("p", {
+		ae(e).then((e) => {
+			o(e.documents), c(e.sessions ?? []);
+		}).catch(u);
+	}, [e]), l ? /* @__PURE__ */ i(B, { error: l }) : r ? r.length === 0 && s.length === 0 ? /* @__PURE__ */ a("p", {
 		className: "py-3 flex items-center gap-2 text-[15px] text-sq-secondary",
 		children: [/* @__PURE__ */ i(f, {
 			size: 20,
@@ -447,7 +469,7 @@ function B() {
 		}), "Немає документів, що потребують уваги."]
 	}) : /* @__PURE__ */ a("div", {
 		className: "space-y-3 pt-2",
-		children: [o.map((e) => /* @__PURE__ */ a("div", {
+		children: [s.map((e) => /* @__PURE__ */ a("div", {
 			role: "alert",
 			className: "rounded-xl bg-red-50 px-4 py-3 text-[15px] text-red-700",
 			children: [
@@ -479,7 +501,7 @@ function B() {
 					children: "Ці чеки треба звірити в кабінеті провайдера — автоматично вони вже не підуть."
 				})
 			]
-		}, `session-${e.id}`)), e.length > 0 && /* @__PURE__ */ i("ul", { children: e.map((e) => /* @__PURE__ */ a("li", {
+		}, `session-${e.id}`)), r.length > 0 && /* @__PURE__ */ i("ul", { children: r.map((e) => /* @__PURE__ */ a("li", {
 			className: "sq-row py-2.5",
 			children: [
 				/* @__PURE__ */ a("div", {
@@ -489,7 +511,7 @@ function B() {
 						children: e.receipt_number ?? `#${e.id}`
 					}), /* @__PURE__ */ i("span", {
 						className: "text-[15px] text-sq-text tabular-nums",
-						children: z(e.total_cents)
+						children: V(e.total_cents)
 					})]
 				}),
 				/* @__PURE__ */ i("p", {
@@ -513,17 +535,17 @@ function B() {
 	});
 }
 // src/modules/fiscal-core/components/ProbeSection.tsx
-function V({ onProbed: e } = {}) {
-	let [t, o] = n(null), [s, c] = n(!1), [l, u] = n(null);
-	async function d() {
-		c(!0), u(null), o(null);
+function pe({ onProbed: e, registerNo: t = 1 } = {}) {
+	let [o, s] = n(null), [c, l] = n(!1), [u, d] = n(null);
+	async function f() {
+		l(!0), d(null), s(null);
 		try {
-			let t = await D();
-			o(t), e?.(t);
+			let n = await A(t);
+			s(n), e?.(n);
 		} catch (e) {
-			u(e);
+			d(e);
 		} finally {
-			c(!1);
+			l(!1);
 		}
 	}
 	return /* @__PURE__ */ a("section", { children: [/* @__PURE__ */ i(m, { title: "Зʼєднання" }), /* @__PURE__ */ a("div", {
@@ -532,22 +554,22 @@ function V({ onProbed: e } = {}) {
 			/* @__PURE__ */ i("button", {
 				type: "button",
 				className: "sq-btn-quiet",
-				disabled: s,
-				onClick: () => void d(),
-				children: s ? "Перевірка…" : "Перевірити з'єднання"
+				disabled: c,
+				onClick: () => void f(),
+				children: c ? "Перевірка…" : "Перевірити з'єднання"
 			}),
-			!!l && /* @__PURE__ */ i(R, { error: l }),
-			t && /* @__PURE__ */ i("div", {
-				className: `rounded-xl px-4 py-3 text-[15px] ${t.ok ? "bg-sq-success/10 text-sq-success-ink" : "bg-amber-50 text-amber-800"}`,
-				children: t.ok ? /* @__PURE__ */ a(r, { children: [
+			!!u && /* @__PURE__ */ i(B, { error: u }),
+			o && /* @__PURE__ */ i("div", {
+				className: `rounded-xl px-4 py-3 text-[15px] ${o.ok ? "bg-sq-success/10 text-sq-success-ink" : "bg-amber-50 text-amber-800"}`,
+				children: o.ok ? /* @__PURE__ */ a(r, { children: [
 					/* @__PURE__ */ i("p", {
 						className: "font-semibold",
 						children: "З'єднання успішне"
 					}),
-					t.cashierName && /* @__PURE__ */ a("p", { children: ["Касир: ", t.cashierName] }),
-					t.cashRegister && /* @__PURE__ */ a("p", { children: ["Каса: ", t.cashRegister] }),
-					t.message && /* @__PURE__ */ i("p", { children: t.message })
-				] }) : /* @__PURE__ */ i("p", { children: t.message ?? "Перевірка не пройдена" })
+					o.cashierName && /* @__PURE__ */ a("p", { children: ["Касир: ", o.cashierName] }),
+					o.cashRegister && /* @__PURE__ */ a("p", { children: ["Каса: ", o.cashRegister] }),
+					o.message && /* @__PURE__ */ i("p", { children: o.message })
+				] }) : /* @__PURE__ */ i("p", { children: o.message ?? "Перевірка не пройдена" })
 			})
 		]
 	})] });
@@ -568,13 +590,21 @@ var H = {
 	Ї: "YI",
 	Й: "J",
 	К: "K"
-}, U = Object.keys(H);
-function ue(e = "") {
-	return {
+}, me = Object.keys(H);
+function he(e = "", t = 0) {
+	return t === 1 ? {
+		letter: e,
+		name: "Акциз",
+		rate: "5",
+		type: 1
+	} : {
 		letter: e,
 		name: "",
 		rate: ""
 	};
+}
+function U(e) {
+	return e.filter((e) => e.type !== 1);
 }
 function W(e) {
 	return {
@@ -583,23 +613,25 @@ function W(e) {
 			return {
 				letter: typeof t.letter == "string" ? t.letter : "",
 				name: typeof t.name == "string" ? t.name : "",
-				rate: t.rate === void 0 || t.rate === null ? "" : String(t.rate)
+				rate: t.rate === void 0 || t.rate === null ? "" : String(t.rate),
+				...t.type === 1 ? { type: 1 } : {}
 			};
 		}),
 		testing: e?.testing === !0
 	};
 }
-function de(e) {
+function ge(e) {
 	return {
 		taxes: e.taxes.map((e) => ({
 			letter: e.letter.trim(),
 			name: e.name.trim(),
-			rate: fe(e.rate)
+			rate: _e(e.rate),
+			...e.type === 1 ? { type: 1 } : {}
 		})),
 		testing: e.testing
 	};
 }
-function fe(e) {
+function _e(e) {
 	let t = e.trim().replace(",", ".");
 	if (t === "") return e;
 	let n = Number(t);
@@ -611,7 +643,7 @@ function G(e) {
 function K(e, t) {
 	let n = e?.trim().toUpperCase();
 	if (!n) return null;
-	let r = t.find((e) => {
+	let r = U(t).find((e) => {
 		let t = e.letter.trim().toUpperCase();
 		return t === n || G(t) === n;
 	});
@@ -619,11 +651,11 @@ function K(e, t) {
 }
 function q(e, t) {
 	let n = new Set(e.filter((e, n) => n !== t).map((e) => e.letter.trim().toUpperCase()));
-	return U.filter((e) => !n.has(e));
+	return me.filter((e) => !n.has(e));
 }
 // src/modules/fiscal-cashalot/components/TaxTableForm.tsx
 var J = "text-[13px] font-semibold text-sq-secondary", Y = "w-5 h-5 shrink-0 accent-[rgb(var(--sq-blue-rgb))]";
-function X({ settings: e, saving: r, onSave: o }) {
+function ve({ settings: e, saving: r, onSave: o }) {
 	let [s, c] = n(() => W(e.config)), [l, u] = n(() => K(e.default_tax_code, W(e.config).taxes));
 	t(() => {
 		let t = W(e.config);
@@ -635,16 +667,16 @@ function X({ settings: e, saving: r, onSave: o }) {
 			...n,
 			...t
 		} : n)
-	})), h = () => c((e) => ({
-		...e,
-		taxes: [...e.taxes, ue(q(e.taxes, e.taxes.length)[0] ?? "")]
-	})), g = (e) => c((t) => ({
+	})), h = (e = 0) => c((t) => ({
+		...t,
+		taxes: [...t.taxes, he(q(t.taxes, t.taxes.length)[0] ?? "", e)]
+	})), g = s.taxes.some((e) => e.type === 1), _ = (e) => c((t) => ({
 		...t,
 		taxes: t.taxes.filter((t, n) => n !== e)
 	}));
-	function _() {
-		let e = s.taxes.map((e) => e.letter.trim().toUpperCase()), t = l && e.includes(l) ? l : e[0];
-		o(de(s), t ? G(t) : null);
+	function v() {
+		let e = U(s.taxes).map((e) => e.letter.trim().toUpperCase()), t = l && e.includes(l) ? l : e[0];
+		o(ge(s), t ? G(t) : null);
 	}
 	return /* @__PURE__ */ a("div", {
 		className: "space-y-4",
@@ -669,11 +701,15 @@ function X({ settings: e, saving: r, onSave: o }) {
 			}) : /* @__PURE__ */ a("div", {
 				className: "space-y-2",
 				children: [/* @__PURE__ */ a("div", {
-					className: "hidden sm:grid grid-cols-[4rem_1fr_6rem_6.5rem_2.5rem] gap-2 px-1",
+					className: "hidden sm:grid grid-cols-[4rem_5.5rem_1fr_5rem_5.5rem_2.5rem] gap-2 px-1",
 					children: [
 						/* @__PURE__ */ i("span", {
 							className: J,
 							children: "Літера"
+						}),
+						/* @__PURE__ */ i("span", {
+							className: J,
+							children: "Вид"
 						}),
 						/* @__PURE__ */ i("span", {
 							className: J,
@@ -692,7 +728,8 @@ function X({ settings: e, saving: r, onSave: o }) {
 				}), s.taxes.map((e, t) => {
 					let n = e.letter.trim().toUpperCase();
 					return /* @__PURE__ */ a("div", {
-						className: "grid grid-cols-[4rem_1fr_6rem_6.5rem_2.5rem] gap-2 items-center",
+						className: "grid grid-cols-[4rem_5.5rem_1fr_5rem_5.5rem_2.5rem] gap-2 items-center",
+						"data-testid": `tax-row-${t}`,
 						children: [
 							/* @__PURE__ */ a("select", {
 								"aria-label": `Літера ставки ${t + 1}`,
@@ -706,6 +743,20 @@ function X({ settings: e, saving: r, onSave: o }) {
 									value: e,
 									children: e
 								}, e))]
+							}),
+							/* @__PURE__ */ a("select", {
+								"aria-label": `Вид ставки ${t + 1}`,
+								className: "sq-input",
+								value: e.type === 1 ? "1" : "0",
+								onChange: (e) => m(t, { type: +(e.target.value === "1") }),
+								children: [/* @__PURE__ */ i("option", {
+									value: "0",
+									children: "ПДВ"
+								}), /* @__PURE__ */ i("option", {
+									value: "1",
+									disabled: g && e.type !== 1,
+									children: "Акциз"
+								})]
 							}),
 							/* @__PURE__ */ i("input", {
 								"aria-label": `Назва ставки ${t + 1}`,
@@ -729,8 +780,8 @@ function X({ settings: e, saving: r, onSave: o }) {
 									name: "cashalot-default-tax",
 									"aria-label": `Ставка ${t + 1} за замовчуванням`,
 									className: Y,
-									checked: n !== "" && l === n,
-									disabled: n === "",
+									checked: n !== "" && e.type !== 1 && l === n,
+									disabled: n === "" || e.type === 1,
 									onChange: () => u(n)
 								})
 							}),
@@ -738,22 +789,35 @@ function X({ settings: e, saving: r, onSave: o }) {
 								type: "button",
 								"aria-label": `Прибрати ставку ${t + 1}`,
 								className: "min-h-11 text-[20px] leading-none text-sq-muted hover:text-red-600",
-								onClick: () => g(t),
+								onClick: () => _(t),
 								children: "×"
 							})
 						]
 					}, t);
 				})]
 			}),
-			s.taxes.length < 10 && /* @__PURE__ */ i("button", {
-				type: "button",
-				className: "sq-btn-quiet",
-				onClick: h,
-				children: "+ Додати ставку"
+			s.taxes.length < 10 && /* @__PURE__ */ a("div", {
+				className: "flex flex-wrap gap-2",
+				children: [/* @__PURE__ */ i("button", {
+					type: "button",
+					className: "sq-btn-quiet",
+					onClick: () => h(0),
+					children: "+ Додати ставку"
+				}), !g && /* @__PURE__ */ i("button", {
+					type: "button",
+					className: "sq-btn-quiet",
+					onClick: () => h(1),
+					"data-testid": "tax-add-excise",
+					children: "+ Акциз 5 %"
+				})]
 			}),
 			/* @__PURE__ */ i("p", {
 				className: "text-[13px] text-sq-muted",
 				children: "Літери й назви — як у кабінеті Cashalot (Налаштування → Податки). Ставка за замовчуванням друкується на кожному рядку чека. Змінюються лише при закритій зміні."
+			}),
+			/* @__PURE__ */ i("p", {
+				className: "text-[13px] text-sq-muted",
+				children: "Акциз — для пива й алкоголю: його літера додається до ставки ПДВ підакцизного товару («АГ»). ФОП без ПДВ, що продає алкоголь, лишає в таблиці тільки рядок акцизу."
 			}),
 			/* @__PURE__ */ a("label", {
 				className: "min-h-11 flex items-center gap-3 text-[15px] text-sq-text",
@@ -775,27 +839,27 @@ function X({ settings: e, saving: r, onSave: o }) {
 				type: "button",
 				className: "pos-btn-primary min-h-11 px-4 rounded-sq text-[15px]",
 				disabled: r,
-				onClick: _,
+				onClick: v,
 				children: r ? "Збереження…" : "Зберегти ставки й режим"
 			})
 		]
 	});
 }
 // src/modules/fiscal-cashalot/secretSpecs.ts
-var Z = "Кабінет Cashalot → Налаштування → Інтеграція з WEB API → Управління касирами", pe = [
+var X = "Кабінет Cashalot → Налаштування → Інтеграція з WEB API → Управління касирами", ye = [
 	{
 		key: "keyGuid",
 		label: "Ідентифікатор ключа (KeyGuid)",
 		required: !0,
 		kind: "password",
-		hint: Z
+		hint: X
 	},
 	{
 		key: "keyPin",
 		label: "PIN касира",
 		required: !0,
 		kind: "password",
-		hint: Z
+		hint: X
 	},
 	{
 		key: "numFiscal",
@@ -805,18 +869,23 @@ var Z = "Кабінет Cashalot → Налаштування → Інтегра
 		hint: "Кабінет Cashalot → Каси → обраний ПРРО"
 	}
 ];
+// src/modules/fiscal-cashalot/lib/registerTitle.ts
+function Z(e, t) {
+	let n = t?.trim();
+	return n ? `Каса ${e} · ${n}` : `Каса ${e}`;
+}
 // src/modules/fiscal-cashalot/pages/CashalotAdminPage.tsx
-function me(e) {
+function be(e) {
 	let t = e?.response;
 	return t?.status === 400 && typeof t.data?.error == "string" ? t.data.error : null;
 }
 function Q({ error: e }) {
-	let t = me(e);
+	let t = be(e);
 	return t ? /* @__PURE__ */ i("p", {
 		role: "alert",
 		className: "text-[15px] text-red-600",
 		children: t
-	}) : /* @__PURE__ */ i(R, { error: e });
+	}) : /* @__PURE__ */ i(B, { error: e });
 }
 function $({ where: e }) {
 	return /* @__PURE__ */ a("p", {
@@ -832,34 +901,162 @@ function $({ where: e }) {
 		]
 	});
 }
-function he() {
-	let [o, s] = n(null), [c, l] = n(null), [d, f] = n(!1), [h, g] = n(null), [_, v] = n(!1), [y, b] = n(null), [x, S] = n(null), C = e(() => {
-		T().then(s).catch(l);
-	}, []);
-	t(C, [C]);
-	async function w(e) {
-		f(!0), g(null);
+function xe({ registerNo: e, initial: r, onSaved: o }) {
+	let [s, c] = n(r ?? null), [l, u] = n(null), [d, f] = n(!1), [p, h] = n(null), [g, _] = n(!1), [v, y] = n(null), [b, x] = n(null), S = r != null;
+	t(() => {
+		S || T(e).then(c).catch(u);
+	}, [e, S]);
+	function C(e) {
+		c(e), o(e);
+	}
+	async function w(t) {
+		f(!0), h(null);
 		try {
-			s(await ee(e));
+			C(await O(t, e));
 		} catch (e) {
-			g(e);
+			h(e);
 		} finally {
 			f(!1);
 		}
 	}
-	async function E(e, t) {
-		v(!0), b(null), S(null);
+	async function E(t, n) {
+		_(!0), y(null), x(null);
 		try {
-			let n = await te(e, t);
-			if (s(n), S("Збережено"), n.enabled) try {
-				await D(), s(await T());
+			let r = await te(t, n, e);
+			if (C(r), x("Збережено"), r.enabled) try {
+				await A(e), c(await T(e));
 			} catch {}
 		} catch (e) {
-			b(e);
+			y(e);
 		} finally {
-			v(!1);
+			_(!1);
 		}
 	}
+	return l ? /* @__PURE__ */ i(B, { error: l }) : s ? /* @__PURE__ */ a("div", {
+		className: "space-y-8",
+		children: [
+			s.config.testing === !0 && /* @__PURE__ */ i($, { where: "admin" }),
+			e !== 1 && /* @__PURE__ */ i(Se, {
+				registerNo: e,
+				settings: s,
+				onSaved: C
+			}),
+			/* @__PURE__ */ a("section", { children: [/* @__PURE__ */ i(m, { title: "Дані доступу" }), /* @__PURE__ */ a("div", {
+				className: "pt-4 space-y-3",
+				children: [/* @__PURE__ */ i(oe, {
+					specs: ye,
+					secretsSet: s.secrets_set,
+					saving: d,
+					onSave: (e) => void w(e)
+				}), !!p && /* @__PURE__ */ i(Q, { error: p })]
+			})] }),
+			/* @__PURE__ */ a("section", { children: [/* @__PURE__ */ i(m, { title: "Ставки податку й режим" }), /* @__PURE__ */ a("div", {
+				className: "pt-4 space-y-3",
+				children: [
+					/* @__PURE__ */ i(ve, {
+						settings: s,
+						saving: g,
+						onSave: (e, t) => void E(e, t)
+					}),
+					b && /* @__PURE__ */ i("p", {
+						className: "text-[15px] font-medium text-sq-success-ink",
+						children: b
+					}),
+					!!v && /* @__PURE__ */ i(Q, { error: v })
+				]
+			})] }),
+			/* @__PURE__ */ i(pe, { registerNo: e }),
+			/* @__PURE__ */ a("section", { children: [/* @__PURE__ */ i(m, { title: "Потребують уваги" }), /* @__PURE__ */ i(fe, { registerNo: e })] })
+		]
+	}) : /* @__PURE__ */ i("p", {
+		className: "text-[15px] text-sq-muted",
+		children: "Завантаження…"
+	});
+}
+function Se({ registerNo: e, settings: t, onSaved: r }) {
+	let [o, s] = n(t.label ?? ""), [c, l] = n(t.enabled), [u, d] = n(!1), [f, p] = n(null), [h, g] = n(null), _ = o.trim() !== (t.label ?? "").trim() || c !== t.enabled;
+	async function v() {
+		d(!0), p(null), g(null);
+		try {
+			r(await ee(e, {
+				label: o.trim() || null,
+				enabled: c
+			})), g("Збережено");
+		} catch (e) {
+			p(e);
+		} finally {
+			d(!1);
+		}
+	}
+	return /* @__PURE__ */ a("section", {
+		"data-testid": "register-basics",
+		children: [/* @__PURE__ */ i(m, { title: "Друга каса" }), /* @__PURE__ */ a("div", {
+			className: "pt-4 space-y-3",
+			children: [
+				/* @__PURE__ */ i("p", {
+					className: "text-[15px] text-sq-secondary",
+					children: "Інший ФОП: свої ключі Cashalot і своя таблиця ставок. Які товари йдуть на цю касу, вибирається в картці товару («Каса») або для кількох одразу в списку товарів."
+				}),
+				/* @__PURE__ */ a("label", {
+					className: "block",
+					children: [/* @__PURE__ */ i("span", {
+						className: "text-[13px] text-sq-secondary",
+						children: "Назва"
+					}), /* @__PURE__ */ i("input", {
+						className: "mt-1 w-full min-h-11 rounded-[10px] bg-sq-surface ring-1 ring-inset ring-sq-divider px-3 text-[15px]",
+						value: o,
+						maxLength: 60,
+						placeholder: "Наприклад: Бар",
+						onChange: (e) => s(e.target.value),
+						"data-testid": "register-label"
+					})]
+				}),
+				/* @__PURE__ */ a("label", {
+					className: "flex items-center gap-2.5 text-[15px] cursor-pointer",
+					children: [/* @__PURE__ */ i("input", {
+						type: "checkbox",
+						className: "w-5 h-5",
+						checked: c,
+						onChange: (e) => l(e.target.checked),
+						"data-testid": "register-enabled"
+					}), "Каса працює — товари, призначені на неї, пробиваються її чеком"]
+				}),
+				/* @__PURE__ */ i("button", {
+					type: "button",
+					className: "pos-btn-primary min-h-11 px-4 rounded-sq text-[15px] disabled:opacity-50",
+					disabled: !_ || u,
+					onClick: () => void v(),
+					"data-testid": "register-basics-save",
+					children: u ? "Збереження…" : "Зберегти"
+				}),
+				h && /* @__PURE__ */ i("p", {
+					className: "text-[15px] font-medium text-sq-success-ink",
+					children: h
+				}),
+				!!f && /* @__PURE__ */ i(Q, { error: f })
+			]
+		})]
+	});
+}
+function Ce() {
+	let [r, o] = n(null), [s, c] = n(null), [l, d] = n(1), [f, h] = n(!1), g = e(() => {
+		T(1).then(o).catch(c);
+	}, []);
+	t(g, [g]);
+	let _ = r?.extra_registers ?? [], v = [
+		{
+			registerNo: 1,
+			title: Z(1)
+		},
+		..._.map((e) => ({
+			registerNo: e.register_no,
+			title: Z(e.register_no, e.label)
+		})),
+		...f && !_.some((e) => e.register_no === 2) ? [{
+			registerNo: 2,
+			title: Z(2)
+		}] : []
+	], y = _.length === 0 && !f && r?.provider === "cashalot" && r.enabled;
 	return /* @__PURE__ */ a("div", {
 		className: "space-y-8 animate-fade-up max-w-2xl text-sq-text",
 		children: [
@@ -867,37 +1064,44 @@ function he() {
 				glyph: u,
 				title: "Фіскалізація — Cashalot"
 			}),
-			!!c && /* @__PURE__ */ i(R, { error: c }),
-			o && /* @__PURE__ */ a(r, { children: [
-				o.config.testing === !0 && /* @__PURE__ */ i($, { where: "admin" }),
-				/* @__PURE__ */ a("section", { children: [/* @__PURE__ */ i(m, { title: "Дані доступу" }), /* @__PURE__ */ a("div", {
+			!!s && /* @__PURE__ */ i(B, { error: s }),
+			v.length > 1 && /* @__PURE__ */ i("div", {
+				role: "tablist",
+				"aria-label": "Каси",
+				className: "flex flex-wrap gap-2",
+				"data-testid": "register-tabs",
+				children: v.map((e) => /* @__PURE__ */ i("button", {
+					type: "button",
+					role: "tab",
+					"aria-selected": l === e.registerNo,
+					onClick: () => d(e.registerNo),
+					className: `min-h-11 px-4 rounded-[10px] text-[15px] font-semibold ${l === e.registerNo ? "bg-sq-blue text-white" : "bg-sq-surface ring-1 ring-inset ring-sq-divider text-sq-text"}`,
+					children: e.title
+				}, e.registerNo))
+			}),
+			r && /* @__PURE__ */ i(xe, {
+				registerNo: l,
+				initial: l === 1 ? r : null,
+				onSaved: (e) => l === 1 ? o(e) : g()
+			}, l),
+			l === 1 && y && /* @__PURE__ */ a("section", {
+				"data-testid": "register-add",
+				children: [/* @__PURE__ */ i(m, { title: "Друга каса" }), /* @__PURE__ */ a("div", {
 					className: "pt-4 space-y-3",
-					children: [/* @__PURE__ */ i(ie, {
-						specs: pe,
-						secretsSet: o.secrets_set,
-						saving: d,
-						onSave: (e) => void w(e)
-					}), !!h && /* @__PURE__ */ i(Q, { error: h })]
-				})] }),
-				/* @__PURE__ */ a("section", { children: [/* @__PURE__ */ i(m, { title: "Ставки податку й режим" }), /* @__PURE__ */ a("div", {
-					className: "pt-4 space-y-3",
-					children: [
-						/* @__PURE__ */ i(X, {
-							settings: o,
-							saving: _,
-							onSave: (e, t) => void E(e, t)
-						}),
-						x && /* @__PURE__ */ i("p", {
-							className: "text-[15px] font-medium text-sq-success-ink",
-							children: x
-						}),
-						!!y && /* @__PURE__ */ i(Q, { error: y })
-					]
-				})] }),
-				/* @__PURE__ */ i(V, {}),
-				/* @__PURE__ */ a("section", { children: [/* @__PURE__ */ i(m, { title: "Потребують уваги" }), /* @__PURE__ */ i(B, {})] })
-			] })
+					children: [/* @__PURE__ */ i("p", {
+						className: "text-[15px] text-sq-secondary",
+						children: "Якщо частину товарів продає інший ФОП (наприклад, алкоголь — ФОП із ліцензією), підключіть його касу Cashalot тут. Тоді замовлення з товарами обох ФОП пробивається двома чеками."
+					}), /* @__PURE__ */ i("button", {
+						type: "button",
+						className: "sq-btn-quiet",
+						onClick: () => {
+							h(!0), d(2);
+						},
+						children: "Додати другу касу"
+					})]
+				})]
+			})
 		]
 	});
 }
-export { he as CashalotAdminPage, $ as TestingBanner, A as a, ne as c, u as d, O as i, l, N as n, k as o, L as r, E as s, R as t, f as u };
+export { Ce as CashalotAdminPage, $ as TestingBanner, re as a, ne as c, f as d, u as f, z as i, j as l, B as n, M as o, I as r, ie as s, Z as t, l as u };

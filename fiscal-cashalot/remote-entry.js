@@ -1,6 +1,6 @@
 import { lazy as e } from "react";
 // src/platform/version.ts
-var t = "2.6.6";
+var t = "2.7.0";
 // src/modules/lazyWithRetry.ts
 async function n(e, { retries: t = 2, backoffMs: n = 400 } = {}) {
 	let r;
@@ -16,7 +16,7 @@ function r(t, r) {
 	return e(() => n(t, r));
 }
 // src/modules/fiscal-cashalot/manifest.ts
-var i = r(() => import("./CashalotTillPage-CFbsI1oC.js").then((e) => ({ default: e.CashalotTillPage }))), a = r(() => import("./CashalotAdminPage-CaD45DDb.js").then((e) => ({ default: e.CashalotAdminPage }))), o = {
+var i = r(() => import("./CashalotTillPage-CVmoFihB.js").then((e) => ({ default: e.CashalotTillPage }))), a = r(() => import("./CashalotAdminPage-CRyy-qqa.js").then((e) => ({ default: e.CashalotAdminPage }))), o = {
 	id: "fiscal-cashalot",
 	title: "Фіскалізація (Cashalot)",
 	shells: [

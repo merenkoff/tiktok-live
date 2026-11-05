@@ -1,15 +1,15 @@
 {
   "schema": 1,
   "moduleId": "fiscal-cashalot",
-  "version": "2.6.6",
-  "minHostPlatform": 21,
+  "version": "2.7.0",
+  "minHostPlatform": 23,
   "entry": "remote-entry.js",
   "keyId": "2a73632c13044371",
-  "builtAt": "2026-11-02T17:46:12.454Z",
+  "builtAt": "2026-11-05T23:18:29.029Z",
   "files": {
-    "CashalotAdminPage-CaD45DDb.js": "sha384-c9D/8PwDsp7joOE34bHGmAyR794ocCff51pPZfj81cUwa/gX/u8U9j9m1oMuUbKW",
-    "CashalotTillPage-CFbsI1oC.js": "sha384-trLLoVakDXDJvvc0MD9GyNO6XaU1p4F3ZhMj3KzMoKulQTSVZg5axLRByYEJwuVa",
-    "remote-entry.js": "sha384-dJbtaxgQgHOzuWcypWOWurgAC+QbBVg8Z+jwKnCDFtF1K51qspBIl2uq7vaUg5yZ",
-    "style.css": "sha384-XDZUwuRmE460hDthjMbz+HQ2tTYfNwoossJvbrWweIsDSjNbaHrnqIvIiV1x4srH"
+    "CashalotAdminPage-CRyy-qqa.js": "sha384-MddPJ013krh4gaa3MiSVO4HrgWcoJ1zxy1sjmmJF3DL5K54QvbwnG9RAAxJwsS2u",
+    "CashalotTillPage-CVmoFihB.js": "sha384-0sMT7oHrGE67ikHAW/RHn0MuWlRX5xOxyP+SrEqVRqkjJmqRzbLyOp2dKFnTJy4b",
+    "remote-entry.js": "sha384-TmXgVigQ+ynQvkhySV6bOE4cg5tIEhtyPrHFl6QRVrAm6B0B1NpdQpoukYxaBxSB",
+    "style.css": "sha384-pS6g45vcsuxCIJj8AW+OciIWSZxQDdQaB5fSQbI0g6t5BOZl+5oz2ke5jcO/DUZt"
   }
 }
