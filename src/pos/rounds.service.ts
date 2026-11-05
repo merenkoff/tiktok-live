@@ -52,6 +52,7 @@ import { ALLOWED_FROM, explainPrepRefusal, KitchenNotFound } from './kitchen.ser
 import type { PrepStatusRow } from './kitchen.service.js';
 import * as modifiers from './modifiers.service.js';
 import { customBouquetLabel } from './sales.service.js';
+import { newPourContext, undoRoundPours } from './bottles.service.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -190,6 +191,10 @@ export async function fireRoundTx(
     ]
   );
   const roundId = Number(round.rows[0].id);
+  // What the round pours from the bar's open bottles (ДК5-Б): it never waits
+  // for a stamp — what does not fit queues for the bar to scan the next
+  // bottle, and the bill is not paid until it has (Д18).
+  const pour = newPourContext({ storeId: input.storeId, staffId: input.staffId, mode: 'queue' });
 
   for (const row of draft.rows) {
     const lineId = Number(row.id);
@@ -258,6 +263,7 @@ export async function fireRoundTx(
       staffId: input.staffId,
       components: components ?? undefined,
       extra: promised.components,
+      pour,
     });
   }
 
@@ -318,6 +324,9 @@ export async function cancelRound(params: {
       `UPDATE pos_bill_rounds SET cancelled_at = NOW(), cancelled_by = $2 WHERE id = $1`,
       [params.roundId, params.staffId]
     );
+    // Nor was it poured (ДК5-Б): the millilitres go back into their bottles,
+    // and its pours stop waiting for the bar.
+    await undoRoundPours(client, params.storeId, params.roundId);
     // Bottles that never reached the table are not sold: their stamps are free (ДК4-Б).
     await client.query(
       `UPDATE pos_excise_labels SET released_at = NOW()

@@ -49,6 +49,8 @@ import {
 } from './fiscal/routing.js';
 import {
   assertNoShortfall,
+  assertNoWaitingPours,
+  detachPoursFromSale,
   newPourContext,
   pourFactsOfSale,
   readOpenBottles,
@@ -770,6 +772,14 @@ export async function completeSaleTx(
       }
     });
   }
+
+  // A table's dish whose pour still waits for the bar's scan is not paid
+  // (ДК5-Б, Д18) — checked here too, so no path that pays a bill skips it.
+  await assertNoWaitingPours(
+    client,
+    params.storeId,
+    locked.map((line) => line.bill_item_id).filter((id): id is number => id != null)
+  );
 
   // What this sale pours from the bar's open bottles (ДК5): the till names
   // the stamps of any it opens, and a bottle it would open without one
@@ -1931,6 +1941,8 @@ async function releasePartLines(
       throw new Error('Рахунок столу вже закрито — цей чек можна лише повернути');
     }
     await bills.releasePaidLines(client, { storeId: params.storeId, saleId: params.saleId });
+    // And what they poured is the bill's again (ДК5-Б).
+    await detachPoursFromSale(client, params.storeId, params.saleId);
     // The bottles are owed for again on the bill: their stamps stay with its lines (ДК4-Б).
     await client.query(
       `UPDATE pos_excise_labels SET sale_item_id = NULL

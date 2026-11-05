@@ -43,6 +43,7 @@ import { authorName } from './guest-author.js';
 import { feedbackMenuKey, feedbackUrl } from './public-menu/urls.js';
 import { getTableKeys } from './public-menu/table-keys.js';
 import type { LineModifierSnapshot } from './modifiers.service.js';
+import { movePoursToSale } from './bottles.service.js';
 
 export class BillError extends Error {
   constructor(message: string) {
@@ -84,6 +85,11 @@ export interface BillLine {
   excise_labels?: string[];
   /** Goods sold with a stamp per unit (ДК4-Б) — the bill screen asks for them before firing. */
   excise_per_unit?: boolean;
+  /**
+   * Part of what this line poured waits for the bar to scan the next
+   * bottle's stamp (ДК5-Б, Д18): the line cannot be paid until it has.
+   */
+  bottle_pending?: boolean;
   id: number;
   variant_id: number;
   quantity: number;
@@ -280,6 +286,7 @@ function mapLine(row: Record<string, unknown>, preview: number | null): BillLine
       ? { excise_labels: (row.excise_labels as unknown[]).map(String) }
       : {}),
     ...(row.excise_per_unit ? { excise_per_unit: true } : {}),
+    ...(row.bottle_pending ? { bottle_pending: true } : {}),
   };
 }
 
@@ -427,7 +434,9 @@ export async function getBill(storeId: number, billId: number): Promise<Bill> {
             p.name AS live_product_name, v.label AS live_label, v.unit AS live_unit,
             p.excise_per_unit,
             (SELECT array_agg(l.label ORDER BY l.id) FROM pos_excise_labels l
-              WHERE l.bill_item_id = i.id AND l.released_at IS NULL) AS excise_labels
+              WHERE l.bill_item_id = i.id AND l.released_at IS NULL) AS excise_labels,
+            EXISTS (SELECT 1 FROM pos_bottle_pours bp
+                     WHERE bp.bill_item_id = i.id AND bp.bottle_id IS NULL AND bp.undone_at IS NULL) AS bottle_pending
        FROM pos_bill_items i
        LEFT JOIN pos_staff s ON s.id = i.added_by
        JOIN pos_variants v ON v.id = i.variant_id
@@ -1275,6 +1284,9 @@ export async function attachPaidLine(
     `UPDATE pos_bill_items SET sale_id = $3 WHERE store_id = $1 AND id = $2`,
     [params.storeId, params.billItemId, params.saleId]
   );
+  // What it poured from the bar's bottles goes with it (ДК5-Б): the receipt
+  // line is the one that carries a first pour's stamp.
+  await movePoursToSale(client, params.storeId, params.billItemId, params.saleItemId);
 }
 
 /**

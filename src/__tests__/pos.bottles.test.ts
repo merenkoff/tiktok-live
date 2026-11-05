@@ -27,6 +27,7 @@ import { resetRuntime } from '../pos/fiscal/runtime.js';
 import { updateFiscalSettings, updateRegisterSettings } from '../pos/fiscal/settings.service.js';
 import type { FiscalSaleDoc } from '../pos/fiscal/types.js';
 import * as modifiers from '../pos/modifiers.service.js';
+import * as bills from '../pos/bills.service.js';
 import { createPreorder, PreorderError } from '../pos/preorders.service.js';
 import { createProduct } from '../pos/products.service.js';
 import { voidSale } from '../pos/sales.service.js';
@@ -63,6 +64,8 @@ describe.skipIf(!hasDb)('POS open bottles at the till (ДК5-А)', () => {
   let coffee = 0;
   let coffeeProduct = 0;
   let withCognac = 0;
+  let hall = 0;
+  let tableSeq = 0;
 
   const ingredient = async (name: string, uktzed: string, bottleMl: number) => {
     const made = await createProduct(store.storeId, {
@@ -119,6 +122,10 @@ describe.skipIf(!hasDb)('POS open bottles at the till (ДК5-А)', () => {
     await modifiers.setProductGroups(store.storeId, coffeeProduct, [group.id]);
     const answers = await pool.query(`SELECT id FROM pos_modifiers WHERE group_id = $1`, [group.id]);
     withCognac = Number(answers.rows[0].id);
+    hall = Number(
+      (await pool.query(`INSERT INTO pos_halls (store_id, name) VALUES ($1, 'Зала') RETURNING id`, [store.storeId]))
+        .rows[0].id
+    );
   }, 120000);
 
   afterAll(async () => {
@@ -391,6 +398,196 @@ describe.skipIf(!hasDb)('POS open bottles at the till (ДК5-А)', () => {
     );
     expect(both.statusCode).toBe(409);
     expect(both.json().error).toBe('split_needs_update');
+  });
+
+  // ── at the table and at the bar (ДК5-Б) ────────────────────────────────
+
+  async function tableWith(variantId: number, quantity: number): Promise<{ billId: number; tableName: string }> {
+    tableSeq += 1;
+    const tableName = `B${tableSeq}`;
+    const table = await pool.query(
+      `INSERT INTO pos_tables (store_id, hall_id, name) VALUES ($1, $2, $3) RETURNING id`,
+      [store.storeId, hall, tableName]
+    );
+    const opened = await bills.openBill({ storeId: store.storeId, staffId: store.sellerId, tableId: Number(table.rows[0].id) });
+    await bills.addDraftItem(store.storeId, store.sellerId, opened.bill.id, { variant_id: variantId, quantity });
+    return { billId: opened.bill.id, tableName };
+  }
+  const fire = (billId: number) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/pos/bills/${billId}/fire`,
+      headers: auth(store.sellerToken),
+      payload: { client_uuid: randomUUID() },
+    });
+  const pay = (billId: number, amount: number) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/pos/bills/${billId}/pay`,
+      headers: auth(store.sellerToken),
+      payload: { parts: [{ payments: [{ method: 'card', amount_cents: amount }], client_uuid: randomUUID() }] },
+    });
+  const barOpen = (variantId: number, label: string, extra: Record<string, unknown> = {}) =>
+    app.inject({
+      method: 'POST',
+      url: '/api/pos/bottles/open',
+      headers: auth(store.sellerToken),
+      payload: { variant_id: variantId, excise_label: label, ...extra },
+    });
+  const billLine = async (billId: number) =>
+    (await app.inject({ method: 'GET', url: `/api/pos/bills/${billId}`, headers: auth(store.sellerToken) })).json()
+      .rounds[0].items[0];
+  const stockOf = async (variantId: number) =>
+    Number((await pool.query(`SELECT quantity FROM pos_stock WHERE variant_id = $1`, [variantId])).rows[0].quantity);
+
+  it('fires a table’s pour without a stamp, and the bill waits for the bar’s scan (Д18)', async () => {
+    const { billId, tableName } = await tableWith(shot, 1);
+    expect((await fire(billId)).statusCode).toBe(200);
+    expect((await billLine(billId)).bottle_pending).toBe(true);
+
+    const refused = await pay(billId, 9_000);
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json()).toMatchObject({ code: 'bottle_pending' });
+    expect(refused.json().error).toMatch(/Бар ще не відсканував марку нової пляшки «Горілка «Хлібний дар»»/);
+    expect(docsOf(bar)).toHaveLength(0);
+
+    const list = await app.inject({ method: 'GET', url: '/api/pos/bottles', headers: auth(store.sellerToken) });
+    expect(list.json().waiting).toEqual([
+      expect.objectContaining({ variant_id: vodka, ml: 50, bottle_ml: 500, tables: [tableName] }),
+    ]);
+
+    const opened = await barOpen(vodka, STAMP_A);
+    expect(opened.statusCode).toBe(201);
+    expect(opened.json().waiting).toEqual([]);
+    expect(opened.json().open).toEqual([expect.objectContaining({ label: STAMP_A, poured_ml: 50 })]);
+    // The same scan again is the same bottle.
+    expect((await barOpen(vodka, STAMP_A)).statusCode).toBe(200);
+    expect((await billLine(billId)).bottle_pending).toBeUndefined();
+
+    expect((await pay(billId, 9_000)).statusCode).toBe(200);
+    const [doc] = docsOf(bar);
+    expect(doc.lines[0]).toMatchObject({ excise: true, exciseLabels: [STAMP_A] });
+  });
+
+  it('pours a round straight from the open bottle, and fills a second new bottle only with a second stamp', async () => {
+    await openWith(vodka, STAMP_A, 500, 500);
+    const first = await tableWith(shot, 1);
+    expect((await fire(first.billId)).statusCode).toBe(200);
+    expect((await billLine(first.billId)).bottle_pending).toBeUndefined();
+
+    // Twelve shots: 450 ml from the open bottle, 150 ml waiting.
+    const second = await tableWith(shot, 12);
+    expect((await fire(second.billId)).statusCode).toBe(200);
+    expect((await billLine(second.billId)).bottle_pending).toBe(true);
+    expect((await barOpen(vodka, STAMP_B)).statusCode).toBe(201);
+    expect((await billLine(second.billId)).bottle_pending).toBeUndefined();
+    expect(await bottlesOf(vodka)).toEqual([
+      expect.objectContaining({ label: STAMP_A, poured_ml: 500, closed: true }),
+      expect.objectContaining({ label: STAMP_B, poured_ml: 150, closed: false }),
+    ]);
+
+    expect((await pay(second.billId, 108_000)).statusCode).toBe(200);
+    expect(docsOf(bar)[0].lines[0].exciseLabels).toEqual([STAMP_B]);
+  });
+
+  it('gives a cancelled round’s pours back: to the bottle, and out of the bar’s queue', async () => {
+    await openWith(vodka, STAMP_A, 500, 70);
+    const { billId } = await tableWith(shot, 3);
+    const fired = await fire(billId);
+    expect((await bottlesOf(vodka))[0]).toMatchObject({ poured_ml: 500, closed: true });
+    const roundId = fired.json().rounds[0].id;
+    const cancelled = await app.inject({
+      method: 'POST',
+      url: `/api/pos/bills/${billId}/rounds/${roundId}/cancel`,
+      headers: auth(store.sellerToken),
+    });
+    expect(cancelled.statusCode).toBe(200);
+    // The old bottle closed when the count reached its size; its 70 ml are not poured back into it.
+    const list = await app.inject({ method: 'GET', url: '/api/pos/bottles', headers: auth(store.sellerToken) });
+    expect(list.json().waiting).toEqual([]);
+  });
+
+  it('frees a voided table receipt’s pours for the bill to pay again, with the stamp', async () => {
+    const { billId } = await tableWith(shot, 1);
+    await bills.addDraftItem(store.storeId, store.sellerId, billId, { variant_id: coffee, quantity: 1 });
+    await fire(billId);
+    await barOpen(vodka, STAMP_A);
+    const view = (await app.inject({ method: 'GET', url: `/api/pos/bills/${billId}`, headers: auth(store.sellerToken) })).json();
+    const shotLine = view.rounds[0].items.find((i: { variant_id: number }) => i.variant_id === shot).id;
+    const payShot = () =>
+      app.inject({
+        method: 'POST',
+        url: `/api/pos/bills/${billId}/pay`,
+        headers: auth(store.sellerToken),
+        payload: {
+          parts: [{ line_ids: [shotLine], payments: [{ method: 'card', amount_cents: 9_000 }], client_uuid: randomUUID() }],
+        },
+      });
+    const paid = await payShot();
+    expect(paid.statusCode).toBe(200);
+    // The coffee is still owed: the bill stays open and its receipt may be voided.
+    await voidSale({ storeId: store.storeId, saleId: Number(paid.json().sale_ids[0]), staffId: store.sellerId });
+    expect((await payShot()).statusCode).toBe(200);
+    const docs = docsOf(bar);
+    expect(docs).toHaveLength(2);
+    expect(docs[1].lines[0].exciseLabels).toEqual([STAMP_A]);
+  });
+
+  it('replaces a bottle that ran out before its count, writing off the difference, and records a broken one', async () => {
+    await openWith(vodka, STAMP_A, 500, 400);
+    const before = await stockOf(vodka);
+    const refused = await barOpen(vodka, STAMP_B);
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json().error).toMatch(/«Замінити»/);
+
+    const replaced = await barOpen(vodka, STAMP_B, { replace: true, note: 'перелили' });
+    expect(replaced.statusCode).toBe(201);
+    expect(await stockOf(vodka)).toBe(before - 400);
+    expect(replaced.json().closed[0]).toMatchObject({ label: STAMP_A, close_reason: 'replaced', discrepancy_ml: 400 });
+
+    const broken = await app.inject({
+      method: 'POST',
+      url: `/api/pos/bottles/${replaced.json().bottle_id}/broken`,
+      headers: auth(store.sellerToken),
+      payload: { note: 'впала' },
+    });
+    expect(broken.statusCode).toBe(200);
+    expect(await stockOf(vodka)).toBe(before - 900);
+    const writeoffs = await pool.query(
+      `SELECT reason_code FROM pos_stock_documents WHERE store_id = $1 AND type = 'writeoff' ORDER BY id DESC LIMIT 2`,
+      [store.storeId]
+    );
+    expect(writeoffs.rows.map((r) => r.reason_code)).toEqual(['damaged', 'lost']);
+  });
+
+  it('notes what was left in a bottle the count closed, and the owner reads it all over a period', async () => {
+    await openWith(vodka, STAMP_A, 500, 50);
+    expect((await sell([{ variant_id: shot, quantity: 1 }], 9_000)).statusCode).toBe(201);
+    const [closed] = await bottlesOf(vodka);
+    expect(closed).toMatchObject({ closed: true, close_reason: 'empty' });
+    const id = Number(
+      (await pool.query(`SELECT id FROM pos_open_bottles WHERE store_id = $1 AND variant_id = $2`, [store.storeId, vodka]))
+        .rows[0].id
+    );
+    const before = await stockOf(vodka);
+    const left = await app.inject({
+      method: 'POST',
+      url: `/api/pos/bottles/${id}/leftover`,
+      headers: auth(store.sellerToken),
+      payload: { ml: 30 },
+    });
+    expect(left.statusCode).toBe(200);
+    expect(await stockOf(vodka)).toBe(before);
+
+    const today = new Date().toISOString().slice(0, 10);
+    const report = (token: string) =>
+      app.inject({ method: 'GET', url: `/api/pos/bottles/report?from=${today}&to=${today}`, headers: auth(token) });
+    expect((await report(store.sellerToken)).statusCode).toBe(403);
+    const read = await report(store.ownerToken);
+    expect(read.statusCode).toBe(200);
+    expect(read.json().totals).toEqual([
+      expect.objectContaining({ variant_id: vodka, bottles: 1, missing_ml: 0, left_ml: 30 }),
+    ]);
   });
 
   it('never pours on credit or into a pre-order', async () => {
