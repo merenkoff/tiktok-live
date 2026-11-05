@@ -9,6 +9,7 @@ import { AttributeFields } from '@pos/platform/ui';
 import { CompositionEditor } from './CompositionEditor';
 import { Dialog } from './Dialog';
 import { GenerateBarcodeButton } from './GenerateBarcodeButton';
+import { BottleField } from './BottleField';
 import { PackFields } from './PackFields';
 import { TechCardLine } from './TechCardLine';
 import { VariantDiscountEditor } from './VariantDiscountEditor';
@@ -34,6 +35,7 @@ export function VariantSheet({
   colours,
   partOptions,
   techCard,
+  bottle,
   onApply,
   onArchive,
   onClose,
@@ -45,6 +47,11 @@ export function VariantSheet({
   colours: ColourUse[];
   partOptions: ComponentOption[];
   techCard?: TechCardRow;
+  /**
+   * Ask «Пляшка за маркою, мл» (ДК5) — in a store that fiscalises (Д17), with
+   * the product's excise fields as the card's draft holds them.
+   */
+  bottle?: { excise: { on: boolean; perUnit: boolean; uktzed: string } };
   onApply: (next: VariantDraft) => void;
   /** Called with the edited copy, so a cancelled confirmation loses nothing typed here. */
   onArchive: (next: VariantDraft) => void;
@@ -233,6 +240,17 @@ export function VariantSheet({
         </div>
 
         <PackFields qty={local.pack.qty} label={local.pack.label} unit={local.unit} onChange={(pack) => set({ pack })} />
+
+        {/* A variant that already has one keeps the field, whatever else changed. */}
+        {((bottle && local.unit === 'мл') || (local.bottleMl ?? '').trim() !== '') && (
+          <BottleField
+            value={local.bottleMl ?? ''}
+            unit={local.unit}
+            pack={local.pack}
+            excise={bottle?.excise ?? { on: true, perUnit: false, uktzed: '-' }}
+            onChange={(bottleMl) => set({ bottleMl })}
+          />
+        )}
 
         <p className="text-[13px] text-sq-muted">
           {shape === 'derived' ? 'Можна зібрати' : 'Залишок'}:{' '}

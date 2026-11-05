@@ -33,6 +33,11 @@ export interface VariantDraft {
   sku: string;
   barcode: string;
   pack: { qty: string; label: string };
+  /**
+   * The bottle's size in ml when this variant pours from a bottle opened by
+   * its excise stamp (track ДК, ДК5) — raw text, '' = not one.
+   */
+  bottleMl: string;
   components: ProductComponentInput[];
 }
 
@@ -97,6 +102,7 @@ export function variantDraftOf(v: ProductVariant): VariantDraft {
     sku: v.sku ?? '',
     barcode: v.barcode ?? '',
     pack: { qty: v.pack_qty == null ? '' : String(v.pack_qty), label: v.pack_label ?? '' },
+    bottleMl: v.bottle_ml == null ? '' : String(v.bottle_ml),
     components: (v.components ?? []).map((c) => ({
       component_variant_id: c.component_variant_id,
       quantity: c.quantity,
@@ -217,6 +223,11 @@ function packQty(qty: string): number | null {
   return qty.trim() === '' ? null : Number(qty);
 }
 
+/** The bottle's size as the server takes it: '' (or an older draft without one) clears it. */
+function bottleMlOf(text: string | undefined): number | null {
+  return text == null || text.trim() === '' ? null : Number(text);
+}
+
 /**
  * Whether the owner changed anything the server would store. Text is compared
  * by what it MEANS — «400» and «400,00» are one price, « KZ-86 » is «KZ-86».
@@ -230,6 +241,7 @@ export function variantChanged(a: VariantDraft, b: VariantDraft): boolean {
   if (a.unit !== b.unit) return true;
   if (packQty(a.pack.qty) !== packQty(b.pack.qty)) return true;
   if (a.pack.label.trim() !== b.pack.label.trim()) return true;
+  if (bottleMlOf(a.bottleMl) !== bottleMlOf(b.bottleMl)) return true;
   if (!sameAttributes(a.attributes, b.attributes)) return true;
   if (!sameComponents(a.components, b.components)) return true;
   return false;
@@ -252,6 +264,7 @@ export interface VariantPayload {
   barcode: string;
   pack_qty: number | null;
   pack_label: string;
+  bottle_ml: number | null;
   components?: ProductComponentInput[];
 }
 
@@ -270,6 +283,8 @@ export function variantPayload(v: VariantDraft, components: ComponentsMode): Var
     // alone is what the server refuses by name.
     pack_qty: packQty(v.pack.qty),
     pack_label: v.pack.label.trim(),
+    // Always sent: an emptied box clears it (the server keeps it when absent).
+    bottle_ml: bottleMlOf(v.bottleMl),
     ...(components === 'keep'
       ? { components: v.components }
       : components === 'clear'

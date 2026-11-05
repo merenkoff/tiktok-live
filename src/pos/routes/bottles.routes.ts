@@ -25,7 +25,7 @@ function idOf(value: string): number | null {
 
 function sendError(reply: { code: (n: number) => { send: (b: unknown) => unknown } }, error: unknown): unknown {
   if (error instanceof bottles.BottleError) {
-    return reply.code(error.status).send({ error: errorMessage(error) });
+    return reply.code(error.status).send({ error: errorMessage(error), ...(error.code ? { code: error.code } : {}) });
   }
   // A stamp that is not one, or already sold: the bartender's sentence in `error`.
   if (error instanceof ExciseError) {

@@ -130,6 +130,8 @@ describe('variantChanged — by what the text means', () => {
     expect(variantChanged(base, { ...base, attributes: { color: 'рожевий', size: '86' } })).toBe(true);
     expect(variantChanged(base, { ...base, attributes: { color: 'блакитний', size: '86', fit: '' } })).toBe(false);
     expect(variantChanged(base, { ...base, components: [{ component_variant_id: 1, quantity: 2 }] })).toBe(true);
+    expect(variantChanged(base, { ...base, bottleMl: '500' })).toBe(true);
+    expect(variantChanged(base, { ...base, bottleMl: ' ' })).toBe(false);
   });
 });
 
@@ -149,6 +151,13 @@ describe('variantPayload — the whole row, as the server replaces it', () => {
       pack_qty: 12,
       pack_label: 'ящик',
     });
+  });
+
+  it('reads and sends the bottle’s size (ДК5): an emptied box clears it, never left out', () => {
+    expect(variantDraftOf(variant({ unit: 'мл', bottle_ml: 500 })).bottleMl).toBe('500');
+    expect(variantDraftOf(variant()).bottleMl).toBe('');
+    expect(variantPayload({ ...v, bottleMl: '700' }, 'omit').bottle_ml).toBe(700);
+    expect(variantPayload({ ...v, bottleMl: '' }, 'omit')).toHaveProperty('bottle_ml', null);
   });
 });
 

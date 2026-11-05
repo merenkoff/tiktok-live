@@ -2544,6 +2544,8 @@ export interface ExchangeSaleParams {
     /** Absent = the original sale's customer; `null` = nobody. */
     customer_id?: number | null;
     note?: string;
+    /** Stamps of bottles the new goods open (ДК5, Д4), after a `bottle_needed` refusal. */
+    open_bottles?: unknown;
     client_uuid: string;
   };
   /** `'pending'` when the caller is about to fiscalise both halves. */
@@ -2619,6 +2621,7 @@ export async function exchangeSale(
       customer_id: customerId,
       note: params.sale.note,
       client_uuid: saleUuid,
+      open_bottles: params.sale.open_bottles,
       fiscal_status: params.fiscal_status,
       exchange_refund_id: refund.refundId,
       cash_rounding: params.cash_rounding,

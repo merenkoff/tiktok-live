@@ -817,6 +817,18 @@ describe('the retail excise and the stamps on the paper (track ДК, ДК4)', ()
     ]);
   });
 
+  it('prints the stamp of the bottle a pour was the first from under its line (ДК5)', () => {
+    const sale = makeSaleDetail({ fiscal: doneDoc });
+    sale.items = [{ ...sale.items[0], excise: true, bottle_labels: ['AATE 508932'] }];
+    expect(buildReceiptPayload(sale, vatAndExcise).items[0]).toMatchObject({
+      tax_symbol: 'АГ',
+      excise_labels: ['AATE 508932'],
+    });
+    // The second pour from the same bottle carries no stamp at all.
+    sale.items = [{ ...sale.items[0], bottle_labels: undefined }];
+    expect(buildReceiptPayload(sale, vatAndExcise).items[0]).not.toHaveProperty('excise_labels');
+  });
+
   it('never takes the excise row for a line’s own letter, and gives a non-VAT seller «Г» alone', () => {
     const plain = makeSaleDetail({ fiscal: doneDoc });
     expect(buildReceiptPayload(plain, vatAndExcise).items[0].tax_symbol).toBe('А');

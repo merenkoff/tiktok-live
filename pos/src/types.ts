@@ -190,6 +190,12 @@ export interface StoreConfig {
    * than F7 does not send it, and a cached login from before it reads as none.
    */
   feedback_url?: string | null;
+  /**
+   * Something is poured from a bottle opened by its excise stamp (track ДК,
+   * ДК5): draws «Пляшки». Read at login and `/auth/me`; absent from an older
+   * API → no screen.
+   */
+  bottles?: boolean;
   /** Toggleable module ids the store has enabled (effective set; core ids not listed). */
   enabled_modules: string[];
   /**
@@ -274,6 +280,8 @@ export interface AuthResponse {
      * auth or backend → no QR, the old paper.
      */
     feedback_url?: string | null;
+    /** Pours from stamped bottles (ДК5): draws «Пляшки». Absent on older cached auth → no screen. */
+    bottles?: boolean;
     /** Toggleable module ids the store has enabled. Absent on older cached auth → treat as "all defaults on". */
     enabled_modules?: string[];
     /** Module-remote map (roadmap #9 string form / #13 Part C object form). Absent on older cached auth. */
@@ -428,6 +436,11 @@ export interface CatalogItem {
    */
   pack_qty?: number | null;
   pack_label?: string;
+  /**
+   * Poured by the millilitre from a bottle opened by its excise stamp (track
+   * ДК, ДК5, migration 093): the bottle's size in ml. Absent = not one.
+   */
+  bottle_ml?: number | null;
   sku: string | null;
   barcode: string | null;
   price_cents: number;
@@ -773,6 +786,11 @@ export interface ProductVariant {
    */
   pack_qty?: number | null;
   pack_label?: string;
+  /**
+   * Poured by the millilitre from a bottle opened by its excise stamp (track
+   * ДК, ДК5, migration 093): the bottle's size in ml. Absent = not one.
+   */
+  bottle_ml?: number | null;
   /**
    * 1000 when the price is per kilogram or litre (migration 075) — derived by
    * the server from the unit under the store's vertical, never sent. Absent
@@ -1272,6 +1290,13 @@ export interface SaleDetail {
     excise?: boolean;
     /** The excise stamps this line still holds (ДК4-Б) — printed under it, offered to a return. */
     excise_labels?: string[];
+    /**
+     * The stamps of the bottles this line was the FIRST pour from (ДК5): the
+     * tax office wants an open bottle's stamp once, on that receipt. Printed
+     * under the line with its own stamps; never offered to a return — a pour
+     * does not come back into its bottle.
+     */
+    bottle_labels?: string[];
     /** The stamps a return already gave back. */
     excise_labels_returned?: string[];
   }>;
@@ -1399,6 +1424,15 @@ export interface ExchangeDraft {
 }
 
 /** The body of `POST /sales/:id/exchange` — both halves, each with its own key. */
+/**
+ * The stamp of a new bottle a pour opens (track ДК, ДК5, Д4): sent as
+ * `open_bottles` after the server refused a sale with `bottle_needed`.
+ */
+export interface OpenBottleStamp {
+  variant_id: number;
+  excise_label: string;
+}
+
 export interface ExchangeInput {
   refund: ExchangeDraft['refund'];
   sale: {
@@ -1409,6 +1443,8 @@ export interface ExchangeInput {
     customer_id?: number | null;
     note?: string;
     client_uuid: string;
+    /** Stamps of new bottles the new goods open (ДК5), after a `bottle_needed` refusal. */
+    open_bottles?: OpenBottleStamp[];
   };
   /** The cash-rounding step for both halves — each is its own document and rounds its own cash. */
   cash_rounding?: number;

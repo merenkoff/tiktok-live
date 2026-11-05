@@ -11,6 +11,16 @@ import { storeCashRounding, type CashRoundingStep } from '../../lib/cashRounding
 import { cartNeedsSplit, registerCaption } from '../../lib/cartRegisters';
 import { linesNeedingStamps } from '../../lib/excise';
 import { ExciseStampSheet } from '../../components/cashier/ExciseStampSheet';
+import {
+  bottleOfUid,
+  bottleStampLines,
+  bottlesMissingStamps,
+  mergeNeeded,
+  openBottlesField,
+  setBottleStamps as withBottleStamps,
+  type NeededBottle,
+  type OpenBottleStamp,
+} from '../../lib/bottles';
 import { exchangeOutcome } from '../../lib/exchange';
 import { localOrderLabel } from '../../lib/localOrderNo';
 import {
@@ -187,10 +197,29 @@ export function RegisterPage() {
    */
   const [stampSheet, setStampSheet] = useState<{ error: string | null } | null>(null);
   const setExciseLabels = useCartStore((s) => s.setExciseLabels);
+  /**
+   * New bottles a pour opens (track ДК, ДК5, Д4): the server names them when
+   * it refuses the sale (`bottle_needed`), their stamps go on the same sheet as
+   * a whole bottle's, and every payment request carries them as
+   * `open_bottles` until the cart is rung or emptied. Not cart state: the
+   * stamp belongs to the bottle the bar opens, not to a line.
+   */
+  const [bottleNeed, setBottleNeed] = useState<NeededBottle[]>([]);
+  const [bottleStamps, setBottleStamps] = useState<OpenBottleStamp[]>([]);
+  const stampLines = useMemo(
+    () => [...lines, ...bottleStampLines(bottleNeed, bottleStamps)],
+    [lines, bottleNeed, bottleStamps]
+  );
+  const setStampLabels = (uid: string, labels: string[]) => {
+    const bottle = bottleOfUid(uid);
+    if (bottle == null) setExciseLabels(uid, labels);
+    else setBottleStamps((prev) => withBottleStamps(prev, bottle, labels));
+  };
   /** «Оплатити»: the stamps first, where a bottle needs one, then the payment screen. */
   const openCheckout = () => {
-    if (linesNeedingStamps(lines).length > 0) setStampSheet({ error: null });
-    else setCheckoutOpen(true);
+    if (linesNeedingStamps(lines).length > 0 || bottlesMissingStamps(bottleNeed, bottleStamps) > 0) {
+      setStampSheet({ error: null });
+    } else setCheckoutOpen(true);
   };
   // Food and alcohol of two ФОП in one cart (track ДК): two receipts. A
   // pre-order is the server's lines and is never split (it answers 409).
@@ -201,21 +230,46 @@ export function RegisterPage() {
       splitMode
         ? {
             quote: (method) =>
-              cashierApi.splitQuote({
-                items: lines.map(wireLine),
-                payments: [{ method, amount_cents: totalCents() }],
-                cart_discount: cartDiscount,
-                customer_id: customer?.id ?? null,
-                ...(method === 'cash' && roundingStep ? { cash_rounding: roundingStep } : {}),
-              }),
+              cashierApi
+                .splitQuote({
+                  items: lines.map(wireLine),
+                  payments: [{ method, amount_cents: totalCents() }],
+                  cart_discount: cartDiscount,
+                  customer_id: customer?.id ?? null,
+                  ...(method === 'cash' && roundingStep ? { cash_rounding: roundingStep } : {}),
+                  ...openBottlesField(bottleStamps),
+                })
+                .catch((error: unknown) => {
+                  // The dry run pours too (ДК5): a new bottle's stamp is asked
+                  // for here, before the cashier picks an amount.
+                  const failure = classifyCheckoutError(error);
+                  if (failure.kind === 'bottle_needed') askBottleStamps(failure);
+                  throw error;
+                }),
           }
         : null,
-    [splitMode, lines, cartDiscount, customer, roundingStep, totalCents]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- askBottleStamps reads state through setters only
+    [splitMode, lines, cartDiscount, customer, roundingStep, totalCents, bottleStamps]
   );
   // A cart emptied or rung leaves no reason to insist on two receipts.
   useEffect(() => {
-    if (lines.length === 0) setForceSplit(false);
+    if (lines.length === 0) {
+      setForceSplit(false);
+      // Rung or emptied: the next cart opens no bottle until the server says so.
+      setBottleNeed([]);
+      setBottleStamps([]);
+    }
   }, [lines.length]);
+
+  /**
+   * The server would open a bottle without its stamp (ДК5, Д4): back to the
+   * stamps sheet, asking for every new bottle at once. Nothing was written.
+   */
+  function askBottleStamps(failure: { message: string; bottles: NeededBottle[] }) {
+    setBottleNeed((need) => mergeNeeded(need, bottleStamps, failure.bottles));
+    setCheckoutOpen(false);
+    setStampSheet({ error: failure.message });
+  }
   /** Set beside `success` when the sale on screen is the sale half of an exchange. */
   const [exchangeDone, setExchangeDone] = useState<ExchangeResult | null>(null);
   /**
@@ -522,6 +576,7 @@ export function RegisterPage() {
           // The step the payment screen rounded the cash part by; the server
           // computes the sum itself and files what the customer was shown.
           ...(cashRounding ? { cash_rounding: cashRounding } : {}),
+          ...openBottlesField(bottleStamps),
         },
         { clientUuid: opts.clientUuid }
       );
@@ -555,6 +610,7 @@ export function RegisterPage() {
         customer_id: customer?.id ?? null,
         parked_cart_id: fromParkedId,
         ...(cashRounding ? { cash_rounding: cashRounding } : {}),
+        ...openBottlesField(bottleStamps),
       },
       { clientUuid }
     );
@@ -593,6 +649,7 @@ export function RegisterPage() {
           cart_discount: cartDiscount,
           ...(customer ? { customer_id: customer.id } : {}),
           client_uuid: saleUuid,
+          ...openBottlesField(bottleStamps),
         },
         // Both halves round their own cash by this step (НБУ № 25).
         ...(cashRounding ? { cash_rounding: cashRounding } : {}),
@@ -669,6 +726,11 @@ export function RegisterPage() {
         } оформлено, а новий чек не зареєстровано в ПРРО: ${failure.message} Пробийте товар окремим чеком.`
       );
       setStockEpoch((n) => n + 1);
+      return;
+    }
+
+    if (failure.kind === 'bottle_needed') {
+      askBottleStamps(failure);
       return;
     }
 
@@ -785,6 +847,22 @@ export function RegisterPage() {
     if (failure.kind === 'rejected' && failure.code?.startsWith('excise_')) {
       setCheckoutOpen(false);
       setStampSheet({ error: failure.message });
+      return;
+    }
+
+    // A pour would open a bottle the till sent no stamp for (ДК5, Д4).
+    if (failure.kind === 'bottle_needed') {
+      askBottleStamps(failure);
+      return;
+    }
+
+    // Another till opened that bottle a moment ago: the stamps scanned here
+    // are not needed. Nothing was written; paying again asks only for what
+    // the server still lacks.
+    if (failure.kind === 'rejected' && failure.code === 'bottle_opened_elsewhere') {
+      setBottleNeed([]);
+      setBottleStamps([]);
+      setCheckoutError({ message: failure.message });
       return;
     }
 
@@ -1441,9 +1519,9 @@ export function RegisterPage() {
 
       {stampSheet && (
         <ExciseStampSheet
-          lines={lines}
+          lines={stampLines}
           error={stampSheet.error}
-          onSetLabels={setExciseLabels}
+          onSetLabels={setStampLabels}
           onClose={() => setStampSheet(null)}
           onDone={() => {
             setStampSheet(null);

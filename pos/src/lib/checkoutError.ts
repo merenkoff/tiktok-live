@@ -21,6 +21,7 @@
 
 import axios from 'axios';
 import type { FiscalActionResult, SaleDetail, SplitSalePart } from '../types';
+import { readNeededBottles, type NeededBottle } from './bottles';
 
 /**
  * What stands after an exchange whose SALE half failed (clothing R1): the
@@ -93,6 +94,12 @@ export type CheckoutFailure =
    * Nothing was written; the payment screen asks again for two receipts.
    */
   | { kind: 'split_needed'; message: string }
+  /**
+   * A pour would open a bottle the till sent no stamp for (track ДК, ДК5, Д4):
+   * nothing was written; the till scans the new bottles' stamps and pays again
+   * with `open_bottles`. `bottles` names every one still missing.
+   */
+  | { kind: 'bottle_needed'; message: string; bottles: NeededBottle[] }
   /** Anything else — stock, validation, a plain server error. `code` is the body's `error` when it was a machine word. */
   | { kind: 'rejected'; message: string; code?: string | null };
 
@@ -113,6 +120,8 @@ interface FiscalFailBody {
   refund_id?: number;
   refund?: ExchangeAftermath['refund'];
   difference_cents?: number;
+  /** The new bottles a pour needs a stamp for (`bottle_needed`, ДК5). */
+  bottles?: unknown;
 }
 
 /** The refund an exchange body names, when it names one. */
@@ -189,6 +198,11 @@ export function classifyCheckoutError(error: unknown): CheckoutFailure {
       kind: 'split_needed',
       message: 'У кошику товари двох кас — оплата двома чеками',
     };
+  }
+
+  if (status === 409 && body?.error === 'bottle_needed') {
+    const bottles = readNeededBottles(body.bottles);
+    if (bottles.length > 0) return { kind: 'bottle_needed', message, bottles };
   }
 
   if (body?.error === 'split_part_failed') {

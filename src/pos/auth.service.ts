@@ -96,7 +96,22 @@ export interface AuthResponse {
      * exactly the moment the cashier needs it not to.
      */
     nav_overrides: NavOverrides;
+    /**
+     * The store pours from bottles opened by their excise stamp (track ДК,
+     * ДК5): some active variant has `bottle_ml`. Draws «Пляшки» on the till
+     * rail and in the owner's sidebar; read at login and at `/auth/me`.
+     */
+    bottles: boolean;
   };
+}
+
+/** Does this store pour from stamped bottles (ДК5)? One indexed probe, at login only. */
+async function storeHasBottles(storeId: number): Promise<boolean> {
+  const result = await pool.query(
+    `SELECT 1 FROM pos_variants WHERE store_id = $1 AND bottle_ml IS NOT NULL AND is_active LIMIT 1`,
+    [storeId]
+  );
+  return result.rows.length > 0;
 }
 
 async function createSession(storeId: number, staffId: number): Promise<AuthResponse> {
@@ -114,10 +129,10 @@ async function createSession(storeId: number, staffId: number): Promise<AuthResp
     throw new Error('Failed to create session');
   }
 
-  return toAuthResponse(auth, expiresAt);
+  return toAuthResponse(auth, expiresAt, await storeHasBottles(storeId));
 }
 
-function toAuthResponse(auth: PosAuthContext, expiresAt: Date): AuthResponse {
+function toAuthResponse(auth: PosAuthContext, expiresAt: Date, bottles: boolean): AuthResponse {
   return {
     token: auth.token,
     expires_at: expiresAt.toISOString(),
@@ -141,6 +156,7 @@ function toAuthResponse(auth: PosAuthContext, expiresAt: Date): AuthResponse {
       enabled_modules: effectiveEnabledModules(auth.enabledModules),
       module_remotes: auth.moduleRemotes,
       nav_overrides: auth.navOverrides,
+      bottles,
     },
   };
 }
@@ -262,7 +278,7 @@ export async function me(auth: PosAuthContext): Promise<AuthResponse> {
   const expiresAt = result.rows[0]?.expires_at
     ? new Date(result.rows[0].expires_at)
     : sessionExpiresAt();
-  return toAuthResponse(auth, expiresAt);
+  return toAuthResponse(auth, expiresAt, await storeHasBottles(auth.storeId));
 }
 
 export async function listStaff(storeId: number) {
