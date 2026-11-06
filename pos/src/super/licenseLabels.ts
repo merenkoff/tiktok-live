@@ -17,7 +17,18 @@ export function licenseTitle(lic: Pick<SuperLicenseSummary, 'fingerprint' | 'ver
   return 'Ключ не підтверджено';
 }
 
-/** The origin a copy ran on, or a placeholder when it reported none. */
-export function originLabel(url: string): string {
-  return url || '(невідомо)';
+/**
+ * The origin a copy ran on. A copy that named none is shown by the address its
+ * ping came from, and only a ping the server kept no address for (an older
+ * server) is «(невідомо)».
+ */
+export function originLabel(url: string, ip?: string | null): string {
+  if (url) return url;
+  if (ip) return `IP ${ip}`;
+  return '(невідомо)';
+}
+
+/** The address beside a named origin — when both are known and differ from each other. */
+export function originNote(url: string, ip?: string | null): string {
+  return url && ip ? `з IP ${ip}` : '';
 }

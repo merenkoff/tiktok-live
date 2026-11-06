@@ -143,6 +143,14 @@ envelope», AAD-прив'язка до стора+провайдера, відм
 - Інжест + читання: `src/pos/license/activations.service.ts` (`recordActivation`, `listLicenses`,
   `getLicense`): `fingerprint` = sha256 токена ('' = «без ключа»), `installs` = різних `instance_id`,
   `over_limit` = installs > `instance_limit` токена, `cloned` = один `instance_id` з кількох origin.
+  Origin копія бере з `PUBLIC_BASE_URL`, а без нього — з того, що на деплої і так є
+  (`reportedOrigin` у `service.ts`: `RAILWAY_PUBLIC_DOMAIN`, який Railway ставить сам, потім перший
+  `http(s)` origin із `CORS_ORIGINS`), і ніколи не вгадує домен автора — інакше клон без змінної звітував
+  би як `the-live.shop` і сигнал клона осліп би. Приймач додатково пише адресу, з якої прийшов пінг
+  (міграція `096`, `remote_ip` — останній запис `X-Forwarded-For`, той, що дописав проксі Railway;
+  `remoteIpOf`), і картка показує «IP …» замість «(невідомо)» для копії, що не назвала origin
+  (`originLabel`/`originNote` в `pos/src/super/licenseLabels.ts`). Власний деплой автора 2026-11-06
+  пінгував як «(невідомо)», бо `PUBLIC_BASE_URL` там не задано.
 - Читання власника: owner/super `GET /api/pos/super/licenses` і `…/:fingerprint`
   (`src/pos/routes/super.routes.ts`, `ensureSuper`); єдиний запис — `DELETE …/:fingerprint`
   (`deleteLicense`, `none` = група без ключа, 404 коли нічого не лишилось): кнопка «Видалити записи» в

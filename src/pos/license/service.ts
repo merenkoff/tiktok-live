@@ -44,6 +44,28 @@ function licenseServerUrl(): string {
   return process.env.LICENSE_SERVER_URL?.trim() || 'https://the-live.shop';
 }
 
+/**
+ * The origin this copy reports running on. `PUBLIC_BASE_URL` when the operator
+ * set it; otherwise what every deployment already has — Railway's own
+ * `RAILWAY_PUBLIC_DOMAIN` (set by the platform on any service with a public
+ * domain), then the first origin of `CORS_ORIGINS`, without which no web POS
+ * can talk to this API. Null only when none of them is there, so a copy whose
+ * operator filled none of the optional variables still names itself. Never a
+ * guess at the author's domain: that would make a clone report as the author
+ * and blind the clone signal. Pure over the env map, for the test.
+ */
+export function reportedOrigin(env: NodeJS.ProcessEnv = process.env): string | null {
+  const explicit = env.PUBLIC_BASE_URL?.trim();
+  if (explicit) return explicit;
+  const railway = env.RAILWAY_PUBLIC_DOMAIN?.trim();
+  if (railway) return /^https?:\/\//i.test(railway) ? railway : `https://${railway}`;
+  const cors = (env.CORS_ORIGINS || env.EXTRA_CORS_ORIGINS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .find((s) => /^https?:\/\//i.test(s));
+  return cors ?? null;
+}
+
 interface LicenseRow {
   instance_id: string;
   status: LicenseStatus;
@@ -124,7 +146,7 @@ export async function runLicenseHeartbeat(): Promise<HeartbeatResult> {
         token: token || null,
         instance_id: row.instance_id,
         pos_api_version: POS_API_VERSION,
-        public_base_url: process.env.PUBLIC_BASE_URL ?? null,
+        public_base_url: reportedOrigin(),
       }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });

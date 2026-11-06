@@ -14,6 +14,7 @@ import { LeadValidationError, cleanLeadInput, recordLead } from './crm/leads.ser
 import {
   ActivationError,
   activationAllowed,
+  remoteIpOf,
   recordActivation,
   type ActivationPing,
 } from './pos/license/activations.service.js';
@@ -305,7 +306,7 @@ export async function createServer(): Promise<FastifyInstance> {
       return { ok: false };
     }
     try {
-      await recordActivation((request.body ?? {}) as ActivationPing);
+      await recordActivation((request.body ?? {}) as ActivationPing, { remoteIp: remoteIpOf(request) });
       return { ok: true };
     } catch (error) {
       if (error instanceof ActivationError) {

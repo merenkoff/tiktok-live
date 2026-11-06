@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import { superApi, superErrorText, type SuperLicenseDetail } from './superApi';
 import { formatWhen } from './leadLabels';
-import { licenseTitle, originLabel } from './licenseLabels';
+import { licenseTitle, originLabel, originNote } from './licenseLabels';
 
 /**
  * One licence: the claim, the copy count against its limit, and every install
@@ -121,8 +121,9 @@ export function LicenseCard({
                     <ul className="mt-2 space-y-1">
                       {inst.origins.map((o) => (
                         <li key={o.url || '(none)'} className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-                          <span className="text-sq-text break-all">{originLabel(o.url)}</span>
+                          <span className="text-sq-text break-all">{originLabel(o.url, o.ip)}</span>
                           <span className="text-xs text-sq-secondary whitespace-nowrap">
+                            {originNote(o.url, o.ip) && `${originNote(o.url, o.ip)} · `}
                             {formatWhen(o.last_seen)} · {o.seen_count}×
                           </span>
                         </li>
