@@ -56,6 +56,7 @@
     "check:case-collisions": "node scripts/check-case-collisions.mjs src",
     "check:platform-boundary": "node scripts/check-platform-boundary.mjs",
     "check:tauri-capabilities": "node scripts/check-tauri-capabilities.mjs",
+    "check:prod-no-dev-key": "node scripts/check-prod-no-dev-key.mjs",
     "platform:snapshot": "UPDATE_PLATFORM_SURFACE=1 vitest run src/platform/surface.test.ts",
     "updater:init": "node scripts/updater-init.mjs",
     "preview": "vite preview",
