@@ -40,6 +40,8 @@ jobs:
       # Linux is case-sensitive, the release runners for macOS/Windows are not.
       - run: npm run check:case-collisions
       - run: npm run check:tauri-capabilities
+      # An official host build must never trust the dev module-signing key.
+      - run: npm run check:prod-no-dev-key
       - run: npm run test:coverage
 
   e2e:
