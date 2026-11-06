@@ -1,14 +1,14 @@
 [package]
-name = "cloth-pos"
+name = "liveshop-pos"
 version = "2.7.0"
-description = "Cloth POS cashier desktop shell"
+description = "LiveShop POS cashier desktop shell"
 authors = ["Serhii Merenkov / Technologies LLC <mer.sergei@gmail.com>"]
 edition = "2021"
 license-file = "../../LICENSE"
 publish = false
 
 [lib]
-name = "cloth_pos_lib"
+name = "liveshop_pos_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -22,6 +22,10 @@ tauri-plugin-opener = "2"
 # `install_update` command, so the window needs no `updater:*`/`process:*`
 # capability a runtime-loaded module could reach.
 tauri-plugin-updater = "2"
+# The same resolver Tauri uses for `app_data_dir` / `app_local_data_dir`, so
+# the one-time copy of the `shop.cloth.pos` folders (legacy_profile.rs) lands
+# exactly where Tauri will look for them.
+dirs = "7"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 hidapi = "2"

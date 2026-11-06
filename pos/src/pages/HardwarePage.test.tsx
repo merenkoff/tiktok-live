@@ -78,6 +78,9 @@ describe('HardwarePage station printers', () => {
     expect(await screen.findByText('Принтер чеків')).toBeInTheDocument();
     expect(screen.queryByText('Принтер кухні')).toBeNull();
     expect(screen.queryByText('Принтер бару')).toBeNull();
+    // «Про програму» (2.8.0) sits under «Версія програми» for every vertical.
+    expect(screen.getByText('Про програму')).toBeInTheDocument();
+    expect(screen.getByText('LiveShop POS')).toBeInTheDocument();
   });
 
   it('remembers the kitchen printer on this device and prints a test ticket to it', async () => {

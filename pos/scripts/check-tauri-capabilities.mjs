@@ -31,7 +31,7 @@ const DOC = 'TechDocs/POS_MODULE_TAURI_CAPABILITIES.md';
  * to one string per entry (`identifier` + its scope, if scoped).
  */
 const EXPECTED_PERMISSIONS = [
-  'opener:allow-open-url allow=https://github.com/merenkoff/tiktok-live/releases/*',
+  'opener:allow-open-url allow=https://github.com/merenkoff/tiktok-live/releases/* allow=https://the-live.shop/* allow=https://technologies.llc/* allow=https://own-net.com/*',
 ];
 
 /** The commands registered in `src/lib.rs`'s `tauri::generate_handler![…]`. */

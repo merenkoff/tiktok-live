@@ -15,7 +15,7 @@
 
 **Чому Tauri 2, а не Electron.** Каса — кіоск на слабшому ПК, UI вже веб. Tauri дає системний webview, малий інсталятор і RAM. Slack/Electron має сенс, коли потрібен той самий Chromium скрізь; для цієї каси зайвий. Уся логіка в TS: офлайн не вимагає міграції на Electron.
 
-**Не в скоупі:** ESC/POS, автооновлення, підпис/нотарізація бінарів, офлайн на сайті адмінки, складські документи офлайн (виняток з 2026-09-09: лист інвентаризації на касі — модуль `stocktake` зі своєю офлайн-чергою, проводка лишається на вебі — [POS_MODULE_OFFLINE_DATA.md](POS_MODULE_OFFLINE_DATA.md)), Rust-SQLite.
+**Не в скоупі** (станом на першу поставку; ESC/POS і автооновлення відтоді з'явилися — `src-tauri/src/hardware/`, `update.rs`)**:** підпис/нотарізація бінарів, офлайн на сайті адмінки, складські документи офлайн (виняток з 2026-09-09: лист інвентаризації на касі — модуль `stocktake` зі своєю офлайн-чергою, проводка лишається на вебі — [POS_MODULE_OFFLINE_DATA.md](POS_MODULE_OFFLINE_DATA.md)), Rust-SQLite.
 
 ```
 [Браузер: index.html + App.tsx]
@@ -76,7 +76,7 @@ npm run tauri:build
 
 Сайт каса+адмінка лишається `npm run dev` на `:3002` (прокси на локальний API). Для десктопа локальний `:3000` не потрібен.
 
-`tauri.conf.json`: `bundle.targets = all`. Збірка `.msi` / `.dmg` — на відповідній ОС (на Ubuntu вийде AppImage/deb). Автооновлення й code signing — не в цій поставці.
+`tauri.conf.json`: `bundle.targets = all`. Збірка `.msi` / `.dmg` — на відповідній ОС (на Ubuntu вийде AppImage/deb). Автооновлення є (`update.rs`, кнопка на «Обладнанні»; macOS і Linux AppImage ставлять самі, Windows дає посилання); code signing — ні.
 
 ## CORS
 
@@ -139,7 +139,7 @@ JWT: last-good токен тримається до `expires_at` (14 днів). 
 
 Fullscreen лише в **release** (`npm run tauri:build`), не в `tauri:dev`. Rust: `set_fullscreen(true)`, без рамки, не resizable, не closable. Alt+F4 на Ubuntu все одно може закрити GTK-вікно — обмеження ОС.
 
-Бінар після збірки: `pos/src-tauri/target/release/cloth-pos`. Після `.deb` зазвичай `/usr/bin/cloth-pos`.
+Бінар після збірки: `pos/src-tauri/target/release/liveshop-pos` (до 2.7.x — `cloth-pos`). Після `.deb` зазвичай `/usr/bin/liveshop-pos`.
 
 ### Автологін користувача каси
 
@@ -155,13 +155,13 @@ AutomaticLogin=kasyr
 
 ### Автостарт
 
-`~/.config/autostart/cloth-pos.desktop`:
+`~/.config/autostart/liveshop-pos.desktop`:
 
 ```ini
 [Desktop Entry]
 Type=Application
-Name=Cloth POS
-Exec=/usr/bin/cloth-pos
+Name=LiveShop POS
+Exec=/usr/bin/liveshop-pos
 X-GNOME-Autostart-enabled=true
 ```
 
@@ -190,7 +190,27 @@ GTK fullscreen Tauri працює на обох. Огляд GNOME (Super) ОС �
 
 ## Файли оболонки
 
-- [`pos/src-tauri/tauri.conf.json`](../pos/src-tauri/tauri.conf.json) — вікно «Каса» min 1024×700, CSP (`connect-src` на API, `media-src` для камери)
+- [`pos/src-tauri/tauri.conf.json`](../pos/src-tauri/tauri.conf.json) — вікно «LiveShop POS» min 1024×700, CSP (`connect-src` на API, `media-src` для камери)
 - [`pos/src-tauri/src/lib.rs`](../pos/src-tauri/src/lib.rs) — у release: fullscreen, без рамки
-- identifier: `shop.cloth.pos`
+- identifier: `shop.the-live.pos` (до 2.7.x — `shop.cloth.pos`; перенесення тек — нижче)
 - [`pos/src-tauri/capabilities/default.json`](../pos/src-tauri/capabilities/default.json) — права вікна; що з них випливає для feature-модулів — [POS_MODULE_TAURI_CAPABILITIES.md](POS_MODULE_TAURI_CAPABILITIES.md)
+
+## Перейменування 2.8.0: «Cloth POS» → «LiveShop POS»
+
+До 2.7.x десктопна каса називалася «Cloth POS» (крейт `cloth-pos`, identifier `shop.cloth.pos`) — ім'я з перших версій, коли каса продавала лише одяг. З 2.8.0 файл програми називається так само, як сайт: **«LiveShop POS»**, крейт і бінар `liveshop-pos`, identifier **`shop.the-live.pos`**, файли релізу `LiveShop.POS_<версія>_…`. Що лишилося старим навмисно: ключ і endpoint апдейтера (вшиті в кожну встановлену копію), імена баз Dexie `cloth-pos-offline` / `cloth-pos-module-*` і ключі `localStorage` (користувач їх не бачить, а перейменування втратило б дані і на вебі), шлях до локального ключа підпису `~/.tauri/cloth-pos-updater.key`.
+
+**Де лежать дані.** Tauri виводить кожну теку з identifier:
+
+| ОС | `app_data_dir` (кеш модулів `modules/`) | профіль webview (IndexedDB, localStorage) |
+|---|---|---|
+| Windows | `%APPDATA%\shop.the-live.pos` | `%LOCALAPPDATA%\shop.the-live.pos\EBWebView` |
+| macOS | `~/Library/Application Support/shop.the-live.pos` | `~/Library/WebKit/shop.the-live.pos` (стандартне сховище WKWebView за bundle id) |
+| Linux | `~/.local/share/shop.the-live.pos` | там само (`app_local_data_dir`) |
+
+У профілі webview живе все, без чого каса після перейменування стала б порожньою: черга невідправлених продаж, вхід, `deviceId`, резерв фіскальних кодів, вибір принтерів.
+
+**Перенесення.** `src-tauri/src/legacy_profile.rs` викликається першим рядком `run()`, до `tauri::Builder` (Tauri створює теки нового identifier лише при побудові webview): для кожної базової теки, якщо `<base>/shop.the-live.pos` ще немає, а `<base>/shop.cloth.pos` є — копіює дерево у `<base>/shop.the-live.pos.migrating`, пише маркер `.migrated-from-shop.cloth.pos` (скільки файлів, що не вдалося) і перейменовує у `<base>/shop.the-live.pos`. Стару теку ніколи не видаляє. Кеші браузера (`CacheStorage` з фото товарів — 474 МБ на одному Mac — `Code Cache`, `GPUCache`, …) пропускає. Файл, який не читається (стара каса ще відкрита), записує в маркер і йде далі — бо наступний запуск уже побачить теку, яку створив Tauri, і не повторить спробу; тому в заметках релізу: **закрити «Cloth POS» перед першим запуском нової**. Базові теки резолвить крейт `dirs`, той самий, що й Tauri. Тести — `cargo test legacy_profile`.
+
+**Оновлення на місці.** macOS-апдейтер 2.7.x замінює вміст бандла, тека лишається `Cloth POS.app`; після заміни `app.restart()` шукає кешований шлях `…/MacOS/cloth-pos`, якого вже немає, тому каса закривається і не перезапускається — один раз, власник відкриває її з Dock. `install-macos.sh` прибирає і `Cloth POS.app`, і `LiveShop POS.app` перед копіюванням. Windows-інсталятор NSIS ставить «LiveShop POS» поруч зі старою; «Cloth POS» видаляють через «Програми та компоненти» після першого запуску нової.
+
+**«Про програму».** Картка на «Обладнанні» під «Версія програми» і внизу «Налаштувань» (`pos/src/components/AboutCard.tsx`, факти в `pos/src/lib/about.ts` — ті самі, що `site/src/lib/productFacts.ts` і шапка LICENSE); на macOS — меню «LiveShop POS → Про LiveShop POS» (`src-tauri/src/app_menu.rs`). Посилання з картки десктоп відкриває через `opener`, тому `capabilities/default.json` має три шаблони для `the-live.shop`, `technologies.llc`, `own-net.com` — [POS_MODULE_TAURI_CAPABILITIES.md](POS_MODULE_TAURI_CAPABILITIES.md) §4; `bundle` у `tauri.conf.json` несе publisher, copyright, homepage, ліцензію і опис для інсталяторів.

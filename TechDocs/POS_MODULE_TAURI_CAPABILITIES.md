@@ -81,14 +81,24 @@ Ed25519-верифицируется и кешируется в Rust, а пот�
 "permissions": [
   {
     "identifier": "opener:allow-open-url",
-    "allow": [{ "url": "https://github.com/merenkoff/tiktok-live/releases/*" }]
+    "allow": [
+      { "url": "https://github.com/merenkoff/tiktok-live/releases/*" },
+      { "url": "https://the-live.shop/*" },
+      { "url": "https://technologies.llc/*" },
+      { "url": "https://own-net.com/*" }
+    ]
   }
 ]
 ```
 
-Одно право, потому что фронт из всего Tauri-API использует ровно `invoke`
-(не ACL-gated) и один `openUrl` на странице «Обладнання» — открыть страницу
-релиза, которую вернул `check_for_update`.
+Одно право с четырьмя шаблонами, потому что фронт из всего Tauri-API
+использует ровно `invoke` (не ACL-gated) и один `openUrl` на странице
+«Обладнання»: открыть страницу релиза, которую вернул `check_for_update`, и
+(с 2.8.0) три сайта из карточки «Про програму» (`pos/src/components/AboutCard.tsx`
+— сайт программы, компания, манифест лицензии; адреса в `pos/src/lib/about.ts`,
+тест которого проверяет, что каждый покрыт одним из шаблонов). По-прежнему без
+`allow-default-urls`: новая ссылка в карточке — это новый шаблон здесь и в
+`scripts/check-tauri-capabilities.mjs`.
 
 Обновление по кнопке (macOS и Linux AppImage) намеренно сделано **своей**
 командой `install_update`, а `tauri-plugin-updater` подключён только на

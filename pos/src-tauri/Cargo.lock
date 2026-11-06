@@ -496,26 +496,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cloth-pos"
-version = "2.7.0"
-dependencies = [
- "base64 0.22.1",
- "ed25519-dalek",
- "escpos",
- "hidapi",
- "printers",
- "reqwest 0.12.28",
- "semver",
- "serde",
- "serde_json",
- "sha2",
- "tauri",
- "tauri-build",
- "tauri-plugin-opener",
- "tauri-plugin-updater",
-]
-
-[[package]]
 name = "combine"
 version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2207,6 +2187,27 @@ name = "litemap"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47d9d19d1d6efa0109d2f65ff4c85cddd50bd572e5a00127ab10987290bcefae"
+
+[[package]]
+name = "liveshop-pos"
+version = "2.7.0"
+dependencies = [
+ "base64 0.22.1",
+ "dirs",
+ "ed25519-dalek",
+ "escpos",
+ "hidapi",
+ "printers",
+ "reqwest 0.12.28",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-opener",
+ "tauri-plugin-updater",
+]
 
 [[package]]
 name = "lock_api"

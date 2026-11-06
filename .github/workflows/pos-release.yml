@@ -84,7 +84,7 @@ jobs:
             # cashier itself — HardwarePage shows the first lines of it as the
             # update notes — so it is in the same language as the app.
             body="$(printf '%s\n' \
-              'Оновлення десктопної каси Cloth POS.' \
+              'Оновлення десктопної каси LiveShop POS.' \
               '' \
               'Збірка без підпису Apple/Microsoft — на першому запуску система може показати попередження.' \
               'Встановлення на macOS однією командою, без попереджень:' \
@@ -191,7 +191,7 @@ jobs:
         with:
           projectPath: pos
           tagName: ${{ needs.version.outputs.tag }}
-          releaseName: 'Cloth POS v${{ needs.version.outputs.version }}'
+          releaseName: 'LiveShop POS v${{ needs.version.outputs.version }}'
           # `.github/releases/<tag>.md` when it exists, else the placeholder —
           # resolved by the `version` job above.
           releaseBody: ${{ needs.version.outputs.body }}

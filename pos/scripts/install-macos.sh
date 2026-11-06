@@ -1,5 +1,5 @@
 #!/bin/bash
-# Cloth POS — macOS installer for the unsigned desktop cashier build.
+# LiveShop POS — macOS installer for the unsigned desktop cashier build.
 #
 #   curl -fsSL https://raw.githubusercontent.com/merenkoff/tiktok-live/main/pos/scripts/install-macos.sh | bash
 #
@@ -14,7 +14,11 @@
 set -euo pipefail
 
 REPO="merenkoff/tiktok-live"
-ASSET="Cloth.POS_universal.app.tar.gz"
+# The bundle's name since 2.8.0; up to 2.7.x it was Cloth.POS_universal.app.tar.gz
+# (pass such a tag and this script fails to download — install a current one).
+ASSET="LiveShop.POS_universal.app.tar.gz"
+# The till's name up to 2.7.x: quit and removed too, so one install replaces it.
+LEGACY_NAME="Cloth POS.app"
 DEST="${DEST:-/Applications}"
 
 say()  { printf '\033[1m%s\033[0m\n' "$*"; }
@@ -44,16 +48,23 @@ app="$(find "${tmp}" -maxdepth 1 -name '*.app' -print -quit)"
 [ -n "${app}" ] || fail "В архиве нет .app — сборка релиза сломана?"
 name="$(basename "${app}")"
 
-# A running copy cannot be replaced cleanly.
-osascript -e "quit app \"${name%.app}\"" >/dev/null 2>&1 || true
+# A running copy cannot be replaced cleanly — the old name's either.
+for running in "${name}" "${LEGACY_NAME}"; do
+  osascript -e "quit app \"${running%.app}\"" >/dev/null 2>&1 || true
+done
 
 sudo=""
 [ -w "${DEST}" ] || { say "Для записи в ${DEST} нужен пароль администратора."; sudo="sudo"; }
 
-if [ -e "${DEST}/${name}" ]; then
-  say "Удаляю прежнюю версию ${DEST}/${name}…"
-  ${sudo} rm -rf "${DEST:?}/${name}"
-fi
+# The old name goes too: its data was copied under the new identifier on the
+# new till's first start (legacy_profile.rs), and two tills on one Mac would
+# confuse whoever opens «Программы».
+for previous in "${name}" "${LEGACY_NAME}"; do
+  if [ -e "${DEST}/${previous}" ]; then
+    say "Удаляю прежнюю версию ${DEST}/${previous}…"
+    ${sudo} rm -rf "${DEST:?}/${previous}"
+  fi
+done
 
 say "Устанавливаю в ${DEST}/${name}…"
 ${sudo} ditto "${app}" "${DEST}/${name}"

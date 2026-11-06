@@ -5,6 +5,7 @@
 import { FormEvent, useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { api, useAuthStore, sameRemoteMap, useVertical, PLATFORM_VERSION } from '@pos/platform';
+import { AboutCard } from '../../components/AboutCard';
 import { ProductPhotoField } from '../../components/ProductPhotoField';
 import { PageHeader, SectionHead, Segmented } from '../../components/ui/Page';
 import { Plus, Settings } from '../../platform/glyphs';
@@ -733,6 +734,14 @@ export function SettingsPage() {
           </div>
         </div>
       </form>
+
+      {/* Who makes the program and on what terms — the same card the till
+          shows on «Обладнання»; outside the form, so its links are not
+          form content. */}
+      <section>
+        <SectionHead title="Про програму" />
+        <AboutCard />
+      </section>
     </div>
   );
 }
