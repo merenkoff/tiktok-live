@@ -856,7 +856,11 @@ function W(e, t, n) {
 	let r = U();
 	return r.length > 0 ? Promise.reject(new B(r)) : o.api.posRequest(e, t, n);
 }
-function G(e, t) {
+function G(e) {
+	let t = o.quickCashAmounts;
+	return V(t) ? t(e) : [];
+}
+function K(e, t) {
 	let n = o.storeCashRounding, r = o.cashRoundingDelta;
 	if (!V(n) || !V(r)) return {
 		step: 0,
@@ -872,82 +876,91 @@ function G(e, t) {
 	};
 }
 // src/modules/tables/lib/tablesApi.ts
-function K() {
+function q() {
 	return W("get", "/halls");
 }
-function q() {
+function J() {
 	return W("get", "/bills");
 }
-function J(e, t) {
+function Y(e, t) {
 	return W("post", "/bills", {
 		table_id: e,
 		...t ? { guests: t } : {}
 	});
 }
-function Y(e) {
+function ae(e) {
 	return W("get", `/bills/${e}`);
 }
-function ae(e, t) {
+function oe(e, t) {
 	return W("post", `/bills/${e}/items`, t);
 }
-function oe(e, t, n) {
+function se(e, t, n) {
 	return W("patch", `/bills/${e}/items/${t}`, { quantity: n });
 }
-function se(e, t, n) {
+function ce(e, t, n) {
 	return W("patch", `/bills/${e}/items/${t}`, n);
 }
-function ce(e, t) {
-	return W("delete", `/bills/${e}/items/${t}`);
-}
-function le(e, t) {
-	return W("post", `/bills/${e}/fire`, { client_uuid: t });
+function le(e, t, n) {
+	return W("put", `/bills/${e}/items/${t}/excise`, { excise_labels: n });
 }
 function ue(e, t) {
+	return W("delete", `/bills/${e}/items/${t}`);
+}
+function de(e, t) {
+	return W("post", `/bills/${e}/fire`, { client_uuid: t });
+}
+function fe(e, t) {
 	return W("post", `/bills/${e}/rounds/${t}/cancel`);
 }
-function de(e, t, n = 0) {
+function pe(e, t, n = 0) {
 	return W("post", `/bills/${e}/pay`, {
 		parts: t,
 		...n ? { cash_rounding: n } : {}
 	});
 }
-function fe(e) {
+function me(e, t, n = 0) {
+	return W("post", `/bills/${e}/pay-quote`, {
+		parts: t,
+		...n ? { cash_rounding: n } : {}
+	});
+}
+function he(e) {
 	return W("post", `/bills/${e}/precheck`);
 }
-function pe(e) {
+function ge(e) {
 	return W("get", e == null ? "/guest-orders" : `/guest-orders?table_id=${e}`);
 }
-function me(e, t = []) {
+function _e(e, t = []) {
 	return W("post", `/guest-orders/${e}/accept`, t.length > 0 ? { exclude_item_ids: t } : {});
 }
-function he(e, t) {
+function ve(e, t) {
 	return W("post", `/guest-orders/${e}/reject`, t ? { reason: t } : {});
 }
-function ge(e) {
+function ye(e) {
 	return W("post", `/guest-orders/${e}/seen`);
 }
-function _e(e) {
+function be(e) {
 	return W("post", `/waiter-calls/${e}/answer`);
 }
-function ve(e) {
+function xe(e) {
 	return W("post", `/feedback/${e}/seen`);
 }
-function ye(e) {
+function Se(e) {
 	return W("post", "/halls", { name: e });
 }
-function be(e, t) {
+function Ce(e, t) {
 	return W("patch", `/halls/${e}`, t);
 }
-function xe(e) {
+function X(e) {
 	return W("post", "/tables", e);
 }
-function Se(e, t) {
+function we(e, t) {
 	return W("patch", `/tables/${e}`, t);
 }
-function Ce(e) {
+function Te(e) {
 	return W("patch", "/tables/positions", { positions: e });
 }
-var X = new class extends c {
+var Z = new class extends c {
 	constructor() {
 		super("cloth-pos-module-tables"), R(this, "room", void 0), R(this, "bills", void 0), this.version(1).stores({
 			room: "id",
@@ -955,71 +968,71 @@ var X = new class extends c {
 		});
 	}
 }();
-async function Z(e, t) {
+async function Q(e, t) {
 	try {
 		return await e();
 	} catch {
 		return t;
 	}
 }
-async function we(e, t) {
-	await Z(() => X.room.put({
+async function Ee(e, t) {
+	await Q(() => Z.room.put({
 		id: 1,
 		storeId: e,
 		...t,
 		savedAt: Date.now()
 	}), void 0);
 }
-async function Q(e) {
-	return Z(async () => {
-		let t = await X.room.get(1);
+async function De(e) {
+	return Q(async () => {
+		let t = await Z.room.get(1);
 		return t && t.storeId === e ? t : null;
 	}, null);
 }
-async function Te(e, t) {
-	await Z(() => X.bills.put({
+async function Oe(e, t) {
+	await Q(() => Z.bills.put({
 		id: t.id,
 		storeId: e,
 		bill: t,
 		savedAt: Date.now()
 	}), void 0);
 }
-async function Ee(e, t) {
-	return Z(async () => {
-		let n = await X.bills.get(t);
+async function ke(e, t) {
+	return Q(async () => {
+		let n = await Z.bills.get(t);
 		return n && n.storeId === e ? n : null;
 	}, null);
 }
-async function De(e, t) {
-	await Z(async () => {
-		let n = new Set(t), r = (await X.bills.where("storeId").equals(e).toArray()).filter((e) => !n.has(e.id)).map((e) => e.id);
-		r.length > 0 && await X.bills.bulkDelete(r);
+async function Ae(e, t) {
+	await Q(async () => {
+		let n = new Set(t), r = (await Z.bills.where("storeId").equals(e).toArray()).filter((e) => !n.has(e.id)).map((e) => e.id);
+		r.length > 0 && await Z.bills.bulkDelete(r);
 	}, void 0);
 }
 // src/modules/tables/lib/useHallMap.ts
-var Oe = 1e4;
+var je = 1e4;
 function $(e, t) {
 	let n = e?.response?.data;
 	return n && typeof n.error == "string" ? n.error : t;
 }
-function ke({ online: i, mirrored: a = !1, storeId: o = null }) {
+function Me({ online: i, mirrored: a = !1, storeId: o = null }) {
 	let [s, c] = r([]), [l, u] = r([]), [d, f] = r(() => (/* @__PURE__ */ new Date()).toISOString()), [p, m] = r(!0), [h, g] = r(null), [_, v] = r(!1), [y, b] = r(null), x = n(!0);
 	t(() => (x.current = !0, () => {
 		x.current = !1;
 	}), []);
 	let S = e(async () => {
 		if (!a || o == null) return !1;
-		let e = await Q(o);
+		let e = await De(o);
 		return !e || !x.current ? !1 : (c(e.halls), u(e.bills), f(e.now), v(!0), b(e.savedAt), m(!1), !0);
 	}, [a, o]), C = e(async () => {
 		try {
-			let [e, t] = await Promise.all([K(), q()]);
+			let [e, t] = await Promise.all([q(), J()]);
 			if (!x.current) return;
-			c(e.halls), u(t.bills), f((/* @__PURE__ */ new Date()).toISOString()), g(null), v(!1), b(null), a && o != null && (we(o, {
+			c(e.halls), u(t.bills), f((/* @__PURE__ */ new Date()).toISOString()), g(null), v(!1), b(null), a && o != null && (Ee(o, {
 				halls: e.halls,
 				bills: t.bills,
 				now: (/* @__PURE__ */ new Date()).toISOString()
-			}), De(o, t.bills.map((e) => e.id)));
+			}), Ae(o, t.bills.map((e) => e.id)));
 		} catch (e) {
 			if (!x.current) return;
 			let t = await S();
@@ -1042,7 +1055,7 @@ function ke({ online: i, mirrored: a = !1, storeId: o = null }) {
 		C();
 		let e = setInterval(() => {
 			(typeof document > "u" || document.visibilityState === "visible") && C();
-		}, Oe);
+		}, je);
 		return () => clearInterval(e);
 	}, [i, C]), {
 		halls: s,
@@ -1055,4 +1068,4 @@ function ke({ online: i, mirrored: a = !1, storeId: o = null }) {
 		refresh: C
 	};
 }
-export { m as $, P as A, l as B, oe as C, G as D, Se as E, k as F, f as G, b as H, te as I, C as J, p as K, j as L, A as M, M as N, W as O, re as P, E as Q, N as R, J as S, se as T, d as U, u as V, x as W, w as X, ee as Y, T as Z, fe as _, me as a, O as at, he as b, ue as c, le as d, D as et, Y as f, ge as g, ve as h, Te as i, v as it, ne as j, ie as k, ye as l, K as m, ke as n, g as nt, ae as o, pe as p, S as q, Ee as r, _ as rt, _e as s, $ as t, h as tt, xe as u, Ce as v, be as w, ce as x, de as y, y as z };
+export { w as $, W as A, j as B, Y as C, ce as D, Ce as E, A as F, b as G, y as H, M as I, f as J, d as K, re as L, ie as M, P as N, we as O, ne as P, ee as Q, k as R, ue as S, se as T, l as U, N as V, u as W, S as X, p as Y, C as Z, he as _, _e as a, g as at, me as b, fe as c, O as ct, de as d, T as et, ae as f, ye as g, xe as h, Oe as i, h as it, G as j, K as k, Se as l, q as m, Me as n, m as nt, oe as o, _ as ot, ge as p, x as q, ke as r, D as rt, be as s, v as st, $ as t, E as tt, X as u, Te as v, le as w, ve as x, pe as y, te as z };

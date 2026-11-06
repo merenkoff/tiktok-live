@@ -1,6 +1,6 @@
 import { lazy as e } from "react";
 // src/platform/version.ts
-var t = "2.6.6";
+var t = "2.7.0";
 // src/modules/lazyWithRetry.ts
 async function n(e, { retries: t = 2, backoffMs: n = 400 } = {}) {
 	let r;
@@ -16,7 +16,7 @@ function r(t, r) {
 	return e(() => n(t, r));
 }
 // src/modules/tables/manifest.ts
-var i = r(() => import("./TablesRoutes-B-AW_Sms.js").then((e) => ({ default: e.TablesRoutes }))), a = r(() => import("./HallEditorPage-gHuoIDDE.js").then((e) => ({ default: e.HallEditorPage }))), o = {
+var i = r(() => import("./TablesRoutes-Dp7oFI98.js").then((e) => ({ default: e.TablesRoutes }))), a = r(() => import("./HallEditorPage-DXTPh1xs.js").then((e) => ({ default: e.HallEditorPage }))), o = {
 	id: "tables",
 	title: "Столи",
 	shells: [
