@@ -18,6 +18,8 @@
  * accepts any key in this map, so a token signed under either is valid.
  */
 export const TRUSTED_LICENSE_KEYS: Readonly<Record<string, string>> = {
-  // prod — generated 2026-11-06 (`node scripts/license-key.mjs --gen`).
-  '980b166aa890defb': 'vbuO2vhJH8hXLc8oDBaDtmufkSoSYdmN7XBuEHmMdVU=',
+  // prod — the owner generated this keypair on their own machine
+  // (`node scripts/license-key.mjs --gen`, 2026-11-06); the private half lives
+  // only in their secret manager and is NOT in this repo.
+  '07c5b2206fc251db': 'H6OPXO54epq23yGU+JB2fw5hXQEU+GbrJtPPm37wNQk=',
 };
