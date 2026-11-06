@@ -109,3 +109,15 @@ export function readNeededBottles(raw: unknown): NeededBottle[] {
     return [{ variant_id: variantId, product_name: String(r?.product_name ?? 'Пляшка'), count }];
   });
 }
+
+/**
+ * The sentence over the stamps sheet when the till asked before payment —
+ * the server's own words for `bottle_needed`, so the cashier reads the same
+ * thing whichever side noticed first.
+ */
+export function bottleNeededText(needed: readonly NeededBottle[]): string {
+  const names = needed
+    .map((b) => (b.count > 1 ? `«${b.product_name}» — ${b.count} пляшки` : `«${b.product_name}»`))
+    .join(', ');
+  return `Відкрийте нову пляшку: ${names} — скануйте її акцизну марку`;
+}

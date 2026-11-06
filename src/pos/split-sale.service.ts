@@ -35,6 +35,7 @@ import { pool } from '../db.js';
 import { logger } from '../logger.js';
 import { shareDiscount } from './bill-payment.service.js';
 import { registerPartUuidFor } from './core/derivedUuid.js';
+import { ExciseError } from './excise.js';
 import * as fiscalService from './fiscal/fiscal.service.js';
 import { registersOfLines } from './fiscal/routing.js';
 import { normalizeModifierIds } from './modifiers.service.js';
@@ -152,6 +153,56 @@ export async function groupByRegister(
     groups.set(register, [...(groups.get(register) ?? []), index]);
   });
   return new Map([...groups.entries()].sort(([a], [b]) => a - b));
+}
+
+/** A bottle a cart would open without its stamp (ДК5, Д4). */
+export interface NeededBottle {
+  variant_id: number;
+  product_name: string;
+  count: number;
+}
+
+/**
+ * `POST /bottles/check`: the new bottles a cart would open that the till has
+ * no stamp for — asked BEFORE the payment screen, so a cashier never runs a
+ * card on the terminal and only then hears «відкрийте нову пляшку». The same
+ * dry run as the split quote (the real `completeSaleTx`, rolled back), one
+ * per register, so it pours exactly as the sale will. Any other refusal —
+ * stock, the stop-list, a whole bottle's stamp — is not this question's: the
+ * payment meets it in its own words, so it answers «none» here.
+ */
+export async function bottlesNeeded(input: {
+  storeId: number;
+  staffId: number;
+  items: CompleteSaleItemInput[];
+  open_bottles?: unknown;
+}): Promise<NeededBottle[]> {
+  if (!Array.isArray(input.items) || input.items.length === 0) return [];
+  let groups: Map<number, number[]>;
+  try {
+    groups = await groupByRegister(input.storeId, input.items);
+  } catch {
+    return [];
+  }
+  const out = new Map<number, NeededBottle>();
+  for (const [register, indexes] of groups) {
+    try {
+      await dryRun(
+        { storeId: input.storeId, staffId: input.staffId, open_bottles: input.open_bottles } as SplitSaleInput,
+        register,
+        indexes.map((i) => input.items[i]),
+        null,
+        'cash'
+      );
+    } catch (error) {
+      if (!(error instanceof ExciseError) || error.code !== 'bottle_needed') continue;
+      for (const raw of (error.detail.bottles as NeededBottle[] | undefined) ?? []) {
+        const have = out.get(raw.variant_id);
+        out.set(raw.variant_id, have ? { ...have, count: have.count + raw.count } : { ...raw });
+      }
+    }
+  }
+  return [...out.values()];
 }
 
 /** The one method a split cart is paid by (Д8), or a refusal in words. */

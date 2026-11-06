@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   bottleOfUid,
   bottleStampLines,
+  bottleNeededText,
   bottlesMissingStamps,
   mergeNeeded,
   openBottlesField,
@@ -89,5 +90,12 @@ describe('the new bottles on the stamps sheet (ДК5)', () => {
     expect(readNeededBottles([{ variant_id: 3, count: 1 }])).toEqual([
       { variant_id: 3, product_name: 'Пляшка', count: 1 },
     ]);
+  });
+
+  it('says which bottles to open in the server’s own words', () => {
+    expect(bottleNeededText([vodka])).toBe('Відкрийте нову пляшку: «Горілка · 500 мл» — скануйте її акцизну марку');
+    expect(bottleNeededText([vodka, cognac])).toBe(
+      'Відкрийте нову пляшку: «Горілка · 500 мл», «Коньяк · 700 мл» — 2 пляшки — скануйте її акцизну марку'
+    );
   });
 });

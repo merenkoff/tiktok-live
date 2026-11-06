@@ -646,6 +646,29 @@ describe.skipIf(!hasDb)('POS open bottles at the till (ДК5-А)', () => {
     expect(done.json().sale.items[0].bottle_labels).toEqual([STAMP_B]);
   });
 
+  it('tells the till before payment which new bottles a cart would open, and writes nothing', async () => {
+    await openWith(vodka, STAMP_A, 500, 20);
+    const check = (payload: Record<string, unknown>) =>
+      app.inject({ method: 'POST', url: '/api/pos/bottles/check', headers: auth(store.sellerToken), payload });
+
+    const asked = await check({ items: [{ variant_id: shot, quantity: 1 }] });
+    expect(asked.statusCode).toBe(200);
+    expect(asked.json().bottles).toEqual([expect.objectContaining({ variant_id: vodka, count: 1 })]);
+    // Nothing was poured or opened by the question.
+    expect(await bottlesOf(vodka)).toEqual([expect.objectContaining({ label: STAMP_A, poured_ml: 480, closed: false })]);
+
+    const stamped = await check({
+      items: [{ variant_id: shot, quantity: 1 }],
+      open_bottles: [{ variant_id: vodka, excise_label: STAMP_B }],
+    });
+    expect(stamped.json().bottles).toEqual([]);
+    expect(await bottlesOf(vodka)).toHaveLength(1);
+
+    // A cart that pours nothing, and an empty one, need no stamp.
+    expect((await check({ items: [{ variant_id: coffee, quantity: 1 }] })).json().bottles).toEqual([]);
+    expect((await check({})).json().bottles).toEqual([]);
+  });
+
   it('never pours on credit or into a pre-order', async () => {
     const customer = await pool.query(
       `INSERT INTO pos_customers (store_id, name, phone, credit_limit_cents)

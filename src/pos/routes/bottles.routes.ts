@@ -17,6 +17,8 @@ import { ensurePosAuth, ensurePosOwner } from '../core/auth.js';
 import * as bottles from '../bottles.service.js';
 import { ExciseError } from '../excise.js';
 import { errorMessage } from './_shared.js';
+import { bottlesNeeded } from '../split-sale.service.js';
+import type { CompleteSaleItemInput } from '../types.js';
 
 function idOf(value: string): number | null {
   const id = Number(value);
@@ -57,6 +59,25 @@ export function registerBottleRoutes(fastify: FastifyInstance): void {
       return reply.code(400).send({ error: 'Вкажіть період: from і to як РРРР-ММ-ДД' });
     }
     return bottles.bottleReport(auth.storeId, from, new Date(to.getTime() + 86_400_000));
+  });
+
+  // The till asks before its payment screen which new bottles this cart
+  // would open without a stamp (Д4) — writes nothing; `bottles` is empty when
+  // none, or when the cart is refused for something else.
+  fastify.post('/bottles/check', async (request, reply) => {
+    const auth = await ensurePosAuth(request, reply);
+    if (!auth) return;
+    const body = (request.body ?? {}) as { items?: unknown; open_bottles?: unknown };
+    const items = Array.isArray(body.items) ? (body.items as CompleteSaleItemInput[]) : [];
+    if (items.length > 200) return reply.code(400).send({ error: 'Забагато рядків' });
+    return {
+      bottles: await bottlesNeeded({
+        storeId: auth.storeId,
+        staffId: auth.staffId,
+        items,
+        open_bottles: body.open_bottles,
+      }),
+    };
   });
 
   // The bar scans a new bottle's stamp; `replace` when the old one ran out

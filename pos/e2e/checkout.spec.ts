@@ -340,3 +340,66 @@ test('a pour that opens a new bottle asks for its stamp, then pays with it', asy
   // The stamp belongs to the bottle, not to the line.
   expect((sent[1].items as Array<Record<string, unknown>>)[0].excise_labels).toBeUndefined();
 });
+
+// The same, asked BEFORE the payment screen: in a store that pours from
+// stamped bottles the till asks the server first, so the cashier never runs
+// a card on the terminal and only then hears «відкрийте нову пляшку».
+test('a pour that opens a new bottle asks for its stamp before the payment screen', async ({ page }) => {
+  const SHOT = { ...catalog[0], product_name: 'Горілка 50' };
+  const checks: Array<Record<string, unknown>> = [];
+  const sales: Array<Record<string, unknown>> = [];
+  await mockPosApi(page, undefined, { store: { bottles: true } });
+  await page.route('**/api/pos/catalog**', (route) => route.fulfill({ json: [SHOT, catalog[1]] }));
+  await page.route('**/api/pos/bottles/check', async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    checks.push(body);
+    await route.fulfill({
+      json: {
+        bottles: body.open_bottles ? [] : [{ variant_id: 77, product_name: 'Горілка Хортиця · 500 мл', count: 1 }],
+      },
+    });
+  });
+  await page.route('**/api/pos/sales/complete', async (route) => {
+    sales.push(route.request().postDataJSON());
+    await route.fulfill({
+      status: 201,
+      json: {
+        id: 303,
+        receipt_number: 'R-303',
+        status: 'completed',
+        subtotal_cents: SHOT.price_cents,
+        total_cents: SHOT.price_cents,
+        rounding_cents: 0,
+        cart_discount_cents: 0,
+        created_at: '2026-11-06T20:00:00.000Z',
+        staff_name: 'Олена',
+        items: [],
+        payments: [{ id: 1, method: 'card', amount_cents: SHOT.price_cents }],
+        refunds: [],
+        fiscal: null,
+      },
+    });
+  });
+  await loginAsOwner(page);
+  await page.goto('/register');
+
+  await page.getByText(SHOT.product_name).first().click();
+  await page.getByRole('button', { name: /^Оплатити/ }).first().click();
+
+  // The stamps first — no payment screen, no card on the terminal yet.
+  const sheet = page.getByTestId('excise-sheet');
+  await expect(sheet).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Оплата' })).toHaveCount(0);
+  await expect(sheet.getByTestId('excise-error')).toContainText('Відкрийте нову пляшку');
+  await sheet.getByTestId('excise-input').fill('ANFC015604');
+  await sheet.getByRole('button', { name: 'Додати' }).click();
+  await sheet.getByTestId('excise-done').click();
+
+  const dialog = page.getByRole('dialog', { name: 'Оплата' });
+  await dialog.getByRole('button', { name: 'Картка' }).click();
+  await dialog.getByRole('button', { name: /Оплата карткою пройшла/ }).click();
+  await expect(page.getByTestId('sale-success')).toBeVisible();
+  expect(sales).toHaveLength(1);
+  expect(sales[0].open_bottles).toEqual([{ variant_id: 77, excise_label: 'ANFC015604' }]);
+  expect(checks[1].open_bottles).toEqual([{ variant_id: 77, excise_label: 'ANFC015604' }]);
+});
