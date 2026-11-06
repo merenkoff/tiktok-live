@@ -2,7 +2,9 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
+mod app_menu;
 mod hardware;
+mod legacy_profile;
 mod module_remotes;
 mod update;
 
@@ -18,7 +20,13 @@ fn print_webview(window: tauri::WebviewWindow) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let context: tauri::Context<tauri::Wry> = tauri::generate_context!();
+    // Before Tauri touches the disk: every folder of the app is keyed by the
+    // identifier, and a till that ran as `shop.cloth.pos` keeps its data only
+    // if the old folders are copied under the new name first (2.8.0).
+    legacy_profile::run_at_startup(&context.config().identifier);
+
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         // Only the Rust side ever touches the updater (see update.rs):
         // registering it here costs the window no `updater:*` permission.
@@ -52,7 +60,14 @@ pub fn run() {
                 }
             }
             Ok(())
-        })
-        .run(tauri::generate_context!())
+        });
+
+    // The macOS menu bar with «Про програму» filled in; Windows and Linux
+    // have no menu (the kiosk window is undecorated).
+    #[cfg(target_os = "macos")]
+    let builder = builder.menu(app_menu::build);
+
+    builder
+        .run(context)
         .expect("error while running tauri application");
 }

@@ -74,7 +74,7 @@ fn self_update_supported() -> bool {
         let Ok(exe) = std::env::current_exe() else {
             return false;
         };
-        // …/Cloth POS.app/Contents/MacOS/cloth-pos -> …/Cloth POS.app/Contents
+        // …/LiveShop POS.app/Contents/MacOS/liveshop-pos -> …/LiveShop POS.app/Contents
         let Some(contents) = exe.parent().and_then(|p| p.parent()) else {
             return false;
         };
@@ -93,7 +93,7 @@ fn self_update_supported() -> bool {
 /// Picks the installer matching this OS from the release assets. Matches the
 /// same per-platform filename convention as the marketing site's download
 /// cards (public/app.js's initDownloadOsDetect) and what `pos-release.yml`
-/// actually produces (Cloth.POS_*-setup.exe / *.dmg / *.AppImage / *.deb / *.rpm).
+/// actually produces (LiveShop.POS_*-setup.exe / *.dmg / *.AppImage / *.deb / *.rpm).
 fn pick_asset(assets: &[GhAsset]) -> Option<String> {
     let pattern: &str = match std::env::consts::OS {
         "windows" => "-setup.exe",
@@ -112,7 +112,7 @@ pub async fn check_for_update(app: tauri::AppHandle) -> Result<UpdateInfo, Strin
     let current_version = app.package_info().version.clone();
 
     let client = match reqwest::Client::builder()
-        .user_agent(format!("cloth-pos/{current_version}"))
+        .user_agent(format!("liveshop-pos/{current_version}"))
         .timeout(std::time::Duration::from_secs(10))
         .build()
     {

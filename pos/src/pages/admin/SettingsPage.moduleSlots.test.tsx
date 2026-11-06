@@ -83,6 +83,9 @@ describe('Settings — module cards (Г2)', () => {
     const florist = await screen.findByText('Картка флориста');
     const debts = screen.getByText('Картка боргів');
     expect(florist.compareDocumentPosition(debts) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // «Про програму» (2.8.0) closes the page, after every module's card.
+    const about = screen.getByText('Про програму');
+    expect(debts.compareDocumentPosition(about) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('keeps the page when a module card throws', async () => {

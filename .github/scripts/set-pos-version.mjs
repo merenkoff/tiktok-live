@@ -25,7 +25,7 @@ const PKG_JSON = p('pos', 'package.json');
 const TAURI_CONF = p('pos', 'src-tauri', 'tauri.conf.json');
 const CARGO_TOML = p('pos', 'src-tauri', 'Cargo.toml');
 const CARGO_LOCK = p('pos', 'src-tauri', 'Cargo.lock');
-const CRATE = 'cloth-pos';
+const CRATE = 'liveshop-pos';
 
 // Plain semver: MAJOR.MINOR.PATCH, optional -prerelease, optional +build.
 const SEMVER = /^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
@@ -89,7 +89,7 @@ const version = resolveTarget(process.argv[2]);
   writeFileSync(CARGO_TOML, out);
 }
 
-// Cargo.lock — the version line in the `name = "cloth-pos"` block.
+// Cargo.lock — the version line in the `name = "liveshop-pos"` block.
 {
   const src = readFileSync(CARGO_LOCK, 'utf-8');
   const re = new RegExp(`(name = "${CRATE}"\\nversion = ")[^"]+(")`);

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Cloth POS",
+  "productName": "LiveShop POS",
   "version": "2.7.0",
-  "identifier": "shop.cloth.pos",
+  "identifier": "shop.the-live.pos",
   "build": {
     "beforeDevCommand": "npm run dev:cashier",
     "devUrl": "http://localhost:3003",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Каса",
+        "title": "LiveShop POS",
         "width": 1280,
         "height": 800,
         "minWidth": 1024,
@@ -27,6 +27,13 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "Technologies LLC",
+    "homepage": "https://the-live.shop/pos",
+    "copyright": "Copyright (c) 2026 Serhii Merenkov / Technologies LLC",
+    "license": "OwnNet Source License 1.1 (Source Available Edition)",
+    "category": "Business",
+    "shortDescription": "LiveShop POS cashier for shops, cafes and restaurants",
+    "longDescription": "The Live Shop desktop cashier: products, barcodes, weighed goods, discounts, QR payment, Ukrainian fiscal registration (PRRO) and an offline mode. Developer: Technologies LLC (EDRPOU 46288273), https://technologies.llc/. License: OwnNet Source License 1.1, https://own-net.com/.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

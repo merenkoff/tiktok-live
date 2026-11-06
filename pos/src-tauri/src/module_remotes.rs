@@ -301,7 +301,7 @@ pub async fn sync_module_remote(
 
     let (manifest_url, sig_url, dir_url) = derive_urls(&base_url)?;
     let client = reqwest::Client::builder()
-        .user_agent(concat!("cloth-pos-modules/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("liveshop-pos-modules/", env!("CARGO_PKG_VERSION")))
         .timeout(std::time::Duration::from_secs(10))
         .build()
         .map_err(|e| e.to_string())?;

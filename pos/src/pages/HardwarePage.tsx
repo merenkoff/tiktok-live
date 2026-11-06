@@ -7,6 +7,7 @@ import {
   Check,
   Download,
   DownloadLine,
+  Info,
   Printer,
   PrinterColor,
   RefreshCw,
@@ -15,6 +16,7 @@ import {
   type Glyph,
 } from '../platform/glyphs';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { AboutCard } from '../components/AboutCard';
 import { HardwareDevice, listHardware } from '../lib/hardware';
 import { installUpdate } from '../lib/updates';
 import {
@@ -608,6 +610,11 @@ export function HardwarePage() {
             {updateInfo ? `Встановлено ${updateInfo.current_version} — актуальна версія.` : 'Перевірка версії…'}
           </p>
         )}
+      </section>
+
+      <section className={CARD}>
+        <CardTitle glyph={Info} title="Про програму" hint="Хто робить касу і на яких умовах." />
+        <AboutCard />
       </section>
 
       <section className={CARD}>
