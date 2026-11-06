@@ -235,7 +235,8 @@ envelope», AAD-прив'язка до стора+провайдера, відм
 | Ф2-A/B/C/E | Активація ліцензії (бекенд) | Ed25519-перевірка токена, `pos_license_state`, env, `GET /license/status`, boot/cron ping, м'яка деградація, розкриття | **зроблено** |
 | Ф2-F | Приймач активацій + підрахунок + адмінка | `POST /api/license/activation`, `pos_license_activations`, `GET /super/licenses`, вкладка «Ліцензії» (installs/over-limit/clone/origin) | **зроблено** |
 | Ф2-D-A | Ґейт власних сервісів (бекенд + канал оновлень) | `requireValidLicense`, `GET /api/license/entitlement`, `GET /api/updates/latest.json` (проксі, enforcement за `LICENSE_UPDATE_GATE`), updater → `the-live.shop` | **зроблено** |
-| Ф2-D-B | Десктоп шле свій токен в `X-License-Key` | перехід на програмний `plugin-updater` + токен із логіну; робить gate per-deployment | — (потребує Tauri-збірки) |
+| Ф2-D-C | Ґейт роздачі онлайн-модулів (open-core, `POS_OPENCORE.md` §8) | токен доставки **в шляху** (`/api/modules/t/<token>/<id>/<ver>/*`), який деплой отримує за свій `LICENSE_KEY` (`POST /api/modules/token`) і сам вставляє в URL модулів у відповіді логіну — ключ ліцензії до каси не доходить, каси не змінюються; закрите сховище бандлів на томі (`.module-bundles`, `/pos-uploads` його не віддає) перед публічним jsdelivr; журнал виданого `pos_module_issues` (міграція `097`) — протермінована ліцензія отримує лише видане раніше (§1.12); `Access-Control-Allow-Origin: *`, `Cache-Control: private`; enforcement за `LICENSE_MODULE_GATE` (дефолт off = прозоро) | **зроблено** (бекенд); заливка в сховище з Module Release — `POS_OPENCORE.md` O-3 |
+| Ф2-D-B | Десктоп шле свій токен в `X-License-Key` | перехід на програмний `plugin-updater` + токен із логіну; робить gate **оновлень** per-deployment (модулям не потрібен — 2D-C несе токен у шляху) | — (потребує Tauri-збірки) |
 
 ## Рішення власника
 

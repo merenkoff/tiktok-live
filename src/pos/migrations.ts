@@ -173,6 +173,9 @@ export const POS_MIGRATIONS = [
   // running copies and spots over-limit/cloned ones (POS_LICENSING.md, phase 2F).
   '095_pos_license_activations.sql',
   '096_pos_license_activations_remote_ip.sql',
+  // Licence-gated delivery of online-module bundles (POS_OPENCORE.md §8): the
+  // author's journal of issued versions + a deployment's own delivery token.
+  '097_pos_module_delivery.sql',
 ] as const;
 
 export function readMigration(file: string): string {

@@ -18,6 +18,7 @@ import { getAuthByToken, sessionExpiresAt } from './core/auth.js';
 import { effectiveEnabledModules } from './core/modules.js';
 import { getVertical, publicConfigOf } from './verticals/index.js';
 import { clearPinMisses, reservePinAttempt, type PinLock } from './pin-attempts.js';
+import { moduleRemotesForTill } from './license/moduleToken.js';
 import type { VerticalPublicConfig } from './verticals/types.js';
 import type {
   FiscalPublicConfig,
@@ -129,10 +130,20 @@ async function createSession(storeId: number, staffId: number): Promise<AuthResp
     throw new Error('Failed to create session');
   }
 
-  return toAuthResponse(auth, expiresAt, await storeHasBottles(storeId));
+  return toAuthResponse(auth, expiresAt, await storeHasBottles(storeId), await moduleRemotesForTill(auth.moduleRemotes));
 }
 
-function toAuthResponse(auth: PosAuthContext, expiresAt: Date, bottles: boolean): AuthResponse {
+/**
+ * `moduleRemotes` is the store's map as a till should receive it: bare module
+ * URLs of the licence server carry this copy's delivery token
+ * (`moduleRemotesForTill`, POS_OPENCORE.md §8) — the stored map never does.
+ */
+function toAuthResponse(
+  auth: PosAuthContext,
+  expiresAt: Date,
+  bottles: boolean,
+  moduleRemotes: AuthResponse['store']['module_remotes']
+): AuthResponse {
   return {
     token: auth.token,
     expires_at: expiresAt.toISOString(),
@@ -154,7 +165,7 @@ function toAuthResponse(auth: PosAuthContext, expiresAt: Date, bottles: boolean)
       cash_rounding: auth.cashRounding,
       feedback_url: auth.feedbackUrl,
       enabled_modules: effectiveEnabledModules(auth.enabledModules),
-      module_remotes: auth.moduleRemotes,
+      module_remotes: moduleRemotes,
       nav_overrides: auth.navOverrides,
       bottles,
     },
@@ -278,7 +289,12 @@ export async function me(auth: PosAuthContext): Promise<AuthResponse> {
   const expiresAt = result.rows[0]?.expires_at
     ? new Date(result.rows[0].expires_at)
     : sessionExpiresAt();
-  return toAuthResponse(auth, expiresAt, await storeHasBottles(auth.storeId));
+  return toAuthResponse(
+    auth,
+    expiresAt,
+    await storeHasBottles(auth.storeId),
+    await moduleRemotesForTill(auth.moduleRemotes)
+  );
 }
 
 export async function listStaff(storeId: number) {

@@ -22,6 +22,7 @@ import { closeDueShifts } from './pos/fiscal/shifts.service.js';
 import { retryPendingFiscalDocs } from './pos/fiscal/fiscal.service.js';
 import { refillAllStores } from './pos/fiscal/offline/pool.js';
 import { runBootHeartbeat, runLicenseHeartbeat } from './pos/license/service.js';
+import { refreshModuleToken, refreshModuleTokenOnBoot } from './pos/license/moduleToken.js';
 import { expireParkedCarts } from './pos/parked-carts.service.js';
 import { cleanupExpiredReservations } from './reservations.js';
 import { sessionManager } from './sessions/sessions.manager.js';
@@ -263,6 +264,10 @@ async function main(): Promise<void> {
       try {
         const { status } = await runLicenseHeartbeat();
         logger.info(`🔑 Licence heartbeat: ${status}`);
+        // The delivery token that goes into the tills' module URLs
+        // (POS_OPENCORE.md §8). The same token comes back for a whole 30-day
+        // window, so a daily refresh changes no URL most days.
+        logger.info(`🔑 Module delivery token: ${await refreshModuleToken()}`);
       } catch (error) {
         logger.error('Licence heartbeat cron error', { error });
       }
@@ -287,6 +292,9 @@ async function main(): Promise<void> {
           error: error instanceof Error ? error.message : 'unknown',
         });
       });
+    void refreshModuleTokenOnBoot()
+      .then((outcome) => logger.info(`🔑 Module delivery token (boot): ${outcome}`))
+      .catch(() => undefined);
 
     logger.info('');
     logger.info('╔═════════════════════════════════════════════════════════════════╗');
