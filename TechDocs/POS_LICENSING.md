@@ -208,7 +208,8 @@ envelope», AAD-прив'язка до стора+провайдера, відм
 | Ф2-A/B/C/E | Активація ліцензії (бекенд) | Ed25519-перевірка токена, `pos_license_state`, env, `GET /license/status`, boot/cron ping, м'яка деградація, розкриття | **зроблено** |
 | Ф2-F | Приймач активацій + підрахунок + адмінка | `POST /api/license/activation`, `pos_license_activations`, `GET /super/licenses`, вкладка «Ліцензії» (installs/over-limit/clone/origin) | **зроблено** |
 | Ф2-D-A | Ґейт власних сервісів (бекенд + канал оновлень) | `requireValidLicense`, `GET /api/license/entitlement`, `GET /api/updates/latest.json` (проксі, enforcement за `LICENSE_UPDATE_GATE`), updater → `the-live.shop` | **зроблено** |
-| Ф2-D-B | Десктоп шле свій токен в `X-License-Key` | перехід на програмний `plugin-updater` + токен із логіну; робить gate per-deployment | — (потребує Tauri-збірки) |
+| Ф2-D-C | Ґейт роздачі онлайн-модулів (open-core, `POS_OPENCORE.md` §8) | `GET /api/modules/:id/:version/*` — проксі підписаного бандла з jsdelivr, enforcement за `LICENSE_MODULE_GATE` (дефолт off = прозоро); строга валідація шляху | **зроблено** (бекенд) |
+| Ф2-D-B | Десктоп шле свій токен в `X-License-Key` | перехід на програмний `plugin-updater` + токен із логіну; робить gate оновлень І модулів per-deployment | — (потребує Tauri-збірки) |
 
 ## Рішення власника
 

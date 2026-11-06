@@ -373,6 +373,61 @@ export async function createServer(): Promise<FastifyInstance> {
   });
 
   /**
+   * Licence-gated delivery of a signed module bundle (TechDocs/POS_OPENCORE.md
+   * §8, TechDocs/POS_LICENSING.md phase 2D). The author can repoint stores'
+   * `module_remotes` at `the-live.shop/api/modules/<id>/<version>/<file>` so the
+   * online modules are served through here instead of straight from jsdelivr.
+   *   - `LICENSE_MODULE_GATE` !== 'on' (default): transparent proxy of the
+   *     upstream bundle — identical to loading from jsdelivr, zero behaviour
+   *     change. Safe default until the author opts in.
+   *   - gate 'on': the request must carry a valid licence token (`X-License-Key`),
+   *     else 403 — an unlicensed copy loses the online modules, while the open
+   *     platform (clothing + build-your-own) keeps working.
+   * Bytes are proxied VERBATIM, so the host's Ed25519 signature check
+   * (remoteVerify) is unaffected. The id/version/path are strictly validated so
+   * this can only ever fetch a module-bundle path, never act as an open proxy.
+   * Only bites per-deployment once the desktop forwards its token (2D-B).
+   */
+  fastify.get('/api/modules/:id/:version/*', async (request, reply) => {
+    const p = request.params as { id: string; version: string; '*': string };
+    const rest = p['*'] ?? '';
+    const idOk = /^[a-z0-9][a-z0-9-]{0,40}$/.test(p.id);
+    const verOk = /^\d+\.\d+\.\d+$/.test(p.version);
+    const pathOk = /^[A-Za-z0-9._/-]{1,200}$/.test(rest) && !rest.includes('..');
+    if (!idOk || !verOk || !pathOk) {
+      reply.status(400);
+      return { error: 'bad_module_path' };
+    }
+    if ((process.env.LICENSE_MODULE_GATE ?? '').trim() === 'on') {
+      if (!requireValidLicense(request, reply)) return; // 403 already sent
+    }
+    const base = process.env.LICENSE_MODULE_UPSTREAM_BASE?.trim() || 'https://cdn.jsdelivr.net/gh';
+    const gh = process.env.LICENSE_MODULE_GH?.trim() || 'merenkoff/tiktok-live';
+    const upstream = `${base}/${gh}@module-${p.id}-v${p.version}/${p.id}/${rest}`;
+    try {
+      const res = await fetch(upstream, { redirect: 'follow', signal: AbortSignal.timeout(8000) });
+      if (!res.ok) {
+        logger.warn('module feed: upstream non-2xx', { status: res.status, id: p.id, version: p.version });
+        reply.status(502);
+        return { error: 'module_unavailable' };
+      }
+      const buf = Buffer.from(await res.arrayBuffer());
+      const ct = res.headers.get('content-type');
+      // Versioned bundle path is immutable, so it is safe to cache hard.
+      reply.header('cache-control', 'public, max-age=31536000, immutable');
+      if (ct) reply.type(ct);
+      return reply.send(buf);
+    } catch (error) {
+      logger.warn('module feed: upstream unreachable', {
+        error: error instanceof Error ? error.message : 'fetch_failed',
+        id: p.id,
+      });
+      reply.status(502);
+      return { error: 'module_unavailable' };
+    }
+  });
+
+  /**
    * Health check
    */
   fastify.get('/health', async () => {
