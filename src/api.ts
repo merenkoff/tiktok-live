@@ -17,6 +17,7 @@ import {
   recordActivation,
   type ActivationPing,
 } from './pos/license/activations.service.js';
+import { checkEntitlement, licenseTokenFromRequest, requireValidLicense } from './pos/license/entitlement.js';
 import { leadAllowed } from './crm/limits.js';
 import {
   getOrder,
@@ -314,6 +315,60 @@ export async function createServer(): Promise<FastifyInstance> {
       logger.error('Error recording licence activation', { error });
       reply.status(500);
       return { ok: false };
+    }
+  });
+
+  /**
+   * Entitlement check for an author-hosted service (TechDocs/POS_LICENSING.md,
+   * phase 2D). "Authentication for a network service the user chooses to use"
+   * (OwnNet 1.1 §1.145) — NOT a kill switch: it reports whether the presented
+   * licence token is valid, and gates only the AUTHOR's own services, never a
+   * deployment's local POS. A valid token → 200 { entitled: true, … }; otherwise
+   * 403 with the reason. The token comes in the `X-License-Key` header or `?key=`.
+   */
+  fastify.get('/api/license/entitlement', async (request, reply) => {
+    const ent = checkEntitlement(licenseTokenFromRequest(request));
+    reply.status(ent.entitled ? 200 : 403);
+    return ent;
+  });
+
+  /**
+   * Desktop update feed, gated on a valid licence (TechDocs/POS_LICENSING.md,
+   * phase 2D). The official Tauri cashier points its updater here instead of at
+   * GitHub, so the author controls that channel. Behaviour:
+   *   - `LICENSE_UPDATE_GATE` !== 'on' (default): transparent proxy of the
+   *     upstream `latest.json` — identical to going straight to GitHub, zero
+   *     behaviour change. This is the safe default until the author opts in.
+   *   - gate 'on': the request must carry a valid licence token (`X-License-Key`),
+   *     else 403 — an unlicensed copy of an official build stops getting updates,
+   *     while its POS keeps running untouched.
+   * The upstream body is proxied VERBATIM so the updater's own signature check
+   * (the `pubkey` in tauri.conf) is unaffected. An upstream failure is a 502,
+   * which the updater treats as "no update this cycle" — never a brick.
+   */
+  fastify.get('/api/updates/latest.json', async (request, reply) => {
+    if ((process.env.LICENSE_UPDATE_GATE ?? '').trim() === 'on') {
+      if (!requireValidLicense(request, reply)) return; // 403 already sent
+    }
+    const upstream =
+      process.env.LICENSE_UPDATE_UPSTREAM?.trim() ||
+      'https://github.com/merenkoff/tiktok-live/releases/latest/download/latest.json';
+    try {
+      const res = await fetch(upstream, { redirect: 'follow', signal: AbortSignal.timeout(5000) });
+      if (!res.ok) {
+        logger.warn('update feed: upstream non-2xx', { status: res.status });
+        reply.status(502);
+        return { error: 'update_feed_unavailable' };
+      }
+      const body = await res.text();
+      reply.type('application/json').header('cache-control', 'no-store');
+      return body;
+    } catch (error) {
+      logger.warn('update feed: upstream unreachable', {
+        error: error instanceof Error ? error.message : 'fetch_failed',
+      });
+      reply.status(502);
+      return { error: 'update_feed_unavailable' };
     }
   });
 
