@@ -45,18 +45,20 @@ function licenseServerUrl(): string {
 }
 
 /**
- * The origin this copy reports running on. `PUBLIC_BASE_URL` when the operator
- * set it; otherwise what every deployment already has — Railway's own
- * `RAILWAY_PUBLIC_DOMAIN` (set by the platform on any service with a public
- * domain), then the first origin of `CORS_ORIGINS`, without which no web POS
- * can talk to this API. Null only when none of them is there, so a copy whose
- * operator filled none of the optional variables still names itself. Never a
- * guess at the author's domain: that would make a clone report as the author
- * and blind the clone signal. Pure over the env map, for the test.
+ * The origin this copy reports running on — read only from what a deployment
+ * sets for its OWN sake, never from a variable one would fill for the ping:
+ * Railway's `RAILWAY_PUBLIC_DOMAIN` (the platform sets it on any service with
+ * a public domain), then the first origin of `CORS_ORIGINS`, without which no
+ * web POS can talk to this API. `PUBLIC_BASE_URL` is deliberately NOT read
+ * here: it exists for the guest QR menu's addresses (`public-menu/urls.ts`),
+ * and a variable set to be reported is the easiest one to set falsely. Every
+ * reported origin is still the copy's own word; what it cannot choose is the
+ * address its ping comes from, which the receiver keeps (migration 096). Null
+ * when nothing names the deployment — never a guess at the author's domain:
+ * that would make a clone report as the author and blind the clone signal.
+ * Pure over the env map, for the test.
  */
 export function reportedOrigin(env: NodeJS.ProcessEnv = process.env): string | null {
-  const explicit = env.PUBLIC_BASE_URL?.trim();
-  if (explicit) return explicit;
   const railway = env.RAILWAY_PUBLIC_DOMAIN?.trim();
   if (railway) return /^https?:\/\//i.test(railway) ? railway : `https://${railway}`;
   const cors = (env.CORS_ORIGINS || env.EXTRA_CORS_ORIGINS || '')

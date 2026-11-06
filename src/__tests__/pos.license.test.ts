@@ -193,13 +193,14 @@ describe('runBootHeartbeat', () => {
 });
 
 describe('reportedOrigin', () => {
-  it('prefers an explicit PUBLIC_BASE_URL', () => {
+  it('never reads PUBLIC_BASE_URL — a variable set to be reported is the easiest to set falsely', () => {
+    expect(reportedOrigin({ PUBLIC_BASE_URL: 'https://shop.example' })).toBeNull();
     expect(
-      reportedOrigin({ PUBLIC_BASE_URL: ' https://shop.example ', RAILWAY_PUBLIC_DOMAIN: 'x.up.railway.app' })
-    ).toBe('https://shop.example');
+      reportedOrigin({ PUBLIC_BASE_URL: 'https://shop.example', RAILWAY_PUBLIC_DOMAIN: 'x.up.railway.app' })
+    ).toBe('https://x.up.railway.app');
   });
 
-  it("falls back to Railway's own public domain, with https in front of a bare host", () => {
+  it("takes Railway's own public domain, with https in front of a bare host", () => {
     expect(reportedOrigin({ RAILWAY_PUBLIC_DOMAIN: 'api.up.railway.app' })).toBe('https://api.up.railway.app');
     expect(reportedOrigin({ RAILWAY_PUBLIC_DOMAIN: 'http://api.local' })).toBe('http://api.local');
   });
@@ -213,6 +214,6 @@ describe('reportedOrigin', () => {
 
   it('is null when nothing names the deployment — never a guess at the author', () => {
     expect(reportedOrigin({})).toBeNull();
-    expect(reportedOrigin({ PUBLIC_BASE_URL: '  ', CORS_ORIGINS: 'tauri://localhost' })).toBeNull();
+    expect(reportedOrigin({ CORS_ORIGINS: 'tauri://localhost' })).toBeNull();
   });
 });
