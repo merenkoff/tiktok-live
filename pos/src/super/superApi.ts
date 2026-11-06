@@ -286,6 +286,12 @@ export class SuperApi {
     const { data } = await this.client.get<SuperLicenseDetail>(`/licenses/${fingerprint || 'none'}`);
     return data;
   }
+
+  /** Forget every ping of one licence — the «Без ключа» row a copy left before its key was set. */
+  async deleteLicense(fingerprint: string): Promise<{ deleted: number }> {
+    const { data } = await this.client.delete<{ deleted: number }>(`/licenses/${fingerprint || 'none'}`);
+    return data;
+  }
 }
 
 

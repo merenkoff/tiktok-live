@@ -11,11 +11,38 @@ import { licenseTitle, originLabel } from './licenseLabels';
  * One licence: the claim, the copy count against its limit, and every install
  * with the origins it ran on. The origin is what the author uses to find who
  * to contact over a copy-count breach (TechDocs/POS_LICENSING.md, phase 2F).
- * Read only — nothing here disables a copy.
+ * Nothing here disables a copy; the one write forgets the licence's pings —
+ * for the «Без ключа» row a copy left before its `LICENSE_KEY` was set, which
+ * would otherwise sit beside its real licence forever. A copy that still runs
+ * pings again within a day.
  */
-export function LicenseCard({ fingerprint, onClose }: { fingerprint: string; onClose: () => void }) {
+export function LicenseCard({
+  fingerprint,
+  onClose,
+  onDeleted,
+}: {
+  fingerprint: string;
+  onClose: () => void;
+  /** Called after the pings are gone, so the list re-reads. */
+  onDeleted?: () => void;
+}) {
   const [lic, setLic] = useState<SuperLicenseDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const remove = async () => {
+    setDeleting(true);
+    setError(null);
+    try {
+      await superApi.deleteLicense(fingerprint);
+      onDeleted?.();
+    } catch (err) {
+      setError(superErrorText(err));
+      setDeleting(false);
+      setConfirming(false);
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -104,6 +131,44 @@ export function LicenseCard({ fingerprint, onClose }: { fingerprint: string; onC
                   </div>
                 ))}
               </div>
+            </section>
+
+            <section className="space-y-2 border-t border-sq-divider pt-4">
+              {confirming ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm text-sq-text">
+                    Прибрати {lic.total_pings} пінгів цієї ліцензії? Копія, що працює, з'явиться знову з наступним пінгом.
+                  </span>
+                  <button
+                    type="button"
+                    disabled={deleting}
+                    onClick={() => void remove()}
+                    className="rounded-sq bg-rose-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+                  >
+                    {deleting ? 'Видаляю…' : 'Так, видалити'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deleting}
+                    onClick={() => setConfirming(false)}
+                    className="rounded-sq border border-sq-divider px-3 py-1.5 text-sm text-sq-secondary"
+                  >
+                    Ні
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirming(true)}
+                  className="rounded-sq border border-rose-200 px-3 py-1.5 text-sm text-rose-600"
+                >
+                  Видалити записи
+                </button>
+              )}
+              <p className="text-xs text-sq-secondary">
+                Для рядка «Без ключа», що лишився від копії, якій ключ задали пізніше. Це лише історія пінгів — нічого
+                не вимикає.
+              </p>
             </section>
           </>
         )}

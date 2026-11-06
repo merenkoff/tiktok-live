@@ -173,4 +173,54 @@ describe.skipIf(!hasDb)('licence activations (095)', () => {
     });
     expect(res.statusCode).toBe(404);
   });
+
+  it('the super admin forgets a licence\u2019s pings: the keyless group by «none», 404 once gone', async () => {
+    const id = uuid();
+    expect((await ping({ instance_id: id })).statusCode).toBe(200);
+    expect(await rowFor(id)).toHaveLength(1);
+
+    const unauthenticated = await app.inject({ method: 'DELETE', url: '/api/pos/super/licenses/none' });
+    expect(unauthenticated.statusCode).toBe(401);
+    expect(await rowFor(id)).toHaveLength(1);
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/api/pos/super/licenses/none',
+      headers: { 'x-pos-super-token': superToken() },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().deleted).toBeGreaterThanOrEqual(1);
+    expect(await rowFor(id)).toHaveLength(0);
+
+    const again = await app.inject({
+      method: 'DELETE',
+      url: '/api/pos/super/licenses/none',
+      headers: { 'x-pos-super-token': superToken() },
+    });
+    expect(again.statusCode).toBe(404);
+    const read = await app.inject({
+      method: 'GET',
+      url: '/api/pos/super/licenses/none',
+      headers: { 'x-pos-super-token': superToken() },
+    });
+    expect(read.statusCode).toBe(404);
+  });
+
+  it('deleting one licence leaves the others', async () => {
+    const key = ephemeralKey();
+    const token = signLicenseToken({ kid: key.kid, licensee: 'Keep', instance_limit: 5 }, key.priv);
+    const keep = uuid();
+    const gone = uuid();
+    await recordActivation({ token, instance_id: keep, public_base_url: 'https://keep.example' }, { keys: key.keys });
+    await recordActivation({ instance_id: gone, public_base_url: 'https://gone.example' });
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/api/pos/super/licenses/none',
+      headers: { 'x-pos-super-token': superToken() },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(await rowFor(gone)).toHaveLength(0);
+    expect(await rowFor(keep)).toHaveLength(1);
+  });
 });

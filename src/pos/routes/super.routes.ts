@@ -178,8 +178,8 @@ export function registerSuperRoutes(fastify: FastifyInstance): void {
   });
 
   // Licence activations (TechDocs/POS_LICENSING.md, phase 2F): who runs the
-  // software, how many copies, over the limit, cloned. Read-only — this surface
-  // counts and shows, it never disables a copy.
+  // software, how many copies, over the limit, cloned. This surface counts and
+  // shows, it never disables a copy; the one write forgets a licence's pings.
   fastify.get('/super/licenses', async (request, reply) => {
     if (!(await ensureSuper(request, reply))) return;
     return licenses.listLicenses();
@@ -191,6 +191,15 @@ export function registerSuperRoutes(fastify: FastifyInstance): void {
     const detail = await licenses.getLicense(fp);
     if (!detail) return reply.code(404).send({ error: 'Ліцензію не знайдено' });
     return detail;
+  });
+
+  fastify.delete('/super/licenses/:fingerprint', async (request, reply) => {
+    if (!(await ensureSuper(request, reply))) return;
+    const fp = String((request.params as { fingerprint: string }).fingerprint);
+    const deleted = await licenses.deleteLicense(fp);
+    if (deleted === 0) return reply.code(404).send({ error: 'Ліцензію не знайдено' });
+    logger.info('super: licence activations deleted', { fingerprint: fp, deleted });
+    return { deleted };
   });
 
   fastify.patch('/super/leads/:id', async (request, reply) => {
