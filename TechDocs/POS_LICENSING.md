@@ -124,6 +124,21 @@ envelope», AAD-прив'язка до стора+провайдера, відм
 - Тести: `src/__tests__/pos.license.test.ts` (валідний / absent / malformed / unknown_key /
   tampered / forged / expired; `computeStatus`).
 
+**Що приземлилось у 2F (приймач + адмінка підрахунку, окремий PR поверх 2A-E):**
+- Таблиця: `migrations/095_pos_license_activations.sql` — дзеркало 094 на боці АВТОРА: рядок на
+  `(fingerprint, instance_id, origin)`, лише дані сумісності, повторний пінг лише піднімає `seen_count`.
+- Приймач: публічний `POST /api/license/activation` (`src/api.ts`, за зразком `/api/leads` — ліміт тіла,
+  глобальний ліміт частоти; відсутній/невалідний токен навмисно записується, а не відкидається).
+- Інжест + читання: `src/pos/license/activations.service.ts` (`recordActivation`, `listLicenses`,
+  `getLicense`): `fingerprint` = sha256 токена ('' = «без ключа»), `installs` = різних `instance_id`,
+  `over_limit` = installs > `instance_limit` токена, `cloned` = один `instance_id` з кількох origin.
+- Читання власника: owner/super `GET /api/pos/super/licenses` і `…/:fingerprint`
+  (`src/pos/routes/super.routes.ts`, `ensureSuper`).
+- Адмінка: вкладка «Ліцензії» в супер-адмінці (`pos/src/super/LicensesPage.tsx` + `LicenseCard.tsx`,
+  `superApi.listLicenses/getLicense`) — хто, скільки копій, понад ліміт, клон, і origin для скарги.
+- Тести: `src/__tests__/pos.license-activations.test.ts` (приймач, ідемпотентність, підрахунок,
+  over-limit, клон, гейт `ensureSuper`) + `pos/src/super/licenseLabels.test.ts`.
+
 Деталі дизайну (нижче лишені як специфікація контракту):
 
 - **2A. Токен ліцензії = Ed25519-підпис** над малим JSON `{ licensee, plan, issued_at, expires_at?,
@@ -153,11 +168,12 @@ envelope», AAD-прив'язка до стора+провайдера, відм
 - **2E. Розкриття (що робить 2B законним).** Розділ у цьому доці + абзац у `README.md`/`NOTICE` +
   коментовані записи в `.env.example`: прямо — що ping шле, куди, навіщо (відповідність ліцензії), і що
   він **ніколи не вимикає** законну копію.
-- **2F. Підрахунок.** Серверний `/api/license/activation` пише first-seen `(licence, instance_id)` =
-  лічильник інсталяцій + мітка «новий клієнт запустився»; невідомі/невалідні ключі = кандидати на
-  несанкціоновані копії, у лог для **юридичного** супроводу (не технічного вимкнення). Панель перегляду
-  — звичайна, **не прихована** адмінка на `the-live.shop` — **окреме завдання** (власник це зазначив);
-  цей трек лише визначає модель даних для неї.
+- **2F. Підрахунок — ЗРОБЛЕНО.** Серверний `/api/license/activation` пише `(fingerprint, instance_id,
+  origin)` = лічильник інсталяцій; невідомі/невалідні ключі = кандидати на несанкціоновані копії, для
+  **юридичного** супроводу (не технічного вимкнення). Панель перегляду — звичайна, **не прихована**
+  вкладка «Ліцензії» в супер-адмінці на `the-live.shop`. Клон виявляється через один `instance_id` з
+  кількох `origin` (клон копіює й базу з `instance_id`); перевищення договору — `installs >
+  instance_limit`; origin кожної копії — на кого подавати скаргу.
 
 ## Фази
 
@@ -165,8 +181,8 @@ envelope», AAD-прив'язка до стора+провайдера, відм
 |---|---|---|---|
 | Ф1 | Moat: custody + документація | цей док; гвардія `check:prod-no-dev-key`; runbook ротації; пін `pos.secrets.test.ts` | **в роботі** (ця гілка) |
 | Ф2-A/B/C/E | Активація ліцензії (бекенд) | Ed25519-перевірка токена, `pos_license_state`, env, `GET /license/status`, boot/cron ping, м'яка деградація, розкриття | **зроблено** |
-| Ф2-D | Ґейт власних сервісів автора (серверний бік) | оновлення/онлайн-модулі вимагають ліцензію (403 від `the-live.shop`), інжест активацій, підрахунок | — (окремий трек) |
-| Ф3 | Адмінка перегляду активацій на `the-live.shop` | окреме завдання (власник) | — (поза цим треком) |
+| Ф2-F | Приймач активацій + підрахунок + адмінка | `POST /api/license/activation`, `pos_license_activations`, `GET /super/licenses`, вкладка «Ліцензії» (installs/over-limit/clone/origin) | **зроблено** |
+| Ф2-D | Ґейт власних сервісів автора (серверний бік) | оновлення/онлайн-модулі вимагають ліцензію (403 від `the-live.shop`) | — (окремий трек) |
 
 ## Рішення власника
 
