@@ -21,6 +21,7 @@ import { wipeGuestFeedbackPhones } from './pos/guest-feedback.service.js';
 import { closeDueShifts } from './pos/fiscal/shifts.service.js';
 import { retryPendingFiscalDocs } from './pos/fiscal/fiscal.service.js';
 import { refillAllStores } from './pos/fiscal/offline/pool.js';
+import { runLicenseHeartbeat } from './pos/license/service.js';
 import { expireParkedCarts } from './pos/parked-carts.service.js';
 import { cleanupExpiredReservations } from './reservations.js';
 import { sessionManager } from './sessions/sessions.manager.js';
@@ -253,7 +254,29 @@ async function main(): Promise<void> {
       }
     });
 
+    // Disclosed licence-compliance heartbeat (TechDocs/POS_LICENSING.md, phase
+    // 2): verify the local LICENSE_KEY, ping the activation server so a running
+    // copy can be counted, and cache the status the owner reads. Best-effort —
+    // it NEVER disables the POS and never throws past this wrapper. Daily, plus
+    // a fire-and-forget run on boot below.
+    cron.schedule('20 4 * * *', async () => {
+      try {
+        const status = await runLicenseHeartbeat();
+        logger.info(`🔑 Licence heartbeat: ${status}`);
+      } catch (error) {
+        logger.error('Licence heartbeat cron error', { error });
+      }
+    });
+
     logger.info('✅ Cron jobs configured');
+
+    // One-shot licence heartbeat on boot. Fire-and-forget: a slow or
+    // unreachable activation server must never delay or fail startup.
+    void runLicenseHeartbeat().catch((error) => {
+      logger.warn('Licence heartbeat (boot) error', {
+        error: error instanceof Error ? error.message : 'unknown',
+      });
+    });
 
     // 6. Start API server
     logger.info('🚀 Step 6: Starting API server...');

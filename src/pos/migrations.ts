@@ -166,6 +166,9 @@ export const POS_MIGRATIONS = [
   // Excise goods and their stamps — product flags and pos_excise_labels (ДК4-Б).
   '092_pos_excise.sql',
   '093_pos_open_bottles.sql',
+  // Disclosed licence-activation state: one instance-global row with the
+  // deployment's instance_id and cached licence status (POS_LICENSING.md, phase 2).
+  '094_pos_license_state.sql',
 ] as const;
 
 export function readMigration(file: string): string {
