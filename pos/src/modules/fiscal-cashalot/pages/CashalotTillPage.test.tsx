@@ -4,7 +4,7 @@
 
 import { screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderWithProviders } from '../../../test/utils';
+import { renderWithProviders } from '@host/test/utils';
 import type { FiscalStatus } from '../../fiscal-core/types';
 
 const getFiscalStatus = vi.fn<[], Promise<FiscalStatus>>();

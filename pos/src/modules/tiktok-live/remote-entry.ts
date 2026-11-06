@@ -11,8 +11,8 @@
 //
 // `version` is stamped from THIS build's `POS_APP_VERSION` (deep import, so it
 // is bundled locally) and shows up in the host's `session_manifest` telemetry.
-import '../remote-styles.css';
-import { POS_APP_VERSION } from '../../platform/version';
+import '@host/modules/remote-styles.css';
+import { POS_APP_VERSION } from '@host/platform/version';
 import { tiktokLiveModule } from './manifest';
 
 export const manifest = { ...tiktokLiveModule, version: POS_APP_VERSION };

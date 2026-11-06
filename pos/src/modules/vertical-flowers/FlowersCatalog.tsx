@@ -44,7 +44,7 @@ import {
 // is already in this bundle's static graph (the tiles above), so a dynamic
 // import of it resolves to the same chunk and splits nothing.
 const BarcodeScanner = lazy(() =>
-  import('../../components/BarcodeScanner').then((m) => ({ default: m.BarcodeScanner }))
+  import('@host/components/BarcodeScanner').then((m) => ({ default: m.BarcodeScanner }))
 );
 import { HostTooOldError, missingHostApi } from './lib/hostPlatform';
 import { FloristBench } from './bench/FloristBench';

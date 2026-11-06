@@ -22,7 +22,7 @@ const { default: CheckoutAction } = await import('./CheckoutAction');
 const { formatUah, useOfflineStatus } = await import('@pos/platform');
 const { resetCreditCache } = await import('../lib/useCredit');
 const { resetUnanswered } = await import('../lib/pendingKeys');
-const { renderWithProviders } = await import('../../../test/utils');
+const { renderWithProviders } = await import('@host/test/utils');
 
 const customer: PosCustomer = {
   id: 7,

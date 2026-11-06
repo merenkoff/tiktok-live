@@ -3,8 +3,8 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { describe, expect, it } from 'vitest';
-import { makeCatalogItem } from '../../../test/utils';
-import type { PosTag } from '../../../types';
+import { makeCatalogItem } from '@host/test/utils';
+import type { PosTag } from '@host/types';
 import { stationOf } from './station';
 
 const tag = (id: number, station: PosTag['station'], children: PosTag[] = []): PosTag => ({

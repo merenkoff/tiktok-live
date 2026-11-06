@@ -9,8 +9,8 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { makeCatalogItem } from '../../test/utils';
-import type { CatalogItem } from '../../types';
+import { makeCatalogItem } from '@host/test/utils';
+import type { CatalogItem } from '@host/types';
 
 const rows: CatalogItem[] = [];
 const lookupBarcode = vi.fn(async (): Promise<CatalogItem[]> => []);

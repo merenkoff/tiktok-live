@@ -22,8 +22,8 @@
 
 // Type-only import — erased at build time, so this does NOT pull the bundled
 // registry (and every manifest alongside it) into the remote chunk.
-import type { RemoteModuleDescriptor } from '../registry';
-import { lazyWithRetry } from '../lazyWithRetry';
+import type { RemoteModuleDescriptor } from '@host/modules/registry';
+import { lazyWithRetry } from '@host/modules/lazyWithRetry';
 
 const TablesRoutes = lazyWithRetry(() =>
   import('./pages/TablesRoutes').then((m) => ({ default: m.TablesRoutes }))

@@ -10,7 +10,7 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderWithProviders } from '../../../test/utils';
+import { renderWithProviders } from '@host/test/utils';
 import type { FiscalStatus, ShiftCloseResponse, ShiftOpenResponse } from '../../fiscal-core/types';
 
 const getFiscalStatus = vi.fn<[], Promise<FiscalStatus>>();

@@ -22,7 +22,7 @@ const { DebtsRoutes } = await import('./DebtsRoutes');
 const { formatUah, useAuthStore, useOfflineStatus } = await import('@pos/platform');
 const { resetCreditCache } = await import('../lib/useCredit');
 const { resetUnanswered } = await import('../lib/pendingKeys');
-const { makeAuthResponse, renderWithProviders } = await import('../../../test/utils');
+const { makeAuthResponse, renderWithProviders } = await import('@host/test/utils');
 
 const uah = (cents: number) => formatUah(cents).replace(/\s/g, ' ');
 

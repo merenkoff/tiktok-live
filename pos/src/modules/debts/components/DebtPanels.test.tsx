@@ -17,7 +17,7 @@ vi.mock('@pos/platform', async () => {
 
 const { default: DebtPanels } = await import('./DebtPanels');
 const { formatUah } = await import('@pos/platform');
-const { renderWithProviders } = await import('../../../test/utils');
+const { renderWithProviders } = await import('@host/test/utils');
 
 const uah = (cents: number) => formatUah(cents).replace(/\s/g, ' ');
 

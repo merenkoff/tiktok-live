@@ -4,7 +4,7 @@
 
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { makeCatalogItem } from '../../../test/utils';
+import { makeCatalogItem } from '@host/test/utils';
 import { budgetRead, useBench } from './useBench';
 
 const rose = (over: Partial<Parameters<typeof makeCatalogItem>[0]> = {}) =>

@@ -7,10 +7,10 @@
 
 import { describe, expect, it } from 'vitest';
 import { tablesModule } from './manifest';
-import { CORE_MODULE_IDS, DEFAULT_ENABLED_MODULE_IDS } from '../constants';
-import { MODULES } from '../registry';
+import { CORE_MODULE_IDS, DEFAULT_ENABLED_MODULE_IDS } from '@host/modules/constants';
+import { MODULES } from '@host/modules/registry';
 import { REQUIRED_HOST_API } from './lib/hostPlatform';
-import { NAV_ICONS } from '../../platform/icons';
+import { NAV_ICONS } from '@host/platform/icons';
 
 describe('tables manifest', () => {
   it('is its own module, not a vertical and not a bundled one', () => {

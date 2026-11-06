@@ -35,6 +35,8 @@ export default defineConfig({
   // No `@pos/platform/ui` alias here (unlike the `returns` build): this module
   // imports nothing from that entry point, so there is no self-referential
   // external to break.
+  // O-1 (POS_OPENCORE §4): host imports via `@host/*` → open platform at `pos/src/*`.
+  resolve: { alias: { '@host': path.resolve(dir, 'src') } },
   build: {
     outDir: 'dist-remotes/tiktok-live',
     emptyOutDir: true,

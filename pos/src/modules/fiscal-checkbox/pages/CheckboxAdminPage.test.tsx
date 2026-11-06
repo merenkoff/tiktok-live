@@ -10,7 +10,7 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderWithProviders } from '../../../test/utils';
+import { renderWithProviders } from '@host/test/utils';
 import type {
   AttentionDoc,
   FiscalProbe,
@@ -18,7 +18,7 @@ import type {
   HolderStatusBlock,
   OfflineSessionView,
 } from '../../fiscal-core/types';
-import type { FiscalSettingsView } from '../../../types';
+import type { FiscalSettingsView } from '@host/types';
 
 const getFiscalSettingsView = vi.fn<[], Promise<FiscalSettingsView>>();
 const saveFiscalSecrets = vi.fn<[Record<string, string | null>], Promise<FiscalSettingsView>>();

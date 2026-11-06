@@ -17,8 +17,8 @@
 
 // Type-only import (erased at build time — this does NOT pull the bundled
 // registry, and every manifest with it, into the remote chunk).
-import type { RemoteModuleDescriptor } from '../registry';
-import { lazyWithRetry } from '../lazyWithRetry';
+import type { RemoteModuleDescriptor } from '@host/modules/registry';
+import { lazyWithRetry } from '@host/modules/lazyWithRetry';
 
 const LiveDeskPage = lazyWithRetry(() =>
   import('./pages/LiveDeskPage').then((m) => ({ default: m.LiveDeskPage }))

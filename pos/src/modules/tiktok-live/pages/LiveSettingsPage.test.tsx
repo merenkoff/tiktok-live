@@ -10,7 +10,7 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderWithProviders } from '../../../test/utils';
+import { renderWithProviders } from '@host/test/utils';
 import { resetReportedFailures } from '../lib/diagnostics';
 import type { LiveSettings, LiveSettingsPatch } from '../types';
 

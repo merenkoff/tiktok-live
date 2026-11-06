@@ -42,7 +42,7 @@ const { resetUnanswered } = await import('../lib/pendingKeys');
 const { db } = await import('../data/db');
 const { applyDebtors, mirroredCredit } = await import('../data/mirror');
 const { enqueueIssue } = await import('../data/queue');
-const { makeAuthResponse, renderWithProviders } = await import('../../../test/utils');
+const { makeAuthResponse, renderWithProviders } = await import('@host/test/utils');
 
 // `toHaveTextContent` folds every space, the thousands' narrow one included.
 const uah = (cents: number) => formatUah(cents).replace(/\s/g, ' ');

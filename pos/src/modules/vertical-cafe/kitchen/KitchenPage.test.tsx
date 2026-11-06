@@ -8,8 +8,8 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderWithProviders } from '../../../test/utils';
-import type { CatalogItem } from '../../../types';
+import { renderWithProviders } from '@host/test/utils';
+import type { CatalogItem } from '@host/types';
 
 const CAFE = {
   id: 'cafe',

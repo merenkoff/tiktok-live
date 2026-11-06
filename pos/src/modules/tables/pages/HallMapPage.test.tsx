@@ -10,7 +10,7 @@ import 'fake-indexeddb/auto';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderWithProviders } from '../../../test/utils';
+import { renderWithProviders } from '@host/test/utils';
 
 const posRequest = vi.fn();
 const navigate = vi.fn();
@@ -91,7 +91,7 @@ vi.mock('react-router-dom', async () => {
 const { HallMapPage } = await import('./HallMapPage');
 const { useOfflineStatus, useAuthStore } = await import('@pos/platform');
 const mirror = await import('../data/mirror');
-const { makeAuthResponse } = await import('../../../test/utils');
+const { makeAuthResponse } = await import('@host/test/utils');
 
 beforeEach(async () => {
   navigate.mockReset();

@@ -46,7 +46,7 @@ import { groceryTile } from './lib/tile';
 // never presses the button never downloads it — by file path, for the reason
 // `FlowersCatalog` gives (the barrel is already in this bundle's static graph).
 const BarcodeScanner = lazy(() =>
-  import('../../components/BarcodeScanner').then((m) => ({ default: m.BarcodeScanner }))
+  import('@host/components/BarcodeScanner').then((m) => ({ default: m.BarcodeScanner }))
 );
 
 export default function GroceryCatalog({ active, stockEpoch }: SalesCatalogProps) {

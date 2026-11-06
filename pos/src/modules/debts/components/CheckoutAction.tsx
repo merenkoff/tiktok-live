@@ -43,7 +43,7 @@ import {
   useOfflineStatus,
 } from '@pos/platform';
 import { Wallet } from '@pos/platform/ui';
-import type { CheckoutActionProps } from '../../types';
+import type { CheckoutActionProps } from '@host/modules/types';
 import type { IssueRow } from '../data/db';
 import { enqueueIssue } from '../data/queue';
 import { withPending } from '../lib/creditStore';

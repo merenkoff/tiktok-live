@@ -15,7 +15,7 @@
 // закритій зміні…», «Є чеки, що ще реєструються…») is shown verbatim.
 
 import { useEffect, useState } from 'react';
-import type { FiscalSettingsView } from '../../../types';
+import type { FiscalSettingsView } from '@host/types';
 import {
   configFromDraft,
   defaultLetterFor,

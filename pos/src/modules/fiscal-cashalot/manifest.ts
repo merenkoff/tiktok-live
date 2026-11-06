@@ -5,8 +5,8 @@
 // Type-only import — erased at build time, so this does NOT pull the bundled
 // registry (and every manifest alongside it) into the remote chunk. Same
 // pattern as `fiscal-checkbox/manifest.ts`.
-import type { RemoteModuleDescriptor } from '../registry';
-import { lazyWithRetry } from '../lazyWithRetry';
+import type { RemoteModuleDescriptor } from '@host/modules/registry';
+import { lazyWithRetry } from '@host/modules/lazyWithRetry';
 
 const CashalotTillPage = lazyWithRetry(() =>
   import('./pages/CashalotTillPage').then((m) => ({ default: m.CashalotTillPage }))

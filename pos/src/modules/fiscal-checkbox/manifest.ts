@@ -5,8 +5,8 @@
 // Type-only import — erased at build time, so this does NOT pull the bundled
 // registry (and every manifest alongside it) into the remote chunk. Same
 // pattern as `tiktok-live/manifest.ts`.
-import type { RemoteModuleDescriptor } from '../registry';
-import { lazyWithRetry } from '../lazyWithRetry';
+import type { RemoteModuleDescriptor } from '@host/modules/registry';
+import { lazyWithRetry } from '@host/modules/lazyWithRetry';
 
 const CheckboxTillPage = lazyWithRetry(() =>
   import('./pages/CheckboxTillPage').then((m) => ({ default: m.CheckboxTillPage }))

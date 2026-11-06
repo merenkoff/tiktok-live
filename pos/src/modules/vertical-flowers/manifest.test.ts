@@ -7,11 +7,11 @@
 
 import { describe, expect, it } from 'vitest';
 import { verticalFlowersModule } from './manifest';
-import { NAV_ICONS } from '../../platform/icons';
-import { CORE_MODULE_IDS, DEFAULT_ENABLED_MODULE_IDS } from '../constants';
-import { resolveSalesCatalog } from '../verticals';
-import { resolveModuleSlots, type ModuleSlotContext } from '../featureSlots';
-import { MODULES } from '../registry';
+import { NAV_ICONS } from '@host/platform/icons';
+import { CORE_MODULE_IDS, DEFAULT_ENABLED_MODULE_IDS } from '@host/modules/constants';
+import { resolveSalesCatalog } from '@host/modules/verticals';
+import { resolveModuleSlots, type ModuleSlotContext } from '@host/modules/featureSlots';
+import { MODULES } from '@host/modules/registry';
 
 // A florist's owner on the web: the screens where both host slots live.
 const FLORIST: ModuleSlotContext = { vertical: 'flowers', shell: 'web', role: 'owner', enabled: new Set() };
