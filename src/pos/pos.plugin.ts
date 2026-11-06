@@ -36,6 +36,10 @@ export async function registerPosPlugin(fastify: FastifyInstance): Promise<void>
     root: POS_UPLOADS_DIR,
     prefix: `${POS_UPLOADS_PREFIX}/`,
     decorateReply: false,
+    // Nothing under a dot directory leaves through here: the volume also holds
+    // the closed store of module bundles (`.module-bundles`, POS_OPENCORE.md
+    // §8), which only the licence-gated `/api/modules/…` may hand out.
+    allowedPath: (pathName) => !pathName.split('/').some((segment) => segment.startsWith('.')),
   });
 
   // The guest's menu lives at the site's root (/m/<token>), not under /api/pos:

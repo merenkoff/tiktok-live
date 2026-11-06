@@ -36,11 +36,11 @@ const GRACE_DAYS = 14;
 
 export type LicenseStatus = 'unknown' | 'licensed' | 'unlicensed' | 'unreachable';
 
-function licenseKey(): string {
+export function licenseKey(): string {
   return process.env.LICENSE_KEY?.trim() ?? '';
 }
 
-function licenseServerUrl(): string {
+export function licenseServerUrl(): string {
   return process.env.LICENSE_SERVER_URL?.trim() || 'https://the-live.shop';
 }
 
