@@ -74,10 +74,15 @@ function LicenseRow() {
   useEffect(() => {
     if (!isOwner) return;
     let alive = true;
-    api
-      .posRequest<LicenseStatusView>('get', '/license/status')
-      .then((v) => alive && setView(v))
-      .catch(() => alive && setView(null));
+    // A host older than `posRequest`, or a stubbed one, must not take the page
+    // down with the card: the row is optional.
+    let read: Promise<LicenseStatusView>;
+    try {
+      read = api.posRequest<LicenseStatusView>('get', '/license/status');
+    } catch {
+      return;
+    }
+    read.then((v) => alive && setView(v)).catch(() => alive && setView(null));
     return () => {
       alive = false;
     };
