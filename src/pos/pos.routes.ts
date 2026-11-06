@@ -19,6 +19,7 @@ import { registerStaffRoutes } from './routes/staff.routes.js';
 import { registerGtinRoutes } from './routes/gtin.routes.js';
 import { registerQrRoutes } from './routes/qr.routes.js';
 import { registerTelemetryRoutes } from './routes/telemetry.routes.js';
+import { registerLicenseRoutes } from './routes/license.routes.js';
 import { registerLiveRoutes } from './routes/live.routes.js';
 import { registerKitchenRoutes } from './routes/kitchen.routes.js';
 import { registerBottleRoutes } from './routes/bottles.routes.js';
@@ -54,6 +55,10 @@ export const POS_ROUTE_GROUPS: PosRouteGroup[] = [
   { moduleId: null, register: registerPreorderRoutes },
   { moduleId: null, register: registerStoreRoutes },
   { moduleId: null, register: registerTelemetryRoutes },
+  // Disclosed licence-compliance status (TechDocs/POS_LICENSING.md, phase 2).
+  // Instance-global, owner-only read; the status is written by the boot/daily
+  // heartbeat, never by this route. Never gates the POS — see license/service.ts.
+  { moduleId: null, register: registerLicenseRoutes },
   // Core, not `moduleId: 'tiktok-live'`: that module opts in through
   // `pos_stores.module_remotes`, not `enabled_modules`, so `ensureModule`
   // has nothing to check. The per-request gate is `ensurePosAuth` plus the

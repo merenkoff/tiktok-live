@@ -39,6 +39,19 @@ Contributions are accepted under the inbound terms in Section 6 of the LICENSE
 (you keep your copyright; the Steward gets the right to relicense, including
 commercially).
 
+### Licence activation (disclosed)
+
+If you set `LICENSE_KEY`, the backend verifies that signed token locally and, on
+boot and once a day, sends a **licence-compliance** ping to `LICENSE_SERVER_URL`
+(default `https://the-live.shop`) carrying only the token, a random per-install
+id, the POS API version and `PUBLIC_BASE_URL` — **no user activity, catalogue or
+personal data**. It is best-effort and never disables anything: a missing,
+invalid or expired key, or an unreachable server, only changes what the
+owner-only `GET /api/pos/license/status` reports. This is a licence-compliance
+check, explicitly **not** a remote kill switch or undisclosed tracking (OwnNet
+1.1 §1.150). Leave `LICENSE_KEY` unset and the POS runs exactly as before, with
+status `unlicensed`. Details: [`TechDocs/POS_LICENSING.md`](TechDocs/POS_LICENSING.md).
+
 ---
 
 **Made with ❤️ for TikTok LIVE sellers**

@@ -15,6 +15,13 @@ No one may use this software as part of a "Closed System" (remote kill
 switches, undocumented data lock-in, anti-repair measures, or undisclosed
 user tracking), as defined in the LICENSE.
 
+Disclosed licence activation: when LICENSE_KEY is set, this software sends a
+licence-compliance ping (the token, a random per-install id, the POS API
+version and PUBLIC_BASE_URL — no user activity, catalogue or personal data) to
+LICENSE_SERVER_URL on boot and once a day. It is best-effort and never disables
+the software — a licence-compliance check, not a Closed System, consistent with
+the LICENSE. See README.md and TechDocs/POS_LICENSING.md.
+
 Attribution line for derivative works:
   "Based on The Live Shop by Serhii Merenkov / Technologies LLC (own-net.com)"
 

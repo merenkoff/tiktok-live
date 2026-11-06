@@ -33,6 +33,8 @@ POS ділить **той самий Postgres**, що й LIVE API. UI каси �
 | `NODE_ENV` | `production` |
 | `POS_SECRETS_KEY` | 32 байти base64 — шифрування ПРРО-кредів ([POS_FISCAL_CHECKBOX_SETUP.md](prro/checkbox/POS_FISCAL_CHECKBOX_SETUP.md) п. 0.1) |
 | `POS_SUPER_PASSWORD` | пароль супер-адмінки `/super` (усі магазини: модулі та їхні джерела), ≥ 12 символів — [POS_SUPER_ADMIN.md](POS_SUPER_ADMIN.md). Не задано → сторінка вимкнена |
+| `LICENSE_KEY` | *(опц.)* підписаний ліцензійний токен інсталяції — [POS_LICENSING.md](POS_LICENSING.md), фаза 2. Перевіряється локально; беззвучний пінг сумісності нічого не вимикає. Не задано → статус `unlicensed`, POS працює далі |
+| `LICENSE_SERVER_URL` | *(опц.)* сервер активації для пінга, типово `https://the-live.shop` |
 
 Решту LIVE-змінних не чіпай.
 
