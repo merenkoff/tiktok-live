@@ -124,10 +124,21 @@ function walk(dir) {
 
 const rel = (file) => path.relative(pos, file).replaceAll(path.sep, '/');
 
-/** `./x` -> the file it actually is. Bare specifiers are someone else's problem. */
+/**
+ * `./x` or `@host/x` -> the file it actually is. Other bare specifiers are
+ * someone else's problem.
+ *
+ * `@host/*` is the build alias for `src/*` that the online-only modules reach
+ * the host through (POS_OPENCORE.md §4, O-1). It bundles exactly like the
+ * relative path it replaced, so a module importing a state owner through it
+ * gets the same second copy — and an edge this function did not resolve was an
+ * edge this check never saw.
+ */
 function resolveRelative(from, spec) {
-  if (!spec.startsWith('.')) return null;
-  const base = path.resolve(path.dirname(from), spec);
+  let base;
+  if (spec.startsWith('@host/')) base = path.join(srcRoot, spec.slice('@host/'.length));
+  else if (spec.startsWith('.')) base = path.resolve(path.dirname(from), spec);
+  else return null;
   for (const candidate of [
     base + '.ts',
     base + '.tsx',
