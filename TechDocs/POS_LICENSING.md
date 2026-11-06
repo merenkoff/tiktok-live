@@ -119,7 +119,18 @@ envelope», AAD-прив'язка до стора+провайдера, відм
   (перша справді instance-global POS-таблиця), лише дані відповідності, без PII.
 - Маршрут: owner-only `GET /api/pos/license/status` (`src/pos/routes/license.routes.ts`, core-група в
   `pos.routes.ts`).
-- Крон + boot: щоденний `cron.schedule('20 4 * * *', …)` і fire-and-forget на старті в `src/index.ts`.
+- Крон + boot: щоденний `cron.schedule('20 4 * * *', …)` і fire-and-forget на старті в `src/index.ts` —
+  **після** `startServer`, через `runBootHeartbeat` (до 3 спроб з паузою 2 хв, поки сервер не прийме пінг;
+  `HeartbeatResult.server_ok`). Чому: деплой автора на `the-live.shop` пінгує **сам себе** через публічний
+  домен, який під час заміни контейнера на Railway ще дивиться на старий — 2026-11-06 обидва boot-пінги
+  впали по таймауту, і перший пінг зі щойно заданим `LICENSE_KEY` чекав крону цілу добу, а на «Ліцензії»
+  висів лише рядок «Без ключа».
+- Картка «Про програму» (`pos/src/components/AboutCard.tsx`, рядок «Ліцензія копії»): для власника
+  читає `GET /license/status` і пише зеленим «Копія ліцензована · <licensee> · план <plan>», жовтим
+  «Ключ дійсний, сервер активації не відповідає», червоним «Копія не ліцензована · <чому>» — слова в
+  `pos/src/lib/licenseStatus.ts`; продавцю не показує нічого, невдале читання (офлайн, старіший сервер)
+  теж нічого — картка про програму, і збій читання не має виглядати як вердикт. Десктоп отримує рядок
+  з наступним POS Release.
 - Кейтул автора: `scripts/license-key.mjs` (`--gen` / `--sign` / `--verify`).
 - Тести: `src/__tests__/pos.license.test.ts` (валідний / absent / malformed / unknown_key /
   tampered / forged / expired; `computeStatus`).
@@ -132,8 +143,24 @@ envelope», AAD-прив'язка до стора+провайдера, відм
 - Інжест + читання: `src/pos/license/activations.service.ts` (`recordActivation`, `listLicenses`,
   `getLicense`): `fingerprint` = sha256 токена ('' = «без ключа»), `installs` = різних `instance_id`,
   `over_limit` = installs > `instance_limit` токена, `cloned` = один `instance_id` з кількох origin.
+  Origin копія бере лише з того, що на деплої є заради самої каси (`reportedOrigin` у `service.ts`:
+  `RAILWAY_PUBLIC_DOMAIN`, який Railway ставить сам, потім перший `http(s)` origin із `CORS_ORIGINS`) —
+  навмисно НЕ з `PUBLIC_BASE_URL`, бо та лишається для адрес гостьового QR-меню (`public-menu/urls.ts`),
+  а змінна, яку ставлять, щоб її звітували, найлегше ставиться неправдиво (рішення власника 2026-11-07);
+  і ніколи не вгадує домен автора — інакше клон без змінної звітував би як `the-live.shop` і сигнал
+  клона осліп би. Будь-який origin — слово самої копії; чого вона не вибирає, так це адреси, з якої
+  приходить пінг. Приймач додатково пише адресу, з якої прийшов пінг
+  (міграція `096`, `remote_ip` — останній запис `X-Forwarded-For`, той, що дописав проксі Railway;
+  `remoteIpOf`), і картка показує «IP …» замість «(невідомо)» для копії, що не назвала origin
+  (`originLabel`/`originNote` в `pos/src/super/licenseLabels.ts`). Власний деплой автора 2026-11-06
+  пінгував як «(невідомо)», бо `PUBLIC_BASE_URL` там не задано.
 - Читання власника: owner/super `GET /api/pos/super/licenses` і `…/:fingerprint`
-  (`src/pos/routes/super.routes.ts`, `ensureSuper`).
+  (`src/pos/routes/super.routes.ts`, `ensureSuper`); єдиний запис — `DELETE …/:fingerprint`
+  (`deleteLicense`, `none` = група без ключа, 404 коли нічого не лишилось): кнопка «Видалити записи» в
+  картці ліцензії з підтвердженням. Навіщо: копія, що пінгувала до того, як їй задали `LICENSE_KEY`,
+  лишає рядок «Без ключа» поруч зі своєю справжньою ліцензією назавжди (групування — за sha256 токена,
+  порожній токен — окрема група), а запис — лише історія пінгів: копія, що працює, з'явиться знову з
+  наступним пінгом.
 - Адмінка: вкладка «Ліцензії» в супер-адмінці (`pos/src/super/LicensesPage.tsx` + `LicenseCard.tsx`,
   `superApi.listLicenses/getLicense`) — хто, скільки копій, понад ліміт, клон, і origin для скарги.
 - Тести: `src/__tests__/pos.license-activations.test.ts` (приймач, ідемпотентність, підрахунок,

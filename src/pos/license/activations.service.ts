@@ -56,6 +56,24 @@ interface RecordOptions {
   now?: Date;
   /** Trusted keys override, for tests. Production uses TRUSTED_LICENSE_KEYS. */
   keys?: Readonly<Record<string, string>>;
+  /** The network address the ping came from (migration 096); '' / undefined = unknown. */
+  remoteIp?: string;
+}
+
+/**
+ * The address a request came from, behind Railway's edge: `request.ip` there
+ * is the proxy's (TechDocs/POS_SINGLE_INSTANCE.md), the client's is the LAST
+ * entry of `X-Forwarded-For` — the one the proxy itself appended, so a client
+ * that sends its own header cannot put a made-up first entry in front of it.
+ * Falls back to `request.ip` off the proxy (local dev, tests). Display only,
+ * never a limiter key.
+ */
+export function remoteIpOf(request: { ip: string; headers: Record<string, unknown> }): string {
+  const fwd = request.headers['x-forwarded-for'];
+  const raw = Array.isArray(fwd) ? fwd[fwd.length - 1] : fwd;
+  const last = typeof raw === 'string' ? raw.split(',').map((s) => s.trim()).filter(Boolean).pop() : undefined;
+  const ip = (last || request.ip || '').trim();
+  return ip.length <= 64 ? ip : '';
 }
 
 /**
@@ -80,11 +98,13 @@ export async function recordActivation(ping: ActivationPing, options: RecordOpti
   const instanceLimit =
     verdict.ok && Number.isInteger(verdict.claim.instance_limit) ? (verdict.claim.instance_limit as number) : null;
 
+  const remoteIp = options.remoteIp?.trim() || null;
+
   await pool.query(
     `INSERT INTO pos_license_activations
        (license_fingerprint, instance_id, public_base_url, verified, licensee, plan,
-        instance_limit, pos_api_version, first_seen, last_seen, seen_count)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9, 1)
+        instance_limit, pos_api_version, first_seen, last_seen, seen_count, remote_ip)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9, 1, $10)
      ON CONFLICT (license_fingerprint, instance_id, public_base_url) DO UPDATE SET
        verified        = EXCLUDED.verified,
        licensee        = EXCLUDED.licensee,
@@ -92,8 +112,9 @@ export async function recordActivation(ping: ActivationPing, options: RecordOpti
        instance_limit  = EXCLUDED.instance_limit,
        pos_api_version = EXCLUDED.pos_api_version,
        last_seen       = EXCLUDED.last_seen,
-       seen_count      = pos_license_activations.seen_count + 1`,
-    [fp, instanceId, baseUrl, verdict.ok, licensee, plan, instanceLimit, apiVersion, now.toISOString()]
+       seen_count      = pos_license_activations.seen_count + 1,
+       remote_ip       = COALESCE(EXCLUDED.remote_ip, pos_license_activations.remote_ip)`,
+    [fp, instanceId, baseUrl, verdict.ok, licensee, plan, instanceLimit, apiVersion, now.toISOString(), remoteIp]
   );
 }
 
@@ -120,6 +141,8 @@ export interface LicenseSummary {
 
 export interface LicenseOrigin {
   url: string;
+  /** The address the last ping of this row came from; null when unknown (migration 096). */
+  ip: string | null;
   first_seen: string;
   last_seen: string;
   seen_count: number;
@@ -196,7 +219,7 @@ export async function getLicense(fingerprint: string): Promise<LicenseDetail | n
   if (!summary) return null;
 
   const r = await pool.query(
-    `SELECT instance_id, public_base_url, verified, first_seen, last_seen, seen_count
+    `SELECT instance_id, public_base_url, verified, first_seen, last_seen, seen_count, remote_ip
        FROM pos_license_activations
       WHERE license_fingerprint = $1
       ORDER BY instance_id, last_seen DESC`,
@@ -216,6 +239,7 @@ export async function getLicense(fingerprint: string): Promise<LicenseDetail | n
     if (!inst.last_seen || lastSeen > inst.last_seen) inst.last_seen = lastSeen;
     inst.origins.push({
       url: (row.public_base_url as string) || '',
+      ip: (row.remote_ip as string | null) || null,
       first_seen: new Date(row.first_seen as string).toISOString(),
       last_seen: lastSeen,
       seen_count: Number(row.seen_count),
@@ -228,6 +252,19 @@ export async function getLicense(fingerprint: string): Promise<LicenseDetail | n
   instances.sort((a, b) => (a.last_seen < b.last_seen ? 1 : -1));
 
   return { ...summary, instances };
+}
+
+/**
+ * Forget every ping of one licence (the super admin's «Видалити записи»): the
+ * rows of a fingerprint — 'none' / '' for the keyless group. The usual reason
+ * is a copy that pinged before its `LICENSE_KEY` was set and so left a
+ * «Без ключа» row beside its real licence forever. A copy that still runs
+ * pings again, so nothing is lost but history. Returns how many rows went.
+ */
+export async function deleteLicense(fingerprint: string): Promise<number> {
+  const fp = fingerprint === 'none' ? '' : fingerprint;
+  const r = await pool.query(`DELETE FROM pos_license_activations WHERE license_fingerprint = $1`, [fp]);
+  return r.rowCount ?? 0;
 }
 
 // --- Ingest rate limit (global, in-memory) --------------------------------

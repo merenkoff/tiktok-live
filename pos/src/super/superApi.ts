@@ -131,6 +131,8 @@ export interface SuperLicenseSummary {
 
 export interface SuperLicenseOrigin {
   url: string;
+  /** Where the last ping came from, when the server kept it (an older server sends none). */
+  ip?: string | null;
   first_seen: string;
   last_seen: string;
   seen_count: number;
@@ -284,6 +286,12 @@ export class SuperApi {
 
   async getLicense(fingerprint: string): Promise<SuperLicenseDetail> {
     const { data } = await this.client.get<SuperLicenseDetail>(`/licenses/${fingerprint || 'none'}`);
+    return data;
+  }
+
+  /** Forget every ping of one licence — the «Без ключа» row a copy left before its key was set. */
+  async deleteLicense(fingerprint: string): Promise<{ deleted: number }> {
+    const { data } = await this.client.delete<{ deleted: number }>(`/licenses/${fingerprint || 'none'}`);
     return data;
   }
 }

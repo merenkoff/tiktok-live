@@ -21,7 +21,7 @@ import { registerPosPlugin } from '../pos/pos.plugin.js';
 import { applyPosMigrations, hasDb } from './helpers/pos-fixtures.js';
 import { issueSuperToken, resetSuperRateLimiter } from '../pos/core/superAuth.js';
 import { signLicenseToken } from '../pos/license/token.js';
-import { recordActivation, resetActivationLimits } from '../pos/license/activations.service.js';
+import { recordActivation, remoteIpOf, resetActivationLimits } from '../pos/license/activations.service.js';
 
 const PASSWORD = 'correct-horse-battery-staple-lic';
 
@@ -172,5 +172,94 @@ describe.skipIf(!hasDb)('licence activations (095)', () => {
       headers: { 'x-pos-super-token': superToken() },
     });
     expect(res.statusCode).toBe(404);
+  });
+
+  it('the super admin forgets a licence\u2019s pings: the keyless group by «none», 404 once gone', async () => {
+    const id = uuid();
+    expect((await ping({ instance_id: id })).statusCode).toBe(200);
+    expect(await rowFor(id)).toHaveLength(1);
+
+    const unauthenticated = await app.inject({ method: 'DELETE', url: '/api/pos/super/licenses/none' });
+    expect(unauthenticated.statusCode).toBe(401);
+    expect(await rowFor(id)).toHaveLength(1);
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/api/pos/super/licenses/none',
+      headers: { 'x-pos-super-token': superToken() },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().deleted).toBeGreaterThanOrEqual(1);
+    expect(await rowFor(id)).toHaveLength(0);
+
+    const again = await app.inject({
+      method: 'DELETE',
+      url: '/api/pos/super/licenses/none',
+      headers: { 'x-pos-super-token': superToken() },
+    });
+    expect(again.statusCode).toBe(404);
+    const read = await app.inject({
+      method: 'GET',
+      url: '/api/pos/super/licenses/none',
+      headers: { 'x-pos-super-token': superToken() },
+    });
+    expect(read.statusCode).toBe(404);
+  });
+
+  it('deleting one licence leaves the others', async () => {
+    const key = ephemeralKey();
+    const token = signLicenseToken({ kid: key.kid, licensee: 'Keep', instance_limit: 5 }, key.priv);
+    const keep = uuid();
+    const gone = uuid();
+    await recordActivation({ token, instance_id: keep, public_base_url: 'https://keep.example' }, { keys: key.keys });
+    await recordActivation({ instance_id: gone, public_base_url: 'https://gone.example' });
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/api/pos/super/licenses/none',
+      headers: { 'x-pos-super-token': superToken() },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(await rowFor(gone)).toHaveLength(0);
+    expect(await rowFor(keep)).toHaveLength(1);
+  });
+
+  it('keeps the address a ping came from — the last X-Forwarded-For entry — and shows it for a copy that named no origin', async () => {
+    const id = uuid();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/license/activation',
+      headers: { 'x-forwarded-for': '10.0.0.1, 203.0.113.7' },
+      payload: { instance_id: id },
+    });
+    expect(res.statusCode).toBe(200);
+    const [row] = await rowFor(id);
+    expect(row.public_base_url).toBe('');
+    expect(row.remote_ip).toBe('203.0.113.7');
+
+    // The LAST ping's address wins: a copy that moved is found where it is now.
+    const moved = await app.inject({
+      method: 'POST',
+      url: '/api/license/activation',
+      headers: { 'x-forwarded-for': '198.51.100.4' },
+      payload: { instance_id: id },
+    });
+    expect(moved.statusCode).toBe(200);
+    expect((await rowFor(id))[0].remote_ip).toBe('198.51.100.4');
+
+    const detail = await app.inject({
+      method: 'GET',
+      url: '/api/pos/super/licenses/none',
+      headers: { 'x-pos-super-token': superToken() },
+    });
+    const inst = detail.json().instances.find((i: { instance_id: string }) => i.instance_id === id);
+    expect(inst.origins[0]).toMatchObject({ url: '', ip: '198.51.100.4' });
+  });
+
+  it('remoteIpOf reads the last forwarded entry, else the socket address, and refuses junk', () => {
+    expect(remoteIpOf({ ip: '127.0.0.1', headers: { 'x-forwarded-for': 'a, b , 203.0.113.9' } })).toBe('203.0.113.9');
+    expect(remoteIpOf({ ip: '127.0.0.1', headers: { 'x-forwarded-for': ['203.0.113.1', '203.0.113.2'] } })).toBe('203.0.113.2');
+    expect(remoteIpOf({ ip: '127.0.0.1', headers: {} })).toBe('127.0.0.1');
+    expect(remoteIpOf({ ip: '127.0.0.1', headers: { 'x-forwarded-for': 'x'.repeat(80) } })).toBe('');
   });
 });

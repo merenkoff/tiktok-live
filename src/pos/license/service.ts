@@ -44,6 +44,30 @@ function licenseServerUrl(): string {
   return process.env.LICENSE_SERVER_URL?.trim() || 'https://the-live.shop';
 }
 
+/**
+ * The origin this copy reports running on — read only from what a deployment
+ * sets for its OWN sake, never from a variable one would fill for the ping:
+ * Railway's `RAILWAY_PUBLIC_DOMAIN` (the platform sets it on any service with
+ * a public domain), then the first origin of `CORS_ORIGINS`, without which no
+ * web POS can talk to this API. `PUBLIC_BASE_URL` is deliberately NOT read
+ * here: it exists for the guest QR menu's addresses (`public-menu/urls.ts`),
+ * and a variable set to be reported is the easiest one to set falsely. Every
+ * reported origin is still the copy's own word; what it cannot choose is the
+ * address its ping comes from, which the receiver keeps (migration 096). Null
+ * when nothing names the deployment — never a guess at the author's domain:
+ * that would make a clone report as the author and blind the clone signal.
+ * Pure over the env map, for the test.
+ */
+export function reportedOrigin(env: NodeJS.ProcessEnv = process.env): string | null {
+  const railway = env.RAILWAY_PUBLIC_DOMAIN?.trim();
+  if (railway) return /^https?:\/\//i.test(railway) ? railway : `https://${railway}`;
+  const cors = (env.CORS_ORIGINS || env.EXTRA_CORS_ORIGINS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .find((s) => /^https?:\/\//i.test(s));
+  return cors ?? null;
+}
+
 interface LicenseRow {
   instance_id: string;
   status: LicenseStatus;
@@ -81,13 +105,19 @@ export function computeStatus(
   return 'unreachable';
 }
 
+export interface HeartbeatResult {
+  status: LicenseStatus;
+  /** The activation server answered 2xx to THIS ping (so the copy is counted). */
+  server_ok: boolean;
+}
+
 /**
  * Verify the local token, ping the activation server, and cache the result.
- * Called once on boot and daily by the cron in `src/index.ts`. Best-effort:
- * returns the computed status and never throws, so a boot or a cron tick is
- * never harmed by it.
+ * Called on boot (`runBootHeartbeat`) and daily by the cron in `src/index.ts`.
+ * Best-effort: returns the computed status and whether this ping reached the
+ * server, and never throws, so a boot or a cron tick is never harmed by it.
  */
-export async function runLicenseHeartbeat(): Promise<LicenseStatus> {
+export async function runLicenseHeartbeat(): Promise<HeartbeatResult> {
   const now = new Date();
   const token = licenseKey();
   const verdict = verifyLicenseToken(token || undefined, { now });
@@ -99,11 +129,11 @@ export async function runLicenseHeartbeat(): Promise<LicenseStatus> {
     logger.warn('licence: cannot read state row', {
       error: error instanceof Error ? error.message : 'db_error',
     });
-    return verdict.ok ? 'licensed' : 'unlicensed';
+    return { status: verdict.ok ? 'licensed' : 'unlicensed', server_ok: false };
   }
   if (!row) {
     // No singleton row — migration 094 has not run on this DB. Nothing to do.
-    return verdict.ok ? 'licensed' : 'unlicensed';
+    return { status: verdict.ok ? 'licensed' : 'unlicensed', server_ok: false };
   }
 
   // Ping regardless of local verdict: an absent or invalid token pinging in is
@@ -118,7 +148,7 @@ export async function runLicenseHeartbeat(): Promise<LicenseStatus> {
         token: token || null,
         instance_id: row.instance_id,
         pos_api_version: POS_API_VERSION,
-        public_base_url: process.env.PUBLIC_BASE_URL ?? null,
+        public_base_url: reportedOrigin(),
       }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
@@ -155,7 +185,60 @@ export async function runLicenseHeartbeat(): Promise<LicenseStatus> {
   if (status !== 'licensed') {
     logger.warn('licence not validated', { status, reason: verdict.ok ? 'server' : verdict.reason });
   }
-  return status;
+  return { status, server_ok: serverOk };
+}
+
+export interface BootHeartbeatOptions {
+  /** How many pings to try before giving up until the daily cron. */
+  attempts?: number;
+  /** Pause between attempts. */
+  retryDelayMs?: number;
+  /** Test seam: the heartbeat to run. */
+  run?: () => Promise<HeartbeatResult>;
+  /** Test seam: the sleeper. */
+  sleep?: (ms: number) => Promise<void>;
+}
+
+const BOOT_ATTEMPTS = 3;
+const BOOT_RETRY_DELAY_MS = 2 * 60 * 1000;
+
+function sleepUnref(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const t = setTimeout(resolve, ms);
+    // Never keep the process alive for a retry.
+    if (typeof t === 'object' && 'unref' in t) t.unref();
+  });
+}
+
+/**
+ * The boot-time heartbeat. The author's own deployment pings ITSELF on
+ * `https://the-live.shop`, and during a Railway deploy the public domain still
+ * points at the container being replaced — the 2026-11-06 boots each timed out
+ * there, so the first ping with a freshly set `LICENSE_KEY` was lost until the
+ * daily cron, a day later. So this runs AFTER the server listens and, when the
+ * ping did not reach the server, tries again a couple of minutes later, a few
+ * times. Returns the last result; never throws.
+ */
+export async function runBootHeartbeat(options: BootHeartbeatOptions = {}): Promise<HeartbeatResult> {
+  const attempts = Math.max(1, options.attempts ?? BOOT_ATTEMPTS);
+  const delay = options.retryDelayMs ?? BOOT_RETRY_DELAY_MS;
+  const run = options.run ?? runLicenseHeartbeat;
+  const sleep = options.sleep ?? sleepUnref;
+  let last: HeartbeatResult = { status: 'unknown', server_ok: false };
+  for (let i = 1; i <= attempts; i += 1) {
+    try {
+      last = await run();
+    } catch (error) {
+      logger.warn('licence: boot heartbeat failed', {
+        attempt: i,
+        error: error instanceof Error ? error.message : 'unknown',
+      });
+    }
+    if (last.server_ok || i === attempts) break;
+    logger.info(`licence: activation ping not delivered, retrying in ${Math.round(delay / 1000)}s`, { attempt: i });
+    await sleep(delay);
+  }
+  return last;
 }
 
 export interface LicenseStatusView {

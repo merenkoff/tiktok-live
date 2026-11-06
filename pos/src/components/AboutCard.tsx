@@ -7,10 +7,18 @@
 // supplies its own frame — the till its `CARD` + `CardTitle`, the owner's
 // settings a `SectionHead` — so this is the rows only.
 
-import type { MouseEvent, ReactNode } from 'react';
-import { PLATFORM_VERSION, POS_API_CLIENT_VERSION, POS_APP_VERSION, usePosShell } from '@pos/platform';
+import { useEffect, useState, type MouseEvent, type ReactNode } from 'react';
+import {
+  api,
+  PLATFORM_VERSION,
+  POS_API_CLIENT_VERSION,
+  POS_APP_VERSION,
+  useAuthStore,
+  usePosShell,
+} from '@pos/platform';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { ABOUT, type AboutLink } from '../lib/about';
+import { licenseLine, type LicenseStatusView } from '../lib/licenseStatus';
 
 function SiteLink({ link }: { link: AboutLink }) {
   const shell = usePosShell();
@@ -46,6 +54,51 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+const TONE_CLASS = {
+  ok: 'text-emerald-700',
+  warn: 'text-amber-700',
+  bad: 'text-rose-600',
+} as const;
+
+/**
+ * This copy's licence, for the owner only (`GET /license/status` is owner-only
+ * and a seller has no business with it): green when licensed, with who and
+ * which plan; amber when the key is valid but the author's server has not
+ * answered; red when there is no valid key. Nothing while the answer has not
+ * come, and nothing at all when it cannot (offline, an older server) — the
+ * card is about the program, and a failed read must not look like a verdict.
+ */
+function LicenseRow() {
+  const isOwner = useAuthStore((s) => s.auth?.staff.role === 'owner');
+  const [view, setView] = useState<LicenseStatusView | null>(null);
+  useEffect(() => {
+    if (!isOwner) return;
+    let alive = true;
+    // A host older than `posRequest`, or a stubbed one, must not take the page
+    // down with the card: the row is optional.
+    let read: Promise<LicenseStatusView>;
+    try {
+      read = api.posRequest<LicenseStatusView>('get', '/license/status');
+    } catch {
+      return;
+    }
+    read.then((v) => alive && setView(v)).catch(() => alive && setView(null));
+    return () => {
+      alive = false;
+    };
+  }, [isOwner]);
+  if (!isOwner || !view) return null;
+  const line = licenseLine(view);
+  return (
+    <Row label="Ліцензія копії">
+      <span className={`font-semibold ${TONE_CLASS[line.tone]}`} data-testid="license-line" data-tone={line.tone}>
+        {line.title}
+      </span>
+      {line.detail && <span className="text-sq-text"> · {line.detail}</span>}
+    </Row>
+  );
+}
+
 export function AboutCard() {
   const shell = usePosShell();
   const build = shell === 'cashier' ? `каса ${POS_APP_VERSION}` : POS_APP_VERSION;
@@ -67,6 +120,7 @@ export function AboutCard() {
         <Row label="Ліцензія">
           {ABOUT.license} · <SiteLink link={ABOUT.licenseSite} />
         </Row>
+        <LicenseRow />
         <Row label="Зв'язок">{ABOUT.contactEmail}</Row>
       </dl>
       <p className="mt-3 text-[13px] text-sq-muted">{ABOUT.copyright}</p>
