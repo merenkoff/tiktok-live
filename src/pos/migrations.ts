@@ -169,6 +169,9 @@ export const POS_MIGRATIONS = [
   // Disclosed licence-activation state: one instance-global row with the
   // deployment's instance_id and cached licence status (POS_LICENSING.md, phase 2).
   '094_pos_license_state.sql',
+  // Author-side ingest of licence-activation pings — how the author counts
+  // running copies and spots over-limit/cloned ones (POS_LICENSING.md, phase 2F).
+  '095_pos_license_activations.sql',
 ] as const;
 
 export function readMigration(file: string): string {

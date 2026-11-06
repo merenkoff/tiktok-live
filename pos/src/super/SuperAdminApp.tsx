@@ -7,6 +7,7 @@ import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { getSuperToken, superApi, superErrorText } from './superApi';
 import { StoresPage } from './StoresPage';
 import { LeadsPage } from './LeadsPage';
+import { LicensesPage } from './LicensesPage';
 
 /**
  * `/super` — the cross-store admin (TechDocs/POS_SUPER_ADMIN.md). Web shell
@@ -29,6 +30,7 @@ export function SuperAdminApp() {
       <Routes>
         <Route index element={<StoresPage />} />
         <Route path="leads" element={<LeadsPage />} />
+        <Route path="licenses" element={<LicensesPage />} />
         <Route path="*" element={<Navigate to="/super" replace />} />
       </Routes>
     </SuperShell>
@@ -42,11 +44,17 @@ export function SuperAdminApp() {
 const TABS = [
   { to: '/super', label: 'Магазини' },
   { to: '/super/leads', label: 'Ліди' },
+  { to: '/super/licenses', label: 'Ліцензії' },
 ] as const;
 
 function SuperShell({ onLogout, children }: { onLogout: () => void; children: ReactNode }) {
   const { pathname } = useLocation();
-  const current = pathname.replace(/\/+$/, '').startsWith('/super/leads') ? '/super/leads' : '/super';
+  const path = pathname.replace(/\/+$/, '');
+  const current = path.startsWith('/super/leads')
+    ? '/super/leads'
+    : path.startsWith('/super/licenses')
+      ? '/super/licenses'
+      : '/super';
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">

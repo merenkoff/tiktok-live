@@ -11,6 +11,12 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { logger } from './logger.js';
 import { LeadValidationError, cleanLeadInput, recordLead } from './crm/leads.service.js';
+import {
+  ActivationError,
+  activationAllowed,
+  recordActivation,
+  type ActivationPing,
+} from './pos/license/activations.service.js';
 import { leadAllowed } from './crm/limits.js';
 import {
   getOrder,
@@ -280,6 +286,34 @@ export async function createServer(): Promise<FastifyInstance> {
       logger.error('Error saving lead', { error });
       reply.status(500);
       return { error: 'Не вдалося зберегти заявку' };
+    }
+  });
+
+  /**
+   * Licence-activation heartbeat from a POS install (TechDocs/POS_LICENSING.md,
+   * phase 2F). This is the AUTHOR-side receiver for the disclosed ping that
+   * every copy sends (src/pos/license/service.ts). Public and unauthenticated —
+   * an absent or invalid token is exactly the "unknown copy" we want to record,
+   * not a reason to reject. The body is capped and the volume bounded globally.
+   * It records only licence-compliance data, never disables anyone, and the
+   * super admin reads it through `/api/pos/super/licenses`.
+   */
+  fastify.post('/api/license/activation', { bodyLimit: 8192 }, async (request, reply) => {
+    if (!activationAllowed()) {
+      reply.status(429);
+      return { ok: false };
+    }
+    try {
+      await recordActivation((request.body ?? {}) as ActivationPing);
+      return { ok: true };
+    } catch (error) {
+      if (error instanceof ActivationError) {
+        reply.status(400);
+        return { ok: false };
+      }
+      logger.error('Error recording licence activation', { error });
+      reply.status(500);
+      return { ok: false };
     }
   });
 

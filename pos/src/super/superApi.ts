@@ -109,6 +109,45 @@ export interface SuperLeadFilter {
   offset?: number;
 }
 
+/**
+ * A licence as the activation ingest sees it (TechDocs/POS_LICENSING.md, phase
+ * 2F). `fingerprint` is '' for the «без ключа» group; the detail is fetched by
+ * `fingerprint || 'none'`.
+ */
+export interface SuperLicenseSummary {
+  fingerprint: string;
+  verified: boolean;
+  licensee: string | null;
+  plan: string | null;
+  instance_limit: number | null;
+  installs: number;
+  origins: number;
+  over_limit: boolean;
+  cloned: boolean;
+  first_seen: string;
+  last_seen: string;
+  total_pings: number;
+}
+
+export interface SuperLicenseOrigin {
+  url: string;
+  first_seen: string;
+  last_seen: string;
+  seen_count: number;
+}
+
+export interface SuperLicenseInstance {
+  instance_id: string;
+  verified: boolean;
+  last_seen: string;
+  origins: SuperLicenseOrigin[];
+  cloned: boolean;
+}
+
+export interface SuperLicenseDetail extends SuperLicenseSummary {
+  instances: SuperLicenseInstance[];
+}
+
 export function getSuperToken(): string | null {
   try {
     return sessionStorage.getItem(SUPER_TOKEN_KEY);
@@ -234,6 +273,17 @@ export class SuperApi {
   /** The two things the super admin writes: the status and the note. */
   async patchLead(id: number, body: { status?: SuperLeadStatus; note?: string }): Promise<SuperLeadCard> {
     const { data } = await this.client.patch<SuperLeadCard>(`/leads/${id}`, body);
+    return data;
+  }
+
+  /** Licence activations, most recently seen first (TechDocs/POS_LICENSING.md). */
+  async listLicenses(): Promise<SuperLicenseSummary[]> {
+    const { data } = await this.client.get<SuperLicenseSummary[]>('/licenses');
+    return data;
+  }
+
+  async getLicense(fingerprint: string): Promise<SuperLicenseDetail> {
+    const { data } = await this.client.get<SuperLicenseDetail>(`/licenses/${fingerprint || 'none'}`);
     return data;
   }
 }

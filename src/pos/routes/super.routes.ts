@@ -26,6 +26,7 @@ import * as superService from '../super.service.js';
 import * as menuImport from '../import/menu-import.service.js';
 import { MenuImportError } from '../import/choiceqr.js';
 import * as leads from '../../crm/leads.service.js';
+import * as licenses from '../license/activations.service.js';
 import { errorMessage } from './_shared.js';
 
 export function registerSuperRoutes(fastify: FastifyInstance): void {
@@ -174,6 +175,22 @@ export function registerSuperRoutes(fastify: FastifyInstance): void {
     const lead = await leads.getLead(id);
     if (!lead) return reply.code(404).send({ error: 'Лід не знайдено' });
     return lead;
+  });
+
+  // Licence activations (TechDocs/POS_LICENSING.md, phase 2F): who runs the
+  // software, how many copies, over the limit, cloned. Read-only — this surface
+  // counts and shows, it never disables a copy.
+  fastify.get('/super/licenses', async (request, reply) => {
+    if (!(await ensureSuper(request, reply))) return;
+    return licenses.listLicenses();
+  });
+
+  fastify.get('/super/licenses/:fingerprint', async (request, reply) => {
+    if (!(await ensureSuper(request, reply))) return;
+    const fp = String((request.params as { fingerprint: string }).fingerprint);
+    const detail = await licenses.getLicense(fp);
+    if (!detail) return reply.code(404).send({ error: 'Ліцензію не знайдено' });
+    return detail;
   });
 
   fastify.patch('/super/leads/:id', async (request, reply) => {
