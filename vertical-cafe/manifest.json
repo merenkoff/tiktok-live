@@ -1,20 +1,20 @@
 {
   "schema": 1,
   "moduleId": "vertical-cafe",
-  "version": "2.5.3",
-  "minHostPlatform": 18,
+  "version": "2.7.0",
+  "minHostPlatform": 23,
   "entry": "remote-entry.js",
   "keyId": "2a73632c13044371",
-  "builtAt": "2026-10-19T21:23:30.528Z",
+  "builtAt": "2026-11-06T08:32:23.727Z",
   "files": {
-    "BarcodeScanner-DDyd6b-m.js": "sha384-h7k7FozxihdT2cYBXZsLuvH2nmezpFoHZ17TVH+R34lHtTcbvHJBkmWVo9KVWFbs",
-    "CafeAnalyticsPage-rU-m-Bjw.js": "sha384-Zlr75fCYX7bhMUU2lADwsYU2Yn1Xj9jq/1tfYGjH4prO0gaIrxSM3gNfCJwkrH7H",
-    "CafeCatalog-dLYpNAf3.js": "sha384-4DZpNlkR3Loa5yAOMiYGpdJybluHlA+0nQSxrrya+ybX+DWPIgUOx342QLJikg4N",
-    "CafePanels-Dj1uoLYt.js": "sha384-4M3suEUXe44owLznSB7ngkCSoJ4FO4Z/FhKNPj40zPjifNLiITDdNVMiwne5Vy3r",
-    "KitchenPage-BtNzQJrx.js": "sha384-8gLVW7igzj5+fmeuOUG1gOFFXXxV+rMKJdoZz89BRbEujxOLuL5lYpzLdnHDKqp8",
-    "figures-BAUwsFBm.js": "sha384-dP6f7RoTCHumpwQ9k4Nm2X/T/PMJD3rL/JfhOlUWtIG+Hz7suBjzRr0jPlSGH081",
-    "hostPlatform-C_l59Ii7.js": "sha384-jy442qaRVEAGeJyR6yMDT/2jQx8NFWcvZhTV9ykImJ2O4a7D2bl6ZoO1i5S27L4Y",
-    "remote-entry.js": "sha384-+zFik5xofqNlXdo8dAApY4EVVW3TvCUfFKgS9j7oexD4978RN1HufInTcSgGSbwx",
+    "BarcodeScanner-CQcblLVh.js": "sha384-fWCuIZHEDIV4cwz9WkK7lqfpFGba2svcZB4t+3tIgtA8WCA7cmD8c+hoX3GsL8ON",
+    "CafeAnalyticsPage-CuMIdswF.js": "sha384-OP1k3Mnm4PKSVqwRpuANRjKPXVkiC6WifS+yjh9TDkNmHTZH7nX2S5TGeRt21n5s",
+    "CafeCatalog-D_RkwdXa.js": "sha384-4mgET/CR9ggVd5YQFQIhfQitphndH95jcpBBEdQ9/Epnt8K9c6zNHDIGCS6br1bb",
+    "CafePanels-CP72cm0O.js": "sha384-/f3heILtDSATRrQDiAcI/PUT0BPguj/GxfytKjACDkn5hb5CO0voLOIcqrrAoDkI",
+    "KitchenPage-wPraXHLZ.js": "sha384-+evPsAz6w6MuxSiVjmvvpPI3DF12GNOyFC7m+5uDqPzo54OxTwXPlsDMsF3Cw8DZ",
+    "figures-Dl_oEw-2.js": "sha384-M0COGXhx0n7bCVQ6ZgiqfPiBjSKxF9HZVqV8w8ceu/r7cMxJ/FFOmRJ8w+b5Erth",
+    "hostPlatform-U1keJ493.js": "sha384-5qsKr3JgZjOYVM0OzS9+b8+bH3SFmxmADQhABo5bwUX6Ip6+MUfBzO7c7mVHQP9I",
+    "remote-entry.js": "sha384-NlWzfXfpMXhvEq2BgENiD525nl5wi35/iV8GS4uU2Yi1zfF1CgalqFlWWzfHU5Zk",
     "style.css": "sha384-36DBlbu6ZmBuXMefTX5xYjNBlAeOZCbPmbskHCLcyrmmipf4qVg5iBm2HePGDQbJ"
   }
 }

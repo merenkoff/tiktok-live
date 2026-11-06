@@ -1,8 +1,8 @@
-import { C as e, _ as t, b as n, c as r, f as i, g as a, h as o, m as s, n as c, p as l, s as u, t as d, u as f } from "./hostPlatform-C_l59Ii7.js";
+import { C as e, _ as t, b as n, c as r, f as i, g as a, h as o, m as s, n as c, p as l, s as u, t as d, u as f } from "./hostPlatform-U1keJ493.js";
 import { Suspense as p, lazy as m, useEffect as h, useRef as g, useState as _ } from "react";
 import { Fragment as v, jsx as y, jsxs as b } from "react/jsx-runtime";
 import { assetUrl as x, defaultModifierIds as S, groupsOf as C, needsModifierSheet as w, useCartStore as T, usePosShell as E, useSalesCatalog as D, useVertical as O } from "@pos/platform";
-//#region src/hooks/useDragScroll.ts
+// src/hooks/useDragScroll.ts
 var k = 6;
 function A() {
 	let e = g(null);
@@ -33,8 +33,7 @@ function A() {
 		};
 	}, []), e;
 }
-//#endregion
-//#region src/lib/money.ts
+// src/lib/money.ts
 var j = "\xA0";
 function M(e) {
 	return e.replace(/\B(?=(\d{3})+(?!\d))/g, j);
@@ -46,45 +45,44 @@ function N(e) {
 function P(e) {
 	return e % 100 == 0 ? `${e < 0 ? "-" : ""}${M(String(Math.abs(e) / 100))} ₴` : N(e);
 }
-//#endregion
-//#region src/components/cashier/ProductTile.tsx
-function F({ name: e, subtitle: t, priceCents: n, compareAtCents: r, imageUrl: i, stock: a, onClick: s, disabled: c, count: l, onMore: u, badge: d, testId: f }) {
-	let [p, m] = _(!1), h = p ? null : x(i), g = c || !!d || a != null && a <= 0, v = /* @__PURE__ */ b("button", {
+// src/components/cashier/ProductTile.tsx
+function F({ name: e, subtitle: t, priceCents: n, compareAtCents: r, priceUnit: i, imageUrl: a, stock: s, onClick: c, disabled: l, count: u, onMore: d, badge: f, testId: p }) {
+	let [m, h] = _(!1), g = m ? null : x(a), v = l || !!f || s != null && s <= 0, S = /* @__PURE__ */ b("button", {
 		type: "button",
-		disabled: c,
-		onClick: s,
-		"data-testid": f,
-		className: `w-full ${u ? "h-full" : ""} flex flex-col rounded-[14px] overflow-hidden text-left bg-sq-surface transition-shadow disabled:opacity-50 disabled:cursor-not-allowed ${l ? "ring-2 ring-sq-blue" : "ring-1 ring-sq-divider hover:ring-sq-muted/50"}`,
+		disabled: l,
+		onClick: c,
+		"data-testid": p,
+		className: `w-full ${d ? "h-full" : ""} flex flex-col rounded-[14px] overflow-hidden text-left bg-sq-surface transition-shadow disabled:opacity-50 disabled:cursor-not-allowed ${u ? "ring-2 ring-sq-blue" : "ring-1 ring-sq-divider hover:ring-sq-muted/50"}`,
 		children: [/* @__PURE__ */ b("div", {
 			className: "relative w-full aspect-[4/3] bg-sq-empty shrink-0",
 			children: [
-				h ? /* @__PURE__ */ y("img", {
-					src: h,
+				g ? /* @__PURE__ */ y("img", {
+					src: g,
 					alt: "",
-					className: `absolute inset-0 w-full h-full object-cover pointer-events-none ${g ? "opacity-45" : ""}`,
-					onError: () => m(!0)
+					className: `absolute inset-0 w-full h-full object-cover pointer-events-none ${v ? "opacity-45" : ""}`,
+					onError: () => h(!0)
 				}) : /* @__PURE__ */ y("div", {
 					className: "absolute inset-0 grid place-items-center text-sq-secondary text-xs px-2 font-medium pointer-events-none",
 					children: t || " "
 				}),
-				l != null && l > 0 && /* @__PURE__ */ y("span", {
+				u != null && u > 0 && /* @__PURE__ */ y("span", {
 					className: "absolute top-2 left-2 min-w-7 h-7 px-2 grid place-items-center rounded-full bg-sq-blue text-white text-[13px] font-bold tabular-nums pointer-events-none",
 					"data-testid": "tile-count",
-					children: l
+					children: u
 				}),
-				d ? /* @__PURE__ */ y("span", {
-					className: `absolute ${l ? "top-10" : "top-2"} left-2 text-[12px] font-semibold bg-[#F4386A] text-white px-2 py-0.5 rounded-md pointer-events-none`,
+				f ? /* @__PURE__ */ y("span", {
+					className: `absolute ${u ? "top-10" : "top-2"} left-2 text-[12px] font-semibold bg-[#F4386A] text-white px-2 py-0.5 rounded-md pointer-events-none`,
 					"data-testid": "tile-badge",
-					children: d
-				}) : a != null && a <= 0 && /* @__PURE__ */ y("span", {
-					className: `absolute ${l ? "top-10" : "top-2"} left-2 text-[12px] font-semibold bg-sq-secondary text-white px-2 py-0.5 rounded-md pointer-events-none`,
+					children: f
+				}) : s != null && s <= 0 && /* @__PURE__ */ y("span", {
+					className: `absolute ${u ? "top-10" : "top-2"} left-2 text-[12px] font-semibold bg-sq-secondary text-white px-2 py-0.5 rounded-md pointer-events-none`,
 					children: "немає"
 				})
 			]
 		}), /* @__PURE__ */ b("div", {
 			className: "px-3 pt-2 pb-2.5 flex flex-col gap-0.5 min-w-0 pointer-events-none",
 			children: [/* @__PURE__ */ y("p", {
-				className: `text-[14px] leading-tight font-semibold line-clamp-2 ${g ? "text-sq-muted" : "text-sq-text"}`,
+				className: `text-[14px] leading-tight font-semibold line-clamp-2 ${v ? "text-sq-muted" : "text-sq-text"}`,
 				children: e
 			}), n != null && /* @__PURE__ */ b("p", {
 				className: "text-[14px] text-sq-secondary tabular-nums flex items-baseline gap-1.5",
@@ -92,27 +90,26 @@ function F({ name: e, subtitle: t, priceCents: n, compareAtCents: r, imageUrl: i
 					className: "text-[12px] text-sq-muted",
 					"data-testid": "tile-old-price",
 					children: N(r)
-				}), /* @__PURE__ */ y("span", { children: N(n) })]
+				}), /* @__PURE__ */ b("span", { children: [N(n), i ? `/${i}` : ""] })]
 			})]
 		})]
 	});
-	return u ? /* @__PURE__ */ b("div", {
+	return d ? /* @__PURE__ */ b("div", {
 		className: "relative",
-		children: [v, !c && /* @__PURE__ */ y("button", {
+		children: [S, !l && /* @__PURE__ */ y("button", {
 			type: "button",
-			onClick: u,
+			onClick: d,
 			"aria-label": `Змінити: ${e}`,
 			className: "absolute top-0.5 right-0.5 w-11 h-11 grid place-items-center",
-			"data-testid": f ? `${f}-more` : "tile-more",
+			"data-testid": p ? `${p}-more` : "tile-more",
 			children: /* @__PURE__ */ y("span", {
 				className: "w-8 h-8 grid place-items-center rounded-full bg-white/95 text-sq-text shadow-[0_1px_3px_rgba(0,0,0,0.15)]",
 				children: /* @__PURE__ */ y(o, { size: 20 })
 			})
 		})]
-	}) : v;
+	}) : S;
 }
-//#endregion
-//#region src/lib/tagColors.ts
+// src/lib/tagColors.ts
 var I = [
 	"green",
 	"rose",
@@ -138,8 +135,7 @@ function z(e) {
 function B(e) {
 	return z(e) ? L[e] : L[R];
 }
-//#endregion
-//#region src/components/cashier/TagFolderTile.tsx
+// src/components/cashier/TagFolderTile.tsx
 function V({ name: e, color: t, onClick: n }) {
 	let r = B(t);
 	return /* @__PURE__ */ b("button", {
@@ -162,8 +158,7 @@ function V({ name: e, color: t, onClick: n }) {
 		})]
 	});
 }
-//#endregion
-//#region src/components/cashier/CatalogTagBar.tsx
+// src/components/cashier/CatalogTagBar.tsx
 function H({ tags: e, activeId: t, showBack: n, backLabel: r, onSelect: i, onBack: a }) {
 	let o = A(), s = (e) => `shrink-0 min-h-9 px-3.5 rounded-[10px] text-[15px] whitespace-nowrap transition-colors ${e ? "bg-sq-selected font-semibold text-sq-text" : "font-medium text-sq-secondary hover:bg-sq-selected/50"}`;
 	return /* @__PURE__ */ b("div", {
@@ -258,8 +253,7 @@ function q() {
 		}
 	};
 }
-//#endregion
-//#region src/components/cashier/ScanWedge.tsx
+// src/components/cashier/ScanWedge.tsx
 function ee({ active: e, onScan: t }) {
 	let n = E(), r = g(null), i = g(t);
 	h(() => {
@@ -341,11 +335,7 @@ function ce(e, t) {
 	let r = null, i = [];
 	for (let e of se(t)) {
 		let t = n.get(e);
-		if (!t) {
-			r ?? (r = `Модифікатор ${e} недоступний для цього товару`);
-			continue;
-		}
-		i.push(t);
+		t ? i.push(t) : r ?? (r = `Модифікатор ${e} недоступний для цього товару`);
 	}
 	let a = /* @__PURE__ */ new Map();
 	for (let e of i) a.set(e.group.id, (a.get(e.group.id) ?? 0) + 1);
@@ -379,8 +369,7 @@ function le(e, t) {
 function ue(e) {
 	return e.find((e) => e.modifier_groups?.length)?.modifier_groups ?? [];
 }
-//#endregion
-//#region src/components/cashier/ModifierSheet.tsx
+// src/components/cashier/ModifierSheet.tsx
 function de({ productName: n, variants: o, variantLabel: c = "Варіант", initialVariantId: l, initialModifierIds: u, initialNote: d, submitLabel: f = "Додати в чек", withQuantity: p = !0, notePlaceholder: m = "Коментар для кухні", onAdd: g, onClose: S }) {
 	let [C, w] = _(() => l ?? (o.length === 1 ? o[0].variant_id : null)), [T, E] = _(() => u ?? []), [D, O] = _(d ?? ""), [k, j] = _(1), M = A(), F = o.find((e) => e.variant_id === C) ?? null, I = F?.modifier_groups?.length ? F.modifier_groups : ue(o), L = ce(I, T), R = F ? F.price_cents + L.deltaCents : null, z = F == null ? `Оберіть «${c}»` : L.error ?? (R != null && R < 0 ? "Ціна не може бути відʼємною" : null), B = z == null && F != null;
 	h(() => {
@@ -631,16 +620,14 @@ function Q(e, t) {
 function pe(e) {
 	return e > 0 ? `+${P(e)}` : e < 0 ? `−${P(-e)}` : "";
 }
-//#endregion
-//#region src/modules/vertical-cafe/lib/stopList.ts
+// src/modules/vertical-cafe/lib/stopList.ts
 function $(e = /* @__PURE__ */ new Date()) {
 	return new Intl.DateTimeFormat("en-CA").format(e);
 }
 function me(e, t = $()) {
 	return e.stop_listed_on == null ? e.stop_listed === !0 : e.stop_listed_on === t;
 }
-//#endregion
-//#region src/modules/vertical-cafe/lib/station.ts
+// src/modules/vertical-cafe/lib/station.ts
 function he(e, t) {
 	let n = new Set(e?.tag_ids ?? []);
 	if (n.size === 0) return null;
@@ -649,9 +636,8 @@ function he(e, t) {
 	};
 	return i(t), r;
 }
-//#endregion
-//#region src/modules/vertical-cafe/CafeCatalog.tsx
-var ge = m(() => import("./BarcodeScanner-DDyd6b-m.js").then((e) => ({ default: e.BarcodeScanner })));
+// src/modules/vertical-cafe/CafeCatalog.tsx
+var ge = m(() => import("./BarcodeScanner-CQcblLVh.js").then((e) => ({ default: e.BarcodeScanner })));
 function _e({ active: e, stockEpoch: t }) {
 	let n = c();
 	if (n.length > 0) throw new d(n);
@@ -667,25 +653,17 @@ function ve({ active: e, stockEpoch: t }) {
 	}, [t]);
 	function g(e, { ask: t = !1 } = {}) {
 		let n = C(e);
-		if (t || w(e, n)) {
-			f({
-				variants: e,
-				initialVariantId: e.length === 1 ? e[0].variant_id : null
-			});
-			return;
-		}
-		a(e[0], 1, {
+		t || w(e, n) ? f({
+			variants: e,
+			initialVariantId: e.length === 1 ? e[0].variant_id : null
+		}) : a(e[0], 1, {
 			modifiers: S(n),
 			note: ""
 		});
 	}
 	async function v(e) {
 		let t = await r.lookupBarcode(e);
-		if (t.length === 0) {
-			o("Штрихкод не знайдено");
-			return;
-		}
-		g(t), r.setQuery("");
+		t.length === 0 ? o("Штрихкод не знайдено") : (g(t), r.setQuery(""));
 	}
 	return /* @__PURE__ */ b("section", {
 		className: "relative flex flex-col min-h-0 bg-white",
@@ -788,5 +766,4 @@ function ve({ active: e, stockEpoch: t }) {
 		]
 	});
 }
-//#endregion
 export { _e as default };

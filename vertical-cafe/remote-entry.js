@@ -1,8 +1,7 @@
 import { lazy as e } from "react";
-//#region src/platform/version.ts
-var t = "2.5.3";
-//#endregion
-//#region src/modules/lazyWithRetry.ts
+// src/platform/version.ts
+var t = "2.7.0";
+// src/modules/lazyWithRetry.ts
 async function n(e, { retries: t = 2, backoffMs: n = 400 } = {}) {
 	let r;
 	for (let i = 0; i <= t; i += 1) try {
@@ -16,9 +15,8 @@ async function n(e, { retries: t = 2, backoffMs: n = 400 } = {}) {
 function r(t, r) {
 	return e(() => n(t, r));
 }
-//#endregion
-//#region src/modules/vertical-cafe/manifest.ts
-var i = r(() => import("./CafeCatalog-dLYpNAf3.js")), a = r(() => import("./KitchenPage-BtNzQJrx.js")), o = r(() => import("./CafePanels-Dj1uoLYt.js")), s = r(() => import("./CafeAnalyticsPage-rU-m-Bjw.js")), c = {
+// src/modules/vertical-cafe/manifest.ts
+var i = r(() => import("./CafeCatalog-D_RkwdXa.js")), a = r(() => import("./KitchenPage-wPraXHLZ.js")), o = r(() => import("./CafePanels-CP72cm0O.js")), s = r(() => import("./CafeAnalyticsPage-CuMIdswF.js")), c = {
 	id: "vertical-cafe",
 	title: "Кафе",
 	shells: [
@@ -52,5 +50,4 @@ var i = r(() => import("./CafeCatalog-dLYpNAf3.js")), a = r(() => import("./Kitc
 	}],
 	version: t
 };
-//#endregion
 export { c as manifest };

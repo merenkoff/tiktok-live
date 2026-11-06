@@ -1,7 +1,7 @@
 import { useId as e } from "react";
 import { jsx as t, jsxs as n } from "react/jsx-runtime";
 import * as r from "@pos/platform";
-//#region src/platform/glyphs.tsx
+// src/platform/glyphs.tsx
 var i = () => e().replace(/:/g, "") + "-";
 function a({ size: e = 24, ...r }) {
 	return /* @__PURE__ */ n("svg", {
@@ -733,8 +733,7 @@ function C({ size: e = 20, ...n }) {
 		})
 	});
 }
-//#endregion
-//#region \0@oxc-project+runtime@0.152.0/helpers/esm/typeof.js
+// \0@oxc-project+runtime@0.155.0/helpers/esm/typeof.js
 function w(e) {
 	"@babel/helpers - typeof";
 	return w = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
@@ -743,8 +742,7 @@ function w(e) {
 		return e && typeof Symbol == "function" && e.constructor === Symbol && e !== Symbol.prototype ? "symbol" : typeof e;
 	}, w(e);
 }
-//#endregion
-//#region \0@oxc-project+runtime@0.152.0/helpers/esm/toPrimitive.js
+// \0@oxc-project+runtime@0.155.0/helpers/esm/toPrimitive.js
 function T(e, t) {
 	if (w(e) != "object" || !e) return e;
 	var n = e[Symbol.toPrimitive];
@@ -755,14 +753,12 @@ function T(e, t) {
 	}
 	return (t === "string" ? String : Number)(e);
 }
-//#endregion
-//#region \0@oxc-project+runtime@0.152.0/helpers/esm/toPropertyKey.js
+// \0@oxc-project+runtime@0.155.0/helpers/esm/toPropertyKey.js
 function E(e) {
 	var t = T(e, "string");
 	return w(t) == "symbol" ? t : t + "";
 }
-//#endregion
-//#region \0@oxc-project+runtime@0.152.0/helpers/esm/defineProperty.js
+// \0@oxc-project+runtime@0.155.0/helpers/esm/defineProperty.js
 function D(e, t, n) {
 	return (t = E(t)) in e ? Object.defineProperty(e, t, {
 		value: n,
@@ -771,8 +767,7 @@ function D(e, t, n) {
 		writable: !0
 	}) : e[t] = n, e;
 }
-//#endregion
-//#region src/modules/vertical-cafe/lib/hostPlatform.ts
+// src/modules/vertical-cafe/lib/hostPlatform.ts
 var O = [
 	"useSalesCatalog",
 	"useCartStore",
@@ -808,5 +803,4 @@ async function P() {
 	let e = j("cashierApi.refreshCatalog");
 	A(e) && await e();
 }
-//#endregion
 export { C, d as S, x as _, a, S as b, m as c, g as d, s as f, b as g, y as h, P as i, o as l, v as m, M as n, f as o, _ as p, N as r, p as s, k as t, h as u, c as v, u as x, l as y };

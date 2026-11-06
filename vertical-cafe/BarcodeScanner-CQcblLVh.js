@@ -1,7 +1,7 @@
 import { useEffect as e, useRef as t, useState as n } from "react";
 import { jsx as r, jsxs as i } from "react/jsx-runtime";
-//#region \0rolldown/runtime.js
-var a = Object.create, o = Object.defineProperty, s = Object.getOwnPropertyDescriptor, c = Object.getOwnPropertyNames, l = Object.getPrototypeOf, u = Object.prototype.hasOwnProperty, d = (e, t) => () => (t || (e((t = { exports: {} }).exports, t), e = null), t.exports), f = (e, t, n, r) => {
+// \0rolldown/runtime.js
+var a = Object.create, o = Object.defineProperty, s = Object.getOwnPropertyDescriptor, c = Object.getOwnPropertyNames, l = Object.getPrototypeOf, u = Object.prototype.hasOwnProperty, d = (e, t) => () => (t || (e((t = { exports: {} }).exports, t, t.exports), e = null), t.exports), f = (e, t, n, r) => {
 	if (t && typeof t == "object" || typeof t == "function") for (var i = c(t), a = 0, l = i.length, d; a < l; a++) d = i[a], !u.call(e, d) && d !== n && o(e, d, {
 		get: ((e) => t[e]).bind(null, d),
 		enumerable: !(r = s(t, d)) || r.enumerable
@@ -102,8 +102,7 @@ function te(e) {
 function w(e, t, n) {
 	return e > n ? n : e < t ? t : e;
 }
-//#endregion
-//#region node_modules/html5-qrcode/esm/strings.js
+// node_modules/html5-qrcode/esm/strings.js
 var T = function() {
 	function e() {}
 	return e.codeParseError = function(e) {
@@ -213,10 +212,10 @@ var T = function() {
 		}
 		return !0;
 	}, e;
-}(), O = /* @__PURE__ */ p((/* @__PURE__ */ d(((e, t) => {
+}(), O = /* @__PURE__ */ p((/* @__PURE__ */ d(((e, t, n) => {
 	(function(n, r) {
 		typeof e == "object" && t !== void 0 ? r(e) : typeof define == "function" && define.amd ? define(["exports"], r) : (n = typeof globalThis < "u" ? globalThis : n || self, r(n.ZXing = {}));
-	})(e, (function(e) {
+	})(n, (function(e) {
 		function t(e) {
 			return e == null;
 		}
@@ -511,7 +510,7 @@ var T = function() {
 				t--;
 				let r = Math.floor(e / 32), i = Math.floor(t / 32), a = this.bits;
 				for (let o = r; o <= i; o++) {
-					let s = o > r ? 0 : e & 31, c = (2 << (o < i ? 31 : t & 31)) - (1 << s) & 4294967295;
+					let s = o > r ? 0 : e & 31, c = (2 << (o < i ? 31 : t & 31)) - (1 << s) | 0;
 					if ((a[o] & c) !== (n ? c : 0)) return !1;
 				}
 				return !0;
@@ -817,15 +816,15 @@ var T = function() {
 			}
 			set(e, t) {
 				let n = t * this.rowSize + Math.floor(e / 32);
-				this.bits[n] |= 1 << (e & 31) & 4294967295;
+				this.bits[n] |= 1 << (e & 31);
 			}
 			unset(e, t) {
 				let n = t * this.rowSize + Math.floor(e / 32);
-				this.bits[n] &= ~(1 << (e & 31) & 4294967295);
+				this.bits[n] &= ~(1 << (e & 31));
 			}
 			flip(e, t) {
 				let n = t * this.rowSize + Math.floor(e / 32);
-				this.bits[n] ^= 1 << (e & 31) & 4294967295;
+				this.bits[n] ^= 1 << (e & 31);
 			}
 			xor(e) {
 				if (this.width !== e.getWidth() || this.height !== e.getHeight() || this.rowSize !== e.getRowSize()) throw new l("input matrix dimensions do not match");
@@ -847,7 +846,7 @@ var T = function() {
 				let o = this.rowSize, s = this.bits;
 				for (let n = t; n < a; n++) {
 					let t = n * o;
-					for (let n = e; n < i; n++) s[t + Math.floor(n / 32)] |= 1 << (n & 31) & 4294967295;
+					for (let n = e; n < i; n++) s[t + Math.floor(n / 32)] |= 1 << (n & 31);
 				}
 			}
 			getRow(e, t) {
@@ -870,7 +869,7 @@ var T = function() {
 					if (c !== 0) {
 						if (e < a && (a = e), e > s && (s = e), t * 32 < i) {
 							let e = 0;
-							for (; !(c << 31 - e & 4294967295);) e++;
+							for (; !(c << 31 - e);) e++;
 							t * 32 + e < i && (i = t * 32 + e);
 						}
 						if (t * 32 + 31 > o) {
@@ -892,7 +891,7 @@ var T = function() {
 				for (; n < t.length && t[n] === 0;) n++;
 				if (n === t.length) return null;
 				let r = n / e, i = n % e * 32, a = t[n], o = 0;
-				for (; !(a << 31 - o & 4294967295);) o++;
+				for (; !(a << 31 - o);) o++;
 				return i += o, Int32Array.from([i, r]);
 			}
 			getBottomRightOnBit() {
@@ -1386,11 +1385,8 @@ var T = function() {
 			}
 			tryPlayVideo(e) {
 				return se(this, void 0, void 0, function* () {
-					if (this.isVideoPlaying(e)) {
-						console.warn("Trying to play video that is already playing.");
-						return;
-					}
-					try {
+					if (this.isVideoPlaying(e)) console.warn("Trying to play video that is already playing.");
+					else try {
 						yield e.play();
 					} catch {
 						console.warn("It was not possible to play the video.");
@@ -1486,11 +1482,8 @@ var T = function() {
 			decodeOnce(e, t = !0, n = !0) {
 				this._stopAsyncDecode = !1;
 				let r = (i, a) => {
-					if (this._stopAsyncDecode) {
-						a(new D("Video stream has ended before any code could be detected.")), this._stopAsyncDecode = void 0;
-						return;
-					}
-					try {
+					if (this._stopAsyncDecode) a(new D("Video stream has ended before any code could be detected.")), this._stopAsyncDecode = void 0;
+					else try {
 						i(this.decode(e));
 					} catch (e) {
 						let o = t && e instanceof D, s = (e instanceof d || e instanceof x) && n;
@@ -1503,11 +1496,8 @@ var T = function() {
 			decodeContinuously(e, t) {
 				this._stopContinuousDecode = !1;
 				let n = () => {
-					if (this._stopContinuousDecode) {
-						this._stopContinuousDecode = void 0;
-						return;
-					}
-					try {
+					if (this._stopContinuousDecode) this._stopContinuousDecode = void 0;
+					else try {
 						t(this.decode(e), null), setTimeout(n, this.timeBetweenScansMillis);
 					} catch (e) {
 						t(null, e);
@@ -7943,7 +7933,7 @@ var T = function() {
 				if (n * 13 > e.available()) throw new x();
 				let r = new Uint8Array(2 * n), i = 0;
 				for (; n > 0;) {
-					let t = e.readBits(13), a = t / 96 << 8 & 4294967295 | t % 96;
+					let t = e.readBits(13), a = t / 96 << 8 | t % 96;
 					a += a < 959 ? 41377 : 42657, r[i] = a >> 8 & 255, r[i + 1] = a & 255, i += 2, n--;
 				}
 				try {
@@ -7956,7 +7946,7 @@ var T = function() {
 				if (n * 13 > e.available()) throw new x();
 				let r = new Uint8Array(2 * n), i = 0;
 				for (; n > 0;) {
-					let t = e.readBits(13), a = t / 192 << 8 & 4294967295 | t % 192;
+					let t = e.readBits(13), a = t / 192 << 8 | t % 192;
 					a += a < 7936 ? 33088 : 49472, r[i] = a >> 8, r[i + 1] = a, i += 2, n--;
 				}
 				try {
@@ -8019,11 +8009,11 @@ var T = function() {
 				if (!(t & 128)) return t & 127;
 				if ((t & 192) == 128) {
 					let n = e.readBits(8);
-					return (t & 63) << 8 & 4294967295 | n;
+					return (t & 63) << 8 | n;
 				}
 				if ((t & 224) == 192) {
 					let n = e.readBits(16);
-					return (t & 31) << 16 & 4294967295 | n;
+					return (t & 31) << 16 | n;
 				}
 				throw new x();
 			}
@@ -14172,10 +14162,10 @@ var T = function() {
 						a = !1, i = 0;
 						for (let e of n) e[1] != null && (r = Math.trunc(Math.max(r, e[1].getY()))), e[3] != null && (r = Math.max(r, Math.trunc(e[3].getY())));
 						r += q.ROW_STEP;
-						continue;
+					} else {
+						if (a = !0, n.push(o), !e) break;
+						o[2] == null ? (i = Math.trunc(o[4].getX()), r = Math.trunc(o[4].getY())) : (i = Math.trunc(o[2].getX()), r = Math.trunc(o[2].getY()));
 					}
-					if (a = !0, n.push(o), !e) break;
-					o[2] == null ? (i = Math.trunc(o[4].getX()), r = Math.trunc(o[4].getY())) : (i = Math.trunc(o[2].getX()), r = Math.trunc(o[2].getY()));
 				}
 				return n;
 			}
@@ -14639,13 +14629,7 @@ var T = function() {
 			}
 			toString() {
 				let e = new $t(), t = 0;
-				for (let n of this.codewords) {
-					if (n == null) {
-						e.format("%3d:    |   %n", t++);
-						continue;
-					}
-					e.format("%3d: %3d|%3d%n", t++, n.getRowNumber(), n.getValue());
-				}
+				for (let n of this.codewords) n == null ? e.format("%3d:    |   %n", t++) : e.format("%3d: %3d|%3d%n", t++, n.getRowNumber(), n.getValue());
 				return e.toString();
 			}
 		}
@@ -14747,11 +14731,8 @@ var T = function() {
 					let r = e[n];
 					if (e[n] == null) continue;
 					let i = r.getValue() % 30, a = r.getRowNumber();
-					if (a > t.getRowCount()) {
-						e[n] = null;
-						continue;
-					}
-					switch (this._isLeft || (a += 2), a % 3) {
+					if (a > t.getRowCount()) e[n] = null;
+					else switch (this._isLeft || (a += 2), a % 3) {
 						case 0:
 							i * 3 + 1 !== t.getRowCountUpperPart() && (e[n] = null);
 							break;
@@ -14877,11 +14858,7 @@ var T = function() {
 							continue;
 						}
 						let r = this.detectionResultColumns[e].getCodewords()[n];
-						if (r == null) {
-							t.format("    |   ");
-							continue;
-						}
-						t.format(" %3d|%3d", r.getRowNumber(), r.getValue());
+						r == null ? t.format("    |   ") : t.format(" %3d|%3d", r.getRowNumber(), r.getValue());
 					}
 					t.format("%n");
 				}
@@ -16808,7 +16785,7 @@ var T = function() {
 				}
 				let r = n.length;
 				for (let e = 0; e < r; e += 2) {
-					let r = n[e] & 255, i = n[e + 1] & 255, a = r << 8 & 4294967295 | i, o = -1;
+					let r = n[e] & 255, i = n[e + 1] & 255, a = r << 8 | i, o = -1;
 					if (a >= 33088 && a <= 40956 ? o = a - 33088 : a >= 57408 && a <= 60351 && (o = a - 49472), o === -1) throw new Z("Invalid byte sequence");
 					let s = (o >> 8) * 192 + (o & 255);
 					t.appendBits(s, 13);
@@ -18585,28 +18562,27 @@ var N = function() {
 		var u = this, d = this.stateManagerProxy.startTransition(xe.SCANNING);
 		return new Promise(function(t, r) {
 			var s = c ? o.videoConstraints : u.createVideoConstraints(e);
-			if (!s) {
-				d.cancel(), r("videoConstraints should be defined");
-				return;
-			}
-			var l = {};
-			(!c || o.aspectRatio) && (l.aspectRatio = o.aspectRatio);
-			var f = { onRenderSurfaceReady: function(e, t) {
-				u.setupUi(e, t, o), u.isScanning = !0, u.foreverScan(o, n, a);
-			} };
-			ye.failIfNotSupported().then(function(e) {
-				e.create(s).then(function(e) {
-					return e.render(i.element, l, f).then(function(e) {
-						u.renderedCamera = e, d.execute(), t(null);
+			if (!s) d.cancel(), r("videoConstraints should be defined");
+			else {
+				var l = {};
+				(!c || o.aspectRatio) && (l.aspectRatio = o.aspectRatio);
+				var f = { onRenderSurfaceReady: function(e, t) {
+					u.setupUi(e, t, o), u.isScanning = !0, u.foreverScan(o, n, a);
+				} };
+				ye.failIfNotSupported().then(function(e) {
+					e.create(s).then(function(e) {
+						return e.render(i.element, l, f).then(function(e) {
+							u.renderedCamera = e, d.execute(), t(null);
+						}).catch(function(e) {
+							d.cancel(), r(e);
+						});
 					}).catch(function(e) {
-						d.cancel(), r(e);
+						d.cancel(), r(T.errorGettingUserMedia(e));
 					});
 				}).catch(function(e) {
-					d.cancel(), r(T.errorGettingUserMedia(e));
+					d.cancel(), r(T.cameraStreamingNotSupported());
 				});
-			}).catch(function(e) {
-				d.cancel(), r(T.cameraStreamingNotSupported());
-			});
+			}
 		});
 	}, e.prototype.pause = function(e) {
 		if (!this.stateManagerProxy.isStrictlyScanning()) throw "Cannot pause, scanner is not scanning.";
@@ -18617,13 +18593,9 @@ var N = function() {
 		var e = this, t = function() {
 			e.stateManagerProxy.directTransition(xe.SCANNING), e.hidePausedState();
 		};
-		if (!this.renderedCamera.isPaused()) {
+		this.renderedCamera.isPaused() ? this.renderedCamera.resume(function() {
 			t();
-			return;
-		}
-		this.renderedCamera.resume(function() {
-			t();
-		});
+		}) : t();
 	}, e.prototype.getState = function() {
 		return this.stateManagerProxy.getState();
 	}, e.prototype.stop = function() {
@@ -19369,7 +19341,7 @@ var N = function() {
 		n === 1 ? t.style.display = "none" : t.innerText = `${E.selectCamera()} (${this.cameras.length})  `;
 		for (var r = 1, i = 0, a = this.cameras; i < a.length; i++) {
 			var o = a[i], s = o.id, c = o.label == null ? s : o.label;
-			(!c || c === "") && (c = [E.anonymousCameraPrefix(), r++].join(" "));
+			c && c !== "" || (c = [E.anonymousCameraPrefix(), r++].join(" "));
 			var l = document.createElement("option");
 			l.value = s, l.innerText = c, this.options.push(l), this.selectElement.appendChild(l);
 		}
@@ -19479,19 +19451,11 @@ function Xe(e, t) {
 			t && (t.innerHTML = "", e.resetBasicLayout(t));
 		};
 		return this.html5Qrcode ? new Promise(function(n, r) {
-			if (!e.html5Qrcode) {
-				n();
-				return;
-			}
-			e.html5Qrcode.isScanning ? e.html5Qrcode.stop().then(function(r) {
-				if (!e.html5Qrcode) {
-					n();
-					return;
-				}
-				e.html5Qrcode.clear(), t(), n();
+			e.html5Qrcode ? e.html5Qrcode.isScanning ? e.html5Qrcode.stop().then(function(r) {
+				e.html5Qrcode && (e.html5Qrcode.clear(), t()), n();
 			}).catch(function(t) {
 				e.verbose && e.logger.logError("Unable to stop qrcode scanner", t), r(t);
-			}) : (e.html5Qrcode.clear(), t(), n());
+			}) : (e.html5Qrcode.clear(), t(), n()) : n();
 		}) : Promise.resolve();
 	}, e.prototype.getRunningTrackCapabilities = function() {
 		return this.getHtml5QrcodeOrFail().getRunningTrackCapabilities();
@@ -19544,15 +19508,11 @@ function Xe(e, t) {
 		}), t.appendChild(r);
 	}, e.prototype.createPermissionsUi = function(e, t) {
 		var n = this;
-		if (I.isCameraScanType(this.currentScanType) && this.persistedDataManager.hasCameraPermissions()) {
-			Re.hasPermissions().then(function(r) {
-				r ? n.createCameraListUi(e, t) : (n.persistedDataManager.setHasPermission(!1), n.createPermissionButton(e, t));
-			}).catch(function(r) {
-				n.persistedDataManager.setHasPermission(!1), n.createPermissionButton(e, t);
-			});
-			return;
-		}
-		this.createPermissionButton(e, t);
+		I.isCameraScanType(this.currentScanType) && this.persistedDataManager.hasCameraPermissions() ? Re.hasPermissions().then(function(r) {
+			r ? n.createCameraListUi(e, t) : (n.persistedDataManager.setHasPermission(!1), n.createPermissionButton(e, t));
+		}).catch(function(r) {
+			n.persistedDataManager.setHasPermission(!1), n.createPermissionButton(e, t);
+		}) : this.createPermissionButton(e, t);
 	}, e.prototype.createSectionControlPanel = function() {
 		var e = document.getElementById(this.getDashboardSectionId()), t = document.createElement("div");
 		e.appendChild(t);
@@ -19587,16 +19547,12 @@ function Xe(e, t) {
 		var l = Be.createElement("button", ze.CAMERA_STOP_BUTTON_ID);
 		l.innerText = E.scanButtonStopScanningText(), l.style.display = "none", l.disabled = !0, s.appendChild(l);
 		var u, d = function(e) {
-			if (!e.torchFeature().isSupported()) {
-				u && u.hide();
-				return;
-			}
-			u ? u.updateTorchCapability(e.torchFeature()) : u = We.create(s, e.torchFeature(), {
+			e.torchFeature().isSupported() ? (u ? u.updateTorchCapability(e.torchFeature()) : u = We.create(s, e.torchFeature(), {
 				display: "none",
 				marginLeft: "5px"
 			}, function(e) {
 				n.setHeaderMessage(e, Je.STATUS_WARNING);
-			}), u.show();
+			}), u.show()) : u && u.hide();
 		};
 		r.appendChild(s);
 		var f = function(e) {
@@ -19628,26 +19584,19 @@ function Xe(e, t) {
 		i.style.textAlign = "center";
 		var a = Be.createElement("span", this.getDashboardSectionSwapLinkId());
 		a.style.textDecoration = "underline", a.style.cursor = "pointer", a.innerText = I.isCameraScanType(this.currentScanType) ? t : n, a.addEventListener("click", function() {
-			if (!e.sectionSwapAllowed) {
-				e.verbose && e.logger.logError("Section swap called when not allowed");
-				return;
-			}
-			e.resetHeaderMessage(), e.fileSelectionUi.resetValue(), e.sectionSwapAllowed = !1, I.isCameraScanType(e.currentScanType) ? (e.clearScanRegion(), e.getCameraScanRegion().style.display = "none", e.fileSelectionUi.show(), a.innerText = n, e.currentScanType = v.SCAN_TYPE_FILE, e.insertFileScanImageToScanRegion()) : (e.clearScanRegion(), e.getCameraScanRegion().style.display = "block", e.fileSelectionUi.hide(), a.innerText = t, e.currentScanType = v.SCAN_TYPE_CAMERA, e.insertCameraScanImageToScanRegion(), e.startCameraScanIfPermissionExistsOnSwap()), e.sectionSwapAllowed = !0;
+			e.sectionSwapAllowed ? (e.resetHeaderMessage(), e.fileSelectionUi.resetValue(), e.sectionSwapAllowed = !1, I.isCameraScanType(e.currentScanType) ? (e.clearScanRegion(), e.getCameraScanRegion().style.display = "none", e.fileSelectionUi.show(), a.innerText = n, e.currentScanType = v.SCAN_TYPE_FILE, e.insertFileScanImageToScanRegion()) : (e.clearScanRegion(), e.getCameraScanRegion().style.display = "block", e.fileSelectionUi.hide(), a.innerText = t, e.currentScanType = v.SCAN_TYPE_CAMERA, e.insertCameraScanImageToScanRegion(), e.startCameraScanIfPermissionExistsOnSwap()), e.sectionSwapAllowed = !0) : e.verbose && e.logger.logError("Section swap called when not allowed");
 		}), i.appendChild(a), r.appendChild(i);
 	}, e.prototype.startCameraScanIfPermissionExistsOnSwap = function() {
 		var e = this, t = this;
-		if (this.persistedDataManager.hasCameraPermissions()) {
-			Re.hasPermissions().then(function(n) {
-				if (n) {
-					var r = document.getElementById(t.getCameraPermissionButtonId());
-					if (!r) throw e.logger.logError("Permission button not found, fail;"), "Permission button not found";
-					r.click();
-				} else t.persistedDataManager.setHasPermission(!1);
-			}).catch(function(e) {
-				t.persistedDataManager.setHasPermission(!1);
-			});
-			return;
-		}
+		this.persistedDataManager.hasCameraPermissions() && Re.hasPermissions().then(function(n) {
+			if (n) {
+				var r = document.getElementById(t.getCameraPermissionButtonId());
+				if (!r) throw e.logger.logError("Permission button not found, fail;"), "Permission button not found";
+				r.click();
+			} else t.persistedDataManager.setHasPermission(!1);
+		}).catch(function(e) {
+			t.persistedDataManager.setHasPermission(!1);
+		});
 	}, e.prototype.resetHeaderMessage = function() {
 		var e = document.getElementById(this.getHeaderMessageContainerId());
 		e.style.display = "none";
@@ -19668,22 +19617,14 @@ function Xe(e, t) {
 		this.scanTypeSelector.hasMoreThanOneScanType() && (e !== !0 && (e = !1), this.sectionSwapAllowed = e, this.getDashboardSectionSwapLink().style.display = e ? "inline-block" : "none");
 	}, e.prototype.insertCameraScanImageToScanRegion = function() {
 		var e = this, t = document.getElementById(this.getScanRegionId());
-		if (this.cameraScanImage) {
-			t.innerHTML = "<br>", t.appendChild(this.cameraScanImage);
-			return;
-		}
-		this.cameraScanImage = new Image(), this.cameraScanImage.onload = function(n) {
+		this.cameraScanImage ? (t.innerHTML = "<br>", t.appendChild(this.cameraScanImage)) : (this.cameraScanImage = new Image(), this.cameraScanImage.onload = function(n) {
 			t.innerHTML = "<br>", t.appendChild(e.cameraScanImage);
-		}, this.cameraScanImage.width = 64, this.cameraScanImage.style.opacity = "0.8", this.cameraScanImage.src = ke, this.cameraScanImage.alt = E.cameraScanAltText();
+		}, this.cameraScanImage.width = 64, this.cameraScanImage.style.opacity = "0.8", this.cameraScanImage.src = ke, this.cameraScanImage.alt = E.cameraScanAltText());
 	}, e.prototype.insertFileScanImageToScanRegion = function() {
 		var e = this, t = document.getElementById(this.getScanRegionId());
-		if (this.fileScanImage) {
-			t.innerHTML = "<br>", t.appendChild(this.fileScanImage);
-			return;
-		}
-		this.fileScanImage = new Image(), this.fileScanImage.onload = function(n) {
+		this.fileScanImage ? (t.innerHTML = "<br>", t.appendChild(this.fileScanImage)) : (this.fileScanImage = new Image(), this.fileScanImage.onload = function(n) {
 			t.innerHTML = "<br>", t.appendChild(e.fileScanImage);
-		}, this.fileScanImage.width = 64, this.fileScanImage.style.opacity = "0.8", this.fileScanImage.src = Ae, this.fileScanImage.alt = E.fileScanAltText();
+		}, this.fileScanImage.width = 64, this.fileScanImage.style.opacity = "0.8", this.fileScanImage.src = Ae, this.fileScanImage.alt = E.fileScanAltText());
 	}, e.prototype.clearScanRegion = function() {
 		var e = document.getElementById(this.getScanRegionId());
 		e.innerHTML = "";
@@ -19709,8 +19650,7 @@ function Xe(e, t) {
 		return document.getElementById(this.getHeaderMessageContainerId());
 	}, e;
 })();
-//#endregion
-//#region src/components/BarcodeScanner.tsx
+// src/components/BarcodeScanner.tsx
 function Ze({ onScan: a, onClose: o }) {
 	let s = t(!1), [c, l] = n(null);
 	return e(() => {
@@ -19763,5 +19703,4 @@ function Ze({ onScan: a, onClose: o }) {
 		})
 	});
 }
-//#endregion
 export { Ze as BarcodeScanner };

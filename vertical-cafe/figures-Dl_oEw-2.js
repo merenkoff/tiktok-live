@@ -1,6 +1,6 @@
-import { r as e } from "./hostPlatform-C_l59Ii7.js";
+import { r as e } from "./hostPlatform-U1keJ493.js";
 import { jsx as t, jsxs as n } from "react/jsx-runtime";
-//#region src/modules/vertical-cafe/ui/Stat.tsx
+// src/modules/vertical-cafe/ui/Stat.tsx
 function r({ label: e, value: r, strong: i, hint: a, tone: o, testId: s }) {
 	return /* @__PURE__ */ n("div", {
 		className: "rounded-xl bg-sq-sidebar px-4 py-3.5",
@@ -21,16 +21,14 @@ function r({ label: e, value: r, strong: i, hint: a, tone: o, testId: s }) {
 		]
 	});
 }
-//#endregion
-//#region src/modules/vertical-cafe/analytics/cafeAnalyticsApi.ts
+// src/modules/vertical-cafe/analytics/cafeAnalyticsApi.ts
 function i(t) {
 	let n = new URLSearchParams();
 	t.from && n.set("from", t.from), t.to && n.set("to", t.to);
 	let r = n.toString();
 	return e("get", `/analytics/cafe${r ? `?${r}` : ""}`);
 }
-//#endregion
-//#region src/modules/vertical-cafe/lib/figures.ts
+// src/modules/vertical-cafe/lib/figures.ts
 function a(e) {
 	return e == null ? "—" : `${(e / 100).toFixed(1).replace(".", ",")} %`;
 }
@@ -91,5 +89,4 @@ function m(e) {
 	let n = t % 60;
 	return n === 0 ? `${t / 60} год` : `${Math.floor(t / 60)} год ${n} хв`;
 }
-//#endregion
 export { f as a, p as c, r as d, m as i, c as l, l as n, a as o, o as r, s, d as t, i as u };

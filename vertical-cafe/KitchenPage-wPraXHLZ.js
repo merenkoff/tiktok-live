@@ -1,4 +1,4 @@
-import { C as e, S as t, c as n, d as r, i, l as a, n as o, r as s, t as c } from "./hostPlatform-C_l59Ii7.js";
+import { C as e, S as t, c as n, d as r, i, l as a, n as o, r as s, t as c } from "./hostPlatform-U1keJ493.js";
 import { useCallback as l, useEffect as u, useReducer as d, useRef as f, useState as p } from "react";
 import { jsx as m, jsxs as h } from "react/jsx-runtime";
 import { assetUrl as g, useOfflineStatus as _, useVertical as v } from "@pos/platform";
@@ -62,8 +62,7 @@ function A(e, t) {
 	let n = e?.response?.data?.error;
 	return typeof n == "string" && n.trim() ? n : t;
 }
-//#endregion
-//#region src/modules/vertical-cafe/kitchen/kitchenApi.ts
+// src/modules/vertical-cafe/kitchen/kitchenApi.ts
 function j() {
 	return s("get", "/kitchen/orders");
 }
@@ -77,8 +76,7 @@ function N(e, t) {
 function P() {
 	return s("get", "/catalog");
 }
-//#endregion
-//#region src/modules/vertical-cafe/kitchen/useKitchenOrders.ts
+// src/modules/vertical-cafe/kitchen/useKitchenOrders.ts
 var F = 5e3;
 function I(e) {
 	let [t, n] = p([]), [r, i] = p(0), [a, o] = p(!0), [s, c] = p(null), [d, m] = p(null), h = f(!0);
@@ -126,8 +124,7 @@ function I(e) {
 		clearBanner: l(() => m(null), [])
 	};
 }
-//#endregion
-//#region src/modules/vertical-cafe/kitchen/OrdersTab.tsx
+// src/modules/vertical-cafe/kitchen/OrdersTab.tsx
 var L = {
 	kitchen: "кухня",
 	bar: "бар"
@@ -314,8 +311,7 @@ function V({ order: e, since: t, offset: i, action: a, actionTestId: o, onAction
 		]
 	});
 }
-//#endregion
-//#region src/modules/vertical-cafe/kitchen/StopListTab.tsx
+// src/modules/vertical-cafe/kitchen/StopListTab.tsx
 function H({ onCount: e } = {}) {
 	let [t, n] = p(null), [r, a] = p(null), [o, s] = p(null), c = l(async () => {
 		try {
@@ -408,8 +404,7 @@ function H({ onCount: e } = {}) {
 		]
 	});
 }
-//#endregion
-//#region src/modules/vertical-cafe/kitchen/KitchenPage.tsx
+// src/modules/vertical-cafe/kitchen/KitchenPage.tsx
 function U() {
 	let e = o();
 	if (e.length > 0) throw new c(e);
@@ -489,5 +484,4 @@ function G({ active: e, onClick: t, testId: n, children: r }) {
 		children: r
 	});
 }
-//#endregion
 export { U as default };

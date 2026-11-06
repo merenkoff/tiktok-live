@@ -1,10 +1,10 @@
-import { f as e } from "./hostPlatform-C_l59Ii7.js";
-import { d as t, l as n, o as r, r as i, s as a, u as o } from "./figures-BAUwsFBm.js";
+import { f as e } from "./hostPlatform-U1keJ493.js";
+import { d as t, l as n, o as r, r as i, s as a, u as o } from "./figures-Dl_oEw-2.js";
 import { useEffect as s, useState as c } from "react";
 import { jsx as l, jsxs as u } from "react/jsx-runtime";
 import { formatUah as d } from "@pos/platform";
 import { Link as f } from "react-router-dom";
-//#region src/modules/vertical-cafe/panels/CafePanels.tsx
+// src/modules/vertical-cafe/panels/CafePanels.tsx
 function p({ from: p, to: m }) {
 	let [h, g] = c(null), [_, v] = c(!1);
 	if (s(() => {
@@ -76,5 +76,4 @@ function p({ from: p, to: m }) {
 		})]
 	});
 }
-//#endregion
 export { p as default };

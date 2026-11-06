@@ -1,10 +1,10 @@
-import { a as e, f as t, o as n, v as r, x as i, y as a } from "./hostPlatform-C_l59Ii7.js";
-import { a as o, c as s, d as c, i as l, n as u, o as d, r as f, t as p, u as m } from "./figures-BAUwsFBm.js";
+import { a as e, f as t, o as n, v as r, x as i, y as a } from "./hostPlatform-U1keJ493.js";
+import { a as o, c as s, d as c, i as l, n as u, o as d, r as f, t as p, u as m } from "./figures-Dl_oEw-2.js";
 import { useCallback as h, useEffect as g, useMemo as _, useState as v } from "react";
 import { Fragment as y, jsx as b, jsxs as x } from "react/jsx-runtime";
 import { formatUah as S, useVertical as C } from "@pos/platform";
 import { Link as w } from "react-router-dom";
-//#region src/components/ui/Page.tsx
+// src/components/ui/Page.tsx
 function T({ title: e, glyph: t, subtitle: r, actions: i, back: a }) {
 	return /* @__PURE__ */ x("header", {
 		className: "mb-7 space-y-1.5",
@@ -73,8 +73,7 @@ function D({ value: e, options: t, onChange: n, ariaLabel: r, className: i = "" 
 		})
 	});
 }
-//#endregion
-//#region src/modules/vertical-cafe/pages/CafeAnalyticsPage.tsx
+// src/modules/vertical-cafe/pages/CafeAnalyticsPage.tsx
 function O(e) {
 	return (/* @__PURE__ */ new Date(Date.now() - e * 864e5)).toISOString().slice(0, 10);
 }
@@ -457,5 +456,4 @@ function M() {
 		]
 	});
 }
-//#endregion
 export { M as default };
