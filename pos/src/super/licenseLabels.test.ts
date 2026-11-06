@@ -3,7 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { describe, expect, it } from 'vitest';
-import { licenseTitle, originLabel } from './licenseLabels';
+import { licenseTitle, originLabel, originNote } from './licenseLabels';
 
 describe('licenseTitle', () => {
   it('shows the licensee for a verified token', () => {
@@ -31,5 +31,16 @@ describe('originLabel', () => {
 
   it('names an empty origin', () => {
     expect(originLabel('')).toBe('(невідомо)');
+  });
+
+  it('names a copy that reported no origin by the address its ping came from', () => {
+    expect(originLabel('', '203.0.113.7')).toBe('IP 203.0.113.7');
+    expect(originLabel('https://shop.example.com', '203.0.113.7')).toBe('https://shop.example.com');
+  });
+
+  it('notes the address beside a named origin, and nothing otherwise', () => {
+    expect(originNote('https://shop.example.com', '203.0.113.7')).toBe('з IP 203.0.113.7');
+    expect(originNote('', '203.0.113.7')).toBe('');
+    expect(originNote('https://shop.example.com', null)).toBe('');
   });
 });

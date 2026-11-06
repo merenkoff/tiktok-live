@@ -172,6 +172,7 @@ export const POS_MIGRATIONS = [
   // Author-side ingest of licence-activation pings — how the author counts
   // running copies and spots over-limit/cloned ones (POS_LICENSING.md, phase 2F).
   '095_pos_license_activations.sql',
+  '096_pos_license_activations_remote_ip.sql',
 ] as const;
 
 export function readMigration(file: string): string {

@@ -131,6 +131,8 @@ export interface SuperLicenseSummary {
 
 export interface SuperLicenseOrigin {
   url: string;
+  /** Where the last ping came from, when the server kept it (an older server sends none). */
+  ip?: string | null;
   first_seen: string;
   last_seen: string;
   seen_count: number;

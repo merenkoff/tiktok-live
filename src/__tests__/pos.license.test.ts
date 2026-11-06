@@ -24,7 +24,7 @@ import {
   signLicenseToken,
   type LicenseClaim,
 } from '../pos/license/token.js';
-import { computeStatus, runBootHeartbeat, type HeartbeatResult } from '../pos/license/service.js';
+import { computeStatus, reportedOrigin, runBootHeartbeat, type HeartbeatResult } from '../pos/license/service.js';
 
 /** Mint an ephemeral Ed25519 keypair and return the raw-pubkey map + private key. */
 function ephemeralKey(): { kid: string; keys: Record<string, string>; privateKeyPkcs8B64: string } {
@@ -189,5 +189,31 @@ describe('runBootHeartbeat', () => {
     await runBootHeartbeat({ attempts: 1, run, sleep });
     expect(run).toHaveBeenCalledTimes(1);
     expect(sleep).not.toHaveBeenCalled();
+  });
+});
+
+describe('reportedOrigin', () => {
+  it('never reads PUBLIC_BASE_URL — a variable set to be reported is the easiest to set falsely', () => {
+    expect(reportedOrigin({ PUBLIC_BASE_URL: 'https://shop.example' })).toBeNull();
+    expect(
+      reportedOrigin({ PUBLIC_BASE_URL: 'https://shop.example', RAILWAY_PUBLIC_DOMAIN: 'x.up.railway.app' })
+    ).toBe('https://x.up.railway.app');
+  });
+
+  it("takes Railway's own public domain, with https in front of a bare host", () => {
+    expect(reportedOrigin({ RAILWAY_PUBLIC_DOMAIN: 'api.up.railway.app' })).toBe('https://api.up.railway.app');
+    expect(reportedOrigin({ RAILWAY_PUBLIC_DOMAIN: 'http://api.local' })).toBe('http://api.local');
+  });
+
+  it('then to the first http(s) origin of CORS_ORIGINS, skipping junk', () => {
+    expect(reportedOrigin({ CORS_ORIGINS: ' , tauri://localhost, https://pos.shop.example, https://b' })).toBe(
+      'https://pos.shop.example'
+    );
+    expect(reportedOrigin({ EXTRA_CORS_ORIGINS: 'https://old.shop.example' })).toBe('https://old.shop.example');
+  });
+
+  it('is null when nothing names the deployment — never a guess at the author', () => {
+    expect(reportedOrigin({})).toBeNull();
+    expect(reportedOrigin({ CORS_ORIGINS: 'tauri://localhost' })).toBeNull();
   });
 });

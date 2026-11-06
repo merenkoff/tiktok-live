@@ -44,6 +44,30 @@ function licenseServerUrl(): string {
   return process.env.LICENSE_SERVER_URL?.trim() || 'https://the-live.shop';
 }
 
+/**
+ * The origin this copy reports running on — read only from what a deployment
+ * sets for its OWN sake, never from a variable one would fill for the ping:
+ * Railway's `RAILWAY_PUBLIC_DOMAIN` (the platform sets it on any service with
+ * a public domain), then the first origin of `CORS_ORIGINS`, without which no
+ * web POS can talk to this API. `PUBLIC_BASE_URL` is deliberately NOT read
+ * here: it exists for the guest QR menu's addresses (`public-menu/urls.ts`),
+ * and a variable set to be reported is the easiest one to set falsely. Every
+ * reported origin is still the copy's own word; what it cannot choose is the
+ * address its ping comes from, which the receiver keeps (migration 096). Null
+ * when nothing names the deployment — never a guess at the author's domain:
+ * that would make a clone report as the author and blind the clone signal.
+ * Pure over the env map, for the test.
+ */
+export function reportedOrigin(env: NodeJS.ProcessEnv = process.env): string | null {
+  const railway = env.RAILWAY_PUBLIC_DOMAIN?.trim();
+  if (railway) return /^https?:\/\//i.test(railway) ? railway : `https://${railway}`;
+  const cors = (env.CORS_ORIGINS || env.EXTRA_CORS_ORIGINS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .find((s) => /^https?:\/\//i.test(s));
+  return cors ?? null;
+}
+
 interface LicenseRow {
   instance_id: string;
   status: LicenseStatus;
@@ -124,7 +148,7 @@ export async function runLicenseHeartbeat(): Promise<HeartbeatResult> {
         token: token || null,
         instance_id: row.instance_id,
         pos_api_version: POS_API_VERSION,
-        public_base_url: process.env.PUBLIC_BASE_URL ?? null,
+        public_base_url: reportedOrigin(),
       }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
