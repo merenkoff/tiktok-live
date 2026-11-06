@@ -161,10 +161,35 @@ envelope», AAD-прив'язка до стора+провайдера, відм
   `GET /api/pos/license/status` → `licensed | unlicensed | unreachable` (видно в супер-адміні); валідний
   токен кешується з власним expiry, heartbeat може падати N днів до статусу `unreachable` — документовано,
   оператор може перевписати ключ (та «documented, self-serviceable alternative», якої вимагає §1.12(a)).
-- **2D. Важіль = ґейт ВЛАСНИХ сервісів автора, не локальної копії.** Окремий серверний PR: ендпоінти
-  оновлень/онлайн-модулів `the-live.shop` вимагають дійсну ліцензію; нема ліцензії → 403 **від сервера
-  автора**. Це «authentication for a network service the user chooses to use» (§1.145), явно **не**
-  Closed System. Несанкціонований клон працює на тому, що має, але не отримує оновлень/онлайн-модулів.
+- **2D. Важіль = ґейт ВЛАСНИХ сервісів автора, не локальної копії.** Ендпоінти `the-live.shop` вимагають
+  дійсну ліцензію; нема ліцензії → 403 **від сервера автора**. Це «authentication for a network service
+  the user chooses to use» (§1.145), явно **не** Closed System. Несанкціонований клон **офіційної
+  збірки** працює на тому, що має, але не отримує оновлень.
+
+  **Знахідка по архітектурі (чому гейт вузький):** оновлення десктопу йдуть з **GitHub Releases**, а
+  онлайн-модулі — з **jsdelivr** за публічними URL у `module_remotes`; POS-API та LIVE-міст — це **власний
+  сервер кожного деплоя**. Тобто єдиний канал автора, який варто й можна гейтити без вимкнення чужого
+  POS, — це **фід оновлень десктопу**, перенаправлений на `the-live.shop`.
+
+  **2D-A — ЗРОБЛЕНО (бекенд + канал):**
+  - `src/pos/license/entitlement.ts`: чистий `checkEntitlement(token)` + Fastify-ґард `requireValidLicense`
+    (токен із заголовка `X-License-Key` або `?key=`, перевірка публічним ключем, 403 інакше).
+  - `GET /api/license/entitlement` (`src/api.ts`): перевірка токена — 200 `{entitled:true,…}` або 403.
+  - `GET /api/updates/latest.json` (`src/api.ts`): фід оновлень. **За замовчуванням прозорий проксі**
+    upstream `latest.json` (нуль змін поведінки); з `LICENSE_UPDATE_GATE=on` вимагає валідний токен,
+    інакше 403; тіло проксі **дослівне**, щоб підпис оновлення (`pubkey` у `tauri.conf`) не ламався; збій
+    upstream → 502 (updater трактує як «оновлення нема», не цеглина). Upstream задається
+    `LICENSE_UPDATE_UPSTREAM` (дефолт — GitHub latest.json проєкту).
+  - `pos/src-tauri/tauri.conf.json`: updater тепер вказує **лише** на `the-live.shop/api/updates/latest.json`
+    (один ендпоінт, щоб gate не обходився фолбеком на GitHub).
+  - Тести: `src/__tests__/pos.license-entitlement.test.ts` (verdict, entitlement 403, gate off→проксі,
+    gate on→403, 502-upstream).
+
+  **2D-B — ще НЕ зроблено (десктоп):** щоб гейт «кусався» per-deployment, офіційна каса має слати свій
+  лицензійний токен у `X-License-Key`. Це означає перехід з вбудованого auto-updater на програмний
+  `@tauri-apps/plugin-updater` `check({ headers })` + віддача токена з бекенду деплоя при логіні. Потребує
+  Tauri-збірки для перевірки, тож окремий PR + POS Release. **Поки `LICENSE_UPDATE_GATE` вимкнено** фід —
+  чистий проксі, нічого не ламається.
 - **2E. Розкриття (що робить 2B законним).** Розділ у цьому доці + абзац у `README.md`/`NOTICE` +
   коментовані записи в `.env.example`: прямо — що ping шле, куди, навіщо (відповідність ліцензії), і що
   він **ніколи не вимикає** законну копію.
@@ -182,7 +207,8 @@ envelope», AAD-прив'язка до стора+провайдера, відм
 | Ф1 | Moat: custody + документація | цей док; гвардія `check:prod-no-dev-key`; runbook ротації; пін `pos.secrets.test.ts` | **в роботі** (ця гілка) |
 | Ф2-A/B/C/E | Активація ліцензії (бекенд) | Ed25519-перевірка токена, `pos_license_state`, env, `GET /license/status`, boot/cron ping, м'яка деградація, розкриття | **зроблено** |
 | Ф2-F | Приймач активацій + підрахунок + адмінка | `POST /api/license/activation`, `pos_license_activations`, `GET /super/licenses`, вкладка «Ліцензії» (installs/over-limit/clone/origin) | **зроблено** |
-| Ф2-D | Ґейт власних сервісів автора (серверний бік) | оновлення/онлайн-модулі вимагають ліцензію (403 від `the-live.shop`) | — (окремий трек) |
+| Ф2-D-A | Ґейт власних сервісів (бекенд + канал оновлень) | `requireValidLicense`, `GET /api/license/entitlement`, `GET /api/updates/latest.json` (проксі, enforcement за `LICENSE_UPDATE_GATE`), updater → `the-live.shop` | **зроблено** |
+| Ф2-D-B | Десктоп шле свій токен в `X-License-Key` | перехід на програмний `plugin-updater` + токен із логіну; робить gate per-deployment | — (потребує Tauri-збірки) |
 
 ## Рішення власника
 
