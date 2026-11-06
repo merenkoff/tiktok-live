@@ -18,13 +18,13 @@
 // this file.
 
 import crypto from 'crypto';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   verifyLicenseToken,
   signLicenseToken,
   type LicenseClaim,
 } from '../pos/license/token.js';
-import { computeStatus } from '../pos/license/service.js';
+import { computeStatus, runBootHeartbeat, type HeartbeatResult } from '../pos/license/service.js';
 
 /** Mint an ephemeral Ed25519 keypair and return the raw-pubkey map + private key. */
 function ephemeralKey(): { kid: string; keys: Record<string, string>; privateKeyPkcs8B64: string } {
@@ -153,5 +153,41 @@ describe('computeStatus', () => {
   it('treats the grace boundary as still licensed', () => {
     const exactly14 = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
     expect(computeStatus(okVerdict, exactly14, now)).toBe('licensed');
+  });
+});
+
+describe('runBootHeartbeat', () => {
+  it('stops at the first ping the server took', async () => {
+    const run = vi
+      .fn<() => Promise<HeartbeatResult>>()
+      .mockResolvedValueOnce({ status: 'licensed', server_ok: false })
+      .mockResolvedValueOnce({ status: 'licensed', server_ok: true });
+    const sleep = vi.fn<(ms: number) => Promise<void>>().mockResolvedValue(undefined);
+    const result = await runBootHeartbeat({ attempts: 3, retryDelayMs: 1234, run, sleep });
+    expect(result).toEqual({ status: 'licensed', server_ok: true });
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(sleep).toHaveBeenCalledTimes(1);
+    expect(sleep).toHaveBeenCalledWith(1234);
+  });
+
+  it('gives up after the last attempt without sleeping again, and survives a throw', async () => {
+    const run = vi
+      .fn<() => Promise<HeartbeatResult>>()
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce({ status: 'unreachable', server_ok: false })
+      .mockResolvedValueOnce({ status: 'unreachable', server_ok: false });
+    const sleep = vi.fn<(ms: number) => Promise<void>>().mockResolvedValue(undefined);
+    const result = await runBootHeartbeat({ attempts: 3, run, sleep });
+    expect(result).toEqual({ status: 'unreachable', server_ok: false });
+    expect(run).toHaveBeenCalledTimes(3);
+    expect(sleep).toHaveBeenCalledTimes(2);
+  });
+
+  it('a single attempt never sleeps', async () => {
+    const run = vi.fn<() => Promise<HeartbeatResult>>().mockResolvedValue({ status: 'unlicensed', server_ok: false });
+    const sleep = vi.fn<(ms: number) => Promise<void>>();
+    await runBootHeartbeat({ attempts: 1, run, sleep });
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
   });
 });

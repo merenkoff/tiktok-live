@@ -115,7 +115,16 @@ export function LicensesPage() {
         </table>
       </div>
 
-      {open != null && <LicenseCard fingerprint={open} onClose={() => setOpen(null)} />}
+      {open != null && (
+        <LicenseCard
+          fingerprint={open}
+          onClose={() => setOpen(null)}
+          onDeleted={() => {
+            setOpen(null);
+            void load();
+          }}
+        />
+      )}
     </div>
   );
 }

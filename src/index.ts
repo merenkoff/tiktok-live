@@ -21,7 +21,7 @@ import { wipeGuestFeedbackPhones } from './pos/guest-feedback.service.js';
 import { closeDueShifts } from './pos/fiscal/shifts.service.js';
 import { retryPendingFiscalDocs } from './pos/fiscal/fiscal.service.js';
 import { refillAllStores } from './pos/fiscal/offline/pool.js';
-import { runLicenseHeartbeat } from './pos/license/service.js';
+import { runBootHeartbeat, runLicenseHeartbeat } from './pos/license/service.js';
 import { expireParkedCarts } from './pos/parked-carts.service.js';
 import { cleanupExpiredReservations } from './reservations.js';
 import { sessionManager } from './sessions/sessions.manager.js';
@@ -261,7 +261,7 @@ async function main(): Promise<void> {
     // a fire-and-forget run on boot below.
     cron.schedule('20 4 * * *', async () => {
       try {
-        const status = await runLicenseHeartbeat();
+        const { status } = await runLicenseHeartbeat();
         logger.info(`🔑 Licence heartbeat: ${status}`);
       } catch (error) {
         logger.error('Licence heartbeat cron error', { error });
@@ -270,18 +270,23 @@ async function main(): Promise<void> {
 
     logger.info('✅ Cron jobs configured');
 
-    // One-shot licence heartbeat on boot. Fire-and-forget: a slow or
-    // unreachable activation server must never delay or fail startup.
-    void runLicenseHeartbeat().catch((error) => {
-      logger.warn('Licence heartbeat (boot) error', {
-        error: error instanceof Error ? error.message : 'unknown',
-      });
-    });
-
     // 6. Start API server
     logger.info('🚀 Step 6: Starting API server...');
     const port = parseInt(process.env.API_PORT || '3000');
     await startServer(fastify, port);
+
+    // Licence heartbeat on boot, AFTER the server listens: the author's own
+    // deployment pings itself through its public domain, which during a deploy
+    // still points at the container being replaced. Fire-and-forget with a few
+    // retries (`runBootHeartbeat`): a slow or unreachable activation server
+    // must never delay or fail startup.
+    void runBootHeartbeat()
+      .then(({ status }) => logger.info(`🔑 Licence heartbeat (boot): ${status}`))
+      .catch((error) => {
+        logger.warn('Licence heartbeat (boot) error', {
+          error: error instanceof Error ? error.message : 'unknown',
+        });
+      });
 
     logger.info('');
     logger.info('╔═════════════════════════════════════════════════════════════════╗');

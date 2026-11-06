@@ -230,6 +230,19 @@ export async function getLicense(fingerprint: string): Promise<LicenseDetail | n
   return { ...summary, instances };
 }
 
+/**
+ * Forget every ping of one licence (the super admin's «Видалити записи»): the
+ * rows of a fingerprint — 'none' / '' for the keyless group. The usual reason
+ * is a copy that pinged before its `LICENSE_KEY` was set and so left a
+ * «Без ключа» row beside its real licence forever. A copy that still runs
+ * pings again, so nothing is lost but history. Returns how many rows went.
+ */
+export async function deleteLicense(fingerprint: string): Promise<number> {
+  const fp = fingerprint === 'none' ? '' : fingerprint;
+  const r = await pool.query(`DELETE FROM pos_license_activations WHERE license_fingerprint = $1`, [fp]);
+  return r.rowCount ?? 0;
+}
+
 // --- Ingest rate limit (global, in-memory) --------------------------------
 // Behind Railway's proxy `request.ip` is the proxy's, so a per-IP window is
 // meaningless (TechDocs/POS_SINGLE_INSTANCE.md) — the same reasoning as
