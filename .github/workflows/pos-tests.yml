@@ -37,6 +37,9 @@ jobs:
         working-directory: .
         run: node scripts/gen-icons.mjs --check
       - run: npm run check:platform-boundary
+      # The online-only modules reach the host only via @host/* or @pos/platform,
+      # and the open platform imports none of them (TechDocs/POS_OPENCORE.md §4).
+      - run: npm run check:private-imports
       # Linux is case-sensitive, the release runners for macOS/Windows are not.
       - run: npm run check:case-collisions
       - run: npm run check:tauri-capabilities

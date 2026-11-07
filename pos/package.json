@@ -55,6 +55,7 @@
     "check:fiscal-cashalot-css-coverage": "node scripts/check-module-css-coverage.mjs src/modules/fiscal-core dist-remotes/fiscal-cashalot/style.css && node scripts/check-module-css-coverage.mjs src/modules/fiscal-cashalot dist-remotes/fiscal-cashalot/style.css src/components/ui/Page.tsx",
     "check:case-collisions": "node scripts/check-case-collisions.mjs src",
     "check:platform-boundary": "node scripts/check-platform-boundary.mjs",
+    "check:private-imports": "node scripts/check-private-imports.mjs",
     "check:tauri-capabilities": "node scripts/check-tauri-capabilities.mjs",
     "check:prod-no-dev-key": "node scripts/check-prod-no-dev-key.mjs",
     "platform:snapshot": "UPDATE_PLATFORM_SURFACE=1 vitest run src/platform/surface.test.ts",
