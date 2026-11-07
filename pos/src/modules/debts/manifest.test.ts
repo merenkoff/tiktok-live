@@ -7,10 +7,10 @@
 
 import { describe, expect, it } from 'vitest';
 import { debtsModule } from './manifest';
-import { CORE_MODULE_IDS, DEFAULT_ENABLED_MODULE_IDS } from '../constants';
-import { MODULES } from '../registry';
-import { navGroupOf } from '../navGroups';
-import { NAV_ICONS } from '../../platform/icons';
+import { CORE_MODULE_IDS, DEFAULT_ENABLED_MODULE_IDS } from '@host/modules/constants';
+import { MODULES } from '@host/modules/registry';
+import { navGroupOf } from '@host/modules/navGroups';
+import { NAV_ICONS } from '@host/platform/icons';
 
 describe('debts manifest', () => {
   it('is its own module — not a vertical, not bundled, for every vertical (Д1)', () => {

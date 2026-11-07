@@ -4,8 +4,8 @@
 
 // A type-only import: pulling the registry in for real would drag every other
 // module's manifest (and their lazy pages) into this bundle.
-import type { RemoteModuleDescriptor } from '../registry';
-import { lazyWithRetry } from '../lazyWithRetry';
+import type { RemoteModuleDescriptor } from '@host/modules/registry';
+import { lazyWithRetry } from '@host/modules/lazyWithRetry';
 
 const ShowcasePage = lazyWithRetry(() => import('./pages/ShowcasePage'));
 const FlowerAnalyticsPage = lazyWithRetry(() => import('./pages/FlowerAnalyticsPage'));

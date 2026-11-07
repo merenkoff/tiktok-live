@@ -8,8 +8,8 @@
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderWithProviders } from '../../../test/utils';
-import type { FiscalSettingsView } from '../../../types';
+import { renderWithProviders } from '@host/test/utils';
+import type { FiscalSettingsView } from '@host/types';
 
 const getFiscalSettingsView = vi.fn<[number?], Promise<FiscalSettingsView>>();
 const saveFiscalSecrets = vi.fn<[Record<string, string | null>, number?], Promise<FiscalSettingsView>>();

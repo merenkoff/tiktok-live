@@ -45,7 +45,7 @@ import {
 // The camera scanner drags in html5-qrcode (~500 kB); split out so a till
 // that never presses the button never downloads it — see `FlowersCatalog`.
 const BarcodeScanner = lazy(() =>
-  import('../../components/BarcodeScanner').then((m) => ({ default: m.BarcodeScanner }))
+  import('@host/components/BarcodeScanner').then((m) => ({ default: m.BarcodeScanner }))
 );
 import { HostTooOldError, missingHostApi } from './lib/hostPlatform';
 import { isStopListed } from './lib/stopList';

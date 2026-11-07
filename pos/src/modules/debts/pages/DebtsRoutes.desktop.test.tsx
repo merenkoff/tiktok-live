@@ -34,7 +34,7 @@ const { db } = await import('../data/db');
 const { applyDebtors } = await import('../data/mirror');
 const { enqueueIssue } = await import('../data/queue');
 const { resetSyncState, syncIssues } = await import('../data/sync');
-const { makeAuthResponse, renderWithProviders } = await import('../../../test/utils');
+const { makeAuthResponse, renderWithProviders } = await import('@host/test/utils');
 
 const uah = (cents: number) => formatUah(cents).replace(/\s/g, ' ');
 

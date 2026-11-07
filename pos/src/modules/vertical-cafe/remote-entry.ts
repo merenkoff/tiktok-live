@@ -9,8 +9,8 @@
 // `version` comes from THIS build's `POS_APP_VERSION` (deep import, so it is
 // bundled locally rather than taken from the host) and shows up in the host's
 // `session_manifest` telemetry.
-import '../remote-styles.css';
-import { POS_APP_VERSION } from '../../platform/version';
+import '@host/modules/remote-styles.css';
+import { POS_APP_VERSION } from '@host/platform/version';
 import { verticalCafeModule } from './manifest';
 
 export const manifest = { ...verticalCafeModule, version: POS_APP_VERSION };

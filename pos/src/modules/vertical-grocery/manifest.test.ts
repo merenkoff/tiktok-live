@@ -7,12 +7,12 @@
 
 import { describe, expect, it } from 'vitest';
 import { verticalGroceryModule } from './manifest';
-import { CORE_MODULE_IDS, DEFAULT_ENABLED_MODULE_IDS } from '../constants';
-import { resolveSalesCatalog } from '../verticals';
-import { MODULES } from '../registry';
+import { CORE_MODULE_IDS, DEFAULT_ENABLED_MODULE_IDS } from '@host/modules/constants';
+import { resolveSalesCatalog } from '@host/modules/verticals';
+import { MODULES } from '@host/modules/registry';
 import { REQUIRED_HOST_API, missingHostApi } from './lib/hostPlatform';
-import { PLATFORM_VERSION } from '../../platform/version';
-import { VERTICAL_OPTIONS } from '../../lib/vertical';
+import { PLATFORM_VERSION } from '@host/platform/version';
+import { VERTICAL_OPTIONS } from '@host/lib/vertical';
 
 describe('vertical-grocery manifest', () => {
   it('is keyed exactly as the store setting names it', () => {

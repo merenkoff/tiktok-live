@@ -32,7 +32,7 @@ import { deviceLabel } from '../../fiscal-core/lib/deviceLabel';
 import { useFiscalStatus } from '../../fiscal-core/hooks/useFiscalStatus';
 import { CHECKBOX_SECRET_SPECS } from '../secretSpecs';
 import type { FiscalStatus } from '../../fiscal-core/types';
-import type { FiscalSettingsView } from '../../../types';
+import type { FiscalSettingsView } from '@host/types';
 
 /**
  * The owner's view of the register lock, and the only way out of a dead holder:

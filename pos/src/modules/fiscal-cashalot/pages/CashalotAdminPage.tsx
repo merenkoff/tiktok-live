@@ -37,7 +37,7 @@ import { ProbeSection } from '../../fiscal-core/components/ProbeSection';
 import { TaxTableForm } from '../components/TaxTableForm';
 import { CASHALOT_SECRET_SPECS } from '../secretSpecs';
 import { registerTitle } from '../lib/registerTitle';
-import type { FiscalSettingsView } from '../../../types';
+import type { FiscalSettingsView } from '@host/types';
 
 /**
  * `PATCH /fiscal/settings` is the one fiscal route whose 400 carries the

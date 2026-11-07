@@ -8,7 +8,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
-import type { FlowerAnalytics } from '../../../types';
+import type { FlowerAnalytics } from '@host/types';
 
 const getFlowerAnalytics = vi.fn();
 

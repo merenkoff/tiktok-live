@@ -33,6 +33,9 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      // O-1 (POS_OPENCORE §4): host imports via `@host/*` → open platform at `pos/src/*`,
+      // so a private module's host imports survive the open-core move unchanged.
+      '@host': path.resolve(dir, 'src'),
       // Bundled locally, like every other remote: `@pos/platform/ui` re-exports
       // components, not singletons. The stores they read come from the shared,
       // externalised `@pos/platform` below.

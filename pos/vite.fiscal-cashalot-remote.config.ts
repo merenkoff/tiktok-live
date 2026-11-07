@@ -38,6 +38,8 @@ export default defineConfig({
     // Which bundle `fiscal-core`'s diagnostics are speaking for.
     __POS_FISCAL_MODULE__: JSON.stringify('fiscal-cashalot'),
   },
+  // O-1 (POS_OPENCORE §4): host imports via `@host/*` → open platform at `pos/src/*`.
+  resolve: { alias: { '@host': path.resolve(dir, 'src') } },
   build: {
     outDir: 'dist-remotes/fiscal-cashalot',
     emptyOutDir: true,

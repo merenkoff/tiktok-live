@@ -12,8 +12,8 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderWithProviders } from '../../../test/utils';
-import { useOfflineStatus } from '../../../offline';
+import { renderWithProviders } from '@host/test/utils';
+import { useOfflineStatus } from '@host/offline';
 import type { FiscalStatus, HolderStatusBlock } from '../types';
 
 const claimRegister = vi.fn();

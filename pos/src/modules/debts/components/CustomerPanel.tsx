@@ -22,7 +22,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuthStore, usePosShell } from '@pos/platform';
 import { SectionHead } from '@pos/platform/ui';
-import type { CustomerPanelProps } from '../../types';
+import type { CustomerPanelProps } from '@host/modules/types';
 import { creditLine } from '../lib/debt';
 import { statementPath } from '../lib/paths';
 import { useCredit } from '../lib/useCredit';

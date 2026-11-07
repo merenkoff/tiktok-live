@@ -8,7 +8,7 @@
 import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderWithProviders } from '../../../test/utils';
+import { renderWithProviders } from '@host/test/utils';
 import { FakeWebSocket, installFakeWebSocket } from '../test-support';
 import { HostTooOldError } from '../lib/hostPlatform';
 import { resetReportedFailures } from '../lib/diagnostics';

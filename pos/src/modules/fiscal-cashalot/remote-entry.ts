@@ -2,8 +2,8 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import '../remote-styles.css';
-import { POS_APP_VERSION } from '../../platform/version';
+import '@host/modules/remote-styles.css';
+import { POS_APP_VERSION } from '@host/platform/version';
 import { fiscalCashalotModule } from './manifest';
 
 export const manifest = { ...fiscalCashalotModule, version: POS_APP_VERSION };

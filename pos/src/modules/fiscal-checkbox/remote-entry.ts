@@ -7,8 +7,8 @@
 // `tiktok-live/remote-entry.ts` — react + react-router + zustand +
 // `@pos/platform` external, `version` deep-imported so it is bundled locally
 // and shows up in the host's `session_manifest` telemetry.
-import '../remote-styles.css';
-import { POS_APP_VERSION } from '../../platform/version';
+import '@host/modules/remote-styles.css';
+import { POS_APP_VERSION } from '@host/platform/version';
 import { fiscalCheckboxModule } from './manifest';
 
 export const manifest = { ...fiscalCheckboxModule, version: POS_APP_VERSION };

@@ -10,7 +10,7 @@ import 'fake-indexeddb/auto';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderWithProviders } from '../../../test/utils';
+import { renderWithProviders } from '@host/test/utils';
 import type { Bill, BillLine, BillRound } from '../lib/types';
 
 const posRequest = vi.fn();
@@ -80,7 +80,7 @@ vi.mock('react-router-dom', async () => {
 const { BillPage } = await import('./BillPage');
 const { useOfflineStatus, useAuthStore } = await import('@pos/platform');
 const mirror = await import('../data/mirror');
-const { makeAuthResponse } = await import('../../../test/utils');
+const { makeAuthResponse } = await import('@host/test/utils');
 
 const line = (over: Partial<BillLine> = {}): BillLine => ({
   id: 1,

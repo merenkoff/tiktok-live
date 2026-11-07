@@ -25,7 +25,7 @@ import { LiveApiError, LiveNotConfiguredError } from './errors';
 
 /**
  * This module's own build version — deliberately NOT `import { POS_APP_VERSION }
- * from '../../../platform/version'` even though that is exactly what
+ * from '@host/platform/version'` even though that is exactly what
  * `remote-entry.ts` does for the same value.
  *
  * `remote-entry.ts` is the only synchronous entry point, so its imports never
