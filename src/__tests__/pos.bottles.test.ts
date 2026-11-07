@@ -326,6 +326,90 @@ describe.skipIf(!hasDb)('POS open bottles at the till (ДК5-А)', () => {
     expect(await bottlesOf(vodka)).toEqual([]);
   });
 
+  // ── a whole bottle off the same stock (Д7, one stock in ml) ─────────────
+
+  it('sells a whole bottle as a derived 500 ml of the poured ingredient: its own stamp, the ml off one stock, the open bottle untouched', async () => {
+    // The bar's setup for a drink sold both whole and by the pour: the whole
+    // bottle is its own card (Д7), assembled as it sells from 500 ml of the
+    // very ingredient the shots pour from — so there is one stock, in ml.
+    const made = await app.inject({
+      method: 'POST',
+      url: '/api/pos/products',
+      headers: auth(store.ownerToken),
+      payload: {
+        name: 'Горілка «Хлібний дар» 0,5 ціла',
+        kind: 'composite',
+        stock_mode: 'derived',
+        fiscal_excise: true,
+        excise_per_unit: true,
+        fiscal_uktzed: '2208601100',
+        fiscal_register: 2,
+        variants: [{ attributes: {}, price_cents: 30_000, components: [{ component_variant_id: vodka, quantity: 500 }] }],
+      },
+    });
+    expect(made.statusCode).toBe(201);
+    const whole = Number(made.json().variants[0].id);
+    const stockOf = async (variantId: number) =>
+      Number(
+        (await pool.query(`SELECT quantity FROM pos_stock WHERE variant_id = $1 AND store_id = $2`, [variantId, store.storeId]))
+          .rows[0]?.quantity ?? 0
+      );
+    const wholeOnSale = async () => {
+      const catalog = await app.inject({ method: 'GET', url: '/api/pos/catalog', headers: auth(store.sellerToken) });
+      return (catalog.json() as Array<{ variant_id: number; quantity: number }>).find((r) => r.variant_id === whole);
+    };
+
+    // The bar opens a bottle by its stamp on the first shot.
+    const shotSold = await sell([{ variant_id: shot, quantity: 1 }], 9_000, [{ variant_id: vodka, excise_label: STAMP_A }]);
+    expect(shotSold.statusCode).toBe(201);
+    const before = await stockOf(vodka);
+    // Whole bottles on sale are what the ml stock holds, 500 ml each.
+    expect((await wholeOnSale())?.quantity).toBe(Math.floor(before / 500));
+
+    // A whole bottle never pours: the check before payment asks for no bottle,
+    // and the sale asks for the bottle's OWN stamp, not a new open one.
+    const check = await app.inject({
+      method: 'POST',
+      url: '/api/pos/bottles/check',
+      headers: auth(store.sellerToken),
+      payload: { items: [{ variant_id: whole, quantity: 1 }] },
+    });
+    expect(check.json().bottles).toEqual([]);
+    const unstamped = await sell([{ variant_id: whole, quantity: 1 }], 30_000);
+    expect(unstamped.statusCode).toBe(409);
+    expect(unstamped.json().error).toBe('excise_labels_needed');
+    // The open bottle's stamp is not a sealed bottle's.
+    const openStamp = await sell([{ variant_id: whole, quantity: 1, excise_labels: [STAMP_A] }], 30_000);
+    expect(openStamp.statusCode).toBe(409);
+    expect(openStamp.json()).toMatchObject({ error: 'excise_label_taken', label: STAMP_A });
+    expect(await stockOf(vodka)).toBe(before);
+
+    const sold = await sell([{ variant_id: whole, quantity: 1, excise_labels: [STAMP_B] }], 30_000);
+    expect(sold.statusCode).toBe(201);
+    expect(sold.json().items[0]).toMatchObject({ excise: true, excise_labels: [STAMP_B] });
+    expect(sold.json().items[0].bottle_labels).toBeUndefined();
+    const [, wholeDoc] = docsOf(bar);
+    expect(wholeDoc.lines[0]).toMatchObject({ excise: true, exciseLabels: [STAMP_B], uktzed: '2208601100' });
+    expect(docsOf(food)).toHaveLength(0);
+    // 500 ml left the one stock; the open bottle's count did not move.
+    expect(await stockOf(vodka)).toBe(before - 500);
+    expect(await bottlesOf(vodka)).toEqual([
+      expect.objectContaining({ label: STAMP_A, poured_ml: 50, label_pending: false, closed: false }),
+    ]);
+    expect((await wholeOnSale())?.quantity).toBe(Math.floor((before - 500) / 500));
+
+    // The next shot still pours from the bottle that is open, with no stamp.
+    const next = await sell([{ variant_id: shot, quantity: 1 }], 9_000);
+    expect(next.statusCode).toBe(201);
+    expect(next.json().items[0].bottle_labels).toBeUndefined();
+    expect((await bottlesOf(vodka))[0]).toMatchObject({ label: STAMP_A, poured_ml: 100, closed: false });
+
+    // A voided whole bottle gives its 500 ml back to the stock and nothing to the open bottle.
+    await voidSale({ storeId: store.storeId, saleId: sold.json().id, staffId: store.sellerId });
+    expect(await stockOf(vodka)).toBe(before - 50);
+    expect((await bottlesOf(vodka))[0]).toMatchObject({ poured_ml: 100, closed: false });
+  });
+
   // ── undoing ─────────────────────────────────────────────────────────────
 
   it('gives a voided pour back to its bottle, and its stamp to the next pour', async () => {
