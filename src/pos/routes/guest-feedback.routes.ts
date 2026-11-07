@@ -7,7 +7,8 @@
 // guest's side — sending one — is in `public-menu.routes.ts`.
 //
 // Owner-only (`ensurePosOwner`): the rows carry the guest's call-back phone,
-// which a waiter has no business with. Core rather than a module: the guest
+// which a waiter has no business with. The marketer (track МР) reads them too,
+// with every phone taken out (М7). Core rather than a module: the guest
 // menu is the café's, and that store opts in through `module_remotes`, so
 // there is no `enabled_modules` entry to gate on. A store with no feedback
 // simply reads an empty list; the page says how to switch it on.
@@ -22,6 +23,7 @@ import {
   type FeedbackListQuery,
 } from '../guest-feedback.service.js';
 import { badRange } from './analytics.routes.js';
+import { withoutPhones } from '../marketer.js';
 
 export function registerGuestFeedbackRoutes(fastify: FastifyInstance): void {
   // A WAITER's «Бачу» on a low score from a table (phase F6): the card leaves
@@ -38,7 +40,7 @@ export function registerGuestFeedbackRoutes(fastify: FastifyInstance): void {
   });
 
   fastify.get('/feedback', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensurePosOwner(request, reply, { allow: 'menu.feedback' });
     if (!auth) return;
     const q = request.query as Record<string, string | undefined>;
     const bad = badRange(q);
@@ -65,22 +67,25 @@ export function registerGuestFeedbackRoutes(fastify: FastifyInstance): void {
       if (!Number.isInteger(offset) || offset < 0) return reply.code(400).send({ error: 'offset має бути цілим числом' });
       query.offset = offset;
     }
-    return listFeedback(auth.storeId, query);
+    const list = await listFeedback(auth.storeId, query);
+    // The guest left the phone for the owner's call-back, not the marketer's (М7).
+    return auth.role === 'marketer' ? withoutPhones(list) : list;
   });
 
   fastify.get('/feedback/summary', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensurePosOwner(request, reply, { allow: 'menu.feedback' });
     if (!auth) return;
     const q = request.query as { from?: string; to?: string };
     const bad = badRange(q);
     if (bad) return reply.code(400).send({ error: bad });
-    return feedbackSummary(auth.storeId, q);
+    const summary = await feedbackSummary(auth.storeId, q);
+    return auth.role === 'marketer' ? withoutPhones(summary) : summary;
   });
 
   // «Опрацьовано», or back to waiting with `{ handled: false }`. Marking
   // keeps the first stamp: a second owner's tap does not rewrite who did it.
   fastify.post('/feedback/:id/handled', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensurePosOwner(request, reply, { allow: 'menu.feedback' });
     if (!auth) return;
     const id = Number((request.params as { id: string }).id);
     if (!Number.isInteger(id) || id <= 0) return reply.code(400).send({ error: 'Некоректний id' });
@@ -90,6 +95,6 @@ export function registerGuestFeedbackRoutes(fastify: FastifyInstance): void {
     }
     const row = await setFeedbackHandled(auth.storeId, id, auth.staffId, body.handled !== false);
     if (!row) return reply.code(404).send({ error: 'Відгук не знайдено' });
-    return row;
+    return auth.role === 'marketer' ? withoutPhones(row) : row;
   });
 }

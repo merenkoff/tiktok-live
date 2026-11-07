@@ -16,7 +16,8 @@ import {
 } from './core/crypto.js';
 import { getAuthByToken, sessionExpiresAt } from './core/auth.js';
 import { effectiveEnabledModules } from './core/modules.js';
-import { getVertical, publicConfigOf } from './verticals/index.js';
+import { getVertical, publicConfigOf, verticalOffersRole } from './verticals/index.js';
+import { ROLE_UNAVAILABLE } from './core/roles.js';
 import { clearPinMisses, reservePinAttempt, type PinLock } from './pin-attempts.js';
 import { moduleRemotesForTill } from './license/moduleToken.js';
 import type { VerticalPublicConfig } from './verticals/types.js';
@@ -222,6 +223,8 @@ export async function loginOwner(
  */
 export type PinLoginOutcome =
   | { kind: 'ok'; auth: AuthResponse }
+  /** The PIN was right, but the role cannot work here (a marketer outside a café, М3). */
+  | { kind: 'refused'; error: string }
   | { kind: 'invalid'; lock: PinLock | null }
   | { kind: 'locked'; lock: PinLock };
 
@@ -230,16 +233,20 @@ export async function attemptPinLogin(storeSlug: string, pin: string): Promise<P
   const normalizedPin = normalizePin(pin);
   if (!isValidPin(normalizedPin)) return { kind: 'invalid', lock: null };
 
-  const storeResult = await pool.query(`SELECT id FROM pos_stores WHERE slug = $1`, [slug]);
+  const storeResult = await pool.query(`SELECT id, vertical FROM pos_stores WHERE slug = $1`, [slug]);
   if (storeResult.rows.length === 0) return { kind: 'invalid', lock: null };
   const storeId = Number(storeResult.rows[0].id);
+  const vertical = storeResult.rows[0].vertical as string | null;
 
   const reservation = await reservePinAttempt(storeId);
   if (!reservation.ok) return { kind: 'locked', lock: reservation.lock };
 
   const staffResult = await pool.query(
+    // Oldest first: two people who still share a PIN from before it had to be
+    // unique (track МР) always resolve to the same one, never at random.
     `SELECT * FROM pos_staff
-     WHERE store_id = $1 AND is_active = TRUE AND pin_hash IS NOT NULL`,
+     WHERE store_id = $1 AND is_active = TRUE AND pin_hash IS NOT NULL
+     ORDER BY id`,
     [storeId]
   );
 
@@ -247,6 +254,14 @@ export async function attemptPinLogin(storeSlug: string, pin: string): Promise<P
     const ok = await verifyPin(normalizedPin, staff.pin_hash);
     if (ok) {
       await clearPinMisses(storeId);
+      if (!verticalOffersRole(vertical, String(staff.role))) {
+        logger.warn('POS PIN login refused: the store no longer offers the role', {
+          staffId: staff.id,
+          storeId,
+          role: staff.role,
+        });
+        return { kind: 'refused', error: ROLE_UNAVAILABLE };
+      }
       logger.info('POS PIN login', { staffId: staff.id, storeId });
       return { kind: 'ok', auth: await createSession(storeId, Number(staff.id)) };
     }
@@ -303,7 +318,7 @@ export async function listStaff(storeId: number) {
             (pin_hash IS NOT NULL) AS has_pin
      FROM pos_staff
      WHERE store_id = $1
-     ORDER BY role ASC, display_name ASC`,
+     ORDER BY CASE role WHEN 'owner' THEN 0 WHEN 'seller' THEN 1 ELSE 2 END, display_name ASC`,
     [storeId]
   );
   return result.rows.map((row) => ({
@@ -318,43 +333,152 @@ export async function listStaff(storeId: number) {
   }));
 }
 
+/** A staff write refused in the owner's words, with the status the route answers. */
+export class StaffError extends Error {
+  constructor(
+    message: string,
+    readonly status: 400 | 404 | 409 = 400
+  ) {
+    super(message);
+    this.name = 'StaffError';
+  }
+}
+
+/** The roles an owner gives on «Співробітники»: never a second owner. */
+export type StaffRole = Exclude<PosRole, 'owner'>;
+
+function isStaffRole(value: unknown): value is StaffRole {
+  return value === 'seller' || value === 'marketer';
+}
+
+/**
+ * A PIN as this role must have it. A marketer's opens the cabinet, not a till,
+ * so it is six digits (track МР, М2); a seller's stays four to six.
+ */
+function pinForRole(pin: string, role: PosRole): string {
+  const normalized = normalizePin(pin);
+  if (role === 'marketer') {
+    if (!/^\d{6}$/.test(normalized)) throw new StaffError('PIN маркетолога — 6 цифр: він відкриває кабінет');
+    return normalized;
+  }
+  if (!isValidPin(normalized)) throw new StaffError('PIN must be 4-6 digits');
+  return normalized;
+}
+
+/**
+ * Refuse a PIN another active person of the store already has. The PIN is what
+ * says who logs in (`attemptPinLogin` takes the first match), so two people
+ * sharing one would log in as whichever row came first — and a seller's PIN
+ * opening a marketer's cabinet, or the other way round, is not a coin toss we
+ * can allow. Compared against every hash: a café has a handful of people.
+ */
+async function assertPinFree(storeId: number, pin: string, exceptStaffId: number | null): Promise<void> {
+  const others = await pool.query(
+    `SELECT pin_hash FROM pos_staff
+     WHERE store_id = $1 AND is_active = TRUE AND pin_hash IS NOT NULL
+       AND ($2::bigint IS NULL OR id <> $2)`,
+    [storeId, exceptStaffId]
+  );
+  for (const row of others.rows) {
+    if (await verifyPin(pin, row.pin_hash)) {
+      throw new StaffError('Такий PIN уже має інший співробітник — оберіть інший', 409);
+    }
+  }
+}
+
+/** Refuse a role the store's vertical does not offer (only the café has a marketer). */
+async function assertRoleOffered(storeId: number, role: StaffRole): Promise<void> {
+  const store = await pool.query(`SELECT vertical FROM pos_stores WHERE id = $1`, [storeId]);
+  if (!verticalOffersRole(store.rows[0]?.vertical as string | null, role)) {
+    throw new StaffError('Роль «Маркетолог» є лише в кафе й ресторані');
+  }
+}
+
+/** A new seller or marketer, with a PIN no one else in the store has. */
+export async function createStaff(
+  storeId: number,
+  input: { displayName: string; pin: string; role?: unknown }
+): Promise<{ id: number; role: StaffRole }> {
+  const role = input.role === undefined || input.role === null ? 'seller' : input.role;
+  if (!isStaffRole(role)) throw new StaffError('Роль — продавець або маркетолог');
+  await assertRoleOffered(storeId, role);
+  const pin = pinForRole(input.pin, role);
+  await assertPinFree(storeId, pin, null);
+  const pinHash = await hashPin(pin);
+  const result = await pool.query(
+    `INSERT INTO pos_staff (store_id, role, display_name, pin_hash)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id`,
+    [storeId, role, input.displayName.trim(), pinHash]
+  );
+  return { id: Number(result.rows[0].id), role };
+}
+
 export async function createSeller(
   storeId: number,
   displayName: string,
   pin: string
 ): Promise<{ id: number }> {
-  const normalizedPin = normalizePin(pin);
-  if (!isValidPin(normalizedPin)) {
-    throw new Error('PIN must be 4-6 digits');
-  }
-  const pinHash = await hashPin(normalizedPin);
-  const result = await pool.query(
-    `INSERT INTO pos_staff (store_id, role, display_name, pin_hash)
-     VALUES ($1, 'seller', $2, $3)
-     RETURNING id`,
-    [storeId, displayName.trim(), pinHash]
-  );
-  return { id: Number(result.rows[0].id) };
+  const created = await createStaff(storeId, { displayName, pin, role: 'seller' });
+  return { id: created.id };
 }
 
 export async function setStaffPin(storeId: number, staffId: number, pin: string): Promise<void> {
-  const normalizedPin = normalizePin(pin);
-  if (!isValidPin(normalizedPin)) {
-    throw new Error('PIN must be 4-6 digits');
-  }
-  const pinHash = await hashPin(normalizedPin);
-  const result = await pool.query(
-    `UPDATE pos_staff
-     SET pin_hash = $1, updated_at = NOW()
-     WHERE id = $2 AND store_id = $3
-     RETURNING id`,
-    [pinHash, staffId, storeId]
-  );
-  if (result.rows.length === 0) {
+  const staff = await pool.query(`SELECT role FROM pos_staff WHERE id = $1 AND store_id = $2`, [staffId, storeId]);
+  // Same order as before: a bad PIN is refused before an unknown person is.
+  const normalized = pinForRole(pin, (staff.rows[0]?.role as PosRole | undefined) ?? 'seller');
+  if (staff.rows.length === 0) {
     throw new Error('Staff not found');
   }
+  await assertPinFree(storeId, normalized, staffId);
+  const pinHash = await hashPin(normalized);
+  await pool.query(
+    `UPDATE pos_staff
+     SET pin_hash = $1, updated_at = NOW()
+     WHERE id = $2 AND store_id = $3`,
+    [pinHash, staffId, storeId]
+  );
   // The owner's rule: a new PIN for anyone reopens PIN login, like «Розблокувати».
   await clearPinMisses(storeId);
+}
+
+/**
+ * Make a seller a marketer or the other way round (track МР, М9). Becoming a
+ * marketer takes a new six-digit PIN in the same call — the stored hash cannot
+ * say how long the old one is. Every session of that person ends: a till
+ * logged in as a seller must not carry on as someone else.
+ */
+export async function setStaffRole(
+  storeId: number,
+  staffId: number,
+  input: { role: unknown; pin?: unknown }
+): Promise<{ id: number; role: StaffRole }> {
+  if (!isStaffRole(input.role)) throw new StaffError('Роль — продавець або маркетолог');
+  const role = input.role;
+  const staff = await pool.query(`SELECT role FROM pos_staff WHERE id = $1 AND store_id = $2`, [staffId, storeId]);
+  if (staff.rows.length === 0) throw new StaffError('Співробітника не знайдено', 404);
+  const before = staff.rows[0].role as PosRole;
+  if (before === 'owner') throw new StaffError('Роль власника не змінюється');
+  await assertRoleOffered(storeId, role);
+  const pinGiven = typeof input.pin === 'string' && input.pin.trim() !== '';
+  if (role === 'marketer' && before !== 'marketer' && !pinGiven) {
+    throw new StaffError('Маркетологу потрібен новий PIN із 6 цифр');
+  }
+  let pinHash: string | null = null;
+  if (pinGiven) {
+    const pin = pinForRole(input.pin as string, role);
+    await assertPinFree(storeId, pin, staffId);
+    pinHash = await hashPin(pin);
+  }
+  await pool.query(
+    `UPDATE pos_staff
+     SET role = $1, pin_hash = COALESCE($2, pin_hash), updated_at = NOW()
+     WHERE id = $3 AND store_id = $4`,
+    [role, pinHash, staffId, storeId]
+  );
+  if (before !== role) await pool.query(`DELETE FROM pos_sessions WHERE staff_id = $1`, [staffId]);
+  if (pinHash) await clearPinMisses(storeId);
+  return { id: staffId, role };
 }
 
 export async function setStaffActive(
@@ -365,7 +489,7 @@ export async function setStaffActive(
   const result = await pool.query(
     `UPDATE pos_staff
      SET is_active = $1, updated_at = NOW()
-     WHERE id = $2 AND store_id = $3 AND role = 'seller'
+     WHERE id = $2 AND store_id = $3 AND role <> 'owner'
      RETURNING id`,
     [isActive, staffId, storeId]
   );

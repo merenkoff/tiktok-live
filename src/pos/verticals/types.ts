@@ -145,7 +145,18 @@ export interface VerticalDefinition {
    * florist's stems, a café's drinks).
    */
   autoBarcode: boolean;
+  /**
+   * The staff roles this kind of store offers besides the seller (track МР,
+   * TechDocs/POS_MARKETER_ROLE.md): `marketer` keeps a café's menu, halls and QR
+   * menu. The vertical carries it because a boutique has no guest menu for a
+   * marketer to keep. Absent = none; a store whose vertical stops offering a
+   * role refuses that staff member's login and every request of their session.
+   */
+  staffRoles?: readonly ExtraStaffRole[];
 }
+
+/** A role a vertical may offer beside the owner and the seller (`staffRoles`). */
+export type ExtraStaffRole = 'marketer';
 
 /**
  * What the client is told about its store's vertical. Functions are stripped on
@@ -192,4 +203,10 @@ export interface VerticalPublicConfig {
    * `VerticalDefinition.autoBarcode`.
    */
   autoBarcode: boolean;
+  /**
+   * The staff roles the owner may give besides «Продавець» — see
+   * `VerticalDefinition.staffRoles`. Optional on the client: an older backend
+   * sends none, and none means only sellers.
+   */
+  staffRoles: ExtraStaffRole[];
 }

@@ -13,7 +13,8 @@
 //
 // Reading the map is `ensurePosAuth`: the waiter with a tablet is a seller,
 // and §4.7 says everyone sees every table. Changing the furniture is
-// `ensurePosOwner` — a floor plan is not a shift-time decision.
+// `ensurePosOwner` — a floor plan is not a shift-time decision. The marketer
+// (track МР) edits it too: halls and tables are what the QR stickers print.
 //
 // The bill endpoints (К4b) live here too, under the same core group: they
 // are the same module's server surface, and one registration is easier to
@@ -166,13 +167,13 @@ export function registerTablesRoutes(fastify: FastifyInstance): void {
   // store is exactly the one whose owner is about to create the first hall.
   // The endpoints that need a room to exist are the bill ones (К4b).
   fastify.get('/halls', async (request, reply) => {
-    const auth = await ensurePosAuth(request, reply);
+    const auth = await ensurePosAuth(request, reply, { allow: 'menu.tables' });
     if (!auth) return;
     return { halls: await tables.listHalls(auth.storeId) };
   });
 
   fastify.post('/halls', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensurePosOwner(request, reply, { allow: 'menu.tables' });
     if (!auth) return;
     try {
       return await tables.createHall(auth.storeId, (request.body ?? {}) as tables.HallInput);
@@ -182,7 +183,7 @@ export function registerTablesRoutes(fastify: FastifyInstance): void {
   });
 
   fastify.patch('/halls/:id', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensurePosOwner(request, reply, { allow: 'menu.tables' });
     if (!auth) return;
     const id = idOf((request.params as { id: string }).id);
     if (id == null) return reply.code(404).send({ error: 'Зал не знайдено' });
@@ -194,7 +195,7 @@ export function registerTablesRoutes(fastify: FastifyInstance): void {
   });
 
   fastify.delete('/halls/:id', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensurePosOwner(request, reply, { allow: 'menu.tables' });
     if (!auth) return;
     const id = idOf((request.params as { id: string }).id);
     if (id == null) return reply.code(404).send({ error: 'Зал не знайдено' });
@@ -207,7 +208,7 @@ export function registerTablesRoutes(fastify: FastifyInstance): void {
   });
 
   fastify.post('/tables', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensurePosOwner(request, reply, { allow: 'menu.tables' });
     if (!auth) return;
     try {
       return await tables.createTable(auth.storeId, (request.body ?? {}) as tables.TableInput);
@@ -220,7 +221,7 @@ export function registerTablesRoutes(fastify: FastifyInstance): void {
   // transaction, one round-trip — N PATCHes mid-drag is the anti-pattern the
   // design doc's speed budget is against (§6).
   fastify.patch('/tables/positions', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensurePosOwner(request, reply, { allow: 'menu.tables' });
     if (!auth) return;
     try {
       return { tables: await tables.moveTables(auth.storeId, readPositions(request.body)) };
@@ -230,7 +231,7 @@ export function registerTablesRoutes(fastify: FastifyInstance): void {
   });
 
   fastify.patch('/tables/:id', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensurePosOwner(request, reply, { allow: 'menu.tables' });
     if (!auth) return;
     const id = idOf((request.params as { id: string }).id);
     if (id == null) return reply.code(404).send({ error: 'Стіл не знайдено' });
@@ -242,7 +243,7 @@ export function registerTablesRoutes(fastify: FastifyInstance): void {
   });
 
   fastify.delete('/tables/:id', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensurePosOwner(request, reply, { allow: 'menu.tables' });
     if (!auth) return;
     const id = idOf((request.params as { id: string }).id);
     if (id == null) return reply.code(404).send({ error: 'Стіл не знайдено' });

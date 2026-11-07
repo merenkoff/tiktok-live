@@ -2,7 +2,7 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { ensureModule, ensurePosAuth } from '../core/auth.js';
 import { pool } from '../../db.js';
 import { listTechCards } from '../composites.service.js';
@@ -13,13 +13,42 @@ import * as tagsService from '../tags.service.js';
 import { saveProductImage } from '../uploads.service.js';
 import { logger } from '../../logger.js';
 import { errorMessage, isUniqueViolation } from './_shared.js';
+import {
+  MarketerFieldError,
+  assertMarketerProductWrite,
+  assertMarketerVariantWrite,
+  catalogForMarketer,
+} from '../marketer.js';
+import type { PosAuthContext } from '../types.js';
+
+/**
+ * The answer as this session may read it: the marketer gets no purchase price
+ * and no stock (track МР, М4); everyone else the answer as it is.
+ */
+function forRole<T>(auth: PosAuthContext, value: T): T {
+  return auth.role === 'marketer' ? catalogForMarketer(value) : value;
+}
+
+/** A marketer's write that touched the owner's half of a card. */
+export function sendMarketerRefusal(reply: FastifyReply, error: MarketerFieldError) {
+  return reply.code(403).send({ error: error.message, code: error.code });
+}
+
+/** One variant as the product list reads it — what a marketer's edit is compared against. */
+async function findVariant(storeId: number, variantId: number): Promise<Record<string, unknown> | null> {
+  const row = await pool.query(`SELECT product_id FROM pos_variants WHERE id = $1 AND store_id = $2`, [variantId, storeId]);
+  if (row.rows.length === 0) return null;
+  const product = await productsService.getProduct(storeId, Number(row.rows[0].product_id));
+  const variants = (product?.variants ?? []) as Array<Record<string, unknown>>;
+  return variants.find((v) => Number(v.id) === variantId) ?? null;
+}
 import * as techCardsImport from '../techcards-import.service.js';
 
 export function registerProductsRoutes(fastify: FastifyInstance): void {
   fastify.get('/products', async (request, reply) => {
-    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;
-    return productsService.listProducts(auth.storeId);
+    return forRole(auth, await productsService.listProducts(auth.storeId));
   });
 
   /**
@@ -53,18 +82,19 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
   });
 
   fastify.get('/products/:id', async (request, reply) => {
-    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;
     const { id } = request.params as { id: string };
     const product = await productsService.getProduct(auth.storeId, Number(id));
     if (!product) return reply.code(404).send({ error: 'Product not found' });
-    return product;
+    return forRole(auth, product);
   });
 
   fastify.post('/products', async (request, reply) => {
-    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;
     try {
+      if (auth.role === 'marketer') assertMarketerProductWrite(request.body, null);
       const product = await productsService.createProduct(
         auth.storeId,
         request.body as productsService.CreateProductInput
@@ -72,8 +102,9 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
       // A dish's description, composition and allergens are on the guest's page:
       // what an owner just wrote must not wait out the menu's 15 s cache.
       invalidatePublicMenu(auth.storeId);
-      return reply.code(201).send(product);
+      return reply.code(201).send(forRole(auth, product));
     } catch (error) {
+      if (error instanceof MarketerFieldError) return sendMarketerRefusal(reply, error);
       const status = isUniqueViolation(error) ? 409 : 400;
       logger.error('Create product failed', { error: errorMessage(error) });
       return reply.code(status).send({ error: errorMessage(error) });
@@ -81,10 +112,15 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
   });
 
   fastify.patch('/products/:id', async (request, reply) => {
-    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
+      if (auth.role === 'marketer') {
+        const current = await productsService.getProduct(auth.storeId, Number(id));
+        if (!current) return reply.code(404).send({ error: 'Product not found' });
+        assertMarketerProductWrite(request.body, current as unknown as Record<string, unknown>);
+      }
       const product = await productsService.updateProduct(
         auth.storeId,
         Number(id),
@@ -93,14 +129,15 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
       // Allergens are the one thing on that page a stale copy can hurt someone
       // over, so the change is visible at once (see `invalidatePublicMenu`).
       invalidatePublicMenu(auth.storeId);
-      return product;
+      return forRole(auth, product);
     } catch (error) {
+      if (error instanceof MarketerFieldError) return sendMarketerRefusal(reply, error);
       return reply.code(400).send({ error: errorMessage(error) });
     }
   });
 
   fastify.post('/uploads', async (request, reply) => {
-    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;
     try {
       const file = await request.file();
@@ -113,17 +150,19 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
   });
 
   fastify.post('/products/:id/variants', async (request, reply) => {
-    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
+      if (auth.role === 'marketer') assertMarketerVariantWrite(request.body, null);
       const product = await productsService.addVariant(
         auth.storeId,
         Number(id),
         request.body as productsService.VariantInput
       );
-      return reply.code(201).send(product);
+      return reply.code(201).send(forRole(auth, product));
     } catch (error) {
+      if (error instanceof MarketerFieldError) return sendMarketerRefusal(reply, error);
       const status = isUniqueViolation(error) ? 409 : 400;
       return reply.code(status).send({ error: errorMessage(error) });
     }
@@ -132,14 +171,16 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
   // A whole size × colour matrix in one request (TechDocs/POS_CLOTHING.md, C1):
   // all of it or nothing, and a clash says which article or barcode was taken.
   fastify.post('/products/:id/variants/batch', async (request, reply) => {
-    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;
     const { id } = request.params as { id: string };
     const body = (request.body ?? {}) as { variants?: productsService.VariantInput[] };
     try {
+      if (auth.role === 'marketer') for (const variant of body.variants ?? []) assertMarketerVariantWrite(variant, null);
       const product = await productsService.addVariants(auth.storeId, Number(id), body.variants ?? []);
-      return reply.code(201).send(product);
+      return reply.code(201).send(forRole(auth, product));
     } catch (error) {
+      if (error instanceof MarketerFieldError) return sendMarketerRefusal(reply, error);
       const status = isUniqueViolation(error) ? 409 : 400;
       return reply.code(status).send({ error: errorMessage(error) });
     }
@@ -148,7 +189,7 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
   // Mint a store-local barcode for a tag that will not scan. Static segment,
   // so it never shadows `PATCH /variants/:id`.
   fastify.post('/variants/internal-barcode', async (request, reply) => {
-    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;
     try {
       return { barcode: await productsService.generateInternalBarcode(auth.storeId) };
@@ -158,27 +199,36 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
   });
 
   fastify.patch('/variants/:id', async (request, reply) => {
-    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
-      return await productsService.updateVariant(
-        auth.storeId,
-        Number(id),
-        request.body as Parameters<typeof productsService.updateVariant>[2]
+      if (auth.role === 'marketer') {
+        const current = await findVariant(auth.storeId, Number(id));
+        if (!current) return reply.code(400).send({ error: 'Variant not found' });
+        assertMarketerVariantWrite(request.body, current);
+      }
+      return forRole(
+        auth,
+        await productsService.updateVariant(
+          auth.storeId,
+          Number(id),
+          request.body as Parameters<typeof productsService.updateVariant>[2]
+        )
       );
     } catch (error) {
+      if (error instanceof MarketerFieldError) return sendMarketerRefusal(reply, error);
       const status = isUniqueViolation(error) ? 409 : 400;
       return reply.code(status).send({ error: errorMessage(error) });
     }
   });
 
   fastify.post('/products/:id/archive', async (request, reply) => {
-    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
-      return await productsService.archiveProduct(auth.storeId, Number(id));
+      return forRole(auth, await productsService.archiveProduct(auth.storeId, Number(id)));
     } catch (error) {
       return reply.code(400).send({ error: errorMessage(error) });
     }
@@ -186,32 +236,32 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
 
   // The archive's way back (the list's «Архів» filter → «Повернути»).
   fastify.post('/products/:id/restore', async (request, reply) => {
-    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
       const product = await productsService.restoreProduct(auth.storeId, Number(id));
       // A restored dish is on the guest menu again at once, like any edit.
       invalidatePublicMenu(auth.storeId);
-      return product;
+      return forRole(auth, product);
     } catch (error) {
       return reply.code(400).send({ error: errorMessage(error) });
     }
   });
 
   fastify.post('/variants/:id/archive', async (request, reply) => {
-    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
-      return await productsService.archiveVariant(auth.storeId, Number(id));
+      return forRole(auth, await productsService.archiveVariant(auth.storeId, Number(id)));
     } catch (error) {
       return reply.code(400).send({ error: errorMessage(error) });
     }
   });
 
   fastify.put('/products/:id/tags', async (request, reply) => {
-    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;
     const { id } = request.params as { id: string };
     const body = request.body as { tag_ids?: number[] };
@@ -230,13 +280,13 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
   // ── Tags ──────────────────────────────────────────────
 
   fastify.get('/tags', async (request, reply) => {
-    const auth = await ensurePosAuth(request, reply);
+    const auth = await ensurePosAuth(request, reply, { allow: 'menu.catalog' });
     if (!auth) return;
     return tagsService.listTags(auth.storeId);
   });
 
   fastify.post('/tags', async (request, reply) => {
-    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;
     const body = request.body as {
       name?: string;
@@ -264,7 +314,7 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
   });
 
   fastify.patch('/tags/:id', async (request, reply) => {
-    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
@@ -285,7 +335,7 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
   });
 
   fastify.delete('/tags/:id', async (request, reply) => {
-    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
@@ -297,7 +347,7 @@ export function registerProductsRoutes(fastify: FastifyInstance): void {
   });
 
   fastify.post('/tags/:id/assign', async (request, reply) => {
-    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;
     const { id } = request.params as { id: string };
     const body = request.body as { product_ids?: number[] };

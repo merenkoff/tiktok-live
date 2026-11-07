@@ -11,7 +11,11 @@ import type { AttributeValues, VerticalId } from './verticals/types.js';
 
 export type { ModuleRemoteEntry, NavOverrides };
 
-export type PosRole = 'owner' | 'seller';
+/**
+ * `marketer` (track МР, migration 098): the menu, the halls and the QR menu of a
+ * café, nothing else — denied every route that does not name it (`core/roles.ts`).
+ */
+export type PosRole = 'owner' | 'seller' | 'marketer';
 
 export type StockReason =
   | 'sale'

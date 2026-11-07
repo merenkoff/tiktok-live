@@ -16,6 +16,7 @@ import { isFiscalProviderId } from '../fiscal/types.js';
 import { isModuleEnabled } from './modules.js';
 import { verticalOrDefault } from '../verticals/index.js';
 import { feedbackMenuKey, feedbackUrl } from '../public-menu/urls.js';
+import { MARKETER_FORBIDDEN, marketerMay, roleUnavailable, type StaffCapability } from './roles.js';
 
 /** The feedback QR's address for the session's store, or null (see `urls.ts`). */
 function feedbackUrlOf(row: Record<string, unknown>): string | null {
@@ -151,9 +152,20 @@ function extractBearer(request: FastifyRequest): string | null {
   return header.slice(7).trim() || null;
 }
 
+/**
+ * Who may pass a guard besides the roles it is written for. Only the marketer
+ * needs naming (track МР): the owner passes every guard, the seller every
+ * `ensurePosAuth`, and the marketer only a route that opens one of its
+ * capabilities here — every other route answers it 403 (`core/roles.ts`).
+ */
+export interface GuardOptions {
+  allow?: StaffCapability;
+}
+
 export async function ensurePosAuth(
   request: FastifyRequest,
-  reply: FastifyReply
+  reply: FastifyReply,
+  opts: GuardOptions = {}
 ): Promise<PosAuthContext | null> {
   const token = extractBearer(request);
   if (!token) {
@@ -167,17 +179,35 @@ export async function ensurePosAuth(
     return null;
   }
 
+  if (auth.role === 'marketer') {
+    const gone = roleUnavailable(auth);
+    if (gone) {
+      await reply.code(403).send({ error: gone, code: 'role_unavailable' });
+      return null;
+    }
+    if (!marketerMay(opts.allow)) {
+      await reply.code(403).send({ error: MARKETER_FORBIDDEN, code: 'role_forbidden' });
+      return null;
+    }
+  }
+
   request.posAuth = auth;
   return auth;
 }
 
+/**
+ * The owner — or the marketer, on a route that opened one of its
+ * capabilities (`opts.allow`). A seller never passes.
+ */
 export async function ensurePosOwner(
   request: FastifyRequest,
-  reply: FastifyReply
+  reply: FastifyReply,
+  opts: GuardOptions = {}
 ): Promise<PosAuthContext | null> {
-  const auth = await ensurePosAuth(request, reply);
+  const auth = await ensurePosAuth(request, reply, opts);
   if (!auth) return null;
-  if (auth.role !== 'owner') {
+  // A marketer is here only because `ensurePosAuth` found the route open to it.
+  if (auth.role !== 'owner' && auth.role !== 'marketer') {
     await reply.code(403).send({ error: 'Owner access required' });
     return null;
   }
@@ -194,11 +224,12 @@ export async function ensureModule(
   request: FastifyRequest,
   reply: FastifyReply,
   moduleId: string,
-  opts: { owner?: boolean } = {}
+  opts: { owner?: boolean } & GuardOptions = {}
 ): Promise<PosAuthContext | null> {
+  const guard = { allow: opts.allow };
   const auth = opts.owner
-    ? await ensurePosOwner(request, reply)
-    : await ensurePosAuth(request, reply);
+    ? await ensurePosOwner(request, reply, guard)
+    : await ensurePosAuth(request, reply, guard);
   if (!auth) return null;
   if (!isModuleEnabled(auth.enabledModules, moduleId)) {
     await reply.code(404).send({ error: 'Not found' });
