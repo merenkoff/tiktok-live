@@ -250,10 +250,23 @@ jsdelivr роздає її за тегом:
   `/app/data/pos-uploads`, тож тека лежить **усередині** нього:
   `data/pos-uploads/.module-bundles/<id>/<ver>/` (`MODULE_BUNDLES_DIR`), а
   `/pos-uploads/*` не віддає жодної dot-теки (`allowedPath` у `pos.plugin.ts`).
-  Окрема `data/module-bundles` поруч із томом зникала б з кожним деплоєм. Workflow
-  заливає файли через
-  owner-only ендпоінт із секретом CI; альтернатива — ассети релізів приватної
-  репи, які сервер тягне з токеном і кешує;
+  Окрема `data/module-bundles` поруч із томом зникала б з кожним деплоєм.
+  **Як заливається (O-3, зроблено):** Module Release для модуля зі списку
+  `pos/private-modules.json` (одна копія списку для `check:private-imports`,
+  e2e і workflow) не комітить збірку в `module-builds`, а заливає її на
+  `DELETE` → `PUT …/:file` (сирі байти) → `POST …/commit` під
+  `/api/modules/upload/<id>/<ver>` з `Authorization: Bearer <MODULE_UPLOAD_SECRET>`
+  (`src/pos/license/moduleUpload.ts`). Секрет дає CI лише **запис**; коміт
+  приймає збірку, тільки якщо `manifest.json` підписано **прод-ключем модулів**
+  (`moduleKeys.ts`, той самий, що в `remoteSigningKeys.ts` — тест звіряє), він
+  називає саме цей модуль і версію, а завантажені файли — рівно ті, що в
+  `files`, з їхнім sha384. Файли лежать у `.staging/<id>/<ver>/` і переносяться
+  на місце одним `rename`; версія незмінна (той самий вміст — `already`, інший —
+  409). Без `MODULE_UPLOAD_SECRET` workflow падає, а не публікує в `module-builds`.
+  Тег приватного модуля лишається на коміті вихідників. URL для `module_remotes`:
+  `https://the-live.shop/api/modules/<id>/<ver>/remote-entry.js`. Рішення
+  власника 2026-11-07: публікацію приватних модулів у `module-builds` припинено
+  **одразу**, без перехідного періоду;
 - гейт роздає **звідти**; jsdelivr лишається тільки для відкритих модулів
   (`stocktake`, …) і для вже виданих старих версій;
 - старі теги на `module-builds` лишаються публічними — це історія (§1); захист
@@ -319,7 +332,7 @@ jsdelivr роздає її за тегом:
 | O-0 | Цей док + рішення Р1–Р8 — **зроблено 2026-11-07** | — |
 | O-1 | Алиас `@host/*` замість відносних виходів із модуля (§4); критерій — побайтно однакові бандли — **зроблено** (100 імпортів у 9 приватних теках → `@host/*`; alias у `tsconfig`, `vitest.config.ts` і 8 `vite.<id>-remote.config.ts`; усі 8 бандлів **побайтно однакові** до/після; tsc/lint/2712 тестів зелені; `check-platform-boundary` читає й `@host/*`, а `check:private-imports` у CI не дає модулям знову вийти в хост відносним шляхом, а хосту — імпортувати приватний модуль) | низький (окремий PR, поведінка не змінюється) |
 | O-2 | Публічний e2e без приватних remotes: `webServer` збирає приватний remote лише там, де є його вихідники, 10 спеків пропускаються, якщо теки модуля нема (§5) — **зроблено** (`e2e/_private.ts` `hasPrivateModule`; `webServer` → `scripts/build-private-remotes.mjs`, що будує 8 приватних remotes лише за наявності `src/modules/<id>`; `stocktake` (відкритий remote) лишається явним; `test.skip(() => !hasPrivateModule('<id>'), …)` у `debts`, `tables`, `tablet`, `vertical-cafe`, `vertical-flowers`, `vertical-grocery`, `florist-bench`, `fiscal-cashalot`, а нові `fiscal-checkbox.spec.ts` і `tiktok-live.spec.ts` уперше ганяють реальні бандли цих двох випущених модулів; де вихідники є — усі 10 біжать) | низький |
-| O-3 | Module Release заливає приватні збірки в закрите сховище (§8.1) | середній |
+| O-3 | Module Release заливає приватні збірки в закрите сховище (§8.1) — **зроблено 2026-11-07** (`/api/modules/upload/…` з перевіркою підпису, `pos/private-modules.json`; потрібні `MODULE_UPLOAD_SECRET` на Railway і в Actions) | середній |
 | O-4 | Гейт із токеном у шляху + журнал виданого + читання сховища (§8.2–8.3), за прапором, дефолт off — **зроблено 2026-11-07, PR #399** (сервер вставляє токен, хост без змін) | середній |
 | O-5 | Увімкнути `LICENSE_MODULE_GATE` + репойнт `module_remotes` на гейт | середній (поведінка кас) |
 | O-6 | Перенос вихідників (Р2: B або D), зміна заголовків ліцензії (Р8), правки §4, CLAUDE.md і TechDocs | високий (структурний; окремо, по кроках, з власником) |

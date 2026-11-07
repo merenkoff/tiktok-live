@@ -31,18 +31,9 @@ const pos = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const srcRoot = path.join(pos, 'src');
 const modulesRoot = path.join(srcRoot, 'modules');
 
-/** POS_OPENCORE.md §2: the online-only remotes plus the library two of them share. */
-const PRIVATE = [
-  'tiktok-live',
-  'fiscal-checkbox',
-  'fiscal-cashalot',
-  'fiscal-core',
-  'vertical-flowers',
-  'vertical-cafe',
-  'vertical-grocery',
-  'tables',
-  'debts',
-];
+/** POS_OPENCORE.md §2: the online-only remotes plus the library two of them share (`private-modules.json`). */
+const privateList = JSON.parse(readFileSync(path.join(pos, 'private-modules.json'), 'utf-8'));
+const PRIVATE = [...privateList.remotes, ...privateList.libraries];
 
 const privateDirs = PRIVATE.map((id) => path.join(modulesRoot, id));
 const isPrivate = (file) => privateDirs.some((dir) => file === dir || file.startsWith(dir + path.sep));

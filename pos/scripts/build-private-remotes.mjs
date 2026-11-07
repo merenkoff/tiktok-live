@@ -14,25 +14,17 @@
 // so it is always present and stays an explicit build in playwright.config.ts.
 
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const posRoot = path.resolve(dir, '..');
 
-// Each private remote the e2e suite serves: its `src/modules/<id>` source and
-// the `npm run build:<id>-remote` script that produces `dist-remotes/<id>`.
-const PRIVATE_REMOTES = [
-  'vertical-flowers',
-  'vertical-cafe',
-  'vertical-grocery',
-  'tables',
-  'debts',
-  'fiscal-cashalot',
-  'fiscal-checkbox',
-  'tiktok-live',
-];
+// Each private remote (`private-modules.json`, POS_OPENCORE.md §2): its
+// `src/modules/<id>` source and the `npm run build:<id>-remote` script that
+// produces `dist-remotes/<id>`.
+const PRIVATE_REMOTES = JSON.parse(readFileSync(path.join(posRoot, 'private-modules.json'), 'utf-8')).remotes;
 
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 

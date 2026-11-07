@@ -8,6 +8,7 @@
 //   POST /api/modules/token                       X-License-Key → { token, scope, expires_at }
 //   GET  /api/modules/t/:token/:id/:version/*     a bundle file, with a delivery token
 //   GET  /api/modules/:id/:version/*              the same file, anonymously
+//   DELETE|PUT|POST /api/modules/upload/…         CI puts a build into the closed store (O-3, `moduleUpload.ts`)
 //
 // Both GETs answer with `Access-Control-Allow-Origin: *` (a till on any origin
 // `import()`s the bundle, as it did from jsdelivr; the credential is the path,
@@ -31,6 +32,14 @@ import {
   wasIssued,
   type ModulePath,
 } from './moduleDelivery.js';
+import {
+  ModuleUploadError,
+  clearStaged,
+  commitStaged,
+  moduleUploadSecret,
+  stageFile,
+  uploadAuthorized,
+} from './moduleUpload.js';
 
 let verifyOptionsForTests: VerifyOptions | null = null;
 
@@ -143,4 +152,89 @@ export function registerModuleDeliveryRoutes(fastify: FastifyInstance): void {
   fastify.get('/api/modules/:id/:version/*', async (request, reply) =>
     deliver(request.params as { id: string; version: string; '*': string }, reply)
   );
+}
+
+// ── Upload into the closed store (O-3) ─────────────────────────────────────
+
+let uploadKeysForTests: Readonly<Record<string, string>> | null = null;
+
+/** Test seam: accept manifests signed with these keys instead of the PROD one. */
+export function setModuleUploadKeysForTests(keys: Readonly<Record<string, string>> | null): void {
+  uploadKeysForTests = keys;
+}
+
+const UPLOAD_FILE_LIMIT = 10 * 1024 * 1024;
+
+/**
+ * `DELETE|PUT|POST /api/modules/upload/:id/:version[/…]` — the Module Release
+ * workflow's way into the closed bundle store (`moduleUpload.ts`). An
+ * encapsulated plugin, so the raw-bytes body parser applies here only.
+ */
+export async function moduleUploadRoutes(fastify: FastifyInstance): Promise<void> {
+  fastify.addContentTypeParser(
+    'application/octet-stream',
+    { parseAs: 'buffer', bodyLimit: UPLOAD_FILE_LIMIT },
+    (_request, body, done) => done(null, body)
+  );
+
+  const guard = (authorization: string | undefined, reply: FastifyReply): boolean => {
+    const secret = moduleUploadSecret();
+    if (!secret) {
+      reply.status(503).send({ error: 'module_upload_disabled' });
+      return false;
+    }
+    if (!uploadAuthorized(authorization, secret)) {
+      reply.status(401).send({ error: 'unauthorized' });
+      return false;
+    }
+    return true;
+  };
+
+  const fail = (error: unknown, reply: FastifyReply, id: string) => {
+    if (error instanceof ModuleUploadError) {
+      reply.status(error.status);
+      return { error: error.code, message: error.message };
+    }
+    logger.error('module upload failed', { error: error instanceof Error ? error.message : 'unknown', id });
+    reply.status(500);
+    return { error: 'module_upload_failed' };
+  };
+
+  fastify.delete('/api/modules/upload/:id/:version', async (request, reply) => {
+    if (!guard(request.headers.authorization, reply)) return reply;
+    const { id, version } = request.params as { id: string; version: string };
+    try {
+      await clearStaged(id, version);
+      return { ok: true };
+    } catch (error) {
+      return fail(error, reply, id);
+    }
+  });
+
+  fastify.put('/api/modules/upload/:id/:version/:file', async (request, reply) => {
+    if (!guard(request.headers.authorization, reply)) return reply;
+    const { id, version, file } = request.params as { id: string; version: string; file: string };
+    if (!Buffer.isBuffer(request.body)) {
+      reply.status(415);
+      return { error: 'octet_stream_expected', message: 'Send the file as application/octet-stream.' };
+    }
+    try {
+      await stageFile(id, version, file, request.body);
+      return { ok: true, bytes: request.body.length };
+    } catch (error) {
+      return fail(error, reply, id);
+    }
+  });
+
+  fastify.post('/api/modules/upload/:id/:version/commit', async (request, reply) => {
+    if (!guard(request.headers.authorization, reply)) return reply;
+    const { id, version } = request.params as { id: string; version: string };
+    try {
+      const result = await commitStaged(id, version, uploadKeysForTests ? { keys: uploadKeysForTests } : {});
+      logger.info('module upload committed', { id, version, status: result.status, files: result.files });
+      return { ...result, module_id: id, version, entry: `/api/modules/${id}/${version}/remote-entry.js` };
+    } catch (error) {
+      return fail(error, reply, id);
+    }
+  });
 }

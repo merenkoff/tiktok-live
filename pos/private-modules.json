@@ -1,0 +1,14 @@
+{
+  "$comment": "TechDocs/POS_OPENCORE.md §2 — the online-only modules whose sources and builds are private. One list for check:private-imports, the e2e webServer build, the e2e skip guards and the Module Release workflow (which uploads these to the closed bundle store instead of the public module-builds branch). `libraries` travel with them but are not released on their own.",
+  "remotes": [
+    "tiktok-live",
+    "fiscal-checkbox",
+    "fiscal-cashalot",
+    "vertical-flowers",
+    "vertical-cafe",
+    "vertical-grocery",
+    "tables",
+    "debts"
+  ],
+  "libraries": ["fiscal-core"]
+}

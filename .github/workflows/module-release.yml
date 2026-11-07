@@ -31,6 +31,17 @@ name: Module Release
 # Result — a stable, immutable URL for that exact version:
 #   https://cdn.jsdelivr.net/gh/<owner>/<repo>@module-<id>-v<version>/<id>/remote-entry.js
 #
+# PRIVATE modules (`pos/private-modules.json`, TechDocs/POS_OPENCORE.md §2 and
+# §8.1, step O-3) never go to `module-builds`: that branch is public, and so is
+# everything jsdelivr serves from it. Their build is uploaded into the closed
+# bundle store on the API's volume instead (`/api/modules/upload/…`, verified
+# there against the prod signing key), the tag stays on its source commit, and
+# the URL to register is
+#   https://the-live.shop/api/modules/<id>/<version>/remote-entry.js
+# — which the licence gate serves (transparently while LICENSE_MODULE_GATE is
+# off). Needs the `MODULE_UPLOAD_SECRET` Actions secret (the same value as the
+# API's env); `MODULE_STORE_URL` (an Actions variable) overrides the API origin.
+#
 # That URL is NOT wired into any store automatically — registering it in a
 # store's `module_remotes` (Settings → "Онлайн-модулі", or `PATCH /api/pos/store`)
 # is a separate, deliberate step. See the job summary for the exact URLs once
@@ -154,7 +165,23 @@ jobs:
           path: src
           fetch-depth: 0
 
+      - name: Public or private module?
+        id: kind
+        working-directory: src
+        run: |
+          set -euo pipefail
+          if [ -f pos/private-modules.json ] && node -e "process.exit(require('./pos/private-modules.json').remotes.includes(process.env.MODULE) ? 0 : 1)"; then
+            echo "private=true" >> "$GITHUB_OUTPUT"
+            echo "**${MODULE}** is private — it goes to the closed bundle store, not to module-builds." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "private=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Refuse to re-publish an already-released tag
+        # Private modules: the store's commit is what refuses a second,
+        # different upload of one version (409), so this check is for the
+        # public branch only.
+        if: steps.kind.outputs.private != 'true'
         # The tag itself always exists by this point (a tag push IS the tag
         # existing; manual dispatch just created it) — that's not what this
         # checks. This is about to FORCE-MOVE it onto module-builds, same as
@@ -208,7 +235,36 @@ jobs:
         working-directory: src/pos
         run: npm run "check:${MODULE}-css-coverage"
 
+      - name: Upload to the closed bundle store (private modules)
+        if: steps.kind.outputs.private == 'true'
+        working-directory: src/pos
+        env:
+          MODULE_UPLOAD_SECRET: ${{ secrets.MODULE_UPLOAD_SECRET }}
+          STORE_URL: ${{ vars.MODULE_STORE_URL || 'https://the-live.shop' }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MODULE_UPLOAD_SECRET}" ]; then
+            echo "::error::MODULE_UPLOAD_SECRET is not set on this repo's Actions secrets — a private module cannot be published without it (and must never fall back to the public module-builds branch)." >&2
+            exit 1
+          fi
+          base="${STORE_URL%/}/api/modules/upload/${MODULE}/${VERSION}"
+          auth="Authorization: Bearer ${MODULE_UPLOAD_SECRET}"
+          curl -sS --fail-with-body -X DELETE -H "$auth" "$base"
+          echo
+          for f in "dist-remotes/${MODULE}"/*; do
+            name="$(basename "$f")"
+            echo "upload ${name}"
+            curl -sS --fail-with-body -X PUT -H "$auth" -H 'Content-Type: application/octet-stream' \
+              --data-binary "@${f}" "${base}/${name}"
+            echo
+          done
+          curl -sS --fail-with-body -X POST -H "$auth" "${base}/commit" | tee /tmp/commit.json
+          echo
+          node -e "const r=require('/tmp/commit.json'); if (!['published','already'].includes(r.status)) process.exit(1)"
+
       - name: Publish built output to the module-builds branch
+        if: steps.kind.outputs.private != 'true'
         working-directory: src
         run: |
           set -euo pipefail
@@ -245,8 +301,16 @@ jobs:
           git push -f origin "${TAG}"
 
       - name: Summarize
+        env:
+          PRIVATE: ${{ steps.kind.outputs.private }}
+          STORE_URL: ${{ vars.MODULE_STORE_URL || 'https://the-live.shop' }}
+          VERSION: ${{ needs.resolve.outputs.version }}
         run: |
-          base="https://cdn.jsdelivr.net/gh/${GITHUB_REPOSITORY}@${TAG}/${MODULE}"
+          if [ "$PRIVATE" = "true" ]; then
+            base="${STORE_URL%/}/api/modules/${MODULE}/${VERSION}"
+          else
+            base="https://cdn.jsdelivr.net/gh/${GITHUB_REPOSITORY}@${TAG}/${MODULE}"
+          fi
           {
             echo "### Published"
             echo ""
