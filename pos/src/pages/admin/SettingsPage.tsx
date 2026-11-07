@@ -10,8 +10,6 @@ import { ProductPhotoField } from '../../components/ProductPhotoField';
 import { PageHeader, SectionHead, Segmented } from '../../components/ui/Page';
 import { Plus, Settings } from '../../platform/glyphs';
 import { FiscalSettingsCard } from './FiscalSettingsCard';
-import { PublicMenuCard } from './PublicMenuCard';
-import { StoreProfileCard } from './StoreProfileCard';
 import { MODULES } from '../../modules/registry';
 import { reportModuleEvent } from '../../modules/telemetry';
 import { useModuleSlots } from '../../modules/featureSlots';
@@ -457,15 +455,22 @@ export function SettingsPage() {
             whole settings screen on a method it does not have. */}
         {typeof api.fiscalSettings === 'function' && <FiscalSettingsCard />}
 
-        {/* The guest's QR menu: a café's, and its own endpoint and buttons for
-            the same reason as the card above. A store with no kitchen never
-            asks. `posRequest` is the only client method it needs. */}
-        {vertical.id === 'cafe' && typeof api.posRequest === 'function' && <PublicMenuCard />}
-
-        {/* What that page says about the place itself — logo, address, phone,
-            hours. Same reasons for a card of its own; hides itself for a seller
-            and for a backend that has no such route yet. */}
-        {vertical.id === 'cafe' && typeof api.posRequest === 'function' && <StoreProfileCard />}
+        {/* The guest's QR menu and the place's profile moved to their own page,
+            «QR-меню», which the café's marketer reaches too (track МР, М10). */}
+        {vertical.id === 'cafe' && (
+          <section>
+            <SectionHead title="QR-меню для гостей" />
+            <div className="pt-3 space-y-3">
+              <SectionLead>
+                Публікація меню, QR для друку, відгуки гостей, логотип, адреса, години й корковий збір — на
+                окремій сторінці.
+              </SectionLead>
+              <Link to="/admin/qr-menu" className="sq-btn-quiet inline-flex">
+                Відкрити «QR-меню»
+              </Link>
+            </div>
+          </section>
+        )}
 
         <section>
           <SectionHead title="TikTok LIVE" />

@@ -25,6 +25,7 @@ import type { PosShell } from '../shell';
 import type { PosRole } from '../types';
 import { allModules, type AnyModuleDescriptor } from './registry';
 import { runsInShell } from './shells';
+import { moduleOpenTo, routeOpenTo, usesCabinet } from './roles';
 import type { ModuleId } from './types';
 
 export interface RouteContext {
@@ -56,25 +57,32 @@ function DesktopAdminPage({ children }: { children: ReactNode }) {
 function Guard({
   children,
   ownerOnly = false,
+  cabinet = false,
 }: {
   children: ReactNode;
   ownerOnly?: boolean;
+  /** The cabinet: the owner, and the marketer (track МР) for the pages that name it. */
+  cabinet?: boolean;
 }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const role = useAuthStore((s) => s.role());
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (ownerOnly && role !== 'owner') return <Navigate to="/register" replace />;
+  if (cabinet && !usesCabinet(role)) return <Navigate to="/register" replace />;
+  // The marketer has no till: any root page sends it back to the cabinet.
+  if (!cabinet && role === 'marketer') return <Navigate to="/admin" replace />;
   return <>{children}</>;
 }
 
 /** Where an authenticated user lands from `/login` or an unmatched path. */
 export function homePath(ctx: RouteContext): string {
-  return ctx.shell === 'web' && ctx.role === 'owner' ? '/admin' : '/register';
+  // The marketer's home is the cabinet's first page it may open (the menu).
+  return ctx.shell === 'web' && usesCabinet(ctx.role) ? '/admin' : '/register';
 }
 
 export function moduleVisible(m: AnyModuleDescriptor, ctx: RouteContext): boolean {
   if (!runsInShell(m, ctx.shell)) return false;
-  if (m.ownerOnly && ctx.role !== 'owner') return false;
+  if (!moduleOpenTo(m, ctx.role)) return false;
   // Online-only remote modules (roadmap #13 Part C) opt in via `module_remotes`,
   // not `enabled_modules`.
   if ('alwaysEnabled' in m && m.alwaysEnabled) return true;
@@ -91,6 +99,7 @@ export function renderModuleRoutes(ctx: RouteContext) {
 
   for (const m of visible) {
     for (const r of m.routes) {
+      if (!routeOpenTo(m, r, ctx.role)) continue;
       const El = r.element;
       const raw = <El {...(r.props ?? {})} />;
       const node = r.eager ? (
@@ -127,7 +136,10 @@ export function renderModuleRoutes(ctx: RouteContext) {
         if (r.index) {
           adminIndex = <Route key={`admin-index:${m.id}`} index element={node} />;
         } else if (r.path) {
-          if (firstAdminPath === null) firstAdminPath = `/admin/${r.path}`;
+          // The marketer opens on the menu itself, wherever the module sits in the registry.
+          if (firstAdminPath === null || (ctx.role === 'marketer' && r.path === 'products')) {
+            firstAdminPath = `/admin/${r.path}`;
+          }
           adminRoutes.push(<Route key={`admin:${m.id}:${r.path}`} path={r.path} element={node} />);
         }
         continue;
@@ -163,7 +175,7 @@ export function renderModuleRoutes(ctx: RouteContext) {
         <Route
           path="/admin"
           element={
-            <Guard ownerOnly>
+            <Guard cabinet>
               <AdminLayout />
             </Guard>
           }

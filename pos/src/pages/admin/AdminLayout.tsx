@@ -24,10 +24,13 @@ export function AdminLayout() {
 
   // The sidebar's numbers follow the owner around the cabinet: re-read on a
   // page change once the last read is a minute old, never on every render.
+  // The marketer's cabinet has no register, orders or stock to count (track
+  // МР), and the server would refuse every one of those reads.
+  const marketer = auth?.staff.role === 'marketer';
   useEffect(() => {
-    if (!auth) return;
+    if (!auth || marketer) return;
     void useAttention.getState().load({ vertical, fiscalEnabled });
-  }, [auth, pathname, vertical, fiscalEnabled]);
+  }, [auth, marketer, pathname, vertical, fiscalEnabled]);
 
   return (
     <div className="min-h-screen md:grid md:grid-cols-[256px_1fr] bg-sq-surface font-sans text-sq-text">
@@ -46,7 +49,7 @@ export function AdminLayout() {
           aria-label="Кабінет"
           className="flex md:flex-col overflow-x-auto md:overflow-y-auto md:flex-1 px-2 pb-2 gap-0.5 select-none"
         >
-          <Nav location="admin-sidebar" tillLink counts={counts} />
+          <Nav location="admin-sidebar" tillLink={!marketer} counts={marketer ? undefined : counts} />
         </nav>
         <div className="p-2 border-t border-sq-divider/70">
           <button

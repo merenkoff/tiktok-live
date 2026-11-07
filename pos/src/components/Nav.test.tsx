@@ -40,6 +40,7 @@ describe('Nav — admin sidebar', () => {
       '/admin/stock',
       '/admin/gtin',
       '/admin/staff',
+      '/admin/qr-menu',
       '/admin/settings',
       '/admin/appearance',
     ]);

@@ -22,6 +22,12 @@ const MarkdownsPage = lazyWithRetry(() =>
 );
 
 /**
+ * The pages a café's marketer keeps too (track МР): the list, the card and the
+ * modifiers. Markdowns and tech cards are money, and stay the owner's.
+ */
+const MENU = ['owner', 'marketer'] as const;
+
+/**
  * Product / variant / tag catalog management. Owner-only: the web cabinet, and
  * the desktop app too — that is where the printers are, so that is where an
  * owner prints price tags (`desktop` on every route: the pages link only to
@@ -34,28 +40,28 @@ export const productsModule: ModuleDescriptor = {
   shells: ['web', 'cashier'],
   ownerOnly: true,
   routes: [
-    { path: 'products', mount: 'admin', element: ProductsPage, desktop: true },
+    { path: 'products', mount: 'admin', element: ProductsPage, desktop: true, roles: MENU },
     // The card on its own page (C1e): two columns, the variants as a table,
     // one variant's full field set in a sheet. `?edit=<id>` on the list
     // redirects here, so the older links from «Техкарти» keep working.
-    { path: 'products/new', mount: 'admin', element: ProductPage, desktop: true },
+    { path: 'products/new', mount: 'admin', element: ProductPage, desktop: true, roles: MENU },
     // Mass markdowns (clothing D2): what is on sale, until when, and the
     // button that puts the prices back. Static, so it ranks above `:id`.
     { path: 'products/markdowns', mount: 'admin', element: MarkdownsPage, desktop: true },
-    { path: 'products/:id', mount: 'admin', element: ProductPage, desktop: true },
+    { path: 'products/:id', mount: 'admin', element: ProductPage, desktop: true, roles: MENU },
     // The questions a product may ask («Молоко?») and their answers. Host code,
     // not café code: the next vertical that asks a question reuses it.
-    { path: 'modifiers', mount: 'admin', element: ModifiersPage, desktop: true },
+    { path: 'modifiers', mount: 'admin', element: ModifiersPage, desktop: true, roles: MENU },
     // What a composite costs to assemble, and what share of its price that is.
     { path: 'tech-cards', mount: 'admin', element: TechCardsPage, desktop: true },
   ],
   nav: [
-    { to: '/admin/products', label: 'Товари', location: 'admin-sidebar', order: 20 },
+    { to: '/admin/products', label: 'Товари', location: 'admin-sidebar', order: 20, roles: MENU },
     // Shown to every owner, not only a café: a clothing shop CAN make a product
     // composite (phase A), so hiding the screen from it would be a lie. Where
     // there is nothing to show, the page says so and points at the product card.
     { to: '/admin/tech-cards', label: 'Техкарти', location: 'admin-sidebar', order: 21 },
-    { to: '/admin/modifiers', label: 'Модифікатори', location: 'admin-sidebar', order: 22 },
+    { to: '/admin/modifiers', label: 'Модифікатори', location: 'admin-sidebar', order: 22, roles: MENU },
     {
       to: '/admin/products',
       label: 'Товари',

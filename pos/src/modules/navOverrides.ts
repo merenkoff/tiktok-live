@@ -26,6 +26,7 @@ import type { NavOverride, NavOverrides } from '../types';
 import type { PosShell } from '../shell';
 import type { AnyModuleDescriptor } from './registry';
 import { runsInShell } from './shells';
+import { navOpenTo } from './roles';
 import type { ModuleId, NavCtx, NavItem, NavLocation, NavVariant } from './types';
 
 export type { NavOverride, NavOverrides };
@@ -85,7 +86,7 @@ export function pruneNavOverrides(
 
 /** Every shell/role/variant combination an entry's `visible()` is asked about. */
 const NAV_CONTEXTS: NavCtx[] = (['web', 'cashier', 'tablet'] as const).flatMap((shell) =>
-  (['owner', 'seller'] as const).flatMap((role) =>
+  (['owner', 'seller', 'marketer'] as const).flatMap((role) =>
     (['rail', 'bottom'] as const).map<NavCtx>((variant) => ({ shell, role, variant }))
   )
 );
@@ -115,7 +116,8 @@ export interface NavCatalogEntry {
 
 function describeScope(module: AnyModuleDescriptor, item: NavItem): NavEntryScope {
   const visible = NAV_CONTEXTS.filter(
-    (ctx) => runsInShell(module, ctx.shell) && (!item.visible || item.visible(ctx))
+    (ctx) =>
+      runsInShell(module, ctx.shell) && navOpenTo(module, item, ctx.role) && (!item.visible || item.visible(ctx))
   );
   const seen = <K extends keyof NavCtx>(field: K): Set<NavCtx[K]> =>
     new Set(visible.map((ctx) => ctx[field]));
@@ -124,7 +126,8 @@ function describeScope(module: AnyModuleDescriptor, item: NavItem): NavEntryScop
   const shellsSeen = seen('shell');
   const variants = seen('variant');
   return {
-    ownerOnly: Boolean(module.ownerOnly) || (roles.size === 1 && roles.has('owner')),
+    // «лише власник» = no seller sees it; the marketer's few entries do not change that.
+    ownerOnly: Boolean(module.ownerOnly) || (roles.has('owner') && !roles.has('seller')),
     shellOnly: shellsSeen.size === 1 ? ([...shellsSeen][0] ?? null) : null,
     variantOnly:
       item.location === 'cashier-primary' && variants.size === 1

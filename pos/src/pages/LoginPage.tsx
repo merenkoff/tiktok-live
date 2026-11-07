@@ -11,6 +11,8 @@ import { AppIcon } from '../components/AppIcon';
 
 function loginErrorMessage(error: unknown, mode: 'owner' | 'pin'): string {
   if (error instanceof OfflineAuthError) return error.message;
+  // A marketer at the till or on the tablet (track МР): the sentence says where to go.
+  if (error instanceof Error && error.name === 'MarketerShellError') return error.message;
   if (axios.isAxiosError(error)) {
     if (!error.response) {
       if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
@@ -67,6 +69,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const shell = usePosShell();
   const afterLogin = shell === 'web' ? '/admin' : '/register';
+  const pinTypesCode = shell === 'web' && !savedSlug;
   const { canInstall, install } = useInstallPrompt();
   // The install nudge belongs to the tablet entry only, and only in a browser
   // tab: an installed app asking to be installed is noise.
@@ -81,7 +84,7 @@ export function LoginPage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    const code = mode === 'owner' ? storeSlug.trim() : savedSlug;
+    const code = mode === 'owner' || pinTypesCode ? storeSlug.trim() : savedSlug;
     if (!code) {
       setError(mode === 'owner' ? 'Введіть код магазину' : NO_CODE_FOR_PIN);
       return;
@@ -105,7 +108,9 @@ export function LoginPage() {
           return;
         }
         await loginPin(code, pin);
-        navigate('/register');
+        // The café's marketer goes straight to the cabinet (track МР); a
+        // seller to the till, as always.
+        navigate(shell === 'web' && useAuthStore.getState().role() === 'marketer' ? '/admin' : '/register');
       }
     } catch (err) {
       setError(loginErrorMessage(err, mode));
@@ -116,7 +121,10 @@ export function LoginPage() {
 
   const ownerMode = mode === 'owner';
   // A seller on a device the owner has not set up yet has nothing to type into.
-  const pinWithoutCode = !ownerMode && !savedSlug;
+  // In the browser, though, the PIN tab asks for the code itself: the café's
+  // marketer signs in from their own laptop, which no owner has set up, and a
+  // PIN of one store opens nothing in another (track МР).
+  const pinWithoutCode = !ownerMode && !savedSlug && !pinTypesCode;
 
   const storeCodeField = (
     <div className="flex flex-col gap-1.5">
@@ -142,13 +150,13 @@ export function LoginPage() {
         id="login-store-code"
         ref={slugRef}
         className={`${fieldClass} disabled:text-sq-secondary disabled:cursor-default`}
-        value={ownerMode ? storeSlug : savedSlug}
+        value={ownerMode || pinTypesCode ? storeSlug : savedSlug}
         onChange={(e) => setStoreSlug(e.target.value)}
-        disabled={!ownerMode || slugLocked}
+        disabled={(!ownerMode && !pinTypesCode) || slugLocked}
         autoComplete="organization"
         autoCapitalize="none"
         spellCheck={false}
-        autoFocus={ownerMode && !savedSlug}
+        autoFocus={(ownerMode || pinTypesCode) && !savedSlug}
       />
     </div>
   );

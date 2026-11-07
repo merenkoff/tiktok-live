@@ -55,6 +55,9 @@ export function stockSummary(
   variants: ReadonlyArray<Pick<ProductVariant, 'quantity' | 'unit'> & Partial<Pick<ProductVariant, 'price_per'>>>
 ): string | null {
   if (variants.length === 0) return null;
+  // No figure was sent at all (the café's marketer is sent no stock, track МР):
+  // say nothing rather than «0 шт».
+  if (variants.every((v) => v.quantity == null)) return null;
   const derived = product.kind === 'composite' && product.stock_mode === 'derived';
   if (derived) {
     const most = Math.max(...variants.map((v) => v.quantity ?? 0));

@@ -47,10 +47,11 @@ export const tablesModule: RemoteModuleDescriptor = {
   // not-yet-downloaded state; `TablesRoutes` nests the map and (К4f) the bill.
   routes: [
     { path: '/tables/*', element: TablesRoutes },
-    // Owner-gated by the admin layout itself (`Guard ownerOnly`), so the
-    // module stays open to staff for everything else — «усі бачать усі
-    // столи» (§4.7) and only the plan is the owner's.
-    { path: 'tables', mount: 'admin', element: HallEditorPage },
+    // The cabinet's own guard keeps sellers out, so the module stays open to
+    // staff for everything else — «усі бачать усі столи» (§4.7) — and only the
+    // plan is the owner's and, with its QR stickers, the café marketer's
+    // (track МР): named here, as every page the marketer reaches must be.
+    { path: 'tables', mount: 'admin', element: HallEditorPage, roles: ['owner', 'marketer'] },
   ],
   nav: [
     // `Table` is in the host's `NAV_ICONS` allowlist. Keep in sync with the
@@ -63,6 +64,6 @@ export const tablesModule: RemoteModuleDescriptor = {
       order: 60,
       match: '/tables',
     },
-    { to: '/admin/tables', label: 'Зали і столи', location: 'admin-sidebar', order: 24 },
+    { to: '/admin/tables', label: 'Зали і столи', location: 'admin-sidebar', order: 24, roles: ['owner', 'marketer'] },
   ],
 };

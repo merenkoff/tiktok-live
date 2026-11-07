@@ -73,7 +73,7 @@ test('after signing out the store code is remembered and locked until «Змін
   await expect(page.getByLabel('Код магазину')).toBeFocused();
 });
 
-test('a device with no store code opens on «Власник»; a seller is sent there', async ({
+test('a browser with no store code opens on «Власник»; the PIN tab asks for the code itself', async ({
   page,
 }) => {
   await page.goto('/login');
@@ -83,11 +83,13 @@ test('a device with no store code opens on «Власник»; a seller is sent 
   );
   await expect(page.getByLabel('Код магазину')).toBeEditable();
 
+  // In the browser a PIN of one store opens nothing in another, so the PIN tab
+  // types the code too — the café's marketer signs in from their own laptop
+  // (track МР). A till keeps sending the seller to the owner (unit test).
   await page.getByRole('button', { name: 'Продавець · PIN' }).click();
-  await expect(page.getByTestId('store-code-missing')).toBeVisible();
-  await expect(page.getByLabel('PIN')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Увійти як власник' }).click();
-  await expect(page.getByLabel('Email / логін')).toBeVisible();
+  await expect(page.getByTestId('store-code-missing')).toHaveCount(0);
+  await expect(page.getByLabel('Код магазину')).toBeEditable();
+  await expect(page.getByLabel('PIN')).toHaveCount(1);
 });
 
 test('a session that predates the remembered code teaches it on reload', async ({ page }) => {

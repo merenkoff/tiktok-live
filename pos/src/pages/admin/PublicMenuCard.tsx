@@ -25,7 +25,7 @@
 // (`/m/<token>/qr`), so this page needs no QR library.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api } from '@pos/platform';
+import { api, useAuthStore } from '@pos/platform';
 import { formatUahCompact } from '../../lib/money';
 import { SectionHead } from '../../components/ui/Page';
 import { GuestAutoKitchen, type AutoKitchenMode } from './GuestAutoKitchen';
@@ -100,6 +100,7 @@ function errorText(error: unknown): string {
 }
 
 export function PublicMenuCard() {
+  const role = useAuthStore((s) => s.role());
   const [state, setState] = useState<LoadState>('loading');
   const [settings, setSettings] = useState<PublicMenuSettings | null>(null);
   const [saving, setSaving] = useState(false);
@@ -264,9 +265,13 @@ export function PublicMenuCard() {
   // The switch is about tables, so it shows where there are some — and stays
   // visible once on, so an owner can always turn it off.
   const showBillSwitch = tables > 0 || settings.bill_enabled === true;
-  const showOrderingSwitch = tables > 0 || settings.ordering_enabled === true;
+  // Guest ordering, the kitchen, calling a waiter and a new address are the
+  // owner's (track МР, М5): the server refuses them to the marketer, so its
+  // page does not offer them.
+  const ownerTools = role !== 'marketer';
+  const showOrderingSwitch = ownerTools && (tables > 0 || settings.ordering_enabled === true);
   // Phases Q8/Q9 exist only where the backend reports their fields.
-  const showCallSwitch = typeof settings.call_enabled === 'boolean' && (tables > 0 || settings.call_enabled);
+  const showCallSwitch = ownerTools && typeof settings.call_enabled === 'boolean' && (tables > 0 || settings.call_enabled);
   // Feedback needs no tables (it works from the venue's QR), so it sits with
   // the published menu — and stays once on, so an owner can always turn it off.
   const showFeedbackSwitch = typeof settings.feedback_enabled === 'boolean' && (Boolean(live) || settings.feedback_enabled);
@@ -473,7 +478,7 @@ export function PublicMenuCard() {
           </div>
         )}
 
-        {settings.token && (
+        {settings.token && ownerTools && (
           <div className="rounded-xl bg-sq-sidebar px-[18px] py-4 space-y-3">
             <p className="text-[15px] text-sq-text">
               Потрапило посилання не тим людям? Створіть нове: старі QR перестануть працювати.

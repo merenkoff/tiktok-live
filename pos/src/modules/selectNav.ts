@@ -7,6 +7,7 @@ import type { AnyModuleDescriptor } from './registry';
 import { applyNavOverride, navItemKey, type NavOverrides } from './navOverrides';
 import { runsInShell } from './shells';
 import { navGroupOf } from './navGroups';
+import { moduleOpenTo, navOpenTo } from './roles';
 
 /**
  * The nav entries a given shell/role/variant should see, in display order:
@@ -35,11 +36,13 @@ export function selectNavItems(
       (m) =>
         (('alwaysEnabled' in m && m.alwaysEnabled) || enabled.has(m.id as ModuleId)) &&
         runsInShell(m, ctx.shell) &&
-        (!m.ownerOnly || ctx.role === 'owner')
+        moduleOpenTo(m, ctx.role)
     )
     .flatMap((m) =>
       m.nav
-        .filter((n) => n.location === location && (!n.visible || n.visible(ctx)))
+        .filter(
+          (n) => n.location === location && navOpenTo(m, n, ctx.role) && (!n.visible || n.visible(ctx))
+        )
         .map((n) => ({ ...applyNavOverride(n, overrides[navItemKey(m.id, n)]), group: navGroupOf(m.id, n.group) }))
     )
     .sort((a, b) => a.order - b.order);

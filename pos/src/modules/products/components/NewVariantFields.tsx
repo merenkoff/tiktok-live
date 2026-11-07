@@ -6,6 +6,7 @@ import { displayUnit, WEIGHED_PRICE_PER } from '@pos/platform';
 import type { VerticalPublicConfig } from '@pos/platform';
 import { AttributeFields } from '@pos/platform/ui';
 import { CompositionEditor } from './CompositionEditor';
+import { useMenuOnly } from '../lib/menuOnly';
 import type { ComponentOption } from './componentOptions';
 import { GenerateBarcodeButton } from './GenerateBarcodeButton';
 import { PackFields } from './PackFields';
@@ -35,6 +36,7 @@ export function NewVariantFields({
   /** Inside a dialog: one column, no two-column grid. */
   compact?: boolean;
 }) {
+  const menuOnly = useMenuOnly();
   const grid = compact ? 'grid gap-3' : 'grid gap-3 sm:grid-cols-2';
   const set = (patch: Partial<NewVariantValues>) => onChange({ ...value, ...patch });
   // Sold by weight here: the price is per kilogram and the stock is typed in kilograms.
@@ -60,7 +62,7 @@ export function NewVariantFields({
           required
         />
       </label>
-      {shape === 'derived' ? (
+      {menuOnly ? null : shape === 'derived' ? (
         <p className="text-[13px] text-sq-muted self-end pb-3">Залишок рахується зі складників.</p>
       ) : (
         <label className="flex flex-col gap-1.5">
@@ -76,7 +78,7 @@ export function NewVariantFields({
           />
         </label>
       )}
-      {shape && (
+      {shape && !menuOnly && (
         <div className="sm:col-span-2">
           <CompositionEditor
             value={value.components}
@@ -101,6 +103,7 @@ export function NewVariantFields({
           <GenerateBarcodeButton onGenerated={(barcode) => set({ barcode })} />
         </div>
       </label>
+      {!menuOnly && (
       <PackFields
         className="sm:col-span-2"
         qty={value.pack.qty}
@@ -108,6 +111,7 @@ export function NewVariantFields({
         unit={value.unit}
         onChange={(pack) => set({ pack })}
       />
+      )}
     </div>
   );
 }

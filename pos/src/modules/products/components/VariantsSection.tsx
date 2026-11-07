@@ -5,6 +5,7 @@
 import { formatUahCompact } from '@pos/platform';
 import { MoreHorizontal, Plus, SectionHead } from '@pos/platform/ui';
 import { GenerateBarcodeButton } from './GenerateBarcodeButton';
+import { useMenuOnly } from '../lib/menuOnly';
 import { rowName, type VariantDraft } from '../lib/productDraft';
 import { stockText } from '../lib/weighedUnit';
 
@@ -45,6 +46,8 @@ export function VariantsSection({
   onAdd: () => void;
   addLabel: string;
 }) {
+  // The marketer is sent no stock (track МР): no column rather than a column of zeros.
+  const stock = !useMenuOnly();
   return (
     <section className="space-y-3">
       <SectionHead
@@ -66,7 +69,7 @@ export function VariantsSection({
               <tr>
                 <th>Варіант</th>
                 <th>Ціна, грн</th>
-                <th className="!text-right whitespace-nowrap">{derived ? 'Можна зібрати' : 'Залишок'}</th>
+                {stock && <th className="!text-right whitespace-nowrap">{derived ? 'Можна зібрати' : 'Залишок'}</th>}
                 <th>Артикул</th>
                 <th>Штрихкод</th>
                 <th className="!pr-0" aria-label="Ще" />
@@ -87,6 +90,7 @@ export function VariantsSection({
                     marked={marked}
                     derived={derived}
                     composite={composite}
+                    stock={stock}
                     onPatch={onPatch}
                     onOpen={onOpen}
                   />
@@ -108,10 +112,13 @@ function VariantRow({
   marked,
   derived,
   composite,
+  stock = true,
   onPatch,
   onOpen,
 }: {
   v: VariantDraft;
+  /** Whether the stock column is drawn (not for the marketer). */
+  stock?: boolean;
   /** Priced per kilogram, its stock counted in grams. */
   weighed: boolean;
   name: string;
@@ -152,17 +159,19 @@ function VariantRow({
             </span>
           )}
         </td>
-        <td className="align-middle text-right tabular-nums whitespace-nowrap">
-          {derived ? 'до ' : ''}
-          {weighed ? (
-            stockText(v.quantity, v.unit, true)
-          ) : (
-            <>
-              {v.quantity}
-              {v.unit ? <span className="text-[13px] text-sq-muted"> {v.unit}</span> : null}
-            </>
-          )}
-        </td>
+        {stock && (
+          <td className="align-middle text-right tabular-nums whitespace-nowrap">
+            {derived ? 'до ' : ''}
+            {weighed ? (
+              stockText(v.quantity, v.unit, true)
+            ) : (
+              <>
+                {v.quantity}
+                {v.unit ? <span className="text-[13px] text-sq-muted"> {v.unit}</span> : null}
+              </>
+            )}
+          </td>
+        )}
         <td className="align-middle">
           <input
             className={`${cell} w-28`}
@@ -204,7 +213,7 @@ function VariantRow({
       </tr>
       {error && (
         <tr>
-          <td colSpan={6} className="!pt-0 text-sm text-red-600" role="alert">
+          <td colSpan={stock ? 6 : 5} className="!pt-0 text-sm text-red-600" role="alert">
             {error}
           </td>
         </tr>

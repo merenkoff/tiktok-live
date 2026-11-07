@@ -5,6 +5,7 @@
 import { formatQuantity, isWeighed, unitPriceLabel } from '@pos/platform';
 import type { ProductVariant } from '@pos/platform';
 import { useDragScroll } from '@pos/platform/ui';
+import { useMenuOnly } from '../lib/menuOnly';
 
 /** The read-only variants of one product, as the list shows them. */
 export function VariantsTable({
@@ -16,6 +17,8 @@ export function VariantsTable({
   derived?: boolean;
 }) {
   const scrollRef = useDragScroll<HTMLDivElement>();
+  // The marketer is sent no stock (track МР): no column rather than a column of zeros.
+  const stock = !useMenuOnly();
 
   return (
     <div ref={scrollRef} className="mt-2 overflow-x-auto select-none">
@@ -24,7 +27,7 @@ export function VariantsTable({
           <tr>
             <th>Варіант</th>
             <th className="!text-right">Ціна</th>
-            <th className="!text-right">{derived ? 'Можна зібрати' : 'Залишок'}</th>
+            {stock && <th className="!text-right">{derived ? 'Можна зібрати' : 'Залишок'}</th>}
             <th>Артикул</th>
             <th className="!pr-0">Штрихкод</th>
           </tr>
@@ -36,16 +39,18 @@ export function VariantsTable({
               <td className="text-right tabular-nums whitespace-nowrap">
                 {unitPriceLabel(v.price_cents, v.unit, v.price_per)}
               </td>
-              <td className="text-right tabular-nums whitespace-nowrap">
-                {isWeighed(v.price_per) ? (
-                  formatQuantity(Math.max(0, v.quantity), v.unit, v.price_per)
-                ) : (
-                  <>
-                    {v.quantity}
-                    {v.unit ? <span className="text-[13px] text-sq-muted"> {v.unit}</span> : null}
-                  </>
-                )}
-              </td>
+              {stock && (
+                <td className="text-right tabular-nums whitespace-nowrap">
+                  {isWeighed(v.price_per) ? (
+                    formatQuantity(Math.max(0, v.quantity), v.unit, v.price_per)
+                  ) : (
+                    <>
+                      {v.quantity}
+                      {v.unit ? <span className="text-[13px] text-sq-muted"> {v.unit}</span> : null}
+                    </>
+                  )}
+                </td>
+              )}
               <td className="text-[13px] text-sq-secondary tabular-nums">{v.sku || '—'}</td>
               <td className="!pr-0 text-[13px] text-sq-secondary tabular-nums">{v.barcode || '—'}</td>
             </tr>

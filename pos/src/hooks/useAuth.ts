@@ -63,6 +63,18 @@ function persistStoreSlug(slug: string | undefined): void {
   }
 }
 
+/**
+ * The marketer works in the web cabinet only (track МР): the desktop till and
+ * the waiter's tablet have no cabinet to show it, and must not keep its PIN for
+ * an offline login. Matched by `name` in `LoginPage`, like the offline errors.
+ */
+export class MarketerShellError extends Error {
+  constructor() {
+    super('Маркетолог працює у веб-кабінеті: pos.the-live.shop. На касі й планшеті офіціанта входу немає.');
+    this.name = 'MarketerShellError';
+  }
+}
+
 async function afterOnlineLogin(
   auth: AuthResponse,
   secret: string,
@@ -140,6 +152,11 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     // Див. коментар у loginOwner: navigator.onLine у Tauri/WebView2 ненадійний.
     try {
       const auth = await api.loginPin(storeSlug, pin);
+      // Offline reads are on exactly in the desktop and the tablet shells.
+      if (auth.staff.role === 'marketer' && isOfflineReadsEnabled()) {
+        await api.logout().catch(() => undefined);
+        throw new MarketerShellError();
+      }
       await afterOnlineLogin(auth, pin, 'pin');
       set({ auth, isAuthenticated: true, moduleRemotesStale: remotesChanged(auth) });
     } catch (error) {

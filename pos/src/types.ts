@@ -2,7 +2,13 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-export type PosRole = 'owner' | 'seller';
+/**
+ * `marketer` (track МР, TechDocs/POS_MARKETER_ROLE.md): a café's menu, halls and
+ * QR menu in the web cabinet, nothing else. The client hides from it every page
+ * and menu entry that does not name it (`modules/roles.ts`), as the server
+ * refuses every route that does not open itself to it.
+ */
+export type PosRole = 'owner' | 'seller' | 'marketer';
 
 export type PaymentMethod = 'cash' | 'card' | 'qr';
 
@@ -139,6 +145,11 @@ export interface VerticalPublicConfig {
    * store has a guest menu. Absent (an older cached auth) reads as «yes».
    */
   dishFacts?: boolean;
+  /**
+   * The staff roles the owner may give besides «Продавець» (track МР): the café
+   * offers `marketer`. Absent (an older backend or cached auth) = sellers only.
+   */
+  staffRoles?: Array<'marketer'>;
   /**
    * The server gives a new variant a barcode of the store's own when none is
    * typed (clothing). Absent (an older cached auth) reads as «no», which only

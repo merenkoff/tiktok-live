@@ -57,6 +57,12 @@ export interface RouteDef {
   desktop?: boolean;
   /** Skip the `<Suspense>` wrapper — for landing screens that must not flash. */
   eager?: boolean;
+  /**
+   * Who may open this page, when that is narrower than the module's rule — and
+   * the ONLY way a page reaches the marketer, who sees nothing that does not
+   * name it (track МР, `modules/roles.ts`). Absent = the module's rule.
+   */
+  roles?: readonly PosRole[];
   // Real props travel in `props`; the registry is not the place to re-type every page.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   element: ComponentType<any> | LazyExoticComponent<ComponentType<any>>;
@@ -108,6 +114,8 @@ export interface NavItem {
    */
   indicator?: 'update' | 'pending';
   visible?: (ctx: NavCtx) => boolean;
+  /** Who sees this entry, like `RouteDef.roles` — the marketer only where it is named. */
+  roles?: readonly PosRole[];
 }
 
 export interface SalesCatalogProps {

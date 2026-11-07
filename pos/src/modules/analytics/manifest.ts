@@ -32,11 +32,12 @@ export const analyticsModule: ModuleDescriptor = {
   ownerOnly: true,
   routes: [
     { index: true, mount: 'admin', element: DashboardPage },
-    { path: 'reviews', mount: 'admin', element: ReviewsPage },
+    // The café's marketer reads the guests' words too, without their phones (track МР).
+    { path: 'reviews', mount: 'admin', element: ReviewsPage, roles: ['owner', 'marketer'] },
   ],
   nav: [
     { to: '/admin', end: true, label: 'Сьогодні', location: 'admin-sidebar', order: 10 },
     // In the «Продажі» group after «Продажі» (50): the guests' words belong with the sales, not on top beside «Сьогодні».
-    { to: '/admin/reviews', label: 'Відгуки', location: 'admin-sidebar', order: 55, group: 'sales', visible: hasGuestMenu },
+    { to: '/admin/reviews', label: 'Відгуки', location: 'admin-sidebar', order: 55, group: 'sales', visible: hasGuestMenu, roles: ['owner', 'marketer'] },
   ],
 };

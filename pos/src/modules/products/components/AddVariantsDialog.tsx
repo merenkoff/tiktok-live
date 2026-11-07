@@ -6,6 +6,7 @@ import { useState, type FormEvent } from 'react';
 import { api, uahInputToCents } from '@pos/platform';
 import type { Product, VerticalPublicConfig } from '@pos/platform';
 import { Dialog } from './Dialog';
+import { useMenuOnly } from '../lib/menuOnly';
 import { NewVariantFields } from './NewVariantFields';
 import { VariantMatrix, type MatrixResult } from './VariantMatrix';
 import type { ComponentOption } from './componentOptions';
@@ -49,6 +50,7 @@ export function AddVariantsDialog({
   const useMatrix = supportsMatrix(vertical.attributes) && shape === '';
   const [matrix, setMatrix] = useState<MatrixResult | null>(null);
   const [single, setSingle] = useState<NewVariantValues>(() => emptyVariant(vertical.defaultUnit));
+  const menuOnly = useMenuOnly();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -72,7 +74,7 @@ export function AddVariantsDialog({
     try {
       const updated = useMatrix
         ? await api.addVariants(productId, matrix!.variants)
-        : await api.addVariant(productId, newVariantInput(single, shape, isWeighedUnit(vertical, single.unit)));
+        : await api.addVariant(productId, newVariantInput(single, shape, isWeighedUnit(vertical, single.unit), menuOnly));
       onAdded(updated);
     } catch (err) {
       setError(batchErrorMessage(err, useMatrix ? 'Не вдалося додати варіанти' : 'Не вдалося додати варіант'));
