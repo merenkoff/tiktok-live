@@ -259,7 +259,8 @@ export interface VariantPayload {
   unit: string;
   price_cents: number;
   compare_at_cents: number | null;
-  cost_cents: number;
+  /** Left out for the café's marketer, who is never sent it (track МР). */
+  cost_cents?: number;
   sku: string;
   barcode: string;
   pack_qty: number | null;
@@ -269,13 +270,18 @@ export interface VariantPayload {
 }
 
 /** The body of `PATCH /variants/:id` for one row — the whole row, as the server replaces it. */
-export function variantPayload(v: VariantDraft, components: ComponentsMode): VariantPayload {
+export function variantPayload(
+  v: VariantDraft,
+  components: ComponentsMode,
+  /** The café's marketer: the purchase price is not its to send (track МР). */
+  menuOnly = false
+): VariantPayload {
   return {
     attributes: v.attributes,
     unit: v.unit,
     price_cents: uahInputToCents(v.price),
     compare_at_cents: v.compareAtCents ?? null,
-    cost_cents: uahInputToCents(v.cost),
+    ...(menuOnly ? {} : { cost_cents: uahInputToCents(v.cost) }),
     // An empty string clears the field, which is what an emptied box means.
     sku: v.sku.trim(),
     barcode: v.barcode.trim(),

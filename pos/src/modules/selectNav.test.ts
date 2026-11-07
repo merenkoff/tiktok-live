@@ -39,10 +39,23 @@ describe('admin sidebar', () => {
       '/admin/sales',
       '/admin/reviews',
       '/admin/staff',
+      '/admin/qr-menu',
       '/admin/gtin',
       '/admin/settings',
       '/admin/appearance',
     ]);
+  });
+
+  it('gives the café marketer only the menu, the QR menu and the reviews (track МР)', () => {
+    // Denied by default: an entry reaches the marketer only by naming it.
+    expect(select({ shell: 'web', role: 'marketer' }, 'admin-sidebar')).toEqual([
+      '/admin/products',
+      '/admin/modifiers',
+      '/admin/reviews',
+      '/admin/qr-menu',
+    ]);
+    // And nothing on the till's rail or bar: the marketer has no till.
+    expect(select({ shell: 'web', role: 'marketer', variant: 'rail' }, 'cashier-primary')).toEqual([]);
   });
 
   it('offers «Відгуки» only to a store with a guest menu — a kitchen vertical, or an auth that does not say', () => {

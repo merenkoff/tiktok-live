@@ -13,6 +13,7 @@ import { BottleField } from './BottleField';
 import { PackFields } from './PackFields';
 import { TechCardLine } from './TechCardLine';
 import { VariantDiscountEditor } from './VariantDiscountEditor';
+import { useMenuOnly } from '../lib/menuOnly';
 import type { ComponentOption } from './componentOptions';
 import { captionClass } from './formStyles';
 import { canonicalColour, type ColourUse } from '../lib/variantMatrix';
@@ -57,6 +58,7 @@ export function VariantSheet({
   onArchive: (next: VariantDraft) => void;
   onClose: () => void;
 }) {
+  const menuOnly = useMenuOnly();
   const [local, setLocal] = useState<VariantDraft>(variant);
   const [error, setError] = useState<string | null>(null);
   const set = (patch: Partial<VariantDraft>) => setLocal((prev) => ({ ...prev, ...patch }));
@@ -113,7 +115,7 @@ export function VariantSheet({
       }
     >
       <div className="space-y-5 py-1">
-        {composite && (
+        {composite && !menuOnly && (
           <section className="space-y-2 pb-4 shadow-[0_1px_0_rgb(var(--sq-divider-rgb))]">
             <p className={captionClass}>Склад</p>
             <CompositionEditor
@@ -180,7 +182,7 @@ export function VariantSheet({
             />
             {error && <span className="text-sm text-red-600">{error}</span>}
           </label>
-          {weighed ? (
+          {menuOnly ? null : weighed ? (
             <label className="flex flex-col gap-1.5">
               <span className={captionClass}>Закупівельна ціна за 1 кг, грн</span>
               <input
@@ -239,10 +241,12 @@ export function VariantSheet({
           </label>
         </div>
 
-        <PackFields qty={local.pack.qty} label={local.pack.label} unit={local.unit} onChange={(pack) => set({ pack })} />
+        {!menuOnly && (
+          <PackFields qty={local.pack.qty} label={local.pack.label} unit={local.unit} onChange={(pack) => set({ pack })} />
+        )}
 
         {/* A variant that already has one keeps the field, whatever else changed. */}
-        {((bottle && local.unit === 'мл') || (local.bottleMl ?? '').trim() !== '') && (
+        {!menuOnly && ((bottle && local.unit === 'мл') || (local.bottleMl ?? '').trim() !== '') && (
           <BottleField
             value={local.bottleMl ?? ''}
             unit={local.unit}
@@ -252,11 +256,13 @@ export function VariantSheet({
           />
         )}
 
+        {!menuOnly && (
         <p className="text-[13px] text-sq-muted">
           {shape === 'derived' ? 'Можна зібрати' : 'Залишок'}:{' '}
           <span className="tabular-nums text-sq-secondary">{stockText(local.quantity, local.unit, weighed)}</span>
           {shape === 'derived' ? ' — рахується зі складників' : ' — змінюється документами складу'}
         </p>
+        )}
       </div>
     </Dialog>
   );

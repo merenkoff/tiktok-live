@@ -55,7 +55,10 @@ vi.mock('./registry', () => {
       title: 'Товари',
       shells: ['web', 'cashier'],
       ownerOnly: true,
-      routes: [{ path: 'products', mount: 'admin', element: page('Товари'), desktop: true }],
+      // Named for the café's marketer too (track МР): the only page here that is.
+      routes: [
+        { path: 'products', mount: 'admin', element: page('Товари'), desktop: true, roles: ['owner', 'marketer'] },
+      ],
       nav: [],
     },
   ];
@@ -139,6 +142,36 @@ describe('the /admin area', () => {
     // No `/admin` route matches, so the catch-all takes over.
     expect(await screen.findByText('Каса')).toBeInTheDocument();
     expect(screen.queryByText('Кабінет')).not.toBeInTheDocument();
+  });
+});
+
+describe('the café marketer (track МР)', () => {
+  it('opens the cabinet on the menu, not on the owner’s dashboard', async () => {
+    renderAt('/admin', { role: 'marketer' });
+
+    expect(await screen.findByText('Кабінет')).toBeInTheDocument();
+    expect(await screen.findByText('Товари')).toBeInTheDocument();
+    expect(screen.queryByText('Сьогодні')).not.toBeInTheDocument();
+  });
+
+  it('never reaches a cabinet page that does not name it', async () => {
+    renderAt('/admin/stock', { role: 'marketer' });
+
+    expect(await screen.findByText('Товари')).toBeInTheDocument();
+    expect(screen.queryByText('Склад')).not.toBeInTheDocument();
+  });
+
+  it('has no till: the register sends it back to the cabinet', async () => {
+    renderAt('/register', { role: 'marketer' });
+
+    expect(await screen.findByText('Товари')).toBeInTheDocument();
+    expect(screen.queryByText('Каса')).not.toBeInTheDocument();
+  });
+
+  it('leaves the owner every page as before', async () => {
+    renderAt('/admin/products');
+
+    expect(await screen.findByText('Товари')).toBeInTheDocument();
   });
 });
 

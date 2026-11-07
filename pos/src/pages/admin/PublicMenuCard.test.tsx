@@ -504,4 +504,33 @@ describe('PublicMenuCard', () => {
     await userEvent.click(await screen.findByText('Спробувати ще раз'));
     expect(await screen.findByLabelText('Показувати меню гостям')).toBeInTheDocument();
   });
+
+  it('gives the café marketer the menu’s own switches and the stickers, never the hall’s or a new address (МР, М5)', async () => {
+    const { useAuthStore } = await import('../../hooks/useAuth');
+    const { makeAuthResponse } = await import('../../test/utils');
+    useAuthStore.setState({ auth: makeAuthResponse({ staff: { id: 7, display_name: 'Оля', role: 'marketer' } }) } as never);
+    try {
+      posRequest.mockResolvedValue({
+        ...ON,
+        tables: 2,
+        bill_enabled: false,
+        ordering_enabled: false,
+        call_enabled: false,
+        feedback_enabled: false,
+        auto_kitchen: 'off',
+        print: 'abc.def',
+      });
+      renderWithProviders(<PublicMenuCard />);
+
+      expect(await screen.findByLabelText('Показувати меню гостям')).toBeChecked();
+      expect(screen.getByText('QR для всіх столів (2)')).toBeInTheDocument();
+      expect(screen.getByLabelText('Показувати гостю рахунок його столу')).toBeInTheDocument();
+      expect(screen.getByLabelText('Приймати відгуки гостей')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Приймати замовлення гостей з телефону')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/Покликати офіціанта/)).not.toBeInTheDocument();
+      expect(screen.queryByText('Створити нове посилання')).not.toBeInTheDocument();
+    } finally {
+      useAuthStore.setState({ auth: null } as never);
+    }
+  });
 });

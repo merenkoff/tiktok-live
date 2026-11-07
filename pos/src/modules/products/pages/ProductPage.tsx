@@ -54,6 +54,7 @@ import {
 } from '../lib/productDraft';
 import { registerChoices } from '../lib/registerChoices';
 import { batchErrorMessage, saveErrorMessage } from '../lib/saveErrors';
+import { useMenuOnly } from '../lib/menuOnly';
 import { useLeaveGuard } from '../lib/useLeaveGuard';
 
 /** What the list hands over so «← Товари» lands on the same search and tag. */
@@ -98,7 +99,10 @@ function ProductCard({ id }: { id: string | undefined }) {
   const location = useLocation();
   const vertical = useVertical();
   const fiscal = useAuthStore((s) => s.auth?.store.fiscal);
-  const registers = useMemo(() => registerChoices(fiscal), [fiscal]);
+  // The café's marketer keeps the menu half of the card (track МР): no shape,
+  // recipe, register, excise, cost or stock — the server refuses those to it.
+  const menuOnly = useMenuOnly();
+  const registers = useMemo(() => (menuOnly ? [] : registerChoices(fiscal)), [fiscal, menuOnly]);
   const state = (location.state ?? null) as CardLocationState | null;
   const listSearch = state?.list ?? '';
 
@@ -148,14 +152,14 @@ function ProductCard({ id }: { id: string | undefined }) {
       api.listModifierGroups(),
       // Empty for a shop with no composites — and never fails the page: the
       // card is the point here, the cost figure is a bonus beside it.
-      listTechCards().catch(() => [] as TechCardRow[]),
+      menuOnly ? Promise.resolve([] as TechCardRow[]) : listTechCards().catch(() => [] as TechCardRow[]),
     ]);
     setProducts(plist);
     setTags(tlist);
     setGroups(glist);
     setTechCards(new Map(cards.map((c) => [c.variant_id, c])));
     return plist.find((p) => p.id === productId && p.is_active);
-  }, [productId]);
+  }, [productId, menuOnly]);
 
   useEffect(() => {
     let alive = true;
@@ -228,7 +232,7 @@ function ProductCard({ id }: { id: string | undefined }) {
   async function writeVariants(rows: VariantDraft[], mode: ComponentsMode): Promise<void> {
     for (const row of rows) {
       try {
-        await api.updateVariant(row.id, variantPayload(row, mode));
+        await api.updateVariant(row.id, variantPayload(row, mode, menuOnly));
       } catch (err) {
         throw new RowFailure(row, err);
       }
@@ -318,7 +322,7 @@ function ProductCard({ id }: { id: string | undefined }) {
         ...(draft.shape ? { kind: 'composite' as const, stock_mode: draft.shape } : {}),
         variants: useMatrix
           ? matrix!.variants
-          : [newVariantInput(single, draft.shape, isWeighedUnit(vertical, single.unit))],
+          : [newVariantInput(single, draft.shape, isWeighedUnit(vertical, single.unit), menuOnly)],
       });
       const undone: string[] = [];
       if (draft.groupIds.length) {
@@ -426,7 +430,7 @@ function ProductCard({ id }: { id: string | undefined }) {
   // card that already HAS them keeps them on screen (a store that changed its
   // vertical, a florist's bouquet): hiding existing data is not cleaning up.
   const scope = productFormScope(vertical);
-  const showShape = scope.canComposite || (snapshot?.shape ?? '') !== '';
+  const showShape = !menuOnly && (scope.canComposite || (snapshot?.shape ?? '') !== '');
   const showDishFacts =
     scope.askDishFacts ||
     !!snapshot?.composition ||
@@ -528,7 +532,7 @@ function ProductCard({ id }: { id: string | undefined }) {
                 variants={draft.variants}
                 askMenuHidden={scope.askDishFacts}
                 registers={registers}
-                askExcise={fiscal?.enabled === true}
+                askExcise={!menuOnly && fiscal?.enabled === true}
               />
             </div>
           </fieldset>
@@ -565,7 +569,7 @@ function ProductCard({ id }: { id: string | undefined }) {
           partOptions={partOptions}
           techCard={techCards.get(sheetVariant.id)}
           bottle={
-            fiscal?.enabled === true
+            !menuOnly && fiscal?.enabled === true
               ? { excise: { on: draft.fiscalExcise, perUnit: draft.excisePerUnit, uktzed: draft.uktzed } }
               : undefined
           }

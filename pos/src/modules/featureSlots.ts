@@ -104,6 +104,9 @@ export function resolveModuleSlots<K extends ModuleSlotName>(
 
     const isVertical = m.id.startsWith(VERTICAL_MODULE_PREFIX);
     if (isVertical && m.id !== own) continue;
+    // The marketer draws no module's slot: its cabinet has no till, no
+    // dashboard and no «Налаштування» (track МР).
+    if (ctx.role === 'marketer') continue;
     if (!isVertical) {
       if (!runsInShell(m, ctx.shell)) continue;
       if (m.ownerOnly && ctx.role !== 'owner') continue;

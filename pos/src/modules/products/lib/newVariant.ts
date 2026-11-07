@@ -43,7 +43,13 @@ export function singleTyped(v: NewVariantValues, defaultUnit: string): boolean {
  * `weighed`: the unit is sold by weight here, so the opening stock was typed
  * in kilograms («12,5») and goes out in grams (TechDocs/grocery/G4_WEIGHED.md).
  */
-export function newVariantInput(v: NewVariantValues, shape: ProductShape, weighed = false) {
+export function newVariantInput(
+  v: NewVariantValues,
+  shape: ProductShape,
+  weighed = false,
+  /** The café's marketer (track МР): no opening stock, which only the owner sets. */
+  menuOnly = false
+) {
   return {
     attributes: v.attributes,
     unit: v.unit,
@@ -52,7 +58,7 @@ export function newVariantInput(v: NewVariantValues, shape: ProductShape, weighe
     price_cents: uahInputToCents(v.price),
     // A derived composite keeps no stock of its own; the server refuses an
     // opening quantity on one rather than silently dropping it.
-    quantity: shape === 'derived' ? 0 : openingStockOf(v.qty, weighed),
+    quantity: shape === 'derived' || menuOnly ? 0 : openingStockOf(v.qty, weighed),
     pack_qty: v.pack.qty.trim() === '' ? null : Number(v.pack.qty),
     pack_label: v.pack.label.trim() === '' ? null : v.pack.label,
     ...(shape ? { components: v.components } : {}),

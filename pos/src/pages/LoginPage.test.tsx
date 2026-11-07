@@ -5,11 +5,13 @@
 // The login form asks for the store code once, and only the owner types it: a
 // fresh device opens on «Власник», the code goes next to the email + password,
 // and from then on the field shows the remembered code, locked, until the owner
-// taps «Змінити». A seller's PIN always goes with the remembered code — the PIN
-// tab can neither type one nor change it. One email may own several stores, so
+// taps «Змінити». On a till a seller's PIN always goes with the remembered code —
+// the PIN tab can neither type one nor change it; in the browser, with no code
+// remembered, the PIN tab asks for one (the café's marketer, track МР). One email may own several stores, so
 // the owner's request carries the code too.
 
 import { describe, expect, it } from 'vitest';
+import { Route, Routes } from 'react-router-dom';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test/msw/server';
@@ -135,7 +137,7 @@ describe('LoginPage — store code', () => {
     expect(screen.queryByTestId('store-code-change')).not.toBeInTheDocument();
   });
 
-  it('on a device with no code the PIN tab sends the seller to the owner', async () => {
+  it('on a till with no code the PIN tab sends the seller to the owner', async () => {
     let pinCalls = 0;
     server.use(
       http.post(url('/auth/staff/pin'), () => {
@@ -143,7 +145,7 @@ describe('LoginPage — store code', () => {
         return HttpResponse.json(makeAuthResponse());
       })
     );
-    renderWithProviders(<LoginPage />, { route: '/login' });
+    renderWithProviders(<LoginPage />, { route: '/login', shell: 'cashier' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Продавець · PIN' }));
 
@@ -156,6 +158,38 @@ describe('LoginPage — store code', () => {
     expect(screen.getByRole('button', { name: 'Власник' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByLabelText('Код магазину')).toBeEnabled();
     expect(pinCalls).toBe(0);
+  });
+
+  it('in the browser with no code the PIN tab asks for it, and a marketer lands in the cabinet (МР)', async () => {
+    let sent: unknown = null;
+    server.use(
+      http.post(url('/auth/staff/pin'), async ({ request }) => {
+        sent = await request.json();
+        return HttpResponse.json(
+          makeAuthResponse({ staff: { id: 7, display_name: 'Оля', role: 'marketer' }, store: { slug: 'shablya' } })
+        );
+      })
+    );
+    renderWithProviders(
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/admin" element={<p>кабінет</p>} />
+        <Route path="/register" element={<p>каса</p>} />
+      </Routes>,
+      { route: '/login' }
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Продавець · PIN' }));
+    expect(screen.queryByTestId('store-code-missing')).not.toBeInTheDocument();
+    const code = screen.getByLabelText('Код магазину');
+    expect(code).toBeEnabled();
+    fireEvent.change(code, { target: { value: 'shablya' } });
+    fireEvent.change(screen.getByLabelText('PIN'), { target: { value: '135790' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Увійти' }));
+
+    expect(await screen.findByText('кабінет')).toBeInTheDocument();
+    expect(sent).toEqual({ store_slug: 'shablya', pin: '135790' });
+    expect(localStorage.getItem(LAST_SLUG_KEY)).toBe('shablya');
   });
 
   it('a code the owner is still typing never reaches a PIN login', async () => {

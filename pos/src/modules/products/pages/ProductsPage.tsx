@@ -27,6 +27,7 @@ import { productMatchesQuery } from '../components/productSearch';
 import { flattenTags, tagPathLabel } from '../components/tagLabels';
 import { readListParams, writeListParams, type TagFilter } from '../lib/listParams';
 import { assignRegister, registerChoices } from '../lib/registerChoices';
+import { useMenuOnly } from '../lib/menuOnly';
 import { ukPlural } from '../../../lib/plural';
 
 /** Whether a card carries a guest-menu label (an older payload has none). */
@@ -56,7 +57,9 @@ export function ProductsPage() {
   const [bulkRegister, setBulkRegister] = useState<number | ''>('');
   const [assigningRegister, setAssigningRegister] = useState(false);
   const fiscal = useAuthStore((s) => s.auth?.store.fiscal);
-  const registers = useMemo(() => registerChoices(fiscal), [fiscal]);
+  // The café's marketer keeps the menu only (track МР): no registers, markdowns or price tags.
+  const menuOnly = useMenuOnly();
+  const registers = useMemo(() => (menuOnly ? [] : registerChoices(fiscal)), [fiscal, menuOnly]);
   const [savingTagId, setSavingTagId] = useState<number | null>(null);
 
   const vertical = useVertical();
@@ -246,13 +249,15 @@ export function ProductsPage() {
       <PageHeader
         glyph={Package}
         title="Товари"
-        subtitle="Мітки, варіанти та залишки."
+        subtitle={menuOnly ? 'Страви, ціни, порції й те, що бачить гість.' : 'Мітки, варіанти та залишки.'}
         actions={
           <>
-            <Link to="/admin/products/markdowns" className="sq-btn-quiet">
-              <Percent size={20} />
-              Уцінки
-            </Link>
+            {!menuOnly && (
+              <Link to="/admin/products/markdowns" className="sq-btn-quiet">
+                <Percent size={20} />
+                Уцінки
+              </Link>
+            )}
             <Link
               to="/admin/products/new"
               state={cardState}
@@ -478,14 +483,20 @@ export function ProductsPage() {
                   </button>
                 </>
               )}
-              <button type="button" onClick={() => setTagsOpen(true)} className="sq-btn-quiet">
-                <Printer size={20} />
-                Друк цінників
-              </button>
-              <button type="button" onClick={() => setMarkdownOpen(true)} className="sq-btn-quiet">
-                <Percent size={20} />
-                Уцінити
-              </button>
+              {/* Price tags count copies from the stock, and markdowns are money:
+                  neither is the café marketer's (track МР). */}
+              {!menuOnly && (
+                <>
+                  <button type="button" onClick={() => setTagsOpen(true)} className="sq-btn-quiet">
+                    <Printer size={20} />
+                    Друк цінників
+                  </button>
+                  <button type="button" onClick={() => setMarkdownOpen(true)} className="sq-btn-quiet">
+                    <Percent size={20} />
+                    Уцінити
+                  </button>
+                </>
+              )}
             </div>
           )}
 
