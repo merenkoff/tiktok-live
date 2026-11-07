@@ -2,7 +2,12 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
+import { hasPrivateModule } from './_private';
 import { ALL_MODULES, loginAsOwner, mockPosApi } from './helpers';
+
+// `vertical-cafe` is an online-only module whose source moves to a private repo
+// (POS_OPENCORE.md §5, O-2); run this spec only where that source is present.
+test.skip(() => !hasPrivateModule('vertical-cafe'), 'vertical-cafe: private module (POS_OPENCORE §5)');
 
 /**
  * The café vertical end to end in the web shell: the REAL signed

@@ -3,6 +3,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
 import { ALL_MODULES, catalog, loginAsOwner, mockPosApi } from './helpers';
+import { hasPrivateModule } from './_private';
+
+// `debts` is an online-only module whose source moves to a private repo
+// (POS_OPENCORE.md §5, O-2); run this spec only where that source is present.
+test.skip(() => !hasPrivateModule('debts'), 'debts: private module (POS_OPENCORE §5)');
 
 /**
  * «Під запис» end to end in the web shell (phase Г3, PR2): the REAL signed
