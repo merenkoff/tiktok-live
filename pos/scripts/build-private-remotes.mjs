@@ -6,12 +6,12 @@
 // builds the online-only module bundles the private e2e specs serve — but only
 // the ones whose source is present. When those modules' source moves to a
 // private repo (O-6), a stripped public checkout builds none of them and the
-// eight specs that need them skip (e2e/_private.ts), instead of the whole job
+// ten specs that need them skip (e2e/_private.ts), instead of the whole job
 // failing on the first missing `build:<id>-remote`.
 //
 // Run from `pos/`: `node scripts/build-private-remotes.mjs`.
-// `stocktake` is a host module (always present) and stays an explicit build in
-// playwright.config.ts, not here.
+// `stocktake` is an online-only remote too, but an open one (POS_OPENCORE.md §2),
+// so it is always present and stays an explicit build in playwright.config.ts.
 
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -30,6 +30,8 @@ const PRIVATE_REMOTES = [
   'tables',
   'debts',
   'fiscal-cashalot',
+  'fiscal-checkbox',
+  'tiktok-live',
 ];
 
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';

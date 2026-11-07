@@ -18,11 +18,12 @@ export default defineConfig({
     // `VITE_REMOTE_ALLOW_DEV_KEY=1`: e2e/remotes.spec.ts signs a throwaway
     // module remote with the deterministic dev key, which a production build
     // does not trust otherwise (POS_MODULE_REMOTE_SIGNING.md).
-    // `build:stocktake-remote` is a host module, always present. The private
-    // online-only remotes the e2e suite serves (vertical-flowers, vertical-cafe,
-    // vertical-grocery, tables, debts, fiscal-cashalot) are built by
+    // `build:stocktake-remote` is an online-only remote that stays open, so it is
+    // always present. The private online-only remotes the e2e suite serves
+    // (vertical-flowers, vertical-cafe, vertical-grocery, tables, debts,
+    // fiscal-cashalot, fiscal-checkbox, tiktok-live) are built by
     // `scripts/build-private-remotes.mjs` — but only where their source is
-    // present, so a stripped public checkout builds none and the eight specs
+    // present, so a stripped public checkout builds none and the ten specs
     // that serve them skip (e2e/_private.ts) instead of failing the whole job
     // on a missing build script (open-core, POS_OPENCORE.md §5, O-2).
     command:

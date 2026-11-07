@@ -59,9 +59,13 @@ import). Решта вертикальних/онлайн-модулів — **r
 - Платформа: `@pos/platform`, хост-оболонка, `registry`/slots/`verticals.ts`,
   `remoteVerify`, `sign-remote.mjs`, публічні ключі підпису (`remoteSigningKeys.ts`).
 - **Бандл-коре модулі** (ship у хості, лишаються відкриті): `vertical-clothing`,
-  `products`, `stock`, `returns`, `stocktake`, `customers`, `staff`, `analytics`,
+  `products`, `stock`, `returns`, `customers`, `staff`, `analytics`,
   `settings`, `gtin-enrichment`, `qr-payment`, `catalog-checkout`, `hardware`,
-  `live-selling`.
+  `live-selling`. `products`, `stock` і `returns` мають ще й remote-збірку
+  (рядок `module_remotes` перекриває вшитий код) — вона теж лишається відкритою.
+- **`stocktake`** — online-only remote, як і приватні (у `registry.ts` його
+  немає, магазин підключає його записом у `module_remotes`), але **лишається
+  відкритим**: це інвентаризація для будь-якої вертикалі, не преміум-модуль.
 
 **Кандидати в ПРИВАТНЕ** (online-only remotes, shell ships no code):
 `tiktok-live`, `fiscal-checkbox`, `fiscal-cashalot`, `vertical-flowers`,
@@ -167,10 +171,12 @@ URL), але **самі модулі** тягнуть хост відносни�
 
 - **Публічний e2e без приватних вихідників падає ЦІЛИМ джобом**, не окремими
   спеками: `webServer.command` у `pos/playwright.config.ts` збирає шість приватних
-  remotes одним ланцюжком `&&`. Вісім спеків читають приватні бандли з
+  remotes одним ланцюжком `&&`. Десять спеків читають приватні бандли з
   `dist-remotes/`: `debts`, `tables`, `tablet`, `vertical-cafe`, `vertical-flowers`,
-  `vertical-grocery`, `florist-bench`, `fiscal-cashalot`. До переносу:
-  `webServer` збирає лише відкриті remotes (`stocktake`, хост), а ці вісім спеків
+  `vertical-grocery`, `florist-bench`, `fiscal-cashalot`, і з O-2 — `fiscal-checkbox`
+  та `tiktok-live` (до того ці два випущені модулі не мали жодного e2e на реальному
+  бандлі). До переносу:
+  `webServer` збирає лише відкриті remotes (`stocktake`, хост), а ці десять спеків
   переїжджають у приватний CI (варіант B) або запускаються тільки там, де
   приватні теки є (варіант D — у приватній репі, з тим самим конфігом).
 - PR із форків секретів не отримують, тож жоден публічний CI не має залежати від
@@ -312,12 +318,12 @@ jsdelivr роздає її за тегом:
 |---|---|---|
 | O-0 | Цей док + рішення Р1–Р8 — **зроблено 2026-11-07** | — |
 | O-1 | Алиас `@host/*` замість відносних виходів із модуля (§4); критерій — побайтно однакові бандли — **зроблено** (100 імпортів у 9 приватних теках → `@host/*`; alias у `tsconfig`, `vitest.config.ts` і 8 `vite.<id>-remote.config.ts`; усі 8 бандлів **побайтно однакові** до/після; tsc/lint/2712 тестів зелені; `check-platform-boundary` читає й `@host/*`, а `check:private-imports` у CI не дає модулям знову вийти в хост відносним шляхом, а хосту — імпортувати приватний модуль) | низький (окремий PR, поведінка не змінюється) |
-| O-2 | Публічний e2e без приватних remotes: `webServer` збирає приватний remote лише там, де є його вихідники, 8 спеків пропускаються, якщо теки модуля нема (§5) — **зроблено** (`e2e/_private.ts` `hasPrivateModule`; `webServer` → `scripts/build-private-remotes.mjs`, що будує 6 приватних remotes лише за наявності `src/modules/<id>`; `stocktake` (хост) лишається явним; `test.skip(() => !hasPrivateModule('<id>'), …)` у `debts`, `tables`, `tablet`, `vertical-cafe`, `vertical-flowers`, `vertical-grocery`, `florist-bench`, `fiscal-cashalot`; де вихідники є — усі 8 біжать як раніше) | низький |
+| O-2 | Публічний e2e без приватних remotes: `webServer` збирає приватний remote лише там, де є його вихідники, 10 спеків пропускаються, якщо теки модуля нема (§5) — **зроблено** (`e2e/_private.ts` `hasPrivateModule`; `webServer` → `scripts/build-private-remotes.mjs`, що будує 8 приватних remotes лише за наявності `src/modules/<id>`; `stocktake` (відкритий remote) лишається явним; `test.skip(() => !hasPrivateModule('<id>'), …)` у `debts`, `tables`, `tablet`, `vertical-cafe`, `vertical-flowers`, `vertical-grocery`, `florist-bench`, `fiscal-cashalot`, а нові `fiscal-checkbox.spec.ts` і `tiktok-live.spec.ts` уперше ганяють реальні бандли цих двох випущених модулів; де вихідники є — усі 10 біжать) | низький |
 | O-3 | Module Release заливає приватні збірки в закрите сховище (§8.1) | середній |
 | O-4 | Гейт із токеном у шляху + журнал виданого + читання сховища (§8.2–8.3), за прапором, дефолт off — **зроблено 2026-11-07, PR #399** (сервер вставляє токен, хост без змін) | середній |
 | O-5 | Увімкнути `LICENSE_MODULE_GATE` + репойнт `module_remotes` на гейт | середній (поведінка кас) |
 | O-6 | Перенос вихідників (Р2: B або D), зміна заголовків ліцензії (Р8), правки §4, CLAUDE.md і TechDocs | високий (структурний; окремо, по кроках, з власником) |
-| O-7 | CI приватної частини: Module Release, `check-platform-boundary`, 8 e2e-спеків, тести модулів | середній |
+| O-7 | CI приватної частини: Module Release, `check-platform-boundary`, 10 e2e-спеків, тести модулів | середній |
 
 O-1…O-5 дають основну цінність (§6) і нічого не ламають, поки прапор вимкнений.
 O-6 (сам розкол) робимо **окремо й по кроках** — це структурна зміна основної
