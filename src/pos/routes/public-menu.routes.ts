@@ -81,6 +81,7 @@ import {
 import { PROFILE_FIELDS, ProfileError, normalizeProfilePatch } from '../public-menu/profile.js';
 import { MENU_PAGE_HEADERS } from '../public-menu/render.js';
 import { verifyTableKey } from '../public-menu/table-keys.js';
+import { MarketerFieldError, assertMarketerMenuPatch } from '../marketer.js';
 import { saveProductImage } from '../uploads.service.js';
 import { errorMessage } from './_shared.js';
 
@@ -286,15 +287,25 @@ export function registerPublicMenuRoutes(fastify: FastifyInstance): void {
   });
 
   fastify.get('/store/public-menu', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensurePosOwner(request, reply, { allow: 'menu.public' });
     if (!auth) return;
     return getPublicMenuSettings(auth.storeId);
   });
 
   fastify.patch('/store/public-menu', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensurePosOwner(request, reply, { allow: 'menu.public' });
     if (!auth) return;
     const body = (request.body ?? {}) as Record<string, unknown>;
+    // The marketer publishes the menu and takes feedback; guest ordering, the
+    // kitchen and calling a waiter are the owner's (track МР, М5).
+    if (auth.role === 'marketer') {
+      try {
+        assertMarketerMenuPatch(body);
+      } catch (error) {
+        if (error instanceof MarketerFieldError) return reply.code(403).send({ error: error.message, code: error.code });
+        throw error;
+      }
+    }
     const switches = ['enabled', 'slug_enabled', 'bill_enabled', 'ordering_enabled', 'call_enabled', 'feedback_enabled'] as const;
     const given = switches.filter((field) => body[field] !== undefined);
     const autoGiven = body.auto_kitchen !== undefined;
@@ -357,7 +368,7 @@ export function registerPublicMenuRoutes(fastify: FastifyInstance): void {
   });
 
   fastify.get('/store/profile', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensurePosOwner(request, reply, { allow: 'menu.public' });
     if (!auth) return;
     return getStoreProfile(auth.storeId);
   });
@@ -365,7 +376,7 @@ export function registerPublicMenuRoutes(fastify: FastifyInstance): void {
   // A field left out is left alone; `null` clears it. Every value is checked
   // before anything is written, so a bad phone cannot half-save the hours.
   fastify.patch('/store/profile', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensurePosOwner(request, reply, { allow: 'menu.public' });
     if (!auth) return;
     const body = (request.body ?? {}) as Record<string, unknown>;
     if (!PROFILE_FIELDS.some((field) => body[field] !== undefined)) {
@@ -383,7 +394,7 @@ export function registerPublicMenuRoutes(fastify: FastifyInstance): void {
   // Only stores the file; `PATCH /store/profile` is what makes it the logo, so
   // an upload the owner abandons changes nothing on the guest's page.
   fastify.post('/store/logo', async (request, reply) => {
-    const auth = await ensurePosOwner(request, reply);
+    const auth = await ensurePosOwner(request, reply, { allow: 'menu.public' });
     if (!auth) return;
     try {
       const file = await request.file();

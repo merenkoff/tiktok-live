@@ -355,7 +355,7 @@ describe.skipIf(!hasDb)('POS auth & staff routes', () => {
       }
     });
 
-    it('400s a PATCH without is_active', async () => {
+    it('400s a PATCH with neither is_active nor role', async () => {
       const res = await app.inject({
         method: 'PATCH',
         url: `/api/pos/staff/${store.sellerId}`,
@@ -363,7 +363,7 @@ describe.skipIf(!hasDb)('POS auth & staff routes', () => {
         payload: {},
       });
       expect(res.statusCode).toBe(400);
-      expect(res.json().error).toBe('is_active required');
+      expect(res.json().error).toBe('is_active or role required');
     });
 
     it('deactivates a seller through PATCH', async () => {

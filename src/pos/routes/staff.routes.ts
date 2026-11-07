@@ -2,11 +2,17 @@
 // Licensed under the OwnNet Source License 1.1 (source-available). See LICENSE.
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { ensureModule } from '../core/auth.js';
 import * as authService from '../auth.service.js';
 import { clearPinMisses, getPinLockStatus } from '../pin-attempts.js';
 import { errorMessage } from './_shared.js';
+
+/** A staff write's refusal: the owner's words and their status, or a plain 400. */
+function sendStaffError(reply: FastifyReply, error: unknown) {
+  if (error instanceof authService.StaffError) return reply.code(error.status).send({ error: error.message });
+  return reply.code(400).send({ error: errorMessage(error) });
+}
 
 export function registerStaffRoutes(fastify: FastifyInstance): void {
   fastify.get('/staff', async (request, reply) => {
@@ -18,15 +24,21 @@ export function registerStaffRoutes(fastify: FastifyInstance): void {
   fastify.post('/staff', async (request, reply) => {
     const auth = await ensureModule(request, reply, 'staff', { owner: true });
     if (!auth) return;
-    const body = request.body as { display_name?: string; pin?: string };
+    const body = (request.body ?? {}) as { display_name?: string; pin?: string; role?: unknown };
     try {
       if (!body.display_name || !body.pin) {
         return reply.code(400).send({ error: 'display_name and pin required' });
       }
-      const created = await authService.createSeller(auth.storeId, body.display_name, body.pin);
+      // `role` is the seller unless the owner picks a role the vertical offers
+      // (track МР: the café's marketer).
+      const created = await authService.createStaff(auth.storeId, {
+        displayName: body.display_name,
+        pin: body.pin,
+        role: body.role,
+      });
       return reply.code(201).send(created);
     } catch (error) {
-      return reply.code(400).send({ error: errorMessage(error) });
+      return sendStaffError(reply, error);
     }
   });
 
@@ -40,7 +52,7 @@ export function registerStaffRoutes(fastify: FastifyInstance): void {
       await authService.setStaffPin(auth.storeId, Number(id), body.pin);
       return { ok: true };
     } catch (error) {
-      return reply.code(400).send({ error: errorMessage(error) });
+      return sendStaffError(reply, error);
     }
   });
 
@@ -63,15 +75,17 @@ export function registerStaffRoutes(fastify: FastifyInstance): void {
     const auth = await ensureModule(request, reply, 'staff', { owner: true });
     if (!auth) return;
     const { id } = request.params as { id: string };
-    const body = request.body as { is_active?: boolean };
+    const body = (request.body ?? {}) as { is_active?: boolean; role?: unknown; pin?: unknown };
     try {
-      if (typeof body.is_active !== 'boolean') {
-        return reply.code(400).send({ error: 'is_active required' });
+      if (typeof body.is_active !== 'boolean' && body.role === undefined) {
+        return reply.code(400).send({ error: 'is_active or role required' });
       }
-      await authService.setStaffActive(auth.storeId, Number(id), body.is_active);
+      // A seller ↔ marketer switch (track МР, М9), a new PIN with it when needed.
+      if (body.role !== undefined) await authService.setStaffRole(auth.storeId, Number(id), { role: body.role, pin: body.pin });
+      if (typeof body.is_active === 'boolean') await authService.setStaffActive(auth.storeId, Number(id), body.is_active);
       return { ok: true };
     } catch (error) {
-      return reply.code(400).send({ error: errorMessage(error) });
+      return sendStaffError(reply, error);
     }
   });
 

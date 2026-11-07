@@ -60,4 +60,7 @@ export const cafeVertical: VerticalDefinition = {
   // exactly that gap.
   kitchen: true,
   autoBarcode: false,
+  // Someone keeps the guest menu, the halls and the QR stickers without seeing
+  // the takings (track МР, TechDocs/POS_MARKETER_ROLE.md).
+  staffRoles: ['marketer'],
 };

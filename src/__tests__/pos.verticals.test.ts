@@ -85,6 +85,7 @@ describe('vertical registry', () => {
       productKinds: ['simple', 'composite'],
       dishFacts: false,
       autoBarcode: false,
+      staffRoles: [],
     });
     expect('labelOf' in config).toBe(false);
   });

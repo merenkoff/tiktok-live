@@ -14,7 +14,7 @@ import { cafeVertical } from './cafe.js';
 import { clothingVertical } from './clothing.js';
 import { flowersVertical } from './flowers.js';
 import { groceryVertical } from './grocery.js';
-import type { VerticalDefinition, VerticalId, VerticalPublicConfig } from './types.js';
+import type { ExtraStaffRole, VerticalDefinition, VerticalId, VerticalPublicConfig } from './types.js';
 
 /** Verticals compiled into this build. */
 const BUILT_IN: VerticalDefinition[] = [clothingVertical, flowersVertical, cafeVertical, groceryVertical];
@@ -70,7 +70,14 @@ export function publicConfigOf(def: VerticalDefinition): VerticalPublicConfig {
     productKinds: [...def.productKinds],
     dishFacts: def.kitchen,
     autoBarcode: def.autoBarcode,
+    staffRoles: [...(def.staffRoles ?? [])],
   };
+}
+
+/** Whether a store of this vertical may have a staff member in `role`. */
+export function verticalOffersRole(id: string | null | undefined, role: string): boolean {
+  if (role === 'owner' || role === 'seller') return true;
+  return (verticalOrDefault(id).staffRoles ?? []).includes(role as ExtraStaffRole);
 }
 
 /** Every vertical this build ships, for the super admin's picker. */

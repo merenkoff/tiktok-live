@@ -176,6 +176,9 @@ export const POS_MIGRATIONS = [
   // Licence-gated delivery of online-module bundles (POS_OPENCORE.md §8): the
   // author's journal of issued versions + a deployment's own delivery token.
   '097_pos_module_delivery.sql',
+  // A third staff role, «Маркетолог» — the menu, the halls and the QR menu only
+  // (TechDocs/POS_MARKETER_ROLE.md, МР1).
+  '098_pos_staff_marketer.sql',
 ] as const;
 
 export function readMigration(file: string): string {

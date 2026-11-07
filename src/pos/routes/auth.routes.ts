@@ -46,20 +46,22 @@ export function registerAuthRoutes(fastify: FastifyInstance): void {
     const outcome = await authService.attemptPinLogin(body.store_slug, body.pin);
     if (outcome.kind === 'ok') return outcome.auth;
     if (outcome.kind === 'locked') return sendPinLock(reply, outcome.lock, false);
+    // The right PIN of a role this store cannot have any more (track МР, М3).
+    if (outcome.kind === 'refused') return reply.code(403).send({ error: outcome.error, code: 'role_unavailable' });
     // A miss that earned a wait says so at once — the next tap would hear it anyway.
     if (outcome.lock) return sendPinLock(reply, outcome.lock, true);
     return reply.code(401).send({ error: 'Invalid PIN or store' });
   });
 
   fastify.post('/auth/logout', async (request, reply) => {
-    const auth = await ensurePosAuth(request, reply);
+    const auth = await ensurePosAuth(request, reply, { allow: 'session' });
     if (!auth) return;
     await authService.logout(auth.token);
     return { ok: true };
   });
 
   fastify.get('/me', async (request, reply) => {
-    const auth = await ensurePosAuth(request, reply);
+    const auth = await ensurePosAuth(request, reply, { allow: 'session' });
     if (!auth) return;
     return authService.me(auth);
   });

@@ -13,13 +13,13 @@ import { errorMessage } from './_shared.js';
 
 export function registerModifierRoutes(fastify: FastifyInstance): void {
   fastify.get('/modifier-groups', async (request, reply) => {
-    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;
     return modifiers.listGroups(auth.storeId);
   });
 
   fastify.post('/modifier-groups', async (request, reply) => {
-    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;
     try {
       const group = await modifiers.createGroup(
@@ -33,7 +33,7 @@ export function registerModifierRoutes(fastify: FastifyInstance): void {
   });
 
   fastify.patch('/modifier-groups/:id', async (request, reply) => {
-    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
@@ -48,7 +48,7 @@ export function registerModifierRoutes(fastify: FastifyInstance): void {
   });
 
   fastify.delete('/modifier-groups/:id', async (request, reply) => {
-    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
@@ -60,7 +60,7 @@ export function registerModifierRoutes(fastify: FastifyInstance): void {
   });
 
   fastify.post('/modifier-groups/:id/modifiers', async (request, reply) => {
-    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
@@ -76,7 +76,7 @@ export function registerModifierRoutes(fastify: FastifyInstance): void {
   });
 
   fastify.patch('/modifiers/:id', async (request, reply) => {
-    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
@@ -91,7 +91,7 @@ export function registerModifierRoutes(fastify: FastifyInstance): void {
   });
 
   fastify.delete('/modifiers/:id', async (request, reply) => {
-    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;
     const { id } = request.params as { id: string };
     try {
@@ -104,7 +104,7 @@ export function registerModifierRoutes(fastify: FastifyInstance): void {
 
   /** Which groups a product asks, replaced wholesale and in this order. */
   fastify.put('/products/:id/modifier-groups', async (request, reply) => {
-    const auth = await ensureModule(request, reply, 'products', { owner: true });
+    const auth = await ensureModule(request, reply, 'products', { owner: true, allow: 'menu.catalog' });
     if (!auth) return;
     const { id } = request.params as { id: string };
     const body = (request.body ?? {}) as { group_ids?: unknown };
