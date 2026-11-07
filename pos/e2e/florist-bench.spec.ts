@@ -2,6 +2,11 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
+import { hasPrivateModule } from './_private';
+
+// This spec serves the private `vertical-flowers` bundle (its source moves to a
+// private repo, POS_OPENCORE.md §5, O-2); run it only where that source is present.
+test.skip(() => !hasPrivateModule('vertical-flowers'), 'vertical-flowers: private module (POS_OPENCORE §5)');
 import { ALL_MODULES, loginAsOwner, mockPosApi } from './helpers';
 
 /**
