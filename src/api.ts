@@ -35,7 +35,7 @@ import { createNovaPoshtaClient } from './novaposhta.js';
 import { getUserSettings } from './users/users.service.js';
 import { ensureAuth, isUnauthorizedError } from './core/auth.js';
 import { POS_UPLOADS_PREFIX } from './pos/uploads.service.js';
-import { registerModuleDeliveryRoutes } from './pos/license/moduleDelivery.routes.js';
+import { moduleUploadRoutes, registerModuleDeliveryRoutes } from './pos/license/moduleDelivery.routes.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const siteDistDir = join(__dirname, '..', 'site', 'dist');
@@ -380,6 +380,8 @@ export async function createServer(): Promise<FastifyInstance> {
   // takes back a version a licence was given. Transparent while
   // LICENSE_MODULE_GATE is off.
   registerModuleDeliveryRoutes(fastify);
+  // …and the Module Release workflow's upload into that closed store (O-3).
+  await fastify.register(moduleUploadRoutes);
 
   /**
    * Health check
