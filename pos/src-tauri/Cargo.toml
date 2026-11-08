@@ -1,6 +1,6 @@
 [package]
 name = "liveshop-pos"
-version = "2.8.0"
+version = "2.8.1"
 description = "LiveShop POS cashier desktop shell"
 authors = ["Serhii Merenkov / Technologies LLC <mer.sergei@gmail.com>"]
 edition = "2021"
