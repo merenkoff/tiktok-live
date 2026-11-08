@@ -18,7 +18,8 @@ import {
   recordActivation,
   type ActivationPing,
 } from './pos/license/activations.service.js';
-import { checkEntitlement, licenseTokenFromRequest, requireValidLicense } from './pos/license/entitlement.js';
+import { checkEntitlement, licenseTokenFromRequest } from './pos/license/entitlement.js';
+import { requireUpdateEntitlement } from './pos/license/updateGate.js';
 import { leadAllowed } from './crm/limits.js';
 import {
   getOrder,
@@ -341,16 +342,18 @@ export async function createServer(): Promise<FastifyInstance> {
    *   - `LICENSE_UPDATE_GATE` !== 'on' (default): transparent proxy of the
    *     upstream `latest.json` — identical to going straight to GitHub, zero
    *     behaviour change. This is the safe default until the author opts in.
-   *   - gate 'on': the request must carry a valid licence token (`X-License-Key`),
-   *     else 403 — an unlicensed copy of an official build stops getting updates,
-   *     while its POS keeps running untouched.
+   *   - gate 'on': the request must carry a valid licence token (`X-License-Key`)
+   *     or a valid delivery token (`X-Delivery-Token`, what the desktop cashier
+   *     sends — see `updateGate.ts`), else 403 — an unlicensed copy of an
+   *     official build stops getting updates, while its POS keeps running
+   *     untouched.
    * The upstream body is proxied VERBATIM so the updater's own signature check
    * (the `pubkey` in tauri.conf) is unaffected. An upstream failure is a 502,
    * which the updater treats as "no update this cycle" — never a brick.
    */
   fastify.get('/api/updates/latest.json', async (request, reply) => {
     if ((process.env.LICENSE_UPDATE_GATE ?? '').trim() === 'on') {
-      if (!requireValidLicense(request, reply)) return; // 403 already sent
+      if (!requireUpdateEntitlement(request, reply)) return; // 403 already sent
     }
     const upstream =
       process.env.LICENSE_UPDATE_UPSTREAM?.trim() ||

@@ -35,12 +35,14 @@ import { setModuleDeliveryKeysForTests } from '../pos/license/moduleDelivery.rou
 import {
   currentModuleToken,
   moduleRemotesForTill,
+  moduleTokenForUpdate,
   refreshModuleToken,
   resetModuleTokenCacheForTests,
   withModuleToken,
   withModuleTokens,
 } from '../pos/license/moduleToken.js';
 import { POS_UPLOADS_DIR } from '../pos/uploads.service.js';
+import { auth, buildPosTestApp, createTestStore, dropTestStore, type TestStore } from './helpers/pos-fixtures.js';
 
 function ephemeralKey() {
   const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
@@ -456,5 +458,83 @@ describe('the deployment’s delivery token', () => {
     expect(await refreshModuleToken()).toBe('refused');
     resetModuleTokenCacheForTests();
     expect(await currentModuleToken()).toBeNull();
+  });
+
+  it('the update check waits for the refresh a missing token starts, and asks the author nothing when it holds one', async () => {
+    process.env.LICENSE_KEY = 'licence-token-of-this-copy';
+    const token = 'v1.updatetoken01.mac0123456789abcdefghijk';
+    answer = { status: 200, body: { token, scope: 'all', expires_at: new Date(Date.now() + 40 * DAY).toISOString() } };
+    await pool.query(`UPDATE pos_license_state SET module_token = NULL, module_token_expires_at = NULL WHERE id = 1`);
+    resetModuleTokenCacheForTests();
+
+    // Nothing held: unlike a login, the press of «Оновити» has to get an answer.
+    expect(await moduleTokenForUpdate()).toBe(token);
+
+    seenKey = undefined;
+    expect(await moduleTokenForUpdate()).toBe(token);
+    expect(seenKey).toBeUndefined(); // held and fresh: the author's server is not asked again
+  });
+
+  it('the update check says null — and does not hang — when this copy has no key to ask with', async () => {
+    delete process.env.LICENSE_KEY;
+    await pool.query(`UPDATE pos_license_state SET module_token = NULL, module_token_expires_at = NULL WHERE id = 1`);
+    resetModuleTokenCacheForTests();
+    expect(await moduleTokenForUpdate()).toBeNull();
+  });
+});
+
+// 2D-B: the route a till calls at the moment of pressing «Оновити».
+describe('GET /api/pos/license/update-token', () => {
+  let app: FastifyInstance;
+  let store: TestStore;
+  const env = { LICENSE_KEY: process.env.LICENSE_KEY, LICENSE_SERVER_URL: process.env.LICENSE_SERVER_URL };
+  const TOKEN = 'v1.routetoken001.mac0123456789abcdefghijk';
+
+  beforeAll(async () => {
+    app = await buildPosTestApp();
+    store = await createTestStore('lic_upd');
+    // A key that must never come back out of the route, and a server that is not there:
+    // nothing here may reach the network.
+    process.env.LICENSE_KEY = 'secret-licence-key-of-this-copy';
+    process.env.LICENSE_SERVER_URL = 'http://127.0.0.1:59996';
+  }, 60000);
+
+  afterAll(async () => {
+    await dropTestStore(store?.storeId);
+    await app?.close();
+    await pool.query(`UPDATE pos_license_state SET module_token = NULL, module_token_expires_at = NULL WHERE id = 1`);
+    resetModuleTokenCacheForTests();
+    for (const [key, value] of Object.entries(env)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+
+  it('is for staff only', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/pos/license/update-token' });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('hands a seller and an owner the delivery token the copy holds — never its licence key', async () => {
+    await pool.query(
+      `UPDATE pos_license_state SET module_token = $1, module_token_expires_at = $2 WHERE id = 1`,
+      [TOKEN, new Date(Date.now() + 40 * DAY)]
+    );
+    resetModuleTokenCacheForTests();
+    for (const token of [store.sellerToken, store.ownerToken]) {
+      const res = await app.inject({ method: 'GET', url: '/api/pos/license/update-token', headers: auth(token) });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ token: TOKEN });
+      expect(res.headers['cache-control']).toBe('no-store');
+      expect(res.body).not.toContain('secret-licence-key');
+    }
+  });
+
+  it('answers token: null, not an error, when the copy holds none', async () => {
+    await pool.query(`UPDATE pos_license_state SET module_token = NULL, module_token_expires_at = NULL WHERE id = 1`);
+    resetModuleTokenCacheForTests();
+    const res = await app.inject({ method: 'GET', url: '/api/pos/license/update-token', headers: auth(store.sellerToken) });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ token: null });
   });
 });

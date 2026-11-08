@@ -22,7 +22,14 @@ export function checkForUpdate(): Promise<UpdateInfo> {
 /**
  * Downloads, verifies and installs the update, then restarts the app — so this
  * promise only ever settles by rejecting. Offer it when `can_self_update`.
+ *
+ * `updateToken` is this deployment's delivery token for the author's update feed
+ * (`fetchUpdateToken` in `./updateToken`; TechDocs/POS_LICENSING.md 2D-B). The
+ * command sends it only to the update endpoint baked into the binary and drops it
+ * before the installer is downloaded. This file stays free of `@pos/platform`
+ * on purpose: the update store reaches it from the global test setup and from
+ * every screen's chrome, and the whole platform barrel does not belong there.
  */
-export function installUpdate(): Promise<void> {
-  return invoke('install_update');
+export function installUpdate(updateToken: string | null = null): Promise<void> {
+  return invoke('install_update', { updateToken });
 }
