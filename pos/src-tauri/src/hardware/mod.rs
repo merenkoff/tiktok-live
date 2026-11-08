@@ -3,6 +3,7 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 mod catalog;
+pub mod encoding;
 pub mod kitchen_ticket;
 pub mod precheck;
 pub mod os_printers;

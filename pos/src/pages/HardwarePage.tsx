@@ -17,6 +17,7 @@ import {
 } from '../platform/glyphs';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { AboutCard } from '../components/AboutCard';
+import { PrinterEncodingPicker } from '../components/PrinterEncodingPicker';
 import { HardwareDevice, listHardware } from '../lib/hardware';
 import { installUpdate } from '../lib/updates';
 import { fetchUpdateToken } from '../lib/updateToken';
@@ -122,6 +123,7 @@ function StationPrinterSection({
       {selected && (
         <>
           <PaperWidthPicker value={paperWidth} onChange={onPaperWidth} />
+          <PrinterEncodingPicker printerName={selected} paperWidth={paperWidth} />
           <div className="mt-4 flex items-center gap-3 flex-wrap">
             <button type="button" onClick={onTest} disabled={testing} className="sq-btn-quiet">
               <Printer size={20} />
@@ -708,6 +710,8 @@ export function HardwarePage() {
               </p>
               <PaperWidthPicker value={paperWidth} onChange={selectPaperWidth} />
             </div>
+
+            <PrinterEncodingPicker printerName={selectedPrinter} paperWidth={paperWidth} />
 
             <div className="mt-4 flex items-center gap-3 flex-wrap">
               <button type="button" onClick={() => void testPrint()} disabled={testing} className="sq-btn-quiet">

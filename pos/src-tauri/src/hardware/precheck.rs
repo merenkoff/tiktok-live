@@ -24,14 +24,12 @@
 use std::fs::OpenOptions;
 
 use escpos::driver::FileDriver;
-use escpos::printer::Printer;
-use escpos::printer_options::PrinterOptions;
-use escpos::utils::{JustifyMode, Protocol};
+use escpos::utils::JustifyMode;
 use serde::Deserialize;
 
+use crate::hardware::encoding::{PrinterEncoding, TextPrinter};
 use crate::hardware::receipt::{
     chars_per_line, divider, feedback_block, money, now_nanos, send_raw, two_col,
-    RECEIPT_PAGE_CODE,
 };
 
 #[derive(Deserialize, Default)]
@@ -76,7 +74,18 @@ pub struct PrecheckData {
 const TITLE: &str = "ПЕРЕДЧЕК";
 const DISCLAIMER: &str = "НЕ Є РОЗРАХУНКОВИМ ДОКУМЕНТОМ";
 
+/// The profile-less form the tests use: Windows-1251 at its standard number, as
+/// every release before encoding profiles printed.
+#[cfg(test)]
 fn build_precheck(bill: &PrecheckData, width: usize) -> Result<Vec<u8>, String> {
+    build_precheck_with(bill, width, &PrinterEncoding::default())
+}
+
+fn build_precheck_with(
+    bill: &PrecheckData,
+    width: usize,
+    encoding: &PrinterEncoding,
+) -> Result<Vec<u8>, String> {
     let dir = std::env::temp_dir();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let path = dir.join(format!("pos-precheck-{}.bin", now_nanos()));
@@ -84,8 +93,7 @@ fn build_precheck(bill: &PrecheckData, width: usize) -> Result<Vec<u8>, String> 
     let mut open_opts = OpenOptions::new();
     open_opts.read(true).write(true).create(true).truncate(true);
     let driver = FileDriver::open_with_options(&path, &open_opts).map_err(|e| e.to_string())?;
-    let options = PrinterOptions::new(Some(RECEIPT_PAGE_CODE), None, width as u8);
-    let mut printer = Printer::new(driver, Protocol::default(), Some(options));
+    let mut printer = TextPrinter::new(driver, encoding, width);
 
     printer.init().map_err(|e| e.to_string())?;
     printer.justify(JustifyMode::CENTER).map_err(|e| e.to_string())?;
@@ -201,8 +209,9 @@ pub fn print_precheck(
     printer_name: String,
     bill: PrecheckData,
     paper_width_mm: Option<u16>,
+    encoding: Option<PrinterEncoding>,
 ) -> Result<(), String> {
-    let bytes = build_precheck(&bill, chars_per_line(paper_width_mm))?;
+    let bytes = build_precheck_with(&bill, chars_per_line(paper_width_mm), &encoding.unwrap_or_default())?;
     send_raw(&printer_name, &bytes, "Передчек")
 }
 

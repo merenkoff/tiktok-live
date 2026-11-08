@@ -5,11 +5,11 @@
 use std::fs::OpenOptions;
 
 use escpos::driver::FileDriver;
-use escpos::printer::Printer;
-use escpos::printer_options::PrinterOptions;
-use escpos::utils::{JustifyMode, PageCode, Protocol};
+use escpos::utils::JustifyMode;
 use printers::common::base::job::PrinterJobOptions;
 use serde::Deserialize;
+
+use crate::hardware::encoding::{PrinterEncoding, TextPrinter};
 
 #[derive(Deserialize, Default)]
 pub struct ReceiptItem {
@@ -176,7 +176,7 @@ pub(crate) const FEEDBACK_CAPTION: &str = "Як вам сьогодні? Від�
 /// on the pre-bill — which must not look like a receipt — as on the receipt.
 /// Leaves the printer left-justified.
 pub(crate) fn feedback_block(
-    printer: &mut Printer<FileDriver>,
+    printer: &mut TextPrinter,
     width: usize,
     url: &str,
 ) -> Result<(), String> {
@@ -214,11 +214,11 @@ pub(crate) fn chars_per_line(paper_width_mm: Option<u16>) -> usize {
 
 // Thermal printers don't speak UTF-8: without a code page the raw UTF-8 bytes
 // get rendered through the printer's default table (PC437) and Cyrillic comes
-// out as garbage. Windows-1251 is the one ESC/POS Cyrillic table in the escpos
-// crate that carries the full Ukrainian set (і, ї, є, ґ); PC866 there is missing
-// them. `Printer::init()` emits the matching `ESC t` select command, and every
-// `write` maps each char to its single Win-1251 byte.
-pub(crate) const RECEIPT_PAGE_CODE: PageCode = PageCode::WPC1251;
+// out as garbage. Which table the text is encoded for, and the `ESC t` number
+// that selects it, is the printer's `PrinterEncoding` (hardware/encoding.rs):
+// Windows-1251 at Epson's number 46 unless the owner picked another profile for
+// a printer that numbers its tables differently. `TextPrinter::init` sends the
+// select command and every `writeln` maps each char to its single byte.
 
 pub(crate) fn money(cents: i64) -> String {
     format!("{:.2}", cents as f64 / 100.0)
@@ -269,7 +269,18 @@ fn vat_label(line: &ReceiptVatLine) -> String {
     }
 }
 
+/// The profile-less form the tests use: Windows-1251 at its standard number, as
+/// every release before encoding profiles printed.
+#[cfg(test)]
 fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> {
+    build_ticket_with(receipt, width, &PrinterEncoding::default())
+}
+
+fn build_ticket_with(
+    receipt: &ReceiptData,
+    width: usize,
+    encoding: &PrinterEncoding,
+) -> Result<Vec<u8>, String> {
     let dir = std::env::temp_dir();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let path = dir.join(format!("pos-receipt-{}.bin", now_nanos()));
@@ -279,8 +290,7 @@ fn build_ticket(receipt: &ReceiptData, width: usize) -> Result<Vec<u8>, String> 
     let mut open_opts = OpenOptions::new();
     open_opts.read(true).write(true).create(true).truncate(true);
     let driver = FileDriver::open_with_options(&path, &open_opts).map_err(|e| e.to_string())?;
-    let options = PrinterOptions::new(Some(RECEIPT_PAGE_CODE), None, width as u8);
-    let mut printer = Printer::new(driver, Protocol::default(), Some(options));
+    let mut printer = TextPrinter::new(driver, encoding, width);
 
     printer.init().map_err(|e| e.to_string())?;
 
@@ -594,8 +604,9 @@ pub fn print_receipt(
     printer_name: String,
     receipt: ReceiptData,
     paper_width_mm: Option<u16>,
+    encoding: Option<PrinterEncoding>,
 ) -> Result<(), String> {
-    let bytes = build_ticket(&receipt, chars_per_line(paper_width_mm))?;
+    let bytes = build_ticket_with(&receipt, chars_per_line(paper_width_mm), &encoding.unwrap_or_default())?;
     send_raw(&printer_name, &bytes, "Чек")
 }
 
@@ -603,7 +614,7 @@ pub fn print_receipt(
 pub(crate) mod test_util {
     pub(crate) fn win1251(s: &str) -> Vec<u8> {
         // Only what these tests need: ASCII passes through, Cyrillic maps to
-        // the Win-1251 table the printer is switched to (`RECEIPT_PAGE_CODE`).
+        // the Win-1251 table the default profile switches the printer to.
         s.chars()
             .map(|c| match c {
                 'А'..='Я' => 0xC0 + (c as u32 - 'А' as u32) as u8,

@@ -40,6 +40,7 @@ const EXPECTED_COMMANDS = [
   'install_update',
   'list_hardware',
   'list_printers',
+  'print_encoding_test',
   'print_kitchen_ticket',
   'print_precheck',
   'print_receipt',
