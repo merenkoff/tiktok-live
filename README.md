@@ -52,6 +52,14 @@ check, explicitly **not** a remote kill switch or undisclosed tracking (OwnNet
 1.1 §1.150). Leave `LICENSE_KEY` unset and the POS runs exactly as before, with
 status `unlicensed`. Details: [`TechDocs/POS_LICENSING.md`](TechDocs/POS_LICENSING.md).
 
+The official desktop cashier (POS 2.8.1+), only when the user presses «Встановити
+оновлення» (in-place update on macOS and Linux AppImage), adds one header to its
+update check at `the-live.shop`: `X-Delivery-Token`, a signed token derived from the
+deployment's licence (a licence fingerprint, a scope and an expiry — never the
+licence key itself) that the deployment's server already holds. It carries **no
+user activity, catalogue or personal data**, and the author's server may refuse an
+update because of it — never a running copy.
+
 ---
 
 **Made with ❤️ for TikTok LIVE sellers**

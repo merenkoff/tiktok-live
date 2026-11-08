@@ -19,6 +19,7 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import { AboutCard } from '../components/AboutCard';
 import { HardwareDevice, listHardware } from '../lib/hardware';
 import { installUpdate } from '../lib/updates';
+import { fetchUpdateToken } from '../lib/updateToken';
 import {
   DEFAULT_RECEIPT_PAPER_WIDTH,
   KitchenTicketData,
@@ -526,7 +527,7 @@ export function HardwarePage() {
     setInstalling(true);
     setInstallError(null);
     try {
-      await installUpdate();
+      await installUpdate(await fetchUpdateToken());
     } catch (e) {
       setInstallError(typeof e === 'string' ? e : 'Не вдалося встановити оновлення.');
       setInstalling(false);

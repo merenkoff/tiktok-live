@@ -22,6 +22,12 @@ LICENSE_SERVER_URL on boot and once a day. It is best-effort and never disables
 the software — a licence-compliance check, not a Closed System, consistent with
 the LICENSE. See README.md and TechDocs/POS_LICENSING.md.
 
+Disclosed update check: when the user presses "install update", the official
+desktop cashier adds an X-Delivery-Token header (a licence fingerprint, a scope
+and an expiry, signed; not the licence key; no user activity or personal data)
+to its request for the update manifest at the-live.shop. It can only make the
+author's update server refuse an update, never disable a copy that is running.
+
 Attribution line for derivative works:
   "Based on The Live Shop by Serhii Merenkov / Technologies LLC (own-net.com)"
 

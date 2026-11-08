@@ -18,7 +18,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { createServer } from '../api.js';
 import { checkEntitlement } from '../pos/license/entitlement.js';
+import { signModuleToken } from '../pos/license/moduleDelivery.js';
 import { signLicenseToken } from '../pos/license/token.js';
+import { checkUpdateEntitlement } from '../pos/license/updateGate.js';
 
 function ephemeralKey() {
   const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
@@ -54,6 +56,71 @@ describe('checkEntitlement (pure)', () => {
 
     const expired = signLicenseToken({ kid: k.kid, licensee: 'X', expires_at: '2020-01-01T00:00:00Z' }, k.priv);
     expect(checkEntitlement(expired, { keys: k.keys })).toMatchObject({ entitled: false, reason: 'expired' });
+  });
+});
+
+// 2D-B: the desktop cashier presents the DELIVERY token its deployment already
+// holds, not the licence key (which never reaches a till — 2D-C, rule 2).
+describe('checkUpdateEntitlement (pure)', () => {
+  const secret = Buffer.from('update-gate-test-secret');
+  const fp = 'ab'.repeat(16);
+  const inAnHour = Math.floor(Date.now() / 1000) + 3600;
+  const delivery = (scope: 'all' | 'issued', exp = inAnHour, key = secret) =>
+    signModuleToken({ fp, scope, exp }, key);
+
+  it('opens for a delivery token of scope all', () => {
+    expect(checkUpdateEntitlement({ deliveryToken: delivery('all') }, { secret })).toEqual({ ok: true, via: 'delivery' });
+  });
+
+  it('opens for a valid licence token, as it did before the desktop sent anything', () => {
+    const k = ephemeralKey();
+    const licence = signLicenseToken({ kid: k.kid, licensee: 'Acme LLC' }, k.priv);
+    expect(checkUpdateEntitlement({ licenseToken: licence }, { secret, verify: { keys: k.keys } })).toEqual({
+      ok: true,
+      via: 'licence',
+    });
+  });
+
+  it('refuses a delivery token of scope issued: a new desktop version was never handed to an expired licence', () => {
+    expect(checkUpdateEntitlement({ deliveryToken: delivery('issued') }, { secret })).toEqual({
+      ok: false,
+      reason: 'delivery_token_issued_only',
+    });
+  });
+
+  it('refuses an expired, forged or garbled delivery token', () => {
+    expect(checkUpdateEntitlement({ deliveryToken: delivery('all', Math.floor(Date.now() / 1000) - 10) }, { secret })).toEqual({
+      ok: false,
+      reason: 'bad_delivery_token',
+    });
+    expect(
+      checkUpdateEntitlement({ deliveryToken: delivery('all', inAnHour, Buffer.from('another-secret')) }, { secret })
+    ).toEqual({ ok: false, reason: 'bad_delivery_token' });
+    expect(checkUpdateEntitlement({ deliveryToken: 'not-a-token' }, { secret })).toEqual({
+      ok: false,
+      reason: 'bad_delivery_token',
+    });
+  });
+
+  it('refuses everything when this server has no secret to verify with, and when nothing is presented', () => {
+    expect(checkUpdateEntitlement({ deliveryToken: delivery('all') }, { secret: null })).toMatchObject({ ok: false });
+    expect(checkUpdateEntitlement({}, { secret })).toEqual({ ok: false, reason: 'absent' });
+    expect(checkUpdateEntitlement({ licenseToken: '  ', deliveryToken: '' }, { secret })).toEqual({ ok: false, reason: 'absent' });
+  });
+
+  it('a bad licence token does not shadow a good delivery token, and says why when neither works', () => {
+    expect(checkUpdateEntitlement({ licenseToken: 'junk', deliveryToken: delivery('all') }, { secret })).toEqual({
+      ok: true,
+      via: 'delivery',
+    });
+    const both = checkUpdateEntitlement({ licenseToken: 'junk', deliveryToken: 'junk' }, { secret });
+    expect(both.ok).toBe(false);
+    // Neither reason is lost: the licence's first, then the delivery token's.
+    const reasons = both.ok ? [] : both.reason.split(',');
+    expect(reasons).toHaveLength(2);
+    expect(reasons[1]).toBe('bad_delivery_token');
+    const issued = checkUpdateEntitlement({ licenseToken: 'junk', deliveryToken: delivery('issued') }, { secret });
+    expect(issued.ok ? '' : issued.reason).toMatch(/,delivery_token_issued_only$/);
   });
 });
 
@@ -108,6 +175,52 @@ describe('licence gate routes', () => {
     const res = await app.inject({ method: 'GET', url: '/api/updates/latest.json' });
     expect(res.statusCode).toBe(403);
     expect(res.json()).toMatchObject({ entitled: false });
+  });
+
+  it('updates: gate ON serves a desktop that presents its deployment’s delivery token, verbatim', async () => {
+    const savedSecret = process.env.MODULE_TOKEN_SECRET;
+    process.env.MODULE_TOKEN_SECRET = 'route-level-secret';
+    try {
+      process.env.LICENSE_UPDATE_GATE = 'on';
+      process.env.LICENSE_UPDATE_UPSTREAM = upstreamUrl;
+      const secret = Buffer.from('route-level-secret');
+      const exp = Math.floor(Date.now() / 1000) + 3600;
+      const fp = 'cd'.repeat(16);
+
+      const ok = await app.inject({
+        method: 'GET',
+        url: '/api/updates/latest.json',
+        headers: { 'x-delivery-token': signModuleToken({ fp, scope: 'all', exp }, secret) },
+      });
+      expect(ok.statusCode).toBe(200);
+      expect(ok.body).toBe(LATEST);
+
+      const issued = await app.inject({
+        method: 'GET',
+        url: '/api/updates/latest.json',
+        headers: { 'x-delivery-token': signModuleToken({ fp, scope: 'issued', exp }, secret) },
+      });
+      expect(issued.statusCode).toBe(403);
+      expect(issued.json()).toEqual({ entitled: false, reason: 'delivery_token_issued_only' });
+
+      const forged = await app.inject({
+        method: 'GET',
+        url: '/api/updates/latest.json',
+        headers: { 'x-delivery-token': signModuleToken({ fp, scope: 'all', exp }, Buffer.from('not-our-secret')) },
+      });
+      expect(forged.statusCode).toBe(403);
+      expect(forged.json()).toEqual({ entitled: false, reason: 'bad_delivery_token' });
+
+      // A delivery token in the query string is not read: URLs end up in logs.
+      const viaQuery = await app.inject({
+        method: 'GET',
+        url: `/api/updates/latest.json?key=${signModuleToken({ fp, scope: 'all', exp }, secret)}`,
+      });
+      expect(viaQuery.statusCode).toBe(403);
+    } finally {
+      if (savedSecret === undefined) delete process.env.MODULE_TOKEN_SECRET;
+      else process.env.MODULE_TOKEN_SECRET = savedSecret;
+    }
   });
 
   it('updates: a 502 upstream never bricks (gate off, unreachable upstream)', async () => {

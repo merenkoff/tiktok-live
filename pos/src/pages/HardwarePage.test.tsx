@@ -13,8 +13,13 @@ import { useAuthStore } from '../hooks/useAuth';
 vi.mock('../lib/hardware', () => ({ listHardware: vi.fn(async () => []) }));
 vi.mock('../lib/updates', () => ({ installUpdate: vi.fn() }));
 vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: vi.fn() }));
+const updateState = vi.hoisted(() => ({ info: null as Record<string, unknown> | null }));
 vi.mock('../hooks/useUpdateCheck', () => ({
-  useUpdateStore: (selector: (s: { updateInfo: null }) => unknown) => selector({ updateInfo: null }),
+  useUpdateStore: (selector: (s: { updateInfo: Record<string, unknown> | null }) => unknown) =>
+    selector({ updateInfo: updateState.info }),
+}));
+vi.mock('../lib/updateToken', () => ({
+  fetchUpdateToken: vi.fn(async () => 'v1.test-token-0123456789abcdef'),
 }));
 vi.mock('../hooks/usePrintableReceipt', () => ({
   usePrintableReceipt: () => ({ printToPdf: vi.fn(), printablePortal: null }),
@@ -35,6 +40,8 @@ vi.mock('../lib/printer', async (importOriginal) => ({
 }));
 
 const { setMeta } = await import('../offline/db');
+const { installUpdate } = await import('../lib/updates');
+const { fetchUpdateToken } = await import('../lib/updateToken');
 const { printKitchenTicket, printSlip } = await import('../lib/printer');
 const { remoteModules } = await import('../modules/registry');
 const { HardwarePage } = await import('./HardwarePage');
@@ -60,6 +67,7 @@ beforeEach(() => {
 afterEach(() => {
   useAuthStore.setState({ auth: null, isAuthenticated: false });
   remoteModules.length = 0;
+  updateState.info = null;
 });
 
 describe('HardwarePage station printers', () => {
@@ -167,5 +175,40 @@ describe('HardwarePage — a feature module station (Г2)', () => {
     renderWithProviders(<HardwarePage />, { shell: 'cashier' });
     expect(await screen.findByText('Принтер чеків')).toBeInTheDocument();
     expect(screen.queryByTestId('station-printer-debts-slip')).toBeNull();
+  });
+});
+
+// The in-place update (TechDocs/POS_LICENSING.md 2D-B): the press asks the
+// deployment's server for its delivery token and hands it to the install command.
+describe('HardwarePage in-place update', () => {
+  const available = {
+    current_version: '2.8.0',
+    latest_version: '2.8.1',
+    update_available: true,
+    download_url: null,
+    release_url: 'https://github.com/merenkoff/tiktok-live/releases/tag/pos-v2.8.1',
+    notes: null,
+    can_self_update: true,
+  };
+
+  it('fetches the deployment token at the press and gives it to the install command', async () => {
+    updateState.info = available;
+    signIn('clothing');
+    renderWithProviders(<HardwarePage />, { shell: 'cashier' });
+    fireEvent.click(await screen.findByRole('button', { name: /Встановити оновлення/ }));
+    await waitFor(() => expect(installUpdate).toHaveBeenCalledWith('v1.test-token-0123456789abcdef'));
+    expect(fetchUpdateToken).toHaveBeenCalledTimes(1);
+  });
+
+  it('says why in words when the command refuses, and leaves the button usable', async () => {
+    updateState.info = available;
+    vi.mocked(installUpdate).mockRejectedValueOnce(
+      'Сервер оновлень не віддав нову версію: він недоступний або не підтвердив ліцензію цієї копії.'
+    );
+    signIn('clothing');
+    renderWithProviders(<HardwarePage />, { shell: 'cashier' });
+    fireEvent.click(await screen.findByRole('button', { name: /Встановити оновлення/ }));
+    expect(await screen.findByText(/не підтвердив ліцензію цієї копії/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Встановити оновлення/ })).toBeEnabled();
   });
 });

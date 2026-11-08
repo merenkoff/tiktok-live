@@ -36,6 +36,7 @@ const REFRESH_THROTTLE_MS = 60_000;
 export function resetModuleTokenCacheForTests(): void {
   cached = undefined;
   lastRefreshAt = 0;
+  inflight = null;
 }
 
 function usable(t: StoredModuleToken | null | undefined, now = Date.now()): StoredModuleToken | null {
@@ -112,9 +113,34 @@ export async function refreshModuleToken(): Promise<ModuleTokenRefresh> {
   }
 }
 
+// The refresh in flight, so `moduleTokenForUpdate` can wait for the one a stale
+// `currentModuleToken` has just started instead of finding the throttle shut.
+let inflight: Promise<void> | null = null;
+
 async function refreshModuleTokenThrottled(): Promise<void> {
+  if (inflight) return inflight;
   if (Date.now() - lastRefreshAt < REFRESH_THROTTLE_MS) return;
-  await refreshModuleToken().catch(() => undefined);
+  inflight = refreshModuleToken()
+    .then(() => undefined, () => undefined)
+    .finally(() => {
+      inflight = null;
+    });
+  return inflight;
+}
+
+/**
+ * The delivery token a till presents to the author's update feed
+ * (TechDocs/POS_LICENSING.md 2D-B), or null. Unlike `currentModuleToken`, which
+ * starts a refresh and answers at once (a login must never wait for the author's
+ * server), this waits for it: the cashier has just pressed «Оновити», and
+ * answering «no token» while the very refresh that would produce one is running
+ * would make the first press after a long quiet spell fail for nothing.
+ */
+export async function moduleTokenForUpdate(): Promise<string | null> {
+  const known = await currentModuleToken();
+  if (known) return known;
+  await refreshModuleTokenThrottled();
+  return usable(cached)?.token ?? null;
 }
 
 async function store(t: StoredModuleToken | null): Promise<void> {
