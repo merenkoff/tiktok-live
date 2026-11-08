@@ -46,7 +46,10 @@ export interface UpdateCheckOptions {
   now?: Date;
 }
 
-/** Pure: may these credentials read the update feed? Never throws. */
+/**
+ * Pure: may these credentials read the update feed? Never throws. A refusal's
+ * `reason` names every credential that was presented and failed, comma-joined.
+ */
 export function checkUpdateEntitlement(
   presented: UpdateCredentials,
   options: UpdateCheckOptions = {}
@@ -68,7 +71,9 @@ export function checkUpdateEntitlement(
     reasons.push(claim ? 'delivery_token_issued_only' : 'bad_delivery_token');
   }
 
-  return { ok: false, reason: reasons[0] ?? 'absent' };
+  // Both credentials failed: name both, licence first (`expired,bad_delivery_token`),
+  // so a 403 in the logs says why each one did not open the feed.
+  return { ok: false, reason: reasons.length > 0 ? reasons.join(',') : 'absent' };
 }
 
 /**

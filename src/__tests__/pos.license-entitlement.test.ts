@@ -115,6 +115,12 @@ describe('checkUpdateEntitlement (pure)', () => {
     });
     const both = checkUpdateEntitlement({ licenseToken: 'junk', deliveryToken: 'junk' }, { secret });
     expect(both.ok).toBe(false);
+    // Neither reason is lost: the licence's first, then the delivery token's.
+    const reasons = both.ok ? [] : both.reason.split(',');
+    expect(reasons).toHaveLength(2);
+    expect(reasons[1]).toBe('bad_delivery_token');
+    const issued = checkUpdateEntitlement({ licenseToken: 'junk', deliveryToken: delivery('issued') }, { secret });
+    expect(issued.ok ? '' : issued.reason).toMatch(/,delivery_token_issued_only$/);
   });
 });
 
