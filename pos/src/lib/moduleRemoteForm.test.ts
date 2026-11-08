@@ -55,6 +55,15 @@ describe('url helpers', () => {
     expect(parseVersionFromUrl('http://localhost:5004/remote-entry.js')).toBeNull();
   });
 
+  it('reads the version of a private module served from our own bundle store', () => {
+    expect(parseVersionFromUrl('https://the-live.shop/api/modules/tiktok-live/2.8.0/remote-entry.js')).toBe('2.8.0');
+    expect(parseVersionFromUrl('/api/modules/fiscal-checkbox/2.8.0/remote-entry.js')).toBe('2.8.0');
+    expect(
+      parseVersionFromUrl('https://the-live.shop/api/modules/t/v1.abc_DEF-123.xyz/tiktok-live/2.8.1/remote-entry.js')
+    ).toBe('2.8.1');
+    expect(parseVersionFromUrl('https://the-live.shop/api/modules/token')).toBeNull();
+  });
+
   it('takes the URL from either module_remotes form', () => {
     expect(remoteUrlOf('https://a/b.js')).toBe('https://a/b.js');
     expect(remoteUrlOf({ url: 'https://a/c.js', title: 'x', routePath: '/x', nav: [] })).toBe('https://a/c.js');

@@ -74,12 +74,21 @@ export function validateRemoteEntryInput(input: RemoteEntryInput): RemoteEntryRe
   return { ok: true, id, entry };
 }
 
+const SEMVER = String.raw`(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)`;
+/** jsdelivr: `…@module-<id>-v<version>/<id>/remote-entry.js`. */
+const JSDELIVR_VERSION_RE = new RegExp(String.raw`@module-[a-z0-9-]+-v${SEMVER}/`);
 /**
- * The version a release URL pins, when it follows the `module-release.yml`
- * layout (`…@module-<id>-v<version>/<id>/remote-entry.js`); null otherwise.
+ * The closed bundle store on our own API: `/api/modules/<id>/<version>/…`, or
+ * with a delivery token `/api/modules/t/<token>/<id>/<version>/…`.
+ */
+const STORE_VERSION_RE = new RegExp(String.raw`/api/modules/(?:t/[^/]+/)?[a-z0-9][a-z0-9-]{0,40}/${SEMVER}/`);
+
+/**
+ * The version a release URL pins — a public `module-release.yml` build on
+ * jsdelivr or a private one in the API's bundle store; null otherwise.
  */
 export function parseVersionFromUrl(url: string): string | null {
-  const m = /@module-[a-z0-9-]+-v(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)\//.exec(url);
+  const m = JSDELIVR_VERSION_RE.exec(url) ?? STORE_VERSION_RE.exec(url);
   return m ? m[1] : null;
 }
 
