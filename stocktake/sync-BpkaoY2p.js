@@ -1,6 +1,6 @@
 import { api as e, isNetworkError as t, isUnauthorized as n } from "@pos/platform";
 import r from "dexie";
-//#region \0@oxc-project+runtime@0.149.0/helpers/esm/typeof.js
+// \0@oxc-project+runtime@0.155.0/helpers/esm/typeof.js
 function i(e) {
 	"@babel/helpers - typeof";
 	return i = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
@@ -9,8 +9,7 @@ function i(e) {
 		return e && typeof Symbol == "function" && e.constructor === Symbol && e !== Symbol.prototype ? "symbol" : typeof e;
 	}, i(e);
 }
-//#endregion
-//#region \0@oxc-project+runtime@0.149.0/helpers/esm/toPrimitive.js
+// \0@oxc-project+runtime@0.155.0/helpers/esm/toPrimitive.js
 function a(e, t) {
 	if (i(e) != "object" || !e) return e;
 	var n = e[Symbol.toPrimitive];
@@ -21,14 +20,12 @@ function a(e, t) {
 	}
 	return (t === "string" ? String : Number)(e);
 }
-//#endregion
-//#region \0@oxc-project+runtime@0.149.0/helpers/esm/toPropertyKey.js
+// \0@oxc-project+runtime@0.155.0/helpers/esm/toPropertyKey.js
 function o(e) {
 	var t = a(e, "string");
 	return i(t) == "symbol" ? t : t + "";
 }
-//#endregion
-//#region \0@oxc-project+runtime@0.149.0/helpers/esm/defineProperty.js
+// \0@oxc-project+runtime@0.155.0/helpers/esm/defineProperty.js
 function s(e, t, n) {
 	return (t = o(t)) in e ? Object.defineProperty(e, t, {
 		value: n,
@@ -57,8 +54,7 @@ function u(e) {
 function d(e, t = Date.now()) {
 	return e.status === "queued" || e.status === "error" && t >= (e.lastAttemptAt ?? e.createdAt) + u(e.attempts);
 }
-//#endregion
-//#region src/modules/stocktake/data/sync.ts
+// src/modules/stocktake/data/sync.ts
 var f = !1;
 function p() {
 	return c.sheets.where("status").anyOf(["queued", "error"]).count();
@@ -118,5 +114,4 @@ async function _() {
 		}
 	}
 }
-//#endregion
 export { _ as n, c as r, p as t };

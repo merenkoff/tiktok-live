@@ -1,9 +1,8 @@
-import { n as e, t } from "./sync-CyxwpwU0.js";
+import { n as e, t } from "./sync-BpkaoY2p.js";
 import { lazy as n } from "react";
-//#region src/platform/version.ts
-var r = "2.4.0";
-//#endregion
-//#region src/modules/lazyWithRetry.ts
+// src/platform/version.ts
+var r = "2.8.0";
+// src/modules/lazyWithRetry.ts
 async function i(e, { retries: t = 2, backoffMs: n = 400 } = {}) {
 	let r;
 	for (let i = 0; i <= t; i += 1) try {
@@ -17,8 +16,7 @@ async function i(e, { retries: t = 2, backoffMs: n = 400 } = {}) {
 function a(e, t) {
 	return n(() => i(e, t));
 }
-//#endregion
-//#region src/modules/stocktake/remote-entry.ts
+// src/modules/stocktake/remote-entry.ts
 var o = {
 	id: "stocktake",
 	title: "Інвентаризація",
@@ -30,7 +28,7 @@ var o = {
 	alwaysEnabled: !0,
 	routes: [{
 		path: "/stocktake/*",
-		element: a(() => import("./StocktakeRoutes-R37VHbZY.js").then((e) => ({ default: e.StocktakeRoutes })))
+		element: a(() => import("./StocktakeRoutes-CPdRt196.js").then((e) => ({ default: e.StocktakeRoutes })))
 	}],
 	nav: [{
 		to: "/stocktake",
@@ -46,5 +44,4 @@ var o = {
 	},
 	version: r
 };
-//#endregion
 export { o as manifest };
