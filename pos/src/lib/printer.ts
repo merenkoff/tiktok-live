@@ -3,6 +3,14 @@
 // Commercial use requires a separate agreement: mer.sergei@gmail.com
 
 import { invoke } from '@tauri-apps/api/core';
+import { getMeta, setMeta } from '../offline/db';
+import {
+  DEFAULT_PRINTER_ENCODING,
+  normalizeEncoding,
+  printerEncodingMetaKey,
+  type EncodingCandidate,
+  type PrinterEncoding,
+} from './printerEncoding';
 
 export interface PrinterInfo {
   name: string;
@@ -153,18 +161,52 @@ export function listPrinters(): Promise<PrinterInfo[]> {
   return invoke('list_printers');
 }
 
+/**
+ * The character profile this device prints a printer's Cyrillic with
+ * (`hardware/encoding.rs`), kept per printer name in the device's settings
+ * and set on «Обладнання» by looking at a test sheet. Never throws: a printer
+ * that was never set up, or a settings store that cannot be read, prints with
+ * the default profile — Windows-1251 at its standard number — which is exactly
+ * what every release before profiles printed with.
+ */
+export async function loadPrinterEncoding(printerName: string): Promise<PrinterEncoding> {
+  try {
+    return normalizeEncoding(await getMeta<unknown>(printerEncodingMetaKey(printerName)));
+  } catch {
+    return { ...DEFAULT_PRINTER_ENCODING };
+  }
+}
+
+export function savePrinterEncoding(printerName: string, encoding: PrinterEncoding): Promise<void> {
+  return setMeta(printerEncodingMetaKey(printerName), normalizeEncoding(encoding));
+}
+
+/**
+ * Prints one test sheet with every candidate profile in its own table, so the
+ * owner can read off which one their printer understands — the Rust
+ * `print_encoding_test` command.
+ */
+export function printEncodingTest(
+  printerName: string,
+  paperWidthMm: ReceiptPaperWidth,
+  candidates: EncodingCandidate[]
+): Promise<void> {
+  return invoke('print_encoding_test', { printerName, paperWidthMm, candidates });
+}
+
 /** Thermal roll width in millimetres. 58mm ≈ 32 chars/line, 80mm ≈ 48. */
 export type ReceiptPaperWidth = 58 | 80;
 
 export const RECEIPT_PAPER_WIDTHS: ReceiptPaperWidth[] = [58, 80];
 export const DEFAULT_RECEIPT_PAPER_WIDTH: ReceiptPaperWidth = 58;
 
-export function printReceipt(
+export async function printReceipt(
   printerName: string,
   receipt: ReceiptData,
   paperWidthMm: ReceiptPaperWidth = DEFAULT_RECEIPT_PAPER_WIDTH,
 ): Promise<void> {
-  return invoke('print_receipt', { printerName, receipt, paperWidthMm });
+  const encoding = await loadPrinterEncoding(printerName);
+  return invoke('print_receipt', { printerName, receipt, paperWidthMm, encoding });
 }
 
 /** One line of a kitchen ticket — what to make, how many, and how. */
@@ -200,12 +242,13 @@ export interface KitchenTicketData {
 }
 
 /** Print one kitchen ticket to a named OS printer — the Rust `print_kitchen_ticket` command. */
-export function printKitchenTicket(
+export async function printKitchenTicket(
   printerName: string,
   ticket: KitchenTicketData,
   paperWidthMm: ReceiptPaperWidth
 ): Promise<void> {
-  return invoke('print_kitchen_ticket', { printerName, ticket, paperWidthMm });
+  const encoding = await loadPrinterEncoding(printerName);
+  return invoke('print_kitchen_ticket', { printerName, ticket, paperWidthMm, encoding });
 }
 
 /** One line of a pre-bill: what was served, how many, at what the round locked. */
@@ -248,12 +291,13 @@ export interface PrecheckData {
 }
 
 /** Print one pre-bill to a named OS printer — the Rust `print_precheck` command. */
-export function printPrecheck(
+export async function printPrecheck(
   printerName: string,
   bill: PrecheckData,
   paperWidthMm: ReceiptPaperWidth = DEFAULT_RECEIPT_PAPER_WIDTH
 ): Promise<void> {
-  return invoke('print_precheck', { printerName, bill, paperWidthMm });
+  const encoding = await loadPrinterEncoding(printerName);
+  return invoke('print_precheck', { printerName, bill, paperWidthMm, encoding });
 }
 
 /** One line of a non-fiscal slip: what, how much, and — when it matters — for how much. */
@@ -292,10 +336,11 @@ export interface SlipData {
 }
 
 /** Print one non-fiscal slip to a named OS printer — the Rust `print_slip` command. */
-export function printSlip(
+export async function printSlip(
   printerName: string,
   slip: SlipData,
   paperWidthMm: ReceiptPaperWidth = DEFAULT_RECEIPT_PAPER_WIDTH
 ): Promise<void> {
-  return invoke('print_slip', { printerName, slip, paperWidthMm });
+  const encoding = await loadPrinterEncoding(printerName);
+  return invoke('print_slip', { printerName, slip, paperWidthMm, encoding });
 }

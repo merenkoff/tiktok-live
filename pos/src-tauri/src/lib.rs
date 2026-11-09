@@ -42,6 +42,7 @@ pub fn run() {
             hardware::kitchen_ticket::print_kitchen_ticket,
             hardware::precheck::print_precheck,
             hardware::slip::print_slip,
+            hardware::encoding::print_encoding_test,
             update::check_for_update,
             update::install_update,
             module_remotes::sync_module_remote,

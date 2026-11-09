@@ -111,6 +111,21 @@ describe('HardwarePage station printers', () => {
     expect(await within(kitchen).findByText('Надіслано на друк')).toBeInTheDocument();
   });
 
+  it('offers the Cyrillic encoding under every selected printer, and keeps it per printer', async () => {
+    signIn('cafe');
+    renderWithProviders(<HardwarePage />, { shell: 'cashier' });
+    const kitchen = screen.getByTestId('station-printer-kitchen');
+    // Nothing to set up until a printer is chosen.
+    expect(within(kitchen).queryByTestId('printer-encoding')).toBeNull();
+    fireEvent.click(await within(kitchen).findByText('Kitchen-1'));
+    const picker = await within(kitchen).findByTestId('printer-encoding');
+    expect(picker).toHaveTextContent('Windows-1251 · таблиця 46 (за замовчуванням)');
+
+    fireEvent.click(within(picker).getByRole('button', { name: /Кодування кирилиці/ }));
+    fireEvent.click(within(picker).getByRole('radio', { name: /B · CP866/ }));
+    expect(setMeta).toHaveBeenCalledWith('printerEncoding:Kitchen-1', { table: 'cp866', esc_t: null });
+  });
+
   it('remembers the «Чеки столів» printer and prints a test receipt to it (track ДК, Д13)', async () => {
     signIn('cafe');
     renderWithProviders(<HardwarePage />, { shell: 'cashier' });
