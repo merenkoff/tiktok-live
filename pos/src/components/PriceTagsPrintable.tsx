@@ -23,13 +23,20 @@ import {
 import {
   LABEL_GAP_MM,
   LABEL_LINE_HEIGHT,
+  labelBodyTop,
   labelLayout,
   labelPageRule,
   labelTransform,
   priceRowFonts,
   type LabelLayout,
 } from '../lib/priceLabelLayout';
-import type { TagMedia } from '../lib/priceTagMedia';
+import {
+  SHEET_SLACK_MM,
+  cellPosition,
+  sheetLayout,
+  sheetPageRule,
+} from '../lib/priceSheetLayout';
+import type { LabelSpec, TagMedia } from '../lib/priceTagMedia';
 import { expandCopies, type PriceTag } from '../lib/priceTag';
 
 export type { TagPaperWidth };
@@ -162,7 +169,9 @@ function Ean13({
  *
  * `media` says what the tags go on; without it they go on the roll
  * `paperWidth` names, as they always did. On labels each tag is one page
- * exactly the label's size — see `PriceLabel`.
+ * exactly the label's size — see `PriceLabel`. On a sheet the page is A4 and
+ * the tags are laid out on it, as many as fit, to be cut by hand — see
+ * `PriceSheets`.
  */
 export function PriceTagsPrintable({
   tags,
@@ -174,6 +183,15 @@ export function PriceTagsPrintable({
   media?: TagMedia;
 }) {
   if (!tags || typeof document === 'undefined') return null;
+
+  if (media?.kind === 'sheet') {
+    return createPortal(
+      <div className="price-tag-print-area" data-media="sheet">
+        <PriceSheets tags={tags} spec={media} />
+      </div>,
+      document.body
+    );
+  }
 
   if (media?.kind === 'label') {
     const layout = labelLayout(media);
@@ -303,7 +321,9 @@ export function PriceLabel({
         style={{
           position: 'absolute',
           left: 0,
-          top: 0,
+          // Not always 0: see `labelBodyTop` — a turned box hanging below the
+          // page loses its bottom in the printout.
+          top: mm(labelBodyTop(layout)),
           width: mm(layout.box.w),
           height: mm(layout.box.h),
           padding: `${mm(layout.pad.y)} ${mm(layout.pad.x)}`,
@@ -451,5 +471,98 @@ export function PriceLabel({
         </div>
       </div>
     </div>
+  );
+}
+
+/** Where to cut. Light and dashed: it has to be seen, not to be read as part of the tag. */
+const CUT_GUIDE = '1px dashed #888';
+
+/**
+ * The tags on A4 sheets, edge to edge, for cutting by hand.
+ *
+ * Every piece is the very `PriceLabel` the dialog previews and the label
+ * printer prints — same size, same turned text, same barcode — placed by
+ * `sheetLayout` instead of being a page of its own. The sheet is a page; a
+ * page is filled row by row and the rest goes on the next one, so the sheet
+ * count is `ceil(tags / perSheet)` and nothing is ever scaled to squeeze one
+ * more in (a barcode scaled by a print dialog is a barcode nobody checked).
+ *
+ * The dashed guides are drawn once per line, not once per piece: each piece
+ * owns its right and bottom edge, and only the first row and column add their
+ * top and left — so two pieces side by side are separated by one line, and a
+ * half-filled last sheet is outlined only where there is a tag.
+ *
+ * Inline styles throughout, like `PriceLabel`: `@media print` ships with the
+ * host and this component with every module that prints a tag.
+ */
+export function PriceSheets({ tags, spec }: { tags: PriceTag[]; spec: LabelSpec }) {
+  const grid = sheetLayout(spec);
+  const layout = labelLayout(spec);
+  const all = expandCopies(tags);
+
+  const sheets: PriceTag[][] = [];
+  for (let i = 0; i < all.length; i += grid.perSheet) sheets.push(all.slice(i, i + grid.perSheet));
+
+  return (
+    <>
+      {/* Like the label page rule: inside the print area, so it exists only
+          while something is being printed and cannot reshape the next receipt. */}
+      <style>{sheetPageRule(grid)}</style>
+      {sheets.map((sheet, s) => {
+        const last = s === sheets.length - 1;
+        return (
+          <div
+            key={s}
+            className="price-sheet"
+            data-sheet={s + 1}
+            style={{
+              position: 'relative',
+              width: mm(grid.page.w),
+              height: mm(grid.page.h - SHEET_SLACK_MM),
+              overflow: 'hidden',
+              background: '#fff',
+              breakAfter: last ? 'auto' : 'page',
+              pageBreakAfter: last ? 'auto' : 'always',
+            }}
+          >
+            {sheet.map((tag, i) => {
+              const at = cellPosition(grid, i);
+              return (
+                <div
+                  key={i}
+                  className="price-sheet-cell"
+                  style={{
+                    position: 'absolute',
+                    left: mm(at.x),
+                    top: mm(at.y),
+                    width: mm(grid.cell.w),
+                    height: mm(grid.cell.h),
+                  }}
+                >
+                  <PriceLabel tag={tag} layout={layout} />
+                  <div
+                    className="price-sheet-cut"
+                    aria-hidden="true"
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      top: 0,
+                      right: 0,
+                      bottom: 0,
+                      boxSizing: 'border-box',
+                      pointerEvents: 'none',
+                      borderRight: CUT_GUIDE,
+                      borderBottom: CUT_GUIDE,
+                      ...(at.row === 0 ? { borderTop: CUT_GUIDE } : {}),
+                      ...(at.col === 0 ? { borderLeft: CUT_GUIDE } : {}),
+                    }}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </>
   );
 }

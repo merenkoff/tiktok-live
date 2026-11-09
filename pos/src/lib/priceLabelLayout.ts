@@ -265,20 +265,43 @@ export function labelLayout(spec: LabelSpec): LabelLayout {
 }
 
 /**
+ * Where the top edge of the laid-out box sits on the label: 0, or — for a label
+ * turned a quarter and wider than it is tall — negative.
+ *
+ * The box is laid out in its own, turned, shape: 40 wide and 58 tall for a
+ * 58×40 label turned 90°. Before the transform that box hangs 18 mm below the
+ * label, and a print engine paginates by where things are laid out, not by
+ * where a transform puts them: Chromium sends everything below the page's edge
+ * to the NEXT page, so the bottom of the tag — the barcode and the article —
+ * vanished from the printout (a PDF of a 58×40 label turned 90° had none).
+ * `overflow: hidden` on the label hides the overflow on screen and does not
+ * stop that. Hanging the box off the TOP instead, its bottom flush with the
+ * label's, leaves nothing below the page; overflow upwards is simply cut off.
+ * `labelTransform` takes the shift back out, so the tag lands exactly where it
+ * did.
+ */
+export function labelBodyTop(layout: Pick<LabelLayout, 'page' | 'rotate'>): number {
+  const turned = layout.rotate === 90 || layout.rotate === 270;
+  // A turned box is `page.w` tall; it only overhangs the page when that is more than `page.h`.
+  return turned && layout.page.w > layout.page.h ? round(layout.page.h - layout.page.w) : 0;
+}
+
+/**
  * The CSS transform that turns the laid-out box onto the label, clockwise,
- * about the label's top-left corner. Each turn is followed by the shift that
- * brings the box back onto the page — the rotated box would otherwise sit
- * entirely off it.
+ * about the box's top-left corner (which is at `labelBodyTop`). Each turn is
+ * followed by the shift that brings the box back onto the page — the rotated
+ * box would otherwise sit entirely off it.
  */
 export function labelTransform(layout: Pick<LabelLayout, 'page' | 'rotate'>): string | undefined {
   const { w, h } = layout.page;
+  const top = labelBodyTop(layout);
   switch (layout.rotate) {
     case 90:
-      return `translateX(${w}mm) rotate(90deg)`;
+      return top === 0 ? `translateX(${w}mm) rotate(90deg)` : `translate(${w}mm, ${round(-top)}mm) rotate(90deg)`;
     case 180:
       return `translate(${w}mm, ${h}mm) rotate(180deg)`;
     case 270:
-      return `translateY(${h}mm) rotate(270deg)`;
+      return `translateY(${round(h - top)}mm) rotate(270deg)`;
     default:
       return undefined;
   }

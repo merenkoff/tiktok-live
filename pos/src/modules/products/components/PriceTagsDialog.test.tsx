@@ -250,7 +250,7 @@ describe('labels', () => {
     const body = within(screen.getByTestId('label-preview')).getByText('Піжама').closest<HTMLElement>(
       '.price-label-body'
     )!;
-    expect(body.style.transform).toBe('translateX(58mm) rotate(90deg)');
+    expect(body.style.transform).toBe('translate(58mm, 18mm) rotate(90deg)');
     expect(screen.getByText(/поворот 90°/)).toBeInTheDocument();
   });
 
@@ -278,6 +278,75 @@ describe('labels', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Друкувати 2' }));
     await act(async () => {});
     expect(printed()).toHaveLength(2);
+  });
+
+  describe('on A4 sheets', () => {
+    const sheets = () => [...document.querySelectorAll<HTMLElement>('.price-tag-print-area .price-sheet')];
+
+    it('offers the A4 button for labels only — the roll has no size to lay out', () => {
+      open();
+      expect(screen.queryByRole('button', { name: /Друк на А4/ })).toBeNull();
+      toLabels();
+      expect(screen.getByRole('button', { name: /Друк на А4/ })).toBeInTheDocument();
+    });
+
+    it('says how many go on a sheet and how many sheets this is', () => {
+      open({ quantity: 50 });
+      toLabels();
+      // 58 × 40 → 3 × 7 = 21 to a sheet; 50 tags → 3 sheets.
+      expect(screen.getByRole('button', { name: 'Друк на А4 · 3 арк.' })).toBeInTheDocument();
+      expect(screen.getByText(/на А4: 21 на аркуші/)).toBeInTheDocument();
+      expect(screen.getByText(/3 × 7 = 21 на аркуш, аркуш — книжковий/)).toBeInTheDocument();
+    });
+
+    it('follows the chosen size: a wider label turns the sheet', () => {
+      open({ quantity: 50 });
+      toLabels();
+      fireEvent.click(screen.getByRole('button', { name: '70×40' }));
+      expect(screen.getByRole('button', { name: 'Друк на А4 · 3 арк.' })).toBeInTheDocument();
+      expect(screen.getByText(/4 × 5 = 20 на аркуш, аркуш — альбомний/)).toBeInTheDocument();
+    });
+
+    it('prints every copy on sheets, the label size and rotation as chosen, and clears afterwards', async () => {
+      open({ quantity: 25 });
+      toLabels();
+      fireEvent.click(screen.getByRole('button', { name: '90°' }));
+      fireEvent.click(screen.getByRole('button', { name: /Друк на А4/ }));
+      await act(async () => {});
+
+      expect(sheets()).toHaveLength(2);
+      const cells = sheets().flatMap((s) => [...s.querySelectorAll<HTMLElement>('.price-sheet-cell')]);
+      expect(cells).toHaveLength(25);
+      // The label printer's own pages are not printed as well.
+      expect(printed()).toHaveLength(25); // `.price-label` inside the cells — one per tag, no extras
+      expect(document.querySelector('.price-tag-print-area style')?.textContent).toBe(
+        '@page { size: 210mm 297mm; margin: 0; }'
+      );
+      expect(
+        cells[0]!.querySelector<HTMLElement>('.price-label-body')!.style.transform
+      ).toBe('translate(58mm, 18mm) rotate(90deg)');
+
+      act(() => {
+        window.dispatchEvent(new Event('afterprint'));
+      });
+      expect(sheets()).toHaveLength(0);
+    });
+
+    it('does not print a sheet when there are no copies to print', () => {
+      open({ quantity: 0 });
+      toLabels();
+      fireEvent.change(screen.getByRole('spinbutton', { name: /Цінників: Піжама/ }), { target: { value: '0' } });
+      expect(screen.getByRole('button', { name: /Друк на А4/ })).toBeDisabled();
+    });
+
+    it('prints the test label as a label, not as a sheet', async () => {
+      open({ quantity: 5 });
+      toLabels();
+      fireEvent.click(screen.getByRole('button', { name: /Пробний друк/ }));
+      await act(async () => {});
+      expect(sheets()).toHaveLength(0);
+      expect(printed()).toHaveLength(1);
+    });
   });
 
   it('still prints on the roll when the roll is chosen', async () => {
