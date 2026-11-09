@@ -2195,6 +2195,7 @@ dependencies = [
  "base64 0.22.1",
  "dirs",
  "ed25519-dalek",
+ "encoding_rs",
  "escpos",
  "hidapi",
  "printers",
