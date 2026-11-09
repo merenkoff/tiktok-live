@@ -9,6 +9,7 @@ import {
   LABEL_MIN_BAR_MM,
   labelContentHeightMm,
   labelLayout,
+  labelBodyTop,
   labelTransform,
   priceRowFonts,
   textWidthEm,
@@ -117,6 +118,86 @@ describe('the transform onto the label', () => {
     [270, 'translateY(58mm) rotate(270deg)'],
   ])('%i°', (rotate, transform) => {
     expect(labelTransform({ page, rotate })).toBe(transform);
+  });
+});
+
+describe('a turned label wider than it is tall', () => {
+  it('hangs its box off the top of the label, so nothing is laid out below the page', () => {
+    // 58×40 turned 90°: the box is 40 wide and 58 tall — 18 mm of it below the label.
+    expect(labelBodyTop({ page: { w: 58, h: 40 }, rotate: 90 })).toBe(-18);
+    expect(labelBodyTop({ page: { w: 58, h: 40 }, rotate: 270 })).toBe(-18);
+    expect(labelTransform({ page: { w: 58, h: 40 }, rotate: 90 })).toBe('translate(58mm, 18mm) rotate(90deg)');
+    expect(labelTransform({ page: { w: 58, h: 40 }, rotate: 270 })).toBe('translateY(58mm) rotate(270deg)');
+  });
+
+  it('moves nothing that did not overhang: upright, upside down, or turned on a tall label', () => {
+    expect(labelBodyTop({ page: { w: 58, h: 40 }, rotate: 0 })).toBe(0);
+    expect(labelBodyTop({ page: { w: 58, h: 40 }, rotate: 180 })).toBe(0);
+    expect(labelBodyTop({ page: { w: 40, h: 58 }, rotate: 90 })).toBe(0);
+    expect(labelBodyTop({ page: { w: 40, h: 58 }, rotate: 270 })).toBe(0);
+    expect(labelBodyTop({ page: { w: 40, h: 40 }, rotate: 90 })).toBe(0);
+  });
+
+  /** Where a point of the box ends up on the label, by reading the transform the way CSS does. */
+  function land(transform: string | undefined, top: number, x: number, y: number): [number, number] {
+    // Local point, relative to the box's top-left corner, which sits at (0, top).
+    let [px, py] = [x, y];
+    const angle = /rotate\((\d+)deg\)/.exec(transform ?? '')?.[1];
+    const [tx, ty] = (() => {
+      const t = transform ?? '';
+      const both = /translate\(([\d.-]+)mm, ([\d.-]+)mm\)/.exec(t);
+      if (both) return [Number(both[1]), Number(both[2])];
+      const onlyX = /translateX\(([\d.-]+)mm\)/.exec(t);
+      if (onlyX) return [Number(onlyX[1]), 0];
+      const onlyY = /translateY\(([\d.-]+)mm\)/.exec(t);
+      return onlyY ? [0, Number(onlyY[1])] : [0, 0];
+    })();
+    switch (Number(angle ?? 0)) {
+      case 90:
+        [px, py] = [-py, px];
+        break;
+      case 180:
+        [px, py] = [-px, -py];
+        break;
+      case 270:
+        [px, py] = [py, -px];
+        break;
+    }
+    return [Math.round((px + tx) * 1000) / 1000, Math.round((py + ty + top) * 1000) / 1000];
+  }
+
+  it('lands the box exactly on the label, whatever the size and the turn — and never lets it hang below', () => {
+    for (const rotate of [0, 90, 180, 270] as const) {
+      for (const [w, h] of [
+        [58, 40],
+        [40, 58],
+        [70, 40],
+        [43, 25],
+        [40, 40],
+        [110, 15],
+        [20, 200],
+      ]) {
+        const layout = labelLayout({ widthMm: w, heightMm: h, rotate });
+        const top = labelBodyTop(layout);
+        const transform = labelTransform(layout);
+        const msg = `${w}×${h} @${rotate}`;
+
+        // What a print engine paginates by: the box where it is LAID OUT.
+        expect(top + layout.box.h, msg).toBeLessThanOrEqual(h + 1e-6);
+
+        // What it looks like: the four corners of the box are the four corners of the label.
+        const corners = [
+          land(transform, top, 0, 0),
+          land(transform, top, layout.box.w, 0),
+          land(transform, top, 0, layout.box.h),
+          land(transform, top, layout.box.w, layout.box.h),
+        ]
+          .map((c) => c.join(','))
+          .sort();
+        const want = [`0,0`, `${w},0`, `0,${h}`, `${w},${h}`].sort();
+        expect(corners, msg).toEqual(want);
+      }
+    }
   });
 });
 

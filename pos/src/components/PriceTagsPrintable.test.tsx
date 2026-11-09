@@ -31,6 +31,7 @@ import {
   tagWidthMm,
 } from '../lib/priceTagLayout';
 import { labelLayout } from '../lib/priceLabelLayout';
+import { sheetLayout } from '../lib/priceSheetLayout';
 import { LABEL_PRESETS, type TagMedia } from '../lib/priceTagMedia';
 import { rasterize, scanEan13, type PrintedBar } from '../test/scannerSim';
 
@@ -364,6 +365,22 @@ describe('labels', () => {
     expect(body.dataset.orientation).toBe('landscape');
   });
 
+  it('hangs a turned box off the top of the label, never below it — a print engine moves what hangs below to the next page', () => {
+    // The bug: a 58×40 label turned 90° laid its 58 mm tall box out 18 mm
+    // below the 40 mm page, and Chromium printed the label without its
+    // barcode. What the box overhangs must be above the label, where it is cut off.
+    render(<PriceTagsPrintable tags={tags()} media={{ kind: 'label', widthMm: 58, heightMm: 40, rotate: 90 }} />);
+    const body = document.querySelector<HTMLElement>('.price-label-body')!;
+    expect(body.style.top).toBe('-18mm');
+    expect(body.style.height).toBe('58mm');
+    expect(body.style.transform).toBe('translate(58mm, 18mm) rotate(90deg)');
+  });
+
+  it('leaves an upright label and a turned tall one exactly where they were', () => {
+    render(<PriceTagsPrintable tags={tags()} media={{ kind: 'label', widthMm: 58, heightMm: 40, rotate: 0 }} />);
+    expect(document.querySelector<HTMLElement>('.price-label-body')!.style.top).toBe('0mm');
+  });
+
   it('carries the caption, the old price struck through and the price', () => {
     const marked = tags().map((t) => ({ ...t, compareAtCents: 59000 }));
     render(<PriceTagsPrintable tags={marked} media={{ kind: 'label', widthMm: 58, heightMm: 40, rotate: 0 }} />);
@@ -392,6 +409,142 @@ describe('labels', () => {
     expect(document.querySelector('.price-label')).toBeNull();
     expect(document.querySelector('.price-tag')).not.toBeNull();
     expect(document.querySelector('.price-tag-print-area style')).toBeNull();
+  });
+});
+
+describe('A4 sheets', () => {
+  const SHEET = { kind: 'sheet' as const, widthMm: 58, heightMm: 40, rotate: 0 as const }; // 3 × 7 = 21 to a sheet
+
+  const many = (copies: number) => tags().map((t) => ({ ...t, copies }));
+  const sheets = () => [...document.querySelectorAll<HTMLElement>('.price-sheet')];
+  const cellsOf = (sheet: HTMLElement) => [...sheet.querySelectorAll<HTMLElement>('.price-sheet-cell')];
+
+  it('asks the print engine for an A4 page with no margin of its own', () => {
+    render(<PriceTagsPrintable tags={many(1)} media={SHEET} />);
+    expect(document.querySelector('.price-tag-print-area style')?.textContent).toBe(
+      '@page { size: 210mm 297mm; margin: 0; }'
+    );
+    expect(document.querySelector('.price-tag-print-area')?.getAttribute('data-media')).toBe('sheet');
+  });
+
+  it('puts as many on a sheet as fit and the rest on the next, with no blank page after the last', () => {
+    render(<PriceTagsPrintable tags={many(50)} media={SHEET} />);
+    const all = sheets();
+    expect(all.map((s) => cellsOf(s).length)).toEqual([21, 21, 8]);
+    expect(all.map((s) => s.style.breakAfter)).toEqual(['page', 'page', 'auto']);
+    // A hair shorter than the page, or a sheet spills a blank one after it.
+    expect(all[0]!.style.width).toBe('210mm');
+    expect(all[0]!.style.height).toBe('296mm');
+  });
+
+  it('prints exactly one sheet when everything fits on it', () => {
+    render(<PriceTagsPrintable tags={many(21)} media={SHEET} />);
+    expect(sheets()).toHaveLength(1);
+    expect(sheets()[0]!.style.breakAfter).toBe('auto');
+  });
+
+  it('prints nothing but the page rule for an empty list', () => {
+    render(<PriceTagsPrintable tags={[]} media={SHEET} />);
+    expect(sheets()).toHaveLength(0);
+  });
+
+  it('places the tags edge to edge, row by row, each the size of the label', () => {
+    render(<PriceTagsPrintable tags={many(4)} media={SHEET} />);
+    const cells = cellsOf(sheets()[0]!);
+    expect(cells.map((c) => [c.style.left, c.style.top])).toEqual([
+      ['18mm', '8.5mm'],
+      ['76mm', '8.5mm'],
+      ['134mm', '8.5mm'],
+      ['18mm', '48.5mm'],
+    ]);
+    for (const c of cells) {
+      expect(c.style.width).toBe('58mm');
+      expect(c.style.height).toBe('40mm');
+      // The tag inside is the label itself, not a copy that could drift from it.
+      const label = c.querySelector<HTMLElement>('.price-label')!;
+      expect(label.style.width).toBe('58mm');
+      expect(label.style.height).toBe('40mm');
+      expect(label.style.breakAfter).toBe('auto');
+    }
+  });
+
+  it('turns the sheet when that holds more — 70×40 is 14 upright and 20 turned', () => {
+    render(
+      <PriceTagsPrintable tags={many(25)} media={{ kind: 'sheet', widthMm: 70, heightMm: 40, rotate: 0 }} />
+    );
+    expect(document.querySelector('.price-tag-print-area style')?.textContent).toBe(
+      '@page { size: 297mm 210mm; margin: 0; }'
+    );
+    expect(sheets().map((s) => cellsOf(s).length)).toEqual([20, 5]);
+    expect(sheets()[0]!.style.width).toBe('297mm');
+  });
+
+  it('turns the text inside each tag, never the tag — the grid does not move with the rotation', () => {
+    const upright = render(<PriceTagsPrintable tags={many(3)} media={SHEET} />);
+    const flat = cellsOf(sheets()[0]!).map((c) => [c.style.left, c.style.top, c.style.width, c.style.height]);
+    upright.unmount();
+
+    render(<PriceTagsPrintable tags={many(3)} media={{ ...SHEET, rotate: 90 }} />);
+    const turned = cellsOf(sheets()[0]!);
+    expect(turned.map((c) => [c.style.left, c.style.top, c.style.width, c.style.height])).toEqual(flat);
+    const body = turned[0]!.querySelector<HTMLElement>('.price-label-body')!;
+    expect(body.style.transform).toBe('translate(58mm, 18mm) rotate(90deg)');
+    expect(body.style.top).toBe('-18mm');
+    expect(body.dataset.orientation).toBe('portrait');
+  });
+
+  it('draws each cut line once: the first row and column close the outline, every piece owns its right and bottom edge', () => {
+    render(<PriceTagsPrintable tags={many(4)} media={SHEET} />);
+    const cut = cellsOf(sheets()[0]!).map((c) => c.querySelector<HTMLElement>('.price-sheet-cut')!);
+    const edges = (el: HTMLElement) =>
+      (['Top', 'Right', 'Bottom', 'Left'] as const)
+        .filter((side) => el.style[`border${side}` as 'borderTop'] !== '')
+        .join(' ');
+    expect(cut.map(edges)).toEqual([
+      'Top Right Bottom Left', // top left corner
+      'Top Right Bottom', // top row
+      'Top Right Bottom', // top right corner
+      'Right Bottom Left', // second row, first column
+    ]);
+    expect(cut[0]!.style.pointerEvents).toBe('none');
+  });
+
+  it('prints the same tag as a label does: caption, price, the old price struck through', () => {
+    const marked = many(1).map((t) => ({ ...t, compareAtCents: 59000 }));
+    render(<PriceTagsPrintable tags={marked} media={SHEET} />);
+    expect(document.querySelector('.price-label-name')?.textContent).toBe('Піжама');
+    expect(document.querySelector('.price-label-variant')?.textContent).toBe('Рожевий · 98/104');
+    expect(document.querySelector('.price-label-old')?.textContent).toBe('590 ₴');
+    expect(document.querySelector('.price-label-price')?.textContent).toBe('450 ₴');
+  });
+
+  it('hangs off the body like every other printable', () => {
+    const { container } = render(<PriceTagsPrintable tags={many(1)} media={SHEET} />);
+    expect(container.querySelector('.price-tag-print-area')).toBeNull();
+    expect(document.querySelector('.price-tag-print-area')?.parentElement).toBe(document.body);
+  });
+
+  it('scans: the barcode on a sheet is the one the label draws, light margins and all', () => {
+    // 58 mm across leaves the symbol its full 0.35 mm module; a laser at 300 dpi
+    // is what prints a sheet.
+    render(<PriceTagsPrintable tags={many(1)} media={SHEET} />);
+    const { bars, viewWidth } = printedBars('svg.price-label-barcode');
+    expect(bars[0]!.start).toBeGreaterThanOrEqual(EAN13_MIN_QUIET_LEFT);
+    const scanned = scanEan13(
+      rasterize(bars, {
+        totalModules: viewWidth,
+        moduleMm: labelLayout(SHEET).barcode.moduleMm,
+        dpi: 300,
+        barGrowth: 0,
+      })
+    );
+    expect(scanned).toBe(CODE);
+  });
+
+  it('keeps the sheet grid inside what the layout says for the label', () => {
+    render(<PriceTagsPrintable tags={many(21)} media={SHEET} />);
+    const grid = sheetLayout(SHEET);
+    expect(cellsOf(sheets()[0]!)).toHaveLength(grid.perSheet);
   });
 });
 

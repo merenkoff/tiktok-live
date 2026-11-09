@@ -10,11 +10,13 @@ import { Printer, PrinterColor, Segmented, X } from '@pos/platform/ui';
 import { buildPriceTags, defaultCopies, variantLabel, type PriceTag } from '../../../lib/priceTag';
 import { hasEan13Shape, isEan13 } from '../../../lib/ean13';
 import { tagWidthMm } from '../../../lib/priceTagLayout';
+import { sheetCount, sheetLayout } from '../../../lib/priceSheetLayout';
 import {
   formatMm,
   loadTagMediaSettings,
   mediaOf,
   saveTagMediaSettings,
+  sheetMediaOf,
   type LabelSpec,
   type TagMediaSettings,
 } from '../../../lib/priceTagMedia';
@@ -135,7 +137,9 @@ export function PriceTagsDialog({
         }))
     )
   );
-  const [printing, setPrinting] = useState<PriceTag[] | null>(null);
+  // What is on its way to the printer, and where: the label as the station's
+  // printer takes it, or the same label laid out on A4 sheets for cutting.
+  const [printing, setPrinting] = useState<{ tags: PriceTag[]; sheet: boolean } | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
   // The printable is mounted before the dialog triggers the OS dialog, and torn
@@ -210,18 +214,25 @@ export function PriceTagsDialog({
   }
 
   function print() {
-    setPrinting(tagsOf(rows));
+    setPrinting({ tags: tagsOf(rows), sheet: false });
+  }
+
+  function printSheets() {
+    setPrinting({ tags: tagsOf(rows), sheet: true });
   }
 
   // One label of the first row: a whole receiving document printed upside
   // down, or on the wrong size of paper, is a roll of labels in the bin.
   const firstRow = rows.find((r) => r.copies > 0) ?? rows[0];
   function printTest() {
-    if (firstRow) setPrinting(tagsOf([firstRow], 1));
+    if (firstRow) setPrinting({ tags: tagsOf([firstRow], 1), sheet: false });
   }
 
   const sample = firstRow ? tagsOf([firstRow], 1)[0]! : SAMPLE_TAG;
   const onLabels = media.kind === 'label';
+  // How the chosen label goes on A4 — the figure the button and the hint quote.
+  const sheet = sheetLayout(media.label);
+  const sheets = sheetCount(total, sheet);
 
   // The printable sends itself to `document.body`; the dialog is portalled for
   // a different reason — a page wrapper with a finished `animate-fade-up` on it
@@ -231,7 +242,10 @@ export function PriceTagsDialog({
   // means no future one can put the dialog off-screen either.
   return (
     <>
-      <PriceTagsPrintable tags={printing} media={mediaOf(media)} />
+      <PriceTagsPrintable
+        tags={printing?.tags ?? null}
+        media={printing?.sheet ? sheetMediaOf(media) : mediaOf(media)}
+      />
       {createPortal(
         <div
           data-testid="price-tags-overlay"
@@ -251,7 +265,7 @@ export function PriceTagsDialog({
                     ? `Кількість — за приходом ${received.docNumber}: по одному цінику на кожну отриману одиницю; змініть, якщо треба інакше.`
                     : 'Кількість — за залишком на складі; змініть, якщо треба інакше.'}{' '}
                   {onLabels
-                    ? 'Кожен цінник — окрема наліпка.'
+                    ? 'Кожен цінник — окрема наліпка; «Друк на А4» розкладе їх по аркушах, щоб розрізати.'
                     : 'Кожен цінник друкується окремою сторінкою, тож принтер ріже їх так само, як чеки.'}
                 </p>
               </div>
@@ -289,6 +303,9 @@ export function PriceTagsDialog({
                   >
                     {labelOpen ? 'Готово' : 'Змінити'}
                   </button>
+                  <span className="text-[13px] text-sq-muted tabular-nums">
+                    · на А4: {sheet.perSheet} на аркуші
+                  </span>
                 </span>
               ) : (
                 <>
@@ -324,6 +341,12 @@ export function PriceTagsDialog({
                     {formatMm(media.label.heightMm)} мм (якщо такого немає — додайте його в налаштуваннях
                     принтера), поля — «Немає», масштаб — 100 %. Спершу — «Пробний друк»: одна наліпка
                     покаже, чи збігся розмір і куди дивиться текст.
+                  </p>
+                  <p className="text-[13px] text-sq-secondary leading-snug mt-2">
+                    «Друк на А4» кладе наліпки впритул по аркушу, скільки влізе: {sheet.cols} × {sheet.rows} ={' '}
+                    {sheet.perSheet} на аркуш, аркуш — {sheet.orientation === 'portrait' ? 'книжковий' : 'альбомний'}{' '}
+                    (так вміщається більше). Решта піде на наступні аркуші. У вікні друку — звичайний
+                    принтер, папір А4, поля — «Немає», масштаб — 100 %; розрізати по пунктирних лініях.
                   </p>
                 </div>
               )}
@@ -413,6 +436,17 @@ export function PriceTagsDialog({
               <button type="button" className="sq-btn-quiet" onClick={onClose}>
                 Закрити
               </button>
+              {onLabels && (
+                <button
+                  type="button"
+                  className="sq-btn-quiet"
+                  disabled={total === 0}
+                  onClick={printSheets}
+                  title={`На аркуші А4 вміщається ${sheet.perSheet} (${sheet.cols} × ${sheet.rows})`}
+                >
+                  Друк на А4{sheets > 0 && ` · ${sheets} арк.`}
+                </button>
+              )}
               <button
                 type="button"
                 className="pos-btn-primary min-h-11 px-5 rounded-sq text-[15px] gap-2"

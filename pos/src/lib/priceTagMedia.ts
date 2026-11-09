@@ -39,7 +39,15 @@ export interface LabelSpec {
   rotate: TagRotation;
 }
 
-export type TagMedia = { kind: 'roll'; paper: TagPaperWidth } | ({ kind: 'label' } & LabelSpec);
+/**
+ * `sheet` is the label's size and rotation laid out on A4 sheets for cutting
+ * by hand (`priceSheetLayout.ts`). It is never stored: it is a way of printing
+ * the label the station has chosen, not a third kind of paper to choose.
+ */
+export type TagMedia =
+  | { kind: 'roll'; paper: TagPaperWidth }
+  | ({ kind: 'label' } & LabelSpec)
+  | ({ kind: 'sheet' } & LabelSpec);
 
 /** Everything the dialog remembers, so switching media loses neither half. */
 export interface TagMediaSettings {
@@ -132,6 +140,11 @@ export function mediaOf(settings: TagMediaSettings): TagMedia {
   return settings.kind === 'label'
     ? { kind: 'label', ...normalizeLabel(settings.label) }
     : { kind: 'roll', paper: settings.paper };
+}
+
+/** The same label, as many to an A4 sheet as fit. */
+export function sheetMediaOf(settings: TagMediaSettings): TagMedia {
+  return { kind: 'sheet', ...normalizeLabel(settings.label) };
 }
 
 export function loadTagMediaSettings(): TagMediaSettings {
