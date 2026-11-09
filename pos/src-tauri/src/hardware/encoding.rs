@@ -34,9 +34,16 @@ use serde::Deserialize;
 
 use crate::hardware::receipt::{chars_per_line, divider, now_nanos, send_raw};
 
-/// The character tables we can encode text for. Only these three: they are the
-/// ones the escpos crate carries that hold the whole Ukrainian alphabet or most
-/// of it (CP866 misses і/І/ґ/Ґ and is folded, see `fold`).
+/// The character tables we can encode text for: the three that hold the whole
+/// Ukrainian alphabet or most of it (CP866 misses і/І/ґ/Ґ and is folded, see
+/// `fold`).
+///
+/// The bytes are OURS (`high_half` below), not the escpos crate's: its tables
+/// are wrong in three slots (Windows-1251 has an ASCII hyphen at 0xAD, CP1125
+/// has «÷» and «±» where «·» and «√» are), and a character a table lacks it
+/// sends as raw UTF-8 — two or three wrong symbols for one «ʼ». The crate
+/// still sends `ESC @` and `ESC t`; every byte of text goes out through
+/// `put_line`.
 #[derive(Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum EncodingTable {
@@ -71,54 +78,127 @@ impl EncodingTable {
         }
     }
 
-    /// Text as this table can carry it. Windows-1251 holds everything we print,
-    /// so it passes through untouched — exactly what it did before profiles.
+    /// Bytes 0x80..=0xFF of this table, in order (0x00..=0x7F is ASCII in all
+    /// three). Written out from the code pages themselves; the test compares
+    /// Windows-1251 and CP866 with `encoding_rs`.
+    fn high_half(self) -> &'static [char; 128] {
+        match self {
+            EncodingTable::Windows1251 => &WINDOWS_1251_HIGH,
+            EncodingTable::Cp866 => &CP866_HIGH,
+            EncodingTable::Cp1125 => &CP1125_HIGH,
+        }
+    }
+
+    /// The byte `c` is in this table, or None when the table lacks it.
+    pub(crate) fn encode_char(self, c: char) -> Option<u8> {
+        if c.is_ascii() {
+            return Some(c as u8);
+        }
+        self.high_half().iter().position(|&t| t == c).map(|i| 0x80 + i as u8)
+    }
+
+    /// Text as this table can carry it: after this, every character is one
+    /// byte of the table.
     ///
-    /// CP866 and CP1125 do not hold the letters or the punctuation below; the
-    /// escpos crate would emit the raw UTF-8 bytes of such a character, which is
-    /// two or three more wrong symbols, so each is replaced by the nearest
-    /// thing the table does have. Ukrainian «і» reads as the Latin «i» it is
-    /// drawn like, «ґ» as «г».
+    ///   * a character the table has stays — so Windows-1251 text that worked
+    ///     before profiles is untouched;
+    ///   * one it lacks becomes the nearest thing it does have (`substitute`):
+    ///     Ukrainian «і» reads as the Latin «i» it is drawn like, «ґ» as «г»,
+    ///     the modifier-letter apostrophe «ʼ» a phone keyboard types as «'»,
+    ///     «₴» as «грн»;
+    ///   * anything else is «?» — one wrong symbol, never the two or three a
+    ///     character's UTF-8 bytes would be;
+    ///   * a soft hyphen is dropped (it is invisible on screen, a «-» or «¡» on
+    ///     paper) and an ASCII control character becomes a space, so text an
+    ///     owner typed can never carry a printer command.
     pub(crate) fn fold(self, text: &str) -> Cow<'_, str> {
-        let needs = |c: char| match self {
-            EncodingTable::Windows1251 => false,
-            EncodingTable::Cp866 => fold_char(c, true).is_some(),
-            EncodingTable::Cp1125 => fold_char(c, false).is_some(),
-        };
-        if !text.chars().any(needs) {
+        let keeps = |c: char| c != SOFT_HYPHEN && !c.is_ascii_control() && self.encode_char(c).is_some();
+        if text.chars().all(keeps) {
             return Cow::Borrowed(text);
         }
         let mut out = String::with_capacity(text.len());
         for c in text.chars() {
-            let folded = match self {
-                EncodingTable::Windows1251 => None,
-                EncodingTable::Cp866 => fold_char(c, true),
-                EncodingTable::Cp1125 => fold_char(c, false),
-            };
-            match folded {
-                Some(s) => out.push_str(s),
-                None => out.push(c),
+            if keeps(c) {
+                out.push(c);
+            } else if c == SOFT_HYPHEN {
+                // dropped
+            } else if c.is_ascii_control() {
+                out.push(' ');
+            } else {
+                match substitute(c) {
+                    Some(s) if s.chars().all(|r| self.encode_char(r).is_some()) => out.push_str(s),
+                    _ => out.push('?'),
+                }
             }
         }
         Cow::Owned(out)
     }
 }
 
-/// What a character is printed as on a table that lacks it. `cp866` is the
-/// narrower of the two tables: it also lacks the four Ukrainian letters.
-fn fold_char(c: char, cp866: bool) -> Option<&'static str> {
+const SOFT_HYPHEN: char = '\u{00AD}';
+
+/// What a character is printed as on a table that lacks it. Used only for a
+/// character the table does not have, so «і» stays «і» in Windows-1251.
+fn substitute(c: char) -> Option<&'static str> {
     match c {
-        'і' if cp866 => Some("i"),
-        'І' if cp866 => Some("I"),
-        'ґ' if cp866 => Some("г"),
-        'Ґ' if cp866 => Some("Г"),
-        '«' | '»' | '“' | '”' | '„' => Some("\""),
-        '’' | 'ʼ' | '‘' => Some("'"),
-        '—' | '–' | '‒' => Some("-"),
+        'і' => Some("i"),
+        'І' => Some("I"),
+        'ґ' => Some("г"),
+        'Ґ' => Some("Г"),
+        '«' | '»' | '“' | '”' | '„' | '‟' => Some("\""),
+        '’' | 'ʼ' | '‘' | '‚' | '′' | 'ʹ' => Some("'"),
+        '—' | '–' | '‒' | '−' | '‑' => Some("-"),
+        '\u{00A0}' | '\u{2009}' | '\u{202F}' | '\u{2007}' => Some(" "),
+        '…' => Some("..."),
+        '×' => Some("x"),
+        '•' | '∙' => Some("*"),
+        '№' => Some("N"),
         '₴' => Some("грн"),
+        '€' => Some("EUR"),
         _ => None,
     }
 }
+
+/// Windows-1251, bytes 0x80..=0xFF. 0x98 is unassigned (`'\0'` never matches:
+/// it is ASCII and handled before the table is read).
+#[rustfmt::skip]
+const WINDOWS_1251_HIGH: [char; 128] = [
+    'Ђ', 'Ѓ', '‚', 'ѓ', '„', '…', '†', '‡', '€', '‰', 'Љ', '‹', 'Њ', 'Ќ', 'Ћ', 'Џ', // 0x80
+    'ђ', '‘', '’', '“', '”', '•', '–', '—', '\0', '™', 'љ', '›', 'њ', 'ќ', 'ћ', 'џ', // 0x90
+    '\u{00A0}', 'Ў', 'ў', 'Ј', '¤', 'Ґ', '¦', '§', 'Ё', '©', 'Є', '«', '¬', '\u{00AD}', '®', 'Ї', // 0xA0
+    '°', '±', 'І', 'і', 'ґ', 'µ', '¶', '·', 'ё', '№', 'є', '»', 'ј', 'Ѕ', 'ѕ', 'ї', // 0xB0
+    'А', 'Б', 'В', 'Г', 'Д', 'Е', 'Ж', 'З', 'И', 'Й', 'К', 'Л', 'М', 'Н', 'О', 'П', // 0xC0
+    'Р', 'С', 'Т', 'У', 'Ф', 'Х', 'Ц', 'Ч', 'Ш', 'Щ', 'Ъ', 'Ы', 'Ь', 'Э', 'Ю', 'Я', // 0xD0
+    'а', 'б', 'в', 'г', 'д', 'е', 'ж', 'з', 'и', 'й', 'к', 'л', 'м', 'н', 'о', 'п', // 0xE0
+    'р', 'с', 'т', 'у', 'ф', 'х', 'ц', 'ч', 'ш', 'щ', 'ъ', 'ы', 'ь', 'э', 'ю', 'я', // 0xF0
+];
+
+/// CP866 (DOS Cyrillic), bytes 0x80..=0xFF.
+#[rustfmt::skip]
+const CP866_HIGH: [char; 128] = [
+    'А', 'Б', 'В', 'Г', 'Д', 'Е', 'Ж', 'З', 'И', 'Й', 'К', 'Л', 'М', 'Н', 'О', 'П', // 0x80
+    'Р', 'С', 'Т', 'У', 'Ф', 'Х', 'Ц', 'Ч', 'Ш', 'Щ', 'Ъ', 'Ы', 'Ь', 'Э', 'Ю', 'Я', // 0x90
+    'а', 'б', 'в', 'г', 'д', 'е', 'ж', 'з', 'и', 'й', 'к', 'л', 'м', 'н', 'о', 'п', // 0xA0
+    '░', '▒', '▓', '│', '┤', '╡', '╢', '╖', '╕', '╣', '║', '╗', '╝', '╜', '╛', '┐', // 0xB0
+    '└', '┴', '┬', '├', '─', '┼', '╞', '╟', '╚', '╔', '╩', '╦', '╠', '═', '╬', '╧', // 0xC0
+    '╨', '╤', '╥', '╙', '╘', '╒', '╓', '╫', '╪', '┘', '┌', '█', '▄', '▌', '▐', '▀', // 0xD0
+    'р', 'с', 'т', 'у', 'ф', 'х', 'ц', 'ч', 'ш', 'щ', 'ъ', 'ы', 'ь', 'э', 'ю', 'я', // 0xE0
+    'Ё', 'ё', 'Є', 'є', 'Ї', 'ї', 'Ў', 'ў', '°', '∙', '·', '√', '№', '¤', '■', '\u{00A0}', // 0xF0
+];
+
+/// CP1125 (RUSCII, the Ukrainian DOS table): CP866 except 0xF2..=0xF9, where
+/// it carries Ґ ґ Є є І і Ї ї instead of Є є Ї ї Ў ў ° ∙.
+#[rustfmt::skip]
+const CP1125_HIGH: [char; 128] = [
+    'А', 'Б', 'В', 'Г', 'Д', 'Е', 'Ж', 'З', 'И', 'Й', 'К', 'Л', 'М', 'Н', 'О', 'П', // 0x80
+    'Р', 'С', 'Т', 'У', 'Ф', 'Х', 'Ц', 'Ч', 'Ш', 'Щ', 'Ъ', 'Ы', 'Ь', 'Э', 'Ю', 'Я', // 0x90
+    'а', 'б', 'в', 'г', 'д', 'е', 'ж', 'з', 'и', 'й', 'к', 'л', 'м', 'н', 'о', 'п', // 0xA0
+    '░', '▒', '▓', '│', '┤', '╡', '╢', '╖', '╕', '╣', '║', '╗', '╝', '╜', '╛', '┐', // 0xB0
+    '└', '┴', '┬', '├', '─', '┼', '╞', '╟', '╚', '╔', '╩', '╦', '╠', '═', '╬', '╧', // 0xC0
+    '╨', '╤', '╥', '╙', '╘', '╒', '╓', '╫', '╪', '┘', '┌', '█', '▄', '▌', '▐', '▀', // 0xD0
+    'р', 'с', 'т', 'у', 'ф', 'х', 'ц', 'ч', 'ш', 'щ', 'ъ', 'ы', 'ь', 'э', 'ю', 'я', // 0xE0
+    'Ё', 'ё', 'Ґ', 'ґ', 'Є', 'є', 'І', 'і', 'Ї', 'ї', '·', '√', '№', '¤', '■', '\u{00A0}', // 0xF0
+];
 
 /// The profile a printer is driven with: the table the text is encoded for and,
 /// when the printer numbers its tables differently from Epson, the number to
@@ -139,7 +219,7 @@ pub struct PrinterEncoding {
 ///
 ///   * `init` — `ESC @`, the table's standard `ESC t`, then the profile's own
 ///     number when it differs;
-///   * `write` / `writeln` — the text folded for the table first.
+///   * `writeln` — the text folded for the table and encoded by `put_line`.
 pub(crate) struct TextPrinter {
     inner: Printer<FileDriver>,
     encoding: PrinterEncoding,
@@ -167,43 +247,27 @@ impl TextPrinter {
     }
 }
 
+/// The bytes of `text` in `table`: one byte per character, folded first.
+/// ASCII is itself in every table a printer has — which is also what keeps a
+/// hyphen a hyphen (the escpos crate sent `-` as Windows-1251's 0xAD, «¡» on a
+/// printer that stayed on CP437: every divider, «R-00001» and fiscal code).
+pub(crate) fn encode_text(table: EncodingTable, text: &str) -> Vec<u8> {
+    table
+        .fold(text)
+        .chars()
+        .map(|c| table.encode_char(c).unwrap_or(b'?'))
+        .collect()
+}
+
 /// One line of text and a line feed, in `table`.
-///
-/// Printable ASCII is sent as itself and never looked up: the escpos crate's
-/// Windows-1251 table has an ASCII hyphen in the slot of 0xAD (Windows-1251's
-/// soft hyphen), so `-` used to go out as 0xAD — a hyphen on a printer whose
-/// table 1251 really is selected, `¡` on one that stayed on CP437, which is what
-/// every divider, «R-00001» and fiscal code printed as there. ASCII is the same
-/// byte in every table a printer has, so nothing needs the table for it.
-/// Everything else (the Cyrillic) goes through the table, folded first.
 fn put_line<'a>(
     printer: &'a mut Printer<FileDriver>,
     table: EncodingTable,
     text: &str,
 ) -> EscResult<&'a mut Printer<FileDriver>> {
-    let folded = table.fold(text);
-    let mut ascii: Vec<u8> = Vec::new();
-    let mut other = String::new();
-    for c in folded.chars() {
-        if c.is_ascii() && !c.is_ascii_control() {
-            if !other.is_empty() {
-                printer.write(&other)?;
-                other.clear();
-            }
-            ascii.push(c as u8);
-        } else {
-            if !ascii.is_empty() {
-                printer.custom(&ascii)?;
-                ascii.clear();
-            }
-            other.push(c);
-        }
-    }
-    if !ascii.is_empty() {
-        printer.custom(&ascii)?;
-    }
-    if !other.is_empty() {
-        printer.write(&other)?;
+    let bytes = encode_text(table, text);
+    if !bytes.is_empty() {
+        printer.custom(&bytes)?;
     }
     printer.feed()
 }
@@ -380,8 +444,84 @@ mod tests {
 
     #[test]
     fn windows_1251_text_is_passed_through_untouched() {
-        let text = "Привіт, «Тест» ’ — ₴ ґ";
+        let text = "Привіт, «Тест» ’ — ґ № M · вівсяне";
         assert!(matches!(EncodingTable::Windows1251.fold(text), Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn the_tables_are_the_code_pages() {
+        for (table, encoding) in [
+            (EncodingTable::Windows1251, encoding_rs::WINDOWS_1251),
+            (EncodingTable::Cp866, encoding_rs::IBM866),
+        ] {
+            for b in 0x80u8..=0xFF {
+                let byte = [b];
+                let (decoded, _, had_errors) = encoding.decode(&byte);
+                let ours = table.high_half()[(b - 0x80) as usize];
+                // WHATWG decodes Windows-1251's unassigned 0x98 as the C1 control U+0098.
+                let unassigned = had_errors || decoded.chars().all(|c| c.is_control());
+                if unassigned {
+                    assert_eq!(ours, '\0', "{table:?} 0x{b:02X} is unassigned");
+                } else {
+                    assert_eq!(decoded.chars().next(), Some(ours), "{table:?} 0x{b:02X}");
+                }
+            }
+        }
+        // CP1125 is not in encoding_rs: CP866 everywhere but 0xF2..=0xF9.
+        for b in 0x80u8..=0xFF {
+            if !(0xF2..=0xF9).contains(&b) {
+                let i = (b - 0x80) as usize;
+                assert_eq!(CP1125_HIGH[i], CP866_HIGH[i], "CP1125 0x{b:02X}");
+            }
+        }
+        let ukrainian: String = CP1125_HIGH[0x72..=0x79].iter().collect();
+        assert_eq!(ukrainian, "ҐґЄєІіЇї");
+        // Every character is in its table once, so a byte decodes back to it.
+        for table in [EncodingTable::Windows1251, EncodingTable::Cp866, EncodingTable::Cp1125] {
+            for (i, &c) in table.high_half().iter().enumerate() {
+                if c != '\0' {
+                    assert_eq!(table.encode_char(c), Some(0x80 + i as u8), "{table:?} {c}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_slots_the_escpos_crate_had_wrong() {
+        // Windows-1251 0xAD is the soft hyphen, never `-`.
+        assert_eq!(EncodingTable::Windows1251.encode_char('-'), Some(b'-'));
+        assert_eq!(EncodingTable::Windows1251.encode_char('\u{00AD}'), Some(0xAD));
+        // CP1125 0xFA/0xFB are «·» and «√», not «÷» and «±».
+        assert_eq!(EncodingTable::Cp1125.encode_char('·'), Some(0xFA));
+        assert_eq!(EncodingTable::Cp1125.encode_char('√'), Some(0xFB));
+        assert_eq!(EncodingTable::Cp1125.encode_char('÷'), None);
+    }
+
+    #[test]
+    fn a_character_a_table_lacks_is_folded_or_a_question_mark_never_utf8() {
+        // «ʼ» (U+02BC) is what a phone's Ukrainian keyboard types; Windows-1251
+        // lacks it, and its UTF-8 bytes used to print «Мʼясо» as «МКјясо».
+        assert_eq!(EncodingTable::Windows1251.fold("Мʼясо"), "М'ясо");
+        assert_eq!(EncodingTable::Windows1251.fold("100 ₴"), "100 грн");
+        assert_eq!(EncodingTable::Windows1251.fold("2×3 − 1"), "2x3 - 1");
+        assert_eq!(EncodingTable::Windows1251.fold("Café 😀"), "Caf? ?");
+        for table in [EncodingTable::Windows1251, EncodingTable::Cp866, EncodingTable::Cp1125] {
+            let text = "Мʼясо 100 ₴ … × é 😀 «Тест» — ґ і M · вівсяне";
+            let bytes = encode_text(table, text);
+            assert_eq!(bytes.len(), table.fold(text).chars().count(), "{table:?}: one byte per character");
+            assert!(table.fold(text).chars().all(|c| table.encode_char(c).is_some()), "{table:?}");
+        }
+        // «M · вівсяне», a modifier caption, keeps its dot in every table.
+        assert!(contains(&encode_text(EncodingTable::Windows1251, "M · в"), &[b'M', b' ', 0xB7, b' ', 0xE2]));
+        assert!(contains(&encode_text(EncodingTable::Cp866, "M · в"), &[b'M', b' ', 0xFA, b' ', 0xA2]));
+        assert!(contains(&encode_text(EncodingTable::Cp1125, "M · в"), &[b'M', b' ', 0xFA, b' ', 0xA2]));
+    }
+
+    #[test]
+    fn a_soft_hyphen_is_dropped_and_a_control_character_cannot_reach_the_printer() {
+        assert_eq!(EncodingTable::Windows1251.fold("пере\u{00AD}нос"), "перенос");
+        // ESC i (cut) typed into a product name prints as a space and an «i».
+        assert_eq!(encode_text(EncodingTable::Windows1251, "a\u{1b}i\tb"), b"a i b".to_vec());
     }
 
     #[test]
